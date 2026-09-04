@@ -1,13 +1,34 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-03 16:30 +08。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-05 +08。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application source: `codex/scansci-upstream-mcp` / `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。
-- Production application source / immutable release: `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`。
-- Production rollback: `2313038bef4fabce5cdc90517d25cb177ab1e8dd`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP、持久 Cookie、容器重建恢复和普通 DOI 下载已验收；明确 institutional/publisher provenance、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
+- Local docs branch / HEAD: `codex/scansci-cas-blocked-handoff` / `c6667701558f7f8596b461f07288291ba9d3b14e`；`origin/main` / application candidate `7593e82e8a309ffcaaa8092b5628c53a0fec444a`（PR #70 merged，**not deployed**）。
+- Production release / rollback: `e23a94f6622bb65e33ddbfe290970a9e6366567a` / `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`；core/search `36/36` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 10/11 in-progress、Task 12 pending。服务器端 ZJU WebVPN Cookie 与 subscription-only Nature PDF 已证明机构通道；ScienceDirect 改为官方 Remote Access/API entitlement 外部增强项。当前本地候选已实现 Task 11 与 Task 12 汇总门禁，生产部署/四入口/72h/600s/完整 ECS gate pending。
+
+## 2026-09-05 — Task 11 implementation and Task 12 aggregate gate candidate
+
+- Task 11 已实现严格 API、Domain 状态机、确定性 SVG/interactive HTML、content-addressed Storage、同版本 verified Claim 绑定、Worker 双重权限校验、draft→approved/rejected 审计与公开安全 SVG 展示；确定性 CPU 任务不消耗 AI Credit。
+- MiniMax image/video 保持管理员限定且生产默认关闭；没有增加 provider、浏览器、模型、迁移或运行时依赖。
+- 新增 content-free exact-release 汇总门禁，锁定 locator 100%、Claim/Evidence precision、bbox、search P95、TTL/signed-link、retrieval、presentation replay、生产健康与 rollback 条件。
+- 新改动通过聚焦 11 个 Presentation 测试、API 安全/公开 22 个测试、全仓 test/build/typecheck/lint，以及 dependency-cruiser/Knip/Syncpack；ECS/CI pending。
+
+## 2026-09-04–05 — ScanSci institutional target blocked before release
+
+- 生产 `e23a94f…` / rollback `4bba4e5…` healthy；只有官方 `scansci-pdf==1.13.1` 单 MCP。ScanSci wheel/Chromium 层和 BGE 模型/依赖层均复用缓存，未安装第二套运行时。
+- PR #68 / CI `33835200273` 和 PR #69 / CI `33838217748` 修复浙大双语名、Elsevier ARIA 选项；PR #70 / CI `33840879274` 精确接受当前公开标签 `浙江大学(Zhejiang University) (Zhejiang University Library)`，继续拒绝附属医院近似项。
+- 未发布候选 `7593e82…` 直接验收 DOI `10.1016/j.physleta.2025.130846`：`selected=2`、`exact_not_found=0`；账号只提交一次并越过 ZJU IdP，官方仓库保存 43 条会话记录。断链 profile 锁精确迁移 `6/6` 后确认持久浏览器成功启动，但 ScienceDirect 仍停在 `Just a moment…`，PDF probe 为 HTML/403，官方下载超时且临时目录清理完成。
+- 强制 Elsevier/CARSI/ZJU 经 Windows 反向隧道的试验确认远端与本机 v2ray 出口一致，但出口为美国 Cox、不是校网，且未解决 challenge；Squid 已恢复原配置，候选单服务已恢复正式 `e23a94f…` 镜像，session volume 保留、ScanSci healthy。
+- 服务器 CloakBrowser 已成功登录 `webvpn.zju.edu.cn`，6 条 Cookie 以 `0600` 持久化；凭据和 Cookie 值未输出。`webvpn_test` 因固定 Nature 探针 403 返回 `unreachable`，源码明确该状态不等于 session expired。目标 DOI 单次 legal-only 验收恢复全部 Cookie、进入 ScienceDirect 页面后仍在 PDF 端点得到 HTML/403，最终 `cloudflare_blocked`、PDF 0。
+- aTrust/RVPN 服务器登录成功并取得隧道地址，但网关未下发 ScienceDirect 当前 CDN `203.22.241.8/30` 路由；精确临时路由测试超时后已撤销，aTrust 停止且数据卷保留。浙大官方提示 WebVPN 对部分数据库存在兼容问题并建议异常时使用 RVPN，本次两条通道均未交付目标 PDF。
+- 直连诊断绕过生产 Squid时，Nature/Wiley/Springer/ScienceDirect 均被浙大网关拒绝；按 canonical Squid 路径模拟修复后，Nature/Wiley 页面均为 200，Nature PDF 为 `200 / application/pdf / %PDF-`，Wiley 样本 PDF 为 HTML，ScienceDirect 页面仍为 403。故教程与 WebVPN 本身可用，剩余外部阻塞是 ScienceDirect 单站防护。
+- canonical 容器只接 internal `retrieval_net`，而上游 `_fetch_via_webvpn()` 与 `session_status()` 均强制 `trust_env=False`，下载仅应用 SOCKS5、状态探针完全漏接 proxy。已按 TDD 增加 exact-preimage 最小补丁：下载与状态探针的 HTTP(S)/SOCKS5 均走显式 proxy 且保持目标站 TLS 校验；代理与 valid/expired 回归均先红后绿。服务器 `--rm` 候选用官方函数在正式 internal 网络取得 Nature `%PDF-` 并复现 ScienceDirect 403；未发布、未替换正式容器。
+- 持久化/完整下载验收：全新 `--rm` 候选只读挂载 `openscience-prod_scansci-data`，读到 6 条 Cookie；官方 WebVPN 下载函数返回 success/source `WebVPN`，文件为 3,651,992-byte `%PDF-`，SHA-256 `6eae057a9faf4f671c3101e0745ed704460c6d3dec77243dfd3a9f2d2ab68970`。临时文件随容器退出清除，正式 Cookie 文件保持 `0600`、单链接。
+- 订阅权限验收：Nature 页面明确标注 subscription content 的 DOI `10.1038/s41586-025-09320-4` 经同一持久 Cookie/WebVPN 返回 1,873,303-byte `%PDF-`，SHA-256 `c4b9b02e25d8d0f0f3a4cb847d54bc50db0f88619ea7b082c046d97c4187be8e`、source `WebVPN`；因此机构通道不只可下载 OA。测试 PDF 随 `--rm` 容器清除。
+- 镜像审计确认正式 ScanSci 镜像为 2,503,852,066 bytes，其中后置 `chown -R /opt/scansci-browsers` 触发约 685 MB overlay copy-up；Dockerfile 已删除该操作，并为 ECS 可选 Debian 签名镜像参数与 final-stage identity ARG 加回归。ECS 由精确 Dockerfile 构建的最终候选为 1,818,508,851 bytes，减少 685,343,215 bytes（约 653.6 MiB / 27.37%）；browser/venv 仅一层 1.69 GB，后置用户层 4.71 KB、无递归 chown。候选以 UID 10001、只读根、512 PID 通过 MCP health，root-owned `0755` Chromium 151 成功启动 Patchright；版本/wheel/source labels 完整。固定 ScanSci 1.13.1 只在 Sci-Hub 集成 FlareSolverr，WebVPN/CARSI 未接入它，因此当前不安装第二 Chrome；服务本身并非技术上只能访问灰色源。
+- 正式 `e23a94f…` ScanSci 已恢复并通过 image/tools/storage/Worker verifier；Cookie 保留，aTrust exited。临时 WebVPN 网络、socat、SSH 转发、aTrust `.deb` 与两张 display 镜像均已精确清除；未安装 FlareSolverr、第二 Chromium、BGE 或下载器，未 broad prune。成功前不发布、不重复跑全仓/视觉门禁。
 
 ## 2026-09-03 — ScanSci persistent session and PDF download accepted
 
@@ -64,33 +85,3 @@
 - PR #17 / exact CI run `33397550370`、job `99505612016` 合并为 main `abd38d3`。ECS 新 SHA schema-v3 16-case Parser acceptance、core/search `33/33`/`2/2`、BGE-M3 CPU、ScanSci source/topology/policy/file-limit/token/session 与 API/Web/Worker health 全绿。
 - canonical post-switch Worker+ScanSci OA 门禁真实下载 `arXiv:2009.06045v1`，route `open_access`、PDF magic `%PDF-`、24,671,920 bytes；Squid 记录 `172.24.0.2 -> arxiv.org:443 -> FIRSTUP_PARENT/127.0.0.1`。active/public CAS 到 `abd38d3`，rollback `6893318`，journal/failed/pending 均 absent；CARSI 仍 `auth_required`。
 - 发布后独立 checkup 与 exact working-dir 复核全绿。删除历史 parser-eval/悬空镜像并按 `>24h + keep 4GB` 清 54 个 BuildKit 对象，释放约 586MB；磁盘 `44G/148G`（31%，98G available），保护对象均保留。PR #18 / CI `33404431776`（13m10s）以 red→green 合同把 release metadata 移到稳定 Chromium 层之后，merged main `a08237a`，不单独部署。下一步只剩 CARSI、四入口/375px、one-use 与 72h/600s 生产旅程。
-
-## 2026-08-31 — ScanSci Task 9 local security/release gate
-
-- 用户明确授权的例外修复波 `3d23b87` 已关闭最终两项 Important：任何既有 candidate/protected rollback sidecar 均在 mutation 前拒绝，真实 publish/CAS-failure cleanup 只删除本事务唯一 staging/owned sidecar；canonical verifier 内部派生 release-tagged Worker image，核验 source label、运行 image ID 与精确三个挂载。独立 scoped review 无 Critical/Important，结论 READY。新鲜全仓 build/typecheck/lint/test green：release `97/104`、ScanSci `82/89`、Web `469`、Domain `535`、Worker `503`、API `101`，失败 0；22 skips 均为 Linux/ECS gate。两项 bounded hygiene Minor（部分 unique staging 写失败残留、早期 dangling symlink 检查）记录到 Task 10 ECS preflight/清理，不影响 canonical/protected state。
-- 禁用词精确扫描 58 个命中均为 fixed false、拒绝/compatibility 逻辑或 adversarial test；`audit:knip`、`audit:dep`（831 modules / 1936 dependencies）和 `audit:deps` green。全仓 build/typecheck/test green：release `95/102`（7 skips）、ScanSci `82/89`（7 Windows/POSIX skips）、Web `469`、Domain `535`、Worker `503`、API `101`；本机总计 `2115 pass / 22 skip / 0 fail`。Linux CI 将执行真实 RLIMIT/child 继承用例。
-- 本地候选不等于生产：ECS 仍为 `6893318` / `c435c4c` / core-search `32/32`-`2/2`，ScanSci disabled。Migration 33、Linux negative-cache/硬 file limit/NAT64/serial/256 MiB runtime、真实 OA/CARSI、四入口、72h GC、zero-grey/Tor 与 exact rollback/retention 均留给 Task 10。
-
-## 2026-08-30 — ScanSci Task 8 local review candidate
-
-- `8238a9f` + fix rounds `d75ca1c` / `c0bcf0a` 接通并加固 Hermes Drawer、RO Hermes、RO Files/Evidence：Drawer intent 自持 stable key/SHA-256 fingerprint，并在 generic history recovery 前 exact replay；Dashboard 固定 Personal、RO route ID 为唯一 target authority；IME composition Enter 不提交。
-- Durable payload server-stamp target；API 严格 target 组合；active/retryable/terminal 均在 limit 前做 user/authority/target 筛选，Web 不再 global-then-filter。Domain `535`、API `101`、Worker `502`、Web `463 + 5 Node`、19-route build/typecheck、browser fix `6/6`、product `72/72`、Hermes `19/19 + 8/8` green。
-- 这是本地 review candidate；生产仍为 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。ECS 375px、真实 OA/CARSI、一次性下载与部署仍属 Task 10，不能标 done。
-- Task 10 部署前须只读确认 targetless durable ScanSci task 数为 0；非零即阻断并另行决策，本轮不自动回填或扩 migration。
-
-## 2026-08-30 — ScanSci Task 7 local review candidate
-
-- `22088c0` + `86e037e` + `3e829db` + `1059072` + `82d4772` + `185d5d6` 闭合 persisted DTO/hash-only intent、同 task/credit retry、精确 poll cleanup、server-only retry invariant 与 PostgreSQL parity test truthfulness；generic/public/internal caller 不能注入 marker，Worker 只读精确 durable v1，历史/畸形/撤权任务 false。
-- Retry 的 authority read/CAS/audit 现为三次 P2034-only Serializable 事务，Redis commit 后投递；recovery 用一次参数化 ID-only SQL 精确筛选权限/JSONB/DOI-arXiv 后 hydrate 并复用共享 predicate，无 top-N/循环/payload 泄露。14-case corpus 显式区分 JSONB 与 JavaScript-only `undefined` own-property；PG parity 用更新 terminal sentinel 分辨 raw candidate 与 fallback。Fresh Domain `534`、API `99`、Worker `502` 与三包/typechecked real-PG contracts green；既有 Web/Playwright `441 + 5 Node` / `7` 未改。
-- 这是本地 review candidate；ECS 375px、真实 CARSI/OA、一次性下载与 Task 8 四入口仍 pending，不能把 Task 10 标 done。生产保持 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。
-
-## 2026-08-30 — ScanSci Task 6 local recovery candidate
-
-- `60b3740` 闭合 provider state 事务/重放/generation、三次 P2034、非致命 observation、descriptor Secret 与 disabled rollback；Domain 520、Database 26、Worker 501、三包 typecheck、独立复审均 green。
-- 真实 PG forward/rollback/redeploy + 双 client 合同仅 typecheck；migration 33、OA/CARSI/session/四入口仍须 ECS。生产保持 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。
-
-## 2026-08-30 — ScanSci Task 5 atomic acquisition candidate
-
-- 本地 `ff5568f` + `4763228` 将 Personal RO/SDF、AgentSession、AgentTask、AI Credit debit 与三类 audit 收口到一笔三次有界 Serializable acquisition 事务；同键用完整 target/query/identifier/server payload digest 绑定，exact replay 在余额前返回，不再使用补偿删除。P2002 仅在 Prisma modelName 与该操作 idempotency field/column/constraint 同时精确匹配时重试，其他唯一冲突原样传播。
-- `createResearchObject`、`createAgentSession`、`submitAgentTask` 共用 transaction primitives；公开 RO 仍拒绝 `system:`，公开 generic Agent API 仍拒绝 `source.retrieve`，严格 4 KiB/字段/CSRF/auth/rate-limit 合同未变。Redis 仅在 commit 后投递；失败留下一个 `dispatchedAt=null` pending task，可由 replay 或 recovery 重派且不重复扣费。
-- 本地 Domain `59/514`、API `18/95`、Agent Worker `33/468`、全仓 typecheck/lint green。真实 PostgreSQL 集成 suite 已覆盖 rollback、credit、audit、并发、两连接确定性 archive/membership SSI cycle、同键 target/query/identifier mismatch 与 recovery；依本地 no-Docker 规则只完成编译，须在后续服务器验收执行。

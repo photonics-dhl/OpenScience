@@ -1,0 +1,121 @@
+import type { AuditContext } from '@openscience/observability';
+import type { PresentationAsset, PresentationAssetStatus } from '@prisma/client';
+import { createAgentSession, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
+import { recordAudit } from '../workspace/audit';
+import { requireActiveMembership } from '../workspace/helpers';
+import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
+import { PresentationAssetError } from './errors';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const KINDS = ['chart', 'interactive_html', 'image', 'video'] as const;
+export const DETERMINISTIC_PRESENTATION_GENERATOR = 'OpenScience deterministic renderer';
+export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-presentation-v1';
+export type PresentationGenerationKind = (typeof KINDS)[number];
+export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[] }
+export interface PresentationAssetView {
+  id: string;
+  researchObjectId: string;
+  versionId: string;
+  kind: PresentationAsset['kind'];
+  contentHash: string;
+  generator: string;
+  generatorVersion: string;
+  status: PresentationAsset['status'];
+  label: string;
+  sourceClaimIds: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export function parsePresentationGenerationPayload(value: unknown): PresentationGenerationPayload {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation payload is invalid');
+  const payload = value as Record<string, unknown>;
+  const expected = ['kind', 'researchObjectId', 'schemaVersion', 'sourceClaimIds', 'versionId'];
+  const keys = Object.keys(payload).sort();
+  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index]) || payload.schemaVersion !== 1
+    || typeof payload.researchObjectId !== 'string' || !UUID.test(payload.researchObjectId)
+    || typeof payload.versionId !== 'string' || !UUID.test(payload.versionId)
+    || typeof payload.kind !== 'string' || !(KINDS as readonly string[]).includes(payload.kind)
+    || !Array.isArray(payload.sourceClaimIds) || payload.sourceClaimIds.length < 1 || payload.sourceClaimIds.length > 12
+    || payload.sourceClaimIds.some((id) => typeof id !== 'string' || !UUID.test(id))) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation payload is invalid');
+  }
+  const sourceClaimIds = [...new Set(payload.sourceClaimIds as string[])].sort();
+  if (sourceClaimIds.length !== payload.sourceClaimIds.length) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation payload contains duplicate Claims');
+  return { schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
+}
+
+async function requireScope(deps: AgentDeps, input: { userId: string; researchObjectId: string; versionId: string }) {
+  const version = await deps.prisma.version.findUnique({ where: { id: input.versionId }, include: { researchObject: true } });
+  if (!version || version.researchObjectId !== input.researchObjectId || !version.researchObject) throw new PresentationAssetError('NOT_FOUND', 'Research Object version not found');
+  await requireActiveMembership(deps.prisma, version.researchObject.workspaceId, input.userId);
+  return version;
+}
+
+async function requirePlatformAdmin(deps: AgentDeps, userId: string): Promise<void> {
+  const user = await deps.prisma.user.findUnique({ where: { id: userId }, select: { platformRole: true } });
+  if (user?.platformRole !== 'platform_admin') throw new PresentationAssetError('ADMIN_REQUIRED', 'Generated image and video requests require a platform administrator');
+}
+
+export async function submitPresentationGeneration(deps: AgentDeps, input: {
+  userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; idempotencyKey: string;
+}, ctx: AuditContext = {}): Promise<AgentTaskView> {
+  await requireScope(deps, input);
+  const payload = parsePresentationGenerationPayload({ schemaVersion: 1, researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, sourceClaimIds: input.sourceClaimIds });
+  const claims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: input.researchObjectId, versionId: input.versionId }, select: { id: true, extractionStatus: true } });
+  const returnedClaimIds = new Set(claims.map((claim) => claim.id));
+  if (claims.length !== payload.sourceClaimIds.length || payload.sourceClaimIds.some((id) => !returnedClaimIds.has(id))
+    || claims.some((claim) => claim.extractionStatus !== 'succeeded')) {
+    throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Every source Claim must be verified in the exact version');
+  }
+  if (input.kind === 'image' || input.kind === 'video') await requirePlatformAdmin(deps, input.userId);
+  const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
+  const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey };
+  return input.kind === 'chart' || input.kind === 'interactive_html'
+    ? submitDeterministicPresentationTask(deps, taskInput, ctx)
+    : submitAgentTask(deps, taskInput, ctx);
+}
+
+export async function listPresentationAssets(deps: AgentDeps, input: {
+  userId: string; researchObjectId: string; versionId: string;
+}): Promise<PresentationAssetView[]> {
+  await requireScope(deps, input);
+  const assets = await deps.prisma.presentationAsset.findMany({
+    where: { researchObjectId: input.researchObjectId, versionId: input.versionId },
+    include: { sourceClaims: { select: { claimId: true } } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  });
+  return assets.map((asset) => ({
+    id: asset.id,
+    researchObjectId: asset.researchObjectId,
+    versionId: asset.versionId,
+    kind: asset.kind,
+    contentHash: asset.contentHash,
+    generator: asset.generator,
+    generatorVersion: asset.generatorVersion,
+    status: asset.status,
+    label: asset.label,
+    sourceClaimIds: asset.sourceClaims.map((source) => source.claimId).sort(),
+    createdAt: asset.createdAt,
+    updatedAt: asset.updatedAt,
+  }));
+}
+
+export async function transitionPresentationAsset(deps: AgentDeps, input: {
+  userId: string; researchObjectId: string; versionId: string; assetId: string; status: Extract<PresentationAssetStatus, 'approved' | 'rejected'>; expectedUpdatedAt: Date;
+}, ctx: AuditContext = {}): Promise<PresentationAsset> {
+  const version = await requireScope(deps, input);
+  const asset = await deps.prisma.presentationAsset.findUnique({ where: { id: input.assetId } });
+  if (!asset || asset.researchObjectId !== input.researchObjectId || asset.versionId !== input.versionId) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
+  if (asset.label !== PRESENTATION_ASSET_LABEL) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation asset label is invalid');
+  if (asset.status !== 'draft') throw new PresentationAssetError('ILLEGAL_TRANSITION', 'Presentation asset status is terminal');
+  if (asset.kind === 'image' || asset.kind === 'video') await requirePlatformAdmin(deps, input.userId);
+  const changed = await deps.prisma.presentationAsset.updateMany({ where: { id: asset.id, status: 'draft', updatedAt: input.expectedUpdatedAt }, data: { status: input.status } });
+  if (changed.count !== 1) throw new PresentationAssetError('CONCURRENT_UPDATE', 'Presentation asset changed concurrently');
+  const current = await deps.prisma.presentationAsset.findUnique({ where: { id: asset.id } });
+  if (!current) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
+  await recordAudit(deps, deps.prisma, { actorId: input.userId, action: `presentation_asset.${input.status}`, workspaceId: version.researchObject.workspaceId, targetType: 'presentation_asset', targetId: asset.id, metadata: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: asset.kind } }, ctx);
+  return current;
+}
+
+export { PresentationAssetError } from './errors';

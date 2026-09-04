@@ -432,7 +432,31 @@
         "apps/scansci-mcp/test/runtime-contract.test.mjs"
       ],
       "prevention": "A publisher browser strategy must initialize from a networkless page, consume the same explicit proxy contract as non-browser paths, and restore successful operator-imported sessions from the declared persistent volume. Controlled egress must not be broadened for unrelated traffic. Keep upstream preimage assertions exact so a package upgrade fails closed for review."
+    },
+    {
+      "id": "issue-021",
+      "title": "Authenticated ZJU WebVPN session cannot deliver the target ScienceDirect PDF",
+      "date": "2026-09-04",
+      "status": "in_progress",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/network",
+        "troubleshooting/production",
+        "troubleshooting/browser",
+        "troubleshooting/integration"
+      ],
+      "description": "Server-side ZJU WebVPN authentication succeeded and persisted six cookies, but the subscription-only ScienceDirect DOI still produced no PDF. Bounded cross-publisher checks were needed to separate credential failure, publisher-specific blocking, and the production network path.",
+      "root_cause": "The credentials and saved session are valid. The canonical container is attached only to internal retrieval_net, while upstream scansci-pdf 1.13.1 _fetch_via_webvpn disables environment proxies and applies only SOCKS5, so its HTTP path cannot resolve the WebVPN host even though an HTTP proxy is configured. A direct-egress diagnostic misleadingly produced ZJU 访问被拒绝 across sites; the canonical Squid route instead returned 200 for Nature/Wiley pages and a real Nature PDF, proving WebVPN is not globally blocked. ScienceDirect alone still returns its own 403 page. The alternative aTrust/RVPN gateway authenticated but did not push the current ScienceDirect CDN route. The noVNC disconnect was a separate x11vnc file-descriptor-limit problem and is not part of the production path.",
+      "solution": "Add exact-preimage compatibility patches so _fetch_via_webvpn and session_status apply config.network_proxy for HTTP, HTTPS and SOCKS5 while preserving target-site TLS verification for every proxy scheme. Keep the authenticated cookies in scansci-data at mode 0600 and keep aTrust stopped with its data volume preserved. Restore the canonical production image and internal network, remove all temporary containers, display/direct-egress bridges and derived images, and do not install a second Chromium. Do not publish the proxy fix until the target Elsevier acceptance is complete. The pinned package invokes FlareSolverr only for Sci-Hub, so its current integration is not a valid fix for WebVPN/CARSI and must remain absent unless a later target-specific proof changes that conclusion.",
+      "verification": "The HTTP regression failed first because the download proxy was absent; the SOCKS5 regression then failed first because TLS verification was disabled; the status regression failed first because session_status had no proxy. Download HTTP/SOCKS5 and status valid/expired branches pass after the minimal patches. New disposable server containers loaded all six cookies from the read-only production named volume. The real patched WebVPN function downloaded a complete 3,651,992-byte PDF and separately downloaded DOI 10.1038/s41586-025-09320-4, whose Nature page explicitly labels it subscription content, as a 1,873,303-byte %PDF- with SHA-256 c4b9b02e25d8d0f0f3a4cb847d54bc50db0f88619ea7b082c046d97c4187be8e and source WebVPN. ScienceDirect remained 403 text/html with title ScienceDirect. The official cookie file remains mode 0600 and single-link without exposing values. A Dockerfile-built ECS candidate reduced the image from 2,503,852,066 to 1,818,508,851 bytes by removing the later browser-tree chown; UID 10001 MCP health, root-owned Chromium launch, layer history and identity labels passed. FlareSolverr was not installed because ScanSci 1.13.1 does not integrate it with WebVPN/CARSI. Canonical e23a94f ScanSci is running/healthy; aTrust is exited; disposable containers, volumes, images and temporary bridges are absent.",
+      "files": [
+        "apps/scansci-mcp/patch-upstream.py",
+        "apps/scansci-mcp/test/patch-upstream-behavior.test.mjs",
+        "docs/handoff/2026-08-16-hermes-2d-pet-handoff.md",
+        "docs/progress.md"
+      ],
+      "prevention": "Do not use a fixed unrelated WebVPN probe as the sole session-validity signal, and do not equate login success with publisher entitlement. Every canonical institutional path must prove DNS/proxy routing from the isolated container and require publisher-source PDF magic before release."
     }
   ],
-  "last_updated": "2026-09-03"
+  "last_updated": "2026-09-05"
 }

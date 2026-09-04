@@ -322,7 +322,13 @@ proof already exist in production. The rejected visible-browser bridge is being
 removed. Institutional bootstrap will use the official `cookie_import` tool
 with an administrator-exported Netscape file; subscription-only and post-recreate
 proof remain pending. The fixed DOI's Semantic Scholar PDF is only an OA proof,
-not the required subscription-only evidence.
+not the required subscription-only evidence. A subscription-only Nature PDF now
+proves the WebVPN entitlement path, but the target ScienceDirect DOI remains 403.
+The local Dockerfile removes a redundant browser-tree `chown` copy-up. Its exact
+ECS image is 1,818,508,851 bytes versus production 2,503,852,066 bytes
+(-685,343,215 bytes / 27.37%); UID 10001 MCP health, root-owned Chromium launch,
+layer history and identity labels are green. Pinned 1.13.1 integrates
+FlareSolverr only from Sci-Hub, not WebVPN/CARSI, so no second Chrome is installed.
 
 - [x] **Step 4: Delete rejected repository artifacts**
 

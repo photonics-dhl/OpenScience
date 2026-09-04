@@ -25,7 +25,7 @@
     "archiver": "^7",
     "diff": "^9.0.0",
     "fastify": "5.10.0",
-    "zod": "3"
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@openscience/agent-worker": "workspace:^",

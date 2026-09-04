@@ -68,10 +68,20 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
     dockerfile.indexOf('LABEL org.openscience.source=') > dockerfile.indexOf('patchright install --with-deps chromium'),
     'release-dependent labels must not invalidate the browser dependency layer',
   );
+  assert.match(
+    dockerfile.slice(dockerfile.indexOf('FROM runtime AS mcp')),
+    /ARG SCANSCI_VERSION=1\.13\.1[\s\S]*ARG SCANSCI_WHEEL_SHA256=f68c30503834fc093eb192bd556090d210241eed48445017fdb3d32f6e1355e5[\s\S]*LABEL org\.openscience\.source=/,
+    'the final stage must redeclare ScanSci build args before emitting runtime identity labels',
+  );
   assert.equal(
     dockerfile.match(/patchright install --with-deps chromium/g)?.length,
     1,
     'the image must install exactly one Patchright Chromium runtime',
+  );
+  assert.doesNotMatch(
+    dockerfile,
+    /chown\s+-R\s+[^\n]*\/opt\/scansci-browsers/,
+    'the read-only Chromium tree must not be copied into a later layer by recursive chown',
   );
   assert.match(compose, /SCANSCI_PDF_PROXY: http:\/\/openscience-egress:7891/);
   assert.match(compose, /SCANSCI_PDF_SESSION_FILE: \/data\/scansci\/publisher-session\.netscape/);

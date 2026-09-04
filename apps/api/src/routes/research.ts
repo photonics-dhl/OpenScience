@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
 import type { StorageAdapter } from '@openscience/storage';
-import { getPublicEvidenceSource, PublicEvidenceSourceError } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, getPublicEvidenceSource, PublicEvidenceSourceError } from '@openscience/domain';
 
 /** /research 公开路由依赖：AuthDeps（仅用 prisma）。 */
 export type ResearchRouteDeps = AuthDeps & { storage?: StorageAdapter };
@@ -15,6 +15,12 @@ const presentationAssetParams = versionParams.extend({ assetId: z.string().uuid(
 const MAX_PUBLIC_PRESENTATION_BYTES = 16 * 1024 * 1024;
 const safeInlineImages = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']);
 const safeInlineVideos = new Set(['video/mp4', 'video/webm']);
+
+function isSafeDeterministicSvg(bytes: Buffer): boolean {
+  const svg = bytes.toString('utf8');
+  return svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')
+    && !/(?:<script|<foreignobject|\son[a-z]+\s*=|\s(?:href|xlink:href)\s*=|url\s*\(|<!entity|<\?xml)/i.test(svg);
+}
 const publicLocatorSchema = z.object({
   blockId: z.string().min(1).optional(),
   page: z.number().int().positive().optional(),
@@ -319,9 +325,14 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
       throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
     }
 
+    const bytes = Buffer.concat(chunks);
     const storedType = (object.contentType ?? head.contentType ?? '').toLowerCase().split(';', 1)[0] ?? '';
+    const deterministicChartSvg = asset.kind === 'chart' && storedType === 'image/svg+xml'
+      && asset.generator === DETERMINISTIC_PRESENTATION_GENERATOR
+      && asset.generatorVersion === DETERMINISTIC_PRESENTATION_GENERATOR_VERSION
+      && isSafeDeterministicSvg(bytes);
     const inline = ((asset.kind === 'image' || asset.kind === 'chart') && safeInlineImages.has(storedType))
-      || (asset.kind === 'video' && safeInlineVideos.has(storedType));
+      || deterministicChartSvg || (asset.kind === 'video' && safeInlineVideos.has(storedType));
     const contentType = inline ? storedType : 'application/octet-stream';
     return reply
       .header('Content-Type', contentType)
@@ -330,6 +341,6 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
       .header('X-Content-Type-Options', 'nosniff')
       .header('Content-Security-Policy', "sandbox; default-src 'none'")
       .header('Cache-Control', 'public, max-age=31536000, immutable')
-      .send(Buffer.concat(chunks));
+      .send(bytes);
   });
 }

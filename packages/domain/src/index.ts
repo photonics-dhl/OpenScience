@@ -262,6 +262,18 @@ export {
   type PresentationAsset,
 } from './research-intelligence/types';
 export {
+  parsePresentationGenerationPayload,
+  DETERMINISTIC_PRESENTATION_GENERATOR,
+  DETERMINISTIC_PRESENTATION_GENERATOR_VERSION,
+  listPresentationAssets,
+  submitPresentationGeneration,
+  transitionPresentationAsset,
+  PresentationAssetError,
+  type PresentationGenerationKind,
+  type PresentationGenerationPayload,
+  type PresentationAssetView,
+} from './assets/presentation-asset';
+export {
   ResearchIntelligenceValidationError,
   validateResearchIdentityProfile,
   validateSourceLocator,

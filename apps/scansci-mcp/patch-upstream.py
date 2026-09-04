@@ -411,6 +411,78 @@ import uuid""",
         ),
         (
             package / "sources" / "carsi.py",
+            """                    else:
+                        log.info("   [CARSI-Browser] Cloudflare challenge did not resolve")""",
+            """                    else:
+                        log.info("   [CARSI-Browser] Cloudflare challenge did not resolve")
+
+                    # A human challenge completion can replace the document between
+                    # the final title check and the paywall probe. Require three
+                    # consecutive complete snapshots; a destroyed context resets the
+                    # stability counter instead of leaking into the next DOM probe.
+                    stable_marker = None
+                    stable_count = 0
+                    for _document_wait in range(30):
+                        cancel_event = self.config.get("_scansci_cancel_event")
+                        if cancel_event is not None and cancel_event.is_set():
+                            return None
+                        try:
+                            page.wait_for_load_state("domcontentloaded", timeout=2000)
+                            stable_title = page.title() or ""
+                            marker = (page.url, stable_title)
+                            ready_state = page.evaluate("() => document.readyState")
+                            if ready_state == "complete" and not is_cloudflare_challenge(stable_title):
+                                if marker == stable_marker:
+                                    stable_count += 1
+                                else:
+                                    stable_marker = marker
+                                    stable_count = 1
+                                if stable_count >= 3:
+                                    break
+                            else:
+                                stable_marker = None
+                                stable_count = 0
+                        except Exception:
+                            stable_marker = None
+                            stable_count = 0
+                        time.sleep(1)
+                    else:
+                        log.info("   [CARSI-Browser] Post-challenge document did not stabilize")
+                        return None""",
+            "CARSI Cloudflare navigation synchronization",
+        ),
+        (
+            package / "sources" / "carsi.py",
+            """                    cookies_valid = False
+                    if has_cookies and not needs_login:""",
+            '''                    cookies_valid = False
+                    institution_access = False
+                    if publisher == "sciencedirect" and has_cookies and not needs_login:
+                        try:
+                            access_marker = page.evaluate(
+                                "() => { const institution = document.querySelector('#gh-inst-icon-btn.gh-has-institution'); "
+                                "const label = (institution?.innerText || institution?.textContent || "
+                                "institution?.getAttribute('aria-label') || '').trim(); "
+                                "const pdf = [...document.querySelectorAll('a')].find(a => "
+                                "(a.getAttribute('href') || '').includes('/pdfft')); "
+                                "return { label, hasPdf: Boolean(pdf) }; }"
+                            )
+                            if isinstance(access_marker, dict):
+                                actual_label = " ".join(str(access_marker.get("label", "")).casefold().split())
+                                expected_label = " ".join(str(idp_en).casefold().split())
+                                allowed_labels = {expected_label, f"{expected_label} library"}
+                                institution_access = bool(access_marker.get("hasPdf")) and actual_label in allowed_labels
+                        except Exception:
+                            institution_access = False
+
+                    if institution_access:
+                        cookies_valid = True
+                        log.info("   [CARSI-Browser] Institutional access UI confirmed, skipping re-login")
+                    elif has_cookies and not needs_login:''',
+            "ScienceDirect authenticated institution UI",
+        ),
+        (
+            package / "sources" / "carsi.py",
             """                            for i in range(100):
                                 time.sleep(3)""",
             """                            for i in range(100):
@@ -434,6 +506,38 @@ import uuid""",
                             log.info("   [CARSI-Browser] No institution search box found")
                             return None""",
             "CARSI fail-closed institution selection",
+        ),
+        (
+            package / "sources" / "instsci.py",
+            '''        s = requests.Session()
+        s.trust_env = False
+        s.cookies.update(jar)
+        resp = s.get(test_url, timeout=15, allow_redirects=True,
+                     headers={"User-Agent": USER_AGENT})''',
+            '''        s = requests.Session()
+        s.trust_env = False
+        proxy = str(config.get("network_proxy", "")).strip()
+        if proxy:
+            s.proxies = {"http": proxy, "https": proxy}
+        s.cookies.update(jar)
+        resp = s.get(test_url, timeout=15, allow_redirects=True,
+                     headers={"User-Agent": USER_AGENT})''',
+            "WebVPN status controlled proxy",
+        ),
+        (
+            package / "sources" / "instsci.py",
+            '''    # Use SOCKS5 proxy if configured (for campus connectors like EasyConnect/aTrust)
+    socks5 = _get_socks5_proxy(config)
+    if socks5:
+        s.proxies = {"http": socks5, "https": socks5}
+        s.verify = False  # Campus connectors often use self-signed certs''',
+            '''    # Route WebVPN through the same explicit proxy as the isolated runtime.
+    # A proxy changes transport routing, not the publisher/WebVPN TLS trust
+    # boundary, so certificate verification remains enabled for every scheme.
+    proxy = str(config.get("network_proxy", "")).strip()
+    if proxy:
+        s.proxies = {"http": proxy, "https": proxy}''',
+            "WebVPN controlled HTTP proxy",
         ),
         (
             package / "sources" / "instsci.py",

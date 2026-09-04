@@ -145,7 +145,7 @@ importers:
         specifier: 5.10.0
         version: 5.10.0
       zod:
-        specifier: '3'
+        specifier: 3.25.76
         version: 3.25.76
     devDependencies:
       '@openscience/agent-worker':
