@@ -26,6 +26,78 @@ import re""",
             "institutional session environment",
         ),
         (
+            package / "browser_login.py",
+            """import json
+import time
+import atexit""",
+            """import json
+import os
+import time
+import atexit""",
+            "WebVPN imported-session environment",
+        ),
+        (
+            package / "browser_login.py",
+            """def _save_cookies_netscape(cookies: list[dict[str, Any]], cookie_file: Path) -> None:
+    \"\"\"Save cookies in Netscape format (CloakBrowser import compatible).\"\"\"
+    from .browser_cookies import cookies_to_netscape
+    cookie_file.write_text(cookies_to_netscape(cookies), encoding=\"utf-8\")
+
+
+def _import_to_browser""",
+            """def _save_cookies_netscape(cookies: list[dict[str, Any]], cookie_file: Path) -> None:
+    \"\"\"Save cookies in Netscape format (CloakBrowser import compatible).\"\"\"
+    from .browser_cookies import cookies_to_netscape
+    cookie_file.write_text(cookies_to_netscape(cookies), encoding=\"utf-8\")
+
+
+def _restore_imported_session_cookies(context: Any, config: dict[str, Any]) -> int:
+    session_file = os.environ.get(\"SCANSCI_PDF_SESSION_FILE\", \"\").strip()
+    if not session_file:
+        return 0
+    session_path = Path(session_file)
+    if not session_path.is_file():
+        return 0
+    try:
+        from .browser_engine import _parse_netscape_cookies
+
+        restored = []
+        for cookie in _parse_netscape_cookies(session_path.read_text(encoding=\"utf-8\")):
+            domain = str(cookie.get(\"domain\", \"\"))
+            if not domain:
+                continue
+            restored.append({
+                \"name\": str(cookie.get(\"name\", \"\")),
+                \"value\": str(cookie.get(\"value\", \"\")),
+                \"domain\": domain,
+                \"path\": str(cookie.get(\"path\", \"/\")) or \"/\",
+            })
+        if restored:
+            context.add_cookies(restored)
+        return len(restored)
+    except Exception:
+        return 0
+
+
+def _import_to_browser""",
+            "WebVPN imported-session restore helper",
+        ),
+        (
+            package / "browser_login.py",
+            """        browser = launch(headless=False, humanize=True,
+                         args=[\"--disable-features=CrossOriginOpenerPolicy\"])
+        context = browser.new_context()
+        page = context.new_page()""",
+            """        browser = launch(headless=False, humanize=True,
+                         args=[\"--disable-features=CrossOriginOpenerPolicy\"])
+        context = browser.new_context()
+        restored_count = _restore_imported_session_cookies(context, config)
+        if restored_count:
+            log.info(f\"   [browser] Restored {restored_count} imported cookies\")
+        page = context.new_page()""",
+            "WebVPN login imported-session restore",
+        ),
+        (
             package / "_publisher_strategies_core.py",
             '"浙江大学": "Zhejiang",',
             '"浙江大学": "Zhejiang University",',
@@ -353,6 +425,59 @@ import uuid""",
                             log.info("   [CARSI-Browser] No institution search box found")
                             return None""",
             "CARSI fail-closed institution selection",
+        ),
+        (
+            package / "sources" / "instsci.py",
+            """            for i in range(100):
+                time.sleep(3)
+                try:""",
+            """            for i in range(100):
+                cancel_event = config.get("_scansci_cancel_event")
+                if cancel_event is not None and cancel_event.is_set():
+                    return None
+                time.sleep(3)
+                try:""",
+            "WebVPN login cancellation",
+        ),
+        (
+            package / "institutional" / "publisher_batch.py",
+            """        self._progress_active = False
+
+    def run_records(""",
+            """        self._progress_active = False
+
+    def _cancel_requested(self) -> bool:
+        try:
+            cancel_event = self.config.get(\"_scansci_cancel_event\")
+        except AttributeError:
+            return False
+        return cancel_event is not None and cancel_event.is_set()
+
+    def run_records(""",
+            "institutional publisher cancellation helper",
+        ),
+        (
+            package / "institutional" / "publisher_batch.py",
+            """        while time.time() < deadline:
+            time.sleep(3)
+            marker = f\"{self._title(page)} | {getattr(page, 'url', '')[:160]}\"""",
+            """        while time.time() < deadline:
+            if self._cancel_requested():
+                self._event(result, \"request_cancelled\", \"institutional login\")
+                return False
+            time.sleep(3)
+            marker = f\"{self._title(page)} | {getattr(page, 'url', '')[:160]}\"""",
+            "institutional login cancellation",
+        ),
+        (
+            package / "institutional" / "publisher_batch.py",
+            """            for index in range(max_checks):
+                if self._is_challenge_page(page):""",
+            """            for index in range(max_checks):
+                if self._cancel_requested():
+                    return False
+                if self._is_challenge_page(page):""",
+            "institutional challenge cancellation",
         ),
         (
             package / "_publisher_strategies_core.py",
@@ -754,8 +879,13 @@ def main() -> None:
     package = Path(sys.argv[1]) if len(sys.argv) == 2 else DEFAULT_PACKAGE
     for target, old, new, label in patches(package):
         source = target.read_text(encoding="utf-8")
-        if source.count(old) != 1 or new in source:
-            raise SystemExit(f"unexpected scansci-pdf {label} preimage")
+        old_count = source.count(old)
+        new_present = new in source
+        if old_count != 1 or new_present:
+            raise SystemExit(
+                f"unexpected scansci-pdf {label} preimage "
+                f"(old_count={old_count}, new_present={new_present})"
+            )
         target.write_text(source.replace(old, new), encoding="utf-8")
 
 
