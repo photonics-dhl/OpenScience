@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Local docs branch / HEAD: `codex/scansci-cas-blocked-handoff` / `2903123b803bf7d3642a86d3dbb651fc97ee820b`；`origin/main` / application candidate `7593e82e8a309ffcaaa8092b5628c53a0fec444a`（PR #70 merged，**not deployed**）。
+- Local docs branch / handoff base: `codex/scansci-cas-blocked-handoff` / `d8e4382c6130199d50b0ff8bde3099365fbb190c`；`origin/main` / application candidate `7593e82e8a309ffcaaa8092b5628c53a0fec444a`（PR #70 merged，**not deployed**）。
 - Production release / rollback: `e23a94f6622bb65e33ddbfe290970a9e6366567a` / `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`；core/search `36/36` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12。机构条目精确选择与 ZJU CAS 已通，但 ScienceDirect Cloudflare challenge 未通过；订阅 PDF、四入口/72h/600s 仍 pending。
 
@@ -14,7 +14,7 @@
 - PR #68 / CI `33835200273` 和 PR #69 / CI `33838217748` 修复浙大双语名、Elsevier ARIA 选项；PR #70 / CI `33840879274` 精确接受当前公开标签 `浙江大学(Zhejiang University) (Zhejiang University Library)`，继续拒绝附属医院近似项。
 - 未发布候选 `7593e82…` 直接验收 DOI `10.1016/j.physleta.2025.130846`：`selected=2`、`exact_not_found=0`；账号只提交一次并越过 ZJU IdP，官方仓库保存 43 条会话记录。断链 profile 锁精确迁移 `6/6` 后确认持久浏览器成功启动，但 ScienceDirect 仍停在 `Just a moment…`，PDF probe 为 HTML/403，官方下载超时且临时目录清理完成。
 - 强制 Elsevier/CARSI/ZJU 经 Windows 反向隧道的试验确认远端与本机 v2ray 出口一致，但出口为美国 Cox、不是校网，且未解决 challenge；Squid 已恢复原配置，候选单服务已恢复正式 `e23a94f…` 镜像，session volume 保留、ScanSci healthy。
-- 上游 README 明确机构登录、验证码、二次验证需用户在可见浏览器完成；CARSI 可校外使用，不要求校园 IP。下一步不再复跑当前 Xvfb 路径，只接受同一官方运行时的可见交互或机构 Elsevier API Key/InstToken；成功前不发布、不重复跑全仓/视觉门禁。
+- 1.13.1 官方 README/源码明确：机构登录需用户在宿主机可见浏览器完成；内置 `RemoteAssist` 只有 URL/状态/完成按钮，不提供远程画面或输入。CARSI 官方允许校外访问；Elsevier API 的准确条件是 API Key + 校园/机构出口，通常不需要 InstToken。FlareSolverr 属 Sci-Hub/LibGen 灰色源层，不用于本次 legal-only publisher 路径。下一步不再复跑当前 Xvfb 路径；成功前不发布、不重复跑全仓/视觉门禁。
 
 ## 2026-09-03 — ScanSci persistent session and PDF download accepted
 

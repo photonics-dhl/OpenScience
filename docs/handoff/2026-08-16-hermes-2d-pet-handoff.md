@@ -6,12 +6,12 @@
 
 - 产品目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
 - Taskmaster `hermes-research-intelligence` 为 9/12；ScanSci upstream plan 的替换、部署、Cookie 持久化与普通下载验收已完成，Task 10 的 publisher-provenance 机构旅程尚未完成。
-- 当前唯一任务是通过官方支持的可见浏览器交互或 Elsevier API/InstToken 越过 publisher challenge，再用无 OA fallback 的 DOI `10.1016/j.physleta.2025.130846` 下载 publisher PDF；成功后才发布候选并完成四入口与 72h/600s 生命周期。
+- 当前唯一任务是按官方 1.13.1 边界完成一种合法通道：CARSI 必须由用户在宿主机可见浏览器完成 challenge；Elsevier API 则需要 API Key + 校园/机构出口，通常不需要 InstToken。之后再用无 OA fallback 的 DOI `10.1016/j.physleta.2025.130846` 下载 publisher PDF；成功后才发布候选并完成四入口与 72h/600s 生命周期。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Local state: branch `codex/scansci-cas-blocked-handoff` / HEAD `2903123b803bf7d3642a86d3dbb651fc97ee820b`；`origin/main` / 未发布应用候选为 `7593e82e8a309ffcaaa8092b5628c53a0fec444a`。
+- Local state: branch `codex/scansci-cas-blocked-handoff` / handoff base `d8e4382c6130199d50b0ff8bde3099365fbb190c`；`origin/main` / 未发布应用候选为 `7593e82e8a309ffcaaa8092b5628c53a0fec444a`。
 - Production application source / immutable release: `e23a94f6622bb65e33ddbfe290970a9e6366567a`
 - Rollback: `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`
 - Core/search migrations: `36/36` / `2/2`。生产仅运行官方 `scansci-pdf==1.13.1` 的单一 MCP；Chromium 安装层和 BGE 模型/依赖层继续复用缓存。
@@ -41,7 +41,7 @@
 ## Open risks and constraints
 
 - 当前 DOI 最终由 `SemanticScholar` fallback 命中，因此证明了 ScanSci 可用、下载正确和重建后 session 文件可恢复，但不证明 publisher subscription entitlement；必须用无 OA/聚合全文回退的 DOI 补 institution/publisher provenance。
-- 当前阻塞不是机构订阅不存在，也不是 ZJU CAS 账号失败；CAS 已通过，阻塞点是 ScienceDirect Cloudflare challenge。CARSI 允许校外认证，不要求校园 IP；当前 Xvfb 自动化无法替代上游说明要求的可见浏览器人工登录/挑战交互。
+- 当前阻塞不是机构订阅不存在，也不是 ZJU CAS 账号失败；CAS 已通过，阻塞点是 ScienceDirect Cloudflare challenge。CARSI 官方允许校外认证，不要求校园 IP；ScanSci 1.13.1 的登录实现明确启动 `headless=False` 浏览器并要求用户在宿主机浏览器窗口完成交互。其内置 `RemoteAssist` 只显示 URL/状态并接收“已完成”信号，不提供画面或输入控制，因此不能替代远程显示通道。
 - 四入口尚未在生产完成统一旅程：Personal Space、Hermes、RO Hermes、RO Files/Evidence。
 - Task 10 在机构下载、MCP recreate/repeat、一次性下载和 72h/600s 生命周期全部通过前保持 `in-progress`，不得把 Taskmaster 改为 10/12。
 - 不恢复 noVNC/auth sidecar，不保存账号密码，不读取或打印 `.env`、Cookie、MCP 原始响应或生产文档正文。
@@ -49,9 +49,9 @@
 
 ## Next action
 
-1. 不再复跑当前 Xvfb + 美国 v2ray 出口；选择上游支持的单一完成路径：让同一官方运行时获得可见浏览器人工交互，或配置机构批准的 Elsevier API Key/InstToken。不得安装第二套 Chromium/BGE、FlareSolverr 或自制下载器。
+1. 不再复跑当前 Xvfb + 美国 v2ray 出口。官方可行路径只有两类：为同一服务器 Chromium 提供用户可操作的显示通道以完成 CARSI challenge；或取得 Elsevier API Key 并让 `api.elsevier.com` 走校园/机构出口。普通 API Key + 当前美国 Cox 出口不证明闭源全文授权，InstToken 通常不需要。
 2. 会话建立后只重试一次 DOI `10.1016/j.physleta.2025.130846`，要求 publisher/CARSI source、`%PDF-`、bytes 与 SHA-256；成功前不跑额外全仓/视觉门禁，不发布。
-3. 下载成功后才发布候选，完成 recreate/repeat、四入口和 72h/600s 旅程，最后将 Task 10 置为 done。
+3. 不为 legal-only publisher 路径安装 FlareSolverr；1.13.1 文档把它放在 Sci-Hub/LibGen 灰色源层。下载成功后才发布候选，完成 recreate/repeat、四入口和 72h/600s 旅程，最后将 Task 10 置为 done。
 
 ## Read first
 
