@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Local docs state: branch `codex/hermes-final-handoff` / 基于 merge `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`；docs-only 收尾提交待生成。
+- Current docs state: 以 Git `main` 实时 HEAD 为准；docs-only 提交不得替代或冒充下列 production application source。
 - Production application source / immutable release: `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`
 - Rollback: `0aaf52fed29e79bb19b15517ba9ef50545510f72`
 - Core/search migrations: `36/36` / `2/2`。
