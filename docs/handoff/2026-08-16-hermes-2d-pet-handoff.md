@@ -1,17 +1,17 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-04 +08。** 生产为 `e23a94f…` / rollback `4bba4e5…`；未发布候选 `7593e82…` 已能精确选中 Elsevier 的“浙江大学图书馆” CARSI 条目，但账号只提交一次后 CAS 未建立认证会话，订阅 DOI 仍返回 `CAS login required`。Taskmaster 为 9/12，Task 10 仍在进行；功能验收前不再发布候选。
+> **CURRENT active-memory，2026-09-04 +08。** 生产为 `e23a94f…` / rollback `4bba4e5…`；未发布候选 `7593e82…` 已精确选中 Elsevier 的“浙江大学图书馆” CARSI 条目并越过浙大 CAS，官方运行时保存 43 条会话记录，但 ScienceDirect 持续停在 Cloudflare challenge，订阅 DOI 未取得 PDF。Taskmaster 为 9/12，Task 10 仍在进行；功能验收前不发布候选。
 
 ## Goal and state
 
 - 产品目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
 - Taskmaster `hermes-research-intelligence` 为 9/12；ScanSci upstream plan 的替换、部署、Cookie 持久化与普通下载验收已完成，Task 10 的 publisher-provenance 机构旅程尚未完成。
-- 当前唯一任务是先取得有效浙大 CAS 会话，直接用无 OA fallback 的 DOI `10.1016/j.physleta.2025.130846` 下载 publisher PDF；成功后才发布候选并完成四入口与 72h/600s 生命周期。
+- 当前唯一任务是通过官方支持的可见浏览器交互或 Elsevier API/InstToken 越过 publisher challenge，再用无 OA fallback 的 DOI `10.1016/j.physleta.2025.130846` 下载 publisher PDF；成功后才发布候选并完成四入口与 72h/600s 生命周期。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Local state: detached `HEAD 7593e82e8a309ffcaaa8092b5628c53a0fec444a`（PR #70 已合并，仅是未发布候选）。
+- Local state: branch `codex/scansci-cas-blocked-handoff` / HEAD `2903123b803bf7d3642a86d3dbb651fc97ee820b`；`origin/main` / 未发布应用候选为 `7593e82e8a309ffcaaa8092b5628c53a0fec444a`。
 - Production application source / immutable release: `e23a94f6622bb65e33ddbfe290970a9e6366567a`
 - Rollback: `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`
 - Core/search migrations: `36/36` / `2/2`。生产仅运行官方 `scansci-pdf==1.13.1` 的单一 MCP；Chromium 安装层和 BGE 模型/依赖层继续复用缓存。
@@ -35,12 +35,13 @@
 - 正式 helper 返回 `SCANSCI_COOKIE_IMPORT_OK`；持久 session 为 UID 10001、mode `0600`、单链接、非空，host/container staging、`.next` 和 cleanup marker 均 absent。本机认证临时目录已精确清理。
 - 导入后只重建 `scansci-mcp`，runtime verifier 与持久 session 复核通过。DOI `10.1016/j.physleta.2023.129241` 下载为 `%PDF-` 文件，1,382,940 bytes，SHA-256 `fe441330f962ab8c178071ea8b864cbfc1baf953b27ade5d4cf5c80a2ba70aa1`；重复调用返回相同受控文件与哈希。
 - PR #66–#70 仅对锁定的上游 1.13.1 做 exact-preimage 兼容修复：浏览器回收、导入 session 恢复、取消传播、浙大双语/图书馆标签精确匹配；公开 17-tool MCP 接口和官方运行方式未变。
-- 未发布候选 `7593e82…` 目标验收证明 `selected=2` / `exact_not_found=0`；账号标准输入只提交一次，后续官方下载仍 `CAS login required=2`、`pdf_captured=0`。候选未发布，临时服务已恢复生产镜像，ScanSci 为 8 PID / 0 Chromium 子进程。
+- 未发布候选 `7593e82…` 目标验收证明 `selected=2` / `exact_not_found=0`；账号标准输入只提交一次，浏览器离开 ZJU IdP 并进入 Elsevier，官方持久仓库保存 43 条会话记录。修复 6 个断链 `Singleton*` 后日志确认 `persistent browser profile` 启动，但 ScienceDirect 仍在 Cloudflare `Just a moment…`，PDF probe 为 HTML/403，官方下载超时且临时目录清理完成。
+- `never_direct` 强制 Elsevier/CARSI/ZJU 走 Windows 反向隧道的运行时试验未改善结果；出口与本机 v2ray 相同且为美国 Cox 网络，并非校网。试验配置已原子恢复，候选单服务也已恢复生产镜像；`scansci-data` 会话卷保留，生产 ScanSci healthy。
 
 ## Open risks and constraints
 
 - 当前 DOI 最终由 `SemanticScholar` fallback 命中，因此证明了 ScanSci 可用、下载正确和重建后 session 文件可恢复，但不证明 publisher subscription entitlement；必须用无 OA/聚合全文回退的 DOI 补 institution/publisher provenance。
-- 当前阻塞不是机构订阅不存在，而是没有有效的 ZJU CAS 认证会话。已有账号提交未完成认证；不自动重试，不绕过验证码/二次认证。
+- 当前阻塞不是机构订阅不存在，也不是 ZJU CAS 账号失败；CAS 已通过，阻塞点是 ScienceDirect Cloudflare challenge。CARSI 允许校外认证，不要求校园 IP；当前 Xvfb 自动化无法替代上游说明要求的可见浏览器人工登录/挑战交互。
 - 四入口尚未在生产完成统一旅程：Personal Space、Hermes、RO Hermes、RO Files/Evidence。
 - Task 10 在机构下载、MCP recreate/repeat、一次性下载和 72h/600s 生命周期全部通过前保持 `in-progress`，不得把 Taskmaster 改为 10/12。
 - 不恢复 noVNC/auth sidecar，不保存账号密码，不读取或打印 `.env`、Cookie、MCP 原始响应或生产文档正文。
@@ -48,9 +49,9 @@
 
 ## Next action
 
-1. 用可成功完成 CAS 的浙大账号/二次认证建立会话；不重复安装 Chromium/BGE，不建新下载器。
-2. 先在未发布候选 `7593e82…` 上直接下载 DOI `10.1016/j.physleta.2025.130846`，要求 publisher/CARSI source、`%PDF-`、bytes 与 SHA-256；成功前不跑额外全仓/视觉门禁，不发布。
-3. 下载成功后才发布，完成 recreate/repeat、四入口和 72h/600s 旅程，最后将 Task 10 置为 done。
+1. 不再复跑当前 Xvfb + 美国 v2ray 出口；选择上游支持的单一完成路径：让同一官方运行时获得可见浏览器人工交互，或配置机构批准的 Elsevier API Key/InstToken。不得安装第二套 Chromium/BGE、FlareSolverr 或自制下载器。
+2. 会话建立后只重试一次 DOI `10.1016/j.physleta.2025.130846`，要求 publisher/CARSI source、`%PDF-`、bytes 与 SHA-256；成功前不跑额外全仓/视觉门禁，不发布。
+3. 下载成功后才发布候选，完成 recreate/repeat、四入口和 72h/600s 旅程，最后将 Task 10 置为 done。
 
 ## Read first
 

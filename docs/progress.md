@@ -4,16 +4,17 @@
 
 ## Current version tuple
 
-- Local candidate: detached `7593e82e8a309ffcaaa8092b5628c53a0fec444a`（PR #70 merged，**not deployed**）。
+- Local docs branch / HEAD: `codex/scansci-cas-blocked-handoff` / `2903123b803bf7d3642a86d3dbb651fc97ee820b`；`origin/main` / application candidate `7593e82e8a309ffcaaa8092b5628c53a0fec444a`（PR #70 merged，**not deployed**）。
 - Production release / rollback: `e23a94f6622bb65e33ddbfe290970a9e6366567a` / `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`；core/search `36/36` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12。机构条目精确选择已通，但 ZJU CAS 未建立认证会话；订阅 PDF、四入口/72h/600s 仍 pending。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12。机构条目精确选择与 ZJU CAS 已通，但 ScienceDirect Cloudflare challenge 未通过；订阅 PDF、四入口/72h/600s 仍 pending。
 
 ## 2026-09-04 — ScanSci institutional target blocked before release
 
 - 生产 `e23a94f…` / rollback `4bba4e5…` healthy；只有官方 `scansci-pdf==1.13.1` 单 MCP。ScanSci wheel/Chromium 层和 BGE 模型/依赖层均复用缓存，未安装第二套运行时。
 - PR #68 / CI `33835200273` 和 PR #69 / CI `33838217748` 修复浙大双语名、Elsevier ARIA 选项；PR #70 / CI `33840879274` 精确接受当前公开标签 `浙江大学(Zhejiang University) (Zhejiang University Library)`，继续拒绝附属医院近似项。
-- 未发布候选 `7593e82…` 直接验收 DOI `10.1016/j.physleta.2025.130846`：`selected=2`、`exact_not_found=0`。账号只提交一次，但后续官方下载仍 `CAS login required=2`、`pdf_captured=0`，因此候选不发布。临时服务已恢复正式镜像，8 PID / 0 Chromium。
-- 下一步只是获取可成功完成 CAS/二次认证的会话，先直接下载目标 PDF；成功前不发布，不重复跑全仓/视觉门禁。
+- 未发布候选 `7593e82…` 直接验收 DOI `10.1016/j.physleta.2025.130846`：`selected=2`、`exact_not_found=0`；账号只提交一次并越过 ZJU IdP，官方仓库保存 43 条会话记录。断链 profile 锁精确迁移 `6/6` 后确认持久浏览器成功启动，但 ScienceDirect 仍停在 `Just a moment…`，PDF probe 为 HTML/403，官方下载超时且临时目录清理完成。
+- 强制 Elsevier/CARSI/ZJU 经 Windows 反向隧道的试验确认远端与本机 v2ray 出口一致，但出口为美国 Cox、不是校网，且未解决 challenge；Squid 已恢复原配置，候选单服务已恢复正式 `e23a94f…` 镜像，session volume 保留、ScanSci healthy。
+- 上游 README 明确机构登录、验证码、二次验证需用户在可见浏览器完成；CARSI 可校外使用，不要求校园 IP。下一步不再复跑当前 Xvfb 路径，只接受同一官方运行时的可见交互或机构 Elsevier API Key/InstToken；成功前不发布、不重复跑全仓/视觉门禁。
 
 ## 2026-09-03 — ScanSci persistent session and PDF download accepted
 
