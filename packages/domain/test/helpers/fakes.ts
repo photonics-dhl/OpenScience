@@ -47,13 +47,14 @@ interface FakeDb {
   claimNodes: any[];
   evidenceRecords: any[];
   presentationAssets: any[];
+  presentationAssetClaims: any[];
   researchIdentityProfiles: any[];
   auditLogs: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], researchIdentityProfiles: [], auditLogs: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], presentationAssetClaims: [], researchIdentityProfiles: [], auditLogs: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = (modelName?: string, target?: string | string[]) => {
@@ -639,6 +640,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     claimNode: {
       findMany: async ({ where }: any) =>
         db.claimNodes.filter((claim) =>
+          (where.id?.in === undefined || where.id.in.includes(claim.id)) &&
           (where.researchObjectId === undefined || claim.researchObjectId === where.researchObjectId) &&
           (where.versionId === undefined || claim.versionId === where.versionId),
         ),
@@ -663,9 +665,32 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     presentationAsset: {
-      findMany: async ({ where }: any) => db.presentationAssets.filter((asset) =>
-        (where.researchObjectId === undefined || asset.researchObjectId === where.researchObjectId) &&
-        (where.versionId === undefined || asset.versionId === where.versionId)),
+      findMany: async ({ where, include, orderBy }: any) => {
+        const rows = db.presentationAssets.filter((asset) =>
+          (where.researchObjectId === undefined || asset.researchObjectId === where.researchObjectId) &&
+          (where.versionId === undefined || asset.versionId === where.versionId));
+        if (orderBy) rows.sort((left, right) => (right.createdAt?.getTime?.() ?? 0) - (left.createdAt?.getTime?.() ?? 0) || right.id.localeCompare(left.id));
+        return rows.map((asset) => include?.sourceClaims
+          ? { ...asset, sourceClaims: db.presentationAssetClaims.filter((source) => source.presentationAssetId === asset.id) }
+          : asset);
+      },
+      findUnique: async ({ where }: any) => db.presentationAssets.find((asset) => asset.id === where.id) ?? null,
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), status: 'draft', createdAt: new Date(), updatedAt: new Date(), ...data };
+        db.presentationAssets.push(row);
+        return row;
+      },
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.presentationAssets.filter((asset) => (where.id === undefined || asset.id === where.id) && (where.status === undefined || asset.status === where.status) && (where.updatedAt === undefined || asset.updatedAt?.getTime() === where.updatedAt.getTime()));
+        rows.forEach((asset) => Object.assign(asset, data, { updatedAt: new Date((asset.updatedAt?.getTime?.() ?? Date.now()) + 1) }));
+        return { count: rows.length };
+      },
+    },
+    presentationAssetClaim: {
+      createMany: async ({ data }: any) => {
+        db.presentationAssetClaims.push(...data);
+        return { count: data.length };
+      },
     },
     versionManifest: {
       findUnique: async ({ where, include }: any) => {

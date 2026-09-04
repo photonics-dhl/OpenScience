@@ -23,7 +23,7 @@ import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict }
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
 export const AGENT_TASK_KINDS = [
-  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'workspace.guide', 'search.index', 'source.retrieve',
+  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'presentation.generate', 'workspace.guide', 'search.index', 'source.retrieve',
 ] as const;
 export const PUBLIC_AGENT_TASK_KINDS = [
   'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan',
@@ -443,6 +443,7 @@ async function persistAgentTaskCoreInTransaction(
   tx: Prisma.TransactionClient,
   input: Omit<SubmitAgentTaskInput, 'dispatch'>,
   ctx: AuditContext = {},
+  billing: 'ai_credit' | 'deterministic' = 'ai_credit',
 ): Promise<{ task: AgentTask; replayed: boolean }> {
   const session = await tx.agentSession.findUnique({ where: { id: input.sessionId } });
   if (!session || session.userId !== input.userId) {
@@ -507,12 +508,14 @@ async function persistAgentTaskCoreInTransaction(
     session.researchObjectId,
     requestedContext,
   );
-  const balance = await tx.usageLedger.aggregate({
-    where: { userId: input.userId, resource: AI_CREDIT_RESOURCE },
-    _sum: { delta: true },
-  });
-  if (Number(balance._sum.delta ?? 0) <= 0) {
-    throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
+  if (billing === 'ai_credit') {
+    const balance = await tx.usageLedger.aggregate({
+      where: { userId: input.userId, resource: AI_CREDIT_RESOURCE },
+      _sum: { delta: true },
+    });
+    if (Number(balance._sum.delta ?? 0) <= 0) {
+      throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
+    }
   }
   let task: AgentTask;
   try {
@@ -529,18 +532,20 @@ async function persistAgentTaskCoreInTransaction(
     if (!input.idempotencyKey) throw error;
     throwOwnedPrismaIdempotencyConflict(error, AGENT_TASK_IDEMPOTENCY_CONSTRAINT);
   }
-  await recordEntry(tx, {
-    userId: input.userId,
-    resource: AI_CREDIT_RESOURCE,
-    delta: -1,
-    kind: 'consume',
-    reason: `Agent task reservation ${input.kind}`,
-    idempotencyKey: `agent-task-reserve:${task.id}`,
-    metadata: { taskId: task.id, kind: input.kind, policy: 'charged-on-submit' },
-  });
+  if (billing === 'ai_credit') {
+    await recordEntry(tx, {
+      userId: input.userId,
+      resource: AI_CREDIT_RESOURCE,
+      delta: -1,
+      kind: 'consume',
+      reason: `Agent task reservation ${input.kind}`,
+      idempotencyKey: `agent-task-reserve:${task.id}`,
+      metadata: { taskId: task.id, kind: input.kind, policy: 'charged-on-submit' },
+    });
+  }
   await recordAudit(deps, tx, {
     actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: task.id,
-    metadata: { kind: input.kind, sessionId: session.id, creditPolicy: 'charged-on-submit' },
+    metadata: { kind: input.kind, sessionId: session.id, creditPolicy: billing === 'ai_credit' ? 'charged-on-submit' : 'not-applicable-deterministic' },
   }, ctx);
   return { task, replayed: false };
 }
@@ -603,6 +608,34 @@ export async function submitAgentTask(
   return taskToView(task);
 }
 
+/** Package-internal free queue path for deterministic CPU rendering; it cannot submit arbitrary task kinds. */
+export async function submitDeterministicPresentationTask(
+  deps: AgentDeps,
+  input: SubmitAgentTaskInput & { kind: 'presentation.generate' },
+  ctx: AuditContext = {},
+): Promise<AgentTaskView> {
+  const { dispatch, ...persistenceInput } = input;
+  let task: AgentTask | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      ({ task } = await deps.prisma.$transaction(
+        (tx) => persistAgentTaskCoreInTransaction(deps, tx, persistenceInput, ctx, 'deterministic'),
+        { isolationLevel: 'Serializable' },
+      ));
+      break;
+    } catch (error: unknown) {
+      const code = (error as { code?: unknown })?.code;
+      const idempotencyConflict = isOwnedPrismaIdempotencyConflict(error);
+      if ((code === 'P2034' || idempotencyConflict) && attempt < 2) continue;
+      if (idempotencyConflict) throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等键重复（§16）', error);
+      throw error;
+    }
+  }
+  if (!task) throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等任务并发冲突，请重试');
+  if (dispatch !== false) await dispatchAgentTask(deps, task.id);
+  return taskToView(task);
+}
+
 export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promise<boolean> {
   const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
   if (!task || task.dispatchedAt != null) return false;
@@ -617,7 +650,7 @@ export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promis
 /** DB task rows with dispatchedAt=null are the durable queue outbox. */
 export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50): Promise<number> {
   const tasks = await deps.prisma.agentTask.findMany({
-    where: { kind: { in: ['workspace.guide', 'sdf.extract', 'search.index', 'source.retrieve'] }, status: 'pending', dispatchedAt: null },
+    where: { kind: { in: ['workspace.guide', 'sdf.extract', 'presentation.generate', 'search.index', 'source.retrieve'] }, status: 'pending', dispatchedAt: null },
     orderBy: { createdAt: 'asc' },
     take: limit,
   });

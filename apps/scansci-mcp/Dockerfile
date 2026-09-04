@@ -4,6 +4,8 @@ FROM python:3.12-slim@sha256:7a8b475003c4fe15a2cd4e55e5cfc2f3560bdc9333d624f24cd
 
 ARG SCANSCI_VERSION=1.13.1
 ARG SCANSCI_WHEEL_SHA256=f68c30503834fc093eb192bd556090d210241eed48445017fdb3d32f6e1355e5
+ARG DEBIAN_MIRROR=
+ARG DEBIAN_SECURITY_MIRROR=
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -19,7 +21,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
 WORKDIR /opt/scansci
 COPY requirements.lock /opt/scansci/requirements.lock
 COPY install-lock.py /opt/scansci/install-lock.py
-RUN python -m venv /opt/scansci-venv \
+RUN if [ -n "$DEBIAN_SECURITY_MIRROR" ]; then \
+      sed -i "s#http://deb.debian.org/debian-security#$DEBIAN_SECURITY_MIRROR#g" /etc/apt/sources.list.d/debian.sources; \
+      printf '%s\n' 'Acquire::http::Proxy "DIRECT";' 'Acquire::https::Proxy "DIRECT";' > /etc/apt/apt.conf.d/99scansci-direct-mirror; \
+    fi \
+    && if [ -n "$DEBIAN_MIRROR" ]; then \
+      sed -i "s#http://deb.debian.org/debian#$DEBIAN_MIRROR#g" /etc/apt/sources.list.d/debian.sources; \
+      printf '%s\n' 'Acquire::http::Proxy "DIRECT";' 'Acquire::https::Proxy "DIRECT";' > /etc/apt/apt.conf.d/99scansci-direct-mirror; \
+    fi \
+    && python -m venv /opt/scansci-venv \
     && python /opt/scansci/install-lock.py --lock /opt/scansci/requirements.lock --output /tmp/scansci-lock-blocks \
     && for requirement in /tmp/scansci-lock-blocks/*.txt; do \
          installed=0; \
@@ -41,12 +51,13 @@ RUN python /opt/scansci/patch-upstream.py \
     && rm -f /opt/scansci/patch-upstream.py
 
 ENV PATH=/opt/scansci-venv/bin:$PATH
+# Chromium is a read-only runtime dependency. Do not recursively chown its tree
+# here: a later-layer metadata change copies roughly 685 MB into overlayfs.
 RUN groupadd --gid 10001 scansci \
     && groupadd --gid 11000 scansci-share \
     && useradd --uid 10001 --gid 10001 --groups 11000 --home-dir /data/scansci/home --no-create-home --shell /usr/sbin/nologin scansci \
     && install -d -o 10001 -g 10001 -m 0700 /data/scansci /data/scansci/home /data/scansci/tor /tmp/scansci-runtime \
-    && install -d -o 10001 -g 11000 -m 0770 /data/papers \
-    && chown -R 10001:10001 /opt/scansci-browsers
+    && install -d -o 10001 -g 11000 -m 0770 /data/papers
 
 FROM runtime AS mcp
 
@@ -58,6 +69,8 @@ COPY --chown=10001:10001 healthcheck.py /opt/scansci/healthcheck.py
 COPY --chown=10001:10001 nginx-mcp.conf /opt/scansci/nginx-mcp.conf
 RUN chmod 0555 /opt/scansci/entrypoint.sh
 
+ARG SCANSCI_VERSION=1.13.1
+ARG SCANSCI_WHEEL_SHA256=f68c30503834fc093eb192bd556090d210241eed48445017fdb3d32f6e1355e5
 ARG XGS_RELEASE_IMAGE_TAG
 LABEL org.openscience.source=$XGS_RELEASE_IMAGE_TAG \
       org.openscience.scansci.role=official-mcp \

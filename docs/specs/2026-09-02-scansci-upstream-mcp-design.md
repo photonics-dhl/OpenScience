@@ -59,6 +59,8 @@ The data and paper volumes have independent retention. Product ingestion copies 
 
 Resource ceiling for the first candidate: 2 CPUs, 2 GiB memory, 512 PIDs, read-only root, bounded `/tmp` and `/dev/shm`. The host remains CPU-only.
 
+The image installs exactly one Patchright Chromium runtime. Browser binaries remain root-owned and world-readable/executable; the non-root ScanSci process writes profiles and session state only beneath `scansci-data`. A later recursive `chown` of the browser tree is forbidden because overlayfs copies the complete browser payload into another layer. ECS builds may explicitly select a regional Debian mirror through build arguments; defaults remain the official Debian endpoints and apt still verifies Debian signatures. FlareSolverr is not part of the current legal institutional integration: pinned ScanSci `1.13.1` calls it only from the Sci-Hub source, while WebVPN/CARSI use CloakBrowser. A second Chrome service is retained only if a disposable, target-specific proof first converts the blocked legal publisher response into a valid PDF without changing the authorized source boundary.
+
 ### 4.2 Agent Worker
 
 Agent Worker connects to the internal streamable-HTTP MCP endpoint and discovers the expected tool names at startup. The acquisition path invokes:

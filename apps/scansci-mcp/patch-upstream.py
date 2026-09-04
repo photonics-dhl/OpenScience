@@ -509,6 +509,38 @@ import uuid""",
         ),
         (
             package / "sources" / "instsci.py",
+            '''        s = requests.Session()
+        s.trust_env = False
+        s.cookies.update(jar)
+        resp = s.get(test_url, timeout=15, allow_redirects=True,
+                     headers={"User-Agent": USER_AGENT})''',
+            '''        s = requests.Session()
+        s.trust_env = False
+        proxy = str(config.get("network_proxy", "")).strip()
+        if proxy:
+            s.proxies = {"http": proxy, "https": proxy}
+        s.cookies.update(jar)
+        resp = s.get(test_url, timeout=15, allow_redirects=True,
+                     headers={"User-Agent": USER_AGENT})''',
+            "WebVPN status controlled proxy",
+        ),
+        (
+            package / "sources" / "instsci.py",
+            '''    # Use SOCKS5 proxy if configured (for campus connectors like EasyConnect/aTrust)
+    socks5 = _get_socks5_proxy(config)
+    if socks5:
+        s.proxies = {"http": socks5, "https": socks5}
+        s.verify = False  # Campus connectors often use self-signed certs''',
+            '''    # Route WebVPN through the same explicit proxy as the isolated runtime.
+    # A proxy changes transport routing, not the publisher/WebVPN TLS trust
+    # boundary, so certificate verification remains enabled for every scheme.
+    proxy = str(config.get("network_proxy", "")).strip()
+    if proxy:
+        s.proxies = {"http": proxy, "https": proxy}''',
+            "WebVPN controlled HTTP proxy",
+        ),
+        (
+            package / "sources" / "instsci.py",
             """            for i in range(100):
                 time.sleep(3)
                 try:""",

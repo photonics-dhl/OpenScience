@@ -5,7 +5,8 @@
       "entry": ["scripts/*.mjs"],
       "project": ["scripts/**/*.mjs"],
       "ignoreDependencies": ["@prisma/client", "prisma", "task-master-ai"],
-      "ignoreBinaries": ["docker-compose", "flock"]
+      "ignoreBinaries": ["docker-compose", "flock"],
+      "ignoreUnresolved": ["/usr/sbin/squid"]
     },
     "apps/api": {
       "ignoreDependencies": ["archiver", "@types/archiver"]
@@ -27,7 +28,7 @@
       "project": ["src/**/*.ts"]
     },
     "packages/database": {
-      "entry": ["src/index.ts", "src/migrate-cli.ts"],
+      "entry": ["src/index.ts", "src/migrate-cli.ts", "src/ror-sync-cli.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "packages/*": {

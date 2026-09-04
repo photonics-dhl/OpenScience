@@ -242,4 +242,35 @@ describe('anonymous public research contract', () => {
     expect(unavailable.json().error.code).toBe('SOURCE_UNAVAILABLE');
     await app.close();
   });
+
+  it('serves only the platform deterministic chart SVG inline', async () => {
+    const bytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><text>verified</text></svg>');
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const prisma = routePrisma();
+    prisma.version.findFirst.mockResolvedValue({ id: 'version-1' });
+    prisma.presentationAsset.findFirst.mockResolvedValue({
+      id: '55555555-5555-4555-8555-555555555555', objectKey: 'private/asset-key', kind: 'chart',
+      contentHash: hash, generator: 'OpenScience deterministic renderer', generatorVersion: 'openscience-presentation-v1',
+    });
+    const storage = {
+      headObject: vi.fn().mockResolvedValue({ size: bytes.length, etag: 'etag', contentType: 'image/svg+xml' }),
+      getObject: vi.fn().mockImplementation(async () => ({ body: Readable.from([bytes]), size: bytes.length, contentType: 'image/svg+xml' })),
+    };
+    const app = Fastify();
+    registerResearchRoutes(app, { prisma, storage } as never);
+
+    const response = await app.inject({ method: 'GET', url: '/research/OSR-2026-000001/v/1/presentation-assets/55555555-5555-4555-8555-555555555555' });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('image/svg+xml');
+    expect(response.headers['content-disposition']).toContain('inline');
+
+    prisma.presentationAsset.findFirst.mockResolvedValue({
+      id: '55555555-5555-4555-8555-555555555555', objectKey: 'private/asset-key', kind: 'chart',
+      contentHash: hash, generator: 'other', generatorVersion: 'openscience-presentation-v1',
+    });
+    const untrusted = await app.inject({ method: 'GET', url: '/research/OSR-2026-000001/v/1/presentation-assets/55555555-5555-4555-8555-555555555555' });
+    expect(untrusted.headers['content-type']).toContain('application/octet-stream');
+    expect(untrusted.headers['content-disposition']).toContain('attachment');
+    await app.close();
+  });
 });
