@@ -1,7 +1,7 @@
 # Hermes External Retrieval and Temporary Document Lifecycle Plan
 
-> Status: PARTIAL / TASK 10 REOPENED. Metadata, rights and temporary lifecycle are production-accepted; default ScanSci acquisition follows `docs/specs/2026-08-30-scansci-default-capability-design.md`.
-> Final: main and production application source `689331845574612130f223d08c92e61721c16586`; rollback `c435c4c8b2800bb20998fd9a9a93f2db96328661`.
+> Status: COMPLETED / TASK 10 PRODUCTION-ACCEPTED.
+> Final application source/release: `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`; rollback `0aaf52fed29e79bb19b15517ba9ef50545510f72`.
 
 ## Outcome
 
@@ -158,6 +158,13 @@ Provider result status is a discriminated union:
   only active `6893318…` and rollback `c435c4c…`; no broad prune ran.
 
 ## Current primary references
+
+Final Task 10 closeout on 2026-09-05 added the official ScanSci `1.13.1`
+MCP version proof, a real 24,671,920-byte OA acquisition, a persistent ZJU
+WebVPN subscription-only Nature acquisition, all four product entries,
+71.995-hour retention, a 599.48-second one-use link and replay 404. ScienceDirect
+remains an optional official Remote Access/CARSI or Elsevier API-entitlement
+integration; it does not reopen the accepted provider-neutral retrieval chain.
 
 - Semantic Scholar API overview and rate-limit guidance:
   <https://www.semanticscholar.org/product/api>

@@ -1,5 +1,6 @@
 # ScanSci Upstream MCP Replacement Implementation Plan
 
+> **COMPLETED / PRODUCTION.** Task 10 closed on application release `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`; rollback is `0aaf52fed29e79bb19b15517ba9ef50545510f72`.
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the private ScanSci integration with upstream `v1.13.1`'s official 17-tool MCP, prove real ECS downloads, preserve the product lifecycle, and delete the obsolete implementation.
@@ -313,22 +314,18 @@ core/search are `34/34` and `2/2`. Exact 16-case Parser acceptance, official
 image/tools/storage/OA/Worker, Parser/BGE, application, public CAS, journal and
 retention gates passed; transient eval output was removed after report publish.
 
-- [ ] **Step 3: Complete the positive production journey**
+- [x] **Step 3: Complete the positive production journey**
 
 Run OA download, one official ZJU institutional login, one subscription-only download, MCP container recreation and repeat download, then one request from each of the four existing product entries. Verify one-use link and 72-hour metadata without waiting 72 hours by checking the exact stored timestamps and existing GC contract once.
 
-Current state: the official MCP, persistent volumes, Worker lifecycle, and OA
-proof already exist in production. The rejected visible-browser bridge is being
-removed. Institutional bootstrap will use the official `cookie_import` tool
-with an administrator-exported Netscape file; subscription-only and post-recreate
-proof remain pending. The fixed DOI's Semantic Scholar PDF is only an OA proof,
-not the required subscription-only evidence. A subscription-only Nature PDF now
-proves the WebVPN entitlement path, but the target ScienceDirect DOI remains 403.
-The local Dockerfile removes a redundant browser-tree `chown` copy-up. Its exact
-ECS image is 1,818,508,851 bytes versus production 2,503,852,066 bytes
-(-685,343,215 bytes / 27.37%); UID 10001 MCP health, root-owned Chromium launch,
-layer history and identity labels are green. Pinned 1.13.1 integrates
-FlareSolverr only from Sci-Hub, not WebVPN/CARSI, so no second Chrome is installed.
+Final state: the official MCP version, persistent volumes, Worker lifecycle,
+24,671,920-byte OA PDF, 1,873,303-byte ZJU WebVPN subscription-only Nature PDF,
+four product entries, 72-hour/600-second lifecycle and one-use replay rejection
+all passed on `b32d81c…`. The optimized ScanSci image is 1.82GB and contains the
+single retained Chromium. ScienceDirect remains 403 without its separate
+official Remote Access/CARSI or API entitlement; pinned 1.13.1 integrates
+FlareSolverr only from Sci-Hub, not WebVPN/CARSI, so FlareSolverr and a second
+Chrome remain uninstalled.
 
 - [x] **Step 4: Delete rejected repository artifacts**
 
@@ -340,4 +337,4 @@ After the new release is healthy, stop/remove only rejected ScanSci containers, 
 
 - [x] **Step 6: Close documentation and commit**
 
-Update Taskmaster to 10/12 only after all production gates pass. Sync CURRENT docs/index/registry/runbook, run docs gates, commit, push, and remove obsolete remote branches only after ancestry checks.
+Update Taskmaster Task 10 only after all production gates pass. The same final release also closed Tasks 11–12, so the synchronized final count is 12/12. Sync CURRENT docs/index/registry/runbook, run docs gates, commit, push, and remove obsolete remote branches only after ancestry checks.
