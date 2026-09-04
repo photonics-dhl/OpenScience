@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 
 const launcherSource = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const transactionSource = readFileSync(new URL('./production-deploy-transaction.sh', import.meta.url), 'utf8');
@@ -52,6 +53,23 @@ const embeddingEvaluatorDockerfile = readFileSync(new URL('../embedding-candidat
 const squidConfig = readFileSync(new URL('../squid/openscience-egress.conf', import.meta.url), 'utf8');
 const atomicSquidConfig = readFileSync(new URL('./atomic-squid-config.mjs', import.meta.url), 'utf8');
 const rootPackage = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+test('portable SSH paths preserve apostrophes and require pinned host verification', () => {
+  const optionsSource = cloudSync.slice(cloudSync.indexOf('const hostOptions = []'), cloudSync.indexOf('const archive = spawn'));
+  const getOptions = (cfg) => Array.from(runInNewContext(`${optionsSource}\nhostOptions`, { cfg }));
+  assert.deepEqual(getOptions({}), []);
+  assert.deepEqual(getOptions({ knownHostsFile: "C:/Users/s'y'c/My Keys/known_hosts" }), [
+    '-o', 'UserKnownHostsFile="C:/Users/s\'y\'c/My Keys/known_hosts"', '-o', 'StrictHostKeyChecking=yes',
+  ]);
+  for (const knownHostsFile of ['bad"path', 'bad\npath', 'bad\rpath', 'bad\0path', 42]) {
+    assert.throws(() => getOptions({ knownHostsFile }), /Invalid knownHostsFile/);
+  }
+  assert.match(launcherSource, /XGS_SSH_KEY:-\$HOME\/\.ssh\/id_ed25519_xgs/u);
+  for (const script of [launcherSource, sshRun]) {
+    assert.match(script, /XGS_SSH_KNOWN_HOSTS/u);
+    assert.match(script, /StrictHostKeyChecking=yes/u);
+    assert.doesNotMatch(script, /StrictHostKeyChecking=no/u);
+  }
+});
 const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
   ? 'C:/Program Files/Git/bin/bash.exe'
   : '/bin/bash';

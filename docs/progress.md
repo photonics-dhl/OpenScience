@@ -1,15 +1,17 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-03 16:30 +08。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-04。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application source: `codex/scansci-upstream-mcp` / `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。
-- Production application source / immutable release: `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`。
-- Production rollback: `2313038bef4fabce5cdc90517d25cb177ab1e8dd`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
+- Frontend candidate: `frontend/nanqing` / `f0ff424`，连接与文档提交随后，以 PR #71 head 为准；CI/部署 pending。
+- 实测 production application source / immutable release: `e23a94f6622bb65e33ddbfe290970a9e6366567a`，active/public 一致。
+- Production rollback: `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`；本次部署仍应以最新 active 为回退目标。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP、持久 Cookie、容器重建恢复和普通 DOI 下载已验收；明确 institutional/publisher provenance、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
 
 ## 2026-09-03 — ScanSci persistent session and PDF download accepted
+
+<!-- 下方为既有 ScanSci 专题证据，不是本次前端发布目标。 -->
 
 - PR #58 / exact CI `33730045672` 合并为 `f9dbd59…`；canonical ECS transaction 通过 exact Parser report、core/search `36/36` / `2/2`、BGE、ScanSci image/tools/storage/Worker、API/Web/Worker health、Nginx/public CAS、retention 与 journal-clear，rollback 为 `2313038…`。
 - 浙江大学 CARSI/publisher Cookie 由 active helper 导入并返回 `SCANSCI_COOKIE_IMPORT_OK`。持久文件 UID 10001、mode `0600`、单链接且非空；host/container staging、`.next`、cleanup marker 和本机认证临时目录均已清理。
