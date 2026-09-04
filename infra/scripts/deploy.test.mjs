@@ -293,6 +293,11 @@ test('production search runtime is isolated, bounded and source locked', () => {
   assert.match(source, /--profile embedding/);
   assert.match(source, /if \[ "\$EMBEDDING_DEPLOY" -eq 1 \]/);
   assert.match(source, /search migration status=2\/2/);
+  assert.match(source, /scripts\/register-search-model\.mjs/);
+  assert.ok(
+    source.indexOf('scripts/register-search-model.mjs') < source.indexOf('初始化并验证 BGE-M3 模型卷'),
+    'the exact search model identity must be registered before the embedding worker switch',
+  );
   assert.match(source, /embedding model manifest and runtime identity verified/);
 });
 

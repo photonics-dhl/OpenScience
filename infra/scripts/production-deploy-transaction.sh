@@ -551,6 +551,10 @@ if [ "$SKIP_MIGRATE" -ne 1 ]; then
   compose_current "run --rm --no-deps -T -w /opt/openscience api node node_modules/prisma/build/index.js migrate deploy --schema /opt/openscience/infra/search/schema.prisma"
   compose_current "run --rm --no-deps -T -w /opt/openscience api node node_modules/prisma/build/index.js migrate status --schema /opt/openscience/infra/search/schema.prisma"
   log "[3c] search migration status=2/2"
+  if [ "$BGE_M3_ENABLED" -eq 1 ]; then
+    log "[3d] 注册精确 BGE-M3 搜索模型身份..."
+    compose_current "run --rm --no-deps -T -w /opt/openscience api node scripts/register-search-model.mjs"
+  fi
   log "[4] seed-quota..."
   compose_current "run --rm --no-deps -T -w /opt/openscience api node scripts/seed-quota.mjs --confirm"
   transaction_complete_migration
