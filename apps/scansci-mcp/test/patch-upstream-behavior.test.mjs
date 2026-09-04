@@ -982,6 +982,14 @@ test('upstream patch connects the controlled institutional context and reaps bro
       selectInstitution(bilingualDocument)('Zhejiang University'),
       '浙江大学(Zhejiang University)',
     );
+    const libraryUniversity = candidate('浙江大学(Zhejiang University) (Zhejiang University Library)');
+    const currentElsevierDocument = {
+      querySelectorAll: () => [hospital, libraryUniversity],
+    };
+    assert.equal(
+      selectInstitution(currentElsevierDocument)('Zhejiang University'),
+      '浙江大学(Zhejiang University) (Zhejiang University Library)',
+    );
     assert.equal(hospital.clicked, false);
     assert.equal(bilingualUniversity.clicked, true);
     const ambiguousHospital = candidate('Zhejiang University School of Medicine Sir Run Run Shaw Hospital');
