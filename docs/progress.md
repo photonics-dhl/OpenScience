@@ -1,15 +1,23 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-03 16:30 +08。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-04。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application source: `codex/scansci-upstream-mcp` / `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。
-- Production application source / immutable release: `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`。
-- Production rollback: `2313038bef4fabce5cdc90517d25cb177ab1e8dd`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
+- Frontend candidate: `frontend/nanqing` / `f0ff424`，连接与文档提交随后，以 PR #71 head 为准；CI/部署 pending。
+- 实测 production application source / immutable release: `e23a94f6622bb65e33ddbfe290970a9e6366567a`，active/public 一致。
+- Production rollback: `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`；本次部署仍应以最新 active 为回退目标。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP、持久 Cookie、容器重建恢复和普通 DOI 下载已验收；明确 institutional/publisher provenance、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
 
+## 2026-09-04 — Profile/settings candidate and release gate
+
+- PR #71：账号/头像→本人主页，设置→个人偏好；科研资料/ORCID/机构邮箱集中本人管理，不默认公开。完整证据见本轮 frontend handoff。
+- 首次 CI build/typecheck/lint/unit green，页面 71/72。手机额外换行修复为既有 compact brand，长按先滚动再验 ready；本地连续 3/3，新增身份 7 案纳入 CI。发布仍 pending，不将局部绿冒充完成。
+- 双库新备份 `db-set-20260904T095211Z-580403` 绑定 active `e23a94f…`，SHA 与权限通过，旧备份全保留；journal/failed/pending absent。
+
 ## 2026-09-03 — ScanSci persistent session and PDF download accepted
+
+<!-- 下方为既有 ScanSci 专题证据，不是本次前端发布目标。 -->
 
 - PR #58 / exact CI `33730045672` 合并为 `f9dbd59…`；canonical ECS transaction 通过 exact Parser report、core/search `36/36` / `2/2`、BGE、ScanSci image/tools/storage/Worker、API/Web/Worker health、Nginx/public CAS、retention 与 journal-clear，rollback 为 `2313038…`。
 - 浙江大学 CARSI/publisher Cookie 由 active helper 导入并返回 `SCANSCI_COOKIE_IMPORT_OK`。持久文件 UID 10001、mode `0600`、单链接且非空；host/container staging、`.next`、cleanup marker 和本机认证临时目录均已清理。
@@ -84,13 +92,6 @@
 - Retry 的 authority read/CAS/audit 现为三次 P2034-only Serializable 事务，Redis commit 后投递；recovery 用一次参数化 ID-only SQL 精确筛选权限/JSONB/DOI-arXiv 后 hydrate 并复用共享 predicate，无 top-N/循环/payload 泄露。14-case corpus 显式区分 JSONB 与 JavaScript-only `undefined` own-property；PG parity 用更新 terminal sentinel 分辨 raw candidate 与 fallback。Fresh Domain `534`、API `99`、Worker `502` 与三包/typechecked real-PG contracts green；既有 Web/Playwright `441 + 5 Node` / `7` 未改。
 - 这是本地 review candidate；ECS 375px、真实 CARSI/OA、一次性下载与 Task 8 四入口仍 pending，不能把 Task 10 标 done。生产保持 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。
 
-## 2026-08-30 — ScanSci Task 6 local recovery candidate
+## 历史窗口
 
-- `60b3740` 闭合 provider state 事务/重放/generation、三次 P2034、非致命 observation、descriptor Secret 与 disabled rollback；Domain 520、Database 26、Worker 501、三包 typecheck、独立复审均 green。
-- 真实 PG forward/rollback/redeploy + 双 client 合同仅 typecheck；migration 33、OA/CARSI/session/四入口仍须 ECS。生产保持 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。
-
-## 2026-08-30 — ScanSci Task 5 atomic acquisition candidate
-
-- 本地 `ff5568f` + `4763228` 将 Personal RO/SDF、AgentSession、AgentTask、AI Credit debit 与三类 audit 收口到一笔三次有界 Serializable acquisition 事务；同键用完整 target/query/identifier/server payload digest 绑定，exact replay 在余额前返回，不再使用补偿删除。P2002 仅在 Prisma modelName 与该操作 idempotency field/column/constraint 同时精确匹配时重试，其他唯一冲突原样传播。
-- `createResearchObject`、`createAgentSession`、`submitAgentTask` 共用 transaction primitives；公开 RO 仍拒绝 `system:`，公开 generic Agent API 仍拒绝 `source.retrieve`，严格 4 KiB/字段/CSRF/auth/rate-limit 合同未变。Redis 仅在 commit 后投递；失败留下一个 `dispatchedAt=null` pending task，可由 replay 或 recovery 重派且不重复扣费。
-- 本地 Domain `59/514`、API `18/95`、Agent Worker `33/468`、全仓 typecheck/lint green。真实 PostgreSQL 集成 suite 已覆盖 rollback、credit、audit、并发、两连接确定性 archive/membership SSI cycle、同键 target/query/identifier mismatch 与 recovery；依本地 no-Docker 规则只完成编译，须在后续服务器验收执行。
+- 2026-08-30 Task 5/6 候选细节保留在本文件 Git 历史（`8d9ca89` 及之前）；不再作为当前实施入口。没有删除历史文件或回退版本。

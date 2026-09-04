@@ -931,8 +931,10 @@ test('Hermes action menu / mobile long press is compact and does not invoke the 
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   const trigger = page.locator('[data-hermes-input-owner="true"]');
-  await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  // Offscreen renderers intentionally suspend. Scroll before requiring a drawn frame.
   await trigger.scrollIntoViewIfNeeded();
+  await expect(trigger).toBeInViewport();
+  await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   const closedGeometry = await page.evaluate(() => {
     const actor = document.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!.getBoundingClientRect();
     const nearestProtectedBottom = Math.max(...Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))

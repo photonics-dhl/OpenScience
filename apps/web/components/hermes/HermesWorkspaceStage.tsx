@@ -446,7 +446,13 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     ));
     sync();
     systemPreference.addEventListener('change', sync);
-    return () => systemPreference.removeEventListener('change', sync);
+    window.addEventListener('openscience:motion-preference', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      systemPreference.removeEventListener('change', sync);
+      window.removeEventListener('openscience:motion-preference', sync);
+      window.removeEventListener('storage', sync);
+    };
   }, [motionSearch]);
 
   useEffect(() => {

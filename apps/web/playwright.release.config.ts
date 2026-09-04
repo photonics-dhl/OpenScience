@@ -2,7 +2,7 @@ import { defineConfig } from 'playwright/test';
 
 export default defineConfig({
   testDir: './test/e2e',
-  testMatch: ['product-release.spec.ts', 'claim-first-public-ro.spec.ts'],
+  testMatch: ['product-release.spec.ts', 'claim-first-public-ro.spec.ts', 'academic-identity-recovery.spec.ts'],
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,

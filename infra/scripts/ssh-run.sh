@@ -88,7 +88,13 @@ SSH_ERR="$(mktemp)"
 trap 'rm -f "$SSH_ERR"' EXIT
 
 set +e
-ssh -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "$REMOTE_CMD" 2>"$SSH_ERR"
+SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT")
+[ -z "${XGS_SSH_KEY:-}" ] || SSH_OPTS+=(-i "$XGS_SSH_KEY")
+if [ -n "${XGS_SSH_KNOWN_HOSTS:-}" ]; then
+  [[ "$XGS_SSH_KNOWN_HOSTS" != *[\"$'\r\n']* ]] || { echo "错误：known_hosts 路径无效" >&2; exit 64; }
+  SSH_OPTS+=(-o "UserKnownHostsFile=\"$XGS_SSH_KNOWN_HOSTS\"" -o StrictHostKeyChecking=yes)
+fi
+ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" "$REMOTE_CMD" 2>"$SSH_ERR"
 rc=$?
 set -e
 

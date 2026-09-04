@@ -28,6 +28,7 @@ function DashboardShell({
     <div className={cn('surface-folio min-h-dvh', className)} data-os-surface="dashboard" {...props}>
       <SkipLink tone="paper">{skipLabel}</SkipLink>
       <ShellHeader
+        compactBrandOnMobile
         actions={<ProductRouteNavigation active={activeRoute} />}
         navigationLabel={navigationLabel}
         tone="paper"

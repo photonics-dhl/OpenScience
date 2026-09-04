@@ -234,7 +234,7 @@ export function getAcademicIdentityStatus(): Promise<AcademicIdentityStatus> {
 }
 
 export function beginOrcidConnection(): Promise<{ authorizationUrl: string }> {
-  return request('/api/auth/orcid/start', { method: 'POST', body: JSON.stringify({ returnTo: '/settings' }) });
+  return request('/api/auth/orcid/start', { method: 'POST', body: JSON.stringify({ returnTo: '/me' }) });
 }
 
 export function requestInstitutionEmailCode(email: string): Promise<{

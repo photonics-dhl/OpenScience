@@ -15,6 +15,14 @@ if (!releaseSha || !/^[0-9a-f]{40}$/.test(releaseSha)) {
 const releaseRoot = `/opt/openscience-releases/${releaseSha}`;
 const cfg = JSON.parse(readFileSync(path.join(configRoot, '.cloud-sync-env'), 'utf8'));
 const key = cfg.key.replace(/^~/, os.homedir());
+// OpenSSH parses -o values again: quote paths containing spaces/apostrophes.
+const hostOptions = [];
+if (cfg.knownHostsFile) {
+  if (typeof cfg.knownHostsFile !== 'string' || /["\r\n\0]/u.test(cfg.knownHostsFile)) {
+    throw new Error('Invalid knownHostsFile path');
+  }
+  hostOptions.push('-o', `UserKnownHostsFile="${cfg.knownHostsFile}"`, '-o', 'StrictHostKeyChecking=yes');
+}
 
 const archive = spawn(
   'git',
@@ -22,7 +30,7 @@ const archive = spawn(
   { cwd: sourceRoot },
 );
 const remote = buildReleaseMaterializeCommand(releaseRoot, releaseSha);
-const ssh = spawn('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20', '-i', key, '-p', String(cfg.port), `${cfg.user}@${cfg.host}`, remote], { cwd: process.cwd() });
+const ssh = spawn('ssh', [...hostOptions, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20', '-i', key, '-p', String(cfg.port), `${cfg.user}@${cfg.host}`, remote], { cwd: process.cwd() });
 
 archive.stdout.pipe(ssh.stdin);
 let err = '';

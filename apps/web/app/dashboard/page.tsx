@@ -6,6 +6,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 
 import LocaleSwitcher from '@/components/LocaleSwitcher';
+import { AccountLink } from '@/components/navigation/AccountLink';
 import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
 import { ImportStage } from '@/components/dashboard/ImportStage';
 import { LiteratureAcquisition } from '@/components/dashboard/LiteratureAcquisition';
@@ -115,7 +116,7 @@ export default function DashboardPage() {
       activeRoute="dashboard"
       headerActions={(
         <div className="ml-auto flex items-center justify-end gap-2">
-          <span data-reading-role="caption" className="hidden text-os-muted-paper sm:inline">{user?.displayName}</span>
+          <AccountLink user={user} />
           <LocaleSwitcher locale={locale} />
         </div>
       )}
