@@ -973,7 +973,11 @@ test('upstream patch connects the controlled institutional context and reaps bro
     assert.equal(hospital.clicked, false);
     assert.equal(university.clicked, true);
     const bilingualUniversity = candidate('浙江大学(Zhejiang University)');
-    const bilingualDocument = { querySelectorAll: () => [hospital, bilingualUniversity] };
+    const bilingualDocument = {
+      querySelectorAll: (selector) => selector.includes('[role="option"]')
+        ? [hospital, bilingualUniversity]
+        : [],
+    };
     assert.equal(
       selectInstitution(bilingualDocument)('Zhejiang University'),
       '浙江大学(Zhejiang University)',

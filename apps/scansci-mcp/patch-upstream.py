@@ -114,7 +114,9 @@ def _import_to_browser""",
     "  }"''',
             '''    "  const normalize = value => (value || '').replace(/\\\\s+/g, ' ').trim().toLowerCase();"
     "  const needle = normalize(name);"
-    "  const visible = [...items].filter(el => el.offsetParent !== null);"
+    "  const optionItems = document.querySelectorAll('[role=\\\"option\\\"]');"
+    "  const allItems = [...items, ...optionItems];"
+    "  const visible = allItems.filter(el => el.offsetParent !== null);"
     "  const exact = visible.find(el => {"
     "    const candidate = normalize(el.textContent);"
     "    return candidate === needle ||"
