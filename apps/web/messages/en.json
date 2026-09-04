@@ -493,7 +493,7 @@
   },
   "researchIdentity": {
     "title": "Your research identity",
-    "disclosure": "Hermes quietly adapts its priorities from this profile. There is no mode switch, and it never infers sensitive traits or off-site behavior. You can change this in Settings.",
+    "disclosure": "Hermes quietly adapts its priorities from this profile. There is no mode switch, and it never infers sensitive traits or off-site behavior. You can change this in My profile.",
     "primary": "Primary",
     "identities": {
       "reader": "Reader",
@@ -1102,6 +1102,33 @@
       "summary": "One difference remains between the evidence and result. Hermes stays below the work without covering the decision.",
       "hint": "Long-press Hermes below for the compact action menu. Ordinary tap still opens the assistant."
     }
+  },
+  "myAccount": {
+    "researchLoading": "Loading your accessible research projects…",
+    "researchEmpty": "No accessible research projects yet.",
+    "researchError": "Projects could not be loaded. Try opening your research workspace.",
+    "profileTitle": "My profile",
+    "privateLabel": "Only visible to you",
+    "privateBody": "Manage your research profile, ORCID and institutional email here. This is not a public profile and does not publish your information.",
+    "settingsTitle": "Website preferences",
+    "settingsBody": "Manage your own language, reading and motion preferences and account information. These are not site-wide administrator settings.",
+    "accountTitle": "Account and privacy",
+    "accountLink": "{name}: My profile",
+    "continueIdentity": "Continue identity verification in My profile",
+    "bio": "Biography",
+    "bioUnavailable": "Not provided. The current profile API does not support saving a biography yet.",
+    "fields": "Research fields",
+    "notProvided": "Not provided. Edit your research profile below.",
+    "researchTitle": "My research outputs and projects",
+    "researchBody": "Your workspace lists research you can access, including team collaborations. An authored-output list is not connected yet; shared projects are not represented as your personal publications.",
+    "researchLink": "Open my research workspace",
+    "motionTitle": "Hermes motion preference",
+    "motionSystem": "Follow system",
+    "motionReduced": "Reduced motion",
+    "motionFull": "Full motion",
+    "motionScope": "Uses the existing Hermes preference in this browser only. It does not change other users or site-wide motion.",
+    "motionError": "Your browser did not allow saving this preference. The change was not saved.",
+    "callbackHelp": "ORCID authorization did not complete. Check the server-reported status below and retry. Cancelling an attempt does not remove an existing connection."
   },
   "academicIdentity": {
     "loading": "Loading saved identity status…",

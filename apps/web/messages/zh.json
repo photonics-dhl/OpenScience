@@ -493,7 +493,7 @@
   },
   "researchIdentity": {
     "title": "你的科研身份",
-    "disclosure": "Hermes 会据此静默调整关注重点；不会出现模式开关，也不会推断敏感属性或站外行为。你可以随时在设置中修改。",
+    "disclosure": "Hermes 会据此静默调整关注重点；不会出现模式开关，也不会推断敏感属性或站外行为。你可以随时在我的个人主页中修改。",
     "primary": "主要",
     "identities": {
       "reader": "读者",
@@ -1138,6 +1138,33 @@
       "summary": "证据与结果段有一处需要确认。Hermes 会留在页面下方，不遮住主要决定。",
       "hint": "长按下方 Hermes，查看紧凑动作菜单。普通点按仍打开助手。"
     }
+  },
+  "myAccount": {
+    "researchLoading": "正在读取你可访问的研究项目…",
+    "researchEmpty": "目前暂无可访问的研究项目。",
+    "researchError": "研究项目暂时无法读取，可尝试打开研究工作台。",
+    "profileTitle": "我的个人主页",
+    "privateLabel": "仅本人可见",
+    "privateBody": "在这里管理科研资料、ORCID 和机构邮箱认证。本页不是公开个人主页，不会自动公开你的资料。",
+    "settingsTitle": "网站使用设置",
+    "settingsBody": "管理你自己的界面语言、阅读与动效偏好及账号信息；这些不是全站管理员设置。",
+    "accountTitle": "账号与隐私",
+    "accountLink": "{name}：我的个人主页",
+    "continueIdentity": "前往个人主页，继续科研身份认证",
+    "bio": "个人简介",
+    "bioUnavailable": "暂未提供。当前资料接口尚不支持保存个人简介。",
+    "fields": "研究领域",
+    "notProvided": "尚未填写，可在下方编辑科研资料。",
+    "researchTitle": "我的科研成果与项目",
+    "researchBody": "当前可从工作台查看你有权访问的研究项目（可能包含团队协作）。本人署名成果清单尚未接入，不将协作项目误标为个人成果。",
+    "researchLink": "查看我的研究工作台",
+    "motionTitle": "Hermes 动效偏好",
+    "motionSystem": "跟随系统",
+    "motionReduced": "减少动效",
+    "motionFull": "完整动效",
+    "motionScope": "复用现有 Hermes 动效设置，仅保存在当前浏览器，不会改变其他用户或全站动效。",
+    "motionError": "浏览器未允许保存偏好，本次修改未保存。",
+    "callbackHelp": "ORCID 授权未完成，请核对下方从服务器读取的状态，然后重试。已有认证不会因本次取消而被移除。"
   },
   "academicIdentity": {
     "loading": "正在读取已保存的身份状态…",

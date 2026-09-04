@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-export type ProductRouteId = 'dashboard' | 'explore' | 'create' | 'settings';
+export type ProductRouteId = 'dashboard' | 'explore' | 'create' | 'settings' | 'profile';
 
 const productRoutes: ReadonlyArray<{ href: string; id: ProductRouteId }> = [
   { href: '/dashboard', id: 'dashboard' },
