@@ -9,6 +9,12 @@
 - Production rollback: `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`；本次部署仍应以最新 active 为回退目标。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP、持久 Cookie、容器重建恢复和普通 DOI 下载已验收；明确 institutional/publisher provenance、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
 
+## 2026-09-04 — Profile/settings candidate and release gate
+
+- PR #71：账号/头像→本人主页，设置→个人偏好；科研资料/ORCID/机构邮箱集中本人管理，不默认公开。完整证据见本轮 frontend handoff。
+- 首次 CI build/typecheck/lint/unit green，页面 71/72。手机额外换行修复为既有 compact brand，长按先滚动再验 ready；本地连续 3/3，新增身份 7 案纳入 CI。发布仍 pending，不将局部绿冒充完成。
+- 双库新备份 `db-set-20260904T095211Z-580403` 绑定 active `e23a94f…`，SHA 与权限通过，旧备份全保留；journal/failed/pending absent。
+
 ## 2026-09-03 — ScanSci persistent session and PDF download accepted
 
 <!-- 下方为既有 ScanSci 专题证据，不是本次前端发布目标。 -->

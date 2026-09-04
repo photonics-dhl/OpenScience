@@ -15,9 +15,11 @@
 - `9ebe158` 科研身份加载/重试/验证恢复，`f0ff424` 账号链接到 `/me`、设置只保留使用偏好与账户设置；功能文件仅 `apps/web/`。
 - 本人主页管理科研资料、ORCID、机构邮箱；旧设置认证入口与 OAuth 返回兼容，不默认公开。
 - 本地 TypeScript、针对性 ESLint、diff check 通过；浏览器模拟 API 回归 7/7。全仓 Vitest 受 Windows ancestor EPERM 限制，不能声明通过。
+- CI `33860098082` 首次 build/typecheck/lint/unit 通过，页面 71/72：手机 header 额外换行将助手推出首屏，测试又先等绘制再滚动。复用紧凑品牌修复布局，测试改先可见再等 ready、原几何门禁不变；本地长按连续 3/3，账号 7 项也加入 CI release gate。后续候选须重新全绿。
 - 官方 GitHub CLI 设备授权与实际 push 成功。Git Bash 内补 PATH 解决 dirname/credential-helper 不可见；系统 Git 使用 OpenSSL 后端。
 - SSH 沿用原私钥；配置支持已核验 known_hosts 与自定义现有密钥路径，不改 HOME、不放宽私钥权限、不绕过 host key 校验。
 - 服务器 checkup 通过，active/public 一致，未发现 failed marker；已有 2026-09-04 数据库备份集合，发布前须校验哈希与 release。
+- 已补当前 active 备份 `db-set-20260904T095211Z-580403`：core/search SHA 校验、release 绑定与 0700/0600 权限通过；保留全部旧备份，未轮转删除。
 - 用户指定的 OpenScience 定时任务已删除，不重新建立。
 
 ## Constraints and next action
