@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`，rollback tree 为 `2313038bef4fabce5cdc90517d25cb177ab1e8dd`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。Networkless bootstrap、browser proxy、session 原子持久化/恢复与参数修复已上线；浙江大学 CARSI/publisher Cookie 已导入，MCP recreate 后普通 DOI PDF 下载 green。明确 institutional/publisher provenance、四入口和 72h/600s 正向旅程 pending。
+> 状态：**CURRENT**。active immutable release / application source 为 `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`，rollback tree 为 `0aaf52fed29e79bb19b15517ba9ef50545510f72`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。OA、ZJU subscription-only PDF、四入口、72h/600s、presentation replay、真实 publish/public journey 与 exact aggregate gate 均已通过；现行完成态见 §5.66。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -2307,3 +2307,60 @@ The first browser attempt left one Chromium tree at roughly 402/512 container
 PIDs while remaining healthy. If a new uncached DOI reports `pthread_create:
 Resource temporarily unavailable`, treat Chromium lifecycle/PID budget as a
 separate runtime defect; do not re-import credentials or broaden egress.
+
+### 5.66 Hermes Tasks 10–12 final release and exact hygiene (2026-09-05)
+
+#### 前置检查
+
+Require clean exact CI for PR #72–#74, active/rollback markers, a matching
+schema-3 Parser report, no failed/deploy journal, a current database backup and
+the canonical release script. Never replace the application SHA with a later
+docs-only commit. The approved application SHA was
+`b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`; rollback was
+`0aaf52fed29e79bb19b15517ba9ef50545510f72`.
+
+#### 执行步骤
+
+1. Deploy the immutable merged SHA through `infra/scripts/deploy.sh`, including
+   full workspace build, core/search migration status, exact BGE model
+   registration, Parser/BGE/ScanSci runtime gates and public CAS.
+2. Run one real OA acquisition through the product API, verify the retained
+   institution-entitled Nature proof, four product entries, 72-hour retention,
+   600-second one-use link and graceful degradation.
+3. Generate and replay one deterministic SVG and one safe interactive HTML
+   asset, then run one fresh real PDF through upload, parser/source-map,
+   review/confirm, commit, three core Claims, license, publication review,
+   approval, R3 publish and anonymous public retrieval. If a larger document
+   yields a source map but no SDF proposal, retain it as `needs_review` and do
+   not misreport it as either a parser failure or a published journey.
+4. Write the strict content-free report below the exact release acceptance root
+   and run `scripts/hermes-full-release-gate.mjs` from that release.
+5. After inventory and active/rollback exclusion, remove only the exact stopped
+   one-shot/aTrust containers, aTrust image/volume, unreferenced anonymous test
+   volumes and obsolete Parser acceptance directories. Do not prune system,
+   volumes or BuildKit cache broadly.
+
+#### 回滚步骤
+
+Use the canonical transaction rollback to
+`0aaf52fed29e79bb19b15517ba9ef50545510f72`. The retained rollback release,
+Parser report, images, BGE model volume, ScanSci session/data, core/search data,
+object storage, monitoring and backups must remain untouched. If a cleanup
+target is referenced, mounted, symlinked or equals active/rollback, stop rather
+than forcing removal.
+
+#### 验证命令
+
+Run `infra/scripts/checkup.sh`; replay
+`node /opt/openscience-releases/b32d81c.../scripts/hermes-full-release-gate.mjs
+/opt/openscience-acceptance/hermes-full-release/b32d81c.../report.json`; verify
+core `36/36`, search `2/2`, public `/__release`, all 13 running containers,
+zero exited containers, exact active/rollback Parser roots and absence of the
+aTrust image/volume. Accepted aggregate SHA-256 is
+`1ca3b0e1e3f730a94ba49a4e0e9959041d2b98e20d2778227c909ccae55a08f2`.
+The final report also binds the fresh 2,215,244-byte production upload
+(`bdfaa68d…697`) and its published `OSR-2026-000021` content
+(`625f5308…2cba`); anonymous public retrieval returned 200.
+Final resources were 54G/148G used (39%, 88G available) and 24 GiB available
+memory. BuildKit cache remained 14.83GB intentionally to reuse the existing
+Chromium/BGE closure; no system or volume prune was run.

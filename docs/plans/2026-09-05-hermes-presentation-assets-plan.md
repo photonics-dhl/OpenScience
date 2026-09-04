@@ -1,5 +1,6 @@
 # Hermes Presentation Assets Implementation Plan
 
+> **COMPLETED / PRODUCTION.** Taskmaster Task 11 was accepted on immutable application release `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`; rollback is `0aaf52fed29e79bb19b15517ba9ef50545510f72`.
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Complete Taskmaster `hermes-research-intelligence` Task 11 with deterministic, provenance-bound SVG/HTML assets and a fail-closed administrator media workflow.
@@ -84,7 +85,7 @@
 - Modify: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
 
 - [x] Run Domain/Worker/API focused tests and the affected workspace build/typecheck/lint gates.
-- [ ] Run a server candidate with one deterministic chart and one interactive HTML asset; verify identical hashes on replay, public retrieval, CSP/no-script contract, and source Claim IDs.
-- [ ] Keep MiniMax image/video disabled unless exact provider/model/price/secret and one administrator approval journey are available; record this as an optional blocked capability, not a Task 12 blocker.
-- [ ] Set Taskmaster Task 11 to `done` only after deterministic production acceptance and leave Task 12 as the sole ready task.
-- [ ] Sync CURRENT docs and run docs gates.
+- [x] Run a server candidate with one deterministic chart and one interactive HTML asset; verify identical hashes on replay, public retrieval, CSP/no-script contract, and source Claim IDs.
+- [x] Keep MiniMax image/video disabled unless exact provider/model/price/secret and one administrator approval journey are available; record this as an optional blocked capability, not a Task 12 blocker.
+- [x] Set Taskmaster Task 11 to `done` only after deterministic production acceptance. Production RO `OSR-2026-000019` replayed SVG/HTML hashes exactly (`8d5f8f23…c640` / `b20f83cc…1198`), served the safe HTML publicly, and enforced `presentation_not_evidence`.
+- [x] Sync CURRENT docs and run docs gates.

@@ -1534,36 +1534,36 @@
         "id": "10",
         "title": "External Retrieval and Temporary Document Lifecycle",
         "description": "Implement external source retrieval (Semantic Scholar, Tavily, ScanSci) with proper rights decisions, 72-hour TTL caching, 10-minute signed download links, and provenance tracking.",
-        "details": "Create apps/agent-worker/src/retrieval/semantic-scholar.ts for paper metadata, citation graph, and open access links. Implement apps/agent-worker/src/retrieval/tavily.ts for web discovery (non-authoritative). Build apps/agent-worker/src/retrieval/scansci.ts for institution-authenticated PDF retrieval within legal bounds. Create apps/agent-worker/src/storage/temp-documents.ts implementing 72-hour TTL cleanup for cached files. Implement apps/agent-worker/src/storage/signed-links.ts generating 10-minute expiration links for authorized downloads. Build apps/agent-worker/src/rights/decision-engine.ts determining distribution rights and storing rights decisions with contentHash. Ensure contentHash, source URL, rights decision, parser provenance, and locator always persisted even when file is deleted.",
+        "details": "Create apps/agent-worker/src/retrieval/semantic-scholar.ts for paper metadata, citation graph, and open access links. Implement apps/agent-worker/src/retrieval/tavily.ts for web discovery (non-authoritative). Build apps/agent-worker/src/retrieval/scansci.ts for institution-authenticated PDF retrieval within legal bounds. Create apps/agent-worker/src/storage/temp-documents.ts implementing 72-hour TTL cleanup for cached files. Implement apps/agent-worker/src/storage/signed-links.ts generating 10-minute expiration links for authorized downloads. Build apps/agent-worker/src/rights/decision-engine.ts determining distribution rights and storing rights decisions with contentHash. Ensure contentHash, source URL, rights decision, parser provenance, and locator always persisted even when file is deleted.\n<info added on 2026-09-05T05:00:00+08:00>Production release b32d81c accepted official scansci-pdf 1.13.1, real 24,671,920-byte OA PDF, persistent ZJU WebVPN subscription-only Nature PDF, four product entries, 71.995h retention, 599.48s one-use link and replay 404. ScienceDirect remains an optional official Remote Access/CARSI or API-entitlement capability, not a platform blocker.</info>",
         "testStrategy": "Test Semantic Scholar metadata retrieval accuracy. Verify 72-hour TTL cleanup executes reliably. Test signed link generation and expiration. Verify rights decisions are logged and auditable. Test graceful degradation when external APIs unavailable.",
         "priority": "medium",
         "dependencies": [
           "4",
           "5"
         ],
-        "status": "in-progress",
+        "status": "done",
         "subtasks": [],
-        "updatedAt": "2026-08-30T02:15:00.000Z"
+        "updatedAt": "2026-09-04T23:00:00.000Z"
       },
       {
         "id": "11",
         "title": "Deterministic Presentation Assets Generation",
         "description": "Implement deterministic chart and interactive HTML generation from real Claim data as PresentationAssets. Configure admin-only MiniMax image/video generation for representative public results with approval workflow.",
-        "details": "Create apps/agent-worker/src/presentation/chart-generator.ts generating Plotly/SVG charts from verified data with sourceClaimIds, generator version. Build apps/agent-worker/src/presentation/interactive-html.ts creating Claim/Evidence/conditions/limitations interaction HTML deterministically. Implement apps/agent-worker/src/presentation/minimax-admin.ts as admin-only endpoint for MiniMax image/video generation with cost logging, prompt hash, source claims, and approval requirement. Create apps/api/src/routes/presentation-assets.ts with draft/approved/rejected status workflow. Implement packages/domain/src/assets/presentation-asset.ts with label: 'presentation_not_evidence' enforcement. Ensure video generation is last priority after charts/interactive HTML prove stable.",
+        "details": "Create apps/agent-worker/src/presentation/chart-generator.ts generating Plotly/SVG charts from verified data with sourceClaimIds, generator version. Build apps/agent-worker/src/presentation/interactive-html.ts creating Claim/Evidence/conditions/limitations interaction HTML deterministically. Implement apps/agent-worker/src/presentation/minimax-admin.ts as admin-only endpoint for MiniMax image/video generation with cost logging, prompt hash, source claims, and approval requirement. Create apps/api/src/routes/presentation-assets.ts with draft/approved/rejected status workflow. Implement packages/domain/src/assets/presentation-asset.ts with label: 'presentation_not_evidence' enforcement. Ensure video generation is last priority after charts/interactive HTML prove stable.\n<info added on 2026-09-05T05:00:00+08:00>Production RO OSR-2026-000019 generated and replayed deterministic SVG/HTML with exact hashes 8d5f8f23…c640 and b20f83cc…1198. HTML is scriptless/networkless, public 200, source Claims verified, and presentation_not_evidence enforced. MiniMax image/video remains optional, administrator-only and disabled.</info>",
         "testStrategy": "Test chart generation produces identical output for same input data (deterministic). Verify interactive HTML contains no LLM-generated evidence, only structured data. Test admin MiniMax workflow requires approval before publication. Verify presentation_not_evidence label prevents asset use as Claim evidence.",
         "priority": "medium",
         "dependencies": [
           "9"
         ],
-        "status": "in-progress",
+        "status": "done",
         "subtasks": [],
-        "updatedAt": "2026-09-04T17:54:49.669Z"
+        "updatedAt": "2026-09-04T21:00:00.000Z"
       },
       {
         "id": "12",
         "title": "Full Golden-Corpus Gate and Production Acceptance",
         "description": "Run the foundation corpus through every completed subsystem, enforce quantitative release thresholds, canary capability switches and the real ECS end-to-end acceptance journey.",
-        "details": "Extend the Task 1 corpus runner to cover the complete parser, OCR, Claim/Evidence, hybrid retrieval, identity routing, external retrieval, public RO and presentation paths. Enforce citation locator round-trip 100%, core Claim precision ≥0.90, evidence relation precision ≥0.90, evidence page/bbox hit rate ≥0.95, CPU search P95 ≤2.5s, and TTL/signed-link expiration 100%. Add the real upload → parse/OCR → Claim review → version → publish → public reuse journey. Verify server full build, migration status, target containers/model digests, runtime dependency loading, internal/public health, kill switches and rollback before release.",
+        "details": "Extend the Task 1 corpus runner to cover the complete parser, OCR, Claim/Evidence, hybrid retrieval, identity routing, external retrieval, public RO and presentation paths. Enforce citation locator round-trip 100%, core Claim precision ≥0.90, evidence relation precision ≥0.90, evidence page/bbox hit rate ≥0.95, CPU search P95 ≤2.5s, and TTL/signed-link expiration 100%. Add the real upload → parse/OCR → Claim review → version → publish → public reuse journey. Verify server full build, migration status, target containers/model digests, runtime dependency loading, internal/public health, kill switches and rollback before release.\n<info added on 2026-09-05T07:00:00+08:00>Exact ECS aggregate report 1ca3b0e1…08f2 passed on release b32d81c: Parser 14/2/0/0 and locator 26/26; Claim/Evidence/bbox/TTL/signed-link 100%; BGE P95 240 ms plus live hybrid/fallback. A fresh real 2,215,244-byte PDF completed upload, parser with automatic core and canonical source map, review/confirm, commit, three core Claims, licensing, publication review, approval, R3 publish and anonymous public 200 as OSR-2026-000021; input SHA bdfaa68d…697 and publication SHA 625f5308…2cba are bound into the report. The earlier 24.7 MB upload produced a source map but no SDF proposal, remained needs_review and was archived. Core/search 36/36 and 2/2; health, kill switches and rollback verified.</info>",
         "testStrategy": "Run full golden corpus suite before any release. Verify all thresholds pass individually. Test canary deployment with real traffic. Verify rollback capability at each phase. Confirm production acceptance test suite passes on target infrastructure before go-live.",
         "priority": "high",
         "dependencies": [
@@ -1575,15 +1575,16 @@
           "10",
           "11"
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-09-04T23:00:00.000Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T17:54:49.669Z",
+      "lastModified": "2026-09-04T23:00:00.000Z",
       "taskCount": 12,
-      "completedCount": 9,
+      "completedCount": 12,
       "tags": [
         "hermes-research-intelligence"
       ]
