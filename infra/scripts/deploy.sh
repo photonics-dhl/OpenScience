@@ -6,6 +6,11 @@ set -eEuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG_ROOT="${XGS_CONFIG_ROOT:-$PROJECT_ROOT}"
+# Native Windows Node must not receive /c/... paths (notably quoted usernames).
+if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then
+  PROJECT_ROOT="$(cygpath -m "$PROJECT_ROOT")"
+  CONFIG_ROOT="$(cygpath -m "$CONFIG_ROOT")"
+fi
 ENV_FILE="$CONFIG_ROOT/.env"
 
 CONFIRM=0

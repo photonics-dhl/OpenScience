@@ -40,6 +40,7 @@ Git Bash 会沿用 Windows 用户目录中的 SSH 配置和项目专用密钥。
 - Git for Windows 完整安装后，在 Bash 内补齐 `PATH=/usr/bin:/mingw64/bin:$PATH`，修复 `dirname` 等基础命令不可见；不需要更换网站编译器。
 - GitHub 网页登录与 Git 推送凭据相互独立。使用官方 GitHub CLI 的设备授权；不在聊天、日志或仓库中记录令牌。推送使用项目级 helper `!gh auth git-credential`，不要关闭 TLS 验证；Windows Schannel 不可用时可选择 Git OpenSSL 后端。
 - `XGS_SSH_KEY` 可指定现有私钥位置；`XGS_SSH_KNOWN_HOSTS` 指向已核验主机指纹的文件，启用严格主机校验。不要复制私钥或放宽权限，不修改 `HOME`。
+- Git Bash 下 `deploy.sh` 以 `cygpath -m` 将 source/config root 转为原生 Windows 路径，避免用户名带单引号时 Node 把 `/c/...` 错当作 `C:/c/...`；不会改变 Git exact-tree 校验。
 - 未跟踪的 `.cloud-sync-env` 保留 `host/user/port/key`，可增加 `knownHostsFile`，与上述主机文件一致；路径允许空格、单引号，拒绝双引号和换行。相对路径以运行部署命令的目录为基准。
 - 验证顺序：`ssh-run.sh` 只读命令 → `checkup.sh` → CI → 精确 release dry-run → 带 parser 门禁与明确 rollback ref 的确认部署。失败仍走既有事务自动回退；不要绕过主机、CI 或 release-source 守卫。
 

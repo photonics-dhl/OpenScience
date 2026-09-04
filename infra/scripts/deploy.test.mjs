@@ -64,6 +64,8 @@ test('portable SSH paths preserve apostrophes and require pinned host verificati
     assert.throws(() => getOptions({ knownHostsFile }), /Invalid knownHostsFile/);
   }
   assert.match(launcherSource, /XGS_SSH_KEY:-\$HOME\/\.ssh\/id_ed25519_xgs/u);
+  assert.match(launcherSource, /PROJECT_ROOT="\$\(cygpath -m "\$PROJECT_ROOT"\)"/u);
+  assert.match(launcherSource, /CONFIG_ROOT="\$\(cygpath -m "\$CONFIG_ROOT"\)"/u);
   for (const script of [launcherSource, sshRun]) {
     assert.match(script, /XGS_SSH_KNOWN_HOSTS/u);
     assert.match(script, /StrictHostKeyChecking=yes/u);
