@@ -1,13 +1,19 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-03 16:30 +08。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-04 +08。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application source: `codex/scansci-upstream-mcp` / `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。
-- Production application source / immutable release: `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`。
-- Production rollback: `2313038bef4fabce5cdc90517d25cb177ab1e8dd`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP、持久 Cookie、容器重建恢复和普通 DOI 下载已验收；明确 institutional/publisher provenance、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
+- Local candidate: detached `7593e82e8a309ffcaaa8092b5628c53a0fec444a`（PR #70 merged，**not deployed**）。
+- Production release / rollback: `e23a94f6622bb65e33ddbfe290970a9e6366567a` / `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`；core/search `36/36` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12。机构条目精确选择已通，但 ZJU CAS 未建立认证会话；订阅 PDF、四入口/72h/600s 仍 pending。
+
+## 2026-09-04 — ScanSci institutional target blocked before release
+
+- 生产 `e23a94f…` / rollback `4bba4e5…` healthy；只有官方 `scansci-pdf==1.13.1` 单 MCP。ScanSci wheel/Chromium 层和 BGE 模型/依赖层均复用缓存，未安装第二套运行时。
+- PR #68 / CI `33835200273` 和 PR #69 / CI `33838217748` 修复浙大双语名、Elsevier ARIA 选项；PR #70 / CI `33840879274` 精确接受当前公开标签 `浙江大学(Zhejiang University) (Zhejiang University Library)`，继续拒绝附属医院近似项。
+- 未发布候选 `7593e82…` 直接验收 DOI `10.1016/j.physleta.2025.130846`：`selected=2`、`exact_not_found=0`。账号只提交一次，但后续官方下载仍 `CAS login required=2`、`pdf_captured=0`，因此候选不发布。临时服务已恢复正式镜像，8 PID / 0 Chromium。
+- 下一步只是获取可成功完成 CAS/二次认证的会话，先直接下载目标 PDF；成功前不发布，不重复跑全仓/视觉门禁。
 
 ## 2026-09-03 — ScanSci persistent session and PDF download accepted
 
@@ -77,20 +83,3 @@
 - Durable payload server-stamp target；API 严格 target 组合；active/retryable/terminal 均在 limit 前做 user/authority/target 筛选，Web 不再 global-then-filter。Domain `535`、API `101`、Worker `502`、Web `463 + 5 Node`、19-route build/typecheck、browser fix `6/6`、product `72/72`、Hermes `19/19 + 8/8` green。
 - 这是本地 review candidate；生产仍为 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。ECS 375px、真实 OA/CARSI、一次性下载与部署仍属 Task 10，不能标 done。
 - Task 10 部署前须只读确认 targetless durable ScanSci task 数为 0；非零即阻断并另行决策，本轮不自动回填或扩 migration。
-
-## 2026-08-30 — ScanSci Task 7 local review candidate
-
-- `22088c0` + `86e037e` + `3e829db` + `1059072` + `82d4772` + `185d5d6` 闭合 persisted DTO/hash-only intent、同 task/credit retry、精确 poll cleanup、server-only retry invariant 与 PostgreSQL parity test truthfulness；generic/public/internal caller 不能注入 marker，Worker 只读精确 durable v1，历史/畸形/撤权任务 false。
-- Retry 的 authority read/CAS/audit 现为三次 P2034-only Serializable 事务，Redis commit 后投递；recovery 用一次参数化 ID-only SQL 精确筛选权限/JSONB/DOI-arXiv 后 hydrate 并复用共享 predicate，无 top-N/循环/payload 泄露。14-case corpus 显式区分 JSONB 与 JavaScript-only `undefined` own-property；PG parity 用更新 terminal sentinel 分辨 raw candidate 与 fallback。Fresh Domain `534`、API `99`、Worker `502` 与三包/typechecked real-PG contracts green；既有 Web/Playwright `441 + 5 Node` / `7` 未改。
-- 这是本地 review candidate；ECS 375px、真实 CARSI/OA、一次性下载与 Task 8 四入口仍 pending，不能把 Task 10 标 done。生产保持 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。
-
-## 2026-08-30 — ScanSci Task 6 local recovery candidate
-
-- `60b3740` 闭合 provider state 事务/重放/generation、三次 P2034、非致命 observation、descriptor Secret 与 disabled rollback；Domain 520、Database 26、Worker 501、三包 typecheck、独立复审均 green。
-- 真实 PG forward/rollback/redeploy + 双 client 合同仅 typecheck；migration 33、OA/CARSI/session/四入口仍须 ECS。生产保持 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。
-
-## 2026-08-30 — ScanSci Task 5 atomic acquisition candidate
-
-- 本地 `ff5568f` + `4763228` 将 Personal RO/SDF、AgentSession、AgentTask、AI Credit debit 与三类 audit 收口到一笔三次有界 Serializable acquisition 事务；同键用完整 target/query/identifier/server payload digest 绑定，exact replay 在余额前返回，不再使用补偿删除。P2002 仅在 Prisma modelName 与该操作 idempotency field/column/constraint 同时精确匹配时重试，其他唯一冲突原样传播。
-- `createResearchObject`、`createAgentSession`、`submitAgentTask` 共用 transaction primitives；公开 RO 仍拒绝 `system:`，公开 generic Agent API 仍拒绝 `source.retrieve`，严格 4 KiB/字段/CSRF/auth/rate-limit 合同未变。Redis 仅在 commit 后投递；失败留下一个 `dispatchedAt=null` pending task，可由 replay 或 recovery 重派且不重复扣费。
-- 本地 Domain `59/514`、API `18/95`、Agent Worker `33/468`、全仓 typecheck/lint green。真实 PostgreSQL 集成 suite 已覆盖 rollback、credit、audit、并发、两连接确定性 archive/membership SSI cycle、同键 target/query/identifier mismatch 与 recovery；依本地 no-Docker 规则只完成编译，须在后续服务器验收执行。
