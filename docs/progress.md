@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Local docs branch / HEAD: `codex/hermes-final-handoff` / 基于应用 merge `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`，文档收尾提交待生成。
+- Current docs: 以 Git `main` 为准并在每次 session 读取实时 HEAD；文档提交不改变下列 production application release。
 - Production application release / rollback: `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7` / `0aaf52fed29e79bb19b15517ba9ef50545510f72`；core/search `36/36` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 12/12。Tasks 10–12 已通过真实 ECS 验收；下一任务尚未选择。
 
