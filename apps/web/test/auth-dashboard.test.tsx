@@ -455,6 +455,16 @@ describe('dashboard product states', () => {
     expect(markup).not.toContain('Already written');
   });
 
+  it.each(['queued', 'running', 'failed_retryable', 'failed_blocked'] as const)('opens the existing read-only task view for %s work', (status) => {
+    const markup = renderToStaticMarkup(createElement(HermesTaskRail, {
+      tasks: [{ id: 'task-1', researchObjectId: 'ro-1', title: 'Research material', status, current: 0, total: 6 }],
+    }));
+    expect(markup).toContain('href="/research-objects/ro-1/hermes?task=task-1"');
+    expect(markup).not.toContain('/ingest?task=');
+    expect(markup).toContain('hermes.view');
+    expect(markup).not.toContain('hermes.retry');
+  });
+
   it('renders recent research as a semantic list with status text', () => {
     const markup = renderToStaticMarkup(
       createElement(ResearchList, {

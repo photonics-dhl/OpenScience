@@ -139,3 +139,25 @@ test('ORCID start requests the new profile return target', async ({ page }) => {
   await expect(page).toHaveURL(/\/me\?identity=orcid-connected$/);
   expect(returnTo).toBe('/me');
 });
+
+
+test('profile uses the desktop canvas and keeps long project lists expandable', async ({ page }) => {
+  await prepare(page);
+  await page.setViewportSize({ width: 2048, height: 1100 });
+  await page.route('**/api/research-objects?*', route => route.fulfill({ json: { researchObjects: Array.from({ length: 12 }, (_, i) => ({ id: 'project-' + i, publicId: null, title: 'Research project ' + i + ' — ' + 'Long scientific title '.repeat(7), version: 1, status: 'draft' })) } }));
+  await page.goto('/me');
+  await expect(page.getByRole('heading', { name: 'My profile', exact: true })).toBeVisible();
+  const header = await page.locator('main > header').boundingBox();
+  expect(header!.width).toBeGreaterThan(1100);
+  expect(Math.abs(header!.x - (2048 - header!.x - header!.width))).toBeLessThan(8);
+  await expect(page.locator('[data-profile-projects] li')).toHaveCount(6);
+  await page.getByRole('button', { name: 'Show all projects' }).click();
+  await expect(page.locator('[data-profile-projects] li')).toHaveCount(12);
+  await page.getByRole('button', { name: 'Show fewer' }).click();
+  await expect(page.locator('[data-profile-projects] li')).toHaveCount(6);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/profile-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/profile-mobile.png', fullPage: true });
+});

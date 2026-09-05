@@ -81,13 +81,13 @@ export default function SettingsPage() {
   if (error) return <DashboardShell activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} /></DashboardShell>;
   if (!user || !readingPreference) return <DashboardShell activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={t('state.loadingBody')} kind="loading" title={meT('settingsTitle')} /></DashboardShell>;
   return (
-    <DashboardShell activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}>
-      <header className="max-w-3xl border-b border-os-rule-paper pb-6">
+    <DashboardShell className="account-workspace" activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}>
+      <header className="account-heading">
         <p data-reading-role="caption" className="text-os-vermilion-ink">{t('settings.kicker')}</p>
         <h1 className="mt-2 text-[clamp(2rem,4vw,2.75rem)] font-normal text-os-ink">{meT('settingsTitle')}</h1>
         <p data-reading-role="body" className="mt-3 text-os-muted-paper">{meT('settingsBody')}</p>
       </header>
-      <div data-reading-role="body" className="mt-8 grid max-w-4xl gap-8 md:grid-cols-2">
+      <div className="settings-grid">
         <section className="surface-folio-sheet px-5 py-6">
           <div className="flex items-center gap-3"><UserRound className="h-5 w-5 text-os-vermilion-ink" /><h2 className="text-lg font-semibold text-os-ink">{meT('accountTitle')}</h2></div>
           <dl className="mt-6 divide-y divide-os-rule-paper text-base">

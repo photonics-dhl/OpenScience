@@ -8,6 +8,12 @@
 - Production application release / rollback: `6478aa8ef6045ecef93127c6e3183fc05acb946f` / `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`；core/search `36/36` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 12/12。Tasks 10–12 已通过真实 ECS 验收；下一主题已确认为工作区—Hermes—RO 与多模态产品交付。
 
+## 2026-09-05 — UI acceptance revision
+
+- 用户否决首批布局/视觉，要求参考成熟方案优化后继续流程。修订候选解决 2048px 页面仅 768px 宽、默认列表/缩进、巨大标题和长项目列表；采用居中自适应网格、紧凑资料/认证表单、可展开最近项目、统一按钮与快捷入口。
+- 同时修复 Dashboard queued/running/failed task 的不存在 /ingest 路由，改用真实 Hermes task 页面与准确的查看文案。无 API、依赖或迁移变化。
+- 16 个相关浏览器用例通过，含桌面几何、展开和移动 overflow；全量构建、发布矩阵和独立复审进行中，生产仍为 6478aa8。
+
 ## 2026-09-05 — Integrated product scope confirmed
 
 - 用户确认优先完整功能、展示和交互；复用现有能力，成熟方案优先，分段交用户验收。论文生成图片/视频；语音用于 Hermes 修改 RO，不做上传音视频理解。

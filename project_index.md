@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-05 +08）：** docs maintenance branch / observed parent HEAD `codex/product-workflow-design` / `1a8dfb1`；后续 docs HEAD 以 Git 实时值为准。production release / rollback `6478aa8ef6045ecef93127c6e3183fc05acb946f` / `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`；core/search `36/36` / `2/2`。Research Intelligence Tasks 1–12 完成；integrated product 首批入口与同事前端成果已部署，用户效果及其余阶段待验收。最新实测见 CURRENT handoff；docs-only HEAD 不得冒充 application release。
+> **CURRENT source/deployment anchor（2026-09-05 +08）：** docs maintenance branch / observed parent HEAD `codex/product-workflow-design` / `1a8dfb1`；后续 docs HEAD 以 Git 实时值为准。production release / rollback `6478aa8ef6045ecef93127c6e3183fc05acb946f` / `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`；core/search `36/36` / `2/2`。Research Intelligence Tasks 1–12 完成；integrated product 首批入口与同事前端成果已部署，首批视觉已收到修改意见，UI 修订候选验证中，其余阶段待完成。最新实测见 CURRENT handoff；docs-only HEAD 不得冒充 application release。
 
 ## 当前产品交付
 
