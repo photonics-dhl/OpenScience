@@ -1,8 +1,8 @@
 import type { AuditContext } from '@openscience/observability';
-import type { PresentationAsset, PresentationAssetStatus } from '@prisma/client';
+import type { PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { createAgentSession, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
 import { recordAudit } from '../workspace/audit';
-import { requireActiveMembership } from '../workspace/helpers';
+import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
 import { PresentationAssetError } from './errors';
 
@@ -45,11 +45,42 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
   return { schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
 }
 
-async function requireScope(deps: AgentDeps, input: { userId: string; researchObjectId: string; versionId: string }) {
-  const version = await deps.prisma.version.findUnique({ where: { id: input.versionId }, include: { researchObject: true } });
+type PresentationScope = { userId: string; researchObjectId: string; versionId: string };
+type ScopeDb = Pick<Prisma.TransactionClient, 'version' | 'workspace' | 'membership'>;
+const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
+
+async function requireScope(prisma: ScopeDb, input: PresentationScope, write = false) {
+  const version = await prisma.version.findUnique({ where: { id: input.versionId }, include: { researchObject: true } });
   if (!version || version.researchObjectId !== input.researchObjectId || !version.researchObject) throw new PresentationAssetError('NOT_FOUND', 'Research Object version not found');
-  await requireActiveMembership(deps.prisma, version.researchObject.workspaceId, input.userId);
+  const { workspace, membership } = await requireMembership({ prisma }, version.researchObject.workspaceId, input.userId);
+  if (write && (workspace.status !== 'active' || !WRITE_ROLES.has(membership.role))) throw new PresentationAssetError('FORBIDDEN', 'Presentation writes require an active workspace and a content-writing role');
+  if (write && version.status !== 'draft') throw new PresentationAssetError('ILLEGAL_TRANSITION', 'Presentation assets can only change on a draft version');
   return version;
+}
+
+export function requirePresentationWriteScope(prisma: ScopeDb, input: PresentationScope) {
+  return requireScope(prisma, input, true);
+}
+
+/** Same draft row fence and Serializable retry policy as Claim/Evidence writes. */
+export async function withPresentationAssetWrite<T>(
+  prisma: Pick<AgentDeps['prisma'], '$transaction'>,
+  input: PresentationScope,
+  operation: (tx: Prisma.TransactionClient, version: Awaited<ReturnType<typeof requirePresentationWriteScope>>) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const version = await requirePresentationWriteScope(tx, input);
+        const touched = await tx.version.updateMany({ where: { id: input.versionId, status: 'draft' }, data: { status: 'draft' } });
+        if (touched.count !== 1) throw new PresentationAssetError('ILLEGAL_TRANSITION', 'Presentation assets can only change on a draft version');
+        return operation(tx, version);
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if ((error as { code?: unknown })?.code === 'P2034' && attempt < 2) continue;
+      throw error;
+    }
+  }
 }
 
 async function requirePlatformAdmin(deps: AgentDeps, userId: string): Promise<void> {
@@ -60,7 +91,7 @@ async function requirePlatformAdmin(deps: AgentDeps, userId: string): Promise<vo
 export async function submitPresentationGeneration(deps: AgentDeps, input: {
   userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
-  await requireScope(deps, input);
+  await requirePresentationWriteScope(deps.prisma, input);
   const payload = parsePresentationGenerationPayload({ schemaVersion: 1, researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, sourceClaimIds: input.sourceClaimIds });
   const claims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: input.researchObjectId, versionId: input.versionId }, select: { id: true, extractionStatus: true } });
   const returnedClaimIds = new Set(claims.map((claim) => claim.id));
@@ -79,7 +110,7 @@ export async function submitPresentationGeneration(deps: AgentDeps, input: {
 export async function listPresentationAssets(deps: AgentDeps, input: {
   userId: string; researchObjectId: string; versionId: string;
 }): Promise<PresentationAssetView[]> {
-  await requireScope(deps, input);
+  await requireScope(deps.prisma, input);
   const assets = await deps.prisma.presentationAsset.findMany({
     where: { researchObjectId: input.researchObjectId, versionId: input.versionId },
     include: { sourceClaims: { select: { claimId: true } } },
@@ -104,18 +135,20 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
 export async function transitionPresentationAsset(deps: AgentDeps, input: {
   userId: string; researchObjectId: string; versionId: string; assetId: string; status: Extract<PresentationAssetStatus, 'approved' | 'rejected'>; expectedUpdatedAt: Date;
 }, ctx: AuditContext = {}): Promise<PresentationAsset> {
-  const version = await requireScope(deps, input);
-  const asset = await deps.prisma.presentationAsset.findUnique({ where: { id: input.assetId } });
-  if (!asset || asset.researchObjectId !== input.researchObjectId || asset.versionId !== input.versionId) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
-  if (asset.label !== PRESENTATION_ASSET_LABEL) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation asset label is invalid');
-  if (asset.status !== 'draft') throw new PresentationAssetError('ILLEGAL_TRANSITION', 'Presentation asset status is terminal');
-  if (asset.kind === 'image' || asset.kind === 'video') await requirePlatformAdmin(deps, input.userId);
-  const changed = await deps.prisma.presentationAsset.updateMany({ where: { id: asset.id, status: 'draft', updatedAt: input.expectedUpdatedAt }, data: { status: input.status } });
-  if (changed.count !== 1) throw new PresentationAssetError('CONCURRENT_UPDATE', 'Presentation asset changed concurrently');
-  const current = await deps.prisma.presentationAsset.findUnique({ where: { id: asset.id } });
-  if (!current) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
-  await recordAudit(deps, deps.prisma, { actorId: input.userId, action: `presentation_asset.${input.status}`, workspaceId: version.researchObject.workspaceId, targetType: 'presentation_asset', targetId: asset.id, metadata: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: asset.kind } }, ctx);
-  return current;
+  return withPresentationAssetWrite(deps.prisma, input, async (tx, version) => {
+    const transaction = { ...deps, prisma: tx as AgentDeps['prisma'] };
+    const asset = await tx.presentationAsset.findUnique({ where: { id: input.assetId } });
+    if (!asset || asset.researchObjectId !== input.researchObjectId || asset.versionId !== input.versionId) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
+    if (asset.label !== PRESENTATION_ASSET_LABEL) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation asset label is invalid');
+    if (asset.status !== 'draft') throw new PresentationAssetError('ILLEGAL_TRANSITION', 'Presentation asset status is terminal');
+    if (asset.kind === 'image' || asset.kind === 'video') await requirePlatformAdmin(transaction, input.userId);
+    const changed = await tx.presentationAsset.updateMany({ where: { id: asset.id, status: 'draft', updatedAt: input.expectedUpdatedAt }, data: { status: input.status } });
+    if (changed.count !== 1) throw new PresentationAssetError('CONCURRENT_UPDATE', 'Presentation asset changed concurrently');
+    const current = await tx.presentationAsset.findUnique({ where: { id: asset.id } });
+    if (!current) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
+    await recordAudit(transaction, tx, { actorId: input.userId, action: `presentation_asset.${input.status}`, workspaceId: version.researchObject.workspaceId, targetType: 'presentation_asset', targetId: asset.id, metadata: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: asset.kind } }, ctx);
+    return current;
+  });
 }
 
 export { PresentationAssetError } from './errors';

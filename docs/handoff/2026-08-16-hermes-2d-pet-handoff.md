@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Docs maintenance branch / observed parent HEAD: `codex/product-workflow-design` / `6478aa8`（PR #78 已合入 main）；后续 docs-only HEAD 以 Git 实时值为准，不得替代或冒充下列 production application source。
+- Worktree branch / observed parent HEAD: `codex/product-workflow-design` / `440266c`（PR #83）；UI 候选 canonical 发布进行中，后续权限补丁未提交；Git HEAD 不得冒充下面的生产 application release。
 - Production application source / immutable release: `6478aa8ef6045ecef93127c6e3183fc05acb946f`
 - Rollback: `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`
 - Core/search migrations: `36/36` / `2/2`。
@@ -29,6 +29,11 @@
 - 不安装 FlareSolverr、第二套 Chromium、另一份 BGE、宿主 Python/Node 全局包；不 broad prune，不删除 active/rollback 或持久数据。
 - MiniMax image/video 仍为管理员限定、默认关闭的可选能力；Tavily 额度耗尽会显式降级，不阻断已验收主链。
 - ScienceDirect Remote Access 的 Elsevier 账号/机构邮箱激活、180 天续期以及 API entitlement 均属于外部账号条件；获得条件前不宣称该站订阅 PDF 可用。
+
+## Current UI and next product slice
+
+- UI 候选 440266c 已通过全仓检查、Product88、Hermes gate 和 CI 33941432761；ECS build/parser acceptance 通过，canonical 部署正在慢速 OA 验收阶段。完成前生产保持下述旧版事实，不并发开启第二事务。
+- 下一项展示资产权限修复已通过全仓检查与独立复审：写角色/draft version/Worker 重验及 draft fence；尚未提交部署。私有预览与图解操作界面尚未接通，批准 UI 前还须处理来源 Claim 后续编辑的资产失效。
 
 ## Next action and read first
 

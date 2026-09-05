@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import {
   parsePresentationGenerationPayload,
@@ -30,6 +30,48 @@ function fixture(platformRole = 'user') {
 }
 
 describe('Presentation asset domain contract', () => {
+  it.each(['viewer', 'reviewer'])('keeps %s read-only for generation and approval', async (role) => {
+    const ctx = fixture();
+    ctx.db.memberships[0].role = role;
+    const updatedAt = new Date();
+    ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'chart', status: 'draft', label: 'presentation_not_evidence', updatedAt });
+    await expect(submitPresentationGeneration(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'chart', sourceClaimIds: [CLAIM], idempotencyKey: 'read-only' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(transitionPresentationAsset(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: ASSET, status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(ctx.db.agentTasks).toHaveLength(0);
+    expect(ctx.db.presentationAssets[0].status).toBe('draft');
+    expect(await listPresentationAssets(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION })).toHaveLength(1);
+  });
+
+  it.each(['under_review', 'approved', 'published', 'revised'])('cannot generate or approve on immutable %s versions', async (status) => {
+    const ctx = fixture();
+    ctx.db.versions[0].status = status;
+    const updatedAt = new Date();
+    ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'chart', status: 'draft', label: 'presentation_not_evidence', updatedAt });
+    await expect(submitPresentationGeneration(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'chart', sourceClaimIds: [CLAIM], idempotencyKey: 'immutable' })).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+    await expect(transitionPresentationAsset(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: ASSET, status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+    expect(ctx.db.presentationAssets[0].status).toBe('draft');
+  });
+
+  it('keeps archived assets readable while rejecting writes', async () => {
+    const ctx = fixture();
+    ctx.db.workspaces[0].status = 'archived';
+    await expect(listPresentationAssets(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION })).resolves.toEqual([]);
+    await expect(submitPresentationGeneration(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'chart', sourceClaimIds: [CLAIM], idempotencyKey: 'archived' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('does not approve when publication wins the draft row fence', async () => {
+    const ctx = fixture();
+    const updatedAt = new Date();
+    ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'chart', status: 'draft', label: 'presentation_not_evidence', updatedAt });
+    const update = ctx.prisma.version.updateMany;
+    vi.spyOn(ctx.prisma.version, 'updateMany').mockImplementation(async (args) => {
+      ctx.db.versions[0].status = 'published';
+      return update(args);
+    });
+    await expect(transitionPresentationAsset(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: ASSET, status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+    expect(ctx.db.presentationAssets[0].status).toBe('draft');
+  });
+
   it('canonicalizes exact-version source Claims and creates one replay-safe task', async () => {
     const ctx = fixture();
     const input = {

@@ -140,6 +140,10 @@
 - 现有生成/列表/审核 API 位于 apps/api/src/routes/presentation-assets.ts；domain 位于 packages/domain/src/assets/presentation-asset.ts；Worker 与确定性 SVG/HTML 位于 apps/agent-worker/src/presentation/。公开展示已有 PresentationAssetGallery。
 - 当前缺少认证 RO 页面中的 Claim 选择、发起生成、任务进度、草稿预览和审核操作。下一步优先补这条产品路径，先使用 chart，复用既有任务/资产/版本合同。
 - 实施前需核对草稿内容的认证读取入口及 exact-version Claim 数据合同；已有列表只返回资产元数据，不能把公开 approved 路径误当成私有草稿预览。图片/视频 provider 保持未验证，不新增安装或绕过权限。
+- 已核实私有草稿内容接口缺失；新增时复用公开内容的字节上限、完整性与安全 SVG 检查，成员认证后以 private/no-store 返回，前端通过 img 展示，不注入 SVG。现有 chart 是主张摘要卡片，文案不能称为数据图或科学验证。
+- 开放入口前先补现有写授权：沿用 Claim/Evidence 的 owner/maintainer/author/contributor 与 draft Version 规则；生成和审核拒绝 Viewer/Reviewer，Worker 在生成前及提交事务内重验角色、精确版本与来源 Claims，并沿用 draft row fence 防止发布并发。只读成员仍可读取；不另建权限体系。
+- 权限修复候选已通过 domain 12、worker 16、API 3 项回归和独立复审；包含生成期间 Claim 内容改变但 succeeded 状态不变的检查。并发测试使用确定性交错，未声称实际 PostgreSQL 双会话验收。入队后的撤权仍可能留下已计费但被 Worker 拒绝的媒体任务，沿用 charged-on-submit；对象上传后拒绝落库可能留下无引用对象。
+- 批准 UI 前还需处理生成完成后的 Claim 编辑：修改来源 Claim 时应在同一事务中使关联展示资产失效，避免旧图继续被批准。当前 ID/status 和内容校验不能证明图对应最新 Claim；不在本轮权限补丁内另加哈希或扩大到 Claim 编辑流程。
 
 ### 发布复审中修正的两处问题
 
