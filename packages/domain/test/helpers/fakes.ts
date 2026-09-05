@@ -674,7 +674,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           ? { ...asset, sourceClaims: db.presentationAssetClaims.filter((source) => source.presentationAssetId === asset.id) }
           : asset);
       },
-      findUnique: async ({ where }: any) => db.presentationAssets.find((asset) => asset.id === where.id) ?? null,
+      findUnique: async ({ where, include }: any) => { const asset = db.presentationAssets.find((asset) => asset.id === where.id); return !asset ? null : include?.sourceClaims ? { ...asset, sourceClaims: db.presentationAssetClaims.filter(source => source.presentationAssetId === asset.id) } : asset; },
       create: async ({ data }: any) => {
         const row = { id: nextId(), status: 'draft', createdAt: new Date(), updatedAt: new Date(), ...data };
         db.presentationAssets.push(row);
@@ -687,6 +687,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     presentationAssetClaim: {
+      findMany: async ({ where }: any) => db.presentationAssetClaims.filter(source => source.presentationAssetId === where.presentationAssetId),
       createMany: async ({ data }: any) => {
         db.presentationAssetClaims.push(...data);
         return { count: data.length };

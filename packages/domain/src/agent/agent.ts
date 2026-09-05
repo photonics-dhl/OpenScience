@@ -614,6 +614,7 @@ export async function submitDeterministicPresentationTask(
   input: SubmitAgentTaskInput & { kind: 'presentation.generate' },
   ctx: AuditContext = {},
 ): Promise<AgentTaskView> {
+  if (input.kind !== 'presentation.generate' || (input.payload.kind !== 'chart' && input.payload.kind !== 'interactive_html') || 'storyboard' in input.payload) throw new AgentError('VALIDATION_ERROR', 'Only deterministic presentation tasks may use free submission');
   const { dispatch, ...persistenceInput } = input;
   let task: AgentTask | undefined;
   for (let attempt = 0; attempt < 3; attempt += 1) {

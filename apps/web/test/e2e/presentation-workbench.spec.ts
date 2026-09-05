@@ -195,15 +195,15 @@ test('requires both a draft version and an active writer membership', async ({ p
 test('does not let delayed or failed reads, or a delayed generation, move a changed version back to the old scope', async ({ page }) => {
   await fixtures(page, { delayVersionTwoReads: true, delayGeneration: true, failVersionOneReads: true });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
-  await page.getByRole('combobox').selectOption('version-1');
+  await page.locator('select').first().selectOption('version-1');
   await expect(page).toHaveURL(/version=version-1/);
   await page.waitForTimeout(800);
   await expect(page.getByText(initialClaim.statement)).toHaveCount(0);
-  await page.getByRole('combobox').selectOption('version-2');
+  await page.locator('select').first().selectOption('version-2');
   await expect(page.getByText(initialClaim.statement)).toBeVisible();
   await page.getByRole('checkbox', { name: new RegExp(initialClaim.statement) }).check();
   await page.getByRole('button', { name: /Generate concept map/i }).click();
-  await page.getByRole('combobox').selectOption('version-1');
+  await page.locator('select').first().selectOption('version-1');
   await page.waitForTimeout(800);
   await expect(page).toHaveURL(/version=version-1$/);
   await expect(page.locator('[data-presentation-asset]')).toHaveCount(0);
@@ -228,10 +228,10 @@ test('restores a scoped pending task from the URL and reports foreign tasks with
 test('keeps writes and task polling blocked until a failed whole-scope load is retried successfully', async ({ page }) => {
   const observed = await fixtures(page, { scopeLoadErrorOnce: true, pendingReads: 1 });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2&task=presentation-task`);
-  await expect(page.getByRole('button', { name: /Retry loading claims and diagrams/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Retry loading claims and presentation content/i })).toBeVisible();
   await expect(page.getByLabel(/Core claim statement/i)).toBeDisabled();
   expect(observed.taskReadCount()).toBe(0);
-  await page.getByRole('button', { name: /Retry loading claims and diagrams/i }).click();
+  await page.getByRole('button', { name: /Retry loading claims and presentation content/i }).click();
   await expect(page.locator('[data-presentation-asset="asset-chart"]')).toBeVisible({ timeout: 10_000 });
   expect(observed.taskReadCount()).toBeGreaterThan(0);
 });
@@ -254,7 +254,7 @@ test('shows every claim, caps a diagram at twelve selections, and restores URL s
   for (let index = 0; index < 12; index += 1) await checkboxes.nth(index).check();
   await expect(checkboxes.nth(12)).toBeDisabled();
   await expect(page.getByText('12 of 12 selected')).toBeVisible();
-  await page.getByRole('combobox').selectOption('version-1');
+  await page.locator('select').first().selectOption('version-1');
   await expect(page).toHaveURL(/version=version-1$/);
   await page.goBack();
   await expect(page).toHaveURL(/version=version-2$/);
@@ -266,7 +266,7 @@ test('keeps an unavailable version link explicit instead of silently changing it
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-missing`);
   await expect(page.getByText(/version in this link isn't available/i)).toBeVisible();
   await expect(page).toHaveURL(/version=version-missing$/);
-  await page.getByRole('combobox').selectOption('version-2');
+  await page.locator('select').first().selectOption('version-2');
   await expect(page).toHaveURL(/version=version-2$/);
 });
 
@@ -319,4 +319,67 @@ test('puts media first and keeps source details and editor keyboard accessible o
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(video.locator('video')).toHaveAttribute('controls', '');
   await expect(video.getByRole('button', { name: /Approve/i })).toHaveCount(0);
+});
+
+test('Hermes plans and revises sourced scenes, retaining the original through approval and reload', async ({ page }) => {
+  await fixtures(page);
+  const plans: Array<Record<string, unknown>> = [];
+  const requests: Array<Record<string, unknown>> = [];
+  const keys: string[] = [];
+  let failedOnce = false;
+  await page.route('**/api/**/presentation-assets/generations', async (route) => {
+    const body = route.request().postDataJSON();
+    requests.push(body);
+    keys.push(route.request().headers()['idempotency-key']);
+    if (!failedOnce) { failedOnce = true; return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Temporary storyboard failure' } }, 503); }
+    const revision = Boolean(body.storyboard.baseAssetId);
+    plans.push({ ...asset, id: revision ? 'plan-revision' : 'plan-original', kind: 'interactive_html', canTransition: true,
+      storyboard: { ...body.storyboard, document: { schemaVersion: 1, title: revision ? 'Revised light journey' : 'Light journey', scenes: Array.from({ length: 3 }, (_, index) => ({ title: `Stage ${index + 1}`, narration: revision ? `Revised narration ${index}` : `Original narration ${index}`, visualAction: revision ? `Revised visual ${index}` : `Original visual ${index}`, durationSeconds: 8, sourceClaimIds: [initialClaim.id] })) } } });
+    return json(route, { task: task('pending', 0) }, 202);
+  });
+  await page.route('**/api/**/presentation-assets', (route) => json(route, { assets: route.request().url().includes('/version-2/') ? plans : [] }));
+  let storyboardTaskReads = 0;
+  await page.route('**/api/**/presentation-tasks/presentation-task', (route) => {
+    storyboardTaskReads += 1;
+    return json(route, { task: storyboardTaskReads === 1 ? task('running', 35) : task('succeeded', 100) });
+  });
+  await page.route('**/api/**/presentation-assets/plan-revision', (route) => {
+    plans[1] = { ...plans[1], status: 'approved' };
+    return json(route, { asset: plans[1] });
+  });
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+  await page.getByRole('checkbox', { name: new RegExp(initialClaim.statement) }).check();
+  await page.getByLabel('Intended artwork direction').selectOption('ink');
+  await page.getByLabel(/What should the explanation emphasize/).fill('Explain propagation.');
+  await page.getByRole('button', { name: 'Generate storyboard · 1 AI credit' }).click();
+  await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('Temporary storyboard failure');
+  await page.getByRole('button', { name: 'Generate storyboard · 1 AI credit' }).click();
+  await expect(page.getByRole('progressbar', { name: 'Presentation task progress' })).toBeVisible();
+  await expect(page.locator('[data-presentation-task]')).toContainText('Preparing presentation content');
+  await expect(page.locator('[data-presentation-task]')).not.toContainText(/diagram/i);
+  const original = page.locator('[data-presentation-asset="plan-original"]');
+  await expect(original).toBeVisible();
+  expect(keys[0]).toBe(keys[1]);
+  expect(requests[1]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', instruction: 'Explain propagation.' } });
+  await original.getByLabel('What should Hermes change?').fill('Show interference.');
+  await original.getByRole('button', { name: 'Create revised draft · 1 AI credit' }).click();
+  const revision = page.locator('[data-presentation-asset="plan-revision"]');
+  await expect(revision).toBeVisible();
+  expect(requests[2].storyboard).toEqual({ locale: 'en', style: 'ink', instruction: 'Show interference.', baseAssetId: 'plan-original' });
+  expect(keys[2]).not.toBe(keys[1]);
+  await expect(revision).toContainText('Original narration 0');
+  await expect(revision).toContainText('Revised visual 0');
+  await expect(original).toContainText('Original visual 0');
+  await revision.getByRole('button', { name: /Approve/i }).click();
+  await page.reload();
+  await expect(revision).toContainText('Approved');
+  await expect(original).toContainText('Needs review');
+  expect(plans[0].status).toBe('draft');
+  await page.screenshot({ path: 'test/visual/out/science-video/storyboard-local-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/science-video/storyboard-local-mobile.png', fullPage: true });
+  await page.locator('select').first().selectOption('version-1');
+  await expect(page.locator('[data-presentation-asset]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Generate storyboard/ })).toHaveCount(0);
 });

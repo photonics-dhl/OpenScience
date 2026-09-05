@@ -28,6 +28,7 @@ const taskParams = scopeParams.extend({ taskId: z.string().uuid() }).strict();
 
 const generationBody = z.object({
   kind: z.enum(['chart', 'interactive_html', 'image', 'video']),
+  storyboard: z.object({ locale: z.enum(['zh', 'en']), style: z.enum(['watercolor', 'technical', 'ink']), instruction: z.string().max(1000).trim().min(1), baseAssetId: z.string().uuid().optional() }).strict().optional(),
   sourceClaimIds: z.array(z.string().uuid()).min(1).max(12),
 }).strict();
 
@@ -84,18 +85,7 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     const params = assetParams.parse(req.params);
     const body = transitionBody.parse(req.body);
     const asset = await transitionPresentationAsset(deps, { userId: user.userId, ...params, ...body }, auditCtx(req));
-    return reply.send({ asset: {
-      id: asset.id,
-      researchObjectId: asset.researchObjectId,
-      versionId: asset.versionId,
-      kind: asset.kind,
-      contentHash: asset.contentHash,
-      generator: asset.generator,
-      generatorVersion: asset.generatorVersion,
-      status: asset.status,
-      label: asset.label,
-      createdAt: asset.createdAt,
-      updatedAt: asset.updatedAt,
-    } });
+    const assets = await listPresentationAssets(deps, { userId: user.userId, researchObjectId: params.researchObjectId, versionId: params.versionId });
+    return reply.send({ asset: assets.find(item => item.id === asset.id) });
   });
 }

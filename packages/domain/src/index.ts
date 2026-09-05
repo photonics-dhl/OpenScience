@@ -382,3 +382,7 @@ export {
 } from './retrieval/temporary-document';
 
 export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from './assets/reviewed-media-import';
+
+export { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
+
+export { requireStoryboardBase } from './assets/presentation-asset';

@@ -596,7 +596,11 @@ export interface PresentationClaim {
   updatedAt: string;
 }
 
+import type { StoryboardRequest, StoryboardView } from '@openscience/domain';
+export type { StoryboardRequest, StoryboardDocument, StoryboardView } from '@openscience/domain';
+
 export interface PresentationAsset {
+  storyboard?: StoryboardView;
   canTransition?: boolean;
   id: string;
   researchObjectId: string;
@@ -652,6 +656,13 @@ export async function generatePresentationChart(roId: string, versionId: string,
     headers: { 'Idempotency-Key': idempotencyKey },
     signal,
     body: JSON.stringify({ kind: 'chart', sourceClaimIds }),
+  });
+}
+
+export async function generatePresentationStoryboard(roId: string, versionId: string, sourceClaimIds: string[], storyboard: StoryboardRequest, idempotencyKey = crypto.randomUUID(), signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
+  return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, signal,
+    body: JSON.stringify({ kind: 'interactive_html', sourceClaimIds, storyboard }),
   });
 }
 

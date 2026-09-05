@@ -457,3 +457,5 @@
 | `scripts/import-presentation-media.mjs` | 默认dry-run的受控媒体导入CLI，真实来源与已有S3基座 | DEPLOYED83b2933；服务器实际CLI预检通过，不启用占位生成器 |
 
 | `scripts/import-presentation-media.test.mjs` | 维护CLI实际启动回归，防止根目录workspace别名解析失败 | 本地实际入口测试与CI通过；ECS预检成功 |
+
+| `packages/domain/src/assets/storyboard.ts` / `packages/domain/test/assets/storyboard.test.ts` / `apps/agent-worker/src/presentation/storyboard.ts` / `apps/web/components/presentation/StoryboardPanel.tsx` / `apps/web/test/storyboard-panel.test.tsx` | Sourced storyboard contract, Gateway planner and Hermes revision UI | CANDIDATE; current production64ae872; Gateway planning/revision implementation in verification |

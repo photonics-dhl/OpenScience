@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('next-intl', () => ({
+  useLocale: () => 'en',
   useTranslations: () => (key: string) => key === 'generate' ? 'presentation.generate' : key === 'approve' ? 'presentation.approve' : key,
 }));
 
@@ -81,4 +82,15 @@ it.each([
     expect(markup.indexOf('role="alert"')).toBeLessThan(markup.indexOf('data-source-tools="true"'));
   }
   if ('task' in overrides) expect(markup.indexOf('role="progressbar"')).toBeLessThan(markup.indexOf('data-source-tools="true"'));
+});
+
+it('keeps rendered media before storyboard plans and gives comparisons the full gallery width', () => {
+  const base = { researchObjectId: 'ro', versionId: 'v', contentHash: 'a'.repeat(64), generator: 'Hermes', generatorVersion: 'v1', status: 'approved' as const, label: 'presentation_not_evidence', sourceClaimIds: [], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' };
+  const markup = renderToStaticMarkup(createElement(PresentationWorkbench, {
+    claims: [], assets: [{ ...base, id: 'plan', kind: 'interactive_html', storyboard: { locale: 'en', style: 'ink', document: { schemaVersion: 1, title: 'Plan after media', scenes: [] } } }, { ...base, id: 'media', kind: 'image' }],
+    version: { versionId: 'v', versionNo: 1, status: 'draft' }, canWrite: false,
+    onCreateClaim: vi.fn(), onGenerate: vi.fn(), onTransition: vi.fn(),
+  }));
+  expect(markup.indexOf('data-presentation-asset="media"')).toBeLessThan(markup.indexOf('data-presentation-asset="plan"'));
+  expect(markup).toMatch(/<article class="[^"]*lg:col-span-2[^"]*" data-presentation-asset="plan"/);
 });

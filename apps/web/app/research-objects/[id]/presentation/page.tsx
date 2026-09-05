@@ -10,6 +10,8 @@ import {
   ApiClientError,
   createPresentationClaim,
   generatePresentationChart,
+  generatePresentationStoryboard,
+  type StoryboardRequest,
   getPresentationTask,
   getResearchObject,
   listMyWorkspaces,
@@ -272,17 +274,19 @@ export default function PresentationPage({ params }: { params: { id: string } })
     }
   }
 
-  async function generate(sourceClaimIds: string[]) {
+  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest) {
     if (!version || !canWrite || !scopeReady) return;
     const scope = scopeRef.current;
     if (!scopeIsCurrent(scope)) return;
-    const signature = `${scope.key}:${[...sourceClaimIds].sort().join(',')}`;
+    const signature = JSON.stringify([scope.key, [...sourceClaimIds].sort(), storyboard ?? null]);
     if (generationIntent.current?.signature !== signature) generationIntent.current = { signature, key: crypto.randomUUID() };
     const intent = generationIntent.current;
     setWorking(true);
     setError('');
     try {
-      const { task } = await generatePresentationChart(params.id, version.versionId, sourceClaimIds, intent.key, scope.controller.signal);
+      const { task } = storyboard
+        ? await generatePresentationStoryboard(params.id, version.versionId, sourceClaimIds, storyboard, intent.key, scope.controller.signal)
+        : await generatePresentationChart(params.id, version.versionId, sourceClaimIds, intent.key, scope.controller.signal);
       if (!scopeIsCurrent(scope)) return;
       generationIntent.current = null;
       setTaskState({ status: task.status, progress: task.progress, paused: false });
@@ -365,7 +369,7 @@ export default function PresentationPage({ params }: { params: { id: string } })
             <a className="inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')}</a>
           </div>
           <PresentationWorkbench
-            key={version.versionId}
+            key={scopeKey}
             researchObjectId={params.id}
             researchTitle={researchTitle}
             claims={claims}
@@ -378,6 +382,7 @@ export default function PresentationPage({ params }: { params: { id: string } })
             task={taskState}
             onCreateClaim={createClaim}
             onGenerate={(ids) => void generate(ids)}
+            onGenerateStoryboard={(ids, request) => void generate(ids, request)}
             onResumeTask={() => setResumeNonce((current) => current + 1)}
             onRetryData={() => setLoadNonce((current) => current + 1)}
             onTransition={(assetItem, status) => void transition(assetItem, status)}
