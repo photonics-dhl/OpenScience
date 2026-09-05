@@ -2364,3 +2364,54 @@ The final report also binds the fresh 2,215,244-byte production upload
 Final resources were 54G/148G used (39%, 88G available) and 24 GiB available
 memory. BuildKit cache remained 14.83GB intentionally to reuse the existing
 Chromium/BGE closure; no system or volume prune was run.
+
+### 5.67 Bounded Docker cache maintenance (2026-09-05)
+
+#### 前置检查
+
+Read active/public/rollback as `b32d81c…` / `b32d81c…` / `0aaf52f…`, run
+`checkup.sh`, verify 13 running containers, core/search `36/36` / `2/2`, and
+confirm the latest of seven atomic backup sets passes both checksum files.
+Inventory container image IDs before classifying any image as unreferenced.
+The pre-cleanup footprint was 54G/148G used (39%, 88G available), images
+16.07GB/24 with 6.485GB reported reclaimable, and BuildKit 14.83GB/583 records.
+
+The cache was large because successive immutable builds retained intermediate
+Node, Parser, ScanSci/Chromium and BGE Python layers. Docker image sizes are
+logical and share physical layers, so image and cache totals must not be added
+as independently reclaimable bytes.
+
+#### 执行步骤
+
+1. Exclude every container image plus all exact active/rollback application
+   tags. Remove only the four inspected, unreferenced untagged image IDs
+   `14f0e46e2425`, `22680e4382a7`, `a415731ef20f` and `f2754720c69e`.
+2. Run bounded legacy-builder cache cleanup with `until=24h` and
+   `keep-storage=8GB`, then a second pass with `until=12h` and
+   `keep-storage=6GB`. These cutoffs preserve the current build's recently used
+   Chromium cache while removing older unshared records.
+3. Do not run `docker system prune`, broad image prune or volume prune. Keep
+   product data, ScanSci session, BGE model, monitoring, backups, current and
+   rollback images.
+
+#### 回滚步骤
+
+Deleted untagged images and BuildKit records are not host-recoverable. They are
+rebuildable from immutable Git releases, while tagged active/rollback images
+remain local. If any required tag or health probe is missing, stop cleanup and
+use the canonical deployment transaction with rollback
+`0aaf52fed29e79bb19b15517ba9ef50545510f72`; never reconstruct state by manual
+retagging.
+
+#### 验证命令
+
+Run `checkup.sh`, both Prisma migration status commands, `docker system df`,
+and exact image inspection for the four active plus four rollback application
+tags. Expected post-cleanup evidence: 44G/148G used (31%, 98G available),
+BuildKit 6.344GB/260 records, images 13.49GB/20, 13 running containers, 8/8
+active/rollback application images, zero exited/dangling images/dangling
+volumes, no release-failed marker or deploy journal, public/loopback 200,
+egress 204, and current backup core/search checksums `OK`. The remaining cache
+is dominated by the retained BGE 4.59GB and current Chromium 1.69GB build
+closures; the 3.905GB image reclaimable estimate includes required
+rollback/base/shared images and is not an approved deletion target.

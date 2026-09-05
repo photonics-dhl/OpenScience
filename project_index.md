@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-05 +08）：** docs branch `codex/hermes-final-handoff` 基于 application merge `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`；production release / rollback `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7` / `0aaf52fed29e79bb19b15517ba9ef50545510f72`；core/search `36/36` / `2/2`。Hermes Research Intelligence Tasks 1–12 全部完成；OA、ZJU subscription-only PDF、四入口、72h/600s、确定性 SVG/HTML、真实 publish/public journey 与 exact aggregate gate 均已在 ECS 验收。ScienceDirect 仅保留为官方 Remote Access/CARSI 或 Elsevier API entitlement 外部增强项；未安装 FlareSolverr、第二 Chromium 或另一份 BGE。docs-only 收尾 HEAD 不得冒充 application release。
+> **CURRENT source/deployment anchor（2026-09-05 +08）：** docs maintenance branch / observed parent HEAD `codex/server-cache-maintenance` / `3ad53b11e08df55701e516d28baed59eea15b1cc`；后续 docs HEAD 以 Git 实时值为准。production release / rollback `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7` / `0aaf52fed29e79bb19b15517ba9ef50545510f72`；core/search `36/36` / `2/2`。Hermes Research Intelligence Tasks 1–12 全部完成；ECS 二次维护将 BuildKit `14.83 → 6.344 GB`、根盘 `54 → 44 GB`，保留唯一 Chromium、BGE、ScanSci session、生产数据、备份与 active/rollback。docs-only HEAD 不得冒充 application release。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -365,7 +365,7 @@
 | `docs/decisions/ADR-006-cloudflare-tunnel-public-ingress.md` | 未备案域名公网入口改由 ECS 常驻 Cloudflare Tunnel 承载；Nginx 继续作为统一回源与安全边界 | Accepted |
 | `docs/handoff/2026-08-15-cloudflare-tunnel-egress-incident-handoff.md` | Cloudflare Tunnel 502/530 事故根因、生产修复、回滚证据与后续观察项 | 当前基础设施交接 |
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
-| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE/ScanSci 隔离、Windows Git Bash）；§5.49–5.65 为历史 evidence，现行完成态见 §5.66 | **CURRENT**；production `b32d81c` / `0aaf52f`，Tasks 10–12 accepted and exact hygiene complete |
+| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE/ScanSci 隔离、Windows Git Bash）；§5.49–5.66 为历史/发布 evidence，现行 Docker cache 维护见 §5.67 | **CURRENT**；production `b32d81c` / `0aaf52f`；BuildKit 6.344GB，disk 44G/148G，bounded cleanup/health verified |
 | `infra/scripts/evaluate-scansci-upstream-mcp.{sh,test.mjs}` | 上游 `v1.13.1` 官方 MCP 有界 ECS 正向试点：wheel hash、17 tools、真实 OA PDF、exact trap cleanup | **TASK 1 ECS ACCEPTED**；24,671,920 bytes / `d57dc94c…f484a`，临时容器/卷 `0/0` |
 | `docs/runbooks/hermes-capability-registry.md` | Hermes Skill/MCP/model/parser/provider 能力台账：注入状态、成本、项目级安装目录、72h PDF TTL、10min signed URL、评测/回滚/退役规则 | **CURRENT / MACHINE-GATED**；CPU parser/Tesseract、BGE-M3、lexical search、Semantic Scholar、temporary lifecycle 与 official ScanSci MCP 为 production |
 | `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；验证后临时库按用户授权精确清理 |
