@@ -251,3 +251,5 @@ v2效果迭代：用户认可v1并要求过渡自然、动效突出；`render-v2
 ### Full video conversational narration (approved B)
 
 User accepted B naturalness and approved applying it to full demo. Generate five reviewed scene paragraphs with the existing offline Qwen/Serena runtime and fixedseed42; retain original demo release for rollback. Reuse audio-duration scene timing, attach bounded optional narration.json with scene-level exact-text cues, replace stale Windows provenance. Update chapter buttons and page duration from actual WAV timings, then build/render/publish via existing isolated demo transaction. Validate narration4 unit tests, renderer cue bounds, full MP4 decode, real browser playback/chapters/mobile and unchanged app release. No new model, API, schema or gateway endpoint.
+
+完整口语视频交付实测：CURRENT独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白共合成91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；新增版本CI待完成。

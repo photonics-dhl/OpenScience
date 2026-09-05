@@ -131,7 +131,7 @@ Nginx Range 播放，不表示 RO 已能自动生成图片或视频。演示不�
 3. 用真实桌面和移动视口播放，验证 poster、字幕、音频、暂停、跳转与 seek。
    最后再次读取公网 `/__release`；其值必须与部署前应用 release 相同。
 
-## Latest verified run
+## Historical first verified run
 
 独立服务器演示已部署：source 6a1b848a3df109098e5f1b9721e6c4df06c2c6d0，run 6a1b848-20260905T081000Z；公网 /demos/science-video/d2nn/。复用ScanSci Chrome151完整headless bundle，CPU渲染22.80秒生成46.25秒720p/H264/AAC视频（4,814,309 bytes），无新增付费API调用。全片解码、五项资源200、Range206、实际首播/章节seek、390px无溢出及零页面异常通过；内部路径最终404（input/先308规范化）。应用release仍390afc0。
 
@@ -171,3 +171,7 @@ Post-audition review fixed rollback of a newly-created WAV when metrics publicat
 配音自然度二轮：用户反馈第一轮仍机械；复用Serena/seed42，新增可选script/delivery。A原文+聊天指令14.88s/生成37.07s，B口语短句+同指令21.84s/54.37s；ECS离线CPU完成、两段完整WAV解码通过，无新增依赖/模型/付费调用。自然度尚待用户试听，不宣称已解决；原音频保留。
 
 Use --delivery conversational --script original for A, and --delivery conversational --script spoken for B. Separate host outputs output-v2-direction / output-v2-spoken avoid overwriting previous samples. Evidence: ignored science-video/tts-v2-{direction,spoken}/ WAV and metrics.
+
+## Latest verified run
+
+CURRENT独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白共合成91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；新增版本CI待完成。

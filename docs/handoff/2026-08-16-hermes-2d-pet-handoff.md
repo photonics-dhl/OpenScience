@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-05 +08。** PR #86 工作流已部署；用户否定卡片作为图解交付，认可后续生成式科普插图方向。46秒CPU动画样片已在ECS渲染并通过公网播放验收，完整多模态产品尚未完成。
+> **CURRENT active-memory，2026-09-05 +08。** PR #86 工作流已部署；用户否定卡片作为图解交付，认可后续生成式科普插图方向。40秒口语配音CPU动画样片已在ECS渲染并通过公网播放验收，完整多模态产品尚未完成。
 
 ## Version tuple and production truth
 
@@ -22,6 +22,8 @@
 - 成片`d2nn-science-explainer.mp4`：46.25秒、1280×720/24fps、H264+yuv420p/AAC、1.78MB；主线程全片解码exit0、本机Chromium首播/seek成功、390px无溢出，查看五层/干涉/探测画面。证据validation/playback-validation JSON；约21秒编码为文件时间估算，非性能基准。
 
 ## Fresh acceptance evidence
+
+- CURRENT独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白共合成91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；新增版本CI待完成。
 
 - 独立服务器演示已部署：source 6a1b848a3df109098e5f1b9721e6c4df06c2c6d0，run 6a1b848-20260905T081000Z；公网 /demos/science-video/d2nn/。复用ScanSci Chrome151完整headless bundle，CPU渲染22.80秒生成46.25秒720p/H264/AAC视频（4,814,309 bytes），无新增付费API调用。全片解码、五项资源200、Range206、实际首播/章节seek、390px无溢出及零页面异常通过；内部路径最终404（input/先308规范化）。应用release仍390afc0。
 
