@@ -29,7 +29,7 @@ function makeRedis() {
   };
 }
 
-async function fixture(platformRole = 'user', storage?: StorageAdapter) {
+async function fixture(platformRole = 'user', storage?: StorageAdapter, sceneImageEnabled = false) {
   const { prisma, db } = createFakePrisma();
   const redis = makeRedis();
   seedUser(db, { id: USER, platformRole });
@@ -45,7 +45,7 @@ async function fixture(platformRole = 'user', storage?: StorageAdapter) {
   const token = await createSession(redis as never, { userId: USER, status: 'email_verified' });
   const app = await buildApp({
     prisma, redis: redis as never, mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false,
-    security: { csrf: true }, rateLimitEnabled: false, storage,
+    security: { csrf: true }, rateLimitEnabled: false, storage, sceneImageEnabled,
   });
   const csrf = await app.inject({ method: 'GET', url: '/csrf-token' });
   return {
@@ -333,14 +333,14 @@ describe('Presentation asset routes', () => {
     await app.close();
   });
 
-  it('keeps generated media behind platform-admin authorization', async () => {
+  it('rejects unavailable legacy image generation before charge', async () => {
     const { app, token, csrfCookie, csrfToken } = await fixture();
     const response = await app.inject({
       method: 'POST', url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`,
       ...writeAuth(token, csrfCookie, csrfToken, 'presentation-image-1'), payload: { kind: 'image', sourceClaimIds: [CLAIM] },
     });
-    expect(response.statusCode).toBe(403);
-    expect(response.json().error.code).toBe('ADMIN_REQUIRED');
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('VALIDATION_ERROR');
     await app.close();
   });
 });
@@ -362,4 +362,33 @@ it('accepts charged storyboard settings and preserves the validated DTO on appro
     expect(approved.body).not.toContain('secret');
     expect(approved.body).not.toContain('instruction');
     await ctx.app.close();
+});
+
+
+it.each([false,true])('gates scene capability and charges one exact replay only when enabled=%s', async enabled => {
+  const ctx=await fixture('platform_admin',undefined,enabled);
+  const settings={locale:'en',style:'ink',instruction:'Explain'};
+  const document={schemaVersion:1,title:'Plan',scenes:Array.from({length:3},()=>({title:'Scene',narration:'Finding',visualAction:'Wave',durationSeconds:8,sourceClaimIds:[CLAIM]}))};
+  ctx.db.presentationAssets.push({id:ASSET,researchObjectId:RO,versionId:VERSION,kind:'interactive_html',status:'approved',label:'presentation_not_evidence',provenance:{subtype:'sourced_storyboard',storyboardDocument:document,storyboardSettings:settings}});
+  ctx.db.presentationAssetClaims.push({presentationAssetId:ASSET,claimId:CLAIM});
+  const response=await ctx.app.inject({method:'GET',url:`/research-objects/${RO}/versions/${VERSION}/presentation-assets`,cookies:{openscience_session:ctx.token}});
+  expect(response.json().assets[0].canGenerateSceneImage).toBe(enabled);
+  const request={method:'POST' as const,url:`/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`,...writeAuth(ctx.token,ctx.csrfCookie,ctx.csrfToken,'scene-api'),payload:{kind:'image',sourceClaimIds:[CLAIM],sceneImage:{storyboardAssetId:ASSET,sceneIndex:0}}};
+  const first=await ctx.app.inject(request);
+  expect(first.statusCode).toBe(enabled?202:400);
+  if(enabled){const replay=await ctx.app.inject(request);expect(replay.json().task.id).toBe(first.json().task.id);expect(ctx.db.agentTasks[0].payload.sceneImage).toEqual(request.payload.sceneImage);}
+  expect(ctx.db.usageLedger.filter(row=>row.delta<0)).toHaveLength(enabled?1:0);
+  await ctx.app.close();
+});
+
+it.each([false,true])('does not charge unavailable legacy media with scene feature flag %s',async enabled=>{
+  const ctx=await fixture('platform_admin',undefined,enabled);
+  for(const kind of ['image','video']) {
+    const response=await ctx.app.inject({method:'POST',url:`/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`,...writeAuth(ctx.token,ctx.csrfCookie,ctx.csrfToken,`unsupported-${kind}`),payload:{kind,sourceClaimIds:[CLAIM]}});
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('VALIDATION_ERROR');
+  }
+  expect(ctx.db.agentTasks).toHaveLength(0);
+  expect(ctx.db.usageLedger.filter(row=>row.delta<0)).toHaveLength(0);
+  await ctx.app.close();
 });

@@ -10,8 +10,8 @@ import {
   ApiClientError,
   createPresentationClaim,
   generatePresentationChart,
-  generatePresentationStoryboard,
-  type StoryboardRequest,
+  generatePresentationStoryboard, generatePresentationSceneImage,
+  type StoryboardRequest, type SceneImageRequest,
   getPresentationTask,
   getResearchObject,
   listMyWorkspaces,
@@ -274,17 +274,19 @@ export default function PresentationPage({ params }: { params: { id: string } })
     }
   }
 
-  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest) {
+  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest) {
     if (!version || !canWrite || !scopeReady) return;
     const scope = scopeRef.current;
     if (!scopeIsCurrent(scope)) return;
-    const signature = JSON.stringify([scope.key, [...sourceClaimIds].sort(), storyboard ?? null]);
+    const signature = JSON.stringify([scope.key, [...sourceClaimIds].sort(), storyboard ?? null, sceneImage ?? null]);
     if (generationIntent.current?.signature !== signature) generationIntent.current = { signature, key: crypto.randomUUID() };
     const intent = generationIntent.current;
     setWorking(true);
     setError('');
     try {
-      const { task } = storyboard
+      const { task } = sceneImage
+        ? await generatePresentationSceneImage(params.id, version.versionId, sourceClaimIds, sceneImage, intent.key, scope.controller.signal)
+        : storyboard
         ? await generatePresentationStoryboard(params.id, version.versionId, sourceClaimIds, storyboard, intent.key, scope.controller.signal)
         : await generatePresentationChart(params.id, version.versionId, sourceClaimIds, intent.key, scope.controller.signal);
       if (!scopeIsCurrent(scope)) return;
@@ -383,6 +385,7 @@ export default function PresentationPage({ params }: { params: { id: string } })
             onCreateClaim={createClaim}
             onGenerate={(ids) => void generate(ids)}
             onGenerateStoryboard={(ids, request) => void generate(ids, request)}
+            onGenerateSceneImage={(ids, request) => void generate(ids, undefined, request)}
             onResumeTask={() => setResumeNonce((current) => current + 1)}
             onRetryData={() => setLoadNonce((current) => current + 1)}
             onTransition={(assetItem, status) => void transition(assetItem, status)}

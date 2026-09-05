@@ -92,5 +92,5 @@ it('keeps rendered media before storyboard plans and gives comparisons the full 
     onCreateClaim: vi.fn(), onGenerate: vi.fn(), onTransition: vi.fn(),
   }));
   expect(markup.indexOf('data-presentation-asset="media"')).toBeLessThan(markup.indexOf('data-presentation-asset="plan"'));
-  expect(markup).toMatch(/<article class="[^"]*lg:col-span-2[^"]*" data-presentation-asset="plan"/);
+  expect(markup).toMatch(/<article class="[^"]*lg:col-span-2[^"]*"[^>]* data-presentation-asset="plan"/);
 });

@@ -295,3 +295,10 @@ Media-first steps1–4 complete on64ae872 (rollback83b2933): PR91 CI, Web499+5 t
 - [x] Record exact release/rollback and browser evidence in CURRENT, progress and index; next consumer is image/video production from reviewed plan.
 
 Sourced storyboard acceptance (2026-09-06): canonical d6507ea/rollback64ae872, PR93/main CI, exact Parser/build/runtime/health checks passed. Real controlled RO used 3 tasks and4 MiniMax-M3 calls (one structured retry), charged3 credits with stable replays. Human review corrected an unsupported independent-validation claim via a new revision; corrected six-scene45s plan approved, prior drafts retained. Four public-browser locale/viewport cases, approval/reload and existing media playback passed. This is selected-Claim planning, not automatic raw-paper understanding, image/video production or global Hermes dialogue.
+
+### Reviewed storyboard scene imagery — current implementation
+
+- [x] Gateway: add bounded single-image provider/API, metadata-only audit, no automatic retry, bytes/type/dimension validation; tests for disabled/malformed/oversized/provider failures. Reuse existing credential and official endpoint.
+- [x] Domain/API/Worker: optional sceneImage payload and narrow DTO; approved exact parent and Claim set before charge and final write, parent rejection invalidation, admin+writer authorization, prompt planning and real image persistence; regression tests for scope/replay/invalidation/races.
+- [x] UI: per-scene generation on eligible approved plans, explicit one-credit copy, parent/scene attribution and existing image approval/task recovery; bilingual mobile/desktop tests.
+- [ ] Verify: workspace build/typecheck/lint/tests, independent security and UI review, controlled real model visual inspection; canonical deploy and server/browser acceptance. Record image quality and actual calls without inventing dollar cost. Follow with reviewed image -> CPU video in a separate acceptance slice.

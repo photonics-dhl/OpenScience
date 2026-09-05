@@ -22,6 +22,7 @@ async function main(): Promise<void> {
     redis,
     mailer,
     storage,
+    sceneImageEnabled: env.ai.sceneImageEnabled,
     // P1A-6：审计落库（domain/auth 写操作 + authz.deny 经 deps.audit 流出）
     audit: createPrismaAuditSink(prisma),
     // P1A-4：邮箱验证通过同事务创建 Personal Workspace（回调注入，避免 auth→domain 反向依赖）

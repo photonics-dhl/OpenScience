@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import type { PresentationAsset, PresentationClaim, VersionSummary } from '@/lib/api';
-import { presentationAssetContentUrl, type StoryboardRequest } from '@/lib/api';
+import { presentationAssetContentUrl, type SceneImageRequest, type StoryboardRequest } from '@/lib/api';
 import { StoryboardPanel } from './StoryboardPanel';
 
 type PresentationVersion = Pick<VersionSummary, 'versionId' | 'versionNo' | 'status'>;
@@ -29,6 +29,7 @@ export interface PresentationWorkbenchProps {
   task?: PresentationTaskState | null;
   onCreateClaim: (statement: string) => Promise<boolean>;
   onGenerate: (claimIds: string[]) => void;
+  onGenerateSceneImage?: (claimIds: string[], request: SceneImageRequest) => void;
   onGenerateStoryboard?: (claimIds: string[], request: StoryboardRequest) => void;
   onResumeTask?: () => void;
   onRetryData?: () => void;
@@ -41,7 +42,7 @@ const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onGenerate, onGenerateStoryboard, onResumeTask, onRetryData, onTransition, working = false, error = '',
+  onCreateClaim, onGenerate, onGenerateStoryboard, onGenerateSceneImage, onResumeTask, onRetryData, onTransition, working = false, error = '',
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const [selected, setSelected] = useState<string[]>([]);
@@ -85,18 +86,20 @@ export function PresentationWorkbench({
               <div className={`mt-5 grid min-w-0 items-start gap-6 ${assets.length > 1 ? 'lg:grid-cols-2' : ''}`}>
                 {[...assets].sort((a, b) => Number(Boolean(a.storyboard)) - Number(Boolean(b.storyboard))).map((assetItem) => {
                   const linkedClaims = assetItem.sourceClaimIds.map((id) => claimsById.get(id)?.statement).filter((value): value is string => Boolean(value));
+                  const imageParent = assetItem.sceneImage ? assets.find(item => item.id === assetItem.sceneImage?.storyboardAssetId) : undefined;
                   return (
-                    <article className={`surface-folio-sheet min-w-0 overflow-hidden ${assetItem.storyboard && assets.length > 1 ? 'lg:col-span-2' : ''}`} key={assetItem.id} data-presentation-asset={assetItem.id}>
+                    <article className={`surface-folio-sheet min-w-0 overflow-hidden ${assetItem.storyboard && assets.length > 1 ? 'lg:col-span-2' : ''}`} key={assetItem.id} id={`presentation-asset-${assetItem.id}`} data-presentation-asset={assetItem.id}>
                       <div className="border-b border-os-rule-paper px-5 py-4 sm:px-6">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <h3 className="m-0 font-semibold">{t(assetItem.storyboard ? 'storyboard.assetTitle' : assetItem.kind === 'video' ? 'videoTitle' : assetItem.kind === 'image' ? 'imageTitle' : 'assetTitle')}</h3>
                           <span className="text-xs text-os-muted-paper">{t(`assetStatus.${assetItem.status}`)}</span>
                         </div>
                         <p className="m-0 mt-1 text-xs leading-5 text-os-muted-paper">{t('notEvidence')}</p>
+                        {assetItem.sceneImage ? <p className="m-0 mt-2 text-sm text-os-vermilion-ink">{imageParent?.storyboard ? <a className="underline [overflow-wrap:anywhere]" href={`#presentation-asset-${imageParent.id}`}>{t('storyboard.imageSource', { title: imageParent.storyboard.document.title, number: assetItem.sceneImage.sceneIndex + 1 })}</a> : t('storyboard.imageSourceUnavailable')}</p> : null}
                       </div>
                       <div className="bg-os-paper px-4 py-4 sm:px-6 sm:py-5">
                         {assetItem.storyboard ? (
-                          <StoryboardPanel storyboard={assetItem.storyboard} parent={assets.find((item) => item.id === assetItem.storyboard?.baseAssetId)?.storyboard} baseAssetId={assetItem.id} claims={claims} selectedClaimIds={assetItem.sourceClaimIds} canGenerate={canWrite && !loading && !loadFailed && !working && assetItem.status !== 'rejected'} onGenerate={onGenerateStoryboard} />
+                          <StoryboardPanel storyboard={assetItem.storyboard} parent={assets.find((item) => item.id === assetItem.storyboard?.baseAssetId)?.storyboard} baseAssetId={assetItem.id} claims={claims} selectedClaimIds={assetItem.sourceClaimIds} canGenerate={canWrite && !loading && !loadFailed && !working && assetItem.status !== 'rejected'} onGenerate={onGenerateStoryboard} canGenerateImage={canWrite && !loading && !loadFailed && !working && assetItem.status === 'approved' && assetItem.canGenerateSceneImage === true} onGenerateImage={onGenerateSceneImage} />
                         ) : assetItem.kind === 'chart' || assetItem.kind === 'image' || assetItem.kind === 'svg' ? (
                           <>
                             <div className="relative aspect-video max-h-[32rem] w-full">

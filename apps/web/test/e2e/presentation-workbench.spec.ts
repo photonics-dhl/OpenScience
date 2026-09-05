@@ -383,3 +383,43 @@ test('Hermes plans and revises sourced scenes, retaining the original through ap
   await expect(page.locator('[data-presentation-asset]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Generate storyboard/ })).toHaveCount(0);
 });
+
+test('approved scene produces an independently reviewable image with stable retry', async ({ page }) => {
+  await fixtures(page);
+  const plan = { ...asset, id: 'approved-plan', kind: 'interactive_html', status: 'approved', canGenerateSceneImage: true,
+    storyboard: { locale: 'en', style: 'watercolor', document: { schemaVersion: 1, title: 'Wavefronts in motion', scenes: Array.from({ length: 3 }, (_, i) => ({ title: `Scene ${i + 1}`, narration: 'The wave spreads.', visualAction: 'Draw expanding blue wavefronts.', durationSeconds: 8, sourceClaimIds: [initialClaim.id] })) } } };
+  const items: Array<Record<string, unknown>> = [plan];
+  const keys: string[] = [];
+  let requests = 0;
+  await page.route('**/api/**/presentation-assets', route => json(route, { assets: route.request().url().includes('/version-2/') ? items : [] }));
+  await page.route('**/api/**/presentation-assets/generations', route => {
+    keys.push(route.request().headers()['idempotency-key']);
+    expect(route.request().postDataJSON()).toEqual({ kind: 'image', sourceClaimIds: [initialClaim.id], sceneImage: { storyboardAssetId: 'approved-plan', sceneIndex: 1 } });
+    if (requests++ === 0) return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Please retry the image request.' } }, 503);
+    items.push({ ...asset, id: 'scene-image', kind: 'image', canTransition: true, sceneImage: { storyboardAssetId: 'approved-plan', sceneIndex: 1 } });
+    return json(route, { task: task('pending', 0) }, 202);
+  });
+  await page.route('**/api/**/presentation-tasks/presentation-task', route => json(route, { task: task('succeeded', 100) }));
+  await page.route('**/api/**/presentation-assets/scene-image/content', route => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') }));
+  await page.route('**/api/**/presentation-assets/scene-image', route => {
+    items[1] = { ...items[1], status: 'approved' }; return json(route, { asset: items[1] });
+  });
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+  const action = page.locator('[data-scene-image="1"]');
+  await expect(action).toBeVisible();
+  await expect(page.getByText('One image costs 1 AI credit.', { exact: false }).first()).toBeVisible();
+  await action.click();
+  await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('Please retry');
+  await action.click();
+  const image = page.locator('[data-presentation-asset="scene-image"]');
+  await expect(image).toContainText('Storyboard: Wavefronts in motion · Scene 2');
+  expect(keys[0]).toBe(keys[1]);
+  await image.getByRole('button', { name: /Approve/i }).click();
+  await page.reload();
+  await expect(image).toContainText('Approved');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  plan.canGenerateSceneImage = false;
+  await page.reload();
+  await expect(page.locator('[data-scene-image]')).toHaveCount(0);
+});

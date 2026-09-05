@@ -1,5 +1,6 @@
 import type { AuditSink } from '@openscience/observability';
 import { AiGatewayError } from './errors';
+import { validateImageBytes, validateImageRequest, type ImageProvider, type ImageRequest, type ImageResult } from './image';
 import {
   DEFAULT_OCR_LIMITS,
   canonicalizeProviderResult,
@@ -24,7 +25,7 @@ import type { ChatMessage, Provider, ProviderResult } from './provider';
 
 /** 调用日志（§9.3 + §17 脱敏：只记元数据，绝不记 prompt/附件/密钥）。 */
 export interface GatewayCallLog {
-  operation: 'text' | 'ocr';
+  operation: 'text' | 'ocr' | 'image';
   provider: string;
   model: string;
   inputTokens: number | null;
@@ -55,6 +56,7 @@ export interface AiGatewayOptions {
   providers: Provider[];
   /** Dedicated vision/OCR provider pool; text providers never receive images. */
   ocrProviders?: OcrProvider[];
+  imageProviders?: ImageProvider[];
   /** 缺省：第一条为 primary。 */
   primaryIndex?: number;
   /** §17 审计：调用日志落 AuditSink（action='ai.gateway.call'）；缺省 no-op。 */
@@ -90,6 +92,7 @@ function parseStructuredJson(text: string): unknown {
 export class AiGateway {
   private readonly providers: Provider[];
   private readonly ocrProviders: OcrProvider[];
+  private readonly imageProviders: ImageProvider[];
   private readonly primaryIndex: number;
   private readonly audit?: AuditSink;
   private readonly logger?: Pick<Console, 'info' | 'warn' | 'error'>;
@@ -103,6 +106,8 @@ export class AiGateway {
     }
     assertProviderPool(opts.providers, 'text');
     assertProviderPool(opts.ocrProviders ?? [], 'ocr');
+    assertProviderPool(opts.imageProviders ?? [], 'image');
+    this.imageProviders = [...(opts.imageProviders ?? [])];
     this.providers = [...opts.providers];
     this.ocrProviders = [...(opts.ocrProviders ?? [])];
     this.primaryIndex = opts.primaryIndex ?? 0;
@@ -111,6 +116,36 @@ export class AiGateway {
     this.killSwitch = opts.killSwitch;
     this.externalProcessingPolicy = opts.externalProcessingPolicy;
     this.ocrLimits = { ...(opts.ocrLimits ?? {}) };
+  }
+
+  /** One paid image attempt. Never retry or fall back, including after audit failure. */
+  async generateImage(request: ImageRequest): Promise<ImageResult> {
+    const prompt = validateImageRequest(request);
+    const provider = this.imageProviders[0];
+    if (!provider || !(await this.providerEnabled(provider.name, 'image')).enabled) throw new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image provider unavailable');
+    const start = Date.now();
+    const promptHash = sha256Text(prompt);
+    let succeeded = false;
+    try {
+      const generated = await provider.generate({ prompt });
+      const result = validateImageBytes(generated.bytes);
+      succeeded = true;
+      return { ...result, model: provider.model, provider: provider.name, promptHash };
+    } catch { throw new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image generation failed'); }
+    finally {
+      // Separate metadata-only audit: an audit sink exception may contain credentials.
+      try {
+        await this.audit?.record({ actorId: null, action: 'ai.gateway.call', targetType: 'ai_gateway', metadata: {
+          operation: 'image', provider: provider.name, model: provider.model, promptHash,
+          inputTokens: null, outputTokens: null, estimatedInputTokens: null, estimatedOutputTokens: null,
+          estimatedCostUsdMicros: null, actualCostUsdMicros: null, currency: 'USD', pricingVersion: null,
+          pricingEffectiveDate: null, serviceTier: null, latencyMs: Date.now() - start, totalLatencyMs: Date.now() - start,
+          inputContentHash: null, pageNumbers: [], pageCount: 0, selectionReason: null,
+          outcome: succeeded ? 'succeeded' : 'failed', error: succeeded ? null : 'image_provider_failed',
+          fallbackReason: null, retryCount: 0, ts: new Date().toISOString(),
+        } });
+      } catch { this.logger?.error?.('ai.gateway.image audit failed'); }
+    }
   }
 
   /** 文本补全：primary → fallbacks 逐级回退（§9.3 回退策略配置管理）。 */

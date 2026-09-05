@@ -27,3 +27,13 @@ it('provides storyboard labels in the actual presentation namespace for both loc
     expect(messages.default.presentation.storyboard.charge).toContain('1 AI credit');
   }
 });
+
+it('offers one paid image action per current scene only when authorized', () => {
+  const scene = { title: 'Light', narration: 'Wave spreads', visualAction: 'Show wavefronts', durationSeconds: 8, sourceClaimIds: ['claim'] };
+  const storyboard = { document: { schemaVersion: 1 as const, title: 'Plan', scenes: [scene, scene] }, locale: 'en' as const, style: 'ink' as const };
+  const props = { storyboard, parent: storyboard, baseAssetId: 'parent', claims: [], selectedClaimIds: ['claim'], canGenerate: false, onGenerateImage: vi.fn() };
+  const allowed = renderToStaticMarkup(createElement(StoryboardPanel, { ...props, canGenerateImage: true }));
+  expect(allowed.match(/data-scene-image=/g)).toHaveLength(2);
+  expect(allowed).toContain('imageCharge');
+  expect(renderToStaticMarkup(createElement(StoryboardPanel, { ...props, canGenerateImage: false }))).not.toContain('data-scene-image=');
+});

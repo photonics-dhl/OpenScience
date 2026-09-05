@@ -31,6 +31,13 @@
 - 公网en/zh×1440/390显示/无溢出、父稿对比、批准/刷新、会话注销通过。旧插图可解码，原41.291667秒视频仍可播放；原两媒体保持rejected（历史Claim失效测试状态）。
 - Evidence ignored apps/web/test/visual/out/science-video/: storyboard-browser-evidence.json、storyboard-audit-evidence.json、storyboard-approved-{1440,390}.png、storyboard-parser.log、storyboard-deploy.log。控制账户不是用户个人RO，勿把其链接当作用户可访问展示。
 
+## Current candidate: scene imagery
+
+- 基于docs HEAD61bc597继续，启动实测生产仍d6507ea/rollback64ae872、13运行/10健康、约94GiB可用。本轮候选尚未部署。
+- 单幕图片：已审批分镜→Gateway MiniMax image-01→独立draft预览/审批；先保留管理员门禁。无新依赖/模型/容器，视频下一片继续。
+- API/Worker默认关闭图像，生产Compose本片显式开启；复用现有Secret，独立图像region，固定1280×720/base64、零自动图片重试，崩溃重跑无资产则阻止再付费。
+- 已有12本地浏览器流程通过；最终构建/测试/独立复审与真实服务器质量/额度验收进行中。不能把候选写成已上线。
+
 ## Constraints and next action
 
 - 用户已授权实施/合入/部署/真实论文验证/必要开源方案，不重复询问。不得读取/打印.env、Cookie、密钥；云上仅项目SSH/deploy脚本。

@@ -241,3 +241,24 @@ Precondition: active writer membership, exact draft version,1–12 succeeded Cla
 Acceptance: controlled private RO bcbf1586-b6bd-44b6-ab66-c675fcddce78 has initial72bfd097-68cd-4b75-8d39-1ce465a14e10, revisione959a696-22a0-477c-b2ab-03bb2474f3ef and scientifically corrected74ef00f4-be7e-4a95-9256-c22dbee7ad33. Only the corrected plan is approved. Three charges/generation audits,4 MiniMax-M3 calls including one structured retry; dollar cost unavailable (logged as null), not zero. Initial unsupported independent-validation wording was corrected by feedback before approval. Six scenes/45s are planned duration only.
 
 Direct browser en/zh at1440/390 verified plan display/comparison, approval reload, stable replay, no overflow, original image decode and41.291667s video playback; session logged out. Evidence ignored science-video directory: storyboard-browser-evidence.json, storyboard-audit-evidence.json, storyboard-approved-{1440,390}.png, storyboard-parser.log and storyboard-deploy.log. This account/RO is controlled and private, not the normal user account. Automatic image/video/global-dialogue integration remains next.
+
+## RO scene-image generation rollout
+
+### 前置检查
+
+Application candidate adds one-image generation from one approved storyboard scene; video rendering remains separate. No new dependency/model/container or migration is required. Production Compose explicitly enables MINIMAX_IMAGE_ENABLED for API and Worker; library/dev default remains disabled. AI_ENABLED must be true, a trimmed MINIMAX_API_KEY or MINIMAX_API_KEY_2 must exist, and AI_DISABLED_PROVIDERS must not disable minimax-image. Credentials stay in the existing Secret injection. Optional MINIMAX_IMAGE_REGION accepts global/cn, default global, independently from Vision configuration. Do not print Secret values to diagnose readiness.
+
+### 执行步骤
+
+1. Verify local build/typecheck/lint/tests and independent review; retain full logs under ignored science-video output. Merge exact reviewed source, materialize through scripts/cloud-sync.mjs and run the canonical Parser source/image acceptance on that SHA.
+2. Use infra/scripts/deploy.sh --confirm --require-parser-acceptance --skip-migrate --rollback-ref with the measured old release and exact merged application SHA. No migration changes exist in this slice.
+3. In the controlled administrator RO, choose a scene of the approved plan and submit via the real UI. One task costs one product credit; prompt condensation may call text generation and one image call consumes provider quota. Audit unavailable dollar cost as null, not zero. Do not batch scenes before visual review.
+4. Check returned image in zh/en at desktop/390px, actual browser decode and natural dimensions1280x720, exact parent link, independent draft/approval, anonymous denial and existing video playback. Approve only after scientific/visual inspection.
+
+### 回滚步骤
+
+Use the canonical application rollback transaction to the saved old SHA. The rollout flag is in the reviewed Compose source, so rollback restores the prior configuration; no Secret edit is needed. Generated drafts remain private records and must not be deleted merely to hide a failed acceptance.
+
+### 验证命令
+
+Run the standard checkup and exact public/loopback release checks. Verify core36/search2 migrations and configured container health, plus an in-container boolean-only API readiness check. Ignored scene-image-browser.mjs requires `--run --release <exactsha>`; its durable key prevents duplicate task charging. It first leaves the real image draft for review; --approve-reviewed is only used after visual inspection. The Gateway validates bounded raster container structure and PNG scanlines, not a full JPEG/WebP pixel decode; actual browser decoding supplies runtime image evidence. Provider call recovery is deliberately conservative: if Worker executionAttempt exceeds1 and there is no existing asset, no additional image request is sent. A successful paid response followed by a crash can therefore require manual assessment rather than automatic retry.

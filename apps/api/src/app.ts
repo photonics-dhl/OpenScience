@@ -37,6 +37,7 @@ import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
 export interface BuildAppOptions extends AuthRouteDeps {
+  sceneImageEnabled?: boolean;
   cookieSecret: string;
   /** P1A-6：注入结构化 logger（pino 实例满足 FastifyBaseLogger）；缺省关闭（测试现状）。 */
   logger?: FastifyBaseLogger;
