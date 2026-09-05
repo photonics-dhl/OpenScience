@@ -1,11 +1,11 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT active-memory，2026-09-06 +08。RO内Hermes分镜生成、自然语言修订、对比与审批已部署并通过真实模型验收；任意论文自动生图/视频与全局Hermes对话编辑尚未完成。
+> CURRENT active-memory，2026-09-06 +08。RO内Hermes分镜生成、自然语言修订、对比与审批已部署并通过真实模型验收；已审批分镜单幕生图已上线管理员试用；首张图保持draft，解释质量待改善，自动视频与全局Hermes对话编辑未完成。
 
 ## Version tuple
 
-- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance；branch codex/product-workflow-design；application source/main d6507eaa07edfdacabe135fd30ff9f91183e0c02（PR93）；后续docs HEAD以Git为准。
-- Production active/public/loopback d6507eaa07edfdacabe135fd30ff9f91183e0c02；rollback 64ae87252ebf183742bb0cdfa96941be0fea3cf6。Canonical deploy与retention完成，journal/failed/pending标记均无；core36/search2迁移最新，13容器运行、10健康检查通过，约94GiB磁盘/24GiB内存可用。
+- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance；branch codex/product-workflow-design；application source/main 615ca2dc22bcceabc99562a31340053725a81098（PR95）；后续docs HEAD以Git为准。
+- Production active/public/loopback 615ca2dc22bcceabc99562a31340053725a81098；rollback d6507eaa07edfdacabe135fd30ff9f91183e0c02。Canonical deploy与retention完成，journal/failed/pending标记均无；core36/search2迁移最新，13容器运行、10健康检查通过，约94GiB磁盘/24GiB内存可用。
 - 独立淡彩demo source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705a-20260905T121000Z；/demos/science-video/d2nn/?v=watercolor-v1。应用版本与demo分开记录。
 - 根目录旧main和用户未提交资料未动。启动先Git/fetch/checkup/实际release，再读本handoff、需求基线相关章节和当前设计/计划。
 
@@ -18,7 +18,7 @@
 - PR93：选择1–12条当前RO主张，设置中英文与淡彩/技术/水墨预期方向，通过Gateway生成3–6幕分镜；旁白、画面动作、时长和来源逐幕显示。自然语言反馈生成独立新draft，旧稿保留、对比后沿用既有审批；已审批稿仍可作为修订来源。
 - 分镜为interactive_html显式子类型，JSONB中存有界结构，DTO只返回验证后的document/locale/style/baseAssetId；HTML转义且仅附件下载。无新表、依赖、队列或SDK；原概念图免费确定性路径保持。
 - 分镜任务每次提交1AI Credit，幂等重放只扣一次。Worker模型前与Serializable落库前重验权限、draft、来源、父稿；父稿批准允许继续，拒绝则阻止；异常元数据不可批准。
-- 分镜仅使用所选RO Claims及条件/限制，不读取原始Evidence/SourceMap。风格是规划方向，尚未自动调用生图或视频；Hermes入口在RO分镜面板，不等于全局自由对话已接通。
+- 分镜仅使用所选RO Claims及条件/限制，不读取原始Evidence/SourceMap。风格指导规划与单幕生图，尚未自动生成视频；Hermes入口在RO分镜面板，不等于全局自由对话已接通。
 
 ## Fresh acceptance
 
@@ -31,18 +31,21 @@
 - 公网en/zh×1440/390显示/无溢出、父稿对比、批准/刷新、会话注销通过。旧插图可解码，原41.291667秒视频仍可播放；原两媒体保持rejected（历史Claim失效测试状态）。
 - Evidence ignored apps/web/test/visual/out/science-video/: storyboard-browser-evidence.json、storyboard-audit-evidence.json、storyboard-approved-{1440,390}.png、storyboard-parser.log、storyboard-deploy.log。控制账户不是用户个人RO，勿把其链接当作用户可访问展示。
 
-## Current candidate: scene imagery
+## Scene imagery deployed; visual quality still pending
 
-- 基于docs HEAD61bc597继续，启动实测生产仍d6507ea/rollback64ae872、13运行/10健康、约94GiB可用。本轮候选尚未部署。
-- 单幕图片：已审批分镜→Gateway MiniMax image-01→独立draft预览/审批；先保留管理员门禁。无新依赖/模型/容器，视频下一片继续。
-- API/Worker默认关闭图像，生产Compose本片显式开启；复用现有Secret，独立图像region，固定1280×720/base64、零自动图片重试，崩溃重跑无资产则阻止再付费。
-- 已有12本地浏览器流程通过；最终构建/测试/独立复审与真实服务器质量/额度验收进行中。不能把候选写成已上线。
+- PR95/main CI33986402240通过；全仓build/typecheck/test/lint、Web504+5与12E2E通过（原有search测试8项跳过）。服务器全build、Parser16、BGE/ScanSci、core36/search2、13运行/10健康及公网/loopback精确版本通过。
+- 已审批分镜→单幕image-01→独立draft与来源/审批已接通；管理员+workspace writer、每任务1Credit、图片无自动重试；无新永久依赖/模型/服务。
+- 首次task247f5dc6-0991-418c-9705-ae3214f3be17失败：凭据CN而图片默认global。CN quota只读200/code0后，在生产锁内追加非秘密MINIMAX_IMAGE_REGION=cn，仅重建同版本Worker；独立核验region/镜像/健康/精确release及无journal通过。
+- 第二次task/asset9cccb431-7e41-4d2a-bc01-5116902516de成功；M3规划2.791s、image-01生图27.588s，1280×720、3Claim关联，生成审计1。两次任务各有1Credit reservation，不能称总共只用1Credit；美元成本null。
+- zh/en×1440/390无溢出、浏览器解码、匿名401、会话注销通过；ECS复用现有Chromium151隔离解码3,686,400像素字节，无新增运行时。
+- 实际画面偏抽象，光传播/干涉因果不够直观，保留draft，未执行真实图片批准；审批已有本地E2E覆盖。下一步先强化构图和科学解释，再接CPU视频。
+- ignored证据scene-image-browser-evidence.json、scene-image-artwork.png、scene-image-audit-evidence.json、scene-image-attempts-evidence.json、scene-image-ecs-decode.json。首次部署在journal前EPIPE未切换，重试canonical deploy成功；确切底层原因未证实。
 
 ## Constraints and next action
 
 - 用户已授权实施/合入/部署/真实论文验证/必要开源方案，不重复询问。不得读取/打印.env、Cookie、密钥；云上仅项目SSH/deploy脚本。
 - 复用Chromium、CPU Canvas、离线Qwen；torchCPU基础约0.97GB，Qwen子镜像约2.04GB含基础，模型4.52GB。BGE依赖不同，不合并可变环境；无GPU，不重装模型。
 - 用户接受v4 Serena完整41.28秒WAV；原WAV不分段/补静音/变速。淡彩视频41.292秒/3,203,000bytes，ECS渲染37.76秒；未以本轮分镜重生成配音或视频。
-- 已知边界：来源/权限在扣额后改变可使任务失败；模型返回到素材提交间故障可能重复provider调用；Storage先写后DB失败可留私有无引用对象。公开review digest未纳入媒体的历史债务在扩大公开发布前复核。
-- 下一步：以已核对分镜作为输入，接可溯源图片资产与隔离CPU视频渲染，保留当前声音；再把分镜/媒体目标接入全局Hermes对话。优先复用现有渲染和成熟方案，实际测质量/成本；未接的能力不显示假成功。
+- 已知边界：来源/权限在扣额后改变可使任务失败；生图崩溃恢复无素材时阻止再次付费，可能需人工核查；Storage先写后DB失败可留私有无引用对象。公开review digest未纳入媒体的历史债务在扩大公开发布前复核。
+- 下一步：改善单幕图片的明确主体、空间关系和机制可读性，经视觉审阅后再接隔离CPU视频渲染，保留当前声音；再把分镜/媒体目标接入全局Hermes对话。优先复用现有渲染和成熟方案，实际测质量/成本；未接的能力不显示假成功。
 - 同事frontend/nanqing上次核实e5db5ae；已有每日10:00巡检自动任务，勿重复创建。下一次合并前重新fetch比较。
