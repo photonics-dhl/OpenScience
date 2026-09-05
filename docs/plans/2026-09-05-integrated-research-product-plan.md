@@ -150,3 +150,13 @@
 - Dashboard 最后六行标题压缩改变 protected geometry，触发既有 above-wide 菜单定位缺陷；PR #82 撤回该压缩，保留主要 UI 优化。精确 detached 菜单从 3/3 失败恢复 3/3 通过，修正版 Product88 在 CI 通过。后续改 Dashboard 高度需重验此路径。
 - 既有 unsafe patrol→blink-single 别名可能与相邻 micro beat 重复，不能以偶然通过的 CI 重跑代替修复。共用 seed 的解析器改选 microCursor+1，跳过前后动作，保持巡游保护和现有节奏；5 个种子、全部 cursor/wrap 与延迟 signature ticks 回归及 performance 23/23 通过，独立复审无阻断。
 - 000120b 候选发布停在隔离 OA 下载，精确探针 SIGINT 后 canonical rollback 成功，生产始终为 6478aa8；不跳过下一候选的真实 OA 验收。
+
+### 后续图解写权限修复验收
+
+- PR #84 / c07c8d1：domain 12、worker 16、API 3 与全仓 build/typecheck/lint/test 通过；CI 33942733721 GREEN，独立安全复审无阻断。并发用例为确定性交错，未冒称 PostgreSQL 双会话验证。
+- 首次发布在 mutation 前因 runtime entries 96518→96515 拦截，生产 440266c 不变且无 journal/failed。三个原始路径未保留清单，具体原因未定位；不能宣称已修复构建漂移。旧报告已原子归档，正式重新验收成功；验收期间清单无变化，随后完整 install/database generate/build/normalize/四镜像构建及官方报告校验通过。允许一次 canonical 重试；若再漂移，必须定位生命周期差异后新建候选，不重复重签或跳过校验。
+
+### 最终交付状态（2026-09-05）
+
+- UI 440266c 已部署并交用户查看；随后权限补丁 c07c8d1 部署完成，rollback 440266c。最终公网/active 一致、13 容器运行、36/36 与 2/2、无 failed/journal；ECS build/parser/ScanSci/BGE/runtime/retention、CI 与公网 fixtures 16/16 通过。
+- 下一步是来源 Claim 编辑时资产失效、认证私有预览及 RO/Hermes 图解生成闭环；这次交付不等于五段产品全部完成。完整实现与验证证据见 CURRENT handoff 与 progress。

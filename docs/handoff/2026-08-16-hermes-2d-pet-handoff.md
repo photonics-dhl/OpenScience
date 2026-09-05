@@ -1,54 +1,43 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-05 +08。** Hermes Research Intelligence Tasks 1–12 已全部完成。产品首批入口修复已部署；生产 application release 为 `6478aa8…`，rollback 为 `b32d81c…`；文档收尾位于后续 docs-only HEAD，不改变生产应用版本。
+> **CURRENT active-memory，2026-09-05 +08。** UI 修订与展示资产写权限修复均已上线；完整多模态产品仍按段推进。
 
-## Goal and state
+## Version tuple and production truth
 
-- 产品目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索、受控外部全文与可版本化展示资产。
-- Taskmaster `hermes-research-intelligence`：12/12 done。没有遗留的 Task 10–12 实施动作；下一主题已确认：工作区—Hermes—RO 完整流程、论文图像/视频及 Hermes 语音修改；成熟方案和现有能力优先，按段验收。
-- ScienceDirect 仅是官方授权条件尚未满足的单站增强项，不是 ScanSci 或机构访问总体失败；不要恢复 Cloudflare 绕过、noVNC、aTrust 容器或第二 Chromium。
+- Worktree: E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance；branch: codex/product-workflow-design；文档记录时 application parent HEAD: c07c8d1（PR #84），后续 docs-only HEAD 从 Git 读取。
+- Production source / active marker / public /__release: c07c8d15e5ba3b722577f42d6ad72af8c83189fe。
+- Rollback: 440266c53325044f2bdff21b1ebfe1be6b792f71。Core/search migrations: 36/36、2/2。
+- 13 个容器运行；API/Worker/Parser/ScanSci/BGE 与数据服务健康；公网/loopback 正常，无 failed marker 或 deploy journal；canonical transaction 与 retention 完成。
+- 根目录旧 main 仍为 b9616cb，既有 memory、.Codex 配置及用户资料未改动；不是本轮开发或部署源。
 
-## Version tuple
+## Goal and completed work
 
-- Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Worktree branch / observed parent HEAD: `codex/product-workflow-design` / `440266c`（PR #83）；UI 候选 canonical 发布进行中，后续权限补丁未提交；Git HEAD 不得冒充下面的生产 application release。
-- Production application source / immutable release: `6478aa8ef6045ecef93127c6e3183fc05acb946f`
-- Rollback: `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`
-- Core/search migrations: `36/36` / `2/2`。
+- Hermes Research Intelligence Tasks 1–12 已完成；不要恢复旧 MVP 或 Task 10–12 next action。当前目标是工作区—Hermes—RO 完整流程，以及论文生成图/视频、Hermes 语音修改和讨论。
+- 用户要求成熟方案与现有能力优先、先做可用功能和展示、分段验收；暂不支持上传音视频理解。同事 frontend/nanqing 每日 10:00 巡检，已授权选择性合并部署。
+- 首批 PR #78 整合同事 18 个 Web 文件，并修复 Dashboard 继续研究、RO scoped tasks 与 Hermes 会话绑定；避免重复移植 frontend/nanqing@e5db5ae。
+- PR #81–83：居中自适应应用布局、紧凑个人页与设置、可展开研究列表、统一表单与按钮、手机布局；任务入口改到真实 Hermes task 页面；修复 unsafe patrol 的相邻动作重复。最后六行 Dashboard 压缩已撤回，避免 detached 菜单重叠。
+- PR #84：展示资产生成/审核仅允许内容编辑角色及 draft Version；Worker 前置检查和提交事务重验权限、任务、版本与 Claim 内容；复用 Serializable draft row fence。已发布版本不可被追加/批准展示资产；成员只读和 archived 读取保留。
+- UI 已交用户查看，不能冒称用户已接受效果。图片/视频/语音完整工作流尚未完成。
 
-## Production truth
+## Fresh acceptance evidence
 
-- Canonical release、active marker 和公网 `/__release` 均为 `6478aa8…`；13 个容器运行，无 failed marker 或 deploy journal。API/Worker/Parser/official ScanSci/BGE 和数据服务 healthy；Nginx/Docker/Squid/cloudflared active。
-- 生产只运行官方 `scansci-pdf==1.13.1` 单 MCP；Chromium 只存在于该 release 镜像并复用 BuildKit layer，BGE 复用既有 model volume。ScanSci Cookie 保存在命名数据卷、mode `0600`；不要读取或输出其内容。
-- Task 10 真实证据：OA PDF SHA `d57dc94c…f484a`，72h/600s/one-use 与四入口通过；ZJU WebVPN subscription-only Nature PDF SHA `c4b9b02e…be8e`。ScienceDirect 后续只走官方 CARSI/Remote Access 或 Elsevier API key + entitlement。
-- Task 11 真实证据：`OSR-2026-000019`，3 个 verified Claims；SVG/HTML replay hash `8d5f8f23…c640` / `b20f83cc…1198`；无 script/网络且始终标记 `presentation_not_evidence`。
-- Task 12 已在前一 release `b32d81c` 以真实 2,215,244-byte PDF（SHA `bdfaa68d…697`）完成 fresh upload → parser/source map → review/confirm → commit → 3 core Claims → license → publication review → approve → R3 publish → anonymous public 200；`OSR-2026-000021` 已公开，内容 SHA `625f5308…2cba`，自动 core 与 canonical source map 均存在。Claims 无独立 locator 时保持 `missing`。此前 24.7 MB 上传已生成 source map，但 SDF proposal unavailable，停在 `needs_review` 后归档。汇总报告 SHA `1ca3b0e1…08f2`，Parser 14/2/0/0、locator 26/26、Claim/Evidence/bbox/TTL/signed-link 100%、search P95 240 ms。
+- 全仓 build/typecheck/lint/test GREEN；权限 focused domain 12、worker 16、API 3；独立安全复审无阻断。并发用例是确定性交错，非 PostgreSQL 双会话测试。
+- main CI 33942733721 GREEN，含 Product88 与 Hermes gate；ECS 精确 build、Parser 16-case acceptance、ScanSci 真实 OA/Worker、BGE 真实向量、迁移与内外网健康通过。
+- c07c8d1 公网实际 Web + 受控 API fixtures 16/16；覆盖个人页宽屏/手机、身份恢复、Hermes 入口与任务继续。未写用户数据，不代替真实 OAuth/SMTP 或账号数据验收。
+- 证据在 apps/web/test/visual/out/research-continuation/（ignored）；最终文件前缀 presentation-security-，部署使用 deploy-retry，另有 profile-desktop.png/profile-mobile.png 截图。
+- 既有真实研究验收：OSR-2026-000019 展示资产；OSR-2026-000021 真实论文解析到公开发布。展示必须保留 presentation_not_evidence；Claims 不等于科学结论已验证。
 
-## Constraints and open risks
+## Constraints and remaining risks
 
-- 不安装 FlareSolverr、第二套 Chromium、另一份 BGE、宿主 Python/Node 全局包；不 broad prune，不删除 active/rollback 或持久数据。
-- MiniMax image/video 仍为管理员限定、默认关闭的可选能力；Tavily 额度耗尽会显式降级，不阻断已验收主链。
-- ScienceDirect Remote Access 的 Elsevier 账号/机构邮箱激活、180 天续期以及 API entitlement 均属于外部账号条件；获得条件前不宣称该站订阅 PDF 可用。
-
-## Current UI and next product slice
-
-- UI 候选 440266c 已通过全仓检查、Product88、Hermes gate 和 CI 33941432761；ECS build/parser acceptance 通过，canonical 部署正在慢速 OA 验收阶段。完成前生产保持下述旧版事实，不并发开启第二事务。
-- 下一项展示资产权限修复已通过全仓检查与独立复审：写角色/draft version/Worker 重验及 draft fence；尚未提交部署。私有预览与图解操作界面尚未接通，批准 UI 前还须处理来源 Claim 后续编辑的资产失效。
+- 不读取/打印 .env 或 Cookie；不安装第二 Chromium/BGE、FlareSolverr、全局包，不 broad prune。生产操作遵循项目脚本；发布已有用户授权。
+- ScanSci OA 下载存在连接速度波动；本轮成功下载完整 24,671,920 bytes，SHA d57dc94c…f484a，owned canary 清理为 0。
+- c07 首次发布在 mutation 前因 runtime entries 96518→96515 拦截；三个路径未定位。旧报告已保留，正式重验与完整重建/镜像/报告校验稳定后重试成功；不得将此描述为已定位并修复构建漂移。
+- 生成完成后再编辑 Claim，仍可能使已有资产过时；批准 UI 前必须增加关联资产失效处理。提交前检查已覆盖生成过程中的 Claim 改动。
+- 被拒绝的 Worker 完成可能留下无引用对象；媒体沿用 charged-on-submit，撤权后排队任务可能被拒绝但已计费。图解 chart 为现有确定性主张摘要卡片。
+- MiniMax image/video 仍是管理员限定、默认关闭能力；ScienceDirect 仅等待官方授权条件，不恢复绕过方案。
 
 ## Next action and read first
 
-1. 用户已否决首批视觉；先完成当前 UI 修订候选的验证和部署，再交用户检查；按 `docs/plans/2026-09-05-integrated-research-product-plan.md` 补全导入/失败/发布旅程审计，再推进图解、视频、语音和讨论。完整五段未完成；不要继续旧 Task 10–12。
-2. 新任务先读 `AGENTS.md`、本 handoff、`docs/progress.md`，再按 `project_index.md` 定向读取需求基线相关章节。
-3. 涉及生产时重新核对 active/public/rollback；文档 HEAD 不得冒充 application release。
-
-- 同事分支 frontend/nanqing 已确认，每日 10:00 巡检，用户授权选择性合并优质前端成果并部署。
-- 首批已部署：Dashboard 待确认优先、RO Hermes 任务入口/会话绑定/范围查询，以及同事个人主页与设置分离。无新依赖或迁移；独立复审无阻断。
-
-## First product slice acceptance
-
-- 同事 `frontend/nanqing@e5db5ae` 的 18-file Web 差异已选择性整合至 PR #78；未引入其工具或部署脚本。后续巡检避免重复合并。
-- 全仓 build/test/typecheck/lint、Web 479+5、完整本地 browser release suite 87/87、main GitHub CI GREEN。
-- ECS 全仓 build、同提交 parser 隔离验收、BGE 实际向量、ScanSci runtime、部署与 retention 通过；core/search status 36/36、2/2；公网与 loopback 200、egress 204。
-- 公网真实页面 + 受控 API fixtures 15/15 GREEN；不写用户数据，不替代真实账号/ORCID/SMTP 或新版本数据纵向验收。上文 Task 10–12 真实数据证据属于前一 release b32d81c。
-- 本地日志：apps/web/test/visual/out/research-continuation/（ignored），含 build、deploy-retry、parser-acceptance、production-checkup、production-identity、production-migrations、public-browser。
-- 已知限制：scoped feed 最多 20 条、无分页；viewer 确认仍由 API 拒绝无权写入；用户效果待验收。
+1. 按 docs/plans/2026-09-05-integrated-research-product-plan.md 推进图解：来源 Claim 修改时使资产失效 → 认证私有内容预览 → 版本/Claim 选择、生成、进度与明确批准 → RO/Hermes 入口。
+2. 复用现有 presentation-assets API/domain/Worker 与公开 Gallery。私有 SVG 必须精确作用域认证、大小/完整性检查、安全 SVG、private/no-store 与 sandbox CSP；使用 img，不注入 SVG；HTML 暂保持附件。
+3. 新 session 先读 AGENTS、本 handoff、需求基线相关章节、短 progress；涉及生产重新 fetch/checkup 并核对 active/public/rollback，不把 docs HEAD 或根目录旧 main 当生产源。
