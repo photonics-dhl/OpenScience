@@ -211,3 +211,7 @@ Run the immutable API image with existing production env/networks and read-only 
 Rollback: keep imported draft or reject through existing transition; never silently delete rows/objects. Exact replay returns existing status, including rejected; new editorial work needs distinct reviewed content. Same bytes with mismatched provenance/Claims conflicts. Storage-before-transaction may leave a private unreferenced object on failure, same existing worker limitation.
 
 Verification: two concurrent imports must yield one asset per media and one set of Claim joins/audit; repeat dry-run/confirm is idempotent. Native private video must play/seek with200/206 while anonymous access is401; corrupt content must not bypass full digest viaRange. Admin with writer membership approves explicitly; source Claim edits reject associated drafts/approvals. Capability canTransition prevents ordinary writers from being offered admin-only media approval. Full buffer reader remains bounded16MiB; no unbounded streaming claim.
+
+CLI运行时修正：根目录没有所有workspace包别名，维护脚本按已有脚本模式从../packages/*/dist/index.js加载，部署前运行node --test scripts/import-presentation-media.test.mjs。源代码编译检查不能替代实际CLI启动。
+
+完整应用部署仍要求每个候选SHA的document-parser16-case验收report，须在正式事务前执行accept-document-parser-release.sh并核对源/image绑定。d174b1f首次事务停在缺少report的前置检查，未进入应用切换；先补齐最终候选report再部署，禁止绕过验收标记。

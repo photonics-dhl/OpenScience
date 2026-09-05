@@ -3,10 +3,10 @@
 import { open, lstat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { Buffer } from 'node:buffer';
-import { loadApiEnv } from '@openscience/config';
-import { createPrismaClient, createPrismaAuditSink } from '@openscience/database';
-import { createStorageAdapter } from '@openscience/storage';
-import { importReviewedPresentationMedia } from '@openscience/domain';
+import { loadApiEnv } from '../packages/config/dist/index.js';
+import { createPrismaClient, createPrismaAuditSink } from '../packages/database/dist/index.js';
+import { createStorageAdapter } from '../packages/storage/dist/index.js';
+import { importReviewedPresentationMedia } from '../packages/domain/dist/index.js';
 
 async function boundedFile(path, maximum) {
   const before = await lstat(path);
