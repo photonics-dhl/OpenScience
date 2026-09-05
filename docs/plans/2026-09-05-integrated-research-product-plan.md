@@ -247,3 +247,7 @@ v2效果迭代：用户认可v1并要求过渡自然、动效突出；`render-v2
 ### Voice naturalness revision
 
 用户反馈第一轮Qwen比系统语音好，但仍机械。复用Serena/seed42/CPU模型，先生成A（原文+具体日常聊天指令）与B（相同聊天指令+短句口语文案）。B保留五层结构、传播分类，并补充训练制造在先，避免误解为无需训练。原样本保留，各候选输出独立目录；不追加模型或付费API。比较A与旧版看指令影响，比较B与A看口语稿整体影响（B时长和措辞变化，不是严格同文案实验）。最终自然度需用户试听。
+
+### Full video conversational narration (approved B)
+
+User accepted B naturalness and approved applying it to full demo. Generate five reviewed scene paragraphs with the existing offline Qwen/Serena runtime and fixedseed42; retain original demo release for rollback. Reuse audio-duration scene timing, attach bounded optional narration.json with scene-level exact-text cues, replace stale Windows provenance. Update chapter buttons and page duration from actual WAV timings, then build/render/publish via existing isolated demo transaction. Validate narration4 unit tests, renderer cue bounds, full MP4 decode, real browser playback/chapters/mobile and unchanged app release. No new model, API, schema or gateway endpoint.

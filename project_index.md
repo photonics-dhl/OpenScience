@@ -12,7 +12,8 @@
 | 本地产物（Git忽略，非仓库路径） | apps/web/test/visual/out/science-video/：D2NN科普MP4、分镜、旁白、preview.html与FFmpeg/播放记录 | LOCAL PREVIEW；用户认可v1；v2加强过渡/动效，46.25秒720p/H264/AAC、4.80MB，完整解码与成片抽帧通过；保留v1，非生产自动生成能力 |
 | `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | CANDIDATE；服务器重新渲染/公网播放验收进行中，不接私有RO或任意用户代码 |
 | `infra/scripts/deploy-science-video-demo.sh` / `infra/scripts/deploy-science-video-demo.test.mjs` / `infra/nginx/science-video-demo.location.conf` | 一次性隔离渲染与独立演示路径发布/恢复，Nginx原生Range | DEPLOYED demo 6a1b848；应用release不变 |
-| `infra/tts-audition/` | CPU音频公共基础镜像、Qwen隔离试听与输出校验；模型独立挂载 | ECS TRIAL VERIFIED；三音色与自然度A/B两版已生成，听感待验收；生产BGE不变 |
+| `apps/media-demo/test/narration.test.mjs` | 配音来源、逐段字幕时间边界与旧素材回退验证 | 7项renderer测试通过；新版视频待服务器验收 |
+| `infra/tts-audition/` | CPU音频公共基础镜像、Qwen隔离试听与输出校验；模型独立挂载 | ECS TRIAL VERIFIED；三音色与自然度A/B两版已生成；新增video_narration.py完整五段配音，听感待验收；生产BGE不变 |
 | `docs/runbooks/science-video-demo.md` | CPU样片服务器部署、回退与验证操作手册 | DEPLOYED demo 6a1b848；CPU22.80秒/46.25秒成片；新增已批准缓存清理实测与PyTorch复用约束 |
 | `apps/api/src/routes/presentation-asset-content.ts` / `apps/api/src/routes/presentation-assets.ts` / `apps/api/test/presentation-assets-routes.test.ts` / `apps/api/src/routes/research.ts` | 共用安全内容交付、认证私有预览与 exact RO/version/task 恢复 | DEPLOYED390afc0；真实匿名读取401，保留v1兼容 |
 | `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准 | DEPLOYED390afc0；真实页面创建3主张、生成/预览/批准，图解9项回归通过 |

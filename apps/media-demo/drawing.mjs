@@ -180,8 +180,16 @@ export const installDrawing = async ({ scenes, total, artworkData }) => {
         text('0' + (index + 1) + ' / 05', 1135, 42, 15, muted);
         text(s.title, 64, 111, 40, ink, 600);
         text(s.sub, 66, 151, 23, muted);
-        box(48, 624, 1184, 57, '#e6e6dc');
-        text(s.caption, 70, 661, 23, ink);
+        const caption = s.cues ? (s.cues.find(cue => u >= cue.start && u < cue.end)?.text ?? '') : s.caption;
+        box(48, 620, 1184, 69, '#e6e6dc');
+        g.font = '400 23px "Noto Sans CJK SC", "Microsoft YaHei", sans-serif';
+        const lines = [''];
+        for (const character of caption) {
+            const last = lines.length - 1;
+            if (g.measureText(lines[last] + character).width > 1140) lines.push(character);
+            else lines[last] += character;
+        }
+        for (let i = 0; i < lines.length; i++) text(lines[i], 70, lines.length === 1 ? 663 : 647 + i * 28, 23, ink);
         text('Lin et al., 2018 · arXiv:1804.08711v2 · 颜色与波形为示意', 64, 707, 14, muted);
         g.fillStyle = teal;
         g.fillRect(0, 716, 1280 * t / total, 4);
