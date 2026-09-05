@@ -1,3 +1,4 @@
+import { presentationStoryboardView } from '@openscience/domain';
 import { describe, expect, it, vi } from 'vitest';
 import { generateClaimChartSvg } from '../../src/presentation/chart-generator';
 import { generateClaimInteractiveHtml } from '../../src/presentation/interactive-html';
@@ -204,4 +205,74 @@ describe('deterministic presentation generation', () => {
     })).rejects.toThrow(/platform administrator/i);
     expect(generate).not.toHaveBeenCalled();
   });
+});
+
+describe('sourced storyboard planning', () => {
+    const settings = { locale: 'en' as const, style: 'technical' as const, instruction: 'Explain the scoped findings' };
+    const document = () => ({ schemaVersion: 1, title: '<script>alert(1)</script>', scenes: Array.from({ length: 3 }, () => ({ title: 'Scene', narration: 'Signal < 2', visualAction: '<img src=x onerror=alert(1)>', durationSeconds: 8, sourceClaimIds: [CLAIM_A, CLAIM_B] })) });
+    it('uses Gateway, preserves qualifiers, escapes output and saves a draft with truthful provenance', async () => {
+        const ctx = authorityFixture();
+        const completeStructured = vi.fn(async () => document());
+        const task = { ...ctx.task, payload: { ...ctx.task.payload, kind: 'interactive_html', storyboard: settings } };
+        await createPresentationGenerationHandler({ gateway: { completeStructured } as never })(ctx.deps as never, task);
+        expect(JSON.stringify(completeStructured.mock.calls)).toContain('n=4');
+        expect(JSON.stringify(completeStructured.mock.calls)).toContain('300 K');
+        const html = ctx.putObject.mock.calls[0][1].toString();
+        expect(html).not.toContain('<script>');
+        expect(html).not.toContain('<img');
+        expect(html).toContain('&lt;script&gt;');
+        expect(ctx.rows[0]).toMatchObject({ status: 'draft', generator: 'OpenScience Hermes storyboard planner', generatorVersion: '1', provenance: { subtype: 'sourced_storyboard', storyboardDocument: document() } });
+    });
+    it.each(['model', 'storage'])('rejects source edits during %s', async (phase) => {
+        const ctx = authorityFixture();
+        const completeStructured = vi.fn(async () => { if (phase === 'model')
+            ctx.authority.statement = 'Changed'; return document(); });
+        if (phase === 'storage')
+            ctx.putObject.mockImplementation(async () => { ctx.authority.statement = 'Changed'; return { key: 'stored', size: 200, etag: 'stored' }; });
+        await expect(createPresentationGenerationHandler({ gateway: { completeStructured } as never })(ctx.deps as never, { ...ctx.task, payload: { ...ctx.task.payload, kind: 'interactive_html', storyboard: settings } })).rejects.toThrow('source Claims changed');
+        expect(ctx.rows).toHaveLength(0);
+    });
+    it.each(['model', 'storage'])('rejects base invalidation during %s', async (phase) => {
+        const ctx = authorityFixture();
+        const base = { id: CLAIM_A, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'draft', updatedAt: new Date(), contentHash: 'base', sourceClaims: [{ claimId: CLAIM_A }, { claimId: CLAIM_B }], provenance: { subtype: 'sourced_storyboard', storyboardSettings: settings, storyboardDocument: document() } };
+        ctx.prisma.presentationAsset.findUnique = async ({ where }: any) => where.id === CLAIM_A ? base : null;
+        const completeStructured = vi.fn(async () => { if (phase === 'model')
+            base.status = 'rejected'; return document(); });
+        if (phase === 'storage')
+            ctx.putObject.mockImplementation(async () => { base.status = 'rejected'; return { key: 'stored', size: 200, etag: 'stored' }; });
+        await expect(createPresentationGenerationHandler({ gateway: { completeStructured } as never })(ctx.deps as never, { ...ctx.task, payload: { ...ctx.task.payload, kind: 'interactive_html', storyboard: { ...settings, baseAssetId: CLAIM_A } } })).rejects.toThrow();
+        expect(ctx.rows).toHaveLength(0);
+    });
+});
+
+
+it.each(['already-approved', 'model', 'storage'])('creates an independent revision and replays without side effects when base approval occurs at %s', async phase => {
+  const ctx = authorityFixture();
+  const settings = { locale: 'en' as const, style: 'ink' as const, instruction: 'Explain the mechanism' };
+  const baseDocument = { schemaVersion: 1, title: 'Original', scenes: Array.from({ length: 3 }, () => ({ title: 'Scene', narration: 'Finding with limits', visualAction: 'Wave meets detector', durationSeconds: 8, sourceClaimIds: [CLAIM_A, CLAIM_B] })) };
+  const base = { id: CLAIM_A, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: phase === 'already-approved' ? 'approved' : 'draft', updatedAt: new Date(), contentHash: 'base-content', sourceClaims: [{ claimId: CLAIM_A }, { claimId: CLAIM_B }], provenance: { subtype: 'sourced_storyboard', storyboardSettings: settings, storyboardDocument: baseDocument } };
+  const originalContent = JSON.stringify(base.provenance);
+  ctx.prisma.presentationAsset.findUnique = async ({ where }: any) => where.id === base.id ? base : ctx.rows.find(row => row.id === where.id) ?? null;
+  const joins = vi.fn(async () => ({ count: 2 }));
+  ctx.prisma.presentationAssetClaim.createMany = joins;
+  const record = vi.fn(async () => undefined);
+  const approve = () => { base.status = 'approved'; base.updatedAt = new Date(base.updatedAt.getTime() + 1); };
+  const revised = { ...baseDocument, title: 'Revised mechanism' };
+  const completeStructured = vi.fn(async () => { if (phase === 'model') approve(); return revised; });
+  if (phase === 'storage') ctx.putObject.mockImplementation(async () => { approve(); return { key: 'stored', size: 200, etag: 'stored' }; });
+  const task = { ...ctx.task, payload: { ...ctx.task.payload, kind: 'interactive_html', storyboard: { ...settings, baseAssetId: base.id } } };
+  const handler = createPresentationGenerationHandler({ gateway: { completeStructured } as never });
+  const deps = { ...ctx.deps, audit: { record } };
+  const first = await handler(deps as never, task);
+  expect(await handler(deps as never, task)).toEqual(first);
+  expect(base.status).toBe('approved');
+  expect(JSON.stringify(base.provenance)).toBe(originalContent);
+  expect(ctx.rows).toHaveLength(1);
+  expect(ctx.rows[0]).toMatchObject({ id: TASK, status: 'draft' });
+  expect(presentationStoryboardView(ctx.rows[0], [CLAIM_A, CLAIM_B])).toEqual({ document: revised, locale: 'en', style: 'ink', baseAssetId: base.id });
+  expect(joins).toHaveBeenCalledWith({ data: [CLAIM_A, CLAIM_B].map(claimId => ({ presentationAssetId: TASK, claimId, researchObjectId: RO, versionId: VERSION })) });
+  expect(completeStructured).toHaveBeenCalledTimes(1);
+  expect(ctx.putObject).toHaveBeenCalledTimes(1);
+  expect(joins).toHaveBeenCalledTimes(1);
+  expect(record).toHaveBeenCalledTimes(1);
 });

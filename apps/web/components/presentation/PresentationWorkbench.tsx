@@ -5,7 +5,8 @@ import * as React from 'react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import type { PresentationAsset, PresentationClaim, VersionSummary } from '@/lib/api';
-import { presentationAssetContentUrl } from '@/lib/api';
+import { presentationAssetContentUrl, type StoryboardRequest } from '@/lib/api';
+import { StoryboardPanel } from './StoryboardPanel';
 
 type PresentationVersion = Pick<VersionSummary, 'versionId' | 'versionNo' | 'status'>;
 
@@ -28,6 +29,7 @@ export interface PresentationWorkbenchProps {
   task?: PresentationTaskState | null;
   onCreateClaim: (statement: string) => Promise<boolean>;
   onGenerate: (claimIds: string[]) => void;
+  onGenerateStoryboard?: (claimIds: string[], request: StoryboardRequest) => void;
   onResumeTask?: () => void;
   onRetryData?: () => void;
   onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => void;
@@ -39,7 +41,7 @@ const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onGenerate, onResumeTask, onRetryData, onTransition, working = false, error = '',
+  onCreateClaim, onGenerate, onGenerateStoryboard, onResumeTask, onRetryData, onTransition, working = false, error = '',
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const [selected, setSelected] = useState<string[]>([]);
@@ -81,19 +83,21 @@ export function PresentationWorkbench({
             </div>
             {loading ? <p className="m-0 py-7 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : loadFailed ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{t('scopeLoadFailed')}</p> : assets.length === 0 ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{canWrite ? t('emptyPreview') : t('emptyPreviewReadonly')}</p> : (
               <div className={`mt-5 grid min-w-0 items-start gap-6 ${assets.length > 1 ? 'lg:grid-cols-2' : ''}`}>
-                {assets.map((assetItem) => {
+                {[...assets].sort((a, b) => Number(Boolean(a.storyboard)) - Number(Boolean(b.storyboard))).map((assetItem) => {
                   const linkedClaims = assetItem.sourceClaimIds.map((id) => claimsById.get(id)?.statement).filter((value): value is string => Boolean(value));
                   return (
-                    <article className="surface-folio-sheet min-w-0 overflow-hidden" key={assetItem.id} data-presentation-asset={assetItem.id}>
+                    <article className={`surface-folio-sheet min-w-0 overflow-hidden ${assetItem.storyboard && assets.length > 1 ? 'lg:col-span-2' : ''}`} key={assetItem.id} data-presentation-asset={assetItem.id}>
                       <div className="border-b border-os-rule-paper px-5 py-4 sm:px-6">
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                          <h3 className="m-0 font-semibold">{t(assetItem.kind === 'video' ? 'videoTitle' : assetItem.kind === 'image' ? 'imageTitle' : 'assetTitle')}</h3>
+                          <h3 className="m-0 font-semibold">{t(assetItem.storyboard ? 'storyboard.assetTitle' : assetItem.kind === 'video' ? 'videoTitle' : assetItem.kind === 'image' ? 'imageTitle' : 'assetTitle')}</h3>
                           <span className="text-xs text-os-muted-paper">{t(`assetStatus.${assetItem.status}`)}</span>
                         </div>
                         <p className="m-0 mt-1 text-xs leading-5 text-os-muted-paper">{t('notEvidence')}</p>
                       </div>
                       <div className="bg-os-paper px-4 py-4 sm:px-6 sm:py-5">
-                        {assetItem.kind === 'chart' || assetItem.kind === 'image' || assetItem.kind === 'svg' ? (
+                        {assetItem.storyboard ? (
+                          <StoryboardPanel storyboard={assetItem.storyboard} parent={assets.find((item) => item.id === assetItem.storyboard?.baseAssetId)?.storyboard} baseAssetId={assetItem.id} claims={claims} selectedClaimIds={assetItem.sourceClaimIds} canGenerate={canWrite && !loading && !loadFailed && !working && assetItem.status !== 'rejected'} onGenerate={onGenerateStoryboard} />
+                        ) : assetItem.kind === 'chart' || assetItem.kind === 'image' || assetItem.kind === 'svg' ? (
                           <>
                             <div className="relative aspect-video max-h-[32rem] w-full">
                             <img className="absolute inset-0 h-full w-full object-contain outline -outline-offset-1 outline-black/10" src={presentationAssetContentUrl(researchObjectId, version.versionId, assetItem.id)} alt={t(assetItem.kind === 'image' ? 'imageTitle' : 'assetTitle')} width={1200} height={720} loading="lazy" />
@@ -228,6 +232,7 @@ export function PresentationWorkbench({
             ) : null}
 
 
+            <div className="mt-8 border-t border-os-rule-paper pt-6"><StoryboardPanel claims={claims} selectedClaimIds={selected} canGenerate={canWrite && !loading && !loadFailed && !working} onGenerate={onGenerateStoryboard} /></div>
           </details>
     </div>
   );

@@ -211,3 +211,46 @@ it('reports media transition capability only for an admin with workspace write a
   ctx.db.memberships[0].role='viewer';
   expect((await listPresentationAssets(ctx as never,{userId:USER,researchObjectId:RO,versionId:VERSION}))[0].canTransition).toBe(false);
 });
+
+it('charges storyboard submissions once and blocks the free path', async () => {
+    const ctx = fixture();
+    const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html' as const, sourceClaimIds: [CLAIM], storyboard: { locale: 'en' as const, style: 'technical' as const, instruction: 'Explain this finding' }, idempotencyKey: 'storyboard' };
+    const first = await submitPresentationGeneration(ctx as never, input);
+    expect((await submitPresentationGeneration(ctx as never, input)).id).toBe(first.id);
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+    expect(ctx.db.usageLedger.find(row => row.delta < 0)?.delta).toBe(-1n);
+    const { submitDeterministicPresentationTask } = await import('../../src/agent/agent');
+    await expect(submitDeterministicPresentationTask(ctx as never, { sessionId: ctx.db.agentSessions[0].id, userId: USER, kind: 'presentation.generate', payload: ctx.db.agentTasks[0].payload, idempotencyKey: 'bypass' })).rejects.toThrow();
+});
+it.each(['foreign', 'version', 'rejected', 'legacy', 'malformed', 'claim-set'])('rejects an invalid %s revision base without charge', async (reason) => {
+    const ctx = fixture();
+    const document = { schemaVersion: 1, title: 'Plan', scenes: Array.from({ length: 3 }, () => ({ title: 'Scene', narration: 'Finding', visualAction: 'Wave', durationSeconds: 8, sourceClaimIds: [CLAIM] })) };
+    const base = { id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'draft', provenance: { subtype: 'sourced_storyboard', storyboardDocument: document, storyboardSettings: { locale: 'en', style: 'ink', instruction: 'Explain' } } };
+    if (reason === 'foreign')
+        base.researchObjectId = ASSET;
+    if (reason === 'version')
+        base.versionId = ASSET;
+    if (reason === 'rejected')
+        base.status = 'rejected';
+    if (reason === 'legacy')
+        base.provenance.subtype = 'legacy';
+    if (reason === 'malformed')
+        document.scenes = [];
+    ctx.db.presentationAssets.push(base);
+    ctx.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: reason === 'claim-set' ? ASSET : CLAIM });
+    await expect(submitPresentationGeneration(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', sourceClaimIds: [CLAIM], storyboard: { locale: 'en', style: 'ink', instruction: 'Revise', baseAssetId: ASSET }, idempotencyKey: 'invalid-base' })).rejects.toThrow();
+    expect(ctx.db.agentTasks).toHaveLength(0);
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(0);
+});
+
+it.each([undefined, 'legacy'])('blocks planner-owned assets with invalid subtype %s from approval', async subtype => {
+  const ctx = fixture();
+  const updatedAt = new Date();
+  ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'draft', label: 'presentation_not_evidence', generator: 'OpenScience Hermes storyboard planner', generatorVersion: '1', updatedAt, provenance: { subtype } });
+  ctx.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM });
+  const assets = await listPresentationAssets(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION });
+  expect(assets[0].canTransition).toBe(false);
+  expect(assets[0].storyboard).toBeUndefined();
+  await expect(transitionPresentationAsset(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: ASSET, status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  expect(ctx.db.presentationAssets[0].status).toBe('draft');
+});

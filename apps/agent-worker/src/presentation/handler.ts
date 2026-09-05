@@ -1,3 +1,6 @@
+import type { AiGateway } from '@openscience/ai-gateway';
+import { requireStoryboardBase, type StoryboardDocument } from '@openscience/domain';
+import { generateStoryboard, renderStoryboard } from './storyboard';
 import { createHash } from 'node:crypto';
 import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
@@ -11,7 +14,7 @@ function presentationClaimContent(claims: readonly PresentationClaim[]): string 
   })));
 }
 
-export function createPresentationGenerationHandler(options: { mediaGenerator?: PresentationMediaGenerator } = {}): TaskHandler {
+export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'>; mediaGenerator?: PresentationMediaGenerator } = {}): TaskHandler {
   return async (deps, task) => {
     if (!deps.storage) throw new Error('[blocked] presentation object storage unavailable');
     const payload = parsePresentationGenerationPayload(task.payload);
@@ -34,13 +37,21 @@ export function createPresentationGenerationHandler(options: { mediaGenerator?: 
       throw new Error('[blocked] source Claims are not verified in the exact version');
     }
     const claims = canonicalPresentationClaims(claimRows as PresentationClaim[]);
+    const base = await requireStoryboardBase(deps.prisma, payload);
+    let storyboardDocument: StoryboardDocument | undefined;
     let bytes: Buffer;
     let extension: string;
     let contentType: string;
     let generator = DETERMINISTIC_PRESENTATION_GENERATOR;
     let generatorVersion = DETERMINISTIC_PRESENTATION_GENERATOR_VERSION;
     let promptHash: string | null = null;
-    if (payload.kind === 'chart') {
+    if (payload.storyboard) {
+      if (!options.gateway) throw new Error('[blocked] storyboard planner unavailable');
+      const planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view);
+      storyboardDocument = planned.document; promptHash = planned.promptHash;
+      bytes = renderStoryboard(planned.document, payload.storyboard); extension = 'html'; contentType = 'text/html; charset=utf-8';
+      generator = 'OpenScience Hermes storyboard planner'; generatorVersion = '1';
+    } else if (payload.kind === 'chart') {
       bytes = generateClaimChartSvg(claims); extension = 'svg'; contentType = 'image/svg+xml';
     } else if (payload.kind === 'interactive_html') {
       bytes = generateClaimInteractiveHtml(claims); extension = 'html'; contentType = 'text/html; charset=utf-8';
@@ -72,12 +83,14 @@ export function createPresentationGenerationHandler(options: { mediaGenerator?: 
         || presentationClaimContent(currentClaims as PresentationClaim[]) !== presentationClaimContent(claims)) {
         throw new Error('[blocked] source Claims changed before presentation completion');
       }
+      if (base && (await requireStoryboardBase(tx, payload))?.identity !== base.identity) throw new Error('[blocked] base storyboard changed before completion');
       const created = await tx.presentationAsset.create({ data: {
         id: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind,
         objectKey, contentHash, generator, generatorVersion, promptHash, label: PRESENTATION_ASSET_LABEL,
-        provenance: { source: 'verified_claims', taskId: task.id, sourceClaimIds: payload.sourceClaimIds, contentType },
+        provenance: { source: 'verified_claims', taskId: task.id, sourceClaimIds: payload.sourceClaimIds, contentType, ...(storyboardDocument && payload.storyboard ? { subtype: 'sourced_storyboard', storyboardDocument: JSON.parse(JSON.stringify(storyboardDocument)), storyboardSettings: JSON.parse(JSON.stringify(payload.storyboard)) } : {}) },
       } });
       await tx.presentationAssetClaim.createMany({ data: payload.sourceClaimIds.map((claimId) => ({ presentationAssetId: created.id, claimId, researchObjectId: payload.researchObjectId, versionId: payload.versionId })) });
+      if (storyboardDocument) await deps.audit?.record({ actorId: scope.userId, action: 'presentation_asset.generated', workspaceId: researchObject.workspaceId, targetType: 'presentation_asset', targetId: created.id, metadata: { taskId: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, subtype: 'sourced_storyboard', baseAssetId: payload.storyboard?.baseAssetId ?? null } }, tx);
       return created;
     });
     return { assetId: asset.id, kind: asset.kind, status: asset.status, contentHash, sourceClaimIds: payload.sourceClaimIds };

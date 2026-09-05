@@ -1,3 +1,4 @@
+import { parseStoryboardRequest, presentationStoryboardView, type StoryboardRequest, type StoryboardView } from './storyboard';
 import type { AuditContext } from '@openscience/observability';
 import type { PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { createAgentSession, getAgentTask, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
@@ -11,8 +12,9 @@ const KINDS = ['chart', 'interactive_html', 'image', 'video'] as const;
 export const DETERMINISTIC_PRESENTATION_GENERATOR = 'OpenScience deterministic renderer';
 export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-presentation-v2';
 export type PresentationGenerationKind = (typeof KINDS)[number];
-export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[] }
+export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest }
 export interface PresentationAssetView {
+  storyboard?: StoryboardView;
   canTransition: boolean;
   id: string;
   researchObjectId: string;
@@ -31,7 +33,7 @@ export interface PresentationAssetView {
 export function parsePresentationGenerationPayload(value: unknown): PresentationGenerationPayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation payload is invalid');
   const payload = value as Record<string, unknown>;
-  const expected = ['kind', 'researchObjectId', 'schemaVersion', 'sourceClaimIds', 'versionId'];
+  const expected = ['kind', 'researchObjectId', 'schemaVersion', 'sourceClaimIds', ...('storyboard' in payload ? ['storyboard'] : []), 'versionId'];
   const keys = Object.keys(payload).sort();
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index]) || payload.schemaVersion !== 1
     || typeof payload.researchObjectId !== 'string' || !UUID.test(payload.researchObjectId)
@@ -43,7 +45,9 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
   }
   const sourceClaimIds = [...new Set(payload.sourceClaimIds as string[])].sort();
   if (sourceClaimIds.length !== payload.sourceClaimIds.length) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation payload contains duplicate Claims');
-  return { schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
+  const storyboard = 'storyboard' in payload ? parseStoryboardRequest(payload.storyboard) : undefined;
+  if (storyboard && payload.kind !== 'interactive_html') throw new PresentationAssetError('VALIDATION_ERROR', 'Storyboard requires interactive_html');
+  return { ...(storyboard ? { storyboard } : {}), schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
 }
 
 type PresentationScope = { userId: string; researchObjectId: string; versionId: string };
@@ -103,20 +107,21 @@ async function requirePlatformAdmin(deps: AgentDeps, userId: string): Promise<vo
 }
 
 export async function submitPresentationGeneration(deps: AgentDeps, input: {
-  userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; idempotencyKey: string;
+  userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
   await requirePresentationWriteScope(deps.prisma, input);
-  const payload = parsePresentationGenerationPayload({ schemaVersion: 1, researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, sourceClaimIds: input.sourceClaimIds });
+  const payload = parsePresentationGenerationPayload({ schemaVersion: 1, researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, sourceClaimIds: input.sourceClaimIds, ...(input.storyboard !== undefined ? { storyboard: input.storyboard } : {}) });
   const claims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: input.researchObjectId, versionId: input.versionId }, select: { id: true, extractionStatus: true } });
   const returnedClaimIds = new Set(claims.map((claim) => claim.id));
   if (claims.length !== payload.sourceClaimIds.length || payload.sourceClaimIds.some((id) => !returnedClaimIds.has(id))
     || claims.some((claim) => claim.extractionStatus !== 'succeeded')) {
     throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Every source Claim must be verified in the exact version');
   }
+  if (payload.storyboard?.baseAssetId) await requireStoryboardBase(deps.prisma, payload);
   if (input.kind === 'image' || input.kind === 'video') await requirePlatformAdmin(deps, input.userId);
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
   const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey };
-  return input.kind === 'chart' || input.kind === 'interactive_html'
+  return !payload.storyboard && (input.kind === 'chart' || input.kind === 'interactive_html')
     ? submitDeterministicPresentationTask(deps, taskInput, ctx)
     : submitAgentTask(deps, taskInput, ctx);
 }
@@ -134,7 +139,8 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
   });
   return assets.map((asset) => ({
-    canTransition: canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin'),
+    storyboard: presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
+    canTransition: !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin'),
     id: asset.id,
     researchObjectId: asset.researchObjectId,
     versionId: asset.versionId,
@@ -167,6 +173,10 @@ export async function transitionPresentationAsset(deps: AgentDeps, input: {
     const transaction = { ...deps, prisma: tx as AgentDeps['prisma'] };
     const asset = await tx.presentationAsset.findUnique({ where: { id: input.assetId } });
     if (!asset || asset.researchObjectId !== input.researchObjectId || asset.versionId !== input.versionId) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
+    if (input.status === 'approved') {
+      const links = await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } });
+      if (hasInvalidStoryboard(asset, links.map(link => link.claimId))) throw new PresentationAssetError('VALIDATION_ERROR', 'Saved storyboard is invalid');
+    }
     if (asset.label !== PRESENTATION_ASSET_LABEL) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation asset label is invalid');
     if (asset.status !== 'draft') throw new PresentationAssetError('ILLEGAL_TRANSITION', 'Presentation asset status is terminal');
     if (asset.kind === 'image' || asset.kind === 'video') await requirePlatformAdmin(transaction, input.userId);
@@ -180,3 +190,25 @@ export async function transitionPresentationAsset(deps: AgentDeps, input: {
 }
 
 export { PresentationAssetError } from './errors';
+
+function hasInvalidStoryboard(asset: {
+    kind: string;
+    provenance: unknown;
+    generator?: string;
+}, ids: string[]): boolean {
+    const p = asset.provenance as {
+        subtype?: unknown;
+    } | null;
+    return (p?.subtype === 'sourced_storyboard' || asset.generator === 'OpenScience Hermes storyboard planner') && !presentationStoryboardView(asset, ids);
+}
+export async function requireStoryboardBase(prisma: Pick<Prisma.TransactionClient, 'presentationAsset'>, payload: PresentationGenerationPayload) {
+    const id = payload.storyboard?.baseAssetId;
+    if (!id)
+        return undefined;
+    const asset = await prisma.presentationAsset.findUnique({ where: { id }, include: { sourceClaims: { select: { claimId: true } } } });
+    const ids = asset?.sourceClaims.map(link => link.claimId).sort() ?? [];
+    const view = asset && presentationStoryboardView(asset, ids);
+    if (!asset || asset.researchObjectId !== payload.researchObjectId || asset.versionId !== payload.versionId || !['draft', 'approved'].includes(asset.status) || !view || JSON.stringify(ids) !== JSON.stringify(payload.sourceClaimIds))
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Base storyboard is invalid for these sources');
+    return { view, identity: JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids }) };
+}

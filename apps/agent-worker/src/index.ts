@@ -288,7 +288,7 @@ export function createHandlers(
     },
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
-    'presentation.generate': createPresentationGenerationHandler(),
+    'presentation.generate': createPresentationGenerationHandler({ gateway }),
     'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
     ...(options.searchIndexer === undefined ? {} : {
       'search.index': async (_deps: WorkerDeps, task) =>

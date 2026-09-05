@@ -344,3 +344,22 @@ describe('Presentation asset routes', () => {
     await app.close();
   });
 });
+
+it('accepts charged storyboard settings and preserves the validated DTO on approval', async () => {
+    const ctx = await fixture();
+    const settings = { locale: 'en', style: 'ink', instruction: 'Explain findings' };
+    const response = await ctx.app.inject({ method: 'POST', url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`, ...writeAuth(ctx.token, ctx.csrfCookie, ctx.csrfToken, 'storyboard-api'), payload: { kind: 'interactive_html', sourceClaimIds: [CLAIM], storyboard: settings } });
+    expect(response.statusCode).toBe(202);
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+    const updatedAt = new Date();
+    const document = { schemaVersion: 1, title: 'Plan', scenes: Array.from({ length: 3 }, () => ({ title: 'Scene', narration: 'Qualified finding', visualAction: 'Wave', durationSeconds: 8, sourceClaimIds: [CLAIM] })) };
+    ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'draft', label: 'presentation_not_evidence', updatedAt, createdAt: updatedAt, provenance: { subtype: 'sourced_storyboard', storyboardDocument: document, storyboardSettings: settings, secret: 'never expose' } });
+    ctx.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM });
+    const approved = await ctx.app.inject({ method: 'PATCH', url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/${ASSET}`, ...writeAuth(ctx.token, ctx.csrfCookie, ctx.csrfToken), payload: { status: 'approved', expectedUpdatedAt: updatedAt.toISOString() } });
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json().asset.storyboard).toEqual({ document, locale: 'en', style: 'ink' });
+    expect(approved.json().asset.sourceClaimIds).toEqual([CLAIM]);
+    expect(approved.body).not.toContain('secret');
+    expect(approved.body).not.toContain('instruction');
+    await ctx.app.close();
+});
