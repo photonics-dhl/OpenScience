@@ -1,20 +1,20 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-05 +08）：** branch `codex/product-workflow-design`，application parent HEAD `c07c8d1`；后续 docs-only HEAD 以 Git 为准。production release / rollback `c07c8d15e5ba3b722577f42d6ad72af8c83189fe` / `440266c53325044f2bdff21b1ebfe1be6b792f71`；core/search `36/36` / `2/2`。UI 修订与展示资产写授权已部署，CI/服务器/公网页面16项通过；完整图解私有预览与多模态流程仍分段推进。根目录旧 main 不是部署源。
+> **CURRENT source/deployment anchor（2026-09-05 +08）：** branch `codex/product-workflow-design`，application HEAD / production `390afc09d3b6ec64d5b23e64f6bffe6bf8a375e7`，rollback `c07c8d15e5ba3b722577f42d6ad72af8c83189fe`；后续 docs-only HEAD 以 Git 为准。core/search `36/36` / `2/2`，CI99与服务器验收通过；真实PDF→人工确认/补齐→源文件入版本→Claim→图解预览/批准已完成。图解为主张卡片，机制图/图片、视频和语音待下一段；相同PDF复验仍有三个字段未自动提取。根目录旧 main 不是部署源。
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑的已确认产品范围 | CURRENT；效果待分段验收 |
-| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划 | CURRENT；生产 c07c8d1；图解私有预览/Claim 创建/任务恢复候选开发中；真实 D2NN PDF 已由页面上传、确认与创建版本 |
-| `apps/api/src/routes/presentation-asset-content.ts` / `apps/api/src/routes/presentation-assets.ts` / `apps/api/test/presentation-assets-routes.test.ts` / `apps/api/src/routes/research.ts` | 共用安全内容交付、认证私有预览与 exact RO/version/task 恢复 | LOCAL CANDIDATE，待部署；保留旧 renderer v1 内容读取 |
-| `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准 | LOCAL CANDIDATE；审查修正与真实后半段验收进行中 |
-| `apps/web/app/research-objects/[id]/edit/page.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` / `apps/web/package.json` / `apps/web/playwright.release.config.ts` | 已确认论文带入版本提交并保留原 manifest 附件；图解用例加入既有 release suite | LOCAL CANDIDATE；续接 E2E 9/9 与独立复审通过 |
-| `packages/domain/src/research-intelligence/claim-evidence-service.ts` / `packages/domain/test/research-intelligence/claim-evidence-service.test.ts` / `apps/agent-worker/src/presentation/chart-generator.ts` / `apps/agent-worker/src/presentation/interactive-html.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | Claim 变更/删除的关联资产失效；真实表述与换行图解 | LOCAL CANDIDATE；沿用事务和版本权限，无新增迁移 |
-| `apps/agent-worker/src/extractor.ts` / `apps/agent-worker/test/extractor.test.ts` | 摘录选择跳过头尾及已覆盖中段关键词，保留正文证据预算 | LOCAL CANDIDATE；27 项回归通过，本地 D2NN 片段补回 88% 结果；生产模型改善待重验 |
-| `packages/domain/src/assets/presentation-asset.ts` / `packages/domain/src/index.ts` / `packages/domain/test/assets/presentation-asset.test.ts` / `apps/agent-worker/src/presentation/handler.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | 展示资产内容写角色、draft Version 与 Worker 提交时权限/Claim 重验；沿用 Serializable draft fence | PR #84 / c07c8d1 DEPLOYED；domain12/worker16/API3、全仓与 CI GREEN；私有预览/后续 Claim 编辑失效待补 |
+| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划 | CURRENT；PR86/390afc0已部署，真实图解流程完成；下一段机制图/媒体，提取质量并行改进 |
+| `apps/api/src/routes/presentation-asset-content.ts` / `apps/api/src/routes/presentation-assets.ts` / `apps/api/test/presentation-assets-routes.test.ts` / `apps/api/src/routes/research.ts` | 共用安全内容交付、认证私有预览与 exact RO/version/task 恢复 | DEPLOYED390afc0；真实匿名读取401，保留v1兼容 |
+| `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准 | DEPLOYED390afc0；真实页面创建3主张、生成/预览/批准，图解9项回归通过 |
+| `apps/web/app/research-objects/[id]/edit/page.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` / `apps/web/package.json` / `apps/web/playwright.release.config.ts` | 已确认论文带入版本提交并保留原 manifest 附件；图解用例加入既有 release suite | DEPLOYED390afc0；真实PDF入版本，续接9项与CI99通过 |
+| `packages/domain/src/research-intelligence/claim-evidence-service.ts` / `packages/domain/test/research-intelligence/claim-evidence-service.test.ts` / `apps/agent-worker/src/presentation/chart-generator.ts` / `apps/agent-worker/src/presentation/interactive-html.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | Claim 变更/删除的关联资产失效；真实表述与换行图解 | DEPLOYED390afc0；实际编辑使旧批准图rejected，重新生成通过；无迁移 |
+| `apps/agent-worker/src/extractor.ts` / `apps/agent-worker/test/extractor.test.ts` | 摘录选择跳过头尾及已覆盖中段关键词，保留正文证据预算 | DEPLOYED390afc0；27项通过；生产重验仍缺method/results/reproducibility，不声称完整度提升 |
+| `packages/domain/src/assets/presentation-asset.ts` / `packages/domain/src/index.ts` / `packages/domain/test/assets/presentation-asset.test.ts` / `apps/agent-worker/src/presentation/handler.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | 展示资产内容写角色、draft Version 与 Worker 提交时权限/Claim 重验；沿用 Serializable draft fence | PR84权限底座历史；PR86/390afc0已补私有预览与Claim失效，当前验收见CURRENT handoff |
 
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/ContinueResearch.tsx` / `apps/web/components/research/ResearchWorkspaceNav.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/components/hermes/HermesTaskEntry.tsx` / `apps/web/messages/{zh,en}.json` | 同 RO 待确认优先、Hermes 常驻导航、真实任务入口与错误恢复、现有助手连接 | DEPLOYED 6478aa8；用户效果待验收 |
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO 入口、scope、恢复、确认和移动体验回归 | DEPLOYED 6478aa8；公网 7 continuation cases GREEN，API fixtures |

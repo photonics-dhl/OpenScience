@@ -1,7 +1,7 @@
 # Integrated Research Product Delivery Plan
 
 > 执行者使用 executing-plans；只有独立且有明确 owner 的工作才委派。
-> 状态：CURRENT delivery plan；首批入口断点已实现并合入 main，完整旅程审计与其余阶段仍待完成。
+> 状态：CURRENT delivery plan；PR86/390afc0已部署并完成真实PDF图解工作流，下一段推进机制图/媒体展示，提取质量并行改进。
 
 **Goal:** 分段交付工作区—Hermes—RO、多模态展示与语音编辑完整产品体验。
 
@@ -12,7 +12,7 @@
 ## Global constraints
 
 - 设计依据：`docs/specs/2026-09-05-integrated-research-product-design.md`。
-- 生产 application/rollback 为 `6478aa8` / `b32d81c`，开始部署前重新只读核实。
+- 生产 application/rollback 为 `390afc0` / `c07c8d1`，每次新任务先只读核实。
 - 不复做 Research Intelligence Tasks 1–12；不修改根目录旧 main 或其他人的未提交内容。
 - 每段先参考成熟方案；未经实测不得宣布候选 provider 可用。
 - 真实数据操作、发布、迁移和第三方安装遵守既有授权范围；效果按段交用户验收。
@@ -182,3 +182,11 @@
 - Renderer v2 改为完整换行的主张卡片，标签不再声称科学结论已验证；v1 保持安全内联读取兼容。有效极端输入能生成数十万像素高 SVG，原字节上限不足以限制绘制尺寸，因此绘制高度上限 8192，超限明确要求减少主张/缩短文本，不静默删去限定条件。19 项 renderer 回归通过；本地真实论文内容与中英文截图检查无横向溢出。
 - arXiv 页面许可为 non-exclusive distribute grant to arXiv（https://arxiv.org/licenses/nonexclusive-distrib/1.0/license.html），不是全文开放再许可；验收论文留在受控私有空间，用户可查看导出的自写摘要图解和页面证据。
 - 提取片段修正：原实现将头尾已有文本和中段重复命中的关键词计入八次候选额度，可能不再选取正文关键结果。两项 RED 回归复现后，跳过已覆盖锚点，保持 24,000 正文字符与偏移合同；27 项 extractor 测试通过。本地 PDF 文本旧片段缺 88% 结果，新片段包含；91.75% 两者都有。未取得生产 canonical parser 文本，不能声称已证明三个空字段的唯一根因；部署后对同一论文重跑比较。
+
+### PR86 生产与真实图解验收
+
+- 390afc09d3b6ec64d5b23e64f6bffe6bf8a375e7 已部署，rollback c07c8d15e5ba3b722577f42d6ad72af8c83189fe；CI33947575816完整99项及Hermes专项通过，ECS完整build/Parser16/ScanSci OA与Worker/BGE/迁移/健康/retention通过，13容器运行，active与公网一致。本轮无runtime漂移。
+- 真实页面将已确认的源PDF带入版本，再通过表单创建3条人工主张、发起生成、私有预览并批准；匿名内容请求401且private,no-store。实际修改来源Claim使旧approved资产rejected，恢复来源后重新生成批准成功。未用后台植入Claims替代页面操作；失效检查单独用受控API执行并记录。
+- 相同PDF在新版本重新上传/解析仍缺method/results/reproducibility，未提高字段完整度；最初展示版本保留人工补充标识。自动提取/证据匹配原因待进一步诊断，不能宣称选择器修正解决了全部模型输出问题。
+- 当前输出是可追溯的主张摘要卡片，real-chart.png/svg与桌面/手机截图可验收，源PDF和受控RO保持私有。所有验收会话已注销；文件位于ignored chart-workflow目录。
+- 下一段按用户要求继续功能与展示：成熟方案支持的机制图/图片、视频及Hermes语音编辑讨论；提取完整度和主张/证据自动衔接并行优化。
