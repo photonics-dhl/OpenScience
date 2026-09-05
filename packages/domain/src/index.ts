@@ -268,6 +268,8 @@ export {
   requirePresentationWriteScope,
   withPresentationAssetWrite,
   listPresentationAssets,
+  getPresentationAssetForRead,
+  getPresentationTask,
   submitPresentationGeneration,
   transitionPresentationAsset,
   PresentationAssetError,

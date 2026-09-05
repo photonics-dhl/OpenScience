@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
+import type { StorageAdapter } from '@openscience/storage';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION } from '@openscience/domain';
 import { createSession } from '@openscience/auth';
 import { createFakeMailer, createFakePrisma, seedUser } from '@openscience/domain/test-helpers';
 import { buildApp } from '../src/app';
@@ -25,7 +29,7 @@ function makeRedis() {
   };
 }
 
-async function fixture(platformRole = 'user') {
+async function fixture(platformRole = 'user', storage?: StorageAdapter) {
   const { prisma, db } = createFakePrisma();
   const redis = makeRedis();
   seedUser(db, { id: USER, platformRole });
@@ -41,7 +45,7 @@ async function fixture(platformRole = 'user') {
   const token = await createSession(redis as never, { userId: USER, status: 'email_verified' });
   const app = await buildApp({
     prisma, redis: redis as never, mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false,
-    security: { csrf: true }, rateLimitEnabled: false,
+    security: { csrf: true }, rateLimitEnabled: false, storage,
   });
   const csrf = await app.inject({ method: 'GET', url: '/csrf-token' });
   return {
@@ -58,6 +62,152 @@ function writeAuth(token: string, csrfCookie: string, csrfToken: string, idempot
 }
 
 describe('Presentation asset routes', () => {
+  async function taskFixture() {
+    const ctx = await fixture();
+    const created = await ctx.app.inject({ method: 'POST', url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`, ...writeAuth(ctx.token, ctx.csrfCookie, ctx.csrfToken, 'scoped-task-read'), payload: { kind: 'chart', sourceClaimIds: [CLAIM] } });
+    expect(created.statusCode).toBe(202);
+    const taskId = created.json().task.id as string;
+    return { ...ctx, url: `/research-objects/${RO}/versions/${VERSION}/presentation-tasks/${taskId}`, taskId };
+  }
+
+  it.each(['pending', 'succeeded'])('reads the exact scoped %s presentation task without inventing DTO fields', async (status) => {
+    const ctx = await taskFixture();
+    ctx.db.agentTasks[0].status = status;
+    ctx.db.workspaces[0].status = 'archived';
+    const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies: { openscience_session: ctx.token } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().task).toMatchObject({ id: ctx.taskId, status, kind: 'presentation.generate' });
+    expect(response.json().task).not.toHaveProperty('researchObjectId');
+    expect(response.json().task).not.toHaveProperty('payload');
+    await ctx.app.close();
+  });
+
+  it.each(['session-ro', 'payload-ro', 'payload-version', 'kind', 'creator', 'membership'])('rejects task recovery for mismatched %s', async (mismatch) => {
+    const ctx = await taskFixture();
+    if (mismatch === 'session-ro') ctx.db.agentSessions[0].researchObjectId = ASSET;
+    if (mismatch === 'payload-ro') ctx.db.agentTasks[0].payload.researchObjectId = ASSET;
+    if (mismatch === 'payload-version') ctx.db.agentTasks[0].payload.versionId = ASSET;
+    if (mismatch === 'kind') ctx.db.agentTasks[0].kind = 'sdf.extract';
+    if (mismatch === 'creator') ctx.db.agentSessions[0].userId = ASSET;
+    if (mismatch === 'membership') ctx.db.memberships.length = 0;
+    const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies: { openscience_session: ctx.token } });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).not.toHaveProperty('task');
+    await ctx.app.close();
+  });
+
+  it('requires authentication and validates the scoped task id', async () => {
+    const ctx = await taskFixture();
+    expect((await ctx.app.inject({ method: 'GET', url: ctx.url })).statusCode).toBe(401);
+    expect((await ctx.app.inject({ method: 'GET', url: ctx.url.replace(ctx.taskId, 'invalid'), cookies: { openscience_session: ctx.token } })).statusCode).toBe(400);
+    await ctx.app.close();
+  });
+
+  async function contentFixture(bytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><text>Study</text></svg>')) {
+    const headObject = vi.fn(async () => ({ size: bytes.length, contentType: 'image/svg+xml', etag: 'test' }));
+    const getObject = vi.fn(async () => ({ size: bytes.length, contentType: 'image/svg+xml', body: Readable.from([bytes]) }));
+    const ctx = await fixture('user', { headObject, getObject } as unknown as StorageAdapter);
+    ctx.db.presentationAssets.push({
+      id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'chart', status: 'draft',
+      label: 'presentation_not_evidence', objectKey: 'private/secret-chart.svg', contentHash: createHash('sha256').update(bytes).digest('hex'),
+      generator: DETERMINISTIC_PRESENTATION_GENERATOR, generatorVersion: DETERMINISTIC_PRESENTATION_GENERATOR_VERSION,
+    });
+    return { ...ctx, bytes, headObject, getObject, url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/${ASSET}/content` };
+  }
+
+  it.each(['draft', 'approved', 'rejected'])('privately serves trusted chart bytes for %s assets, including archived member reads', async (status) => {
+    const ctx = await contentFixture();
+    ctx.db.presentationAssets[0].status = status;
+    ctx.db.workspaces[0].status = 'archived';
+    ctx.db.memberships[0].role = 'viewer';
+    const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies: { openscience_session: ctx.token } });
+    expect(response.statusCode).toBe(200);
+    expect(response.rawPayload).toEqual(ctx.bytes);
+    expect(response.headers['content-type']).toContain('image/svg+xml');
+    expect(response.headers['content-disposition']).toContain('inline');
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['content-security-policy']).toContain("sandbox; default-src 'none'");
+    expect(response.headers['referrer-policy']).toBe('no-referrer');
+    expect(JSON.stringify(response.headers)).not.toContain('secret-chart');
+    await ctx.app.close();
+  });
+
+  it('rejects anonymous, cross-workspace, wrong-version and wrong-RO reads before touching storage', async () => {
+    const ctx = await contentFixture();
+    expect((await ctx.app.inject({ method: 'GET', url: ctx.url })).statusCode).toBe(401);
+    const cookies = { openscience_session: ctx.token };
+    const otherVersion = '40000000-0000-4000-8000-000000000099';
+    ctx.db.versions.push({ id: otherVersion, researchObjectId: RO, status: 'draft' });
+    expect((await ctx.app.inject({ method: 'GET', url: ctx.url.replace(VERSION, otherVersion), cookies })).statusCode).toBe(404);
+    expect((await ctx.app.inject({ method: 'GET', url: ctx.url.replace(RO, '30000000-0000-4000-8000-000000000099'), cookies })).statusCode).toBe(404);
+    ctx.db.memberships.length = 0;
+    expect((await ctx.app.inject({ method: 'GET', url: ctx.url, cookies })).statusCode).toBe(404);
+    expect(ctx.headObject).not.toHaveBeenCalled();
+    await ctx.app.close();
+  });
+
+  it('rejects range requests and corrupted content without returning partial bytes or storage paths', async () => {
+    const ctx = await contentFixture();
+    const cookies = { openscience_session: ctx.token };
+    expect((await ctx.app.inject({ method: 'GET', url: ctx.url, cookies, headers: { range: 'bytes=0-4' } })).statusCode).toBe(416);
+    expect(ctx.getObject).not.toHaveBeenCalled();
+    ctx.db.presentationAssets[0].contentHash = '0'.repeat(64);
+    const corrupt = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies });
+    expect(corrupt.statusCode).toBe(404);
+    expect(corrupt.body).not.toContain('secret-chart');
+    await ctx.app.close();
+  });
+
+  it('keeps existing v1 charts viewable after the renderer upgrade', async () => {
+    const ctx = await contentFixture();
+    ctx.db.presentationAssets[0].generatorVersion = 'openscience-presentation-v1';
+    const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies: { openscience_session: ctx.token } });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('image/svg+xml');
+    expect(response.headers['content-disposition']).toContain('inline');
+    await ctx.app.close();
+  });
+
+  it('downloads unsafe or untrusted SVG instead of embedding it', async () => {
+    const ctx = await contentFixture(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'));
+    const cookies = { openscience_session: ctx.token };
+    const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('application/octet-stream');
+    expect(response.headers['content-disposition']).toContain('attachment');
+    await ctx.app.close();
+    const untrusted = await contentFixture();
+    untrusted.db.presentationAssets[0].generatorVersion = 'unknown';
+    const fallback = await untrusted.app.inject({ method: 'GET', url: untrusted.url, cookies: { openscience_session: untrusted.token } });
+    expect(fallback.headers['content-disposition']).toContain('attachment');
+    await untrusted.app.close();
+  });
+
+  it.each(['oversized', 'size-mismatch', 'truncated', 'overflow'])('rejects %s storage content before delivery', async (failure) => {
+    const ctx = await contentFixture();
+    if (failure === 'oversized') ctx.headObject.mockResolvedValue({ size: 16 * 1024 * 1024 + 1, contentType: 'image/svg+xml', etag: 'test' });
+    if (failure === 'size-mismatch') ctx.getObject.mockImplementation(async () => ({ size: ctx.bytes.length + 1, contentType: 'image/svg+xml', body: Readable.from([ctx.bytes]) }));
+    if (failure === 'truncated') ctx.getObject.mockImplementation(async () => ({ size: ctx.bytes.length, contentType: 'image/svg+xml', body: Readable.from([ctx.bytes.subarray(0, 5)]) }));
+    if (failure === 'overflow') ctx.getObject.mockImplementation(async () => ({ size: ctx.bytes.length, contentType: 'image/svg+xml', body: Readable.from([ctx.bytes, Buffer.from('extra')]) }));
+    const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies: { openscience_session: ctx.token } });
+    expect(response.statusCode).toBe(404);
+    expect(response.body).not.toContain('<svg');
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    if (failure === 'oversized') expect(ctx.getObject).not.toHaveBeenCalled();
+    await ctx.app.close();
+  });
+
+  it('reports unavailable storage without leaking internal object coordinates', async () => {
+    const ctx = await contentFixture();
+    ctx.headObject.mockRejectedValue(new Error('private/secret-chart.svg unavailable'));
+    const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies: { openscience_session: ctx.token } });
+    expect(response.statusCode).toBe(503);
+    expect(response.body).not.toContain('secret-chart');
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    await ctx.app.close();
+  });
+
   it('submits one replay-safe deterministic generation task through a bounded contract', async () => {
     const { app, db, token, csrfCookie, csrfToken } = await fixture();
     const url = `/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`;

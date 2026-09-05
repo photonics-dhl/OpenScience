@@ -580,6 +580,96 @@ export async function listVersions(roId: string): Promise<{ versions: VersionSum
   return request(`/api/research-objects/${roId}/versions`);
 }
 
+export interface PresentationClaim {
+  id: string;
+  researchObjectId: string;
+  versionId: string;
+  parentClaimId: string | null;
+  kind: 'core' | 'supporting' | 'method' | 'boundary' | 'counter';
+  statement: string;
+  assessment: 'supported' | 'partial' | 'disputed' | 'missing';
+  conditions: string[];
+  limitations: string[];
+  provenance: unknown;
+  extractionStatus: 'succeeded' | 'needs_review' | 'blocked' | 'failed';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PresentationAsset {
+  id: string;
+  researchObjectId: string;
+  versionId: string;
+  kind: 'chart' | 'interactive_html' | 'image' | 'video' | 'svg';
+  contentHash: string;
+  generator: string;
+  generatorVersion: string;
+  status: 'draft' | 'approved' | 'rejected';
+  label: string;
+  sourceClaimIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PresentationAssetTransition = Omit<PresentationAsset, 'sourceClaimIds'>;
+
+function presentationScopePath(roId: string, versionId: string): string {
+  return `/api/research-objects/${encodeURIComponent(roId)}/versions/${encodeURIComponent(versionId)}`;
+}
+
+export async function listVersionClaims(roId: string, versionId: string, signal?: AbortSignal): Promise<{ claims: PresentationClaim[] }> {
+  return request(`${presentationScopePath(roId, versionId)}/claims`, { signal });
+}
+
+export async function createPresentationClaim(
+  roId: string,
+  versionId: string,
+  input: { id: string; statement: string },
+  signal?: AbortSignal,
+): Promise<{ claim: PresentationClaim }> {
+  return request(`${presentationScopePath(roId, versionId)}/claims`, {
+    method: 'POST',
+    signal,
+    body: JSON.stringify({
+      id: input.id,
+      kind: 'core',
+      statement: input.statement,
+      assessment: 'missing',
+      conditions: [],
+      limitations: [],
+    }),
+  });
+}
+
+export async function listPresentationAssets(roId: string, versionId: string, signal?: AbortSignal): Promise<{ assets: PresentationAsset[] }> {
+  return request(`${presentationScopePath(roId, versionId)}/presentation-assets`, { signal });
+}
+
+export async function generatePresentationChart(roId: string, versionId: string, sourceClaimIds: string[], idempotencyKey = crypto.randomUUID(), signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
+  return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    signal,
+    body: JSON.stringify({ kind: 'chart', sourceClaimIds }),
+  });
+}
+
+export async function getPresentationTask(roId: string, versionId: string, taskId: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
+  return request(`${presentationScopePath(roId, versionId)}/presentation-tasks/${encodeURIComponent(taskId)}`, { signal });
+}
+
+export async function transitionPresentationAsset(roId: string, versionId: string, assetId: string, status: 'approved' | 'rejected', expectedUpdatedAt: string, signal?: AbortSignal): Promise<{ asset: PresentationAssetTransition }> {
+  return request(`${presentationScopePath(roId, versionId)}/presentation-assets/${encodeURIComponent(assetId)}`, {
+    method: 'PATCH',
+    signal,
+    body: JSON.stringify({ status, expectedUpdatedAt }),
+  });
+}
+
+export function presentationAssetContentUrl(roId: string, versionId: string, assetId: string): string {
+  return `${presentationScopePath(roId, versionId)}/presentation-assets/${encodeURIComponent(assetId)}/content`;
+}
+
 /** 创建提交（P1B-4，乐观锁 + 幂等）。 */
 export async function createCommit(
   roId: string,

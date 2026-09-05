@@ -297,6 +297,26 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(malwareScanner).not.toHaveBeenCalled();
     expect(parserCascade).not.toHaveBeenCalled();
   });
+  it('前八个关键词已在头部时仍选取中段结果，并保留准确偏移和字符预算', () => {
+    const manuscript = `${'results '.repeat(8)}${'h'.repeat(15_000)}RESULTS critical-middle-measurement${'t'.repeat(18_000)}`;
+    const selected = selectManuscriptEvidence(manuscript);
+
+    expect(selected).toContain('critical-middle-measurement');
+    const excerpts = [...selected.matchAll(/--- SOURCE chars:(\d+)-(\d+) ---\n([\s\S]*?)(?=\n\n--- SOURCE|$)/g)];
+    let total = 0;
+    for (const [, start, end, content] of excerpts) {
+      expect(content).toBe(manuscript.slice(Number(start), Number(end)));
+      total += Number(end) - Number(start);
+    }
+    expect(total).toBeLessThanOrEqual(24_000);
+  });
+
+  it('同一个中段窗口内的重复关键词不耗尽后续证据窗口', () => {
+    const manuscript = `${'h'.repeat(10_000)}${'results '.repeat(8)}${'m'.repeat(6_000)}RESULTS later-critical-measurement${'t'.repeat(18_000)}`;
+
+    expect(selectManuscriptEvidence(manuscript)).toContain('later-critical-measurement');
+  });
+
   it('长文即使前段关键词窗口很多也始终保留正文尾部', () => {
     const earlyWindows = Array.from({ length: 10 }, (_, index) => `LIMITATIONS early-${index} ${'x'.repeat(2_500)}`).join('\n');
     const manuscript = `${earlyWindows}${'m'.repeat(20_000)}TAIL-REPRODUCIBILITY-MARKER`;

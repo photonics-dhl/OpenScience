@@ -4,7 +4,7 @@ const apiOrigin = `http://127.0.0.1:${process.env.PRODUCT_RELEASE_API_PORT ?? '3
 
 export default defineConfig({
   testDir: './test/e2e',
-  testMatch: ['product-release.spec.ts', 'claim-first-public-ro.spec.ts', 'academic-identity-recovery.spec.ts', 'research-continuation.spec.ts'],
+  testMatch: ['product-release.spec.ts', 'claim-first-public-ro.spec.ts', 'academic-identity-recovery.spec.ts', 'research-continuation.spec.ts', 'presentation-workbench.spec.ts'],
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,

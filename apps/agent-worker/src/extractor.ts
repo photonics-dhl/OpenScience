@@ -80,7 +80,11 @@ export function selectManuscriptEvidence(manuscriptText: string): string {
   const tail = { start: text.length - 8_000, end: text.length };
   const keywordRanges: Array<{ start: number; end: number }> = [];
   KEY_EVIDENCE.lastIndex = 0;
-  for (let match = KEY_EVIDENCE.exec(text), count = 0; match && count < 8; match = KEY_EVIDENCE.exec(text), count += 1) {
+  for (let match = KEY_EVIDENCE.exec(text); match && keywordRanges.length < 8; match = KEY_EVIDENCE.exec(text)) {
+    // Already included evidence must not consume the middle-window allowance.
+    if (match.index < head.end || match.index >= tail.start) continue;
+    const previous = keywordRanges.at(-1);
+    if (previous && match.index + match[0].length <= previous.end) continue;
     const start = Math.max(head.end, match.index - 1_200);
     const end = Math.min(tail.start, match.index + match[0].length + 1_800);
     if (end > start) keywordRanges.push({ start, end });

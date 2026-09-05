@@ -104,6 +104,45 @@ describe('deterministic presentation generation', () => {
     expect(html.toString('utf8')).not.toMatch(/<script|https?:\/\//i);
   });
 
+  it('wraps long English and Chinese without losing conditions or scientific qualifiers', () => {
+    const statement = 'Numerical accuracy was 91.75% on 10,000 held-out images; experimental agreement was 88% on 50 selected examples. '.repeat(8);
+    const chinese = '\u5149\u5b66\u5b9e\u9a8c\u7ed3\u679c\u4e0d\u4ee3\u8868\u5168\u90e8\u6d4b\u8bd5\u96c6'.repeat(20);
+    const svg = generateClaimChartSvg([{ ...claims[0]!, statement, assessment: 'missing', conditions: [chinese], limitations: ['Selected successful examples only; not an unbiased MNIST accuracy estimate.'] }]).toString('utf8');
+    const lines = [...svg.matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map((match) => match[1]!);
+    expect(lines.length).toBeGreaterThan(20);
+    expect(lines.join(' ').replace(/\s/g, '')).toContain(statement.replace(/\s/g, ''));
+    expect(lines.join('')).toContain(chinese);
+    expect(lines.join(' ')).toContain('not an unbiased MNIST accuracy estimate.');
+    expect(svg).toContain('Evidence not assessed');
+    expect(svg).toContain('Research claims');
+    expect(svg).toContain('not scientific evidence');
+    expect(svg).not.toContain('Verified claims');
+    expect(svg).not.toContain('…');
+  });
+
+  it('escapes injected markup in every display field and gives HTML truthful labels', () => {
+    const payload = '<script>alert("x")</script>';
+    const input = [{ ...claims[0]!, id: payload, statement: payload, assessment: 'missing', conditions: [payload], limitations: [payload] }];
+    for (const output of [generateClaimChartSvg(input), generateClaimInteractiveHtml(input)]) {
+      const source = output.toString('utf8');
+      expect(source).not.toContain('<script>');
+      expect(source).toContain('&lt;script&gt;');
+      expect(source).toContain('Research claims');
+      expect(source).toContain('Evidence not assessed');
+      expect(source).toContain('not scientific evidence');
+    }
+  });
+
+  it('rejects an oversized but valid claim set rather than clipping scientific qualifiers', () => {
+    const oversized = Array.from({ length: 12 }, (_, i) => ({ ...claims[0]!, id: String(i), statement: '光'.repeat(4000), conditions: Array(100).fill('条'.repeat(500)), limitations: Array(100).fill('限'.repeat(500)) }));
+    expect(() => generateClaimChartSvg(oversized)).toThrow('Select fewer claims');
+    expect(() => generateClaimChartSvg([...oversized].reverse())).toThrow('Select fewer claims');
+    const accepted = generateClaimChartSvg(Array.from({ length: 12 }, (_, i) => ({ ...claims[0]!, id: String(i), statement: '光'.repeat(300) }))).toString('utf8');
+    const height = Number(accepted.match(/viewBox="0 0 1200 (\d+)"/)?.[1]);
+    expect(height).toBeGreaterThan(3000);
+    expect(height).toBeLessThanOrEqual(8192);
+  });
+
   it('stores one content-addressed asset and reuses it on task replay', async () => {
     const rows: Array<Record<string, unknown>> = [];
     const putObject = vi.fn(async (key: string, bytes: Buffer, opts: { sha256: string }) => ({ key, size: bytes.length, etag: opts.sha256 }));

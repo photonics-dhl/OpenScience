@@ -1,6 +1,6 @@
 import type { AuditContext } from '@openscience/observability';
 import type { PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
-import { createAgentSession, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
+import { createAgentSession, getAgentTask, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
 import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
@@ -9,7 +9,7 @@ import { PresentationAssetError } from './errors';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KINDS = ['chart', 'interactive_html', 'image', 'video'] as const;
 export const DETERMINISTIC_PRESENTATION_GENERATOR = 'OpenScience deterministic renderer';
-export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-presentation-v1';
+export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-presentation-v2';
 export type PresentationGenerationKind = (typeof KINDS)[number];
 export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[] }
 export interface PresentationAssetView {
@@ -46,6 +46,19 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
 }
 
 type PresentationScope = { userId: string; researchObjectId: string; versionId: string };
+
+export async function getPresentationTask(deps: AgentDeps, input: PresentationScope & { taskId: string }): Promise<AgentTaskView> {
+  await requireScope(deps.prisma, input);
+  const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
+  const payload = task?.payload;
+  if (!task || task.kind !== 'presentation.generate' || task.session.userId !== input.userId
+    || task.session.researchObjectId !== input.researchObjectId
+    || !payload || typeof payload !== 'object' || Array.isArray(payload)
+    || payload.researchObjectId !== input.researchObjectId || payload.versionId !== input.versionId) {
+    throw new PresentationAssetError('NOT_FOUND', 'Presentation task not found');
+  }
+  return getAgentTask(deps, input);
+}
 type ScopeDb = Pick<Prisma.TransactionClient, 'version' | 'workspace' | 'membership'>;
 const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 
@@ -130,6 +143,16 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
     createdAt: asset.createdAt,
     updatedAt: asset.updatedAt,
   }));
+}
+
+/** Server-only content lookup; storage coordinates must never enter metadata responses. */
+export async function getPresentationAssetForRead(deps: AgentDeps, input: PresentationScope & { assetId: string }): Promise<PresentationAsset> {
+  await requireScope(deps.prisma, input);
+  const asset = await deps.prisma.presentationAsset.findUnique({ where: { id: input.assetId } });
+  if (!asset || asset.researchObjectId !== input.researchObjectId || asset.versionId !== input.versionId) {
+    throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
+  }
+  return asset;
 }
 
 export async function transitionPresentationAsset(deps: AgentDeps, input: {

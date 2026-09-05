@@ -311,6 +311,11 @@ async function updateClaimInTransaction(deps: ArtifactDeps, input: UpdateClaimIn
   });
   if (updated.count !== 1) throw new ClaimEvidenceError('CONCURRENT_UPDATE', 'Claim changed while being updated');
   await touchMutableVersion(deps, input.versionId);
+  if (existing.kind !== kind || existing.statement !== statement || existing.assessment !== assessment
+    || existing.extractionStatus !== 'succeeded'
+    || !sameStringLists(existing.conditions, conditions) || !sameStringLists(existing.limitations, limitations)) {
+    await invalidateClaimPresentations(deps, input);
+  }
   await invalidatePublicationReview(deps, input.versionId);
   await recordAudit(deps, deps.prisma, {
     actorId: input.userId, action: 'claim.update', workspaceId: version.researchObject.workspaceId,
@@ -326,6 +331,21 @@ async function updateClaimInTransaction(deps: ArtifactDeps, input: UpdateClaimIn
   return current;
 }
 
+async function invalidateClaimPresentations(
+  deps: ArtifactDeps,
+  input: { researchObjectId: string; versionId: string; claimId: string },
+): Promise<void> {
+  await deps.prisma.presentationAsset.updateMany({
+    where: {
+      researchObjectId: input.researchObjectId,
+      versionId: input.versionId,
+      sourceClaims: { some: { claimId: input.claimId } },
+      status: { in: ['draft', 'approved'] },
+    },
+    data: { status: 'rejected' },
+  });
+}
+
 async function deleteClaimInTransaction(
   deps: ArtifactDeps,
   input: { userId: string; researchObjectId: string; versionId: string; claimId: string; expectedUpdatedAt: Date },
@@ -338,9 +358,14 @@ async function deleteClaimInTransaction(
     deps.prisma.evidenceRecord.count({ where: { claimId: existing.id } }),
   ]);
   if (children > 0 || evidence > 0) throw new ClaimEvidenceError('DEPENDENT_RECORDS', 'Remove child Claims and Evidence before deleting this Claim');
+  await touchMutableVersion(deps, input.versionId);
+  await invalidateClaimPresentations(deps, input);
+  // Retain the rejected asset and its provenance, but release the Claim's RESTRICT foreign key.
+  await deps.prisma.presentationAssetClaim.deleteMany({ where: {
+    researchObjectId: input.researchObjectId, versionId: input.versionId, claimId: input.claimId,
+  } });
   const deleted = await deps.prisma.claimNode.deleteMany({ where: { id: existing.id, updatedAt: input.expectedUpdatedAt } });
   if (deleted.count !== 1) throw new ClaimEvidenceError('CONCURRENT_UPDATE', 'Claim changed while being deleted');
-  await touchMutableVersion(deps, input.versionId);
   await invalidatePublicationReview(deps, input.versionId);
   await recordAudit(deps, deps.prisma, {
     actorId: input.userId, action: 'claim.delete', workspaceId: version.researchObject.workspaceId,

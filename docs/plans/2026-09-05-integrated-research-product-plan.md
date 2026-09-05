@@ -160,3 +160,25 @@
 
 - UI 440266c 已部署并交用户查看；随后权限补丁 c07c8d1 部署完成，rollback 440266c。最终公网/active 一致、13 容器运行、36/36 与 2/2、无 failed/journal；ECS build/parser/ScanSci/BGE/runtime/retention、CI 与公网 fixtures 16/16 通过。
 - 下一步是来源 Claim 编辑时资产失效、认证私有预览及 RO/Hermes 图解生成闭环；这次交付不等于五段产品全部完成。完整实现与验证证据见 CURRENT handoff 与 progress。
+
+### 图解工作流实施批次（用户已授权继续与真实 PDF 验收）
+
+- 用户允许自主下载开放 PDF、上传验证，并自主选择安装必要开源方案；仍优先既有能力，密钥与用户资料约束不变。
+- 复用现有确定性 renderer、任务队列、资产/版本 API、Next UI 与公开 Gallery；本段暂不需要引入另一个生成或渲染框架。外部布局方案只参考适用结构与许可。
+- 任务 A：在 Claim 的实际内容修改/删除/替换事务中，使当前 draft Version 的关联 draft/approved 展示资产变为 rejected；沿用现有版本 fence 与审核 CAS，禁止改写已发布版本。先补旧图获批/修改竞争、跨版本隔离的失败测试。
+- 任务 B：抽取已有公开资产字节交付为共享 helper；新增 GET /research-objects/:roId/versions/:versionId/presentation-assets/:assetId/content，精确成员作用域可读私有各状态，保留字节上限/hash/安全 SVG，private,no-store + nosniff + sandbox CSP。公开交付原有权限与缓存不变；增加越权/范围/完整性/附件回归。
+- 任务 C：新增 /research-objects/[id]/presentation 页面和工作区/Hermes入口。使用 listVersions UUID、精确 Claim选择、幂等生成、真实任务轮询、资产列表、私有 img 预览及 expectedUpdatedAt 审核。只读或发布版本禁写，错误可重试；任务恢复核对当前作用域，切换版本清除旧结果。中文/英文和390px均可完成。
+- 任务 D：选择可合法获取且适合解析的论文，记录来源/许可与主题；复用既有真实验收脚本和受控测试身份，执行下载→上传→解析→确认→版本/Claim→生成→预览→批准。截取真实页面效果，核对来源内容而非只看响应成功；结果保留可供用户查看，公开发布按已有许可/审批流程。
+- 最终：相关 RED/GREEN、全仓 build/typecheck/lint/test、真实浏览器、独立安全/UI复审，合入main后按canonical服务器流程验收部署；记录具体已完成路径与剩余视频/语音范围。
+
+### 真实论文验收发现与修正
+
+- 真实来源为 Lin 等 All-Optical Machine Learning Using Diffractive Deep Neural Networks，https://arxiv.org/abs/1804.08711v2；下载 PDF 4,000,593 bytes / 20 pages，仅用于受控私有研究验收，不公开再分发全文。现有 pdfplumber 可用，无新增第三方安装。
+- 已由真实页面完成上传、Hermes review 与 Editor commit。自动提取 problem/insight/limitations；method/results/reproducibility 由论文核对后人工补齐，字段明确保留 Human-reviewed supplement。91.75% 是 10,000 个测试样本的数值准确率；88% 是 50 个经过选择的物理样本与数值分类的一致率，不能混写。
+- 真实解析确认只写 SDF，不自动创建 Claims；现有 Editor 也没有 Claim 创建入口。因此任务 C 加入核心主张表单，复用既有 POST claims 与客户端 UUID 幂等，保留人工来源及 missing 证据状态。不能后台植入 Claims 再宣称页面闭环。
+- 恢复图解任务新增 exact RO/version/task GET；旧个人任务 GET 不提供足够作用域保证。页面异步完成必须检查当前作用域，版本切换清空选择，所有写操作要求 draft 与内容编辑角色；审核冲突刷新实际 CAS，PATCH 的部分 DTO 不得替换完整资产条目。
+- 真实脚本曾在 Editor hydrate/load 前点击而超时，等待实际研究标题后成功。Editor 提交输入与按钮改为加载完成才启用。真实证据保留于 ignored apps/web/test/visual/out/chart-workflow/；后半段图解仍待修正版部署后验证。
+- 后续核实 Editor 没有携带导入源文件。Hermes 的继续编辑带 ingestionTask，Editor 校验同 RO 且 confirmed 后将文件并入提交；先读取最近版本 manifest，按 logicalPath 合并，避免遗漏旧附件。E2E 覆盖已有 A.pdf + 新 B.pdf 均保留和外部研究任务拒绝。
+- Renderer v2 改为完整换行的主张卡片，标签不再声称科学结论已验证；v1 保持安全内联读取兼容。有效极端输入能生成数十万像素高 SVG，原字节上限不足以限制绘制尺寸，因此绘制高度上限 8192，超限明确要求减少主张/缩短文本，不静默删去限定条件。19 项 renderer 回归通过；本地真实论文内容与中英文截图检查无横向溢出。
+- arXiv 页面许可为 non-exclusive distribute grant to arXiv（https://arxiv.org/licenses/nonexclusive-distrib/1.0/license.html），不是全文开放再许可；验收论文留在受控私有空间，用户可查看导出的自写摘要图解和页面证据。
+- 提取片段修正：原实现将头尾已有文本和中段重复命中的关键词计入八次候选额度，可能不再选取正文关键结果。两项 RED 回归复现后，跳过已覆盖锚点，保持 24,000 正文字符与偏移合同；27 项 extractor 测试通过。本地 PDF 文本旧片段缺 88% 结果，新片段包含；91.75% 两者都有。未取得生产 canonical parser 文本，不能声称已证明三个空字段的唯一根因；部署后对同一论文重跑比较。

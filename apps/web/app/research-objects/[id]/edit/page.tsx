@@ -17,9 +17,11 @@ import { useOptionalHermesWorkspaceStage } from '../../../../components/hermes/H
 import {
   createCommit,
   getAgentTask,
+  getIngestionTask,
   getResearchObject,
   getVersionDiff,
   listVersions,
+  apiRequest,
   retryAgentTask,
   submitExtractTask,
   updateSdf,
@@ -62,10 +64,17 @@ interface VersionRow {
   status: string;
 }
 
-export default function EditorPage({ params }: { params: { id: string } }) {
+type EditorPageProps = { params: { id: string }; searchParams?: { ingestionTask?: string | string[] } };
+
+export default function EditorPage(props: EditorPageProps) {
+  return <EditorWorkspace key={`${props.params.id}:${props.searchParams?.ingestionTask ?? ''}`} {...props} />;
+}
+
+function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const t = useTranslations('editor');
   const locale = useLocale() as Locale;
   const roId = params.id;
+  const ingestionTaskId = typeof searchParams?.ingestionTask === 'string' ? searchParams.ingestionTask : '';
   const editorSuggestion = useMemo<HermesGuideSuggestion>(() => ({
     bodyKey: 'guide.continue.body',
     href: `/research-objects/${encodeURIComponent(roId)}/edit`,
@@ -104,6 +113,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   // 加载 RO + SDF + 版本
   useEffect(() => {
     let cancelled = false;
+    setEditorLoaded(false);
     void (async () => {
       try {
         const ro = await getResearchObject(roId);
@@ -120,6 +130,24 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           dispatch({ type: 'init', core, version: ro.researchObject.version });
         }
         const vs = await listVersions(roId);
+        if (cancelled) return;
+        let inheritedArtifacts: ArtifactReference[] = [];
+        const latest = vs.versions[0];
+        if (latest) {
+          const previous = await apiRequest<{ version: { versionId: string; snapshot: { artifacts: ArtifactReference[] } } }>(`/api/versions/${encodeURIComponent(latest.versionId)}`);
+          if (cancelled) return;
+          if (previous.version.versionId !== latest.versionId) throw new Error('Version snapshot mismatch');
+          inheritedArtifacts = previous.version.snapshot.artifacts.map(({ artifactId, logicalPath }) => ({ artifactId, logicalPath }));
+        }
+        if (ingestionTaskId) {
+          const imported = await getIngestionTask(ingestionTaskId);
+          if (cancelled) return;
+          if (imported.researchObjectId !== roId || imported.task.state !== 'confirmed') {
+            throw new Error(locale === 'zh' ? '这份文件尚未在当前研究中确认。请返回 Hermes 完成确认。' : 'This file has not been confirmed in this research. Return to Hermes to review it.');
+          }
+          inheritedArtifacts = [...inheritedArtifacts.filter((item) => item.logicalPath !== imported.task.logicalPath), { artifactId: imported.task.artifactId, logicalPath: imported.task.logicalPath }];
+        }
+        setArtifacts(inheritedArtifacts);
         if (!cancelled) {
           setVersions(vs.versions ?? []);
           setEditorLoaded(true);
@@ -129,7 +157,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [roId]);
+  }, [roId, ingestionTaskId, locale]);
 
   // 自动保存草稿（§18.3，debounce 1s）
   useEffect(() => {
@@ -446,13 +474,14 @@ export default function EditorPage({ params }: { params: { id: string } }) {
                 </button>
                 <input
                   aria-label={t('commitMessage')}
+                  disabled={!editorLoaded || committing}
                   className="h-9 w-20 min-w-0 border border-os-rule-dark bg-os-black-1 px-2 text-sm text-os-paper placeholder:text-os-muted-dark sm:w-40 sm:px-3"
                   data-reading-role="control"
                   placeholder={t('commitMessage')}
                   value={commitMsg}
                   onChange={(event) => setCommitMsg(event.target.value)}
                 />
-                <button className="min-h-9 rounded-panel border-0 bg-os-vermilion px-3 font-semibold text-os-black-0 disabled:opacity-40" onClick={handleCommit} disabled={committing}><span className="hidden sm:inline">{t('commit')}</span><span className="sm:hidden">{t('commitShort')}</span></button>
+                <button className="min-h-9 rounded-panel border-0 bg-os-vermilion px-3 font-semibold text-os-black-0 disabled:opacity-40" onClick={handleCommit} disabled={committing || !editorLoaded}><span className="hidden sm:inline">{t('commit')}</span><span className="sm:hidden">{t('commitShort')}</span></button>
               </>
             }
             objectId={roId}

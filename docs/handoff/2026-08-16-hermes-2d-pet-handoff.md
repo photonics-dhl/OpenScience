@@ -1,10 +1,10 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-05 +08。** UI 修订与展示资产写权限修复均已上线；完整多模态产品仍按段推进。
+> **CURRENT active-memory，2026-09-05 +08。** 生产仍为 c07c8d1；图解闭环候选开发中，真实论文已完成上传/确认/版本创建，未完成图解后半段。
 
 ## Version tuple and production truth
 
-- Worktree: E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance；branch: codex/product-workflow-design；文档记录时 application parent HEAD: c07c8d1（PR #84），后续 docs-only HEAD 从 Git 读取。
+- Worktree: E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance；branch: codex/product-workflow-design；本地 HEAD 478d512（docs），工作树含未提交图解候选；不能当成已部署。
 - Production source / active marker / public /__release: c07c8d15e5ba3b722577f42d6ad72af8c83189fe。
 - Rollback: 440266c53325044f2bdff21b1ebfe1be6b792f71。Core/search migrations: 36/36、2/2。
 - 13 个容器运行；API/Worker/Parser/ScanSci/BGE 与数据服务健康；公网/loopback 正常，无 failed marker 或 deploy journal；canonical transaction 与 retention 完成。
@@ -32,12 +32,12 @@
 - 不读取/打印 .env 或 Cookie；不安装第二 Chromium/BGE、FlareSolverr、全局包，不 broad prune。生产操作遵循项目脚本；发布已有用户授权。
 - ScanSci OA 下载存在连接速度波动；本轮成功下载完整 24,671,920 bytes，SHA d57dc94c…f484a，owned canary 清理为 0。
 - c07 首次发布在 mutation 前因 runtime entries 96518→96515 拦截；三个路径未定位。旧报告已保留，正式重验与完整重建/镜像/报告校验稳定后重试成功；不得将此描述为已定位并修复构建漂移。
-- 生成完成后再编辑 Claim，仍可能使已有资产过时；批准 UI 前必须增加关联资产失效处理。提交前检查已覆盖生成过程中的 Claim 改动。
+- 候选全部本地完成，独立后端/UI/renderer/extractor 复审无产品阻断。全仓 build/typecheck/lint/test 通过；浏览器98/99后修正唯一测试时序问题，图解9/9复验通过。源文件进入提交时保留原附件，原有独立 search DB 集成8例按配置未跑。尚未部署。
 - 被拒绝的 Worker 完成可能留下无引用对象；媒体沿用 charged-on-submit，撤权后排队任务可能被拒绝但已计费。图解 chart 为现有确定性主张摘要卡片。
 - MiniMax image/video 仍是管理员限定、默认关闭能力；ScienceDirect 仅等待官方授权条件，不恢复绕过方案。
 
 ## Next action and read first
 
-1. 按 docs/plans/2026-09-05-integrated-research-product-plan.md 推进图解：来源 Claim 修改时使资产失效 → 认证私有内容预览 → 版本/Claim 选择、生成、进度与明确批准 → RO/Hermes 入口。
+1. 合入候选，CI完整99/服务器精确验收后部署。ignored chart-workflow/real-paper.mjs bind 通过Hermes续接把源PDF带入新commit；chart 通过真实Claim表单→生成→预览→批准；reextract 对同一PDF复验摘要窗口改进。real-state.json 含受控私有RO/version，不含凭据。不要后台植入 Claims 冒充 UI 闭环。
 2. 复用现有 presentation-assets API/domain/Worker 与公开 Gallery。私有 SVG 必须精确作用域认证、大小/完整性检查、安全 SVG、private/no-store 与 sandbox CSP；使用 img，不注入 SVG；HTML 暂保持附件。
 3. 新 session 先读 AGENTS、本 handoff、需求基线相关章节、短 progress；涉及生产重新 fetch/checkup 并核对 active/public/rollback，不把 docs HEAD 或根目录旧 main 当生产源。
