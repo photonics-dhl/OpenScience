@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Docs maintenance worktree / branch / observed parent HEAD: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance` / `codex/product-workflow-design` / `6478aa8`（PR #78）；后续文档 HEAD 以 Git 实时值为准，且不改变下列 production application release。
+- Worktree / branch / observed parent HEAD: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance` / `codex/product-workflow-design` / `440266c`（PR #83）；后续 Git HEAD 以实时值为准，候选与生产分开记录。
 - Production application release / rollback: `6478aa8ef6045ecef93127c6e3183fc05acb946f` / `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`；core/search `36/36` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 12/12。Tasks 10–12 已通过真实 ECS 验收；下一主题已确认为工作区—Hermes—RO 与多模态产品交付。
 
@@ -12,7 +12,9 @@
 
 - 用户否决首批布局/视觉，要求参考成熟方案优化后继续流程。修订候选解决 2048px 页面仅 768px 宽、默认列表/缩进、巨大标题和长项目列表；采用居中自适应网格、紧凑资料/认证表单、可展开最近项目、统一按钮与快捷入口。
 - 同时修复 Dashboard queued/running/failed task 的不存在 /ingest 路由，改用真实 Hermes task 页面与准确的查看文案。无 API、依赖或迁移变化。
-- UI 主修订 483+5 单测、全仓 build/lint、88-case matrix 通过。最后的 Dashboard 标题压缩触发 detached Hermes 菜单重叠：CI 33939580194 失败，本地 3/3 复现；PR #82 撤回该 6 行 CSS 与 wrapper 后同例 3/3 通过。候选 main 833be32646c2e7b1dc457c08c003d0d32db9831e，精确 parser acceptance 通过；CI 33940323736 的 Product88 通过，但既有 blink-single 连续动作门禁失败（此前 docs-only 同样出现），根因已确认：unsafe patrol 的固定 blink-single 别名与相邻 micro beat 重复。已实现 cursor+1 回退，23/23 回归与独立复审通过；最终 build/gate 进行中，未以偶然 rerun 通过冒充修复。上一候选 000120b 的发布卡在隔离 OA 下载；核实并 SIGINT 仅该探针后 canonical rollback 已恢复 6478aa8，公网/marker 一致，journal/failed marker 均不存在。不要并发启动另一生产事务；先检查 journal/failed marker 和完整回滚结果。
+- UI 最终候选 `440266c53325044f2bdff21b1ebfe1be6b792f71`：全仓 build/typecheck/lint/test、本地 Hermes gate 与 CI 33941432761 GREEN（Product88 + Hermes）；服务器 build 与精确 Parser acceptance 通过。实际 ScanSci OA 复验完整 24,671,920 bytes、SHA d57dc94c…f484a、cleanupCount 0；canonical 部署进行中，未完成前生产仍记录 6478aa8。
+- PR #82 已撤回导致 detached 菜单重叠的最后六行 Dashboard 压缩；PR #83 修复 unsafe patrol 固定 blink-single 与相邻动作重复。早先 000120b 事务因 OA 慢下载中止并成功回滚，无损恢复；本次下载仍有速度波动，不能以 HEAD 请求替代真实下载验收。
+- 后续图解写权限补丁已实现：仅内容编辑角色和 draft Version 可写；Worker 完成时重验权限、任务与 Claim 内容，复用 Serializable draft fence。domain 12、worker 16、API 3，完整 build/typecheck/lint/test 与独立复审通过；尚未提交部署。私有草稿预览和图解 UI 尚未实现；后续 Claim 编辑使旧资产失效仍需先补。
 
 ## 2026-09-05 — Integrated product scope confirmed
 

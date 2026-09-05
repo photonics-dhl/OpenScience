@@ -265,6 +265,8 @@ export {
   parsePresentationGenerationPayload,
   DETERMINISTIC_PRESENTATION_GENERATOR,
   DETERMINISTIC_PRESENTATION_GENERATOR_VERSION,
+  requirePresentationWriteScope,
+  withPresentationAssetWrite,
   listPresentationAssets,
   submitPresentationGeneration,
   transitionPresentationAsset,

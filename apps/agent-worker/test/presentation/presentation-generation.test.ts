@@ -18,7 +18,81 @@ const claims = [
   { id: CLAIM_A, kind: 'core', statement: 'Transfer completes in 43 fs', assessment: 'supported', conditions: [], limitations: [], extractionStatus: 'succeeded' },
 ];
 
+function scopeTables() {
+  return {
+    version: { findUnique: async () => ({ id: VERSION, researchObjectId: RO, status: 'draft', researchObject: { id: RO, workspaceId: WORKSPACE } }), updateMany: async () => ({ count: 1 }) },
+    workspace: { findUnique: async () => ({ id: WORKSPACE, status: 'active' }) },
+  };
+}
+
+function authorityFixture() {
+  const authority = { role: 'author', version: 'draft', workspace: 'active', member: true, claimStatus: 'succeeded', statement: null as string | null };
+  const rows: any[] = [];
+  const prisma: any = {
+    agentTask: { findUnique: async () => ({ id: TASK, kind: 'presentation.generate', status: 'running', session: { userId: USER, researchObjectId: RO, researchObject: { id: RO, workspaceId: WORKSPACE, workspace: { status: authority.workspace } } } }) },
+    version: { findUnique: async () => ({ id: VERSION, researchObjectId: RO, status: authority.version, researchObject: { id: RO, workspaceId: WORKSPACE } }), updateMany: async ({ where }: any) => ({ count: authority.version === where.status ? 1 : 0 }) },
+    workspace: { findUnique: async () => ({ id: WORKSPACE, status: authority.workspace }) },
+    membership: { findUnique: async () => authority.member ? { userId: USER, workspaceId: WORKSPACE, role: authority.role } : null },
+    claimNode: { findMany: async () => claims.map((claim) => ({ ...claim, statement: authority.statement ?? claim.statement, extractionStatus: authority.claimStatus })) },
+    presentationAsset: { findUnique: async () => null, create: async ({ data }: any) => { const row = { ...data, status: 'draft' }; rows.push(row); return row; } },
+    presentationAssetClaim: { createMany: async () => ({ count: 2 }) },
+    $transaction: async (work: (tx: any) => Promise<unknown>) => work(prisma),
+  };
+  const putObject = vi.fn(async () => ({ key: 'stored', size: 200, etag: 'stored' }));
+  const task = { id: TASK, payload: { schemaVersion: 1, researchObjectId: RO, versionId: VERSION, kind: 'chart', sourceClaimIds: [CLAIM_A, CLAIM_B] } };
+  return { authority, rows, prisma, putObject, task, deps: { prisma, storage: { putObject } } };
+}
+
 describe('deterministic presentation generation', () => {
+  it.each(['viewer', 'reviewer'])('blocks %s before generating or storing output', async (role) => {
+    const ctx = authorityFixture();
+    ctx.authority.role = role;
+    await expect(createPresentationGenerationHandler()(ctx.deps as never, ctx.task)).rejects.toThrow();
+    expect(ctx.putObject).not.toHaveBeenCalled();
+    expect(ctx.rows).toHaveLength(0);
+  });
+
+  it.each(['published', 'revised'])('blocks immutable %s versions before storage', async (status) => {
+    const ctx = authorityFixture();
+    ctx.authority.version = status;
+    await expect(createPresentationGenerationHandler()(ctx.deps as never, ctx.task)).rejects.toThrow();
+    expect(ctx.putObject).not.toHaveBeenCalled();
+  });
+
+  it.each(['demoted', 'revoked', 'published', 'archived', 'claim-invalid', 'claim-edited'])('rejects completion when authority changes after rendering: %s', async (change) => {
+    const ctx = authorityFixture();
+    ctx.putObject.mockImplementation(async () => {
+      if (change === 'demoted') ctx.authority.role = 'viewer';
+      if (change === 'revoked') ctx.authority.member = false;
+      if (change === 'published') ctx.authority.version = 'published';
+      if (change === 'archived') ctx.authority.workspace = 'archived';
+      if (change === 'claim-invalid') ctx.authority.claimStatus = 'failed';
+      if (change === 'claim-edited') ctx.authority.statement = 'Revised conclusion with succeeded extraction status';
+      return { key: 'stored', size: 200, etag: 'stored' };
+    });
+    await expect(createPresentationGenerationHandler()(ctx.deps as never, ctx.task)).rejects.toThrow();
+    expect(ctx.rows).toHaveLength(0);
+  });
+
+  it('rejects completion when publication wins the version row fence after its scope read', async () => {
+    const ctx = authorityFixture();
+    ctx.prisma.version.updateMany = async () => { ctx.authority.version = 'published'; return { count: 0 }; };
+    await expect(createPresentationGenerationHandler()(ctx.deps as never, ctx.task)).rejects.toThrow();
+    expect(ctx.rows).toHaveLength(0);
+  });
+
+  it('does not persist media if platform-admin authority is revoked after the provider returned', async () => {
+    const ctx = authorityFixture();
+    let platformRole = 'platform_admin';
+    ctx.prisma.user = { findUnique: async () => ({ platformRole }) };
+    const generate = vi.fn(async () => ({ bytes: Buffer.alloc(64), contentType: 'image/webp', generator: 'configured-test', generatorVersion: '1', promptHash: null }));
+    ctx.putObject.mockImplementation(async () => { platformRole = 'user'; return { key: 'stored', size: 64, etag: 'stored' }; });
+    const handler = createPresentationGenerationHandler({ mediaGenerator: { generate } });
+    await expect(handler(ctx.deps as never, { ...ctx.task, payload: { ...ctx.task.payload, kind: 'image' } })).rejects.toThrow(/platform administrator/);
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(ctx.rows).toHaveLength(0);
+  });
+
   it('produces byte-identical escaped SVG and no-script HTML for reordered Claims', () => {
     const svg = generateClaimChartSvg(claims);
     const html = generateClaimInteractiveHtml(claims);
@@ -34,9 +108,10 @@ describe('deterministic presentation generation', () => {
     const rows: Array<Record<string, unknown>> = [];
     const putObject = vi.fn(async (key: string, bytes: Buffer, opts: { sha256: string }) => ({ key, size: bytes.length, etag: opts.sha256 }));
     const prisma: any = {
+      ...scopeTables(),
       agentTask: { findUnique: async () => ({
         id: TASK, kind: 'presentation.generate', status: 'running',
-        session: { userId: USER, researchObject: { id: RO, workspaceId: WORKSPACE, workspace: { status: 'active' } } },
+        session: { userId: USER, researchObjectId: RO, researchObject: { id: RO, workspaceId: WORKSPACE, workspace: { status: 'active' } } },
       }) },
       membership: { findUnique: async () => ({ userId: USER, workspaceId: WORKSPACE, role: 'author' }) },
       claimNode: { findMany: async () => claims },
@@ -62,7 +137,8 @@ describe('deterministic presentation generation', () => {
   it('fails closed for generated image and video without a configured AI Gateway media capability', async () => {
     const handler = createPresentationGenerationHandler();
     const prisma: any = {
-      agentTask: { findUnique: async () => ({ id: TASK, kind: 'presentation.generate', status: 'running', session: { userId: USER, researchObject: { id: RO, workspaceId: WORKSPACE, workspace: { status: 'active' } } } }) },
+      ...scopeTables(),
+      agentTask: { findUnique: async () => ({ id: TASK, kind: 'presentation.generate', status: 'running', session: { userId: USER, researchObjectId: RO, researchObject: { id: RO, workspaceId: WORKSPACE, workspace: { status: 'active' } } } }) },
       membership: { findUnique: async () => ({ userId: USER, workspaceId: WORKSPACE, role: 'author' }) },
       user: { findUnique: async () => ({ id: USER, platformRole: 'platform_admin' }) },
       claimNode: { findMany: async () => [claims[1]] },
@@ -77,7 +153,8 @@ describe('deterministic presentation generation', () => {
     const generate = vi.fn();
     const handler = createPresentationGenerationHandler({ mediaGenerator: { generate } });
     const prisma: any = {
-      agentTask: { findUnique: async () => ({ id: TASK, kind: 'presentation.generate', status: 'running', session: { userId: USER, researchObject: { id: RO, workspaceId: WORKSPACE, workspace: { status: 'active' } } } }) },
+      ...scopeTables(),
+      agentTask: { findUnique: async () => ({ id: TASK, kind: 'presentation.generate', status: 'running', session: { userId: USER, researchObjectId: RO, researchObject: { id: RO, workspaceId: WORKSPACE, workspace: { status: 'active' } } } }) },
       membership: { findUnique: async () => ({ userId: USER, workspaceId: WORKSPACE, role: 'author' }) },
       user: { findUnique: async () => ({ id: USER, platformRole: 'user' }) },
       claimNode: { findMany: async () => [claims[1]] },

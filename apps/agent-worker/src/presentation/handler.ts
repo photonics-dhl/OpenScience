@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto';
-import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
 import { requirePresentationMediaGenerator, type PresentationMediaGenerator } from './minimax-admin';
+
+function presentationClaimContent(claims: readonly PresentationClaim[]): string {
+  return JSON.stringify(canonicalPresentationClaims(claims).map(({ id, kind, statement, assessment, conditions, limitations, extractionStatus }) => ({
+    id, kind, statement, assessment, conditions, limitations, extractionStatus,
+  })));
+}
 
 export function createPresentationGenerationHandler(options: { mediaGenerator?: PresentationMediaGenerator } = {}): TaskHandler {
   return async (deps, task) => {
@@ -17,8 +23,8 @@ export function createPresentationGenerationHandler(options: { mediaGenerator?: 
     if (!owner || owner.kind !== 'presentation.generate' || owner.status !== 'running' || !researchObject
       || owner.session.userId == null || researchObject.id !== payload.researchObjectId
       || researchObject.workspace.status !== 'active') throw new Error('[blocked] presentation task authority is invalid');
-    const membership = await deps.prisma.membership.findUnique({ where: { workspaceId_userId: { workspaceId: researchObject.workspaceId, userId: owner.session.userId } } });
-    if (!membership) throw new Error('[blocked] workspace membership revoked');
+    const scope = { userId: owner.session.userId, researchObjectId: payload.researchObjectId, versionId: payload.versionId };
+    await requirePresentationWriteScope(deps.prisma, scope);
     const existing = await deps.prisma.presentationAsset.findUnique({ where: { id: task.id }, include: { sourceClaims: true } });
     if (existing) return { assetId: existing.id, kind: existing.kind, status: existing.status, contentHash: existing.contentHash, sourceClaimIds: payload.sourceClaimIds };
     const claimRows = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
@@ -49,7 +55,23 @@ export function createPresentationGenerationHandler(options: { mediaGenerator?: 
     const contentHash = createHash('sha256').update(bytes).digest('hex');
     const objectKey = `presentation/${payload.researchObjectId}/${payload.versionId}/${contentHash}.${extension}`;
     await deps.storage.putObject(objectKey, bytes, { contentType, sha256: contentHash });
-    const asset = await deps.prisma.$transaction(async (tx) => {
+    const asset = await withPresentationAssetWrite(deps.prisma, scope, async (tx) => {
+      const currentTask = await tx.agentTask.findUnique({ where: { id: task.id }, include: { session: true } });
+      if (!currentTask || currentTask.kind !== 'presentation.generate' || currentTask.status !== 'running'
+        || currentTask.session.userId !== scope.userId || currentTask.session.researchObjectId !== payload.researchObjectId) {
+        throw new Error('[blocked] presentation task authority changed');
+      }
+      if (payload.kind === 'image' || payload.kind === 'video') {
+        const currentUser = await tx.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
+        if (currentUser?.platformRole !== 'platform_admin') throw new Error('[blocked] presentation media generation requires a platform administrator');
+      }
+      const currentClaims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
+      const currentIds = new Set(currentClaims.map((claim) => claim.id));
+      if (currentClaims.length !== payload.sourceClaimIds.length || payload.sourceClaimIds.some((id) => !currentIds.has(id))
+        || currentClaims.some((claim) => claim.extractionStatus !== 'succeeded')
+        || presentationClaimContent(currentClaims as PresentationClaim[]) !== presentationClaimContent(claims)) {
+        throw new Error('[blocked] source Claims changed before presentation completion');
+      }
       const created = await tx.presentationAsset.create({ data: {
         id: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind,
         objectKey, contentHash, generator, generatorVersion, promptHash, label: PRESENTATION_ASSET_LABEL,
