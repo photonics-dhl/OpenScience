@@ -5,13 +5,13 @@
 ## Goal and state
 
 - 产品目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索、受控外部全文与可版本化展示资产。
-- Taskmaster `hermes-research-intelligence`：12/12 done。没有遗留的 Task 10–12 实施动作；下一产品任务待用户选择。
+- Taskmaster `hermes-research-intelligence`：12/12 done。没有遗留的 Task 10–12 实施动作；下一主题已确认：工作区—Hermes—RO 完整流程、论文图像/视频及 Hermes 语音修改；成熟方案和现有能力优先，按段验收。
 - ScienceDirect 仅是官方授权条件尚未满足的单站增强项，不是 ScanSci 或机构访问总体失败；不要恢复 Cloudflare 绕过、noVNC、aTrust 容器或第二 Chromium。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Docs maintenance branch / observed parent HEAD: `codex/server-cache-maintenance` / `3ad53b11e08df55701e516d28baed59eea15b1cc`；后续 docs-only HEAD 以 Git 实时值为准，不得替代或冒充下列 production application source。
+- Docs maintenance branch / observed parent HEAD: `codex/product-workflow-design` / `c0a162d`；后续 docs-only HEAD 以 Git 实时值为准，不得替代或冒充下列 production application source。
 - Production application source / immutable release: `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`
 - Rollback: `0aaf52fed29e79bb19b15517ba9ef50545510f72`
 - Core/search migrations: `36/36` / `2/2`。
@@ -34,6 +34,9 @@
 
 ## Next action and read first
 
-1. 用户选择下一项产品任务；不要继续旧 Task 10–12 或再次做认证试验。
+1. 按 `docs/plans/2026-09-05-integrated-research-product-plan.md` 完成首批候选全仓验证、浏览器矩阵与部署验收；新 design 记录已批准范围，效果未验收。不要继续旧 Task 10–12。
 2. 新任务先读 `AGENTS.md`、本 handoff、`docs/progress.md`，再按 `project_index.md` 定向读取需求基线相关章节。
 3. 涉及生产时重新核对 active/public/rollback；文档 HEAD 不得冒充 application release。
+
+- 同事分支 frontend/nanqing 已确认，每日 10:00 巡检，用户授权选择性合并优质前端成果并部署。
+- 本轮首批代码候选已实现：Dashboard 待确认优先、RO Hermes 任务入口/会话绑定/范围查询、同事个人主页与设置分离。独立复审无阻断；本地测试/构建与浏览器矩阵收口中，未部署。无新依赖或迁移。

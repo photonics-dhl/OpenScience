@@ -40,7 +40,7 @@ async function mockWorkspace(page: Page) {
   await page.route('**/api/csrf-token', (route) => json(route, { csrfToken: 'guide-token' }));
   await page.route('**/api/workspaces**', (route) => json(route, { workspaces: [{ id: 'workspace-guide', name: 'Ada lab' }] }));
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { researchObjects: [] }));
-  await page.route('**/api/ingestion?actionable=true', (route) => json(route, { tasks: [] }));
+  await page.route('**/api/ingestion?actionable=true*', (route) => json(route, { tasks: [] }));
   await page.route('**/api/agent/tasks**', (route) => json(route, { tasks: [] }));
   await page.route('**/api/research-objects/ro-guide/versions', (route) => json(route, { versions: [] }));
   await page.route('**/api/research-objects/ro-guide', (route) => json(route, { researchObject: {

@@ -234,7 +234,7 @@ export function getAcademicIdentityStatus(): Promise<AcademicIdentityStatus> {
 }
 
 export function beginOrcidConnection(): Promise<{ authorizationUrl: string }> {
-  return request('/api/auth/orcid/start', { method: 'POST', body: JSON.stringify({ returnTo: '/settings' }) });
+  return request('/api/auth/orcid/start', { method: 'POST', body: JSON.stringify({ returnTo: '/me' }) });
 }
 
 export function requestInstitutionEmailCode(email: string): Promise<{
@@ -264,6 +264,10 @@ export interface DashboardTaskApi {
   state: IngestionTaskState;
   retryCount: number;
   error: string | null;
+}
+
+export async function listResearchIngestionTasks(researchObjectId: string): Promise<{ tasks: DashboardTaskApi[] }> {
+  return request(`/api/ingestion?actionable=true&researchObjectId=${encodeURIComponent(researchObjectId)}`);
 }
 
 export async function getDashboardOverview(): Promise<{
@@ -831,11 +835,11 @@ export interface WorkspaceGuideResult {
   needsMoreInformation: boolean;
 }
 
-export async function createWorkspaceGuideSession(title: string, idempotencyKey: string): Promise<{ session: { id: string } }> {
+export async function createWorkspaceGuideSession(title: string, idempotencyKey: string, researchObjectId?: string): Promise<{ session: { id: string } }> {
   return request('/api/agent/sessions', {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({ kind: 'workspace.guide', title: title.slice(0, 200) }),
+    body: JSON.stringify({ kind: 'workspace.guide', title: title.slice(0, 200), ...(researchObjectId ? { researchObjectId } : {}) }),
   });
 }
 

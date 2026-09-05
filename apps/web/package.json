@@ -10,7 +10,7 @@
     "test": "vitest run && node --test test/hermes-cubism-export-contract.test.mjs test/hermes-live2d-source-art.test.mjs",
     "test:e2e": "playwright test --config playwright.config.ts",
     "test:e2e:signup": "playwright test --config playwright.signup.config.ts",
-    "test:release": "playwright test product-release.spec.ts --config playwright.release.config.ts",
+    "test:release": "playwright test product-release.spec.ts academic-identity-recovery.spec.ts research-continuation.spec.ts --config playwright.release.config.ts",
     "test:claim-first-release": "node test/visual/claim-first-public-ro-gate.mjs",
     "test:hermes-release": "node test/visual/hermes-release-gate.mjs",
     "test:hermes-companion-release": "node test/visual/hermes-release-gate.mjs",

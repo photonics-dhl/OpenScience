@@ -160,14 +160,19 @@ const ACTIONABLE_INGESTION_STATES = [
   'queued', 'uploading', 'stored', 'parsing', 'needs_review', 'failed_retryable', 'failed_blocked',
 ] as const;
 
-/** Lists only the caller's current ingestion work so Dashboard links use real IngestionTask ids. */
+/** Dashboard defaults to caller-owned work; an authorized RO scope includes its members' work. */
 export async function listActionableIngestionTasks(
   deps: IngestionDeps,
-  input: { userId: string },
+  input: { userId: string; researchObjectId?: string },
 ): Promise<ActionableIngestionTaskView[]> {
+  if (input.researchObjectId !== undefined) {
+    const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
+    if (!ro) throw new IngestionError('INGESTION_NOT_FOUND', 'Research object not found');
+    await requireMembership(deps, ro.workspaceId, input.userId);
+  }
   const tasks = await deps.prisma.ingestionTask.findMany({
     where: {
-      batch: { userId: input.userId },
+      batch: input.researchObjectId === undefined ? { userId: input.userId } : { researchObjectId: input.researchObjectId },
       state: { in: [...ACTIONABLE_INGESTION_STATES] },
     },
     include: { artifact: true, batch: { include: { researchObject: true } } },

@@ -88,6 +88,7 @@ import { ResearchIdentityPanel } from '../components/auth/ResearchIdentityPanel'
 import { SignupCodeForm, validateSignupPassword } from '../components/auth/SignupCodeForm';
 import { applyProfileTokenDraft } from '../components/auth/ResearchProfileFields';
 import { ContinueResearch } from '../components/dashboard/ContinueResearch';
+import { ResearchWorkspaceNav } from '../components/research/ResearchWorkspaceNav';
 import { HermesTaskRail } from '../components/dashboard/HermesTaskRail';
 import { ImportStage } from '../components/dashboard/ImportStage';
 import { ResearchList } from '../components/dashboard/ResearchList';
@@ -96,6 +97,30 @@ import NewResearchObjectPage from '../app/research-objects/new/page';
 afterEach(() => {
   vi.unstubAllGlobals();
   replace.mockReset();
+});
+
+describe('research continuation', () => {
+  it('keeps Hermes discoverable inside the RO with its own active navigation state', () => {
+    const markup = renderToStaticMarkup(createElement(ResearchWorkspaceNav, { active: 'hermes', objectId: 'ro-a' }));
+    expect(markup).toContain('href="/research-objects/ro-a/hermes"');
+    expect(markup.match(/aria-current="page"/g)).toHaveLength(1);
+  });
+  const research = { id: 'ro-a', title: 'Current research', publicId: 'OSR-A', versionNo: 1, status: 'draft', pendingCount: 2 };
+  const task = (id: string, researchObjectId: string, state: string) => ({ id, researchObjectId, state, researchTitle: 'Research', logicalPath: 'paper.pdf', retryCount: 0, error: null });
+  it('continues the current RO review before other pending work', () => {
+    const markup = renderToStaticMarkup(createElement(ContinueResearch, { research, tasks: [task('foreign', 'ro-b', 'needs_review'), task('failed', 'ro-a', 'failed_retryable'), task('review', 'ro-a', 'needs_review')] }));
+    expect(markup).toContain('/research-objects/ro-a/hermes?task=review');
+    expect(markup).not.toContain('task=foreign');
+  });
+  it('opens the task hub when attention is required but no task detail is loaded', () => {
+    const markup = renderToStaticMarkup(createElement(ContinueResearch, { research }));
+    expect(markup).toContain('href="/research-objects/ro-a/hermes"');
+  });
+  it('keeps the editor as the next step when no work needs attention', () => {
+    const markup = renderToStaticMarkup(createElement(ContinueResearch, { research: { ...research, pendingCount: 0 }, tasks: [task('done', 'ro-a', 'confirmed')] }));
+    expect(markup).toContain('href="/research-objects/ro-a/edit"');
+    expect(markup).not.toContain('task=done');
+  });
 });
 
 describe('auth API contract', () => {
@@ -388,7 +413,7 @@ describe('dashboard product states', () => {
 
     expect(markup).toContain('Transient-state spectroscopy');
     expect(markup).toContain('OSR-2026-000123');
-    expect(markup).toContain('href="/research-objects/ro-1/edit"');
+    expect(markup).toContain('href="/research-objects/ro-1/hermes"');
     expect(markup).toContain('data-continuation-priority="primary"');
   });
 

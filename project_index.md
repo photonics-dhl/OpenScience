@@ -1,7 +1,24 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-05 +08）：** docs maintenance branch / observed parent HEAD `codex/server-cache-maintenance` / `3ad53b11e08df55701e516d28baed59eea15b1cc`；后续 docs HEAD 以 Git 实时值为准。production release / rollback `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7` / `0aaf52fed29e79bb19b15517ba9ef50545510f72`；core/search `36/36` / `2/2`。Hermes Research Intelligence Tasks 1–12 全部完成；ECS 二次维护将 BuildKit `14.83 → 6.344 GB`、根盘 `54 → 44 GB`，保留唯一 Chromium、BGE、ScanSci session、生产数据、备份与 active/rollback。docs-only HEAD 不得冒充 application release。
+> **CURRENT source/deployment anchor（2026-09-05 +08）：** docs maintenance branch / observed parent HEAD `codex/product-workflow-design` / `c0a162d`；后续 docs HEAD 以 Git 实时值为准。production release / rollback `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7` / `0aaf52fed29e79bb19b15517ba9ef50545510f72`；core/search `36/36` / `2/2`。Hermes Research Intelligence Tasks 1–12 全部完成；ECS 二次维护将 BuildKit `14.83 → 6.344 GB`、根盘 `54 → 44 GB`，保留唯一 Chromium、BGE、ScanSci session、生产数据、备份与 active/rollback。docs-only HEAD 不得冒充 application release。
+
+## 当前产品交付
+
+| 路径 | 用途 | 状态 |
+|---|---|---|
+| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑的已确认产品范围 | CURRENT；效果待分段验收 |
+| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划 | CURRENT；Task 1 审计进行中 |
+
+| `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/ContinueResearch.tsx` / `apps/web/components/research/ResearchWorkspaceNav.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/components/hermes/HermesTaskEntry.tsx` / `apps/web/messages/{zh,en}.json` | 同 RO 待确认优先、Hermes 常驻导航、真实任务入口与错误恢复、现有助手连接 | LOCAL candidate；production unchanged |
+| `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO 入口、scope、恢复、确认和移动体验回归 | LOCAL；7 browser cases GREEN，API fixtures |
+
+| `apps/web/app/me/{page,layout}.tsx` / `apps/web/app/settings/page.tsx` / `apps/web/components/navigation/{AccountLink,ProductRouteNavigation}.tsx` / `apps/web/components/profile/MyResearchProjects.tsx` / `apps/web/components/settings/{AcademicIdentityControl,MotionPreferenceControl}.tsx` / `apps/web/components/hermes/HermesWorkspaceStage.tsx` / `apps/web/components/shell/DashboardShell.tsx` | frontend/nanqing 个人主页/设置分离、身份恢复与移动导航整合 | LOCAL integrated，尚未部署 |
+| `apps/web/lib/api.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/test/{api-agent,hermes-guide-recovery}.test.ts` | 绑定 RO 的 guide 会话与范围恢复、scoped ingestion client | LOCAL；复审修正 |
+| `apps/web/playwright.release.config.ts` / `apps/web/package.json` / `apps/web/test/e2e/{academic-identity-recovery,product-release,auth-dashboard,hermes-blank-ro-flow,hermes-dashboard,hermes-workspace-stage,hermes-field-guide}.spec.ts` | 合并同事浏览器用例，既有 release suite 纳入 continuation，scoped task fixtures | LOCAL integrated |
+| `packages/domain/src/ingestion/ingestion-service.ts` / `packages/domain/test/{ingestion-service.test.ts,helpers/fakes.ts}` / `apps/api/src/routes/ingestion.ts` | RO membership 范围内任务查询，过滤先于 limit，个人 feed 兼容 | LOCAL；无迁移 |
+
+| `apps/api/test/ingestion-routes.test.ts` / `apps/web/test/e2e/start-release-api.mjs` | Scoped ingestion 路由/权限合同与可选独立 release fixture 端口 | LOCAL；保留默认 3001，Windows portproxy 环境用 3311 |
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -132,7 +149,7 @@
 | `docs/specs/2026-08-03-p1a-9-cicd-deploy-backup-design.md` | P1A-9 CI/CD 与 ECS 部署及备份设计（design gate 已确认：GitHub Actions/仅 PG dump/临时库演练 + QQ SMTP 偏离，生产已上线 2026-08-03） | 活文档 |
 | `docs/specs/2026-08-03-p1b-1-sdf-schema-design.md` | P1B-1 SDF 六字段 core + manifest JSON Schema 设计（design gate 已确认：手写 JSON Schema + ajv，additionalProperties 宽容债务，代码已实现 2026-08-03） | 活文档 |
 | `docs/specs/2026-08-03-p1b-2-ro-sdf-model-design.md` | P1B-2 RO/SDF 数据模型设计（design gate 已确认：三实体 + 迁移 7 + API 骨架，代码已实现 2026-08-03） | 活文档 |
-| `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（方向 A：Monumental Scholarly Intelligence；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可与版本模型；用户已批准，待书面审阅） | 活文档 |
+| `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（方向 A：Monumental Scholarly Intelligence；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可与版本模型；用户已批准，待书面审阅） | HISTORICAL 产品流程 → 2026-09-05 integrated-research-product-design |
 | `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` | 前端视觉与交互 spec：Art Direction v3 Optical Editorial Instrument 为视觉真源；2026-08-11 增量优化边界明确为保留现有线上功能、优先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 用户已确认范围，待书面审阅 |
 | `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量 Blender 原型历史设计 | **用户视觉 NO-GO**；不得作为当前候选 |
 | `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 整图 PNG/CSS-signal 历史原型 | **DEPRECATED / VISUAL NO-GO**；资产可复用，renderer 不得继续 |
@@ -193,7 +210,7 @@
 | `apps/web/lib/extract-review-state.ts` / `apps/web/test/e2e/hermes-blank-ro-flow.spec.ts` / `apps/web/test/visual/hermes-blank-ro-production-gate.mjs` | blank RO 字段级 evidence diff、accept/edit-accept/reject/missing/save/reload/commit；checkpoint 只存 task/决策元数据，storage/transport/Redis 失败复用同一付费 task；公网 gate 要求真实账号/MiniMax、零拦截、credit/audit/immutable snapshot、完整 footprint、真实 Wanko idle/work/review/celebration pixels 与 zh/en/mobile/reduced | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；真实账号纵向证据来自 `06072c1`，现行 `5f4e73c` 仅重跑无写入 Dashboard UI gate |
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Hermes Research Intelligence 完成态、生产基线、外部限制、约束与新任务入口 | **CURRENT active-memory**；production/rollback `b32d81c` / `0aaf52f`；Taskmaster 12/12，下一任务待选 |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Hermes Research Intelligence 完成态、生产基线、外部限制、约束与新任务入口 | **CURRENT active-memory**；production/rollback `b32d81c` / `0aaf52f`；Taskmaster 12/12，下一主题为 integrated research product |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |

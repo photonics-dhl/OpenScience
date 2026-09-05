@@ -6,12 +6,15 @@ import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import type { DashboardResearch } from './ResearchList';
+import type { HermesRailTask } from '@/components/hermes/HermesRail';
+import { hermesTaskHref } from '@/components/hermes/hermes-state';
 
 export interface ContinueResearchProps {
   research: DashboardResearch | null;
+  tasks?: HermesRailTask[];
 }
 
-export function ContinueResearch({ research }: ContinueResearchProps) {
+export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps) {
   const t = useTranslations('dashboard');
 
   if (!research) {
@@ -36,6 +39,9 @@ export function ContinueResearch({ research }: ContinueResearchProps) {
     );
   }
 
+  const review = tasks.find((task) => task.researchObjectId === research.id && task.state === 'needs_review');
+  const href = review ? hermesTaskHref(review)
+    : `/research-objects/${encodeURIComponent(research.id)}/${research.pendingCount > 0 ? 'hermes' : 'edit'}`;
   return (
     <section
       className="group surface-folio-sheet border-y border-os-rule-paper px-5 py-6 sm:px-7 sm:py-8"
@@ -58,8 +64,8 @@ export function ContinueResearch({ research }: ContinueResearchProps) {
           </span>
         ) : null}
       </div>
-      <Link className="mt-7 inline-flex items-center border-b border-os-vermilion-ink pb-1 text-sm font-semibold text-os-ink outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={`/research-objects/${research.id}/edit`}>
-          {t('continue.open')}
+      <Link className="mt-7 inline-flex items-center border-b border-os-vermilion-ink pb-1 text-sm font-semibold text-os-ink outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={href}>
+          {review ? t('hermes.review') : t('continue.open')}
           <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
       </Link>
     </section>

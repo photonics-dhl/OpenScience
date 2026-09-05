@@ -22,6 +22,13 @@ import { createLiteratureIntentFingerprint } from '@/lib/literature-acquisition-
 import type { HermesGuideSuggestion } from './hermes-guide';
 
 type LiteratureIntent = Extract<RoutedHermesIntent, { kind: 'literature.acquire' }>;
+
+export function selectRestorableGuide(tasks: AgentTaskView[], route: WorkspaceGuidePayload['route'], researchObjectId?: string): AgentTaskView | null {
+  return tasks.find((candidate) => candidate.kind === 'workspace.guide'
+    && (route === 'research-object-edit'
+      ? Boolean(researchObjectId) && candidate.researchObjectId === researchObjectId
+      : !candidate.researchObjectId)) ?? null;
+}
 type DrawerLiteratureIntent = LiteratureIntent & { callerIdempotencyKey: string; callerIntentFingerprint: string };
 
 export function resolveDrawerLiteratureTarget(routeResearchObjectId: string | null): LiteratureIntent['target'] {
@@ -105,7 +112,7 @@ export function HermesAssistantDrawer({
     void listAgentTasks()
       .then(({ tasks }) => {
         if (cancelled) return;
-        const restored = tasks.find((candidate) => candidate.kind === 'workspace.guide') ?? null;
+        const restored = selectRestorableGuide(tasks, route, routeResearchObjectId);
         if (restored) {
           sessionId.current = restored.sessionId;
           setTask(restored);
@@ -113,7 +120,7 @@ export function HermesAssistantDrawer({
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [open, task]);
+  }, [open, task, route, routeResearchObjectId]);
 
   useEffect(() => {
     if (!activeTask || !task || error) return;
@@ -145,7 +152,7 @@ export function HermesAssistantDrawer({
       }
       if (!sessionId.current) {
         sessionKey.current ??= crypto.randomUUID();
-        const response = await createWorkspaceGuideSession(normalized, sessionKey.current);
+        const response = await createWorkspaceGuideSession(normalized, sessionKey.current, route === 'research-object-edit' ? routeResearchObjectId : undefined);
         sessionId.current = response.session.id;
       }
       taskKey.current ??= crypto.randomUUID();

@@ -6,6 +6,22 @@ afterEach(() => {
 });
 
 describe('workspace.guide API client contract', () => {
+  it('binds RO guidance to the existing authorized session context', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session: { id: 'session-ro' } }), { status: 201 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { createWorkspaceGuideSession } = await import('../lib/api');
+    await createWorkspaceGuideSession('Explain the method', 'key-ro', 'ro-current');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ kind: 'workspace.guide', title: 'Explain the method', researchObjectId: 'ro-current' });
+  });
+  it('requests scoped work before the server task limit is applied', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ tasks: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { listResearchIngestionTasks } = await import('../lib/api');
+    await listResearchIngestionTasks('ro-current');
+    expect(fetchMock).toHaveBeenCalledWith('/api/ingestion?actionable=true&researchObjectId=ro-current', expect.anything());
+  });
   it('creates a guide session and submits an idempotent asynchronous task', async () => {
     const task = {
       id: 'task-1', sessionId: 'session-1', kind: 'workspace.guide', status: 'pending',
