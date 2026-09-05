@@ -233,3 +233,13 @@ v2效果迭代：用户认可v1并要求过渡自然、动效突出；`render-v2
 独立服务器演示已部署：source 6a1b848a3df109098e5f1b9721e6c4df06c2c6d0，run 6a1b848-20260905T081000Z；公网 /demos/science-video/d2nn/。复用ScanSci Chrome151完整headless bundle，CPU渲染22.80秒生成46.25秒720p/H264/AAC视频（4,814,309 bytes），无新增付费API调用。全片解码、五项资源200、Range206、实际首播/章节seek、390px无溢出及零页面异常通过；内部路径最终404（input/先308规范化）。应用release仍390afc0。
 
 首次公网验收发现Nginx精确location将文件alias再次追加index.html导致500；6a1b848改用root+try_files，重新部署并以真实GET/浏览器验收通过。早期测试只覆盖配置事务，不能替代真实Nginx请求。新增参考creator-buddy/video-Skills的连续动作、口语分镜与字幕对齐方法；微信正文被验证页阻断，已读公开仓库原件。仓库未发现LICENSE，不整包复制；sketch依赖模型渠道，不等于免费本地推理。
+
+### Qwen CPU配音试听（用户已批准）
+
+1. 盘点并复用已有CPU PyTorch基础，隔离试验与BGE服务；模型独立存放，新增磁盘峰值预算15GB。
+2. 下载固定版本Qwen3-TTS 1.7B CustomVoice（约4.52GB），不使用云API，不安装VoiceDesign/Base。
+3. 同文案生成Serena、Uncle_Fu、Vivian短试听；固定随机种子，记录加载/生成耗时、音频时长、峰值内存与磁盘。容器无网推理、资源受限、任务超时。
+4. WAV完整解码、非空/有限波形校验后提供实际音频；正式RO/Hermes接入仍走Gateway，当前是隔离模型评估而非产品新端点。
+5. 更新runbook/索引/进度，按实测决定CPU适用性。
+
+实测结果：Qwen三音色已在ECS CPU完成：Serena15.92s/生成39.57s、Uncle_Fu15.68s/39.45s、Vivian17.68s/43.99s；峰值进程RSS5.22–5.31GiB，4线程/BF16/SDPA，付费API调用0。三段WAV全片解码、有限非零波形通过；自然度与内容完整性待用户试听，不能把生成成功当作听感验收。基础镜像971705460bytes；子镜像2043364436bytes已含基础层；模型4520217432bytes。df可用101313294336bytes（94.36GiB），较清理后占用增加约6.11GiB；公网/loopback200、应用390afc0不变。

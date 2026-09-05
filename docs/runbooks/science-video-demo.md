@@ -134,3 +134,34 @@ Nginx Range 播放，不表示 RO 已能自动生成图片或视频。演示不�
 ## Latest verified run
 
 独立服务器演示已部署：source 6a1b848a3df109098e5f1b9721e6c4df06c2c6d0，run 6a1b848-20260905T081000Z；公网 /demos/science-video/d2nn/。复用ScanSci Chrome151完整headless bundle，CPU渲染22.80秒生成46.25秒720p/H264/AAC视频（4,814,309 bytes），无新增付费API调用。全片解码、五项资源200、Range206、实际首播/章节seek、390px无溢出及零页面异常通过；内部路径最终404（input/先308规范化）。应用release仍390afc0。
+
+## Storage and runtime reuse
+
+2026-09-05 用户明确批准仅清理未使用Docker构建缓存，已执行docker builder prune --force。Docker回收报告7.517GB；df可用字节102607519744→107878596608，实际增加5271076864 bytes（4.91GiB），剩余100.47GiB。镜像21、运行容器13、生产390afc0均不变，构建缓存计费大小0B。用户要求PyTorch等基础依赖支持后续复用：先盘点现有embedding-worker CPU PyTorch版本/层，优先固定版本公共基础镜像，模型独立挂载，兼容后共享层；不共享可变site-packages、不继承BGE权重来运行TTS。本轮未安装TTS。
+
+## Qwen CPU audition trial
+
+### Preconditions
+
+- Existing BGE runtime uses torch2.13 CPU, transformers5.16.1 and accelerate1.14; these are not the Qwen dependency set. No reusable tagged intermediate exists after cache cleanup. Keep BGE unchanged.
+- Model: Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice at 0c0e3051f131929182e2c023b9537f8b1c68adfe; host /opt/openscience-models/qwen3-tts-customvoice-0c0e305. Files total approximately4.52GB. ModelScope weight revision ae999bce1d1356e93686274865bc72744daab1a5 has identical published weight SHA256; verify after cross-source resume to avoid mixed files.
+
+### Execution
+
+1. Build infra/tts-audition/Dockerfile.base as openscience/python-ml-cpu:py312-torch2.11.0-cpu; Qwen child inherits that reusable layer. Model weights are not copied into either image.
+2. Build infra/tts-audition/Dockerfile; pip check and import checks must pass, package freeze remains in /opt/tts-lock.
+3. Run a bounded one-off container with network none, read-only root, user10001,4CPU,12GiB memory/no additional swap,256PIDs,/tmp tmpfs. Mount model read-only to /models/qwen3-tts-12hz-1.7b-customvoice and dedicated output writable to /output. Set --speaker Serena, Uncle_Fu or Vivian; reuse one model directory.
+
+### Rollback
+
+Stop only the named trial container. Existing application, BGE, gateway and video assets are unchanged. Retain diagnostics and model files; further deletion needs explicit approval.
+
+### Verification
+
+Run audition_test.py; check saved waveform finite/nonzero, full WAV decode and listen to complete narration. Read per-voice metrics for duration/load/generation/maxRSS, df and image size for disk. A sample file does not establish automatic RO/Hermes integration or acceptable real-time latency.
+
+### Verified audition results
+
+Qwen三音色已在ECS CPU完成：Serena15.92s/生成39.57s、Uncle_Fu15.68s/39.45s、Vivian17.68s/43.99s；峰值进程RSS5.22–5.31GiB，4线程/BF16/SDPA，付费API调用0。三段WAV全片解码、有限非零波形通过；自然度与内容完整性待用户试听，不能把生成成功当作听感验收。基础镜像971705460bytes；子镜像2043364436bytes已含基础层；模型4520217432bytes。df可用101313294336bytes（94.36GiB），较清理后占用增加约6.11GiB；公网/loopback200、应用390afc0不变。
+
+Post-audition review fixed rollback of a newly-created WAV when metrics publication fails (4/4 local and ECS tests). Abrupt process death between two publications still requires a fresh output directory. Original generation script retained at /opt/openscience-trials/tts/audition.sample-run.py; current script is bind-mounted from source for trial execution, so the image tag alone does not identify trial code.

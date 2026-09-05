@@ -40,6 +40,12 @@
 - Worker 拒绝落库可能留下无引用对象；媒体沿用 charged-on-submit；并发测试为确定性交错，不冒称 PostgreSQL 双会话验证。
 - MiniMax image/video仍管理员限定且未注入provider；实际套餐权益未验证、不消费聊天提供的密钥。ScienceDirect仅官方授权。用户认可科普插图视觉方向，视频样片尚待验收。
 
+## Qwen audition delivered
+
+- User approved Serena/Uncle_Fu/Vivian same-text audition before production use. One fixed Qwen CustomVoice model downloaded (4.3GiB); reusable CPU torch/torchaudio2.11 base built (~0.97GB). BGE torch2.13/Transformers5.16 differs; no production dependency change. Child image download timeout fixed by600-second pip timeout; import/pip check passed.
+- Source infra/tts-audition, server /opt/openscience-trials/tts; model /opt/openscience-models/qwen3-tts-customvoice-0c0e305. Logs in ignored science-video/tts-*. Three voices generated and fully decoded; next user listens before replacing production narration.
+- Qwen三音色已在ECS CPU完成：Serena15.92s/生成39.57s、Uncle_Fu15.68s/39.45s、Vivian17.68s/43.99s；峰值进程RSS5.22–5.31GiB，4线程/BF16/SDPA，付费API调用0。三段WAV全片解码、有限非零波形通过；自然度与内容完整性待用户试听，不能把生成成功当作听感验收。基础镜像971705460bytes；子镜像2043364436bytes已含基础层；模型4520217432bytes。df可用101313294336bytes（94.36GiB），较清理后占用增加约6.11GiB；公网/loopback200、应用390afc0不变。
+
 ## Next action and read first
 
 1. 用户认可46秒v1样片，要求自然过渡与突出动效；v2已完成并交验收，文件`d2nn-science-explainer-v2.mp4`（4.80MB/46.25s，实测渲染25.17s）。主线程全片解码并查看最终MP4抽帧通过；v1保留，模型调用0。服务器已复用该旁白完成渲染；正式自动生成仍需服务器TTS。

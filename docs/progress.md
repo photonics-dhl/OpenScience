@@ -2,10 +2,19 @@
 
 > 最新同步：2026-09-05 +08。历史由 Git 保存；当前应用390afc0已部署，后续文档提交不改变生产。
 
+## Storage and reusable runtime
+
+- 2026-09-05 用户明确批准仅清理未使用Docker构建缓存，已执行docker builder prune --force。Docker回收报告7.517GB；df可用字节102607519744→107878596608，实际增加5271076864 bytes（4.91GiB），剩余100.47GiB。镜像21、运行容器13、生产390afc0均不变，构建缓存计费大小0B。用户要求PyTorch等基础依赖支持后续复用：先盘点现有embedding-worker CPU PyTorch版本/层，优先固定版本公共基础镜像，模型独立挂载，兼容后共享层；不共享可变site-packages、不继承BGE权重来运行TTS。后续已安装隔离TTS试听环境，见下。
+
+## Qwen CPU audition
+
+- Qwen三音色已在ECS CPU完成：Serena15.92s/生成39.57s、Uncle_Fu15.68s/39.45s、Vivian17.68s/43.99s；峰值进程RSS5.22–5.31GiB，4线程/BF16/SDPA，付费API调用0。三段WAV全片解码、有限非零波形通过；自然度与内容完整性待用户试听，不能把生成成功当作听感验收。基础镜像971705460bytes；子镜像2043364436bytes已含基础层；模型4520217432bytes。df可用101313294336bytes（94.36GiB），较清理后占用增加约6.11GiB；公网/loopback200、应用390afc0不变。
+- infra/tts-audition新增公共CPU基础、Qwen子镜像与试听脚本，4项测试本地/容器通过。原系统Huihui同文案样本保留；音频与validation.json在ignored science-video/tts-audition/。
+
 ## Server video demo acceptance
 
 - 独立服务器演示已部署：source 6a1b848a3df109098e5f1b9721e6c4df06c2c6d0，run 6a1b848-20260905T081000Z；公网 /demos/science-video/d2nn/。复用ScanSci Chrome151完整headless bundle，CPU渲染22.80秒生成46.25秒720p/H264/AAC视频（4,814,309 bytes），无新增付费API调用。全片解码、五项资源200、Range206、实际首播/章节seek、390px无溢出及零页面异常通过；内部路径最终404（input/先308规范化）。应用release仍390afc0。
-- PR #88仍待CI；已修复Nginx exact alias首页追加index.html问题，改root+try_files。部署脚本9例与renderer4例通过，独立复审通过。
+- PR #88上一版CI已通过；本次新增试听文件待新CI；已修复Nginx exact alias首页追加index.html问题，改root+try_files。部署脚本9例与renderer4例通过，独立复审通过。
 
 ## Current version tuple
 
