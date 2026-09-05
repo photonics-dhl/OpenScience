@@ -1,6 +1,6 @@
 # OpenScience 产品级网页设计 Spec
 
-**状态：** 已获用户批准，待书面 spec 审阅  
+> HISTORICAL 产品流程 → CURRENT 见 `docs/specs/2026-09-05-integrated-research-product-design.md`；本稿保留历史背景。
 **日期：** 2026-08-08  
 **基线：** `docs/OpenScience_Kimi_Development_Spec.md`  
 **视觉依据：** `docs/specs/2026-08-06-frontend-visual-system-design.md`

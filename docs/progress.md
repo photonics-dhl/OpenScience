@@ -4,9 +4,15 @@
 
 ## Current version tuple
 
-- Docs maintenance worktree / branch / observed parent HEAD: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance` / `codex/server-cache-maintenance` / `3ad53b11e08df55701e516d28baed59eea15b1cc`；后续文档 HEAD 以 Git 实时值为准，且不改变下列 production application release。
+- Docs maintenance worktree / branch / observed parent HEAD: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance` / `codex/product-workflow-design` / `c0a162d`；后续文档 HEAD 以 Git 实时值为准，且不改变下列 production application release。
 - Production application release / rollback: `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7` / `0aaf52fed29e79bb19b15517ba9ef50545510f72`；core/search `36/36` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 为 12/12。Tasks 10–12 已通过真实 ECS 验收；下一任务尚未选择。
+- Taskmaster `hermes-research-intelligence` 为 12/12。Tasks 10–12 已通过真实 ECS 验收；下一主题已确认为工作区—Hermes—RO 与多模态产品交付。
+
+## 2026-09-05 — Integrated product scope confirmed
+
+- 用户确认优先完整功能、展示和交互；复用现有能力，成熟方案优先，分段交用户验收。论文生成图片/视频；语音用于 Hermes 修改 RO，不做上传音视频理解。
+- 同事分支确认 frontend/nanqing，已授权选择性整合部署；每日 10:00 巡检。先查已移植成果，避免重复合并。
+- 新 design 与 delivery plan 已登记；Task 1 页面断点审计尚未完成，代码和生产版本未改。下一步完成真实旅程审计及第一段逐文件实施步骤。
 
 ## 2026-09-05 — Hermes Research Intelligence 12/12 production closeout
 
@@ -22,5 +28,5 @@
 
 ## Next action
 
-- 不恢复旧 ScanSci/Task 10 next action。先由用户选择新的产品任务；新 session 从 CURRENT handoff、需求基线相关章节与本文件读取，生产基线固定为 `b32d81c…`。
+- 不恢复旧 ScanSci/Task 10 next action。执行 integrated product Task 1 旅程审计；新 session 从 CURRENT handoff、需求基线相关章节与本文件读取，生产基线固定为 `b32d81c…`。
 - 需要补强 ScienceDirect 时，只走 Elsevier 官方 Remote Access/CARSI 或取得 API key + institution entitlement；不得以 Cloudflare 绕过工具替代授权。
