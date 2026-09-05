@@ -597,6 +597,7 @@ export interface PresentationClaim {
 }
 
 export interface PresentationAsset {
+  canTransition?: boolean;
   id: string;
   researchObjectId: string;
   versionId: string;

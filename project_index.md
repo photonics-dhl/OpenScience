@@ -452,3 +452,6 @@
 | `infra/tts-audition/continuity_audition.py` | 全文连续与平实指令离线试听对照，复用现有Qwen运行时 | v4连续讲述已接受；f4b4db3视频已部署验证，relaxed复现选项保留 |
 
 | `apps/media-demo/test/visual-style.test.mjs` | 默认技术风格/可选淡彩风格的选择校验 | 381705a已部署，视觉待验收，保留已接受v4配音 |
+
+| `packages/domain/src/assets/reviewed-media-import.ts` / `packages/domain/test/assets/reviewed-media-import.test.ts` | 受审PNG/MP4导入，管理员+版本写权限、Claim关联、草稿/重放/审计 | 实现完成，待ECS产品验收 |
+| `scripts/import-presentation-media.mjs` | 默认dry-run的受控媒体导入CLI，真实来源与已有S3基座 | 不启用占位生成器；部署验收见science-video runbook |

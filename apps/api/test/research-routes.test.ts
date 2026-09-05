@@ -243,6 +243,56 @@ describe('anonymous public research contract', () => {
     await app.close();
   });
 
+  it('serves public video ranges only after publication authorization and complete digest verification', async () => {
+    const bytes = Buffer.from('0123456789');
+    const prisma = routePrisma();
+    prisma.version.findFirst.mockResolvedValue({ id: 'version-1' });
+    prisma.presentationAsset.findFirst.mockResolvedValue({
+      id: '55555555-5555-4555-8555-555555555555', objectKey: 'private/video-key',
+      kind: 'video', contentHash: createHash('sha256').update(bytes).digest('hex'),
+    });
+    const storage = {
+      headObject: vi.fn().mockResolvedValue({ size: bytes.length, contentType: 'video/webm' }),
+      getObject: vi.fn().mockImplementation(async () => ({ body: Readable.from([bytes]), size: bytes.length, contentType: 'video/webm' })),
+    };
+    const app = Fastify();
+    app.setErrorHandler((error, req, reply) => {
+      const mapped = httpStatusForError(error, String(req.id));
+      void reply.status(mapped.status).send(mapped.body);
+    });
+    registerResearchRoutes(app, { prisma, storage } as never);
+    const url = '/research/OSR-2026-000001/v/1/presentation-assets/55555555-5555-4555-8555-555555555555';
+    const headers = { range: 'bytes=-3' };
+    prisma.version.findFirst.mockResolvedValueOnce(null);
+    expect((await app.inject({ method: 'GET', url, headers })).statusCode).toBe(404);
+    expect(storage.headObject).not.toHaveBeenCalled();
+    prisma.presentationAsset.findFirst.mockResolvedValueOnce(null);
+    expect((await app.inject({ method: 'GET', url, headers })).statusCode).toBe(404);
+    expect(storage.getObject).not.toHaveBeenCalled();
+
+    const response = await app.inject({ method: 'GET', url, headers });
+    expect(response.statusCode).toBe(206);
+    expect(response.body).toBe('789');
+    expect(response.headers['content-range']).toBe('bytes 7-9/10');
+    expect(response.headers['content-length']).toBe('3');
+    expect(response.headers['accept-ranges']).toBe('bytes');
+    expect(response.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    expect(prisma.version.findFirst).toHaveBeenLastCalledWith({
+      where: { researchObjectId: publicResearchObject().id, versionNo: 1, status: 'published', publications: { some: {} } },
+      select: { id: true },
+    });
+
+    const invalid = await app.inject({ method: 'GET', url, headers: { range: 'bytes=99-' } });
+    expect(invalid.statusCode).toBe(416);
+    expect(invalid.headers['content-range']).toBe('bytes */10');
+    storage.getObject.mockImplementation(async () => ({ body: Readable.from([Buffer.from('X123456789')]), size: bytes.length, contentType: 'video/webm' }));
+    const corrupt = await app.inject({ method: 'GET', url, headers });
+    expect(corrupt.statusCode).toBe(404);
+    expect(corrupt.headers['content-range']).toBeUndefined();
+    expect(corrupt.headers.etag).toBeUndefined();
+    await app.close();
+  });
+
   it('serves only the platform deterministic chart SVG inline', async () => {
     const bytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><text>verified</text></svg>');
     const hash = createHash('sha256').update(bytes).digest('hex');

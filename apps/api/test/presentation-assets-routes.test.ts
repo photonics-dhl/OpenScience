@@ -151,12 +151,80 @@ describe('Presentation asset routes', () => {
     const ctx = await contentFixture();
     const cookies = { openscience_session: ctx.token };
     expect((await ctx.app.inject({ method: 'GET', url: ctx.url, cookies, headers: { range: 'bytes=0-4' } })).statusCode).toBe(416);
-    expect(ctx.getObject).not.toHaveBeenCalled();
     ctx.db.presentationAssets[0].contentHash = '0'.repeat(64);
     const corrupt = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies });
     expect(corrupt.statusCode).toBe(404);
     expect(corrupt.body).not.toContain('secret-chart');
     await ctx.app.close();
+  });
+
+  async function videoFixture() {
+    const ctx = await contentFixture(Buffer.from('0123456789'));
+    ctx.db.presentationAssets[0].kind = 'video';
+    ctx.headObject.mockResolvedValue({ size: ctx.bytes.length, contentType: 'video/mp4', etag: 'test' });
+    ctx.getObject.mockImplementation(async () => ({ size: ctx.bytes.length, contentType: 'video/mp4', body: Readable.from([ctx.bytes]) }));
+    return ctx;
+  }
+
+  it.each([
+    ['bytes=2-5', '2345', 'bytes 2-5/10'],
+    ['bytes=7-', '789', 'bytes 7-9/10'],
+    ['bytes=-3', '789', 'bytes 7-9/10'],
+    ['bytes=8-999', '89', 'bytes 8-9/10'],
+    ['bytes=-999', '0123456789', 'bytes 0-9/10'],
+  ])('serves authenticated video seeks for %s', async (range, body, contentRange) => {
+    const ctx = await videoFixture();
+    const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies: { openscience_session: ctx.token }, headers: { range } });
+    expect(response.statusCode).toBe(206);
+    expect(response.body).toBe(body);
+    expect(response.headers['content-range']).toBe(contentRange);
+    expect(response.headers['content-length']).toBe(String(body.length));
+    expect(response.headers['accept-ranges']).toBe('bytes');
+    expect(response.headers['content-type']).toContain('video/mp4');
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    await ctx.app.close();
+  });
+
+  it.each(['bytes=10-', 'bytes=5-2', 'bytes=-0', 'bytes=-', 'bytes=0-1,4-5', 'items=0-1', 'bytes=1.5-2', 'bytes=9007199254740992-'])('rejects invalid or unsatisfiable video range %s', async (range) => {
+    const ctx = await videoFixture();
+    const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies: { openscience_session: ctx.token }, headers: { range } });
+    expect(response.statusCode).toBe(416);
+    expect(response.headers['content-range']).toBe('bytes */10');
+    expect(response.body).not.toContain('0123456789');
+    await ctx.app.close();
+  });
+
+  it('honors only the current strong If-Range validator', async () => {
+    const ctx = await videoFixture();
+    const cookies = { openscience_session: ctx.token };
+    const full = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies });
+    expect(full.headers.etag).toBe(`"${ctx.db.presentationAssets[0].contentHash}"`);
+    for (const validator of [full.headers.etag as string, '"old"', `W/${full.headers.etag}`, 'Wed, 01 Jan 2025 00:00:00 GMT']) {
+      const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies, headers: { range: 'bytes=2-3', 'if-range': validator } });
+      const match = validator === full.headers.etag;
+      expect(response.statusCode).toBe(match ? 206 : 200);
+      expect(response.body).toBe(match ? '23' : '0123456789');
+    }
+    await ctx.app.close();
+  });
+
+  it('authorizes video ranges before storage and verifies the whole digest before slicing', async () => {
+    const ctx = await videoFixture();
+    const headers = { range: 'bytes=0-1' };
+    const cookies = { openscience_session: ctx.token };
+    expect((await ctx.app.inject({ method: 'GET', url: ctx.url, headers })).statusCode).toBe(401);
+    ctx.db.memberships.length = 0;
+    expect((await ctx.app.inject({ method: 'GET', url: ctx.url, cookies, headers })).statusCode).toBe(404);
+    expect(ctx.headObject).not.toHaveBeenCalled();
+    expect(ctx.getObject).not.toHaveBeenCalled();
+    await ctx.app.close();
+    const corrupt = await videoFixture();
+    corrupt.getObject.mockImplementation(async () => ({ size: 10, contentType: 'video/mp4', body: Readable.from([Buffer.from('012345678X')]) }));
+    const response = await corrupt.app.inject({ method: 'GET', url: corrupt.url, cookies: { openscience_session: corrupt.token }, headers });
+    expect(response.statusCode).toBe(404);
+    expect(response.headers['content-range']).toBeUndefined();
+    expect(response.headers.etag).toBeUndefined();
+    await corrupt.app.close();
   });
 
   it('keeps existing v1 charts viewable after the renderer upgrade', async () => {

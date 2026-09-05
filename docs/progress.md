@@ -23,6 +23,8 @@
 
 ## Server video demo acceptance
 
+- 当前产品接入：受审媒体管理员CLI、私有视频预览/Range、canTransition已实现；独立管理员验收RO bcbf1586-b6bd-44b6-ab66-c675fcddce78 / version57d10269-2ba7-4eaa-88fc-622a00d20ef5，人工整理同论文主张，未公开。原普通账号个人RO未改权限。应用仍390afc0，部署待执行。
+
 - CURRENT淡彩视频：source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705a-20260905T121000Z；原创2172x724五层/十探测区全景、线稿显色、纸张与石墨质感。用户已认可的v4原WAV保持逐字节一致；视频41.292s/3,203,000bytes，ECS渲染37.76s。11项测试、ESLint/docs、独立复审（technical兼容/画面确定性/无裁切）、服务器build/全解码/public200/Range206/播放跳转/手机字幕无溢出/健康通过。应用390afc0及回滚c07c8d1不变；原技术风格f4b4db3保留。一次内置生图，无新增服务器依赖，render模型调用0不代表图片生成免费。视觉效果待用户验收；下一步按反馈优化或接入RO/Hermes媒体能力。
 
 - 淡彩手绘候选：已生成并检查五层/十探测区原创全景，借鉴story-to-handdrawn-video的完整构图与线稿显色，复用Canvas/Chromium。配音保持已接受v4，服务器发布已完成，见最新381705a证据。

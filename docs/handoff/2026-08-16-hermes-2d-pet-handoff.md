@@ -64,6 +64,8 @@
 
 ## Next action and read first
 
+- 当前产品接入：受审媒体管理员CLI、私有视频预览/Range、canTransition已实现；独立管理员验收RO bcbf1586-b6bd-44b6-ab66-c675fcddce78 / version57d10269-2ba7-4eaa-88fc-622a00d20ef5，人工整理同论文主张，未公开。原普通账号个人RO未改权限。应用仍390afc0，部署待执行。
+
 1. 用户已接受v4连续配音，f4b4db3已在ECS渲染/发布并验证；接下来优先图片与画面的艺术风格，评估story-to-handdrawn-video等成熟方案。正式任意RO自动生成仍未接入。
 2. 正式接入需补有来源的叙事/分镜内容、Gateway媒体provider、隔离CPUrenderer、视频播放/Range与Hermes修订；现有生成器只接IDs、Worker10MiB/reader16MiB与Range416是已查缺口。复用Claim失效并覆盖Evidence变更；无需先新建表/hash/gate。
 3. 提取空缺并行改进；区分模型未返回、证据匹配拒绝和片段覆盖，先取得受控证据再改提取逻辑。

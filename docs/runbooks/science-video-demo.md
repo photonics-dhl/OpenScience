@@ -201,3 +201,13 @@ Image prompt: original panoramic scientific editorial illustration on ivory wate
 Rollback uses the existing managed-demo release transaction and preserves f4b4db3 technical output. Validate five-scene screenshots, source counts, caption readability, same full audio, server render/decode, public playback/Range/mobile and unchanged application release.
 
 CURRENT淡彩视频：source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705a-20260905T121000Z；原创2172x724五层/十探测区全景、线稿显色、纸张与石墨质感。用户已认可的v4原WAV保持逐字节一致；视频41.292s/3,203,000bytes，ECS渲染37.76s。11项测试、ESLint/docs、独立复审（technical兼容/画面确定性/无裁切）、服务器build/全解码/public200/Range206/播放跳转/手机字幕无溢出/健康通过。应用390afc0及回滚c07c8d1不变；原技术风格f4b4db3保留。一次内置生图，无新增服务器依赖，render模型调用0不代表图片生成免费。视觉效果待用户验收；下一步按反馈优化或接入RO/Hermes媒体能力。
+
+## RO reviewed-media import
+
+Preflight: administrator actor must also own/write the active workspace, exact version draft and sourceClaims succeeded. Existing PNG/MP4 must be reviewed, regular non-symlink files,32bytes..10MiB; content magic and existing fast scan apply. No caller-supplied HTML or remote fetching.
+
+Run the immutable API image with existing production env/networks and read-only mounts for the exact media and manifest; do not write active source tree. CLI: `node scripts/import-presentation-media.mjs --manifest /input/manifest.json --file /input/media.png` is dry-run; append `--confirm` to create draft. Manifest fields: userId,researchObjectId,versionId,kind,sourceClaimIds,generator,generatorVersion,importRun,sourcePaperUrl. Kind is image or video, URL is HTTPS attribution only. Record the generated-image tool and CPU renderer truthfully.
+
+Rollback: keep imported draft or reject through existing transition; never silently delete rows/objects. Exact replay returns existing status, including rejected; new editorial work needs distinct reviewed content. Same bytes with mismatched provenance/Claims conflicts. Storage-before-transaction may leave a private unreferenced object on failure, same existing worker limitation.
+
+Verification: two concurrent imports must yield one asset per media and one set of Claim joins/audit; repeat dry-run/confirm is idempotent. Native private video must play/seek with200/206 while anonymous access is401; corrupt content must not bypass full digest viaRange. Admin with writer membership approves explicitly; source Claim edits reject associated drafts/approvals. Capability canTransition prevents ordinary writers from being offered admin-only media approval. Full buffer reader remains bounded16MiB; no unbounded streaming claim.

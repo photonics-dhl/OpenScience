@@ -265,3 +265,11 @@ User accepted v4 relaxed full WAV (41.28s); further voice polish deferred. Prese
 Keep the accepted v4 full narration and sentence timings. Add an optional watercolor visual style while retaining technical rendering as the default for old inputs. Generate an original panorama with exactly five plates and ten detector cells; full-image contain framing protects scientific objects. Reference story-to-handdrawn-video's contained composition and monochrome-to-color reveal, then adapt to the existing CPU Canvas renderer rather than adding a second full Remotion runtime. Apply consistent pencil contours/paper material and restrained wave motion to mechanism scenes. Render and inspect representative frames, then deploy the isolated demo and validate audio, playback/Range/mobile. Scientific limits remain visible; illustrated intensity values are not measurements.
 
 CURRENT淡彩视频：source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705a-20260905T121000Z；原创2172x724五层/十探测区全景、线稿显色、纸张与石墨质感。用户已认可的v4原WAV保持逐字节一致；视频41.292s/3,203,000bytes，ECS渲染37.76s。11项测试、ESLint/docs、独立复审（technical兼容/画面确定性/无裁切）、服务器build/全解码/public200/Range206/播放跳转/手机字幕无溢出/健康通过。应用390afc0及回滚c07c8d1不变；原技术风格f4b4db3保留。一次内置生图，无新增服务器依赖，render模型调用0不代表图片生成免费。视觉效果待用户验收；下一步按反馈优化或接入RO/Hermes媒体能力。
+
+### Reviewed RO media integration
+
+1. Implement admin+writer/draft scoped import, exact Claim snapshot checks, existing version fence and replay semantics, draft status/audit/provenance; CLI defaults dry-run.
+2. Add authenticated and publication-guarded single Range video delivery after complete digest verification, preserving16MiB bound; add private video preview and server canTransition capability.
+3. Run focused permission/replay/tamper/range/UI tests, full build/typecheck/test/lint and independent security review.
+4. Deploy through canonical full application transaction; create two-session import evidence in the controlled admin-owned private D2NN RO, verify replay, approval and Claim invalidation, actual desktop/mobile playback/seek, anonymous denial and health. No role escalation, external invitation or public research publication.
+5. Update CURRENT with actual app/demo/rollback tuple. Automatic narrative/image/video generation and Hermes edits remain next slices.

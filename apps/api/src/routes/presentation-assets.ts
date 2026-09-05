@@ -52,9 +52,8 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     if (!user) return;
     const params = assetParams.parse(req.params);
     const asset = await getPresentationAssetForRead(deps, { userId: user.userId, ...params });
-    if (req.headers.range !== undefined) return reply.status(416).send({ error: { code: 'RANGE_NOT_SUPPORTED', message: 'Partial presentation reads are not supported' } });
     if (!deps.storage) throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'presentation asset is temporarily unavailable');
-    return sendPresentationAssetContent(deps.storage, asset, reply, 'private');
+    return sendPresentationAssetContent(deps.storage, asset, reply, 'private', req.headers);
   });
 
   app.post('/research-objects/:researchObjectId/versions/:versionId/presentation-assets/generations', { bodyLimit: 8 * 1024 }, async (req, reply) => {

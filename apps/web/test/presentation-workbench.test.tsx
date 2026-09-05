@@ -26,3 +26,32 @@ describe('presentation workbench', () => {
     expect(markup).not.toContain('video');
   });
 });
+
+
+it('previews private videos with native controls and keeps explicit draft approval', () => {
+  const markup = renderToStaticMarkup(createElement(PresentationWorkbench, {
+    researchObjectId: 'ro-video', claims: [],
+    assets: [{ id: 'video-1', researchObjectId: 'ro-video', versionId: 'version-1', kind: 'video', canTransition: true, contentHash: 'b'.repeat(64), generator: 'Reviewed local renderer', generatorVersion: 'v1', status: 'draft', label: 'presentation_not_evidence', sourceClaimIds: [], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }],
+    version: {versionId: 'version-1', versionNo: 1, status: 'draft'}, canWrite: true,
+    onCreateClaim: vi.fn().mockResolvedValue(true), onGenerate: vi.fn(), onTransition: vi.fn(),
+  }));
+  expect(markup).toContain('<video');
+  expect(markup).toContain('controls=""');
+  expect(markup).toContain('playsinline=""');
+  expect(markup).toContain('preload="metadata"');
+  expect(markup).toContain('/research-objects/ro-video/versions/version-1/presentation-assets/video-1/content');
+  expect(markup).not.toContain('autoPlay');
+  expect(markup).toContain('presentation.approve');
+});
+
+
+it('does not offer media approval when server capability is absent', () => {
+  const markup = renderToStaticMarkup(createElement(PresentationWorkbench, {
+    claims: [], assets: [{ id:'video',researchObjectId:'ro',versionId:'v',kind:'video',contentHash:'a'.repeat(64),generator:'reviewed',generatorVersion:'v1',status:'draft',label:'presentation_not_evidence',sourceClaimIds:[],createdAt:'2026-01-01T00:00:00Z',updatedAt:'2026-01-01T00:00:00Z' }],
+    version:{versionId:'v',versionNo:1,status:'draft'},canWrite:true,
+    onCreateClaim:vi.fn(),onGenerate:vi.fn(),onTransition:vi.fn(),
+  }));
+  expect(markup).toContain('<video');
+  expect(markup).not.toContain('presentation.approve');
+  expect(markup).toContain('mediaAdminApproval');
+});

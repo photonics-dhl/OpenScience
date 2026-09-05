@@ -906,6 +906,11 @@
     "artifacts": { "document": "Documents", "image": "Images", "data": "Data", "code": "Code", "video": "Video", "other": "Other" }
   },
   "presentation": {
+    "videoTitle": "Paper explainer video",
+    "imageTitle": "Scientific illustration",
+    "generatedBy": "Created with {name}",
+    "openVideo": "Play video in a new window",
+    "mediaAdminApproval": "Images and videos currently require approval by a platform administrator with editing access to this workspace.",
     "navigation": "Presentation workspace", "skip": "Skip to presentation", "kicker": "Claim-led presentation", "title": "Turn research claims into a clear diagram", "description": "Write or choose claims from one exact version, generate a deterministic diagram, and approve it before it enters the public record.",
     "sourceTitle": "Source claims", "sourceBody": "Saved claims with completed extraction can be selected. Each diagram keeps these exact source links.", "selectClaims": "Select claims", "selectedLimit": "{count} of {max} selected", "generate": "Generate diagram", "starting": "Starting…",
     "claimStatementLabel": "Core claim statement", "claimStatementPlaceholder": "State one result or mechanism in a precise sentence", "claimDraftNote": "Saved as a human-authored draft with scientific support marked as missing until evidence is reviewed.", "addClaim": "Add claim", "claimSaveFailed": "The claim could not be saved. Retry to continue with the same draft.",
