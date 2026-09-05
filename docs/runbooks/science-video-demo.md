@@ -130,3 +130,7 @@ Nginx Range 播放，不表示 RO 已能自动生成图片或视频。演示不�
 
 3. 用真实桌面和移动视口播放，验证 poster、字幕、音频、暂停、跳转与 seek。
    最后再次读取公网 `/__release`；其值必须与部署前应用 release 相同。
+
+## Latest verified run
+
+独立服务器演示已部署：source 6a1b848a3df109098e5f1b9721e6c4df06c2c6d0，run 6a1b848-20260905T081000Z；公网 /demos/science-video/d2nn/。复用ScanSci Chrome151完整headless bundle，CPU渲染22.80秒生成46.25秒720p/H264/AAC视频（4,814,309 bytes），无新增付费API调用。全片解码、五项资源200、Range206、实际首播/章节seek、390px无溢出及零页面异常通过；内部路径最终404（input/先308规范化）。应用release仍390afc0。

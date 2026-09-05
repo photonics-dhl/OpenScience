@@ -2,6 +2,11 @@
 
 > 最新同步：2026-09-05 +08。历史由 Git 保存；当前应用390afc0已部署，后续文档提交不改变生产。
 
+## Server video demo acceptance
+
+- 独立服务器演示已部署：source 6a1b848a3df109098e5f1b9721e6c4df06c2c6d0，run 6a1b848-20260905T081000Z；公网 /demos/science-video/d2nn/。复用ScanSci Chrome151完整headless bundle，CPU渲染22.80秒生成46.25秒720p/H264/AAC视频（4,814,309 bytes），无新增付费API调用。全片解码、五项资源200、Range206、实际首播/章节seek、390px无溢出及零页面异常通过；内部路径最终404（input/先308规范化）。应用release仍390afc0。
+- PR #88仍待CI；已修复Nginx exact alias首页追加index.html问题，改root+try_files。部署脚本9例与renderer4例通过，独立复审通过。
+
 ## Current version tuple
 
 - Worktree / branch: E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance / codex/product-workflow-design；application HEAD 390afc09d3b6ec64d5b23e64f6bffe6bf8a375e7（PR #86），docs HEAD 从 Git 读取。

@@ -91,12 +91,12 @@
 目标是在ECS实际重新渲染已验收分镜，并提供可访问的演示页面；不把单论文演示标记为任意RO自动生成。不变更当前应用release/rollback、数据库或私有RO。
 
 1. `apps/media-demo/` 固定人工核对绘图/CLI、参数保护测试；输入仅原创插图与已有5段WAV，输出720pMP4/海报/分镜/真实运行指标。Linux使用Noto CJK字体，配音文件复用而非宣称Linux TTS已实现。
-2. `apps/media-demo/Dockerfile` 使用Node22、Debian Chromium/FFmpeg/Noto CJK、精确playwright-core依赖；一次性无网非root容器，限制CPU/RAM/PID/临时目录，输入只读，输出在独立demo目录。非任意用户代码运行器。
+2. `apps/media-demo/Dockerfile` 使用Node22、复用ScanSci Chromium、Debian FFmpeg/Noto CJK、精确playwright-core依赖；一次性无网非root容器，限制CPU/RAM/PID/临时目录，输入只读，输出在独立demo目录。非任意用户代码运行器。
 3. `apps/media-demo/web/` 提供科普视频、章节、来源与明确演示说明；仅公开原创媒体和页面，不公开私有PDF、源脚本或原始旁白目录。
 4. `infra/scripts/deploy-science-video-demo.sh` 完成受管Nginx片段、原配置备份/失败恢复和独立目录发布；Nginx原生Range播放，禁止往active应用runtime tree写演示文件。既有用户部署授权适用。
 5. 部署前审查及有意义测试；服务器镜像build、隔离实际渲染、ffprobe/decode与公网首播/seek/390px截图，复核应用release/健康未变。只报告实际时长与资源，不用本地25秒替代ECS实测。
 
-用户新增纠正与参考：开始镜像构建前未完整盘点现有Chromium/Playwright缓存与镜像，不能仅凭PATH无可执行文件判断能力缺失。实际Chromium在ScanSci的 `/opt/scansci-browsers/`，Chrome151.0.7922.34/revision1234精确匹配playwright-core1.62.1。旧重复安装构建acc3963ac653已主动停止（exit137非OOM），无暂停残留。改用多阶段复制完整262MB headless-shell bundle到独立renderer；只补FFmpeg/CJK/运行库，不复制生产容器overlay，不继承ScanSci服务或运行权限。应用生产仍未变。Docker最终ldd/launch/成片待实际验收。
+用户新增纠正与参考：开始镜像构建前未完整盘点现有Chromium/Playwright缓存与镜像，不能仅凭PATH无可执行文件判断能力缺失。实际Chromium在ScanSci的 `/opt/scansci-browsers/`，Chrome151.0.7922.34/revision1234精确匹配playwright-core1.62.1。旧重复安装构建acc3963ac653已主动停止（exit137非OOM），无暂停残留。改用多阶段复制完整262MB headless-shell bundle到独立renderer；只补FFmpeg/CJK/运行库，不复制生产容器overlay，不继承ScanSci服务或运行权限。应用生产仍未变。Docker最终ldd/launch/成片验收通过。
 
 新参考为用户提供的微信公众号文章“过去7天·GitHub被加星最猛的9个videoSkill”；正文访问受限，已据可读元数据定位并查阅[creator-buddy官方仓库](https://github.com/SpaceZephyr/creator-buddy/tree/main/video-Skills)。`space-video-broll`的连续运动叙事、已有浏览器探测和确定性时间轴与当前路线吻合；`space-video-script`适合口语化/逐秒分镜，`space-video-subtitle`强调实际音频时间与科研术语校对。`space-video-broll-sketch`使用Seedance/libtv，不是本地免费生成器；它的静止白板/硬切风格也不能原样替代用户认可的光学动效。未发现仓库LICENSE，暂参考方法，不直接复制代码入产品或批量安装技能。
 
@@ -107,7 +107,7 @@
 - [x] 在 ignored `apps/web/test/visual/out/science-video/` 保存分镜、可复现脚本、MP4和抽样帧。为完整保留旁白，成片46.25秒（比原45秒目标多1.25秒）；首尾复用生成插图，中段为传播/干涉/探测动画。
 - [x] 核对五层结构、训练/推理、10区域光强读出；主线程查看海报及干涉/探测帧，ffprobe证实1280×720、24fps、H264/yuv420p与AAC，1,779,576bytes；全片解码exit0。
 - [x] 独立High审查现有presentation接入缺口；未绕过权限或启用占位provider。主线程本机浏览器首播/跳转26.96秒成功、无video error；390px无横向溢出，证据为playback-validation.json与截图。
-- [x] 输出实际视频、分镜与限制；用户视频效果验收待反馈，正式服务器渲染/RO接入尚未实施。
+- [x] 输出实际视频、分镜与限制；用户视频效果验收待反馈，独立服务器渲染已实施；RO自动接入尚未实施。
 
 样片产物：`d2nn-science-explainer.mp4`、`source-artwork.png`、`poster.png`、`frame-*.png`、`storyboard.json`、`narration.srt/vtt`、`preview.html`、`render.mjs`、`narrate.ps1`、`README.md`、`validation.json`、`playback-validation.json`。本批项目局部Gyan FFmpeg9.0.1保留许可证；系统Scoop shim无目标bin，未改系统安装。编码约21秒按文件时间估算，非严格性能基准；首次下载约158秒。新增付费API调用0，已有图的历史成本与硬件成本未计入。旁白为Windows Huihui，Linux服务端替代方案尚未选择；SRT短语时间近似，画内要点字幕按场景显示。
 
@@ -227,3 +227,9 @@ v2效果迭代：用户认可v1并要求过渡自然、动效突出；`render-v2
 - 相同PDF在新版本重新上传/解析仍缺method/results/reproducibility，未提高字段完整度；最初展示版本保留人工补充标识。自动提取/证据匹配原因待进一步诊断，不能宣称选择器修正解决了全部模型输出问题。
 - 当前输出是可追溯的主张摘要卡片，real-chart.png/svg与桌面/手机截图可验收，源PDF和受控RO保持私有。所有验收会话已注销；文件位于ignored chart-workflow目录。
 - 下一段按用户要求继续功能与展示：成熟方案支持的机制图/图片、视频及Hermes语音编辑讨论；提取完整度和主张/证据自动衔接并行优化。
+
+### ECS独立演示实测（2026-09-05）
+
+独立服务器演示已部署：source 6a1b848a3df109098e5f1b9721e6c4df06c2c6d0，run 6a1b848-20260905T081000Z；公网 /demos/science-video/d2nn/。复用ScanSci Chrome151完整headless bundle，CPU渲染22.80秒生成46.25秒720p/H264/AAC视频（4,814,309 bytes），无新增付费API调用。全片解码、五项资源200、Range206、实际首播/章节seek、390px无溢出及零页面异常通过；内部路径最终404（input/先308规范化）。应用release仍390afc0。
+
+首次公网验收发现Nginx精确location将文件alias再次追加index.html导致500；6a1b848改用root+try_files，重新部署并以真实GET/浏览器验收通过。早期测试只覆盖配置事务，不能替代真实Nginx请求。新增参考creator-buddy/video-Skills的连续动作、口语分镜与字幕对齐方法；微信正文被验证页阻断，已读公开仓库原件。仓库未发现LICENSE，不整包复制；sketch依赖模型渠道，不等于免费本地推理。
