@@ -277,3 +277,10 @@ Keep the accepted v4 full narration and sentence timings. Add an optional waterc
 ### Reviewed-media delivery checkpoint — 2026-09-05
 
 Steps1–5 for reviewed-media import are complete on application83b2933 (rollback390afc0): source/image-bound Parser acceptance, server build/runtime/migrations, real two-session database import, browser playback/Range/individual approval/Claim invalidation and restoration all passed. The private controlled test leaves assets rejected after invalidation; approved screenshots are prior-state evidence. No arbitrary-paper generation or Hermes media-editing completion is claimed. Next prioritize clear media-page hierarchy and terminology, then sourced narrative/storyboard and generation/editing orchestration.
+
+### Media-first layout implementation
+
+1. PresentationWorkbench and localized navigation/copy: gallery first, responsive contained media, explicit status/actions, collapsible source metadata and subsequent concept-map editor; reuse tokens and native controls.
+2. Verify component semantics plus existing E2E permissions, scope changes and recovery. Run scoped lint, Web build/typecheck and local browser screenshots at desktop/390px; check keyboard and reduced motion.
+3. Independently review the diff, sync docs/index, merge candidate, prepare exact Parser acceptance and canonical ECS deployment. Reuse existing media/voice/runtime; no new paid generation or dependency installation.
+4. Validate real private RO media visibility, playback/seek and disclosures in both locales after deployment; logout test session. Record exact source/rollback and screenshots, then continue sourced generation/Hermes editing as a separate slice.

@@ -23,7 +23,10 @@ describe('presentation workbench', () => {
     expect(markup).not.toContain('11111111-1111-4111-8111-111111111111');
     expect(markup).toContain('presentation.generate');
     expect(markup).toContain('presentation.approve');
-    expect(markup).not.toContain('video');
+    expect(markup).not.toContain('<video');
+    expect(markup.indexOf('id="presentation-preview-heading"')).toBeLessThan(markup.indexOf('id="presentation-source-heading"'));
+    expect(markup).toContain('<summary');
+    expect(markup).toContain('sourceDetails');
   });
 });
 
@@ -54,4 +57,28 @@ it('does not offer media approval when server capability is absent', () => {
   expect(markup).toContain('<video');
   expect(markup).not.toContain('presentation.approve');
   expect(markup).toContain('mediaAdminApproval');
+});
+
+
+it.each([
+  { assets: [], expectedOpen: true },
+  { error: 'Save failed', expectedOpen: true },
+  { loadFailed: true, expectedOpen: true },
+  { task: { status: 'running' as const, progress: 20, paused: false }, expectedOpen: true },
+  { task: { status: 'failed' as const, progress: 20, paused: false }, expectedOpen: true },
+  { expectedOpen: false },
+])('keeps source tools reachable for empty, failed and active work: %j', ({expectedOpen, ...overrides}) => {
+  const markup = renderToStaticMarkup(createElement(PresentationWorkbench, {
+    claims: [], assets: [{ id:'image',researchObjectId:'ro',versionId:'v',kind:'image',contentHash:'a'.repeat(64),generator:'reviewed',generatorVersion:'v1',status:'approved',label:'presentation_not_evidence',sourceClaimIds:[],createdAt:'2026-01-01T00:00:00Z',updatedAt:'2026-01-01T00:00:00Z' }],
+    version:{versionId:'v',versionNo:1,status:'draft'},canWrite:true,
+    onCreateClaim:vi.fn(),onGenerate:vi.fn(),onTransition:vi.fn(), ...overrides,
+  }));
+  const disclosure = markup.match(/<details[^>]*data-source-tools="true"[^>]*>/)?.[0];
+  expect(disclosure).toBeDefined();
+  expect(disclosure?.includes('open=""')).toBe(expectedOpen);
+  expect(markup).toContain('claimStatementLabel');
+  if ('error' in overrides) {
+    expect(markup.indexOf('role="alert"')).toBeLessThan(markup.indexOf('data-source-tools="true"'));
+  }
+  if ('task' in overrides) expect(markup.indexOf('role="progressbar"')).toBeLessThan(markup.indexOf('data-source-tools="true"'));
 });

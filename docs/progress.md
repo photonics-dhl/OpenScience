@@ -2,6 +2,10 @@
 
 > 最新同步：2026-09-05 +08。应用83b2933已部署，rollback390afc0。后续文档提交不改变生产；历史过程由Git保存。
 
+## Media-first layout in progress
+
+- 用户批准继续优化媒体页：媒体先于表单、全宽桌面双列/手机单列、来源按需展开、任务与错误保持可见；沿用暖白/朱红与原生控件，无新增依赖。9项组件测试、Web499+5项测试、10项浏览器流程、build/typecheck/lint通过；真实插图尺寸已检查，本地代理视频读取不稳定，最终播放在ECS直接验收。应用仍83b2933/rollback390afc0。
+
 ## Reviewed RO media delivered
 
 - PR88/89/main83b2933：管理员+workspace写权限的受审PNG/MP4导入，默认dry-run、精确版本/Claims、真实来源、草稿/审计/幂等；原生视频预览、安全单Range和canTransition。没有打开任意论文媒体生成器。
