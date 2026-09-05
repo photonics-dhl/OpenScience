@@ -13,7 +13,7 @@ async function mockWorkspace(page: Page) {
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { researchObjects: [{
     id: 'ro-hermes', publicId: 'OSR-2026-000042', title: 'Coherent transport at the attosecond frontier', version: 2, status: 'draft',
   }] }));
-  await page.route('**/api/ingestion?actionable=true', (route) => json(route, { tasks: [] }));
+  await page.route('**/api/ingestion?actionable=true*', (route) => json(route, { tasks: [] }));
   await page.route('**/api/research-objects/ro-hermes/versions', (route) => json(route, { versions: [] }));
   await page.route('**/api/research-objects/ro-hermes', (route) => json(route, { researchObject: {
     id: 'ro-hermes', workspaceId: 'workspace-hermes', title: 'Coherent transport at the attosecond frontier',

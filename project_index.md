@@ -10,6 +10,16 @@
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑的已确认产品范围 | CURRENT；效果待分段验收 |
 | `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划 | CURRENT；Task 1 审计进行中 |
 
+| `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/ContinueResearch.tsx` / `apps/web/components/research/ResearchWorkspaceNav.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/components/hermes/HermesTaskEntry.tsx` / `apps/web/messages/{zh,en}.json` | 同 RO 待确认优先、Hermes 常驻导航、真实任务入口与错误恢复、现有助手连接 | LOCAL candidate；production unchanged |
+| `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO 入口、scope、恢复、确认和移动体验回归 | LOCAL；7 browser cases GREEN，API fixtures |
+
+| `apps/web/app/me/{page,layout}.tsx` / `apps/web/app/settings/page.tsx` / `apps/web/components/navigation/{AccountLink,ProductRouteNavigation}.tsx` / `apps/web/components/profile/MyResearchProjects.tsx` / `apps/web/components/settings/{AcademicIdentityControl,MotionPreferenceControl}.tsx` / `apps/web/components/hermes/HermesWorkspaceStage.tsx` / `apps/web/components/shell/DashboardShell.tsx` | frontend/nanqing 个人主页/设置分离、身份恢复与移动导航整合 | LOCAL integrated，尚未部署 |
+| `apps/web/lib/api.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/test/{api-agent,hermes-guide-recovery}.test.ts` | 绑定 RO 的 guide 会话与范围恢复、scoped ingestion client | LOCAL；复审修正 |
+| `apps/web/playwright.release.config.ts` / `apps/web/package.json` / `apps/web/test/e2e/{academic-identity-recovery,product-release,auth-dashboard,hermes-blank-ro-flow,hermes-dashboard,hermes-workspace-stage,hermes-field-guide}.spec.ts` | 合并同事浏览器用例，既有 release suite 纳入 continuation，scoped task fixtures | LOCAL integrated |
+| `packages/domain/src/ingestion/ingestion-service.ts` / `packages/domain/test/{ingestion-service.test.ts,helpers/fakes.ts}` / `apps/api/src/routes/ingestion.ts` | RO membership 范围内任务查询，过滤先于 limit，个人 feed 兼容 | LOCAL；无迁移 |
+
+| `apps/api/test/ingestion-routes.test.ts` / `apps/web/test/e2e/start-release-api.mjs` | Scoped ingestion 路由/权限合同与可选独立 release fixture 端口 | LOCAL；保留默认 3001，Windows portproxy 环境用 3311 |
+
 ## 根目录
 | 路径 | 用途 | 状态 |
 |---|---|---|

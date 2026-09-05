@@ -21,7 +21,7 @@ async function mockAuthenticatedUser(page: Page, options: {
   await page.route('**/api/research-objects?limit=20', async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjects: options.researchObjects ?? [] }) });
   });
-  await page.route('**/api/ingestion?actionable=true', async (route) => {
+  await page.route('**/api/ingestion?actionable=true*', async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: options.tasks ?? [] }) });
   });
   await page.route('**/api/workspaces', async (route) => {

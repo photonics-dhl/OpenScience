@@ -28,7 +28,7 @@ async function installBlankRoApi(page: Page, options: { failAfterRetry?: boolean
     userId: 'blank-user', email: 'blank@example.invalid', displayName: 'Ada', status: 'email_verified', level: 'free',
   }));
   await page.route('**/api/workspaces', (route) => json(route, { workspaces: [{ id: 'workspace-blank', name: 'Ada lab' }] }));
-  await page.route('**/api/ingestion?actionable=true', (route) => json(route, { tasks: [] }));
+  await page.route('**/api/ingestion?actionable=true*', (route) => json(route, { tasks: [] }));
   await page.route('**/api/agent/tasks?actionable=false&kind=workspace.guide', (route) => json(route, { tasks: [] }));
   await page.route('**/api/csrf-token', (route) => json(route, { csrfToken: 'blank-csrf' }));
   await page.route('**/api/research-objects', (route) => {

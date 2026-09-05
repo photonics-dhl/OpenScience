@@ -63,8 +63,8 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
   app.get('/ingestion', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
-    z.object({ actionable: z.enum(['true']).optional() }).parse(req.query);
-    return reply.send({ tasks: await listActionableIngestionTasks(deps, { userId: user.userId }) });
+    const { researchObjectId } = z.object({ actionable: z.enum(['true']).optional(), researchObjectId: z.string().uuid().optional() }).parse(req.query);
+    return reply.send({ tasks: await listActionableIngestionTasks(deps, { userId: user.userId, researchObjectId }) });
   });
 
   app.get('/ingestion/:batchId', async (req, reply) => {

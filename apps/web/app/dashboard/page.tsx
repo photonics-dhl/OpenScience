@@ -6,6 +6,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 
 import LocaleSwitcher from '@/components/LocaleSwitcher';
+import { AccountLink } from '@/components/navigation/AccountLink';
 import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
 import { ImportStage } from '@/components/dashboard/ImportStage';
 import { LiteratureAcquisition } from '@/components/dashboard/LiteratureAcquisition';
@@ -16,7 +17,7 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { deriveHermesGuide } from '@/components/hermes/hermes-guide';
 import { deriveHermesCompositeVisualState } from '@/components/hermes/hermes-state';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, getCurrentUser, getDashboardOverview, listSourceRetrieveTasks, type AgentTaskView, type CurrentUser } from '@/lib/api';
+import { ApiClientError, getCurrentUser, getDashboardOverview, listResearchIngestionTasks, listSourceRetrieveTasks, type AgentTaskView, type CurrentUser } from '@/lib/api';
 import type { DashboardResearch } from '@/components/dashboard/ResearchList';
 import type { Locale } from '@/i18n/locale';
 
@@ -39,7 +40,10 @@ export default function DashboardPage() {
   useEffect(() => {
     let active = true;
     Promise.all([getCurrentUser(), getDashboardOverview(), listSourceRetrieveTasks({ kind: 'personal' })])
-      .then(([currentUser, overview, retrieval]) => {
+      .then(async ([currentUser, overview, retrieval]) => {
+        const latestId = overview.researchObjects[0]?.id;
+        const latestTasks = latestId ? (await listResearchIngestionTasks(latestId)).tasks : [];
+        const visibleTasks = latestId ? [...latestTasks, ...overview.tasks.filter((task) => task.researchObjectId !== latestId)] : overview.tasks;
         if (!active) return;
         setUser(currentUser);
         const mappedResearch = overview.researchObjects.map((research) => ({
@@ -48,10 +52,10 @@ export default function DashboardPage() {
           title: research.title,
           versionNo: research.version,
           status: research.status,
-          pendingCount: overview.tasks.filter((task) => task.researchObjectId === research.id).length,
+          pendingCount: visibleTasks.filter((task) => task.researchObjectId === research.id).length,
         }));
         setResearchObjects(mappedResearch);
-        setTasks(overview.tasks);
+        setTasks(visibleTasks);
         setLiteratureTask(retrieval.tasks[0] ?? null);
         setLiteratureRecovered(true);
       })
@@ -115,7 +119,7 @@ export default function DashboardPage() {
       activeRoute="dashboard"
       headerActions={(
         <div className="ml-auto flex items-center justify-end gap-2">
-          <span data-reading-role="caption" className="hidden text-os-muted-paper sm:inline">{user?.displayName}</span>
+          <AccountLink user={user} />
           <LocaleSwitcher locale={locale} />
         </div>
       )}
@@ -136,7 +140,7 @@ export default function DashboardPage() {
         </header>
 
         <div className="lg:col-span-8">
-          <ContinueResearch research={researchObjects[0] ?? null} />
+          <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
         </div>
         <div className="lg:col-span-4 lg:row-span-2">
           <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={visualState} suggestion={suggestion} />

@@ -33,7 +33,7 @@
 - [x] fetch 后核对最新 main、CURRENT handoff 与生产身份的既有实测证据。
 - [x] 确认 `frontend/nanqing` 为同事分支，记录持续巡检授权。
 - [x] 读取 Dashboard 与 Hermes Drawer，确认已有文献获取和 task/session 路径。
-- [ ] 比较同事分支与 main 的实际文件，识别已移植功能；只把未包含且适用的成果列入候选。
+- [x] 比较同事分支与 main 的实际文件，识别已移植功能；只把未包含且适用的成果列入候选。
 - [ ] 浏览器完成空工作区、导入处理中、待确认、已有 RO、生成失败、已发布六种状态；记录用户能否找到下一步。
 - [ ] 检查跨 RO 切换、浏览器刷新和返回时 Hermes 的目标、任务和版本是否正确。
 - [ ] 将每个断点映射到现有代码与测试后，在本文件补充第一段逐文件实现步骤；不得凭文件名猜测修复。
@@ -45,6 +45,28 @@
 **Consumes:** 既有 API DTO 与 route；不先设计新的统一后端。
 
 **Produces:** 可实际执行的导入 → Hermes 任务 → RO 确认编辑 → 预览 → 返回继续研究。
+
+### 首批已复现断点与实施范围（2026-09-05）
+
+| 触发 | 实际结果 | 修复 owner | 验收 |
+|---|---|---|---|
+| Dashboard 有待确认材料，点主继续按钮 | 固定跳编辑器，错过待确认任务 | ContinueResearch + DashboardPage | 同 RO needs_review 优先，其他 RO 不串入，无待办仍进入编辑器 |
+| 打开 RO 的 /hermes 且不带 task | 显示 missing task，无真实任务入口 | HermesReviewPage + Hermes task entry | 当前 RO 任务列表、空态、错误重试、编辑/材料入口 |
+| RO 各页面寻找 Hermes | 二级导航没有 Hermes | ResearchWorkspaceNav | 常驻入口与独立 active 状态，桌面/移动可达 |
+| 修改 URL task/RO 或请求失败 | effect 仅监听 task，旧 detail 未清理；失败仍有 loading | HermesReviewPage | 校验返回 RO、取消旧结果、明确错误与重试 |
+
+本批复用 Next Link、现有 Research Folio、getDashboardOverview/getResearchObject、ingestion 确认和已有 deep link；不引入第三方依赖或新 API。先完成已有路径连接，无需为导航另建状态机。浏览器证据使用真实 Next 页面与明确的 API fixtures，只证明前端流程，不冒充真实账号/数据库验收。
+
+具体顺序：
+
+1. `apps/web/test/auth-dashboard.test.tsx` 添加 continuation 和 nav 回归，先记录 RED。
+2. `apps/web/components/dashboard/ContinueResearch.tsx` 接收现有 tasks，选择同 RO 待复核任务；`apps/web/app/dashboard/page.tsx` 传入已加载 tasks。
+3. `apps/web/components/research/ResearchWorkspaceNav.tsx` 增加 Hermes 入口；不扩大后端 DTO。
+4. 为 Hermes 入口添加组件与测试，改造 `apps/web/app/research-objects/[id]/hermes/page.tsx` 的空入口、作用域与失败恢复，修改 `messages/zh.json`、`messages/en.json` 对应文案。
+5. `apps/web/test/e2e/research-continuation.spec.ts` 验证主继续按钮、直接任务入口、移动空态；再补作用域错误与确认后继续回归。
+6. 相关单测、浏览器、Web typecheck/test/build、lint 和独立复审后进入生产发布候选；未验收的状态继续记录为 pending。
+
+同事成果核验：`origin/frontend/nanqing@e5db5ae` 与 main 有 18 个 Web 文件差异，main 与 production `b32d81c` 的 Web tree 无差异，故该批前端尚未部署。个人主页/设置拆分、身份恢复与移动账号入口为适用候选；工具与部署脚本另行审查，不盲合整个分支。
 
 - [ ] 先为查明的上下文丢失、错误目标或状态恢复问题编写有意义的失败回归。
 - [ ] 复用既有导航、Drawer、任务和 diff 组件补齐断点，统一主动作、返回路径、loading/empty/error 文案。
@@ -80,3 +102,21 @@
 - 文档格式：`npx pnpm@9.15.0 docs:lint`。
 - 变更卫生：`git diff --check`。
 - 本检查点不声称代码实现、运行时测试、用户效果验收或新部署已完成。
+
+## 首批本地验收记录
+
+- 首批入口修复已实现；Web 7 个真实浏览器交互场景通过（受控 API fixtures）、Web 单测及 Node contracts、typecheck、targeted ESLint 通过。完整页面审计、同事分支集成、生产部署和用户效果验收仍未完成。
+- 用户已确认五段范围；本批只实现第一段的已复现入口断点，不代表图片/视频/语音或完整产品五段完成。
+
+## 独立复审后的必要范围修正
+
+- 全局最近 20 条个人任务在过滤 RO 前已截断，会把旧任务或协作者任务误判为空；现有 feed 不足以支持 RO 任务页。新增 GET /ingestion?actionable=true&researchObjectId=UUID 的可选兼容查询：先核对 RO membership，再按 RO 过滤后取 20 条，响应仍为既有 tasks DTO；无参数保留个人 Dashboard 合同。首屏继续研究另取当前 RO scoped tasks；其余 Dashboard 列表仍是最近个人工作。无迁移。
+- 原 Drawer 恢复第一条全局 guide，会串研究上下文；创建 session 使用既有 researchObjectId 字段，RO 页面只恢复相同 RO，Dashboard 只恢复非 RO session。历史未绑定 RO 的 guide 不在 RO 页自动恢复，不能猜测归属。
+- 同事 18 个 Web 文件已选择性整合，保留本轮改动，修复 settings#research-profile 的锚点；没有引入同事的部署/同步脚本。
+
+## 首批候选验证（2026-09-05）
+
+- production browser matrix 87/87 GREEN（含同事 identity/个人主页与本轮 7 个 continuation 场景）；使用独立 fixture 端口 3311，默认 3001 与本机 Windows iphlpsvc portproxy 冲突，未改系统服务。
+- Web 479/479 + Node 5/5、domain ingestion 39/39、API scoped route 3/3、全仓 test/typecheck/lint、docs-sync 和 docs-lint GREEN；Web production build GREEN。独立前端审查和 scoped 修正后复审均无剩余阻断。
+- 仍待：全仓 build 最终收口、main 集成、ECS build/健康/公网验收和用户效果验收；真实 ORCID/SMTP、真实账号研究数据纵向验收未由 mocked 浏览器矩阵替代。
+- 非阻断：scoped feed 上限 20 条且未提供分页；viewer 的确认控件仍依赖 API 拒绝无权写入；其他完整产品子阶段保持未完成。

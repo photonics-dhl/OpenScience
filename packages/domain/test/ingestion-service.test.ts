@@ -163,6 +163,36 @@ describe('multi-format ingestion service', () => {
     await expect(listActionableIngestionTasks(deps, { userId: 'another-user' })).resolves.toEqual([]);
   });
 
+  it('includes other creators in scoped reads while preserving caller-only dashboard tasks', async () => {
+    const { deps, db, user } = makeDeps();
+    const batch = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('shared.pdf')] });
+    db.memberships.push({ ...db.memberships[0], id: 'viewer-member', userId: 'viewer', role: 'viewer' });
+    await expect(listActionableIngestionTasks(deps, { userId: 'viewer', researchObjectId: TEST_RO_ID })).resolves.toEqual([
+      expect.objectContaining({ id: batch.tasks[0].id, logicalPath: 'shared.pdf' }),
+    ]);
+    await expect(listActionableIngestionTasks(deps, { userId: 'viewer' })).resolves.toEqual([]);
+  });
+
+  it('filters the research object before the twenty task limit', async () => {
+    const { deps, db, user } = makeDeps();
+    const batch = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('target.pdf')] });
+    db.ingestionTasks[0].updatedAt = new Date('2020-01-01');
+    const otherRoId = '00000000-0000-4000-8000-000000000102';
+    db.researchObjects.push({ ...db.researchObjects[0], id: otherRoId });
+    db.ingestionBatches.push({ ...db.ingestionBatches[0], id: 'other-batch', researchObjectId: otherRoId });
+    for (let i = 0; i < 21; i += 1) db.ingestionTasks.push({ ...db.ingestionTasks[0], id: `other-${i}`, batchId: 'other-batch', updatedAt: new Date('2025-01-01') });
+    await expect(listActionableIngestionTasks(deps, { userId: user.id, researchObjectId: TEST_RO_ID })).resolves.toEqual([
+      expect.objectContaining({ id: batch.tasks[0].id, researchObjectId: TEST_RO_ID }),
+    ]);
+    expect(await listActionableIngestionTasks(deps, { userId: user.id })).toHaveLength(20);
+  });
+
+  it('rejects nonmembers and missing research objects before returning scoped tasks', async () => {
+    const { deps, user } = makeDeps();
+    await expect(listActionableIngestionTasks(deps, { userId: 'outsider', researchObjectId: TEST_RO_ID })).rejects.toMatchObject({ code: 'WORKSPACE_NOT_FOUND' });
+    await expect(listActionableIngestionTasks(deps, { userId: user.id, researchObjectId: 'missing' })).rejects.toMatchObject({ code: 'INGESTION_NOT_FOUND' });
+  });
+
   it.each(['viewer', 'reviewer'])('rejects %s ingestion writes', async (role) => {
     const { deps, db, user } = makeDeps();
     db.memberships[0].role = role;

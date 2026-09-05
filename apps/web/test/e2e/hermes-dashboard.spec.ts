@@ -514,7 +514,7 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
     await loadingGate;
     await json(route, { researchObjects: [] });
   });
-  await page.route('**/api/ingestion?actionable=true', async (route) => {
+  await page.route('**/api/ingestion?actionable=true*', async (route) => {
     await loadingGate;
     await json(route, { tasks: [] });
   });
@@ -539,7 +539,7 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
     userId: 'hermes-user', email: 'hermes@example.invalid', displayName: 'Ada', status: 'email_verified', level: 'free',
   }));
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { error: { message: 'Research index unavailable' } }, 503));
-  await page.route('**/api/ingestion?actionable=true', (route) => json(route, { tasks: [] }));
+  await page.route('**/api/ingestion?actionable=true*', (route) => json(route, { tasks: [] }));
   await page.route('**/api/agent/tasks**', (route) => {
     const url = new URL(route.request().url());
     if (url.searchParams.get('actionable') === 'false' && url.searchParams.get('kind') === 'source.retrieve') {

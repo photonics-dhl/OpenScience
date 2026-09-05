@@ -953,6 +953,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         let rows = db.ingestionTasks.filter((task) => {
           const batch = db.ingestionBatches.find((candidate) => candidate.id === task.batchId);
           return (where?.batch?.userId === undefined || batch?.userId === where.batch.userId) &&
+            (where?.batch?.researchObjectId === undefined || batch?.researchObjectId === where.batch.researchObjectId) &&
             (where?.state?.in === undefined || where.state.in.includes(task.state));
         });
         if (orderBy?.updatedAt === 'desc') {

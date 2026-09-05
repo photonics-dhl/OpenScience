@@ -12,7 +12,7 @@
 
 - 用户确认优先完整功能、展示和交互；复用现有能力，成熟方案优先，分段交用户验收。论文生成图片/视频；语音用于 Hermes 修改 RO，不做上传音视频理解。
 - 同事分支确认 frontend/nanqing，已授权选择性整合部署；每日 10:00 巡检。先查已移植成果，避免重复合并。
-- 新 design 与 delivery plan 已登记；Task 1 页面断点审计尚未完成，代码和生产版本未改。下一步完成真实旅程审计及第一段逐文件实施步骤。
+- 新 design 与 delivery plan 已登记；首批入口代码与同事 18-file Web 变更已整合；RO 会话/任务范围经独立复审修正。完整五段未完成，production 未改；全仓 test/typecheck/lint、Web 479+5、production browser 87/87 通过；下一步全仓 build、main 集成和发布验收。
 
 ## 2026-09-05 — Hermes Research Intelligence 12/12 production closeout
 

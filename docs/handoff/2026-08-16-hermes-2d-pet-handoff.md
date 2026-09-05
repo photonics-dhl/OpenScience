@@ -34,9 +34,9 @@
 
 ## Next action and read first
 
-1. 按 `docs/plans/2026-09-05-integrated-research-product-plan.md` 完成 Task 1 真实页面断点与同事成果审计；新 design 记录已批准范围，效果未验收。不要继续旧 Task 10–12。
+1. 按 `docs/plans/2026-09-05-integrated-research-product-plan.md` 完成首批候选全仓验证、浏览器矩阵与部署验收；新 design 记录已批准范围，效果未验收。不要继续旧 Task 10–12。
 2. 新任务先读 `AGENTS.md`、本 handoff、`docs/progress.md`，再按 `project_index.md` 定向读取需求基线相关章节。
 3. 涉及生产时重新核对 active/public/rollback；文档 HEAD 不得冒充 application release。
 
 - 同事分支 frontend/nanqing 已确认，每日 10:00 巡检，用户授权选择性合并优质前端成果并部署。
-- 本轮只更新设计/交付计划和交接；无代码、依赖安装、迁移或新部署。
+- 本轮首批代码候选已实现：Dashboard 待确认优先、RO Hermes 任务入口/会话绑定/范围查询、同事个人主页与设置分离。独立复审无阻断；本地测试/构建与浏览器矩阵收口中，未部署。无新依赖或迁移。
