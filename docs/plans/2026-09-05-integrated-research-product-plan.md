@@ -84,6 +84,43 @@
 
 ## Task 4: 视频
 
+### 当前执行批次：D2NN 科普样片
+
+### 服务器演示执行（用户已批准继续）
+
+目标是在ECS实际重新渲染已验收分镜，并提供可访问的演示页面；不把单论文演示标记为任意RO自动生成。不变更当前应用release/rollback、数据库或私有RO。
+
+1. `apps/media-demo/` 固定人工核对绘图/CLI、参数保护测试；输入仅原创插图与已有5段WAV，输出720pMP4/海报/分镜/真实运行指标。Linux使用Noto CJK字体，配音文件复用而非宣称Linux TTS已实现。
+2. `apps/media-demo/Dockerfile` 使用Node22、复用ScanSci Chromium、Debian FFmpeg/Noto CJK、精确playwright-core依赖；一次性无网非root容器，限制CPU/RAM/PID/临时目录，输入只读，输出在独立demo目录。非任意用户代码运行器。
+3. `apps/media-demo/web/` 提供科普视频、章节、来源与明确演示说明；仅公开原创媒体和页面，不公开私有PDF、源脚本或原始旁白目录。
+4. `infra/scripts/deploy-science-video-demo.sh` 完成受管Nginx片段、原配置备份/失败恢复和独立目录发布；Nginx原生Range播放，禁止往active应用runtime tree写演示文件。既有用户部署授权适用。
+5. 部署前审查及有意义测试；服务器镜像build、隔离实际渲染、ffprobe/decode与公网首播/seek/390px截图，复核应用release/健康未变。只报告实际时长与资源，不用本地25秒替代ECS实测。
+
+用户新增纠正与参考：开始镜像构建前未完整盘点现有Chromium/Playwright缓存与镜像，不能仅凭PATH无可执行文件判断能力缺失。实际Chromium在ScanSci的 `/opt/scansci-browsers/`，Chrome151.0.7922.34/revision1234精确匹配playwright-core1.62.1。旧重复安装构建acc3963ac653已主动停止（exit137非OOM），无暂停残留。改用多阶段复制完整262MB headless-shell bundle到独立renderer；只补FFmpeg/CJK/运行库，不复制生产容器overlay，不继承ScanSci服务或运行权限。应用生产仍未变。Docker最终ldd/launch/成片验收通过。
+
+新参考为用户提供的微信公众号文章“过去7天·GitHub被加星最猛的9个videoSkill”；正文访问受限，已据可读元数据定位并查阅[creator-buddy官方仓库](https://github.com/SpaceZephyr/creator-buddy/tree/main/video-Skills)。`space-video-broll`的连续运动叙事、已有浏览器探测和确定性时间轴与当前路线吻合；`space-video-script`适合口语化/逐秒分镜，`space-video-subtitle`强调实际音频时间与科研术语校对。`space-video-broll-sketch`使用Seedance/libtv，不是本地免费生成器；它的静止白板/硬切风格也不能原样替代用户认可的光学动效。未发现仓库LICENSE，暂参考方法，不直接复制代码入产品或批量安装技能。
+
+用户已认可科学插图方向并批准按质量与成本自主选型。本批先产出可播放样片，不把单篇预制动画当作任意论文自动生成能力。
+
+- [x] 核对 Git 与服务器：2026-09-05 release/rollback 仍为390afc0/c07c8d1；16 CPU、约30GiB内存，nvidia-smi和宿主机ffmpeg未发现；13容器运行，公网与loopback健康。
+- [x] 比较成熟方案：diagram-design提供HTML/SVG图形语法；story-to-handdrawn-video基于Remotion做无声画面轨；Remotion自动化商业许可需按实际组织情况核实。当前已有Playwright与FFmpeg足够验证样片，暂不新增渲染框架。
+- [x] 在 ignored `apps/web/test/visual/out/science-video/` 保存分镜、可复现脚本、MP4和抽样帧。为完整保留旁白，成片46.25秒（比原45秒目标多1.25秒）；首尾复用生成插图，中段为传播/干涉/探测动画。
+- [x] 核对五层结构、训练/推理、10区域光强读出；主线程查看海报及干涉/探测帧，ffprobe证实1280×720、24fps、H264/yuv420p与AAC，1,779,576bytes；全片解码exit0。
+- [x] 独立High审查现有presentation接入缺口；未绕过权限或启用占位provider。主线程本机浏览器首播/跳转26.96秒成功、无video error；390px无横向溢出，证据为playback-validation.json与截图。
+- [x] 输出实际视频、分镜与限制；用户视频效果验收待反馈，独立服务器渲染已实施；RO自动接入尚未实施。
+
+样片产物：`d2nn-science-explainer.mp4`、`source-artwork.png`、`poster.png`、`frame-*.png`、`storyboard.json`、`narration.srt/vtt`、`preview.html`、`render.mjs`、`narrate.ps1`、`README.md`、`validation.json`、`playback-validation.json`。本批项目局部Gyan FFmpeg9.0.1保留许可证；系统Scoop shim无目标bin，未改系统安装。编码约21秒按文件时间估算，非严格性能基准；首次下载约158秒。新增付费API调用0，已有图的历史成本与硬件成本未计入。旁白为Windows Huihui，Linux服务端替代方案尚未选择；SRT短语时间近似，画内要点字幕按场景显示。
+
+v2效果迭代：用户认可v1并要求过渡自然、动效突出；`render-v2.mjs`加入0.6秒画面过渡、3.5%镜头推进、层板依次入场/波包响应与区域7柔和脉冲。`d2nn-science-explainer-v2.mp4`保留46.25秒旁白，4,798,719bytes，720p/24fps/H264/AAC；渲染计时25.173秒，新增模型调用0。主线程完整解码exit0并直接从最终MP4抽取第23秒确认文字/画面；v1保留。README-v2/validation-v2/render-timing-v2保存制作方法与证据，生产未改。
+
+独立 High 架构审查已核对的接入缺口（本批不冒称已修复）：
+
+1. `apps/agent-worker/src/presentation/minimax-admin.ts` 只有接口，且仅传 kind/Claim IDs；`src/index.ts` 注册时未注入生成器。应在 Worker 按当前授权版本解析 SDF/Claims/Evidence/SourceMap，形成有界叙事与分镜，再交给 Gateway 和 renderer。原始 proof 与衍生资产必须分开。
+2. `PresentationWorkbench.tsx` 当前只生成 chart，尚无视频播放器；Hermes 需要绑定具体资产和版本的生成/修订动作。样片手工分镜不能证明这条自动链已打通。
+3. Worker 输出上限10MiB、reader上限16MiB，private route拒绝Range且reader全量buffer。正式视频接入先按实际成片决定容量，并验证首播、seek与移动播放；不能仅把MP4上传就声称可用。
+4. 现有Claim变更失效可复用；当生成叙事消费Evidence时，也要覆盖Evidence变更。重试要复用已完成媒体，避免同一任务重复消耗provider额度。
+5. Renderer部署应仿照parser的独立无网、无Secret、非root、资源限制容器，接收验证后的本地资产与JSON；不让模型HTML/外部URL直接进入浏览器。首阶段不需要新表、新hash或全局门禁。
+
 - [ ] 比较 story-to-handdrawn-video、Remotion 与现有生成路径，核实许可、CPU 成本、尺寸、字幕和导出能力。
 - [ ] 以同一 RO 做真实分镜/成片样例，选定实现后补充独立视频实施计划与所需安装清单。
 - [ ] 接通异步生成、预览、修改和版本展示；失败可恢复，不能用占位视频代替真实产物。
@@ -190,3 +227,49 @@
 - 相同PDF在新版本重新上传/解析仍缺method/results/reproducibility，未提高字段完整度；最初展示版本保留人工补充标识。自动提取/证据匹配原因待进一步诊断，不能宣称选择器修正解决了全部模型输出问题。
 - 当前输出是可追溯的主张摘要卡片，real-chart.png/svg与桌面/手机截图可验收，源PDF和受控RO保持私有。所有验收会话已注销；文件位于ignored chart-workflow目录。
 - 下一段按用户要求继续功能与展示：成熟方案支持的机制图/图片、视频及Hermes语音编辑讨论；提取完整度和主张/证据自动衔接并行优化。
+
+### ECS独立演示实测（2026-09-05）
+
+独立服务器演示已部署：source 6a1b848a3df109098e5f1b9721e6c4df06c2c6d0，run 6a1b848-20260905T081000Z；公网 /demos/science-video/d2nn/。复用ScanSci Chrome151完整headless bundle，CPU渲染22.80秒生成46.25秒720p/H264/AAC视频（4,814,309 bytes），无新增付费API调用。全片解码、五项资源200、Range206、实际首播/章节seek、390px无溢出及零页面异常通过；内部路径最终404（input/先308规范化）。应用release仍390afc0。
+
+首次公网验收发现Nginx精确location将文件alias再次追加index.html导致500；6a1b848改用root+try_files，重新部署并以真实GET/浏览器验收通过。早期测试只覆盖配置事务，不能替代真实Nginx请求。新增参考creator-buddy/video-Skills的连续动作、口语分镜与字幕对齐方法；微信正文被验证页阻断，已读公开仓库原件。仓库未发现LICENSE，不整包复制；sketch依赖模型渠道，不等于免费本地推理。
+
+### Qwen CPU配音试听（用户已批准）
+
+1. 盘点并复用已有CPU PyTorch基础，隔离试验与BGE服务；模型独立存放，新增磁盘峰值预算15GB。
+2. 下载固定版本Qwen3-TTS 1.7B CustomVoice（约4.52GB），不使用云API，不安装VoiceDesign/Base。
+3. 同文案生成Serena、Uncle_Fu、Vivian短试听；固定随机种子，记录加载/生成耗时、音频时长、峰值内存与磁盘。容器无网推理、资源受限、任务超时。
+4. WAV完整解码、非空/有限波形校验后提供实际音频；正式RO/Hermes接入仍走Gateway，当前是隔离模型评估而非产品新端点。
+5. 更新runbook/索引/进度，按实测决定CPU适用性。
+
+实测结果：Qwen三音色已在ECS CPU完成：Serena15.92s/生成39.57s、Uncle_Fu15.68s/39.45s、Vivian17.68s/43.99s；峰值进程RSS5.22–5.31GiB，4线程/BF16/SDPA，付费API调用0。三段WAV全片解码、有限非零波形通过；自然度与内容完整性待用户试听，不能把生成成功当作听感验收。基础镜像971705460bytes；子镜像2043364436bytes已含基础层；模型4520217432bytes。df可用101313294336bytes（94.36GiB），较清理后占用增加约6.11GiB；公网/loopback200、应用390afc0不变。
+
+### Voice naturalness revision
+
+用户反馈第一轮Qwen比系统语音好，但仍机械。复用Serena/seed42/CPU模型，先生成A（原文+具体日常聊天指令）与B（相同聊天指令+短句口语文案）。B保留五层结构、传播分类，并补充训练制造在先，避免误解为无需训练。原样本保留，各候选输出独立目录；不追加模型或付费API。比较A与旧版看指令影响，比较B与A看口语稿整体影响（B时长和措辞变化，不是严格同文案实验）。最终自然度需用户试听。
+
+### Full video conversational narration (approved B)
+
+User accepted B naturalness and approved applying it to full demo. Generate five reviewed scene paragraphs with the existing offline Qwen/Serena runtime and fixedseed42; retain original demo release for rollback. Reuse audio-duration scene timing, attach bounded optional narration.json with scene-level exact-text cues, replace stale Windows provenance. Update chapter buttons and page duration from actual WAV timings, then build/render/publish via existing isolated demo transaction. Validate narration4 unit tests, renderer cue bounds, full MP4 decode, real browser playback/chapters/mobile and unchanged app release. No new model, API, schema or gateway endpoint.
+
+完整口语视频交付实测：历史独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白总长37.12秒、生成耗时91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；新增版本CI待完成。
+
+### Continuous narration accepted (v4)
+
+User accepted v4 relaxed full WAV (41.28s); further voice polish deferred. Preserve the exact single audio stream, bypass legacy per-scene padding, and derive five visual intervals from reviewed sentence pauses at 0/6.45/11/20.56/31.81 seconds. Sentence captions use waveform silence boundaries, not claimed phoneme forced alignment. Update mobile chapter captions and duration. Validate bounded input/metadata, unchanged audio sample stream at staging, render/decode/public playback on ECS; keep prior demo for rollback. No new dependencies, model calls, or application/schema changes. Then proceed to artistic visual styles in the next product increment.
+
+历史技术风格视频：f4b4db3df77c7568b0c2a7e266035dc6f5f42303，run f4b4db3-20260905T113000Z。用户已接受v4完整配音；原WAV41.28秒逐字节一致，直接AAC封装，无分段/补静音/变速。视频41.292秒/991帧/4,432,202bytes，ECS渲染20.50秒。字幕依据语句停顿，章节0/6.45/11/20.56/31.81；10项渲染测试、音频4项、lint/docs、独立发布复审、全片解码、公网200/Range206/实际播放跳转/390px字幕无溢出/零页面错误均通过。应用390afc0/回滚c07c8d1不变，旧demo617ed1c保留。PR88新CI仍进行中。下一步图片/画面艺术风格，声音后续微调。
+
+### Artistic visual iteration (approved next step)
+
+Keep the accepted v4 full narration and sentence timings. Add an optional watercolor visual style while retaining technical rendering as the default for old inputs. Generate an original panorama with exactly five plates and ten detector cells; full-image contain framing protects scientific objects. Reference story-to-handdrawn-video's contained composition and monochrome-to-color reveal, then adapt to the existing CPU Canvas renderer rather than adding a second full Remotion runtime. Apply consistent pencil contours/paper material and restrained wave motion to mechanism scenes. Render and inspect representative frames, then deploy the isolated demo and validate audio, playback/Range/mobile. Scientific limits remain visible; illustrated intensity values are not measurements.
+
+CURRENT淡彩视频：source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705a-20260905T121000Z；原创2172x724五层/十探测区全景、线稿显色、纸张与石墨质感。用户已认可的v4原WAV保持逐字节一致；视频41.292s/3,203,000bytes，ECS渲染37.76s。11项测试、ESLint/docs、独立复审（technical兼容/画面确定性/无裁切）、服务器build/全解码/public200/Range206/播放跳转/手机字幕无溢出/健康通过。应用390afc0及回滚c07c8d1不变；原技术风格f4b4db3保留。一次内置生图，无新增服务器依赖，render模型调用0不代表图片生成免费。视觉效果待用户验收；下一步按反馈优化或接入RO/Hermes媒体能力。
+
+### Reviewed RO media integration
+
+1. Implement admin+writer/draft scoped import, exact Claim snapshot checks, existing version fence and replay semantics, draft status/audit/provenance; CLI defaults dry-run.
+2. Add authenticated and publication-guarded single Range video delivery after complete digest verification, preserving16MiB bound; add private video preview and server canTransition capability.
+3. Run focused permission/replay/tamper/range/UI tests, full build/typecheck/test/lint and independent security review.
+4. Deploy through canonical full application transaction; create two-session import evidence in the controlled admin-owned private D2NN RO, verify replay, approval and Claim invalidation, actual desktop/mobile playback/seek, anonymous denial and health. No role escalation, external invitation or public research publication.
+5. Update CURRENT with actual app/demo/rollback tuple. Automatic narrative/image/video generation and Hermes edits remain next slices.

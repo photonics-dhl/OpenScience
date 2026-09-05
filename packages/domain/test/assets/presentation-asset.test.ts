@@ -200,3 +200,14 @@ describe('Presentation asset domain contract', () => {
     expect(assets[0]).not.toHaveProperty('promptHash');
   });
 });
+
+
+it('reports media transition capability only for an admin with workspace write access', async () => {
+  const ctx=fixture('user');
+  ctx.db.presentationAssets.push({id:ASSET,researchObjectId:RO,versionId:VERSION,kind:'video',status:'draft',label:'presentation_not_evidence',updatedAt:new Date()});
+  expect((await listPresentationAssets(ctx as never,{userId:USER,researchObjectId:RO,versionId:VERSION}))[0].canTransition).toBe(false);
+  ctx.db.users[0].platformRole='platform_admin';
+  expect((await listPresentationAssets(ctx as never,{userId:USER,researchObjectId:RO,versionId:VERSION}))[0].canTransition).toBe(true);
+  ctx.db.memberships[0].role='viewer';
+  expect((await listPresentationAssets(ctx as never,{userId:USER,researchObjectId:RO,versionId:VERSION}))[0].canTransition).toBe(false);
+});

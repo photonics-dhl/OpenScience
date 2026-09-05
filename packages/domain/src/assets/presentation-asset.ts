@@ -13,6 +13,7 @@ export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-present
 export type PresentationGenerationKind = (typeof KINDS)[number];
 export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[] }
 export interface PresentationAssetView {
+  canTransition: boolean;
   id: string;
   researchObjectId: string;
   versionId: string;
@@ -123,13 +124,17 @@ export async function submitPresentationGeneration(deps: AgentDeps, input: {
 export async function listPresentationAssets(deps: AgentDeps, input: {
   userId: string; researchObjectId: string; versionId: string;
 }): Promise<PresentationAssetView[]> {
-  await requireScope(deps.prisma, input);
+  const version = await requireScope(deps.prisma, input);
+  const { workspace, membership } = await requireMembership(deps, version.researchObject.workspaceId, input.userId);
+  const user = await deps.prisma.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } });
+  const canWrite = version.status === 'draft' && workspace.status === 'active' && WRITE_ROLES.has(membership.role);
   const assets = await deps.prisma.presentationAsset.findMany({
     where: { researchObjectId: input.researchObjectId, versionId: input.versionId },
     include: { sourceClaims: { select: { claimId: true } } },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
   });
   return assets.map((asset) => ({
+    canTransition: canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin'),
     id: asset.id,
     researchObjectId: asset.researchObjectId,
     versionId: asset.versionId,

@@ -1,0 +1,19 @@
+ARG PYTHON_IMAGE=python:3.12-slim@sha256:7a8b475003c4fe15a2cd4e55e5cfc2f3560bdc9333d624f24cdd6d4340fd7a17
+FROM ${PYTHON_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN python -m pip install --no-cache-dir \
+      --index-url https://download.pytorch.org/whl/cpu \
+      --extra-index-url https://pypi.org/simple \
+      'torch==2.11.0+cpu' \
+      'torchaudio==2.11.0+cpu' \
+    && python -c "import importlib.metadata as m, torch, torchaudio; names=[d.metadata['Name'].lower() for d in m.distributions() if d.metadata.get('Name')]; assert torch.__version__ == '2.11.0+cpu'; assert torchaudio.__version__ == '2.11.0+cpu'; assert torch.version.cuda is None; assert not any(n.startswith(('cuda-', 'nvidia-', 'rocm', 'triton')) for n in names)"
+
+LABEL org.opencontainers.image.title="OpenScience reusable CPU PyTorch audio runtime" \
+      org.openscience.python="3.12" \
+      org.openscience.torch="2.11.0+cpu" \
+      org.openscience.torchaudio="2.11.0+cpu"

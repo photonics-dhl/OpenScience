@@ -906,6 +906,11 @@
     "artifacts": { "document": "文档", "image": "图片", "data": "数据", "code": "代码", "video": "视频", "other": "其他" }
   },
   "presentation": {
+    "videoTitle": "论文讲解视频",
+    "imageTitle": "论文可视化插图",
+    "generatedBy": "制作方式：{name}",
+    "openVideo": "在新窗口播放视频",
+    "mediaAdminApproval": "图片和视频当前由具备本工作区编辑权限的平台管理员审批。",
     "navigation": "图解工作区", "skip": "跳到图解内容", "kicker": "围绕主张的图解", "title": "把科研主张整理成清晰图解", "description": "在确切版本中撰写或选择主张，生成确定性图解，并在进入公开记录前明确审批。",
     "sourceTitle": "来源主张", "sourceBody": "已保存且提取完成的主张可用于生成；每张图解都会保留这些确切来源链接。", "selectClaims": "选择主张", "selectedLimit": "已选择 {count} / {max} 项", "generate": "生成图解", "starting": "正在启动…",
     "claimStatementLabel": "核心主张", "claimStatementPlaceholder": "用一句准确的话描述一个结果或机制", "claimDraftNote": "这会保存为人工撰写的草稿；在证据审阅完成前，科学支持状态保持为“待补”。", "addClaim": "添加主张", "claimSaveFailed": "主张暂时无法保存；重试会继续使用同一份草稿。",

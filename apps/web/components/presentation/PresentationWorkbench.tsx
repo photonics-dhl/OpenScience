@@ -188,10 +188,10 @@ export function PresentationWorkbench({
                     <article className="surface-folio-sheet overflow-hidden" key={assetItem.id} data-presentation-asset={assetItem.id}>
                       <div className="border-b border-os-rule-paper px-5 py-4 sm:px-6">
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                          <h3 className="font-semibold">{t('assetTitle')}</h3>
+                          <h3 className="font-semibold">{t(assetItem.kind === 'video' ? 'videoTitle' : assetItem.kind === 'image' ? 'imageTitle' : 'assetTitle')}</h3>
                           <span className="text-xs text-os-muted-paper">{t(`assetStatus.${assetItem.status}`)}</span>
                         </div>
-                        <p className="mt-2 text-xs leading-5 text-os-muted-paper">{t('generatedByPlatform')}</p>
+                        <p className="mt-2 text-xs leading-5 text-os-muted-paper">{t('generatedBy', { name: assetItem.generator })}</p>
                         <p className="mt-1 text-xs leading-5 text-os-muted-paper">{t('notEvidence')}</p>
                       </div>
                       <div className="bg-os-paper px-4 py-4 sm:px-6 sm:py-5">
@@ -200,6 +200,11 @@ export function PresentationWorkbench({
                             <img className="h-auto w-full outline -outline-offset-1 outline-black/10" src={presentationAssetContentUrl(researchObjectId, version.versionId, assetItem.id)} alt={t('assetTitle')} width={1200} height={720} loading="lazy" />
                             <a className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={presentationAssetContentUrl(researchObjectId, version.versionId, assetItem.id)} target="_blank" rel="noreferrer">{t('viewFullSize')}</a>
                           </>
+                        ) : assetItem.kind === 'video' ? (
+                          <div>
+                            <video className="aspect-video w-full rounded-control bg-black" controls playsInline preload="metadata" aria-label={t('videoTitle')} src={presentationAssetContentUrl(researchObjectId, version.versionId, assetItem.id)} />
+                            <a className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={presentationAssetContentUrl(researchObjectId, version.versionId, assetItem.id)} target="_blank" rel="noreferrer">{t('openVideo')}</a>
+                          </div>
                         ) : (
                           <a className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={presentationAssetContentUrl(researchObjectId, version.versionId, assetItem.id)}>{t('openAsset')}</a>
                         )}
@@ -208,7 +213,8 @@ export function PresentationWorkbench({
                         <p className="text-xs font-semibold text-os-muted-paper">{t('linkedClaims')}</p>
                         {linkedClaims.length > 0 ? <ul className="mt-2 grid gap-1 text-sm leading-6">{linkedClaims.map((linked) => <li key={linked}>“{linked}”</li>)}</ul> : <p className="mt-2 text-sm text-os-muted-paper">{t('linkedClaimsUnavailable')}</p>}
                       </div>
-                      {assetItem.status === 'rejected' ? <p className="border-t border-os-rule-paper px-5 py-4 text-sm leading-6 text-os-muted-paper sm:px-6">{t('rejectedNote')}</p> : assetItem.status === 'draft' && canWrite ? (
+                      {(assetItem.kind === 'image' || assetItem.kind === 'video') && assetItem.status === 'draft' && canWrite ? <p className="px-5 py-3 text-xs text-os-muted-paper sm:px-6">{t('mediaAdminApproval')}</p> : null}
+                      {assetItem.status === 'rejected' ? <p className="border-t border-os-rule-paper px-5 py-4 text-sm leading-6 text-os-muted-paper sm:px-6">{t('rejectedNote')}</p> : assetItem.status === 'draft' && canWrite && (assetItem.canTransition ?? (assetItem.kind !== 'image' && assetItem.kind !== 'video')) ? (
                         <div className="flex flex-wrap gap-3 border-t border-os-rule-paper px-5 py-4 sm:px-6">
                           <button type="button" disabled={working} onClick={() => onTransition(assetItem, 'approved')} className="bg-accent-primary-strong inline-flex min-h-11 items-center gap-2 rounded-control px-4 text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-40 motion-reduce:transform-none"><Check className="h-4 w-4" aria-hidden="true" />{t('approve')}</button>
                           <button type="button" disabled={working} onClick={() => onTransition(assetItem, 'rejected')} className="inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-dark px-4 text-sm text-os-ink transition-transform active:scale-[0.96] disabled:opacity-40 motion-reduce:transform-none"><X className="h-4 w-4" aria-hidden="true" />{t('reject')}</button>

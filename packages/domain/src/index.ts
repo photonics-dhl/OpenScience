@@ -380,3 +380,5 @@ export {
   buildTemporaryDocumentObjectKey,
   temporaryDocumentExpiresAt,
 } from './retrieval/temporary-document';
+
+export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from './assets/reviewed-media-import';

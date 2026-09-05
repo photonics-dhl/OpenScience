@@ -1,7 +1,7 @@
 # Integrated Research Product Design
 
 > CURRENT；用户已确认产品方向与分段效果验收，2026-09-05。
-> 本文记录批准范围与推荐交互；具体页面效果尚未实现或验收。
+> 本文记录批准范围与推荐交互；用户已认可科学插图样张方向，视频样片与产品接入仍需实际验收。
 > 需求基线：`docs/OpenScience_Kimi_Development_Spec.md`。
 
 ## 1. Product objective
@@ -11,6 +11,16 @@
 用户确认的完整旅程：导入论文 → Hermes 整理研究对象 → 查看并确认建议 → 生成核心图解 → 用文字或语音要求修改 → 预览差异并应用 → 生成讲解视频 → 预览发布 → 围绕具体结论和证据讨论 → 修订下一版本。
 
 图片和视频主要根据论文生成。音频用于 Hermes 与用户交互，不以音频版论文为首要交付。首期不处理用户上传音视频的转录、理解或证据提取。
+
+### 1.1 Scientific explanation acceptance (2026-09-05)
+
+用户明确纠正：RO 已承担论文凝练，衍生图必须用场景、结构、传播/作用过程和局部放大解释研究做什么、怎么做、为什么有效；文字主张卡片不能作为科学插图完成。用户认可 D2NN 科普生图的视觉方向，仍需纠正探测面与干涉细节，认可方向不等于免除科学检查。
+
+解析器先保留章节、图表/图注与位置；语义切分后 BGE 负责向量检索，语言/视觉模型负责理解与综合。原始图表和代码引用进入有来源的 Evidence，不能把切块保存或模型生成的说明称为独立证明。生成资产与原文、RO 版本和相关结论关联，修改后重新检查。
+
+用户已同意先做同一论文的真实科普视频演示，再固化进产品。首选少量高质量插图配合本地动画/字幕/剪辑；需要时才调用 MiniMax。既有推荐仓库均为候选，按解释效果、准确性、编辑能力、许可、成本和维护负担选择，不为采用某个仓库而增加依赖。
+
+本次演示采用已有 Playwright/Chromium 与 FFmpeg；先验证 30–45 秒成片、中文可读性与探测区域表达。已有图片复用时本次新增图片/视频 API 调用可为零，但不宣称历史图片免费或服务器运行无成本。演示脚本不接受任意用户 HTML，不作为生产模型调用路径。
 
 ## 2. Capability reuse
 
@@ -79,3 +89,11 @@ Hermes 接收当前 Workspace、RO、版本及显式选中对象。跨路由继�
 优先采用本机已有独立 worktree，从最新 origin/main 开始，根目录旧 main 与未提交文件保持原样。Landing 与 Wanko 造型保持现状；可优化工作流布局与交互，不顺带重做角色。生产 CPU 条件、权限、审批、来源追踪和受控资源边界继续有效。
 
 本方案未安装依赖、未启用受阻 provider、未修改 API/schema、未部署。Research Intelligence 旧 Task 1–12 保持完成；本轮是新的产品交付主题。
+
+## 7. Reviewed-media integration slice
+
+First integrate already reviewed PNG/MP4 into existing PresentationAsset records through an administrator maintenance CLI, never a fake generation task. The actor must also have write membership in the active workspace and the exact version must be draft. Source Claims must belong to that version; import creates draft assets with truthful admin_reviewed_import provenance and audit, explicit approval remains separate. Existing Claim edits/deletes invalidate imported assets. No arbitrary user media upload or automatic paper generation is claimed.
+
+Private/public safe-video reads support one HTTP byte range after existing authorization and full-object checksum validation. The existing16MiB buffer limit stays; first samples are below4MiB. List metadata adds canTransition, computed from draft/writer/admin restrictions; frontend media controls fail closed if absent. Private workbench has inline native video, clear creator text and linked Claims. No schema migration or new provider.
+
+The old ordinary-user personal acceptance workspace cannot invite an admin; do not change roles or bypass scope. Use the already-existing administrator E2E account and a new private same-paper acceptance RO, with human-authored summaries/Claims and source URL. This validates the product capability without claiming the original RO has been modified.

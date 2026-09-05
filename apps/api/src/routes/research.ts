@@ -274,6 +274,6 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
     } });
     if (!asset) throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
 
-    return sendPresentationAssetContent(deps.storage, asset, reply, 'public');
+    return sendPresentationAssetContent(deps.storage, asset, reply, 'public', req.headers);
   });
 }

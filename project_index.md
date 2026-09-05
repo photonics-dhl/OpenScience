@@ -1,14 +1,20 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-05 +08）：** branch `codex/product-workflow-design`，application HEAD / production `390afc09d3b6ec64d5b23e64f6bffe6bf8a375e7`，rollback `c07c8d15e5ba3b722577f42d6ad72af8c83189fe`；后续 docs-only HEAD 以 Git 为准。core/search `36/36` / `2/2`，CI99与服务器验收通过；真实PDF→人工确认/补齐→源文件入版本→Claim→图解预览/批准已完成。图解为主张卡片，机制图/图片、视频和语音待下一段；相同PDF复验仍有三个字段未自动提取。根目录旧 main 不是部署源。
+> **CURRENT source/deployment anchor（2026-09-05 +08）：** branch `codex/product-workflow-design`，application HEAD / production `390afc09d3b6ec64d5b23e64f6bffe6bf8a375e7`，rollback `c07c8d15e5ba3b722577f42d6ad72af8c83189fe`；独立demo source `381705a`，后续HEAD以Git为准。core/search `36/36` / `2/2`，CI99与服务器验收通过；真实PDF→人工确认/补齐→源文件入版本→Claim→图解预览/批准已完成。图解为主张卡片，机制图/图片、视频和语音待下一段；相同PDF复验仍有三个字段未自动提取。根目录旧 main 不是部署源。
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑的已确认产品范围 | CURRENT；效果待分段验收 |
-| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划 | CURRENT；PR86/390afc0已部署，真实图解流程完成；下一段机制图/媒体，提取质量并行改进 |
+| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；用户认可生图视觉方向，卡片不算图解完成 |
+| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；PR86/390afc0已部署；46秒样片ECS渲染与公网验收通过；应用release不变 |
+| 本地产物（Git忽略，非仓库路径） | apps/web/test/visual/out/science-video/：D2NN科普MP4、分镜、旁白、preview.html与FFmpeg/播放记录 | LOCAL PREVIEW；用户认可v1；v2加强过渡/动效，46.25秒720p/H264/AAC、4.80MB，完整解码与成片抽帧通过；保留v1，非生产自动生成能力 |
+| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | CANDIDATE；服务器重新渲染/公网播放验收进行中，不接私有RO或任意用户代码 |
+| `infra/scripts/deploy-science-video-demo.sh` / `infra/scripts/deploy-science-video-demo.test.mjs` / `infra/nginx/science-video-demo.location.conf` | 一次性隔离渲染与独立演示路径发布/恢复，Nginx原生Range | DEPLOYED demo 617ed1c；应用release不变 |
+| `apps/media-demo/test/narration.test.mjs` | 配音来源、逐段字幕时间边界与旧素材回退验证 | 7项renderer测试通过；40秒口语视频ECS/公网/手机字幕验收通过 |
+| `infra/tts-audition/` | CPU音频公共基础镜像、Qwen隔离试听与输出校验；模型独立挂载 | ECS TRIAL VERIFIED；三音色与自然度A/B两版已生成；新增video_narration.py完整五段配音，听感待验收；生产BGE不变 |
+| `docs/runbooks/science-video-demo.md` | CPU样片服务器部署、回退与验证操作手册 | DEPLOYED demo 6a1b848；CPU20.52秒/40秒口语配音成片；新增已批准缓存清理实测与PyTorch复用约束 |
 | `apps/api/src/routes/presentation-asset-content.ts` / `apps/api/src/routes/presentation-assets.ts` / `apps/api/test/presentation-assets-routes.test.ts` / `apps/api/src/routes/research.ts` | 共用安全内容交付、认证私有预览与 exact RO/version/task 恢复 | DEPLOYED390afc0；真实匿名读取401，保留v1兼容 |
 | `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准 | DEPLOYED390afc0；真实页面创建3主张、生成/预览/批准，图解9项回归通过 |
 | `apps/web/app/research-objects/[id]/edit/page.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` / `apps/web/package.json` / `apps/web/playwright.release.config.ts` | 已确认论文带入版本提交并保留原 manifest 附件；图解用例加入既有 release suite | DEPLOYED390afc0；真实PDF入版本，续接9项与CI99通过 |
@@ -442,3 +448,10 @@
 | 路径 | 说明 |
 |---|---|
 | `方案0723.docx` | 早期脑暴稿，2026-07-24 被 Baseline v1.0 取代，用户确认放弃，不归档 |
+
+| `infra/tts-audition/continuity_audition.py` | 全文连续与平实指令离线试听对照，复用现有Qwen运行时 | v4连续讲述已接受；f4b4db3视频已部署验证，relaxed复现选项保留 |
+
+| `apps/media-demo/test/visual-style.test.mjs` | 默认技术风格/可选淡彩风格的选择校验 | 381705a已部署，视觉待验收，保留已接受v4配音 |
+
+| `packages/domain/src/assets/reviewed-media-import.ts` / `packages/domain/test/assets/reviewed-media-import.test.ts` | 受审PNG/MP4导入，管理员+版本写权限、Claim关联、草稿/重放/审计 | 实现完成，待ECS产品验收 |
+| `scripts/import-presentation-media.mjs` | 默认dry-run的受控媒体导入CLI，真实来源与已有S3基座 | 不启用占位生成器；部署验收见science-video runbook |
