@@ -455,3 +455,5 @@
 
 | `packages/domain/src/assets/reviewed-media-import.ts` / `packages/domain/test/assets/reviewed-media-import.test.ts` | 受审PNG/MP4导入，管理员+版本写权限、Claim关联、草稿/重放/审计 | 实现完成，待ECS产品验收 |
 | `scripts/import-presentation-media.mjs` | 默认dry-run的受控媒体导入CLI，真实来源与已有S3基座 | 不启用占位生成器；部署验收见science-video runbook |
+
+| `scripts/import-presentation-media.test.mjs` | 维护CLI实际启动回归，防止根目录workspace别名解析失败 | 本地入口测试通过 |
