@@ -12,7 +12,7 @@
 
 - 用户否决首批布局/视觉，要求参考成熟方案优化后继续流程。修订候选解决 2048px 页面仅 768px 宽、默认列表/缩进、巨大标题和长项目列表；采用居中自适应网格、紧凑资料/认证表单、可展开最近项目、统一按钮与快捷入口。
 - 同时修复 Dashboard queued/running/failed task 的不存在 /ingest 路由，改用真实 Hermes task 页面与准确的查看文案。无 API、依赖或迁移变化。
-- 16 个相关浏览器用例通过，含桌面几何、展开和移动 overflow；全量构建、发布矩阵和独立复审进行中，生产仍为 6478aa8。
+- UI 主修订 483+5 单测、全仓 build/lint、88-case matrix 通过。最后的 Dashboard 标题压缩触发 detached Hermes 菜单重叠：CI 33939580194 失败，本地 3/3 复现；PR #82 撤回该 6 行 CSS 与 wrapper 后同例 3/3 通过。候选 main 833be32646c2e7b1dc457c08c003d0d32db9831e，精确 parser acceptance 通过；CI 33940323736 的 Product88 通过，但既有 blink-single 连续动作门禁失败（此前 docs-only 同样出现），根因已确认：unsafe patrol 的固定 blink-single 别名与相邻 micro beat 重复。已实现 cursor+1 回退，23/23 回归与独立复审通过；最终 build/gate 进行中，未以偶然 rerun 通过冒充修复。上一候选 000120b 的发布卡在隔离 OA 下载；核实并 SIGINT 仅该探针后 canonical rollback 已恢复 6478aa8，公网/marker 一致，journal/failed marker 均不存在。不要并发启动另一生产事务；先检查 journal/failed marker 和完整回滚结果。
 
 ## 2026-09-05 — Integrated product scope confirmed
 

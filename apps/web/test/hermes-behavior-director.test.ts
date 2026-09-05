@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { HERMES_ACTION_CATALOG, HERMES_MICRO_ACTIONS } from '@/lib/hermes/action-catalog';
+import { HERMES_ACTION_CATALOG, HERMES_MICRO_ACTIONS, HERMES_SIGNATURE_ACTIONS } from '@/lib/hermes/action-catalog';
 import {
   createInitialHermesBehavior,
+  resolveHermesAutonomousAction,
   stepHermesBehavior,
   type HermesBehaviorInput,
 } from '@/lib/hermes/behavior-director';
@@ -22,6 +23,40 @@ const input = (overrides: Partial<HermesBehaviorInput> = {}): HermesBehaviorInpu
 });
 
 describe('Hermes behavior director', () => {
+  it('keeps fallback micro cards unique and separate from autonomous signature cards', () => {
+    expect(HERMES_MICRO_ACTIONS.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(HERMES_MICRO_ACTIONS).size).toBe(HERMES_MICRO_ACTIONS.length);
+    expect(HERMES_SIGNATURE_ACTIONS.every((action) => !HERMES_MICRO_ACTIONS.includes(action))).toBe(true);
+  });
+
+  it.each([0, 1, 37, 91, 0x4845524d])('keeps unsafe patrol distinct from both adjacent micro actions at every cadence cursor (seed %s)', (seed) => {
+    let current = createInitialHermesBehavior(input({ nowMs: 0, seed }));
+    for (let index = 0; index < HERMES_MICRO_ACTIONS.length * 2; index += 1) {
+      const next = stepHermesBehavior({ ...current, nextSignatureAtMs: Number.MAX_SAFE_INTEGER }, input({ nowMs: current.nextMicroAtMs, seed }));
+      const patrol = { ...current, primary: 'patrol' as const, kind: 'signature' as const };
+      const rendered = resolveHermesAutonomousAction(patrol, { seed, patrolEnvelopeSafe: false });
+      expect(rendered).not.toBe('patrol');
+      expect(rendered).not.toBe(current.primary);
+      expect(rendered).not.toBe(next.primary);
+      expect(resolveHermesAutonomousAction(patrol, { seed, patrolEnvelopeSafe: false })).toBe(rendered);
+      expect(resolveHermesAutonomousAction(patrol, { seed, patrolEnvelopeSafe: true })).toBe('patrol');
+      current = next;
+    }
+  });
+
+  it('keeps rendered beats distinct when suspension advances signature cadence without intervening micro actions', () => {
+    const seed = 0x4845524d;
+    let current = createInitialHermesBehavior(input({ nowMs: 0, seed }));
+    let previousRendered = resolveHermesAutonomousAction(current, { seed, patrolEnvelopeSafe: false });
+    for (let tick = 1; tick <= 30; tick += 1) {
+      current = stepHermesBehavior(current, input({ nowMs: tick * 60_000, seed }));
+      const rendered = resolveHermesAutonomousAction(current, { seed, patrolEnvelopeSafe: false });
+      expect(rendered).not.toBe(previousRendered);
+      expect(rendered).not.toBe('patrol');
+      previousRendered = rendered;
+    }
+  });
+
   it('ships a broad action vocabulary with the approved scholar-spirit balance', () => {
     const actions = Object.values(HERMES_ACTION_CATALOG);
     const familiarCount = HERMES_MICRO_ACTIONS

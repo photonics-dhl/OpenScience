@@ -37,6 +37,16 @@ export interface HermesBehaviorFrame {
   startedAtMs: number;
 }
 
+export function resolveHermesAutonomousAction(
+  behavior: HermesBehaviorFrame,
+  options: { seed: number; patrolEnvelopeSafe: boolean },
+): HermesActionId {
+  if (behavior.primary !== 'patrol' || options.patrolEnvelopeSafe) return behavior.primary;
+  // A signature preserves the next micro cursor. Skip that card and the preceding
+  // one so its stationary substitute cannot repeat either neighboring micro beat.
+  return chooseFromCycle(HERMES_MICRO_ACTIONS, options, 0x11, behavior.microCursor + 1);
+}
+
 const CADENCE = {
   quiet: { micro: [6_500, 8_000], signature: [28_000, 35_000] },
   balanced: { micro: [2_400, 4_200], signature: [14_000, 22_000] },
@@ -57,7 +67,7 @@ function interval(input: HermesBehaviorInput, kind: 'micro' | 'signature', salt:
 
 function chooseFromCycle(
   pool: readonly HermesActionId[],
-  input: HermesBehaviorInput,
+  input: Pick<HermesBehaviorInput, 'seed'>,
   salt: number,
   cursor: number,
 ): HermesActionId {
