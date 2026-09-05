@@ -92,6 +92,7 @@ export default function PresentationPage({ params }: { params: { id: string } })
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [workspace, setWorkspace] = useState<WorkspaceApi | null>(null);
   const [loadedResearchObjectId, setLoadedResearchObjectId] = useState('');
+  const [researchTitle, setResearchTitle] = useState('');
   const [claims, setClaims] = useState<PresentationClaim[]>([]);
   const [assets, setAssets] = useState<PresentationAsset[]>([]);
   const [bootstrapLoading, setBootstrapLoading] = useState(true);
@@ -139,11 +140,13 @@ export default function PresentationPage({ params }: { params: { id: string } })
     const epoch = ++bootstrapEpoch.current;
     setBootstrapLoading(true);
     setLoadedResearchObjectId('');
+    setResearchTitle('');
     setWorkspace(null);
     setError('');
     void Promise.all([getResearchObject(params.id), listVersions(params.id), listMyWorkspaces()]).then(([research, history, workspaces]) => {
       if (bootstrapEpoch.current !== epoch) return;
       setVersions(history.versions);
+      setResearchTitle(research.researchObject.title);
       setWorkspace(workspaces.find((item) => item.id === research.researchObject.workspaceId) ?? null);
       setLoadedResearchObjectId(params.id);
     }).catch((cause) => {
@@ -364,6 +367,7 @@ export default function PresentationPage({ params }: { params: { id: string } })
           <PresentationWorkbench
             key={version.versionId}
             researchObjectId={params.id}
+            researchTitle={researchTitle}
             claims={claims}
             assets={assets}
             version={version}

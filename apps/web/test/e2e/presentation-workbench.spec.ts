@@ -36,6 +36,7 @@ function json(route: Route, body: unknown, status = 200) {
 
 interface FixtureOptions {
   role?: string;
+  reviewedMedia?: boolean;
   versionStates?: typeof versions;
   startEmpty?: boolean;
   delayVersionTwoReads?: boolean;
@@ -110,7 +111,10 @@ async function fixtures(page: Page, options: FixtureOptions = {}) {
         return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Assets temporarily unavailable' } }, 503);
       }
       if (options.delayVersionTwoReads) await new Promise((resolve) => setTimeout(resolve, 600));
-      return json(route, { assets: generated ? [currentAsset] : [] });
+      return json(route, { assets: options.reviewedMedia ? [
+        { ...currentAsset, id: 'media-image', kind: 'image', status: 'approved', canTransition: false },
+        { ...currentAsset, id: 'media-video', kind: 'video', status: 'rejected', canTransition: false },
+      ] : generated ? [currentAsset] : [] });
     }
     if (path === `/api/research-objects/${ro.id}/versions/version-2/presentation-tasks/presentation-task`) {
       if (options.foreignTask) return json(route, { error: { code: 'NOT_FOUND', message: 'Presentation task not found' } }, 404);
@@ -121,7 +125,7 @@ async function fixtures(page: Page, options: FixtureOptions = {}) {
       generated = taskReads >= completeAfter;
       return json(route, { task: task(generated ? 'succeeded' : 'running', generated ? 100 : Math.min(92, 12 + taskReads * 17)) });
     }
-    if (path.endsWith('/presentation-assets/asset-chart/content')) return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60"><title>Claim map</title><rect width="120" height="60" fill="#fffdf8"/><text x="8" y="34" fill="#292722">Claim map</text></svg>' });
+    if (path.endsWith('/presentation-assets/asset-chart/content') || path.endsWith('/presentation-assets/media-image/content')) return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60"><title>Claim map</title><rect width="120" height="60" fill="#fffdf8"/><text x="8" y="34" fill="#292722">Claim map</text></svg>' });
     if (path.endsWith('/presentation-assets/asset-chart') && request.method() === 'PATCH') {
       const body = request.postDataJSON() as { status: 'approved' | 'rejected'; expectedUpdatedAt: string };
       patchExpectedTimes.push(body.expectedUpdatedAt);
@@ -144,7 +148,7 @@ async function fixtures(page: Page, options: FixtureOptions = {}) {
 test('creates a human claim, retries stable intents, generates a chart, refreshes a real conflict, and approves', async ({ page }) => {
   const observed = await fixtures(page, { startEmpty: true });
   await page.goto(`/research-objects/${ro.id}/presentation`);
-  await expect(page.getByRole('heading', { name: /Turn research claims/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Visual explanations/i })).toBeVisible();
   const statement = 'Passive diffractive layers perform the learned optical transformation.';
   await page.getByLabel(/Core claim statement/i).fill(statement);
   await page.getByRole('button', { name: /Add claim/i }).click();
@@ -155,9 +159,9 @@ test('creates a human claim, retries stable intents, generates a chart, refreshe
   expect(observed.claimPostIds[0]).toBe(observed.claimPostIds[1]);
   expect(observed.claimPostBodies[1]).toEqual({ id: observed.claimPostIds[1], kind: 'core', statement, assessment: 'missing', conditions: [], limitations: [] });
   await page.getByRole('checkbox', { name: new RegExp(statement) }).check();
-  await page.getByRole('button', { name: /Generate diagram/i }).click();
+  await page.getByRole('button', { name: /Generate concept map/i }).click();
   await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText(/could not be started/i);
-  await page.getByRole('button', { name: /Generate diagram/i }).click();
+  await page.getByRole('button', { name: /Generate concept map/i }).click();
   await expect(page.getByRole('progressbar')).toBeVisible();
   await expect(page.locator('[data-presentation-asset="asset-chart"]')).toBeVisible({ timeout: 10_000 });
   expect(observed.generationKeys).toHaveLength(2);
@@ -168,6 +172,7 @@ test('creates a human claim, retries stable intents, generates a chart, refreshe
   await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('asset changed concurrently');
   await page.getByRole('button', { name: /Approve/i }).click();
   await expect(page.locator('[data-presentation-asset="asset-chart"]')).toContainText('Approved');
+  await page.locator('[data-presentation-asset="asset-chart"] summary').click();
   await expect(page.locator('[data-presentation-asset="asset-chart"]')).toContainText(statement);
   expect(observed.patchExpectedTimes).toEqual(['2026-09-05T00:00:00Z', '2026-09-05T00:00:30Z']);
   await page.screenshot({ path: 'test/visual/out/presentation-workbench-desktop.png', fullPage: true });
@@ -177,14 +182,14 @@ test('requires both a draft version and an active writer membership', async ({ p
   await fixtures(page, { role: 'viewer' });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
   await expect(page.getByText(/view access/i)).toBeVisible();
-  await expect(page.getByRole('button', { name: /Generate diagram/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Generate concept map/i })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Add claim/i })).toHaveCount(0);
 
   await page.unroute('**/api/**');
   await fixtures(page, { role: 'author', versionStates: versions.map((item) => item.versionId === 'version-2' ? { ...item, status: 'under_review' } : item) });
   await page.reload();
   await expect(page.locator('[data-readonly-reason="true"]')).toContainText(/under review/i);
-  await expect(page.getByRole('button', { name: /Generate diagram/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Generate concept map/i })).toHaveCount(0);
 });
 
 test('does not let delayed or failed reads, or a delayed generation, move a changed version back to the old scope', async ({ page }) => {
@@ -197,7 +202,7 @@ test('does not let delayed or failed reads, or a delayed generation, move a chan
   await page.getByRole('combobox').selectOption('version-2');
   await expect(page.getByText(initialClaim.statement)).toBeVisible();
   await page.getByRole('checkbox', { name: new RegExp(initialClaim.statement) }).check();
-  await page.getByRole('button', { name: /Generate diagram/i }).click();
+  await page.getByRole('button', { name: /Generate concept map/i }).click();
   await page.getByRole('combobox').selectOption('version-1');
   await page.waitForTimeout(800);
   await expect(page).toHaveURL(/version=version-1$/);
@@ -238,7 +243,7 @@ test('shows a terminal task failure without offering an endless resume loop', as
   await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('The renderer rejected this request.');
   await expect(page.getByRole('button', { name: /Resume checking/i })).toHaveCount(0);
   await page.getByRole('checkbox').first().check();
-  await expect(page.getByRole('button', { name: /Generate diagram/i })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /Generate concept map/i })).toBeEnabled();
 });
 
 test('shows every claim, caps a diagram at twelve selections, and restores URL state on browser back', async ({ page }) => {
@@ -270,7 +275,48 @@ test('published version is compact, read-only, and stays within a 390px viewport
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-1`);
   await expect(page.getByText(/Published versions are read-only/i)).toBeVisible();
-  await expect(page.getByRole('button', { name: /Generate diagram/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Generate concept map/i })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test/visual/out/presentation-workbench-mobile.png', fullPage: true });
+});
+
+
+test('puts media first and keeps source details and editor keyboard accessible on desktop and mobile', async ({ page }) => {
+  await fixtures(page, { reviewedMedia: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+  const image = page.locator('[data-presentation-asset="media-image"]');
+  const video = page.locator('[data-presentation-asset="media-video"]');
+  const tools = page.locator('[data-source-tools]');
+  await expect(image).toBeVisible();
+  await expect(tools).not.toHaveAttribute('open');
+  const bounds = await Promise.all([image.boundingBox(), video.boundingBox(), tools.boundingBox()]);
+  expect(bounds[0]!.y).toBe(bounds[1]!.y);
+  expect(bounds[0]!.x).toBeLessThan(bounds[1]!.x);
+  expect(bounds[1]!.y).toBeLessThan(bounds[2]!.y);
+  await expect.poll(() => image.locator('img').evaluate((element) => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  const imageStage = await image.locator('img').boundingBox();
+  const videoStage = await video.locator('video').boundingBox();
+  expect(Math.abs(imageStage!.height - imageStage!.width * 9 / 16)).toBeLessThan(2);
+  expect(Math.abs(imageStage!.height - videoStage!.height)).toBeLessThan(2);
+  const metadata = image.locator('summary');
+  await metadata.focus();
+  await page.keyboard.press('Enter');
+  await expect(image.getByText(initialClaim.statement, { exact: false })).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(image.getByText(initialClaim.statement, { exact: false })).not.toBeVisible();
+  await tools.locator('summary').focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByLabel(/Core claim statement/i)).toBeVisible();
+  await page.getByLabel(/Core claim statement/i).fill('Retain this draft when source tools close.');
+  await tools.locator('summary').click();
+  await tools.locator('summary').click();
+  await expect(page.getByLabel(/Core claim statement/i)).toHaveValue('Retain this draft when source tools close.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileBounds = await Promise.all([image.boundingBox(), video.boundingBox()]);
+  expect(mobileBounds[0]!.x).toBe(mobileBounds[1]!.x);
+  expect(mobileBounds[0]!.y).toBeLessThan(mobileBounds[1]!.y);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(video.locator('video')).toHaveAttribute('controls', '');
+  await expect(video.getByRole('button', { name: /Approve/i })).toHaveCount(0);
 });
