@@ -40,7 +40,7 @@
 
 ## Next action and read first
 
-1. 46秒D2NN样片已交用户效果验收；收集节奏/旁白/画面反馈，保留当前手工核对分镜与成本证据。Windows中文旁白需Linux替代；本地播放不等于生产视频交付。
+1. 用户认可46秒v1样片，要求自然过渡与突出动效；v2已完成并交验收，文件`d2nn-science-explainer-v2.mp4`（4.80MB/46.25s，实测渲染25.17s）。主线程全片解码并查看最终MP4抽帧通过；v1保留，模型调用0。Windows旁白需Linux替代；本地播放不等于生产交付。
 2. 正式接入需补有来源的叙事/分镜内容、Gateway媒体provider、隔离CPUrenderer、视频播放/Range与Hermes修订；现有生成器只接IDs、Worker10MiB/reader16MiB与Range416是已查缺口。复用Claim失效并覆盖Evidence变更；无需先新建表/hash/gate。
 3. 提取空缺并行改进；区分模型未返回、证据匹配拒绝和片段覆盖，先取得受控证据再改提取逻辑。
 4. 新session先Git/fetch/checkup核对生产，再读本handoff、需求基线相关章节、短progress与当前设计/计划。不要从根目录旧main或历史c07任务继续。

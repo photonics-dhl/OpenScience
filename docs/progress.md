@@ -11,6 +11,8 @@
 
 ## Delivered this slice
 
+- 用户认可v1视频效果，要求更自然过渡和突出动效。v2样片已输出`d2nn-science-explainer-v2.mp4`，保留v1；新增0.6秒过渡、轻推镜头、逐层响应/波包与探测光斑脉冲，46.25秒/720p、4.80MB。渲染实测25.17秒；主线程完整解码exit0并抽取最终MP4第23秒核对，新增模型调用0，未部署。
+
 - 最新用户反馈：卡片不符合图解要求；已认可生成式科普插图方向，批准同一D2NN论文做低成本本地动画样片，候选仓库按效果与成本自主选择。
 - 样片已生成于ignored `apps/web/test/visual/out/science-video/`：46.25秒720p/H264/AAC中文旁白、1.78MB，复用插图+本机TTS/Chromium/局部FFmpeg，无新增MiniMax调用。主线程完整解码exit0、浏览器首播/seek正常、390px无溢出；正式RO/Hermes媒体接入仍未完成。
 - 启动只读复验release/rollback仍390afc0/c07c8d1；16核30GiB、无NVIDIA工具、13容器运行，公网/loopback200；生产未变更。High独立审查确认内容简报、provider、Range播放与Evidence失效等缺口，详见当前计划Task4。

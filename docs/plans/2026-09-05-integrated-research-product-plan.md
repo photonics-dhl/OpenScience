@@ -86,6 +86,16 @@
 
 ### 当前执行批次：D2NN 科普样片
 
+### 服务器演示执行（用户已批准继续）
+
+目标是在ECS实际重新渲染已验收分镜，并提供可访问的演示页面；不把单论文演示标记为任意RO自动生成。不变更当前应用release/rollback、数据库或私有RO。
+
+1. `apps/media-demo/` 固定人工核对绘图/CLI、参数保护测试；输入仅原创插图与已有5段WAV，输出720pMP4/海报/分镜/真实运行指标。Linux使用Noto CJK字体，配音文件复用而非宣称Linux TTS已实现。
+2. `apps/media-demo/Dockerfile` 使用Node22、Debian Chromium/FFmpeg/Noto CJK、精确playwright-core依赖；一次性无网非root容器，限制CPU/RAM/PID/临时目录，输入只读，输出在独立demo目录。非任意用户代码运行器。
+3. `apps/media-demo/web/` 提供科普视频、章节、来源与明确演示说明；仅公开原创媒体和页面，不公开私有PDF、源脚本或原始旁白目录。
+4. `infra/scripts/deploy-science-video-demo.sh` 完成受管Nginx片段、原配置备份/失败恢复和独立目录发布；Nginx原生Range播放，禁止往active应用runtime tree写演示文件。既有用户部署授权适用。
+5. 部署前审查及有意义测试；服务器镜像build、隔离实际渲染、ffprobe/decode与公网首播/seek/390px截图，复核应用release/健康未变。只报告实际时长与资源，不用本地25秒替代ECS实测。
+
 用户已认可科学插图方向并批准按质量与成本自主选型。本批先产出可播放样片，不把单篇预制动画当作任意论文自动生成能力。
 
 - [x] 核对 Git 与服务器：2026-09-05 release/rollback 仍为390afc0/c07c8d1；16 CPU、约30GiB内存，nvidia-smi和宿主机ffmpeg未发现；13容器运行，公网与loopback健康。
@@ -96,6 +106,8 @@
 - [x] 输出实际视频、分镜与限制；用户视频效果验收待反馈，正式服务器渲染/RO接入尚未实施。
 
 样片产物：`d2nn-science-explainer.mp4`、`source-artwork.png`、`poster.png`、`frame-*.png`、`storyboard.json`、`narration.srt/vtt`、`preview.html`、`render.mjs`、`narrate.ps1`、`README.md`、`validation.json`、`playback-validation.json`。本批项目局部Gyan FFmpeg9.0.1保留许可证；系统Scoop shim无目标bin，未改系统安装。编码约21秒按文件时间估算，非严格性能基准；首次下载约158秒。新增付费API调用0，已有图的历史成本与硬件成本未计入。旁白为Windows Huihui，Linux服务端替代方案尚未选择；SRT短语时间近似，画内要点字幕按场景显示。
+
+v2效果迭代：用户认可v1并要求过渡自然、动效突出；`render-v2.mjs`加入0.6秒画面过渡、3.5%镜头推进、层板依次入场/波包响应与区域7柔和脉冲。`d2nn-science-explainer-v2.mp4`保留46.25秒旁白，4,798,719bytes，720p/24fps/H264/AAC；渲染计时25.173秒，新增模型调用0。主线程完整解码exit0并直接从最终MP4抽取第23秒确认文字/画面；v1保留。README-v2/validation-v2/render-timing-v2保存制作方法与证据，生产未改。
 
 独立 High 架构审查已核对的接入缺口（本批不冒称已修复）：
 
