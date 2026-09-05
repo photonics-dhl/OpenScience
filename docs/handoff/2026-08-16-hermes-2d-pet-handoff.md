@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Current docs state: 以 Git `main` 实时 HEAD 为准；docs-only 提交不得替代或冒充下列 production application source。
+- Docs maintenance branch / observed parent HEAD: `codex/server-cache-maintenance` / `3ad53b11e08df55701e516d28baed59eea15b1cc`；后续 docs-only HEAD 以 Git 实时值为准，不得替代或冒充下列 production application source。
 - Production application source / immutable release: `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`
 - Rollback: `0aaf52fed29e79bb19b15517ba9ef50545510f72`
 - Core/search migrations: `36/36` / `2/2`。
@@ -23,8 +23,8 @@
 - Task 10 真实证据：OA PDF SHA `d57dc94c…f484a`，72h/600s/one-use 与四入口通过；ZJU WebVPN subscription-only Nature PDF SHA `c4b9b02e…be8e`。ScienceDirect 后续只走官方 CARSI/Remote Access 或 Elsevier API key + entitlement。
 - Task 11 真实证据：`OSR-2026-000019`，3 个 verified Claims；SVG/HTML replay hash `8d5f8f23…c640` / `b20f83cc…1198`；无 script/网络且始终标记 `presentation_not_evidence`。
 - Task 12 已在当前 release 以真实 2,215,244-byte PDF（SHA `bdfaa68d…697`）完成 fresh upload → parser/source map → review/confirm → commit → 3 core Claims → license → publication review → approve → R3 publish → anonymous public 200；`OSR-2026-000021` 已公开，内容 SHA `625f5308…2cba`，自动 core 与 canonical source map 均存在。Claims 无独立 locator 时保持 `missing`。此前 24.7 MB 上传已生成 source map，但 SDF proposal unavailable，停在 `needs_review` 后归档。汇总报告 SHA `1ca3b0e1…08f2`，Parser 14/2/0/0、locator 26/26、Claim/Evidence/bbox/TTL/signed-link 100%、search P95 240 ms。
-- 清理后仅保留 active/rollback release 与 Parser acceptance；aTrust 容器/镜像/卷、19 个旧临时卷、20 个旧报告已不可恢复地删除。产品卷、session、模型、监控、备份和 14.83 GB BuildKit 复用缓存保留。
-- 最终资源：根盘 54G/148G（39%），88G available；内存 24 GiB available；公网与 loopback 200，egress 204 经本机代理父级。
+- 精确二次维护已删除 4 个无容器引用且不属于 active/rollback 的 untagged images，并按 24h/12h last-used 阈值清理旧 BuildKit 记录；BuildKit `14.83 → 6.344 GB`，images `16.07 → 13.49 GB`，根盘 `54 → 44 GB`，可用空间 `88 → 98 GB`。未 broad prune；产品卷、ScanSci session、唯一 Chromium、BGE model、监控、7 组备份及 active/rollback 全部保留。
+- 最终资源与健康：13 containers，8/8 active/rollback 应用镜像，core/search `36/36` / `2/2`；内存 24 GiB available；公网/loopback 200，egress 204；exited/dangling image/dangling volume/failed marker/deploy journal 均为 0；最新 core/search backup checksum 通过。
 
 ## Constraints and open risks
 
