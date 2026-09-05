@@ -1,38 +1,25 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-05 +08。应用64ae872已部署，rollback83b2933。后续文档提交不改变生产；历史过程由Git保存。
+> 最新同步：2026-09-06 +08。应用d6507ea已部署，rollback64ae872。后续文档提交不改变生产。
 
-## Sourced storyboard candidate — 2026-09-06
+## Sourced storyboard delivered
 
-- 分镜创建/自然语言修订/旧稿对比/审批候选已实现；复用Gateway、任务队列和素材Claim关联，无迁移或新增依赖。后端独立复审通过；全仓构建、类型、lint和测试通过（现有8项环境测试跳过），最终Web503+5测试与11项浏览器通过，ECS实测待执行。生产仍64ae872/rollback83b2933，不能把分镜当作图片/视频生成完成。
-- 明确边界：只用选定RO主张及条件/限制，未新增全文Evidence检索。并发撤权/来源失效可在扣额后阻止落库；模型返回到素材提交之间进程故障可能重复provider调用，沿用现有charged-on-submit规则，产品幂等重放只扣一次。
+- PR93：RO内Hermes分镜创建、自然语言修订、原稿/新稿对比与审批；媒体先于分镜、分镜全宽，中英文与手机可用。复用Gateway/任务/素材/Claim失效，无新依赖或迁移；计划不是生成图片/视频。
+- 全仓build/typecheck/lint/test通过（现有search storage.integration8项需测试库而跳过）；最终Web503+5测试、11项浏览器通过，独立后端与前端复审、PR93和最终main CI通过。
+- ECS最终d6507eaa07edfdacabe135fd30ff9f91183e0c02，rollback64ae87252ebf183742bb0cdfa96941be0fea3cf6；全build、Parser精确报告、BGE真实向量、ScanSci运行/OA、公网/loopback通过。core36/search2迁移最新，13容器运行/10健康，约94GiB磁盘可用；journal清除、retention完成。
+- 受控私有RO bcbf1586-b6bd-44b6-ab66-c675fcddce78：3分镜任务、4次MiniMax-M3调用（1次结构化重试）、3扣额/3审计。旧两稿draft，纠正稿74ef00f4-be7e-4a95-9256-c22dbee7ad33 approved，六幕45秒规划。美元成本未提供，不编造金额。
+- 内容审阅纠正了模型把平台来源说明误推成论文无独立复核的说法，改进研究者称谓与波前表达后再审批；JSON有效不代表科学正确。公网4组视口/语言、对比、批准刷新/重放、旧图解码与旧视频播放通过；测试会话注销。
+- 证据ignored science-video目录：storyboard-browser-evidence.json、storyboard-audit-evidence.json、storyboard-approved-{1440,390}.png、storyboard-parser.log、storyboard-deploy.log。
 
-## Media-first layout delivered
+## Existing foundations
 
-- PR91/main64ae872已部署：图解与视频优先、桌面双列/手机单列、来源按需展开、任务与错误保持可见；沿用现有视觉与原生控件，无新增依赖。Web499+5测试、10项E2E、build/typecheck/lint与独立复审、PR91 CI通过。
-- ECS全build、精确Parser报告、BGE真实向量及ScanSci检查通过；canonical部署/retention完成，事务标记清除，rollback83b2933。核心36/搜索2迁移最新，13容器运行、10健康检查通过；约93.8GiB磁盘可用。
-- 公网中英文×1440/390四组真实浏览器通过：完整图片、视频41.291667秒播放/28秒seek、键盘来源展开、失效素材不可批准、无横向溢出。会话注销，测试素材仍rejected。证据media-layout-browser-evidence.json、media-layout-{zh,en}-{1440,390}.png、media-layout-deploy.log。
-
-## Reviewed RO media delivered
-
-- PR88/89/main83b2933：管理员+workspace写权限的受审PNG/MP4导入，默认dry-run、精确版本/Claims、真实来源、草稿/审计/幂等；原生视频预览、安全单Range和canTransition。没有打开任意论文媒体生成器。
-- 全仓build/typecheck/test/lint、focused领域/API/UI和实际CLI入口测试、独立复审、PR88/89及最终main CI均通过。
-- ECS最终source83b2933f204894cda43f4bb0d0f8d0c4cbc7b06d，rollback390afc09d3b6ec64d5b23e64f6bffe6bf8a375e7；全build、Parser16-case验收14成功/2需复核/0失败/0错误ready、0外部模型调用；BGE真实向量和ScanSci运行依赖通过，canonical部署/retention完成且journal清除。
-- 新备份core28M/search20K，7/7；首轮部署因本轮旧预检容器引用d174候选而回滚390，精确移除两个已退出无卷容器后重试成功。其余三个成功导入检查容器也已清理；未删除业务数据或广泛prune。
-- 受控管理员私有RO bcbf1586-b6bd-44b6-ab66-c675fcddce78 / version57d10269-2ba7-4eaa-88fc-622a00d20ef5，两种媒体各以两个独立DB连接并发导入，最终各1asset/1audit/3Claim关联。
-- 真实browser：准确文件hash、图片解码、41.291667秒视频播放/28秒seek、Range206/1024bytes、匿名401、图片与视频分别批准、390px无横溢出、Claim修改使两素材失效且恢复不复活。测试会话注销、Claim原文恢复；素材最终rejected，approved截图是失效测试前状态。未公开论文/修改用户权限。
-- 证据：ignored apps/web/test/visual/out/science-video/ro-media-browser-evidence.json、ro-media-approved-{desktop,mobile}.png、ro-import-final-concurrent.log、ro-media-final-parser.log、ro-media-final-deploy-retry.log。
-
-## Accepted visual and audio foundation
-
-- 淡彩demo381705a/run381705a-20260905T121000Z，/demos/science-video/d2nn/?v=watercolor-v1；2172×724五层/十探测区原创图、线稿显色、纸张质感；41.292秒视频3,203,000bytes，ECS渲染37.76秒。
-- 用户接受v4 Serena完整41.28秒WAV，全文单次生成103.41秒CPU；直接AAC封装，无分段、补静音或变速。字幕按语句停顿，不声称音素对齐。技术风格f4b4db3保留。
-- 借鉴story-to-handdrawn-video的构图/显色，复用Canvas/Chromium，不安装上游Remotion。一次内置生图；本轮RO接入无新增模型调用。
-- 已有torch2.11CPU共享基础层约0.97GB；Qwen子镜像约2.04GB含基础层；模型4.52GB。BGE依赖不同，不混合可变环境。无GPU，无新增模型/浏览器安装。
+- PR91媒体优先布局、PR88/89受审图片/视频导入/单Range/审批/Claim失效已部署；原媒体两资产保持历史失效测试rejected，没有公开论文或改变用户权限。
+- 淡彩demo381705a/run381705a-20260905T121000Z保持；2172×724五层/十探测区域图，41.292秒视频3,203,000bytes，CPU渲染37.76秒。
+- v4 Serena完整WAV41.28秒保留，未分段/补静音/变速。复用Chromium/Canvas/Qwen；torch基础约0.97GB、Qwen子镜像约2.04GB含基础、模型4.52GB。无新模型安装或本轮图片/视频调用。
 
 ## Next and limits
 
-- 媒体页层级已完成。下一步接有来源的叙事/分镜、媒体provider/隔离CPU渲染、Hermes修订。当前不等于任意论文自动生图/视频。
-- 现有PDF→Hermes→Editor保留源文件→人工Claims流程已部署；method/results/reproducibility提取空缺仍需改进，演示补充明确人工核对。
-- Storage写入后DB失败可能留下私有无引用对象；公开review digest未纳入媒体的历史债务在扩大公开发布前复核。
-- 唯一CURRENT交接：docs/handoff/2026-08-16-hermes-2d-pet-handoff.md。根目录旧checkout和用户未提交资料未动；用户已授权继续实施/合入/部署。已有每日前端分支巡检，不重复创建。
+- 下一步让已核对分镜驱动可溯源图片和隔离CPU视频渲染，再接全局Hermes对话目标；当前只有RO内专门分镜入口。自动全文理解、生图、视频与语音对话不能标完成。
+- 所选RO Claims及条件/限制是本轮输入，没有新增Evidence/SourceMap检索。现有PDF流程仍缺method/results/reproducibility自动提取，演示主张为人工核对。
+- 并发撤权/来源失效可扣额后阻止落库；模型返回到素材提交之间故障可能重复provider调用，幂等重放产品只扣一次；Storage孤立对象/公开review digest历史债务保留。
+- 唯一CURRENT交接docs/handoff/2026-08-16-hermes-2d-pet-handoff.md；根目录旧checkout与用户资料未动。已有前端分支定期巡检，不重复创建。
