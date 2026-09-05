@@ -905,12 +905,26 @@
     "fields": { "problem": "问题", "insight": "洞见", "method": "方法", "results": "结果", "limitations": "局限", "reproducibility": "可复现性" },
     "artifacts": { "document": "文档", "image": "图片", "data": "数据", "code": "代码", "video": "视频", "other": "其他" }
   },
+  "presentation": {
+    "navigation": "图解工作区", "skip": "跳到图解内容", "kicker": "围绕主张的图解", "title": "把科研主张整理成清晰图解", "description": "在确切版本中撰写或选择主张，生成确定性图解，并在进入公开记录前明确审批。",
+    "sourceTitle": "来源主张", "sourceBody": "已保存且提取完成的主张可用于生成；每张图解都会保留这些确切来源链接。", "selectClaims": "选择主张", "selectedLimit": "已选择 {count} / {max} 项", "generate": "生成图解", "starting": "正在启动…",
+    "claimStatementLabel": "核心主张", "claimStatementPlaceholder": "用一句准确的话描述一个结果或机制", "claimDraftNote": "这会保存为人工撰写的草稿；在证据审阅完成前，科学支持状态保持为“待补”。", "addClaim": "添加主张", "claimSaveFailed": "主张暂时无法保存；重试会继续使用同一份草稿。",
+    "noClaims": "这个版本还没有主张，请在上方添加第一条核心主张。", "noClaimsReadonly": "这个版本没有记录主张。", "loadingSources": "正在读取这个版本的主张…", "scopeLoadFailed": "主张和图解尚未完整载入，因此修改操作保持禁用。", "retryScopeLoad": "重新加载主张和图解", "openEditor": "打开 SDF 编辑器", "openVersions": "查看版本",
+    "previewTitle": "草稿与已审批图解", "emptyPreview": "选择一项或多项可用主张，生成第一张图解。", "emptyPreviewReadonly": "这个版本没有记录图解。", "loadingPreviews": "正在读取这个版本的图解…", "assetTitle": "科研图解", "generatedByPlatform": "由 OpenScience 图解引擎生成", "notEvidence": "图解帮助读者快速理解结构；关联主张和原始材料仍是科学记录。", "linkedClaims": "依据这些主张", "linkedClaimsUnavailable": "当前视图无法显示关联主张的正文。", "viewFullSize": "打开完整尺寸图解", "openAsset": "打开展示文件", "approve": "审批并纳入发布", "reject": "拒绝草稿", "rejectedNote": "该草稿已被拒绝，不能再次审批。请针对当前版本生成新的图解。",
+    "assetStatus": { "draft": "待审阅", "approved": "已审批", "rejected": "已拒绝" }, "assessment": { "supported": "标记为支持", "partial": "标记为部分支持", "disputed": "标记为有争议", "missing": "尚未记录证据支持" }, "claimStatus": { "needs_review": "提取结果需审阅后才能使用", "blocked": "提取被阻断", "failed": "提取失败" },
+    "provenance": "每张图解都绑定到确切版本和所选主张。来源主张被修改后，旧图解会自动退役，避免展示过时结论。",
+    "loading": "正在加载图解工作区…", "loadError": "图解工作区暂时无法加载。", "generationStartFailed": "图解暂时无法启动；重试会继续使用同一次请求。", "generationFailed": "图解任务失败，请重试。", "transitionFailed": "图解状态暂时无法更新。",
+    "taskProgress": "图解生成进度", "taskPaused": "检查已暂停，任务仍可继续", "resumeTask": "继续检查", "taskStatus": { "pending": "等待启动", "running": "正在生成图解", "failed": "生成失败" },
+    "version": "版本", "versionNumber": "版本 {number}", "versionOption": "v{number} · {status}", "invalidVersion": "链接中的版本不属于这个 Research Object，或已不可用。", "selectAvailableVersion": "可用版本", "chooseVersion": "选择版本", "versionStatus": { "draft": "草稿", "under_review": "审核中", "approved": "已批准", "published": "已发布", "revised": "修订中", "withdrawn": "已撤回", "restricted": "受限", "rejected": "已拒绝", "archived": "已归档" },
+    "readonlyRole": "你在这个工作区只有查看权限；请联系所有者或维护者添加、审批展示材料。", "readonlyWorkspace": "工作区当前未启用，不能修改展示材料。", "readonlyVersion": { "under_review": "该版本正在审核，只能阅读。", "approved": "已批准版本只能阅读。", "published": "已发布版本只能阅读。", "revised": "修订快照仍只能阅读；请创建新的草稿版本继续。", "withdrawn": "已撤回版本只能阅读。", "restricted": "受限版本只能阅读。", "rejected": "已拒绝版本只能阅读。", "archived": "已归档版本只能阅读。" },
+    "noVersion": "请先创建已提交版本，再生成图解。"
+  },
   "productSurfaces": {
     "navigation": "科研对象导航", "skip": "跳到产品内容", "objectMap": "SDF 结构图", "integrity": "完整性", "integrityBody": "每个动作都绑定到 Research Object 的具体版本与证据链。",
     "fields": { "problem": "问题", "insight": "洞见", "method": "方法", "results": "结果", "limitations": "局限", "reproducibility": "可复现性" },
     "state": { "loadingBody": "正在读取科研对象与版本历史…", "errorTitle": "页面暂时无法加载", "forbiddenTitle": "该工作区为私有" },
     "nav": {
-      "hermes": "Hermes", "overview": "概览", "sdf": "SDF", "files": "文件", "versions": "版本", "collaboration": "协作", "publish": "发布", "sandbox": "沙箱" },
+      "hermes": "Hermes", "presentation": "图解", "overview": "概览", "sdf": "SDF", "files": "文件", "versions": "版本", "collaboration": "协作", "publish": "发布", "sandbox": "沙箱" },
     "overview": { "kicker": "对象概览", "title": "概览", "body": "安静地呈现这个 Research Object 的主张、证据和当前版本状态。", "status": "对象状态", "visibility": "可见性", "history": "已记录版本", "emptyTitle": "结构仍然开放", "emptyBody": "从六个 SDF 字段开始，再为每项主张绑定可检查的证据。", "continue": "打开 SDF 编辑器", "inspect": "查看版本" },
     "versions": { "kicker": "版本历史", "title": "版本", "body": "快照是不可变记录。选择两个版本，比较确切的 SDF 与证据清单。", "compare": "比较", "emptyTitle": "还没有已提交版本", "emptyBody": "在 SDF 编辑器或文件页面创建第一次提交。", "diff": "确定性比较" },
     "files": { "kicker": "证据存储", "title": "文件", "body": "上传论文、数据、代码、图片或视频。只有创建提交后，文件才会成为版本的一部分。", "provenance": "证据来源", "provenanceBody": "上传会记录内容哈希与逻辑路径；提交会把它绑定到不可变的 Research Object 版本。", "defaultCommit": "绑定证据", "commitMessage": "提交说明", "attaching": "正在创建提交…", "attach": "绑定到新版本", "empty": "请先在上方选择文件。", "committed": "证据已提交，新版本已经出现在版本页面。" },

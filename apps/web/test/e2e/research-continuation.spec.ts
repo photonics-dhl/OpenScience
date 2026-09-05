@@ -94,7 +94,34 @@ test('confirmation writes only on request and keeps a route back into the resear
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled();
   expect(writes).toBe(1);
   await expect(page.locator('textarea[readonly]')).toHaveCount(6);
-  await expect(page.getByRole('link', { name: 'Continue editing', exact: true })).toHaveAttribute('href', '/research-objects/journey-ro/edit');
+  await expect(page.getByRole('link', { name: 'Continue editing', exact: true })).toHaveAttribute('href', '/research-objects/journey-ro/edit?ingestionTask=journey-task');
+});
+
+test('the confirmed paper is included in the next commit through the editor', async ({ page }) => {
+  await fixtures(page);
+  await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ versions: [{ versionId: 'previous-version', versionNo: 1, status: 'draft' }] }) }));
+  await page.route('**/api/versions/previous-version', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: { versionId: 'previous-version', snapshot: { artifacts: [{ artifactId: 'prior-artifact', logicalPath: 'previous-paper.pdf', blobSha256: 'a'.repeat(64) }] } } }) }));
+  await page.route('**/api/ingestion/tasks/journey-task', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjectId: ro.id, version: 1, task: { ...task, state: 'confirmed', result: { core } } }) }));
+  await page.route('**/api/csrf-token', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'test-csrf' }) }));
+  let submitted: unknown;
+  await page.route('**/api/research-objects/journey-ro/commits', async route => {
+    submitted = route.request().postDataJSON();
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ commit: { versionId: 'committed-version' } }) });
+  });
+  await page.goto('/research-objects/journey-ro/edit?ingestionTask=journey-task');
+  await expect(page.getByText('paper.pdf', { exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Commit message', exact: true }).fill('Reviewed paper');
+  await page.getByRole('button', { name: 'Create commit', exact: true }).click();
+  await expect.poll(() => submitted).toMatchObject({ artifacts: [{ artifactId: 'prior-artifact', logicalPath: 'previous-paper.pdf' }, { artifactId: 'artifact-journey', logicalPath: 'paper.pdf' }], sdfCore: core });
+});
+
+test('a foreign imported paper cannot be silently attached or committed', async ({ page }) => {
+  await fixtures(page);
+  await page.route('**/api/ingestion/tasks/journey-task', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjectId: 'foreign-ro', version: 1, task: { ...task, state: 'confirmed', result: { core } } }) }));
+  await page.goto('/research-objects/journey-ro/edit?ingestionTask=journey-task');
+  await expect(page.locator('main').getByRole('alert')).toContainText('This file has not been confirmed in this research');
+  await expect(page.getByRole('button', { name: 'Create commit', exact: true })).toBeDisabled();
+  await expect(page.getByText('paper.pdf', { exact: true })).toHaveCount(0);
 });
 
 test('the task hub opens the existing assistant in the same research context', async ({ page }) => {

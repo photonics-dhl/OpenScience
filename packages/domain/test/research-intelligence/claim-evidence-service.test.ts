@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { persistDocumentSourceMapReference } from '../../src/research-intelligence/source-map-ref';
 import {
   createClaim,
+  updateClaim,
+  deleteClaim,
   createEvidence,
   updateEvidence,
   verifyEvidence,
@@ -46,6 +48,7 @@ function fixture() {
   const auditRecord = vi.fn();
   const claimRows: Array<Record<string, unknown>> = [];
   const evidenceRows: Array<Record<string, unknown>> = [];
+  const presentationRows: Array<{ id: string; researchObjectId: string; versionId: string; status: string; claimIds: string[]; updatedAt: Date }> = [];
   const matchesTimestamp = (left: unknown, right: unknown) => left instanceof Date && right instanceof Date
     && left.getTime() === right.getTime();
   const prisma = {
@@ -73,7 +76,13 @@ function fixture() {
         Object.assign(row, data, { updatedAt: new Date(where.updatedAt.getTime() + 1) });
         return { count: 1 };
       }),
-      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+      deleteMany: vi.fn(async ({ where }: { where: { id: string; updatedAt: Date } }) => {
+        const index = claimRows.findIndex((row) => row.id === where.id && matchesTimestamp(row.updatedAt, where.updatedAt));
+        if (index < 0) return { count: 0 };
+        if (presentationRows.some((row) => row.claimIds.includes(where.id))) throw new Error('presentation source foreign key restricts deletion');
+        claimRows.splice(index, 1);
+        return { count: 1 };
+      }),
       count: vi.fn().mockResolvedValue(0),
     },
     evidenceRecord: {
@@ -101,11 +110,31 @@ function fixture() {
     }) },
     ingestionTask: { findFirst: vi.fn() },
     aiReview: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    presentationAsset: { updateMany: vi.fn(async ({ where }: { where: { researchObjectId: string; versionId: string; status: { in: string[] }; sourceClaims: { some: { claimId: string } } } }) => {
+      if (!inTransaction) throw new Error('presentation invalidation must be atomic with Claim writes');
+      const affected = presentationRows.filter((row) => row.researchObjectId === where.researchObjectId && row.versionId === where.versionId
+        && where.status.in.includes(row.status) && row.claimIds.includes(where.sourceClaims.some.claimId));
+      for (const row of affected) { row.status = 'rejected'; row.updatedAt = new Date(row.updatedAt.getTime() + 1); }
+      return { count: affected.length };
+    }) },
+    presentationAssetClaim: { deleteMany: vi.fn(async ({ where }: { where: { claimId: string; researchObjectId: string; versionId: string } }) => {
+      if (!inTransaction) throw new Error('source links must change in the Claim transaction');
+      for (const row of presentationRows) {
+        if (row.researchObjectId === where.researchObjectId && row.versionId === where.versionId) row.claimIds = row.claimIds.filter((id) => id !== where.claimId);
+      }
+      return { count: 1 };
+    }) },
   };
   Object.assign(prisma, { $transaction: vi.fn(async (operation: (transaction: typeof prisma) => unknown) => {
+    const priorClaims = structuredClone(claimRows);
+    const priorPresentations = structuredClone(presentationRows);
     inTransaction = true;
     try {
       return await operation(prisma);
+    } catch (error) {
+      claimRows.splice(0, claimRows.length, ...priorClaims);
+      presentationRows.splice(0, presentationRows.length, ...priorPresentations);
+      throw error;
     } finally {
       inTransaction = false;
     }
@@ -116,6 +145,7 @@ function fixture() {
     storage,
     claimRows,
     evidenceRows,
+    presentationRows,
     auditRecord,
   };
 }
@@ -142,6 +172,58 @@ async function seedSourceMap(ctx: ReturnType<typeof fixture>) {
 }
 
 describe('Claim/Evidence operations', () => {
+  function presentationFixture() {
+    const ctx = fixture();
+    ctx.claimRows.push({ id: CLAIM, researchObjectId: RO, versionId: VERSION, kind: 'core', statement: 'Original result', assessment: 'supported', conditions: [], limitations: [], parentClaimId: null, extractionStatus: 'succeeded', updatedAt: NOW });
+    ctx.presentationRows.push(
+      { id: 'approved-chart', researchObjectId: RO, versionId: VERSION, status: 'approved', claimIds: [CLAIM], updatedAt: NOW },
+      { id: 'draft-chart', researchObjectId: RO, versionId: VERSION, status: 'draft', claimIds: [CLAIM], updatedAt: NOW },
+      { id: 'other-version', researchObjectId: RO, versionId: 'other-version', status: 'approved', claimIds: [CLAIM], updatedAt: NOW },
+      { id: 'other-claim', researchObjectId: RO, versionId: VERSION, status: 'approved', claimIds: ['other-claim'], updatedAt: NOW },
+    );
+    return ctx;
+  }
+
+  it.each([
+    { statement: 'Corrected result' }, { assessment: 'partial' as const },
+    { conditions: ['terahertz illumination'] }, { limitations: ['fixed fabricated layers'] },
+  ])('invalidates exact-version source presentations for changed rendered Claim content: %j', async (patch) => {
+    const ctx = presentationFixture();
+    await updateClaim(ctx.deps, { userId: USER, researchObjectId: RO, versionId: VERSION, claimId: CLAIM, expectedUpdatedAt: NOW, patch });
+    expect(ctx.presentationRows.map((row) => row.status)).toEqual(['rejected', 'rejected', 'approved', 'approved']);
+    expect(ctx.presentationRows[0].updatedAt.getTime()).toBeGreaterThan(NOW.getTime());
+  });
+
+  it('preserves existing presentations when the rendered Claim content is unchanged', async () => {
+    const ctx = presentationFixture();
+    await updateClaim(ctx.deps, { userId: USER, researchObjectId: RO, versionId: VERSION, claimId: CLAIM, expectedUpdatedAt: NOW, patch: { statement: 'Original result', parentClaimId: null } });
+    expect(ctx.prisma.presentationAsset.updateMany).not.toHaveBeenCalled();
+    expect(ctx.presentationRows[0].status).toBe('approved');
+  });
+
+  it('does not invalidate assets on a stale Claim update', async () => {
+    const ctx = presentationFixture();
+    await expect(updateClaim(ctx.deps, { userId: USER, researchObjectId: RO, versionId: VERSION, claimId: CLAIM, expectedUpdatedAt: new Date(0), patch: { statement: 'Stale edit' } })).rejects.toMatchObject({ code: 'CONCURRENT_UPDATE' });
+    expect(ctx.prisma.presentationAsset.updateMany).not.toHaveBeenCalled();
+    expect(ctx.presentationRows[0].status).toBe('approved');
+  });
+
+  it('rejects presentations and detaches their source links before deleting a leaf Claim', async () => {
+    const ctx = presentationFixture();
+    ctx.presentationRows.splice(2, 1);
+    await deleteClaim(ctx.deps, { userId: USER, researchObjectId: RO, versionId: VERSION, claimId: CLAIM, expectedUpdatedAt: NOW });
+    expect(ctx.claimRows).toHaveLength(0);
+    expect(ctx.presentationRows[0]).toMatchObject({ status: 'rejected', claimIds: [] });
+    expect(ctx.presentationRows[1]).toMatchObject({ status: 'rejected', claimIds: [] });
+  });
+
+  it('rolls back presentation invalidation and source removal when Claim deletion loses its CAS', async () => {
+    const ctx = presentationFixture();
+    await expect(deleteClaim(ctx.deps, { userId: USER, researchObjectId: RO, versionId: VERSION, claimId: CLAIM, expectedUpdatedAt: new Date(0) })).rejects.toMatchObject({ code: 'CONCURRENT_UPDATE' });
+    expect(ctx.presentationRows[0]).toMatchObject({ status: 'approved', claimIds: [CLAIM], updatedAt: NOW });
+    expect(ctx.claimRows).toHaveLength(1);
+  });
+
   it('creates a human Claim idempotently and records an auditable mutation', async () => {
     const ctx = fixture();
     const input = {

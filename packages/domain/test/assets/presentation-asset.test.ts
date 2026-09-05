@@ -3,6 +3,7 @@ import { createFakePrisma, seedUser } from '../helpers/fakes';
 import {
   parsePresentationGenerationPayload,
   listPresentationAssets,
+  getPresentationTask,
   submitPresentationGeneration,
   transitionPresentationAsset,
 } from '../../src/assets/presentation-asset';
@@ -30,6 +31,29 @@ function fixture(platformRole = 'user') {
 }
 
 describe('Presentation asset domain contract', () => {
+  it.each(['pending', 'running', 'succeeded'])('reads the existing %s task DTO in its exact scope, including archived memberships', async (status) => {
+    const ctx = fixture();
+    const task = await submitPresentationGeneration(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'chart', sourceClaimIds: [CLAIM], idempotencyKey: 'scoped-read' });
+    ctx.db.agentTasks[0].status = status;
+    ctx.db.workspaces[0].status = 'archived';
+    const response = await getPresentationTask(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, taskId: task.id });
+    expect(response).toMatchObject({ id: task.id, kind: 'presentation.generate', status });
+    expect(response).not.toHaveProperty('researchObjectId');
+    expect(response).not.toHaveProperty('payload');
+  });
+
+  it.each(['session-ro', 'payload-ro', 'payload-version', 'kind', 'creator', 'membership'])('rejects scoped task recovery with mismatched %s', async (mismatch) => {
+    const ctx = fixture();
+    const task = await submitPresentationGeneration(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'chart', sourceClaimIds: [CLAIM], idempotencyKey: 'scoped-read' });
+    if (mismatch === 'session-ro') ctx.db.agentSessions[0].researchObjectId = ASSET;
+    if (mismatch === 'payload-ro') ctx.db.agentTasks[0].payload.researchObjectId = ASSET;
+    if (mismatch === 'payload-version') ctx.db.agentTasks[0].payload.versionId = ASSET;
+    if (mismatch === 'kind') ctx.db.agentTasks[0].kind = 'sdf.extract';
+    if (mismatch === 'creator') ctx.db.agentSessions[0].userId = ASSET;
+    if (mismatch === 'membership') ctx.db.memberships.length = 0;
+    await expect(getPresentationTask(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, taskId: task.id })).rejects.toThrow();
+  });
+
   it.each(['viewer', 'reviewer'])('keeps %s read-only for generation and approval', async (role) => {
     const ctx = fixture();
     ctx.db.memberships[0].role = role;

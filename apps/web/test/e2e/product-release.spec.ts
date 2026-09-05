@@ -87,6 +87,7 @@ async function installClientFixtures(page: Page) {
   }));
   await page.route('**/api/versions/version-4/review', (route) => json(route, { review: null }));
   await page.route('**/api/research-objects/ro-release', (route) => json(route, { researchObject }));
+  await page.route('**/api/versions/version-4', (route) => json(route, { version: { versionId: 'version-4', snapshot: { core: researchObject.sdf.core, artifacts: [] } } }));
   await page.route('**/admin/editorial/candidates', (route) => json(route, { candidates: [{
     publicId: 'OSR-DEMO-000001', title: researchObject.title, versionId: 'version-4', versionNo: 4,
   }] }));
