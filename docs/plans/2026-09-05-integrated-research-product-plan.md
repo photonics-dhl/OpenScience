@@ -84,6 +84,27 @@
 
 ## Task 4: 视频
 
+### 当前执行批次：D2NN 科普样片
+
+用户已认可科学插图方向并批准按质量与成本自主选型。本批先产出可播放样片，不把单篇预制动画当作任意论文自动生成能力。
+
+- [x] 核对 Git 与服务器：2026-09-05 release/rollback 仍为390afc0/c07c8d1；16 CPU、约30GiB内存，nvidia-smi和宿主机ffmpeg未发现；13容器运行，公网与loopback健康。
+- [x] 比较成熟方案：diagram-design提供HTML/SVG图形语法；story-to-handdrawn-video基于Remotion做无声画面轨；Remotion自动化商业许可需按实际组织情况核实。当前已有Playwright与FFmpeg足够验证样片，暂不新增渲染框架。
+- [x] 在 ignored `apps/web/test/visual/out/science-video/` 保存分镜、可复现脚本、MP4和抽样帧。为完整保留旁白，成片46.25秒（比原45秒目标多1.25秒）；首尾复用生成插图，中段为传播/干涉/探测动画。
+- [x] 核对五层结构、训练/推理、10区域光强读出；主线程查看海报及干涉/探测帧，ffprobe证实1280×720、24fps、H264/yuv420p与AAC，1,779,576bytes；全片解码exit0。
+- [x] 独立High审查现有presentation接入缺口；未绕过权限或启用占位provider。主线程本机浏览器首播/跳转26.96秒成功、无video error；390px无横向溢出，证据为playback-validation.json与截图。
+- [x] 输出实际视频、分镜与限制；用户视频效果验收待反馈，正式服务器渲染/RO接入尚未实施。
+
+样片产物：`d2nn-science-explainer.mp4`、`source-artwork.png`、`poster.png`、`frame-*.png`、`storyboard.json`、`narration.srt/vtt`、`preview.html`、`render.mjs`、`narrate.ps1`、`README.md`、`validation.json`、`playback-validation.json`。本批项目局部Gyan FFmpeg9.0.1保留许可证；系统Scoop shim无目标bin，未改系统安装。编码约21秒按文件时间估算，非严格性能基准；首次下载约158秒。新增付费API调用0，已有图的历史成本与硬件成本未计入。旁白为Windows Huihui，Linux服务端替代方案尚未选择；SRT短语时间近似，画内要点字幕按场景显示。
+
+独立 High 架构审查已核对的接入缺口（本批不冒称已修复）：
+
+1. `apps/agent-worker/src/presentation/minimax-admin.ts` 只有接口，且仅传 kind/Claim IDs；`src/index.ts` 注册时未注入生成器。应在 Worker 按当前授权版本解析 SDF/Claims/Evidence/SourceMap，形成有界叙事与分镜，再交给 Gateway 和 renderer。原始 proof 与衍生资产必须分开。
+2. `PresentationWorkbench.tsx` 当前只生成 chart，尚无视频播放器；Hermes 需要绑定具体资产和版本的生成/修订动作。样片手工分镜不能证明这条自动链已打通。
+3. Worker 输出上限10MiB、reader上限16MiB，private route拒绝Range且reader全量buffer。正式视频接入先按实际成片决定容量，并验证首播、seek与移动播放；不能仅把MP4上传就声称可用。
+4. 现有Claim变更失效可复用；当生成叙事消费Evidence时，也要覆盖Evidence变更。重试要复用已完成媒体，避免同一任务重复消耗provider额度。
+5. Renderer部署应仿照parser的独立无网、无Secret、非root、资源限制容器，接收验证后的本地资产与JSON；不让模型HTML/外部URL直接进入浏览器。首阶段不需要新表、新hash或全局门禁。
+
 - [ ] 比较 story-to-handdrawn-video、Remotion 与现有生成路径，核实许可、CPU 成本、尺寸、字幕和导出能力。
 - [ ] 以同一 RO 做真实分镜/成片样例，选定实现后补充独立视频实施计划与所需安装清单。
 - [ ] 接通异步生成、预览、修改和版本展示；失败可恢复，不能用占位视频代替真实产物。

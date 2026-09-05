@@ -11,6 +11,10 @@
 
 ## Delivered this slice
 
+- 最新用户反馈：卡片不符合图解要求；已认可生成式科普插图方向，批准同一D2NN论文做低成本本地动画样片，候选仓库按效果与成本自主选择。
+- 样片已生成于ignored `apps/web/test/visual/out/science-video/`：46.25秒720p/H264/AAC中文旁白、1.78MB，复用插图+本机TTS/Chromium/局部FFmpeg，无新增MiniMax调用。主线程完整解码exit0、浏览器首播/seek正常、390px无溢出；正式RO/Hermes媒体接入仍未完成。
+- 启动只读复验release/rollback仍390afc0/c07c8d1；16核30GiB、无NVIDIA工具、13容器运行，公网/loopback200；生产未变更。High独立审查确认内容简报、provider、Range播放与Evidence失效等缺口，详见当前计划Task4。
+
 - RO 图解页面接通真实主张表单、版本/来源选择、生成/任务恢复、私有预览和批准；错误加载、角色/版本只读、跨版本异步结果、幂等重试与审批CAS冲突均有覆盖。
 - Hermes→Editor 携带已确认源文件，并保留原 manifest 附件；Claim 编辑/删除在原事务中退役旧图解。新renderer换行、不夸大科学验证且拒绝过高输出；v1读取兼容。
 - 摘录关键词额度修正；无新增依赖或迁移。用户已允许自主选择开源安装，本轮复用已有能力。
@@ -27,6 +31,6 @@
 ## Product state and next action
 
 - Research Intelligence Tasks1–12与前批UI已交付；不恢复旧MVP任务。frontend/nanqing@e5db5ae无新增，已有每日10:00巡检。
-- 下一段按功能/展示优先推进机制图/图片、视频和Hermes语音编辑讨论；真实提取空缺和主张/证据自动衔接并行改进。本轮效果尚待用户验收。
+- 科普视频样片已交用户效果验收；下一段实现有来源的分镜与隔离渲染、RO播放和Hermes修订。Windows旁白需服务端替代；真实提取空缺和主张/证据自动衔接并行改进。用户已认可插图方向，视频尚待反馈。
 - 保留界限：科学支持未经独立验证；媒体默认关闭/管理员限定；Worker拒绝可能留下无引用对象，charged-on-submit与并发模拟边界仍在。
 - 先读CURRENT handoff和需求基线，生产状态必须由Git/服务器事实确定。
