@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-05 +08）：** docs maintenance branch / observed parent HEAD `codex/product-workflow-design` / `c0a162d`；后续 docs HEAD 以 Git 实时值为准。production release / rollback `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7` / `0aaf52fed29e79bb19b15517ba9ef50545510f72`；core/search `36/36` / `2/2`。Hermes Research Intelligence Tasks 1–12 全部完成；ECS 二次维护将 BuildKit `14.83 → 6.344 GB`、根盘 `54 → 44 GB`，保留唯一 Chromium、BGE、ScanSci session、生产数据、备份与 active/rollback。docs-only HEAD 不得冒充 application release。
+> **CURRENT source/deployment anchor（2026-09-05 +08）：** docs maintenance branch / observed parent HEAD `codex/product-workflow-design` / `1a8dfb1`；后续 docs HEAD 以 Git 实时值为准。production release / rollback `6478aa8ef6045ecef93127c6e3183fc05acb946f` / `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`；core/search `36/36` / `2/2`。Research Intelligence Tasks 1–12 完成；integrated product 首批入口与同事前端成果已部署，用户效果及其余阶段待验收。最新实测见 CURRENT handoff；docs-only HEAD 不得冒充 application release。
 
 ## 当前产品交付
 
