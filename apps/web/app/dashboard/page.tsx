@@ -126,7 +126,7 @@ export default function DashboardPage() {
       navigationLabel={t('context.navigation')}
       skipLabel={t('context.skip')}
     >
-      <div className="research-dashboard mx-auto grid max-w-[88rem] gap-x-10 gap-y-8 lg:grid-cols-12">
+      <div className="mx-auto grid max-w-[88rem] gap-x-10 gap-y-8 lg:grid-cols-12">
         <header className="border-b border-os-rule-paper pb-6 lg:col-span-12">
           <p data-reading-role="caption" className="text-os-muted-paper">
             {t('eyebrow')}
