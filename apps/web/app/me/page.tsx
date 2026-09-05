@@ -87,29 +87,30 @@ export default function MyProfilePage() {
   if (error) return <DashboardShell activeRoute="profile" headerActions={<AccountLink user={user} active />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} /></DashboardShell>;
   if (!user || !profile) return <DashboardShell activeRoute="profile" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={t('state.loadingBody')} kind="loading" title={meT('profileTitle')} /></DashboardShell>;
   return (
-    <DashboardShell activeRoute="profile" headerActions={<AccountLink user={user} active />} navigationLabel={meT('profileTitle')} skipLabel={t('settings.skip')}>
-      <header className="max-w-3xl border-b border-os-rule-paper pb-6">
+    <DashboardShell className="account-workspace" activeRoute="profile" headerActions={<AccountLink user={user} active />} navigationLabel={meT('profileTitle')} skipLabel={t('settings.skip')}>
+      <header className="account-heading">
         <p data-reading-role="caption" className="text-os-vermilion-ink">{meT('privateLabel')}</p>
         <h1 className="mt-2 text-[clamp(2rem,4vw,2.75rem)] font-normal text-os-ink">{meT('profileTitle')}</h1>
         <p data-reading-role="body" className="mt-3 text-os-muted-paper">{meT('privateBody')}</p>
       </header>
-      <div data-reading-role="body" className="mt-8 grid max-w-4xl gap-8 md:grid-cols-2">
-        <section className="surface-folio-sheet px-5 py-6">
+      <div className="account-grid">
+        <section className="surface-folio-sheet account-summary px-5 py-6">
+          <div aria-hidden="true" className="account-monogram">{Array.from(user.displayName)[0] || "○"}</div>
           <div className="flex items-center gap-3"><UserRound className="h-5 w-5 text-os-vermilion-ink" /><h2 className="text-lg font-semibold text-os-ink">{t('settings.identity')}</h2></div>
           <dl className="mt-6 divide-y divide-os-rule-paper text-base">
             <div className="py-3"><dt className="text-sm text-os-muted-paper">{t('settings.name')}</dt><dd className="mt-1 text-os-ink">{user.displayName}</dd></div>
             <div className="py-3"><dt className="text-sm text-os-muted-paper">{t('settings.level')}</dt><dd className="mt-1 text-os-ink">{user.level}</dd></div>
-            <div className="py-3"><dt className="text-sm text-os-muted-paper">{meT('bio')}</dt><dd className="mt-1 text-os-ink">{meT('bioUnavailable')}</dd></div>
             <div className="py-3"><dt className="text-sm text-os-muted-paper">{meT('fields')}</dt><dd className="mt-1 break-words text-os-ink">{profile.disciplines.join(' · ') || meT('notProvided')}</dd></div>
           </dl>
+          <div className="account-shortcuts"><Link href="#research-profile">{meT('editProfile')}</Link><Link href="#identity">{meT('verifyIdentity')}</Link></div>
           <Link href="/settings" className="mt-4 inline-flex min-h-11 items-center text-os-vermilion-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring">{meT('settingsTitle')}</Link>
         </section>
         <MyResearchProjects />
-        <div id="identity" className="md:col-span-2">
+        <div id="identity" className="account-identity">
           {callbackFailed ? <p role="status" className="mb-4 text-sm text-os-vermilion-ink">{meT('callbackHelp')}</p> : null}
           <AcademicIdentityControl />
         </div>
-        <section className="surface-folio-sheet px-5 py-6 md:col-span-2" data-profile-research-identity="true" id="research-profile">
+        <section className="surface-folio-sheet account-research px-5 py-6" data-profile-research-identity="true" id="research-profile">
           <ResearchProfileFields value={profile} onChange={(next) => setProfile({ ...profile, ...next })} />
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {([

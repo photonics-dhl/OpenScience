@@ -32,7 +32,7 @@
 
 ## Next action and read first
 
-1. 将首批线上效果交用户验收；按 `docs/plans/2026-09-05-integrated-research-product-plan.md` 补全导入/失败/发布旅程审计，再推进图解、视频、语音和讨论。完整五段未完成；不要继续旧 Task 10–12。
+1. 用户已否决首批视觉；先完成当前 UI 修订候选的验证和部署，再交用户检查；按 `docs/plans/2026-09-05-integrated-research-product-plan.md` 补全导入/失败/发布旅程审计，再推进图解、视频、语音和讨论。完整五段未完成；不要继续旧 Task 10–12。
 2. 新任务先读 `AGENTS.md`、本 handoff、`docs/progress.md`，再按 `project_index.md` 定向读取需求基线相关章节。
 3. 涉及生产时重新核对 active/public/rollback；文档 HEAD 不得冒充 application release。
 

@@ -126,3 +126,11 @@
 - PR #78 已部署至 6478aa8，rollback b32d81c；用户效果尚待验收。
 - 验收入口：/dashboard → 当前 RO /hermes → 确认 → RO 编辑；/me → 个人资料、身份与研究项目；/settings → 偏好。
 - 首批已覆盖上述四个入口断点及会话作用域修正，尚不能据此勾选六种状态的完整旅程审计。先补齐导入、失败、预览/发布等剩余路径，再推进后续多模态阶段。
+
+## 用户截图反馈：产品界面修订
+
+- 用户否决首批视觉效果，授权先优化再继续流程。采用成熟应用布局：Atlassian spacing/grid（https://atlassian.design/foundations/spacing），8px 节奏、居中自适应容器、克制标题与清晰操作区；保留暖色/朱红品牌。复用现有 Tailwind 和 scoped CSS，无新安装。
+- 已复现：profile 的 body reading role 限制整块 grid 为 75ch；缺少 preflight 时 dd 缩进、ul 圆点与链接下划线侵入应用布局；巨幅标题和 20 条长项目名把身份表单挤出首屏。
+- 修改 DashboardShell 与 globals 的应用范围布局；profile/settings 使用一致的页标题、资料概要与自适应分区；MyResearchProjects 改为紧凑整行链接及可展开最近列表；精简中英文实现说明。只调整工作台应用表面，公开 RO 长文保持阅读排版。
+- 验证：已有身份/continuation 浏览器用例、1440/2048 与 390/320 视口截图；增加真实几何检查与展开访问测试，防止再次仅凭功能测试接受错位页面。随后独立复审、必要测试、构建及服务器发布。
+- 之后处理审计发现的具体导入/预览发布断点，不将视觉修订当成完整产品任务完成。

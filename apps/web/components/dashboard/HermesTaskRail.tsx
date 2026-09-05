@@ -61,14 +61,10 @@ export function HermesTaskRail({ tasks }: HermesTaskRailProps) {
       ) : (
         <ul className="mt-4 grid gap-3">
           {actionable.map((task) => {
-            const href = task.status === 'needs_review'
-              ? `/research-objects/${task.researchObjectId}/hermes?task=${task.id}`
-              : `/research-objects/${task.researchObjectId}/ingest?task=${task.id}`;
+            const href = `/research-objects/${encodeURIComponent(task.researchObjectId)}/hermes?task=${encodeURIComponent(task.id)}`;
             const action = task.status === 'needs_review'
               ? t('hermes.review')
-              : task.status === 'failed_retryable'
-                ? t('hermes.retry')
-                : t('hermes.view');
+              : t('hermes.view');
 
             return (
               <li key={task.id} className="rounded-control border border-white/10 bg-workbench-bg p-4">

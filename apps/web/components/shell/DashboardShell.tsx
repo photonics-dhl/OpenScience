@@ -25,7 +25,7 @@ function DashboardShell({
   ...props
 }: DashboardShellProps) {
   return (
-    <div className={cn('surface-folio min-h-dvh', className)} data-os-surface="dashboard" {...props}>
+    <div className={cn('surface-folio surface-product-app min-h-dvh', className)} data-os-surface="dashboard" {...props}>
       <SkipLink tone="paper">{skipLabel}</SkipLink>
       <ShellHeader
         compactBrandOnMobile
@@ -37,7 +37,7 @@ function DashboardShell({
       />
       <div className={cn('min-h-[calc(100dvh-3.5rem)]', rail && 'lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]')}>
         {rail ? <aside className="border-b border-os-rule-paper p-4 lg:border-b-0 lg:border-r lg:p-6">{rail}</aside> : null}
-        <main className={cn('min-w-0 px-5 py-8 sm:px-8 lg:px-12 lg:py-10', mainClassName)} id="main-content" tabIndex={-1}>
+        <main className={cn('product-main min-w-0 px-5 py-8 sm:px-8 lg:px-12 lg:py-10', mainClassName)} id="main-content" tabIndex={-1}>
           {children}
         </main>
       </div>
