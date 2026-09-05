@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-05 +08）：** branch `codex/product-workflow-design`，application HEAD / production `390afc09d3b6ec64d5b23e64f6bffe6bf8a375e7`，rollback `c07c8d15e5ba3b722577f42d6ad72af8c83189fe`；独立demo source `f4b4db3`，后续HEAD以Git为准。core/search `36/36` / `2/2`，CI99与服务器验收通过；真实PDF→人工确认/补齐→源文件入版本→Claim→图解预览/批准已完成。图解为主张卡片，机制图/图片、视频和语音待下一段；相同PDF复验仍有三个字段未自动提取。根目录旧 main 不是部署源。
+> **CURRENT source/deployment anchor（2026-09-05 +08）：** branch `codex/product-workflow-design`，application HEAD / production `390afc09d3b6ec64d5b23e64f6bffe6bf8a375e7`，rollback `c07c8d15e5ba3b722577f42d6ad72af8c83189fe`；独立demo source `381705a`，后续HEAD以Git为准。core/search `36/36` / `2/2`，CI99与服务器验收通过；真实PDF→人工确认/补齐→源文件入版本→Claim→图解预览/批准已完成。图解为主张卡片，机制图/图片、视频和语音待下一段；相同PDF复验仍有三个字段未自动提取。根目录旧 main 不是部署源。
 
 ## 当前产品交付
 
@@ -451,4 +451,4 @@
 
 | `infra/tts-audition/continuity_audition.py` | 全文连续与平实指令离线试听对照，复用现有Qwen运行时 | v4连续讲述已接受；f4b4db3视频已部署验证，relaxed复现选项保留 |
 
-| `apps/media-demo/test/visual-style.test.mjs` | 默认技术风格/可选淡彩风格的选择校验 | watercolor实现中，保留已接受v4配音 |
+| `apps/media-demo/test/visual-style.test.mjs` | 默认技术风格/可选淡彩风格的选择校验 | 381705a已部署，视觉待验收，保留已接受v4配音 |
