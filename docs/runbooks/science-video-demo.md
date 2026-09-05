@@ -172,9 +172,9 @@ Post-audition review fixed rollback of a newly-created WAV when metrics publicat
 
 Use --delivery conversational --script original for A, and --delivery conversational --script spoken for B. Separate host outputs output-v2-direction / output-v2-spoken avoid overwriting previous samples. Evidence: ignored science-video/tts-v2-{direction,spoken}/ WAV and metrics.
 
-## Latest verified run
+## Historical conversational-demo run
 
-历史独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白总长37.12秒、生成耗时91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；新增版本CI待完成。
+历史独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白总长37.12秒、生成耗时91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；当时新增版本CI待完成；当前最终main CI已通过。
 
 ## 连续配音对照（2026-09-05）
 
@@ -188,7 +188,7 @@ Use --delivery conversational --script original for A, and --delivery conversati
 
 连续模式使用 input/narration.wav + narration.json（五段绝对start、段内cues）及source-artwork.png；旧五WAV模式保留。原音轨41.28秒，画面最多向上补足一帧，音频不增加段间padding。复现已接受讲稿可用 continuity_audition.py --variant relaxed，但部署复用已试听原WAV，避免重新采样改变声音。
 
-历史技术风格视频：f4b4db3df77c7568b0c2a7e266035dc6f5f42303，run f4b4db3-20260905T113000Z。用户已接受v4完整配音；原WAV41.28秒逐字节一致，直接AAC封装，无分段/补静音/变速。视频41.292秒/991帧/4,432,202bytes，ECS渲染20.50秒。字幕依据语句停顿，章节0/6.45/11/20.56/31.81；10项渲染测试、音频4项、lint/docs、独立发布复审、全片解码、公网200/Range206/实际播放跳转/390px字幕无溢出/零页面错误均通过。应用390afc0/回滚c07c8d1不变，旧demo617ed1c保留。PR88新CI仍进行中。下一步图片/画面艺术风格，声音后续微调。
+历史技术风格视频：f4b4db3df77c7568b0c2a7e266035dc6f5f42303，run f4b4db3-20260905T113000Z。用户已接受v4完整配音；原WAV41.28秒逐字节一致，直接AAC封装，无分段/补静音/变速。视频41.292秒/991帧/4,432,202bytes，ECS渲染20.50秒。字幕依据语句停顿，章节0/6.45/11/20.56/31.81；10项渲染测试、音频4项、lint/docs、独立发布复审、全片解码、公网200/Range206/实际播放跳转/390px字幕无溢出/零页面错误均通过。应用390afc0/回滚c07c8d1不变，旧demo617ed1c保留。当时PR88 CI待完成，现已通过。下一步图片/画面艺术风格，声音后续微调。
 
 ## Watercolor style evaluation
 
@@ -200,7 +200,7 @@ Image prompt: original panoramic scientific editorial illustration on ivory wate
 
 Rollback uses the existing managed-demo release transaction and preserves f4b4db3 technical output. Validate five-scene screenshots, source counts, caption readability, same full audio, server render/decode, public playback/Range/mobile and unchanged application release.
 
-CURRENT淡彩视频：source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705a-20260905T121000Z；原创2172x724五层/十探测区全景、线稿显色、纸张与石墨质感。用户已认可的v4原WAV保持逐字节一致；视频41.292s/3,203,000bytes，ECS渲染37.76s。11项测试、ESLint/docs、独立复审（technical兼容/画面确定性/无裁切）、服务器build/全解码/public200/Range206/播放跳转/手机字幕无溢出/健康通过。应用390afc0及回滚c07c8d1不变；原技术风格f4b4db3保留。一次内置生图，无新增服务器依赖，render模型调用0不代表图片生成免费。视觉效果待用户验收；下一步按反馈优化或接入RO/Hermes媒体能力。
+淡彩独立演示发布时验收（应用版本为当时状态，当前应用见文末RO接入验收）：source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705a-20260905T121000Z；原创2172x724五层/十探测区全景、线稿显色、纸张与石墨质感。用户已认可的v4原WAV保持逐字节一致；视频41.292s/3,203,000bytes，ECS渲染37.76s。11项测试、ESLint/docs、独立复审（technical兼容/画面确定性/无裁切）、服务器build/全解码/public200/Range206/播放跳转/手机字幕无溢出/健康通过。应用390afc0及回滚c07c8d1不变；原技术风格f4b4db3保留。一次内置生图，无新增服务器依赖，render模型调用0不代表图片生成免费。视觉效果待用户验收；下一步按反馈优化或接入RO/Hermes媒体能力。
 
 ## RO reviewed-media import
 
@@ -215,3 +215,13 @@ Verification: two concurrent imports must yield one asset per media and one set 
 CLI运行时修正：根目录没有所有workspace包别名，维护脚本按已有脚本模式从../packages/*/dist/index.js加载，部署前运行node --test scripts/import-presentation-media.test.mjs。源代码编译检查不能替代实际CLI启动。
 
 完整应用部署仍要求每个候选SHA的document-parser16-case验收report，须在正式事务前执行accept-document-parser-release.sh并核对源/image绑定。d174b1f首次事务停在缺少report的前置检查，未进入应用切换；先补齐最终候选report再部署，禁止绕过验收标记。
+
+## RO integration acceptance — 2026-09-05
+
+Application83b2933f204894cda43f4bb0d0f8d0c4cbc7b06d is deployed; rollback390afc09d3b6ec64d5b23e64f6bffe6bf8a375e7. Demo381705a remains separate. Final main/PR CI and server full build passed. Exact Parser report:14 succeeded,2 needsReview,0 failed/falseReady,0 external calls. Core36/search2 migrations current;13 running containers, all10 configured healthchecks healthy; public/loopback release agree and journal/retention complete.
+
+The controlled private RO bcbf1586-b6bd-44b6-ab66-c675fcddce78 contains the reviewed watercolor image and video. Real two-client database concurrency produced one asset/audit and three Claim links per kind. Browser verified source hashes, image decode, video41.291667s and28s seek, authenticated206, anonymous401, independent approvals and390px no overflow. Editing a Claim rejected both media; restoring its original text did not revive them. Session logged out. Final test assets remain rejected; approved screenshots capture the earlier approval state, not current status. The controlled account is not the user's personal RO and no research publication occurred.
+
+Preflight container lifecycle: use `docker run --rm` for task-owned one-off import checks. Two earlier exited, read-only, no-volume d174 CLI checks blocked retention and caused a verified rollback before a successful retry. Their exact IDs/state/mounts were checked before `docker rm` without force/volume flags; all five temporary import containers from this task are now removed. Do not broadly prune or delete release reports to bypass retention. When a stopped preflight container blocks retention, verify ownership, exit status and mounts, clean only that task-owned container, verify rollback/journal state, then retry the canonical transaction.
+
+Evidence stays ignored under apps/web/test/visual/out/science-video/: ro-media-browser-evidence.json, ro-media-approved-desktop.png, ro-media-approved-mobile.png, ro-import-final-concurrent.log, ro-media-final-parser.log and ro-media-final-deploy-retry.log. Local source-artwork.png and d2nn-science-explainer-v2.mp4 are older demo files: use d2nn-watercolor-v1.png and the exact381705a server release path when verifying the watercolor assets.

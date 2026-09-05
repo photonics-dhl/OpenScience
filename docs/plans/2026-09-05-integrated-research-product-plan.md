@@ -1,7 +1,7 @@
 # Integrated Research Product Delivery Plan
 
 > 执行者使用 executing-plans；只有独立且有明确 owner 的工作才委派。
-> 状态：CURRENT delivery plan；PR86/390afc0已部署并完成真实PDF图解工作流，下一段推进机制图/媒体展示，提取质量并行改进。
+> 状态：CURRENT delivery plan；83b2933已部署受审图片/视频RO工作流并通过真实验收，rollback390afc0。下一段优化媒体页层级，再接任意论文生成/Hermes修改，提取质量继续改进。
 
 **Goal:** 分段交付工作区—Hermes—RO、多模态展示与语音编辑完整产品体验。
 
@@ -252,19 +252,19 @@ v2效果迭代：用户认可v1并要求过渡自然、动效突出；`render-v2
 
 User accepted B naturalness and approved applying it to full demo. Generate five reviewed scene paragraphs with the existing offline Qwen/Serena runtime and fixedseed42; retain original demo release for rollback. Reuse audio-duration scene timing, attach bounded optional narration.json with scene-level exact-text cues, replace stale Windows provenance. Update chapter buttons and page duration from actual WAV timings, then build/render/publish via existing isolated demo transaction. Validate narration4 unit tests, renderer cue bounds, full MP4 decode, real browser playback/chapters/mobile and unchanged app release. No new model, API, schema or gateway endpoint.
 
-完整口语视频交付实测：历史独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白总长37.12秒、生成耗时91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；新增版本CI待完成。
+完整口语视频交付实测：历史独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白总长37.12秒、生成耗时91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；当时新增版本CI待完成；当前最终main CI已通过。
 
 ### Continuous narration accepted (v4)
 
 User accepted v4 relaxed full WAV (41.28s); further voice polish deferred. Preserve the exact single audio stream, bypass legacy per-scene padding, and derive five visual intervals from reviewed sentence pauses at 0/6.45/11/20.56/31.81 seconds. Sentence captions use waveform silence boundaries, not claimed phoneme forced alignment. Update mobile chapter captions and duration. Validate bounded input/metadata, unchanged audio sample stream at staging, render/decode/public playback on ECS; keep prior demo for rollback. No new dependencies, model calls, or application/schema changes. Then proceed to artistic visual styles in the next product increment.
 
-历史技术风格视频：f4b4db3df77c7568b0c2a7e266035dc6f5f42303，run f4b4db3-20260905T113000Z。用户已接受v4完整配音；原WAV41.28秒逐字节一致，直接AAC封装，无分段/补静音/变速。视频41.292秒/991帧/4,432,202bytes，ECS渲染20.50秒。字幕依据语句停顿，章节0/6.45/11/20.56/31.81；10项渲染测试、音频4项、lint/docs、独立发布复审、全片解码、公网200/Range206/实际播放跳转/390px字幕无溢出/零页面错误均通过。应用390afc0/回滚c07c8d1不变，旧demo617ed1c保留。PR88新CI仍进行中。下一步图片/画面艺术风格，声音后续微调。
+历史技术风格视频：f4b4db3df77c7568b0c2a7e266035dc6f5f42303，run f4b4db3-20260905T113000Z。用户已接受v4完整配音；原WAV41.28秒逐字节一致，直接AAC封装，无分段/补静音/变速。视频41.292秒/991帧/4,432,202bytes，ECS渲染20.50秒。字幕依据语句停顿，章节0/6.45/11/20.56/31.81；10项渲染测试、音频4项、lint/docs、独立发布复审、全片解码、公网200/Range206/实际播放跳转/390px字幕无溢出/零页面错误均通过。应用390afc0/回滚c07c8d1不变，旧demo617ed1c保留。当时PR88 CI待完成，现已通过。下一步图片/画面艺术风格，声音后续微调。
 
 ### Artistic visual iteration (approved next step)
 
 Keep the accepted v4 full narration and sentence timings. Add an optional watercolor visual style while retaining technical rendering as the default for old inputs. Generate an original panorama with exactly five plates and ten detector cells; full-image contain framing protects scientific objects. Reference story-to-handdrawn-video's contained composition and monochrome-to-color reveal, then adapt to the existing CPU Canvas renderer rather than adding a second full Remotion runtime. Apply consistent pencil contours/paper material and restrained wave motion to mechanism scenes. Render and inspect representative frames, then deploy the isolated demo and validate audio, playback/Range/mobile. Scientific limits remain visible; illustrated intensity values are not measurements.
 
-CURRENT淡彩视频：source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705a-20260905T121000Z；原创2172x724五层/十探测区全景、线稿显色、纸张与石墨质感。用户已认可的v4原WAV保持逐字节一致；视频41.292s/3,203,000bytes，ECS渲染37.76s。11项测试、ESLint/docs、独立复审（technical兼容/画面确定性/无裁切）、服务器build/全解码/public200/Range206/播放跳转/手机字幕无溢出/健康通过。应用390afc0及回滚c07c8d1不变；原技术风格f4b4db3保留。一次内置生图，无新增服务器依赖，render模型调用0不代表图片生成免费。视觉效果待用户验收；下一步按反馈优化或接入RO/Hermes媒体能力。
+淡彩独立演示发布时验收（应用版本为当时状态，当前应用见文末RO接入验收）：source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705a-20260905T121000Z；原创2172x724五层/十探测区全景、线稿显色、纸张与石墨质感。用户已认可的v4原WAV保持逐字节一致；视频41.292s/3,203,000bytes，ECS渲染37.76s。11项测试、ESLint/docs、独立复审（technical兼容/画面确定性/无裁切）、服务器build/全解码/public200/Range206/播放跳转/手机字幕无溢出/健康通过。应用390afc0及回滚c07c8d1不变；原技术风格f4b4db3保留。一次内置生图，无新增服务器依赖，render模型调用0不代表图片生成免费。视觉效果待用户验收；下一步按反馈优化或接入RO/Hermes媒体能力。
 
 ### Reviewed RO media integration
 
@@ -273,3 +273,7 @@ CURRENT淡彩视频：source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705
 3. Run focused permission/replay/tamper/range/UI tests, full build/typecheck/test/lint and independent security review.
 4. Deploy through canonical full application transaction; create two-session import evidence in the controlled admin-owned private D2NN RO, verify replay, approval and Claim invalidation, actual desktop/mobile playback/seek, anonymous denial and health. No role escalation, external invitation or public research publication.
 5. Update CURRENT with actual app/demo/rollback tuple. Automatic narrative/image/video generation and Hermes edits remain next slices.
+
+### Reviewed-media delivery checkpoint — 2026-09-05
+
+Steps1–5 for reviewed-media import are complete on application83b2933 (rollback390afc0): source/image-bound Parser acceptance, server build/runtime/migrations, real two-session database import, browser playback/Range/individual approval/Claim invalidation and restoration all passed. The private controlled test leaves assets rejected after invalidation; approved screenshots are prior-state evidence. No arbitrary-paper generation or Hermes media-editing completion is claimed. Next prioritize clear media-page hierarchy and terminology, then sourced narrative/storyboard and generation/editing orchestration.
