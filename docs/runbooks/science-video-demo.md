@@ -189,3 +189,13 @@ Use --delivery conversational --script original for A, and --delivery conversati
 连续模式使用 input/narration.wav + narration.json（五段绝对start、段内cues）及source-artwork.png；旧五WAV模式保留。原音轨41.28秒，画面最多向上补足一帧，音频不增加段间padding。复现已接受讲稿可用 continuity_audition.py --variant relaxed，但部署复用已试听原WAV，避免重新采样改变声音。
 
 CURRENT独立视频：f4b4db3df77c7568b0c2a7e266035dc6f5f42303，run f4b4db3-20260905T113000Z。用户已接受v4完整配音；原WAV41.28秒逐字节一致，直接AAC封装，无分段/补静音/变速。视频41.292秒/991帧/4,432,202bytes，ECS渲染20.50秒。字幕依据语句停顿，章节0/6.45/11/20.56/31.81；10项渲染测试、音频4项、lint/docs、独立发布复审、全片解码、公网200/Range206/实际播放跳转/390px字幕无溢出/零页面错误均通过。应用390afc0/回滚c07c8d1不变，旧demo617ed1c保留。PR88新CI仍进行中。下一步图片/画面艺术风格，声音后续微调。
+
+## Watercolor style evaluation
+
+2026-09-05: optional narration.json visualStyle=watercolor adds original pencil/watercolor panorama, cached grayscale-to-color reveal, contained framing, graphite contours and deterministic paper grain. Existing technical mode remains the default. No new server software/model download; exact accepted continuous WAV and chapter times retained. Generated asset is ignored apps/web/test/visual/out/science-video/d2nn-watercolor-v1.png, copied from the built-in image generation output; one built-in image generation was used, so renderer freshPaidApiCalls=0 describes rendering only, not free image creation. No MiniMax API invocation.
+
+Reference: https://github.com/gnipbao/story-to-handdrawn-video — studied DESIGN.md and skill-package/story-to-handdrawn-video/SKILL.md (MIT repository), specifically full-image contain and monochrome-to-color reveal. This iteration adapts those visual techniques in our existing renderer; it does not install or claim to run the upstream Remotion stack.
+
+Image prompt: original panoramic scientific editorial illustration on ivory watercolor paper, graphite pencil contours, translucent teal and muted amber washes; one input numeral7 mask, exactly five individually countable diffractive plates, spreading wavefronts, one output with two rows of five regions, third lower cell glowing. No labels, extra intermediate plates, lenses, neurons, or experimental-photo claim. Output2048x683; plate/cell count inspected. Runtime derivatives are Canvas animation, not new image-model edits.
+
+Rollback uses the existing managed-demo release transaction and preserves f4b4db3 technical output. Validate five-scene screenshots, source counts, caption readability, same full audio, server render/decode, public playback/Range/mobile and unchanged application release.

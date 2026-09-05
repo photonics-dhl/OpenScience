@@ -32,3 +32,9 @@ export function applyNarration(scenes, metadata) {
  metadata.scenes.forEach((scene, i) => { scenes[i].narrationText = scene.text; scenes[i].cues = scene.cues.map(({start, end, text}) => ({start, end, text})); });
  return `Supplied pre-generated WAV; provider: ${metadata.provider}; speaker: ${metadata.speaker}; no TTS during rendering.`;
 }
+
+export function resolveVisualStyle(metadata) {
+ const style = metadata?.visualStyle ?? "technical";
+ if (!["technical", "watercolor"].includes(style)) throw new Error("Unsupported visual style");
+ return style;
+}

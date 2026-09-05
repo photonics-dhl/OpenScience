@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { parseArguments, validatePaths, VIDEO_FILE } from './inputs.mjs';
-import { sceneTemplates, applyNarration, continuousTimeline } from './scenes.mjs';
+import { sceneTemplates, applyNarration, continuousTimeline, resolveVisualStyle } from './scenes.mjs';
 import { installDrawing } from './drawing.mjs';
 import { hasFastStart } from './media.mjs';
 
@@ -54,6 +54,7 @@ async function main() {
     if (!info.isFile() || info.isSymbolicLink() || info.size === 0 || info.size > 64 * 1024) throw new Error('Narration metadata must be a regular file of at most 64 KiB');
     metadata = JSON.parse(await readFile(narrationPath, 'utf8'));
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const visualStyle = resolveVisualStyle(metadata);
   let scenes = sceneTemplates.map(scene => ({ ...scene }));
   let total = 0;
   let frameCount;
@@ -77,14 +78,14 @@ async function main() {
   }
   await mkdir(output, { recursive: true });
   // Exclusive writes and FFmpeg -n preserve existing evidence, including partial prior runs.
-  await writeFile(resolve(output, 'storyboard.json'), JSON.stringify({ fps, total, audioMode, frameCount, source: 'https://arxiv.org/abs/1804.08711v2', notice: 'Conceptual animation; intensities illustrative, not measured.', narration, scenes }, null, 2), { flag: 'wx' });
+  await writeFile(resolve(output, 'storyboard.json'), JSON.stringify({ fps, total, audioMode, frameCount, visualStyle, source: 'https://arxiv.org/abs/1804.08711v2', notice: 'Conceptual animation; intensities illustrative, not measured.', narration, scenes }, null, 2), { flag: 'wx' });
     const { chromium } = await import('playwright-core');
     browser = await chromium.launch({ headless: true, executablePath: process.env.SCIENCE_CHROMIUM || '/usr/bin/chromium' });
     if (interrupted) throw new Error('Render interrupted');
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
     await page.route('**/*', route => route.abort());
     await page.setContent('<!doctype html><html><body style="margin:0"><canvas width="1280" height="720"></canvas></body></html>');
-    await page.evaluate(installDrawing, { scenes, total, artworkData: `data:image/png;base64,${(await readFile(resolve(input, 'source-artwork.png'))).toString('base64')}` });
+    await page.evaluate(installDrawing, { scenes, total, visualStyle, artworkData: `data:image/png;base64,${(await readFile(resolve(input, 'source-artwork.png'))).toString('base64')}` });
     await page.evaluate(() => document.fonts.ready);
     encoder = startEncoder(ffmpeg, ['-n', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(fps), '-i', 'pipe:0', '-an', '-c:v', 'libx264', '-preset', 'fast', '-crf', '19', '-pix_fmt', 'yuv420p', resolve(output, 'silent-v2.mp4')]);
     const middle = i => scenes[i].start + scenes[i].duration / 2;
@@ -126,7 +127,7 @@ async function main() {
     if (!fastStart) throw new Error('Rendered MP4 is missing fast-start atom ordering');
     await execute(ffmpeg, ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', resolve(output, VIDEO_FILE), '-f', 'null', '-'], { timeout: 120000, signal: cancellation.signal });
     if (interrupted) throw new Error('Render interrupted');
-    const metrics = { schemaVersion: 1, audioMode, frameCount, width: video.width, height: video.height, durationSeconds: Number(probe.format.duration), videoCodec: video.codec_name, audioCodec: 'aac', pixelFormat: video.pix_fmt, fastStart, completeDecode: true, renderSeconds: (performance.now() - started) / 1000, total, fps, freshPaidApiCalls: 0, narration, probe };
+    const metrics = { schemaVersion: 1, audioMode, frameCount, visualStyle, width: video.width, height: video.height, durationSeconds: Number(probe.format.duration), videoCodec: video.codec_name, audioCodec: 'aac', pixelFormat: video.pix_fmt, fastStart, completeDecode: true, renderSeconds: (performance.now() - started) / 1000, total, fps, freshPaidApiCalls: 0, narration, probe };
     await writeFile(resolve(output, 'metrics.json'), JSON.stringify(metrics, null, 2), { flag: 'wx' });
     process.stdout.write(`${JSON.stringify(metrics)}\n`);
   } finally {

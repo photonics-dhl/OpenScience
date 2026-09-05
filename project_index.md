@@ -450,3 +450,5 @@
 | `方案0723.docx` | 早期脑暴稿，2026-07-24 被 Baseline v1.0 取代，用户确认放弃，不归档 |
 
 | `infra/tts-audition/continuity_audition.py` | 全文连续与平实指令离线试听对照，复用现有Qwen运行时 | v4连续讲述已接受；f4b4db3视频已部署验证，relaxed复现选项保留 |
+
+| `apps/media-demo/test/visual-style.test.mjs` | 默认技术风格/可选淡彩风格的选择校验 | watercolor实现中，保留已接受v4配音 |
