@@ -165,3 +165,9 @@ Run audition_test.py; check saved waveform finite/nonzero, full WAV decode and l
 Qwen三音色已在ECS CPU完成：Serena15.92s/生成39.57s、Uncle_Fu15.68s/39.45s、Vivian17.68s/43.99s；峰值进程RSS5.22–5.31GiB，4线程/BF16/SDPA，付费API调用0。三段WAV全片解码、有限非零波形通过；自然度与内容完整性待用户试听，不能把生成成功当作听感验收。基础镜像971705460bytes；子镜像2043364436bytes已含基础层；模型4520217432bytes。df可用101313294336bytes（94.36GiB），较清理后占用增加约6.11GiB；公网/loopback200、应用390afc0不变。
 
 Post-audition review fixed rollback of a newly-created WAV when metrics publication fails (4/4 local and ECS tests). Abrupt process death between two publications still requires a fresh output directory. Original generation script retained at /opt/openscience-trials/tts/audition.sample-run.py; current script is bind-mounted from source for trial execution, so the image tag alone does not identify trial code.
+
+### Naturalness A/B audition
+
+配音自然度二轮：用户反馈第一轮仍机械；复用Serena/seed42，新增可选script/delivery。A原文+聊天指令14.88s/生成37.07s，B口语短句+同指令21.84s/54.37s；ECS离线CPU完成、两段完整WAV解码通过，无新增依赖/模型/付费调用。自然度尚待用户试听，不宣称已解决；原音频保留。
+
+Use --delivery conversational --script original for A, and --delivery conversational --script spoken for B. Separate host outputs output-v2-direction / output-v2-spoken avoid overwriting previous samples. Evidence: ignored science-video/tts-v2-{direction,spoken}/ WAV and metrics.

@@ -28,6 +28,19 @@ TEXT = (
     "光在传播中不断改变形状，最后照亮对应的探测区域，用一次传播完成图像分类。"
 )
 INSTRUCT = "像向朋友讲一个有趣的科学发现，放松自然，有好奇感；重点处稍作停顿，避免广告腔和夸张播音腔。"
+SPOKEN_TEXT = (
+    "你想过吗，光也能用来认数字。"
+    "这篇研究里，研究人员设计了五层薄片，让光依次穿过去。"
+    "每过一层，光的分布就变一次。"
+    "最后，只要比较几个探测区域的亮度，就能得到分类结果。"
+    "当然，薄片的结构得先在计算机上训练好，再制造出来。"
+)
+CONVERSATIONAL_INSTRUCT = (
+    "用日常聊天的普通话说给身边一个朋友听，声音轻松、亲近，语速中等。"
+    "开头带一点真实的好奇，解释过程时平实清楚，结尾自然收住。"
+    "一句话里只突出最重要的一两个词，短句连贯，长句按意思轻轻换气。"
+    "不要每个词都重读，不要每句话都用相同的抑扬顿挫，不用主持人或广告配音的腔调。"
+)
 SEED = 42
 THREADS = 4
 
@@ -42,6 +55,8 @@ def log_phase(phase, **fields):
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate one Qwen3-TTS CPU audition clip")
     parser.add_argument("--speaker", choices=SPEAKERS, default="Serena")
+    parser.add_argument("--script", choices=("original", "spoken"), default="original")
+    parser.add_argument("--delivery", choices=("original", "conversational"), default="original")
     return parser.parse_args()
 
 
@@ -129,6 +144,8 @@ def max_rss_bytes():
 
 def main():
     args = parse_args()
+    text = SPOKEN_TEXT if args.script == "spoken" else TEXT
+    instruct = CONVERSATIONAL_INSTRUCT if args.delivery == "conversational" else INSTRUCT
     ensure_output_available(OUTPUT_ROOT, args.speaker)
     if not MODEL_ROOT.is_dir():
         raise NotADirectoryError(f"model directory is unavailable: {MODEL_ROOT}")
@@ -158,10 +175,10 @@ def main():
     generation_started = time.perf_counter()
     with torch.inference_mode():
         waveforms, sample_rate = model.generate_custom_voice(
-            text=TEXT,
+            text=text,
             language="Chinese",
             speaker=args.speaker,
-            instruct=INSTRUCT,
+            instruct=instruct,
         )
     generation_seconds = time.perf_counter() - generation_started
     waveform = waveforms[0]
@@ -172,8 +189,10 @@ def main():
     metrics = {
         "schemaVersion": 1,
         "speaker": args.speaker,
-        "text": TEXT,
-        "instruct": INSTRUCT,
+        "text": text,
+        "instruct": instruct,
+        "script": args.script,
+        "delivery": args.delivery,
         "modelPath": str(MODEL_ROOT),
         "device": "cpu",
         "dtype": "bfloat16",
