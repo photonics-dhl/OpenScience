@@ -1,7 +1,7 @@
 # Integrated Research Product Delivery Plan
 
 > 执行者使用 executing-plans；只有独立且有明确 owner 的工作才委派。
-> 状态：CURRENT delivery plan；尚未完成页面断点审计，不是全量逐函数实施计划。
+> 状态：CURRENT delivery plan；首批入口断点已实现并合入 main，完整旅程审计与其余阶段仍待完成。
 
 **Goal:** 分段交付工作区—Hermes—RO、多模态展示与语音编辑完整产品体验。
 
@@ -12,7 +12,7 @@
 ## Global constraints
 
 - 设计依据：`docs/specs/2026-09-05-integrated-research-product-design.md`。
-- 生产 application/rollback 为 `b32d81c` / `0aaf52f`，开始部署前重新只读核实。
+- 生产 application/rollback 为 `6478aa8` / `b32d81c`，开始部署前重新只读核实。
 - 不复做 Research Intelligence Tasks 1–12；不修改根目录旧 main 或其他人的未提交内容。
 - 每段先参考成熟方案；未经实测不得宣布候选 provider 可用。
 - 真实数据操作、发布、迁移和第三方安装遵守既有授权范围；效果按段交用户验收。
@@ -55,7 +55,7 @@
 | RO 各页面寻找 Hermes | 二级导航没有 Hermes | ResearchWorkspaceNav | 常驻入口与独立 active 状态，桌面/移动可达 |
 | 修改 URL task/RO 或请求失败 | effect 仅监听 task，旧 detail 未清理；失败仍有 loading | HermesReviewPage | 校验返回 RO、取消旧结果、明确错误与重试 |
 
-本批复用 Next Link、现有 Research Folio、getDashboardOverview/getResearchObject、ingestion 确认和已有 deep link；不引入第三方依赖或新 API。先完成已有路径连接，无需为导航另建状态机。浏览器证据使用真实 Next 页面与明确的 API fixtures，只证明前端流程，不冒充真实账号/数据库验收。
+本批复用 Next Link、现有 Research Folio、getDashboardOverview/getResearchObject、ingestion 确认和已有 deep link；不引入第三方依赖。复审后为既有 ingestion API 增加兼容的 RO 范围参数，见下方合同修正。浏览器证据使用真实 Next 页面与明确的 API fixtures，只证明前端流程，不冒充真实账号/数据库验收。
 
 具体顺序：
 
@@ -66,7 +66,7 @@
 5. `apps/web/test/e2e/research-continuation.spec.ts` 验证主继续按钮、直接任务入口、移动空态；再补作用域错误与确认后继续回归。
 6. 相关单测、浏览器、Web typecheck/test/build、lint 和独立复审后进入生产发布候选；未验收的状态继续记录为 pending。
 
-同事成果核验：`origin/frontend/nanqing@e5db5ae` 与 main 有 18 个 Web 文件差异，main 与 production `b32d81c` 的 Web tree 无差异，故该批前端尚未部署。个人主页/设置拆分、身份恢复与移动账号入口为适用候选；工具与部署脚本另行审查，不盲合整个分支。
+同事成果核验：启动时 `origin/frontend/nanqing@e5db5ae` 与 main 有 18 个 Web 文件差异；这批个人主页/设置拆分、身份恢复与移动账号入口现已选择性整合并部署至 `6478aa8`。工具与部署脚本未整合；后续巡检避免重复合并。
 
 - [ ] 先为查明的上下文丢失、错误目标或状态恢复问题编写有意义的失败回归。
 - [ ] 复用既有导航、Drawer、任务和 diff 组件补齐断点，统一主动作、返回路径、loading/empty/error 文案。
@@ -105,7 +105,7 @@
 
 ## 首批本地验收记录
 
-- 首批入口修复已实现；Web 7 个真实浏览器交互场景通过（受控 API fixtures）、Web 单测及 Node contracts、typecheck、targeted ESLint 通过。完整页面审计、同事分支集成、生产部署和用户效果验收仍未完成。
+- 首批入口修复已实现；Web 7 个真实浏览器交互场景通过（受控 API fixtures），已纳入完整 87-case release suite。同事分支选定成果已整合；完整页面审计与用户效果验收仍未完成。
 - 用户已确认五段范围；本批只实现第一段的已复现入口断点，不代表图片/视频/语音或完整产品五段完成。
 
 ## 独立复审后的必要范围修正
@@ -118,5 +118,11 @@
 
 - production browser matrix 87/87 GREEN（含同事 identity/个人主页与本轮 7 个 continuation 场景）；使用独立 fixture 端口 3311，默认 3001 与本机 Windows iphlpsvc portproxy 冲突，未改系统服务。
 - Web 479/479 + Node 5/5、domain ingestion 39/39、API scoped route 3/3、全仓 test/typecheck/lint、docs-sync 和 docs-lint GREEN；Web production build GREEN。独立前端审查和 scoped 修正后复审均无剩余阻断。
-- 仍待：全仓 build 最终收口、main 集成、ECS build/健康/公网验收和用户效果验收；真实 ORCID/SMTP、真实账号研究数据纵向验收未由 mocked 浏览器矩阵替代。
+- 全仓 build 已通过，PR #78 已合入 main `6478aa8ef6045ecef93127c6e3183fc05acb946f`；ECS 全仓 build 与同提交解析器隔离验收通过，部署事务与 retention 完成；公网/loopback 200、core/search 36/36 与 2/2，BGE/ScanSci runtime 通过，公网页面 fixtures 15/15、main CI GREEN。真实 ORCID/SMTP、真实账号研究数据纵向验收未由 mocked 浏览器矩阵替代。
 - 非阻断：scoped feed 上限 20 条且未提供分页；viewer 的确认控件仍依赖 API 拒绝无权写入；其他完整产品子阶段保持未完成。
+
+## 首批交付与下一步
+
+- PR #78 已部署至 6478aa8，rollback b32d81c；用户效果尚待验收。
+- 验收入口：/dashboard → 当前 RO /hermes → 确认 → RO 编辑；/me → 个人资料、身份与研究项目；/settings → 偏好。
+- 首批已覆盖上述四个入口断点及会话作用域修正，尚不能据此勾选六种状态的完整旅程审计。先补齐导入、失败、预览/发布等剩余路径，再推进后续多模态阶段。

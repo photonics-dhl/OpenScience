@@ -4,15 +4,15 @@
 
 ## Current version tuple
 
-- Docs maintenance worktree / branch / observed parent HEAD: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance` / `codex/product-workflow-design` / `c0a162d`；后续文档 HEAD 以 Git 实时值为准，且不改变下列 production application release。
-- Production application release / rollback: `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7` / `0aaf52fed29e79bb19b15517ba9ef50545510f72`；core/search `36/36` / `2/2`。
+- Docs maintenance worktree / branch / observed parent HEAD: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance` / `codex/product-workflow-design` / `6478aa8`（PR #78）；后续文档 HEAD 以 Git 实时值为准，且不改变下列 production application release。
+- Production application release / rollback: `6478aa8ef6045ecef93127c6e3183fc05acb946f` / `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`；core/search `36/36` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 12/12。Tasks 10–12 已通过真实 ECS 验收；下一主题已确认为工作区—Hermes—RO 与多模态产品交付。
 
 ## 2026-09-05 — Integrated product scope confirmed
 
 - 用户确认优先完整功能、展示和交互；复用现有能力，成熟方案优先，分段交用户验收。论文生成图片/视频；语音用于 Hermes 修改 RO，不做上传音视频理解。
 - 同事分支确认 frontend/nanqing，已授权选择性整合部署；每日 10:00 巡检。先查已移植成果，避免重复合并。
-- 新 design 与 delivery plan 已登记；首批入口代码与同事 18-file Web 变更已整合；RO 会话/任务范围经独立复审修正。完整五段未完成，production 未改；全仓 test/typecheck/lint、Web 479+5、production browser 87/87 通过；下一步全仓 build、main 集成和发布验收。
+- 新 design 与 delivery plan 已登记；首批入口代码与同事 18-file Web 变更已整合；RO 会话/任务范围经独立复审修正。完整五段未完成。首批经 PR #78 合入 main 并部署至 6478aa8；全仓 build/test/typecheck/lint、Web 479+5、local browser 87/87、main CI 通过。ECS build/parser/runtime/健康与迁移 status 通过，公网页面 fixtures 15/15 通过。下一步用户效果验收和剩余旅程审计；公网 fixtures 不替代真实账号数据验收。
 
 ## 2026-09-05 — Hermes Research Intelligence 12/12 production closeout
 
@@ -28,5 +28,5 @@
 
 ## Next action
 
-- 不恢复旧 ScanSci/Task 10 next action。执行 integrated product Task 1 旅程审计；新 session 从 CURRENT handoff、需求基线相关章节与本文件读取，生产基线固定为 `b32d81c…`。
+- 不恢复旧 ScanSci/Task 10 next action。先交用户验收首批效果，继续 integrated product 剩余旅程审计；新 session 从 CURRENT handoff、需求基线相关章节与本文件读取，生产基线为 `6478aa8…`，启动时重新实测。
 - 需要补强 ScienceDirect 时，只走 Elsevier 官方 Remote Access/CARSI 或取得 API key + institution entitlement；不得以 Cloudflare 绕过工具替代授权。
