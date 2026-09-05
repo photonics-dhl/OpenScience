@@ -1,12 +1,14 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-06 +08。应用d6507ea已部署，rollback64ae872。后续文档提交不改变生产。
+> 最新同步：2026-09-06 +08。应用615ca2d已部署，rollbackd6507ea。后续文档提交不改变生产。
 
-## Scene imagery in progress
+## Scene imagery deployed; quality iteration next
 
-- 下一步范围：已审批分镜单幕生图、独立预览/审批，先保留管理员额度门禁；复用MiniMax官方API/Gateway，无新依赖、模型或渲染容器。
-- 本地候选基于61bc597；2026-09-06启动实测生产仍d6507ea/rollback64ae872，13容器/10健康、约94GiB可用。尚未部署本轮代码。
-- 采用已有来源/版本事务重验；图片请求不自动重试，Worker恢复时无既有资产则阻止重复付费调用。本地最终全仓build/typecheck/test/lint通过（原有search库8项跳过），Web504+5、12E2E通过；独立复审无阻断。图片质量和真实额度需服务器验收。
+- PR95/main CI33986402240通过；全仓build/typecheck/test/lint、Web504+5与12E2E通过（原有search测试8项跳过）。服务器全build、Parser16、BGE/ScanSci、core36/search2、13运行/10健康及公网/loopback精确版本通过。
+- 已审批分镜单幕真实生图已上线，管理员试用；API/Gateway/Worker/媒体预览、父稿场景与3Claims关联可用。没有安装新模型或永久服务。
+- 首次global图片调用失败；CN额度查询通过后配置MINIMAX_IMAGE_REGION=cn，仅重建Worker，同版本健康与release通过。第二次9cccb431-7e41-4d2a-bc01-5116902516de成功，图片调用27.588s；两个任务各1Credit reservation，美元成本未提供。
+- 实图1280×720，四组语言/视口、匿名拒绝、服务器现有Chromium解码及会话注销通过。图像偏抽象、机制关系不清楚，保持draft，不声称视觉验收或真实批准通过；下一步优化构图，然后接CPU视频。
+- canonical deploy首次journal前EPIPE未切换，重试成功；production615ca2d/rollbackd6507ea。ignored scene-image-*证据已保存。
 
 ## Sourced storyboard delivered
 
