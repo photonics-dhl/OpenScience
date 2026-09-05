@@ -134,3 +134,15 @@
 - 修改 DashboardShell 与 globals 的应用范围布局；profile/settings 使用一致的页标题、资料概要与自适应分区；MyResearchProjects 改为紧凑整行链接及可展开最近列表；精简中英文实现说明。只调整工作台应用表面，公开 RO 长文保持阅读排版。
 - 验证：已有身份/continuation 浏览器用例、1440/2048 与 390/320 视口截图；增加真实几何检查与展开访问测试，防止再次仅凭功能测试接受错位页面。随后独立复审、必要测试、构建及服务器发布。
 - 之后处理审计发现的具体导入/预览发布断点，不将视觉修订当成完整产品任务完成。
+
+### 下一步图解入口：已核实的复用点
+
+- 现有生成/列表/审核 API 位于 apps/api/src/routes/presentation-assets.ts；domain 位于 packages/domain/src/assets/presentation-asset.ts；Worker 与确定性 SVG/HTML 位于 apps/agent-worker/src/presentation/。公开展示已有 PresentationAssetGallery。
+- 当前缺少认证 RO 页面中的 Claim 选择、发起生成、任务进度、草稿预览和审核操作。下一步优先补这条产品路径，先使用 chart，复用既有任务/资产/版本合同。
+- 实施前需核对草稿内容的认证读取入口及 exact-version Claim 数据合同；已有列表只返回资产元数据，不能把公开 approved 路径误当成私有草稿预览。图片/视频 provider 保持未验证，不新增安装或绕过权限。
+
+### 发布复审中修正的两处问题
+
+- Dashboard 最后六行标题压缩改变 protected geometry，触发既有 above-wide 菜单定位缺陷；PR #82 撤回该压缩，保留主要 UI 优化。精确 detached 菜单从 3/3 失败恢复 3/3 通过，修正版 Product88 在 CI 通过。后续改 Dashboard 高度需重验此路径。
+- 既有 unsafe patrol→blink-single 别名可能与相邻 micro beat 重复，不能以偶然通过的 CI 重跑代替修复。共用 seed 的解析器改选 microCursor+1，跳过前后动作，保持巡游保护和现有节奏；5 个种子、全部 cursor/wrap 与延迟 signature ticks 回归及 performance 23/23 通过，独立复审无阻断。
+- 000120b 候选发布停在隔离 OA 下载，精确探针 SIGINT 后 canonical rollback 成功，生产始终为 6478aa8；不跳过下一候选的真实 OA 验收。

@@ -6,7 +6,7 @@ import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import type { HermesBehaviorInput } from '@/lib/hermes/behavior-director';
+import { resolveHermesAutonomousAction, type HermesBehaviorInput } from '@/lib/hermes/behavior-director';
 import { createHermesAnchorRegistry, type HermesAnchorAction, type HermesAnchorId, type HermesAnchorRegistration, type HermesAnchorRegistry } from '@/lib/hermes/anchor-registry';
 import type { WorkspaceGuidePayload } from '@/lib/api';
 import {
@@ -160,6 +160,8 @@ const stableGuideTravelHullFootprint = (
   };
 };
 
+const HERMES_BEHAVIOR_SEED = 0x4845524d;
+
 const behaviorInput = (
   state: HermesVisualState,
   pointer: HermesBehaviorInput['pointer'],
@@ -168,7 +170,7 @@ const behaviorInput = (
   nowMs = Date.now(),
 ): HermesBehaviorInput => ({
   activity: 'active', dragging, guide: 'idle', nowMs, pointer, reducedMotion,
-  seed: 0x4845524d, state,
+  seed: HERMES_BEHAVIOR_SEED, state,
   task: state === 'failed' ? 'failed' : state === 'scanning' ? 'working' : 'idle',
   writing: false,
 });
@@ -326,7 +328,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [guideDiagnostics, setGuideDiagnostics] = useState<GuideDiagnostics>({
     phase: 'idle', routeStart: null, settledSource: null, timelineCount: 0,
   });
-  const autonomousAction = behavior.primary === 'patrol' && !patrolEnvelopeSafe ? 'blink-single' : behavior.primary;
+  const autonomousAction = resolveHermesAutonomousAction(behavior, { seed: HERMES_BEHAVIOR_SEED, patrolEnvelopeSafe });
   const visualAction = menuFeedback?.action ?? autonomousAction;
   const guidePlanCountRef = useRef(0);
   const guideSettledReplanCountRef = useRef(0);
