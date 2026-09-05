@@ -1,7 +1,7 @@
 # Integrated Research Product Delivery Plan
 
 > 执行者使用 executing-plans；只有独立且有明确 owner 的工作才委派。
-> 状态：CURRENT delivery plan；64ae872已部署媒体优先页面与受审图片/视频RO工作流并通过真实验收，rollback83b2933。下一段接任意论文生成/Hermes修改，提取质量继续改进。
+> 状态：CURRENT delivery plan；d6507ea已部署RO分镜/修订/审批与媒体优先工作流并通过真实验收，rollback64ae872。下一段接已核对分镜到图片/视频，再接全局Hermes；提取质量继续改进。
 
 **Goal:** 分段交付工作区—Hermes—RO、多模态展示与语音编辑完整产品体验。
 
@@ -12,7 +12,7 @@
 ## Global constraints
 
 - 设计依据：`docs/specs/2026-09-05-integrated-research-product-design.md`。
-- 当前生产 application/rollback 为 `64ae872` / `83b2933`，每次新任务先只读核实；以下早期检查记录为历史证据。
+- 当前生产 application/rollback 为 `d6507ea` / `64ae872`，每次新任务先只读核实；以下早期检查记录为历史证据。
 - 不复做 Research Intelligence Tasks 1–12；不修改根目录旧 main 或其他人的未提交内容。
 - 每段先参考成熟方案；未经实测不得宣布候选 provider 可用。
 - 真实数据操作、发布、迁移和第三方安装遵守既有授权范围；效果按段交用户验收。
@@ -287,9 +287,11 @@ Steps1–5 for reviewed-media import are complete on application83b2933 (rollbac
 
 Media-first steps1–4 complete on64ae872 (rollback83b2933): PR91 CI, Web499+5 tests,10 E2E, full server build, exact Parser acceptance, BGE/ScanSci runtime, core36/search2 migrations and13 running/10 healthy checks passed. Direct public browser en/zh ×1440/390 verified contained images,41.291667s playback and28s seek, keyboard disclosures and no overflow; session closed. Local buffered proxy playback was unreliable and is not the final playback evidence. Next: sourced narrative/storyboard and generation/Hermes revision integration.
 
-### Sourced storyboard implementation — active
+### Sourced storyboard implementation — deployed d6507ea
 
 - [x] Domain/API/Worker: add bounded storyboard contract in packages/domain/src/assets/storyboard.ts; extend presentation payload and narrow list DTO, billing routing and exact base validation in presentation-asset.ts; connect Gateway planning in apps/agent-worker/src/presentation/storyboard.ts and existing handler/index; existing API generation accepts optional validated settings. First failing contract/billing/scope/changed-source tests, then implementation.
 - [x] UI: apps/web/components/presentation/StoryboardPanel.tsx plus Workbench/page/API helper/i18n integration; select Claims and style, show charge, create scenes, feedback creates separate draft, compare parent/new before existing approve. Preserve task recovery/version races; tests for create/revise/readonly and scope.
-- [ ] Integration: focused tests, all-workspace build/typecheck/lint/tests and independent security/concurrency review; real local browser preview, exact candidate Parser acceptance, canonical server deployment, real Gateway create+revise+approve/reload and revoked/invalid source checks. No media rendering completion claim.
-- [ ] Record exact release/rollback and browser evidence in CURRENT, progress and index; next consumer is image/video production from reviewed plan.
+- [x] Integration: focused tests, all-workspace build/typecheck/lint/tests and independent security/concurrency review; real local browser preview, exact candidate Parser acceptance, canonical server deployment, real Gateway create+revise+approve/reload and revoked/invalid source checks. No media rendering completion claim.
+- [x] Record exact release/rollback and browser evidence in CURRENT, progress and index; next consumer is image/video production from reviewed plan.
+
+Sourced storyboard acceptance (2026-09-06): canonical d6507ea/rollback64ae872, PR93/main CI, exact Parser/build/runtime/health checks passed. Real controlled RO used 3 tasks and4 MiniMax-M3 calls (one structured retry), charged3 credits with stable replays. Human review corrected an unsupported independent-validation claim via a new revision; corrected six-scene45s plan approved, prior drafts retained. Four public-browser locale/viewport cases, approval/reload and existing media playback passed. This is selected-Claim planning, not automatic raw-paper understanding, image/video production or global Hermes dialogue.
