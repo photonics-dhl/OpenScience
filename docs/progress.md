@@ -1,10 +1,12 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-05 +08。应用83b2933已部署，rollback390afc0。后续文档提交不改变生产；历史过程由Git保存。
+> 最新同步：2026-09-05 +08。应用64ae872已部署，rollback83b2933。后续文档提交不改变生产；历史过程由Git保存。
 
-## Media-first layout in progress
+## Media-first layout delivered
 
-- 用户批准继续优化媒体页：媒体先于表单、全宽桌面双列/手机单列、来源按需展开、任务与错误保持可见；沿用暖白/朱红与原生控件，无新增依赖。9项组件测试、Web499+5项测试、10项浏览器流程、build/typecheck/lint通过；真实插图尺寸已检查，本地代理视频读取不稳定，最终播放在ECS直接验收。应用仍83b2933/rollback390afc0。
+- PR91/main64ae872已部署：图解与视频优先、桌面双列/手机单列、来源按需展开、任务与错误保持可见；沿用现有视觉与原生控件，无新增依赖。Web499+5测试、10项E2E、build/typecheck/lint与独立复审、PR91 CI通过。
+- ECS全build、精确Parser报告、BGE真实向量及ScanSci检查通过；canonical部署/retention完成，事务标记清除，rollback83b2933。核心36/搜索2迁移最新，13容器运行、10健康检查通过；约93.8GiB磁盘可用。
+- 公网中英文×1440/390四组真实浏览器通过：完整图片、视频41.291667秒播放/28秒seek、键盘来源展开、失效素材不可批准、无横向溢出。会话注销，测试素材仍rejected。证据media-layout-browser-evidence.json、media-layout-{zh,en}-{1440,390}.png、media-layout-deploy.log。
 
 ## Reviewed RO media delivered
 
@@ -25,7 +27,7 @@
 
 ## Next and limits
 
-- RO界面仍有通用Diagram措辞、素材位置与编辑区层级待优化。下一步整理媒体页，再接有来源的叙事/分镜、媒体provider/隔离CPU渲染、Hermes修订。当前不等于任意论文自动生图/视频。
+- 媒体页层级已完成。下一步接有来源的叙事/分镜、媒体provider/隔离CPU渲染、Hermes修订。当前不等于任意论文自动生图/视频。
 - 现有PDF→Hermes→Editor保留源文件→人工Claims流程已部署；method/results/reproducibility提取空缺仍需改进，演示补充明确人工核对。
 - Storage写入后DB失败可能留下私有无引用对象；公开review digest未纳入媒体的历史债务在扩大公开发布前复核。
 - 唯一CURRENT交接：docs/handoff/2026-08-16-hermes-2d-pet-handoff.md。根目录旧checkout和用户未提交资料未动；用户已授权继续实施/合入/部署。已有每日前端分支巡检，不重复创建。

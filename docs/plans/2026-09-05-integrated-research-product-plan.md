@@ -1,7 +1,7 @@
 # Integrated Research Product Delivery Plan
 
 > 执行者使用 executing-plans；只有独立且有明确 owner 的工作才委派。
-> 状态：CURRENT delivery plan；83b2933已部署受审图片/视频RO工作流并通过真实验收，rollback390afc0。下一段优化媒体页层级，再接任意论文生成/Hermes修改，提取质量继续改进。
+> 状态：CURRENT delivery plan；64ae872已部署媒体优先页面与受审图片/视频RO工作流并通过真实验收，rollback83b2933。下一段接任意论文生成/Hermes修改，提取质量继续改进。
 
 **Goal:** 分段交付工作区—Hermes—RO、多模态展示与语音编辑完整产品体验。
 
@@ -12,7 +12,7 @@
 ## Global constraints
 
 - 设计依据：`docs/specs/2026-09-05-integrated-research-product-design.md`。
-- 生产 application/rollback 为 `390afc0` / `c07c8d1`，每次新任务先只读核实。
+- 当前生产 application/rollback 为 `64ae872` / `83b2933`，每次新任务先只读核实；以下早期检查记录为历史证据。
 - 不复做 Research Intelligence Tasks 1–12；不修改根目录旧 main 或其他人的未提交内容。
 - 每段先参考成熟方案；未经实测不得宣布候选 provider 可用。
 - 真实数据操作、发布、迁移和第三方安装遵守既有授权范围；效果按段交用户验收。
@@ -284,3 +284,5 @@ Steps1–5 for reviewed-media import are complete on application83b2933 (rollbac
 2. Verify component semantics plus existing E2E permissions, scope changes and recovery. Run scoped lint, Web build/typecheck and local browser screenshots at desktop/390px; check keyboard and reduced motion.
 3. Independently review the diff, sync docs/index, merge candidate, prepare exact Parser acceptance and canonical ECS deployment. Reuse existing media/voice/runtime; no new paid generation or dependency installation.
 4. Validate real private RO media visibility, playback/seek and disclosures in both locales after deployment; logout test session. Record exact source/rollback and screenshots, then continue sourced generation/Hermes editing as a separate slice.
+
+Media-first steps1–4 complete on64ae872 (rollback83b2933): PR91 CI, Web499+5 tests,10 E2E, full server build, exact Parser acceptance, BGE/ScanSci runtime, core36/search2 migrations and13 running/10 healthy checks passed. Direct public browser en/zh ×1440/390 verified contained images,41.291667s playback and28s seek, keyboard disclosures and no overflow; session closed. Local buffered proxy playback was unreliable and is not the final playback evidence. Next: sourced narrative/storyboard and generation/Hermes revision integration.
