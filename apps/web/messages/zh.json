@@ -907,6 +907,10 @@
   },
   "presentation": {
     "storyboard": {
+      "generateImage": "生成这一幕的插图",
+      "imageCharge": "每次生成 1 张图片，消耗 1 AI credit。生成后请核对画面再审批。",
+      "imageSource": "来源分镜：{title} · 第 {number} 幕",
+      "imageSourceUnavailable": "来源分镜暂不可用。",
       "defaultInstruction": "解释所选主张的机制、适用条件与局限。",
       "assetTitle": "分镜方案",
       "title": "Hermes 分镜",

@@ -14,7 +14,7 @@ export const DEFAULT_OCR_LIMITS: Readonly<OcrLimits> = Object.freeze({
 
 export type OcrMediaType = 'image/jpeg' | 'image/png' | 'image/webp';
 export type OcrSelectionReason = 'low_confidence' | 'formula' | 'complex_table' | 'layout_failure';
-export type ProviderCapability = 'text' | 'ocr';
+export type ProviderCapability = 'text' | 'ocr' | 'image';
 
 export interface OcrLimits {
   maxPages: number;
@@ -311,7 +311,7 @@ function hashPage(bytes: Uint8Array, page: Pick<OcrPageInput, 'pageNumber' | 'me
   return hash.digest('hex');
 }
 
-function encodedImageDimensions(mediaType: OcrMediaType, bytes: Uint8Array, providerError = false): { width: number; height: number } {
+export function encodedImageDimensions(mediaType: OcrMediaType, bytes: Uint8Array, providerError = false): { width: number; height: number } {
   const invalid = (): never => {
     if (providerError) throw new OcrProviderError('provider_error', 'invalid OCR image structure');
     throw new AiGatewayError('OCR_REQUEST_INVALID', 'invalid OCR image structure');

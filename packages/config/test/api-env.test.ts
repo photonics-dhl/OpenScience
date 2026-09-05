@@ -114,3 +114,17 @@ describe('loadApiEnv', () => {
     expect(env.orcid.redirectUri).toContain('/api/auth/orcid/callback');
   });
 });
+
+it('scene imagery is opt-in and requires enabled AI plus a configured credential', () => {
+  expect(loadApiEnv({}).ai.sceneImageEnabled).toBe(false);
+  expect(loadApiEnv({ MINIMAX_IMAGE_ENABLED: 'true', MINIMAX_API_KEY: 'test' }).ai.sceneImageEnabled).toBe(false);
+  expect(loadApiEnv({ AI_ENABLED: 'true', MINIMAX_IMAGE_ENABLED: 'true' }).ai.sceneImageEnabled).toBe(false);
+  expect(loadApiEnv({ AI_ENABLED: 'true', MINIMAX_IMAGE_ENABLED: 'true', MINIMAX_API_KEY: 'test' }).ai.sceneImageEnabled).toBe(true);
+});
+
+it('scene image config shares key2 readiness and ignores blank credentials', () => {
+  const flags = { AI_ENABLED: 'true', MINIMAX_IMAGE_ENABLED: 'true' };
+  expect(loadApiEnv({ ...flags, MINIMAX_API_KEY: '   ' }).ai.sceneImageEnabled).toBe(false);
+  expect(loadApiEnv({ ...flags, MINIMAX_API_KEY: '   ', MINIMAX_API_KEY_2: ' second ' }).ai.sceneImageEnabled).toBe(true);
+  expect(loadApiEnv({ ...flags, MINIMAX_API_KEY_2: 'second', AI_DISABLED_PROVIDERS: ' minimax-image ' }).ai.sceneImageEnabled).toBe(false);
+});

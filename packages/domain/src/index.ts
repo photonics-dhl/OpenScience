@@ -386,3 +386,5 @@ export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from '
 export { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
 
 export { requireStoryboardBase } from './assets/presentation-asset';
+
+export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, type SceneImageRequest } from './assets/scene-image';

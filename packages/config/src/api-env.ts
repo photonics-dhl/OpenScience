@@ -43,6 +43,7 @@ export interface ApiEnv {
   /** P1D-1：AI Gateway（§9.3 + §24 待确认：MiniMax-M3 及回退模型配置，先占位不写死）。 */
   ai: {
     enabled: boolean;
+    sceneImageEnabled: boolean;
     baseUrl: string;
     apiKey: string;
     primaryModel: string;
@@ -146,6 +147,7 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
   const aiEnabled = env.AI_ENABLED === 'true';
   const ai = {
     enabled: aiEnabled,
+    sceneImageEnabled: aiEnabled && env.MINIMAX_IMAGE_ENABLED === 'true' && [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].some(key => Boolean(key?.trim())) && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(s => s.trim()).includes('minimax-image'),
     baseUrl: env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1',
     apiKey: env.MINIMAX_API_KEY ?? '',
     primaryModel: env.MINIMAX_MODEL ?? 'MiniMax-M3',

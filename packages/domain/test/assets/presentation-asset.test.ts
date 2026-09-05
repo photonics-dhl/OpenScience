@@ -254,3 +254,67 @@ it.each([undefined, 'legacy'])('blocks planner-owned assets with invalid subtype
   await expect(transitionPresentationAsset(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: ASSET, status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   expect(ctx.db.presentationAssets[0].status).toBe('draft');
 });
+
+function sceneFixture() {
+  const ctx = fixture('platform_admin');
+  const document = { schemaVersion: 1, title: 'Plan', scenes: Array.from({ length: 3 }, () => ({ title: 'Scene', narration: 'Finding', visualAction: 'Wave', durationSeconds: 8, sourceClaimIds: [CLAIM] })) };
+  ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'approved', label: 'presentation_not_evidence', updatedAt: new Date(), contentHash: 'parent', provenance: { subtype: 'sourced_storyboard', storyboardDocument: document, storyboardSettings: { locale: 'en', style: 'ink', instruction: 'Explain' } } });
+  ctx.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM });
+  const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'image' as const, sourceClaimIds: [CLAIM], sceneImage: { storyboardAssetId: ASSET, sceneIndex: 1 }, idempotencyKey: 'scene' };
+  return { ...ctx, input };
+}
+it('submits one charged scene image with exact replay and narrow capability', async () => {
+  const ctx = sceneFixture();
+  const first = await submitPresentationGeneration(ctx as never, ctx.input);
+  expect((await submitPresentationGeneration(ctx as never, ctx.input)).id).toBe(first.id);
+  expect(ctx.db.agentTasks[0].payload.sceneImage).toEqual(ctx.input.sceneImage);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+  expect((await listPresentationAssets(ctx as never, ctx.input))[0].canGenerateSceneImage).toBe(true);
+});
+it.each(['draft', 'rejected', 'foreign', 'version', 'claim-set', 'index'])('blocks invalid scene parent %s before charging', async reason => {
+  const ctx = sceneFixture();
+  const parent = ctx.db.presentationAssets[0];
+  if (reason === 'draft' || reason === 'rejected') parent.status = reason;
+  if (reason === 'foreign') parent.researchObjectId = ASSET;
+  if (reason === 'version') parent.versionId = ASSET;
+  if (reason === 'claim-set') ctx.db.presentationAssetClaims[0].claimId = ASSET;
+  if (reason === 'index') ctx.input.sceneImage.sceneIndex = 3;
+  await expect(submitPresentationGeneration(ctx as never, ctx.input)).rejects.toThrow();
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(0);
+});
+it('strictly parses scene requests and forbids mixed modes', () => {
+  const { input } = sceneFixture();
+  const payload = {schemaVersion:1,researchObjectId:RO,versionId:VERSION,kind:'image',sourceClaimIds:[CLAIM],sceneImage:input.sceneImage};
+  expect(parsePresentationGenerationPayload(payload)).toMatchObject({sceneImage:input.sceneImage});
+  for (const change of [{kind:'chart'},{sceneImage:{...input.sceneImage,sceneIndex:0.5}},{sceneImage:{...input.sceneImage,extra:true}},{storyboard:{locale:'en',style:'ink',instruction:'x'}}]) expect(() => parsePresentationGenerationPayload({...payload,...change})).toThrow();
+});
+
+it('rejects an approved parent and atomically invalidates its draft and approved scene images', async () => {
+  const ctx = sceneFixture();
+  const {requireSceneImageParent} = await import('../../src/assets/scene-image');
+  const parent = await requireSceneImageParent(ctx.prisma,ctx.input);
+  const children = ['draft','approved'].map((status,i)=>({id:`70000000-0000-4000-8000-00000000000${i}`,researchObjectId:RO,versionId:VERSION,kind:'image',status,provenance:{subtype:'storyboard_scene_image',sceneImage:ctx.input.sceneImage,parentIdentity:parent!.identity}}));
+  ctx.db.presentationAssets.push(...children);
+  const original=ctx.prisma.presentationAsset.updateMany;
+  ctx.prisma.presentationAsset.updateMany=async({where,data}: {where:{id:string | {in:string[]};status:{in:string[]}};data:{status:string}})=>{
+    if(typeof where.id==='object') {const ids=where.id.in;const selected=ctx.db.presentationAssets.filter(row=>ids.includes(row.id)&&where.status.in.includes(row.status));selected.forEach(row=>Object.assign(row,data));return {count:selected.length};}
+    return original({where,data});
+  };
+  const record=vi.fn();
+  await transitionPresentationAsset({...ctx,audit:{record}} as never,{...ctx.input,assetId:ASSET,status:'rejected',expectedUpdatedAt:ctx.db.presentationAssets[0].updatedAt});
+  expect(ctx.db.presentationAssets.map(row=>row.status)).toEqual(['rejected','rejected','rejected']);
+  expect(record).toHaveBeenCalledWith(expect.objectContaining({action:'presentation_asset.rejected',targetId:ASSET,metadata:expect.objectContaining({invalidatedSceneImageCount:2})}),expect.objectContaining({presentationAsset:ctx.prisma.presentationAsset}));
+});
+it.each(['parent-rejected','parent-changed','malformed'])('blocks scene approval and transition capability for %s', async reason=>{
+  const ctx=sceneFixture();
+  const {requireSceneImageParent}=await import('../../src/assets/scene-image');
+  const parent=await requireSceneImageParent(ctx.prisma,ctx.input);
+  const childId='70000000-0000-4000-8000-000000000001';
+  const updatedAt=new Date();
+  ctx.db.presentationAssets.push({id:childId,researchObjectId:RO,versionId:VERSION,kind:'image',status:'draft',label:'presentation_not_evidence',updatedAt,generator:'OpenScience Hermes scene image / minimax',provenance:reason==='malformed'?{}:{subtype:'storyboard_scene_image',sceneImage:ctx.input.sceneImage,parentIdentity:parent!.identity}});
+  ctx.db.presentationAssetClaims.push({presentationAssetId:childId,claimId:CLAIM});
+  if(reason==='parent-rejected')ctx.db.presentationAssets[0].status='rejected';
+  if(reason==='parent-changed')ctx.db.presentationAssets[0].contentHash='changed';
+  expect((await listPresentationAssets(ctx as never,ctx.input)).find(a=>a.id===childId)?.canTransition).toBe(false);
+  await expect(transitionPresentationAsset(ctx as never,{...ctx.input,assetId:childId,status:'approved',expectedUpdatedAt:updatedAt})).rejects.toThrow();
+});

@@ -164,3 +164,23 @@ describe('MiniMax worker gateway config', () => {
     expect((await gateway.ocr(ocrRequest())).status).toBe('succeeded');
   });
 });
+
+it('scene image runtime stays off by default and uses a single configured provider when enabled', async () => {
+  const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({ base_resp: { status_code: 1008 } })));
+  await expect(buildGateway({ MINIMAX_API_KEY: 'test' }, fetchMock as never).generateImage({ prompt: 'A watercolor wave' })).rejects.toThrow();
+  expect(fetchMock).not.toHaveBeenCalled();
+  const gateway = buildGateway({ AI_ENABLED: 'true', MINIMAX_IMAGE_ENABLED: 'true', MINIMAX_API_KEY: 'test', MINIMAX_API_KEY_2: 'second' }, fetchMock as never);
+  await expect(gateway.generateImage({ prompt: 'A watercolor wave' })).rejects.toThrow();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.minimax.io/v1/image_generation');
+});
+
+it('image region is independent from vision and the first nonblank image key is used', async () => {
+  const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({ base_resp: { status_code: 1008 } })));
+  const flags = { AI_ENABLED: 'true', MINIMAX_IMAGE_ENABLED: 'true', MINIMAX_API_KEY: ' ', MINIMAX_API_KEY_2: ' second ', MINIMAX_IMAGE_REGION: 'cn', MINIMAX_VISION_REGION: 'invalid' };
+  await expect(buildGateway(flags, fetchMock as never).generateImage({ prompt: 'A blue wave' })).rejects.toThrow();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock.mock.calls[0][0]).toBe('https://api.minimaxi.com/v1/image_generation');
+  expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('authorization')).toBe('Bearer second');
+  expect(() => buildGateway({ ...flags, MINIMAX_IMAGE_REGION: 'invalid' })).toThrow('MINIMAX_IMAGE_REGION');
+});

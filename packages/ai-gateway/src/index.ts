@@ -1,4 +1,5 @@
 export { AiGatewayError, type AiGatewayErrorCode } from './errors';
+export { MiniMaxImageProvider, type ImageRequest, type ImageProvider, type ImageProviderResult, type ImageResult, type MiniMaxImageConfig } from './image';
 export {
   AiGateway,
   type AiGatewayOptions,

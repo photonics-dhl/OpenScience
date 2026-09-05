@@ -3,6 +3,7 @@ import {
   AiGateway,
   AnthropicCompatProvider,
   MiniMaxCodingPlanVisionProvider,
+  MiniMaxImageProvider,
   MutableProviderKillSwitch,
   OpenAiCompatProvider,
   type ExternalProcessingPolicy,
@@ -466,6 +467,9 @@ export function buildGateway(
     });
   });
 
+  const imageApiKey = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].map(key => key?.trim()).find(Boolean);
+  const imageProviders = env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
+    ? [new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher)] : [];
   const ocrProviders = env.NODE_ENV !== 'production' && env.MINIMAX_VISION_ENABLED === 'true' && keys[0]
     ? [new MiniMaxCodingPlanVisionProvider('minimax-vision', {
         baseUrl: visionOrigin(env),
@@ -490,6 +494,7 @@ export function buildGateway(
   return new AiGateway({
     providers,
     ocrProviders,
+    imageProviders,
     audit,
     logger: console,
     killSwitch,
@@ -531,6 +536,13 @@ export function buildSourceRetrieveHandlerFromEnv(env: NodeJS.ProcessEnv = proce
       papersDir: scansciPapersDir,
     }),
   });
+}
+
+function imageOrigin(env: NodeJS.ProcessEnv): string {
+  const region = env.MINIMAX_IMAGE_REGION ?? 'global';
+  if (region === 'global') return 'https://api.minimax.io';
+  if (region === 'cn') return 'https://api.minimaxi.com';
+  throw new Error('MINIMAX_IMAGE_REGION must be global or cn');
 }
 
 function visionOrigin(env: NodeJS.ProcessEnv): string {

@@ -907,6 +907,10 @@
   },
   "presentation": {
     "storyboard": {
+      "generateImage": "Illustrate this scene",
+      "imageCharge": "One image costs 1 AI credit. Review the drawing before approving it.",
+      "imageSource": "Storyboard: {title} · Scene {number}",
+      "imageSourceUnavailable": "Source storyboard is unavailable.",
       "defaultInstruction": "Explain the mechanism, conditions and limitations of the selected Claims.",
       "assetTitle": "Storyboard plan",
       "title": "Hermes storyboard",

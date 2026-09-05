@@ -276,3 +276,67 @@ it.each(['already-approved', 'model', 'storage'])('creates an independent revisi
   expect(joins).toHaveBeenCalledTimes(1);
   expect(record).toHaveBeenCalledTimes(1);
 });
+
+const PARENT = '70000000-0000-4000-8000-000000000001';
+function sceneHandlerFixture() {
+  const ctx = authorityFixture();
+  const parent = { id: PARENT, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'approved', contentHash: 'parent', sourceClaims: [CLAIM_A, CLAIM_B].map(claimId => ({claimId})), provenance: {subtype:'sourced_storyboard',storyboardSettings:{locale:'en',style:'ink',instruction:'Explain'},storyboardDocument:{schemaVersion:1,title:'Plan',scenes:Array.from({length:3},()=>({title:'Scene',narration:'Finding',visualAction:'Wave passing slit',durationSeconds:8,sourceClaimIds:[CLAIM_A,CLAIM_B]}))}}};
+  ctx.prisma.presentationAsset.findUnique = async ({where}:any) => where.id === PARENT ? parent : ctx.rows[0] ?? null;
+  ctx.prisma.user = { findUnique:async()=>({platformRole:'platform_admin'}) };
+  const completeStructured = vi.fn(async()=>({prompt:'Ink illustration of wave passing slit; room temperature; limited sample. No text overlay. Illustration, not evidence.'}));
+  const bytes = Buffer.alloc(64, 7);
+  const generateImage = vi.fn(async()=>({bytes,contentType:'image/png' as const,model:'image-01',provider:'minimax',promptHash:'actual-prompt-hash'}));
+  const task = {...ctx.task,payload:{...ctx.task.payload,kind:'image',sceneImage:{storyboardAssetId:PARENT,sceneIndex:1}}};
+  const handler = createPresentationGenerationHandler({gateway:{completeStructured,generateImage} as never});
+  return {...ctx,parent,task,handler,completeStructured,generateImage,bytes};
+}
+it('generates one real scene image with correct MIME extension and all parent Claim links, then replays without generation',async()=>{
+  const ctx=sceneHandlerFixture();
+  await ctx.handler(ctx.deps as never,ctx.task);
+  expect(ctx.generateImage).toHaveBeenCalledTimes(1);
+  expect(ctx.putObject).toHaveBeenCalledWith(expect.stringMatching(/\.png$/),ctx.bytes,expect.objectContaining({contentType:'image/png'}));
+  expect(ctx.rows[0].provenance.sceneImage).toEqual(ctx.task.payload.sceneImage);
+  expect(ctx.rows[0].generator).toContain('minimax');
+  await ctx.handler(ctx.deps as never,ctx.task);
+  expect(ctx.generateImage).toHaveBeenCalledTimes(1);
+});
+it.each(['draft','changed','rejected','claims','authority'])('blocks scene image persistence after %s source change',async change=>{
+  const ctx=sceneHandlerFixture();
+  ctx.putObject.mockImplementation(async()=>{
+    if(change==='draft'||change==='rejected')ctx.parent.status=change;
+    if(change==='changed')ctx.parent.contentHash='new';
+    if(change==='claims')ctx.authority.statement='Changed';
+    if(change==='authority')ctx.authority.role='viewer';
+    return {key:'stored',size:64,etag:'stored'};
+  });
+  await expect(ctx.handler(ctx.deps as never,ctx.task)).rejects.toThrow();
+  expect(ctx.rows).toHaveLength(0);
+});
+it('refuses uncertain paid replay with no saved asset before calling either model',async()=>{
+  const ctx=sceneHandlerFixture();
+  await expect(ctx.handler(ctx.deps as never,{...ctx.task,executionAttempt:2})).rejects.toThrow();
+  expect(ctx.completeStructured).not.toHaveBeenCalled();
+  expect(ctx.generateImage).not.toHaveBeenCalled();
+});
+it('blocks a changed parent after text planning before paid image generation',async()=>{
+  const ctx=sceneHandlerFixture();
+  ctx.completeStructured.mockImplementation(async()=>{ctx.parent.status='rejected';return {prompt:'Draw qualified wave as an illustration.'};});
+  await expect(ctx.handler(ctx.deps as never,ctx.task)).rejects.toThrow();
+  expect(ctx.generateImage).not.toHaveBeenCalled();
+});
+it('rejects oversized condensed prompts without silently truncating or invoking image provider',async()=>{
+  const ctx=sceneHandlerFixture();
+  ctx.completeStructured.mockResolvedValue({prompt:'x'.repeat(1501)});
+  await expect(ctx.handler(ctx.deps as never,ctx.task)).rejects.toThrow();
+  expect(ctx.generateImage).not.toHaveBeenCalled();
+});
+
+it('audits a generated scene image within its asset transaction using metadata only',async()=>{
+  const ctx=sceneHandlerFixture();
+  const record=vi.fn();
+  await ctx.handler({...ctx.deps,audit:{record}} as never,ctx.task);
+  expect(record).toHaveBeenCalledTimes(1);
+  expect(record).toHaveBeenCalledWith(expect.objectContaining({action:'presentation_asset.generated',targetId:TASK,metadata:{taskId:TASK,researchObjectId:RO,versionId:VERSION,subtype:'storyboard_scene_image',storyboardAssetId:PARENT,sceneIndex:1,provider:'minimax',model:'image-01',contentHash:ctx.rows[0].contentHash}}),ctx.prisma);
+  expect(record.mock.calls[0][0].metadata).not.toHaveProperty('parentIdentity');
+  expect(record.mock.calls[0][0].metadata).not.toHaveProperty('prompt');
+});

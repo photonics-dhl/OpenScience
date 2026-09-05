@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import type { PresentationClaim, StoryboardRequest, StoryboardView } from '@/lib/api';
+import type { PresentationClaim, StoryboardRequest, StoryboardView, SceneImageRequest } from '@/lib/api';
 
 interface Props {
   storyboard?: StoryboardView;
@@ -12,11 +12,13 @@ interface Props {
   claims: PresentationClaim[];
   selectedClaimIds?: string[];
   canGenerate: boolean;
+  canGenerateImage?: boolean;
+  onGenerateImage?: (claimIds: string[], request: SceneImageRequest) => void;
   onGenerate?: (claimIds: string[], request: StoryboardRequest) => void;
 }
 const control = 'min-h-11 w-full rounded-control border border-os-rule-paper bg-os-paper px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink';
 
-export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selectedClaimIds = [], canGenerate, onGenerate }: Props) {
+export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selectedClaimIds = [], canGenerate, onGenerate, canGenerateImage = false, onGenerateImage }: Props) {
   const t = useTranslations('presentation.storyboard');
   const currentLocale = useLocale();
   const [locale, setLocale] = useState<'zh' | 'en'>(storyboard?.locale ?? (currentLocale === 'zh' ? 'zh' : 'en'));
@@ -41,6 +43,10 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
         {parent ? <div className="min-w-0"><p className="m-0 mb-3 text-xs font-semibold text-os-muted-paper">{t('previous')}</p>{sceneContent(parent.document.scenes[index])}</div> : null}
         <div className="min-w-0">{parent ? <p className="m-0 mb-3 text-xs font-semibold text-os-vermilion-ink">{t('current')}</p> : null}{sceneContent(storyboard.document.scenes[index])}</div>
       </div>
+      {canGenerateImage && onGenerateImage && baseAssetId && storyboard.document.scenes[index] ? <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" data-scene-image={index} className="min-h-11 rounded-control border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink transition-transform active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink motion-reduce:transform-none" onClick={() => onGenerateImage(selectedClaimIds, { storyboardAssetId: baseAssetId, sceneIndex: index })}>{t('generateImage')}</button>
+        <p className="m-0 text-xs leading-5 text-os-muted-paper">{t('imageCharge')}</p>
+      </div> : null}
     </li>)}</ol> : null}
     {storyboard?.baseAssetId && !parent ? <p className="text-sm text-os-muted-paper">{t('parentUnavailable')}</p> : null}
     {canGenerate && onGenerate ? <form className="mt-5 space-y-4 border-t border-os-rule-paper pt-5" onSubmit={(event) => {

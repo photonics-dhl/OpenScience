@@ -85,6 +85,7 @@ services:
     env_file:
       - /opt/openscience/.env.prod
     environment:
+      MINIMAX_IMAGE_ENABLED: "true"
       S3_DRIVER: minio
       S3_ENDPOINT: object-storage
       S3_PORT: "8333"
@@ -145,6 +146,7 @@ services:
     env_file:
       - /opt/openscience/.env.prod
     environment:
+      MINIMAX_IMAGE_ENABLED: "true"
       S3_DRIVER: minio
       S3_ENDPOINT: object-storage
       S3_PORT: "8333"

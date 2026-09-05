@@ -459,3 +459,6 @@
 | `scripts/import-presentation-media.test.mjs` | 维护CLI实际启动回归，防止根目录workspace别名解析失败 | 本地实际入口测试与CI通过；ECS预检成功 |
 
 | `packages/domain/src/assets/storyboard.ts` / `packages/domain/test/assets/storyboard.test.ts` / `apps/agent-worker/src/presentation/storyboard.ts` / `apps/web/components/presentation/StoryboardPanel.tsx` / `apps/web/test/storyboard-panel.test.tsx` | Sourced storyboard contract, Gateway planner and Hermes revision UI | DEPLOYED d6507ea; 3 tasks/4 MiniMax-M3 calls/3 credits, reviewed 45s plan approved; create/revise/compare/replay/browser accepted |
+
+| `packages/ai-gateway/src/image.ts` / `packages/ai-gateway/test/image.test.ts` | Bounded MiniMax single-image provider and Gateway contract tests | CANDIDATE; official origins, base64-only, no paid automatic retry; production verification pending |
+| `packages/domain/src/assets/scene-image.ts` / `apps/agent-worker/src/presentation/scene-image.ts` | Approved storyboard scene binding and source-aware image prompt planning | CANDIDATE; exact parent/Claims, separate image draft, parent invalidation |
