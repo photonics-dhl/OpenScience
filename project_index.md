@@ -9,7 +9,7 @@
 |---|---|---|
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；用户认可生图视觉方向，卡片不算图解完成 |
 | `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；PR86/390afc0已部署；46秒样片本机验收通过，生产未改 |
-| `apps/web/test/visual/out/science-video/` (ignored) | D2NN科普MP4、分镜、旁白、preview.html与项目局部FFmpeg/播放验证记录 | LOCAL PREVIEW；用户认可v1；v2加强过渡/动效，46.25秒720p/H264/AAC、4.80MB，完整解码与成片抽帧通过；保留v1，非生产自动生成能力 |
+| 本地产物（Git忽略，非仓库路径） | apps/web/test/visual/out/science-video/：D2NN科普MP4、分镜、旁白、preview.html与FFmpeg/播放记录 | LOCAL PREVIEW；用户认可v1；v2加强过渡/动效，46.25秒720p/H264/AAC、4.80MB，完整解码与成片抽帧通过；保留v1，非生产自动生成能力 |
 | `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | CANDIDATE；服务器重新渲染/公网播放验收进行中，不接私有RO或任意用户代码 |
 | `infra/scripts/deploy-science-video-demo.sh` / `infra/scripts/deploy-science-video-demo.test.mjs` / `infra/nginx/science-video-demo.location.conf` | 一次性隔离渲染与独立演示路径发布/恢复，Nginx原生Range | CANDIDATE；应用release不变 |
 | `docs/runbooks/science-video-demo.md` | CPU样片服务器部署、回退与验证操作手册 | CANDIDATE；按实测结果更新 |

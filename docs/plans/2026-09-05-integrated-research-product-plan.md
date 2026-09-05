@@ -96,6 +96,10 @@
 4. `infra/scripts/deploy-science-video-demo.sh` 完成受管Nginx片段、原配置备份/失败恢复和独立目录发布；Nginx原生Range播放，禁止往active应用runtime tree写演示文件。既有用户部署授权适用。
 5. 部署前审查及有意义测试；服务器镜像build、隔离实际渲染、ffprobe/decode与公网首播/seek/390px截图，复核应用release/健康未变。只报告实际时长与资源，不用本地25秒替代ECS实测。
 
+用户新增纠正与参考：开始镜像构建前未完整盘点现有Chromium/Playwright缓存与镜像，不能仅凭PATH无可执行文件判断能力缺失。实际Chromium在ScanSci的 `/opt/scansci-browsers/`，Chrome151.0.7922.34/revision1234精确匹配playwright-core1.62.1。旧重复安装构建acc3963ac653已主动停止（exit137非OOM），无暂停残留。改用多阶段复制完整262MB headless-shell bundle到独立renderer；只补FFmpeg/CJK/运行库，不复制生产容器overlay，不继承ScanSci服务或运行权限。应用生产仍未变。Docker最终ldd/launch/成片待实际验收。
+
+新参考为用户提供的微信公众号文章“过去7天·GitHub被加星最猛的9个videoSkill”；正文访问受限，已据可读元数据定位并查阅[creator-buddy官方仓库](https://github.com/SpaceZephyr/creator-buddy/tree/main/video-Skills)。`space-video-broll`的连续运动叙事、已有浏览器探测和确定性时间轴与当前路线吻合；`space-video-script`适合口语化/逐秒分镜，`space-video-subtitle`强调实际音频时间与科研术语校对。`space-video-broll-sketch`使用Seedance/libtv，不是本地免费生成器；它的静止白板/硬切风格也不能原样替代用户认可的光学动效。未发现仓库LICENSE，暂参考方法，不直接复制代码入产品或批量安装技能。
+
 用户已认可科学插图方向并批准按质量与成本自主选型。本批先产出可播放样片，不把单篇预制动画当作任意论文自动生成能力。
 
 - [x] 核对 Git 与服务器：2026-09-05 release/rollback 仍为390afc0/c07c8d1；16 CPU、约30GiB内存，nvidia-smi和宿主机ffmpeg未发现；13容器运行，公网与loopback健康。

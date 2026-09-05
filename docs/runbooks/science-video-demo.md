@@ -10,6 +10,11 @@ Nginx Range 播放，不表示 RO 已能自动生成图片或视频。演示不�
    与 `/opt/openscience/.rollback-id`。本脚本不会修改这两个 marker 或 active release。
 2. 用不可变 Git release 构建镜像 `openscience-media-demo:<full-git-sha>`。镜像的
    ENTRYPOINT 必须接受 `--input /input --output /output`，运行时不下载依赖或模型。
+   Dockerfile从ECS现有 `openscience-scansci-mcp:390afc09d3b6ec64d5b23e64f6bffe6bf8a375e7`
+   复制完整headless-shell目录，而非重复下载Chromium。浏览器Chrome151.0.7922.34/
+   revision1234与playwright-core1.62.1匹配；仅补完整FFmpeg、中文字体与运行库。
+   源镜像是本地tag，构建前须确认存在；不自动换浏览器或进入运行中的ScanSci执行渲染。
+   最终镜像应实测ldd无缺库、浏览器版本和实际截图/编码。
 3. 仓库主配置可预先包含以下一行；若当前运行配置尚未包含，部署脚本只在唯一
    `location = /__release {` 前插入它：
 
