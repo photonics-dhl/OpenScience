@@ -23,7 +23,7 @@
 
 ## Fresh acceptance evidence
 
-- CURRENT独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白共合成91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；新增版本CI待完成。
+- CURRENT独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白总长37.12秒、生成耗时91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；新增版本CI待完成。
 
 - 独立服务器演示已部署：source 6a1b848a3df109098e5f1b9721e6c4df06c2c6d0，run 6a1b848-20260905T081000Z；公网 /demos/science-video/d2nn/。复用ScanSci Chrome151完整headless bundle，CPU渲染22.80秒生成46.25秒720p/H264/AAC视频（4,814,309 bytes），无新增付费API调用。全片解码、五项资源200、Range206、实际首播/章节seek、390px无溢出及零页面异常通过；内部路径最终404（input/先308规范化）。应用release仍390afc0。
 
@@ -44,7 +44,13 @@
 
 ## Qwen audition delivered
 
-- 配音自然度二轮：用户反馈第一轮仍机械；复用Serena/seed42，新增可选script/delivery。A原文+聊天指令14.88s/生成37.07s，B口语短句+同指令21.84s/54.37s；ECS离线CPU完成、两段完整WAV解码通过，无新增依赖/模型/付费调用。自然度尚待用户试听，不宣称已解决；原音频保留。
+- 用户已接受v4连续旁白41.28秒作为当前版本，后续再优化自然度。本轮将原WAV整段直接混入视频，不重新合成、不切分、不插静音；按语句停顿同步五段画面与字幕，候选章节0/6.45/11/20.56/31.81秒。部署完成前，公网仍是617ed1c旧五段配音。
+
+- 用户反馈连续配音已明显改善、仍需更自然。v4仅修改讲稿（取消设问、连贯因果句），保持Serena/seed42/平实指令与全文单次生成；ECS音频41.28秒、生成103.41秒，完整解码通过，无新增安装/付费调用。试听与实际脚本在ignored science-video/voice-v4/、voice-v4.py；未替换公网视频，待用户听感反馈。
+
+- 2026-09-05 用户否定完整视频配音：音色不一致、停顿/转折做作。发现五次独立生成与每段额外0.55秒padding；前者是音色漂移候选原因，未作因果定论。新增 continuity_audition.py，保持同文/Serena/seed42，全文单次生成：continuous沿用原指令39.20s/生成98.37s；plain简短平实指令39.84s/99.70s。ECS现有离线CPU环境、无新增依赖或付费调用，完整WAV解码均通过；自然度/音色/漏读须用户听验，尚未替换视频。证据ignored science-video/voice-v3/和voice-v3.log。下一步先听验再对齐画面，图片风格后置。
+
+- 配音自然度二轮：用户反馈第一轮仍机械；复用Serena/seed42，新增可选script/delivery。A原文+聊天指令14.88s/生成37.07s，B口语短句+同指令21.84s/54.37s；ECS离线CPU完成、两段完整WAV解码通过，无新增依赖/模型/付费调用。用户选择B更自然，但后续五段完整视频未通过听感验收；原音频保留。
 
 - User approved Serena/Uncle_Fu/Vivian same-text audition before production use. One fixed Qwen CustomVoice model downloaded (4.3GiB); reusable CPU torch/torchaudio2.11 base built (~0.97GB). BGE torch2.13/Transformers5.16 differs; no production dependency change. Child image download timeout fixed by600-second pip timeout; import/pip check passed.
 - Source infra/tts-audition, server /opt/openscience-trials/tts; model /opt/openscience-models/qwen3-tts-customvoice-0c0e305. Logs in ignored science-video/tts-*. Three voices generated and fully decoded; next user listens before replacing production narration.

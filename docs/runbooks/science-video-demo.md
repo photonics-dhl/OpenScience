@@ -174,4 +174,16 @@ Use --delivery conversational --script original for A, and --delivery conversati
 
 ## Latest verified run
 
-CURRENT独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白共合成91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；新增版本CI待完成。
+CURRENT独立视频演示：source617ed1ca4365d67c1e363b200e14fd39ef4f9f57，run617ed1c-20260905T101000Z；用户认可B口语方式后，五段Qwen/Serena旁白总长37.12秒、生成耗时91.82秒，新视频40.00秒/4,422,573bytes/720p，ECS渲染20.52秒。字幕按场景真实音频时长显示，手机另有同步可读字幕；章节0/7.541667/16.291667/25.75/32.166667。公网资源200、Range206、实际首播/跳转、手机字幕内容与无横溢出、完整解码均通过；应用390afc0/回滚c07c8d1保持不变。此前6a1b848-20260905T081000Z的46秒系统配音版保留，可按runbook回退；新增版本CI待完成。
+
+## 连续配音对照（2026-09-05）
+
+2026-09-05 用户否定完整视频配音：音色不一致、停顿/转折做作。发现五次独立生成与每段额外0.55秒padding；前者是音色漂移候选原因，未作因果定论。新增 continuity_audition.py，保持同文/Serena/seed42，全文单次生成：continuous沿用原指令39.20s/生成98.37s；plain简短平实指令39.84s/99.70s。ECS现有离线CPU环境、无新增依赖或付费调用，完整WAV解码均通过；自然度/音色/漏读须用户听验，尚未替换视频。证据ignored science-video/voice-v3/和voice-v3.log。下一步先听验再对齐画面，图片风格后置。
+
+复现使用原有4CPU/12GiB、network none、只读root、非root10001试听容器，将整个infra/tts-audition目录只读挂载到/app，以python /app/continuity_audition.py作为入口，/output使用新的空目录，模型沿用既有只读挂载。外层timeout600秒；保留旧试听。实际本轮执行脚本voice-v3.py与整理后的仓库脚本使用相同推理参数，原脚本保存在ignored证据目录。无生产路由修改，无需回滚；验证全片解码后仍须听验全文完整性与一致音色。
+
+用户反馈连续配音已明显改善、仍需更自然。v4仅修改讲稿（取消设问、连贯因果句），保持Serena/seed42/平实指令与全文单次生成；ECS音频41.28秒、生成103.41秒，完整解码通过，无新增安装/付费调用。试听与实际脚本在ignored science-video/voice-v4/、voice-v4.py；未替换公网视频，待用户听感反馈。
+
+用户已接受v4连续旁白41.28秒作为当前版本，后续再优化自然度。本轮将原WAV整段直接混入视频，不重新合成、不切分、不插静音；按语句停顿同步五段画面与字幕，候选章节0/6.45/11/20.56/31.81秒。部署完成前，公网仍是617ed1c旧五段配音。
+
+连续模式使用 input/narration.wav + narration.json（五段绝对start、段内cues）及source-artwork.png；旧五WAV模式保留。原音轨41.28秒，画面最多向上补足一帧，音频不增加段间padding。复现已接受讲稿可用 continuity_audition.py --variant relaxed，但部署复用已试听原WAV，避免重新采样改变声音。

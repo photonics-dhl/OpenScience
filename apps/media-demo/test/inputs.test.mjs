@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArguments, validatePaths, INPUT_FILES } from '../inputs.mjs';
@@ -31,3 +31,31 @@ test('accepts fixed assets but refuses input/output overlap and existing final v
   const valid = await validatePaths(input, join(root, 'fresh-output'));
   assert.equal(valid.input, input);
 });
+
+ test('selects continuous narration without requiring five legacy WAVs and requires metadata', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'science-demo-continuous-'));
+  const input = join(root, 'input'); await mkdir(input);
+  await writeFile(join(input, 'source-artwork.png'), 'fixture');
+  await writeFile(join(input, 'narration.wav'), 'fixture');
+  await assert.rejects(validatePaths(input, join(root, 'output')), /narration.json/);
+  await writeFile(join(input, 'narration.json'), '{}');
+  assert.equal((await validatePaths(input, join(root, 'output'))).audioMode, 'continuous');
+  await writeFile(join(input, 'narration.wav'), '');
+  await assert.rejects(validatePaths(input, join(root, 'output')), /nonempty regular/);
+ });
+
+ test('continuous files must be regular and within audio/metadata size bounds', async () => {
+  for (const [name, size] of [['narration.wav', 64 * 1024 * 1024 + 1], ['narration.json', 64 * 1024 + 1]]) {
+   const root = await mkdtemp(join(tmpdir(), 'science-demo-bounds-'));
+   const input = join(root, 'input'); await mkdir(input);
+   for (const asset of ['source-artwork.png', 'narration.wav', 'narration.json']) await writeFile(join(input, asset), 'fixture');
+   const file = await open(join(input, name), 'r+');
+   try { await file.truncate(size); } finally { await file.close(); }
+   await assert.rejects(validatePaths(input, join(root, 'output')), /nonempty regular/);
+  }
+  const root = await mkdtemp(join(tmpdir(), 'science-demo-directory-'));
+  const input = join(root, 'input'); await mkdir(input);
+  await writeFile(join(input, 'source-artwork.png'), 'fixture');
+  await mkdir(join(input, 'narration.wav'));
+  await assert.rejects(validatePaths(input, join(root, 'output')), /nonempty regular/);
+ });

@@ -25,3 +25,33 @@ test('rejects invalid cue timing, scene count and bounded strings', () => {
   const missing = metadata(); missing.scenes.pop();
   assert.throws(() => applyNarration(scenes(), missing));
 });
+
+ test('continuous timeline preserves absolute boundaries and full audio with at most one frame rounding', async () => {
+  const { continuousTimeline } = await import('../scenes.mjs');
+  assert.equal(typeof continuousTimeline, 'function');
+  const data = metadata();
+  const starts = [0, 7.15, 15.27, 24.38, 33.11];
+  data.scenes.forEach((scene, i) => { scene.start = starts[i]; });
+  const result = continuousTimeline(sceneTemplates, data, 41.28, 24);
+  assert.equal(result.total, 41.28);
+  assert.ok(result.frameCount / 24 >= 41.28);
+  assert.ok(result.frameCount / 24 - 41.28 < 1 / 24);
+  result.scenes.forEach((scene, i) => {
+   assert.equal(scene.start, starts[i]);
+   assert.equal(scene.voiceDuration, scene.duration);
+   assert.equal(scene.duration, (starts[i + 1] ?? 41.28) - starts[i]);
+  });
+  assert.equal(sceneTemplates[0].start, undefined);
+  for (const duration of [0, -1, NaN, Infinity, 60.01]) assert.throws(() => continuousTimeline(sceneTemplates, data, duration));
+  for (const start of [1, -1, NaN]) {
+   const bad = globalThis.structuredClone(data); bad.scenes[0].start = start;
+   assert.throws(() => continuousTimeline(sceneTemplates, bad, 41.28));
+  }
+  for (const start of [7.15, 4, 41.28, Infinity, undefined]) {
+   const bad = globalThis.structuredClone(data); bad.scenes[2].start = start;
+   assert.throws(() => continuousTimeline(sceneTemplates, bad, 41.28));
+  }
+  assert.throws(() => continuousTimeline(sceneTemplates, undefined, 41.28));
+  const spill = globalThis.structuredClone(data); spill.scenes[0].cues[0].end = 7.16;
+  assert.throws(() => continuousTimeline(sceneTemplates, spill, 41.28), /cue/);
+ });

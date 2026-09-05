@@ -6,6 +6,17 @@ export const sceneTemplates=[
  {title:'让结构承担一部分计算',sub:'原理示意 ≠ 实验实拍',caption:'实验采用 0.4 THz 辐射；制造与对准误差会影响表现'},
 ];
 
+// Scene boundaries stay sample-time based; only the final video length rounds up.
+export function continuousTimeline(templates, metadata, seconds, fps = 24) {
+ if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 60 || !Number.isInteger(fps) || fps <= 0) throw new Error('Invalid continuous narration duration or frame rate');
+ if (!metadata || !Array.isArray(metadata.scenes) || metadata.scenes.length !== 5 || templates.length !== 5) throw new Error('Continuous narration requires five metadata scenes');
+ const starts = metadata.scenes.map(scene => scene?.start);
+ if (starts[0] !== 0 || starts.some((start, i) => !Number.isFinite(start) || start < 0 || start >= seconds || (i > 0 && start <= starts[i - 1]))) throw new Error('Invalid continuous narration scene starts');
+ const scenes = templates.map((scene, i) => ({ ...scene, start: starts[i], duration: (starts[i + 1] ?? seconds) - starts[i], voiceDuration: (starts[i + 1] ?? seconds) - starts[i] }));
+ const narration = applyNarration(scenes, metadata);
+ return { scenes, total: seconds, frameCount: Math.ceil(seconds * fps), narration };
+}
+
 export function applyNarration(scenes, metadata) {
  if (metadata === undefined) return 'Supplied pre-generated WAV; provider unknown; no TTS during rendering.';
  const string = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;

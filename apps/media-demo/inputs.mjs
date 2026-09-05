@@ -26,11 +26,17 @@ function contains(parent, child) {
 export async function validatePaths(inputArgument, outputArgument) {
   const input = await realpath(resolve(inputArgument));
   if (!(await lstat(input)).isDirectory()) throw new Error('Input must be a directory');
-  for (const name of INPUT_FILES) {
+  let audioMode = 'legacy';
+  try { await lstat(resolve(input, 'narration.wav')); audioMode = 'continuous'; } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  const files = audioMode === 'continuous' ? ['source-artwork.png', 'narration.wav', 'narration.json'] : INPUT_FILES;
+  for (const name of files) {
     let info;
     try { info = await lstat(resolve(input, name)); } catch { throw new Error(`Missing required input: ${name}`); }
-    if (!info.isFile() || info.isSymbolicLink() || info.size === 0 || info.size > 64 * 1024 * 1024) {
-      throw new Error(`Input must be a nonempty regular file of at most 64 MiB: ${name}`);
+    const limit = name === 'narration.json' ? 64 * 1024 : 64 * 1024 * 1024;
+    if (!info.isFile() || info.isSymbolicLink() || info.size === 0 || info.size > limit) {
+      throw new Error(`Input must be a nonempty regular file of at most ${limit} bytes: ${name}`);
     }
   }
   const requested = resolve(outputArgument);
@@ -47,5 +53,5 @@ export async function validatePaths(inputArgument, outputArgument) {
     if (names.includes(VIDEO_FILE)) throw new Error('Final video already exists; use a new output directory');
     if (names.length) throw new Error('Output directory must be empty; retain prior artifacts and use a new directory');
   }
-  return { input, output };
+  return { input, output, audioMode };
 }
