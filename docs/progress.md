@@ -1,40 +1,33 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-05 +08。历史由 Git 保存；旧计划和旧 release 不作为默认输入。
+> 最新同步：2026-09-05 +08。历史由 Git 保存；旧 release 和旧计划不是默认下一步。
 
 ## Current version tuple
 
-- Worktree / branch / observed parent HEAD: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance` / `codex/product-workflow-design` / `440266c`（PR #83）；后续 Git HEAD 以实时值为准，候选与生产分开记录。
-- Production application release / rollback: `6478aa8ef6045ecef93127c6e3183fc05acb946f` / `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`；core/search `36/36` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 为 12/12。Tasks 10–12 已通过真实 ECS 验收；下一主题已确认为工作区—Hermes—RO 与多模态产品交付。
+- Worktree / branch: E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance / codex/product-workflow-design；application parent HEAD c07c8d1（PR #84），后续 docs-only HEAD 以 Git 实时值为准。
+- Production release / rollback: c07c8d15e5ba3b722577f42d6ad72af8c83189fe / 440266c53325044f2bdff21b1ebfe1be6b792f71；core/search migrations 36/36、2/2。
+- Active/public 标记一致；13 个容器运行，目标服务健康，无 failed marker/journal；部署、retention、公网和 loopback 验收完成。
+- 根目录旧 main b9616cb 与既有 memory/配置/用户资料保持原样；不是开发或部署源。
 
-## 2026-09-05 — UI acceptance revision
+## 2026-09-05 — UI revision deployed, next product slice advanced
 
-- 用户否决首批布局/视觉，要求参考成熟方案优化后继续流程。修订候选解决 2048px 页面仅 768px 宽、默认列表/缩进、巨大标题和长项目列表；采用居中自适应网格、紧凑资料/认证表单、可展开最近项目、统一按钮与快捷入口。
-- 同时修复 Dashboard queued/running/failed task 的不存在 /ingest 路由，改用真实 Hermes task 页面与准确的查看文案。无 API、依赖或迁移变化。
-- UI 最终候选 `440266c53325044f2bdff21b1ebfe1be6b792f71`：全仓 build/typecheck/lint/test、本地 Hermes gate 与 CI 33941432761 GREEN（Product88 + Hermes）；服务器 build 与精确 Parser acceptance 通过。实际 ScanSci OA 复验完整 24,671,920 bytes、SHA d57dc94c…f484a、cleanupCount 0；canonical 部署进行中，未完成前生产仍记录 6478aa8。
-- PR #82 已撤回导致 detached 菜单重叠的最后六行 Dashboard 压缩；PR #83 修复 unsafe patrol 固定 blink-single 与相邻动作重复。早先 000120b 事务因 OA 慢下载中止并成功回滚，无损恢复；本次下载仍有速度波动，不能以 HEAD 请求替代真实下载验收。
-- 后续图解写权限补丁已实现：仅内容编辑角色和 draft Version 可写；Worker 完成时重验权限、任务与 Claim 内容，复用 Serializable draft fence。domain 12、worker 16、API 3，完整 build/typecheck/lint/test 与独立复审通过；尚未提交部署。私有草稿预览和图解 UI 尚未实现；后续 Claim 编辑使旧资产失效仍需先补。
+- 用户否决首批页面视觉，要求成熟方案优先。采用居中自适应应用容器、紧凑标题、资料/项目分区、可展开长列表、统一表单按钮和手机布局；UI 最终候选 440266c 已上线并交用户查看，用户尚未验收效果。
+- PR #81–83 同时修复不存在的 /ingest 任务链接、准确的任务查看文案和 Hermes unsafe patrol 连续动作重复；撤回导致 detached 菜单重叠的最后六行 Dashboard 压缩。复用现有 UI 栈，无新增依赖或迁移。
+- 后续 PR #84 已部署 c07c8d1：生成/审核使用内容编辑角色与 draft Version；Worker 提交前重验权限、任务、版本及 Claim 内容，复用 Serializable draft fence；只读成员/archived 读取不变。
+- 全仓 build/typecheck/lint/test、domain 12/worker 16/API 3、独立安全复审与 CI 33942733721 GREEN（Product88 + Hermes）。ECS build、精确 Parser 16-case、ScanSci OA/Worker、BGE 真实向量、migration、健康与 retention 通过。
+- 最终生产公网页面 fixtures 16/16（41s），不写用户数据，不代替真实 OAuth/SMTP/账号数据纵向验收。日志位于 apps/web/test/visual/out/research-continuation/presentation-security-*；效果截图位于 apps/web/test/visual/out/profile-*.png。
 
-## 2026-09-05 — Integrated product scope confirmed
+## Deployment diagnosis retained
 
-- 用户确认优先完整功能、展示和交互；复用现有能力，成熟方案优先，分段交用户验收。论文生成图片/视频；语音用于 Hermes 修改 RO，不做上传音视频理解。
-- 同事分支确认 frontend/nanqing，已授权选择性整合部署；每日 10:00 巡检。先查已移植成果，避免重复合并。
-- 新 design 与 delivery plan 已登记；首批入口代码与同事 18-file Web 变更已整合；RO 会话/任务范围经独立复审修正。完整五段未完成。首批经 PR #78 合入 main 并部署至 6478aa8；全仓 build/test/typecheck/lint、Web 479+5、local browser 87/87、main CI 通过。ECS build/parser/runtime/健康与迁移 status 通过，公网页面 fixtures 15/15 通过。下一步用户效果验收和剩余旅程审计；公网 fixtures 不替代真实账号数据验收。
+- 早先 000120b 的 OA 下载等待中止后 canonical rollback 恢复 6478aa8；最终 UI440 完整下载验收成功。外部下载速度有波动，本轮有效 OA 为 24,671,920 bytes、SHA d57dc94c…f484a，canary cleanupCount 0。
+- c07 首次发布在 mutation 前因 runtime entryCount 96518→96515 拦截，镜像未变、生产440正常。三个原始路径未定位，不能声称根因修复。
+- 旧报告原子保留；正式重新验收通过，前后清单无增减；完整 install/database generate/build/normalize/四镜像构建后官方报告仍有效。唯一重试通过并部署 c07，未改校验值或跳过验收。
 
-## 2026-09-05 — Hermes Research Intelligence 12/12 production closeout
+## Product state and next action
 
-- PR #72–#74 已合并并以 canonical transaction 发布。最终 release 注册精确 BGE-M3 model identity；Parser、BGE、ScanSci、API、Web、Worker、迁移、内部/公网健康、retention 与 rollback 门禁全部通过。
-- Task 10：官方 `scansci-pdf==1.13.1` MCP 版本握手通过；产品 API 真实获取 arXiv PDF 24,671,920 bytes（SHA-256 `d57dc94c…f484a`），72h retention、600s one-use link 与 replay 404 通过，Dashboard/Drawer/RO Hermes/RO Files 四入口各 1 次。持久 ZJU WebVPN session 另下载明确 subscription-only 的 Nature PDF 1,873,303 bytes（SHA-256 `c4b9b02e…be8e`），证明机构通道不只支持 OA。
-- ScienceDirect 不是 ScanSci 总体阻断：浙大官方将其校外访问导向 CARSI/身份认证，Elsevier Remote Access 需要机构邮箱关联的 Elsevier 账号，API 全文还需 API key + entitlement；当前未满足这些官方条件，因此仅保留为外部增强项，不安装 FlareSolverr 或第二 Chromium。
-- Task 11：生产专用 RO `OSR-2026-000019` 的 3 个 verified core Claims 生成并重放确定性 SVG/HTML；hash 分别为 `8d5f8f23…c640`、`b20f83cc…1198`，HTML 2090 bytes、无 script/网络，公开 200，标签强制 `presentation_not_evidence`。MiniMax image/video 继续管理员限定且默认关闭。
-- Task 12：在 production release 上以真实 2,215,244-byte PDF（SHA-256 `bdfaa68d…697`）完成 fresh upload → parser/source map → review/confirm → commit → 3 core Claims → license → publication review → approve → R3 publish → anonymous public 200 全链；公开对象 `OSR-2026-000021`，发布内容 SHA-256 `625f5308…2cba`。自动 core 与 canonical source map 均产生；Claims 在缺少独立 locator 时诚实保持 `missing`。此前 24.7 MB 上传已得到 source map 但 SDF proposal unavailable，停在 `needs_review` 后归档，未误报失败或发布。
-- ECS content-free 总报告 `/opt/openscience-acceptance/hermes-full-release/b32d81c…/report.json` 已加入 fresh upload/publication hashes，并以 SHA-256 `1ca3b0e1…08f2` 重放通过：Parser 14/2/0/0、locator 26/26、Claim/Evidence/bbox precision 100%、BGE P95 240 ms、TTL/signed-link 100%。
-- 服务器二次维护：14.83 GB BuildKit 来自近期 Node、Parser、ScanSci/Chromium 与 BGE 多目标不可变构建的中间层；先排除 active/rollback 与容器引用，再删除 4 个精确无标签镜像，并按 last-used 清理超过 24h/12h 的未共享缓存，同时保留至少 8GB/6GB 和最近 5h 的现行 Chromium 缓存。未执行 system/image/volume broad prune。
-- 清理后 BuildKit `14.83 → 6.344 GB`（583 → 260 records），images `16.07 → 13.49 GB`（24 → 20，dangling 0），根盘 `54 → 44 GB`，可用空间 `88 → 98 GB`。剩余 cache 主要为 BGE `4.59 GB` 与现行 Chromium `1.69 GB` 构建闭包；Docker 报告的 3.905 GB image reclaimable 含需保留的 rollback/base/shared images，不作为冗余删除。
-- 最终巡检：13 个容器运行；8/8 active/rollback 应用镜像存在，core/search `36/36` / `2/2`，API/Worker/Parser/ScanSci/BGE 与数据服务 healthy，Nginx/Docker/Squid/cloudflared active；公网/loopback 200，egress 204 经 `FIRSTUP_PARENT/127.0.0.1`；内存 24 GiB available，exited/dangling image/dangling volume/failed marker/deploy journal 均为 0；7 组备份中最新 core/search checksum 通过。
-
-## Next action
-
-- 不恢复旧 ScanSci/Task 10 next action。先交用户验收首批效果，继续 integrated product 剩余旅程审计；新 session 从 CURRENT handoff、需求基线相关章节与本文件读取，生产基线为 `6478aa8…`，启动时重新实测。
-- 需要补强 ScienceDirect 时，只走 Elsevier 官方 Remote Access/CARSI 或取得 API key + institution entitlement；不得以 Cloudflare 绕过工具替代授权。
+- Research Intelligence Tasks 1–12 完成；既有真实样例 OSR-2026-000019（展示）和 OSR-2026-000021（论文解析到发布）。不恢复旧 Task 10–12 工作。
+- 同事 frontend/nanqing@e5db5ae 的 18 个 Web 文件已在 PR #78 选择性整合，每日 10:00 巡检已设；避免重复移植。
+- 下一步补来源 Claim 编辑后的资产失效、认证私有预览与图解操作闭环。现有 chart 是主张摘要卡片；从精确版本选择 Claim，生成/进度/预览/批准并接入 RO/Hermes。
+- 私有预览接口与完整图解 UI 尚未实现；图片、视频、Hermes 语音和深入讨论仍按计划分段推进。用户不要求上传音视频理解。
+- 剩余边界：生成后再编辑 Claim 会使资产过时；Worker 拒绝落库可能留下无引用对象；媒体沿用 charged-on-submit；并发测试为确定性交错。批准 UI 前先处理资产失效。
+- 新 session 从 CURRENT handoff、需求基线与本文件读取；生产基线 c07c8d1，必须重新实测。ScienceDirect 后续仅走官方授权，不引入绕过方案。

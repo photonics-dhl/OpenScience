@@ -1,14 +1,15 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-05 +08）：** worktree branch / observed parent HEAD `codex/product-workflow-design` / `440266c`；后续 docs HEAD 以 Git 实时值为准。production release / rollback `6478aa8ef6045ecef93127c6e3183fc05acb946f` / `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`；core/search `36/36` / `2/2`。Research Intelligence Tasks 1–12 完成；integrated product 首批入口与同事前端成果已部署，首批视觉已收到修改意见，UI 候选 440266c CI GREEN、服务器部署进行中；图解写权限补丁全仓检查与复审通过，私有预览和其余阶段待完成。最新实测见 CURRENT handoff；docs-only HEAD 不得冒充 application release。
+> **CURRENT source/deployment anchor（2026-09-05 +08）：** branch `codex/product-workflow-design`，application parent HEAD `c07c8d1`；后续 docs-only HEAD 以 Git 为准。production release / rollback `c07c8d15e5ba3b722577f42d6ad72af8c83189fe` / `440266c53325044f2bdff21b1ebfe1be6b792f71`；core/search `36/36` / `2/2`。UI 修订与展示资产写授权已部署，CI/服务器/公网页面16项通过；完整图解私有预览与多模态流程仍分段推进。根目录旧 main 不是部署源。
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑的已确认产品范围 | CURRENT；效果待分段验收 |
-| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划 | CURRENT；首批入口已部署 6478aa8，完整审计与后续阶段待完成 |
+| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划 | CURRENT；UI 修订与图解写授权已部署 c07c8d1；私有预览、完整图解流程与后续阶段待完成 |
+| `packages/domain/src/assets/presentation-asset.ts` / `packages/domain/src/index.ts` / `packages/domain/test/assets/presentation-asset.test.ts` / `apps/agent-worker/src/presentation/handler.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | 展示资产内容写角色、draft Version 与 Worker 提交时权限/Claim 重验；沿用 Serializable draft fence | PR #84 / c07c8d1 DEPLOYED；domain12/worker16/API3、全仓与 CI GREEN；私有预览/后续 Claim 编辑失效待补 |
 
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/ContinueResearch.tsx` / `apps/web/components/research/ResearchWorkspaceNav.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/components/hermes/HermesTaskEntry.tsx` / `apps/web/messages/{zh,en}.json` | 同 RO 待确认优先、Hermes 常驻导航、真实任务入口与错误恢复、现有助手连接 | DEPLOYED 6478aa8；用户效果待验收 |
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO 入口、scope、恢复、确认和移动体验回归 | DEPLOYED 6478aa8；公网 7 continuation cases GREEN，API fixtures |
