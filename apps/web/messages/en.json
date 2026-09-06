@@ -541,6 +541,11 @@
       "displayName": "Display name",
       "email": "Email",
       "password": "Password",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "forgotPassword": "Forgot password?",
+      "recoveryTitle": "Password recovery",
+      "recoveryBody": "Self-service password reset is not available yet. Do not create a duplicate account: contact the site operator with your account email. Never send your password or verification code.",
       "passwordHint": "Use at least 8 characters with a letter and a number.",
       "passwordError": {
         "length": "Password must be at least 8 characters.",
@@ -582,6 +587,12 @@
       "password": "Password",
       "submit": "Log in",
       "signingIn": "Signing in…",
+      "failure": {
+        "credentials": "The email or password is incorrect. Check both fields and try again.",
+        "rate": "Too many login attempts. Wait a moment before trying again.",
+        "unavailable": "Login is temporarily unavailable. Your password has not been changed; try again later.",
+        "generic": "Login could not be completed. Check your connection and try again."
+      },
       "noAccount": "New to OpenScience?",
       "register": "Create account"
     },
