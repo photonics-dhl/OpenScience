@@ -1,8 +1,13 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-06 +08。生产4d39808，rollback f144eb7；Codex controller3d518af、demo9848411独立。后续文档提交不改变生产。
+> 最新同步：2026-09-06 +08。生产7579738，rollback4d39808；Codex controller3d518af、demo9848411独立。后续文档提交不改变生产。
 
-## PR103 release checks in progress
+## PR103 deployed; medium-width acceptance patch
+
+- PR103 exact7579738 merged/deployed; CI34033218027 all green, server build/parser16/migrations/BGE/ScanSci/public health passed.
+- Public1024 overview exposed right rail narrower than360px Wanko; desktop1440 passed, sessions closed/0writes. Scoped responsive patch and1024/1280 regression under validation; full public acceptance pending.
+
+## PR103 release checks (historical)
 
 - Candidate c8c8cfe: model receives trusted selected-passage target; Worker11/11 passed. CI34031711111 build/typecheck/lint/unit passed, release browser104/110; remaining failures being repaired before merge. ECS candidate fullbuild/parser16 passed, production unchanged.
 - New overview asset endpoint fixture and duplicate header link repaired, overview3/3 passed. Dashboard menu rail corrected; detached geometry fixed with actual rectangle checks; final overview/menu9/9 passed. Final SHA requires fresh CI/parser/deploy/public evidence.

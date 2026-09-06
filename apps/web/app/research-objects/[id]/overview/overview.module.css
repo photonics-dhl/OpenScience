@@ -29,5 +29,10 @@
 .evidence a,.rail a { display:block; padding-block:10px; }
 .article :is(a,button,summary):focus-visible { outline:2px solid #125d66; outline-offset:4px; }
 @media(max-width:1023px) { .surface [data-workspace-plane='19'] { display:none; } .surface [data-workspace-plane='25'] { padding-top:20px; } }
+@media(min-width:1024px) { .surface [data-workspace-planes] { grid-template-columns:220px minmax(0,1fr) 400px; } }
+@media(min-width:1024px) and (max-width:1279px) {
+  .surface [data-workspace-planes] { grid-template-columns:minmax(0,1fr) 400px; }
+  .surface [data-workspace-plane='19'] { display:none; }
+}
 
 .surface .article h1,.surface .article h2,.surface .rail h2 { font-family:Arial,'Microsoft YaHei',sans-serif; }

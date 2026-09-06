@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/product-workflow-design；PR102 source/main/application/public 4d39808ba662da17eaae9db1cef5e54d69db6bb5，rollback f144eb772f1063c00bd61a97612137328443edde；后续docs HEAD以Git为准。独立demo9848411、Codex controller3d518af不变。选择性同事登录/资料UX已合并部署；CI及公网账号验收通过。整站主线及页面职责已确认；A样稿基本验收、Wanko身份保留；PR103研究桌面/真实概览/段落Hermes候选c8c8cfe，发布检查修复中，未部署。
+> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/overview-responsive-companion；PR103 HEAD/main/application75797389fa7afa096599597841b66630f8b82ac4，rollback4d39808ba662da17eaae9db1cef5e54d69db6bb5。CI/server acceptance passed; public1024 overview overflow found, scoped responsive patch in progress. Demo9848411/controller3d518af unchanged; subsequent HEAD from Git.
 
 ## 当前产品交付
 
@@ -488,3 +488,7 @@
 | `apps/agent-worker/src/workspace-guide.ts` / `apps/agent-worker/test/workspace-guide.test.ts` | 将现有已验证target传入Gateway模型上下文；解释sdf-evidence→reproducibility映射；段落引导回归 | RELEASE CANDIDATE；不新增API字段或权限 |
 
 | `apps/web/components/hermes/HermesVisualAdapter.tsx` / `apps/web/test/e2e/product-release.spec.ts` | PR103宽菜单实际矩形避让、12动作布局与概览媒体fixture；原保护/间距门禁保留 | RELEASE CANDIDATE；需最终构建回归与服务器验收 |
+
+| `apps/web/components/shell/WorkspaceShell.tsx` | 稳定workspace planes标识，供概览独立响应式布局保留360px神狗空间 | PATCH CANDIDATE；1024/1280回归及公网复验待完成 |
+
+| `apps/web/playwright.release.config.ts` | 将真实概览与1024/1280断点回归接入既有发布测试 | PATCH CANDIDATE；不是新增发布门禁 |

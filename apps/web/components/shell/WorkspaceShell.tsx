@@ -50,7 +50,7 @@ function WorkspaceShell({
       <div className="min-h-11 overflow-x-auto border-b border-os-rule-paper" data-workspace-mode-tabs="true">
         {workspaceModes}
       </div>
-      <div className="grid min-h-[calc(100dvh-10.25rem)] min-w-0 lg:grid-cols-[17fr_55fr_28fr]">
+      <div className="grid min-h-[calc(100dvh-10.25rem)] min-w-0 lg:grid-cols-[17fr_55fr_28fr]" data-workspace-planes="true">
         <section className={cn('min-w-0 border-b border-os-rule-paper bg-os-paper p-4 lg:block lg:border-b-0 lg:border-r lg:p-5', !usesMobilePlaneSwitcher || activeMobilePlane === 'left' ? 'block' : 'hidden')} data-workspace-plane="19">
           {leftRail}
         </section>

@@ -503,3 +503,7 @@ Acceptance: PR102 merged4d39808; CI34022708530 success. Full workspace checks, f
 ## PR103 release continuation
 
 用户已授权正式研究桌面/概览/段落Hermes发布。Worker传递trusted target；首轮CI构建/类型/lint/单元通过，发布浏览器104/110。修正重复桌面header链接、缺失媒体fixture、菜单rail宽度及detached宽菜单实际碰撞计算，保留所有现有geometry断言。最终候选须经完整CI、精确SHA服务器parser预验收、canonical deploy与公网中英桌面/移动端受控只读验收；rollback使用当前应用4d39808。
+
+## Public medium-width correction
+
+PR103 deployed7579738 with full CI/server checks. Public1024 revealed the percentage overview rail cannot hold original360px Wanko. Use scoped220px/main/400px at>=1280 and main/400px at1024–1279 with hidden structure rail. Keep original model size; preserve full English map labels. Add1024/1280 and post-model-ready overflow coverage to existing release config. Patch acceptance and deployment rollback anchor7579738 are required before closing public verification.

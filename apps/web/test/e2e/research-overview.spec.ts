@@ -1,6 +1,6 @@
 import { test, expect } from 'playwright/test';
 
-for (const width of [1440, 390]) {
+for (const width of [1440, 1280, 1024, 390]) {
   test(`real overview and scoped Hermes at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
@@ -38,6 +38,12 @@ for (const width of [1440, 390]) {
     await page.locator('[data-hermes-dock-anchor]').scrollIntoViewIfNeeded();
     await expect(page.locator('[data-hermes-rig-status="ready"]')).toBeVisible({ timeout: 30000 });
     await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (width >= 1280) {
+      const mapItems = page.locator('[data-workspace-plane="19"] li');
+      await expect(mapItems).toHaveCount(6);
+      expect(await mapItems.evaluateAll(items => items.every(item => item.scrollWidth <= item.clientWidth))).toBe(true);
+    }
     await page.screenshot({ path: `test/visual/out/research-journey/real-overview-${width}.png`, fullPage: true });
     if (width === 1440) {
       let failContent = true;
