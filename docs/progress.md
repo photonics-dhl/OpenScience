@@ -6,7 +6,7 @@
 
 - 现有 presentation.generate → Gateway 新增显式 Codex provider；服务端串行 runner 使用私有文件任务、持久化 started 记录、Unix socket 限域代理及现有 FFmpeg 规范化。无新数据库/API，无公开通用执行入口。
 - 全仓 build/typecheck/lint/test 已通过；后续 focused runner9/Gateway27、媒体第三幕8测试通过。独立审查修复 archive 无 .git、提交中断恢复、安装失败恢复与旧 heartbeat 问题；最终源部署待执行。
-- Demo 仅新增可选 scene3-artwork.png，五幕中的第三幕解释衍射/干涉；原图、41.28秒连续 Serena WAV 与时间轴保持。新demo7e1b6ea已服务器渲染/部署：39.101秒渲染、41.292秒视频，公网/390px/206通过；应用仍615ca2d。Runner安装暴露validator未导出，已自动回退；新增完整模块加载测试先红后绿10/10，provider尚未启用。
+- Demo 仅新增可选 scene3-artwork.png，五幕中的第三幕解释衍射/干涉；原图、41.28秒连续 Serena WAV 与时间轴保持。新demo7e1b6ea已服务器渲染/部署：39.101秒渲染、41.292秒视频，公网/390px/206通过；应用仍615ca2d。Runner安装暴露validator未导出，已自动回退；新增完整模块加载测试先红后绿10/10，API尚旧版本、无生图任务；随后无模型服务器探针发现umask导致输入root:root0640，已改为1000:1000/0400，待新bundle部署。
 
 ## 科学构图修订与 RO 草稿导入完成
 

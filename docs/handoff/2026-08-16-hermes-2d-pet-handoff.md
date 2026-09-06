@@ -43,7 +43,7 @@
 
 ## Current integration candidate — not deployed
 
-- 当前未提交候选新增 Codex Gateway/provider、独立持久化 runner 与 demo scene3-artwork；全仓 build/typecheck/lint/test 已通过，服务器暴露runner引用的validator未导出，安装自动回退；完整runner加载回归先红后绿10/10。真实任务待验收，ADR-013记录边界。
+- 当前未提交候选新增 Codex Gateway/provider、独立持久化 runner 与 demo scene3-artwork；全仓 build/typecheck/lint/test 已通过，服务器暴露runner引用的validator未导出，安装自动回退；完整runner加载回归先红后绿10/10。2c4服务ready但无模型探针发现input权限问题，已修复候选；真实任务待验收，ADR-013记录边界。
 - Candidate oncodex/product-workflow-design basedf7a80ea; production615ca2d/rollbackd6507ea unchanged. Five-field drawing brief implemented; explicit string schema/budgets added after real planner returned array/overlong content.
 - Worker529/focused44、全仓build/typecheck/lint、独立复审通过。实际candidate M3共6文字调用（3结构失败、1诊断、最终2次含1重试），image-01一次；成图仍丢失屏面，未部署/未批准。
 - 同一1351字符提示词、内置imagegen一次对照更清楚保留薄片/波前/屏面，但不是服务器能力。Worker的OpenAI/Gemini独立key配置布尔均false；MiniMax图生图官方subject_reference为人物参考，不能假定可约束科学结构。

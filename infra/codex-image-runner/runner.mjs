@@ -23,7 +23,11 @@ async function imageFiles(dir,depth=0){
 }
 export async function executeImage(config,request,dir){
  for(const sub of ['socket','state','work','input','normalized'])await prepareDirectory(join(dir,sub));
- await atomicWrite(join(dir,'input/request.json'),JSON.stringify({prompt:request.prompt}));
+ const inputPath=join(dir,'input/request.json');
+ await atomicWrite(inputPath,JSON.stringify({prompt:request.prompt}),0o400);
+ // systemd's restrictive umask must not leave the drawing brief owned by root.
+ await chown(inputPath,1000,1000);
+ await chmod(inputPath,0o400);
  const job={id:request.id,dir};
  try{
   await docker(containerArgs('proxy',config,job));
