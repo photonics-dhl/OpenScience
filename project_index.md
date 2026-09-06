@@ -11,13 +11,13 @@
 | `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；3d518af Codex单幕生图与7e1b6ea机制视频已部署；MiniMax历史视觉未通过，自动视频待接入；全局Hermes分镜动作及配色f144eb7已部署验收；下一步通用RO视频 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | DEPLOYED3d518af；runner10、安装预检、真实Task/Credit/来源/草稿/PNG/权限验收通过 |
-| `apps/media-demo/inputs.mjs` / `apps/media-demo/render.mjs` / `apps/media-demo/drawing.mjs` / `apps/media-demo/test/inputs.test.mjs` / `apps/media-demo/test/drawing.test.mjs` | 可选第三幕机制图，保留旁白/输出探测场景与时间轴 | DEPLOYED7e1b6ea；服务器渲染/公网/390px/Range206通过，实际AAC音轨未变 |
+| `apps/media-demo/inputs.mjs` / `apps/media-demo/render.mjs` / `apps/media-demo/drawing.mjs` / `apps/media-demo/test/inputs.test.mjs` / `apps/media-demo/test/drawing.test.mjs` | 可选第三幕机制图，保留旁白/输出探测场景与时间轴 | DEPLOYED9848411；服务器渲染/公网/390px/Range206通过，实际AAC音轨未变 |
 | 本地产物（Git忽略，非仓库路径） | apps/web/test/visual/out/science-video/：D2NN科普MP4、分镜、旁白、preview.html与FFmpeg/播放记录 | CURRENT证据含淡彩41秒demo及真实RO导入/播放/审批/失效截图；历史文件保留，核对精确source/run后使用，非自动生成能力 |
-| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo7e1b6ea；第三幕Codex机制插图/原Serena配音，固定D2NN渲染，已受审产物经独立CLI接入私有RO，不执行任意用户代码 |
+| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo9848411；第三幕Codex机制插图/原Serena配音，固定D2NN渲染，已受审产物经独立CLI接入私有RO，不执行任意用户代码 |
 | `infra/scripts/deploy-science-video-demo.sh` / `infra/scripts/deploy-science-video-demo.test.mjs` / `infra/nginx/science-video-demo.location.conf` | 一次性隔离渲染与独立演示路径发布/恢复，Nginx原生Range | DEPLOYED demo381705a淡彩41秒；应用615ca2d另行部署 |
 | `apps/media-demo/test/narration.test.mjs` | 配音来源、逐段字幕时间边界与旧素材回退验证 | 完整连续v4配音与字幕边界已在技术/淡彩demo验收；历史逐段回退保留 |
 | `infra/tts-audition/` | CPU音频公共基础镜像、Qwen隔离试听与输出校验；模型独立挂载 | ECS TRIAL VERIFIED；用户接受v4 Serena全文连续配音，淡彩视频保留原WAV；旧分段试听为历史证据 |
-| `docs/runbooks/science-video-demo.md` | CPU样片服务器部署、回退与验证操作手册；含隔离CodexCLI验证、受控runner安装/启用/回滚与第三幕视频更新步骤 | DEPLOYED demo7e1b6ea / app3d518af；含分镜与媒体页验收、受审媒体导入、Parser报告与临时容器清理注意事项 |
+| `docs/runbooks/science-video-demo.md` | CPU样片服务器部署、回退与验证操作手册；含隔离CodexCLI验证、受控runner安装/启用/回滚与第三幕视频更新步骤 | DEPLOYED demo9848411 / app3d518af；含分镜与媒体页验收、受审媒体导入、Parser报告与临时容器清理注意事项 |
 | `apps/api/src/routes/presentation-asset-content.ts` / `apps/api/src/routes/presentation-assets.ts` / `apps/api/test/presentation-assets-routes.test.ts` / `apps/api/src/routes/research.ts` | 共用安全内容交付、认证私有预览与 exact RO/version/task 恢复 | DEPLOYED83b2933；私有视频实际播放/28秒seek/Range206，匿名401，保留v1兼容 |
 | `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准 | DEPLOYED64ae872；媒体优先、桌面双列/手机单列、来源折叠、任务错误可见；公网中英文四组播放/seek/键盘/无溢出验收通过 |
 | `apps/web/app/research-objects/[id]/edit/page.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` / `apps/web/package.json` / `apps/web/playwright.release.config.ts` | 已确认论文带入版本提交并保留原 manifest 附件；图解用例加入既有 release suite | DEPLOYED390afc0；真实PDF入版本，续接9项与CI99通过 |
@@ -473,4 +473,4 @@
 
 | `apps/media-demo/storyboard-input.mjs` / `apps/media-demo/storyboard-drawing.mjs` / `apps/media-demo/test/storyboard-input.test.mjs` / `apps/media-demo/test/storyboard-drawing.test.mjs` | Opt-in3–6scene file-driven renderer, bounded local PNGs/cues and contained crossfades; existing render/input entry adapted | ENGINE TESTS passed049e544; VISUAL DELIVERY REJECTED (4/5 repeated panorama, slideshow only); no RO authority/task/TTS integration |
 
-| `apps/media-demo/prepare-animated-demo.mjs` / `apps/media-demo/test/prepare-animated-demo.test.mjs` | Prepare original animation inputs without generic override; explicit mode and scene/motion regression | REPAIR CANDIDATE;23media tests passed, server re-render pending |
+| `apps/media-demo/prepare-animated-demo.mjs` / `apps/media-demo/test/prepare-animated-demo.test.mjs` | Prepare original animation inputs without generic override; explicit mode and scene/motion regression | ECS RESTORED9848411;23media/full workspace tests/browser/High review passed; PR101 merged; CI34019708441 passed |

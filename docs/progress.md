@@ -2,10 +2,14 @@
 
 > 最新同步：2026-09-06 +08。生产f144eb7，rollback b23102b；Codex controller3d518af、demo7e1b6ea独立。后续文档提交不改变生产。
 
-## Repeated-image delivery repair — in progress
+## User scope decision
+
+- Whole-product integration/page redesign requires discussion and agreed scope first. Only the authorized video repair is being closed; subsequent integration directions are proposals.
+
+## Repeated-image delivery repair — server restored
 
 - User rejected the previous generic evaluation video:4/5 scenes reused the panorama and scientific animations were absent. Format/decoding success was not visual acceptance. Restore reviewed D2NN animation and retain generic mode only as illustrated-storyboard preview.
-- Added tracked exact-input preparation, explicit renderMode and distinct-scene/motion regression.23focused tests passed; server re-render, review and CI pending. Original accepted voice retained.
+- Added tracked exact-input preparation, explicit renderMode and distinct-scene/motion regression.23focused/full workspace tests and High review passed. ECS demo9848411 restored:41.292s/2.53MB/39.06s render; five scenes/playback/seek/Range206/390px passed; original4inputs compare equal. PR101 merged; CI34019708441 passed. Original accepted voice retained.
 
 ## Generic renderer development — 2026-09-06
 

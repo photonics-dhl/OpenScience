@@ -364,6 +364,14 @@ Renderer slice accepted at049e544: PR100 merged, CI34018403393 passed,20focused 
 
 User rejected the generic evaluation video: its preparation script copied one panorama into four of five scenes and the generic mode only zooms/crossfades images. Encoding success was incorrectly treated as visual equivalence. Restore the accepted D2NN scientific animation delivery; keep the generic renderer explicitly an illustrated-storyboard preview until per-scene animation exists.
 
-- [ ] Add a tracked animated-demo preparation command/test that copies only original continuous narration/metadata/panorama and optional scene3 artwork into a fresh input directory; never synthesize a generic storyboard from repeated images.
-- [ ] Report explicit renderMode in returned input/metrics and test retained training/wave/detector visuals and motion, in addition to file/cue checks. No new hashes, model, schema, or deployment gate.
-- [ ] Re-render and deploy the independent animated demo with the existing image/runtime, original WAV and canonical deploy script; inspect multiple scene midpoints and real playback/seek/mobile. Mark prior generic evaluation visually rejected, update CURRENT, then prioritize page/workflow integration testing alongside the documented remaining media gaps.
+- [x] Add a tracked animated-demo preparation command/test that copies only original continuous narration/metadata/panorama and optional scene3 artwork into a fresh input directory; never synthesize a generic storyboard from repeated images.
+- [x] Report explicit renderMode in returned input/metrics and test retained training/wave/detector visuals and motion, in addition to file/cue checks. No new hashes, model, schema, or deployment gate.
+- [x] Re-render and deploy the independent animated demo with the existing image/runtime, original WAV and canonical deploy script; inspect multiple scene midpoints and real playback/seek/mobile. Mark prior generic evaluation visually rejected, update CURRENT, hold further page/workflow integration pending the user discussion required below.
+
+## Proposed product integration — discussion required
+
+User explicitly requires discussion before deciding how to perform whole-product integration. Do not start integrated debugging or page redesign without that discussion and an agreed scope. The following is a proposal only. The architecture mainline can support integration work once agreed. Use the existing pages and APIs to test Workspace → PDF import → Hermes guidance/proposals → exact-version RO edit/evidence → storyboard/media review → publication/discussion. Prioritize broken navigation, unclear next actions, lost context, pending/error recovery and desktop/mobile usability. Apply consistent layout/typography/controls to that journey, selectively reuse colleague frontend work after review, and verify the final flow with real papers on ECS. This is the next product direction, not a claim these full-journey checks already passed.
+
+Remaining capabilities are explicit: arbitrary-RO video jobs, new narration/alignment, approved per-scene animation/assets, source extraction completeness and Evidence grounding. The restored fixed D2NN sample does not close these gaps.
+
+Video repair closed9848411: PR101 merged/CI34019708441 passed;23media/full workspace tests, independent High review and canonical server animation/browser acceptance passed. Whole-product integration and redesign remain explicitly awaiting discussion.

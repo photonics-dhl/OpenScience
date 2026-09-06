@@ -1,14 +1,14 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT active-memory, 2026-09-06 +08. Global Hermes remains deployed. User rejected generic evaluation visuals (four repeated panoramas, no scientific animation). Repair animated delivery first; then page/workflow integration and remaining RO media tasks.
+> CURRENT active-memory, 2026-09-06 +08. Global Hermes remains deployed. User rejected generic evaluation visuals (four repeated panoramas, no scientific animation). Authorized video repair restored and merged9848411. Whole-product integration/page redesign requires user discussion before deciding scope.
 
 ## Version tuple
 
-- Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; renderer source/origin-main049e544f7742c063d95e2915a48f661aa6816f2d; deployed application sourcef144eb772f1063c00bd61a97612137328443edde. Subsequent documentation HEAD is obtained from Git.
+- Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; renderer source/origin-main9848411d1419a0dd690f74cca9042369b651f7b2; deployed application sourcef144eb772f1063c00bd61a97612137328443edde. Subsequent documentation HEAD is obtained from Git.
 - Production active/public/loopback f144eb772f1063c00bd61a97612137328443edde; rollback b23102b071ae715d738aa37504a838d2f3fc78f1. PR98 and PR99 merged by non-force fast-forward to exact tested commits.
 - PR98 CI34014496625 and main CI34015117654 succeeded. PR99 CI34015765809 succeeded; main CI34016486547 succeeded (freshly checked).
 - Root checkout is main at b9616cb92dc83437b1b2094291ff43e2a4c34337, with user changes left untouched. It is not the production source or origin/main.
-- Independent Codex controller bundle remains3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52. Demo source7e1b6ea29ada1e4abb5fd24bb71aab4dd65abb98, run7e1b6ea-20260906T044500Z; /demos/science-video/d2nn/?v=codex-mechanism-v1. App, runner and demo identities are separate.
+- Independent Codex controller bundle remains3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52. Demo source9848411d1419a0dd690f74cca9042369b651f7b2, run9848411-20260906T074017Z; /demos/science-video/d2nn/?v=animated-restored-v1. Prior demo7e1b6ea-20260906T044500Z retained for rollback. App, runner and demo identities are separate.
 
 ## Delivered workflow
 
@@ -38,9 +38,11 @@
 
 ## Next action / read-first
 
+- USER STEERING: whole-product integration must be discussed before deciding how to proceed. Do not start whole-site debugging or redesign. Video repair/CI/merge is complete; integration directions below are proposals, not authorization.
+
 - Generic renderer049e544 is VISUALLY REJECTED by user: evaluation copied the same panorama into4/5 scenes, and generic mode only zooms/crossfades. Earlier20 media tests/full workspace tests/lint/docs passed; isolated ECS41.292s/991frames/8080238bytes,37.95s render, full decode/fastStart, exact source WAV retained. PR100 merged; CI34018403393 succeeded. Duplicate main CI is not acceptance evidence at this checkpoint. No app/demo switch, API/task/TTS integration. Evidence generic-server-eval.log/generic-server-*.png in ignored science-video directory.
-- Current repair: tracked prepare-animated-demo.mjs preserves accepted fixed-scene inputs; explicit metrics renderMode and scene/motion regression. Local candidate awaiting CI/server re-render. No new dependencies or model calls.
-- Next bind approved RO inputs and Gateway speech/timing via bounded isolated media jobs, then existing task/draft UI. Qwen supplies audio, not verified word timestamps; new papers need a reviewed alignment step. Keep immutable host staging; maximum aggregate six16MP inputs were not stress-tested.
+- Current repair: tracked prepare-animated-demo.mjs preserves accepted fixed-scene inputs; explicit metrics renderMode and scene/motion regression. ECS restored9848411:41.292s/991frames/2532823bytes,39.06s render; exact original4inputs compare equal, decode/fastStart/playback/seek/Range206/390px and five scene images passed.23focused/full workspace tests and High review passed; PR101 merged; CI34019708441 passed. Evidence animated-fix-deploy.log/animated-restored-browser-evidence.json and animated-restored-scene-*.png. No new dependencies/model calls.
+- Proposed remaining media work (discuss scope first): bind approved RO inputs and Gateway speech/timing via bounded isolated media jobs, then existing task/draft UI. Qwen supplies audio, not verified word timestamps; new papers need a reviewed alignment step. Keep immutable host staging; maximum aggregate six16MP inputs were not stress-tested.
 - Improve the three extraction gaps and original Evidence/SourceMap grounding afterward. User prioritizes usable functions, mature reusable solutions and reviewable results.
 - Coworker release/profile-settings-20260904 tip93bb160 overlaps current identity interactions; no clear missing hunk identified, merge conflicts not tested. Existing daily frontend check remains; do not duplicate automation.
 - Read Git/fetch/checkup first, then this handoff, relevant baseline sections, docs/specs/2026-09-05-integrated-research-product-design.md, matching plan, ADR-013 and docs/runbooks/science-video-demo.md.
