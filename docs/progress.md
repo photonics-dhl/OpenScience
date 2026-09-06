@@ -1,10 +1,12 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-06 +08。应用/main3d518af已部署，rollback615ca2d；demo7e1b6ea独立发布。后续文档提交不改变生产。
+> 最新同步：2026-09-06 +08。应用/origin-main b23102b已部署，rollback3d518af；demo7e1b6ea独立发布。后续文档提交不改变生产。
 
-## Global Hermes presentation actions — local candidate
+## Global Hermes presentation actions — deployed, contrast correction pending
 
-- Global conversation now prepares existing storyboard/revision/image tasks with exact RO/version/source/cost review; no model/provider or endpoint changes. Source permissions, approved image capability, explicit version, style/language, length and retry handling covered by focused tests. Local full workspace build/typecheck/lint/test, final web514 tests and presentation browser15 passed; docs lint passed. Additional Hermes regression14 and independent architecture/security review passed; CI and server acceptance remain pending; production stays3d518af.
+- Global conversation now prepares existing storyboard/revision/image tasks with exact RO/version/source/cost review; no model/provider or endpoint changes. Source permissions, approved image capability, explicit version, style/language, length and retry handling covered by focused tests. Local full workspace build/typecheck/lint/test, final web514 tests and presentation browser15 passed; docs lint passed. Additional Hermes regression14 and independent architecture/security review passed; PR98 CI and exact server acceptance passed for b23102b. The contrast correction remains pending.
+
+- Real task0f50d797 succeeded:6 scenes/3Claims/original unchanged/1 execution/0 retries/1Credit/1 generated audit; M3 13.374s. zh/en1440/390 and logout passed. Actual screenshot found undefined bg-os-ink-paper: button transparent with pale text. Existing ink token correction and computed-color browser regression are pending final build/deploy; no further model call needed.
 
 ## Hermes Codex integration and revised video — deployed and accepted
 
@@ -64,7 +66,7 @@
 
 ## Next and limits
 
-- 下一步让已核对分镜驱动可溯源图片和隔离CPU视频渲染，再接全局Hermes对话目标；当前只有RO内专门分镜入口。自动全文理解、生图、视频与语音对话不能标完成。
+- 全局Hermes已接分镜/修订/配图任务，当前先完成按钮对比度补修；下一步接通受审RO分镜的隔离CPU视频渲染。自动全文理解、生图、视频与语音对话不能标完成。
 - 所选RO Claims及条件/限制是本轮输入，没有新增Evidence/SourceMap检索。现有PDF流程仍缺method/results/reproducibility自动提取，演示主张为人工核对。
 - 并发撤权/来源失效可扣额后阻止落库；模型返回到素材提交之间故障可能重复provider调用，幂等重放产品只扣一次；Storage孤立对象/公开review digest历史债务保留。
 - 唯一CURRENT交接docs/handoff/2026-08-16-hermes-2d-pet-handoff.md；根目录旧checkout与用户资料未动。已有前端分支定期巡检，不重复创建。

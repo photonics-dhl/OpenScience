@@ -444,6 +444,9 @@ test('global Hermes reviews an exact revision and retries one uncertain submissi
   await expect(review.getByLabel('Visual style')).toHaveValue('technical');
   await review.getByLabel('Visual style').selectOption('ink');
   expect(bodies).toHaveLength(0);
+  const buttonColors = await review.getByRole('button', { name: 'Confirm · 1 AI credit' }).evaluate(node => { const style = getComputedStyle(node); return { background: style.backgroundColor, color: style.color }; });
+  expect(buttonColors.background).not.toBe('rgba(0, 0, 0, 0)');
+  expect(buttonColors.background).not.toBe(buttonColors.color);
   await review.getByRole('button', { name: 'Confirm · 1 AI credit' }).click();
   await expect(review.getByRole('alert')).toContainText('outcome is unknown');
   await expect(review.getByLabel('Storyboard instructions')).toBeDisabled();

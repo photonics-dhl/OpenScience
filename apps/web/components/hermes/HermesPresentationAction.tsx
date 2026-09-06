@@ -65,7 +65,7 @@ export function HermesPresentationAction(props: Props) {
       submission.current.fail(ambiguous); setUncertain(ambiguous); setError(ambiguous?'uncertain':'submitError'); setBusy(false);
     }
   }
-  return <section className="min-w-0 rounded-xl bg-os-paper p-4 text-os-ink-paper" data-hermes-presentation-action="true">
+  return <section className="min-w-0 rounded-xl bg-os-paper p-4 text-os-ink" data-hermes-presentation-action="true">
     <h3 className="m-0 text-lg font-semibold">{t('entry')}</h3><p className="text-sm leading-6">{t('boundary')}</p>
     <form onSubmit={submit} className="space-y-4">
       <fieldset disabled={locked} className="m-0 min-w-0 space-y-4 border-0 p-0">
@@ -88,7 +88,7 @@ export function HermesPresentationAction(props: Props) {
       {parent && !validSources?<p role="alert" className="text-sm">{t('staleSources')}</p>:null}
       {error?<p role="alert" className="text-sm">{t(error)}</p>:null}
       {!locked && (error==='loadError' || error==='submitError' || (parent && !validSources))?<button type="button" className={control} onClick={()=>setReload(x=>x+1)}>{t('refresh')}</button>:null}
-      <button type="submit" className="min-h-11 w-full rounded bg-os-ink-paper px-4 py-2 text-sm font-semibold text-os-paper disabled:opacity-40" disabled={busy || !canWrite || ready!==scope || !validSources || (action!=='scene.image' && !validPresentationInstruction(instruction))}>{t(busy?'submitting':uncertain?'retry':'confirm')}</button>
+      <button type="submit" className="min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-os-paper disabled:opacity-40" disabled={busy || !canWrite || ready!==scope || !validSources || (action!=='scene.image' && !validPresentationInstruction(instruction))}>{t(busy?'submitting':uncertain?'retry':'confirm')}</button>
     </form>
     <button type="button" className="mt-3 min-h-11 px-2 text-sm underline" disabled={busy || uncertain} onClick={onBack}>{t('back')}</button>
   </section>;

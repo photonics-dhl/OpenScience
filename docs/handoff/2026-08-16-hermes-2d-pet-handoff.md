@@ -1,11 +1,11 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT active-memory, 2026-09-06 +08. Administrator Hermes → Codex scene-image generation is deployed and verified by a real task. Fixed D2NN video has the revised mechanism illustration and byte-identical accepted narration. Global Hermes presentation preparation is a local uncommitted candidate; release remains unchanged. Generic RO video generation remains open.
+> CURRENT active-memory, 2026-09-06 +08. Administrator Hermes → Codex scene-image generation is deployed and verified by a real task. Fixed D2NN video has the revised mechanism illustration and byte-identical accepted narration. Global Hermes presentation actions are deployed at b23102b and a real revision passed; a confirmation-button contrast correction is pending. Generic RO video generation remains open.
 
 ## Version tuple
 
-- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; application source/main 3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52; subsequent documentation HEAD is obtained from Git.
-- Production active/public/loopback 3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52; rollback 615ca2dc22bcceabc99562a31340053725a81098. PR97 merged by fast-forward to the exact tested commit; PR CI34010770869 and main CI34011369239 succeeded.
+- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; application source/origin-main b23102b071ae715d738aa37504a838d2f3fc78f1; subsequent documentation HEAD is obtained from Git.
+- Production active/public/loopback b23102b071ae715d738aa37504a838d2f3fc78f1; rollback3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52. PR98 merged; PR CI34014496625 succeeded, main CI34015117654 succeeded.
 - Independent demo source7e1b6ea29ada1e4abb5fd24bb71aab4dd65abb98, run7e1b6ea-20260906T044500Z; /demos/science-video/d2nn/?v=codex-mechanism-v1. Demo and application identities are separate.
 - Root checkout and user uncommitted files untouched. Start with Git/fetch/checkup/actual release, then this handoff, baseline relevant sections and current design/plan. Do not restore old MVP next actions.
 
@@ -45,14 +45,14 @@
 - Preserve accepted Serena v4 audio; reuse existing Chromium/FFmpeg/PyTorch/Codex runtime. Do not reinstall Tailscale, read/print env/auth/cookies/private model logs, or expose account-backed Codex as a public general execution endpoint.
 - Evaluation still depends on user's PC/v2ray staying online and account quota. Account refresh requiring auth writes needs operator login maintenance. Broader public rollout needs supported provider/account terms and stable egress; ADR-013 records this boundary.
 
-## Global Hermes candidate / next action
+## Global Hermes acceptance / contrast correction
 
 - Local Drawer prepares bounded zh/en create/revise/image actions; exact current RO/version, succeeded Claims, approved-image capability, visible style/locale and1Credit confirmation reuse existing API/task page. RO/version resets discard preparation; ambiguous same-owner retries preserve key. No provider/backend/schema additions.
-- Local workspace build/typecheck/lint/test passed; final web514 tests and presentation browser15 passed, including exact revision/no preconfirm POST/ambiguous same-key retry/success cleanup/published version/image capability/query switch/390px. Evidence: ignored global-hermes-*.log. Additional Hermes regression14 and independent architecture/security review passed; CI and exact-source server acceptance plus real controlled revision remain pending; do not call this deployed.
+- Local workspace build/typecheck/lint/test passed; final web514 tests and presentation browser15 passed, including exact revision/no preconfirm POST/ambiguous same-key retry/success cleanup/published version/image capability/query switch/390px. Evidence: ignored global-hermes-*.log. Additional Hermes regression14 and independent architecture/security review passed. Exact server build/parser/runtime/migrations/health/retention passed. Real task0f50d797-4340-4ce8-9307-1268ea5610a5 produced6 scenes with3 source Claims, preserved the approved parent,1 execution/0 retry/1Credit/1 generation audit; M3 13.374s,1540 input/924 output tokens. zh/en at1440/390 and logout passed. Server screenshot then exposed an undefined ink-paper background token; the confirmation-button contrast fix has a reproduced red test, final browser3/build/lint/docs and independent token review passed; its CI/deployment remain pending.
 
 ## Next action / read-first
 
-- Present current video and automatic scene-image result for user visual/scientific acceptance. Then connect global Hermes conversation actions to existing storyboard/image tasks and generalize the existing CPU renderer to approved RO storyboards; keep each result reviewable.
+- Present current video and automatic scene-image result for user visual/scientific acceptance. Finish the confirmation-button contrast correction, then generalize the existing CPU renderer to approved RO storyboards; keep each result reviewable.
 - Improve the three PDF extraction gaps and original Evidence/SourceMap grounding; do not conflate BGE embedding with document parsing/chunk design or proof generation.
 - Coworker release/profile-settings-20260904 tip93bb160 has identity interactions overlapping current main; no clear missing hunk identified in this read-only check. Merge conflicts were not tested. Existing daily frontend check remains; do not duplicate automation.
 - Read docs/OpenScience_Kimi_Development_Spec.md relevant chapters; docs/specs/2026-09-05-integrated-research-product-design.md; docs/plans/2026-09-05-integrated-research-product-plan.md; ADR-013; docs/runbooks/science-video-demo.md.

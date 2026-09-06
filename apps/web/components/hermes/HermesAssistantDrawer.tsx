@@ -222,11 +222,11 @@ function HermesAssistantDrawerContent({
     >
       <section className="hermes-guide-drawer" data-hermes-drawer-state={presentationIntent ? 'presentation' : literatureIntent ? 'literature' : busy ? 'working' : task?.status ?? 'ready'} data-literature-routing="deterministic">
         <p className="font-mono text-[0.68rem] uppercase tracking-[0.2em] text-os-vermilion">{t('guide.eyebrow')}</p>
-        <h2 className="mt-3 font-editorial text-3xl text-os-ink-paper">{t('guide.title')}</h2>
+        <h2 className="mt-3 font-editorial text-3xl text-os-ink">{t('guide.title')}</h2>
         <p className="mt-3 text-sm leading-6 text-os-muted-paper">{t(suggestion.bodyKey)}</p>
 
         {suggestion.href ? (
-          <Link className="mt-5 inline-flex border-b border-os-vermilion pb-1 text-sm text-os-ink-paper" href={suggestion.href}>
+          <Link className="mt-5 inline-flex border-b border-os-vermilion pb-1 text-sm text-os-ink" href={suggestion.href}>
             {t('guide.openContext')} →
           </Link>
         ) : null}
@@ -235,7 +235,7 @@ function HermesAssistantDrawerContent({
           <HermesPresentationReview intent={presentationIntent} submissionRecords={presentationSubmissions.current} routeResearchObjectId={routeResearchObjectId} researchObjects={dashboardContext.researchObjects} onBack={() => setPresentationIntent(null)} onDone={() => { setPresentationIntent(null); setGoal(''); onOpenChange(false); }} />
         </React.Suspense> : literatureIntent ? (
           <div className="mt-8 border-t border-os-rule-paper pt-5">
-            <button className="mb-3 inline-flex min-h-11 items-center border-b border-os-vermilion text-sm font-semibold text-os-ink-paper focus-visible:ring-2 focus-visible:ring-focus-ring" onClick={() => setLiteratureIntent(null)} type="button">
+            <button className="mb-3 inline-flex min-h-11 items-center border-b border-os-vermilion text-sm font-semibold text-os-ink focus-visible:ring-2 focus-visible:ring-focus-ring" onClick={() => setLiteratureIntent(null)} type="button">
               {t('guide.backToGuide')}
             </button>
             <LiteratureAcquisition
@@ -249,10 +249,10 @@ function HermesAssistantDrawerContent({
             />
           </div>
         ) : <form className="mt-8 border-t border-os-rule-paper pt-6" onSubmit={submit}>
-          <button type="button" className="mb-4 min-h-11 rounded border border-os-rule-paper px-3 text-sm text-os-ink-paper disabled:opacity-50" disabled={busy} onClick={() => setPresentationIntent({ action: 'storyboard.create', instruction: goal.trim() })}>{tp('entry')}</button>
-          <label className="block text-sm font-medium text-os-ink-paper" htmlFor="hermes-guide-goal">{t('guide.goalLabel')}</label>
+          <button type="button" className="mb-4 min-h-11 rounded border border-os-rule-paper px-3 text-sm text-os-ink disabled:opacity-50" disabled={busy} onClick={() => setPresentationIntent({ action: 'storyboard.create', instruction: goal.trim() })}>{tp('entry')}</button>
+          <label className="block text-sm font-medium text-os-ink" htmlFor="hermes-guide-goal">{t('guide.goalLabel')}</label>
           <textarea
-            className="mt-3 min-h-28 w-full resize-y border border-os-rule-paper bg-transparent p-3 text-sm leading-6 text-os-ink-paper outline-none focus:border-os-vermilion"
+            className="mt-3 min-h-28 w-full resize-y border border-os-rule-paper bg-transparent p-3 text-sm leading-6 text-os-ink outline-none focus:border-os-vermilion"
             disabled={busy}
             id="hermes-guide-goal"
             maxLength={2000}
@@ -260,7 +260,7 @@ function HermesAssistantDrawerContent({
             placeholder={t('guide.goalPlaceholder')}
             value={goal}
           />
-          <button className="mt-3 border-b border-os-vermilion pb-1 text-sm font-semibold text-os-ink-paper disabled:opacity-50" disabled={busy || !goal.trim()} type="submit">
+          <button className="mt-3 border-b border-os-vermilion pb-1 text-sm font-semibold text-os-ink disabled:opacity-50" disabled={busy || !goal.trim()} type="submit">
             {busy ? t('guide.working') : t('guide.submit')}
           </button>
         </form>}
@@ -272,18 +272,18 @@ function HermesAssistantDrawerContent({
         {!presentationIntent && !literatureIntent && (error || task?.status === 'failed' || invalidResult) ? (
           <div className="mt-5 text-sm text-os-vermilion" role="alert">
             <p>{error || task?.error || t('guide.error')}</p>
-            {error && activeTask ? <button className="mt-3 border-b border-os-vermilion pb-1 text-os-ink-paper" onClick={() => setError('')} type="button">{t('guide.resume')}</button> : null}
+            {error && activeTask ? <button className="mt-3 border-b border-os-vermilion pb-1 text-os-ink" onClick={() => setError('')} type="button">{t('guide.resume')}</button> : null}
           </div>
         ) : null}
         {!presentationIntent && !literatureIntent && result ? (
           <section className="mt-7 border-t border-os-rule-paper pt-5" aria-live="polite">
-            <h3 className="text-sm font-semibold text-os-ink-paper">{t('guide.result')}</h3>
+            <h3 className="text-sm font-semibold text-os-ink">{t('guide.result')}</h3>
             <p className="mt-3 text-sm leading-6 text-os-muted-paper">{result.summary}</p>
             {result.needsMoreInformation ? <p className="mt-3 text-sm text-os-vermilion">{t('guide.needsMoreInformation')}</p> : null}
             <ol className="mt-5 space-y-3">
               {result.nextSteps.map((step, index) => {
                 const href = actionHref(step);
-                return <li className="grid grid-cols-[1.5rem_1fr] gap-2 text-sm text-os-ink-paper" key={`${step.intent}-${index}`}><span className="font-mono text-os-vermilion">{String(index + 1).padStart(2, '0')}</span>{href ? <Link className="hover:text-os-vermilion" href={href}>{step.label} →</Link> : <span>{step.label}</span>}</li>;
+                return <li className="grid grid-cols-[1.5rem_1fr] gap-2 text-sm text-os-ink" key={`${step.intent}-${index}`}><span className="font-mono text-os-vermilion">{String(index + 1).padStart(2, '0')}</span>{href ? <Link className="hover:text-os-vermilion" href={href}>{step.label} →</Link> : <span>{step.label}</span>}</li>;
               })}
             </ol>
           </section>
