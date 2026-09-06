@@ -4,7 +4,7 @@
 
 ## Version tuple
 
-- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/overview-responsive-companion. HEAD/origin-main/application/public75797389fa7afa096599597841b66630f8b82ac4, rollback4d39808ba662da17eaae9db1cef5e54d69db6bb5. Subsequent docs/patch HEAD must be read from Git.
+- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/overview-responsive-companion. application/public080fa74eecebd25ad63b48c8dd968d7b66d00cc7, rollback75797389fa7afa096599597841b66630f8b82ac4; subsequent HEAD/origin-main from Git. Subsequent docs/patch HEAD must be read from Git.
 - PR103 merged by non-force fast-forward to exact tested7579738. CI34033218027 success: build/typecheck/lint/unit, product110, Hermes19+8 passed. Server full build/parser16/core migrations36/search2/BGE/ScanSci/container/health/retention passed; no pending migrations or deployment journal.
 - Root checkout has user changes; do not alter it. Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated demo9848411d1419a0dd690f74cca9042369b651f7b2, run9848411-20260906T074017Z remain unchanged. Demo /demos/science-video/d2nn/?v=animated-restored-v1.
 
@@ -16,12 +16,15 @@
 - Three-state isolated A prototype preserves original Live2D/static avatar, single canvas, quiet/reduced-motion/approval-still. Its fixed apply/undo simulation is not production API behavior.
 - Wide Hermes menu checks actual rectangle collision, keeps crown gap24–48px,8 companion+4 research actions. New desktop rail380–400; original containment/protected-region tests retained. Final local overview/menu9/9 and independent High review passed.
 
-## Current acceptance issue / next action
+## Final acceptance / next action
 
-- Public controlled acceptance7579738 passed zh1440 desk/overview/Wanko/assistant and zh1024 desk, then found real overview overflow at1024: percentage right rail is narrower than fixed360px Wanko. Session closed;0business writes. Do not claim whole public matrix passed.
-- Scoped patch in progress: WorkspaceShell adds data-workspace-planes hook; overview >=1280 uses220px/minmax(0,1fr)/400px,1024–1279 hides structure rail and uses main/400px. Model size and other routes unchanged. Added1024/1280 regression cases failed before patch; first build/8cases green; review caught clipped English map label, widened left rail220px; final build/8browser cases and nonempty map-label assertions passed; review cleared product fix.
-- Finish patch checks, commit/PR/CI and exact-SHA server parser acceptance; canonical deploy rollback must be active7579738. Then rerun public zh/en1440/1024/390 plus screenshot inspection. Existing controlled RO currently has0approved media in latest committed version; no new AI generation or approval is part of this UI acceptance.
-- Evidence ignored in apps/web/test/visual/out/research-journey/: release-final-{ci,prebuild,deploy}.log, release-checkup-after.log, release-public-evidence.json, public-*.png, overview-midwidth-*.log. Local8317 stopped for patch rebuild.
+- PR104 exact080fa74 merged/deployed; CI34034878269 build/typecheck/lint/unit/product110/Hermes19+8 passed. Exact server fullbuild/parser16/core36/search2 migration status/BGE/ScanSci/health/retention passed; no pending migrations, transaction cleared. Transfer EPIPE occurred before mutation; active source/no journal checked before successful retry.
+- Medium-screen patch reserves400px companion rail; >=1280 structure rail220px,1024–1279 two columns. Original360px Wanko retained. Local red1024/1280 reproduced overflow, final8cases and actual nonempty map-label assertions passed.
+- Final public zh/en1440/1024/390:12desk/overview scenarios passed,0business writes, controlled session closed. Wanko ready/assistant open/no overflow and screenshots verified. First run timed out waiting networkidle; final waits DOM plus actual ready controls. No application fix was needed for that wait.
+- Important test correction: release config alone did not override package.json explicit test-file list. CI080fa74 ran110 product cases. Post-release test-command correction explicitly includes research-overview.spec.ts; real command with targeted grep passed5/5. This test/docs-only commit is not another app deployment.
+- Controlled latest committed version has0approved images/videos, correctly shows empty state. Approved media filtering/retry is verified with fixtures; this is not new-paper generation or new asset approval acceptance.
+- Evidence ignored in apps/web/test/visual/out/research-journey/: overview-patch-{ci,prebuild,deploy-retry,checkup,public-final}.log, release-public-evidence.json, public-*.png, overview-midwidth-*.log, overview-release-command.log. Local8317 Next start/session23699 restored with final app build.
+- Next continue agreed remaining-page UX/linked journey work and real full-paper ingestion/media/evidence acceptance. This desk/overview/contextual assistant release is complete, not the entire site redesign or automatic media pipeline.
 
 ## Foundation / constraints
 

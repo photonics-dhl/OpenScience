@@ -2450,3 +2450,23 @@ Observed: Docker reclaimed753.4MB, cache1.005GB/184records; available disk
 98623787008bytes.13running containers, all tags retained, public/loopback200,
 egress204; application and rollback unchanged. Logs: ignored
 `apps/web/test/visual/out/science-video/closeout-{checkup-after,cleanup}.log`.
+
+### 2026-09-06 research desk / overview release closeout
+
+#### 前置检查
+
+PR1037579738 then PR104080fa74 each used exact passing CI and parser16 prebuild reports. Final source080fa74eecebd25ad63b48c8dd968d7b66d00cc7; previous active75797389fa7afa096599597841b66630f8b82ac4. Transfer EPIPE happened before transaction; active unchanged/no journal and candidate manifest verified before retry.
+
+#### 执行步骤
+
+1. Materialize immutable source and run exact-SHA parser prebuild via existing helper.
+2. Run canonical deploy.sh --confirm --require-parser-acceptance with explicit source and previous active as --rollback-ref.
+3. Verify zh/en1440/1024/390 controlled desk/overview without business writes; log out the created session.
+
+#### 回滚步骤
+
+Use canonical deploy.sh with retained75797389fa7afa096599597841b66630f8b82ac4 as target, current080fa74eecebd25ad63b48c8dd968d7b66d00cc7 as explicit rollback reference, and the corresponding retained parser acceptance. Do not switch services manually.
+
+#### 验证命令
+
+Canonical build/parser16/core36/search2 migration status/BGE/ScanSci/runtime/public health/retention passed; no pending migrations, journal cleared. Checkup returned public/loopback200 and egress204. Controlled public12 scenarios passed with0business writes/session closed. Evidence: ignored apps/web/test/visual/out/research-journey/overview-patch-{prebuild,deploy-retry,checkup,public-final}.log and release-public-evidence.json. Post-release package test-command/docs updates do not change the deployed application SHA.

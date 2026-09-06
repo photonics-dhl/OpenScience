@@ -1,14 +1,14 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/overview-responsive-companion；PR103 HEAD/main/application75797389fa7afa096599597841b66630f8b82ac4，rollback4d39808ba662da17eaae9db1cef5e54d69db6bb5。CI/server acceptance passed; public1024 overview overflow found, scoped responsive patch in progress. Demo9848411/controller3d518af unchanged; subsequent HEAD from Git.
+> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/overview-responsive-companion；PR104 application/public080fa74eecebd25ad63b48c8dd968d7b66d00cc7，rollback75797389fa7afa096599597841b66630f8b82ac4。CI/server/public12场景验收通过；后续测试/文档HEAD以Git为准。Desk/overview/contextual Hermes deployed; demo9848411/controller3d518af unchanged.
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；已确认RO工作区/概览/Hermes侧栏/研究桌面职责；官方参考实查完成；A配色三态本地样稿，待用户视觉验收 |
-| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；收尾/22路由审计和选择性同事UX整合；PR102应用4d39808已部署、动画demo9848411；主线确认，PR103正式桌面/概览/段落助手发布检查中 |
+| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；收尾/22路由审计和选择性同事UX整合；PR102应用4d39808已部署、动画demo9848411；主线确认，PR103/104正式桌面/概览/段落助手已部署验收 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | DEPLOYED3d518af；runner10、安装预检、真实Task/Credit/来源/草稿/PNG/权限验收通过 |
 | `apps/media-demo/inputs.mjs` / `apps/media-demo/render.mjs` / `apps/media-demo/drawing.mjs` / `apps/media-demo/test/inputs.test.mjs` / `apps/media-demo/test/drawing.test.mjs` | 可选第三幕机制图，保留旁白/输出探测场景与时间轴 | DEPLOYED9848411；服务器渲染/公网/390px/Range206通过，实际AAC音轨未变 |
@@ -479,16 +479,18 @@
 | `apps/web/public/research-journey/d2nn-artwork.png` | 复用已验收science-video/source-artwork.png原文件；后续生成的D2NN机制解释图，非论文原始证据 | LOCAL PROTOTYPE；保留原图字节，非新生图 |
 | `apps/web/test/e2e/research-journey-review.spec.ts` | 三态连接、修改/撤销、移动端焦点、中英文及截图 | LOCAL PROTOTYPE validation |
 
-| `apps/web/app/dashboard/dashboard.module.css` | 正式研究桌面首片局部浅灰白/深青展示层；page保留真实组件/权限/恢复与全局Wanko | LOCAL CANDIDATE；PR103候选；发布浏览器回归修复中，未部署 |
+| `apps/web/app/dashboard/dashboard.module.css` | 正式研究桌面首片局部浅灰白/深青展示层；page保留真实组件/权限/恢复与全局Wanko | LOCAL CANDIDATE；DEPLOYED080fa74；完整CI/server/public验收通过 |
 
 | `apps/web/components/visual/ResearchWorkbenchHermes.tsx` | 复用原Wanko Live2D与静态fallback；增加样稿紧凑尺寸，未修改renderer | LOCAL CANDIDATE；单实例/减少动效/头像身份复用 |
 
-| `apps/web/app/research-objects/[id]/overview/overview.module.css` / `apps/web/test/e2e/research-overview.spec.ts` | 真实概览完整叙述、最新已提交版本审核资产、段落Hermes目标；桌面/移动端与历史版本过滤验证 | LOCAL CANDIDATE；PR103候选；发布浏览器回归修复中，未部署 |
+| `apps/web/app/research-objects/[id]/overview/overview.module.css` / `apps/web/test/e2e/research-overview.spec.ts` | 真实概览完整叙述、最新已提交版本审核资产、段落Hermes目标；桌面/移动端与历史版本过滤验证 | LOCAL CANDIDATE；DEPLOYED080fa74；完整CI/server/public验收通过 |
 
 | `apps/agent-worker/src/workspace-guide.ts` / `apps/agent-worker/test/workspace-guide.test.ts` | 将现有已验证target传入Gateway模型上下文；解释sdf-evidence→reproducibility映射；段落引导回归 | RELEASE CANDIDATE；不新增API字段或权限 |
 
-| `apps/web/components/hermes/HermesVisualAdapter.tsx` / `apps/web/test/e2e/product-release.spec.ts` | PR103宽菜单实际矩形避让、12动作布局与概览媒体fixture；原保护/间距门禁保留 | RELEASE CANDIDATE；需最终构建回归与服务器验收 |
+| `apps/web/components/hermes/HermesVisualAdapter.tsx` / `apps/web/test/e2e/product-release.spec.ts` | PR103宽菜单实际矩形避让、12动作布局与概览媒体fixture；原保护/间距门禁保留 | DEPLOYED080fa74；最终构建回归与服务器验收通过 |
 
-| `apps/web/components/shell/WorkspaceShell.tsx` | 稳定workspace planes标识，供概览独立响应式布局保留360px神狗空间 | PATCH CANDIDATE；1024/1280回归及公网复验待完成 |
+| `apps/web/components/shell/WorkspaceShell.tsx` | 稳定workspace planes标识，供概览独立响应式布局保留360px神狗空间 | DEPLOYED080fa74；1024/1280回归及公网复验通过 |
 
-| `apps/web/playwright.release.config.ts` | 将真实概览与1024/1280断点回归接入既有发布测试 | PATCH CANDIDATE；不是新增发布门禁 |
+| `apps/web/playwright.release.config.ts` | 将真实概览与1024/1280断点回归接入既有发布测试 | DEPLOYED config080fa74；默认package命令显式文件列表已在后续测试提交补齐 |
+
+| `apps/web/package.json` | 默认test:release显式纳入真实概览断点回归 | POST-RELEASE TEST correction；实际命令定向5/5通过，不改变应用080fa74 |
