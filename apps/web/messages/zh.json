@@ -1193,6 +1193,7 @@
     "motionScope": "复用现有 Hermes 动效设置，仅保存在当前浏览器，不会改变其他用户或全站动效。",
     "motionError": "浏览器未允许保存偏好，本次修改未保存。",
     "callbackHelp": "ORCID 授权未完成，请核对下方从服务器读取的状态，然后重试。已有认证不会因本次取消而被移除。"
+    ,"callbackSuccess": "已从 ORCID 返回。下方状态以服务器记录为准；若尚未更新，请重新读取身份状态。"
   },
   "academicIdentity": {
     "loading": "正在读取已保存的身份状态…",
@@ -1215,6 +1216,8 @@
     "institutionEmailVerified": "机构邮箱验证",
     "orcidHint": "通过 ORCID 官方授权连接，不能手工填写研究者编号。",
     "connectOrcid": "连接 ORCID",
+    "orcidStarting": "正在打开 ORCID…",
+    "orcidRecovery": "授权后会返回本个人主页。取消、超时或使用了其他账号时可在这里重试；已有认证不会被移除。",
     "connected": "已连接",
     "notConfigured": "ORCID 尚未配置",
     "institutionTitle": "机构邮箱",

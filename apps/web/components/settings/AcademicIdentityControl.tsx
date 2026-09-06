@@ -106,8 +106,9 @@ export function AcademicIdentityControl() {
           <h3 className="font-semibold text-os-ink">ORCID</h3>
           <p className="mt-2 text-sm text-os-muted-paper">{orcid ? `${orcid.displayLabel} · ${orcid.externalId}` : t('orcidHint')}</p>
           <Button className="mt-4" disabled={unavailable || Boolean(orcid) || status?.capabilities.orcid === false} onClick={() => void connectOrcid()}>
-            <ExternalLink className="mr-2 h-4 w-4" />{orcid ? t('connected') : status?.capabilities.orcid === false ? t('notConfigured') : t('connectOrcid')}
+            <ExternalLink className="mr-2 h-4 w-4" />{orcid ? t('connected') : status?.capabilities.orcid === false ? t('notConfigured') : busy ? t('orcidStarting') : t('connectOrcid')}
           </Button>
+          {!orcid && status?.capabilities.orcid ? <p className="mt-2 text-xs text-os-muted-paper">{t('orcidRecovery')}</p> : null}
           <p className="mt-3 text-sm text-os-muted-paper">{t('orcidPrivacy')}</p>
         </div>
         <div className="border-t border-os-rule-paper pt-4">

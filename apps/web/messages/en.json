@@ -1157,6 +1157,7 @@
     "motionScope": "Uses the existing Hermes preference in this browser only. It does not change other users or site-wide motion.",
     "motionError": "Your browser did not allow saving this preference. The change was not saved.",
     "callbackHelp": "ORCID authorization did not complete. Check the server-reported status below and retry. Cancelling an attempt does not remove an existing connection."
+    ,"callbackSuccess": "ORCID returned successfully. The verified status below is loaded from the server; if it has not updated, reload the identity status."
   },
   "academicIdentity": {
     "loading": "Loading saved identity status…",
@@ -1179,6 +1180,8 @@
     "institutionEmailVerified": "Institutional email verification",
     "orcidHint": "Connect through the official ORCID authorization flow. ORCID iDs cannot be entered manually.",
     "connectOrcid": "Connect ORCID",
+    "orcidStarting": "Opening ORCID…",
+    "orcidRecovery": "You will return to this profile after authorization. If you cancel, time out, or use another account, retry here; an existing verified connection is not removed.",
     "connected": "Connected",
     "notConfigured": "ORCID is not configured",
     "institutionTitle": "Institutional email",

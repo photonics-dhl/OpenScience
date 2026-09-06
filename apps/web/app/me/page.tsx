@@ -34,9 +34,10 @@ export default function MyProfilePage() {
   const [busy, setBusy] = useState(false);
   const [writeStatus, setWriteStatus] = useState<'idle' | 'saved' | 'conflict'>('idle');
   const [writeError, setWriteError] = useState('');
-  const [callbackFailed, setCallbackFailed] = useState(false);
+  const [callbackState, setCallbackState] = useState<'success' | 'failed' | null>(null);
   useEffect(() => {
-    setCallbackFailed(new URLSearchParams(window.location.search).has('identityError'));
+    const callback = new URLSearchParams(window.location.search);
+    setCallbackState(callback.has('identityError') ? 'failed' : callback.get('identity') === 'orcid-connected' ? 'success' : null);
     void Promise.all([getCurrentUser(), getResearchIdentity()])
       .then(([nextUser, nextProfile]) => {
         setUser(nextUser);
@@ -106,7 +107,9 @@ export default function MyProfilePage() {
         </section>
         <MyResearchProjects />
         <div id="identity" className="md:col-span-2">
-          {callbackFailed ? <p role="status" className="mb-4 text-sm text-os-vermilion-ink">{meT('callbackHelp')}</p> : null}
+          {callbackState ? <p role="status" className={`mb-4 border-l-2 py-2 pl-4 text-sm ${callbackState === 'failed' ? 'border-status-danger-text text-status-danger-text' : 'border-status-success-text text-os-ink'}`}>
+            {meT(callbackState === 'failed' ? 'callbackHelp' : 'callbackSuccess')}
+          </p> : null}
           <AcademicIdentityControl />
         </div>
         <section className="surface-folio-sheet px-5 py-6 md:col-span-2" data-profile-research-identity="true" id="research-profile">
