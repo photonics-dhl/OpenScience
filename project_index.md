@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/overview-responsive-companion；application/public69aac5196142f83de1c2c6c6d61ed4bed4a7ad28，rollback080fa74eecebd25ad63b48c8dd968d7b66d00cc7。真实三页视觉修复已上线，媒体陪伴栏补丁待发布；demo9848411/controller3d518af unchanged.
-> 当前用户纠正：上一轮视觉未获验收，Hermes黑块已复现；正在快速统一真实RO三页，69aac51已上线，媒体页浮动角色遮挡须补专属栏；勿把历史测试通过等同视觉认可。
+> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/overview-responsive-companion；application/public8e4ecb2b5f9e291385b0df8495082e923af328a6，rollback69aac5196142f83de1c2c6c6d61ed4bed4a7ad28。Hermes纹理与真实RO三页视觉修复已部署；最终媒体真实/空状态各三宽度通过，尚待用户视觉验收；demo9848411/controller3d518af unchanged.
+> 当前用户纠正：上一轮视觉未获验收，Hermes黑块已复现；正在快速统一真实RO三页，8e4ecb2已上线，媒体页已改专属角色栏；勿把历史测试通过等同视觉认可。
 
 ## 当前产品交付
 

@@ -2470,3 +2470,23 @@ Use canonical deploy.sh with retained75797389fa7afa096599597841b66630f8b82ac4 as
 #### 验证命令
 
 Canonical build/parser16/core36/search2 migration status/BGE/ScanSci/runtime/public health/retention passed; no pending migrations, journal cleared. Checkup returned public/loopback200 and egress204. Controlled public12 scenarios passed with0business writes/session closed. Evidence: ignored apps/web/test/visual/out/research-journey/overview-patch-{prebuild,deploy-retry,checkup,public-final}.log and release-public-evidence.json. Post-release package test-command/docs updates do not change the deployed application SHA.
+
+## 2026-09-06 RO screenshot correction closeout
+
+### 前置检查
+
+User authorized fast direct deployment with focused checks. First69aac51 repaired textures/layout over080fa74; final companion-area source8e4ecb2 used69aac51 as the verified rollback. No new providers, models or migrations.
+
+### 执行步骤
+
+1. Materialize each clean exact source with existing cloud-sync.
+2. Existing exact parser preacceptance and canonical deploy completed for8e4ecb2.
+3. Publish main non-force; retain rollback69aac51. Subsequent docs HEAD is not app source.
+
+### 回滚步骤
+
+Use the existing documented exact-source rollback procedure with69aac5196142f83de1c2c6c6d61ed4bed4a7ad28; do not manually switch Compose or edit active source.
+
+### 验证命令
+
+Existing checkup reports edge/loopback200 and proxy egress204. Final app/public8e4ecb2b5f9e291385b0df8495082e923af328a6; build, core36/search2 migration status, parser16, BGE, ScanSci and container health passed; journal cleared and retention complete. Public actual media and explicit empty fixtures each passed1440/1024/390, original rig ready and assistant opens, no asset overlap/overflow or business writes, sessions closed. Logs/screenshots are ignored under apps/web/test/visual/out/research-journey/ux-anchor-*; full-site CI success is not claimed.

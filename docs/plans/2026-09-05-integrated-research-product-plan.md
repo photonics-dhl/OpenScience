@@ -517,3 +517,5 @@ Acceptance: PR104080fa74 merged/deployed; CI34034878269 and exact server build/p
 3. Run focused runtime checks, Web build and real browser screenshots; independently review material regressions. Deploy via existing exact-source script and inspect public three-page journey. Do not repeat the full-site browser matrix or add new gates.
 
 Public69aac51 follow-up: floating Hermes covered a presentation asset despite no viewport overflow. Reserve a dedicated380px companion rail with the existing DockAnchor/Drawer and real RO identity; stack below content on smaller screens. This is required before closing screenshot correction.
+
+Final8e4ecb2 deployed with rollback69aac51. Existing exact server acceptance passed; actual media and empty fixture each passed1440/1024/390 with original rig ready, contextual drawer and separate desktop asset/companion bounds. Zero business writes/session closed. User visual acceptance remains pending.

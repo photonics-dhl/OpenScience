@@ -1,44 +1,36 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT active-memory, 2026-09-06 +08. User approved A palette, real desk/overview/contextual Hermes integration, merge and server acceptance. Preserve original Wanko/Aladdin-dog and lamp. Continue delivery without repeating settled role or release questions.
+> CURRENT active-memory, 2026-09-06 +08. User rejected previous visual quality and reported black Wanko. Requested direct, fast server delivery with focused checks. Preserve original Aladdin dog/Wanko and lamp; do not infer user visual approval from tests.
 
 ## Version tuple
 
-- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/overview-responsive-companion. application/public69aac5196142f83de1c2c6c6d61ed4bed4a7ad28, rollback080fa74eecebd25ad63b48c8dd968d7b66d00cc7; subsequent HEAD/origin-main from Git. Subsequent docs/patch HEAD must be read from Git.
-- PR103 merged by non-force fast-forward to exact tested7579738. CI34033218027 success: build/typecheck/lint/unit, product110, Hermes19+8 passed. Server full build/parser16/core migrations36/search2/BGE/ScanSci/container/health/retention passed; no pending migrations or deployment journal.
-- Root checkout has user changes; do not alter it. Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated demo9848411d1419a0dd690f74cca9042369b651f7b2, run9848411-20260906T074017Z remain unchanged. Demo /demos/science-video/d2nn/?v=animated-restored-v1.
+- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/overview-responsive-companion. Application/public/loopback8e4ecb2b5f9e291385b0df8495082e923af328a6; rollback69aac5196142f83de1c2c6c6d61ed4bed4a7ad28. Subsequent docs-only HEAD from Git is not another app deployment.
+- First screenshot correction69aac51 deployed over080fa74. Final8e4ecb2 adds dedicated presentation companion area and adapts tests to collapsed storyboards; both pushed non-force to main.
+- Root checkout E:/Miscellaneous/XGS has unrelated user changes; leave them alone.
+- Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
 
-## User correction / active task
+## Shipped correction
 
-用户截图否定上轮视觉效果，要求快部署、少重复测试。production69aac51、rollback080fa74已完成服务器构建/原parser16/迁移/健康，公网8三页场景通过，0业务写入/会话关闭。媒体页实际截图发现浮动Hermes覆盖素材，补专属380px栏+原Drawer，移动端顺序排在内容后；尚待此补丁发布。候选GitHEAD由69aac51继续：修Pixi共享纹理dispose黑块，原Wanko静态fallback；共享A theme/nav四主项+More；概览去左目录/状态堆积并明确起步；编辑当前字段清晰、无永久pending占位；无版本媒体三步引导、已有长分镜按需展开。真实编辑RO部分SDF缺键导致trim崩溃，reducer init补缺且保留扩展字段。相关runtime19及编辑/导航42通过，Web build/lint通过，High review修正双aria-current与partial core后无阻断。2条分镜修订/生图fixture已适配折叠并对公网代码通过；本地代理验收日志勿直接打印（Playwright网络异常可含会话头）；本轮遗留受控会话已定向清理。
+- Exact real-Chromium black-block reproduction: destroying an old Live2D model also destroyed Pixi URL-cached textures still used by its successor. Keep fixed atlas cache, destroy per-instance model/renderer/GL context. Loading/failure fallback is the existing Wanko/lamp image, not abstract shapes.
+- Shared RO workspace A palette, white/gray surfaces, teal actions, simpler type and controls. Four main links: overview/edit/presentation/files; other tools remain in More. Only the real current-page link has aria-current.
+- Overview removes constant left SDF map and duplicate state links. Empty research has Add paper, contextual Hermes and clear next steps. Full existing narrative/approved-version media/evidence distinction retained. Internal Hermes idle caption visually hidden, accessible focus retained.
+- Editor uses focused field cards, simpler outline and concise AI suggestion panel; permanent empty References/Review placeholders removed. Partial SDF from real RO previously crashed trim(): init now fills missing fields while preserving extension keys and dirty=false.
+- Presentation no-version screen explains review/save-version/create-visuals. Existing long storyboards expand on demand; revise/image/approval permissions unchanged.
+- Final presentation layout reserves380px companion column at>=1200 and stacks the companion below content at smaller widths. Uses existing DockAnchor/Drawer with exact authorized object/title/status; scope switch clears old identity/open state. Failed bootstrap does not expose a dead anchored assistant.
 
-## Delivered
+## Fresh acceptance
 
-- Real dashboard uses scoped pale/teal desk; retains auth/data/recovery/polling/global HermesDockAnchor/Drawer. No-task continuation and research list open overview; review-required continuation targets exact task.
-- Real overview displays full SDF narrative, original companion and contextual Drawer. Paragraph target reaches trusted Worker model JSON; sdf-evidence maps to reproducibility. Worker11/11 passed.
-- Only latest committed version approved images/videos appear; explicit version copy, independent loading/retry and separate evidence links. RO.version is an optimistic edit counter, not Version.versionNo; asset.label is presentation_not_evidence, not a human title. Do not restore those incorrect assumptions.
-- Three-state isolated A prototype preserves original Live2D/static avatar, single canvas, quiet/reduced-motion/approval-still. Its fixed apply/undo simulation is not production API behavior.
-- Wide Hermes menu checks actual rectangle collision, keeps crown gap24–48px,8 companion+4 research actions. New desktop rail380–400; original containment/protected-region tests retained. Final local overview/menu9/9 and independent High review passed.
+- Final8e4 exact server full build, existing parser16 acceptance, core36/search2 migration status, BGE real-vector/runtime, ScanSci image/tools/storage/OA/Worker and container/public/loopback health passed. No new migrations/model capabilities. Deployment journal cleared and retention completed; final checkup edge/loopback200, egress204 via parent proxy.
+- Runtime19 relevant unit checks; editor/navigation42 checks; build/lint/docs passed. Two existing storyboard revise/image browser fixtures adapted to first expand details and passed against deployed69 code with all API calls mocked. These are not paid generation tests.
+- Public69: actual RO overview/edit/presentation/back at zh1440/390 passed8 scenarios; empty overview/presentation fixtures passed4. Final8e4: actual presentation at1440/1024/390 passed3, plus explicit empty-research fixtures3. Original rig ready, drawer opens, no horizontal overflow; desktop assets remain outside companion column. Zero business writes and sessions closed.
+- Final harness refinements: target actual actor when scrolling, select the exact committed version before visual checks, and assert the named Hermes composer rather than every textarea. Earlier timeouts during default version navigation/Suspense were not final state. All final three widths have ready/no fallback runtime evidence.
+- Independent High review resolved double aria-current and partial-SDF crash; final companion scope/layout review passed. No full-site browser matrix or final CI success claimed; main CI may still run separately.
+- Evidence is ignored under apps/web/test/visual/out/research-journey/: render-probe-red/green.png, ux-{prebuild,deploy,public-final}.log, ux-anchor-{prebuild,deploy,public,empty}.log, ux-anchor[-empty]-evidence.json, ux-post-tests.log, ux-final-checkup.log and ux-*.png. Early local proxy failures left controlled sessions;4 were revoked, logs sanitized. Do not print raw session/headers/private model logs.
 
-## Final acceptance / next action
+## Remaining / next action
 
-- PR104 exact080fa74 merged/deployed; CI34034878269 build/typecheck/lint/unit/product110/Hermes19+8 passed. Exact server fullbuild/parser16/core36/search2 migration status/BGE/ScanSci/health/retention passed; no pending migrations, transaction cleared. Transfer EPIPE occurred before mutation; active source/no journal checked before successful retry.
-- Medium-screen patch reserves400px companion rail; >=1280 structure rail220px,1024–1279 two columns. Original360px Wanko retained. Local red1024/1280 reproduced overflow, final8cases and actual nonempty map-label assertions passed.
-- Final public zh/en1440/1024/390:12desk/overview scenarios passed,0business writes, controlled session closed. Wanko ready/assistant open/no overflow and screenshots verified. First run timed out waiting networkidle; final waits DOM plus actual ready controls. No application fix was needed for that wait.
-- Important test correction: release config alone did not override package.json explicit test-file list. CI080fa74 ran110 product cases. Post-release test-command correction explicitly includes research-overview.spec.ts; real command with targeted grep passed5/5. This test/docs-only commit is not another app deployment.
-- Controlled latest committed version has0approved images/videos, correctly shows empty state. Approved media filtering/retry is verified with fixtures; this is not new-paper generation or new asset approval acceptance.
-- Evidence ignored in apps/web/test/visual/out/research-journey/: overview-patch-{ci,prebuild,deploy-retry,checkup,public-final}.log, release-public-evidence.json, public-*.png, overview-midwidth-*.log, overview-release-command.log. Local8317 Next start/session23699 restored with final app build.
-- Next continue agreed remaining-page UX/linked journey work and real full-paper ingestion/media/evidence acceptance. This desk/overview/contextual assistant release is complete, not the entire site redesign or automatic media pipeline.
-
-## Foundation / constraints
-
-- Existing PDF originals, Claims, approved-source presentation generation and drafts/approvals are deployed. Automatic method/results/reproducibility extraction has three gaps; no new full-paper Evidence/SourceMap retrieval pipeline is claimed. BGE embeds; it does not parse or decide chunks.
-- Codex image provider remains administrator-controlled evaluation through Gateway; PC/v2ray/account quota remain dependencies (ADR-013). CPU image installation/download is USER-PAUSED; preserve partial files. Earlier MiniMax trials did not meet visual acceptance.
-- Preserve continuous Serena v4 audio, animated D2NN scene restoration, Chromium/FFmpeg/PyTorch/Qwen/Codex runtimes. No new model/dependency installation. Never reinstall Tailscale or read/print env/auth/cookies/private model logs.
-- Controlled private user11b6cf52-fcd4-4f7d-a3ff-8ea3ae9592fd (Hermes Production E2E), workspacef09ab567-4dcd-4d53-97b3-9a96920fd1ed, RObcbf1586-b6bd-44b6-ab66-c675fcddce78. Do not advertise private control RO as user-accessible demo.
-- Coworker auth/profile UX selectively adapted and deployed4d39808; no broad branch merge. Disk after7579738:148G total/50G used/92G available; public/loopback200 and egress204 via parent proxy. Existing daily coworker monitoring unchanged.
-- Remaining product work: extend agreed design to other pages and real full-paper journeys; media-job binding and extraction gaps remain. Generic repeated-panorama video is rejected; retain accepted animated demo. User prioritizes usable functions, mature solutions, quality/cost and reviewable slices.
-
-## Read-first
-
-Git/fetch/checkup, this handoff, relevant baseline sections, docs/specs/2026-09-05-integrated-research-product-design.md and matching plan; ADR-013 and science-video-demo runbook only when relevant. Use explicit Git Bash SSH wrappers; canonical deploy requires immutable exact source and parser acceptance.
+- This correction covers the reported overview/editor/presentation surfaces and shared RO chrome. User has not yet accepted the new visual result. Continue remaining-page consistency and actual paper-to-RO/media/evidence workflow after their review; do not call the whole site or automatic media pipeline complete.
+- Existing PDF method/results/reproducibility extraction and full Evidence/SourceMap grounding still have known gaps. Approved presentation assets are explanations, not original evidence. No fresh paper generation or paid image/video/TTS calls in this task.
+- Preserve Serena continuous v4, restored animated D2NN demo, Chromium/FFmpeg/PyTorch/Qwen/Codex runtimes. CPU image installation remains USER-PAUSED. Codex provider evaluation still depends on existing PC/v2ray/account access and quotas (ADR-013).
+- Controlled private user11b6cf52-fcd4-4f7d-a3ff-8ea3ae9592fd (Hermes Production E2E), workspacef09ab567-4dcd-4d53-97b3-9a96920fd1ed, RObcbf1586-b6bd-44b6-ab66-c675fcddce78. Do not advertise it as a user-accessible demo.
+- Read-first: Git/fetch/checkup, this handoff, relevant baseline, integrated product spec/plan. Never read env/auth secrets; use explicit Git Bash SSH wrappers and existing canonical deploy. Existing local8317 preview was built before the final presentation-anchor patch; use production for final visual truth or rebuild preview before next use.
