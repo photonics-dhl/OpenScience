@@ -1,14 +1,14 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/product-workflow-design；application/main/production 3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52，rollback 615ca2dc22bcceabc99562a31340053725a81098；独立demo7e1b6ea，后续docs HEAD以Git为准。PR97/main CI、ECS build/Parser16/core36/search2/BGE/ScanSci/健康与真实管理员Hermes→Codex生图通过：1任务/1Credit/0重试、精确父分镜/3Claims、draft1280×720。第三幕图解视频已更新，原配音及AAC相同。通用RO自动视频、全局Hermes对话编辑与3个PDF字段仍待完善；CPU图像模型暂停。
+> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/product-workflow-design；调查HEAD/origin-main8369524，后续文档HEAD以Git为准。应用/公网f144eb772f1063c00bd61a97612137328443edde，rollback b23102b071ae715d738aa37504a838d2f3fc78f1；独立demo9848411、Codex controller3d518af。收尾调查及753.4MB缓存清理完成；22产品路由盘点/同事分支审查见CURRENT plan末节。整体联调/改版须先grill-me讨论。
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；用户认可生图视觉方向，新增媒体优先布局与原生折叠交互设计 |
-| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；3d518af Codex单幕生图与7e1b6ea机制视频已部署；MiniMax历史视觉未通过，自动视频待接入；全局Hermes分镜动作及配色f144eb7已部署验收；下一步通用RO视频 |
+| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；2026-09-06收尾/磁盘/22路由/同事分支/设计参考审计；应用f144eb7、动画demo9848411；整体联调与改版进入grill-me讨论，未授权实施 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | DEPLOYED3d518af；runner10、安装预检、真实Task/Credit/来源/草稿/PNG/权限验收通过 |
 | `apps/media-demo/inputs.mjs` / `apps/media-demo/render.mjs` / `apps/media-demo/drawing.mjs` / `apps/media-demo/test/inputs.test.mjs` / `apps/media-demo/test/drawing.test.mjs` | 可选第三幕机制图，保留旁白/输出探测场景与时间轴 | DEPLOYED9848411；服务器渲染/公网/390px/Range206通过，实际AAC音轨未变 |
@@ -26,7 +26,7 @@
 | `packages/domain/src/assets/presentation-asset.ts` / `packages/domain/src/index.ts` / `packages/domain/test/assets/presentation-asset.test.ts` / `apps/agent-worker/src/presentation/handler.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | 展示资产内容写角色、draft Version 与 Worker 提交时权限/Claim 重验；沿用 Serializable draft fence | DEPLOYED83b2933；含媒体canTransition与管理员审批约束；复用既有版本锁/Claim失效，当前证据见CURRENT handoff |
 
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/ContinueResearch.tsx` / `apps/web/components/research/ResearchWorkspaceNav.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/components/hermes/HermesTaskEntry.tsx` / `apps/web/messages/{zh,en}.json` | 同 RO 待确认优先、Hermes 常驻导航、真实任务入口与错误恢复、现有助手连接 | DEPLOYED 6478aa8；用户效果待验收 |
-| `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO 入口、scope、恢复、确认和移动体验回归 | DEPLOYED 6478aa8；公网 7 continuation cases GREEN，API fixtures |
+| `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/login-recovery.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO 入口、scope、恢复、确认和移动体验回归 | DEPLOYED 6478aa8；公网 7 continuation cases GREEN，API fixtures |
 
 | `apps/web/app/me/{page,layout}.tsx` / `apps/web/app/settings/page.tsx` / `apps/web/components/navigation/{AccountLink,ProductRouteNavigation}.tsx` / `apps/web/components/profile/MyResearchProjects.tsx` / `apps/web/components/settings/{AcademicIdentityControl,MotionPreferenceControl}.tsx` / `apps/web/components/hermes/HermesWorkspaceStage.tsx` / `apps/web/components/shell/DashboardShell.tsx` | frontend/nanqing 个人主页/设置分离、身份恢复与移动导航整合 | DEPLOYED 6478aa8 |
 | `apps/web/lib/api.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/test/{api-agent,hermes-guide-recovery}.test.ts` | 绑定 RO 的 guide 会话与范围恢复、scoped ingestion client | DEPLOYED 6478aa8；复审修正 |
@@ -398,7 +398,7 @@
 | `docs/decisions/ADR-006-cloudflare-tunnel-public-ingress.md` | 未备案域名公网入口改由 ECS 常驻 Cloudflare Tunnel 承载；Nginx 继续作为统一回源与安全边界 | Accepted |
 | `docs/handoff/2026-08-15-cloudflare-tunnel-egress-incident-handoff.md` | Cloudflare Tunnel 502/530 事故根因、生产修复、回滚证据与后续观察项 | 当前基础设施交接 |
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
-| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE/ScanSci 隔离、Windows Git Bash）；§5.49–5.66 为历史/发布 evidence，现行 Docker cache 维护见 §5.67 | **CURRENT**；production `b32d81c` / `0aaf52f`；BuildKit 6.344GB，disk 44G/148G，bounded cleanup/health verified |
+| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE/ScanSci 隔离、Windows Git Bash）；§5.49–5.66 为历史/发布 evidence，现行 Docker cache 维护见 §5.67 | **CURRENT运维手册**；2026-09-06缓存清理753.4MB、cache1.005GB、应用f144eb7/rollback b23102b；历史版本证据不作当前部署锚点 |
 | `infra/scripts/evaluate-scansci-upstream-mcp.{sh,test.mjs}` | 上游 `v1.13.1` 官方 MCP 有界 ECS 正向试点：wheel hash、17 tools、真实 OA PDF、exact trap cleanup | **TASK 1 ECS ACCEPTED**；24,671,920 bytes / `d57dc94c…f484a`，临时容器/卷 `0/0` |
 | `docs/runbooks/hermes-capability-registry.md` | Hermes Skill/MCP/model/parser/provider 能力台账：注入状态、成本、项目级安装目录、72h PDF TTL、10min signed URL、评测/回滚/退役规则 | **CURRENT / MACHINE-GATED**；CPU parser/Tesseract、BGE-M3、lexical search、Semantic Scholar、temporary lifecycle 与 official ScanSci MCP 为 production |
 | `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；验证后临时库按用户授权精确清理 |

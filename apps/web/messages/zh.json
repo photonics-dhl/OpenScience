@@ -559,6 +559,18 @@
       "login": "登录"
     },
     "login": {
+      "showPassword": "显示密码",
+      "hidePassword": "隐藏密码",
+      "forgotPassword": "忘记密码？",
+      "recoveryTitle": "密码恢复",
+      "recoveryBody": "网站暂未提供自助重置密码。请不要重复注册；可向网站运营者说明账号邮箱。不要发送密码或验证码。",
+      "failure": {
+        "credentials": "邮箱或密码不正确，请检查后重试。",
+        "rate": "登录尝试次数较多，请稍后再试。",
+        "unavailable": "登录服务暂时不可用，你的密码没有被修改，请稍后重试。",
+        "generic": "暂时无法登录，请检查网络后重试。",
+        "inactive": "账户尚未启用。若还未验证邮箱，请先完成邮箱验证；若已验证，请联系网站运营者。"
+      },
       "title": "欢迎回来",
       "description": "回到你的研究工作区，继续最近的研究。",
       "email": "邮箱",
@@ -1208,6 +1220,14 @@
     }
   },
   "myAccount": {
+    "keepLocalChanges": "保留我的修改",
+    "profileConflict": "服务器上的资料已更新。表单保留了你的修改，并纳入了服务器对其他字段的更新。请选择保留自己的修改后再保存，或撤销修改以采用服务器版本。",
+    "researchProfileTitle": "科研资料",
+    "researchProfileProgress": "已填写 {completed}/5 类资料",
+    "unsavedChanges": "有未保存的修改",
+    "allChangesSaved": "所有修改已保存",
+    "discardChanges": "撤销修改",
+    "saveBeforeSignals": "请先保存或撤销资料修改，再调整兴趣信号。",
     "editProfile": "编辑科研资料",
     "verifyIdentity": "学术身份认证",
     "showAll": "展开全部项目",

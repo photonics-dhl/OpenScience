@@ -559,6 +559,18 @@
       "login": "Log in"
     },
     "login": {
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "forgotPassword": "Forgot password?",
+      "recoveryTitle": "Password recovery",
+      "recoveryBody": "Self-service password reset is not available yet. Do not create a duplicate account: contact the site operator with your account email. Never send your password or verification code.",
+      "failure": {
+        "credentials": "The email or password is incorrect. Check both fields and try again.",
+        "rate": "Too many login attempts. Wait a moment before trying again.",
+        "unavailable": "Login is temporarily unavailable. Your password has not been changed; try again later.",
+        "generic": "Login could not be completed. Check your connection and try again.",
+        "inactive": "This account is not active. Complete email verification if you have not done so. If you already verified your email, contact the site operator."
+      },
       "title": "Welcome back",
       "description": "Return to your research workspace and continue your latest work.",
       "email": "Email",
@@ -1172,6 +1184,14 @@
     }
   },
   "myAccount": {
+    "keepLocalChanges": "Keep my edits",
+    "profileConflict": "The profile changed on the server. Your edits are still in the form. Changes to other fields from the server have also been kept. Choose to keep your edits before saving, or discard them to use the server version.",
+    "researchProfileTitle": "Research profile",
+    "researchProfileProgress": "{completed}/5 profile sections completed",
+    "unsavedChanges": "Unsaved changes",
+    "allChangesSaved": "All changes saved",
+    "discardChanges": "Discard changes",
+    "saveBeforeSignals": "Save or discard your profile changes before correcting interest signals.",
     "editProfile": "Edit research profile",
     "verifyIdentity": "Academic connections",
     "showAll": "Show all projects",

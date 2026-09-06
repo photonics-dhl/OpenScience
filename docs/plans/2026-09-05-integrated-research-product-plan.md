@@ -1,9 +1,11 @@
 # Integrated Research Product Delivery Plan
 
 > 执行者使用 executing-plans；只有独立且有明确 owner 的工作才委派。
-> 状态：CURRENT delivery plan；d6507ea已部署RO分镜/修订/审批与媒体优先工作流并通过真实验收，rollback64ae872。下一段接已核对分镜到图片/视频，再接全局Hermes；提取质量继续改进。
+> 状态：CURRENT；2026-09-06 收尾与页面调查完成，见末尾审计。应用 f144eb7 / rollback b23102b；独立动画 demo9848411。整体联调和改版先经 grill-me 讨论，旧任务顺序不构成继续实施授权。
 
 **Goal:** 分段交付工作区—Hermes—RO、多模态展示与语音编辑完整产品体验。
+
+当前调查入口：[2026-09-06 收尾与页面审计](#closeout-20260906)。以下实施任务保留为历史/候选，等待用户讨论后重排。
 
 **Architecture:** 复用既有路由、AgentTask、SourceMap、Claim/Evidence、审批和版本。先查明用户操作断点，再进行最小连接；生成媒体与语音接入同一研究上下文。
 
@@ -12,7 +14,7 @@
 ## Global constraints
 
 - 设计依据：`docs/specs/2026-09-05-integrated-research-product-design.md`。
-- 当前生产 application/rollback 为 `d6507ea` / `64ae872`，每次新任务先只读核实；以下早期检查记录为历史证据。
+- 当前生产 application/rollback 为 f144eb7 / b23102b（2026-09-06 实测）；以下早期检查记录为历史证据。
 - 不复做 Research Intelligence Tasks 1–12；不修改根目录旧 main 或其他人的未提交内容。
 - 每段先参考成熟方案；未经实测不得宣布候选 provider 可用。
 - 真实数据操作、发布、迁移和第三方安装遵守既有授权范围；效果按段交用户验收。
@@ -375,3 +377,101 @@ User explicitly requires discussion before deciding how to perform whole-product
 Remaining capabilities are explicit: arbitrary-RO video jobs, new narration/alignment, approved per-scene animation/assets, source extraction completeness and Evidence grounding. The restored fixed D2NN sample does not close these gaps.
 
 Video repair closed9848411: PR101 merged/CI34019708441 passed;23media/full workspace tests, independent High review and canonical server animation/browser acceptance passed. Whole-product integration and redesign remain explicitly awaiting discussion.
+
+## Closeout 20260906
+
+### 范围与证据边界
+
+本轮授权：核对状态、清理服务器磁盘、审查同事分支、统计页面与设计参考，然后 grill-me 讨论。未合并分支、改动业务代码、安装依赖、部署应用或执行新生成任务。后续联调/页面改版仍待讨论。
+
+版本：codex/product-workflow-design；调查 HEAD/origin-main `83695240d9f2bc328db3ed668aaa11fc8389f41c`。应用生产/公网实测 `f144eb772f1063c00bd61a97612137328443edde`，rollback `b23102b071ae715d738aa37504a838d2f3fc78f1`。独立 demo source `9848411d1419a0dd690f74cca9042369b651f7b2`；Codex controller仍3d518af。后续文档提交以Git为准，不改变应用。
+
+证据均在 Git 忽略目录 `apps/web/test/visual/out/science-video/`：`closeout-checkup*.log`、`closeout-disk-*.log`、`closeout-cleanup.log`、`closeout-pages.json`、`closeout-public-ro.json` 与 `closeout-*.png`。源码盘点覆盖36个tracked page.tsx：22个产品路由模板，14个视觉/评审源文件（包含私有目录及编码路由副本，不等于14个公开URL）。
+
+公网浏览器核验8个入口×桌面1440/移动390，以及3个真实公开RO×两视口；Dashboard/me/settings匿名跳转登录，不能记为已审查其登录后实际布局。登录后页面本轮是源码审计，未重新验证写操作、完整多角色旅程或服务器build/迁移；本轮没有应用部署。
+
+### 磁盘维护结果
+
+- 操作前文件系统158132850688bytes，已用53646221312bytes，可用97826545664bytes；Docker cache1.758GB。Docker显示镜像可回收6.702GB不代表都应删除，其中包含回滚和共享运行时。
+- 经独立只读安全复核，按deployment runbook同类操作执行 `docker builder prune -f --filter until=12h --keep-storage=1GB`；未使用 `--all` 或system/image/volume prune。
+- Docker报告回收753.4MB，cache剩1.005GB/184records；文件系统已用52848979968bytes，可用98623787008bytes（约91.85GiB），占用35%。文件系统前后变化约797MB，包含同时发生的其他写入/回收，不能冒称全部来自清理。
+- 保留13运行容器、全部47容器、29镜像和12卷；8个应用active/rollback镜像标签、TTS/PyTorch及当前/前版demo镜像存在。健康检查通过，公网/loopback200、出网204；应用版本未变。
+- Qwen模型4.3G、local-image暂停下载1.1G、Playwright缓存656M、业务数据库/对象存储/备份/发布源不动。停止容器全部可回收仅48MB，缺少逐个产物持久化证明，本次保留。没有必要为扩大清理数字牺牲复用能力。
+
+### 页面职责、布局和功能盘点
+
+以下“已接入”指源码存在真实API路径，不等于所有状态已端到端通过。P1表示影响主流程/理解，P2表示后续体验完善。
+
+| 路由（22个模板） | 当前职责及布局 | 已有能力与主要问题 | 建议优先级 |
+|---|---|---|---|
+| `/` | 独立光学品牌首页，产品入口 | 公网正常；保留已验收光学效果，需确保入口与最终主流程一致 | P2 |
+| `/explore` | 暖纸长列表、过滤栏 | 真实索引；公网首批混有Task11/E2E验收内容，标题长、缺少视觉摘要与内容区分；不要擅删公开数据 | P1 |
+| `/collections/[slug]` | 编辑精选、双栏说明 | 公网精选只有一条示例；信息密度低、说明占比高，应明确与Explore区别 | P2 |
+| `/auth/login` | 左侧品牌叙述、右侧登录表单 | 真实登录；大空白、细线输入边界、控件观感需优化；密码恢复能力须诚实展示 | P1 |
+| `/auth/register` | 同登录壳层、长身份表单 | 首次验证码之前填写角色/学科/方法等，桌面页面约1760px高；渐进填写值得讨论 | P1 |
+| `/dashboard` | DashboardShell、继续研究/任务/列表/Hermes | 真实用户、RO、导入/文献任务；需明确“现在该做什么”，本轮未登录截图 | P1 |
+| `/research-objects/new` | blank/import双模式、Intake | 真实workspace/RO/上传/batch/重试；导入与空白创建的默认路径需讨论 | P1 |
+| `/research-objects/[id]/overview` | RO总览、ResearchWorkspaceNav | 真实RO/版本；需承担进度、内容概览、下一步的统一入口 | P1 |
+| `/research-objects/[id]/hermes` | 导入任务/字段确认工作区 | 真实任务轮询与确认；和全局Hermes职责重叠，需要明确上下文与返回路径 | P1 |
+| `/research-objects/[id]/edit` | SDF三栏编辑、graphite工具区 | 已有编辑/证据/版本流程；六字段与普通读者语言的转换需优化 | P1 |
+| `/research-objects/[id]/presentation` | 媒体工作台、版本/Claim/任务/预览/审批 | 真实分镜、图像管理员评测、draft审批；任意RO自动视频尚未闭合，不能用固定demo冒充 | P1 |
+| `/research-objects/[id]/files` | 文件/commit台账 | 真实文件/提交；需区分原文、proof和生成展示物，降低技术术语负担 | P1 |
+| `/research-objects/[id]/versions` | 版本列表/diff | 真实版本与比较；需明确当前草稿、已发布版本和媒体归属 | P2 |
+| `/research-objects/[id]/collab` | GitHub式协作工具 | issues/PR/作者/评审组件已接入；按Claim讨论与普通用户理解仍需真实验收 | P1 |
+| `/research-objects/[id]/publish` | 发布前检查与审核 | 真实许可/审核/发布；需清晰区分保存、批准媒体、公开发布 | P1 |
+| `/research-objects/[id]/sandbox` | graphite复现工具区 | 已有sandbox提交；专业操作不应与普通阅读/生成抢主入口 | P2 |
+| `/research/[publicId]`、`/research/[publicId]/v/[versionNo]` | 学术阅读、Claim区与证据侧栏 | overview已有媒体Gallery、SDF、版本历史；其余9个tab仍ComingSoon。媒体在长正文后，核心图解不够前置 | P1 |
+| `/me` | 私有资料与研究身份 | 已有资料/ORCID/机构信息；需和研究桌面/设置去重，本轮匿名只能看到登录 | P1 |
+| `/settings` | 偏好与学术身份控制 | 已有语言/动效/身份相关入口；账号身份职责仍需与me明确分配 | P2 |
+| `/editorial/curator`、`/admin/editorial` | 策展/管理队列 | 已有真实编辑精选操作；角色边界保留，单独验收，不向普通用户铺开 | P2 |
+
+不存在独立notifications/community/password-reset页面模板；部分通知和协作在组件中，自助密码重置不能当作已有能力。`ResearchWorkspaceNav`同时暴露9个RO入口，主任务顺序尚不突出。`product-surfaces.ts`未覆盖新增Hermes/presentation，不应把旧18表面浏览器测试当成完整页面清单。
+
+### 视觉与实际截图发现
+
+- 三个主要产品视觉族：暖纸folio产品壳、graphite编辑工具区、`pub-reading-*`学术阅读；Landing光学品牌另计。统一tokens在 `apps/web/app/tokens.css`，全局兼容覆盖在 `globals.css`。优先统一控件、空间、标题层级与状态，不简单把全部页面换成相同卡片。
+- PublicVersionPage已在overview渲染 `PresentationAssetGallery`，不能误报“公开页没有媒体”。但真实OSR-2026-000019的媒体在长正文后，卡片还暴露`presentation_not_evidence`、generator/Claim IDs等技术元数据，科普展示效果不足。
+- 公开导航的manuscript/methods/data/figures/versions/issues/pull-requests/reviews/citations均为ComingSoon；其中overview已有部分版本/媒体数据，说明存在重复入口与未完成的信息组织。
+- 3个公开RO里，OSR-2026-000019移动端scrollWidth393对viewport390，有3px横向溢出；另2个为390。尚未定位具体元素，本轮仅登记。
+- 登录/注册/Explore/精选的桌面截图已人工检查；其余受保护页面的布局判断来自代码，不能宣称全部页面已视觉验收。8入口浏览器记录无pageerror，但成功HTTP/零异常不代表产品可用性合格。
+
+### 同事GitHub成果（独立审查）
+
+[PR71](https://github.com/photonics-dhl/OpenScience/pull/71) 的frontend/nanqing tip `e5db5aea422e258d5086bd563f81c28b2b089c9a`：落后main86/独有6提交；release/profile-settings-20260904 tip `93bb1609982eb624023ecba1e71bf88b49ff4336`：落后86/独有13。只读merge-tree发现21冲突路径；结论基于实际merge检查，不能从两个分支tip的大diff直接推断合并会回退代码。
+
+[PR78](https://github.com/photonics-dhl/OpenScience/pull/78) 已适配吸收私有me、设置拆分、身份恢复和紧凑导航；merge6478aa8，后续0b94e8f补充账号布局。当前应选择局部UX，不整支合入，不带入旧CURRENT handoff或部署脚本。
+
+| 提交 | 可参考的成果 | 合入前需解决 |
+|---|---|---|
+| 8c285e3 | 注册完成页、资料隐私和结构化错误提示 | `/MAIL/`先匹配会把EMAIL_ALREADY_REGISTERED误报邮件失败；完成页改变returnTo行为待产品决定 |
+| 30fabce | 密码显隐、未提供自助重置的诚实说明 | ACCOUNT_NOT_ACTIVE(403)漏分类为网络错误；这是唯一精确patch check通过的功能提交 |
+| 609d313 | ORCID成功和恢复提示 | 适配当前组件，避免重复实现 |
+| c13b81f | 机构来源说明、验证码聚焦/冷却/重发 | 共享busy会使机构操作期间ORCID错误显示Opening；需拆开状态 |
+| b0741eb | 资料dirty、保存/放弃、完成度 | 适配当前account-workspace布局 |
+| 93bb160 | 身份步骤摘要 | 与现有进度文案去重，不增加注册负担 |
+
+PR71绿色CI33863229583仅覆盖e5db5ae；93bb160没有对应check/status，不能沿用旧绿灯。本轮未merge、cherry-pick、关闭PR或发布评论。
+
+### 设计参考及复用结论
+
+- [用户文章1](https://mp.weixin.qq.com/s/Z_rFngC5Tcss_7y1lUkNCQ) 对应 [emilkowalski/skills](https://github.com/emilkowalski/skills)，官方MIT仓库已核实。适合控件细节、可中断动效、缓动和减少无效动画的审查；它不会自动解决页面职责与科研工作流。当前仅阅读参考，未安装第三方skill。
+- [用户文章2](https://mp.weixin.qq.com/s/JvO0PVLCXiZKE3TijZH21Q) 经现有Playwright读到完整内容：Huemint、Happy Hues、Realtime Colors、CSS Gradient四个网页工具，不是GitHub页面框架。适合配色候选与实际页面预览，不能替代布局/交互设计。代理曾返回验证页，浏览器后续成功；不把失败页当文章来源。
+- [shadcn/ui](https://github.com/shadcn-ui/ui) 与 [Radix Primitives](https://github.com/radix-ui/primitives) 可作为组件/交互参考；现有项目已有Radix dialog/context-menu/slot、UI button/input与Tailwind，不需要先引入另一整套框架。具体组件和许可在实施选择时按需复核。
+- 暂定讨论方向：研究桌面强调任务与续接，RO工作区强调编辑/证据/生成，公开页强调图解/贡献/深入阅读。这是建议，不是已批准的页面改版方案。
+
+### grill-me讨论顺序（一次一问）
+
+先确认首个完整旅程与目标使用者，再逐一确定Dashboard、RO总览、Hermes、媒体、公开阅读、协作、身份设置的职责和合并/保留关系；最后讨论视觉方向、实现顺序和真实论文验收条件。
+
+首问建议：第一轮完整验收围绕“导入一篇论文→Hermes辅助凝练RO→生成可视化→审核并发布→读者理解并围绕证据讨论”的闭环。既有多角色能力保留，但是否把全部协作功能纳入首轮验收由用户决定。用户回答之前不启动整体联调/改版。
+
+## Selective coworker integration — authorized 2026-09-06
+
+User accepted the paper→Hermes→RO→visual media→review/publish→reading/discussion journey and explicitly requested selective coworker integration. Whole-site responsibilities and visual redesign remain under grill-me discussion; this bounded integration is authorized separately.
+
+- [ ] Adapt 30fabce login password visibility, recovery explanation and localized errors; put keys under auth.login and handle actual ACCOUNT_NOT_ACTIVE403. Preserve safeReturnTo/API/session behavior.
+- [ ] Adapt b0741eb research profile dirty/save/discard to current layout; preserve expectedProfileVersion, protect edits against in-flight saves and interest-signal responses.
+- [ ] Verify real error codes, translated controls and profile state in focused tests; inspect desktop/mobile and existing account flows, then full required checks and independent review.
+- [ ] Selectively merge validated adaptation with coworker provenance; deploy using existing authorized canonical pipeline and verify public behavior. No unrelated deployment-script or stale handoff changes.
+
+Other candidate ORCID/registration/identity-step changes stay deferred until their role in the redesigned journey is agreed. No broad branch merge, new dependencies or API/schema changes.

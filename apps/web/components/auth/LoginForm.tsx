@@ -8,7 +8,18 @@ import { useState, type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { loginWithPassword, safeReturnTo } from '@/lib/api';
+import { ApiClientError, loginWithPassword, safeReturnTo } from '@/lib/api';
+
+export type LoginErrorKind = 'credentials' | 'inactive' | 'rate' | 'unavailable' | 'generic';
+
+export function classifyLoginError(cause: unknown): LoginErrorKind {
+  if (!(cause instanceof ApiClientError)) return 'generic';
+  if (cause.status === 429) return 'rate';
+  if (cause.status === 403 && cause.code === 'ACCOUNT_NOT_ACTIVE') return 'inactive';
+  if (cause.status === 401) return 'credentials';
+  if (cause.status >= 500) return 'unavailable';
+  return 'generic';
+}
 
 export interface LoginFormProps {
   returnTo?: string | null;
@@ -23,6 +34,8 @@ export function LoginForm({ returnTo, nextPath }: LoginFormProps) {
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,7 +46,7 @@ export function LoginForm({ returnTo, nextPath }: LoginFormProps) {
       router.replace(safeReturnTo(returnTo ?? nextPath));
       router.refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('errors.generic'));
+      setError(t(`login.failure.${classifyLoginError(cause)}`));
     } finally {
       setPending(false);
     }
@@ -67,13 +80,25 @@ export function LoginForm({ returnTo, nextPath }: LoginFormProps) {
           <Input
             className="h-12 rounded-none border-0 border-b border-os-rule-paper bg-transparent px-0 text-base focus-visible:border-os-vermilion-ink focus-visible:ring-0"
             name="password"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             autoComplete="current-password"
             required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
         </label>
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <button type="button" className="min-h-11 px-1 text-os-vermilion-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring" aria-pressed={showPassword} aria-label={t(showPassword ? 'login.hidePassword' : 'login.showPassword')} onClick={() => setShowPassword((value) => !value)}>
+            {t(showPassword ? 'login.hidePassword' : 'login.showPassword')}
+          </button>
+          <button type="button" className="min-h-11 px-1 text-os-vermilion-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring" aria-expanded={showRecovery} aria-controls="login-recovery" onClick={() => setShowRecovery((value) => !value)}>
+            {t('login.forgotPassword')}
+          </button>
+        </div>
+        {showRecovery ? <div id="login-recovery" className="border-l-2 border-os-rule-paper pl-4 text-sm leading-6 text-os-muted-paper">
+          <strong className="text-os-ink">{t('login.recoveryTitle')}</strong>
+          <p>{t('login.recoveryBody')}</p>
+        </div> : null}
         <Button className="min-h-12 rounded-control bg-os-vermilion-ink text-os-paper active:translate-y-px" type="submit" size="lg" disabled={pending}>
           {pending ? t('login.signingIn') : t('login.submit')}
         </Button>

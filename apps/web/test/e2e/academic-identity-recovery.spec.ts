@@ -161,3 +161,180 @@ test('profile uses the desktop canvas and keeps long project lists expandable', 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test/visual/out/profile-mobile.png', fullPage: true });
 });
+
+test('profile changes can be saved or discarded without signal correction or in-flight edits losing the draft', async ({ page }) => {
+  await prepare(page);
+  let stored = { identities: ['reader'], primaryIdentity: 'reader', disciplines: ['optics'], methods: [], topics: [], languages: [], acceptedSignals: ['waves'], rejectedSignals: [], profileVersion: 1 };
+  let releaseSave: (() => void) | undefined;
+  const saveReleased = new Promise<void>((resolve) => { releaseSave = resolve; });
+  let writes = 0;
+  await page.route('**/api/research-identity', async route => {
+    if (route.request().method() === 'PATCH') {
+      writes += 1;
+      const input = route.request().postDataJSON();
+      expect(input.expectedProfileVersion).toBe(1);
+      await saveReleased;
+      stored = { ...stored, disciplines: input.disciplines, profileVersion: 2 };
+    }
+    await route.fulfill({ json: { profile: stored } });
+  });
+  await page.goto('/me');
+  const panel = page.locator('[data-profile-research-identity]');
+  const disciplines = panel.getByLabel('Disciplines', { exact: true });
+  const save = panel.getByRole('button', { name: 'Save research identity', exact: true });
+  const discard = panel.getByRole('button', { name: 'Discard changes', exact: true });
+  const exclude = panel.getByRole('button', { name: 'Exclude', exact: true });
+  await expect(save).toBeDisabled();
+  await disciplines.fill('photonics');
+  await expect(panel).toContainText('Unsaved changes');
+  await expect(exclude).toBeDisabled();
+  await expect(panel).toContainText('Save or discard your profile changes before correcting interest signals.');
+  await discard.click();
+  await expect(disciplines).toHaveValue('optics');
+  await expect(exclude).toBeEnabled();
+  await disciplines.fill('photonics');
+  await save.click();
+  await expect(disciplines).toBeDisabled();
+  await expect(discard).toBeDisabled();
+  await expect(exclude).toBeDisabled();
+  releaseSave!();
+  await expect(panel).toContainText('Research identity updated');
+  await expect(disciplines).toBeEnabled();
+  await expect(save).toBeDisabled();
+  await disciplines.fill('another draft');
+  await expect(panel).not.toContainText('Research identity updated');
+  await discard.click();
+  await expect(disciplines).toHaveValue('photonics');
+  expect(writes).toBe(1);
+});
+
+test('profile save failure preserves the draft and conflict reload becomes the discard baseline', async ({ page }) => {
+  await prepare(page);
+  let version = 1;
+  let writes = 0;
+  await page.route('**/api/research-identity', async route => {
+    if (route.request().method() === 'PATCH') {
+      writes += 1;
+      if (writes === 1) return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'Please try again' } } });
+      version = 2;
+      return route.fulfill({ status: 409, json: { error: { code: 'PROFILE_VERSION_CONFLICT', message: 'Conflict' } } });
+    }
+    return route.fulfill({ json: { profile: { identities: ['reader'], primaryIdentity: 'reader', disciplines: [version === 1 ? 'optics' : 'server revision'], methods: [], topics: [], languages: [], acceptedSignals: [], rejectedSignals: [], profileVersion: version } } });
+  });
+  await page.goto('/me');
+  const panel = page.locator('[data-profile-research-identity]');
+  const disciplines = panel.getByLabel('Disciplines', { exact: true });
+  const save = panel.getByRole('button', { name: 'Save research identity', exact: true });
+  await disciplines.fill('my draft');
+  await save.click();
+  await expect(panel.getByRole('alert')).toContainText('Please try again');
+  await expect(disciplines).toHaveValue('my draft');
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(panel).toContainText('Your edits are still in the form.');
+  await expect(disciplines).toHaveValue('my draft');
+  await expect(save).toBeDisabled();
+  await expect(panel.getByRole('button', { name: 'Keep my edits', exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await expect(disciplines).toHaveValue('server revision');
+  await expect(save).toBeDisabled();
+});
+
+test('login visibility and recovery stay local and inactive feedback preserves the return target', async ({ page }) => {
+  await prepare(page);
+  let loginRequests = 0;
+  await page.route('**/api/auth/login', async route => {
+    loginRequests += 1;
+    await route.fulfill({ status: 403, json: { error: { code: 'ACCOUNT_NOT_ACTIVE', message: 'private backend diagnostic' } } });
+  });
+  await page.goto('/auth/login?returnTo=%2Fme');
+  const form = page.locator('[data-auth-flow="login"]');
+  const password = form.locator('input[name="password"]');
+  await password.fill('fixture-password');
+  await expect(password).toHaveAttribute('type', 'password');
+  await form.getByRole('button', { name: 'Show password', exact: true }).click();
+  await expect(password).toHaveAttribute('type', 'text');
+  await expect(password).toHaveValue('fixture-password');
+  await form.getByRole('button', { name: 'Hide password', exact: true }).click();
+  await expect(password).toHaveAttribute('type', 'password');
+  const recovery = form.getByRole('button', { name: 'Forgot password?', exact: true });
+  await expect(recovery).toHaveAttribute('aria-expanded', 'false');
+  await recovery.click();
+  await expect(recovery).toHaveAttribute('aria-expanded', 'true');
+  await expect(form.locator('#login-recovery')).toContainText('Self-service password reset is not available yet');
+  expect(loginRequests).toBe(0);
+  await form.locator('input[name="email"]').fill('test@example.invalid');
+  await form.locator('button[type="submit"]').click();
+  await expect(form.getByRole('alert')).toContainText('This account is not active');
+  await expect(form).not.toContainText('private backend diagnostic');
+  await expect(page).toHaveURL(/\/auth\/login\?returnTo=%2Fme$/);
+  await expect(form.locator('a[href^="/auth/register"]')).toHaveAttribute('href', '/auth/register?returnTo=%2Fme');
+  expect(loginRequests).toBe(1);
+});
+
+
+test('profile conflict keeps remote-only fields and requires an explicit choice before retry', async ({ page }) => {
+  await prepare(page);
+  let version = 1;
+  let writes = 0;
+  await page.route('**/api/research-identity', async route => {
+    const profile = { identities: ['reader'], primaryIdentity: 'reader', disciplines: ['optics'], methods: version === 1 ? [] : ['remote spectroscopy'], topics: [], languages: [], acceptedSignals: [], rejectedSignals: [], profileVersion: version };
+    if (route.request().method() === 'PATCH') {
+      writes += 1;
+      if (writes === 1) { version = 2; return route.fulfill({ status: 409, json: { error: { code: 'PROFILE_VERSION_CONFLICT', message: 'Conflict' } } }); }
+      const input = route.request().postDataJSON();
+      expect(input.expectedProfileVersion).toBe(2);
+      expect(input.disciplines).toEqual(['my photonics']);
+      expect(input.methods).toEqual(['remote spectroscopy']);
+      return route.fulfill({ json: { profile: { ...profile, disciplines: input.disciplines, profileVersion: 3 } } });
+    }
+    return route.fulfill({ json: { profile } });
+  });
+  await page.goto('/me');
+  const panel = page.locator('[data-profile-research-identity]');
+  const save = panel.getByRole('button', { name: 'Save research identity', exact: true });
+  await panel.getByLabel('Disciplines', { exact: true }).fill('my photonics');
+  await save.click();
+  await expect(panel.getByLabel('Methods', { exact: true })).toHaveValue('remote spectroscopy');
+  await expect(save).toBeDisabled();
+  await panel.getByLabel('Disciplines', { exact: true }).fill('my photonics');
+  await expect(save).toBeDisabled();
+  await panel.getByRole('button', { name: 'Keep my edits', exact: true }).click();
+  expect(writes).toBe(1);
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(panel).toContainText('Research identity updated');
+  expect(writes).toBe(2);
+});
+
+
+test('profile conflict merges selected identities and primary identity as one choice', async ({ page }) => {
+  await prepare(page);
+  let version = 1;
+  let writes = 0;
+  await page.route('**/api/research-identity', async route => {
+    const profile = { identities: ['reader', 'author'], primaryIdentity: version === 1 ? 'reader' : 'author', disciplines: [], methods: [], topics: [], languages: [], acceptedSignals: [], rejectedSignals: [], profileVersion: version };
+    if (route.request().method() === 'PATCH') {
+      writes += 1;
+      if (writes === 1) { version = 2; return route.fulfill({ status: 409, json: { error: { code: 'PROFILE_VERSION_CONFLICT', message: 'Conflict' } } }); }
+      const input = route.request().postDataJSON();
+      expect(input.expectedProfileVersion).toBe(2);
+      expect(input.identities).toEqual(['reader']);
+      expect(input.primaryIdentity).toBe('reader');
+      return route.fulfill({ json: { profile: { ...profile, identities: input.identities, primaryIdentity: input.primaryIdentity, profileVersion: 3 } } });
+    }
+    return route.fulfill({ json: { profile } });
+  });
+  await page.goto('/me');
+  const panel = page.locator('[data-profile-research-identity]');
+  await panel.getByRole('checkbox', { name: 'Author', exact: true }).uncheck();
+  const save = panel.getByRole('button', { name: 'Save research identity', exact: true });
+  await save.click();
+  await expect(save).toBeDisabled();
+  await expect(panel.getByRole('checkbox', { name: 'Author', exact: true })).not.toBeChecked();
+  await expect(panel.getByRole('radio', { name: 'Primary', exact: true })).toBeChecked();
+  await panel.getByRole('button', { name: 'Keep my edits', exact: true }).click();
+  await save.click();
+  await expect(panel).toContainText('Research identity updated');
+  expect(writes).toBe(2);
+});

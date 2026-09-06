@@ -1,10 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-06 +08。生产f144eb7，rollback b23102b；Codex controller3d518af、demo7e1b6ea独立。后续文档提交不改变生产。
+> 最新同步：2026-09-06 +08。生产f144eb7，rollback b23102b；Codex controller3d518af、demo9848411独立。后续文档提交不改变生产。
 
-## User scope decision
+## Selective colleague integration — validation
 
-- Whole-product integration/page redesign requires discussion and agreed scope first. Only the authorized video repair is being closed; subsequent integration directions are proposals.
+- 用户确认论文→Hermes→RO→可视化→审核发布→阅读讨论主线，并授权选择性合并；整站页面职责仍在grill-me讨论。
+- 适配30fabce登录显隐/恢复/真实错误本地化与b0741eb资料dirty/save/discard；修复翻译命名空间、ACCOUNT_NOT_ACTIVE语义、并发丢稿、不同字段覆盖和身份字段耦合。冲突需明确保留或撤销。
+- 独立High审查无剩余阻断；最终build/浏览器/CI/部署证据待完成。本轮不重做整站视觉。
+
+## 2026-09-06 收尾调查与讨论入口
+
+- 已fetch核对HEAD/origin-main8369524，生产f144eb7/rollback b23102b；独立demo9848411，controller3d518af。修正索引/计划旧版本摘要。
+- 服务器按有界缓存维护回收753.4MB，cache1.005GB、可用98623787008bytes；13运行容器和应用/回滚/TTS/PyTorch/demo镜像保留，公网/loopback200、出网204。模型与暂停下载未动。
+- 36个tracked page.tsx中22产品路由、14视觉评审源文件；8入口和3公开RO桌面/移动截图。私有页面本轮仅代码审查；公开9tab占位、媒体位置/技术文案、E2E内容混入Explore、注册过长、一个公开RO移动溢出3px已登记。
+- 同事两分支实测21冲突，PR78已吸收核心方向；新6个UX提交有可取细节但含真实错误码分类问题，未合并。设计参考两篇均读到；未安装能力。
+- 调查详见CURRENT plan末尾closeout-20260906；下一步按用户要求grill-me逐问确认旅程/页面职责/验收。未启动整体联调、改版、应用部署或新生成任务。
 
 ## Repeated-image delivery repair — server restored
 
@@ -34,5 +44,5 @@
 
 ## Next
 
-- 将已有CPU渲染器接到任意已审核RO分镜与场景素材，继续贯通视频生成/任务/草稿审核；之后完善全文提取和Evidence溯源。
+- 先grill-me讨论首轮旅程、页面职责、视觉方向和验收；任意RO视频/全文提取仍是待议能力，不直接实施。
 - 唯一CURRENT交接：docs/handoff/2026-08-16-hermes-2d-pet-handoff.md。根目录main仍为b9616cb且用户文件未动，不得与origin/main或生产混淆。保留既有前端分支定期巡检，不重复建自动化。

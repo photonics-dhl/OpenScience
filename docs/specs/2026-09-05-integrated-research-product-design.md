@@ -149,3 +149,9 @@ Extend the existing global composer with explicit storyboard creation/revision a
 Confirming creates a real existing presentation.generate task, then opens the existing presentation page with exact version/task parameters for progress, recovery, preview and diff/approval. This reuses the shipped task owner instead of duplicating a second polling/approval subsystem inside the drawer. Uncertain submission retains the same idempotency key/request and requires an explicit retry; no automatic paid retry. Image generation still requires server-reported approved-parent capability. Normal research guidance and literature acquisition continue through their existing paths.
 
 No new model/provider, endpoint, schema, storage or dependency. The bounded natural-language shortcuts are complemented by an explicit presentation-action entry; unsupported free-form edits stay guidance. Primary files: HermesAssistantDrawer, HermesWorkspaceStage, new HermesPresentationAction and presentation-intent helper, zh/en messages and tests. Risks: stale context, accidental image spending, duplicate submit, version fallback, and mobile drawer nesting; verify them with targeted browser tests and actual server workflow.
+
+## 2026-09-06 confirmed journey and selective integration
+
+用户确认首轮主线为论文导入→Hermes凝练/修改RO→可视化→审核发布→读者理解与讨论；要求整体调整页面布局、UI、配色与艺术表现。页面职责和整站设计继续grill-me逐项讨论，不把主线确认当作完整页面设计已批准。
+
+选择性吸收同事30fabce与b0741eb的登录恢复/密码显隐、资料dirty/save/discard。登录保留真实错误语义与returnTo；资料写入沿用现有API/profileVersion。保存冲突按原已保存值识别本地改动，保留服务器独立字段变更；冲突后须用户选择保留本地修改或撤销，才可再保存。原注册完成页、ORCID/机构步骤等候选留待整体页面职责决定，不夹带部署脚本或旧交接文档。

@@ -2415,3 +2415,38 @@ egress 204, and current backup core/search checksums `OK`. The remaining cache
 is dominated by the retained BGE 4.59GB and current Chromium 1.69GB build
 closures; the 3.905GB image reclaimable estimate includes required
 rollback/base/shared images and is not an approved deletion target.
+
+### 5.68 Bounded cache closeout (2026-09-06)
+
+#### 前置检查
+
+User explicitly requested server disk cleanup. Fresh checkup and release reads
+confirmed application `f144eb772f1063c00bd61a97612137328443edde`, rollback
+`b23102b071ae715d738aa37504a838d2f3fc78f1`, 13 running containers and healthy
+public/loopback ingress. Inventory found 1.758GB build cache, 29 images,
+47 containers and 12 volumes. Independent safety review approved cache-only
+maintenance; tagged reusable runtimes and stopped-container outputs stayed intact.
+
+#### 执行步骤
+
+1. Use the canonical `ssh-run.sh --confirm` wrapper through explicit Git Bash.
+2. Recheck exact active and rollback markers against the inspected values.
+3. Run `docker builder prune -f --filter until=12h --keep-storage=1GB`.
+4. Preserve all images, containers, volumes, model directories, paused local-image
+   download, release sources, backups and private Codex state.
+
+#### 回滚步骤
+
+Removed cache cannot be restored in place. Future builds regenerate it from
+existing source and retained tagged runtimes. No application/volume mutation
+occurred, so an application rollback is not part of this maintenance. If health
+changes, stop further cleanup and investigate before any deployment operation.
+
+#### 验证命令
+
+Run canonical checkup, `df -B1 /`, `docker system df`, and `docker image inspect`
+for eight active/rollback service tags plus TTS, PyTorch and both demo tags.
+Observed: Docker reclaimed753.4MB, cache1.005GB/184records; available disk
+98623787008bytes.13running containers, all tags retained, public/loopback200,
+egress204; application and rollback unchanged. Logs: ignored
+`apps/web/test/visual/out/science-video/closeout-{checkup-after,cleanup}.log`.

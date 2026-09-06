@@ -4,7 +4,7 @@
 
 ## Version tuple
 
-- Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; renderer source/origin-main9848411d1419a0dd690f74cca9042369b651f7b2; deployed application sourcef144eb772f1063c00bd61a97612137328443edde. Subsequent documentation HEAD is obtained from Git.
+- Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; renderer source9848411d1419a0dd690f74cca9042369b651f7b2; audit origin-main83695240d9f2bc328db3ed668aaa11fc8389f41c; deployed application sourcef144eb772f1063c00bd61a97612137328443edde. Subsequent documentation HEAD is obtained from Git.
 - Production active/public/loopback f144eb772f1063c00bd61a97612137328443edde; rollback b23102b071ae715d738aa37504a838d2f3fc78f1. PR98 and PR99 merged by non-force fast-forward to exact tested commits.
 - PR98 CI34014496625 and main CI34015117654 succeeded. PR99 CI34015765809 succeeded; main CI34016486547 succeeded (freshly checked).
 - Root checkout is main at b9616cb92dc83437b1b2094291ff43e2a4c34337, with user changes left untouched. It is not the production source or origin/main.
@@ -38,11 +38,12 @@
 
 ## Next action / read-first
 
-- USER STEERING: whole-product integration must be discussed before deciding how to proceed. Do not start whole-site debugging or redesign. Video repair/CI/merge is complete; integration directions below are proposals, not authorization.
+- USER STEERING: user confirmed full paper-to-discussion journey and authorized selective colleague integration (30fabce/b0741eb adaptation under final validation); whole-site layout discussion remains pending. 2026-09-06 closeout audit and disk cleanup complete; next use grill-me one question at a time to agree full integration/page responsibilities/visual scope. No implementation until discussion. Full inventory in CURRENT plan closeout-20260906.
+- Fresh maintenance: app/rollback f144eb7/b23102b unchanged; builder cache reclaimed753.4MB,1.005GB retained,98623787008bytes free;13running containers and runtime images preserved.22product routes/14visual source files;8entry+3public RO browser audits. Authenticated pages code-only; public gallery exists but9tabs placeholders, E2E public content,3px mobile overflow recorded.
 
 - Generic renderer049e544 is VISUALLY REJECTED by user: evaluation copied the same panorama into4/5 scenes, and generic mode only zooms/crossfades. Earlier20 media tests/full workspace tests/lint/docs passed; isolated ECS41.292s/991frames/8080238bytes,37.95s render, full decode/fastStart, exact source WAV retained. PR100 merged; CI34018403393 succeeded. Duplicate main CI is not acceptance evidence at this checkpoint. No app/demo switch, API/task/TTS integration. Evidence generic-server-eval.log/generic-server-*.png in ignored science-video directory.
 - Current repair: tracked prepare-animated-demo.mjs preserves accepted fixed-scene inputs; explicit metrics renderMode and scene/motion regression. ECS restored9848411:41.292s/991frames/2532823bytes,39.06s render; exact original4inputs compare equal, decode/fastStart/playback/seek/Range206/390px and five scene images passed.23focused/full workspace tests and High review passed; PR101 merged; CI34019708441 passed. Evidence animated-fix-deploy.log/animated-restored-browser-evidence.json and animated-restored-scene-*.png. No new dependencies/model calls.
 - Proposed remaining media work (discuss scope first): bind approved RO inputs and Gateway speech/timing via bounded isolated media jobs, then existing task/draft UI. Qwen supplies audio, not verified word timestamps; new papers need a reviewed alignment step. Keep immutable host staging; maximum aggregate six16MP inputs were not stress-tested.
 - Improve the three extraction gaps and original Evidence/SourceMap grounding afterward. User prioritizes usable functions, mature reusable solutions and reviewable results.
-- Coworker release/profile-settings-20260904 tip93bb160 overlaps current identity interactions; no clear missing hunk identified, merge conflicts not tested. Existing daily frontend check remains; do not duplicate automation.
+- Coworker fresh audit: frontend/nanqing e5db5ae and release/profile-settings-20260904 93bb160;21actual merge conflicts. PR78 already adapted core identity work;6new UX commits are candidates with signup/login error classification defects. No merge; existing daily check unchanged.
 - Read Git/fetch/checkup first, then this handoff, relevant baseline sections, docs/specs/2026-09-05-integrated-research-product-design.md, matching plan, ADR-013 and docs/runbooks/science-video-demo.md.
