@@ -464,3 +464,5 @@
 | `packages/domain/src/assets/scene-image.ts` / `apps/agent-worker/src/presentation/scene-image.ts` | Approved storyboard scene binding and source-aware image prompt planning | DEPLOYED615ca2d; exact parent/Claims, separate image draft, parent invalidation; first image quality pending |
 
 | `apps/agent-worker/test/presentation/scene-image.test.ts` | Concrete composition planner context, validation and prompt-bound tests | CANDIDATE NOT DEPLOYED; tests pass but real MiniMax composition fails visual acceptance |
+
+| `infra/local-image-eval/prepare.py` / `infra/local-image-eval/run.mjs` | Pinned upstream Q4 downloads and isolated CPU image feasibility experiment | PAUSED BY USER; only partial download, no model/runtime installation or inference; scripts unfinished, do not auto-resume |

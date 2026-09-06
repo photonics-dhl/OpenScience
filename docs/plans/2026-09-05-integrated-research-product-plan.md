@@ -312,3 +312,14 @@ Sourced storyboard acceptance (2026-09-06): canonical d6507ea/rollback64ae872, P
 4. If visually useful, merge, canonical deploy with current rollback615ca2d, exact Parser/runtime checks and real product preview acceptance. Record exact candidate/production separately and pending limitations.
 
 Composition checkpoint: implementation/tests/review completed; real MiniMax picture fails visual criteria, so step4 deployment is intentionally pending. Do not merge this as an accepted quality fix. Next determine a server-callable image provider or source-constrained layout approach that passes the same controlled scene before production rollout. Comparison images and exact prompt are in ignored science-video/composition-* files.
+
+### CPU image feasibility
+
+1. Verify actual release/resources and upstream model/license/size metadata; independent High resource review.
+2. infra/local-image-eval/prepare.py downloads the single pinned Q4 set, validates published digests and safe archive extraction, preserves incomplete downloads; root only in isolated download container.
+3. infra/local-image-eval/run.mjs performs an offline nonroot bounded512×288 run with resource monitoring, preserving output/log/report/stopped container. Reuse existing CPU foundation.
+4. Inspect generated scientific composition and actual elapsed/RAM/production health. Only integrate after quality and cost feasibility; otherwise retain documented evidence and stop this route.
+
+2026-09-06 user steering: PAUSE local model preparation; retest MiniMax before any further installation. Exact download container stopped; about1.1GB archive/partial remains under /opt/openscience-evals/local-image, no weights complete and no inference/runtime install executed. Do not resume automatically. Production615ca2d/rollbackd6507ea unchanged.
+
+MiniMax retest complete: same explicit scene prompt/seed42, image-01 optimizerfalse33.039s vs optimizertrue58.000s. Both preserve the screen better, but waves/intensity remain scientifically weak; optimization introduces a focus-like shape. image-01-live optimizertrue failed88.899s within the120s request ceiling; exact provider failure cause unknown, no automatic retry. Three audited image calls, no M3 call, no product asset/credit reservation; provider dollar costs null. No production switch. Next may test isolated official Codex CLI ChatGPT login, conditional on actual account/tool provisioning; API key absence alone does not exclude built-in imagegen.

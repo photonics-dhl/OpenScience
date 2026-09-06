@@ -48,11 +48,18 @@
 - 同一1351字符提示词、内置imagegen一次对照更清楚保留薄片/波前/屏面，但不是服务器能力。Worker的OpenAI/Gemini独立key配置布尔均false；MiniMax图生图官方subject_reference为人物参考，不能假定可约束科学结构。
 - ignored composition-eval.json保存实际prompt；composition-artwork.jpg为MiniMax样本；composition-builtin-comparison.png为内置对照；composition-*-logs记录验收。前两次评测启动仅远程shell解析失败，无模型调用；stdin方式已解决。
 
+## Latest steering and retest
+
+- 用户要求先暂停本地安装、充分复测MiniMax，并核实服务器ChatGPT登录生图。下载容器已停止，约1.1GB archive/partial保留，无完整模型/推理安装；infra/local-image-eval为未完成实验脚本，禁止自动恢复。
+- 同prompt/seed42：image-01优化关33.039s、开58.000s，屏面保留改善但机制仍不准确，开启优化出现聚焦状结构；live约88.899s失败（根因未知，不称超时）。3图片审计、0新M3调用，无RO资产/产品扣额。
+- Codex官方支持服务器device-auth；0.153.0源码允许符合账号/provider/model/auth条件的内置imagegen。因此无独立API key不能证明CLI不可用；服务器未安装/登录，需实际设备登录验证。正式图片API计费独立，不能把登录权限等同产品后端支持。
+- 证据ignored minimax-retest-{A,B}.jpg、各settings/log、minimax-retest-audit.json；生产仍615ca2d/rollbackd6507ea，前端同事e5db5ae无新提交。
+
 ## Constraints and next action
 
 - 用户已授权实施/合入/部署/真实论文验证/必要开源方案，不重复询问。不得读取/打印.env、Cookie、密钥；云上仅项目SSH/deploy脚本。
 - 复用Chromium、CPU Canvas、离线Qwen；torchCPU基础约0.97GB，Qwen子镜像约2.04GB含基础，模型4.52GB。BGE依赖不同，不合并可变环境；无GPU，不重装模型。
 - 用户接受v4 Serena完整41.28秒WAV；原WAV不分段/补静音/变速。淡彩视频41.292秒/3,203,000bytes，ECS渲染37.76秒；未以本轮分镜重生成配音或视频。
 - 已知边界：来源/权限在扣额后改变可使任务失败；生图崩溃恢复无素材时阻止再次付费，可能需人工核查；Storage先写后DB失败可留私有无引用对象。公开review digest未纳入媒体的历史债务在扩大公开发布前复核。
-- 下一步：先取得服务器可调用且能保持科学构图的生成路径（或来源约束的可控布局），同幕验证；当前MiniMax候选不得当作质量完成合入。经视觉审阅后再接隔离CPU视频渲染，保留当前声音；再把分镜/媒体目标接入全局Hermes对话。优先复用现有渲染和成熟方案，实际测质量/成本；未接的能力不显示假成功。
+- 下一步：保持本地模型暂停；按本轮对照继续评估MiniMax的结构表现，或通过官方Codex设备登录核验账号内置生图的服务器可用性（尚未登录），再决定产品路径；当前MiniMax候选不得当作质量完成合入。经视觉审阅后再接隔离CPU视频渲染，保留当前声音；再把分镜/媒体目标接入全局Hermes对话。优先复用现有渲染和成熟方案，实际测质量/成本；未接的能力不显示假成功。
 - 同事frontend/nanqing上次核实e5db5ae；已有每日10:00巡检自动任务，勿重复创建。下一次合并前重新fetch比较。

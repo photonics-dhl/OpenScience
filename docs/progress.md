@@ -2,6 +2,12 @@
 
 > 最新同步：2026-09-06 +08。应用615ca2d已部署，rollbackd6507ea。后续文档提交不改变生产。
 
+## User steering: local installation paused; MiniMax retested
+
+- 下载已停止，约1.1GB临时内容保留，无完整模型/推理运行。生产615ca2d/rollbackd6507ea未变。
+- 3次MiniMax图片调用：image-01固定seed/短构图prompt，优化关33s、开58s；屏面更清楚但机制仍有错误。live89s失败、原因未知，不自动重试；成本美元null，无新M3/产品扣额。
+- 官方支持Codex ChatGPT/device-auth，源码有内置imagegen条件门槛；可以隔离验证，不能仅据API key缺失否定。服务器尚未安装Codex或登录账号，产品API与订阅计费仍独立。
+
 ## Composition candidate — visual acceptance failed, no deployment
 
 - 五字段构图规划与44focused/529Worker测试、全仓build/typecheck/lint及独立审查通过；基于f7a80ea，生产仍615ca2d/rollbackd6507ea。
