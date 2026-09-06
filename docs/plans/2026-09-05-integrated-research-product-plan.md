@@ -350,10 +350,12 @@ Batch completed2026-09-06: global actions b23102b and contrast correction f144eb
 
 Approved direction: retain continuous narration, reuse Chromium/FFmpeg and reviewed artwork. First remove the fixed-paper assumptions before exposing asynchronous video generation. No new model or dependencies.
 
-- [ ] Add `apps/media-demo/storyboard-input.mjs` and tests: accept three to six scenes, bounded titles/cues, explicit sample-time starts, local PNG names; reject missing artwork, escaping paths, overlapping cues and duration over90 seconds. Do not infer scientific approval from a JSON flag.
-- [ ] Add `apps/media-demo/storyboard-drawing.mjs` and browser tests: full-image contain, gentle reveal/crossfade, short titles/subtitles; no hardcoded scientific objects or text. Verify distinct input images and deterministic transitions.
-- [ ] Adapt `render.mjs`/`inputs.mjs` with opt-in `storyboard.json`; keep legacy demo output/audio byte inputs unchanged. Reuse frame encoder, full WAV mux, decode and fast-start verification.
-- [ ] Exercise a prepared bundle on ECS using existing renderer image as a source-only base. Preserve existing public demo and application. Record actual render/format and source audio evidence.
-- [ ] Review, lint/tests/docs sync; record exact remaining work: trusted approved RO asset export, Gateway Qwen synthesis/alignment, bounded asynchronous execution and UI/task/draft integration. These must not be described as delivered by the file-driven renderer alone.
+- [x] Add `apps/media-demo/storyboard-input.mjs` and tests: accept three to six scenes, bounded titles/cues, explicit sample-time starts, local PNG names; reject missing artwork, escaping paths, overlapping cues and duration over90 seconds. Do not infer scientific approval from a JSON flag.
+- [x] Add `apps/media-demo/storyboard-drawing.mjs` and browser tests: full-image contain, gentle reveal/crossfade, short titles/subtitles; no hardcoded scientific objects or text. Verify distinct input images and deterministic transitions.
+- [x] Adapt `render.mjs`/`inputs.mjs` with opt-in `storyboard.json`; keep legacy demo output/audio byte inputs unchanged. Reuse frame encoder, full WAV mux, decode and fast-start verification.
+- [x] Exercise a prepared bundle on ECS using existing renderer image as a source-only base. Preserve existing public demo and application. Record actual render/format and source audio evidence.
+- [x] Review, lint/tests/docs sync; record exact remaining work: trusted approved RO asset export, Gateway Qwen synthesis/alignment, bounded asynchronous execution and UI/task/draft integration. These must not be described as delivered by the file-driven renderer alone.
 
 Risks: source image cropping changes scientific meaning; captions can overflow; supplied cue timestamps can exceed actual WAV; file paths can escape the input directory. Existing fixed-five-scene validation cannot validate arbitrary scene manifests, hence the bounded parser below. No new digest scheme or release gate.
+
+Renderer slice accepted at049e544: PR100 merged, CI34018403393 passed,20focused and full workspace tests passed; isolated ECS build/render/decode/audio identity and unchanged app/demo verified. See runbook for metrics. Authenticated RO video task integration and new-narration timing remain the next slice.

@@ -1,10 +1,10 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT active-memory, 2026-09-06 +08. Global Hermes presentation actions and the confirmation contrast fix are deployed and server-verified. Next: generic RO video generation from approved storyboards.
+> CURRENT active-memory, 2026-09-06 +08. Global Hermes remains deployed. Generic file-driven renderer049e544 passed isolated ECS acceptance; authenticated RO video generation remains next.
 
 ## Version tuple
 
-- Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; application source/origin-main f144eb772f1063c00bd61a97612137328443edde. Subsequent documentation HEAD is obtained from Git.
+- Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; renderer source/origin-main049e544f7742c063d95e2915a48f661aa6816f2d; deployed application sourcef144eb772f1063c00bd61a97612137328443edde. Subsequent documentation HEAD is obtained from Git.
 - Production active/public/loopback f144eb772f1063c00bd61a97612137328443edde; rollback b23102b071ae715d738aa37504a838d2f3fc78f1. PR98 and PR99 merged by non-force fast-forward to exact tested commits.
 - PR98 CI34014496625 and main CI34015117654 succeeded. PR99 CI34015765809 succeeded; main CI34016486547 succeeded (freshly checked).
 - Root checkout is main at b9616cb92dc83437b1b2094291ff43e2a4c34337, with user changes left untouched. It is not the production source or origin/main.
@@ -38,7 +38,8 @@
 
 ## Next action / read-first
 
-- In progress: generic file-driven3–6scene renderer in apps/media-demo, opt-in storyboard.json, continuous WAV/contained PNGs/crossfades. Local tests passed; independent review and isolated ECS render pending. No API/task/TTS integration yet. Next bind approved RO inputs, Gateway speech/alignment and bounded task execution.
+- Generic renderer049e544:20 media tests/full workspace tests/lint/docs and independent review passed; isolated ECS41.292s/991frames/8080238bytes,37.95s render, full decode/fastStart, exact source WAV retained. PR100 merged; CI34018403393 succeeded. Duplicate main CI is not acceptance evidence at this checkpoint. No app/demo switch, API/task/TTS integration. Evidence generic-server-eval.log/generic-server-*.png in ignored science-video directory.
+- Next bind approved RO inputs and Gateway speech/timing via bounded isolated media jobs, then existing task/draft UI. Qwen supplies audio, not verified word timestamps; new papers need a reviewed alignment step. Keep immutable host staging; maximum aggregate six16MP inputs were not stress-tested.
 - Improve the three extraction gaps and original Evidence/SourceMap grounding afterward. User prioritizes usable functions, mature reusable solutions and reviewable results.
 - Coworker release/profile-settings-20260904 tip93bb160 overlaps current identity interactions; no clear missing hunk identified, merge conflicts not tested. Existing daily frontend check remains; do not duplicate automation.
 - Read Git/fetch/checkup first, then this handoff, relevant baseline sections, docs/specs/2026-09-05-integrated-research-product-design.md, matching plan, ADR-013 and docs/runbooks/science-video-demo.md.
