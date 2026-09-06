@@ -2,11 +2,18 @@
 
 > 最新同步：2026-09-06 +08。应用615ca2d已部署，rollbackd6507ea。后续文档提交不改变生产。
 
+## Server Codex image generation verified
+
+- Existing v2ray/SSH/Squid reused through restricted Unixsocket proxy; generationcontainer networknone, no production/firewallchanges. Freshapprelease/public615ca2d unchanged; proxiesstopped.
+- v3 CLIexit0 in56.012s, actualPNG1536×1024/2261484bytes downloaded to ignored codex-server-builtin-v1.png. Oneoutputfileverified; CLIreportsoneimagecall but JSONLdoesnotexpose nestedtool count. Modelusage21205input/417output, imagequota/dollarsunknown.
+- v1 readonlyCODEX_HOME blockedinit beforemodel; v2 cachedirectoryfix allowedtext but disabledcode_mode_host blockedimage (19205input/420output). v3 enabledalreadybundledhost, preserved disabledshell/MCP/browser and nestedreadonlyauthfile. Noadditionalbinaryinstall.
+- Screen/wavefront moreexplicit; scientificvisualreview remains. NoROimport/approval/publication; privatevalidationdoesnotestablishsupportedpublicbackend. CPUmodeldownloadpaused. Fullcheckpoint in science-video runbook andCURRENT handoff.
+
 ## User steering: local installation paused; MiniMax retested
 
 - 下载已停止，约1.1GB临时内容保留，无完整模型/推理运行。生产615ca2d/rollbackd6507ea未变。
 - 3次MiniMax图片调用：image-01固定seed/短构图prompt，优化关33s、开58s；屏面更清楚但机制仍有错误。live89s失败、原因未知，不自动重试；成本美元null，无新M3/产品扣额。
-- 官方支持Codex ChatGPT/device-auth，源码有内置imagegen条件门槛；可以隔离验证，不能仅据API key缺失否定。服务器尚未安装Codex或登录账号，产品API与订阅计费仍独立。
+- 官方支持Codex ChatGPT/device-auth，源码有内置imagegen条件门槛；可以隔离验证，不能仅据API key缺失否定。服务器现已安装Codex并完成ChatGPT登录，一次内置生图已验证，产品API与订阅计费仍独立。
 
 ## Composition candidate — visual acceptance failed, no deployment
 
