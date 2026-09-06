@@ -303,3 +303,12 @@ Sourced storyboard acceptance (2026-09-06): canonical d6507ea/rollback64ae872, P
 - [x] UI: per-scene generation on eligible approved plans, explicit one-credit copy, parent/scene attribution and existing image approval/task recovery; bilingual mobile/desktop tests.
 - [x] Technical acceptance: workspace checks, independent review, canonical deploy615ca2d/rollbackd6507ea, real CN image generation and four browser cases plus ECS existing Chromium decode passed. Two attempts each reserved1 credit; first global request failed, second CN image succeeded in27.588s. Dollar cost unknown.
 - [ ] Visual acceptance: first image remains draft because its abstract rays do not clearly explain diffraction/interference. Improve subject placement and causal composition before approval; then reviewed image -> CPU video.
+
+### Concrete composition iteration
+
+1. Add planner tests in apps/agent-worker/test/presentation/scene-image.test.ts for structured fields, source context, invalid/oversized output and exact assembled prompt bound; update the existing handler fixture.
+2. Change only apps/agent-worker/src/presentation/scene-image.ts to request and compile concrete composition, keeping its string return contract and existing Gateway.
+3. Use the controlled approved scene for a bounded real candidate evaluation before deploying; inspect scientific clarity and retain prior draft. Run Worker tests/typecheck, workspace gates and independent review.
+4. If visually useful, merge, canonical deploy with current rollback615ca2d, exact Parser/runtime checks and real product preview acceptance. Record exact candidate/production separately and pending limitations.
+
+Composition checkpoint: implementation/tests/review completed; real MiniMax picture fails visual criteria, so step4 deployment is intentionally pending. Do not merge this as an accepted quality fix. Next determine a server-callable image provider or source-constrained layout approach that passes the same controlled scene before production rollout. Comparison images and exact prompt are in ignored science-video/composition-* files.

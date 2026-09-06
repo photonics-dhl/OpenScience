@@ -41,11 +41,18 @@
 - 实际画面偏抽象，光传播/干涉因果不够直观，保留draft，未执行真实图片批准；审批已有本地E2E覆盖。下一步先强化构图和科学解释，再接CPU视频。
 - ignored证据scene-image-browser-evidence.json、scene-image-artwork.png、scene-image-audit-evidence.json、scene-image-attempts-evidence.json、scene-image-ecs-decode.json。首次部署在journal前EPIPE未切换，重试canonical deploy成功；确切底层原因未证实。
 
+## Current composition candidate — not deployed
+
+- Candidate oncodex/product-workflow-design basedf7a80ea; production615ca2d/rollbackd6507ea unchanged. Five-field drawing brief implemented; explicit string schema/budgets added after real planner returned array/overlong content.
+- Worker529/focused44、全仓build/typecheck/lint、独立复审通过。实际candidate M3共6文字调用（3结构失败、1诊断、最终2次含1重试），image-01一次；成图仍丢失屏面，未部署/未批准。
+- 同一1351字符提示词、内置imagegen一次对照更清楚保留薄片/波前/屏面，但不是服务器能力。Worker的OpenAI/Gemini独立key配置布尔均false；MiniMax图生图官方subject_reference为人物参考，不能假定可约束科学结构。
+- ignored composition-eval.json保存实际prompt；composition-artwork.jpg为MiniMax样本；composition-builtin-comparison.png为内置对照；composition-*-logs记录验收。前两次评测启动仅远程shell解析失败，无模型调用；stdin方式已解决。
+
 ## Constraints and next action
 
 - 用户已授权实施/合入/部署/真实论文验证/必要开源方案，不重复询问。不得读取/打印.env、Cookie、密钥；云上仅项目SSH/deploy脚本。
 - 复用Chromium、CPU Canvas、离线Qwen；torchCPU基础约0.97GB，Qwen子镜像约2.04GB含基础，模型4.52GB。BGE依赖不同，不合并可变环境；无GPU，不重装模型。
 - 用户接受v4 Serena完整41.28秒WAV；原WAV不分段/补静音/变速。淡彩视频41.292秒/3,203,000bytes，ECS渲染37.76秒；未以本轮分镜重生成配音或视频。
 - 已知边界：来源/权限在扣额后改变可使任务失败；生图崩溃恢复无素材时阻止再次付费，可能需人工核查；Storage先写后DB失败可留私有无引用对象。公开review digest未纳入媒体的历史债务在扩大公开发布前复核。
-- 下一步：改善单幕图片的明确主体、空间关系和机制可读性，经视觉审阅后再接隔离CPU视频渲染，保留当前声音；再把分镜/媒体目标接入全局Hermes对话。优先复用现有渲染和成熟方案，实际测质量/成本；未接的能力不显示假成功。
+- 下一步：先取得服务器可调用且能保持科学构图的生成路径（或来源约束的可控布局），同幕验证；当前MiniMax候选不得当作质量完成合入。经视觉审阅后再接隔离CPU视频渲染，保留当前声音；再把分镜/媒体目标接入全局Hermes对话。优先复用现有渲染和成熟方案，实际测质量/成本；未接的能力不显示假成功。
 - 同事frontend/nanqing上次核实e5db5ae；已有每日10:00巡检自动任务，勿重复创建。下一次合并前重新fetch比较。

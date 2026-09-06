@@ -8,7 +8,7 @@
 | 路径 | 用途 | 状态 |
 |---|---|---|
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；用户认可生图视觉方向，新增媒体优先布局与原生折叠交互设计 |
-| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；615ca2d单幕生图已部署，首图draft待构图优化；自动视频与全局Hermes待接入 |
+| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；615ca2d单幕生图已部署，五字段构图候选测试通过但视觉未通过、未部署；自动视频与全局Hermes待接入 |
 | 本地产物（Git忽略，非仓库路径） | apps/web/test/visual/out/science-video/：D2NN科普MP4、分镜、旁白、preview.html与FFmpeg/播放记录 | CURRENT证据含淡彩41秒demo及真实RO导入/播放/审批/失效截图；历史文件保留，核对精确source/run后使用，非自动生成能力 |
 | `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo381705a；固定D2NN渲染，已受审产物经独立CLI接入私有RO，不执行任意用户代码 |
 | `infra/scripts/deploy-science-video-demo.sh` / `infra/scripts/deploy-science-video-demo.test.mjs` / `infra/nginx/science-video-demo.location.conf` | 一次性隔离渲染与独立演示路径发布/恢复，Nginx原生Range | DEPLOYED demo381705a淡彩41秒；应用615ca2d另行部署 |
@@ -462,3 +462,5 @@
 
 | `packages/ai-gateway/src/image.ts` / `packages/ai-gateway/test/image.test.ts` | Bounded MiniMax single-image provider and Gateway contract tests | DEPLOYED615ca2d; explicit CN region, real image and ECS decode verified; no automatic paid retry |
 | `packages/domain/src/assets/scene-image.ts` / `apps/agent-worker/src/presentation/scene-image.ts` | Approved storyboard scene binding and source-aware image prompt planning | DEPLOYED615ca2d; exact parent/Claims, separate image draft, parent invalidation; first image quality pending |
+
+| `apps/agent-worker/test/presentation/scene-image.test.ts` | Concrete composition planner context, validation and prompt-bound tests | CANDIDATE NOT DEPLOYED; tests pass but real MiniMax composition fails visual acceptance |

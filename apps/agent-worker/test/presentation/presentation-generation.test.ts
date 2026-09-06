@@ -283,7 +283,7 @@ function sceneHandlerFixture() {
   const parent = { id: PARENT, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'approved', contentHash: 'parent', sourceClaims: [CLAIM_A, CLAIM_B].map(claimId => ({claimId})), provenance: {subtype:'sourced_storyboard',storyboardSettings:{locale:'en',style:'ink',instruction:'Explain'},storyboardDocument:{schemaVersion:1,title:'Plan',scenes:Array.from({length:3},()=>({title:'Scene',narration:'Finding',visualAction:'Wave passing slit',durationSeconds:8,sourceClaimIds:[CLAIM_A,CLAIM_B]}))}}};
   ctx.prisma.presentationAsset.findUnique = async ({where}:any) => where.id === PARENT ? parent : ctx.rows[0] ?? null;
   ctx.prisma.user = { findUnique:async()=>({platformRole:'platform_admin'}) };
-  const completeStructured = vi.fn(async()=>({prompt:'Ink illustration of wave passing slit; room temperature; limited sample. No text overlay. Illustration, not evidence.'}));
+  const completeStructured = vi.fn(async()=>({teachingPoint:'Wave diffraction',subjects:'Slit and wavefronts',arrangement:'Slit left, outgoing wavefronts right',mechanism:'Wave spreads after the slit',fidelity:'Room temperature; limited sample; illustration not evidence'}));
   const bytes = Buffer.alloc(64, 7);
   const generateImage = vi.fn(async()=>({bytes,contentType:'image/png' as const,model:'image-01',provider:'minimax',promptHash:'actual-prompt-hash'}));
   const task = {...ctx.task,payload:{...ctx.task.payload,kind:'image',sceneImage:{storyboardAssetId:PARENT,sceneIndex:1}}};
@@ -320,13 +320,13 @@ it('refuses uncertain paid replay with no saved asset before calling either mode
 });
 it('blocks a changed parent after text planning before paid image generation',async()=>{
   const ctx=sceneHandlerFixture();
-  ctx.completeStructured.mockImplementation(async()=>{ctx.parent.status='rejected';return {prompt:'Draw qualified wave as an illustration.'};});
+  ctx.completeStructured.mockImplementation(async()=>{ctx.parent.status='rejected';return {teachingPoint:'Wave diffraction',subjects:'Slit and wavefronts',arrangement:'Slit left, outgoing wavefronts right',mechanism:'Wave spreads after the slit',fidelity:'Room temperature; limited sample; illustration not evidence'};});
   await expect(ctx.handler(ctx.deps as never,ctx.task)).rejects.toThrow();
   expect(ctx.generateImage).not.toHaveBeenCalled();
 });
 it('rejects oversized condensed prompts without silently truncating or invoking image provider',async()=>{
   const ctx=sceneHandlerFixture();
-  ctx.completeStructured.mockResolvedValue({prompt:'x'.repeat(1501)});
+  ctx.completeStructured.mockResolvedValue({...{teachingPoint:'Wave diffraction',subjects:'Slit and wavefronts',arrangement:'Slit left, outgoing wavefronts right',mechanism:'Wave spreads after the slit',fidelity:'Room temperature; limited sample; illustration not evidence'},mechanism:'x'.repeat(1501)});
   await expect(ctx.handler(ctx.deps as never,ctx.task)).rejects.toThrow();
   expect(ctx.generateImage).not.toHaveBeenCalled();
 });

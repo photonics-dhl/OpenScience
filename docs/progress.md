@@ -2,6 +2,12 @@
 
 > 最新同步：2026-09-06 +08。应用615ca2d已部署，rollbackd6507ea。后续文档提交不改变生产。
 
+## Composition candidate — visual acceptance failed, no deployment
+
+- 五字段构图规划与44focused/529Worker测试、全仓build/typecheck/lint及独立审查通过；基于f7a80ea，生产仍615ca2d/rollbackd6507ea。
+- M3本轮6文字调用（3失败结构、1诊断、最终2次含1重试）；最终一次MiniMax生图仍丢失接收屏。一次内置生图同prompt对照更完整，但不等于服务器已接入；保留候选和样本，不批准/不部署。
+- 现有Worker OpenAI/Gemini独立key配置布尔false。下一步验证服务器可用的高保真生成路径或可控布局；不重复付费碰运气。ignored composition-eval.json和两张composition-artwork.jpg/composition-builtin-comparison.png为证据。
+
 ## Scene imagery deployed; quality iteration next
 
 - PR95/main CI33986402240通过；全仓build/typecheck/test/lint、Web504+5与12E2E通过（原有search测试8项跳过）。服务器全build、Parser16、BGE/ScanSci、core36/search2、13运行/10健康及公网/loopback精确版本通过。
