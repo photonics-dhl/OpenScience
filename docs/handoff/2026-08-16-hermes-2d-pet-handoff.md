@@ -4,7 +4,7 @@
 
 ## Version tuple
 
-- Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; renderer source9848411d1419a0dd690f74cca9042369b651f7b2; audit origin-main83695240d9f2bc328db3ed668aaa11fc8389f41c; deployed application source4d39808ba662da17eaae9db1cef5e54d69db6bb5. Subsequent documentation HEAD is obtained from Git.
+- Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; renderer source9848411d1419a0dd690f74cca9042369b651f7b2; HEAD/origin-main b7b290938d2286d18211594310114f9f7b09d3b1; deployed application source4d39808ba662da17eaae9db1cef5e54d69db6bb5. Subsequent documentation HEAD is obtained from Git.
 - Production active/public/loopback 4d39808ba662da17eaae9db1cef5e54d69db6bb5; rollback f144eb772f1063c00bd61a97612137328443edde. PR102 merged and CI34022708530 passed. PR98 and PR99 merged by non-force fast-forward to exact tested commits.
 - PR98 CI34014496625 and main CI34015117654 succeeded. PR99 CI34015765809 succeeded; main CI34016486547 succeeded (freshly checked).
 - Root checkout is main at b9616cb92dc83437b1b2094291ff43e2a4c34337, with user changes left untouched. It is not the production source or origin/main.
@@ -40,8 +40,10 @@
 
 ## Next action / read-first
 
-- USER STEERING: user confirmed full paper-to-discussion journey and authorized selective colleague integration (30fabce/b0741eb adaptation now merged/deployed4d39808); whole-site layout discussion remains pending. 2026-09-06 closeout audit and disk cleanup complete; next use grill-me one question at a time to agree full integration/page responsibilities/visual scope. No implementation until discussion. Full inventory in CURRENT plan closeout-20260906.
-- Fresh maintenance: app/rollback f144eb7/b23102b unchanged; builder cache reclaimed753.4MB,1.005GB retained,98623787008bytes free;13running containers and runtime images preserved.22product routes/14visual source files;8entry+3public RO browser audits. Authenticated pages code-only; public gallery exists but9tabs placeholders, E2E public content,3px mobile overflow recorded.
+- Latest discussion: user approved unified RO workspace, overview default, contextual Hermes sidebar, desk continue/start/todo and A palette. User basically accepted the three-state A prototype; requested retaining original Wanko/Aladdin-dog companion. First dashboard presentation slice is a local candidate, not deployed. Do not repeat settled role questions.
+
+- USER STEERING: selective colleague UX adaptation is merged/deployed4d39808. Closeout/disk audit complete. CURRENT plan closeout-20260906 retains findings; next review the local prototype, then agree the production implementation scope.
+- Historical pre-PR102 maintenance: then app/rollback f144eb7/b23102b; builder cache reclaimed753.4MB,1.005GB retained,98623787008bytes free;13running containers and runtime images preserved.22product routes/14visual source files;8entry+3public RO browser audits. Authenticated pages code-only; public gallery exists but9tabs placeholders, E2E public content,3px mobile overflow recorded.
 
 - Generic renderer049e544 is VISUALLY REJECTED by user: evaluation copied the same panorama into4/5 scenes, and generic mode only zooms/crossfades. Earlier20 media tests/full workspace tests/lint/docs passed; isolated ECS41.292s/991frames/8080238bytes,37.95s render, full decode/fastStart, exact source WAV retained. PR100 merged; CI34018403393 succeeded. Duplicate main CI is not acceptance evidence at this checkpoint. No app/demo switch, API/task/TTS integration. Evidence generic-server-eval.log/generic-server-*.png in ignored science-video directory.
 - Current repair: tracked prepare-animated-demo.mjs preserves accepted fixed-scene inputs; explicit metrics renderMode and scene/motion regression. ECS restored9848411:41.292s/991frames/2532823bytes,39.06s render; exact original4inputs compare equal, decode/fastStart/playback/seek/Range206/390px and five scene images passed.23focused/full workspace tests and High review passed; PR101 merged; CI34019708441 passed. Evidence animated-fix-deploy.log/animated-restored-browser-evidence.json and animated-restored-scene-*.png. No new dependencies/model calls.
@@ -49,3 +51,17 @@
 - Improve the three extraction gaps and original Evidence/SourceMap grounding afterward. User prioritizes usable functions, mature reusable solutions and reviewable results.
 - Coworker fresh audit: frontend/nanqing e5db5ae and release/profile-settings-20260904 93bb160;21actual merge conflicts. PR78 already adapted core identity work;6new UX commits are candidates with signup/login error classification defects. No merge; existing daily check unchanged.
 - Read Git/fetch/checkup first, then this handoff, relevant baseline sections, docs/specs/2026-09-05-integrated-research-product-design.md, matching plan, ADR-013 and docs/runbooks/science-video-demo.md.
+
+## Accepted A direction — Wanko retained, local dashboard candidate
+
+- A配色与三态样稿获准：`/_visual/research-journey?view=desk|overview|hermes`；本地Next start8317，会话60209，HEAD b7b2909，未提交候选文件。生产4d39808/rollback f144eb7不变。
+- 研究桌面、机制图概览、Hermes固定示例diff/采用/撤销、中英文与移动端dialog已接通；不调用真实AI/业务写API。新研究入口仅选择D2NN演示。
+- web typecheck与浏览器1440/390两用例通过；截图`apps/web/test/visual/out/research-journey/`。下一步用户验收实际配色/密度/布局，再决定生产页面改版，不重复讨论已确认页面职责。
+
+- Latest correction: restore original Wanko/神灯 Live2D via existing ResearchWorkbenchHermes (sizes extended), consistent static avatars, one model/quiet/reduced-motion/approval-still; prototype3 browser tests passed. No new assets, model/runtime installs or production stage replacement.
+- Actual dashboard page + dashboard.module.css now scope pale/teal desk presentation while retaining all fetch/auth/recovery/polling and global HermesDockAnchor/Drawer; no prototype state in real UI. Unit36 and continuation/protected-region2 passed; account/dashboard14/14 passed after fixtures aligned to current recovery/identity/Live2D/locale contracts. Stable prototype canvas identity also verified across open/quiet/resume.
+- Fresh read-only ECS checkup healthy; .release-id and loopback/public __release all4d39808. Local candidate uncommitted; no production deployment. Next finish staged real RO/assistant integration and full build/release/server acceptance, preserving original companion.
+
+- Current continuation: real overview readable full SDF + scoped Hermes target + latest committed approved media; desktop no-task continuation/list now overview. Important: RO.version is optimistic counter (commit increments), not Version.versionNo; asset.label is not a human title. Explicit committed-version copy prevents false alignment with current edits. API/Wanko unchanged; local candidate, not deployed.
+
+- Latest validation: full workspace build exit0; web typecheck/scoped lint;30 related unit tests; production-mode15 browser tests passed. Dev continuation had one loading timeout; final built-mode full rerun15/15 green. Local preview now Next start8317/session60209, must rebuild after code edits. No server deployment; production still4d39808/rollback f144eb7.

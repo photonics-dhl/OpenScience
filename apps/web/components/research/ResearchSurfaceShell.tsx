@@ -7,7 +7,7 @@ import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { WorkspaceShell } from '@/components/shell/WorkspaceShell';
 import type { ProductSurfaceId } from '@/lib/product-surfaces';
-import type { ResearchObjectSummary } from '@/lib/api';
+import type { ResearchObjectSummary, WorkspaceGuidePayload } from '@/lib/api';
 import { ObjectHeader } from './ObjectHeader';
 import { ResearchWorkspaceNav } from './ResearchWorkspaceNav';
 
@@ -15,6 +15,7 @@ type ResearchSurfaceId = Exclude<ProductSurfaceId, 'settings'>;
 
 export function ResearchSurfaceShell({
   active,
+  className,
   actions,
   children,
   object,
@@ -22,13 +23,16 @@ export function ResearchSurfaceShell({
 }: {
   active: ResearchSurfaceId;
   actions?: ReactNode;
-  children: ReactNode;
+  children: ReactNode | ((openAssistant: (target: WorkspaceGuidePayload['target']) => void) => ReactNode);
+  className?: string;
   object: ResearchObjectSummary;
   rail?: ReactNode;
 }) {
   const t = useTranslations('productSurfaces');
   const locale = useLocale() as 'zh' | 'en';
   const [hermesOpen, setHermesOpen] = useState(false);
+  const [assistantTarget, setAssistantTarget] = useState<WorkspaceGuidePayload['target']>(null);
+  const openAssistant = (target: WorkspaceGuidePayload['target']) => { setAssistantTarget(target); setHermesOpen(true); };
   const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
   const suggestion = {
     bodyKey: 'guide.continue.body',
@@ -39,6 +43,7 @@ export function ResearchSurfaceShell({
   };
   return (
     <WorkspaceShell
+      className={className}
       activeMobilePlane="main"
       leftRail={
         <div>
@@ -54,9 +59,10 @@ export function ResearchSurfaceShell({
       rightRail={<>
         {rail ?? <div><p data-reading-role="caption" className="text-os-muted-paper">{t('integrity')}</p><p className="mt-4 text-base leading-[var(--leading-body)] text-os-muted-paper">{t('integrityBody')}</p></div>}
         <div className="mt-8 border-t border-os-rule-paper pt-4">
-          <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state="idle" suggestion={suggestion} workspaceId={object.id} />
+          <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => openAssistant(null)} state="idle" suggestion={suggestion} workspaceId={object.id} />
         </div>
         <HermesAssistantDrawer
+          key={object.id}
           dashboardContext={{ tasks: [], researchObjects: [{ id: object.id, status: object.status, title: object.title }] }}
           locale={locale}
           onOpenChange={setHermesOpen}
@@ -64,13 +70,13 @@ export function ResearchSurfaceShell({
           route="research-object-edit"
           routeResearchObjectId={object.id}
           suggestion={suggestion}
-          target={null}
+          target={assistantTarget}
         />
       </>}
       skipLabel={t('skip')}
       workspaceModes={<ResearchWorkspaceNav active={active} objectId={object.id} />}
     >
-      <div className="min-h-[calc(100dvh-10.25rem)] px-4 py-7 sm:px-7 lg:px-10 lg:py-9">{children}</div>
+      <div className="min-h-[calc(100dvh-10.25rem)] px-4 py-7 sm:px-7 lg:px-10 lg:py-9">{typeof children === 'function' ? children(openAssistant) : children}</div>
     </WorkspaceShell>
   );
 }

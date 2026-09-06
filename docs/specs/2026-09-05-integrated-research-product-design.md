@@ -155,3 +155,48 @@ No new model/provider, endpoint, schema, storage or dependency. The bounded natu
 用户确认首轮主线为论文导入→Hermes凝练/修改RO→可视化→审核发布→读者理解与讨论；要求整体调整页面布局、UI、配色与艺术表现。页面职责和整站设计继续grill-me逐项讨论，不把主线确认当作完整页面设计已批准。
 
 选择性吸收同事30fabce与b0741eb的登录恢复/密码显隐、资料dirty/save/discard。登录保留真实错误语义与returnTo；资料写入沿用现有API/profileVersion。保存冲突按原已保存值识别本地改动，保留服务器独立字段变更；冲突后须用户选择保留本地修改或撤销，才可再保存。原注册完成页、ORCID/机构步骤等候选留待整体页面职责决定，不夹带部署脚本或旧交接文档。
+
+## 2026-09-06 page decisions and visual-reference reassessment
+
+### Confirmed page responsibilities
+
+用户连续确认：同一RO使用连续研究工作区，公开阅读页独立；RO默认研究概览，再深入证据/编辑/媒体；Hermes以关联当前内容的助手侧栏为主要入口，复杂任务保留详情页；研究桌面围绕继续研究、开始研究、处理待办。用户已选择A配色，并同意先制作三态高保真交互样稿；整站实施待样稿验收。
+
+### Reference evidence and applicability
+
+已重新阅读用户两篇文章，并浏览/截图官方参考页；证据在Git忽略的 `apps/web/test/visual/out/science-video/design-reference-{linear,distill,elicit,happy-hues}.png` 和 `design-reference-evidence.json`。Linear为官方文档中的产品截图；Elicit为公开官网演示，均非登录后完整产品试用。
+
+| Reference | Verified useful pattern | OpenScience application | Boundary |
+|---|---|---|---|
+| [Emil design engineering](https://github.com/emilkowalski/skills/blob/main/skills/emil-design-eng/SKILL.md) | 动效先判断频率/目的，精确指定属性，强调响应和中断 | Hermes展开、修改预览、生成完成后的定位与反馈 | 是设计判断规则，不是完整模板；高频操作少动效，不能把苹果感理解成全站玻璃层 |
+| [Linear Projects](https://linear.app/docs/projects) | 项目总览、稳定导航、状态/资源组织、按需详情侧栏 | 研究桌面及RO操作壳层 | 借鉴信息组织；不照搬深色、密集英文小字或软件项目术语 |
+| [Elicit](https://elicit.com/) | 科研语境、清楚的主操作、正文与工具控件区分 | 导入/任务引导、科研字体与控件组合参考 | 本轮只看公开展示；官网大Hero/粒子背景不适合日常工作区 |
+| [Distill Feature Visualization](https://distill.pub/2017/feature-visualization/) | 图像直接解释概念，宽图与正文/旁注形成节奏 | RO首屏图解、方法展开、原始证据关联 | 历史文章是视觉参考，不引入旧框架；每篇复杂交互不是首轮必须功能 |
+| [Happy Hues](https://www.happyhues.co/) / [Realtime Colors](https://www.realtimecolors.com/) | 将颜色分别应用到背景、文字、按钮、插画，看整页效果 | 同一真实RO上的配色比较 | 不照搬其卡通粗描边、粉紫色或营销排版 |
+| [用户配色文章](https://mp.weixin.qq.com/s/JvO0PVLCXiZKE3TijZH21Q) | Huemint选候选、Happy Hues看应用、Realtime Colors看页面、CSS Gradient辅助渐变 | 配色验证方法 | 不是代码仓库或完整设计系统；全站不需要为渐变增加实现负担 |
+
+本地ui-ux-pro-max两次查询分别偏向海报/奢华排版与玻璃营销Hero，和科研操作场景不符，未采纳其自动推荐。以下为结合现有产品与参考的人工作用判断，不是来源原样方案。
+
+### Approved prototype direction — production redesign pending
+
+统一导航、控件、字体角色、间距及状态色；随任务切换信息密度。工作区操作壳采用低彩度浅色表面，阅读内容以图解和正文构图体现辨识度。避免把工作区、阅读页分别实现成互不相关的主题。
+
+- 研究桌面：紧凑续接列表 + 明确开始入口 + 少量待办；不使用大宣传标题和重复嵌套卡片。
+- RO概览：标题/一两句贡献与机制图并列或上下组合，图解比元数据更突出；再展开方法、结果、局限，证据可就近查看。不要把媒体排在版本hash和整段SDF之后。
+- Hermes：侧栏和正文同一视觉规则，气泡/工具提示/预览/确认有不同角色；默认不遮挡正在阅读和操作的区域。
+- 证据与编辑：中性表面、清晰选中和来源定位；代码与diff可以使用局部深色，避免整页突然换肤。
+- Explore：有图解缩略图、核心结论、主题和作者的研究条目；精选可使用更有节奏的图文编排，普通列表保持可扫描性。
+- 登录/资料/设置：明确输入框与标签、短步骤/分组、稳定保存反馈；不承担品牌海报功能，不堆大标题和长篇能力说明。
+- 艺术图解：同一论文内统一对象形状、配色和视觉语法；淡彩/手绘可作为资产风格，而页面控件维持一致。原始图表与生成解释始终可区分。
+
+已选A（用于样稿，未决定替换现有品牌）：工作区底#F7F8FA、内容#FFFFFF、正文#20252B、次级正文#626C76、主操作深青#125D66，朱红#BA442F用于少量品牌点缀。候选B保留朱红为主操作色、采用更浅的近白暖底；以同一内容/同一布局对比后决定。深色全站和高饱和渐变不推荐作为首轮方向。
+
+计算的静态文字对比度：正文/工作区底14.52，次级正文/白底5.35，白字/深青7.54，白字/朱红5.31；这些只证明四个色对，不代表整页无障碍验收通过。
+
+样稿参数建议而非冻结规范：工具正文14–16px，中文阅读17–18px、行高1.65–1.8；长段阅读约32–40汉字/行，媒体允许宽于正文；主要控件统一温和圆角与清晰焦点，悬浮层少量阴影。正文主要使用清晰的中文无衬线，衬线限于少量标题或阅读强调，先复用已有字体再判断是否需要新增。
+
+已获授权以同一D2NN论文展示研究桌面、RO概览、Hermes展开三个连续状态，采用A配色。首要验收是能看懂、知道下一步、阅读与操作舒适，其后再评估插图和动效的吸引力。本轮制作隔离本地样稿，不替换生产页面、安装依赖或部署。
+
+### Hermes identity retained — user acceptance correction
+
+用户基本认可A样稿，并明确阿拉丁神狗不可丢失：Hermes须持续作为产品记忆与陪伴助手。复用现有Wanko/神灯模型和静态回退；桌面侧边陪伴入口、展开侧栏中的原角色静态头像、段落入口小头像保持一致，不再以H字母替代。模型固定挂载于陪伴区，展开助手不重建；安静/系统减少动效/待确认时显示原静态图并通过既有可见性检测暂停隐藏模型，不遮挡正文或伪造AI任务状态。下一实施段以真实研究桌面承接此视觉与身份，再推进RO/助手页面；逐段验证现有权限、任务与真实上下文。

@@ -1,26 +1,83 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, CircleDot } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
-
 import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '@/components/research/ResearchSurfaceShell';
-import { ApiClientError, getResearchObject, listVersions, type ResearchObjectSummary, type SdfCore, type VersionSummary } from '@/lib/api';
+import { ApiClientError, getResearchObject, listVersions, listPresentationAssets, presentationAssetContentUrl, type PresentationAsset, type ResearchObjectSummary, type SdfCore, type VersionSummary, type WorkspaceGuidePayload } from '@/lib/api';
+import styles from './overview.module.css';
+
+type Loaded = { object: ResearchObjectSummary & { sdf: { core: SdfCore } }; versions: VersionSummary[]; assets: PresentationAsset[]; mediaFailed: boolean; mediaLoading: boolean };
+const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+const targets: Record<typeof fields[number], WorkspaceGuidePayload['target']> = { problem: 'sdf-problem', insight: 'sdf-insight', method: 'sdf-method', results: 'sdf-results', limitations: 'sdf-limitations', reproducibility: null };
+
+function OverviewAsset({ asset, objectId }: { asset: PresentationAsset; objectId: string }) {
+  const t = useTranslations('productSurfaces.overview');
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const title = t(asset.kind === 'video' ? 'videoTitle' : 'imageTitle');
+  const src = `${presentationAssetContentUrl(objectId, asset.versionId, asset.id)}${attempt ? `?attempt=${attempt}` : ''}`;
+  return <figure data-overview-asset={asset.id}>
+    {failed ? <div role="status"><p>{t('mediaFailed')}</p><button type="button" onClick={() => { setAttempt(value => value + 1); setFailed(false); }}>{t('retry')}</button></div>
+      : asset.kind === 'video' ? <video controls playsInline preload="metadata" aria-label={title} src={src} onError={() => setFailed(true)} />
+      : <img src={src} alt={title} loading="lazy" onError={() => setFailed(true)} />}
+    <figcaption>{title}</figcaption>
+  </figure>;
+}
 
 export default function ResearchOverviewPage({ params }: { params: { id: string } }) {
   const t = useTranslations('productSurfaces');
-  const [object, setObject] = useState<(ResearchObjectSummary & { sdf: { core: SdfCore } }) | null>(null);
-  const [versions, setVersions] = useState<VersionSummary[]>([]);
-  const [error, setError] = useState<ApiClientError | Error | null>(null);
-  useEffect(() => { void Promise.all([getResearchObject(params.id), listVersions(params.id)]).then(([ro, history]) => { setObject(ro.researchObject); setVersions(history.versions); }).catch(setError); }, [params.id]);
-  if (error) return <ResearchSurfaceStateShell active="overview" detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} objectId={params.id} title={t(error instanceof ApiClientError && error.status === 403 ? 'state.forbiddenTitle' : 'state.errorTitle')} />;
-  if (!object) return <ResearchSurfaceStateShell active="overview" detail={t('state.loadingBody')} kind="loading" objectId={params.id} title={t('overview.title')} />;
-  const core = object.sdf.core;
-  const entries = (['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const).filter((field) => core[field]?.trim());
-  return <ResearchSurfaceShell active="overview" object={object} rail={<div><p className="font-data text-[10px] uppercase tracking-[0.14em] text-os-muted-dark">{t('overview.status')}</p><dl className="mt-5 space-y-4 text-sm"><div><dt className="text-os-muted-dark">{t('overview.visibility')}</dt><dd className="mt-1 text-os-paper">{object.visibility}</dd></div><div><dt className="text-os-muted-dark">{t('overview.history')}</dt><dd className="mt-1 text-os-paper">{versions.length}</dd></div></dl></div>}>
-    <header className="max-w-3xl"><p className="font-data text-[10px] uppercase tracking-[0.16em] text-os-vermilion">RO / {t('overview.kicker')}</p><h1 className="mt-4 font-editorial text-5xl font-normal leading-none text-os-paper sm:text-6xl">{object.title}</h1><p className="mt-5 max-w-2xl text-sm leading-7 text-os-muted-dark">{t('overview.body')}</p></header>
-    {entries.length === 0 ? <div className="mt-12 border-t border-os-rule-dark py-10" data-surface-state="empty"><h2 className="font-editorial text-3xl text-os-paper">{t('overview.emptyTitle')}</h2><p className="mt-3 text-sm text-os-muted-dark">{t('overview.emptyBody')}</p></div> : <ol className="mt-12 border-t border-os-rule-dark">{entries.map((field, index) => <li className="grid gap-3 border-b border-os-rule-dark py-6 sm:grid-cols-[4rem_10rem_1fr]" key={field}><span className="font-data text-[10px] text-os-vermilion">N{String(index + 1).padStart(2, '0')}</span><h2 className="text-sm font-semibold text-os-paper">{t(`fields.${field}`)}</h2><p className="line-clamp-3 text-sm leading-6 text-os-muted-dark">{core[field]}</p></li>)}</ol>}
-    <div className="mt-10 flex flex-wrap gap-3"><Link className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-os-paper px-4 text-sm font-semibold text-os-black-0" href={`/research-objects/${object.id}/edit`}>{t('overview.continue')}<ArrowRight className="h-4 w-4" /></Link><Link className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-os-rule-dark px-4 text-sm text-os-paper" href={`/research-objects/${object.id}/versions`}><CircleDot className="h-4 w-4" />{t('overview.inspect')}</Link></div>
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [error, setError] = useState<{ id: string; cause: Error } | null>(null);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    setLoaded(null); setError(null);
+    void (async () => {
+      try {
+        const [{ researchObject: object }, { versions }] = await Promise.all([getResearchObject(params.id), listVersions(params.id)]);
+        if (!active) return;
+        const version = [...versions].sort((a, b) => b.versionNo - a.versionNo)[0];
+        setLoaded({ object, versions, assets: [], mediaFailed: false, mediaLoading: Boolean(version) });
+        let assets: PresentationAsset[] = [];
+        let mediaFailed = false;
+        if (version) {
+          try {
+            const response = await listPresentationAssets(object.id, version.versionId, controller.signal);
+            assets = response.assets.filter(asset => asset.researchObjectId === object.id && asset.versionId === version.versionId && asset.status === 'approved' && (asset.kind === 'image' || asset.kind === 'video'));
+          } catch { mediaFailed = true; }
+        }
+        if (active) setLoaded({ object, versions, assets, mediaFailed, mediaLoading: false });
+      } catch (cause) { if (active) setError({ id: params.id, cause: cause instanceof Error ? cause : new Error(t('state.errorTitle')) }); }
+    })();
+    return () => { active = false; controller.abort(); };
+  }, [params.id, retry, t]);
+  if (error?.id === params.id) return <ResearchSurfaceStateShell active="overview" detail={error.cause.message} kind={error.cause instanceof ApiClientError && error.cause.status === 403 ? 'forbidden' : 'error'} objectId={params.id} title={t(error.cause instanceof ApiClientError && error.cause.status === 403 ? 'state.forbiddenTitle' : 'state.errorTitle')} />;
+  if (!loaded || loaded.object.id !== params.id) return <ResearchSurfaceStateShell active="overview" detail={t('state.loadingBody')} kind="loading" objectId={params.id} title={t('overview.title')} />;
+  const { object, assets, versions, mediaFailed, mediaLoading } = loaded;
+  const mediaVersion = [...versions].sort((a, b) => b.versionNo - a.versionNo)[0];
+  const entries = fields.filter(field => object.sdf.core[field]?.trim());
+  const root = `/research-objects/${encodeURIComponent(object.id)}`;
+  const media = <section className={styles.media} aria-label={t('overview.media')}>
+          <h2>{t('overview.media')}</h2>{mediaVersion ? <p>{t('overview.mediaVersion', { number: mediaVersion.versionNo })}</p> : null}<p className={styles.caption}>{t('overview.notEvidence')}</p>
+          {assets.map(asset => <OverviewAsset key={`${asset.versionId}:${asset.id}`} asset={asset} objectId={object.id} />)}
+          {assets.length === 0 && !mediaFailed && !mediaLoading ? <p>{t('overview.noMedia')}</p> : null}
+          {mediaLoading ? <p role="status">{t('state.loadingBody')}</p> : null}
+          {mediaFailed ? <div role="status"><p>{t('overview.mediaFailed')}</p><button type="button" onClick={() => setRetry(value => value + 1)}>{t('overview.retry')}</button></div> : null}
+          <Link href={`${root}/presentation`}>{t('overview.manageMedia')} →</Link>
+        </section>;
+  return <ResearchSurfaceShell key={object.id} active="overview" object={object} className={styles.surface} rail={<div className={styles.rail}><h2>{t('overview.status')}</h2><p>{t('overview.history')}: {versions.length}</p><Link href={`${root}/files`}>{t('overview.sources')}</Link><Link href={`${root}/presentation`}>{t('overview.manageMedia')}</Link></div>}>
+    {openAssistant => <article className={styles.article} data-research-overview={object.id}>
+      <header className={styles.header}><Link href="/dashboard">← {t('overview.desk')}</Link><p>{t('overview.kicker')}</p><h1>{object.title}</h1><div className={styles.actions}><Link href={`${root}/edit`}>{t('overview.continue')}</Link><button type="button" data-testid="overview-hermes" onClick={() => openAssistant(null)}><img src="/hermes/wanko-static.png" alt="" />Hermes</button></div></header>
+      {entries.length === 0 ? <section data-surface-state="empty"><h2>{t('overview.emptyTitle')}</h2><p>{t('overview.emptyBody')}</p></section> : null}
+      {entries.length === 0 ? media : null}
+      {entries.map((field, index) => <section key={field} id={`overview-${field}`} className={styles.section} data-hermes-protected="true">
+        <h2>{t(`fields.${field}`)}</h2><p className={styles.narrative}>{object.sdf.core[field]}</p>
+        <button type="button" className={styles.discuss} data-testid={`overview-discuss-${field}`} onClick={() => openAssistant(targets[field])}><img src="/hermes/wanko-static.png" alt="" />{t('overview.discuss')}</button>
+        {index === Math.min(1, entries.length - 1) ? media : null}
+      </section>)}
+      <details className={styles.evidence}><summary>{t('overview.sources')}</summary><p>{t('overview.sourceBody')}</p><Link href={`${root}/files`}>{t('overview.openSources')}</Link><Link href={`${root}/versions`}>{t('overview.inspect')}</Link></details>
+    </article>}
   </ResearchSurfaceShell>;
 }

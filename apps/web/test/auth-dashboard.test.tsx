@@ -118,7 +118,7 @@ describe('research continuation', () => {
   });
   it('keeps the editor as the next step when no work needs attention', () => {
     const markup = renderToStaticMarkup(createElement(ContinueResearch, { research: { ...research, pendingCount: 0 }, tasks: [task('done', 'ro-a', 'confirmed')] }));
-    expect(markup).toContain('href="/research-objects/ro-a/edit"');
+    expect(markup).toContain('href="/research-objects/ro-a/overview"');
     expect(markup).not.toContain('task=done');
   });
 });

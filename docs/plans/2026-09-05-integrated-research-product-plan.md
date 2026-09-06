@@ -477,3 +477,25 @@ User accepted the paper→Hermes→RO→visual media→review/publish→reading/
 Other candidate ORCID/registration/identity-step changes stay deferred until their role in the redesigned journey is agreed. No broad branch merge, new dependencies or API/schema changes.
 
 Acceptance: PR102 merged4d39808; CI34022708530 success. Full workspace checks, final web build and14account browser cases passed. ECS full build/parser16/core36/search2/BGE/ScanSci/health/retention passed; public en/zh login1440/390 and controlled profile discard1440/390 passed,0profile writes and session closed. Independent High review fixed draft loss, unrelated remote-field overwrite and coupled identity invariants. Deployment SSH interruption was verified safe before retry; missing exact parser report was prepared before final deployment. Whole-site aesthetic redesign remains pending discussion.
+
+## 2026-09-06 approved visual prototype
+
+用户已确认 A 配色方向及研究桌面、RO 概览、Hermes 侧栏三态样稿。当前授权为隔离本地交互样稿；生产整站改版待实际视觉验收。
+
+1. 在 `/_visual/research-journey` 复用 Next.js / CSS Modules / Radix，连接三种状态。
+2. 使用已验收 D2NN 机制插图与动画视频；明确生成解释图不属于原始证据。
+3. 本地演示证据展开、Hermes 修改预览、应用与撤销，不调用业务写 API。
+4. 验证桌面/移动端、中英文、浏览器返回、焦点和溢出，截图审视实际效果。
+5. 同步交接与索引，交用户验收；不部署或替换生产页面。
+
+## 2026-09-06 accepted A direction — companion and dashboard slice
+
+用户基本验收A样稿，要求保留阿拉丁神狗作为品牌记忆/陪伴助手，并继续下一步。
+
+1. 样稿复用现有ResearchWorkbenchHermes/Wanko Live2D与原静态回退，小入口用同角色头像；单实例、安静模式、系统减少动效、确认时静止。
+2. 正式dashboard只改展示层：page及scoped module；继续/开始/任务/文献/研究列表沿用原真实组件和API。HermesDockAnchor与全局舞台/Drawer保留，不搬样稿模拟状态进入产品。
+3. 运行原dashboard单元/浏览器回归，桌面/手机截图与Hermes运行时检查。此次第一片候选不等于RO/全站联调完成；部署前仍需完整发布验收。
+
+## Real overview and contextual Hermes slice
+
+用户继续授权：概览默认阅读完整SDF研究叙述；最新已提交versionNo资产仅展示approved image/video，明确与当前编辑文本的区别，原始证据单独入口；复用Shell神狗与Drawer，通过现有target字段发送段落上下文。修改overview page/module、Shell可选展示/调用入口、dashboard无待办续接路径及中英文文案；不新增API/数据库/模型。验证当前版本过滤、异步换RO隔离、助手目标请求、移动端与真实续接。正式发布需另跑完整构建/发布验收。

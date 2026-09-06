@@ -41,7 +41,7 @@ export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps
 
   const review = tasks.find((task) => task.researchObjectId === research.id && task.state === 'needs_review');
   const href = review ? hermesTaskHref(review)
-    : `/research-objects/${encodeURIComponent(research.id)}/${research.pendingCount > 0 ? 'hermes' : 'edit'}`;
+    : `/research-objects/${encodeURIComponent(research.id)}/${research.pendingCount > 0 ? 'hermes' : 'overview'}`;
   return (
     <section
       className="group surface-folio-sheet border-y border-os-rule-paper px-5 py-6 sm:px-7 sm:py-8"

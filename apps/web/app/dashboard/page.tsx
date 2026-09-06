@@ -21,6 +21,8 @@ import { ApiClientError, getCurrentUser, getDashboardOverview, listResearchInges
 import type { DashboardResearch } from '@/components/dashboard/ResearchList';
 import type { Locale } from '@/i18n/locale';
 
+import styles from './dashboard.module.css';
+
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
   const locale = useLocale() as Locale;
@@ -117,8 +119,10 @@ export default function DashboardPage() {
   return (
     <DashboardShell
       activeRoute="dashboard"
+      className={styles.desk}
+      mainClassName={styles.main}
       headerActions={(
-        <div className="ml-auto flex items-center justify-end gap-2">
+        <div className={styles.utilities}>
           <AccountLink user={user} />
           <LocaleSwitcher locale={locale} />
         </div>
@@ -126,30 +130,30 @@ export default function DashboardPage() {
       navigationLabel={t('context.navigation')}
       skipLabel={t('context.skip')}
     >
-      <div className="mx-auto grid max-w-[88rem] gap-x-10 gap-y-8 lg:grid-cols-12">
-        <header className="border-b border-os-rule-paper pb-6 lg:col-span-12">
-          <p data-reading-role="caption" className="text-os-muted-paper">
+      <div className={styles.layout}>
+        <header className={styles.heading}>
+          <p data-reading-role="caption" className={styles.eyebrow}>
             {t('eyebrow')}
           </p>
-          <h1 className="mt-2 text-[clamp(2rem,4vw,2.75rem)] font-normal leading-[1.08] tracking-[-0.03em] text-os-ink">
+          <h1 className={styles.title}>
             {t('title')}
           </h1>
-          <p data-reading-role="body" className="mt-3 max-w-2xl text-os-muted-paper">
+          <p data-reading-role="body" className={styles.welcome}>
             {t('welcome', { name: user?.displayName ?? '' })}
           </p>
         </header>
 
-        <div className="lg:col-span-8">
+        <div className={styles.continueResearch}>
           <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
         </div>
-        <div className="lg:col-span-4 lg:row-span-2">
+        <div className={styles.taskRail}>
           <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={visualState} suggestion={suggestion} />
           <HermesRail tasks={tasks} />
         </div>
-        <div className="lg:col-span-8">
+        <div className={styles.startResearch}>
           <ImportStage />
         </div>
-        <div className="lg:col-span-8">
+        <div className={styles.literature}>
           <LiteratureAcquisition
             initialTask={literatureTask}
             onAuthenticationRequired={handleLiteratureAuthenticationRequired}
@@ -157,7 +161,7 @@ export default function DashboardPage() {
             userId={user!.userId}
           />
         </div>
-        <div className="lg:col-span-12">
+        <div className={styles.library}>
           <ResearchList researchObjects={researchObjects} />
         </div>
       </div>

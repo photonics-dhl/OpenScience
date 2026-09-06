@@ -67,7 +67,7 @@ export function ResearchList({ researchObjects }: ResearchListProps) {
           {visible.map((research) => (
             <li key={research.id}>
               <Link
-                href={`/research-objects/${research.id}/edit`}
+                href={`/research-objects/${encodeURIComponent(research.id)}/overview`}
                 className="group grid min-h-14 gap-2 px-1 py-4 outline-none sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"
               >
                 <span className="min-w-0">

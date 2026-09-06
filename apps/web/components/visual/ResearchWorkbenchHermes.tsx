@@ -10,7 +10,7 @@ import type { HermesPetMeshInput } from '@/lib/hermes/pet-mesh-renderer';
 interface ResearchWorkbenchHermesProps {
   action: HermesActionId;
   reducedMotion: boolean;
-  size: 200 | 360;
+  size: 80 | 112 | 144 | 200 | 360;
   state: HermesVisualState;
 }
 

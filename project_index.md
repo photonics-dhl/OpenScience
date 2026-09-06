@@ -1,13 +1,13 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/product-workflow-design；PR102 source/main/application/public 4d39808ba662da17eaae9db1cef5e54d69db6bb5，rollback f144eb772f1063c00bd61a97612137328443edde；后续docs HEAD以Git为准。独立demo9848411、Codex controller3d518af不变。选择性同事登录/资料UX已合并部署；CI及公网账号验收通过。整站联调主线已确认，页面组织继续grill-me讨论。
+> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/product-workflow-design；PR102 source/main/application/public 4d39808ba662da17eaae9db1cef5e54d69db6bb5，rollback f144eb772f1063c00bd61a97612137328443edde；后续docs HEAD以Git为准。独立demo9848411、Codex controller3d518af不变。选择性同事登录/资料UX已合并部署；CI及公网账号验收通过。整站主线及页面职责已确认；A样稿基本验收、Wanko身份保留；正式dashboard首片为未部署本地候选。
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；用户认可生图视觉方向，新增媒体优先布局与原生折叠交互设计 |
+| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；已确认RO工作区/概览/Hermes侧栏/研究桌面职责；官方参考实查完成；A配色三态本地样稿，待用户视觉验收 |
 | `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；收尾/22路由审计和选择性同事UX整合；PR102应用4d39808已部署、动画demo9848411；主线确认，整站页面组织继续grill-me讨论 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | DEPLOYED3d518af；runner10、安装预检、真实Task/Credit/来源/草稿/PNG/权限验收通过 |
@@ -474,3 +474,13 @@
 | `apps/media-demo/storyboard-input.mjs` / `apps/media-demo/storyboard-drawing.mjs` / `apps/media-demo/test/storyboard-input.test.mjs` / `apps/media-demo/test/storyboard-drawing.test.mjs` | Opt-in3–6scene file-driven renderer, bounded local PNGs/cues and contained crossfades; existing render/input entry adapted | ENGINE TESTS passed049e544; VISUAL DELIVERY REJECTED (4/5 repeated panorama, slideshow only); no RO authority/task/TTS integration |
 
 | `apps/media-demo/prepare-animated-demo.mjs` / `apps/media-demo/test/prepare-animated-demo.test.mjs` | Prepare original animation inputs without generic override; explicit mode and scene/motion regression | ECS RESTORED9848411;23media/full workspace tests/browser/High review passed; PR101 merged; CI34019708441 passed |
+
+| `apps/web/app/_visual/research-journey/page.tsx` / `apps/web/app/%5Fvisual/research-journey/page.tsx` / `apps/web/components/visual/ResearchJourneyReview.tsx` / `apps/web/components/visual/research-journey-review.module.css` / `apps/web/components/visual/research-journey-copy.ts` | A配色三态交互样稿；独立noindex路由与中英文，纯本地演示 | LOCAL PROTOTYPE；A方向基本验收，已恢复Wanko陪伴身份；非生产流程 |
+| `apps/web/public/research-journey/d2nn-artwork.png` | 复用已验收science-video/source-artwork.png原文件；后续生成的D2NN机制解释图，非论文原始证据 | LOCAL PROTOTYPE；保留原图字节，非新生图 |
+| `apps/web/test/e2e/research-journey-review.spec.ts` | 三态连接、修改/撤销、移动端焦点、中英文及截图 | LOCAL PROTOTYPE validation |
+
+| `apps/web/app/dashboard/dashboard.module.css` | 正式研究桌面首片局部浅灰白/深青展示层；page保留真实组件/权限/恢复与全局Wanko | LOCAL CANDIDATE；全仓build及构建后浏览器通过，未部署 |
+
+| `apps/web/components/visual/ResearchWorkbenchHermes.tsx` | 复用原Wanko Live2D与静态fallback；增加样稿紧凑尺寸，未修改renderer | LOCAL CANDIDATE；单实例/减少动效/头像身份复用 |
+
+| `apps/web/app/research-objects/[id]/overview/overview.module.css` / `apps/web/test/e2e/research-overview.spec.ts` | 真实概览完整叙述、最新已提交版本审核资产、段落Hermes目标；桌面/移动端与历史版本过滤验证 | LOCAL CANDIDATE；全仓build及构建后浏览器通过，未部署 |

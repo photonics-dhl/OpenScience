@@ -6,6 +6,12 @@ async function mockAuthenticatedUser(page: Page, options: {
   researchObjects?: unknown[];
   tasks?: unknown[];
 } = {}) {
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: baseUrl }]);
+  // Dashboard literature recovery is part of the current read contract.
+  // Individual retrieval tests override these defaults with more specific fixtures.
+  await page.route('**/api/agent/tasks?**', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) });
+  });
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -40,6 +46,7 @@ test('registration is keyboard-operable and restores the intended return path', 
       code: '123456',
       password: 'Method123',
       displayName: 'Ada Researcher',
+      researchIdentity: { identities: ['reader'], primaryIdentity: 'reader', disciplines: [], topics: [], methods: [], languages: [] },
     });
     await route.fulfill({
       contentType: 'application/json',
@@ -195,13 +202,15 @@ test('dashboard binds Hermes portrait and queue to the same real approval task',
   const href = `/research-objects/${task.researchObjectId}/hermes?task=${task.id}`;
   await expect(page.locator(`[href="${href}"]`)).toHaveCount(2);
   await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
-  await expect(page.locator('[data-live2d-instance]')).toHaveCount(0);
-  await expect(page.locator('[data-hermes-fallback="static"]')).toHaveAttribute('data-motion', 'still');
+  await expect(page.locator('[data-live2d-instance="wanko"]')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-rig-status="ready"]')).toBeVisible({ timeout: 30000 });
   await expect(page.locator('.rounded-card')).toHaveCount(0);
   await page.screenshot({ path: 'test/visual/out/dashboard-approval-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
+  await expect(page.getByRole('heading', { name: /research dashboard/i })).toBeVisible({ timeout: 15000 });
   await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-rig-status="ready"]')).toBeVisible({ timeout: 30000 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.screenshot({ path: 'test/visual/out/dashboard-approval-mobile.png', fullPage: true });
 });
