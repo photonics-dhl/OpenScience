@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/overview-responsive-companion；application/public8e4ecb2b5f9e291385b0df8495082e923af328a6，rollback69aac5196142f83de1c2c6c6d61ed4bed4a7ad28。Hermes纹理与真实RO三页视觉修复已部署；最终媒体真实/空状态各三宽度通过，尚待用户视觉验收；demo9848411/controller3d518af unchanged.
-> 当前用户纠正：上一轮视觉未获验收，Hermes黑块已复现；正在快速统一真实RO三页，8e4ecb2已上线，媒体页已改专属角色栏；勿把历史测试通过等同视觉认可。
+> **CURRENT source/deployment anchor（2026-09-07 +08）：** branch codex/overview-responsive-companion；application/public 5e4b4d47cba918db5a9b7f7092de32aa244c258e，rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6。登录/注册减负与共享产品样式已部署；公网auth8/product8通过，未代替用户视觉验收；demo9848411/controller3d518af unchanged.
+> 当前用户要求：结合 frontend-design、ui-ux-pro-max、baseline-ui 统一完整入口体验，减少阅读与操作压力；不得把局部页面或共享配色等同整体联调完成。
 
 ## 当前产品交付
 
@@ -490,7 +490,7 @@
 
 | `apps/web/components/hermes/HermesVisualAdapter.tsx` / `apps/web/test/e2e/product-release.spec.ts` | PR103宽菜单实际矩形避让、12动作布局与概览媒体fixture；原保护/间距门禁保留 | DEPLOYED080fa74；最终构建回归与服务器验收通过 |
 
-| `apps/web/components/auth/Identity.module.css` | Shared login/register form-first layout, original Wanko welcome and accessible teal controls; auth logic unchanged | 2026-09-07 candidate; deploy status in CURRENT handoff |
+| `apps/web/components/auth/Identity.module.css` | Shared login/register form-first layout, original Wanko welcome and accessible teal controls; auth logic unchanged | 2026-09-07 deployed5e4b4d4; focused public auth checks passed |
 | `apps/web/components/shell/WorkspaceShell.tsx` | 稳定workspace planes标识，供概览独立响应式布局保留360px神狗空间 | DEPLOYED080fa74；1024/1280回归及公网复验通过 |
 
 | `apps/web/playwright.release.config.ts` | 将真实概览与1024/1280断点回归接入既有发布测试 | DEPLOYED config080fa74；默认package命令显式文件列表已在后续测试提交补齐 |

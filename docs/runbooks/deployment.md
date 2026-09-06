@@ -2490,3 +2490,23 @@ Use the existing documented exact-source rollback procedure with69aac5196142f83d
 ### 验证命令
 
 Existing checkup reports edge/loopback200 and proxy egress204. Final app/public8e4ecb2b5f9e291385b0df8495082e923af328a6; build, core36/search2 migration status, parser16, BGE, ScanSci and container health passed; journal cleared and retention complete. Public actual media and explicit empty fixtures each passed1440/1024/390, original rig ready and assistant opens, no asset overlap/overflow or business writes, sessions closed. Logs/screenshots are ignored under apps/web/test/visual/out/research-journey/ux-anchor-*; full-site CI success is not claimed.
+
+## 2026-09-07 entry continuity release
+
+### 前置检查
+
+User authorized direct deployment and skills-guided UI simplification. Verified prior active8e4ecb2b5f9e291385b0df8495082e923af328a6, healthy ingress/runtime; clean candidate5e4b4d47cba918db5a9b7f7092de32aa244c258e includes the new auth CSS module. No new migrations/providers.
+
+### 执行步骤
+
+1. Existing cloud-sync materialized exact source; existing parser preacceptance passed.
+2. Canonical deploy.sh --confirm --require-parser-acceptance completed for5e4b4d47cba918db5a9b7f7092de32aa244c258e, rollback8e4ecb2b5f9e291385b0df8495082e923af328a6.
+3. Source pushed non-force to main/branch; later docs commits are not new app releases.
+
+### 回滚步骤
+
+Use the existing exact-source rollback procedure targeting8e4ecb2b5f9e291385b0df8495082e923af328a6. Do not edit active source or manually switch Compose.
+
+### 验证命令
+
+Canonical build/parser16/core36/search2/BGE/ScanSci/container health passed; public/loopback200 and egress204. Journal cleared and retention completed. Public auth8 and product8 read-only checks passed with0business writes and controlled session closed. Evidence: ignored entry-deploy.log, entry-final-checkup.log, entry-shots.json and entry-product-evidence.json under apps/web/test/visual/out/research-journey/. No full research-pipeline or CI completion claim.
