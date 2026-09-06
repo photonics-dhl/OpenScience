@@ -2,9 +2,9 @@
 
 ## 2026-09-06 screenshot correction in progress
 
-- 用户否定旧版视觉与Hermes渲染，要求快部署少重复测试。生产实查080fa74，公网/回源200，服务健康；branch codex/overview-responsive-companion，候选基于b3abaf5，rollback待发布使用080fa74。
+- 用户否定旧版视觉与Hermes渲染，要求快部署少重复测试。69aac51已正式部署，rollback080fa74，公网桌面/手机8场景通过、会话退出。branch codex/overview-responsive-companion；公网发现媒体页浮动Hermes遮挡素材，正在补专属companion栏。
 - 黑块由销毁实例时误销毁Pixi共享纹理，真实Chromium精确红绿复现；原角色静态fallback保留。相关19单测通过。
-- 正在统一RO shell/nav、空概览起步、编辑与无版本媒体流程，尚未部署或完成视觉验收。
+- RO shell/nav、空概览起步、编辑与无版本媒体流程已上线；已有分镜默认折叠，2条原修订/生图fixture先展开后通过。专属媒体companion补丁待发布，不能把69视为视觉收尾。
 
 ## Research desk / overview / contextual Hermes deployed
 

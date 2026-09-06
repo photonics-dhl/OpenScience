@@ -361,6 +361,7 @@ test('Hermes plans and revises sourced scenes, retaining the original through ap
   await expect(original).toBeVisible();
   expect(keys[0]).toBe(keys[1]);
   expect(requests[1]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', instruction: 'Explain propagation.' } });
+  await original.locator('details').filter({ has: page.locator('[data-storyboard-panel]') }).locator('summary').first().click();
   await original.getByLabel('What should Hermes change?').fill('Show interference.');
   await original.getByRole('button', { name: 'Create revised draft · 1 AI credit' }).click();
   const revision = page.locator('[data-presentation-asset="plan-revision"]');
@@ -405,6 +406,7 @@ test('approved scene produces an independently reviewable image with stable retr
     items[1] = { ...items[1], status: 'approved' }; return json(route, { asset: items[1] });
   });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+  await page.locator('[data-presentation-asset="approved-plan"] details').filter({ has: page.locator('[data-storyboard-panel]') }).locator('summary').first().click();
   const action = page.locator('[data-scene-image="1"]');
   await expect(action).toBeVisible();
   await expect(page.getByText('One image costs 1 AI credit.', { exact: false }).first()).toBeVisible();

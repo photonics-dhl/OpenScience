@@ -12,3 +12,13 @@
 .actions a { color:#125d66; text-decoration:none; min-height:44px; display:inline-flex; align-items:center; font-size:14px; }
 .actions .primary { background:#125d66; color:white; padding:10px 18px; border-radius:8px; }
 @media(max-width:640px) { .start { margin:20px 12px; padding:24px; } }
+
+.layout { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; max-width:1360px; margin:24px auto; padding:0 24px; }
+.content { min-width:0; }
+.content .start { margin:0; }
+.content [data-presentation-workbench] { padding:24px 0; }
+.companion { min-width:0; padding-top:16px; }
+.companion h2 { font-size:18px; line-height:1.5; margin:12px 0; }
+.companion>p:not(.eyebrow) { max-width:30ch; font-size:14px; line-height:1.7; color:#626c76; }
+@media(min-width:1200px) { .layout:has(.companion) { grid-template-columns:minmax(0,1fr) 380px; } }
+@media(max-width:640px) { .layout { padding:0 12px; }.content .start { margin:0; } }

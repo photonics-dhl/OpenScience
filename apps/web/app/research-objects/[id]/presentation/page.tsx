@@ -3,7 +3,9 @@
 import workspaceStyles from '@/components/shell/research-workspace.module.css';
 import styles from './presentation-page.module.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
+import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
+import { useLocale, useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PresentationWorkbench, type PresentationTaskState } from '@/components/presentation/PresentationWorkbench';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
@@ -24,6 +26,7 @@ import {
   type PresentationAsset,
   type PresentationClaim,
   type VersionSummary,
+  type ResearchObjectSummary,
   type WorkspaceApi,
 } from '@/lib/api';
 
@@ -89,6 +92,11 @@ function scopedUrl(roId: string, versionId: string, taskId?: string): string {
 
 export default function PresentationPage({ params }: { params: { id: string } }) {
   const t = useTranslations('presentation');
+  const locale = useLocale() as 'zh' | 'en';
+  const companion = useTranslations('productSurfaces.overview');
+  const [hermesOpen, setHermesOpen] = useState(false);
+  const [assistantObject, setAssistantObject] = useState<ResearchObjectSummary | null>(null);
+  const suggestion = { bodyKey: 'guide.continue.body', href: `/research-objects/${encodeURIComponent(params.id)}/edit`, kind: 'continue-research' as const, researchObjectId: params.id, titleKey: 'guide.continue.title' };
   const router = useRouter();
   const search = useSearchParams();
   const requestedVersionId = search.get('version') ?? '';
@@ -145,12 +153,15 @@ export default function PresentationPage({ params }: { params: { id: string } })
     setBootstrapLoading(true);
     setLoadedResearchObjectId('');
     setResearchTitle('');
+    setAssistantObject(null);
+    setHermesOpen(false);
     setWorkspace(null);
     setError('');
     void Promise.all([getResearchObject(params.id), listVersions(params.id), listMyWorkspaces()]).then(([research, history, workspaces]) => {
       if (bootstrapEpoch.current !== epoch) return;
       setVersions(history.versions);
       setResearchTitle(research.researchObject.title);
+      setAssistantObject(research.researchObject);
       setWorkspace(workspaces.find((item) => item.id === research.researchObject.workspaceId) ?? null);
       setLoadedResearchObjectId(params.id);
     }).catch((cause) => {
@@ -346,6 +357,7 @@ export default function PresentationPage({ params }: { params: { id: string } })
   return (
     <DashboardShell className={workspaceStyles.workspace} mainClassName="p-0" navigationLabel={t('navigation')} skipLabel={t('skip')}>
       <div className={styles.navigation}><ResearchWorkspaceNav active="presentation" objectId={params.id} /></div>
+      <div className={styles.layout}><div className={styles.content}>
       {invalidRequestedVersion ? (
         <div className="mx-auto max-w-3xl px-5 py-12 sm:px-8">
           <p className="border-l-2 border-state-danger pl-4 text-state-danger" role="alert">{t('invalidVersion')}</p>
@@ -408,6 +420,11 @@ export default function PresentationPage({ params }: { params: { id: string } })
           </>}
         </section>
       )}
+      </div>{assistantObject?.id === params.id ? <aside className={styles.companion}>
+        <p className={styles.eyebrow}>HERMES</p><h2>{companion('companionTitle')}</h2><p>{companion('companionBody')}</p>
+        <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state="idle" suggestion={suggestion} workspaceId={params.id} />
+      </aside> : null}</div>
+      {assistantObject?.id === params.id ? <HermesAssistantDrawer key={params.id} dashboardContext={{ tasks: [], researchObjects: [{ id: params.id, status: assistantObject.status, title: researchTitle }] }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={params.id} suggestion={suggestion} target={null} /> : null}
     </DashboardShell>
   );
 }

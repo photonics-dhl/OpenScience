@@ -515,3 +515,5 @@ Acceptance: PR104080fa74 merged/deployed; CI34034878269 and exact server build/p
 1. Reproduce Wanko black geometry across renderer teardown; repair shared texture lifetime and original-character fallback.
 2. Apply accepted A to shared RO shell/navigation, overview onboarding, editor and presentation no-version state. Preserve business workflows and move secondary tools into an accessible menu.
 3. Run focused runtime checks, Web build and real browser screenshots; independently review material regressions. Deploy via existing exact-source script and inspect public three-page journey. Do not repeat the full-site browser matrix or add new gates.
+
+Public69aac51 follow-up: floating Hermes covered a presentation asset despite no viewport overflow. Reserve a dedicated380px companion rail with the existing DockAnchor/Drawer and real RO identity; stack below content on smaller screens. This is required before closing screenshot correction.

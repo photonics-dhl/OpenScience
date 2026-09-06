@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/overview-responsive-companion；PR104 application/public080fa74eecebd25ad63b48c8dd968d7b66d00cc7，rollback75797389fa7afa096599597841b66630f8b82ac4。CI/server/public12场景验收通过；后续测试/文档HEAD以Git为准。Desk/overview/contextual Hermes deployed; demo9848411/controller3d518af unchanged.
-> 当前用户纠正：上一轮视觉未获验收，Hermes黑块已复现；正在快速统一真实RO三页，生产仍080fa74，勿把历史测试通过等同视觉认可。
+> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/overview-responsive-companion；application/public69aac5196142f83de1c2c6c6d61ed4bed4a7ad28，rollback080fa74eecebd25ad63b48c8dd968d7b66d00cc7。真实三页视觉修复已上线，媒体陪伴栏补丁待发布；demo9848411/controller3d518af unchanged.
+> 当前用户纠正：上一轮视觉未获验收，Hermes黑块已复现；正在快速统一真实RO三页，69aac51已上线，媒体页浮动角色遮挡须补专属栏；勿把历史测试通过等同视觉认可。
 
 ## 当前产品交付
 
@@ -507,3 +507,5 @@
 - `apps/web/lib/editor-state.ts` / `apps/web/test/editor.test.ts`：partial SDF初始化补齐空字段并保留扩展字段，避免编辑页trim崩溃。
 
 - `apps/web/components/presentation/PresentationWorkbench.tsx`：分镜按标题折叠、按需展开，避免多个长分镜默认连续占满页面。
+
+- `apps/web/app/research-objects/[id]/presentation/page.tsx`：原HermesDockAnchor/Drawer接入真实RO上下文，独立陪伴栏避免覆盖素材；版本/任务权限逻辑保留。

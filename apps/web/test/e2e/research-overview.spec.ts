@@ -39,11 +39,8 @@ for (const width of [1440, 1280, 1024, 390]) {
     await expect(page.locator('[data-hermes-rig-status="ready"]')).toBeVisible({ timeout: 30000 });
     await page.evaluate(() => window.scrollTo(0, 0));
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    if (width >= 1280) {
-      const mapItems = page.locator('[data-workspace-plane="19"] li');
-      await expect(mapItems).toHaveCount(6);
-      expect(await mapItems.evaluateAll(items => items.every(item => item.scrollWidth <= item.clientWidth))).toBe(true);
-    }
+    await expect(page.locator('[data-workspace-plane="19"]')).toBeHidden();
+    await expect(page.locator('[data-research-workspace-nav] summary')).toBeVisible();
     await page.screenshot({ path: `test/visual/out/research-journey/real-overview-${width}.png`, fullPage: true });
     if (width === 1440) {
       let failContent = true;
