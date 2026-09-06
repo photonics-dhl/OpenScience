@@ -1,7 +1,7 @@
 # Integrated Research Product Delivery Plan
 
 > 执行者使用 executing-plans；只有独立且有明确 owner 的工作才委派。
-> 状态：CURRENT；2026-09-06 收尾与页面调查完成，见末尾审计。应用 f144eb7 / rollback b23102b；独立动画 demo9848411。整体联调和改版先经 grill-me 讨论，旧任务顺序不构成继续实施授权。
+> 状态：CURRENT；2026-09-06 收尾与页面调查完成，见末尾审计。应用4d39808 / rollback f144eb7（PR102选择性同事UX已部署）；独立动画demo9848411。整体联调和改版先经 grill-me 讨论，旧任务顺序不构成继续实施授权。
 
 **Goal:** 分段交付工作区—Hermes—RO、多模态展示与语音编辑完整产品体验。
 
@@ -14,7 +14,7 @@
 ## Global constraints
 
 - 设计依据：`docs/specs/2026-09-05-integrated-research-product-design.md`。
-- 当前生产 application/rollback 为 f144eb7 / b23102b（2026-09-06 实测）；以下早期检查记录为历史证据。
+- 当前生产 application/rollback 为4d39808 / f144eb7（2026-09-06实测）；以下早期检查记录为历史证据。
 - 不复做 Research Intelligence Tasks 1–12；不修改根目录旧 main 或其他人的未提交内容。
 - 每段先参考成熟方案；未经实测不得宣布候选 provider 可用。
 - 真实数据操作、发布、迁移和第三方安装遵守既有授权范围；效果按段交用户验收。
@@ -469,9 +469,11 @@ PR71绿色CI33863229583仅覆盖e5db5ae；93bb160没有对应check/status，不�
 
 User accepted the paper→Hermes→RO→visual media→review/publish→reading/discussion journey and explicitly requested selective coworker integration. Whole-site responsibilities and visual redesign remain under grill-me discussion; this bounded integration is authorized separately.
 
-- [ ] Adapt 30fabce login password visibility, recovery explanation and localized errors; put keys under auth.login and handle actual ACCOUNT_NOT_ACTIVE403. Preserve safeReturnTo/API/session behavior.
-- [ ] Adapt b0741eb research profile dirty/save/discard to current layout; preserve expectedProfileVersion, protect edits against in-flight saves and interest-signal responses.
-- [ ] Verify real error codes, translated controls and profile state in focused tests; inspect desktop/mobile and existing account flows, then full required checks and independent review.
-- [ ] Selectively merge validated adaptation with coworker provenance; deploy using existing authorized canonical pipeline and verify public behavior. No unrelated deployment-script or stale handoff changes.
+- [x] Adapt 30fabce login password visibility, recovery explanation and localized errors; put keys under auth.login and handle actual ACCOUNT_NOT_ACTIVE403. Preserve safeReturnTo/API/session behavior.
+- [x] Adapt b0741eb research profile dirty/save/discard to current layout; preserve expectedProfileVersion, protect edits against in-flight saves and interest-signal responses.
+- [x] Verify real error codes, translated controls and profile state in focused tests; inspect desktop/mobile and existing account flows, then full required checks and independent review.
+- [x] Selectively merge validated adaptation with coworker provenance; deploy using existing authorized canonical pipeline and verify public behavior. No unrelated deployment-script or stale handoff changes.
 
 Other candidate ORCID/registration/identity-step changes stay deferred until their role in the redesigned journey is agreed. No broad branch merge, new dependencies or API/schema changes.
+
+Acceptance: PR102 merged4d39808; CI34022708530 success. Full workspace checks, final web build and14account browser cases passed. ECS full build/parser16/core36/search2/BGE/ScanSci/health/retention passed; public en/zh login1440/390 and controlled profile discard1440/390 passed,0profile writes and session closed. Independent High review fixed draft loss, unrelated remote-field overwrite and coupled identity invariants. Deployment SSH interruption was verified safe before retry; missing exact parser report was prepared before final deployment. Whole-site aesthetic redesign remains pending discussion.

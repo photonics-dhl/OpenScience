@@ -1,12 +1,14 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-06 +08。生产f144eb7，rollback b23102b；Codex controller3d518af、demo9848411独立。后续文档提交不改变生产。
+> 最新同步：2026-09-06 +08。生产4d39808，rollback f144eb7；Codex controller3d518af、demo9848411独立。后续文档提交不改变生产。
 
-## Selective colleague integration — validation
+## Selective colleague integration — merged and deployed
 
 - 用户确认论文→Hermes→RO→可视化→审核发布→阅读讨论主线，并授权选择性合并；整站页面职责仍在grill-me讨论。
 - 适配30fabce登录显隐/恢复/真实错误本地化与b0741eb资料dirty/save/discard；修复翻译命名空间、ACCOUNT_NOT_ACTIVE语义、并发丢稿、不同字段覆盖和身份字段耦合。冲突需明确保留或撤销。
-- 独立High审查无剩余阻断；最终build/浏览器/CI/部署证据待完成。本轮不重做整站视觉。
+- 独立High审查通过；全仓build/typecheck/lint/tests、最终web build/14账号浏览器用例、CI34022708530通过。PR102已合并4d39808并部署，rollback f144eb7。服务器parser16/core36/search2/BGE/ScanSci/健康/retention通过。
+- 公网中英1440/390登录4项、真实账号1440/390资料撤销2项通过，profileWrites0/sessionClosed=true。初次SSH断线后确认旧release/无journal/锁释放再重试；补齐遗漏的parser报告后完成发布。浏览器即时断言改为等待React状态后通过。
+- 证据：忽略目录science-video/selective-{deploy-final,parser,public,checkup-final}.log及selective-public-evidence.json。整体布局问题尚未宣称解决，下一问确认统一RO工作区组织。
 
 ## 2026-09-06 收尾调查与讨论入口
 

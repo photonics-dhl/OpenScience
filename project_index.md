@@ -1,14 +1,14 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/product-workflow-design；调查HEAD/origin-main8369524，后续文档HEAD以Git为准。应用/公网f144eb772f1063c00bd61a97612137328443edde，rollback b23102b071ae715d738aa37504a838d2f3fc78f1；独立demo9848411、Codex controller3d518af。收尾调查及753.4MB缓存清理完成；22产品路由盘点/同事分支审查见CURRENT plan末节。整体联调/改版须先grill-me讨论。
+> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/product-workflow-design；PR102 source/main/application/public 4d39808ba662da17eaae9db1cef5e54d69db6bb5，rollback f144eb772f1063c00bd61a97612137328443edde；后续docs HEAD以Git为准。独立demo9848411、Codex controller3d518af不变。选择性同事登录/资料UX已合并部署；CI及公网账号验收通过。整站联调主线已确认，页面组织继续grill-me讨论。
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；用户认可生图视觉方向，新增媒体优先布局与原生折叠交互设计 |
-| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；2026-09-06收尾/磁盘/22路由/同事分支/设计参考审计；应用f144eb7、动画demo9848411；整体联调与改版进入grill-me讨论，未授权实施 |
+| `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；收尾/22路由审计和选择性同事UX整合；PR102应用4d39808已部署、动画demo9848411；主线确认，整站页面组织继续grill-me讨论 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | DEPLOYED3d518af；runner10、安装预检、真实Task/Credit/来源/草稿/PNG/权限验收通过 |
 | `apps/media-demo/inputs.mjs` / `apps/media-demo/render.mjs` / `apps/media-demo/drawing.mjs` / `apps/media-demo/test/inputs.test.mjs` / `apps/media-demo/test/drawing.test.mjs` | 可选第三幕机制图，保留旁白/输出探测场景与时间轴 | DEPLOYED9848411；服务器渲染/公网/390px/Range206通过，实际AAC音轨未变 |
@@ -26,7 +26,7 @@
 | `packages/domain/src/assets/presentation-asset.ts` / `packages/domain/src/index.ts` / `packages/domain/test/assets/presentation-asset.test.ts` / `apps/agent-worker/src/presentation/handler.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | 展示资产内容写角色、draft Version 与 Worker 提交时权限/Claim 重验；沿用 Serializable draft fence | DEPLOYED83b2933；含媒体canTransition与管理员审批约束；复用既有版本锁/Claim失效，当前证据见CURRENT handoff |
 
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/ContinueResearch.tsx` / `apps/web/components/research/ResearchWorkspaceNav.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/components/hermes/HermesTaskEntry.tsx` / `apps/web/messages/{zh,en}.json` | 同 RO 待确认优先、Hermes 常驻导航、真实任务入口与错误恢复、现有助手连接 | DEPLOYED 6478aa8；用户效果待验收 |
-| `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/login-recovery.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO 入口、scope、恢复、确认和移动体验回归 | DEPLOYED 6478aa8；公网 7 continuation cases GREEN，API fixtures |
+| `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/login-recovery.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO及登录恢复/错误语义回归 | DEPLOYED4d39808；login单元10、账号浏览器14及公网登录/资料验收通过 |
 
 | `apps/web/app/me/{page,layout}.tsx` / `apps/web/app/settings/page.tsx` / `apps/web/components/navigation/{AccountLink,ProductRouteNavigation}.tsx` / `apps/web/components/profile/MyResearchProjects.tsx` / `apps/web/components/settings/{AcademicIdentityControl,MotionPreferenceControl}.tsx` / `apps/web/components/hermes/HermesWorkspaceStage.tsx` / `apps/web/components/shell/DashboardShell.tsx` | frontend/nanqing 个人主页/设置分离、身份恢复与移动导航整合 | DEPLOYED 6478aa8 |
 | `apps/web/lib/api.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/test/{api-agent,hermes-guide-recovery}.test.ts` | 绑定 RO 的 guide 会话与范围恢复、scoped ingestion client | DEPLOYED 6478aa8；复审修正 |

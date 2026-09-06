@@ -4,8 +4,8 @@
 
 ## Version tuple
 
-- Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; renderer source9848411d1419a0dd690f74cca9042369b651f7b2; audit origin-main83695240d9f2bc328db3ed668aaa11fc8389f41c; deployed application sourcef144eb772f1063c00bd61a97612137328443edde. Subsequent documentation HEAD is obtained from Git.
-- Production active/public/loopback f144eb772f1063c00bd61a97612137328443edde; rollback b23102b071ae715d738aa37504a838d2f3fc78f1. PR98 and PR99 merged by non-force fast-forward to exact tested commits.
+- Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; renderer source9848411d1419a0dd690f74cca9042369b651f7b2; audit origin-main83695240d9f2bc328db3ed668aaa11fc8389f41c; deployed application source4d39808ba662da17eaae9db1cef5e54d69db6bb5. Subsequent documentation HEAD is obtained from Git.
+- Production active/public/loopback 4d39808ba662da17eaae9db1cef5e54d69db6bb5; rollback f144eb772f1063c00bd61a97612137328443edde. PR102 merged and CI34022708530 passed. PR98 and PR99 merged by non-force fast-forward to exact tested commits.
 - PR98 CI34014496625 and main CI34015117654 succeeded. PR99 CI34015765809 succeeded; main CI34016486547 succeeded (freshly checked).
 - Root checkout is main at b9616cb92dc83437b1b2094291ff43e2a4c34337, with user changes left untouched. It is not the production source or origin/main.
 - Independent Codex controller bundle remains3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52. Demo source9848411d1419a0dd690f74cca9042369b651f7b2, run9848411-20260906T074017Z; /demos/science-video/d2nn/?v=animated-restored-v1. Prior demo7e1b6ea-20260906T044500Z retained for rollback. App, runner and demo identities are separate.
@@ -20,6 +20,8 @@
 - Every result remains draft until reviewed. Generated art is explanatory material, not original evidence or automatic proof.
 
 ## Fresh acceptance
+
+- Latest4d39808: adapted login recovery/password visibility and profile save/discard; real errors and 3way profile conflict handling with atomic identity pair. Full checks,14account browser cases and High review passed. ECS parser16/core36/search2/BGE/ScanSci/health/retention passed. Public login en/zh1440/390 + controlled profile discard1440/390 passed,0profile writes/session closed; selective-* evidence.
 
 - Full workspace build/typecheck/lint/tests passed; final feature web514 tests, presentation browser15, additional Hermes regression14 passed. Contrast regression failed against the old transparent button and passed after correction; final scoped browser3/build/lint/docs and independent architecture/security/token review passed.
 - Both app releases passed exact server build, parser16, runtime identity, migration status, BGE/ScanSci, container/public health and canonical retention. Final deployment journal cleared; public/loopback200, egress204 through existing SSH/v2ray parent. No pending migrations.
@@ -38,7 +40,7 @@
 
 ## Next action / read-first
 
-- USER STEERING: user confirmed full paper-to-discussion journey and authorized selective colleague integration (30fabce/b0741eb adaptation under final validation); whole-site layout discussion remains pending. 2026-09-06 closeout audit and disk cleanup complete; next use grill-me one question at a time to agree full integration/page responsibilities/visual scope. No implementation until discussion. Full inventory in CURRENT plan closeout-20260906.
+- USER STEERING: user confirmed full paper-to-discussion journey and authorized selective colleague integration (30fabce/b0741eb adaptation now merged/deployed4d39808); whole-site layout discussion remains pending. 2026-09-06 closeout audit and disk cleanup complete; next use grill-me one question at a time to agree full integration/page responsibilities/visual scope. No implementation until discussion. Full inventory in CURRENT plan closeout-20260906.
 - Fresh maintenance: app/rollback f144eb7/b23102b unchanged; builder cache reclaimed753.4MB,1.005GB retained,98623787008bytes free;13running containers and runtime images preserved.22product routes/14visual source files;8entry+3public RO browser audits. Authenticated pages code-only; public gallery exists but9tabs placeholders, E2E public content,3px mobile overflow recorded.
 
 - Generic renderer049e544 is VISUALLY REJECTED by user: evaluation copied the same panorama into4/5 scenes, and generic mode only zooms/crossfades. Earlier20 media tests/full workspace tests/lint/docs passed; isolated ECS41.292s/991frames/8080238bytes,37.95s render, full decode/fastStart, exact source WAV retained. PR100 merged; CI34018403393 succeeded. Duplicate main CI is not acceptance evidence at this checkpoint. No app/demo switch, API/task/TTS integration. Evidence generic-server-eval.log/generic-server-*.png in ignored science-video directory.
