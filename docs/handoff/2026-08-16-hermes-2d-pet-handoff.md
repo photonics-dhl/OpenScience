@@ -62,11 +62,17 @@
 - v1 failed beforemodel onreadonlycache; v2 textturn succeeded but code_mode_host disabled (input19205/output420), noimage. v3 CLIexit0,56.012s total, textusage21205/417, PNG1536×1024/2261484bytes saved inECS egress-v3/state/generated_images and copiedto ignored codex-server-builtin-v1.png. CLI reportsoneimagecall; JSONL lacks nestedtool event audit, onlyoneimagefile independentlyverified. Dollar/image quota unknown.
 - Actualscreen/plates/wavefront readable; artisticconceptcandidate, scientificinterferenceexpression stillneedsreview. NoROimport/approval/deployment. Officialservercapability demonstrated; notproof ofsupportedpublicproductbackend. ab.chatgpt.com telemetry denied withoutblockingcompletion. CPUmodeldownload remains paused.
 
+## Latest refinement and private RO draft
+
+- 2026-09-06：服务器新增两次成图。v4消除彩色薄片/深蓝暗斑，但波前过密；v5简化为三处代表性波前，1672×941、1875121bytes，完整任务65.309s。三处为连续相位面的示意采样，不代表三个孔；不是仿真或实验图。
+- v5经现有immutable615ca2d导入CLI写入独立draft666606ad-4f4a-45e6-ae7f-d8ff29ebfa28；hashddda065bad842416433559b703738d4375b18282d8c2a85b0c7054625e3847c1，精确3Claim关联/1导入审计。generator明确assistant visual review；未批准/发布，无分镜父子绑定，也未将Codex接进Gateway。
+- 浏览器桌面/390px显示解码、完整字节hash、登录200/匿名401通过，会话已注销；代理v4/v5与模型均退出，生产仍615ca2d。ignored codex-server-builtin-v2/v3.png、codex-ro-browser-evidence.json、codex-ro-audit.json及codex-ro-draft截图。下一步复用该受控生成/导入路径完善分镜素材，再接视频；正式自动接入需另行设计，不得声称Hermes已自动调用Codex。
+
 ## Constraints and next action
 
 - 用户已授权实施/合入/部署/真实论文验证/必要开源方案，不重复询问。不得读取/打印.env、Cookie、密钥；云上仅项目SSH/deploy脚本。
 - 复用Chromium、CPU Canvas、离线Qwen；torchCPU基础约0.97GB，Qwen子镜像约2.04GB含基础，模型4.52GB。BGE依赖不同，不合并可变环境；无GPU，不重装模型。
 - 用户接受v4 Serena完整41.28秒WAV；原WAV不分段/补静音/变速。淡彩视频41.292秒/3,203,000bytes，ECS渲染37.76秒；未以本轮分镜重生成配音或视频。
 - 已知边界：来源/权限在扣额后改变可使任务失败；生图崩溃恢复无素材时阻止再次付费，可能需人工核查；Storage先写后DB失败可留私有无引用对象。公开review digest未纳入媒体的历史债务在扩大公开发布前复核。
-- 下一步：保持本地模型暂停；审阅已生成的服务器Codex样本，完善科学构图并决定管理员受控素材生产路径（登录/代理/生图已验证，未接入产品）；当前MiniMax候选不得当作质量完成合入。经视觉审阅后再接隔离CPU视频渲染，保留当前声音；再把分镜/媒体目标接入全局Hermes对话。优先复用现有渲染和成熟方案，实际测质量/成本；未接的能力不显示假成功。
+- 下一步：保持本地模型暂停；审阅已生成的服务器Codex样本，完善科学构图并决定管理员受控素材生产路径（登录/代理/生图与私有RO草稿导入已验证，自动生成未接入）；当前MiniMax候选不得当作质量完成合入。经视觉审阅后再接隔离CPU视频渲染，保留当前声音；再把分镜/媒体目标接入全局Hermes对话。优先复用现有渲染和成熟方案，实际测质量/成本；未接的能力不显示假成功。
 - 同事frontend/nanqing上次核实e5db5ae；已有每日10:00巡检自动任务，勿重复创建。下一次合并前重新fetch比较。

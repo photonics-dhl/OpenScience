@@ -2,6 +2,12 @@
 
 > 最新同步：2026-09-06 +08。应用615ca2d已部署，rollbackd6507ea。后续文档提交不改变生产。
 
+## 科学构图修订与 RO 草稿导入完成
+
+- 服务器完成两次图片修订：密集波前版保留为候选；稀疏版消除分色/蓝色暗斑歧义，1672×941，65.309秒完整任务。示意波前和屏上亮度不代表实验数据，图片额度/美元成本未知。
+- 复用当前615ca2d导入CLI，私有RO新增draft666606ad-4f4a-45e6-ae7f-d8ff29ebfa28；3条Claims、1条导入审计已核验。没有批准/发布，没有分镜父绑定，没有Gateway/Codex自动接入。
+- 桌面与390px图片解码、无横向溢出、下载hash、登录200/匿名401均通过；会话注销、临时代理停止，生产版本不变。证据见science-video runbook与CURRENT handoff。
+
 ## Server Codex image generation verified
 
 - Existing v2ray/SSH/Squid reused through restricted Unixsocket proxy; generationcontainer networknone, no production/firewallchanges. Freshapprelease/public615ca2d unchanged; proxiesstopped.
