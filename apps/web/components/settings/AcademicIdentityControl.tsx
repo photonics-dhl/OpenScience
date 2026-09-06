@@ -95,6 +95,8 @@ export function AcademicIdentityControl() {
   const orcid = status?.credentials.find((credential) => credential.type === 'orcid');
   const institution = status?.credentials.find((credential) => credential.type === 'institution_email');
   const unavailable = busy || loading || loadFailed || !status;
+  const completedSteps = steps.filter(([, complete]) => complete).length;
+  const nextStep = status ? !status.steps.emailVerified ? t('nextVerifyPrimary') : !status.steps.orcidConnected ? t('nextConnectOrcid') : !status.steps.institutionEmailVerified ? t('nextVerifyInstitution') : t('nextComplete') : '';
 
   return (
     <section className="surface-folio-sheet px-5 py-6 md:col-span-2" data-academic-identity="true">
@@ -104,6 +106,10 @@ export function AcademicIdentityControl() {
       </div>
       {loading ? <p role="status" className="mt-4 text-sm text-os-muted-paper">{t('loading')}</p> : null}
       {loadFailed ? <div className="mt-4"><p role="alert" className="text-sm text-os-vermilion-ink">{t('loadError')}</p><Button className="mt-2" disabled={loading || busy} onClick={() => void refresh()}>{t('retryStatus')}</Button></div> : null}
+      {status ? <div className="mt-5 grid gap-3 border-y border-os-rule-paper py-4 sm:grid-cols-[auto_1fr] sm:items-center" data-identity-summary="true">
+        <p className="font-data text-2xl text-os-ink">{t('summaryCount', { completed: completedSteps })}</p>
+        <div><p className="text-sm font-semibold text-os-ink">{t('nextAction')}</p><p className="mt-1 text-sm text-os-muted-paper">{nextStep}</p></div>
+      </div> : null}
       <ol aria-label={t('progressLabel')} className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {steps.map(([label, complete], index) => (
           <li key={label} className="flex min-h-11 items-center gap-2 border-b border-os-rule-paper pb-2 text-sm text-os-ink">
@@ -145,6 +151,7 @@ export function AcademicIdentityControl() {
       </div>
       <p aria-live="polite" className="mt-4 text-sm text-os-muted-paper">{message}</p>
       {error ? <p role="alert" className="mt-2 text-sm text-os-vermilion-ink">{error}</p> : null}
+      <p className="mt-5 border-t border-os-rule-paper pt-4 text-xs leading-5 text-os-muted-paper">{t('summaryPrivacy')}</p>
     </section>
   );
 }

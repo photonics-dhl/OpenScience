@@ -37,6 +37,8 @@ test('loading failure stays unknown, blocks writes and can be retried', async ({
   await expect(panel.getByRole('button', { name: 'Connect ORCID', exact: true })).toBeDisabled();
   await panel.getByRole('button', { name: 'Reload identity status' }).click();
   await expect(panel.getByRole('button', { name: 'Connect ORCID', exact: true })).toBeEnabled();
+  await expect(panel.locator('[data-identity-summary="true"]')).toContainText('2/4 complete');
+  await expect(panel.locator('[data-identity-summary="true"]')).toContainText('Connect ORCID');
 });
 
 test('institution challenge locks its email and offers recovery without credential loss', async ({ page }) => {
