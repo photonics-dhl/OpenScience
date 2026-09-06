@@ -5,6 +5,30 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArguments, validatePaths, INPUT_FILES } from '../inputs.mjs';
 
+test('optional third-scene artwork is accepted only as a bounded nonempty regular file', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'science-demo-scene3-'));
+  const input = join(root, 'input'); await mkdir(input);
+  for (const name of INPUT_FILES) await writeFile(join(input, name), 'fixture');
+  const output = join(root, 'output');
+  assert.equal((await validatePaths(input, output)).scene3Artwork, undefined);
+  const artwork = join(input, 'scene3-artwork.png');
+  await writeFile(artwork, 'fixture');
+  assert.equal((await validatePaths(input, output)).scene3Artwork, artwork);
+  await writeFile(artwork, '');
+  await assert.rejects(validatePaths(input, output), /scene3-artwork.png/);
+  const file = await open(artwork, 'r+');
+  try { await file.truncate(64 * 1024 * 1024 + 1); } finally { await file.close(); }
+  await assert.rejects(validatePaths(input, output), /scene3-artwork.png/);
+});
+
+test('rejects an optional artwork directory instead of attempting to decode it', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'science-demo-scene3-dir-'));
+  const input = join(root, 'input'); await mkdir(input);
+  for (const name of INPUT_FILES) await writeFile(join(input, name), 'fixture');
+  await mkdir(join(input, 'scene3-artwork.png'));
+  await assert.rejects(validatePaths(input, join(root, 'output')), /nonempty regular.*scene3-artwork.png/);
+});
+
 test('requires explicit input/output and rejects duplicate or unknown switches', () => {
   assert.throws(() => parseArguments([]), /input.*output/);
   assert.throws(() => parseArguments(['--input', '/a', '--input', '/b', '--output', '/c']), /Duplicate/);

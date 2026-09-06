@@ -86,6 +86,9 @@ services:
       - /opt/openscience/.env.prod
     environment:
       MINIMAX_IMAGE_ENABLED: "true"
+      HERMES_SCENE_IMAGE_PROVIDER: ${HERMES_SCENE_IMAGE_PROVIDER:-minimax}
+      CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
+      CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
       S3_DRIVER: minio
       S3_ENDPOINT: object-storage
       S3_PORT: "8333"
@@ -142,11 +145,17 @@ services:
       - ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}:/opt/openscience:ro
       - parser-jobs:/parser-jobs
       - scansci-papers:/data/papers
+      # Worker can submit jobs but cannot rewrite runner results or access credentials.
+      - /opt/openscience-codex/inbox:/codex-jobs/inbox:rw
+      - /opt/openscience-codex/results:/codex-jobs/results:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
     environment:
       MINIMAX_IMAGE_ENABLED: "true"
+      HERMES_SCENE_IMAGE_PROVIDER: ${HERMES_SCENE_IMAGE_PROVIDER:-minimax}
+      CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
+      CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
       S3_DRIVER: minio
       S3_ENDPOINT: object-storage
       S3_PORT: "8333"

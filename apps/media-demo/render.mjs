@@ -44,7 +44,7 @@ async function main() {
   process.once('SIGINT', stop);
   try {
   const args = parseArguments(process.argv.slice(2));
-  const { input, output, audioMode } = await validatePaths(args.input, args.output);
+  const { input, output, audioMode, scene3Artwork } = await validatePaths(args.input, args.output);
   const ffmpeg = process.env.SCIENCE_FFMPEG || '/usr/bin/ffmpeg';
   const ffprobe = process.env.SCIENCE_FFPROBE || '/usr/bin/ffprobe';
   let metadata;
@@ -85,7 +85,7 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
     await page.route('**/*', route => route.abort());
     await page.setContent('<!doctype html><html><body style="margin:0"><canvas width="1280" height="720"></canvas></body></html>');
-    await page.evaluate(installDrawing, { scenes, total, visualStyle, artworkData: `data:image/png;base64,${(await readFile(resolve(input, 'source-artwork.png'))).toString('base64')}` });
+    await page.evaluate(installDrawing, { scenes, total, visualStyle, artworkData: `data:image/png;base64,${(await readFile(resolve(input, 'source-artwork.png'))).toString('base64')}`, scene3ArtworkData: scene3Artwork ? `data:image/png;base64,${(await readFile(scene3Artwork)).toString('base64')}` : undefined });
     await page.evaluate(() => document.fonts.ready);
     encoder = startEncoder(ffmpeg, ['-n', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(fps), '-i', 'pipe:0', '-an', '-c:v', 'libx264', '-preset', 'fast', '-crf', '19', '-pix_fmt', 'yuv420p', resolve(output, 'silent-v2.mp4')]);
     const middle = i => scenes[i].start + scenes[i].duration / 2;

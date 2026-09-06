@@ -127,7 +127,7 @@ export class AiGateway {
     const promptHash = sha256Text(prompt);
     let succeeded = false;
     try {
-      const generated = await provider.generate({ prompt });
+      const generated = await provider.generate({ prompt, ...(request.requestId !== undefined ? { requestId: request.requestId } : {}) });
       const result = validateImageBytes(generated.bytes);
       succeeded = true;
       return { ...result, model: provider.model, provider: provider.name, promptHash };

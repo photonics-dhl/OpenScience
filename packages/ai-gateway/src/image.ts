@@ -1,8 +1,9 @@
+import { CODEX_IMAGE_ID_PATTERN } from './codex-image-protocol';
 import { inflateSync } from 'node:zlib';
 import { AiGatewayError } from './errors';
 import { encodedImageDimensions, type OcrMediaType } from './ocr';
 
-export interface ImageRequest { prompt: string }
+export interface ImageRequest { prompt: string; requestId?: string }
 export interface ImageProviderResult { bytes: Buffer; contentType: OcrMediaType }
 export interface ImageResult extends ImageProviderResult { model: string; provider: string; promptHash: string }
 export interface ImageProvider { readonly name: string; readonly model: string; generate(request: ImageRequest): Promise<ImageProviderResult> }
@@ -12,7 +13,7 @@ const MAX_RESPONSE_BYTES = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64 * 1024;
 const failed = () => new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image generation failed');
 
 export function validateImageRequest(request: ImageRequest): string {
-  if (!request || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 1500) {
+  if (!request || (request.requestId !== undefined && (typeof request.requestId !== 'string' || !CODEX_IMAGE_ID_PATTERN.test(request.requestId))) || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 1500) {
     throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'image prompt must contain 1 to 1500 characters');
   }
   return request.prompt;

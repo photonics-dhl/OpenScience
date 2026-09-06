@@ -31,13 +31,18 @@ export async function validatePaths(inputArgument, outputArgument) {
     if (error.code !== 'ENOENT') throw error;
   }
   const files = audioMode === 'continuous' ? ['source-artwork.png', 'narration.wav', 'narration.json'] : INPUT_FILES;
-  for (const name of files) {
+  let scene3Artwork;
+  for (const name of [...files, 'scene3-artwork.png']) {
     let info;
-    try { info = await lstat(resolve(input, name)); } catch { throw new Error(`Missing required input: ${name}`); }
+    try { info = await lstat(resolve(input, name)); } catch (error) {
+      if (name === 'scene3-artwork.png' && error.code === 'ENOENT') continue;
+      throw new Error(`Missing or unreadable input: ${name}`);
+    }
     const limit = name === 'narration.json' ? 64 * 1024 : 64 * 1024 * 1024;
     if (!info.isFile() || info.isSymbolicLink() || info.size === 0 || info.size > limit) {
       throw new Error(`Input must be a nonempty regular file of at most ${limit} bytes: ${name}`);
     }
+    if (name === 'scene3-artwork.png') scene3Artwork = resolve(input, name);
   }
   const requested = resolve(outputArgument);
   let output;
@@ -53,5 +58,5 @@ export async function validatePaths(inputArgument, outputArgument) {
     if (names.includes(VIDEO_FILE)) throw new Error('Final video already exists; use a new output directory');
     if (names.length) throw new Error('Output directory must be empty; retain prior artifacts and use a new directory');
   }
-  return { input, output, audioMode };
+  return { input, output, audioMode, scene3Artwork };
 }

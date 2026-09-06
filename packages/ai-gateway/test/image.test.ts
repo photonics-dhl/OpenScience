@@ -106,3 +106,11 @@ describe('bounded scene image provider', () => {
     expect(JSON.stringify(record.mock.calls)).not.toMatch(/secret-key|provider-response|"scene"/);
   });
 });
+
+it('forwards a stable task UUID and rejects unsafe request identifiers before provider invocation', async () => {
+  const generate = vi.fn(async () => ({ bytes: png, contentType: 'image/png' as const }));
+  const gateway = new AiGateway({ providers: [{ name: 'text', model: 'text', complete: vi.fn() }], imageProviders: [{ name: 'image', model: 'image', generate }], killSwitch: { isEnabled: () => ({ enabled: true }) } });
+  const request = { prompt: 'scene', requestId: '01900000-0000-7000-8000-000000000001' };
+  await gateway.generateImage(request); expect(generate).toHaveBeenCalledWith(request);
+  await expect(gateway.generateImage({ ...request, requestId: '../escape' })).rejects.toThrow(); expect(generate).toHaveBeenCalledTimes(1);
+});

@@ -60,7 +60,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if ((await requireSceneImageParent(deps.prisma, payload))?.identity !== sceneParent.identity) throw new Error('[blocked] approved storyboard changed before image generation');
       const currentClaims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
       if (presentationClaimContent(currentClaims as PresentationClaim[]) !== presentationClaimContent(claims)) throw new Error('[blocked] source Claims changed before image generation');
-      const result = await options.gateway.generateImage({ prompt });
+      const result = await options.gateway.generateImage({ prompt, requestId: task.id });
       bytes = result.bytes; contentType = result.contentType; extension = imageExtension(contentType);
       imageProvider = result.provider;
       generator = `OpenScience Hermes scene image / ${result.provider}`; generatorVersion = result.model; promptHash = result.promptHash;

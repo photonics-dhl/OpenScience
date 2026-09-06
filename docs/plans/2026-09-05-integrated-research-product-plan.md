@@ -323,3 +323,14 @@ Composition checkpoint: implementation/tests/review completed; real MiniMax pict
 2026-09-06 user steering: PAUSE local model preparation; retest MiniMax before any further installation. Exact download container stopped; about1.1GB archive/partial remains under /opt/openscience-evals/local-image, no weights complete and no inference/runtime install executed. Do not resume automatically. Production615ca2d/rollbackd6507ea unchanged.
 
 MiniMax retest complete: same explicit scene prompt/seed42, image-01 optimizerfalse33.039s vs optimizertrue58.000s. Both preserve the screen better, but waves/intensity remain scientifically weak; optimization introduces a focus-like shape. image-01-live optimizertrue failed88.899s within the120s request ceiling; exact provider failure cause unknown, no automatic retry. Three audited image calls, no M3 call, no product asset/credit reservation; provider dollar costs null. No production switch. Next may test isolated official Codex CLI ChatGPT login, conditional on actual account/tool provisioning; API key absence alone does not exclude built-in imagegen.
+
+## Current batch: administrator Hermes → Codex and mechanism video
+
+User authorized execution on 2026-09-06. Architecture: ADR-013. No additional approval checkpoint is required for the already-authorized implementation and deployment.
+
+1. Gateway: add shared request/result validation, exclusive task submission and readonly result polling; forward AgentTask UUID and preserve all existing source/permission/retry checks. Add explicit provider config and focused tests.
+2. Runner: private claimed/started state, one job at a time, fixed Docker arguments, socket-only egress, readonly credential, bounded image collection and existing FFmpeg normalization. Test crash/replay/expiry and sandbox boundaries before server use.
+3. Video: add optional scene3-artwork.png only to mechanism scene index2 (11–20.56 seconds); preserve the accepted continuous narration and detector-classification scene. The six-scene RO storyboard and older five-scene demo have different indices; map by content, not index alone.
+4. Review and validate: full workspace build/typecheck/lint/tests, runner and media tests, independent review, docs sync and CI. Install the versioned runner bundle with existing runtime/images; activate Codex only after its heartbeat is healthy.
+5. Server acceptance: submit through the existing authenticated RO/Hermes scene-image API, verify one task/credit/audit, Codex provider provenance, parent/Claims and actual image decoding. Keep generated asset draft until visual review.
+6. Render/deploy the revised demo with the unchanged voice, verify video duration/decoding/seek/mobile display, and give the user the actual result. Do not describe this fixed demo as arbitrary RO-to-video automation.

@@ -2,6 +2,12 @@
 
 > 最新同步：2026-09-06 +08。应用615ca2d已部署，rollbackd6507ea。后续文档提交不改变生产。
 
+## Hermes Codex integration candidate — implementation complete, server validation pending
+
+- 现有 presentation.generate → Gateway 新增显式 Codex provider；服务端串行 runner 使用私有文件任务、持久化 started 记录、Unix socket 限域代理及现有 FFmpeg 规范化。无新数据库/API，无公开通用执行入口。
+- 全仓 build/typecheck/lint/test 已通过；后续 focused runner9/Gateway27、媒体第三幕8测试通过。独立审查修复 archive 无 .git、提交中断恢复、安装失败恢复与旧 heartbeat 问题；最终源部署待执行。
+- Demo 仅新增可选 scene3-artwork.png，五幕中的第三幕解释衍射/干涉；原图、41.28秒连续 Serena WAV 与时间轴保持。未渲染/部署新视频，生产仍615ca2d。
+
 ## 科学构图修订与 RO 草稿导入完成
 
 - 服务器完成两次图片修订：密集波前版保留为候选；稀疏版消除分色/蓝色暗斑歧义，1672×941，65.309秒完整任务。示意波前和屏上亮度不代表实验数据，图片额度/美元成本未知。

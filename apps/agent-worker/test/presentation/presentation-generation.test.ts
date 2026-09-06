@@ -294,11 +294,13 @@ it('generates one real scene image with correct MIME extension and all parent Cl
   const ctx=sceneHandlerFixture();
   await ctx.handler(ctx.deps as never,ctx.task);
   expect(ctx.generateImage).toHaveBeenCalledTimes(1);
+  expect(ctx.generateImage).toHaveBeenCalledWith({ prompt: expect.any(String), requestId: ctx.task.id });
   expect(ctx.putObject).toHaveBeenCalledWith(expect.stringMatching(/\.png$/),ctx.bytes,expect.objectContaining({contentType:'image/png'}));
   expect(ctx.rows[0].provenance.sceneImage).toEqual(ctx.task.payload.sceneImage);
   expect(ctx.rows[0].generator).toContain('minimax');
   await ctx.handler(ctx.deps as never,ctx.task);
   expect(ctx.generateImage).toHaveBeenCalledTimes(1);
+  expect(ctx.generateImage).toHaveBeenCalledWith({ prompt: expect.any(String), requestId: ctx.task.id });
 });
 it.each(['draft','changed','rejected','claims','authority'])('blocks scene image persistence after %s source change',async change=>{
   const ctx=sceneHandlerFixture();

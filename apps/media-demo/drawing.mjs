@@ -1,10 +1,16 @@
 /* global Image, document, window */
 // Executed inside Chromium. Fixed D2NN illustration, not an arbitrary HTML renderer.
-export const installDrawing = async ({ scenes, total, artworkData, visualStyle = 'technical' }) => {
+export const installDrawing = async ({ scenes, total, artworkData, scene3ArtworkData, visualStyle = 'technical' }) => {
     const watercolor = visualStyle === 'watercolor';
     const art = new Image();
     art.src = artworkData;
     await art.decode();
+    let scene3Art;
+    if (scene3ArtworkData) {
+        scene3Art = new Image();
+        scene3Art.src = scene3ArtworkData;
+        await scene3Art.decode();
+    }
     const c = document.querySelector('canvas');
     let g = c.getContext('2d');
     const main = g, stage = document.createElement('canvas');
@@ -121,7 +127,7 @@ export const installDrawing = async ({ scenes, total, artworkData, visualStyle =
         }
         text(String(j), xx + cell / 2 - 7, yy + cell + 21, 19, muted);
     } }
-    function drawScene(index, u) {
+    function drawScene(index, u, useSceneArtwork = true) {
         motionClock = u;
         const p = ease(u / 1.3);
         if (index === 0) {
@@ -157,6 +163,12 @@ export const installDrawing = async ({ scenes, total, artworkData, visualStyle =
             }
         }
         if (index === 2) {
+            if (scene3Art && useSceneArtwork) {
+                const scale = Math.min(1152 / scene3Art.width, 384 / scene3Art.height);
+                g.drawImage(scene3Art, 64 + (1152 - scene3Art.width * scale) / 2, 205 + (384 - scene3Art.height * scale) / 2, scene3Art.width * scale, scene3Art.height * scale);
+                text('末级相位面示意 · 三处代表性波前', 430, 607, 17, muted);
+                return;
+            }
             wave(u, 180, 876);
             for (let n = 1; n <= 5; n++)
                 plate(197 + n * 116, 270, n, .15 + .85 * response(197 + n * 116));
@@ -208,7 +220,8 @@ export const installDrawing = async ({ scenes, total, artworkData, visualStyle =
         const blend = index > 0 ? ease(u / .6) : 1;
         if (blend < 1) {
             suppressStageText = blend >= .5;
-            drawScene(index - 1, scenes[index - 1].duration + u);
+            // Optional artwork belongs only to the active third scene, including at boundaries.
+            drawScene(index - 1, scenes[index - 1].duration + u, false);
         }
         g = stage.getContext('2d');
         g.clearRect(0, 0, 1280, 720);

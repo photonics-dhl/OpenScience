@@ -4,6 +4,7 @@ import {
   AnthropicCompatProvider,
   MiniMaxCodingPlanVisionProvider,
   MiniMaxImageProvider,
+  CodexSpoolImageProvider,
   MutableProviderKillSwitch,
   OpenAiCompatProvider,
   type ExternalProcessingPolicy,
@@ -468,7 +469,10 @@ export function buildGateway(
   });
 
   const imageApiKey = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].map(key => key?.trim()).find(Boolean);
-  const imageProviders = env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
+  const imageProviders = env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
+    ? (env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).includes('codex-image')
+      ? [new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim() })] : [])
+    : (env.HERMES_SCENE_IMAGE_PROVIDER === undefined || env.HERMES_SCENE_IMAGE_PROVIDER === 'minimax') && env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
     ? [new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher)] : [];
   const ocrProviders = env.NODE_ENV !== 'production' && env.MINIMAX_VISION_ENABLED === 'true' && keys[0]
     ? [new MiniMaxCodingPlanVisionProvider('minimax-vision', {

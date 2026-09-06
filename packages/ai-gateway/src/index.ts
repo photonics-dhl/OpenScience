@@ -44,3 +44,6 @@ export {
   type ProviderCapabilityDecision,
   type ProviderCapabilityPolicy,
 } from './ocr';
+
+export { CodexSpoolImageProvider, type CodexSpoolImageConfig } from './codex-image';
+export * from './codex-image-protocol';

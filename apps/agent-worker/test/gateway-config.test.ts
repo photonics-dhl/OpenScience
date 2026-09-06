@@ -184,3 +184,16 @@ it('image region is independent from vision and the first nonblank image key is 
   expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('authorization')).toBe('Bearer second');
   expect(() => buildGateway({ ...flags, MINIMAX_IMAGE_REGION: 'invalid' })).toThrow('MINIMAX_IMAGE_REGION');
 });
+
+it('explicit Codex selection never falls back to enabled MiniMax', async () => {
+  const { CodexSpoolImageProvider } = await import('@openscience/ai-gateway');
+  const generate = vi.spyOn(CodexSpoolImageProvider.prototype, 'generate').mockRejectedValue(new Error('UNCERTAIN'));
+  try {
+    const fetchMock = vi.fn();
+    const flags = { AI_ENABLED: 'true', MINIMAX_IMAGE_ENABLED: 'true', MINIMAX_API_KEY: 'test', HERMES_SCENE_IMAGE_PROVIDER: 'codex', CODEX_IMAGE_INBOX_DIR: process.cwd() + '/inbox', CODEX_IMAGE_RESULTS_DIR: process.cwd() + '/results' };
+    await expect(buildGateway(flags, fetchMock).generateImage({ prompt: 'scene', requestId: '01900000-0000-7000-8000-000000000001' })).rejects.toThrow();
+    expect(generate).toHaveBeenCalledTimes(1); expect(fetchMock).not.toHaveBeenCalled();
+    for (const patch of [{ AI_ENABLED: 'false' }, { HERMES_SCENE_IMAGE_PROVIDER: 'disabled' }, { CODEX_IMAGE_INBOX_DIR: '' }, { AI_DISABLED_PROVIDERS: 'codex-image' }]) await expect(buildGateway({ ...flags, ...patch }, fetchMock).generateImage({ prompt: 'scene' })).rejects.toThrow();
+    expect(generate).toHaveBeenCalledTimes(1); expect(fetchMock).not.toHaveBeenCalled();
+  } finally { generate.mockRestore(); }
+});

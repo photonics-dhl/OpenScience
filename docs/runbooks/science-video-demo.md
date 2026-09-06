@@ -316,3 +316,20 @@ The existing scripts/import-presentation-media.mjs from immutable production sou
 Browser acceptance: desktop and390px card renders, PNG decoding1672×941, mobile document width390, authenticated download200 with matching SHA256, anonymous401, session logged out. Evidence files: codex-ro-browser-evidence.json, codex-ro-audit.json, codex-ro-draft-desktop.png, codex-ro-draft-mobile.png and codex-ro-import-{dry,confirm}.log. Audit helper initially failed on top-level await inside eval before querying; async wrapper corrected it. No import replay was needed.
 
 Temporary model/proxy containersv4/v5 exited; production .release-id remains615ca2d. CPU model download remains paused. Do not reuse attempt-specific helper paths or stale Unix sockets. Next step is user visual acceptance and further storyboard assets/video through the controlled workflow; automatic Hermes-to-Codex product integration is not implemented.
+
+### Administrator Codex runner candidate — installation and activation
+
+Preflight: ADR-013 applies; user authorized controlled account validation. Keep CPU image installation paused. Verify actual app release, backup health and existing Squid egress. Require pinned CLI0.153.0 runtime, UID1000/mode0600 regular auth file (metadata only), and the two existing image IDs in install.sh. Complete canonical source build and exact-source parser acceptance before activation. No dependency reinstall or credential display.
+
+Execution (operator shell on ECS; substitute the final verified 40-character Git SHA):
+
+1. Materialize and build the immutable source through the canonical release workflow.
+2. Run `bash /opt/openscience-releases/<sha>/infra/codex-image-runner/install.sh --confirm --source /opt/openscience-releases/<sha>`. It verifies the archive manifest, creates a versioned runner bundle, preserves the old unit, and requires a newly created ready marker.
+3. Under the existing production deployment lock, append the nonsecret selector `HERMES_SCENE_IMAGE_PROVIDER=codex` to the production environment without displaying its contents. Run canonical app deployment with the actual rollback ref. API and Worker must use the same selector; only Worker mounts the inbox/results.
+4. Submit one approved-storyboard scene-image task as the existing controlled administrator. Verify task, one credit reservation, Gateway provider audit, exact parent/Claims, draft state and normalized1280×720 PNG before visual acceptance. Do not automatically repeat uncertain/failed paid jobs.
+
+Rollback: restore the previous selector (MiniMax, or disabled) under the same production lock and use canonical application rollback/redeploy. Stop the runner after its active request settles; preserve private results/started markers. Installer failure restores the previous unit and enabled/active state; failed bundles remain for inspection. Do not reuse a failed bundle path without diagnosis. An unavailable runner fails closed before model execution; the UI provider flag alone is not a runtime health proof.
+
+Validation commands: `systemctl is-active openscience-codex-image`; `stat -c '%Y %u %a' /opt/openscience-codex/results/.ready` (fresh within60s); `journalctl -u openscience-codex-image --since '-10min' --no-pager` (content-free task status only); existing `checkup.sh`, actual `/__release`, migration/worker/parser/runtime checks and authenticated/anonymous media tests. Never display private model logs or account files.
+
+The new demo accepts optional `scene3-artwork.png` within the existing bounded input tree; it affects only demo index2, not the six-scene RO storyboard's numbering. Copy the accepted original inputs plus the reviewed illustration into a fresh staging run. Reuse the existing renderer image as a base for source-only updates; run canonical demo deployment and compare narration hashes, duration, full decode and public playback.

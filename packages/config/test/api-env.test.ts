@@ -128,3 +128,9 @@ it('scene image config shares key2 readiness and ignores blank credentials', () 
   expect(loadApiEnv({ ...flags, MINIMAX_API_KEY: '   ', MINIMAX_API_KEY_2: ' second ' }).ai.sceneImageEnabled).toBe(true);
   expect(loadApiEnv({ ...flags, MINIMAX_API_KEY_2: 'second', AI_DISABLED_PROVIDERS: ' minimax-image ' }).ai.sceneImageEnabled).toBe(false);
 });
+
+it('selects Codex scene images only explicitly with all enablement conditions', () => {
+  const env = { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'codex', CODEX_IMAGE_INBOX_DIR: '/spool/inbox', CODEX_IMAGE_RESULTS_DIR: '/spool/results' };
+  expect(loadApiEnv(env).ai.sceneImageEnabled).toBe(true);
+  for (const patch of [{ AI_ENABLED: 'false' }, { HERMES_SCENE_IMAGE_PROVIDER: 'disabled' }, { CODEX_IMAGE_INBOX_DIR: '' }, { AI_DISABLED_PROVIDERS: 'codex-image' }]) expect(loadApiEnv({ ...env, ...patch }).ai.sceneImageEnabled).toBe(false);
+});
