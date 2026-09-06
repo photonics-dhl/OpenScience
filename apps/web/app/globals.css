@@ -169,7 +169,25 @@ body {
 /* Product chrome uses an application grid; the 75ch reading measure below
    remains for prose and published research, never an entire account form. */
 .surface-product-app {
-  --os-canvas-warm: #f4f3ef;
+  --os-canvas-warm: #f7f8fa;
+  --os-paper: #f7f8fa;
+  --os-ink: #20252b;
+  --os-muted-paper: #626c76;
+  --os-rule-paper: #dce1e5;
+  --os-vermilion: #125d66;
+  --os-vermilion-ink: #125d66;
+  --accent-primary: #0d4d55;
+  --accent-primary-strong: #125d66;
+  --color-os-paper: #f7f8fa;
+  --color-os-ink: #20252b;
+  --color-os-muted-paper: #626c76;
+  --color-os-rule-paper: #dce1e5;
+  --color-os-vermilion: #125d66;
+  --color-os-vermilion-ink: #125d66;
+  --color-accent-primary: #0d4d55;
+  --color-accent-primary-strong: #125d66;
+  --focus-ring: #125d66;
+  --font-ui: var(--font-bricolage), Arial, 'Microsoft YaHei', sans-serif;
   --os-paper-strong: #ffffff;
   --shadow-card: 0 1px 3px rgb(25 26 24 / 0.07), 0 0 0 1px rgb(25 26 24 / 0.05);
 }
@@ -182,7 +200,17 @@ body {
 }
 .surface-product-app .surface-folio-sheet { border-radius: 12px; }
 .surface-product-app .bg-accent-primary-strong { background: var(--os-vermilion-ink); color: #fff; border: 1px solid transparent; min-height: 44px; }
-.surface-product-app .bg-accent-primary-strong:hover { background: #a92f19; }
+.surface-product-app .bg-accent-primary-strong:hover { background: #0d4d55; }
+.surface-product-app :is(button, input, select, textarea) { border-style: solid; border-color: var(--os-rule-paper); border-radius: 8px; }
+.surface-product-app :is(button, summary, a):focus-visible { outline: 2px solid #125d66; outline-offset: 3px; }
+.surface-product-app :is(button, summary) { cursor: pointer; }
+.surface-product-app button:disabled { cursor: default; }
+.surface-product-app [data-product-route-navigation] a { border-bottom: 0; border-radius: 8px; }
+.surface-product-app [data-product-route-navigation] a[aria-current='page'] { color: #125d66; background: #e7f1f2; }
+.surface-product-app .product-main > header p { max-width: 65ch; text-wrap: pretty; }
+.surface-product-app .product-main :is(h1,h2,h3) { text-wrap: balance; }
+.surface-product-app .product-main dd { margin-inline-start: 0; overflow-wrap: anywhere; }
+.surface-product-app .bg-os-paper { background: #f7f8fa; }
 .account-workspace .account-heading { max-width: none; padding-bottom: 24px; }
 .account-workspace .account-heading h1 { margin: 8px 0; font-size: 30px; font-weight: 600; line-height: 1.25; }
 .account-workspace .account-heading p { margin: 0; max-width: 70ch; font-size: 14px; line-height: 1.6; }

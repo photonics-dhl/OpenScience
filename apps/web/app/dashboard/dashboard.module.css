@@ -163,3 +163,11 @@
 .desk .continueResearch > section > a { color:#fff; }
 .desk .layout [data-reading-role='caption'] { color:#626c76; }
 .desk .main { margin-inline:auto; }
+
+/* Secondary discovery tools stay available without competing with current work. */
+.literature > details { padding: 4px 24px; border: 1px solid #dce1e5; border-radius: 12px; background: #fff; }
+.literature > details > summary { min-height: 52px; }
+.literature > details > section { padding-block: 20px; }
+.literature > details[open] > summary { border-bottom: 1px solid #dce1e5; }
+.desk .layout p { text-wrap: pretty; }
+@media(max-width:479px) { .literature > details { padding-inline: 16px; } }

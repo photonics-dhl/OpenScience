@@ -519,3 +519,11 @@ Acceptance: PR104080fa74 merged/deployed; CI34034878269 and exact server build/p
 Public69aac51 follow-up: floating Hermes covered a presentation asset despite no viewport overflow. Reserve a dedicated380px companion rail with the existing DockAnchor/Drawer and real RO identity; stack below content on smaller screens. This is required before closing screenshot correction.
 
 Final8e4ecb2 deployed with rollback69aac51. Existing exact server acceptance passed; actual media and empty fixture each passed1440/1024/390 with original rig ready, contextual drawer and separate desktop asset/companion bounds. Zero business writes/session closed. User visual acceptance remains pending.
+
+## Entry and product-shell continuity (2026-09-06, authorized)
+
+User confirmed extending the accepted pale/ink/teal direction to the full entry journey and explicitly requested frontend-design, ui-ux-pro-max and baseline-ui to reduce reading and interaction load. Reuse original Wanko, existing auth primitives and routes. No dependency installation.
+
+1. Replace the unbalanced beige identity shell with a compact form and original companion; simplify bilingual copy and explicit field/primary/secondary styles. Preserve authentication, verification and safe return navigation.
+2. Apply the accepted palette to shared DashboardShell surfaces (desk, new research, settings, profile and existing downstream screens). Reduce desk metadata and reuse existing literature disclosure, opening for recovered tasks.
+3. Focused existing auth/dashboard tests, Web build, desktop/mobile login/register visual inspection and route checks; independent release review. Deploy through existing script over verified8e4ecb2, retaining rollback. No full business-pipeline completion claim.

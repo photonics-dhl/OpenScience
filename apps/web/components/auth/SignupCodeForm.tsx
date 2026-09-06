@@ -116,7 +116,7 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
       </p>
 
       <ol aria-label={t('identity.verificationEyebrow')} className="mt-6 flex list-none gap-4 border-y border-os-rule-paper py-3 text-sm text-os-muted-paper">
-        <li aria-current={stage === 'details' ? 'step' : undefined} className={stage === 'details' ? 'font-semibold text-os-ink' : undefined}>1 · {t('register.displayName')}</li>
+        <li aria-current={stage === 'details' ? 'step' : undefined} className={stage === 'details' ? 'font-semibold text-os-ink' : undefined}>1 · {t('register.accountDetails')}</li>
         <li aria-current={stage === 'code' ? 'step' : undefined} className={stage === 'code' ? 'font-semibold text-os-ink' : undefined}>2 · {t('register.code')}</li>
       </ol>
 
@@ -163,7 +163,10 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
           <p id="signup-password-hint" className="-mt-3 text-sm leading-6 text-os-muted-paper">
             {t('register.passwordHint')}
           </p>
-          <ResearchProfileFields value={researchIdentity} onChange={setResearchIdentity} />
+          <details data-signup-profile>
+            <summary className="min-h-11 cursor-pointer py-3 text-sm text-os-muted-paper">{t('register.profileOptional')}</summary>
+            <ResearchProfileFields value={researchIdentity} onChange={setResearchIdentity} />
+          </details>
           <Button className="min-h-12 rounded-control bg-os-vermilion-ink text-os-paper active:translate-y-px" type="submit" size="lg" disabled={pending}>
             {pending ? t('register.sending') : t('register.requestCode')}
           </Button>

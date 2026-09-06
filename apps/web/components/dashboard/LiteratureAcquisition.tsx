@@ -400,7 +400,7 @@ export function LiteratureAcquisitionDisclosure(props: LiteratureAcquisitionProp
   const t = useTranslations('dashboard.literature');
   const dark = props.tone === 'dark';
   return (
-    <details className={`border-y ${dark ? 'border-os-rule-dark' : 'border-os-rule-paper'}`} data-literature-entry="true">
+    <details className={`border-y ${dark ? 'border-os-rule-dark' : 'border-os-rule-paper'}`} data-literature-entry="true" open={Boolean(props.initialTask)}>
       <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 py-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-focus-ring ${dark ? 'text-os-paper' : 'text-os-ink'}`}>
         {t('disclosure')}
         <span aria-hidden="true" className={dark ? 'text-os-vermilion' : 'text-os-vermilion-ink'}>＋</span>

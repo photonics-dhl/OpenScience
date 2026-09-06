@@ -527,19 +527,21 @@
   "auth": {
     "identity": {
       "skipToForm": "Skip to identity form",
-      "loginEyebrow": "Identity / sign in",
+      "loginEyebrow": "OpenScience",
       "verificationEyebrow": "Identity / verification",
-      "tagline": "Identity · provenance · continuity",
-      "createEyebrow": "Research identity / 01",
-      "createTitle": "Evidence begins with a verifiable author.",
-      "createDescription": "Your identity follows each research object, version, contribution, and review without claiming ownership of the science for you.",
-      "returnEyebrow": "Research identity / return",
-      "returnTitle": "Return to the work, not a feed.",
-      "returnDescription": "Continue the latest research object and resolve only the tasks that need your judgment."
+      "tagline": "Papers · Ideas · Discoveries",
+      "createEyebrow": "Meet OpenScience",
+      "createTitle": "A place for your research.",
+      "createDescription": "Keep your papers, ideas and evidence together. Hermes helps you take the next step.",
+      "returnEyebrow": "Your research companion",
+      "returnTitle": "Your next discovery starts here.",
+      "returnDescription": "Read papers, shape your ideas and explore them with Hermes."
     },
     "register": {
+      "profileOptional": "Research preferences (optional, set up later)",
+      "accountDetails": "Account details",
       "title": "Create your research account",
-      "description": "Use your personal or institutional email. No invitation field is required here.",
+      "description": "Use your personal or institutional email.",
       "displayName": "Display name",
       "email": "Email",
       "password": "Password",

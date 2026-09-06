@@ -527,19 +527,21 @@
   "auth": {
     "identity": {
       "skipToForm": "跳转到身份表单",
-      "loginEyebrow": "科研身份 / 登录",
+      "loginEyebrow": "OpenScience",
       "verificationEyebrow": "科研身份 / 验证",
-      "tagline": "身份 · 来源 · 连续性",
-      "createEyebrow": "科研身份 / 01",
-      "createTitle": "证据，从可验证的作者开始。",
-      "createDescription": "同一身份贯穿研究对象、版本、贡献与审阅；平台记录事实，但不替你裁定成果归属。",
-      "returnEyebrow": "科研身份 / 返回",
-      "returnTitle": "回到研究，而不是信息流。",
-      "returnDescription": "继续最近的研究对象，只处理真正需要你判断的任务。"
+      "tagline": "论文 · 想法 · 发现",
+      "createEyebrow": "认识 OpenScience",
+      "createTitle": "让研究，有一个自己的空间。",
+      "createDescription": "把论文、想法与证据放在一起，Hermes 陪你继续探索。",
+      "returnEyebrow": "你的科研伙伴",
+      "returnTitle": "下一次发现，从这里开始。",
+      "returnDescription": "读懂论文，整理想法，与 Hermes 一起深入探索。"
     },
     "register": {
+      "profileOptional": "科研偏好（选填，可稍后设置）",
+      "accountDetails": "账户信息",
       "title": "创建科研账户",
-      "description": "使用个人或机构邮箱获取验证码，无需在此填写邀请码。",
+      "description": "使用个人或机构邮箱注册。",
       "displayName": "显示名称",
       "email": "邮箱",
       "password": "密码",

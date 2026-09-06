@@ -254,6 +254,7 @@ test('personal literature acquisition recovers a running server task after reloa
   await page.route('**/api/agent/tasks/literature-reload', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: runningTask }) }));
 
   await page.goto(`${baseUrl}/dashboard`);
+  await page.locator('[data-literature-entry] > summary').click();
   await page.getByLabel(/title, doi, or arxiv id/i).fill('Reload recovery');
   await page.getByRole('button', { name: /search metadata/i }).click();
   await expect.poll(() => submissions).toBe(1);
@@ -383,21 +384,22 @@ test('metadata selection starts a second acquisition and finishes with one tempo
     return route.fulfill({ contentType: 'application/pdf', body: '%PDF-final' });
   });
   await page.goto(`${baseUrl}/dashboard`);
+  await page.locator('[data-literature-entry] > summary').click();
   const input = page.getByLabel(/title, doi, or arxiv id/i);
   await input.focus();
   await page.keyboard.type('Ultrafast response');
   await page.keyboard.press('Enter');
   await expect.poll(() => submissions).toBe(1);
   await expect(page.getByText(/reconnecting to the task/i)).toBeVisible({ timeout: 4000 });
-  await expect(page.getByRole('button', { name: /get full text/i })).toBeVisible({ timeout: 6000 });
+  const getFullText = page.locator('[data-literature-acquisition]').getByRole('button', { name: /get full text/i });
+  await expect(getFullText).toBeVisible({ timeout: 6000 });
   const sourceLink = page.getByRole('link', { name: /open source record/i });
   const sourceBox = await sourceLink.boundingBox();
   expect(sourceBox?.width).toBeGreaterThanOrEqual(44);
   expect(sourceBox?.height).toBeGreaterThanOrEqual(44);
-  const actionBox = await page.getByRole('button', { name: /get full text/i }).boundingBox();
+  const actionBox = await getFullText.boundingBox();
   expect(actionBox?.width).toBeGreaterThanOrEqual(44);
   expect(actionBox?.height).toBeGreaterThanOrEqual(44);
-  const getFullText = page.getByRole('button', { name: /get full text/i });
   const selecting = getFullText.press('Enter');
   await expect(getFullText).toBeDisabled();
   await expect(sourceLink).toHaveCount(0);

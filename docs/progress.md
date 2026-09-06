@@ -1,5 +1,10 @@
 # Progress
 
+## 2026-09-07 entry continuity in progress
+
+- User explicitly requested skills-guided full entry consistency and lower cognitive load. Login/register compact form with original Wanko; shared app palette; desk metadata and optional search simplified.
+- Production startup check:8e4ecb2, edge/loopback200, egress204. Candidate auth37/final Web build/lint passed; auth8 visual and product8 controlled read-only checks,2 literature fixtures and High review passed. Optional signup preferences now collapse. Server deployment pending. No authentication/provider changes.
+
 ## 2026-09-06 screenshot correction delivered
 
 - Branch codex/overview-responsive-companion; app/public8e4ecb2b5f9e291385b0df8495082e923af328a6, rollback69aac5196142f83de1c2c6c6d61ed4bed4a7ad28. Subsequent docs-only HEAD is not production. Root checkout user changes untouched.

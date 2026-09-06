@@ -36,9 +36,6 @@ export function ResearchList({ researchObjects }: ResearchListProps) {
     <section className="border-t border-os-rule-paper pt-5" aria-labelledby="research-list-title">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p data-reading-role="caption" className="text-os-muted-paper">
-            Index / Research objects
-          </p>
           <h2 id="research-list-title" className="mt-2 text-2xl font-medium text-os-ink">
             {t('research.title')}
           </h2>
@@ -75,7 +72,7 @@ export function ResearchList({ researchObjects }: ResearchListProps) {
                     {research.title}
                   </span>
                   <span data-reading-role="caption" className="mt-1 block font-data text-os-muted-paper">
-                    {research.publicId} · {t('research.version', { version: research.versionNo })}
+                    {t('research.version', { version: research.versionNo })}
                   </span>
                 </span>
                 <span data-reading-role="caption" className="font-data text-os-muted-paper">

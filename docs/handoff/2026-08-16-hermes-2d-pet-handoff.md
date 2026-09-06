@@ -2,6 +2,12 @@
 
 > CURRENT active-memory, 2026-09-06 +08. User rejected previous visual quality and reported black Wanko. Requested direct, fast server delivery with focused checks. Preserve original Aladdin dog/Wanko and lamp; do not infer user visual approval from tests.
 
+## Active continuation: entry and product continuity (2026-09-07)
+
+- User authorized applying frontend-design, ui-ux-pro-max and baseline-ui to lower reading/interaction load across the entry journey. Login/register were omitted from the last release; this round fixes that omission and shared DashboardShell styling.
+- Candidate in the same worktree: balanced auth form/original Wanko, short bilingual copy, pale/teal shared app palette, reduced desk identifiers and existing optional literature disclosure. Authentication and provider contracts unchanged. Current production independently verified8e4ecb2, rollback69aac51; candidate not yet deployed.
+- Focused auth/dashboard37 passed; final local Web build and lint passed. Login/register8 bilingual/width checks and downstream desk/new/settings/me8 controlled read-only checks passed;2 existing literature fixtures passed. Optional signup profile collapsed, same reader default and state retained. Independent High review found no material auth/returnTo regression. Canonical server deployment pending. No full pipeline completion claim.
+
 ## Version tuple
 
 - Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/overview-responsive-companion. Application/public/loopback8e4ecb2b5f9e291385b0df8495082e923af328a6; rollback69aac5196142f83de1c2c6c6d61ed4bed4a7ad28. Subsequent docs-only HEAD from Git is not another app deployment.

@@ -490,6 +490,7 @@
 
 | `apps/web/components/hermes/HermesVisualAdapter.tsx` / `apps/web/test/e2e/product-release.spec.ts` | PR103宽菜单实际矩形避让、12动作布局与概览媒体fixture；原保护/间距门禁保留 | DEPLOYED080fa74；最终构建回归与服务器验收通过 |
 
+| `apps/web/components/auth/Identity.module.css` | Shared login/register form-first layout, original Wanko welcome and accessible teal controls; auth logic unchanged | 2026-09-07 candidate; deploy status in CURRENT handoff |
 | `apps/web/components/shell/WorkspaceShell.tsx` | 稳定workspace planes标识，供概览独立响应式布局保留360px神狗空间 | DEPLOYED080fa74；1024/1280回归及公网复验通过 |
 
 | `apps/web/playwright.release.config.ts` | 将真实概览与1024/1280断点回归接入既有发布测试 | DEPLOYED config080fa74；默认package命令显式文件列表已在后续测试提交补齐 |

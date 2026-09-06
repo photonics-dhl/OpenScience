@@ -9,7 +9,7 @@ import LocaleSwitcher from '@/components/LocaleSwitcher';
 import { AccountLink } from '@/components/navigation/AccountLink';
 import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
 import { ImportStage } from '@/components/dashboard/ImportStage';
-import { LiteratureAcquisition } from '@/components/dashboard/LiteratureAcquisition';
+import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { ResearchList } from '@/components/dashboard/ResearchList';
 import { HermesRail, type HermesRailTask } from '@/components/hermes/HermesRail';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
@@ -154,7 +154,7 @@ export default function DashboardPage() {
           <ImportStage />
         </div>
         <div className={styles.literature}>
-          <LiteratureAcquisition
+          <LiteratureAcquisitionDisclosure
             initialTask={literatureTask}
             onAuthenticationRequired={handleLiteratureAuthenticationRequired}
             recoveryComplete={literatureRecovered}

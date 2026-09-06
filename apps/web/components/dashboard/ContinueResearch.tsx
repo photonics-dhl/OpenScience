@@ -24,7 +24,7 @@ export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps
         className="surface-folio-sheet border-y border-os-rule-paper px-5 py-6 sm:px-7 sm:py-8"
         data-hermes-protected="true"
       >
-        <p data-reading-role="caption" className="text-os-vermilion-ink">00 / {t('continue.title')}</p>
+        <p data-reading-role="caption" className="text-os-vermilion-ink">{t('continue.title')}</p>
         <h2 id="continue-title" className="mt-4 max-w-2xl text-3xl leading-tight text-os-ink sm:text-4xl">
           {t('continue.emptyTitle')}
         </h2>
@@ -50,13 +50,13 @@ export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps
       data-hermes-protected="true"
     >
       <p data-reading-role="caption" className="text-os-vermilion-ink">
-        00 / {t('continue.title')}
+        {t('continue.title')}
       </p>
       <h2 id="continue-title" className="mt-4 max-w-3xl text-3xl leading-[1.1] text-os-ink transition-colors group-hover:text-os-vermilion-ink sm:text-4xl">
         {research.title}
       </h2>
       <div data-reading-role="caption" className="mt-4 flex flex-wrap gap-x-5 gap-y-1 font-data text-os-muted-paper">
-        <span>{research.publicId}</span>
+        <span className="sr-only">{research.publicId}</span>
         <span>{t('continue.version', { version: research.versionNo })}</span>
         {research.pendingCount > 0 ? (
           <span className="text-os-vermilion-ink">
