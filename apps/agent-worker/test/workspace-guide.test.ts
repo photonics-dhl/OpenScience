@@ -61,6 +61,16 @@ function trustedDeps(overrides: { taskUserId?: string; researchObjectIds?: strin
 }
 
 describe('workspace.guide handler', () => {
+  it.each(['sdf-method', 'sdf-evidence'])('passes selected passage %s through to the model', async target => {
+    const gateway = { completeStructured: vi.fn().mockResolvedValue(result) } as unknown as AiGateway;
+    await workspaceGuideHandler(gateway, trustedDeps() as never, { id: 'guide-1', payload: { ...payload, route: 'research-object-edit', target, goal: 'Explain this passage' } });
+    const messages = (gateway.completeStructured as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as Array<{ role: string; content: string }>;
+    const sent = JSON.parse(messages.find(message => message.role === 'user')!.content);
+    expect(sent.target).toBe(target);
+    expect(messages.find(message => message.role === 'system')!.content).toContain('sdf-evidence');
+    expect(sent.context.researchObjects[0].id).toBe('ro-1');
+  });
+
   it('returns a validated read-only guidance result for a bounded dashboard payload', async () => {
     const gateway = { completeStructured: vi.fn().mockResolvedValue(result) } as unknown as AiGateway;
     const deps = trustedDeps();

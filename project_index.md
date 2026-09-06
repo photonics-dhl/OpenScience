@@ -484,3 +484,5 @@
 | `apps/web/components/visual/ResearchWorkbenchHermes.tsx` | 复用原Wanko Live2D与静态fallback；增加样稿紧凑尺寸，未修改renderer | LOCAL CANDIDATE；单实例/减少动效/头像身份复用 |
 
 | `apps/web/app/research-objects/[id]/overview/overview.module.css` / `apps/web/test/e2e/research-overview.spec.ts` | 真实概览完整叙述、最新已提交版本审核资产、段落Hermes目标；桌面/移动端与历史版本过滤验证 | LOCAL CANDIDATE；全仓build及构建后浏览器通过，未部署 |
+
+| `apps/agent-worker/src/workspace-guide.ts` / `apps/agent-worker/test/workspace-guide.test.ts` | 将现有已验证target传入Gateway模型上下文；解释sdf-evidence→reproducibility映射；段落引导回归 | RELEASE CANDIDATE；不新增API字段或权限 |

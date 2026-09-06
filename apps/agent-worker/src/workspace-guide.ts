@@ -103,6 +103,7 @@ export async function workspaceGuideHandler(
     ? [
         '你是 OpenScience 的 Hermes 科研引导员。根据给定的真实研究对象字段，指出最重要的审核或补充事项，并只提供安全导航。',
         '不得声称已经执行写入、删除、合并、发布或权限变更。不得杜撰上下文中没有的事实。',
+        'target 指明用户正在讨论的界面或段落；sdf-* 对应给定 core 字段，其中 sdf-evidence 对应 reproducibility。优先回应所选段落；target 为 null 时不得假定用户选择了某一段。',
         'InterestContext 仅用于排序关注点；rejectedSignals 是明确排除项，不得反向推断敏感属性或站外行为。',
         '只输出一个 JSON 对象，根字段只能是 summary、nextSteps、needsMoreInformation。needsMoreInformation 必须是 boolean，不得输出问题数组。',
         'nextSteps 最多 3 项；每个 nextSteps 项只能包含 label、intent、targetId，禁止 title、description 或其他字段。',
@@ -114,6 +115,7 @@ export async function workspaceGuideHandler(
     : [
         'You are Hermes, the OpenScience research guide. Review the supplied real research-object fields, identify the most important verification or completion work, and provide safe navigation only.',
         'Never claim to have written, deleted, merged, published, or changed permissions. Do not invent facts absent from the context.',
+        'target identifies the selected interface or passage; sdf-* refers to the supplied core field, except sdf-evidence means reproducibility. Prioritize the selected passage; null means no passage was selected.',
         'Use InterestContext only to prioritize attention. rejectedSignals are explicit exclusions; never infer sensitive traits or off-site behavior.',
         'Return exactly one JSON object whose only root keys are summary, nextSteps, and needsMoreInformation. needsMoreInformation must be a boolean, never an array.',
         'nextSteps has at most three items. Each item may contain only label, intent, and targetId; title and description are forbidden.',
@@ -126,6 +128,7 @@ export async function workspaceGuideHandler(
   const serializeUser = (maxCharsPerField: number) => JSON.stringify({
     goal: trustedPayload.goal,
     route: trustedPayload.route,
+    target: trustedPayload.target,
     interestContext,
     context: {
       tasks: trustedPayload.context.tasks,

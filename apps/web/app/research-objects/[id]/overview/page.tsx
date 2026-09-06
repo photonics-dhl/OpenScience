@@ -9,7 +9,7 @@ import styles from './overview.module.css';
 
 type Loaded = { object: ResearchObjectSummary & { sdf: { core: SdfCore } }; versions: VersionSummary[]; assets: PresentationAsset[]; mediaFailed: boolean; mediaLoading: boolean };
 const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
-const targets: Record<typeof fields[number], WorkspaceGuidePayload['target']> = { problem: 'sdf-problem', insight: 'sdf-insight', method: 'sdf-method', results: 'sdf-results', limitations: 'sdf-limitations', reproducibility: null };
+const targets: Record<typeof fields[number], WorkspaceGuidePayload['target']> = { problem: 'sdf-problem', insight: 'sdf-insight', method: 'sdf-method', results: 'sdf-results', limitations: 'sdf-limitations', reproducibility: 'sdf-evidence' };
 
 function OverviewAsset({ asset, objectId }: { asset: PresentationAsset; objectId: string }) {
   const t = useTranslations('productSurfaces.overview');
