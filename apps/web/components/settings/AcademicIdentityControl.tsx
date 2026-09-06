@@ -2,7 +2,7 @@
 
 import { CheckCircle2, Circle, ExternalLink, MailCheck } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +25,9 @@ export function AcademicIdentityControl() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [matchedOrganization, setMatchedOrganization] = useState<{ name: string; domain: string; rorId: string | null; source: string } | null>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -37,6 +40,12 @@ export function AcademicIdentityControl() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => setResendCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
+  useEffect(() => { if (codeRequested) codeRef.current?.focus(); }, [codeRequested]);
 
   async function connectOrcid() {
     setBusy(true); setError(''); setMessage('');
@@ -57,9 +66,11 @@ export function AcademicIdentityControl() {
       setEmail(targetEmail);
       setCode('');
       setCodeRequested(true);
+      setMatchedOrganization(result.organization);
+      setResendCooldown(60);
       setMessage(t('codeSentFor', { organization: result.organization.name }));
     } catch (cause) {
-      setError(cause instanceof ApiClientError && cause.status === 429 ? t('waitBeforeRetry') : t('institutionError'));
+      setError(cause instanceof ApiClientError && cause.status === 429 ? t('waitBeforeRetry') : cause instanceof ApiClientError && (cause.status === 404 || /DOMAIN|INSTITUTION/i.test(cause.code)) ? t('institutionNotRecognized') : t('institutionError'));
     } finally { setBusy(false); }
   }
 
@@ -116,13 +127,15 @@ export function AcademicIdentityControl() {
           {institution ? <p className="mt-2 text-sm text-os-muted-paper">{institution.displayLabel}</p> : (
             <form className="mt-3 grid gap-3" onSubmit={(event) => { event.preventDefault(); if (!unavailable && status?.capabilities.institutionEmail) void (codeRequested ? confirmInstitutionEmail() : sendInstitutionCode()); }}>
               <label className="grid gap-1 text-sm text-os-muted-paper">{t('institutionEmail')}<input className="min-h-11 min-w-0 rounded-control border border-os-rule-paper bg-transparent px-3 text-os-ink" type="email" autoComplete="email" required disabled={unavailable || codeRequested || !status?.capabilities.institutionEmail} value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-              {codeRequested ? <label className="grid gap-1 text-sm text-os-muted-paper">{t('verificationCode')}<input className="min-h-11 min-w-0 rounded-control border border-os-rule-paper bg-transparent px-3 text-os-ink" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" required disabled={unavailable} maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} /></label> : null}
+              {matchedOrganization ? <dl className="grid gap-1 border-l-2 border-os-rule-paper pl-3 text-sm text-os-muted-paper" data-institution-match="true"><div><dt className="inline font-semibold text-os-ink">{t('recognizedInstitution')} </dt><dd className="inline">{matchedOrganization.name}</dd></div><div><dt className="inline">{t('recognizedDomain')} </dt><dd className="inline font-data">{matchedOrganization.domain}</dd></div><div><dt className="inline">{t('recognitionSource')} </dt><dd className="inline">{matchedOrganization.source === 'ror' ? 'ROR' : t('configuredSource')}</dd></div></dl> : null}
+              {codeRequested ? <label className="grid gap-1 text-sm text-os-muted-paper">{t('verificationCode')}<input ref={codeRef} className="min-h-11 min-w-0 rounded-control border border-os-rule-paper bg-transparent px-3 text-os-ink" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" required disabled={unavailable} maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} /></label> : null}
+              {codeRequested ? <p className="text-xs text-os-muted-paper">{t('codeValidity')}</p> : null}
               <Button type="submit" disabled={unavailable || !status?.capabilities.institutionEmail || !email.trim() || (codeRequested && code.length !== 6)}>
                 {codeRequested ? t('verify') : t('sendCode')}
               </Button>
               {codeRequested ? <div className="flex flex-wrap gap-2">
-                <Button type="button" disabled={unavailable || !status?.capabilities.institutionEmail} onClick={() => void sendInstitutionCode()}>{t('resend')}</Button>
-                <Button type="button" disabled={unavailable} onClick={() => { setCodeRequested(false); setCode(''); setMessage(''); setError(''); }}>{t('changeEmail')}</Button>
+                <Button type="button" disabled={unavailable || resendCooldown > 0 || !status?.capabilities.institutionEmail} onClick={() => void sendInstitutionCode()}>{resendCooldown > 0 ? t('resendIn', { seconds: resendCooldown }) : t('resend')}</Button>
+                <Button type="button" disabled={unavailable} onClick={() => { setCodeRequested(false); setCode(''); setMatchedOrganization(null); setResendCooldown(0); setMessage(''); setError(''); }}>{t('changeEmail')}</Button>
               </div> : null}
               {status?.capabilities.institutionEmail === false ? <p className="text-sm text-os-muted-paper">{t('domainsNotConfigured')}</p> : null}
             </form>

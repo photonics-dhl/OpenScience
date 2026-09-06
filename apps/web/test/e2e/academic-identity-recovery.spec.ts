@@ -55,15 +55,16 @@ test('institution challenge locks its email and offers recovery without credenti
   await panel.getByRole('button', { name: 'Send verification code', exact: true }).click();
   await expect(email).toBeDisabled();
   await expect(panel).toContainText('Test Institute (not yet verified)');
+  await expect(panel.locator('[data-institution-match="true"]')).toContainText('example.invalid');
+  await expect(panel.getByLabel('Six-digit verification code')).toBeFocused();
   await panel.getByLabel('Six-digit verification code').fill('123456');
   await panel.getByRole('button', { name: 'Verify email', exact: true }).click();
   await expect(panel.getByRole('alert')).toContainText('Verification has not been confirmed');
-  await panel.getByRole('button', { name: 'Resend verification code' }).click();
-  await expect(panel.getByLabel('Six-digit verification code')).toHaveValue('');
+  await expect(panel.getByRole('button', { name: /Resend in 60s/ })).toBeDisabled();
   await panel.getByRole('button', { name: 'Change verification email' }).click();
   await expect(email).toBeEnabled();
   await expect(panel.getByLabel('Six-digit verification code')).toHaveCount(0);
-  expect(sent).toEqual(['test@example.invalid', 'test@example.invalid']);
+  expect(sent).toEqual(['test@example.invalid']);
 });
 
 test('unavailable integrations disable both operations', async ({ page }) => {
