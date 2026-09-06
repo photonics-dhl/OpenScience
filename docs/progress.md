@@ -7,7 +7,7 @@
 - Fixed real partial-SDF editor crash without losing extension fields. Final presentation uses dedicated380px companion rail/stacked mobile area, real RO drawer context, no asset overlap.
 - Server exact build/parser16/migrations(core36/search2)/BGE/ScanSci/health/retention passed. Edge/loopback200; proxy egress204. No new model capabilities, schema migration, paid generation or research writes.
 - Relevant runtime19 and editor/navigation42 unit checks; two collapsed-storyboard browser fixtures passed. Public69 three-page journey8 + empty-state fixtures4; final8e4 media3 real widths +3 empty fixtures, rig ready/drawer opens/no overflow/no desktop asset overlap, sessions closed. Full-site matrix and final CI success not claimed.
-- Evidence in ignored apps/web/test/visual/out/research-journey/ux-* and render-probe-*; exact acceptance scope and local harness corrections in CURRENT handoff. No user visual approval inferred.
+- Evidence in ignored `apps/web/test/visual/out/research-journey/ux-*` and `render-probe-*`; exact acceptance scope and local harness corrections in CURRENT handoff. No user visual approval inferred.
 
 ## Next
 
