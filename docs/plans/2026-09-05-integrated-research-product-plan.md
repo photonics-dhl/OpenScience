@@ -499,3 +499,7 @@ Acceptance: PR102 merged4d39808; CI34022708530 success. Full workspace checks, f
 ## Real overview and contextual Hermes slice
 
 用户继续授权：概览默认阅读完整SDF研究叙述；最新已提交versionNo资产仅展示approved image/video，明确与当前编辑文本的区别，原始证据单独入口；复用Shell神狗与Drawer，通过现有target字段发送段落上下文。修改overview page/module、Shell可选展示/调用入口、dashboard无待办续接路径及中英文文案；不新增API/数据库/模型。验证当前版本过滤、异步换RO隔离、助手目标请求、移动端与真实续接。正式发布需另跑完整构建/发布验收。
+
+## PR103 release continuation
+
+用户已授权正式研究桌面/概览/段落Hermes发布。Worker传递trusted target；首轮CI构建/类型/lint/单元通过，发布浏览器104/110。修正重复桌面header链接、缺失媒体fixture、菜单rail宽度及detached宽菜单实际碰撞计算，保留所有现有geometry断言。最终候选须经完整CI、精确SHA服务器parser预验收、canonical deploy与公网中英桌面/移动端受控只读验收；rollback使用当前应用4d39808。

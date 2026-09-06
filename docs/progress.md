@@ -2,13 +2,18 @@
 
 > 最新同步：2026-09-06 +08。生产4d39808，rollback f144eb7；Codex controller3d518af、demo9848411独立。后续文档提交不改变生产。
 
+## PR103 release checks in progress
+
+- Candidate c8c8cfe: model receives trusted selected-passage target; Worker11/11 passed. CI34031711111 build/typecheck/lint/unit passed, release browser104/110; remaining failures being repaired before merge. ECS candidate fullbuild/parser16 passed, production unchanged.
+- New overview asset endpoint fixture and duplicate header link repaired, overview3/3 passed. Dashboard menu rail corrected; detached geometry fixed with actual rectangle checks; final overview/menu9/9 passed. Final SHA requires fresh CI/parser/deploy/public evidence.
+
 ## Real overview / contextual Hermes candidate
 
 - 正式概览改为完整研究叙述，不再三行截断；保留原神狗与Drawer，段落入口使用现有target并绑定当前RO。桌面无任务续接/研究列表转概览，待审继续直接去任务。
 - 展示仅含最新已提交版本approved image/video，标明版本及当前正文可能含后续编辑；原始证据独立入口。媒体不阻塞正文；内容失败可重试。
 - 纠错：ResearchObject.version是乐观锁编辑计数，提交后会加1，不能等同Version.versionNo；asset.label为presentation_not_evidence标记，不能作为图标题。已按域实现修正并测试，禁止恢复先前错误假设。
 - 全仓build、web typecheck/scoped ESLint、相关单元30/30、构建后production-mode浏览器15/15通过；涵盖概览/媒体重试/目标RO与段落、真实审核续接和Wanko。开发模式一次旧续接用例停留loading，构建后完整重跑通过；不隐去初次失败。
-- 本地候选未部署；ECS release-id/public/loopback均4d39808。8317现在是Next start生产模式，会话60209，替代旧dev38875；后续编辑需重build再重启。待发布验收，不要把浏览器fixture视为真实论文生成证据。
+- 本地候选未部署；ECS release-id/public/loopback均4d39808。8317已停供重新构建；恢复预览前需启动Next start。待发布验收，不要把浏览器fixture视为真实论文生成证据。
 
 ## Companion identity and first dashboard slice
 

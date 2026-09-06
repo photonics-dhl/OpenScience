@@ -69,7 +69,7 @@ export default function ResearchOverviewPage({ params }: { params: { id: string 
         </section>;
   return <ResearchSurfaceShell key={object.id} active="overview" object={object} className={styles.surface} rail={<div className={styles.rail}><h2>{t('overview.status')}</h2><p>{t('overview.history')}: {versions.length}</p><Link href={`${root}/files`}>{t('overview.sources')}</Link><Link href={`${root}/presentation`}>{t('overview.manageMedia')}</Link></div>}>
     {openAssistant => <article className={styles.article} data-research-overview={object.id}>
-      <header className={styles.header}><Link href="/dashboard">← {t('overview.desk')}</Link><p>{t('overview.kicker')}</p><h1>{object.title}</h1><div className={styles.actions}><Link href={`${root}/edit`}>{t('overview.continue')}</Link><button type="button" data-testid="overview-hermes" onClick={() => openAssistant(null)}><img src="/hermes/wanko-static.png" alt="" />Hermes</button></div></header>
+      <header className={styles.header}><p>{t('overview.kicker')}</p><h1>{object.title}</h1><div className={styles.actions}><Link href={`${root}/edit`}>{t('overview.continue')}</Link><button type="button" data-testid="overview-hermes" onClick={() => openAssistant(null)}><img src="/hermes/wanko-static.png" alt="" />Hermes</button></div></header>
       {entries.length === 0 ? <section data-surface-state="empty"><h2>{t('overview.emptyTitle')}</h2><p>{t('overview.emptyBody')}</p></section> : null}
       {entries.length === 0 ? media : null}
       {entries.map((field, index) => <section key={field} id={`overview-${field}`} className={styles.section} data-hermes-protected="true">

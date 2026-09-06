@@ -313,11 +313,26 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       menuBounds = menu.getBoundingClientRect();
       const crownBounds = crown.getBoundingClientRect();
       const crownCenter = crownBounds.top + crownBounds.height / 2;
-      const minimumTop = protectedClearanceTop(menuBounds, crownCenter);
-      const maximumTop = viewport.bottom - 8 - menuBounds.height;
       const preferredTop = crownCenter - menuBounds.height - 32;
-      const boundedTop = Math.max(viewport.top + 8, Math.min(maximumTop, Math.max(minimumTop, preferredTop)));
-      menu.style.setProperty('--hermes-menu-correction-y', `${boundedTop - menuBounds.top}px`);
+      const protectedBounds = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .map((node) => node.getBoundingClientRect())
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0);
+      // A card below the folio is not an obstacle above it. Search the small
+      // crown attachment band using actual rectangles instead of pushing the
+      // sheet below every protected surface whose top precedes the crown.
+      const candidates = [preferredTop, crownCenter - menuBounds.height - 24, crownCenter - menuBounds.height - 48,
+        ...protectedBounds.flatMap((bounds) => [bounds.top - menuBounds.height - 8, bounds.bottom + 8])]
+        .sort((a, b) => Math.abs(a - preferredTop) - Math.abs(b - preferredTop));
+      const top = candidates.find((candidate) => {
+        const bottom = candidate + menuBounds.height;
+        const gap = crownCenter - bottom;
+        return candidate >= viewport.top + 8 && bottom <= viewport.bottom - 8 && gap >= 24 && gap <= 48
+          && (menuBounds.right <= actorBounds.left || menuBounds.left >= actorBounds.right || bottom <= actorBounds.top)
+          && protectedBounds.every((bounds) => menuBounds.right + 8 <= bounds.left || menuBounds.left - 8 >= bounds.right
+            || bottom + 8 <= bounds.top || candidate - 8 >= bounds.bottom);
+      });
+      if (top === undefined) return false;
+      menu.style.setProperty('--hermes-menu-correction-y', `${top - menuBounds.top}px`);
       return true;
     };
     const alignMenuToCrown = () => {
