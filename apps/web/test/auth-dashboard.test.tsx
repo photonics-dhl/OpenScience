@@ -14,6 +14,8 @@ const translations: Record<string, string> = {
   'register.confirm': 'Create account',
   'register.resend': 'Resend code',
   'register.resendIn': 'Resend in 60s',
+  'register.completeStep': 'Complete',
+  'register.privacy': 'Verification codes are never public.',
   'register.haveAccount': 'Already have an account?',
   'register.login': 'Log in',
   'login.title': 'Welcome back',
@@ -74,6 +76,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import {
+  ApiClientError,
   confirmSignup,
   createResearchObjectWithMaterials,
   getCurrentUser,
@@ -85,7 +88,7 @@ import {
 } from '../lib/api';
 import DefaultLoginForm, { LoginForm } from '../components/auth/LoginForm';
 import { ResearchIdentityPanel } from '../components/auth/ResearchIdentityPanel';
-import { SignupCodeForm, validateSignupPassword } from '../components/auth/SignupCodeForm';
+import { classifySignupError, SignupCodeForm, validateSignupPassword } from '../components/auth/SignupCodeForm';
 import { applyProfileTokenDraft } from '../components/auth/ResearchProfileFields';
 import { ContinueResearch } from '../components/dashboard/ContinueResearch';
 import { HermesTaskRail } from '../components/dashboard/HermesTaskRail';
@@ -321,6 +324,15 @@ describe('code-based auth forms', () => {
     expect(validateSignupPassword('longpassword')).toEqual(['number']);
     expect(validateSignupPassword('12345678')).toEqual(['letter']);
     expect(validateSignupPassword('Method123')).toEqual([]);
+  });
+
+  it('turns signup failures into actionable, non-sensitive recovery states', () => {
+    expect(classifySignupError(new ApiClientError('CODE_INVALID', 'raw', 400))).toBe('code');
+    expect(classifySignupError(new ApiClientError('CODE_EXPIRED', 'raw', 400))).toBe('expired');
+    expect(classifySignupError(new ApiClientError('MAIL_UNAVAILABLE', 'raw', 503))).toBe('mail');
+    expect(classifySignupError(new ApiClientError('USER_EXISTS', 'raw', 409))).toBe('duplicate');
+    expect(classifySignupError(new ApiClientError('RATE_LIMITED', 'raw', 429))).toBe('rate');
+    expect(classifySignupError(new Error('network detail'))).toBe('generic');
   });
 
   it('renders accessible auth controls with no invitation-code field', () => {

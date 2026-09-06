@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { confirmSignup, requestSignupCode, safeReturnTo } from '@/lib/api';
+import { ApiClientError, confirmSignup, requestSignupCode, safeReturnTo } from '@/lib/api';
 import { EMPTY_RESEARCH_PROFILE, ResearchProfileFields } from './ResearchProfileFields';
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -23,6 +23,18 @@ export function validateSignupPassword(password: string): PasswordRule[] {
   return errors;
 }
 
+export type SignupErrorKind = 'code' | 'expired' | 'rate' | 'mail' | 'duplicate' | 'generic';
+
+export function classifySignupError(cause: unknown): SignupErrorKind {
+  if (!(cause instanceof ApiClientError)) return 'generic';
+  if (cause.status === 429) return 'rate';
+  if (/EXPIRED/i.test(cause.code)) return 'expired';
+  if (/CODE|OTP/i.test(cause.code)) return 'code';
+  if (/MAIL|SMTP|DELIVERY/i.test(cause.code)) return 'mail';
+  if (cause.status === 409 || /EXISTS|DUPLICATE/i.test(cause.code)) return 'duplicate';
+  return 'generic';
+}
+
 export interface SignupCodeFormProps {
   returnTo?: string | null;
 }
@@ -30,7 +42,7 @@ export interface SignupCodeFormProps {
 export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
   const t = useTranslations('auth');
   const router = useRouter();
-  const [stage, setStage] = useState<'details' | 'code'>('details');
+  const [stage, setStage] = useState<'details' | 'code' | 'complete'>('details');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -69,7 +81,7 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
     try {
       await sendCode();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('errors.generic'));
+      setError(t(`register.failure.${classifySignupError(cause)}`));
     } finally {
       setPending(false);
     }
@@ -81,10 +93,9 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
     setPending(true);
     try {
       await confirmSignup({ email, code, password, displayName, researchIdentity });
-      router.replace(safeReturnTo(returnTo));
-      router.refresh();
+      setStage('complete');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('errors.generic'));
+      setError(t(`register.failure.${classifySignupError(cause)}`));
     } finally {
       setPending(false);
     }
@@ -97,7 +108,7 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
     try {
       await sendCode();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('errors.generic'));
+      setError(t(`register.failure.${classifySignupError(cause)}`));
     } finally {
       setPending(false);
     }
@@ -115,9 +126,10 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
         {t('register.description')}
       </p>
 
-      <ol aria-label={t('identity.verificationEyebrow')} className="mt-6 flex list-none gap-4 border-y border-os-rule-paper py-3 text-sm text-os-muted-paper">
+      <ol aria-label={t('identity.verificationEyebrow')} className="mt-6 grid list-none grid-cols-3 gap-3 border-y border-os-rule-paper py-3 text-sm text-os-muted-paper">
         <li aria-current={stage === 'details' ? 'step' : undefined} className={stage === 'details' ? 'font-semibold text-os-ink' : undefined}>1 · {t('register.displayName')}</li>
         <li aria-current={stage === 'code' ? 'step' : undefined} className={stage === 'code' ? 'font-semibold text-os-ink' : undefined}>2 · {t('register.code')}</li>
+        <li aria-current={stage === 'complete' ? 'step' : undefined} className={stage === 'complete' ? 'font-semibold text-os-ink' : undefined}>3 · {t('register.completeStep')}</li>
       </ol>
 
       {stage === 'details' ? (
@@ -168,7 +180,7 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
             {pending ? t('register.sending') : t('register.requestCode')}
           </Button>
         </form>
-      ) : (
+      ) : stage === 'code' ? (
         <form className="mt-7 grid gap-6" onSubmit={handleConfirmation}>
           <div className="border-y border-os-rule-paper py-4 text-sm leading-6 text-os-muted-paper">
             {t('register.codeSent', { email })}
@@ -196,8 +208,30 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
           <Button type="button" variant="ghost" disabled={cooldown > 0 || pending} onClick={handleResend}>
             {cooldown > 0 ? t('register.resendIn', { seconds: cooldown }) : t('register.resend')}
           </Button>
+          <Button type="button" variant="ghost" disabled={pending} onClick={() => { setStage('details'); setCode(''); setError(''); }}>
+            {t('register.changeDetails')}
+          </Button>
         </form>
+      ) : (
+        <div className="mt-7 grid gap-5" data-signup-complete="true">
+          <div role="status" className="border-l-2 border-status-success-text py-2 pl-4">
+            <h2 className="text-xl font-semibold text-os-ink">{t('register.completeTitle')}</h2>
+            <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t('register.completeBody')}</p>
+          </div>
+          <div className="border-y border-os-rule-paper px-1 py-4 text-sm leading-6 text-os-muted-paper">
+            <strong className="text-os-ink">{t('register.nextTitle')}</strong>
+            <p className="mt-1">{t('register.nextBody')}</p>
+          </div>
+          <Button size="lg" onClick={() => { router.replace('/me#identity'); router.refresh(); }}>
+            {t('register.continueIdentity')}
+          </Button>
+          <Button variant="ghost" onClick={() => { router.replace(safeReturnTo(returnTo)); router.refresh(); }}>
+            {t('register.continueWork')}
+          </Button>
+        </div>
       )}
+
+      {stage !== 'complete' ? <p className="mt-5 text-sm leading-6 text-os-muted-paper">{t('register.privacy')}</p> : null}
 
       <div className="min-h-8 pt-5" aria-live="polite" data-auth-error-retryable="true">
         {error ? (

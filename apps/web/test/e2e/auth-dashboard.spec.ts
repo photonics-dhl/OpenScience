@@ -40,6 +40,14 @@ test('registration is keyboard-operable and restores the intended return path', 
       code: '123456',
       password: 'Method123',
       displayName: 'Ada Researcher',
+      researchIdentity: {
+        identities: ['reader'],
+        primaryIdentity: 'reader',
+        disciplines: [],
+        methods: [],
+        topics: [],
+        languages: [],
+      },
     });
     await route.fulfill({
       contentType: 'application/json',
@@ -63,6 +71,10 @@ test('registration is keyboard-operable and restores the intended return path', 
   await expect(verificationCode).toBeFocused();
   await page.keyboard.type('123456');
   await page.keyboard.press('Enter');
+  await expect(page.locator('[data-signup-complete="true"]')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /account is ready/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /continue research identity/i })).toBeVisible();
+  await page.getByRole('button', { name: /skip for now/i }).click();
   await expect(page).toHaveURL(`${baseUrl}/dashboard`);
 });
 
@@ -87,7 +99,7 @@ test('signup request failure remains visible and can be retried without losing t
   await page.getByLabel(/^password$/i).fill('Method123');
   const submit = page.getByRole('button', { name: /send verification code/i });
   await submit.click();
-  await expect(page.locator('[data-auth-error-retryable="true"] [role="alert"]')).toContainText('Mail delivery is temporarily unavailable');
+  await expect(page.locator('[data-auth-error-retryable="true"] [role="alert"]')).toContainText('verification email could not be sent');
   await expect(submit).toBeEnabled();
   await submit.click();
   await expect(page.getByLabel(/verification code/i)).toBeFocused();

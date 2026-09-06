@@ -555,6 +555,23 @@
       "confirming": "Creating account…",
       "resend": "Resend code",
       "resendIn": "Resend in {seconds}s",
+      "changeDetails": "Change account details",
+      "completeStep": "Complete",
+      "completeTitle": "Your account is ready",
+      "completeBody": "Your primary email is verified and you are signed in. Your research identity remains private unless a future publishing step clearly asks you to share it.",
+      "nextTitle": "Optional research identity",
+      "nextBody": "Continue to your profile to connect ORCID or verify an institutional email. You can do either independently, skip both, and return later.",
+      "continueIdentity": "Continue research identity verification",
+      "continueWork": "Skip for now and continue",
+      "privacy": "We use these details to create your account, protect sign-in, and personalize your research workspace. Verification codes are never displayed publicly. ORCID and institutional verification are optional and do not grant author, reviewer, or editor permissions.",
+      "failure": {
+        "code": "The code is incorrect. Check the latest email and enter all six digits.",
+        "expired": "This code has expired. Request a new code and use the latest email.",
+        "rate": "Too many attempts. Wait a moment before trying again; if you requested several codes, only use the latest one.",
+        "mail": "The verification email could not be sent. Check the address and try again, or use another email.",
+        "duplicate": "An account already uses this email. Log in instead, or use another email.",
+        "generic": "Registration could not be completed. Your entries are still here; retry or change the account details."
+      },
       "haveAccount": "Already have an account?",
       "login": "Log in"
     },
