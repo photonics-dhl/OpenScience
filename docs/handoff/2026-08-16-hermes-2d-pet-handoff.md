@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT active-memory, 2026-09-06 +08. Administrator Hermes → Codex scene-image generation is deployed and verified by a real task. Fixed D2NN video has the revised mechanism illustration and byte-identical accepted narration. Generic RO video generation and global Hermes conversation editing remain open.
+> CURRENT active-memory, 2026-09-06 +08. Administrator Hermes → Codex scene-image generation is deployed and verified by a real task. Fixed D2NN video has the revised mechanism illustration and byte-identical accepted narration. Global Hermes presentation preparation is a local uncommitted candidate; release remains unchanged. Generic RO video generation remains open.
 
 ## Version tuple
 
@@ -44,6 +44,11 @@
 - CPU image download remains USER-PAUSED; about1.1GB partial files retained, no complete model. Earlier MiniMax trials failed scientific visual criteria; do not describe their composition changes as a validated MiniMax quality improvement.
 - Preserve accepted Serena v4 audio; reuse existing Chromium/FFmpeg/PyTorch/Codex runtime. Do not reinstall Tailscale, read/print env/auth/cookies/private model logs, or expose account-backed Codex as a public general execution endpoint.
 - Evaluation still depends on user's PC/v2ray staying online and account quota. Account refresh requiring auth writes needs operator login maintenance. Broader public rollout needs supported provider/account terms and stable egress; ADR-013 records this boundary.
+
+## Global Hermes candidate / next action
+
+- Local Drawer prepares bounded zh/en create/revise/image actions; exact current RO/version, succeeded Claims, approved-image capability, visible style/locale and1Credit confirmation reuse existing API/task page. RO/version resets discard preparation; ambiguous same-owner retries preserve key. No provider/backend/schema additions.
+- Local workspace build/typecheck/lint/test passed; final web514 tests and presentation browser15 passed, including exact revision/no preconfirm POST/ambiguous same-key retry/success cleanup/published version/image capability/query switch/390px. Evidence: ignored global-hermes-*.log. Additional Hermes regression14 and independent architecture/security review passed; CI and exact-source server acceptance plus real controlled revision remain pending; do not call this deployed.
 
 ## Next action / read-first
 

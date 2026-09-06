@@ -19,6 +19,10 @@ import {
 import { routeHermesLiteratureIntent, type RoutedHermesIntent } from '@/lib/hermes/literature-intent';
 import { createLiteratureIntentFingerprint } from '@/lib/literature-acquisition-state';
 
+import { routeHermesPresentationIntent, type HermesPresentationIntent } from '@/lib/hermes/presentation-intent';
+import { useSearchParams } from 'next/navigation';
+import { HermesPresentationReview } from './HermesPresentationReview';
+import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import type { HermesGuideSuggestion } from './hermes-guide';
 
 type LiteratureIntent = Extract<RoutedHermesIntent, { kind: 'literature.acquire' }>;
@@ -84,10 +88,20 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
   return { summary: value.summary, nextSteps, needsMoreInformation: value.needsMoreInformation };
 }
 
-export function HermesAssistantDrawer({
+export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
+  return <React.Suspense fallback={null}><HermesAssistantDrawerContent {...props} /></React.Suspense>;
+}
+
+function HermesAssistantDrawerContent({
   open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
+  const tp = useTranslations('hermesPresentation');
+  const presentationSubmissions = useRef(new Map<string, SubmissionIntent>());
+  const [presentationIntent, setPresentationIntent] = useState<HermesPresentationIntent | null>(null);
+  const requestedVersion = useSearchParams()?.get('version') ?? '';
+  const currentOwner = `${route}:${routeResearchObjectId ?? ''}:${requestedVersion}`;
+  const ownerRef = useRef(currentOwner); ownerRef.current = currentOwner;
   const sessionId = useRef<string | null>(null);
   const sessionKey = useRef<string | null>(null);
   const taskKey = useRef<string | null>(null);
@@ -101,6 +115,12 @@ export function HermesAssistantDrawer({
   const busy = submitting || activeTask;
   const result = task?.status === 'succeeded' ? resultFromTask(task) : null;
   const invalidResult = task?.status === 'succeeded' && !result;
+
+  useEffect(() => {
+    presentationSubmissions.current.clear();
+    setPresentationIntent(null); setLiteratureIntent(null); setTask(null); setGoal(''); setError(''); setSubmitting(false);
+    sessionId.current = null; sessionKey.current = null; taskKey.current = null; submittingRef.current = false;
+  }, [currentOwner]);
 
   useEffect(() => {
     onTaskStateChange?.(task);
@@ -137,6 +157,9 @@ export function HermesAssistantDrawer({
     event.preventDefault();
     const normalized = goal.trim();
     if (!normalized || busy || submittingRef.current) return;
+    const owner = currentOwner;
+    const presentation = routeHermesPresentationIntent(normalized);
+    if (presentation) { setPresentationIntent(presentation); return; }
     submittingRef.current = true;
     setError('');
     setSubmitting(true);
@@ -146,6 +169,7 @@ export function HermesAssistantDrawer({
         goal: normalized,
         routeResearchObjectId: route === 'research-object-edit' ? routeResearchObjectId ?? null : null,
       });
+      if (ownerRef.current !== owner) return;
       if (routed) {
         setLiteratureIntent(routed);
         return;
@@ -153,6 +177,7 @@ export function HermesAssistantDrawer({
       if (!sessionId.current) {
         sessionKey.current ??= crypto.randomUUID();
         const response = await createWorkspaceGuideSession(normalized, sessionKey.current, route === 'research-object-edit' ? routeResearchObjectId : undefined);
+        if (ownerRef.current !== owner) return;
         sessionId.current = response.session.id;
       }
       taskKey.current ??= crypto.randomUUID();
@@ -161,13 +186,14 @@ export function HermesAssistantDrawer({
         idempotencyKey: taskKey.current,
         payload: { goal: normalized, locale, route, target, context: dashboardContext },
       });
+      if (ownerRef.current !== owner) return;
       setTask(response.task);
       taskKey.current = null;
     } catch (cause) {
+      if (ownerRef.current !== owner) return;
       setError(cause instanceof Error ? cause.message : t('guide.error'));
     } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
+      if (ownerRef.current === owner) { submittingRef.current = false; setSubmitting(false); }
     }
   };
 
@@ -194,20 +220,22 @@ export function HermesAssistantDrawer({
       overlayClassName="hermes-assistant-overlay"
       side="right"
     >
-      <section className="hermes-guide-drawer" data-hermes-drawer-state={literatureIntent ? 'literature' : busy ? 'working' : task?.status ?? 'ready'} data-literature-routing="deterministic">
+      <section className="hermes-guide-drawer" data-hermes-drawer-state={presentationIntent ? 'presentation' : literatureIntent ? 'literature' : busy ? 'working' : task?.status ?? 'ready'} data-literature-routing="deterministic">
         <p className="font-mono text-[0.68rem] uppercase tracking-[0.2em] text-os-vermilion">{t('guide.eyebrow')}</p>
-        <h2 className="mt-3 font-editorial text-3xl text-os-paper">{t('guide.title')}</h2>
-        <p className="mt-3 text-sm leading-6 text-os-muted-dark">{t(suggestion.bodyKey)}</p>
+        <h2 className="mt-3 font-editorial text-3xl text-os-ink-paper">{t('guide.title')}</h2>
+        <p className="mt-3 text-sm leading-6 text-os-muted-paper">{t(suggestion.bodyKey)}</p>
 
         {suggestion.href ? (
-          <Link className="mt-5 inline-flex border-b border-os-vermilion pb-1 text-sm text-os-paper" href={suggestion.href}>
+          <Link className="mt-5 inline-flex border-b border-os-vermilion pb-1 text-sm text-os-ink-paper" href={suggestion.href}>
             {t('guide.openContext')} →
           </Link>
         ) : null}
 
-        {literatureIntent ? (
-          <div className="mt-8 border-t border-os-rule-dark pt-5">
-            <button className="mb-3 inline-flex min-h-11 items-center border-b border-os-vermilion text-sm font-semibold text-os-paper focus-visible:ring-2 focus-visible:ring-focus-ring" onClick={() => setLiteratureIntent(null)} type="button">
+        {presentationIntent ? <React.Suspense fallback={<p role="status">{t('guide.working')}</p>}>
+          <HermesPresentationReview intent={presentationIntent} submissionRecords={presentationSubmissions.current} routeResearchObjectId={routeResearchObjectId} researchObjects={dashboardContext.researchObjects} onBack={() => setPresentationIntent(null)} onDone={() => { setPresentationIntent(null); setGoal(''); onOpenChange(false); }} />
+        </React.Suspense> : literatureIntent ? (
+          <div className="mt-8 border-t border-os-rule-paper pt-5">
+            <button className="mb-3 inline-flex min-h-11 items-center border-b border-os-vermilion text-sm font-semibold text-os-ink-paper focus-visible:ring-2 focus-visible:ring-focus-ring" onClick={() => setLiteratureIntent(null)} type="button">
               {t('guide.backToGuide')}
             </button>
             <LiteratureAcquisition
@@ -217,13 +245,14 @@ export function HermesAssistantDrawer({
               callerIntentFingerprint={literatureIntent.callerIntentFingerprint}
               onAuthenticationRequired={() => window.location.assign(`/auth/login?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`)}
               target={literatureIntent.target}
-              tone="dark"
+              tone="paper"
             />
           </div>
-        ) : <form className="mt-8 border-t border-os-rule-dark pt-6" onSubmit={submit}>
-          <label className="block text-sm font-medium text-os-paper" htmlFor="hermes-guide-goal">{t('guide.goalLabel')}</label>
+        ) : <form className="mt-8 border-t border-os-rule-paper pt-6" onSubmit={submit}>
+          <button type="button" className="mb-4 min-h-11 rounded border border-os-rule-paper px-3 text-sm text-os-ink-paper disabled:opacity-50" disabled={busy} onClick={() => setPresentationIntent({ action: 'storyboard.create', instruction: goal.trim() })}>{tp('entry')}</button>
+          <label className="block text-sm font-medium text-os-ink-paper" htmlFor="hermes-guide-goal">{t('guide.goalLabel')}</label>
           <textarea
-            className="mt-3 min-h-28 w-full resize-y border border-os-rule-dark bg-transparent p-3 text-sm leading-6 text-os-paper outline-none focus:border-os-vermilion"
+            className="mt-3 min-h-28 w-full resize-y border border-os-rule-paper bg-transparent p-3 text-sm leading-6 text-os-ink-paper outline-none focus:border-os-vermilion"
             disabled={busy}
             id="hermes-guide-goal"
             maxLength={2000}
@@ -231,30 +260,30 @@ export function HermesAssistantDrawer({
             placeholder={t('guide.goalPlaceholder')}
             value={goal}
           />
-          <button className="mt-3 border-b border-os-vermilion pb-1 text-sm font-semibold text-os-paper disabled:opacity-50" disabled={busy || !goal.trim()} type="submit">
+          <button className="mt-3 border-b border-os-vermilion pb-1 text-sm font-semibold text-os-ink-paper disabled:opacity-50" disabled={busy || !goal.trim()} type="submit">
             {busy ? t('guide.working') : t('guide.submit')}
           </button>
         </form>}
 
-        {!literatureIntent && activeTask ? (
-          <p className="mt-4 font-mono text-xs text-os-muted-dark" aria-live="polite">{t('guide.progress', { progress: task.progress })}</p>
+        {!presentationIntent && !literatureIntent && activeTask ? (
+          <p className="mt-4 font-mono text-xs text-os-muted-paper" aria-live="polite">{t('guide.progress', { progress: task.progress })}</p>
         ) : null}
 
-        {!literatureIntent && (error || task?.status === 'failed' || invalidResult) ? (
+        {!presentationIntent && !literatureIntent && (error || task?.status === 'failed' || invalidResult) ? (
           <div className="mt-5 text-sm text-os-vermilion" role="alert">
             <p>{error || task?.error || t('guide.error')}</p>
-            {error && activeTask ? <button className="mt-3 border-b border-os-vermilion pb-1 text-os-paper" onClick={() => setError('')} type="button">{t('guide.resume')}</button> : null}
+            {error && activeTask ? <button className="mt-3 border-b border-os-vermilion pb-1 text-os-ink-paper" onClick={() => setError('')} type="button">{t('guide.resume')}</button> : null}
           </div>
         ) : null}
-        {!literatureIntent && result ? (
-          <section className="mt-7 border-t border-os-rule-dark pt-5" aria-live="polite">
-            <h3 className="text-sm font-semibold text-os-paper">{t('guide.result')}</h3>
-            <p className="mt-3 text-sm leading-6 text-os-muted-dark">{result.summary}</p>
+        {!presentationIntent && !literatureIntent && result ? (
+          <section className="mt-7 border-t border-os-rule-paper pt-5" aria-live="polite">
+            <h3 className="text-sm font-semibold text-os-ink-paper">{t('guide.result')}</h3>
+            <p className="mt-3 text-sm leading-6 text-os-muted-paper">{result.summary}</p>
             {result.needsMoreInformation ? <p className="mt-3 text-sm text-os-vermilion">{t('guide.needsMoreInformation')}</p> : null}
             <ol className="mt-5 space-y-3">
               {result.nextSteps.map((step, index) => {
                 const href = actionHref(step);
-                return <li className="grid grid-cols-[1.5rem_1fr] gap-2 text-sm text-os-paper" key={`${step.intent}-${index}`}><span className="font-mono text-os-vermilion">{String(index + 1).padStart(2, '0')}</span>{href ? <Link className="hover:text-os-vermilion" href={href}>{step.label} →</Link> : <span>{step.label}</span>}</li>;
+                return <li className="grid grid-cols-[1.5rem_1fr] gap-2 text-sm text-os-ink-paper" key={`${step.intent}-${index}`}><span className="font-mono text-os-vermilion">{String(index + 1).padStart(2, '0')}</span>{href ? <Link className="hover:text-os-vermilion" href={href}>{step.label} →</Link> : <span>{step.label}</span>}</li>;
               })}
             </ol>
           </section>

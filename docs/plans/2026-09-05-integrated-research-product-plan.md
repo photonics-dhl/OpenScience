@@ -336,3 +336,10 @@ User authorized execution on 2026-09-06. Architecture: ADR-013. No additional ap
 6. Render/deploy the revised demo with the unchanged voice, verify video duration/decoding/seek/mobile display, and give the user the actual result. Do not describe this fixed demo as arbitrary RO-to-video automation.
 
 Batch completed2026-09-06: app/main3d518af and demo7e1b6ea deployed. PR/main CI, exact server build/parser/runtime/health and real administrator Codex task/browser/audit passed. See CURRENT handoff for identities and evidence. Output remains draft for scientific/visual approval; next batch is global Hermes action routing and generic approved-storyboard CPU video generation. Historical MiniMax trials above did not pass visual acceptance; CPU image installation remains paused.
+
+## Current batch: global Hermes presentation actions
+
+1. Add tested bounded zh/en presentation-intent preparation; preserve literature/guidance routes. Wire current RO across all RO paths and clear drawer preparation on scope changes.
+2. Add a scoped, accessible review card using existing API wrappers for RO/version/workspace/Claims/assets; explicit create/revise/image selection, source/parent/scene preview and1Credit confirmation. Submit with a stable per-intent key; hand accepted task to existing presentation page via version/task URL.
+3. Browser coverage: free-form revision through drawer, image capability/approved-parent boundary, no request before confirmation, double click, failed/ambiguous outcome, RO/version switch, zh/en and390px. Reuse existing workbench diff/approval and task resume.
+4. Independent review, workspace checks and CI; canonical server build/parser/runtime/deploy. Real controlled administrator revision through global Hermes; compare old/new drafts, exact task/credit/source and session cleanup. Preserve Codex runner, accepted audio and paused CPU model.

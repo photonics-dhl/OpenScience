@@ -423,3 +423,73 @@ test('approved scene produces an independently reviewable image with stable retr
   await page.reload();
   await expect(page.locator('[data-scene-image]')).toHaveCount(0);
 });
+
+test('global Hermes reviews an exact revision and retries one uncertain submission', async ({ page }) => {
+  await fixtures(page);
+  const parent = { ...asset, id: 'global-plan', kind: 'interactive_html', status: 'approved', canGenerateSceneImage: false,
+    storyboard: { locale: 'en', style: 'technical', document: { schemaVersion: 1, title: 'Original light journey', scenes: Array.from({ length: 3 }, (_, i) => ({ title: `Scene ${i + 1}`, narration: 'Light travels.', visualAction: 'Show propagation.', durationSeconds: 8, sourceClaimIds: [initialClaim.id] })) } } };
+  await page.route('**/api/**/presentation-assets', route => json(route, { assets: [parent] }));
+  const bodies: unknown[] = []; const keys: string[] = [];
+  await page.route('**/api/**/presentation-assets/generations', route => {
+    bodies.push(route.request().postDataJSON()); keys.push(route.request().headers()['idempotency-key']);
+    return bodies.length === 1 ? json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Unknown outcome' } }, 503) : json(route, { task: task('pending', 0) }, 202);
+  });
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+  await page.locator('[data-hermes-input-owner="true"]').click();
+  await page.locator('#hermes-guide-goal').fill('Revise the storyboard to explain diffraction clearly');
+  await page.locator('.hermes-guide-drawer form button[type="submit"]').click();
+  const review = page.locator('[data-hermes-presentation-action="true"]');
+  await expect(review).toContainText(ro.title);
+  await review.getByLabel('Source storyboard').selectOption(parent.id);
+  await expect(review.getByLabel('Visual style')).toHaveValue('technical');
+  await review.getByLabel('Visual style').selectOption('ink');
+  expect(bodies).toHaveLength(0);
+  await review.getByRole('button', { name: 'Confirm · 1 AI credit' }).click();
+  await expect(review.getByRole('alert')).toContainText('outcome is unknown');
+  await expect(review.getByLabel('Storyboard instructions')).toBeDisabled();
+  await review.getByRole('button', { name: 'Retry the same submission' }).click();
+  await expect(page).toHaveURL(/version=version-2&task=presentation-task/);
+  expect(keys).toHaveLength(2); expect(keys[0]).toBeTruthy(); expect(keys[1]).toBe(keys[0]);
+  expect(bodies[0]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', instruction: 'Revise the storyboard to explain diffraction clearly', baseAssetId: parent.id } });
+  expect(bodies[1]).toEqual(bodies[0]);
+  await page.locator('[data-hermes-input-owner="true"]').click();
+  await expect(review).toHaveCount(0);
+  await expect(page.locator('#hermes-guide-goal')).toHaveValue('');
+});
+
+test('global Hermes does not fall back from an explicit published version', async ({ page }) => {
+  const observed = await fixtures(page);
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-1`);
+  await page.locator('[data-hermes-input-owner="true"]').click();
+  await page.getByRole('button', { name: 'Storyboards and scene images', exact: true }).click();
+  const review = page.locator('[data-hermes-presentation-action="true"]');
+  await expect(review.getByLabel('Research version')).toHaveValue('version-1');
+  await expect(review.getByRole('button', { name: 'Confirm · 1 AI credit' })).toBeDisabled();
+  await expect(review).toContainText('Choose a draft version');
+  expect(observed.generationBodies).toHaveLength(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/science-video/global-hermes-mobile.png', fullPage: true });
+});
+
+test('global Hermes image selection follows server capability and version switches discard preparation', async ({ page }) => {
+  await fixtures(page);
+  const plan = { ...asset, id: 'allowed-plan', kind: 'interactive_html', status: 'approved', canGenerateSceneImage: true,
+    storyboard: { locale: 'en', style: 'ink', document: { schemaVersion: 1, title: 'Allowed scene', scenes: [{ title: 'Wave', narration: 'Light travels.', visualAction: 'Draw the wavefront.', durationSeconds: 8, sourceClaimIds: [initialClaim.id] }] } } };
+  await page.route('**/api/**/presentation-assets', route => json(route, { assets: [plan, { ...plan, id: 'denied-plan', canGenerateSceneImage: false, storyboard: { ...plan.storyboard, document: { ...plan.storyboard.document, title: 'Denied scene' } } }] }));
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+  await page.locator('[data-hermes-input-owner="true"]').click();
+  await page.getByRole('button', { name: 'Storyboards and scene images', exact: true }).click();
+  const review = page.locator('[data-hermes-presentation-action="true"]');
+  await review.getByRole('combobox', { name: /^Action/ }).selectOption('scene.image');
+  await expect(review.getByLabel('Source storyboard').locator('option')).toHaveCount(2);
+  await review.getByLabel('Source storyboard').selectOption(plan.id);
+  await expect(review).toContainText('Draw the wavefront.');
+  await expect(review.getByRole('button', { name: 'Confirm · 1 AI credit' })).toBeEnabled();
+  await page.evaluate(() => history.pushState(null, '', '?version=version-1'));
+  await expect(review).toHaveCount(0);
+  await page.getByRole('button', { name: 'Storyboards and scene images', exact: true }).click();
+  await expect(review.getByLabel('Research version')).toHaveValue('version-1');
+  await expect(review.getByRole('combobox', { name: /^Action/ })).toHaveValue('storyboard.create');
+  await expect(review.getByRole('button', { name: 'Confirm · 1 AI credit' })).toBeDisabled();
+});

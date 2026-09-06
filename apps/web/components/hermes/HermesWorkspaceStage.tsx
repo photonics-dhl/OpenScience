@@ -45,6 +45,7 @@ import {
   type HermesBubblePlacement,
 } from '@/lib/hermes/companion-placement';
 
+import { researchObjectFromHermesPath } from '@/lib/hermes/presentation-intent';
 import { HermesAssistantDrawer } from './HermesAssistantDrawer';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import type { HermesVisualState } from './hermes-state';
@@ -206,19 +207,22 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
     else if (/^\/research-objects\/[^/]+\/edit$/.test(pathname)) setGuideTarget('sdf-problem');
     else setGuideTarget(null);
   }, [pathname]);
-  useEffect(() => setRouteAssistantOpen(false), [pathname]);
+  useEffect(() => {
+    setRouteAssistantOpen(false); setRouteState('idle'); setWriting(false);
+  }, [pathname]);
   const context = useMemo(() => ({ register, registerAnchor, requestGuide: setGuideTarget, setRouteState, setWriting }), [register, registerAnchor]);
   const route = pathname === '/research-objects/new' ? 'research-object-new' : 'research-object-edit';
-  const researchObjectId = /^\/research-objects\/([^/]+)\/edit$/.exec(pathname)?.[1];
+  const researchObjectId = researchObjectFromHermesPath(pathname);
   const routeContext: WorkspaceGuidePayload['context'] = researchObjectId
     ? { tasks: [], researchObjects: [{ id: researchObjectId, title: 'Current research object', status: 'draft' }] }
     : { tasks: [], researchObjects: [] };
   return (
     <HermesWorkspaceStageContext.Provider value={context}>
       {children}
-      {supportedPath(pathname) && presentation ? (
-        <HermesWorkspaceStage
+      {supportedPath(pathname) && (presentation || pathname !== '/dashboard') ? (
+        <React.Suspense fallback={null}><HermesWorkspaceStage
           guideTarget={guideTarget}
+          fallbackWorkspaceId={researchObjectId ?? 'workspace-current'}
           fallbackAssistantOpen={routeAssistantOpen}
           fallbackOnInvoke={() => setRouteAssistantOpen(true)}
           onDismissGuide={() => setGuideTarget(null)}
@@ -227,7 +231,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
           registryVersion={registryVersion}
           routeState={routeState}
           writing={writing}
-        />
+        /></React.Suspense>
       ) : null}
       {pathname !== '/dashboard' && supportedPath(pathname) && !presentation ? (
         <HermesAssistantDrawer
@@ -236,6 +240,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
           onOpenChange={setRouteAssistantOpen}
           open={routeAssistantOpen}
           route={route}
+          routeResearchObjectId={researchObjectId}
           suggestion={neutralSuggestion}
           target={guideTarget}
         />
@@ -248,7 +253,8 @@ export function useOptionalHermesWorkspaceStage() {
   return React.useContext(HermesWorkspaceStageContext);
 }
 
-function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTarget, onDismissGuide, presentation, registry, registryVersion, routeState, writing }: {
+function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fallbackOnInvoke, guideTarget, onDismissGuide, presentation, registry, registryVersion, routeState, writing }: {
+  fallbackWorkspaceId: string;
   fallbackAssistantOpen: boolean;
   fallbackOnInvoke: () => void;
   guideTarget: HermesAnchorId | null;
@@ -264,7 +270,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const motionSearch = searchParams.toString();
   const state = presentation?.state ?? routeState;
   const t = useTranslations('hermesCompanion');
-  const workspaceId = presentation?.workspaceId ?? 'workspace-current';
+  const workspaceId = presentation?.workspaceId ?? fallbackWorkspaceId;
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; customDock: boolean; moved: boolean } | null>(null);
   const pointerRef = useRef({ present: false, speed: 0, x: 0, y: 0 });
   const pointerSampleRef = useRef({ at: 0, x: 0, y: 0 });

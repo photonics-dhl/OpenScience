@@ -2,6 +2,10 @@
 
 > 最新同步：2026-09-06 +08。应用/main3d518af已部署，rollback615ca2d；demo7e1b6ea独立发布。后续文档提交不改变生产。
 
+## Global Hermes presentation actions — local candidate
+
+- Global conversation now prepares existing storyboard/revision/image tasks with exact RO/version/source/cost review; no model/provider or endpoint changes. Source permissions, approved image capability, explicit version, style/language, length and retry handling covered by focused tests. Local full workspace build/typecheck/lint/test, final web514 tests and presentation browser15 passed; docs lint passed. Additional Hermes regression14 and independent architecture/security review passed; CI and server acceptance remain pending; production stays3d518af.
+
 ## Hermes Codex integration and revised video — deployed and accepted
 
 - PR97/main source3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52; PR/main CI passed. ECS full build/Parser16/BGE/ScanSci/core36/search2/health/public/retention passed; rollback615ca2d, no pending transaction. One local pre-transaction EPIPE retried only after confirming intact source/old release.
