@@ -1,6 +1,6 @@
 # ADR-013: Administrator Codex image evaluation
 
-Status: implementation candidate, not yet deployed. User explicitly authorized Hermes-to-Codex integration during the current server validation phase (2026-09-06).
+Status: deployed controlled evaluation at source3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52; real administrator task/browser/audit accepted. User explicitly authorized Hermes-to-Codex integration during the current server validation phase (2026-09-06).
 
 ## Context
 

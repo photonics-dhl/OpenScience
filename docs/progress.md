@@ -1,12 +1,14 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-06 +08。应用615ca2d已部署，rollbackd6507ea。后续文档提交不改变生产。
+> 最新同步：2026-09-06 +08。应用/main3d518af已部署，rollback615ca2d；demo7e1b6ea独立发布。后续文档提交不改变生产。
 
-## Hermes Codex integration candidate — implementation complete, server validation pending
+## Hermes Codex integration and revised video — deployed and accepted
 
-- 现有 presentation.generate → Gateway 新增显式 Codex provider；服务端串行 runner 使用私有文件任务、持久化 started 记录、Unix socket 限域代理及现有 FFmpeg 规范化。无新数据库/API，无公开通用执行入口。
-- 全仓 build/typecheck/lint/test 已通过；后续 focused runner9/Gateway27、媒体第三幕8测试通过。独立审查修复 archive 无 .git、提交中断恢复、安装失败恢复与旧 heartbeat 问题；最终源部署待执行。
-- Demo 仅新增可选 scene3-artwork.png，五幕中的第三幕解释衍射/干涉；原图、41.28秒连续 Serena WAV 与时间轴保持。新demo7e1b6ea已服务器渲染/部署：39.101秒渲染、41.292秒视频，公网/390px/206通过；应用仍615ca2d。Runner安装暴露validator未导出，已自动回退；新增完整模块加载测试先红后绿10/10，API尚旧版本、无生图任务；随后无模型服务器探针发现umask导致输入root:root0640，已改为1000:1000/0400，待新bundle部署。
+- PR97/main source3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52; PR/main CI passed. ECS full build/Parser16/BGE/ScanSci/core36/search2/health/public/retention passed; rollback615ca2d, no pending transaction. One local pre-transaction EPIPE retried only after confirming intact source/old release.
+- Real administrator task4661e80a-526e-4a4a-8b11-47359e9c1f6b: Gateway codex-image66.103s, draft1280×720/1298085bytes, exact parent+3Claims,1task/1attempt/0retry/1Credit/1generated audit/1image audit. Spool hash matches,1raw image, runtime containers cleaned. zh/en×1440/390,PNG200/anon401/logout passed. Cost/token fields null.
+- Missing validator export and umask input ownership both reproduced/fixed before model use. Final runner10 tests and complete install import preflight pass; controller3d518af active, input1000:1000/0400. Existing runtime/auth/network/image foundation reused.
+- Demo7e1b6ea third mechanism scene updated;39.101s render/41.292s video/Range206/mobile passed. Original WAV/JSON/artwork and actual AAC stream unchanged. No new TTS or generation for this render.
+- CPU model remains paused; generated image remains draft for scientific/visual approval. Global conversation editing and generic RO-to-video still pending. Exact evidence and next actions in CURRENT handoff and science-video runbook.
 
 ## 科学构图修订与 RO 草稿导入完成
 

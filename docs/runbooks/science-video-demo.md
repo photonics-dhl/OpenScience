@@ -1,7 +1,7 @@
 # D2NN 科普视频服务器演示 Runbook
 
 本手册只部署一篇 D2NN 论文的人工审阅样片。它验证服务器 CPU 渲染和
-Nginx Range 播放，不表示 RO 已能自动生成图片或视频。演示不读取私有 RO，
+Nginx Range 播放；独立于本样片，管理员 RO 单幕 Codex 生图已验证，通用 RO 自动视频仍未实现。演示不读取私有 RO，
 只使用原创图、固定脚本和预先生成的旁白。
 
 ## 前置检查
@@ -317,7 +317,7 @@ Browser acceptance: desktop and390px card renders, PNG decoding1672×941, mobile
 
 Temporary model/proxy containersv4/v5 exited; production .release-id remains615ca2d. CPU model download remains paused. Do not reuse attempt-specific helper paths or stale Unix sockets. Next step is user visual acceptance and further storyboard assets/video through the controlled workflow; automatic Hermes-to-Codex product integration is not implemented.
 
-### Administrator Codex runner candidate — installation and activation
+### Administrator Codex runner — installation and activation
 
 Preflight: ADR-013 applies; user authorized controlled account validation. Keep CPU image installation paused. Verify actual app release, backup health and existing Squid egress. Require pinned CLI0.153.0 runtime, UID1000/mode0600 regular auth file (metadata only), and the two existing image IDs in install.sh. Complete canonical source build and exact-source parser acceptance before activation. No dependency reinstall or credential display.
 
@@ -339,3 +339,13 @@ Server candidate7e1b6ea installation found a missing public Gateway export for v
 Demo candidate7e1b6ea run7e1b6ea-20260906T044500Z deployed successfully using the existing renderer as a source-only base. Server render39.101s,991frames,41.292s,2532823bytes; complete decode true, no paid call. Original narration WAV/JSON and opening artwork compare byte-identical. Public browser1280×720/41.291667s, scene3 screenshot visually verified,390px no overflow and range206 passed. Evidence codex-video-deploy.log, codex-video-browser-evidence.json and codex-video-scene3.png.
 
 Before the first model task, a no-model server probe under the service umask0027 confirmed another runtime issue: root-created input/request.json was0640 root:root and unreadable by UID1000. The runner now explicitly owns that file as1000:1000 with0400 permissions; no account/task content is printed. This check uses invalid image configuration and never starts a model. The2c4cf4d runner reached heartbeat but no generation was submitted; install the corrected bundle before application activation.
+
+### Current deployed Codex acceptance — 2026-09-06
+
+Application/main/runner3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52, rollback615ca2dc22bcceabc99562a31340053725a81098. PR97 is merged at the exact tested SHA; PR CI34010770869 and main CI34011369239 succeeded. Canonical server build, source/image-bound Parser16, core36/search2, BGE vectors, ScanSci OA/runtime and health/public/retention passed. First local sync attempt hit EPIPE before any transaction; source and old release integrity verified, canonical retry succeeded. Activation was initially attempted before the final parser report existed and exited before installation; retry occurred only after the report/contract completed.
+
+Controller is active with HERMES_SCENE_IMAGE_PROVIDER=codex in API and Worker. Controlled task/asset4661e80a-526e-4a4a-8b11-47359e9c1f6b generated a1280×720 PNG in66.103s image Gateway latency,1298085bytes. Independent audit:1task,1attempt,0retry,1Credit debit,1generation audit,1successful codex-image audit; approved parent74ef00f4-be7e-4a95-9256-c22dbee7ad33/index3 and3exactClaims preserved. Spool prompt hash equals the asset promptHash, started marker exists, exactly1raw PNG. All temporary task containers removed; controller remains active. No dollar/token figure is available, and nested image-tool count is not independently measured.
+
+Asset remains draft after visual inspection, not published or human-approved. Browser zh/en×1440/390 decoded the PNG without overflow; content200, anonymous401, session logout passed. Evidence codex-scene-browser-evidence.json, codex-scene-audit-evidence.json, codex-spool-audit.log and codex-scene-artwork.png. Existing private control RO is not a user-accessible demo link.
+
+Demo source7e1b6ea/run7e1b6ea-20260906T044500Z remains independent of app. Actual new/old AAC streams both hash2f5f144657fbbe27a23ff1d37e2c01ecb121640b169bd0560705aef2dcc077cf; accepted audio is unchanged after encoding. Current public entry: /demos/science-video/d2nn/?v=codex-mechanism-v1. Generic RO video automation and global Hermes conversation edits remain next work.
