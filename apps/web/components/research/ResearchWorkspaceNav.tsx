@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import styles from './research-nav.module.css';
 import { Boxes, FileClock, FileText, FlaskConical, Gauge, Image as ImageIcon, Send, Sparkles, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -22,22 +23,19 @@ const items: Array<{ id: WorkspaceNavId; icon: typeof Gauge }> = [
 
 export function ResearchWorkspaceNav({ active, objectId }: { active: WorkspaceNavId; objectId: string }) {
   const t = useTranslations('productSurfaces');
-  return (
-    <nav aria-label={t('navigation')} className="flex min-w-max items-stretch px-2 sm:px-4" data-research-workspace-nav="true">
-      {items.map(({ id, icon: Icon }) => (
-        <Link
-          aria-current={active === id ? 'page' : undefined}
-          className={active === id
-            ? 'flex min-h-11 items-center gap-2 border-b-2 border-os-vermilion-ink px-3 text-sm font-semibold text-os-ink'
-            : 'flex min-h-11 items-center gap-2 border-b-2 border-transparent px-3 text-sm text-os-muted-paper transition-colors hover:text-os-ink'}
-          data-reading-role="control"
-          href={id === 'hermes' ? `/research-objects/${encodeURIComponent(objectId)}/hermes` : id === 'presentation' ? `/research-objects/${encodeURIComponent(objectId)}/presentation` : researchSurfaceHref(id, objectId)}
-          key={id}
-        >
-          <Icon aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.6} />
-          <span>{t(`nav.${id}`)}</span>
-        </Link>
-      ))}
-    </nav>
-  );
+  const primaryIds = ['overview', 'sdf', 'presentation', 'files'];
+  const renderItem = ({ id, icon: Icon }: typeof items[number]) => <Link
+    aria-current={active === id ? 'page' : undefined}
+    className={styles.link}
+    data-reading-role="control"
+    href={id === 'hermes' ? `/research-objects/${encodeURIComponent(objectId)}/hermes` : id === 'presentation' ? `/research-objects/${encodeURIComponent(objectId)}/presentation` : researchSurfaceHref(id, objectId)}
+    key={id}
+  ><Icon aria-hidden="true" width={16} height={16} strokeWidth={1.6} /><span>{t(`nav.${id}`)}</span></Link>;
+  return <nav aria-label={t('navigation')} className={styles.nav} data-research-workspace-nav="true">
+    <div className={styles.primary}>{primaryIds.map(id => renderItem(items.find(item => item.id === id)!))}</div>
+    <details className={styles.more} key={active}>
+      <summary data-active={!primaryIds.includes(active) ? 'true' : undefined}>{primaryIds.includes(active) ? t('nav.more') : t(`nav.${active}`)} <span aria-hidden="true">⌄</span></summary>
+      <div className={styles.menu}>{items.filter(item => !primaryIds.includes(item.id)).map(renderItem)}</div>
+    </details>
+  </nav>;
 }

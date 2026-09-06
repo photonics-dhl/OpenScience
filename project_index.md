@@ -2,6 +2,7 @@
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
 > **CURRENT source/deployment anchor（2026-09-06 +08）：** branch codex/overview-responsive-companion；PR104 application/public080fa74eecebd25ad63b48c8dd968d7b66d00cc7，rollback75797389fa7afa096599597841b66630f8b82ac4。CI/server/public12场景验收通过；后续测试/文档HEAD以Git为准。Desk/overview/contextual Hermes deployed; demo9848411/controller3d518af unchanged.
+> 当前用户纠正：上一轮视觉未获验收，Hermes黑块已复现；正在快速统一真实RO三页，生产仍080fa74，勿把历史测试通过等同视觉认可。
 
 ## 当前产品交付
 
@@ -494,3 +495,15 @@
 | `apps/web/playwright.release.config.ts` | 将真实概览与1024/1280断点回归接入既有发布测试 | DEPLOYED config080fa74；默认package命令显式文件列表已在后续测试提交补齐 |
 
 | `apps/web/package.json` | 默认test:release显式纳入真实概览断点回归 | POST-RELEASE TEST correction；实际命令定向5/5通过，不改变应用080fa74 |
+
+### Active screenshot correction files
+
+- `apps/web/components/shell/research-workspace.module.css`：RO共享A主题、阅读双栏与现代控件。
+- `apps/web/components/research/research-nav.module.css`：四个主入口与More工具菜单。
+- `apps/web/components/editor/editor.module.css`：编辑当前字段、简洁大纲和建议面板。
+- `apps/web/app/research-objects/[id]/presentation/presentation-page.module.css`：无版本媒体准备流程。
+- `apps/web/components/editor/{CoreEditor,OutlinePanel,SuggestionsPanel}.tsx`：正文/大纲/建议布局，移除永远pending占位。
+
+- `apps/web/lib/editor-state.ts` / `apps/web/test/editor.test.ts`：partial SDF初始化补齐空字段并保留扩展字段，避免编辑页trim崩溃。
+
+- `apps/web/components/presentation/PresentationWorkbench.tsx`：分镜按标题折叠、按需展开，避免多个长分镜默认连续占满页面。

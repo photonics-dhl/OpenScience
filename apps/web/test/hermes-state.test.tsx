@@ -160,18 +160,18 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).toContain('data-hermes-rig-status="starting"');
     expect(markup).toContain('data-hermes-input-ready="false"');
     expect(markup).not.toContain('data-runtime-ready');
-    expect(markup).not.toContain('<img');
+    expect(markup).toContain('src="/hermes/wanko-static.png"');
     expect(markup).not.toContain('<picture');
-    expect(markup.match(/<svg/g) ?? []).toHaveLength(1);
+    expect(markup.match(/<img/g) ?? []).toHaveLength(1);
     expect(markup).toContain('class="hermes-portrait');
     expect(markup).not.toContain('poster-');
 
     const reduced = renderToStaticMarkup(createElement(HermesVisualAdapter, {
       reducedMotion: true, state: 'idle', suggestion: neutralSuggestion, onInvoke: () => undefined,
     }));
-    expect(reduced).not.toContain('<img');
+    expect(reduced).toContain('src="/hermes/wanko-static.png"');
     expect(reduced).not.toContain('<picture');
-    expect(reduced.match(/<svg/g) ?? []).toHaveLength(1);
+    expect(reduced.match(/<img/g) ?? []).toHaveLength(1);
     expect(reduced).toContain('class="hermes-portrait');
     expect(reduced).not.toContain('poster-');
     expect(reduced).not.toContain('/hermes/pet/');
@@ -182,9 +182,9 @@ describe('Hermes dashboard guidance', () => {
       const markup = renderToStaticMarkup(createElement(HermesVisualAdapter, { state, suggestion: neutralSuggestion, onInvoke: () => undefined }));
       expect(markup).toContain(`data-hermes-state="${state}"`);
       expect(markup).toContain('data-hermes-renderer="articulated-mesh"');
-      expect(markup).not.toContain('<img');
+      expect(markup).toContain('src="/hermes/wanko-static.png"');
       expect(markup).not.toContain('<picture');
-      expect(markup.match(/<svg/g) ?? []).toHaveLength(1);
+      expect(markup.match(/<img/g) ?? []).toHaveLength(1);
       expect(markup).toContain('class="hermes-portrait');
       expect(markup).not.toContain('poster-');
       expect(markup).not.toContain('/hermes/pet/');

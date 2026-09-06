@@ -140,7 +140,9 @@
       "reproducibility": "关联代码、数据、环境与复现实验说明。"
     },
     "yes": "是",
-    "no": "否"
+    "no": "否",
+    "editingGuide": "先写清楚研究问题，再逐项补全。也可以让 Hermes 帮你整理已有内容。",
+    "suggestionsGuide": "填写或导入研究内容后，使用 AI 提取生成逐项建议，确认后再写入。"
   },
   "collab": {
     "title": "协作",
@@ -969,15 +971,36 @@
     "taskProgress": "展示内容任务进度", "taskPaused": "检查已暂停，任务仍可继续", "resumeTask": "继续检查", "taskStatus": { "pending": "等待启动", "running": "正在准备展示内容", "failed": "生成失败" },
     "version": "版本", "versionNumber": "版本 {number}", "versionOption": "v{number} · {status}", "invalidVersion": "链接中的版本不属于这个 Research Object，或已不可用。", "selectAvailableVersion": "可用版本", "chooseVersion": "选择版本", "versionStatus": { "draft": "草稿", "under_review": "审核中", "approved": "已批准", "published": "已发布", "revised": "修订中", "withdrawn": "已撤回", "restricted": "受限", "rejected": "已拒绝", "archived": "已归档" },
     "readonlyRole": "你在这个工作区只有查看权限；请联系所有者或维护者添加、审批展示材料。", "readonlyWorkspace": "工作区当前未启用，不能修改展示材料。", "readonlyVersion": { "under_review": "该版本正在审核，只能阅读。", "approved": "已批准版本只能阅读。", "published": "已发布版本只能阅读。", "revised": "修订快照仍只能阅读；请创建新的草稿版本继续。", "withdrawn": "已撤回版本只能阅读。", "restricted": "受限版本只能阅读。", "rejected": "已拒绝版本只能阅读。", "archived": "已归档版本只能阅读。" },
-    "noVersion": "请先创建已提交版本，再生成展示内容。"
+    "noVersion": "请先创建已提交版本，再生成展示内容。",
+    "startTitle": "先准备好要讲述的研究",
+    "startBody": "图解和视频需要依据已保存的研究版本。先整理内容，再把核心发现变成生动的解释。",
+    "step1": "核对研究内容",
+    "step1Body": "确认问题、方法和关键发现。",
+    "step2": "保存研究版本",
+    "step2Body": "在编辑页点击“创建版本”，留下可追溯的依据。",
+    "step3": "制作图解与视频",
+    "step3Body": "回来选择核心观点，生成、预览并确认展示内容。"
   },
   "productSurfaces": {
     "navigation": "科研对象导航", "skip": "跳到产品内容", "objectMap": "SDF 结构图", "integrity": "完整性", "integrityBody": "每个动作都绑定到 Research Object 的具体版本与证据链。",
     "fields": { "problem": "问题", "insight": "洞见", "method": "方法", "results": "结果", "limitations": "局限", "reproducibility": "可复现性" },
     "state": { "loadingBody": "正在读取科研对象与版本历史…", "errorTitle": "页面暂时无法加载", "forbiddenTitle": "该工作区为私有" },
     "nav": {
-      "hermes": "Hermes", "presentation": "图解与视频", "overview": "概览", "sdf": "SDF", "files": "文件", "versions": "版本", "collaboration": "协作", "publish": "发布", "sandbox": "沙箱" },
-    "overview": { "imageTitle": "机制解释图", "videoTitle": "研究讲解视频", "mediaVersion": "来自已提交版本 v{number}；当前正文可能包含后续编辑。", "sources": "来源与原始证据", "desk": "研究桌面", "manageMedia": "查看与管理展示资产", "discuss": "与 Hermes 讨论这一段", "media": "可视化解释", "notEvidence": "审核通过的解释性资产，不替代原始论文、图表或代码证据。", "noMedia": "当前版本还没有审核通过的图片或视频。", "mediaFailed": "暂时无法加载展示资产；研究正文仍可阅读。", "retry": "重试加载", "sourceBody": "在来源文件中核对原始论文、图表和代码；在版本记录中追踪研究改动。", "openSources": "打开来源文件", "kicker": "对象概览", "title": "概览", "body": "安静地呈现这个 Research Object 的主张、证据和当前版本状态。", "status": "对象状态", "visibility": "可见性", "history": "已记录版本", "emptyTitle": "结构仍然开放", "emptyBody": "从六个 SDF 字段开始，再为每项主张绑定可检查的证据。", "continue": "打开 SDF 编辑器", "inspect": "查看版本" },
+      "hermes": "Hermes", "presentation": "图解与视频", "overview": "概览", "sdf": "编辑", "files": "文件", "versions": "版本", "collaboration": "协作", "publish": "发布", "sandbox": "沙箱",
+      "more": "更多工具"
+    },
+    "overview": { "imageTitle": "机制解释图", "videoTitle": "研究讲解视频", "mediaVersion": "来自已提交版本 v{number}；当前正文可能包含后续编辑。", "sources": "来源与原始证据", "desk": "研究桌面", "manageMedia": "查看与管理展示资产", "discuss": "与 Hermes 讨论这一段", "media": "可视化解释", "notEvidence": "审核通过的解释性资产，不替代原始论文、图表或代码证据。", "noMedia": "当前版本还没有审核通过的图片或视频。", "mediaFailed": "暂时无法加载展示资产；研究正文仍可阅读。", "retry": "重试加载", "sourceBody": "在来源文件中核对原始论文、图表和代码；在版本记录中追踪研究改动。", "openSources": "打开来源文件", "kicker": "对象概览", "title": "概览", "body": "安静地呈现这个 Research Object 的主张、证据和当前版本状态。", "status": "对象状态", "visibility": "可见性", "history": "已记录版本", "emptyTitle": "从一篇论文开始", "emptyBody": "添加原文，让 Hermes 帮你提炼问题、方法与发现。你可以随时核对证据、修改内容。", "continue": "打开 SDF 编辑器", "inspect": "查看版本",
+      "upload": "添加论文",
+      "ask": "让 Hermes 帮我整理",
+      "companionTitle": "一起读懂这项研究",
+      "companionBody": "解释概念、讨论段落，或协助修改。点击 Hermes 开始。",
+      "nextTitle": "接下来",
+      "stepOne": "整理研究内容",
+      "stepOneBody": "在编辑页核对核心内容，保存一个版本。",
+      "stepTwo": "用图像解释发现",
+      "stepTwoBody": "根据已核对的内容制作图解和视频。",
+      "emptyMedia": "内容整理完成后，在这里展示图解与视频。"
+    },
     "versions": { "kicker": "版本历史", "title": "版本", "body": "快照是不可变记录。选择两个版本，比较确切的 SDF 与证据清单。", "compare": "比较", "emptyTitle": "还没有已提交版本", "emptyBody": "在 SDF 编辑器或文件页面创建第一次提交。", "diff": "确定性比较" },
     "files": { "kicker": "证据存储", "title": "文件", "body": "上传论文、数据、代码、图片或视频。只有创建提交后，文件才会成为版本的一部分。", "provenance": "证据来源", "provenanceBody": "上传会记录内容哈希与逻辑路径；提交会把它绑定到不可变的 Research Object 版本。", "defaultCommit": "绑定证据", "commitMessage": "提交说明", "attaching": "正在创建提交…", "attach": "绑定到新版本", "empty": "请先在上方选择文件。", "committed": "证据已提交，新版本已经出现在版本页面。" },
     "sandbox": { "kicker": "可复现实验", "title": "沙箱", "body": "在服务器上运行受边界约束的科研脚本，检查输出，并把执行环境保留在 Research Object 旁。", "context": "Research Object 可视化", "environment": "执行环境", "script": "Python 脚本", "starting": "启动中…", "run": "在沙箱运行", "notFound": "没有找到这个沙箱任务。", "result": "可视化结果", "close": "关闭", "runtime": "运行时间", "download": "下载到本设备", "viewScript": "查看 Python 脚本", "logs": "执行日志", "modify": "修改脚本", "previewError": "无法生成修改预览。", "executeError": "无法创建修改后的任务。", "modifyPrompt": "描述你想要的修改", "modifyPlaceholder": "例如：改变曲线颜色、添加标题或调整 x 轴标签。", "previewing": "正在生成预览…", "preview": "生成预览", "policyPassed": "策略检查通过", "policyBlocked": "策略检查阻断", "diff": "脚本差异", "confirmExecute": "确认执行" },

@@ -140,7 +140,9 @@
       "reproducibility": "Connect code, data, environment, and rerun instructions."
     },
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "editingGuide": "Start with the research question, then work through each section. Hermes can help organize what you have.",
+    "suggestionsGuide": "Add your research content, then use AI Extract to prepare suggestions for your review."
   },
   "collab": {
     "title": "Collaboration",
@@ -969,15 +971,36 @@
     "taskProgress": "Presentation task progress", "taskPaused": "Checks paused; the task is still available", "resumeTask": "Resume checking", "taskStatus": { "pending": "Waiting to start", "running": "Preparing presentation content", "failed": "Generation failed" },
     "version": "Version", "versionNumber": "Version {number}", "versionOption": "v{number} · {status}", "invalidVersion": "The version in this link isn't available for this Research Object.", "selectAvailableVersion": "Available version", "chooseVersion": "Choose a version", "versionStatus": { "draft": "Draft", "under_review": "Under review", "approved": "Approved", "published": "Published", "revised": "Revised", "withdrawn": "Withdrawn", "restricted": "Restricted", "rejected": "Rejected", "archived": "Archived" },
     "readonlyRole": "Your workspace role has view access only. Ask an owner or maintainer to add or approve presentation material.", "readonlyWorkspace": "This workspace is not active, so presentation changes are unavailable.", "readonlyVersion": { "under_review": "This version is under review and is read-only.", "approved": "Approved versions are read-only.", "published": "Published versions are read-only.", "revised": "Revised snapshots remain read-only; create a new draft version to continue.", "withdrawn": "Withdrawn versions are read-only.", "restricted": "Restricted versions are read-only.", "rejected": "Rejected versions are read-only.", "archived": "Archived versions are read-only." },
-    "noVersion": "Create a committed version before generating presentation content."
+    "noVersion": "Create a committed version before generating presentation content.",
+    "startTitle": "Give your story a starting point",
+    "startBody": "Illustrations and videos build on a saved research version. Shape the ideas first, then bring the findings to life.",
+    "step1": "Review your research",
+    "step1Body": "Check the question, method and key findings.",
+    "step2": "Save a version",
+    "step2Body": "Choose Create commit in the editor to record your source.",
+    "step3": "Create illustrations & video",
+    "step3Body": "Return here to select ideas, create visuals and review them."
   },
   "productSurfaces": {
     "navigation": "Research Object navigation", "skip": "Skip to product surface", "objectMap": "SDF map", "integrity": "Integrity", "integrityBody": "Every action remains attached to a Research Object version and its evidence trail.",
     "fields": { "problem": "Problem", "insight": "Insight", "method": "Method", "results": "Results", "limitations": "Limitations", "reproducibility": "Reproducibility" },
     "state": { "loadingBody": "Loading the Research Object and its version history…", "errorTitle": "The surface could not load", "forbiddenTitle": "This workspace is private" },
     "nav": {
-      "hermes": "Hermes", "presentation": "Visual explanations", "overview": "Overview", "sdf": "SDF", "files": "Files", "versions": "Versions", "collaboration": "Collaboration", "publish": "Publish", "sandbox": "Sandbox" },
-    "overview": { "imageTitle": "Mechanism illustration", "videoTitle": "Research explanation video", "mediaVersion": "From committed version v{number}; the text may include later edits.", "sources": "Sources and original evidence", "desk": "Research desk", "manageMedia": "View and manage visual assets", "discuss": "Discuss this passage with Hermes", "media": "Visual explanation", "notEvidence": "Approved explanatory assets do not replace original papers, figures or code evidence.", "noMedia": "This version has no approved image or video yet.", "mediaFailed": "Visual assets could not be loaded. The research text is still available.", "retry": "Retry loading", "sourceBody": "Check original papers, figures and code in source files, and trace research changes through versions.", "openSources": "Open source files", "kicker": "Object overview", "title": "Overview", "body": "A quiet index of what this Research Object claims, how it is evidenced, and where its current version stands.", "status": "Object state", "visibility": "Visibility", "history": "Recorded versions", "emptyTitle": "The structure is still open", "emptyBody": "Start with the six SDF fields, then attach the evidence that makes each claim inspectable.", "continue": "Open SDF editor", "inspect": "Inspect versions" },
+      "hermes": "Hermes", "presentation": "Visual explanations", "overview": "Overview", "sdf": "Edit", "files": "Files", "versions": "Versions", "collaboration": "Collaboration", "publish": "Publish", "sandbox": "Sandbox",
+      "more": "More"
+    },
+    "overview": { "imageTitle": "Mechanism illustration", "videoTitle": "Research explanation video", "mediaVersion": "From committed version v{number}; the text may include later edits.", "sources": "Sources and original evidence", "desk": "Research desk", "manageMedia": "View and manage visual assets", "discuss": "Discuss this passage with Hermes", "media": "Visual explanation", "notEvidence": "Approved explanatory assets do not replace original papers, figures or code evidence.", "noMedia": "This version has no approved image or video yet.", "mediaFailed": "Visual assets could not be loaded. The research text is still available.", "retry": "Retry loading", "sourceBody": "Check original papers, figures and code in source files, and trace research changes through versions.", "openSources": "Open source files", "kicker": "Object overview", "title": "Overview", "body": "A quiet index of what this Research Object claims, how it is evidenced, and where its current version stands.", "status": "Object state", "visibility": "Visibility", "history": "Recorded versions", "emptyTitle": "Start with a paper", "emptyBody": "Add the source paper. Let Hermes help you shape its question, method and findings, then review and refine them.", "continue": "Open SDF editor", "inspect": "Inspect versions",
+      "upload": "Add a paper",
+      "ask": "Help me get started",
+      "companionTitle": "Your research companion",
+      "companionBody": "Explore an idea, discuss a passage, or refine your draft. Select Hermes to begin.",
+      "nextTitle": "Your next steps",
+      "stepOne": "Shape the research",
+      "stepOneBody": "Review the core ideas in the editor and save a version.",
+      "stepTwo": "Explain it visually",
+      "stepTwoBody": "Turn reviewed ideas into illustrations and video.",
+      "emptyMedia": "Illustrations and videos will appear here once your research is ready."
+    },
     "versions": { "kicker": "Version history", "title": "Versions", "body": "Snapshots are immutable records. Select two to compare their exact SDF and evidence manifest.", "compare": "Compare", "emptyTitle": "No committed versions", "emptyBody": "Create the first commit from the SDF editor or Files surface.", "diff": "Deterministic comparison" },
     "files": { "kicker": "Evidence store", "title": "Files", "body": "Upload manuscripts, data, code, images or video. Files become part of a version only when you create a commit.", "provenance": "Evidence provenance", "provenanceBody": "The upload records a content hash and logical path. A commit binds it to an immutable Research Object version.", "defaultCommit": "Attach evidence", "commitMessage": "Commit message", "attaching": "Creating commit…", "attach": "Attach to new version", "empty": "Choose one or more files above to prepare a version.", "committed": "Evidence committed. The new version is now available in Versions." },
     "sandbox": { "kicker": "Reproducible execution", "title": "Sandbox", "body": "Run a bounded scientific script on the server, inspect its output, and keep the environment alongside the Research Object.", "context": "Research Object visualization", "environment": "Execution environment", "script": "Python script", "starting": "Starting…", "run": "Run in sandbox", "notFound": "The sandbox job was not found.", "result": "Visualization result", "close": "Close", "runtime": "Runtime", "download": "Download locally", "viewScript": "View Python script", "logs": "Execution logs", "modify": "Modify script", "previewError": "Could not generate a preview.", "executeError": "Could not create the modified job.", "modifyPrompt": "Describe the change", "modifyPlaceholder": "For example: change the curve colour, add a title, or adjust the x-axis label.", "previewing": "Generating preview…", "preview": "Generate preview", "policyPassed": "Policy check passed", "policyBlocked": "Policy check blocked", "diff": "Script diff", "confirmExecute": "Confirm execution" },

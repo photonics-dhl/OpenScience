@@ -3,8 +3,8 @@
 import { useTranslations } from 'next-intl';
 
 import { BeforeAfterProposal } from '@/components/research/BeforeAfterProposal';
-import { EvidenceSnippet } from '@/components/research/EvidenceSnippet';
 import type { AiSuggestion, SdfField } from '../../lib/suggestions';
+import styles from './editor.module.css';
 
 export default function SuggestionsPanel({
   suggestions,
@@ -30,7 +30,7 @@ export default function SuggestionsPanel({
   const t = useTranslations('editor');
 
   return (
-    <section aria-label={t('suggestions')}>
+    <section aria-label={t('suggestions')} className={styles.suggestions}>
       <div className="flex items-end justify-between border-b border-os-rule-dark pb-3">
         <div>
           <p data-reading-role="caption" className="m-0 font-data uppercase tracking-[0.1em] text-os-muted-dark">{t('hermesEvidenceLabel')}</p>
@@ -57,7 +57,7 @@ export default function SuggestionsPanel({
           <button className="mt-3 min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" onClick={() => onAcknowledgeMissing(field)}>{t('acknowledgeMissingEvidence')}</button>
         </article>
       ))}
-      {suggestions.length === 0 && <p data-reading-role="body" className="border-b border-os-rule-dark py-6 text-base leading-[var(--leading-body)] text-os-muted-dark">{t('noSuggestions')}</p>}
+      {suggestions.length === 0 && !extracting && <p data-reading-role="body" className={styles.guide}>{t('suggestionsGuide')}</p>}
       {suggestions.map((suggestion) => (
         <BeforeAfterProposal
           after={suggestion.suggestion}
@@ -73,14 +73,6 @@ export default function SuggestionsPanel({
           status={suggestion.status}
         />
       ))}
-      <div className="mt-8 space-y-3">
-        <EvidenceSnippet label={t('references')} source={t('evidencePending')}>
-          {t('evidencePendingDescription')}
-        </EvidenceSnippet>
-        <EvidenceSnippet label={t('review')} source={t('reviewPending')}>
-          {t('reviewPendingDescription')}
-        </EvidenceSnippet>
-      </div>
     </section>
   );
 }

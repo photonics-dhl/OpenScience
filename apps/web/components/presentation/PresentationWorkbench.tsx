@@ -99,7 +99,7 @@ export function PresentationWorkbench({
                       </div>
                       <div className="bg-os-paper px-4 py-4 sm:px-6 sm:py-5">
                         {assetItem.storyboard ? (
-                          <StoryboardPanel storyboard={assetItem.storyboard} parent={assets.find((item) => item.id === assetItem.storyboard?.baseAssetId)?.storyboard} baseAssetId={assetItem.id} claims={claims} selectedClaimIds={assetItem.sourceClaimIds} canGenerate={canWrite && !loading && !loadFailed && !working && assetItem.status !== 'rejected'} onGenerate={onGenerateStoryboard} canGenerateImage={canWrite && !loading && !loadFailed && !working && assetItem.status === 'approved' && assetItem.canGenerateSceneImage === true} onGenerateImage={onGenerateSceneImage} />
+                          <details><summary className="cursor-pointer py-3 text-base font-semibold text-os-ink">{assetItem.storyboard.document.title}</summary><StoryboardPanel storyboard={assetItem.storyboard} parent={assets.find((item) => item.id === assetItem.storyboard?.baseAssetId)?.storyboard} baseAssetId={assetItem.id} claims={claims} selectedClaimIds={assetItem.sourceClaimIds} canGenerate={canWrite && !loading && !loadFailed && !working && assetItem.status !== 'rejected'} onGenerate={onGenerateStoryboard} canGenerateImage={canWrite && !loading && !loadFailed && !working && assetItem.status === 'approved' && assetItem.canGenerateSceneImage === true} onGenerateImage={onGenerateSceneImage} /></details>
                         ) : assetItem.kind === 'chart' || assetItem.kind === 'image' || assetItem.kind === 'svg' ? (
                           <>
                             <div className="relative aspect-video max-h-[32rem] w-full">

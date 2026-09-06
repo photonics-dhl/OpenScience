@@ -200,3 +200,9 @@ No new model/provider, endpoint, schema, storage or dependency. The bounded natu
 ### Hermes identity retained — user acceptance correction
 
 用户基本认可A样稿，并明确阿拉丁神狗不可丢失：Hermes须持续作为产品记忆与陪伴助手。复用现有Wanko/神灯模型和静态回退；桌面侧边陪伴入口、展开侧栏中的原角色静态头像、段落入口小头像保持一致，不再以H字母替代。模型固定挂载于陪伴区，展开助手不重建；安静/系统减少动效/待确认时显示原静态图并通过既有可见性检测暂停隐藏模型，不遮挡正文或伪造AI任务状态。下一实施段以真实研究桌面承接此视觉与身份，再推进RO/助手页面；逐段验证现有权限、任务与真实上下文。
+
+## 2026-09-06 production screenshot correction — immediate delivery
+
+用户否定上一轮整体视觉成效并要求快速服务器交付、减少重复测试。直接落实已确认A，而非再做样稿：统一 WorkspaceShell 与 presentation 的浅灰白/深青/无衬线控件；RO常用导航为概览、编辑、可视化、原始文件，其余保留在More菜单。概览移除固定左侧SDF目录与重复状态链接，空内容强调添加论文/调用Hermes、整理内容与制作图解的顺序；编辑改为明确当前字段、宽松书写区与简洁建议卡，去掉永久pending占位；无版本媒体页提供三步准备说明。保持真实版本/权限/生成边界，不自动写入或消费额度。
+
+Hermes继续原Wanko与神灯。真实Chromium复现旧实例销毁共享Pixi纹理导致下一实例黑色几何块；修正texture ownership，保留固定atlas缓存，正常释放每实例GL资源。加载失败显示原静态角色。缩小验收为相关runtime回归、Web构建、页面截图/关键入口和现有服务器发布脚本，不重复全站浏览器矩阵。

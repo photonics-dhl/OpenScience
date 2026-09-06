@@ -1,0 +1,139 @@
+.core {
+  color: #20252b;
+  max-width: 900px;
+  margin-inline: auto;
+}
+
+.core > div:first-child {
+  border: 0;
+  align-items: center;
+  padding-bottom: 0;
+}
+
+.core h1 {
+  font-family: inherit;
+  font-size: clamp(24px, 2.3vw, 32px);
+  font-weight: 650;
+  letter-spacing: -.035em;
+}
+
+.guide {
+  color: #626c76;
+  font-size: 14px;
+  line-height: 1.75;
+  margin: 14px 0 26px;
+}
+
+.core [data-sdf-node] {
+  background: #fff;
+  border: 1px solid #e7ebee;
+  border-radius: 14px;
+  margin-bottom: 12px;
+  padding: 14px 18px;
+}
+
+.core [data-sdf-node]:has(> button[aria-expanded='true']) {
+  border-color: #8cb5b9;
+  box-shadow: 0 3px 14px #125d6608;
+}
+
+.core [data-sdf-node] > button > span:nth-child(2) {
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+
+.core [data-sdf-node] > button > span:nth-child(3) {
+  display: none;
+}
+
+.core [data-sdf-node] > button > span:last-child {
+  margin-left: auto;
+  border-radius: 50%;
+}
+
+.core textarea {
+  min-height: 230px;
+  border: 0;
+  border-radius: 8px;
+  background: #f7f8fa;
+  color: #20252b;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.core textarea::placeholder {
+  color: #626c76;
+}
+
+.outline > div:first-child,
+.outline li {
+  border: 0;
+}
+
+.outline ol {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.outline li > button {
+  border-radius: 9px;
+  padding: 10px;
+  min-height: 44px;
+}
+
+.outline li > button:hover {
+  background: #edf1f3;
+}
+
+.outline li > button[aria-current='step'] {
+  background: #e6f1f1;
+  color: #125d66;
+  font-weight: 600;
+}
+
+.outline h2 {
+  font-family: inherit;
+  letter-spacing: .025em;
+  color: #626c76;
+}
+
+.suggestions {
+  background: #fff;
+  border: 1px solid #e7ebee;
+  border-radius: 14px;
+  padding: 18px;
+}
+
+.suggestions > div:first-child {
+  border: 0;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.suggestions h2 {
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.suggestions .guide {
+  margin-bottom: 0;
+}
+
+.suggestions [data-extract-sdf] {
+  background: #125d66;
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+}
+
+@media (max-width: 640px) {
+  .core [data-sdf-node] {
+    padding: 12px;
+  }
+}

@@ -509,3 +509,9 @@ Acceptance: PR102 merged4d39808; CI34022708530 success. Full workspace checks, f
 PR103 deployed7579738 with full CI/server checks. Public1024 revealed the percentage overview rail cannot hold original360px Wanko. Use scoped220px/main/400px at>=1280 and main/400px at1024–1279 with hidden structure rail. Keep original model size; preserve full English map labels. Add1024/1280 and post-model-ready overflow coverage to existing release config. Patch acceptance and deployment rollback anchor7579738 are required before closing public verification.
 
 Acceptance: PR104080fa74 merged/deployed; CI34034878269 and exact server build/parser16/runtime/migrations/health passed. Public zh/en1440/1024/390 desk/overview12 scenarios passed,0business writes/session closed. Post-release package script now explicitly includes overview suite (config alone did not change explicit CLI list); actual command targeted5/5 passed. Next: remaining agreed pages and full-paper workflow acceptance; no new AI generation claimed.
+
+## Screenshot correction — user-directed fast production slice
+
+1. Reproduce Wanko black geometry across renderer teardown; repair shared texture lifetime and original-character fallback.
+2. Apply accepted A to shared RO shell/navigation, overview onboarding, editor and presentation no-version state. Preserve business workflows and move secondary tools into an accessible menu.
+3. Run focused runtime checks, Web build and real browser screenshots; independently review material regressions. Deploy via existing exact-source script and inspect public three-page journey. Do not repeat the full-site browser matrix or add new gates.

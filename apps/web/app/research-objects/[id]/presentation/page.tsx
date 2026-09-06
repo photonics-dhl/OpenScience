@@ -1,5 +1,7 @@
 'use client';
 
+import workspaceStyles from '@/components/shell/research-workspace.module.css';
+import styles from './presentation-page.module.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -342,8 +344,8 @@ export default function PresentationPage({ params }: { params: { id: string } })
   }
 
   return (
-    <DashboardShell activeRoute="create" mainClassName="p-0" navigationLabel={t('navigation')} skipLabel={t('skip')}>
-      <div className="overflow-x-auto border-b border-os-rule-paper"><ResearchWorkspaceNav active="presentation" objectId={params.id} /></div>
+    <DashboardShell className={workspaceStyles.workspace} mainClassName="p-0" navigationLabel={t('navigation')} skipLabel={t('skip')}>
+      <div className={styles.navigation}><ResearchWorkspaceNav active="presentation" objectId={params.id} /></div>
       {invalidRequestedVersion ? (
         <div className="mx-auto max-w-3xl px-5 py-12 sm:px-8">
           <p className="border-l-2 border-state-danger pl-4 text-state-danger" role="alert">{t('invalidVersion')}</p>
@@ -394,13 +396,17 @@ export default function PresentationPage({ params }: { params: { id: string } })
           />
         </>
       ) : (
-        <div className="mx-auto max-w-3xl px-5 py-12 sm:px-8">
-          <p className="text-os-muted-paper">{t('noVersion')}</p>
-          <div className="mt-5 flex flex-wrap gap-4">
-            <a className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')}</a>
-            <a className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(params.id)}/versions`}>{t('openVersions')}</a>
-          </div>
-        </div>
+        <section className={styles.start} aria-busy={bootstrapLoading}>
+          {bootstrapLoading ? <p role="status">{t('loading')}</p> : <>
+            <p className={styles.eyebrow}>{researchTitle}</p>
+            <h1>{t('startTitle')}</h1><p className={styles.intro}>{t('startBody')}</p>
+            <ol className={styles.steps}>{[1,2,3].map(step => <li key={step}><span>0{step}</span><div><h2>{t(`step${step}`)}</h2><p>{t(`step${step}Body`)}</p></div></li>)}</ol>
+            <div className={styles.actions}>
+              <a className={styles.primary} href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')} →</a>
+              <a href={`/research-objects/${encodeURIComponent(params.id)}/versions`}>{t('openVersions')}</a>
+            </div>
+          </>}
+        </section>
       )}
     </DashboardShell>
   );

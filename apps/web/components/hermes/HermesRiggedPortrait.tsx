@@ -151,7 +151,7 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
       data-hermes-runtime-reason={runtimeStatus.phase === 'fallback' ? runtimeStatus.reason : undefined}
       ref={stageRef}
     >
-      <span aria-hidden="true" className="hermes-rig-vector-fallback">{fallback}</span>
+      <span aria-hidden="true" className="hermes-rig-vector-fallback" style={{ opacity: runtimeStatus.phase === 'ready' ? 0 : 1 }}>{fallback}</span>
       <WankoCarrierScene>
         <canvas
           aria-hidden="true"

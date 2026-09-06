@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import type { SdfCore } from '../../lib/api';
 import VersionList from './VersionList';
+import styles from './editor.module.css';
 
 const FIELD_ORDER: Array<keyof Omit<SdfCore, 'schemaVersion'>> = [
   'problem', 'insight', 'method', 'results', 'limitations', 'reproducibility',
@@ -33,7 +34,7 @@ export default function OutlinePanel({
   const filled = FIELD_ORDER.filter((field) => core[field].trim().length > 0).length;
 
   return (
-    <nav aria-label={t('outline')}>
+    <nav aria-label={t('outline')} className={styles.outline}>
       <div className="flex items-baseline justify-between border-b border-os-rule-dark pb-3">
         <h2 className="m-0 font-data text-xs uppercase tracking-[0.14em] text-os-paper">{t('outline')}</h2>
         <span className="font-data text-xs text-os-muted-dark">{filled}/{FIELD_ORDER.length}</span>
@@ -44,6 +45,7 @@ export default function OutlinePanel({
             <button
               className="flex min-h-12 w-full items-center gap-3 border-0 bg-transparent p-0 text-left text-sm text-os-muted-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
               onClick={() => onSelectField(field)}
+              aria-current={activeField === field ? 'step' : undefined}
               type="button"
             >
               <span className="font-data text-xs">{String(index + 1).padStart(2, '0')}</span>

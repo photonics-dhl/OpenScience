@@ -10,6 +10,7 @@ import { HermesAnchor } from '@/components/hermes/HermesAnchor';
 import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
 import type { HermesAnchorId } from '@/lib/hermes/anchor-registry';
 import type { SdfCore } from '../../lib/api';
+import styles from './editor.module.css';
 
 const FIELDS: Array<keyof Omit<SdfCore, 'schemaVersion'>> = [
   'problem', 'insight', 'method', 'results', 'limitations', 'reproducibility',
@@ -44,7 +45,7 @@ export default function CoreEditor({
   }, [current, hermesStage]);
 
   return (
-    <div data-reading-role="body">
+    <div className={styles.core} data-reading-role="body">
       <div className="flex items-end justify-between border-b border-os-rule-dark pb-4">
         <div>
           <p data-reading-role="caption" className="m-0 font-data uppercase tracking-[0.1em] text-os-muted-dark">{t('sdfCoreLabel')}</p>
@@ -54,6 +55,7 @@ export default function CoreEditor({
           {preview ? t('edit') : t('preview')}
         </button>
       </div>
+      <p className={styles.guide}>{t('editingGuide')}</p>
       {FIELDS.map((field, index) => (
         <SDFNode
           active={current === field}

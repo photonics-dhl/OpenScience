@@ -1,6 +1,10 @@
-# OpenScience 进度（CURRENT window）
+# Progress
 
-> 最新同步：2026-09-06 +08。应用/public080fa74eecebd25ad63b48c8dd968d7b66d00cc7，rollback75797389fa7afa096599597841b66630f8b82ac4；分支codex/overview-responsive-companion，后续文档/测试提交HEAD以Git为准。demo9848411、Codex controller3d518af独立不变。
+## 2026-09-06 screenshot correction in progress
+
+- 用户否定旧版视觉与Hermes渲染，要求快部署少重复测试。生产实查080fa74，公网/回源200，服务健康；branch codex/overview-responsive-companion，候选基于b3abaf5，rollback待发布使用080fa74。
+- 黑块由销毁实例时误销毁Pixi共享纹理，真实Chromium精确红绿复现；原角色静态fallback保留。相关19单测通过。
+- 正在统一RO shell/nav、空概览起步、编辑与无版本媒体流程，尚未部署或完成视觉验收。
 
 ## Research desk / overview / contextual Hermes deployed
 

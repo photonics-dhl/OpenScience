@@ -88,16 +88,19 @@ export async function createWankoLive2DRenderer(
   let model: WankoModel | null = null;
   let controller: HermesPetMeshRenderer | null = null;
   let disposed = false;
+  // Live2DModel.from uses Pixi's URL texture cache. A departing or aborted
+  // model must not destroy textures already used by its successor. The fixed
+  // Wanko atlas stays cached; renderer disposal still releases its GL context.
   const disposePartial = () => {
     if (disposed) return;
     disposed = true;
     controller?.dispose();
     controller = null;
     if (model) {
-      model.destroy({ baseTexture: true, children: true, texture: true });
+      model.destroy({ children: true });
       model = null;
     }
-    app?.destroy(false, { baseTexture: true, children: false, texture: true });
+    app?.destroy(false, { children: false });
     app = null;
     canvas.dataset.hermesRuntimeIntentionalContextLoss = 'true';
     ownedContext.getExtension('WEBGL_lose_context')?.loseContext();
@@ -142,7 +145,7 @@ export async function createWankoLive2DRenderer(
     model = await claimAbortableWankoResource(
       pendingModel,
       signal,
-      (lateModel) => lateModel.destroy({ baseTexture: true, children: true, texture: true }),
+      (lateModel) => lateModel.destroy({ children: true }),
     );
     if (signal?.aborted) throw abortError();
     // Wanko has no mask drawables. pixi-live2d-display 0.5 assumes Cubism's
@@ -222,10 +225,10 @@ export async function createWankoLive2DRenderer(
         motionSwitch.dispose();
         model?.internalModel.off('beforeModelUpdate', applyParameters);
         if (model) {
-          model.destroy({ baseTexture: true, children: true, texture: true });
+          model.destroy({ children: true });
           model = null;
         }
-        app?.destroy(false, { baseTexture: true, children: false, texture: true });
+        app?.destroy(false, { children: false });
         app = null;
         canvas.dataset.hermesRuntimeIntentionalContextLoss = 'true';
         ownedContext.getExtension('WEBGL_lose_context')?.loseContext();

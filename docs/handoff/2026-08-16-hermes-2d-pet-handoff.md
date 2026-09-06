@@ -8,6 +8,10 @@
 - PR103 merged by non-force fast-forward to exact tested7579738. CI34033218027 success: build/typecheck/lint/unit, product110, Hermes19+8 passed. Server full build/parser16/core migrations36/search2/BGE/ScanSci/container/health/retention passed; no pending migrations or deployment journal.
 - Root checkout has user changes; do not alter it. Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated demo9848411d1419a0dd690f74cca9042369b651f7b2, run9848411-20260906T074017Z remain unchanged. Demo /demos/science-video/d2nn/?v=animated-restored-v1.
 
+## User correction / active task
+
+用户截图否定上轮视觉效果，要求快部署、少重复测试。production仍实查080fa74。候选GitHEAD由b3abaf5继续：修Pixi共享纹理dispose黑块，原Wanko静态fallback；共享A theme/nav四主项+More；概览去左目录/状态堆积并明确起步；编辑当前字段清晰、无永久pending占位；无版本媒体三步引导、已有长分镜按需展开。真实编辑RO部分SDF缺键导致trim崩溃，reducer init补缺且保留扩展字段。相关runtime19及编辑/导航42通过，Web build/lint通过，High review修正双aria-current与partial core后无阻断。尚待最终服务器部署/公网实页；本地代理验收日志勿直接打印（Playwright网络异常可含会话头）。
+
 ## Delivered
 
 - Real dashboard uses scoped pale/teal desk; retains auth/data/recovery/polling/global HermesDockAnchor/Drawer. No-task continuation and research list open overview; review-required continuation targets exact task.

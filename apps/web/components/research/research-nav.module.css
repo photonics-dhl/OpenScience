@@ -1,0 +1,11 @@
+.nav { display:flex; align-items:center; gap:12px; padding:0 24px; font-family:var(--font-ui); }
+.primary { display:flex; gap:4px; min-width:0; overflow-x:auto; }
+.nav .link,.more summary { display:flex; align-items:center; gap:8px; min-height:42px; padding:8px 14px; border-radius:8px; color:#626c76; font-size:14px; font-weight:500; white-space:nowrap; text-decoration:none; cursor:pointer; }
+.nav .link[aria-current='page'],.more summary[data-active='true'] { background:#e7f2f1; color:#125d66; font-weight:600; }
+.nav .link:hover,.more summary:hover { background:#eef2f4; color:#20252b; text-decoration:none; }
+.more { position:relative; flex-shrink:0; }
+.more summary { list-style:none; }
+.more summary::-webkit-details-marker { display:none; }
+.menu { position:absolute; z-index:45; top:calc(100% + 8px); right:0; width:210px; padding:6px; background:white; border-radius:12px; box-shadow:0 8px 32px #20252b24; }
+.nav :is(a,summary):focus-visible { outline:2px solid #125d66; outline-offset:-2px; }
+@media(max-width:640px) { .nav { gap:4px; padding:0 8px; }.nav .link,.more summary { font-size:13px; padding:8px 10px; }.primary .link svg { display:none; } }

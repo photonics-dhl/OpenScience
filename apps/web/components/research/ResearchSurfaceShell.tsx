@@ -43,7 +43,7 @@ export function ResearchSurfaceShell({
   };
   return (
     <WorkspaceShell
-      className={className}
+      className={["research-reading-surface", className].filter(Boolean).join(" ")}
       activeMobilePlane="main"
       leftRail={
         <div>

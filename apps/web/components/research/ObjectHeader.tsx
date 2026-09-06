@@ -26,8 +26,8 @@ function ObjectHeader({ objectId, title, version, visibility, saveState, actions
           <span className="shrink-0 font-data text-xs">v{version}</span>
         </div>
         <div data-reading-role="caption" className="mt-1 flex min-w-0 items-center gap-2 font-data">
-          <span className="hidden truncate sm:inline">{objectId}</span>
-          <span className="hidden sm:inline" aria-hidden="true">/</span>
+          <span className="sr-only">{objectId}</span>
+
           <span className="hidden md:inline">{visibilityLabel}</span>
           <span data-save-state={saveState}>{saveStateLabel}</span>
         </div>

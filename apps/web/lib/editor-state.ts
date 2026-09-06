@@ -21,7 +21,7 @@ export type EditorAction =
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
     case 'init':
-      return { core: { ...action.core }, version: action.version, dirty: false, lastSavedAt: Date.now() };
+      return { core: { ...emptyCore(), ...action.core }, version: action.version, dirty: false, lastSavedAt: Date.now() };
     case 'edit_field':
       return { ...state, core: { ...state.core, [action.field]: action.value }, dirty: true };
     case 'saved':

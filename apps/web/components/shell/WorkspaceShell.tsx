@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import styles from './research-workspace.module.css';
 import { cn } from '@/lib/utils';
 import { ProductRouteNavigation } from '@/components/navigation/ProductRouteNavigation';
 import { ShellHeader, SkipLink } from './ShellPrimitives';
@@ -34,7 +35,7 @@ function WorkspaceShell({
 }: WorkspaceShellProps) {
   const usesMobilePlaneSwitcher = Boolean(mobileNavigation);
   return (
-    <div className={cn('surface-folio min-h-dvh', className)} data-os-surface="workspace" {...props}>
+    <div className={cn('surface-folio min-h-dvh', styles.workspace, className)} data-os-surface="workspace" {...props}>
       <SkipLink tone="paper">{skipLabel}</SkipLink>
       <ShellHeader
         actions={<ProductRouteNavigation />}

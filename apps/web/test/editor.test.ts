@@ -27,6 +27,14 @@ const core = () => ({
 });
 
 describe('editorReducer', () => {
+  it('loads partial paper content without dropping extension fields', () => {
+    const partial = { schemaVersion: '0.1.0', problem: 'Research question', futureField: 'Retained' } as unknown as ReturnType<typeof emptyCore>;
+    const state = editorReducer({ core: emptyCore(), version: 1, dirty: false, lastSavedAt: null }, { type: 'init', core: partial, version: 2 });
+    expect(SDF_CORE_FIELDS.every(field => typeof state.core[field] === 'string')).toBe(true);
+    expect(state.core).toMatchObject({ problem: 'Research question', insight: '', futureField: 'Retained' });
+    expect(state.dirty).toBe(false);
+  });
+
   it('init → 载入 core + version，dirty=false', () => {
     const s = editorReducer({ core: emptyCore(), version: 1, dirty: false, lastSavedAt: null }, { type: 'init', core: core(), version: 3 });
     expect(s.core.problem).toBe('P');
