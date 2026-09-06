@@ -30,6 +30,7 @@ export default function MyProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [profile, setProfile] = useState<ResearchIdentityProfile | null>(null);
+  const [savedProfile, setSavedProfile] = useState<ResearchIdentityProfile | null>(null);
   const [error, setError] = useState<ApiClientError | Error | null>(null);
   const [busy, setBusy] = useState(false);
   const [writeStatus, setWriteStatus] = useState<'idle' | 'saved' | 'conflict'>('idle');
@@ -42,6 +43,7 @@ export default function MyProfilePage() {
       .then(([nextUser, nextProfile]) => {
         setUser(nextUser);
         setProfile(nextProfile);
+        setSavedProfile(nextProfile);
       })
       .catch((cause) => {
         if (cause instanceof ApiClientError && cause.status === 401) router.replace('/auth/login?returnTo=%2Fme');
@@ -51,7 +53,9 @@ export default function MyProfilePage() {
   async function handleWriteFailure(cause: unknown) {
     if (cause instanceof ApiClientError && cause.code === 'PROFILE_VERSION_CONFLICT') {
       try {
-        setProfile(await getResearchIdentity());
+        const latestProfile = await getResearchIdentity();
+        setProfile(latestProfile);
+        setSavedProfile(latestProfile);
         setWriteStatus('conflict');
         return;
       } catch (reloadCause) {
@@ -59,13 +63,13 @@ export default function MyProfilePage() {
         return;
       }
     }
-    setWriteError(cause instanceof Error ? cause.message : identityT('writeError'));
+    setWriteError(identityT('writeError'));
   }
   async function saveProfile() {
     if (!profile) return;
     setBusy(true); setWriteStatus('idle'); setWriteError('');
     try {
-      setProfile(await updateResearchIdentity({
+      const nextProfile = await updateResearchIdentity({
         expectedProfileVersion: profile.profileVersion,
         identities: profile.identities,
         primaryIdentity: profile.primaryIdentity,
@@ -73,7 +77,9 @@ export default function MyProfilePage() {
         methods: profile.methods,
         topics: profile.topics,
         languages: profile.languages,
-      }));
+      });
+      setProfile(nextProfile);
+      setSavedProfile(nextProfile);
       setWriteStatus('saved');
     } catch (cause) { await handleWriteFailure(cause); } finally { setBusy(false); }
   }
@@ -81,12 +87,16 @@ export default function MyProfilePage() {
     if (!profile) return;
     setBusy(true); setWriteStatus('idle'); setWriteError('');
     try {
-      setProfile(await correctResearchInterestSignal({ expectedProfileVersion: profile.profileVersion, signal, decision }));
+      const nextProfile = await correctResearchInterestSignal({ expectedProfileVersion: profile.profileVersion, signal, decision });
+      setProfile(nextProfile);
+      setSavedProfile(nextProfile);
       setWriteStatus('saved');
     } catch (cause) { await handleWriteFailure(cause); } finally { setBusy(false); }
   }
   if (error) return <DashboardShell activeRoute="profile" headerActions={<AccountLink user={user} active />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} /></DashboardShell>;
   if (!user || !profile) return <DashboardShell activeRoute="profile" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={t('state.loadingBody')} kind="loading" title={meT('profileTitle')} /></DashboardShell>;
+  const profileDirty = savedProfile ? JSON.stringify(profile) !== JSON.stringify(savedProfile) : false;
+  const completedProfileGroups = [profile.identities.length, profile.disciplines.length, profile.methods.length, profile.topics.length, profile.languages.length].filter(Boolean).length;
   return (
     <DashboardShell activeRoute="profile" headerActions={<AccountLink user={user} active />} navigationLabel={meT('profileTitle')} skipLabel={t('settings.skip')}>
       <header className="max-w-3xl border-b border-os-rule-paper pb-6">
@@ -113,6 +123,10 @@ export default function MyProfilePage() {
           <AcademicIdentityControl />
         </div>
         <section className="surface-folio-sheet px-5 py-6 md:col-span-2" data-profile-research-identity="true" id="research-profile">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-os-rule-paper pb-4">
+            <div><h2 className="text-lg font-semibold text-os-ink">{meT('researchProfileTitle')}</h2><p className="mt-1 text-sm text-os-muted-paper">{meT('researchProfileProgress', { completed: completedProfileGroups })}</p></div>
+            <span className="text-sm text-os-muted-paper">{profileDirty ? meT('unsavedChanges') : meT('allChangesSaved')}</span>
+          </div>
           <ResearchProfileFields value={profile} onChange={(next) => setProfile({ ...profile, ...next })} />
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {([
@@ -135,7 +149,8 @@ export default function MyProfilePage() {
             ))}
           </div>
           <div className="mt-6 flex items-center gap-4">
-            <Button disabled={busy} onClick={() => void saveProfile()}>{busy ? identityT('saving') : identityT('save')}</Button>
+            <Button disabled={busy || !profileDirty} onClick={() => void saveProfile()}>{busy ? identityT('saving') : identityT('save')}</Button>
+            <Button variant="ghost" disabled={busy || !profileDirty || !savedProfile} onClick={() => { if (savedProfile) setProfile(savedProfile); setWriteError(''); setWriteStatus('idle'); }}>{meT('discardChanges')}</Button>
             <span aria-live="polite" className="text-sm text-os-muted-paper">
               {writeStatus === 'saved' ? identityT('saved') : writeStatus === 'conflict' ? identityT('conflict') : ''}
             </span>
