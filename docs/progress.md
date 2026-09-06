@@ -2,6 +2,11 @@
 
 > 最新同步：2026-09-06 +08。生产f144eb7，rollback b23102b；Codex controller3d518af、demo7e1b6ea独立。后续文档提交不改变生产。
 
+## Repeated-image delivery repair — in progress
+
+- User rejected the previous generic evaluation video:4/5 scenes reused the panorama and scientific animations were absent. Format/decoding success was not visual acceptance. Restore reviewed D2NN animation and retain generic mode only as illustrated-storyboard preview.
+- Added tracked exact-input preparation, explicit renderMode and distinct-scene/motion regression.23focused tests passed; server re-render, review and CI pending. Original accepted voice retained.
+
 ## Generic renderer development — 2026-09-06
 
 - Added bounded file-driven3–6scene renderer using existing Canvas/Chromium/FFmpeg and continuous audio mux. Source manifest is rendering data, not RO approval. API/tasks/TTS integration remains next.

@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT active-memory, 2026-09-06 +08. Global Hermes remains deployed. Generic file-driven renderer049e544 passed isolated ECS acceptance; authenticated RO video generation remains next.
+> CURRENT active-memory, 2026-09-06 +08. Global Hermes remains deployed. User rejected generic evaluation visuals (four repeated panoramas, no scientific animation). Repair animated delivery first; then page/workflow integration and remaining RO media tasks.
 
 ## Version tuple
 
@@ -38,7 +38,8 @@
 
 ## Next action / read-first
 
-- Generic renderer049e544:20 media tests/full workspace tests/lint/docs and independent review passed; isolated ECS41.292s/991frames/8080238bytes,37.95s render, full decode/fastStart, exact source WAV retained. PR100 merged; CI34018403393 succeeded. Duplicate main CI is not acceptance evidence at this checkpoint. No app/demo switch, API/task/TTS integration. Evidence generic-server-eval.log/generic-server-*.png in ignored science-video directory.
+- Generic renderer049e544 is VISUALLY REJECTED by user: evaluation copied the same panorama into4/5 scenes, and generic mode only zooms/crossfades. Earlier20 media tests/full workspace tests/lint/docs passed; isolated ECS41.292s/991frames/8080238bytes,37.95s render, full decode/fastStart, exact source WAV retained. PR100 merged; CI34018403393 succeeded. Duplicate main CI is not acceptance evidence at this checkpoint. No app/demo switch, API/task/TTS integration. Evidence generic-server-eval.log/generic-server-*.png in ignored science-video directory.
+- Current repair: tracked prepare-animated-demo.mjs preserves accepted fixed-scene inputs; explicit metrics renderMode and scene/motion regression. Local candidate awaiting CI/server re-render. No new dependencies or model calls.
 - Next bind approved RO inputs and Gateway speech/timing via bounded isolated media jobs, then existing task/draft UI. Qwen supplies audio, not verified word timestamps; new papers need a reviewed alignment step. Keep immutable host staging; maximum aggregate six16MP inputs were not stress-tested.
 - Improve the three extraction gaps and original Evidence/SourceMap grounding afterward. User prioritizes usable functions, mature reusable solutions and reviewable results.
 - Coworker release/profile-settings-20260904 tip93bb160 overlaps current identity interactions; no clear missing hunk identified, merge conflicts not tested. Existing daily frontend check remains; do not duplicate automation.

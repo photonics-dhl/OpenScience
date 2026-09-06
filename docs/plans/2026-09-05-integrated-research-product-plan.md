@@ -359,3 +359,11 @@ Approved direction: retain continuous narration, reuse Chromium/FFmpeg and revie
 Risks: source image cropping changes scientific meaning; captions can overflow; supplied cue timestamps can exceed actual WAV; file paths can escape the input directory. Existing fixed-five-scene validation cannot validate arbitrary scene manifests, hence the bounded parser below. No new digest scheme or release gate.
 
 Renderer slice accepted at049e544: PR100 merged, CI34018403393 passed,20focused and full workspace tests passed; isolated ECS build/render/decode/audio identity and unchanged app/demo verified. See runbook for metrics. Authenticated RO video task integration and new-narration timing remain the next slice.
+
+## Repair repeated-image delivery — 2026-09-06
+
+User rejected the generic evaluation video: its preparation script copied one panorama into four of five scenes and the generic mode only zooms/crossfades images. Encoding success was incorrectly treated as visual equivalence. Restore the accepted D2NN scientific animation delivery; keep the generic renderer explicitly an illustrated-storyboard preview until per-scene animation exists.
+
+- [ ] Add a tracked animated-demo preparation command/test that copies only original continuous narration/metadata/panorama and optional scene3 artwork into a fresh input directory; never synthesize a generic storyboard from repeated images.
+- [ ] Report explicit renderMode in returned input/metrics and test retained training/wave/detector visuals and motion, in addition to file/cue checks. No new hashes, model, schema, or deployment gate.
+- [ ] Re-render and deploy the independent animated demo with the existing image/runtime, original WAV and canonical deploy script; inspect multiple scene midpoints and real playback/seek/mobile. Mark prior generic evaluation visually rejected, update CURRENT, then prioritize page/workflow integration testing alongside the documented remaining media gaps.

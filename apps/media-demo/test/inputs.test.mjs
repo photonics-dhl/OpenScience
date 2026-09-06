@@ -15,6 +15,7 @@ test('generic manifest selects continuous audio and its own scene files without 
   const result = await validatePaths(input,join(root,'output'));
   assert.deepEqual(result.storyboard,manifest);
   assert.equal(result.audioMode,'continuous');
+  assert.equal(result.renderMode,'illustrated-storyboard-preview');
 });
 
 test('optional third-scene artwork is accepted only as a bounded nonempty regular file', async () => {

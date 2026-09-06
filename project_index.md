@@ -471,4 +471,6 @@
 
 | `infra/local-image-eval/prepare.py` / `infra/local-image-eval/run.mjs` | Pinned upstream Q4 downloads and isolated CPU image feasibility experiment | PAUSED BY USER; only partial download, no model/runtime installation or inference; scripts unfinished, do not auto-resume |
 
-| `apps/media-demo/storyboard-input.mjs` / `apps/media-demo/storyboard-drawing.mjs` / `apps/media-demo/test/storyboard-input.test.mjs` / `apps/media-demo/test/storyboard-drawing.test.mjs` | Opt-in3–6scene file-driven renderer, bounded local PNGs/cues and contained crossfades; existing render/input entry adapted | ECS ISOLATED EVALUATION049e544 passed; PR100 merged/CI34018403393 passed; no RO authority/task/TTS integration |
+| `apps/media-demo/storyboard-input.mjs` / `apps/media-demo/storyboard-drawing.mjs` / `apps/media-demo/test/storyboard-input.test.mjs` / `apps/media-demo/test/storyboard-drawing.test.mjs` | Opt-in3–6scene file-driven renderer, bounded local PNGs/cues and contained crossfades; existing render/input entry adapted | ENGINE TESTS passed049e544; VISUAL DELIVERY REJECTED (4/5 repeated panorama, slideshow only); no RO authority/task/TTS integration |
+
+| `apps/media-demo/prepare-animated-demo.mjs` / `apps/media-demo/test/prepare-animated-demo.test.mjs` | Prepare original animation inputs without generic override; explicit mode and scene/motion regression | REPAIR CANDIDATE;23media tests passed, server re-render pending |

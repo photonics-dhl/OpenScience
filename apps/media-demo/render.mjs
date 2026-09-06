@@ -46,7 +46,7 @@ async function main() {
   process.once('SIGINT', stop);
   try {
   const args = parseArguments(process.argv.slice(2));
-  const { input, output, audioMode, scene3Artwork, storyboard } = await validatePaths(args.input, args.output);
+  const { input, output, audioMode, scene3Artwork, storyboard, renderMode } = await validatePaths(args.input, args.output);
   const videoFile = storyboard ? 'ro-science-explainer.mp4' : VIDEO_FILE;
   const ffmpeg = process.env.SCIENCE_FFMPEG || '/usr/bin/ffmpeg';
   const ffprobe = process.env.SCIENCE_FFPROBE || '/usr/bin/ffprobe';
@@ -131,7 +131,7 @@ async function main() {
     if (!fastStart) throw new Error('Rendered MP4 is missing fast-start atom ordering');
     await execute(ffmpeg, ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', resolve(output, videoFile), '-f', 'null', '-'], { timeout: 120000, signal: cancellation.signal });
     if (interrupted) throw new Error('Render interrupted');
-    const metrics = { schemaVersion: 1, audioMode, frameCount, visualStyle, width: video.width, height: video.height, durationSeconds: Number(probe.format.duration), videoCodec: video.codec_name, audioCodec: 'aac', pixelFormat: video.pix_fmt, fastStart, completeDecode: true, renderSeconds: (performance.now() - started) / 1000, total, fps, freshPaidApiCalls: 0, narration, probe };
+    const metrics = { schemaVersion: 1, renderMode, audioMode, frameCount, visualStyle, width: video.width, height: video.height, durationSeconds: Number(probe.format.duration), videoCodec: video.codec_name, audioCodec: 'aac', pixelFormat: video.pix_fmt, fastStart, completeDecode: true, renderSeconds: (performance.now() - started) / 1000, total, fps, freshPaidApiCalls: 0, narration, probe };
     await writeFile(resolve(output, 'metrics.json'), JSON.stringify(metrics, null, 2), { flag: 'wx' });
     process.stdout.write(`${JSON.stringify(metrics)}\n`);
   } finally {
