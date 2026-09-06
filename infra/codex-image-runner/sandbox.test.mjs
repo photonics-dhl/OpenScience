@@ -13,3 +13,8 @@ test('normalizer contains image without stretching and never has network or cred
  assert.match(args,/force_original_aspect_ratio=decrease/);assert.match(args,/pad=1280:720/);assert.match(args,/--network none/);assert.doesNotMatch(args,/auth.json|--env-file/);
 });
 test('untrusted id cannot become a container name',()=>assert.throws(()=>containerArgs('model',config,{...job,id:'../bad'})));
+
+test('complete runner runtime loads the compiled Gateway validators', async () => {
+ const { executeImage } = await import('./runner.mjs');
+ assert.equal(typeof executeImage, 'function');
+});

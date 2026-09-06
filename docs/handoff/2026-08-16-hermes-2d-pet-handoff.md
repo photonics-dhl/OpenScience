@@ -6,7 +6,7 @@
 
 - Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance；branch codex/product-workflow-design；application source/main 615ca2dc22bcceabc99562a31340053725a81098（PR95）；后续docs HEAD以Git为准。
 - Production active/public/loopback 615ca2dc22bcceabc99562a31340053725a81098；rollback d6507eaa07edfdacabe135fd30ff9f91183e0c02。Canonical deploy与retention完成，journal/failed/pending标记均无；core36/search2迁移最新，13容器运行、10健康检查通过，约94GiB磁盘/24GiB内存可用。
-- 独立淡彩demo source381705a32deeed38fb94564eccbcbb2c66fb7739，run381705a-20260905T121000Z；/demos/science-video/d2nn/?v=watercolor-v1。应用版本与demo分开记录。
+- 独立demo source7e1b6ea29ada1e4abb5fd24bb71aab4dd65abb98，run7e1b6ea-20260906T044500Z；?v=codex-mechanism-v1，第三幕新图/原Serena声音。应用版本与demo分开记录。
 - 根目录旧main和用户未提交资料未动。启动先Git/fetch/checkup/实际release，再读本handoff、需求基线相关章节和当前设计/计划。
 
 ## Product decisions and delivered behavior
@@ -43,7 +43,7 @@
 
 ## Current integration candidate — not deployed
 
-- 当前未提交候选新增 Codex Gateway/provider、独立持久化 runner 与 demo scene3-artwork；全仓 build/typecheck/lint/test 已通过，最终审查与服务器验收待完成。ADR-013 记录边界。
+- 当前未提交候选新增 Codex Gateway/provider、独立持久化 runner 与 demo scene3-artwork；全仓 build/typecheck/lint/test 已通过，服务器暴露runner引用的validator未导出，安装自动回退；完整runner加载回归先红后绿10/10。真实任务待验收，ADR-013记录边界。
 - Candidate oncodex/product-workflow-design basedf7a80ea; production615ca2d/rollbackd6507ea unchanged. Five-field drawing brief implemented; explicit string schema/budgets added after real planner returned array/overlong content.
 - Worker529/focused44、全仓build/typecheck/lint、独立复审通过。实际candidate M3共6文字调用（3结构失败、1诊断、最终2次含1重试），image-01一次；成图仍丢失屏面，未部署/未批准。
 - 同一1351字符提示词、内置imagegen一次对照更清楚保留薄片/波前/屏面，但不是服务器能力。Worker的OpenAI/Gemini独立key配置布尔均false；MiniMax图生图官方subject_reference为人物参考，不能假定可约束科学结构。

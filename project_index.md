@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch `codex/product-workflow-design`，application source / production `615ca2dc22bcceabc99562a31340053725a81098`，rollback `d6507eaa07edfdacabe135fd30ff9f91183e0c02`；独立demo source `381705a`，后续docs HEAD以Git为准。core/search `36/36` / `2/2`，PR95/main CI与服务器/browser/真实单幕生图验收通过，首图draft待质量改进。已受审图片/视频接入私有RO，支持播放、独立批准和Claim修改失效；RO内Hermes分镜/修订/审批已部署，管理员已审批分镜单幕生图可用；自动视频与全局对话修改仍待接入。相同PDF仍有三个字段未自动提取。根目录旧main不是部署源。
+> **CURRENT source/deployment anchor（2026-09-06 +08）：** branch `codex/product-workflow-design`，application source / production `615ca2dc22bcceabc99562a31340053725a81098`，rollback `d6507eaa07edfdacabe135fd30ff9f91183e0c02`；独立demo source `7e1b6ea`，后续docs HEAD以Git为准。core/search `36/36` / `2/2`，PR95/main CI与服务器/browser/真实单幕生图验收通过，首图draft待质量改进。已受审图片/视频接入私有RO，支持播放、独立批准和Claim修改失效；RO内Hermes分镜/修订/审批已部署，管理员已审批分镜单幕生图可用；自动视频与全局对话修改仍待接入。相同PDF仍有三个字段未自动提取。根目录旧main不是部署源。
 
 ## 当前产品交付
 
@@ -13,7 +13,7 @@
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | CANDIDATE；单测通过，服务器整链待验收 |
 | `apps/media-demo/inputs.mjs` / `apps/media-demo/render.mjs` / `apps/media-demo/drawing.mjs` / `apps/media-demo/test/inputs.test.mjs` / `apps/media-demo/test/drawing.test.mjs` | 可选第三幕机制图，保留旁白/输出探测场景与时间轴 | CANDIDATE；14项渲染测试通过，服务器视频待生成 |
 | 本地产物（Git忽略，非仓库路径） | apps/web/test/visual/out/science-video/：D2NN科普MP4、分镜、旁白、preview.html与FFmpeg/播放记录 | CURRENT证据含淡彩41秒demo及真实RO导入/播放/审批/失效截图；历史文件保留，核对精确source/run后使用，非自动生成能力 |
-| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo381705a；固定D2NN渲染，已受审产物经独立CLI接入私有RO，不执行任意用户代码 |
+| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo7e1b6ea；第三幕Codex机制插图/原Serena配音，固定D2NN渲染，已受审产物经独立CLI接入私有RO，不执行任意用户代码 |
 | `infra/scripts/deploy-science-video-demo.sh` / `infra/scripts/deploy-science-video-demo.test.mjs` / `infra/nginx/science-video-demo.location.conf` | 一次性隔离渲染与独立演示路径发布/恢复，Nginx原生Range | DEPLOYED demo381705a淡彩41秒；应用615ca2d另行部署 |
 | `apps/media-demo/test/narration.test.mjs` | 配音来源、逐段字幕时间边界与旧素材回退验证 | 完整连续v4配音与字幕边界已在技术/淡彩demo验收；历史逐段回退保留 |
 | `infra/tts-audition/` | CPU音频公共基础镜像、Qwen隔离试听与输出校验；模型独立挂载 | ECS TRIAL VERIFIED；用户接受v4 Serena全文连续配音，淡彩视频保留原WAV；旧分段试听为历史证据 |
