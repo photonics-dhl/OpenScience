@@ -21,3 +21,9 @@
 
 - 将已有CPU渲染器接到任意已审核RO分镜与场景素材，继续贯通视频生成/任务/草稿审核；之后完善全文提取和Evidence溯源。
 - 唯一CURRENT交接：docs/handoff/2026-08-16-hermes-2d-pet-handoff.md。根目录main仍为b9616cb且用户文件未动，不得与origin/main或生产混淆。保留既有前端分支定期巡检，不重复建自动化。
+
+## Generic renderer development — 2026-09-06
+
+- Added bounded file-driven3–6scene renderer using existing Canvas/Chromium/FFmpeg and continuous audio mux. Source manifest is rendering data, not RO approval. API/tasks/TTS integration remains next.
+- Startup verified production/public f144eb7 and rollback b23102b;50G used/92G available, containers/public200/egress204 healthy. Prior main CI34016486547 completed successfully.
+- Local candidate is not deployed; independent review and isolated server rendering acceptance in progress. See current plan/runbook for boundaries.

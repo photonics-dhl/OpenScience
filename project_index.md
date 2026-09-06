@@ -470,3 +470,5 @@
 | `apps/agent-worker/test/presentation/scene-image.test.ts` | Concrete composition planner context, validation and prompt-bound tests | CANDIDATE NOT DEPLOYED; tests pass but real MiniMax composition fails visual acceptance |
 
 | `infra/local-image-eval/prepare.py` / `infra/local-image-eval/run.mjs` | Pinned upstream Q4 downloads and isolated CPU image feasibility experiment | PAUSED BY USER; only partial download, no model/runtime installation or inference; scripts unfinished, do not auto-resume |
+
+| `apps/media-demo/storyboard-input.mjs` / `apps/media-demo/storyboard-drawing.mjs` / `apps/media-demo/test/storyboard-input.test.mjs` / `apps/media-demo/test/storyboard-drawing.test.mjs` | Opt-in3–6scene file-driven renderer, bounded local PNGs/cues and contained crossfades; existing render/input entry adapted | LOCAL CANDIDATE; server evaluation pending; no RO authority/task/TTS integration |

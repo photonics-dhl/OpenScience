@@ -1,5 +1,6 @@
 import { lstat, realpath, readdir } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { readStoryboardInput } from './storyboard-input.mjs';
 
 export const INPUT_FILES = ['source-artwork.png', ...Array.from({ length: 5 }, (_, i) => `voice-${i}.wav`)];
 export const VIDEO_FILE = 'd2nn-science-explainer-v2.mp4';
@@ -26,13 +27,15 @@ function contains(parent, child) {
 export async function validatePaths(inputArgument, outputArgument) {
   const input = await realpath(resolve(inputArgument));
   if (!(await lstat(input)).isDirectory()) throw new Error('Input must be a directory');
+  const storyboard = await readStoryboardInput(input);
   let audioMode = 'legacy';
   try { await lstat(resolve(input, 'narration.wav')); audioMode = 'continuous'; } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
-  const files = audioMode === 'continuous' ? ['source-artwork.png', 'narration.wav', 'narration.json'] : INPUT_FILES;
+  if (storyboard) audioMode = 'continuous';
+  const files = storyboard ? ['narration.wav', ...storyboard.scenes.map(scene => scene.artwork)] : audioMode === 'continuous' ? ['source-artwork.png', 'narration.wav', 'narration.json'] : INPUT_FILES;
   let scene3Artwork;
-  for (const name of [...files, 'scene3-artwork.png']) {
+  for (const name of storyboard ? files : [...files, 'scene3-artwork.png']) {
     let info;
     try { info = await lstat(resolve(input, name)); } catch (error) {
       if (name === 'scene3-artwork.png' && error.code === 'ENOENT') continue;
@@ -58,5 +61,5 @@ export async function validatePaths(inputArgument, outputArgument) {
     if (names.includes(VIDEO_FILE)) throw new Error('Final video already exists; use a new output directory');
     if (names.length) throw new Error('Output directory must be empty; retain prior artifacts and use a new directory');
   }
-  return { input, output, audioMode, scene3Artwork };
+  return { input, output, audioMode, scene3Artwork, storyboard };
 }

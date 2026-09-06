@@ -12,6 +12,8 @@ import { parseArguments, validatePaths, VIDEO_FILE } from './inputs.mjs';
 import { sceneTemplates, applyNarration, continuousTimeline, resolveVisualStyle } from './scenes.mjs';
 import { installDrawing } from './drawing.mjs';
 import { hasFastStart } from './media.mjs';
+import { storyboardTimeline, readSceneArtwork } from './storyboard-input.mjs';
+import { installStoryboardDrawing } from './storyboard-drawing.mjs';
 
 const execute = promisify(execFile);
 const fps = 24;
@@ -44,24 +46,25 @@ async function main() {
   process.once('SIGINT', stop);
   try {
   const args = parseArguments(process.argv.slice(2));
-  const { input, output, audioMode, scene3Artwork } = await validatePaths(args.input, args.output);
+  const { input, output, audioMode, scene3Artwork, storyboard } = await validatePaths(args.input, args.output);
+  const videoFile = storyboard ? 'ro-science-explainer.mp4' : VIDEO_FILE;
   const ffmpeg = process.env.SCIENCE_FFMPEG || '/usr/bin/ffmpeg';
   const ffprobe = process.env.SCIENCE_FFPROBE || '/usr/bin/ffprobe';
   let metadata;
   const narrationPath = resolve(input, 'narration.json');
-  try {
+  if (!storyboard) try {
     const info = await lstat(narrationPath);
     if (!info.isFile() || info.isSymbolicLink() || info.size === 0 || info.size > 64 * 1024) throw new Error('Narration metadata must be a regular file of at most 64 KiB');
     metadata = JSON.parse(await readFile(narrationPath, 'utf8'));
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  const visualStyle = resolveVisualStyle(metadata);
+  const visualStyle = storyboard ? storyboard.style : resolveVisualStyle(metadata);
   let scenes = sceneTemplates.map(scene => ({ ...scene }));
   let total = 0;
   let frameCount;
   let narration;
   if (audioMode === 'continuous') {
     const { stdout } = await execute(ffprobe, ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', resolve(input, 'narration.wav')], { timeout: 30000, signal: cancellation.signal });
-    ({ scenes, total, frameCount, narration } = continuousTimeline(scenes, metadata, Number(stdout.trim()), fps));
+    ({ scenes, total, frameCount, narration } = storyboard ? storyboardTimeline(storyboard, Number(stdout.trim()), fps) : continuousTimeline(scenes, metadata, Number(stdout.trim()), fps));
   } else {
     for (let i = 0; i < scenes.length; i++) {
       const { stdout } = await execute(ffprobe, ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', resolve(input, `voice-${i}.wav`)], { timeout: 30000, signal: cancellation.signal });
@@ -78,18 +81,19 @@ async function main() {
   }
   await mkdir(output, { recursive: true });
   // Exclusive writes and FFmpeg -n preserve existing evidence, including partial prior runs.
-  await writeFile(resolve(output, 'storyboard.json'), JSON.stringify({ fps, total, audioMode, frameCount, visualStyle, source: 'https://arxiv.org/abs/1804.08711v2', notice: 'Conceptual animation; intensities illustrative, not measured.', narration, scenes }, null, 2), { flag: 'wx' });
+  await writeFile(resolve(output, 'storyboard.json'), JSON.stringify({ fps, total, audioMode, frameCount, visualStyle, source: storyboard ? 'Supplied storyboard and artwork; upstream review required' : 'https://arxiv.org/abs/1804.08711v2', notice: 'Conceptual visualization, not original evidence.', narration, scenes }, null, 2), { flag: 'wx' });
     const { chromium } = await import('playwright-core');
     browser = await chromium.launch({ headless: true, executablePath: process.env.SCIENCE_CHROMIUM || '/usr/bin/chromium' });
     if (interrupted) throw new Error('Render interrupted');
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
     await page.route('**/*', route => route.abort());
     await page.setContent('<!doctype html><html><body style="margin:0"><canvas width="1280" height="720"></canvas></body></html>');
-    await page.evaluate(installDrawing, { scenes, total, visualStyle, artworkData: `data:image/png;base64,${(await readFile(resolve(input, 'source-artwork.png'))).toString('base64')}`, scene3ArtworkData: scene3Artwork ? `data:image/png;base64,${(await readFile(scene3Artwork)).toString('base64')}` : undefined });
+    if (storyboard) await page.evaluate(installStoryboardDrawing, {scenes, total, visualStyle, locale: storyboard.locale, artwork: await readSceneArtwork(input, scenes)});
+    else await page.evaluate(installDrawing, { scenes, total, visualStyle, artworkData: `data:image/png;base64,${(await readFile(resolve(input, 'source-artwork.png'))).toString('base64')}`, scene3ArtworkData: scene3Artwork ? `data:image/png;base64,${(await readFile(scene3Artwork)).toString('base64')}` : undefined });
     await page.evaluate(() => document.fonts.ready);
     encoder = startEncoder(ffmpeg, ['-n', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(fps), '-i', 'pipe:0', '-an', '-c:v', 'libx264', '-preset', 'fast', '-crf', '19', '-pix_fmt', 'yuv420p', resolve(output, 'silent-v2.mp4')]);
     const middle = i => scenes[i].start + scenes[i].duration / 2;
-    const samples = [['poster-v2', middle(0)], ['frame-interference-v2', middle(2)], ['frame-detector-v2', middle(3)], ...scenes.slice(1).map((scene, i) => [`transition-${i + 1}-v2`, scene.start + 0.3])];
+    const samples = [['poster-v2', middle(0)], ...(storyboard ? scenes.map((_, i) => [`scene-${i}`, middle(i)]) : [['frame-interference-v2', middle(2)], ['frame-detector-v2', middle(3)]]), ...scenes.slice(1).map((scene, i) => [`transition-${i + 1}-v2`, scene.start + 0.3])];
     for (let frame = 0; frame < frameCount; frame++) {
       if (interrupted) throw new Error('Render interrupted');
       const png = Buffer.from(await page.evaluate(time => window.render(time), frame / fps), 'base64');
@@ -115,17 +119,17 @@ async function main() {
       const filters = scenes.map((scene, i) => `[${i + 1}:a]apad,atrim=duration=${scene.duration},asetpts=PTS-STARTPTS[a${i}]`).join(';') + ';' + scenes.map((_, i) => `[a${i}]`).join('') + `concat=n=${scenes.length}:v=0:a=1[a]`;
       audioArgs = [...audioInputs, '-filter_complex', filters, '-map', '0:v', '-map', '[a]'];
     }
-    encoder = startEncoder(ffmpeg, ['-n', '-hide_banner', '-loglevel', 'error', '-protocol_whitelist', 'file,pipe', '-i', resolve(output, 'silent-v2.mp4'), ...audioArgs, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', ...(audioMode === 'legacy' ? ['-shortest'] : []), resolve(output, VIDEO_FILE)]);
+    encoder = startEncoder(ffmpeg, ['-n', '-hide_banner', '-loglevel', 'error', '-protocol_whitelist', 'file,pipe', '-i', resolve(output, 'silent-v2.mp4'), ...audioArgs, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', ...(audioMode === 'legacy' ? ['-shortest'] : []), resolve(output, videoFile)]);
     encoder.child.stdin.end();
     await encoder.done;
     if (interrupted) throw new Error('Render interrupted');
-    const { stdout } = await execute(ffprobe, ['-v', 'error', '-show_entries', 'stream=codec_name,codec_type,width,height,pix_fmt,r_frame_rate:format=duration,size', '-of', 'json', resolve(output, VIDEO_FILE)], { timeout: 30000, signal: cancellation.signal });
+    const { stdout } = await execute(ffprobe, ['-v', 'error', '-show_entries', 'stream=codec_name,codec_type,width,height,pix_fmt,r_frame_rate:format=duration,size', '-of', 'json', resolve(output, videoFile)], { timeout: 30000, signal: cancellation.signal });
     const probe = JSON.parse(stdout);
     const video = probe.streams.find(stream => stream.codec_type === 'video');
     if (video?.codec_name !== 'h264' || video.width !== 1280 || video.height !== 720 || video.pix_fmt !== 'yuv420p' || !probe.streams.some(stream => stream.codec_name === 'aac') || Math.abs(Number(probe.format.duration) - total) > (audioMode === 'continuous' ? 1 / fps : 0.1)) throw new Error('Rendered media failed format validation');
-    const fastStart = await hasFastStart(resolve(output, VIDEO_FILE));
+    const fastStart = await hasFastStart(resolve(output, videoFile));
     if (!fastStart) throw new Error('Rendered MP4 is missing fast-start atom ordering');
-    await execute(ffmpeg, ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', resolve(output, VIDEO_FILE), '-f', 'null', '-'], { timeout: 120000, signal: cancellation.signal });
+    await execute(ffmpeg, ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', resolve(output, videoFile), '-f', 'null', '-'], { timeout: 120000, signal: cancellation.signal });
     if (interrupted) throw new Error('Render interrupted');
     const metrics = { schemaVersion: 1, audioMode, frameCount, visualStyle, width: video.width, height: video.height, durationSeconds: Number(probe.format.duration), videoCodec: video.codec_name, audioCodec: 'aac', pixelFormat: video.pix_fmt, fastStart, completeDecode: true, renderSeconds: (performance.now() - started) / 1000, total, fps, freshPaidApiCalls: 0, narration, probe };
     await writeFile(resolve(output, 'metrics.json'), JSON.stringify(metrics, null, 2), { flag: 'wx' });

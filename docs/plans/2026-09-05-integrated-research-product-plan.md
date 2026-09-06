@@ -345,3 +345,15 @@ Batch completed2026-09-06: app/main3d518af and demo7e1b6ea deployed. PR/main CI,
 4. Independent review, workspace checks and CI; canonical server build/parser/runtime/deploy. Real controlled administrator revision through global Hermes; compare old/new drafts, exact task/credit/source and session cleanup. Preserve Codex runner, accepted audio and paused CPU model.
 
 Batch completed2026-09-06: global actions b23102b and contrast correction f144eb7 deployed; PR98/99 CI and exact server acceptance passed. Real6-scene revision retained3Claims and its approved parent,1 task/credit/audit; final zh/en and Chinese confirmation revalidation created0 additional tasks. Contrast regression was reproduced before the fix. No provider/backend/schema change. See CURRENT handoff for exact release/rollback/evidence and pending duplicate main CI; next is generic approved-RO CPU video generation.
+
+## Generic video renderer: first integration slice
+
+Approved direction: retain continuous narration, reuse Chromium/FFmpeg and reviewed artwork. First remove the fixed-paper assumptions before exposing asynchronous video generation. No new model or dependencies.
+
+- [ ] Add `apps/media-demo/storyboard-input.mjs` and tests: accept three to six scenes, bounded titles/cues, explicit sample-time starts, local PNG names; reject missing artwork, escaping paths, overlapping cues and duration over90 seconds. Do not infer scientific approval from a JSON flag.
+- [ ] Add `apps/media-demo/storyboard-drawing.mjs` and browser tests: full-image contain, gentle reveal/crossfade, short titles/subtitles; no hardcoded scientific objects or text. Verify distinct input images and deterministic transitions.
+- [ ] Adapt `render.mjs`/`inputs.mjs` with opt-in `storyboard.json`; keep legacy demo output/audio byte inputs unchanged. Reuse frame encoder, full WAV mux, decode and fast-start verification.
+- [ ] Exercise a prepared bundle on ECS using existing renderer image as a source-only base. Preserve existing public demo and application. Record actual render/format and source audio evidence.
+- [ ] Review, lint/tests/docs sync; record exact remaining work: trusted approved RO asset export, Gateway Qwen synthesis/alignment, bounded asynchronous execution and UI/task/draft integration. These must not be described as delivered by the file-driven renderer alone.
+
+Risks: source image cropping changes scientific meaning; captions can overflow; supplied cue timestamps can exceed actual WAV; file paths can escape the input directory. Existing fixed-five-scene validation cannot validate arbitrary scene manifests, hence the bounded parser below. No new digest scheme or release gate.

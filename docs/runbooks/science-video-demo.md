@@ -349,3 +349,23 @@ Controller is active with HERMES_SCENE_IMAGE_PROVIDER=codex in API and Worker. C
 Asset remains draft after visual inspection, not published or human-approved. Browser zh/en×1440/390 decoded the PNG without overflow; content200, anonymous401, session logout passed. Evidence codex-scene-browser-evidence.json, codex-scene-audit-evidence.json, codex-spool-audit.log and codex-scene-artwork.png. Existing private control RO is not a user-accessible demo link.
 
 Demo source7e1b6ea/run7e1b6ea-20260906T044500Z remains independent of app. Actual new/old AAC streams both hash2f5f144657fbbe27a23ff1d37e2c01ecb121640b169bd0560705aef2dcc077cf; accepted audio is unchanged after encoding. Current public entry: /demos/science-video/d2nn/?v=codex-mechanism-v1. Generic RO video automation and global Hermes conversation edits remain next work.
+
+## Generic file-driven rendering (development slice)
+
+### Preconditions
+
+This opt-in CLI is a rendering primitive, not an authenticated RO generation endpoint. A supplied manifest does not certify approval. Use existing isolated media runtime and manually reviewed inputs; no model installation or API call is required. Keep production app and public demo unchanged during evaluation.
+
+### Execution
+
+Place `storyboard.json`, `narration.wav` and `scene-0.png` through `scene-N.png` in a read-only input directory. The manifest has schemaVersion1, title, locale(zh/en), style(technical/watercolor/ink), provider, speaker and3–6 scenes. Each scene has title, artwork(exact local filename), start(seconds in full WAV) and cues(relative start/end/text). Starts begin at0, strictly increase and stay within the measured WAV; cues may not overlap or cross scenes.90seconds maximum. PNG files are bounded10MiB/8192px/16M pixels. Palette choices preserve supplied artwork; they do not turn technical images into newly generated watercolor art.
+
+Run existing renderer `node /opt/renderer/render.mjs --input /input --output /output` under the same network-none, non-root, read-only,4CPU/4GiB/256PID/600second limits used above. Mount only input read-only and a fresh output directory. Reuse an existing media image as a source-only build base. Never pass user HTML/scripts, DB/model credentials or the Docker socket into the renderer.
+
+### Rollback
+
+This evaluation does not switch app/demo releases or Nginx. Stop the exact evaluation container if needed; preserve its output/logs and use a fresh directory for retry. Existing accepted demo remains available.
+
+### Verification
+
+Require `ro-science-explainer.mp4`, poster-v2.png and metrics.json:1280x720/24fps/H264/AAC/yuv420p, fastStart and completeDecode true. Compare input WAV with accepted source; mux adds no silence/splits/time scaling. Inspect representative frames and transitions. Integration with approved RO assets, asynchronous tasks, Qwen synthesis/alignment and draft review remains subsequent work.

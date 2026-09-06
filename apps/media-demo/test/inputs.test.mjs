@@ -5,6 +5,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArguments, validatePaths, INPUT_FILES } from '../inputs.mjs';
 
+test('generic manifest selects continuous audio and its own scene files without D2NN assets', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'science-storyboard-'));
+  const input = join(root, 'input'); await mkdir(input);
+  const manifest = {schemaVersion:1,title:'Different research',locale:'en',style:'ink',provider:'supplied',speaker:'supplied',scenes:Array.from({length:3},(_,i)=>({title:`Scene ${i}`,artwork:`scene-${i}.png`,start:i*5,cues:[{start:0,end:4,text:'Example'}]}))};
+  await writeFile(join(input,'storyboard.json'),JSON.stringify(manifest));
+  await writeFile(join(input,'narration.wav'),'fixture');
+  for (let i=0;i<3;i++) await writeFile(join(input,`scene-${i}.png`),'fixture');
+  const result = await validatePaths(input,join(root,'output'));
+  assert.deepEqual(result.storyboard,manifest);
+  assert.equal(result.audioMode,'continuous');
+});
+
 test('optional third-scene artwork is accepted only as a bounded nonempty regular file', async () => {
   const root = await mkdtemp(join(tmpdir(), 'science-demo-scene3-'));
   const input = join(root, 'input'); await mkdir(input);

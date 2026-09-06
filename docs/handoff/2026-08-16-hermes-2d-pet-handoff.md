@@ -6,7 +6,7 @@
 
 - Active worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/product-workflow-design; application source/origin-main f144eb772f1063c00bd61a97612137328443edde. Subsequent documentation HEAD is obtained from Git.
 - Production active/public/loopback f144eb772f1063c00bd61a97612137328443edde; rollback b23102b071ae715d738aa37504a838d2f3fc78f1. PR98 and PR99 merged by non-force fast-forward to exact tested commits.
-- PR98 CI34014496625 and main CI34015117654 succeeded. PR99 CI34015765809 succeeded; duplicate main CI34016486547 was still running at this checkpoint. Do not describe that pending run as passed.
+- PR98 CI34014496625 and main CI34015117654 succeeded. PR99 CI34015765809 succeeded; main CI34016486547 succeeded (freshly checked).
 - Root checkout is main at b9616cb92dc83437b1b2094291ff43e2a4c34337, with user changes left untouched. It is not the production source or origin/main.
 - Independent Codex controller bundle remains3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52. Demo source7e1b6ea29ada1e4abb5fd24bb71aab4dd65abb98, run7e1b6ea-20260906T044500Z; /demos/science-video/d2nn/?v=codex-mechanism-v1. App, runner and demo identities are separate.
 
@@ -38,7 +38,7 @@
 
 ## Next action / read-first
 
-- Generalize the existing CPU video renderer to approved RO storyboards and approved scene assets, using the existing task/draft/review flow and accepted voice direction. Do not call the fixed D2NN demo arbitrary RO-to-video automation.
+- In progress: generic file-driven3–6scene renderer in apps/media-demo, opt-in storyboard.json, continuous WAV/contained PNGs/crossfades. Local tests passed; independent review and isolated ECS render pending. No API/task/TTS integration yet. Next bind approved RO inputs, Gateway speech/alignment and bounded task execution.
 - Improve the three extraction gaps and original Evidence/SourceMap grounding afterward. User prioritizes usable functions, mature reusable solutions and reviewable results.
 - Coworker release/profile-settings-20260904 tip93bb160 overlaps current identity interactions; no clear missing hunk identified, merge conflicts not tested. Existing daily frontend check remains; do not duplicate automation.
 - Read Git/fetch/checkup first, then this handoff, relevant baseline sections, docs/specs/2026-09-05-integrated-research-product-design.md, matching plan, ADR-013 and docs/runbooks/science-video-demo.md.
