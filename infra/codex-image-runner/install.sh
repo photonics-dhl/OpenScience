@@ -26,6 +26,12 @@ install -d -m 0755 "$bundle/infra/codex-image-runner" "$bundle/packages/ai-gatew
 for file in core.mjs runner.mjs sandbox.mjs proxy.mjs container-client.mjs; do install -m 0444 "$source_root/infra/codex-image-runner/$file" "$bundle/infra/codex-image-runner/$file"; done
 # Compiled Gateway has only built-in Node runtime imports; copy its complete dist to preserve the protocol/validator version.
 find "$source_root/packages/ai-gateway/dist" -maxdepth 1 -type f -name '*.js' -exec install -m 0444 -t "$bundle/packages/ai-gateway/dist" {} +
+# Load the complete compiled runtime before changing any existing service.
+node --input-type=module - "$bundle/infra/codex-image-runner/runner.mjs" <<'NODE'
+import { pathToFileURL } from 'node:url';
+const runner = await import(pathToFileURL(process.argv[2]).href);
+if (typeof runner.executeImage !== 'function') throw Error('RUNNER_RUNTIME_INVALID');
+NODE
 printf '%s\n' "$sha" > "$bundle/source-id"
 config="$root/config-$sha.json"
 printf '{"inbox":"%s/inbox","results":"%s/results","privateRoot":"%s/private","runtime":"%s","auth":"%s","nodeImage":"%s","rendererImage":"%s"}\n' "$root" "$root" "$root" "$runtime" "$auth" "$node_image" "$renderer_image" > "$config"
