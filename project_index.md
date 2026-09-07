@@ -12,6 +12,7 @@
 | `infra/migrations/20260907010000_frozen_research_record/` / `packages/domain/src/commit/{research-record-snapshot,research-record}.ts` / `apps/api/src/routes/{research-record,research-record-schema}.ts` | 提交时冻结记录、固定版本读取/来源/JSON 导出、机器 Schema/OpenAPI；nullable 迁移 37 与回滚 SQL | CANDIDATE；开发与专项验证中，尚未部署 |
 | `apps/web/components/research/VersionRecord.tsx` / `apps/web/lib/research-materials.ts` | 固定版本预览、材料恢复与并发附件保护 | UI 候选 99793fd 已复审；固定 API 接入中 |
 | `docs/specs/2026-09-07-research-record-api.md` | 每 RO 固定研究记录 API：权限、引用、来源、JSON 导出与机器合同 | CANDIDATE；开发验证中，尚未部署 |
+| `apps/agent-worker/src/parsers/native-pdf-text-items.ts` / `apps/agent-worker/src/parsers/cascade-orchestrator.ts` / `apps/agent-worker/src/parsers/text-extractor.ts` | 保留科学文本的 PDF 几何与 CMSY 否定符恢复，无法证明保真时保持待核查 | 已部署 17eb209；本候选合入，复核中 |
 | `docs/plans/2026-09-07-open-research-publication-plan.md` | 原子导入确认、材料一致性、来源核查和每 RO 只读 API；独立审查与精确 SHA 发布 | IN PROGRESS；codex/open-research-publication，生产基线 5e4b4d4 / rollback 8e4ecb2 |
 | `packages/domain/src/ingestion/{ingestion-service,ingestion-evidence}.ts` / `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/ingestion.ts` / corresponding ingestion tests | 确认原子创建真实 Version、幂等重放、材料恢复与保守来源匹配；保留既有草稿图谱编辑 | CANDIDATE 0822515；76 domain / 8 API，独立复审通过；未部署 |
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；已确认RO工作区/概览/Hermes侧栏/研究桌面职责；官方参考实查完成；A配色三态本地样稿，待用户视觉验收 |
