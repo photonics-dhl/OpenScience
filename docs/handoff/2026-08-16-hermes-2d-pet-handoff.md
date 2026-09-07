@@ -28,6 +28,9 @@
 
 ## Next action / quality constraints
 
+- Continuation: same Web6Pro returned staged planning and a formula-fidelity decision. Sol/medium repaired certified CMSY10 negation composition and conservative page-level review fallback; Sol/high approved after identity, all-empty-page false-success and operator-work fixes. Fresh Worker556/focused37/compiled10/types/lint pass; exact512MiB replay has25pages/two not-equals/no empty pages or warnings. New release acceptance/deployment and real Hermes retest are next; current production remains c9439ae. OCR independently failed formula fidelity and cannot clear the retained review reason.
+- Scientific identity: this PDF is *On-chip sampling of optical fields with attosecond resolution*, not D2NN. Reuse the accepted animation quality/runtime, never its different physical mechanism. Media review also confirmed the missing SDF-to-evidence-backed-Claim bridge and narration/isolated-render adapters.
+
 1. Reproduce and fix the real-PDF geometry failure with a meaningful regression and existing sandbox limits; rerun the SAME document through the actual upload/Hermes/confirmation/commit journey, retaining first-failure evidence.
 2. Verify how confirmed SDF/analysis becomes same-version Claims, then connect mechanism-image planning/generation and controlled animated rendering to existing presentation tasks/assets. Preserve approvals, artifact/version binding, source provenance, uncertainty, private playback and real failure/retry states.
 3. Extend actual production acceptance to newly generated images and videos: inspect image dimensions, video decode/duration/audio and in-RO playback/seek; test cross-RO authorization and stale tasks. Do not substitute imported files or a standalone demo.

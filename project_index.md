@@ -174,7 +174,8 @@
 | `docs/specs/2026-08-24-research-folio-product-system-design.md` | 登录到公开验证的全部真实非 Landing 产品视觉与信息架构；暖纸阅读、graphite 证据工具、18 表面、预留 Hermes 研究页边与无覆盖合同 | **CURRENT non-Landing product UI spec / IMPLEMENTED**；Landing unchanged |
 | `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同 | **CURRENT / TASKS 1–12 DONE**；production `b32d81c`，rollback `0aaf52f`；fresh upload/public `OSR-2026-000021`；aggregate `1ca3b0e1…08f2` |
 | `docs/specs/2026-09-02-scansci-upstream-mcp-design.md` | 上游 `v1.13.1` 官方 17-tool MCP、Worker 直连、官方 cookie import、持久数据/瞬态论文卷、`source_retrieval` provenance 与旧实现清理 | **CURRENT / PRODUCTION**；OA/institution/four-entry/lifecycle ECS accepted；ScienceDirect official entitlement optional |
-| `docs/plans/2026-09-07-literature-recovery-workflow-plan.md` | 文献恢复修复、SourceMap证据定位接续、网页规划与模型路由实测记录 | DEPLOYED c9439ae；安全API投影/作用域/匹配资源修复已验收；真实PDF几何失败、媒体生成未走通；净节省率未知 |
+| `docs/plans/2026-09-07-literature-recovery-workflow-plan.md` | 文献恢复修复、SourceMap证据定位接续、网页规划与模型路由实测记录 | Production c9439ae；新增原生PDF否定符恢复通过Worker556与真实25页隔离复现，待部署/真实Hermes；媒体链路未走通；净节省率未知 |
+| `apps/agent-worker/test/native-pdf-text-items.test.ts` | 原生CMSY10否定符组合、字体/位置反例、页级保真回退与运算限额回归 | 新增；配合cascade回归37项通过，Sol/high已复核 |
 | 本地发布证据（Git忽略） | apps/web/test/visual/out/token-smart-release/：真实论文测试、任务脱敏检查与无网络Parser复现脚本/JSON | c9439ae已部署；实际PDF invalid PDF text geometry，未完成LLM/确认/图片视频；失败证据保留 |
 | `apps/web/test/e2e/literature-disclosure-recovery.spec.ts` | RO Files/Hermes恢复、折叠和异步生命周期回归 | Application c9439ae；最终target/user隔离测试8928a9d，受影响浏览器17/17通过 |
 | `apps/web/test/literature-disclosure-harness/` | index.html、main.tsx、vite.config.ts；仅测试进程挂载真实组件，复现同组件切换与卸载 | 无生产路由或新增依赖；由上述Playwright用例启动 |

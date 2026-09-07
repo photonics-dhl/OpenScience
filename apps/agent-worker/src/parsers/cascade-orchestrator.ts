@@ -9,7 +9,7 @@ import {
 } from '@openscience/domain';
 import { runDocumentParser } from './base-parser';
 import { enrichWithGrobid, type GrobidEnrichmentResult } from './grobid-parser';
-import type { ParserStageResult, StagePage } from './job-protocol';
+import { SafeParserWarningCode, type ParserStageResult, type StagePage } from './job-protocol';
 import {
   PARSER_CASCADE_METADATA,
   runLlmOcrFallback,
@@ -17,6 +17,7 @@ import {
 } from './llm-ocr-fallback';
 import { ocrSelectedPages, type LocalOcrAdapter } from './ocr-parser';
 import { assessPageQuality } from './page-quality';
+import { PDF_TEXT_ITEM_METADATA } from './native-pdf-contract';
 import type { DocumentParser, ParserInput } from './types';
 
 export const CASCADE_ORCHESTRATOR_METADATA: DocumentParserMetadata = PARSER_CASCADE_METADATA;
@@ -82,6 +83,13 @@ function emptySourceMap(input: ParserInput): DocumentSourceMap {
     parser: metadataCopy(CASCADE_ORCHESTRATOR_METADATA),
     pages: [],
   };
+}
+
+function hasNativePdfTextBlocks(sourceMap: DocumentSourceMap): boolean {
+  return sourceMap.pages.some((page) => page.blocks.some((block) => (
+    block.parser.name === PDF_TEXT_ITEM_METADATA.name
+    && block.parser.version === PDF_TEXT_ITEM_METADATA.version
+  )));
 }
 
 function normalizedText(value: string | undefined): string | undefined {
@@ -293,6 +301,7 @@ export async function runParserCascade(
   const warnings: string[] = [];
   let current = emptySourceMap(canonicalInput);
   let localStageSucceeded = false;
+  let nativeTextFidelityReview = false;
 
   try {
     const extracted = await runDocumentParser(adapterInput(canonicalInput), context.adapters.extractText);
@@ -300,6 +309,10 @@ export async function runParserCascade(
     if (extracted.status === 'failed') {
       reasons.push('extract_text failed');
     } else {
+      nativeTextFidelityReview = canonicalInput.mediaType === 'application/pdf'
+        && extracted.status === 'succeeded'
+        && extracted.warnings.includes(SafeParserWarningCode.PARTIAL_RESULT)
+        && hasNativePdfTextBlocks(extracted.sourceMap);
       const stamped = withOrchestratorMetadata(extracted.sourceMap);
       if (!stamped) reasons.push('critical locator could not round-trip');
       else {
@@ -435,6 +448,7 @@ export async function runParserCascade(
 
   if (!localStageSucceeded) reasons.push('all local parser stages failed');
   if (remaining.length > 0) reasons.push('unresolved pages remain');
+  if (nativeTextFidelityReview) reasons.push('native PDF text fidelity requires review');
   const sourceMap = withOrchestratorMetadata(current) ?? emptySourceMap(canonicalInput);
   const recoveredReasons = localStageSucceeded
     ? reasons.filter((reason) => reason !== 'empty-parsed-text' && reason !== 'extract_text failed')

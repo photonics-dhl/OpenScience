@@ -1,5 +1,12 @@
 # Progress
 
+## 2026-09-07 continuation: native PDF repair ready for release acceptance
+
+- Same Web6Pro supplied staged execution and a formula-fidelity followup. Sol/medium diagnosed and repaired the exact CMSY10 negation overlay; Sol/high closed identity, all-empty-page false-success and operator-work findings.
+- Fresh Worker556/36files, focused37, compiled10, typecheck/lint passed. Exact PDF replay under original isolated512MiB runtime:25pages,2557blocks,two not-equals,no empty pages/warnings. OCR was separately shown to corrupt mathematical symbols and cannot clear native-fidelity review.
+- Production/public remains c9439ae, rollback5e4; new code awaits exact release build/Parser acceptance/deployment and real Hermes retest. Main source branch remains codex/token-smart-live-workflow; root dirty main preserved.
+- Next remains the full same-paper pipeline. Paper is on-chip light-field sampling, not D2NN; confirmedSDF-to-Claims/narration/video adapters are still missing. Detailed evidence is in the current literature-recovery plan and ignored token-smart-release outputs.
+
 ## 2026-09-07 deployed evidence fixes; minimum paper/media journey blocked
 
 - Application/source/public c9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2 deployed by canonical transaction; rollback5e4b4d47cba918db5a9b7f7092de32aa244c258e. Exact worktree token-smart-production-c9439ae; development branch codex/token-smart-live-workflow has test-only8928a9d plus subsequent docs. Root main@b9616cb remains dirty/stale.
