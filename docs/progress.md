@@ -1,5 +1,15 @@
 # Progress
 
+## 2026-09-07 — Final review release blocker
+
+- Final correction resolves canonical ambiguity and timestamp ordering. Scoped rereview found merge Version graph continuity is incomplete; release blocked pending focused correction under SDD final-review breaker. No candidate deployment or confirmed GitHub push; exact server/real PostgreSQL acceptance remains unrun. Docs lint passed; browser product cases passed cumulatively, not a single clean full run.
+
+## 2026-09-07 发布候选验证
+
+- 候选 f199b4fd 已合入新生产 17eb209 的 PDF 保真修复；当前 production17eb209 / rollbackc9439ae，本轮尚未部署。
+- 完成原子确认、材料恢复、固定 API/Schema/OpenAPI、共享预览与导出；迁移37可空快照，旧数据不回填。两项审查修复补齐连续图谱、歧义定位与同时间戳父版本顺序；151专项通过，最后复审进行中。
+- 合并 Web548单测与生产构建通过；Node22浏览器124项覆盖通过（全量121 +补齐夹具后3项复验），文献恢复13项通过。Node24本机图片优化超时已在Node22消失，生产同为Node22。
+- 下一步：精确候选服务器构建/迁移/真实PG/Parser16与HTTP流程验收。GitHub仍待本机GCM登录；服务器也无可用GitHub SSH认证。受控dev数据库服务验收后停止并保留卷。
 ## 2026-09-07 固定 API 与生产修复合并候选
 
 - Task3 候选 dd7b131：提交时冻结研究记录，固定 API/Schema/OpenAPI、来源、JSON/ZIP 导出和页面预览共用。新增 nullable 迁移 37；旧版本明确 not_recorded，不回填。

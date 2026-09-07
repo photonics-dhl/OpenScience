@@ -81,6 +81,19 @@ async function installClientFixtures(page: Page) {
     { versionId: 'version-3', versionNo: 3, status: 'published' },
   ] }));
   await page.route('**/api/research-objects/ro-release/ingestion', (route) => json(route, { researchObjectId: 'ro-release', version: researchObject.version, tasks: [], latestConfirmation: null }));
+  await page.route('**/api/research-objects/ro-release/versions/*/record', (route) => {
+    const versionId = new URL(route.request().url()).pathname.split('/').at(-2)!;
+    const recordUrl = `/api/research-objects/ro-release/versions/${versionId}/record`;
+    return json(route, { record: {
+      schemaVersion: '1.0.0', objectId: researchObject.id, versionId, versionNo: Number(versionId.split('-').at(-1)), recordState: 'not_recorded',
+      citation: { uri: `urn:openscience:${researchObject.id}:version:${versionId}`, url: recordUrl, title: null, createdAt: researchObject.createdAt },
+      identity: { originalAuthors: { state: 'not_recorded', items: [] }, originalDoi: { state: 'not_recorded', value: null }, platformAuthors: [], licenses: [] },
+      sdf: researchObject.sdf.core, claims: [], evidence: [], manifest: [],
+      missing: { sdfFields: [], claims: 'not_recorded', evidence: 'not_recorded', materials: 'not_recorded' },
+      collections: { complete: true, pagination: 'none', order: 'claims/evidence:id; manifest:logicalPath; authors:sortOrder; licenses:type,identifier' },
+      links: { self: recordUrl, export: `${recordUrl}/export`, schema: '/api/research-record/schema', openapi: '/api/research-record/openapi' },
+    } });
+  });
   await page.route('**/api/research-objects/ro-release/issues**', (route) => json(route, { issues: [] }));
   await page.route('**/api/research-objects/ro-release/versions/version-4/presentation-assets', (route) => json(route, { assets: [] }));
   await page.route('**/api/research-objects/ro-release/author-change-info', (route) => json(route, {}));

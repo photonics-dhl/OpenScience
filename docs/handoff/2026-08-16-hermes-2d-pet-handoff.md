@@ -2,9 +2,13 @@
 
 > CURRENT active-memory, 2026-09-07 +08. User authorized PRD v1.1 implementation, GitHub push and server deployment. Current plan: docs/plans/2026-09-07-open-research-publication-plan.md. Preserve original Aladdin dog/Wanko and lamp. Never infer aesthetic approval from passing checks.
 
+## Release blocker
+
+- Final scoped rereview found a load-bearing merge-to-next-commit graph loss: merge creates a Version without Claim/Evidence carry or frozen record, while the next commit selects it. Original canonical ambiguity is fixed. Per SDD final-review breaker, no second fix wave or deployment; awaiting user direction to continue this focused correction. GitHub authentication remains pending. Exact server acceptance has not run.
+
 ## Version tuple
 
-- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; record/API candidate dd7b131, integrating deployed c9439ae; not deployed. Fresh21:13 +08 markers/public: application17eb209d15cc427d33b426e8430fa87006e899c2; rollbackc9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2. Parallel deployed extraction/recovery changes integrated for final review; production containers healthy and journal clear. Later docs HEAD is not another app release.
+- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; record/API candidate f199b4fd, both production fixes integrated; not deployed. Fresh21:13 +08 markers/public: application17eb209d15cc427d33b426e8430fa87006e899c2; rollbackc9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2. Parallel deployed extraction/recovery changes integrated for final review; production containers healthy and journal clear. Later docs HEAD is not another app release.
 - Parallel branch codex/token-smart-live-workflow deployed c9439ae; latest deployed17eb209 adds the reviewed PDF geometry/CMSY fidelity fix. origin/main still1b974dd. Current publication branch is awaiting GitHub login and has not been deployed. Root checkout contains unrelated user changes; leave untouched.
 - Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
 
@@ -22,7 +26,7 @@
 - RO overview/editor/presentation use shared A palette and four main tabs plus More. Empty overview has Add paper/Hermes; editor initializes missing SDF keys without losing extensions. Original evidence remains distinct from approved generated explanatory assets.
 -8e4ecb2 reserves380px companion area on wide presentation pages and stacks below content on smaller screens; real RO context and drawer retained. Storyboards collapse by title. These earlier fixes remain in current release.
 
-## Fresh acceptance
+## Historical entry acceptance (5e4b4d4)
 
 - Current exact server full build, parser16 acceptance, core36/search2 migration status (none pending), BGE real-vector/runtime, ScanSci image/tools/storage/worker and healthy containers passed. Public/loopback200, egress204 via parent proxy. No new model, migration or paid generation.
 - Auth/dashboard37 unit checks, modified-file lint, final local Web build, docs checks passed. Existing browser fixtures:2 literature recovery/full-text plus3 keyboard signup/failure retry/login-return cases passed with API fixtures.
@@ -32,7 +36,7 @@
 
 ## Remaining / next action
 
-- Task1 approved0822515 (76 domain/8 API); Task2 approved99793fd (528 Web unit/18 browser, build/typecheck/lint). Task3 dd7b131 implemented:616 domain/159 API/529 Web+5 source-art/18 browser passed; independent review underway. Frozen JSON snapshot and API/export added with nullable migration37; final combined-source/server gates pending. Ledger ignored under .superpowers/sdd/2026-09-07-open-research-publication-plan/progress.md.
+- Task1 approved0822515 (76 domain/8 API); Task2 approved99793fd (528 Web unit/18 browser, build/typecheck/lint). Task3/final fixes f199b4fd: immutable API/export with migration37, graph carry, canonical ambiguity preserved, logical parent order under tied timestamps;151 focused tests passed. Final scoped rereview pending. Merged Web548+build passed; Node22 product124 cases covered (121 full +3 fixture reruns), literature13 passed. Server gates pending. Ledger ignored under .superpowers/sdd/2026-09-07-open-research-publication-plan/progress.md.
 - GitHub push awaiting local Git Credential Manager login; user notified. Linux release-contract baseline137/137 passed. Local Web525 passed plus source-art after Chromium install. No production switch yet; do not declare full PRD complete.
 - Continue route-specific layout/interaction refinement and actual paper-to-RO/media/evidence workflow; whole site and automatic multimodal pipeline remain incomplete. User has not yet accepted this visual iteration. Do not repeat the login omission or equate shared color changes with complete page redesign.
 - Integrated deployed c9439ae: literature recovery scope isolation and validated canonical evidence locations with private-ref redaction. Parallel parser17eb209 was newly deployed and is now integrated; its reported real-PDF geometry failure is not evidence about the 0175 paper. Generic automatic image/video remains incomplete.
