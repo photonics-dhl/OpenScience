@@ -61,6 +61,11 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
             boundingBox: { x: 0, y: 5, width: 100, height: 10 },
             parser: { name: 'native', version: '1' }, transformations: [],
           },
+          {
+            id: 'block-4', kind: 'paragraph', text: '   ',
+            boundingBox: { x: 0, y: 30, width: 100, height: 10 },
+            parser: { name: 'native', version: '1' }, transformations: [],
+          },
         ],
       }],
     };
@@ -153,6 +158,10 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       parserStatus: 'succeeded',
       artifactId: 'artifact-1',
       contentHash,
+    });
+    expect(result.evidenceLocation?.problem).toMatchObject({
+      status: 'located', origin: 'explicit_field_label',
+      sourceLocator: { artifactId: 'artifact-1', contentHash, blockId: 'block-1', page: 1 },
     });
     expect(storage.putObject).toHaveBeenCalledWith(
       expect.stringMatching(/^derived\/source-maps\/[a-f0-9]{64}\.json$/),
@@ -493,6 +502,166 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.core.problem).toContain('庞大设备');
     expect(result.evidence.problem.quote).toBe('However, optical-field sampling systems\nrequire bulky apparatuses and vacuum environments');
     expect(result.evidence.problem.locator).toMatch(/^chars:\d+-\d+$/);
+  });
+
+  it('canonical source map 将唯一第二页 Unicode 空白等价引文定位到原始 block，并忽略模型伪造 locator', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-canonical', contentHash: 'b'.repeat(64),
+      parser: { name: 'cascade', version: '1' },
+      pages: [
+        { page: 1, width: 100, height: 100, blocks: [{
+          id: 'page-one', kind: 'paragraph', text: 'Unrelated first page.',
+          boundingBox: { x: 0, y: 0, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [],
+        }] },
+        { page: 2, width: 100, height: 100, blocks: [{
+          id: 'page-two', kind: 'paragraph', text: '  CRLF\r\n😀e\u0301 evidence  ',
+          boundingBox: { x: 0, y: 0, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [],
+        }] },
+      ],
+    };
+    const proposal = {
+      ...VALID_PROPOSAL,
+      fields: {
+        ...VALID_PROPOSAL.fields,
+        problem: {
+          summary: 'Unicode evidence', sourceQuote: 'CRLF 😀e\u0301 evidence',
+          sourceLocator: '{"artifactId":"forged","blockId":"forged"}', needsMoreInformation: false,
+        },
+      },
+    };
+    const provider: Provider = {
+      name: 'canonical-location', model: 'canonical-location',
+      complete: async () => ({ text: JSON.stringify(proposal), usage: { inputTokens: 1, outputTokens: 1 }, model: 'canonical-location' }),
+    };
+    const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] }) as AiGateway;
+
+    const result = await extractHandler(gateway, {
+      payload: { manuscriptText: sourceMapToManuscriptText(sourceMap) },
+    }, { sourceMap });
+
+    expect(result.evidence.problem).toEqual({ quote: 'CRLF\r\n😀e\u0301 evidence', locator: 'chars:22-41' });
+    expect(result.evidenceLocation?.problem).toMatchObject({
+      status: 'located', origin: 'model_quote', matching: 'whitespace',
+      sourceLocator: {
+        artifactId: 'artifact-canonical', contentHash: 'b'.repeat(64), blockId: 'page-two', page: 2,
+        charRange: { start: 2, end: 21 },
+      },
+    });
+  });
+
+  it('trusted canonical source map overrides a conflicting payload manuscript for both prompt and locator binding', async () => {
+    const mapA: DocumentSourceMap = {
+      artifactId: 'artifact-A', contentHash: 'd'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'map-a-block', kind: 'paragraph', text: 'Problem: shared quote from map A.',
+        boundingBox: { x: 0, y: 0, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [],
+      }] }],
+    };
+    const payloadB = 'Problem: shared quote from map B.';
+    let prompt = '';
+    const proposal = {
+      schemaVersion: '0.1.0', fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, {
+        summary: '', sourceQuote: '', needsMoreInformation: true,
+      }])),
+    };
+    const provider: Provider = {
+      name: 'canonical-overrides-payload', model: 'canonical-overrides-payload',
+      complete: async (input) => {
+        prompt = input.messages.map((message) => message.content).join('\n');
+        return { text: JSON.stringify(proposal), usage: { inputTokens: 1, outputTokens: 1 }, model: 'canonical-overrides-payload' };
+      },
+    };
+    const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] }) as AiGateway;
+
+    const result = await extractHandler(gateway, { payload: { manuscriptText: payloadB } }, { sourceMap: mapA });
+
+    expect(prompt).toContain('shared quote from map A');
+    expect(prompt).not.toContain('shared quote from map B');
+    expect(result.evidenceLocation?.problem).toMatchObject({
+      status: 'located', sourceLocator: { artifactId: 'artifact-A', contentHash: 'd'.repeat(64), blockId: 'map-a-block' },
+    });
+  });
+
+  it('canonical locations refuse duplicate, cross-block, missing, and empty quotes without inventing a source locator', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-status', contentHash: 'c'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [
+        { id: 'one', kind: 'paragraph', text: 'Exact duplicate', boundingBox: { x: 0, y: 0, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'two', kind: 'paragraph', text: 'Exact duplicate', boundingBox: { x: 0, y: 20, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'three', kind: 'paragraph', text: 'Whitespace\n duplicate', boundingBox: { x: 0, y: 40, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'four', kind: 'paragraph', text: 'Whitespace duplicate', boundingBox: { x: 0, y: 60, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'five', kind: 'paragraph', text: 'cross block', boundingBox: { x: 0, y: 80, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'six', kind: 'paragraph', text: 'quote', boundingBox: { x: 0, y: 90, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+      ] }, { page: 2, width: 100, height: 100, blocks: [
+        { id: 'seven', kind: 'paragraph', text: 'Exact duplicate', boundingBox: { x: 0, y: 0, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+      ] }],
+    };
+    const quote = (sourceQuote: string, needsMoreInformation = false) => ({ summary: 'summary', sourceQuote, needsMoreInformation });
+    const proposal = {
+      schemaVersion: '0.1.0', fields: {
+        problem: quote('Exact duplicate'),
+        insight: quote('Whitespace duplicate'),
+        method: quote('block\nquote'),
+        results: quote('absent quote'),
+        limitations: quote('', true),
+        reproducibility: quote('', true),
+      },
+    };
+    const provider: Provider = {
+      name: 'location-status', model: 'location-status',
+      complete: async () => ({ text: JSON.stringify(proposal), usage: { inputTokens: 1, outputTokens: 1 }, model: 'location-status' }),
+    };
+    const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] }) as AiGateway;
+    const result = await extractHandler(gateway, {
+      payload: { manuscriptText: sourceMapToManuscriptText(sourceMap) },
+    }, { sourceMap });
+
+    expect(result.evidenceLocation).toMatchObject({
+      problem: { status: 'ambiguous', reason: 'multiple-matches' },
+      insight: { status: 'ambiguous', reason: 'multiple-matches' },
+      method: { status: 'cross_block', reason: 'match-spans-blocks' },
+      results: { status: 'missing', reason: 'no-match' },
+      limitations: { status: 'missing', reason: 'empty-quote' },
+    });
+    expect(result.evidenceLocation?.insight).not.toHaveProperty('matching');
+    expect(result.evidence.problem).toEqual({ quote: 'Exact duplicate', locator: 'chars:0-15' });
+    expect(result.evidence.insight).toEqual({ quote: 'Whitespace duplicate', locator: 'chars:54-74' });
+    expect(result.evidence.method).toEqual({ quote: 'block\nquote', locator: 'chars:81-92' });
+    for (const field of ['problem', 'insight', 'method', 'results', 'limitations'] as const) {
+      expect(result.evidenceLocation?.[field]).not.toHaveProperty('sourceLocator');
+    }
+  });
+
+  it.each(['repeat quote ', 'repeat\nquote '])('stops occurrence enumeration after ambiguity is established: %j', async (fragment) => {
+    const text = fragment.repeat(2_000).trim();
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'repeated', contentHash: 'c'.repeat(64), parser: { name: 'test', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'repeated-block', kind: 'paragraph', text,
+        boundingBox: { x: 0, y: 0, width: 90, height: 10 },
+        parser: { name: 'test', version: '1' }, transformations: [],
+      }] }],
+    };
+    const proposal = { schemaVersion: '0.1.0', fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, {
+      summary: 'Repeated source is ambiguous', sourceQuote: 'repeat quote', needsMoreInformation: false,
+    }])) };
+    const provider: Provider = { name: 'repeated', model: 'repeated', complete: async () => ({
+      text: JSON.stringify(proposal), usage: { inputTokens: 1, outputTokens: 1 }, model: 'repeated',
+    }) };
+    const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] });
+    const original = String.prototype.indexOf;
+    let occurrenceSearches = 0;
+    const spy = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (this: string, search, position) {
+      if (this.length > 20_000 && search === 'repeat quote') occurrenceSearches += 1;
+      return original.call(this, search, position);
+    });
+    try {
+      const result = await extractHandler(gateway, { payload: { manuscriptText: text } }, { sourceMap });
+      expect(result.evidenceLocation?.problem.status).toBe('ambiguous');
+      expect(result.evidence.problem.quote).toBe(fragment.trim());
+      // A six-field extraction must not enumerate thousands of equivalent ranges.
+      expect(occurrenceSearches).toBeLessThan(50);
+    } finally { spy.mockRestore(); }
   });
 
   it('拒绝仅在移除词边界后才相同的语义变异引文', async () => {

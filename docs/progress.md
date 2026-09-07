@@ -1,5 +1,11 @@
 # Progress
 
+## 2026-09-07 固定 API 与生产修复合并候选
+
+- Task3 候选 dd7b131：提交时冻结研究记录，固定 API/Schema/OpenAPI、来源、JSON/ZIP 导出和页面预览共用。新增 nullable 迁移 37；旧版本明确 not_recorded，不回填。
+- 本地 Task3 门禁：616 domain、159 API、529 Web +5 Node、18 浏览器通过，构建/类型/lint 通过；独立审查进行中。
+- 20:33 +08 核实并行部署：production c9439ae / rollback 5e4b4d4，已合并该来源定位、隐私投影和文献恢复修复；origin/main 仍1b974dd。合并后全量验证待跑，不能沿用单分支结果。
+- 生产仍未部署本轮候选。GitHub GCM 登录仍待用户完成。隔离 dev PG/Redis 由本轮启动，最终验收后停止服务并保留卷。
 ## 2026-09-07 PRD v1.1 实施启动
 
 - 用户已授权完善功能、版本管理、GitHub 推送和服务器部署；本轮按 M1/M2 修复记录闭环并提供只读 API。

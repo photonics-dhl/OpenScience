@@ -263,14 +263,34 @@ describe('multi-format ingestion service', () => {
     });
     const ingestionTask = db.ingestionTasks.find((row) => row.id === batch.tasks[0].id)!;
     const agentTask = db.agentTasks.find((row) => row.id === ingestionTask.agentTaskId)!;
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+    const contentHash = 'a'.repeat(64);
+    const serializedSha256 = 'b'.repeat(64);
     agentTask.result = {
-      core: { title: 'Parsed title' },
-      sourceMapRef: { objectKey: 'derived/source-maps/internal.json', serializedSha256: 'secret-internal-digest' },
+      core: { schemaVersion: '0.1.0', ...Object.fromEntries(fields.map((field) => [field, field === 'method' ? 'Parsed method' : ''])) },
+      evidence: Object.fromEntries(fields.map((field) => [field, {
+        quote: field === 'method' ? 'Original source sentence.' : '', locator: field === 'method' ? 'chars:0-25' : '',
+      }])),
+      evidenceLocation: Object.fromEntries(fields.map((field) => [field, field === 'method' ? {
+        status: 'located', origin: 'model_quote', matching: 'exact', sourceLocator: {
+          artifactId: agentTask.payload.artifactId, contentHash, blockId: 'block-2', charRange: { start: 0, end: 25 },
+        },
+      } : { status: 'missing', origin: 'model_quote', reason: 'empty-quote' }])),
+      needsMoreInformation: fields.filter((field) => field !== 'method'),
+      sourceMapRef: {
+        schemaVersion: 1, parserStatus: 'succeeded', artifactId: agentTask.payload.artifactId, contentHash,
+        objectKey: `derived/source-maps/${serializedSha256}.json`, serializedSha256, size: 100,
+      },
+      sourceMapAvailable: false,
+      sourceMapIdentity: { artifactId: 'forged-artifact', contentHash: 'f'.repeat(64) },
     };
 
     const response = await getIngestionTask(deps, { userId: user.id, taskId: ingestionTask.id });
 
-    expect(response.task.result).toEqual({ core: { title: 'Parsed title' }, sourceMapAvailable: true });
+    expect(response.task.result).toMatchObject({
+      sourceMapAvailable: true,
+      sourceMapIdentity: { artifactId: agentTask.payload.artifactId, contentHash },
+    });
     expect(JSON.stringify(response)).not.toContain('derived/source-maps');
     expect(JSON.stringify(response)).not.toContain('secret-internal-digest');
   });

@@ -1,4 +1,5 @@
 import type { SdfCore } from './api';
+import { getSuggestionEvidenceLocation, type SuggestionEvidenceLocation } from './suggestion-evidence';
 
 /** AI 建议（§5.4 MUST：以 diff 展示，确认后才写入 SDF）。 */
 export interface AiSuggestion {
@@ -12,6 +13,8 @@ export interface AiSuggestion {
   sourceLocator?: string;
   risk?: 'normal' | 'high';
   evidence?: { quote: string; locator: string };
+  /** Read-only, task-bound source-map location. It never changes proposal actions. */
+  evidenceLocation?: SuggestionEvidenceLocation;
 }
 
 export const SDF_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
@@ -87,13 +90,17 @@ export function coreToSuggestions(
   core: SdfCore,
   currentCore: SdfCore,
   evidenceOrLocator?: Partial<Record<SdfField, { quote: string; locator: string }>> | string,
+  canonicalContext?: unknown,
 ): AiSuggestion[] {
   const list: AiSuggestion[] = [];
   for (const field of SDF_FIELDS) {
     const suggestion = (core[field] ?? '').trim();
     const before = (currentCore[field] ?? '').trim();
     if (!suggestion || suggestion === before) continue;
-    const evidence = typeof evidenceOrLocator === 'object' ? evidenceOrLocator[field] : undefined;
+    const rawEvidence = evidenceOrLocator && typeof evidenceOrLocator === 'object' ? evidenceOrLocator[field] : undefined;
+    const evidence = rawEvidence && typeof rawEvidence.quote === 'string' && typeof rawEvidence.locator === 'string'
+      ? rawEvidence
+      : undefined;
     list.push({
       id: `extract-${field}`,
       field,
@@ -104,6 +111,7 @@ export function coreToSuggestions(
       sourceContext: 'sdf_aggregate',
       sourceLocator: evidence?.locator ?? (typeof evidenceOrLocator === 'string' ? evidenceOrLocator : undefined),
       evidence,
+      evidenceLocation: getSuggestionEvidenceLocation(field, rawEvidence?.quote, canonicalContext),
       risk: field === 'results' || field === 'reproducibility' ? 'high' : 'normal',
     });
   }

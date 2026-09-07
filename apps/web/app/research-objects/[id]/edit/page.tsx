@@ -212,7 +212,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           const nextMissing = extractMissingSdfFields(cur.task.result).filter((field) => !activeExtraction.acknowledgedMissingFields.includes(field));
           const evidence = cur.task.result?.evidence as Partial<Record<SdfField, { quote: string; locator: string }>> | undefined;
           const nextSuggestions = core
-            ? coreToSuggestions(core, activeExtraction.sourceCore, evidence).filter((item) => !activeExtraction.dismissedFields.includes(item.field))
+            ? coreToSuggestions(core, activeExtraction.sourceCore, evidence, cur.task.result).filter((item) => !activeExtraction.dismissedFields.includes(item.field))
             : [];
           dispatchSuggestions({ type: 'reset' });
           for (const suggestion of nextSuggestions) dispatchSuggestions({ type: 'add', suggestion });

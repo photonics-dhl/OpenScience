@@ -4,7 +4,7 @@
 
 ## Version tuple
 
-- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; record/UI candidate99793fd, not deployed. Fresh20:33 +08 markers/public: application c9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2; rollback5e4b4d47cba918db5a9b7f7092de32aa244c258e. Parallel deployed extraction/recovery changes must be merged before final review; production containers healthy and journal clear. Later docs HEAD is not another app release.
+- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; record/API candidate dd7b131, integrating deployed c9439ae; not deployed. Fresh20:33 +08 markers/public: application c9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2; rollback5e4b4d47cba918db5a9b7f7092de32aa244c258e. Parallel deployed extraction/recovery changes integrated for final review; production containers healthy and journal clear. Later docs HEAD is not another app release.
 - Parallel branch codex/token-smart-live-workflow deployed c9439ae; latest remote17eb209 adds an undeployed parser candidate. origin/main still1b974dd. Current publication branch is awaiting GitHub login and has not been deployed. Root checkout contains unrelated user changes; leave untouched.
 - Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
 
@@ -32,10 +32,10 @@
 
 ## Remaining / next action
 
-- Task1 approved0822515 (76 domain/8 API); Task2 approved99793fd (528 Web unit/18 browser, build/typecheck/lint). Task3 frozen per-RO API in progress, then full review/test/exact-SHA deploy. Draft graph remains mutable; Task3 must persist fixed record metadata, not mislabel it. Ledger ignored under .superpowers/sdd/2026-09-07-open-research-publication-plan/progress.md.
+- Task1 approved0822515 (76 domain/8 API); Task2 approved99793fd (528 Web unit/18 browser, build/typecheck/lint). Task3 dd7b131 implemented:616 domain/159 API/529 Web+5 source-art/18 browser passed; independent review underway. Frozen JSON snapshot and API/export added with nullable migration37; final combined-source/server gates pending. Ledger ignored under .superpowers/sdd/2026-09-07-open-research-publication-plan/progress.md.
 - GitHub push awaiting local Git Credential Manager login; user notified. Linux release-contract baseline137/137 passed. Local Web525 passed plus source-art after Chromium install. No production switch yet; do not declare full PRD complete.
 - Continue route-specific layout/interaction refinement and actual paper-to-RO/media/evidence workflow; whole site and automatic multimodal pipeline remain incomplete. User has not yet accepted this visual iteration. Do not repeat the login omission or equate shared color changes with complete page redesign.
-- Known PDF method/results/reproducibility extraction and Evidence/SourceMap gaps remain. Existing RO Files/Hermes literature disclosures can keep internally recovered tasks collapsed when no initialTask is supplied; this pre-existing issue was not introduced or fixed here.
+- Integrated deployed c9439ae: literature recovery scope isolation and validated canonical evidence locations with private-ref redaction. Parallel parser candidate17eb209 remains separate unless deployed; its reported real-PDF geometry failure is not evidence about the 0175 paper. Generic automatic image/video remains incomplete.
 - Preserve Serena continuous v4, restored animated D2NN, Chromium/FFmpeg/PyTorch/Qwen/Codex. CPU image installation remains USER-PAUSED. Codex still depends on PC/v2ray/account access and quotas (ADR-013).
 - Controlled private user11b6cf52-fcd4-4f7d-a3ff-8ea3ae9592fd (Hermes Production E2E), workspacef09ab567-4dcd-4d53-97b3-9a96920fd1ed, RObcbf1586-b6bd-44b6-ab66-c675fcddce78. Do not advertise as a user-accessible demo.
 - Read-first: Git/fetch/checkup, this handoff, relevant baseline and latest integrated plan section. Use explicit Git Bash SSH wrappers and canonical deployment; no env/Secret reads.

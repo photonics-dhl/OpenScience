@@ -1,6 +1,7 @@
 import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
 import { Prisma, type AgentSession, type AgentTask } from '@prisma/client';
+import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import {
   parseDurableSourceRetrievePayload,
   SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION,
@@ -16,7 +17,8 @@ import { AgentError } from './errors';
 import type { InterestContext } from '../research-intelligence/types';
 import { buildInterestContext, validateInterestContext } from '../research-intelligence/interest-context';
 import { ResearchIdentityProfileError, validateResearchIdentityProfileState } from '../research-intelligence/identity-profile-service';
-import { ResearchIntelligenceValidationError } from '../research-intelligence/validation';
+import { ResearchIntelligenceValidationError, validateSourceLocator } from '../research-intelligence/validation';
+import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
 import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 
@@ -862,19 +864,90 @@ async function syncIngestionState(
   });
 }
 
+type JsonRecord = Record<string, unknown>;
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(value: JsonRecord, keys: readonly string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && actual.every((key) => keys.includes(key));
+}
+
+const EVIDENCE_ORIGINS = ['model_quote', 'explicit_field_label'] as const;
+const EVIDENCE_MATCHING = ['exact', 'whitespace'] as const;
+const EVIDENCE_UNLOCATED_STATUSES = ['ambiguous', 'cross_block', 'missing'] as const;
+const EVIDENCE_UNLOCATED_REASONS = [
+  'empty-quote', 'multiple-matches', 'match-spans-blocks', 'no-match', 'locator-roundtrip-failed',
+] as const;
+
+function hasValidEvidenceLocation(value: unknown, reference: DocumentSourceMapReference): boolean {
+  if (!isJsonRecord(value) || !EVIDENCE_ORIGINS.includes(value.origin as typeof EVIDENCE_ORIGINS[number])) return false;
+  if (value.status === 'located') {
+    if (!hasExactKeys(value, ['status', 'sourceLocator', 'origin', 'matching'])
+      || !EVIDENCE_MATCHING.includes(value.matching as typeof EVIDENCE_MATCHING[number])) return false;
+    try {
+      const locator = validateSourceLocator(value.sourceLocator);
+      return locator.artifactId === reference.artifactId && locator.contentHash === reference.contentHash;
+    } catch {
+      return false;
+    }
+  }
+  if (!EVIDENCE_UNLOCATED_STATUSES.includes(value.status as typeof EVIDENCE_UNLOCATED_STATUSES[number])
+    || !EVIDENCE_UNLOCATED_REASONS.includes(value.reason as typeof EVIDENCE_UNLOCATED_REASONS[number])) return false;
+  const expectedKeys = value.matching === undefined
+    ? ['status', 'origin', 'reason']
+    : ['status', 'origin', 'matching', 'reason'];
+  return hasExactKeys(value, expectedKeys)
+    && (value.matching === undefined || EVIDENCE_MATCHING.includes(value.matching as typeof EVIDENCE_MATCHING[number]));
+}
+
+function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMapReference): boolean {
+  if (!isJsonRecord(result.evidence) || !isJsonRecord(result.evidenceLocation)
+    || !hasExactKeys(result.evidence, SDF_CORE_FIELDS)
+    || !hasExactKeys(result.evidenceLocation, SDF_CORE_FIELDS)) return false;
+  const evidenceByField = result.evidence;
+  const locationsByField = result.evidenceLocation;
+  return SDF_CORE_FIELDS.every((field) => {
+    const evidence = evidenceByField[field];
+    return isJsonRecord(evidence)
+      && hasExactKeys(evidence, ['quote', 'locator'])
+      && typeof evidence.quote === 'string'
+      && typeof evidence.locator === 'string'
+      && hasValidEvidenceLocation(locationsByField[field], reference);
+  });
+}
+
+/** Builds the public task result while keeping the private SourceMap storage reference server-side. */
+export function projectAgentTaskResult(rawResult: unknown, kind: string): Record<string, unknown> | null {
+  if (!isJsonRecord(rawResult)) return null;
+  const sourceMapRef = rawResult.sourceMapRef;
+  const publicResult = { ...rawResult };
+  delete publicResult.sourceMapRef;
+  delete publicResult.sourceMapAvailable;
+  delete publicResult.sourceMapIdentity;
+  if (sourceMapRef === undefined) return publicResult;
+  try {
+    const reference = parseDocumentSourceMapReference(sourceMapRef);
+    return {
+      ...publicResult,
+      sourceMapAvailable: true,
+      ...(kind === 'sdf.extract' && hasValidEvidenceBundle(publicResult, reference)
+        ? { sourceMapIdentity: { artifactId: reference.artifactId, contentHash: reference.contentHash } }
+        : {}),
+    };
+  } catch {
+    return publicResult;
+  }
+}
+
 function taskToView(task: {
   id: string; sessionId: string; kind: string; status: AgentTaskStatus;
   progress: number; retryCount: number; executionAttempt: number;
   result: unknown; error: string | null; createdAt: Date; updatedAt: Date;
 }, canRetry = false): AgentTaskView {
-  let result: Record<string, unknown> | null = null;
-  if (task.result && typeof task.result === 'object' && !Array.isArray(task.result)) {
-    const { sourceMapRef, ...publicResult } = task.result as Record<string, unknown>;
-    result = {
-      ...publicResult,
-      ...(sourceMapRef === undefined ? {} : { sourceMapAvailable: true }),
-    };
-  }
+  const result = projectAgentTaskResult(task.result, task.kind);
   return {
     id: task.id, sessionId: task.sessionId, kind: task.kind, status: task.status,
     progress: task.progress, retryCount: task.retryCount, executionAttempt: task.executionAttempt,
