@@ -782,6 +782,7 @@
     "eyebrow": "OpenScience / Research Object"
   },
   "hermesReview": {
+    "snapshotLoadError": "The saved confirmation snapshot could not be loaded. Retry to view its contents.",
     "legacyConfirmation":"This older import has no recorded confirmation snapshot. Review the saved versions before relying on its evidence.",
     "reviewPending": "Extracted content needs human review. Leave unavailable information empty; do not fill it with assumptions.",
     "missing": "Not provided · pending",

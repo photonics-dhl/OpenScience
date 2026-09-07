@@ -233,3 +233,79 @@ test('missing upload form input is separate from Hermes task failure', async ({ 
   await expect(page.locator('[data-hermes-state="failed"]')).toHaveCount(0);
   await expect(page.locator('[data-hermes-workspace-stage]')).toBeVisible();
 });
+
+for (const recoveryPhase of ['initial', 'after-save'] as const) {
+  test(`Files ${recoveryPhase} recovery cannot commit an old manifest with a newer revision`, async ({ page }) => {
+    await fixtures(page);
+    let serverRevision = 1;
+    let acceptedWrites = 0;
+    let raceStarted = false;
+    const requests: Array<{ version: number; artifacts: Array<{ artifactId: string; logicalPath: string }> }> = [];
+    const original = { artifactId: 'original', logicalPath: 'paper.pdf' };
+    const intervening = { artifactId: 'intervening', logicalPath: 'other-tab.pdf' };
+    let serverArtifacts = [original];
+    const snapshots = new Map<string, typeof serverArtifacts>();
+    await page.route('**/api/research-objects/journey-ro', async route => {
+      // With the former Promise.all, the manifest read advances the server revision
+      // before this delayed response samples it, producing a dangerously valid CAS.
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await route.fulfill({ json: { researchObject: { ...ro, version: serverRevision, sdf: { core } } } });
+    });
+    await page.route('**/api/research-objects/journey-ro/versions', async route => {
+      const id = `race-v${serverRevision}`;
+      snapshots.set(id, [...serverArtifacts]);
+      if (!raceStarted && (recoveryPhase === 'initial' || acceptedWrites === 1)) {
+        raceStarted = true;
+        serverRevision++;
+        serverArtifacts = [...serverArtifacts, intervening];
+      }
+      await route.fulfill({ json: { versions: [{ versionId: id, versionNo: 1, status: 'draft' }] } });
+    });
+    await page.route('**/api/versions/race-*', route => route.fulfill({ json: { version: { versionId: new URL(route.request().url()).pathname.split('/').pop(), snapshot: { core, artifacts: snapshots.get(new URL(route.request().url()).pathname.split('/').pop()!) } } } }));
+    await page.route('**/api/csrf-token', route => route.fulfill({ json: { csrfToken: 'test-csrf' } }));
+    let uploadNumber = 0;
+    await page.route('**/api/artifacts/upload', route => route.fulfill({ json: { artifact: { artifactId: `added-${++uploadNumber}` } } }));
+    await page.route('**/api/research-objects/journey-ro/commits', async route => {
+      const input = route.request().postDataJSON();
+      requests.push(input);
+      if (input.version !== serverRevision) return route.fulfill({ status: 409, json: { error: { code: 'CONCURRENT_UPDATE', message: 'Research changed. Reload before attaching.' } } });
+      acceptedWrites++;
+      serverRevision++;
+      serverArtifacts = input.artifacts;
+      await route.fulfill({ json: { commit: { versionId: 'accepted' } } });
+    });
+    await page.goto('/research-objects/journey-ro/files');
+    await expect(page.locator('a[href="/api/artifacts/original/download"]')).toBeVisible();
+    if (recoveryPhase === 'after-save') {
+      await page.getByTestId('artifact-input').setInputFiles({ name: 'first.txt', mimeType: 'text/plain', buffer: Buffer.from('first') });
+      await page.getByRole('button', { name: 'Attach to new version', exact: true }).click();
+      await expect(page.locator('a[href="/api/artifacts/added-1/download"]')).toBeVisible();
+    }
+    await page.getByTestId('artifact-input').setInputFiles({ name: 'last.txt', mimeType: 'text/plain', buffer: Buffer.from('last') });
+    await page.getByRole('button', { name: 'Attach to new version', exact: true }).click();
+    await expect.poll(() => requests.length).toBe(recoveryPhase === 'initial' ? 1 : 2);
+    expect(serverArtifacts).toContainEqual(intervening);
+    expect(requests.at(-1)?.version).toBe(serverRevision - 1);
+    expect(acceptedWrites).toBe(recoveryPhase === 'initial' ? 0 : 1);
+    await expect(page.locator('main').getByRole('alert')).toHaveText('Research changed. Reload before attaching.');
+  });
+}
+
+test('failed confirmed snapshot shows a retryable load error without empty saved fields', async ({ page }) => {
+  await fixtures(page);
+  await page.route('**/api/research-objects/journey-ro/ingestion', route => route.fulfill({ json: { researchObjectId: ro.id, version: 9, tasks: [{ ...task, state: 'confirmed', confirmation }], latestConfirmation: confirmation } }));
+  await page.route('**/api/ingestion/tasks/journey-task', route => route.fulfill({ json: { researchObjectId: ro.id, version: 9, task: { ...task, state: 'confirmed', result: { core } } } }));
+  let fails = true;
+  await page.route('**/api/versions/confirmed-version', route => fails
+    ? route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'Storage unavailable' } } })
+    : route.fulfill({ json: { version: { versionId: 'confirmed-version', snapshot: { core: { ...core, problem: 'Actual saved contents' }, artifacts: [] } } } }));
+  await page.goto('/research-objects/journey-ro/hermes?task=journey-task');
+  await expect(page.locator('main').getByRole('alert')).toBeVisible();
+  await expect(page.locator('textarea')).toHaveCount(0);
+  await expect(page.locator('main').getByRole('alert')).toHaveText('The saved confirmation snapshot could not be loaded. Retry to view its contents.');
+  await expect(page.getByText('Confirmed and recorded in a new version.', { exact: true })).toHaveCount(0);
+  fails = false;
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.locator('textarea[readonly]').first()).toHaveValue('Actual saved contents');
+  await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+});

@@ -10,7 +10,7 @@ import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/Literatu
 import ArtifactUploader from '@/components/editor/ArtifactUploader';
 import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '@/components/research/ResearchSurfaceShell';
 import { ApiClientError, createCommit, getResearchObject, type ArtifactReference, type ResearchObjectSummary, type SdfCore } from '@/lib/api';
-import { appendMaterials, loadResearchMaterials } from '@/lib/research-materials';
+import { appendMaterials, loadAttachmentDraft, loadResearchMaterials } from '@/lib/research-materials';
 
 type FilesResearchObject = ResearchObjectSummary & { sdf: { core: SdfCore } };
 
@@ -33,9 +33,9 @@ export function ResearchObjectFilesContent({ object }: { object: FilesResearchOb
   useEffect(() => {
     let active = true;
     setRestored(null);
-    void Promise.all([getResearchObject(object.id), loadResearchMaterials(object.id)]).then(([ro, materials]) => {
+    void loadAttachmentDraft(object.id).then(({ researchObject, materials }) => {
       if (!active) return;
-      setCurrentObject(ro.researchObject);
+      setCurrentObject(researchObject);
       setRestored(materials);
     }).catch((cause: Error) => { if (active) setError(cause); });
     return () => { active = false; };

@@ -1,11 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { appendMaterials, loadResearchMaterials } from '@/lib/research-materials';
-import { apiRequest, getResearchIngestion, listVersions } from '@/lib/api';
+import { appendMaterials, loadAttachmentDraft, loadResearchMaterials } from '@/lib/research-materials';
+import { apiRequest, getResearchIngestion, getResearchObject, listVersions } from '@/lib/api';
 
-vi.mock('@/lib/api', () => ({ apiRequest: vi.fn(), getResearchIngestion: vi.fn(), listVersions: vi.fn() }));
+vi.mock('@/lib/api', () => ({ apiRequest: vi.fn(), getResearchIngestion: vi.fn(), getResearchObject: vi.fn(), listVersions: vi.fn() }));
 
 describe('persistent research materials', () => {
   beforeEach(() => vi.resetAllMocks());
+  it('captures the write revision before material reads on initial and post-save recovery', async () => {
+    for (const revision of [1, 3]) {
+      const versionReads = vi.mocked(listVersions).mock.calls.length;
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      vi.mocked(getResearchObject).mockImplementationOnce(async () => {
+        await gate;
+        return { researchObject: { id: 'ro', version: revision, sdf: { core: { problem: `Revision ${revision}` } } } } as Awaited<ReturnType<typeof getResearchObject>>;
+      });
+      vi.mocked(listVersions).mockResolvedValue({ versions: [] });
+      vi.mocked(getResearchIngestion).mockResolvedValue({ researchObjectId: 'ro', version: revision + 1, latestConfirmation: null, tasks: [] });
+      const pending = loadAttachmentDraft('ro');
+      await Promise.resolve();
+      expect(vi.mocked(listVersions).mock.calls).toHaveLength(versionReads);
+      release();
+      const restored = await pending;
+      expect(restored.researchObject.version).toBe(revision);
+      expect(restored.researchObject.sdf.core.problem).toBe(`Revision ${revision}`);
+      expect(restored.materials.ingestion.version).toBe(revision + 1);
+    }
+  });
   it('recovers the manifest without query tasks and preserves server-renamed import paths', async () => {
     vi.mocked(listVersions).mockResolvedValue({ versions: [{ versionId: 'v2', versionNo: 2, status: 'draft', commitId: 'c2', createdAt: '' }] });
     vi.mocked(getResearchIngestion).mockResolvedValue({ researchObjectId: 'ro', version: 7, latestConfirmation: null, tasks: [] });

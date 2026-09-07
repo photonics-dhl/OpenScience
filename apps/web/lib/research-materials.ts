@@ -1,4 +1,11 @@
-import { apiRequest, getResearchIngestion, listVersions, type ArtifactReference } from './api';
+import { apiRequest, getResearchIngestion, getResearchObject, listVersions, type ArtifactReference } from './api';
+
+/** Keep the first revision as the write fence: any intervening commit must fail CAS. */
+export async function loadAttachmentDraft(researchObjectId: string) {
+  const { researchObject } = await getResearchObject(researchObjectId);
+  const materials = await loadResearchMaterials(researchObjectId);
+  return { researchObject, materials };
+}
 
 /** The manifest is authoritative; a task's original filename may have been renamed on confirmation. */
 export async function loadResearchMaterials(researchObjectId: string) {

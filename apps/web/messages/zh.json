@@ -782,6 +782,7 @@
     "eyebrow": "OpenScience / Research Object"
   },
   "hermesReview": {
+    "snapshotLoadError": "无法读取已确认的版本快照，请重试后查看保存内容。",
     "legacyConfirmation":"此旧导入未记录确认快照，请核查已有版本后再使用其证据。",
     "reviewPending": "提取内容待人工核查；未提供的信息请留空，不需要补写推测。",
     "missing": "未提供 · 待补充",

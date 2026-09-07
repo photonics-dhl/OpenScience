@@ -48,16 +48,19 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
     setLoading(true); setError(''); setDetail(null); setCore(emptyCore()); setSaved(false); setConfirmation(null);
     const load = taskId ? Promise.all([loadScopedHermesReview(routeParams.id, taskId, getIngestionTask), getResearchIngestion(routeParams.id)]).then(async ([value, recovery]) => {
       if (cancelled) return;
-      setDetail({ ...value, version: recovery.version });
       const confirmed = recovery.tasks.find((task) => task.id === taskId)?.confirmation ?? null;
-      setConfirmation(confirmed);
-      setSaved(value.task.state === 'confirmed' || value.task.state === 'written');
       const proposed = (value.task.result as { core?: SdfCore } | null)?.core;
       if (confirmed) {
-        const snapshot = await apiRequest<{ version: { versionId: string; snapshot: { core: SdfCore } } }>(`/api/versions/${encodeURIComponent(confirmed.versionId)}`);
-        if (snapshot.version.versionId !== confirmed.versionId) throw new Error('Version snapshot mismatch');
-        if (!cancelled) setCore({ ...emptyCore(), ...snapshot.version.snapshot.core });
+        try {
+          const snapshot = await apiRequest<{ version: { versionId: string; snapshot: { core: SdfCore } } }>(`/api/versions/${encodeURIComponent(confirmed.versionId)}`);
+          if (snapshot.version.versionId !== confirmed.versionId) throw new Error('Version snapshot mismatch');
+          if (!cancelled) setCore({ ...emptyCore(), ...snapshot.version.snapshot.core });
+        } catch { throw new Error(t('snapshotLoadError')); }
       } else if (proposed) setCore({ ...emptyCore(), ...proposed });
+      if (cancelled) return;
+      setDetail({ ...value, version: recovery.version });
+      setConfirmation(confirmed);
+      setSaved(value.task.state === 'confirmed' || value.task.state === 'written');
     }) : Promise.all([getResearchObject(routeParams.id), getResearchIngestion(routeParams.id)]).then(([research, value]) => {
       if (!cancelled) { setTasks(value.tasks.map((task) => ({ ...task, researchObjectId: routeParams.id, researchTitle: research.researchObject.title }))); setResearchTitle(research.researchObject.title); setResearchStatus(research.researchObject.status); }
     });
