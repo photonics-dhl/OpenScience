@@ -80,6 +80,7 @@ async function installClientFixtures(page: Page) {
     { versionId: 'version-4', versionNo: 4, status: 'draft' },
     { versionId: 'version-3', versionNo: 3, status: 'published' },
   ] }));
+  await page.route('**/api/research-objects/ro-release/ingestion', (route) => json(route, { researchObjectId: 'ro-release', version: researchObject.version, tasks: [], latestConfirmation: null }));
   await page.route('**/api/research-objects/ro-release/issues**', (route) => json(route, { issues: [] }));
   await page.route('**/api/research-objects/ro-release/versions/version-4/presentation-assets', (route) => json(route, { assets: [] }));
   await page.route('**/api/research-objects/ro-release/author-change-info', (route) => json(route, {}));

@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { readdirSync } from 'node:fs';
-import { openSync } from 'node:fs';
+import { openSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from 'playwright/test';
 
@@ -17,6 +17,7 @@ test.beforeAll(async () => {
   const vitePackage = readdirSync(path.join(workspace, 'node_modules/.pnpm')).find((name) => name.startsWith('vite@'));
   if (!vitePackage) throw new Error('Vite is unavailable for the test-only harness.');
   const vite = path.join(workspace, 'node_modules/.pnpm', vitePackage, 'node_modules/vite/bin/vite.js');
+  mkdirSync(path.join(workspace, 'apps/web/test/research-intelligence/out/token-smart-live'), { recursive: true });
   const log = openSync(path.join(workspace, 'apps/web/test/research-intelligence/out/token-smart-live/harness-vite.log'), 'a');
   harness = spawn(process.execPath, [vite, '--host', '127.0.0.1', '--port', '3011', '--strictPort'], { cwd, stdio: ['ignore', log, log] });
   harness.once('exit', (code) => { harnessExit = new Error(`Test-only Vite harness exited before readiness (code ${code}); see harness-vite.log.`); });
@@ -239,13 +240,14 @@ test('the mounted disclosure clears a typed query in the first target and user s
   await page.getByRole('button', { name: 'switch-target' }).click();
 
   await expect(disclosure.locator('[data-literature-acquisition]')).toHaveAttribute('data-literature-target', 'research-object:ro-b');
-  await expect(page.locator('body')).toHaveAttribute('data-literature-query-at-scope-commit', '');
+  await expect(page.locator('body')).toHaveAttribute('data-literature-scope-commit', 'user-a:ro-b:');
   await expect(query).toHaveValue('');
 
+  await disclosure.locator('summary').click();
   await query.fill('Scope B private query');
   await page.getByRole('button', { name: 'switch-user' }).click();
 
-  await expect(page.locator('body')).toHaveAttribute('data-literature-query-at-scope-commit', '');
+  await expect(page.locator('body')).toHaveAttribute('data-literature-scope-commit', 'user-b:ro-b:');
   await expect(query).toHaveValue('');
 });
 
