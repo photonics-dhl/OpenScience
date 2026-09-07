@@ -86,9 +86,13 @@ Missing narrative fields are pending information, not a finding of "not reported
 when provided in the SDF; the API does not infer them from an empty string.
 
 New ordinary commits capture their branch predecessor's working Claim/Evidence
-graph inside the commit transaction. Inherited Evidence is `needs_review` and not
+graph into fresh scoped working rows inside the commit transaction, remapping
+Claim parents and Evidence references before freezing the new version's own rows.
+Inherited Evidence is `needs_review` and not
 verified; an inherited `supported` Claim becomes `missing` pending review against
-the new version. IDs identify the captured graph members within this fixed record.
+the new version. IDs identify the captured graph members within this fixed record and its editable
+version graph. Subsequent commits copy the immediate predecessor's actual working
+rows; deliberately deleted rows are never restored from a frozen snapshot.
 Import confirmation captures after graph carry and source matching, before the
 same transaction commits. Both paths save metadata once; subsequent editable graph
 changes do not rewrite it, including later verification or publication.

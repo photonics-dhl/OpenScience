@@ -12,7 +12,7 @@ import { createCommit, type CreateCommitResult } from '../commit/commits';
 import { ResearchObjectError } from '../research-object/errors';
 import { SDF_NODE_TYPES } from '../research-object/types';
 import type { SdfDocumentView } from '../research-object/sdf';
-import { carryIngestionEvidence, writeIngestionEvidence } from './ingestion-evidence';
+import { carryVersionEvidence, writeIngestionEvidence } from './ingestion-evidence';
 import { IngestionError } from './errors';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
 import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
@@ -295,7 +295,7 @@ export async function confirmIngestionTask(
           for (const nodeType of SDF_NODE_TYPES) await tx.sdfNode.update({
             where: { sdfDocumentId_nodeType: { sdfDocumentId: document.id, nodeType } }, data: { content: input.core[nodeType] ?? '' },
           });
-          if (latest) await carryIngestionEvidence(scoped, { researchObjectId: ro.id, previousVersionId: latest.id, versionId: commit.versionId });
+          if (latest) await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: latest.id, versionId: commit.versionId });
           await writeIngestionEvidence(scoped, { task, versionId: commit.versionId, core: input.core });
           await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: commit.versionId });
           const updated = await tx.ingestionTask.updateMany({ where: { id: task.id, state: 'needs_review' }, data: { state: 'confirmed', error: null } });

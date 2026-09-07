@@ -137,6 +137,58 @@ describe('frozen research record real HTTP routes', () => {
     expect(response.json().record.evidence[0].verified).toBe(false);
     expect(response.json().record.sdf.extension).toBe('Preserved extension');
   });
+  it.each([false, true])('keeps a scoped editable graph through consecutive commits (edit v2: %s)', async editV2 => {
+    const f = await fixture();
+    const root = f.db.claimNodes[0];
+    await f.deps.prisma.claimNode.create({ data: { researchObjectId: RO, versionId: f.versionId,
+      parentClaimId: root.id, kind: 'supporting', statement: 'Child statement', assessment: 'missing',
+      extractionStatus: 'needs_review', provenance: { source: 'human' } } });
+    const v2 = await createCommit(f.deps, {researchObjectId:RO,userId:f.user.id,version:2,message:'Version two',sdfCore:f.core,artifacts:[{artifactId:ARTIFACT,logicalPath:'source.txt'}]});
+    const v2Claims = f.db.claimNodes.filter(c => c.versionId === v2.versionId);
+    expect(v2Claims).toHaveLength(2);
+    const v2Root = v2Claims.find(c => c.kind === 'core')!;
+    expect(v2Root.id).not.toBe(root.id);
+    expect(v2Claims.find(c => c.kind === 'supporting')!.parentClaimId).toBe(v2Root.id);
+    const v2Evidence = f.db.evidenceRecords.find(e => e.versionId === v2.versionId)!;
+    expect(v2Evidence.claimId).toBe(v2Root.id);
+    expect(v2Evidence.id).not.toBe(f.db.evidenceRecords[0].id);
+    const v2Url = f.url.replace(f.versionId, v2.versionId);
+    const v2Before = await f.app.inject({method:'GET',url:v2Url,cookies:f.cookies});
+    if (editV2) {
+      const edit = await f.app.inject({method:'PATCH',url:`/research-objects/${RO}/versions/${v2.versionId}/claims/${v2Root.id}`,cookies:f.cookies,
+        payload:{expectedUpdatedAt:v2Root.updatedAt.toISOString(),patch:{statement:'Edited in version two'}}});
+      expect(edit.statusCode).toBe(200);
+    }
+    const v3 = await createCommit(f.deps, {researchObjectId:RO,userId:f.user.id,version:3,message:'Version three',sdfCore:f.core,artifacts:[{artifactId:ARTIFACT,logicalPath:'source.txt'}]});
+    const v3Response = await f.app.inject({method:'GET',url:f.url.replace(f.versionId,v3.versionId),cookies:f.cookies});
+    const record = v3Response.json().record;
+    expect(record.claims).toHaveLength(2);
+    const v3Root = record.claims.find((c: {kind:string}) => c.kind === 'core');
+    expect(v3Root).toMatchObject({statement:editV2 ? 'Edited in version two' : 'Source statement'});
+    expect(v3Root.id).not.toBe(v2Root.id);
+    expect(record.claims.find((c: {kind:string}) => c.kind === 'supporting').parentClaimId).toBe(v3Root.id);
+    expect(record.evidence).toHaveLength(1);
+    expect(record.evidence[0].claimId).toBe(v3Root.id);
+    expect(record.evidence[0].id).not.toBe(v2Evidence.id);
+    expect(f.db.claimNodes.filter(c => c.versionId === v3.versionId)).toHaveLength(2);
+    const source = await f.app.inject({method:'GET',url:record.evidence[0].source.url.replace(/^\/api/,''),cookies:f.cookies});
+    expect(source.statusCode).toBe(200);
+    expect(source.json().source.text).toBe('Original source passage.');
+    expect((await f.app.inject({method:'GET',url:v2Url,cookies:f.cookies})).body).toBe(v2Before.body);
+  });
+  it('does not resurrect intentionally deleted working rows from a frozen predecessor', async () => {
+    const f = await fixture();
+    const v2 = await createCommit(f.deps, {researchObjectId:RO,userId:f.user.id,version:2,message:'Version two',sdfCore:f.core,artifacts:[{artifactId:ARTIFACT,logicalPath:'source.txt'}]});
+    expect(f.db.claimNodes.filter(c => c.versionId === v2.versionId)).toHaveLength(1);
+    // Model the committed result of an intentional graph deletion; retain the fixed v2 record.
+    f.db.evidenceRecords = f.db.evidenceRecords.filter(e => e.versionId !== v2.versionId);
+    f.db.claimNodes = f.db.claimNodes.filter(c => c.versionId !== v2.versionId);
+    const v3 = await createCommit(f.deps, {researchObjectId:RO,userId:f.user.id,version:3,message:'Preserve deliberate deletion',sdfCore:f.core,artifacts:[{artifactId:ARTIFACT,logicalPath:'source.txt'}]});
+    const response = await f.app.inject({method:'GET',url:f.url.replace(f.versionId,v3.versionId),cookies:f.cookies});
+    expect(response.json().record).toMatchObject({claims:[],evidence:[]});
+    expect(f.db.claimNodes.filter(c => c.versionId === v3.versionId)).toHaveLength(0);
+    expect((await f.app.inject({method:'GET',url:f.url.replace(f.versionId,v2.versionId),cookies:f.cookies})).json().record.claims).toHaveLength(1);
+  });
   it('publishes discoverable machine schema and OpenAPI contracts', async () => {
     const f=await fixture();
     const schema=await f.app.inject({method:'GET',url:'/research-record/schema'});

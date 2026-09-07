@@ -1,3 +1,4 @@
+import { carryVersionEvidence } from '../ingestion/ingestion-evidence';
 import { freezeResearchRecord } from './research-record-snapshot';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import { getBlobStorageKey } from '@openscience/storage';
@@ -228,7 +229,8 @@ export async function createCommit(
     });
     if (!transaction) {
       const predecessor = parentCommit ? await tx.version.findFirst({ where: { commitId: parentCommit.id } }) : null;
-      await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: version.id, graphVersionId: predecessor?.id });
+      if (predecessor) await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: predecessor.id, versionId: version.id });
+      await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: version.id });
     }
     await recordAudit(
       deps, tx,

@@ -16,10 +16,18 @@ function claimProvenance(value: unknown): Record<string, unknown> {
 }
 
 /** Carry the prior graph into a new version without rewriting its immutable source rows. */
-export async function carryIngestionEvidence(deps: IngestionDeps, input: { researchObjectId: string; previousVersionId: string; versionId: string }) {
+export async function carryVersionEvidence(tx: Prisma.TransactionClient, input: { researchObjectId: string; previousVersionId: string; versionId: string }) {
+  const [previous, target] = await Promise.all([
+    tx.version.findUnique({ where: { id: input.previousVersionId } }),
+    tx.version.findUnique({ where: { id: input.versionId } }),
+  ]);
+  if (!previous || !target || previous.id === target.id || previous.researchObjectId !== input.researchObjectId
+    || target.researchObjectId !== input.researchObjectId) throw new Error('Research graph scope mismatch');
+  // Share the predecessor row fence with graph edits before reading its working rows.
+  await tx.version.update({ where: { id: previous.id }, data: { status: previous.status } });
   const where = { researchObjectId: input.researchObjectId, versionId: input.previousVersionId };
-  const claims = await deps.prisma.claimNode.findMany({ where });
-  const evidence = await deps.prisma.evidenceRecord.findMany({ where });
+  const claims = await tx.claimNode.findMany({ where });
+  const evidence = await tx.evidenceRecord.findMany({ where });
   const ids = new Map(claims.map(claim => [claim.id, randomUUID()]));
   // Insert parents first; source data already obeys the scoped parent foreign key.
   const pending = [...claims];
@@ -28,20 +36,20 @@ export async function carryIngestionEvidence(deps: IngestionDeps, input: { resea
     const index = pending.findIndex(claim => !claim.parentClaimId || inserted.has(claim.parentClaimId));
     if (index < 0) throw new Error('Existing Claim graph cannot be copied');
     const claim = pending.splice(index, 1)[0]!;
-    await deps.prisma.claimNode.create({ data: {
+    await tx.claimNode.create({ data: {
       id: ids.get(claim.id)!, researchObjectId: input.researchObjectId, versionId: input.versionId,
       parentClaimId: claim.parentClaimId ? ids.get(claim.parentClaimId) : undefined,
-      kind: claim.kind, statement: claim.statement, assessment: claim.assessment,
+      kind: claim.kind, statement: claim.statement, assessment: claim.assessment === 'supported' ? 'missing' : claim.assessment,
       conditions: claim.conditions, limitations: claim.limitations, extractionStatus: 'needs_review',
       provenance: { ...claimProvenance(claim.provenance), previousVersionId: input.previousVersionId, previousClaimId: claim.id } as Prisma.InputJsonValue,
     } });
     inserted.add(claim.id);
   }
-  for (const item of evidence) await deps.prisma.evidenceRecord.create({ data: {
+  for (const item of evidence) await tx.evidenceRecord.create({ data: {
     researchObjectId: input.researchObjectId, versionId: input.versionId, workspaceId: item.workspaceId,
     claimId: ids.get(item.claimId)!, artifactId: item.artifactId, kind: item.kind, title: item.title,
     exactQuote: item.exactQuote, relation: item.relation, locator: item.locator as Prisma.InputJsonValue,
-    contentHash: item.contentHash, extractionConfidence: item.extractionConfidence, extractionStatus: 'needs_review',
+    contentHash: item.contentHash, extractionConfidence: item.extractionConfidence, extractionStatus: 'needs_review', verifiedByUserId: null,
     provenance: { ...record(item.provenance), previousVersionId: input.previousVersionId, previousEvidenceId: item.id } as Prisma.InputJsonValue,
   } });
 }
