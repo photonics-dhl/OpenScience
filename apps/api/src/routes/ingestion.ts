@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
-import { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, IngestionError, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from '@openscience/domain';
+import { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, IngestionError, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -27,6 +27,13 @@ function auditCtx(req: FastifyRequest): AuditContext {
 
 export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDeps): void {
   void app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 20, fields: 1, parts: 21 } });
+
+  app.get('/research-objects/:id/ingestion', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    return reply.send(await getResearchObjectIngestion(deps, { userId: user.userId, researchObjectId: id }));
+  });
 
   app.post('/research-objects/:id/ingest', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);

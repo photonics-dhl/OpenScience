@@ -228,7 +228,7 @@ export {
   type UpdateClaimInput,
   type UpdateEvidenceInput,
 } from './research-intelligence/claim-evidence-service';
-export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
+export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
 export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';
 export {
   RESEARCH_IDENTITIES,

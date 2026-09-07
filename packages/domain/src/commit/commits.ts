@@ -69,7 +69,13 @@ export async function createCommit(
   deps: ArtifactDeps,
   input: CreateCommitInput,
   ctx: AuditContext = {},
+  transaction?: Prisma.TransactionClient,
 ): Promise<CreateCommitResult> {
+  // Internal composition: all reads and writes use the caller's transaction.
+  if (transaction) deps = { ...deps, prisma: transaction as ArtifactDeps['prisma'] };
+  if (!transaction && input.idempotencyKey?.startsWith('ingestion-confirm:')) {
+    throw new CommitError('VALIDATION_ERROR', 'Reserved ingestion idempotency key');
+  }
   const message = input.message.trim();
   if (!message || message.length > 500) {
     throw new CommitError('VALIDATION_ERROR', '提交说明需为 1-500 字符');
@@ -79,6 +85,10 @@ export async function createCommit(
   if (input.idempotencyKey) {
     const existing = await deps.prisma.commit.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
     if (existing) {
+      if (existing.researchObjectId !== input.researchObjectId) throw new CommitError('VALIDATION_ERROR', 'Idempotency key belongs to another research object');
+      const existingRo = await deps.prisma.researchObject.findUnique({ where: { id: existing.researchObjectId } });
+      if (!existingRo) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+      await requireMembership(deps, existingRo.workspaceId, input.userId);
       const version = await deps.prisma.version.findFirst({ where: { commitId: existing.id } });
       const snapshot = await loadSnapshot(deps, version?.id ?? '');
       if (version) {
@@ -188,7 +198,12 @@ export async function createCommit(
     if (artifact) manifestArtifacts.push({ logicalPath: ref.logicalPath, artifactId: ref.artifactId, blobSha256: artifact.blobSha256 });
   }
 
-  const result = await deps.prisma.$transaction(async (tx) => {
+  const persist = async (tx: Prisma.TransactionClient) => {
+    const advanced = await tx.researchObject.updateMany({
+      where: { id: ro.id, version: input.version },
+      data: { version: input.version + 1 },
+    });
+    if (advanced.count !== 1) throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');
     const commit = await tx.commit.create({
       data: {
         researchObjectId: ro.id,
@@ -210,10 +225,6 @@ export async function createCommit(
         entries: { create: manifestArtifacts },
       },
     });
-    await tx.researchObject.update({
-      where: { id: ro.id },
-      data: { version: ro.version + 1 },
-    });
     await recordAudit(
       deps, tx,
       {
@@ -224,7 +235,8 @@ export async function createCommit(
       ctx,
     );
     return { commit, version };
-  });
+  };
+  const result = transaction ? await persist(transaction) : await deps.prisma.$transaction(persist);
 
   return {
     commitId: result.commit.id,

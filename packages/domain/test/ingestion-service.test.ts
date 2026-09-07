@@ -2,10 +2,119 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
 import { createFakePrisma, seedUser } from './helpers/fakes';
-import { authorizeIngestionWrite, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask } from '../src/ingestion/ingestion-service';
+import { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, retryIngestionTask } from '../src/ingestion/ingestion-service';
+import { persistDocumentSourceMapReference } from '../src/research-intelligence/source-map-ref';
+import { createCommit } from '../src/commit/commits';
 import { markTaskProgress } from '../src/agent/agent';
 
 const TEST_RO_ID = '00000000-0000-4000-8000-000000000101';
+const CORE = { schemaVersion: '0.1.0', problem: 'Question', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
+
+async function confirmationFixture() {
+  const fixture = makeDeps();
+  const { deps, db, user } = fixture;
+  Object.assign(deps.prisma.ingestionTask, { findUniqueOrThrow: async (args: Parameters<typeof deps.prisma.ingestionTask.findUnique>[0]) => deps.prisma.ingestionTask.findUnique(args) });
+  db.sdfDocuments.push({ id: 'sdf-1', researchObjectId: TEST_RO_ID, coreJson: { ...CORE, problem: 'Before' } });
+  for (const nodeType of Object.keys(CORE).filter(key => key !== 'schemaVersion')) db.sdfNodes.push({ id: nodeType, sdfDocumentId: 'sdf-1', nodeType, content: '' });
+  const batch = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('notes.md')] });
+  db.ingestionTasks[0].state = 'needs_review';
+  return { ...fixture, input: { userId: user.id, taskId: batch.tasks[0].id, version: 1, core: CORE } };
+}
+
+describe('ingestion confirmation research record', () => {
+  it('creates an immutable version with original material and replays the same result', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const first = await confirmIngestionTask(deps, input);
+    expect(db.versions).toHaveLength(1);
+    expect(db.manifestEntries[0].artifactId).toBe(db.artifacts[0].id);
+    expect(first).toMatchObject({ confirmation: { versionId: db.versions[0].id, evidenceStatus: 'needs_review' } });
+    expect(await confirmIngestionTask(deps, input)).toEqual(first);
+    expect(db.versions).toHaveLength(1);
+    expect(db.researchObjects[0].version).toBe(2);
+  });
+
+  it('rolls back every write when confirmation state cannot be claimed', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    vi.spyOn(deps.prisma.ingestionTask, 'updateMany').mockResolvedValueOnce({ count: 0 });
+    await expect(confirmIngestionTask(deps, input)).rejects.toThrow();
+    expect(db.versions).toHaveLength(0);
+    expect(db.commits).toHaveLength(0);
+    expect(db.researchObjects[0].version).toBe(1);
+    expect(db.sdfDocuments[0].coreJson.problem).toBe('Before');
+  });
+
+  it('rejects a stale version without partial writes', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    await expect(confirmIngestionTask(deps, { ...input, version: 0 })).rejects.toMatchObject({ code: 'CONCURRENT_UPDATE' });
+    expect(db.versions).toHaveLength(0);
+    expect(db.ingestionTasks[0].state).toBe('needs_review');
+  });
+
+  it('retains earlier materials with colliding names and recovers confirmed imports without a task URL', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    db.artifacts.push({ ...db.artifacts[0], id: 'previous-artifact' });
+    await createCommit(deps, { researchObjectId: TEST_RO_ID, userId: input.userId, version: 1, message: 'Earlier material', artifacts: [{ logicalPath: 'notes.md', artifactId: 'previous-artifact' }] });
+    const result = await confirmIngestionTask(deps, { ...input, version: 2 });
+    const manifest = db.versionManifests.find(row => row.versionId === result.confirmation.versionId);
+    const entries = db.manifestEntries.filter(row => row.manifestId === manifest.id);
+    expect(entries.map(row => row.artifactId)).toEqual(['previous-artifact', db.artifacts[0].id]);
+    expect(new Set(entries.map(row => row.logicalPath)).size).toBe(2);
+    const recovered = await getResearchObjectIngestion(deps, { userId: input.userId, researchObjectId: TEST_RO_ID });
+    expect(recovered.latestConfirmation).toEqual(result.confirmation);
+    expect(recovered.tasks[0].state).toBe('confirmed');
+    await expect(getResearchObjectIngestion(deps, { userId: 'outsider', researchObjectId: TEST_RO_ID })).rejects.toThrow();
+  });
+
+  it('simultaneous confirmation creates exactly one version', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const results = await Promise.all([confirmIngestionTask(deps, input), confirmIngestionTask(deps, input)]);
+    expect(results[0]).toEqual(results[1]);
+    expect(db.versions).toHaveLength(1);
+  });
+
+  it('keeps previous Claim/Evidence history and carries its graph as pending into the new version', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const prior = await createCommit(deps, { researchObjectId: TEST_RO_ID, userId: input.userId, version: 1,
+      message: 'Prior record', artifacts: [{ logicalPath: 'notes.md', artifactId: db.artifacts[0].id }] });
+    db.claimNodes.push({ id: 'old-claim', researchObjectId: TEST_RO_ID, versionId: prior.versionId, kind: 'core', statement: 'Earlier claim', assessment: 'supported', conditions: [], limitations: [], provenance: { source: 'human' }, extractionStatus: 'succeeded' });
+    db.evidenceRecords.push({ id: 'old-evidence', researchObjectId: TEST_RO_ID, workspaceId: 'ws-1', versionId: prior.versionId, claimId: 'old-claim', artifactId: db.artifacts[0].id, kind: 'passage', title: 'Earlier source', exactQuote: 'Earlier quote', relation: 'supports', locator: {}, contentHash: db.artifacts[0].blobSha256, provenance: { source: 'human' }, extractionStatus: 'succeeded', verifiedByUserId: input.userId });
+    const originals = structuredClone({ claim: db.claimNodes[0], evidence: db.evidenceRecords[0] });
+    const next = await confirmIngestionTask(deps, { ...input, version: 2 });
+    expect(db.claimNodes[0]).toEqual(originals.claim);
+    expect(db.evidenceRecords[0]).toEqual(originals.evidence);
+    expect(db.claimNodes[1]).toMatchObject({ versionId: next.confirmation.versionId, statement: 'Earlier claim', extractionStatus: 'needs_review' });
+    expect(db.evidenceRecords[1]).toMatchObject({ versionId: next.confirmation.versionId, claimId: db.claimNodes[1].id, verifiedByUserId: null, extractionStatus: 'needs_review' });
+  });
+
+  it('enforces write permission on replay and keeps the original SDF snapshot after later edits', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const first = await confirmIngestionTask(deps, input);
+    db.sdfDocuments[0].coreJson = { ...CORE, problem: 'Later work' };
+    expect(await confirmIngestionTask(deps, { ...input, core: { ...CORE, problem: 'Replay changes' } })).toEqual(first);
+    db.memberships[0].role = 'viewer';
+    await expect(confirmIngestionTask(deps, input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.versions).toHaveLength(1);
+  });
+
+  it.each(['exact', 'missing', 'ambiguous', 'edited', 'foreign'])('persists only verifiable source evidence: %s', async mode => {
+    const { deps, db, input } = await confirmationFixture();
+    const quote = 'Original source question.';
+    const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, {
+      artifactId: mode === 'foreign' ? 'other-artifact' : db.artifacts[0].id,
+      contentHash: db.artifacts[0].blobSha256, parser: { name: 'fixture', version: '1' },
+      pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'block-1', kind: 'paragraph',
+        text: mode === 'ambiguous' ? `${quote} ${quote}` : quote,
+        boundingBox: { x: 10, y: 20, width: 300, height: 30 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }],
+    }, 'succeeded');
+    db.agentTasks[0].result = { core: CORE, evidence: { problem: { quote: mode === 'missing' ? 'Invented quote' : quote, locator: 'page 999' } }, sourceMapRef };
+    await confirmIngestionTask(deps, mode === 'edited' ? { ...input, core: { ...CORE, problem: 'Changed claim' } } : input);
+    expect(db.evidenceRecords).toHaveLength(mode === 'exact' ? 1 : 0);
+    if (mode === 'exact') {
+      expect(db.evidenceRecords[0]).toMatchObject({ exactQuote: quote, extractionStatus: 'needs_review', verifiedByUserId: null, locator: { page: 1, blockId: 'block-1', charRange: { start: 0, end: quote.length } } });
+      expect(db.claimNodes[0]).toMatchObject({ assessment: 'missing', extractionStatus: 'needs_review' });
+    }
+  });
+});
 
 function makeDeps() {
   const { prisma, db } = createFakePrisma();

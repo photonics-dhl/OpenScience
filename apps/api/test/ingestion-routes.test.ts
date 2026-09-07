@@ -26,6 +26,18 @@ async function fixture() {
 }
 
 describe('GET /ingestion scoped actionable feed', () => {
+  it('recovers completed material history for RO members', async () => {
+    const { app, db, cookies } = await fixture();
+    db.ingestionTasks[0].state = 'confirmed';
+    const response = await app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/ingestion`, cookies });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ researchObjectId: RO_ID, version: 1, latestConfirmation: null,
+      tasks: [{ id: 'task', state: 'confirmed', logicalPath: 'shared.pdf', confirmation: null }] });
+    db.memberships.length = 0;
+    const denied = await app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/ingestion`, cookies });
+    expect(denied.statusCode).toBe(404);
+    expect(denied.body).not.toContain('shared.pdf');
+  });
   it('includes another creator task for an RO member without changing the default feed', async () => {
     const { app, cookies } = await fixture();
     const scoped = await app.inject({ method: 'GET', url: `/ingestion?actionable=true&researchObjectId=${RO_ID}`, cookies });
