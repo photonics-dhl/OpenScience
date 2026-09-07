@@ -4,8 +4,8 @@
 
 ## Version tuple
 
-- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; record/UI candidate99793fd, not deployed. Fresh18:53 +08 checkup: application/public/loopback5e4b4d47cba918db5a9b7f7092de32aa244c258e; rollback8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs HEAD is not another app release.
-- Previous application5e4b4d4 was pushed and deployed. Current publication branch is awaiting GitHub login and has not been deployed. Root checkout contains unrelated user changes; leave untouched.
+- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; record/UI candidate99793fd, not deployed. Fresh20:33 +08 markers/public: application c9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2; rollback5e4b4d47cba918db5a9b7f7092de32aa244c258e. Parallel deployed extraction/recovery changes must be merged before final review; production containers healthy and journal clear. Later docs HEAD is not another app release.
+- Parallel branch codex/token-smart-live-workflow deployed c9439ae; latest remote17eb209 adds an undeployed parser candidate. origin/main still1b974dd. Current publication branch is awaiting GitHub login and has not been deployed. Root checkout contains unrelated user changes; leave untouched.
 - Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
 
 ## Shipped entry continuity
