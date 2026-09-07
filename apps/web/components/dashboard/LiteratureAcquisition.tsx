@@ -132,7 +132,9 @@ export function LiteratureAcquisition({
   const namespace = targetNamespace(target);
   const effectiveUserId = userId ?? resolvedUserId;
   const scopeKey = `${effectiveUserId}:${namespace}`;
-  const [query, setQuery] = React.useState(initialRequest?.query ?? '');
+  const initialQuery = initialRequest?.query ?? '';
+  const [queryState, setQueryState] = React.useState({ scope: scopeKey, initialQuery, value: initialQuery });
+  const query = queryState.scope === scopeKey && queryState.initialQuery === initialQuery ? queryState.value : initialQuery;
   const [taskState, setTaskState] = React.useState({ scope: scopeKey, task: initialTask as LiteratureTask | null });
   const [error, setError] = React.useState('');
   const [reconnecting, setReconnecting] = React.useState(false);
@@ -420,7 +422,7 @@ export function LiteratureAcquisition({
         className={`mt-2 min-h-11 w-full border ${rule} bg-transparent px-3 text-base ${ink} outline-none transition-transform duration-150 focus:border-current focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`}
         disabled={active || submissionPending || !recoveryReady || !effectiveUserId}
         id={queryId}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => setQueryState({ scope: scopeKey, initialQuery, value: event.target.value })}
         placeholder={t('queryPlaceholder')}
         value={query}
       />

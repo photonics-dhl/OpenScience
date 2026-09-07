@@ -92,10 +92,8 @@ async function installBlankRoApi(page: Page, options: { failAfterRetry?: boolean
         insight: { quote: 'Field-resolved sampling', locator: 'chars:18-41' },
         method: { quote: 'researcher-specified pump-probe', locator: 'chars:42-74' },
       },
-      sourceMapRef: {
-        schemaVersion: 1, parserStatus: 'succeeded', artifactId: 'artifact-blank', contentHash: 'a'.repeat(64),
-        objectKey: `derived/source-maps/${'b'.repeat(64)}.json`, serializedSha256: 'b'.repeat(64), size: 100,
-      },
+      sourceMapAvailable: true,
+      sourceMapIdentity: { artifactId: 'artifact-blank', contentHash: 'a'.repeat(64) },
       evidenceLocation: {
         problem: {
           status: 'located', origin: 'model_quote', matching: 'exact', sourceLocator: {

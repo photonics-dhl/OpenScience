@@ -12,6 +12,9 @@ function Harness() {
   const [researchObjectId, setResearchObjectId] = React.useState('ro-a');
   const [userId, setUserId] = React.useState('user-a');
   const [mounted, setMounted] = React.useState(true);
+  React.useLayoutEffect(() => {
+    document.body.dataset.literatureQueryAtScopeCommit = document.querySelector<HTMLInputElement>('#harness-query')?.value ?? '';
+  }, [researchObjectId, userId]);
   return <NextIntlClientProvider locale="en" messages={messages}>
     <button onClick={() => setResearchObjectId('ro-b')} type="button">switch-target</button>
     <button onClick={() => setResearchObjectId('ro-a')} type="button">switch-back-target</button>

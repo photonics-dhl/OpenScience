@@ -50,15 +50,8 @@ describe('coreToSuggestions（P1D-3：Extractor core → AiSuggestion，§5.4 �
     const quote = 'Method proposal.';
     const evidence = { method: { quote, locator: 'chars:0-16' } };
     const canonicalResult = {
-      sourceMapRef: {
-        schemaVersion: 1,
-        parserStatus: 'succeeded',
-        artifactId: 'artifact-a',
-        contentHash: 'a'.repeat(64),
-        objectKey: `${'derived/source-maps/'}${'b'.repeat(64)}.json`,
-        serializedSha256: 'b'.repeat(64),
-        size: 100,
-      },
+      sourceMapAvailable: true,
+      sourceMapIdentity: { artifactId: 'artifact-a', contentHash: 'a'.repeat(64) },
       evidence,
       evidenceLocation: {
         method: {

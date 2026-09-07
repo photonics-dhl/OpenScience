@@ -136,6 +136,8 @@ function findEvidenceMatches(source: string, proposedQuote: string): EvidenceMat
   const matches: EvidenceMatch[] = [];
   for (let start = source.indexOf(quote); start >= 0; start = source.indexOf(quote, start + 1)) {
     matches.push({ start, end: start + quote.length, matching: 'exact' });
+    // Two distinct ranges already prove ambiguity; never enumerate the rest.
+    if (matches.length === 2) return matches;
   }
 
   let normalizedSource = '';
@@ -163,15 +165,11 @@ function findEvidenceMatches(source: string, proposedQuote: string): EvidenceMat
   const normalizedQuote = quote.replace(/\s+/g, ' ');
   for (let start = normalizedSource.indexOf(normalizedQuote); start >= 0; start = normalizedSource.indexOf(normalizedQuote, start + 1)) {
     const end = start + normalizedQuote.length - 1;
-    matches.push({ start: starts[start]!, end: ends[end]!, matching: 'whitespace' });
+    const match: EvidenceMatch = { start: starts[start]!, end: ends[end]!, matching: 'whitespace' };
+    if (!matches.some((existing) => existing.start === match.start && existing.end === match.end)) matches.push(match);
+    if (matches.length === 2) return matches;
   }
-  const unique = new Map<string, EvidenceMatch>();
-  for (const match of matches) {
-    const key = `${match.start}:${match.end}`;
-    const existing = unique.get(key);
-    if (!existing || existing.matching === 'whitespace' && match.matching === 'exact') unique.set(key, match);
-  }
-  return [...unique.values()];
+  return matches;
 }
 
 /** Existing pure-text compatibility path. Canonical source-map evidence intentionally uses stricter matching above. */
@@ -270,8 +268,8 @@ function locateCanonicalEvidence(
   quote: string,
   origin: EvidenceLocation['origin'],
   manuscriptText: string,
+  matches: EvidenceMatch[] = findEvidenceMatches(manuscriptText, quote),
 ): EvidenceLocation {
-  const matches = findEvidenceMatches(manuscriptText, quote);
   if (matches.length === 0) return { status: 'missing', origin, reason: quote.trim() ? 'no-match' : 'empty-quote' };
   if (matches.length > 1) return { status: 'ambiguous', origin, reason: 'multiple-matches' };
   const match = matches[0]!;
@@ -306,14 +304,14 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
   const evidenceLocation = sourceMap ? {} as NonNullable<ExtractionResult['evidenceLocation']> : undefined;
   for (const field of SDF_CORE_FIELDS) {
     const candidate = proposal.fields[field];
-    const matches = findEvidenceMatches(manuscriptText, candidate.sourceQuote);
+    const matches = sourceMap ? findEvidenceMatches(manuscriptText, candidate.sourceQuote) : [];
     const range = sourceMap ? (matches[0] ?? null) : findLegacyEvidenceRange(manuscriptText, candidate.sourceQuote);
     const explicit = findExplicitFieldEvidence(manuscriptText, field);
     if (!candidate.needsMoreInformation && range) {
       core[field] = candidate.summary.trim();
       evidence[field] = { quote: manuscriptText.slice(range.start, range.end), locator: `chars:${range.start}-${range.end}` };
       if (sourceMap && evidenceLocation && blocks) {
-        evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, candidate.sourceQuote, 'model_quote', manuscriptText);
+        evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, candidate.sourceQuote, 'model_quote', manuscriptText, matches);
       }
     } else if (explicit) {
       const explicitMatches = findEvidenceMatches(manuscriptText, explicit.quote);
@@ -322,14 +320,14 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
         core[field] = manuscriptText.slice(explicitRange.start, explicitRange.end);
         evidence[field] = { quote: core[field], locator: `chars:${explicitRange.start}-${explicitRange.end}` };
         if (sourceMap && evidenceLocation && blocks) {
-          evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, explicit.quote, 'explicit_field_label', manuscriptText);
+          evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, explicit.quote, 'explicit_field_label', manuscriptText, explicitMatches);
         }
       } else {
         core[field] = '';
         evidence[field] = { quote: '', locator: '' };
         needsMoreInformation.push(field);
         if (sourceMap && evidenceLocation && blocks) {
-          evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, explicit.quote, 'explicit_field_label', manuscriptText);
+          evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, explicit.quote, 'explicit_field_label', manuscriptText, explicitMatches);
         }
       }
     } else {
@@ -337,7 +335,7 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
       evidence[field] = { quote: '', locator: '' };
       needsMoreInformation.push(field);
       if (sourceMap && evidenceLocation && blocks) {
-        evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, candidate.sourceQuote, 'model_quote', manuscriptText);
+        evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, candidate.sourceQuote, 'model_quote', manuscriptText, matches);
       }
     }
   }

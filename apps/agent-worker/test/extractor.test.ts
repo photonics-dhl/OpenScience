@@ -632,6 +632,38 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     }
   });
 
+  it.each(['repeat quote ', 'repeat\nquote '])('stops occurrence enumeration after ambiguity is established: %j', async (fragment) => {
+    const text = fragment.repeat(2_000).trim();
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'repeated', contentHash: 'c'.repeat(64), parser: { name: 'test', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'repeated-block', kind: 'paragraph', text,
+        boundingBox: { x: 0, y: 0, width: 90, height: 10 },
+        parser: { name: 'test', version: '1' }, transformations: [],
+      }] }],
+    };
+    const proposal = { schemaVersion: '0.1.0', fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, {
+      summary: 'Repeated source is ambiguous', sourceQuote: 'repeat quote', needsMoreInformation: false,
+    }])) };
+    const provider: Provider = { name: 'repeated', model: 'repeated', complete: async () => ({
+      text: JSON.stringify(proposal), usage: { inputTokens: 1, outputTokens: 1 }, model: 'repeated',
+    }) };
+    const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] });
+    const original = String.prototype.indexOf;
+    let occurrenceSearches = 0;
+    const spy = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (this: string, search, position) {
+      if (this.length > 20_000 && search === 'repeat quote') occurrenceSearches += 1;
+      return original.call(this, search, position);
+    });
+    try {
+      const result = await extractHandler(gateway, { payload: { manuscriptText: text } }, { sourceMap });
+      expect(result.evidenceLocation?.problem.status).toBe('ambiguous');
+      expect(result.evidence.problem.quote).toBe(fragment.trim());
+      // A six-field extraction must not enumerate thousands of equivalent ranges.
+      expect(occurrenceSearches).toBeLessThan(50);
+    } finally { spy.mockRestore(); }
+  });
+
   it('拒绝仅在移除词边界后才相同的语义变异引文', async () => {
     const manuscriptText = 'The treatment was notable for toxicity in the longitudinal cohort.';
     const proposal = {

@@ -6,8 +6,7 @@ const digest = 'b'.repeat(64);
 const quote = 'Original source sentence.';
 function context() {
   return {
-    sourceMapRef: { schemaVersion: 1, parserStatus: 'succeeded', artifactId: 'artifact-A', contentHash: hash,
-      objectKey: `derived/source-maps/${digest}.json`, serializedSha256: digest, size: 100 },
+    sourceMapIdentity: { artifactId: 'artifact-A', contentHash: hash },
     evidence: { method: { quote, locator: 'chars:0-25' } },
     evidenceLocation: { method: { status: 'located', origin: 'model_quote', matching: 'exact', sourceLocator: {
       artifactId: 'artifact-A', contentHash: hash, blockId: 'block-2', page: 2,
@@ -30,7 +29,7 @@ describe('suggestion evidence display normalization', () => {
     value.evidenceLocation.method.status = status;
     expect(getSuggestionEvidenceLocation('method', quote, value)).toEqual({ status });
   });
-  it.each([undefined, null, [], {}, { sourceMapRef: context().sourceMapRef }])('degrades legacy or incomplete context', (value) => {
+  it.each([undefined, null, [], {}, { sourceMapIdentity: context().sourceMapIdentity }])('degrades legacy or incomplete context', (value) => {
     expect(getSuggestionEvidenceLocation('method', quote, value)).toEqual({ status: 'unverified' });
   });
   it('rejects a different field or quote and does not retain preceding state', () => {
@@ -49,8 +48,8 @@ describe('suggestion evidence display normalization', () => {
   });
   it('rejects malformed reference and locator structure', () => {
     const mutations: Array<(value: ReturnType<typeof context>) => void> = [
-      v => { v.sourceMapRef.objectKey = 'https://example.com/untrusted'; },
-      v => { v.sourceMapRef.size = 0; },
+      v => { v.sourceMapIdentity.artifactId = ''; },
+      v => { v.sourceMapIdentity.contentHash = 'not-a-hash'; },
       v => { v.evidenceLocation.method.sourceLocator.blockId = ''; },
       v => { v.evidenceLocation.method.sourceLocator.page = 1.5; },
       v => { v.evidenceLocation.method.sourceLocator.charRange.end = 0; },
@@ -61,5 +60,15 @@ describe('suggestion evidence display normalization', () => {
       const value = context(); mutate(value);
       expect(getSuggestionEvidenceLocation('method', quote, value).status).toBe('unverified');
     }
+  });
+
+  it('rejects the private raw SourceMap reference shape even when evidence otherwise matches', () => {
+    const value = context() as Record<string, unknown>;
+    value.sourceMapRef = {
+      schemaVersion: 1, parserStatus: 'succeeded', artifactId: 'artifact-A', contentHash: hash,
+      objectKey: `derived/source-maps/${digest}.json`, serializedSha256: digest, size: 100,
+    };
+    delete value.sourceMapIdentity;
+    expect(getSuggestionEvidenceLocation('method', quote, value)).toEqual({ status: 'unverified' });
   });
 });

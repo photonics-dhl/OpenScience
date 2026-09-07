@@ -222,6 +222,33 @@ test('a delayed submit cannot write task A after the mounted disclosure switches
   await expect(disclosure).not.toContainText('A source');
 });
 
+test('the mounted disclosure clears a typed query in the first target and user scope commits', async ({ page }) => {
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/agent/tasks') {
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) });
+    }
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) });
+  });
+  await page.goto(harnessUrl);
+  const disclosure = page.locator('[data-literature-entry]');
+  await disclosure.locator('summary').click();
+  const query = disclosure.getByLabel(/title, doi, or arxiv id/i);
+  await query.fill('Scope A private query');
+
+  await page.getByRole('button', { name: 'switch-target' }).click();
+
+  await expect(disclosure.locator('[data-literature-acquisition]')).toHaveAttribute('data-literature-target', 'research-object:ro-b');
+  await expect(page.locator('body')).toHaveAttribute('data-literature-query-at-scope-commit', '');
+  await expect(query).toHaveValue('');
+
+  await query.fill('Scope B private query');
+  await page.getByRole('button', { name: 'switch-user' }).click();
+
+  await expect(page.locator('body')).toHaveAttribute('data-literature-query-at-scope-commit', '');
+  await expect(query).toHaveValue('');
+});
+
 test('a delayed retry cannot write task A after the mounted disclosure switches to RO B', async ({ page }) => {
   let release: (() => void) | undefined;
   const failed = { ...runningTask(), status: 'failed', canRetry: true, error: '[retryable] timeout' };

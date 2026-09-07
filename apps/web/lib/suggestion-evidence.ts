@@ -28,47 +28,20 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-function isValidReference(value: unknown): value is JsonRecord {
+function isValidEvidenceIdentity(value: unknown): value is JsonRecord {
   if (
     !isRecord(value) ||
-    !hasOnlyKeys(value, [
-      'schemaVersion',
-      'parserStatus',
-      'artifactId',
-      'contentHash',
-      'objectKey',
-      'serializedSha256',
-      'size',
-    ])
+    !hasOnlyKeys(value, ['artifactId', 'contentHash'])
   ) {
     return false;
   }
-
-  const required = [
-    'schemaVersion',
-    'parserStatus',
-    'artifactId',
-    'contentHash',
-    'objectKey',
-    'serializedSha256',
-    'size',
-  ];
-
   return (
-    required.every((key) => hasOwn(value, key)) &&
-    value.schemaVersion === 1 &&
-    (value.parserStatus === 'succeeded' || value.parserStatus === 'needs_review') &&
+    hasOwn(value, 'artifactId') &&
+    hasOwn(value, 'contentHash') &&
     isNonblank(value.artifactId) &&
     value.artifactId.length <= 200 &&
     typeof value.contentHash === 'string' &&
-    /^[0-9a-fA-F]{64}$/.test(value.contentHash) &&
-    typeof value.serializedSha256 === 'string' &&
-    /^[0-9a-fA-F]{64}$/.test(value.serializedSha256) &&
-    value.objectKey ===
-      `derived/source-maps/${value.serializedSha256.toLowerCase()}.json` &&
-    isSafeInteger(value.size) &&
-    value.size >= 1 &&
-    value.size <= 33_554_432
+    /^[0-9a-f]{64}$/.test(value.contentHash)
   );
 }
 
@@ -121,8 +94,8 @@ export function getSuggestionEvidenceLocation(
     ].includes(field) ||
     !isNonblank(quote) ||
     !isRecord(canonicalContext) ||
-    !hasOwn(canonicalContext, 'sourceMapRef') ||
-    !isValidReference(canonicalContext.sourceMapRef) ||
+    !hasOwn(canonicalContext, 'sourceMapIdentity') ||
+    !isValidEvidenceIdentity(canonicalContext.sourceMapIdentity) ||
     !hasOwn(canonicalContext, 'evidence') ||
     !isRecord(canonicalContext.evidence) ||
     !hasOwn(canonicalContext.evidence, field) ||
@@ -135,7 +108,7 @@ export function getSuggestionEvidenceLocation(
 
   const evidence = canonicalContext.evidence[field];
   const location = canonicalContext.evidenceLocation[field];
-  const reference = canonicalContext.sourceMapRef;
+  const reference = canonicalContext.sourceMapIdentity;
 
   if (
     !isRecord(evidence) ||
