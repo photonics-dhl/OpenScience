@@ -638,6 +638,12 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)),
     },
     claimNode: {
+      findUnique: async ({ where }: any) => db.claimNodes.find(row => row.id === where.id) ?? null,
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.claimNodes.filter(row => row.id === where.id && row.updatedAt.getTime() === where.updatedAt.getTime());
+        rows.forEach(row => Object.assign(row, data, { updatedAt: new Date(row.updatedAt.getTime() + 1) }));
+        return { count: rows.length };
+      },
       create: async ({ data }: any) => {
         const row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), conditions: [], limitations: [], ...data };
         db.claimNodes.push(row);
@@ -658,6 +664,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     evidenceRecord: {
+      findUnique: async ({ where }: any) => db.evidenceRecords.find(row => row.id === where.id) ?? null,
       create: async ({ data }: any) => {
         const row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), verifiedByUserId: null, ...data };
         db.evidenceRecords.push(row);

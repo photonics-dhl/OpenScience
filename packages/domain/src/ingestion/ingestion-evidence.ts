@@ -9,6 +9,12 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function claimProvenance(value: unknown): Record<string, unknown> {
+  const provenance = { ...record(value) };
+  delete provenance.sourceMapRef;
+  return provenance;
+}
+
 /** Carry the prior graph into a new version without rewriting its immutable source rows. */
 export async function carryIngestionEvidence(deps: IngestionDeps, input: { researchObjectId: string; previousVersionId: string; versionId: string }) {
   const where = { researchObjectId: input.researchObjectId, versionId: input.previousVersionId };
@@ -27,7 +33,7 @@ export async function carryIngestionEvidence(deps: IngestionDeps, input: { resea
       parentClaimId: claim.parentClaimId ? ids.get(claim.parentClaimId) : undefined,
       kind: claim.kind, statement: claim.statement, assessment: claim.assessment,
       conditions: claim.conditions, limitations: claim.limitations, extractionStatus: 'needs_review',
-      provenance: { ...record(claim.provenance), previousVersionId: input.previousVersionId, previousClaimId: claim.id } as Prisma.InputJsonValue,
+      provenance: { ...claimProvenance(claim.provenance), previousVersionId: input.previousVersionId, previousClaimId: claim.id } as Prisma.InputJsonValue,
     } });
     inserted.add(claim.id);
   }
@@ -81,17 +87,19 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
     const { block, start } = matches[0]!;
     const locator = createBlockSourceLocator(sourceMap, block.id, { charRange: { start, end: start + quote.length } });
     const provenance = { source: 'deterministic', provider: 'ingestion-source-match', providerVersion: '1',
-      inputHash: task.artifact.blobSha256, ingestionTaskId: task.id, field, sourceMapRef: { ...reference } };
+      inputHash: task.artifact.blobSha256, ingestionTaskId: task.id, field };
     const claim = await deps.prisma.claimNode.create({ data: {
       researchObjectId: task.batch.researchObjectId, versionId: input.versionId,
-      kind: field === 'method' ? 'method' : field === 'limitations' ? 'boundary' : 'core',
+      // Extraction fields do not establish parent relationships. Preserve the field in
+      // provenance and use a valid root; users may classify it within a grounded graph.
+      kind: 'core',
       statement, assessment: 'missing', extractionStatus: 'needs_review', provenance: provenance as Prisma.InputJsonValue,
     } });
     await deps.prisma.evidenceRecord.create({ data: {
       researchObjectId: task.batch.researchObjectId, versionId: input.versionId, workspaceId: task.artifact.workspaceId,
       claimId: claim.id, artifactId: task.artifactId, kind: 'passage', title: field, exactQuote: quote,
       relation: 'context', locator: locator as unknown as Prisma.InputJsonValue, contentHash: task.artifact.blobSha256,
-      extractionStatus: 'needs_review', provenance: provenance as Prisma.InputJsonValue,
+      extractionStatus: 'needs_review', provenance: { ...provenance, sourceMapRef: { ...reference } } as Prisma.InputJsonValue,
     } });
   }
 }

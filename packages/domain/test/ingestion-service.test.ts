@@ -5,6 +5,7 @@ import { createFakePrisma, seedUser } from './helpers/fakes';
 import { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, retryIngestionTask } from '../src/ingestion/ingestion-service';
 import { persistDocumentSourceMapReference } from '../src/research-intelligence/source-map-ref';
 import { createCommit } from '../src/commit/commits';
+import { updateClaim } from '../src/research-intelligence/claim-evidence-service';
 import { markTaskProgress } from '../src/agent/agent';
 
 const TEST_RO_ID = '00000000-0000-4000-8000-000000000101';
@@ -113,6 +114,25 @@ describe('ingestion confirmation research record', () => {
       expect(db.evidenceRecords[0]).toMatchObject({ exactQuote: quote, extractionStatus: 'needs_review', verifiedByUserId: null, locator: { page: 1, blockId: 'block-1', charRange: { start: 0, end: quote.length } } });
       expect(db.claimNodes[0]).toMatchObject({ assessment: 'missing', extractionStatus: 'needs_review' });
     }
+  });
+
+  it.each(['method', 'limitations'])('imports an editable root claim for %s without inventing a parent', async field => {
+    const { deps, db, input } = await confirmationFixture();
+    const core = { ...CORE, [field]: 'Source-grounded statement' };
+    const quote = 'Original source passage.';
+    const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, {
+      artifactId: db.artifacts[0].id, contentHash: db.artifacts[0].blobSha256, parser: { name: 'fixture', version: '1' },
+      pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'source', kind: 'paragraph', text: quote,
+        boundingBox: { x: 0, y: 0, width: 100, height: 20 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }],
+    }, 'succeeded');
+    db.agentTasks[0].result = { core, evidence: { [field]: { quote } }, sourceMapRef };
+    const result = await confirmIngestionTask(deps, { ...input, core });
+    const claim = db.claimNodes[0];
+    const updated = await updateClaim(deps, { userId: input.userId, researchObjectId: TEST_RO_ID,
+      versionId: result.confirmation.versionId, claimId: claim.id, expectedUpdatedAt: claim.updatedAt,
+      patch: { statement: 'Human edited statement' } });
+    expect(updated.statement).toBe('Human edited statement');
+    expect(updated.kind).toBe('core');
   });
 });
 
