@@ -2,6 +2,7 @@ import { expect, test, type Page } from 'playwright/test';
 
 const ro = { id: 'journey-ro', workspaceId: 'workspace-journey', publicId: 'OSR-JOURNEY', title: 'Research continuation', version: 1, status: 'draft', visibility: 'private' };
 const core = { schemaVersion: '0.1.0', problem: 'Question', insight: 'Finding', method: 'Measurement', results: 'Result', limitations: 'Limits', reproducibility: 'Data' };
+const confirmation = { commitId: 'confirmed-commit', versionId: 'confirmed-version', versionNo: 2, version: 7, evidenceStatus: 'needs_review', missingFields: ['results'] };
 const task = { id: 'journey-task', researchObjectId: ro.id, researchTitle: ro.title, logicalPath: 'paper.pdf', state: 'needs_review', retryCount: 0, error: null, artifactId: 'artifact-journey', agentTaskId: null };
 
 async function fixtures(page: Page, tasks = [task]) {
@@ -12,6 +13,10 @@ async function fixtures(page: Page, tasks = [task]) {
     if (path === '/api/auth/me') body = { userId: 'user-journey', email: 'test@example.invalid', displayName: 'Researcher', status: 'email_verified', level: 'free' };
     else if (path === '/api/research-objects') body = { researchObjects: [ro] };
     else if (path === '/api/ingestion') body = { tasks };
+    else if (path === `/api/research-objects/${ro.id}/ingestion`) body = { researchObjectId: ro.id, version: 1, tasks: tasks.map(item => ({ ...item, confirmation: null })), latestConfirmation: null };
+    else if (path === '/api/versions/confirmed-version') body = { version: { versionId: 'confirmed-version', snapshot: { core, artifacts: [{ artifactId: task.artifactId, logicalPath: task.logicalPath }] } } };
+    else if (path.endsWith('/claims')) body = { claims: [] };
+    else if (path.endsWith('/evidence')) body = { evidence: [] };
     else if (path === '/api/ingestion/tasks/journey-task') body = { researchObjectId: ro.id, batchId: 'batch', version: 1, task: { ...task, result: { core } } };
     else if (path === `/api/research-objects/${ro.id}`) body = { researchObject: { ...ro, sdf: { core, nodes: [] } } };
     else if (path.endsWith('/versions')) body = { versions: [] };
@@ -63,7 +68,8 @@ test('failed loading can retry and confirmed results continue into the RO', asyn
   failed = false;
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(page.locator('textarea[readonly]')).toHaveCount(6);
-  await expect(page.locator('main a[href="/research-objects/journey-ro/edit"]').last()).toBeVisible();
+  await expect(page.getByText('This older import has no recorded confirmation snapshot. Review the saved versions before relying on its evidence.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Continue editing', exact: true })).toHaveAttribute('href', '/research-objects/journey-ro/edit');
   await expect(page.locator('main a[href="/research-objects/journey-ro/versions"]').last()).toBeVisible();
 });
 
@@ -85,22 +91,20 @@ test('confirmation writes only on request and keeps a route back into the resear
   await page.route('**/api/ingestion/journey-task/confirm', async route => {
     writes += 1;
     expect(route.request().postDataJSON()).toEqual({ version: 1, core: { ...core, problem: 'Revised question' } });
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { ...task, state: 'confirmed' }, sdf: { core: { ...core, problem: 'Revised question' } } }) });
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { ...task, state: 'confirmed' }, sdf: { core: { ...core, problem: 'Revised question' } }, confirmation }) });
   });
   await page.goto('/research-objects/journey-ro/hermes?task=journey-task');
   await page.locator('textarea').first().fill('Revised question');
   expect(writes).toBe(0);
   await page.getByRole('button', { name: 'Confirm and create version', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled();
+  await expect(page).toHaveURL(/versions\?version=confirmed-version$/);
   expect(writes).toBe(1);
-  await expect(page.locator('textarea[readonly]')).toHaveCount(6);
-  await expect(page.getByRole('link', { name: 'Continue editing', exact: true })).toHaveAttribute('href', '/research-objects/journey-ro/edit?ingestionTask=journey-task');
 });
 
 test('the confirmed paper is included in the next commit through the editor', async ({ page }) => {
   await fixtures(page);
   await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ versions: [{ versionId: 'previous-version', versionNo: 1, status: 'draft' }] }) }));
-  await page.route('**/api/versions/previous-version', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: { versionId: 'previous-version', snapshot: { artifacts: [{ artifactId: 'prior-artifact', logicalPath: 'previous-paper.pdf', blobSha256: 'a'.repeat(64) }] } } }) }));
+  await page.route('**/api/versions/previous-version', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: { versionId: 'previous-version', snapshot: { artifacts: [{ artifactId: 'prior-artifact', logicalPath: 'previous-paper.pdf', blobSha256: 'a'.repeat(64) }, { artifactId: task.artifactId, logicalPath: task.logicalPath }] } } }) }));
   await page.route('**/api/ingestion/tasks/journey-task', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjectId: ro.id, version: 1, task: { ...task, state: 'confirmed', result: { core } } }) }));
   await page.route('**/api/csrf-token', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'test-csrf' }) }));
   let submitted: unknown;
@@ -108,7 +112,7 @@ test('the confirmed paper is included in the next commit through the editor', as
     submitted = route.request().postDataJSON();
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ commit: { versionId: 'committed-version' } }) });
   });
-  await page.goto('/research-objects/journey-ro/edit?ingestionTask=journey-task');
+  await page.goto('/research-objects/journey-ro/edit');
   await expect(page.getByText('paper.pdf', { exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: 'Commit message', exact: true }).fill('Reviewed paper');
   await page.getByRole('button', { name: 'Create commit', exact: true }).click();
@@ -119,7 +123,7 @@ test('a foreign imported paper cannot be silently attached or committed', async 
   await fixtures(page);
   await page.route('**/api/ingestion/tasks/journey-task', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjectId: 'foreign-ro', version: 1, task: { ...task, state: 'confirmed', result: { core } } }) }));
   await page.goto('/research-objects/journey-ro/edit?ingestionTask=journey-task');
-  await expect(page.locator('main').getByRole('alert')).toContainText('This file has not been confirmed in this research');
+  await expect(page.locator('main').getByRole('alert')).toContainText('This material has no confirmed version');
   await expect(page.getByRole('button', { name: 'Create commit', exact: true })).toBeDisabled();
   await expect(page.getByText('paper.pdf', { exact: true })).toHaveCount(0);
 });
@@ -132,4 +136,100 @@ test('the task hub opens the existing assistant in the same research context', a
   await expect(page.getByRole('dialog').getByRole('textbox')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('partial extraction can be confirmed with empty fields and navigates to the real snapshot', async ({ page }) => {
+  await fixtures(page);
+  await page.route('**/api/csrf-token', route => route.fulfill({ json: { csrfToken: 'test-csrf' } }));
+  await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ ...confirmation, status: 'draft' }] } }));
+  let writes = 0;
+  await page.route('**/api/ingestion/journey-task/confirm', async route => {
+    writes++;
+    expect(route.request().postDataJSON().core.results).toBe('');
+    await route.fulfill({ json: { task: { ...task, state: 'confirmed' }, sdf: { core: { ...core, results: '' } }, confirmation } });
+  });
+  await page.goto('/research-objects/journey-ro/hermes?task=journey-task');
+  await page.locator('textarea').nth(3).fill('');
+  await expect(page.getByText('Not provided · pending', { exact: true })).toBeVisible();
+  expect(writes).toBe(0);
+  await page.getByRole('button', { name: 'Confirm and create version', exact: true }).click();
+  await expect(page.locator('[data-selected-version="confirmed-version"]')).toBeVisible();
+  await expect(page).toHaveURL(/versions\?version=confirmed-version$/);
+  expect(writes).toBe(1);
+});
+
+test('saved materials survive Files refresh and same-name attachments create a merged manifest', async ({ page }) => {
+  await fixtures(page);
+  const original = { artifactId: 'original', logicalPath: 'paper.pdf' };
+  await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ versionId: 'confirmed-version', versionNo: 2, status: 'draft' }] } }));
+  await page.route('**/api/versions/confirmed-version', route => route.fulfill({ json: { version: { versionId: 'confirmed-version', snapshot: { core, artifacts: [original] } } } }));
+  await page.route('**/api/csrf-token', route => route.fulfill({ json: { csrfToken: 'test-csrf' } }));
+  await page.route('**/api/artifacts/upload', route => route.fulfill({ json: { artifact: { artifactId: 'added' } } }));
+  let submitted: unknown;
+  await page.route('**/api/research-objects/journey-ro/commits', async route => { submitted = route.request().postDataJSON(); await route.fulfill({ json: { commit: { versionId: 'new' } } }); });
+  await page.goto('/research-objects/journey-ro/files');
+  await expect(page.locator('a[href="/api/artifacts/original/download"]')).toHaveText('paper.pdf');
+  await page.reload();
+  await expect(page.locator('a[href="/api/artifacts/original/download"]')).toBeVisible();
+  await page.getByTestId('artifact-input').setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('controlled fixture') });
+  await page.getByRole('button', { name: 'Attach to new version', exact: true }).click();
+  await expect.poll(() => submitted).toMatchObject({ version: 1, artifacts: [original, { artifactId: 'added', logicalPath: 'paper.pdf.1' }] });
+});
+
+test('selected snapshot and original evidence remain scoped across version switches', async ({ page }) => {
+  await fixtures(page);
+  await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ versionId: 'newer', versionNo: 3, status: 'draft' }, { versionId: 'confirmed-version', versionNo: 2, status: 'draft' }] } }));
+  await page.route('**/api/versions/newer', route => route.fulfill({ json: { version: { versionId: 'newer', snapshot: { core: { ...core, results: 'Newer result' }, artifacts: [] } } } }));
+  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/claims', route => route.fulfill({ json: { claims: [{ id: 'claim', statement: 'Claim needing verification', assessment: 'missing' }] } }));
+  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/evidence', route => route.fulfill({ json: { evidence: [{ id: 'evidence', claimId: 'claim', artifactId: task.artifactId, kind: 'passage', relation: 'context', title: 'Original passage', exactQuote: 'Exact original quotation', locator: { page: 3 }, extractionConfidence: null, verifiedByUserId: null, extractionStatus: 'needs_review' }] } }));
+  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/evidence/evidence/source', route => route.fulfill({ json: { source: { text: 'Exact original quotation' } } }));
+  await page.goto('/research-objects/journey-ro/versions?version=confirmed-version');
+  await expect(page.getByText('Draft revision 1', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Open original passage: Original passage', exact: true }).click();
+  await expect(page.getByText('Exact original quotation', { exact: true })).toBeVisible();
+  await expect(page.getByText('Region highlighting is unavailable for this source.', { exact: true })).toBeVisible();
+  await expect(page.locator('dd').filter({ hasText: /^3$/ })).toBeVisible();
+  await page.screenshot({ path: 'test/visual/out/research-continuation/version-source-desktop.png', fullPage: true });
+  await page.getByRole('link', { name: 'Version 3', exact: true }).click();
+  await expect(page.getByText('Newer result', { exact: true })).toBeVisible();
+  await expect(page.getByText('Exact original quotation', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('No verified source location is available. Human review is needed.', { exact: true })).toBeVisible();
+});
+
+test('confirmed review restores the saved user revision and exposes its exact version after refresh', async ({ page }) => {
+  await fixtures(page);
+  await page.route('**/api/research-objects/journey-ro/ingestion', route => route.fulfill({ json: { researchObjectId: ro.id, version: 9, tasks: [{ ...task, state: 'confirmed', confirmation }], latestConfirmation: confirmation } }));
+  await page.route('**/api/ingestion/tasks/journey-task', route => route.fulfill({ json: { researchObjectId: ro.id, version: 9, task: { ...task, state: 'confirmed', result: { core } } } }));
+  await page.route('**/api/versions/confirmed-version', route => route.fulfill({ json: { version: { versionId: 'confirmed-version', snapshot: { core: { ...core, problem: 'Saved human revision', results: '' }, artifacts: [] } } } }));
+  await page.goto('/research-objects/journey-ro/hermes?task=journey-task');
+  await expect(page.locator('textarea').first()).toHaveValue('Saved human revision');
+  await page.reload();
+  await expect(page.locator('textarea[readonly]').first()).toHaveValue('Saved human revision');
+  await expect(page.getByRole('link', { name: 'View versions', exact: true })).toHaveAttribute('href', '/research-objects/journey-ro/versions?version=confirmed-version');
+});
+
+test('selected version is readable on a narrow Chinese surface and unknown versions do not fall back', async ({ page }) => {
+  await fixtures(page);
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ ...confirmation, status: 'draft' }] } }));
+  await page.goto('/research-objects/journey-ro/versions?version=confirmed-version');
+  await expect(page.getByRole('heading', { name: '快照版本 2', exact: true })).toBeVisible();
+  await expect(page.getByText('暂无可核查的原文定位，需要人工核查。', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/research-continuation/version-mobile-zh.png', fullPage: true });
+  await page.goto('/research-objects/journey-ro/versions?version=foreign');
+  await expect(page.locator('main').getByRole('alert')).toHaveText('当前研究中没有这个版本。');
+  await expect(page.locator('[data-selected-version]')).toHaveCount(0);
+});
+
+test('missing upload form input is separate from Hermes task failure', async ({ page }) => {
+  await fixtures(page);
+  await page.route('**/api/workspaces', route => route.fulfill({ json: { workspaces: [{ id: 'workspace-journey', name: 'Research workspace', role: 'owner' }] } }));
+  await page.goto('/research-objects/new?mode=import');
+  await page.locator('input[name="title"]').fill('Incomplete intake');
+  await page.getByRole('button', { name: 'Create research object', exact: true }).click();
+  await expect(page.locator('main').getByRole('alert')).toHaveText('Choose at least one source file to start an import.');
+  await expect(page.locator('[data-hermes-state="failed"]')).toHaveCount(0);
+  await expect(page.locator('[data-hermes-workspace-stage]')).toBeVisible();
 });

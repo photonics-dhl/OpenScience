@@ -23,7 +23,7 @@ function ObjectHeader({ objectId, title, version, visibility, saveState, actions
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <strong className="min-w-0 truncate text-sm font-semibold text-os-ink sm:text-base">{title}</strong>
-          <span className="shrink-0 font-data text-xs">v{version}</span>
+          <span className="shrink-0 font-data text-xs">{t('draftRevision', { version })}</span>
         </div>
         <div data-reading-role="caption" className="mt-1 flex min-w-0 items-center gap-2 font-data">
           <span className="sr-only">{objectId}</span>

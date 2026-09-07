@@ -10,7 +10,7 @@ import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/Literatu
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, confirmIngestionTask, listResearchIngestionTasks, getResearchObject, getIngestionTask, type DashboardTaskApi, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
+import { ApiClientError, confirmIngestionTask, apiRequest, getResearchObject, getIngestionTask, getResearchIngestion, type IngestionConfirmation, type DashboardTaskApi, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
@@ -25,12 +25,14 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
   const locale = useLocale() as 'zh' | 'en';
   const t = useTranslations('hermesReview');
   const shell = useTranslations('shell');
+  const fieldT = useTranslations('editor');
   const statusT = useTranslations('ingestion.status');
   const [detail, setDetail] = useState<IngestionTaskDetail | null>(null);
   const [core, setCore] = useState<SdfCore>(emptyCore);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [confirmation, setConfirmation] = useState<IngestionConfirmation | null>(null);
   const [hermesOpen, setHermesOpen] = useState(false);
 
   const [researchTitle, setResearchTitle] = useState('');
@@ -43,15 +45,21 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true); setError(''); setDetail(null); setCore(emptyCore()); setSaved(false);
-    const load = taskId ? loadScopedHermesReview(routeParams.id, taskId, getIngestionTask).then((value) => {
+    setLoading(true); setError(''); setDetail(null); setCore(emptyCore()); setSaved(false); setConfirmation(null);
+    const load = taskId ? Promise.all([loadScopedHermesReview(routeParams.id, taskId, getIngestionTask), getResearchIngestion(routeParams.id)]).then(async ([value, recovery]) => {
       if (cancelled) return;
-      setDetail(value);
+      setDetail({ ...value, version: recovery.version });
+      const confirmed = recovery.tasks.find((task) => task.id === taskId)?.confirmation ?? null;
+      setConfirmation(confirmed);
       setSaved(value.task.state === 'confirmed' || value.task.state === 'written');
       const proposed = (value.task.result as { core?: SdfCore } | null)?.core;
-      if (proposed) setCore({ ...emptyCore(), ...proposed });
-    }) : Promise.all([getResearchObject(routeParams.id), listResearchIngestionTasks(routeParams.id)]).then(([research, value]) => {
-      if (!cancelled) { setTasks(value.tasks); setResearchTitle(research.researchObject.title); setResearchStatus(research.researchObject.status); }
+      if (confirmed) {
+        const snapshot = await apiRequest<{ version: { versionId: string; snapshot: { core: SdfCore } } }>(`/api/versions/${encodeURIComponent(confirmed.versionId)}`);
+        if (snapshot.version.versionId !== confirmed.versionId) throw new Error('Version snapshot mismatch');
+        if (!cancelled) setCore({ ...emptyCore(), ...snapshot.version.snapshot.core });
+      } else if (proposed) setCore({ ...emptyCore(), ...proposed });
+    }) : Promise.all([getResearchObject(routeParams.id), getResearchIngestion(routeParams.id)]).then(([research, value]) => {
+      if (!cancelled) { setTasks(value.tasks.map((task) => ({ ...task, researchObjectId: routeParams.id, researchTitle: research.researchObject.title }))); setResearchTitle(research.researchObject.title); setResearchStatus(research.researchObject.status); }
     });
     load.catch((cause) => {
       if (cancelled) return;
@@ -74,9 +82,9 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
     titleKey: 'guide.review.title',
   }) : ({ bodyKey: 'guide.neutral.body', kind: 'neutral' as const, titleKey: 'guide.neutral.title' }), [detail, taskId]);
   async function confirm() {
-    if (!detail || !complete || !approvalOpen || saving || detail.researchObjectId !== routeParams.id) return;
+    if (!detail || !approvalOpen || saving || saved || detail.researchObjectId !== routeParams.id) return;
     setSaving(true); setError('');
-    try { await confirmIngestionTask(taskId, { version: detail.version, core }); if (!mounted.current) return; setSaved(true); setDetail({ ...detail, task: { ...detail.task, state: 'confirmed' } }); }
+    try { const result = await confirmIngestionTask(taskId, { version: detail.version, core }); if (!mounted.current) return; setSaved(true); setConfirmation(result.confirmation); router.push(`/research-objects/${encodeURIComponent(routeParams.id)}/versions?version=${encodeURIComponent(result.confirmation.versionId)}`); }
     catch (cause) { if (mounted.current) setError(cause instanceof ApiClientError ? cause.message : t('confirmError')); }
     finally { if (mounted.current) setSaving(false); }
   }
@@ -121,14 +129,15 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
             <span className="font-data">{detail.task.logicalPath}</span>
             <span>{t('taskState', { state: statusT(detail.task.state) })}</span>
           </div>
+          <p className="mb-4 text-sm text-os-muted-paper">{t('reviewPending')}</p>
           <section aria-label={t('fieldLabel')} className="surface-folio-sheet divide-y divide-os-rule-paper border-y border-os-rule-paper">
             {fields.map((field, index) => <label key={field} className="grid gap-3 px-4 py-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:px-6">
-              <span><span className="block font-data text-xs text-os-vermilion-ink">0{index + 1}</span><span className="mt-1 block text-sm font-semibold text-os-ink">{field}</span></span>
+              <span><span className="block font-data text-xs text-os-vermilion-ink">0{index + 1}</span><span className="mt-1 block text-sm font-semibold text-os-ink">{fieldT(field)}</span>{!core[field].trim() && <span className="block text-sm text-os-muted-paper">{t('missing')}</span>}</span>
               <textarea readOnly={!approvalOpen || saving} data-hermes-review-field value={core[field]} onChange={(event) => setCore({ ...core, [field]: event.target.value })} rows={5} className="w-full resize-y rounded-panel border border-os-rule-paper bg-os-paper-strong p-4 font-reading text-lg leading-[1.68] text-os-ink outline-none focus:border-os-vermilion-ink focus:ring-2 focus:ring-os-vermilion-ink/20" />
             </label>)}
           </section>
-          {saved && <nav aria-label={t('entryActions')} className="mt-6 flex flex-wrap gap-5"><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit?ingestionTask=${encodeURIComponent(taskId)}`}>{t('continueEditing')}</Link><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/versions`}>{t('viewVersions')}</Link></nav>}
-          <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-5"><p className="text-base text-os-muted-paper" role="status">{saved ? t('saved') : complete ? t('ready') : t('incomplete')}</p><button type="button" disabled={!complete || saving || !approvalOpen} onClick={confirm} className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('saving') : saved ? t('confirmed') : t('confirm')}</button></footer>
+          {saved && <nav aria-label={t('entryActions')} className="mt-6 flex flex-wrap gap-5"><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit` }>{t('continueEditing')}</Link><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/versions${confirmation ? `?version=${encodeURIComponent(confirmation.versionId)}` : ''}`}>{t('viewVersions')}</Link></nav>}
+          <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-5"><p className="text-base text-os-muted-paper" role="status">{saved ? confirmation ? t('saved') : t('legacyConfirmation') : approvalOpen ? complete ? t('ready') : t('incomplete') : t('taskState', { state: statusT(detail.task.state) })}</p><button type="button" disabled={saving || saved || !approvalOpen} onClick={confirm} className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('saving') : saved ? t('confirmed') : t('confirm')}</button></footer>
         </div>
         <aside aria-label={t('marginLabel')} className="border-t border-os-rule-paper pt-3 lg:border-l lg:border-t-0 lg:pl-5">
           <p data-reading-role="caption" className="text-os-muted-paper">{t('boundary')}</p>

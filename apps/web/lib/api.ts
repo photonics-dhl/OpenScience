@@ -1289,6 +1289,26 @@ export interface IngestionTaskDetail {
   version: number;
 }
 
+export interface IngestionConfirmation {
+  commitId: string;
+  versionId: string;
+  versionNo: number;
+  version: number;
+  evidenceStatus: 'needs_review';
+  missingFields: string[];
+}
+
+export interface ResearchIngestion {
+  researchObjectId: string;
+  version: number;
+  tasks: Array<IngestionTaskSummary & { confirmation: IngestionConfirmation | null }>;
+  latestConfirmation: IngestionConfirmation | null;
+}
+
+export async function getResearchIngestion(researchObjectId: string): Promise<ResearchIngestion> {
+  return apiRequest(`/api/research-objects/${encodeURIComponent(researchObjectId)}/ingestion`);
+}
+
 export type IngestionTaskState = 'queued' | 'uploading' | 'stored' | 'parsing' | 'needs_review' | 'confirmed' | 'written' | 'failed_retryable' | 'failed_blocked';
 
 export interface IngestionTaskSummary {
@@ -1356,6 +1376,6 @@ export async function getIngestionTask(taskId: string): Promise<IngestionTaskDet
   return apiRequest(`/api/ingestion/tasks/${taskId}`);
 }
 
-export async function confirmIngestionTask(taskId: string, input: { version: number; core: SdfCore }): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore } }> {
+export async function confirmIngestionTask(taskId: string, input: { version: number; core: SdfCore }): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore }; confirmation: IngestionConfirmation }> {
   return apiRequest(`/api/ingestion/${taskId}/confirm`, { method: 'POST', body: JSON.stringify(input) });
 }

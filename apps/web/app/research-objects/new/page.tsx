@@ -202,7 +202,7 @@ export default function NewResearchObjectPage() {
               <p className="mt-3">{intakeT('consent')}</p>
             </div>
             <div className="mt-4">
-              <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} />
+              <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={pending ? 'scanning' : materials.some((material) => material.taskId && ['failed_retryable', 'failed_blocked'].includes(material.status)) ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} />
             </div>
           </aside>
 
