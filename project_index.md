@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-07 +08）：** branch codex/overview-responsive-companion；application/public 5e4b4d47cba918db5a9b7f7092de32aa244c258e，rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6。登录/注册减负与共享产品样式已部署；公网auth8/product8通过，未代替用户视觉验收；demo9848411/controller3d518af unchanged.
-> 当前用户要求：结合 frontend-design、ui-ux-pro-max、baseline-ui 统一完整入口体验，减少阅读与操作压力；不得把局部页面或共享配色等同整体联调完成。
+> **CURRENT source/deployment anchor（2026-09-07 +08）：** branch codex/token-smart-live-workflow；application/public c9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2，rollback5e4b4d47cba918db5a9b7f7092de32aa244c258e。证据/恢复修复已部署；真实PDF几何失败，文献到机制图/动画的最小产品尚未走通。后续test/docs HEAD不是新应用版本。
+> 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 
 ## 当前产品交付
 
@@ -174,10 +174,11 @@
 | `docs/specs/2026-08-24-research-folio-product-system-design.md` | 登录到公开验证的全部真实非 Landing 产品视觉与信息架构；暖纸阅读、graphite 证据工具、18 表面、预留 Hermes 研究页边与无覆盖合同 | **CURRENT non-Landing product UI spec / IMPLEMENTED**；Landing unchanged |
 | `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同 | **CURRENT / TASKS 1–12 DONE**；production `b32d81c`，rollback `0aaf52f`；fresh upload/public `OSR-2026-000021`；aggregate `1ca3b0e1…08f2` |
 | `docs/specs/2026-09-02-scansci-upstream-mcp-design.md` | 上游 `v1.13.1` 官方 17-tool MCP、Worker 直连、官方 cookie import、持久数据/瞬态论文卷、`source_retrieval` provenance 与旧实现清理 | **CURRENT / PRODUCTION**；OA/institution/four-entry/lifecycle ECS accepted；ScienceDirect official entitlement optional |
-| `docs/plans/2026-09-07-literature-recovery-workflow-plan.md` | 文献恢复修复、SourceMap证据定位接续、网页规划与模型路由实测记录 | 恢复与SourceMap LOCAL VALIDATED；codex/token-smart-live-workflow@1b974dd+未提交修复；无生产部署；净节省率未测得 |
-| `apps/web/test/e2e/literature-disclosure-recovery.spec.ts` | RO Files/Hermes恢复、折叠和异步生命周期回归 | LOCAL candidate；验收结果见文献恢复计划 |
+| `docs/plans/2026-09-07-literature-recovery-workflow-plan.md` | 文献恢复修复、SourceMap证据定位接续、网页规划与模型路由实测记录 | DEPLOYED c9439ae；安全API投影/作用域/匹配资源修复已验收；真实PDF几何失败、媒体生成未走通；净节省率未知 |
+| 本地发布证据（Git忽略） | apps/web/test/visual/out/token-smart-release/：真实论文测试、任务脱敏检查与无网络Parser复现脚本/JSON | c9439ae已部署；实际PDF invalid PDF text geometry，未完成LLM/确认/图片视频；失败证据保留 |
+| `apps/web/test/e2e/literature-disclosure-recovery.spec.ts` | RO Files/Hermes恢复、折叠和异步生命周期回归 | Application c9439ae；最终target/user隔离测试8928a9d，受影响浏览器17/17通过 |
 | `apps/web/test/literature-disclosure-harness/` | index.html、main.tsx、vite.config.ts；仅测试进程挂载真实组件，复现同组件切换与卸载 | 无生产路由或新增依赖；由上述Playwright用例启动 |
-| `apps/web/lib/suggestion-evidence.ts` / `apps/web/test/{suggestion-evidence.test.ts,suggestions-panel.test.tsx}` | 同次抽取结果的前端定位状态适配；旧结果不冒充可信出处 | LOCAL VALIDATED；Astra/low计量生成，前端接线/响应式回归通过 |
+| `apps/web/lib/suggestion-evidence.ts` / `apps/web/test/{suggestion-evidence.test.ts,suggestions-panel.test.tsx}` | 同次抽取结果的前端定位状态适配；旧结果不冒充可信出处 | DEPLOYED c9439ae；Sol修复真实API安全identity合同；旧Astra局部测试不代表端到端等质 |
 | `C:/Users/Mac/.agents/skills/token-smart/references/metering.md` | 用户指定全局skill的独立只读任务计量入口，关联metered-run脚本和测试 | GLOBAL；单次真实审查Sol相对Astra标准credits低56.06%；不代表完整开发/网页净收益 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-foundation-plan.md` | Taskmaster Task 1 的可执行 TDD 计划：能力台账门禁、自有 corpus、现状 parser 基准、零污染输出与全仓验收；后续三计划按实测结果展开 | **COMPLETED / TASKMASTER TASK 1 DONE**；能力候选尚未安装 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-core-model-plan.md` | Taskmaster Task 2 的可执行 TDD/迁移/部署计划：Claim/Evidence/locator 合同、核心迁移 28、独立搜索数据库与 ECS-only 验收 | **COMPLETED / TASKMASTER TASK 2 DONE / ECS DEPLOYED `e0828a6`** |

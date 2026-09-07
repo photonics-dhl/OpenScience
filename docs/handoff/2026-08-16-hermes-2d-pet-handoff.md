@@ -1,41 +1,43 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT active-memory, 2026-09-07 +08. User requested skills-guided coherent product UI with lower reading/interaction load, after rejecting partial RO-only changes. Preserve original Aladdin dog/Wanko and lamp. Never infer aesthetic approval from passing checks.
+> CURRENT, 2026-09-07 +08. Goal: a real workspace paper upload → Hermes structured analysis → scientific mechanism images and meaningful animated video in the SAME RO. Deployment of the evidence/recovery fixes is complete; this minimum product is NOT yet end-to-end accepted.
 
 ## Version tuple
 
-- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/overview-responsive-companion. Application/public/loopback 5e4b4d47cba918db5a9b7f7092de32aa244c258e; rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs-only Git HEAD is not another app release.
-- Application source pushed non-force to main and branch. Canonical server release completed, journal cleared and retention complete. Root checkout contains unrelated user changes; leave untouched.
-- Separate local candidate: E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow, branch codex/token-smart-live-workflow, HEAD/base 1b974dd. Literature recovery correction/review complete locally: Web526+5, browser12+1, typecheck/lint/build passed; no merge/deployment. Evidence: docs/plans/2026-09-07-literature-recovery-workflow-plan.md. Independent local control is not a production release; net savings unmeasured.
-- Same candidate also consumes evidence locations in the frontend: same-Chat6Pro continuation → metered Astra/low adapter → Terra/medium UI; Web543+5, TS/lint/build and browser4 desktop/mobile passed locally. No deployment; full-chain cost unknown. SourceMap extraction evidence locations: ordinary Chat6 Pro planning → Terra/medium implementation → Sol/high review and targeted corrections. Local tests/build passed; final evidence and cost limits in the same workflow plan. Not deployed; do not equate locatable quotes with scientific validity.
-- Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
+- Working branch: codex/token-smart-live-workflow, E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow. Application commit/release c9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2; later test-only HEAD8928a9d760c58d232024ead397a8159769802c80 and docs commits are not another application release.
+- Exact deployment workspace: E:/Miscellaneous/XGS/.worktrees/token-smart-production-c9439ae, detached HEADc9439ae. Canonical deploy completed; active/public c9439ae, rollback5e4b4d47cba918db5a9b7f7092de32aa244c258e. Journal clear, no failed-release marker.
+- Root E:/Miscellaneous/XGS remains dirty main@b9616cb; do not reset/pull/stash it. origin/main was1b974dd at last fetch; publication/integration state must be checked with Git. Use the working branch above for continued product work.
+- Separate animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z and controlled Codex image service are preserved. They do not prove automatic RO media generation.
 
-## Shipped entry continuity
+## Deployed / verified
 
-- Applied frontend-design, ui-ux-pro-max and baseline-ui using approved pale/ink/teal direction. The local skill search recommends flat/minimal interfaces but its marketing-video layout was rejected as unsuitable for authentication. No new dependencies or skills installed.
-- IdentityShell and new auth/Identity.module.css center a compact form with original Wanko welcome, explicit input/primary/secondary styles, readable headings and mobile form-first order. Short bilingual identity copy replaces the old slogans. Original image uses next/image with a circular CSS frame.
-- SignupCodeForm keeps required name/email/password prominent; optional ResearchProfileFields stays mounted inside native details, same reader default and parent state. Verification, validation, cooldown, session, safeReturnTo and all auth handlers unchanged.
-- Shared surface-product-app palette now applies to DashboardShell routes, including dashboard/new/settings/me. Clear active navigation, consistent control/focus treatment, aligned account values. This is shared styling, not a claim that every page layout has been redesigned.
-- Dashboard removes visible internal identifiers/redundant index caption. Reuses LiteratureAcquisitionDisclosure; recovered dashboard task opens it. Two existing browser tests now expand the disclosure and scope the full-text action.
+- Literature recovery is visible and async results are scoped to user/RO; query state also changes synchronously with scope. Existing Wanko/lamp, accepted layout, manual confirmation and permissions remain.
+- Canonical extraction maps quotes to SourceMap blocks with identity/roundtrip validation. Repeated matches stop after two distinct locations; ambiguous/cross-block/missing never invent trusted locations. Legacy pure-text extraction remains compatible.
+- Both Agent and ingestion public results retain private storage redaction and expose only validated sourceMapIdentity artifactId/contentHash. The UI displays safe location status and preserves apply/dismiss/high-risk confirmation; no source URL invention or automatic SDF writes.
+- Independent Sol/high review found and closed three blockers: raw-ref/API serialization mismatch, cross-scope query leakage, and occurrence-count memory growth. Earlier helper13/13 did NOT prove complete real-API wiring.
+- Fresh local checks: domain83, Worker537, Web544+5; affected browser17/17 including first-commit target/user isolation; relevant typechecks, domain build and lint passed. Test-only8928a9d fixes reopening a disclosure in the regression, not application behavior.
+- Exact server fullbuild, Parser16, core36/search2 migrations (none pending), database isolation, BGE runtime, ScanSci tools/storage/worker/OA and container health passed. Public/loopback200, egress204. Predeployment backup core28M/search20K; no manual old-backup deletion.
 
-## Preserved RO corrections
+## Real minimum-flow acceptance: FAILED
 
--69aac51 fixed black Wanko: destroying a model also destroyed Pixi URL-cached atlases used by its successor. Keep fixed atlas cache; dispose instance model/renderer/GL. Original Wanko/lamp image is loading/failure fallback.
-- RO overview/editor/presentation use shared A palette and four main tabs plus More. Empty overview has Add paper/Hermes; editor initializes missing SDF keys without losing extensions. Original evidence remains distinct from approved generated explanatory assets.
--8e4ecb2 reserves380px companion area on wide presentation pages and stacks below content on smaller screens; real RO context and drawer retained. Storyboards collapse by title. These earlier fixes remain in current release.
+- Real UI uploaded pinned arXiv2009.06045v1 PDF,24,671,920bytes, SHA256d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a, under the controlled test user. RO ba7920d1-ea3c-4355-b479-8d7a203d3a94; ingestion bfeb3d55-4f31-4bb4-9c56-0a7a280d5d01; AgentTask ed2554fd-f909-43cc-aeb3-009007bd63e9.
+- Ingestion reached needs_review. Worker task status is succeeded but result.status is needs_review: parser-failed; all local parser stages failed; unresolved pages remain. SourceMap was stored, but no six-field core/evidenceLocation was produced. Do not equate task succeeded with successful extraction.
+- The exact PDF reproduced invalid PDF text geometry in the deployed Parser image with network none, read-only root, non-root user,512MiB/2CPU/64PID and no host data mounts. Start at apps/agent-worker/src/parsers/native-pdf-text-items.ts:textItemBoundingBox. Do not loosen isolation, fabricate geometry or silently drop scientific text to force green.
+- The task stopped before LLM extraction; its audit time window contained no gateway calls. Manual confirmation/commit and new media generation were NOT reached. Controlled session was closed; test data is retained privately, not a public demo.
+- Generic video and generic image without sceneImage are explicitly unavailable in presentation-assets.ts; worker lacks mediaGenerator injection. Existing playback/import/demo and fixture tests cannot establish a producing pipeline.
 
-## Fresh acceptance
+## Next action / quality constraints
 
-- Current exact server full build, parser16 acceptance, core36/search2 migration status (none pending), BGE real-vector/runtime, ScanSci image/tools/storage/worker and healthy containers passed. Public/loopback200, egress204 via parent proxy. No new model, migration or paid generation.
-- Auth/dashboard37 unit checks, modified-file lint, final local Web build, docs checks passed. Existing browser fixtures:2 literature recovery/full-text plus3 keyboard signup/failure retry/login-return cases passed with API fixtures.
-- Final public login/register:8 zh/en ×1440/390 visual checks, image decoded/no horizontal overflow/password toggle; no registration submission. Final public dashboard/new/settings/me:8 read-only checks at1440/390 using controlled user;0business writes/session closed. Actual screenshots inspected. Full business-pipeline and CI completion not claimed.
-- Evidence ignored under apps/web/test/visual/out/research-journey/: entry-{sync,prebuild,deploy,final-checkup}.log, entry-public-{auth,product}.log, entry-shots.json, entry-product-evidence.json and entry-*.png. Early next-dev screenshot rerenders made interaction smoke unstable; final production-mode and public checks passed. A next/image assertion was corrected to decode URL escaping.
-- Local8318 production-mode preview built from current app source remains available; older8317 preview is stale. Never print cookies/session headers, env values or raw private logs.
+1. Reproduce and fix the real-PDF geometry failure with a meaningful regression and existing sandbox limits; rerun the SAME document through the actual upload/Hermes/confirmation/commit journey, retaining first-failure evidence.
+2. Verify how confirmed SDF/analysis becomes same-version Claims, then connect mechanism-image planning/generation and controlled animated rendering to existing presentation tasks/assets. Preserve approvals, artifact/version binding, source provenance, uncertainty, private playback and real failure/retry states.
+3. Extend actual production acceptance to newly generated images and videos: inspect image dimensions, video decode/duration/audio and in-RO playback/seek; test cross-RO authorization and stale tasks. Do not substitute imported files or a standalone demo.
+4. Earlier approved design rejects text Claim cards as scientific illustrations and repeated-panorama/slideshow-only videos. Preserve scenes/structure/propagation/action/local magnification, accepted D2NN animation direction and continuous Serena narration. CPU image installation remains USER-PAUSED.
+5. Actual development route this turn: Luna/low discovery; Sol/high release review and API/privacy repair; main scripts/resource fix; same ordinary Chat6Pro planning and corrected visual constraints. Main client settings were preserved. Native/main/browser costs are not fully metered; no full-chain saving percentage.
 
-## Remaining / next action
+## Read first / evidence
 
-- Continue route-specific layout/interaction refinement and actual paper-to-RO/media/evidence workflow; whole site and automatic multimodal pipeline remain incomplete. User has not yet accepted this visual iteration. Do not repeat the login omission or equate shared color changes with complete page redesign.
-- Known PDF method/results/reproducibility extraction and Evidence/SourceMap gaps remain. Deployed RO Files/Hermes literature disclosures can keep internally recovered tasks collapsed without initialTask; the separate local candidate above tests its correction and async-scope safety. Do not treat local checks as production acceptance.
-- Preserve Serena continuous v4, restored animated D2NN, Chromium/FFmpeg/PyTorch/Qwen/Codex. CPU image installation remains USER-PAUSED. Codex still depends on PC/v2ray/account access and quotas (ADR-013).
-- Controlled private user11b6cf52-fcd4-4f7d-a3ff-8ea3ae9592fd (Hermes Production E2E), workspacef09ab567-4dcd-4d53-97b3-9a96920fd1ed, RObcbf1586-b6bd-44b6-ab66-c675fcddce78. Do not advertise as a user-accessible demo.
-- Read-first: Git/fetch/checkup, this handoff, relevant baseline and latest integrated plan section. Use explicit Git Bash SSH wrappers and canonical deployment; no env/Secret reads.
+- This handoff; relevant docs/OpenScience_Kimi_Development_Spec.md; docs/specs/2026-09-05-integrated-research-product-design.md; then latest section of docs/plans/2026-09-07-literature-recovery-workflow-plan.md. Do not resume old MVP Task2 or layout polishing before the minimum-flow blockers.
+- Ignored evidence: apps/web/test/visual/out/token-smart-release/{real-paper-run.json,real-paper/checkpoint.json,real-paper/extraction-checkpoint.json,native-parser-replay.json}; reproducible helpers run-real-paper.mjs,inspect-task.mjs,replay-public-pdf.mjs. Preserve failed attempts when retrying.
+- Local logs under C:/Users/Mac/AppData/Local/Temp/token-smart-checks/: preaccept1788778447440-aeaf3a4c-89f4-4659-adb9-ac3e4c8afc84; deploy1788778768188-ddef03fe-f00a-4cbb-b993-28d7229a2095; health1788779287297-b34ac338-9d1e-4b3f-a0c0-4eb58103cb5a; real-paper failure1788779301585-98b3e68e-c546-4570-b03b-b452807dd5f9 (all .log).
+- Same ordinary Chat6Pro: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec. Web advice is advisory; local approved requirements overrode its initial static-card/video proposal.
+- SSH only through root infra/scripts/ssh-run.sh/checkup.sh with explicit Git Bash. No env/Secret reads, no private session logs, no arbitrary production commands or cleanup. Fresh fetch/release/rollback checks before another deployment.

@@ -1,6 +1,15 @@
 # Progress
 
-## 2026-09-07 same-chat evidence UI continuation
+## 2026-09-07 deployed evidence fixes; minimum paper/media journey blocked
+
+- Application/source/public c9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2 deployed by canonical transaction; rollback5e4b4d47cba918db5a9b7f7092de32aa244c258e. Exact worktree token-smart-production-c9439ae; development branch codex/token-smart-live-workflow has test-only8928a9d plus subsequent docs. Root main@b9616cb remains dirty/stale.
+- Sol/high release review found and fixed public API ref stripping, user/RO query retention and unbounded repeated-match enumeration. Both ingestion/Agent public views now expose safe identity; private storage stays redacted. Domain83/Worker537/Web544+5/browser17 and relevant types/build/lint passed. The final17 includes the corrected target+user scope test.
+- Server fullbuild/Parser16/core36/search2/BGE/ScanSci/container/public checks passed; journal clear, retention complete. Public/loopback200, egress204. Backup preserved. No full CI completion claim.
+- Actual UI upload of arXiv2009.06045v1 (24,671,920bytes) FAILED the minimum journey: Parser result needs_review, no core fields and no LLM extraction. Exact isolated production image replay reproduced invalid PDF text geometry. Confirmation/commit/new image/video were not reached; controlled session closed.
+- Next: fix real-PDF geometry regression without weakening parser isolation, validate the same document through actual Hermes/confirmation, then connect same-RO mechanism images and meaningful animated video. Generic video generation is currently blocked; playback/import/demo is not generation. Previously rejected text cards/slideshows are not an acceptable shortcut.
+- Actual route: Luna/low discovery, Sol/high release review/repair, main deterministic execution, same ordinary Chat6Pro planning with corrected prior visual requirements. Full-chain savings unknown; earlier13-test Astra/low sample did not prove real API integration.
+- CURRENT: docs/handoff/2026-08-16-hermes-2d-pet-handoff.md. Full evidence and preserved failed attempts: docs/plans/2026-09-07-literature-recovery-workflow-plan.md and ignored token-smart-release outputs.
+## Earlier local checkpoint: same-chat evidence UI
 
 - Continued the SAME ordinary6Pro URL with implemented decisions and new frontend gap; received focused follow-up plan (1m59s). One browser call timeout was checked for already-sent status, not resent.
 - Astra/low/default produced browser-safe display adapter:29,226tokens,62.478s,8.87750estimated credits;13 prewritten behavior cases passed first try, no code correction/model retry. Terra/medium wired panel/page/i18n and integration tests; manual evidence preserved after main review.
