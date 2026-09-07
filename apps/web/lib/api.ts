@@ -1132,6 +1132,7 @@ export interface PublicEvidenceSource {
 }
 
 export interface PublicResearchVersion {
+  recordUrl?: string;
   publicId: string;
   title: string;
   url: string;

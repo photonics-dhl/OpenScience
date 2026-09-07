@@ -388,3 +388,5 @@ export { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboard
 export { requireStoryboardBase } from './assets/presentation-asset';
 
 export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, type SceneImageRequest } from './assets/scene-image';
+
+export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';

@@ -1,3 +1,4 @@
+import { freezeResearchRecord } from '../commit/research-record-snapshot';
 import { createHash, randomUUID } from 'node:crypto';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
@@ -304,6 +305,7 @@ export async function confirmIngestionTask(
           });
           if (latest) await carryIngestionEvidence(scoped, { researchObjectId: ro.id, previousVersionId: latest.id, versionId: commit.versionId });
           await writeIngestionEvidence(scoped, { task, versionId: commit.versionId, core: input.core });
+          await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: commit.versionId });
           const updated = await tx.ingestionTask.updateMany({ where: { id: task.id, state: 'needs_review' }, data: { state: 'confirmed', error: null } });
           if (updated.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Task changed while confirming');
           await recordAudit(deps, tx, { actorId: input.userId, action: 'ingestion.confirm', workspaceId: ro.workspaceId,

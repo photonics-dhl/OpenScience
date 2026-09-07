@@ -1,3 +1,4 @@
+import { freezeResearchRecord } from './research-record-snapshot';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import { getBlobStorageKey } from '@openscience/storage';
 import { buildSnapshot, diffSdfCore, type ManifestEntryInput, type VersionSnapshot } from '@openscience/versioning';
@@ -225,6 +226,10 @@ export async function createCommit(
         entries: { create: manifestArtifacts },
       },
     });
+    if (!transaction) {
+      const predecessor = parentCommit ? await tx.version.findFirst({ where: { commitId: parentCommit.id } }) : null;
+      await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: version.id, graphVersionId: predecessor?.id });
+    }
     await recordAudit(
       deps, tx,
       {
@@ -236,7 +241,10 @@ export async function createCommit(
     );
     return { commit, version };
   };
-  const result = transaction ? await persist(transaction) : await deps.prisma.$transaction(persist);
+  const result = transaction ? await persist(transaction) : await deps.prisma.$transaction(persist, { isolationLevel: 'Serializable' }).catch((error: unknown) => {
+    if ((error as { code?: string }).code === 'P2034') throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');
+    throw error;
+  });
 
   return {
     commitId: result.commit.id,

@@ -1,9 +1,12 @@
 {
   "versionRecord": {
+    "export": "导出固定记录",
+    "api": "研究 API",
+    "legacy": "此旧版本未保存固定的论断与证据记录，仅提供当时的 SDF 和材料。",
     "noRegion": "此来源暂不提供区域高亮。",
     "loading": "正在加载版本…",
     "mismatch": "版本快照不匹配",
-    "reviewBoundary": "此版本保存的 SDF 与材料。草稿阶段的论断和证据记录仍可编辑，需人工核查。",
+    "reviewBoundary": "生成版本时保存的固定研究记录。后续草稿编辑不会改变此记录；证据仍可能需要人工核查。",
     "missing": "未提供 · 待补充",
     "checkEvidence": "核查论断与来源",
     "evidence": "论断与来源核查",

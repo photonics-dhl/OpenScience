@@ -268,6 +268,7 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
           <section className="pub-reading-citation" data-public-citation="true" data-print-landmark="citation">
             <h2>{t('citation')}</h2>
             <p>{research.citation}</p>
+            {research.recordUrl && <p><a href={research.recordUrl}>Research API</a> · <a href="/api/research-record/openapi">OpenAPI</a></p>}
             <ProvenanceCaption label={t('versionId')} value={version.publicVersionId} landmark="provenance" />
             <ProvenanceCaption label={t('publishedAt')} value={publishedAt} landmark="provenance" />
             <ProvenanceCaption label={t('versionHash')} value={hashShort} landmark="provenance" />

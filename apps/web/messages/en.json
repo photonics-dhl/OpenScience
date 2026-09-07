@@ -1,9 +1,12 @@
 {
   "versionRecord": {
+    "export": "Export fixed record",
+    "api": "Research API",
+    "legacy": "This older version has no frozen claim or evidence record. Only its saved SDF and materials are available.",
     "noRegion": "Region highlighting is unavailable for this source.",
     "loading": "Loading version…",
     "mismatch": "Version snapshot mismatch",
-    "reviewBoundary": "Saved SDF and materials for this version. Its draft claim and evidence records remain editable and require human verification.",
+    "reviewBoundary": "Frozen research record captured when this version was created. Later draft edits do not change this record. Evidence may still need human review.",
     "missing": "Not provided · pending",
     "checkEvidence": "Check claims and sources",
     "evidence": "Claims and source verification",

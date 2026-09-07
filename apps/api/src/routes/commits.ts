@@ -1,3 +1,4 @@
+import { registerResearchRecordRoutes } from './research-record';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { createRequire } from 'node:module';
@@ -34,6 +35,7 @@ const commitBody = z.object({
  * GET /versions/:id/rebuild：完整重建 + blob sha256 校验（§7.1）。
  */
 export function registerCommitRoutes(app: FastifyInstance, deps: CommitRouteDeps): void {
+  registerResearchRecordRoutes(app, deps);
   app.get('/research-objects/:id/versions', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;

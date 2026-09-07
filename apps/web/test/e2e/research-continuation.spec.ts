@@ -15,6 +15,7 @@ async function fixtures(page: Page, tasks = [task]) {
     else if (path === '/api/ingestion') body = { tasks };
     else if (path === `/api/research-objects/${ro.id}/ingestion`) body = { researchObjectId: ro.id, version: 1, tasks: tasks.map(item => ({ ...item, confirmation: null })), latestConfirmation: null };
     else if (path === '/api/versions/confirmed-version') body = { version: { versionId: 'confirmed-version', snapshot: { core, artifacts: [{ artifactId: task.artifactId, logicalPath: task.logicalPath }] } } };
+    else if (path.endsWith('/record')) body = { record: { objectId: ro.id, versionId: path.split('/').at(-2), recordState: 'recorded', sdf: core, manifest: [{ artifactId: task.artifactId, logicalPath: task.logicalPath }], claims: [], evidence: [] } };
     else if (path.endsWith('/claims')) body = { claims: [] };
     else if (path.endsWith('/evidence')) body = { evidence: [] };
     else if (path === '/api/ingestion/tasks/journey-task') body = { researchObjectId: ro.id, batchId: 'batch', version: 1, task: { ...task, result: { core } } };
@@ -179,11 +180,12 @@ test('saved materials survive Files refresh and same-name attachments create a m
 test('selected snapshot and original evidence remain scoped across version switches', async ({ page }) => {
   await fixtures(page);
   await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ versionId: 'newer', versionNo: 3, status: 'draft' }, { versionId: 'confirmed-version', versionNo: 2, status: 'draft' }] } }));
-  await page.route('**/api/versions/newer', route => route.fulfill({ json: { version: { versionId: 'newer', snapshot: { core: { ...core, results: 'Newer result' }, artifacts: [] } } } }));
-  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/claims', route => route.fulfill({ json: { claims: [{ id: 'claim', statement: 'Claim needing verification', assessment: 'missing' }] } }));
-  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/evidence', route => route.fulfill({ json: { evidence: [{ id: 'evidence', claimId: 'claim', artifactId: task.artifactId, kind: 'passage', relation: 'context', title: 'Original passage', exactQuote: 'Exact original quotation', locator: { page: 3 }, extractionConfidence: null, verifiedByUserId: null, extractionStatus: 'needs_review' }] } }));
-  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/evidence/evidence/source', route => route.fulfill({ json: { source: { text: 'Exact original quotation' } } }));
+  await page.route('**/api/research-objects/journey-ro/versions/newer/record', route => route.fulfill({ json: { record: { objectId: ro.id, versionId: 'newer', recordState: 'recorded', sdf: { ...core, results: 'Newer result' }, manifest: [], claims: [], evidence: [] } } }));
+  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record', route => route.fulfill({ json: { record: { objectId: ro.id, versionId: 'confirmed-version', recordState: 'recorded', sdf: core, manifest: [{ artifactId: task.artifactId, logicalPath: task.logicalPath }], claims: [{ id: 'claim', statement: 'Claim needing verification', assessment: 'missing' }], evidence: [{ id: 'evidence', claimId: 'claim', artifactId: task.artifactId, kind: 'passage', relation: 'context', title: 'Original passage', locator: { page: 3 }, extractionConfidence: null, verified: false, extractionStatus: 'needs_review' }] } } }));
+  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record/evidence/evidence/source', route => route.fulfill({ json: { source: { text: 'Exact original quotation', page: 3, region: null } } }));
   await page.goto('/research-objects/journey-ro/versions?version=confirmed-version');
+  await expect(page.getByRole('link', { name: 'Research API', exact: true })).toHaveAttribute('href', '/api/research-objects/journey-ro/versions/confirmed-version/record');
+  await expect(page.getByRole('link', { name: 'Export fixed record', exact: true })).toHaveAttribute('href', '/api/research-objects/journey-ro/versions/confirmed-version/record/export');
   await expect(page.getByText('Draft revision 1', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open original passage: Original passage', exact: true }).click();
   await expect(page.getByText('Exact original quotation', { exact: true })).toBeVisible();

@@ -601,6 +601,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const row = db.versions.find((v) => v.id === where.id) ?? null;
         if (!row) return null;
         const out: any = { ...row };
+        if (include?.publications) out.publications = db.publications.filter(p => p.versionId === row.id);
         if (include?.researchObject) {
           const ro = db.researchObjects.find((r) => r.id === row.researchObjectId) ?? null;
           out.researchObject = ro
@@ -737,6 +738,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     publication: {
+      findMany: async ({ where }: any) => db.publications.filter(p => !where?.version?.researchObjectId || db.versions.some(v => v.id === p.versionId && v.researchObjectId === where.version.researchObjectId)),
       create: async ({ data }: any) => {
         const row = { id: nextId(), ...data };
         db.publications.push(row);
