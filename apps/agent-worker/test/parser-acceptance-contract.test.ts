@@ -586,6 +586,64 @@ describe('Task 8 acceptance contract', () => {
     expect(() => classifyAcceptanceHandlerResult({ ...completed, evidence: {} })).toThrow(/handler result/i);
     expect(() => classifyAcceptanceHandlerResult({ ...completed, sourceMapRef: { schemaVersion: 1 } }))
       .toThrow(/handler result/i);
+    const canonicalLocation = {
+      status: 'located', origin: 'model_quote', matching: 'exact',
+      sourceLocator: {
+        artifactId: 'artifact-1', contentHash: 'a'.repeat(64), blockId: 'block-1', page: 1,
+        boundingBox: { x: 0, y: 0, width: 1, height: 1 }, charRange: { start: 0, end: 1 },
+      },
+    };
+    const sourceMapRef = {
+      schemaVersion: 1, parserStatus: 'succeeded', artifactId: 'artifact-1', contentHash: 'a'.repeat(64),
+      serializedSha256: 'b'.repeat(64), objectKey: `derived/source-maps/${'b'.repeat(64)}.json`, size: 1,
+    };
+    const withLocations = {
+      ...completed,
+      evidenceLocation: Object.fromEntries(fields.map((field) => [field, canonicalLocation])),
+    };
+    expect(() => classifyAcceptanceHandlerResult(withLocations)).toThrow(/handler result/i);
+    const canonicalCompleted = { ...withLocations, sourceMapRef };
+    expect(classifyAcceptanceHandlerResult(canonicalCompleted)).toBe('completed');
+    const withSegments = {
+      ...canonicalCompleted,
+      core: { ...canonicalCompleted.core, problem: 'Supported problem' },
+      evidence: { ...canonicalCompleted.evidence, problem: { quote: 'x', locator: 'blocks:B000001' } },
+      needsMoreInformation: fields.filter((field) => field !== 'problem'),
+      evidenceLocation: Object.fromEntries(fields.map((field) => [field, field === 'problem'
+        ? canonicalLocation : { status: 'missing', origin: 'model_quote', reason: 'empty-quote' }])),
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, field === 'problem' ? [{
+        quote: 'x', sourceLocator: canonicalLocation.sourceLocator,
+      }] : []])),
+    };
+    expect(classifyAcceptanceHandlerResult(withSegments)).toBe('completed');
+    expect(() => classifyAcceptanceHandlerResult({
+      ...withSegments,
+      evidenceSegments: { ...withSegments.evidenceSegments, problem: [{ quote: 'x', sourceLocator: { ...canonicalLocation.sourceLocator, artifactId: 'forged' } }] },
+    })).toThrow(/handler result/i);
+    expect(() => classifyAcceptanceHandlerResult({
+      ...canonicalCompleted,
+      evidenceLocation: Object.fromEntries(fields.map((field) => [field, {
+        ...canonicalLocation, sourceLocator: { ...canonicalLocation.sourceLocator, artifactId: 'artifact-2' },
+      }])),
+    })).toThrow(/handler result/i);
+    expect(() => classifyAcceptanceHandlerResult({
+      ...canonicalCompleted,
+      evidenceLocation: Object.fromEntries(fields.map((field) => [field, {
+        ...canonicalLocation, sourceLocator: { ...canonicalLocation.sourceLocator, contentHash: 'c'.repeat(64) },
+      }])),
+    })).toThrow(/handler result/i);
+    expect(classifyAcceptanceHandlerResult({ ...completed, sourceMapRef })).toBe('completed');
+    expect(() => classifyAcceptanceHandlerResult({
+      ...withLocations,
+      evidenceLocation: { ...withLocations.evidenceLocation, problem: { status: 'located', origin: 'model_quote' } },
+    })).toThrow(/handler result/i);
+    expect(() => classifyAcceptanceHandlerResult({
+      ...withLocations,
+      evidenceLocation: {
+        ...withLocations.evidenceLocation,
+        problem: { status: 'missing', origin: 'model_quote', reason: 'no-match', sourceLocator: canonicalLocation.sourceLocator },
+      },
+    })).toThrow(/handler result/i);
     expect(() => classifyAcceptanceHandlerResult({
       ...completed, core: { ...completed.core, schemaVersion: '9.9.9' },
     })).toThrow(/handler result/i);

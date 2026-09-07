@@ -115,6 +115,11 @@ describe('Personal literature acquisition', () => {
     expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
   });
 
+  it('opens a server-supplied recovered task on first render', () => {
+    const markup = renderToStaticMarkup(<LiteratureAcquisitionDisclosure initialTask={sourceTask} onAuthenticationRequired={() => undefined} userId="user-1" />);
+    expect(markup).toMatch(/<details[^>]*data-literature-entry="true"[^>]*open=""/);
+  });
+
   it('does not submit embedded Enter while a Chinese IME composition is active', () => {
     expect(shouldSubmitEmbeddedLiteratureQuery({ key: 'Enter', isComposing: true, keyCode: 229 })).toBe(false);
     expect(shouldSubmitEmbeddedLiteratureQuery({ key: 'Enter', isComposing: false, keyCode: 229 })).toBe(false);

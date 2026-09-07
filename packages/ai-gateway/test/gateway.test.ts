@@ -68,6 +68,55 @@ describe('结构化输出 + Schema 校验（§9.3）', () => {
     const gw = new AiGateway({ providers: [fakeProvider('p', async () => OK('bad'))] });
     await expect(gw.completeStructured(isStringMap, [{ role: 'user', content: 'x' }])).rejects.toThrow(/重试上限/);
   });
+
+  it('Schema 失败重试可附加有界反馈且不回显原始响应', async () => {
+    const requests: unknown[] = [];
+    let calls = 0;
+    const provider: Provider = {
+      name: 'p', model: 'p',
+      complete: async (request) => {
+        requests.push(request);
+        calls += 1;
+        return OK(calls === 1 ? '{"secretRaw":"do-not-repeat"}' : '{"method":"m"}');
+      },
+    };
+    const gw = new AiGateway({ providers: [provider] });
+    const hasMethod = (value: unknown): value is { method: string } => typeof value === 'object' && value !== null
+      && typeof (value as { method?: unknown }).method === 'string';
+    const out = await gw.completeStructured(hasMethod, [{ role: 'user', content: 'x' }], {
+      validationFeedback: () => 'method:malformed_item',
+    });
+    expect(out).toEqual({ method: 'm' });
+    expect(JSON.stringify(requests[0])).not.toContain('malformed_item');
+    expect(JSON.stringify(requests[1])).toContain('method:malformed_item');
+    expect(JSON.stringify(requests[1])).not.toContain('do-not-repeat');
+  });
+
+  it('反馈回调异常不会泄漏原始异常或绕过有限重试', async () => {
+    let calls = 0;
+    const gw = new AiGateway({ providers: [fakeProvider('p', async () => {
+      calls += 1;
+      return OK('{"bad":"shape"}');
+    })] });
+    const hasMethod = (value: unknown): value is { method: string } => typeof value === 'object' && value !== null
+      && typeof (value as { method?: unknown }).method === 'string';
+    await expect(gw.completeStructured(hasMethod, [{ role: 'user', content: 'x' }], {
+      validationFeedback: () => { throw new Error('feedback callback secret'); },
+    })).rejects.toThrow(/重试上限/);
+    expect(calls).toBe(3);
+  });
+
+  it('传输失败仍受既有 structured 重试上限约束', async () => {
+    let calls = 0;
+    const gw = new AiGateway({ providers: [fakeProvider('p', async () => {
+      calls += 1;
+      throw new Error('transport down');
+    })] });
+    await expect(gw.completeStructured(isStringMap, [{ role: 'user', content: 'x' }], {
+      validationFeedback: () => 'response:malformed_item',
+    })).rejects.toThrow(/重试上限/);
+    expect(calls).toBe(3);
+  });
 });
 
 describe('调用日志脱敏（§17）', () => {
