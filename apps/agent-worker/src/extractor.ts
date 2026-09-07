@@ -325,32 +325,90 @@ function canonicalBlockPrompt(blocks: PromptCanonicalBlock[]): string {
   return blocks.map((block) => `--- SOURCE_BLOCK id:${block.promptId} ---\n${block.text}`).join('\n\n');
 }
 
-function canonicalProposalGuard(blocks: PromptCanonicalBlock[]): SchemaGuard<ExtractedProposal> {
+type CanonicalFieldValidationReason =
+  | 'malformed_item'
+  | 'missing_requires_empty'
+  | 'summary_required'
+  | 'segment_count_1_to_32'
+  | 'duplicate_ids'
+  | 'unknown_ids'
+  | 'contiguous_ids_required'
+  | 'source_text_limit_8000';
+
+function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
+  guard: SchemaGuard<ExtractedProposal>;
+  validationFeedback: (value: unknown) => string | undefined;
+  mergeRetained: (proposal: ExtractedProposal) => ExtractedProposal;
+} {
   const allowed = new Map(blocks.map((block) => [block.promptId, block]));
-  return (value: unknown): value is ExtractedProposal => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
+  let invalidFields = new Map<string, CanonicalFieldValidationReason>();
+  const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason } => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return { reason: 'malformed_item' };
+    const candidate = item as Record<string, unknown>;
+    if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourceBlockIds,summary'
+      || typeof candidate.summary !== 'string' || typeof candidate.needsMoreInformation !== 'boolean'
+      || !Array.isArray(candidate.sourceBlockIds) || candidate.sourceBlockIds.some((id) => typeof id !== 'string')) {
+      return { reason: 'malformed_item' };
+    }
+    const ids = candidate.sourceBlockIds as string[];
+    if (candidate.needsMoreInformation) {
+      return candidate.summary.trim() || ids.length > 0
+        ? { reason: 'missing_requires_empty' }
+        : { candidate: candidate as unknown as ExtractedFieldProposal };
+    }
+    if (!candidate.summary.trim()) return { reason: 'summary_required' };
+    if (ids.length === 0 || ids.length > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32' };
+    if (new Set(ids).size !== ids.length) return { reason: 'duplicate_ids' };
+    if (ids.some((id) => !allowed.has(id))) return { reason: 'unknown_ids' };
+    const selected = ids.map((id) => allowed.get(id)!);
+    if (selected.some((block, index) => index > 0 && block.ordinal !== selected[index - 1]!.ordinal + 1)) {
+      return { reason: 'contiguous_ids_required' };
+    }
+    if (selected.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
+      return { reason: 'source_text_limit_8000' };
+    }
+    return { candidate: candidate as unknown as ExtractedFieldProposal };
+  };
+  const guard: SchemaGuard<ExtractedProposal> = (value: unknown): value is ExtractedProposal => {
+    invalidFields = new Map();
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      invalidFields.set('response', 'malformed_item');
+      return false;
+    }
     const proposal = value as Record<string, unknown>;
-    if (proposal.schemaVersion !== SDF_CORE_VERSION || !proposal.fields || typeof proposal.fields !== 'object' || Array.isArray(proposal.fields)) return false;
+    if (proposal.schemaVersion !== SDF_CORE_VERSION || !proposal.fields || typeof proposal.fields !== 'object' || Array.isArray(proposal.fields)) {
+      invalidFields.set('response', 'malformed_item');
+      return false;
+    }
     const fields = proposal.fields as Record<string, unknown>;
     for (const field of SDF_CORE_FIELDS) {
-      const item = fields[field];
-      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
-      const candidate = item as Record<string, unknown>;
-      if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourceBlockIds,summary'
-        || typeof candidate.summary !== 'string' || typeof candidate.needsMoreInformation !== 'boolean'
-        || !Array.isArray(candidate.sourceBlockIds) || candidate.sourceBlockIds.some((id) => typeof id !== 'string')) return false;
-      const ids = candidate.sourceBlockIds as string[];
-      if (candidate.needsMoreInformation) {
-        if (candidate.summary.trim() || ids.length > 0) return false;
-        continue;
-      }
-      if (!candidate.summary.trim() || ids.length === 0 || ids.length > MAX_EVIDENCE_SEGMENTS
-        || new Set(ids).size !== ids.length || ids.some((id) => !allowed.has(id))) return false;
-      const selected = ids.map((id) => allowed.get(id)!);
-      if (selected.some((block, index) => index > 0 && block.ordinal !== selected[index - 1]!.ordinal + 1)
-        || selected.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) return false;
+      const validation = validateField(fields[field]);
+      if (!validation.candidate) invalidFields.set(field, validation.reason!);
+      else if (!validation.candidate.needsMoreInformation && !retained.has(field)) retained.set(field, validation.candidate);
     }
-    return true;
+    return invalidFields.size === 0;
+  };
+  return {
+    guard,
+    validationFeedback: () => {
+      if (invalidFields.size === 0) return undefined;
+      const details = [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(', ');
+      return [
+        'Previous JSON failed canonical validation.',
+        `Invalid fields and reason codes: ${details}.`,
+        'Return the full six-field JSON object. Correct the listed fields; re-derive other fields from the unchanged SOURCE_BLOCK input.',
+        'If one contiguous run cannot support the current summary, narrow the summary to what one supported run proves or mark the field missing.',
+        'Do not quote or repeat source text in this correction instruction; use the SOURCE_BLOCK ids already provided.',
+      ].join(' ');
+    },
+    mergeRetained: (proposal) => ({
+      ...proposal,
+      fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
+        const current = proposal.fields[field];
+        return [field, retained.get(field) ?? current];
+      })) as ExtractedProposal['fields'],
+    }),
   };
 }
 
@@ -512,11 +570,16 @@ export async function extractHandler(
     ].join(' ') },
     { role: 'user' as const, content: promptBlocks ? canonicalBlockPrompt(promptBlocks) : selectManuscriptEvidence(manuscriptText) },
   ];
-  const proposal = await gateway.completeStructured(
-    promptBlocks ? canonicalProposalGuard(promptBlocks) : sdfProposalGuard,
+  const canonicalValidation = promptBlocks ? canonicalProposalValidation(promptBlocks) : undefined;
+  const rawProposal = await gateway.completeStructured(
+    canonicalValidation?.guard ?? sdfProposalGuard,
     prompt,
-    { temperature: 0.2 },
+    {
+      temperature: 0.2,
+      ...(canonicalValidation ? { validationFeedback: canonicalValidation.validationFeedback } : {}),
+    },
   );
+  const proposal = canonicalValidation ? canonicalValidation.mergeRetained(rawProposal) : rawProposal;
   return canonicalSourceMap && promptBlocks
     ? materializeCanonicalProposal(proposal, canonicalSourceMap, promptBlocks)
     : materializeProposal(proposal, manuscriptText);

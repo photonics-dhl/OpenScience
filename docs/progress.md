@@ -1,5 +1,9 @@
 # Progress
 
+## 2026-09-07 focused extraction and UX repair candidate
+
+- Candidate codex/validated-workflow-repair derives005ffb8; production005ffb8/rollback17eb209 unchanged. Current handoff records exact diagnosis, focused repair and media exclusion. Deployment and real-flow acceptance pending.
+
 ## 2026-09-07 parser deployed; real extraction and Claim bridge continuation
 
 - Production/public17eb209d15cc427d33b426e8430fa87006e899c2, rollbackc9439ae; canonical build/Parser acceptance/migrations/runtime/health passed. Working branch same HEAD with uncommitted Claim bridge/UI; root dirty main preserved.
