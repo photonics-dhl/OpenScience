@@ -4,8 +4,8 @@
 
 ## Version tuple
 
-- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; record candidate0822515, not deployed. Fresh18:53 +08 checkup: application/public/loopback5e4b4d47cba918db5a9b7f7092de32aa244c258e; rollback8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs HEAD is not another app release.
-- Application source pushed non-force to main and branch. Canonical server release completed, journal cleared and retention complete. Root checkout contains unrelated user changes; leave untouched.
+- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; record/UI candidate99793fd, not deployed. Fresh18:53 +08 checkup: application/public/loopback5e4b4d47cba918db5a9b7f7092de32aa244c258e; rollback8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs HEAD is not another app release.
+- Previous application5e4b4d4 was pushed and deployed. Current publication branch is awaiting GitHub login and has not been deployed. Root checkout contains unrelated user changes; leave untouched.
 - Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
 
 ## Shipped entry continuity
@@ -32,7 +32,7 @@
 
 ## Remaining / next action
 
-- Execute publication plan Task2 UI, Task3 frozen per-RO API, then full review/test/exact-SHA deploy. Task1 approved0822515:76 domain/8 API + typecheck/build/lint. Draft graph remains mutable; Task3 must persist fixed record metadata, not mislabel it. Ledger ignored under .superpowers/sdd/2026-09-07-open-research-publication-plan/progress.md.
+- Task1 approved0822515 (76 domain/8 API); Task2 approved99793fd (528 Web unit/18 browser, build/typecheck/lint). Task3 frozen per-RO API in progress, then full review/test/exact-SHA deploy. Draft graph remains mutable; Task3 must persist fixed record metadata, not mislabel it. Ledger ignored under .superpowers/sdd/2026-09-07-open-research-publication-plan/progress.md.
 - GitHub push awaiting local Git Credential Manager login; user notified. Linux release-contract baseline137/137 passed. Local Web525 passed plus source-art after Chromium install. No production switch yet; do not declare full PRD complete.
 - Continue route-specific layout/interaction refinement and actual paper-to-RO/media/evidence workflow; whole site and automatic multimodal pipeline remain incomplete. User has not yet accepted this visual iteration. Do not repeat the login omission or equate shared color changes with complete page redesign.
 - Known PDF method/results/reproducibility extraction and Evidence/SourceMap gaps remain. Existing RO Files/Hermes literature disclosures can keep internally recovered tasks collapsed when no initialTask is supplied; this pre-existing issue was not introduced or fixed here.
