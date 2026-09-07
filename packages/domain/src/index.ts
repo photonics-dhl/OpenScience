@@ -212,6 +212,7 @@ export { ClaimEvidenceError, type ClaimEvidenceErrorCode } from './research-inte
 export { evaluateEvidencePublicationBlocks } from './research-intelligence/publication-evidence';
 export {
   createClaim,
+  createClaimEvidenceBatch,
   createEvidence,
   deleteClaim,
   deleteEvidence,
@@ -227,8 +228,19 @@ export {
   type EvidenceRightsInput,
   type UpdateClaimInput,
   type UpdateEvidenceInput,
+  type ReviewedIngestionClaimEvidenceBatchInput,
 } from './research-intelligence/claim-evidence-service';
 export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
+export {
+  INGESTION_BRIDGE_FIELDS,
+  confirmIngestionClaimEvidenceBridge,
+  listIngestionClaimEvidenceCandidates,
+  previewIngestionClaimEvidenceBridge,
+  type IngestionBridgeField,
+  type IngestionClaimEvidencePreview,
+  type IngestionClaimEvidenceSuggestion,
+  type IngestionClaimSelection,
+} from './ingestion/claim-evidence-bridge';
 export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';
 export {
   RESEARCH_IDENTITIES,

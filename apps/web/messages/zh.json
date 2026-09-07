@@ -1348,6 +1348,19 @@
     "gpuTime": "GPU 帧时",
     "bounds": "稳定边界"
   },
+  "ingestionClaimReview": {
+    "duplicateAssociation": "本批次中，同一组原文只关联一条主张；拆分出的其他主张可先不重复关联原文。",
+    "reviewEvidence": "核对原文段落",
+    "evidenceNotice": "每段原文保留独立出处。请核对这些段落是否完整支持建议内容及其条件、局限；定位本身不代表科学结论正确。",
+    "title": "从论文分析整理主张", "boundary": "从当前已保存版本选择、编辑主张。原文引文只是候选依据；确认本批次不会将主张或证据标为已验证。",
+    "load": "预览已确认的论文分析", "refresh": "重新加载预览", "loading": "正在加载预览…", "empty": "当前版本没有匹配的已确认论文分析。请先确认 Hermes 建议并保存版本。",
+    "source": "来源文献", "statement": "主张内容", "changed": "内容与原提取不同，请重新核对引文关联", "kind": "主张类型", "parent": "本批次的上级主张", "chooseParent": "选择上级主张", "conditions": "适用条件（每行一项）", "limitations": "局限（每行一项）",
+    "page": "原文第 {page} 页", "sourceLocated": "已提供来源定位", "associate": "我已核对引文与此主张的关系，将它作为待复核的候选证据关联。", "noQuote": "没有可信引文可关联，此主张将保留为无附加证据。", "split": "从此项再拆出一条主张",
+    "invalid": "请为子主张选择上级、消除循环，并填写非空内容（最多 4,000 字符）。每批最多选择 12 条。适用条件和局限各限 100 个非空行，每行最多 500 字符。", "confirm": "确认所选主张及候选证据", "saving": "正在保存…", "retry": "重试同一批次", "complete": "已保存到当前版本。主张与证据仍需科学复核，现在可以选择这些主张生成分镜。",
+    "loadError": "预览加载失败，请重新加载。", "submitError": "本批次未被接受，请重新加载并核对选择。", "stale": "版本或来源已经变化，请重新加载预览后确认。", "uncertain": "响应中断，提交结果尚未确定。请保持当前选择，重试同一批次以核对结果。",
+    "field_problem": "研究问题", "field_insight": "核心见解", "field_method": "方法", "field_results": "结果", "field_limitations": "局限", "field_reproducibility": "可复现性",
+    "kind_core": "核心主张", "kind_supporting": "支持主张", "kind_method": "方法", "kind_boundary": "边界条件", "kind_counter": "反向主张"
+  },
   "hermesPresentation": {
     "entry": "分镜与配图",
     "chooseResearch": "选择要处理的研究",

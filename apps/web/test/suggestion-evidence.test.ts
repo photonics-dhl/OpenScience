@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getSuggestionEvidenceLocation } from '../lib/suggestion-evidence';
+import { getSuggestionEvidenceLocation, getSuggestionEvidenceSegments } from '../lib/suggestion-evidence';
 
 const hash = 'a'.repeat(64);
 const digest = 'b'.repeat(64);
@@ -16,6 +16,28 @@ function context() {
 }
 
 describe('suggestion evidence display normalization', () => {
+  it('keeps segment boundaries and rejects the entire list when one locator belongs elsewhere', () => {
+    const value = context();
+    const segment = { quote, sourceLocator: { ...value.evidenceLocation.method.sourceLocator, charRange: { start: 0, end: quote.length } } };
+    const condition = 'provided the pulse remains weak';
+    const next = { quote: condition, sourceLocator: { ...segment.sourceLocator, blockId: 'block-3', page: 3, charRange: { start: 0, end: condition.length } } };
+    const canonical = { ...value, evidenceSegments: { method: [segment, next] } };
+    expect(getSuggestionEvidenceSegments('method', canonical)).toEqual([
+      { quote, location: { status: 'located', page: 2, blockId: 'block-2' } },
+      { quote: next.quote, location: { status: 'located', page: 3, blockId: 'block-3' } },
+    ]);
+    next.sourceLocator.artifactId = 'other';
+    expect(getSuggestionEvidenceSegments('method', canonical)).toEqual([]);
+  });
+  it('does not partially display duplicates, oversized lists, or malformed segment ranges as located', () => {
+    const value = context();
+    const segment = { quote, sourceLocator: { ...value.evidenceLocation.method.sourceLocator, charRange: { start: 0, end: quote.length } } };
+    const canonical = (segments: unknown[]) => ({ ...value, evidenceSegments: { method: segments } });
+    expect(getSuggestionEvidenceSegments('method', canonical([segment, segment]))).toEqual([]);
+    expect(getSuggestionEvidenceSegments('method', canonical(Array(33).fill(segment)))).toEqual([]);
+    expect(getSuggestionEvidenceSegments('method', canonical([{ ...segment, sourceLocator: { ...segment.sourceLocator, charRange: { start: 0, end: 2 } } }]))).toEqual([]);
+    expect(getSuggestionEvidenceSegments('method', value)).toEqual([]);
+  });
   it('keeps only safe page/block display values for a bound located quote', () => {
     expect(getSuggestionEvidenceLocation('method', quote, context())).toEqual({ status: 'located', blockId: 'block-2', page: 2 });
   });

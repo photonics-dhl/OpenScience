@@ -2,6 +2,8 @@ import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
+import { IngestionClaimReview } from '@/components/hermes/IngestionClaimReview';
+import english from '../../messages/en.json';
 
 const messages = { dashboard: { literature: {
   eyebrow: 'Personal literature', title: 'Find a source', description: 'Search by title, DOI, or arXiv ID.',
@@ -24,4 +26,14 @@ function Harness() {
   </NextIntlClientProvider>;
 }
 
-createRoot(document.getElementById('root')!).render(<Harness />);
+function ClaimHarness() {
+  const [ro, setRo] = React.useState('ro-a');
+  const [busy, setBusy] = React.useState(false);
+  const [saved, setSaved] = React.useState('');
+  return <NextIntlClientProvider locale="en" messages={english}>
+    <button type="button" onClick={() => setRo('ro-b')}>switch-target</button>
+    <p data-testid="bridge-busy">{String(busy)}</p><p data-testid="bridge-saved">{saved}</p>
+    <IngestionClaimReview researchObjectId={ro} versionId="version-a" onBusyChange={setBusy} onComplete={claims => setSaved(claims.map(claim => claim.id).join(','))}/>
+  </NextIntlClientProvider>;
+}
+createRoot(document.getElementById('root')!).render(new URLSearchParams(location.search).get('case') === 'claim-review' ? <ClaimHarness/> : <Harness />);

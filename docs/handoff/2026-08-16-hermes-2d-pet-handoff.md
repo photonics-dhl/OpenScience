@@ -4,8 +4,8 @@
 
 ## Version tuple
 
-- Working branch: codex/token-smart-live-workflow, E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow. Application commit/release c9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2; later test-only HEAD8928a9d760c58d232024ead397a8159769802c80 and docs commits are not another application release.
-- Exact deployment workspace: E:/Miscellaneous/XGS/.worktrees/token-smart-production-c9439ae, detached HEADc9439ae. Canonical deploy completed; active/public c9439ae, rollback5e4b4d47cba918db5a9b7f7092de32aa244c258e. Journal clear, no failed-release marker.
+- Working branch: codex/token-smart-live-workflow, E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow. Precommit HEAD/origin17eb209d15cc427d33b426e8430fa87006e899c2; multisegment extraction and Claim bridge/UI are final-review approved for the next candidate. Read Git for the resulting candidate HEAD; this work is not deployed yet.
+- Exact deployment workspace: E:/Miscellaneous/XGS/.worktrees/token-smart-production-17eb209, detached HEAD17eb209. Canonical deploy completed; active/public17eb209, rollbackc9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2. Journal clear, no failed-release marker; fresh server build/Parser/migrations/runtime/container/public checks passed.
 - Root E:/Miscellaneous/XGS remains dirty main@b9616cb; do not reset/pull/stash it. origin/main was1b974dd at last fetch; publication/integration state must be checked with Git. Use the working branch above for continued product work.
 - Separate animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z and controlled Codex image service are preserved. They do not prove automatic RO media generation.
 
@@ -20,22 +20,23 @@
 
 ## Real minimum-flow acceptance: FAILED
 
-- Real UI uploaded pinned arXiv2009.06045v1 PDF,24,671,920bytes, SHA256d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a, under the controlled test user. RO ba7920d1-ea3c-4355-b479-8d7a203d3a94; ingestion bfeb3d55-4f31-4bb4-9c56-0a7a280d5d01; AgentTask ed2554fd-f909-43cc-aeb3-009007bd63e9.
-- Ingestion reached needs_review. Worker task status is succeeded but result.status is needs_review: parser-failed; all local parser stages failed; unresolved pages remain. SourceMap was stored, but no six-field core/evidenceLocation was produced. Do not equate task succeeded with successful extraction.
-- The exact PDF reproduced invalid PDF text geometry in the deployed Parser image with network none, read-only root, non-root user,512MiB/2CPU/64PID and no host data mounts. Start at apps/agent-worker/src/parsers/native-pdf-text-items.ts:textItemBoundingBox. Do not loosen isolation, fabricate geometry or silently drop scientific text to force green.
-- The task stopped before LLM extraction; its audit time window contained no gateway calls. Manual confirmation/commit and new media generation were NOT reached. Controlled session was closed; test data is retained privately, not a public demo.
+- Real UI uploaded pinned arXiv2009.06045v1 PDF,24,671,920bytes, SHA256d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a. Latest17eb209 attempt: RO7e586b12-4c6c-4676-9453-0df42078e66b, ingestion218f4b94-e91c-47c6-9391-a0ec3021c5a7, AgentTask526d0515-b215-49fc-8ce4-bea8f8acb754. Earlier failed attempt retained.
+- Parser now succeeds with safe SourceMap identity. Real MiniMax-M3 call completed (6318 input/1669 output,12.438s, no fallback/retry), but all six fields were cleared because model-authored quotes fail strict matching. Task succeeded does not prove useful analysis.
+- Diagnosis: model rewrites PDF hyphenated lines and fragmented math. Preserve strict matching; next fix uses bounded prompt-listed canonical block selections and authentic per-block locators, sufficient multi-line support, with no fabricated single locator. Same Web6Pro is planning the additive contract.
+- Confirmation/commit/new media were NOT reached; controlled session closed. One diagnostic provider replay reported in=1/out=1035,7.574s without complete audit metadata, so input/cost are unreliable. It incorrectly parsed the PDF in a networked worker before the boundary correction arrived; no DB/task/storage/SDF writes. Do not repeat that diagnostic pattern; parser remains isolated.
 - Generic video and generic image without sceneImage are explicitly unavailable in presentation-assets.ts; worker lacks mediaGenerator injection. Existing playback/import/demo and fixture tests cannot establish a producing pipeline.
 
 ## Next action / quality constraints
 
-- Continuation: same Web6Pro returned staged planning and a formula-fidelity decision. Sol/medium repaired certified CMSY10 negation composition and conservative page-level review fallback; Sol/high approved after identity, all-empty-page false-success and operator-work fixes. Fresh Worker556/focused37/compiled10/types/lint pass; exact512MiB replay has25pages/two not-equals/no empty pages or warnings. New release acceptance/deployment and real Hermes retest are next; current production remains c9439ae. OCR independently failed formula fidelity and cannot clear the retained review reason.
+- Native repair is deployed17eb209: certified CMSY10 negation composition, conservative review fallback, Worker556/focused37/compiled10/types/lint; exact512MiB replay25pages/two not-equals/no empty pages or warnings. OCR independently failed formula fidelity and cannot clear the retained review reason.
+- Multisegment extraction and Claim bridge/UI are final-review approved: exact block selections, once-parsed SourceMap, original-order quotes, one bulk Evidence insert, bounded unique field attachments, immutable missing/needs_review, same-request retry and lineage after edits. Fresh domain622, Worker561 before last extractor change; final focused188/build/compiled10, API5, root types; Web553 plus final helper7/browser4/types/lint pass. Fresh server acceptance and real provider/UI journey remain required.
 - Scientific identity: this PDF is *On-chip sampling of optical fields with attosecond resolution*, not D2NN. Reuse the accepted animation quality/runtime, never its different physical mechanism. Media review also confirmed the missing SDF-to-evidence-backed-Claim bridge and narration/isolated-render adapters.
 
-1. Reproduce and fix the real-PDF geometry failure with a meaningful regression and existing sandbox limits; rerun the SAME document through the actual upload/Hermes/confirmation/commit journey, retaining first-failure evidence.
+1. Fix model quote reconstruction using sufficient canonical block support, then rerun the SAME document through actual Hermes/confirmation/commit; retain both earlier failures and original isolation.
 2. Verify how confirmed SDF/analysis becomes same-version Claims, then connect mechanism-image planning/generation and controlled animated rendering to existing presentation tasks/assets. Preserve approvals, artifact/version binding, source provenance, uncertainty, private playback and real failure/retry states.
 3. Extend actual production acceptance to newly generated images and videos: inspect image dimensions, video decode/duration/audio and in-RO playback/seek; test cross-RO authorization and stale tasks. Do not substitute imported files or a standalone demo.
 4. Earlier approved design rejects text Claim cards as scientific illustrations and repeated-panorama/slideshow-only videos. Preserve scenes/structure/propagation/action/local magnification, accepted D2NN animation direction and continuous Serena narration. CPU image installation remains USER-PAUSED.
-5. Actual development route this turn: Luna/low discovery; Sol/high release review and API/privacy repair; main scripts/resource fix; same ordinary Chat6Pro planning and corrected visual constraints. Main client settings were preserved. Native/main/browser costs are not fully metered; no full-chain saving percentage.
+5. Actual development route this continuation: Sol/medium parser/bridge implementation; Sol/high independent review/diagnosis; main UI/integration; same ordinary Chat6Pro incremental planning. Main settings preserved. Product MiniMax usage is separate from Codex development usage; native/main/browser costs are not fully metered, no full-chain saving percentage.
 
 ## Read first / evidence
 

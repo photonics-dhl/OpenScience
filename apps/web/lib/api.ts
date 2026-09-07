@@ -628,6 +628,37 @@ export async function listVersionClaims(roId: string, versionId: string, signal?
   return request(`${presentationScopePath(roId, versionId)}/claims`, { signal });
 }
 
+export type IngestionClaimField = 'problem' | 'insight' | 'method' | 'results' | 'limitations' | 'reproducibility';
+export type IngestionClaimSource = { quote: string; locator: { page?: number; blockId?: string; [key: string]: unknown } };
+export interface IngestionClaimSuggestion {
+  sourceField: IngestionClaimField;
+  originalStatement: string;
+  reviewedStatement: string;
+  rewritten: boolean;
+  defaultQuoteAssociation: boolean;
+  source?: IngestionClaimSource;
+  sources?: IngestionClaimSource[];
+}
+export interface IngestionClaimPreview {
+  taskId: string; researchObjectId: string; versionId: string; commitId: string;
+  artifact: { id: string; logicalPath: string; contentHash: string };
+  snapshotToken: string;
+  suggestions: IngestionClaimSuggestion[];
+}
+export interface IngestionClaimSelection {
+  clientKey: string; sourceField: IngestionClaimField; kind: PresentationClaim['kind'];
+  parentClientKey?: string; statement: string; conditions?: string[]; limitations?: string[];
+  attachSourceQuote: boolean;
+}
+export function listIngestionClaimPreviews(roId: string, versionId: string, signal?: AbortSignal): Promise<{ candidates: IngestionClaimPreview[] }> {
+  return request(`${presentationScopePath(roId, versionId)}/ingestion-claim-evidence`, { signal });
+}
+export function confirmIngestionClaims(roId: string, versionId: string, taskId: string, body: { snapshotToken: string; selections: IngestionClaimSelection[] }, idempotencyKey: string, signal?: AbortSignal): Promise<{ claims: PresentationClaim[]; evidence: unknown[] }> {
+  return request(`${presentationScopePath(roId, versionId)}/ingestion-claim-evidence/${encodeURIComponent(taskId)}`, {
+    method: 'POST', signal, headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(body),
+  });
+}
+
 export async function createPresentationClaim(
   roId: string,
   versionId: string,

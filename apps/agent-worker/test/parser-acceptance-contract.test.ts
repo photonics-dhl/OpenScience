@@ -604,6 +604,22 @@ describe('Task 8 acceptance contract', () => {
     expect(() => classifyAcceptanceHandlerResult(withLocations)).toThrow(/handler result/i);
     const canonicalCompleted = { ...withLocations, sourceMapRef };
     expect(classifyAcceptanceHandlerResult(canonicalCompleted)).toBe('completed');
+    const withSegments = {
+      ...canonicalCompleted,
+      core: { ...canonicalCompleted.core, problem: 'Supported problem' },
+      evidence: { ...canonicalCompleted.evidence, problem: { quote: 'x', locator: 'blocks:B000001' } },
+      needsMoreInformation: fields.filter((field) => field !== 'problem'),
+      evidenceLocation: Object.fromEntries(fields.map((field) => [field, field === 'problem'
+        ? canonicalLocation : { status: 'missing', origin: 'model_quote', reason: 'empty-quote' }])),
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, field === 'problem' ? [{
+        quote: 'x', sourceLocator: canonicalLocation.sourceLocator,
+      }] : []])),
+    };
+    expect(classifyAcceptanceHandlerResult(withSegments)).toBe('completed');
+    expect(() => classifyAcceptanceHandlerResult({
+      ...withSegments,
+      evidenceSegments: { ...withSegments.evidenceSegments, problem: [{ quote: 'x', sourceLocator: { ...canonicalLocation.sourceLocator, artifactId: 'forged' } }] },
+    })).toThrow(/handler result/i);
     expect(() => classifyAcceptanceHandlerResult({
       ...canonicalCompleted,
       evidenceLocation: Object.fromEntries(fields.map((field) => [field, {

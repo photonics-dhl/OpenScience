@@ -1312,6 +1312,19 @@
     "gpuTime": "GPU frame",
     "bounds": "Stable bounds"
   },
+  "ingestionClaimReview": {
+    "duplicateAssociation": "For this batch, associate each original passage set with one claim. Other split claims can be saved without the repeated association.",
+    "reviewEvidence": "Review original passages",
+    "evidenceNotice": "Each passage retains its own source location. Check that the full set supports the proposed statement, including its conditions and limitations. A location alone does not establish scientific correctness.",
+    "title": "Review claims from your paper", "boundary": "Select and edit claims from this saved version. Source quotations are candidate evidence; confirming this batch does not verify the claims or evidence.",
+    "load": "Preview confirmed paper analysis", "refresh": "Reload preview", "loading": "Loading preview…", "empty": "No confirmed paper analysis matches this version. Confirm the Hermes suggestions and save a version first.",
+    "source": "Source document", "statement": "Claim statement", "changed": "Changed from the extraction — review the source association", "kind": "Claim type", "parent": "Parent claim in this batch", "chooseParent": "Select a parent claim", "conditions": "Conditions — one per line", "limitations": "Limitations — one per line",
+    "page": "Source page {page}", "sourceLocated": "Source location available", "associate": "Attach this quotation as evidence needing review. I have reviewed its relation to this statement.", "noQuote": "No trusted quotation is available. This claim will have no attached evidence.", "split": "Add a separate claim from this item",
+    "invalid": "Select a parent for each child claim, remove cycles, and provide a nonempty statement (up to 4,000 characters). Select at most 12 claims. Conditions and limitations each allow 100 nonempty lines, up to 500 characters per line.", "confirm": "Confirm selected claims and candidate evidence", "saving": "Saving…", "retry": "Retry the same batch", "complete": "Saved to this version. Claims and evidence still require scientific review; you can now select these claims for a storyboard.",
+    "loadError": "The preview could not be loaded. Try reloading.", "submitError": "The batch was not accepted. Reload and review the selection.", "stale": "The saved version or source changed. Reload the preview before confirming.", "uncertain": "The response was interrupted. Keep this selection unchanged and retry the same batch to check its result.",
+    "field_problem": "Problem", "field_insight": "Insight", "field_method": "Method", "field_results": "Results", "field_limitations": "Limitations", "field_reproducibility": "Reproducibility",
+    "kind_core": "Core claim", "kind_supporting": "Supporting claim", "kind_method": "Method", "kind_boundary": "Boundary", "kind_counter": "Counterclaim"
+  },
   "hermesPresentation": {
     "entry": "Storyboards and scene images",
     "chooseResearch": "Choose a research object",

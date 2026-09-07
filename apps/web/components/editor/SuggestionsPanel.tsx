@@ -84,8 +84,8 @@ export default function SuggestionsPanel({
           <div key={suggestion.id}>
           {evidenceLocation && (
             <div className="mt-4 border-l-2 border-os-rule-dark pl-4" data-suggestion-evidence-location={evidenceLocation.status}>
-              <p className="m-0 font-data text-xs uppercase tracking-[0.08em] text-os-muted-dark">{evidenceLocationLabel(t, evidenceLocation)}</p>
-              {suggestion.evidence?.quote && <blockquote className="mb-0 mt-2 text-base leading-[var(--leading-body)] text-os-paper" data-suggestion-evidence-quote="true">{suggestion.evidence.quote}</blockquote>}
+              {suggestion.evidenceSegments?.length ? <ol className="m-0 space-y-3 pl-5" data-suggestion-evidence-segments="true">{suggestion.evidenceSegments.map((segment, index) => <li key={index}><p className="m-0 font-data text-xs text-os-muted-dark">{evidenceLocationLabel(t, segment.location)}</p><blockquote className="mb-0 mt-2 whitespace-pre-wrap break-words text-base leading-[var(--leading-body)] text-os-paper" data-suggestion-evidence-quote="true">{segment.quote}</blockquote></li>)}</ol> : <><p className="m-0 font-data text-xs uppercase tracking-[0.08em] text-os-muted-dark">{evidenceLocationLabel(t, evidenceLocation)}</p>
+              {suggestion.evidence?.quote && <blockquote className="mb-0 mt-2 text-base leading-[var(--leading-body)] text-os-paper" data-suggestion-evidence-quote="true">{suggestion.evidence.quote}</blockquote>}</>}
               <p className="mb-0 mt-2 text-sm leading-[var(--leading-body)] text-os-muted-dark">{t('evidenceLocationNotice')}</p>
             </div>
           )}

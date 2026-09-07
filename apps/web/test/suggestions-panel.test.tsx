@@ -20,6 +20,7 @@ vi.mock('next-intl', () => ({
 }));
 
 import SuggestionsPanel from '../components/editor/SuggestionsPanel';
+import { HermesExtractionEvidence } from '../components/hermes/HermesExtractionEvidence';
 import type { AiSuggestion } from '../lib/suggestions';
 
 const base: Omit<AiSuggestion, 'id' | 'evidenceLocation'> = {
@@ -30,6 +31,23 @@ const base: Omit<AiSuggestion, 'id' | 'evidenceLocation'> = {
 describe('SuggestionsPanel evidence locations', () => {
   beforeAll(() => {
     vi.stubGlobal('React', React);
+  });
+
+  it('shows exact source segments separately in the ingestion confirmation surface', () => {
+    const quotes = ['The optical-', 'field is sampled only in the weak-signal regime.'];
+    const result = {
+      sourceMapIdentity: { artifactId: 'a', contentHash: 'a'.repeat(64) },
+      evidenceSegments: { method: quotes.map((quote, index) => ({ quote, sourceLocator: {
+        artifactId: 'a', contentHash: 'a'.repeat(64), blockId: `b${index}`, page: index + 1,
+        charRange: { start: 0, end: quote.length },
+      } })) },
+    };
+    const markup = renderToStaticMarkup(createElement(HermesExtractionEvidence, { field: 'method', result }));
+    expect(markup.match(/<blockquote/g)).toHaveLength(2);
+    expect(markup).toContain('The optical-');
+    expect(markup).toContain('field is sampled only in the weak-signal regime.');
+    expect(markup).not.toContain('The optical-field');
+    expect(markup).not.toContain('<button');
   });
 
   it('shows each normalized status with only validated page/block details, keeps the quote escaped, and leaves review actions available', () => {

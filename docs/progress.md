@@ -1,5 +1,13 @@
 # Progress
 
+## 2026-09-07 parser deployed; real extraction and Claim bridge continuation
+
+- Production/public17eb209d15cc427d33b426e8430fa87006e899c2, rollbackc9439ae; canonical build/Parser acceptance/migrations/runtime/health passed. Working branch same HEAD with uncommitted Claim bridge/UI; root dirty main preserved.
+- Same real PDF now passes isolated parsing and invokes MiniMax-M3 (6318 input/1669 output). Semantic acceptance FAILED: model normalized canonical line breaks/hyphenation and every source quote became no-match. Strict matching remains; sufficient multiblock source selection is the next repair, planned in the same Web6Pro conversation.
+- Multisegment extraction/Claim bridge now final-review approved. Domain622, Worker561 before final extractor change; final focused188/build/compiled10, API5/root types; Web553, final helper7/browser4/types/lint passed. No deployment of these changes yet; actual model/block-selection/confirmation/Claim flow is the next gate.
+- Real confirmation/commit/mechanism images/video remain unaccepted. A diagnostic replay violated parser isolation by parsing inside a networked worker, with no business writes; it will not be reused. Its usage metadata is incomplete. Full development savings are not measurable from product gateway tokens.
+- CURRENT handoff and literature-recovery plan hold exact attempt IDs and evidence. Continue implementation; do not resume historical geometry work or claim the full product is complete.
+
 ## 2026-09-07 continuation: native PDF repair ready for release acceptance
 
 - Same Web6Pro supplied staged execution and a formula-fidelity followup. Sol/medium diagnosed and repaired the exact CMSY10 negation overlay; Sol/high closed identity, all-empty-page false-success and operator-work findings.

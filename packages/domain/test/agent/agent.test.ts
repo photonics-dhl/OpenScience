@@ -327,6 +327,9 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
       core: Object.fromEntries(fields.map((field) => [field, field === 'method' ? 'Method summary' : ''])),
       evidence,
       evidenceLocation,
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, field === 'method' ? [{
+        quote: 'Original source sentence.', sourceLocator: evidenceLocation.method.sourceLocator,
+      }] : []])),
       needsMoreInformation: fields.filter((field) => field !== 'method'),
       sourceMapRef: {
         schemaVersion: 1, parserStatus: 'succeeded', artifactId: 'artifact-A', contentHash,
@@ -344,6 +347,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
       sourceMapIdentity: { artifactId: 'artifact-A', contentHash: contentHash.toLowerCase() },
       evidence,
       evidenceLocation,
+      evidenceSegments: storedResult.evidenceSegments,
     });
     expect(JSON.stringify(view.result)).not.toMatch(/objectKey|serializedSha256|derived\/source-maps/);
 
