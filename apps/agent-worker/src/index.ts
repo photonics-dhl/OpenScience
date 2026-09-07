@@ -283,7 +283,10 @@ export function createHandlers(
       const manuscriptText = sourceMapToManuscriptText(parsed.sourceMap);
       if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
       try {
-        return { ...await extractHandler(gateway, { payload: { manuscriptText } }), sourceMapRef };
+        return {
+          ...await extractHandler(gateway, { payload: { manuscriptText } }, { sourceMap: parsed.sourceMap }),
+          sourceMapRef,
+        };
       } catch {
         return { status: 'needs_review', format, reason: 'sdf-proposal-unavailable', sourceMapRef };
       }

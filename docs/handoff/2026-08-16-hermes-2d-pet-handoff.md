@@ -6,6 +6,8 @@
 
 - Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/overview-responsive-companion. Application/public/loopback 5e4b4d47cba918db5a9b7f7092de32aa244c258e; rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs-only Git HEAD is not another app release.
 - Application source pushed non-force to main and branch. Canonical server release completed, journal cleared and retention complete. Root checkout contains unrelated user changes; leave untouched.
+- Separate local candidate: E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow, branch codex/token-smart-live-workflow, HEAD/base 1b974dd. Literature recovery correction/review complete locally: Web526+5, browser12+1, typecheck/lint/build passed; no merge/deployment. Evidence: docs/plans/2026-09-07-literature-recovery-workflow-plan.md. Independent local control is not a production release; net savings unmeasured.
+- Same candidate also consumes evidence locations in the frontend: same-Chat6Pro continuation → metered Astra/low adapter → Terra/medium UI; Web543+5, TS/lint/build and browser4 desktop/mobile passed locally. No deployment; full-chain cost unknown. SourceMap extraction evidence locations: ordinary Chat6 Pro planning → Terra/medium implementation → Sol/high review and targeted corrections. Local tests/build passed; final evidence and cost limits in the same workflow plan. Not deployed; do not equate locatable quotes with scientific validity.
 - Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
 
 ## Shipped entry continuity
@@ -33,7 +35,7 @@
 ## Remaining / next action
 
 - Continue route-specific layout/interaction refinement and actual paper-to-RO/media/evidence workflow; whole site and automatic multimodal pipeline remain incomplete. User has not yet accepted this visual iteration. Do not repeat the login omission or equate shared color changes with complete page redesign.
-- Known PDF method/results/reproducibility extraction and Evidence/SourceMap gaps remain. Existing RO Files/Hermes literature disclosures can keep internally recovered tasks collapsed when no initialTask is supplied; this pre-existing issue was not introduced or fixed here.
+- Known PDF method/results/reproducibility extraction and Evidence/SourceMap gaps remain. Deployed RO Files/Hermes literature disclosures can keep internally recovered tasks collapsed without initialTask; the separate local candidate above tests its correction and async-scope safety. Do not treat local checks as production acceptance.
 - Preserve Serena continuous v4, restored animated D2NN, Chromium/FFmpeg/PyTorch/Qwen/Codex. CPU image installation remains USER-PAUSED. Codex still depends on PC/v2ray/account access and quotas (ADR-013).
 - Controlled private user11b6cf52-fcd4-4f7d-a3ff-8ea3ae9592fd (Hermes Production E2E), workspacef09ab567-4dcd-4d53-97b3-9a96920fd1ed, RObcbf1586-b6bd-44b6-ab66-c675fcddce78. Do not advertise as a user-accessible demo.
 - Read-first: Git/fetch/checkup, this handoff, relevant baseline and latest integrated plan section. Use explicit Git Bash SSH wrappers and canonical deployment; no env/Secret reads.

@@ -1,5 +1,26 @@
 # Progress
 
+## 2026-09-07 same-chat evidence UI continuation
+
+- Continued the SAME ordinary6Pro URL with implemented decisions and new frontend gap; received focused follow-up plan (1m59s). One browser call timeout was checked for already-sent status, not resent.
+- Astra/low/default produced browser-safe display adapter:29,226tokens,62.478s,8.87750estimated credits;13 prewritten behavior cases passed first try, no code correction/model retry. Terra/medium wired panel/page/i18n and integration tests; manual evidence preserved after main review.
+- Full-chain costs remain unmeasured; no same-task comparative savings claim. Final Web543+5, TS/lint/build, browser4 desktop/mobile passed; screenshots inspected. Existing workflow plan records evidence, including test-only mobile-tab correction. No deployment.
+
+## 2026-09-07 SourceMap evidence workflow local validation
+
+- Same local candidate/base1b974dd; fresh fetch and ECS read-only checks confirm production5e4b4d4, healthy containers and edge200. Prior recovery changes preserved.
+- Ordinary Chat6 Pro planning submitted once and retrieved (4m33s displayed). Adopt deterministic canonical block mapping with explicit ambiguous/cross-block/missing states, no extra provider calls or automatic SDF write.
+- Routing: Luna/low bounded discovery complete; Terra/medium implementation and corrections complete; Sol/high evidence-only review found identity-binding gaps, then root checked fixes and real RED3 → GREEN98. No Astra worker. Evidence and acceptance scope in existing literature-recovery-workflow plan. Final worker535 tests, build+10 compiled checks and changed-file lint passed. Failed+successful metered reviews cost16.60542 estimated credits; full workflow/net savings remain unknown. No deployment.
+
+## 2026-09-07 literature recovery workflow local validation
+
+- Local candidate: `codex/token-smart-live-workflow`, base/HEAD `1b974dd`; production remains `5e4b4d47cba918db5a9b7f7092de32aa244c258e`, rollback `8e4ecb2b5f9e291385b0df8495082e923af328a6`. No merge or deployment in this experiment.
+- Completed local correction of the current RO Files/Hermes recovery-disclosure defect, not old local Task2. Ordinary Chat analysis was retrieved and used; Terra implementation was escalated to Sol after independent review found async-scope gaps. Main review corrections were applied.
+- Final validation: Web526+5 tests, new browser12 + existing literature1, typecheck, root lint/docs-sync and Web production build passed. Test services stopped. This is API-fixture/local acceptance, not production business-pipeline acceptance.
+- Full scope/evidence and measurement limitation: `docs/plans/2026-09-07-literature-recovery-workflow-plan.md`. Do not report prior isolated savings as this task's net savings; session usage aggregation was blocked by automatic approval review.
+- Follow-up measurement research: official CLI0.153.4 schema exposes per-thread estimated credits and model/effort/speed groups. Read-only stdio usage query succeeded but this task's threadUsage was null; desktop control socket failed10050. At that research checkpoint, event/OTel collection was not connected and no restart or new model turn had been performed; subsequent metered runs are recorded below.
+- Subsequent implementation: global token-smart metered-run now captures authorized new read-only app-server tasks; not the existing desktop main task. One real review comparison passed4/4 required findings on both routes: Astra32,369tokens/8.47745estimated credits vs Sol32,254/3.72524, i.e. credits56.06% lower for this review only. Probe/setup/main orchestration costs are separate, not free. Real Sol/high → Luna/low routing was verified through child metadata (no turns); parent/child usage and completion were captured, but child serviceTier remains unknown and live resume failed. No full-chain credits claim. See same plan for evidence.
+
 ## 2026-09-07 entry continuity deployed
 
 - Branch codex/overview-responsive-companion; app/public 5e4b4d47cba918db5a9b7f7092de32aa244c258e, rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs HEAD differs from deployed app. Main and branch pushed; root user files untouched.
@@ -13,4 +34,4 @@
 
 - User reviews deployed visual iteration. Continue individual-page layout and actual paper-to-RO/media/evidence workflow; shared style is not complete whole-site redesign.
 - Preserve original Wanko/lamp, Serena v4, animated D2NN and existing runtimes; CPU image installation stays paused.
-- Extraction/Evidence grounding and existing internally recovered RO literature-disclosure visibility remain unresolved.
+- Extraction/Evidence grounding remains unresolved. RO literature-disclosure recovery local candidate is ready for integration above; production still has the old behavior. Review/merge and production acceptance are separate follow-up work.

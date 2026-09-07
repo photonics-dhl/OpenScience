@@ -1,5 +1,10 @@
 import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
-import type { DocumentSourceMap } from '@openscience/domain';
+import {
+  createBlockSourceLocator,
+  resolveSourceLocator,
+  type DocumentSourceMap,
+  type SourceLocator,
+} from '@openscience/domain';
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
 
 /** 六字段 core 结构（§5.1：schemaVersion + 6 字段，全部 string）。 */
@@ -29,7 +34,21 @@ export interface ExtractionResult extends Record<string, unknown> {
   core: ExtractedCore;
   evidence: Record<(typeof SDF_CORE_FIELDS)[number], { quote: string; locator: string }>;
   needsMoreInformation: Array<(typeof SDF_CORE_FIELDS)[number]>;
+  /** Present only when trusted canonical parser context was supplied outside the user payload. */
+  evidenceLocation?: Record<(typeof SDF_CORE_FIELDS)[number], EvidenceLocation>;
 }
+
+export type EvidenceLocation = {
+  status: 'located';
+  sourceLocator: SourceLocator;
+  origin: 'model_quote' | 'explicit_field_label';
+  matching: 'exact' | 'whitespace';
+} | {
+  status: 'ambiguous' | 'cross_block' | 'missing';
+  origin: 'model_quote' | 'explicit_field_label';
+  matching?: 'exact' | 'whitespace';
+  reason: 'empty-quote' | 'multiple-matches' | 'match-spans-blocks' | 'no-match' | 'locator-roundtrip-failed';
+};
 
 /**
  * SDF core 类型守卫（§9.3 JSON 输出必须经 Schema 校验；对齐 sdf-schema JSON Schema §5.1/§5.3）。
@@ -109,11 +128,15 @@ export function selectManuscriptEvidence(manuscriptText: string): string {
   return excerpts.join('\n\n');
 }
 
-function findEvidenceRange(source: string, proposedQuote: string): { start: number; end: number } | null {
+type EvidenceMatch = { start: number; end: number; matching: 'exact' | 'whitespace' };
+
+function findEvidenceMatches(source: string, proposedQuote: string): EvidenceMatch[] {
   const quote = proposedQuote.trim();
-  if (!quote) return null;
-  const exactStart = source.indexOf(quote);
-  if (exactStart >= 0) return { start: exactStart, end: exactStart + quote.length };
+  if (!quote) return [];
+  const matches: EvidenceMatch[] = [];
+  for (let start = source.indexOf(quote); start >= 0; start = source.indexOf(quote, start + 1)) {
+    matches.push({ start, end: start + quote.length, matching: 'exact' });
+  }
 
   let normalizedSource = '';
   const starts: number[] = [];
@@ -138,12 +161,24 @@ function findEvidenceRange(source: string, proposedQuote: string): { start: numb
     ends.push(index + 1);
   }
   const normalizedQuote = quote.replace(/\s+/g, ' ');
-  const normalizedStart = normalizedSource.indexOf(normalizedQuote);
-  if (normalizedStart >= 0) {
-    const normalizedEnd = normalizedStart + normalizedQuote.length - 1;
-    return { start: starts[normalizedStart], end: ends[normalizedEnd] };
+  for (let start = normalizedSource.indexOf(normalizedQuote); start >= 0; start = normalizedSource.indexOf(normalizedQuote, start + 1)) {
+    const end = start + normalizedQuote.length - 1;
+    matches.push({ start: starts[start]!, end: ends[end]!, matching: 'whitespace' });
   }
+  const unique = new Map<string, EvidenceMatch>();
+  for (const match of matches) {
+    const key = `${match.start}:${match.end}`;
+    const existing = unique.get(key);
+    if (!existing || existing.matching === 'whitespace' && match.matching === 'exact') unique.set(key, match);
+  }
+  return [...unique.values()];
+}
 
+/** Existing pure-text compatibility path. Canonical source-map evidence intentionally uses stricter matching above. */
+function findLegacyEvidenceRange(source: string, proposedQuote: string): EvidenceMatch | null {
+  const direct = findEvidenceMatches(source, proposedQuote)[0];
+  if (direct) return direct;
+  const quote = proposedQuote.trim();
   const tokenize = (input: string) => {
     const tokens: Array<{ text: string; start: number; end: number }> = [];
     let current: { text: string; start: number; end: number } | null = null;
@@ -180,9 +215,9 @@ function findEvidenceRange(source: string, proposedQuote: string): { start: numb
     if (matches.length > 1) return null;
   }
   if (matches.length !== 1) return null;
-  const startToken = sourceTokens[matches[0]];
-  const endToken = sourceTokens[matches[0] + quoteTokens.length - 1];
-  return { start: startToken.start, end: endToken.end };
+  const first = sourceTokens[matches[0]]!;
+  const last = sourceTokens[matches[0]! + quoteTokens.length - 1]!;
+  return { start: first.start, end: last.end, matching: 'exact' };
 }
 
 const EXPLICIT_FIELD_LABELS: Record<(typeof SDF_CORE_FIELDS)[number], string> = {
@@ -206,27 +241,107 @@ function findExplicitFieldEvidence(
   return { quote, start, end: start + quote.length };
 }
 
-function materializeProposal(proposal: ExtractedProposal, manuscriptText: string): ExtractionResult {
+interface CanonicalTextBlock {
+  id: string;
+  textStart: number;
+  textEnd: number;
+  originalStart: number;
+}
+
+function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[] {
+  const blocks: CanonicalTextBlock[] = [];
+  let cursor = 0;
+  for (const page of sourceMap.pages) {
+    for (const block of page.blocks) {
+      const text = block.text?.trim();
+      if (!text) continue;
+      if (blocks.length > 0) cursor += 1;
+      const originalStart = block.text!.indexOf(text);
+      blocks.push({ id: block.id, textStart: cursor, textEnd: cursor + text.length, originalStart });
+      cursor += text.length;
+    }
+  }
+  return blocks;
+}
+
+function locateCanonicalEvidence(
+  sourceMap: DocumentSourceMap,
+  blocks: CanonicalTextBlock[],
+  quote: string,
+  origin: EvidenceLocation['origin'],
+  manuscriptText: string,
+): EvidenceLocation {
+  const matches = findEvidenceMatches(manuscriptText, quote);
+  if (matches.length === 0) return { status: 'missing', origin, reason: quote.trim() ? 'no-match' : 'empty-quote' };
+  if (matches.length > 1) return { status: 'ambiguous', origin, reason: 'multiple-matches' };
+  const match = matches[0]!;
+  const block = blocks.find((candidate) => match.start >= candidate.textStart && match.end <= candidate.textEnd);
+  if (!block) return { status: 'cross_block', origin, matching: match.matching, reason: 'match-spans-blocks' };
+  try {
+    const sourceLocator = createBlockSourceLocator(sourceMap, block.id, {
+      charRange: {
+        start: block.originalStart + match.start - block.textStart,
+        end: block.originalStart + match.end - block.textStart,
+      },
+    });
+    const resolved = resolveSourceLocator(sourceMap, sourceLocator);
+    if (resolved.id !== block.id) throw new Error('locator resolved to a different block');
+    const selectedText = manuscriptText.slice(match.start, match.end);
+    const locatedText = resolved.text?.slice(sourceLocator.charRange!.start, sourceLocator.charRange!.end);
+    const sameText = match.matching === 'exact'
+      ? locatedText === selectedText
+      : locatedText?.replace(/\s+/gu, ' ') === selectedText.replace(/\s+/gu, ' ');
+    if (!sameText) throw new Error('locator text does not match selected evidence');
+    return { status: 'located', sourceLocator, origin, matching: match.matching };
+  } catch {
+    return { status: 'missing', origin, matching: match.matching, reason: 'locator-roundtrip-failed' };
+  }
+}
+
+function materializeProposal(proposal: ExtractedProposal, manuscriptText: string, sourceMap?: DocumentSourceMap): ExtractionResult {
   const core = { schemaVersion: SDF_CORE_VERSION } as ExtractedCore;
   const evidence = {} as ExtractionResult['evidence'];
   const needsMoreInformation: ExtractionResult['needsMoreInformation'] = [];
+  const blocks = sourceMap ? canonicalTextBlocks(sourceMap) : undefined;
+  const evidenceLocation = sourceMap ? {} as NonNullable<ExtractionResult['evidenceLocation']> : undefined;
   for (const field of SDF_CORE_FIELDS) {
     const candidate = proposal.fields[field];
-    const range = findEvidenceRange(manuscriptText, candidate.sourceQuote);
+    const matches = findEvidenceMatches(manuscriptText, candidate.sourceQuote);
+    const range = sourceMap ? (matches[0] ?? null) : findLegacyEvidenceRange(manuscriptText, candidate.sourceQuote);
     const explicit = findExplicitFieldEvidence(manuscriptText, field);
     if (!candidate.needsMoreInformation && range) {
       core[field] = candidate.summary.trim();
       evidence[field] = { quote: manuscriptText.slice(range.start, range.end), locator: `chars:${range.start}-${range.end}` };
+      if (sourceMap && evidenceLocation && blocks) {
+        evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, candidate.sourceQuote, 'model_quote', manuscriptText);
+      }
     } else if (explicit) {
-      core[field] = explicit.quote;
-      evidence[field] = { quote: explicit.quote, locator: `chars:${explicit.start}-${explicit.end}` };
+      const explicitMatches = findEvidenceMatches(manuscriptText, explicit.quote);
+      if (explicitMatches.length > 0) {
+        const explicitRange = explicitMatches[0]!;
+        core[field] = manuscriptText.slice(explicitRange.start, explicitRange.end);
+        evidence[field] = { quote: core[field], locator: `chars:${explicitRange.start}-${explicitRange.end}` };
+        if (sourceMap && evidenceLocation && blocks) {
+          evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, explicit.quote, 'explicit_field_label', manuscriptText);
+        }
+      } else {
+        core[field] = '';
+        evidence[field] = { quote: '', locator: '' };
+        needsMoreInformation.push(field);
+        if (sourceMap && evidenceLocation && blocks) {
+          evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, explicit.quote, 'explicit_field_label', manuscriptText);
+        }
+      }
     } else {
       core[field] = '';
       evidence[field] = { quote: '', locator: '' };
       needsMoreInformation.push(field);
+      if (sourceMap && evidenceLocation && blocks) {
+        evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, candidate.sourceQuote, 'model_quote', manuscriptText);
+      }
     }
   }
-  return { core, evidence, needsMoreInformation };
+  return { core, evidence, needsMoreInformation, ...(evidenceLocation ? { evidenceLocation } : {}) };
 }
 
 /**
@@ -237,8 +352,11 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
 export async function extractHandler(
   gateway: AiGateway,
   task: { payload: Record<string, unknown> },
+  trustedContext: { sourceMap?: DocumentSourceMap } = {},
 ): Promise<ExtractionResult> {
-  const manuscriptText = typeof task.payload?.manuscriptText === 'string' ? task.payload.manuscriptText : '';
+  const manuscriptText = trustedContext.sourceMap
+    ? sourceMapToManuscriptText(trustedContext.sourceMap)
+    : typeof task.payload?.manuscriptText === 'string' ? task.payload.manuscriptText : '';
   if (!manuscriptText.trim()) {
     throw new Error('缺少正文（payload.manuscriptText）');
   }
@@ -252,5 +370,5 @@ export async function extractHandler(
     { role: 'user' as const, content: selectManuscriptEvidence(manuscriptText) },
   ];
   const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
-  return materializeProposal(proposal, manuscriptText);
+  return materializeProposal(proposal, manuscriptText, trustedContext.sourceMap);
 }

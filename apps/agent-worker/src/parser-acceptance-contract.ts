@@ -7,6 +7,7 @@ import {
   createTableCellSourceLocator,
   parseDocumentSourceMapReference,
   resolveSourceLocator,
+  validateSourceLocator,
   type DocumentSourceMap,
 } from '@openscience/domain';
 import { SDF_CORE_VERSION } from '@openscience/sdf-schema';
@@ -364,6 +365,30 @@ function hasExactKeys(value: Record<string, unknown>, expected: readonly string[
   return keys.length === expected.length && [...expected].sort().every((key, index) => keys[index] === key);
 }
 
+function isEvidenceLocation(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.status !== 'string'
+    || (value.origin !== 'model_quote' && value.origin !== 'explicit_field_label')) return false;
+  if (value.status === 'located') {
+    if (!hasExactKeys(value, ['status', 'sourceLocator', 'origin', 'matching'])
+      || (value.matching !== 'exact' && value.matching !== 'whitespace')) return false;
+    try {
+      validateSourceLocator(value.sourceLocator);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  if (!['ambiguous', 'cross_block', 'missing'].includes(value.status)
+    || typeof value.reason !== 'string') return false;
+  const keys = Object.keys(value);
+  if (!keys.every((key) => ['status', 'origin', 'matching', 'reason'].includes(key))
+    || !hasExactKeys(value, value.matching === undefined
+      ? ['status', 'origin', 'reason']
+      : ['status', 'origin', 'matching', 'reason'])) return false;
+  return (value.matching === undefined || value.matching === 'exact' || value.matching === 'whitespace')
+    && ['empty-quote', 'multiple-matches', 'match-spans-blocks', 'no-match', 'locator-roundtrip-failed'].includes(value.reason);
+}
+
 export interface AcceptanceRuntimeGraphEntry {
   path: string;
   sha256: string;
@@ -514,9 +539,10 @@ export async function verifyAcceptanceRuntimeGraphManifest(
 export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | 'needs_review' {
   if (!isRecord(value)) throw new Error('invalid sdf.extract handler result');
   const hasSourceMapRef = value.sourceMapRef !== undefined;
+  let sourceMapRef: ReturnType<typeof parseDocumentSourceMapReference> | undefined;
   if (hasSourceMapRef) {
     try {
-      parseDocumentSourceMapReference(value.sourceMapRef);
+      sourceMapRef = parseDocumentSourceMapReference(value.sourceMapRef);
     } catch {
       throw new Error('invalid sdf.extract handler result');
     }
@@ -529,15 +555,21 @@ export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | '
     }
     return 'needs_review';
   }
+  const hasEvidenceLocation = value.evidenceLocation !== undefined;
   if (!hasExactKeys(value, hasSourceMapRef
-    ? ['core', 'evidence', 'needsMoreInformation', 'sourceMapRef']
-    : ['core', 'evidence', 'needsMoreInformation'])
+    ? hasEvidenceLocation
+      ? ['core', 'evidence', 'needsMoreInformation', 'sourceMapRef', 'evidenceLocation']
+      : ['core', 'evidence', 'needsMoreInformation', 'sourceMapRef']
+    : hasEvidenceLocation
+      ? ['core', 'evidence', 'needsMoreInformation', 'evidenceLocation']
+      : ['core', 'evidence', 'needsMoreInformation'])
     || !isRecord(value.core) || !isRecord(value.evidence)
     || !Array.isArray(value.needsMoreInformation)) {
     throw new Error('invalid sdf.extract handler result');
   }
   const core = value.core;
   const evidenceByField = value.evidence;
+  const evidenceLocations = value.evidenceLocation as Record<string, unknown> | undefined;
   const needsMoreInformation = value.needsMoreInformation;
   if (!hasExactKeys(core, ['schemaVersion', ...SDF_FIELDS])
     || core.schemaVersion !== SDF_CORE_VERSION
@@ -548,6 +580,15 @@ export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | '
       return !isRecord(evidence) || !hasExactKeys(evidence, ['quote', 'locator'])
         || typeof evidence.quote !== 'string' || typeof evidence.locator !== 'string';
     })
+    || (hasEvidenceLocation && (!sourceMapRef || !isRecord(evidenceLocations)
+      || !hasExactKeys(evidenceLocations, SDF_FIELDS)
+      || SDF_FIELDS.some((field) => {
+        const location = evidenceLocations[field];
+        return !isEvidenceLocation(location)
+          || (isRecord(location) && location.status === 'located'
+            && ((location.sourceLocator as Record<string, unknown>).artifactId !== sourceMapRef.artifactId
+              || (location.sourceLocator as Record<string, unknown>).contentHash !== sourceMapRef.contentHash));
+      })))
     || new Set(needsMoreInformation).size !== needsMoreInformation.length
     || needsMoreInformation.some((field) => !SDF_FIELDS.includes(field))) {
     throw new Error('invalid sdf.extract handler result');
