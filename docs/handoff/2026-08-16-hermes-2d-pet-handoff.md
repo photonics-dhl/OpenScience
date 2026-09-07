@@ -1,10 +1,10 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT active-memory, 2026-09-07 +08. User requested skills-guided coherent product UI with lower reading/interaction load, after rejecting partial RO-only changes. Preserve original Aladdin dog/Wanko and lamp. Never infer aesthetic approval from passing checks.
+> CURRENT active-memory, 2026-09-07 +08. User authorized PRD v1.1 implementation, GitHub push and server deployment. Current plan: docs/plans/2026-09-07-open-research-publication-plan.md. Preserve original Aladdin dog/Wanko and lamp. Never infer aesthetic approval from passing checks.
 
 ## Version tuple
 
-- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/overview-responsive-companion. Application/public/loopback 5e4b4d47cba918db5a9b7f7092de32aa244c258e; rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs-only Git HEAD is not another app release.
+- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; record candidate0822515, not deployed. Fresh18:53 +08 checkup: application/public/loopback5e4b4d47cba918db5a9b7f7092de32aa244c258e; rollback8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs HEAD is not another app release.
 - Application source pushed non-force to main and branch. Canonical server release completed, journal cleared and retention complete. Root checkout contains unrelated user changes; leave untouched.
 - Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
 
@@ -32,6 +32,8 @@
 
 ## Remaining / next action
 
+- Execute publication plan Task2 UI, Task3 frozen per-RO API, then full review/test/exact-SHA deploy. Task1 approved0822515:76 domain/8 API + typecheck/build/lint. Draft graph remains mutable; Task3 must persist fixed record metadata, not mislabel it. Ledger ignored under .superpowers/sdd/2026-09-07-open-research-publication-plan/progress.md.
+- GitHub push awaiting local Git Credential Manager login; user notified. Linux release-contract baseline137/137 passed. Local Web525 passed plus source-art after Chromium install. No production switch yet; do not declare full PRD complete.
 - Continue route-specific layout/interaction refinement and actual paper-to-RO/media/evidence workflow; whole site and automatic multimodal pipeline remain incomplete. User has not yet accepted this visual iteration. Do not repeat the login omission or equate shared color changes with complete page redesign.
 - Known PDF method/results/reproducibility extraction and Evidence/SourceMap gaps remain. Existing RO Files/Hermes literature disclosures can keep internally recovered tasks collapsed when no initialTask is supplied; this pre-existing issue was not introduced or fixed here.
 - Preserve Serena continuous v4, restored animated D2NN, Chromium/FFmpeg/PyTorch/Qwen/Codex. CPU image installation remains USER-PAUSED. Codex still depends on PC/v2ray/account access and quotas (ADR-013).

@@ -5,6 +5,9 @@
 - 用户已授权完善功能、版本管理、GitHub 推送和服务器部署；本轮按 M1/M2 修复记录闭环并提供只读 API。
 - 分支 codex/open-research-publication，起点 1b974dd；18:53 +08 巡检 production 5e4b4d4 / rollback 8e4ecb2，容器健康、公网/内网 200、出网 204。
 - 实施计划已登记；导入确认原子快照、页面材料恢复、固定版本 API 依次开发并独立审查。M3/M4 仍为后续阶段。
+- 记录修复候选 0822515：原子确认、幂等重放、普通入口材料恢复 API、保守 Claim/Evidence 定位；76 domain / 8 API、构建/类型/lint 通过，独立复审通过。SDF/manifest 固定；草稿图谱仍可编辑，Task3 负责冻结 API 记录。
+- Web 基线 525 单元测试通过，补装 Chromium 后 source-art 测试通过；服务器 Linux 发布合同 137/137 通过。本机同合同受 Windows shell/symlink 限制，不作为发布通过证据。
+- 网页一致性 Task2 开发中。GitHub 推送待本机 GCM 登录；用户已收到登录提示。尚未切换生产。
 
 ## 2026-09-07 开放研究出版物 PRD 草案
 

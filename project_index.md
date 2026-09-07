@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-07 +08）：** branch codex/overview-responsive-companion；application/public 5e4b4d47cba918db5a9b7f7092de32aa244c258e，rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6。登录/注册减负与共享产品样式已部署；公网auth8/product8通过，未代替用户视觉验收；demo9848411/controller3d518af unchanged.
-> 当前用户要求：结合 frontend-design、ui-ux-pro-max、baseline-ui 统一完整入口体验，减少阅读与操作压力；不得把局部页面或共享配色等同整体联调完成。
+> **CURRENT source/deployment anchor（2026-09-07 +08）：** branch codex/open-research-publication；record candidate0822515 未部署；18:53 巡检 application/public5e4b4d47cba918db5a9b7f7092de32aa244c258e，rollback8e4ecb2b5f9e291385b0df8495082e923af328a6。demo9848411/controller3d518af unchanged.
+> 当前用户要求：按 PRD v1.1 完善功能、版本管理、推送 GitHub 并部署；本轮研究记录/核查/每 RO API 优先，保留原有视觉与解释能力，不代表四阶段全部完成。
 
 ## 当前产品交付
 
@@ -10,6 +10,7 @@
 |---|---|---|
 | `docs/specs/2026-09-07-open-research-publication-prd.md` | 开放研究出版物 PRD v1.1：四阶段建设，每 RO AI 友好 API、固定版本/权限合同及独立客户端验收 | 用户授权实施；本轮 M1/M2 优先，不代表已部署 |
 | `docs/plans/2026-09-07-open-research-publication-plan.md` | 原子导入确认、材料一致性、来源核查和每 RO 只读 API；独立审查与精确 SHA 发布 | IN PROGRESS；codex/open-research-publication，生产基线 5e4b4d4 / rollback 8e4ecb2 |
+| `packages/domain/src/ingestion/{ingestion-service,ingestion-evidence}.ts` / `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/ingestion.ts` / corresponding ingestion tests | 确认原子创建真实 Version、幂等重放、材料恢复与保守来源匹配；保留既有草稿图谱编辑 | CANDIDATE 0822515；76 domain / 8 API，独立复审通过；未部署 |
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；已确认RO工作区/概览/Hermes侧栏/研究桌面职责；官方参考实查完成；A配色三态本地样稿，待用户视觉验收 |
 | `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；收尾/22路由审计和选择性同事UX整合；PR102应用4d39808已部署、动画demo9848411；主线确认，PR103/104正式桌面/概览/段落助手已部署验收 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |
