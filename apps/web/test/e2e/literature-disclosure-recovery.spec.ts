@@ -239,13 +239,14 @@ test('the mounted disclosure clears a typed query in the first target and user s
   await page.getByRole('button', { name: 'switch-target' }).click();
 
   await expect(disclosure.locator('[data-literature-acquisition]')).toHaveAttribute('data-literature-target', 'research-object:ro-b');
-  await expect(page.locator('body')).toHaveAttribute('data-literature-query-at-scope-commit', '');
+  await expect(page.locator('body')).toHaveAttribute('data-literature-scope-commit', 'user-a:ro-b:');
   await expect(query).toHaveValue('');
 
+  await disclosure.locator('summary').click();
   await query.fill('Scope B private query');
   await page.getByRole('button', { name: 'switch-user' }).click();
 
-  await expect(page.locator('body')).toHaveAttribute('data-literature-query-at-scope-commit', '');
+  await expect(page.locator('body')).toHaveAttribute('data-literature-scope-commit', 'user-b:ro-b:');
   await expect(query).toHaveValue('');
 });
 
