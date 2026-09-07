@@ -135,11 +135,15 @@ export async function createCommit(
     }
   }
 
-  // 父 Commit = 该分支最近一个；空分支回退分支起点锚点（head_commit_id，P1C-2 §21.2 步骤 11）
-  let parentCommit = await deps.prisma.commit.findFirst({
-    where: { branchId: branch.id },
-    orderBy: { createdAt: 'desc' },
+  // Version numbers are the RO's logical commit order; wall-clock timestamps may tie.
+  // An empty branch still falls back to its explicit creation anchor.
+  const branchTipVersion = await deps.prisma.version.findFirst({
+    where: { researchObjectId: ro.id, commit: { branchId: branch.id } },
+    orderBy: { versionNo: 'desc' },
   });
+  let parentCommit = branchTipVersion
+    ? await deps.prisma.commit.findUnique({ where: { id: branchTipVersion.commitId } })
+    : null;
   if (!parentCommit && branch.headCommitId) {
     parentCommit = await deps.prisma.commit.findUnique({ where: { id: branch.headCommitId } });
   }
@@ -228,7 +232,7 @@ export async function createCommit(
       },
     });
     if (!transaction) {
-      const predecessor = parentCommit ? await tx.version.findFirst({ where: { commitId: parentCommit.id } }) : null;
+      const predecessor = parentCommit ? await tx.version.findFirst({ where: { commitId: parentCommit.id }, orderBy: { versionNo: 'desc' } }) : null;
       if (predecessor) await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: predecessor.id, versionId: version.id });
       await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: version.id });
     }

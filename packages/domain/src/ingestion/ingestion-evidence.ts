@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import type { IngestionDeps } from './ingestion-service';
 import { SDF_NODE_TYPES } from '../research-object/types';
 import { loadDocumentSourceMapReference, parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
-import { createBlockSourceLocator } from '../research-intelligence/source-locator';
+import { createBlockSourceLocator, resolveSourceLocator } from '../research-intelligence/source-locator';
+import { validateSourceLocator } from '../research-intelligence/validation';
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -85,15 +86,33 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
     const statement = input.core[field]?.trim();
     const quote = record(evidence[field]).quote;
     if (!statement || statement !== proposed[field] || typeof quote !== 'string' || !quote.trim()) continue;
-    const matches = sourceMap.pages.flatMap(page => page.blocks.flatMap(block => {
-      const start = block.text?.indexOf(quote) ?? -1;
-      if (start < 0) return [];
-      // A second occurrence must count as ambiguity, even if another block matches once.
-      return block.text?.indexOf(quote, start + 1) === -1 ? [{ block, start }] : [{ block, start }, { block, start }];
-    }));
-    if (matches.length !== 1) continue;
-    const { block, start } = matches[0]!;
-    const locator = createBlockSourceLocator(sourceMap, block.id, { charRange: { start, end: start + quote.length } });
+    let locator: ReturnType<typeof createBlockSourceLocator>;
+    if (Object.prototype.hasOwnProperty.call(result, 'evidenceLocation')) {
+      // Canonical parser outcomes are authoritative. Unresolved or malformed
+      // supplied metadata must never be upgraded by a narrower legacy rematch.
+      const location = record(record(result.evidenceLocation)[field]);
+      if (location.status !== 'located' || (location.origin !== 'model_quote' && location.origin !== 'explicit_field_label')
+        || (location.matching !== 'exact' && location.matching !== 'whitespace')
+        || Object.keys(location).sort().join(',') !== 'matching,origin,sourceLocator,status') continue;
+      try {
+        locator = validateSourceLocator(location.sourceLocator);
+        const block = resolveSourceLocator(sourceMap, locator);
+        if (!locator.charRange || block.text?.slice(locator.charRange.start, locator.charRange.end) !== quote) continue;
+      } catch {
+        continue;
+      }
+    } else {
+      // Older results without canonical metadata retain conservative exact matching.
+      const matches = sourceMap.pages.flatMap(page => page.blocks.flatMap(block => {
+        const start = block.text?.indexOf(quote) ?? -1;
+        if (start < 0) return [];
+        // A second occurrence must count as ambiguity, even if another block matches once.
+        return block.text?.indexOf(quote, start + 1) === -1 ? [{ block, start }] : [{ block, start }, { block, start }];
+      }));
+      if (matches.length !== 1) continue;
+      const { block, start } = matches[0]!;
+      locator = createBlockSourceLocator(sourceMap, block.id, { charRange: { start, end: start + quote.length } });
+    }
     const provenance = { source: 'deterministic', provider: 'ingestion-source-match', providerVersion: '1',
       inputHash: task.artifact.blobSha256, ingestionTaskId: task.id, field };
     const claim = await deps.prisma.claimNode.create({ data: {

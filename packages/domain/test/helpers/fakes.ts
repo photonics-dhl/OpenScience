@@ -584,7 +584,8 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const rows = db.versions.filter(
           (v) =>
             (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId) &&
-            (where.commitId === undefined || v.commitId === where.commitId),
+            (where.commitId === undefined || v.commitId === where.commitId) &&
+            (where.commit?.branchId === undefined || db.commits.some(c => c.id === v.commitId && c.branchId === where.commit.branchId)),
         );
         if (orderBy?.versionNo === 'desc') rows.sort((a, b) => b.versionNo - a.versionNo);
         const row = rows[0] ?? null;

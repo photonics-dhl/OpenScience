@@ -159,7 +159,9 @@ describe('frozen research record real HTTP routes', () => {
         payload:{expectedUpdatedAt:v2Root.updatedAt.toISOString(),patch:{statement:'Edited in version two'}}});
       expect(edit.statusCode).toBe(200);
     }
+    for (const commit of f.db.commits) commit.createdAt = new Date('2026-09-07T00:00:00.000Z');
     const v3 = await createCommit(f.deps, {researchObjectId:RO,userId:f.user.id,version:3,message:'Version three',sdfCore:f.core,artifacts:[{artifactId:ARTIFACT,logicalPath:'source.txt'}]});
+    expect(f.db.commits.find(c => c.id === v3.commitId).parentCommitId).toBe(v2.commitId);
     const v3Response = await f.app.inject({method:'GET',url:f.url.replace(f.versionId,v3.versionId),cookies:f.cookies});
     const record = v3Response.json().record;
     expect(record.claims).toHaveLength(2);
@@ -183,11 +185,28 @@ describe('frozen research record real HTTP routes', () => {
     // Model the committed result of an intentional graph deletion; retain the fixed v2 record.
     f.db.evidenceRecords = f.db.evidenceRecords.filter(e => e.versionId !== v2.versionId);
     f.db.claimNodes = f.db.claimNodes.filter(c => c.versionId !== v2.versionId);
+    for (const commit of f.db.commits) commit.createdAt = new Date('2026-09-07T00:00:00.000Z');
     const v3 = await createCommit(f.deps, {researchObjectId:RO,userId:f.user.id,version:3,message:'Preserve deliberate deletion',sdfCore:f.core,artifacts:[{artifactId:ARTIFACT,logicalPath:'source.txt'}]});
     const response = await f.app.inject({method:'GET',url:f.url.replace(f.versionId,v3.versionId),cookies:f.cookies});
     expect(response.json().record).toMatchObject({claims:[],evidence:[]});
     expect(f.db.claimNodes.filter(c => c.versionId === v3.versionId)).toHaveLength(0);
     expect((await f.app.inject({method:'GET',url:f.url.replace(f.versionId,v2.versionId),cookies:f.cookies})).json().record.claims).toHaveLength(1);
+  });
+  it('uses an empty branch anchor once, then its own latest logical version despite tied clocks', async () => {
+    const f = await fixture();
+    const anchor = f.db.commits[0].id;
+    f.db.branches.push({id:'feature',researchObjectId:RO,name:'feature',headCommitId:anchor,isDefault:false});
+    const feature = await createCommit(f.deps,{researchObjectId:RO,userId:f.user.id,version:2,branchId:'feature',message:'Feature first',sdfCore:f.core,artifacts:[{artifactId:ARTIFACT,logicalPath:'source.txt'}]});
+    expect(f.db.commits.find(c => c.id === feature.commitId).parentCommitId).toBe(anchor);
+    const claim = f.db.claimNodes.find(c => c.versionId === feature.versionId)!;
+    const edited = await f.app.inject({method:'PATCH',url:`/research-objects/${RO}/versions/${feature.versionId}/claims/${claim.id}`,cookies:f.cookies,
+      payload:{expectedUpdatedAt:claim.updatedAt.toISOString(),patch:{statement:'Feature work'}}});
+    expect(edited.statusCode).toBe(200);
+    await createCommit(f.deps,{researchObjectId:RO,userId:f.user.id,version:3,message:'Main advances separately',sdfCore:f.core,artifacts:[{artifactId:ARTIFACT,logicalPath:'source.txt'}]});
+    for (const commit of f.db.commits) commit.createdAt = new Date('2026-09-07T00:00:00.000Z');
+    const next = await createCommit(f.deps,{researchObjectId:RO,userId:f.user.id,version:4,branchId:'feature',message:'Feature second',sdfCore:f.core,artifacts:[{artifactId:ARTIFACT,logicalPath:'source.txt'}]});
+    expect(f.db.commits.find(c => c.id === next.commitId).parentCommitId).toBe(feature.commitId);
+    expect(f.db.claimNodes.find(c => c.versionId === next.versionId)?.statement).toBe('Feature work');
   });
   it('publishes discoverable machine schema and OpenAPI contracts', async () => {
     const f=await fixture();
