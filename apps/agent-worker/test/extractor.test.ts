@@ -96,7 +96,10 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
         ? { summary: 'Canonical parser problem', sourceBlockIds: ['B000001'], needsMoreInformation: false }
         : { summary: '', sourceBlockIds: [], needsMoreInformation: true }])),
     };
-    const completeStructured = vi.fn().mockResolvedValue(proposal);
+    const completeStructured = vi.fn(async (guard: (value: unknown) => boolean) => {
+      expect(guard(proposal)).toBe(true);
+      return proposal;
+    });
     const gateway = { completeStructured } as unknown as AiGateway;
     const parserCascade = vi.fn().mockResolvedValue({ status: 'succeeded', sourceMap, warnings: [] });
     const handlers = createHandlers(gateway, {
@@ -504,7 +507,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.evidence.problem.locator).toMatch(/^chars:\d+-\d+$/);
   });
 
-  it.each(['missing', 'rewritten', 'two-failed-attempts'])('保留首轮合法字段并以字段原因修复其余字段：%s', async (mode) => {
+  it.each(['missing', 'rewritten', 'partial', 'first-omitted', 'missing-upgrade', 'missing-invalid', 'two-failed-attempts'])('保留首轮合法字段并以字段原因修复其余字段：%s', async (mode) => {
     const blocks = Array.from({ length: 6 }, (_, index) => ({
       id: `block-${index + 1}`, kind: 'paragraph' as const, text: `Exact source block ${index + 1}`,
       boundingBox: { x: 1, y: 90 - index * 10, width: 80, height: 8 },
@@ -519,7 +522,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       schemaVersion: '0.1.0',
       fields: {
         problem: { summary: 'Retained problem', sourceBlockIds: ['B000001', 'B000002'], needsMoreInformation: false },
-        insight: { summary: 'Gap is invalid', sourceBlockIds: ['B000003', 'B000005'], needsMoreInformation: false },
+        insight: { summary: 'Reverse order is invalid', sourceBlockIds: ['B000005', 'B000003'], needsMoreInformation: false },
         method: { summary: '', sourceBlockIds: [], needsMoreInformation: false },
         results: { summary: 'Duplicate invalid', sourceBlockIds: ['B000004', 'B000004'], needsMoreInformation: false },
         limitations: { summary: 'Must be empty when missing', sourceBlockIds: [], needsMoreInformation: true },
@@ -541,10 +544,18 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
         requests.push(request);
         call += 1;
         const reply = structuredClone(call === 1 ? first : second);
+        if (call === 1 && mode === 'first-omitted') delete (reply.fields as Record<string, unknown>).method;
+        if (call > 1 && mode === 'missing-upgrade') reply.fields.reproducibility = { summary: 'Supported reproduction condition', sourceBlockIds: ['B000006'], needsMoreInformation: false };
+        if (call > 1 && mode === 'missing-invalid') reply.fields.reproducibility = { summary: 'Invalid must not upgrade', sourceBlockIds: ['UNKNOWN'], needsMoreInformation: false };
         if (call > 1 && mode !== 'missing') {
           reply.fields.problem = { summary: 'Unrequested rewrite', sourceBlockIds: ['B000005'], needsMoreInformation: false };
         }
         if (call === 2 && mode === 'two-failed-attempts') reply.fields.insight = first.fields.insight;
+        if (call > 1 && mode === 'partial') {
+          const partialFields = reply.fields as Record<string, unknown>;
+          delete partialFields.problem;
+          delete partialFields.reproducibility;
+        }
         return { text: JSON.stringify(reply), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
       },
     };
@@ -560,13 +571,16 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.evidenceSegments?.method.map((segment) => segment.quote)).toEqual([
       'Exact source block 3', 'Exact source block 4',
     ]);
-    expect(result.needsMoreInformation).toEqual(['insight', 'results', 'limitations', 'reproducibility']);
+    expect(result.needsMoreInformation).toEqual(mode === 'missing-upgrade'
+      ? ['insight', 'results', 'limitations'] : ['insight', 'results', 'limitations', 'reproducibility']);
+    expect(result.core.reproducibility).toBe(mode === 'missing-upgrade' ? 'Supported reproduction condition' : '');
     const retryRequest = JSON.stringify(requests[1]);
-    expect(retryRequest).toContain('insight:contiguous_ids_required');
-    expect(retryRequest).toContain('method:summary_required');
+    expect(retryRequest).toContain('insight:ordered_ids_required');
+    expect(retryRequest).toContain(mode === 'first-omitted' ? 'method:malformed_item' : 'method:summary_required');
     expect(retryRequest).toContain('results:duplicate_ids');
     expect(retryRequest).toContain('limitations:missing_requires_empty');
-    expect(retryRequest).not.toContain('Gap is invalid');
+    expect(retryRequest).toContain('only the invalid fields');
+    expect(retryRequest).not.toContain('Reverse order is invalid');
     expect(retryRequest).not.toContain('Must be empty when missing');
   });
 
@@ -608,7 +622,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     const invalid = {
       schemaVersion: '0.1.0', fields: {
         problem: { summary: 'Valid but not independently returnable', sourceBlockIds: ['B000001'], needsMoreInformation: false },
-        insight: { summary: 'Still gapped', sourceBlockIds: ['B000001', 'B000003'], needsMoreInformation: false },
+        insight: { summary: 'Still reversed', sourceBlockIds: ['B000003', 'B000001'], needsMoreInformation: false },
         method: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
         results: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
         limitations: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
@@ -841,19 +855,20 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.needsMoreInformation).toEqual(['results']);
   });
 
-  it('uses an ordered contiguous canonical block span without rewriting hyphenation or fragmented formulas', async () => {
+  it('uses ordered noncontiguous canonical blocks without including unrelated text or rewriting fragmented formulas', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-segments', contentHash: 'e'.repeat(64), parser: { name: 'cascade', version: '1' },
       pages: [{ page: 1, width: 600, height: 800, blocks: [
         { id: 'line-a', kind: 'paragraph', text: 'The optical-', boundingBox: { x: 10, y: 10, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
         { id: 'line-b', kind: 'paragraph', text: 'field obeys Φ_CEP ≠ 0 under calibrated condi-', boundingBox: { x: 10, y: 20, width: 300, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'unrelated', kind: 'paragraph', text: 'Copyright and running header.', boundingBox: { x: 10, y: 25, width: 200, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
         { id: 'line-c', kind: 'paragraph', text: 'tions.', boundingBox: { x: 10, y: 30, width: 50, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
       ] }],
     };
     const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
     const proposal = {
       schemaVersion: '0.1.0', fields: {
-        problem: { summary: 'The calibrated condition produces a nonzero CEP response.', sourceBlockIds: ['B000001', 'B000002', 'B000003'], needsMoreInformation: false },
+        problem: { summary: 'The calibrated condition produces a nonzero CEP response.', sourceBlockIds: ['B000001', 'B000002', 'B000004'], needsMoreInformation: false },
         insight: missing, method: missing, results: missing, limitations: missing, reproducibility: missing,
       },
     };
@@ -920,5 +935,22 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     }) };
     const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] });
     await expect(extractHandler(gateway, { payload: {} }, { sourceMap })).rejects.toThrow();
+  });
+
+  it('rejects canonical evidence whose authentic selected text exceeds 8000 characters', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-oversize-evidence', contentHash: '8'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'oversize', kind: 'paragraph', text: 'x'.repeat(8_001), boundingBox: { x: 0, y: 0, width: 90, height: 10 },
+        parser: { name: 'native', version: '1' }, transformations: [],
+      }] }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const fields = { problem: { summary: 'Too large', sourceBlockIds: ['B000001'], needsMoreInformation: false },
+      insight: missing, method: missing, results: missing, limitations: missing, reproducibility: missing };
+    const gateway = new AiGateway({ providers: [{ name: 'oversize', model: 'oversize', complete: async () => ({
+      text: JSON.stringify({ schemaVersion: '0.1.0', fields }), usage: { inputTokens: 1, outputTokens: 1 }, model: 'oversize',
+    }) }] });
+    await expect(extractHandler(gateway, { payload: {} }, { sourceMap })).rejects.toThrow(/重试上限/);
   });
 });

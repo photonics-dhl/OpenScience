@@ -95,7 +95,7 @@
       "evidenceLocationUnverified": "未验证",
       "evidenceLocationPage": "第 {page} 页",
       "evidenceLocationBlock": "块 {blockId}",
-      "evidenceLocationNotice": "位置仅说明引文出现在哪里，不代表结论正确。",
+      "evidenceLocationNotice": "以下是按原文顺序排列的独立摘录，段落可能不连续。每个位置只对应该段引文，不代表结论正确。",
       "artifactStored": "已存储素材",
       "artifactStatus": {
         "uploading": "上传中",
@@ -1351,7 +1351,7 @@
   "ingestionClaimReview": {
     "duplicateAssociation": "本批次中，同一组原文只关联一条主张；拆分出的其他主张可先不重复关联原文。",
     "reviewEvidence": "核对原文段落",
-    "evidenceNotice": "每段原文保留独立出处。请核对这些段落是否完整支持建议内容及其条件、局限；定位本身不代表科学结论正确。",
+    "evidenceNotice": "以下独立摘录按原文顺序排列，段落可能不连续，省略部分未展示。每段保留独立出处。请核对这些段落是否完整支持建议内容及其条件、局限；定位本身不代表科学结论正确。",
     "title": "从论文分析整理主张", "boundary": "从当前已保存版本选择、编辑主张。原文引文只是候选依据；确认本批次不会将主张或证据标为已验证。",
     "load": "预览已确认的论文分析", "refresh": "重新加载预览", "loading": "正在加载预览…", "empty": "当前版本没有匹配的已确认论文分析。请先确认 Hermes 建议并保存版本。",
     "source": "来源文献", "statement": "主张内容", "changed": "内容与原提取不同，请重新核对引文关联", "kind": "主张类型", "parent": "本批次的上级主张", "chooseParent": "选择上级主张", "conditions": "适用条件（每行一项）", "limitations": "局限（每行一项）",

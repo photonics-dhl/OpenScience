@@ -332,13 +332,18 @@ type CanonicalFieldValidationReason =
   | 'segment_count_1_to_32'
   | 'duplicate_ids'
   | 'unknown_ids'
-  | 'contiguous_ids_required'
+  | 'ordered_ids_required'
   | 'source_text_limit_8000';
 
+interface CanonicalRepairResponse {
+  schemaVersion: string;
+  fields: Record<string, unknown>;
+}
+
 function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
-  guard: SchemaGuard<ExtractedProposal>;
+  guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: (value: unknown) => string | undefined;
-  mergeRetained: (proposal: ExtractedProposal) => ExtractedProposal;
+  mergeRetained: () => ExtractedProposal;
 } {
   const allowed = new Map(blocks.map((block) => [block.promptId, block]));
   const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
@@ -362,15 +367,15 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     if (new Set(ids).size !== ids.length) return { reason: 'duplicate_ids' };
     if (ids.some((id) => !allowed.has(id))) return { reason: 'unknown_ids' };
     const selected = ids.map((id) => allowed.get(id)!);
-    if (selected.some((block, index) => index > 0 && block.ordinal !== selected[index - 1]!.ordinal + 1)) {
-      return { reason: 'contiguous_ids_required' };
+    if (selected.some((block, index) => index > 0 && block.ordinal <= selected[index - 1]!.ordinal)) {
+      return { reason: 'ordered_ids_required' };
     }
     if (selected.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
       return { reason: 'source_text_limit_8000' };
     }
     return { candidate: candidate as unknown as ExtractedFieldProposal };
   };
-  const guard: SchemaGuard<ExtractedProposal> = (value: unknown): value is ExtractedProposal => {
+  const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
     invalidFields = new Map();
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       invalidFields.set('response', 'malformed_item');
@@ -383,9 +388,11 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     }
     const fields = proposal.fields as Record<string, unknown>;
     for (const field of SDF_CORE_FIELDS) {
+      const previous = retained.get(field);
+      if (previous && !previous.needsMoreInformation) continue;
       const validation = validateField(fields[field]);
-      if (!validation.candidate) invalidFields.set(field, validation.reason!);
-      else if (!validation.candidate.needsMoreInformation && !retained.has(field)) retained.set(field, validation.candidate);
+      if (validation.candidate) retained.set(field, validation.candidate);
+      else if (!previous) invalidFields.set(field, validation.reason!);
     }
     return invalidFields.size === 0;
   };
@@ -397,16 +404,19 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
       return [
         'Previous JSON failed canonical validation.',
         `Invalid fields and reason codes: ${details}.`,
-        'Return the full six-field JSON object. Correct the listed fields; re-derive other fields from the unchanged SOURCE_BLOCK input.',
-        'If one contiguous run cannot support the current summary, narrow the summary to what one supported run proves or mark the field missing.',
+        'Return schemaVersion and fields containing only the invalid fields listed above; already validated fields are retained locally and need not be repeated.',
+        'For each repaired field, write one core statement with its necessary conditions, then select at most 32 blocks that jointly support it. If more are needed, narrow the statement before selecting evidence; never truncate necessary evidence.',
+        'A missing field must have summary="", sourceBlockIds=[], needsMoreInformation=true. Do not include a nonempty explanation in a missing field.',
+        'Use only the minimal sufficient SOURCE_BLOCK ids in strictly increasing source order; unrelated blocks may be skipped.',
         'Do not quote or repeat source text in this correction instruction; use the SOURCE_BLOCK ids already provided.',
       ].join(' ');
     },
-    mergeRetained: (proposal) => ({
-      ...proposal,
+    mergeRetained: () => ({
+      schemaVersion: SDF_CORE_VERSION,
       fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
-        const current = proposal.fields[field];
-        return [field, retained.get(field) ?? current];
+        const candidate = retained.get(field);
+        if (!candidate) throw new Error(`Canonical field was not validated: ${field}`);
+        return [field, candidate];
       })) as ExtractedProposal['fields'],
     }),
   };
@@ -443,6 +453,8 @@ function materializeCanonicalProposal(
       });
       return { quote: block.text, sourceLocator };
     });
+    // Compatibility projection only: evidenceSegments retain the independent exact quotes and locators;
+    // this newline-joined string never represents a contiguous source passage or a source locator.
     const quote = segments.map((segment) => segment.quote).join('\n');
     core[field] = candidate.summary.trim();
     evidence[field] = { quote, locator: `blocks:${ids.join(',')}` };
@@ -559,8 +571,11 @@ export async function extractHandler(
       '你是科研结构化提取器。从给定 SOURCE 片段提取 SDF 六字段 problem/insight/method/results/limitations/reproducibility。',
       ...(promptBlocks ? [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能含 summary、sourceBlockIds、needsMoreInformation。',
-        `sourceBlockIds 必须选择 1-${MAX_EVIDENCE_SEGMENTS} 个 SOURCE_BLOCK id，按原文顺序连续，合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符；选择完整块，不得改写、跳块或重复。`,
-        'summary 可综合所选连续块，但所选块必须共同构成足以支持 summary 的原文段落。',
+        `sourceBlockIds 必须选择 1-${MAX_EVIDENCE_SEGMENTS} 个最少充分 SOURCE_BLOCK id，按原文顺序严格递增，合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符；可跳过无关块，选择的完整块不得改写、倒序或重复。`,
+        '逐字段独立判断：所选块共同充分支持 summary；单块可能只是断行、符号或单位，无需独立成句或独立证明整句。可跨行或跨段综合，但必须保留否定、适用条件和数值单位，不借未选文本补足论证。',
+        '每字段先用一句话概括一个核心要点及其必要条件，再选共同支持这句话的最少块。若需超过32块，应先缩小陈述范围，不能任意截断必要证据。不要因一个字段缺失而清空其他字段，不穷举细节或所有相关段落。',
+        '跨行示例（仅说明结构，不是 SOURCE，严禁引用示例 ID）：EXAMPLE_1="方法甲测量"、EXAMPLE_2="量乙。"共同支持"方法甲测量量乙。"；正式输出只能使用用户输入的 SOURCE_BLOCK id。',
+        '严格区分理论预测、仿真与实测，不能把缺少主语或限定词的片段扩写成实验结论；results 中的理论或仿真结果必须明确注明其性质。',
         '若材料不足，summary 置空、sourceBlockIds=[]、needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
       ] : [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须含 summary、sourceQuote、needsMoreInformation。',
@@ -570,17 +585,13 @@ export async function extractHandler(
     ].join(' ') },
     { role: 'user' as const, content: promptBlocks ? canonicalBlockPrompt(promptBlocks) : selectManuscriptEvidence(manuscriptText) },
   ];
-  const canonicalValidation = promptBlocks ? canonicalProposalValidation(promptBlocks) : undefined;
-  const rawProposal = await gateway.completeStructured(
-    canonicalValidation?.guard ?? sdfProposalGuard,
-    prompt,
-    {
-      temperature: 0.2,
-      ...(canonicalValidation ? { validationFeedback: canonicalValidation.validationFeedback } : {}),
-    },
-  );
-  const proposal = canonicalValidation ? canonicalValidation.mergeRetained(rawProposal) : rawProposal;
-  return canonicalSourceMap && promptBlocks
-    ? materializeCanonicalProposal(proposal, canonicalSourceMap, promptBlocks)
-    : materializeProposal(proposal, manuscriptText);
+  if (canonicalSourceMap && promptBlocks) {
+    const validation = canonicalProposalValidation(promptBlocks);
+    await gateway.completeStructured(validation.guard, prompt, {
+      temperature: 0.2, validationFeedback: validation.validationFeedback,
+    });
+    return materializeCanonicalProposal(validation.mergeRetained(), canonicalSourceMap, promptBlocks);
+  }
+  const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
+  return materializeProposal(proposal, manuscriptText);
 }

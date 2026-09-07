@@ -245,3 +245,9 @@ Scientific check against https://arxiv.org/html/2009.06045v1: animate the strong
 
 ## 2026-09-07 focused extraction and UX candidate
 Actual stored SourceMap diagnosis identified field constraint failures; bounded reason-only retry feedback and valid-field preservation keep existing strict limits. UI empty-state guidance and Hermes confirmation contrast repaired. Production005ffb8 unchanged until independent review and exact candidate acceptance. Incomplete media isolated in development worktree; installed dependencies, UID boundaries, queue recovery and deployment wiring require further repair.
+
+## 2026-09-08 ordered excerpt repair after real fbb failure
+
+Canonical fbb5405/rollback005ffb8 deployment and public/runtime acceptance passed; real taskc7f00b13-3563-47cd-965f-51f990679de5 still returned allmissing and stopped before confirmation. Controlled session closed. UX separately passed actual writable-version desktop/mobile guide/CTA/no-overflow capture (ux-deployed-v3-*); first404 capture is not acceptance.
+
+Current candidate changes strictly contiguous to strictly source-ordered separate authentic blocks. It preserves32/8000 bounds, unique allowed IDs, original text/identity/locators, manual verification and first-valid retention. Joined quote remains compatibility projection only. Three UI surfaces disclose independent potentially noncontiguous excerpts. Full batch regression verifies two gap-separated blocks produce two needs_review, unverified Evidence rows; reverse/unknown/duplicate/identity failures remain rejected. Sol/medium119extractor/26domain; High consumer review GO with fresh43extractor/36domain/26Web. Prepared real ordered-v5 gate uses hash-verified cached PDF, requires substantive four primary fields and exact separate displayed blockquotes/notice. Media remains excluded and disabled.

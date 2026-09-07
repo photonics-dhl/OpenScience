@@ -572,6 +572,16 @@ describe('Task 8 acceptance contract', () => {
     });
   });
 
+  it('executes the real caller guard before accepting a deterministic structured fixture', async () => {
+    const value = { schemaVersion: '0.1.0', fields: {} };
+    const seam = createAcceptanceGatewaySeam(value);
+    const seen: unknown[] = [];
+    await expect(seam.gateway.completeStructured((candidate: unknown) => { seen.push(candidate); return true; })).resolves.toEqual(value);
+    expect(seen).toEqual([value]);
+    await expect(seam.gateway.completeStructured(() => false)).rejects.toThrow(/schema guard/);
+    expect(seam.snapshot().externalProvider).toBe(0);
+  });
+
   it('accepts only exact sdf.extract success and needs-review handler result shapes', () => {
     const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
     const completed = {

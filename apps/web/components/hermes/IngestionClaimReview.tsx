@@ -86,6 +86,7 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
     <button type="button" className={control} disabled={locked} onClick={() => void load()}>{t(busy && !loaded ? 'loading' : loaded ? 'refresh' : 'load')}</button>
     {current && loaded && !candidates.length ? <p role="status">{t('empty')}</p> : null}
     {candidates.length ? <fieldset disabled={locked || complete} className="min-w-0 space-y-4 border-0 p-0">
+      <p className="text-sm leading-6 text-os-muted-paper">{t('evidenceNotice')}</p>
       <label className="grid gap-2 text-sm">{t('source')}<select className={control} value={state.chosen} onChange={event => choose(event.target.value)}>{candidates.map(item => <option key={item.taskId} value={item.taskId}>{item.artifact.logicalPath}</option>)}</select></label>
       {rows.map((row, index) => <div key={row.clientKey} className="space-y-2 border-t border-os-rule-paper pt-3">
         <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={row.selected} onChange={event => update(row.clientKey, value => ({ ...value, selected: event.target.checked }))}/>{t(`field_${row.sourceField}`)} · {index + 1}</label>

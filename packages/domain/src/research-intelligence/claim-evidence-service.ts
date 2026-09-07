@@ -483,8 +483,8 @@ export function validateCanonicalEvidenceSources(
       || !locator.charRange || typeof block.text !== 'string'
       || block.text.slice(locator.charRange.start, locator.charRange.end) !== source.quote
       || locator.charRange.end - locator.charRange.start !== source.quote.length
-      || (priorOrdinal !== undefined && block.ordinal !== priorOrdinal + 1)) {
-      throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence does not match a contiguous exact source passage');
+      || (priorOrdinal !== undefined && block.ordinal <= priorOrdinal)) {
+      throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence does not match strictly ordered exact source blocks');
     }
     priorOrdinal = block.ordinal;
     total += source.quote.length;

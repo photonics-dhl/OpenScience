@@ -1007,9 +1007,13 @@ export function createAcceptanceGatewaySeam<T>(structuredValue: T | ((args: unkn
   const target: Record<string, (...args: unknown[]) => Promise<unknown>> = {
     completeStructured: async (...args: unknown[]) => {
       counts.structuredFake += 1;
-      return typeof structuredValue === 'function'
+      const value = typeof structuredValue === 'function'
         ? (structuredValue as (args: unknown[]) => T)(args)
         : structuredValue;
+      if (typeof args[0] === 'function' && !(args[0] as (value: T) => boolean)(value)) {
+        throw new Error('deterministic structured fixture failed its schema guard');
+      }
+      return value;
     },
     complete: forbidden('complete'),
     ocr: forbidden('ocr'),
