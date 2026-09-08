@@ -569,6 +569,10 @@ export async function extractHandler(
   const prompt = [
     { role: 'system' as const, content: [
       '你是科研结构化提取器。从给定 SOURCE 片段提取 SDF 六字段 problem/insight/method/results/limitations/reproducibility。',
+      '保持证据类型与认识边界：明确区分实验实测、理论估计、数值仿真、作者归因或解释、以及讨论中的能力或上限；不得把其中一种改写成另一种，也不得把讨论上限写成已验证性能。',
+      '保持物理量身份：明确区分入射量与局域量、场振幅与强度、脉冲能量与功率，并保留数值、单位、比例的对象和适用条件；除非原文明确给出关系，不得自行换算或混用。',
+      'summary 中的每个分句、数字、比较、因果或能力限定都必须由所选原文直接支持；可跳过无关页眉或噪声块，但不得跨越缺失的中间论证拼接新结论。作者提出的原因必须写成作者归因，不能写成已证因果。',
+      '方法或配置披露不等于独立复现完成；reproducibility 只能概括原文明示的材料、参数、步骤、数据或代码可用性及其缺口。若某个条款缺少直接证据，从 summary 删除该条款；若字段已无可支持内容，则按缺失字段返回 needsMoreInformation=true。',
       ...(promptBlocks ? [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能含 summary、sourceBlockIds、needsMoreInformation。',
         `sourceBlockIds 必须选择 1-${MAX_EVIDENCE_SEGMENTS} 个最少充分 SOURCE_BLOCK id，按原文顺序严格递增，合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符；可跳过无关块，选择的完整块不得改写、倒序或重复。`,

@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-08:** 服务器实测 release134ebdea796b922ac07d9f29b6148b458b5e515f / rollback97aa06a542febf558a47cecbf6559bd0a6c876aa；codex/onchip-video-release 已合并生产，自主流程候选正做服务器验收，未部署。
+> **CURRENT 2026-09-08:** production `134ebdea796b922ac07d9f29b6148b458b5e515f` healthy / rollback `97aa06a542febf558a47cecbf6559bd0a6c876aa`；candidate `6cc6f466` 部署因退出的 `09be` 验收容器只读挂载触发 retention prepare 失败，已自动回滚并清空 journal（log `1788860199633-c730685b-7af5-4db5-8922-0d20956d358c`）。39 migrations 已在生产保留，候选未上线。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -256,7 +256,7 @@
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
 | `apps/web/components/hermes/HermesPresentationAction.tsx` / `apps/web/components/hermes/HermesPresentationReview.tsx` / `apps/web/lib/hermes/presentation-action.ts` / `apps/web/lib/hermes/presentation-intent.ts` / `apps/web/test/hermes-presentation-action.test.ts` / `apps/web/test/hermes-presentation-intent.test.ts` | Global Hermes scoped storyboard/revision/image review using existing presentation API and task page; Drawer/Stage, zh/en, hermes-state and presentation-workbench tests updated | DEPLOYED f144eb7; real revision/task/audit and final contrast/Chinese/read-only acceptance passed |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT：研究记录/API、生产媒体功能保留、发布验收 | **CURRENT active-memory**；publication候选整合生产97aa06a5，待最终验收与部署 |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT：Hermes durable run、审核边界、版本元组与发布验收 | **CURRENT active-memory**；candidate `6cc6f466` retention prepare 失败并自动回滚，production 为 `134ebdea`；39 migrations 保留，待清理退出容器引用和新候选 |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
@@ -460,8 +460,8 @@
 | `infra/nginx/openscience.test.mjs` | 生产 Nginx 合同：`/api` rewrite、Auth 页面/API 分流、Curator/Admin API 保护、Basic credential 不转发、Tunnel 真实 IP 与部署同步 | 8/8 GREEN |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–36（36 = ROR 全球机构目录；35 = 学术身份凭证/机构邮箱挑战/多作用域角色；34 = ScanSci `source_retrieval` provenance），各附 rollback.sql | **PRODUCTION 36/36**；search 2/2 |
-| `infra/schema.prisma` | core Prisma schema：既有平台模型 + Research Intelligence/Identity/Reading/External Retrieval/ScanSci provider state scoped relations + `source_retrieval` rights basis + academic credentials/scoped roles/ROR directory | **PRODUCTION migration 36** |
+| `infra/migrations/` | Prisma migrations（含 additive Hermes schema），各附 rollback.sql | **PRODUCTION 39/39**；search 2/2；应用回滚时保留 additive schema |
+| `infra/schema.prisma` | core Prisma schema：既有平台模型 + Research Intelligence/Identity/Reading/External Retrieval/ScanSci provider state scoped relations + Hermes durable run | **PRODUCTION migration 39** |
 | `infra/search/schema.prisma` / `infra/search/migrations/` / `packages/search/test/migration.test.ts` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta` 不与 core ledger 混用；Task 6 migration 2 增加 tenant-scoped chunk/embedding/index/model/telemetry、GIN 与机械 rollback | **CURRENT PRODUCTION 2/2 `c581712`**；forward/rollback/redeploy、tenant-safe PostgreSQL integration 与双库恢复 GREEN |
 | `scripts/verify-database-isolation.mjs` / `scripts/verify-database-isolation.test.mjs` | 拒绝 core/search 指向同一物理数据库，并以脱敏元数据给出部署门禁 | **CURRENT**；focused contract 与 ECS `DATABASE_ISOLATION_OK` GREEN |
 

@@ -1,20 +1,14 @@
 # Progress
 
-## 2026-09-08: integrate latest production before server workflow acceptance
+## 2026-09-08: Hermes candidate deployment rolled back safely
 
-- Server-only isolated real Prisma deploy39 + empty-DB rollback/reapply39 passed; two additive Hermes migrations remain uninstalled in production. New candidate527f705e fixes atomic approval/replay access; server build in progress.
-- Measured server release134ebdea / rollback97aa06a, healthy containers and public/local200. Preserve newly deployed atomic confirmation, canonical evidence and frozen version records.
-- Candidate4c369cbc adds scoped source review and media continuation; merging134ebdea, tests pending. All runtime validation is server-only. Old a72 acceptance directory was externally removed; logs are historical.
-- Production publication implementation details remain in docs/plans/2026-09-07-open-research-publication-plan.md. Complete autonomous normal-user workflow first; then second supported paper and UX.
-
-## 2026-09-08: server-only candidate verification
-
-- User correction: no local runtime validation; all tests/build/migration checks run on ECS. Rule persisted in AGENTS across root/development/release workspaces.
-- Candidate a72b5e1c7559edb673579042b7cfaa84260b5a6a is synced to its immutable server directory. Production remains97aa06a, rollbackc5b0dd7; no switch.
-- Server full build progressed to image preparation. Server targeted18 domain+3 API+3 worker tests and three package typechecks passed; docs-sync passed. docs:lint found one extra blank line, corrected locally pending server recheck.
-- Isolated no-network PostgreSQL container xgs-hermes-migration-a72b5e1c applied all37 migrations, then migration37 rollback/reapply passed. SQL harness created only a minimal migration-name ledger for rollback; this is not Prisma deploy/status evidence. Container retained, production DB untouched.
-- Logs: checks1788854681801-dfb18d33-56a9-43bf-a53c-966048fc8f7f; migration1788854617122-e0d1bebc-7594-4c9d-8edd-7e2b74a9e929 and1788854646230-d9b4212d-2540-441e-91dd-626a2bb8537c. Initiale2c78a server build caught missingAuthDeps; fixed in a72b5e1c.
-- Scope remains attach-existing-ingestion→awaiting_source_review. Full Hermes initiation, approval resume, Claims/media and ordinary-user real journey remain incomplete.
+- Candidate `6cc6f46646b6ad97005b071ec085262bccb111a3` on `codex/onchip-video-release` is PR107; CI `34209642581` passed. ECS validation passed: domain `672`, web `568`, worker `594` with one intentional skip, API `171`, types, lint, docs, build, and Parser `16`.
+- Candidate `6cc6f466` deployment failed after public and exact-release checks when retention preparation found exited `xgs-hermes-run-acceptance-09beecba` retaining a read-only candidate mount. This was not a business-health failure. Automatic rollback restored healthy production `134ebdea796b922ac07d9f29b6148b458b5e515f`; journal is cleared. Log `1788860199633-c730685b-7af5-4db5-8922-0d20956d358c`.
+- All 39 migrations are now applied in production. Keep the additive Hermes schema; do not roll it back. Three exited, read-only test-container references were released after saving logs/metadata; database, source and evidence remain. Recovery/cleanup verified in log1788860988269-d89427ea-1c10-43f1-9913-1ace385f2781; retention gate unchanged.
+- Real normal-user browser upload created RO `6f3a07ba-c79a-461b-aae7-1dac1efb55ee` and task `27ddab3c-b52b-4005-a614-12c9d25e81dd`. After browser closure, extraction succeeded and ingestion waits for review. No human source confirmation, Claim/Evidence review, media generation, or media approval has occurred.
+- Durable Hermes UI and server flow retain exact confirmation-version recovery, quote-bound source review, separate Claim/Evidence verification, and server-owned continuation. SDF/extraction alone never establishes a completed workflow.
+- Scientific qualification and discontinuous-evidence feedback from Chat6Pro requires four generic extractor-prompt changes; the main thread has modified `apps/agent-worker/src/extractor.ts`, pending commit and ECS focused validation. The old source must not be retried; use the prepared normal-user `qualityv2` upload for the next candidate.
+- All runtime checks remain server-only. Do not reset, pull, stash, or overwrite the concurrent extractor change.
 ## 2026-09-08: video user-approved; server-owned Hermes workflow next
 
 - Production/public97aa06a542febf558a47cecbf6559bd0a6c876aa, rollbackc5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb. CI34192289263 and canonical server build/Parser16/migrations/runtime/public acceptance passed.
@@ -25,4 +19,4 @@
 - Current priority: server-owned Hermes workflow using existing OCR/ScanSci/retrieval/extraction/media. Ordinary-user acceptance without Codex orchestration first, UX/layout polish second, further capabilities afterward. Chat6Pro plan actually received;60s single browser actions succeeded. Durable server run implementation is underway.
 - Future UX polish: simplify historical/rejected asset display and replace internal/generic media labels. Current first-slice UX and desktop/mobile no-overflow checks passed; do not imply all UX refinements complete.
 
-CURRENT: docs/handoff/2026-08-16-hermes-2d-pet-handoff.md. Root dirty main and development/release worktrees are separate; do not reset or merge them blindly. CPU image installation remains paused; no new providers installed.
+CURRENT: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`. Next: clean the exited read-only container reference, validate the extractor changes, and deploy a new candidate before continuing normal-user review boundaries. CPU image installation remains paused; no new providers installed.
