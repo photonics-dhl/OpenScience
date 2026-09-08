@@ -7,7 +7,6 @@
 - Recovery code132dcd07+5ffd5424 implements permission/CAS, pending-only delivery, controlled crash recovery, current-run/step retry and UI action; High findings repaired, ECS checks pending. Existing run90a25481 recovered after browser close/reopen; no new run/upload/manual Claims.
 - Failed MiniMax-M3 window consumed19035 input+2420 output=21455 tokens across3 calls; evidence .tmp/token-smart-logs/1788862810865-f787e3e5-d34d-495b-9d0a-9a43c2694499.log. This is product-model usage for one failed extraction, not Codex savings. Current full IDs, tool versions, unchanged full-suite evidence and constraints are in CURRENT handoff. All runtime stays on ECS.
 
-
 ## HISTORICAL 2026-09-08: prior 6cc candidate rolled back safely
 
 - Candidate `6cc6f46646b6ad97005b071ec085262bccb111a3` on `codex/onchip-video-release` is PR107; CI `34209642581` passed. ECS validation passed: domain `672`, web `568`, worker `594` with one intentional skip, API `171`, types, lint, docs, build, and Parser `16`.

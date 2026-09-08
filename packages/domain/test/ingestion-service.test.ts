@@ -1,6 +1,8 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
+import type { AuditSink } from '@openscience/observability';
+import type { Prisma } from '@prisma/client';
 import { createFakePrisma, seedUser } from './helpers/fakes';
 import { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, retryIngestionTask } from '../src/ingestion/ingestion-service';
 import { persistDocumentSourceMapReference } from '../src/research-intelligence/source-map-ref';
@@ -155,7 +157,13 @@ function makeDeps() {
     deleteObject: vi.fn(async (key) => void objects.delete(key)),
   };
   const redis = { lpush: vi.fn().mockResolvedValue(1) };
-  return { db, user, deps: { prisma, storage, redis } as never, redis };
+  const audit: AuditSink = {
+    record: async (event, tx) => {
+      if (!tx) throw new Error('Ingestion audit must share the business transaction');
+      await tx.auditLog.create({ data: { ...event, metadata: event.metadata as Prisma.InputJsonValue | undefined } });
+    },
+  };
+  return { db, user, deps: { prisma, storage, redis, audit } as never, redis };
 }
 
 const file = (filename: string) => {
