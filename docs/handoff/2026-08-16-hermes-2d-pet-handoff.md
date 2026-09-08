@@ -2,6 +2,11 @@
 
 > CURRENT 2026-09-08：生产407ad49e86f3869c1fe34a574f3ba2ca76b1b442 / rollback88018512ba7d34bad5ced93386e1381184e9ee93已完成部署。连续原文提取、全空停止盲重试、非终态进度刷新已上线。用户禁止继续测试；未重跑论文或媒体，完整自主闭环仍未确认。
 
+## 最新授权与执行
+- 用户现明确要求实际执行论文提取→视频并确保流程畅通；允许实际产品调用，仍禁止独立测试/预检套件。
+- 407实际执行产品reanalysis后，同task retry2/execution3失败；三次structured输出因contiguous_ids_required拒绝，run90a25481已failed，费用1credit已扣。
+- 正发布：服务器展开已提供的连续块、保留partial字段及diagnostics、已有付费schema失败补偿一次无需再扣。随后用同ingestion/artifact新建run，旧失败run不复活，不重上传。
+
 ## 当前执行约束与进展
 - 407ad49e以--no-tests部署完成；旧worker build内嵌10项parser测试意外执行，已向用户说明并拆开build/test。不重跑，也不声称本轮零测试。该package命令修正仅影响后续构建，无需为此重复部署正在启动的应用。
 - 不运行测试、预检、模型试跑或自动 CI 测试；只执行交付必需的构建、启动、发布与回滚。历史验收清单不再作为本轮 next action。

@@ -41,6 +41,10 @@ export interface ExtractionResult extends Record<string, unknown> {
   evidenceLocation?: Record<(typeof SDF_CORE_FIELDS)[number], EvidenceLocation>;
   /** Exact canonical block segments selected by the model and materialized by the worker. */
   evidenceSegments?: Record<(typeof SDF_CORE_FIELDS)[number], Array<{ quote: string; sourceLocator: SourceLocator }>>;
+  /** Present only when structured retries exhausted after retaining at least one supported canonical field. */
+  reason?: 'canonical_partial_validation_exhausted';
+  /** Exact final guard reasons for unresolved fields; explicitly missing fields are omitted. */
+  fieldDiagnostics?: Record<string, string>;
 }
 
 export type EvidenceLocation = {
@@ -347,9 +351,11 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
   guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: (value: unknown) => string | undefined;
   validationDiagnostic: (value: unknown) => string | undefined;
+  partialResult: () => { proposal: ExtractedProposal; fieldDiagnostics: Record<string, CanonicalFieldValidationReason> } | undefined;
   mergeRetained: () => ExtractedProposal;
 } {
   const allowed = new Map(blocks.map((block) => [block.promptId, block]));
+  const allowedByOrdinal = new Map(blocks.map((block) => [block.ordinal, block]));
   const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
   const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason } => {
@@ -374,16 +380,27 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     if (selected.some((block, index) => index > 0 && block.ordinal <= selected[index - 1]!.ordinal)) {
       return { reason: 'ordered_ids_required' };
     }
-    if (selected.some((block, index) => index > 0 && block.ordinal !== selected[index - 1]!.ordinal + 1)) {
-      return { reason: 'contiguous_ids_required' };
+    const firstOrdinal = selected[0]!.ordinal;
+    const lastOrdinal = selected[selected.length - 1]!.ordinal;
+    const expanded: PromptCanonicalBlock[] = [];
+    for (let ordinal = firstOrdinal; ordinal <= lastOrdinal; ordinal += 1) {
+      const block = allowedByOrdinal.get(ordinal);
+      if (!block) return { reason: 'contiguous_ids_required' };
+      expanded.push(block);
     }
-    if (selected.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
+    if (expanded.length > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32' };
+    if (expanded.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
       return { reason: 'source_text_limit_8000' };
     }
-    if (selected.map((block) => block.text).join('\n').length > MAX_CANONICAL_CORE_CHARS) {
+    if (expanded.map((block) => block.text).join('\n').length > MAX_CANONICAL_CORE_CHARS) {
       return { reason: 'core_text_limit_4000' };
     }
-    return { candidate: candidate as unknown as ExtractedFieldProposal };
+    return {
+      candidate: {
+        ...candidate,
+        sourceBlockIds: expanded.map((block) => block.promptId),
+      } as unknown as ExtractedFieldProposal,
+    };
   };
   const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
     invalidFields = new Map();
@@ -415,7 +432,7 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
         'Previous JSON failed canonical validation.',
         `Invalid fields and reason codes: ${details}.`,
         'Return schemaVersion and fields containing only the invalid fields listed above; already validated fields are retained locally and need not be repeated.',
-        'For each repaired non-missing field, first select one continuous original-order span of 1-32 SOURCE_BLOCK ids whose exact joined text states one supported core point with all necessary conditions; a non-missing field may never have an empty sourceBlockIds array. Prefer a short complete span of at most 600 characters, but never truncate qualifiers, units, or necessary evidence to meet that preference. The exact joined source text, not summary, becomes the canonical core.',
+        'For each repaired non-missing field, first identify one continuous original-order span whose exact joined text states one supported core point with all necessary conditions. sourceBlockIds may contain the first and last anchors or an ordered subset; the server expands them to every already supplied SOURCE_BLOCK in that ordinal range. A non-missing field may never have an empty sourceBlockIds array. The expanded span must contain 1-32 blocks. Prefer a short complete span of at most 600 characters, but never truncate qualifiers, units, or necessary evidence to meet that preference. The exact joined source text, not summary, becomes the canonical core.',
         'A missing field must have summary="", sourceBlockIds=[], needsMoreInformation=true. Do not include a nonempty explanation in a missing field.',
         'A field is missing only when no supplied SOURCE_BLOCK span states a supported point for that field. Preserve whether a point is measured, theoretical, simulated, or author-attributed.',
         'Do not quote or repeat source text in this correction instruction; use the SOURCE_BLOCK ids already provided.',
@@ -424,6 +441,20 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     validationDiagnostic: () => invalidFields.size === 0
       ? undefined
       : [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(','),
+    partialResult: () => {
+      if (!SDF_CORE_FIELDS.some((field) => retained.get(field)?.needsMoreInformation === false)) return undefined;
+      const responseReason = invalidFields.get('response');
+      const fieldDiagnostics: Record<string, CanonicalFieldValidationReason> = {};
+      const fields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
+        const candidate = retained.get(field);
+        if (candidate) return [field, candidate];
+        fieldDiagnostics[field] = invalidFields.get(field) ?? responseReason ?? 'malformed_item';
+        return [field, {
+          summary: '', sourceQuote: '', sourceBlockIds: [], needsMoreInformation: true,
+        } satisfies ExtractedFieldProposal];
+      })) as ExtractedProposal['fields'];
+      return { proposal: { schemaVersion: SDF_CORE_VERSION, fields }, fieldDiagnostics };
+    },
     mergeRetained: () => ({
       schemaVersion: SDF_CORE_VERSION,
       fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
@@ -587,7 +618,7 @@ export async function extractHandler(
       '方法或配置披露不等于独立复现完成；reproducibility 只能概括原文明示的材料、参数、步骤、数据或代码可用性及其缺口。若某个条款缺少直接证据，从 summary 删除该条款；若字段已无可支持内容，则按缺失字段返回 needsMoreInformation=true。',
       ...(promptBlocks ? [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能是 {"summary": string, "sourceBlockIds": string[], "needsMoreInformation": boolean}，不得把字段写成字符串、数组或增加其他键。',
-        `每个非缺失字段的 sourceBlockIds 必须选择 1-${MAX_EVIDENCE_SEGMENTS} 个原始 ordinal 连续的 SOURCE_BLOCK id，按原文顺序严格递增，证据合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符，拼接后的 canonical core 不超过 ${MAX_CANONICAL_CORE_CHARS} 字符；选择的完整块不得改写、倒序、跳号或重复。`,
+        `每个非缺失字段先确定一个原始 ordinal 连续的 SOURCE_BLOCK 跨度；sourceBlockIds 可列出首尾锚点或跨度内的递增子集，服务端会补齐该范围内所有已提供的中间块。补齐后的跨度必须包含 1-${MAX_EVIDENCE_SEGMENTS} 个块，证据合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符，拼接后的 canonical core 不超过 ${MAX_CANONICAL_CORE_CHARS} 字符；不得改写、倒序或重复 id，也不得依赖输入中未提供的中间块。`,
         '逐字段独立判断：先选择能直接陈述一个核心要点的最短完整连续跨度，优先不超过600字符；600字符只是偏好，不得为缩短而丢失否定、适用条件、数值单位、实验或理论性质。服务端会把所选块原文以换行拼接为 canonical core，不使用模型自由概括。',
         'summary 仅为兼容现有 JSON wire shape，填写非空简短说明；它不会进入 canonical core。若完整证据需超过32块或4000字符，应缩小到仍完整受支持的单一要点，不能任意截断必要证据。不要因一个字段缺失而清空其他字段。',
         '跨行示例（仅说明结构，不是 SOURCE，严禁引用示例 ID）：EXAMPLE_1="方法甲测量"、EXAMPLE_2="量乙。"共同支持"方法甲测量量乙。"；正式输出只能使用用户输入的 SOURCE_BLOCK id。',
@@ -603,11 +634,23 @@ export async function extractHandler(
   ];
   if (canonicalSourceMap && promptBlocks) {
     const validation = canonicalProposalValidation(promptBlocks);
-    await gateway.completeStructured(validation.guard, prompt, {
-      temperature: 0.2,
-      validationFeedback: validation.validationFeedback,
-      validationDiagnostic: validation.validationDiagnostic,
-    });
+    try {
+      await gateway.completeStructured(validation.guard, prompt, {
+        temperature: 0.2,
+        validationFeedback: validation.validationFeedback,
+        validationDiagnostic: validation.validationDiagnostic,
+      });
+    } catch (error) {
+      if (!(error instanceof AiGatewayError) || error.code !== 'SCHEMA_VALIDATION') throw error;
+      if (!(error.cause instanceof AiGatewayError) || error.cause.code !== 'SCHEMA_VALIDATION') throw error;
+      const partial = validation.partialResult();
+      if (!partial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
+      return {
+        ...materializeCanonicalProposal(partial.proposal, canonicalSourceMap, promptBlocks),
+        reason: 'canonical_partial_validation_exhausted',
+        fieldDiagnostics: partial.fieldDiagnostics,
+      };
+    }
     const proposal = validation.mergeRetained();
     if (SDF_CORE_FIELDS.every((field) => proposal.fields[field].needsMoreInformation)) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_all_fields_missing');
