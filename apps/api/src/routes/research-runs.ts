@@ -1,3 +1,4 @@
+import type { AuthDeps } from '@openscience/auth';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { createHermesResearchRun, getHermesResearchRun, type HermesResearchRunDeps } from '@openscience/domain';
@@ -12,7 +13,7 @@ function auditCtx(req: FastifyRequest): AuditContext {
   return { requestId: String(req.id), ip: req.ip };
 }
 
-export function registerResearchRunRoutes(app: FastifyInstance, deps: HermesResearchRunDeps): void {
+export function registerResearchRunRoutes(app: FastifyInstance, deps: HermesResearchRunDeps & AuthDeps): void {
   app.post('/research-objects/:id/hermes-runs', async (req, reply) => {
     void reply.header('Cache-Control', 'private, no-store');
     const user = await requireCurrentUser(deps, req, reply);
