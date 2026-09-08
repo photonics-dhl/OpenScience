@@ -33,6 +33,7 @@ import { registerAdminEditorialRoutes } from './routes/admin-editorial';
 import { registerSandboxJobsRoutes } from './routes/sandbox-jobs';
 import { registerTemporaryDocumentRoutes } from './routes/temporary-documents';
 import { registerPresentationAssetRoutes } from './routes/presentation-assets';
+import { registerResearchRunRoutes } from './routes/research-runs';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
@@ -118,6 +119,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerReadingPreferenceRoutes(instance, opts), {});
   await app.register(async (instance) => registerSandboxJobsRoutes(instance, opts), {});
   await app.register(async (instance) => registerPresentationAssetRoutes(instance, opts), {});
+  await app.register(async (instance) => registerResearchRunRoutes(instance, opts), {});
   if (opts.storage) {
     const storage = opts.storage;
     await app.register(async (instance) => registerArtifactRoutes(instance, { ...opts, storage }), {});

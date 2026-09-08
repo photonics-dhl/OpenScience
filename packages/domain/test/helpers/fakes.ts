@@ -49,12 +49,14 @@ interface FakeDb {
   presentationAssets: any[];
   presentationAssetClaims: any[];
   researchIdentityProfiles: any[];
+  hermesResearchRuns: any[];
+  hermesResearchSteps: any[];
   auditLogs: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], presentationAssetClaims: [], researchIdentityProfiles: [], auditLogs: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], presentationAssetClaims: [], researchIdentityProfiles: [], hermesResearchRuns: [], hermesResearchSteps: [], auditLogs: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = (modelName?: string, target?: string | string[]) => {
@@ -100,6 +102,28 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     const memberWhere = workspaceWhere?.members?.some;
     return !memberWhere || db.memberships.some((membership) => membership.workspaceId === workspace.id
       && (memberWhere.userId === undefined || membership.userId === memberWhere.userId));
+  };
+
+  const hermesRunWithSteps = (run: any, include: any) => {
+    if (!include?.steps) return { ...run };
+    let steps = db.hermesResearchSteps.filter((step) => step.runId === run.id);
+    if (include.steps.orderBy?.ordinal === 'asc') steps = steps.toSorted((left, right) => left.ordinal - right.ordinal);
+    return {
+      ...run,
+      steps: steps.map((step) => {
+        if (!include.steps.include?.ingestionTask) return { ...step };
+        const ingestionTask = db.ingestionTasks.find((task) => task.id === step.ingestionTaskId) ?? null;
+        if (!ingestionTask) return { ...step, ingestionTask: null };
+        return {
+          ...step,
+          ingestionTask: {
+            ...ingestionTask,
+            batch: db.ingestionBatches.find((batch) => batch.id === ingestionTask.batchId) ?? null,
+            agentTask: db.agentTasks.find((task) => task.id === ingestionTask.agentTaskId) ?? null,
+          },
+        };
+      }),
+    };
   };
 
   const prisma: any = {
@@ -930,6 +954,46 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return { ...row };
       },
     },
+    hermesResearchRun: {
+      create: async ({ data, include }: any) => {
+        if (db.hermesResearchRuns.some((run) => run.idempotencyKey === data.idempotencyKey)) throw p2002();
+        const row = {
+          id: nextId(), status: 'running', version: 1, error: null, lastReconciledAt: null,
+          createdAt: new Date(), updatedAt: new Date(), ...data,
+        };
+        delete row.steps;
+        db.hermesResearchRuns.push(row);
+        for (const step of data.steps?.create ?? []) {
+          db.hermesResearchSteps.push({ id: nextId(), runId: row.id, status: 'waiting', error: null, createdAt: new Date(), updatedAt: new Date(), ...step });
+        }
+        return hermesRunWithSteps(row, include);
+      },
+      findUnique: async ({ where, include }: any) => {
+        const row = db.hermesResearchRuns.find((run) => where.id ? run.id === where.id : run.idempotencyKey === where.idempotencyKey) ?? null;
+        return row ? hermesRunWithSteps(row, include) : null;
+      },
+      findMany: async ({ where, include, take }: any) => db.hermesResearchRuns
+        .filter((run) => where.status === undefined || run.status === where.status)
+        .slice(0, take ?? db.hermesResearchRuns.length)
+        .map((run) => hermesRunWithSteps(run, include)),
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.hermesResearchRuns.filter((run) =>
+          (where.id === undefined || run.id === where.id) && (where.status === undefined || run.status === where.status)
+          && (where.version === undefined || run.version === where.version));
+        rows.forEach((row) => Object.assign(row, data, {
+          version: data.version?.increment ? row.version + data.version.increment : (data.version ?? row.version), updatedAt: new Date(),
+        }));
+        return { count: rows.length };
+      },
+    },
+    hermesResearchStep: {
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.hermesResearchSteps.filter((step) =>
+          (where.id === undefined || step.id === where.id) && (where.runId === undefined || step.runId === where.runId));
+        rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
+        return { count: rows.length };
+      },
+    },
     ingestionTask: {
       create: async ({ data }: any) => {
         const row = { id: nextId(), state: 'queued', retryCount: 0, error: null, createdAt: new Date(), updatedAt: new Date(), ...data };
@@ -953,7 +1017,8 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       findMany: async ({ where, include, orderBy, take }: any) => {
         let rows = db.ingestionTasks.filter((task) => {
           const batch = db.ingestionBatches.find((candidate) => candidate.id === task.batchId);
-          return (where?.batch?.userId === undefined || batch?.userId === where.batch.userId) &&
+          return (where?.id?.in === undefined || where.id.in.includes(task.id)) &&
+            (where?.batch?.userId === undefined || batch?.userId === where.batch.userId) &&
             (where?.batch?.researchObjectId === undefined || batch?.researchObjectId === where.batch.researchObjectId) &&
             (where?.state?.in === undefined || where.state.in.includes(task.state));
         });
@@ -969,6 +1034,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
             ...row,
             artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId),
             batch: batch ? { ...batch, researchObject } : null,
+            agentTask: include.agentTask ? db.agentTasks.find((task) => task.id === row.agentTaskId) ?? null : undefined,
           };
         });
       },

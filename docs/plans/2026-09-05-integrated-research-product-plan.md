@@ -529,3 +529,51 @@ User confirmed extending the accepted pale/ink/teal direction to the full entry 
 3. Focused existing auth/dashboard tests, Web build, desktop/mobile login/register visual inspection and route checks; independent release review. Deploy through existing script over verified8e4ecb2, retaining rollback. No full business-pipeline completion claim.
 
 Entry continuity delivered5e4b4d4 with rollback8e4ecb2. Server canonical acceptance and public auth8/product8 checks passed; optional signup profile collapsed after actual mobile inspection. Existing37 unit and5 browser fixtures passed. Shared styling covers DashboardShell routes, but route-specific redesign and full research business flow remain open; user visual acceptance is pending.
+## 2026-09-08 user correction: server-owned Hermes media capability
+
+User approved the real53.875s video, but requires a reusable server product: a user asks Hermes to generate from workspace literature; Codex must not manually prepare Claims, select asset IDs, or drive each stage. This supersedes treating one accepted sample as product completion.
+
+Current evidence at production97aa06a5:
+- Server image,offline TTS,render,storage,queue,asset approval and playback work. The accepted sample was generated on ECS, not rendered on the desktop and uploaded.
+- Main/Chat supplied scientific refinements and selected/reviewed inputs; ignored local acceptance scripts submitted each task. This is assisted acceptance, not autonomous UX.
+- Generic Hermes task kinds exclude presentation.generate (domain agent.ts). Dedicated presentation-assets route creates tasks, but no server-owned multi-stage coordinator or approval-resume chain exists.
+- Worker image/video paths require platform_admin. Video domain fixes onchip-field-sampling-v1, five approved images and one-paper source contract. Removing the profile check would render wrong physics; do not do that.
+
+Implementation sequence and acceptance:
+1. Add a server-owned Hermes media intent bound to current workspace/RO/version and source snapshot. Reuse existing membership,queue/outbox,task IDs,idempotency and parent/source revalidation. Ordinary authorized workspace users need an explicit supported capability, not a blanket administrator role.
+2. Persist generation stages and resume on server: source readiness→grounded draft Claims/storyboard→image tasks→voice/render→reviewable result. User generation consent does not auto-verify scientific evidence or publish content. Any necessary review must be a visible Hermes task state with resume, not Codex intervention or implicit approval.
+3. Generalize supported data-only rendering programs from grounded source/storyboard; keep the on-chip profile as a tested example. No arbitrary model-generated executable code, wrong-paper template reuse or fake simulation. Unsupported mechanisms must be explicit, not silently converted into the fixed paper's physics or a still-image slideshow.
+4. Product UI: one primary instruction/action, visible stage/progress and recoverable error, final player/gallery; source detail and rejected/history assets in secondary disclosure. Remove internal asset labels; preserve scientific provenance and review. Desktop/mobile layout uses current A/Folio design and Hermes identity.
+5. Real acceptance uses a normal workspace user and another supported paper without hand-written Claims or local orchestration scripts. Submit through Hermes, close client, let server finish/resume after worker restart, reopen and see result. Test duplicate submission and scope changes without duplicate spend or cross-user exposure. Finish source correctness, actual motion/voice, playback and permissions before declaring product capability complete.
+
+High-risk review focuses on authorization/cost scope, durable-stage retries and scientific source binding. Existing server primitives are reused; do not create parallel worker infrastructure merely to satisfy this plan. Browser Chat planning remains authorized but current controls fail (in-app read timeout; Chrome Debugger unattached); do not claim a new web plan was received.
+
+### Capability wiring audit and user priority (2026-09-08)
+
+- User explicitly orders: complete server-owned real workflow using existing capabilities first; improve UX/layout/aesthetics second; equip further Hermes capabilities afterward.
+- Read-only audit at97aa06a confirms local OCR via index.ts136–180/cascade-orchestrator.ts231–249; ScanSci via index.ts522–554 and retrieval/handler.ts80–84; sdf.extract and presentation.generate registered at index.ts260–305. These are executable integrations, not only registry entries.
+- Existing durable Redis/DB outbox and worker loop can run without Codex. Missing capability is coordinated transition among retrieval, extraction, grounded planning and media, preserving user/workspace/source identity and resumable reviews.
+- Production LLM OCR is disabled (index.ts146–151); use existing local OCR first, do not claim vision fallback is available or enable it without evaluating need and deployment constraints.
+- Browser Chat planning remains NOT submitted: after the user switched Chrome to the correct conversation, getTab returned Debugger unattached. No new Chat recommendation exists. Explorer audit is local source evidence, not the requested external plan.
+
+### Chat planning retrieved (2026-09-08, 6 Pro)
+
+Source: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec . Request actually sent15:06; final answer visibly completed after8m33s. This is a summary, not a verbatim export.
+
+- Adopt a constrained server orchestration entry using existing AgentTask/domain services/worker/outbox. Persist stages and child/result references; review waits release worker capacity and authorized review resumes through durable dispatch. Verify transaction, lease and provider idempotency support before implementation; outbox alone is not exactly-once execution.
+- First vertical slice: ordinary member uploads the currently supported paper; automatic source-grounded SDF/Claim drafts; product batch review and same-version commit; storyboard/images/voice/animation; private result. No manually authored Claims or local stage-driving scripts.
+- Native extraction first; OCR only problematic pages; ScanSci acquisition/supplements when needed and rights permit; BGE finds evidence within authorized sources, then use exact original blocks. Keep local OCR and existing parser isolation; no unverified vision fallback claim.
+- Separate scoped generation authority from scientific verification/publication; carry member/RO/version/source checks through execution and result access. Reuse successful stages, bound resources, and reconcile uncertain external responses rather than blindly repeating paid calls.
+- Retain onchip-specific physics guard. Add only supported data-driven animation primitives with explicit scientific/source constraints for another paper; unsupported mechanisms stop clearly. No arbitrary model code or fake simulation.
+- Required acceptance: normal user, upload and literature clue entry, client closure, worker restart, duplicate dispatch, source/review changes, revoked access, real motion/audio/private playback, another supported paper.
+- Main corrections: second-paper functional acceptance precedes UX polish per user priority; Chat's unexplained Serena name is not an established local capability and is not adopted. No implementation or deployment success is implied by receiving this plan.
+- Browser diagnosis: individual Chrome calls took about43s;60s single-action limits succeeded. Default30s and combined slow actions caused resets. This does not establish every prior Debugger unattached root cause.
+
+### First server slice implementation checkpoint
+
+- Actual route: Terra/medium implemented source-readiness decisions (8 focused tests); Sol/medium owns run metadata/API/worker implementation; independent Sol/high reviewed permissions/concurrency. No measured end-to-end Codex savings percentage.
+- First slice attaches existing authorized ingestion tasks and server reconciliation advances only to awaiting_source_review. It does not yet submit a new full research journey, create/verify Claims, resume after approval, or generate media. Names must not imply Claims already exist.
+- Persistent run/step rows address missing cross-stage identity; request digest detects idempotency-key input changes. last_reconciled_at addresses starvation when a bounded scan repeatedly visits early unfinished rows. No separate paid coordination task or queue.
+- Review found excessive tick writes, per-row error isolation, missing Serializable create retry, and absent transition audit; fixes and regression validation are required before release.
+- Fresh production checkup passed (log1788852190942-86abf97c-1194-4e50-a3a6-9ad9cc3b0ac3); source/public release lookup log1788852567786-fb37d0d0-b45c-4374-b8cf-2339bc2f76c4. Production remains97aa06a, rollbackc5b0dd7.
+- Local Docker Linux engine unavailable; migration forward/rollback/reapply runtime test is still missing. Additive SQL/schema validation cannot replace that evidence. No production migration or deployment performed for this slice.

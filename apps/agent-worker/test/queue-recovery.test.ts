@@ -1,7 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { recoverProcessingQueue } from '../src/index';
+import { createResearchRunReconcileScheduler, reconcileResearchRunsTick, recoverProcessingQueue } from '../src/index';
 
 describe('agent-worker durable queue recovery', () => {
+  it('contains a research reconciler failure so normal queue polling can continue', async () => {
+    const errors: unknown[] = [];
+    const completed = await reconcileResearchRunsTick({} as never, async () => { throw new Error('database unavailable'); }, (error) => errors.push(error));
+    expect(completed).toBe(false);
+    expect(errors).toHaveLength(1);
+  });
+
+  it('throttles bounded reconciliation while queue polling stays frequent', async () => {
+    let current = 0;
+    let calls = 0;
+    const tick = createResearchRunReconcileScheduler({
+      intervalMs: 5_000,
+      now: () => current,
+      reconcile: async () => { calls += 1; return { inspected: 0, advanced: 0, failed: 0, stopped: 0, errors: 0 }; },
+      onError: () => undefined,
+    });
+    expect(await tick({} as never)).toBe(true);
+    current = 1_000;
+    expect(await tick({} as never)).toBe(false);
+    current = 5_000;
+    expect(await tick({} as never)).toBe(true);
+    expect(calls).toBe(2);
+  });
+
   it('requeues abandoned pending/running tasks and discards terminal processing residues', async () => {
     const tasks = new Map([
       ['pending-task', { id: 'pending-task', status: 'pending' }],

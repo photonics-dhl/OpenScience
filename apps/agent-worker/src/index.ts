@@ -12,7 +12,7 @@ import {
   type ProviderCapabilityPolicy,
 } from '@openscience/ai-gateway';
 import {
-  claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
+  claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
   AGENT_TASK_QUEUE, persistDocumentSourceMapReference, type AgentDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
@@ -313,6 +313,37 @@ export async function sleep(ms: number): Promise<void> {
 
 const AGENT_TASK_PROCESSING_QUEUE = `${AGENT_TASK_QUEUE}:processing`;
 
+export async function reconcileResearchRunsTick(
+  deps: WorkerDeps,
+  reconcile: typeof reconcileHermesResearchRuns = reconcileHermesResearchRuns,
+  onError: (error: unknown) => void = (error) => console.error('Hermes research run reconcile error', error),
+): Promise<boolean> {
+  try {
+    await reconcile(deps, { limit: 20 });
+    return true;
+  } catch (error) {
+    onError(error);
+    return false;
+  }
+}
+
+export function createResearchRunReconcileScheduler(options: {
+  intervalMs?: number;
+  now?: () => number;
+  reconcile?: typeof reconcileHermesResearchRuns;
+  onError?: (error: unknown) => void;
+} = {}): (deps: WorkerDeps) => Promise<boolean> {
+  const intervalMs = options.intervalMs ?? 5_000;
+  const clock = options.now ?? (() => performance.now());
+  let nextAt = Number.NEGATIVE_INFINITY;
+  return async (deps) => {
+    const current = clock();
+    if (current < nextAt) return false;
+    nextAt = current + intervalMs;
+    return reconcileResearchRunsTick(deps, options.reconcile, options.onError);
+  };
+}
+
 /** Single-consumer startup recovery for tasks stranded by a previous worker process. */
 export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> {
   let recovered = 0;
@@ -334,7 +365,9 @@ export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> 
  * 轮询 Redis 队列 → handler 执行 → markTaskProgress（状态机前进，succeeded 后重放 skip）。
  */
 export async function createPollOnce(handlers: Record<string, TaskHandler>): Promise<(deps: WorkerDeps) => Promise<boolean>> {
+  const reconcileRuns = createResearchRunReconcileScheduler();
   return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
+    await reconcileRuns(deps);
     await recoverUndispatchedAgentTasks(deps);
     // BRPOPLPUSH：原子弹出 → 处理中队列（崩溃恢复用）
     const taskId = await deps.redis.brpoplpush(AGENT_TASK_QUEUE, AGENT_TASK_PROCESSING_QUEUE, 1);

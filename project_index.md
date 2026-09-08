@@ -1,14 +1,15 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-08 +08）：** production/public b361f4f7781b760583b3a312829877c4d6310e8a，rollback a73f273f7079819579962aa6eff31c1dd9368b08；release branch codex/onchip-video-release base b361，scene-image数值反馈382bf2e已验证；登录页PNG优化请求在CI重复挂起，单图直读修复本地7项通过，候选待CI及部署。真实论文六字段确认、同版Claim桥接和四图通过；末图结构规划失败已定位，修复后接续原RO，不重复提取。完整版本及证据见CURRENT handoff。
-> 最新生产c5b0dd71，rollback69ea938；CI与部署通过。第五图结构化改写仍失败；确定性完整来源组装待发布，其余四图复用，视频未验收。
+> **CURRENT source/deployment anchor（2026-09-08 +08）：** production/public97aa06a542febf558a47cecbf6559bd0a6c876aa，rollbackc5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb；release branch codex/onchip-video-release HEAD97aa06a，当前实现未提交未部署。视频已获用户批准；Chat6Pro已返回自主流程规划，服务器编排正在实现。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 
 ## 当前产品交付
 
+
 | 路径 | 用途 | 状态 |
 |---|---|---|
+| `packages/domain/src/agent/research-source-readiness.ts` / `packages/domain/test/agent/research-source-readiness.test.ts` | Hermes原生文本/OCR/外部来源准备决策；区分上传、外部文件和文献线索 | LOCAL CANDIDATE；Terra/medium，8项测试通过；尚未接入运行流程，不代表OCR/ScanSci调用验收 |
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；已确认RO工作区/概览/Hermes侧栏/研究桌面职责；官方参考实查完成；A配色三态本地样稿，待用户视觉验收 |
 | `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；收尾/22路由审计和选择性同事UX整合；PR102应用4d39808已部署、动画demo9848411；主线确认，PR103/104正式桌面/概览/段落助手已部署验收 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |

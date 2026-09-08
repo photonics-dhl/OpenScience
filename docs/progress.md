@@ -1,18 +1,13 @@
 # Progress
 
-- Latest productionc5b0dd71 (rollback69ea938), CI34189588048/deployment passed. Structured scene4 retrybbba7cd failed before image. High review selected complete deterministic source assembly<=1500, no lossy intermediate model; implementation pending validation. Existing4images retained, video remains open.
+## 2026-09-08: video user-approved; server-owned Hermes workflow next
 
-- Production now69ea938c, rollbackb361; CI34187601825 and canonical deployment passed. Fifth image generated but rejected for wrong radio apparatus. Semantic prompt correction keeps physical subtype/scale; retain prior4images. Full real-video acceptance remains open.
+- Production/public97aa06a542febf558a47cecbf6559bd0a6c876aa, rollbackc5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb. CI34192289263 and canonical server build/Parser16/migrations/runtime/public acceptance passed.
+- Real paper six fields confirmed and committed; same-version Claim bridge passed. Five scientific Claims/112 Evidence reviewed; storyboard-v3 and all5images approved. Prior failures preserved, only scene4 regenerated.
+- Actual53.875s1280x720H264/AAC video generated,1,926,620bytes. Full decode, actual animated scene frames, authenticatedRange, desktop/mobile playback and anonymous/cross-RO denial passed. User approved the video; API approval verified2026-09-08T06:32:43.612Z. Audio acceptance is attributed to the user.
+- Deterministic prompt assembly preserves complete scene and Claim conditions/limitations, actual1401chars and0intermediate model calls. Over1500 fails closed instead of lossy rewriting; existing identity/approval boundaries unchanged. Tests3+consumer39+compiledparser10/types/lint/build and independentHigh review passed.
+- token-smart scientific handoff updated and portable ZIP refreshed. Local zero text-planner calls do not establish whole-task Codex savings. Browser control still times out; prior actual Chat6Pro planning/review reused.
+- Current priority: server-owned Hermes workflow using existing OCR/ScanSci/retrieval/extraction/media. Ordinary-user acceptance without Codex orchestration first, UX/layout polish second, further capabilities afterward. Chat6Pro plan actually received;60s single browser actions succeeded. Durable server run implementation is underway.
+- Future UX polish: simplify historical/rejected asset display and replace internal/generic media labels. Current first-slice UX and desktop/mobile no-overflow checks passed; do not imply all UX refinements complete.
 
-- Latest candidate382bf2e CI34184988463 reproduced7 auth/login image-optimizer hangs twice. One local 53KB PNG now loads directly; unchanged7 visual cases pass after fresh build (11.7s). Production remainsb361; final CI and real scene4/video acceptance pending.
-
-## 2026-09-08: media release deployed; real-paper bridge passed
-
-- Production/public b361f4f7781b760583b3a312829877c4d6310e8a, rollback a73f273f7079819579962aa6eff31c1dd9368b08. Source codex/onchip-video-release HEAD/origin b361; PR107 CI passed. Canonical server build/Parser16/migrations/runtime/public acceptance and post-checkup passed.
-- API/Worker video enabled; existing image and new video runner active, exact renderer/TTS/model readiness verified. CPU image installation remains paused.
-- Real paper six fields confirmed/committed. Same-version UI bridge now passed after strict bbox roundtrip repair, without another model call. RO af1a9817, version a66f7b15; complete IDs and evidence in CURRENT handoff.
-- Main and ordinary Chat6Pro completed scientific wording and five-scene mechanism review. Scientific Claims/evidence stage passed5/112; storyboard-v3 and actual images0..3 approved. Final scene4 composition failed before codex-image; three MiniMax text responses used the same prompt, rejected output was not stored. Generic feedback alone failed real replay. Numeric length feedback then passed exact-input replay in3calls,1533/2004→1439; candidate8e CI/server Parser16 passed, final delta pending release; no source/length/retry boundary relaxation. Resume only failed scene, then same-RO video and narration/Range/playback acceptance.
-- Production desktop1440/mobile390 screenshot UX accepted. Runtime video fixture passed full decode; actual paper images/video are still pending and cannot be inferred from fixture success.
-- Routing uses strong main, bounded Sol/medium implementation and Sol/high risk review, webpage whole-stage design. token-smart continuity routing/handoff updated; sharing ZIP token-smart-share-20260908-continuity.zip. Overall Codex savings percentage remains unavailable without a valid whole-chain baseline; codex-image is not free Codex usage.
-- Historical failed extractions and one erroneous helper repeat retained as cost/failure. Root dirty main and development changes preserved. Resume current evidence IDs, do not restart upload or re-run valid checks.
-- Read first: docs/handoff/2026-08-16-hermes-2d-pet-handoff.md; docs/plans/2026-09-07-literature-recovery-workflow-plan.md. Full logs retained locally, not copied into active docs.
+CURRENT: docs/handoff/2026-08-16-hermes-2d-pet-handoff.md. Root dirty main and development/release worktrees are separate; do not reset or merge them blindly. CPU image installation remains paused; no new providers installed.

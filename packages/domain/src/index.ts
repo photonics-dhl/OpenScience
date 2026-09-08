@@ -154,6 +154,12 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
+  createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns,
+  HermesResearchRunError,
+  type HermesResearchRunDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
+  type HermesResearchRunView, type HermesResearchStepStatus,
+} from './agent/research-run';
+export {
   claimAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
   submitAgentTask, persistAgentTaskInTransaction, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,

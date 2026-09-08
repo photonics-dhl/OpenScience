@@ -73,6 +73,7 @@ model User {
   institutionChallenges    InstitutionEmailChallenge[]
   scopedRoleAssignments    ScopedRoleAssignment[]      @relation("ScopedRoleSubject")
   grantedScopedRoles       ScopedRoleAssignment[]      @relation("ScopedRoleGranter")
+  hermesResearchRuns       HermesResearchRun[]         @relation("HermesResearchRunActor")
 
   @@map("users")
 }
@@ -519,6 +520,7 @@ model ResearchObject {
   claimNodes          ClaimNode[]
   evidenceRecords     EvidenceRecord[]
   presentationAssets  PresentationAsset[]
+  hermesResearchRuns  HermesResearchRun[]
 
   @@unique([id, workspaceId], map: "research_objects_id_workspace_id_key")
   @@index([workspaceId])
@@ -737,6 +739,7 @@ model Artifact {
   workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   ingestionTasks  IngestionTask[]
   evidenceRecords EvidenceRecord[]
+  hermesResearchSteps HermesResearchStep[]
 
   @@unique([id, workspaceId], map: "artifacts_id_workspace_id_key")
   @@index([workspaceId])
@@ -1246,6 +1249,7 @@ model AgentTask {
   ingestionTask     IngestionTask?
   retrievalRights   SourceRightsDecision[]
   temporaryDocument TemporaryDocument?
+  hermesResearchSteps HermesResearchStep[]   @relation("HermesResearchStepAgentTask")
 
   @@index([sessionId])
   @@map("agent_tasks")
@@ -1321,6 +1325,7 @@ model IngestionTask {
   batch     IngestionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   artifact  Artifact       @relation(fields: [artifactId], references: [id], onDelete: Restrict)
   agentTask AgentTask?     @relation(fields: [agentTaskId], references: [id], onDelete: SetNull)
+  hermesResearchSteps HermesResearchStep[]
 
   @@unique([batchId, artifactId])
   @@index([batchId])
@@ -1459,6 +1464,53 @@ model ResearchIdentityProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("research_identity_profiles")
+}
+
+// Hermes server-owned research orchestration: durable metadata only. Source bytes remain in object storage.
+model HermesResearchRun {
+  id                             String   @id @default(uuid()) @db.Uuid
+  researchObjectId               String   @map("research_object_id") @db.Uuid
+  actorId                        String   @map("actor_id") @db.Uuid
+  status                         String   @default("running")
+  version                        Int      @default(1)
+  idempotencyKey                 String   @unique @map("idempotency_key")
+  requestDigest                  String   @map("request_digest") @db.Char(64)
+  error                          String?
+  lastReconciledAt               DateTime? @map("last_reconciled_at")
+  createdAt                      DateTime @default(now()) @map("created_at")
+  updatedAt                      DateTime @updatedAt @map("updated_at")
+
+  researchObject ResearchObject        @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  actor          User                  @relation("HermesResearchRunActor", fields: [actorId], references: [id], onDelete: Restrict)
+  steps          HermesResearchStep[]
+
+  @@index([status, lastReconciledAt], map: "idx_hermes_research_runs_reconcile")
+  @@index([researchObjectId, actorId], map: "idx_hermes_research_runs_scope")
+  @@map("hermes_research_runs")
+}
+
+model HermesResearchStep {
+  id              String   @id @default(uuid()) @db.Uuid
+  runId           String   @map("run_id") @db.Uuid
+  stage           String
+  ordinal         Int
+  status          String   @default("waiting")
+  ingestionTaskId String   @map("ingestion_task_id") @db.Uuid
+  artifactId      String   @map("artifact_id") @db.Uuid
+  agentTaskId     String?  @map("agent_task_id") @db.Uuid
+  error           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  run           HermesResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  ingestionTask IngestionTask     @relation(fields: [ingestionTaskId], references: [id], onDelete: Restrict)
+  artifact      Artifact          @relation(fields: [artifactId], references: [id], onDelete: Restrict)
+  agentTask     AgentTask?        @relation("HermesResearchStepAgentTask", fields: [agentTaskId], references: [id], onDelete: SetNull)
+
+  @@unique([runId, stage, ordinal], map: "hermes_research_steps_run_stage_ordinal_key")
+  @@index([ingestionTaskId])
+  @@index([agentTaskId])
+  @@map("hermes_research_steps")
 }
 
 model ClaimNode {
