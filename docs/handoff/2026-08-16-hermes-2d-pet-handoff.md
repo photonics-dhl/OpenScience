@@ -4,7 +4,7 @@
 
 ## Version tuple
 - Production/public: b361f4f7781b760583b3a312829877c4d6310e8a; rollback a73f273f7079819579962aa6eff31c1dd9368b08.
-- Release source: E:/Miscellaneous/XGS/.worktrees/onchip-video-release, codex/onchip-video-release, HEAD/origin b361f4f7781b760583b3a312829877c4d6310e8a. Draft PR107; deployed CI34180370205 passed. Follow-up base8e7b95e50f15893eb83cd38c9fa0dd57c00c8107 CI34184022890 and server Parser16 passed but not deployed; numeric feedback delta pending commit.
+- Release source: E:/Miscellaneous/XGS/.worktrees/onchip-video-release, codex/onchip-video-release, HEAD/origin b361f4f7781b760583b3a312829877c4d6310e8a. Draft PR107; deployed CI34180370205 passed. Follow-up base8e7b95e50f15893eb83cd38c9fa0dd57c00c8107 CI34184022890 and server Parser16 passed but not deployed; numeric feedback committed382bf2e; CI34184988463 twice failed the same7 auth/login networkidle cases, all blocked on the local PNG optimizer. Local static PNG unoptimized fix now passes all7 after fresh web build (11.7s); next commit/CI/deployment pending.
 - Development: E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow, codex/token-smart-live-workflow, HEAD/origin005ffb8d8298d3476e8411046cae300079bd8344; dirty development work retained. Root dirty main is separate; do not reset/pull/stash it.
 
 ## Completed and evidence

@@ -1,5 +1,7 @@
 # Progress
 
+- Latest candidate382bf2e CI34184988463 reproduced7 auth/login image-optimizer hangs twice. One local 53KB PNG now loads directly; unchanged7 visual cases pass after fresh build (11.7s). Production remainsb361; final CI and real scene4/video acceptance pending.
+
 ## 2026-09-08: media release deployed; real-paper bridge passed
 
 - Production/public b361f4f7781b760583b3a312829877c4d6310e8a, rollback a73f273f7079819579962aa6eff31c1dd9368b08. Source codex/onchip-video-release HEAD/origin b361; PR107 CI passed. Canonical server build/Parser16/migrations/runtime/public acceptance and post-checkup passed.
