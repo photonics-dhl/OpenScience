@@ -53,6 +53,8 @@ if git -C "$REPOSITORY_ROOT" rev-parse HEAD >/dev/null 2>&1; then
   GIT_SHA="$(git -C "$REPOSITORY_ROOT" rev-parse HEAD)"
 elif [[ -f "$REPOSITORY_ROOT/.evaluation-source" && ! -L "$REPOSITORY_ROOT/.evaluation-source" ]]; then
   GIT_SHA="$(< "$REPOSITORY_ROOT/.evaluation-source")"
+elif [[ -f "$REPOSITORY_ROOT/.release-source" && ! -L "$REPOSITORY_ROOT/.release-source" ]]; then
+  GIT_SHA="$(< "$REPOSITORY_ROOT/.release-source")"
 else
   echo 'evaluation source identity is unavailable' >&2
   exit 65

@@ -10,6 +10,17 @@ import {
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { ONCHIP_SOURCE_CONTENT_HASH } from '../../src/assets/video';
 
+type IdQuery = { where: { id: string } };
+type MembershipQuery = { where: { workspaceId_userId: { workspaceId: string; userId: string } } };
+type IngestionListQuery = { where: { id: { in: string[] } } };
+type RunUniqueQuery = { where: { id?: string; idempotencyKey?: string } };
+type RunListQuery = { where: { status: string | { in: string[] } }; take: number };
+type RunCreateQuery = { data: Record<string, unknown> & { steps: { create: Array<Record<string, unknown>> } } };
+type RunUpdateQuery = { where: { id: string; status: string; version: number }; data: Record<string, unknown> & { version?: { increment?: number } } };
+type StepCountQuery = { where: { runId: string; agentTaskId?: { not: null } } };
+type StepUpdateQuery = { where: { runId: string; id?: string }; data: Record<string, unknown> };
+type AuditCreateQuery = { data: Record<string, unknown> };
+
 function fixture(options: { role?: string; roStatus?: string; taskState?: string; transactionFailures?: string[] } = {}) {
   const now = new Date('2026-09-08T00:00:00.000Z');
   let sequence = 0;
@@ -45,26 +56,26 @@ function fixture(options: { role?: string; roStatus?: string; taskState?: string
       if (failure) throw Object.assign(new Error(failure), { code: failure });
       return callback(prisma);
     },
-    workspace: { findUnique: async ({ where }: any) => db.workspaces.find((row) => row.id === where.id) ?? null },
+    workspace: { findUnique: async ({ where }: IdQuery) => db.workspaces.find((row) => row.id === where.id) ?? null },
     membership: {
-      findUnique: async ({ where }: any) => db.memberships.find((row) => row.workspaceId === where.workspaceId_userId.workspaceId && row.userId === where.workspaceId_userId.userId) ?? null,
+      findUnique: async ({ where }: MembershipQuery) => db.memberships.find((row) => row.workspaceId === where.workspaceId_userId.workspaceId && row.userId === where.workspaceId_userId.userId) ?? null,
     },
-    researchObject: { findUnique: async ({ where }: any) => db.researchObjects.find((row) => row.id === where.id) ?? null },
+    researchObject: { findUnique: async ({ where }: IdQuery) => db.researchObjects.find((row) => row.id === where.id) ?? null },
     ingestionTask: {
-      findMany: async ({ where }: any) => db.ingestionTasks.filter((task) => where.id.in.includes(task.id)).map((task) => ({
+      findMany: async ({ where }: IngestionListQuery) => db.ingestionTasks.filter((task) => where.id.in.includes(task.id)).map((task) => ({
         ...task,
         batch: db.ingestionBatches.find((batch) => batch.id === task.batchId),
         agentTask: db.agentTasks.find((agentTask) => agentTask.id === task.agentTaskId),
       })),
     },
     hermesResearchRun: {
-      findUnique: async ({ where }: any) => {
+      findUnique: async ({ where }: RunUniqueQuery) => {
         const run = db.runs.find((row) => where.id ? row.id === where.id : row.idempotencyKey === where.idempotencyKey);
         return run ? withRun(run) : null;
       },
-      findMany: async ({ where, take }: any) => db.runs.filter((run) => Array.isArray(where.status?.in)
-        ? where.status.in.includes(run.status) : run.status === where.status).slice(0, take).map(withRun),
-      create: async ({ data }: any) => {
+      findMany: async ({ where, take }: RunListQuery) => db.runs.filter((run) => typeof where.status !== 'string'
+        ? where.status.in.includes(String(run.status)) : run.status === where.status).slice(0, take).map(withRun),
+      create: async ({ data }: RunCreateQuery) => {
         const row = { id: `run-${++sequence}`, status: 'running', version: 1, versionId: null, profile: null,
           maxAgentTasks: null, sourceClaimIds: [], sourceReviewDigest: null, error: null, lastReconciledAt: null,
           createdAt: now, updatedAt: now, ...data };
@@ -72,21 +83,21 @@ function fixture(options: { role?: string; roStatus?: string; taskState?: string
         for (const step of data.steps.create) db.steps.push({ id: `step-${++sequence}`, status: 'waiting', createdAt: now, updatedAt: now, runId: row.id, ...step });
         return withRun(row);
       },
-      updateMany: async ({ where, data }: any) => {
+      updateMany: async ({ where, data }: RunUpdateQuery) => {
         const rows = db.runs.filter((run) => run.id === where.id && run.status === where.status && run.version === where.version);
         rows.forEach((run) => Object.assign(run, data, { version: Number(run.version) + (data.version?.increment ?? 0), updatedAt: now }));
         return { count: rows.length };
       },
     },
     hermesResearchStep: {
-      count: async ({ where }: any) => db.steps.filter((step) => step.runId === where.runId && (!where.agentTaskId?.not || step.agentTaskId != null)).length,
-      updateMany: async ({ where, data }: any) => {
+      count: async ({ where }: StepCountQuery) => db.steps.filter((step) => step.runId === where.runId && (where.agentTaskId === undefined || step.agentTaskId != null)).length,
+      updateMany: async ({ where, data }: StepUpdateQuery) => {
         const rows = db.steps.filter((step) => step.runId === where.runId && (where.id === undefined || step.id === where.id));
         rows.forEach((step) => Object.assign(step, data, { updatedAt: now }));
         return { count: rows.length };
       },
     },
-    auditLog: { create: async ({ data }: any) => void db.audits.push(data) },
+    auditLog: { create: async ({ data }: AuditCreateQuery) => void db.audits.push(data) },
   };
   return { deps: { prisma, now: () => now, audit: { record: async (event: Record<string, unknown>) => void db.audits.push(event) } } as never, db };
 }

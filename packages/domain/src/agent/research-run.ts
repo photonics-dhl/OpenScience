@@ -40,7 +40,7 @@ export class HermesResearchRunError extends Error {
   }
 }
 
-export interface HermesResearchRunDeps extends AgentDeps {}
+export type HermesResearchRunDeps = AgentDeps;
 export interface HermesSourceReviewDeps extends HermesResearchRunDeps { storage: IngestionDeps['storage'] }
 
 export interface HermesResearchRunView {

@@ -9,6 +9,7 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
+| `infra/scripts/verify-hermes-user-journey.mjs` | 服务器真实普通账号浏览器上传/启动/恢复取证，禁止手工生成各媒体阶段 | ACCEPTANCE TOOL；待运行，不代表产品流程通过 |
 | `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |
 | `packages/domain/src/agent/research-run.ts` / `apps/api/src/routes/research-runs.ts` / `infra/migrations/20260908010000_hermes_research_runs/` / `infra/migrations/20260908020000_hermes_research_workflow/` | 持久流程、来源审核和限定生成授权、服务器审核后续跑 | CANDIDATE4c369cbc；正合并生产，新增流程待服务器验收 |
 | `apps/web/components/hermes/{HermesResearchRunPanel,HermesSourceReview,HermesClaimEvidenceReview}.tsx` / `apps/web/test/hermes-research-run-panel.test.tsx` / `apps/web/test/hermes-claim-evidence-review.test.ts` | 用户启动、恢复及审核进度入口 | CANDIDATE；待服务器验收 |
