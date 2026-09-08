@@ -1,6 +1,9 @@
 # Progress
 
-## 2026-09-08: real UI recovery works; empty scientific output blocks acceptance
+## 2026-09-08: integrate concurrent R1 and grounded extraction recovery
+
+- Production88018512 / rollbackc1c7fa4b detected read-only; preserve parallel R1 cross-block evidence, no-empty-confirmation and human revision provenance. Nine-PDF R1 acceptance remains separately tracked in its publication plan. Integrating both branches; no deployed R1 work may be overwritten.
+- Candidate998 passed ECS build/types/lint/docs/tests/Parser16. One isolated real producer preflight returned5 nonempty sourced fields and missing reproducibility in2 calls (12678 input+1630 output=14308 product-model tokens). Packet /opt/openscience-diagnostics/998-sdf-real-source-20260908.jsonl; scientific review pending, no DB/run/ledger mutation. An earlier preflight command stopped before any call on active-release CAS mismatch.
 
 - Productionc1c7fa4b / rollback8c0601a7; CI34223306660/server build/types/lint/docs/API171/web569/Parser16 passed, deploy1788869423787-f16a8cd9-8260-438e-86b9-f3d1194a6ef8 succeeded. UI retry-v2 passed and browser/session closed; same AgentTask executionAttempt2/retryCount1 returned six empty fields and all needsMoreInformation. Scientific acceptance blocked; no confirmation/Claims/media. Chat6Pro+worker investigating without new product-model calls or DB resets.
 - Candidate2ccac6e5 implements aggregate all-missing rejection within the existing 3-call budget and one exact paid 1-to-2 recovery with actor/session, Serializable permission/CAS, ledger and audit. High diff review/server tests pending; run one read-only real producer preflight before deployment. Latest real attempt used6248 input+191 output=6439 product-model tokens; no structured retry. Input had359 canonical blocks/23968 chars with main-body evidence. Chat6Pro returned an Unusual activity restriction, no plan; Sol/high supplied the implementation boundaries.
