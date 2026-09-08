@@ -2510,3 +2510,10 @@ Use the existing exact-source rollback procedure targeting8e4ecb2b5f9e291385b0df
 ### 验证命令
 
 Canonical build/parser16/core36/search2/BGE/ScanSci/container health passed; public/loopback200 and egress204. Journal cleared and retention completed. Public auth8 and product8 read-only checks passed with0business writes and controlled session closed. Evidence: ignored entry-deploy.log, entry-final-checkup.log, entry-shots.json and entry-product-evidence.json under apps/web/test/visual/out/research-journey/. No full research-pipeline or CI completion claim.
+
+### 2026-09-08 — Publication record/API release134ebdea
+
+- Precheck: user authorized repair/deployment; current97aa06a5 retained in merged candidate. Independent review, build/types/lint, package/browser tests, real isolated PostgreSQL and parser16 acceptance passed. GitHub branch uploaded; PR connector403, no Actions completion claimed.
+- Execution: canonical deploy.sh --confirm --require-parser-acceptance --rollback-ref 97aa06a542febf558a47cecbf6559bd0a6c876aa 134ebdea796b922ac07d9f29b6148b458b5e515f completed. Core37/search2 and runtime/public identity checks passed; journal cleared.
+- Rollback: use canonical transaction with134ebdea as current and97aa06a5 as target. The nullable research_record column can remain for application rollback; archive record data before any destructive column rollback. No separate fresh pre-deployment DB backup was taken by this transaction; post-deployment backup core28M/search20K succeeded with existing sets retained.
+- Verification: checkup public/loopback200, egress204; live controlled upload/Hermes/duplicate confirmation,6 source lookups, fixed export equality/draft isolation/private404 passed. Original paper PDF hash and old Version preserved; isolated services stopped. Evidence lives in ignored .superpowers/sdd/2026-09-07-open-research-publication-plan/.
