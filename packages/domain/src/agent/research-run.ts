@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { AuditContext } from '@openscience/observability';
 import { recordAudit } from '../workspace/audit';
 import { requireActiveMembership } from '../workspace/helpers';
