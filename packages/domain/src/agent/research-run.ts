@@ -9,7 +9,8 @@ import { confirmIngestionClaimEvidenceBridge, type IngestionClaimSelection } fro
 import type { IngestionDeps } from '../ingestion/ingestion-service';
 import { findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH } from '../assets/video';
-import type { HermesPresentationAuthority, PresentationGenerationPayload } from '../assets/presentation-asset';
+import { parsePresentationGenerationPayload, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
+import { presentationStoryboardView } from '../assets/storyboard';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
 
 const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
@@ -419,6 +420,58 @@ async function validateReviewedSources(tx: Prisma.TransactionClient, run: RunRow
   return 'ready';
 }
 
+async function findApprovedStoryboardRevision(
+  tx: Prisma.TransactionClient,
+  input: {
+    actorId: string;
+    researchObjectId: string;
+    versionId: string;
+    sourceClaimIds: string[];
+    baseAsset: { id: string; kind: string; provenance: unknown; sourceClaims: Array<{ claimId: string }> };
+  },
+) {
+  const expectedClaimIds = [...input.sourceClaimIds].sort();
+  const baseClaimIds = input.baseAsset.sourceClaims.map((link) => link.claimId).sort();
+  if (!presentationStoryboardView(input.baseAsset, baseClaimIds)
+    || !isDeepStrictEqual(baseClaimIds, expectedClaimIds)) return null;
+  const revisions = await tx.presentationAsset.findMany({
+    where: {
+      researchObjectId: input.researchObjectId,
+      versionId: input.versionId,
+      kind: 'interactive_html',
+      status: 'approved',
+      provenance: { path: ['storyboardSettings', 'baseAssetId'], equals: input.baseAsset.id },
+    },
+    include: { sourceClaims: { select: { claimId: true } } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 2,
+  });
+  if (revisions.length !== 1) return null;
+  const revision = revisions[0]!;
+  const revisionClaimIds = revision.sourceClaims.map((link) => link.claimId).sort();
+  const view = presentationStoryboardView(revision, revisionClaimIds);
+  if (!view || view.baseAssetId !== input.baseAsset.id
+    || !isDeepStrictEqual(revisionClaimIds, expectedClaimIds)) return null;
+  const provenance = jsonRecord(revision.provenance);
+  if (provenance.source !== 'verified_claims' || provenance.taskId !== revision.id
+    || !Array.isArray(provenance.sourceClaimIds)
+    || !isDeepStrictEqual([...provenance.sourceClaimIds].sort(), expectedClaimIds)) return null;
+  const task = await tx.agentTask.findUnique({ where: { id: revision.id }, include: { session: true } });
+  if (!task || task.kind !== 'presentation.generate' || task.status !== 'succeeded'
+    || task.session.userId !== input.actorId || task.session.researchObjectId !== input.researchObjectId
+    || task.session.status !== 'active') return null;
+  let payload: PresentationGenerationPayload;
+  try {
+    payload = parsePresentationGenerationPayload(task.payload);
+  } catch {
+    return null;
+  }
+  if (payload.researchObjectId !== input.researchObjectId || payload.versionId !== input.versionId
+    || payload.kind !== 'interactive_html' || payload.storyboard?.baseAssetId !== input.baseAsset.id
+    || !isDeepStrictEqual(payload.sourceClaimIds, expectedClaimIds)) return null;
+  return revision;
+}
+
 async function moveRun(
   deps: HermesResearchRunDeps, tx: Prisma.TransactionClient, run: RunRow,
   to: HermesResearchRunStatus, workspaceId: string | undefined, error: string | null = null,
@@ -547,6 +600,51 @@ export async function reconcileHermesResearchRuns(
             }
             const waiting = stage === 'storyboard' ? 'awaiting_storyboard_review' : stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_video_review';
             return moveRun(deps, tx, run, waiting, ro.workspaceId);
+          }
+          if (run.status === 'awaiting_storyboard_review' && run.versionId && steps.length === 1) {
+            const step = steps[0]!;
+            const baseAsset = step.presentationAsset;
+            if (step.status === 'awaiting_approval' && baseAsset && baseAsset.status !== 'approved') {
+              const revision = await findApprovedStoryboardRevision(tx, {
+                actorId: run.actorId,
+                researchObjectId: run.researchObjectId,
+                versionId: run.versionId,
+                sourceClaimIds: run.sourceClaimIds,
+                baseAsset,
+              });
+              if (revision) {
+                const fencedRun = await tx.hermesResearchRun.updateMany({
+                  where: { id: run.id, status: run.status, version: run.version },
+                  data: { lastReconciledAt: now(deps) },
+                });
+                if (fencedRun.count !== 1) return null;
+                const adopted = await tx.hermesResearchStep.updateMany({
+                  where: {
+                    id: step.id, runId: run.id, stage: 'storyboard', ordinal: 0,
+                    status: 'awaiting_approval', presentationAssetId: baseAsset.id,
+                  },
+                  data: { presentationAssetId: revision.id, error: null },
+                });
+                if (adopted.count !== 1) {
+                  throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Storyboard review changed during revision adoption');
+                }
+                await recordAudit(deps, tx, {
+                  actorId: run.actorId,
+                  action: 'hermes.research_run.storyboard_revision_adopted',
+                  workspaceId: ro.workspaceId,
+                  targetType: 'hermes_research_run',
+                  targetId: run.id,
+                  metadata: {
+                    stepId: step.id,
+                    baseAssetId: baseAsset.id,
+                    revisionAssetId: revision.id,
+                    baseContentHash: baseAsset.contentHash,
+                    revisionContentHash: revision.contentHash,
+                  },
+                }, {});
+                return null;
+              }
+            }
           }
           const assets = steps.map((step) => step.presentationAsset);
           if (!assets.length || assets.some((asset) => !asset)) return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Reviewed asset binding is missing');
