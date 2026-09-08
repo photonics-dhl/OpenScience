@@ -5,23 +5,26 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HermesTaskEntry, loadScopedHermesReview } from '@/components/hermes/HermesTaskEntry';
+import { HermesResearchRunPanel } from '@/components/hermes/HermesResearchRunPanel';
+import { HermesSourceReview } from '@/components/hermes/HermesSourceReview';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, confirmIngestionTask, listResearchIngestionTasks, getResearchObject, getIngestionTask, type DashboardTaskApi, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
+import { ApiClientError, confirmIngestionTask, getHermesResearchRun, listResearchIngestionTasks, getResearchObject, getIngestionTask, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
 export default function HermesReviewPage({ params: routeParams }: { params: { id: string } }) {
   const searchParams = useSearchParams();
   const taskId = searchParams.get('task') ?? '';
-  return <HermesResearchPage key={`${routeParams.id}:${taskId}`} routeParams={routeParams} taskId={taskId} />;
+  const runId = searchParams.get('run') ?? '';
+  return <HermesResearchPage key={`${routeParams.id}:${taskId}:${runId}`} routeParams={routeParams} taskId={taskId} runId={runId} />;
 }
 
-function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string }; taskId: string }) {
+function HermesResearchPage({ routeParams, taskId, runId }: { routeParams: { id: string }; taskId: string; runId: string }) {
   const router = useRouter();
   const locale = useLocale() as 'zh' | 'en';
   const t = useTranslations('hermesReview');
@@ -33,6 +36,7 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [hermesOpen, setHermesOpen] = useState(false);
+  const [run, setRun] = useState<HermesResearchRun | null>(null);
 
   const [researchTitle, setResearchTitle] = useState('');
   const [researchStatus, setResearchStatus] = useState('draft');
@@ -41,6 +45,12 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
   const [reload, setReload] = useState(0);
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => {
+    if (!runId) { setRun(null); return; }
+    const controller = new AbortController();
+    void getHermesResearchRun(routeParams.id, runId, controller.signal).then((result) => { if (!controller.signal.aborted) setRun(result.run); });
+    return () => controller.abort();
+  }, [routeParams.id, runId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,10 +103,12 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
     </div>
   );
 
+  const onRunCreated = (run: { id: string }) => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`);
   if (!taskId) return (
     <DashboardShell mainClassName="p-0" navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
       {workspaceNavigation}
       <div className="min-h-[calc(100dvh-7rem)] px-4 py-7 text-os-ink sm:px-8 lg:px-12"><HermesTaskEntry researchObjectId={routeParams.id} researchTitle={researchTitle} tasks={tasks} loading={loading} error={error} onRetry={() => setReload((value) => value + 1)} />
+        {!loading && !error ? <HermesResearchRunPanel researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
         {!loading && !error && <button type="button" className="mt-5 min-h-11 rounded-panel border border-os-vermilion-ink px-4 py-2 font-semibold text-os-vermilion-ink" onClick={() => setHermesOpen(true)}>{t('askHermes')}</button>}
         {literatureEntry}
         <HermesAssistantDrawer dashboardContext={{ tasks: tasks.filter((task) => task.researchObjectId === routeParams.id).map(({ id, researchObjectId, state }) => ({ id, researchObjectId, state })), researchObjects: [{ id: routeParams.id, status: researchStatus, title: researchTitle }] }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={routeParams.id} suggestion={reviewSuggestion} target={null} />
@@ -116,6 +128,7 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
       {literatureEntry}
       {error && <p className="mt-6 max-w-3xl border-l-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{error}</p>}
       {!detail && error && <div className="mt-4 flex flex-wrap items-center gap-5"><button type="button" onClick={() => setReload((value) => value + 1)} className="min-h-11 font-semibold text-os-vermilion-ink underline">{t('retry')}</button><Link className="min-h-11 py-3 text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/hermes`}>{t('allTasks')}</Link></div>}
+      {runId ? <HermesResearchRunPanel researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
       {loading ? <p className="mt-10 text-base text-os-muted-paper" role="status">{t('loading')}</p> : !detail ? null : <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-os-rule-paper py-3 text-sm text-os-muted-paper">
@@ -129,6 +142,7 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
             </div>)}
           </section>
           {saved && <nav aria-label={t('entryActions')} className="mt-6 flex flex-wrap gap-5"><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit?ingestionTask=${encodeURIComponent(taskId)}`}>{t('continueEditing')}</Link><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/versions`}>{t('viewVersions')}</Link></nav>}
+          {saved && run?.status === 'awaiting_source_review' ? <HermesSourceReview researchObjectId={routeParams.id} run={run} onSubmitted={() => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`)} /> : null}
           <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-5"><p className="text-base text-os-muted-paper" role="status">{saved ? t('saved') : complete ? t('ready') : t('incomplete')}</p><button type="button" disabled={!complete || saving || !approvalOpen} onClick={confirm} className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('saving') : saved ? t('confirmed') : t('confirm')}</button></footer>
         </div>
         <aside aria-label={t('marginLabel')} className="border-t border-os-rule-paper pt-3 lg:border-l lg:border-t-0 lg:pl-5">

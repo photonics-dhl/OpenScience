@@ -1,5 +1,13 @@
 # Progress
 
+## 2026-09-08: server-only candidate verification
+
+- User correction: no local runtime validation; all tests/build/migration checks run on ECS. Rule persisted in AGENTS across root/development/release workspaces.
+- Candidate a72b5e1c7559edb673579042b7cfaa84260b5a6a is synced to its immutable server directory. Production remains97aa06a, rollbackc5b0dd7; no switch.
+- Server full build progressed to image preparation. Server targeted18 domain+3 API+3 worker tests and three package typechecks passed; docs-sync passed. docs:lint found one extra blank line, corrected locally pending server recheck.
+- Isolated no-network PostgreSQL container xgs-hermes-migration-a72b5e1c applied all37 migrations, then migration37 rollback/reapply passed. SQL harness created only a minimal migration-name ledger for rollback; this is not Prisma deploy/status evidence. Container retained, production DB untouched.
+- Logs: checks1788854681801-dfb18d33-56a9-43bf-a53c-966048fc8f7f; migration1788854617122-e0d1bebc-7594-4c9d-8edd-7e2b74a9e929 and1788854646230-d9b4212d-2540-441e-91dd-626a2bb8537c. Initiale2c78a server build caught missingAuthDeps; fixed in a72b5e1c.
+- Scope remains attach-existing-ingestion→awaiting_source_review. Full Hermes initiation, approval resume, Claims/media and ordinary-user real journey remain incomplete.
 ## 2026-09-08: video user-approved; server-owned Hermes workflow next
 
 - Production/public97aa06a542febf558a47cecbf6559bd0a6c876aa, rollbackc5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb. CI34192289263 and canonical server build/Parser16/migrations/runtime/public acceptance passed.

@@ -266,6 +266,83 @@ export interface DashboardTaskApi {
   error: string | null;
 }
 
+/** A server-owned Hermes workflow. The browser only starts and observes it. */
+export type HermesResearchRunStatus =
+  | 'running'
+  | 'awaiting_source_review'
+  | 'awaiting_claim_review'
+  | 'generating_storyboard'
+  | 'awaiting_storyboard_review'
+  | 'generating_scene_images'
+  | 'awaiting_scene_images_review'
+  | 'generating_video'
+  | 'awaiting_video_review'
+  | 'succeeded'
+  | 'failed'
+  | 'stopped';
+export type HermesResearchStepStatus = 'waiting' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'stopped';
+export interface HermesResearchRun {
+  id: string;
+  researchObjectId: string;
+  actorId: string;
+  status: HermesResearchRunStatus;
+  version: number;
+  versionId: string | null;
+  profile: 'onchip-field-sampling-v1' | null;
+  maxAgentTasks: number | null;
+  sourceClaimIds: string[];
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  steps: Array<{
+    id: string;
+    stage: 'source_ingestion' | 'storyboard' | 'scene_image' | 'video';
+    ordinal: number;
+    status: HermesResearchStepStatus;
+    ingestionTaskId?: string;
+    artifactId?: string;
+    agentTaskId?: string | null;
+    presentationAssetId?: string;
+    error: string | null;
+  }>;
+}
+
+export function createHermesResearchRun(researchObjectId: string, ingestionTaskIds: string[], idempotencyKey: string): Promise<{ run: HermesResearchRun }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ ingestionTaskIds }),
+  });
+}
+
+export function getHermesResearchRun(researchObjectId: string, runId: string, signal?: AbortSignal): Promise<{ run: HermesResearchRun }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
+}
+
+export interface HermesSourceReview {
+  ingestionTaskId: string;
+  snapshotToken: string;
+  selections: IngestionClaimSelection[];
+}
+
+export function submitHermesSourceReview(
+  researchObjectId: string,
+  runId: string,
+  input: {
+    expectedVersion: number;
+    versionId: string;
+    generationGrant: { profile: 'onchip-field-sampling-v1'; maxAgentTasks: 7 };
+    reviews: HermesSourceReview[];
+  },
+  idempotencyKey: string,
+): Promise<{ run: HermesResearchRun; claims: PresentationClaim[]; evidence: unknown[] }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}/source-review`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify(input),
+  });
+}
+
 export async function listResearchIngestionTasks(researchObjectId: string): Promise<{ tasks: DashboardTaskApi[] }> {
   return request(`/api/ingestion?actionable=true&researchObjectId=${encodeURIComponent(researchObjectId)}`);
 }
@@ -653,6 +730,9 @@ export interface IngestionClaimSelection {
 }
 export function listIngestionClaimPreviews(roId: string, versionId: string, signal?: AbortSignal): Promise<{ candidates: IngestionClaimPreview[] }> {
   return request(`${presentationScopePath(roId, versionId)}/ingestion-claim-evidence`, { signal });
+}
+export function getHermesIngestionClaimPreview(roId: string, versionId: string, ingestionTaskId: string, signal?: AbortSignal): Promise<IngestionClaimPreview> {
+  return request(`${presentationScopePath(roId, versionId)}/ingestion-claim-evidence/${encodeURIComponent(ingestionTaskId)}`, { signal });
 }
 export function confirmIngestionClaims(roId: string, versionId: string, taskId: string, body: { snapshotToken: string; selections: IngestionClaimSelection[] }, idempotencyKey: string, signal?: AbortSignal): Promise<{ claims: PresentationClaim[]; evidence: unknown[] }> {
   return request(`${presentationScopePath(roId, versionId)}/ingestion-claim-evidence/${encodeURIComponent(taskId)}`, {

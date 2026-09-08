@@ -6,7 +6,6 @@
 
 ## 当前产品交付
 
-
 | 路径 | 用途 | 状态 |
 |---|---|---|
 | `packages/domain/src/agent/research-source-readiness.ts` / `packages/domain/test/agent/research-source-readiness.test.ts` | Hermes原生文本/OCR/外部来源准备决策；区分上传、外部文件和文献线索 | LOCAL CANDIDATE；Terra/medium，8项测试通过；尚未接入运行流程，不代表OCR/ScanSci调用验收 |

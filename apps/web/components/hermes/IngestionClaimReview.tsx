@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ApiClientError, confirmIngestionClaims, listIngestionClaimPreviews, type IngestionClaimPreview, type PresentationClaim } from '@/lib/api';
+import { ApiClientError, confirmIngestionClaims, getHermesIngestionClaimPreview, listIngestionClaimPreviews, submitHermesSourceReview, type IngestionClaimPreview, type PresentationClaim } from '@/lib/api';
 import { createReviewRows, editReviewStatement, selectedReviewClaims, splitReviewRow, type ClaimReviewRow } from '@/lib/hermes/ingestion-claim-review';
 import { SubmissionIntent } from '@/lib/hermes/presentation-action';
 
@@ -12,12 +12,13 @@ interface Props {
   researchObjectId: string; versionId: string;
   onComplete: (claims: PresentationClaim[]) => void;
   onBusyChange?: (busy: boolean) => void;
+  sourceReview?: { runId: string; expectedVersion: number; ingestionTaskIds: string[]; onSubmitted(): void };
 }
-export function IngestionClaimReview({ researchObjectId: ro, versionId, onComplete, onBusyChange }: Props) {
+export function IngestionClaimReview({ researchObjectId: ro, versionId, onComplete, onBusyChange, sourceReview }: Props) {
   const t = useTranslations('ingestionClaimReview');
   const scope = `${ro}:${versionId}`;
   const rendered = useRef(scope); rendered.current = scope;
-  const callbacks = useRef({ onComplete, onBusyChange }); callbacks.current = { onComplete, onBusyChange };
+  const callbacks = useRef({ onComplete, onBusyChange, sourceReview }); callbacks.current = { onComplete, onBusyChange, sourceReview };
   const controller = useRef<AbortController | null>(null);
   const intent = useRef(new SubmissionIntent());
   const [state, setState] = useState<{ scope: string; candidates: IngestionClaimPreview[]; chosen: string; rows: ClaimReviewRow[] }>({ scope, candidates: [], chosen: '', rows: [] });
@@ -50,9 +51,11 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
     if (locked) return;
     const abort = controller.current; setBusy(true); setError('');
     try {
-      const result = await listIngestionClaimPreviews(ro, versionId, abort?.signal);
+      const result = sourceReview
+        ? await Promise.all(sourceReview.ingestionTaskIds.map((taskId) => getHermesIngestionClaimPreview(ro, versionId, taskId, abort?.signal))).then((candidates) => ({ candidates }))
+        : await listIngestionClaimPreviews(ro, versionId, abort?.signal);
       if (abort?.signal.aborted || rendered.current !== scope) return;
-      const values = result.candidates.filter(item => item.researchObjectId === ro && item.versionId === versionId);
+      const values = result.candidates.filter(item => item.researchObjectId === ro && item.versionId === versionId && (!sourceReview || sourceReview.ingestionTaskIds.includes(item.taskId)));
       choose(values[0]?.taskId ?? '', values); setLoaded(true);
     } catch { if (!abort?.signal.aborted && rendered.current === scope) setError('loadError'); }
     finally { if (!abort?.signal.aborted && rendered.current === scope) setBusy(false); }
@@ -68,10 +71,18 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
     if (!key) return;
     const abort = controller.current; setBusy(true); setError(''); callbacks.current.onBusyChange?.(true);
     try {
-      const result = await confirmIngestionClaims(ro, versionId, candidate.taskId, body, key, abort?.signal);
+      const result = sourceReview
+        ? await submitHermesSourceReview(ro, sourceReview.runId, {
+          expectedVersion: sourceReview.expectedVersion,
+          versionId,
+          generationGrant: { profile: 'onchip-field-sampling-v1', maxAgentTasks: 7 },
+          reviews: [{ ingestionTaskId: candidate.taskId, ...body }],
+        }, key)
+        : await confirmIngestionClaims(ro, versionId, candidate.taskId, body, key, abort?.signal);
       if (abort?.signal.aborted || rendered.current !== scope) return;
       intent.current.complete(); setUncertain(false); setComplete(true);
       callbacks.current.onComplete(result.claims.filter(claim => claim.researchObjectId === ro && claim.versionId === versionId));
+      if (sourceReview) callbacks.current.sourceReview?.onSubmitted();
       callbacks.current.onBusyChange?.(false);
     } catch (cause) {
       if (abort?.signal.aborted || rendered.current !== scope) return;
@@ -82,7 +93,7 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
     } finally { if (!abort?.signal.aborted && rendered.current === scope) setBusy(false); }
   }
   return <section className="my-4 space-y-3 rounded-lg border border-os-rule-paper p-3" aria-label={t('title')}>
-    <h4 className="text-base font-semibold">{t('title')}</h4><p className="text-sm leading-6">{t('boundary')}</p>
+    <h4 className="text-base font-semibold">{t(sourceReview ? 'runTitle' : 'title')}</h4><p className="text-sm leading-6">{t(sourceReview ? 'runBoundary' : 'boundary')}</p>
     <button type="button" className={control} disabled={locked} onClick={() => void load()}>{t(busy && !loaded ? 'loading' : loaded ? 'refresh' : 'load')}</button>
     {current && loaded && !candidates.length ? <p role="status">{t('empty')}</p> : null}
     {candidates.length ? <fieldset disabled={locked || complete} className="min-w-0 space-y-4 border-0 p-0">
@@ -101,6 +112,7 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
     </fieldset> : null}
     {!valid ? <p role="alert" className="text-sm">{t(invalidReason)}</p> : null}
     {error ? <p role="alert" className="text-sm">{t(error)}</p> : null}
-    {complete ? <p role="status" className="text-sm">{t('complete')}</p> : candidate ? <button type="button" className="min-h-11 w-full rounded bg-os-ink px-3 py-2 text-sm text-white disabled:opacity-40" disabled={busy || !valid || !selections.length || error === 'stale' || error === 'submitError'} onClick={() => void confirm()}>{t(busy ? 'saving' : uncertain ? 'retry' : 'confirm')}</button> : null}
+    {sourceReview ? <p className="text-sm leading-6 text-os-muted-paper">{t('generationGrant')}</p> : null}
+    {complete ? <p role="status" className="text-sm">{t(sourceReview ? 'runComplete' : 'complete')}</p> : candidate ? <button type="button" className="min-h-11 w-full rounded bg-os-ink px-3 py-2 text-sm text-white disabled:opacity-40" disabled={busy || !valid || !selections.length || error === 'stale' || error === 'submitError'} onClick={() => void confirm()}>{t(busy ? 'saving' : uncertain ? 'retry' : sourceReview ? 'runConfirm' : 'confirm')}</button> : null}
   </section>;
 }

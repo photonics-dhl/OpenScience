@@ -154,10 +154,11 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns,
+  confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns,
+  requireHermesPresentationTaskAuthority,
   HermesResearchRunError,
   type HermesResearchRunDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
-  type HermesResearchRunView, type HermesResearchStepStatus,
+  type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,
 } from './agent/research-run';
 export {
   claimAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
@@ -293,6 +294,7 @@ export {
   PresentationAssetError,
   type PresentationGenerationKind,
   type PresentationGenerationPayload,
+  type HermesPresentationAuthority,
   type PresentationAssetView,
 } from './assets/presentation-asset';
 export {

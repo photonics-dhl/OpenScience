@@ -14,7 +14,8 @@ const KINDS = ['chart', 'interactive_html', 'image', 'video'] as const;
 export const DETERMINISTIC_PRESENTATION_GENERATOR = 'OpenScience deterministic renderer';
 export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-presentation-v2';
 export type PresentationGenerationKind = (typeof KINDS)[number];
-export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest }
+export interface HermesPresentationAuthority { runId: string; stage: 'storyboard' | 'scene_image' | 'video'; ordinal: number; profile: 'onchip-field-sampling-v1' }
+export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest; hermesRunAuthority?: HermesPresentationAuthority }
 export interface PresentationAssetView {
   storyboard?: StoryboardView;
   sceneImage?: SceneImageRequest;
@@ -38,7 +39,7 @@ export interface PresentationAssetView {
 export function parsePresentationGenerationPayload(value: unknown): PresentationGenerationPayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation payload is invalid');
   const payload = value as Record<string, unknown>;
-  const expected = ['kind', 'researchObjectId', 'schemaVersion', 'sourceClaimIds', ...('storyboard' in payload ? ['storyboard'] : []), ...('sceneImage' in payload ? ['sceneImage'] : []), ...('video' in payload ? ['video'] : []), 'versionId'].sort();
+  const expected = ['kind', 'researchObjectId', 'schemaVersion', 'sourceClaimIds', ...('storyboard' in payload ? ['storyboard'] : []), ...('sceneImage' in payload ? ['sceneImage'] : []), ...('video' in payload ? ['video'] : []), ...('hermesRunAuthority' in payload ? ['hermesRunAuthority'] : []), 'versionId'].sort();
   const keys = Object.keys(payload).sort();
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index]) || payload.schemaVersion !== 1
     || typeof payload.researchObjectId !== 'string' || !UUID.test(payload.researchObjectId)
@@ -56,7 +57,18 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
   if (sceneImage && (payload.kind !== 'image' || storyboard)) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene images require image kind and no storyboard settings');
   const video = 'video' in payload ? parseVideoGenerationRequest(payload.video) : undefined;
   if ((payload.kind === 'video') !== Boolean(video) || (video && (storyboard || sceneImage))) throw new PresentationAssetError('VALIDATION_ERROR', 'Video kind requires exact video settings');
-  return { ...(sceneImage ? { sceneImage } : {}), ...(storyboard ? { storyboard } : {}), ...(video ? { video } : {}), schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
+  let hermesRunAuthority: HermesPresentationAuthority | undefined;
+  if ('hermesRunAuthority' in payload) {
+    const authority = payload.hermesRunAuthority as Record<string, unknown> | null;
+    if (!authority || typeof authority !== 'object' || Array.isArray(authority)
+      || Object.keys(authority).sort().join(',') !== 'ordinal,profile,runId,stage'
+      || typeof authority.runId !== 'string' || !UUID.test(authority.runId)
+      || !['storyboard', 'scene_image', 'video'].includes(String(authority.stage))
+      || !Number.isInteger(authority.ordinal) || Number(authority.ordinal) < 0 || Number(authority.ordinal) > 4
+      || authority.profile !== 'onchip-field-sampling-v1') throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes run authority is invalid');
+    hermesRunAuthority = authority as unknown as HermesPresentationAuthority;
+  }
+  return { ...(sceneImage ? { sceneImage } : {}), ...(storyboard ? { storyboard } : {}), ...(video ? { video } : {}), ...(hermesRunAuthority ? { hermesRunAuthority } : {}), schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
 }
 
 type PresentationScope = { userId: string; researchObjectId: string; versionId: string };

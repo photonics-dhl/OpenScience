@@ -4,7 +4,7 @@ import { requireSceneImageParent, requireStoryboardBase, requireVideoGenerationP
 import { generateStoryboard, renderStoryboard } from './storyboard';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
@@ -48,6 +48,14 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       || researchObject.workspace.status !== 'active') throw new Error('[blocked] presentation task authority is invalid');
     const scope = { userId: owner.session.userId, researchObjectId: payload.researchObjectId, versionId: payload.versionId };
     await requirePresentationWriteScope(deps.prisma, scope);
+    const requireHermesAuthority = async (prisma: Parameters<typeof requireHermesPresentationTaskAuthority>[0]) => {
+      if (!payload.hermesRunAuthority) return false;
+      await requireHermesPresentationTaskAuthority(prisma, {
+        taskId: task.id, actorId: scope.userId, payload, authority: payload.hermesRunAuthority,
+      });
+      return true;
+    };
+    await requireHermesAuthority(deps.prisma);
     const existing = await deps.prisma.presentationAsset.findUnique({ where: { id: task.id }, include: { sourceClaims: true } });
     if (existing) return { assetId: existing.id, kind: existing.kind, status: existing.status, contentHash: existing.contentHash, sourceClaimIds: payload.sourceClaimIds };
     if (payload.sceneImage && task.executionAttempt > 1) throw new Error('[blocked] Previous paid image attempt has no saved result; explicit new generation is required');
@@ -74,7 +82,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     let videoProvenance: Record<string, unknown> | undefined;
     if (payload.video && videoParents) {
       const user = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
-      if (user?.platformRole !== 'platform_admin' || !options.videoSpool) throw new Error('[blocked] isolated video generation is unavailable');
+      if (user?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] isolated video generation is unavailable');
+      if (!options.videoSpool) throw new Error('[blocked] isolated video generation is unavailable');
       const sceneImages = [];
       for (const asset of videoParents.orderedImages) {
         sceneImages.push(await readPresentationInput(deps.storage, asset.objectKey, asset.contentHash));
@@ -88,7 +97,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       ]);
       if (!currentOwner || currentOwner.status !== 'running' || currentOwner.executionAttempt !== task.executionAttempt
         || currentOwner.session.userId !== scope.userId || currentOwner.session.researchObjectId !== payload.researchObjectId
-        || currentUser?.platformRole !== 'platform_admin'
+        || (currentUser?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma))
         || presentationClaimContent(currentClaims as PresentationClaim[]) !== presentationClaimContent(claims)
         || currentParents?.identity !== videoParents.identity) {
         throw new Error('[blocked] approved video inputs changed before rendering');
@@ -109,12 +118,12 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       };
     } else if (payload.sceneImage && sceneParent) {
       const user = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
-      if (user?.platformRole !== 'platform_admin') throw new Error('[blocked] presentation media generation requires a platform administrator');
+      if (user?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media generation requires a platform administrator');
       if (!options.gateway?.generateImage) throw new Error('[blocked] scene image gateway unavailable');
       const prompt = await planSceneImagePrompt(options.gateway, claims, sceneParent.view, payload.sceneImage.sceneIndex);
       await requirePresentationWriteScope(deps.prisma, scope);
       const currentUser = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
-      if (currentUser?.platformRole !== 'platform_admin') throw new Error('[blocked] presentation media administrator authority changed');
+      if (currentUser?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media authority changed');
       if ((await requireSceneImageParent(deps.prisma, payload))?.identity !== sceneParent.identity) throw new Error('[blocked] approved storyboard changed before image generation');
       const currentClaims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
       if (presentationClaimContent(currentClaims as PresentationClaim[]) !== presentationClaimContent(claims)) throw new Error('[blocked] source Claims changed before image generation');
@@ -152,7 +161,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       }
       if (payload.kind === 'image' || payload.kind === 'video') {
         const currentUser = await tx.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
-        if (currentUser?.platformRole !== 'platform_admin') throw new Error('[blocked] presentation media generation requires a platform administrator');
+        if (currentUser?.platformRole !== 'platform_admin') await requireHermesAuthority(tx);
       }
       const currentClaims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
       const currentIds = new Set(currentClaims.map((claim) => claim.id));

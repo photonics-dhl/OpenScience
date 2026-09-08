@@ -1,10 +1,10 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT 2026-09-08. Real paper→structured analysis→confirmed same-version Claims→five approved scientific illustrations→actual animated video now generated and technically validated. User approved the actual video; asset approval verified2026-09-08T06:32:43.612Z. Autonomous server orchestration is the current objective, not yet implemented.
+> CURRENT 2026-09-08. Real paper→structured analysis→confirmed same-version Claims→five approved scientific illustrations→actual animated video now generated and technically validated. User approved the actual video; asset approval verified2026-09-08T06:32:43.612Z. Autonomous server orchestration is the current objective. Source-tracking candidate a72b5e1c is server-validated; full initiation/review-resume/media remains in implementation.
 
 ## Exact versions
 - Production/public97aa06a542febf558a47cecbf6559bd0a6c876aa; rollbackc5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb. CI34192289263 passed. Server build/Parser16/migrations/runtime/public release passed; deploy log1788847601812-bb0e1267-8342-4ce0-ac1e-e4b1671f179a, post-checkup1788848374145-0b609e64-296e-4412-afc6-bee21c921b7e.
-- Release worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release, codex/onchip-video-release, HEAD/origin97aa06a5 before final docs. Draft PR107; no merge. Final docs may make the worktree dirty but do not change deployed code.
+- Release worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release, codex/onchip-video-release, HEADa72b5e1c; origin97aa06a5 before candidate push. Draft PR107; no merge. Final docs may make the worktree dirty but do not change deployed code.
 - Development E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow, codex/token-smart-live-workflow, HEAD005ffb8d8298d3476e8411046cae300079bd8344; relevant final source/tests copied back, dirty work retained. Root dirty main separate: do not reset/pull/stash.
 
 ## Product and scientific evidence
@@ -22,12 +22,14 @@
 - Accepted sample still depended on main/Chat-authored scientific refinements and local stage submissions; it is not an autonomous Hermes workflow.
 - User now requires existing OCR, ScanSci, retrieval, extraction and media capabilities to be coordinated by Hermes on the server. First complete the autonomous real-user flow; then improve UX/layout/visual design; add further capabilities afterward.
 - Reuse existing queue/outbox and tenant/source checks. Normal workspace user submits; server continues without Codex, handles necessary review/resume and produces grounded results. Another supported paper must pass without manually authored Claims/local orchestration.
-- Chat6Pro planning now sent and retrieved in existing conversation (15:06 request,8m33s answer). Adopted summary/corrections in integrated product plan final section. Browser60s single-action calls succeeded; do not restore stale browser-blocked next action. Next: verify orchestration transaction/lease/permission extension points and implement first normal-user vertical slice.
+- Chat6Pro planning now sent and retrieved in existing conversation (15:06 request,8m33s answer). Adopted summary/corrections in integrated product plan final section. Browser60s single-action calls succeeded; do not restore stale browser-blocked next action. Next: complete server review-resume/media orchestration and Hermes UI, validate real DB/API and normal-user journey on ECS. No local runtime validation.
+- Candidate a72b5e1c server fullbuild/worker+parser images/Parser16 passed, production unchanged.24 focused tests and3 package typechecks passed; isolated PostgreSQL forward/rollback/reapply passed. Latest prepare log1788854556198-799a9362-27a7-4e3b-9970-db3fb647e095. Real DB/API journey and full media still pending.
+
 ## Failure history / routing
 - Initial scene4 task5ec57a87 failed structured composition. Numeric feedback recovered schema but image taskd7ce0396-52c3-4401-a07f-24ffa0f9a39a replaced nanoantenna with radio/satellite apparatus; main rejected via API. Semantic promptc5b0dd71 still failed structured taskbbba7cdf-ddcb-4c1a-bc83-45f2b146dcdf before image generation. All evidence retained.
 - Final97aa06a5 removes lossy text-model rewriting: deterministic complete approved scene+all Claim statements/conditions/limitations; actual1401chars, zero intermediate calls.1500accept/1501reject, no truncation;40k input protection preserved. Long contexts now explicitly require revised/split approved source instead of silently dropping qualifiers. This is a deliberate scope/quality limit, not arbitrary-paper automation.
 - New tests3+consumer39+compiledparser10/types/lint/build passed; independent Sol/high architecture/semantic review. Main keeps selected strong model; bounded Sol/medium implementation. codex-image still consumes Codex; product MiniMax distinct. Zero intermediate-call saving is local to this step, not a valid whole-task savings percentage.
-- Ordinary Chat6Pro actually supplied planning/scientific wording/scene design/storyboard review at https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec. Latest formal browser tab reads time out in both in-app/Chrome; no new web review completed this continuation. Reuse saved results, do not claim new screenshots/audio sent to Chat.
+- Ordinary Chat6Pro actually supplied planning/scientific wording/scene design/storyboard review at https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec. Latest server-flow plan actually retrieved from6Pro after8m33s;60s single-action browser calls resolved default timeout. No new screenshot/audio review is implied.
 - Global token-smart scientific-validation now preserves physical qualifiers and favors complete deterministic assembly where possible. Share package docs/user/_ideas/token-smart-share-20260908-scientific-handoff.zip refreshed; no overall savings claim.
 
 ## Evidence and entry points
