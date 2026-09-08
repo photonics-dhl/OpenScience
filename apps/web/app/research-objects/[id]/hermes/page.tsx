@@ -18,12 +18,30 @@ import { ApiClientError, confirmIngestionTask, apiRequest, getHermesResearchRun,
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
+const hasExactKeys = (value: unknown, keys: string[]): value is Record<string, unknown> => Boolean(value && typeof value === 'object'
+  && !Array.isArray(value) && Object.keys(value).sort().join(',') === [...keys].sort().join(','));
+export function isCanonicalAllMissingExtraction(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount'>): boolean {
+  if (task.state !== 'needs_review' || task.retryCount !== 1 || !task.result || typeof task.result !== 'object') return false;
+  const result = task.result as Record<string, unknown>;
+  const core = result.core;
+  const segments = result.evidenceSegments;
+  const evidence = result.evidence;
+  const missing = result.needsMoreInformation;
+  return Boolean(hasExactKeys(core, ['schemaVersion', ...fields]) && core.schemaVersion === '0.1.0'
+    && fields.every((field) => core[field] === '')
+    && Array.isArray(missing) && missing.length === fields.length && new Set(missing).size === fields.length
+    && fields.every((field) => missing.includes(field))
+    && hasExactKeys(segments, fields) && fields.every((field) => { const value = segments[field]; return Array.isArray(value) && value.length === 0; })
+    && hasExactKeys(evidence, fields) && fields.every((field) => { const value = evidence[field]; return hasExactKeys(value, ['quote', 'locator'])
+      && value.quote === '' && value.locator === ''; })
+    && result.sourceMapAvailable === true);
+}
 export function isRetryableSdfExtraction(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount'>): boolean {
   const result = task.result;
-  return task.retryCount === 0 && (task.state === 'failed_retryable' || (task.state === 'needs_review' && Boolean(result && typeof result === 'object'
+  return isCanonicalAllMissingExtraction(task) || (task.retryCount === 0 && (task.state === 'failed_retryable' || (task.state === 'needs_review' && Boolean(result && typeof result === 'object'
     && (result as Record<string, unknown>).status === 'needs_review'
     && (result as Record<string, unknown>).reason === 'sdf-proposal-unavailable'
-    && !Object.hasOwn(result as object, 'core'))));
+    && !Object.hasOwn(result as object, 'core')))));
 }
 export default function HermesReviewPage({ params: routeParams }: { params: { id: string } }) {
   const searchParams = useSearchParams();
@@ -101,6 +119,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
   }, [detail]);
 
   const complete = useMemo(() => fields.every((field) => core[field].trim().length > 0), [core]);
+  const canonicalAllMissing = detail ? isCanonicalAllMissingExtraction(detail.task) : false;
   const proposalUnavailable = detail ? isRetryableSdfExtraction(detail.task) : false;
   const approvalOpen = detail?.task.state === 'needs_review' && !proposalUnavailable;
   const reviewSuggestion = useMemo(() => detail ? ({
@@ -180,10 +199,10 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
             <span className="font-data">{detail.task.logicalPath}</span>
             <span>{t('taskState', { state: statusT(detail.task.state) })}</span>
           </div>
-          {proposalUnavailable ? <section className="surface-folio-sheet border-y border-os-rule-paper px-4 py-6 sm:px-6" aria-label={t('proposalUnavailableTitle')}>
-            <h2 className="font-reading text-2xl text-os-ink">{t('proposalUnavailableTitle')}</h2>
-            <p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t('proposalUnavailableBody')}</p>
-            <button type="button" disabled={saving} onClick={() => void retryExtraction()} className="mt-5 min-h-11 touch-manipulation rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('proposalRetrying') : t('proposalRetry')}</button>
+          {proposalUnavailable ? <section className="surface-folio-sheet border-y border-os-rule-paper px-4 py-6 sm:px-6" aria-label={t(canonicalAllMissing ? 'proposalReanalysisTitle' : 'proposalUnavailableTitle')}>
+            <h2 className="font-reading text-2xl text-os-ink">{t(canonicalAllMissing ? 'proposalReanalysisTitle' : 'proposalUnavailableTitle')}</h2>
+            <p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t(canonicalAllMissing ? 'proposalReanalysisBody' : 'proposalUnavailableBody')}</p>
+            <button type="button" disabled={saving} onClick={() => void retryExtraction()} className="mt-5 min-h-11 touch-manipulation rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('proposalRetrying') : t(canonicalAllMissing ? 'proposalReanalysis' : 'proposalRetry')}</button>
           </section> : <><p className="mb-4 text-sm text-os-muted-paper">{t('reviewPending')}</p>
           <section aria-label={t('fieldLabel')} className="surface-folio-sheet divide-y divide-os-rule-paper border-y border-os-rule-paper">
             {fields.map((field, index) => <div key={field} className="grid gap-3 px-4 py-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:px-6">

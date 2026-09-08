@@ -415,6 +415,82 @@ describe('multi-format ingestion service', () => {
       .rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
   });
 
+  it('charges one idempotent credit and requeues only the exact canonical all-missing remediation on attempt two', async () => {
+    const { deps, db, user, redis } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+    const digest = 'b'.repeat(64);
+    task.state = 'needs_review';
+    task.retryCount = 1;
+    agentTask.status = 'succeeded';
+    agentTask.progress = 100;
+    agentTask.retryCount = 1;
+    agentTask.executionAttempt = 2;
+    agentTask.result = {
+      core: { schemaVersion: '0.1.0', ...Object.fromEntries(fields.map((field) => [field, ''])) },
+      evidence: Object.fromEntries(fields.map((field) => [field, { quote: '', locator: '' }])),
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, []])),
+      needsMoreInformation: [...fields],
+      sourceMapRef: {
+        schemaVersion: 1, parserStatus: 'succeeded', artifactId: task.artifactId,
+        contentHash: db.artifacts.find((row) => row.id === task.artifactId)!.blobSha256,
+        objectKey: `derived/source-maps/${digest}.json`, serializedSha256: digest, size: 10,
+      },
+    };
+
+    const outcomes = await Promise.allSettled([
+      retryIngestionTask(deps, { userId: user.id, taskId: task.id }),
+      retryIngestionTask(deps, { userId: user.id, taskId: task.id }),
+    ]);
+    const fulfilled = outcomes.filter((outcome): outcome is PromiseFulfilledResult<Awaited<ReturnType<typeof retryIngestionTask>>> => outcome.status === 'fulfilled');
+    expect(fulfilled).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.status === 'rejected')).toHaveLength(1);
+    const retried = fulfilled[0]!.value;
+
+    expect(retried).toMatchObject({ id: task.id, agentTaskId: agentTask.id, state: 'queued', retryCount: 2, error: null });
+    expect(agentTask).toMatchObject({ status: 'pending', progress: 0, retryCount: 2, result: null, error: null });
+    expect(redis.lpush).toHaveBeenLastCalledWith('agent:queue', agentTask.id);
+    expect(db.usageLedger).toContainEqual(expect.objectContaining({
+      userId: user.id, resource: 'ai_credit', delta: BigInt(-1), kind: 'consume',
+      idempotencyKey: `agent-task-recovery:${agentTask.id}:2`,
+      metadata: expect.objectContaining({ retryAttempt: 2, policy: 'charged-on-remediation' }),
+    }));
+    expect(db.auditLogs).toContainEqual(expect.objectContaining({
+      actorId: user.id, action: 'ingestion.task.retry', targetId: task.id,
+      metadata: expect.objectContaining({ recovery: 'canonical_all_fields_missing', retryAttempt: 2, creditPolicy: 'charged-on-remediation' }),
+    }));
+    expect(db.usageLedger.filter((entry) => entry.idempotencyKey === `agent-task-recovery:${agentTask.id}:2`)).toHaveLength(1);
+  });
+
+  it('fails closed without charging or changing state when canonical all-missing remediation has no credit', async () => {
+    const { deps, db, user } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+    const digest = 'c'.repeat(64);
+    task.state = 'needs_review'; task.retryCount = 1;
+    agentTask.status = 'succeeded'; agentTask.retryCount = 1; agentTask.executionAttempt = 2;
+    agentTask.result = {
+      core: { schemaVersion: '0.1.0', ...Object.fromEntries(fields.map((field) => [field, ''])) },
+      evidence: Object.fromEntries(fields.map((field) => [field, { quote: '', locator: '' }])),
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, []])), needsMoreInformation: [...fields],
+      sourceMapRef: { schemaVersion: 1, parserStatus: 'succeeded', artifactId: task.artifactId,
+        contentHash: db.artifacts.find((row) => row.id === task.artifactId)!.blobSha256,
+        objectKey: `derived/source-maps/${digest}.json`, serializedSha256: digest, size: 10 },
+    };
+    db.usageLedger.find((entry) => entry.id === 'credit-1')!.delta = 1;
+    const beforeLedgerSize = db.usageLedger.length;
+
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toMatchObject({ code: 'INSUFFICIENT_CREDIT' });
+    expect(task).toMatchObject({ state: 'needs_review', retryCount: 1 });
+    expect(agentTask).toMatchObject({ status: 'succeeded', retryCount: 1, executionAttempt: 2 });
+    expect(db.usageLedger).toHaveLength(beforeLedgerSize);
+  });
+
   it('does not requeue a genuine reviewable SDF result', async () => {
     const { deps, db, user } = makeDeps();
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });

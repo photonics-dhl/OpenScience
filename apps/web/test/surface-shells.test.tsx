@@ -10,7 +10,7 @@ import { DashboardShell } from '../components/shell/DashboardShell';
 import { IdentityShell } from '../components/shell/IdentityShell';
 import { PublicShell } from '../components/shell/PublicShell';
 import { WorkspaceShell } from '../components/shell/WorkspaceShell';
-import HermesReviewPage, { isRetryableSdfExtraction } from '../app/research-objects/[id]/hermes/page';
+import HermesReviewPage, { isCanonicalAllMissingExtraction, isRetryableSdfExtraction } from '../app/research-objects/[id]/hermes/page';
 
 vi.mock('next-intl', () => ({
   useLocale: () => 'en',
@@ -196,6 +196,26 @@ describe('Optical Editorial brand and surface shells', () => {
     })).toBe(false);
     expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 0, result: null })).toBe(true);
     expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 1, result: null })).toBe(false);
+  });
+
+  it('offers a charged reanalysis only for the exact six-field canonical all-missing projection', () => {
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
+    const result = {
+      core: { schemaVersion: '0.1.0', ...Object.fromEntries(fields.map((field) => [field, ''])) },
+      evidence: Object.fromEntries(fields.map((field) => [field, { quote: '', locator: '' }])),
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, []])),
+      needsMoreInformation: fields,
+      sourceMapAvailable: true,
+    };
+    const task = { state: 'needs_review' as const, retryCount: 1, result };
+
+    expect(isCanonicalAllMissingExtraction(task)).toBe(true);
+    expect(isRetryableSdfExtraction(task)).toBe(true);
+    expect(isCanonicalAllMissingExtraction({ ...task, retryCount: 0 })).toBe(false);
+    expect(isCanonicalAllMissingExtraction({ ...task, result: { ...result,
+      core: { ...result.core, method: 'Supported method' } } })).toBe(false);
+    expect(isCanonicalAllMissingExtraction({ ...task, result: { ...result,
+      evidenceSegments: { ...result.evidenceSegments, method: [{ quote: 'source' }] } } })).toBe(false);
   });
 
   it('renders one current-RO full-text action in the ready RO Files workspace', async () => {

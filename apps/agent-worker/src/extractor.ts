@@ -1,4 +1,4 @@
-import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
+import { AiGatewayError, type AiGateway, type SchemaGuard } from '@openscience/ai-gateway';
 import {
   createBlockSourceLocator,
   parseDocumentSourceMap,
@@ -333,7 +333,8 @@ type CanonicalFieldValidationReason =
   | 'duplicate_ids'
   | 'unknown_ids'
   | 'ordered_ids_required'
-  | 'source_text_limit_8000';
+  | 'source_text_limit_8000'
+  | 'all_fields_missing';
 
 interface CanonicalRepairResponse {
   schemaVersion: string;
@@ -344,11 +345,13 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
   guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: (value: unknown) => string | undefined;
   validationDiagnostic: (value: unknown) => string | undefined;
+  allFieldsMissing: () => boolean;
   mergeRetained: () => ExtractedProposal;
 } {
   const allowed = new Map(blocks.map((block) => [block.promptId, block]));
   const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
+  let allFieldsMissing = false;
   const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason } => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return { reason: 'malformed_item' };
     const candidate = item as Record<string, unknown>;
@@ -378,6 +381,7 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
   };
   const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
     invalidFields = new Map();
+    allFieldsMissing = false;
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       invalidFields.set('response', 'malformed_item');
       return false;
@@ -395,6 +399,10 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
       if (validation.candidate) retained.set(field, validation.candidate);
       else if (!previous) invalidFields.set(field, validation.reason!);
     }
+    if (invalidFields.size === 0 && SDF_CORE_FIELDS.every((field) => retained.get(field)?.needsMoreInformation === true)) {
+      allFieldsMissing = true;
+      for (const field of SDF_CORE_FIELDS) invalidFields.set(field, 'all_fields_missing');
+    }
     return invalidFields.size === 0;
   };
   return {
@@ -402,9 +410,13 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     validationFeedback: () => {
       if (invalidFields.size === 0) return undefined;
       const details = [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(', ');
+      const allMissingFeedback = allFieldsMissing
+        ? 'All six fields were marked missing. Re-examine every field independently against the supplied SOURCE_BLOCKs. Populate every field that has direct support; a field may remain missing only when the source truly provides no direct evidence. Do not invent or weaken evidence requirements.'
+        : undefined;
       return [
         'Previous JSON failed canonical validation.',
         `Invalid fields and reason codes: ${details}.`,
+        ...(allMissingFeedback ? [allMissingFeedback] : []),
         'Return schemaVersion and fields containing only the invalid fields listed above; already validated fields are retained locally and need not be repeated.',
         'For each repaired non-missing field, write one core statement with its necessary conditions, then select 1-32 blocks that jointly support it; a non-missing field may never have an empty sourceBlockIds array. If more are needed, narrow the statement before selecting evidence; never truncate necessary evidence.',
         'A missing field must have summary="", sourceBlockIds=[], needsMoreInformation=true. Do not include a nonempty explanation in a missing field.',
@@ -415,6 +427,7 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     validationDiagnostic: () => invalidFields.size === 0
       ? undefined
       : [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(','),
+    allFieldsMissing: () => allFieldsMissing,
     mergeRetained: () => ({
       schemaVersion: SDF_CORE_VERSION,
       fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
@@ -595,11 +608,18 @@ export async function extractHandler(
   ];
   if (canonicalSourceMap && promptBlocks) {
     const validation = canonicalProposalValidation(promptBlocks);
-    await gateway.completeStructured(validation.guard, prompt, {
-      temperature: 0.2,
-      validationFeedback: validation.validationFeedback,
-      validationDiagnostic: validation.validationDiagnostic,
-    });
+    try {
+      await gateway.completeStructured(validation.guard, prompt, {
+        temperature: 0.2,
+        validationFeedback: validation.validationFeedback,
+        validationDiagnostic: validation.validationDiagnostic,
+      });
+    } catch (error) {
+      if (validation.allFieldsMissing()) {
+        throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_all_fields_missing', error);
+      }
+      throw error;
+    }
     return materializeCanonicalProposal(validation.mergeRetained(), canonicalSourceMap, promptBlocks);
   }
   const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
