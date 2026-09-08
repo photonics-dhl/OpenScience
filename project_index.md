@@ -2,6 +2,7 @@
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
 > **CURRENT source/deployment anchor（2026-09-08 +08）：** production/public b361f4f7781b760583b3a312829877c4d6310e8a，rollback a73f273f7079819579962aa6eff31c1dd9368b08；release branch codex/onchip-video-release base b361，scene-image数值反馈382bf2e已验证；登录页PNG优化请求在CI重复挂起，单图直读修复本地7项通过，候选待CI及部署。真实论文六字段确认、同版Claim桥接和四图通过；末图结构规划失败已定位，修复后接续原RO，不重复提取。完整版本及证据见CURRENT handoff。
+> 最新生产69ea938c，rollbackb361；CI与部署通过。第五图因错误天线类型拒绝，语义提示修复待发布；其余四图复用。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 
 ## 当前产品交付

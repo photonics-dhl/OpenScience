@@ -1,5 +1,7 @@
 # Progress
 
+- Production now69ea938c, rollbackb361; CI34187601825 and canonical deployment passed. Fifth image generated but rejected for wrong radio apparatus. Semantic prompt correction keeps physical subtype/scale; retain prior4images. Full real-video acceptance remains open.
+
 - Latest candidate382bf2e CI34184988463 reproduced7 auth/login image-optimizer hangs twice. One local 53KB PNG now loads directly; unchanged7 visual cases pass after fresh build (11.7s). Production remainsb361; final CI and real scene4/video acceptance pending.
 
 ## 2026-09-08: media release deployed; real-paper bridge passed
