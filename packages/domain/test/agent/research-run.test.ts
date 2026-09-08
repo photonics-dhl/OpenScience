@@ -181,6 +181,9 @@ describe('Hermes durable research run', () => {
     failure.db.agentTasks[0]!.status = 'failed';
     expect(await reconcileHermesResearchRuns(failure.deps)).toMatchObject({ failed: 1 });
     expect(failure.db.runs[0]).toMatchObject({ status: 'failed', error: 'structured output exhausted' });
+    expect(failure.db.steps[0]).toMatchObject({
+      status: 'failed', error: 'structured output exhausted', ingestionTaskId: 'ingestion', agentTaskId: 'agent-task',
+    });
   });
 
   it('leaves pending extraction waiting without consuming or requeueing a task', async () => {
