@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { AiGateway } from '@openscience/ai-gateway';
+import { AiGatewayError, type AiGateway } from '@openscience/ai-gateway';
 import { parseStoryboardDocument, requireAnimationSourceSupport, type StoryboardDocument, type StoryboardRequest, type StoryboardView } from '@openscience/domain';
 import type { PresentationClaim } from './chart-generator';
 export async function generateStoryboard(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], settings: StoryboardRequest, base?: StoryboardView) {
@@ -82,6 +82,8 @@ Each action has EXACT keys {kind,target,start,end,meaning,basis}; ONLY translate
             validationFeedback: () => `The previous draft was rejected by this exact validation rule: ${lastValidationCode}. Return a corrected complete JSON document. Use the exact keys and kind-specific fields from the schema; do not add null placeholders. Keep positions plus sizes within 1, choose actual sourcePassages quoteId references, and preserve supported scientific meaning. Fix the reported structural issue instead of copying the same invalid shape. Do not add facts to repair a missing source.`,
         });
     } catch (error) {
+        if (error instanceof AiGatewayError && error.code === 'ALL_PROVIDERS_FAILED') lastValidationCode = 'provider_pool_exhausted';
+        else if (error instanceof AiGatewayError && error.code === 'STRUCTURED_JSON_INVALID') lastValidationCode = 'structured_json_invalid';
         throw new Error(`[blocked] Storyboard output rejected: ${lastValidationCode}`, { cause: error });
     }
     const document = parseStoryboardDocument(materialize(output), ids);

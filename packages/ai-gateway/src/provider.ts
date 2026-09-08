@@ -30,6 +30,30 @@ export interface ProviderResult {
   text: string;
   usage: Usage;
   model: string;
+  /** Provider-controlled stop reason normalized before it reaches logs. */
+  finishReason?: 'stop' | 'length' | 'other' | 'unknown';
+}
+
+export type TextProviderErrorCode =
+  | 'provider_timeout'
+  | 'provider_http'
+  | 'provider_response_json'
+  | 'provider_response_shape'
+  | 'provider_empty'
+  | 'provider_error';
+
+/** Safe transport/response category only; never contains response bodies or credentials. */
+export class TextProviderError extends Error {
+  constructor(readonly code: TextProviderErrorCode, message: string, readonly httpStatus?: number) {
+    super(message);
+    this.name = new.target.name;
+  }
+}
+
+function finishReason(value: unknown): ProviderResult['finishReason'] {
+  if (value === 'stop' || value === 'end_turn') return 'stop';
+  if (value === 'length' || value === 'max_tokens') return 'length';
+  return typeof value === 'string' && value ? 'other' : 'unknown';
 }
 
 export interface ProviderConfig {
@@ -79,24 +103,38 @@ export class OpenAiCompatProvider implements Provider {
         }),
         signal: controller.signal,
       });
-      if (!res.ok) {
-        throw new Error(`Provider ${this.name} HTTP ${res.status}`);
-      }
-      const data = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
+      if (!res.ok) throw new TextProviderError('provider_http', `Provider ${this.name} HTTP ${res.status}`, res.status);
+      let data: {
+        choices?: Array<{ message?: { content?: string }; finish_reason?: unknown }>;
         usage?: { prompt_tokens?: number; completion_tokens?: number };
         model?: string;
       };
-      const text = data.choices?.[0]?.message?.content ?? '';
-      if (!text) throw new Error(`Provider ${this.name} 空响应`);
+      try { data = await res.json() as typeof data; }
+      catch (error) {
+        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+        throw new TextProviderError('provider_response_json', `Provider ${this.name} response JSON invalid`);
+      }
+      const choice = data && typeof data === 'object' && Array.isArray(data.choices) ? data.choices[0] : undefined;
+      if (!choice || !choice.message || typeof choice.message !== 'object' || typeof choice.message.content !== 'string') {
+        throw new TextProviderError('provider_response_shape', `Provider ${this.name} response shape invalid`);
+      }
+      const text = choice.message.content;
+      if (!text.trim()) throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`);
       return {
         text,
         usage: {
           inputTokens: data.usage?.prompt_tokens ?? 0,
           outputTokens: data.usage?.completion_tokens ?? 0,
         },
-        model: data.model ?? opts.model,
+        model: typeof data.model === 'string' && data.model ? data.model : opts.model,
+        finishReason: finishReason(choice.finish_reason),
       };
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw new TextProviderError('provider_timeout', `Provider ${this.name} timed out`);
+      }
+      if (error instanceof TextProviderError) throw error;
+      throw new TextProviderError('provider_error', `Provider ${this.name} request failed`);
     } finally {
       clearTimeout(timer);
     }
@@ -142,25 +180,41 @@ export class AnthropicCompatProvider implements Provider {
         }),
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error(`Provider ${this.name} HTTP ${res.status}`);
-      const data = (await res.json()) as {
+      if (!res.ok) throw new TextProviderError('provider_http', `Provider ${this.name} HTTP ${res.status}`, res.status);
+      let data: {
         content?: Array<{ type?: string; text?: string }>;
         usage?: { input_tokens?: number; output_tokens?: number };
         model?: string;
+        stop_reason?: unknown;
       };
+      try { data = await res.json() as typeof data; }
+      catch (error) {
+        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+        throw new TextProviderError('provider_response_json', `Provider ${this.name} response JSON invalid`);
+      }
+      if (!data || typeof data !== 'object' || !Array.isArray(data.content)) {
+        throw new TextProviderError('provider_response_shape', `Provider ${this.name} response shape invalid`);
+      }
       const text = data.content
         ?.filter((block) => block.type === 'text' && typeof block.text === 'string')
         .map((block) => block.text)
         .join('\n') ?? '';
-      if (!text) throw new Error(`Provider ${this.name} 空响应`);
+      if (!text.trim()) throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`);
       return {
         text,
         usage: {
           inputTokens: data.usage?.input_tokens ?? 0,
           outputTokens: data.usage?.output_tokens ?? 0,
         },
-        model: data.model ?? opts.model,
+        model: typeof data.model === 'string' && data.model ? data.model : opts.model,
+        finishReason: finishReason(data.stop_reason),
       };
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw new TextProviderError('provider_timeout', `Provider ${this.name} timed out`);
+      }
+      if (error instanceof TextProviderError) throw error;
+      throw new TextProviderError('provider_error', `Provider ${this.name} request failed`);
     } finally {
       clearTimeout(timer);
     }

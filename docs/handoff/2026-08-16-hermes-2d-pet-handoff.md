@@ -7,9 +7,9 @@
 
 ## Version tuple
 - Branch codex/onchip-video-release; worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release.
-- HEAD 9236dbf7aca73d9bea8c70c1d83e139637f578b8; content-driven implementation deployed; current documentation updates pending commit.
-- Production 9236dbf7aca73d9bea8c70c1d83e139637f578b8; rollback db4e92086cc5f230feb1be4a722926d9819fd22f.
-- Canonical deployment completed; log1788879135201-537dffe8-3380-450a-bdbf-f6009257d2f4.log under C:/Users/Mac/AppData/Local/Temp/token-smart-checks. No test suites in this deployment.
+- HEAD d971954ffe72a5cd1d73b861c972361efb24eb06; content-driven implementation and citation repair deployed; documentation updates pending commit.
+- Production d971954ffe72a5cd1d73b861c972361efb24eb06; rollback e40e25b049d8533415f1449b4fa1a9fb59d8cf6c.
+- Canonical d971 deployment completed without test suites; exact evidence below.
 - Root dirty main and token-smart-live-workflow dirty branch are separate. Preserve concurrent R1 evidence hardening; fresh production marker before deployment.
 
 ## Actual source and run
@@ -29,24 +29,25 @@
 - Existing onchip profile is historical capability, not evidence of a general workflow. New content-driven renderer needs a fresh immutable media image AND video-runner install with its digest.
 - Chat6Pro full architecture reply actually read by main (8m10s), same conversation6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec. Courier previously mistook thinking summaries for output; those were not a review.
 
-## Next actions
-1. Finish bounded content-driven implementation and High review; no tests. Sync docs, commit [skip ci], push, server-only canonical --no-tests deployment.
-2. Build actual media image on ECS; install video runner using existing offline TTS image, new renderer digest, exact release. Keep rollback identity.
-3. Use ordinary product API to explicitly upgrade current run grant. Request one source-grounded revision from original base; Hermes chooses scenes and actions. Approve only reviewed actual output.
-4. Server reconciler generates scene images; review actual content, approve, server generates MP4; review actual audio/motion and report result. Never substitute historical assisted sample.
+## Current execution and next actions
+- Production d971954f deployed --no-tests; rollbacke40e25b0. Deployment log1788882645786-9e5c8468-50ae-47c1-9d39-7cf324130bef. Fresh server marker confirmed2026-09-09.
+- Renderer installed from9236dbf7, image sha256:71094f26aa21e0a1143fedb23f9667403ebe08c564311d72e589ea0b1f16f95a. TTS sha256:a215840921a40a9e066ed970d2bf49dcf25bc20af0f7e569d55c0867343ba0ab. Planner-only changes need no renderer rebuild.
+- Ordinary API upgraded current run to content-driven-v1/maxAgentTasks8/version6. Existing grant/source/history preserved.
+- Actual revisions:2a9990f9 failed schema/JSON; d89c5268 failed scene_1/action_0/basis_quote_unsupported; neither created an approved asset.
+- d971 planner uses lossless original sourcePassages quoteId; server inserts exact quote before unchanged structure/source guard. High read-only review CLEAR.
+- Latest task041cea95-f926-4f95-9ee6-ff508c26f38d FAILED at2026-09-08T15:58:17Z. Idempotency hermes-content-plan-passages-v3. First response failed JSON parse; later primary calls each60s failed, fallback each65–69ms failed. No raw malformed response retained; precise JSON defect unknown.
+- Existing error not_validated masks parsing/provider failures. Sol implementation is correcting bounded error categories and transport-vs-schema retry behavior; no tests or extra paid requests.
+1. Finish focused gateway/planner error handling, independent High static review, commit [skip ci], necessary server-only --no-tests deployment.
+2. Resume one actual same-source revision after concrete correction; inspect exact returned task and storyboard. Never blindly resubmit running/failed paid tasks or relax scientific support.
+3. Approve only scientifically supported actual storyboard; server reconciler adopts unique direct approved revision and generates actual scene images.
+4. Review/approve actual images, then let the same server flow generate MP4. Inspect actual narration/motion and report method-only scope. No independent test matrix.
 
-## Evidence and boundaries
-- Helper source E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow/apps/web/test/visual/out/token-smart-release (ignored). ECS /opt/openscience-evals/hermes-user-journey.
-- read-product-run.cjs returns current run and exact API-shaped assets. request-product-revision.cjs is ordinary auth/CSRF/idempotent API pattern; -v2 was prepared but NOT submitted.
-- Logs: source1788877289630-df14e2f8-19a8-49a1-88ac-ff310e36a1cd; source approve1788877983966-ce8c8796-dd51-42dd-80d8-593d70581d7f; Evidence1788878309256-e75da8ca-8e36-4934-9426-6b67aeb50bf1; latest drafts1788879052260-875e65a0-7d1b-4861-b0fe-8270fe9d3545.
-- SSH only root infra/scripts/ssh-run.sh via explicit C:/Program Files/Git/bin/bash.exe. LF shell files, <=8KB commands (gzip/chunk longer payloads), never print secrets/.env.
-- Historical video ca0908bb used manual assistance and fixed source-specific renderer; not current autonomous/general evidence. No overall token-saving percentage established.
-- Read-first baseline docs/OpenScience_Kimi_Development_Spec.md; integrated product plan; this handoff. Full older evidence remains in Git history.
-## Latest server execution
-- 9236dbf7 deployed --no-tests, log1788881047659-ad3b390c-d1f3-432b-b048-31f4ba66e3da, exit0. Earlier a00 candidate stopped at optional-storyboard TS build error before switch, fixed.
-- Media runtime reused prior immutable renderer dependencies and copied committed renderer code; new image sha256:71094f26aa21e0a1143fedb23f9667403ebe08c564311d72e589ea0b1f16f95a; install9236dbf7 succeeded. TTS sha256:a215840921a40a9e066ed970d2bf49dcf25bc20af0f7e569d55c0867343ba0ab unchanged. No model/binary installation needed.
-- Actual ordinary-user API upgraded run13 to content-driven-v1/8, version6, without recreating sources. Submitted revision2a9990f9-e9ee-45a8-a51a-5bccead133bb via idempotency hermes-content-plan-a00-v1. Response202, pending. Request log1788881375823-b5b62b1a-e496-4ee9-b150-9e068e2697db.
-- Original3d46 and prior445a remain draft. Inspect new revision; no approval/images/video yet. No repeat submission with a different idempotency key.- Actual plan2a9990f9 failed before assets: first2 responses schema rejected, third JSON parse; no diagnostics in923. Gateway reported in/out2298/2664,1/2744,1/3346; input1 may reflect provider caching, not a Codex-saving ratio. Log1788881509351-8dfb3e50-0d28-49c4-aaee-cc584836748b.
-- Candidate e40e25b0 now deploying --no-tests/rollback9236dbf7: precise scene/object/action diagnostics + targeted repair feedback; same schema/source guards, concise non-conflicting planner prompt. No renderer rebuild required (same923 runtime).
-- request-content-plan-v2.cjs prepared but NOT submitted; idempotency hermes-content-plan-e40-v2. Execute once after e40 deployment then inspect actual returned task; do not repeat v1.- e40e25b0 deployment completed, rollback9236dbf7, log1788881879714-9d4a4286-388c-4169-b8c7-b750cde6d17d exit0. Actual v2 taskd89c5268-6be7-4922-8a98-e315b864468c failed with explicit scene_1/action_0/basis_quote_unsupported. No images/video.
-- Pending planner-only fix: model selects trusted lossless sourcePassages quoteId; server materializes exact original quote before unchanged schema/source guards. Original PDF line-wrap hyphens and numeric formatting no longer need model copying. v3 helper prepared (idempotency hermes-content-plan-passages-v3), NOT yet submitted. Runtime renderer remains923.
+## Evidence and tools
+- Helper directory E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow/apps/web/test/visual/out/token-smart-release (ignored); server /opt/openscience-evals/hermes-user-journey.
+- read-product-run.cjs outputs exact run/assets and latest planTask041. request-content-plan-v3.cjs ALREADY SUBMITTED; do not rerun blindly.
+- approve-product-assets.cjs prepared, never executed: fixed actor/RO/version, reviewed id/kind/contentHash/updatedAt via XGS_REVIEWED_ASSETS_B64, ordinary authenticated CSRF PATCH. Only use after real content review.
+- Task status log1788883114260-30c9b79c-c744-4316-90a6-a4f9270a6b94; server failure log1788883354454-4a0e9a23-3734-4262-8e59-732d6fc52e49. Logs under C:/Users/Mac/AppData/Local/Temp/token-smart-checks.
+- Source log1788877289630-df14e2f8-19a8-49a1-88ac-ff310e36a1cd; Evidenceapproval1788878309256-e75da8ca-8e36-4934-9426-6b67aeb50bf1. Earlier evidence remains in Git history.
+- SSH only root infra/scripts/ssh-run.sh via C:/Program Files/Git/bin/bash.exe. LF shell files, <=8KB commands (gzip/chunk longer payloads); never print secrets/.env.
+- Historical video ca0908bb used manual assistance and a fixed renderer; not current autonomous/general proof. No overall token-saving percentage established.
+- Read-first baseline docs/OpenScience_Kimi_Development_Spec.md, current integrated product plan, this handoff. Root dirty main is separate; copy current handoff there without changing unrelated work.

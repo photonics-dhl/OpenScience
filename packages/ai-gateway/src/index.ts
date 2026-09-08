@@ -9,6 +9,7 @@ export {
 export {
   OpenAiCompatProvider,
   AnthropicCompatProvider,
+  TextProviderError,
   MiniMaxCodingPlanVisionProvider,
   type Provider,
   type ProviderConfig,
@@ -16,6 +17,7 @@ export {
   type ChatMessage,
   type CompleteOptions,
   type Usage,
+  type TextProviderErrorCode,
   type MiniMaxVisionConfig,
   type MiniMaxVisionPricing,
 } from './provider';
