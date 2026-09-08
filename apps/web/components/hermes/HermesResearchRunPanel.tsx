@@ -96,9 +96,10 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
   }
 
   const sourceReady = run?.status === 'awaiting_source_review';
+  const claimReviewReady = run?.status === 'awaiting_claim_review' && Boolean(run.versionId);
   const terminal = run?.status === 'failed' || run?.status === 'stopped';
   const presentationReady = Boolean(run?.versionId && [
-    'awaiting_claim_review', 'generating_storyboard', 'awaiting_storyboard_review',
+    'generating_storyboard', 'awaiting_storyboard_review',
     'generating_scene_images', 'awaiting_scene_images_review', 'generating_video', 'awaiting_video_review', 'succeeded',
   ].includes(run.status));
   return <section className="surface-folio-sheet mt-7 max-w-3xl border-y border-os-rule-paper px-5 py-6 sm:px-7" aria-labelledby="hermes-run-title" data-hermes-research-run={run?.status ?? 'new'}>
@@ -120,6 +121,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
       {run.error ? <p className="mt-3 text-sm text-os-vermilion-ink">{run.error}</p> : null}
       <nav className="mt-5 flex flex-wrap gap-4" aria-label={t('actions')}>
         {sourceReady ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={reviewHref(researchObjectId, run)}>{t('reviewSource')}</Link> : null}
+        {claimReviewReady && run?.versionId ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`${runHref(researchObjectId, run.id)}&claimReview=1`}>{t('reviewClaims')}</Link> : null}
         {presentationReady && run?.versionId ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(researchObjectId)}/presentation?version=${encodeURIComponent(run.versionId)}`}>{t('reviewPresentation')}</Link> : null}
         <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={runHref(researchObjectId, run.id)}>{t('reopen')}</Link>
         {terminal ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(researchObjectId)}/files`}>{t('openFiles')}</Link> : null}

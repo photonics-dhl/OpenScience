@@ -42,6 +42,9 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
   let valid = true;
   let invalidReason = 'invalid';
   try { selections = selectedReviewClaims(rows); } catch (cause) { valid = false; if (cause instanceof Error && cause.message === 'DUPLICATE_SOURCE_ASSOCIATION') invalidReason = 'duplicateAssociation'; }
+  const missingRequiredQuote = Boolean(sourceReview && rows.some((row) => row.selected && (!row.attachSourceQuote || !(row.sources ? row.sources.length : row.source))));
+  if (missingRequiredQuote) { valid = false; invalidReason = 'runQuoteRequired'; }
+  const submittedSelections = sourceReview ? selections.map((selection) => ({ ...selection, attachSourceQuote: true as const })) : selections;
   const choose = (taskId: string, values = candidates) => {
     const next = values.find(item => item.taskId === taskId);
     setState({ scope, candidates: values, chosen: taskId, rows: next ? createReviewRows(next.suggestions) : [] });
@@ -62,11 +65,15 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
   }
   function update(key: string, edit: (row: ClaimReviewRow) => ClaimReviewRow) {
     if (locked) return;
-    setState(previous => previous.scope === scope ? { ...previous, rows: previous.rows.map(row => row.clientKey === key ? edit(row) : row) } : previous);
+    setState(previous => previous.scope === scope ? { ...previous, rows: previous.rows.map(row => {
+      if (row.clientKey !== key) return row;
+      const next = edit(row);
+      return sourceReview && next.selected ? { ...next, attachSourceQuote: true } : next;
+    }) } : previous);
   }
   async function confirm() {
-    if (!candidate || !valid || !selections.length || busy || complete || error === 'stale' || error === 'submitError') return;
-    const body = { snapshotToken: candidate.snapshotToken, selections };
+    if (!candidate || !valid || !submittedSelections.length || busy || complete || error === 'stale' || error === 'submitError') return;
+    const body = { snapshotToken: candidate.snapshotToken, selections: submittedSelections };
     const key = intent.current.begin(JSON.stringify([scope, candidate.taskId, body]));
     if (!key) return;
     const abort = controller.current; setBusy(true); setError(''); callbacks.current.onBusyChange?.(true);
@@ -106,13 +113,13 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
         <label className="grid gap-2 text-sm">{t('kind')}<select className={control} value={row.kind} onChange={event => update(row.clientKey, value => ({ ...value, kind: event.target.value as PresentationClaim['kind'], parentClientKey: undefined }))}>{(['core','supporting','method','boundary','counter'] as const).map(kind => <option key={kind} value={kind}>{t(`kind_${kind}`)}</option>)}</select></label>
         {row.kind !== 'core' ? <label className="grid gap-2 text-sm">{t('parent')}<select className={control} value={row.parentClientKey ?? ''} onChange={event => update(row.clientKey, value => ({ ...value, parentClientKey: event.target.value || undefined }))}><option value="">{t('chooseParent')}</option>{rows.filter(item => item.selected && item.clientKey !== row.clientKey).map(item => <option key={item.clientKey} value={item.clientKey}>{item.statement.slice(0, 90)}</option>)}</select></label> : null}
         {(['conditions','limitations'] as const).map(field => <label key={field} className="grid gap-2 text-sm">{t(field)}<textarea className={control} maxLength={4000} value={(row[field] ?? []).join('\n')} onChange={event => update(row.clientKey, value => ({ ...value, [field]: event.target.value.split('\n'), attachSourceQuote: false }))}/></label>)}
-        {(row.sources ?? (row.source ? [row.source] : [])).length ? <><ol className="space-y-3 pl-5">{(row.sources ?? [row.source!]).map((source, segment) => <li key={segment}><blockquote className="m-0 whitespace-pre-wrap break-words border-l-2 border-os-rule-paper pl-3 text-sm">{source.quote}</blockquote><p className="text-xs">{source.locator.page ? t('page', { page: source.locator.page }) : t('sourceLocated')}</p></li>)}</ol><label className="flex min-h-11 items-start gap-2 text-sm"><input type="checkbox" checked={row.attachSourceQuote} onChange={event => update(row.clientKey, value => ({ ...value, attachSourceQuote: event.target.checked }))}/>{t('associate')}</label></> : <p className="text-sm">{t('noQuote')}</p>}
+        {(row.sources ?? (row.source ? [row.source] : [])).length ? <><ol className="space-y-3 pl-5">{(row.sources ?? [row.source!]).map((source, segment) => <li key={segment}><blockquote className="m-0 whitespace-pre-wrap break-words border-l-2 border-os-rule-paper pl-3 text-sm">{source.quote}</blockquote><p className="text-xs">{source.locator.page ? t('page', { page: source.locator.page }) : t('sourceLocated')}</p></li>)}</ol><label className="flex min-h-11 items-start gap-2 text-sm"><input type="checkbox" checked={row.attachSourceQuote} disabled={Boolean(sourceReview)} onChange={event => update(row.clientKey, value => ({ ...value, attachSourceQuote: event.target.checked }))}/>{t(sourceReview ? 'runAssociate' : 'associate')}</label></> : <p className="text-sm">{t('noQuote')}</p>}
         <button type="button" className="min-h-11 text-sm underline" disabled={rows.length >= 12} onClick={() => setState(previous => ({ ...previous, rows: [...previous.rows, splitReviewRow(row, crypto.randomUUID())] }))}>{t('split')}</button>
       </div>)}
     </fieldset> : null}
     {!valid ? <p role="alert" className="text-sm">{t(invalidReason)}</p> : null}
     {error ? <p role="alert" className="text-sm">{t(error)}</p> : null}
     {sourceReview ? <p className="text-sm leading-6 text-os-muted-paper">{t('generationGrant')}</p> : null}
-    {complete ? <p role="status" className="text-sm">{t(sourceReview ? 'runComplete' : 'complete')}</p> : candidate ? <button type="button" className="min-h-11 w-full rounded bg-os-ink px-3 py-2 text-sm text-white disabled:opacity-40" disabled={busy || !valid || !selections.length || error === 'stale' || error === 'submitError'} onClick={() => void confirm()}>{t(busy ? 'saving' : uncertain ? 'retry' : sourceReview ? 'runConfirm' : 'confirm')}</button> : null}
+    {complete ? <p role="status" className="text-sm">{t(sourceReview ? 'runComplete' : 'complete')}</p> : candidate ? <button type="button" className="min-h-11 w-full rounded bg-os-ink px-3 py-2 text-sm text-white disabled:opacity-40" disabled={busy || !valid || !submittedSelections.length || error === 'stale' || error === 'submitError'} onClick={() => void confirm()}>{t(busy ? 'saving' : uncertain ? 'retry' : sourceReview ? 'runConfirm' : 'confirm')}</button> : null}
   </section>;
 }

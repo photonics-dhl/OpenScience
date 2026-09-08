@@ -706,6 +706,34 @@ export async function listVersionClaims(roId: string, versionId: string, signal?
   return request(`${presentationScopePath(roId, versionId)}/claims`, { signal });
 }
 
+export interface VersionEvidence {
+  id: string;
+  researchObjectId: string;
+  versionId: string;
+  claimId: string;
+  title: string;
+  exactQuote?: string;
+  locator: { page?: number; [key: string]: unknown };
+  relation: string;
+  extractionStatus: 'succeeded' | 'needs_review' | 'blocked' | 'failed';
+  verifiedByUserId?: string;
+  updatedAt: string;
+}
+
+export function listVersionEvidence(roId: string, versionId: string, signal?: AbortSignal): Promise<{ evidence: VersionEvidence[] }> {
+  return request(`${presentationScopePath(roId, versionId)}/evidence`, { signal });
+}
+
+export function verifyVersionEvidence(roId: string, versionId: string, evidenceId: string, expectedUpdatedAt: string): Promise<{ evidence: VersionEvidence }> {
+  return request(`${presentationScopePath(roId, versionId)}/evidence/${encodeURIComponent(evidenceId)}/verify`, {
+    method: 'POST', body: JSON.stringify({ expectedUpdatedAt }),
+  });
+}
+
+export function getVersionEvidenceSource(roId: string, versionId: string, evidenceId: string, signal?: AbortSignal): Promise<{ source: { text?: string } }> {
+  return request(`${presentationScopePath(roId, versionId)}/evidence/${encodeURIComponent(evidenceId)}/source`, { signal });
+}
+
 export type IngestionClaimField = 'problem' | 'insight' | 'method' | 'results' | 'limitations' | 'reproducibility';
 export type IngestionClaimSource = { quote: string; locator: { page?: number; blockId?: string; [key: string]: unknown } };
 export interface IngestionClaimSuggestion {

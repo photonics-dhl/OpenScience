@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HermesTaskEntry, loadScopedHermesReview } from '@/components/hermes/HermesTaskEntry';
 import { HermesResearchRunPanel } from '@/components/hermes/HermesResearchRunPanel';
+import { HermesClaimEvidenceReview } from '@/components/hermes/HermesClaimEvidenceReview';
 import { HermesSourceReview } from '@/components/hermes/HermesSourceReview';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
@@ -21,10 +22,11 @@ export default function HermesReviewPage({ params: routeParams }: { params: { id
   const searchParams = useSearchParams();
   const taskId = searchParams.get('task') ?? '';
   const runId = searchParams.get('run') ?? '';
-  return <HermesResearchPage key={`${routeParams.id}:${taskId}:${runId}`} routeParams={routeParams} taskId={taskId} runId={runId} />;
+  const claimReview = searchParams.get('claimReview') === '1';
+  return <HermesResearchPage key={`${routeParams.id}:${taskId}:${runId}:${claimReview}`} routeParams={routeParams} taskId={taskId} runId={runId} claimReview={claimReview} />;
 }
 
-function HermesResearchPage({ routeParams, taskId, runId }: { routeParams: { id: string }; taskId: string; runId: string }) {
+function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { routeParams: { id: string }; taskId: string; runId: string; claimReview: boolean }) {
   const router = useRouter();
   const locale = useLocale() as 'zh' | 'en';
   const t = useTranslations('hermesReview');
@@ -125,6 +127,7 @@ function HermesResearchPage({ routeParams, taskId, runId }: { routeParams: { id:
       {workspaceNavigation}
       <div className="min-h-[calc(100dvh-7rem)] px-4 py-7 text-os-ink sm:px-8 lg:px-12"><HermesTaskEntry researchObjectId={routeParams.id} researchTitle={researchTitle} tasks={tasks} loading={loading} error={error} onRetry={() => setReload((value) => value + 1)} />
         {!loading && !error ? <HermesResearchRunPanel researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
+        {!loading && !error && claimReview && run?.status === 'awaiting_claim_review' ? <HermesClaimEvidenceReview researchObjectId={routeParams.id} run={run} onDone={() => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`)} /> : null}
         {!loading && !error && <button type="button" className="mt-5 min-h-11 rounded-panel border border-os-vermilion-ink px-4 py-2 font-semibold text-os-vermilion-ink" onClick={() => setHermesOpen(true)}>{t('askHermes')}</button>}
         {literatureEntry}
         <HermesAssistantDrawer dashboardContext={{ tasks: tasks.filter((task) => task.researchObjectId === routeParams.id).map(({ id, researchObjectId, state }) => ({ id, researchObjectId, state })), researchObjects: [{ id: routeParams.id, status: researchStatus, title: researchTitle }] }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={routeParams.id} suggestion={reviewSuggestion} target={null} />
