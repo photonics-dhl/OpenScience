@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-08:** production `134ebdea796b922ac07d9f29b6148b458b5e515f` healthy / rollback `97aa06a542febf558a47cecbf6559bd0a6c876aa`；candidate `6cc6f466` 部署因退出的 `09be` 验收容器只读挂载触发 retention prepare 失败，已自动回滚并清空 journal（log `1788860199633-c730685b-7af5-4db5-8922-0d20956d358c`）。39 migrations 已在生产保留，候选未上线。
+> **CURRENT 2026-09-08:** 服务器已部署1ba694ae / rollback134ebdea；普通用户qualityv2上传完成，但模型结构化校验耗尽、无core；修复精确失败/重试并接续同源，尚未全流程通过。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 

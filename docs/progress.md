@@ -1,6 +1,14 @@
 # Progress
 
-## 2026-09-08: Hermes candidate deployment rolled back safely
+## 2026-09-08: server workflow deployed; actual extraction recovery in progress
+
+- Production/HEAD1ba694ae, rollback134ebdea; CI34212202821 and canonical deploy/retention passed (log1788861913105-4d326e11-fbea-4471-8037-1d124d2a15fa).123 focused server tests/build/types/lint/docs/Parser16 passed.
+- Ordinary qualityv2 RO714a0c2d / ingestion19149438 uploaded once. Actual result has no core: MiniMax-M3 completed3 calls, structured validation exhausted, catch returned sdf-proposal-unavailable. Do not count task succeeded as extraction success.
+- Recovery code132dcd07+5ffd5424 implements permission/CAS, pending-only delivery, controlled crash recovery, current-run/step retry and UI action; High findings repaired, ECS checks pending. Existing run90a25481 recovered after browser close/reopen; no new run/upload/manual Claims.
+- Failed MiniMax-M3 window consumed19035 input+2420 output=21455 tokens across3 calls; evidence .tmp/token-smart-logs/1788862810865-f787e3e5-d34d-495b-9d0a-9a43c2694499.log. This is product-model usage for one failed extraction, not Codex savings. Current full IDs, tool versions, unchanged full-suite evidence and constraints are in CURRENT handoff. All runtime stays on ECS.
+
+
+## HISTORICAL 2026-09-08: prior 6cc candidate rolled back safely
 
 - Candidate `6cc6f46646b6ad97005b071ec085262bccb111a3` on `codex/onchip-video-release` is PR107; CI `34209642581` passed. ECS validation passed: domain `672`, web `568`, worker `594` with one intentional skip, API `171`, types, lint, docs, build, and Parser `16`.
 - Candidate `6cc6f466` deployment failed after public and exact-release checks when retention preparation found exited `xgs-hermes-run-acceptance-09beecba` retaining a read-only candidate mount. This was not a business-health failure. Automatic rollback restored healthy production `134ebdea796b922ac07d9f29b6148b458b5e515f`; journal is cleared. Log `1788860199633-c730685b-7af5-4db5-8922-0d20956d358c`.
@@ -9,7 +17,7 @@
 - Durable Hermes UI and server flow retain exact confirmation-version recovery, quote-bound source review, separate Claim/Evidence verification, and server-owned continuation. SDF/extraction alone never establishes a completed workflow.
 - Scientific qualification and discontinuous-evidence feedback from Chat6Pro requires four generic extractor-prompt changes; the main thread has modified `apps/agent-worker/src/extractor.ts`, pending commit and ECS focused validation. The old source must not be retried; use the prepared normal-user `qualityv2` upload for the next candidate.
 - All runtime checks remain server-only. Do not reset, pull, stash, or overwrite the concurrent extractor change.
-## 2026-09-08: video user-approved; server-owned Hermes workflow next
+## HISTORICAL 2026-09-08: user-approved assisted video
 
 - Production/public97aa06a542febf558a47cecbf6559bd0a6c876aa, rollbackc5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb. CI34192289263 and canonical server build/Parser16/migrations/runtime/public acceptance passed.
 - Real paper six fields confirmed and committed; same-version Claim bridge passed. Five scientific Claims/112 Evidence reviewed; storyboard-v3 and all5images approved. Prior failures preserved, only scene4 regenerated.
