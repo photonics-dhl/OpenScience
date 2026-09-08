@@ -329,6 +329,15 @@ function jsonRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function terminalReconcileError(error: unknown): string | null {
+  const code = (error as { code?: unknown })?.code;
+  if (['INSUFFICIENT_CREDIT', 'VALIDATION_ERROR', 'SOURCE_CLAIM_INVALID', 'ILLEGAL_TRANSITION'].includes(String(code))) {
+    return error instanceof Error ? error.message.slice(0, 1_000) : 'Hermes generation precondition failed';
+  }
+  const message = error instanceof Error ? error.message : '';
+  return /Hermes generation grant|parent|storyboard|scene image|video inputs/i.test(message) ? message.slice(0, 1_000) : null;
+}
+
 async function createPresentationSteps(
   deps: HermesResearchRunDeps,
   tx: Prisma.TransactionClient,
@@ -370,17 +379,36 @@ async function validateReviewedSources(tx: Prisma.TransactionClient, run: RunRow
   if (!version || version.researchObjectId !== run.researchObjectId || version.status !== 'draft') return 'invalid';
   const claims = await tx.claimNode.findMany({ where: { id: { in: run.sourceClaimIds }, researchObjectId: run.researchObjectId, versionId: run.versionId } });
   if (claims.length !== run.sourceClaimIds.length) return 'invalid';
-  const ingestionIds = new Set(run.steps.filter((step) => step.stage === 'source_ingestion').map((step) => step.ingestionTaskId));
+  const sourceSteps = run.steps.filter((step) => step.stage === 'source_ingestion');
+  const ingestionIds = new Set(sourceSteps.map((step) => step.ingestionTaskId));
+  const lineageByClaim = new Map<string, string>();
   if (claims.some((claim) => {
     const provenance = jsonRecord(claim.provenance);
     const lineage = provenance.sourceTaskLineage ?? provenance.sourceTaskId;
-    return typeof lineage !== 'string' || !ingestionIds.has(lineage);
+    if (typeof lineage === 'string') lineageByClaim.set(claim.id, lineage);
+    return provenance.source !== 'reviewed_ingestion' || typeof lineage !== 'string' || !ingestionIds.has(lineage);
   })) return 'invalid';
   if (claims.some((claim) => claim.extractionStatus === 'failed')) return 'invalid';
   if (claims.some((claim) => claim.extractionStatus !== 'succeeded')) return 'pending';
   const evidence = await tx.evidenceRecord.findMany({ where: { claimId: { in: run.sourceClaimIds }, researchObjectId: run.researchObjectId, versionId: run.versionId } });
   if (evidence.some((row) => row.extractionStatus === 'failed')) return 'invalid';
-  if (run.sourceClaimIds.some((claimId) => !evidence.some((row) => row.claimId === claimId && row.extractionStatus === 'succeeded'))) return 'pending';
+  const ingestionRows = await tx.ingestionTask.findMany({
+    where: { id: { in: [...ingestionIds].filter((id): id is string => typeof id === 'string') } },
+    include: { artifact: true, batch: true },
+  });
+  const bindingByTask = new Map(ingestionRows.map((task) => [task.id, task]));
+  if (run.sourceClaimIds.some((claimId) => {
+    const sourceTaskId = lineageByClaim.get(claimId);
+    const binding = sourceTaskId ? bindingByTask.get(sourceTaskId) : undefined;
+    const matching = evidence.filter((row) => {
+      const provenance = jsonRecord(row.provenance);
+      return row.claimId === claimId && row.extractionStatus === 'succeeded' && binding
+        && binding.batch.researchObjectId === run.researchObjectId && row.artifactId === binding.artifactId
+        && row.contentHash === binding.artifact.blobSha256 && provenance.source === 'reviewed_ingestion'
+        && provenance.sourceTaskId === sourceTaskId;
+    });
+    return matching.length === 0;
+  })) return evidence.some((row) => row.extractionStatus === 'needs_review') ? 'pending' : 'invalid';
   if (!evidence.some((row) => row.contentHash === ONCHIP_SOURCE_CONTENT_HASH)) return 'invalid';
   return 'ready';
 }
@@ -525,6 +553,16 @@ export async function reconcileHermesResearchRuns(
       }
     }
     if (reconcileError) {
+      const terminalError = terminalReconcileError(reconcileError);
+      if (terminalError) {
+        const failed = await deps.prisma.$transaction(async (tx) => {
+          const run = await tx.hermesResearchRun.findUnique({ where: { id: candidate.id }, include: RUN_INCLUDE });
+          if (!run || !ACTIVE_RUN_STATES.includes(run.status as HermesResearchRunStatus)) return null;
+          const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+          return moveRun(deps, tx, run, 'failed', ro?.workspaceId, terminalError);
+        }, { isolationLevel: 'Serializable' }).catch(() => null);
+        if (failed === 'failed') { counts.failed += 1; continue; }
+      }
       counts.errors += 1;
       await deps.prisma.hermesResearchRun.updateMany({
         where: { id: candidate.id, status: candidate.status, version: candidate.version },

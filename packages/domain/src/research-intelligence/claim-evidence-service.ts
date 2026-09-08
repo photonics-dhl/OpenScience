@@ -841,7 +841,6 @@ export async function createClaimEvidenceBatch(
   const base = { userId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId };
   const authority = input.authority;
   let exactReference: DocumentSourceMapReference;
-  if (existingTransaction) return materialize(existingTransaction);
   try {
     exactReference = parseDocumentSourceMapReference(authority.sourceMapRef);
   } catch (error) {
@@ -1010,6 +1009,7 @@ export async function createClaimEvidenceBatch(
     const storedById = new Map(storedEvidence.map((item) => [item.id, item]));
     return { claims, evidence: evidenceIds.map((id) => publicEvidenceRow(storedById.get(id)!)) };
   };
+  if (existingTransaction) return materialize(existingTransaction);
   try {
     return await serializableWrite(deps, materialize);
   } catch (error) {

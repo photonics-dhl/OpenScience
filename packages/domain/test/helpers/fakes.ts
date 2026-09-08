@@ -105,17 +105,30 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
   };
 
   const hermesRunWithSteps = (run: any, include: any) => {
-    if (!include?.steps) return { ...run };
+    const researchObject = include?.researchObject ? db.researchObjects.find((row) => row.id === run.researchObjectId) ?? null : undefined;
+    if (!include?.steps) return { ...run, ...(include?.researchObject ? { researchObject } : {}) };
     let steps = db.hermesResearchSteps.filter((step) => step.runId === run.id);
+    if (include.steps.where?.stage !== undefined) steps = steps.filter((step) => step.stage === include.steps.where.stage);
+    if (include.steps.where?.ordinal !== undefined) steps = steps.filter((step) => step.ordinal === include.steps.where.ordinal);
     if (include.steps.orderBy?.ordinal === 'asc') steps = steps.toSorted((left, right) => left.ordinal - right.ordinal);
     return {
       ...run,
+      ...(include?.researchObject ? { researchObject } : {}),
       steps: steps.map((step) => {
-        if (!include.steps.include?.ingestionTask) return { ...step };
+        const extra = {
+          ...(include.steps.include?.agentTask ? { agentTask: db.agentTasks.find((task) => task.id === step.agentTaskId) ?? null } : {}),
+          ...(include.steps.include?.presentationAsset ? { presentationAsset: (() => {
+            const asset = db.presentationAssets.find((candidate) => candidate.id === step.presentationAssetId) ?? null;
+            return asset && include.steps.include.presentationAsset.include?.sourceClaims
+              ? { ...asset, sourceClaims: db.presentationAssetClaims.filter((link) => link.presentationAssetId === asset.id) } : asset;
+          })() } : {}),
+        };
+        if (!include.steps.include?.ingestionTask) return { ...step, ...extra };
         const ingestionTask = db.ingestionTasks.find((task) => task.id === step.ingestionTaskId) ?? null;
-        if (!ingestionTask) return { ...step, ingestionTask: null };
+        if (!ingestionTask) return { ...step, ...extra, ingestionTask: null };
         return {
           ...step,
+          ...extra,
           ingestionTask: {
             ...ingestionTask,
             batch: db.ingestionBatches.find((batch) => batch.id === ingestionTask.batchId) ?? null,
