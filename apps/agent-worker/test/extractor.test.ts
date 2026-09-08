@@ -574,12 +574,16 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.needsMoreInformation).toEqual(mode === 'missing-upgrade'
       ? ['insight', 'results', 'limitations'] : ['insight', 'results', 'limitations', 'reproducibility']);
     expect(result.core.reproducibility).toBe(mode === 'missing-upgrade' ? 'Supported reproduction condition' : '');
+    const initialRequest = JSON.stringify(requests[0]);
     const retryRequest = JSON.stringify(requests[1]);
+    expect(initialRequest).toContain('{\\"summary\\": string, \\"sourceBlockIds\\": string[], \\"needsMoreInformation\\": boolean}');
     expect(retryRequest).toContain('insight:ordered_ids_required');
     expect(retryRequest).toContain(mode === 'first-omitted' ? 'method:malformed_item' : 'method:summary_required');
     expect(retryRequest).toContain('results:duplicate_ids');
     expect(retryRequest).toContain('limitations:missing_requires_empty');
     expect(retryRequest).toContain('only the invalid fields');
+    expect(retryRequest).toContain('select 1-32 blocks');
+    expect(retryRequest).toContain('may never have an empty sourceBlockIds array');
     expect(retryRequest).not.toContain('Reverse order is invalid');
     expect(retryRequest).not.toContain('Must be empty when missing');
   });

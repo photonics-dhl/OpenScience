@@ -406,7 +406,7 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
         'Previous JSON failed canonical validation.',
         `Invalid fields and reason codes: ${details}.`,
         'Return schemaVersion and fields containing only the invalid fields listed above; already validated fields are retained locally and need not be repeated.',
-        'For each repaired field, write one core statement with its necessary conditions, then select at most 32 blocks that jointly support it. If more are needed, narrow the statement before selecting evidence; never truncate necessary evidence.',
+        'For each repaired non-missing field, write one core statement with its necessary conditions, then select 1-32 blocks that jointly support it; a non-missing field may never have an empty sourceBlockIds array. If more are needed, narrow the statement before selecting evidence; never truncate necessary evidence.',
         'A missing field must have summary="", sourceBlockIds=[], needsMoreInformation=true. Do not include a nonempty explanation in a missing field.',
         'Use only the minimal sufficient SOURCE_BLOCK ids in strictly increasing source order; unrelated blocks may be skipped.',
         'Do not quote or repeat source text in this correction instruction; use the SOURCE_BLOCK ids already provided.',
@@ -578,7 +578,7 @@ export async function extractHandler(
       'summary 中的每个分句、数字、比较、因果或能力限定都必须由所选原文直接支持；可跳过无关页眉或噪声块，但不得跨越缺失的中间论证拼接新结论。作者提出的原因必须写成作者归因，不能写成已证因果。',
       '方法或配置披露不等于独立复现完成；reproducibility 只能概括原文明示的材料、参数、步骤、数据或代码可用性及其缺口。若某个条款缺少直接证据，从 summary 删除该条款；若字段已无可支持内容，则按缺失字段返回 needsMoreInformation=true。',
       ...(promptBlocks ? [
-        '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能含 summary、sourceBlockIds、needsMoreInformation。',
+        '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能是 {"summary": string, "sourceBlockIds": string[], "needsMoreInformation": boolean}，不得把字段写成字符串、数组或增加其他键。',
         `sourceBlockIds 必须选择 1-${MAX_EVIDENCE_SEGMENTS} 个最少充分 SOURCE_BLOCK id，按原文顺序严格递增，合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符；可跳过无关块，选择的完整块不得改写、倒序或重复。`,
         '逐字段独立判断：所选块共同充分支持 summary；单块可能只是断行、符号或单位，无需独立成句或独立证明整句。可跨行或跨段综合，但必须保留否定、适用条件和数值单位，不借未选文本补足论证。',
         '每字段先用一句话概括一个核心要点及其必要条件，再选共同支持这句话的最少块。若需超过32块，应先缩小陈述范围，不能任意截断必要证据。不要因一个字段缺失而清空其他字段，不穷举细节或所有相关段落。',
