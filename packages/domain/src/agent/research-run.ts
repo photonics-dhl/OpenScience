@@ -157,7 +157,10 @@ export async function createHermesResearchRun(
       return toView(await createOnce());
     } catch (error) {
       const code = (error as { code?: string }).code;
-      if (code === 'P2034' && attempt < 2) continue;
+      if (code === 'P2034') {
+        if (attempt < 2) continue;
+        break;
+      }
       if (code !== 'P2002') throw error;
       const replay = await deps.prisma.hermesResearchRun.findUnique({ where: { idempotencyKey: input.idempotencyKey }, include: RUN_INCLUDE });
       if (!replay || replay.actorId !== input.actorId || replay.researchObjectId !== input.researchObjectId || replay.requestDigest !== digest) {
