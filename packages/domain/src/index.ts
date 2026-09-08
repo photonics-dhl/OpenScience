@@ -157,7 +157,7 @@ export {
   confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns,
   requireHermesPresentationTaskAuthority,
   HermesResearchRunError,
-  type HermesResearchRunDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
+  type HermesResearchRunDeps, type HermesSourceReviewDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
   type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,
 } from './agent/research-run';
 export {
