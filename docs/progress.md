@@ -1,8 +1,9 @@
 # Progress
 
-## 2026-09-08: server workflow deployed; actual extraction recovery in progress
+## 2026-09-08: recovery deployed; real browser retry transport fix
 
-- Production/HEAD1ba694ae, rollback134ebdea; CI34212202821 and canonical deploy/retention passed (log1788861913105-4d326e11-fbea-4471-8037-1d124d2a15fa).123 focused server tests/build/types/lint/docs/Parser16 passed.
+- Production8c0601a7 / rollback1ba694ae; CI34219115044, ECS build/types/lint/docs/gateway79/domain676/worker126/API171/web569/Parser16 passed. Deploy1788867164346-67c35e52-5cb0-43d2-b605-6ef048508169 succeeded after preserving/removing two exact stopped134 browser container references. Actual UI retry was rejected before domain/model execution because JSON request body was empty; source/run remain unchanged, retryCount0. Frontend transport repair underway.
+- HISTORICAL1ba: CI34212202821 and canonical deploy/retention passed (log1788861913105-4d326e11-fbea-4471-8037-1d124d2a15fa).123 focused server tests/build/types/lint/docs/Parser16 passed.
 - Ordinary qualityv2 RO714a0c2d / ingestion19149438 uploaded once. Actual result has no core: MiniMax-M3 completed3 calls, structured validation exhausted, catch returned sdf-proposal-unavailable. Do not count task succeeded as extraction success.
 - Recovery code132dcd07+5ffd5424+1d828176 implements permission/CAS, pending-only delivery, controlled crash recovery, current-run/step retry and UI action; High review clear; e794 server build/types/lint and gateway79/worker126/API171/web569 passed, domain675 passed with one missing-audit-fixture failure fixed6097b87f. Existing run90a25481 recovered after browser close/reopen; no new run/upload/manual Claims.
 - Failed MiniMax-M3 window consumed19035 input+2420 output=21455 tokens across3 calls; evidence .tmp/token-smart-logs/1788862810865-f787e3e5-d34d-495b-9d0a-9a43c2694499.log. This is product-model usage for one failed extraction, not Codex savings. One controlled diagnostic consumed21533 product-model tokens and isolated canonical shape/empty citation failures;59124e61 clarifies initial shape and repair minimum, guard unchanged. Current full IDs, tool versions, unchanged full-suite evidence and constraints are in CURRENT handoff. All runtime stays on ECS.
