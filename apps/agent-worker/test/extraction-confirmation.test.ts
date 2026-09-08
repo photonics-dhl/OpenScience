@@ -85,9 +85,9 @@ describe('canonical extractor → confirmation → frozen research record',()=>{
     expect(f.db.evidenceRecords).toHaveLength(3);
     expect(new Set(f.db.evidenceRecords.map(row=>row.claimId))).toEqual(new Set([f.db.claimNodes[0].id]));
     expect(f.db.evidenceRecords.map(row=>({quote:row.exactQuote,blockId:row.locator.blockId,relation:row.relation,verifiedByUserId:row.verifiedByUserId}))).toEqual([
-      {quote:'The optical-',blockId:'block0',relation:'supports',verifiedByUserId:null},
-      {quote:'field obeys Φ_CEP ≠ 0.',blockId:'block1',relation:'supports',verifiedByUserId:null},
-      {quote:'Calibration required.',blockId:'block3',relation:'supports',verifiedByUserId:null},
+      {quote:'The optical-',blockId:'block0',relation:'context',verifiedByUserId:null},
+      {quote:'field obeys Φ_CEP ≠ 0.',blockId:'block1',relation:'context',verifiedByUserId:null},
+      {quote:'Calibration required.',blockId:'block3',relation:'context',verifiedByUserId:null},
     ]);
     expect(view.record).toMatchObject({sdf:{problem:'Reported result'},evidence:[{verified:false},{verified:false},{verified:false}]});
     expect(view.record.manifest).toHaveLength(1);
@@ -146,12 +146,25 @@ describe('canonical extractor → confirmation → frozen research record',()=>{
     expect(f.db.claimNodes).toHaveLength(0);
     expect(f.db.evidenceRecords).toHaveLength(0);
   });
+  it('atomically rejects canonical segments that reverse SourceMap block order on one page',async()=>{
+    const f=await extractedFixture(['First source.','Second source.'],['B000001','B000002']);
+    f.db.agentTasks[0].result.evidenceSegments.problem.reverse();
+    f.db.agentTasks[0].result.evidence.problem.quote='Second source.\nFirst source.';
+    await expect(f.confirm()).rejects.toThrow(/source order/i);
+    expect(f.db.versions).toHaveLength(0);
+    expect(f.db.commits).toHaveLength(0);
+    expect(f.db.claimNodes).toHaveLength(0);
+    expect(f.db.evidenceRecords).toHaveLength(0);
+  });
   it('records an edited proposal as a Claim with an explicit evidence gap',async()=>{
     const f=await extractedFixture(['Same result.']);
     const saved=await confirmIngestionTask(f.deps,{userId:f.user.id,taskId:'task',version:1,
       core:{...f.result.core,problem:'Human revised statement'}});
     expect(saved.sdf.core.problem).toBe('Human revised statement');
-    expect(f.db.claimNodes).toEqual([expect.objectContaining({statement:'Human revised statement',assessment:'missing',extractionStatus:'needs_review'})]);
+    expect(f.db.claimNodes).toEqual([expect.objectContaining({
+      statement:'Human revised statement',assessment:'missing',extractionStatus:'needs_review',
+      provenance:expect.objectContaining({source:'human',revision:'human',proposalSource:'sdf.extract',proposalStatementSha256:expect.stringMatching(/^[a-f0-9]{64}$/)}),
+    })]);
     expect(f.db.evidenceRecords).toHaveLength(0);
   });
 });

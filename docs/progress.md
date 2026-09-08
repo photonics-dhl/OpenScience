@@ -6,7 +6,6 @@
 - Prior nine-PDF audit is failed stage acceptance: six snapshots have zero Claim/Evidence despite282 exact segments; three parser-review outputs lacked core; UI0126 confirmed an empty snapshot. Preserve all old snapshots and inputs; create explicit new revisions. Evidence remains in ignored2026-09-08-nine-pdf-r1-audit.
 - First fixing atomic cross-block confirmation and no-proposal guard, then real nine-file replay, selection/identity gaps and nonempty graph/API/conflict acceptance. No remediation success or deployment yet.
 
-
 ## 2026-09-08: recovery deployed; real browser retry transport fix
 
 - Production8c0601a7 / rollback1ba694ae; CI34219115044, ECS build/types/lint/docs/gateway79/domain676/worker126/API171/web569/Parser16 passed. Deploy1788867164346-67c35e52-5cb0-43d2-b605-6ef048508169 succeeded after preserving/removing two exact stopped134 browser container references. Actual UI retry was rejected before domain/model execution because JSON request body was empty; source/run remain unchanged, retryCount0. Frontend transport repair underway.

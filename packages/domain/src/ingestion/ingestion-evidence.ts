@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { IngestionDeps } from './ingestion-service';
 import { SDF_NODE_TYPES } from '../research-object/types';
@@ -116,6 +116,7 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
       const blockIds = new Set<string>();
       let total = 0;
       let previousPage = 0;
+      let previousBlockOrdinal = -1;
       for (const value of values) {
         const segment = record(value);
         if (Object.keys(segment).sort().join(',') !== 'quote,sourceLocator' || typeof segment.quote !== 'string'
@@ -134,9 +135,15 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
           || block.text?.slice(locator.charRange.start, locator.charRange.end) !== segment.quote) {
           throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence segment does not match its source');
         }
+        const blockOrdinal = sourceMap.pages.find(page => page.page === locator.page)?.blocks
+          .findIndex(candidate => candidate.id === locator.blockId) ?? -1;
+        if (blockOrdinal < 0 || (locator.page === previousPage && blockOrdinal <= previousBlockOrdinal)) {
+          throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence segments are out of source order');
+        }
         total += segment.quote.length;
         if (total > 8_000) throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence exceeds the quote limit');
         blockIds.add(locator.blockId);
+        previousBlockOrdinal = blockOrdinal;
         previousPage = locator.page ?? previousPage;
         fieldSources.push({ quote: segment.quote, locator });
       }
@@ -219,8 +226,13 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
         sources = [{ quote, locator: createBlockSourceLocator(sourceMap, block.id, { charRange: { start, end: start + quote.length } }) }];
       }
     }
-    const provenance = { source: 'deterministic', provider: 'ingestion-source-match', providerVersion: '1',
-      inputHash: task.artifact.blobSha256, ingestionTaskId: task.id, field };
+    const rewritten = statement !== proposed[field];
+    const provenance = rewritten
+      ? { source: 'human', provider: 'ingestion-confirmation', providerVersion: '1', inputHash: task.artifact.blobSha256,
+          ingestionTaskId: task.id, field, revision: 'human', proposalSource: 'sdf.extract',
+          proposalStatementSha256: createHash('sha256').update(String(proposed[field] ?? '')).digest('hex') }
+      : { source: 'deterministic', provider: 'ingestion-source-match', providerVersion: '1',
+          inputHash: task.artifact.blobSha256, ingestionTaskId: task.id, field };
     const claim = await deps.prisma.claimNode.create({ data: {
       researchObjectId: task.batch.researchObjectId, versionId: input.versionId,
       // Extraction fields do not establish parent relationships. Preserve the field in
@@ -231,7 +243,7 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
     for (const [segmentIndex, source] of sources.entries()) await deps.prisma.evidenceRecord.create({ data: {
       researchObjectId: task.batch.researchObjectId, versionId: input.versionId, workspaceId: task.artifact.workspaceId,
       claimId: claim.id, artifactId: task.artifactId, kind: 'passage', title: field, exactQuote: source.quote,
-      relation: 'supports', locator: source.locator as unknown as Prisma.InputJsonValue, contentHash: task.artifact.blobSha256,
+      relation: 'context', locator: source.locator as unknown as Prisma.InputJsonValue, contentHash: task.artifact.blobSha256,
       extractionStatus: 'needs_review', verifiedByUserId: null,
       provenance: { ...provenance, segmentIndex, sourceMapRef: { ...reference! } } as Prisma.InputJsonValue,
     } });
