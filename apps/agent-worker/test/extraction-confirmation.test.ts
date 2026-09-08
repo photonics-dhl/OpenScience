@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { AiGateway } from '@openscience/ai-gateway';
-import { confirmIngestionTask, getResearchRecord, getResearchRecordSource, persistDocumentSourceMapReference, type DocumentSourceMap } from '@openscience/domain';
+import { confirmIngestionTask, getIngestionTask, getResearchRecord, getResearchRecordSource, persistDocumentSourceMapReference, type DocumentSourceMap } from '@openscience/domain';
 import { createFakePrisma, seedUser } from '@openscience/domain/test-helpers';
 import { getBlobStorageKey, type StorageAdapter } from '@openscience/storage';
 import { extractHandler } from '../src/extractor';
@@ -44,12 +44,15 @@ async function extractedFixture(texts: string[], sourceBlockIds = ['B000001']) {
   db.ingestionBatches.push({id:'batch',researchObjectId:RO,userId:user.id});
   db.ingestionTasks.push({id:'task',batchId:'batch',artifactId:ARTIFACT,agentTaskId:'extract',state:'needs_review',retryCount:0,updatedAt:new Date()});
   const deps={prisma,storage,redis:{} as never,mailer:{} as never};
+  const projected = await getIngestionTask(deps, { userId: user.id, taskId: 'task' });
+  const sourceIdentityReview = { token: String(projected.task.result?.sourceIdentityToken),
+    acceptedFields: [] as [] };
   const confirm=async()=>{
-    const saved=await confirmIngestionTask(deps,{userId:user.id,taskId:'task',version:1,core:{...extracted.core}});
+    const saved=await confirmIngestionTask(deps,{userId:user.id,taskId:'task',version:1,core:{...extracted.core},sourceIdentityReview});
     const view=await getResearchRecord(deps,{researchObjectId:RO,versionId:saved.confirmation.versionId,userId:user.id});
     return {saved,view};
   };
-  return {db,deps,user,result,confirm};
+  return {db,deps,user,result,sourceIdentityReview,confirm};
 }
 
 describe('canonical extractor → confirmation → frozen research record',()=>{
@@ -159,7 +162,7 @@ describe('canonical extractor → confirmation → frozen research record',()=>{
   it('records an edited proposal as a Claim with an explicit evidence gap',async()=>{
     const f=await extractedFixture(['Same result.']);
     const saved=await confirmIngestionTask(f.deps,{userId:f.user.id,taskId:'task',version:1,
-      core:{...f.result.core,problem:'Human revised statement'}});
+      core:{...f.result.core,problem:'Human revised statement'},sourceIdentityReview:f.sourceIdentityReview});
     expect(saved.sdf.core.problem).toBe('Human revised statement');
     expect(f.db.claimNodes).toEqual([expect.objectContaining({
       statement:'Human revised statement',assessment:'missing',extractionStatus:'needs_review',

@@ -51,9 +51,9 @@ export const researchRecordSchema = {
   }),
   allOf: [
     { if: { properties: { schemaVersion: { const: '1.1.0' } }, required: ['schemaVersion'] },
-      then: { properties: { identity: { required: ['originalAuthors','originalDoi','platformAuthors','licenses','source'] } } } },
+      then: { properties: { identity: { type: 'object', required: ['originalAuthors','originalDoi','platformAuthors','licenses','source'] } } } },
     { if: { properties: { schemaVersion: { const: '1.0.0' } }, required: ['schemaVersion'] },
-      then: { properties: { identity: { not: { required: ['source'] } } } } },
+      then: { properties: { identity: { type: 'object', not: { type: 'object', required: ['source'] } } } } },
   ],
 };
 const parameters = [

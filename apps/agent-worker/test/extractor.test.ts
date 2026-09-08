@@ -1077,7 +1077,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     });
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-identity', contentHash: '5'.repeat(64), parser: { name: 'cascade', version: '1' },
-      pages: [{ page: 1, width: 600, height: 800, blocks: [
+      pages: [{ page: 1, width: 700, height: 800, blocks: [
         make('header', 'Author et al. | https://doi.org/10.1234/example.42', 760, 8),
         make('type', 'RESEARCH ARTICLE', 80, 12),
         make('title-a', 'Measured response above 10', 105, 18),
@@ -1097,7 +1097,9 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
     const gateway = new AiGateway({ providers: [{ name: 'identity', model: 'identity', complete: async () => ({
       text: JSON.stringify({ schemaVersion: '0.1.0', fields: Object.fromEntries(
-        Object.keys(VALID_PROPOSAL.fields).map((field) => [field, missing]),
+        Object.keys(VALID_PROPOSAL.fields).map((field) => [field, field === 'problem'
+          ? { summary: 'The source provides article metadata.', sourceBlockIds: ['B000001'], needsMoreInformation: false }
+          : missing]),
       ) }), usage: { inputTokens: 1, outputTokens: 1 }, model: 'identity',
     }) }] });
 

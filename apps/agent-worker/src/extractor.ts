@@ -580,19 +580,51 @@ function emptyIdentityItem(field: 'authors' | 'scalar'): SourceIdentityProposalI
 }
 
 type IdentityField = 'title' | 'authors' | 'doi' | 'articleLicense';
+type GeometricPromptCanonicalBlock = PromptCanonicalBlock & {
+  boundingBox: NonNullable<PromptCanonicalBlock['boundingBox']>;
+};
+
+function geometricBlocksOrUndefined(
+  blocks: PromptCanonicalBlock[],
+): GeometricPromptCanonicalBlock[] | undefined {
+  if (blocks.some((block) => block.boundingBox === undefined)) return undefined;
+  return blocks as GeometricPromptCanonicalBlock[];
+}
 
 function reviewIdentityItem(field: IdentityField): SourceIdentityProposalItem {
   return { state: 'needs_review', value: field === 'authors' ? [] : '', evidenceSegments: [] };
 }
 
+function finalizeSourceIdentityProposal(
+  proposal: SourceIdentityProposal,
+  sourceMap: DocumentSourceMap,
+): SourceIdentityProposal {
+  try {
+    return parseSourceIdentityProposal(proposal, {
+      artifactId: sourceMap.artifactId,
+      contentHash: sourceMap.contentHash,
+    });
+  } catch {
+    // Supplemental metadata must not make valid SDF extraction unavailable.
+    return parseSourceIdentityProposal({
+      schemaVersion: '0.1.0',
+      title: reviewIdentityItem('title'),
+      authors: reviewIdentityItem('authors'),
+      doi: reviewIdentityItem('doi'),
+      articleLicense: reviewIdentityItem('articleLicense'),
+    }, { artifactId: sourceMap.artifactId, contentHash: sourceMap.contentHash });
+  }
+}
+
 function boundedIdentitySegments(sourceMap: DocumentSourceMap, blocks: PromptCanonicalBlock[]) {
-  if (blocks.length === 0 || blocks.length > MAX_EVIDENCE_SEGMENTS
+  const geometricBlocks = geometricBlocksOrUndefined(blocks);
+  if (!geometricBlocks || geometricBlocks.length === 0 || geometricBlocks.length > MAX_EVIDENCE_SEGMENTS
     || blocks.some((block) => block.text.length > MAX_FIELD_EVIDENCE_CHARS)
     || blocks.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
     return undefined;
   }
   try {
-    return blocks.map((block) => fullBlockSegment(sourceMap, block));
+    return geometricBlocks.map((block) => fullBlockSegment(sourceMap, block));
   } catch {
     return undefined;
   }
@@ -666,10 +698,21 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
   const articleTypeIndex = blocks.findIndex((block) => /^(?:research|review) article$|^(?:perspective|report)$/iu
     .test(normalizedSelectionText(block.text)));
   if (articleTypeIndex >= 0 && blocks[articleTypeIndex + 1]) {
-    const titleHeight = blocks[articleTypeIndex + 1]!.boundingBox.height;
+    const firstTitleBlock = blocks[articleTypeIndex + 1]!;
+    if (!firstTitleBlock.boundingBox) {
+      assign('title', reviewIdentityItem('title'));
+      assign('authors', reviewIdentityItem('authors'));
+      return finalizeSourceIdentityProposal(proposal, sourceMap);
+    }
+    const titleHeight = firstTitleBlock.boundingBox.height;
     let authorStart = -1;
+    let headerGeometryComplete = true;
     for (let index = articleTypeIndex + 1; index < Math.min(blocks.length, articleTypeIndex + 24); index += 1) {
       const block = blocks[index]!;
+      if (!block.boundingBox) {
+        headerGeometryComplete = false;
+        break;
+      }
       const normalized = normalizedSelectionText(block.text);
       const numericOrPunctuation = /^[\d,.*†‡\s]+$/u.test(normalized);
       if (!numericOrPunctuation && block.boundingBox.height < titleHeight * 0.8) {
@@ -677,8 +720,16 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
         break;
       }
     }
-    if (authorStart > articleTypeIndex + 1) {
-      const titleBlocks = blocks.slice(articleTypeIndex + 1, authorStart);
+    if (!headerGeometryComplete) {
+      assign('title', reviewIdentityItem('title'));
+      assign('authors', reviewIdentityItem('authors'));
+    } else if (authorStart > articleTypeIndex + 1) {
+      const titleBlocks = geometricBlocksOrUndefined(blocks.slice(articleTypeIndex + 1, authorStart));
+      if (!titleBlocks) {
+        assign('title', reviewIdentityItem('title'));
+        assign('authors', reviewIdentityItem('authors'));
+        return finalizeSourceIdentityProposal(proposal, sourceMap);
+      }
       const superscriptDigits: Record<string, string> = {
         '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
         '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
@@ -727,15 +778,23 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
       const authors: string[] = [];
       let uncertain = false;
       let authorBoundaryFound = false;
+      let authorGeometryComplete = true;
       const authorScanEnd = Math.min(blocks.length, authorStart + 80);
+      const authorStartBlock = blocks[authorStart]!;
       for (let index = authorStart; index < authorScanEnd; index += 1) {
         const block = blocks[index]!;
+        const previous = index > authorStart ? blocks[index - 1] : undefined;
+        const previousBox = previous?.boundingBox;
+        if (!block.boundingBox || (previous && !previousBox) || !authorStartBlock.boundingBox) {
+          authorGeometryComplete = false;
+          break;
+        }
         const next = blocks[index + 1];
         const normalized = normalizedSelectionText(block.text);
         const affiliationMarker = /^\d+(?:,\d+)*[\s*†‡§]*$/u.test(normalized)
-          && block.boundingBox.x <= blocks[authorStart]!.boundingBox.x + 8
+          && block.boundingBox.x <= authorStartBlock.boundingBox.x + 8
           && (!!next && /\b(?:university|institute|laborator(?:y|ies)|department|school|centre|center|academy|hospital|infrastructure)\b/iu.test(next.text)
-            || index > authorStart && block.boundingBox.y - blocks[index - 1]!.boundingBox.y > 16);
+            || previousBox !== undefined && block.boundingBox.y - previousBox.y > 16);
         if (affiliationMarker) {
           authorBoundaryFound = true;
           break;
@@ -751,7 +810,9 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
         authorBlocks.push(block);
       }
       if (!authorBoundaryFound && authorScanEnd < blocks.length) uncertain = true;
-      if (authors.length > 0) {
+      if (!authorGeometryComplete) {
+        assign('authors', reviewIdentityItem('authors'));
+      } else if (authors.length > 0) {
         const authorEvidence = boundedIdentitySegments(sourceMap, authorBlocks);
         const boundedAuthors = authors.length <= 100 && authors.every((author) => author.length <= 300);
         assign('authors', authorEvidence && boundedAuthors
@@ -761,23 +822,7 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
     }
   }
 
-  try {
-    return parseSourceIdentityProposal(proposal, {
-      artifactId: sourceMap.artifactId,
-      contentHash: sourceMap.contentHash,
-    });
-  } catch {
-    // A source-identity proposal must never make an otherwise valid extraction
-    // unavailable. This fallback itself is validated against the shared
-    // contract and leaves every field for explicit review.
-    return parseSourceIdentityProposal({
-      schemaVersion: '0.1.0',
-      title: reviewIdentityItem('title'),
-      authors: reviewIdentityItem('authors'),
-      doi: reviewIdentityItem('doi'),
-      articleLicense: reviewIdentityItem('articleLicense'),
-    }, { artifactId: sourceMap.artifactId, contentHash: sourceMap.contentHash });
-  }
+  return finalizeSourceIdentityProposal(proposal, sourceMap);
 }
 
 function deterministicAvailabilityProposal(
