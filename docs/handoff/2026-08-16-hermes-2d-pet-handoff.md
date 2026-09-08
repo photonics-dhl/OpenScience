@@ -1,11 +1,11 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT 2026-09-08. Active task: four-hour R1 remediation and nine-PDF acceptance (19:58–23:58 +08). Branch codex/r1-record-hardening from c1c7fa4b; production8c0601a7/rollback1ba694ae verified. Prior nine-PDF1ba audit failed stage acceptance. Preserve all frozen records; repair through explicit new revisions, never backfill.
+> CURRENT 2026-09-08. Active task: four-hour R1 remediation and nine-PDF acceptance (19:58–23:58 +08). Branch codex/r1-record-hardening from c1c7fa4b; production88018512/rollbackc1c7fa4b verified. Prior nine-PDF1ba audit failed stage acceptance. Preserve all frozen records; repair through explicit new revisions, never backfill.
 
 ## Active R1 work
 - First owner r1_confirm_fix fixes atomic cross-block evidence and no-proposal confirmation guard, preserving current recovery/run logic. Then repeat nine exact PDFs in existing private test ROs, checking previous record hashes.
 - Next selection/missing provenance/source identity; final nonempty relationship edit/reject/freeze/API roundtrip and conflict differences. No paper-specific answers or automatic publication.
-- Independent baseline/groundtruth at ignored .superpowers/sdd/2026-09-08-nine-pdf-r1-audit; new evidence at2026-09-08-r1-remediation. Fresh server backup core29M/search20K,8sets retained. Remediation not yet deployed or accepted.
+- Independent baseline/groundtruth at ignored .superpowers/sdd/2026-09-08-nine-pdf-r1-audit; new evidence at2026-09-08-r1-remediation. Fresh server backup core29M/search20K,8sets retained. Stage1 88018512 deployed after CI34225813453, full ECS tests/Parser16/isolated PG passed; nine-PDF explicit revision replay started. Stage2 source/selection/identity and UI conflict acceptance in progress. All49 historical record+manifest hashes matched before replay.
 - Below contains preserved prior media/recovery workflow context; do not substitute it for the active R1 task. Other workspace source changes must be integrated before deployment, not overwritten.
 
 ## Exact versions

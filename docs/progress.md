@@ -4,7 +4,7 @@
 
 - User authorized four-hour repair/retest, 19:58–23:58 +08. New branch codex/r1-record-hardening from c1c7fa4b preserves concurrent recovery work; live8c0601a7/rollback1ba694ae checked, healthy. Fresh core29M/search20K backup retained8 sets without rotation.
 - Prior nine-PDF audit is failed stage acceptance: six snapshots have zero Claim/Evidence despite282 exact segments; three parser-review outputs lacked core; UI0126 confirmed an empty snapshot. Preserve all old snapshots and inputs; create explicit new revisions. Evidence remains in ignored2026-09-08-nine-pdf-r1-audit.
-- First fixing atomic cross-block confirmation and no-proposal guard, then real nine-file replay, selection/identity gaps and nonempty graph/API/conflict acceptance. No remediation success or deployment yet.
+- First fixing atomic cross-block confirmation and no-proposal guard, then real nine-file replay, selection/identity gaps and nonempty graph/API/conflict acceptance. Stage1 88018512 deployed with rollbackc1c7fa4b after CI34225813453, full ECS gates/Parser16 and isolated PG rollback/merge tests passed. Nine-file replay started;0126 no core and no new version. Stage2 remains in progress; do not claim full acceptance. All49 historical record/manifest hashes matched before replay.
 
 ## 2026-09-08: recovery deployed; real browser retry transport fix
 
