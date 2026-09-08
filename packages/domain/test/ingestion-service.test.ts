@@ -21,10 +21,29 @@ async function confirmationFixture() {
   for (const nodeType of Object.keys(CORE).filter(key => key !== 'schemaVersion')) db.sdfNodes.push({ id: nodeType, sdfDocumentId: 'sdf-1', nodeType, content: '' });
   const batch = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('notes.md')] });
   db.ingestionTasks[0].state = 'needs_review';
+  db.agentTasks[0].result = { core: CORE, evidence: {}, needsMoreInformation: ['insight', 'method', 'results', 'limitations', 'reproducibility'] };
   return { ...fixture, input: { userId: user.id, taskId: batch.tasks[0].id, version: 1, core: CORE } };
 }
 
 describe('ingestion confirmation research record', () => {
+  it('rejects a parser-review task with no SDF proposal before creating a version', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    db.agentTasks[0].result = { status: 'needs_review', reason: 'native PDF text fidelity requires review' };
+    await expect(confirmIngestionTask(deps, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.versions).toHaveLength(0);
+    expect(db.commits).toHaveLength(0);
+    expect(db.ingestionTasks[0].state).toBe('needs_review');
+  });
+
+  it('rejects an entirely empty proposal and confirmation before creating a version', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const empty = { ...CORE, problem: '' };
+    db.agentTasks[0].result = { core: empty, evidence: {}, needsMoreInformation: Object.keys(empty).filter(key => key !== 'schemaVersion') };
+    await expect(confirmIngestionTask(deps, { ...input, core: empty })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.versions).toHaveLength(0);
+    expect(db.commits).toHaveLength(0);
+  });
+
   it('creates an immutable version with original material and replays the same result', async () => {
     const { deps, db, input } = await confirmationFixture();
     const first = await confirmIngestionTask(deps, input);
@@ -99,11 +118,11 @@ describe('ingestion confirmation research record', () => {
     expect(db.versions).toHaveLength(1);
   });
 
-  it.each(['exact', 'missing', 'ambiguous', 'edited', 'foreign'])('persists only verifiable source evidence: %s', async mode => {
+  it.each(['exact', 'missing', 'ambiguous', 'edited'])('persists only verifiable source evidence: %s', async mode => {
     const { deps, db, input } = await confirmationFixture();
     const quote = 'Original source question.';
     const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, {
-      artifactId: mode === 'foreign' ? 'other-artifact' : db.artifacts[0].id,
+      artifactId: db.artifacts[0].id,
       contentHash: db.artifacts[0].blobSha256, parser: { name: 'fixture', version: '1' },
       pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'block-1', kind: 'paragraph',
         text: mode === 'ambiguous' ? `${quote} ${quote}` : quote,
@@ -116,6 +135,21 @@ describe('ingestion confirmation research record', () => {
       expect(db.evidenceRecords[0]).toMatchObject({ exactQuote: quote, extractionStatus: 'needs_review', verifiedByUserId: null, locator: { page: 1, blockId: 'block-1', charRange: { start: 0, end: quote.length } } });
       expect(db.claimNodes[0]).toMatchObject({ assessment: 'missing', extractionStatus: 'needs_review' });
     }
+  });
+
+  it('atomically rejects a source map reference bound to another artifact', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, {
+      artifactId: 'other-artifact', contentHash: db.artifacts[0].blobSha256, parser: { name: 'fixture', version: '1' },
+      pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'block-1', kind: 'paragraph', text: 'Original source question.',
+        boundingBox: { x: 10, y: 20, width: 300, height: 30 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }],
+    }, 'succeeded');
+    db.agentTasks[0].result = { core: CORE, evidence: { problem: { quote: 'Original source question.' } }, sourceMapRef };
+    await expect(confirmIngestionTask(deps, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.versions).toHaveLength(0);
+    expect(db.commits).toHaveLength(0);
+    expect(db.claimNodes).toHaveLength(0);
+    expect(db.evidenceRecords).toHaveLength(0);
   });
 
   it.each(['method', 'limitations'])('imports an editable root claim for %s without inventing a parent', async field => {

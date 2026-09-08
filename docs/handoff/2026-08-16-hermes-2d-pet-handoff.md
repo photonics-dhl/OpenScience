@@ -1,6 +1,12 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT 2026-09-08. Server-owned Hermes workflow deployed at8c0601a7, rollback1ba694ae. Ordinary-user qualityv2 upload completed, but extraction returned sdf-proposal-unavailable with no core: full product flow is NOT accepted. Repair precise failure/retry handling, then resume the same source/run; no manual Claims or repeat uploads.
+> CURRENT 2026-09-08. Active task: four-hour R1 remediation and nine-PDF acceptance (19:58–23:58 +08). Branch codex/r1-record-hardening from c1c7fa4b; production8c0601a7/rollback1ba694ae verified. Prior nine-PDF1ba audit failed stage acceptance. Preserve all frozen records; repair through explicit new revisions, never backfill.
+
+## Active R1 work
+- First owner r1_confirm_fix fixes atomic cross-block evidence and no-proposal confirmation guard, preserving current recovery/run logic. Then repeat nine exact PDFs in existing private test ROs, checking previous record hashes.
+- Next selection/missing provenance/source identity; final nonempty relationship edit/reject/freeze/API roundtrip and conflict differences. No paper-specific answers or automatic publication.
+- Independent baseline/groundtruth at ignored .superpowers/sdd/2026-09-08-nine-pdf-r1-audit; new evidence at2026-09-08-r1-remediation. Fresh server backup core29M/search20K,8sets retained. Remediation not yet deployed or accepted.
+- Below contains preserved prior media/recovery workflow context; do not substitute it for the active R1 task. Other workspace source changes must be integrated before deployment, not overwritten.
 
 ## Exact versions
 - Production8c0601a702215ac6446f96f278398156492ce3ad / rollback1ba694ae18fdddc08e9e0f53ee15c8afd11ddc2f. CI34219115044 and ECS build/types/lint/docs/gateway79/domain676/worker126/API171/web569/Parser16 passed. Deploy1788867164346-67c35e52-5cb0-43d2-b605-6ef048508169 succeeded. Initial8c attempt rolled back because two old134 browser containers retained bind mounts; their logs were saved and exact stopped containers removed. Historical1ba: Canonical deploy and retention completed, log1788861913105-4d326e11-fbea-4471-8037-1d124d2a15fa; post-checkup1788862450223-26f8c28d-1e5e-4a74-8008-ae38fcdc1aa8. CI34212202821 passed.
@@ -49,3 +55,4 @@
 - All helpers/evidence under development apps/web/test/visual/out/token-smart-release (Git ignored). Actual MP4 video-v1/onchip-field-sampling.mp4; video-v1/server-review/; video-ui-v1/; image-approval-final-v3/; scene-images-v3/. Historicalv1/v2 retained.
 - Controlled run validates exact release, uses actor11b6cf52-fcd4-4f7d-a3ff-8ea3ae9592fd, closes ephemeral sessions. No credentials printed. stage-video-v1 uses XGS_STORYBOARD_OUTPUT=storyboard-v3,XGS_IMAGE_OUTPUT=scene-images-v3; do not resubmit successful video.
 - Baseline docs/OpenScience_Kimi_Development_Spec.md; integrated product design and literature-recovery plan. Fixed on-chip profile only. CPU image installation user-paused. Parser no network/Secret,nonroot,readonly,512MiB. SSH only root wrappers+explicit Git Bash; production through canonical scripts.
+

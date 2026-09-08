@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-08:** 服务器已部署8c0601a7 / rollback1ba694ae，精确恢复逻辑验收通过；实际UI重试遇空JSON请求体，尚未触发新模型调用，修复前端传输后接续同源；尚未全流程通过。
+> **CURRENT source/deployment anchor（2026-09-08 +08）：** R1九篇论文修复中；branch codex/r1-record-hardening，base c1c7fa4b；实测production8c0601a7，rollback1ba694ae。旧1ba审计发现空图/空确认等缺陷，不代表阶段验收通过。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -547,3 +547,4 @@
 | `infra/codex-image-runner/video-runner.mjs` / `infra/codex-image-runner/video-runner.test.mjs` / `infra/codex-image-runner/video-tts.py` | Offline isolated TTS/render runner | Candidate; existing immutable-source installer |
 | `apps/media-demo/onchip-drawing.mjs` / `apps/media-demo/test/onchip-drawing.test.mjs` | On-chip optical-field mechanism animation | Illustrative profile, not experimental reproduction |
 | `apps/web/components/presentation/MechanismVideoPanel.tsx` / `apps/web/test/mechanism-video-panel.test.tsx` | Approved-parent video generation UI | Candidate; capability defaults off |
+

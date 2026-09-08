@@ -73,7 +73,7 @@ describe('canonical extractor → confirmation → frozen research record',()=>{
     const source=await getResearchRecordSource(f.deps,{researchObjectId:RO,versionId:saved.confirmation.versionId,evidenceId:f.db.evidenceRecords[0].id,userId:f.user.id});
     expect(source.text).toBe('Same  result.');
   });
-  it('keeps canonical noncontiguous multi-segment evidence as an explicit confirmation gap',async()=>{
+  it('persists canonical noncontiguous segments as independent Evidence rows for one Claim',async()=>{
     const f=await extractedFixture(['The optical-','field obeys Φ_CEP ≠ 0.','Unrelated header.','Calibration required.'],['B000001','B000002','B000004']);
     expect(f.result.evidenceLocation?.problem).toMatchObject({status:'cross_block',reason:'match-spans-blocks'});
     expect(f.result.evidenceSegments?.problem.map(segment=>({quote:segment.quote,blockId:segment.sourceLocator.blockId}))).toEqual([
@@ -81,9 +81,15 @@ describe('canonical extractor → confirmation → frozen research record',()=>{
     ]);
     expect(f.result.evidence.problem.quote).toBe('The optical-\nfield obeys Φ_CEP ≠ 0.\nCalibration required.');
     const {view}=await f.confirm();
-    // Confirmation currently persists only a single located quote. Never flatten segments into a false locator.
-    expect(f.db.evidenceRecords).toHaveLength(0);
-    expect(view.record).toMatchObject({sdf:{problem:'Reported result'},evidence:[],missing:{evidence:'not_recorded'}});
+    expect(f.db.claimNodes).toHaveLength(1);
+    expect(f.db.evidenceRecords).toHaveLength(3);
+    expect(new Set(f.db.evidenceRecords.map(row=>row.claimId))).toEqual(new Set([f.db.claimNodes[0].id]));
+    expect(f.db.evidenceRecords.map(row=>({quote:row.exactQuote,blockId:row.locator.blockId,relation:row.relation,verifiedByUserId:row.verifiedByUserId}))).toEqual([
+      {quote:'The optical-',blockId:'block0',relation:'supports',verifiedByUserId:null},
+      {quote:'field obeys Φ_CEP ≠ 0.',blockId:'block1',relation:'supports',verifiedByUserId:null},
+      {quote:'Calibration required.',blockId:'block3',relation:'supports',verifiedByUserId:null},
+    ]);
+    expect(view.record).toMatchObject({sdf:{problem:'Reported result'},evidence:[{verified:false},{verified:false},{verified:false}]});
     expect(view.record.manifest).toHaveLength(1);
     expect(view.record.manifest[0].artifactId).toBe(ARTIFACT);
   });
@@ -111,26 +117,41 @@ describe('canonical extractor → confirmation → frozen research record',()=>{
     {status:'missing',origin:'model_quote',reason:'no-match'},
     {status:'located',origin:'model_quote',matching:'exact'},
     null,
-  ])('does not fall back to an exact match for supplied unresolved/malformed metadata: %j',async(location)=>{
+  ])('atomically rejects canonical segments paired with inconsistent location metadata: %j',async(location)=>{
     const f=await extractedFixture(['Same result.']);
     f.db.agentTasks[0].result.evidenceLocation={problem:location};
-    await f.confirm();
+    await expect(f.confirm()).rejects.toThrow();
+    expect(f.db.versions).toHaveLength(0);
+    expect(f.db.commits).toHaveLength(0);
     expect(f.db.evidenceRecords).toHaveLength(0);
   });
-  it.each([null, {}])('rejects a malformed supplied canonical bundle: %j',async(bundle)=>{
+  it.each([null, {}])('atomically rejects a malformed supplied canonical bundle: %j',async(bundle)=>{
     const f=await extractedFixture(['Same result.']);
     f.db.agentTasks[0].result.evidenceLocation=bundle;
-    await f.confirm();
+    await expect(f.confirm()).rejects.toThrow();
+    expect(f.db.versions).toHaveLength(0);
+    expect(f.db.commits).toHaveLength(0);
     expect(f.db.evidenceRecords).toHaveLength(0);
   });
-  it.each(['artifactId','contentHash','page','quote'])('rejects canonical located metadata with invalid %s',async(field)=>{
+  it.each(['artifactId','contentHash','page','quote'])('atomically rejects canonical metadata with invalid %s',async(field)=>{
     const f=await extractedFixture(['Same result.']);
-    const location=f.db.agentTasks[0].result.evidenceLocation.problem;
-    if(field==='artifactId') location.sourceLocator.artifactId='00000000-0000-4000-8000-000000000999';
-    if(field==='contentHash') location.sourceLocator.contentHash='f'.repeat(64);
-    if(field==='page') location.sourceLocator.page=99;
-    if(field==='quote') f.db.agentTasks[0].result.evidence.problem.quote='Different quote';
-    await f.confirm();
+    const segment=f.db.agentTasks[0].result.evidenceSegments.problem[0];
+    if(field==='artifactId') segment.sourceLocator.artifactId='00000000-0000-4000-8000-000000000999';
+    if(field==='contentHash') segment.sourceLocator.contentHash='f'.repeat(64);
+    if(field==='page') segment.sourceLocator.page=99;
+    if(field==='quote') segment.quote='Different quote';
+    await expect(f.confirm()).rejects.toThrow();
+    expect(f.db.versions).toHaveLength(0);
+    expect(f.db.commits).toHaveLength(0);
+    expect(f.db.claimNodes).toHaveLength(0);
+    expect(f.db.evidenceRecords).toHaveLength(0);
+  });
+  it('records an edited proposal as a Claim with an explicit evidence gap',async()=>{
+    const f=await extractedFixture(['Same result.']);
+    const saved=await confirmIngestionTask(f.deps,{userId:f.user.id,taskId:'task',version:1,
+      core:{...f.result.core,problem:'Human revised statement'}});
+    expect(saved.sdf.core.problem).toBe('Human revised statement');
+    expect(f.db.claimNodes).toEqual([expect.objectContaining({statement:'Human revised statement',assessment:'missing',extractionStatus:'needs_review'})]);
     expect(f.db.evidenceRecords).toHaveLength(0);
   });
 });

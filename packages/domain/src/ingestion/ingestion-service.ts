@@ -276,6 +276,32 @@ function confirmationView(commit: CreateCommitResult): IngestionConfirmation {
   };
 }
 
+function assertReviewableIngestionProposal(task: { artifactId: string; artifact: { blobSha256: string }; agentTask: { result: unknown } | null }, core: Record<string, string>): void {
+  const result = task.agentTask?.result;
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    throw new IngestionError('VALIDATION_ERROR', 'No reviewable SDF proposal is available');
+  }
+  const proposed = (result as Record<string, unknown>).core;
+  if (!proposed || typeof proposed !== 'object' || Array.isArray(proposed)
+    || SDF_NODE_TYPES.some(field => typeof (proposed as Record<string, unknown>)[field] !== 'string')
+    || !SDF_NODE_TYPES.some(field => String((proposed as Record<string, unknown>)[field]).trim())) {
+    throw new IngestionError('VALIDATION_ERROR', 'No reviewable SDF proposal is available');
+  }
+  if (!SDF_NODE_TYPES.some(field => String(core[field] ?? '').trim())) {
+    throw new IngestionError('VALIDATION_ERROR', 'An entirely empty SDF proposal cannot be confirmed');
+  }
+  const sourceMapRef = (result as Record<string, unknown>).sourceMapRef;
+  if (sourceMapRef !== undefined) {
+    try {
+      const reference = parseDocumentSourceMapReference(sourceMapRef);
+      if (reference.parserStatus !== 'succeeded' || reference.artifactId !== task.artifactId
+        || reference.contentHash !== task.artifact.blobSha256) throw new Error('source fidelity incomplete');
+    } catch (error) {
+      throw new IngestionError('VALIDATION_ERROR', 'The extraction source still requires review', error);
+    }
+  }
+}
+
 async function savedConfirmation(deps: IngestionDeps, taskId: string, researchObjectId: string): Promise<CreateCommitResult | null> {
   const commit = await deps.prisma.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${taskId}` } });
   if (!commit || commit.researchObjectId !== researchObjectId) return null;
@@ -322,6 +348,7 @@ export async function confirmIngestionTask(
           if (task.state !== 'needs_review') throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only tasks awaiting review can be confirmed');
           const check = ro.status === 'draft' ? validateSdfDraftCore(input.core) : validateSdfCore(input.core);
           if (!check.ok) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
+          assertReviewableIngestionProposal(task, input.core);
           const document = await tx.sdfDocument.findUnique({ where: { researchObjectId: ro.id } });
           if (!document) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');
           const latest = await tx.version.findFirst({ where: { researchObjectId: ro.id }, orderBy: { versionNo: 'desc' } });
