@@ -12,66 +12,69 @@ export interface AnimationAction {
   meaning: string; basis: { claimId: string; quote: string };
 }
 export interface SceneAnimation { objects: AnimationObject[]; actions: AnimationAction[] }
-function invalid(): never { throw new PresentationAssetError('VALIDATION_ERROR', 'Animation plan is invalid or exceeds supported bounds'); }
-function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();
+function invalid(reason: string): never { throw new PresentationAssetError('VALIDATION_ERROR', `animation:${reason}`); }
+function record(value: unknown, reason: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid(reason);
   return value as Record<string, unknown>;
 }
-function keys(value: Record<string, unknown>, expected: string[]) {
-  if (Object.keys(value).sort().join(',') !== expected.sort().join(',')) invalid();
+function keys(value: Record<string, unknown>, expected: string[], reason: string) {
+  if (Object.keys(value).sort().join(',') !== expected.sort().join(',')) invalid(reason);
 }
 function unit(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1; }
 
 /** Data only: no executable code, external assets, CSS, or renderer-selected scientific content. */
 export function parseSceneAnimation(value: unknown, sceneClaimIds: readonly string[]): SceneAnimation {
-  const plan = record(value); keys(plan, ['objects', 'actions']);
-  if (!Array.isArray(plan.objects) || plan.objects.length < 1 || plan.objects.length > 12
-    || !Array.isArray(plan.actions) || plan.actions.length < 1 || plan.actions.length > 16) return invalid();
-  const objects = plan.objects.map(raw => {
-    const item = record(raw);
+  const plan = record(value, 'plan_shape'); keys(plan, ['objects', 'actions'], 'plan_keys');
+  if (!Array.isArray(plan.objects) || plan.objects.length < 1 || plan.objects.length > 12) return invalid('object_count');
+  if (!Array.isArray(plan.actions) || plan.actions.length < 1 || plan.actions.length > 16) return invalid('action_count');
+  const objects = plan.objects.map((raw, index) => {
+    const prefix = `object_${index}`;
+    const item = record(raw, `${prefix}:shape`);
     keys(item, ['id', 'kind', 'x', 'y', 'width', 'height', 'color', 'sourceClaimIds',
-      ...(item.kind === 'label' ? ['label'] : []), ...(['trace', 'arrow'].includes(String(item.kind)) ? ['points'] : [])]);
-    if (typeof item.id !== 'string' || !/^[a-z][a-z0-9_-]{0,31}$/.test(item.id)
-      || !['rect', 'ellipse', 'arrow', 'trace', 'label'].includes(String(item.kind))
-      || !['ink', 'blue', 'teal', 'amber', 'muted'].includes(String(item.color))
-      || !unit(item.x) || !unit(item.y) || !unit(item.width) || item.width === 0 || !unit(item.height) || item.height === 0
-      || item.x + item.width > 1 || item.y + item.height > 1
-      || !Array.isArray(item.sourceClaimIds) || item.sourceClaimIds.length < 1 || item.sourceClaimIds.length > 12
+      ...(item.kind === 'label' ? ['label'] : []), ...(['trace', 'arrow'].includes(String(item.kind)) ? ['points'] : [])], `${prefix}:keys`);
+    if (typeof item.id !== 'string' || !/^[a-z][a-z0-9_-]{0,31}$/.test(item.id)) return invalid(`${prefix}:id`);
+    if (!['rect', 'ellipse', 'arrow', 'trace', 'label'].includes(String(item.kind))) return invalid(`${prefix}:kind`);
+    if (!['ink', 'blue', 'teal', 'amber', 'muted'].includes(String(item.color))) return invalid(`${prefix}:color`);
+    if (!unit(item.x) || !unit(item.y) || !unit(item.width) || item.width === 0 || !unit(item.height) || item.height === 0
+      || item.x + item.width > 1 || item.y + item.height > 1) return invalid(`${prefix}:bounds`);
+    if (!Array.isArray(item.sourceClaimIds) || item.sourceClaimIds.length < 1 || item.sourceClaimIds.length > 12
       || new Set(item.sourceClaimIds).size !== item.sourceClaimIds.length
-      || item.sourceClaimIds.some(id => typeof id !== 'string' || !sceneClaimIds.includes(id))) return invalid();
-    if (item.kind === 'label' && (typeof item.label !== 'string' || !item.label.trim() || item.label.length > 60 || /[\u0000-\u001f]/.test(item.label))) return invalid();
+      || item.sourceClaimIds.some(id => typeof id !== 'string' || !sceneClaimIds.includes(id))) return invalid(`${prefix}:source_claims`);
+    if (item.kind === 'label' && (typeof item.label !== 'string' || !item.label.trim() || item.label.length > 60 || /[\u0000-\u001f]/.test(item.label))) return invalid(`${prefix}:label`);
     if (item.kind === 'trace' || item.kind === 'arrow') {
-      if (!Array.isArray(item.points) || item.points.length < 2 || item.points.length > 32) return invalid();
-      if (item.kind === 'arrow' && item.points.length !== 2) return invalid();
-      for (const rawPoint of item.points) { const point = record(rawPoint); keys(point, ['x', 'y']); if (!unit(point.x) || !unit(point.y)) invalid(); }
+      if (!Array.isArray(item.points) || item.points.length < 2 || item.points.length > 32
+        || (item.kind === 'arrow' && item.points.length !== 2)) return invalid(`${prefix}:points_count`);
+      for (const rawPoint of item.points) { const point = record(rawPoint, `${prefix}:point_shape`); keys(point, ['x', 'y'], `${prefix}:point_keys`); if (!unit(point.x) || !unit(point.y)) invalid(`${prefix}:point_bounds`); }
     }
     return item as unknown as AnimationObject;
   });
   const byId = new Map(objects.map(item => [item.id, item]));
-  if (byId.size !== objects.length) return invalid();
-  const actions = plan.actions.map(raw => {
-    const item = record(raw); keys(item, ['kind', 'target', 'start', 'end', 'meaning', 'basis', ...(item.kind === 'translate' ? ['toX', 'toY'] : [])]);
+  if (byId.size !== objects.length) return invalid('duplicate_object_id');
+  const actions = plan.actions.map((raw, index) => {
+    const prefix = `action_${index}`;
+    const item = record(raw, `${prefix}:shape`); keys(item, ['kind', 'target', 'start', 'end', 'meaning', 'basis', ...(item.kind === 'translate' ? ['toX', 'toY'] : [])], `${prefix}:keys`);
     const target = typeof item.target === 'string' ? byId.get(item.target) : undefined;
-    if (!target || !['enter', 'fade', 'translate', 'pulse', 'draw', 'highlight'].includes(String(item.kind))
-      || !unit(item.start) || !unit(item.end) || item.start >= item.end) return invalid();
-    const basis = record(item.basis); keys(basis, ['claimId', 'quote']);
+    if (!target) return invalid(`${prefix}:target`);
+    if (!['enter', 'fade', 'translate', 'pulse', 'draw', 'highlight'].includes(String(item.kind))) return invalid(`${prefix}:kind`);
+    if (!unit(item.start) || !unit(item.end) || item.start >= item.end) return invalid(`${prefix}:timing`);
+    const basis = record(item.basis, `${prefix}:basis_shape`); keys(basis, ['claimId', 'quote'], `${prefix}:basis_keys`);
     if (typeof item.meaning !== 'string' || !item.meaning.trim() || item.meaning.length > 180 || /[\u0000-\u001f]/.test(item.meaning)
       || typeof basis.claimId !== 'string' || !target.sourceClaimIds.includes(basis.claimId)
-      || typeof basis.quote !== 'string' || basis.quote.trim().length < 12 || basis.quote.length > 400) return invalid();
+      || typeof basis.quote !== 'string' || basis.quote.trim().length < 12 || basis.quote.length > 400) return invalid(`${prefix}:meaning_basis`);
     if (item.kind === 'translate' && (!unit(item.toX) || !unit(item.toY)
-      || item.toX + target.width > 1 || item.toY + target.height > 1)) return invalid();
-    if (item.kind === 'draw' && !['arrow', 'trace'].includes(target.kind)) return invalid();
+      || item.toX + target.width > 1 || item.toY + target.height > 1)) return invalid(`${prefix}:translate_bounds`);
+    if (item.kind === 'draw' && !['arrow', 'trace'].includes(target.kind)) return invalid(`${prefix}:draw_target`);
     return item as unknown as AnimationAction;
   });
-  if (new Set(actions.map(action => `${action.target}:${action.kind}`)).size !== actions.length
-    || !actions.some(action => ['translate', 'pulse', 'draw'].includes(action.kind) && byId.get(action.target)!.kind !== 'label')) return invalid();
+  if (new Set(actions.map(action => `${action.target}:${action.kind}`)).size !== actions.length) return invalid('duplicate_target_action');
+  if (!actions.some(action => ['translate', 'pulse', 'draw'].includes(action.kind) && byId.get(action.target)!.kind !== 'label')) return invalid('dynamic_action_required');
   return { objects, actions };
 }
 
 export function requireAnimationSourceSupport(animation: SceneAnimation, claims: readonly { id: string; statement: string }[]): void {
   const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
   const byId = new Map(claims.map(claim => [claim.id, normalize(claim.statement)]));
-  for (const action of animation.actions) {
-    if (!byId.get(action.basis.claimId)?.includes(normalize(action.basis.quote))) invalid();
+  for (const [index, action] of animation.actions.entries()) {
+    if (!byId.get(action.basis.claimId)?.includes(normalize(action.basis.quote))) invalid(`action_${index}:basis_quote_unsupported`);
   }
 }
