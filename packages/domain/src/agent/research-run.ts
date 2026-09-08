@@ -486,10 +486,15 @@ export async function reconcileHermesResearchRuns(
             return moveRun(deps, tx, run, 'awaiting_source_review', ro.workspaceId);
           }
           if (run.status === 'awaiting_source_review') {
-            const failedStep = sourceSteps.find((step) => FAILED_INGESTION_STATES.has(step.ingestionTask!.state));
-            if (failedStep) {
-              const error = failedStep.ingestionTask!.error ?? 'Ingestion extraction failed';
-              await tx.hermesResearchStep.updateMany({ where: { id: failedStep.id, runId: run.id }, data: { status: 'failed', error } });
+            const failedSteps = sourceSteps.filter((step) => FAILED_INGESTION_STATES.has(step.ingestionTask!.state));
+            if (failedSteps.length) {
+              const error = failedSteps[0]!.ingestionTask!.error ?? 'Ingestion extraction failed';
+              for (const step of failedSteps) {
+                await tx.hermesResearchStep.updateMany({
+                  where: { id: step.id, runId: run.id },
+                  data: { status: 'failed', error: step.ingestionTask!.error ?? 'Ingestion extraction failed' },
+                });
+              }
               return moveRun(deps, tx, run, 'failed', ro.workspaceId, error);
             }
             if (!sourceSteps.every((step) => READY_INGESTION_STATES.has(step.ingestionTask!.state))) {

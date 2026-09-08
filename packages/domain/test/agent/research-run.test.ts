@@ -174,16 +174,22 @@ describe('Hermes durable research run', () => {
     expect(success.db.steps[0]).toMatchObject({ status: 'succeeded', ingestionTaskId: 'ingestion', agentTaskId: 'agent-task' });
 
     const failure = fixture({ taskState: 'needs_review' });
-    await createHermesResearchRun(failure.deps, { actorId: 'actor', researchObjectId: 'ro', ingestionTaskIds: ['ingestion'], idempotencyKey: 'failure' });
+    failure.db.ingestionTasks.push({ id: 'ingestion-2', batchId: 'batch', artifactId: 'artifact-2', agentTaskId: 'agent-task-2', state: 'needs_review', error: null });
+    failure.db.agentTasks.push({ id: 'agent-task-2', status: 'succeeded' });
+    await createHermesResearchRun(failure.deps, { actorId: 'actor', researchObjectId: 'ro', ingestionTaskIds: ['ingestion', 'ingestion-2'], idempotencyKey: 'failure' });
     await reconcileHermesResearchRuns(failure.deps);
     failure.db.ingestionTasks[0]!.state = 'failed_retryable';
     failure.db.ingestionTasks[0]!.error = 'structured output exhausted';
     failure.db.agentTasks[0]!.status = 'failed';
+    failure.db.ingestionTasks[1]!.state = 'failed_blocked';
+    failure.db.ingestionTasks[1]!.error = 'second source blocked';
+    failure.db.agentTasks[1]!.status = 'failed';
     expect(await reconcileHermesResearchRuns(failure.deps)).toMatchObject({ failed: 1 });
     expect(failure.db.runs[0]).toMatchObject({ status: 'failed', error: 'structured output exhausted' });
-    expect(failure.db.steps[0]).toMatchObject({
-      status: 'failed', error: 'structured output exhausted', ingestionTaskId: 'ingestion', agentTaskId: 'agent-task',
-    });
+    expect(failure.db.steps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: 'failed', error: 'structured output exhausted', ingestionTaskId: 'ingestion', agentTaskId: 'agent-task' }),
+      expect.objectContaining({ status: 'failed', error: 'second source blocked', ingestionTaskId: 'ingestion-2', agentTaskId: 'agent-task-2' }),
+    ]));
   });
 
   it('leaves pending extraction waiting without consuming or requeueing a task', async () => {
