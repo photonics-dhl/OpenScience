@@ -35,4 +35,3 @@
 - Future UX polish: simplify historical/rejected asset display and replace internal/generic media labels. Current first-slice UX and desktop/mobile no-overflow checks passed; do not imply all UX refinements complete.
 
 CURRENT: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`. Next: clean the exited read-only container reference, validate the extractor changes, and deploy a new candidate before continuing normal-user review boundaries. CPU image installation remains paused; no new providers installed.
-

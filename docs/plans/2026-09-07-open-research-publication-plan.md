@@ -53,4 +53,3 @@
 ## Task 4: 发布与线上验收（控制器）
 
 完成独立审查，运行全量 build/typecheck/lint/单测与文档门禁；记录任何环境限制。推送非强制版本到 GitHub，精确 SHA 部署并保留 rollback；canonical parser/runtime/migration/health 验收。用受控记录验证导入确认、材料一致性、API 权限和固定版本。更新 CURRENT handoff、索引和短进度，区分应用 SHA 与后续 docs SHA。
-

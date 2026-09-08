@@ -547,4 +547,3 @@
 | `infra/codex-image-runner/video-runner.mjs` / `infra/codex-image-runner/video-runner.test.mjs` / `infra/codex-image-runner/video-tts.py` | Offline isolated TTS/render runner | Candidate; existing immutable-source installer |
 | `apps/media-demo/onchip-drawing.mjs` / `apps/media-demo/test/onchip-drawing.test.mjs` | On-chip optical-field mechanism animation | Illustrative profile, not experimental reproduction |
 | `apps/web/components/presentation/MechanismVideoPanel.tsx` / `apps/web/test/mechanism-video-panel.test.tsx` | Approved-parent video generation UI | Candidate; capability defaults off |
-

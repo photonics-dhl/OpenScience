@@ -55,4 +55,3 @@
 - All helpers/evidence under development apps/web/test/visual/out/token-smart-release (Git ignored). Actual MP4 video-v1/onchip-field-sampling.mp4; video-v1/server-review/; video-ui-v1/; image-approval-final-v3/; scene-images-v3/. Historicalv1/v2 retained.
 - Controlled run validates exact release, uses actor11b6cf52-fcd4-4f7d-a3ff-8ea3ae9592fd, closes ephemeral sessions. No credentials printed. stage-video-v1 uses XGS_STORYBOARD_OUTPUT=storyboard-v3,XGS_IMAGE_OUTPUT=scene-images-v3; do not resubmit successful video.
 - Baseline docs/OpenScience_Kimi_Development_Spec.md; integrated product design and literature-recovery plan. Fixed on-chip profile only. CPU image installation user-paused. Parser no network/Secret,nonroot,readonly,512MiB. SSH only root wrappers+explicit Git Bash; production through canonical scripts.
-
