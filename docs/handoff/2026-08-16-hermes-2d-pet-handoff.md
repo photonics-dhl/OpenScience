@@ -1,9 +1,9 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT 2026-09-08：用户明确禁止继续测试/预检，产品实现与部署优先。production88018512 / rollbackc1c7fa4b（本轮服务器只读确认）；候选基于0e928a65，正在落实连续原文提取、Hermes进度刷新和显式无测试部署。未宣称完整流程已走通。
+> CURRENT 2026-09-08：生产407ad49e86f3869c1fe34a574f3ba2ca76b1b442 / rollback88018512ba7d34bad5ced93386e1381184e9ee93已完成部署。连续原文提取、全空停止盲重试、非终态进度刷新已上线。用户禁止继续测试；未重跑论文或媒体，完整自主闭环仍未确认。
 
 ## 当前执行约束与进展
-- 407ad49e以--no-tests部署中；旧worker build内嵌10项parser测试意外执行，已向用户说明并拆开build/test。不重跑，也不声称本轮零测试。该package命令修正仅影响后续构建，无需为此重复部署正在启动的应用。
+- 407ad49e以--no-tests部署完成；旧worker build内嵌10项parser测试意外执行，已向用户说明并拆开build/test。不重跑，也不声称本轮零测试。该package命令修正仅影响后续构建，无需为此重复部署正在启动的应用。
 - 不运行测试、预检、模型试跑或自动 CI 测试；只执行交付必需的构建、启动、发布与回滚。历史验收清单不再作为本轮 next action。
 - 网页原会话现已取回真实6 Pro诊断：先选原文、再写最窄有据草稿；missing不表示信息不完整。采用连续原文摘录由服务器物化，避免自由摘要越过引用范围，不手写论文答案。
 - 998历史输出的method/results/limitations仍有引用覆盖不足，不能整体确认。现有用户run及计费状态保留，不再拿它做预检。
@@ -11,7 +11,12 @@
 ## Concurrent R1 scope
 - Preserve the deployed R1 cross-block evidence, empty-confirmation protection and human-revision provenance from codex/r1-record-hardening. Its nine-PDF remediation/evidence is tracked in docs/plans/2026-09-07-open-research-publication-plan.md; do not overwrite frozen records or claim its stage acceptance from this media workflow.
 
-## Exact versions
+## 当前版本与后续
+- Branch codex/onchip-video-release，应用release407ad49e；后续83cd0a02仅拆除build内嵌测试并同步文档，不改变已部署运行时代码。
+- 部署日志：C:/Users/Mac/AppData/Local/Temp/token-smart-checks/1788875083763-415eaf3b-a066-4fce-8a02-4102cc15edb8.log，exit0；服务启动/公网release切换完成。Parser/ScanSci/BGE功能探针均跳过，CI跳过。
+- 不再自动运行历史fixture/UI验收helper或付费试跑。用户实际使用从Hermes现有来源审核和生成入口继续；若报告真实阻塞，直接修复。
+
+## Historical versions (not CURRENT)
 - Production88018512ba7d34bad5ced93386e1381184e9ee93 / rollbackc1c7fa4bbcd304510d394884c8266d7d2e68d225 verified from ECS markers. Historicalc1: CI34223306660 and ECS build/types/lint/docs/API171/web569/Parser16 passed; deploy1788869423787-f16a8cd9-8260-438e-86b9-f3d1194a6ef8 succeeded. Historical8c: CI34219115044 and ECS build/types/lint/docs/gateway79/domain676/worker126/API171/web569/Parser16 passed. Deploy1788867164346-67c35e52-5cb0-43d2-b605-6ef048508169 succeeded. Initial8c attempt rolled back because two old134 browser containers retained bind mounts; their logs were saved and exact stopped containers removed. Historical1ba: Canonical deploy and retention completed, log1788861913105-4d326e11-fbea-4471-8037-1d124d2a15fa; post-checkup1788862450223-26f8c28d-1e5e-4a74-8008-ae38fcdc1aa8. CI34212202821 passed.
 - Release worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release, branch codex/onchip-video-release, HEAD998e227f being merged with production88018512; aggregate extraction and precise paid recovery passed ECS checks and one real producer preflight, PR107 open. Main owns deployment/docs. Do not overwrite concurrent changes.
 - Development E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow, codex/token-smart-live-workflow, HEAD005ffb8d8298d3476e8411046cae300079bd8344; relevant final source/tests copied back, dirty work retained. Root dirty main separate: do not reset/pull/stash.
