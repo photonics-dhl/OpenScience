@@ -283,6 +283,7 @@ function assertReviewableIngestionProposal(task: { artifactId: string; artifact:
   }
   const proposed = (result as Record<string, unknown>).core;
   if (!proposed || typeof proposed !== 'object' || Array.isArray(proposed)
+    || !validateSdfDraftCore(proposed).ok
     || SDF_NODE_TYPES.some(field => typeof (proposed as Record<string, unknown>)[field] !== 'string')
     || !SDF_NODE_TYPES.some(field => String((proposed as Record<string, unknown>)[field]).trim())) {
     throw new IngestionError('VALIDATION_ERROR', 'No reviewable SDF proposal is available');
