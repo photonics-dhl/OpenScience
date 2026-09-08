@@ -10,6 +10,7 @@ import { createRequire } from 'node:module';
 import { basename, join, resolve, sep } from 'node:path';
 
 const CANONICAL_ORIGIN = 'https://openscience.428312321.xyz';
+const OPTIONAL_BLOCKED_ORIGINS = new Set(['https://static.cloudflareinsights.com']);
 const OUTPUT_ROOT = '/opt/openscience-evals/hermes-user-journey';
 const INIT_WORKSPACE_ID = '6b83001a-75c1-4337-ab76-629908615a39';
 const EXPECTED_ACTOR_ID = 'a15edcab-7ec8-4e75-86d7-aa9c0498a829';
@@ -40,7 +41,8 @@ function parseArgs(argv) {
 
 async function configFrom(values) {
   const mode = values.get('--mode');
-  assert.ok(mode === 'init' || mode === 'inspect' || mode === 'start', 'mode must be init, inspect, or start');
+  assert.ok(['init', 'inspect', 'inspect-source', 'start'].includes(mode),
+    'mode must be init, inspect, inspect-source, or start');
 
   const requestedUrl = values.get('--release-url');
   assert.ok(requestedUrl, 'an explicit --release-url is required');
@@ -76,10 +78,15 @@ async function configFrom(values) {
     assert.match(ingestionTaskId ?? '', UUID, 'start mode requires an explicit ingestion task UUID');
     assert.equal(runId, undefined, 'start mode creates a run and does not accept --run-id');
     assert.equal(workspaceId, undefined, 'workspace id is only accepted in init mode');
-  } else {
+  } else if (mode === 'inspect') {
     assert.match(researchObjectId ?? '', UUID, 'research object id must be a UUID');
     assert.match(runId ?? '', UUID, 'inspect mode requires an explicit run UUID');
     if (ingestionTaskId !== undefined) assert.match(ingestionTaskId, UUID, 'ingestion task id must be a UUID');
+    assert.equal(workspaceId, undefined, 'workspace id is only accepted in init mode');
+  } else {
+    assert.match(researchObjectId ?? '', UUID, 'inspect-source mode requires a research object UUID');
+    assert.match(ingestionTaskId ?? '', UUID, 'inspect-source mode requires an ingestion task UUID');
+    assert.equal(runId, undefined, 'inspect-source mode does not accept a run id');
     assert.equal(workspaceId, undefined, 'workspace id is only accepted in init mode');
   }
 
@@ -152,11 +159,16 @@ async function openBrowser(config, credential) {
     serviceWorkers: 'block',
   });
   const violations = [];
+  const blockedOptionalRequests = [];
   let allowedCreateCount = 0;
   await context.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     if (url.protocol === 'data:' || url.protocol === 'blob:') return route.continue();
+    if (OPTIONAL_BLOCKED_ORIGINS.has(url.origin)) {
+      blockedOptionalRequests.push(url.origin);
+      return route.abort('blockedbyclient');
+    }
     if (url.origin !== CANONICAL_ORIGIN) {
       violations.push(`origin:${url.origin}`);
       return route.abort('blockedbyclient');
@@ -188,7 +200,7 @@ async function openBrowser(config, credential) {
     name: 'openscience_session', value: credential.sessionCookie, domain: new URL(config.releaseUrl).hostname,
     path: '/', httpOnly: true, secure: true, sameSite: 'Lax',
   }]);
-  return { allowedCreateCount: () => allowedCreateCount, browser, context, violations };
+  return { allowedCreateCount: () => allowedCreateCount, blockedOptionalRequests, browser, context, violations };
 }
 
 async function pageResponse(page, path, init = {}) {
@@ -263,6 +275,7 @@ async function verifyResearchObjectScope(page, config) {
 
 async function initializeSource(config, credential) {
   const opened = await openBrowser(config, credential);
+  let createdIds;
   try {
     const page = await opened.context.newPage();
     const actorUserId = await bootstrap(page, config, credential, '/research-objects/new?mode=import');
@@ -290,6 +303,7 @@ async function initializeSource(config, credential) {
       'ingestion response changed research object scope');
     assert.equal(ingestionBody.tasks?.length, 1, 'init mode must create exactly one ingestion task');
     assert.match(ingestionBody.tasks[0]?.id ?? '', UUID, 'ingestion response omitted its task id');
+    createdIds = { researchObjectId: roBody.researchObject.id, ingestionTaskId: ingestionBody.tasks[0].id };
     assert.equal(opened.allowedCreateCount(), 2, 'init mode must issue exactly one RO create and one upload mutation');
     assert.deepEqual(opened.violations, [], 'init browser attempted a forbidden origin or mutation');
     const screenshot = join(config.outputDir, 'init-upload.png');
@@ -301,7 +315,42 @@ async function initializeSource(config, credential) {
       ingestionState: ingestionBody.tasks[0].state, actor: { userId: actorUserId, platformRole: credential.platformRole,
         identityEvidenceSource: 'api/auth/me', roleEvidenceSource: 'stdin_server_db_query', sessionSource: 'stdin' },
       input: { filename: basename(INPUT_PDF), sha256: INPUT_SHA256 }, screenshots: [basename(screenshot)],
+      blockedOptionalRequests: [...new Set(opened.blockedOptionalRequests)],
       mutations: ['create_research_object', 'upload_source'], approvalsPerformed: false, generatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    if (createdIds && error && typeof error === 'object') error.journeyIds = createdIds;
+    throw error;
+  } finally {
+    await opened.browser.close();
+  }
+}
+
+async function inspectExistingSource(config, credential) {
+  const opened = await openBrowser(config, credential);
+  try {
+    const page = await opened.context.newPage();
+    const actorUserId = await bootstrap(page, config, credential,
+      `/research-objects/${encodeURIComponent(config.researchObjectId)}/hermes?task=${encodeURIComponent(config.ingestionTaskId)}`);
+    await verifyResearchObjectScope(page, config);
+    const paths = scopedPaths(config, randomUUID(), config.ingestionTaskId);
+    const ingestion = await pageResponse(page, paths.ingestionApi);
+    assert.equal(ingestion.status, 200, 'ordinary actor cannot read the existing ingestion task');
+    assert.equal(ingestion.body?.task?.id, config.ingestionTaskId, 'ingestion response changed task scope');
+    assert.equal(ingestion.body?.researchObjectId, config.researchObjectId, 'ingestion task belongs to another research object');
+    await page.locator('[data-hermes-review-field]').first().waitFor({ state: 'visible', timeout: 30_000 });
+    const screenshot = join(config.outputDir, 'source-existing.png');
+    await page.screenshot({ path: screenshot, fullPage: true });
+    assert.equal(opened.allowedCreateCount(), 0, 'inspect-source mode must remain read-only');
+    assert.deepEqual(opened.violations, [], 'inspect-source browser attempted a forbidden origin or mutation');
+    return {
+      schemaVersion: 1, ok: true, mode: 'inspect-source', origin: CANONICAL_ORIGIN,
+      expectedReleaseSha: config.expectedReleaseSha, researchObjectId: config.researchObjectId,
+      ingestionTaskId: config.ingestionTaskId, ingestionState: ingestion.body.task.state,
+      actor: { userId: actorUserId, platformRole: credential.platformRole,
+        identityEvidenceSource: 'api/auth/me', roleEvidenceSource: 'stdin_server_db_query', sessionSource: 'stdin' },
+      screenshots: [basename(screenshot)], blockedOptionalRequests: [...new Set(opened.blockedOptionalRequests)],
+      mutations: [], approvalsPerformed: false, generatedAt: new Date().toISOString(),
     };
   } finally {
     await opened.browser.close();
@@ -310,6 +359,7 @@ async function initializeSource(config, credential) {
 
 async function execute(config, credential) {
   if (config.mode === 'init') return initializeSource(config, credential);
+  if (config.mode === 'inspect-source') return inspectExistingSource(config, credential);
   let runId = config.runId;
   let ingestionTaskId = config.ingestionTaskId;
   let firstRun;
@@ -383,6 +433,7 @@ async function execute(config, credential) {
       identityEvidenceSource: 'api/auth/me', roleEvidenceSource: 'stdin_server_db_query', sessionSource: 'stdin' },
     first: { status: firstRun.status, version: firstRun.version, ui: firstUi },
     reopened: { status: finalRun.status, version: finalRun.version, ui: reopenedUi },
+    blockedOptionalRequests: [...new Set([...first.blockedOptionalRequests, ...reopened.blockedOptionalRequests])],
     mutations: config.mode === 'start' ? ['create_hermes_run'] : [],
     approvalsPerformed: false,
     generatedAt: new Date().toISOString(),
@@ -401,10 +452,13 @@ async function main() {
   try {
     report = await execute(config, credential);
   } catch (error) {
+    const journeyIds = error && typeof error === 'object' ? error.journeyIds : undefined;
     report = {
       schemaVersion: 1, ok: false, mode: config.mode, origin: CANONICAL_ORIGIN,
-      expectedReleaseSha: config.expectedReleaseSha, researchObjectId: config.researchObjectId,
-      workspaceId: config.workspaceId ?? null, ingestionTaskId: config.ingestionTaskId ?? null, runId: config.runId ?? null,
+      expectedReleaseSha: config.expectedReleaseSha,
+      workspaceId: config.workspaceId ?? null,
+      researchObjectId: journeyIds?.researchObjectId ?? config.researchObjectId ?? null,
+      ingestionTaskId: journeyIds?.ingestionTaskId ?? config.ingestionTaskId ?? null, runId: config.runId ?? null,
       error: safeError(error), approvalsPerformed: false, generatedAt: new Date().toISOString(),
     };
   }
