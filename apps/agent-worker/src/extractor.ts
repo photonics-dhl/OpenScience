@@ -805,7 +805,7 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
           .replace(/[,*†‡\s]+$/gu, '')
           .trim();
         if (!name) continue;
-        if (!/^[\p{L}\p{M}.'’\-]+(?:\s+[\p{L}\p{M}.'’\-]+){1,7}$/u.test(name)) uncertain = true;
+        if (!/^[\p{L}\p{M}.'’-]+(?:\s+[\p{L}\p{M}.'’-]+){1,7}$/u.test(name)) uncertain = true;
         authors.push(name);
         authorBlocks.push(block);
       }
