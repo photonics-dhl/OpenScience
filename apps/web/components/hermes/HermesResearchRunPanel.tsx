@@ -9,6 +9,7 @@ import {
   authorizeHermesGenerationGrant,
   createHermesResearchRun,
   getHermesResearchRun,
+  retryHermesGeneration,
   type DashboardTaskApi,
   type HermesResearchRun,
 } from '@/lib/api';
@@ -39,6 +40,8 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
   const [run, setRun] = React.useState<HermesResearchRun | null>(null);
   const [starting, setStarting] = React.useState(false);
   const [granting, setGranting] = React.useState(false);
+  const [retrying, setRetrying] = React.useState(false);
+  const retryRequest = React.useRef<{ runId: string; version: number; key: string } | null>(null);
   const [loading, setLoading] = React.useState(Boolean(runId));
   const [error, setError] = React.useState('');
   const eligibleTasks = React.useMemo(
@@ -110,6 +113,23 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
     }
   }
 
+  async function retryGeneration() {
+    if (!run?.canRetryGeneration || retrying) return;
+    const previous = retryRequest.current;
+    const current = previous?.runId === run.id && previous.version === run.version
+      ? previous : { runId: run.id, version: run.version, key: crypto.randomUUID() };
+    retryRequest.current = current;
+    setRetrying(true); setError('');
+    try {
+      const result = await retryHermesGeneration(researchObjectId, run.id, run.version, current.key);
+      setRun(result.run);
+    } catch (cause) {
+      setError(cause instanceof ApiClientError ? cause.message : t('retryError'));
+    } finally {
+      setRetrying(false);
+    }
+  }
+
   const sourceReady = run?.status === 'awaiting_source_review';
   const claimReviewReady = run?.status === 'awaiting_claim_review' && Boolean(run.versionId);
   const terminal = run?.status === 'failed' || run?.status === 'stopped';
@@ -137,7 +157,9 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
         {run.steps.map((step) => <li key={step.id} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{t(step.stage === 'source_ingestion' ? 'source' : 'stepName', { number: step.ordinal + 1 })}</span><span className="font-data text-os-muted-paper">{t(`step.${step.status}`)}</span></li>)}
       </ol>
       {run.error ? <p className="mt-3 text-sm text-os-vermilion-ink">{run.error}</p> : null}
+      {run.canRetryGeneration && run.chargeableAttempts !== undefined ? <p className="mt-3 text-sm leading-6 text-os-muted-paper">{t('retryDescription', { count: run.chargeableAttempts })}</p> : null}
       <nav className="mt-5 flex flex-wrap gap-4" aria-label={t('actions')}>
+        {run.canRetryGeneration ? <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="inline-flex min-h-11 items-center rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : 'retryGeneration')}</button> : null}
         {sourceReady ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={reviewHref(researchObjectId, run)}>{t('reviewSource')}</Link> : null}
         {claimReviewReady && run?.versionId ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`${runHref(researchObjectId, run.id)}&claimReview=1`}>{t('reviewClaims')}</Link> : null}
         {presentationReady && run?.versionId ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(researchObjectId)}/presentation?version=${encodeURIComponent(run.versionId)}`}>{t('reviewPresentation')}</Link> : null}

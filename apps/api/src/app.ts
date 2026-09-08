@@ -34,12 +34,14 @@ import { registerSandboxJobsRoutes } from './routes/sandbox-jobs';
 import { registerTemporaryDocumentRoutes } from './routes/temporary-documents';
 import { registerPresentationAssetRoutes } from './routes/presentation-assets';
 import { registerResearchRunRoutes } from './routes/research-runs';
+import type { HermesResearchRunDeps } from '@openscience/domain';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
 export interface BuildAppOptions extends AuthRouteDeps {
   sceneImageEnabled?: boolean;
   videoEnabled?: boolean;
+  canResumeImageBeforeSubmission?: HermesResearchRunDeps['canResumeImageBeforeSubmission'];
   cookieSecret: string;
   /** P1A-6：注入结构化 logger（pino 实例满足 FastifyBaseLogger）；缺省关闭（测试现状）。 */
   logger?: FastifyBaseLogger;

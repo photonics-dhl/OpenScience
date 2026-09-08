@@ -290,6 +290,8 @@ export interface HermesResearchRun {
   versionId: string | null;
   profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | null;
   maxAgentTasks: number | null;
+  canRetryGeneration?: boolean;
+  chargeableAttempts?: number;
   sourceClaimIds: string[];
   error: string | null;
   createdAt: string;
@@ -354,6 +356,14 @@ export function authorizeHermesGenerationGrant(
   });
 }
 
+export function retryHermesGeneration(
+  researchObjectId: string, runId: string, expectedVersion: number, idempotencyKey: string,
+): Promise<{ run: HermesResearchRun }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}/retry-generation`, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ expectedVersion }),
+  });
+}
 export async function listResearchIngestionTasks(researchObjectId: string): Promise<{ tasks: DashboardTaskApi[] }> {
   return request(`/api/ingestion?actionable=true&researchObjectId=${encodeURIComponent(researchObjectId)}`);
 }

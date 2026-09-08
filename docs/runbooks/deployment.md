@@ -2530,3 +2530,9 @@ Use the existing exact-source rollback procedure targeting8e4ecb2b5f9e291385b0df
 ### 验证命令
 
 Canonical build/parser16/core36/search2/BGE/ScanSci/container health passed; public/loopback200 and egress204. Journal cleared and retention completed. Public auth8 and product8 read-only checks passed with0business writes and controlled session closed. Evidence: ignored entry-deploy.log, entry-final-checkup.log, entry-shots.json and entry-product-evidence.json under apps/web/test/visual/out/research-journey/. No full research-pipeline or CI completion claim.
+
+### Hermes 同流程图片恢复（2026-09-09）
+
+API 使用组 11000 只读挂载 `/opt/openscience-codex/inbox` 与 `results`，仅核对候选任务的提交记录是否存在；不挂载运行器 private/state/auth，也不获得写入或执行图片权限。恢复接口必须先确认所有候选均无提交记录，才在事务内创建付费替代任务；Worker 执行前再次核对并消费一次性恢复标记。其他 Provider 缺少该能力时拒绝这类恢复。
+
+部署仍走既有 `deploy.sh --confirm --no-tests --rollback-ref <当前版本> <候选版本>`，应用构建和服务启动完成后使用正常用户界面的“继续未完成生成”。来源、资产、余额或版本发生变化时由接口拒绝；不得直接改任务状态。若回滚应用，使用记录的前一 release 及其 compose；本次不新增迁移，不清理已有图片和提交记录。

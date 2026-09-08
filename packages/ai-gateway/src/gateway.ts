@@ -149,6 +149,13 @@ export class AiGateway {
     }
   }
 
+  async canResumeImageBeforeSubmission(requestId: string): Promise<boolean> {
+    const provider = this.imageProviders[0];
+    if (!provider?.canResumeBeforeSubmission) return false;
+    if (!(await this.providerEnabled(provider.name, 'image')).enabled) return false;
+    try { return await provider.canResumeBeforeSubmission(requestId) === true; } catch { return false; }
+  }
+
   /** 文本补全：primary → fallbacks 逐级回退（§9.3 回退策略配置管理）。 */
   async complete(messages: ChatMessage[], opts: { temperature?: number; maxTokens?: number } = {}): Promise<ProviderResult> {
     const totalStart = Date.now();

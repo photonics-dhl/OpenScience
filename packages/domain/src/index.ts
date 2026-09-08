@@ -154,8 +154,9 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns,
+  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration,
   requireHermesPresentationTaskAuthority,
+  HERMES_AUTHORITY_REARM_MARKER,
   HermesResearchRunError,
   type HermesResearchRunDeps, type HermesSourceReviewDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
   type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,

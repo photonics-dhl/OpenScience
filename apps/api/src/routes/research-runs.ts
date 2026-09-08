@@ -1,7 +1,7 @@
 import type { AuthDeps } from '@openscience/auth';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, type HermesSourceReviewDeps } from '@openscience/domain';
+import { authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, retryHermesGeneration, type HermesSourceReviewDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import type { StorageAdapter } from '@openscience/storage';
 import { requireCurrentUser } from './session-guard';
@@ -32,6 +32,7 @@ const generationGrantSchema = z.object({
   expectedVersion: z.number().int().positive(),
   generationGrant: z.object({ profile: z.literal('content-driven-v1'), maxAgentTasks: z.literal(8) }).strict(),
 }).strict();
+const generationRetrySchema = z.object({ expectedVersion: z.number().int().positive() }).strict();
 
 function auditCtx(req: FastifyRequest): AuditContext {
   return { requestId: String(req.id), ip: req.ip };
@@ -82,5 +83,18 @@ export function registerResearchRunRoutes(app: FastifyInstance, deps: Omit<Herme
       actorId: user.userId, researchObjectId: id, runId, ...body,
     }, auditCtx(req));
     return reply.status(201).send({ run });
+  });
+
+  app.post('/research-objects/:id/hermes-runs/:runId/retry-generation', async (req, reply) => {
+    void reply.header('Cache-Control', 'private, no-store');
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id, runId } = readParamsSchema.parse(req.params);
+    const body = generationRetrySchema.parse(req.body);
+    const idempotencyKey = z.string().trim().min(1).max(200).parse(req.headers['idempotency-key']);
+    const run = await retryHermesGeneration(deps, {
+      actorId: user.userId, researchObjectId: id, runId, idempotencyKey, ...body,
+    }, auditCtx(req));
+    return reply.status(202).send({ run });
   });
 }
