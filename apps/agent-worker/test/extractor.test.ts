@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Readable } from 'node:stream';
 import { AiGateway, type Provider } from '@openscience/ai-gateway';
 import type { DocumentSourceMap } from '@openscience/domain';
+import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import {
   extractHandler,
   sdfCoreGuard,
@@ -587,6 +588,79 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(retryRequest).not.toContain('Must be empty when missing');
   });
 
+  it('rejects a six-field missing collapse and repairs supported fields within the structured retry budget', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-all-missing', contentHash: 'd'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'supported-result', kind: 'paragraph', text: 'The measured response increased under the calibrated condition.',
+        boundingBox: { x: 1, y: 1, width: 90, height: 10 }, parser: { name: 'native-pdf', version: '1' }, transformations: [],
+      }] }],
+    };
+    const missing: { summary: string; sourceBlockIds: string[]; needsMoreInformation: boolean } = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const allMissing = { schemaVersion: '0.1.0', fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, missing])) };
+    const repaired = structuredClone(allMissing);
+    repaired.fields.results = { summary: 'The measured response increased under the calibrated condition.', sourceBlockIds: ['B000001'], needsMoreInformation: false };
+    const requests: Array<{ messages: Array<{ content: string }> }> = [];
+    let calls = 0;
+    const provider: Provider = { name: 'all-missing-repair', model: 'all-missing-repair', complete: async (request) => {
+      requests.push(request as typeof requests[number]);
+      calls += 1;
+      return { text: JSON.stringify(calls === 1 ? allMissing : repaired), usage: { inputTokens: 1, outputTokens: 1 }, model: 'all-missing-repair' };
+    } };
+
+    const result = await extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap });
+
+    expect(calls).toBe(2);
+    expect(result.core.results).toContain('measured response');
+    expect(result.needsMoreInformation).toEqual(['problem', 'insight', 'method', 'limitations', 'reproducibility']);
+    const repairPrompt = JSON.stringify(requests[1]);
+    for (const field of SDF_CORE_FIELDS) expect(repairPrompt).toContain(`${field}:all_fields_missing`);
+    expect(repairPrompt).toContain('Re-examine every field independently');
+    expect(repairPrompt).toContain('Do not invent or weaken evidence requirements');
+  });
+
+  it('fails with a safe canonical marker after three six-field missing responses', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-all-missing-exhausted', contentHash: 'e'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'paper-result', kind: 'paragraph', text: 'The experiment measured a nonzero response.',
+        boundingBox: { x: 1, y: 1, width: 90, height: 10 }, parser: { name: 'native-pdf', version: '1' }, transformations: [],
+      }] }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const response = { schemaVersion: '0.1.0', fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, missing])) };
+    let calls = 0;
+    const provider: Provider = { name: 'all-missing-exhausted', model: 'all-missing-exhausted', complete: async () => {
+      calls += 1;
+      return { text: JSON.stringify(response), usage: { inputTokens: 1, outputTokens: 1 }, model: 'all-missing-exhausted' };
+    } };
+
+    await expect(extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap }))
+      .rejects.toMatchObject({ code: 'SCHEMA_VALIDATION', message: 'canonical_all_fields_missing' });
+    expect(calls).toBe(3);
+  });
+
+  it('does not mislabel a provider failure after two all-missing rejections', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-provider-failure', contentHash: 'f'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{ id: 'paper-result', kind: 'paragraph',
+        text: 'The experiment measured a response.', boundingBox: { x: 1, y: 1, width: 90, height: 10 },
+        parser: { name: 'native-pdf', version: '1' }, transformations: [] }] }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const response = { schemaVersion: '0.1.0', fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, missing])) };
+    let calls = 0;
+    const provider: Provider = { name: 'provider-failure', model: 'provider-failure', complete: async () => {
+      calls += 1;
+      if (calls === 3) throw new Error('provider unavailable');
+      return { text: JSON.stringify(response), usage: { inputTokens: 1, outputTokens: 1 }, model: 'provider-failure' };
+    } };
+
+    await expect(extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap }))
+      .rejects.not.toMatchObject({ message: 'canonical_all_fields_missing' });
+    expect(calls).toBe(3);
+  });
+
   it('错误 schemaVersion 的响应不缓存其中看似合法的字段', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-1', contentHash: 'b'.repeat(64), parser: { name: 'cascade', version: '1' },
@@ -601,11 +675,15 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
         ? { summary: 'Must not survive', sourceBlockIds: ['B000001'], needsMoreInformation: false }
         : { summary: '', sourceBlockIds: [], needsMoreInformation: true }]));
     let call = 0;
+    const repairedFields: Record<string, { summary: string; sourceBlockIds: string[]; needsMoreInformation: boolean }> = Object.fromEntries(
+      Object.keys(fields).map((field) => [field, { summary: '', sourceBlockIds: [], needsMoreInformation: true }]),
+    );
+    repairedFields.insight = { summary: 'Supported insight', sourceBlockIds: ['B000001'], needsMoreInformation: false };
     const provider: Provider = {
       name: 'fixture', model: 'fixture',
       complete: async () => ({ text: JSON.stringify(call++ === 0
         ? { schemaVersion: 'wrong', fields }
-        : { schemaVersion: '0.1.0', fields: Object.fromEntries(Object.keys(fields).map((field) => [field, { summary: '', sourceBlockIds: [], needsMoreInformation: true }])) }), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } }),
+        : { schemaVersion: '0.1.0', fields: repairedFields }), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } }),
     };
 
     const result = await extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap });

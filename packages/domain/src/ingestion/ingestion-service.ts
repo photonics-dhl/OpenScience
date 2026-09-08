@@ -4,7 +4,8 @@ import { Prisma } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
 import { createArtifact } from '../artifact/artifacts';
-import { createAgentSession, dispatchAgentTask, projectAgentTaskResult, submitAgentTask, type AgentDeps } from '../agent/agent';
+import { AI_CREDIT_RESOURCE, createAgentSession, dispatchAgentTask, projectAgentTaskResult, submitAgentTask, type AgentDeps } from '../agent/agent';
+import { AgentError } from '../agent/errors';
 import { requireActive, requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { WorkspaceError } from '../workspace/errors';
 import { recordAudit } from '../workspace/audit';
@@ -16,6 +17,7 @@ import type { SdfDocumentView } from '../research-object/sdf';
 import { carryVersionEvidence, writeIngestionEvidence } from './ingestion-evidence';
 import { IngestionError } from './errors';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
+import { recordEntry } from '../usage/ledger';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
 import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
 import { confirmSourceIdentity, parseSourceIdentitySnapshot, projectSourceIdentity, type SourceIdentityReview, type SourceIdentitySnapshot } from './source-identity';
@@ -23,6 +25,37 @@ import { confirmSourceIdentity, parseSourceIdentitySnapshot, projectSourceIdenti
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
 
 const INGESTION_WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
+
+function exactRecordKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value).sort().join(',') === [...keys].sort().join(','));
+}
+
+function isCanonicalAllFieldsMissingResult(value: unknown, artifact: { id: string; blobSha256: string }): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const result = value as Record<string, unknown>;
+  if (!exactRecordKeys(result.core, ['schemaVersion', ...SDF_NODE_TYPES])) return false;
+  const core = result.core;
+  const evidenceSegments = result.evidenceSegments;
+  const evidence = result.evidence;
+  const needsMoreInformation = result.needsMoreInformation;
+  if (core.schemaVersion !== '0.1.0' || SDF_NODE_TYPES.some((field) => core[field] !== '')) return false;
+  if (!Array.isArray(needsMoreInformation) || needsMoreInformation.length !== SDF_NODE_TYPES.length
+    || new Set(needsMoreInformation).size !== SDF_NODE_TYPES.length
+    || SDF_NODE_TYPES.some((field) => !needsMoreInformation.includes(field))) return false;
+  if (!exactRecordKeys(evidenceSegments, SDF_NODE_TYPES)
+    || SDF_NODE_TYPES.some((field) => { const value = evidenceSegments[field]; return !Array.isArray(value) || value.length !== 0; })) return false;
+  if (!exactRecordKeys(evidence, SDF_NODE_TYPES)
+    || SDF_NODE_TYPES.some((field) => { const value = evidence[field]; return !exactRecordKeys(value, ['quote', 'locator'])
+      || value.quote !== '' || value.locator !== ''; })) return false;
+  try {
+    const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+    return reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
+      && reference.contentHash === artifact.blobSha256;
+  } catch {
+    return false;
+  }
+}
 
 export async function authorizeIngestionWrite(
   deps: IngestionDeps,
@@ -221,16 +254,41 @@ export async function retryIngestionTask(
             legacyProposalFailure = false;
           }
         }
+        const agentTask = task.agentTask;
         const failedRetry = task.state === 'failed_retryable' && task.retryCount === 0
-          && task.agentTask?.status === 'failed' && task.agentTask.retryCount === 0;
-        if (!failedRetry && !legacyProposalFailure) {
+          && agentTask?.status === 'failed' && agentTask.retryCount === 0;
+        let canonicalAllMissingRecovery = false;
+        if (task.state === 'needs_review' && task.retryCount === 1 && agentTask?.kind === 'sdf.extract'
+          && agentTask.status === 'succeeded' && agentTask.retryCount === 1
+          && agentTask.executionAttempt === 2 && isCanonicalAllFieldsMissingResult(result, task.artifact)) {
+          const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
+          canonicalAllMissingRecovery = session?.userId === input.userId && session.status === 'active';
+        }
+        if (!failedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
         }
-        const recovery = legacyProposalFailure ? 'legacy_sdf_proposal_unavailable' : 'failed_retryable';
+        const retryAttempt = canonicalAllMissingRecovery ? 2 : 1;
+        const recovery = canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
+          : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable' : 'failed_retryable';
+        if (canonicalAllMissingRecovery) {
+          if (!agentTask) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction task is unavailable');
+          const balance = await tx.usageLedger.aggregate({
+            where: { userId: input.userId, resource: AI_CREDIT_RESOURCE }, _sum: { delta: true },
+          });
+          if (Number(balance._sum.delta ?? 0) <= 0) {
+            throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
+          }
+          await recordEntry(tx, {
+            userId: input.userId, resource: AI_CREDIT_RESOURCE, delta: -1, kind: 'consume',
+            reason: 'Agent task recovery sdf.extract', idempotencyKey: `agent-task-recovery:${agentTask.id}:2`,
+            metadata: { taskId: agentTask.id, kind: agentTask.kind, retryAttempt: 2, policy: 'charged-on-remediation' },
+          });
+        }
         const resetAgent = await tx.agentTask.updateMany({
           where: {
-            id: task.agentTaskId!, kind: 'sdf.extract', retryCount: 0,
-            status: legacyProposalFailure ? 'succeeded' : 'failed',
+            id: task.agentTaskId!, kind: 'sdf.extract', retryCount: retryAttempt - 1,
+            status: legacyProposalFailure || canonicalAllMissingRecovery ? 'succeeded' : 'failed',
+            ...(canonicalAllMissingRecovery ? { executionAttempt: 2 } : {}),
           },
           data: {
             status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
@@ -239,14 +297,15 @@ export async function retryIngestionTask(
         });
         if (resetAgent.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry is no longer available');
         const claimed = await tx.ingestionTask.updateMany({
-          where: { id: task.id, agentTaskId: task.agentTaskId, state: task.state, retryCount: 0 },
+          where: { id: task.id, agentTaskId: task.agentTaskId, state: task.state, retryCount: retryAttempt - 1 },
           data: { state: 'queued', retryCount: { increment: 1 }, error: null },
         });
         if (claimed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry is no longer available');
         await recordAudit(deps, tx, {
           actorId: input.userId, action: 'ingestion.task.retry', workspaceId: workspace.id,
           targetType: 'ingestion_task', targetId: task.id,
-          metadata: { recovery, agentTaskId: task.agentTaskId, retryAttempt: 1 },
+          metadata: { recovery, agentTaskId: task.agentTaskId, retryAttempt,
+            creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation' : 'reuse-original-reservation' },
         }, ctx);
         return tx.ingestionTask.findUnique({ where: { id: task.id }, include: { artifact: true } });
       }, { isolationLevel: 'Serializable' });
