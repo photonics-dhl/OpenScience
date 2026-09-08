@@ -722,6 +722,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return row;
       },
       findMany: async ({ where }: any) => db.evidenceRecords.filter((evidence) =>
+        (where.claimId?.in === undefined || where.claimId.in.includes(evidence.claimId)) &&
         (where.researchObjectId === undefined || evidence.researchObjectId === where.researchObjectId) &&
         (where.versionId === undefined || evidence.versionId === where.versionId)),
       findFirst: async ({ where, orderBy }: any) => {
@@ -1062,7 +1063,8 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
       updateMany: async ({ where, data }: any) => {
         const rows = db.hermesResearchSteps.filter((step) =>
-          (where.id === undefined || step.id === where.id) && (where.runId === undefined || step.runId === where.runId));
+          (where.id === undefined || step.id === where.id) && (where.runId === undefined || step.runId === where.runId)
+          && (where.stage === undefined || step.stage === where.stage) && (where.status === undefined || step.status === where.status));
         rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
         return { count: rows.length };
       },

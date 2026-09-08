@@ -162,7 +162,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if (payload.kind === 'image' || payload.kind === 'video') {
         const currentUser = await tx.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
         if (currentUser?.platformRole !== 'platform_admin' && !await requireHermesAuthority(tx)) {
-          throw new Error('[blocked] presentation media generation requires an administrator or active Hermes run grant');
+          throw new Error('[blocked] presentation media generation requires a platform administrator or active Hermes run grant');
         }
       }
       const currentClaims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });

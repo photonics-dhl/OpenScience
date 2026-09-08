@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import {
+  confirmHermesSourceReview,
   createHermesResearchRun,
   getHermesResearchRun,
   HermesResearchRunError,
@@ -102,11 +104,13 @@ describe('Hermes durable research run', () => {
   });
 
   it('replays the exact request and rejects the same idempotency key with a different source binding', async () => {
-    const { deps } = fixture();
+    const { deps, db } = fixture();
     const input = { actorId: 'actor', researchObjectId: 'ro', ingestionTaskIds: ['ingestion'], idempotencyKey: 'run-key' };
     const first = await createHermesResearchRun(deps, input);
     await expect(createHermesResearchRun(deps, input)).resolves.toEqual(first);
     await expect(createHermesResearchRun(deps, { ...input, ingestionTaskIds: ['other-ingestion'] })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    db.memberships.length = 0;
+    await expect(createHermesResearchRun(deps, input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('retries serializable creation conflicts without duplicating the run', async () => {
@@ -247,5 +251,43 @@ describe('Hermes durable research run', () => {
     await reconcileHermesResearchRuns(deps);
     expect(db.hermesResearchRuns[0]).toMatchObject({ status: 'succeeded', error: null });
     expect(db.usageLedger.filter((entry) => entry.kind === 'consume')).toHaveLength(7);
+  });
+
+  it('replays an exact source review after advancement without storage access or private SourceMap coordinates', async () => {
+    const { prisma, db } = createFakePrisma();
+    const user = '10000000-0000-4000-8000-000000000001';
+    const workspace = '20000000-0000-4000-8000-000000000001';
+    const ro = '30000000-0000-4000-8000-000000000001';
+    const versionId = '40000000-0000-4000-8000-000000000001';
+    const runId = '50000000-0000-4000-8000-000000000001';
+    const ingestionTaskId = '60000000-0000-4000-8000-000000000001';
+    const claimId = '70000000-0000-4000-8000-000000000001';
+    seedUser(db, { id: user });
+    db.workspaces.push({ id: workspace, status: 'active' });
+    db.memberships.push({ id: 'membership', workspaceId: workspace, userId: user, role: 'author' });
+    db.researchObjects.push({ id: ro, workspaceId: workspace, status: 'draft' });
+    db.versions.push({ id: versionId, researchObjectId: ro, status: 'draft', versionNo: 1 });
+    const reviews = [{ ingestionTaskId, snapshotToken: 'a'.repeat(64), selections: [{ clientKey: 'core',
+      sourceField: 'results' as const, kind: 'core' as const, statement: 'Reviewed result', attachSourceQuote: true as const }] }];
+    const generationGrant = { profile: 'onchip-field-sampling-v1' as const, maxAgentTasks: 7 as const };
+    const idempotencyKey = 'source-review-key';
+    const sourceReviewDigest = createHash('sha256').update(JSON.stringify({ actorId: user, researchObjectId: ro, runId,
+      versionId, generationGrant, reviews })).digest('hex');
+    db.hermesResearchRuns.push({ id: runId, actorId: user, researchObjectId: ro, versionId,
+      profile: generationGrant.profile, maxAgentTasks: 7, sourceClaimIds: [claimId], sourceReviewDigest,
+      status: 'generating_storyboard', version: 3, error: null, createdAt: new Date(), updatedAt: new Date() });
+    db.hermesResearchSteps.push({ id: 'source-step', runId, stage: 'source_ingestion', ordinal: 0,
+      status: 'succeeded', ingestionTaskId });
+    db.claimNodes.push({ id: claimId, researchObjectId: ro, versionId, extractionStatus: 'succeeded', provenance: {} });
+    db.evidenceRecords.push({ id: 'evidence', claimId, researchObjectId: ro, versionId, extractionStatus: 'succeeded',
+      provenance: { source: 'reviewed_ingestion', sourceTaskId: ingestionTaskId, sourceMapRef: { objectKey: 'private/key' } } });
+    const deps = { prisma, redis: { lpush: async () => 1 }, storage: { getObject: async () => { throw new Error('storage must not be read'); } } } as never;
+    const result = await confirmHermesSourceReview(deps, { actorId: user, researchObjectId: ro, runId, versionId,
+      expectedVersion: 2, idempotencyKey, generationGrant, reviews });
+    expect(result.run.status).toBe('generating_storyboard');
+    expect(result.evidence[0].provenance).not.toHaveProperty('sourceMapRef');
+    db.memberships.length = 0;
+    await expect(confirmHermesSourceReview(deps, { actorId: user, researchObjectId: ro, runId, versionId,
+      expectedVersion: 2, idempotencyKey, generationGrant, reviews })).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });

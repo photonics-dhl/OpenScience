@@ -4,7 +4,7 @@
 
 ## Exact versions
 - Production now134ebdea796b922ac07d9f29b6148b458b5e515f; rollback97aa06a542febf558a47cecbf6559bd0a6c876aa, verified by SSH. Healthy services/public200/local200/egress204, log1788856128022-4eb2f945-569f-4959-978b-36134bc6deee. The following97aa acceptance is historical. CI34192289263 passed. Server build/Parser16/migrations/runtime/public release passed; deploy log1788847601812-bb0e1267-8342-4ce0-ac1e-e4b1671f179a, post-checkup1788848374145-0b609e64-296e-4412-afc6-bee21c921b7e.
-- Release worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release, codex/onchip-video-release, HEAD527f705e; production134ebdea merged, origin97aa06a5 before candidate push. Draft PR107; no merge. Final docs may make the worktree dirty but do not change deployed code.
+- Release worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release, codex/onchip-video-release, HEAD09beecba plus final tests/UI candidate; production134ebdea merged, origin97aa06a5 before candidate push. Draft PR107; no merge. Final docs may make the worktree dirty but do not change deployed code.
 - Development E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow, codex/token-smart-live-workflow, HEAD005ffb8d8298d3476e8411046cae300079bd8344; relevant final source/tests copied back, dirty work retained. Root dirty main separate: do not reset/pull/stash.
 
 ## Integrated production continuity
@@ -30,6 +30,8 @@
 - Candidate a72b5e1c server fullbuild/worker+parser images/Parser16 passed, production unchanged.24 focused tests and3 package typechecks passed; isolated PostgreSQL forward/rollback/reapply passed. Latest prepare log1788854556198-799a9362-27a7-4e3b-9970-db3fb647e095. Real DB/API journey and full media still pending.
 
 ## Server validation and recovery
+- Candidate09beecba full server build, worker/parser images and Parser16 passed (log1788857419353-ed4e4e2d-77f7-4e99-ae3d-a8d8c9bf0f7c). Domain93, API22 and run UI2 passed; worker41/42 only legacy error-text matcher failed, wording repaired for next candidate. Docs-sync passed; index blockquote blank lines fixed after docs:lint finding.
+- Real PostgreSQL cross-process API acceptance passed: create/get persistence, idempotency conflict, concurrent CAS, source-review boundary, write-authority revocation. auth=memory-fake; not real browser/media acceptance. Log1788857539714-2edc6526-9a96-4996-adf4-cbea50379f1c. Sol/high final scoped review of09be found no remaining P1/P2; ordinary-user full media still unrun.
 - Isolated no-network PostgreSQL database hermes_run_acceptance_integrated: real Prisma deploy applied39 migrations; rollback of the two new Hermes migrations and Prisma reapply returned39 finished records. Logs1788856805191-baec20c1-a618-49d3-baca-9a31b946cbde and1788856841729-5a525021-ac95-4902-9319-ad4b2f429502. Production database untouched.
 - Once generation steps exist, workflow rollback SQL intentionally refuses to discard them. Release recovery must keep the additive Hermes schema and restore the previous application release; do not execute destructive schema rollback or delete run data. Empty-isolated-DB rollback evidence does not prove rollback with real runs.
 - Server23fd build found missing Prisma inverse relations;6fa generate passed then build found two missing imports. Fixed in527f705e, new server build underway. No local runtime checks.
