@@ -237,7 +237,7 @@ export {
   type UpdateEvidenceInput,
   type ReviewedIngestionClaimEvidenceBatchInput,
 } from './research-intelligence/claim-evidence-service';
-export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
+export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
 export {
   INGESTION_BRIDGE_FIELDS,
   confirmIngestionClaimEvidenceBridge,
@@ -409,3 +409,5 @@ export { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTEN
 export { requireStoryboardBase } from './assets/presentation-asset';
 
 export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, type SceneImageRequest } from './assets/scene-image';
+
+export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';

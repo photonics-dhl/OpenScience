@@ -1,14 +1,28 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-08 +08）：** production/public97aa06a542febf558a47cecbf6559bd0a6c876aa，rollbackc5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb；release branch codex/onchip-video-release HEAD97aa06a，当前实现未提交未部署。视频已获用户批准；Chat6Pro已返回自主流程规划，服务器编排正在实现。
+> **CURRENT 2026-09-08:** 服务器实测 release134ebdea796b922ac07d9f29b6148b458b5e515f / rollback97aa06a542febf558a47cecbf6559bd0a6c876aa；codex/onchip-video-release 正合并生产与4c369cbc自主流程候选，未部署。
+
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
+
+> 当前用户要求：按 PRD v1.1 完善功能、版本管理、推送 GitHub 并部署；本轮研究记录/核查/每 RO API 优先，保留原有视觉与解释能力，不代表四阶段全部完成。
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
+| `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |
+| `packages/domain/src/agent/research-run.ts` / `apps/api/src/routes/research-runs.ts` / `infra/migrations/20260908010000_hermes_research_runs/` / `infra/migrations/20260908020000_hermes_research_workflow/` | 持久流程、来源审核和限定生成授权、服务器审核后续跑 | CANDIDATE4c369cbc；正合并生产，新增流程待服务器验收 |
+| `apps/web/components/hermes/{HermesResearchRunPanel,HermesSourceReview}.tsx` / `apps/web/test/hermes-research-run-panel.test.tsx` | 用户启动、恢复及审核进度入口 | CANDIDATE；待服务器验收 |
 | `packages/domain/src/agent/research-source-readiness.ts` / `packages/domain/test/agent/research-source-readiness.test.ts` | Hermes原生文本/OCR/外部来源准备决策；区分上传、外部文件和文献线索 | LOCAL CANDIDATE；Terra/medium，8项测试通过；尚未接入运行流程，不代表OCR/ScanSci调用验收 |
+| `docs/specs/2026-09-07-open-research-publication-prd.md` | 开放研究出版物 PRD v1.1：四阶段建设，每 RO AI 友好 API、固定版本/权限合同及独立客户端验收 | 用户授权实施；本轮 M1/M2 优先，不代表已部署 |
+| `infra/migrations/20260907010000_frozen_research_record/` / `packages/domain/src/commit/{research-record-snapshot,research-record}.ts` / `apps/api/src/routes/{research-record,research-record-schema}.ts` | 提交时冻结记录、固定版本读取/来源/JSON 导出、机器 Schema/OpenAPI；nullable 迁移 37 与回滚 SQL | CANDIDATE；开发与专项验证中，尚未部署 |
+| `apps/web/components/research/VersionRecord.tsx` / `apps/web/lib/research-materials.ts` | 固定版本预览、材料恢复与并发附件保护 | UI 候选 99793fd 已复审；固定 API 接入中 |
+| `docs/specs/2026-09-07-research-record-api.md` | 每 RO 固定研究记录 API：权限、引用、来源、JSON 导出与机器合同 | CANDIDATE；开发验证中，尚未部署 |
+| `apps/agent-worker/src/parsers/native-pdf-text-items.ts` / `apps/agent-worker/src/parsers/cascade-orchestrator.ts` / `apps/agent-worker/src/parsers/text-extractor.ts` | 保留科学文本的 PDF 几何与 CMSY 否定符恢复，无法证明保真时保持待核查 | 已部署 17eb209；本候选合入，复核中 |
+| `apps/agent-worker/test/extraction-confirmation.test.ts` | 真实 extractHandler → 确认 → 冻结 API 的组合回归；位置歧义与错误身份不能升级为确定证据 | 最终修复 f199b4fd；14组合回归通过，复审中 |
+| `docs/plans/2026-09-07-open-research-publication-plan.md` | 原子导入确认、材料一致性、来源核查和每 RO 只读 API；独立审查与精确 SHA 发布 | IN PROGRESS；codex/open-research-publication，生产基线 5e4b4d4 / rollback 8e4ecb2 |
+| `packages/domain/src/ingestion/{ingestion-service,ingestion-evidence}.ts` / `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/ingestion.ts` / corresponding ingestion tests | 确认原子创建真实 Version、幂等重放、材料恢复与保守来源匹配；保留既有草稿图谱编辑 | CANDIDATE 0822515；76 domain / 8 API，独立复审通过；未部署 |
 | `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；已确认RO工作区/概览/Hermes侧栏/研究桌面职责；官方参考实查完成；A配色三态本地样稿，待用户视觉验收 |
 | `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；收尾/22路由审计和选择性同事UX整合；PR102应用4d39808已部署、动画demo9848411；主线确认，PR103/104正式桌面/概览/段落助手已部署验收 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |
@@ -243,7 +257,7 @@
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
 | `apps/web/components/hermes/HermesPresentationAction.tsx` / `apps/web/components/hermes/HermesPresentationReview.tsx` / `apps/web/lib/hermes/presentation-action.ts` / `apps/web/lib/hermes/presentation-intent.ts` / `apps/web/test/hermes-presentation-action.test.ts` / `apps/web/test/hermes-presentation-intent.test.ts` | Global Hermes scoped storyboard/revision/image review using existing presentation API and task page; Drawer/Stage, zh/en, hermes-state and presentation-workbench tests updated | DEPLOYED f144eb7; real revision/task/audit and final contrast/Chinese/read-only acceptance passed |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT：真实论文到机制媒体、精确版本与未决项 | **CURRENT active-memory**；production fbb5405/rollback005ffb8；UX已部署并完成真实1440/390截图；有序摘录待部署/真实验收，视频未走通 |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT：研究记录/API、生产媒体功能保留、发布验收 | **CURRENT active-memory**；publication候选整合生产97aa06a5，待最终验收与部署 |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |

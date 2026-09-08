@@ -1,4 +1,23 @@
 {
+  "versionRecord": {
+    "export": "导出固定记录",
+    "api": "研究 API",
+    "legacy": "此旧版本未保存固定的论断与证据记录，仅提供当时的 SDF 和材料。",
+    "noRegion": "此来源暂不提供区域高亮。",
+    "loading": "正在加载版本…",
+    "mismatch": "版本快照不匹配",
+    "reviewBoundary": "生成版本时保存的固定研究记录。后续草稿编辑不会改变此记录；证据仍可能需要人工核查。",
+    "missing": "未提供 · 待补充",
+    "checkEvidence": "核查论断与来源",
+    "evidence": "论断与来源核查",
+    "noLocator": "暂无可核查的原文定位，需要人工核查。",
+    "assessment": "评估：{assessment}",
+    "openSource": "查看原文段落",
+    "verified": "已人工核查",
+    "pending": "待核查",
+    "noPage": "此来源未提供页码。",
+    "materials": "版本材料"
+  },
   "mechanismVideo": {
     "driver_signal": "强驱动与弱信号",
     "tip_enhancement": "尖端局域场增强",
@@ -39,6 +58,8 @@
     "settingsShort": "设置"
   },
   "editor": {
+    "savedVersionSources":"核查最近保存版本的来源",
+    "draftRevision": "草稿修订 {version}",
     "common": {
       "cancel": "取消"
     },
@@ -785,6 +806,10 @@
     "eyebrow": "OpenScience / Research Object"
   },
   "hermesReview": {
+    "snapshotLoadError": "无法读取已确认的版本快照，请重试后查看保存内容。",
+    "legacyConfirmation":"此旧导入未记录确认快照，请核查已有版本后再使用其证据。",
+    "reviewPending": "提取内容待人工核查；未提供的信息请留空，不需要补写推测。",
+    "missing": "未提供 · 待补充",
     "missingTask": "缺少任务标识。",
     "back": "返回工作台",
     "eyebrow": "Hermes / 证据审核",
@@ -799,7 +824,7 @@
     "boundaryNote": "角色保持安静；右键或长按可查看当前证据工具。",
     "saved": "已确认并写入新版本。",
     "ready": "六项内容已填写，可以确认。",
-    "incomplete": "请补齐所有字段后确认。",
+    "incomplete": "缺失字段可保留为空，确认后继续核查。",
     "saving": "正在写入…",
     "confirmed": "已确认",
     "confirm": "确认并创建版本",
@@ -819,57 +844,9 @@
     "viewVersions": "查看版本记录"
   },
   "hermesRun": {
-    "title": "论文到视频工作流",
-    "startDescription": "Hermes 会在服务器上持续跟踪这份论文的结构化分析。你可以离开后再回来；来源审核和后续媒体审核仍由你明确决定。",
-    "unavailableDescription": "上传后的论文正在准备可跟踪的分析任务。解析开始后，可以从这里启动工作流。",
-    "start": "让 Hermes 开始跟踪这篇论文",
-    "startFor": "让 Hermes 跟踪：{source}",
-    "sourceLabel": "要跟踪的论文材料",
-    "starting": "正在建立工作流…",
-    "loading": "正在恢复 Hermes 工作流…",
-    "loadError": "无法恢复 Hermes 工作流。请刷新后重试。",
-    "startError": "无法建立 Hermes 工作流。请检查研究材料后重试。",
-    "actions": "工作流操作",
-    "source": "来源材料 {number}",
-    "stepName": "工作流步骤 {number}",
-    "reopen": "保存此工作流链接",
-    "reviewSource": "审核论文结构与来源",
-    "reviewPresentation": "打开主张与媒体审核",
-    "openFiles": "查看研究材料",
-    "sourceReviewSection": "继续 Hermes 来源审核",
-    "versionLabel": "用于来源审核的草稿版本",
-    "versionOption": "草稿版本 {number}",
-    "loadingVersions": "正在读取可审核的草稿版本…",
-    "versionLoadError": "无法读取草稿版本。请刷新后重试。",
-    "noDraftVersion": "请先提交当前草稿版本，再继续来源审核。",
-    "status": {
-      "running": "正在分析来源材料",
-      "awaiting_source_review": "需要审核论文结构与来源",
-      "awaiting_claim_review": "需要审核主张与候选证据",
-      "generating_storyboard": "正在生成分镜",
-      "awaiting_storyboard_review": "需要审核分镜",
-      "generating_scene_images": "正在生成场景图",
-      "awaiting_scene_images_review": "需要审核场景图",
-      "generating_video": "正在生成视频",
-      "awaiting_video_review": "需要审核视频",
-      "succeeded": "工作流已完成",
-      "failed": "工作流已停止",
-      "stopped": "工作流已停止"
-    },
-    "description": {
-      "running": "分析在服务器上继续进行；关闭此页面不会取消它。",
-      "awaiting_source_review": "请先核对六项研究结构和原文来源。确认前，Hermes 不会开始分镜、图像或视频。",
-      "awaiting_claim_review": "主张和候选证据需要科学复核；它们尚未因此被标为已验证。",
-      "generating_storyboard": "已获授权的后续媒体任务正在服务器上执行。",
-      "awaiting_storyboard_review": "请审核分镜后，才会继续生成场景图。",
-      "generating_scene_images": "已获授权的场景图正在服务器上生成。",
-      "awaiting_scene_images_review": "请审核全部场景图后，才会继续生成视频。",
-      "generating_video": "已获授权的视频正在服务器上生成。",
-      "awaiting_video_review": "请审核视频；完成不会自动发布研究成果。",
-      "succeeded": "已完成经审核的媒体流程；研究成果仍需按现有发布流程处理。",
-      "failed": "某个服务器步骤未完成。请查看材料和具体错误后再决定下一步。",
-      "stopped": "工作流因研究对象或权限范围变化而安全停止。"
-    },
+    "title": "论文到视频工作流", "startDescription": "Hermes 会在服务器上跟踪这篇论文。你可以离开后再回来；每次来源和媒体审核仍由你决定。", "unavailableDescription": "论文正在准备可跟踪的分析任务。任务可用后可从这里启动工作流。", "startFor": "让 Hermes 跟踪：{source}", "sourceLabel": "要跟踪的论文材料", "starting": "正在建立工作流…", "loading": "正在恢复 Hermes 工作流…", "loadError": "无法恢复 Hermes 工作流。", "startError": "无法建立 Hermes 工作流。", "actions": "工作流操作", "source": "来源材料 {number}", "stepName": "工作流步骤 {number}", "reopen": "保存此工作流链接", "reviewSource": "审核论文结构与来源", "reviewPresentation": "打开主张与媒体审核", "openFiles": "查看研究材料", "sourceReviewSection": "继续 Hermes 来源审核", "confirmedVersion": "使用已确认的草稿版本 {number}。",
+    "status": { "running": "正在分析来源材料", "awaiting_source_review": "需要审核论文结构与来源", "awaiting_claim_review": "需要审核主张与候选证据", "generating_storyboard": "正在生成分镜", "awaiting_storyboard_review": "需要审核分镜", "generating_scene_images": "正在生成场景图", "awaiting_scene_images_review": "需要审核场景图", "generating_video": "正在生成视频", "awaiting_video_review": "需要审核视频", "succeeded": "工作流已完成", "failed": "工作流已停止", "stopped": "工作流已停止" },
+    "description": { "running": "分析在服务器上继续进行；关闭此页面不会取消它。", "awaiting_source_review": "请先核对六项研究结构和原文来源。确认前 Hermes 不会开始媒体生成。", "awaiting_claim_review": "主张和候选证据需要科学复核；它们不会因此被标为已验证。", "generating_storyboard": "服务器正在执行已授权的后续媒体任务。", "awaiting_storyboard_review": "请审核分镜后再继续生成场景图。", "generating_scene_images": "已授权的场景图正在服务器上生成。", "awaiting_scene_images_review": "请审核全部场景图后再继续视频。", "generating_video": "已授权的视频正在服务器上生成。", "awaiting_video_review": "请审核视频；完成不会自动发布研究成果。", "succeeded": "已审核的媒体工作流已完成。", "failed": "某个服务器步骤未完成。请查看错误后决定下一步。", "stopped": "工作流因研究对象或权限范围变化而安全停止。" },
     "step": { "waiting": "等待中", "running": "进行中", "awaiting_approval": "等待审核", "succeeded": "已完成", "failed": "失败", "stopped": "已停止" }
   },
   "ingestion": {
@@ -1078,8 +1055,12 @@
       "stepTwoBody": "根据已核对的内容制作图解和视频。",
       "emptyMedia": "内容整理完成后，在这里展示图解与视频。"
     },
-    "versions": { "kicker": "版本历史", "title": "版本", "body": "快照是不可变记录。选择两个版本，比较确切的 SDF 与证据清单。", "compare": "比较", "emptyTitle": "还没有已提交版本", "emptyBody": "在 SDF 编辑器或文件页面创建第一次提交。", "diff": "确定性比较" },
-    "files": { "kicker": "证据存储", "title": "文件", "body": "上传论文、数据、代码、图片或视频。只有创建提交后，文件才会成为版本的一部分。", "provenance": "证据来源", "provenanceBody": "上传会记录内容哈希与逻辑路径；提交会把它绑定到不可变的 Research Object 版本。", "defaultCommit": "绑定证据", "commitMessage": "提交说明", "attaching": "正在创建提交…", "attach": "绑定到新版本", "empty": "请先在上方选择文件。", "committed": "证据已提交，新版本已经出现在版本页面。" },
+    "versions": { "notFound": "当前研究中没有这个版本。",
+      "kicker": "版本历史", "title": "版本", "body": "快照是不可变记录。选择两个版本，比较确切的 SDF 与证据清单。", "compare": "比较", "emptyTitle": "还没有已提交版本", "emptyBody": "在 SDF 编辑器或文件页面创建第一次提交。", "diff": "确定性比较" },
+    "files": { "savedMaterials": "已有材料与导入记录",
+      "snapshotVersion": "快照版本 {version}",
+      "addMore": "可在上方添加更多材料。",
+      "kicker": "证据存储", "title": "文件", "body": "上传论文、数据、代码、图片或视频。只有创建提交后，文件才会成为版本的一部分。", "provenance": "证据来源", "provenanceBody": "上传会记录内容哈希与逻辑路径；提交会把它绑定到不可变的 Research Object 版本。", "defaultCommit": "绑定证据", "commitMessage": "提交说明", "attaching": "正在创建提交…", "attach": "绑定到新版本", "empty": "请先在上方选择文件。", "committed": "证据已提交，新版本已经出现在版本页面。" },
     "sandbox": { "kicker": "可复现实验", "title": "沙箱", "body": "在服务器上运行受边界约束的科研脚本，检查输出，并把执行环境保留在 Research Object 旁。", "context": "Research Object 可视化", "environment": "执行环境", "script": "Python 脚本", "starting": "启动中…", "run": "在沙箱运行", "notFound": "没有找到这个沙箱任务。", "result": "可视化结果", "close": "关闭", "runtime": "运行时间", "download": "下载到本设备", "viewScript": "查看 Python 脚本", "logs": "执行日志", "modify": "修改脚本", "previewError": "无法生成修改预览。", "executeError": "无法创建修改后的任务。", "modifyPrompt": "描述你想要的修改", "modifyPlaceholder": "例如：改变曲线颜色、添加标题或调整 x 轴标签。", "previewing": "正在生成预览…", "preview": "生成预览", "policyPassed": "策略检查通过", "policyBlocked": "策略检查阻断", "diff": "脚本差异", "confirmExecute": "确认执行" },
     "publish": { "kicker": "发布控制", "title": "发布", "body": "发布是高影响操作：选择版本、记录三类许可、通过发布审核，再确认不可变的公开记录。", "permanence": "公开记录", "permanenceBody": "已发布版本会获得稳定公开 ID、UTC 时间戳和内容哈希，并向所有人公开，不能原地修改。", "version": "要发布的版本", "licenses": "许可", "license": { "text": "正文", "code": "代码", "data": "数据" }, "checking": "正在审核…", "review": "保存许可并审核", "action": "审阅变更", "readiness": "发布就绪度", "notReviewed": "尚未审核", "reviewStatus": { "passed": "审核通过", "blocked": "发布被阻断" }, "emptyTitle": "还没有可发布版本", "emptyBody": "先创建一个提交版本，再进入发布控制。", "published": "已发布公开版本", "confirmTitle": "确认不可变发布", "confirmBody": "这是 R3 操作。确认后，所选版本会获得永久公开 URL，Research Object 的可见性将扩展为所有人可访问；版本、许可、时间戳和内容哈希将成为不可变公开记录。", "cancel": "取消", "confirm": "发布版本", "close": "关闭审阅" },
     "settings": { "navigation": "账户设置", "skip": "跳到设置内容", "kicker": "账户 / 偏好", "title": "设置", "body": "管理 OpenScience 的身份、语言和会话。", "identity": "科研身份", "name": "显示名称", "email": "邮箱", "level": "访问级别", "preferences": "偏好", "language": "语言", "evidenceCollapsed": "默认折叠证据", "evidenceCollapsedHint": "公开 RO 仍会完整加载证据，页面上先以摘要高度展示；打印和辅助技术始终保留全文。", "preferenceSaved": "阅读偏好已保存。", "preferenceConflict": "另一会话已更新偏好，已载入最新设置。", "preferenceError": "偏好暂时无法保存，请重试。", "signOut": "退出登录" }

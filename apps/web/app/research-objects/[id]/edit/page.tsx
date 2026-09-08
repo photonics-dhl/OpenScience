@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import EditorLayout from '../../../../components/editor/EditorLayout';
 import OutlinePanel from '../../../../components/editor/OutlinePanel';
@@ -17,11 +18,8 @@ import { useOptionalHermesWorkspaceStage } from '../../../../components/hermes/H
 import {
   createCommit,
   getAgentTask,
-  getIngestionTask,
   getResearchObject,
-  getVersionDiff,
   listVersions,
-  apiRequest,
   retryAgentTask,
   submitExtractTask,
   updateSdf,
@@ -49,6 +47,7 @@ import {
   suggestionReducer,
   type SdfField,
 } from '../../../../lib/suggestions';
+import { loadResearchMaterials } from '../../../../lib/research-materials';
 import type { Locale } from '../../../../i18n/locale';
 
 type FieldKey = keyof Omit<SdfCore, 'schemaVersion'>;
@@ -74,6 +73,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const t = useTranslations('editor');
   const locale = useLocale() as Locale;
   const roId = params.id;
+  const router = useRouter();
   const ingestionTaskId = typeof searchParams?.ingestionTask === 'string' ? searchParams.ingestionTask : '';
   const editorSuggestion = useMemo<HermesGuideSuggestion>(() => ({
     bodyKey: 'guide.continue.body',
@@ -129,25 +129,13 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         } else {
           dispatch({ type: 'init', core, version: ro.researchObject.version });
         }
-        const vs = await listVersions(roId);
+        const restored = await loadResearchMaterials(roId);
+        const vs = { versions: restored.versions };
         if (cancelled) return;
-        let inheritedArtifacts: ArtifactReference[] = [];
-        const latest = vs.versions[0];
-        if (latest) {
-          const previous = await apiRequest<{ version: { versionId: string; snapshot: { artifacts: ArtifactReference[] } } }>(`/api/versions/${encodeURIComponent(latest.versionId)}`);
-          if (cancelled) return;
-          if (previous.version.versionId !== latest.versionId) throw new Error('Version snapshot mismatch');
-          inheritedArtifacts = previous.version.snapshot.artifacts.map(({ artifactId, logicalPath }) => ({ artifactId, logicalPath }));
+        if (ingestionTaskId && !restored.ingestion.tasks.some((task) => task.id === ingestionTaskId && task.confirmation)) {
+          throw new Error(locale === 'zh' ? '这份材料尚无确认版本，请到 Hermes 核查。' : 'This material has no confirmed version. Review it in Hermes.');
         }
-        if (ingestionTaskId) {
-          const imported = await getIngestionTask(ingestionTaskId);
-          if (cancelled) return;
-          if (imported.researchObjectId !== roId || imported.task.state !== 'confirmed') {
-            throw new Error(locale === 'zh' ? '这份文件尚未在当前研究中确认。请返回 Hermes 完成确认。' : 'This file has not been confirmed in this research. Return to Hermes to review it.');
-          }
-          inheritedArtifacts = [...inheritedArtifacts.filter((item) => item.logicalPath !== imported.task.logicalPath), { artifactId: imported.task.artifactId, logicalPath: imported.task.logicalPath }];
-        }
-        setArtifacts(inheritedArtifacts);
+        setArtifacts(restored.artifacts);
         if (!cancelled) {
           setVersions(vs.versions ?? []);
           setEditorLoaded(true);
@@ -407,7 +395,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     setErrorMsg(null);
     try {
       await createCommit(roId, {
-        message: commitMsg || `v${state.version}`,
+        message: commitMsg || t('draftRevision', { version: state.version }),
         version: state.version,
         sdfCore: state.core,
         artifacts,
@@ -435,17 +423,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     setDraftPrompt(false);
   }
 
-  async function handleVersionSelect(versionId: string) {
-    setErrorMsg(null);
-    try {
-      const latest = versions[0]?.versionId;
-      if (latest && latest !== versionId) {
-        const diff = await getVersionDiff(versionId, latest);
-        void diff;
-      }
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
-    }
+  function handleVersionSelect(versionId: string) {
+    router.push(`/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versionId)}`);
   }
 
   const saveState = saveError ? 'error' : saving ? 'saving' : state.dirty ? 'dirty' : 'saved';
@@ -469,7 +448,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           <ObjectHeader
             actions={
               <>
-                <button aria-label={t('saveToSdf')} className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper disabled:opacity-40" onClick={handleSave} disabled={saving || !state.dirty}>
+                <button aria-label={t('saveToSdf')} className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper disabled:opacity-40" onClick={handleSave} disabled={saving || !state.dirty || !editorLoaded}>
                   <span className="hidden sm:inline">{saving ? t('common.saving') ?? '…' : t('saveToSdf')}</span><span className="sm:hidden">SDF</span>
                 </button>
                 <input
@@ -520,7 +499,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
               </div>
             )}
-            <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} />
+            <CoreEditor sourceHref={versions[0] ? `/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versions[0].versionId)}#version-evidence` : undefined} core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} />
             <ArtifactUploader workspaceId={workspaceId} artifacts={artifacts} onArtifactsChange={setArtifacts} />
           </>
         }

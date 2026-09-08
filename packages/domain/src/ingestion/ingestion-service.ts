@@ -1,3 +1,4 @@
+import { freezeResearchRecord } from '../commit/research-record-snapshot';
 import { createHash, randomUUID } from 'node:crypto';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
@@ -6,7 +7,12 @@ import { createAgentSession, dispatchAgentTask, projectAgentTaskResult, submitAg
 import { requireActive, requireMembership } from '../workspace/helpers';
 import { WorkspaceError } from '../workspace/errors';
 import { recordAudit } from '../workspace/audit';
-import { updateSdfDocument } from '../research-object/sdf';
+import { validateSdfCore, validateSdfDraftCore } from '@openscience/sdf-schema';
+import { createCommit, type CreateCommitResult } from '../commit/commits';
+import { ResearchObjectError } from '../research-object/errors';
+import { SDF_NODE_TYPES } from '../research-object/types';
+import type { SdfDocumentView } from '../research-object/sdf';
+import { carryVersionEvidence, writeIngestionEvidence } from './ingestion-evidence';
 import { IngestionError } from './errors';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
 import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
@@ -209,23 +215,103 @@ export async function retryIngestionTask(
   return taskToView(updated);
 }
 
-/** 将 Hermes 建议写入 SDF，并把 ingestion task 从 needs_review 推进为 confirmed。 */
+export interface IngestionConfirmation {
+  commitId: string;
+  versionId: string;
+  versionNo: number;
+  /** RO optimistic lock immediately after this confirmation, not its current value. */
+  version: number;
+  evidenceStatus: 'needs_review';
+  missingFields: string[];
+}
+
+function confirmationView(commit: CreateCommitResult): IngestionConfirmation {
+  return {
+    commitId: commit.commitId, versionId: commit.versionId, versionNo: commit.versionNo,
+    version: commit.versionNo + 1, evidenceStatus: 'needs_review',
+    missingFields: SDF_NODE_TYPES.filter(field => !String(commit.snapshot.core[field] ?? '').trim()),
+  };
+}
+
+async function savedConfirmation(deps: IngestionDeps, taskId: string, researchObjectId: string): Promise<CreateCommitResult | null> {
+  const commit = await deps.prisma.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${taskId}` } });
+  if (!commit || commit.researchObjectId !== researchObjectId) return null;
+  const version = await deps.prisma.version.findFirst({ where: { commitId: commit.id } });
+  if (!version) return null;
+  const manifest = await deps.prisma.versionManifest.findUnique({ where: { versionId: version.id }, include: { entries: true } });
+  if (!manifest) return null;
+  return { commitId: commit.id, versionId: version.id, versionNo: version.versionNo,
+    snapshot: { core: manifest.coreJson as Record<string, unknown>, artifacts: manifest.entries } };
+}
+
+/** Durable RO-scoped material history, including completed imports and their fixed versions. */
+export async function getResearchObjectIngestion(deps: IngestionDeps, input: { userId: string; researchObjectId: string }) {
+  const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
+  if (!ro) throw new IngestionError('INGESTION_NOT_FOUND', 'Research object not found');
+  await requireMembership(deps, ro.workspaceId, input.userId);
+  const rows = await deps.prisma.ingestionTask.findMany({
+    where: { batch: { researchObjectId: ro.id } }, include: { artifact: true }, orderBy: { updatedAt: 'desc' },
+  });
+  const tasks = await Promise.all(rows.map(async task => {
+    const saved = await savedConfirmation(deps, task.id, ro.id);
+    return { ...taskToView(task), confirmation: saved ? confirmationView(saved) : null };
+  }));
+  return { researchObjectId: ro.id, version: ro.version, tasks,
+    latestConfirmation: tasks.filter(task => task.confirmation).sort((a, b) => b.confirmation!.versionNo - a.confirmation!.versionNo)[0]?.confirmation ?? null };
+}
+
+/** A human confirmation creates one version, working SDF and source records atomically. */
 export async function confirmIngestionTask(
   deps: IngestionDeps,
   input: { userId: string; taskId: string; version: number; core: Record<string, string> },
   ctx: AuditContext = {},
-): Promise<{ task: IngestionTaskView; sdf: Awaited<ReturnType<typeof updateSdfDocument>> }> {
-  const task = await deps.prisma.ingestionTask.findUnique({
-    where: { id: input.taskId }, include: { artifact: true, batch: { include: { researchObject: true } } },
-  });
-  if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
-  await authorizeIngestionWrite(deps, { userId: input.userId, researchObjectId: task.batch.researchObject.id });
-  if (task.state !== 'needs_review') throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only tasks awaiting review can be confirmed');
-  const sdf = await updateSdfDocument(deps, { userId: input.userId, roId: task.batch.researchObject.id, version: input.version, core: input.core }, ctx);
-  const updated = await deps.prisma.ingestionTask.updateMany({ where: { id: task.id, state: 'needs_review' }, data: { state: 'confirmed', error: null } });
-  if (updated.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Task changed while confirming');
-  const confirmed = await deps.prisma.ingestionTask.findUniqueOrThrow({ where: { id: task.id }, include: { artifact: true } });
-  return { task: taskToView(confirmed), sdf };
+): Promise<{ task: IngestionTaskView; sdf: SdfDocumentView; confirmation: IngestionConfirmation }> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await deps.prisma.$transaction(async tx => {
+        const scoped = { ...deps, prisma: tx as IngestionDeps['prisma'] };
+        const task = await tx.ingestionTask.findUnique({ where: { id: input.taskId },
+          include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } } });
+        if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+        const { researchObject: ro } = await authorizeIngestionWrite(scoped, { userId: input.userId, researchObjectId: task.batch.researchObjectId });
+        let commit = await savedConfirmation(scoped, task.id, ro.id);
+        if (!commit) {
+          if (task.state !== 'needs_review') throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only tasks awaiting review can be confirmed');
+          const check = ro.status === 'draft' ? validateSdfDraftCore(input.core) : validateSdfCore(input.core);
+          if (!check.ok) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
+          const document = await tx.sdfDocument.findUnique({ where: { researchObjectId: ro.id } });
+          if (!document) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');
+          const latest = await tx.version.findFirst({ where: { researchObjectId: ro.id }, orderBy: { versionNo: 'desc' } });
+          const previous = latest ? await tx.versionManifest.findUnique({ where: { versionId: latest.id }, include: { entries: true } }) : null;
+          const artifacts = (previous?.entries ?? []).map(entry => ({ logicalPath: entry.logicalPath, artifactId: entry.artifactId }));
+          if (!artifacts.some(entry => entry.artifactId === task.artifactId)) {
+            let logicalPath = task.artifact.logicalPath;
+            if (artifacts.some(entry => entry.logicalPath === logicalPath)) logicalPath = `imports/${task.id}/${logicalPath}`;
+            artifacts.push({ logicalPath, artifactId: task.artifactId });
+          }
+          commit = await createCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: input.version,
+            sdfCore: input.core, artifacts, message: `Confirm import: ${task.artifact.logicalPath}`, idempotencyKey: `ingestion-confirm:${task.id}` }, ctx, tx);
+          await tx.sdfDocument.update({ where: { researchObjectId: ro.id }, data: { coreJson: input.core } });
+          for (const nodeType of SDF_NODE_TYPES) await tx.sdfNode.update({
+            where: { sdfDocumentId_nodeType: { sdfDocumentId: document.id, nodeType } }, data: { content: input.core[nodeType] ?? '' },
+          });
+          if (latest) await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: latest.id, versionId: commit.versionId });
+          await writeIngestionEvidence(scoped, { task, versionId: commit.versionId, core: input.core });
+          await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: commit.versionId });
+          const updated = await tx.ingestionTask.updateMany({ where: { id: task.id, state: 'needs_review' }, data: { state: 'confirmed', error: null } });
+          if (updated.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Task changed while confirming');
+          await recordAudit(deps, tx, { actorId: input.userId, action: 'ingestion.confirm', workspaceId: ro.workspaceId,
+            targetType: 'ingestion_task', targetId: task.id, metadata: { versionId: commit.versionId, evidenceStatus: 'needs_review' } }, ctx);
+        }
+        const core = commit.snapshot.core as Record<string, string>;
+        return { task: { ...taskToView(task), state: 'confirmed', error: null },
+          sdf: { core, nodes: SDF_NODE_TYPES.map(nodeType => ({ nodeType, content: core[nodeType] ?? '' })) }, confirmation: confirmationView(commit) };
+      }, { isolationLevel: 'Serializable', timeout: 30_000 });
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2034' && attempt < 2) continue;
+      throw error;
+    }
+  }
 }
 
 function taskToView(task: {

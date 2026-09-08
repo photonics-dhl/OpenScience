@@ -3,9 +3,13 @@
 > CURRENT 2026-09-08. Real paper→structured analysis→confirmed same-version Claims→five approved scientific illustrations→actual animated video now generated and technically validated. User approved the actual video; asset approval verified2026-09-08T06:32:43.612Z. Autonomous server orchestration is the current objective. Source-tracking candidate a72b5e1c is server-validated; full initiation/review-resume/media remains in implementation.
 
 ## Exact versions
-- Production/public97aa06a542febf558a47cecbf6559bd0a6c876aa; rollbackc5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb. CI34192289263 passed. Server build/Parser16/migrations/runtime/public release passed; deploy log1788847601812-bb0e1267-8342-4ce0-ac1e-e4b1671f179a, post-checkup1788848374145-0b609e64-296e-4412-afc6-bee21c921b7e.
-- Release worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release, codex/onchip-video-release, HEADa72b5e1c; origin97aa06a5 before candidate push. Draft PR107; no merge. Final docs may make the worktree dirty but do not change deployed code.
+- Production now134ebdea796b922ac07d9f29b6148b458b5e515f; rollback97aa06a542febf558a47cecbf6559bd0a6c876aa, verified by SSH. Healthy services/public200/local200/egress204, log1788856128022-4eb2f945-569f-4959-978b-36134bc6deee. The following97aa acceptance is historical. CI34192289263 passed. Server build/Parser16/migrations/runtime/public release passed; deploy log1788847601812-bb0e1267-8342-4ce0-ac1e-e4b1671f179a, post-checkup1788848374145-0b609e64-296e-4412-afc6-bee21c921b7e.
+- Release worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release, codex/onchip-video-release, HEAD4c369cbc; merge134ebdea in progress, origin97aa06a5 before candidate push. Draft PR107; no merge. Final docs may make the worktree dirty but do not change deployed code.
 - Development E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow, codex/token-smart-live-workflow, HEAD005ffb8d8298d3476e8411046cae300079bd8344; relevant final source/tests copied back, dirty work retained. Root dirty main separate: do not reset/pull/stash.
+
+## Integrated production continuity
+- Preserve134ebdea atomic ingestion confirmation.versionId, canonical source block IDs, frozen research records and graph inheritance; publication plan docs/plans/2026-09-07-open-research-publication-plan.md. Its stale pre-deploy status does not override measured server release.
+- Candidate a72 server directory was removed by an external deployment; its logs remain historical evidence. New integrated candidate requires fresh server build and acceptance. All runtime tests/builds only on ECS.
 
 ## Product and scientific evidence
 - Real paper2009.06045v1,25pages, SHA d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a. Six substantive fields scientifically narrowed, confirmed and committed via UI; strict same-version Claim bridge passed without reupload after bbox roundtrip repair.

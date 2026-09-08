@@ -815,6 +815,7 @@ enum VersionStatus {
 }
 
 model Version {
+  researchRecord   Json?         @map("research_record")
   id               String        @id @default(uuid()) @db.Uuid
   researchObjectId String        @map("research_object_id") @db.Uuid
   commitId         String        @map("commit_id") @db.Uuid

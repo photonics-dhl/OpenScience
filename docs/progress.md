@@ -1,5 +1,11 @@
 # Progress
 
+## 2026-09-08: integrate latest production before server workflow acceptance
+
+- Measured server release134ebdea / rollback97aa06a, healthy containers and public/local200. Preserve newly deployed atomic confirmation, canonical evidence and frozen version records.
+- Candidate4c369cbc adds scoped source review and media continuation; merging134ebdea, tests pending. All runtime validation is server-only. Old a72 acceptance directory was externally removed; logs are historical.
+- Production publication implementation details remain in docs/plans/2026-09-07-open-research-publication-plan.md. Complete autonomous normal-user workflow first; then second supported paper and UX.
+
 ## 2026-09-08: server-only candidate verification
 
 - User correction: no local runtime validation; all tests/build/migration checks run on ECS. Rule persisted in AGENTS across root/development/release workspaces.

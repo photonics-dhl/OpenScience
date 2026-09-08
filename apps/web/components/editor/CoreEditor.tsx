@@ -29,11 +29,13 @@ export default function CoreEditor({
   onEdit,
   activeField,
   onSelectField,
+  sourceHref,
 }: {
   core: SdfCore;
   onEdit: (field: keyof Omit<SdfCore, 'schemaVersion'>, value: string) => void;
   activeField: keyof Omit<SdfCore, 'schemaVersion'> | null;
   onSelectField: (field: keyof Omit<SdfCore, 'schemaVersion'>) => void;
+  sourceHref?: string;
 }) {
   const t = useTranslations('editor');
   const [preview, setPreview] = useState(false);
@@ -81,6 +83,7 @@ export default function CoreEditor({
               />
             </HermesAnchor>
           )}
+          {sourceHref && (field === 'insight' || field === 'results') && <a className="mt-2 inline-flex min-h-11 items-center text-sm text-os-vermilion-ink underline" href={sourceHref}>{t('savedVersionSources')}</a>}
         </SDFNode>
       ))}
     </div>
