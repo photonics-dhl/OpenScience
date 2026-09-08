@@ -61,5 +61,5 @@ export async function validatePaths(inputArgument, outputArgument) {
     if (names.includes(VIDEO_FILE)) throw new Error('Final video already exists; use a new output directory');
     if (names.length) throw new Error('Output directory must be empty; retain prior artifacts and use a new directory');
   }
-  return { input, output, audioMode, scene3Artwork, storyboard, renderMode: storyboard ? 'illustrated-storyboard-preview' : 'd2nn-scientific-animation' };
+  return { input, output, audioMode, scene3Artwork, storyboard, renderMode: storyboard?.profile === 'onchip-field-sampling-v1' ? 'onchip-field-sampling-animation' : storyboard ? 'illustrated-storyboard-preview' : 'd2nn-scientific-animation' };
 }

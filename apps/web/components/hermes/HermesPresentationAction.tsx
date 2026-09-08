@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { ApiClientError, getResearchObject, listVersions, listMyWorkspaces, listVersionClaims, listPresentationAssets, generatePresentationStoryboard, generatePresentationSceneImage, type PresentationClaim, type PresentationAsset, type VersionSummary, type WorkspaceApi, type StoryboardRequest } from '@/lib/api';
 import { validPresentationInstruction, hasCurrentPresentationSources, presentationSources, selectPresentationVersion, SubmissionIntent, type PresentationAction } from '@/lib/hermes/presentation-action';
+import { IngestionClaimReview } from './IngestionClaimReview';
 interface Props { researchObjectId: string; requestedVersionId?: string; intent: { action: PresentationAction; instruction: string; sceneIndex?: number }; onBack: () => void; onSubmitted: (url: string) => void; submissionRecords?: Map<string, SubmissionIntent>; onBusyChange?: (locked: boolean) => void }
 const control = 'min-h-11 w-full rounded border border-os-rule-paper bg-os-paper px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink';
 export function HermesPresentationAction(props: Props) {
@@ -17,6 +18,7 @@ export function HermesPresentationAction(props: Props) {
   const [claims,setClaims] = useState<PresentationClaim[]>([]); const [assets,setAssets] = useState<PresentationAsset[]>([]);
   const [selected,setSelected] = useState<string[]>([]); const [parentId,setParentId] = useState(''); const [scene,setScene] = useState(intent.sceneIndex ?? 0);
   const [ready,setReady] = useState(''); const [error,setError] = useState(''); const [busy,setBusy] = useState(false); const [uncertain,setUncertain] = useState(false); const [reload,setReload] = useState(0);
+  const [bridgeBusy, setBridgeBusy] = useState(false);
   const localRecords = useRef(new Map<string, SubmissionIntent>());
   const records = props.submissionRecords ?? localRecords.current;
   const submission = useRef(new SubmissionIntent()); const controller = useRef<AbortController | null>(null);
@@ -40,16 +42,16 @@ export function HermesPresentationAction(props: Props) {
     }).catch(()=>{if(!abort.signal.aborted && renderedScope.current===scope)setError('loadError');});
     return()=>{if(record.isBusy)record.fail(true);if(!record.isUncertain)records.delete(scope);abort.abort();};
   },[context,data,locale,records,ro,scope,versionId]);
-  useEffect(()=>{props.onBusyChange?.(busy || uncertain);},[busy,uncertain,props.onBusyChange]);
+  useEffect(()=>{props.onBusyChange?.(busy || uncertain || bridgeBusy);},[busy,uncertain,bridgeBusy,props.onBusyChange]);
   const version=data?.context===context ? data.versions.find(x=>x.versionId===versionId) : undefined;
   const canWrite=version?.status==='draft' && data?.workspace?.status==='active' && ['owner','maintainer','author','contributor'].includes(data.workspace.role ?? '');
   const parents=assets.filter(x=>x.storyboard && (x.status==='draft' || x.status==='approved') && (action!=='scene.image' || (x.status==='approved' && x.canGenerateSceneImage===true)));
   const parent=parents.find(x=>x.id===parentId);
   const ids=presentationSources(action,selected,parent,scene);
   const validSources=hasCurrentPresentationSources(ids,claims);
-  const locked=busy || uncertain;
+  const locked=busy || uncertain || bridgeBusy;
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); if(!canWrite || ready!==scope || !validSources || (action!=='scene.image' && !validPresentationInstruction(instruction)))return;
+    event.preventDefault(); if(busy || bridgeBusy || !canWrite || ready!==scope || !validSources || (action!=='scene.image' && !validPresentationInstruction(instruction)))return;
     const request=action==='scene.image' ? {storyboardAssetId:parent!.id,sceneIndex:scene} : {locale:language,style,instruction:instruction.trim(),...(parent ? {baseAssetId:parent.id}: {})};
     submission.current.draft={action,instruction,style,language,selected:[...selected],parentId,scene};
     const key=submission.current.begin(JSON.stringify([ro,versionId,action,ids,request])); if(!key)return;
@@ -67,6 +69,10 @@ export function HermesPresentationAction(props: Props) {
   }
   return <section className="min-w-0 rounded-xl bg-os-paper p-4 text-os-ink" data-hermes-presentation-action="true">
     <h3 className="m-0 text-lg font-semibold">{t('entry')}</h3><p className="text-sm leading-6">{t('boundary')}</p>
+    {canWrite && ready === scope && action === 'storyboard.create' ? <IngestionClaimReview key={scope} researchObjectId={ro} versionId={versionId} onBusyChange={setBridgeBusy} onComplete={created => {
+      setClaims(previous => [...previous.filter(claim => !created.some(item => item.id === claim.id)), ...created]);
+      setSelected(created.map(claim => claim.id).slice(0, 12));
+    }}/> : null}
     <form onSubmit={submit} className="space-y-4">
       <fieldset disabled={locked} className="m-0 min-w-0 space-y-4 border-0 p-0">
         <p className="break-words text-sm font-semibold">{data?.context===context?data.title:t('loading')}</p>
@@ -88,8 +94,8 @@ export function HermesPresentationAction(props: Props) {
       {parent && !validSources?<p role="alert" className="text-sm">{t('staleSources')}</p>:null}
       {error?<p role="alert" className="text-sm">{t(error)}</p>:null}
       {!locked && (error==='loadError' || error==='submitError' || (parent && !validSources))?<button type="button" className={control} onClick={()=>setReload(x=>x+1)}>{t('refresh')}</button>:null}
-      <button type="submit" className="min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" disabled={busy || !canWrite || ready!==scope || !validSources || (action!=='scene.image' && !validPresentationInstruction(instruction))}>{t(busy?'submitting':uncertain?'retry':'confirm')}</button>
+      <button type="submit" className="min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" disabled={busy || bridgeBusy || !canWrite || ready!==scope || !validSources || (action!=='scene.image' && !validPresentationInstruction(instruction))}>{t(busy?'submitting':uncertain?'retry':'confirm')}</button>
     </form>
-    <button type="button" className="mt-3 min-h-11 px-2 text-sm underline" disabled={busy || uncertain} onClick={onBack}>{t('back')}</button>
+    <button type="button" className="mt-3 min-h-11 px-2 text-sm underline" disabled={locked} onClick={onBack}>{t('back')}</button>
   </section>;
 }

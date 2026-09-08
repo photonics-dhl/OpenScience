@@ -1,7 +1,9 @@
 import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
 import {
   createBlockSourceLocator,
+  parseDocumentSourceMap,
   resolveSourceLocator,
+  validateSourceLocator,
   type DocumentSourceMap,
   type SourceLocator,
 } from '@openscience/domain';
@@ -21,6 +23,7 @@ export interface ExtractedCore {
 interface ExtractedFieldProposal {
   summary: string;
   sourceQuote: string;
+  sourceBlockIds?: string[];
   sourceLocator?: string;
   needsMoreInformation: boolean;
 }
@@ -36,6 +39,8 @@ export interface ExtractionResult extends Record<string, unknown> {
   needsMoreInformation: Array<(typeof SDF_CORE_FIELDS)[number]>;
   /** Present only when trusted canonical parser context was supplied outside the user payload. */
   evidenceLocation?: Record<(typeof SDF_CORE_FIELDS)[number], EvidenceLocation>;
+  /** Exact canonical block segments selected by the model and materialized by the worker. */
+  evidenceSegments?: Record<(typeof SDF_CORE_FIELDS)[number], Array<{ quote: string; sourceLocator: SourceLocator }>>;
 }
 
 export type EvidenceLocation = {
@@ -80,6 +85,8 @@ const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown): value
 
 const KEY_EVIDENCE = /limitations?|constraints?|uncertaint|data availability|code availability|reproduc|materials? and methods?|experimental setup|results?|discussion|局限|限制|不确定|数据可用|代码可用|复现|方法|结果/gi;
 const MAX_EXCERPT_CHARS = 24_000;
+const MAX_EVIDENCE_SEGMENTS = 32;
+const MAX_FIELD_EVIDENCE_CHARS = 8_000;
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
 export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
@@ -241,9 +248,18 @@ function findExplicitFieldEvidence(
 
 interface CanonicalTextBlock {
   id: string;
+  text: string;
   textStart: number;
   textEnd: number;
   originalStart: number;
+  page: number;
+  boundingBox: SourceLocator['boundingBox'];
+}
+
+interface PromptCanonicalBlock extends CanonicalTextBlock {
+  promptId: string;
+  ordinal: number;
+  text: string;
 }
 
 function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[] {
@@ -255,11 +271,199 @@ function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[]
       if (!text) continue;
       if (blocks.length > 0) cursor += 1;
       const originalStart = block.text!.indexOf(text);
-      blocks.push({ id: block.id, textStart: cursor, textEnd: cursor + text.length, originalStart });
+      blocks.push({
+        id: block.id, text, textStart: cursor, textEnd: cursor + text.length, originalStart,
+        page: page.page, boundingBox: block.boundingBox,
+      });
       cursor += text.length;
     }
   }
   return blocks;
+}
+
+function promptCanonicalBlocks(sourceMap: DocumentSourceMap): PromptCanonicalBlock[] {
+  const canonical = canonicalTextBlocks(sourceMap);
+  return canonical.map((block, ordinal) => ({
+    ...block, ordinal, promptId: `B${String(ordinal + 1).padStart(6, '0')}`,
+  }));
+}
+
+function selectCanonicalBlocks(sourceMap: DocumentSourceMap): PromptCanonicalBlock[] {
+  const blocks = promptCanonicalBlocks(sourceMap);
+  const selected = new Set<number>();
+  let remaining = MAX_EXCERPT_CHARS;
+  const renderedLength = (block: PromptCanonicalBlock) => `--- SOURCE_BLOCK id:${block.promptId} ---\n${block.text}\n\n`.length;
+  const addRange = (start: number, end: number): boolean => {
+    const candidates = blocks.slice(start, end + 1).filter((block) => !selected.has(block.ordinal));
+    const cost = candidates.reduce((total, block) => total + renderedLength(block), 0);
+    if (cost > remaining) return false;
+    candidates.forEach((block) => selected.add(block.ordinal));
+    remaining -= cost;
+    return true;
+  };
+  let headCost = 0;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const cost = renderedLength(blocks[index]!);
+    if (headCost + cost > 8_000 || !addRange(index, index)) break;
+    headCost += cost;
+  }
+  for (const block of blocks) {
+    if (remaining <= 8_000) break;
+    KEY_EVIDENCE.lastIndex = 0;
+    if (KEY_EVIDENCE.test(block.text)) addRange(Math.max(0, block.ordinal - 3), Math.min(blocks.length - 1, block.ordinal + 3));
+  }
+  let tailCost = 0;
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const cost = selected.has(index) ? 0 : renderedLength(blocks[index]!);
+    if (tailCost + cost > 8_000 || !addRange(index, index)) break;
+    tailCost += cost;
+  }
+  return blocks.filter((block) => selected.has(block.ordinal));
+}
+
+function canonicalBlockPrompt(blocks: PromptCanonicalBlock[]): string {
+  return blocks.map((block) => `--- SOURCE_BLOCK id:${block.promptId} ---\n${block.text}`).join('\n\n');
+}
+
+type CanonicalFieldValidationReason =
+  | 'malformed_item'
+  | 'missing_requires_empty'
+  | 'summary_required'
+  | 'segment_count_1_to_32'
+  | 'duplicate_ids'
+  | 'unknown_ids'
+  | 'ordered_ids_required'
+  | 'source_text_limit_8000';
+
+interface CanonicalRepairResponse {
+  schemaVersion: string;
+  fields: Record<string, unknown>;
+}
+
+function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
+  guard: SchemaGuard<CanonicalRepairResponse>;
+  validationFeedback: (value: unknown) => string | undefined;
+  mergeRetained: () => ExtractedProposal;
+} {
+  const allowed = new Map(blocks.map((block) => [block.promptId, block]));
+  const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
+  let invalidFields = new Map<string, CanonicalFieldValidationReason>();
+  const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason } => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return { reason: 'malformed_item' };
+    const candidate = item as Record<string, unknown>;
+    if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourceBlockIds,summary'
+      || typeof candidate.summary !== 'string' || typeof candidate.needsMoreInformation !== 'boolean'
+      || !Array.isArray(candidate.sourceBlockIds) || candidate.sourceBlockIds.some((id) => typeof id !== 'string')) {
+      return { reason: 'malformed_item' };
+    }
+    const ids = candidate.sourceBlockIds as string[];
+    if (candidate.needsMoreInformation) {
+      return candidate.summary.trim() || ids.length > 0
+        ? { reason: 'missing_requires_empty' }
+        : { candidate: candidate as unknown as ExtractedFieldProposal };
+    }
+    if (!candidate.summary.trim()) return { reason: 'summary_required' };
+    if (ids.length === 0 || ids.length > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32' };
+    if (new Set(ids).size !== ids.length) return { reason: 'duplicate_ids' };
+    if (ids.some((id) => !allowed.has(id))) return { reason: 'unknown_ids' };
+    const selected = ids.map((id) => allowed.get(id)!);
+    if (selected.some((block, index) => index > 0 && block.ordinal <= selected[index - 1]!.ordinal)) {
+      return { reason: 'ordered_ids_required' };
+    }
+    if (selected.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
+      return { reason: 'source_text_limit_8000' };
+    }
+    return { candidate: candidate as unknown as ExtractedFieldProposal };
+  };
+  const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
+    invalidFields = new Map();
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      invalidFields.set('response', 'malformed_item');
+      return false;
+    }
+    const proposal = value as Record<string, unknown>;
+    if (proposal.schemaVersion !== SDF_CORE_VERSION || !proposal.fields || typeof proposal.fields !== 'object' || Array.isArray(proposal.fields)) {
+      invalidFields.set('response', 'malformed_item');
+      return false;
+    }
+    const fields = proposal.fields as Record<string, unknown>;
+    for (const field of SDF_CORE_FIELDS) {
+      const previous = retained.get(field);
+      if (previous && !previous.needsMoreInformation) continue;
+      const validation = validateField(fields[field]);
+      if (validation.candidate) retained.set(field, validation.candidate);
+      else if (!previous) invalidFields.set(field, validation.reason!);
+    }
+    return invalidFields.size === 0;
+  };
+  return {
+    guard,
+    validationFeedback: () => {
+      if (invalidFields.size === 0) return undefined;
+      const details = [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(', ');
+      return [
+        'Previous JSON failed canonical validation.',
+        `Invalid fields and reason codes: ${details}.`,
+        'Return schemaVersion and fields containing only the invalid fields listed above; already validated fields are retained locally and need not be repeated.',
+        'For each repaired field, write one core statement with its necessary conditions, then select at most 32 blocks that jointly support it. If more are needed, narrow the statement before selecting evidence; never truncate necessary evidence.',
+        'A missing field must have summary="", sourceBlockIds=[], needsMoreInformation=true. Do not include a nonempty explanation in a missing field.',
+        'Use only the minimal sufficient SOURCE_BLOCK ids in strictly increasing source order; unrelated blocks may be skipped.',
+        'Do not quote or repeat source text in this correction instruction; use the SOURCE_BLOCK ids already provided.',
+      ].join(' ');
+    },
+    mergeRetained: () => ({
+      schemaVersion: SDF_CORE_VERSION,
+      fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
+        const candidate = retained.get(field);
+        if (!candidate) throw new Error(`Canonical field was not validated: ${field}`);
+        return [field, candidate];
+      })) as ExtractedProposal['fields'],
+    }),
+  };
+}
+
+function materializeCanonicalProposal(
+  proposal: ExtractedProposal,
+  sourceMap: DocumentSourceMap,
+  promptBlocks: PromptCanonicalBlock[],
+): ExtractionResult {
+  const byPromptId = new Map(promptBlocks.map((block) => [block.promptId, block]));
+  const core = { schemaVersion: SDF_CORE_VERSION } as ExtractedCore;
+  const evidence = {} as ExtractionResult['evidence'];
+  const evidenceLocation = {} as NonNullable<ExtractionResult['evidenceLocation']>;
+  const evidenceSegments = {} as NonNullable<ExtractionResult['evidenceSegments']>;
+  const needsMoreInformation: ExtractionResult['needsMoreInformation'] = [];
+  for (const field of SDF_CORE_FIELDS) {
+    const candidate = proposal.fields[field];
+    const ids = candidate.sourceBlockIds ?? [];
+    if (candidate.needsMoreInformation) {
+      core[field] = '';
+      evidence[field] = { quote: '', locator: '' };
+      evidenceSegments[field] = [];
+      evidenceLocation[field] = { status: 'missing', origin: 'model_quote', reason: 'empty-quote' };
+      needsMoreInformation.push(field);
+      continue;
+    }
+    const segments = ids.map((id) => {
+      const block = byPromptId.get(id)!;
+      const sourceLocator = validateSourceLocator({
+        artifactId: sourceMap.artifactId, contentHash: sourceMap.contentHash,
+        blockId: block.id, page: block.page, boundingBox: block.boundingBox,
+        charRange: { start: block.originalStart, end: block.originalStart + block.text.length },
+      });
+      return { quote: block.text, sourceLocator };
+    });
+    // Compatibility projection only: evidenceSegments retain the independent exact quotes and locators;
+    // this newline-joined string never represents a contiguous source passage or a source locator.
+    const quote = segments.map((segment) => segment.quote).join('\n');
+    core[field] = candidate.summary.trim();
+    evidence[field] = { quote, locator: `blocks:${ids.join(',')}` };
+    evidenceSegments[field] = segments;
+    evidenceLocation[field] = segments.length === 1
+      ? { status: 'located', sourceLocator: segments[0]!.sourceLocator, origin: 'model_quote', matching: 'exact' }
+      : { status: 'cross_block', origin: 'model_quote', matching: 'exact', reason: 'match-spans-blocks' };
+  }
+  return { core, evidence, needsMoreInformation, evidenceLocation, evidenceSegments };
 }
 
 function locateCanonicalEvidence(
@@ -352,21 +556,42 @@ export async function extractHandler(
   task: { payload: Record<string, unknown> },
   trustedContext: { sourceMap?: DocumentSourceMap } = {},
 ): Promise<ExtractionResult> {
-  const manuscriptText = trustedContext.sourceMap
-    ? sourceMapToManuscriptText(trustedContext.sourceMap)
+  const canonicalSourceMap = trustedContext.sourceMap
+    ? parseDocumentSourceMap(trustedContext.sourceMap)
+    : undefined;
+  const manuscriptText = canonicalSourceMap
+    ? sourceMapToManuscriptText(canonicalSourceMap)
     : typeof task.payload?.manuscriptText === 'string' ? task.payload.manuscriptText : '';
   if (!manuscriptText.trim()) {
     throw new Error('缺少正文（payload.manuscriptText）');
   }
+  const promptBlocks = canonicalSourceMap ? selectCanonicalBlocks(canonicalSourceMap) : undefined;
   const prompt = [
     { role: 'system' as const, content: [
       '你是科研结构化提取器。从给定 SOURCE 片段提取 SDF 六字段 problem/insight/method/results/limitations/reproducibility。',
-      '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须含 summary、sourceQuote、needsMoreInformation。',
-      'sourceQuote 必须逐字复制 SOURCE 中支持 summary 的最短充分原文；不得概括、改写或虚构引文。',
-      '若材料不足，summary 与 sourceQuote 置空，needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
+      ...(promptBlocks ? [
+        '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能含 summary、sourceBlockIds、needsMoreInformation。',
+        `sourceBlockIds 必须选择 1-${MAX_EVIDENCE_SEGMENTS} 个最少充分 SOURCE_BLOCK id，按原文顺序严格递增，合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符；可跳过无关块，选择的完整块不得改写、倒序或重复。`,
+        '逐字段独立判断：所选块共同充分支持 summary；单块可能只是断行、符号或单位，无需独立成句或独立证明整句。可跨行或跨段综合，但必须保留否定、适用条件和数值单位，不借未选文本补足论证。',
+        '每字段先用一句话概括一个核心要点及其必要条件，再选共同支持这句话的最少块。若需超过32块，应先缩小陈述范围，不能任意截断必要证据。不要因一个字段缺失而清空其他字段，不穷举细节或所有相关段落。',
+        '跨行示例（仅说明结构，不是 SOURCE，严禁引用示例 ID）：EXAMPLE_1="方法甲测量"、EXAMPLE_2="量乙。"共同支持"方法甲测量量乙。"；正式输出只能使用用户输入的 SOURCE_BLOCK id。',
+        '严格区分理论预测、仿真与实测，不能把缺少主语或限定词的片段扩写成实验结论；results 中的理论或仿真结果必须明确注明其性质。',
+        '若材料不足，summary 置空、sourceBlockIds=[]、needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
+      ] : [
+        '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须含 summary、sourceQuote、needsMoreInformation。',
+        'sourceQuote 必须逐字复制 SOURCE 中支持 summary 的最短充分原文；不得概括、改写或虚构引文。',
+        '若材料不足，summary 与 sourceQuote 置空，needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
+      ]),
     ].join(' ') },
-    { role: 'user' as const, content: selectManuscriptEvidence(manuscriptText) },
+    { role: 'user' as const, content: promptBlocks ? canonicalBlockPrompt(promptBlocks) : selectManuscriptEvidence(manuscriptText) },
   ];
+  if (canonicalSourceMap && promptBlocks) {
+    const validation = canonicalProposalValidation(promptBlocks);
+    await gateway.completeStructured(validation.guard, prompt, {
+      temperature: 0.2, validationFeedback: validation.validationFeedback,
+    });
+    return materializeCanonicalProposal(validation.mergeRetained(), canonicalSourceMap, promptBlocks);
+  }
   const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
-  return materializeProposal(proposal, manuscriptText, trustedContext.sourceMap);
+  return materializeProposal(proposal, manuscriptText);
 }

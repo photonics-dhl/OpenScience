@@ -44,6 +44,7 @@ export interface ApiEnv {
   ai: {
     enabled: boolean;
     sceneImageEnabled: boolean;
+    videoEnabled: boolean;
     baseUrl: string;
     apiKey: string;
     primaryModel: string;
@@ -150,6 +151,7 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     sceneImageEnabled: env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
       ? aiEnabled && Boolean(env.CODEX_IMAGE_INBOX_DIR?.trim()) && Boolean(env.CODEX_IMAGE_RESULTS_DIR?.trim()) && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(s => s.trim()).includes('codex-image')
       : (env.HERMES_SCENE_IMAGE_PROVIDER === undefined || env.HERMES_SCENE_IMAGE_PROVIDER === 'minimax') && aiEnabled && env.MINIMAX_IMAGE_ENABLED === 'true' && [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].some(key => Boolean(key?.trim())) && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(s => s.trim()).includes('minimax-image'),
+    videoEnabled: env.HERMES_VIDEO_ENABLED === 'true',
     baseUrl: env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1',
     apiKey: env.MINIMAX_API_KEY ?? '',
     primaryModel: env.MINIMAX_MODEL ?? 'MiniMax-M3',

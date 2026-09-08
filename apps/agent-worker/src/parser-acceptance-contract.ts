@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { chown, link, lstat, mkdir, open, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import {
   createTableCellSourceLocator,
@@ -389,6 +390,29 @@ function isEvidenceLocation(value: unknown): boolean {
     && ['empty-quote', 'multiple-matches', 'match-spans-blocks', 'no-match', 'locator-roundtrip-failed'].includes(value.reason);
 }
 
+function isEvidenceSegmentBundle(value: unknown, reference: ReturnType<typeof parseDocumentSourceMapReference>): boolean {
+  if (!isRecord(value) || !hasExactKeys(value, SDF_FIELDS)) return false;
+  return SDF_FIELDS.every((field) => {
+    const segments = value[field];
+    if (!Array.isArray(segments) || segments.length > 32) return false;
+    let total = 0;
+    let priorPage = 0;
+    const blockIds = new Set<string>();
+    for (const segment of segments) {
+      if (!isRecord(segment) || !hasExactKeys(segment, ['quote', 'sourceLocator']) || typeof segment.quote !== 'string') return false;
+      let locator;
+      try { locator = validateSourceLocator(segment.sourceLocator); } catch { return false; }
+      if (locator.artifactId !== reference.artifactId || locator.contentHash !== reference.contentHash
+        || !locator.blockId || !locator.charRange || locator.charRange.end - locator.charRange.start !== segment.quote.length
+        || blockIds.has(locator.blockId) || (locator.page ?? 0) < priorPage) return false;
+      blockIds.add(locator.blockId);
+      priorPage = locator.page ?? priorPage;
+      total += segment.quote.length;
+    }
+    return total <= 8_000;
+  });
+}
+
 export interface AcceptanceRuntimeGraphEntry {
   path: string;
   sha256: string;
@@ -556,13 +580,12 @@ export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | '
     return 'needs_review';
   }
   const hasEvidenceLocation = value.evidenceLocation !== undefined;
-  if (!hasExactKeys(value, hasSourceMapRef
-    ? hasEvidenceLocation
-      ? ['core', 'evidence', 'needsMoreInformation', 'sourceMapRef', 'evidenceLocation']
-      : ['core', 'evidence', 'needsMoreInformation', 'sourceMapRef']
-    : hasEvidenceLocation
-      ? ['core', 'evidence', 'needsMoreInformation', 'evidenceLocation']
-      : ['core', 'evidence', 'needsMoreInformation'])
+  const hasEvidenceSegments = value.evidenceSegments !== undefined;
+  const expectedKeys = ['core', 'evidence', 'needsMoreInformation',
+    ...(hasSourceMapRef ? ['sourceMapRef'] : []),
+    ...(hasEvidenceLocation ? ['evidenceLocation'] : []),
+    ...(hasEvidenceSegments ? ['evidenceSegments'] : [])];
+  if (!hasExactKeys(value, expectedKeys)
     || !isRecord(value.core) || !isRecord(value.evidence)
     || !Array.isArray(value.needsMoreInformation)) {
     throw new Error('invalid sdf.extract handler result');
@@ -589,9 +612,25 @@ export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | '
             && ((location.sourceLocator as Record<string, unknown>).artifactId !== sourceMapRef.artifactId
               || (location.sourceLocator as Record<string, unknown>).contentHash !== sourceMapRef.contentHash));
       })))
+    || (hasEvidenceSegments && (!sourceMapRef || !isEvidenceSegmentBundle(value.evidenceSegments, sourceMapRef)))
     || new Set(needsMoreInformation).size !== needsMoreInformation.length
     || needsMoreInformation.some((field) => !SDF_FIELDS.includes(field))) {
     throw new Error('invalid sdf.extract handler result');
+  }
+  if (hasEvidenceSegments) {
+    const segmentsByField = value.evidenceSegments as Record<string, Array<{ quote: string; sourceLocator: unknown }>>;
+    if (SDF_FIELDS.some((field) => {
+      const segments = segmentsByField[field]!;
+      const missing = needsMoreInformation.includes(field);
+      const location = evidenceLocations?.[field] as Record<string, unknown> | undefined;
+      return (evidenceByField[field] as Record<string, unknown>).quote !== segments.map((segment) => segment.quote).join('\n')
+        || missing !== (segments.length === 0) || missing !== !(core[field] as string).trim()
+        || (segments.length === 0 && location?.status !== 'missing')
+        || (segments.length === 1 && (location?.status !== 'located'
+          || !isRecord(location.sourceLocator)
+          || !isDeepStrictEqual(location.sourceLocator, segments[0]!.sourceLocator)))
+        || (segments.length > 1 && location?.status !== 'cross_block');
+    })) throw new Error('invalid sdf.extract handler result');
   }
   return 'completed';
 }
@@ -955,7 +994,7 @@ export function buildFinalAcceptanceReport(draftValue: unknown, resourcesValue: 
   return { ...draft, resources };
 }
 
-export function createAcceptanceGatewaySeam<T>(structuredValue: T) {
+export function createAcceptanceGatewaySeam<T>(structuredValue: T | ((args: unknown[]) => T)) {
   const counts = {
     structuredFake: 0,
     externalProvider: 0,
@@ -966,9 +1005,15 @@ export function createAcceptanceGatewaySeam<T>(structuredValue: T) {
     throw new Error(`forbidden gateway seam invoked: ${kind}`);
   };
   const target: Record<string, (...args: unknown[]) => Promise<unknown>> = {
-    completeStructured: async () => {
+    completeStructured: async (...args: unknown[]) => {
       counts.structuredFake += 1;
-      return structuredValue;
+      const value = typeof structuredValue === 'function'
+        ? (structuredValue as (args: unknown[]) => T)(args)
+        : structuredValue;
+      if (typeof args[0] === 'function' && !(args[0] as (value: T) => boolean)(value)) {
+        throw new Error('deterministic structured fixture failed its schema guard');
+      }
+      return value;
     },
     complete: forbidden('complete'),
     ocr: forbidden('ocr'),

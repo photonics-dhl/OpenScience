@@ -28,13 +28,43 @@ function percentile(values: readonly number[], fraction: number): number {
   return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)] ?? 0;
 }
 
-function proposal() {
-  const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
+const ACCEPTANCE_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+
+/**
+ * The acceptance gateway is deterministic, but it still exercises the canonical
+ * block-ID contract. Explicit fixture labels become reviewed extraction fields;
+ * no text or locator is invented by the runner.
+ */
+export function buildAcceptanceProposal(gatewayArgs: unknown[]) {
+  const prompt = Array.isArray(gatewayArgs[1]) ? gatewayArgs[1] : [];
+  const userMessage = prompt.find((message) => message && typeof message === 'object'
+    && (message as { role?: unknown }).role === 'user') as { content?: unknown } | undefined;
+  const source = typeof userMessage?.content === 'string' ? userMessage.content : '';
+  const blocks = [...source.matchAll(/--- SOURCE_BLOCK id:(B\d{6}) ---\n([\s\S]*?)(?=\n\n--- SOURCE_BLOCK id:B\d{6} ---|$)/gu)]
+    .map((match) => ({ id: match[1]!, text: match[2]!.trim() }));
+  const selected = new Map<string, { id: string; summary: string }>();
+  for (const block of blocks) {
+    const label = /^(problem|insight|method|results|limitations|reproducibility)\s*:\s*([\s\S]+)$/iu.exec(block.text);
+    if (!label) continue;
+    const field = label[1]!.toLowerCase();
+    if (!selected.has(field) && label[2]!.trim()) {
+      selected.set(field, { id: block.id, summary: label[2]!.trim() });
+    }
+  }
+  // Canonical corpus files are parser fixtures rather than semantic SDF fixtures.
+  // Select one exact bounded block so successful cases exercise materialization
+  // and locator round-trip instead of passing with an all-missing response.
+  if (selected.size === 0 && blocks[0] && blocks[0].text.length <= 8_000) {
+    selected.set('problem', { id: blocks[0].id, summary: blocks[0].text });
+  }
   return {
     schemaVersion: '0.1.0',
-    fields: Object.fromEntries(fields.map((field) => [field, {
-      summary: '', sourceQuote: '', needsMoreInformation: true,
-    }])),
+    fields: Object.fromEntries(ACCEPTANCE_FIELDS.map((field) => {
+      const evidence = selected.get(field);
+      return [field, evidence
+        ? { summary: evidence.summary, sourceBlockIds: [evidence.id], needsMoreInformation: false }
+        : { summary: '', sourceBlockIds: [], needsMoreInformation: true }];
+    })),
   };
 }
 
@@ -74,7 +104,7 @@ async function main(): Promise<void> {
   const manifest = parseCanonicalManifest(await readFile(join(corpusDir, 'manifest.json')));
   const jobDir = process.env.PARSER_JOB_DIR ?? '/parser-jobs';
   const stageAdapter = createParserStageJobClient(jobDir, expectedSidecarParserMetadata);
-  const gatewaySeam = createAcceptanceGatewaySeam(proposal());
+  const gatewaySeam = createAcceptanceGatewaySeam(buildAcceptanceProposal);
   const gateway = gatewaySeam.gateway as unknown as AiGateway;
   const canonicalCascade = createWorkerParserCascade(gateway, stageAdapter);
   const results = [];

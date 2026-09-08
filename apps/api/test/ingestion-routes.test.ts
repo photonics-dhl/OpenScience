@@ -102,3 +102,34 @@ describe('GET /ingestion scoped actionable feed', () => {
     expect(response.body).not.toContain('shared.pdf');
   });
 });
+
+describe('reviewed ingestion Claim/Evidence route contract', () => {
+  const VERSION_ID = '00000000-0000-4000-8000-000000000201';
+  const TASK_ID = '00000000-0000-4000-8000-000000000301';
+
+  it('requires an idempotency key and a strict reviewed selection DTO', async () => {
+    const { app, db, cookies } = await fixture();
+    db.memberships[0]!.role = 'author';
+    const url = `/research-objects/${RO_ID}/versions/${VERSION_ID}/ingestion-claim-evidence/${TASK_ID}`;
+    const missingKey = await app.inject({
+      method: 'POST', url, cookies,
+      payload: { snapshotToken: 'a'.repeat(64), selections: [{ clientKey: 'result', sourceField: 'results', kind: 'core', statement: 'Result', attachSourceQuote: false }] },
+    });
+    expect(missingKey.statusCode).toBe(400);
+
+    const unknownField = await app.inject({
+      method: 'POST', url, cookies, headers: { 'idempotency-key': 'review-1' },
+      payload: { snapshotToken: 'a'.repeat(64), selections: [{ clientKey: 'result', sourceField: 'results', kind: 'core', statement: 'Result', attachSourceQuote: false, verified: true }] },
+    });
+    expect(unknownField.statusCode).toBe(400);
+  });
+
+  it('marks extracted-quote preview responses private and non-cacheable', async () => {
+    const { app, db, cookies } = await fixture();
+    db.memberships[0]!.role = 'author';
+    const response = await app.inject({
+      method: 'GET', url: `/research-objects/${RO_ID}/versions/not-a-version/ingestion-claim-evidence`, cookies,
+    });
+    expect(response.headers['cache-control']).toBe('private, no-store');
+  });
+});

@@ -8,6 +8,7 @@ import { HermesTaskEntry, loadScopedHermesReview } from '@/components/hermes/Her
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
+import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import { ApiClientError, confirmIngestionTask, apiRequest, getResearchObject, getIngestionTask, getResearchIngestion, type IngestionConfirmation, type DashboardTaskApi, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
@@ -134,10 +135,10 @@ function HermesResearchPage({ routeParams, taskId }: { routeParams: { id: string
           </div>
           <p className="mb-4 text-sm text-os-muted-paper">{t('reviewPending')}</p>
           <section aria-label={t('fieldLabel')} className="surface-folio-sheet divide-y divide-os-rule-paper border-y border-os-rule-paper">
-            {fields.map((field, index) => <label key={field} className="grid gap-3 px-4 py-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:px-6">
-              <span><span className="block font-data text-xs text-os-vermilion-ink">0{index + 1}</span><span className="mt-1 block text-sm font-semibold text-os-ink">{fieldT(field)}</span>{!core[field].trim() && <span className="block text-sm text-os-muted-paper">{t('missing')}</span>}</span>
-              <textarea readOnly={!approvalOpen || saving} data-hermes-review-field value={core[field]} onChange={(event) => setCore({ ...core, [field]: event.target.value })} rows={5} className="w-full resize-y rounded-panel border border-os-rule-paper bg-os-paper-strong p-4 font-reading text-lg leading-[1.68] text-os-ink outline-none focus:border-os-vermilion-ink focus:ring-2 focus:ring-os-vermilion-ink/20" />
-            </label>)}
+            {fields.map((field, index) => <div key={field} className="grid gap-3 px-4 py-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:px-6">
+              <label htmlFor={`hermes-review-${field}`}><span className="block font-data text-xs text-os-vermilion-ink">0{index + 1}</span><span className="mt-1 block text-sm font-semibold text-os-ink">{fieldT(field)}</span>{!core[field].trim() && <span className="block text-sm text-os-muted-paper">{t('missing')}</span>}</label>
+              <div className="min-w-0"><textarea id={`hermes-review-${field}`} aria-label={field} readOnly={!approvalOpen || saving} data-hermes-review-field value={core[field]} onChange={(event) => setCore({ ...core, [field]: event.target.value })} rows={5} className="w-full resize-y rounded-panel border border-os-rule-paper bg-os-paper-strong p-4 font-reading text-lg leading-[1.68] text-os-ink outline-none focus:border-os-vermilion-ink focus:ring-2 focus:ring-os-vermilion-ink/20" /><HermesExtractionEvidence field={field} result={detail.task.result}/></div>
+            </div>)}
           </section>
           {saved && <nav aria-label={t('entryActions')} className="mt-6 flex flex-wrap gap-5"><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit` }>{t('continueEditing')}</Link><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/versions${confirmation ? `?version=${encodeURIComponent(confirmation.versionId)}` : ''}`}>{t('viewVersions')}</Link></nav>}
           <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-5"><p className="text-base text-os-muted-paper" role="status">{saved ? confirmation ? t('saved') : t('legacyConfirmation') : approvalOpen ? complete ? t('ready') : t('incomplete') : t('taskState', { state: statusT(detail.task.state) })}</p><button type="button" disabled={saving || saved || !approvalOpen} onClick={confirm} className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('saving') : saved ? t('confirmed') : t('confirm')}</button></footer>

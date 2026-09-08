@@ -2,6 +2,38 @@ export type SuggestionEvidenceLocation =
   | { status: 'located'; blockId: string; page?: number }
   | { status: 'ambiguous' | 'cross_block' | 'missing' | 'unverified' };
 
+export interface SuggestionEvidenceSegment {
+  quote: string;
+  location: Extract<SuggestionEvidenceLocation, { status: 'located' }>;
+}
+
+/** Display only: server-side source resolution remains authoritative. Reject partial lists. */
+export function getSuggestionEvidenceSegments(field: string, context?: unknown): SuggestionEvidenceSegment[] {
+  if (!isRecord(context) || !isRecord(context.evidenceSegments)) return [];
+  const values = context.evidenceSegments[field];
+  if (!Array.isArray(values) || !values.length || values.length > 32) return [];
+  const result: SuggestionEvidenceSegment[] = [];
+  const seen = new Set<string>();
+  let characters = 0;
+  let lastPage = 0;
+  for (const value of values) {
+    if (!isRecord(value) || !hasOnlyKeys(value, ['quote', 'sourceLocator']) || !isNonblank(value.quote) || !isRecord(value.sourceLocator)) return [];
+    const range = value.sourceLocator.charRange;
+    if (!isRecord(range) || !isValidCharRange(range) || Number(range.end) - Number(range.start) !== value.quote.length) return [];
+    const location = getSuggestionEvidenceLocation(field, value.quote, {
+      sourceMapIdentity: context.sourceMapIdentity,
+      evidence: { [field]: { quote: value.quote } },
+      evidenceLocation: { [field]: { status: 'located', sourceLocator: value.sourceLocator } },
+    });
+    if (location.status !== 'located' || seen.has(location.blockId) || (location.page !== undefined && location.page < lastPage)) return [];
+    characters += value.quote.length;
+    if (characters > 8000) return [];
+    seen.add(location.blockId); lastPage = location.page ?? lastPage;
+    result.push({ quote: value.quote, location });
+  }
+  return result;
+}
+
 type JsonRecord = Record<string, unknown>;
 
 function isRecord(value: unknown): value is JsonRecord {

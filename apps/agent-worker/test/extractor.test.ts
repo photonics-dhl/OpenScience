@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { Readable } from 'node:stream';
-import type { AiGateway, Provider } from '@openscience/ai-gateway';
+import { AiGateway, type Provider } from '@openscience/ai-gateway';
 import type { DocumentSourceMap } from '@openscience/domain';
 import {
   extractHandler,
@@ -92,11 +92,14 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     };
     const proposal = {
       schemaVersion: '0.1.0',
-      fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, {
-        summary: '', sourceQuote: '', needsMoreInformation: true,
-      }])),
+      fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, field === 'problem'
+        ? { summary: 'Canonical parser problem', sourceBlockIds: ['B000001'], needsMoreInformation: false }
+        : { summary: '', sourceBlockIds: [], needsMoreInformation: true }])),
     };
-    const completeStructured = vi.fn().mockResolvedValue(proposal);
+    const completeStructured = vi.fn(async (guard: (value: unknown) => boolean) => {
+      expect(guard(proposal)).toBe(true);
+      return proposal;
+    });
     const gateway = { completeStructured } as unknown as AiGateway;
     const parserCascade = vi.fn().mockResolvedValue({ status: 'succeeded', sourceMap, warnings: [] });
     const handlers = createHandlers(gateway, {
@@ -160,7 +163,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       contentHash,
     });
     expect(result.evidenceLocation?.problem).toMatchObject({
-      status: 'located', origin: 'explicit_field_label',
+      status: 'located', origin: 'model_quote',
       sourceLocator: { artifactId: 'artifact-1', contentHash, blockId: 'block-1', page: 1 },
     });
     expect(storage.putObject).toHaveBeenCalledWith(
@@ -504,6 +507,139 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.evidence.problem.locator).toMatch(/^chars:\d+-\d+$/);
   });
 
+  it.each(['missing', 'rewritten', 'partial', 'first-omitted', 'missing-upgrade', 'missing-invalid', 'two-failed-attempts'])('保留首轮合法字段并以字段原因修复其余字段：%s', async (mode) => {
+    const blocks = Array.from({ length: 6 }, (_, index) => ({
+      id: `block-${index + 1}`, kind: 'paragraph' as const, text: `Exact source block ${index + 1}`,
+      boundingBox: { x: 1, y: 90 - index * 10, width: 80, height: 8 },
+      parser: { name: 'native-pdf', version: '1' }, transformations: [],
+    }));
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-1', contentHash: 'a'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const first = {
+      schemaVersion: '0.1.0',
+      fields: {
+        problem: { summary: 'Retained problem', sourceBlockIds: ['B000001', 'B000002'], needsMoreInformation: false },
+        insight: { summary: 'Reverse order is invalid', sourceBlockIds: ['B000005', 'B000003'], needsMoreInformation: false },
+        method: { summary: '', sourceBlockIds: [], needsMoreInformation: false },
+        results: { summary: 'Duplicate invalid', sourceBlockIds: ['B000004', 'B000004'], needsMoreInformation: false },
+        limitations: { summary: 'Must be empty when missing', sourceBlockIds: [], needsMoreInformation: true },
+        reproducibility: missing,
+      },
+    };
+    const second = {
+      schemaVersion: '0.1.0',
+      fields: Object.fromEntries(['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility']
+        .map((field) => [field, field === 'method'
+          ? { summary: 'Repaired method', sourceBlockIds: ['B000003', 'B000004'], needsMoreInformation: false }
+          : missing])),
+    };
+    const requests: unknown[] = [];
+    let call = 0;
+    const provider: Provider = {
+      name: 'fixture', model: 'fixture',
+      complete: async (request) => {
+        requests.push(request);
+        call += 1;
+        const reply = structuredClone(call === 1 ? first : second);
+        if (call === 1 && mode === 'first-omitted') delete (reply.fields as Record<string, unknown>).method;
+        if (call > 1 && mode === 'missing-upgrade') reply.fields.reproducibility = { summary: 'Supported reproduction condition', sourceBlockIds: ['B000006'], needsMoreInformation: false };
+        if (call > 1 && mode === 'missing-invalid') reply.fields.reproducibility = { summary: 'Invalid must not upgrade', sourceBlockIds: ['UNKNOWN'], needsMoreInformation: false };
+        if (call > 1 && mode !== 'missing') {
+          reply.fields.problem = { summary: 'Unrequested rewrite', sourceBlockIds: ['B000005'], needsMoreInformation: false };
+        }
+        if (call === 2 && mode === 'two-failed-attempts') reply.fields.insight = first.fields.insight;
+        if (call > 1 && mode === 'partial') {
+          const partialFields = reply.fields as Record<string, unknown>;
+          delete partialFields.problem;
+          delete partialFields.reproducibility;
+        }
+        return { text: JSON.stringify(reply), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+      },
+    };
+
+    const result = await extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap });
+
+    expect(call).toBe(mode === 'two-failed-attempts' ? 3 : 2);
+    expect(result.core.problem).toBe('Retained problem');
+    expect(result.evidenceSegments?.problem.map((segment) => segment.quote)).toEqual([
+      'Exact source block 1', 'Exact source block 2',
+    ]);
+    expect(result.core.method).toBe('Repaired method');
+    expect(result.evidenceSegments?.method.map((segment) => segment.quote)).toEqual([
+      'Exact source block 3', 'Exact source block 4',
+    ]);
+    expect(result.needsMoreInformation).toEqual(mode === 'missing-upgrade'
+      ? ['insight', 'results', 'limitations'] : ['insight', 'results', 'limitations', 'reproducibility']);
+    expect(result.core.reproducibility).toBe(mode === 'missing-upgrade' ? 'Supported reproduction condition' : '');
+    const retryRequest = JSON.stringify(requests[1]);
+    expect(retryRequest).toContain('insight:ordered_ids_required');
+    expect(retryRequest).toContain(mode === 'first-omitted' ? 'method:malformed_item' : 'method:summary_required');
+    expect(retryRequest).toContain('results:duplicate_ids');
+    expect(retryRequest).toContain('limitations:missing_requires_empty');
+    expect(retryRequest).toContain('only the invalid fields');
+    expect(retryRequest).not.toContain('Reverse order is invalid');
+    expect(retryRequest).not.toContain('Must be empty when missing');
+  });
+
+  it('错误 schemaVersion 的响应不缓存其中看似合法的字段', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-1', contentHash: 'b'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'block-1', kind: 'paragraph', text: 'Exact source',
+        boundingBox: { x: 1, y: 1, width: 10, height: 10 },
+        parser: { name: 'native-pdf', version: '1' }, transformations: [],
+      }] }],
+    };
+    const fields = Object.fromEntries(['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility']
+      .map((field) => [field, field === 'problem'
+        ? { summary: 'Must not survive', sourceBlockIds: ['B000001'], needsMoreInformation: false }
+        : { summary: '', sourceBlockIds: [], needsMoreInformation: true }]));
+    let call = 0;
+    const provider: Provider = {
+      name: 'fixture', model: 'fixture',
+      complete: async () => ({ text: JSON.stringify(call++ === 0
+        ? { schemaVersion: 'wrong', fields }
+        : { schemaVersion: '0.1.0', fields: Object.fromEntries(Object.keys(fields).map((field) => [field, { summary: '', sourceBlockIds: [], needsMoreInformation: true }])) }), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } }),
+    };
+
+    const result = await extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap });
+    expect(result.core.problem).toBe('');
+    expect(result.needsMoreInformation).toContain('problem');
+  });
+
+  it('重试耗尽时拒绝整份结果而不返回已缓存的局部字段', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-1', contentHash: 'c'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: Array.from({ length: 3 }, (_, index) => ({
+        id: `block-${index + 1}`, kind: 'paragraph' as const, text: `Exact ${index + 1}`,
+        boundingBox: { x: 1, y: 20 + index, width: 10, height: 10 },
+        parser: { name: 'native-pdf', version: '1' }, transformations: [],
+      })) }],
+    };
+    const invalid = {
+      schemaVersion: '0.1.0', fields: {
+        problem: { summary: 'Valid but not independently returnable', sourceBlockIds: ['B000001'], needsMoreInformation: false },
+        insight: { summary: 'Still reversed', sourceBlockIds: ['B000003', 'B000001'], needsMoreInformation: false },
+        method: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+        results: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+        limitations: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+        reproducibility: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+      },
+    };
+    let calls = 0;
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => {
+      calls += 1;
+      return { text: JSON.stringify(invalid), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+
+    await expect(extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap }))
+      .rejects.toThrow(/重试上限/);
+    expect(calls).toBe(3);
+  });
+
   it('canonical source map 将唯一第二页 Unicode 空白等价引文定位到原始 block，并忽略模型伪造 locator', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-canonical', contentHash: 'b'.repeat(64),
@@ -523,10 +659,12 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       ...VALID_PROPOSAL,
       fields: {
         ...VALID_PROPOSAL.fields,
-        problem: {
-          summary: 'Unicode evidence', sourceQuote: 'CRLF 😀e\u0301 evidence',
-          sourceLocator: '{"artifactId":"forged","blockId":"forged"}', needsMoreInformation: false,
-        },
+        problem: { summary: 'Unicode evidence', sourceBlockIds: ['B000002'], needsMoreInformation: false },
+        insight: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+        method: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+        results: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+        limitations: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+        reproducibility: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
       },
     };
     const provider: Provider = {
@@ -539,9 +677,9 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       payload: { manuscriptText: sourceMapToManuscriptText(sourceMap) },
     }, { sourceMap });
 
-    expect(result.evidence.problem).toEqual({ quote: 'CRLF\r\n😀e\u0301 evidence', locator: 'chars:22-41' });
+    expect(result.evidence.problem.quote).toBe('CRLF\r\n😀e\u0301 evidence');
     expect(result.evidenceLocation?.problem).toMatchObject({
-      status: 'located', origin: 'model_quote', matching: 'whitespace',
+      status: 'located', origin: 'model_quote', matching: 'exact',
       sourceLocator: {
         artifactId: 'artifact-canonical', contentHash: 'b'.repeat(64), blockId: 'page-two', page: 2,
         charRange: { start: 2, end: 21 },
@@ -560,9 +698,9 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     const payloadB = 'Problem: shared quote from map B.';
     let prompt = '';
     const proposal = {
-      schemaVersion: '0.1.0', fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, {
-        summary: '', sourceQuote: '', needsMoreInformation: true,
-      }])),
+      schemaVersion: '0.1.0', fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, field === 'problem'
+        ? { summary: 'Map A problem', sourceBlockIds: ['B000001'], needsMoreInformation: false }
+        : { summary: '', sourceBlockIds: [], needsMoreInformation: true }])),
     };
     const provider: Provider = {
       name: 'canonical-overrides-payload', model: 'canonical-overrides-payload',
@@ -582,7 +720,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     });
   });
 
-  it('canonical locations refuse duplicate, cross-block, missing, and empty quotes without inventing a source locator', async () => {
+  it('canonical block selections disambiguate repeated text and preserve multi-block evidence without a fake locator', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-status', contentHash: 'c'.repeat(64), parser: { name: 'cascade', version: '1' },
       pages: [{ page: 1, width: 100, height: 100, blocks: [
@@ -596,15 +734,16 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
         { id: 'seven', kind: 'paragraph', text: 'Exact duplicate', boundingBox: { x: 0, y: 0, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
       ] }],
     };
-    const quote = (sourceQuote: string, needsMoreInformation = false) => ({ summary: 'summary', sourceQuote, needsMoreInformation });
+    const selected = (sourceBlockIds: string[]) => ({ summary: 'summary', sourceBlockIds, needsMoreInformation: false });
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
     const proposal = {
       schemaVersion: '0.1.0', fields: {
-        problem: quote('Exact duplicate'),
-        insight: quote('Whitespace duplicate'),
-        method: quote('block\nquote'),
-        results: quote('absent quote'),
-        limitations: quote('', true),
-        reproducibility: quote('', true),
+        problem: selected(['B000001']),
+        insight: selected(['B000003']),
+        method: selected(['B000005', 'B000006']),
+        results: missing,
+        limitations: missing,
+        reproducibility: missing,
       },
     };
     const provider: Provider = {
@@ -617,19 +756,16 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     }, { sourceMap });
 
     expect(result.evidenceLocation).toMatchObject({
-      problem: { status: 'ambiguous', reason: 'multiple-matches' },
-      insight: { status: 'ambiguous', reason: 'multiple-matches' },
+      problem: { status: 'located', sourceLocator: { blockId: 'one' } },
+      insight: { status: 'located', sourceLocator: { blockId: 'three' } },
       method: { status: 'cross_block', reason: 'match-spans-blocks' },
-      results: { status: 'missing', reason: 'no-match' },
+      results: { status: 'missing', reason: 'empty-quote' },
       limitations: { status: 'missing', reason: 'empty-quote' },
     });
-    expect(result.evidenceLocation?.insight).not.toHaveProperty('matching');
-    expect(result.evidence.problem).toEqual({ quote: 'Exact duplicate', locator: 'chars:0-15' });
-    expect(result.evidence.insight).toEqual({ quote: 'Whitespace duplicate', locator: 'chars:54-74' });
-    expect(result.evidence.method).toEqual({ quote: 'block\nquote', locator: 'chars:81-92' });
-    for (const field of ['problem', 'insight', 'method', 'results', 'limitations'] as const) {
-      expect(result.evidenceLocation?.[field]).not.toHaveProperty('sourceLocator');
-    }
+    expect(result.evidence.problem).toEqual({ quote: 'Exact duplicate', locator: 'blocks:B000001' });
+    expect(result.evidence.insight.quote).toBe('Whitespace\n duplicate');
+    expect(result.evidence.method.quote).toBe('cross block\nquote');
+    expect(result.evidenceLocation?.method).not.toHaveProperty('sourceLocator');
   });
 
   it.each(['repeat quote ', 'repeat\nquote '])('stops occurrence enumeration after ambiguity is established: %j', async (fragment) => {
@@ -642,9 +778,9 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
         parser: { name: 'test', version: '1' }, transformations: [],
       }] }],
     };
-    const proposal = { schemaVersion: '0.1.0', fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, {
-      summary: 'Repeated source is ambiguous', sourceQuote: 'repeat quote', needsMoreInformation: false,
-    }])) };
+    const proposal = { schemaVersion: '0.1.0', fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, field === 'problem'
+      ? { summary: 'Repeated source', sourceBlockIds: ['B000001'], needsMoreInformation: false }
+      : { summary: '', sourceBlockIds: [], needsMoreInformation: true }])) };
     const provider: Provider = { name: 'repeated', model: 'repeated', complete: async () => ({
       text: JSON.stringify(proposal), usage: { inputTokens: 1, outputTokens: 1 }, model: 'repeated',
     }) };
@@ -656,11 +792,8 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       return original.call(this, search, position);
     });
     try {
-      const result = await extractHandler(gateway, { payload: { manuscriptText: text } }, { sourceMap });
-      expect(result.evidenceLocation?.problem.status).toBe('ambiguous');
-      expect(result.evidence.problem.quote).toBe(fragment.trim());
-      // A six-field extraction must not enumerate thousands of equivalent ranges.
-      expect(occurrenceSearches).toBeLessThan(50);
+      await expect(extractHandler(gateway, { payload: { manuscriptText: text } }, { sourceMap })).rejects.toThrow();
+      expect(occurrenceSearches).toBe(0);
     } finally { spy.mockRestore(); }
   });
 
@@ -720,5 +853,104 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.core.reproducibility).toContain('Publish calibration');
     expect(result.core.results).toBe('');
     expect(result.needsMoreInformation).toEqual(['results']);
+  });
+
+  it('uses ordered noncontiguous canonical blocks without including unrelated text or rewriting fragmented formulas', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-segments', contentHash: 'e'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 600, height: 800, blocks: [
+        { id: 'line-a', kind: 'paragraph', text: 'The optical-', boundingBox: { x: 10, y: 10, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'line-b', kind: 'paragraph', text: 'field obeys Φ_CEP ≠ 0 under calibrated condi-', boundingBox: { x: 10, y: 20, width: 300, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'unrelated', kind: 'paragraph', text: 'Copyright and running header.', boundingBox: { x: 10, y: 25, width: 200, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'line-c', kind: 'paragraph', text: 'tions.', boundingBox: { x: 10, y: 30, width: 50, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+      ] }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const proposal = {
+      schemaVersion: '0.1.0', fields: {
+        problem: { summary: 'The calibrated condition produces a nonzero CEP response.', sourceBlockIds: ['B000001', 'B000002', 'B000004'], needsMoreInformation: false },
+        insight: missing, method: missing, results: missing, limitations: missing, reproducibility: missing,
+      },
+    };
+    const provider: Provider = { name: 'block-span', model: 'block-span', complete: async () => ({
+      text: JSON.stringify(proposal), usage: { inputTokens: 1, outputTokens: 1 }, model: 'block-span',
+    }) };
+    const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] });
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
+
+    expect(result.core.problem).toContain('nonzero CEP');
+    expect(result.evidence.problem.quote).toBe('The optical-\nfield obeys Φ_CEP ≠ 0 under calibrated condi-\ntions.');
+    expect(result.evidenceLocation?.problem).toMatchObject({ status: 'cross_block', reason: 'match-spans-blocks' });
+    expect(result.evidenceSegments?.problem).toEqual([
+      expect.objectContaining({ quote: 'The optical-', sourceLocator: expect.objectContaining({ blockId: 'line-a', charRange: { start: 0, end: 12 } }) }),
+      expect.objectContaining({ quote: 'field obeys Φ_CEP ≠ 0 under calibrated condi-', sourceLocator: expect.objectContaining({ blockId: 'line-b' }) }),
+      expect.objectContaining({ quote: 'tions.', sourceLocator: expect.objectContaining({ blockId: 'line-c' }) }),
+    ]);
+  });
+
+  it('materializes the legal six-by-32 canonical segment maximum in one indexed pass', async () => {
+    const blocks = Array.from({ length: 32 }, (_, index) => ({
+      id: `block-${index + 1}`, kind: 'paragraph' as const, text: `Exact segment ${index + 1}.`,
+      boundingBox: { x: 0, y: index * 2, width: 50, height: 1 },
+      parser: { name: 'native', version: '1' }, transformations: [],
+    }));
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-max-segments', contentHash: '9'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks }],
+    };
+    const sourceBlockIds = blocks.map((_, index) => `B${String(index + 1).padStart(6, '0')}`);
+    const fields = Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, {
+      summary: `${field} summary`, sourceBlockIds, needsMoreInformation: false,
+    }]));
+    const provider: Provider = { name: 'max-segments', model: 'max-segments', complete: async () => ({
+      text: JSON.stringify({ schemaVersion: '0.1.0', fields }), usage: { inputTokens: 1, outputTokens: 1 }, model: 'max-segments',
+    }) };
+    const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] });
+
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
+
+    expect(Object.values(result.evidenceSegments!).flat()).toHaveLength(6 * 32);
+    expect(result.evidenceSegments!.reproducibility[31]).toMatchObject({
+      quote: 'Exact segment 32.', sourceLocator: { blockId: 'block-32', page: 1 },
+    });
+  });
+
+  it.each([
+    { label: 'unlisted', ids: ['B999999'] },
+    { label: 'duplicate', ids: ['B000001', 'B000001'] },
+    { label: 'empty', ids: [] },
+  ])('rejects $label canonical block selections in structured validation', async ({ ids }) => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-guard', contentHash: 'f'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'only', kind: 'paragraph', text: 'A sufficiently substantive canonical evidence block.',
+        boundingBox: { x: 0, y: 0, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [],
+      }] }],
+    };
+    const fields = Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, {
+      summary: field === 'problem' ? 'Claim' : '', sourceBlockIds: field === 'problem' ? ids : [], needsMoreInformation: field !== 'problem',
+    }]));
+    const provider: Provider = { name: 'invalid-block', model: 'invalid-block', complete: async () => ({
+      text: JSON.stringify({ schemaVersion: '0.1.0', fields }), usage: { inputTokens: 1, outputTokens: 1 }, model: 'invalid-block',
+    }) };
+    const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] });
+    await expect(extractHandler(gateway, { payload: {} }, { sourceMap })).rejects.toThrow();
+  });
+
+  it('rejects canonical evidence whose authentic selected text exceeds 8000 characters', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-oversize-evidence', contentHash: '8'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'oversize', kind: 'paragraph', text: 'x'.repeat(8_001), boundingBox: { x: 0, y: 0, width: 90, height: 10 },
+        parser: { name: 'native', version: '1' }, transformations: [],
+      }] }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const fields = { problem: { summary: 'Too large', sourceBlockIds: ['B000001'], needsMoreInformation: false },
+      insight: missing, method: missing, results: missing, limitations: missing, reproducibility: missing };
+    const gateway = new AiGateway({ providers: [{ name: 'oversize', model: 'oversize', complete: async () => ({
+      text: JSON.stringify({ schemaVersion: '0.1.0', fields }), usage: { inputTokens: 1, outputTokens: 1 }, model: 'oversize',
+    }) }] });
+    await expect(extractHandler(gateway, { payload: {} }, { sourceMap })).rejects.toThrow(/重试上限/);
   });
 });

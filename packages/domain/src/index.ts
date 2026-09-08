@@ -212,6 +212,7 @@ export { ClaimEvidenceError, type ClaimEvidenceErrorCode } from './research-inte
 export { evaluateEvidencePublicationBlocks } from './research-intelligence/publication-evidence';
 export {
   createClaim,
+  createClaimEvidenceBatch,
   createEvidence,
   deleteClaim,
   deleteEvidence,
@@ -227,8 +228,19 @@ export {
   type EvidenceRightsInput,
   type UpdateClaimInput,
   type UpdateEvidenceInput,
+  type ReviewedIngestionClaimEvidenceBatchInput,
 } from './research-intelligence/claim-evidence-service';
 export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
+export {
+  INGESTION_BRIDGE_FIELDS,
+  confirmIngestionClaimEvidenceBridge,
+  listIngestionClaimEvidenceCandidates,
+  previewIngestionClaimEvidenceBridge,
+  type IngestionBridgeField,
+  type IngestionClaimEvidencePreview,
+  type IngestionClaimEvidenceSuggestion,
+  type IngestionClaimSelection,
+} from './ingestion/claim-evidence-bridge';
 export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';
 export {
   RESEARCH_IDENTITIES,
@@ -384,6 +396,7 @@ export {
 export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from './assets/reviewed-media-import';
 
 export { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
+export { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
 
 export { requireStoryboardBase } from './assets/presentation-asset';
 

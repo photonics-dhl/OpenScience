@@ -603,6 +603,7 @@ export interface PresentationAsset {
   storyboard?: StoryboardView;
   sceneImage?: SceneImageRequest;
   canGenerateSceneImage?: boolean;
+  canGenerateVideo?: boolean;
   canTransition?: boolean;
   id: string;
   researchObjectId: string;
@@ -626,6 +627,37 @@ function presentationScopePath(roId: string, versionId: string): string {
 
 export async function listVersionClaims(roId: string, versionId: string, signal?: AbortSignal): Promise<{ claims: PresentationClaim[] }> {
   return request(`${presentationScopePath(roId, versionId)}/claims`, { signal });
+}
+
+export type IngestionClaimField = 'problem' | 'insight' | 'method' | 'results' | 'limitations' | 'reproducibility';
+export type IngestionClaimSource = { quote: string; locator: { page?: number; blockId?: string; [key: string]: unknown } };
+export interface IngestionClaimSuggestion {
+  sourceField: IngestionClaimField;
+  originalStatement: string;
+  reviewedStatement: string;
+  rewritten: boolean;
+  defaultQuoteAssociation: boolean;
+  source?: IngestionClaimSource;
+  sources?: IngestionClaimSource[];
+}
+export interface IngestionClaimPreview {
+  taskId: string; researchObjectId: string; versionId: string; commitId: string;
+  artifact: { id: string; logicalPath: string; contentHash: string };
+  snapshotToken: string;
+  suggestions: IngestionClaimSuggestion[];
+}
+export interface IngestionClaimSelection {
+  clientKey: string; sourceField: IngestionClaimField; kind: PresentationClaim['kind'];
+  parentClientKey?: string; statement: string; conditions?: string[]; limitations?: string[];
+  attachSourceQuote: boolean;
+}
+export function listIngestionClaimPreviews(roId: string, versionId: string, signal?: AbortSignal): Promise<{ candidates: IngestionClaimPreview[] }> {
+  return request(`${presentationScopePath(roId, versionId)}/ingestion-claim-evidence`, { signal });
+}
+export function confirmIngestionClaims(roId: string, versionId: string, taskId: string, body: { snapshotToken: string; selections: IngestionClaimSelection[] }, idempotencyKey: string, signal?: AbortSignal): Promise<{ claims: PresentationClaim[]; evidence: unknown[] }> {
+  return request(`${presentationScopePath(roId, versionId)}/ingestion-claim-evidence/${encodeURIComponent(taskId)}`, {
+    method: 'POST', signal, headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(body),
+  });
 }
 
 export async function createPresentationClaim(
@@ -665,6 +697,19 @@ export async function generatePresentationSceneImage(roId: string, versionId: st
   return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
     method: 'POST', headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify({ kind: 'image', sourceClaimIds, sceneImage }), signal,
+  });
+}
+
+export interface PresentationVideoRequest {
+  profile: 'onchip-field-sampling-v1';
+  sceneRoles: ['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'];
+  storyboardAssetId: string;
+  sceneImageAssetIds: string[];
+}
+export async function generatePresentationVideo(roId: string, versionId: string, sourceClaimIds: string[], video: PresentationVideoRequest, idempotencyKey: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
+  return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, signal,
+    body: JSON.stringify({kind: 'video', sourceClaimIds, video}),
   });
 }
 

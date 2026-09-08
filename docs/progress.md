@@ -1,5 +1,9 @@
 # Progress
 
+## 2026-09-08 — Authorized merge correction and production integration
+
+- User reopened correction;2d19052b passes full domain624, build/types/lint. GitHub b3d9a879 upload verified. Current production97aa06a5/rollbackc5b0dd71 integrated to preserve source excerpts, Claim review and video features. Final merged review/server acceptance/deploy pending; old release blocker is historical.
+
 ## 2026-09-07 — Final review release blocker
 
 - Final correction resolves canonical ambiguity and timestamp ordering. Scoped rereview found merge Version graph continuity is incomplete; release blocked pending focused correction under SDD final-review breaker. No candidate deployment or confirmed GitHub push; exact server/real PostgreSQL acceptance remains unrun. Docs lint passed; browser product cases passed cumulatively, not a single clean full run.

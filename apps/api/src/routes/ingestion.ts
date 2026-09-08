@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
-import { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, IngestionError, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from '@openscience/domain';
+import { authorizeIngestionWrite, confirmIngestionClaimEvidenceBridge, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, IngestionError, listActionableIngestionTasks, listIngestionClaimEvidenceCandidates, previewIngestionClaimEvidenceBridge, retryIngestionTask, type IngestionDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -101,5 +101,52 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
     const { taskId } = z.object({ taskId: z.string().uuid() }).parse(req.params);
     const body = z.object({ version: z.number().int().nonnegative(), core: z.record(z.string(), z.string()) }).parse(req.body);
     return reply.send(await confirmIngestionTask(deps, { userId: user.userId, taskId, version: body.version, core: body.core }, auditCtx(req)));
+  });
+
+  const bridgeParams = z.object({ id: z.string().uuid(), versionId: z.string().uuid() }).strict();
+  const bridgeTaskParams = bridgeParams.extend({ taskId: z.string().uuid() }).strict();
+
+  app.get('/research-objects/:id/versions/:versionId/ingestion-claim-evidence', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    reply.header('Cache-Control', 'private, no-store');
+    const { id, versionId } = bridgeParams.parse(req.params);
+    const candidates = await listIngestionClaimEvidenceCandidates(deps, { userId: user.userId, researchObjectId: id, versionId });
+    return reply.send({ candidates });
+  });
+
+  app.get('/research-objects/:id/versions/:versionId/ingestion-claim-evidence/:taskId', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    reply.header('Cache-Control', 'private, no-store');
+    const { id, versionId, taskId } = bridgeTaskParams.parse(req.params);
+    return reply.send(await previewIngestionClaimEvidenceBridge(deps, {
+      userId: user.userId, researchObjectId: id, versionId, taskId,
+    }));
+  });
+
+  app.post('/research-objects/:id/versions/:versionId/ingestion-claim-evidence/:taskId', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id, versionId, taskId } = bridgeTaskParams.parse(req.params);
+    const idempotencyKey = z.string().min(1).max(200).parse(req.headers['idempotency-key']);
+    const selectionSchema = z.object({
+      clientKey: z.string().min(1).max(100),
+      sourceField: z.enum(['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility']),
+      kind: z.enum(['core', 'supporting', 'method', 'boundary', 'counter']),
+      parentClientKey: z.string().min(1).max(100).optional(),
+      statement: z.string().min(1).max(4_000),
+      conditions: z.array(z.string().min(1).max(500)).max(100).optional(),
+      limitations: z.array(z.string().min(1).max(500)).max(100).optional(),
+      attachSourceQuote: z.boolean(),
+    }).strict();
+    const body = z.object({
+      snapshotToken: z.string().regex(/^[a-f0-9]{64}$/), selections: z.array(selectionSchema).min(1).max(12),
+    }).strict().parse(req.body);
+    const created = await confirmIngestionClaimEvidenceBridge(deps, {
+      userId: user.userId, researchObjectId: id, versionId, taskId,
+      snapshotToken: body.snapshotToken, idempotencyKey, selections: body.selections,
+    }, auditCtx(req));
+    return reply.status(201).send(created);
   });
 }

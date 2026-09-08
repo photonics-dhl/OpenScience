@@ -909,13 +909,47 @@ function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMap
     || !hasExactKeys(result.evidenceLocation, SDF_CORE_FIELDS)) return false;
   const evidenceByField = result.evidence;
   const locationsByField = result.evidenceLocation;
-  return SDF_CORE_FIELDS.every((field) => {
+  const baseValid = SDF_CORE_FIELDS.every((field) => {
     const evidence = evidenceByField[field];
     return isJsonRecord(evidence)
       && hasExactKeys(evidence, ['quote', 'locator'])
       && typeof evidence.quote === 'string'
       && typeof evidence.locator === 'string'
       && hasValidEvidenceLocation(locationsByField[field], reference);
+  });
+  if (!baseValid || result.evidenceSegments === undefined) return baseValid;
+  if (!isJsonRecord(result.evidenceSegments) || !hasExactKeys(result.evidenceSegments, SDF_CORE_FIELDS)
+    || !isJsonRecord(result.core) || !Array.isArray(result.needsMoreInformation)) return false;
+  const segmentBundle = result.evidenceSegments;
+  const core = result.core;
+  const missingFields = new Set(result.needsMoreInformation);
+  return SDF_CORE_FIELDS.every((field) => {
+    const segments = segmentBundle[field];
+    if (!Array.isArray(segments) || segments.length > 32) return false;
+    let total = 0;
+    let priorPage = 0;
+    const blockIds = new Set<string>();
+    for (const segment of segments) {
+      if (!isJsonRecord(segment) || !hasExactKeys(segment, ['quote', 'sourceLocator']) || typeof segment.quote !== 'string') return false;
+      let locator;
+      try { locator = validateSourceLocator(segment.sourceLocator); } catch { return false; }
+      if (locator.artifactId !== reference.artifactId || locator.contentHash !== reference.contentHash
+        || !locator.blockId || !locator.charRange || locator.charRange.end - locator.charRange.start !== segment.quote.length
+        || blockIds.has(locator.blockId) || (locator.page ?? 0) < priorPage) return false;
+      blockIds.add(locator.blockId);
+      priorPage = locator.page ?? priorPage;
+      total += segment.quote.length;
+    }
+    const evidence = evidenceByField[field] as Record<string, unknown>;
+    const location = locationsByField[field] as Record<string, unknown>;
+    const missing = missingFields.has(field);
+    return total <= 8_000 && evidence.quote === segments.map((segment) => (segment as Record<string, unknown>).quote).join('\n')
+      && missing === (segments.length === 0) && missing === !(typeof core[field] === 'string' && core[field].trim())
+      && (segments.length !== 0 || location.status === 'missing')
+      && (segments.length !== 1 || (location.status === 'located'
+        && isJsonRecord(location.sourceLocator)
+        && isDeepStrictEqual(location.sourceLocator, (segments[0] as JsonRecord).sourceLocator)))
+      && (segments.length <= 1 || location.status === 'cross_block');
   });
 }
 

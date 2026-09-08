@@ -1,5 +1,5 @@
 import type { SdfCore } from './api';
-import { getSuggestionEvidenceLocation, type SuggestionEvidenceLocation } from './suggestion-evidence';
+import { getSuggestionEvidenceLocation, getSuggestionEvidenceSegments, type SuggestionEvidenceLocation, type SuggestionEvidenceSegment } from './suggestion-evidence';
 
 /** AI 建议（§5.4 MUST：以 diff 展示，确认后才写入 SDF）。 */
 export interface AiSuggestion {
@@ -15,6 +15,7 @@ export interface AiSuggestion {
   evidence?: { quote: string; locator: string };
   /** Read-only, task-bound source-map location. It never changes proposal actions. */
   evidenceLocation?: SuggestionEvidenceLocation;
+  evidenceSegments?: SuggestionEvidenceSegment[];
 }
 
 export const SDF_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
@@ -112,6 +113,7 @@ export function coreToSuggestions(
       sourceLocator: evidence?.locator ?? (typeof evidenceOrLocator === 'string' ? evidenceOrLocator : undefined),
       evidence,
       evidenceLocation: getSuggestionEvidenceLocation(field, rawEvidence?.quote, canonicalContext),
+      evidenceSegments: getSuggestionEvidenceSegments(field, canonicalContext),
       risk: field === 'results' || field === 'reproducibility' ? 'high' : 'normal',
     });
   }

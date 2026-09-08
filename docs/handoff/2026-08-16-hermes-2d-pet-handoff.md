@@ -2,14 +2,15 @@
 
 > CURRENT active-memory, 2026-09-07 +08. User authorized PRD v1.1 implementation, GitHub push and server deployment. Current plan: docs/plans/2026-09-07-open-research-publication-plan.md. Preserve original Aladdin dog/Wanko and lamp. Never infer aesthetic approval from passing checks.
 
-## Release blocker
+## Current release work
 
-- Final scoped rereview found a load-bearing merge-to-next-commit graph loss: merge creates a Version without Claim/Evidence carry or frozen record, while the next commit selects it. Original canonical ambiguity is fixed. Per SDD final-review breaker, no second fix wave or deployment; awaiting user direction to continue this focused correction. GitHub authentication remains pending. Exact server acceptance has not run.
+- User explicitly authorized merge continuity correction and deployment on2026-09-08. Fix2d19052b: merged Version receives working graph and frozen record transactionally; full domain624 passed. Independent review and exact merged acceptance pending. GitHub b3d9a879 upload verified.
+- Preserve deployed97aa06a5 extraction/ordered evidence, same-Version Claim review, auth static PNG and on-chip video integration. Historical real paper RO af1a9817-dad3-4c5e-ace4-f33951f19574 and its four approved images remain untouched; full real-video acceptance belongs to the existing media workflow and is not claimed here.
 
 ## Version tuple
 
-- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; record/API candidate f199b4fd, both production fixes integrated; not deployed. Fresh21:13 +08 markers/public: application17eb209d15cc427d33b426e8430fa87006e899c2; rollbackc9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2. Parallel deployed extraction/recovery changes integrated for final review; production containers healthy and journal clear. Later docs HEAD is not another app release.
-- Parallel branch codex/token-smart-live-workflow deployed c9439ae; latest deployed17eb209 adds the reviewed PDF geometry/CMSY fidelity fix. origin/main still1b974dd. Current publication branch is awaiting GitHub login and has not been deployed. Root checkout contains unrelated user changes; leave untouched.
+- Current checkout D:/02-work/学术茶话会/OpenScience; branch codex/open-research-publication; merge correction2d19052b plus deployed97aa06a542febf558a47cecbf6559bd0a6c876aa integration candidate; not deployed. Fresh production97aa06a5 / rollbackc5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb; healthy, no journal/failure. Later docs HEAD is not another app release.
+- origin/main remains1b974dd. Publication branch b3d9a879 uploaded; final corrected candidate pending push. Other workspaces and production user records remain untouched.
 - Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
 
 ## Shipped entry continuity
