@@ -11,8 +11,8 @@
 |---|---|---|
 | `infra/scripts/verify-hermes-user-journey.mjs` | 服务器真实普通账号浏览器上传/启动/恢复取证，禁止手工生成各媒体阶段 | ACCEPTANCE TOOL；待运行，不代表产品流程通过 |
 | `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |
-| `packages/domain/src/agent/research-run.ts` / `apps/api/src/routes/research-runs.ts` / `infra/migrations/20260908010000_hermes_research_runs/` / `infra/migrations/20260908020000_hermes_research_workflow/` | 持久流程、来源审核、限定生成授权与保留成功资产的失败生成续跑 | 基础流程DEPLOYED583d201e；恢复API候选待发布，真实状态见CURRENT handoff |
-| `apps/web/components/hermes/{HermesResearchRunPanel,HermesSourceReview,HermesClaimEvidenceReview}.tsx` / `apps/web/test/hermes-research-run-panel.test.tsx` / `apps/web/test/hermes-claim-evidence-review.test.ts` | 用户启动、审核进度与未完成生成恢复入口 | 基础入口已部署；计费数量提示和恢复按钮候选待发布，不运行测试 |
+| `packages/domain/src/agent/research-run.ts` / `apps/api/src/routes/research-runs.ts` / `infra/migrations/20260908010000_hermes_research_runs/` / `infra/migrations/20260908020000_hermes_research_workflow/` | 持久流程、来源审核、限定生成授权与保留成功资产的失败生成续跑 | DEPLOYED3446f309；恢复API已实际202，原论文方法讲解流程SUCCEEDED/视频approved，真实状态见CURRENT handoff |
+| `apps/web/components/hermes/{HermesResearchRunPanel,HermesSourceReview,HermesClaimEvidenceReview}.tsx` / `apps/web/test/hermes-research-run-panel.test.tsx` / `apps/web/test/hermes-claim-evidence-review.test.ts` | 用户启动、审核进度与未完成生成恢复入口 | DEPLOYED3446f309：计费数量提示和恢复按钮已上线；未运行测试 |
 | `packages/domain/src/agent/research-source-readiness.ts` / `packages/domain/test/agent/research-source-readiness.test.ts` | Hermes原生文本/OCR/外部来源准备决策；区分上传、外部文件和文献线索 | LOCAL CANDIDATE；Terra/medium，8项测试通过；尚未接入运行流程，不代表OCR/ScanSci调用验收 |
 | `docs/specs/2026-09-07-open-research-publication-prd.md` | 开放研究出版物 PRD v1.1：四阶段建设，每 RO AI 友好 API、固定版本/权限合同及独立客户端验收 | 用户授权实施；本轮 M1/M2 优先，不代表已部署 |
 | `infra/migrations/20260907010000_frozen_research_record/` / `packages/domain/src/commit/{research-record-snapshot,research-record}.ts` / `apps/api/src/routes/{research-record,research-record-schema}.ts` | 提交时冻结记录、固定版本读取/来源/JSON 导出、机器 Schema/OpenAPI；nullable 迁移 37 与回滚 SQL | CANDIDATE；开发与专项验证中，尚未部署 |
