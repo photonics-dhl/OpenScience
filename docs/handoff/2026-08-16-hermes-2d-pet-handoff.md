@@ -1,39 +1,30 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT active-memory, 2026-09-07 +08. User requested skills-guided coherent product UI with lower reading/interaction load, after rejecting partial RO-only changes. Preserve original Aladdin dog/Wanko and lamp. Never infer aesthetic approval from passing checks.
+> CURRENT, 2026-09-08. Goal: real paper upload → structured analysis → confirmed same-version Claims → scientific images and animated video. Not yet end-to-end accepted.
 
 ## Version tuple
+- Candidate branch: codex/ordered-source-excerpts, E:/Miscellaneous/XGS/.worktrees/token-smart-production-005ffb8; source base fbb54059567728f5064edc34e006836c6f589bd6. Candidate commit is obtained from Git, not inferred from this filename.
+- Fresh production/public fbb54059567728f5064edc34e006836c6f589bd6, rollback005ffb8d8298d3476e8411046cae300079bd8344. Full canonical deployment/Parser16/migrations/runtime/public checks passed, PR105 CI passed. Ordered-excerpt candidate not yet deployed.
+- Development/media work remains E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow on codex/token-smart-live-workflow. Uncommitted media is deliberately excluded from this candidate. Root dirty main remains unchanged.
 
-- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/overview-responsive-companion. Application/public/loopback 5e4b4d47cba918db5a9b7f7092de32aa244c258e; rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs-only Git HEAD is not another app release.
-- Application source pushed non-force to main and branch. Canonical server release completed, journal cleared and retention complete. Root checkout contains unrelated user changes; leave untouched.
-- Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
+## Findings and changes
+- Actual stored SourceMap single MiniMax-M3 diagnosis5836in/2479out: problem valid; insight/method noncontiguous; results73blocks; missing=true fields contain text/IDs. Strict full-response rejection then blind retry explains lost usable fields. Diagnostic uses existing isolated-parser output, no PDF parsing or business writes.
+- fbb preserves first valid nonempty fields across retries; deployed stored-response replay passed. Fresh real UI task c7f00b13-3563-47cd-965f-51f990679de5 still returned allmissing and failed semantic acceptance; no confirmation/commit, session closed. Two product MiniMax calls5836/1856 and5966/192 are not Codex usage.
+- Same ordinary Chat6Pro had recommended separate noncontinuous excerpts. Current candidate implements strictly increasing authentic block choices, may skip unrelated blocks; retains max32/8000, uniqueness, exact original quote/locator/identity, and first-valid retention. Compatibility joined quote is not a continuous source passage. Batch creates separate needs_review/unverified Evidence and revalidates actual SourceMap order. All three UI surfaces disclose possible gaps.
+- Empty presentation now explains unavailable usable Claims and links to editor only when writable/loaded; zero count removed. Hermes dark confirmation controls use white text to avoid folio CSS making ink-on-ink.
+- fbb UX production1440/390 captures verified in controlled writable empty version; new guide and editor CTA, no horizontal overflow. Failed first scope404 retained, not acceptance. Evidence development ignored ux-deployed-v3-*. Sol/medium ordered extraction119/domain26 tests passed including complete noncontiguous batch write; independent High reviewed consumers and fresh extractor43/domain36/Web26 tests passed. Candidate build/checks pending below.
 
-## Shipped entry continuity
+- Latest repair requests only invalid fields and materializes all six fields from validated retained values; valid missing fields can upgrade. Cross-line support and theory/experiment distinctions are explicit in the prompt. Fresh first response plus bounded field-only correction passed real-gateway diagnostic v10/v11 (not UI acceptance). Extractor/parser contract/runner123 tests and worker typecheck passed. Acceptance fake now executes its guard; existing corpus manifest is LF-pinned to preserve its existing content hash on Windows.
 
-- Applied frontend-design, ui-ux-pro-max and baseline-ui using approved pale/ink/teal direction. The local skill search recommends flat/minimal interfaces but its marketing-video layout was rejected as unsuitable for authentication. No new dependencies or skills installed.
-- IdentityShell and new auth/Identity.module.css center a compact form with original Wanko welcome, explicit input/primary/secondary styles, readable headings and mobile form-first order. Short bilingual identity copy replaces the old slogans. Original image uses next/image with a circular CSS frame.
-- SignupCodeForm keeps required name/email/password prominent; optional ResearchProfileFields stays mounted inside native details, same reader default and parent state. Verification, validation, cooldown, session, safeReturnTo and all auth handlers unchanged.
-- Shared surface-product-app palette now applies to DashboardShell routes, including dashboard/new/settings/me. Clear active navigation, consistent control/focus treatment, aligned account values. This is shared styling, not a claim that every page layout has been redesigned.
-- Dashboard removes visible internal identifiers/redundant index caption. Reuses LiteratureAcquisitionDisclosure; recovered dashboard task opens it. Two existing browser tests now expand the disclosure and scope the full-text action.
+## Next / acceptance
+1. Complete exact candidate build/checks; server Parser16 acceptance, canonical deployment with rollback fbb5405, then same real PDF ordered-v5 acceptance. Preserve failures. Gate requires substantive problem/insight/method/results and separate source blockquotes with omission notice.
+2. Confirm/apply analysis, commit version and inspect source-backed Claims. Do not treat located evidence as scientific verification or task-success as useful analysis.
+3. Media runner review blockers have been fixed in development: dependency/TTS closure, UID input, queue/crash handling, exact runtime/attempt, installer rollback, capacity closure, immutable byte staging against retained-FD TOCTOU. High pilot GO, runner15/worker44 and root build pass; actual isolated runVideoOne now passed: offline Serena TTS, 12.25s H264/AAC MP4, full decode and five distinct scene frames. FFmpeg thread limits fixed the 128-PID failure; business/UI acceptance remains pending. Not enabled/deployed by this candidate.
+4. Real images/video generation and same-RO playback/audio/scientific acceptance still outstanding. CPU image installation remains user-paused. Existing D2NN demo is not this paper's mechanism or full-product evidence.
 
-## Preserved RO corrections
-
--69aac51 fixed black Wanko: destroying a model also destroyed Pixi URL-cached atlases used by its successor. Keep fixed atlas cache; dispose instance model/renderer/GL. Original Wanko/lamp image is loading/failure fallback.
-- RO overview/editor/presentation use shared A palette and four main tabs plus More. Empty overview has Add paper/Hermes; editor initializes missing SDF keys without losing extensions. Original evidence remains distinct from approved generated explanatory assets.
--8e4ecb2 reserves380px companion area on wide presentation pages and stacks below content on smaller screens; real RO context and drawer retained. Storyboards collapse by title. These earlier fixes remain in current release.
-
-## Fresh acceptance
-
-- Current exact server full build, parser16 acceptance, core36/search2 migration status (none pending), BGE real-vector/runtime, ScanSci image/tools/storage/worker and healthy containers passed. Public/loopback200, egress204 via parent proxy. No new model, migration or paid generation.
-- Auth/dashboard37 unit checks, modified-file lint, final local Web build, docs checks passed. Existing browser fixtures:2 literature recovery/full-text plus3 keyboard signup/failure retry/login-return cases passed with API fixtures.
-- Final public login/register:8 zh/en ×1440/390 visual checks, image decoded/no horizontal overflow/password toggle; no registration submission. Final public dashboard/new/settings/me:8 read-only checks at1440/390 using controlled user;0business writes/session closed. Actual screenshots inspected. Full business-pipeline and CI completion not claimed.
-- Evidence ignored under apps/web/test/visual/out/research-journey/: entry-{sync,prebuild,deploy,final-checkup}.log, entry-public-{auth,product}.log, entry-shots.json, entry-product-evidence.json and entry-*.png. Early next-dev screenshot rerenders made interaction smoke unstable; final production-mode and public checks passed. A next/image assertion was corrected to decode URL escaping.
-- Local8318 production-mode preview built from current app source remains available; older8317 preview is stale. Never print cookies/session headers, env values or raw private logs.
-
-## Remaining / next action
-
-- Continue route-specific layout/interaction refinement and actual paper-to-RO/media/evidence workflow; whole site and automatic multimodal pipeline remain incomplete. User has not yet accepted this visual iteration. Do not repeat the login omission or equate shared color changes with complete page redesign.
-- Known PDF method/results/reproducibility extraction and Evidence/SourceMap gaps remain. Existing RO Files/Hermes literature disclosures can keep internally recovered tasks collapsed when no initialTask is supplied; this pre-existing issue was not introduced or fixed here.
-- Preserve Serena continuous v4, restored animated D2NN, Chromium/FFmpeg/PyTorch/Qwen/Codex. CPU image installation remains USER-PAUSED. Codex still depends on PC/v2ray/account access and quotas (ADR-013).
-- Controlled private user11b6cf52-fcd4-4f7d-a3ff-8ea3ae9592fd (Hermes Production E2E), workspacef09ab567-4dcd-4d53-97b3-9a96920fd1ed, RObcbf1586-b6bd-44b6-ab66-c675fcddce78. Do not advertise as a user-accessible demo.
-- Read-first: Git/fetch/checkup, this handoff, relevant baseline and latest integrated plan section. Use explicit Git Bash SSH wrappers and canonical deployment; no env/Secret reads.
+## Evidence / constraints
+- Plan: docs/plans/2026-09-07-literature-recovery-workflow-plan.md. Requirement baseline: docs/OpenScience_Kimi_Development_Spec.md; accepted product design: docs/specs/2026-09-05-integrated-research-product-design.md.
+- Failed real task9eb31436-ef96-4f87-ae28-4220dc44bf50/RO4f786585-edc9-40ca-b464-1e0fa3412642 retained in development worktree ignored visual output. New diagnosis: block-selection-diagnostic-v3.json.
+- Official browser same conversation: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec. Web advice was actually sent/read; no private session logs.
+- Parser stays nonroot, readonly, no network/Secret,512MiB. SSH uses root infra/scripts/ssh-run.sh/checkup.sh via explicit Git Bash. No .env/Secret printing or manual production code edits.
+- Strong main preserved; delegated bounded Terra implementation/validation, Sol diagnosis and High review. No complete Codex cost baseline: no net savings percentage.

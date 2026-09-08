@@ -5,7 +5,12 @@ import {
   type DocumentSourceMap,
 } from '@openscience/domain';
 import { parseStructuredXlsxResult, XlsxParsingLimitError } from '../ingestion-parser';
-import { parseParserStageResult, type ParserJobRequestV2, type ParserStageResult } from './job-protocol';
+import {
+  SafeParserWarningCode,
+  parseParserStageResult,
+  type ParserJobRequestV2,
+  type ParserStageResult,
+} from './job-protocol';
 import {
   buildPhysicalPages,
   buildVirtualPage,
@@ -366,7 +371,9 @@ async function parseBinary(
     const pages = buildPhysicalPages(result.pages, result.parser);
     assertSourceMapBudgets(pages);
     if (!pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {
-      return needsReview(input, 'empty-parsed-text');
+      return needsReview(input, kind === 'pdf' && result.warnings.includes(SafeParserWarningCode.PARTIAL_RESULT)
+        ? 'native PDF text fidelity requires review'
+        : 'empty-parsed-text');
     }
     return succeeded(input, pages, result.warnings);
   }

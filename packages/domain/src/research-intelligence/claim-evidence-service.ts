@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import type { AuditContext } from '@openscience/observability';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import { recordAudit } from '../workspace/audit';
@@ -13,6 +14,7 @@ import type {
 import { CLAIM_ASSESSMENTS, CLAIM_KINDS, CLAIM_RELATIONS, EVIDENCE_KINDS } from './types';
 import { validateSourceLocator } from './validation';
 import { resolveSourceLocator } from './source-locator';
+import type { DocumentSourceMap } from './document-source-map';
 import {
   loadDocumentSourceMapReference,
   parseDocumentSourceMapReference,
@@ -53,7 +55,7 @@ type VersionContext = {
   status: string;
   commitId: string;
   researchObject: { id: string; workspaceId: string };
-  manifest: { entries: Array<{ artifactId: string; logicalPath: string; blobSha256: string }> } | null;
+  manifest: { coreJson?: unknown; entries: Array<{ artifactId: string; logicalPath: string; blobSha256: string }> } | null;
 };
 
 export interface ClaimInput {
@@ -90,6 +92,27 @@ export interface EvidenceInput {
   locator: SourceLocator;
   extractionConfidence?: number;
   rights?: EvidenceRightsInput;
+}
+
+export interface ReviewedIngestionClaimEvidenceBatchInput {
+  userId: string;
+  researchObjectId: string;
+  versionId: string;
+  sourceTaskId: string;
+  snapshotToken: string;
+  batchDigest: string;
+  authority: {
+    taskUpdatedAt: string;
+    agentTaskId: string;
+    agentTaskUpdatedAt: string;
+    versionCommitId: string;
+    artifactId: string;
+    contentHash: string;
+    manifestCoreDigest: string;
+    sourceMapRef: DocumentSourceMapReference;
+  };
+  claims: Array<Omit<ClaimInput, 'userId' | 'researchObjectId' | 'versionId'>>;
+  evidence: Array<Omit<EvidenceInput, 'userId' | 'researchObjectId' | 'versionId'>>;
 }
 
 export interface UpdateClaimInput {
@@ -161,6 +184,7 @@ function humanProvenance(
   value: unknown,
   rights?: EvidenceRightsInput,
   sourceMapRef?: DocumentSourceMapReference,
+  metadata: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
     source: 'human',
@@ -169,6 +193,7 @@ function humanProvenance(
     inputHash: inputHash(value),
     ...(rights ? { rights: { ...rights } } : {}),
     ...(sourceMapRef ? { sourceMapRef } : {}),
+    ...metadata,
   };
 }
 
@@ -251,7 +276,9 @@ async function validateClaimParent(
   }
 }
 
-async function createClaimInTransaction(deps: ArtifactDeps, input: ClaimInput, ctx: AuditContext) {
+async function createClaimInTransaction(
+  deps: ArtifactDeps, input: ClaimInput, ctx: AuditContext, provenanceMetadata: Record<string, unknown> = {},
+) {
   const version = await versionContext(deps, input, true);
   if (!CLAIM_KINDS.includes(input.kind) || !CLAIM_ASSESSMENTS.includes(input.assessment)) {
     throw new ClaimEvidenceError('VALIDATION_ERROR', 'Claim kind or assessment is invalid');
@@ -270,7 +297,7 @@ async function createClaimInTransaction(deps: ArtifactDeps, input: ClaimInput, c
     id: input.id, researchObjectId: input.researchObjectId, versionId: input.versionId,
     parentClaimId: input.parentClaimId ?? null, kind: input.kind, statement,
     assessment: input.assessment, conditions, limitations,
-    provenance: humanProvenance(provenanceInput) as never, extractionStatus: 'succeeded',
+    provenance: humanProvenance(provenanceInput, undefined, undefined, provenanceMetadata) as never, extractionStatus: 'succeeded',
   } });
   await touchMutableVersion(deps, input.versionId);
   await invalidatePublicationReview(deps, input.versionId);
@@ -302,11 +329,17 @@ async function updateClaimInTransaction(deps: ArtifactDeps, input: UpdateClaimIn
     id: existing.id, kind, parentClaimId, researchObjectId: input.researchObjectId, versionId: input.versionId,
   });
   const provenanceInput = { parentClaimId, kind, statement, assessment, conditions, limitations };
+  const existingProvenance = recordValue(existing.provenance);
+  const sourceTaskLineage = typeof existingProvenance.sourceTaskId === 'string'
+    ? existingProvenance.sourceTaskId
+    : typeof existingProvenance.sourceTaskLineage === 'string' ? existingProvenance.sourceTaskLineage : undefined;
   const updated = await deps.prisma.claimNode.updateMany({
     where: { id: existing.id, updatedAt: input.expectedUpdatedAt },
     data: {
       parentClaimId: parentClaimId ?? null, kind, statement, assessment, conditions, limitations,
-      provenance: humanProvenance(provenanceInput) as never, extractionStatus: 'succeeded',
+      provenance: humanProvenance(provenanceInput, undefined, undefined,
+        sourceTaskLineage ? { sourceTaskLineage } : {}) as never,
+      extractionStatus: 'succeeded',
     },
   });
   if (updated.count !== 1) throw new ClaimEvidenceError('CONCURRENT_UPDATE', 'Claim changed while being updated');
@@ -374,7 +407,7 @@ async function deleteClaimInTransaction(
   }, ctx);
 }
 
-type ResolvedEvidenceSource = {
+export type ResolvedEvidenceSource = {
   text?: string;
   sourceMapRef?: DocumentSourceMapReference;
   region?: { x: number; y: number; width: number; height: number };
@@ -405,16 +438,75 @@ async function assertEvidenceSourceIdentity(
   }
 }
 
-export async function resolveEvidenceSource(
+type ResolveEvidenceSourceInput = {
+  researchObjectId: string;
+  versionId: string;
+  artifactId: string;
+  locator: SourceLocator;
+  exactQuote?: string;
+  sourceMapRef?: unknown;
+};
+
+export type CanonicalEvidenceSource = { quote: string; locator: SourceLocator };
+
+/** Validates exact canonical slices against one already parsed SourceMap. */
+export function validateCanonicalEvidenceSources(
+  sourceMap: DocumentSourceMap,
+  sources: readonly CanonicalEvidenceSource[],
+): ResolvedEvidenceSource[] {
+  if (sources.length === 0 || sources.length > 32) {
+    throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence segment count is invalid');
+  }
+  const blocks = new Map<string, {
+    ordinal: number; page: number; pageWidth: number; pageHeight: number;
+    text?: string; boundingBox: NonNullable<SourceLocator['boundingBox']>;
+  }>();
+  let ordinal = 0;
+  for (const page of sourceMap.pages) {
+    for (const block of page.blocks) {
+      if (!block.text?.trim()) continue;
+      blocks.set(block.id, {
+        ordinal, page: page.page, pageWidth: page.width, pageHeight: page.height,
+        text: block.text, boundingBox: block.boundingBox,
+      });
+      ordinal += 1;
+    }
+  }
+  let priorOrdinal: number | undefined;
+  let total = 0;
+  const resolved: ResolvedEvidenceSource[] = [];
+  for (const source of sources) {
+    const locator = validateSourceLocator(source.locator);
+    const block = locator.blockId ? blocks.get(locator.blockId) : undefined;
+    if (locator.artifactId !== sourceMap.artifactId || locator.contentHash !== sourceMap.contentHash
+      || !block || locator.page !== block.page || !isDeepStrictEqual(locator.boundingBox, block.boundingBox)
+      || !locator.charRange || typeof block.text !== 'string'
+      || block.text.slice(locator.charRange.start, locator.charRange.end) !== source.quote
+      || locator.charRange.end - locator.charRange.start !== source.quote.length
+      || (priorOrdinal !== undefined && block.ordinal <= priorOrdinal)) {
+      throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence does not match strictly ordered exact source blocks');
+    }
+    priorOrdinal = block.ordinal;
+    total += source.quote.length;
+    const box = locator.boundingBox!;
+    resolved.push({
+      text: source.quote,
+      region: {
+        x: Math.min(1, box.x / block.pageWidth),
+        y: Math.min(1, box.y / block.pageHeight),
+        width: Math.min(1 - Math.min(1, box.x / block.pageWidth), box.width / block.pageWidth),
+        height: Math.min(1 - Math.min(1, box.y / block.pageHeight), box.height / block.pageHeight),
+      },
+    });
+  }
+  if (total > 8_000) throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence passage is too large');
+  return resolved;
+}
+
+async function resolveEvidenceSourceInternal(
   deps: ArtifactDeps,
-  input: {
-    researchObjectId: string;
-    versionId: string;
-    artifactId: string;
-    locator: SourceLocator;
-    exactQuote?: string;
-    sourceMapRef?: unknown;
-  },
+  input: ResolveEvidenceSourceInput,
+  loadedSourceMap?: DocumentSourceMap,
 ): Promise<ResolvedEvidenceSource> {
   const version = await deps.prisma.version.findUnique({
     where: { id: input.versionId },
@@ -445,7 +537,7 @@ export async function resolveEvidenceSource(
       throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'SourceMap reference does not match Evidence source');
     }
     if (reference.parserStatus !== 'succeeded') throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Parser output still requires review');
-    const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+    const sourceMap = loadedSourceMap ?? await loadDocumentSourceMapReference(deps.storage, reference);
     const block = resolveSourceLocator(sourceMap, locator);
     const page = locator.page === undefined ? undefined : sourceMap.pages.find((candidate) => candidate.page === locator.page);
     const box = locator.boundingBox ?? block.boundingBox;
@@ -469,6 +561,13 @@ export async function resolveEvidenceSource(
     if (error instanceof ClaimEvidenceError) throw error;
     throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Evidence locator could not be resolved', error);
   }
+}
+
+export async function resolveEvidenceSource(
+  deps: ArtifactDeps,
+  input: ResolveEvidenceSourceInput,
+): Promise<ResolvedEvidenceSource> {
+  return resolveEvidenceSourceInternal(deps, input);
 }
 
 function normalizedRights(rights: EvidenceRightsInput | undefined): EvidenceRightsInput | undefined {
@@ -512,6 +611,7 @@ async function createEvidenceInTransaction(
   input: EvidenceInput,
   resolved: ResolvedEvidenceSource,
   ctx: AuditContext,
+  provenanceMetadata: Record<string, unknown> = {},
 ) {
   const version = await versionContext(deps, input, true);
   if (!EVIDENCE_KINDS.includes(input.kind) || !CLAIM_RELATIONS.includes(input.relation)) {
@@ -543,7 +643,7 @@ async function createEvidenceInTransaction(
     kind: input.kind, title, exactQuote: exactQuote ?? null, relation: input.relation,
     locator: locator as never, contentHash: locator.contentHash,
     extractionConfidence: input.extractionConfidence ?? null, extractionStatus: 'needs_review',
-    verifiedByUserId: null, provenance: humanProvenance(provenanceInput, rights, resolved.sourceMapRef) as never,
+    verifiedByUserId: null, provenance: humanProvenance(provenanceInput, rights, resolved.sourceMapRef, provenanceMetadata) as never,
   } });
   await touchMutableVersion(deps, input.versionId);
   await invalidatePublicationReview(deps, input.versionId);
@@ -710,6 +810,209 @@ export async function createClaim(deps: ArtifactDeps, input: ClaimInput, ctx: Au
     const limitations = boundedList(input.limitations, 'Claim limitations');
     if (existing && sameClaim(existing as unknown as Record<string, unknown>, input, conditions, limitations)) return existing;
     throw new ClaimEvidenceError('IDEMPOTENCY_CONFLICT', 'Claim id was already used for another payload', error);
+  }
+}
+
+/**
+ * Creates a user-reviewed ingestion batch in one serializable transaction.
+ * Evidence deliberately remains needs_review; reviewing the batch is not proof
+ * that each extracted quote and locator has been independently verified.
+ */
+export async function createClaimEvidenceBatch(
+  deps: ArtifactDeps,
+  input: ReviewedIngestionClaimEvidenceBatchInput,
+  ctx: AuditContext = {},
+) {
+  boundedText(input.sourceTaskId, 'Source task id', 200);
+  boundedText(input.snapshotToken, 'Snapshot token', 200);
+  boundedText(input.batchDigest, 'Batch digest', 200);
+  if (input.claims.length === 0 || input.claims.length > 12 || input.evidence.length > 6 * 32) {
+    throw new ClaimEvidenceError('VALIDATION_ERROR', 'Reviewed ingestion batch size is invalid');
+  }
+  if (input.claims.some((claim) => claim.assessment !== 'missing')) {
+    throw new ClaimEvidenceError('VALIDATION_ERROR', 'Reviewed ingestion Claims must start with missing assessment');
+  }
+  const claimIds = new Set(input.claims.map((claim) => claim.id));
+  if (claimIds.size !== input.claims.length || new Set(input.evidence.map((evidence) => evidence.id)).size !== input.evidence.length
+    || input.evidence.some((evidence) => !claimIds.has(evidence.claimId))) {
+    throw new ClaimEvidenceError('VALIDATION_ERROR', 'Reviewed ingestion batch references are invalid');
+  }
+  const base = { userId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId };
+  const authority = input.authority;
+  let exactReference: DocumentSourceMapReference;
+  try {
+    exactReference = parseDocumentSourceMapReference(authority.sourceMapRef);
+  } catch (error) {
+    throw new ClaimEvidenceError('ORIGINAL_MISSING', 'Reviewed ingestion SourceMap reference is invalid', error);
+  }
+  if (exactReference.parserStatus !== 'succeeded' || exactReference.artifactId !== authority.artifactId
+    || exactReference.contentHash !== authority.contentHash) {
+    throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Reviewed ingestion SourceMap is not an exact successful source');
+  }
+  const provenanceMetadata = {
+    source: 'reviewed_ingestion', sourceTaskId: input.sourceTaskId,
+    sourceTaskLineage: input.sourceTaskId,
+    snapshotToken: input.snapshotToken, batchDigest: input.batchDigest,
+  };
+  await versionContext(deps, base, true);
+  const sourceMap = input.evidence.length > 0
+    ? await loadDocumentSourceMapReference(deps.storage, exactReference)
+    : undefined;
+  const preparedEvidence = input.evidence.map((evidence) => {
+    const complete = { ...base, ...evidence } satisfies EvidenceInput;
+    const locator = validateSourceLocator(complete.locator);
+    const exactQuote = complete.exactQuote === undefined
+      ? undefined : boundedText(complete.exactQuote, 'Evidence exactQuote', 20_000);
+    if (exactQuote === undefined) throw new ClaimEvidenceError('VALIDATION_ERROR', 'Reviewed ingestion Evidence requires an exact quote');
+    if (complete.artifactId !== authority.artifactId || locator.artifactId !== complete.artifactId
+      || locator.contentHash !== authority.contentHash) {
+      throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Reviewed ingestion Evidence source identity is invalid');
+    }
+    return { input: complete, source: { quote: exactQuote, locator } };
+  });
+  const resolvedById = new Map<string, ResolvedEvidenceSource>();
+  for (const claimId of claimIds) {
+    const group = preparedEvidence.filter((item) => item.input.claimId === claimId);
+    if (group.length === 0) continue;
+    const resolved = validateCanonicalEvidenceSources(sourceMap!, group.map((item) => item.source));
+    group.forEach((item, index) => resolvedById.set(item.input.id, {
+      ...resolved[index]!, sourceMapRef: exactReference,
+    }));
+  }
+  const resolvedEvidence = preparedEvidence.map((item) => ({
+    input: item.input, resolved: resolvedById.get(item.input.id)!,
+  }));
+  const materialize = async (transaction: ArtifactDeps) => {
+    const [authoritativeTask, authoritativeVersion] = await Promise.all([
+      transaction.prisma.ingestionTask.findUnique({
+        where: { id: input.sourceTaskId },
+        include: { artifact: true, batch: true, agentTask: true },
+      }),
+      transaction.prisma.version.findUnique({
+        where: { id: input.versionId },
+        include: { researchObject: true, manifest: { include: { entries: true } } },
+      }),
+    ]);
+    const taskResult = recordValue(authoritativeTask?.agentTask?.result);
+    let currentReference: DocumentSourceMapReference | undefined;
+    try { currentReference = parseDocumentSourceMapReference(taskResult.sourceMapRef); } catch { /* handled below */ }
+    const taskMatches = authoritativeTask?.state === 'confirmed'
+      && authoritativeTask.batch?.researchObjectId === input.researchObjectId
+      && authoritativeTask.artifactId === authority.artifactId
+      && authoritativeTask.artifact?.blobSha256 === authority.contentHash
+      && authoritativeTask.updatedAt?.toISOString() === authority.taskUpdatedAt
+      && authoritativeTask.agentTask?.id === authority.agentTaskId
+      && authoritativeTask.agentTask.status === 'succeeded'
+      && authoritativeTask.agentTask.updatedAt?.toISOString() === authority.agentTaskUpdatedAt
+      && currentReference?.serializedSha256 === exactReference.serializedSha256
+      && currentReference?.objectKey === exactReference.objectKey
+      && currentReference?.parserStatus === exactReference.parserStatus
+      && currentReference?.artifactId === exactReference.artifactId
+      && currentReference?.contentHash === exactReference.contentHash;
+    const versionMatches = authoritativeVersion?.researchObjectId === input.researchObjectId
+      && authoritativeVersion.status === 'draft'
+      && authoritativeVersion.commitId === authority.versionCommitId
+      && authoritativeVersion.manifest
+      && inputHash(authoritativeVersion.manifest.coreJson) === authority.manifestCoreDigest
+      && authoritativeVersion.manifest.entries.some((entry) => entry.artifactId === authority.artifactId
+        && entry.blobSha256 === authority.contentHash);
+    if (!taskMatches || !versionMatches) {
+      throw new ClaimEvidenceError('CONCURRENT_UPDATE', 'Ingestion or version authority changed; preview again');
+    }
+    const existingClaims = await transaction.prisma.claimNode.findMany({
+      where: { researchObjectId: input.researchObjectId, versionId: input.versionId },
+    });
+    const priorBatchClaims = existingClaims.filter((claim) => {
+      const provenance = recordValue(claim.provenance);
+      return provenance.sourceTaskId === input.sourceTaskId || provenance.sourceTaskLineage === input.sourceTaskId;
+    });
+    if (priorBatchClaims.length > 0) {
+      const sameBatch = priorBatchClaims.every((claim) => {
+        const provenance = recordValue(claim.provenance);
+        return provenance.snapshotToken === input.snapshotToken && provenance.batchDigest === input.batchDigest;
+      });
+      if (!sameBatch || priorBatchClaims.length !== input.claims.length) {
+        throw new ClaimEvidenceError('IDEMPOTENCY_CONFLICT', 'Reviewed ingestion task was already materialized with another batch');
+      }
+      const expectedClaimIds = new Set(input.claims.map((claim) => claim.id));
+      if (priorBatchClaims.some((claim) => !expectedClaimIds.has(claim.id))) {
+        throw new ClaimEvidenceError('IDEMPOTENCY_CONFLICT', 'Reviewed ingestion batch ids do not match');
+      }
+      const existingEvidence = await transaction.prisma.evidenceRecord.findMany({
+        where: { researchObjectId: input.researchObjectId, versionId: input.versionId },
+      });
+      const priorBatchEvidence = existingEvidence.filter((item) => {
+        const provenance = recordValue(item.provenance);
+        return provenance.source === 'reviewed_ingestion' && provenance.sourceTaskId === input.sourceTaskId
+          && provenance.snapshotToken === input.snapshotToken && provenance.batchDigest === input.batchDigest;
+      });
+      const expectedEvidenceIds = new Set(input.evidence.map((item) => item.id));
+      if (priorBatchEvidence.length !== input.evidence.length || priorBatchEvidence.some((item) => !expectedEvidenceIds.has(item.id))) {
+        throw new ClaimEvidenceError('IDEMPOTENCY_CONFLICT', 'Reviewed ingestion Evidence replay does not match');
+      }
+      return { claims: priorBatchClaims, evidence: priorBatchEvidence.map(publicEvidenceRow) };
+    }
+    const claims = [];
+    for (const claim of input.claims) {
+      claims.push(await createClaimInTransaction(transaction, { ...base, ...claim }, ctx, provenanceMetadata));
+    }
+    if (resolvedEvidence.length > 0) {
+      const evidenceData = resolvedEvidence.map(({ input: evidenceInput, resolved }) => {
+        if (!EVIDENCE_KINDS.includes(evidenceInput.kind) || !CLAIM_RELATIONS.includes(evidenceInput.relation)) {
+          throw new ClaimEvidenceError('VALIDATION_ERROR', 'Evidence kind or relation is invalid');
+        }
+        const title = boundedText(evidenceInput.title, 'Evidence title', 500);
+        const exactQuote = evidenceInput.exactQuote === undefined
+          ? undefined : boundedText(evidenceInput.exactQuote, 'Evidence exactQuote', 20_000);
+        const locator = validateSourceLocator(evidenceInput.locator);
+        const rights = normalizedRights(evidenceInput.rights);
+        const provenanceInput = {
+          claimId: evidenceInput.claimId, artifactId: evidenceInput.artifactId, kind: evidenceInput.kind,
+          title, exactQuote, relation: evidenceInput.relation, locator,
+          extractionConfidence: evidenceInput.extractionConfidence, rights,
+        };
+        return {
+          id: evidenceInput.id, researchObjectId: evidenceInput.researchObjectId,
+          versionId: evidenceInput.versionId, workspaceId: authoritativeVersion.researchObject.workspaceId,
+          claimId: evidenceInput.claimId, artifactId: evidenceInput.artifactId, kind: evidenceInput.kind,
+          title, exactQuote: exactQuote ?? null, relation: evidenceInput.relation,
+          locator: locator as never, contentHash: locator.contentHash,
+          extractionConfidence: evidenceInput.extractionConfidence ?? null,
+          extractionStatus: 'needs_review' as const, verifiedByUserId: null,
+          provenance: humanProvenance(provenanceInput, rights, resolved.sourceMapRef, provenanceMetadata) as never,
+        };
+      });
+      const created = await transaction.prisma.evidenceRecord.createMany({ data: evidenceData });
+      if (created.count !== evidenceData.length) {
+        throw new ClaimEvidenceError('IDEMPOTENCY_CONFLICT', 'Reviewed ingestion Evidence batch was not created atomically');
+      }
+      await touchMutableVersion(transaction, input.versionId);
+      await invalidatePublicationReview(transaction, input.versionId);
+      await recordAudit(transaction, transaction.prisma, {
+        actorId: input.userId, action: 'evidence.batch_create',
+        workspaceId: authoritativeVersion.researchObject.workspaceId,
+        targetType: 'version', targetId: input.versionId,
+        metadata: {
+          researchObjectId: input.researchObjectId, versionId: input.versionId,
+          sourceTaskId: input.sourceTaskId, evidenceIds: evidenceData.map((item) => item.id),
+        },
+      }, ctx);
+    }
+    const evidenceIds = input.evidence.map((item) => item.id);
+    const storedEvidence = evidenceIds.length === 0 ? [] : await transaction.prisma.evidenceRecord.findMany({
+      where: { id: { in: evidenceIds } },
+    });
+    if (storedEvidence.length !== evidenceIds.length) {
+      throw new ClaimEvidenceError('IDEMPOTENCY_CONFLICT', 'Reviewed ingestion Evidence batch is incomplete');
+    }
+    const storedById = new Map(storedEvidence.map((item) => [item.id, item]));
+    return { claims, evidence: evidenceIds.map((id) => publicEvidenceRow(storedById.get(id)!)) };
+  };
+  try {
+    return await serializableWrite(deps, materialize);
+  } catch (error) {
+    if ((error as { code?: unknown })?.code !== 'P2002') throw error;
+    return serializableWrite(deps, materialize);
   }
 }
 

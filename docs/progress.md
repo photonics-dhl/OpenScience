@@ -1,16 +1,12 @@
 # Progress
 
-## 2026-09-07 entry continuity deployed
+## 2026-09-08: UX/extraction repair deployed; real-paper flow still blocked
 
-- Branch codex/overview-responsive-companion; app/public 5e4b4d47cba918db5a9b7f7092de32aa244c258e, rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs HEAD differs from deployed app. Main and branch pushed; root user files untouched.
-- Skills-guided compact login/register layout, original Wanko, shorter bilingual copy, optional signup preferences collapsed with state/defaults preserved. Shared DashboardShell palette and active navigation unified; desk metadata/search simplified.
-- Preserved previous Wanko texture fix, RO focused editor and media companion area. No auth/provider/schema changes, installs, paid generation or research writes.
-- Exact server build/parser16/core36/search2/BGE/ScanSci/container/public acceptance passed; journal cleared/retention complete, edge/loopback200 and egress204.
-- Auth37 unit checks, Web build/lint/docs and5 focused existing browser fixtures passed. Public auth8 and dashboard/new/settings/me8 desktop/mobile checks passed;0business writes, controlled session closed. High review found no auth/returnTo regression. No full-site business or CI completion claim.
-- Evidence: ignored entry-*.log/png/json under apps/web/test/visual/out/research-journey/. Canonical handoff records exact scope and remaining issues.
-
-## Next
-
-- User reviews deployed visual iteration. Continue individual-page layout and actual paper-to-RO/media/evidence workflow; shared style is not complete whole-site redesign.
-- Preserve original Wanko/lamp, Serena v4, animated D2NN and existing runtimes; CPU image installation stays paused.
-- Extraction/Evidence grounding and existing internally recovered RO literature-disclosure visibility remain unresolved.
+- Production/public fbb54059567728f5064edc34e006836c6f589bd6, rollback005ffb8d8298d3476e8411046cae300079bd8344. Draft PR105 CI passed; canonical fullbuild/Parser16/migrations/runtime/public acceptance passed and journal cleared. MEDIA is excluded.
+- fbb preserves first valid extraction fields across retries and applies screenshot-informed empty-state/contrast UX. Exact compiled replay passed; local desktop/mobile browser16 and focused gateway39/extractor118/UI14 checks passed.
+- Fresh real UI paper test FAILED: ROf3f04cee-09a2-42cf-a967-4588e2c46d44, AgentTaskc7f00b13-3563-47cd-965f-51f990679de5. Safe SourceMap, but all six fields empty after retry; no confirmation or commit. Session closed, failure retained.
+- Next repair permits source-ordered independently located noncontiguous excerpts, with visible omission notice and unchanged authenticity/size/approval rules. Sol/medium implementation, main UI, Sol/high contract review active. Prepared ordered-v5 real gate uses hash-verified cached paper. Input was verified intact; prompt now explains joint cross-line evidence. Invalid-field-only repair with typed retained-value materialization passed real-gateway diagnostic v10/v11; this is not UI acceptance. Fresh extractor/parser contract/runner123 tests and worker typecheck passed.
+- Video runner/media integration remains uncommitted and disabled. Byte-snapshot TOCTOU fix independently reviewed; runner15/worker44/renderer6/domain1/UI2, build/types/lint passed. Actual isolated runVideoOne passed offline TTS and 12.25s H264/AAC full decode after limiting FFmpeg threads within unchanged128-PID isolation; same-RO business generation remains required.
+- CPU image installation paused. Full same-paper image/video workflow has NOT passed; standalone D2NN demo is separate. Production screenshotv1 reached404 and is not acceptance; controlled writable-version v3 confirms new guide/editor CTA at1440/390 with no overflow, session closed.
+- Cross-project token-smart quality-main share bundle remains ready at docs/user/_ideas/token-smart-share-20260907-quality-main.zip. Preserve main model; bounded routing/web stage planning are actual, but no defensible full-chain token savings percentage is available.
+- Exact state/evidence/next actions: docs/handoff/2026-08-16-hermes-2d-pet-handoff.md. Root dirty main preserved. Historical attempts remain in Git history and ignored evidence; do not use their release numbers as current state.

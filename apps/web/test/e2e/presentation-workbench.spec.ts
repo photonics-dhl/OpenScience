@@ -178,6 +178,26 @@ test('creates a human claim, retries stable intents, generates a chart, refreshe
   await page.screenshot({ path: 'test/visual/out/presentation-workbench-desktop.png', fullPage: true });
 });
 
+test('gives an empty writable presentation a visible editor next step without a misleading zero count', async ({ page }) => {
+  await fixtures(page, { startEmpty: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+
+  const workbench = page.locator('[data-presentation-workbench]');
+  await expect(workbench.getByRole('heading', { name: /Build a visual explanation/i })).toBeVisible();
+  await expect(workbench.getByText(/No usable claims are available/i)).toBeVisible();
+  await expect(workbench.getByRole('link', { name: /Open the SDF editor/i })).toHaveAttribute('href', `/research-objects/${ro.id}/edit`);
+  await expect(workbench.locator('#presentation-preview-heading + span')).toHaveCount(0);
+  await expect(workbench.locator('[data-source-tools]')).toHaveAttribute('open', '');
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/token-smart-release/ux-empty-local-desktop.png', fullPage: true });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(workbench.getByRole('link', { name: /Open the SDF editor/i })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/token-smart-release/ux-empty-local-mobile.png', fullPage: true });
+});
+
 test('requires both a draft version and an active writer membership', async ({ page }) => {
   await fixtures(page, { role: 'viewer' });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
@@ -449,6 +469,8 @@ test('global Hermes reviews an exact revision and retries one uncertain submissi
   const buttonColors = await review.getByRole('button', { name: 'Confirm · 1 AI credit' }).evaluate(node => { const style = getComputedStyle(node); return { background: style.backgroundColor, color: style.color }; });
   expect(buttonColors.background).not.toBe('rgba(0, 0, 0, 0)');
   expect(buttonColors.background).not.toBe(buttonColors.color);
+  await review.getByRole('button', { name: 'Confirm · 1 AI credit' }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test/visual/out/token-smart-release/hermes-presentation-confirm-contrast.png', fullPage: true });
   await review.getByRole('button', { name: 'Confirm · 1 AI credit' }).click();
   await expect(review.getByRole('alert')).toContainText('outcome is unknown');
   await expect(review.getByLabel('Storyboard instructions')).toBeDisabled();

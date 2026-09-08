@@ -88,6 +88,14 @@
       "researcherPrompt": "研究者提示",
       "sourceLocatorUnavailable": "来源位置暂不可用",
       "currentSdfAggregate": "当前 SDF 聚合内容",
+      "evidenceLocationLocated": "已定位",
+      "evidenceLocationAmbiguous": "多处匹配",
+      "evidenceLocationCrossBlock": "跨块引文",
+      "evidenceLocationMissing": "未定位",
+      "evidenceLocationUnverified": "未验证",
+      "evidenceLocationPage": "第 {page} 页",
+      "evidenceLocationBlock": "块 {blockId}",
+      "evidenceLocationNotice": "以下是按原文顺序排列的独立摘录，段落可能不连续。每个位置只对应该段引文，不代表结论正确。",
       "artifactStored": "已存储素材",
       "artifactStatus": {
         "uploading": "上传中",
@@ -966,7 +974,7 @@
     "sourceTitle": "来源主张、概念图与分镜", "sourceBody": "添加或选择已完成提取的主张，生成文字结构概念图。论文插图与视频需经制作和审阅后导入。", "selectClaims": "选择主张", "selectedLimit": "已选择 {count} / {max} 项", "generate": "生成概念图", "starting": "正在启动…",
     "claimStatementLabel": "核心主张", "claimStatementPlaceholder": "用一句准确的话描述一个结果或机制", "claimDraftNote": "这会保存为人工撰写的草稿；在证据审阅完成前，科学支持状态保持为“待补”。", "addClaim": "添加主张", "claimSaveFailed": "主张暂时无法保存；重试会继续使用同一份草稿。",
     "noClaims": "这个版本还没有主张，请在上方添加第一条核心主张。", "noClaimsReadonly": "这个版本没有记录主张。", "loadingSources": "正在读取这个版本的主张…", "scopeLoadFailed": "主张和展示内容尚未完整载入，因此修改操作保持禁用。", "retryScopeLoad": "重新加载主张和展示内容", "openEditor": "打开 SDF 编辑器", "openVersions": "查看版本",
-    "previewTitle": "研究可视化", "emptyPreview": "选择可用主张，创建概念图或分镜。", "emptyPreviewReadonly": "这个版本没有记录展示内容。", "loadingPreviews": "正在读取这个版本的展示内容…", "assetTitle": "主张概念图", "generatedByPlatform": "由 OpenScience 图解引擎生成", "notEvidence": "用于解释研究，不替代原始证据。", "linkedClaims": "依据这些主张", "linkedClaimsUnavailable": "当前视图无法显示关联主张的正文。", "viewFullSize": "打开完整尺寸图解", "openAsset": "打开展示文件", "approve": "审批并纳入发布", "reject": "拒绝草稿", "rejectedNote": "该草稿已被拒绝，不能再次审批。请针对当前版本创建新草稿。",
+    "previewTitle": "研究可视化", "emptyPreviewTitle": "从研究主张开始，构建可视化", "emptyPreviewNeedsSources": "当前版本暂无可用主张。请打开编辑器，检查论文分析并准备来源材料；也可以在下方手动添加主张。", "emptyPreview": "选择可用主张，创建概念图或分镜。", "emptyPreviewReadonly": "这个版本没有记录展示内容。", "loadingPreviews": "正在读取这个版本的展示内容…", "assetTitle": "主张概念图", "generatedByPlatform": "由 OpenScience 图解引擎生成", "notEvidence": "用于解释研究，不替代原始证据。", "linkedClaims": "依据这些主张", "linkedClaimsUnavailable": "当前视图无法显示关联主张的正文。", "viewFullSize": "打开完整尺寸图解", "openAsset": "打开展示文件", "approve": "审批并纳入发布", "reject": "拒绝草稿", "rejectedNote": "该草稿已被拒绝，不能再次审批。请针对当前版本创建新草稿。",
     "assetStatus": { "draft": "待审阅", "approved": "已审批", "rejected": "已拒绝" }, "assessment": { "supported": "标记为支持", "partial": "标记为部分支持", "disputed": "标记为有争议", "missing": "尚未记录证据支持" }, "claimStatus": { "needs_review": "提取结果需审阅后才能使用", "blocked": "提取被阻断", "failed": "提取失败" },
     "provenance": "素材绑定当前版本与来源主张；主张修改后，相关素材会失效。",
     "loading": "正在加载展示工作区…", "loadError": "展示工作区暂时无法加载。", "generationStartFailed": "生成任务暂时无法启动；重试会继续使用同一次请求。", "generationFailed": "生成任务失败，请重试。", "transitionFailed": "展示内容状态暂时无法更新。",
@@ -1339,6 +1347,19 @@
     "frameTime": "CPU 提交",
     "gpuTime": "GPU 帧时",
     "bounds": "稳定边界"
+  },
+  "ingestionClaimReview": {
+    "duplicateAssociation": "本批次中，同一组原文只关联一条主张；拆分出的其他主张可先不重复关联原文。",
+    "reviewEvidence": "核对原文段落",
+    "evidenceNotice": "以下独立摘录按原文顺序排列，段落可能不连续，省略部分未展示。每段保留独立出处。请核对这些段落是否完整支持建议内容及其条件、局限；定位本身不代表科学结论正确。",
+    "title": "从论文分析整理主张", "boundary": "从当前已保存版本选择、编辑主张。原文引文只是候选依据；确认本批次不会将主张或证据标为已验证。",
+    "load": "预览已确认的论文分析", "refresh": "重新加载预览", "loading": "正在加载预览…", "empty": "当前版本没有匹配的已确认论文分析。请先确认 Hermes 建议并保存版本。",
+    "source": "来源文献", "statement": "主张内容", "changed": "内容与原提取不同，请重新核对引文关联", "kind": "主张类型", "parent": "本批次的上级主张", "chooseParent": "选择上级主张", "conditions": "适用条件（每行一项）", "limitations": "局限（每行一项）",
+    "page": "原文第 {page} 页", "sourceLocated": "已提供来源定位", "associate": "我已核对引文与此主张的关系，将它作为待复核的候选证据关联。", "noQuote": "没有可信引文可关联，此主张将保留为无附加证据。", "split": "从此项再拆出一条主张",
+    "invalid": "请为子主张选择上级、消除循环，并填写非空内容（最多 4,000 字符）。每批最多选择 12 条。适用条件和局限各限 100 个非空行，每行最多 500 字符。", "confirm": "确认所选主张及候选证据", "saving": "正在保存…", "retry": "重试同一批次", "complete": "已保存到当前版本。主张与证据仍需科学复核，现在可以选择这些主张生成分镜。",
+    "loadError": "预览加载失败，请重新加载。", "submitError": "本批次未被接受，请重新加载并核对选择。", "stale": "版本或来源已经变化，请重新加载预览后确认。", "uncertain": "响应中断，提交结果尚未确定。请保持当前选择，重试同一批次以核对结果。",
+    "field_problem": "研究问题", "field_insight": "核心见解", "field_method": "方法", "field_results": "结果", "field_limitations": "局限", "field_reproducibility": "可复现性",
+    "kind_core": "核心主张", "kind_supporting": "支持主张", "kind_method": "方法", "kind_boundary": "边界条件", "kind_counter": "反向主张"
   },
   "hermesPresentation": {
     "entry": "分镜与配图",

@@ -274,14 +274,19 @@ export class AiGateway {
   async completeStructured<T>(
     guard: SchemaGuard<T>,
     messages: ChatMessage[],
-    opts: { temperature?: number } = {},
+    opts: { temperature?: number; validationFeedback?: (value: unknown) => string | undefined } = {},
   ): Promise<T> {
     let lastError: unknown;
+    let retryMessages = messages;
     for (let attempt = 0; attempt <= MAX_STRUCTURED_RETRIES; attempt++) {
       try {
-        const result = await this.complete(messages, { temperature: opts.temperature, maxTokens: 4096 });
+        const result = await this.complete(retryMessages, { temperature: opts.temperature, maxTokens: 4096 });
         const parsed: unknown = parseStructuredJson(result.text);
         if (!guard(parsed)) {
+          const feedback = opts.validationFeedback?.(parsed)?.trim();
+          if (feedback && feedback.length <= 2_000 && ![...feedback].some((character) => { const code = character.charCodeAt(0); return code < 32 && code !== 9 && code !== 10 && code !== 13; })) {
+            retryMessages = [...messages, { role: 'system', content: feedback }];
+          }
           throw new AiGatewayError('SCHEMA_VALIDATION', `结构化输出未通过 Schema 校验（第 ${attempt + 1} 次）`);
         }
         return parsed;

@@ -80,9 +80,15 @@ export function PresentationWorkbench({
           <section className="mt-6" aria-labelledby="presentation-preview-heading">
             <div className="flex items-center justify-between gap-4 border-b border-os-rule-paper pb-3">
               <h2 id="presentation-preview-heading" className="m-0 text-xl font-semibold tracking-[-0.012em]">{t('previewTitle')}</h2>
-              <span className="font-data text-sm tabular-nums text-os-muted-paper">{assets.length}</span>
+              {assets.length > 0 ? <span className="font-data text-sm tabular-nums text-os-muted-paper">{assets.length}</span> : null}
             </div>
-            {loading ? <p className="m-0 py-7 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : loadFailed ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{t('scopeLoadFailed')}</p> : assets.length === 0 ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{canWrite ? t('emptyPreview') : t('emptyPreviewReadonly')}</p> : (
+            {loading ? <p className="m-0 py-7 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : loadFailed ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{t('scopeLoadFailed')}</p> : assets.length === 0 ? (
+              <div className="mt-5 rounded-control border border-os-rule-paper bg-os-paper-strong p-5 sm:p-6">
+                <h3 className="m-0 text-base font-semibold">{t('emptyPreviewTitle')}</h3>
+                <p className="m-0 mt-2 max-w-2xl text-base leading-7 text-os-muted-paper">{canWrite ? t(eligibleIds.size === 0 ? 'emptyPreviewNeedsSources' : 'emptyPreview') : t('emptyPreviewReadonly')}</p>
+                {canWrite && eligibleIds.size === 0 && researchObjectId ? <a className="mt-4 inline-flex min-h-11 items-center rounded-control border border-os-rule-paper px-4 text-sm font-semibold text-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/edit`}>{t('openEditor')}</a> : null}
+              </div>
+            ) : (
               <div className={`mt-5 grid min-w-0 items-start gap-6 ${assets.length > 1 ? 'lg:grid-cols-2' : ''}`}>
                 {[...assets].sort((a, b) => Number(Boolean(a.storyboard)) - Number(Boolean(b.storyboard))).map((assetItem) => {
                   const linkedClaims = assetItem.sourceClaimIds.map((id) => claimsById.get(id)?.statement).filter((value): value is string => Boolean(value));
