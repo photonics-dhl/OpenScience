@@ -9,7 +9,7 @@ import { extractHandler } from '../src/extractor';
 
 const RO = '00000000-0000-4000-8000-000000000201';
 const ARTIFACT = '00000000-0000-4000-8000-000000000202';
-async function extractedFixture(texts: string[]) {
+async function extractedFixture(texts: string[], sourceBlockIds = ['B000001']) {
   const { prisma, db } = createFakePrisma();
   const user = seedUser(db);
   db.workspaces.push({ id:'workspace', type:'team', name:'Study', status:'active', ownerId:user.id });
@@ -32,7 +32,7 @@ async function extractedFixture(texts: string[]) {
   }]};
   const fields=['problem','insight','method','results','limitations','reproducibility'];
   const proposal={schemaVersion:'0.1.0',fields:Object.fromEntries(fields.map(field=>[field,{
-    summary:field==='problem'?'Reported result':'',sourceQuote:field==='problem'?'Same result.':'',needsMoreInformation:field!=='problem',
+    summary:field==='problem'?'Reported result':'',sourceBlockIds:field==='problem'?sourceBlockIds:[],needsMoreInformation:field!=='problem',
   }]))};
   const gateway=new AiGateway({providers:[{name:'fixture',model:'fixture',complete:async()=>({text:JSON.stringify(proposal),usage:{inputTokens:1,outputTokens:1},model:'fixture'})}]});
   const extracted=await extractHandler(gateway,{payload:{}},{sourceMap});
@@ -53,13 +53,47 @@ async function extractedFixture(texts: string[]) {
 }
 
 describe('canonical extractor → confirmation → frozen research record',()=>{
-  it('does not promote exact-plus-whitespace ambiguity to a frozen source',async()=>{
+  it('preserves a legacy persisted exact-plus-whitespace ambiguity through confirmation',async()=>{
     const f=await extractedFixture(['Same result.','Same  result.']);
-    expect(f.result.evidenceLocation?.problem).toMatchObject({status:'ambiguous',reason:'multiple-matches'});
+    // Pre-block-ID extraction stored quote-rematch ambiguity. It remains authoritative on replay.
+    f.db.agentTasks[0].result.evidenceLocation.problem={status:'ambiguous',origin:'model_quote',reason:'multiple-matches'};
+    delete f.db.agentTasks[0].result.evidenceSegments;
     expect(f.result.evidence.problem.quote).toBe('Same result.');
     const {view}=await f.confirm();
     expect(f.db.evidenceRecords).toHaveLength(0);
     expect(view.record).toMatchObject({recordState:'recorded',evidence:[],missing:{evidence:'not_recorded'}});
+  });
+  it('retains the exact selected block identity even when another block has normalized matching text',async()=>{
+    const f=await extractedFixture(['Same result.','Same  result.'],['B000002']);
+    expect(f.result.evidenceLocation?.problem).toMatchObject({status:'located',sourceLocator:{blockId:'block1'}});
+    expect(f.result.evidence.problem.quote).toBe('Same  result.');
+    const {saved,view}=await f.confirm();
+    expect(f.db.evidenceRecords).toHaveLength(1);
+    expect(view.record.evidence[0].locator.blockId).toBe('block1');
+    const source=await getResearchRecordSource(f.deps,{researchObjectId:RO,versionId:saved.confirmation.versionId,evidenceId:f.db.evidenceRecords[0].id,userId:f.user.id});
+    expect(source.text).toBe('Same  result.');
+  });
+  it('keeps canonical noncontiguous multi-segment evidence as an explicit confirmation gap',async()=>{
+    const f=await extractedFixture(['The optical-','field obeys Φ_CEP ≠ 0.','Unrelated header.','Calibration required.'],['B000001','B000002','B000004']);
+    expect(f.result.evidenceLocation?.problem).toMatchObject({status:'cross_block',reason:'match-spans-blocks'});
+    expect(f.result.evidenceSegments?.problem.map(segment=>({quote:segment.quote,blockId:segment.sourceLocator.blockId}))).toEqual([
+      {quote:'The optical-',blockId:'block0'}, {quote:'field obeys Φ_CEP ≠ 0.',blockId:'block1'}, {quote:'Calibration required.',blockId:'block3'},
+    ]);
+    expect(f.result.evidence.problem.quote).toBe('The optical-\nfield obeys Φ_CEP ≠ 0.\nCalibration required.');
+    const {view}=await f.confirm();
+    // Confirmation currently persists only a single located quote. Never flatten segments into a false locator.
+    expect(f.db.evidenceRecords).toHaveLength(0);
+    expect(view.record).toMatchObject({sdf:{problem:'Reported result'},evidence:[],missing:{evidence:'not_recorded'}});
+    expect(view.record.manifest).toHaveLength(1);
+    expect(view.record.manifest[0].artifactId).toBe(ARTIFACT);
+  });
+  it('retains conservative exact matching for legacy persisted results with canonical metadata absent',async()=>{
+    const f=await extractedFixture(['Same result.']);
+    delete f.db.agentTasks[0].result.evidenceLocation;
+    delete f.db.agentTasks[0].result.evidenceSegments;
+    const {view}=await f.confirm();
+    expect(f.db.evidenceRecords).toHaveLength(1);
+    expect(view.record.evidence[0].locator.blockId).toBe('block0');
   });
   it.each(['Same result.','Same  result.'])('retains a uniquely located canonical quote: %s',async(text)=>{
     const f=await extractedFixture([text]);
