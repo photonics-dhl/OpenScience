@@ -7,8 +7,8 @@
 
 ## Version tuple
 - Branch codex/onchip-video-release; worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release.
-- HEAD 1f56ddc8428c1bc41b48bcf526b5a7f18bf96ece; content-driven implementation and citation repair deployed; documentation updates pending commit.
-- Production 1f56ddc8428c1bc41b48bcf526b5a7f18bf96ece; rollback d971954ffe72a5cd1d73b861c972361efb24eb06.
+- HEAD 7f4dbf2fd89903c73f0194b4cd0d85f904d7b45f; content-driven implementation and citation repair deployed; documentation updates pending commit.
+- Production 7f4dbf2fd89903c73f0194b4cd0d85f904d7b45f; rollback 1f56ddc8428c1bc41b48bcf526b5a7f18bf96ece.
 - Canonical d971 deployment completed without test suites; exact evidence below.
 - Root dirty main and token-smart-live-workflow dirty branch are separate. Preserve concurrent R1 evidence hardening; fresh production marker before deployment.
 
@@ -56,3 +56,7 @@
 - 1f56 diagnostics deployed --no-tests, log1788883897069-4396115d-1c4c-4bbb-b857-c21d6e3c8965 exit0; High static review CLEAR.
 - Actualv4 task/asset90ec6ebe-36ee-4baf-b1df-63b91af46f0a SUCCEEDED at16:17:30Z, draft3scenes; idempotency hermes-content-plan-diagnostics-v4. NOT approved: copied legacybase errors ambient→常温, PHz→皮赫兹, unsupported electronpaths/counterbeamgeometry. Actualassetlog1788884298604-1ed9eab1-bd7c-4bdc-a331-ca29e41cc1ca.
 - Next correction: omit legacy no-animation base document from planner input while preserving baseAssetId lineage; regenerate fromoriginalClaims/revisioninstruction. Do not approve bad scientific content to advance images. read-product-run.cjs now targets90ec task.
+
+- 7f4dbf2f legacybase isolation deployed --no-tests, log1788884466583-9ecee92a-d2c4-41cb-8389-a4dbc6b4b6d3 exit0. v5 e62cbbb4-fb83-4075-b5eb-e9d6d3dcf8bf succeeded4scenes but unsupported electronmovement/period claims remain, NOT approved. Assetlog1788884855712-a45fb149-25f4-444f-9edf-d37cdf4cbe7c.
+- Ordinary scientific feedback v6 b6636a27-defe-46c7-80dc-4a16d6c651a9 FAILED scene_1:animation:dynamic_action_required at16:29:38Z; noimages/video. Idempotency hermes-content-plan-scientific-feedback-v6. Tasklog1788884992305-d37aff7f-72e2-4855-ba62-7b2e2e4bdcfc.
+- Current fix underway: require meaningful dynamic action across whole storyboard, not every explanatory/parameter scene; preserve sourcevalidation and boundedobject/actioncontract, update all renderer mirrors. Worker owns this boundedfix; no tests/build. read-product-run.cjs targetb663.

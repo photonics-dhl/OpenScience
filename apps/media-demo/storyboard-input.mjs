@@ -50,8 +50,7 @@ function animation(value, sceneClaimIds) {
     return item;
   });
   if (new Set(actions.map(action => `${action.target}\u0000${action.kind}`)).size !== actions.length) invalid();
-  if (!actions.some(action => ['translate', 'pulse', 'draw'].includes(action.kind) && byId.get(action.target).kind !== 'label')) invalid();
-  return { objects, actions };
+  return { value: { objects, actions }, hasDynamic: actions.some(action => ['translate', 'pulse', 'draw'].includes(action.kind) && byId.get(action.target).kind !== 'label') };
 }
 
 // This parser validates rendering data, never scientific approval or RO authority.
@@ -66,6 +65,7 @@ export function storyboardTimeline(value, seconds, fps = 24) {
     || !Array.isArray(v.scenes) || v.scenes.length < 3 || v.scenes.length > 6) invalid();
   const title = text(v.title, 120);
   const provider = text(v.provider, 120); const speaker = text(v.speaker, 80);
+  let hasDynamic = false;
   const scenes = v.scenes.map((raw, i) => {
     const s = object(raw, `title,artwork,start,cues${v.profile === 'onchip-field-sampling-v1' ? ',role' : ''}${contentDriven ? ',sourceClaimIds,animation' : ''}`);
     if (v.profile === 'onchip-field-sampling-v1' && s.role !== onchipRoles[i]) invalid();
@@ -82,10 +82,13 @@ export function storyboardTimeline(value, seconds, fps = 24) {
       previousEnd = cue.end;
       return {start: cue.start, end: cue.end, text: text(cue.text, 80)};
     });
+    const parsedAnimation = contentDriven ? animation(s.animation, s.sourceClaimIds) : undefined;
+    if (parsedAnimation?.hasDynamic) hasDynamic = true;
     return {title: text(s.title, 120), artwork: s.artwork, start: s.start, duration, cues,
       ...(v.profile === 'onchip-field-sampling-v1' ? {role: s.role} : {}),
-      ...(contentDriven ? {sourceClaimIds: [...s.sourceClaimIds], animation: animation(s.animation, s.sourceClaimIds)} : {})};
+      ...(contentDriven ? {sourceClaimIds: [...s.sourceClaimIds], animation: parsedAnimation.value} : {})};
   });
+  if (contentDriven && !hasDynamic) invalid();
   return { title, locale: v.locale, visualStyle: v.style, scenes, total: seconds, frameCount: Math.ceil(seconds * fps), narration: `Supplied continuous WAV; provider: ${provider}; speaker: ${speaker}; no TTS during rendering.` };
 }
 

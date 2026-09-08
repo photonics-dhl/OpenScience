@@ -47,22 +47,21 @@ function validateAnimation(value,sceneClaimIds){
   if(kind==='draw'&&!['arrow','trace'].includes(target.kind))invalid();return item;
  });
  if(new Set(actions.map(action=>`${action.target}\u0000${action.kind}`)).size!==actions.length)invalid();
- if(!actions.some(action=>['translate','pulse','draw'].includes(action.kind)&&byId.get(action.target).kind!=='label'))invalid();
- return {objects,actions};
+ return {objects,actions,hasDynamic:actions.some(action=>['translate','pulse','draw'].includes(action.kind)&&byId.get(action.target).kind!=='label')};
 }
 function validateContentStoryboard(bytes,request){
  const value=strictObject(JSON.parse(bytes.toString()),['schemaVersion','title','scenes']);
  if(value.schemaVersion!==1||!Array.isArray(value.scenes)||value.scenes.length<3||value.scenes.length>6||value.scenes.length!==request.files.scenes.length)invalid();
  boundedText(value.title,120);
- const allowedClaims=new Set(request.sourceClaimIds);const covered=new Set();
+ const allowedClaims=new Set(request.sourceClaimIds);const covered=new Set();let hasDynamic=false;
  value.scenes.forEach(scene=>{
   const item=strictObject(scene,['title','narration','visualAction','durationSeconds','sourceClaimIds','animation']);
   boundedText(item.title,120);boundedText(item.narration,600);boundedText(item.visualAction,1000);
   if(!Number.isInteger(item.durationSeconds)||item.durationSeconds<4||item.durationSeconds>20||!Array.isArray(item.sourceClaimIds)||item.sourceClaimIds.length<1||item.sourceClaimIds.length>12
    ||new Set(item.sourceClaimIds).size!==item.sourceClaimIds.length||item.sourceClaimIds.some(id=>typeof id!=='string'||!allowedClaims.has(id)))invalid();
-  item.sourceClaimIds.forEach(id=>covered.add(id));validateAnimation(item.animation,item.sourceClaimIds);
+  item.sourceClaimIds.forEach(id=>covered.add(id));hasDynamic=validateAnimation(item.animation,item.sourceClaimIds).hasDynamic||hasDynamic;
  });
- if(request.sourceClaimIds.some(id=>!covered.has(id))||value.scenes.reduce((sum,scene)=>sum+scene.durationSeconds,0)<24||value.scenes.reduce((sum,scene)=>sum+scene.durationSeconds,0)>90)invalid();
+ if(!hasDynamic||request.sourceClaimIds.some(id=>!covered.has(id))||value.scenes.reduce((sum,scene)=>sum+scene.durationSeconds,0)<24||value.scenes.reduce((sum,scene)=>sum+scene.durationSeconds,0)>90)invalid();
  return value;
 }
 

@@ -67,7 +67,6 @@ export function parseSceneAnimation(value: unknown, sceneClaimIds: readonly stri
     return item as unknown as AnimationAction;
   });
   if (new Set(actions.map(action => `${action.target}:${action.kind}`)).size !== actions.length) return invalid('duplicate_target_action');
-  if (!actions.some(action => ['translate', 'pulse', 'draw'].includes(action.kind) && byId.get(action.target)!.kind !== 'label')) return invalid('dynamic_action_required');
   return { objects, actions };
 }
 

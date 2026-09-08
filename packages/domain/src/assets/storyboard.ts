@@ -68,6 +68,12 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
     const duration = scenes.reduce((n, s) => n + s.durationSeconds, 0);
     if (duration < 24 || duration > 90) return invalid('total_duration');
     if (selected.some(id => !covered.has(id))) return invalid('claim_coverage');
+    const hasDynamicAction = scenes.some(scene => {
+        if (!scene.animation) return false;
+        const objects = new Map(scene.animation.objects.map(item => [item.id, item]));
+        return scene.animation.actions.some(action => ['translate', 'pulse', 'draw'].includes(action.kind) && objects.get(action.target)?.kind !== 'label');
+    });
+    if (scenes.some(scene => scene.animation) && !hasDynamicAction) return invalid('dynamic_action_required');
     return { schemaVersion: 1, title: text(v.title, 120, 'title'), scenes };
 }
 /** Never expose arbitrary provenance or a malformed saved plan. */
