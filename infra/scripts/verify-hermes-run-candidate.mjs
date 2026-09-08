@@ -257,7 +257,7 @@ async function main(values) {
     const stopped = await finalDb.hermesResearchRun.findUnique({ where: { id: revokedRunId }, include: { steps: true } });
     assert.equal(stopped?.status, 'stopped');
     assert.equal(stopped?.version, 2);
-    assert.equal(stopped?.error, 'authorization or research object scope changed');
+    assert.equal(stopped?.error, 'authorization scope changed');
     assert.deepEqual(stopped?.steps.map((step) => step.status), ['stopped']);
     assert.equal(await finalDb.hermesResearchRun.count({ where: { idempotencyKey: primaryRequest.idempotencyKey } }), 1);
   } finally {

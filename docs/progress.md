@@ -2,6 +2,7 @@
 
 ## 2026-09-08: integrate latest production before server workflow acceptance
 
+- Server-only isolated real Prisma deploy39 + empty-DB rollback/reapply39 passed; two additive Hermes migrations remain uninstalled in production. New candidate527f705e fixes atomic approval/replay access; server build in progress.
 - Measured server release134ebdea / rollback97aa06a, healthy containers and public/local200. Preserve newly deployed atomic confirmation, canonical evidence and frozen version records.
 - Candidate4c369cbc adds scoped source review and media continuation; merging134ebdea, tests pending. All runtime validation is server-only. Old a72 acceptance directory was externally removed; logs are historical.
 - Production publication implementation details remain in docs/plans/2026-09-07-open-research-publication-plan.md. Complete autonomous normal-user workflow first; then second supported paper and UX.

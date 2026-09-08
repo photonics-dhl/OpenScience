@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-08:** 服务器实测 release134ebdea796b922ac07d9f29b6148b458b5e515f / rollback97aa06a542febf558a47cecbf6559bd0a6c876aa；codex/onchip-video-release 正合并生产与4c369cbc自主流程候选，未部署。
+> **CURRENT 2026-09-08:** 服务器实测 release134ebdea796b922ac07d9f29b6148b458b5e515f / rollback97aa06a542febf558a47cecbf6559bd0a6c876aa；codex/onchip-video-release 已合并生产，自主流程候选正做服务器验收，未部署。
 
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 
@@ -13,7 +13,7 @@
 |---|---|---|
 | `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |
 | `packages/domain/src/agent/research-run.ts` / `apps/api/src/routes/research-runs.ts` / `infra/migrations/20260908010000_hermes_research_runs/` / `infra/migrations/20260908020000_hermes_research_workflow/` | 持久流程、来源审核和限定生成授权、服务器审核后续跑 | CANDIDATE4c369cbc；正合并生产，新增流程待服务器验收 |
-| `apps/web/components/hermes/{HermesResearchRunPanel,HermesSourceReview}.tsx` / `apps/web/test/hermes-research-run-panel.test.tsx` | 用户启动、恢复及审核进度入口 | CANDIDATE；待服务器验收 |
+| `apps/web/components/hermes/{HermesResearchRunPanel,HermesSourceReview,HermesClaimEvidenceReview}.tsx` / `apps/web/test/hermes-research-run-panel.test.tsx` | 用户启动、恢复及审核进度入口 | CANDIDATE；待服务器验收 |
 | `packages/domain/src/agent/research-source-readiness.ts` / `packages/domain/test/agent/research-source-readiness.test.ts` | Hermes原生文本/OCR/外部来源准备决策；区分上传、外部文件和文献线索 | LOCAL CANDIDATE；Terra/medium，8项测试通过；尚未接入运行流程，不代表OCR/ScanSci调用验收 |
 | `docs/specs/2026-09-07-open-research-publication-prd.md` | 开放研究出版物 PRD v1.1：四阶段建设，每 RO AI 友好 API、固定版本/权限合同及独立客户端验收 | 用户授权实施；本轮 M1/M2 优先，不代表已部署 |
 | `infra/migrations/20260907010000_frozen_research_record/` / `packages/domain/src/commit/{research-record-snapshot,research-record}.ts` / `apps/api/src/routes/{research-record,research-record-schema}.ts` | 提交时冻结记录、固定版本读取/来源/JSON 导出、机器 Schema/OpenAPI；nullable 迁移 37 与回滚 SQL | CANDIDATE；开发与专项验证中，尚未部署 |

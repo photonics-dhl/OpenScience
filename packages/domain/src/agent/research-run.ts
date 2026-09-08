@@ -10,6 +10,7 @@ import type { IngestionDeps } from '../ingestion/ingestion-service';
 import { findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH } from '../assets/video';
 import type { HermesPresentationAuthority, PresentationGenerationPayload } from '../assets/presentation-asset';
+import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
 
 const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 const READY_INGESTION_STATES = new Set(['needs_review', 'confirmed', 'written']);
@@ -250,8 +251,14 @@ export async function confirmHermesSourceReview(
     if (!ro || ro.status !== 'draft' || !membership || !WRITE_ROLES.has(membership.membership.role)) {
       throw new HermesResearchRunError('FORBIDDEN', 'Hermes source review permission is unavailable');
     }
-    const replay = initial.status === 'awaiting_claim_review' && initial.sourceReviewDigest === digest && initial.versionId === input.versionId;
-    if (!replay && (initial.status !== 'awaiting_source_review' || initial.version !== input.expectedVersion)) {
+    const replay = initial.sourceReviewDigest === digest && initial.versionId === input.versionId && initial.sourceClaimIds.length > 0;
+    if (replay) {
+      const claims = await tx.claimNode.findMany({ where: { id: { in: initial.sourceClaimIds }, researchObjectId: input.researchObjectId, versionId: input.versionId } });
+      const evidence = await tx.evidenceRecord.findMany({ where: { claimId: { in: initial.sourceClaimIds }, researchObjectId: input.researchObjectId, versionId: input.versionId } });
+      if (claims.length !== initial.sourceClaimIds.length) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Hermes source review material changed');
+      return { run: toView(initial), claims, evidence: evidence.map(publicEvidenceRow) };
+    }
+    if (initial.status !== 'awaiting_source_review' || initial.version !== input.expectedVersion) {
       throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before reviewing sources');
     }
     const sourceSteps = initial.steps.filter((step) => step.stage === 'source_ingestion');
@@ -272,7 +279,6 @@ export async function confirmHermesSourceReview(
     }
     const sourceClaimIds = [...new Set(createdClaims.map((claim) => claim.id))].sort();
     if (sourceClaimIds.length !== requestedClaimCount) throw new HermesResearchRunError('VALIDATION_ERROR', 'Hermes source Claim identities are incomplete');
-    if (replay) return { run: toView(initial), claims: createdClaims, evidence: createdEvidence };
     const version = await tx.version.findUnique({ where: { id: input.versionId }, include: { researchObject: true } });
     if (!version || version.researchObjectId !== input.researchObjectId || version.status !== 'draft'
       || version.researchObject.status !== 'draft') throw new HermesResearchRunError('SOURCE_NOT_READY', 'Reviewed Version is unavailable');
@@ -331,7 +337,7 @@ function jsonRecord(value: unknown): Record<string, unknown> {
 
 function terminalReconcileError(error: unknown): string | null {
   const code = (error as { code?: unknown })?.code;
-  if (['INSUFFICIENT_CREDIT', 'VALIDATION_ERROR', 'SOURCE_CLAIM_INVALID', 'ILLEGAL_TRANSITION'].includes(String(code))) {
+  if (['VALIDATION_ERROR', 'SOURCE_CLAIM_INVALID', 'ILLEGAL_TRANSITION'].includes(String(code))) {
     return error instanceof Error ? error.message.slice(0, 1_000) : 'Hermes generation precondition failed';
   }
   const message = error instanceof Error ? error.message : '';
@@ -420,6 +426,12 @@ async function moveRun(
   const changed = await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version },
     data: { status: to, error, version: { increment: 1 } } });
   if (changed.count !== 1) return null;
+  if (to === 'failed' || to === 'stopped') {
+    for (const step of run.steps) {
+      if (step.status === 'succeeded') continue;
+      await tx.hermesResearchStep.updateMany({ where: { id: step.id, runId: run.id }, data: { status: to, error } });
+    }
+  }
   await recordAudit(deps, tx, { actorId: run.actorId, action: `hermes.research_run.${to}`, workspaceId,
     targetType: 'hermes_research_run', targetId: run.id, metadata: { from: run.status, to } }, {});
   return to;
@@ -456,9 +468,8 @@ export async function reconcileHermesResearchRuns(
           if (!run || !ACTIVE_RUN_STATES.includes(run.status as HermesResearchRunStatus)) return null;
           const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
           const authority = ro ? await requireActiveMembership(tx, ro.workspaceId, run.actorId).catch(() => null) : null;
-          if (!ro || ro.status !== 'draft' || !authority || !WRITE_ROLES.has(authority.membership.role)) {
-            return moveRun(deps, tx, run, 'stopped', ro?.workspaceId, 'authorization or research object scope changed');
-          }
+          if (!ro || ro.status !== 'draft') return moveRun(deps, tx, run, 'stopped', ro?.workspaceId, 'research object scope changed');
+          if (!authority || !WRITE_ROLES.has(authority.membership.role)) return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'authorization scope changed');
           const sourceSteps = run.steps.filter((step) => step.stage === 'source_ingestion');
           if (sourceSteps.some((step) => !step.ingestionTask || step.ingestionTask.batch.researchObjectId !== run.researchObjectId
             || step.ingestionTask.artifactId !== step.artifactId || step.ingestionTask.agentTaskId !== step.agentTaskId)) {
@@ -553,6 +564,22 @@ export async function reconcileHermesResearchRuns(
       }
     }
     if (reconcileError) {
+      if ((reconcileError as { code?: unknown })?.code === 'INSUFFICIENT_CREDIT') {
+        const retryAt = new Date(now(deps).getTime() + 55_000);
+        const recorded = await deps.prisma.$transaction(async (tx) => {
+          const run = await tx.hermesResearchRun.findUnique({ where: { id: candidate.id }, include: RUN_INCLUDE });
+          if (!run || !ACTIVE_RUN_STATES.includes(run.status as HermesResearchRunStatus)) return false;
+          const changed = await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version },
+            data: { error: 'AI Credit is insufficient; Hermes will check again after credits are added', lastReconciledAt: retryAt } });
+          if (changed.count !== 1) return false;
+          const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+          await recordAudit(deps, tx, { actorId: run.actorId, action: 'hermes.research_run.awaiting_credit',
+            workspaceId: ro?.workspaceId, targetType: 'hermes_research_run', targetId: run.id,
+            metadata: { status: run.status, retryAfter: retryAt.toISOString() } }, {});
+          return true;
+        }, { isolationLevel: 'Serializable' }).catch(() => false);
+        if (recorded) continue;
+      }
       const terminalError = terminalReconcileError(reconcileError);
       if (terminalError) {
         const failed = await deps.prisma.$transaction(async (tx) => {

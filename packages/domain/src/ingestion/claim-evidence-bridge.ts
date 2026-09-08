@@ -329,7 +329,7 @@ export async function confirmIngestionClaimEvidenceBridge(
     }));
   });
   const batchDigest = digest({ versionId: input.versionId, taskId: input.taskId, idempotencyKey, claims, evidence });
-  return createClaimEvidenceBatch(scoped, {
+  const batch = {
     userId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId,
     sourceTaskId: input.taskId, snapshotToken: input.snapshotToken, batchDigest,
     authority: {
@@ -340,5 +340,8 @@ export async function confirmIngestionClaimEvidenceBridge(
       sourceMapRef: parseDocumentSourceMapReference(record(task.agentTask!.result).sourceMapRef),
     },
     claims, evidence,
-  }, ctx, existingTransaction ? scoped : undefined);
+  };
+  return existingTransaction
+    ? createClaimEvidenceBatch(scoped, batch, ctx, scoped)
+    : createClaimEvidenceBatch(scoped, batch, ctx);
 }

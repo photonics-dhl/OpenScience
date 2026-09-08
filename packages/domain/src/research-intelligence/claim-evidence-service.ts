@@ -585,7 +585,7 @@ function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function publicEvidenceRow<T extends { provenance: unknown }>(row: T): T {
+export function publicEvidenceRow<T extends { provenance: unknown }>(row: T): T {
   const provenance = { ...recordValue(row.provenance) };
   delete provenance.sourceMapRef;
   return { ...row, provenance };

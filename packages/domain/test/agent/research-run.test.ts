@@ -5,6 +5,8 @@ import {
   HermesResearchRunError,
   reconcileHermesResearchRuns,
 } from '../../src/agent/research-run';
+import { createFakePrisma, seedUser } from '../helpers/fakes';
+import { ONCHIP_SOURCE_CONTENT_HASH } from '../../src/assets/video';
 
 function fixture(options: { role?: string; roStatus?: string; taskState?: string; transactionFailures?: string[] } = {}) {
   const now = new Date('2026-09-08T00:00:00.000Z');
@@ -176,5 +178,74 @@ describe('Hermes durable research run', () => {
     db.transactionFailures.push('POISON');
     expect(await reconcileHermesResearchRuns(deps, { limit: 2 })).toEqual({ inspected: 2, advanced: 1, failed: 0, stopped: 0, errors: 1 });
     expect(db.runs.filter((run) => run.status === 'awaiting_source_review')).toHaveLength(1);
+  });
+
+  it('durably creates exactly one storyboard, five images, and one video without charging source steps', async () => {
+    const ids = {
+      user: '10000000-0000-4000-8000-000000000001', workspace: '20000000-0000-4000-8000-000000000001',
+      ro: '30000000-0000-4000-8000-000000000001', version: '40000000-0000-4000-8000-000000000001',
+      run: '50000000-0000-4000-8000-000000000001', claim: '60000000-0000-4000-8000-000000000001',
+      ingestion: '70000000-0000-4000-8000-000000000001', artifact: '80000000-0000-4000-8000-000000000001',
+      ingestionAgent: '90000000-0000-4000-8000-000000000001',
+    };
+    const { prisma, db } = createFakePrisma();
+    seedUser(db, { id: ids.user });
+    db.workspaces.push({ id: ids.workspace, status: 'active' });
+    db.memberships.push({ id: 'membership', workspaceId: ids.workspace, userId: ids.user, role: 'author' });
+    db.researchObjects.push({ id: ids.ro, workspaceId: ids.workspace, status: 'draft' });
+    db.versions.push({ id: ids.version, researchObjectId: ids.ro, status: 'draft', versionNo: 1 });
+    db.artifacts.push({ id: ids.artifact, workspaceId: ids.workspace, blobSha256: ONCHIP_SOURCE_CONTENT_HASH });
+    db.ingestionBatches.push({ id: 'batch', researchObjectId: ids.ro, userId: ids.user });
+    db.agentTasks.push({ id: ids.ingestionAgent, status: 'succeeded' });
+    db.ingestionTasks.push({ id: ids.ingestion, batchId: 'batch', artifactId: ids.artifact,
+      agentTaskId: ids.ingestionAgent, state: 'confirmed', error: null });
+    db.claimNodes.push({ id: ids.claim, researchObjectId: ids.ro, versionId: ids.version, extractionStatus: 'succeeded',
+      provenance: { source: 'reviewed_ingestion', sourceTaskId: ids.ingestion, sourceTaskLineage: ids.ingestion } });
+    db.evidenceRecords.push({ id: 'evidence', claimId: ids.claim, researchObjectId: ids.ro, versionId: ids.version,
+      artifactId: ids.artifact, contentHash: ONCHIP_SOURCE_CONTENT_HASH, extractionStatus: 'succeeded',
+      provenance: { source: 'reviewed_ingestion', sourceTaskId: ids.ingestion } });
+    db.hermesResearchRuns.push({ id: ids.run, actorId: ids.user, researchObjectId: ids.ro, versionId: ids.version,
+      profile: 'onchip-field-sampling-v1', maxAgentTasks: 7, sourceClaimIds: [ids.claim], sourceReviewDigest: 'digest',
+      status: 'awaiting_claim_review', version: 2, error: null, lastReconciledAt: null, createdAt: new Date(), updatedAt: new Date() });
+    db.hermesResearchSteps.push({ id: 'source-step', runId: ids.run, stage: 'source_ingestion', ordinal: 0,
+      status: 'succeeded', ingestionTaskId: ids.ingestion, artifactId: ids.artifact, agentTaskId: ids.ingestionAgent });
+    const deps = { prisma, redis: { lpush: async () => 1 } } as never;
+    const generationTasks = () => db.agentTasks.filter((task) => task.kind === 'presentation.generate');
+    const finishStage = (stage: string, kind: string) => {
+      const steps = db.hermesResearchSteps.filter((step) => step.stage === stage);
+      for (const step of steps) {
+        const task = db.agentTasks.find((candidate) => candidate.id === step.agentTaskId)!;
+        task.status = 'succeeded';
+        db.presentationAssets.push({ id: task.id, researchObjectId: ids.ro, versionId: ids.version,
+          kind, status: 'draft', contentHash: `hash-${stage}-${step.ordinal}`, provenance: {}, createdAt: new Date(), updatedAt: new Date() });
+        db.presentationAssetClaims.push({ presentationAssetId: task.id, claimId: ids.claim, researchObjectId: ids.ro, versionId: ids.version });
+      }
+    };
+
+    await reconcileHermesResearchRuns(deps);
+    expect(generationTasks()).toHaveLength(0);
+    expect(db.hermesResearchRuns[0].error).toMatch(/Credit/);
+    db.usageLedger.push({ id: 'grant', userId: ids.user, resource: 'ai_credit', delta: 20, kind: 'grant' });
+    db.hermesResearchRuns[0].lastReconciledAt = null;
+    await reconcileHermesResearchRuns(deps);
+    expect(generationTasks()).toHaveLength(1);
+    await reconcileHermesResearchRuns(deps);
+    expect(generationTasks()).toHaveLength(1);
+    finishStage('storyboard', 'interactive_html');
+    await reconcileHermesResearchRuns(deps);
+    db.presentationAssets.find((asset) => asset.id === generationTasks()[0].id)!.status = 'approved';
+    await reconcileHermesResearchRuns(deps);
+    expect(generationTasks()).toHaveLength(6);
+    finishStage('scene_image', 'image');
+    await reconcileHermesResearchRuns(deps);
+    db.presentationAssets.filter((asset) => asset.kind === 'image').forEach((asset) => { asset.status = 'approved'; });
+    await reconcileHermesResearchRuns(deps);
+    expect(generationTasks()).toHaveLength(7);
+    finishStage('video', 'video');
+    await reconcileHermesResearchRuns(deps);
+    db.presentationAssets.find((asset) => asset.kind === 'video')!.status = 'approved';
+    await reconcileHermesResearchRuns(deps);
+    expect(db.hermesResearchRuns[0]).toMatchObject({ status: 'succeeded', error: null });
+    expect(db.usageLedger.filter((entry) => entry.kind === 'consume')).toHaveLength(7);
   });
 });

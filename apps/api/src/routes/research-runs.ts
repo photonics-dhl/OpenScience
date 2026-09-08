@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, type HermesSourceReviewDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
+import type { StorageAdapter } from '@openscience/storage';
 import { requireCurrentUser } from './session-guard';
 
 const paramsSchema = z.object({ id: z.string().uuid() }).strict();
@@ -32,7 +33,7 @@ function auditCtx(req: FastifyRequest): AuditContext {
   return { requestId: String(req.id), ip: req.ip };
 }
 
-export function registerResearchRunRoutes(app: FastifyInstance, deps: HermesSourceReviewDeps & AuthDeps): void {
+export function registerResearchRunRoutes(app: FastifyInstance, deps: Omit<HermesSourceReviewDeps, 'storage'> & AuthDeps & { storage?: StorageAdapter }): void {
   app.post('/research-objects/:id/hermes-runs', async (req, reply) => {
     void reply.header('Cache-Control', 'private, no-store');
     const user = await requireCurrentUser(deps, req, reply);
@@ -61,7 +62,8 @@ export function registerResearchRunRoutes(app: FastifyInstance, deps: HermesSour
     const { id, runId } = readParamsSchema.parse(req.params);
     const body = sourceReviewSchema.parse(req.body);
     const idempotencyKey = z.string().trim().min(1).max(200).parse(req.headers['idempotency-key']);
-    return reply.status(201).send(await confirmHermesSourceReview(deps, {
+    if (!deps.storage) return reply.status(503).send({ error: { code: 'STORAGE_UNAVAILABLE', message: 'Source review storage is unavailable' } });
+    return reply.status(201).send(await confirmHermesSourceReview({ ...deps, storage: deps.storage }, {
       actorId: user.userId, researchObjectId: id, runId, idempotencyKey, ...body,
     }, auditCtx(req)));
   });
