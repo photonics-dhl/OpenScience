@@ -6,6 +6,9 @@ import type { ArtifactDeps } from '../artifact/artifacts';
 import { getEffectiveLicenses } from '../license/licenses';
 import { getAuthorChangeInfo } from '../authorship/authors';
 import { ReviewError } from './errors';
+import { CommitError } from '../commit/errors';
+import { carryVersionEvidence } from '../ingestion/ingestion-evidence';
+import { freezeResearchRecord } from '../commit/research-record-snapshot';
 
 export const REVIEW_VERDICTS = ['approve', 'request_changes', 'comment'] as const;
 export type ReviewVerdict = (typeof REVIEW_VERDICTS)[number];
@@ -167,24 +170,34 @@ export async function mergePullRequest(
   }
 
   await deps.prisma.$transaction(async (tx) => {
+    const currentPr = await tx.pullRequest.findUnique({ where: { id: pr.id } });
+    if (!currentPr || currentPr.status !== 'open') throw new ReviewError('PR_NOT_OPEN', '仅 open 状态的 PR 可 Merge（§8.3）');
+    const ro = await tx.researchObject.findUnique({ where: { id: pr.researchObjectId } });
+    if (!ro) throw new ReviewError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+    const latest = await tx.version.findFirst({ where: { researchObjectId: ro.id }, orderBy: { versionNo: 'desc' } });
+    // Share the ordinary commit revision fence; legacy merges may have left it behind Version numbers.
+    const versionNo = Math.max(ro.version, (latest?.versionNo ?? 0) + 1);
+    const advanced = await tx.researchObject.updateMany({ where: { id: ro.id, version: ro.version }, data: { version: versionNo + 1 } });
+    if (advanced.count !== 1) throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');
+
     // 1. source tip commit → target 分支（fast-forward 到 target 链尾）
-    const sourceTipCommit = await tx.commit.findFirst({ where: { branchId: pr.sourceBranchId }, orderBy: { createdAt: 'desc' } });
+    const sourceTipVersion = await tx.version.findFirst({
+      where: { researchObjectId: ro.id, commit: { branchId: pr.sourceBranchId } }, orderBy: { versionNo: 'desc' },
+    });
+    const sourceTipCommit = sourceTipVersion ? await tx.commit.findUnique({ where: { id: sourceTipVersion.commitId } }) : null;
     if (sourceTipCommit) {
       await tx.commit.update({ where: { id: sourceTipCommit.id }, data: { branchId: pr.targetBranchId } });
     }
 
-    // 2. 新草稿版本：复用 source tip manifest（versionNo = target 分支版本数+1）
-    const sourceTipVersion = sourceTipCommit
-      ? await tx.version.findFirst({ where: { commitId: sourceTipCommit.id } })
-      : null;
+    // 2. 新草稿版本：复用 source tip manifest，复制独立可编辑图。
+    let mergedVersionId: string | undefined;
     if (sourceTipVersion) {
-      const targetVersionCount = await tx.version.count({ where: { researchObjectId: pr.researchObjectId } });
       const manifest = await tx.versionManifest.findUnique({
         where: { versionId: sourceTipVersion.id },
         include: { entries: true },
       });
       const newVersion = await tx.version.create({
-        data: { researchObjectId: pr.researchObjectId, commitId: sourceTipCommit!.id, versionNo: targetVersionCount + 1, status: 'draft' },
+        data: { researchObjectId: pr.researchObjectId, commitId: sourceTipCommit!.id, versionNo, status: 'draft' },
       });
       const entries = (manifest?.entries ?? []).map((e) => ({
         logicalPath: e.logicalPath,
@@ -199,11 +212,13 @@ export async function mergePullRequest(
           ...(entries.length > 0 ? { entries: { create: entries } } : {}),
         },
       });
+      await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: sourceTipVersion.id, versionId: newVersion.id });
+      mergedVersionId = newVersion.id;
     }
 
     // 3. 作者合并（Q4：现有 + PR.newContributors 去重，顺序现有+新增）
-    const changeInfo = await getAuthorChangeInfo(deps, { researchObjectId: pr.researchObjectId, userId: input.userId });
-    const existingAuthors = changeInfo.authors.map((a) => a.userId);
+    const authors = await tx.author.findMany({ where: { researchObjectId: ro.id }, orderBy: { sortOrder: 'asc' } });
+    const existingAuthors = authors.map((a) => a.userId);
     const prContributors = (pr.newContributors as Array<{ userId: string }>).map((c) => c.userId);
     const merged = [...existingAuthors];
     for (const uid of prContributors) {
@@ -222,8 +237,8 @@ export async function mergePullRequest(
     }
 
     // 4. 许可应用（PR dataLicense/codeLicense → RO 级；text 不变）
-    const sourceLicenses = await getEffectiveLicenses(deps, { researchObjectId: pr.researchObjectId, userId: input.userId });
-    const textLicense = sourceLicenses.licenses?.text ?? 'CC-BY-4.0';
+    const textAssignment = await tx.licenseAssignment.findFirst({ where: { researchObjectId: ro.id, versionId: null, licenseType: 'text' } });
+    const textLicense = textAssignment?.licenseId ?? 'CC-BY-4.0';
     const targetLicenses = { text: textLicense, code: pr.codeLicense as string, data: pr.dataLicense as string };
     for (const [type, licenseId] of Object.entries(targetLicenses)) {
       const existing = await tx.licenseAssignment.findFirst({
@@ -237,6 +252,9 @@ export async function mergePullRequest(
         });
       }
     }
+
+    // Freeze only after the merged author/license state exists in this transaction.
+    if (mergedVersionId) await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: mergedVersionId });
 
     // 5. PR merged + 事件
     await tx.pullRequest.update({ where: { id: pr.id }, data: { status: 'merged' } });
@@ -252,6 +270,9 @@ export async function mergePullRequest(
       targetType: 'pull_request', targetId: pr.id,
       metadata: { researchObjectId: pr.researchObjectId, highRisk: highRisk.reasons },
     }, ctx);
+  }, { isolationLevel: 'Serializable' }).catch((error: unknown) => {
+    if ((error as { code?: string }).code === 'P2034') throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');
+    throw error;
   });
 
   return { prId: pr.id, status: 'merged', highRisk };

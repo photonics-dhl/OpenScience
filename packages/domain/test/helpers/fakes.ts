@@ -640,6 +640,12 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)),
     },
     claimNode: {
+      count: async ({ where }: any) => db.claimNodes.filter(row => Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value))).length,
+      deleteMany: async ({ where }: any) => {
+        const before = db.claimNodes.length;
+        db.claimNodes = db.claimNodes.filter(row => !Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value)));
+        return { count: before - db.claimNodes.length };
+      },
       findUnique: async ({ where }: any) => db.claimNodes.find(row => row.id === where.id) ?? null,
       updateMany: async ({ where, data }: any) => {
         const rows = db.claimNodes.filter(row => row.id === where.id && row.updatedAt.getTime() === where.updatedAt.getTime());
@@ -666,6 +672,12 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     evidenceRecord: {
+      count: async ({ where }: any) => db.evidenceRecords.filter(row => Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value))).length,
+      deleteMany: async ({ where }: any) => {
+        const before = db.evidenceRecords.length;
+        db.evidenceRecords = db.evidenceRecords.filter(row => !Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value)));
+        return { count: before - db.evidenceRecords.length };
+      },
       findUnique: async ({ where }: any) => db.evidenceRecords.find(row => row.id === where.id) ?? null,
       create: async ({ data }: any) => {
         const row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), verifiedByUserId: null, ...data };
@@ -706,6 +718,11 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     presentationAssetClaim: {
+      deleteMany: async ({ where }: any) => {
+        const before = db.presentationAssetClaims.length;
+        db.presentationAssetClaims = db.presentationAssetClaims.filter(row => !Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value)));
+        return { count: before - db.presentationAssetClaims.length };
+      },
       findMany: async ({ where }: any) => db.presentationAssetClaims.filter(source => source.presentationAssetId === where.presentationAssetId),
       createMany: async ({ data }: any) => {
         db.presentationAssetClaims.push(...data);
