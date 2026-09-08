@@ -7,8 +7,8 @@
 
 ## Version tuple
 - Branch codex/onchip-video-release; worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release.
-- HEAD d971954ffe72a5cd1d73b861c972361efb24eb06; content-driven implementation and citation repair deployed; documentation updates pending commit.
-- Production d971954ffe72a5cd1d73b861c972361efb24eb06; rollback e40e25b049d8533415f1449b4fa1a9fb59d8cf6c.
+- HEAD 1f56ddc8428c1bc41b48bcf526b5a7f18bf96ece; content-driven implementation and citation repair deployed; documentation updates pending commit.
+- Production 1f56ddc8428c1bc41b48bcf526b5a7f18bf96ece; rollback d971954ffe72a5cd1d73b861c972361efb24eb06.
 - Canonical d971 deployment completed without test suites; exact evidence below.
 - Root dirty main and token-smart-live-workflow dirty branch are separate. Preserve concurrent R1 evidence hardening; fresh production marker before deployment.
 
@@ -51,3 +51,8 @@
 - SSH only root infra/scripts/ssh-run.sh via C:/Program Files/Git/bin/bash.exe. LF shell files, <=8KB commands (gzip/chunk longer payloads); never print secrets/.env.
 - Historical video ca0908bb used manual assistance and a fixed renderer; not current autonomous/general proof. No overall token-saving percentage established.
 - Read-first baseline docs/OpenScience_Kimi_Development_Spec.md, current integrated product plan, this handoff. Root dirty main is separate; copy current handoff there without changing unrelated work.
+
+## Latest actual continuation
+- 1f56 diagnostics deployed --no-tests, log1788883897069-4396115d-1c4c-4bbb-b857-c21d6e3c8965 exit0; High static review CLEAR.
+- Actualv4 task/asset90ec6ebe-36ee-4baf-b1df-63b91af46f0a SUCCEEDED at16:17:30Z, draft3scenes; idempotency hermes-content-plan-diagnostics-v4. NOT approved: copied legacybase errors ambient→常温, PHz→皮赫兹, unsupported electronpaths/counterbeamgeometry. Actualassetlog1788884298604-1ed9eab1-bd7c-4bdc-a331-ca29e41cc1ca.
+- Next correction: omit legacy no-animation base document from planner input while preserving baseAssetId lineage; regenerate fromoriginalClaims/revisioninstruction. Do not approve bad scientific content to advance images. read-product-run.cjs now targets90ec task.
