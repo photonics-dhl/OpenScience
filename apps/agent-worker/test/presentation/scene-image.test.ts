@@ -2,81 +2,50 @@ import { describe, expect, it, vi } from 'vitest';
 import type { StoryboardView } from '@openscience/domain';
 import { planSceneImagePrompt } from '../../src/presentation/scene-image';
 
-const brief = {
-  teachingPoint: 'Phase changes redistribute intensity through interference.',
-  subjects: 'A thin phase sheet and a receiving screen.',
-  arrangement: 'Sheet on the left, wavefronts in the middle, screen on the right.',
-  mechanism: 'Overlapping wavefronts reach distinct bright and dim patches on the screen.',
-  fidelity: 'Illustrative patches, not measured data; monochromatic light, no rainbow splitting.',
-};
-const parent = { style: 'watercolor', document: { scenes: [{title:'Interference',narration:'Intensity changes',visualAction:'Sheet and screen',sourceClaimIds:['c1'],durationSeconds:8}] } } as StoryboardView;
-const claims = [{id:'c1',kind:'method',statement:'Phase changes',assessment:'supported',conditions:['monochromatic'],limitations:['illustration only']}] as unknown as Parameters<typeof planSceneImagePrompt>[1];
+const parent = { style: 'watercolor', document: { scenes: [{
+  title: 'Interference', narration: 'Intensity changes', visualAction: 'Sheet and screen',
+  sourceClaimIds: ['c1'], durationSeconds: 8,
+}] } } as StoryboardView;
+const claims = [{
+  id: 'c1', kind: 'method', statement: 'Phase changes redistribute intensity.', assessment: 'supported',
+  conditions: ['monochromatic illumination', 'fixed geometry'], limitations: ['illustration only'], extractionStatus: 'succeeded',
+}] as Parameters<typeof planSceneImagePrompt>[1];
 
-function gateway(value: unknown) {
-  return { completeStructured: vi.fn(async () => value) } as unknown as Parameters<typeof planSceneImagePrompt>[0];
+function unusedGateway() {
+  return { completeStructured: vi.fn(() => { throw new Error('provider must not be called'); }) } as unknown as Parameters<typeof planSceneImagePrompt>[0];
 }
-describe('scene composition planning', () => {
-  it('compiles concrete subjects, spatial cause-effect and limits without dropping source context', async () => {
-    const g = gateway(brief);
-    const prompt = await planSceneImagePrompt(g, claims, parent, 0);
-    for (const value of Object.values(brief)) expect(prompt).toContain(value);
+
+describe('scene image prompt assembly', () => {
+  it('preserves the approved scene and every source constraint verbatim without a model call', async () => {
+    const gateway = unusedGateway();
+    const repeated = [{...claims[0], conditions: ['same constraint', 'same constraint']}];
+    const prompt = await planSceneImagePrompt(gateway, repeated, parent, 0);
+    expect(gateway.completeStructured).not.toHaveBeenCalled();
+    for (const value of [parent.document.scenes[0]!.title, parent.document.scenes[0]!.narration,
+      parent.document.scenes[0]!.visualAction, repeated[0]!.statement,
+      ...repeated[0]!.conditions, ...repeated[0]!.limitations]) expect(prompt).toContain(value);
+    expect(prompt.match(/same constraint/gu)).toHaveLength(2);
     expect(prompt.length).toBeLessThanOrEqual(1500);
-    expect(prompt).toContain('watercolor');
-    const call = vi.mocked(g.completeStructured).mock.calls[0];
-    const input = JSON.parse(call[1][1].content);
-    expect(input.claims[0].limitations).toEqual(['illustration only']);
-    expect(input.scene.visualAction).toBe('Sheet and screen');
   });
-  it.each([null, {prompt:'Abstract atmospheric rays'}, {...brief,subjects:' '}, {...brief,extra:'unbounded'}, {...brief,mechanism:'x'.repeat(1500)}])('blocks malformed or over-budget brief before image generation (%j)', async value => {
-    await expect(planSceneImagePrompt(gateway(value), claims, parent, 0)).rejects.toThrow();
+
+  it('accepts exactly 1500 characters and rejects 1501 without truncating source text', async () => {
+    const gateway = unusedGateway();
+    const empty = [{...claims[0], statement: '', conditions: [], limitations: []}];
+    const baseline = await planSceneImagePrompt(gateway, empty, parent, 0);
+    const exactMarker = 'x'.repeat(1500 - baseline.length);
+    const exact = await planSceneImagePrompt(gateway, [{...empty[0]!, statement: exactMarker}], parent, 0);
+    expect(exact).toHaveLength(1500);
+    expect(exact).toContain(exactMarker);
+    await expect(planSceneImagePrompt(gateway, [{...empty[0]!, statement: `${exactMarker}x`}], parent, 0))
+      .rejects.toThrow(/approved scene or source context exceeds image prompt bounds/u);
+    expect(gateway.completeStructured).not.toHaveBeenCalled();
   });
-  it.each([
-    ['not_object', null],
-    ['key_set', {...brief, extra: 'RAW_CANDIDATE_MARKER'}],
-    ['field_type:subjects', {...brief, subjects: { value: 'RAW_CANDIDATE_MARKER' }}],
-    ['field_empty:subjects', {...brief, subjects: '   '}],
-    ['compiled_length', {...brief, mechanism: 'RAW_CANDIDATE_MARKER'.repeat(100)}],
-  ])('provides bounded %s feedback and accepts a corrected composition', async (expectedIssue, invalid) => {
-    const completeStructured = vi.fn(async (guard: (value: unknown) => boolean, _messages: unknown, options: { validationFeedback?: (value: unknown) => string | undefined }) => {
-      expect(guard(invalid)).toBe(false);
-      const feedback = options.validationFeedback?.(invalid);
-      expect(feedback).toContain(`reason=${expectedIssue}`);
-      expect(feedback?.length).toBeLessThanOrEqual(1000);
-      expect(feedback).not.toContain('RAW_CANDIDATE_MARKER');
-      expect(feedback).toContain('teachingPoint,subjects,arrangement,mechanism,fidelity');
-      expect(guard(brief)).toBe(true);
-      return brief;
-    });
-    const prompt = await planSceneImagePrompt({ completeStructured } as unknown as Parameters<typeof planSceneImagePrompt>[0], claims, parent, 0);
-    expect(prompt).toContain(brief.fidelity);
-    expect(completeStructured).toHaveBeenCalledOnce();
-  });
-  it('reports only fixed field lengths and the exact overage when a valid composition is too long', async () => {
-    const invalid = {...brief, mechanism: 'RAW_CANDIDATE_MARKER'.repeat(100)};
-    const completeStructured = vi.fn(async (guard: (value: unknown) => boolean, _messages: unknown, options: { validationFeedback?: (value: unknown) => string | undefined }) => {
-      expect(guard(invalid)).toBe(false);
-      const feedback = options.validationFeedback?.(invalid) ?? '';
-      expect(feedback).not.toContain('RAW_CANDIDATE_MARKER');
-      expect(feedback).toContain('characters_including_spaces');
-      expect(feedback).toContain(`teachingPoint:${brief.teachingPoint.length}`);
-      expect(feedback).toContain(`subjects:${brief.subjects.length}`);
-      expect(feedback).toContain(`arrangement:${brief.arrangement.length}`);
-      expect(feedback).toContain(`mechanism:${invalid.mechanism.length}`);
-      expect(feedback).toContain(`fidelity:${brief.fidelity.length}`);
-      expect(feedback).toContain('targetValueCharacters<=700');
-      const lengths = /compiled:(\d+),over:(\d+)/u.exec(feedback);
-      expect(lengths).not.toBeNull();
-      expect(Number(lengths![1])).toBeGreaterThan(1500);
-      expect(Number(lengths![2])).toBe(Number(lengths![1]) - 1500);
-      expect(guard(brief)).toBe(true);
-      return brief;
-    });
-    await expect(planSceneImagePrompt({ completeStructured } as unknown as Parameters<typeof planSceneImagePrompt>[0], claims, parent, 0)).resolves.toContain(brief.mechanism);
-  });
-  it('blocks missing scene and oversized context before planning', async () => {
-    const g=gateway(brief);
-    await expect(planSceneImagePrompt(g,claims,parent,4)).rejects.toThrow();
-    await expect(planSceneImagePrompt(g,[{...claims[0],statement:'x'.repeat(40001)}],parent,0)).rejects.toThrow();
-    expect(g.completeStructured).not.toHaveBeenCalled();
+
+  it('rejects a missing scene and the existing 40000-character input bound before assembly', async () => {
+    const gateway = unusedGateway();
+    await expect(planSceneImagePrompt(gateway, claims, parent, 4)).rejects.toThrow(/Scene is missing/u);
+    await expect(planSceneImagePrompt(gateway, [{...claims[0], statement: 'x'.repeat(40001)}], parent, 0))
+      .rejects.toThrow(/Scene context exceeds image planner bounds/u);
+    expect(gateway.completeStructured).not.toHaveBeenCalled();
   });
 });

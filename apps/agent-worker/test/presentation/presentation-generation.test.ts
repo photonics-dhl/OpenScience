@@ -336,16 +336,22 @@ it('refuses uncertain paid replay with no saved asset before calling either mode
   expect(ctx.completeStructured).not.toHaveBeenCalled();
   expect(ctx.generateImage).not.toHaveBeenCalled();
 });
-it('blocks a changed parent after text planning before paid image generation',async()=>{
+it('blocks a changed parent after deterministic prompt assembly before paid image generation',async()=>{
   const ctx=sceneHandlerFixture();
-  ctx.completeStructured.mockImplementation(async()=>{ctx.parent.status='rejected';return {teachingPoint:'Wave diffraction',subjects:'Slit and wavefronts',arrangement:'Slit left, outgoing wavefronts right',mechanism:'Wave spreads after the slit',fidelity:'Room temperature; limited sample; illustration not evidence'};});
+  let parentReads=0;
+  ctx.prisma.presentationAsset.findUnique=async({where}:any)=>{
+    if(where.id===PARENT){parentReads+=1;if(parentReads===2)ctx.parent.status='rejected';return ctx.parent;}
+    return ctx.rows[0]??null;
+  };
   await expect(ctx.handler(ctx.deps as never,ctx.task)).rejects.toThrow();
+  expect(ctx.completeStructured).not.toHaveBeenCalled();
   expect(ctx.generateImage).not.toHaveBeenCalled();
 });
-it('rejects oversized condensed prompts without silently truncating or invoking image provider',async()=>{
+it('rejects oversized approved source prompts without silently truncating or invoking either provider',async()=>{
   const ctx=sceneHandlerFixture();
-  ctx.completeStructured.mockResolvedValue({...{teachingPoint:'Wave diffraction',subjects:'Slit and wavefronts',arrangement:'Slit left, outgoing wavefronts right',mechanism:'Wave spreads after the slit',fidelity:'Room temperature; limited sample; illustration not evidence'},mechanism:'x'.repeat(1501)});
+  ctx.authority.statement='x'.repeat(800);
   await expect(ctx.handler(ctx.deps as never,ctx.task)).rejects.toThrow();
+  expect(ctx.completeStructured).not.toHaveBeenCalled();
   expect(ctx.generateImage).not.toHaveBeenCalled();
 });
 
