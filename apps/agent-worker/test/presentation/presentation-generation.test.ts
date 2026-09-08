@@ -45,6 +45,22 @@ function authorityFixture() {
 }
 
 describe('deterministic presentation generation', () => {
+  it.each([false, true])('video recovery replays persisted assets but never resubmits an uncertain task (saved=%s)', async (saved) => {
+    const ctx = authorityFixture();
+    const existing = { id: TASK, kind: 'video', status: 'draft', contentHash: 'a'.repeat(64) };
+    ctx.prisma.presentationAsset.findUnique = async () => saved ? existing : null;
+    const generate = vi.fn();
+    const task = { ...ctx.task, executionAttempt: 2, payload: { ...ctx.task.payload, kind: 'video', video: {
+      profile: 'onchip-field-sampling-v1', storyboardAssetId: '70000000-0000-4000-8000-000000000001',
+      sceneImageAssetIds: Array.from({ length: 5 }, (_, index) => `80000000-0000-4000-8000-00000000000${index + 1}`),
+      sceneRoles: ['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'],
+    } } };
+    const pending = createPresentationGenerationHandler({ videoSpool: { generate } as any })(ctx.deps as any, task as any);
+    if (saved) await expect(pending).resolves.toMatchObject({ assetId: TASK, kind: existing.kind, status: existing.status, contentHash: existing.contentHash });
+    else await expect(pending).rejects.toThrow('explicit new generation');
+    expect(generate).not.toHaveBeenCalled();
+    expect(ctx.putObject).not.toHaveBeenCalled();
+  });
   it.each(['viewer', 'reviewer'])('blocks %s before generating or storing output', async (role) => {
     const ctx = authorityFixture();
     ctx.authority.role = role;

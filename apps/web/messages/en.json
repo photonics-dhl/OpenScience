@@ -1,4 +1,17 @@
 {
+  "mechanismVideo": {
+    "driver_signal": "Driver and weak signal",
+    "tip_enhancement": "Local enhancement at the tip",
+    "emission_collection": "Gated emission and collection",
+    "delay_scan": "Delay scan and average current",
+    "field_reconstruction": "Local versus incident field",
+    "title": "Animate the optical field sampling mechanism",
+    "scope": "This animation is specific to on-chip optical field sampling: two pulses, tip enhancement, electron collection, delay scanning, and the distinction between local and incident fields. Confirm that the five reviewed scenes describe this mechanism.",
+    "chooseImage": "Choose an approved image",
+    "missingImage": "Generate and approve this scene image first",
+    "review": "Creates an explanatory animation with one continuous Serena narration. It is not measured data or a numerical simulation. Review the science, pronunciation and scene timing before approval; estimated timing is not verified alignment.",
+    "generate": "Confirm scene roles and generate video draft"
+  },
   "common": {
     "save": "Save",
     "cancel": "Cancel",

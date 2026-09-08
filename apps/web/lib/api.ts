@@ -603,6 +603,7 @@ export interface PresentationAsset {
   storyboard?: StoryboardView;
   sceneImage?: SceneImageRequest;
   canGenerateSceneImage?: boolean;
+  canGenerateVideo?: boolean;
   canTransition?: boolean;
   id: string;
   researchObjectId: string;
@@ -696,6 +697,19 @@ export async function generatePresentationSceneImage(roId: string, versionId: st
   return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
     method: 'POST', headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify({ kind: 'image', sourceClaimIds, sceneImage }), signal,
+  });
+}
+
+export interface PresentationVideoRequest {
+  profile: 'onchip-field-sampling-v1';
+  sceneRoles: ['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'];
+  storyboardAssetId: string;
+  sceneImageAssetIds: string[];
+}
+export async function generatePresentationVideo(roId: string, versionId: string, sourceClaimIds: string[], video: PresentationVideoRequest, idempotencyKey: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
+  return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, signal,
+    body: JSON.stringify({kind: 'video', sourceClaimIds, video}),
   });
 }
 

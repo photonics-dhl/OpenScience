@@ -1,8 +1,10 @@
 # Progress
 
-## 2026-09-08: UX/extraction repair deployed; real-paper flow still blocked
+## 2026-09-08: ordered extraction candidate ready; real-paper acceptance pending
 
-- Production/public fbb54059567728f5064edc34e006836c6f589bd6, rollback005ffb8d8298d3476e8411046cae300079bd8344. Draft PR105 CI passed; canonical fullbuild/Parser16/migrations/runtime/public acceptance passed and journal cleared. MEDIA is excluded.
+- Fresh a73 paper extracted six fields and confirmed/committed same RO af1a9817, version a66f7b15. Claim bridge409 exposed bbox floating-point roundtrip mismatch; fix/review in onchip-video-release. Resume-v2 zero model calls; resume-v1 helper newline mistake caused one extra extraction, retained as failure/cost.
+- Candidate a73f273f7079819579962aa6eff31c1dd9368b08 pushed as draft PR106. ECS full build/Parser16 passed; exact CI passed. Same ordinary Chat6Pro resumed and returned next-stage plan; global token-smart routing/handoff updated, portable continuity ZIP refreshed.
+- Production/public a73f273f7079819579962aa6eff31c1dd9368b08, rollback fbb54059567728f5064edc34e006836c6f589bd6. Draft PR105 CI passed; canonical fullbuild/Parser16/migrations/runtime/public acceptance passed and journal cleared. MEDIA is excluded.
 - fbb preserves first valid extraction fields across retries and applies screenshot-informed empty-state/contrast UX. Exact compiled replay passed; local desktop/mobile browser16 and focused gateway39/extractor118/UI14 checks passed.
 - Fresh real UI paper test FAILED: ROf3f04cee-09a2-42cf-a967-4588e2c46d44, AgentTaskc7f00b13-3563-47cd-965f-51f990679de5. Safe SourceMap, but all six fields empty after retry; no confirmation or commit. Session closed, failure retained.
 - Next repair permits source-ordered independently located noncontiguous excerpts, with visible omission notice and unchanged authenticity/size/approval rules. Sol/medium implementation, main UI, Sol/high contract review active. Prepared ordered-v5 real gate uses hash-verified cached paper. Input was verified intact; prompt now explains joint cross-line evidence. Invalid-field-only repair with typed retained-value materialization passed real-gateway diagnostic v10/v11; this is not UI acceptance. Fresh extractor/parser contract/runner123 tests and worker typecheck passed.

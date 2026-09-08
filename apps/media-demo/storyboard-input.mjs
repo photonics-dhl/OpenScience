@@ -1,5 +1,6 @@
 import { readFile, lstat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+const onchipRoles = ['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'];
 
 function invalid() { throw new Error('Invalid storyboard media input'); }
 function object(value, keys) {
@@ -13,14 +14,17 @@ function text(value, max) {
 
 // This parser validates rendering data, never scientific approval or RO authority.
 export function storyboardTimeline(value, seconds, fps = 24) {
-  const v = object(value, 'schemaVersion,title,locale,style,provider,speaker,scenes');
+  const hasProfile = value && Object.hasOwn(value, 'profile');
+  const v = object(value, `schemaVersion,title,locale,style,provider,speaker,scenes${hasProfile ? ',profile' : ''}`);
+  if (hasProfile && (v.profile !== 'onchip-field-sampling-v1' || !Array.isArray(v.scenes) || v.scenes.length !== 5)) invalid();
   if (v.schemaVersion !== 1 || !['zh', 'en'].includes(v.locale) || !['technical', 'watercolor', 'ink'].includes(v.style)
     || !Number.isFinite(seconds) || seconds <= 0 || seconds > 90 || fps !== 24
     || !Array.isArray(v.scenes) || v.scenes.length < 3 || v.scenes.length > 6) invalid();
   const title = text(v.title, 120);
   const provider = text(v.provider, 120); const speaker = text(v.speaker, 80);
   const scenes = v.scenes.map((raw, i) => {
-    const s = object(raw, 'title,artwork,start,cues');
+    const s = object(raw, `title,artwork,start,cues${hasProfile ? ',role' : ''}`);
+    if (hasProfile && s.role !== onchipRoles[i]) invalid();
     if (s.artwork !== `scene-${i}.png` || !Number.isFinite(s.start) || s.start < 0 || s.start >= seconds
       || (i === 0 ? s.start !== 0 : s.start <= v.scenes[i - 1].start)) invalid();
     const duration = (v.scenes[i + 1]?.start ?? seconds) - s.start;
@@ -32,7 +36,7 @@ export function storyboardTimeline(value, seconds, fps = 24) {
       previousEnd = cue.end;
       return {start: cue.start, end: cue.end, text: text(cue.text, 80)};
     });
-    return {title: text(s.title, 120), artwork: s.artwork, start: s.start, duration, cues};
+    return {title: text(s.title, 120), artwork: s.artwork, start: s.start, duration, cues, ...(hasProfile ? {role: s.role} : {})};
   });
   return { title, locale: v.locale, visualStyle: v.style, scenes, total: seconds, frameCount: Math.ceil(seconds * fps), narration: `Supplied continuous WAV; provider: ${provider}; speaker: ${speaker}; no TTS during rendering.` };
 }

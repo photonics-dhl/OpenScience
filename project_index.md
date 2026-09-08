@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-07 +08）：** branch codex/token-smart-live-workflow；HEAD/application/public17eb209d15cc427d33b426e8430fa87006e899c2，rollbackc9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2。原生PDF修复已部署；真实模型引用因改写断行而全被拒绝，正在修复。Claim桥接/UI未提交，机制图/动画的最小产品尚未走通。
+> **CURRENT source/deployment anchor（2026-09-08 +08）：** development branch codex/token-smart-live-workflow，HEAD/origin005ffb8（MEDIA未提交）；生产候选branch codex/ordered-source-excerpts，HEAD/origin/application/public a73f273f7079819579962aa6eff31c1dd9368b08，rollback fbb54059567728f5064edc34e006836c6f589bd6。PR106 CI、服务器全构建/Parser16/runtime/公网验收通过；真实论文已返回六字段，确认/Claim桥接与后续图像视频仍在验收。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 
 ## 当前产品交付
@@ -14,13 +14,14 @@
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | DEPLOYED3d518af；runner10、安装预检、真实Task/Credit/来源/草稿/PNG/权限验收通过 |
 | `apps/media-demo/inputs.mjs` / `apps/media-demo/render.mjs` / `apps/media-demo/drawing.mjs` / `apps/media-demo/test/inputs.test.mjs` / `apps/media-demo/test/drawing.test.mjs` | 可选第三幕机制图，保留旁白/输出探测场景与时间轴 | DEPLOYED9848411；服务器渲染/公网/390px/Range206通过，实际AAC音轨未变 |
 | 本地产物（Git忽略，非仓库路径） | apps/web/test/visual/out/science-video/：D2NN科普MP4、分镜、旁白、preview.html与FFmpeg/播放记录 | CURRENT证据含淡彩41秒demo及真实RO导入/播放/审批/失效截图；历史文件保留，核对精确source/run后使用，非自动生成能力 |
-| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo9848411；第三幕Codex机制插图/原Serena配音，固定D2NN渲染，已受审产物经独立CLI接入私有RO，不执行任意用户代码 |
+| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo9848411；on-chip新机制渲染在工作分支开发，不代表已部署 |
+| `apps/media-demo/onchip-drawing.mjs` / `apps/media-demo/test/onchip-drawing.test.mjs` | On-chip field-sampling五场真实动态图元；固定profile，不执行用户代码 | WORKING after005ffb8；局部运动/输入14项通过，科学审查和真实音频/RO验收待完成 |
 | `infra/scripts/deploy-science-video-demo.sh` / `infra/scripts/deploy-science-video-demo.test.mjs` / `infra/nginx/science-video-demo.location.conf` | 一次性隔离渲染与独立演示路径发布/恢复，Nginx原生Range | DEPLOYED demo381705a淡彩41秒；应用615ca2d另行部署 |
 | `apps/media-demo/test/narration.test.mjs` | 配音来源、逐段字幕时间边界与旧素材回退验证 | 完整连续v4配音与字幕边界已在技术/淡彩demo验收；历史逐段回退保留 |
 | `infra/tts-audition/` | CPU音频公共基础镜像、Qwen隔离试听与输出校验；模型独立挂载 | ECS TRIAL VERIFIED；用户接受v4 Serena全文连续配音，淡彩视频保留原WAV；旧分段试听为历史证据 |
 | `docs/runbooks/science-video-demo.md` | CPU样片服务器部署、回退与验证操作手册；含隔离CodexCLI验证、受控runner安装/启用/回滚与第三幕视频更新步骤 | DEPLOYED demo9848411 / app3d518af；含分镜与媒体页验收、受审媒体导入、Parser报告与临时容器清理注意事项 |
 | `apps/api/src/routes/presentation-asset-content.ts` / `apps/api/src/routes/presentation-assets.ts` / `apps/api/test/presentation-assets-routes.test.ts` / `apps/api/src/routes/research.ts` | 共用安全内容交付、认证私有预览与 exact RO/version/task 恢复 | DEPLOYED83b2933；私有视频实际播放/28秒seek/Range206，匿名401，保留v1兼容 |
-| `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准；本地空状态/确认对比度修复16浏览器通过，待部署 | DEPLOYED64ae872；媒体优先、桌面双列/手机单列、来源折叠、任务错误可见；公网中英文四组播放/seek/键盘/无溢出验收通过 |
+| `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准；LOCAL 空状态下一步/16测试通过，未部署 | DEPLOYED64ae872；媒体优先、桌面双列/手机单列、来源折叠、任务错误可见；公网中英文四组播放/seek/键盘/无溢出验收通过 |
 | `apps/web/app/research-objects/[id]/edit/page.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` / `apps/web/package.json` / `apps/web/playwright.release.config.ts` | 已确认论文带入版本提交并保留原 manifest 附件；图解用例加入既有 release suite | DEPLOYED390afc0；真实PDF入版本，续接9项与CI99通过 |
 | `packages/domain/src/research-intelligence/claim-evidence-service.ts` / `packages/domain/test/research-intelligence/claim-evidence-service.test.ts` / `apps/agent-worker/src/presentation/chart-generator.ts` / `apps/agent-worker/src/presentation/interactive-html.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | Claim 变更/删除的关联资产失效；真实表述与换行图解 | DEPLOYED390afc0；实际编辑使旧批准图rejected，重新生成通过；无迁移 |
 | `apps/agent-worker/src/extractor.ts` / `apps/agent-worker/test/extractor.test.ts` | 摘录选择跳过头尾及已覆盖中段关键词，保留正文证据预算 | DEPLOYED390afc0；27项通过；生产重验仍缺method/results/reproducibility，不声称完整度提升 |
@@ -183,7 +184,11 @@
 | `apps/web/test/e2e/literature-disclosure-recovery.spec.ts` | RO Files/Hermes恢复、折叠和异步生命周期回归 | Application c9439ae；最终target/user隔离测试8928a9d，受影响浏览器17/17通过 |
 | `apps/web/test/literature-disclosure-harness/` | index.html、main.tsx、vite.config.ts；仅测试进程挂载真实组件，复现同组件切换与卸载 | 无生产路由或新增依赖；由上述Playwright用例启动 |
 | `apps/web/lib/suggestion-evidence.ts` / `apps/web/test/{suggestion-evidence.test.ts,suggestions-panel.test.tsx}` | 同次抽取结果的前端定位状态适配；旧结果不冒充可信出处 | DEPLOYED c9439ae；Sol修复真实API安全identity合同；旧Astra局部测试不代表端到端等质 |
-| `C:/Users/Mac/.agents/skills/token-smart/references/metering.md` | 用户指定全局skill的独立只读任务计量入口，关联metered-run脚本和测试 | GLOBAL；单次真实审查Sol相对Astra标准credits低56.06%；不代表完整开发/网页净收益 |
+| `C:/Users/Mac/.agents/skills/token-smart/` | 全局自动省量：阶段网页分析、实际Luna/Terra/Sol路由、必要high复核及真实纵向验收 | UPDATED2026-09-07；四文件11529→4246字符，非整体费用节省；离线meter13/13 |
+| `E:/Miscellaneous/XGS/docs/user/_ideas/token-smart-share-20260908-continuity.zip` | 最新分享包：保留主模型，续接状态、整段网页分析和最小真实产物验证 | LOCAL DELIVERY；旧20260907包保留历史，非质量等同或净节省实测 |
+| `E:/Miscellaneous/XGS/docs/user/_ideas/token-smart-share-20260907/` / `E:/Miscellaneous/XGS/docs/user/_ideas/token-smart-share-20260907.zip` | 用户指定分享包：两skills、安装说明、AGENTS片段、prompts、验证与场景 | LOCAL DELIVERY；不含个人账号/项目状态；新机器浏览器与路由仍需现场验证 |
+| `apps/web/components/presentation/MechanismVideoPanel.tsx` / `apps/web/test/mechanism-video-panel.test.tsx` | 同版已审分镜/五图与角色确认的视频草稿入口 | WORKING；后台因额度耗尽中断，不是已部署功能 |
+| `apps/agent-worker/src/presentation/host-video-spool.ts` / `apps/agent-worker/test/host-video-spool.test.ts` / `packages/domain/src/assets/video.ts` / `packages/domain/test/assets/video.test.ts` / `infra/codex-image-runner/video-runner.mjs` / `infra/codex-image-runner/video-runner.test.mjs` / `infra/codex-image-runner/video-tts.py` | 隔离视频任务候选实现、固定profile和连续旁白 | INCOMPLETE WORKING；需收尾编译/安全review/真实音画验收；不部署此脏树 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-foundation-plan.md` | Taskmaster Task 1 的可执行 TDD 计划：能力台账门禁、自有 corpus、现状 parser 基准、零污染输出与全仓验收；后续三计划按实测结果展开 | **COMPLETED / TASKMASTER TASK 1 DONE**；能力候选尚未安装 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-core-model-plan.md` | Taskmaster Task 2 的可执行 TDD/迁移/部署计划：Claim/Evidence/locator 合同、核心迁移 28、独立搜索数据库与 ECS-only 验收 | **COMPLETED / TASKMASTER TASK 2 DONE / ECS DEPLOYED `e0828a6`** |
 | `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md` | Taskmaster Task 3 的可执行 TDD 计划：严格 DocumentSourceMap、locator 构造/复验、Worker parser boundary、image-only false-ready 与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `ef043eb`**；final docs CI `32997554922` GREEN |
@@ -520,3 +525,11 @@
 - `apps/web/components/presentation/PresentationWorkbench.tsx`：分镜按标题折叠、按需展开，避免多个长分镜默认连续占满页面。
 
 - `apps/web/app/research-objects/[id]/presentation/page.tsx`：原HermesDockAnchor/Drawer接入真实RO上下文，独立陪伴栏避免覆盖素材；版本/任务权限逻辑保留。
+
+| Path | Purpose | Status |
+| --- | --- | --- |
+| `packages/domain/src/assets/video.ts` / `packages/domain/test/assets/video.test.ts` | Fixed source-paper five-scene video parent contract | Candidate codex/onchip-video-release; media not enabled |
+| `apps/agent-worker/src/presentation/host-video-spool.ts` / `apps/agent-worker/test/host-video-spool.test.ts` | Bounded isolated host video exchange | Runtime tested; business acceptance pending |
+| `infra/codex-image-runner/video-runner.mjs` / `infra/codex-image-runner/video-runner.test.mjs` / `infra/codex-image-runner/video-tts.py` | Offline isolated TTS/render runner | Candidate; existing immutable-source installer |
+| `apps/media-demo/onchip-drawing.mjs` / `apps/media-demo/test/onchip-drawing.test.mjs` | On-chip optical-field mechanism animation | Illustrative profile, not experimental reproduction |
+| `apps/web/components/presentation/MechanismVideoPanel.tsx` / `apps/web/test/mechanism-video-panel.test.tsx` | Approved-parent video generation UI | Candidate; capability defaults off |

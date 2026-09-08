@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
 import type { AuditContext } from '@openscience/observability';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import { recordAudit } from '../workspace/audit';
@@ -13,7 +12,7 @@ import type {
 } from './types';
 import { CLAIM_ASSESSMENTS, CLAIM_KINDS, CLAIM_RELATIONS, EVIDENCE_KINDS } from './types';
 import { validateSourceLocator } from './validation';
-import { resolveSourceLocator } from './source-locator';
+import { resolveSourceLocator, sameSourceBoundingBox } from './source-locator';
 import type { DocumentSourceMap } from './document-source-map';
 import {
   loadDocumentSourceMapReference,
@@ -479,7 +478,8 @@ export function validateCanonicalEvidenceSources(
     const locator = validateSourceLocator(source.locator);
     const block = locator.blockId ? blocks.get(locator.blockId) : undefined;
     if (locator.artifactId !== sourceMap.artifactId || locator.contentHash !== sourceMap.contentHash
-      || !block || locator.page !== block.page || !isDeepStrictEqual(locator.boundingBox, block.boundingBox)
+      || !block || locator.page !== block.page || !locator.boundingBox
+      || !sameSourceBoundingBox(locator.boundingBox, block.boundingBox)
       || !locator.charRange || typeof block.text !== 'string'
       || block.text.slice(locator.charRange.start, locator.charRange.end) !== source.quote
       || locator.charRange.end - locator.charRange.start !== source.quote.length
@@ -488,7 +488,7 @@ export function validateCanonicalEvidenceSources(
     }
     priorOrdinal = block.ordinal;
     total += source.quote.length;
-    const box = locator.boundingBox!;
+    const box = block.boundingBox;
     resolved.push({
       text: source.quote,
       region: {
@@ -540,7 +540,7 @@ async function resolveEvidenceSourceInternal(
     const sourceMap = loadedSourceMap ?? await loadDocumentSourceMapReference(deps.storage, reference);
     const block = resolveSourceLocator(sourceMap, locator);
     const page = locator.page === undefined ? undefined : sourceMap.pages.find((candidate) => candidate.page === locator.page);
-    const box = locator.boundingBox ?? block.boundingBox;
+    const box = block.boundingBox;
     const region = page ? {
       x: Math.min(1, box.x / page.width),
       y: Math.min(1, box.y / page.height),

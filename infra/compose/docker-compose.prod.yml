@@ -87,6 +87,7 @@ services:
     environment:
       MINIMAX_IMAGE_ENABLED: "true"
       HERMES_SCENE_IMAGE_PROVIDER: ${HERMES_SCENE_IMAGE_PROVIDER:-minimax}
+      HERMES_VIDEO_ENABLED: ${HERMES_VIDEO_ENABLED:-false}
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
       S3_DRIVER: minio
@@ -148,14 +149,19 @@ services:
       # Worker can submit jobs but cannot rewrite runner results or access credentials.
       - /opt/openscience-codex/inbox:/codex-jobs/inbox:rw
       - /opt/openscience-codex/results:/codex-jobs/results:ro
+      - /opt/openscience-video/inbox:/video-jobs/inbox:rw
+      - /opt/openscience-video/results:/video-jobs/results:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
     environment:
       MINIMAX_IMAGE_ENABLED: "true"
       HERMES_SCENE_IMAGE_PROVIDER: ${HERMES_SCENE_IMAGE_PROVIDER:-minimax}
+      HERMES_VIDEO_ENABLED: ${HERMES_VIDEO_ENABLED:-false}
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
+      HOST_VIDEO_INBOX_DIR: /video-jobs/inbox
+      HOST_VIDEO_RESULTS_DIR: /video-jobs/results
       S3_DRIVER: minio
       S3_ENDPOINT: object-storage
       S3_PORT: "8333"

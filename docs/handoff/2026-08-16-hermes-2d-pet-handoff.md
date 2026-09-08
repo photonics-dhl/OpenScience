@@ -3,8 +3,8 @@
 > CURRENT, 2026-09-08. Goal: real paper upload → structured analysis → confirmed same-version Claims → scientific images and animated video. Not yet end-to-end accepted.
 
 ## Version tuple
-- Candidate branch: codex/ordered-source-excerpts, E:/Miscellaneous/XGS/.worktrees/token-smart-production-005ffb8; source base fbb54059567728f5064edc34e006836c6f589bd6. Candidate commit is obtained from Git, not inferred from this filename.
-- Fresh production/public fbb54059567728f5064edc34e006836c6f589bd6, rollback005ffb8d8298d3476e8411046cae300079bd8344. Full canonical deployment/Parser16/migrations/runtime/public checks passed, PR105 CI passed. Ordered-excerpt candidate not yet deployed.
+- Candidate branch: codex/ordered-source-excerpts, E:/Miscellaneous/XGS/.worktrees/token-smart-production-005ffb8; source base fbb54059567728f5064edc34e006836c6f589bd6. Candidate a73f273f7079819579962aa6eff31c1dd9368b08 pushed; draft PR106, CI34177686323 passed. ECS full build and Parser16 acceptance passed (1788832209404-8b43ba85-51dd-4e71-84a3-9c0bb23472e2.log).
+- Fresh production/public a73f273f7079819579962aa6eff31c1dd9368b08, rollback fbb54059567728f5064edc34e006836c6f589bd6. Full canonical deployment/Parser16/migrations/runtime/public checks passed, PR105 CI passed. Ordered-excerpt release deployed successfully; canonical log1788832791065-c5d37e23-2efa-4b4d-8d30-1f8bc3ed77ca.log, post-checkup1788833287502-12a26855-f707-4011-b37c-c8bb3fd0fc97.log.
 - Development/media work remains E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow on codex/token-smart-live-workflow. Uncommitted media is deliberately excluded from this candidate. Root dirty main remains unchanged.
 
 ## Findings and changes
@@ -16,11 +16,16 @@
 
 - Latest repair requests only invalid fields and materializes all six fields from validated retained values; valid missing fields can upgrade. Cross-line support and theory/experiment distinctions are explicit in the prompt. Fresh first response plus bounded field-only correction passed real-gateway diagnostic v10/v11 (not UI acceptance). Extractor/parser contract/runner123 tests and worker typecheck passed. Acceptance fake now executes its guard; existing corpus manifest is LF-pinned to preserve its existing content hash on Windows.
 
+- Real a73 UI now extracted all six fields; main + ordinary Chat reviewed and narrowed insight/limitations/reproducibility. Confirm/commit succeeded: RO af1a9817-dad3-4c5e-ace4-f33951f19574, ingestion c1ee0470-729c-4852-9f3c-0569e83778e1, AgentTask a167c7b3-81cf-4fa1-b79d-7438c352b537, version a66f7b15-8d8f-42bf-9f58-c4dd38bbd162. Claim bridge failed409 LOCATOR_MISMATCH: stored bbox rounding differs ~1e-14 from SourceMap, other source checks all match. Same-version resume-v2 reproduced with zero model calls. Resume-v1 helper newline error accidentally repeated upload/model once; failure retained, not savings.
+- Next isolated media/bbox candidate: E:/Miscellaneous/XGS/.worktrees/onchip-video-release, branch codex/onchip-video-release, basea73; media31 files tests/typechecks passed, not committed/deployed. Shared float-roundtrip bbox fix complete, High GO, source locator/service40 tests and typecheck passed. Actual stored result replay passed6fields/94segments, rejects1e-9 displacement,0modelcalls/0businesswrites. Existing image runner codex-image healthy; actor already platform_admin+owner. No new install required.
+
 ## Next / acceptance
-1. Complete exact candidate build/checks; server Parser16 acceptance, canonical deployment with rollback fbb5405, then same real PDF ordered-v5 acceptance. Preserve failures. Gate requires substantive problem/insight/method/results and separate source blockquotes with omission notice.
+1. Commit/push media+bbox candidate, exact CI/server Parser16 and canonical deployment with rollback a73f; resume same confirmed version Claim bridge without new extraction. Preserve failures. Gate requires substantive problem/insight/method/results and separate source blockquotes with omission notice.
 2. Confirm/apply analysis, commit version and inspect source-backed Claims. Do not treat located evidence as scientific verification or task-success as useful analysis.
 3. Media runner review blockers have been fixed in development: dependency/TTS closure, UID input, queue/crash handling, exact runtime/attempt, installer rollback, capacity closure, immutable byte staging against retained-FD TOCTOU. High pilot GO, runner15/worker44 and root build pass; actual isolated runVideoOne now passed: offline Serena TTS, 12.25s H264/AAC MP4, full decode and five distinct scene frames. FFmpeg thread limits fixed the 128-PID failure; business/UI acceptance remains pending. Not enabled/deployed by this candidate.
 4. Real images/video generation and same-RO playback/audio/scientific acceptance still outstanding. CPU image installation remains user-paused. Existing D2NN demo is not this paper's mechanism or full-product evidence.
+
+- Same ordinary Chat6Pro continuation actually submitted and read on September8: paper UI first, existing image provider check, first image before five, then same-RO video. Do not lower scientific verification or treat runtime fixture as business acceptance. Global token-smart routing/handoff refined to reduce duplicated analysis and recover submitted-message state; share update token-smart-share-20260908-continuity.zip.
 
 ## Evidence / constraints
 - Plan: docs/plans/2026-09-07-literature-recovery-workflow-plan.md. Requirement baseline: docs/OpenScience_Kimi_Development_Spec.md; accepted product design: docs/specs/2026-09-05-integrated-research-product-design.md.

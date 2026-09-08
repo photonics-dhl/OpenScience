@@ -396,6 +396,7 @@ export {
 export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from './assets/reviewed-media-import';
 
 export { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
+export { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
 
 export { requireStoryboardBase } from './assets/presentation-asset';
 

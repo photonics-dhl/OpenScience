@@ -7,6 +7,8 @@ import { useTranslations } from 'next-intl';
 import type { PresentationAsset, PresentationClaim, VersionSummary } from '@/lib/api';
 import { presentationAssetContentUrl, type SceneImageRequest, type StoryboardRequest } from '@/lib/api';
 import { StoryboardPanel } from './StoryboardPanel';
+import { MechanismVideoPanel } from './MechanismVideoPanel';
+import type { PresentationVideoRequest } from '@/lib/api';
 
 type PresentationVersion = Pick<VersionSummary, 'versionId' | 'versionNo' | 'status'>;
 
@@ -30,6 +32,7 @@ export interface PresentationWorkbenchProps {
   onCreateClaim: (statement: string) => Promise<boolean>;
   onGenerate: (claimIds: string[]) => void;
   onGenerateSceneImage?: (claimIds: string[], request: SceneImageRequest) => void;
+  onGenerateVideo?: (claimIds: string[], request: PresentationVideoRequest) => void;
   onGenerateStoryboard?: (claimIds: string[], request: StoryboardRequest) => void;
   onResumeTask?: () => void;
   onRetryData?: () => void;
@@ -42,7 +45,7 @@ const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onGenerate, onGenerateStoryboard, onGenerateSceneImage, onResumeTask, onRetryData, onTransition, working = false, error = '',
+  onCreateClaim, onGenerate, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryData, onTransition, working = false, error = '',
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const [selected, setSelected] = useState<string[]>([]);
@@ -124,6 +127,7 @@ export function PresentationWorkbench({
                           <a className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={presentationAssetContentUrl(researchObjectId, version.versionId, assetItem.id)}>{t('openAsset')}</a>
                         )}
                       </div>
+                      {canWrite && onGenerateVideo && assetItem.storyboard ? <MechanismVideoPanel key={`${researchObjectId}:${version.versionId}:${assetItem.id}`} parent={assetItem} assets={assets} disabled={working || loading || loadFailed} onGenerate={onGenerateVideo} /> : null}
                       {(assetItem.kind === 'image' || assetItem.kind === 'video') && assetItem.status === 'draft' && canWrite ? <p className="m-0 px-5 py-3 text-xs text-os-muted-paper sm:px-6">{t('mediaAdminApproval')}</p> : null}
                       {assetItem.status === 'rejected' ? <p className="m-0 border-t border-os-rule-paper px-5 py-4 text-sm leading-6 text-os-muted-paper sm:px-6">{t(assetItem.kind === 'image' || assetItem.kind === 'video' ? 'rejectedMediaNote' : 'rejectedNote')}</p> : assetItem.status === 'draft' && canWrite && (assetItem.canTransition ?? (assetItem.kind !== 'image' && assetItem.kind !== 'video')) ? (
                         <div className="flex flex-wrap gap-3 border-t border-os-rule-paper px-5 py-4 sm:px-6">

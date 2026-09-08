@@ -1,4 +1,17 @@
 {
+  "mechanismVideo": {
+    "driver_signal": "强驱动与弱信号",
+    "tip_enhancement": "尖端局域场增强",
+    "emission_collection": "门控发射与收集",
+    "delay_scan": "扫描延迟与平均电流",
+    "field_reconstruction": "局域场与入射场",
+    "title": "制作光场采样机制动画",
+    "scope": "此动画适用于片上光场采样：双脉冲、尖端增强、电子收集、延迟扫描，以及局域场与入射场的区别。请确认五场已审分镜确实描述这一机制。",
+    "chooseImage": "选择已批准的配图",
+    "missingImage": "请先生成并批准这场配图",
+    "review": "将生成说明性动画与一次完整的 Serena 连续旁白，不代表测量数据或数值模拟。批准前须复核科学内容、发音和场景时间；估算时间不等于已验证对齐。",
+    "generate": "确认场景对应并生成视频草稿"
+  },
   "common": {
     "save": "保存",
     "cancel": "取消",
