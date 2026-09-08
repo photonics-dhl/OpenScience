@@ -61,4 +61,22 @@ describe('Hermes research run API contract', () => {
     const hidden = await owner.app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/hermes-runs/${created.json().run.id}`, cookies: owner.cookies });
     expect(hidden.statusCode).toBe(404);
   });
+
+  it('keeps the source-review generation grant fixed and rejects server-owned fields on create', async () => {
+    const { app, cookies } = await fixture();
+    const create = await app.inject({ method: 'POST', url: `/research-objects/${RO_ID}/hermes-runs`, cookies,
+      headers: { 'idempotency-key': 'source-review-run' }, payload: { ingestionTaskIds: [INGESTION_ID], runId: RO_ID } });
+    expect(create.statusCode).toBe(400);
+
+    const validCreate = await app.inject({ method: 'POST', url: `/research-objects/${RO_ID}/hermes-runs`, cookies,
+      headers: { 'idempotency-key': 'source-review-run' }, payload: { ingestionTaskIds: [INGESTION_ID] } });
+    const response = await app.inject({ method: 'POST',
+      url: `/research-objects/${RO_ID}/hermes-runs/${validCreate.json().run.id}/source-review`, cookies,
+      headers: { 'idempotency-key': 'review-key' }, payload: {
+        expectedVersion: 1, versionId: RO_ID,
+        generationGrant: { profile: 'arbitrary-profile', maxAgentTasks: 7 }, reviews: [],
+      } });
+    expect(response.statusCode).toBe(400);
+    expect(response.headers['cache-control']).toBe('private, no-store');
+  });
 });

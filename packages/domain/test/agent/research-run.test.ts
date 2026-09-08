@@ -58,9 +58,12 @@ function fixture(options: { role?: string; roStatus?: string; taskState?: string
         const run = db.runs.find((row) => where.id ? row.id === where.id : row.idempotencyKey === where.idempotencyKey);
         return run ? withRun(run) : null;
       },
-      findMany: async ({ where, take }: any) => db.runs.filter((run) => run.status === where.status).slice(0, take).map(withRun),
+      findMany: async ({ where, take }: any) => db.runs.filter((run) => Array.isArray(where.status?.in)
+        ? where.status.in.includes(run.status) : run.status === where.status).slice(0, take).map(withRun),
       create: async ({ data }: any) => {
-        const row = { id: `run-${++sequence}`, status: 'running', version: 1, error: null, lastReconciledAt: null, createdAt: now, updatedAt: now, ...data };
+        const row = { id: `run-${++sequence}`, status: 'running', version: 1, versionId: null, profile: null,
+          maxAgentTasks: null, sourceClaimIds: [], sourceReviewDigest: null, error: null, lastReconciledAt: null,
+          createdAt: now, updatedAt: now, ...data };
         db.runs.push(row);
         for (const step of data.steps.create) db.steps.push({ id: `step-${++sequence}`, status: 'waiting', createdAt: now, updatedAt: now, runId: row.id, ...step });
         return withRun(row);
@@ -72,6 +75,7 @@ function fixture(options: { role?: string; roStatus?: string; taskState?: string
       },
     },
     hermesResearchStep: {
+      count: async ({ where }: any) => db.steps.filter((step) => step.runId === where.runId && (!where.agentTaskId?.not || step.agentTaskId != null)).length,
       updateMany: async ({ where, data }: any) => {
         const rows = db.steps.filter((step) => step.runId === where.runId && (where.id === undefined || step.id === where.id));
         rows.forEach((step) => Object.assign(step, data, { updatedAt: now }));

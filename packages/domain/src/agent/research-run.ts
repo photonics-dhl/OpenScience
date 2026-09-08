@@ -39,7 +39,8 @@ export class HermesResearchRunError extends Error {
   }
 }
 
-export interface HermesResearchRunDeps extends IngestionDeps {}
+export interface HermesResearchRunDeps extends AgentDeps {}
+export interface HermesSourceReviewDeps extends HermesResearchRunDeps { storage: IngestionDeps['storage'] }
 
 export interface HermesResearchRunView {
   id: string;
@@ -219,7 +220,7 @@ export interface HermesSourceReviewInput {
 }
 
 export async function confirmHermesSourceReview(
-  deps: HermesResearchRunDeps,
+  deps: HermesSourceReviewDeps,
   input: HermesSourceReviewInput,
   ctx: AuditContext = {},
 ) {
@@ -331,7 +332,9 @@ async function createPresentationSteps(
   if (!run.versionId || run.profile !== ONCHIP_FIELD_SAMPLING_PROFILE || run.maxAgentTasks !== 7) {
     throw new Error('Hermes generation grant is invalid');
   }
-  const existingCount = await tx.hermesResearchStep.count({ where: { runId: run.id, agentTaskId: { not: null } } });
+  const existingCount = await tx.hermesResearchStep.count({
+    where: { runId: run.id, stage: { in: ['storyboard', 'scene_image', 'video'] }, agentTaskId: { not: null } },
+  });
   if (existingCount + inputs.length > run.maxAgentTasks) throw new Error('Hermes generation grant exhausted');
   const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
     userId: run.actorId, researchObjectId: run.researchObjectId, kind: 'visualization',

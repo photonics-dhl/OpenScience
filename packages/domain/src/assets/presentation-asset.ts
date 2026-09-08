@@ -1,4 +1,5 @@
 import { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, hasSceneImageProvenance, type SceneImageRequest } from './scene-image';
+import { isDeepStrictEqual } from 'node:util';
 import { parseStoryboardRequest, presentationStoryboardView, type StoryboardRequest, type StoryboardView } from './storyboard';
 import type { AuditContext } from '@openscience/observability';
 import type { PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
@@ -127,6 +128,20 @@ async function requirePlatformAdmin(deps: AgentDeps, userId: string): Promise<vo
   if (user?.platformRole !== 'platform_admin') throw new PresentationAssetError('ADMIN_REQUIRED', 'Generated image and video requests require a platform administrator');
 }
 
+async function hasHermesAssetReviewAuthority(
+  prisma: AgentDeps['prisma'] | Prisma.TransactionClient,
+  input: PresentationScope & { assetId: string; sourceClaimIds: string[] },
+): Promise<boolean> {
+  const step = await prisma.hermesResearchStep.findFirst({
+    where: { presentationAssetId: input.assetId, status: 'awaiting_approval', run: {
+      actorId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId,
+      profile: ONCHIP_FIELD_SAMPLING_PROFILE, maxAgentTasks: 7,
+      status: { in: ['awaiting_scene_images_review', 'awaiting_video_review'] },
+    } }, include: { run: true },
+  });
+  return Boolean(step && isDeepStrictEqual([...step.run.sourceClaimIds].sort(), [...input.sourceClaimIds].sort()));
+}
+
 export async function submitPresentationGeneration(deps: AgentDeps, input: {
   userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
@@ -167,6 +182,13 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
     researchObjectId: input.researchObjectId, versionId: input.versionId,
     claimId: { in: [...validClaimIds] }, extractionStatus: 'succeeded', contentHash: ONCHIP_SOURCE_CONTENT_HASH,
   }, select: { id: true } }));
+  const hermesReviewable = new Set<string>();
+  if (user?.platformRole !== 'platform_admin') {
+    for (const asset of assets.filter((candidate) => candidate.status === 'draft' && (candidate.kind === 'image' || candidate.kind === 'video'))) {
+      if (await hasHermesAssetReviewAuthority(deps.prisma, { ...input, assetId: asset.id,
+        sourceClaimIds: asset.sourceClaims.map((source) => source.claimId) })) hermesReviewable.add(asset.id);
+    }
+  }
   const sceneImagesByStoryboard = new Map<string, typeof assets>();
   for (const candidate of assets) {
     const scene = presentationSceneImageView(candidate);
@@ -213,7 +235,7 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
     canGenerateSceneImage: claimsValid && canWrite && user?.platformRole === 'platform_admin' && asset.status === 'approved' && !!presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
     canGenerateVideo,
     storyboard: presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
-    canTransition: sceneValid && videoValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin'),
+    canTransition: sceneValid && videoValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin' || hermesReviewable.has(asset.id)),
     id: asset.id,
     researchObjectId: asset.researchObjectId,
     versionId: asset.versionId,
@@ -267,7 +289,9 @@ export async function transitionPresentationAsset(deps: AgentDeps, input: {
     if (asset.label !== PRESENTATION_ASSET_LABEL) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation asset label is invalid');
     const rejectApprovedStoryboard = input.status === 'rejected' && asset.status === 'approved' && (asset.provenance as Prisma.JsonObject)?.subtype === 'sourced_storyboard';
     if (asset.status !== 'draft' && !rejectApprovedStoryboard) throw new PresentationAssetError('ILLEGAL_TRANSITION', 'Presentation asset status is terminal');
-    if (asset.kind === 'image' || asset.kind === 'video') await requirePlatformAdmin(transaction, input.userId);
+    if ((asset.kind === 'image' || asset.kind === 'video') && !(await hasHermesAssetReviewAuthority(tx, {
+      ...input, sourceClaimIds: (await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } })).map((link) => link.claimId),
+    }))) await requirePlatformAdmin(transaction, input.userId);
     const changed = await tx.presentationAsset.updateMany({ where: { id: asset.id, status: asset.status, updatedAt: input.expectedUpdatedAt }, data: { status: input.status } });
     if (changed.count !== 1) throw new PresentationAssetError('CONCURRENT_UPDATE', 'Presentation asset changed concurrently');
     let invalidatedSceneImageCount = 0;

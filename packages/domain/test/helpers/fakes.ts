@@ -995,7 +995,8 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       create: async ({ data, include }: any) => {
         if (db.hermesResearchRuns.some((run) => run.idempotencyKey === data.idempotencyKey)) throw p2002();
         const row = {
-          id: nextId(), status: 'running', version: 1, error: null, lastReconciledAt: null,
+          id: nextId(), status: 'running', version: 1, versionId: null, profile: null, maxAgentTasks: null,
+          sourceClaimIds: [], sourceReviewDigest: null, error: null, lastReconciledAt: null,
           createdAt: new Date(), updatedAt: new Date(), ...data,
         };
         delete row.steps;
@@ -1010,7 +1011,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return row ? hermesRunWithSteps(row, include) : null;
       },
       findMany: async ({ where, include, take }: any) => db.hermesResearchRuns
-        .filter((run) => where.status === undefined || run.status === where.status)
+        .filter((run) => where.status === undefined || (where.status?.in ? where.status.in.includes(run.status) : run.status === where.status))
         .slice(0, take ?? db.hermesResearchRuns.length)
         .map((run) => hermesRunWithSteps(run, include)),
       updateMany: async ({ where, data }: any) => {
@@ -1024,6 +1025,28 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     hermesResearchStep: {
+      count: async ({ where }: any) => db.hermesResearchSteps.filter((step) =>
+        (where.runId === undefined || step.runId === where.runId)
+        && (where.stage?.in === undefined || where.stage.in.includes(step.stage))
+        && (where.agentTaskId?.not !== null || step.agentTaskId != null)).length,
+      findFirst: async ({ where, include }: any) => {
+        const step = db.hermesResearchSteps.find((candidate) => {
+          const run = db.hermesResearchRuns.find((row) => row.id === candidate.runId);
+          const scoped = where.run;
+          return candidate.presentationAssetId === where.presentationAssetId && candidate.status === where.status && run
+            && run.actorId === scoped.actorId && run.researchObjectId === scoped.researchObjectId
+            && run.versionId === scoped.versionId && run.profile === scoped.profile && run.maxAgentTasks === scoped.maxAgentTasks
+            && scoped.status.in.includes(run.status);
+        }) ?? null;
+        return step && include?.run ? { ...step, run: db.hermesResearchRuns.find((run) => run.id === step.runId) } : step;
+      },
+      upsert: async ({ where, create, update }: any) => {
+        let row = db.hermesResearchSteps.find((step) => step.runId === where.runId_stage_ordinal.runId
+          && step.stage === where.runId_stage_ordinal.stage && step.ordinal === where.runId_stage_ordinal.ordinal);
+        if (row) Object.assign(row, update, { updatedAt: new Date() });
+        else { row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), error: null, ...create }; db.hermesResearchSteps.push(row); }
+        return row;
+      },
       updateMany: async ({ where, data }: any) => {
         const rows = db.hermesResearchSteps.filter((step) =>
           (where.id === undefined || step.id === where.id) && (where.runId === undefined || step.runId === where.runId));

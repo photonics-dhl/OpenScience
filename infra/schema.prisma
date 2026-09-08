@@ -518,6 +518,8 @@ model ResearchObject {
   ingestionBatches    IngestionBatch[]
   editorialSelections EditorialSelection[]
   claimNodes          ClaimNode[]
+  evidenceRecords     EvidenceRecord[]
+  presentationAssets  PresentationAsset[]
   hermesResearchRuns  HermesResearchRun[]
 
   @@unique([id, workspaceId], map: "research_objects_id_workspace_id_key")
@@ -1518,6 +1520,7 @@ model HermesResearchStep {
   @@unique([runId, stage, ordinal], map: "hermes_research_steps_run_stage_ordinal_key")
   @@index([ingestionTaskId])
   @@index([agentTaskId])
+  @@index([presentationAssetId])
   @@map("hermes_research_steps")
 }
 
