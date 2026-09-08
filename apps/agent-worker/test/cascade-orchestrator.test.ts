@@ -131,7 +131,7 @@ function baseContext(extractText: DocumentParser): CascadeContext {
 }
 
 describe('runParserCascade', () => {
-  it('retains native text fidelity review after targeted OCR while preserving healthy neighboring pages', async () => {
+  it('clears only the recovered native-page fidelity review while preserving healthy neighboring pages', async () => {
     const textMetadata = { name: 'pdf-parse-pdfjs-text-items', version: '2.4.5+pdfjs-dist.5.4.296' };
     const tesseract = { name: 'tesseract', version: '5.3.0' };
     const extractText = parser(textMetadata, () => ({
@@ -161,9 +161,9 @@ describe('runParserCascade', () => {
       externalProcessingEligible: false,
     });
 
-    expect(result.status).toBe('needs_review');
-    if (result.status !== 'needs_review') throw new Error('expected targeted OCR review');
-    expect(result.reasons).toEqual(['native PDF text fidelity requires review']);
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') throw new Error('expected targeted OCR recovery');
+    expect(result.warnings).not.toContain('partial_result');
     expect(result.sourceMap.pages[0]?.blocks[0]?.text).toBe('Healthy native page one has sufficient scientific evidence density');
     expect(result.sourceMap.pages[1]?.blocks[0]).toMatchObject({
       text: 'OCR recovered scientific relation with sufficient evidence',
@@ -203,6 +203,28 @@ describe('runParserCascade', () => {
       'native PDF text fidelity requires review',
     ]);
     expect(result.sourceMap.pages[1]?.blocks).toEqual([]);
+  });
+
+  it('keeps an unscoped native fidelity warning when the adapter does not identify a recoverable page', async () => {
+    const textMetadata = { name: 'pdf-parse-pdfjs-text-items', version: '2.4.5+pdfjs-dist.5.4.296' };
+    const extractText = parser(textMetadata, () => ({
+      status: 'succeeded',
+      sourceMap: map(textMetadata, [{
+        page: 1,
+        blocks: [block('native-1', 'Healthy native text remains, but the adapter reported unscoped loss', 1, textMetadata)],
+      }]),
+      warnings: ['partial_result'],
+    }));
+
+    const result = await runParserCascade(input(), {
+      adapters: { extractText },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: false, llmOcr: false },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('needs_review');
+    if (result.status !== 'needs_review') throw new Error('expected unscoped fidelity review');
+    expect(result.reasons).toEqual(['native PDF text fidelity requires review']);
   });
 
   it('does not let high-confidence OCR clear fidelity review when every native page failed closed', async () => {

@@ -7,6 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import {
   createTableCellSourceLocator,
   parseDocumentSourceMapReference,
+  parseSourceIdentityProposal,
   resolveSourceLocator,
   validateSourceLocator,
   type DocumentSourceMap,
@@ -581,10 +582,14 @@ export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | '
   }
   const hasEvidenceLocation = value.evidenceLocation !== undefined;
   const hasEvidenceSegments = value.evidenceSegments !== undefined;
+  const hasMissingDetails = value.missingDetails !== undefined;
+  const hasSourceIdentity = value.sourceIdentity !== undefined;
   const expectedKeys = ['core', 'evidence', 'needsMoreInformation',
     ...(hasSourceMapRef ? ['sourceMapRef'] : []),
     ...(hasEvidenceLocation ? ['evidenceLocation'] : []),
-    ...(hasEvidenceSegments ? ['evidenceSegments'] : [])];
+    ...(hasEvidenceSegments ? ['evidenceSegments'] : []),
+    ...(hasMissingDetails ? ['missingDetails'] : []),
+    ...(hasSourceIdentity ? ['sourceIdentity'] : [])];
   if (!hasExactKeys(value, expectedKeys)
     || !isRecord(value.core) || !isRecord(value.evidence)
     || !Array.isArray(value.needsMoreInformation)) {
@@ -594,6 +599,19 @@ export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | '
   const evidenceByField = value.evidence;
   const evidenceLocations = value.evidenceLocation as Record<string, unknown> | undefined;
   const needsMoreInformation = value.needsMoreInformation;
+  const missingDetails = value.missingDetails;
+  let sourceIdentityValid = !hasSourceIdentity;
+  if (hasSourceIdentity && sourceMapRef) {
+    try {
+      parseSourceIdentityProposal(value.sourceIdentity, {
+        artifactId: sourceMapRef.artifactId,
+        contentHash: sourceMapRef.contentHash,
+      });
+      sourceIdentityValid = true;
+    } catch {
+      sourceIdentityValid = false;
+    }
+  }
   if (!hasExactKeys(core, ['schemaVersion', ...SDF_FIELDS])
     || core.schemaVersion !== SDF_CORE_VERSION
     || SDF_FIELDS.some((field) => typeof core[field] !== 'string')
@@ -613,6 +631,14 @@ export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | '
               || (location.sourceLocator as Record<string, unknown>).contentHash !== sourceMapRef.contentHash));
       })))
     || (hasEvidenceSegments && (!sourceMapRef || !isEvidenceSegmentBundle(value.evidenceSegments, sourceMapRef)))
+    || (hasMissingDetails && (!isRecord(missingDetails)
+      || !hasExactKeys(missingDetails, needsMoreInformation)
+      || needsMoreInformation.some((field) => {
+        const detail = missingDetails[field];
+        return !isRecord(detail) || !hasExactKeys(detail, ['cause'])
+          || !['not_selected', 'model_no_supported_summary', 'validation_rejected', 'undetermined'].includes(String(detail.cause));
+      })))
+    || !sourceIdentityValid
     || new Set(needsMoreInformation).size !== needsMoreInformation.length
     || needsMoreInformation.some((field) => !SDF_FIELDS.includes(field))) {
     throw new Error('invalid sdf.extract handler result');

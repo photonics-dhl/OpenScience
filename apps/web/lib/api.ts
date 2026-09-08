@@ -1443,6 +1443,25 @@ export interface IngestionTaskDetail {
   version: number;
 }
 
+export type SourceIdentityField = 'title' | 'authors' | 'doi' | 'articleLicense';
+export interface SourceIdentitySegment {
+  quote: string;
+  sourceLocator: { artifactId: string; contentHash: string; page: number; blockId: string;
+    boundingBox: { x: number; y: number; width: number; height: number }; charRange: { start: number; end: number } };
+}
+export interface SourceIdentityProposalItem {
+  state: 'proposed' | 'needs_review' | 'not_extracted';
+  value: string | string[];
+  evidenceSegments: SourceIdentitySegment[];
+}
+export type SourceIdentityProposal = { schemaVersion: '0.1.0' } & Record<SourceIdentityField, SourceIdentityProposalItem>;
+export interface SourceIdentitySnapshotItem {
+  state: 'recorded' | 'needs_review' | 'not_recorded';
+  value: string | string[];
+  evidenceSegments: SourceIdentitySegment[];
+}
+export type SourceIdentitySnapshot = { schemaVersion: '0.1.0'; reviewed: true } & Record<SourceIdentityField, SourceIdentitySnapshotItem>;
+
 export interface IngestionConfirmation {
   commitId: string;
   versionId: string;
@@ -1450,6 +1469,7 @@ export interface IngestionConfirmation {
   version: number;
   evidenceStatus: 'needs_review';
   missingFields: string[];
+  sourceIdentity?: SourceIdentitySnapshot;
 }
 
 export interface ResearchIngestion {
@@ -1533,6 +1553,6 @@ export async function getIngestionTask(taskId: string): Promise<IngestionTaskDet
   return apiRequest(`/api/ingestion/tasks/${taskId}`);
 }
 
-export async function confirmIngestionTask(taskId: string, input: { version: number; core: SdfCore }): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore }; confirmation: IngestionConfirmation }> {
+export async function confirmIngestionTask(taskId: string, input: { version: number; core: SdfCore; sourceIdentityReview?: { token: string; acceptedFields: SourceIdentityField[] } }): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore }; confirmation: IngestionConfirmation }> {
   return apiRequest(`/api/ingestion/${taskId}/confirm`, { method: 'POST', body: JSON.stringify(input) });
 }

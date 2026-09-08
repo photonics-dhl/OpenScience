@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-08 +08）：** R1九篇论文修复中；branch codex/r1-record-hardening，base c1c7fa4b；实测production88018512，rollback1ba694ae。旧1ba审计发现空图/空确认等缺陷，不代表阶段验收通过。
+> **CURRENT source/deployment anchor（2026-09-08 +08）：** R1九篇论文修复中；branch codex/r1-record-hardening，base c1c7fa4b；实测production88018512，rollbackc1c7fa4b。旧1ba审计发现空图/空确认等缺陷，不代表阶段验收通过。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -17,7 +17,10 @@
 | `docs/specs/2026-09-07-open-research-publication-prd.md` | 开放研究出版物 PRD v1.1：四阶段建设，每 RO AI 友好 API、固定版本/权限合同及独立客户端验收 | 用户授权实施；本轮 M1/M2 优先，不代表已部署 |
 | `infra/migrations/20260907010000_frozen_research_record/` / `packages/domain/src/commit/{research-record-snapshot,research-record}.ts` / `apps/api/src/routes/{research-record,research-record-schema}.ts` | 提交时冻结记录、固定版本读取/来源/JSON 导出、机器 Schema/OpenAPI；nullable 迁移 37 与回滚 SQL | CANDIDATE；开发与专项验证中，尚未部署 |
 | `apps/web/components/research/VersionRecord.tsx` / `apps/web/lib/research-materials.ts` | 固定版本预览、材料恢复与并发附件保护 | UI 候选 99793fd 已复审；固定 API 接入中 |
-| `docs/specs/2026-09-07-research-record-api.md` | 每 RO 固定研究记录 API：权限、引用、来源、JSON 导出与机器合同 | CANDIDATE；开发验证中，尚未部署 |
+| `docs/specs/2026-09-07-research-record-api.md` | 每 RO 固定研究记录 API：权限、引用、来源、JSON 导出与1.0/1.1机器合同 | 1.0已部署88018512；1.1来源身份候选待ECS验收 |
+| `packages/domain/src/ingestion/source-identity.ts` / `packages/domain/test/source-identity.test.ts` | 来源身份候选、逐项确认与固定快照契约 | Stage2候选，服务器验证待完成 |
+| `apps/web/components/hermes/HermesSourceIdentityReview.tsx` / `apps/web/test/source-identity-review.test.tsx` | 原文身份逐项来源核对 | Stage2候选 |
+| `apps/web/components/hermes/HermesMissingCause.tsx` / `apps/web/test/hermes-missing-cause.test.tsx` | 提取缺失归因与未知原因保护 | Stage2候选 |
 | `apps/agent-worker/src/parsers/native-pdf-text-items.ts` / `apps/agent-worker/src/parsers/cascade-orchestrator.ts` / `apps/agent-worker/src/parsers/text-extractor.ts` | 保留科学文本的 PDF 几何与 CMSY 否定符恢复，无法证明保真时保持待核查 | 已部署 17eb209；本候选合入，复核中 |
 | `apps/agent-worker/test/extraction-confirmation.test.ts` | 真实 extractHandler → 确认 → 冻结 API 的组合回归；位置歧义与错误身份不能升级为确定证据 | 最终修复 f199b4fd；14组合回归通过，复审中 |
 | `docs/plans/2026-09-07-open-research-publication-plan.md` | 原子导入确认、材料一致性、来源核查和每 RO 只读 API；独立审查与精确 SHA 发布 | IN PROGRESS；codex/open-research-publication，生产基线 5e4b4d4 / rollback 8e4ecb2 |

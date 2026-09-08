@@ -61,7 +61,7 @@ otherwise a public source request fails closed.
 
 The machine schema is authoritative for field types. A response includes:
 
-- `schemaVersion: "1.0.0"`, RO/Version UUIDs, version number and fixed citation.
+- `schemaVersion: "1.0.0"` for existing records, or `"1.1.0"` for a new record with explicitly reviewed source identity; RO/Version UUIDs, version number and fixed citation.
 - Full immutable `sdf` core JSON, retaining its own schemaVersion and extension keys.
 - Frozen title and timestamp, separate `platformAuthors`, original-author/DOI
   missing states, and available RO/version license assignments. Platform authors
@@ -77,6 +77,31 @@ The machine schema is authoritative for field types. A response includes:
   with no implicit page, cap or truncation. Claims/Evidence sort by ID; manifest by
   logicalPath; platform authors by recorded author order (ID tie-break); licenses by
   type then identifier. Do not attempt cursor pagination on these routes.
+
+Version 1.1 adds `identity.source` with its own `schemaVersion: "0.1.0"`,
+`reviewed: true`, and separate `title`, `authors`, `doi`, `articleLicense` items.
+Each item includes `state` (`recorded`, `needs_review`, `not_recorded`), `value`,
+and exact quoted `evidenceSegments` with artifact/hash/page/block locators.
+Legacy `originalAuthors` / `originalDoi` fields remain unchanged; new consumers
+read `identity.source`. Source licensing is distinct from platform licensing.
+Recording metadata never marks scientific Claims or Evidence as verified.
+
+Ingestion detail provides `task.result.sourceIdentity` and `sourceIdentityToken`.
+Confirmation requires `sourceIdentityReview: {token, acceptedFields}` when a
+proposal exists. Fields are unchecked initially; an empty acceptance list records
+that review occurred while leaving proposals `needs_review`. Only `proposed`
+fields can be accepted, and the server revalidates exact source segments.
+The confirmation response includes the same frozen `sourceIdentity` projection.
+Ordinary commits inherit source identity from the branch predecessor; merges use
+the source tip. A new import with no identity proposal clears source identity
+for that new version instead of borrowing another paper's metadata. Existing
+fixed records are never upgraded or backfilled by reads or later imports.
+
+Extraction `missingDetails[field].cause` distinguishes `not_selected`,
+`model_no_supported_summary`, `validation_rejected`, and `undetermined`.
+These are extraction diagnostics, not claims that a paper lacks information.
+The fixed record retains empty SDF fields honestly; task diagnostics remain
+available with the original ingestion task.
 
 `source.state: "recorded"` means a source reference was captured, not that storage
 is currently reachable or the Evidence is verified. Runtime retrieval may return

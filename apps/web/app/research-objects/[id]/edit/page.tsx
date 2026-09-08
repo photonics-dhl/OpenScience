@@ -121,6 +121,11 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoredExtraction = useRef(false);
   const serverSnapshot = useRef<{ core: SdfCore; version: number } | null>(null);
+  const latestCore = useRef(state.core);
+  const latestArtifacts = useRef(artifacts);
+  const mutationRequestInFlight = useRef(false);
+  latestCore.current = state.core;
+  latestArtifacts.current = artifacts;
 
   // 加载 RO + SDF + 版本
   useEffect(() => {
@@ -150,6 +155,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         if (ingestionTaskId && !restored.ingestion.tasks.some((task) => task.id === ingestionTaskId && task.confirmation)) {
           throw new Error(locale === 'zh' ? '这份材料尚无确认版本，请到 Hermes 核查。' : 'This material has no confirmed version. Review it in Hermes.');
         }
+        latestArtifacts.current = restored.artifacts;
         setArtifacts(restored.artifacts);
         if (!cancelled) {
           setVersions(vs.versions ?? []);
@@ -276,6 +282,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   useEffect(() => () => hermesStage?.setRouteState('idle'), [hermesStage]);
 
   function editField(field: FieldKey, value: string) {
+    if (interactionBlocked || mutationRequestInFlight.current) return;
+    latestCore.current = { ...latestCore.current, [field]: value };
     dispatch({ type: 'edit_field', field, value });
   }
 
@@ -293,21 +301,23 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   function applySuggestion(id: string, value: string) {
-    if (interactionBlocked) return;
+    if (interactionBlocked || mutationRequestInFlight.current) return;
     const revised = suggestionReducer(suggestions, { type: 'revise', id, suggestion: value });
     const applied = suggestionReducer(revised, { type: 'apply', id });
     dispatchSuggestions({ type: 'revise', id, suggestion: value });
     dispatchSuggestions({ type: 'apply', id });
-    const next = applySuggestionsToCore(state.core, applied);
+    const currentCore = latestCore.current;
+    const next = applySuggestionsToCore(currentCore, applied);
     for (const [k, v] of Object.entries(next) as [FieldKey, string][]) {
-      if (v !== state.core[k]) dispatch({ type: 'edit_field', field: k, value: v });
+      if (v !== currentCore[k]) dispatch({ type: 'edit_field', field: k, value: v });
     }
+    latestCore.current = next;
     saveDraft(roId, next);
     advanceReview(id);
   }
 
   function dismissSuggestion(id: string) {
-    if (interactionBlocked) return;
+    if (interactionBlocked || mutationRequestInFlight.current) return;
     const dismissed = suggestionReducer(suggestions, { type: 'dismiss', id });
     dispatchSuggestions({ type: 'dismiss', id });
     const field = dismissed.find((item) => item.id === id)?.field;
@@ -319,7 +329,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   function acknowledgeMissing(field: SdfField) {
-    if (interactionBlocked) return;
+    if (interactionBlocked || mutationRequestInFlight.current) return;
     const remaining = missingFields.filter((candidate) => candidate !== field);
     setMissingFields(remaining);
     persistReview((checkpoint) => ({
@@ -337,6 +347,9 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   function updateArtifacts(next: ArtifactReference[]) {
+    // A previously started upload may finish while Save/Commit is in flight.
+    // Keep the ref current so a later 409 captures that artifact as local input.
+    latestArtifacts.current = next;
     setArtifacts(next);
     setConflict((current) => current?.operation === 'commit' ? {
       ...current,
@@ -349,13 +362,15 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   async function captureConflict(operation: 'save' | 'commit') {
     const latest = await getResearchObject(roId);
     const serverCore = latest.researchObject.sdf?.core ?? emptyCore();
-    const serverArtifacts = operation === 'commit' ? (await loadResearchMaterials(roId)).artifacts : artifacts;
+    const serverArtifacts = operation === 'commit' ? (await loadResearchMaterials(roId)).artifacts : latestArtifacts.current;
+    const localCore = latestCore.current;
+    const localArtifacts = latestArtifacts.current;
     setConflict({
-      ...createCoreConflict(state.core, serverCore, latest.researchObject.version),
+      ...createCoreConflict(localCore, serverCore, latest.researchObject.version),
       operation,
-      localArtifacts: artifacts,
+      localArtifacts,
       serverArtifacts,
-      artifactsDiffer: operation === 'commit' && !artifactsEqual(artifacts, serverArtifacts),
+      artifactsDiffer: operation === 'commit' && !artifactsEqual(localArtifacts, serverArtifacts),
     });
     setSaveError(null);
     setErrorMsg(null);
@@ -376,6 +391,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     const nextArtifacts = conflict.operation === 'commit' && conflict.artifactsDiffer
       ? (conflict.artifactChoice === 'mine' ? conflict.localArtifacts : conflict.serverArtifacts)
       : artifacts;
+    latestCore.current = resolved.core;
+    latestArtifacts.current = nextArtifacts;
     dispatch({ type: 'replace', ...resolved });
     setArtifacts(nextArtifacts);
     serverSnapshot.current = { core: conflict.serverCore, version: conflict.serverVersion };
@@ -391,7 +408,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
   /** P1D-3：AI 提取（§9.3 异步长任务 + §18.3 轮询进度）。提取只产出建议，不写 SDF（§9.2）。 */
   async function handleExtract() {
-    if (interactionBlocked) return;
+    if (interactionBlocked || mutationRequestInFlight.current) return;
     setExtracting(true);
     setExtractProgress(0);
     setMissingFields([]);
@@ -448,6 +465,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
   /** 保存到 SDF（乐观锁，§16）。 */
   async function handleSave() {
+    if (interactionBlocked || mutationRequestInFlight.current) return;
+    mutationRequestInFlight.current = true;
     setSaving(true);
     setSaveError(null);
     setErrorMsg(null);
@@ -472,12 +491,15 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       setSaveError(message);
       setErrorMsg(message);
     } finally {
+      mutationRequestInFlight.current = false;
       setSaving(false);
     }
   }
 
   /** 创建提交（P1B-4，版本快照）。 */
   async function handleCommit() {
+    if (interactionBlocked || mutationRequestInFlight.current) return;
+    mutationRequestInFlight.current = true;
     setCommitting(true);
     setErrorMsg(null);
     try {
@@ -505,6 +527,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       }
       setErrorMsg(e instanceof Error ? e.message : String(e));
     } finally {
+      mutationRequestInFlight.current = false;
       setCommitting(false);
     }
   }
@@ -512,7 +535,9 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   function restoreDraft() {
     const server = serverSnapshot.current;
     if (pendingDraft && server) {
-      dispatch({ type: 'replace', ...resolveDraftChoice(server, pendingDraft, 'restore') });
+      const restored = resolveDraftChoice(server, pendingDraft, 'restore');
+      latestCore.current = restored.core;
+      dispatch({ type: 'replace', ...restored });
     }
     setPendingDraft(null);
     setDraftPrompt(false);
@@ -521,7 +546,11 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   function discardDraft() {
     clearDraft(roId);
     const server = serverSnapshot.current;
-    if (server && pendingDraft) dispatch({ type: 'replace', ...resolveDraftChoice(server, pendingDraft, 'discard') });
+    if (server && pendingDraft) {
+      const discarded = resolveDraftChoice(server, pendingDraft, 'discard');
+      latestCore.current = discarded.core;
+      dispatch({ type: 'replace', ...discarded });
+    }
     setPendingDraft(null);
     setDraftPrompt(false);
   }
@@ -531,7 +560,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   const saveState = saveError ? 'error' : saving ? 'saving' : state.dirty ? 'dirty' : 'saved';
-  const interactionBlocked = draftPrompt || !!conflict;
+  const interactionBlocked = draftPrompt || !!conflict || saving || committing;
   const fieldForTarget: Record<HermesDraftTarget, FieldKey> = {
     'sdf-problem': 'problem',
     'sdf-insight': 'insight',

@@ -2,9 +2,12 @@ import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
 import {
   createBlockSourceLocator,
   parseDocumentSourceMap,
+  parseSourceIdentityProposal,
   resolveSourceLocator,
   validateSourceLocator,
   type DocumentSourceMap,
+  type SourceIdentityProposal,
+  type SourceIdentityProposalItem,
   type SourceLocator,
 } from '@openscience/domain';
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
@@ -33,10 +36,16 @@ interface ExtractedProposal {
   fields: Record<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>;
 }
 
+type ExtractionMissingCause = 'not_selected' | 'model_no_supported_summary' | 'validation_rejected' | 'undetermined';
+
 export interface ExtractionResult extends Record<string, unknown> {
   core: ExtractedCore;
   evidence: Record<(typeof SDF_CORE_FIELDS)[number], { quote: string; locator: string }>;
   needsMoreInformation: Array<(typeof SDF_CORE_FIELDS)[number]>;
+  missingDetails?: Partial<Record<(typeof SDF_CORE_FIELDS)[number], {
+    cause: ExtractionMissingCause;
+  }>>;
+  sourceIdentity?: SourceIdentityProposal;
   /** Present only when trusted canonical parser context was supplied outside the user payload. */
   evidenceLocation?: Record<(typeof SDF_CORE_FIELDS)[number], EvidenceLocation>;
   /** Exact canonical block segments selected by the model and materialized by the worker. */
@@ -84,9 +93,14 @@ const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown): value
 };
 
 const KEY_EVIDENCE = /limitations?|constraints?|uncertaint|data availability|code availability|reproduc|materials? and methods?|experimental setup|results?|discussion|局限|限制|不确定|数据可用|代码可用|复现|方法|结果/gi;
+const AVAILABILITY_HEADING = /^(?:(?:data|code|data and code) availability|availability of data(?: and materials)?|availability of data and code)$/iu;
+const AVAILABILITY_STOP_HEADING = /^(?:supplementary materials?|references?|acknowledg(?:e)?ments?|funding|author contributions?|competing interests?|conflicts? of interest)$/iu;
+const LIMITATION_EVIDENCE = /\b(?:limitations?|constraints?|uncertaint(?:y|ies)|assum(?:e|ed|es|ing|ption|ptions)|estimat(?:e|ed|es|ing|ion|ions)|sensitivity|not available|remain(?:s|ed)? un(?:known|verified)|future work)\b|局限|限制|不确定|假设|估算|敏感性/iu;
 const MAX_EXCERPT_CHARS = 24_000;
 const MAX_EVIDENCE_SEGMENTS = 32;
 const MAX_FIELD_EVIDENCE_CHARS = 8_000;
+const MAX_AVAILABILITY_CHARS = 3_000;
+const MAX_LIMITATION_CHARS = 5_000;
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
 export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
@@ -262,6 +276,61 @@ interface PromptCanonicalBlock extends CanonicalTextBlock {
   text: string;
 }
 
+interface CanonicalAvailabilityWindow {
+  headingOrdinals: number[];
+  contentOrdinals: number[];
+  complete: boolean;
+}
+
+function normalizedSelectionText(value: string): string {
+  return value.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLocaleLowerCase('en-US');
+}
+
+function headingSpanLength(
+  blocks: PromptCanonicalBlock[],
+  start: number,
+  pattern: RegExp,
+): number {
+  let joined = '';
+  for (let length = 1; length <= 4 && start + length <= blocks.length; length += 1) {
+    joined = normalizedSelectionText(`${joined} ${blocks[start + length - 1]!.text}`);
+    pattern.lastIndex = 0;
+    if (pattern.test(joined)) return length;
+  }
+  return 0;
+}
+
+function canonicalAvailabilityWindows(blocks: PromptCanonicalBlock[]): CanonicalAvailabilityWindow[] {
+  const windows: CanonicalAvailabilityWindow[] = [];
+  for (let index = 0; index < blocks.length;) {
+    const headingLength = headingSpanLength(blocks, index, AVAILABILITY_HEADING);
+    if (headingLength === 0) {
+      index += 1;
+      continue;
+    }
+    const headingOrdinals = blocks.slice(index, index + headingLength).map(({ ordinal }) => ordinal);
+    const contentOrdinals: number[] = [];
+    let characters = 0;
+    let complete = true;
+    let cursor = index + headingLength;
+    while (cursor < blocks.length) {
+      if (headingSpanLength(blocks, cursor, AVAILABILITY_STOP_HEADING) > 0
+        || headingSpanLength(blocks, cursor, AVAILABILITY_HEADING) > 0) break;
+      const block = blocks[cursor]!;
+      if (characters + block.text.length > MAX_AVAILABILITY_CHARS) {
+        complete = false;
+        break;
+      }
+      contentOrdinals.push(block.ordinal);
+      characters += block.text.length;
+      cursor += 1;
+    }
+    windows.push({ headingOrdinals, contentOrdinals, complete });
+    index = Math.max(cursor, index + headingLength);
+  }
+  return windows;
+}
+
 function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[] {
   const blocks: CanonicalTextBlock[] = [];
   let cursor = 0;
@@ -301,6 +370,45 @@ function selectCanonicalBlocks(sourceMap: DocumentSourceMap): PromptCanonicalBlo
     remaining -= cost;
     return true;
   };
+  // Availability statements are short, source-defined reproducibility facts.
+  // Reserve them before repeated Methods/Results headings can consume the
+  // middle budget. Exact source blocks and locators remain unchanged.
+  let availabilitySpent = 0;
+  for (const window of canonicalAvailabilityWindows(blocks)) {
+    const ordinals = [...window.headingOrdinals, ...window.contentOrdinals];
+    const first = ordinals[0]!;
+    const last = ordinals.at(-1)!;
+    const before = remaining;
+    if (addRange(first, last)) availabilitySpent += before - remaining;
+    if (availabilitySpent >= MAX_AVAILABILITY_CHARS) break;
+  }
+
+  // Give explicit limitations, assumptions, estimates, and uncertainty
+  // contexts their own bounded allowance. Rank explicit headings first, then
+  // restore document order in the final prompt.
+  const limitationCandidates = blocks
+    .filter((block) => LIMITATION_EVIDENCE.test(normalizedSelectionText(block.text)))
+    .map((block) => {
+      const text = normalizedSelectionText(block.text);
+      return {
+        block,
+        priority: /^(?:limitations?|constraints?|uncertaint(?:y|ies)|局限|限制|不确定)$/iu.test(text)
+          ? 0
+          : /\b(?:limitations?|constraints?|uncertaint(?:y|ies)|not available|remain(?:s|ed)? un(?:known|verified))\b|局限|限制|不确定/iu.test(text)
+            ? 1
+            : 2,
+      };
+    })
+    .sort((left, right) => left.priority - right.priority || left.block.ordinal - right.block.ordinal);
+  let limitationSpent = 0;
+  for (const { block } of limitationCandidates) {
+    if (limitationSpent >= MAX_LIMITATION_CHARS) break;
+    const before = remaining;
+    const start = Math.max(0, block.ordinal - 2);
+    const end = Math.min(blocks.length - 1, block.ordinal + 2);
+    if (addRange(start, end)) limitationSpent += before - remaining;
+  }
+
   let headCost = 0;
   for (let index = 0; index < blocks.length; index += 1) {
     const cost = renderedLength(blocks[index]!);
@@ -344,10 +452,12 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
   guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: (value: unknown) => string | undefined;
   validationDiagnostic: (value: unknown) => string | undefined;
+  validationRejectedFields: () => ReadonlySet<string>;
   mergeRetained: () => ExtractedProposal;
 } {
   const allowed = new Map(blocks.map((block) => [block.promptId, block]));
   const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
+  const rejectedFields = new Set<string>();
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
   const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason } => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return { reason: 'malformed_item' };
@@ -390,10 +500,17 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     const fields = proposal.fields as Record<string, unknown>;
     for (const field of SDF_CORE_FIELDS) {
       const previous = retained.get(field);
-      if (previous && !previous.needsMoreInformation) continue;
+      // Every valid field, including an explicit missing field, is final for
+      // this response. Repair prompts request only invalid fields; allowing a
+      // later attempt to rewrite a retained missing field made that contract
+      // contradictory and could exhaust retries on otherwise valid output.
+      if (previous) continue;
       const validation = validateField(fields[field]);
       if (validation.candidate) retained.set(field, validation.candidate);
-      else if (!previous) invalidFields.set(field, validation.reason!);
+      else if (!previous) {
+        invalidFields.set(field, validation.reason!);
+        rejectedFields.add(field);
+      }
     }
     return invalidFields.size === 0;
   };
@@ -415,6 +532,7 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     validationDiagnostic: () => invalidFields.size === 0
       ? undefined
       : [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(','),
+    validationRejectedFields: () => rejectedFields,
     mergeRetained: () => ({
       schemaVersion: SDF_CORE_VERSION,
       fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
@@ -426,10 +544,291 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
   };
 }
 
+function fullBlockSegment(sourceMap: DocumentSourceMap, block: PromptCanonicalBlock) {
+  return {
+    quote: block.text,
+    sourceLocator: validateSourceLocator({
+      artifactId: sourceMap.artifactId,
+      contentHash: sourceMap.contentHash,
+      blockId: block.id,
+      page: block.page,
+      boundingBox: block.boundingBox,
+      charRange: { start: block.originalStart, end: block.originalStart + block.text.length },
+    }),
+  };
+}
+
+function emptyIdentityItem(field: 'authors' | 'scalar'): SourceIdentityProposalItem {
+  return { state: 'not_extracted', value: field === 'authors' ? [] : '', evidenceSegments: [] };
+}
+
+type IdentityField = 'title' | 'authors' | 'doi' | 'articleLicense';
+
+function reviewIdentityItem(field: IdentityField): SourceIdentityProposalItem {
+  return { state: 'needs_review', value: field === 'authors' ? [] : '', evidenceSegments: [] };
+}
+
+function boundedIdentitySegments(sourceMap: DocumentSourceMap, blocks: PromptCanonicalBlock[]) {
+  if (blocks.length === 0 || blocks.length > MAX_EVIDENCE_SEGMENTS
+    || blocks.some((block) => block.text.length > MAX_FIELD_EVIDENCE_CHARS)
+    || blocks.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
+    return undefined;
+  }
+  try {
+    return blocks.map((block) => fullBlockSegment(sourceMap, block));
+  } catch {
+    return undefined;
+  }
+}
+
+function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdentityProposal {
+  const pageNumber = sourceMap.pages[0]?.page;
+  const blocks = promptCanonicalBlocks(sourceMap).filter((block) => block.page === pageNumber);
+  const proposal = {
+    schemaVersion: '0.1.0',
+    title: emptyIdentityItem('scalar'),
+    authors: emptyIdentityItem('authors'),
+    doi: emptyIdentityItem('scalar'),
+    articleLicense: emptyIdentityItem('scalar'),
+  } as SourceIdentityProposal;
+  const assign = (field: IdentityField, item: SourceIdentityProposalItem) => {
+    try {
+      const parsed = parseSourceIdentityProposal({ ...proposal, [field]: item }, {
+        artifactId: sourceMap.artifactId,
+        contentHash: sourceMap.contentHash,
+      });
+      proposal[field] = parsed[field];
+    } catch {
+      // Metadata is supplemental to SDF extraction. Preserve a review state
+      // rather than letting an oversized or malformed metadata candidate fail
+      // the six scientific fields.
+      proposal[field] = reviewIdentityItem(field);
+    }
+  };
+
+  // The paper DOI is expected in first-page article metadata. Restricting the
+  // search to page 1 avoids accidentally selecting a DOI from References.
+  const doiCandidates = new Map<string, PromptCanonicalBlock>();
+  for (const block of blocks) {
+    for (const match of block.text.matchAll(/10\.\d{4,9}\/[^\s|<>]+/giu)) {
+      const value = match[0].replace(/[),.;:\]}]+$/u, '').toLocaleLowerCase('en-US');
+      if (value) doiCandidates.set(value, block);
+    }
+  }
+  if (doiCandidates.size === 1) {
+    const [value, block] = [...doiCandidates][0]!;
+    const evidenceSegments = boundedIdentitySegments(sourceMap, [block]);
+    assign('doi', evidenceSegments
+      ? { state: 'proposed', value, evidenceSegments }
+      : reviewIdentityItem('doi'));
+  } else if (doiCandidates.size > 1) {
+    const seen = new Set<string>();
+    const candidateBlocks = [...doiCandidates.values()].filter((block) => {
+      if (seen.has(block.id)) return false;
+      seen.add(block.id);
+      return true;
+    });
+    const evidenceSegments = boundedIdentitySegments(sourceMap, candidateBlocks);
+    assign('doi', evidenceSegments
+      ? { state: 'needs_review', value: '', evidenceSegments }
+      : reviewIdentityItem('doi'));
+  }
+
+  const licenseIndex = blocks.findIndex((block) => /\bcc\s*by\s*4\.0\b/iu.test(block.text));
+  if (licenseIndex >= 0) {
+    const context = blocks.slice(Math.max(0, licenseIndex - 2), licenseIndex + 1);
+    if (/creative\s+commons\s+attribution\s+license[\s\S]*cc\s*by\s*4\.0/iu
+      .test(context.map(({ text }) => text).join(' '))) {
+      const evidenceSegments = boundedIdentitySegments(sourceMap, context);
+      assign('articleLicense', evidenceSegments
+        ? { state: 'proposed', value: 'CC-BY-4.0', evidenceSegments }
+        : reviewIdentityItem('articleLicense'));
+    }
+  }
+
+  const articleTypeIndex = blocks.findIndex((block) => /^(?:research|review) article$|^(?:perspective|report)$/iu
+    .test(normalizedSelectionText(block.text)));
+  if (articleTypeIndex >= 0 && blocks[articleTypeIndex + 1]) {
+    const titleHeight = blocks[articleTypeIndex + 1]!.boundingBox.height;
+    let authorStart = -1;
+    for (let index = articleTypeIndex + 1; index < Math.min(blocks.length, articleTypeIndex + 24); index += 1) {
+      const block = blocks[index]!;
+      const normalized = normalizedSelectionText(block.text);
+      const numericOrPunctuation = /^[\d,.*†‡\s]+$/u.test(normalized);
+      if (!numericOrPunctuation && block.boundingBox.height < titleHeight * 0.8) {
+        authorStart = index;
+        break;
+      }
+    }
+    if (authorStart > articleTypeIndex + 1) {
+      const titleBlocks = blocks.slice(articleTypeIndex + 1, authorStart);
+      const superscriptDigits: Record<string, string> = {
+        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+      };
+      const subscriptDigits: Record<string, string> = {
+        '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+        '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+      };
+      let ambiguousScript = false;
+      const titleValue = titleBlocks.map((block, blockIndex) => {
+        const text = block.text.trim();
+        if (!/^\d+$/u.test(text) || block.boundingBox.height >= titleHeight * 0.8) return text;
+        const neighboringLargeBlocks = titleBlocks.filter((candidate, candidateIndex) => (
+          Math.abs(candidateIndex - blockIndex) <= 2
+          && candidate.boundingBox.height >= titleHeight * 0.8
+          && Math.abs((candidate.boundingBox.y + candidate.boundingBox.height / 2)
+            - (block.boundingBox.y + block.boundingBox.height / 2)) <= titleHeight
+        ));
+        if (neighboringLargeBlocks.length === 0) {
+          ambiguousScript = true;
+          return text;
+        }
+        const referenceCenter = neighboringLargeBlocks.reduce((total, candidate) => (
+          total + candidate.boundingBox.y + candidate.boundingBox.height / 2
+        ), 0) / neighboringLargeBlocks.length;
+        const center = block.boundingBox.y + block.boundingBox.height / 2;
+        const verticalDelta = referenceCenter - center;
+        const threshold = Math.max(1, titleHeight * 0.15);
+        if (verticalDelta > threshold) {
+          return [...text].map((digit) => superscriptDigits[digit] ?? digit).join('');
+        }
+        if (verticalDelta < -threshold) {
+          return [...text].map((digit) => subscriptDigits[digit] ?? digit).join('');
+        }
+        ambiguousScript = true;
+        return text;
+      }).join(' ')
+        .replace(/\s+([⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉]+)/gu, '$1')
+        .replace(/\s+/gu, ' ');
+      const titleEvidence = boundedIdentitySegments(sourceMap, titleBlocks);
+      assign('title', titleEvidence && titleValue.length <= 1_000
+        ? { state: ambiguousScript ? 'needs_review' : 'proposed', value: titleValue, evidenceSegments: titleEvidence }
+        : reviewIdentityItem('title'));
+
+      const authorBlocks: PromptCanonicalBlock[] = [];
+      const authors: string[] = [];
+      let uncertain = false;
+      let authorBoundaryFound = false;
+      const authorScanEnd = Math.min(blocks.length, authorStart + 80);
+      for (let index = authorStart; index < authorScanEnd; index += 1) {
+        const block = blocks[index]!;
+        const next = blocks[index + 1];
+        const normalized = normalizedSelectionText(block.text);
+        const affiliationMarker = /^\d+(?:,\d+)*[\s*†‡§]*$/u.test(normalized)
+          && block.boundingBox.x <= blocks[authorStart]!.boundingBox.x + 8
+          && (!!next && /\b(?:university|institute|laborator(?:y|ies)|department|school|centre|center|academy|hospital|infrastructure)\b/iu.test(next.text)
+            || index > authorStart && block.boundingBox.y - blocks[index - 1]!.boundingBox.y > 16);
+        if (affiliationMarker) {
+          authorBoundaryFound = true;
+          break;
+        }
+        if (/^[\d,.*†‡§\s]+$/u.test(normalized)) continue;
+        const name = block.text
+          .replace(/^\s*,?\s*(?:and\s+)?/iu, '')
+          .replace(/[,*†‡\s]+$/gu, '')
+          .trim();
+        if (!name) continue;
+        if (!/^[\p{L}\p{M}.'’\-]+(?:\s+[\p{L}\p{M}.'’\-]+){1,7}$/u.test(name)) uncertain = true;
+        authors.push(name);
+        authorBlocks.push(block);
+      }
+      if (!authorBoundaryFound && authorScanEnd < blocks.length) uncertain = true;
+      if (authors.length > 0) {
+        const authorEvidence = boundedIdentitySegments(sourceMap, authorBlocks);
+        const boundedAuthors = authors.length <= 100 && authors.every((author) => author.length <= 300);
+        assign('authors', authorEvidence && boundedAuthors
+          ? { state: uncertain ? 'needs_review' : 'proposed', value: authors, evidenceSegments: authorEvidence }
+          : reviewIdentityItem('authors'));
+      }
+    }
+  }
+
+  try {
+    return parseSourceIdentityProposal(proposal, {
+      artifactId: sourceMap.artifactId,
+      contentHash: sourceMap.contentHash,
+    });
+  } catch {
+    // A source-identity proposal must never make an otherwise valid extraction
+    // unavailable. This fallback itself is validated against the shared
+    // contract and leaves every field for explicit review.
+    return parseSourceIdentityProposal({
+      schemaVersion: '0.1.0',
+      title: reviewIdentityItem('title'),
+      authors: reviewIdentityItem('authors'),
+      doi: reviewIdentityItem('doi'),
+      articleLicense: reviewIdentityItem('articleLicense'),
+    }, { artifactId: sourceMap.artifactId, contentHash: sourceMap.contentHash });
+  }
+}
+
+function deterministicAvailabilityProposal(
+  sourceMap: DocumentSourceMap,
+  promptBlocks: PromptCanonicalBlock[],
+): { status: 'absent' | 'unrepresentable'; proposal?: undefined }
+  | { status: 'usable'; proposal: ExtractedFieldProposal } {
+  const allBlocks = promptCanonicalBlocks(sourceMap);
+  const windows = canonicalAvailabilityWindows(allBlocks);
+  if (windows.length === 0) return { status: 'absent' };
+  const selected = new Set(promptBlocks.map(({ promptId }) => promptId));
+  const content = windows.flatMap((window) => window.contentOrdinals.map((ordinal) => allBlocks[ordinal]!));
+  if (windows.some((window) => !window.complete)
+    || content.length === 0 || content.length > MAX_EVIDENCE_SEGMENTS
+    || content.some((block) => !selected.has(block.promptId))
+    || content.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
+    // Never truncate a request condition, negation, or repository URL merely
+    // to fit the evidence contract. An availability section that cannot be
+    // represented completely remains explicitly missing.
+    return { status: 'unrepresentable' };
+  }
+  return {
+    status: 'usable',
+    proposal: {
+      // Preserve the source wording and line boundaries. In particular, do not
+      // silently repair printed hyphens or URLs in a scientific source.
+      summary: content.map(({ text }) => text).join('\n'),
+      sourceQuote: '',
+      sourceBlockIds: content.map(({ promptId }) => promptId),
+      needsMoreInformation: false,
+    },
+  };
+}
+
+function canonicalMissingCause(
+  field: (typeof SDF_CORE_FIELDS)[number],
+  sourceMap: DocumentSourceMap,
+  promptBlocks: PromptCanonicalBlock[],
+  validationRejectedFields: ReadonlySet<string>,
+): ExtractionMissingCause {
+  if (validationRejectedFields.has(field)) return 'validation_rejected';
+  const cuePatterns: Record<(typeof SDF_CORE_FIELDS)[number], RegExp> = {
+    problem: /\b(?:problem|challenge|need|gap)\b|问题|挑战/iu,
+    insight: /\b(?:insight|demonstrat|reveal|show(?:s|n)?|find(?:s|ing)?)\b|洞见|发现/iu,
+    method: /\b(?:methods?|experimental setup|procedure|protocol)\b|方法|实验装置/iu,
+    results: /\b(?:results?|we (?:find|show|demonstrate|observe|measure))\b|结果|我们(?:发现|观察|测量)/iu,
+    limitations: LIMITATION_EVIDENCE,
+    reproducibility: /\b(?:data|code) availability\b|\breproduc|数据可用|代码可用|复现/iu,
+  };
+  const pattern = cuePatterns[field];
+  const selectedIds = new Set(promptBlocks.map(({ id }) => id));
+  let cueSelected = false;
+  let cueOutsideSelection = false;
+  for (const block of promptCanonicalBlocks(sourceMap)) {
+    pattern.lastIndex = 0;
+    if (!pattern.test(normalizedSelectionText(block.text))) continue;
+    if (selectedIds.has(block.id)) cueSelected = true;
+    else cueOutsideSelection = true;
+  }
+  if (cueOutsideSelection && !cueSelected) return 'not_selected';
+  return cueSelected ? 'model_no_supported_summary' : 'undetermined';
+}
+
 function materializeCanonicalProposal(
   proposal: ExtractedProposal,
   sourceMap: DocumentSourceMap,
   promptBlocks: PromptCanonicalBlock[],
+  validationRejectedFields: ReadonlySet<string> = new Set(),
 ): ExtractionResult {
   const byPromptId = new Map(promptBlocks.map((block) => [block.promptId, block]));
   const core = { schemaVersion: SDF_CORE_VERSION } as ExtractedCore;
@@ -437,8 +836,15 @@ function materializeCanonicalProposal(
   const evidenceLocation = {} as NonNullable<ExtractionResult['evidenceLocation']>;
   const evidenceSegments = {} as NonNullable<ExtractionResult['evidenceSegments']>;
   const needsMoreInformation: ExtractionResult['needsMoreInformation'] = [];
+  const missingDetails: NonNullable<ExtractionResult['missingDetails']> = {};
+  const availability = deterministicAvailabilityProposal(sourceMap, promptBlocks);
   for (const field of SDF_CORE_FIELDS) {
-    const candidate = proposal.fields[field];
+    const availabilityUnavailable = field === 'reproducibility' && availability.status === 'unrepresentable';
+    const candidate = field === 'reproducibility' && availability.status === 'usable'
+      ? availability.proposal
+      : availabilityUnavailable
+        ? { summary: '', sourceQuote: '', sourceBlockIds: [], needsMoreInformation: true }
+        : proposal.fields[field];
     const ids = candidate.sourceBlockIds ?? [];
     if (candidate.needsMoreInformation) {
       core[field] = '';
@@ -446,6 +852,11 @@ function materializeCanonicalProposal(
       evidenceSegments[field] = [];
       evidenceLocation[field] = { status: 'missing', origin: 'model_quote', reason: 'empty-quote' };
       needsMoreInformation.push(field);
+      missingDetails[field] = {
+        cause: availabilityUnavailable
+          ? 'validation_rejected'
+          : canonicalMissingCause(field, sourceMap, promptBlocks, validationRejectedFields),
+      };
       continue;
     }
     const segments = ids.map((id) => {
@@ -467,7 +878,7 @@ function materializeCanonicalProposal(
       ? { status: 'located', sourceLocator: segments[0]!.sourceLocator, origin: 'model_quote', matching: 'exact' }
       : { status: 'cross_block', origin: 'model_quote', matching: 'exact', reason: 'match-spans-blocks' };
   }
-  return { core, evidence, needsMoreInformation, evidenceLocation, evidenceSegments };
+  return { core, evidence, needsMoreInformation, missingDetails, evidenceLocation, evidenceSegments };
 }
 
 function locateCanonicalEvidence(
@@ -508,6 +919,7 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
   const core = { schemaVersion: SDF_CORE_VERSION } as ExtractedCore;
   const evidence = {} as ExtractionResult['evidence'];
   const needsMoreInformation: ExtractionResult['needsMoreInformation'] = [];
+  const missingDetails: NonNullable<ExtractionResult['missingDetails']> = {};
   const blocks = sourceMap ? canonicalTextBlocks(sourceMap) : undefined;
   const evidenceLocation = sourceMap ? {} as NonNullable<ExtractionResult['evidenceLocation']> : undefined;
   for (const field of SDF_CORE_FIELDS) {
@@ -534,6 +946,7 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
         core[field] = '';
         evidence[field] = { quote: '', locator: '' };
         needsMoreInformation.push(field);
+        missingDetails[field] = { cause: 'undetermined' };
         if (sourceMap && evidenceLocation && blocks) {
           evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, explicit.quote, 'explicit_field_label', manuscriptText, explicitMatches);
         }
@@ -542,12 +955,13 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
       core[field] = '';
       evidence[field] = { quote: '', locator: '' };
       needsMoreInformation.push(field);
+      missingDetails[field] = { cause: 'undetermined' };
       if (sourceMap && evidenceLocation && blocks) {
         evidenceLocation[field] = locateCanonicalEvidence(sourceMap, blocks, candidate.sourceQuote, 'model_quote', manuscriptText, matches);
       }
     }
   }
-  return { core, evidence, needsMoreInformation, ...(evidenceLocation ? { evidenceLocation } : {}) };
+  return { core, evidence, needsMoreInformation, missingDetails, ...(evidenceLocation ? { evidenceLocation } : {}) };
 }
 
 /**
@@ -600,7 +1014,13 @@ export async function extractHandler(
       validationFeedback: validation.validationFeedback,
       validationDiagnostic: validation.validationDiagnostic,
     });
-    return materializeCanonicalProposal(validation.mergeRetained(), canonicalSourceMap, promptBlocks);
+    const extraction = materializeCanonicalProposal(
+      validation.mergeRetained(),
+      canonicalSourceMap,
+      promptBlocks,
+      validation.validationRejectedFields(),
+    );
+    return { ...extraction, sourceIdentity: sourceIdentityFromFirstPage(canonicalSourceMap) };
   }
   const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
   return materializeProposal(proposal, manuscriptText);

@@ -2,9 +2,9 @@
 
 ## 2026-09-08 — Nine-PDF R1 remediation active
 
-- User authorized four-hour repair/retest, 19:58–23:58 +08. New branch codex/r1-record-hardening from c1c7fa4b preserves concurrent recovery work; live8c0601a7/rollback1ba694ae checked, healthy. Fresh core29M/search20K backup retained8 sets without rotation.
+- User authorized four-hour repair/retest, 19:58–23:58 +08. New branch codex/r1-record-hardening from c1c7fa4b preserves concurrent recovery work; initial live8c0601a7 checked, then concurrent c1c7fa4b incorporated. Fresh core29M/search20K backup retained8 sets without rotation.
 - Prior nine-PDF audit is failed stage acceptance: six snapshots have zero Claim/Evidence despite282 exact segments; three parser-review outputs lacked core; UI0126 confirmed an empty snapshot. Preserve all old snapshots and inputs; create explicit new revisions. Evidence remains in ignored2026-09-08-nine-pdf-r1-audit.
-- First fixing atomic cross-block confirmation and no-proposal guard, then real nine-file replay, selection/identity gaps and nonempty graph/API/conflict acceptance. Stage1 88018512 deployed with rollbackc1c7fa4b after CI34225813453, full ECS gates/Parser16 and isolated PG rollback/merge tests passed. Nine-file replay started;0126 no core and no new version. Stage2 remains in progress; do not claim full acceptance. All49 historical record/manifest hashes matched before replay.
+- First fixing atomic cross-block confirmation and no-proposal guard, then real nine-file replay, selection/identity gaps and nonempty graph/API/conflict acceptance. Stage1 88018512 deployed with rollbackc1c7fa4b after CI34225813453, full ECS gates/Parser16 and isolated PG rollback/merge tests passed. Nine-file replay: four new versions,19 Claims/358 Evidence; all source GETs pass after rate-limit-aware read-only resume. Five other samples failed/blocked; original results retained with separate manifest-path expectation correction. All49 old hashes unchanged;53-version baseline saved. Stage2 remains in progress.
 
 ## 2026-09-08: recovery deployed; real browser retry transport fix
 
@@ -33,4 +33,4 @@
 - Current priority: server-owned Hermes workflow using existing OCR/ScanSci/retrieval/extraction/media. Ordinary-user acceptance without Codex orchestration first, UX/layout polish second, further capabilities afterward. Chat6Pro plan actually received;60s single browser actions succeeded. Durable server run implementation is underway.
 - Future UX polish: simplify historical/rejected asset display and replace internal/generic media labels. Current first-slice UX and desktop/mobile no-overflow checks passed; do not imply all UX refinements complete.
 
-CURRENT: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`. Next: clean the exited read-only container reference, validate the extractor changes, and deploy a new candidate before continuing normal-user review boundaries. CPU image installation remains paused; no new providers installed.
+CURRENT: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`. Next: validate stage2 source identity/selection/conflict changes on ECS, deploy and replay the same nine PDFs through explicit new revisions. CPU image installation remains paused; no new providers installed.

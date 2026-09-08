@@ -5,15 +5,36 @@ const array = (items: object) => ({ type: 'array', items });
 const object = (properties: Record<string, object>) => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
 const state = { enum: ['recorded', 'not_recorded'] };
 const fields = ['problem','insight','method','results','limitations','reproducibility'];
+const sourceLocator = { type: 'object', required: ['artifactId','contentHash','page','blockId','boundingBox','charRange'], additionalProperties: false, properties: {
+  artifactId: string, contentHash: string, page: { type: 'integer', minimum: 1 }, blockId: string,
+  boundingBox: object({ x: {type:'number'}, y: {type:'number'}, width: {type:'number'}, height: {type:'number'} }),
+  charRange: object({start:{type:'integer'},end:{type:'integer'}}), tableCell: {type:'object'}, codeRange: {type:'object'},
+} };
+const identityEvidence = array(object({ quote: string, sourceLocator }));
+const sourceIdentityItem = (value: object) => object({
+  state: { enum: ['recorded','needs_review','not_recorded'] }, value, evidenceSegments: identityEvidence,
+});
+const sourceIdentity = object({
+  schemaVersion: { const: '0.1.0' }, reviewed: { const: true },
+  title: sourceIdentityItem(string), authors: sourceIdentityItem(array(string)),
+  doi: sourceIdentityItem(string), articleLicense: sourceIdentityItem(string),
+});
+const identity = {
+  type: 'object', additionalProperties: false,
+  required: ['originalAuthors','originalDoi','platformAuthors','licenses'],
+  properties: {
+    originalAuthors: object({ state: { const: 'not_recorded' }, items: { type: 'array', maxItems: 0, items: string } }),
+    originalDoi: object({ state: { const: 'not_recorded' }, value: { type: 'null' } }),
+    platformAuthors: array(object({ name: nullableString, affiliation: nullableString, isCorresponding: { type: 'boolean' } })),
+    licenses: array(object({ type: string, identifier: string })), source: sourceIdentity,
+  },
+};
 export const researchRecordSchema = {
   $id: 'https://openscience.428312321.xyz/api/research-record/schema',
   ...object({
-    schemaVersion: { const: '1.0.0' }, objectId: string, versionId: string, versionNo: { type: 'integer', minimum: 1 }, recordState: state,
+    schemaVersion: { enum: ['1.0.0','1.1.0'] }, objectId: string, versionId: string, versionNo: { type: 'integer', minimum: 1 }, recordState: state,
     citation: object({ uri: string, url: string, title: nullableString, createdAt: { type: 'string', format: 'date-time' } }),
-    identity: object({ originalAuthors: object({ state: { const: 'not_recorded' }, items: { type: 'array', maxItems: 0, items: string } }),
-      originalDoi: object({ state: { const: 'not_recorded' }, value: { type: 'null' } }),
-      platformAuthors: array(object({ name: nullableString, affiliation: nullableString, isCorresponding: { type: 'boolean' } })),
-      licenses: array(object({ type: string, identifier: string })) }),
+    identity,
     sdf: { type: 'object', properties: Object.fromEntries([...fields, 'schemaVersion'].map(field => [field,string])), additionalProperties: true },
     claims: array(object({ id: string, parentClaimId: nullableString, kind: string, statement: string, assessment: string,
       conditions: array(string), limitations: array(string), extractionStatus: string })),
@@ -28,6 +49,12 @@ export const researchRecordSchema = {
     collections: object({ complete: { const: true }, pagination: { const: 'none' }, order: string }),
     links: object({ self: string, export: string, schema: string, openapi: string }),
   }),
+  allOf: [
+    { if: { properties: { schemaVersion: { const: '1.1.0' } }, required: ['schemaVersion'] },
+      then: { properties: { identity: { required: ['originalAuthors','originalDoi','platformAuthors','licenses','source'] } } } },
+    { if: { properties: { schemaVersion: { const: '1.0.0' } }, required: ['schemaVersion'] },
+      then: { properties: { identity: { not: { required: ['source'] } } } } },
+  ],
 };
 const parameters = [
   { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
@@ -35,7 +62,7 @@ const parameters = [
 ];
 const errors = { '401': { description: 'Invalid or expired session cookie' }, '404': { description: 'Unknown or inaccessible object/version/evidence' }, '429': { description: 'Rate limited; honor Retry-After seconds' } };
 export const researchRecordOpenApi = {
-  openapi: '3.1.0', info: { title: 'OpenScience frozen research record API', version: '1.0.0' }, servers: [{ url: '/api' }],
+  openapi: '3.1.0', info: { title: 'OpenScience frozen research record API', version: '1.1.0' }, servers: [{ url: '/api' }],
   components: { securitySchemes: { session: { type: 'apiKey', in: 'cookie', name: 'openscience_session' } }, schemas: { ResearchRecord: researchRecordSchema } },
   paths: Object.fromEntries(['', '/export', '/evidence/{evidenceId}/source'].map(suffix => [`/research-objects/{id}/versions/{versionId}/record${suffix}`, { get: {
     summary: suffix.includes('source') ? 'Resolve the frozen source locator' : 'Read the complete frozen research record',

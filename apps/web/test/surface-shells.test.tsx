@@ -10,7 +10,7 @@ import { DashboardShell } from '../components/shell/DashboardShell';
 import { IdentityShell } from '../components/shell/IdentityShell';
 import { PublicShell } from '../components/shell/PublicShell';
 import { WorkspaceShell } from '../components/shell/WorkspaceShell';
-import HermesReviewPage, { isRetryableSdfExtraction } from '../app/research-objects/[id]/hermes/page';
+import HermesReviewPage, { hasReviewableSdfProposal, isRetryableSdfExtraction } from '../app/research-objects/[id]/hermes/page';
 
 vi.mock('next-intl', () => ({
   useLocale: () => 'en',
@@ -196,6 +196,13 @@ describe('Optical Editorial brand and surface shells', () => {
     })).toBe(false);
     expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 0, result: null })).toBe(true);
     expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 1, result: null })).toBe(false);
+  });
+
+  it('does not open confirmation for a missing or entirely empty core proposal', () => {
+    expect(hasReviewableSdfProposal(null)).toBe(false);
+    expect(hasReviewableSdfProposal({ status: 'succeeded' })).toBe(false);
+    expect(hasReviewableSdfProposal({ core: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' } })).toBe(false);
+    expect(hasReviewableSdfProposal({ core: { schemaVersion: '0.1.0', problem: 'Question', insight: '', method: '', results: '', limitations: '', reproducibility: '' } })).toBe(true);
   });
 
   it('renders one current-RO full-text action in the ready RO Files workspace', async () => {

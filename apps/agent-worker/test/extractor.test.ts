@@ -507,7 +507,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.evidence.problem.locator).toMatch(/^chars:\d+-\d+$/);
   });
 
-  it.each(['missing', 'rewritten', 'partial', 'first-omitted', 'missing-upgrade', 'missing-invalid', 'two-failed-attempts'])('保留首轮合法字段并以字段原因修复其余字段：%s', async (mode) => {
+  it.each(['missing', 'rewritten', 'partial', 'first-omitted', 'missing-rewrite', 'missing-invalid', 'two-failed-attempts'])('保留首轮合法字段并以字段原因修复其余字段：%s', async (mode) => {
     const blocks = Array.from({ length: 6 }, (_, index) => ({
       id: `block-${index + 1}`, kind: 'paragraph' as const, text: `Exact source block ${index + 1}`,
       boundingBox: { x: 1, y: 90 - index * 10, width: 80, height: 8 },
@@ -545,7 +545,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
         call += 1;
         const reply = structuredClone(call === 1 ? first : second);
         if (call === 1 && mode === 'first-omitted') delete (reply.fields as Record<string, unknown>).method;
-        if (call > 1 && mode === 'missing-upgrade') reply.fields.reproducibility = { summary: 'Supported reproduction condition', sourceBlockIds: ['B000006'], needsMoreInformation: false };
+        if (call > 1 && mode === 'missing-rewrite') reply.fields.reproducibility = { summary: 'Unrequested missing-field rewrite', sourceBlockIds: ['B000006'], needsMoreInformation: false };
         if (call > 1 && mode === 'missing-invalid') reply.fields.reproducibility = { summary: 'Invalid must not upgrade', sourceBlockIds: ['UNKNOWN'], needsMoreInformation: false };
         if (call > 1 && mode !== 'missing') {
           reply.fields.problem = { summary: 'Unrequested rewrite', sourceBlockIds: ['B000005'], needsMoreInformation: false };
@@ -571,9 +571,8 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.evidenceSegments?.method.map((segment) => segment.quote)).toEqual([
       'Exact source block 3', 'Exact source block 4',
     ]);
-    expect(result.needsMoreInformation).toEqual(mode === 'missing-upgrade'
-      ? ['insight', 'results', 'limitations'] : ['insight', 'results', 'limitations', 'reproducibility']);
-    expect(result.core.reproducibility).toBe(mode === 'missing-upgrade' ? 'Supported reproduction condition' : '');
+    expect(result.needsMoreInformation).toEqual(['insight', 'results', 'limitations', 'reproducibility']);
+    expect(result.core.reproducibility).toBe('');
     const initialRequest = JSON.stringify(requests[0]);
     const retryRequest = JSON.stringify(requests[1]);
     expect(initialRequest).toContain('{\\"summary\\": string, \\"sourceBlockIds\\": string[], \\"needsMoreInformation\\": boolean}');
@@ -917,6 +916,127 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.evidenceSegments!.reproducibility[31]).toMatchObject({
       quote: 'Exact segment 32.', sourceLocator: { blockId: 'block-32', page: 1 },
     });
+  });
+
+  it('reserves split Data Availability and late limitations before repeated result headings', async () => {
+    const metadata = { name: 'native', version: '1' };
+    const blocks = Array.from({ length: 520 }, (_, index) => ({
+      id: `block-${index}`, kind: 'paragraph' as const,
+      text: index === 250 ? 'Data' : index === 251 ? 'Availability'
+        : index === 252 ? 'The data are available from the authors'
+          : index === 253 ? 'upon reasonable request.'
+            : index === 254 ? 'Supplementary' : index === 255 ? 'Materials'
+              : index === 330 ? 'A remaining limitation applies only under the stated assumption.'
+                : `Results repeated context ${index} ${'x'.repeat(70)}`,
+      boundingBox: { x: 1, y: 1, width: 90, height: 8 }, parser: metadata, transformations: [],
+    }));
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-priority', contentHash: '7'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const requests: unknown[] = [];
+    const gateway = new AiGateway({ providers: [{ name: 'priority', model: 'priority', complete: async (request) => {
+      requests.push(request);
+      return { text: JSON.stringify({ schemaVersion: '0.1.0', fields: Object.fromEntries(
+        Object.keys(VALID_PROPOSAL.fields).map((field) => [field, field === 'reproducibility'
+          ? {
+              summary: 'No data or code availability statement is present.',
+              sourceBlockIds: ['B000253'],
+              needsMoreInformation: false,
+            }
+          : missing]),
+      ) }), usage: { inputTokens: 1, outputTokens: 1 }, model: 'priority' };
+    } }] });
+
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
+
+    const request = JSON.stringify(requests[0]);
+    expect(request).toContain('A remaining limitation applies only under the stated assumption.');
+    expect(result.core.reproducibility).toBe('The data are available from the authors\nupon reasonable request.');
+    expect(result.evidenceSegments?.reproducibility.map(({ quote }) => quote)).toEqual([
+      'The data are available from the authors', 'upon reasonable request.',
+    ]);
+    expect(result.needsMoreInformation).not.toContain('reproducibility');
+    expect(result.missingDetails?.limitations?.cause).toBe('model_no_supported_summary');
+  });
+
+  it('does not truncate an availability statement beyond the canonical segment limit', async () => {
+    const metadata = { name: 'native', version: '1' };
+    const content = Array.from({ length: 33 }, (_, index) => ({
+      id: `availability-${index}`, kind: 'paragraph' as const, text: `availability term ${index}`,
+      boundingBox: { x: 1, y: index + 2, width: 80, height: 1 }, parser: metadata, transformations: [],
+    }));
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-unrepresentable', contentHash: '6'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [
+        { id: 'heading', kind: 'paragraph', text: 'Data Availability', boundingBox: { x: 1, y: 1, width: 80, height: 1 }, parser: metadata, transformations: [] },
+        ...content,
+        { id: 'references', kind: 'paragraph', text: 'References', boundingBox: { x: 1, y: 40, width: 80, height: 1 }, parser: metadata, transformations: [] },
+      ] }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const fields = Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field,
+      field === 'reproducibility'
+        ? { summary: 'Incomplete availability claim', sourceBlockIds: ['B000002'], needsMoreInformation: false }
+        : missing]));
+    const gateway = new AiGateway({ providers: [{ name: 'bounded', model: 'bounded', complete: async () => ({
+      text: JSON.stringify({ schemaVersion: '0.1.0', fields }), usage: { inputTokens: 1, outputTokens: 1 }, model: 'bounded',
+    }) }] });
+
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
+
+    expect(result.core.reproducibility).toBe('');
+    expect(result.evidenceSegments?.reproducibility).toEqual([]);
+    expect(result.needsMoreInformation).toContain('reproducibility');
+    expect(result.missingDetails?.reproducibility?.cause).toBe('validation_rejected');
+  });
+
+  it('extracts locator-backed first-page source identity without using reference metadata', async () => {
+    const metadata = { name: 'native', version: '1' };
+    const make = (id: string, text: string, y: number, height: number, x = 50) => ({
+      id, kind: 'paragraph' as const, text, boundingBox: { x, y, width: 300, height }, parser: metadata, transformations: [],
+    });
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-identity', contentHash: '5'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 600, height: 800, blocks: [
+        make('header', 'Author et al. | https://doi.org/10.1234/example.42', 760, 8),
+        make('type', 'RESEARCH ARTICLE', 80, 12),
+        make('title-a', 'Measured response above 10', 105, 18),
+        make('title-exp', '14', 103, 8, 300),
+        make('title-b', 'photons', 105, 18, 320),
+        make('author-a', 'Ada Example', 140, 12),
+        make('author-a-ref', '1', 138, 8, 120),
+        make('author-b', ', and Bo Researcher', 140, 12, 130),
+        make('author-b-ref', '1*', 138, 8, 260),
+        make('affiliation-ref', '1', 165, 6),
+        make('affiliation', 'Example University, Example City', 166, 7),
+        make('license-a', 'Distributed under a Creative', 700, 7),
+        make('license-b', 'Commons Attribution License', 710, 7),
+        make('license-c', '(CC BY 4.0).', 720, 7),
+      ] }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const gateway = new AiGateway({ providers: [{ name: 'identity', model: 'identity', complete: async () => ({
+      text: JSON.stringify({ schemaVersion: '0.1.0', fields: Object.fromEntries(
+        Object.keys(VALID_PROPOSAL.fields).map((field) => [field, missing]),
+      ) }), usage: { inputTokens: 1, outputTokens: 1 }, model: 'identity',
+    }) }] });
+
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
+
+    expect(result.sourceIdentity).toMatchObject({
+      title: { state: 'proposed', value: 'Measured response above 10¹⁴ photons' },
+      authors: { state: 'proposed', value: ['Ada Example', 'Bo Researcher'] },
+      doi: { state: 'proposed', value: '10.1234/example.42' },
+      articleLicense: { state: 'proposed', value: 'CC-BY-4.0' },
+    });
+    for (const field of ['title', 'authors', 'doi', 'articleLicense'] as const) {
+      expect(result.sourceIdentity?.[field].evidenceSegments.length).toBeGreaterThan(0);
+      expect(result.sourceIdentity?.[field].evidenceSegments.every(({ sourceLocator }) => (
+        sourceLocator.artifactId === sourceMap.artifactId && sourceLocator.contentHash === sourceMap.contentHash
+      ))).toBe(true);
+    }
   });
 
   it.each([

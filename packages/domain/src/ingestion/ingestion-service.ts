@@ -18,6 +18,7 @@ import { IngestionError } from './errors';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
 import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
+import { confirmSourceIdentity, parseSourceIdentitySnapshot, projectSourceIdentity, type SourceIdentityReview, type SourceIdentitySnapshot } from './source-identity';
 
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
 
@@ -153,7 +154,11 @@ export async function getIngestionTask(
   if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
   await requireMembership(deps, task.batch.researchObject.workspaceId, input.userId);
   const result = projectAgentTaskResult(task.agentTask?.result, task.agentTask?.kind ?? '');
-  return { task: { ...taskToView(task), result }, batchId: task.batchId, researchObjectId: task.batch.researchObjectId, version: task.batch.researchObject.version };
+  const identity = task.agentTask ? projectSourceIdentity({
+    taskId: task.id, artifactId: task.artifactId, contentHash: task.artifact.blobSha256, result: task.agentTask.result,
+  }) : null;
+  return { task: { ...taskToView(task), result: result && identity ? { ...result, ...identity } : result },
+    batchId: task.batchId, researchObjectId: task.batch.researchObject.id, version: task.batch.researchObject.version };
 }
 
 const ACTIONABLE_INGESTION_STATES = [
@@ -266,13 +271,15 @@ export interface IngestionConfirmation {
   version: number;
   evidenceStatus: 'needs_review';
   missingFields: string[];
+  sourceIdentity?: SourceIdentitySnapshot;
 }
 
-function confirmationView(commit: CreateCommitResult): IngestionConfirmation {
+function confirmationView(commit: CreateCommitResult & { sourceIdentity?: SourceIdentitySnapshot }): IngestionConfirmation {
   return {
     commitId: commit.commitId, versionId: commit.versionId, versionNo: commit.versionNo,
     version: commit.versionNo + 1, evidenceStatus: 'needs_review',
     missingFields: SDF_NODE_TYPES.filter(field => !String(commit.snapshot.core[field] ?? '').trim()),
+    ...(commit.sourceIdentity ? { sourceIdentity: commit.sourceIdentity } : {}),
   };
 }
 
@@ -303,15 +310,20 @@ function assertReviewableIngestionProposal(task: { artifactId: string; artifact:
   }
 }
 
-async function savedConfirmation(deps: IngestionDeps, taskId: string, researchObjectId: string): Promise<CreateCommitResult | null> {
+async function savedConfirmation(deps: IngestionDeps, taskId: string, researchObjectId: string): Promise<(CreateCommitResult & { sourceIdentity?: SourceIdentitySnapshot }) | null> {
   const commit = await deps.prisma.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${taskId}` } });
   if (!commit || commit.researchObjectId !== researchObjectId) return null;
-  const version = await deps.prisma.version.findFirst({ where: { commitId: commit.id } });
+  const version = await deps.prisma.version.findFirst({ where: { commitId: commit.id }, orderBy: { versionNo: 'asc' } });
   if (!version) return null;
   const manifest = await deps.prisma.versionManifest.findUnique({ where: { versionId: version.id }, include: { entries: true } });
   if (!manifest) return null;
+  const frozen = version.researchRecord && typeof version.researchRecord === 'object' && !Array.isArray(version.researchRecord)
+    ? version.researchRecord as Record<string, unknown> : {};
+  const dto = frozen.dto && typeof frozen.dto === 'object' && !Array.isArray(frozen.dto) ? frozen.dto as Record<string, unknown> : {};
+  const identity = dto.identity && typeof dto.identity === 'object' && !Array.isArray(dto.identity) ? dto.identity as Record<string, unknown> : {};
+  const sourceIdentity = parseSourceIdentitySnapshot(identity.source);
   return { commitId: commit.id, versionId: version.id, versionNo: version.versionNo,
-    snapshot: { core: manifest.coreJson as Record<string, unknown>, artifacts: manifest.entries } };
+    snapshot: { core: manifest.coreJson as Record<string, unknown>, artifacts: manifest.entries }, ...(sourceIdentity ? { sourceIdentity } : {}) };
 }
 
 /** Durable RO-scoped material history, including completed imports and their fixed versions. */
@@ -333,7 +345,7 @@ export async function getResearchObjectIngestion(deps: IngestionDeps, input: { u
 /** A human confirmation creates one version, working SDF and source records atomically. */
 export async function confirmIngestionTask(
   deps: IngestionDeps,
-  input: { userId: string; taskId: string; version: number; core: Record<string, string> },
+  input: { userId: string; taskId: string; version: number; core: Record<string, string>; sourceIdentityReview?: SourceIdentityReview },
   ctx: AuditContext = {},
 ): Promise<{ task: IngestionTaskView; sdf: SdfDocumentView; confirmation: IngestionConfirmation }> {
   for (let attempt = 0; ; attempt += 1) {
@@ -350,6 +362,9 @@ export async function confirmIngestionTask(
           const check = ro.status === 'draft' ? validateSdfDraftCore(input.core) : validateSdfCore(input.core);
           if (!check.ok) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
           assertReviewableIngestionProposal(task, input.core);
+          const sourceIdentity = await confirmSourceIdentity({ storage: deps.storage, taskId: task.id,
+            artifactId: task.artifactId, contentHash: task.artifact.blobSha256,
+            result: task.agentTask?.result, review: input.sourceIdentityReview });
           const document = await tx.sdfDocument.findUnique({ where: { researchObjectId: ro.id } });
           if (!document) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');
           const latest = await tx.version.findFirst({ where: { researchObjectId: ro.id }, orderBy: { versionNo: 'desc' } });
@@ -368,7 +383,8 @@ export async function confirmIngestionTask(
           });
           if (latest) await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: latest.id, versionId: commit.versionId });
           await writeIngestionEvidence(scoped, { task, versionId: commit.versionId, core: input.core });
-          await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: commit.versionId });
+          await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: commit.versionId, sourceIdentity: sourceIdentity ?? null });
+          if (sourceIdentity) commit = Object.assign(commit, { sourceIdentity });
           const updated = await tx.ingestionTask.updateMany({ where: { id: task.id, state: 'needs_review' }, data: { state: 'confirmed', error: null } });
           if (updated.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Task changed while confirming');
           await recordAudit(deps, tx, { actorId: input.userId, action: 'ingestion.confirm', workspaceId: ro.workspaceId,

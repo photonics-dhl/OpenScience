@@ -91,6 +91,41 @@ describe('frozen research record real HTTP routes', () => {
     const later = await f.app.inject({method:'GET',url:f.url,cookies:f.cookies});
     expect(later.body).toBe(first.body);
   });
+  it('inherits source identity only from the explicit parent version on an ordinary commit', async () => {
+    const f = await fixture();
+    const sourceIdentity = { schemaVersion: '0.1.0', reviewed: true,
+      title: { state: 'recorded', value: 'Source paper', evidenceSegments: [{ quote: 'Original source passage.', sourceLocator: {
+        artifactId: ARTIFACT, contentHash: f.db.artifacts[0].blobSha256, page: 1, blockId: 'block', charRange: { start: 0, end: 24 },
+        boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+      } }] },
+      authors: { state: 'not_recorded', value: [], evidenceSegments: [] }, doi: { state: 'not_recorded', value: '', evidenceSegments: [] },
+      articleLicense: { state: 'not_recorded', value: '', evidenceSegments: [] } };
+    (f.db.versions[0].researchRecord as { dto: { identity: Record<string, unknown> } }).dto.identity.source = sourceIdentity;
+    f.db.agentTasks[0].result = { sourceIdentity: { title: 'untrusted later task' } };
+    const next = await createCommit(f.deps, { researchObjectId: RO, userId: f.user.id, version: 2, message: 'Continue explicit parent',
+      sdfCore: { ...f.core, problem: 'Continued' }, artifacts: [{ artifactId: ARTIFACT, logicalPath: 'source.txt' }] });
+    const record = (await f.app.inject({ method: 'GET', url: f.url.replace(f.versionId, next.versionId), cookies: f.cookies })).json().record;
+    expect(record.schemaVersion).toBe('1.1.0');
+    expect(record.identity.source).toEqual(sourceIdentity);
+  });
+  it('clears inherited source identity when its PDF is removed from the target manifest', async () => {
+    const f = await fixture();
+    const sourceIdentity = { schemaVersion: '0.1.0', reviewed: true,
+      title: { state: 'recorded', value: 'Removed paper', evidenceSegments: [{ quote: 'Original source passage.', sourceLocator: {
+        artifactId: ARTIFACT, contentHash: f.db.artifacts[0].blobSha256, page: 1, blockId: 'block', charRange: { start: 0, end: 24 },
+        boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+      } }] },
+      authors: { state: 'not_recorded', value: [], evidenceSegments: [] }, doi: { state: 'not_recorded', value: '', evidenceSegments: [] },
+      articleLicense: { state: 'not_recorded', value: '', evidenceSegments: [] } };
+    (f.db.versions[0].researchRecord as { dto: { identity: Record<string, unknown> } }).dto.identity.source = sourceIdentity;
+    const previous = JSON.stringify(f.db.versions[0].researchRecord);
+    const next = await createCommit(f.deps, { researchObjectId: RO, userId: f.user.id, version: 2,
+      message: 'Remove source PDF', sdfCore: f.core, artifacts: [] });
+    const record = (await f.app.inject({ method: 'GET', url: f.url.replace(f.versionId, next.versionId), cookies: f.cookies })).json().record;
+    expect(record.schemaVersion).toBe('1.0.0');
+    expect(record.identity).not.toHaveProperty('source');
+    expect(JSON.stringify(f.db.versions[0].researchRecord)).toBe(previous);
+  });
   it('anonymous latest selects only published versions and rejects private/foreign versions and revoked access', async () => {
     const f = await fixture();
     for (const url of [f.url, f.url.replace(f.versionId,'latest')]) expect((await f.app.inject({method:'GET',url})).statusCode).toBe(404);

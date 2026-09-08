@@ -12,9 +12,11 @@ import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
+import { HermesMissingCause } from '@/components/hermes/HermesMissingCause';
+import { HermesSourceIdentityReview } from '@/components/hermes/HermesSourceIdentityReview';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, confirmIngestionTask, apiRequest, getHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
+import { ApiClientError, confirmIngestionTask, apiRequest, getHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore, type SourceIdentityField, type SourceIdentityProposal } from '@/lib/api';
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
@@ -24,6 +26,13 @@ export function isRetryableSdfExtraction(task: Pick<IngestionTaskDetail['task'],
     && (result as Record<string, unknown>).status === 'needs_review'
     && (result as Record<string, unknown>).reason === 'sdf-proposal-unavailable'
     && !Object.hasOwn(result as object, 'core'))));
+}
+export function hasReviewableSdfProposal(result: Record<string, unknown> | null): boolean {
+  const candidate = result?.core;
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
+  const core = candidate as Record<string, unknown>;
+  return core.schemaVersion === '0.1.0' && fields.every((field) => typeof core[field] === 'string')
+    && fields.some((field) => String(core[field]).trim().length > 0);
 }
 export default function HermesReviewPage({ params: routeParams }: { params: { id: string } }) {
   const searchParams = useSearchParams();
@@ -46,6 +55,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [confirmation, setConfirmation] = useState<IngestionConfirmation | null>(null);
+  const [acceptedSourceIdentityFields, setAcceptedSourceIdentityFields] = useState<SourceIdentityField[]>([]);
   const [hermesOpen, setHermesOpen] = useState(false);
   const [run, setRun] = useState<HermesResearchRun | null>(null);
 
@@ -65,7 +75,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true); setError(''); setDetail(null); setCore(emptyCore()); setSaved(false); setConfirmation(null);
+    setLoading(true); setError(''); setDetail(null); setCore(emptyCore()); setSaved(false); setConfirmation(null); setAcceptedSourceIdentityFields([]);
     const load = taskId ? Promise.all([loadScopedHermesReview(routeParams.id, taskId, getIngestionTask), getResearchIngestion(routeParams.id)]).then(async ([value, recovery]) => {
       if (cancelled) return;
       const confirmed = recovery.tasks.find((task) => task.id === taskId)?.confirmation ?? null;
@@ -80,6 +90,8 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
       if (cancelled) return;
       setDetail({ ...value, version: recovery.version });
       setConfirmation(confirmed);
+      if (confirmed?.sourceIdentity) setAcceptedSourceIdentityFields((['title', 'authors', 'doi', 'articleLicense'] as SourceIdentityField[])
+        .filter((field) => confirmed.sourceIdentity?.[field].state === 'recorded'));
       setSaved(value.task.state === 'confirmed' || value.task.state === 'written');
     }) : Promise.all([getResearchObject(routeParams.id), getResearchIngestion(routeParams.id)]).then(([research, value]) => {
       if (!cancelled) { setTasks(value.tasks.map((task) => ({ ...task, researchObjectId: routeParams.id, researchTitle: research.researchObject.title }))); setResearchTitle(research.researchObject.title); setResearchStatus(research.researchObject.status); }
@@ -101,7 +113,11 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
   }, [detail]);
 
   const complete = useMemo(() => fields.every((field) => core[field].trim().length > 0), [core]);
-  const proposalUnavailable = detail ? isRetryableSdfExtraction(detail.task) : false;
+  const sourceIdentity = detail?.task.result?.sourceIdentity as SourceIdentityProposal | undefined;
+  const displayedSourceIdentity = confirmation?.sourceIdentity ?? sourceIdentity;
+  const sourceIdentityToken = typeof detail?.task.result?.sourceIdentityToken === 'string' ? detail.task.result.sourceIdentityToken : '';
+  const retryableProposal = detail ? isRetryableSdfExtraction(detail.task) : false;
+  const proposalUnavailable = detail?.task.state === 'needs_review' && !hasReviewableSdfProposal(detail.task.result);
   const approvalOpen = detail?.task.state === 'needs_review' && !proposalUnavailable;
   const reviewSuggestion = useMemo(() => detail ? ({
     bodyKey: 'guide.review.body',
@@ -115,7 +131,8 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
     if (!detail || !approvalOpen || saving || saved || detail.researchObjectId !== routeParams.id) return;
     setSaving(true); setError('');
     try {
-      const result = await confirmIngestionTask(taskId, { version: detail.version, core });
+      const result = await confirmIngestionTask(taskId, { version: detail.version, core,
+        ...(sourceIdentity ? { sourceIdentityReview: { token: sourceIdentityToken, acceptedFields: acceptedSourceIdentityFields } } : {}) });
       if (!mounted.current) return;
       setSaved(true); setConfirmation(result.confirmation);
       if (!runId) router.push(`/research-objects/${encodeURIComponent(routeParams.id)}/versions?version=${encodeURIComponent(result.confirmation.versionId)}`);
@@ -124,7 +141,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
     finally { if (mounted.current) setSaving(false); }
   }
   async function retryExtraction() {
-    if (!detail || !proposalUnavailable || saving || detail.researchObjectId !== routeParams.id) return;
+    if (!detail || !retryableProposal || saving || detail.researchObjectId !== routeParams.id) return;
     setSaving(true); setError('');
     try {
       await retryIngestionTask(taskId);
@@ -183,14 +200,17 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
           {proposalUnavailable ? <section className="surface-folio-sheet border-y border-os-rule-paper px-4 py-6 sm:px-6" aria-label={t('proposalUnavailableTitle')}>
             <h2 className="font-reading text-2xl text-os-ink">{t('proposalUnavailableTitle')}</h2>
             <p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t('proposalUnavailableBody')}</p>
-            <button type="button" disabled={saving} onClick={() => void retryExtraction()} className="mt-5 min-h-11 touch-manipulation rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('proposalRetrying') : t('proposalRetry')}</button>
+            {retryableProposal ? <button type="button" disabled={saving} onClick={() => void retryExtraction()} className="mt-5 min-h-11 touch-manipulation rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('proposalRetrying') : t('proposalRetry')}</button> : null}
           </section> : <><p className="mb-4 text-sm text-os-muted-paper">{t('reviewPending')}</p>
           <section aria-label={t('fieldLabel')} className="surface-folio-sheet divide-y divide-os-rule-paper border-y border-os-rule-paper">
             {fields.map((field, index) => <div key={field} className="grid gap-3 px-4 py-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:px-6">
-              <label htmlFor={`hermes-review-${field}`}><span className="block font-data text-xs text-os-vermilion-ink">0{index + 1}</span><span className="mt-1 block text-sm font-semibold text-os-ink">{fieldT(field)}</span>{!core[field].trim() && <span className="block text-sm text-os-muted-paper">{t('missing')}</span>}</label>
+              <label htmlFor={`hermes-review-${field}`}><span className="block font-data text-xs text-os-vermilion-ink">0{index + 1}</span><span className="mt-1 block text-sm font-semibold text-os-ink">{fieldT(field)}</span>{!core[field].trim() && <><span className="block text-sm text-os-muted-paper">{t('missing')}</span><HermesMissingCause field={field} result={detail.task.result} /></>}</label>
               <div className="min-w-0"><textarea id={`hermes-review-${field}`} aria-label={field} readOnly={!approvalOpen || saving} data-hermes-review-field value={core[field]} onChange={(event) => setCore({ ...core, [field]: event.target.value })} rows={5} className="w-full resize-y rounded-panel border border-os-rule-paper bg-os-paper-strong p-4 font-reading text-lg leading-[1.68] text-os-ink outline-none focus:border-os-vermilion-ink focus:ring-2 focus:ring-os-vermilion-ink/20" /><HermesExtractionEvidence field={field} result={detail.task.result}/></div>
             </div>)}
           </section></>}
+          {displayedSourceIdentity ? <HermesSourceIdentityReview proposal={displayedSourceIdentity} acceptedFields={acceptedSourceIdentityFields}
+            disabled={!approvalOpen || saving || saved} onToggle={(field, accepted) => setAcceptedSourceIdentityFields((current) => accepted
+              ? [...current.filter((item) => item !== field), field] : current.filter((item) => item !== field))} /> : null}
           {saved && <nav aria-label={t('entryActions')} className="mt-6 flex flex-wrap gap-5"><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit` }>{t('continueEditing')}</Link><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/versions${confirmation ? `?version=${encodeURIComponent(confirmation.versionId)}` : ''}`}>{t('viewVersions')}</Link></nav>}
           {saved && run?.status === 'awaiting_source_review' && confirmation ? <HermesSourceReview researchObjectId={routeParams.id} run={run} confirmation={confirmation} onSubmitted={() => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`)} /> : null}
           {!proposalUnavailable ? <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-5"><p className="text-base text-os-muted-paper" role="status">{saved ? confirmation ? t('saved') : t('legacyConfirmation') : approvalOpen ? complete ? t('ready') : t('incomplete') : t('taskState', { state: statusT(detail.task.state) })}</p><button type="button" disabled={saving || saved || !approvalOpen} onClick={confirm} className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('saving') : saved ? t('confirmed') : t('confirm')}</button></footer> : null}

@@ -248,6 +248,16 @@ export {
   type IngestionClaimEvidenceSuggestion,
   type IngestionClaimSelection,
 } from './ingestion/claim-evidence-bridge';
+export {
+  SOURCE_IDENTITY_FIELDS,
+  parseSourceIdentityProposal,
+  type SourceIdentityField,
+  type SourceIdentityProposal,
+  type SourceIdentityProposalItem,
+  type SourceIdentitySegment,
+  type SourceIdentityReview,
+  type SourceIdentitySnapshot,
+} from './ingestion/source-identity';
 export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';
 export {
   RESEARCH_IDENTITIES,

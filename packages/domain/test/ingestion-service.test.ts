@@ -9,6 +9,7 @@ import { persistDocumentSourceMapReference } from '../src/research-intelligence/
 import { createCommit } from '../src/commit/commits';
 import { updateClaim } from '../src/research-intelligence/claim-evidence-service';
 import { markTaskProgress } from '../src/agent/agent';
+import { projectSourceIdentity } from '../src/ingestion/source-identity';
 
 const TEST_RO_ID = '00000000-0000-4000-8000-000000000101';
 const CORE = { schemaVersion: '0.1.0', problem: 'Question', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
@@ -135,6 +136,68 @@ describe('ingestion confirmation research record', () => {
       expect(db.evidenceRecords[0]).toMatchObject({ exactQuote: quote, extractionStatus: 'needs_review', verifiedByUserId: null, locator: { page: 1, blockId: 'block-1', charRange: { start: 0, end: quote.length } } });
       expect(db.claimNodes[0]).toMatchObject({ assessment: 'missing', extractionStatus: 'needs_review' });
     }
+  });
+
+  it('freezes explicitly accepted source identity without changing platform identity', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const quote = 'A source-grounded title';
+    const artifactId = db.artifacts[0].id;
+    const contentHash = db.artifacts[0].blobSha256;
+    const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, { artifactId, contentHash,
+      parser: { name: 'fixture', version: '1' }, pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'title', kind: 'paragraph', text: quote,
+        boundingBox: { x: 0, y: 0, width: 200, height: 20 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }] }, 'succeeded');
+    const sourceLocator = { artifactId, contentHash, page: 1, blockId: 'title', charRange: { start: 0, end: quote.length },
+      boundingBox: { x: 0, y: 0, width: 200, height: 20 } };
+    const sourceIdentity = { schemaVersion: '0.1.0', title: { state: 'proposed', value: quote, evidenceSegments: [{ quote, sourceLocator }] },
+      authors: { state: 'not_extracted', value: [], evidenceSegments: [] }, doi: { state: 'not_extracted', value: '', evidenceSegments: [] },
+      articleLicense: { state: 'not_extracted', value: '', evidenceSegments: [] } };
+    db.agentTasks[0].result = { core: CORE, evidence: {}, sourceMapRef, sourceIdentity };
+    const token = projectSourceIdentity({ taskId: input.taskId, artifactId, contentHash, result: db.agentTasks[0].result })!.sourceIdentityToken;
+    const result = await confirmIngestionTask(deps, { ...input, sourceIdentityReview: { token, acceptedFields: ['title'] } });
+    expect(result.confirmation.sourceIdentity).toMatchObject({ reviewed: true, title: { state: 'recorded', value: quote },
+      authors: { state: 'not_recorded' } });
+    const frozen = db.versions[0].researchRecord as { dto: { schemaVersion: string; identity: Record<string, unknown> } };
+    expect(frozen.dto).toMatchObject({ schemaVersion: '1.1.0', identity: { source: result.confirmation.sourceIdentity } });
+    expect(frozen.dto.identity).toMatchObject({ originalAuthors: { state: 'not_recorded' }, originalDoi: { state: 'not_recorded' } });
+  });
+
+  it('atomically rejects source identity when the proposal was not explicitly reviewed', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const artifactId = db.artifacts[0].id;
+    const contentHash = db.artifacts[0].blobSha256;
+    const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, { artifactId, contentHash,
+      parser: { name: 'fixture', version: '1' }, pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'title', kind: 'paragraph', text: 'Title',
+        boundingBox: { x: 0, y: 0, width: 100, height: 20 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }] }, 'succeeded');
+    db.agentTasks[0].result = { core: CORE, evidence: {}, sourceMapRef, sourceIdentity: { schemaVersion: '0.1.0',
+      title: { state: 'proposed', value: 'Title', evidenceSegments: [{ quote: 'Title', sourceLocator: { artifactId, contentHash, page: 1,
+        blockId: 'title', charRange: { start: 0, end: 5 }, boundingBox: { x: 0, y: 0, width: 100, height: 20 } } }] },
+      authors: { state: 'not_extracted', value: [], evidenceSegments: [] }, doi: { state: 'not_extracted', value: '', evidenceSegments: [] },
+      articleLicense: { state: 'not_extracted', value: '', evidenceSegments: [] } } };
+    await expect(confirmIngestionTask(deps, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.versions).toHaveLength(0);
+    expect(db.commits).toHaveLength(0);
+    expect(db.ingestionTasks[0].state).toBe('needs_review');
+  });
+
+  it('clears a prior paper identity when a new ingestion has no source identity proposal', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const prior = await createCommit(deps, { researchObjectId: TEST_RO_ID, userId: input.userId, version: 1,
+      message: 'Paper A', artifacts: [{ logicalPath: 'paper-a.md', artifactId: db.artifacts[0].id }] });
+    const priorVersion = db.versions.find(version => version.id === prior.versionId)!;
+    const priorFrozen = priorVersion.researchRecord as { dto: { identity: Record<string, unknown> } };
+    const paperAIdentity = { schemaVersion: '0.1.0', reviewed: true,
+      title: { state: 'needs_review', value: 'Paper A', evidenceSegments: [] },
+      authors: { state: 'not_recorded', value: [], evidenceSegments: [] }, doi: { state: 'not_recorded', value: '', evidenceSegments: [] },
+      articleLicense: { state: 'not_recorded', value: '', evidenceSegments: [] } };
+    priorFrozen.dto.identity.source = paperAIdentity;
+    const priorBytes = JSON.stringify(priorVersion.researchRecord);
+
+    const result = await confirmIngestionTask(deps, { ...input, version: 2 });
+    const nextVersion = db.versions.find(version => version.id === result.confirmation.versionId)!;
+    const nextDto = (nextVersion.researchRecord as { dto: { schemaVersion: string; identity: Record<string, unknown> } }).dto;
+    expect(nextDto.schemaVersion).toBe('1.0.0');
+    expect(nextDto.identity).not.toHaveProperty('source');
+    expect(JSON.stringify(priorVersion.researchRecord)).toBe(priorBytes);
   });
 
   it('atomically rejects a source map reference bound to another artifact', async () => {

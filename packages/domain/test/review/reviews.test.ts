@@ -217,6 +217,22 @@ async function makeGraphPr() {
 }
 
 describe('merge research graph continuity', () => {
+  it('inherits source identity from the merged source version', async () => {
+    const f = await makeGraphPr();
+    const sourceIdentity = { schemaVersion: '0.1.0', reviewed: true,
+      title: { state: 'recorded', value: 'Feature paper', evidenceSegments: [{ quote: 'Source quote', sourceLocator: {
+        artifactId: f.evidence.artifactId, contentHash: f.evidence.contentHash, page: 1, blockId: 'source-block', charRange: { start: 0, end: 12 },
+        boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+      } }] },
+      authors: { state: 'not_recorded', value: [], evidenceSegments: [] }, doi: { state: 'not_recorded', value: '', evidenceSegments: [] },
+      articleLicense: { state: 'not_recorded', value: '', evidenceSegments: [] } };
+    f.source.researchRecord = { dto: { identity: { source: sourceIdentity } } };
+    await mergePullRequest(f.deps, { prId: f.pr.id, userId: f.owner.id, confirmHighRisk: false });
+    const merged = f.db.versions.toSorted((a, b) => b.versionNo - a.versionNo)[0]!;
+    const frozen = merged.researchRecord as { dto: { identity: { source: unknown } } };
+    expect(frozen.dto.identity.source).toEqual(sourceIdentity);
+  });
+
   it.each(['unchanged', 'edit', 'delete'] as const)('freezes the merge graph and continues its current rows: %s', async mode => {
     const f = await makeGraphPr();
     const author = seedUser(f.db, { id: 'merged-author', displayName: 'Merged author' });

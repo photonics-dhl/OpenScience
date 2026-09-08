@@ -254,7 +254,8 @@ export async function mergePullRequest(
     }
 
     // Freeze only after the merged author/license state exists in this transaction.
-    if (mergedVersionId) await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: mergedVersionId });
+    if (mergedVersionId && sourceTipVersion) await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: mergedVersionId,
+      sourceIdentityFromVersionId: sourceTipVersion.id });
 
     // 5. PR merged + 事件
     await tx.pullRequest.update({ where: { id: pr.id }, data: { status: 'merged' } });
