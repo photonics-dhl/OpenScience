@@ -76,7 +76,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
   }, [loadRun, runId]);
 
   React.useEffect(() => {
-    if (!runId || run?.status !== 'running') return undefined;
+    if (!runId || !run || ['succeeded', 'failed', 'stopped'].includes(run.status)) return undefined;
     const timer = window.setInterval(() => { void loadRun(); }, 5_000);
     return () => window.clearInterval(timer);
   }, [loadRun, run?.status, runId]);

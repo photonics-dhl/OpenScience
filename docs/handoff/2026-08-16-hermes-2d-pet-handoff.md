@@ -1,6 +1,11 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT 2026-09-08. Production88018512 / rollbackc1c7fa4b includes concurrent R1 evidence/confirmation hardening. Integrate it with grounded extraction recovery before any deployment. The ordinary-user same-task run still has all-empty core and is NOT accepted. Candidate998 read-only producer preflight yielded five sourced fields in two model calls; no DB/run changes or manual Claims.
+> CURRENT 2026-09-08：用户明确禁止继续测试/预检，产品实现与部署优先。production88018512 / rollbackc1c7fa4b（本轮服务器只读确认）；候选基于0e928a65，正在落实连续原文提取、Hermes进度刷新和显式无测试部署。未宣称完整流程已走通。
+
+## 当前执行约束与进展
+- 不运行测试、预检、模型试跑或自动 CI 测试；只执行交付必需的构建、启动、发布与回滚。历史验收清单不再作为本轮 next action。
+- 网页原会话现已取回真实6 Pro诊断：先选原文、再写最窄有据草稿；missing不表示信息不完整。采用连续原文摘录由服务器物化，避免自由摘要越过引用范围，不手写论文答案。
+- 998历史输出的method/results/limitations仍有引用覆盖不足，不能整体确认。现有用户run及计费状态保留，不再拿它做预检。
 
 ## Concurrent R1 scope
 - Preserve the deployed R1 cross-block evidence, empty-confirmation protection and human-revision provenance from codex/r1-record-hardening. Its nine-PDF remediation/evidence is tracked in docs/plans/2026-09-07-open-research-publication-plan.md; do not overwrite frozen records or claim its stage acceptance from this media workflow.
