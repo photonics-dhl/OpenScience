@@ -641,6 +641,27 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(calls).toBe(3);
   });
 
+  it('does not mislabel a provider failure after two all-missing rejections', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-provider-failure', contentHash: 'f'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{ id: 'paper-result', kind: 'paragraph',
+        text: 'The experiment measured a response.', boundingBox: { x: 1, y: 1, width: 90, height: 10 },
+        parser: { name: 'native-pdf', version: '1' }, transformations: [] }] }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const response = { schemaVersion: '0.1.0', fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, missing])) };
+    let calls = 0;
+    const provider: Provider = { name: 'provider-failure', model: 'provider-failure', complete: async () => {
+      calls += 1;
+      if (calls === 3) throw new Error('provider unavailable');
+      return { text: JSON.stringify(response), usage: { inputTokens: 1, outputTokens: 1 }, model: 'provider-failure' };
+    } };
+
+    await expect(extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap }))
+      .rejects.not.toMatchObject({ message: 'canonical_all_fields_missing' });
+    expect(calls).toBe(3);
+  });
+
   it('错误 schemaVersion 的响应不缓存其中看似合法的字段', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-1', contentHash: 'b'.repeat(64), parser: { name: 'cascade', version: '1' },

@@ -345,13 +345,14 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
   guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: (value: unknown) => string | undefined;
   validationDiagnostic: (value: unknown) => string | undefined;
-  allFieldsMissing: () => boolean;
+  allFieldsMissingExhausted: () => boolean;
   mergeRetained: () => ExtractedProposal;
 } {
   const allowed = new Map(blocks.map((block) => [block.promptId, block]));
   const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
   let allFieldsMissing = false;
+  let allFieldsMissingRejections = 0;
   const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason } => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return { reason: 'malformed_item' };
     const candidate = item as Record<string, unknown>;
@@ -401,6 +402,7 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     }
     if (invalidFields.size === 0 && SDF_CORE_FIELDS.every((field) => retained.get(field)?.needsMoreInformation === true)) {
       allFieldsMissing = true;
+      allFieldsMissingRejections += 1;
       for (const field of SDF_CORE_FIELDS) invalidFields.set(field, 'all_fields_missing');
     }
     return invalidFields.size === 0;
@@ -427,7 +429,7 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     validationDiagnostic: () => invalidFields.size === 0
       ? undefined
       : [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(','),
-    allFieldsMissing: () => allFieldsMissing,
+    allFieldsMissingExhausted: () => allFieldsMissingRejections === 3,
     mergeRetained: () => ({
       schemaVersion: SDF_CORE_VERSION,
       fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
@@ -615,7 +617,7 @@ export async function extractHandler(
         validationDiagnostic: validation.validationDiagnostic,
       });
     } catch (error) {
-      if (validation.allFieldsMissing()) {
+      if (validation.allFieldsMissingExhausted()) {
         throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_all_fields_missing', error);
       }
       throw error;

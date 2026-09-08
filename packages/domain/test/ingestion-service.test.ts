@@ -491,6 +491,33 @@ describe('multi-format ingestion service', () => {
     expect(db.usageLedger).toHaveLength(beforeLedgerSize);
   });
 
+  it('does not charge or requeue canonical all-missing work from a closed AgentSession', async () => {
+    const { deps, db, user } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+    const digest = 'd'.repeat(64);
+    task.state = 'needs_review'; task.retryCount = 1;
+    agentTask.status = 'succeeded'; agentTask.retryCount = 1; agentTask.executionAttempt = 2;
+    agentTask.result = {
+      core: { schemaVersion: '0.1.0', ...Object.fromEntries(fields.map((field) => [field, ''])) },
+      evidence: Object.fromEntries(fields.map((field) => [field, { quote: '', locator: '' }])),
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, []])), needsMoreInformation: [...fields],
+      sourceMapRef: { schemaVersion: 1, parserStatus: 'succeeded', artifactId: task.artifactId,
+        contentHash: db.artifacts.find((row) => row.id === task.artifactId)!.blobSha256,
+        objectKey: `derived/source-maps/${digest}.json`, serializedSha256: digest, size: 10 },
+    };
+    db.agentSessions.find((session) => session.id === agentTask.sessionId)!.status = 'closed';
+    const beforeLedgerSize = db.usageLedger.length;
+
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
+    expect(task).toMatchObject({ state: 'needs_review', retryCount: 1 });
+    expect(agentTask).toMatchObject({ status: 'succeeded', retryCount: 1, executionAttempt: 2 });
+    expect(db.usageLedger).toHaveLength(beforeLedgerSize);
+  });
+
   it('does not requeue a genuine reviewable SDF result', async () => {
     const { deps, db, user } = makeDeps();
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });

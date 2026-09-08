@@ -255,7 +255,7 @@ export async function retryIngestionTask(
           && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === 1
           && task.agentTask.executionAttempt === 2 && isCanonicalAllFieldsMissingResult(result, task.artifact)) {
           const session = await tx.agentSession.findUnique({ where: { id: task.agentTask.sessionId } });
-          canonicalAllMissingRecovery = session?.userId === input.userId;
+          canonicalAllMissingRecovery = session?.userId === input.userId && session.status === 'active';
         }
         if (!failedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
