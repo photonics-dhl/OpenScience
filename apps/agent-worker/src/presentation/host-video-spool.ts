@@ -23,8 +23,8 @@ export interface HostVideoSpoolConfig {
 export interface HostVideoInput {
   taskId: string;
   executionAttempt: number;
-  profile: 'onchip-field-sampling-v1';
-  sceneRoles: readonly ['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'];
+  profile: 'onchip-field-sampling-v1' | 'content-driven-v1';
+  sceneRoles?: readonly ['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'];
   sourceClaimIds: string[];
   storyboard: StoryboardDocument;
   sceneImages: Buffer[];
@@ -35,8 +35,8 @@ export interface HostVideoResult {
   size: number;
   contentHash: string;
   contentType: 'video/mp4';
-  generator: 'OpenScience isolated on-chip video renderer';
-  generatorVersion: 'onchip-field-sampling-v1';
+  generator: 'OpenScience isolated on-chip video renderer' | 'OpenScience isolated content-driven video renderer';
+  generatorVersion: 'onchip-field-sampling-v1' | 'content-driven-v1';
   inputHash: string;
   narration: { provider: 'Qwen3-TTS'; speaker: 'Serena'; timingStatus: 'estimated_requires_review' };
   metrics: Record<string, unknown>;
@@ -123,9 +123,12 @@ export class HostVideoSpool {
       || typeof runtime.modelRevision !== 'string' || !/^[a-zA-Z0-9._-]{1,128}$/.test(runtime.modelRevision)) fail('VIDEO_RUNNER_UNAVAILABLE');
     const ready = await lstat(readyPath);
     if (this.now() - ready.mtimeMs > READY_MAX_AGE || ready.mtimeMs > this.now() + 5_000) fail('VIDEO_RUNNER_UNAVAILABLE');
-    if (input.profile !== 'onchip-field-sampling-v1' || input.sceneImages.length !== 5
-      || JSON.stringify(input.sceneRoles) !== JSON.stringify(['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'])
-      || input.sourceClaimIds.length < 1 || input.sourceClaimIds.length > 12) fail('INVALID_VIDEO_INPUT');
+    const legacyProfile = input.profile === 'onchip-field-sampling-v1'
+      && input.sceneImages.length === 5
+      && JSON.stringify(input.sceneRoles) === JSON.stringify(['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction']);
+    const contentDrivenProfile = input.profile === 'content-driven-v1'
+      && input.sceneRoles === undefined && input.sceneImages.length >= 3 && input.sceneImages.length <= 6;
+    if ((!legacyProfile && !contentDrivenProfile) || input.sourceClaimIds.length < 1 || input.sourceClaimIds.length > 12) fail('INVALID_VIDEO_INPUT');
     input.sceneImages.forEach((bytes) => {
       if (bytes.length < 33 || bytes.length > MAX_PNG || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') fail('INVALID_VIDEO_INPUT');
     });
@@ -142,7 +145,7 @@ export class HostVideoSpool {
     const request = {
       schemaVersion: 1, id, taskId: input.taskId, executionAttempt: input.executionAttempt,
       profile: input.profile, inputHash, sourceClaimIds: input.sourceClaimIds,
-      sceneRoles: input.sceneRoles,
+      ...(legacyProfile ? { sceneRoles: input.sceneRoles } : {}),
       files,
       createdAt, deadlineAt: createdAt + this.timeout,
       narration: { provider: 'Qwen3-TTS', speaker: 'Serena', timingStatus: 'estimated_requires_review' },
@@ -190,8 +193,9 @@ export class HostVideoSpool {
         const metrics = JSON.parse((await boundedRead(join(resultDir, 'metrics.json'), MAX_JSON)).toString()) as Record<string, unknown>;
         return {
           filePath, size: verified.size, contentHash: verified.hash,
-          contentType: 'video/mp4', generator: 'OpenScience isolated on-chip video renderer',
-          generatorVersion: 'onchip-field-sampling-v1', inputHash,
+          contentType: 'video/mp4',
+          generator: legacyProfile ? 'OpenScience isolated on-chip video renderer' : 'OpenScience isolated content-driven video renderer',
+          generatorVersion: input.profile, inputHash,
           narration: { provider: 'Qwen3-TTS', speaker: 'Serena', timingStatus: 'estimated_requires_review' }, metrics, runtime,
         };
       } catch (error) {

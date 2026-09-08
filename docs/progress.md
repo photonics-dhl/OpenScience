@@ -1,55 +1,16 @@
-## 2026-09-08 — 用户授权实际论文到视频流程
-
-- 最新授权覆盖实际提取、图片和视频生成；仍不跑独立测试套件。407实际UI reanalysis扣1credit后schema失败（不连续引用），retry2/execution3，旧runfailed。未手改结果或重复上传。
-- 修复：已给来源范围内确定性补齐块、保留有效partial字段并显示诊断、绑定既有付款的一次免费schema恢复。修复发布后通过产品继续，再用同来源创建新run，保留旧失败历史。
-
-## 2026-09-08 — 已部署407ad49e
-
-- production407ad49e / rollback88018512；部署exit0，原文连续摘录、全空停止重试及非终态刷新上线。无论文/图片/视频试跑；完整产品闭环未确认。
-- 83cd0a02拆开worker build/test，后续默认构建不再内嵌测试。本轮旧build曾意外执行10项，已说明，不能声称零测试。
-- 用户禁止继续测试；不执行历史待办中的验收矩阵。
-
-> 本轮部署事实：407ad49e以--no-tests发布中；旧worker build内嵌test:parser-compiled意外运行10项，违反用户要求，已拆开build/test命令，未重跑。不得声称本轮完全零测试。
-
-## 2026-09-08 — 产品交付优先，停止测试
-
-- 用户明确不允许再测试。正在实现连续来源摘录、全过程进度刷新及无测试部署入口；不触发CI测试，不启动模型预检。
-- 当前候选基于0e928a65；服务器仍为88018512，rollbackc1c7fa4b。以下测试记录为历史，不是本轮执行计划。
-
-> 2026-09-08 用户强约束更新：AGENTS.md 已明确产品落地优先，默认不做预检/测试；仅对具体重大风险或阻塞故障做最小必要服务器检查。此条只更新执行政策，不改变下方产品版本与完成状态。
-
 # Progress
 
-## 2026-09-08: integrate concurrent R1 and grounded extraction recovery
+## 2026-09-08 — 内容驱动视频整改（进行中）
+- 用户纠正：Hermes应按每篇论文内容自主规划，不得固定论文SHA、五幕或物理机制；静图平移缩放不能冒充机制动画。
+- 生产db4e92086cc5f230feb1be4a722926d9819fd22f / rollback234e6b47bf911caa0ae76e1644631380a83834ea；canonical --no-tests发布完成。
+- 当前run13e3fcd5-a6f0-48d6-82d7-33263e06fe33：部分提取已确认、仅原文method Claim及23 Evidence、服务器生成分镜待审。两个草稿有科学问题，未批准；当前run尚未生成图片或视频。
+- 候选代码：content-driven-v1计划、动作原文依据、动态数量图像/视频、普通用户显式8任务授权、旧7授权升级、确定性对象动画renderer、3–6场景连续配音；新增约束迁移保留旧数据。
+- 网页6Pro完整8m10s架构答复已由主线程实际读取；采纳执行原语固定但论文叙事不固定、来源快照保留、科学动作需支持、实际动画非装饰运动。先前代理仅看到思考摘要，不算完成审查。
+- 正在High静态审查；不运行测试/本地构建/CI测试。随后服务器必要构建/部署、新renderer镜像与runner切换、实际同来源任务续跑。
+- 入口：docs/handoff/2026-08-16-hermes-2d-pet-handoff.md。更早证据查Git历史，不恢复旧next action。
 
-- Production88018512 / rollbackc1c7fa4b detected read-only; preserve parallel R1 cross-block evidence, no-empty-confirmation and human revision provenance. Nine-PDF R1 acceptance remains separately tracked in its publication plan. Integrating both branches; no deployed R1 work may be overwritten.
-- Candidate998 passed ECS build/types/lint/docs/tests/Parser16. One isolated real producer preflight returned5 nonempty sourced fields and missing reproducibility in2 calls (12678 input+1630 output=14308 product-model tokens). Packet /opt/openscience-diagnostics/998-sdf-real-source-20260908.jsonl; scientific review pending, no DB/run/ledger mutation. An earlier preflight command stopped before any call on active-release CAS mismatch.
-
-- Productionc1c7fa4b / rollback8c0601a7; CI34223306660/server build/types/lint/docs/API171/web569/Parser16 passed, deploy1788869423787-f16a8cd9-8260-438e-86b9-f3d1194a6ef8 succeeded. UI retry-v2 passed and browser/session closed; same AgentTask executionAttempt2/retryCount1 returned six empty fields and all needsMoreInformation. Scientific acceptance blocked; no confirmation/Claims/media. Chat6Pro+worker investigating without new product-model calls or DB resets.
-- Candidate2ccac6e5 implements aggregate all-missing rejection within the existing 3-call budget and one exact paid 1-to-2 recovery with actor/session, Serializable permission/CAS, ledger and audit. High diff review/server tests pending; run one read-only real producer preflight before deployment. Latest real attempt used6248 input+191 output=6439 product-model tokens; no structured retry. Input had359 canonical blocks/23968 chars with main-body evidence. Chat6Pro returned an Unusual activity restriction, no plan; Sol/high supplied the implementation boundaries.
-- HISTORICAL8c: CI34219115044, ECS build/types/lint/docs/gateway79/domain676/worker126/API171/web569/Parser16 passed. Deploy1788867164346-67c35e52-5cb0-43d2-b605-6ef048508169 succeeded after preserving/removing two exact stopped134 browser container references. Actual UI retry was rejected before domain/model execution because JSON request body was empty; source/run remain unchanged, retryCount0. Frontend transport repair underway.
-- HISTORICAL1ba: CI34212202821 and canonical deploy/retention passed (log1788861913105-4d326e11-fbea-4471-8037-1d124d2a15fa).123 focused server tests/build/types/lint/docs/Parser16 passed.
-- Ordinary qualityv2 RO714a0c2d / ingestion19149438 uploaded once. Actual result has no core: MiniMax-M3 completed3 calls, structured validation exhausted, catch returned sdf-proposal-unavailable. Do not count task succeeded as extraction success.
-- Recovery code132dcd07+5ffd5424+1d828176 implements permission/CAS, pending-only delivery, controlled crash recovery, current-run/step retry and UI action; High review clear; e794 server build/types/lint and gateway79/worker126/API171/web569 passed, domain675 passed with one missing-audit-fixture failure fixed6097b87f. Existing run90a25481 recovered after browser close/reopen; no new run/upload/manual Claims.
-- Failed MiniMax-M3 window consumed19035 input+2420 output=21455 tokens across3 calls; evidence .tmp/token-smart-logs/1788862810865-f787e3e5-d34d-495b-9d0a-9a43c2694499.log. This is product-model usage for one failed extraction, not Codex savings. One controlled diagnostic consumed21533 product-model tokens and isolated canonical shape/empty citation failures;59124e61 clarifies initial shape and repair minimum, guard unchanged. Current full IDs, tool versions, unchanged full-suite evidence and constraints are in CURRENT handoff. All runtime stays on ECS.
-
-## HISTORICAL 2026-09-08: prior 6cc candidate rolled back safely
-
-- Candidate `6cc6f46646b6ad97005b071ec085262bccb111a3` on `codex/onchip-video-release` is PR107; CI `34209642581` passed. ECS validation passed: domain `672`, web `568`, worker `594` with one intentional skip, API `171`, types, lint, docs, build, and Parser `16`.
-- Candidate `6cc6f466` deployment failed after public and exact-release checks when retention preparation found exited `xgs-hermes-run-acceptance-09beecba` retaining a read-only candidate mount. This was not a business-health failure. Automatic rollback restored healthy production `134ebdea796b922ac07d9f29b6148b458b5e515f`; journal is cleared. Log `1788860199633-c730685b-7af5-4db5-8922-0d20956d358c`.
-- All 39 migrations are now applied in production. Keep the additive Hermes schema; do not roll it back. Three exited, read-only test-container references were released after saving logs/metadata; database, source and evidence remain. Recovery/cleanup verified in log1788860988269-d89427ea-1c10-43f1-9913-1ace385f2781; retention gate unchanged.
-- Real normal-user browser upload created RO `6f3a07ba-c79a-461b-aae7-1dac1efb55ee` and task `27ddab3c-b52b-4005-a614-12c9d25e81dd`. After browser closure, extraction succeeded and ingestion waits for review. No human source confirmation, Claim/Evidence review, media generation, or media approval has occurred.
-- Durable Hermes UI and server flow retain exact confirmation-version recovery, quote-bound source review, separate Claim/Evidence verification, and server-owned continuation. SDF/extraction alone never establishes a completed workflow.
-- Scientific qualification and discontinuous-evidence feedback from Chat6Pro requires four generic extractor-prompt changes; the main thread has modified `apps/agent-worker/src/extractor.ts`, pending commit and ECS focused validation. The old source must not be retried; use the prepared normal-user `qualityv2` upload for the next candidate.
-- All runtime checks remain server-only. Do not reset, pull, stash, or overwrite the concurrent extractor change.
-## HISTORICAL 2026-09-08: user-approved assisted video
-
-- Production/public97aa06a542febf558a47cecbf6559bd0a6c876aa, rollbackc5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb. CI34192289263 and canonical server build/Parser16/migrations/runtime/public acceptance passed.
-- Real paper six fields confirmed and committed; same-version Claim bridge passed. Five scientific Claims/112 Evidence reviewed; storyboard-v3 and all5images approved. Prior failures preserved, only scene4 regenerated.
-- Actual53.875s1280x720H264/AAC video generated,1,926,620bytes. Full decode, actual animated scene frames, authenticatedRange, desktop/mobile playback and anonymous/cross-RO denial passed. User approved the video; API approval verified2026-09-08T06:32:43.612Z. Audio acceptance is attributed to the user.
-- Deterministic prompt assembly preserves complete scene and Claim conditions/limitations, actual1401chars and0intermediate model calls. Over1500 fails closed instead of lossy rewriting; existing identity/approval boundaries unchanged. Tests3+consumer39+compiledparser10/types/lint/build and independentHigh review passed.
-- token-smart scientific handoff updated and portable ZIP refreshed. Local zero text-planner calls do not establish whole-task Codex savings. Browser control still times out; prior actual Chat6Pro planning/review reused.
-- Current priority: server-owned Hermes workflow using existing OCR/ScanSci/retrieval/extraction/media. Ordinary-user acceptance without Codex orchestration first, UX/layout polish second, further capabilities afterward. Chat6Pro plan actually received;60s single browser actions succeeded. Durable server run implementation is underway.
-- Future UX polish: simplify historical/rejected asset display and replace internal/generic media labels. Current first-slice UX and desktop/mobile no-overflow checks passed; do not imply all UX refinements complete.
-
-CURRENT: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`. Next: clean the exited read-only container reference, validate the extractor changes, and deploy a new candidate before continuing normal-user review boundaries. CPU image installation remains paused; no new providers installed.
+## 已保留的边界
+- 已授权实际产品执行；不重上传、不手写Claims、不重置任务/费用、不用历史手工样片代替自动流程。
+- 论文提取仍partial，不能宣称完整理解全文；生成/来源核实/科学验证/发表彼此分开。
+- R1跨块证据与研究记录保护保持；root脏main及另一工作树不改写。
+- Main保持所选模型；Sol/medium实施、Sol/high边界审查、网页6Pro规划。没有整体token节省比例证据。

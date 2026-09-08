@@ -577,3 +577,13 @@ Source: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec . Request act
 - Review found excessive tick writes, per-row error isolation, missing Serializable create retry, and absent transition audit; fixes and regression validation are required before release.
 - Fresh production checkup passed (log1788852190942-86abf97c-1194-4e50-a3a6-9ad9cc3b0ac3); source/public release lookup log1788852567786-fb37d0d0-b45c-4374-b8cf-2339bc2f76c4. Production remains97aa06a, rollbackc5b0dd7.
 - Local Docker Linux engine unavailable; migration forward/rollback/reapply runtime test is still missing. Additive SQL/schema validation cannot replace that evidence. No production migration or deployment performed for this slice.
+
+## 2026-09-08 — 内容驱动媒体（当前实施范围）
+
+用户明确废止把固定论文样例当通用产品能力。固定的是安全执行原语和授权上限；论文SHA、场景顺序、科学对象/关系不得写死。Hermes依据同版已审核Claims及来源自主选取3–6幕（当前资源范围），给出旁白、时长和声明式对象/动作。每个动作附原文依据及含义；结构校验不等于科学审查。
+
+复用现有研究run、版本、来源、分镜修订、素材、任务/outbox、费用、图片与离线Qwen连续配音。新增content-driven-v1授权最多8个阶段任务，旧7任务授权由产品入口明确升级；不改旧授权或重复来源入库。renderer仅解释有限形状/箭头/示意轨迹/标签及受限运动，不执行模型代码、不抓外部URL；主画布由同一计划生成，图片是独立参考插图。常显概念/非实测/非仿真/尺寸时间非比例说明，不能借免责声明编造过程。
+
+已知限制：当前输出是中文有据概念动画，不是任意数值仿真或任意科学图形的万能生成器。缺证据或原语不足应缩小范围/留待修订，不回退某篇论文模板。用户禁止测试套件；当前交付通过实际产品任务推进，服务器必要构建部署，尚未以新MP4证明闭环。
+
+网页完整规划： https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec （8m10s答复，主线程已读）。它的扩展状态/测试矩阵属建议，不覆盖用户不测试的约束；本轮不新建Agent框架或复制整套合同。

@@ -288,7 +288,7 @@ export interface HermesResearchRun {
   status: HermesResearchRunStatus;
   version: number;
   versionId: string | null;
-  profile: 'onchip-field-sampling-v1' | null;
+  profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | null;
   maxAgentTasks: number | null;
   sourceClaimIds: string[];
   error: string | null;
@@ -331,7 +331,7 @@ export function submitHermesSourceReview(
   input: {
     expectedVersion: number;
     versionId: string;
-    generationGrant: { profile: 'onchip-field-sampling-v1'; maxAgentTasks: 7 };
+    generationGrant: { profile: 'content-driven-v1'; maxAgentTasks: 8 };
     reviews: HermesSourceReview[];
   },
   idempotencyKey: string,
@@ -340,6 +340,17 @@ export function submitHermesSourceReview(
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(input),
+  });
+}
+
+export function authorizeHermesGenerationGrant(
+  researchObjectId: string,
+  runId: string,
+  expectedVersion: number,
+): Promise<{ run: HermesResearchRun }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}/generation-grant`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedVersion, generationGrant: { profile: 'content-driven-v1', maxAgentTasks: 8 } }),
   });
 }
 
@@ -809,8 +820,7 @@ export async function generatePresentationSceneImage(roId: string, versionId: st
 }
 
 export interface PresentationVideoRequest {
-  profile: 'onchip-field-sampling-v1';
-  sceneRoles: ['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'];
+  profile: 'content-driven-v1';
   storyboardAssetId: string;
   sceneImageAssetIds: string[];
 }

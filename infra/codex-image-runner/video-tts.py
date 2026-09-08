@@ -1,4 +1,4 @@
-"""Offline continuous Serena narration for an approved five-scene storyboard."""
+"""Offline continuous Serena narration for an approved bounded storyboard."""
 import json
 import numpy as np
 import resource
@@ -9,7 +9,6 @@ from pathlib import Path
 import soundfile as sf
 import torch
 from qwen_tts import Qwen3TTSModel
-ROLES = ('driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction')
 INSTRUCTION = '用自然平实的普通话连贯地解释，语气放松，语速适中。'
 MODEL_ROOT = Path('/models/qwen3-tts-12hz-1.7b-customvoice')
 
@@ -28,7 +27,7 @@ def validate_waveform(waveform, sample_rate):
 def main():
     source = json.loads(Path('/input/storyboard.json').read_text(encoding='utf-8'))
     scenes = source.get('scenes')
-    if source.get('schemaVersion') != 1 or not isinstance(scenes, list) or len(scenes) != 5:
+    if source.get('schemaVersion') != 1 or not isinstance(scenes, list) or not 3 <= len(scenes) <= 6:
         raise ValueError('invalid storyboard')
     texts = []
     for scene in scenes:
@@ -60,7 +59,7 @@ def main():
     total_weight = sum(weights); cursor = 0.0; timeline = []
     for index, (text, weight) in enumerate(zip(texts, weights)):
         start = cursor
-        cursor = duration if index == 4 else cursor + duration * weight / total_weight
+        cursor = duration if index == len(texts) - 1 else cursor + duration * weight / total_weight
         parts = []
         for sentence in filter(None, re.split(r'(?<=[。！？；,.!?;])', text)):
             parts.extend(sentence[offset:offset + 80] for offset in range(0, len(sentence), 80))
@@ -70,7 +69,7 @@ def main():
             cue_start = cue_cursor
             cue_cursor = scene_duration if part_index == len(parts) - 1 else cue_cursor + scene_duration * len(part) / part_weight
             cues.append({'start': cue_start, 'end': cue_cursor, 'text': part})
-        timeline.append({'role': ROLES[index], 'text': text, 'start': start, 'cues': cues})
+        timeline.append({'text': text, 'start': start, 'cues': cues})
     metadata = {
         'schemaVersion': 1, 'provider': 'Qwen3-TTS 1.7B CustomVoice / CPU offline', 'speaker': 'Serena',
         'timingStatus': 'estimated_requires_review', 'durationSeconds': duration, 'scenes': timeline,

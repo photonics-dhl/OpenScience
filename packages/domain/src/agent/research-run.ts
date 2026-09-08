@@ -8,7 +8,7 @@ import { now } from '../workspace/types';
 import { confirmIngestionClaimEvidenceBridge, type IngestionClaimSelection } from '../ingestion/claim-evidence-bridge';
 import type { IngestionDeps } from '../ingestion/ingestion-service';
 import { findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
-import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH } from '../assets/video';
+import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE } from '../assets/video';
 import { parsePresentationGenerationPayload, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
 import { presentationStoryboardView } from '../assets/storyboard';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
@@ -17,6 +17,13 @@ const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 const READY_INGESTION_STATES = new Set(['needs_review', 'confirmed', 'written']);
 const FAILED_INGESTION_STATES = new Set(['failed_retryable', 'failed_blocked']);
 const RUN_INCLUDE = { steps: { orderBy: { ordinal: 'asc' as const } } } as const;
+type GenerationProfile = typeof ONCHIP_FIELD_SAMPLING_PROFILE | typeof CONTENT_DRIVEN_PROFILE;
+type GenerationGrant = { profile: typeof ONCHIP_FIELD_SAMPLING_PROFILE; maxAgentTasks: 7 }
+  | { profile: typeof CONTENT_DRIVEN_PROFILE; maxAgentTasks: 8 };
+function validGrant(value: { profile: string | null; maxAgentTasks: number | null }): boolean {
+  return (value.profile === ONCHIP_FIELD_SAMPLING_PROFILE && value.maxAgentTasks === 7)
+    || (value.profile === CONTENT_DRIVEN_PROFILE && value.maxAgentTasks === 8);
+}
 
 export type HermesResearchRunStatus = 'running' | 'awaiting_source_review' | 'awaiting_claim_review'
   | 'generating_storyboard' | 'awaiting_storyboard_review' | 'generating_scene_images'
@@ -49,7 +56,7 @@ export interface HermesResearchRunView {
   researchObjectId: string;
   actorId: string;
   versionId: string | null;
-  profile: typeof ONCHIP_FIELD_SAMPLING_PROFILE | null;
+  profile: GenerationProfile | null;
   maxAgentTasks: number | null;
   sourceClaimIds: string[];
   status: HermesResearchRunStatus;
@@ -78,7 +85,7 @@ function toView(run: RunRow): HermesResearchRunView {
     researchObjectId: run.researchObjectId,
     actorId: run.actorId,
     versionId: run.versionId,
-    profile: run.profile as typeof ONCHIP_FIELD_SAMPLING_PROFILE | null,
+    profile: run.profile as GenerationProfile | null,
     maxAgentTasks: run.maxAgentTasks,
     sourceClaimIds: run.sourceClaimIds,
     status: run.status as HermesResearchRunStatus,
@@ -218,7 +225,7 @@ export interface HermesSourceReviewInput {
   expectedVersion: number;
   versionId: string;
   idempotencyKey: string;
-  generationGrant: { profile: typeof ONCHIP_FIELD_SAMPLING_PROFILE; maxAgentTasks: 7 };
+  generationGrant: GenerationGrant;
   reviews: Array<{ ingestionTaskId: string; snapshotToken: string; selections: IngestionClaimSelection[] }>;
 }
 
@@ -228,8 +235,8 @@ export async function confirmHermesSourceReview(
   ctx: AuditContext = {},
 ) {
   if (!input.idempotencyKey.trim() || input.idempotencyKey.length > 200
-    || input.generationGrant.profile !== ONCHIP_FIELD_SAMPLING_PROFILE || input.generationGrant.maxAgentTasks !== 7) {
-    throw new HermesResearchRunError('VALIDATION_ERROR', 'Hermes source review requires the fixed on-chip generation grant');
+    || !validGrant(input.generationGrant)) {
+    throw new HermesResearchRunError('VALIDATION_ERROR', 'Hermes source review requires a bounded generation grant');
   }
   const reviewIds = input.reviews.map((review) => review.ingestionTaskId);
   const requestedClaimCount = input.reviews.reduce((total, review) => total + review.selections.length, 0);
@@ -285,13 +292,13 @@ export async function confirmHermesSourceReview(
       || version.researchObject.status !== 'draft') throw new HermesResearchRunError('SOURCE_NOT_READY', 'Reviewed Version is unavailable');
     const changed = await tx.hermesResearchRun.updateMany({
       where: { id: input.runId, actorId: input.actorId, researchObjectId: input.researchObjectId, status: 'awaiting_source_review', version: input.expectedVersion },
-      data: { status: 'awaiting_claim_review', versionId: input.versionId, profile: ONCHIP_FIELD_SAMPLING_PROFILE,
-        maxAgentTasks: 7, sourceClaimIds, sourceReviewDigest: digest, version: { increment: 1 }, error: null },
+      data: { status: 'awaiting_claim_review', versionId: input.versionId, ...input.generationGrant,
+        sourceClaimIds, sourceReviewDigest: digest, version: { increment: 1 }, error: null },
     });
     if (changed.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before reviewing sources');
     await recordAudit(deps, tx, { actorId: input.actorId, action: 'hermes.research_run.source_review',
       workspaceId: version.researchObject.workspaceId, targetType: 'hermes_research_run', targetId: input.runId,
-      metadata: { versionId: input.versionId, sourceClaimIds, profile: ONCHIP_FIELD_SAMPLING_PROFILE, maxAgentTasks: 7 } }, ctx);
+      metadata: { versionId: input.versionId, sourceClaimIds, ...input.generationGrant } }, ctx);
     const updated = await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: input.runId }, include: RUN_INCLUDE });
     return { run: toView(updated), claims: createdClaims, evidence: createdEvidence };
   }, { isolationLevel: 'Serializable', timeout: 30_000 });
@@ -299,6 +306,50 @@ export async function confirmHermesSourceReview(
     try { return await execute(); }
     catch (error) { if ((error as { code?: string }).code === 'P2034' && attempt < 2) continue; throw error; }
   }
+}
+
+/** Explicitly renew a legacy grant before any image/video work is submitted. */
+export async function authorizeHermesGenerationGrant(deps: HermesResearchRunDeps, input: {
+  actorId: string; researchObjectId: string; runId: string; expectedVersion: number;
+  generationGrant: { profile: typeof CONTENT_DRIVEN_PROFILE; maxAgentTasks: 8 };
+}, ctx: AuditContext = {}): Promise<HermesResearchRunView> {
+  if (input.generationGrant.profile !== CONTENT_DRIVEN_PROFILE || input.generationGrant.maxAgentTasks !== 8
+    || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 1) {
+    throw new HermesResearchRunError('VALIDATION_ERROR', 'Content-driven generation requires an explicit bounded grant');
+  }
+  return deps.prisma.$transaction(async tx => {
+    const run = await tx.hermesResearchRun.findUnique({ where: { id: input.runId }, include: RUN_INCLUDE });
+    if (!run || run.actorId !== input.actorId || run.researchObjectId !== input.researchObjectId) {
+      throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
+    }
+    const ro = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
+    const membership = ro ? await requireActiveMembership(tx, ro.workspaceId, input.actorId).catch(() => null) : null;
+    const version = run.versionId ? await tx.version.findUnique({ where: { id: run.versionId } }) : null;
+    if (!ro || ro.status !== 'draft' || !version || version.status !== 'draft' || version.researchObjectId !== ro.id
+      || !membership || !WRITE_ROLES.has(membership.membership.role)) {
+      throw new HermesResearchRunError('FORBIDDEN', 'Generation grant permission is unavailable');
+    }
+    if (!['awaiting_claim_review', 'awaiting_storyboard_review'].includes(run.status)
+      || run.steps.some(step => step.stage === 'scene_image' || step.stage === 'video')) {
+      throw new HermesResearchRunError('SOURCE_NOT_READY', 'Generation grant can only change before image generation');
+    }
+    if (run.status === 'awaiting_storyboard_review') {
+      const step = run.steps.find(item => item.stage === 'storyboard');
+      const asset = step?.presentationAssetId ? await tx.presentationAsset.findUnique({ where: { id: step.presentationAssetId } }) : null;
+      const plan = asset && presentationStoryboardView(asset, run.sourceClaimIds);
+      if (!asset || !plan || (asset.status === 'approved' && plan.document.scenes.some(scene => !scene.animation))) {
+        throw new HermesResearchRunError('SOURCE_NOT_READY', 'Revise the approved legacy storyboard before upgrading its generation grant');
+      }
+    }
+    const changed = await tx.hermesResearchRun.updateMany({ where: {
+      id: run.id, actorId: input.actorId, version: input.expectedVersion, status: run.status,
+    }, data: { ...input.generationGrant, version: { increment: 1 }, error: null } });
+    if (changed.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before authorizing');
+    await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId,
+      action: 'hermes.research_run.generation_grant', targetType: 'hermes_research_run', targetId: run.id,
+      metadata: { previousProfile: run.profile, previousMaxAgentTasks: run.maxAgentTasks, ...input.generationGrant } }, ctx);
+    return toView(await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }));
+  }, { isolationLevel: 'Serializable' });
 }
 
 export async function requireHermesPresentationTaskAuthority(
@@ -314,7 +365,7 @@ export async function requireHermesPresentationTaskAuthority(
   const step = run?.steps[0];
   if (!run || !step || run.steps.length !== 1 || run.actorId !== input.actorId
     || run.researchObjectId !== input.payload.researchObjectId || run.versionId !== input.payload.versionId
-    || run.profile !== ONCHIP_FIELD_SAMPLING_PROFILE || run.maxAgentTasks !== 7 || run.status !== expectedStatus
+    || !validGrant(run) || run.profile !== input.authority.profile || run.status !== expectedStatus
     || step.agentTaskId !== input.taskId || step.status !== 'running'
     || !isDeepStrictEqual([...run.sourceClaimIds].sort(), input.payload.sourceClaimIds)
     || run.researchObject.status !== 'draft') throw new Error('[blocked] Hermes run authority is invalid');
@@ -352,13 +403,13 @@ async function createPresentationSteps(
   stage: 'storyboard' | 'scene_image' | 'video',
   inputs: Array<{ ordinal: number; payload: Record<string, unknown> }>,
 ): Promise<void> {
-  if (!run.versionId || run.profile !== ONCHIP_FIELD_SAMPLING_PROFILE || run.maxAgentTasks !== 7) {
+  if (!run.versionId || !validGrant(run)) {
     throw new Error('Hermes generation grant is invalid');
   }
   const existingCount = await tx.hermesResearchStep.count({
     where: { runId: run.id, stage: { in: ['storyboard', 'scene_image', 'video'] }, agentTaskId: { not: null } },
   });
-  if (existingCount + inputs.length > run.maxAgentTasks) throw new Error('Hermes generation grant exhausted');
+  if (existingCount + inputs.length > run.maxAgentTasks!) throw new Error('Hermes generation grant exhausted');
   const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
     userId: run.actorId, researchObjectId: run.researchObjectId, kind: 'visualization',
     title: 'Hermes research video', idempotencyKey: `hermes-run-session:${run.id}`,
@@ -366,7 +417,7 @@ async function createPresentationSteps(
   for (const item of inputs) {
     const payload = {
       ...item.payload,
-      hermesRunAuthority: { runId: run.id, stage, ordinal: item.ordinal, profile: ONCHIP_FIELD_SAMPLING_PROFILE },
+      hermesRunAuthority: { runId: run.id, stage, ordinal: item.ordinal, profile: run.profile },
     };
     const { task } = await persistAgentTaskInTransaction(deps, tx, {
       sessionId: session.id, userId: run.actorId, kind: 'presentation.generate', payload,
@@ -381,7 +432,7 @@ async function createPresentationSteps(
 }
 
 async function validateReviewedSources(tx: Prisma.TransactionClient, run: RunRow): Promise<'pending' | 'ready' | 'invalid'> {
-  if (!run.versionId || run.profile !== ONCHIP_FIELD_SAMPLING_PROFILE || run.maxAgentTasks !== 7 || run.sourceClaimIds.length === 0) return 'invalid';
+  if (!run.versionId || !validGrant(run) || run.sourceClaimIds.length === 0) return 'invalid';
   const version = await tx.version.findUnique({ where: { id: run.versionId } });
   if (!version || version.researchObjectId !== run.researchObjectId || version.status !== 'draft') return 'invalid';
   const claims = await tx.claimNode.findMany({ where: { id: { in: run.sourceClaimIds }, researchObjectId: run.researchObjectId, versionId: run.versionId } });
@@ -416,7 +467,7 @@ async function validateReviewedSources(tx: Prisma.TransactionClient, run: RunRow
     });
     return matching.length === 0;
   })) return evidence.some((row) => row.extractionStatus === 'needs_review') ? 'pending' : 'invalid';
-  if (!evidence.some((row) => row.contentHash === ONCHIP_SOURCE_CONTENT_HASH)) return 'invalid';
+  if (run.profile === ONCHIP_FIELD_SAMPLING_PROFILE && !evidence.some((row) => row.contentHash === ONCHIP_SOURCE_CONTENT_HASH)) return 'invalid';
   return 'ready';
 }
 
@@ -569,11 +620,17 @@ export async function reconcileHermesResearchRuns(
             await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
             return null;
           }
+          if (run.profile === ONCHIP_FIELD_SAMPLING_PROFILE
+            && ['awaiting_claim_review', 'awaiting_storyboard_review', 'awaiting_scene_images_review'].includes(run.status)) {
+            await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version },
+              data: { lastReconciledAt: now(deps), error: 'Legacy template generation paused; explicitly authorize a content-driven plan before continuing' } });
+            return null;
+          }
           if (run.status === 'awaiting_claim_review') {
             await createPresentationSteps(deps, tx, run, 'storyboard', [{ ordinal: 0, payload: {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
               kind: 'interactive_html', sourceClaimIds: run.sourceClaimIds,
-              storyboard: { locale: 'zh', style: 'technical', instruction: '用五幕中文分镜准确解释片上场采样实验；每幕简洁、可验证，并只使用已审核的 Claims。' },
+              storyboard: { locale: 'zh', style: 'technical', instruction: '根据当前已审核Claims自主选择讲解重点、场景数量、时长和动态表现。只讲来源支持的内容；若只提取到方法，就仅讲方法。不套用任何特定论文或固定科学机制，不为凑场景补写结果。' },
             } }]);
             return moveRun(deps, tx, run, 'generating_storyboard', ro.workspaceId);
           }
@@ -656,7 +713,16 @@ export async function reconcileHermesResearchRuns(
           await tx.hermesResearchStep.updateMany({ where: { runId: run.id, stage, status: 'awaiting_approval' }, data: { status: 'succeeded' } });
           if (run.status === 'awaiting_storyboard_review') {
             const storyboardAssetId = assets[0]!.id;
-            await createPresentationSteps(deps, tx, run, 'scene_image', Array.from({ length: 5 }, (_, ordinal) => ({ ordinal, payload: {
+            const approved = presentationStoryboardView(assets[0]!, run.sourceClaimIds);
+            if (!approved || (run.profile === CONTENT_DRIVEN_PROFILE && approved.document.scenes.some(scene => !scene.animation))) {
+              return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Approved storyboard requires a content-driven animation plan');
+            }
+            const sceneCount = approved.document.scenes.length;
+            if (run.profile === ONCHIP_FIELD_SAMPLING_PROFILE && sceneCount !== 5) {
+              return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Legacy generation grant requires upgrade for this storyboard');
+            }
+            if (sceneCount + 2 > run.maxAgentTasks!) return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Hermes generation grant cannot cover this storyboard');
+            await createPresentationSteps(deps, tx, run, 'scene_image', Array.from({ length: sceneCount }, (_, ordinal) => ({ ordinal, payload: {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
               kind: 'image', sourceClaimIds: run.sourceClaimIds, sceneImage: { storyboardAssetId, sceneIndex: ordinal },
             } })));
@@ -668,7 +734,8 @@ export async function reconcileHermesResearchRuns(
             await createPresentationSteps(deps, tx, run, 'video', [{ ordinal: 0, payload: {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
               kind: 'video', sourceClaimIds: run.sourceClaimIds, video: { storyboardAssetId: storyboard,
-                sceneImageAssetIds: assets.map((asset) => asset!.id), profile: ONCHIP_FIELD_SAMPLING_PROFILE, sceneRoles: ONCHIP_SCENE_ROLES },
+                sceneImageAssetIds: assets.map((asset) => asset!.id), profile: run.profile,
+                ...(run.profile === ONCHIP_FIELD_SAMPLING_PROFILE ? { sceneRoles: ONCHIP_SCENE_ROLES } : {}) },
             } }]);
             return moveRun(deps, tx, run, 'generating_video', ro.workspaceId);
           }

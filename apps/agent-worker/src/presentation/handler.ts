@@ -104,7 +104,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       }
       const result = await options.videoSpool.generate({
         taskId: task.id, executionAttempt: task.executionAttempt, profile: payload.video.profile,
-        sceneRoles: payload.video.sceneRoles,
+        ...(payload.video.profile === 'onchip-field-sampling-v1' ? { sceneRoles: payload.video.sceneRoles } : {}),
         sourceClaimIds: payload.sourceClaimIds, storyboard: videoParents.storyboardView.document, sceneImages,
       });
       bytes = Buffer.alloc(0); contentType = result.contentType; extension = 'mp4';

@@ -1,7 +1,7 @@
 import type { AuthDeps } from '@openscience/auth';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, type HermesSourceReviewDeps } from '@openscience/domain';
+import { authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, type HermesSourceReviewDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import type { StorageAdapter } from '@openscience/storage';
 import { requireCurrentUser } from './session-guard';
@@ -22,11 +22,15 @@ const selectionSchema = z.object({
 const sourceReviewSchema = z.object({
   expectedVersion: z.number().int().positive(),
   versionId: z.string().uuid(),
-  generationGrant: z.object({ profile: z.literal('onchip-field-sampling-v1'), maxAgentTasks: z.literal(7) }).strict(),
+  generationGrant: z.object({ profile: z.literal('content-driven-v1'), maxAgentTasks: z.literal(8) }).strict(),
   reviews: z.array(z.object({
     ingestionTaskId: z.string().uuid(), snapshotToken: z.string().regex(/^[a-f0-9]{64}$/),
     selections: z.array(selectionSchema).min(1).max(12),
   }).strict()).min(1).max(20),
+}).strict();
+const generationGrantSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  generationGrant: z.object({ profile: z.literal('content-driven-v1'), maxAgentTasks: z.literal(8) }).strict(),
 }).strict();
 
 function auditCtx(req: FastifyRequest): AuditContext {
@@ -66,5 +70,17 @@ export function registerResearchRunRoutes(app: FastifyInstance, deps: Omit<Herme
     return reply.status(201).send(await confirmHermesSourceReview({ ...deps, storage: deps.storage }, {
       actorId: user.userId, researchObjectId: id, runId, idempotencyKey, ...body,
     }, auditCtx(req)));
+  });
+
+  app.post('/research-objects/:id/hermes-runs/:runId/generation-grant', async (req, reply) => {
+    void reply.header('Cache-Control', 'private, no-store');
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id, runId } = readParamsSchema.parse(req.params);
+    const body = generationGrantSchema.parse(req.body);
+    const run = await authorizeHermesGenerationGrant(deps, {
+      actorId: user.userId, researchObjectId: id, runId, ...body,
+    }, auditCtx(req));
+    return reply.status(201).send({ run });
   });
 }

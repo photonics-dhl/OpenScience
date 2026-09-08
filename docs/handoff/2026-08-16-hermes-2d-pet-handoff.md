@@ -1,71 +1,44 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> CURRENT 2026-09-08：生产407ad49e86f3869c1fe34a574f3ba2ca76b1b442 / rollback88018512ba7d34bad5ced93386e1381184e9ee93已完成部署。连续原文提取、全空停止盲重试、非终态进度刷新已上线。用户禁止继续测试；未重跑论文或媒体，完整自主闭环仍未确认。
+## Objective and current authorization
+- User requires server-owned paper extraction → content-driven images and substantive animated video. Hermes chooses content, scene count/order/duration and objects from each paper; never a paper-specific template.
+- Actual product execution and necessary server build/deployment are authorized. No independent tests, preflights, model benchmarks, local runtime/build, or CI tests. Commits use [skip ci].
+- Ordinary workspace user; preserve source/permission/review/charging boundaries. No handwritten Claims, source replacement or database task resets.
 
-## 最新授权与执行
-- 用户现明确要求实际执行论文提取→视频并确保流程畅通；允许实际产品调用，仍禁止独立测试/预检套件。
-- 407实际执行产品reanalysis后，同task retry2/execution3失败；三次structured输出因contiguous_ids_required拒绝，run90a25481已failed，费用1credit已扣。
-- 正发布：服务器展开已提供的连续块、保留partial字段及diagnostics、已有付费schema失败补偿一次无需再扣。随后用同ingestion/artifact新建run，旧失败run不复活，不重上传。
+## Version tuple
+- Branch codex/onchip-video-release; worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release.
+- HEAD db4e92086cc5f230feb1be4a722926d9819fd22f plus UNCOMMITTED content-driven implementation.
+- Production db4e92086cc5f230feb1be4a722926d9819fd22f; rollback234e6b47bf911caa0ae76e1644631380a83834ea.
+- Canonical deployment completed; log1788879135201-537dffe8-3380-450a-bdbf-f6009257d2f4.log under C:/Users/Mac/AppData/Local/Temp/token-smart-checks. No test suites in this deployment.
+- Root dirty main and token-smart-live-workflow dirty branch are separate. Preserve concurrent R1 evidence hardening; fresh production marker before deployment.
 
-## 当前执行约束与进展
-- 407ad49e以--no-tests部署完成；旧worker build内嵌10项parser测试意外执行，已向用户说明并拆开build/test。不重跑，也不声称本轮零测试。该package命令修正仅影响后续构建，无需为此重复部署正在启动的应用。
-- 不运行测试、预检、模型试跑或自动 CI 测试；只执行交付必需的构建、启动、发布与回滚。历史验收清单不再作为本轮 next action。
-- 网页原会话现已取回真实6 Pro诊断：先选原文、再写最窄有据草稿；missing不表示信息不完整。采用连续原文摘录由服务器物化，避免自由摘要越过引用范围，不手写论文答案。
-- 998历史输出的method/results/limitations仍有引用覆盖不足，不能整体确认。现有用户run及计费状态保留，不再拿它做预检。
+## Actual source and run
+- Paper arXiv2009.06045v1,25pages; artifact SHA d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a.
+- Ordinary actor a15edcab-7ec8-4e75-86d7-aa9c0498a829; RO714a0c2d-8c00-4471-a4f9-4a1270eafcdb; version1011dcdb-66fa-4221-beab-5880e38f3939.
+- Ingestion19149438-6f2a-4a95-aba0-b0db31d4f62e; AgentTask11675dd1-684f-4df8-af8d-6fe52edc0bb4; source artifact6864cc65-f944-474a-af40-bab7ca8c65d7.
+- Current Hermes run13e3fcd5-a6f0-48d6-82d7-33263e06fe33 awaits storyboard review. Old failed run90a25481 stays historical.
+- Actual234 recovery used the same paid task/source without another credit; extraction succeeded partially (problem/insight/method). Results/limitations/reproducibility missing with diagnostics; do not claim full extraction.
+- Only method Claim1b75d4c6-ab34-4810-b34d-88f4bc4a1289 selected, original statement unchanged,23 Evidence source-reviewed via ordinary authenticated product API. No manually authored scientific Claims.
+- Server generated original storyboard3d46fd45-7e1e-4d43-b5f1-1845ba3de5a5 and requested revision445a7f17-173e-479b-bded-08a1efef1e5c. BOTH DRAFT; scientific problems, do not approve. No current-run images/video yet.
 
-## Concurrent R1 scope
-- Preserve the deployed R1 cross-block evidence, empty-confirmation protection and human-revision provenance from codex/r1-record-hardening. Its nine-PDF remediation/evidence is tracked in docs/plans/2026-09-07-open-research-publication-plan.md; do not overwrite frozen records or claim its stage acceptance from this media workflow.
+## Active implementation
+- db4 adds approved direct storyboard revision adoption (same actor/RO/version/Claims/base/task, CAS and audit) and grounded planner instructions.
+- Pending content-driven-v1:3–6 content-selected scenes, bounded objects/actions with source quotations; no scripts/URLs. Actual diagram motion, not PNG pan/zoom alone.
+- New grant8 covers up to6 images+storyboard+video; old grant7 must be explicitly upgraded via product endpoint, never silently enlarged. Additive DB CHECK migration retains old profile.
+- Main owns domain run/assets/animation/planner/migration/docs/deploy. Sol/medium worker owns API/UI/spool/runner/TTS/renderer. Sol/high read-only review.
+- Existing onchip profile is historical capability, not evidence of a general workflow. New content-driven renderer needs a fresh immutable media image AND video-runner install with its digest.
+- Chat6Pro full architecture reply actually read by main (8m10s), same conversation6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec. Courier previously mistook thinking summaries for output; those were not a review.
 
-## 当前版本与后续
-- Branch codex/onchip-video-release，应用release407ad49e；后续83cd0a02仅拆除build内嵌测试并同步文档，不改变已部署运行时代码。
-- 部署日志：C:/Users/Mac/AppData/Local/Temp/token-smart-checks/1788875083763-415eaf3b-a066-4fce-8a02-4102cc15edb8.log，exit0；服务启动/公网release切换完成。Parser/ScanSci/BGE功能探针均跳过，CI跳过。
-- 不再自动运行历史fixture/UI验收helper或付费试跑。用户实际使用从Hermes现有来源审核和生成入口继续；若报告真实阻塞，直接修复。
+## Next actions
+1. Finish bounded content-driven implementation and High review; no tests. Sync docs, commit [skip ci], push, server-only canonical --no-tests deployment.
+2. Build actual media image on ECS; install video runner using existing offline TTS image, new renderer digest, exact release. Keep rollback identity.
+3. Use ordinary product API to explicitly upgrade current run grant. Request one source-grounded revision from original base; Hermes chooses scenes and actions. Approve only reviewed actual output.
+4. Server reconciler generates scene images; review actual content, approve, server generates MP4; review actual audio/motion and report result. Never substitute historical assisted sample.
 
-## Historical versions (not CURRENT)
-- Production88018512ba7d34bad5ced93386e1381184e9ee93 / rollbackc1c7fa4bbcd304510d394884c8266d7d2e68d225 verified from ECS markers. Historicalc1: CI34223306660 and ECS build/types/lint/docs/API171/web569/Parser16 passed; deploy1788869423787-f16a8cd9-8260-438e-86b9-f3d1194a6ef8 succeeded. Historical8c: CI34219115044 and ECS build/types/lint/docs/gateway79/domain676/worker126/API171/web569/Parser16 passed. Deploy1788867164346-67c35e52-5cb0-43d2-b605-6ef048508169 succeeded. Initial8c attempt rolled back because two old134 browser containers retained bind mounts; their logs were saved and exact stopped containers removed. Historical1ba: Canonical deploy and retention completed, log1788861913105-4d326e11-fbea-4471-8037-1d124d2a15fa; post-checkup1788862450223-26f8c28d-1e5e-4a74-8008-ae38fcdc1aa8. CI34212202821 passed.
-- Release worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release, branch codex/onchip-video-release, HEAD998e227f being merged with production88018512; aggregate extraction and precise paid recovery passed ECS checks and one real producer preflight, PR107 open. Main owns deployment/docs. Do not overwrite concurrent changes.
-- Development E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow, codex/token-smart-live-workflow, HEAD005ffb8d8298d3476e8411046cae300079bd8344; relevant final source/tests copied back, dirty work retained. Root dirty main separate: do not reset/pull/stash.
-
-## Integrated production continuity
-- Preserve `134ebdea` atomic ingestion confirmation.versionId, canonical source block IDs, frozen research records and graph inheritance. All 39 migrations are now applied in production; retain the additive Hermes schema after application rollback.
-- Candidate `a72b5e1c` and its externally removed server directory are historical evidence only. All runtime tests/builds remain ECS-only.
-
-## Product and scientific evidence
-- Real paper2009.06045v1,25pages, SHA d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a. Six substantive fields scientifically narrowed, confirmed and committed via UI; strict same-version Claim bridge passed without reupload after bbox roundtrip repair.
-- RO af1a9817-dad3-4c5e-ace4-f33951f19574; version a66f7b15-8d8f-42bf-9f58-c4dd38bbd162. Original ingestionc1ee0470-729c-4852-9f3c-0569e83778e1, AgentTaska167c7b3-81cf-4fa1-b79d-7438c352b537.
-- Five mechanism Claims/112 exact Evidence explicitly reviewed and verified; original auto-bridge Claims are not thereby all scientifically verified.
-- Storyboard-v3 asset0f568ba8-b67f-4fff-8032-1333fad6a390 approved,251 narration characters. Images0..3 reused; correct scene4 asset58f77883-a967-4fd9-94fe-1d4b5fda4e37 approved after actual visual review. All artwork schematic, not measured geometry/amplitudes or simulation.
-- Actual video task/assetca0908bb-5795-4226-b1fa-6b71400f7e09 succeeded without retry, now user-approved. SHA00d49d87c0e7190965a99b1c36e1830fe42259a5ff5099c8b443b48ce7133338,1,926,620bytes,53.875s,1280x720H264/AAC24kHzmono.
-- Complete server decode and source/public/local identity passed.15 frames and5 contiguous scene audio excerpts preserved. Main viewed early/late frames of each scene: actual pulse motion, phase/emission changes, delay scan and signed-field reconstruction; not only still slides. Limitations and non-simulation labels visible.
-- Authenticated Range206/invalidRange416 passed. Real UI desktop1440/mobile390 playback advances,readyState4,no horizontal overflow. Cross-RO404 and anonymous401 refuse video. Main viewed saved UI screenshots.
-- UX first slice empty-state/contrast deployed/accepted. Auth small PNG optimizer twice blocked7 CIcases; direct static PNG fix69ea938 passes original7 and full CI. Existing media selection UX still shows generic/internal labels and historical rejected assets; future polish, not proof of final UX quality.
-
-## Current objective and acceptance
-- User approved video ca0908bb-5795-4226-b1fa-6b71400f7e09; verified approved at2026-09-08T06:32:43.612Z. Evidence: video-user-approval-v1/approval-review-record.json. Do not repeat approval or generation.
-- Accepted sample still depended on main/Chat-authored scientific refinements and local stage submissions; it is not an autonomous Hermes workflow.
-- User now requires existing OCR, ScanSci, retrieval, extraction and media capabilities to be coordinated by Hermes on the server. First complete the autonomous real-user flow; then improve UX/layout/visual design; add further capabilities afterward.
-- Reuse existing queue/outbox and tenant/source checks. Normal workspace user submits; server continues without Codex, handles necessary review/resume and produces grounded results. Another supported paper must pass without manually authored Claims/local orchestration.
-- Durable runs now recover by server run URL, use exact `confirmation.versionId` and exact preview snapshots, make the bounded seven-task generation grant explicit, and leave all model orchestration to the server. Claim/Evidence, storyboard, image, and video approvals remain explicit human boundaries.
-- Chat6Pro reported scientific-qualification and discontinuous-evidence weaknesses. Four generic extractor-prompt requirements are integrated in the current working tree; actual server output must be revalidated before claiming quality improvement.
-
-## Server validation and recovery
-- ECS candidate validation passed: full domain `672`, web `568`, worker `594` with one intentional skip, API `171`, types, lint, docs, build, and Parser `16`; CI `34209642581` also passed.
-- Normal-user browser upload created RO `6f3a07ba-c79a-461b-aae7-1dac1efb55ee`, ingestion task `27ddab3c-b52b-4005-a614-12c9d25e81dd`; after browser closure extraction reached `succeeded` and ingestion `needs_review`. No human source confirmation, Claim/Evidence review, media generation, or media approval occurred.
-- Retention preparation failed only because exited container `xgs-hermes-run-acceptance-09beecba` still has the candidate read-only mount. Public/exact-release checks had passed; this is not a business-health failure. Three own exited read-only test containers were removed after preserving logs/metadata; recovery verified in log1788860988269-d89427ea-1c10-43f1-9913-1ace385f2781. Database/source/evidence retained; retention gate unchanged.
-- New ordinary qualityv2 RO714a0c2d-8c00-4471-a4f9-4a1270eafcdb, ingestion19149438-6f2a-4a95-aba0-b0db31d4f62e, AgentTask11675dd1-684f-4df8-af8d-6fe52edc0bb4. Parser/SourceMap passed; MiniMax-M3 completed3 calls but structured validation exhausted. Result lacks core/evidence; succeeded/needs_review is misleading. Recovery implemented: serializable authorization/CAS, exact legacy marker retry, pending-only delivery claim, controlled crash recovery, existing run/step continuation and real UI retry. High findings fixed. ECS e794 full build/types/lint passed; gateway79/domain675+1failure/worker126/API171/web569. Audit failure was missing fixture sink, fixed6097b87f. One real diagnostic identified malformed object shapes and results with zero source IDs;59124e61 clarifies shape and repair minimum without relaxing validation. Recovery and frontend JSON repair deployed; all-empty scientific extraction is the current blocker. Do not manually change DB state or reupload.
-- Real UI created run90a25481-c030-4fd0-af29-9327a93f43e5 once. API and DOM both awaiting_source_review after browser close/reopen, alerts0; source reviewFields0. V3 timeout was a race against the earlier running snapshot, not a product load failure. V4 read-only report quality-v2-existing-run-inspect-v1 passed; do not recreate run. V5 actual retry-source clicked once on8c but request returned500: Fastify rejects application/json without body. Domain was not entered, retryCount0 and task/run unchanged, no model call. f5fe66be fixed frontend JSON body; c1 deployed. Actual V5 quality-v2-source-retry-v2 passed, SESSION_CLOSED; same task executionAttempt2/retryCount1. Result now has six empty core/evidence fields and all needsMoreInformation; not accepted. Evidence1788869954763-e6f4cb53-5783-4bff-a525-deb1a5512647. Do not repeat retry, reset DB/counters, or confirm empty core. Chat6Pro request encountered Unusual activity and returned no conclusion; Sol/high plan approved aggregate all-missing handling plus exact paid retryCount1-to-2 recovery (same session owner, atomic credit/CAS/audit). Sol/medium implementation committed2ccac6e5, High diff review pending. Real attempt used6248 input+191 output, first-round all-missing; selected359 blocks/23968chars includes main body. One new-candidate read-only producer preflight follows server checks before deployment; not autonomous workflow proof.
-- Latest1ba focused extractor/text tests123, types/lint/docs/build/images/Parser16 passed. Existing6cc full-suite evidence remains valid for unchanged code. Actual failed scientific extraction is retained, not accepted.
-- V6 Evidence and V7 asset review helpers are uploaded/server syntax checked/High CLEAR but unexecuted. Packet comparisons bind exact content, IDs, timestamps, source quotes and stage ordinals; only UI approvals, no generation calls. Helpers/evidence remain in the ignored token-smart-release directory.
-- Tool paths /opt/openscience-evals/hermes-user-journey/run-browser-v3.sh and v4; all browser runtime on ECS. V3 init had concurrent-write tail syntax failure after upload succeeded; restored atomically, own stopped container/logs preserved/cleaned. Future tools use separate versions and atomic publication.
-
-## Failure history / routing
-- Initial scene4 task5ec57a87 failed structured composition. Numeric feedback recovered schema but image taskd7ce0396-52c3-4401-a07f-24ffa0f9a39a replaced nanoantenna with radio/satellite apparatus; main rejected via API. Semantic promptc5b0dd71 still failed structured taskbbba7cdf-ddcb-4c1a-bc83-45f2b146dcdf before image generation. All evidence retained.
-- Final97aa06a5 removes lossy text-model rewriting: deterministic complete approved scene+all Claim statements/conditions/limitations; actual1401chars, zero intermediate calls.1500accept/1501reject, no truncation;40k input protection preserved. Long contexts now explicitly require revised/split approved source instead of silently dropping qualifiers. This is a deliberate scope/quality limit, not arbitrary-paper automation.
-- New tests3+consumer39+compiledparser10/types/lint/build passed; independent Sol/high architecture/semantic review. Main keeps selected strong model; bounded Sol/medium implementation. codex-image still consumes Codex; product MiniMax distinct. Zero intermediate-call saving is local to this step, not a valid whole-task savings percentage.
-- Ordinary Chat6Pro actually supplied planning/scientific wording/scene design/storyboard review at https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec. Latest server-flow plan actually retrieved from6Pro after8m33s;60s single-action browser calls resolved default timeout. No new screenshot/audio review is implied.
-- Global token-smart scientific-validation now preserves physical qualifiers and favors complete deterministic assembly where possible. Share package docs/user/_ideas/token-smart-share-20260908-scientific-handoff.zip refreshed; no overall savings claim.
-
-## Evidence and entry points
-- All helpers/evidence under development apps/web/test/visual/out/token-smart-release (Git ignored). Actual MP4 video-v1/onchip-field-sampling.mp4; video-v1/server-review/; video-ui-v1/; image-approval-final-v3/; scene-images-v3/. Historicalv1/v2 retained.
-- Controlled run validates exact release, uses actor11b6cf52-fcd4-4f7d-a3ff-8ea3ae9592fd, closes ephemeral sessions. No credentials printed. stage-video-v1 uses XGS_STORYBOARD_OUTPUT=storyboard-v3,XGS_IMAGE_OUTPUT=scene-images-v3; do not resubmit successful video.
-- Baseline docs/OpenScience_Kimi_Development_Spec.md; integrated product design and literature-recovery plan. Fixed on-chip profile only. CPU image installation user-paused. Parser no network/Secret,nonroot,readonly,512MiB. SSH only root wrappers+explicit Git Bash; production through canonical scripts.
+## Evidence and boundaries
+- Helper source E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow/apps/web/test/visual/out/token-smart-release (ignored). ECS /opt/openscience-evals/hermes-user-journey.
+- read-product-run.cjs returns current run and exact API-shaped assets. request-product-revision.cjs is ordinary auth/CSRF/idempotent API pattern; -v2 was prepared but NOT submitted.
+- Logs: source1788877289630-df14e2f8-19a8-49a1-88ac-ff310e36a1cd; source approve1788877983966-ce8c8796-dd51-42dd-80d8-593d70581d7f; Evidence1788878309256-e75da8ca-8e36-4934-9426-6b67aeb50bf1; latest drafts1788879052260-875e65a0-7d1b-4861-b0fe-8270fe9d3545.
+- SSH only root infra/scripts/ssh-run.sh via explicit C:/Program Files/Git/bin/bash.exe. LF shell files, <=8KB commands (gzip/chunk longer payloads), never print secrets/.env.
+- Historical video ca0908bb used manual assistance and fixed source-specific renderer; not current autonomous/general evidence. No overall token-saving percentage established.
+- Read-first baseline docs/OpenScience_Kimi_Development_Spec.md; integrated product plan; this handoff. Full older evidence remains in Git history.

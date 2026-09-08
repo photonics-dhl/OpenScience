@@ -1,4 +1,5 @@
 import { PresentationAssetError } from './errors';
+import { parseSceneAnimation, type SceneAnimation } from './animation';
 export interface StoryboardRequest {
     locale: 'zh' | 'en';
     style: 'watercolor' | 'technical' | 'ink';
@@ -14,6 +15,7 @@ export interface StoryboardDocument {
         visualAction: string;
         durationSeconds: number;
         sourceClaimIds: string[];
+        animation?: SceneAnimation;
     }>;
 }
 export interface StoryboardView {
@@ -27,7 +29,7 @@ function object(value: unknown): Record<string, unknown> { if (!value || typeof 
     return invalid(); return value as Record<string, unknown>; }
 function keys(value: Record<string, unknown>, required: string[], optional: string[] = []) { if (required.some(k => !(k in value)) || Object.keys(value).some(k => !required.includes(k) && !optional.includes(k)))
     invalid(); }
-function text(value: unknown, max: number): string { if (typeof value !== 'string' || !value.trim() || value.length > max)
+function text(value: unknown, max: number): string { if (typeof value !== 'string' || !value.trim() || value.length > max || /[\u0000-\u001f]/.test(value))
     return invalid(); return value; }
 export function parseStoryboardRequest(value: unknown): StoryboardRequest {
     const v = object(value);
@@ -44,12 +46,12 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
     const covered = new Set<string>();
     const scenes = v.scenes.map(raw => {
         const s = object(raw);
-        keys(s, ['title', 'narration', 'visualAction', 'durationSeconds', 'sourceClaimIds']);
+        keys(s, ['title', 'narration', 'visualAction', 'durationSeconds', 'sourceClaimIds'], ['animation']);
         if (!Number.isInteger(s.durationSeconds) || Number(s.durationSeconds) < 4 || Number(s.durationSeconds) > 20 || !Array.isArray(s.sourceClaimIds) || s.sourceClaimIds.length < 1 || s.sourceClaimIds.length > 12 || new Set(s.sourceClaimIds).size !== s.sourceClaimIds.length || s.sourceClaimIds.some(id => typeof id !== 'string' || !selected.includes(id)))
             return invalid();
         const ids = s.sourceClaimIds as string[];
         ids.forEach(id => covered.add(id));
-        return { title: text(s.title, 120), narration: text(s.narration, 600), visualAction: text(s.visualAction, 1000), durationSeconds: s.durationSeconds as number, sourceClaimIds: [...ids] };
+        return { title: text(s.title, 120), narration: text(s.narration, 600), visualAction: text(s.visualAction, 1000), durationSeconds: s.durationSeconds as number, sourceClaimIds: [...ids], ...('animation' in s ? { animation: parseSceneAnimation(s.animation, ids) } : {}) };
     });
     const duration = scenes.reduce((n, s) => n + s.durationSeconds, 0);
     if (duration < 24 || duration > 90 || selected.some(id => !covered.has(id)))

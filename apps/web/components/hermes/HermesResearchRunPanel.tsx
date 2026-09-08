@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import {
   ApiClientError,
+  authorizeHermesGenerationGrant,
   createHermesResearchRun,
   getHermesResearchRun,
   type DashboardTaskApi,
@@ -37,6 +38,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
   const t = useTranslations('hermesRun');
   const [run, setRun] = React.useState<HermesResearchRun | null>(null);
   const [starting, setStarting] = React.useState(false);
+  const [granting, setGranting] = React.useState(false);
   const [loading, setLoading] = React.useState(Boolean(runId));
   const [error, setError] = React.useState('');
   const eligibleTasks = React.useMemo(
@@ -95,6 +97,19 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
     }
   }
 
+  async function upgradeGenerationGrant() {
+    if (!run || granting) return;
+    setGranting(true); setError('');
+    try {
+      const result = await authorizeHermesGenerationGrant(researchObjectId, run.id, run.version);
+      setRun(result.run);
+    } catch (cause) {
+      setError(cause instanceof ApiClientError ? cause.message : t('grantError'));
+    } finally {
+      setGranting(false);
+    }
+  }
+
   const sourceReady = run?.status === 'awaiting_source_review';
   const claimReviewReady = run?.status === 'awaiting_claim_review' && Boolean(run.versionId);
   const terminal = run?.status === 'failed' || run?.status === 'stopped';
@@ -102,6 +117,8 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
     'generating_storyboard', 'awaiting_storyboard_review',
     'generating_scene_images', 'awaiting_scene_images_review', 'generating_video', 'awaiting_video_review', 'succeeded',
   ].includes(run.status));
+  const legacyGrantNeedsUpgrade = run?.status === 'awaiting_storyboard_review'
+    && run.profile === 'onchip-field-sampling-v1' && run.maxAgentTasks === 7;
   return <section className="surface-folio-sheet mt-7 max-w-3xl border-y border-os-rule-paper px-5 py-6 sm:px-7" aria-labelledby="hermes-run-title" data-hermes-research-run={run?.status ?? 'new'}>
     <p data-reading-role="caption" className="text-os-vermilion-ink">Hermes</p>
     <h2 id="hermes-run-title" className="mt-2 text-2xl font-medium text-os-ink">{t('title')}</h2>
@@ -123,6 +140,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
         {sourceReady ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={reviewHref(researchObjectId, run)}>{t('reviewSource')}</Link> : null}
         {claimReviewReady && run?.versionId ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`${runHref(researchObjectId, run.id)}&claimReview=1`}>{t('reviewClaims')}</Link> : null}
         {presentationReady && run?.versionId ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(researchObjectId)}/presentation?version=${encodeURIComponent(run.versionId)}`}>{t('reviewPresentation')}</Link> : null}
+        {legacyGrantNeedsUpgrade ? <button type="button" disabled={granting} onClick={() => void upgradeGenerationGrant()} className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline disabled:opacity-40">{t(granting ? 'granting' : 'upgradeGrant')}</button> : null}
         <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={runHref(researchObjectId, run.id)}>{t('reopen')}</Link>
         {terminal ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(researchObjectId)}/files`}>{t('openFiles')}</Link> : null}
       </nav>

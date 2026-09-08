@@ -9,23 +9,76 @@ import { atomicWrite, exists, safeRead, UUID } from './core.mjs';
 
 const exec = promisify(execFile);
 const ROLES = ['driver_signal','tip_enhancement','emission_collection','delay_scan','field_reconstruction'];
+const OBJECT_KINDS = ['rect','ellipse','arrow','trace','label'];
+const OBJECT_COLORS = ['ink','blue','teal','amber','muted'];
+const ACTION_KINDS = ['enter','fade','translate','pulse','draw','highlight'];
 const SHA = /^[a-f0-9]{64}$/;
 const MIN_FREE_BYTES = 2n * 1024n * 1024n * 1024n;
 async function docker(args, timeout=360000){return exec('docker',args,{timeout,maxBuffer:128*1024,encoding:'utf8'});}
 function invalid(){throw Error('INVALID_REQUEST');}
 async function directory(path){const s=await lstat(path);if(!s.isDirectory()||s.isSymbolicLink())throw Error('UNSAFE_DIRECTORY');}
 function strictObject(value,keys){if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join(',')!==[...keys].sort().join(','))invalid();return value;}
+function unit(value){return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1;}
+function boundedText(value,max){if(typeof value!=='string'||!value.trim()||value.length>max)invalid();return value;}
+function validateAnimation(value,sceneClaimIds){
+ const plan=strictObject(value,['objects','actions']);
+ if(!Array.isArray(plan.objects)||plan.objects.length<1||plan.objects.length>12||!Array.isArray(plan.actions)||plan.actions.length<1||plan.actions.length>16)invalid();
+ const objects=plan.objects.map(raw=>{
+  const kind=raw?.kind;const item=strictObject(raw,['id','kind','x','y','width','height','color','sourceClaimIds',...(kind==='label'?['label']:[]),...(['arrow','trace'].includes(kind)?['points']:[])]);
+  if(typeof item.id!=='string'||!/^[a-z][a-z0-9_-]{0,31}$/.test(item.id)||!OBJECT_KINDS.includes(item.kind)||!OBJECT_COLORS.includes(item.color)
+   ||!unit(item.x)||!unit(item.y)||!unit(item.width)||item.width===0||!unit(item.height)||item.height===0||item.x+item.width>1||item.y+item.height>1
+   ||!Array.isArray(item.sourceClaimIds)||item.sourceClaimIds.length<1||item.sourceClaimIds.length>12||new Set(item.sourceClaimIds).size!==item.sourceClaimIds.length
+   ||item.sourceClaimIds.some(id=>typeof id!=='string'||!sceneClaimIds.includes(id)))invalid();
+  if(kind==='label')boundedText(item.label,60);
+  if(['arrow','trace'].includes(kind)){
+   if(!Array.isArray(item.points)||item.points.length<2||item.points.length>(kind==='arrow'?2:32))invalid();
+   for(const rawPoint of item.points){const point=strictObject(rawPoint,['x','y']);if(!unit(point.x)||!unit(point.y))invalid();}
+  }
+  return item;
+ });
+ const byId=new Map(objects.map(item=>[item.id,item]));if(byId.size!==objects.length)invalid();
+ const actions=plan.actions.map(raw=>{
+  const kind=raw?.kind;const item=strictObject(raw,['kind','target','start','end','meaning','basis',...(kind==='translate'?['toX','toY']:[])]);const target=byId.get(item.target);
+  const basis=strictObject(item.basis,['claimId','quote']);
+  if(!target||!ACTION_KINDS.includes(kind)||!unit(item.start)||!unit(item.end)||item.start>=item.end
+   ||typeof item.meaning!=='string'||!item.meaning.trim()||item.meaning.length>180
+   ||typeof basis.claimId!=='string'||!target.sourceClaimIds.includes(basis.claimId)||typeof basis.quote!=='string'||basis.quote.trim().length<12||basis.quote.length>400)invalid();
+  if(kind==='translate'&&(!unit(item.toX)||!unit(item.toY)||item.toX+target.width>1||item.toY+target.height>1))invalid();
+  if(kind==='draw'&&!['arrow','trace'].includes(target.kind))invalid();return item;
+ });
+ if(new Set(actions.map(action=>`${action.target}\u0000${action.kind}`)).size!==actions.length)invalid();
+ if(!actions.some(action=>['translate','pulse','draw'].includes(action.kind)&&byId.get(action.target).kind!=='label'))invalid();
+ return {objects,actions};
+}
+function validateContentStoryboard(bytes,request){
+ const value=strictObject(JSON.parse(bytes.toString()),['schemaVersion','title','scenes']);
+ if(value.schemaVersion!==1||!Array.isArray(value.scenes)||value.scenes.length<3||value.scenes.length>6||value.scenes.length!==request.files.scenes.length)invalid();
+ boundedText(value.title,120);
+ const allowedClaims=new Set(request.sourceClaimIds);const covered=new Set();
+ value.scenes.forEach(scene=>{
+  const item=strictObject(scene,['title','narration','visualAction','durationSeconds','sourceClaimIds','animation']);
+  boundedText(item.title,120);boundedText(item.narration,600);boundedText(item.visualAction,1000);
+  if(!Number.isInteger(item.durationSeconds)||item.durationSeconds<4||item.durationSeconds>20||!Array.isArray(item.sourceClaimIds)||item.sourceClaimIds.length<1||item.sourceClaimIds.length>12
+   ||new Set(item.sourceClaimIds).size!==item.sourceClaimIds.length||item.sourceClaimIds.some(id=>typeof id!=='string'||!allowedClaims.has(id)))invalid();
+  item.sourceClaimIds.forEach(id=>covered.add(id));validateAnimation(item.animation,item.sourceClaimIds);
+ });
+ if(request.sourceClaimIds.some(id=>!covered.has(id))||value.scenes.reduce((sum,scene)=>sum+scene.durationSeconds,0)<24||value.scenes.reduce((sum,scene)=>sum+scene.durationSeconds,0)>90)invalid();
+ return value;
+}
 
 async function snapshotVideoRequest(dir,id,now=Date.now()){
- const request=strictObject(JSON.parse((await safeRead(join(dir,'request.json'),128*1024)).toString()),['schemaVersion','id','taskId','executionAttempt','profile','inputHash','sourceClaimIds','sceneRoles','files','createdAt','deadlineAt','narration']);
- if(request.schemaVersion!==1||request.id!==id||request.taskId!==id||!UUID.test(id)||request.profile!=='onchip-field-sampling-v1'||!SHA.test(request.inputHash)
+ const raw=JSON.parse((await safeRead(join(dir,'request.json'),128*1024)).toString());const contentDriven=raw?.profile==='content-driven-v1';
+ const request=strictObject(raw,['schemaVersion','id','taskId','executionAttempt','profile','inputHash','sourceClaimIds',...(contentDriven?[]:['sceneRoles']),'files','createdAt','deadlineAt','narration']);
+ if(request.schemaVersion!==1||request.id!==id||request.taskId!==id||!UUID.test(id)||!['onchip-field-sampling-v1','content-driven-v1'].includes(request.profile)||!SHA.test(request.inputHash)
   ||!Number.isInteger(request.executionAttempt)||request.executionAttempt<1||request.createdAt>now||request.deadlineAt-now<60000||request.deadlineAt-now>360000
   ||!Array.isArray(request.sourceClaimIds)||request.sourceClaimIds.length<1||request.sourceClaimIds.length>12||new Set(request.sourceClaimIds).size!==request.sourceClaimIds.length
-  ||JSON.stringify(request.sceneRoles)!==JSON.stringify(ROLES))invalid();
+  ||request.sourceClaimIds.some(id=>typeof id!=='string'||!UUID.test(id))
+  ||(!contentDriven&&JSON.stringify(request.sceneRoles)!==JSON.stringify(ROLES)))invalid();
  strictObject(request.narration,['provider','speaker','timingStatus']);
  if(request.narration.provider!=='Qwen3-TTS'||request.narration.speaker!=='Serena'||request.narration.timingStatus!=='estimated_requires_review')invalid();
  const files=strictObject(request.files,['storyboard','scenes']);
- const expected=[strictObject(files.storyboard,['name','size','sha256']),...((Array.isArray(files.scenes)&&files.scenes.length===5)?files.scenes.map(v=>strictObject(v,['name','size','sha256'])):(invalid(),[]))];
+ const sceneCount=contentDriven&&Array.isArray(files.scenes)?files.scenes.length:5;
+ const expected=[strictObject(files.storyboard,['name','size','sha256']),...((Array.isArray(files.scenes)&&files.scenes.length===sceneCount&&sceneCount>=3&&sceneCount<=6)?files.scenes.map(v=>strictObject(v,['name','size','sha256'])):(invalid(),[]))];
  const buffers=[];
  for(let i=0;i<expected.length;i++){
   const spec=expected[i],name=i===0?'storyboard.json':`scene-${i-1}.png`,limit=i===0?128*1024:10*1024*1024;
@@ -33,6 +86,7 @@ async function snapshotVideoRequest(dir,id,now=Date.now()){
   const bytes=await safeRead(join(dir,name),limit);if(bytes.length!==spec.size||createHash('sha256').update(bytes).digest('hex')!==spec.sha256)invalid();buffers.push(bytes);
  }
  if(createHash('sha256').update(JSON.stringify(files)).digest('hex')!==request.inputHash)invalid();
+ if(contentDriven)validateContentStoryboard(buffers[0],request);
  return {request,storyboard:buffers[0],scenes:buffers.slice(1)};
 }
 export async function validateVideoRequest(dir,id,now=Date.now()){return (await snapshotVideoRequest(dir,id,now)).request;}
@@ -89,6 +143,7 @@ export async function runVideoOne(config,dependencies={}){
   return {id,status:'invalid'};
  }
  const request=snapshot.request;
+ const contentDriven=request.profile==='content-driven-v1';
  await chown(privateDir,0,0);await chmod(privateDir,0o700);
  if(dependencies.afterValidation)await dependencies.afterValidation(request,privateDir);
  const started=join(privateDir,'started');
@@ -101,19 +156,20 @@ export async function runVideoOne(config,dependencies={}){
  const ttsInput=join(privateDir,'tts-input'),tts=join(privateDir,'tts'),renderInput=join(privateDir,'render-input'),output=join(privateDir,'output');
  await prepare(ttsInput,10001);await writeOwnedExclusive(join(ttsInput,'storyboard.json'),snapshot.storyboard,10001);
  await prepare(tts,10001);await prepare(renderInput,1000);await prepare(output,1000);
- for(let i=0;i<5;i++)await writeOwnedExclusive(join(renderInput,`scene-${i}.png`),snapshot.scenes[i],1000);
+ for(let i=0;i<snapshot.scenes.length;i++)await writeOwnedExclusive(join(renderInput,`scene-${i}.png`),snapshot.scenes[i],1000);
  if(dependencies.executeReserved)return dependencies.executeReserved(request,privateDir,{ttsInput,tts,renderInput,output});
  try{
   await docker([...common(`xgs-video-tts-${id}`,'12g','4','256'),'--user','10001:10001','-v',`${config.model}:/models/qwen3-tts-12hz-1.7b-customvoice:ro`,'-v',`${config.scripts}:/scripts:ro`,'-v',`${ttsInput}:/input:ro`,'-v',`${tts}:/output:rw`,'--entrypoint','python',config.ttsImage,'/scripts/video-tts.py'],Math.max(1,request.deadlineAt-Date.now()));
   const narration=JSON.parse((await safeRead(join(tts,'narration.json'),128*1024)).toString());
   const storyboard=JSON.parse(snapshot.storyboard.toString());
-  const renderStoryboard={schemaVersion:1,title:storyboard.title,locale:'zh',style:'technical',provider:narration.provider,speaker:narration.speaker,profile:request.profile,scenes:storyboard.scenes.map((scene,i)=>({title:scene.title,artwork:`scene-${i}.png`,start:narration.scenes[i].start,cues:narration.scenes[i].cues,role:ROLES[i]}))};
+  const renderStoryboard={schemaVersion:1,title:storyboard.title,locale:'zh',style:'technical',provider:narration.provider,speaker:narration.speaker,profile:request.profile,scenes:storyboard.scenes.map((scene,i)=>({title:scene.title,artwork:`scene-${i}.png`,start:narration.scenes[i].start,cues:narration.scenes[i].cues,...(contentDriven?{sourceClaimIds:scene.sourceClaimIds,animation:scene.animation}:{role:ROLES[i]})}))};
   await writeOwnedExclusive(join(renderInput,'storyboard.json'),Buffer.from(JSON.stringify(renderStoryboard)),1000);
   await writeOwnedExclusive(join(renderInput,'narration.wav'),await safeRead(join(tts,'narration.wav'),32*1024*1024),1000);
   await docker([...common(`xgs-video-render-${id}`,'4g','2','128'),'--user','1000:1000','-v',`${renderInput}:/input:ro`,'-v',`${output}:/output:rw`,config.rendererImage,'--input','/input','--output','/output'],Math.max(1,request.deadlineAt-Date.now()));
   const video=join(output,'ro-science-explainer.mp4'),metricsPath=join(output,'metrics.json');
   const bytes=await safeRead(video,128*1024*1024),metrics=JSON.parse((await safeRead(metricsPath,128*1024)).toString());
-  if(!metrics.completeDecode||metrics.renderMode!=='onchip-field-sampling-animation'||metrics.audioMode!=='continuous'||metrics.width!==1280||metrics.height!==720)throw Error('INVALID_RENDER');
+  const expectedRenderMode=contentDriven?'content-driven-animation':'onchip-field-sampling-animation';
+  if(!metrics.completeDecode||metrics.renderMode!==expectedRenderMode||metrics.audioMode!=='continuous'||metrics.width!==1280||metrics.height!==720)throw Error('INVALID_RENDER');
   const result={outputSha256:createHash('sha256').update(bytes).digest('hex'),outputSize:bytes.length,contentType:'video/mp4',scriptDigest:config.scriptDigest,measuredDurationSeconds:metrics.durationSeconds};
   await publishVideoResult(config,request,'succeeded',undefined,{videoBytes:bytes,metricsBytes:await safeRead(metricsPath,128*1024),result});return {id,status:'succeeded'};
  }catch{await publishVideoResult(config,request,'failed','EXECUTION_FAILED');return {id,status:'failed'};}
