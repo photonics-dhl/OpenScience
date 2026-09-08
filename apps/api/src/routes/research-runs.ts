@@ -16,7 +16,7 @@ const selectionSchema = z.object({
   statement: z.string().min(1).max(4_000),
   conditions: z.array(z.string().min(1).max(500)).max(100).optional(),
   limitations: z.array(z.string().min(1).max(500)).max(100).optional(),
-  attachSourceQuote: z.boolean(),
+  attachSourceQuote: z.literal(true),
 }).strict();
 const sourceReviewSchema = z.object({
   expectedVersion: z.number().int().positive(),

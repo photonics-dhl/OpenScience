@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+import type { Prisma } from '@prisma/client';
 import type { AuditContext } from '@openscience/observability';
 import type { SourceLocator, ClaimKind } from '../research-intelligence/types';
 import { CLAIM_KINDS } from '../research-intelligence/types';
@@ -257,8 +258,10 @@ export async function confirmIngestionClaimEvidenceBridge(
     snapshotToken: string; idempotencyKey: string; selections: IngestionClaimSelection[];
   },
   ctx: AuditContext = {},
+  existingTransaction?: Prisma.TransactionClient,
 ) {
-  const { preview, task, version } = await loadSnapshot(deps, input);
+  const scoped = existingTransaction ? { ...deps, prisma: existingTransaction as IngestionDeps['prisma'] } : deps;
+  const { preview, task, version } = await loadSnapshot(scoped, input);
   if (input.snapshotToken !== preview.snapshotToken) {
     throw new ClaimEvidenceError('CONCURRENT_UPDATE', 'Ingestion or version snapshot changed; preview again');
   }
@@ -326,7 +329,7 @@ export async function confirmIngestionClaimEvidenceBridge(
     }));
   });
   const batchDigest = digest({ versionId: input.versionId, taskId: input.taskId, idempotencyKey, claims, evidence });
-  return createClaimEvidenceBatch(deps, {
+  return createClaimEvidenceBatch(scoped, {
     userId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId,
     sourceTaskId: input.taskId, snapshotToken: input.snapshotToken, batchDigest,
     authority: {
@@ -337,5 +340,5 @@ export async function confirmIngestionClaimEvidenceBridge(
       sourceMapRef: parseDocumentSourceMapReference(record(task.agentTask!.result).sourceMapRef),
     },
     claims, evidence,
-  }, ctx);
+  }, ctx, existingTransaction ? scoped : undefined);
 }

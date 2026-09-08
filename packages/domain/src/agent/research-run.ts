@@ -7,7 +7,7 @@ import { requireActiveMembership } from '../workspace/helpers';
 import { now } from '../workspace/types';
 import { confirmIngestionClaimEvidenceBridge, type IngestionClaimSelection } from '../ingestion/claim-evidence-bridge';
 import type { IngestionDeps } from '../ingestion/ingestion-service';
-import { findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction } from './agent';
+import { findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH } from '../assets/video';
 import type { HermesPresentationAuthority, PresentationGenerationPayload } from '../assets/presentation-asset';
 
@@ -118,19 +118,18 @@ export async function createHermesResearchRun(
   const digest = requestDigest({ ...input, ingestionTaskIds: taskIds });
   const createOnce = () => deps.prisma.$transaction(async (tx) => {
     const replay = await tx.hermesResearchRun.findUnique({ where: { idempotencyKey: input.idempotencyKey }, include: RUN_INCLUDE });
-    if (replay) {
-      if (replay.actorId !== input.actorId || replay.researchObjectId !== input.researchObjectId || replay.requestDigest !== digest) {
-        throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Idempotency key belongs to a different Hermes research run');
-      }
-      return replay;
-    }
-
     const researchObject = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
     if (!researchObject) throw new HermesResearchRunError('NOT_FOUND', 'Research object not found');
     const { workspace, membership } = await requireActiveMembership(tx, researchObject.workspaceId, input.actorId)
       .catch((cause) => { throw new HermesResearchRunError('NOT_FOUND', 'Research object not found', { cause }); });
     if (!WRITE_ROLES.has(membership.role)) throw new HermesResearchRunError('FORBIDDEN', 'Research object write permission is required');
     if (researchObject.status !== 'draft') throw new HermesResearchRunError('RESEARCH_OBJECT_NOT_DRAFT', 'Hermes research runs require a draft research object');
+    if (replay) {
+      if (replay.actorId !== input.actorId || replay.researchObjectId !== input.researchObjectId || replay.requestDigest !== digest) {
+        throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Idempotency key belongs to a different Hermes research run');
+      }
+      return replay;
+    }
 
     const tasks = await tx.ingestionTask.findMany({
       where: { id: { in: taskIds } },
@@ -184,7 +183,9 @@ export async function createHermesResearchRun(
       }
       if (code !== 'P2002') throw error;
       const replay = await deps.prisma.hermesResearchRun.findUnique({ where: { idempotencyKey: input.idempotencyKey }, include: RUN_INCLUDE });
-      if (!replay || replay.actorId !== input.actorId || replay.researchObjectId !== input.researchObjectId || replay.requestDigest !== digest) {
+      if (!replay) throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Idempotency key belongs to a different Hermes research run', { cause: error });
+      await getHermesResearchRun(deps, { actorId: input.actorId, researchObjectId: input.researchObjectId, runId: replay.id });
+      if (replay.requestDigest !== digest) {
         throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Idempotency key belongs to a different Hermes research run', { cause: error });
       }
       return toView(replay);
@@ -229,7 +230,9 @@ export async function confirmHermesSourceReview(
     throw new HermesResearchRunError('VALIDATION_ERROR', 'Hermes source review requires the fixed on-chip generation grant');
   }
   const reviewIds = input.reviews.map((review) => review.ingestionTaskId);
-  if (reviewIds.length === 0 || new Set(reviewIds).size !== reviewIds.length) {
+  const requestedClaimCount = input.reviews.reduce((total, review) => total + review.selections.length, 0);
+  if (reviewIds.length === 0 || new Set(reviewIds).size !== reviewIds.length || requestedClaimCount < 1 || requestedClaimCount > 12
+    || input.reviews.some((review) => review.selections.some((selection) => !selection.attachSourceQuote))) {
     throw new HermesResearchRunError('VALIDATION_ERROR', 'Hermes source reviews must be unique and non-empty');
   }
   const digest = createHash('sha256').update(JSON.stringify({
@@ -237,39 +240,39 @@ export async function confirmHermesSourceReview(
     versionId: input.versionId, generationGrant: input.generationGrant,
     reviews: [...input.reviews].sort((a, b) => a.ingestionTaskId.localeCompare(b.ingestionTaskId)),
   })).digest('hex');
-  const initial = await deps.prisma.hermesResearchRun.findUnique({ where: { id: input.runId }, include: RUN_INCLUDE });
-  if (!initial || initial.actorId !== input.actorId || initial.researchObjectId !== input.researchObjectId) {
-    throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
-  }
-  if (initial.status === 'awaiting_claim_review' && initial.sourceReviewDigest === digest && initial.versionId === input.versionId) {
-    const claims = await deps.prisma.claimNode.findMany({ where: { id: { in: initial.sourceClaimIds } } });
-    const evidence = await deps.prisma.evidenceRecord.findMany({ where: { claimId: { in: initial.sourceClaimIds } } });
-    return { run: toView(initial), claims, evidence };
-  }
-  if (initial.status !== 'awaiting_source_review' || initial.version !== input.expectedVersion) {
-    throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before reviewing sources');
-  }
-  const sourceSteps = initial.steps.filter((step) => step.stage === 'source_ingestion');
-  if (!isDeepStrictEqual(reviewIds.slice().sort(), sourceSteps.map((step) => step.ingestionTaskId).sort())) {
-    throw new HermesResearchRunError('VALIDATION_ERROR', 'Source reviews must exactly cover the run ingestion tasks');
-  }
-  const createdClaims: Array<{ id: string }> = [];
-  const createdEvidence: Array<{ id: string; claimId: string }> = [];
-  for (const review of input.reviews) {
-    const created = await confirmIngestionClaimEvidenceBridge(deps, {
-      userId: input.actorId, researchObjectId: input.researchObjectId, versionId: input.versionId,
-      taskId: review.ingestionTaskId, snapshotToken: review.snapshotToken,
-      idempotencyKey: `hermes-source:${input.runId}:${review.ingestionTaskId}`,
-      selections: review.selections,
-    }, ctx);
-    createdClaims.push(...created.claims);
-    createdEvidence.push(...created.evidence);
-  }
-  const sourceClaimIds = [...new Set(createdClaims.map((claim) => claim.id))].sort();
-  if (sourceClaimIds.length === 0 || sourceClaimIds.length > 12) {
-    throw new HermesResearchRunError('VALIDATION_ERROR', 'Hermes source review must create between one and twelve Claims');
-  }
-  const updated = await deps.prisma.$transaction(async (tx) => {
+  const execute = () => deps.prisma.$transaction(async (tx) => {
+    const initial = await tx.hermesResearchRun.findUnique({ where: { id: input.runId }, include: RUN_INCLUDE });
+    if (!initial || initial.actorId !== input.actorId || initial.researchObjectId !== input.researchObjectId) {
+      throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
+    }
+    const ro = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
+    const membership = ro ? await requireActiveMembership(tx, ro.workspaceId, input.actorId).catch(() => null) : null;
+    if (!ro || ro.status !== 'draft' || !membership || !WRITE_ROLES.has(membership.membership.role)) {
+      throw new HermesResearchRunError('FORBIDDEN', 'Hermes source review permission is unavailable');
+    }
+    const replay = initial.status === 'awaiting_claim_review' && initial.sourceReviewDigest === digest && initial.versionId === input.versionId;
+    if (!replay && (initial.status !== 'awaiting_source_review' || initial.version !== input.expectedVersion)) {
+      throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before reviewing sources');
+    }
+    const sourceSteps = initial.steps.filter((step) => step.stage === 'source_ingestion');
+    if (!isDeepStrictEqual(reviewIds.slice().sort(), sourceSteps.map((step) => step.ingestionTaskId).sort())) {
+      throw new HermesResearchRunError('VALIDATION_ERROR', 'Source reviews must exactly cover the run ingestion tasks');
+    }
+    const createdClaims: Array<{ id: string }> = [];
+    const createdEvidence: Array<{ id: string; claimId: string }> = [];
+    for (const review of input.reviews) {
+      const created = await confirmIngestionClaimEvidenceBridge(deps, {
+        userId: input.actorId, researchObjectId: input.researchObjectId, versionId: input.versionId,
+        taskId: review.ingestionTaskId, snapshotToken: review.snapshotToken,
+        idempotencyKey: `hermes-source:${input.runId}:${review.ingestionTaskId}`,
+        selections: review.selections,
+      }, ctx, tx);
+      createdClaims.push(...created.claims);
+      createdEvidence.push(...created.evidence);
+    }
+    const sourceClaimIds = [...new Set(createdClaims.map((claim) => claim.id))].sort();
+    if (sourceClaimIds.length !== requestedClaimCount) throw new HermesResearchRunError('VALIDATION_ERROR', 'Hermes source Claim identities are incomplete');
+    if (replay) return { run: toView(initial), claims: createdClaims, evidence: createdEvidence };
     const version = await tx.version.findUnique({ where: { id: input.versionId }, include: { researchObject: true } });
     if (!version || version.researchObjectId !== input.researchObjectId || version.status !== 'draft'
       || version.researchObject.status !== 'draft') throw new HermesResearchRunError('SOURCE_NOT_READY', 'Reviewed Version is unavailable');
@@ -282,9 +285,13 @@ export async function confirmHermesSourceReview(
     await recordAudit(deps, tx, { actorId: input.actorId, action: 'hermes.research_run.source_review',
       workspaceId: version.researchObject.workspaceId, targetType: 'hermes_research_run', targetId: input.runId,
       metadata: { versionId: input.versionId, sourceClaimIds, profile: ONCHIP_FIELD_SAMPLING_PROFILE, maxAgentTasks: 7 } }, ctx);
-    return tx.hermesResearchRun.findUniqueOrThrow({ where: { id: input.runId }, include: RUN_INCLUDE });
-  }, { isolationLevel: 'Serializable' });
-  return { run: toView(updated), claims: createdClaims, evidence: createdEvidence };
+    const updated = await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: input.runId }, include: RUN_INCLUDE });
+    return { run: toView(updated), claims: createdClaims, evidence: createdEvidence };
+  }, { isolationLevel: 'Serializable', timeout: 30_000 });
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await execute(); }
+    catch (error) { if ((error as { code?: string }).code === 'P2034' && attempt < 2) continue; throw error; }
+  }
 }
 
 export async function requireHermesPresentationTaskAuthority(
@@ -314,7 +321,7 @@ export async function requireHermesPresentationTaskAuthority(
 
 type ReconcileCounts = { inspected: number; advanced: number; failed: number; stopped: number; errors: number };
 const ACTIVE_RUN_STATES: HermesResearchRunStatus[] = [
-  'running', 'awaiting_claim_review', 'generating_storyboard', 'awaiting_storyboard_review',
+  'running', 'awaiting_source_review', 'awaiting_claim_review', 'generating_storyboard', 'awaiting_storyboard_review',
   'generating_scene_images', 'awaiting_scene_images_review', 'generating_video', 'awaiting_video_review',
 ];
 
@@ -438,6 +445,10 @@ export async function reconcileHermesResearchRuns(
             }
             await tx.hermesResearchStep.updateMany({ where: { runId: run.id, stage: 'source_ingestion' }, data: { status: 'succeeded', error: null } });
             return moveRun(deps, tx, run, 'awaiting_source_review', ro.workspaceId);
+          }
+          if (run.status === 'awaiting_source_review') {
+            await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
+            return null;
           }
           const sourceState = await validateReviewedSources(tx, run);
           if (sourceState === 'invalid') return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'reviewed Claim or Evidence binding changed');

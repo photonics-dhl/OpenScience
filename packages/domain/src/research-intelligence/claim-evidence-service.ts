@@ -822,6 +822,7 @@ export async function createClaimEvidenceBatch(
   deps: ArtifactDeps,
   input: ReviewedIngestionClaimEvidenceBatchInput,
   ctx: AuditContext = {},
+  existingTransaction?: ArtifactDeps,
 ) {
   boundedText(input.sourceTaskId, 'Source task id', 200);
   boundedText(input.snapshotToken, 'Snapshot token', 200);
@@ -840,6 +841,7 @@ export async function createClaimEvidenceBatch(
   const base = { userId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId };
   const authority = input.authority;
   let exactReference: DocumentSourceMapReference;
+  if (existingTransaction) return materialize(existingTransaction);
   try {
     exactReference = parseDocumentSourceMapReference(authority.sourceMapRef);
   } catch (error) {
