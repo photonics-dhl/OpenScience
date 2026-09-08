@@ -37,10 +37,11 @@ function isCanonicalAllFieldsMissingResult(value: unknown, artifact: { id: strin
   const core = result.core;
   const evidenceSegments = result.evidenceSegments;
   const evidence = result.evidence;
+  const needsMoreInformation = result.needsMoreInformation;
   if (core.schemaVersion !== '0.1.0' || SDF_NODE_TYPES.some((field) => core[field] !== '')) return false;
-  if (!Array.isArray(result.needsMoreInformation) || result.needsMoreInformation.length !== SDF_NODE_TYPES.length
-    || new Set(result.needsMoreInformation).size !== SDF_NODE_TYPES.length
-    || SDF_NODE_TYPES.some((field) => !result.needsMoreInformation.includes(field))) return false;
+  if (!Array.isArray(needsMoreInformation) || needsMoreInformation.length !== SDF_NODE_TYPES.length
+    || new Set(needsMoreInformation).size !== SDF_NODE_TYPES.length
+    || SDF_NODE_TYPES.some((field) => !needsMoreInformation.includes(field))) return false;
   if (!exactRecordKeys(evidenceSegments, SDF_NODE_TYPES)
     || SDF_NODE_TYPES.some((field) => { const value = evidenceSegments[field]; return !Array.isArray(value) || value.length !== 0; })) return false;
   if (!exactRecordKeys(evidence, SDF_NODE_TYPES)
@@ -248,13 +249,14 @@ export async function retryIngestionTask(
             legacyProposalFailure = false;
           }
         }
+        const agentTask = task.agentTask;
         const failedRetry = task.state === 'failed_retryable' && task.retryCount === 0
-          && task.agentTask?.status === 'failed' && task.agentTask.retryCount === 0;
+          && agentTask?.status === 'failed' && agentTask.retryCount === 0;
         let canonicalAllMissingRecovery = false;
-        if (task.state === 'needs_review' && task.retryCount === 1 && task.agentTask?.kind === 'sdf.extract'
-          && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === 1
-          && task.agentTask.executionAttempt === 2 && isCanonicalAllFieldsMissingResult(result, task.artifact)) {
-          const session = await tx.agentSession.findUnique({ where: { id: task.agentTask.sessionId } });
+        if (task.state === 'needs_review' && task.retryCount === 1 && agentTask?.kind === 'sdf.extract'
+          && agentTask.status === 'succeeded' && agentTask.retryCount === 1
+          && agentTask.executionAttempt === 2 && isCanonicalAllFieldsMissingResult(result, task.artifact)) {
+          const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
           canonicalAllMissingRecovery = session?.userId === input.userId && session.status === 'active';
         }
         if (!failedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery) {
@@ -264,6 +266,7 @@ export async function retryIngestionTask(
         const recovery = canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
           : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable' : 'failed_retryable';
         if (canonicalAllMissingRecovery) {
+          if (!agentTask) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction task is unavailable');
           const balance = await tx.usageLedger.aggregate({
             where: { userId: input.userId, resource: AI_CREDIT_RESOURCE }, _sum: { delta: true },
           });
@@ -272,8 +275,8 @@ export async function retryIngestionTask(
           }
           await recordEntry(tx, {
             userId: input.userId, resource: AI_CREDIT_RESOURCE, delta: -1, kind: 'consume',
-            reason: 'Agent task recovery sdf.extract', idempotencyKey: `agent-task-recovery:${task.agentTask.id}:2`,
-            metadata: { taskId: task.agentTask.id, kind: task.agentTask.kind, retryAttempt: 2, policy: 'charged-on-remediation' },
+            reason: 'Agent task recovery sdf.extract', idempotencyKey: `agent-task-recovery:${agentTask.id}:2`,
+            metadata: { taskId: agentTask.id, kind: agentTask.kind, retryAttempt: 2, policy: 'charged-on-remediation' },
           });
         }
         const resetAgent = await tx.agentTask.updateMany({
