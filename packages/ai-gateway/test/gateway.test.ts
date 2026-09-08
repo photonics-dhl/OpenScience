@@ -92,6 +92,23 @@ describe('结构化输出 + Schema 校验（§9.3）', () => {
     expect(JSON.stringify(requests[1])).not.toContain('do-not-repeat');
   });
 
+  it('记录结构化失败阶段和受限诊断码但不记录响应内容', async () => {
+    const warnings: string[] = [];
+    const gw = new AiGateway({
+      providers: [fakeProvider('p', async () => OK('{"secretRaw":"do-not-log"}'))],
+      logger: { info: vi.fn(), error: vi.fn(), warn: (message) => warnings.push(message) },
+    });
+    const hasMethod = (value: unknown): value is { method: string } => typeof value === 'object' && value !== null
+      && typeof (value as { method?: unknown }).method === 'string';
+
+    await expect(gw.completeStructured(hasMethod, [{ role: 'user', content: 'x' }], {
+      validationDiagnostic: () => 'method:malformed_item',
+    })).rejects.toThrow(/重试上限/);
+
+    expect(warnings).toContain('structured.output.rejected stage=schema_validation attempt=1/3 diagnostic=method:malformed_item');
+    expect(warnings.join('\n')).not.toContain('do-not-log');
+  });
+
   it('反馈回调异常不会泄漏原始异常或绕过有限重试', async () => {
     let calls = 0;
     const gw = new AiGateway({ providers: [fakeProvider('p', async () => {

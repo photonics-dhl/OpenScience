@@ -92,7 +92,7 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { taskId } = z.object({ taskId: z.string().uuid() }).parse(req.params);
-    return reply.send({ task: await retryIngestionTask(deps, { userId: user.userId, taskId }) });
+    return reply.send({ task: await retryIngestionTask(deps, { userId: user.userId, taskId }, auditCtx(req)) });
   });
 
   app.post('/ingestion/:taskId/confirm', async (req, reply) => {

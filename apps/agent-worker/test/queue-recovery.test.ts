@@ -70,6 +70,6 @@ describe('agent-worker durable queue recovery', () => {
     expect(await recoverProcessingQueue({ prisma, redis } as never)).toBe(2);
     expect(lists.get('agent:queue:processing')).toEqual([]);
     expect(new Set(lists.get('agent:queue'))).toEqual(new Set(['pending-task', 'running-task']));
-    expect(tasks.get('running-task')).toMatchObject({ status: 'failed', error: '[retryable] worker interrupted' });
+    expect(tasks.get('running-task')).toMatchObject({ status: 'pending', error: null });
   });
 });

@@ -1,10 +1,11 @@
 import { freezeResearchRecord } from '../commit/research-record-snapshot';
 import { createHash, randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
 import { createArtifact } from '../artifact/artifacts';
 import { createAgentSession, dispatchAgentTask, projectAgentTaskResult, submitAgentTask, type AgentDeps } from '../agent/agent';
-import { requireActive, requireMembership } from '../workspace/helpers';
+import { requireActive, requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { WorkspaceError } from '../workspace/errors';
 import { recordAudit } from '../workspace/audit';
 import { validateSdfCore, validateSdfDraftCore } from '@openscience/sdf-schema';
@@ -14,6 +15,7 @@ import { SDF_NODE_TYPES } from '../research-object/types';
 import type { SdfDocumentView } from '../research-object/sdf';
 import { carryVersionEvidence, writeIngestionEvidence } from './ingestion-evidence';
 import { IngestionError } from './errors';
+import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
 import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
 
@@ -187,32 +189,73 @@ export async function listActionableIngestionTasks(
 export async function retryIngestionTask(
   deps: IngestionDeps,
   input: { userId: string; taskId: string },
+  ctx: AuditContext = {},
 ): Promise<IngestionTaskView> {
-  const task = await deps.prisma.ingestionTask.findUnique({
-    where: { id: input.taskId }, include: { artifact: true, batch: { include: { researchObject: true } } },
-  });
-  if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
-  await authorizeIngestionWrite(deps, { userId: input.userId, researchObjectId: task.batch.researchObject.id });
-  if (task.state !== 'failed_retryable') throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable failures can be retried');
-  const claimed = await deps.prisma.ingestionTask.updateMany({
-    where: { id: task.id, state: 'failed_retryable' }, data: { state: 'queued', retryCount: { increment: 1 }, error: null },
-  });
-  if (claimed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable failures can be retried');
-  const updated = await deps.prisma.ingestionTask.findUnique({ where: { id: task.id }, include: { artifact: true } });
-  if (!updated) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
-  if (updated.agentTaskId) {
-    await deps.prisma.agentTask.update({ where: { id: updated.agentTaskId }, data: { dispatchedAt: null } });
+  let queued: Prisma.IngestionTaskGetPayload<{ include: { artifact: true } }> | null | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      await dispatchAgentTask(deps, updated.agentTaskId);
+      queued = await deps.prisma.$transaction(async (tx) => {
+        const task = await tx.ingestionTask.findUnique({
+          where: { id: input.taskId }, include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } },
+        });
+        if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+        const { workspace, membership } = await requireActiveMembership(tx, task.batch.researchObject.workspaceId, input.userId);
+        if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+        const result = task.agentTask?.result;
+        let legacyProposalFailure = false;
+        if (task.state === 'needs_review' && task.retryCount === 0 && task.agentTask?.kind === 'sdf.extract'
+          && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === 0
+          && result && typeof result === 'object' && !Array.isArray(result)) {
+          const record = result as Record<string, unknown>;
+          try {
+            const reference = parseDocumentSourceMapReference(record.sourceMapRef);
+            legacyProposalFailure = record.status === 'needs_review' && record.reason === 'sdf-proposal-unavailable'
+              && !Object.hasOwn(record, 'core') && reference.parserStatus === 'succeeded'
+              && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256;
+          } catch {
+            legacyProposalFailure = false;
+          }
+        }
+        const failedRetry = task.state === 'failed_retryable' && task.retryCount === 0
+          && task.agentTask?.status === 'failed' && task.agentTask.retryCount === 0;
+        if (!failedRetry && !legacyProposalFailure) {
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
+        }
+        const recovery = legacyProposalFailure ? 'legacy_sdf_proposal_unavailable' : 'failed_retryable';
+        const resetAgent = await tx.agentTask.updateMany({
+          where: {
+            id: task.agentTaskId!, kind: 'sdf.extract', retryCount: 0,
+            status: legacyProposalFailure ? 'succeeded' : 'failed',
+          },
+          data: {
+            status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
+            retryCount: { increment: 1 },
+          },
+        });
+        if (resetAgent.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry is no longer available');
+        const claimed = await tx.ingestionTask.updateMany({
+          where: { id: task.id, agentTaskId: task.agentTaskId, state: task.state, retryCount: 0 },
+          data: { state: 'queued', retryCount: { increment: 1 }, error: null },
+        });
+        if (claimed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry is no longer available');
+        await recordAudit(deps, tx, {
+          actorId: input.userId, action: 'ingestion.task.retry', workspaceId: workspace.id,
+          targetType: 'ingestion_task', targetId: task.id,
+          metadata: { recovery, agentTaskId: task.agentTaskId, retryAttempt: 1 },
+        }, ctx);
+        return tx.ingestionTask.findUnique({ where: { id: task.id }, include: { artifact: true } });
+      }, { isolationLevel: 'Serializable' });
+      break;
     } catch (error) {
-      await deps.prisma.ingestionTask.updateMany({
-        where: { id: updated.id, state: 'queued' },
-        data: { state: 'failed_retryable', error: 'Queue dispatch unavailable' },
-      });
+      if ((error as { code?: unknown }).code === 'P2034' && attempt < 2) continue;
       throw error;
     }
   }
-  return taskToView(updated);
+  if (!queued) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+  if (queued.agentTaskId) {
+    await dispatchAgentTask(deps, queued.agentTaskId);
+  }
+  return taskToView(queued);
 }
 
 export interface IngestionConfirmation {

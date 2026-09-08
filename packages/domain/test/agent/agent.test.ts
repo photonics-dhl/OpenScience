@@ -615,7 +615,13 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const { deps, user, ro } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {} });
-    expect(await claimAgentTask(deps, task.id)).toMatchObject({ status: 'running', executionAttempt: 1 });
+    const claimed = await claimAgentTask(deps, task.id);
+    expect(claimed).toMatchObject({ status: 'running', executionAttempt: 1 });
+    expect(await claimAgentTask(deps, task.id)).toBeNull();
+    await markTaskProgress(deps, {
+      taskId: task.id, status: 'failed', error: 'structured output exhausted',
+      expectedExecutionAttempt: claimed!.executionAttempt,
+    });
     expect(await claimAgentTask(deps, task.id)).toBeNull();
   });
 

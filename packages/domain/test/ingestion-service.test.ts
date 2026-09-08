@@ -367,20 +367,91 @@ describe('multi-format ingestion service', () => {
     const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id);
     task.state = 'failed_retryable';
     task.error = 'provider timeout';
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    agentTask.status = 'failed';
+    agentTask.error = 'provider timeout';
     const retried = await retryIngestionTask(deps, { userId: user.id, taskId: task.id });
     expect(retried).toMatchObject({ state: 'queued', retryCount: 1, error: null });
     expect(redis.lpush).toHaveBeenLastCalledWith('agent:queue', task.agentTaskId);
     await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id })).rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
   });
 
-  it('retry dispatch 失败会恢复 failed_retryable 状态', async () => {
+  it('requeues only the legacy SDF proposal-unavailable result on the same AgentTask binding', async () => {
+    const { deps, db, user, redis } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    const digest = 'a'.repeat(64);
+    task.state = 'needs_review';
+    agentTask.status = 'succeeded';
+    agentTask.progress = 100;
+    agentTask.result = {
+      status: 'needs_review', format: 'pdf', reason: 'sdf-proposal-unavailable',
+      sourceMapRef: {
+        schemaVersion: 1, parserStatus: 'succeeded', artifactId: task.artifactId,
+        contentHash: db.artifacts.find((row) => row.id === task.artifactId)!.blobSha256,
+        objectKey: `derived/source-maps/${digest}.json`, serializedSha256: digest, size: 10,
+      },
+    };
+
+    const retried = await retryIngestionTask(deps, { userId: user.id, taskId: task.id });
+
+    expect(retried).toMatchObject({ id: task.id, agentTaskId: agentTask.id, state: 'queued', retryCount: 1, error: null });
+    expect(agentTask).toMatchObject({ status: 'pending', progress: 0, retryCount: 1, result: null, error: null });
+    expect(redis.lpush).toHaveBeenLastCalledWith('agent:queue', agentTask.id);
+    expect(db.auditLogs).toContainEqual(expect.objectContaining({
+      actorId: user.id, action: 'ingestion.task.retry', targetId: task.id,
+      metadata: expect.objectContaining({ recovery: 'legacy_sdf_proposal_unavailable', agentTaskId: agentTask.id }),
+    }));
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
+  });
+
+  it('does not requeue a genuine reviewable SDF result', async () => {
+    const { deps, db, user } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    task.state = 'needs_review';
+    agentTask.status = 'succeeded';
+    agentTask.progress = 100;
+    agentTask.result = { core: CORE, evidence: {}, needsMoreInformation: [] };
+
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
+  });
+
+  it('rechecks active write membership inside the retry transaction', async () => {
+    const { deps, db, user } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    task.state = 'failed_retryable';
+    agentTask.status = 'failed';
+    const transaction = deps.prisma.$transaction.bind(deps.prisma);
+    deps.prisma.$transaction = (async (...args: Parameters<typeof transaction>) => {
+      db.memberships.splice(0, db.memberships.length);
+      return transaction(...args);
+    }) as typeof deps.prisma.$transaction;
+
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toMatchObject({ code: 'WORKSPACE_NOT_FOUND' });
+    expect(task).toMatchObject({ state: 'failed_retryable', retryCount: 0 });
+    expect(agentTask).toMatchObject({ status: 'failed', retryCount: 0 });
+  });
+
+  it('retry dispatch failure leaves the pending task for durable outbox recovery', async () => {
     const { deps, db, user, redis } = makeDeps();
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
     task.state = 'failed_retryable';
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    agentTask.status = 'failed';
+    agentTask.error = 'provider timeout';
     redis.lpush.mockRejectedValueOnce(new Error('redis unavailable'));
     await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/redis unavailable/);
-    expect(task.state).toBe('failed_retryable');
+    expect(task).toMatchObject({ state: 'queued', retryCount: 1, error: null });
+    expect(agentTask).toMatchObject({ status: 'pending', retryCount: 1, dispatchedAt: null });
   });
 
   it('resumes the same batch idempotently without duplicating artifacts, sessions, or tasks', async () => {

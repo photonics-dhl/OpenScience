@@ -274,26 +274,39 @@ export class AiGateway {
   async completeStructured<T>(
     guard: SchemaGuard<T>,
     messages: ChatMessage[],
-    opts: { temperature?: number; validationFeedback?: (value: unknown) => string | undefined } = {},
+    opts: {
+      temperature?: number;
+      validationFeedback?: (value: unknown) => string | undefined;
+      validationDiagnostic?: (value: unknown) => string | undefined;
+    } = {},
   ): Promise<T> {
     let lastError: unknown;
     let retryMessages = messages;
     for (let attempt = 0; attempt <= MAX_STRUCTURED_RETRIES; attempt++) {
       try {
         const result = await this.complete(retryMessages, { temperature: opts.temperature, maxTokens: 4096 });
-        const parsed: unknown = parseStructuredJson(result.text);
+        let parsed: unknown;
+        try {
+          parsed = parseStructuredJson(result.text);
+        } catch (error) {
+          this.logger?.warn?.(`structured.output.rejected stage=json_parse attempt=${attempt + 1}/${MAX_STRUCTURED_RETRIES + 1}`);
+          throw error;
+        }
         if (!guard(parsed)) {
           const feedback = opts.validationFeedback?.(parsed)?.trim();
           if (feedback && feedback.length <= 2_000 && ![...feedback].some((character) => { const code = character.charCodeAt(0); return code < 32 && code !== 9 && code !== 10 && code !== 13; })) {
             retryMessages = [...messages, { role: 'system', content: feedback }];
           }
+          const diagnostic = opts.validationDiagnostic?.(parsed)?.trim();
+          const safeDiagnostic = diagnostic && /^[a-z0-9_,:-]{1,512}$/i.test(diagnostic) ? ` diagnostic=${diagnostic}` : '';
+          this.logger?.warn?.(`structured.output.rejected stage=schema_validation attempt=${attempt + 1}/${MAX_STRUCTURED_RETRIES + 1}${safeDiagnostic}`);
           throw new AiGatewayError('SCHEMA_VALIDATION', `结构化输出未通过 Schema 校验（第 ${attempt + 1} 次）`);
         }
         return parsed;
       } catch (e) {
         lastError = e;
         if (attempt < MAX_STRUCTURED_RETRIES) {
-          this.logger?.warn?.(`结构化输出校验失败，重试 ${attempt + 1}/${MAX_STRUCTURED_RETRIES}`);
+          this.logger?.warn?.(`structured.output.retry next_attempt=${attempt + 2}/${MAX_STRUCTURED_RETRIES + 1}`);
         }
       }
     }

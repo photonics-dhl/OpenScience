@@ -958,7 +958,10 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           const executionAttempt = data.executionAttempt?.increment
             ? row.executionAttempt + data.executionAttempt.increment
             : (data.executionAttempt ?? row.executionAttempt);
-          Object.assign(row, { ...data, ...(data.result === Prisma.JsonNull ? { result: null } : {}), executionAttempt, updatedAt: new Date() });
+          const retryCount = data.retryCount?.increment
+            ? row.retryCount + data.retryCount.increment
+            : (data.retryCount ?? row.retryCount);
+          Object.assign(row, { ...data, ...(data.result === Prisma.JsonNull ? { result: null } : {}), executionAttempt, retryCount, updatedAt: new Date() });
         });
         return { count: rows.length };
       },
@@ -1123,6 +1126,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const rows = db.ingestionTasks.filter((task) =>
           (where.agentTaskId === undefined || task.agentTaskId === where.agentTaskId) &&
           (where.id === undefined || task.id === where.id) &&
+          (where.retryCount === undefined || task.retryCount === where.retryCount) &&
           (where.state === undefined || task.state === where.state),
         );
         rows.forEach((row) => {

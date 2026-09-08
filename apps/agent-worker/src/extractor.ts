@@ -343,6 +343,7 @@ interface CanonicalRepairResponse {
 function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
   guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: (value: unknown) => string | undefined;
+  validationDiagnostic: (value: unknown) => string | undefined;
   mergeRetained: () => ExtractedProposal;
 } {
   const allowed = new Map(blocks.map((block) => [block.promptId, block]));
@@ -411,6 +412,9 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
         'Do not quote or repeat source text in this correction instruction; use the SOURCE_BLOCK ids already provided.',
       ].join(' ');
     },
+    validationDiagnostic: () => invalidFields.size === 0
+      ? undefined
+      : [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(','),
     mergeRetained: () => ({
       schemaVersion: SDF_CORE_VERSION,
       fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
@@ -592,7 +596,9 @@ export async function extractHandler(
   if (canonicalSourceMap && promptBlocks) {
     const validation = canonicalProposalValidation(promptBlocks);
     await gateway.completeStructured(validation.guard, prompt, {
-      temperature: 0.2, validationFeedback: validation.validationFeedback,
+      temperature: 0.2,
+      validationFeedback: validation.validationFeedback,
+      validationDiagnostic: validation.validationDiagnostic,
     });
     return materializeCanonicalProposal(validation.mergeRetained(), canonicalSourceMap, promptBlocks);
   }

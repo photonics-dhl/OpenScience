@@ -664,16 +664,15 @@ export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50)
   return dispatched;
 }
 
-/** Convert an interrupted running claim into the existing retryable failed state. */
+/** Convert only a crash-interrupted claim back to pending before its processing-list entry is requeued. */
 export async function prepareAgentTaskForCrashRecovery(deps: AgentDeps, taskId: string): Promise<boolean> {
   const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
   if (!task) return false;
   if (task.status === 'pending') return true;
-  if (task.status === 'failed' && task.error === '[retryable] worker interrupted') return true;
-  if (task.status !== 'running') return false;
+  if (task.status !== 'running' && !(task.status === 'failed' && task.error === '[retryable] worker interrupted')) return false;
   const reset = await deps.prisma.agentTask.updateMany({
-    where: { id: taskId, status: 'running' },
-    data: { status: 'failed', error: '[retryable] worker interrupted' },
+    where: { id: taskId, status: task.status, ...(task.status === 'failed' ? { error: '[retryable] worker interrupted' } : {}) },
+    data: { status: 'pending', error: null },
   });
   return reset.count === 1;
 }
@@ -681,7 +680,7 @@ export async function prepareAgentTaskForCrashRecovery(deps: AgentDeps, taskId: 
 export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<AgentTaskView | null> {
   const task = await deps.prisma.$transaction(async (tx) => {
     const claimed = await tx.agentTask.updateMany({
-      where: { id: taskId, status: { in: ['pending', 'failed'] } },
+      where: { id: taskId, status: 'pending' },
       data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } },
     });
     if (claimed.count !== 1) return null;

@@ -158,6 +158,31 @@ describe('Hermes durable research run', () => {
     expect((db as unknown as { claimNodes?: unknown[] }).claimNodes).toBeUndefined();
   });
 
+  it('reopens a completed source step while its bound extraction retries, then observes its result', async () => {
+    const success = fixture({ taskState: 'needs_review' });
+    await createHermesResearchRun(success.deps, { actorId: 'actor', researchObjectId: 'ro', ingestionTaskIds: ['ingestion'], idempotencyKey: 'success' });
+    await reconcileHermesResearchRuns(success.deps);
+    success.db.ingestionTasks[0]!.state = 'queued';
+    success.db.agentTasks[0]!.status = 'pending';
+    expect(await reconcileHermesResearchRuns(success.deps)).toMatchObject({ advanced: 0, failed: 0 });
+    expect(success.db.runs[0]).toMatchObject({ status: 'awaiting_source_review', version: 2 });
+    expect(success.db.steps[0]).toMatchObject({ status: 'waiting', ingestionTaskId: 'ingestion', agentTaskId: 'agent-task' });
+    success.db.ingestionTasks[0]!.state = 'needs_review';
+    success.db.agentTasks[0]!.status = 'succeeded';
+    expect(await reconcileHermesResearchRuns(success.deps)).toMatchObject({ advanced: 0, failed: 0 });
+    expect(success.db.runs[0]).toMatchObject({ status: 'awaiting_source_review', version: 2 });
+    expect(success.db.steps[0]).toMatchObject({ status: 'succeeded', ingestionTaskId: 'ingestion', agentTaskId: 'agent-task' });
+
+    const failure = fixture({ taskState: 'needs_review' });
+    await createHermesResearchRun(failure.deps, { actorId: 'actor', researchObjectId: 'ro', ingestionTaskIds: ['ingestion'], idempotencyKey: 'failure' });
+    await reconcileHermesResearchRuns(failure.deps);
+    failure.db.ingestionTasks[0]!.state = 'failed_retryable';
+    failure.db.ingestionTasks[0]!.error = 'structured output exhausted';
+    failure.db.agentTasks[0]!.status = 'failed';
+    expect(await reconcileHermesResearchRuns(failure.deps)).toMatchObject({ failed: 1 });
+    expect(failure.db.runs[0]).toMatchObject({ status: 'failed', error: 'structured output exhausted' });
+  });
+
   it('leaves pending extraction waiting without consuming or requeueing a task', async () => {
     const { deps, db } = fixture();
     await createHermesResearchRun(deps, { actorId: 'actor', researchObjectId: 'ro', ingestionTaskIds: ['ingestion'], idempotencyKey: 'key' });

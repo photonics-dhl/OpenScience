@@ -173,7 +173,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     );
   });
 
-  it('SDF proposal provider fails after parsing without orphaning the trusted SourceMap reference', async () => {
+  it('SDF proposal provider failure stays retryable after preserving the trusted SourceMap reference', async () => {
     const bytes = Buffer.from('%PDF-1.7 proposal failure fixture', 'utf8');
     const contentHash = createHash('sha256').update(bytes).digest('hex');
     const sourceMap: DocumentSourceMap = {
@@ -189,7 +189,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       parserCascade: vi.fn().mockResolvedValue({ status: 'succeeded', sourceMap, warnings: [] }),
     });
     const stored = new Map<string, Buffer>();
-    const result = await handlers['sdf.extract']!({
+    await expect(handlers['sdf.extract']!({
       storage: {
         getObject: vi.fn().mockResolvedValue({ body: Readable.from([bytes]), size: bytes.length }),
         headObject: vi.fn().mockResolvedValue(null),
@@ -212,9 +212,9 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
           blobSha256: contentHash, logicalPath: 'paper.pdf', mimeType: 'application/pdf',
         }) },
       },
-    } as never, { id: 'agent-task-1', payload: { artifactId: 'artifact-1', researchObjectId: 'ro-1' }, executionAttempt: 1 });
+    } as never, { id: 'agent-task-1', payload: { artifactId: 'artifact-1', researchObjectId: 'ro-1' }, executionAttempt: 1 }))
+      .rejects.toThrow(/provider down/);
 
-    expect(result).toMatchObject({ status: 'needs_review', reason: 'sdf-proposal-unavailable', sourceMapRef: { parserStatus: 'succeeded' } });
     expect(stored.size).toBe(1);
   });
 

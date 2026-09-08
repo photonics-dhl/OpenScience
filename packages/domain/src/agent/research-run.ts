@@ -486,6 +486,18 @@ export async function reconcileHermesResearchRuns(
             return moveRun(deps, tx, run, 'awaiting_source_review', ro.workspaceId);
           }
           if (run.status === 'awaiting_source_review') {
+            const failure = sourceSteps.map((step) => step.ingestionTask!).find((task) => FAILED_INGESTION_STATES.has(task.state));
+            if (failure) return moveRun(deps, tx, run, 'failed', ro.workspaceId, failure.error ?? 'Ingestion extraction failed');
+            if (!sourceSteps.every((step) => READY_INGESTION_STATES.has(step.ingestionTask!.state))) {
+              await tx.hermesResearchStep.updateMany({
+                where: { runId: run.id, stage: 'source_ingestion' }, data: { status: 'waiting', error: null },
+              });
+              await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
+              return null;
+            }
+            await tx.hermesResearchStep.updateMany({
+              where: { runId: run.id, stage: 'source_ingestion' }, data: { status: 'succeeded', error: null },
+            });
             await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
             return null;
           }

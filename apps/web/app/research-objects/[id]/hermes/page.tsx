@@ -14,10 +14,17 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, confirmIngestionTask, apiRequest, getHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
+import { ApiClientError, confirmIngestionTask, apiRequest, getHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
+export function isRetryableSdfExtraction(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount'>): boolean {
+  const result = task.result;
+  return task.retryCount === 0 && (task.state === 'failed_retryable' || (task.state === 'needs_review' && Boolean(result && typeof result === 'object'
+    && (result as Record<string, unknown>).status === 'needs_review'
+    && (result as Record<string, unknown>).reason === 'sdf-proposal-unavailable'
+    && !Object.hasOwn(result as object, 'core'))));
+}
 export default function HermesReviewPage({ params: routeParams }: { params: { id: string } }) {
   const searchParams = useSearchParams();
   const taskId = searchParams.get('task') ?? '';
@@ -87,8 +94,15 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
     return () => { cancelled = true; };
   }, [taskId, routeParams.id, reload, router, t]);
 
+  useEffect(() => {
+    if (!detail || !['queued', 'stored', 'parsing'].includes(detail.task.state)) return;
+    const timer = window.setTimeout(() => setReload((value) => value + 1), 1_500);
+    return () => window.clearTimeout(timer);
+  }, [detail]);
+
   const complete = useMemo(() => fields.every((field) => core[field].trim().length > 0), [core]);
-  const approvalOpen = detail?.task.state === 'needs_review';
+  const proposalUnavailable = detail ? isRetryableSdfExtraction(detail.task) : false;
+  const approvalOpen = detail?.task.state === 'needs_review' && !proposalUnavailable;
   const reviewSuggestion = useMemo(() => detail ? ({
     bodyKey: 'guide.review.body',
     href: `/research-objects/${encodeURIComponent(detail.researchObjectId)}/edit`,
@@ -109,6 +123,18 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
     catch (cause) { if (mounted.current) setError(cause instanceof ApiClientError ? cause.message : t('confirmError')); }
     finally { if (mounted.current) setSaving(false); }
   }
+  async function retryExtraction() {
+    if (!detail || !proposalUnavailable || saving || detail.researchObjectId !== routeParams.id) return;
+    setSaving(true); setError('');
+    try {
+      await retryIngestionTask(taskId);
+      if (mounted.current) setReload((value) => value + 1);
+    } catch (cause) {
+      if (mounted.current) setError(cause instanceof ApiClientError ? cause.message : t('proposalRetryError'));
+    } finally {
+      if (mounted.current) setSaving(false);
+    }
+  }
 
   const workspaceNavigation = (
     <div className="overflow-x-auto border-b border-os-rule-paper" data-workspace-mode-tabs="true">
@@ -126,7 +152,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
     <DashboardShell mainClassName="p-0" navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
       {workspaceNavigation}
       <div className="min-h-[calc(100dvh-7rem)] px-4 py-7 text-os-ink sm:px-8 lg:px-12"><HermesTaskEntry researchObjectId={routeParams.id} researchTitle={researchTitle} tasks={tasks} loading={loading} error={error} onRetry={() => setReload((value) => value + 1)} />
-        {!loading && !error ? <HermesResearchRunPanel researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
+        {!loading && !error ? <HermesResearchRunPanel key={`${runId}:${reload}`} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
         {!loading && !error && claimReview && run?.status === 'awaiting_claim_review' ? <HermesClaimEvidenceReview researchObjectId={routeParams.id} run={run} onDone={() => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`)} /> : null}
         {!loading && !error && <button type="button" className="mt-5 min-h-11 rounded-panel border border-os-vermilion-ink px-4 py-2 font-semibold text-os-vermilion-ink" onClick={() => setHermesOpen(true)}>{t('askHermes')}</button>}
         {literatureEntry}
@@ -147,23 +173,27 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
       {literatureEntry}
       {error && <p className="mt-6 max-w-3xl border-l-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{error}</p>}
       {!detail && error && <div className="mt-4 flex flex-wrap items-center gap-5"><button type="button" onClick={() => setReload((value) => value + 1)} className="min-h-11 font-semibold text-os-vermilion-ink underline">{t('retry')}</button><Link className="min-h-11 py-3 text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/hermes`}>{t('allTasks')}</Link></div>}
-      {runId ? <HermesResearchRunPanel researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
+      {runId ? <HermesResearchRunPanel key={`${runId}:${reload}`} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
       {loading ? <p className="mt-10 text-base text-os-muted-paper" role="status">{t('loading')}</p> : !detail ? null : <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-os-rule-paper py-3 text-sm text-os-muted-paper">
             <span className="font-data">{detail.task.logicalPath}</span>
             <span>{t('taskState', { state: statusT(detail.task.state) })}</span>
           </div>
-          <p className="mb-4 text-sm text-os-muted-paper">{t('reviewPending')}</p>
+          {proposalUnavailable ? <section className="surface-folio-sheet border-y border-os-rule-paper px-4 py-6 sm:px-6" aria-label={t('proposalUnavailableTitle')}>
+            <h2 className="font-reading text-2xl text-os-ink">{t('proposalUnavailableTitle')}</h2>
+            <p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t('proposalUnavailableBody')}</p>
+            <button type="button" disabled={saving} onClick={() => void retryExtraction()} className="mt-5 min-h-11 touch-manipulation rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('proposalRetrying') : t('proposalRetry')}</button>
+          </section> : <><p className="mb-4 text-sm text-os-muted-paper">{t('reviewPending')}</p>
           <section aria-label={t('fieldLabel')} className="surface-folio-sheet divide-y divide-os-rule-paper border-y border-os-rule-paper">
             {fields.map((field, index) => <div key={field} className="grid gap-3 px-4 py-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:px-6">
               <label htmlFor={`hermes-review-${field}`}><span className="block font-data text-xs text-os-vermilion-ink">0{index + 1}</span><span className="mt-1 block text-sm font-semibold text-os-ink">{fieldT(field)}</span>{!core[field].trim() && <span className="block text-sm text-os-muted-paper">{t('missing')}</span>}</label>
               <div className="min-w-0"><textarea id={`hermes-review-${field}`} aria-label={field} readOnly={!approvalOpen || saving} data-hermes-review-field value={core[field]} onChange={(event) => setCore({ ...core, [field]: event.target.value })} rows={5} className="w-full resize-y rounded-panel border border-os-rule-paper bg-os-paper-strong p-4 font-reading text-lg leading-[1.68] text-os-ink outline-none focus:border-os-vermilion-ink focus:ring-2 focus:ring-os-vermilion-ink/20" /><HermesExtractionEvidence field={field} result={detail.task.result}/></div>
             </div>)}
-          </section>
+          </section></>}
           {saved && <nav aria-label={t('entryActions')} className="mt-6 flex flex-wrap gap-5"><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit` }>{t('continueEditing')}</Link><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/versions${confirmation ? `?version=${encodeURIComponent(confirmation.versionId)}` : ''}`}>{t('viewVersions')}</Link></nav>}
           {saved && run?.status === 'awaiting_source_review' && confirmation ? <HermesSourceReview researchObjectId={routeParams.id} run={run} confirmation={confirmation} onSubmitted={() => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`)} /> : null}
-          <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-5"><p className="text-base text-os-muted-paper" role="status">{saved ? confirmation ? t('saved') : t('legacyConfirmation') : approvalOpen ? complete ? t('ready') : t('incomplete') : t('taskState', { state: statusT(detail.task.state) })}</p><button type="button" disabled={saving || saved || !approvalOpen} onClick={confirm} className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('saving') : saved ? t('confirmed') : t('confirm')}</button></footer>
+          {!proposalUnavailable ? <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-5"><p className="text-base text-os-muted-paper" role="status">{saved ? confirmation ? t('saved') : t('legacyConfirmation') : approvalOpen ? complete ? t('ready') : t('incomplete') : t('taskState', { state: statusT(detail.task.state) })}</p><button type="button" disabled={saving || saved || !approvalOpen} onClick={confirm} className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('saving') : saved ? t('confirmed') : t('confirm')}</button></footer> : null}
         </div>
         <aside aria-label={t('marginLabel')} className="border-t border-os-rule-paper pt-3 lg:border-l lg:border-t-0 lg:pl-5">
           <p data-reading-role="caption" className="text-os-muted-paper">{t('boundary')}</p>
