@@ -1522,7 +1522,10 @@ export async function getIngestionBatch(batchId: string): Promise<IngestionBatch
 }
 
 export async function retryIngestionTask(taskId: string): Promise<IngestionTaskSummary> {
-  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/retry`, { method: 'POST' });
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/retry`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
   return result.task;
 }
 
