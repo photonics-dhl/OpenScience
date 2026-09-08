@@ -9,10 +9,11 @@ export function MechanismVideoPanel({parent, assets, disabled, onGenerate}: {
   onGenerate: (claimIds: string[], request: PresentationVideoRequest) => void;
 }) {
   const t = useTranslations('mechanismVideo');
-  const sceneCount = parent.storyboard?.document.scenes.length ?? 0;
+  const storyboard = parent.storyboard;
+  const sceneCount = storyboard?.document.scenes.length ?? 0;
   const [selected, setSelected] = useState<string[]>(() => Array(sceneCount).fill(''));
-  if (parent.canGenerateVideo !== true || parent.status !== 'approved' || sceneCount < 3 || sceneCount > 6) return null;
-  const options = parent.storyboard.document.scenes.map((_, index) => assets.filter(asset =>
+  if (!storyboard || parent.canGenerateVideo !== true || parent.status !== 'approved' || sceneCount < 3 || sceneCount > 6) return null;
+  const options = storyboard.document.scenes.map((_, index) => assets.filter(asset =>
     asset.kind === 'image' && asset.status === 'approved' && asset.researchObjectId === parent.researchObjectId
     && asset.versionId === parent.versionId && asset.sceneImage?.storyboardAssetId === parent.id
     && asset.sceneImage.sceneIndex === index && asset.sourceClaimIds.length === parent.sourceClaimIds.length
@@ -24,8 +25,8 @@ export function MechanismVideoPanel({parent, assets, disabled, onGenerate}: {
     <p className="my-3 text-sm leading-6 text-os-muted-paper">{t('scope')}</p>
     <fieldset disabled={disabled} className="grid gap-3 border-0 p-0">
       {options.map((items, index) => <label key={index} className="grid gap-1 text-sm">
-        {index + 1}. {parent.storyboard!.document.scenes[index].title}
-        <span className="leading-6 text-os-muted-paper">{parent.storyboard!.document.scenes[index].narration}</span>
+        {index + 1}. {storyboard.document.scenes[index].title}
+        <span className="leading-6 text-os-muted-paper">{storyboard.document.scenes[index].narration}</span>
         <select value={chosen[index]} onChange={event => setSelected(current => current.map((id, i) => i === index ? event.target.value : id))} className="min-h-11 min-w-0 rounded border border-os-rule-paper bg-os-paper px-3">
           <option value="">{t(items.length ? 'chooseImage' : 'missingImage')}</option>
           {items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}

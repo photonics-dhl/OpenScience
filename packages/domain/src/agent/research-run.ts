@@ -621,7 +621,7 @@ export async function reconcileHermesResearchRuns(
             return null;
           }
           if (run.profile === ONCHIP_FIELD_SAMPLING_PROFILE
-            && ['awaiting_claim_review', 'awaiting_storyboard_review', 'awaiting_scene_images_review'].includes(run.status)) {
+            && ['awaiting_claim_review', 'awaiting_storyboard_review'].includes(run.status)) {
             await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version },
               data: { lastReconciledAt: now(deps), error: 'Legacy template generation paused; explicitly authorize a content-driven plan before continuing' } });
             return null;
