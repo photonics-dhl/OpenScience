@@ -29,6 +29,12 @@ export async function planSceneImagePrompt(gateway: Pick<AiGateway, 'completeStr
   const validationFeedback = (value: unknown): string | undefined => {
     const issue = validationIssue(value);
     if (!issue) return undefined;
+    if (issue === 'compiled_length') {
+      const composition = value as Composition;
+      const lengths = fields.map(key => `${key}:${composition[key].trim().length}`).join(',');
+      const compiledLength = compile(composition).length;
+      return `SCENE_COMPOSITION_INVALID reason=compiled_length characters_including_spaces=${lengths} compiled:${compiledLength},over:${compiledLength - 1500}. Return exactly one JSON object with only these five keys: teachingPoint,subjects,arrangement,mechanism,fidelity. Every value must be a nonempty English string. Count every space and punctuation mark. Keep teachingPoint<=100, subjects<=160, arrangement<=240, mechanism<=240, fidelity<=220, targetValueCharacters<=700, and the compiled prompt<=1500 characters. Use terse phrases and remove repetition rather than paragraphs. Preserve the supplied scene, source Claims, conditions and limitations; do not add text overlays, measurements, mechanisms or evidence.`;
+    }
     return `SCENE_COMPOSITION_INVALID reason=${issue}. Return exactly one JSON object with only these five keys: teachingPoint,subjects,arrangement,mechanism,fidelity. Every value must be a nonempty English string. Keep teachingPoint<=100, subjects<=160, arrangement<=240, mechanism<=240, fidelity<=220, total values<960, and the compiled prompt<=1500 characters. Preserve the supplied scene, source Claims, conditions and limitations; do not add text overlays, measurements, mechanisms or evidence.`;
   };
   const result = await gateway.completeStructured(guard, [

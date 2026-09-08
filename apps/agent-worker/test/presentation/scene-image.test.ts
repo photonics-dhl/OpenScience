@@ -51,6 +51,28 @@ describe('scene composition planning', () => {
     expect(prompt).toContain(brief.fidelity);
     expect(completeStructured).toHaveBeenCalledOnce();
   });
+  it('reports only fixed field lengths and the exact overage when a valid composition is too long', async () => {
+    const invalid = {...brief, mechanism: 'RAW_CANDIDATE_MARKER'.repeat(100)};
+    const completeStructured = vi.fn(async (guard: (value: unknown) => boolean, _messages: unknown, options: { validationFeedback?: (value: unknown) => string | undefined }) => {
+      expect(guard(invalid)).toBe(false);
+      const feedback = options.validationFeedback?.(invalid) ?? '';
+      expect(feedback).not.toContain('RAW_CANDIDATE_MARKER');
+      expect(feedback).toContain('characters_including_spaces');
+      expect(feedback).toContain(`teachingPoint:${brief.teachingPoint.length}`);
+      expect(feedback).toContain(`subjects:${brief.subjects.length}`);
+      expect(feedback).toContain(`arrangement:${brief.arrangement.length}`);
+      expect(feedback).toContain(`mechanism:${invalid.mechanism.length}`);
+      expect(feedback).toContain(`fidelity:${brief.fidelity.length}`);
+      expect(feedback).toContain('targetValueCharacters<=700');
+      const lengths = /compiled:(\d+),over:(\d+)/u.exec(feedback);
+      expect(lengths).not.toBeNull();
+      expect(Number(lengths![1])).toBeGreaterThan(1500);
+      expect(Number(lengths![2])).toBe(Number(lengths![1]) - 1500);
+      expect(guard(brief)).toBe(true);
+      return brief;
+    });
+    await expect(planSceneImagePrompt({ completeStructured } as unknown as Parameters<typeof planSceneImagePrompt>[0], claims, parent, 0)).resolves.toContain(brief.mechanism);
+  });
   it('blocks missing scene and oversized context before planning', async () => {
     const g=gateway(brief);
     await expect(planSceneImagePrompt(g,claims,parent,4)).rejects.toThrow();

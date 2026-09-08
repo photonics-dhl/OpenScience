@@ -4,7 +4,7 @@
 
 ## Version tuple
 - Production/public: b361f4f7781b760583b3a312829877c4d6310e8a; rollback a73f273f7079819579962aa6eff31c1dd9368b08.
-- Release source: E:/Miscellaneous/XGS/.worktrees/onchip-video-release, codex/onchip-video-release, HEAD/origin b361f4f7781b760583b3a312829877c4d6310e8a. Draft PR107; CI34180370205 passed.
+- Release source: E:/Miscellaneous/XGS/.worktrees/onchip-video-release, codex/onchip-video-release, HEAD/origin b361f4f7781b760583b3a312829877c4d6310e8a. Draft PR107; deployed CI34180370205 passed. Follow-up base8e7b95e50f15893eb83cd38c9fa0dd57c00c8107 CI34184022890 and server Parser16 passed but not deployed; numeric feedback delta pending commit.
 - Development: E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow, codex/token-smart-live-workflow, HEAD/origin005ffb8d8298d3476e8411046cae300079bd8344; dirty development work retained. Root dirty main is separate; do not reset/pull/stash it.
 
 ## Completed and evidence
@@ -19,7 +19,7 @@
 ## Active / next
 1. Scientific five-scene Claims stage PASSED:5 Claims/112 exact SourceMap Evidence, all explicitly reviewed/verified. scientific-claims-v1 preserves IDs. No duplicate upload or extraction.
 2. Actual storyboard-v1 and v2 retained with scientific review failures; ordinary Chat reviewed actual differences. v3 asset0f568ba8-b67f-4fff-8032-1333fad6a390 approved after direction/emission/signed-local-field/no-data corrections,251 narration characters,5roles. First actual image8ab839e7-0763-4b40-9026-46c1ad8e16ad visually reviewed and approved; scene-images-v1 has four actual approved images0..3. Scene4 task5ec57a87-8de6-4294-a2ef-c3e2184420b0 failed structured planning (2026-09-08T03:18:52Z), no reviewable fifth image; retain task and diagnose before retry. Raw images are stylized unlabelled artwork under existing provider contract; scientific labels/scale limits remain in storyboard/video, not measured imagery.
-3. Generate new same-RO video from approved same-version storyboard + five image IDs. Check authenticated Range/playback, full decode, narration timing and real scene motion, science/source/permissions. No full-flow completion claim before this passes.
+3. Scene4 repair: generic feedback replay still failed3 compiled_length responses. Numeric feedback delta passed real exact-input replay in3calls: lengths1533/2004 corrected to1439 under unchanged1500; no business/image writes. Independent review and final release pending, then explicitly resume only scene4 with new recovery task state. Generate new same-RO video from approved same-version storyboard + five image IDs. Check authenticated Range/playback, full decode, narration timing and real scene motion, science/source/permissions. No full-flow completion claim before this passes.
 4. Acceptance helpers/evidence live under development apps/web/test/visual/out/token-smart-release (Git ignored). run-controlled-stage.mjs uses scoped controlled actor, validates release, closes ephemeral session. Never print session tokens.
 
 ## Cost / continuity
