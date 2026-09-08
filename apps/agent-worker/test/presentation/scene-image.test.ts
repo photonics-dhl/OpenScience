@@ -30,6 +30,27 @@ describe('scene composition planning', () => {
   it.each([null, {prompt:'Abstract atmospheric rays'}, {...brief,subjects:' '}, {...brief,extra:'unbounded'}, {...brief,mechanism:'x'.repeat(1500)}])('blocks malformed or over-budget brief before image generation (%j)', async value => {
     await expect(planSceneImagePrompt(gateway(value), claims, parent, 0)).rejects.toThrow();
   });
+  it.each([
+    ['not_object', null],
+    ['key_set', {...brief, extra: 'RAW_CANDIDATE_MARKER'}],
+    ['field_type:subjects', {...brief, subjects: { value: 'RAW_CANDIDATE_MARKER' }}],
+    ['field_empty:subjects', {...brief, subjects: '   '}],
+    ['compiled_length', {...brief, mechanism: 'RAW_CANDIDATE_MARKER'.repeat(100)}],
+  ])('provides bounded %s feedback and accepts a corrected composition', async (expectedIssue, invalid) => {
+    const completeStructured = vi.fn(async (guard: (value: unknown) => boolean, _messages: unknown, options: { validationFeedback?: (value: unknown) => string | undefined }) => {
+      expect(guard(invalid)).toBe(false);
+      const feedback = options.validationFeedback?.(invalid);
+      expect(feedback).toContain(`reason=${expectedIssue}`);
+      expect(feedback?.length).toBeLessThanOrEqual(1000);
+      expect(feedback).not.toContain('RAW_CANDIDATE_MARKER');
+      expect(feedback).toContain('teachingPoint,subjects,arrangement,mechanism,fidelity');
+      expect(guard(brief)).toBe(true);
+      return brief;
+    });
+    const prompt = await planSceneImagePrompt({ completeStructured } as unknown as Parameters<typeof planSceneImagePrompt>[0], claims, parent, 0);
+    expect(prompt).toContain(brief.fidelity);
+    expect(completeStructured).toHaveBeenCalledOnce();
+  });
   it('blocks missing scene and oversized context before planning', async () => {
     const g=gateway(brief);
     await expect(planSceneImagePrompt(g,claims,parent,4)).rejects.toThrow();

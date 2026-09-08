@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`，rollback tree 为 `0aaf52fed29e79bb19b15517ba9ef50545510f72`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。OA、ZJU subscription-only PDF、四入口、72h/600s、presentation replay、真实 publish/public journey 与 exact aggregate gate 均已通过；现行完成态见 §5.66。
+> 状态：**CURRENT 操作手册**。实际 production/application source、rollback 与未完成验收以 `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` 和服务器精确 release 核验为准；下方阶段记录保留历史版本，不能据此恢复旧 release 或跳过当前验收。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
