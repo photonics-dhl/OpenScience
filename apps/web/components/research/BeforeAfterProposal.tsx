@@ -15,6 +15,7 @@ export interface BeforeAfterProposalProps {
   status?: 'pending' | 'applied' | 'dismissed';
   evidenceQuote?: string;
   evidenceLocator?: string;
+  disabled?: boolean;
 }
 
 function BeforeAfterProposal({
@@ -28,6 +29,7 @@ function BeforeAfterProposal({
   status = 'pending',
   evidenceQuote,
   evidenceLocator,
+  disabled = false,
 }: BeforeAfterProposalProps) {
   const [reviewing, setReviewing] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -68,6 +70,7 @@ function BeforeAfterProposal({
           <span data-reading-role="caption" className="font-data uppercase tracking-[0.08em] text-os-muted-dark">{t('proposalAfter')}</span>
           {editing ? (
             <textarea
+              disabled={disabled}
               aria-label={t('editSuggestion')}
               className="mt-3 min-h-36 w-full resize-y border border-os-rule-dark bg-os-black-0 p-3 text-[1.0625rem] leading-[var(--leading-reading)] text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
               data-reading-role="reading"
@@ -87,19 +90,19 @@ function BeforeAfterProposal({
       ) : null}
       {status === 'pending' ? (
         <div className="mt-4 flex justify-end gap-2">
-          {onDismiss && <button data-reading-role="control" className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-muted-dark" onClick={onDismiss}>{t('dismissSuggestion')}</button>}
+          {onDismiss && <button data-reading-role="control" className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-muted-dark disabled:cursor-not-allowed disabled:opacity-40" disabled={disabled} onClick={onDismiss}>{t('dismissSuggestion')}</button>}
           {editing ? (
             <>
-              <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" onClick={() => { setReviewValue(after); setEditing(false); }}>{t('cancelEditSuggestion')}</button>
-              <button className="min-h-10 rounded-panel border-0 bg-os-paper px-3 text-sm font-semibold text-os-black-0 disabled:opacity-40" disabled={!reviewValue.trim()} onClick={reviewEditedValue}>{t('applyEditedChange')}</button>
+              <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper disabled:cursor-not-allowed disabled:opacity-40" disabled={disabled} onClick={() => { setReviewValue(after); setEditing(false); }}>{t('cancelEditSuggestion')}</button>
+              <button className="min-h-10 rounded-panel border-0 bg-os-paper px-3 text-sm font-semibold text-os-black-0 disabled:cursor-not-allowed disabled:opacity-40" disabled={disabled || !reviewValue.trim()} onClick={reviewEditedValue}>{t('applyEditedChange')}</button>
             </>
           ) : (
-            <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" onClick={() => setEditing(true)}>{t('editSuggestion')}</button>
+            <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper disabled:cursor-not-allowed disabled:opacity-40" disabled={disabled} onClick={() => setEditing(true)}>{t('editSuggestion')}</button>
           )}
           {!editing && (risk === 'high' ? (
-            <Dialog onOpenChange={setReviewing} open={reviewing}>
+            <Dialog onOpenChange={(open) => { if (!disabled) setReviewing(open); }} open={reviewing}>
               <DialogTrigger asChild>
-                <button className="min-h-10 rounded-panel border border-os-paper bg-transparent px-3 text-sm font-semibold text-os-paper" ref={highRiskTriggerRef}>{t('reviewChanges')}</button>
+                <button className="min-h-10 rounded-panel border border-os-paper bg-transparent px-3 text-sm font-semibold text-os-paper disabled:cursor-not-allowed disabled:opacity-40" disabled={disabled} ref={highRiskTriggerRef}>{t('reviewChanges')}</button>
               </DialogTrigger>
                 <DialogContent
                   aria-describedby={undefined}
@@ -118,13 +121,13 @@ function BeforeAfterProposal({
                     </div>
                     <div className="mt-6 flex justify-end gap-3">
                       <DialogClose asChild><button className="min-h-11 rounded-panel border border-os-rule-paper bg-transparent px-4 text-os-ink">{t('returnToProposal')}</button></DialogClose>
-                      <button className="min-h-11 rounded-panel border-0 bg-os-vermilion px-4 font-semibold text-white" onClick={() => finishReview()}>{t('applyReviewedChange')}</button>
+                      <button className="min-h-11 rounded-panel border-0 bg-os-vermilion px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40" disabled={disabled} onClick={() => finishReview()}>{t('applyReviewedChange')}</button>
                     </div>
                   </div>
                 </DialogContent>
             </Dialog>
           ) : (
-            <button className="min-h-10 rounded-panel border border-os-paper bg-transparent px-3 text-sm font-semibold text-os-paper" onClick={() => finishReview(after)}>{t('reviewChanges')}</button>
+            <button className="min-h-10 rounded-panel border border-os-paper bg-transparent px-3 text-sm font-semibold text-os-paper disabled:cursor-not-allowed disabled:opacity-40" disabled={disabled} onClick={() => finishReview(after)}>{t('reviewChanges')}</button>
           ))}
         </div>
       ) : <p className="mb-0 mt-4 font-data text-xs uppercase tracking-[0.12em] text-os-muted-dark">{status}</p>}

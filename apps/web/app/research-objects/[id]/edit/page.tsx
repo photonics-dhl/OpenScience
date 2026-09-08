@@ -8,6 +8,7 @@ import OutlinePanel from '../../../../components/editor/OutlinePanel';
 import CoreEditor from '../../../../components/editor/CoreEditor';
 import SuggestionsPanel from '../../../../components/editor/SuggestionsPanel';
 import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
+import ConflictResolutionPanel, { type EditorConflict } from '../../../../components/editor/ConflictResolutionPanel';
 import { ObjectHeader } from '../../../../components/research/ObjectHeader';
 import { HermesAnchor } from '../../../../components/hermes/HermesAnchor';
 import { HermesAssistantDrawer } from '../../../../components/hermes/HermesAssistantDrawer';
@@ -17,6 +18,7 @@ import type { HermesGuideSuggestion } from '../../../../components/hermes/hermes
 import { useOptionalHermesWorkspaceStage } from '../../../../components/hermes/HermesWorkspaceStage';
 import {
   createCommit,
+  ApiClientError,
   getAgentTask,
   getResearchObject,
   listVersions,
@@ -28,10 +30,17 @@ import {
 } from '../../../../lib/api';
 import {
   clearDraft,
+  chooseConflictField,
+  conflictChoicesComplete,
+  createCoreConflict,
   editorReducer,
   emptyCore,
   loadDraft,
   saveDraft,
+  resolveCoreConflict,
+  resolveDraftChoice,
+  type ConflictChoice,
+  type DraftData,
   type EditorState,
 } from '../../../../lib/editor-state';
 import {
@@ -93,6 +102,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     visibility: 'private',
   });
   const [draftPrompt, setDraftPrompt] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<DraftData | null>(null);
+  const [conflict, setConflict] = useState<EditorConflict | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -109,6 +120,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const hermesStage = useOptionalHermesWorkspaceStage();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoredExtraction = useRef(false);
+  const serverSnapshot = useRef<{ core: SdfCore; version: number } | null>(null);
 
   // 加载 RO + SDF + 版本
   useEffect(() => {
@@ -121,13 +133,16 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         setWorkspaceId(ro.researchObject.workspaceId);
         setObjectMeta({ title: ro.researchObject.title, visibility: ro.researchObject.visibility });
         const core = ro.researchObject.sdf?.core ?? emptyCore();
+        serverSnapshot.current = { core, version: ro.researchObject.version };
+        dispatch({ type: 'init', core, version: ro.researchObject.version });
         // 草稿恢复（§18.3）
         const draft = loadDraft(roId);
         if (draft && Date.now() - draft.savedAt < 24 * 3600 * 1000) {
+          setPendingDraft(draft);
           setDraftPrompt(true);
-          dispatch({ type: 'init', core: draft.core, version: ro.researchObject.version });
         } else {
-          dispatch({ type: 'init', core, version: ro.researchObject.version });
+          setPendingDraft(null);
+          setDraftPrompt(false);
         }
         const restored = await loadResearchMaterials(roId);
         const vs = { versions: restored.versions };
@@ -278,6 +293,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   function applySuggestion(id: string, value: string) {
+    if (interactionBlocked) return;
     const revised = suggestionReducer(suggestions, { type: 'revise', id, suggestion: value });
     const applied = suggestionReducer(revised, { type: 'apply', id });
     dispatchSuggestions({ type: 'revise', id, suggestion: value });
@@ -291,6 +307,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   function dismissSuggestion(id: string) {
+    if (interactionBlocked) return;
     const dismissed = suggestionReducer(suggestions, { type: 'dismiss', id });
     dispatchSuggestions({ type: 'dismiss', id });
     const field = dismissed.find((item) => item.id === id)?.field;
@@ -302,6 +319,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   function acknowledgeMissing(field: SdfField) {
+    if (interactionBlocked) return;
     const remaining = missingFields.filter((candidate) => candidate !== field);
     setMissingFields(remaining);
     persistReview((checkpoint) => ({
@@ -312,8 +330,68 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     setActiveField(nextSuggestion?.field ?? remaining[0] ?? field);
   }
 
+  function artifactsEqual(left: ArtifactReference[], right: ArtifactReference[]) {
+    const normalized = (items: ArtifactReference[]) => [...items]
+      .sort((a, b) => a.logicalPath.localeCompare(b.logicalPath) || a.artifactId.localeCompare(b.artifactId));
+    return JSON.stringify(normalized(left)) === JSON.stringify(normalized(right));
+  }
+
+  function updateArtifacts(next: ArtifactReference[]) {
+    setArtifacts(next);
+    setConflict((current) => current?.operation === 'commit' ? {
+      ...current,
+      localArtifacts: next,
+      artifactsDiffer: !artifactsEqual(next, current.serverArtifacts),
+      artifactChoice: undefined,
+    } : current);
+  }
+
+  async function captureConflict(operation: 'save' | 'commit') {
+    const latest = await getResearchObject(roId);
+    const serverCore = latest.researchObject.sdf?.core ?? emptyCore();
+    const serverArtifacts = operation === 'commit' ? (await loadResearchMaterials(roId)).artifacts : artifacts;
+    setConflict({
+      ...createCoreConflict(state.core, serverCore, latest.researchObject.version),
+      operation,
+      localArtifacts: artifacts,
+      serverArtifacts,
+      artifactsDiffer: operation === 'commit' && !artifactsEqual(artifacts, serverArtifacts),
+    });
+    setSaveError(null);
+    setErrorMsg(null);
+  }
+
+  function isConcurrentUpdate(error: unknown): error is ApiClientError {
+    return error instanceof ApiClientError && (error.status === 409 || error.code === 'CONCURRENT_UPDATE');
+  }
+
+  function chooseConflict(field: string, choice: ConflictChoice) {
+    setConflict((current) => current ? { ...current, ...chooseConflictField(current, field, choice) } : current);
+  }
+
+  function resolveConflict() {
+    if (!conflict) return;
+    const resolved = resolveCoreConflict(conflict);
+    if (!resolved || (conflict.artifactsDiffer && !conflict.artifactChoice)) return;
+    const nextArtifacts = conflict.operation === 'commit' && conflict.artifactsDiffer
+      ? (conflict.artifactChoice === 'mine' ? conflict.localArtifacts : conflict.serverArtifacts)
+      : artifacts;
+    dispatch({ type: 'replace', ...resolved });
+    setArtifacts(nextArtifacts);
+    serverSnapshot.current = { core: conflict.serverCore, version: conflict.serverVersion };
+    if (resolved.dirty) saveDraft(roId, resolved.core);
+    else clearDraft(roId);
+    setConflict(null);
+    setSaveError(null);
+    setErrorMsg(null);
+  }
+
+  const conflictReady = !!conflict && conflictChoicesComplete(conflict)
+    && (!conflict.artifactsDiffer || !!conflict.artifactChoice);
+
   /** P1D-3：AI 提取（§9.3 异步长任务 + §18.3 轮询进度）。提取只产出建议，不写 SDF（§9.2）。 */
   async function handleExtract() {
+    if (interactionBlocked) return;
     setExtracting(true);
     setExtractProgress(0);
     setMissingFields([]);
@@ -376,11 +454,20 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     try {
       await updateSdf(roId, state.version, state.core);
       dispatch({ type: 'saved', version: state.version + 1 });
+      serverSnapshot.current = { core: state.core, version: state.version + 1 };
       clearDraft(roId);
       if (!suggestions.some((item) => item.status === 'pending') && missingFields.length === 0) {
         clearExtractReviewState(window.localStorage, roId);
       }
     } catch (e) {
+      if (isConcurrentUpdate(e)) {
+        try { await captureConflict('save'); } catch (refreshError) {
+          const message = refreshError instanceof Error ? refreshError.message : String(refreshError);
+          setSaveError(message);
+          setErrorMsg(message);
+        }
+        return;
+      }
       const message = e instanceof Error ? e.message : String(e);
       setSaveError(message);
       setErrorMsg(message);
@@ -401,6 +488,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         artifacts,
       });
       dispatch({ type: 'saved', version: state.version + 1 });
+      serverSnapshot.current = { core: state.core, version: state.version + 1 };
+      clearDraft(roId);
       if (!suggestions.some((item) => item.status === 'pending') && missingFields.length === 0) {
         clearExtractReviewState(window.localStorage, roId);
       }
@@ -408,6 +497,12 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       const vs = await listVersions(roId);
       setVersions(vs.versions ?? []);
     } catch (e) {
+      if (isConcurrentUpdate(e)) {
+        try { await captureConflict('commit'); } catch (refreshError) {
+          setErrorMsg(refreshError instanceof Error ? refreshError.message : String(refreshError));
+        }
+        return;
+      }
       setErrorMsg(e instanceof Error ? e.message : String(e));
     } finally {
       setCommitting(false);
@@ -415,11 +510,19 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   function restoreDraft() {
+    const server = serverSnapshot.current;
+    if (pendingDraft && server) {
+      dispatch({ type: 'replace', ...resolveDraftChoice(server, pendingDraft, 'restore') });
+    }
+    setPendingDraft(null);
     setDraftPrompt(false);
   }
 
   function discardDraft() {
     clearDraft(roId);
+    const server = serverSnapshot.current;
+    if (server && pendingDraft) dispatch({ type: 'replace', ...resolveDraftChoice(server, pendingDraft, 'discard') });
+    setPendingDraft(null);
     setDraftPrompt(false);
   }
 
@@ -428,6 +531,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   const saveState = saveError ? 'error' : saving ? 'saving' : state.dirty ? 'dirty' : 'saved';
+  const interactionBlocked = draftPrompt || !!conflict;
   const fieldForTarget: Record<HermesDraftTarget, FieldKey> = {
     'sdf-problem': 'problem',
     'sdf-insight': 'insight',
@@ -448,19 +552,19 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           <ObjectHeader
             actions={
               <>
-                <button aria-label={t('saveToSdf')} className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper disabled:opacity-40" onClick={handleSave} disabled={saving || !state.dirty || !editorLoaded}>
+                <button aria-label={t('saveToSdf')} className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper disabled:opacity-40" onClick={handleSave} disabled={saving || committing || !state.dirty || !editorLoaded || interactionBlocked}>
                   <span className="hidden sm:inline">{saving ? t('common.saving') ?? '…' : t('saveToSdf')}</span><span className="sm:hidden">SDF</span>
                 </button>
                 <input
                   aria-label={t('commitMessage')}
-                  disabled={!editorLoaded || committing}
+                  disabled={!editorLoaded || committing || interactionBlocked}
                   className="h-9 w-20 min-w-0 border border-os-rule-dark bg-os-black-1 px-2 text-sm text-os-paper placeholder:text-os-muted-dark sm:w-40 sm:px-3"
                   data-reading-role="control"
                   placeholder={t('commitMessage')}
                   value={commitMsg}
                   onChange={(event) => setCommitMsg(event.target.value)}
                 />
-                <button className="min-h-9 rounded-panel border-0 bg-os-vermilion px-3 font-semibold text-os-black-0 disabled:opacity-40" onClick={handleCommit} disabled={committing || !editorLoaded}><span className="hidden sm:inline">{t('commit')}</span><span className="sm:hidden">{t('commitShort')}</span></button>
+                <button className="min-h-9 rounded-panel border-0 bg-os-vermilion px-3 font-semibold text-os-black-0 disabled:opacity-40" onClick={handleCommit} disabled={committing || saving || !editorLoaded || interactionBlocked}><span className="hidden sm:inline">{t('commit')}</span><span className="sm:hidden">{t('commitShort')}</span></button>
               </>
             }
             objectId={roId}
@@ -482,7 +586,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         main={
           <>
             <HermesDraftDiff
-              disabled={extracting}
+              disabled={extracting || interactionBlocked}
               onCheck={revealDiff}
               onDraft={(target) => { revealDiff(target); void handleExtract(); }}
             />
@@ -493,14 +597,23 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={discardDraft}>{t('discardDraft')}</button>
               </div>
             )}
+            {conflict ? (
+              <ConflictResolutionPanel
+                conflict={conflict}
+                onChooseArtifacts={(choice) => setConflict((current) => current ? { ...current, artifactChoice: choice } : current)}
+                onChooseField={chooseConflict}
+                onResolve={resolveConflict}
+                ready={conflictReady}
+              />
+            ) : null}
             {errorMsg && (
               <div className="mb-5 flex items-center justify-between gap-4 border-l-2 border-os-vermilion py-2 pl-4 text-sm text-os-paper" role="alert">
                 <span>{errorMsg}</span>
                 <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
               </div>
             )}
-            <CoreEditor sourceHref={versions[0] ? `/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versions[0].versionId)}#version-evidence` : undefined} core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} />
-            <ArtifactUploader workspaceId={workspaceId} artifacts={artifacts} onArtifactsChange={setArtifacts} />
+            <CoreEditor disabled={interactionBlocked} sourceHref={versions[0] ? `/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versions[0].versionId)}#version-evidence` : undefined} core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} />
+            <ArtifactUploader disabled={interactionBlocked} workspaceId={workspaceId} artifacts={artifacts} onArtifactsChange={updateArtifacts} />
           </>
         }
         aside={
@@ -508,6 +621,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             <HermesAnchor id="hermes-diff" sides={HERMES_DIFF_SIDES}>
               <SuggestionsPanel
                 suggestions={suggestions}
+                disabled={interactionBlocked}
                 missingFields={missingFields}
                 onAcknowledgeMissing={acknowledgeMissing}
                 onApply={applySuggestion}

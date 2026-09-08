@@ -30,12 +30,14 @@ export default function CoreEditor({
   activeField,
   onSelectField,
   sourceHref,
+  disabled = false,
 }: {
   core: SdfCore;
   onEdit: (field: keyof Omit<SdfCore, 'schemaVersion'>, value: string) => void;
   activeField: keyof Omit<SdfCore, 'schemaVersion'> | null;
   onSelectField: (field: keyof Omit<SdfCore, 'schemaVersion'>) => void;
   sourceHref?: string;
+  disabled?: boolean;
 }) {
   const t = useTranslations('editor');
   const [preview, setPreview] = useState(false);
@@ -53,7 +55,7 @@ export default function CoreEditor({
           <p data-reading-role="caption" className="m-0 font-data uppercase tracking-[0.1em] text-os-muted-dark">{t('sdfCoreLabel')}</p>
           <h1 className="mb-0 mt-2 font-editorial text-4xl font-normal tracking-[-0.04em] text-os-paper">{t('coreEdit')}</h1>
         </div>
-        <button data-reading-role="control" className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" onClick={() => setPreview(!preview)}>
+        <button data-reading-role="control" className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper disabled:opacity-40" disabled={disabled} onClick={() => setPreview(!preview)}>
           {preview ? t('edit') : t('preview')}
         </button>
       </div>
@@ -74,8 +76,9 @@ export default function CoreEditor({
           ) : (
             <HermesAnchor id={HERMES_FIELD_ANCHORS[field]}>
               <textarea
+                disabled={disabled}
                 data-reading-role="reading"
-                className="min-h-48 w-full resize-y border border-os-rule-dark bg-os-black-1 p-4 font-editorial text-lg leading-8 text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                className="min-h-48 w-full resize-y border border-os-rule-dark bg-os-black-1 p-4 font-editorial text-lg leading-8 text-os-paper disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                 value={core[field]}
                 onChange={(event) => onEdit(field, event.target.value)}
                 placeholder={t(`hints.${field}`)}

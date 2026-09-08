@@ -19,10 +19,12 @@ export default function ArtifactUploader({
   workspaceId,
   artifacts,
   onArtifactsChange,
+  disabled = false,
 }: {
   workspaceId: string;
   artifacts: ArtifactReference[];
   onArtifactsChange: (artifacts: ArtifactReference[]) => void;
+  disabled?: boolean;
 }) {
   const t = useTranslations('editor');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -80,12 +82,13 @@ export default function ArtifactUploader({
     <section className="mt-10 border-t border-os-rule-dark pt-5" id="artifacts">
       <div className="flex items-center justify-between gap-4">
         <h2 className="m-0 font-editorial text-2xl font-normal text-os-paper">{t('artifacts')}</h2>
-        <label className="inline-flex min-h-10 cursor-pointer items-center rounded-panel border border-os-rule-dark px-3 text-sm text-os-paper">
+        <label className={`inline-flex min-h-10 items-center rounded-panel border border-os-rule-dark px-3 text-sm text-os-paper ${disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}>
           {t('uploadArtifact')}
           <input
             ref={fileRef}
             className="sr-only"
             type="file"
+            disabled={disabled}
             data-testid="artifact-input"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }}
             aria-label={t('uploadArtifact')}

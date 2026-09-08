@@ -34,6 +34,7 @@ export default function SuggestionsPanel({
   extractError,
   missingFields,
   onAcknowledgeMissing,
+  disabled = false,
 }: {
   suggestions: AiSuggestion[];
   onApply: (id: string, value: string) => void;
@@ -44,6 +45,7 @@ export default function SuggestionsPanel({
   extracting?: boolean;
   extractProgress?: number;
   extractError?: string | null;
+  disabled?: boolean;
 }) {
   const t = useTranslations('editor');
 
@@ -55,7 +57,7 @@ export default function SuggestionsPanel({
           <h2 className="mb-0 mt-2 font-editorial text-2xl font-normal text-os-paper">{t('suggestions')}</h2>
         </div>
         {onExtract && (
-          <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" data-extract-sdf="true" data-reading-role="control" onClick={onExtract} disabled={extracting}>
+          <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper disabled:cursor-not-allowed disabled:opacity-40" data-extract-sdf="true" data-reading-role="control" onClick={onExtract} disabled={extracting || disabled}>
             {extracting ? t('extracting') : t('extract')}
           </button>
         )}
@@ -72,7 +74,7 @@ export default function SuggestionsPanel({
           <p data-reading-role="body" className="mb-0 mt-2 text-base leading-[var(--leading-body)] text-os-paper">
             {field === 'results' ? t('missingResultsEvidence') : t('missingEvidenceDescription', { field: t(field) })}
           </p>
-          <button className="mt-3 min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" onClick={() => onAcknowledgeMissing(field)}>{t('acknowledgeMissingEvidence')}</button>
+          <button className="mt-3 min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper disabled:cursor-not-allowed disabled:opacity-40" disabled={disabled} onClick={() => onAcknowledgeMissing(field)}>{t('acknowledgeMissingEvidence')}</button>
         </article>
       ))}
       {suggestions.length === 0 && !extracting && <p data-reading-role="body" className={styles.guide}>{t('suggestionsGuide')}</p>}
@@ -92,6 +94,7 @@ export default function SuggestionsPanel({
           <BeforeAfterProposal
             after={suggestion.suggestion}
             before={suggestion.before}
+            disabled={disabled}
             evidenceLocator={suggestion.source === 'manual' ? suggestion.evidence?.locator : undefined}
             evidenceQuote={suggestion.source === 'manual' ? suggestion.evidence?.quote : undefined}
             key={suggestion.id}
