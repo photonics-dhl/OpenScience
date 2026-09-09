@@ -623,7 +623,7 @@
     "close": "Close",
     "loading": "Loading preview…",
     "unavailable": "This attachment could not be previewed. Download it to view the original file.",
-    "safePreviewNotice": "Preview is limited to PDFs and raster images. Other files are downloaded without running in OpenScience.",
+    "safePreviewNotice": "View the original attachment. PDFs and images support preview; other formats can be downloaded.",
     "documentTitle": "Preview of {name}"
   },
   "auth": {

@@ -623,7 +623,7 @@
     "close": "关闭",
     "loading": "正在加载预览…",
     "unavailable": "无法预览此附件。请下载原始文件后查看。",
-    "safePreviewNotice": "仅预览 PDF 和位图；其他文件会下载，且不会在 OpenScience 中运行。",
+    "safePreviewNotice": "查看原始附件。PDF 和图片支持预览，其他格式可下载。",
     "documentTitle": "预览：{name}"
   },
   "auth": {

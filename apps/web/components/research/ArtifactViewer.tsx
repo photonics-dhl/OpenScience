@@ -102,16 +102,16 @@ export function ArtifactViewer({ artifactId, logicalPath }: { artifactId: string
       {previewType ? <button className="min-h-9 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" type="button" onClick={() => void openPreview()}>{t('preview')}</button> : null}
       <a className="min-h-9 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" download href={`/api/artifacts/${encodeURIComponent(artifactId)}/download`}>{t('download')}</a>
       {previewType ? <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) closePreview(); }}>
-        <DialogContent surface="dark" className="max-h-[90dvh] max-w-5xl overflow-y-auto border-os-rule-dark bg-os-black-0 p-4 sm:p-6" onEscapeKeyDown={closePreview}>
+        <DialogContent className="max-h-[90dvh] max-w-5xl overflow-y-auto border-os-rule-paper bg-os-paper p-4 sm:p-6" onEscapeKeyDown={closePreview}>
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <DialogTitle className="truncate font-editorial text-2xl font-normal text-os-paper">{logicalPath}</DialogTitle>
-              <DialogDescription className="mt-2 text-os-muted-dark">{t('safePreviewNotice')}</DialogDescription>
+              <DialogTitle className="break-all font-editorial text-2xl font-normal text-os-ink">{logicalPath}</DialogTitle>
+              <DialogDescription className="mt-2 text-os-muted-paper">{t('safePreviewNotice')}</DialogDescription>
             </div>
-            <DialogClose asChild><button className="min-h-10 shrink-0 rounded-panel border border-os-rule-dark px-3 text-sm text-os-paper" type="button">{t('close')}</button></DialogClose>
+            <DialogClose asChild><button className="min-h-10 shrink-0 rounded-panel border border-os-rule-paper px-3 text-sm text-os-ink" type="button">{t('close')}</button></DialogClose>
           </div>
-          <div className="mt-5 min-h-48 bg-os-black-1">
-            {loading ? <p className="p-5 text-sm text-os-muted-dark" role="status">{t('loading')}</p> : null}
+          <div className="mt-5 min-h-48 border border-os-rule-paper bg-os-paper-strong">
+            {loading ? <p className="p-5 text-sm text-os-muted-paper" role="status">{t('loading')}</p> : null}
             {error ? <p className="p-5 text-sm text-os-vermilion" role="alert">{t('unavailable')}</p> : null}
             {preview?.kind === 'image' ? <img alt={logicalPath} className="mx-auto max-h-[65dvh] w-auto max-w-full object-contain" src={preview.url} /> : null}
             {preview?.kind === 'pdf' ? <object aria-label={t('documentTitle', { name: logicalPath })} className="h-[65dvh] w-full bg-white" data={preview.url} type="application/pdf"><p className="p-5 text-sm text-os-ink">{t('unavailable')}</p></object> : null}
