@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-09:** production3446f309 / rollback583d201e；正在合并R1来源身份、缺失归因、非空证据链与冲突修复。旧固定快照保持不变；新候选须精确门禁、部署和九篇Stage2复验。
+> **CURRENT 2026-09-09:** production1cdb18e0 / rollback45dabd7a；R1来源身份、缺失归因、非空证据链与冲突修复正在合入已上线编辑/Hermes体验改进。旧固定快照保持不变；新候选须重新通过精确门禁、部署和九篇Stage2复验。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -48,7 +48,7 @@
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/login-recovery.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO及登录恢复/错误语义回归 | DEPLOYED4d39808；login单元10、账号浏览器14及公网登录/资料验收通过 |
 
 | `apps/web/app/me/{page,layout}.tsx` / `apps/web/app/settings/page.tsx` / `apps/web/components/navigation/{AccountLink,ProductRouteNavigation}.tsx` / `apps/web/components/profile/MyResearchProjects.tsx` / `apps/web/components/settings/{AcademicIdentityControl,MotionPreferenceControl}.tsx` / `apps/web/components/hermes/HermesWorkspaceStage.tsx` / `apps/web/components/shell/DashboardShell.tsx` | frontend/nanqing 个人主页/设置分离、身份恢复与移动导航整合 | DEPLOYED 6478aa8 |
-| `apps/web/lib/api.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/test/{api-agent,hermes-guide-recovery}.test.ts` | 绑定 RO 的 guide 会话与范围恢复、scoped ingestion client | DEPLOYED 6478aa8；复审修正 |
+| `apps/web/lib/api.ts` / `apps/web/lib/hermes/draft-state.ts` / `apps/web/components/hermes/{HermesAssistantDrawer,HermesPresentationReview,HermesPresentationAction}.tsx` | guide会话与范围恢复、真实建议入可编辑草稿、账号/RO/版本草稿隔离 | DEPLOYED45dabd7a；服务器构建/启动完成，未运行测试；登录后UI未观察 |
 | `apps/web/playwright.release.config.ts` / `apps/web/package.json` / `apps/web/test/e2e/{academic-identity-recovery,product-release,auth-dashboard,hermes-blank-ro-flow,hermes-dashboard,hermes-workspace-stage,hermes-field-guide}.spec.ts` | 合并同事浏览器用例，既有 release suite 纳入 continuation，scoped task fixtures | DEPLOYED 6478aa8 |
 | `packages/domain/src/ingestion/ingestion-service.ts` / `packages/domain/test/{ingestion-service.test.ts,helpers/fakes.ts}` / `apps/api/src/routes/ingestion.ts` | RO membership 范围内任务查询，过滤先于 limit，个人 feed 兼容 | DEPLOYED 6478aa8；无迁移 |
 
@@ -249,7 +249,7 @@
 | `docs/plans/2026-08-16-hermes-contextual-guide-plan.md` | Hermes Dashboard 情境引导员历史实施：真实提示模型、`workspace.guide` Worker、助手抽屉与纵向验收 | 已完成的基础能力；新范围转入 2026-08-17 计划 |
 | `docs/plans/2026-08-16-hermes-articulated-mesh-pet-plan.md` | Hermes mesh-rig 历史实施：继承纠偏、motion model、真实像素 OGL rig 与感知门禁 | 已完成的基础能力；新范围转入 2026-08-17 计划 |
 | `apps/web/app/_visual/hermes-articulation/` / `apps/web/app/%5Fvisual/hermes-articulation/` / `apps/web/test/visual/hermes-articulation-gate.mjs` / `apps/web/test/visual/hermes-performance-gate.mjs` / `apps/web/test/visual/hermes-release-gate.mjs` | Hermes 隔离视觉夹具与 CI 聚合门禁：固定自主时钟、语义 head/forepaws/tail/crown/evidence region 像素、非重叠关节光学配准、裂缝/连通性、整图 affine mutation、冷加载/first-ready 与真实 WebGL draw cadence；production 默认 404 | Task 5 `757de5b` standalone gates GREEN；SwiftShader 证据不替代物理设备或用户审美验收 |
-| `packages/domain/src/agent/workspace-guide-contract.ts` / `apps/api/src/routes/agent.ts` / `apps/agent-worker/src/workspace-guide.ts` | `workspace.guide` 跨进程唯一 payload 边界、API 写前校验、Worker trusted-context 重建；模型只读取 membership-scoped RO/SDF 摘要并返回严格只读导航 | CURRENT；真实 ECS MiniMax/Dashboard 任务 GREEN，共享 parser 与 target allowlist 保持严格 |
+| `packages/domain/src/agent/workspace-guide-contract.ts` / `apps/api/src/routes/agent.ts` / `apps/agent-worker/src/workspace-guide.ts` | `workspace.guide` 跨进程唯一 payload 边界、API 写前校验、Worker trusted-context 重建；模型读取membership-scoped RO/SDF摘要，返回导航及有界可编辑建议 | DEPLOYED45dabd7a：同RO/version建议；保持共享parser与target allowlist，未运行测试 |
 | `packages/domain/src/agent/agent.ts` / `apps/agent-worker/src/index.ts` / `apps/agent-worker/test/queue-recovery.test.ts` | Hermes task 的 Serializable credit 预留、三次 `P2034` 上界、workspace.guide/sdf.extract 未派发 DB outbox 协调与单消费者 processing 恢复；文本 `sdf.extract` 仅一次安全 retry，blocked/artifact/其他 kind 不可重试 | CURRENT；原 payload/credit 保持不变，Redis 失败恢复合同 GREEN |
 | `scripts/docs/hermes-renderer-index.mjs` / `scripts/docs/hermes-renderer-index.test.mjs` | Hermes 事实源门禁：唯一 CURRENT renderer 是 2026-08-19 Wanko，2026-08-17 仅保留 implemented foundation，旧 articulated/2.5D/3D/sprite 不得恢复 | **CURRENT contract**；Wanko 路由与 active-memory 状态已锁定 |
 | `scripts/research-intelligence/verify-capability-registry.mjs` / `scripts/research-intelligence/verify-capability-registry.test.mjs` / `apps/agent-worker/test/research-intelligence-corpus.test.ts` / `apps/agent-worker/test/support/research-intelligence-corpus.ts` / `test/research-intelligence/manifest.json` | Hermes Foundation 机器门禁、13 项自著权全格式 parser corpus、跨 Windows CRLF/Linux LF 的稳定 SHA-256/locator manifest 与 ignored 现状基准报告 | **COMPLETED Task 1 acceptance evidence**；21-row 主表 + 11-row 候选评测矩阵 GREEN，7 ready / 6 text-matched / 6 explicit review，含 image-only PDF false-ready 基线；候选仍为 baseline-only |

@@ -26,6 +26,7 @@ export default function EditorLayout({
   return (
     <WorkspaceShell
       activeMobilePlane={mobileTab === 'outline' ? 'left' : mobileTab === 'panel' ? 'right' : 'main'}
+      className="editor-workspace"
       leftRail={outline}
       mainClassName="p-0 lg:p-0"
       mobileNavigation={
@@ -41,7 +42,7 @@ export default function EditorLayout({
         <ResearchWorkspaceNav active="sdf" objectId={objectId} />
       }
     >
-      <div className="min-h-[calc(100dvh-13.25rem)] px-4 pb-24 pt-5 lg:min-h-[calc(100dvh-10.25rem)] lg:p-8">{main}</div>
+      <div className="min-h-[calc(100dvh-13.25rem)] px-4 pb-24 pt-5 lg:min-h-[calc(100dvh-10.25rem)] lg:p-6">{main}</div>
     </WorkspaceShell>
   );
 }

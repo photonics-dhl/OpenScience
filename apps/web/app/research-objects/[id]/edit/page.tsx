@@ -53,6 +53,7 @@ import {
   applySuggestionsToCore,
   coreToSuggestions,
   extractMissingSdfFields,
+  SDF_FIELDS,
   suggestionReducer,
   type SdfField,
 } from '../../../../lib/suggestions';
@@ -66,6 +67,7 @@ type ActiveExtraction = Pick<ExtractReviewCheckpoint, 'idempotencyKey' | 'taskId
 };
 
 const HERMES_DIFF_SIDES: Array<'left' | 'top'> = ['left', 'top'];
+const aggregateCoreText = (core: SdfCore) => SDF_FIELDS.map((field) => core[field].trim()).filter(Boolean).join('\n\n');
 interface VersionRow {
   versionId: string;
   versionNo: number;
@@ -113,6 +115,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   // P1D-3：AI 提取状态（§5.4 + §18.3 进度可恢复）
   const [extracting, setExtracting] = useState(false);
   const [extractProgress, setExtractProgress] = useState(0);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractionComplete, setExtractionComplete] = useState(false);
   const [missingFields, setMissingFields] = useState<SdfField[]>([]);
   const [editorLoaded, setEditorLoaded] = useState(false);
   const [activeExtraction, setActiveExtraction] = useState<ActiveExtraction | null>(null);
@@ -183,6 +187,12 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     restoredExtraction.current = true;
     const checkpoint = loadExtractReviewState(window.localStorage, roId);
     if (!checkpoint) return;
+    const manuscriptText = aggregateCoreText(state.core);
+    if (!checkpoint.taskId && !manuscriptText) {
+      clearExtractReviewState(window.localStorage, roId);
+      setExtractError(t('extractNeedsContent'));
+      return;
+    }
     setExtracting(true);
     setActiveExtraction({
       idempotencyKey: checkpoint.idempotencyKey,
@@ -190,10 +200,10 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       retryAvailable: checkpoint.retryAvailable,
       dismissedFields: checkpoint.dismissedFields,
       acknowledgedMissingFields: checkpoint.acknowledgedMissingFields,
-      manuscriptText: Object.values(state.core).join('\n\n'),
+      manuscriptText,
       sourceCore: state.core,
     });
-  }, [editorLoaded, roId, state.core]);
+  }, [editorLoaded, roId, state.core, t]);
 
   // 单一串行轮询 owner：每次 await 完成后才安排下一次，避免重叠 GET 与重复完成回调。
   useEffect(() => {
@@ -238,6 +248,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           dispatchSuggestions({ type: 'reset' });
           for (const suggestion of nextSuggestions) dispatchSuggestions({ type: 'add', suggestion });
           setMissingFields(nextMissing);
+          setExtractionComplete(true);
+          setExtractError(null);
           setActiveField(nextSuggestions[0]?.field ?? nextMissing[0] ?? 'problem');
           if (nextSuggestions.length === 0 && nextMissing.length === 0) clearExtractReviewState(window.localStorage, roId);
           else persist(activeExtraction);
@@ -252,6 +264,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           setRecoverableExtraction(paused);
           setActiveExtraction(null);
           setErrorMsg(cur.task.error ?? 'AI 提取失败');
+          setExtractError(cur.task.error ?? t('extractFailed'));
           setExtracting(false);
           return;
         }
@@ -259,6 +272,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       } catch (error) {
         if (cancelled) return;
         setErrorMsg(error instanceof Error ? error.message : String(error));
+        setExtractError(error instanceof Error ? error.message : t('extractFailed'));
         setRecoverableExtraction(activeExtraction);
         setActiveExtraction(null);
         setExtracting(false);
@@ -269,7 +283,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [activeExtraction, roId]);
+  }, [activeExtraction, roId, t]);
 
   const hermesRouteState = extracting
     ? 'scanning'
@@ -409,12 +423,22 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   /** P1D-3：AI 提取（§9.3 异步长任务 + §18.3 轮询进度）。提取只产出建议，不写 SDF（§9.2）。 */
   async function handleExtract() {
     if (interactionBlocked || mutationRequestInFlight.current) return;
+    const manuscriptText = aggregateCoreText(state.core);
+    const checkpoint = loadExtractReviewState(window.localStorage, roId);
+    const recovery = recoverableExtraction;
+    const existingTaskId = recovery?.taskId ?? checkpoint?.taskId;
+    const existingRetryAvailable = recovery?.retryAvailable ?? checkpoint?.retryAvailable ?? false;
+    if ((!existingTaskId || existingRetryAvailable) && !manuscriptText) {
+      setExtractError(t('extractNeedsContent'));
+      setExtractionComplete(false);
+      return;
+    }
     setExtracting(true);
     setExtractProgress(0);
     setMissingFields([]);
     setErrorMsg(null);
-    const checkpoint = loadExtractReviewState(window.localStorage, roId);
-    const recovery = recoverableExtraction;
+    setExtractError(null);
+    setExtractionComplete(false);
     let taskId = recovery?.taskId ?? checkpoint?.taskId;
     const retryAvailable = recovery?.retryAvailable ?? checkpoint?.retryAvailable ?? false;
     if (retryAvailable && taskId) {
@@ -423,13 +447,14 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         taskId = retried.task.id;
       } catch (error) {
         setErrorMsg(error instanceof Error ? error.message : String(error));
+        setExtractError(error instanceof Error ? error.message : t('extractFailed'));
         const resumed: ActiveExtraction = recovery ?? {
           idempotencyKey: checkpoint?.idempotencyKey ?? crypto.randomUUID(),
           taskId,
           retryAvailable: false,
           dismissedFields: checkpoint?.dismissedFields ?? [],
           acknowledgedMissingFields: checkpoint?.acknowledgedMissingFields ?? [],
-          manuscriptText: Object.values(state.core).join('\n\n'),
+          manuscriptText,
           sourceCore: state.core,
         };
         setRecoverableExtraction(null);
@@ -447,7 +472,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       retryAvailable: false,
       dismissedFields: checkpoint?.dismissedFields ?? [],
       acknowledgedMissingFields: checkpoint?.acknowledgedMissingFields ?? [],
-      manuscriptText: Object.values(state.core).join('\n\n'),
+      manuscriptText,
       sourceCore: state.core,
     };
     saveExtractReviewState(window.localStorage, roId, {
@@ -658,6 +683,11 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 onExtract={handleExtract}
                 extracting={extracting}
                 extractProgress={extractProgress}
+                extractError={extractError}
+                extractionComplete={extractionComplete}
+                canExtract={Boolean(aggregateCoreText(state.core)) || Boolean(recoverableExtraction?.taskId && !recoverableExtraction.retryAvailable)}
+                resumeExtraction={Boolean(recoverableExtraction?.taskId && !recoverableExtraction.retryAvailable)}
+                sourceHref={`/research-objects/${encodeURIComponent(roId)}/hermes`}
               />
             </HermesAnchor>
             <div className="mt-8 border-t border-os-rule-paper pt-4">

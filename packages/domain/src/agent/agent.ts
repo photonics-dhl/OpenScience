@@ -166,7 +166,7 @@ function evaluateAgentTaskRetryEligibility(
     ? task.payload as Record<string, unknown>
     : {};
   if (task.kind === 'sdf.extract') {
-    return { authorityValid: true, canRetry: typeof payload.manuscriptText === 'string' && !('artifactId' in payload) };
+    return { authorityValid: true, canRetry: typeof payload.manuscriptText === 'string' && Boolean(payload.manuscriptText.trim()) && !('artifactId' in payload) };
   }
   if (task.kind !== 'source.retrieve' || payload.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
     return { authorityValid: true, canRetry: false };
@@ -503,6 +503,10 @@ async function persistAgentTaskCoreInTransaction(
       assertTaskReplay(existing, input, session.researchObjectId, requestedContext);
       return { task: existing, replayed: true };
     }
+  }
+  if (input.kind === 'sdf.extract' && !artifactId
+    && (typeof input.payload.manuscriptText !== 'string' || !input.payload.manuscriptText.trim())) {
+    throw new AgentError('VALIDATION_ERROR', '当前编辑内容为空，请先填写内容或选择文献提取');
   }
   const interestContext = await resolveInterestContext(
     tx,

@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { ApiClientError, getResearchObject, listVersions, listMyWorkspaces, listVersionClaims, listPresentationAssets, generatePresentationStoryboard, generatePresentationSceneImage, type PresentationClaim, type PresentationAsset, type VersionSummary, type WorkspaceApi, type StoryboardRequest } from '@/lib/api';
 import { validPresentationInstruction, hasCurrentPresentationSources, presentationSources, selectPresentationVersion, SubmissionIntent, type PresentationAction } from '@/lib/hermes/presentation-action';
+import { getHermesDraftStorage, loadHermesPresentationDraft, saveHermesPresentationDraft, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import { IngestionClaimReview } from './IngestionClaimReview';
-interface Props { researchObjectId: string; requestedVersionId?: string; intent: { action: PresentationAction; instruction: string; sceneIndex?: number }; onBack: () => void; onSubmitted: (url: string) => void; submissionRecords?: Map<string, SubmissionIntent>; onBusyChange?: (locked: boolean) => void }
+interface Props { researchObjectId: string; requestedVersionId?: string; intent: { action: PresentationAction; instruction: string; sceneIndex?: number }; suggestion?: { action: 'storyboard.create'; instruction: string; researchObjectId: string; versionId: string }; userId?: string; onBack: () => void; onSubmitted: (url: string) => void; submissionRecords?: Map<string, SubmissionIntent>; onBusyChange?: (locked: boolean) => void }
 const control = 'min-h-11 w-full rounded border border-os-rule-paper bg-os-paper px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink';
 export function HermesPresentationAction(props: Props) {
   const t = useTranslations('hermesPresentation'); const locale = useLocale();
@@ -19,10 +20,17 @@ export function HermesPresentationAction(props: Props) {
   const [selected,setSelected] = useState<string[]>([]); const [parentId,setParentId] = useState(''); const [scene,setScene] = useState(intent.sceneIndex ?? 0);
   const [ready,setReady] = useState(''); const [error,setError] = useState(''); const [busy,setBusy] = useState(false); const [uncertain,setUncertain] = useState(false); const [reload,setReload] = useState(0);
   const [bridgeBusy, setBridgeBusy] = useState(false);
+  const [draftStored, setDraftStored] = useState(false);
   const localRecords = useRef(new Map<string, SubmissionIntent>());
   const records = props.submissionRecords ?? localRecords.current;
   const submission = useRef(new SubmissionIntent()); const controller = useRef<AbortController | null>(null);
+  const hydratedDraft = useRef(''); const skipDraftSave = useRef(false);
   const scope = `${context}:${versionId}`; const renderedScope = useRef(scope); renderedScope.current = scope;
+  const draftScope: HermesDraftScope | null = React.useMemo(() => props.userId && versionId
+    ? { userId: props.userId, researchObjectId: ro, versionId, purpose: 'presentation' }
+    : null, [props.userId, ro, versionId]);
+  const draftKey = draftScope ? JSON.stringify(draftScope) : '';
+  const draftStorage = getHermesDraftStorage();
   useEffect(() => {
     let active = true; setData(null); setVersionId(''); setError(''); setAction(intent.action); setInstruction(intent.instruction); setStyle('watercolor'); setLanguage(locale==='zh'?'zh':'en'); setScene(intent.sceneIndex ?? 0);
     void Promise.all([getResearchObject(ro),listVersions(ro),listMyWorkspaces()]).then(([r,v,w]) => {
@@ -42,6 +50,26 @@ export function HermesPresentationAction(props: Props) {
     }).catch(()=>{if(!abort.signal.aborted && renderedScope.current===scope)setError('loadError');});
     return()=>{if(record.isBusy)record.fail(true);if(!record.isUncertain)records.delete(scope);abort.abort();};
   },[context,data,locale,records,ro,scope,versionId]);
+  useEffect(() => {
+    if (!draftScope || hydratedDraft.current === draftKey) return;
+    const stored = loadHermesPresentationDraft(draftStorage, draftScope);
+    setDraftStored(stored !== null);
+    hydratedDraft.current = draftKey; skipDraftSave.current = true;
+    if (submission.current.isUncertain) return;
+    if (stored) {
+      setAction(stored.action); setInstruction(stored.instruction); setStyle(stored.style); setLanguage(stored.language);
+      setSelected(stored.selected); setParentId(stored.parentId); setScene(stored.scene);
+    } else if (intent.instruction.trim()) {
+      setAction(intent.action); setInstruction(intent.instruction); setScene(intent.sceneIndex ?? 0);
+    } else if (props.suggestion?.researchObjectId === ro && props.suggestion.versionId === versionId) {
+      setAction('storyboard.create'); setInstruction(props.suggestion.instruction);
+    }
+  }, [draftKey, draftScope, draftStorage, intent.action, intent.instruction, intent.sceneIndex, props.suggestion, ro, versionId]);
+  useEffect(() => {
+    if (!draftScope || hydratedDraft.current !== draftKey) return;
+    if (skipDraftSave.current) { skipDraftSave.current = false; return; }
+    setDraftStored(saveHermesPresentationDraft(draftStorage, draftScope, { action, instruction, style, language, selected, parentId, scene }));
+  }, [action, draftKey, draftScope, draftStorage, instruction, language, parentId, scene, selected, style]);
   useEffect(()=>{props.onBusyChange?.(busy || uncertain || bridgeBusy);},[busy,uncertain,bridgeBusy,props.onBusyChange]);
   const version=data?.context===context ? data.versions.find(x=>x.versionId===versionId) : undefined;
   const canWrite=version?.status==='draft' && data?.workspace?.status==='active' && ['owner','maintainer','author','contributor'].includes(data.workspace.role ?? '');
@@ -68,7 +96,13 @@ export function HermesPresentationAction(props: Props) {
     }
   }
   return <section className="min-w-0 rounded-xl bg-os-paper p-4 text-os-ink" data-hermes-presentation-action="true">
-    <h3 className="m-0 text-lg font-semibold">{t('entry')}</h3><p className="text-sm leading-6">{t('boundary')}</p>
+    <h3 className="m-0 text-lg font-semibold">{t('entry')}</h3><p className="text-sm leading-6 text-os-muted-paper">{t('boundary')}</p>
+    {props.suggestion?.researchObjectId === ro && props.suggestion.versionId === versionId ? <div className="my-4 border-l-2 border-os-vermilion bg-os-paper-strong px-4 py-3">
+      <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-os-vermilion">{t('suggestedDraft')}</p>
+      <p className="mt-2 text-sm leading-6">{props.suggestion.instruction}</p>
+      <p className="mt-2 text-xs leading-5 text-os-muted-paper">{t('sourcesManual')}</p>
+      {instruction !== props.suggestion.instruction ? <button className="mt-2 min-h-11 border-b border-os-vermilion text-sm font-semibold" disabled={locked} onClick={() => { setAction('storyboard.create'); setInstruction(props.suggestion!.instruction); }} type="button">{t('replaceWithSuggestion')}</button> : <p className="mt-2 text-xs text-os-muted-paper">{t('suggestionApplied')}</p>}
+    </div> : null}
     {canWrite && ready === scope && action === 'storyboard.create' ? <IngestionClaimReview key={scope} researchObjectId={ro} versionId={versionId} onBusyChange={setBridgeBusy} onComplete={created => {
       setClaims(previous => [...previous.filter(claim => !created.some(item => item.id === claim.id)), ...created]);
       setSelected(created.map(claim => claim.id).slice(0, 12));
@@ -90,6 +124,8 @@ export function HermesPresentationAction(props: Props) {
       </fieldset>
       {!canWrite && data?<p role="status" className="text-sm">{t('readOnly')}</p>:null}
       <p className="text-sm leading-6">{t('charge')}</p>
+      <p className="text-xs leading-5 text-os-muted-paper">{t('deterministicDefaults')}</p>
+      {draftStored ? <p className="text-xs leading-5 text-os-muted-paper">{t('browserSessionDraft')}</p> : null}
       {action!=='scene.image' && instruction.length>1000?<p role="alert" className="text-sm">{t('instructionLimit')}</p>:null}
       {parent && !validSources?<p role="alert" className="text-sm">{t('staleSources')}</p>:null}
       {error?<p role="alert" className="text-sm">{t(error)}</p>:null}
