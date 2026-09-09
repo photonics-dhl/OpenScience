@@ -3,6 +3,7 @@
 Status: CANDIDATE, not a production image provider. No webpage login or generated image observed yet.
 
 ## Prerequisites
+- Read server-capabilities.md first. Reuse the installed ScanSci image's full Chrome revision1234, Xvfb and libraries, plus existing Node/media-font layers. Only x11vnc/noVNC/websockify are additional packages; do not download Chromium again.
 - User authorized a server-hosted interactive browser for the existing account. Login/MFA/challenge stays with the user; no copied Codex credentials or cookie extraction.
 - Existing Docker and localhost Squid127.0.0.1:7891. This installation does not modify production networks, application services, or Squid configuration.
 - Dedicated UID11040, private profile/downloads under /opt/openscience-chatgpt-browser; never include them in repository or general artifact uploads.
@@ -10,12 +11,13 @@ Status: CANDIDATE, not a production image provider. No webpage login or generate
 
 ## Execution
 1. Transfer infra/chatgpt-browser to a dedicated server staging directory through the project SSH wrapper; do not mount the application checkout into the browser.
-2. On server run `bash <staging>/install.sh --confirm`. It builds the dedicated Debian browser image, starts the localhost bridge and isolated browser. It retains all profile/download data.
+2. On server run `bash <staging>/install.sh --confirm`. The build uses the Aliyun Debian mirror with Debian signature verification intact and clears build-only HTTP proxy arguments. It builds the dedicated Debian browser image, starts the localhost bridge and isolated browser. It retains all profile/download data.
 3. From Windows use explicit Git Bash and this worktree's `infra/scripts/ssh-run.sh --browser-tunnel`, with XGS_CONFIG_ROOT=E:/Miscellaneous/XGS. The only forwarding is local127.0.0.1:6081→server127.0.0.1:6081.
 4. Open `http://127.0.0.1:6081/vnc.html?autoconnect=true&resize=scale`. User completes normal ChatGPT login in that remote browser. Do not enter credentials in conversation.
 5. This is a private interactive session, not a server-triggered public API. Keep the approved Hermes image brief unchanged when later attempting one web generation. Do not mark the product flow complete until actual image return is observed.
 
 ## Recovery / rollback
+- If the image build was interrupted before either the bridge unit or browser container exists, resume with `bash <staging>/install.sh --confirm --resume-build`. This mode refuses to overwrite a running installation or logged-in profile.
 - Stop only openscience-chatgpt-browser container and openscience-chatgpt-browser-bridge service when retiring this research environment; keep profile/downloads and scripts intact.
 - Do not restart production or overwrite its Codex auth. Existing image provider remains unchanged.
 - A denied CONNECT log may identify a necessary hostname; review it before narrowly adding it. No wildcard proxy or direct-connect fallback.

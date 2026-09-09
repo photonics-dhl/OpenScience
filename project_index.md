@@ -572,3 +572,5 @@
 - RESEARCH ADR-013补充自定义GPT/Image Generation + Action文件回传候选，未实施或验收。
 
 - CANDIDATE infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：独立服务器交互浏览器、loopback SSH登录界面，未接入生产Provider；infra/scripts/ssh-run.sh固定browser-tunnel。
+
+- CURRENT docs/runbooks/server-capabilities.md：服务器已有服务、镜像、浏览器/模型路径与复用边界；服务器任务先查，新增安装只补缺失能力（2026-09-09）。

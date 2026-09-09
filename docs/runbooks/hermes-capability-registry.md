@@ -5,6 +5,8 @@
 > 设计真源：`docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
 > 安全原则：只记录变量名与注入状态，禁止记录、读取或输出真实 key/token/cookie。
 
+服务器具体文件、镜像与复用入口见 [服务器能力清单](server-capabilities.md)；服务器任务先读相关条目。本台账历史验收记录不构成新一轮测试要求，遵循AGENTS产品落地优先规则。
+
 ## 1. Purpose
 
 本台账防止 Hermes 能力在后续迭代中被重复安装、遗忘、误判或污染服务器。新增、升级、启用、停用、替换或删除任何 Skill、MCP、模型、parser、provider 或运行容器时，必须同步本文件与 `project_index.md`。
