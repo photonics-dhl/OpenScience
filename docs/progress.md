@@ -1,14 +1,10 @@
-# 最新推进
-- production929667dd / rollback1ad54c72，deploy exit0日志1788953147802-c053bd8c-626c-499c-9265-03536fa01ce4；runner仍1ad54c72（含skill）。
-- 原run通过正常retry恢复，Hermes实际规划asset3a809f33；存在亚纳米等同/虚构波矢谱等错误，未批准。正常修订asset833a2def仍重复错误，未生图。
-- 候选storyboard.ts补image遵循修订规则、base非权威，单独user修订消息且仍受科学约束；不增加模型调用。待部署再正常修订。
-
 # Progress
 
-## 当前：来源审核续跑兼容修复
-- production1ad54c72 / rollback85f65451，服务器部署和宿主runner install均成功。预设imagegen skill与画廊宽幅布局已部署。
-- 原run46442dc4正常confirmSourceReview成功；15条verifyEvidence成功，Claim7397c444仅assessment改supported。
-- 实际发现正常updateClaim写human来源，run却硬要求reviewed_ingestion，任务stopped/version4。候选接受受服务器保留的human sourceTaskLineage，仍验证原证据task/artifact/hash；仅无生成step的此类错误可经正常retry恢复。
-- 图片仍未生成；论文完整分析partial不变；浏览器控制失败，页面视觉未观察。
-- 迁移/runner已获独立High静态复核；候选来源修复复核中。未运行测试。
-- 当前详细状态与后续见docs/handoff/2026-08-16-hermes-2d-pet-handoff.md。
+## 2026-09-09 实际生图到达服务器Codex，受订阅额度阻塞
+- production7f8e47d9 / rollback929667dd；runner1ad54c72含官方预设imagegen skill。全部部署成功，未运行测试。
+- 已修图片grant数据库约束、正常Claim审核导致run误停、图片规划不遵循修订；画廊单图宽幅展示已部署。
+- Hermes实际生成并修订方案；approved asset10f36f01，一幅有来源支持的研究动机概念图。15条证据正常定位核对成功。
+- 真实scene_image task f6f29af4已下发详细brief，服务器Codex thread01a085fa返回usage limit，未生成图片。保留已审核方案，不盲重试。
+- run46442dc4当前failed/version9；额度恢复后走正常retry，先GET对账，不重跑OCR。未授权兑换额度、购买或切换API付费。
+- 全论文仍partial，method/reproducibility与部分科学忠实性未完成；浏览器连接失败，无页面视觉验收。
+- 详细ID/日志/下一步见CURRENT handoff。
