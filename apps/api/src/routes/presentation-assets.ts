@@ -33,14 +33,8 @@ const generationBody = z.object({
   sceneImage: z.object({ storyboardAssetId: z.string().uuid(), sceneIndex: z.number().int().min(0).max(5) }).strict().optional(),
   video: z.object({
     storyboardAssetId: z.string().uuid(),
-    sceneImageAssetIds: z.tuple([
-      z.string().uuid(), z.string().uuid(), z.string().uuid(), z.string().uuid(), z.string().uuid(),
-    ]),
-    sceneRoles: z.tuple([
-      z.literal('driver_signal'), z.literal('tip_enhancement'), z.literal('emission_collection'),
-      z.literal('delay_scan'), z.literal('field_reconstruction'),
-    ]),
-    profile: z.literal('onchip-field-sampling-v1'),
+    sceneImageAssetIds: z.array(z.string().uuid()).min(3).max(6),
+    profile: z.literal('content-driven-v1'),
   }).strict().optional(),
   sourceClaimIds: z.array(z.string().uuid()).min(1).max(12),
 }).strict();

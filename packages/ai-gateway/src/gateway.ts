@@ -21,7 +21,7 @@ import {
   type ProviderCapabilityDecision,
   type ProviderCapabilityPolicy,
 } from './ocr';
-import type { ChatMessage, Provider, ProviderResult } from './provider';
+import { TextProviderError, type ChatMessage, type Provider, type ProviderResult } from './provider';
 
 /** 调用日志（§9.3 + §17 脱敏：只记元数据，绝不记 prompt/附件/密钥）。 */
 export interface GatewayCallLog {
@@ -49,6 +49,7 @@ export interface GatewayCallLog {
   error: string | null;
   fallbackReason: string | null;
   retryCount: number;
+  finishReason?: ProviderResult['finishReason'];
 }
 
 export interface AiGatewayOptions {
@@ -148,6 +149,13 @@ export class AiGateway {
     }
   }
 
+  async canResumeImageBeforeSubmission(requestId: string): Promise<boolean> {
+    const provider = this.imageProviders[0];
+    if (!provider?.canResumeBeforeSubmission) return false;
+    if (!(await this.providerEnabled(provider.name, 'image')).enabled) return false;
+    try { return await provider.canResumeBeforeSubmission(requestId) === true; } catch { return false; }
+  }
+
   /** 文本补全：primary → fallbacks 逐级回退（§9.3 回退策略配置管理）。 */
   async complete(messages: ChatMessage[], opts: { temperature?: number; maxTokens?: number } = {}): Promise<ProviderResult> {
     const totalStart = Date.now();
@@ -195,10 +203,12 @@ export class AiGateway {
           error: null,
           fallbackReason: isPrimary && fallbackNotes.length === 0 ? null : boundedFallbackReason(fallbackNotes),
           retryCount: i,
+          ...(result.finishReason ? { finishReason: result.finishReason } : {}),
         });
         return result;
       } catch (e) {
         lastError = e;
+        const failure = textProviderFailure(e);
         await this.record({
           operation: 'text',
           provider: provider.name,
@@ -221,12 +231,12 @@ export class AiGateway {
           pageCount: 0,
           selectionReason: null,
           outcome: 'failed',
-          error: 'provider_error',
+          error: failure,
           fallbackReason: boundedFallbackReason(fallbackNotes),
           retryCount: i,
         });
-        fallbackNotes.push(`${provider.name}:provider_error`);
-        this.logger?.warn?.(`AI provider ${provider.name} failed; trying configured fallback`);
+        fallbackNotes.push(`${provider.name}:${failure}`);
+        this.logger?.warn?.(`AI provider ${provider.name} failed category=${failure}; trying configured fallback`);
       }
     }
     throw new AiGatewayError('ALL_PROVIDERS_FAILED', '全部 AI Provider 失败', lastError);
@@ -289,8 +299,9 @@ export class AiGateway {
         try {
           parsed = parseStructuredJson(result.text);
         } catch (error) {
-          this.logger?.warn?.(`structured.output.rejected stage=json_parse attempt=${attempt + 1}/${MAX_STRUCTURED_RETRIES + 1}`);
-          throw error;
+          const finishReason = result.finishReason ?? 'unknown';
+          this.logger?.warn?.(`structured.output.rejected stage=json_parse attempt=${attempt + 1}/${MAX_STRUCTURED_RETRIES + 1} finish=${finishReason}`);
+          throw new AiGatewayError('STRUCTURED_JSON_INVALID', 'structured JSON invalid', error);
         }
         if (!guard(parsed)) {
           const feedback = opts.validationFeedback?.(parsed)?.trim();
@@ -305,10 +316,16 @@ export class AiGateway {
         return parsed;
       } catch (e) {
         lastError = e;
+        // complete() already exhausted the configured provider pool. Repeating the
+        // same transport cycle is neither a schema repair nor a useful fallback.
+        if (e instanceof AiGatewayError && e.code === 'ALL_PROVIDERS_FAILED') throw e;
         if (attempt < MAX_STRUCTURED_RETRIES) {
           this.logger?.warn?.(`structured.output.retry next_attempt=${attempt + 2}/${MAX_STRUCTURED_RETRIES + 1}`);
         }
       }
+    }
+    if (lastError instanceof AiGatewayError && lastError.code === 'STRUCTURED_JSON_INVALID') {
+      throw new AiGatewayError('STRUCTURED_JSON_INVALID', 'structured JSON invalid after retry limit', lastError);
     }
     throw new AiGatewayError('SCHEMA_VALIDATION', '结构化输出超过重试上限', lastError);
   }
@@ -502,6 +519,14 @@ function assertProviderPool(providers: ReadonlyArray<{ name: string; model: stri
 
 function safePolicyReason(reason: unknown): string {
   return typeof reason === 'string' && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(reason) ? reason : 'disabled';
+}
+
+function textProviderFailure(error: unknown): string {
+  if (!(error instanceof TextProviderError)) return 'provider_error';
+  if (error.code !== 'provider_http') return error.code;
+  return Number.isInteger(error.httpStatus) && error.httpStatus! >= 100 && error.httpStatus! <= 599
+    ? `provider_http_${error.httpStatus}`
+    : 'provider_http';
 }
 
 function boundedFallbackReason(notes: string[]): string | null {

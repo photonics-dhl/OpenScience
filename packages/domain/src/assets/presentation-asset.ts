@@ -8,14 +8,15 @@ import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
 import { PresentationAssetError } from './errors';
-import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SOURCE_CONTENT_HASH, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './video';
+import { ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './video';
+import { requireAnimationSourceSupport } from './animation';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KINDS = ['chart', 'interactive_html', 'image', 'video'] as const;
 export const DETERMINISTIC_PRESENTATION_GENERATOR = 'OpenScience deterministic renderer';
 export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-presentation-v2';
 export type PresentationGenerationKind = (typeof KINDS)[number];
-export interface HermesPresentationAuthority { runId: string; stage: 'storyboard' | 'scene_image' | 'video'; ordinal: number; profile: 'onchip-field-sampling-v1' }
+export interface HermesPresentationAuthority { runId: string; stage: 'storyboard' | 'scene_image' | 'video'; ordinal: number; profile: 'onchip-field-sampling-v1' | 'content-driven-v1' }
 export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest; hermesRunAuthority?: HermesPresentationAuthority }
 export interface PresentationAssetView {
   storyboard?: StoryboardView;
@@ -65,8 +66,9 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
       || Object.keys(authority).sort().join(',') !== 'ordinal,profile,runId,stage'
       || typeof authority.runId !== 'string' || !UUID.test(authority.runId)
       || !['storyboard', 'scene_image', 'video'].includes(String(authority.stage))
-      || !Number.isInteger(authority.ordinal) || Number(authority.ordinal) < 0 || Number(authority.ordinal) > 4
-      || authority.profile !== 'onchip-field-sampling-v1') throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes run authority is invalid');
+      || !Number.isInteger(authority.ordinal) || Number(authority.ordinal) < 0
+      || Number(authority.ordinal) > (authority.profile === CONTENT_DRIVEN_PROFILE ? 5 : 4)
+      || ![ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE].includes(authority.profile as HermesPresentationAuthority['profile'])) throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes run authority is invalid');
     hermesRunAuthority = authority as unknown as HermesPresentationAuthority;
   }
   return { ...(sceneImage ? { sceneImage } : {}), ...(storyboard ? { storyboard } : {}), ...(video ? { video } : {}), ...(hermesRunAuthority ? { hermesRunAuthority } : {}), schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
@@ -135,7 +137,7 @@ async function hasHermesAssetReviewAuthority(
   const step = await prisma.hermesResearchStep.findFirst({
     where: { presentationAssetId: input.assetId, status: 'awaiting_approval', run: {
       actorId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId,
-      profile: ONCHIP_FIELD_SAMPLING_PROFILE, maxAgentTasks: 7,
+      OR: [{ profile: ONCHIP_FIELD_SAMPLING_PROFILE, maxAgentTasks: 7 }, { profile: CONTENT_DRIVEN_PROFILE, maxAgentTasks: 8 }],
       status: { in: ['awaiting_scene_images_review', 'awaiting_video_review'] },
     } }, include: { run: true },
   });
@@ -178,10 +180,10 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
   });
   const liveClaims = await deps.prisma.claimNode.findMany({ where: { researchObjectId: input.researchObjectId, versionId: input.versionId, extractionStatus: 'succeeded' }, select: { id: true, extractionStatus: true } });
   const validClaimIds = new Set(liveClaims.filter(claim => claim.extractionStatus === 'succeeded').map(claim => claim.id));
-  const sourcePaperReady = Boolean(await deps.prisma.evidenceRecord.findFirst({ where: {
+  const sourcedClaimIds = new Set((await deps.prisma.evidenceRecord.findMany({ where: {
     researchObjectId: input.researchObjectId, versionId: input.versionId,
-    claimId: { in: [...validClaimIds] }, extractionStatus: 'succeeded', contentHash: ONCHIP_SOURCE_CONTENT_HASH,
-  }, select: { id: true } }));
+    claimId: { in: [...validClaimIds] }, extractionStatus: 'succeeded',
+  }, select: { claimId: true }, distinct: ['claimId'] })).map(row => row.claimId));
   const hermesReviewable = new Set<string>();
   if (user?.platformRole !== 'platform_admin') {
     for (const asset of assets.filter((candidate) => candidate.status === 'draft' && (candidate.kind === 'image' || candidate.kind === 'video'))) {
@@ -224,12 +226,13 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
         && provenance?.parentIdentity === storyboardIdentity && JSON.stringify(candidateIds) === JSON.stringify(ids)
         ? [scene.sceneIndex] : [];
     }));
-    const canGenerateVideo = sourcePaperReady && claimsValid && canWrite && user?.platformRole === 'platform_admin'
+    const canGenerateVideo = ids.length > 0 && ids.every(id => sourcedClaimIds.has(id)) && claimsValid && canWrite && user?.platformRole === 'platform_admin'
       && asset.status === 'approved' && storyboardForVideo?.locale === 'zh'
-      && storyboardForVideo.document.scenes.length === 5
+      && storyboardForVideo.document.scenes.length >= 3 && storyboardForVideo.document.scenes.length <= 6
+      && storyboardForVideo.document.scenes.every(scene => !!scene.animation)
       && storyboardForVideo.document.scenes.every((scene) => [...scene.narration].length <= 120)
       && storyboardForVideo.document.scenes.reduce((total, scene) => total + [...scene.narration].length, 0) <= 450
-      && [0, 1, 2, 3, 4].every((index) => eligibleSceneIndexes.has(index));
+      && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index));
     return ({
     sceneImage: presentationSceneImageView(asset),
     canGenerateSceneImage: claimsValid && canWrite && user?.platformRole === 'platform_admin' && asset.status === 'approved' && !!presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
@@ -270,6 +273,23 @@ export async function transitionPresentationAsset(deps: AgentDeps, input: {
     if (!asset || asset.researchObjectId !== input.researchObjectId || asset.versionId !== input.versionId) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
     if (input.status === 'approved') {
       const links = await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } });
+      const storyboard = presentationStoryboardView(asset, links.map(link => link.claimId));
+      if (storyboard) {
+        const boundRun = await tx.hermesResearchRun.findFirst({ where: {
+          researchObjectId: input.researchObjectId, versionId: input.versionId, profile: CONTENT_DRIVEN_PROFILE,
+          status: 'awaiting_storyboard_review', steps: { some: { stage: 'storyboard',
+            presentationAssetId: { in: [asset.id, ...(storyboard.baseAssetId ? [storyboard.baseAssetId] : [])] } } },
+        } });
+        if (boundRun && storyboard.document.scenes.some(scene => !scene.animation)) {
+          throw new PresentationAssetError('VALIDATION_ERROR', 'This workflow requires a revised content-driven animation plan before approval');
+        }
+        if (storyboard.document.scenes.some(scene => !!scene.animation)) {
+          const claims = await tx.claimNode.findMany({ where: { id: { in: links.map(link => link.claimId) },
+            researchObjectId: input.researchObjectId, versionId: input.versionId, extractionStatus: 'succeeded' }, select: { id: true, statement: true } });
+          if (claims.length !== links.length) throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Storyboard source Claims changed');
+          for (const scene of storyboard.document.scenes) if (scene.animation) requireAnimationSourceSupport(scene.animation, claims);
+        }
+      }
       if (hasSceneImageProvenance(asset)) {
         const sceneImage = presentationSceneImageView(asset);
         if (!sceneImage) throw new PresentationAssetError('VALIDATION_ERROR', 'Saved scene image is invalid');

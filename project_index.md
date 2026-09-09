@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-08 +08）：** R1九篇论文修复中；branch codex/r1-record-hardening，base c1c7fa4b；实测production88018512，rollbackc1c7fa4b。旧1ba审计发现空图/空确认等缺陷，不代表阶段验收通过。
+> **CURRENT 2026-09-09:** production3446f309 / rollback583d201e；正在合并R1来源身份、缺失归因、非空证据链与冲突修复。旧固定快照保持不变；新候选须精确门禁、部署和九篇Stage2复验。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -11,8 +11,8 @@
 |---|---|---|
 | `infra/scripts/verify-hermes-user-journey.mjs` | 服务器真实普通账号浏览器上传/启动/恢复取证，禁止手工生成各媒体阶段 | ACCEPTANCE TOOL；待运行，不代表产品流程通过 |
 | `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |
-| `packages/domain/src/agent/research-run.ts` / `apps/api/src/routes/research-runs.ts` / `infra/migrations/20260908010000_hermes_research_runs/` / `infra/migrations/20260908020000_hermes_research_workflow/` | 持久流程、来源审核和限定生成授权、服务器审核后续跑 | CANDIDATE4c369cbc；正合并生产，新增流程待服务器验收 |
-| `apps/web/components/hermes/{HermesResearchRunPanel,HermesSourceReview,HermesClaimEvidenceReview}.tsx` / `apps/web/test/hermes-research-run-panel.test.tsx` / `apps/web/test/hermes-claim-evidence-review.test.ts` | 用户启动、恢复及审核进度入口 | CANDIDATE；待服务器验收 |
+| `packages/domain/src/agent/research-run.ts` / `apps/api/src/routes/research-runs.ts` / `infra/migrations/20260908010000_hermes_research_runs/` / `infra/migrations/20260908020000_hermes_research_workflow/` | 持久流程、来源审核、限定生成授权与保留成功资产的失败生成续跑 | DEPLOYED3446f309；恢复API已实际202，原论文方法讲解流程SUCCEEDED/视频approved，真实状态见CURRENT handoff |
+| `apps/web/components/hermes/{HermesResearchRunPanel,HermesSourceReview,HermesClaimEvidenceReview}.tsx` / `apps/web/test/hermes-research-run-panel.test.tsx` / `apps/web/test/hermes-claim-evidence-review.test.ts` | 用户启动、审核进度与未完成生成恢复入口 | DEPLOYED3446f309：计费数量提示和恢复按钮已上线；未运行测试 |
 | `packages/domain/src/agent/research-source-readiness.ts` / `packages/domain/test/agent/research-source-readiness.test.ts` | Hermes原生文本/OCR/外部来源准备决策；区分上传、外部文件和文献线索 | LOCAL CANDIDATE；Terra/medium，8项测试通过；尚未接入运行流程，不代表OCR/ScanSci调用验收 |
 | `docs/specs/2026-09-07-open-research-publication-prd.md` | 开放研究出版物 PRD v1.1：四阶段建设，每 RO AI 友好 API、固定版本/权限合同及独立客户端验收 | 用户授权实施；本轮 M1/M2 优先，不代表已部署 |
 | `infra/migrations/20260907010000_frozen_research_record/` / `packages/domain/src/commit/{research-record-snapshot,research-record}.ts` / `apps/api/src/routes/{research-record,research-record-schema}.ts` | 提交时冻结记录、固定版本读取/来源/JSON 导出、机器 Schema/OpenAPI；nullable 迁移 37 与回滚 SQL | CANDIDATE；开发与专项验证中，尚未部署 |
@@ -57,7 +57,7 @@
 ## 根目录
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `AGENTS.md` | 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
+| `AGENTS.md` | 产品落地优先；默认不预检/测试，例外仅最小必要服务器检查； 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | Codex global `ui-ux-pro-max` / `baseline-ui` Skills + `shadcn` MCP | 2026-08-24 为 Hermes 互动视觉纠偏启用：Skills 固定审计提交 `bc826e2` / `bdbcc56`；shadcn 固定 `4.19.0`、cwd 为当前 worktree `apps/web`，MCP 初始化握手通过；不把资料库命中替代用户审美验收 | **本机工具能力，不入库**；重启 Codex 后自动发现 Skills/MCP |
@@ -259,7 +259,7 @@
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
 | `apps/web/components/hermes/HermesPresentationAction.tsx` / `apps/web/components/hermes/HermesPresentationReview.tsx` / `apps/web/lib/hermes/presentation-action.ts` / `apps/web/lib/hermes/presentation-intent.ts` / `apps/web/test/hermes-presentation-action.test.ts` / `apps/web/test/hermes-presentation-intent.test.ts` | Global Hermes scoped storyboard/revision/image review using existing presentation API and task page; Drawer/Stage, zh/en, hermes-state and presentation-workbench tests updated | DEPLOYED f144eb7; real revision/task/audit and final contrast/Chinese/read-only acceptance passed |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT：Hermes durable run、审核边界、版本元组与发布验收 | **CURRENT active-memory**；candidate `6cc6f466` retention prepare 失败并自动回滚，production 为 `134ebdea`；39 migrations 保留，待清理退出容器引用和新候选 |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT：Hermes内容驱动媒体、durable run与版本元组 | **CURRENT active-memory**；当前生产与任务状态以handoff顶部及最新执行段为准，历史固定样片不算通用能力 |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
@@ -550,3 +550,6 @@
 | `infra/codex-image-runner/video-runner.mjs` / `infra/codex-image-runner/video-runner.test.mjs` / `infra/codex-image-runner/video-tts.py` | Offline isolated TTS/render runner | Candidate; existing immutable-source installer |
 | `apps/media-demo/onchip-drawing.mjs` / `apps/media-demo/test/onchip-drawing.test.mjs` | On-chip optical-field mechanism animation | Illustrative profile, not experimental reproduction |
 | `apps/web/components/presentation/MechanismVideoPanel.tsx` / `apps/web/test/mechanism-video-panel.test.tsx` | Approved-parent video generation UI | Candidate; capability defaults off |
+
+- `packages/domain/src/assets/animation.ts`：内容驱动动画声明式合同，已部署9236dbf7；对象/动作/原文依据，禁止模型代码。
+- `infra/migrations/20260908030000_hermes_content_driven_video/`：扩展明确的内容驱动生成授权，已部署9236dbf7；旧授权不自动扩大。

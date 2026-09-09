@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json && pnpm run test:parser-compiled",
+    "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --exclude test/parser-compiled-composition.test.mjs",
     "test:research-intelligence": "vitest run research-intelligence-corpus.test.ts",

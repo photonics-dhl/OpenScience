@@ -4,12 +4,13 @@ import { requireSceneImageParent, requireStoryboardBase, requireVideoGenerationP
 import { generateStoryboard, renderStoryboard } from './storyboard';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
 import { requirePresentationMediaGenerator, type PresentationMediaGenerator } from './minimax-admin';
 import { HostVideoSpool } from './host-video-spool';
+import { Prisma } from '@prisma/client';
 
 function presentationClaimContent(claims: readonly PresentationClaim[]): string {
   return JSON.stringify(canonicalPresentationClaims(claims).map(({ id, kind, statement, assessment, conditions, limitations, extractionStatus }) => ({
@@ -34,7 +35,7 @@ async function readPresentationInput(storage: NonNullable<Parameters<TaskHandler
   return result;
 }
 
-export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'generateImage'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool } = {}): TaskHandler {
+export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'generateImage' | 'canResumeImageBeforeSubmission'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool } = {}): TaskHandler {
   return async (deps, task) => {
     if (!deps.storage) throw new Error('[blocked] presentation object storage unavailable');
     const payload = parsePresentationGenerationPayload(task.payload);
@@ -58,7 +59,20 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     await requireHermesAuthority(deps.prisma);
     const existing = await deps.prisma.presentationAsset.findUnique({ where: { id: task.id }, include: { sourceClaims: true } });
     if (existing) return { assetId: existing.id, kind: existing.kind, status: existing.status, contentHash: existing.contentHash, sourceClaimIds: payload.sourceClaimIds };
-    if (payload.sceneImage && task.executionAttempt > 1) throw new Error('[blocked] Previous paid image attempt has no saved result; explicit new generation is required');
+    const preProviderAuthorityRearm = payload.sceneImage && payload.hermesRunAuthority
+      && task.executionAttempt === 2 && task.retryCount === 1 && task.recoveryContract === HERMES_AUTHORITY_REARM_MARKER;
+    if (payload.sceneImage && task.executionAttempt > 1 && !preProviderAuthorityRearm) throw new Error('[blocked] Previous paid image attempt has no saved result; explicit new generation is required');
+    if (preProviderAuthorityRearm) {
+      if (!options.gateway?.canResumeImageBeforeSubmission
+        || !await options.gateway.canResumeImageBeforeSubmission(task.id)) {
+        throw new Error('[blocked] Image retry has no durable pre-submission proof');
+      }
+      const consumed = await deps.prisma.agentTask.updateMany({ where: {
+        id: task.id, status: 'running', executionAttempt: 2, retryCount: 1,
+        result: { equals: { hermesRecovery: HERMES_AUTHORITY_REARM_MARKER } },
+      }, data: { result: Prisma.DbNull } });
+      if (consumed.count !== 1) throw new Error('[blocked] Hermes authority retry marker is invalid');
+    }
     if (payload.video && task.executionAttempt > 1) throw new Error('[blocked] Previous video attempt has no saved result; explicit new generation is required');
     const claimRows = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
     const returnedClaimIds = new Set(claimRows.map((claim) => claim.id));
@@ -104,7 +118,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       }
       const result = await options.videoSpool.generate({
         taskId: task.id, executionAttempt: task.executionAttempt, profile: payload.video.profile,
-        sceneRoles: payload.video.sceneRoles,
+        ...(payload.video.profile === 'onchip-field-sampling-v1' ? { sceneRoles: payload.video.sceneRoles } : {}),
         sourceClaimIds: payload.sourceClaimIds, storyboard: videoParents.storyboardView.document, sceneImages,
       });
       bytes = Buffer.alloc(0); contentType = result.contentType; extension = 'mp4';

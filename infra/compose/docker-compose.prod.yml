@@ -75,12 +75,16 @@ services:
     # debian-openssl-3.0.x 匹配；slim/alpine 缺 openssl 运行时致 engine 加载失败（P1A-9 实证）
     image: node:22
     user: node
+    group_add: ['11000']
     # 暴露 127.0.0.1:3001 到 host（nginx 反代）；不绑 0.0.0.0
     ports:
       - "127.0.0.1:3001:3001"
     working_dir: /opt/openscience/apps/api
     volumes:
       - ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}:/opt/openscience:ro
+      # Read-only submission evidence for credit-safe generation recovery.
+      - /opt/openscience-codex/inbox:/codex-jobs/inbox:ro
+      - /opt/openscience-codex/results:/codex-jobs/results:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod

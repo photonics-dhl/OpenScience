@@ -255,8 +255,9 @@ export async function retryIngestionTask(
           }
         }
         const agentTask = task.agentTask;
-        const failedRetry = task.state === 'failed_retryable' && task.retryCount === 0
-          && agentTask?.status === 'failed' && agentTask.retryCount === 0;
+        const failedRetry = task.state === 'failed_retryable' && task.retryCount >= 0 && task.retryCount < 3
+          && agentTask?.kind === 'sdf.extract' && agentTask.status === 'failed'
+          && agentTask.retryCount === task.retryCount && agentTask.executionAttempt === task.retryCount + 1;
         let canonicalAllMissingRecovery = false;
         if (task.state === 'needs_review' && task.retryCount === 1 && agentTask?.kind === 'sdf.extract'
           && agentTask.status === 'succeeded' && agentTask.retryCount === 1
@@ -264,13 +265,45 @@ export async function retryIngestionTask(
           const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
           canonicalAllMissingRecovery = session?.userId === input.userId && session.status === 'active';
         }
-        if (!failedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery) {
+        const retryAttempt = canonicalAllMissingRecovery ? 2 : failedRetry ? task.retryCount + 1 : 1;
+        let activeFailedRetryOwner = false;
+        let paidFailedRetry = false;
+        let compensatedSchemaRetry = false;
+        if (failedRetry && agentTask) {
+          const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
+          if (session?.userId === input.userId && session.status === 'active') {
+            activeFailedRetryOwner = true;
+            if (task.retryCount === 1) {
+              paidFailedRetry = true;
+            } else if (task.retryCount === 2
+              && task.error === agentTask.error
+              && (agentTask.error === '结构化输出超过重试上限' || agentTask.error === 'canonical_validation_exhausted')) {
+              const priorCharge = await tx.usageLedger.findUnique({
+                where: { idempotencyKey: `agent-task-recovery:${agentTask.id}:2` },
+                select: { userId: true, resource: true, delta: true, kind: true, reason: true, metadata: true },
+              });
+              const priorMetadata = priorCharge?.metadata && typeof priorCharge.metadata === 'object'
+                && !Array.isArray(priorCharge.metadata) ? priorCharge.metadata as Record<string, unknown> : null;
+              compensatedSchemaRetry = priorCharge?.userId === input.userId
+                && priorCharge.resource === AI_CREDIT_RESOURCE && priorCharge.delta === BigInt(-1)
+                && priorCharge.kind === 'consume' && priorCharge.reason === 'Agent task recovery sdf.extract'
+                && Boolean(priorMetadata && exactRecordKeys(priorMetadata, ['taskId', 'kind', 'retryAttempt', 'policy'])
+                  && priorMetadata.taskId === agentTask.id && priorMetadata.kind === 'sdf.extract'
+                  && priorMetadata.retryAttempt === 2
+                  && (priorMetadata.policy === 'charged-on-remediation' || priorMetadata.policy === 'charged-on-retry'));
+            }
+          }
+        }
+        const authorizedFailedRetry = failedRetry && activeFailedRetryOwner
+          && (task.retryCount === 0 || paidFailedRetry || compensatedSchemaRetry);
+        if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
         }
-        const retryAttempt = canonicalAllMissingRecovery ? 2 : 1;
         const recovery = canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
-          : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable' : 'failed_retryable';
-        if (canonicalAllMissingRecovery) {
+          : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable'
+            : compensatedSchemaRetry ? 'canonical_schema_exhaustion_compensation'
+              : paidFailedRetry ? 'failed_retryable_paid' : 'failed_retryable';
+        if (canonicalAllMissingRecovery || paidFailedRetry) {
           if (!agentTask) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction task is unavailable');
           const balance = await tx.usageLedger.aggregate({
             where: { userId: input.userId, resource: AI_CREDIT_RESOURCE }, _sum: { delta: true },
@@ -280,15 +313,17 @@ export async function retryIngestionTask(
           }
           await recordEntry(tx, {
             userId: input.userId, resource: AI_CREDIT_RESOURCE, delta: -1, kind: 'consume',
-            reason: 'Agent task recovery sdf.extract', idempotencyKey: `agent-task-recovery:${agentTask.id}:2`,
-            metadata: { taskId: agentTask.id, kind: agentTask.kind, retryAttempt: 2, policy: 'charged-on-remediation' },
+            reason: 'Agent task recovery sdf.extract', idempotencyKey: `agent-task-recovery:${agentTask.id}:${retryAttempt}`,
+            metadata: { taskId: agentTask.id, kind: agentTask.kind, retryAttempt,
+              policy: canonicalAllMissingRecovery ? 'charged-on-remediation' : 'charged-on-retry' },
           });
         }
         const resetAgent = await tx.agentTask.updateMany({
           where: {
             id: task.agentTaskId!, kind: 'sdf.extract', retryCount: retryAttempt - 1,
             status: legacyProposalFailure || canonicalAllMissingRecovery ? 'succeeded' : 'failed',
-            ...(canonicalAllMissingRecovery ? { executionAttempt: 2 } : {}),
+            ...(canonicalAllMissingRecovery ? { executionAttempt: 2 }
+              : authorizedFailedRetry ? { executionAttempt: retryAttempt } : {}),
           },
           data: {
             status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
@@ -305,7 +340,9 @@ export async function retryIngestionTask(
           actorId: input.userId, action: 'ingestion.task.retry', workspaceId: workspace.id,
           targetType: 'ingestion_task', targetId: task.id,
           metadata: { recovery, agentTaskId: task.agentTaskId, retryAttempt,
-            creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation' : 'reuse-original-reservation' },
+            creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation'
+              : paidFailedRetry ? 'charged-on-retry'
+                : compensatedSchemaRetry ? 'reuse-paid-remediation' : 'reuse-original-reservation' },
         }, ctx);
         return tx.ingestionTask.findUnique({ where: { id: task.id }, include: { artifact: true } });
       }, { isolationLevel: 'Serializable' });

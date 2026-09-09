@@ -154,8 +154,9 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns,
+  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration,
   requireHermesPresentationTaskAuthority,
+  HERMES_AUTHORITY_REARM_MARKER,
   HermesResearchRunError,
   type HermesResearchRunDeps, type HermesSourceReviewDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
   type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,
@@ -414,7 +415,8 @@ export {
 export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from './assets/reviewed-media-import';
 
 export { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
-export { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
+export { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
+export { parseSceneAnimation, requireAnimationSourceSupport, type SceneAnimation, type AnimationObject, type AnimationAction } from './assets/animation';
 
 export { requireStoryboardBase } from './assets/presentation-asset';
 

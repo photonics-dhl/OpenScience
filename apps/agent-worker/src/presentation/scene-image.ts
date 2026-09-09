@@ -15,7 +15,7 @@ export async function planSceneImagePrompt(gateway: Pick<AiGateway, 'completeStr
   const source = JSON.stringify({
     style: parent.style,
     scene: { title: scene.title, narration: scene.narration, visualAction: scene.visualAction },
-    claims: claims.map(({ statement, conditions, limitations }) => ({ statement, conditions, limitations })),
+    claims: claims.filter(claim => scene.sourceClaimIds.includes(claim.id)).map(({ statement, conditions, limitations }) => ({ statement, conditions, limitations })),
   });
   const prompt = `${wrapper}\nSOURCE_JSON_BEGIN\n${source}\nSOURCE_JSON_END\n${noText}`;
   if (prompt.length > IMAGE_PROMPT_LIMIT) {

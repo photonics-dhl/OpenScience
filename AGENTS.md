@@ -4,6 +4,17 @@
 OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印本 + 社区评价）。工作目录 `E:/Miscellaneous/XGS`。
 平台基线：**MVP（Phase 0/1A/1B/1C/1D/1E）已完成（2026-08-06）**。当前产品任务、候选版本与生产 release 不写死在本段；必须从 Git 版本元数据和 `project_index.md` 标记的 CURRENT handoff 取得，禁止恢复旧 MVP next action。
 
+## 产品落地优先：强约束（用户明确要求，2026-09-08）
+
+- 本次任务最新指令：不允许再测试；不得主动触发测试、预检或演练，包括 CI 测试。直接实现与部署，保留必要构建、服务启动和回滚机制。
+
+- 第一优先级是把用户需要的服务器产品功能实现并部署，不得用预检、测试、评审工具建设或重复分析替代交付。
+- 默认不做预检、不新增或运行测试、不执行全套回归；仅在非常必要时执行最小范围检查。必要性必须对应当前改动的具体重大风险（例如数据损坏、权限越界、不可逆迁移），或正在阻塞功能的已知故障；不能只因 Skill、旧计划或固定清单要求而运行。
+- 执行例外检查前简短说明具体风险、检查如何消除该风险及最小范围；已有授权内直接执行，不重复索要批准。部署必需的编译、构建与启动属于交付步骤，按需执行，不扩展为测试项目。
+- 本机只编辑、静态阅读和传输文件；任何必要的运行检查均在服务器进行。复用已有有效证据，不反复重跑模型提取或整条流程。
+- 优先串联服务器已有 PDF 解析/OCR、BGE 检索、MiniMax 理解生成与图片/视频能力，由 Hermes 在服务器续跑。不得用 Codex 手工生成内容冒充服务器自动能力，也不得为了通过流程放行已知错误。
+- 如实区分已实现、已部署、已观察到可用与尚未确认；不因省略测试声称质量已获验证。此规则优先于本项目 Skills、旧计划及文档中的默认测试/预检要求。
+
 ## Monorepo Layout & Commands（P1A-1 起）
 - 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
 - `apps/`：`api` 已含 50+ Fastify 端点——平台底座（`/auth` P1A-3、`/workspaces` P1A-4、RBAC 守卫 P1A-5、`/admin/audit-logs` P1A-6、配额/账务 P1A-7、安全基线 `src/security/` P1A-8）+ RO/SDF/版本（`/research-objects`、`/sdf`、`/artifacts`、`/commits`、`/versions`、comparison、导出 zip，P1B）+ 协作（branches/issues/licenses/forks/pull-requests/authors/reviews/notifications，P1C）+ Hermes 与发布（agent-approvals、审核、申诉、publications、公开页，P1D）+ `/sandbox-jobs`（P1E-5）；`web` 已实现三栏 SDF 编辑器（P1B-8）+ 移动端抽屉/WCAG AA（P1B-9）+ 协作单页（P1C-10）+ 公开 RO 页（P1D-9）+ 沙箱可视化组件（P1E-6/7）+ **next-intl 已接通**（无 locale 路由：`i18n/request.ts` cookie NEXT_LOCALE→Accept-Language→zh，`NextIntlClientProvider` 在 layout，语言切换 `components/LocaleSwitcher.tsx`；公开页文案走 `messages/* public` 命名空间；`public/` 含 favicon/logo/og-image SVG 占位 + `hermes/` Live2D 待迁移说明）；`agent-worker` 队列消费者 + sdf.extract + review.analyze（P1D）；`science-worker` 沙箱执行完整实现（dockerode 编排 + AST 策略检查 + 16 项安全基线测试 + **pending 轮询执行链** `src/index.ts` pollOnce/main + `/output` 产物收集落库 `artifact-collector.ts`，P1E）；`sandbox-controller` 仍为空壳（功能落在 science-worker）。
@@ -71,8 +82,8 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 
 ## Deployment Acceptance Rule
 
-- 有部署目标的功能优先在服务器完成最终部署与验收；本地用于代码编写、单元/构建门禁和安全预检，不能以本地通过替代服务器运行证据。
-- 服务器是生产功能的最终应用场景；交付证据至少包含服务器 build、迁移状态、目标容器状态、运行时依赖加载和公网/内网健康检查。
+- 有部署目标的功能优先在服务器完成最终部署与验收；本地仅用于编辑与静态取证，不执行本地测试、构建或预检。
+- 服务器是生产功能的最终应用场景；按部署实际需要执行构建、适用迁移及启动；优先观察实际产品结果，不默认逐项执行独立验收清单。
 
 ## Index Maintenance Rules
 - 创建/修改/移动文件后更新 `project_index.md`
@@ -80,4 +91,4 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 ## Safety Red Line
 - 不删除任何文件，除非用户明确批准
 - 不读取/打印 `.env` 内容
-- 用户明确要求（2026-09-08）：本机仅编辑与静态取证，不在本机运行测试、构建、Docker或迁移验证；运行验证在服务器隔离候选环境完成，验收通过后再切换生产。不得用本机通过替代服务器证据。
+- 用户明确要求（2026-09-08）：本机仅编辑与静态取证，不在本机运行测试、构建、Docker或迁移验证；非常必要的运行检查仅在服务器执行，遵循上方产品落地优先规则；不得恢复默认“预检通过后才部署”的流程。

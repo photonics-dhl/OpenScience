@@ -13,7 +13,7 @@ import {
 } from '@openscience/ai-gateway';
 import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
-  AGENT_TASK_QUEUE, persistDocumentSourceMapReference, type AgentDeps,
+  AGENT_TASK_QUEUE, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference, type AgentDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -129,7 +129,7 @@ export type ParserCascadeRunner = ((
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
 export type TaskHandler = (
   deps: WorkerDeps,
-  task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number },
+  task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number; retryCount?: number; recoveryContract?: string },
 ) => Promise<Record<string, unknown>>;
 
 /** Production-safe cascade composition: one V2 sidecar stage plus disabled candidate routes. */
@@ -385,6 +385,8 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
         payload: (task.payload ?? {}) as Record<string, unknown>,
         interestContext: task.interestContext,
         executionAttempt: claimed.executionAttempt,
+        retryCount: claimed.retryCount,
+        ...(claimed.result?.hermesRecovery === HERMES_AUTHORITY_REARM_MARKER ? { recoveryContract: HERMES_AUTHORITY_REARM_MARKER } : {}),
       });
       await markTaskProgress(deps, {
         taskId,
