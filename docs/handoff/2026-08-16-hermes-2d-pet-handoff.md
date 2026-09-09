@@ -7,13 +7,13 @@
 
 ## Current user journey work
 - 2026-09-09 actual landing→login (user completed authentication)→dashboard→Quantization review→presentation→edit→files→overview observed in iab tab4. Chat tab3 same planning conversation; two actual messages sent, first reply1m26s, second reply1m29s read. No tests/preflights/media generation.
-- b03263de deployed exit0; log1788922978762-a8a31114-2020-4e91-af90-952b6f490165. Full11issue record in existing integrated plan. Sol/medium implemented Hermes, main page fixes, Sol/high found hiddenanchor dock initialization issue which was fixed beforecommit.
-- Post-release observed overview continues exact existing task, Hermes ready and editor drawer opens. Screenshot then exposed stretched motion button (top+bottom fixed) and oversized narrow stage; hotfix1ec98fc6 corrects bound positioning and consistent200px geometry, deployed as fb61cf63 exit0; screenshot confirms blackpill removed and200px character. Final delta: stop route auto-guide obstruction and align assistant palette; candidate pending.
+- b03263de deployed exit0; log1788922978762-a8a31114-2020-4e91-af90-952b6f490165. Full14issue record in existing integrated plan. Sol/medium implemented Hermes, main page fixes, Sol/high found hiddenanchor dock initialization issue which was fixed beforecommit.
+- Post-release observed overview continues exact existing task, Hermes ready and editor drawer opens. Screenshot then exposed stretched motion button (top+bottom fixed) and oversized narrow stage; hotfix1ec98fc6 corrects bound positioning and consistent200px geometry, deployed as fb61cf63 exit0; screenshot confirms blackpill removed and200px character. Final delta: stop route auto-guide obstruction and align assistant palette; deployed e0ff364e exit0, log1788924361937-cc8f3b7c-7bca-4fb2-9b47-3070fa9d65db. Final screenshot confirms no stretchedpill/no automaticguide; compactWanko remains floating near right-side content.
 - Product browser logged in; preserve session. Do not claim wholeUXcomplete; afterdeployment observe newpages, then draft-fastnavigation/singleassistant/remainingvisualconsistency.
 
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release; branch codex/onchip-video-release.
-- Productionfb61cf63d5bbeb9dcd5601656c28471b610312f6; rollbackb03263de4823d6468728ca2cc737ca87e266d7fe. Subsequent HEAD is docs-only handoff, not a new deployed release.
+- Productione0ff364e2e4d6fb1ed371a90c90d8143dfa6328a; rollbackfb61cf63d5bbeb9dcd5601656c28471b610312f6. Subsequent HEAD is docs-only handoff, not a new deployed release.
 - Recovery commits1df4e047 +3446f309 deployed through canonical --confirm --no-tests. First candidate failed server compile due to type-only Prisma import; fixed before switch.
 - Root dirty main and token-smart-live-workflow worktree are separate; preserve them and concurrent R1 hardening.
 
@@ -39,7 +39,7 @@
 - Main retains selected model; Sol/medium implementation, Sol/high credit/authority review; prior WebChat6Pro architecture advice reused. No reliable overall Codex savings percentage established.
 
 ## Next action and evidence
-- Editor UX deployed1cdb18e0; log1788920554267-b1b32e67-7192-4d38-8f8e-c5d831217b64 exit0, server build/start --no-tests. Six-field input excludes schemaVersion; blank new/retry text protected before debit; explicit current-text vs same-RO Hermes literature flow; collapsed missing details, truthful no-suggestion state, editor-only compact typography/rails.
+- Historical editor UX deployed1cdb18e0; log1788920554267-b1b32e67-7192-4d38-8f8e-c5d831217b64 exit0, server build/start --no-tests. Six-field input excludes schemaVersion; blank new/retry text protected before debit; explicit current-text vs same-RO Hermes literature flow; collapsed missing details, truthful no-suggestion state, editor-only compact typography/rails.
 - Web6Pro actual new discussion4m21s plus candidate review2m14s complete, same URL. User screenshot only text-described to Chat (no image upload); no visual acceptance. Chrome control Debugger unattached, iab3 works with single slow actions. Do not claim screenshotRO9067a2d5 PDF parser failed: editor did not read uploads; actual task payload not inspected.
 - Remaining: single Hermes/suggestions area, cross-page state/nav and visual polish, suspected clipped outline actual-page observation. Existing editor draft saves after1s debounce; fast-navigation flush remains navigation follow-up. Do not rerun paper/media or tests.
 - WebChat6Pro UX discussion submitted/read back4m36s (same known URL); adopted sequence in docs/plans/2026-09-05-integrated-research-product-plan.md. First batch deployed45dabd7a: real guide storyboard.create suggestions + account/RO/actual-version scoped session drafts + sidebar hierarchy. Edited/cleared values win; paid submit remains explicit. Sol/medium implementation and focused Sol/high static review complete.
@@ -50,3 +50,5 @@
 - Helper/media directory E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow/apps/web/test/visual/out/token-smart-release: hermes-content-driven-method.mp4,hermes-video-frames.png,current-scene-0/1/2/3.png. Copies for viewing; generation occurred entirely on server.
 - Server media /opt/openscience-video/results/c033b30c-eb1c-4fff-ad72-154ed7d8c6b7/result.mp4; normal API source remains product asset. Do not substitute historical manually assisted ca0908bb video.
 - SSH only root infra/scripts/ssh-run.sh via C:/Program Files/Git/bin/bash.exe; no .env/credentials output. Read-first requirement baseline docs/OpenScience_Kimi_Development_Spec.md + this handoff.
+
+- Latest productionbrowser: iab4 authenticated edit page; one502duringdeploymenttransition recoveredafterreload. Logintransparentbackground, localizedtitle, overviewexistingtask, readyHermes andnarrowdrawerobserved; no guaranteealltransientflashgone. Next:singlein-flowassistant, fastnavigationdraftflush, source-to-claimUX; no repeatedgeneration/tests.
