@@ -6,6 +6,16 @@ import * as React from 'react';
 
 import { hermesTaskHref } from './hermes-state';
 
+const localizedTaskStates: Record<string, 'queued' | 'uploading' | 'parsing' | 'stored' | 'needsReview' | 'failedRetryable' | 'failedBlocked'> = {
+  queued: 'queued',
+  uploading: 'uploading',
+  parsing: 'parsing',
+  stored: 'stored',
+  needs_review: 'needsReview',
+  failed_retryable: 'failedRetryable',
+  failed_blocked: 'failedBlocked',
+};
+
 export interface HermesRailTask {
   id: string;
   researchObjectId: string;
@@ -37,8 +47,9 @@ export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
         <p className="py-6 text-sm leading-6 text-os-muted-paper">{t('hermes.empty')}</p>
       ) : (
         <ol className="list-none divide-y divide-os-rule-paper p-0">
-          {tasks.map((task, index) => (
-            <li key={task.id}>
+          {tasks.map((task, index) => {
+            const stateKey = localizedTaskStates[task.state];
+            return <li key={task.id}>
               <Link
                 className="group grid grid-cols-[2.2rem_minmax(0,1fr)_auto] items-start gap-3 py-4 outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"
                 href={hermesTaskHref(task)}
@@ -49,10 +60,12 @@ export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
                   <span data-reading-role="caption" className="mt-1 block truncate font-data text-os-muted-paper">{task.logicalPath}</span>
                   {task.error ? <span className="mt-1 block text-sm text-os-vermilion-ink">{task.error}</span> : null}
                 </span>
-                <span data-reading-role="caption" className="font-data text-os-muted-paper">{task.state.replaceAll('_', ' ')}</span>
+                <span data-reading-role="caption" className="font-data text-os-muted-paper">
+                  {stateKey ? t(`hermes.taskStates.${stateKey}`) : task.state.replaceAll('_', ' ')}
+                </span>
               </Link>
-            </li>
-          ))}
+            </li>;
+          })}
         </ol>
       )}
     </aside>

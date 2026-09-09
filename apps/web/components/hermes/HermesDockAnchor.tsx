@@ -15,7 +15,7 @@ export function HermesDockAnchor({ assistantOpen = false, onInvoke, state, sugge
 }) {
   const anchorRef = React.useRef<HTMLDivElement | null>(null);
   const stage = useOptionalHermesWorkspaceStage();
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const anchor = anchorRef.current;
     if (!anchor || !stage) return;
     return stage.register({ anchor, assistantOpen, onInvoke, state, suggestion, workspaceId });

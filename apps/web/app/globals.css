@@ -2235,7 +2235,19 @@ body {
   pointer-events: none;
 }
 
+.hermes-dock-anchor:has(.hermes-workspace-stage[data-hermes-stage-size='200']:not([data-hermes-guide-target])) {
+  min-height: 18rem;
+}
+
 .hermes-workspace-stage {
+  --os-paper: #f7f8fa;
+  --os-paper-strong: #fff;
+  --os-ink: #20252b;
+  --os-muted-paper: #626c76;
+  --os-rule-paper: #e4e9ed;
+  --os-vermilion: #125d66;
+  --os-vermilion-ink: #125d66;
+  --color-vermilion: #125d66;
   position: fixed;
   z-index: 44;
   min-width: 7.5rem;
@@ -2249,6 +2261,22 @@ body {
   position: relative;
   z-index: 1;
   margin: 6.5rem auto 0;
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'][data-hermes-stage-size='200']:not([data-hermes-guide-target]) {
+  margin-top: 3.5rem;
+}
+
+.hermes-workspace-stage-loading {
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: 12.5rem;
+  height: 12.5rem;
+}
+
+.hermes-workspace-stage-loading .hermes-companion-actor {
+  position: absolute;
+  inset: 0;
 }
 
 .hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-visual {
@@ -2335,8 +2363,12 @@ body {
 }
 
 .hermes-workspace-stage[data-hermes-guide-target] .hermes-motion-enable {
+  position: absolute;
   top: .25rem;
   right: .25rem;
+  bottom: auto;
+  height: auto;
+  white-space: nowrap;
 }
 
 .hermes-presence-control summary {
@@ -2860,6 +2892,28 @@ body {
 .hermes-workspace-stage[data-hermes-guide-target] .hermes-functional-bubble {
   --hermes-guide-bubble-inline-offset: .5rem;
   right: var(--hermes-guide-bubble-inline-offset);
+  border-color: var(--os-rule-paper);
+  background: var(--os-paper-strong);
+  color: var(--os-ink);
+  box-shadow: 0 4px 16px rgb(24 43 51 / .1);
+}
+
+.hermes-workspace-stage[data-hermes-guide-target] .hermes-functional-bubble::after {
+  background: var(--os-vermilion-ink);
+}
+
+.hermes-workspace-stage[data-hermes-guide-target] .hermes-functional-bubble .hermes-companion-kicker {
+  color: var(--os-vermilion-ink);
+}
+
+.hermes-workspace-stage[data-hermes-guide-target] .hermes-functional-bubble .hermes-companion-dismiss {
+  color: var(--os-muted-paper);
+}
+
+.hermes-workspace-stage[data-hermes-guide-target] .hermes-functional-bubble :is(.hermes-companion-actions button, .hermes-companion-take-me) {
+  border-color: var(--os-rule-paper);
+  background: var(--os-paper);
+  color: var(--os-ink);
 }
 
 .hermes-companion-bubble::after {
@@ -3391,6 +3445,19 @@ body [data-reading-role='reading'] {
 }
 
 .drawer.hermes-assistant-shell {
+  --os-paper: #f7f8fa;
+  --os-paper-strong: #fff;
+  --os-ink: #20252b;
+  --os-muted-paper: #626c76;
+  --os-rule-paper: #e4e9ed;
+  --os-vermilion: #125d66;
+  --os-vermilion-ink: #125d66;
+  --color-os-paper: #f7f8fa;
+  --color-os-ink: #20252b;
+  --color-os-muted-paper: #626c76;
+  --color-os-rule-paper: #e4e9ed;
+  --color-os-vermilion: #125d66;
+  --color-os-vermilion-ink: #125d66;
   width: min(30rem, calc(100vw - 2rem));
   max-width: none;
   padding: 2rem 2rem 2.5rem;
@@ -3398,6 +3465,13 @@ body [data-reading-role='reading'] {
   background: var(--os-paper-strong);
   box-shadow: -16px 0 44px rgb(25 26 24 / .18);
   color: var(--os-ink);
+  font-family: var(--font-ui), Arial, 'Microsoft YaHei', sans-serif;
+}
+
+.hermes-assistant-shell .hermes-guide-drawer h2 {
+  font-family: var(--font-ui), Arial, 'Microsoft YaHei', sans-serif;
+  font-size: 1.5rem;
+  line-height: 1.25;
 }
 
 .hermes-assistant-shell .drawer-close {

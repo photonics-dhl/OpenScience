@@ -48,10 +48,10 @@ import type { HermesVisualState } from './hermes-state';
 
 const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-function HermesStaticPortrait() {
+export function HermesStaticPortrait() {
   return (
     // Keep the same companion visible while the canvas starts or recovers.
-    <img aria-hidden="true" alt="" className="hermes-portrait h-full w-full" src="/hermes/wanko-static.png" style={{ objectFit: 'contain' }} />
+    <img aria-hidden="true" alt="" className="hermes-portrait h-full w-full" src="/hermes/wanko-static-transparent.png" style={{ objectFit: 'contain' }} />
   );
 }
 export interface HermesVisualAdapterProps {
@@ -675,7 +675,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
           data-hermes-input-owner="true"
           data-hermes-menu-open={menuOpen ? 'true' : 'false'}
         >
-          <span data-reading-role="caption" className="hermes-visual-state-label absolute left-0 top-0 z-10 font-mono uppercase tracking-[0.1em] text-os-muted-dark">Hermes / {state.replaceAll('_', ' ')}</span>
+          <span data-reading-role="caption" className="hermes-visual-state-label absolute left-0 top-0 z-10 font-mono uppercase tracking-[0.1em] text-os-muted-dark">Hermes / {t(`states.${state}`)}</span>
           <span className="hermes-visual-invoke-label absolute inset-x-0 bottom-3 z-10 flex items-center justify-between gap-4 border-t border-os-rule-dark pt-3 text-xs text-os-muted-dark" data-hermes-visual-footer="true">
             <span className="truncate">{t(suggestion.titleKey)}</span><span className="hermes-visible-invoke-cta shrink-0 text-os-vermilion transition-transform group-hover:translate-x-1 motion-reduce:transform-none" data-hermes-visible-invoke-cta="true">{t('guide.invoke')} →</span>
           </span>

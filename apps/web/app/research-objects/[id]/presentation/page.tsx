@@ -7,6 +7,7 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { PresentationWorkbench, type PresentationTaskState } from '@/components/presentation/PresentationWorkbench';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
@@ -385,7 +386,7 @@ export default function PresentationPage({ params }: { params: { id: string } })
                 {versions.map((item) => <option key={item.versionId} value={item.versionId}>{t('versionOption', { number: item.versionNo, status: t(`versionStatus.${item.status}`) })}</option>)}
               </select>
             </label>
-            <a className="inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')}</a>
+            <Link className="inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')}</Link>
           </div>
           <PresentationWorkbench
             key={scopeKey}
@@ -418,8 +419,8 @@ export default function PresentationPage({ params }: { params: { id: string } })
             <h1>{t('startTitle')}</h1><p className={styles.intro}>{t('startBody')}</p>
             <ol className={styles.steps}>{[1,2,3].map(step => <li key={step}><span>0{step}</span><div><h2>{t(`step${step}`)}</h2><p>{t(`step${step}Body`)}</p></div></li>)}</ol>
             <div className={styles.actions}>
-              <a className={styles.primary} href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')} →</a>
-              <a href={`/research-objects/${encodeURIComponent(params.id)}/versions`}>{t('openVersions')}</a>
+              <Link className={styles.primary} href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')} →</Link>
+              <Link href={`/research-objects/${encodeURIComponent(params.id)}/versions`}>{t('openVersions')}</Link>
             </div>
           </>}
         </section>

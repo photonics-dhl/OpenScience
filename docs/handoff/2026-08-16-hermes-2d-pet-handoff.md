@@ -5,9 +5,15 @@
 - NO tests/preflights/benchmarks/local runtime/build/CI tests. Necessary server build/deploy and actual authorized product generation only. No direct DB resets, duplicate uploads or deletion.
 - Preserve scientific sources, workspace permissions, user approval, billing and sandbox boundaries.
 
+## Current user journey work
+- 2026-09-09 actual landing→login (user completed authentication)→dashboard→Quantization review→presentation→edit→files→overview observed in iab tab4. Chat tab3 same planning conversation; two actual messages sent, first reply1m26s, second reply1m29s read. No tests/preflights/media generation.
+- b03263de deployed exit0; log1788922978762-a8a31114-2020-4e91-af90-952b6f490165. Full11issue record in existing integrated plan. Sol/medium implemented Hermes, main page fixes, Sol/high found hiddenanchor dock initialization issue which was fixed beforecommit.
+- Post-release observed overview continues exact existing task, Hermes ready and editor drawer opens. Screenshot then exposed stretched motion button (top+bottom fixed) and oversized narrow stage; hotfix1ec98fc6 corrects bound positioning and consistent200px geometry, deployed as fb61cf63 exit0; screenshot confirms blackpill removed and200px character. Final delta: stop route auto-guide obstruction and align assistant palette; candidate pending.
+- Product browser logged in; preserve session. Do not claim wholeUXcomplete; afterdeployment observe newpages, then draft-fastnavigation/singleassistant/remainingvisualconsistency.
+
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release; branch codex/onchip-video-release.
-- Production45dabd7a25ba7bd1b7d5cc8ba1e226d6eb26ecd8; rollback3446f309480fe0a9a38a25c8669e0ccedf7aa0bd. Subsequent HEAD is docs-only handoff, not a new deployed release.
+- Productionfb61cf63d5bbeb9dcd5601656c28471b610312f6; rollbackb03263de4823d6468728ca2cc737ca87e266d7fe. Subsequent HEAD is docs-only handoff, not a new deployed release.
 - Recovery commits1df4e047 +3446f309 deployed through canonical --confirm --no-tests. First candidate failed server compile due to type-only Prisma import; fixed before switch.
 - Root dirty main and token-smart-live-workflow worktree are separate; preserve them and concurrent R1 hardening.
 
@@ -36,6 +42,9 @@
 - Main retains selected model; Sol/medium implementation, Sol/high credit/authority review; prior WebChat6Pro architecture advice reused. No reliable overall Codex savings percentage established.
 
 ## Next action and evidence
+- Editor UX deployed1cdb18e0; log1788920554267-b1b32e67-7192-4d38-8f8e-c5d831217b64 exit0, server build/start --no-tests. Six-field input excludes schemaVersion; blank new/retry text protected before debit; explicit current-text vs same-RO Hermes literature flow; collapsed missing details, truthful no-suggestion state, editor-only compact typography/rails.
+- Web6Pro actual new discussion4m21s plus candidate review2m14s complete, same URL. User screenshot only text-described to Chat (no image upload); no visual acceptance. Chrome control Debugger unattached, iab3 works with single slow actions. Do not claim screenshotRO9067a2d5 PDF parser failed: editor did not read uploads; actual task payload not inspected.
+- Remaining: single Hermes/suggestions area, cross-page state/nav and visual polish, suspected clipped outline actual-page observation. Existing editor draft saves after1s debounce; fast-navigation flush remains navigation follow-up. Do not rerun paper/media or tests.
 - WebChat6Pro UX discussion submitted/read back4m36s (same known URL); adopted sequence in docs/plans/2026-09-05-integrated-research-product-plan.md. First batch deployed45dabd7a: real guide storyboard.create suggestions + account/RO/actual-version scoped session drafts + sidebar hierarchy. Edited/cleared values win; paid submit remains explicit. Sol/medium implementation and focused Sol/high static review complete.
 - UX deploy log1788917875578-5f990ae8-3be2-480a-b0dc-cd7a6335a1f8 exit0; canonical --no-tests server build/start completed. No tests/media reruns; product browser currently unauthenticated, so logged-in UI/visual behavior unobserved. Next: sidebar primary actions, cross-page navigation/state and shared typography/spacing; no whole-site polish completion claim.
 - This selected-method vertical flow is complete. Current authorized phase: improve user experience/page layout/visual polish; retain server-owned generation. Full-paper extraction completeness and pronunciation quality remain distinct limitations.

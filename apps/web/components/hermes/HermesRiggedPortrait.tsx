@@ -28,9 +28,11 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
   const rendererRef = useRef<HermesPetMeshRenderer | null>(null);
   const stageRef = useRef<HTMLSpanElement | null>(null);
   const stateRef = useRef(state);
+  const staticPresentationRef = useRef(false);
   const [runtimeStatus, setRuntimeStatus] = useState<HermesRuntimeStatus>(() => createHermesRuntimeStatus(rendererGeneration));
   const staticPresentation = reducedMotion || state === 'awaiting_approval';
   stateRef.current = state;
+  staticPresentationRef.current = staticPresentation;
   inputRef.current.state = state;
 
   const publishStatus = (next: HermesRuntimeStatus) => {
@@ -39,8 +41,11 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
   };
 
   useEffect(() => {
-    if (staticPresentation) return;
-    rendererRef.current?.wake();
+    const stage = stageRef.current;
+    if (!stage || staticPresentation || document.hidden) return;
+    const bounds = stage.getBoundingClientRect();
+    if (bounds.bottom <= 0 || bounds.right <= 0 || bounds.top >= window.innerHeight || bounds.left >= window.innerWidth) return;
+    rendererRef.current?.setSuspended(false);
   }, [state, staticPresentation]);
 
   useEffect(() => {
@@ -54,11 +59,12 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
     let contextLost = false;
     let renderer: HermesPetMeshRenderer | null = null;
     let staticFrameDrawn = false;
+    let initialFrameDrawn = false;
     let intersecting = false;
     let desiredSuspended = document.hidden;
     const applySuspension = () => {
       desiredSuspended = document.hidden || !stage.isConnected || !intersecting;
-      renderer?.setSuspended(desiredSuspended);
+      renderer?.setSuspended(initialFrameDrawn && (desiredSuspended || staticPresentationRef.current));
     };
     const resizeObserver = new ResizeObserver(() => renderer?.resize());
     const intersectionObserver = new IntersectionObserver(([entry]) => {
@@ -92,14 +98,15 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
         stage,
         () => ({
           ...inputRef.current,
-          action: staticPresentation ? 'approval-still' : inputRef.current.action,
+          action: staticPresentationRef.current ? 'approval-still' : inputRef.current.action,
           state: stateRef.current,
         }),
         (snapshot) => {
           if (cancelled || contextLost) return;
           if (snapshot.status === 'ready') {
+            initialFrameDrawn = true;
             publishStatus(reduceHermesRuntimeStatus(startingStatus, { at: snapshot.drawnAt, type: 'frame-drawn' }));
-            if (staticPresentation) {
+            if (staticPresentationRef.current || desiredSuspended) {
               staticFrameDrawn = true;
               renderer?.setSuspended(true);
             }
@@ -117,7 +124,7 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
         else {
           renderer = created;
           rendererRef.current = created;
-          renderer.setSuspended(desiredSuspended || staticFrameDrawn);
+          renderer.setSuspended(initialFrameDrawn && (desiredSuspended || staticFrameDrawn));
           stage.dataset.hermesRuntimeOwner = 'running';
         }
       })
@@ -137,7 +144,7 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
       resizeObserver.disconnect();
       stopOwnedRenderer();
     };
-  }, [inputRef, rendererGeneration, staticPresentation]);
+  }, [inputRef, rendererGeneration]);
 
   return (
     <span
@@ -159,7 +166,7 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
           data-hermes-articulated-canvas="true"
           data-hermes-live2d-canvas="true"
           data-live2d-instance="wanko"
-          key={`${staticPresentation ? 'still' : 'motion'}-${rendererGeneration}`}
+          key={`wanko-${rendererGeneration}`}
           ref={canvasRef}
         />
       </WankoCarrierScene>
