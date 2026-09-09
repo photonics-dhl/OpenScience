@@ -12,7 +12,7 @@
 
 .core h1 {
   font-family: inherit;
-  font-size: clamp(24px, 2.3vw, 32px);
+  font-size: 22px;
   font-weight: 650;
   letter-spacing: -.035em;
 }
@@ -39,7 +39,7 @@
 
 .core [data-sdf-node] > button > span:nth-child(2) {
   font-family: inherit;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: -.01em;
 }
@@ -54,7 +54,7 @@
 }
 
 .core textarea {
-  min-height: 230px;
+  min-height: 96px;
   border: 0;
   border-radius: 8px;
   background: #f7f8fa;
@@ -85,6 +85,12 @@
   min-height: 44px;
 }
 
+.outline li > button > span:nth-child(2) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
 .outline li > button:hover {
   background: #edf1f3;
 }
@@ -105,7 +111,7 @@
   background: #fff;
   border: 1px solid #e7ebee;
   border-radius: 14px;
-  padding: 18px;
+  padding: 14px;
 }
 
 .suggestions > div:first-child {

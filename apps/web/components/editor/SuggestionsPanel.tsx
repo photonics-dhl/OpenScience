@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { BeforeAfterProposal } from '@/components/research/BeforeAfterProposal';
@@ -32,6 +33,10 @@ export default function SuggestionsPanel({
   extracting,
   extractProgress,
   extractError,
+  extractionComplete,
+  canExtract = true,
+  resumeExtraction = false,
+  sourceHref,
   missingFields,
   onAcknowledgeMissing,
 }: {
@@ -44,6 +49,10 @@ export default function SuggestionsPanel({
   extracting?: boolean;
   extractProgress?: number;
   extractError?: string | null;
+  extractionComplete?: boolean;
+  canExtract?: boolean;
+  resumeExtraction?: boolean;
+  sourceHref: string;
 }) {
   const t = useTranslations('editor');
 
@@ -55,8 +64,8 @@ export default function SuggestionsPanel({
           <h2 className="mb-0 mt-2 font-editorial text-2xl font-normal text-os-paper">{t('suggestions')}</h2>
         </div>
         {onExtract && (
-          <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" data-extract-sdf="true" data-reading-role="control" onClick={onExtract} disabled={extracting}>
-            {extracting ? t('extracting') : t('extract')}
+          <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper disabled:cursor-not-allowed disabled:opacity-45" data-extract-sdf="true" data-reading-role="control" onClick={onExtract} disabled={extracting || !canExtract}>
+            {extracting ? t('extracting') : t(resumeExtraction ? 'resumeExtraction' : 'extractCurrentContent')}
           </button>
         )}
       </div>
@@ -65,17 +74,35 @@ export default function SuggestionsPanel({
           <div className="h-full bg-os-paper transition-[width] motion-reduce:transition-none" style={{ width: `${extractProgress}%` }} />
         </div>
       )}
+      <div className="mt-4 border-l-2 border-os-rule-dark pl-3">
+        <p className="m-0 text-sm font-semibold text-os-paper">{t('currentEditorSource')}</p>
+        <p className="mb-0 mt-1 text-xs leading-5 text-os-muted-dark">{t('currentEditorScope')}</p>
+        {!canExtract && !extracting && <p className="mb-0 mt-2 text-sm leading-6 text-os-muted-dark">{t('extractNeedsContent')}</p>}
+      </div>
       {extractError && <div className="mt-4 border-l-2 border-os-vermilion pl-3 text-sm text-os-paper" role="alert">{extractError}</div>}
-      {missingFields.map((field) => (
-        <article className="mt-4 border-l-2 border-os-vermilion bg-os-black-1 p-4" data-missing-evidence={field} key={field}>
-          <p className="m-0 font-data text-xs uppercase tracking-[0.1em] text-os-vermilion">{t('missingEvidenceTitle', { field: t(field) })}</p>
-          <p data-reading-role="body" className="mb-0 mt-2 text-base leading-[var(--leading-body)] text-os-paper">
-            {field === 'results' ? t('missingResultsEvidence') : t('missingEvidenceDescription', { field: t(field) })}
-          </p>
-          <button className="mt-3 min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" onClick={() => onAcknowledgeMissing(field)}>{t('acknowledgeMissingEvidence')}</button>
-        </article>
-      ))}
-      {suggestions.length === 0 && !extracting && <p data-reading-role="body" className={styles.guide}>{t('suggestionsGuide')}</p>}
+      {!extracting && <div className="mt-4 border-t border-os-rule-dark pt-4">
+        <p className="m-0 text-sm leading-6 text-os-muted-dark">{t('sourceNextStep')}</p>
+        <Link className="mt-2 inline-flex min-h-11 items-center font-semibold text-os-paper underline underline-offset-4" href={sourceHref}>{t('openSourceWorkflow')} →</Link>
+      </div>}
+      {extractionComplete && suggestions.length === 0 ? <div className="mt-4" role="status">
+        <p className="m-0 text-sm font-semibold text-os-paper">{t('noUsableSuggestions')}</p>
+        {missingFields.length > 0 ? <p className="mb-0 mt-2 text-sm leading-6 text-os-muted-dark">{t('missingEvidenceSummaryBody')}</p> : null}
+      </div> : null}
+      {missingFields.length > 0 ? <details className="mt-3 border-l-2 border-os-vermilion bg-os-black-1 px-4 py-2">
+        <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-os-paper">
+          {t('missingEvidenceSummary', { count: missingFields.length })}
+          <span className="mt-1 block font-normal text-os-muted-dark">{missingFields.map((field) => t(field)).join(' · ')}</span>
+        </summary>
+        <ul className="m-0 list-none divide-y divide-os-rule-dark p-0">
+          {missingFields.map((field) => <li className="py-3" data-missing-evidence={field} key={field}>
+            <p className="m-0 text-sm font-semibold text-os-paper">{t(field)}</p>
+            <p className="mb-0 mt-1 text-sm leading-6 text-os-muted-dark">{field === 'results' ? t('missingResultsEvidence') : t('missingEvidenceDescription', { field: t(field) })}</p>
+            <button className="mt-2 min-h-10 text-sm text-os-paper underline underline-offset-4" onClick={() => onAcknowledgeMissing(field)}>{t('acknowledgeMissingEvidence')}</button>
+          </li>)}
+        </ul>
+        <p className="mt-3 text-xs leading-5 text-os-muted-dark">{t('acknowledgeMissingEvidenceNote')}</p>
+      </details> : null}
+      {suggestions.length === 0 && !extracting && !extractError && !extractionComplete && missingFields.length === 0 && <p data-reading-role="body" className={styles.guide}>{t('suggestionsGuide')}</p>}
       {suggestions.map((suggestion) => {
         const evidenceLocation = suggestion.source === 'extractor'
           ? suggestion.evidenceLocation ?? { status: 'unverified' as const }
