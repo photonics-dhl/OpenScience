@@ -34,17 +34,26 @@ export async function generateStoryboard(gateway: Pick<AiGateway, 'completeStruc
     if (input.length > 100000)
         throw new Error('[blocked] Selected Claims and base storyboard exceed planner input bounds; select fewer Claims');
     const ids = claims.map(c => c.id);
+    function singleLine(value: unknown): unknown {
+        return typeof value === 'string' ? value.replace(/[\u0000-\u001f]+/g, ' ').replace(/\s{2,}/g, ' ').trim() : value;
+    }
     function materialize(value: unknown): unknown {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
         const document = value as Record<string, unknown>;
         if (!Array.isArray(document.scenes)) return value;
-        return { ...document, scenes: document.scenes.map(raw => {
+        return { ...document, title: singleLine(document.title), scenes: document.scenes.map(raw => {
             if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
             const scene = raw as Record<string, unknown>;
-            if (!scene.animation || typeof scene.animation !== 'object' || Array.isArray(scene.animation)) return scene;
+            const normalizedScene = {
+                ...scene,
+                title: singleLine(scene.title),
+                narration: singleLine(scene.narration),
+                visualAction: singleLine(scene.visualAction),
+            };
+            if (!scene.animation || typeof scene.animation !== 'object' || Array.isArray(scene.animation)) return normalizedScene;
             const animation = scene.animation as Record<string, unknown>;
-            if (!Array.isArray(animation.actions)) return scene;
-            return { ...scene, animation: { ...animation, actions: animation.actions.map(rawAction => {
+            if (!Array.isArray(animation.actions)) return normalizedScene;
+            return { ...normalizedScene, animation: { ...animation, actions: animation.actions.map(rawAction => {
                 if (!rawAction || typeof rawAction !== 'object' || Array.isArray(rawAction)) return rawAction;
                 const action = rawAction as Record<string, unknown>;
                 const basis = action.basis as Record<string, unknown> | undefined;
