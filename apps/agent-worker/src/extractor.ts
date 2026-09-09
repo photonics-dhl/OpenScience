@@ -604,25 +604,22 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     guard,
     validationFeedback: () => {
       if (invalidFields.size === 0) return undefined;
-      if (!invalidFields.has('response')) {
-        expectedFields = [...invalidFields.keys()].filter(
+      const nextExpectedFields = invalidFields.has('response') ? expectedFields : [...invalidFields.keys()].filter(
           (field): field is (typeof SDF_CORE_FIELDS)[number] => SDF_CORE_FIELDS.includes(field as (typeof SDF_CORE_FIELDS)[number]),
         );
-      }
-      const priorSelections = expectedFields.flatMap((field) => {
+      const priorSelections = nextExpectedFields.flatMap((field) => {
         const ids = draftPassageIds.get(field);
         return ids ? [`${field} priorSelection=${ids.join(',')}`] : [];
       });
-      return [
-        'Previous JSON failed canonical validation.',
-        `Invalid fields and reason codes: ${[...invalidFields].map(([field, reason]) => `${field}:${reason}${invalidDetails.get(field) ? `(${invalidDetails.get(field)})` : ''}`).join(', ')}.`,
-        priorSelections.length ? `The rejected selections were: ${priorSelections.join('; ')}.` : '',
-        `Return schemaVersion and fields with exactly these keys: ${expectedFields.join(',')}. Other fields already passed server validation and are retained without another model rewrite. Each returned field must still use exactly summary, sourcePassageIds, needsMoreInformation.`,
-        `A non-empty summary requires needsMoreInformation=false and valid P labels. Re-evaluate the rejected selection claim by claim and keep the smallest sufficient set, ordinarily 1-${USUAL_SOURCE_PASSAGE_IDS}; ${MAX_SOURCE_PASSAGE_IDS} is only the hard ceiling, and expanded source must still fit 32 segments/8000 chars.`,
-        'passage_ids_required: recreate that field with valid P labels and keep only supported claims. source_text_limit_8000 or segment_count_1_to_32: remove claims that are not essential to the field summary, then remove only passages that no remaining claim needs; never truncate or edit source and never drop evidence for a retained claim. Method may cite dispersed key assumptions, steps and validation without every derivation. Reproducibility cites only direct parameter/material/procedure/data/code disclosures and explicit access gaps.',
-        'A label reports its blocks/chars. Overlapping or adjacent slices merge; separated slices in one source block remain separate segments and each counts toward the limit. Do not return quotes or window IDs.',
-        'If the smallest sufficient evidence still exceeds either limit, return summary="", sourcePassageIds:[], needsMoreInformation=true for that field. Do not relabel a capacity failure as an author omission.',
-      ].filter(Boolean).join(' ');
+      const rejected = priorSelections.length ? ` Rejected IDs: ${priorSelections.join('; ')}.` : '';
+      const failure = [...invalidFields].map(([field, reason]) => `${field}:${reason}${invalidDetails.get(field) ? `(${invalidDetails.get(field)})` : ''}`).join(',');
+      const shape = Object.fromEntries(nextExpectedFields.map((field) => [field, {
+        summary: '', sourcePassageIds: [], needsMoreInformation: true,
+      }]));
+      const compactFeedback = `Repair only the failed canonical fields. Failure=${failure}.${rejected} Return exactly one JSON object shaped ${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: shape })}; fields must have exactly these keys: ${nextExpectedFields.join(',')}. Other fields already passed server validation and are retained. For each nonempty summary use needsMoreInformation=false and valid P labels. For source_text_limit_8000 or segment_count_1_to_32, remove nonessential claims first, then remove only passages no retained claim needs; never truncate source or leave a retained claim unsupported. Method may use dispersed key assumptions, steps and validation without every derivation. Reproducibility uses only directly disclosed parameters, materials, procedures, data/code availability and explicit access gaps. Expanded evidence must fit 32 segments and 8000 chars. If the smallest sufficient evidence cannot fit, return that field empty with needsMoreInformation=true; never call a capacity failure an author omission. Do not return quotes or commentary.`;
+      const fallbackFeedback = `Repair only failed fields (${failure}). Return exactly schemaVersion and fields with these keys: ${nextExpectedFields.join(',')}; each field has exactly summary, sourcePassageIds, needsMoreInformation. Keep the smallest sufficient valid P-label set within 32 segments/8000 chars, but never drop evidence for a retained claim or truncate source. If sufficient evidence cannot fit, return that field empty with needsMoreInformation=true. Other fields are already retained. No quotes or commentary.`;
+      expectedFields = nextExpectedFields;
+      return compactFeedback.length <= 1_900 ? compactFeedback : fallbackFeedback;
     },
     validationDiagnostic: () => invalidFields.size === 0
       ? undefined : [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(','),
