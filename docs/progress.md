@@ -1,3 +1,7 @@
+## 2026-09-09 服务器浏览器启动故障已修，待登录
+- 实际失败启动trace定位openat2 EPERM→255、clone3 EPERM→134、pkey/chroot拒绝→133；已定点修复，保留完整沙箱。镜像272a5ed57d27复用不重下，浏览器running、bridge active、远程UI HTTP200。
+- Sol/high独立静态审查通过；无测试。CUA连接仍fetch失败，open_in_codex返回queued。用户需打开localhost6081的noVNC，在服务器完成登录；尚未生图/回传。生产应用release未变。
+
 ## 2026-09-09 复用镜像构建完成，运行时启动待修
 - 272a5ed57d27构建成功；新增包下载由321MB降至45.7MB（约86%，不是token比例）。bridge的217/USER由缺少宿主UID11040导致，已补专用nologin账号并active。
 - 浏览器容器报cannot start a stopped process，未进入应用日志，已关闭自动重启；不关闭沙箱。尚未登录、生图。根目录AGENTS及清单也已同步，保留其已有未提交修改。

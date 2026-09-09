@@ -50,6 +50,7 @@
 		}
 	],
 	"syscalls": [
+        {"names": ["clone3"], "action": "SCMP_ACT_ERRNO", "errnoRet": 38},
 		{
 			"comment": "Allow create user namespaces",
 			"names": [
@@ -241,6 +242,11 @@
 				"_newselect",
 				"open",
 				"openat",
+                "openat2",
+                "pkey_alloc",
+                "pkey_free",
+                "pkey_mprotect",
+                "chroot",
 				"pause",
 				"pipe",
 				"pipe2",

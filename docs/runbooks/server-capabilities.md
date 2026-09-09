@@ -16,7 +16,7 @@
 | 完整图形 Chrome | 宿主 `/opt/openscience-tool-cache/playwright/chromium-1234/chrome-linux64/chrome`；ScanSci镜像内 `/opt/scansci-browsers/chromium-1234/chrome-linux64/chrome` | 已静态确认完整二进制。可复用现有镜像与配套资源；不是只存在 headless shell |
 | 无头 Chromium | 宿主 `/root/.cache/ms-playwright/chromium_headless_shell-1234/` 与共享缓存同名目录；ScanSci镜像 `/opt/scansci-browsers/chromium_headless_shell-1234/` | 现成截图/渲染资源；不能用“仅此目录存在”的旧记录推断没有完整浏览器 |
 | 浏览器运行依赖 / Xvfb | `openscience-scansci-mcp:7f8e47d931b751cc28c1000325128c2ca86566cb`；镜像 `/usr/bin/Xvfb` | 已有图形库与Xvfb；独立浏览器可派生镜像，不启动或修改生产ScanSci服务、不挂载其登录卷 |
-| 网页远程桌面 | `infra/chatgpt-browser/`；服务器 `/opt/openscience-chatgpt-browser` | 镜像已构建（272a5ed57d27），桥接服务active；浏览器容器启动报运行时错误，已停止自动重启。Chrome/Xvfb复用上行，仅补远程桌面组件依赖。未证明登录、生图、回传成功；入口见 [浏览器手册](chatgpt-browser.md) |
+| 网页远程桌面 | `infra/chatgpt-browser/`；服务器 `/opt/openscience-chatgpt-browser` | 镜像272a5ed57d27复用完成，桥接active，浏览器running，noVNC HTTP200；启动seccomp兼容故障已修。等待用户服务器登录。Chrome/Xvfb复用上行，仅补远程桌面组件依赖。未证明登录、生图、回传成功；入口见 [浏览器手册](chatgpt-browser.md) |
 | Node / Python | 宿主 `/usr/bin/node`、`/usr/bin/python3`；现有 `node:22-bookworm`、`python:3.12-slim` 镜像 | 已有；必要时复用镜像中的Node。不要默认全局安装 |
 | 视频 / 字体 / FFmpeg | `openscience-media-demo:b361f4f7781b760583b3a312829877c4d6310e8a` 等已有media镜像；源码 `apps/media-demo/Dockerfile` | 镜像包含FFmpeg、CJK字体与无头浏览器；demo镜像可复用运行依赖，不代表Hermes完整视频产品链路通过 |
 | 语音模型 | `/opt/openscience-models/qwen3-tts-customvoice-0c0e305`；`openscience/tts-audition:qwen0.1.1` | 目录与镜像存在，本轮未调用；不要重复下载模型，也不推断生产已接入 |
