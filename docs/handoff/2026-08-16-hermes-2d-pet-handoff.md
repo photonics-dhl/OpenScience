@@ -7,7 +7,7 @@
 
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- 当前production/代码HEAD913002b892a4cce51dac1674edc037c044b81412；rollback40e78370a7425008a64b8df2d2db7cbf91719e27。
+- 当前production/代码HEAD637eda1c99667b2e2b0b9883bf04d1745ab94d67；rollback913002b892a4cce51dac1674edc037c044b81412。
 - canonical --no-tests部署exit0，日志1788943498648-f2e7bcc0-22db-4fb9-b12b-258659848674。首次4d499743服务器构建发现两个类型遗漏，913002b8已修复。
 - main和其他worktree为独立任务，不覆盖。
 
@@ -29,6 +29,9 @@
 
 - 正常refresh创建e800ef2b-e7d7-4aea-a0e4-100da415a981，grounded-passages-v1 sourceMapReused=true；problem/insight成功，method/results passage_ids_required、limitations segment_count_1_to_32，仍未确认/未生图。
 
+- 637eda1c部署exit0，日志1788944248834-83174793-0506-4da5-b917-25417df527a4。正常retry1复用原credit/OCR，method新增成功；results/limitations仍segment_count_1_to_32。
+- 新候选grounded-passages-v2在构造时每P<=5blocks/1200chars，六IDs最多30blocks普通7205char；模型不能再因隐藏原block碎片导致结构性超限。正常付费refresh旧v1预算partial retry0..1到v2，旧结果保留，复用OCR，v2不再次刷新。
+
 ## Active fix: server passage IDs
 - Sol/medium负责extractor：模型输出summary+sourcePassageIds，不再逐字复制quote；服务器从全文自然段/句生成编号，再按选中ID精确回读证据。最多6 IDs/field，≤8k证据/32原块，保留科学条件。
 - 同块多个passages按明确合同覆盖首尾连续原文范围，绝不拼接省中间；缺失字段规范化为空，不为缺失解释浪费重试。
@@ -42,6 +45,6 @@
 
 ## Next
 - 当前候选：extractor明确各passage来源预算和修复反馈；domain仅已复用OCR的passage预算失败允许retry0一次恢复，audit保留旧结果，原credit；需复核/提交/部署，rollback取当前913002b8。
-- 部署后正常retry现有Agente800ef2b，只重新理解；读取实际六字段及来源再确认，不重复OCR/上传。
+- 新v2候选部署后正常refresh现有Agente800ef2b（retry1），只重新理解；读取实际六字段及来源再确认，不重复OCR/上传。
 - 正常Hermes image profile推进规划/图片。浏览器恢复后观察实际展示；没有真实图片前不能标记全流程完成。
 - 精确需求读docs/OpenScience_Kimi_Development_Spec.md §5.4/§9，UX方案见集成产品计划；历史视频仅另一论文方法案例，不能代替当前全文能力。

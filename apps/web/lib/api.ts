@@ -1590,6 +1590,13 @@ export function isRefreshableIngestionAnalysis(task: Pick<IngestionTaskDetail['t
     && result.reason === 'canonical_partial_validation_exhausted'
     && result.sourceMapAvailable === true;
   if (groundedSummaryRefresh) return true;
+  const passageDiagnostics = result.fieldDiagnostics;
+  if (task.retryCount >= 0 && task.retryCount <= 1 && result.canonicalExtractionContract === 'grounded-passages-v1'
+    && result.reason === 'canonical_partial_validation_exhausted' && result.sourceMapAvailable === true
+    && passageDiagnostics && typeof passageDiagnostics === 'object' && !Array.isArray(passageDiagnostics)
+    && Object.keys(passageDiagnostics).length > 0
+    && Object.entries(passageDiagnostics).every(([field, reason]) => LEGACY_INGESTION_FIELDS.includes(field as typeof LEGACY_INGESTION_FIELDS[number])
+      && ['passage_ids_required', 'segment_count_1_to_32', 'source_text_limit_8000'].includes(String(reason)))) return true;
   if (task.retryCount !== 0) return false;
   const core = result.core;
   const evidence = result.evidence;

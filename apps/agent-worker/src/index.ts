@@ -278,7 +278,7 @@ export function createHandlers(
       const externalProcessingEligible = serverDerivedEligibility
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
       let reusableSourceMap: DocumentSourceMap | undefined;
-      const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):grounded-passages-v1$/.exec(ownerTask.idempotencyKey ?? '');
+      const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):grounded-passages-v([12])$/.exec(ownerTask.idempotencyKey ?? '');
       if (refresh) {
         const ingestion = await deps.prisma.ingestionTask.findUnique({ where: { id: refresh[1]! } });
         const previous = await deps.prisma.agentTask.findUnique({ where: { id: refresh[2]! }, include: { session: true } });
@@ -286,7 +286,7 @@ export function createHandlers(
         if (!serverDerivedEligibility || !externalProcessingEligible || ingestion?.agentTaskId !== ownerTask.id
           || ingestion.artifactId !== artifact.id || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
           || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
-          || previousResult?.canonicalExtractionContract !== 'grounded-summary-v1') {
+          || previousResult?.canonicalExtractionContract !== (refresh[3] === '2' ? 'grounded-passages-v1' : 'grounded-summary-v1')) {
           throw new Error('[blocked] Reusable document analysis scope is invalid');
         }
         const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);

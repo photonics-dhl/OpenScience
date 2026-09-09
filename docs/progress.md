@@ -1,7 +1,7 @@
 # Progress
 
 ## 2026-09-09 — 来源编号已部署，继续修复来源预算
-- production913002b8 / rollback40e78370；canonical --no-tests部署exit0，日志1788943498648-f2e7bcc0-22db-4fb9-b12b-258659848674。
+- production637eda1c / rollback913002b8；canonical --no-tests部署exit0，日志1788943498648-f2e7bcc0-22db-4fb9-b12b-258659848674。
 - 实际OCR已接通，修复worker开关、refresh session边界与CN/global endpoint；没有读取或改动key。
 - Agente800ef2b通过正常refresh运行，grounded-passages-v1、sourceMapReused=true；problem/insight成功，method/results passage_ids_required、limitations segment_count_1_to_32。未确认、未生图，不能称全文处理完成。
 - 当前候选明确每段预算和定向反馈；仅已复用OCR的预算失败允许一次正常retry，复用原reservation并审计保留旧结果，不无限刷新。

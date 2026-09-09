@@ -51,7 +51,7 @@ export interface ExtractionResult extends Record<string, unknown> {
   /** Exact final guard reasons for unresolved fields; explicitly missing fields are omitted. */
   fieldDiagnostics?: Record<string, string>;
   /** Server-owned canonical selection contract used to prevent obsolete paid repair loops. */
-  canonicalExtractionContract?: 'windowed-source-v2' | 'exact-quote-v1' | 'grounded-summary-v1' | 'grounded-passages-v1';
+  canonicalExtractionContract?: 'windowed-source-v2' | 'exact-quote-v1' | 'grounded-summary-v1' | 'grounded-passages-v1' | 'grounded-passages-v2';
 }
 
 export type EvidenceLocation = {
@@ -99,7 +99,7 @@ const MAX_EXCERPT_CHARS = 24_000;
 const MAX_EVIDENCE_SEGMENTS = 32;
 const MAX_FIELD_EVIDENCE_CHARS = 8_000;
 const MAX_CANONICAL_CORE_CHARS = 4_000;
-const CANONICAL_EXTRACTION_CONTRACT = 'grounded-passages-v1';
+const CANONICAL_EXTRACTION_CONTRACT = 'grounded-passages-v2';
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
 export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
@@ -314,7 +314,8 @@ interface CanonicalPassage {
 }
 
 const PASSAGE_TARGET_MIN_CHARS = 800;
-const PASSAGE_MAX_CHARS = 1_400;
+const PASSAGE_MAX_CHARS = 1_200;
+const MAX_PASSAGE_BLOCKS = 5;
 const MAX_SOURCE_PASSAGE_IDS = 6;
 
 function splitCanonicalBlock(block: CanonicalTextBlock): CanonicalPassageSlice[] {
@@ -370,10 +371,13 @@ function canonicalPassages(sourceMap: DocumentSourceMap): CanonicalPassage[] {
     pending = [];
   };
   for (const slice of blocks.flatMap(splitCanonicalBlock)) {
-    const candidate = passageText([...pending, slice]);
-    if (pending.length && candidate.length > PASSAGE_MAX_CHARS) flush();
+    const candidateSlices = [...pending, slice];
+    const candidate = passageText(candidateSlices);
+    const candidateBlockCount = new Set(candidateSlices.map((entry) => entry.block.id)).size;
+    if (pending.length && (candidate.length > PASSAGE_MAX_CHARS || candidateBlockCount > MAX_PASSAGE_BLOCKS)) flush();
     pending.push(slice);
-    if (passageText(pending).length >= PASSAGE_TARGET_MIN_CHARS) flush();
+    if (passageText(pending).length >= PASSAGE_TARGET_MIN_CHARS
+      || new Set(pending.map((entry) => entry.block.id)).size >= MAX_PASSAGE_BLOCKS) flush();
   }
   flush();
   return passages;
@@ -549,7 +553,7 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
       'Previous JSON failed canonical validation.',
       `Invalid fields and reason codes: ${[...invalidFields].map(([field, reason]) => `${field}:${reason}${invalidDetails.get(field) ? `(${invalidDetails.get(field)})` : ''}`).join(', ')}.`,
       'Return schemaVersion and all six fields again. Repair the listed invalid fields first; the server retains previously validated supported fields. Each supported field must contain a concise summary and 1-6 sourcePassageIds copied only from the supplied passage labels. Do not return quotes or window IDs.',
-      'Each passage label reports its individual blocks and chars budget. Prefer the fewest passages whose combined expandedBlocks is at most 32 and expandedChars is at most 8000. The server expands selected passage IDs to their exact original text. If multiple selected passages touch the same source block, every character between the first and last selected slice is included; account for that full range under the evidence limit.',
+      'Each passage contains at most 5 original blocks and 1200 characters; its label reports the actual blocks and chars budget. Six non-overlapping passage IDs ordinarily expand to at most 30 blocks and about 7205 characters. Prefer the fewest passages whose combined expandedBlocks is at most 32 and expandedChars is at most 8000. The server expands selected passage IDs to their exact original text. If multiple selected passages touch the same source block, every character between the first and last selected slice is included; account for that full range under the evidence limit.',
       'A missing field must have summary="", sourcePassageIds:[], needsMoreInformation=true.',
     ].join(' '),
     validationDiagnostic: () => invalidFields.size === 0
@@ -721,7 +725,7 @@ export async function extractHandler(
         RESEARCH_UNDERSTANDING_SKILL.instructions,
         '只输出JSON：schemaVersion="0.1.0"，fields下六个字段必须且只能是 {"summary":string,"sourcePassageIds":string[],"needsMoreInformation":boolean}。不得返回引文、窗口ID或来源正文。',
         '每字段凝练成中文摘要，解释该论文的核心要点，避免重复同一证据填不同字段。每个非空摘要选择1–6个足以支持全部实质断言的sourcePassageIds；ID只能来自下方标签，服务端会从这些ID回读原始SourceMap，模型不要复制或改写证据。',
-        `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个原始块。每个passage标签已给出单独的blocks和chars预算，优先选择足够支持结论的最少ID。若同一原始块内选择多个passage，服务端会保留首尾选中片段之间的全部原文，不能跳过中间内容；选择时必须把该完整范围计入限额。`,
+        `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个原始块。每个passage最多5个原始块、1200字符，标签给出实际blocks和chars预算；6个互不重叠ID通常最多展开30块、约7205字符。优先选择足够支持结论的最少ID。若同一原始块内选择多个passage，服务端会保留首尾选中片段之间的全部原文，不能跳过中间内容；选择时必须把该完整范围计入限额。`,
         '选择能完整支持主语、条件、否定、数字和单位的最少passage。不要为了符合限额扩大或改写结论。若无充分证据，summary="",sourcePassageIds=[],needsMoreInformation=true；缺失字段里的解释会被服务端丢弃，不影响其他有证据字段。无法辨认的公式不要猜写。',
       ] : [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须含 summary、sourceQuote、needsMoreInformation。',
