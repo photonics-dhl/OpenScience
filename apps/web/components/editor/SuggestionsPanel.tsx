@@ -54,7 +54,7 @@ export default function SuggestionsPanel({
   extractionComplete?: boolean;
   canExtract?: boolean;
   resumeExtraction?: boolean;
-  sourceHref: string;
+  sourceHref?: string;
 }) {
   const t = useTranslations('editor');
 
@@ -82,7 +82,7 @@ export default function SuggestionsPanel({
         {!canExtract && !extracting && <p className="mb-0 mt-2 text-sm leading-6 text-os-muted-dark">{t('extractNeedsContent')}</p>}
       </div>
       {extractError && <div className="mt-4 border-l-2 border-os-vermilion pl-3 text-sm text-os-paper" role="alert">{extractError}</div>}
-      {!extracting && <div className="mt-4 border-t border-os-rule-dark pt-4">
+      {!extracting && sourceHref && <div className="mt-4 border-t border-os-rule-dark pt-4">
         <p className="m-0 text-sm leading-6 text-os-muted-dark">{t('sourceNextStep')}</p>
         <Link className="mt-2 inline-flex min-h-11 items-center font-semibold text-os-paper underline underline-offset-4" href={sourceHref}>{t('openSourceWorkflow')} →</Link>
       </div>}
