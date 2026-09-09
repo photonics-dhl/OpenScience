@@ -187,7 +187,7 @@ describe('Optical Editorial brand and surface shells', () => {
     expect(entry).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
   });
 
-  it('offers extraction recovery only for the legacy proposal-unavailable result without a core', () => {
+  it('offers only the bounded legacy, paid, and compensated extraction recovery paths', () => {
     expect(isRetryableSdfExtraction({
       state: 'needs_review', retryCount: 0, result: { status: 'needs_review', reason: 'sdf-proposal-unavailable' },
     })).toBe(true);
@@ -195,7 +195,10 @@ describe('Optical Editorial brand and surface shells', () => {
       state: 'needs_review', retryCount: 0, result: { core: { problem: 'reviewable' } },
     })).toBe(false);
     expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 0, result: null })).toBe(true);
-    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 1, result: null })).toBe(false);
+    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 1, result: null })).toBe(true);
+    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 2, error: 'provider timeout', result: null })).toBe(false);
+    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 2, error: 'canonical_validation_exhausted', result: null })).toBe(true);
+    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 3, result: null })).toBe(false);
   });
 
   it('does not open confirmation for a missing or entirely empty core proposal', () => {
