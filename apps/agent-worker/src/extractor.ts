@@ -497,6 +497,7 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
   const draftSummaries = new Map<(typeof SDF_CORE_FIELDS)[number], string>();
   const draftPassageIds = new Map<(typeof SDF_CORE_FIELDS)[number], string[]>();
   const draftFailures = new Map<(typeof SDF_CORE_FIELDS)[number], { reason: CanonicalFieldValidationReason; detail?: string }>();
+  let expectedFields: Array<(typeof SDF_CORE_FIELDS)[number]> = [...SDF_CORE_FIELDS];
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
   let invalidDetails = new Map<string, string>();
   const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason; detail?: string } => {
@@ -550,11 +551,12 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
       return false;
     }
     const fields = proposal.fields as Record<string, unknown>;
-    if (Object.keys(fields).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(',')) {
+    const fieldsToValidate = [...expectedFields];
+    if (Object.keys(fields).sort().join(',') !== fieldsToValidate.slice().sort().join(',')) {
       invalidFields.set('response', 'malformed_item');
       return false;
     }
-    for (const field of SDF_CORE_FIELDS) {
+    for (const field of fieldsToValidate) {
       const previous = retained.get(field);
       // Once a supported field has passed server-side passage materialization, schema
       // retries repair only unresolved fields and cannot replace that verified result.
@@ -600,14 +602,28 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
   };
   return {
     guard,
-    validationFeedback: () => invalidFields.size === 0 ? undefined : [
-      'Previous JSON failed canonical validation.',
-      `Invalid fields and reason codes: ${[...invalidFields].map(([field, reason]) => `${field}:${reason}${invalidDetails.get(field) ? `(${invalidDetails.get(field)})` : ''}`).join(', ')}.`,
-      `Return schemaVersion and all six fields. Repair invalid fields first; supported fields already validated by the server are retained. A non-empty summary requires needsMoreInformation=false and valid P labels. Use the smallest sufficient set, ordinarily 1-${USUAL_SOURCE_PASSAGE_IDS}; ${MAX_SOURCE_PASSAGE_IDS} is only the hard ceiling, and expanded source must still fit 32 segments/8000 chars.`,
-      'passage_ids_required: recreate that field with valid P labels and keep only supported claims. source_text_limit_8000 or segment_count_1_to_32: choose fewer precise passages and narrow the summary; never truncate or edit source. Method may cite dispersed key assumptions, steps and validation without every derivation. Reproducibility cites only direct parameter/material/procedure/data/code disclosures and explicit access gaps.',
-      'A label reports its blocks/chars. Overlapping or adjacent slices merge; separated slices in one source block remain separate segments and each counts toward the limit. Do not return quotes or window IDs.',
-      'A missing field must have summary="", sourcePassageIds:[], needsMoreInformation=true.',
-    ].join(' '),
+    validationFeedback: () => {
+      if (invalidFields.size === 0) return undefined;
+      if (!invalidFields.has('response')) {
+        expectedFields = [...invalidFields.keys()].filter(
+          (field): field is (typeof SDF_CORE_FIELDS)[number] => SDF_CORE_FIELDS.includes(field as (typeof SDF_CORE_FIELDS)[number]),
+        );
+      }
+      const priorSelections = expectedFields.flatMap((field) => {
+        const ids = draftPassageIds.get(field);
+        return ids ? [`${field} priorSelection=${ids.join(',')}`] : [];
+      });
+      return [
+        'Previous JSON failed canonical validation.',
+        `Invalid fields and reason codes: ${[...invalidFields].map(([field, reason]) => `${field}:${reason}${invalidDetails.get(field) ? `(${invalidDetails.get(field)})` : ''}`).join(', ')}.`,
+        priorSelections.length ? `The rejected selections were: ${priorSelections.join('; ')}.` : '',
+        `Return schemaVersion and fields with exactly these keys: ${expectedFields.join(',')}. Other fields already passed server validation and are retained without another model rewrite. Each returned field must still use exactly summary, sourcePassageIds, needsMoreInformation.`,
+        `A non-empty summary requires needsMoreInformation=false and valid P labels. Re-evaluate the rejected selection claim by claim and keep the smallest sufficient set, ordinarily 1-${USUAL_SOURCE_PASSAGE_IDS}; ${MAX_SOURCE_PASSAGE_IDS} is only the hard ceiling, and expanded source must still fit 32 segments/8000 chars.`,
+        'passage_ids_required: recreate that field with valid P labels and keep only supported claims. source_text_limit_8000 or segment_count_1_to_32: remove claims that are not essential to the field summary, then remove only passages that no remaining claim needs; never truncate or edit source and never drop evidence for a retained claim. Method may cite dispersed key assumptions, steps and validation without every derivation. Reproducibility cites only direct parameter/material/procedure/data/code disclosures and explicit access gaps.',
+        'A label reports its blocks/chars. Overlapping or adjacent slices merge; separated slices in one source block remain separate segments and each counts toward the limit. Do not return quotes or window IDs.',
+        'If the smallest sufficient evidence still exceeds either limit, return summary="", sourcePassageIds:[], needsMoreInformation=true for that field. Do not relabel a capacity failure as an author omission.',
+      ].filter(Boolean).join(' ');
+    },
     validationDiagnostic: () => invalidFields.size === 0
       ? undefined : [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(','),
     partialResult: () => {
