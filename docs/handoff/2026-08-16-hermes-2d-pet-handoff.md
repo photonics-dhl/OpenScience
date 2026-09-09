@@ -5,6 +5,12 @@
 - 用户已批准实际生图、预设imagegen skill和页面优化。禁止测试/预检/CI测试/本地构建；允许必要服务器部署与真实任务。保留权限、计费、来源、回滚；不删除文件、不读取打印密钥。
 - 六维不是章节模板；方法可隐含在推导/结果/附录。来源整理失败不等于论文未报告。不能放行科学错误。
 
+## Full-flow optimization — current batch
+- 用户明确先完成附件预览→自动全文凝练→用户确认→选图/视频→生成审核→发布→公开RO；2–3篇高质量精选完成并获认可前暂停冷启动。
+- 普通Chat6aa162f9已实际发送/读回完整产品建议；旧Chat6a9e7dac本轮接口无匹配，不推断Chat整体不可用。此次没有截图评审。
+- 本批候选：ArtifactViewer、媒体类型选择、公开页顺序/去重、索引从草稿改读发布manifest、归档过滤、理解skill v3精确来源恢复。尚未部署/重新提取；问题台账在integrated-research-product-plan最新节。
+- 服务器只读确认production7f8e47d9。18旧demo-source记录及个人测试草稿待正常domain可恢复归档，脚本archive-legacy-showcase；实际3篇论文保护，不删文件/账号/公开版本。
+
 ## Server browser continuation (2026-09-09)
 - 用户要求服务器任务先查能力清单；已新增 docs/runbooks/server-capabilities.md 并写入AGENTS。发现共享缓存与ScanSci镜像已有完整Chrome+Xvfb，已停止重复下载，改为复用镜像，仅补远程桌面组件。
 - 独立浏览器镜像272a5ed57d27已构建；bridge与浏览器已运行，noVNC HTTP200；trace定位openat2/clone3/pkey/chroot并修复seccomp兼容，用户已登录且网页生成/保存一次PNG成功，见下方最新记录；生产release未变，产品资产回传尚未接入。固定SSH6081隧道已启动，CUA仍fetch失败。不得按下方旧Codex retry步骤重复消耗额度。
@@ -56,7 +62,7 @@
 
 ## Routing / sources
 - Sol/high独立复核迁移、runner、lineage恢复、修订提示均通过。两个实现agent额度失败，root实现与部署；不能编造节省比例。
-- 网页Chat6Pro此前给出全文综合→六维→来源核对规划；当前连接失败，不能冒充新回复。
+- 网页Chat此前给出全文综合→六维→来源核对；本批直接Chat已取回完整旅程建议，见上方。
 - 原Chat https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec。
 - 需求docs/OpenScience_Kimi_Development_Spec.md §5.4/§9；计划docs/plans/2026-09-05-integrated-research-product-plan.md。
 - 服务器只走显式Git Bash+E:/Miscellaneous/XGS/infra/scripts/ssh-run.sh，发布docs/runbooks/deployment.md。所有本轮运行均在服务器，未测试。

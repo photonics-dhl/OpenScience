@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { appendMaterials } from '@/lib/research-materials';
 import { ArtifactRow } from '@/components/research/ArtifactRow';
+import { ArtifactViewer } from '@/components/research/ArtifactViewer';
 import { HermesAnchor } from '@/components/hermes/HermesAnchor';
 import { prepareProtectedXhr, startIngestionBatch, type ArtifactReference, type IngestionTaskSummary } from '../../lib/api';
 
@@ -119,7 +120,7 @@ export default function ArtifactUploader({
             type="file"
             disabled={uploadPending}
             data-testid="artifact-input"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.currentTarget.value = ''; }}
             aria-label={t('uploadArtifact')}
           />
         </label>
@@ -128,7 +129,7 @@ export default function ArtifactUploader({
       <div className="mt-4">
         {jobs.map((job) => (
           <div key={job.logicalPath}>
-            <ArtifactRow name={job.logicalPath} status={t(`artifactStatus.${job.state}`)} meta={job.taskId ? t('ingestionQueued') : job.artifactId ? t('artifactStored') : undefined} />
+            <ArtifactRow action={job.artifactId ? <ArtifactViewer artifactId={job.artifactId} logicalPath={job.logicalPath} /> : undefined} name={job.logicalPath} status={t(`artifactStatus.${job.state}`)} meta={job.taskId ? t('ingestionQueued') : job.artifactId ? t('artifactStored') : undefined} />
             {job.state === 'uploading' && (
               <div className="h-1 bg-os-rule-dark" role="progressbar" aria-valuenow={job.progress} aria-valuemin={0} aria-valuemax={100}>
                 <div className="h-full bg-os-paper" style={{ width: `${job.progress}%` }} />
@@ -143,7 +144,7 @@ export default function ArtifactUploader({
           </div>
         ))}
         {artifacts.filter((a) => !jobs.some((j) => j.artifactId === a.artifactId)).map((a) => (
-          <ArtifactRow key={a.artifactId} name={a.logicalPath} status={t('artifactStatus.ready')} meta={t('artifactStored')} />
+          <ArtifactRow action={<ArtifactViewer artifactId={a.artifactId} logicalPath={a.logicalPath} />} key={a.artifactId} name={a.logicalPath} status={t('artifactStatus.ready')} meta={t('artifactStored')} />
         ))}
       </div>
     </section>

@@ -319,6 +319,7 @@ const PASSAGE_TARGET_MIN_CHARS = 800;
 const PASSAGE_MAX_CHARS = 1_200;
 const MAX_PASSAGE_BLOCKS = 5;
 const MAX_SOURCE_PASSAGE_IDS = MAX_EVIDENCE_SEGMENTS;
+const USUAL_SOURCE_PASSAGE_IDS = 6;
 
 function splitCanonicalBlock(block: CanonicalTextBlock): CanonicalPassageSlice[] {
   const result: CanonicalPassageSlice[] = [];
@@ -575,8 +576,9 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     validationFeedback: () => invalidFields.size === 0 ? undefined : [
       'Previous JSON failed canonical validation.',
       `Invalid fields and reason codes: ${[...invalidFields].map(([field, reason]) => `${field}:${reason}${invalidDetails.get(field) ? `(${invalidDetails.get(field)})` : ''}`).join(', ')}.`,
-      `Return schemaVersion and all six fields again. Repair the listed invalid fields first; the server retains previously validated supported fields. Each supported field must contain a concise summary and 1-${MAX_SOURCE_PASSAGE_IDS} sourcePassageIds copied only from the supplied passage labels. Prefer the smallest sufficient set; the combined source still must fit 32 original blocks and 8000 characters. Do not return quotes or window IDs.`,
-      'Each passage contains at most 5 original blocks and 1200 characters; its label reports the actual blocks and chars budget. Six non-overlapping passage IDs ordinarily expand to at most 30 blocks and about 7205 characters. Prefer the fewest passages whose combined expandedBlocks is at most 32 and expandedChars is at most 8000. The server expands selected passage IDs to their exact original text. If multiple selected passages touch the same source block, every character between the first and last selected slice is included; account for that full range under the evidence limit.',
+      `Return schemaVersion and all six fields. Repair invalid fields first; supported fields already validated by the server are retained. A non-empty summary requires needsMoreInformation=false and valid P labels. Use the smallest sufficient set, ordinarily 1-${USUAL_SOURCE_PASSAGE_IDS}; ${MAX_SOURCE_PASSAGE_IDS} is only the hard ceiling, and expanded source must still fit 32 blocks/8000 chars.`,
+      'passage_ids_required: recreate that field with valid P labels and keep only supported claims. source_text_limit_8000 or segment_count_1_to_32: choose fewer precise passages and narrow the summary; never truncate or edit source. Method may cite dispersed key assumptions, steps and validation without every derivation. Reproducibility cites only direct parameter/material/procedure/data/code disclosures and explicit access gaps.',
+      'A label reports its blocks/chars. Multiple passages from one original block expand to the entire range between the first and last selected slice; budget that full range. Do not return quotes or window IDs.',
       'A missing field must have summary="", sourcePassageIds:[], needsMoreInformation=true.',
     ].join(' '),
     validationDiagnostic: () => invalidFields.size === 0
@@ -751,8 +753,8 @@ export async function extractHandler(
         '只输出JSON：schemaVersion="0.1.0"，fields下六个字段必须且只能是 {"summary":string,"sourcePassageIds":string[],"needsMoreInformation":boolean}。不得返回引文、窗口ID或来源正文。',
         `完整输出结构如下（这是空结构，不是论文结论；必须用原文支持的摘要与实际P编号填充）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: '', sourcePassageIds: [], needsMoreInformation: true }])) })}`,
         'sourcePassageIds必须是字符串数组，例如["P00001"]，不能填页码、对象或区间字符串。JSON字符串中的反斜杠必须转义；摘要优先使用普通文字与Unicode数学符号，避免输出不合法的LaTeX转义。',
-        `每字段凝练成中文摘要，通常120–300字，方法可用简洁步骤；优先解释研究逻辑，不逐式重抄推导。同一来源可以支撑不同展示维度，但各维度概括的语义应不同。每个非空摘要选择1–${MAX_SOURCE_PASSAGE_IDS}个足以支持全部实质断言的sourcePassageIds，优先最少充分集合；ID只能来自下方标签，服务端回读原始SourceMap，模型不要复制或改写证据。方法来源可以分布于全文不同章节。`,
-        `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个原始块。每个passage最多5个原始块、1200字符，标签给出实际blocks和chars预算；6个互不重叠ID通常最多展开30块、约7205字符。优先选择足够支持结论的最少ID。若同一原始块内选择多个passage，服务端会保留首尾选中片段之间的全部原文，不能跳过中间内容；选择时必须把该完整范围计入限额。`,
+        `每字段凝练成中文摘要，通常120–300字，方法可用简洁步骤；优先解释研究逻辑，不逐式重抄推导。同一来源可以支撑不同展示维度，但各维度概括的语义应不同。先完成全文综合，再为每个非空摘要选择通常1–${USUAL_SOURCE_PASSAGE_IDS}个关键sourcePassageIds作为最小充分集合；只有确有必要时才能增加，但不得超过${MAX_SOURCE_PASSAGE_IDS}个硬上限。ID只能来自下方标签，服务端回读原始SourceMap，模型不要复制或改写证据。`,
+        `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个原始块。每个passage最多5个原始块、1200字符，标签给出实际blocks和chars预算；${USUAL_SOURCE_PASSAGE_IDS}个互不重叠ID通常最多展开30块、约7205字符。方法用分布于全文的关键passage证明主要假设、研究步骤和验证，不需要引用每段中间推导；reproducibility只选择直接披露参数、材料、步骤、数据或代码可用性及明确缺口的passage，不要附上整条方法链。若同一原始块内选择多个passage，服务端会保留首尾选中片段之间的全部原文，必须把该完整范围计入限额。`,
         '选择能完整支持主语、条件、否定、数字和单位的最少passage。不要为了符合限额扩大或改写结论。若无充分证据，summary="",sourcePassageIds=[],needsMoreInformation=true；缺失字段里的解释会被服务端丢弃，不影响其他有证据字段。无法辨认的公式不要猜写。',
       ] : [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须含 summary、sourceQuote、needsMoreInformation。',

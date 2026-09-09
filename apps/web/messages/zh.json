@@ -612,6 +612,15 @@
     "accept": "接受",
     "reject": "排除"
   },
+  "attachmentViewer": {
+    "preview": "预览",
+    "download": "下载",
+    "close": "关闭",
+    "loading": "正在加载预览…",
+    "unavailable": "无法预览此附件。请下载原始文件后查看。",
+    "safePreviewNotice": "仅预览 PDF 和位图；其他文件会下载，且不会在 OpenScience 中运行。",
+    "documentTitle": "预览：{name}"
+  },
   "auth": {
     "identity": {
       "skipToForm": "跳转到身份表单",
@@ -1473,7 +1482,7 @@
     "sourceReconciliationFailed": "此字段的来源整理尚未完成；这不代表论文没有报告相关内容。",
     "unverifiedSummaryTitle": "综合草稿 · 来源待核对",
     "unverifiedSummaryBody": "这只是一份阅读辅助，不能视为已验证证据，也不能确认或写入研究记录。",
-    "title": "从论文分析整理主张", "boundary": "从当前已保存版本选择、编辑主张。原文引文只是候选依据；确认本批次不会将主张或证据标为已验证。", "runTitle": "确认主张与来源，继续 Hermes 图解流程", "runBoundary": "确认后将记录当前来源审核，并为此研究对象授权最多 7 个论文内容驱动的后续任务：1 个图解方案和 1 至 6 张图解。每条已选择的 Hermes 结论都必须保留其显示的原文引文。每个方案和图解仍会停下等待你的审核；主张和证据不会因此自动标为已验证。", "generationGrant": "本次授权仅适用于当前研究对象和图解配置，后续图解任务硬上限为 7 个。", "runConfirm": "确认来源并授权图解审核流程", "runComplete": "来源审核已记录。Hermes 会在服务器上继续，并在下一个审核点暂停。",
+    "title": "从论文分析整理主张", "boundary": "从当前已保存版本选择、编辑主张。原文引文只是候选依据；确认本批次不会将主张或证据标为已验证。", "runTitle": "确认主张与来源，选择研究可视化", "runBoundary": "确认后将记录当前来源审核，并按下方选择继续图片或视频流程。每条已选择的 Hermes 结论都必须保留其显示的原文引文。每个方案和图解仍会停下等待你的审核；主张和证据不会因此自动标为已验证。", "generationGrant": "本次授权仅适用于当前研究对象和图解配置，后续图解任务硬上限为 7 个。", "mediaChoice": "确认后生成什么？", "mediaImage": "图片示意", "mediaVideo": "视频示意（包含分镜与图片）", "videoGenerationGrant": "仅授权当前研究对象：最多 8 个后续任务，包括方案、图片与视频。Hermes 根据论文内容规划，生成结果仍需审核。", "runConfirm": "确认来源并继续所选流程", "runComplete": "来源审核已记录。Hermes 会在服务器上继续，并在下一个审核点暂停。",
     "load": "预览已确认的论文分析", "refresh": "重新加载预览", "loading": "正在加载预览…", "empty": "当前版本没有匹配的已确认论文分析。请先确认 Hermes 建议并保存版本。",
     "source": "来源文献", "statement": "主张内容", "changed": "内容与原提取不同，请重新核对引文关联", "kind": "主张类型", "parent": "本批次的上级主张", "chooseParent": "选择上级主张", "conditions": "适用条件（每行一项）", "limitations": "局限（每行一项）",
     "page": "原文第 {page} 页", "sourceLocated": "已提供来源定位", "associate": "我已核对引文与此主张的关系，将它作为待复核的候选证据关联。", "runAssociate": "此 Hermes 结论会保留引文，作为下一步审核的证据。", "noQuote": "没有可信引文可关联，此主张将保留为无附加证据。", "split": "从此项再拆出一条主张",

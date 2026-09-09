@@ -1,3 +1,7 @@
+## 2026-09-09 全流程质量优先（进行中）
+
+Chat已实际讨论；附件预览、图/视频选择、发布快照索引、公开页阅读顺序、提取来源恢复与可恢复归档已修改候选，未部署。生产定向读取仍7f8e47d9。先做2–3篇精选、暂停批量冷启动；完整产品队列回传/论文质量仍未完成。详细问题与状态见CURRENT handoff及integrated-research-product-plan最新节。
+
 ## 2026-09-09 服务器网页生图和保存实际成功
 - 直接Chat接口list/read已验证可用；服务器Playwright也已实际接上已登录Chrome，完全不依赖本机CUA。用户接受本机出口。
 - approved Hermes prompt只发送一次；正式会话6aa162f9-d0e4-83ea-afbf-243f7aae8a22，网页Save保存PNG1225x1284/1556710bytes，任务私有output/image.png。非Codex生图调用。

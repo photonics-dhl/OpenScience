@@ -8,6 +8,8 @@ import { useEffect, useState } from 'react';
 
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import ArtifactUploader from '@/components/editor/ArtifactUploader';
+import { ArtifactRow } from '@/components/research/ArtifactRow';
+import { ArtifactViewer } from '@/components/research/ArtifactViewer';
 import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '@/components/research/ResearchSurfaceShell';
 import { ApiClientError, createCommit, getResearchObject, type ArtifactReference, type ResearchObjectSummary, type SdfCore } from '@/lib/api';
 import { appendMaterials, loadAttachmentDraft, loadResearchMaterials } from '@/lib/research-materials';
@@ -66,7 +68,7 @@ export function ResearchObjectFilesContent({ object }: { object: FilesResearchOb
     {!restored && !error && <p role="status">{t('state.loadingBody')}</p>}
     {restored && <section className="mt-7 border-y border-os-rule-dark py-4" aria-label={t('files.savedMaterials')}>
       <h2 className="text-lg">{t('files.savedMaterials')}</h2>
-      {restored.artifacts.map((artifact) => <p className="mt-3 break-all" key={artifact.logicalPath}><a className="text-os-vermilion-ink underline" href={`/api/artifacts/${encodeURIComponent(artifact.artifactId)}/download`}>{artifact.logicalPath}</a></p>)}
+      {restored.artifacts.map((artifact) => <ArtifactRow action={<ArtifactViewer artifactId={artifact.artifactId} logicalPath={artifact.logicalPath} />} key={artifact.artifactId} name={<a className="text-os-vermilion-ink underline" download href={`/api/artifacts/${encodeURIComponent(artifact.artifactId)}/download`}>{artifact.logicalPath}</a>} />)}
       {restored.ingestion.tasks.map((task) => <div className="mt-3" key={task.id}><Link className="underline" href={`/research-objects/${encodeURIComponent(object.id)}/edit?ingestionTask=${encodeURIComponent(task.id)}`}>{task.logicalPath}</Link><span className="ml-3">{taskStatus(task.state)}</span>{task.confirmation && <Link className="ml-3 underline" href={`/research-objects/${encodeURIComponent(object.id)}/versions?version=${encodeURIComponent(task.confirmation.versionId)}`}>{t('files.snapshotVersion', { version: task.confirmation.versionNo })}</Link>}</div>)}
     </section>}
     <ArtifactUploader artifacts={artifacts} onArtifactsChange={(next) => { setArtifacts(next); setCommitted(false); }} onIngestionStarted={(task) => {

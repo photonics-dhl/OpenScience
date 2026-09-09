@@ -21,7 +21,7 @@ export function PresentationAssetGallery({ assets }: { assets: PublicPresentatio
         <figcaption>
           <strong>{asset.label}</strong>
           <span>{t('generatedBy', { name: asset.generator.name, version: asset.generator.version })}</span>
-          <span>{t('sourceClaims')}: {asset.sourceClaimIds.join(', ')}</span>
+          <span>{t('sourceClaims')}: {asset.sourceClaimIds.length}</span>
         </figcaption>
       </figure>)}
     </div>

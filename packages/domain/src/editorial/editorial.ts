@@ -252,7 +252,7 @@ async function getCollection(deps: WorkspaceDeps, slug: string, publicOnly: bool
   const rows = await deps.prisma.editorialSelection.findMany({
     where: {
       collectionId: collection.id,
-      ...(publicOnly ? { state: 'published', researchObject: { visibility: 'public' }, version: { status: 'published' } } : {}),
+      ...(publicOnly ? { state: 'published', researchObject: { visibility: 'public', status: { not: 'archived' } }, version: { status: 'published' } } : {}),
     },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
   });

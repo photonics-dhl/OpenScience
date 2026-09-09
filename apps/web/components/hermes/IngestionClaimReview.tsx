@@ -27,9 +27,11 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState('');
   const [complete, setComplete] = useState(false);
+  const [media, setMedia] = useState<'image' | 'video'>('image');
   useEffect(() => {
     const abort = new AbortController(); controller.current = abort;
     intent.current = new SubmissionIntent();
+    setMedia('image');
     setState({ scope, candidates: [], chosen: '', rows: [] }); setLoaded(false); setBusy(false); setUncertain(false); setError(''); setComplete(false);
     return () => { abort.abort(); callbacks.current.onBusyChange?.(false); };
   }, [scope]);
@@ -74,7 +76,10 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
   async function confirm() {
     if (!candidate || !valid || !submittedSelections.length || busy || complete || error === 'stale' || error === 'submitError') return;
     const body = { snapshotToken: candidate.snapshotToken, selections: submittedSelections };
-    const key = intent.current.begin(JSON.stringify([scope, candidate.taskId, body]));
+    const generationGrant = media === 'video'
+      ? { profile: 'content-driven-v1' as const, maxAgentTasks: 8 as const }
+      : { profile: 'content-driven-image-v1' as const, maxAgentTasks: 7 as const };
+    const key = intent.current.begin(JSON.stringify([scope, candidate.taskId, body, sourceReview ? generationGrant : null]));
     if (!key) return;
     const abort = controller.current; setBusy(true); setError(''); callbacks.current.onBusyChange?.(true);
     try {
@@ -82,7 +87,7 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
         ? await submitHermesSourceReview(ro, sourceReview.runId, {
           expectedVersion: sourceReview.expectedVersion,
           versionId,
-          generationGrant: { profile: 'content-driven-image-v1', maxAgentTasks: 7 },
+          generationGrant,
           reviews: [{ ingestionTaskId: candidate.taskId, ...body }],
         }, key)
         : await confirmIngestionClaims(ro, versionId, candidate.taskId, body, key, abort?.signal);
@@ -119,7 +124,14 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
     </fieldset> : null}
     {!valid ? <p role="alert" className="text-sm">{t(invalidReason)}</p> : null}
     {error ? <p role="alert" className="text-sm">{t(error)}</p> : null}
-    {sourceReview ? <p className="text-sm leading-6 text-os-muted-paper">{t('generationGrant')}</p> : null}
+    {sourceReview && !complete ? <fieldset disabled={locked} className="space-y-3 rounded border border-os-rule-paper p-4">
+      <legend className="px-1 text-sm font-medium">{t('mediaChoice')}</legend>
+      {(['image', 'video'] as const).map((value) => <label key={value} className="flex min-h-11 items-center gap-3 text-sm">
+        <input type="radio" name={`media-${ro}-${versionId}`} value={value} checked={media === value} onChange={() => setMedia(value)} />
+        {t(value === 'image' ? 'mediaImage' : 'mediaVideo')}
+      </label>)}
+      <p className="text-sm leading-6 text-os-muted-paper">{t(media === 'image' ? 'generationGrant' : 'videoGenerationGrant')}</p>
+    </fieldset> : null}
     {complete ? <p role="status" className="text-sm">{t(sourceReview ? 'runComplete' : 'complete')}</p> : candidate ? <button type="button" className="min-h-11 w-full rounded bg-os-ink px-3 py-2 text-sm text-white disabled:opacity-40" disabled={busy || !valid || !submittedSelections.length || error === 'stale' || error === 'submitError'} onClick={() => void confirm()}>{t(busy ? 'saving' : uncertain ? 'retry' : sourceReview ? 'runConfirm' : 'confirm')}</button> : null}
   </section>;
 }
