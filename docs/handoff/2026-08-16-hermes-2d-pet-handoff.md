@@ -1,53 +1,41 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-## Goal and constraints
-- 当前目标：PDF→服务器OCR/全文理解→六字段凝练+独立原文证据→Hermes规划→服务器Codex生图→结果画廊。先停在图片，不执行视频。
-- 用户禁止测试/预检/演练/CI测试和本机构建/运行；只编辑、静态阅读、传输及必要服务器构建/部署/启动。不得手写论文结果冒充服务器自动能力。
-- 保留科学来源、权限、确认、计费、回滚与parser无网络/无secret/非root/只读/512MiB边界；不删除文件，不读写打印密钥。
+## Goal / constraints
+- PDF→服务器OCR/全文理解→六字段凝练+独立原文→Hermes规划→服务器Codex生图→画廊。视频暂停。
+- 用户禁止测试、预检、CI测试、本地运行/构建。允许本地编辑/静态阅读/传输及必要服务器构建部署、实际产品处理。不删除文件、不读取打印密钥，不手写论文结果冒充服务器能力。
+- Parser保持无网络/Secret、非root、只读、512MiB；保留权限、来源、计费、确认与回滚。
 
-## Version tuple
-- Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- 当前production/代码HEADfa751b165865af30954ad4df17fd020ad8847483；rollback637eda1c99667b2e2b0b9883bf04d1745ab94d67。
-- canonical --no-tests部署exit0，日志1788943498648-f2e7bcc0-22db-4fb9-b12b-258659848674。首次4d499743服务器构建发现两个类型遗漏，913002b8已修复。
-- main和其他worktree为独立任务，不覆盖。
+## Version
+- worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
+- production/code HEAD 11ae62000e59fa07f1c556f76e1b73638198c048；rollback fa751b165865af30954ad4df17fd020ad8847483。
+- canonical --no-tests部署exit0，日志1788945551137-935b9b0c-8548-4835-9e08-d29c08fac925。
+- 后续仅状态文档提交不代表新production。其他worktree/main有独立改动，不覆盖。
 
-## Deployed capability and actual corrections
-- 已接通受控OCR：native公式标记→sidecar有界PNG→worker同task/actor/session/RO/artifact/member校验→MiniMax视觉；每批4页串行、每文档最多32需修复页；原native保留，OCR有独立页级bbox/processor provenance。
-- 已修root compose flag误放API：worker当前visionEnabled=true且未禁用。已修refresh新session被错误要求等于初始batch session。
-- 已修地区：文本token-plan endpoint是api.minimaxi.com，视觉未配置地区时原默认global导致provider_status；现在沿同key的显式text CN origin，仍允许vision region override。最近text primary成功，不换key；备用仅明确quota切换。
-- 新content-driven-image-v1/7 profile：1–6幅静态图，无视频时长/动画要求，图片审批齐全直接succeeded；旧video profiles保持。
-- storyboard/scene planner读审核后的EvidenceRecord原文，与摘要分开；生成前/落盘与父规划来源identity绑定；每图真实调用Hermes凝练≤1500字符brief后交服务器Codex。
-- runtime research-understanding skill实际进extractor系统提示并返回id/version；≤120k全文，不静默只选24k头尾。更长文档尚无分层聚合。
-- 画廊、场景标题、完整尺寸入口、折叠来源/规划、图片优先文案和错误恢复已部署；浏览器控制不可用，未做本轮截图观察。
-
-## Current real paper (not confirmed)
+## Actual paper and current blocker
 - RO9067a2d5-42ad-4c06-b234-753728b71064；ingestion7a28a7c8-90f7-429b-a519-53397cf58856；artifact4b94c626-1748-4c5a-934b-2bb94585bd9c。
 - Quantization of a Deep-Subwavelength-Aperture-Confined Optical Near Field.pdf，15页。
-- 旧Agentf286cc57保留；正常refresh创建Agent1eafa17f-e31b-4932-9683-740ef9d5ec1a；两次正常parser retry复用原credit，旧parser结果在audit，无重复上传/手工DB重置。
-- retry2真实OCR接通，多页minimax-vision succeeded（每页7–11s），SourceMap parserStatus=succeeded。
-- 随后grounded-summary-v1仍partial：仅insight成功；problem/method/results/limitations quote_not_found，reproducibility missing_requires_empty。不可确认、不称论文处理完成，尚无这篇论文的新图片。
+- 当前Agent5dba592b-62f5-4bbd-ba80-97d2c5cc4aab，retry1，status succeeded但reason canonical_partial_validation_exhausted；grounded-passages-v2，sourceMapReused=true。
+- 已返回problem/insight/results/limitations/reproducibility，method为空，诊断passage_ids_required。未确认、未进入Hermes生图。不能把Agent succeeded称为论文处理成功。
+- 更重大问题：模型摘要不忠实。原文Eq40明确applies from near field to far field；limitations却把两种极限写成公式成立条件并声称范围外未讨论。results把j1(x)≈x/3混称为完整形式因子的极限；来源中完整因子是3j1(x)/x。局限还从特定模型假设过度推出不能推广，而所选结论原文明确讨论可推广。必须修复语义忠实性再确认，不能仅放宽schema或手改内容。
+- 所选证据保存精确但可能不充分：results/limitations来源文本已实际读到。来源可定位并不等于摘要有充分支持，需要服务器语义复核/定向修复。
 
-- 正常refresh创建e800ef2b-e7d7-4aea-a0e4-100da415a981，grounded-passages-v1 sourceMapReused=true；problem/insight成功，method/results passage_ids_required、limitations segment_count_1_to_32，仍未确认/未生图。
+## Delivered implementation
+- OCR已实际成功：native公式标记→sidecar PNG→worker权限绑定→MiniMax视觉，4页串行批、最多32修复页；原native和OCR独立provenance均保留，OCR为页级bbox。
+- 已修worker vision开关位置、refresh session误约束、CN/global视觉endpoint与同key文本endpoint不一致。没有读取更改key，备用仅明确quota时切换。
+- grounded-passages-v2：模型输出摘要+来源编号；每P≤5原blocks/1200chars，全文≤120k无静默裁剪；来源最多6IDs/32blocks/8k、摘要4k。同原block多个片段按首尾连续原文展开，再locator roundtrip，不能省中间。
+- 提示包含每段blocks/chars、完整六字段JSON形状、字符串ID与转义说明；JSONparse失败固定格式修复反馈；同一次结构化重试保留此前已验证字段，最后JSON错误不会丢弃有效partial。固定最多3次调用未增加。
+- 正常analysis refresh按旧contract版本升级，保持owner/active session/RO/artifact/hash/存储digest、CAS、稳定付费idempotency key，保留旧Agent/results。v2不进入现有refresh或passageBudgetRecovery。不要再为单篇失败不断增版本或扩大免费重试。
+- 旧grounded-summary→passage-v1、passage-v1→v2升级复用成功SourceMap，实际sourceMapReused=true，无重复OCR。新analysis正常扣1平台credit；已有一次retry复用原reservation，审计保留旧partial。
+- content-driven-image-v1 profile（最多7tasks）及1–6静态场景、Hermes真实绘图brief≤1500chars、审核后原文绑定/生成前来源identity重验、结果画廊均已部署。当前论文尚无新图片。
 
-- 637eda1c部署exit0，日志1788944248834-83174793-0506-4da5-b917-25417df527a4。正常retry1复用原credit/OCR，method新增成功；results/limitations仍segment_count_1_to_32。
-- 新候选grounded-passages-v2在构造时每P<=5blocks/1200chars，六IDs最多30blocks普通7205char；模型不能再因隐藏原block碎片导致结构性超限。正常付费refresh旧v1预算partial retry0..1到v2，旧结果保留，复用OCR，v2不再次刷新。
-
-- fa751b16部署exit0，日志1788944906989-a7b0e7c6-1eff-45a1-be7d-a26b94f91d57。正常refresh创建5dba592b-62f5-4bbd-ba80-97d2c5cc4aab，已失败structured JSON invalid after retry limit；安全日志response:malformed_item→四字段passage_ids_required→json_parse finish=stop。未确认/未生图。
-- 当前候选：extractor完整JSON结构示例+ID/转义说明；gateway JSONparse失败提供固定格式修复提示；JSON末次失败仍保留同次调用之前guard验证过的partial。之后现有failed_retryable正常retry0，仍复用SourceMap。
-
-## Active fix: server passage IDs
-- Sol/medium负责extractor：模型输出summary+sourcePassageIds，不再逐字复制quote；服务器从全文自然段/句生成编号，再按选中ID精确回读证据。最多6 IDs/field，≤8k证据/32原块，保留科学条件。
-- 同块多个passages按明确合同覆盖首尾连续原文范围，绝不拼接省中间；缺失字段规范化为空，不为缺失解释浪费重试。
-- root负责新grounded_passages_v1升级入口：仅旧grounded-summary-v1 partial+成功SourceMap，旧retry0..2且attempt对齐，同owner/RO/artifact/未确认/事务CAS；新任务正常计费，旧结果保留，新contract不能无限刷新。
-- root index候选只对该升级验证current ingestion→newAgent、previous同owner/RO/旧contract/succeeded及成功SourceMap的artifact hash和存储digest，复用成功OCR只跑理解，不重复OCR调用。
-- Web helper已改读public sourceMapAvailable（私有sourceMapRef被API删去），按对应旧contract显示升级入口。
-
-## Browser and routing
-- 用户已登录产品。回复“已恢复”后CUA getState仍nodeRepl.fetch失败；直接createBrowserTab也超时，未拿到可控tab。本轮无Chat回复/截图，不据此声称网站HTTP失败。
-- Sol/medium OCR与extractor，Terra/medium图片合同/UI，Sol/high定点静态复核，root集成/服务器交付。没有可证明的整体tokens节省比例。
+## Browser / routing / validation
+- 用户已经登录并回复已恢复，但最近CUA getState仍nodeRepl.fetch request failed，browsers为空；此前createBrowserTab亦超时。不是网站HTTP失败证据。未拿到tab，无本轮Chat复核/截图，不能宣称网页参与。
+- Sol/medium extractor/OCR、Terra/medium UI、Sol/high定点静态复核，root集成部署。整体token节省比例无基线，不能编造。
+- 没有测试/本机构建；必要服务器编译首次4d499743发现两处类型遗漏，913002b8修正后后续发布成功。静态复核不能代替运行结果。
 
 ## Next
-- 当前候选：extractor明确各passage来源预算和修复反馈；domain仅已复用OCR的passage预算失败允许retry0一次恢复，audit保留旧结果，原credit；需复核/提交/部署，rollback取当前913002b8。
-- 新v2候选部署后正常refresh现有Agente800ef2b（retry1），只重新理解；读取实际六字段及来源再确认，不重复OCR/上传。
-- 正常Hermes image profile推进规划/图片。浏览器恢复后观察实际展示；没有真实图片前不能标记全流程完成。
-- 精确需求读docs/OpenScience_Kimi_Development_Spec.md §5.4/§9，UX方案见集成产品计划；历史视频仅另一论文方法案例，不能代替当前全文能力。
+- 首先解决科学忠实性与method来源选择：字段总结须与选中证据逐项对照，纠正适用条件/极限、物理量身份和原文未声明的排除性结论。需要服务器正常处理路径的能力，不能Codex手写稿或盲目重复付费调用。
+- 复用当前上传/OCR和保留旧结果；不要再加单篇专用contract版本/免费重试。设计可重复的用户发起重新分析与服务端语义修复边界后实施。
+- 内容正确后正常confirmIngestionTask→Hermes run/source/claim review→image profile规划与服务器Codex图片。不要执行视频。
+- 浏览器控制恢复后再观察登录页、Hermes跨页闪烁与画廊布局；用户登录状态不需重置。
+- 需求基线 docs/OpenScience_Kimi_Development_Spec.md §5.4/§9，UX方向见docs/plans/2026-09-05-integrated-research-product-plan.md。

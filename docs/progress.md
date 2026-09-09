@@ -1,14 +1,9 @@
 # Progress
 
-## 2026-09-09 — passage-v2已部署，当前JSON输出失败
-- 最新productionfa751b16 / rollback637eda1c。Agent5dba592b通过正常refresh，JSON解析最终失败（finish=stop），未确认/未生图。补充完整结构与格式修复提示后按现有失败恢复入口继续，不能声称完整流程畅通。
-
-### 前序进展
-- production637eda1c / rollback913002b8；canonical --no-tests部署exit0，日志1788943498648-f2e7bcc0-22db-4fb9-b12b-258659848674。
-- 实际OCR已接通，修复worker开关、refresh session边界与CN/global endpoint；没有读取或改动key。
-- Agente800ef2b通过正常refresh运行，grounded-passages-v1、sourceMapReused=true；problem/insight成功，method/results passage_ids_required、limitations segment_count_1_to_32。未确认、未生图，不能称全文处理完成。
-- 当前候选明确每段预算和定向反馈；仅已复用OCR的预算失败允许一次正常retry，复用原reservation并审计保留旧结果，不无限刷新。
-- 图片优先profile、Hermes绘图brief和来源绑定、结果画廊已部署；本论文尚未进入生图。
-- 用户回复已恢复后，浏览器控制仍nodeRepl.fetch失败；没有Chat复核或改后截图。
-- 没有运行测试/本机构建；服务器必要构建第一次发现两项类型遗漏，修正后部署完成。实际处理复用现有上传，无手工DB重置。
-- 唯一CURRENT handoff保留后续正常恢复入口、真实任务状态和版本；视频暂停。
+## 2026-09-09 — 来源分段与格式恢复已部署，科学忠实性仍未完成
+- production11ae6200 / rollbackfa751b16；--no-tests部署exit0，日志1788945551137-935b9b0c-8548-4835-9e08-d29c08fac925。
+- 当前Agent5dba592b retry1返回五字段，method缺失（passage_ids_required）；grounded-passages-v2/sourceMapReused=true。
+- 实际对照所选原文发现科学错误：把近/远场极限讨论写成Eq40适用条件，把j1近似与完整形式因子混淆，局限有过度排除性结论。未确认，未生图，不能称论文处理完成。
+- 已部署OCR地区/授权修复、服务端精确passage选择（≤5blocks/1200chars/P）、完整JSON结构与格式反馈、保留已验证partial、OCR复用、图片profile和画廊。
+- 浏览器重连仍nodeRepl.fetch失败，无网页Chat复核/截图。未运行测试或本机构建，只有必要服务器构建部署和真实论文处理。
+- 下一步是服务器语义忠实性复核与正常重新分析能力，不能继续为单篇加合同版本/免费重试；详细实际状态见唯一CURRENT handoff。
