@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-09:** production1cdb18e0 / rollback45dabd7a；当前论文方法讲解run已SUCCEEDED，四张图及23.459秒视频已批准；进入Hermes交互、草稿与全站一致性优化，唯一CURRENT状态见handoff。
+> **CURRENT 2026-09-09:** production1cdb18e0 / rollback45dabd7a；当前论文方法讲解run已SUCCEEDED，四张图及23.459秒视频已批准；已实际登录观察主要页面，候选修复Hermes启动/导航/窄屏入口及文献媒体UX，唯一CURRENT状态见handoff。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -551,3 +551,5 @@
 
 - `packages/domain/src/assets/animation.ts`：内容驱动动画声明式合同，已部署9236dbf7；对象/动作/原文依据，禁止模型代码。
 - `infra/migrations/20260908030000_hermes_content_driven_video/`：扩展明确的内容驱动生成授权，已部署9236dbf7；旧授权不自动扩大。
+
+| `apps/web/public/hermes/wanko-static-transparent.png` | 登录与Hermes加载态透明背景衍生图（imagegen，原图保留） | 2026-09-09候选，见CURRENT handoff |

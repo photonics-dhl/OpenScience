@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import Drawer from '@/components/editor/Drawer';
@@ -285,7 +286,7 @@ function HermesAssistantDrawerContent({
     return null;
   };
 
-  return (
+  const drawer = (
     <Drawer
       className="hermes-assistant-shell"
       closeLabel={t('guide.close')}
@@ -374,4 +375,5 @@ function HermesAssistantDrawerContent({
       </section>
     </Drawer>
   );
+  return typeof document === 'undefined' ? drawer : createPortal(drawer, document.body);
 }

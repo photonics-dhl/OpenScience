@@ -2,6 +2,7 @@
 
 import { Check, ChevronDown, Image as ImageIcon, Plus, RotateCw, ShieldCheck, X } from 'lucide-react';
 import * as React from 'react';
+import Link from 'next/link';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import type { PresentationAsset, PresentationClaim, VersionSummary } from '@/lib/api';
@@ -89,7 +90,7 @@ export function PresentationWorkbench({
               <div className="mt-5 rounded-control border border-os-rule-paper bg-os-paper-strong p-5 sm:p-6">
                 <h3 className="m-0 text-base font-semibold">{t('emptyPreviewTitle')}</h3>
                 <p className="m-0 mt-2 max-w-2xl text-base leading-7 text-os-muted-paper">{canWrite ? t(eligibleIds.size === 0 ? 'emptyPreviewNeedsSources' : 'emptyPreview') : t('emptyPreviewReadonly')}</p>
-                {canWrite && eligibleIds.size === 0 && researchObjectId ? <a className="mt-4 inline-flex min-h-11 items-center rounded-control border border-os-rule-paper px-4 text-sm font-semibold text-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/edit`}>{t('openEditor')}</a> : null}
+                {canWrite && eligibleIds.size === 0 && researchObjectId ? <Link className="mt-4 inline-flex min-h-11 items-center rounded-control border border-os-rule-paper px-4 text-sm font-semibold text-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/hermes`}>{t('openSourceReview')}</Link> : null}
               </div>
             ) : (
               <div className={`mt-5 grid min-w-0 items-start gap-6 ${assets.length > 1 ? 'lg:grid-cols-2' : ''}`}>

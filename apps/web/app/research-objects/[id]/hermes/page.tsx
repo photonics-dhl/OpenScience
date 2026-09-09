@@ -188,7 +188,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
       <Link href="/dashboard" className="inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink hover:underline">← {t('back')}</Link>
       <header className="mt-5 max-w-3xl border-l-2 border-os-vermilion-ink pl-5">
         <p data-reading-role="caption" className="text-os-vermilion-ink">{t('eyebrow')}</p>
-        <h1 className="mt-2 font-reading text-4xl font-normal text-os-ink">{t('title')}</h1>
+        <h1 className="mt-2 font-reading text-2xl font-semibold text-os-ink">{t('title')}</h1>
         <p data-reading-role="body" className="mt-3 max-w-[66ch] text-os-muted-paper">{t('description')}</p>
       </header>
       {literatureEntry}
@@ -209,7 +209,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
           <section aria-label={t('fieldLabel')} className="surface-folio-sheet divide-y divide-os-rule-paper border-y border-os-rule-paper">
             {fields.map((field, index) => <div key={field} className="grid gap-3 px-4 py-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:px-6">
               <label htmlFor={`hermes-review-${field}`}><span className="block font-data text-xs text-os-vermilion-ink">0{index + 1}</span><span className="mt-1 block text-sm font-semibold text-os-ink">{fieldT(field)}</span>{!core[field].trim() && <span className="block text-sm text-os-muted-paper">{t('missing')}</span>}</label>
-              <div className="min-w-0"><textarea id={`hermes-review-${field}`} aria-label={field} readOnly={!approvalOpen || saving} data-hermes-review-field value={core[field]} onChange={(event) => setCore({ ...core, [field]: event.target.value })} rows={5} className="w-full resize-y rounded-panel border border-os-rule-paper bg-os-paper-strong p-4 font-reading text-lg leading-[1.68] text-os-ink outline-none focus:border-os-vermilion-ink focus:ring-2 focus:ring-os-vermilion-ink/20" /><HermesExtractionEvidence field={field} result={detail.task.result}/></div>
+              <div className="min-w-0"><textarea id={`hermes-review-${field}`} aria-label={fieldT(field)} readOnly={!approvalOpen || saving} data-hermes-review-field value={core[field]} onChange={(event) => setCore({ ...core, [field]: event.target.value })} rows={core[field].trim() ? 5 : 2} className="w-full resize-y rounded-panel border border-os-rule-paper bg-white p-3 font-reading text-base leading-relaxed text-os-ink outline-none focus:border-os-vermilion-ink focus:ring-2 focus:ring-os-vermilion-ink/20" /><HermesExtractionEvidence field={field} result={detail.task.result}/></div>
             </div>)}
           </section></>}
           {saved && <nav aria-label={t('entryActions')} className="mt-6 flex flex-wrap gap-5"><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit` }>{t('continueEditing')}</Link><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/versions${confirmation ? `?version=${encodeURIComponent(confirmation.versionId)}` : ''}`}>{t('viewVersions')}</Link></nav>}

@@ -2235,6 +2235,10 @@ body {
   pointer-events: none;
 }
 
+.hermes-dock-anchor:has(.hermes-workspace-stage[data-hermes-stage-size='200']:not([data-hermes-guide-target])) {
+  min-height: 18rem;
+}
+
 .hermes-workspace-stage {
   position: fixed;
   z-index: 44;
@@ -2249,6 +2253,22 @@ body {
   position: relative;
   z-index: 1;
   margin: 6.5rem auto 0;
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'][data-hermes-stage-size='200']:not([data-hermes-guide-target]) {
+  margin-top: 3.5rem;
+}
+
+.hermes-workspace-stage-loading {
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: 12.5rem;
+  height: 12.5rem;
+}
+
+.hermes-workspace-stage-loading .hermes-companion-actor {
+  position: absolute;
+  inset: 0;
 }
 
 .hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-visual {
