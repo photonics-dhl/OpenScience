@@ -554,4 +554,4 @@
 
 | `apps/web/public/hermes/wanko-static-transparent.png` | 登录与Hermes加载态透明背景衍生图（imagegen，原图保留） | 已随b03263de部署，登录实际无褐底；见CURRENT handoff |
 
-| `apps/web/lib/ingestion-proposal-draft.ts` | 用户/RO/版本/task隔离的提取建议草稿与已触碰字段保存 | 上传自动整理候选；CURRENT handoff与集成计划记录进度 |
+| `apps/web/lib/ingestion-proposal-draft.ts` | 用户/RO/版本/task隔离的提取建议草稿与已触碰字段保存 | 已部署18b69b3c；CURRENT handoff与集成计划记录证据 |

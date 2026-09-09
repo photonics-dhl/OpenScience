@@ -12,7 +12,7 @@
 - Highreview existingbackend: changedfields becomehuman/missing/noevidence; keepproposalimmutable; onlyneeds_review sameRO; confirmtask CAS+task-fixedidempotency firstsnapshotwins, freezeeditsonuncertainoutcome/reconcileactualreturnedcore; don'tordinarysave/commit pendingproposal.
 - 网页6 Pro候选复核已实际读回1m27s：支持有界部署，保留失败续接、关页服务器处理与已有任务恢复；补当前任务详情/恢复入口，不重传或重建任务。未上传截图，不称视觉验收。
 - fc503808已部署exit0，日志1788928642068-07f28b4d-a356-4d9f-a82b-e5f07b7272f9；existing task7a28a7c8-90f7-429b-a519-53397cf58856 / RO9067a2d5-42ad-4c06-b234-753728b71064实际编辑页自动预填洞见，另五项缺失可见；未新上传/确认/重提取。
-- 438px截图发现长材料名撑出横向滚动，正在修source picker宽度后部署。Hermes浮动仍占部分正文为下一阶段布局工作。此时网页3与产品4均保留。
+- 438px截图发现长材料名撑出横向滚动，宽度修正已随18b69b3c部署exit0；最终截图因内置浏览器ERR_TIMED_OUT未取得，不能称目视确认。Hermes浮动仍占部分正文为下一阶段布局工作。此时网页3与产品4均保留。
 
 ## Current user journey work
 - 2026-09-09 actual landing→login (user completed authentication)→dashboard→Quantization review→presentation→edit→files→overview observed in iab tab4. Chat tab3 same planning conversation; two actual messages sent, first reply1m26s, second reply1m29s read. No tests/preflights/media generation.
@@ -22,7 +22,7 @@
 
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release; branch codex/onchip-video-release.
-- Production fc5038082b61b7938d541d2223ea9a5454b894b7; rollback e0ff364e2e4d6fb1ed371a90c90d8143dfa6328a. 窄屏source picker后续候选尚未部署。
+- Production 18b69b3c66369b21eba54af22e91c0d7cc54cef6; rollback fc5038082b61b7938d541d2223ea9a5454b894b7. 后续仅文档同步不代表新部署。
 - Recovery commits1df4e047 +3446f309 deployed through canonical --confirm --no-tests. First candidate failed server compile due to type-only Prisma import; fixed before switch.
 - Root dirty main and token-smart-live-workflow worktree are separate; preserve them and concurrent R1 hardening.
 
