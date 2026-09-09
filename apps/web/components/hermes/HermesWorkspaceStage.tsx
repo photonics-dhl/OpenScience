@@ -178,6 +178,7 @@ const behaviorInput = (
 
 export function HermesWorkspaceStageProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const locale = useLocale() as 'zh' | 'en';
   const [presentation, setPresentation] = useState<HermesStagePresentation | null>(null);
   const [routeAssistantOpen, setRouteAssistantOpen] = useState(false);
@@ -214,7 +215,11 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
   const route = pathname === '/research-objects/new' ? 'research-object-new' : 'research-object-edit';
   const researchObjectId = researchObjectFromHermesPath(pathname);
   const routeContext: WorkspaceGuidePayload['context'] = researchObjectId
-    ? { tasks: [], researchObjects: [{ id: researchObjectId, title: 'Current research object', status: 'draft' }] }
+    ? {
+        tasks: [],
+        researchObjects: [{ id: researchObjectId, title: 'Current research object', status: 'draft' }],
+        presentation: { researchObjectId, ...(searchParams.get('version') ? { versionId: searchParams.get('version')! } : {}) },
+      }
     : { tasks: [], researchObjects: [] };
   return (
     <HermesWorkspaceStageContext.Provider value={context}>

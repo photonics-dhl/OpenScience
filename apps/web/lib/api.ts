@@ -380,10 +380,20 @@ export async function getDashboardOverview(): Promise<{
 }
 
 export async function logout(): Promise<void> {
-  await request('/api/auth/logout', { method: 'POST' });
-  if (typeof window !== 'undefined') {
-    const { clearAllPendingLiteratureIntents } = await import('./literature-acquisition-state');
-    clearAllPendingLiteratureIntents(window.sessionStorage);
+  try {
+    await request('/api/auth/logout', { method: 'POST' });
+  } finally {
+    if (typeof window !== 'undefined') {
+      const [{ clearAllPendingLiteratureIntents }, { clearAllHermesDrafts, getHermesDraftStorage }] = await Promise.all([
+        import('./literature-acquisition-state'), import('./hermes/draft-state'),
+      ]);
+      const storage = getHermesDraftStorage();
+      if (storage) {
+        try { clearAllPendingLiteratureIntents(storage); }
+        catch { /* Logout remains valid when browser storage becomes unavailable. */ }
+      }
+      clearAllHermesDrafts(storage);
+    }
   }
 }
 
@@ -1106,6 +1116,7 @@ export interface WorkspaceGuidePayload {
   context: {
     tasks: Array<{ id: string; researchObjectId: string; state: string }>;
     researchObjects: Array<{ id: string; title: string; status: string }>;
+    presentation?: { researchObjectId: string; versionId?: string };
   };
 }
 
@@ -1117,6 +1128,12 @@ export interface WorkspaceGuideResult {
     targetId?: string;
   }>;
   needsMoreInformation: boolean;
+  presentationDraft?: {
+    action: 'storyboard.create';
+    instruction: string;
+    researchObjectId: string;
+    versionId: string;
+  };
 }
 
 export async function createWorkspaceGuideSession(title: string, idempotencyKey: string, researchObjectId?: string): Promise<{ session: { id: string } }> {

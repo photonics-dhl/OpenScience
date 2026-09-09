@@ -11,6 +11,12 @@ export interface WorkspaceGuideResult extends Record<string, unknown> {
     targetId?: string;
   }>;
   needsMoreInformation: boolean;
+  presentationDraft?: {
+    action: 'storyboard.create';
+    instruction: string;
+    researchObjectId: string;
+    versionId: string;
+  };
 }
 
 const INTENTS = new Set<WorkspaceGuideIntent>(['open-task', 'open-ro', 'start-import']);
@@ -34,10 +40,10 @@ function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[])
 export const workspaceGuideResultGuard: SchemaGuard<WorkspaceGuideResult> = (value): value is WorkspaceGuideResult => {
   if (!value || typeof value !== 'object') return false;
   const result = value as Record<string, unknown>;
-  if (!hasOnlyKeys(result, ['summary', 'nextSteps', 'needsMoreInformation'])) return false;
+  if (!hasOnlyKeys(result, ['summary', 'nextSteps', 'needsMoreInformation', 'presentationDraft'])) return false;
   if (typeof result.summary !== 'string' || result.summary.trim().length === 0 || result.summary.length > 1200) return false;
-  if (typeof result.needsMoreInformation !== 'boolean' || !Array.isArray(result.nextSteps) || result.nextSteps.length > 3) return false;
-  return result.nextSteps.every((candidate) => {
+  if (typeof result.needsMoreInformation !== 'boolean' || !Array.isArray(result.nextSteps) || result.nextSteps.length > 1) return false;
+  const validSteps = result.nextSteps.every((candidate) => {
     if (!candidate || typeof candidate !== 'object') return false;
     const step = candidate as Record<string, unknown>;
     return hasOnlyKeys(step, ['label', 'intent', 'targetId'])
@@ -48,6 +54,20 @@ export const workspaceGuideResultGuard: SchemaGuard<WorkspaceGuideResult> = (val
       && INTENTS.has(step.intent as WorkspaceGuideIntent)
       && (step.targetId === undefined || (typeof step.targetId === 'string' && step.targetId.length <= 100));
   });
+  if (!validSteps || result.presentationDraft === undefined) return validSteps;
+  if (!result.presentationDraft || typeof result.presentationDraft !== 'object' || Array.isArray(result.presentationDraft)) return false;
+  const draft = result.presentationDraft as Record<string, unknown>;
+  return hasOnlyKeys(draft, ['action', 'instruction', 'researchObjectId', 'versionId'])
+    && draft.action === 'storyboard.create'
+    && typeof draft.instruction === 'string'
+    && draft.instruction.trim().length > 0
+    && draft.instruction.length <= 1_000
+    && typeof draft.researchObjectId === 'string'
+    && draft.researchObjectId.length > 0
+    && draft.researchObjectId.length <= 100
+    && typeof draft.versionId === 'string'
+    && draft.versionId.length > 0
+    && draft.versionId.length <= 100;
 };
 
 export async function workspaceGuideHandler(
@@ -95,8 +115,22 @@ export async function workspaceGuideHandler(
         state: item.state,
       })),
       researchObjects: trustedResearch.map((item) => ({ id: item.id, title: item.title, status: item.status })),
+      ...(payload.context.presentation ? { presentation: payload.context.presentation } : {}),
     },
   };
+  const requestedPresentation = trustedPayload.context.presentation;
+  const presentationVersion = requestedPresentation
+    ? await deps.prisma.version.findFirst({
+        where: {
+          researchObjectId: requestedPresentation.researchObjectId,
+          ...(requestedPresentation.versionId ? { id: requestedPresentation.versionId } : {}),
+          ...(!requestedPresentation.versionId ? { status: 'draft' as const } : {}),
+        },
+        select: { id: true, researchObjectId: true, manifest: { select: { coreJson: true } } },
+        ...(!requestedPresentation.versionId ? { orderBy: { versionNo: 'desc' as const } } : {}),
+      })
+    : null;
+  if (requestedPresentation && !presentationVersion) throw new Error('workspace.guide presentation version 未通过服务端授权');
   const taskIds = trustedPayload.context.tasks.map((item) => item.id);
   const researchObjectIds = trustedPayload.context.researchObjects.map((item) => item.id);
   const system = payload.locale === 'zh'
@@ -105,8 +139,9 @@ export async function workspaceGuideHandler(
         '不得声称已经执行写入、删除、合并、发布或权限变更。不得杜撰上下文中没有的事实。',
         'target 指明用户正在讨论的界面或段落；sdf-* 对应给定 core 字段，其中 sdf-evidence 对应 reproducibility。优先回应所选段落；target 为 null 时不得假定用户选择了某一段。',
         'InterestContext 仅用于排序关注点；rejectedSignals 是明确排除项，不得反向推断敏感属性或站外行为。',
-        '只输出一个 JSON 对象，根字段只能是 summary、nextSteps、needsMoreInformation。needsMoreInformation 必须是 boolean，不得输出问题数组。',
-        'nextSteps 最多 3 项；每个 nextSteps 项只能包含 label、intent、targetId，禁止 title、description 或其他字段。',
+        '只输出一个 JSON 对象，根字段只能是 summary、nextSteps、needsMoreInformation、presentationDraft。needsMoreInformation 必须是 boolean，不得输出问题数组。',
+        'nextSteps 最多 1 项；每项只能包含 label、intent、targetId，禁止 title、description 或其他字段。',
+        '仅当 presentationContext 存在且用户目标适合用讲解分镜表达时，才输出 presentationDraft；它只能包含 action、instruction、researchObjectId、versionId。action 必须是 storyboard.create，两个 id 必须逐字使用 presentationContext，instruction 必须是基于给定版本字段的可编辑分镜指令，不得声称已生成、批准或发布。不得输出主张或来源 id。',
         'intent 只能是 open-task、open-ro、start-import。open-task/open-ro 必须带 targetId；start-import 必须省略 targetId。',
         `open-task 只能使用下列 task id：${taskIds.length ? taskIds.join(', ') : '（无；禁止输出 open-task）'}。`,
         `open-ro 只能使用下列 research object id：${researchObjectIds.length ? researchObjectIds.join(', ') : '（无；禁止输出 open-ro）'}。`,
@@ -117,8 +152,9 @@ export async function workspaceGuideHandler(
         'Never claim to have written, deleted, merged, published, or changed permissions. Do not invent facts absent from the context.',
         'target identifies the selected interface or passage; sdf-* refers to the supplied core field, except sdf-evidence means reproducibility. Prioritize the selected passage; null means no passage was selected.',
         'Use InterestContext only to prioritize attention. rejectedSignals are explicit exclusions; never infer sensitive traits or off-site behavior.',
-        'Return exactly one JSON object whose only root keys are summary, nextSteps, and needsMoreInformation. needsMoreInformation must be a boolean, never an array.',
-        'nextSteps has at most three items. Each item may contain only label, intent, and targetId; title and description are forbidden.',
+        'Return exactly one JSON object whose only root keys are summary, nextSteps, needsMoreInformation, and presentationDraft. needsMoreInformation must be a boolean, never an array.',
+        'nextSteps has at most one item. It may contain only label, intent, and targetId; title and description are forbidden.',
+        'Emit presentationDraft only when presentationContext exists and the goal benefits from an explanatory storyboard. It may contain only action, instruction, researchObjectId, and versionId. action must be storyboard.create; copy both ids exactly from presentationContext. instruction is an editable storyboard brief grounded in the supplied version fields. Never claim it was generated, approved, or published, and never emit Claim or source ids.',
         'intent must be open-task, open-ro, or start-import. open-task/open-ro require targetId; start-import must omit targetId.',
         `open-task may use only these task ids: ${taskIds.length ? taskIds.join(', ') : '(none; do not emit open-task)'}.`,
         `open-ro may use only these research object ids: ${researchObjectIds.length ? researchObjectIds.join(', ') : '(none; do not emit open-ro)'}.`,
@@ -138,6 +174,13 @@ export async function workspaceGuideHandler(
         status: item.status,
         core: boundedCore(item.sdfDocument?.coreJson, maxCharsPerField),
       })),
+      ...(presentationVersion ? {
+        presentationContext: {
+          researchObjectId: presentationVersion.researchObjectId,
+          versionId: presentationVersion.id,
+          core: boundedCore(presentationVersion.manifest?.coreJson, maxCharsPerField),
+        },
+      } : {}),
     },
   });
   let lower = 0;
@@ -166,5 +209,10 @@ export async function workspaceGuideHandler(
     || (step.intent === 'start-import' && step.targetId !== undefined)
   ));
   if (invalidTarget) throw new Error('workspace.guide result target 不在允许的上下文中');
+  if (result.presentationDraft && (!presentationVersion
+    || result.presentationDraft.researchObjectId !== presentationVersion.researchObjectId
+    || result.presentationDraft.versionId !== presentationVersion.id)) {
+    throw new Error('workspace.guide presentation draft 不在允许的版本上下文中');
+  }
   return result;
 }
