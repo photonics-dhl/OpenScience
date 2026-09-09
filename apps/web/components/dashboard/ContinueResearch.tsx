@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import type { DashboardResearch } from './ResearchList';
 import type { HermesRailTask } from '@/components/hermes/HermesRail';
-import { hermesTaskHref } from '@/components/hermes/hermes-state';
+import { hermesTaskHref, selectPriorityHermesTask } from '@/components/hermes/hermes-state';
 
 export interface ContinueResearchProps {
   research: DashboardResearch | null;
@@ -39,8 +39,9 @@ export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps
     );
   }
 
-  const review = tasks.find((task) => task.researchObjectId === research.id && task.state === 'needs_review');
-  const href = review ? hermesTaskHref(review)
+  const task = selectPriorityHermesTask(tasks.filter((candidate) => candidate.researchObjectId === research.id));
+  const review = task?.state === 'needs_review';
+  const href = task ? hermesTaskHref(task)
     : `/research-objects/${encodeURIComponent(research.id)}/${research.pendingCount > 0 ? 'hermes' : 'overview'}`;
   return (
     <section

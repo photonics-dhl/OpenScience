@@ -770,6 +770,7 @@
         "continue": { "title": "Continue your latest research", "body": "I can organise the next step around this research object without changing anything you have not approved." },
         "neutral": { "title": "What would you like to advance today?", "body": "I will understand the goal first, then propose a verifiable and actionable research path." },
       "invoke": "Invoke Hermes",
+      "invokeTask": "Open {task}",
       "eyebrow": "Hermes / contextual guide",
       "menu": {
         "trigger": "Hermes: click for the assistant; right-click or long-press for actions",
@@ -812,6 +813,7 @@
         "title": "Start with the goal. I will guide the route.",
         "close": "Close Hermes",
         "openContext": "Open current task",
+        "openTask": "Open {task}",
         "goalLabel": "What would you like to advance today?",
         "goalPlaceholder": "For example: organise the imported paper into a reusable RO structure",
         "submit": "Ask Hermes to plan",

@@ -580,3 +580,5 @@
 - `infra/chatgpt-browser/runner.cjs`：服务器私有网页任务执行/续取/Save下载；2026-09-09分步实际生成并保存1张PNG，通用编排及生产Provider尚未完整落地；Chat接口可用性见AGENTS。
 
 | `apps/web/components/research/ArtifactViewer.tsx` / `scripts/archive-legacy-showcase.mjs` | 附件预览与可恢复旧演示归档；关联完整旅程计划 | 2026-09-09已部署c2d11326，34条归档；真实流程状态见CURRENT handoff |
+
+| infra/chatgpt-browser/broker.mjs | 服务器网页生图队列broker；Gateway、权限、提交恢复与草稿回传 | 候选，静态High复核完成，真实执行待部署 |

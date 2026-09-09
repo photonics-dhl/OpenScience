@@ -67,3 +67,11 @@ Sources: https://playwright.dev/docs/docker ; https://github.com/novnc/websockif
 - Standard `/json/list` plus the selected page's CDP WebSocket successfully read visible login DOM and captured its screenshot immediately. This is server-local page control, not authentication storage/API access. Browser remains open; no restart/relogin of Chat was needed.
 - User completed the separate OpenScience server login; authenticated dashboard observed. Chat remains logged in and direct Chat interface sent/received two product discussions. No password/OTP read or transferred.
 - Screenshot upload encountered an explicit regional asset CONNECT rejection; added only sdmntprwestus.oaiusercontent.com:443 and restarted the host bridge without restarting Chrome. No attachment preview has appeared yet; screenshot review is not complete. Chat text DOM and direct discussion remain usable. Page.captureScreenshot later timed out independently.
+
+- After normal Chat page reload, screenshot attachment preview appeared and dashboard-c2d11326.jpg was sent once for 6 Pro review. Do not repeat that request; reply pending.
+
+## Production web image provider candidate
+- Distinct chatgpt-web Gateway provider reuses the existing request/result spool and pending scientific-review asset pipeline. It does not mark the previous failed Codex task succeeded, approve assets, or publish automatically.
+- Install from built immutable release with install.sh --confirm-provider --source /opt/openscience-releases/<SHA> --renderer-image <existing immutable FFmpeg image digest>; then select HERMES_SCENE_IMAGE_PROVIDER=chatgpt-web for API/worker. No account/profile reinstallation is needed.
+- Results root:1000 mode2750 propagates worker-readable group ownership; only worker mounts inbox rw/results ro. Broker uses the shared browser lock, one exclusive submission marker, strict canonical conversation, and aspect-preserving padding.
+- First attach failure may trigger one Chat-target reload and one attach retry only before any submission. Submitted jobs never use recovery reload/resend. Static High review completed; production execution is still pending.

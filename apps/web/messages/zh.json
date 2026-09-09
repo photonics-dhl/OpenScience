@@ -770,6 +770,7 @@
         "continue": { "title": "继续最近的研究", "body": "我可以围绕现有研究对象梳理下一步，不会改动未经你确认的内容。" },
         "neutral": { "title": "告诉我今天想推进什么", "body": "我会先理解目标，再给出可核查、可执行的研究路径。" },
       "invoke": "唤起 Hermes",
+      "invokeTask": "打开 {task}",
       "eyebrow": "Hermes / 情境引导员",
       "menu": {
         "trigger": "Hermes：点击打开助手，右键或长按打开动作菜单",
@@ -812,6 +813,7 @@
         "title": "从目标开始，我来带路。",
         "close": "关闭 Hermes",
         "openContext": "打开当前任务",
+        "openTask": "打开 {task}",
         "goalLabel": "你今天想推进什么？",
         "goalPlaceholder": "例如：整理刚导入的论文，建立一份可复用的 RO 结构",
         "submit": "请 Hermes 规划",

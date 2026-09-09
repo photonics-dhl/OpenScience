@@ -9,10 +9,10 @@
 - 用户明确先完成附件预览→自动全文凝练→用户确认→选图/视频→生成审核→发布→公开RO；2–3篇高质量精选完成并获认可前暂停冷启动。
 - 普通Chat6aa162f9已实际发送/读回完整产品建议；旧Chat6a9e7dac本轮接口无匹配，不推断Chat整体不可用。此次没有截图评审。
 - 本批已部署c2d11326：ArtifactViewer、媒体类型选择、公开页顺序/去重、索引从草稿改读发布manifest、归档过滤、理解skill v3精确来源恢复。尚未重新提取；问题台账在integrated-research-product-plan最新节。
-- 服务器部署exit0，production c2d113263ee48f276e9dedc4e4dc8a3229b4ceed / rollback7f8e47d931b751cc28c1000325128c2ca86566cb。已正常domain可恢复归档18旧demo-source记录与16个人测试草稿（共34），脚本archive-legacy-showcase；实际3篇论文保护，不删文件/账号/公开版本。
+- 服务器部署exit0，production c2d113263ee48f276e9dedc4e4dc8a3229b4ceed / rollback7f8e47d931b751cc28c1000325128c2ca86566cb。已正常domain可恢复归档18旧demo-source记录与16个人测试草稿（共34），脚本archive-legacy-showcase；3条实际研究记录保护（其中2条同一PDF，不能计作3篇精选），不删文件/账号/公开版本。
 
-- 下一批候选：已确认论文重新分析为独立待确认草稿（复用SourceMap，事务内权限/408与429幂等修复）、归档Hermes任务过滤、MaterialQueue预览、Hermes默认紧凑静态回退。网页spool接入另批仍在修复，不随此批启用。
-- 用户已登录服务器产品页；实际Overview可截图，工作台旧9任务/Hermes常驻重试问题已记录。Chat截图上传未完成，不称截图评审。
+- 下一批候选：已确认论文重新分析为独立待确认草稿（复用SourceMap，事务内权限/408与429幂等修复）、归档Hermes任务过滤、MaterialQueue预览、Hermes默认紧凑静态回退。网页spool接入另批已完成静态修复/High复核，尚未启用或实际回传。
+- 用户已登录服务器产品页；实际Overview可截图，工作台旧9任务/Hermes常驻重试问题已记录。Chat截图在页面reload后上传成功并实际发送6 Pro，等待回复；此前文字讨论已返回。
 
 ## Server browser continuation (2026-09-09)
 - 用户要求服务器任务先查能力清单；已新增 docs/runbooks/server-capabilities.md 并写入AGENTS。发现共享缓存与ScanSci镜像已有完整Chrome+Xvfb，已停止重复下载，改为复用镜像，仅补远程桌面组件。
@@ -69,3 +69,4 @@
 - 原Chat https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec。
 - 需求docs/OpenScience_Kimi_Development_Spec.md §5.4/§9；计划docs/plans/2026-09-05-integrated-research-product-plan.md。
 - 服务器只走显式Git Bash+E:/Miscellaneous/XGS/infra/scripts/ssh-run.sh，发布docs/runbooks/deployment.md。所有本轮运行均在服务器，未测试。
+- b9e326b2部署首轮SSH reset exit255，进程退出后release仍c2d11326且journal清空；正在通过同一部署入口重试，不能称上线。

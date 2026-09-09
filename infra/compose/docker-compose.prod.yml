@@ -90,6 +90,7 @@ services:
       - /opt/openscience/.env.prod
     environment:
       MINIMAX_IMAGE_ENABLED: "true"
+      CHATGPT_WEB_IMAGE_ENABLED: "true"
       HERMES_SCENE_IMAGE_PROVIDER: ${HERMES_SCENE_IMAGE_PROVIDER:-minimax}
       HERMES_VIDEO_ENABLED: ${HERMES_VIDEO_ENABLED:-false}
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
@@ -155,17 +156,22 @@ services:
       - /opt/openscience-codex/results:/codex-jobs/results:ro
       - /opt/openscience-video/inbox:/video-jobs/inbox:rw
       - /opt/openscience-video/results:/video-jobs/results:ro
+      - /opt/openscience-chatgpt-browser/spool/inbox:/chatgpt-web-image-jobs/inbox:rw
+      - /opt/openscience-chatgpt-browser/spool/results:/chatgpt-web-image-jobs/results:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
     environment:
       MINIMAX_IMAGE_ENABLED: "true"
+      CHATGPT_WEB_IMAGE_ENABLED: "true"
       # Worker enforces ingestion consent and sends only selected page rasters.
       MINIMAX_VISION_ENABLED: "true"
       HERMES_SCENE_IMAGE_PROVIDER: ${HERMES_SCENE_IMAGE_PROVIDER:-minimax}
       HERMES_VIDEO_ENABLED: ${HERMES_VIDEO_ENABLED:-false}
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
+      CHATGPT_WEB_IMAGE_INBOX_DIR: /chatgpt-web-image-jobs/inbox
+      CHATGPT_WEB_IMAGE_RESULTS_DIR: /chatgpt-web-image-jobs/results
       HOST_VIDEO_INBOX_DIR: /video-jobs/inbox
       HOST_VIDEO_RESULTS_DIR: /video-jobs/results
       S3_DRIVER: minio
