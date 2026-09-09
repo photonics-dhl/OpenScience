@@ -14,21 +14,6 @@ import { appendMaterials, loadAttachmentDraft, loadResearchMaterials } from '@/l
 
 type FilesResearchObject = ResearchObjectSummary & { sdf: { core: SdfCore } };
 
-const filesObjectRequests = new Map<string, ReturnType<typeof getResearchObject>>();
-
-function loadFilesObject(researchObjectId: string) {
-  const pending = filesObjectRequests.get(researchObjectId);
-  if (pending) return pending;
-  const request = getResearchObject(researchObjectId);
-  filesObjectRequests.set(researchObjectId, request);
-  void request.finally(() => {
-    window.setTimeout(() => {
-      if (filesObjectRequests.get(researchObjectId) === request) filesObjectRequests.delete(researchObjectId);
-    }, 1_000);
-  }).catch(() => {});
-  return request;
-}
-
 export function ResearchObjectFilesLiteratureEntry({ researchObjectId }: { researchObjectId: string }) {
   const router = useRouter();
   return <LiteratureAcquisitionDisclosure instanceId="ro-files-literature" onAuthenticationRequired={() => router.replace(`/auth/login?returnTo=${encodeURIComponent(`/research-objects/${researchObjectId}/files`)}`)} target={{ kind: 'research_object', researchObjectId }} tone="dark" />;
@@ -49,7 +34,10 @@ export function ResearchObjectFilesContent({ object }: { object: FilesResearchOb
     let active = true;
     setRestored(null);
     const draft = revision === 0
-      ? loadResearchMaterials(object.id).then((materials) => ({ researchObject: object, materials }))
+      ? loadResearchMaterials(object.id).then((materials) => ({
+        researchObject: { ...object, version: Math.min(object.version, materials.ingestion.version) },
+        materials,
+      }))
       : loadAttachmentDraft(object.id);
     void draft.then(({ researchObject, materials }) => {
       if (!active) return;
@@ -96,9 +84,7 @@ export default function FilesPage({ params }: { params: { id: string } }) {
   const t = useTranslations('productSurfaces');
   const [object, setObject] = useState<FilesResearchObject | null>(null);
   const [error, setError] = useState<ApiClientError | Error | null>(null);
-  useEffect(() => {
-    void loadFilesObject(params.id).then(({ researchObject }) => setObject(researchObject)).catch(setError);
-  }, [params.id]);
+  useEffect(() => { void getResearchObject(params.id).then(({ researchObject }) => setObject(researchObject)).catch(setError); }, [params.id]);
   if (error) return <ResearchSurfaceStateShell active="files" detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} objectId={params.id} title={t('state.errorTitle')} />;
   if (!object) return <ResearchSurfaceStateShell active="files" detail={t('state.loadingBody')} kind="loading" objectId={params.id} title={t('files.title')} />;
   return <ResearchObjectFilesContent object={object} />;
