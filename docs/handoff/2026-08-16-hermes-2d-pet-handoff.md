@@ -32,7 +32,7 @@
 - 沿用已批准产品方向。Sol/medium负责OCR、Terra/medium负责图片合同/UI、Sol/high定向静态复核，主线程集成摘要/来源和部署。没有可证明的本轮tokens节省比例。
 
 ## Next action
-- 部署worker vision flag修正（当前生产c00c6233），然后通过正常恢复入口续接Agent1eafa17f对应任务。没有运行测试/预检。
+- 5b724c0b正在部署worker vision flag与refresh session授权修正（当前部署事务rollback c00c6233）。追加正常parser retry恢复入口候选：一次复用原credit，严格owner/active session/RO/artifact/retry0/attempt1，无core且仅unresolved pages；audit保留前次结果，不新建batch。完成后续接Agent1eafa17f。没有运行测试/预检。
 - 浏览器恢复后从现有任务正常重新分析，确认可读摘要/公式与证据，按正常授权生成图片并观察展示；不重复上传、不改DB强过、不制作视频。
 - 如浏览器控制仍不可用，如实记录已部署与未观察到的产品结果，不反复要求用户登录。
 

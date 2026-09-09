@@ -321,6 +321,7 @@ export async function retryIngestionTask(
         if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
         const result = task.agentTask?.result;
         let legacyProposalFailure = false;
+        let parserRecovery = false;
         if (task.state === 'needs_review' && task.retryCount === 0 && task.agentTask?.kind === 'sdf.extract'
           && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === 0
           && result && typeof result === 'object' && !Array.isArray(result)) {
@@ -330,6 +331,14 @@ export async function retryIngestionTask(
             legacyProposalFailure = record.status === 'needs_review' && record.reason === 'sdf-proposal-unavailable'
               && !Object.hasOwn(record, 'core') && reference.parserStatus === 'succeeded'
               && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256;
+            if (record.status === 'needs_review' && record.reason === 'unresolved pages remain'
+              && !Object.hasOwn(record, 'core') && reference.parserStatus === 'needs_review'
+              && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256
+              && task.agentTask.executionAttempt === 1 && task.batch.userId === input.userId) {
+              const session = await tx.agentSession.findUnique({ where: { id: task.agentTask.sessionId } });
+              parserRecovery = session?.userId === input.userId && session.status === 'active'
+                && session.researchObjectId === task.batch.researchObjectId;
+            }
           } catch {
             legacyProposalFailure = false;
           }
@@ -376,10 +385,11 @@ export async function retryIngestionTask(
         }
         const authorizedFailedRetry = failedRetry && activeFailedRetryOwner
           && (task.retryCount === 0 || paidFailedRetry || compensatedSchemaRetry);
-        if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery) {
+        if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery && !parserRecovery) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
         }
-        const recovery = canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
+        const recovery = parserRecovery ? 'unresolved_parser_pages'
+          : canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
           : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable'
             : compensatedSchemaRetry ? 'canonical_schema_exhaustion_compensation'
               : paidFailedRetry ? 'failed_retryable_paid' : 'failed_retryable';
@@ -401,7 +411,7 @@ export async function retryIngestionTask(
         const resetAgent = await tx.agentTask.updateMany({
           where: {
             id: task.agentTaskId!, kind: 'sdf.extract', retryCount: retryAttempt - 1,
-            status: legacyProposalFailure || canonicalAllMissingRecovery ? 'succeeded' : 'failed',
+            status: legacyProposalFailure || canonicalAllMissingRecovery || parserRecovery ? 'succeeded' : 'failed',
             ...(canonicalAllMissingRecovery ? { executionAttempt: 2 }
               : authorizedFailedRetry ? { executionAttempt: retryAttempt } : {}),
           },
@@ -420,6 +430,7 @@ export async function retryIngestionTask(
           actorId: input.userId, action: 'ingestion.task.retry', workspaceId: workspace.id,
           targetType: 'ingestion_task', targetId: task.id,
           metadata: { recovery, agentTaskId: task.agentTaskId, retryAttempt,
+            ...(parserRecovery ? { previousParserResult: result } : {}),
             creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation'
               : paidFailedRetry ? 'charged-on-retry'
                 : compensatedSchemaRetry ? 'reuse-paid-remediation' : 'reuse-original-reservation' },

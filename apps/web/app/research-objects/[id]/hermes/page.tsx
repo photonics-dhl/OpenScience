@@ -40,7 +40,8 @@ export function isRetryableSdfExtraction(task: Pick<IngestionTaskDetail['task'],
   const result = task.result;
   return isCanonicalAllMissingExtraction(task) || (task.state === 'failed_retryable' && (task.retryCount < 2 || (task.retryCount === 2 && ['结构化输出超过重试上限', 'canonical_validation_exhausted'].includes(task.error ?? '')))) || (task.retryCount === 0 && ((task.state === 'needs_review' && Boolean(result && typeof result === 'object'
     && (result as Record<string, unknown>).status === 'needs_review'
-    && (result as Record<string, unknown>).reason === 'sdf-proposal-unavailable'
+    && ((result as Record<string, unknown>).reason === 'sdf-proposal-unavailable'
+      || ((result as Record<string, unknown>).reason === 'unresolved pages remain' && (result as Record<string, unknown>).sourceMapAvailable === true))
     && !Object.hasOwn(result as object, 'core')))));
 }
 export default function HermesReviewPage({ params: routeParams }: { params: { id: string } }) {
