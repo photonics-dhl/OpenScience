@@ -742,13 +742,13 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             {ingestionTasks.length > 0 ? (
               <section className="mb-6 border-y border-os-rule-paper bg-white px-4 py-5 text-os-ink" aria-labelledby="ingestion-proposal-heading">
                 <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-data text-[10px] uppercase tracking-[0.14em] text-os-vermilion-ink">{t('ingestionProposalKicker')}</p>
                     <h2 className="mt-2 text-xl font-normal text-os-ink" id="ingestion-proposal-heading">{t('ingestionProposalTitle')}</h2>
                   </div>
-                  <label className="grid gap-1 text-xs text-os-muted-paper">
+                  <label className="grid w-full min-w-0 gap-1 text-xs text-os-muted-paper sm:w-auto sm:max-w-full">
                     {t('ingestionSource')}
-                    <select className="min-h-10 max-w-full border border-os-rule-paper bg-white px-3 text-sm text-os-ink" disabled={confirmingIngestion || Boolean(confirmationIntent)} value={selectedIngestionTaskId} onChange={(event) => {
+                    <select className="block min-h-10 w-full min-w-0 max-w-full truncate border border-os-rule-paper bg-white px-3 text-sm text-os-ink" disabled={confirmingIngestion || Boolean(confirmationIntent)} value={selectedIngestionTaskId} onChange={(event) => {
                       const taskId = event.target.value;
                       setSelectedIngestionTaskId(taskId);
                       setIngestionProposal(null);
