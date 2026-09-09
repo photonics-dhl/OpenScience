@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-09:** production1267e298 / rollback1df9f617；新全文凝练/OCR/图片优先候选未部署；当前论文仍partial未确认。唯一状态入口为Hermes CURRENT handoff。
+> **CURRENT 2026-09-09:** productionc00c6233 / rollback1267e298；全文凝练/OCR/图片优先已部署；当前论文新Agent1eafa17f处理中，尚未确认。唯一状态入口为Hermes CURRENT handoff。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -557,4 +557,4 @@
 | `apps/web/lib/ingestion-proposal-draft.ts` | 用户/RO/版本/task隔离的提取建议草稿与已触碰字段保存 | 已部署18b69b3c；CURRENT handoff与集成计划记录证据 |
 | `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` | POST ingestion/:taskId/refresh：复用artifact、新AgentTask事务扣费/CAS、旧结果保留；限定旧字符证据或旧native分段超限修复 | 旧字符升级已部署a0b47065；分段修复候选，CURRENT handoff记录真实结果 |
 
-| `apps/agent-worker/src/skills/research-understanding.ts` / `apps/web/components/presentation/PresentationResultGallery.tsx` | Hermes运行时理解skill与图片结果画廊 | 2026-09-09候选；部署状态见CURRENT handoff |
+| `apps/agent-worker/src/skills/research-understanding.ts` / `apps/web/components/presentation/PresentationResultGallery.tsx` | Hermes运行时理解skill与图片结果画廊 | 2026-09-09已部署c00c6233；实际结果见CURRENT handoff |

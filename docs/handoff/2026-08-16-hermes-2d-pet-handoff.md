@@ -7,8 +7,8 @@
 
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- 本轮起始HEAD 413948afb29e381f0f73f3b79711c220ff2435c5；以下新实现仍为未提交候选，不能混称生产。
-- 本轮实读生产1267e298baa53b2e697ca3b4a4d2be1590eabc4b；rollback1df9f617c242a70ede2bbb6af6f6208549d43122。
+- 代码HEAD/production c00c62330dbc8d8dc873de7199fee76157d016f5；canonical --no-tests部署exit0，rollback1267e298。后续文档commit不代表新部署。
+- 部署日志1788940513640-798ed351-568a-4382-96ce-6a198d852fb0；首轮上传EPIPE，5c393844应用构建API漏output失败，c00c6233修复后部署成功。
 - root main和其他worktree有独立改动，不覆盖。
 
 ## Current implementation
@@ -21,10 +21,10 @@
 - storyboard/scene planner读取已审核EvidenceRecord原文，与摘要分开；生成前及落盘核对证据身份，图片须匹配父规划证据。每图真正调用Hermes生成≤1500字符科学绘图brief再交服务器Codex。
 - 页面以结果画廊为主，来源/规划折叠，视频次级，保留修改、审批、错误恢复和完整尺寸入口；待服务器部署后实际观察。
 
-## Actual paper state (unchanged; not confirmed)
+## Actual paper state (processing; not confirmed)
 - RO9067a2d5-42ad-4c06-b234-753728b71064；ingestion7a28a7c8-90f7-429b-a519-53397cf58856；artifact4b94c626-1748-4c5a-934b-2bb94585bd9c。
 - Paper: Quantization of a Deep-Subwavelength-Aperture-Confined Optical Near Field.pdf，15页。
-- 最新实际Agentf286cc57-3b16-4daf-b6ba-79887ae91772仍旧exact-quote-v1 partial：problem/results quote_not_found、limitations断头；不可确认或称质量通过。本轮尚未新处理/生成。
+- 旧Agentf286cc57保留未确认partial；部署后通过服务器domain.refreshIngestionAnalysis正常scope/consent/credit入口创建新Agent1eafa17f-e31b-4932-9683-740ef9d5ec1a，返回parser needs_review/unresolved pages remain，未进入理解；审计无OCR调用。发现root误把vision flag加到API而非worker；已改正确worker区，待部署。未重复上传、未直接改DB。
 - 先前不同论文run13e3fcd5-a6f0-48d6-82d7-33263e06fe33曾SUCCEEDED，四图/23.459秒视频，但仅方法Claims且有人工审批/恢复；不能充当当前全文自动能力证据。
 
 ## Browser and routing
@@ -32,7 +32,7 @@
 - 沿用已批准产品方向。Sol/medium负责OCR、Terra/medium负责图片合同/UI、Sol/high定向静态复核，主线程集成摘要/来源和部署。没有可证明的本轮tokens节省比例。
 
 ## Next action
-- 收敛OCR多页候选及图片合同静态问题，同步文档后提交并canonical deploy --confirm --no-tests，rollback取当前生产精确SHA。
+- 部署worker vision flag修正（当前生产c00c6233），然后通过正常恢复入口续接Agent1eafa17f对应任务。没有运行测试/预检。
 - 浏览器恢复后从现有任务正常重新分析，确认可读摘要/公式与证据，按正常授权生成图片并观察展示；不重复上传、不改DB强过、不制作视频。
 - 如浏览器控制仍不可用，如实记录已部署与未观察到的产品结果，不反复要求用户登录。
 
