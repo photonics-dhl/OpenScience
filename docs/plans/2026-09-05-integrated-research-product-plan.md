@@ -653,3 +653,5 @@ Source: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec . Request act
 - 网页6Pro实际2m38s方案：一次适用预算授权、新分析可恢复/幂等、未触碰字段接续、旧证据不冒充新证据；不为了填满而编造。Sol/medium实现、Sol/high定点静态复核，无测试/本地运行。
 - a0b47065已部署exit0 / rollback18b69b3c；正式UI更新原文献生成018b0c76-ef08-4db9-8dd7-8703d6195fd0。从1字段到3字段但不合格：断句及results段数超32，旧成功Agent结果仍保留。
 - 只读真实sourceMap确认15页、2000余块，PDF.js词/run一对一段落导致同一行碎裂。修复native-pdf文本run保守同行归并、坐标union及新processor版本；保持证据块/字数上限，补通用完整句span提示。只允许明确旧分段版本+segment_count诊断独立新Agent恢复，不对一般partial无限付费重试。
+
+实际续接：9741ec53已部署（rollback a0b47065）。同材料正式分析6ef59171-714c-4b35-9ba5-163b5573690a显示词级碎片改善，但results contiguous_ids_required、problem/insight断尾。未确认结果；当前继续修复稀疏输入上下文与过早保留字段，不重复上传或手工填文。

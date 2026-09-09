@@ -1,5 +1,10 @@
 # Progress
 
+## 2026-09-09 — 原生PDF分段已部署，提取上下文继续修复
+- 生产9741ec53 / rollback a0b47065，canonical服务器部署exit0，日志1788933712696-9f11e2e6-906e-4db7-adc4-2177d6d5bbed；无测试。
+- 正式UI同材料新Agent6ef59171-714c-4b35-9ba5-163b5573690a完成，SourceMap由946595降为520107bytes；词级碎片改善，但results诊断contiguous_ids_required，problem/insight断尾，三字段仍缺，未确认。
+- 正定位24k稀疏输入/head-tail/关键词±3块导致上下文断裂，以及结构合格字段提前保留的机制；继续通用服务器修复，不手填冒充自动提取。
+
 ## 2026-09-09 — 旧文献重新分析（已部署；真实分段缺陷修复中）
 - 只读服务器确认Quantization五项缺失来自2026-08-28旧AgentTask，未带sourceMapRef/evidenceSegments；不是当前canonical链路新结果。
 - 新增显式legacy refresh：复用artifact，独立新AgentTask正常扣1额度，与原IngestionTask绑定切换同事务；旧分析保留、固定请求幂等、权限/来源/确认竞态保护。

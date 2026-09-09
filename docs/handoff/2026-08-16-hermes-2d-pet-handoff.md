@@ -6,6 +6,9 @@
 - Preserve scientific sources, workspace permissions, user approval, billing and sandbox boundaries.
 
 ## Active upload-to-draft task
+- 后续候选：24k按正文计预算、关键词连续上下文窗、显式SOURCE_WINDOW阻止跨缺口、六字段重审保留最后有效来源；windowed-source-v2结果标记，严格旧line-runs.1+仅contiguous诊断一次付费恢复。网页6Pro实际2m45s复核；不引入自由概括替换证据。
+- 9741ec53服务器部署exit0，rollback a0b47065；首次SSH中断未切release，确认事务退出后同候选重试成功，日志1788933712696-9f11e2e6-906e-4db7-adc4-2177d6d5bbed。
+- 新正式UI分析Agent6ef59171-714c-4b35-9ba5-163b5573690a succeeded/needs_review；sourceMap520107bytes。逐词改善但results contiguous_ids_required、problem/insight断尾，仍缺results/limitations/reproducibility，未确认。下一步修selectCanonicalBlocks稀疏裁切与字段提前锁定；不是继续重复相同分析。
 - 最新生产a0b470651c817beda301f753029ccfc36cacb60e / rollback18b69b3c；7e0e32ef首次服务器构建因web detail.state string失败，a0b47065对齐IngestionTaskSummary修正后部署exit0，日志1788931956339-e8e092c0-ce78-4270-9b60-8262c0a3e4c2。
 - 正式UI已点击一次1-credit重新分析，得到新Agent018b0c76-ef08-4db9-8dd7-8703d6195fd0 succeeded/needs_review。结果不合格：problem/insight/method非空但断句，results诊断segment_count_1_to_32，reason canonical_partial_validation_exhausted；不确认、不当完成。
 - 真实sourceMap15页、946595bytes，parser cascade1.0.0，block processor pdf-parse-pdfjs-text-items 2.4.5+pdfjs-dist.5.4.296；同行被逐词分块，代码native-pdf-text-items每item直接paragraph为根因。worker正修保守同行归并/版本标记/自然语言完整span提示；High设计仅旧processor+明确段数失败可再独立新Agent修复，正常credit/CAS保留旧结果。禁止盲增32/降科学证据规则。
@@ -28,7 +31,7 @@
 
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release; branch codex/onchip-video-release.
-- Production 18b69b3c66369b21eba54af22e91c0d7cc54cef6; rollback fc5038082b61b7938d541d2223ea9a5454b894b7. 后续仅文档同步不代表新部署。
+- Production 9741ec53db3dbdfb734e5ac8cd520cc8eb7e36b9; rollback a0b470651c817beda301f753029ccfc36cacb60e. 后续仅文档同步不代表新部署。
 - Recovery commits1df4e047 +3446f309 deployed through canonical --confirm --no-tests. First candidate failed server compile due to type-only Prisma import; fixed before switch.
 - Root dirty main and token-smart-live-workflow worktree are separate; preserve them and concurrent R1 hardening.
 

@@ -45,6 +45,8 @@ export interface ExtractionResult extends Record<string, unknown> {
   reason?: 'canonical_partial_validation_exhausted';
   /** Exact final guard reasons for unresolved fields; explicitly missing fields are omitted. */
   fieldDiagnostics?: Record<string, string>;
+  /** Server-owned canonical selection contract used to prevent obsolete paid repair loops. */
+  canonicalExtractionContract?: 'windowed-source-v2';
 }
 
 export type EvidenceLocation = {
@@ -92,6 +94,7 @@ const MAX_EXCERPT_CHARS = 24_000;
 const MAX_EVIDENCE_SEGMENTS = 32;
 const MAX_FIELD_EVIDENCE_CHARS = 8_000;
 const MAX_CANONICAL_CORE_CHARS = 4_000;
+const CANONICAL_EXTRACTION_CONTRACT = 'windowed-source-v2';
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
 export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
@@ -264,6 +267,7 @@ interface CanonicalTextBlock {
 interface PromptCanonicalBlock extends CanonicalTextBlock {
   promptId: string;
   ordinal: number;
+  windowId: string;
   text: string;
 }
 
@@ -289,7 +293,7 @@ function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[]
 function promptCanonicalBlocks(sourceMap: DocumentSourceMap): PromptCanonicalBlock[] {
   const canonical = canonicalTextBlocks(sourceMap);
   return canonical.map((block, ordinal) => ({
-    ...block, ordinal, promptId: `B${String(ordinal + 1).padStart(6, '0')}`,
+    ...block, ordinal, promptId: `B${String(ordinal + 1).padStart(6, '0')}`, windowId: '',
   }));
 }
 
@@ -297,37 +301,68 @@ function selectCanonicalBlocks(sourceMap: DocumentSourceMap): PromptCanonicalBlo
   const blocks = promptCanonicalBlocks(sourceMap);
   const selected = new Set<number>();
   let remaining = MAX_EXCERPT_CHARS;
-  const renderedLength = (block: PromptCanonicalBlock) => `--- SOURCE_BLOCK id:${block.promptId} ---\n${block.text}\n\n`.length;
+  // The source budget measures evidence text. Stable IDs and boundary labels must not
+  // displace manuscript content simply because the parser produced more blocks.
+  const sourceLength = (block: PromptCanonicalBlock) => block.text.length + 1;
   const addRange = (start: number, end: number): boolean => {
     const candidates = blocks.slice(start, end + 1).filter((block) => !selected.has(block.ordinal));
-    const cost = candidates.reduce((total, block) => total + renderedLength(block), 0);
+    const cost = candidates.reduce((total, block) => total + sourceLength(block), 0);
     if (cost > remaining) return false;
     candidates.forEach((block) => selected.add(block.ordinal));
     remaining -= cost;
     return true;
   };
+  const contextualRange = (ordinal: number): { start: number; end: number } => {
+    let start = ordinal;
+    let end = ordinal;
+    let before = 0;
+    let after = 0;
+    while (start > 0 && before < 1_200) {
+      start -= 1;
+      before += sourceLength(blocks[start]!);
+    }
+    while (end < blocks.length - 1 && after < 1_800) {
+      end += 1;
+      after += sourceLength(blocks[end]!);
+    }
+    return { start, end };
+  };
   let headCost = 0;
   for (let index = 0; index < blocks.length; index += 1) {
-    const cost = renderedLength(blocks[index]!);
+    const cost = sourceLength(blocks[index]!);
     if (headCost + cost > 8_000 || !addRange(index, index)) break;
     headCost += cost;
   }
   for (const block of blocks) {
     if (remaining <= 8_000) break;
     KEY_EVIDENCE.lastIndex = 0;
-    if (KEY_EVIDENCE.test(block.text)) addRange(Math.max(0, block.ordinal - 3), Math.min(blocks.length - 1, block.ordinal + 3));
+    if (KEY_EVIDENCE.test(block.text)) {
+      const range = contextualRange(block.ordinal);
+      addRange(range.start, range.end);
+    }
   }
   let tailCost = 0;
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const cost = selected.has(index) ? 0 : renderedLength(blocks[index]!);
+    const cost = selected.has(index) ? 0 : sourceLength(blocks[index]!);
     if (tailCost + cost > 8_000 || !addRange(index, index)) break;
     tailCost += cost;
   }
-  return blocks.filter((block) => selected.has(block.ordinal));
+  let window = 0;
+  let previousOrdinal: number | undefined;
+  return blocks.filter((block) => selected.has(block.ordinal)).map((block) => {
+    if (previousOrdinal === undefined || block.ordinal !== previousOrdinal + 1) window += 1;
+    previousOrdinal = block.ordinal;
+    return { ...block, windowId: `W${String(window).padStart(3, '0')}` };
+  });
 }
 
 function canonicalBlockPrompt(blocks: PromptCanonicalBlock[]): string {
-  return blocks.map((block) => `--- SOURCE_BLOCK id:${block.promptId} ---\n${block.text}`).join('\n\n');
+  let activeWindow = '';
+  return blocks.map((block) => {
+    const boundary = block.windowId === activeWindow ? '' : `--- SOURCE_WINDOW id:${block.windowId} ---\n`;
+    activeWindow = block.windowId;
+    return `${boundary}[${block.promptId}] ${block.text}`;
+  }).join('\n\n');
 }
 
 type CanonicalFieldValidationReason =
@@ -377,6 +412,9 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     if (new Set(ids).size !== ids.length) return { reason: 'duplicate_ids' };
     if (ids.some((id) => !allowed.has(id))) return { reason: 'unknown_ids' };
     const selected = ids.map((id) => allowed.get(id)!);
+    if (selected.some((block) => block.windowId !== selected[0]!.windowId)) {
+      return { reason: 'contiguous_ids_required' };
+    }
     if (selected.some((block, index) => index > 0 && block.ordinal <= selected[index - 1]!.ordinal)) {
       return { reason: 'ordered_ids_required' };
     }
@@ -416,10 +454,17 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
     const fields = proposal.fields as Record<string, unknown>;
     for (const field of SDF_CORE_FIELDS) {
       const previous = retained.get(field);
-      if (previous && !previous.needsMoreInformation) continue;
       const validation = validateField(fields[field]);
-      if (validation.candidate) retained.set(field, validation.candidate);
-      else if (!previous) invalidFields.set(field, validation.reason!);
+      if (validation.candidate) {
+        // A later complete supported span may repair an earlier structurally valid but
+        // linguistically truncated endpoint. Never replace supported evidence with a
+        // later missing-field response.
+        if (!validation.candidate.needsMoreInformation || !previous || previous.needsMoreInformation) {
+          retained.set(field, validation.candidate);
+        }
+      } else {
+        invalidFields.set(field, validation.reason!);
+      }
     }
     return invalidFields.size === 0;
   };
@@ -431,8 +476,8 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
       return [
         'Previous JSON failed canonical validation.',
         `Invalid fields and reason codes: ${details}.`,
-        'Return schemaVersion and fields containing only the invalid fields listed above; already validated fields are retained locally and need not be repeated.',
-        'For each repaired non-missing field, first identify one continuous original-order span whose exact joined text states one supported core point with all necessary conditions. sourceBlockIds may contain the first and last anchors or an ordered subset; the server expands them to every already supplied SOURCE_BLOCK in that ordinal range. A non-missing field may never have an empty sourceBlockIds array. The expanded span must contain 1-32 blocks. Prefer a short complete span of at most 600 characters, but never truncate qualifiers, units, or necessary evidence to meet that preference. The exact joined source text, not summary, becomes the canonical core.',
+        'Return schemaVersion and all six fields again. Repair the invalid fields and recheck every other field for complete grammatical and argument boundaries; the server retains the last valid supported candidate for each field.',
+        'For each non-missing field, choose a span entirely within one explicitly labelled SOURCE_WINDOW. Never select anchors from different SOURCE_WINDOW sections: omitted text exists between those windows. A window edge may itself cut through a longer sentence or argument; select a complete supported point inside the window, or mark the field missing when that window contains no complete point. sourceBlockIds may contain the first and last anchors or an ordered subset within that one window; the server expands them to every supplied SOURCE_BLOCK in that range. A non-missing field may never have an empty sourceBlockIds array. The expanded span must contain 1-32 blocks. Prefer a short complete span of at most 600 characters, but never truncate qualifiers, units, or necessary evidence to meet that preference. The exact joined source text, not summary, becomes the canonical core.',
         'A missing field must have summary="", sourceBlockIds=[], needsMoreInformation=true. Do not include a nonempty explanation in a missing field.',
         'A field is missing only when no supplied SOURCE_BLOCK span states a supported point for that field. Preserve whether a point is measured, theoretical, simulated, or author-attributed.',
         'Do not quote or repeat source text in this correction instruction; use the SOURCE_BLOCK ids already provided.',
@@ -506,7 +551,8 @@ function materializeCanonicalProposal(
       ? { status: 'located', sourceLocator: segments[0]!.sourceLocator, origin: 'model_quote', matching: 'exact' }
       : { status: 'cross_block', origin: 'model_quote', matching: 'exact', reason: 'match-spans-blocks' };
   }
-  return { core, evidence, needsMoreInformation, evidenceLocation, evidenceSegments };
+  return { core, evidence, needsMoreInformation, evidenceLocation, evidenceSegments,
+    canonicalExtractionContract: CANONICAL_EXTRACTION_CONTRACT };
 }
 
 function locateCanonicalEvidence(
@@ -618,7 +664,7 @@ export async function extractHandler(
       '方法或配置披露不等于独立复现完成；reproducibility 只能概括原文明示的材料、参数、步骤、数据或代码可用性及其缺口。若某个条款缺少直接证据，从 summary 删除该条款；若字段已无可支持内容，则按缺失字段返回 needsMoreInformation=true。',
       ...(promptBlocks ? [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能是 {"summary": string, "sourceBlockIds": string[], "needsMoreInformation": boolean}，不得把字段写成字符串、数组或增加其他键。',
-        `每个非缺失字段先确定一个原始 ordinal 连续的 SOURCE_BLOCK 跨度；sourceBlockIds 可列出首尾锚点或跨度内的递增子集，服务端会补齐该范围内所有已提供的中间块。补齐后的跨度必须包含 1-${MAX_EVIDENCE_SEGMENTS} 个块，证据合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符，拼接后的 canonical core 不超过 ${MAX_CANONICAL_CORE_CHARS} 字符；不得改写、倒序或重复 id，也不得依赖输入中未提供的中间块。`,
+        `每个非缺失字段先在一个明确标注的 SOURCE_WINDOW 内确定连续 SOURCE_BLOCK 跨度，不得跨 SOURCE_WINDOW 选择首尾锚点，因为窗口之间存在未提供的原文。窗口边缘自身也可能截断更长的句子或论证；必须选择窗口内部完整且受支持的论点，若没有完整论点则将该字段标为缺失，不得用限额为截断辩解。sourceBlockIds 可列出同一窗口内的首尾锚点或递增子集，服务端会补齐该范围内所有已提供的中间块。补齐后的跨度必须包含 1-${MAX_EVIDENCE_SEGMENTS} 个块，证据合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符，拼接后的 canonical core 不超过 ${MAX_CANONICAL_CORE_CHARS} 字符；不得改写、倒序或重复 id。`,
         '逐字段独立判断：先选择能直接陈述一个核心要点的最短完整连续跨度，优先不超过600字符；600字符只是偏好，不得为缩短而丢失否定、适用条件、数值单位、实验或理论性质。服务端会把所选块原文以换行拼接为 canonical core，不使用模型自由概括。',
         '自然语言证据跨度必须包含完整主语、完整句子或完整论证起止，不得从句中术语或未闭合从句开始，也不得在未完成的词组、限定条件或因果链中结束；可向前后扩展连续块以保留这些条件。公式、参数或符号可保留其自身完整上下文，不要求机械按句号裁切。不同字段应各自选择最直接、独立支持其字段含义的跨度。',
         'summary 仅为兼容现有 JSON wire shape，填写非空简短说明；它不会进入 canonical core。若完整证据需超过32块或4000字符，应缩小到仍完整受支持的单一要点，不能任意截断必要证据。不要因一个字段缺失而清空其他字段。',

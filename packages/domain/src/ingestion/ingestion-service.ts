@@ -81,7 +81,7 @@ const CANONICAL_DIAGNOSTICS = new Set([
   'duplicate_ids', 'unknown_ids', 'ordered_ids_required', 'contiguous_ids_required',
   'source_text_limit_8000', 'core_text_limit_4000',
 ]);
-type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1';
+type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1' | 'canonical_window_contract_v1';
 
 function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
   if (isLegacyCharacterEvidenceResult(value)) return 'legacy_character_evidence_v1';
@@ -96,12 +96,15 @@ function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha25
     || !SDF_NODE_TYPES.some((field) => String(core[field]).trim())) return undefined;
   const entries = Object.entries(diagnostics);
   if (entries.length === 0 || entries.some(([field, reason]) => !SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number])
-    || typeof reason !== 'string' || !CANONICAL_DIAGNOSTICS.has(reason))
-    || !entries.some(([, reason]) => reason === 'segment_count_1_to_32')) return undefined;
+    || typeof reason !== 'string' || !CANONICAL_DIAGNOSTICS.has(reason))) return undefined;
   try {
     const reference = parseDocumentSourceMapReference(result.sourceMapRef);
-    return reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
-      && reference.contentHash === artifact.blobSha256 ? 'native_pdf_fragmentation_v1' : undefined;
+    if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+      || reference.contentHash !== artifact.blobSha256) return undefined;
+    if (result.canonicalExtractionContract !== undefined) return undefined;
+    if (entries.some(([, reason]) => reason === 'segment_count_1_to_32')) return 'native_pdf_fragmentation_v1';
+    if (entries.every(([, reason]) => reason === 'contiguous_ids_required')) return 'canonical_window_contract_v1';
+    return undefined;
   } catch { return undefined; }
 }
 
@@ -115,6 +118,15 @@ function isOldFragmentedNativePdfMap(sourceMap: Awaited<ReturnType<typeof loadDo
         && item.processor.name === 'pdf-parse-pdfjs-text-items' && item.processor.version === oldVersion))
     && !blocks.some((block) => block.parser.name === 'pdf-parse-pdfjs-text-items' && block.parser.version === newVersion
       || block.transformations.some((item) => item.processor.name === 'pdf-parse-pdfjs-text-items' && item.processor.version === newVersion));
+}
+
+function isLineRunNativePdfMap(sourceMap: Awaited<ReturnType<typeof loadDocumentSourceMapReference>>): boolean {
+  const version = '2.4.5+pdfjs-dist.5.4.296.line-runs.1';
+  const blocks = sourceMap.pages.flatMap((page) => page.blocks);
+  return sourceMap.parser.name === 'openscience-parser-cascade' && sourceMap.parser.version === '1.0.0'
+    && blocks.some((block) => block.parser.name === 'pdf-parse-pdfjs-text-items' && block.parser.version === version
+      && block.transformations.some((item) => item.stage === 'extract_text'
+        && item.processor.name === 'pdf-parse-pdfjs-text-items' && item.processor.version === version));
 }
 
 export async function authorizeIngestionWrite(
@@ -433,7 +445,7 @@ export async function refreshIngestionAnalysis(
   }
   const keyPrefix = `ingestion-analysis-refresh:${input.taskId}:${input.sourceAgentTaskId}:`;
   const replay = await deps.prisma.agentTask.findFirst({
-    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`] } },
+    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`] } },
     include: { session: true },
   });
   if (replay) {
@@ -461,11 +473,14 @@ export async function refreshIngestionAnalysis(
   const policy = oldAgent ? analysisRefreshPolicy(oldAgent.result, initial.artifact) : undefined;
   if (!policy) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction is not eligible for analysis refresh');
   let sourceMapProof: { objectKey: string; serializedSha256: string } | undefined;
-  if (policy === 'native_pdf_fragmentation_v1') {
+  if (policy !== 'legacy_character_evidence_v1') {
     const reference = parseDocumentSourceMapReference((oldAgent!.result as Record<string, unknown>).sourceMapRef);
     const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
-    if (!isOldFragmentedNativePdfMap(sourceMap)) {
-      throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction does not use the affected PDF parser generation');
+    const affected = policy === 'native_pdf_fragmentation_v1'
+      ? isOldFragmentedNativePdfMap(sourceMap)
+      : isLineRunNativePdfMap(sourceMap);
+    if (!affected) {
+      throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction does not use the affected analysis generation');
     }
     sourceMapProof = { objectKey: reference.objectKey, serializedSha256: reference.serializedSha256 };
   }
@@ -509,7 +524,7 @@ export async function refreshIngestionAnalysis(
         if (!oldPayload || oldPayload.artifactId !== source.artifactId || oldPayload.researchObjectId !== source.batch.researchObjectId) {
           throw new IngestionError('VALIDATION_ERROR', 'Legacy extraction source does not match its artifact');
         }
-        if (policy === 'native_pdf_fragmentation_v1') {
+        if (policy !== 'legacy_character_evidence_v1') {
           const reference = parseDocumentSourceMapReference((oldAgent.result as Record<string, unknown>).sourceMapRef);
           if (!sourceMapProof || reference.objectKey !== sourceMapProof.objectKey
             || reference.serializedSha256 !== sourceMapProof.serializedSha256) {
