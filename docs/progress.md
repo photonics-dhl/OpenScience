@@ -1,6 +1,9 @@
 # Progress
 
-## 2026-09-09 — 来源编号已部署，继续修复来源预算
+## 2026-09-09 — passage-v2已部署，当前JSON输出失败
+- 最新productionfa751b16 / rollback637eda1c。Agent5dba592b通过正常refresh，JSON解析最终失败（finish=stop），未确认/未生图。补充完整结构与格式修复提示后按现有失败恢复入口继续，不能声称完整流程畅通。
+
+### 前序进展
 - production637eda1c / rollback913002b8；canonical --no-tests部署exit0，日志1788943498648-f2e7bcc0-22db-4fb9-b12b-258659848674。
 - 实际OCR已接通，修复worker开关、refresh session边界与CN/global endpoint；没有读取或改动key。
 - Agente800ef2b通过正常refresh运行，grounded-passages-v1、sourceMapReused=true；problem/insight成功，method/results passage_ids_required、limitations segment_count_1_to_32。未确认、未生图，不能称全文处理完成。

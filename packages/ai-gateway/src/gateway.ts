@@ -301,6 +301,10 @@ export class AiGateway {
         } catch (error) {
           const finishReason = result.finishReason ?? 'unknown';
           this.logger?.warn?.(`structured.output.rejected stage=json_parse attempt=${attempt + 1}/${MAX_STRUCTURED_RETRIES + 1} finish=${finishReason}`);
+          retryMessages = [...retryMessages.filter((message) => message.content !== 'The previous response was not valid JSON. Return exactly one complete JSON object following the requested schema. Use double-quoted keys and strings, escape backslashes, and include no Markdown or commentary.'), {
+            role: 'system',
+            content: 'The previous response was not valid JSON. Return exactly one complete JSON object following the requested schema. Use double-quoted keys and strings, escape backslashes, and include no Markdown or commentary.',
+          }];
           throw new AiGatewayError('STRUCTURED_JSON_INVALID', 'structured JSON invalid', error);
         }
         if (!guard(parsed)) {

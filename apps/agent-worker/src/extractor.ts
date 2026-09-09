@@ -724,6 +724,8 @@ export async function extractHandler(
       ...(passages ? [
         RESEARCH_UNDERSTANDING_SKILL.instructions,
         '只输出JSON：schemaVersion="0.1.0"，fields下六个字段必须且只能是 {"summary":string,"sourcePassageIds":string[],"needsMoreInformation":boolean}。不得返回引文、窗口ID或来源正文。',
+        `完整输出结构如下（这是空结构，不是论文结论；必须用原文支持的摘要与实际P编号填充）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: '', sourcePassageIds: [], needsMoreInformation: true }])) })}`,
+        'sourcePassageIds必须是字符串数组，例如["P00001"]，不能填页码、对象或区间字符串。JSON字符串中的反斜杠必须转义；摘要优先使用普通文字与Unicode数学符号，避免输出不合法的LaTeX转义。',
         '每字段凝练成中文摘要，解释该论文的核心要点，避免重复同一证据填不同字段。每个非空摘要选择1–6个足以支持全部实质断言的sourcePassageIds；ID只能来自下方标签，服务端会从这些ID回读原始SourceMap，模型不要复制或改写证据。',
         `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个原始块。每个passage最多5个原始块、1200字符，标签给出实际blocks和chars预算；6个互不重叠ID通常最多展开30块、约7205字符。优先选择足够支持结论的最少ID。若同一原始块内选择多个passage，服务端会保留首尾选中片段之间的全部原文，不能跳过中间内容；选择时必须把该完整范围计入限额。`,
         '选择能完整支持主语、条件、否定、数字和单位的最少passage。不要为了符合限额扩大或改写结论。若无充分证据，summary="",sourcePassageIds=[],needsMoreInformation=true；缺失字段里的解释会被服务端丢弃，不影响其他有证据字段。无法辨认的公式不要猜写。',
@@ -744,8 +746,8 @@ export async function extractHandler(
         validationDiagnostic: validation.validationDiagnostic,
       });
     } catch (error) {
-      if (!(error instanceof AiGatewayError) || error.code !== 'SCHEMA_VALIDATION') throw error;
-      if (!(error.cause instanceof AiGatewayError) || error.cause.code !== 'SCHEMA_VALIDATION') throw error;
+      if (!(error instanceof AiGatewayError) || !['SCHEMA_VALIDATION', 'STRUCTURED_JSON_INVALID'].includes(error.code)) throw error;
+      if (!(error.cause instanceof AiGatewayError) || !['SCHEMA_VALIDATION', 'STRUCTURED_JSON_INVALID'].includes(error.cause.code)) throw error;
       const partial = validation.partialResult();
       if (!partial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
       return {
