@@ -13,3 +13,5 @@
 - run46442dc4当前failed/version9；额度恢复后走正常retry，先GET对账，不重跑OCR。未授权兑换额度、购买或切换API付费。
 - 全论文仍partial，method/reproducibility与部分科学忠实性未完成；浏览器连接失败，无页面视觉验收。
 - 详细ID/日志/下一步见CURRENT handoff。
+
+- 网页生图补充研究：自定义GPT生图+Action文件回传是用户触发候选；当前新生图模型与Action兼容未实际验证，不能承诺无人值守。CUA重置前后仍fetch失败，未发出网页生图请求。详情ADR-013。
