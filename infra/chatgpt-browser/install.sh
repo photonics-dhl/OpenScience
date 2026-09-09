@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
-[[ ${1:-} == --confirm && $# == 1 ]] || exit 64
+[[ ${1:-} == --confirm && ( $# == 1 || ( $# == 2 && $2 == --resume-build ) ) ]] || exit 64
 [[ $(id -u) == 0 ]] || exit 65
 source_root=$(cd "$(dirname "$0")" && pwd)
 root=/opt/openscience-chatgpt-browser
-[[ ! -e "$root" ]] || { echo 'Existing browser installation retained; inspect before updating'; exit 66; }
+if [[ -e "$root" ]]; then
+  [[ ${2:-} == --resume-build && ! -e /etc/systemd/system/openscience-chatgpt-browser-bridge.service ]] || exit 66
+  ! docker container inspect openscience-chatgpt-browser >/dev/null 2>&1 || exit 66
+fi
 install -d -m 0755 "$root" "$root/scripts"
 install -d -o 11040 -g 11040 -m 0700 "$root/profile" "$root/downloads" "$root/egress" "$root/control"
 for file in Dockerfile start.sh relay.mjs host.mjs seccomp.json; do install -m 0444 "$source_root/$file" "$root/scripts/$file"; done
-docker build --network host --build-arg http_proxy=http://127.0.0.1:7891 --build-arg https_proxy=http://127.0.0.1:7891 \
+docker build --network host --build-arg http_proxy= --build-arg https_proxy= --build-arg HTTP_PROXY= --build-arg HTTPS_PROXY= \
   -t openscience-chatgpt-browser:initial "$root/scripts"
 cat > /etc/systemd/system/openscience-chatgpt-browser-bridge.service <<EOF
 [Unit]
