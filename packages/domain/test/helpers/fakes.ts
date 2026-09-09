@@ -1050,9 +1050,11 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const step = db.hermesResearchSteps.find((candidate) => {
           const run = db.hermesResearchRuns.find((row) => row.id === candidate.runId);
           const scoped = where.run;
+          const profileScopes = scoped.OR ?? [{ profile: scoped.profile, maxAgentTasks: scoped.maxAgentTasks }];
           return candidate.presentationAssetId === where.presentationAssetId && candidate.status === where.status && run
             && run.actorId === scoped.actorId && run.researchObjectId === scoped.researchObjectId
-            && run.versionId === scoped.versionId && run.profile === scoped.profile && run.maxAgentTasks === scoped.maxAgentTasks
+            && run.versionId === scoped.versionId
+            && profileScopes.some((profile: any) => run.profile === profile.profile && run.maxAgentTasks === profile.maxAgentTasks)
             && scoped.status.in.includes(run.status);
         }) ?? null;
         return step && include?.run ? { ...step, run: db.hermesResearchRuns.find((run) => run.id === step.runId) } : step;

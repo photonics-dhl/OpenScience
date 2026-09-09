@@ -229,7 +229,7 @@ describe('Hermes durable research run', () => {
     expect(db.runs.filter((run) => run.status === 'awaiting_source_review')).toHaveLength(1);
   });
 
-  it('durably creates exactly one storyboard, five images, and one video without charging source steps', async () => {
+  it('pauses the retired fixed template without creating or charging generation tasks', async () => {
     const ids = {
       user: '10000000-0000-4000-8000-000000000001', workspace: '20000000-0000-4000-8000-000000000001',
       ro: '30000000-0000-4000-8000-000000000001', version: '40000000-0000-4000-8000-000000000001',
@@ -260,42 +260,15 @@ describe('Hermes durable research run', () => {
       status: 'succeeded', ingestionTaskId: ids.ingestion, artifactId: ids.artifact, agentTaskId: ids.ingestionAgent });
     const deps = { prisma, redis: { lpush: async () => 1 } } as never;
     const generationTasks = () => db.agentTasks.filter((task) => task.kind === 'presentation.generate');
-    const finishStage = (stage: string, kind: string) => {
-      const steps = db.hermesResearchSteps.filter((step) => step.stage === stage);
-      for (const step of steps) {
-        const task = db.agentTasks.find((candidate) => candidate.id === step.agentTaskId)!;
-        task.status = 'succeeded';
-        db.presentationAssets.push({ id: task.id, researchObjectId: ids.ro, versionId: ids.version,
-          kind, status: 'draft', contentHash: `hash-${stage}-${step.ordinal}`, provenance: {}, createdAt: new Date(), updatedAt: new Date() });
-        db.presentationAssetClaims.push({ presentationAssetId: task.id, claimId: ids.claim, researchObjectId: ids.ro, versionId: ids.version });
-      }
-    };
 
     await reconcileHermesResearchRuns(deps);
     expect(generationTasks()).toHaveLength(0);
-    expect(db.hermesResearchRuns[0].error).toMatch(/Credit/);
+    expect(db.hermesResearchRuns[0].error).toMatch(/Legacy template generation paused/);
     db.usageLedger.push({ id: 'grant', userId: ids.user, resource: 'ai_credit', delta: 20, kind: 'grant' });
     db.hermesResearchRuns[0].lastReconciledAt = null;
     await reconcileHermesResearchRuns(deps);
-    expect(generationTasks()).toHaveLength(1);
-    await reconcileHermesResearchRuns(deps);
-    expect(generationTasks()).toHaveLength(1);
-    finishStage('storyboard', 'interactive_html');
-    await reconcileHermesResearchRuns(deps);
-    db.presentationAssets.find((asset) => asset.id === generationTasks()[0].id)!.status = 'approved';
-    await reconcileHermesResearchRuns(deps);
-    expect(generationTasks()).toHaveLength(6);
-    finishStage('scene_image', 'image');
-    await reconcileHermesResearchRuns(deps);
-    db.presentationAssets.filter((asset) => asset.kind === 'image').forEach((asset) => { asset.status = 'approved'; });
-    await reconcileHermesResearchRuns(deps);
-    expect(generationTasks()).toHaveLength(7);
-    finishStage('video', 'video');
-    await reconcileHermesResearchRuns(deps);
-    db.presentationAssets.find((asset) => asset.kind === 'video')!.status = 'approved';
-    await reconcileHermesResearchRuns(deps);
-    expect(db.hermesResearchRuns[0]).toMatchObject({ status: 'succeeded', error: null });
-    expect(db.usageLedger.filter((entry) => entry.kind === 'consume')).toHaveLength(7);
+    expect(generationTasks()).toHaveLength(0);
+    expect(db.usageLedger.filter((entry) => entry.kind === 'consume')).toHaveLength(0);
   });
 
   it('replays an exact source review after advancement without storage access or private SourceMap coordinates', async () => {

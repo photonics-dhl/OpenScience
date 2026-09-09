@@ -475,6 +475,9 @@ describe('multi-format ingestion service', () => {
     const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
     agentTask.status = 'failed';
     agentTask.error = 'provider timeout';
+    agentTask.kind = 'sdf.extract';
+    agentTask.retryCount = 0;
+    agentTask.executionAttempt = 1;
     const retried = await retryIngestionTask(deps, { userId: user.id, taskId: task.id });
     expect(retried).toMatchObject({ state: 'queued', retryCount: 1, error: null });
     expect(redis.lpush).toHaveBeenLastCalledWith('agent:queue', task.agentTaskId);
@@ -653,9 +656,13 @@ describe('multi-format ingestion service', () => {
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
     task.state = 'failed_retryable';
+    task.error = 'provider timeout';
     const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
     agentTask.status = 'failed';
     agentTask.error = 'provider timeout';
+    agentTask.kind = 'sdf.extract';
+    agentTask.retryCount = 0;
+    agentTask.executionAttempt = 1;
     redis.lpush.mockRejectedValueOnce(new Error('redis unavailable'));
     await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/redis unavailable/);
     expect(task).toMatchObject({ state: 'queued', retryCount: 1, error: null });
