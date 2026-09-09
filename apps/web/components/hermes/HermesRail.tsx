@@ -28,6 +28,12 @@ export interface HermesRailTask {
 
 export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
   const t = useTranslations('dashboard');
+  const [expanded, setExpanded] = React.useState(false);
+  const collapsedTasks = [
+    ...tasks.filter((task) => task.state.startsWith('failed_')),
+    ...tasks.filter((task) => !task.state.startsWith('failed_')),
+  ];
+  const visibleTasks = expanded ? tasks : collapsedTasks.slice(0, 3);
 
   return (
     <aside
@@ -45,9 +51,9 @@ export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
 
       {tasks.length === 0 ? (
         <p className="py-6 text-sm leading-6 text-os-muted-paper">{t('hermes.empty')}</p>
-      ) : (
+      ) : <>
         <ol className="list-none divide-y divide-os-rule-paper p-0">
-          {tasks.map((task, index) => {
+          {visibleTasks.map((task, index) => {
             const stateKey = localizedTaskStates[task.state];
             return <li key={task.id}>
               <Link
@@ -67,7 +73,13 @@ export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
             </li>;
           })}
         </ol>
-      )}
+        {tasks.length > 3 ? <button
+          aria-expanded={expanded}
+          className="mt-3 min-h-11 border-b border-os-rule-paper text-sm text-os-ink hover:border-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"
+          onClick={() => setExpanded((current) => !current)}
+          type="button"
+        >{expanded ? t('hermes.showLess') : t('hermes.showMore', { count: tasks.length - 3 })}</button> : null}
+      </>}
     </aside>
   );
 }

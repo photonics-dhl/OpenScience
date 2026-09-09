@@ -757,6 +757,8 @@
       "progress": "{current}/{total} 个字段",
       "states": { "idle": "待命", "guiding": "引导中", "scanning": "读取中", "suggesting": "有建议", "awaiting_approval": "等待确认", "failed": "需要处理" },
       "taskStates": { "queued": "排队中", "uploading": "上传中", "parsing": "解析中", "stored": "已整理", "needsReview": "等待核对", "failedRetryable": "可重试", "failedBlocked": "已阻断" },
+      "showMore": "展开其余 {count} 项任务",
+      "showLess": "收起其余任务",
       "guide": {
         "backToGuide": "返回研究引导",
         "presentationSuggestionLabel": "Hermes 生成的分镜建议",

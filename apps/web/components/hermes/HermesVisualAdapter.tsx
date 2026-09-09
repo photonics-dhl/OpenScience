@@ -676,8 +676,8 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
           data-hermes-menu-open={menuOpen ? 'true' : 'false'}
         >
           <span data-reading-role="caption" className="hermes-visual-state-label absolute left-0 top-0 z-10 font-mono uppercase tracking-[0.1em] text-os-muted-dark">Hermes / {t(`states.${state}`)}</span>
-          <span className="hermes-visual-invoke-label absolute inset-x-0 bottom-3 z-10 flex items-center justify-between gap-4 border-t border-os-rule-dark pt-3 text-xs text-os-muted-dark" data-hermes-visual-footer="true">
-            <span className="truncate">{t(suggestion.titleKey)}</span><span className="hermes-visible-invoke-cta shrink-0 text-os-vermilion transition-transform group-hover:translate-x-1 motion-reduce:transform-none" data-hermes-visible-invoke-cta="true">{suggestion.taskLabel ? t('guide.invokeTask', { task: suggestion.taskLabel }) : t('guide.invoke')} →</span>
+          <span className="hermes-visual-invoke-label absolute inset-x-0 bottom-3 z-10 flex flex-wrap items-start justify-between gap-x-4 gap-y-1 border-t border-os-rule-dark pt-3 text-xs text-os-muted-dark" data-hermes-visual-footer="true">
+            <span className="min-w-0 truncate">{t(suggestion.titleKey)}</span><span className="hermes-visible-invoke-cta max-w-full break-words text-right text-os-vermilion transition-transform group-hover:translate-x-1 motion-reduce:transform-none" data-hermes-visible-invoke-cta="true">{suggestion.taskLabel ? t('guide.invokeTask', { task: suggestion.taskLabel }) : t('guide.invoke')} →</span>
           </span>
           <span
             className="hermes-companion-actor absolute inset-x-2 bottom-9 top-9 flex justify-center text-os-paper"
