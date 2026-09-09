@@ -668,12 +668,14 @@ async function repairCanonicalPartial(
   partial: CanonicalPartialResult,
 ): Promise<CanonicalPartialResult> {
   const passageById = new Map(passages.map((passage) => [passage.id, passage]));
-  const repairFields = SDF_CORE_FIELDS.filter((field) => partial.fieldDiagnostics[field]
-    && partial.unverifiedSummaries[field]?.trim()
-    && partial.unverifiedSourcePassageIds[field]?.length);
+  const repairFields = SDF_CORE_FIELDS.filter((field) => partial.proposal.fields[field].needsMoreInformation);
   if (!repairFields.length) return partial;
-  const candidatesByField = new Map(repairFields.map((field) => [field, new Set(partial.unverifiedSourcePassageIds[field]!)]));
-  const candidateIds = new Set(repairFields.flatMap((field) => partial.unverifiedSourcePassageIds[field]!));
+  const allPassageIds = passages.map((passage) => passage.id);
+  const candidatesByField = new Map(repairFields.map((field) => {
+    const prior = partial.unverifiedSourcePassageIds[field];
+    return [field, new Set(prior?.length ? prior : allPassageIds)] as const;
+  }));
+  const candidateIds = new Set(repairFields.flatMap((field) => [...candidatesByField.get(field)!]));
   const candidatePassages = passages.filter((passage) => candidateIds.has(passage.id));
   const repaired = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
   const repairFailures = new Map<(typeof SDF_CORE_FIELDS)[number], string>();
@@ -777,13 +779,13 @@ async function repairCanonicalPartial(
   }));
   try {
     await gateway.completeStructured(guard, [{ role: 'system', content: [
-      '你是Hermes科研证据修订器。只修复先前因证据容量失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序仅核对来源身份、主张覆盖组合和预算。',
+      '你是Hermes科研证据修订器。只处理首轮留空或因证据容量失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序仅核对来源身份、主张覆盖组合和预算。',
       '每个claims条目是一句完整主张；supportSets列出1到3个可独立充分支持该主张的P编号组合。组合内来源共同支持，组合之间可替代。不得把诊断摘要当作真值，允许据原文纠错和去重。',
       '保留字段的关键假设、步骤、条件与验证；不得为预算删掉核心主张。若候选不足、矛盾未解或任何核心主张没有充分来源，返回claims=[]且needsMoreInformation=true。不得把容量或技术失败写成作者未报告。只输出JSON。',
       `输出schemaVersion="${SDF_CORE_VERSION}"，fields必须且只能包含${repairFields.join(',')}。每字段只能包含claims与needsMoreInformation。`,
     ].join(' ') }, { role: 'user', content: [
       `已验证字段只读语境：${JSON.stringify(supportedContext)}`,
-      `待修订诊断摘要（未验证）：${JSON.stringify(Object.fromEntries(repairFields.map((field) => [field, partial.unverifiedSummaries[field]])))}`,
+      `待修订诊断摘要（未验证；空字符串表示首轮未形成摘要）：${JSON.stringify(Object.fromEntries(repairFields.map((field) => [field, partial.unverifiedSummaries[field] ?? ''])))}`,
       `此前失败与实算预算：${JSON.stringify(Object.fromEntries(repairFields.map((field) => [field, {
         reason: partial.fieldDiagnostics[field], detail: partial.fieldDiagnosticsDetails[field] ?? '',
       }])))}`,
@@ -989,7 +991,17 @@ export async function extractHandler(
         unverifiedSourcePassageIds: partial.unverifiedSourcePassageIds,
       };
     }
-    const proposal = validation.mergeRetained();
+    let proposal = validation.mergeRetained();
+    if (SDF_CORE_FIELDS.some((field) => proposal.fields[field].needsMoreInformation)) {
+      const focused = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, {
+        proposal,
+        fieldDiagnostics: {},
+        fieldDiagnosticsDetails: {},
+        unverifiedSummaries: {},
+        unverifiedSourcePassageIds: {},
+      });
+      proposal = focused.proposal;
+    }
     if (SDF_CORE_FIELDS.every((field) => proposal.fields[field].needsMoreInformation)) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_all_fields_missing');
     }
