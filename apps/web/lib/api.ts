@@ -1581,6 +1581,7 @@ export function isRefreshableIngestionAnalysis(task: Pick<IngestionTaskDetail['t
   if (task.state !== 'needs_review' || !task.agentTaskId || !task.result
     || typeof task.result !== 'object' || Array.isArray(task.result)) return false;
   const result = task.result as Record<string, unknown>;
+  if (result.canonicalExtractionContract === 'grounded-passages-v2' && result.sourceMapAvailable === true) return true;
   const exactQuoteRefresh = task.retryCount === 0
     && result.canonicalExtractionContract === 'exact-quote-v1'
     && result.sourceMapAvailable === true;

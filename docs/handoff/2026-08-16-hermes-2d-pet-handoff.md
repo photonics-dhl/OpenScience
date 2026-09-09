@@ -1,5 +1,8 @@
 # Hermes Research Intelligence CURRENT Handoff
 
+## 当前执行：用户已要求重新处理论文
+- 候选补齐用户主动重新分析入口，当前v2成功解析结果可显式点击重新分析，沿现有sourceAgent稳定key/事务CAS/正常credit保留旧任务并复用OCR。仅用户请求触发，不增加自动重试或新contract版本。服务器实际当前Agent仍5dba592b、retry1、needs_review。
+
 ## 最新用户纠正与候选
 - 六维是展示组织，不是论文章节模板。method可隐含在推导、结果、图注或附录；先全文综合，再组织六维与核对来源。不能把来源格式失败称为论文缺失。
 - 本轮浏览器恢复：getTab用60秒成功，实际发送原Chat对话，网页6 Pro回复已读取，主张同次调用全文综合→六维组织→来源核对，来源失败保留草稿待核对。后续可复用CUA directChat.playwright.domSnapshot（比AX快）。

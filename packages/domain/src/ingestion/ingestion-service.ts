@@ -83,7 +83,7 @@ const CANONICAL_DIAGNOSTICS = new Set([
   'source_text_limit_8000', 'core_text_limit_4000', 'noncontiguous_block_passages',
 ]);
 type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1'
-  | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1' | 'grounded_summary_v1' | 'grounded_passages_v1' | 'grounded_passages_v2';
+  | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1' | 'grounded_summary_v1' | 'grounded_passages_v1' | 'grounded_passages_v2' | 'user_requested_reanalysis';
 
 function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
   if (isLegacyCharacterEvidenceResult(value)) return 'legacy_character_evidence_v1';
@@ -91,6 +91,14 @@ function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha25
   const result = value as Record<string, unknown>;
   const diagnostics = result.fieldDiagnostics;
   const core = result.core;
+  if (result.canonicalExtractionContract === 'grounded-passages-v2'
+    && exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) && validateSdfDraftCore(core).ok) {
+    try {
+      const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+      if (reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
+        && reference.contentHash === artifact.blobSha256) return 'user_requested_reanalysis';
+    } catch { return undefined; }
+  }
   if (result.canonicalExtractionContract === 'grounded-passages-v1'
     && result.reason === 'canonical_partial_validation_exhausted'
     && exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) && validateSdfDraftCore(core).ok
@@ -502,7 +510,7 @@ export async function refreshIngestionAnalysis(
   }
   const keyPrefix = `ingestion-analysis-refresh:${input.taskId}:${input.sourceAgentTaskId}:`;
   const replay = await deps.prisma.agentTask.findFirst({
-    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`, `${keyPrefix}grounded-summary-v1`, `${keyPrefix}grounded-passages-v1`, `${keyPrefix}grounded-passages-v2`] } },
+    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`, `${keyPrefix}grounded-summary-v1`, `${keyPrefix}grounded-passages-v1`, `${keyPrefix}grounded-passages-v2`, `${keyPrefix}user-requested-reanalysis`] } },
     include: { session: true },
   });
   if (replay) {
@@ -520,7 +528,7 @@ export async function refreshIngestionAnalysis(
   const oldPayload = oldAgent?.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload)
     ? oldAgent.payload as Record<string, unknown> : null;
   const policy = oldAgent ? analysisRefreshPolicy(oldAgent.result, initial.artifact) : undefined;
-  const allowedRetries = policy === 'grounded_passages_v1' ? 2 : policy === 'grounded_passages_v2' ? 1 : 0;
+  const allowedRetries = policy === 'user_requested_reanalysis' ? initial.retryCount : policy === 'grounded_passages_v1' ? 2 : policy === 'grounded_passages_v2' ? 1 : 0;
   if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review' || initial.retryCount < 0 || initial.retryCount > allowedRetries
     || !oldAgent || oldAgent.kind !== 'sdf.extract' || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== initial.retryCount
     || oldAgent.executionAttempt !== initial.retryCount + 1 || oldAgent.session.userId !== input.userId
@@ -535,7 +543,7 @@ export async function refreshIngestionAnalysis(
   if (policy !== 'legacy_character_evidence_v1') {
     const reference = parseDocumentSourceMapReference((oldAgent!.result as Record<string, unknown>).sourceMapRef);
     const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
-    const affected = policy === 'grounded_summary_v1' || policy === 'grounded_passages_v1' || policy === 'grounded_passages_v2' ? true : policy === 'native_pdf_fragmentation_v1'
+    const affected = policy === 'user_requested_reanalysis' || policy === 'grounded_summary_v1' || policy === 'grounded_passages_v1' || policy === 'grounded_passages_v2' ? true : policy === 'native_pdf_fragmentation_v1'
       ? isOldFragmentedNativePdfMap(sourceMap)
       : isLineRunNativePdfMap(sourceMap);
     if (!affected) {
