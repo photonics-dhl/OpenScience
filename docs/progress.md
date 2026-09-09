@@ -1,10 +1,12 @@
 # Progress
 
-## 2026-09-09 — 旧文献重新分析（候选完成）
+## 2026-09-09 — 旧文献重新分析（已部署；真实分段缺陷修复中）
 - 只读服务器确认Quantization五项缺失来自2026-08-28旧AgentTask，未带sourceMapRef/evidenceSegments；不是当前canonical链路新结果。
 - 新增显式legacy refresh：复用artifact，独立新AgentTask正常扣1额度，与原IngestionTask绑定切换同事务；旧分析保留、固定请求幂等、权限/来源/确认竞态保护。
 - 编辑/Hermes同任务入口接续；网络歧义先恢复服务器状态。网页6Pro讨论2m38s、Sol/medium实现、Sol/high静态复核无发布阻塞。未测试或本地构建。
-- 下一步服务器部署后，通过正常产品入口对这份旧材料进行一次实际更新，不重新上传、不手工填正文、不自动确认。当前生产18b69b3c。
+- a0b47065服务器部署exit0；首次7e0e32ef因web类型声明失败，修正后完成，日志1788931956339-e8e092c0-ce78-4270-9b60-8262c0a3e4c2。
+- 正式UI一次更新生成Agent018b0c76-ef08-4db9-8dd7-8703d6195fd0：3字段非空但断句、results超过32segments，不合格/未确认。真实15页SourceMap揭示PDF.js每text-run直接paragraph，词级碎片占用证据上限。
+- 正修保守同行run合并、原文/坐标及新版processor、完整句span要求；明确旧processor+段数错误才可新任务修复。网页6Pro实际2m复核，保持科学边界/不跨栏/旧locator不重绑；不加测试或盲增上限。
 
 ## 2026-09-09 — 上传后自动整理与编辑预填（已部署）
 - 编辑/文件上传文献直接复用服务器 ingestion→解析/OCR→AI；新建入口与已有任务进入同一编辑预填流程，普通附件不重复分析。

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
-import { authorizeIngestionWrite, confirmIngestionClaimEvidenceBridge, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, IngestionError, listActionableIngestionTasks, listIngestionClaimEvidenceCandidates, previewIngestionClaimEvidenceBridge, refreshLegacyIngestionTask, retryIngestionTask, type IngestionDeps } from '@openscience/domain';
+import { authorizeIngestionWrite, confirmIngestionClaimEvidenceBridge, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, IngestionError, listActionableIngestionTasks, listIngestionClaimEvidenceCandidates, previewIngestionClaimEvidenceBridge, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -100,7 +100,7 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
     if (!user) return;
     const { taskId } = z.object({ taskId: z.string().uuid() }).parse(req.params);
     const body = z.object({ processingConsent: z.literal(true), sourceAgentTaskId: z.string().uuid() }).strict().parse(req.body);
-    return reply.status(202).send({ task: await refreshLegacyIngestionTask(deps, { userId: user.userId, taskId, ...body }, auditCtx(req)) });
+    return reply.status(202).send({ task: await refreshIngestionAnalysis(deps, { userId: user.userId, taskId, ...body }, auditCtx(req)) });
   });
 
   app.post('/ingestion/:taskId/confirm', async (req, reply) => {

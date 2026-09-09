@@ -13,6 +13,7 @@ const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 const MAX_PARSED_TEXT_CHARS = 5 * 1024 * 1024;
 const MAX_PDF_PAGES = 10_000;
 const MAX_PDF_BLOCKS = 10_000;
+const MAX_PDF_TEXT_ITEMS = 100_000;
 const MAX_PDF_OPERATORS = 100_000;
 // Pinned pdfjs-dist 5.4.296 operator identifiers.
 const PDFJS_OP_SET_FONT = 37;
@@ -237,6 +238,81 @@ function textItemBoundingBox(item: PdfTextItem, viewport: PdfViewport) {
   return { x, y, width, height };
 }
 
+interface PdfLineRun {
+  text: string;
+  boundingBox: { x: number; y: number; width: number; height: number };
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  direction: { x: number; y: number };
+  itemHeight: number;
+  hasEOL: boolean;
+}
+
+function lineRun(item: PdfTextItem, viewport: PdfViewport, text = item.str): PdfLineRun {
+  const boundingBox = textItemBoundingBox(item, viewport);
+  const transform = transformProduct(viewport.transform, item.transform);
+  const magnitude = Math.hypot(transform[0]!, transform[1]!);
+  if (!Number.isFinite(magnitude) || magnitude <= 0) throw new PdfTextGeometryError('invalid PDF text direction');
+  const direction = { x: transform[0]! / magnitude, y: transform[1]! / magnitude };
+  const start = { x: transform[4]!, y: transform[5]! };
+  return {
+    text,
+    boundingBox,
+    start,
+    end: { x: start.x + direction.x * item.width, y: start.y + direction.y * item.width },
+    direction,
+    itemHeight: item.height,
+    hasEOL: item.hasEOL,
+  };
+}
+
+function unionBox(left: PdfLineRun['boundingBox'], right: PdfLineRun['boundingBox']): PdfLineRun['boundingBox'] {
+  const x = Math.min(left.x, right.x);
+  const y = Math.min(left.y, right.y);
+  const edgeX = Math.max(left.x + left.width, right.x + right.width);
+  const edgeY = Math.max(left.y + left.height, right.y + right.height);
+  return { x, y, width: edgeX - x, height: edgeY - y };
+}
+
+/** Merge only consecutive, same-baseline horizontal runs before canonical block IDs are assigned. */
+function mergePdfLineRuns(items: readonly PdfLineRun[]): PdfLineRun[] {
+  const merged: PdfLineRun[] = [];
+  for (const item of items) {
+    const prior = merged[merged.length - 1];
+    if (!prior || prior.hasEOL) {
+      merged.push({ ...item, boundingBox: { ...item.boundingBox } });
+      continue;
+    }
+    const directionDot = prior.direction.x * item.direction.x + prior.direction.y * item.direction.y;
+    const directionCross = Math.abs(prior.direction.x * item.direction.y - prior.direction.y * item.direction.x);
+    const normal = { x: -prior.direction.y, y: prior.direction.x };
+    const baselineOffset = Math.abs((item.start.x - prior.start.x) * normal.x + (item.start.y - prior.start.y) * normal.y);
+    const gap = (item.start.x - prior.end.x) * prior.direction.x + (item.start.y - prior.end.y) * prior.direction.y;
+    const minHeight = Math.min(prior.itemHeight, item.itemHeight);
+    const maxHeight = Math.max(prior.itemHeight, item.itemHeight);
+    const averageCharacterWidth = Math.max(0.5, prior.boundingBox.width / Math.max(1, [...prior.text].length));
+    const canMerge = Math.abs(prior.direction.x) > 0.98 && Math.abs(item.direction.x) > 0.98
+      && directionDot > 0.999 && directionCross < 0.045
+      && maxHeight / minHeight <= 1.35
+      && baselineOffset <= Math.max(1, maxHeight * 0.2)
+      && gap >= -minHeight * 0.25
+      && gap <= Math.max(maxHeight * 1.5, averageCharacterWidth * 2.5)
+      && prior.text.length + item.text.length + 1 <= 50_000;
+    if (!canMerge) {
+      merged.push({ ...item, boundingBox: { ...item.boundingBox } });
+      continue;
+    }
+    const separator = /\s$/u.test(prior.text) || /^\s/u.test(item.text)
+      ? '' : gap > averageCharacterWidth * 0.15 ? ' ' : '';
+    prior.text = `${prior.text}${separator}${item.text}`;
+    prior.boundingBox = unionBox(prior.boundingBox, item.boundingBox);
+    prior.end = item.end;
+    prior.itemHeight = Math.max(prior.itemHeight, item.itemHeight);
+    prior.hasEOL = item.hasEOL;
+  }
+  return merged;
+}
+
 export async function parseStructuredPdfResult(content: Buffer): Promise<ParserStageResult> {
   const loadRuntimeModule = createRequire(__filename);
   const { PDFParse } = loadRuntimeModule('pdf-parse') as PdfParseModule;
@@ -260,12 +336,11 @@ export async function parseStructuredPdfResult(content: Buffer): Promise<ParserS
           disableNormalization: false,
         });
         let hasPotentialNotEqualsOverlay = false;
+        if (textContent.items.length > MAX_PDF_TEXT_ITEMS) throw new Error('PDF text item limit exceeded');
         for (const item of textContent.items) {
           if (!('str' in item) || !item.str.trim()) continue;
-          blockCount += 1;
           textCharacters += item.str.length;
-          if (blockCount > MAX_PDF_BLOCKS || item.str.length > 50_000
-            || textCharacters > MAX_PARSED_TEXT_CHARS) {
+          if (item.str.length > 50_000 || textCharacters > MAX_PARSED_TEXT_CHARS) {
             throw new Error('PDF text item limit exceeded');
           }
           hasPotentialNotEqualsOverlay ||= item.str === '6' && item.width === 0;
@@ -278,17 +353,13 @@ export async function parseStructuredPdfResult(content: Buffer): Promise<ParserS
         let certifiedOverlayIndex = 0;
         let sawCertifiedOverlayCandidate = false;
         const consumedItems = new Set<number>();
-        const blocks: StagePage['blocks'] = [];
+        const runs: PdfLineRun[] = [];
         let pageHasUnrepresentableTextGeometry = false;
         for (const [itemIndex, item] of textContent.items.entries()) {
           if (!('str' in item) || !item.str.trim()) continue;
           if (consumedItems.has(itemIndex)) continue;
           try {
-            blocks.push({
-              kind: 'paragraph',
-              text: item.str,
-              boundingBox: textItemBoundingBox(item, viewport),
-            });
+            runs.push(lineRun(item, viewport));
           } catch (error) {
             if (!(error instanceof PdfTextGeometryError)) throw error;
             const certified = certifiedOverlays[certifiedOverlayIndex];
@@ -303,11 +374,7 @@ export async function parseStructuredPdfResult(content: Buffer): Promise<ParserS
             if (composableNotEquals && following) {
               sawCertifiedOverlayCandidate = true;
               try {
-                blocks.push({
-                  kind: 'paragraph',
-                  text: '≠',
-                  boundingBox: textItemBoundingBox(following.item, viewport),
-                });
+                runs.push(lineRun(following.item, viewport, '≠'));
                 consumedItems.add(following.index);
                 certifiedOverlayIndex += 1;
                 continue;
@@ -321,6 +388,12 @@ export async function parseStructuredPdfResult(content: Buffer): Promise<ParserS
         if (sawCertifiedOverlayCandidate && certifiedOverlayIndex !== certifiedOverlays.length) {
           pageHasUnrepresentableTextGeometry = true;
         }
+        const mergedRuns = pageHasUnrepresentableTextGeometry ? [] : mergePdfLineRuns(runs);
+        blockCount += mergedRuns.length;
+        if (blockCount > MAX_PDF_BLOCKS) throw new Error('PDF text item limit exceeded');
+        const blocks: StagePage['blocks'] = mergedRuns.map((run) => ({
+          kind: 'paragraph', text: run.text, boundingBox: run.boundingBox,
+        }));
         if (pageHasUnrepresentableTextGeometry) partialResult = true;
         pages.push({
           page: pageNumber,

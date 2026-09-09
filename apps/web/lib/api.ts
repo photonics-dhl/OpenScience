@@ -1566,7 +1566,7 @@ export async function retryIngestionTask(taskId: string): Promise<IngestionTaskS
   return result.task;
 }
 
-export async function refreshLegacyIngestionTask(taskId: string, sourceAgentTaskId: string): Promise<IngestionTaskSummary> {
+export async function refreshIngestionAnalysis(taskId: string, sourceAgentTaskId: string): Promise<IngestionTaskSummary> {
   const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/refresh`, {
     method: 'POST',
     body: JSON.stringify({ processingConsent: true, sourceAgentTaskId }),
@@ -1577,13 +1577,21 @@ export async function refreshLegacyIngestionTask(taskId: string, sourceAgentTask
 const LEGACY_INGESTION_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
 
 /** Public-result guard for the old character-offset extraction contract. */
-export function isLegacyCharacterEvidenceExtraction(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount' | 'agentTaskId'>): boolean {
+export function isRefreshableIngestionAnalysis(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount' | 'agentTaskId'>): boolean {
   if (task.state !== 'needs_review' || task.retryCount !== 0 || !task.agentTaskId || !task.result
     || typeof task.result !== 'object' || Array.isArray(task.result)) return false;
   const result = task.result as Record<string, unknown>;
   const core = result.core;
   const evidence = result.evidence;
   const missing = result.needsMoreInformation;
+  const diagnostics = result.fieldDiagnostics;
+  const fragmentedCanonical = result.reason === 'canonical_partial_validation_exhausted'
+    && diagnostics && typeof diagnostics === 'object' && !Array.isArray(diagnostics)
+    && Object.keys(diagnostics).length > 0
+    && Object.entries(diagnostics).every(([field, reason]) => LEGACY_INGESTION_FIELDS.includes(field as typeof LEGACY_INGESTION_FIELDS[number])
+      && ['malformed_item', 'missing_requires_empty', 'summary_required', 'segment_count_1_to_32', 'duplicate_ids', 'unknown_ids', 'ordered_ids_required', 'contiguous_ids_required', 'source_text_limit_8000', 'core_text_limit_4000'].includes(String(reason)))
+    && Object.values(diagnostics).some((reason) => reason === 'segment_count_1_to_32');
+  if (fragmentedCanonical) return true;
   if (Object.keys(result).sort().join(',') !== ['core', 'evidence', 'needsMoreInformation'].sort().join(',')
     || !core || typeof core !== 'object' || Array.isArray(core)
     || !evidence || typeof evidence !== 'object' || Array.isArray(evidence)

@@ -25,10 +25,10 @@ import {
   getCurrentUser,
   getIngestionTask,
   getResearchObject,
-  isLegacyCharacterEvidenceExtraction,
+  isRefreshableIngestionAnalysis,
   listVersions,
   retryAgentTask,
-  refreshLegacyIngestionTask,
+  refreshIngestionAnalysis,
   submitExtractTask,
   updateSdf,
   type ArtifactReference,
@@ -359,11 +359,11 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   async function refreshLegacyProposal() {
-    if (!ingestionProposal?.detail.task.agentTaskId || refreshingLegacyIngestion || !isLegacyCharacterEvidenceExtraction(ingestionProposal.detail.task)) return;
+    if (!ingestionProposal?.detail.task.agentTaskId || refreshingLegacyIngestion || !isRefreshableIngestionAnalysis(ingestionProposal.detail.task)) return;
     setRefreshingLegacyIngestion(true);
     setIngestionMessage(null);
     try {
-      const task = await refreshLegacyIngestionTask(ingestionProposal.detail.task.id, ingestionProposal.detail.task.agentTaskId);
+      const task = await refreshIngestionAnalysis(ingestionProposal.detail.task.id, ingestionProposal.detail.task.agentTaskId);
       setIngestionProposal(null);
       setConfirmationIntent(null);
       setIngestionTasks((current) => current.map((candidate) => candidate.id === task.id ? { ...task, confirmation: null } : candidate));
@@ -790,7 +790,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                   </label>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-os-muted-paper">{t('ingestionProposalBody')}</p>
-                {ingestionProposal && isLegacyCharacterEvidenceExtraction(ingestionProposal.detail.task) ? (
+                {ingestionProposal && isRefreshableIngestionAnalysis(ingestionProposal.detail.task) ? (
                   <div className="mt-4 border-l-2 border-os-vermilion-ink pl-4">
                     <p className="text-sm leading-6 text-os-muted-paper">{t('legacyRefreshBody')}</p>
                     <button type="button" className="mt-3 min-h-11 rounded-panel border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink disabled:opacity-50" disabled={refreshingLegacyIngestion || confirmingIngestion} onClick={() => void refreshLegacyProposal()}>{refreshingLegacyIngestion ? t('legacyRefreshing') : t('legacyRefreshAction')}</button>

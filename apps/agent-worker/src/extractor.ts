@@ -620,6 +620,7 @@ export async function extractHandler(
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能是 {"summary": string, "sourceBlockIds": string[], "needsMoreInformation": boolean}，不得把字段写成字符串、数组或增加其他键。',
         `每个非缺失字段先确定一个原始 ordinal 连续的 SOURCE_BLOCK 跨度；sourceBlockIds 可列出首尾锚点或跨度内的递增子集，服务端会补齐该范围内所有已提供的中间块。补齐后的跨度必须包含 1-${MAX_EVIDENCE_SEGMENTS} 个块，证据合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符，拼接后的 canonical core 不超过 ${MAX_CANONICAL_CORE_CHARS} 字符；不得改写、倒序或重复 id，也不得依赖输入中未提供的中间块。`,
         '逐字段独立判断：先选择能直接陈述一个核心要点的最短完整连续跨度，优先不超过600字符；600字符只是偏好，不得为缩短而丢失否定、适用条件、数值单位、实验或理论性质。服务端会把所选块原文以换行拼接为 canonical core，不使用模型自由概括。',
+        '自然语言证据跨度必须包含完整主语、完整句子或完整论证起止，不得从句中术语或未闭合从句开始，也不得在未完成的词组、限定条件或因果链中结束；可向前后扩展连续块以保留这些条件。公式、参数或符号可保留其自身完整上下文，不要求机械按句号裁切。不同字段应各自选择最直接、独立支持其字段含义的跨度。',
         'summary 仅为兼容现有 JSON wire shape，填写非空简短说明；它不会进入 canonical core。若完整证据需超过32块或4000字符，应缩小到仍完整受支持的单一要点，不能任意截断必要证据。不要因一个字段缺失而清空其他字段。',
         '跨行示例（仅说明结构，不是 SOURCE，严禁引用示例 ID）：EXAMPLE_1="方法甲测量"、EXAMPLE_2="量乙。"共同支持"方法甲测量量乙。"；正式输出只能使用用户输入的 SOURCE_BLOCK id。',
         '严格区分理论预测、仿真与实测，不能把缺少主语或限定词的片段扩写成实验结论；results 中的理论或仿真结果必须明确注明其性质。',

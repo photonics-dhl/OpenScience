@@ -16,7 +16,7 @@ import { SDF_NODE_TYPES } from '../research-object/types';
 import type { SdfDocumentView } from '../research-object/sdf';
 import { carryVersionEvidence, writeIngestionEvidence } from './ingestion-evidence';
 import { IngestionError } from './errors';
-import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
+import { loadDocumentSourceMapReference, parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { recordEntry } from '../usage/ledger';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
 import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
@@ -74,6 +74,47 @@ function isLegacyCharacterEvidenceResult(value: unknown): boolean {
   })) return false;
   return Array.isArray(result.needsMoreInformation)
     && result.needsMoreInformation.every((field) => SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number]));
+}
+
+const CANONICAL_DIAGNOSTICS = new Set([
+  'malformed_item', 'missing_requires_empty', 'summary_required', 'segment_count_1_to_32',
+  'duplicate_ids', 'unknown_ids', 'ordered_ids_required', 'contiguous_ids_required',
+  'source_text_limit_8000', 'core_text_limit_4000',
+]);
+type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1';
+
+function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
+  if (isLegacyCharacterEvidenceResult(value)) return 'legacy_character_evidence_v1';
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const result = value as Record<string, unknown>;
+  const diagnostics = result.fieldDiagnostics;
+  const core = result.core;
+  if (result.reason !== 'canonical_partial_validation_exhausted' || !diagnostics
+    || typeof diagnostics !== 'object' || Array.isArray(diagnostics)
+    || !exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) || !validateSdfDraftCore(core).ok
+    || SDF_NODE_TYPES.some((field) => typeof core[field] !== 'string')
+    || !SDF_NODE_TYPES.some((field) => String(core[field]).trim())) return undefined;
+  const entries = Object.entries(diagnostics);
+  if (entries.length === 0 || entries.some(([field, reason]) => !SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number])
+    || typeof reason !== 'string' || !CANONICAL_DIAGNOSTICS.has(reason))
+    || !entries.some(([, reason]) => reason === 'segment_count_1_to_32')) return undefined;
+  try {
+    const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+    return reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
+      && reference.contentHash === artifact.blobSha256 ? 'native_pdf_fragmentation_v1' : undefined;
+  } catch { return undefined; }
+}
+
+function isOldFragmentedNativePdfMap(sourceMap: Awaited<ReturnType<typeof loadDocumentSourceMapReference>>): boolean {
+  const oldVersion = '2.4.5+pdfjs-dist.5.4.296';
+  const newVersion = '2.4.5+pdfjs-dist.5.4.296.line-runs.1';
+  const blocks = sourceMap.pages.flatMap((page) => page.blocks);
+  return sourceMap.parser.name === 'openscience-parser-cascade' && sourceMap.parser.version === '1.0.0'
+    && blocks.some((block) => block.parser.name === 'pdf-parse-pdfjs-text-items' && block.parser.version === oldVersion
+      && block.transformations.some((item) => item.stage === 'extract_text'
+        && item.processor.name === 'pdf-parse-pdfjs-text-items' && item.processor.version === oldVersion))
+    && !blocks.some((block) => block.parser.name === 'pdf-parse-pdfjs-text-items' && block.parser.version === newVersion
+      || block.transformations.some((item) => item.processor.name === 'pdf-parse-pdfjs-text-items' && item.processor.version === newVersion));
 }
 
 export async function authorizeIngestionWrite(
@@ -374,21 +415,68 @@ export async function retryIngestionTask(
   return taskToView(queued);
 }
 
-/** Explicit paid upgrade for a legacy successful extraction that lacks canonical source-map evidence. */
-export async function refreshLegacyIngestionTask(
+/** Explicit paid refresh for a narrowly recognized extraction generation. */
+export async function refreshIngestionAnalysis(
   deps: IngestionDeps,
   input: { userId: string; taskId: string; sourceAgentTaskId: string; processingConsent: boolean },
   ctx: AuditContext = {},
 ): Promise<IngestionTaskView> {
   if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
-  const stableKey = `ingestion-legacy-refresh:${input.taskId}:${input.sourceAgentTaskId}:v1`;
+  const initial = await deps.prisma.ingestionTask.findUnique({
+    where: { id: input.taskId }, include: { artifact: true, batch: { include: { researchObject: true } } },
+  });
+  if (!initial) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+  const { workspace, membership } = await requireActiveMembership(deps.prisma, initial.batch.researchObject.workspaceId, input.userId);
+  if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+  if (initial.batch.userId !== input.userId || initial.artifact.workspaceId !== workspace.id) {
+    throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion analysis source is unavailable');
+  }
+  const keyPrefix = `ingestion-analysis-refresh:${input.taskId}:${input.sourceAgentTaskId}:`;
+  const replay = await deps.prisma.agentTask.findFirst({
+    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`] } },
+    include: { session: true },
+  });
+  if (replay) {
+    const payload = replay.payload && typeof replay.payload === 'object' && !Array.isArray(replay.payload) ? replay.payload as Record<string, unknown> : null;
+    if (initial.agentTaskId !== replay.id || replay.kind !== 'sdf.extract' || replay.session.userId !== input.userId
+      || replay.session.researchObjectId !== initial.batch.researchObjectId || replay.session.status !== 'active'
+      || !payload || !exactRecordKeys(payload, ['artifactId', 'researchObjectId'])
+      || payload.artifactId !== initial.artifactId || payload.researchObjectId !== initial.batch.researchObjectId) {
+      throw new IngestionError('VALIDATION_ERROR', 'Analysis refresh replay scope does not match');
+    }
+    await dispatchAgentTask(deps, replay.id);
+    return taskToView(initial);
+  }
+  const oldAgent = await deps.prisma.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
+  const oldPayload = oldAgent?.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload)
+    ? oldAgent.payload as Record<string, unknown> : null;
+  if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review' || initial.retryCount !== 0
+    || !oldAgent || oldAgent.kind !== 'sdf.extract' || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== 0
+    || oldAgent.executionAttempt !== 1 || oldAgent.session.userId !== input.userId
+    || oldAgent.session.researchObjectId !== initial.batch.researchObjectId || oldAgent.session.status !== 'active'
+    || !oldPayload || oldPayload.artifactId !== initial.artifactId || oldPayload.researchObjectId !== initial.batch.researchObjectId
+    || await savedConfirmation(deps, initial.id, initial.batch.researchObjectId)) {
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the scoped unconfirmed extraction can be refreshed');
+  }
+  const policy = oldAgent ? analysisRefreshPolicy(oldAgent.result, initial.artifact) : undefined;
+  if (!policy) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction is not eligible for analysis refresh');
+  let sourceMapProof: { objectKey: string; serializedSha256: string } | undefined;
+  if (policy === 'native_pdf_fragmentation_v1') {
+    const reference = parseDocumentSourceMapReference((oldAgent!.result as Record<string, unknown>).sourceMapRef);
+    const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+    if (!isOldFragmentedNativePdfMap(sourceMap)) {
+      throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction does not use the affected PDF parser generation');
+    }
+    sourceMapProof = { objectKey: reference.objectKey, serializedSha256: reference.serializedSha256 };
+  }
+  const stableKey = `${keyPrefix}${policy.replaceAll('_', '-')}`;
   let queued: Prisma.IngestionTaskGetPayload<{ include: { artifact: true } }> | null = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       queued = await deps.prisma.$transaction(async (tx) => {
         const source = await tx.ingestionTask.findUnique({
           where: { id: input.taskId },
-          include: { artifact: true, agentTask: { include: { session: true } }, batch: { include: { researchObject: true } } },
+          include: { artifact: true, batch: { include: { researchObject: true } } },
         });
         if (!source) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
         const { workspace, membership } = await requireActiveMembership(tx, source.batch.researchObject.workspaceId, input.userId);
@@ -397,29 +485,36 @@ export async function refreshLegacyIngestionTask(
           throw new IngestionError('INGESTION_NOT_FOUND', 'Legacy ingestion source is unavailable');
         }
 
-        const replay = await tx.agentTask.findUnique({ where: { idempotencyKey: stableKey }, include: { session: true } });
-        if (replay) {
-          const payload = replay.payload && typeof replay.payload === 'object' && !Array.isArray(replay.payload) ? replay.payload as Record<string, unknown> : null;
-          if (source.agentTaskId !== replay.id || replay.kind !== 'sdf.extract'
-            || replay.session.userId !== input.userId || replay.session.researchObjectId !== source.batch.researchObjectId
-            || replay.session.status !== 'active' || !payload || !exactRecordKeys(payload, ['artifactId', 'researchObjectId'])
+        const transactionReplay = await tx.agentTask.findUnique({ where: { idempotencyKey: stableKey }, include: { session: true } });
+        if (transactionReplay) {
+          const payload = transactionReplay.payload && typeof transactionReplay.payload === 'object' && !Array.isArray(transactionReplay.payload) ? transactionReplay.payload as Record<string, unknown> : null;
+          if (source.agentTaskId !== transactionReplay.id || transactionReplay.kind !== 'sdf.extract'
+            || transactionReplay.session.userId !== input.userId || transactionReplay.session.researchObjectId !== source.batch.researchObjectId
+            || transactionReplay.session.status !== 'active' || !payload || !exactRecordKeys(payload, ['artifactId', 'researchObjectId'])
             || payload.artifactId !== source.artifactId || payload.researchObjectId !== source.batch.researchObjectId) {
             throw new IngestionError('VALIDATION_ERROR', 'Legacy refresh replay scope does not match');
           }
           return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
         }
 
-        const oldAgent = source.agentTask;
+        const oldAgent = await tx.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
         if (source.agentTaskId !== input.sourceAgentTaskId || source.state !== 'needs_review' || source.retryCount !== 0
           || !oldAgent || oldAgent.id !== input.sourceAgentTaskId || oldAgent.kind !== 'sdf.extract'
           || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== 0 || oldAgent.executionAttempt !== 1
           || oldAgent.session.userId !== input.userId || oldAgent.session.researchObjectId !== source.batch.researchObjectId
-          || oldAgent.session.status !== 'active' || !isLegacyCharacterEvidenceResult(oldAgent.result)) {
-          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only an unconfirmed legacy extraction can be refreshed');
+          || oldAgent.session.status !== 'active' || analysisRefreshPolicy(oldAgent.result, source.artifact) !== policy) {
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the scoped unconfirmed extraction can be refreshed');
         }
         const oldPayload = oldAgent.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload) ? oldAgent.payload as Record<string, unknown> : null;
         if (!oldPayload || oldPayload.artifactId !== source.artifactId || oldPayload.researchObjectId !== source.batch.researchObjectId) {
           throw new IngestionError('VALIDATION_ERROR', 'Legacy extraction source does not match its artifact');
+        }
+        if (policy === 'native_pdf_fragmentation_v1') {
+          const reference = parseDocumentSourceMapReference((oldAgent.result as Record<string, unknown>).sourceMapRef);
+          if (!sourceMapProof || reference.objectKey !== sourceMapProof.objectKey
+            || reference.serializedSha256 !== sourceMapProof.serializedSha256) {
+            throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction source map changed while refreshing');
+          }
         }
         if (await savedConfirmation({ ...deps, prisma: tx as IngestionDeps['prisma'] }, source.id, source.batch.researchObjectId)) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Confirmed ingestion cannot be refreshed');
@@ -429,7 +524,7 @@ export async function refreshLegacyIngestionTask(
           userId: input.userId,
           researchObjectId: source.batch.researchObjectId,
           kind: 'ingestion',
-          title: `Legacy ingestion refresh ${source.id}`,
+          title: `Ingestion analysis refresh ${source.id}`,
           idempotencyKey: `${stableKey}:session`,
         }, ctx);
         const { task: replacement } = await persistAgentTaskInTransaction(deps, tx, {
@@ -446,11 +541,12 @@ export async function refreshLegacyIngestionTask(
         if (changed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Legacy extraction changed while refreshing');
         await recordAudit(deps, tx, {
           actorId: input.userId,
-          action: 'ingestion.task.legacy_refresh',
+          action: 'ingestion.task.analysis_refresh',
           workspaceId: workspace.id,
           targetType: 'ingestion_task',
           targetId: source.id,
-          metadata: { oldAgentTaskId: input.sourceAgentTaskId, newAgentTaskId: replacement.id, artifactId: source.artifactId, creditPolicy: 'charged_legacy_artifact_refresh' },
+          metadata: { policy, oldAgentTaskId: input.sourceAgentTaskId, newAgentTaskId: replacement.id, artifactId: source.artifactId,
+            sourceMapSha256: sourceMapProof?.serializedSha256 ?? null, creditPolicy: 'charged_ingestion_analysis_refresh' },
         }, ctx);
         return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
       }, { isolationLevel: 'Serializable' });

@@ -6,6 +6,9 @@
 - Preserve scientific sources, workspace permissions, user approval, billing and sandbox boundaries.
 
 ## Active upload-to-draft task
+- 最新生产a0b470651c817beda301f753029ccfc36cacb60e / rollback18b69b3c；7e0e32ef首次服务器构建因web detail.state string失败，a0b47065对齐IngestionTaskSummary修正后部署exit0，日志1788931956339-e8e092c0-ce78-4270-9b60-8262c0a3e4c2。
+- 正式UI已点击一次1-credit重新分析，得到新Agent018b0c76-ef08-4db9-8dd7-8703d6195fd0 succeeded/needs_review。结果不合格：problem/insight/method非空但断句，results诊断segment_count_1_to_32，reason canonical_partial_validation_exhausted；不确认、不当完成。
+- 真实sourceMap15页、946595bytes，parser cascade1.0.0，block processor pdf-parse-pdfjs-text-items 2.4.5+pdfjs-dist.5.4.296；同行被逐词分块，代码native-pdf-text-items每item直接paragraph为根因。worker正修保守同行归并/版本标记/自然语言完整span提示；High设计仅旧processor+明确段数失败可再独立新Agent修复，正常credit/CAS保留旧结果。禁止盲增32/降科学证据规则。
 - 当前追加：用户要求提升其余五字段提取。只读服务器确认task7a28a7c8-90f7-429b-a519-53397cf58856 / agent0373e9fb-adfc-42e3-8599-159de1094e65 创建2026-08-28，旧core+chars证据，无sourceMapRef/evidenceSegments；不是当前canonical链路新结果，不能据旧空项断言当前OCR失败。
 - 实施中：同IngestionTask保留入口，事务内正常计费创建新sdf.extract AgentTask/CAS绑定，旧AgentTask/result保留；显式旧材料refresh、严格旧shape/未确认/owner/RO/artifact/幂等，沿现有dispatch，不原地清result、不建第二batch。Sol/medium负责代码，Sol/high复核，主负责网页/文档/部署。
 - 网页1（原3）6Pro实际新讨论2m38s：复用artifact、新分析保留旧结果、预算/幂等/人工修改保护、不承诺补齐无证据字段。产品2（原4）连接已恢复，旧字段状态仍在；下一步完成候选→服务器部署→正常产品更新这份旧材料，不测试/重传/强改DB。

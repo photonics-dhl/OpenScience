@@ -14,7 +14,7 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, confirmIngestionTask, apiRequest, getHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, isLegacyCharacterEvidenceExtraction, refreshLegacyIngestionTask, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
+import { ApiClientError, confirmIngestionTask, apiRequest, getHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, isRefreshableIngestionAnalysis, refreshIngestionAnalysis, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
@@ -123,7 +123,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
   const paidReanalysis = canonicalAllMissing || (detail?.task.state === 'failed_retryable' && detail.task.retryCount === 1);
   const compensatedReanalysis = detail?.task.state === 'failed_retryable' && detail.task.retryCount === 2;
   const proposalUnavailable = detail ? isRetryableSdfExtraction(detail.task) : false;
-  const legacyRefreshAvailable = detail ? isLegacyCharacterEvidenceExtraction(detail.task) : false;
+  const legacyRefreshAvailable = detail ? isRefreshableIngestionAnalysis(detail.task) : false;
   const approvalOpen = detail?.task.state === 'needs_review' && !proposalUnavailable;
   const reviewSuggestion = useMemo(() => detail ? ({
     bodyKey: 'guide.review.body',
@@ -161,7 +161,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
     if (!detail?.task.agentTaskId || !legacyRefreshAvailable || saving || detail.researchObjectId !== routeParams.id) return;
     setSaving(true); setError('');
     try {
-      await refreshLegacyIngestionTask(taskId, detail.task.agentTaskId);
+      await refreshIngestionAnalysis(taskId, detail.task.agentTaskId);
       if (mounted.current) setReload((value) => value + 1);
     } catch (cause) {
       try {
