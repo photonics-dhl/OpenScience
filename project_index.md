@@ -553,3 +553,5 @@
 - `infra/migrations/20260908030000_hermes_content_driven_video/`：扩展明确的内容驱动生成授权，已部署9236dbf7；旧授权不自动扩大。
 
 | `apps/web/public/hermes/wanko-static-transparent.png` | 登录与Hermes加载态透明背景衍生图（imagegen，原图保留） | 已随b03263de部署，登录实际无褐底；见CURRENT handoff |
+
+| `apps/web/lib/ingestion-proposal-draft.ts` | 用户/RO/版本/task隔离的提取建议草稿与已触碰字段保存 | 上传自动整理候选；CURRENT handoff与集成计划记录进度 |

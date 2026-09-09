@@ -5,6 +5,14 @@
 - NO tests/preflights/benchmarks/local runtime/build/CI tests. Necessary server build/deploy and actual authorized product generation only. No direct DB resets, duplicate uploads or deletion.
 - Preserve scientific sources, workspace permissions, user approval, billing and sandbox boundaries.
 
+## Active upload-to-draft task
+- User nowrequiresPDFupload automaticallyextract+AIorganize editablefields withminimalmanualoperations. Chat tab3 sameconversation actualplan3m29s read; producttab4 authenticated remainsedit. No tests/preflights/reupload/paidgeneration.
+- 候选实现完成：ArtifactUploader直接startIngestionBatch；未确认任务内联自动预填；用户/RO/版本/task草稿；逐字段编辑/清空保护；唯一可编辑表单；原确认API及来源边界不变。Sol/medium实现、Sol/high静态复核已收敛覆盖/丢弃/重试/并发冲突问题，未测试或运行。
+- Explorer confirmed rawuploader edit/files nevercreatesingestion; newintakealreadyautoextracts; edit?ingestionTask rejectsunconfirmed. getIngestionTask result.core isexistingproducer. Don'tduplicateuploadraw+ingest.
+- Highreview existingbackend: changedfields becomehuman/missing/noevidence; keepproposalimmutable; onlyneeds_review sameRO; confirmtask CAS+task-fixedidempotency firstsnapshotwins, freezeeditsonuncertainoutcome/reconcileactualreturnedcore; don'tordinarysave/commit pendingproposal.
+- 网页6 Pro候选复核已实际读回1m27s：支持有界部署，保留失败续接、关页服务器处理与已有任务恢复；补当前任务详情/恢复入口，不重传或重建任务。未上传截图，不称视觉验收。
+- Next: commit all including docs (canonical deploy requires clean tree), server --no-tests deploy with rollback e0ff364e; observe existing task7a28a7c8-90f7-429b-a519-53397cf58856 in RO9067a2d5-42ad-4c06-b234-753728b71064 without new upload/confirmation, then sync release evidence.
+
 ## Current user journey work
 - 2026-09-09 actual landing→login (user completed authentication)→dashboard→Quantization review→presentation→edit→files→overview observed in iab tab4. Chat tab3 same planning conversation; two actual messages sent, first reply1m26s, second reply1m29s read. No tests/preflights/media generation.
 - b03263de deployed exit0; log1788922978762-a8a31114-2020-4e91-af90-952b6f490165. Full14issue record in existing integrated plan. Sol/medium implemented Hermes, main page fixes, Sol/high found hiddenanchor dock initialization issue which was fixed beforecommit.
