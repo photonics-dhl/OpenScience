@@ -564,3 +564,5 @@
 | `infra/migrations/20260909010000_hermes_image_generation_grant/` | 增加图片7任务授权组合；应用回滚保留扩展约束与图片记录 | CANDIDATE |
 
 - CANDIDATE: infra/codex-image-runner/imagegen-skill.md / imagegen-prompting.md：官方预设imagegen指导的服务器只读副本，由container-client固定注入；install同步。PresentationResultGallery单图宽幅、多图2xl双列。
+
+- CANDIDATE apps/agent-worker/src/presentation/storyboard.ts：明确图片修订指令优先于旧draft、保留科学约束，定性表达替代无依据的量化图形。

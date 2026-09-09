@@ -1,3 +1,8 @@
+# 最新推进
+- production929667dd / rollback1ad54c72，deploy exit0日志1788953147802-c053bd8c-626c-499c-9265-03536fa01ce4；runner仍1ad54c72（含skill）。
+- 原run通过正常retry恢复，Hermes实际规划asset3a809f33；存在亚纳米等同/虚构波矢谱等错误，未批准。正常修订asset833a2def仍重复错误，未生图。
+- 候选storyboard.ts补image遵循修订规则、base非权威，单独user修订消息且仍受科学约束；不增加模型调用。待部署再正常修订。
+
 # Progress
 
 ## 当前：来源审核续跑兼容修复
