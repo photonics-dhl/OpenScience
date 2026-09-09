@@ -432,7 +432,11 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       setConfirmedIngestion(false);
       setConfirmedReanalysisSource(null);
       setIngestionMessage(t('confirmedReanalysisStarted'));
-      router.replace(`/research-objects/${encodeURIComponent(roId)}/edit?ingestionTask=${encodeURIComponent(task.id)}`);
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `/research-objects/${encodeURIComponent(roId)}/edit?ingestionTask=${encodeURIComponent(task.id)}`,
+      );
     } catch (cause) {
       if (cause instanceof ApiClientError && cause.status > 0 && cause.status < 500
         && cause.status !== 408 && cause.status !== 429) {

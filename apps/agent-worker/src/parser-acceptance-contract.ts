@@ -397,17 +397,28 @@ function isEvidenceSegmentBundle(value: unknown, reference: ReturnType<typeof pa
     if (!Array.isArray(segments) || segments.length > 32) return false;
     let total = 0;
     let priorPage = 0;
-    const blockIds = new Set<string>();
-    for (const segment of segments) {
+    let priorLocator: ReturnType<typeof validateSourceLocator> | undefined;
+    let priorRangeEnd = 0;
+    const closedBlockIds = new Set<string>();
+    for (const [index, segment] of segments.entries()) {
       if (!isRecord(segment) || !hasExactKeys(segment, ['quote', 'sourceLocator']) || typeof segment.quote !== 'string') return false;
       let locator;
       try { locator = validateSourceLocator(segment.sourceLocator); } catch { return false; }
+      const sameBlock = locator.blockId === priorLocator?.blockId;
+      const invalidSameBlockRange = sameBlock && priorLocator !== undefined && locator.charRange !== undefined && (
+        locator.page !== priorLocator.page
+        || !isDeepStrictEqual(locator.boundingBox, priorLocator.boundingBox)
+        || locator.charRange.start < priorRangeEnd
+      );
       if (locator.artifactId !== reference.artifactId || locator.contentHash !== reference.contentHash
         || !locator.blockId || !locator.charRange || locator.charRange.end - locator.charRange.start !== segment.quote.length
-        || blockIds.has(locator.blockId) || (locator.page ?? 0) < priorPage) return false;
-      blockIds.add(locator.blockId);
+        || (locator.page ?? 0) < priorPage || invalidSameBlockRange
+        || (!sameBlock && closedBlockIds.has(locator.blockId))) return false;
+      if (!sameBlock && priorLocator?.blockId) closedBlockIds.add(priorLocator.blockId);
+      priorLocator = locator;
+      priorRangeEnd = locator.charRange.end;
       priorPage = locator.page ?? priorPage;
-      total += segment.quote.length;
+      total += segment.quote.length + (index > 0 ? 1 : 0);
     }
     return total <= 8_000;
   });

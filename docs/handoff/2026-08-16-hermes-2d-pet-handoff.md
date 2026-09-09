@@ -25,7 +25,7 @@
 
 ## Versions
 - worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- production c2d113263ee48f276e9dedc4e4dc8a3229b4ceed，rollback7f8e47d931b751cc28c1000325128c2ca86566cb。
+- production ea95e63cc2d62eba7c65494fc713856d7416df42，rollback c2d113263ee48f276e9dedc4e4dc8a3229b4ceed。
 - 部署exit0，日志1788953754740-78c2a47b-196d-4fce-8cfa-98cf09c48cf0。没有运行中的部署。
 - 宿主Codex runner独立bundle1ad54c72f794ba46ee5f423875b9f231d32d4ea1，canonical install成功，含预设skill；此后应用版本没有runner代码变化，不需重装。
 - 早先2000f508 build阶段SSH重置exit255，生产无切换/无journal。后续1ad54c72/929667dd/7f8e47d9均部署exit0。
@@ -72,3 +72,8 @@
 - b9e326b2部署首轮SSH reset exit255，进程退出后release仍c2d11326且journal清空；重试明确因agent-worker unhealthy回滚，release仍c2d11326。模块无网络加载成功，但不代表启动成功。已移除违反用户禁测试要求的自动fixture self-test；不能未经日志断言它是根因。
 
 - 后续候选含网页provider、UI整理、浅色PDF预览，以及启动失败回滚前私有日志保留。当前尚未部署。实际PDF预览已截图显示15页。
+
+- ea95e63c正式部署exit0；新分析/网页provider/UI已上线。网页broker安装成功，timer active/service success；在生产锁内将API/worker HERMES_SCENE_IMAGE_PROVIDER切换chatgpt-web并启动成功。回滚需恢复selector codex。
+- 已通过用户已登录的服务器页面，从原confirmed task点击一次Reanalyze and create new draft，新任务已排队，旧记录保留；新taskID待读取。尚未得到新六维结果/产品图。
+- 新任务c22927f9-68c5-4671-a3df-a81475f2c849已返回needs_review并复用SourceMap；method仍source_text_limit_8000，reproducibility仍segment_count_1_to_32。定位到同一block不连续passage被min/max错误扩成整段，精确range union及下游有序不重叠guard正在修复。
+- Codex重启后直接Chat接口正常，6 Pro已返回精确range/失败字段单次修订建议；约4分钟。CUA浏览器枚举经一次重试和内核重置仍nodeRepl.fetch失败，无法比较本机Chrome另一账号；服务器网页生图执行器不依赖该桥。

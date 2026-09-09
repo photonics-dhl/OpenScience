@@ -113,11 +113,12 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
       const values = segmentBundle[field] as unknown[];
       if (values.length > 32) throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence exceeds the segment limit');
       const fieldSources: IngestionEvidenceSource[] = [];
-      const blockIds = new Set<string>();
       let total = 0;
       let previousPage = 0;
       let previousBlockOrdinal = -1;
-      for (const value of values) {
+      let previousBlockId: string | undefined;
+      let previousRangeEnd = 0;
+      for (const [index, value] of values.entries()) {
         const segment = record(value);
         if (Object.keys(segment).sort().join(',') !== 'quote,sourceLocator' || typeof segment.quote !== 'string'
           || !segment.quote.length) throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence segment is invalid');
@@ -129,20 +130,24 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
         } catch (error) {
           throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence segment does not match its source', error);
         }
+        const sameBlock = locator.blockId === previousBlockId;
         if (!locator.blockId || !locator.charRange || locator.artifactId !== task.artifactId
-          || locator.contentHash !== task.artifact.blobSha256 || blockIds.has(locator.blockId)
+          || locator.contentHash !== task.artifact.blobSha256
           || (locator.page ?? 0) < previousPage
+          || (sameBlock && (locator.page !== previousPage || locator.charRange.start < previousRangeEnd))
           || block.text?.slice(locator.charRange.start, locator.charRange.end) !== segment.quote) {
           throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence segment does not match its source');
         }
         const blockOrdinal = sourceMap.pages.find(page => page.page === locator.page)?.blocks
           .findIndex(candidate => candidate.id === locator.blockId) ?? -1;
-        if (blockOrdinal < 0 || (locator.page === previousPage && blockOrdinal <= previousBlockOrdinal)) {
+        if (blockOrdinal < 0 || (locator.page === previousPage
+          && (sameBlock ? blockOrdinal !== previousBlockOrdinal : blockOrdinal <= previousBlockOrdinal))) {
           throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence segments are out of source order');
         }
-        total += segment.quote.length;
+        total += segment.quote.length + (index > 0 ? 1 : 0);
         if (total > 8_000) throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence exceeds the quote limit');
-        blockIds.add(locator.blockId);
+        previousBlockId = locator.blockId;
+        previousRangeEnd = locator.charRange.end;
         previousBlockOrdinal = blockOrdinal;
         previousPage = locator.page ?? previousPage;
         fieldSources.push({ quote: segment.quote, locator });

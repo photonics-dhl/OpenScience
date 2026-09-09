@@ -50,8 +50,12 @@ export interface ExtractionResult extends Record<string, unknown> {
   reason?: 'canonical_partial_validation_exhausted';
   /** Exact final guard reasons for unresolved fields; explicitly missing fields are omitted. */
   fieldDiagnostics?: Record<string, string>;
+  /** Numeric validation context for unresolved fields; never contains source text. */
+  fieldDiagnosticsDetails?: Record<string, string>;
   /** Read-only drafts whose source binding failed; never canonical core or evidence. */
   unverifiedSummaries?: Record<string, string>;
+  /** Bounded, known canonical passage IDs from failed fields; never canonical evidence. */
+  unverifiedSourcePassageIds?: Record<string, string[]>;
   /** Server-owned canonical selection contract used to prevent obsolete paid repair loops. */
   canonicalExtractionContract?: 'windowed-source-v2' | 'exact-quote-v1' | 'grounded-summary-v1' | 'grounded-passages-v1' | 'grounded-passages-v2';
 }
@@ -393,26 +397,50 @@ function canonicalPassagePrompt(passages: readonly CanonicalPassage[]): string {
   }).join('\n\n');
 }
 
+interface SelectedPassageRange {
+  block: CanonicalTextBlock;
+  start: number;
+  end: number;
+}
+
+function selectedPassageRanges(
+  passageIds: readonly string[],
+  allowed: ReadonlyMap<string, CanonicalPassage>,
+): SelectedPassageRange[] {
+  const byBlock = new Map<string, SelectedPassageRange[]>();
+  for (const id of passageIds) {
+    const passage = allowed.get(id);
+    if (!passage) throw new Error('unknown canonical passage');
+    for (const slice of passage.slices) {
+      const ranges = byBlock.get(slice.block.id) ?? [];
+      ranges.push({ block: slice.block, start: slice.start, end: slice.end });
+      byBlock.set(slice.block.id, ranges);
+    }
+  }
+  const union: SelectedPassageRange[] = [];
+  for (const ranges of byBlock.values()) {
+    ranges.sort((left, right) => left.start - right.start || left.end - right.end);
+    for (const range of ranges) {
+      const previous = union.at(-1);
+      if (previous?.block.id === range.block.id && range.start <= previous.end) {
+        previous.end = Math.max(previous.end, range.end);
+      } else {
+        union.push({ ...range });
+      }
+    }
+  }
+  return union.sort((left, right) => left.block.textStart - right.block.textStart || left.start - right.start);
+}
+
 function selectedPassageBudget(
   passageIds: readonly string[],
   allowed: ReadonlyMap<string, CanonicalPassage>,
-): { blockCount: number; evidenceChars: number } {
-  const ranges = new Map<string, { start: number; end: number }>();
-  for (const id of passageIds) {
-    const passage = allowed.get(id);
-    if (!passage) continue;
-    for (const slice of passage.slices) {
-      const previous = ranges.get(slice.block.id);
-      ranges.set(slice.block.id, {
-        start: Math.min(previous?.start ?? Infinity, slice.start),
-        end: Math.max(previous?.end ?? -Infinity, slice.end),
-      });
-    }
-  }
+): { segmentCount: number; evidenceChars: number } {
+  const ranges = selectedPassageRanges(passageIds, allowed);
   return {
-    blockCount: ranges.size,
-    evidenceChars: [...ranges.values()].reduce((sum, range) => sum + range.end - range.start, 0)
-      + Math.max(0, ranges.size - 1),
+    segmentCount: ranges.length,
+    evidenceChars: ranges.reduce((sum, range) => sum + range.end - range.start, 0)
+      + Math.max(0, ranges.length - 1),
   };
 }
 
@@ -421,20 +449,7 @@ function segmentsForPassages(
   passageIds: readonly string[],
   allowed: ReadonlyMap<string, CanonicalPassage>,
 ): Array<{ quote: string; sourceLocator: SourceLocator }> {
-  const ranges = new Map<string, { block: CanonicalTextBlock; start: number; end: number }>();
-  for (const id of passageIds) {
-    const passage = allowed.get(id);
-    if (!passage) throw new Error('unknown canonical passage');
-    for (const slice of passage.slices) {
-      const previous = ranges.get(slice.block.id);
-      ranges.set(slice.block.id, {
-        block: slice.block,
-        start: Math.min(previous?.start ?? Infinity, slice.start),
-        end: Math.max(previous?.end ?? -Infinity, slice.end),
-      });
-    }
-  }
-  const ordered = [...ranges.values()].sort((left, right) => left.block.textStart - right.block.textStart);
+  const ordered = selectedPassageRanges(passageIds, allowed);
   if (!ordered.length || ordered.length > MAX_EVIDENCE_SEGMENTS) throw new Error('segment_count_1_to_32');
   return ordered.map(({ block, start, end }) => {
     const quote = block.text.slice(start, end);
@@ -474,12 +489,13 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
   guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: () => string | undefined;
   validationDiagnostic: () => string | undefined;
-  partialResult: () => { proposal: ExtractedProposal; fieldDiagnostics: Record<string, CanonicalFieldValidationReason>; unverifiedSummaries: Record<string, string> } | undefined;
+  partialResult: () => { proposal: ExtractedProposal; fieldDiagnostics: Record<string, CanonicalFieldValidationReason>; fieldDiagnosticsDetails: Record<string, string>; unverifiedSummaries: Record<string, string>; unverifiedSourcePassageIds: Record<string, string[]> } | undefined;
   mergeRetained: () => ExtractedProposal;
 } {
   const allowed = new Map(passages.map((passage) => [passage.id, passage]));
   const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
   const draftSummaries = new Map<(typeof SDF_CORE_FIELDS)[number], string>();
+  const draftPassageIds = new Map<(typeof SDF_CORE_FIELDS)[number], string[]>();
   const draftFailures = new Map<(typeof SDF_CORE_FIELDS)[number], { reason: CanonicalFieldValidationReason; detail?: string }>();
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
   let invalidDetails = new Map<string, string>();
@@ -504,8 +520,8 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     if (new Set(ids).size !== ids.length) return { reason: 'duplicate_passage' };
     if (ids.some((id) => !allowed.has(id))) return { reason: 'unknown_passage' };
     const budget = selectedPassageBudget(ids, allowed);
-    const detail = `selectedIds=${ids.length};expandedBlocks=${budget.blockCount};expandedChars=${budget.evidenceChars}`;
-    if (budget.blockCount > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32', detail };
+    const detail = `selectedIds=${ids.length};expandedSegments=${budget.segmentCount};expandedChars=${budget.evidenceChars}`;
+    if (budget.segmentCount > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32', detail };
     if (budget.evidenceChars > MAX_FIELD_EVIDENCE_CHARS) return { reason: 'source_text_limit_8000', detail };
     let segments: Array<{ quote: string; sourceLocator: SourceLocator }>;
     try { segments = segmentsForPassages(sourceMap, ids, allowed); }
@@ -553,6 +569,7 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
         }
         retained.set(field, validation.candidate);
         draftSummaries.delete(field);
+        draftPassageIds.delete(field);
         draftFailures.delete(field);
       }
       else {
@@ -563,6 +580,16 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
             && item.summary.trim() && item.summary.length <= MAX_CANONICAL_CORE_CHARS) {
             draftSummaries.set(field, item.summary.trim());
             draftFailures.set(field, { reason: validation.reason!, detail: validation.detail });
+            const sourcePassageIds = Array.isArray(item.sourcePassageIds) ? item.sourcePassageIds : [];
+            const knownPassageIds = sourcePassageIds.every((id): id is string => typeof id === 'string' && allowed.has(id))
+              ? sourcePassageIds : undefined;
+            if (knownPassageIds && knownPassageIds.length >= 1
+              && knownPassageIds.length <= MAX_SOURCE_PASSAGE_IDS
+              && new Set(knownPassageIds).size === knownPassageIds.length) {
+              draftPassageIds.set(field, [...knownPassageIds]);
+            } else {
+              draftPassageIds.delete(field);
+            }
           }
         }
         invalidFields.set(field, validation.reason!);
@@ -576,9 +603,9 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     validationFeedback: () => invalidFields.size === 0 ? undefined : [
       'Previous JSON failed canonical validation.',
       `Invalid fields and reason codes: ${[...invalidFields].map(([field, reason]) => `${field}:${reason}${invalidDetails.get(field) ? `(${invalidDetails.get(field)})` : ''}`).join(', ')}.`,
-      `Return schemaVersion and all six fields. Repair invalid fields first; supported fields already validated by the server are retained. A non-empty summary requires needsMoreInformation=false and valid P labels. Use the smallest sufficient set, ordinarily 1-${USUAL_SOURCE_PASSAGE_IDS}; ${MAX_SOURCE_PASSAGE_IDS} is only the hard ceiling, and expanded source must still fit 32 blocks/8000 chars.`,
+      `Return schemaVersion and all six fields. Repair invalid fields first; supported fields already validated by the server are retained. A non-empty summary requires needsMoreInformation=false and valid P labels. Use the smallest sufficient set, ordinarily 1-${USUAL_SOURCE_PASSAGE_IDS}; ${MAX_SOURCE_PASSAGE_IDS} is only the hard ceiling, and expanded source must still fit 32 segments/8000 chars.`,
       'passage_ids_required: recreate that field with valid P labels and keep only supported claims. source_text_limit_8000 or segment_count_1_to_32: choose fewer precise passages and narrow the summary; never truncate or edit source. Method may cite dispersed key assumptions, steps and validation without every derivation. Reproducibility cites only direct parameter/material/procedure/data/code disclosures and explicit access gaps.',
-      'A label reports its blocks/chars. Multiple passages from one original block expand to the entire range between the first and last selected slice; budget that full range. Do not return quotes or window IDs.',
+      'A label reports its blocks/chars. Overlapping or adjacent slices merge; separated slices in one source block remain separate segments and each counts toward the limit. Do not return quotes or window IDs.',
       'A missing field must have summary="", sourcePassageIds:[], needsMoreInformation=true.',
     ].join(' '),
     validationDiagnostic: () => invalidFields.size === 0
@@ -587,15 +614,20 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
       if (!SDF_CORE_FIELDS.some((field) => retained.get(field)?.needsMoreInformation === false) && draftSummaries.size === 0) return undefined;
       const responseReason = invalidFields.get('response');
       const fieldDiagnostics: Record<string, CanonicalFieldValidationReason> = {};
+      const fieldDiagnosticsDetails: Record<string, string> = {};
       const fields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
         const candidate = retained.get(field);
         if (candidate && !invalidFields.has(field) && !responseReason) return [field, candidate];
         if (candidate?.needsMoreInformation === false) return [field, candidate];
         fieldDiagnostics[field] = invalidFields.get(field) ?? responseReason ?? 'malformed_item';
+        const detail = invalidDetails.get(field) ?? invalidDetails.get('response');
+        if (detail) fieldDiagnosticsDetails[field] = detail;
         return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true } satisfies ExtractedFieldProposal];
       })) as ExtractedProposal['fields'];
-      return { proposal: { schemaVersion: SDF_CORE_VERSION, fields }, fieldDiagnostics,
-        unverifiedSummaries: Object.fromEntries([...draftSummaries].filter(([field]) => Object.hasOwn(fieldDiagnostics, field))) };
+      return { proposal: { schemaVersion: SDF_CORE_VERSION, fields }, fieldDiagnostics, fieldDiagnosticsDetails,
+        unverifiedSummaries: Object.fromEntries([...draftSummaries].filter(([field]) => Object.hasOwn(fieldDiagnostics, field))),
+        unverifiedSourcePassageIds: Object.fromEntries([...draftPassageIds]
+          .filter(([field]) => Object.hasOwn(fieldDiagnostics, field))) };
     },
     mergeRetained: () => ({
       schemaVersion: SDF_CORE_VERSION,
@@ -754,7 +786,7 @@ export async function extractHandler(
         `完整输出结构如下（这是空结构，不是论文结论；必须用原文支持的摘要与实际P编号填充）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: '', sourcePassageIds: [], needsMoreInformation: true }])) })}`,
         'sourcePassageIds必须是字符串数组，例如["P00001"]，不能填页码、对象或区间字符串。JSON字符串中的反斜杠必须转义；摘要优先使用普通文字与Unicode数学符号，避免输出不合法的LaTeX转义。',
         `每字段凝练成中文摘要，通常120–300字，方法可用简洁步骤；优先解释研究逻辑，不逐式重抄推导。同一来源可以支撑不同展示维度，但各维度概括的语义应不同。先完成全文综合，再为每个非空摘要选择通常1–${USUAL_SOURCE_PASSAGE_IDS}个关键sourcePassageIds作为最小充分集合；只有确有必要时才能增加，但不得超过${MAX_SOURCE_PASSAGE_IDS}个硬上限。ID只能来自下方标签，服务端回读原始SourceMap，模型不要复制或改写证据。`,
-        `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个原始块。每个passage最多5个原始块、1200字符，标签给出实际blocks和chars预算；${USUAL_SOURCE_PASSAGE_IDS}个互不重叠ID通常最多展开30块、约7205字符。方法用分布于全文的关键passage证明主要假设、研究步骤和验证，不需要引用每段中间推导；reproducibility只选择直接披露参数、材料、步骤、数据或代码可用性及明确缺口的passage，不要附上整条方法链。若同一原始块内选择多个passage，服务端会保留首尾选中片段之间的全部原文，必须把该完整范围计入限额。`,
+        `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个精确来源段。每个passage最多5个原始块、1200字符，标签给出实际blocks和chars预算。方法用分布于全文的关键passage证明主要假设、研究步骤和验证，不需要引用每段中间推导；reproducibility只选择直接披露参数、材料、步骤、数据或代码可用性及明确缺口的passage，不要附上整条方法链。同一原始块内重叠或相邻的选段会合并，彼此分隔的选段保留为独立来源段并分别计入限额。`,
         '选择能完整支持主语、条件、否定、数字和单位的最少passage。不要为了符合限额扩大或改写结论。若无充分证据，summary="",sourcePassageIds=[],needsMoreInformation=true；缺失字段里的解释会被服务端丢弃，不影响其他有证据字段。无法辨认的公式不要猜写。',
       ] : [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须含 summary、sourceQuote、needsMoreInformation。',
@@ -781,7 +813,9 @@ export async function extractHandler(
         ...materializeCanonicalProposal(partial.proposal),
         reason: 'canonical_partial_validation_exhausted',
         fieldDiagnostics: partial.fieldDiagnostics,
+        fieldDiagnosticsDetails: partial.fieldDiagnosticsDetails,
         unverifiedSummaries: partial.unverifiedSummaries,
+        unverifiedSourcePassageIds: partial.unverifiedSourcePassageIds,
       };
     }
     const proposal = validation.mergeRetained();

@@ -1,4 +1,8 @@
-## 2026-09-09 新分析/网页队列候选：部署故障修复中
+## 2026-09-09 新分析已运行：精确来源区间修复中
+
+production ea95e63c / rollback c2d11326。网页broker已安装、timer成功，API/worker已选择chatgpt-web；尚无产品图片回传。真实新分析task c22927f9已复用SourceMap并返回needs_review，method/reproducibility仍因8000字符/32段限制失败。根因之一是同一block的不连续passage被min/max扩成中间全文；正改为精确range union及所有消费者的有序不重叠校验。直接Chat正常并返回方案；本机Chrome控制桥重启后仍无法枚举标签页。
+
+## 2026-09-09 部署故障已恢复
 
 b9e326b2未上线：首轮SSH断开，重试Worker unhealthy自动回滚至c2d11326。已确认入口模块可加载；移除main自动fixture自检（用户禁止测试），保留真实请求校验，增加失败前私有日志保留。网页provider静态High复核已完成，仍待服务器实际回传。Chat6 Pro已收到真实截图并返回3项布局建议，代码已整理；原PDF15页预览已实际显示。
 
