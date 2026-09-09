@@ -463,8 +463,8 @@
 | `infra/nginx/openscience.test.mjs` | 生产 Nginx 合同：`/api` rewrite、Auth 页面/API 分流、Curator/Admin API 保护、Basic credential 不转发、Tunnel 真实 IP 与部署同步 | 8/8 GREEN |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma migrations（含 additive Hermes schema），各附 rollback.sql | **PRODUCTION 39/39**；search 2/2；应用回滚时保留 additive schema |
-| `infra/schema.prisma` | core Prisma schema：既有平台模型 + Research Intelligence/Identity/Reading/External Retrieval/ScanSci provider state scoped relations + Hermes durable run | **PRODUCTION migration 39** |
+| `infra/migrations/` | Prisma migrations（含 additive Hermes schema），各附 rollback.sql | **PRODUCTION 40/40**；search 2/2；应用回滚时保留 additive schema |
+| `infra/schema.prisma` | core Prisma schema：既有平台模型 + Research Intelligence/Identity/Reading/External Retrieval/ScanSci provider state scoped relations + Hermes durable run | **PRODUCTION migration 40** |
 | `infra/search/schema.prisma` / `infra/search/migrations/` / `packages/search/test/migration.test.ts` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta` 不与 core ledger 混用；Task 6 migration 2 增加 tenant-scoped chunk/embedding/index/model/telemetry、GIN 与机械 rollback | **CURRENT PRODUCTION 2/2 `c581712`**；forward/rollback/redeploy、tenant-safe PostgreSQL integration 与双库恢复 GREEN |
 | `scripts/verify-database-isolation.mjs` / `scripts/verify-database-isolation.test.mjs` | 拒绝 core/search 指向同一物理数据库，并以脱敏元数据给出部署门禁 | **CURRENT**；focused contract 与 ECS `DATABASE_ISOLATION_OK` GREEN |
 
