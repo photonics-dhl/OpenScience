@@ -64,9 +64,11 @@ describe('结构化输出 + Schema 校验（§9.3）', () => {
     expect(calls).toBe(2);
   });
 
-  it('超过重试上限 → SCHEMA_VALIDATION', async () => {
+  it('无效 JSON 超过重试上限 → STRUCTURED_JSON_INVALID', async () => {
     const gw = new AiGateway({ providers: [fakeProvider('p', async () => OK('bad'))] });
-    await expect(gw.completeStructured(isStringMap, [{ role: 'user', content: 'x' }])).rejects.toThrow(/重试上限/);
+    await expect(gw.completeStructured(isStringMap, [{ role: 'user', content: 'x' }])).rejects.toMatchObject({
+      code: 'STRUCTURED_JSON_INVALID',
+    });
   });
 
   it('Schema 失败重试可附加有界反馈且不回显原始响应', async () => {
@@ -123,7 +125,7 @@ describe('结构化输出 + Schema 校验（§9.3）', () => {
     expect(calls).toBe(3);
   });
 
-  it('传输失败仍受既有 structured 重试上限约束', async () => {
+  it('传输失败不伪装成 structured 校验失败或重复同一 provider cycle', async () => {
     let calls = 0;
     const gw = new AiGateway({ providers: [fakeProvider('p', async () => {
       calls += 1;
@@ -131,8 +133,8 @@ describe('结构化输出 + Schema 校验（§9.3）', () => {
     })] });
     await expect(gw.completeStructured(isStringMap, [{ role: 'user', content: 'x' }], {
       validationFeedback: () => 'response:malformed_item',
-    })).rejects.toThrow(/重试上限/);
-    expect(calls).toBe(3);
+    })).rejects.toMatchObject({ code: 'ALL_PROVIDERS_FAILED' });
+    expect(calls).toBe(1);
   });
 });
 
