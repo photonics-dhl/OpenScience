@@ -566,3 +566,5 @@
 - CANDIDATE: infra/codex-image-runner/imagegen-skill.md / imagegen-prompting.md：官方预设imagegen指导的服务器只读副本，由container-client固定注入；install同步。PresentationResultGallery单图宽幅、多图2xl双列。
 
 - CANDIDATE apps/agent-worker/src/presentation/storyboard.ts：明确图片修订指令优先于旧draft、保留科学约束，定性表达替代无依据的量化图形。
+
+- RESEARCH 2026-09-09：docs/decisions/ADR-013-admin-codex-image-evaluation.md 已补网页生图额度与服务器登录可行性；无生产代码变化，未建立无人值守网页后端。
