@@ -294,7 +294,7 @@ export function createHandlers(
           || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable document source identity changed');
         reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
       }
-      const parsed: ParserExtractionResult = reusableSourceMap
+      const parsed: ParserExtractionResult<DocumentSourceMap> = reusableSourceMap
         ? { status: 'succeeded', sourceMap: reusableSourceMap, warnings: [] }
         : await options.parserCascade({
         artifactId: artifact.id,

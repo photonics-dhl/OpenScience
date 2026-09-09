@@ -472,7 +472,7 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     if (sourceQuote.length > MAX_FIELD_EVIDENCE_CHARS) return { reason: 'source_text_limit_8000' };
     return { candidate: {
       summary: candidate.summary.trim(), sourceQuote, sourcePassageIds: [...ids],
-      sourceBlockIds: segments.map((segment) => segment.sourceLocator.blockId),
+      sourceBlockIds: segments.map((segment) => segment.sourceLocator.blockId!),
       verifiedSegments: segments, needsMoreInformation: false,
     } };
   };
