@@ -337,14 +337,6 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       menu.style.setProperty('--hermes-menu-correction-y', '0px');
       const actorTopAfterLayout = getActorBounds()?.top;
       if (actorTopAfterLayout === undefined) return;
-      if (compactMenu && anchored) {
-        // The compact sheet reserves document flow below the long-press point.
-        // Counter-scroll that reflow so the 200 px actor stays under the finger.
-        window.scrollTo({ behavior: 'auto', top: window.scrollY + actorTopAfterLayout - layout.actorTop });
-        alignMenuToCrown();
-        menuFrame = window.requestAnimationFrame(alignMenuToCrown);
-        return;
-      }
       const reflowShift = anchored ? layout.actorTop - actorTopAfterLayout : 0;
       if (anchored && stage && Math.abs(reflowShift) > .5) {
         stage.style.translate = `0 ${reflowShift}px`;

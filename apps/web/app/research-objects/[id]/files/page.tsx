@@ -33,7 +33,10 @@ export function ResearchObjectFilesContent({ object }: { object: FilesResearchOb
   useEffect(() => {
     let active = true;
     setRestored(null);
-    void loadAttachmentDraft(object.id).then(({ researchObject, materials }) => {
+    const draft = revision === 0
+      ? loadResearchMaterials(object.id).then((materials) => ({ researchObject: object, materials }))
+      : loadAttachmentDraft(object.id);
+    void draft.then(({ researchObject, materials }) => {
       if (!active) return;
       setCurrentObject(researchObject);
       setRestored(materials);
