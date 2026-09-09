@@ -7,8 +7,8 @@
 
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- 当前production/代码HEAD40e78370a7425008a64b8df2d2db7cbf91719e27；rollback62e71a86f7c529ce6273674377f212626cd99912。
-- canonical --no-tests部署exit0，日志1788942112589-01cc12db-cd07-420c-a3b8-00ffe5dee2cc。新passage-ID候选未提交/未部署。
+- 当前production/代码HEAD913002b892a4cce51dac1674edc037c044b81412；rollback40e78370a7425008a64b8df2d2db7cbf91719e27。
+- canonical --no-tests部署exit0，日志1788943498648-f2e7bcc0-22db-4fb9-b12b-258659848674。首次4d499743服务器构建发现两个类型遗漏，913002b8已修复。
 - main和其他worktree为独立任务，不覆盖。
 
 ## Deployed capability and actual corrections
@@ -27,6 +27,8 @@
 - retry2真实OCR接通，多页minimax-vision succeeded（每页7–11s），SourceMap parserStatus=succeeded。
 - 随后grounded-summary-v1仍partial：仅insight成功；problem/method/results/limitations quote_not_found，reproducibility missing_requires_empty。不可确认、不称论文处理完成，尚无这篇论文的新图片。
 
+- 正常refresh创建e800ef2b-e7d7-4aea-a0e4-100da415a981，grounded-passages-v1 sourceMapReused=true；problem/insight成功，method/results passage_ids_required、limitations segment_count_1_to_32，仍未确认/未生图。
+
 ## Active fix: server passage IDs
 - Sol/medium负责extractor：模型输出summary+sourcePassageIds，不再逐字复制quote；服务器从全文自然段/句生成编号，再按选中ID精确回读证据。最多6 IDs/field，≤8k证据/32原块，保留科学条件。
 - 同块多个passages按明确合同覆盖首尾连续原文范围，绝不拼接省中间；缺失字段规范化为空，不为缺失解释浪费重试。
@@ -39,7 +41,7 @@
 - Sol/medium OCR与extractor，Terra/medium图片合同/UI，Sol/high定点静态复核，root集成/服务器交付。没有可证明的整体tokens节省比例。
 
 ## Next
-- 完成passage-ID候选及定点来源/权限复核，commit/deploy --no-tests，rollback取当前40e78370。
-- 通过正常refresh升级现有Agent1eafa17f，必须看到sourceMapReused=true，读取实际六字段及来源再确认；不再增加parser retry次数、不重复OCR/上传。
+- 当前候选：extractor明确各passage来源预算和修复反馈；domain仅已复用OCR的passage预算失败允许retry0一次恢复，audit保留旧结果，原credit；需复核/提交/部署，rollback取当前913002b8。
+- 部署后正常retry现有Agente800ef2b，只重新理解；读取实际六字段及来源再确认，不重复OCR/上传。
 - 正常Hermes image profile推进规划/图片。浏览器恢复后观察实际展示；没有真实图片前不能标记全流程完成。
 - 精确需求读docs/OpenScience_Kimi_Development_Spec.md §5.4/§9，UX方案见集成产品计划；历史视频仅另一论文方法案例，不能代替当前全文能力。

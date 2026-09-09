@@ -307,6 +307,8 @@ interface CanonicalPassage {
   pageStart: number;
   pageEnd: number;
   fragmented: boolean;
+  blockCount: number;
+  evidenceChars: number;
   text: string;
   slices: readonly CanonicalPassageSlice[];
 }
@@ -360,6 +362,8 @@ function canonicalPassages(sourceMap: DocumentSourceMap): CanonicalPassage[] {
       pageStart: pending[0]!.block.page,
       pageEnd: pending.at(-1)!.block.page,
       fragmented: pending.some((slice) => slice.start > 0 || slice.end < slice.block.text.length),
+      blockCount: new Set(pending.map((slice) => slice.block.id)).size,
+      evidenceChars: passageText(pending).length,
       text: passageText(pending),
       slices: Object.freeze(pending.map((slice) => Object.freeze({ ...slice }))),
     }));
@@ -378,8 +382,31 @@ function canonicalPassages(sourceMap: DocumentSourceMap): CanonicalPassage[] {
 function canonicalPassagePrompt(passages: readonly CanonicalPassage[]): string {
   return passages.map((passage) => {
     const page = passage.pageStart === passage.pageEnd ? `${passage.pageStart}` : `${passage.pageStart}-${passage.pageEnd}`;
-    return `[${passage.id} page:${page}${passage.fragmented ? ' fragment:true' : ''}]\n${passage.text}\n[/${passage.id}]`;
+    return `[${passage.id} page:${page} blocks:${passage.blockCount} chars:${passage.evidenceChars}${passage.fragmented ? ' fragment:true' : ''}]\n${passage.text}\n[/${passage.id}]`;
   }).join('\n\n');
+}
+
+function selectedPassageBudget(
+  passageIds: readonly string[],
+  allowed: ReadonlyMap<string, CanonicalPassage>,
+): { blockCount: number; evidenceChars: number } {
+  const ranges = new Map<string, { start: number; end: number }>();
+  for (const id of passageIds) {
+    const passage = allowed.get(id);
+    if (!passage) continue;
+    for (const slice of passage.slices) {
+      const previous = ranges.get(slice.block.id);
+      ranges.set(slice.block.id, {
+        start: Math.min(previous?.start ?? Infinity, slice.start),
+        end: Math.max(previous?.end ?? -Infinity, slice.end),
+      });
+    }
+  }
+  return {
+    blockCount: ranges.size,
+    evidenceChars: [...ranges.values()].reduce((sum, range) => sum + range.end - range.start, 0)
+      + Math.max(0, ranges.size - 1),
+  };
 }
 
 function segmentsForPassages(
@@ -446,7 +473,8 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
   const allowed = new Map(passages.map((passage) => [passage.id, passage]));
   const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
-  const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason } => {
+  let invalidDetails = new Map<string, string>();
+  const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason; detail?: string } => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return { reason: 'malformed_item' };
     const candidate = item as Record<string, unknown>;
     if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourcePassageIds,summary'
@@ -457,11 +485,19 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     }
     if (!candidate.summary.trim()) return { reason: 'summary_required' };
     if (candidate.summary.length > MAX_CANONICAL_CORE_CHARS) return { reason: 'core_text_limit_4000' };
+    const invalidIdType = candidate.sourcePassageIds.some((id) => typeof id !== 'string');
     if (candidate.sourcePassageIds.length < 1 || candidate.sourcePassageIds.length > MAX_SOURCE_PASSAGE_IDS
-      || candidate.sourcePassageIds.some((id) => typeof id !== 'string')) return { reason: 'passage_ids_required' };
+      || invalidIdType) return {
+        reason: 'passage_ids_required',
+        detail: `selectedIds=${candidate.sourcePassageIds.length};limit=${MAX_SOURCE_PASSAGE_IDS};invalidIdType=${invalidIdType}`,
+      };
     const ids = candidate.sourcePassageIds as string[];
     if (new Set(ids).size !== ids.length) return { reason: 'duplicate_passage' };
     if (ids.some((id) => !allowed.has(id))) return { reason: 'unknown_passage' };
+    const budget = selectedPassageBudget(ids, allowed);
+    const detail = `selectedIds=${ids.length};expandedBlocks=${budget.blockCount};expandedChars=${budget.evidenceChars}`;
+    if (budget.blockCount > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32', detail };
+    if (budget.evidenceChars > MAX_FIELD_EVIDENCE_CHARS) return { reason: 'source_text_limit_8000', detail };
     let segments: Array<{ quote: string; sourceLocator: SourceLocator }>;
     try { segments = segmentsForPassages(sourceMap, ids, allowed); }
     catch (error) {
@@ -469,7 +505,7 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
         ? 'segment_count_1_to_32' : 'locator_roundtrip_failed' };
     }
     const sourceQuote = segments.map((segment) => segment.quote).join('\n');
-    if (sourceQuote.length > MAX_FIELD_EVIDENCE_CHARS) return { reason: 'source_text_limit_8000' };
+    if (sourceQuote.length > MAX_FIELD_EVIDENCE_CHARS) return { reason: 'source_text_limit_8000', detail };
     return { candidate: {
       summary: candidate.summary.trim(), sourceQuote, sourcePassageIds: [...ids],
       sourceBlockIds: segments.map((segment) => segment.sourceLocator.blockId!),
@@ -478,6 +514,7 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
   };
   const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
     invalidFields = new Map();
+    invalidDetails = new Map();
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       invalidFields.set('response', 'malformed_item');
       return false;
@@ -494,10 +531,15 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     }
     for (const field of SDF_CORE_FIELDS) {
       const previous = retained.get(field);
+      // Once a supported field has passed server-side passage materialization, schema
+      // retries repair only unresolved fields and cannot replace that verified result.
+      if (previous?.needsMoreInformation === false) continue;
       const validation = validateField(fields[field]);
-      if (validation.candidate) {
-        if (!validation.candidate.needsMoreInformation || !previous || previous.needsMoreInformation) retained.set(field, validation.candidate);
-      } else invalidFields.set(field, validation.reason!);
+      if (validation.candidate) retained.set(field, validation.candidate);
+      else {
+        invalidFields.set(field, validation.reason!);
+        if (validation.detail) invalidDetails.set(field, validation.detail);
+      }
     }
     return invalidFields.size === 0;
   };
@@ -505,9 +547,9 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     guard,
     validationFeedback: () => invalidFields.size === 0 ? undefined : [
       'Previous JSON failed canonical validation.',
-      `Invalid fields and reason codes: ${[...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(', ')}.`,
-      'Return schemaVersion and all six fields again. Each supported field must contain a concise summary and 1-6 sourcePassageIds copied only from the supplied passage labels. Do not return quotes or window IDs.',
-      'The server expands selected passage IDs to their exact original text. If multiple selected passages touch the same source block, every character between the first and last selected slice is included; account for that full range under the evidence limit.',
+      `Invalid fields and reason codes: ${[...invalidFields].map(([field, reason]) => `${field}:${reason}${invalidDetails.get(field) ? `(${invalidDetails.get(field)})` : ''}`).join(', ')}.`,
+      'Return schemaVersion and all six fields again. Repair the listed invalid fields first; the server retains previously validated supported fields. Each supported field must contain a concise summary and 1-6 sourcePassageIds copied only from the supplied passage labels. Do not return quotes or window IDs.',
+      'Each passage label reports its individual blocks and chars budget. Prefer the fewest passages whose combined expandedBlocks is at most 32 and expandedChars is at most 8000. The server expands selected passage IDs to their exact original text. If multiple selected passages touch the same source block, every character between the first and last selected slice is included; account for that full range under the evidence limit.',
       'A missing field must have summary="", sourcePassageIds:[], needsMoreInformation=true.',
     ].join(' '),
     validationDiagnostic: () => invalidFields.size === 0
@@ -679,7 +721,7 @@ export async function extractHandler(
         RESEARCH_UNDERSTANDING_SKILL.instructions,
         '只输出JSON：schemaVersion="0.1.0"，fields下六个字段必须且只能是 {"summary":string,"sourcePassageIds":string[],"needsMoreInformation":boolean}。不得返回引文、窗口ID或来源正文。',
         '每字段凝练成中文摘要，解释该论文的核心要点，避免重复同一证据填不同字段。每个非空摘要选择1–6个足以支持全部实质断言的sourcePassageIds；ID只能来自下方标签，服务端会从这些ID回读原始SourceMap，模型不要复制或改写证据。',
-        `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个原始块。若同一原始块内选择多个passage，服务端会保留首尾选中片段之间的全部原文，不能跳过中间内容；选择时必须把该完整范围计入限额。`,
+        `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个原始块。每个passage标签已给出单独的blocks和chars预算，优先选择足够支持结论的最少ID。若同一原始块内选择多个passage，服务端会保留首尾选中片段之间的全部原文，不能跳过中间内容；选择时必须把该完整范围计入限额。`,
         '选择能完整支持主语、条件、否定、数字和单位的最少passage。不要为了符合限额扩大或改写结论。若无充分证据，summary="",sourcePassageIds=[],needsMoreInformation=true；缺失字段里的解释会被服务端丢弃，不影响其他有证据字段。无法辨认的公式不要猜写。',
       ] : [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须含 summary、sourceQuote、needsMoreInformation。',

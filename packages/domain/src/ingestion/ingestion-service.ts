@@ -324,6 +324,7 @@ export async function retryIngestionTask(
         const result = task.agentTask?.result;
         let legacyProposalFailure = false;
         let parserRecovery = false;
+        let passageBudgetRecovery = false;
         if (task.state === 'needs_review' && task.retryCount >= 0 && task.retryCount < 2 && task.agentTask?.kind === 'sdf.extract'
           && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === task.retryCount
           && result && typeof result === 'object' && !Array.isArray(result)) {
@@ -333,6 +334,22 @@ export async function retryIngestionTask(
             legacyProposalFailure = task.retryCount === 0 && record.status === 'needs_review' && record.reason === 'sdf-proposal-unavailable'
               && !Object.hasOwn(record, 'core') && reference.parserStatus === 'succeeded'
               && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256;
+            if (task.retryCount === 0 && task.agentTask.executionAttempt === 1
+              && record.sourceMapReused === true
+              && /^ingestion-analysis-refresh:[0-9a-f-]{36}:[0-9a-f-]{36}:grounded-passages-v1$/.test(task.agentTask.idempotencyKey ?? '')
+              && task.batch.userId === input.userId && record.canonicalExtractionContract === 'grounded-passages-v1'
+              && record.reason === 'canonical_partial_validation_exhausted'
+              && reference.parserStatus === 'succeeded' && reference.artifactId === task.artifactId
+              && reference.contentHash === task.artifact.blobSha256
+              && record.fieldDiagnostics && typeof record.fieldDiagnostics === 'object' && !Array.isArray(record.fieldDiagnostics)) {
+              const entries = Object.entries(record.fieldDiagnostics);
+              const session = await tx.agentSession.findUnique({ where: { id: task.agentTask.sessionId } });
+              passageBudgetRecovery = entries.length > 0 && entries.every(([field, reason]) =>
+                SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number])
+                && ['passage_ids_required', 'segment_count_1_to_32', 'source_text_limit_8000'].includes(String(reason)))
+                && session?.userId === input.userId && session.status === 'active'
+                && session.researchObjectId === task.batch.researchObjectId;
+            }
             if (record.status === 'needs_review' && record.reason === 'unresolved pages remain'
               && !Object.hasOwn(record, 'core') && reference.parserStatus === 'needs_review'
               && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256
@@ -387,10 +404,10 @@ export async function retryIngestionTask(
         }
         const authorizedFailedRetry = failedRetry && activeFailedRetryOwner
           && (task.retryCount === 0 || paidFailedRetry || compensatedSchemaRetry);
-        if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery && !parserRecovery) {
+        if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery && !parserRecovery && !passageBudgetRecovery) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
         }
-        const recovery = parserRecovery ? 'unresolved_parser_pages'
+        const recovery = passageBudgetRecovery ? 'canonical_passage_budget' : parserRecovery ? 'unresolved_parser_pages'
           : canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
           : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable'
             : compensatedSchemaRetry ? 'canonical_schema_exhaustion_compensation'
@@ -413,9 +430,9 @@ export async function retryIngestionTask(
         const resetAgent = await tx.agentTask.updateMany({
           where: {
             id: task.agentTaskId!, kind: 'sdf.extract', retryCount: retryAttempt - 1,
-            status: legacyProposalFailure || canonicalAllMissingRecovery || parserRecovery ? 'succeeded' : 'failed',
+            status: legacyProposalFailure || canonicalAllMissingRecovery || parserRecovery || passageBudgetRecovery ? 'succeeded' : 'failed',
             ...(canonicalAllMissingRecovery ? { executionAttempt: 2 }
-              : authorizedFailedRetry || parserRecovery ? { executionAttempt: retryAttempt } : {}),
+              : authorizedFailedRetry || parserRecovery || passageBudgetRecovery ? { executionAttempt: retryAttempt } : {}),
           },
           data: {
             status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
@@ -433,6 +450,7 @@ export async function retryIngestionTask(
           targetType: 'ingestion_task', targetId: task.id,
           metadata: { recovery, agentTaskId: task.agentTaskId, retryAttempt,
             ...(parserRecovery ? { previousParserResult: result } : {}),
+            ...(passageBudgetRecovery ? { previousExtractionResult: result } : {}),
             creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation'
               : paidFailedRetry ? 'charged-on-retry'
                 : compensatedSchemaRetry ? 'reuse-paid-remediation' : 'reuse-original-reservation' },

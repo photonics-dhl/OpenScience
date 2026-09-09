@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-09:** production40e78370 / rollback62e71a86；全文凝练/OCR/图片优先已部署；当前论文新Agent1eafa17f处理中，尚未确认。唯一状态入口为Hermes CURRENT handoff。
+> **CURRENT 2026-09-09:** production913002b8 / rollback40e78370；passage-ID及OCR复用已部署；当前Agente800ef2b仅problem/insight成功，来源预算修复中，未确认/未生图。唯一状态入口为Hermes CURRENT handoff。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
