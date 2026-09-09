@@ -15,3 +15,5 @@
 - 详细ID/日志/下一步见CURRENT handoff。
 
 - 网页生图补充研究：自定义GPT生图+Action文件回传是用户触发候选；当前新生图模型与Action兼容未实际验证，不能承诺无人值守。CUA重置前后仍fetch失败，未发出网页生图请求。详情ADR-013。
+
+- 用户批准服务器可交互浏览器研究：候选独立UID11040/network-none/Chromium sandbox/Unix egress与UI桥接，仅SSH localhost访问。待静态复核后在服务器构建启动，无本地运行或测试。

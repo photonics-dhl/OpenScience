@@ -1,0 +1,31 @@
+# Server ChatGPT browser — operator login research
+
+Status: CANDIDATE, not a production image provider. No webpage login or generated image observed yet.
+
+## Prerequisites
+- User authorized a server-hosted interactive browser for the existing account. Login/MFA/challenge stays with the user; no copied Codex credentials or cookie extraction.
+- Existing Docker and localhost Squid127.0.0.1:7891. This installation does not modify production networks, application services, or Squid configuration.
+- Dedicated UID11040, private profile/downloads under /opt/openscience-chatgpt-browser; never include them in repository or general artifact uploads.
+- Browser network none, readonly rootfs, limited RAM/CPU/pids/tmpfs, Chromium sandbox enabled with Microsoft's Playwright v1.62.1 seccomp profile. Never fall back to no-sandbox or privileged.
+
+## Execution
+1. Transfer infra/chatgpt-browser to a dedicated server staging directory through the project SSH wrapper; do not mount the application checkout into the browser.
+2. On server run `bash <staging>/install.sh --confirm`. It builds the dedicated Debian browser image, starts the localhost bridge and isolated browser. It retains all profile/download data.
+3. From Windows use explicit Git Bash and this worktree's `infra/scripts/ssh-run.sh --browser-tunnel`, with XGS_CONFIG_ROOT=E:/Miscellaneous/XGS. The only forwarding is local127.0.0.1:6081→server127.0.0.1:6081.
+4. Open `http://127.0.0.1:6081/vnc.html?autoconnect=true&resize=scale`. User completes normal ChatGPT login in that remote browser. Do not enter credentials in conversation.
+5. This is a private interactive session, not a server-triggered public API. Keep the approved Hermes image brief unchanged when later attempting one web generation. Do not mark the product flow complete until actual image return is observed.
+
+## Recovery / rollback
+- Stop only openscience-chatgpt-browser container and openscience-chatgpt-browser-bridge service when retiring this research environment; keep profile/downloads and scripts intact.
+- Do not restart production or overwrite its Codex auth. Existing image provider remains unchanged.
+- A denied CONNECT log may identify a necessary hostname; review it before narrowly adding it. No wildcard proxy or direct-connect fallback.
+- IPC socket pathnames may be renewed only after type checking that they are sockets; ordinary files are never removed.
+
+## Observing actual operation
+- Server container logs and bridge service status establish startup only, not successful login or image generation.
+- A normal HTTP request receiving403/challenge does not establish browser failure. Observe the remote browser itself.
+- UI accepts only localhost Host and same-origin requests; WebSocket requires same-origin. No Docker published ports, no CDP port, no public VNC.
+- Proxy logs only denied CONNECT hostnames. It never logs headers, cookies, content, or full URLs.
+- Fresh validation is limited to actual startup/login/image workflow; no tests or preflight suites.
+
+Sources: https://playwright.dev/docs/docker ; https://github.com/novnc/websockify ; https://help.openai.com/en/articles/11084440-chatgpt-images-faq .

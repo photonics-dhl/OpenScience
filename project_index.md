@@ -570,3 +570,5 @@
 - RESEARCH 2026-09-09：docs/decisions/ADR-013-admin-codex-image-evaluation.md 已补网页生图额度与服务器登录可行性；无生产代码变化，未建立无人值守网页后端。
 
 - RESEARCH ADR-013补充自定义GPT/Image Generation + Action文件回传候选，未实施或验收。
+
+- CANDIDATE infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：独立服务器交互浏览器、loopback SSH登录界面，未接入生产Provider；infra/scripts/ssh-run.sh固定browser-tunnel。
