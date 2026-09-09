@@ -1,10 +1,26 @@
 import { apiRequest, getResearchIngestion, getResearchObject, listVersions, type ArtifactReference } from './api';
 
+type AttachmentDraft = {
+  researchObject: Awaited<ReturnType<typeof getResearchObject>>['researchObject'];
+  materials: Awaited<ReturnType<typeof loadResearchMaterials>>;
+};
+
+const attachmentDraftRequests = new Map<string, Promise<AttachmentDraft>>();
+
 /** Keep the first revision as the write fence: any intervening commit must fail CAS. */
-export async function loadAttachmentDraft(researchObjectId: string) {
-  const { researchObject } = await getResearchObject(researchObjectId);
-  const materials = await loadResearchMaterials(researchObjectId);
-  return { researchObject, materials };
+export function loadAttachmentDraft(researchObjectId: string): Promise<AttachmentDraft> {
+  const pending = attachmentDraftRequests.get(researchObjectId);
+  if (pending) return pending;
+  const request = (async () => {
+    const { researchObject } = await getResearchObject(researchObjectId);
+    const materials = await loadResearchMaterials(researchObjectId);
+    return { researchObject, materials };
+  })();
+  attachmentDraftRequests.set(researchObjectId, request);
+  void request.finally(() => {
+    if (attachmentDraftRequests.get(researchObjectId) === request) attachmentDraftRequests.delete(researchObjectId);
+  }).catch(() => {});
+  return request;
 }
 
 /** The manifest is authoritative; a task's original filename may have been renamed on confirmation. */
