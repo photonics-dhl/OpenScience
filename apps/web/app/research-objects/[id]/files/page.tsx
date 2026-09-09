@@ -4,7 +4,7 @@ import { PackageCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import ArtifactUploader from '@/components/editor/ArtifactUploader';
@@ -30,10 +30,12 @@ export function ResearchObjectFilesContent({ object }: { object: FilesResearchOb
   const [restored, setRestored] = useState<Awaited<ReturnType<typeof loadResearchMaterials>> | null>(null);
   const [currentObject, setCurrentObject] = useState(object);
   const [revision, setRevision] = useState(0);
+  const attachmentDraftRequest = useRef<ReturnType<typeof loadAttachmentDraft> | null>(null);
   useEffect(() => {
     let active = true;
     setRestored(null);
-    void loadAttachmentDraft(object.id).then(({ researchObject, materials }) => {
+    attachmentDraftRequest.current ??= loadAttachmentDraft(object.id);
+    void attachmentDraftRequest.current.then(({ researchObject, materials }) => {
       if (!active) return;
       setCurrentObject(researchObject);
       setRestored(materials);
@@ -49,6 +51,7 @@ export function ResearchObjectFilesContent({ object }: { object: FilesResearchOb
       await createCommit(object.id, { message: message.trim() || t('files.defaultCommit'), version: currentObject.version, sdfCore: currentObject.sdf.core, artifacts: appendMaterials(restored.artifacts, artifacts) });
       setCommitted(true);
       setArtifacts([]);
+      attachmentDraftRequest.current = null;
       setRevision((value) => value + 1);
     } catch (cause) {
       setError(cause as Error);

@@ -1056,6 +1056,10 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   const stage = page.locator('[data-hermes-workspace-stage="true"]');
   const presence = page.locator('[data-hermes-presence-control="true"]');
   const trigger = page.locator('[data-hermes-input-owner="true"]');
+  // The expanded source guidance can place the companion below the initial
+  // viewport. Offscreen renderers suspend, so expose it before requiring a frame.
+  await trigger.scrollIntoViewIfNeeded();
+  await expect(trigger).toBeInViewport();
   await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await expect(presence).toBeVisible();
   await presence.locator('summary').click();
