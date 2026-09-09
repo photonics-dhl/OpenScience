@@ -9,7 +9,7 @@ if (fs.existsSync(root + '/egress/egress.sock')) {
 const hosts = new Set(['chatgpt.com', 'auth.openai.com', 'auth0.openai.com', 'cdn.auth0.com',
   'challenges.cloudflare.com', 'persistent.oaistatic.com', 'cdn.oaistatic.com', 'ab.chatgpt.com',
   'files.oaiusercontent.com', 'auth-cdn.oaistatic.com', 'cdn.openai.com',
-  'api.oaistatsig.com', 'bzr.openai.com']);
+  'api.oaistatsig.com', 'bzr.openai.com', 'ws.chatgpt.com']);
 const allowed = authority => typeof authority === 'string' && authority.endsWith(':443')
   && hosts.has(authority.slice(0, -4));
 let active = 0;

@@ -9,7 +9,8 @@ COPY --from=font-source /usr/share/fonts/ /usr/share/fonts/
 RUN sed -i 's|http://deb.debian.org/debian|http://mirrors.aliyun.com/debian|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update && apt-get install -y --no-install-recommends x11vnc novnc websockify \
     && useradd --uid 11040 --user-group --create-home browser
-COPY start.sh relay.mjs /app/
+COPY --from=font-source /opt/renderer/node_modules/playwright-core/ /app/node_modules/playwright-core/
+COPY start.sh relay.mjs runner.cjs /app/
 USER 11040:11040
 ENV HOME=/profile DISPLAY=:99
 ENTRYPOINT ["/bin/bash", "/app/start.sh"]

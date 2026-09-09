@@ -1,6 +1,6 @@
 # Server ChatGPT browser — operator login research
 
-Status: server browser running, host bridge active, localhost noVNC page HTTP200 (2026-09-09). Login, webpage generation and image return remain pending; not a production image provider.
+Status: server browser running, host bridge active, localhost noVNC page HTTP200 (2026-09-09). User login and one actual webpage generation/download completed; not yet an integrated production image provider.
 
 ## Prerequisites
 - Read server-capabilities.md first. Reuse the installed ScanSci image's full Chrome revision1234, Xvfb and libraries, plus existing Node/media-font layers. Only x11vnc/noVNC/websockify are additional packages; do not download Chromium again.
@@ -26,7 +26,7 @@ Status: server browser running, host bridge active, localhost noVNC page HTTP200
 ## Observing actual operation
 - Server container logs and bridge service status establish startup only, not successful login or image generation.
 - A normal HTTP request receiving403/challenge does not establish browser failure. Observe the remote browser itself.
-- UI accepts only localhost Host and same-origin requests; WebSocket requires same-origin. No Docker published ports, no CDP port, no public VNC.
+- UI accepts only localhost Host and same-origin requests; WebSocket requires same-origin. No Docker published ports or public VNC. CDP9233 is restricted to loopback inside the network-none container; no host relay.
 - Proxy logs only denied CONNECT hostnames. It never logs headers, cookies, content, or full URLs.
 - Fresh validation is limited to actual startup/login/image workflow; no tests or preflight suites.
 
@@ -44,3 +44,20 @@ Sources: https://playwright.dev/docs/docker ; https://github.com/novnc/websockif
 ## Login assets (2026-09-09)
 - Unstyled OTP screen and unresponsive Continue coincided with70 denied CONNECTs to auth-cdn.oaistatic.com. Added that exact host and observed OpenAI hosts cdn.openai.com/api.oaistatsig.com/bzr.openai.com, consistent with OpenAI network recommendations. Restarted only bridge; browser/profile retained. User must refresh the remote Chrome page; login success not yet observed.
 - Source: https://help.openai.com/en/articles/9247338-network-recommendations-for-chatgpt-errors-on-web-and-apps . Never record OTP values.
+
+## Server execution — actual result 2026-09-09
+- User accepts the existing local proxy exit; do not treat independent server egress as a current blocker.
+- Executor image9f44e1267fba reuses Playwright-core1.62.1 and full Chrome; internal CDP9233 only. jobs is an independent0700 bind mount. No local browser-control bridge is needed to execute the image task.
+- Existing limit256 hit pids.events max1 with245 threads/processes. Increased to512, preserving2GiB memory limit. A subsequent browser restart restored stuck CDP/pages while preserving login. This establishes a resource-limit event, not proof of every previous SIGSEGV cause.
+- OpenAI realtime host ws.chatgpt.com added from denied connection evidence. Direct Chat list/read successfully identified the submitted conversation; CUA failure is not Chat unavailability.
+- Actual job f6f29af4-b3c8-4609-93ac-4572970cc4b8, approved Hermes source scene10f36f01-3521-47b5-bdbd-f491ec3f5b8a. Submitted once via normal webpage Send; no Codex image call or API-billing fallback.
+- Canonical conversation https://chatgpt.com/c/6aa162f9-d0e4-83ea-afbf-243f7aae8a22 (“生成科研机制图”). Initial /c/WEB:d9d90bec-6b4a-4ac4-9979-4a612e80b883 was an optimistic URL, not a second submission.
+- Normal fullscreen Save downloaded `/opt/openscience-chatgpt-browser/jobs/f6f29af4-b3c8-4609-93ac-4572970cc4b8/output/image.png`:1556710bytes, PNG1225x1284. Request/submission/conversation/result records retained privately. Do not read auth storage or log OTP/cookies.
+- Scientific review: revision required. Image adds a plate/aperture geometry and field lines despite the brief requesting abstract objects without reconstructed geometry. Not published to product gallery and not approved as scientific evidence.
+
+## Reusable runner
+- `infra/chatgpt-browser/runner.cjs` provides prepare/send/status/download plus execute (prepare→send→wait→download) and resume (wait/download only). Current server copy `/jobs/runner.cjs`; canonical image installs `/app/runner.cjs`.
+- Trusted operator exports only `{id,prompt,source}` to `/jobs/<UUID>/request.json`. Prompt comes from the already approved Hermes request; caller owns authorization/scene identity. Do not expose this runner as a public endpoint.
+- Run only with `docker exec openscience-chatgpt-browser flock -n /jobs/runner.lock node /jobs/runner.cjs <mode> <UUID>` (use `/app/runner.cjs` after canonical image rollout). UUID/mode are fixed validated arguments; no prompt in argv, no arbitrary URLs/selectors/scripts accepted.
+- Submitted marker is exclusive and fsynced before Send. A timeout/crash after submission must be investigated/resumed, never blindly re-executed. Human should not manipulate the same page during execution.
+- Actual prepare/send/download operations above succeeded. General execute/resume orchestration is saved but has not been independently run end-to-end; no tests performed. Production Hermes queue/Gateway provider and asset-import identity checks remain separate required integration work.

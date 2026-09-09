@@ -1,3 +1,13 @@
+## 2026-09-09 服务器网页生图和保存实际成功
+- 直接Chat接口list/read已验证可用；服务器Playwright也已实际接上已登录Chrome，完全不依赖本机CUA。用户接受本机出口。
+- approved Hermes prompt只发送一次；正式会话6aa162f9-d0e4-83ea-afbf-243f7aae8a22，网页Save保存PNG1225x1284/1556710bytes，任务私有output/image.png。非Codex生图调用。
+- 修ws.chatgpt.com白名单；pids256实际触顶，提高512并保留内存限制，恢复卡住的浏览器。截图确认有图。
+- 图片添加了未获指令允许的孔板几何/场线，需修订；未批准或写入产品画廊。复用runner已保存，通用execute/resume尚未整体执行，生产Hermes队列/Gateway接入未完成。无测试。
+
+## 2026-09-09 Chat接口可用性纠正
+- 用户确认Codex直接Chat会话接口能够读取普通Chat；不能把CUA fetch失败写成Chat不能读写。根目录与交付AGENTS已固化接口隔离判断。
+- 本轮服务器Playwright已实际连接已登录Chrome并读取首页/输入框；网页执行与直接Chat接口分开记录。
+
 ## 2026-09-09 登录页面资源白名单漏项已补
 - 用户截图无样式且验证码提交无响应；实际auth-cdn.oaistatic.com被拒70次。补该域名与日志内3个OpenAI域名，只重启bridge并active，保留浏览器登录会话；待用户刷新远程Chrome，尚未确认登录/生图。
 

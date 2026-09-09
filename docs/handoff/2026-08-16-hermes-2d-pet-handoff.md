@@ -1,13 +1,18 @@
 # Hermes Research Intelligence CURRENT Handoff
 
 ## Goal / constraints
-- PDF→服务器OCR/全文理解→六维凝练与原文→Hermes规划→服务器Codex订阅生图→画廊。视频暂停。
+- PDF→服务器OCR/全文理解→六维凝练与原文→Hermes规划→服务器网页生图→画廊（Codex原失败记录保留）。视频暂停。
 - 用户已批准实际生图、预设imagegen skill和页面优化。禁止测试/预检/CI测试/本地构建；允许必要服务器部署与真实任务。保留权限、计费、来源、回滚；不删除文件、不读取打印密钥。
 - 六维不是章节模板；方法可隐含在推导/结果/附录。来源整理失败不等于论文未报告。不能放行科学错误。
 
 ## Server browser continuation (2026-09-09)
 - 用户要求服务器任务先查能力清单；已新增 docs/runbooks/server-capabilities.md 并写入AGENTS。发现共享缓存与ScanSci镜像已有完整Chrome+Xvfb，已停止重复下载，改为复用镜像，仅补远程桌面组件。
-- 独立浏览器镜像272a5ed57d27已构建；bridge与浏览器已运行，noVNC HTTP200；trace定位openat2/clone3/pkey/chroot并修复seccomp兼容，等待用户在服务器浏览器登录；生产release未变，尚未登录/网页生图/回传。固定SSH6081隧道已启动，CUA仍fetch失败。不得按下方旧Codex retry步骤重复消耗额度。
+- 独立浏览器镜像272a5ed57d27已构建；bridge与浏览器已运行，noVNC HTTP200；trace定位openat2/clone3/pkey/chroot并修复seccomp兼容，用户已登录且网页生成/保存一次PNG成功，见下方最新记录；生产release未变，产品资产回传尚未接入。固定SSH6081隧道已启动，CUA仍fetch失败。不得按下方旧Codex retry步骤重复消耗额度。
+
+## Latest actual web image
+- 服务器执行/Save成功：会话6aa162f9-d0e4-83ea-afbf-243f7aae8a22；私有jobs/f6f29af4-b3c8-4609-93ac-4572970cc4b8/output/image.png，PNG1225x1284/1556710bytes。仅一次提交，原Codex失败任务未伪改成功。
+- 图片额外画了孔板几何/场线，违背brief，需网页修订后才可产品展示。通用runner已保存，execute/resume尚未整体运行，Gateway/生产队列与资产回传尚未接入。
+- 用户确认并本轮验证直接Chat可读；CUA坏不等于Chat不可用。用户接受本机出口，不因此停工。资源pids512、镜像9f44e1267fba、CDP仅容器loopback9233，状态细节见browser runbook。
 
 ## Versions
 - worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
@@ -43,9 +48,9 @@
 - OCR隔离和成功reuse保持；全文提取的科学忠实性/部分来源整理仍待修复。
 
 ## Next
-1. 当前生图受真实订阅限额阻塞，未经恢复不要重试。用户可恢复服务器Codex额度；不自作主张兑换reset/买额度/切计费。
+1. 当前先修订已保存的网页图片，再接入Hermes正常队列/Gateway/资产导入；Codex旧任务受额度阻塞，未经恢复不重试、不换计费。
 2. 恢复后读取run最新版本与正常retry能力，正常retry原run生成已批准的1图；随后实际查看图片，不因任务succeeded自动认可图像科学质量。
-3. 页面视觉：CUA getState连续两次nodeRepl.fetch失败，已异步请用户恢复面板；未获得恢复回复，无本轮Chat讨论或截图。
+3. 页面视觉：本机CUA仍失败，但服务器Playwright可操作/截图，直接Chat可读；不要因此再次阻塞网页工作。
 4. 全论文method/reproducibility/limitations仍未解决。本次问题概念图不能冒充完整论文分析能力，产品端科学语义复核仍需落地。
 5. 额度错误需从runner传为用户可理解原因；现generic错误不能称体验完善。
 

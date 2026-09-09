@@ -576,3 +576,5 @@
 - CURRENT docs/runbooks/server-capabilities.md：服务器已有服务、镜像、浏览器/模型路径与复用边界；服务器任务先查，新增安装只补缺失能力（2026-09-09）。
 
 - `infra/scripts/browser-tunnel.ps1`：Windows隐藏SSH隧道断线重连；固定localhost6081，复用ssh-run.sh，2026-09-09本机页面恢复HTTP200。
+
+- `infra/chatgpt-browser/runner.cjs`：服务器私有网页任务执行/续取/Save下载；2026-09-09分步实际生成并保存1张PNG，通用编排及生产Provider尚未完整落地；Chat接口可用性见AGENTS。

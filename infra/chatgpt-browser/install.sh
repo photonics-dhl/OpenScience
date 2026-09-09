@@ -15,8 +15,8 @@ if ! getent passwd 11040 >/dev/null; then
 fi
 [[ $(getent passwd 11040 | cut -d: -f1) == xgs-browser && $(getent group 11040 | cut -d: -f1) == xgs-browser ]] || exit 67
 install -d -m 0755 "$root" "$root/scripts"
-install -d -o 11040 -g 11040 -m 0700 "$root/profile" "$root/downloads" "$root/egress" "$root/control"
-for file in Dockerfile start.sh relay.mjs host.mjs seccomp.json; do install -m 0444 "$source_root/$file" "$root/scripts/$file"; done
+install -d -o 11040 -g 11040 -m 0700 "$root/profile" "$root/downloads" "$root/egress" "$root/control" "$root/jobs"
+for file in Dockerfile start.sh relay.mjs runner.cjs host.mjs seccomp.json; do install -m 0444 "$source_root/$file" "$root/scripts/$file"; done
 docker build --network host --build-arg http_proxy= --build-arg https_proxy= --build-arg HTTP_PROXY= --build-arg HTTPS_PROXY= \
   -t openscience-chatgpt-browser:initial "$root/scripts"
 cat > /etc/systemd/system/openscience-chatgpt-browser-bridge.service <<EOF
@@ -41,9 +41,9 @@ systemctl enable --now openscience-chatgpt-browser-bridge
 docker run -d --name openscience-chatgpt-browser --init --restart unless-stopped \
   --network none --user 11040:11040 --read-only --cap-drop ALL \
   --security-opt no-new-privileges --security-opt "seccomp=$root/scripts/seccomp.json" \
-  --memory 2g --memory-swap 2g --cpus 2 --pids-limit 256 --shm-size 256m \
+  --memory 2g --memory-swap 2g --cpus 2 --pids-limit 512 --shm-size 256m \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m,mode=1777 \
-  -v "$root/profile:/profile:rw" -v "$root/downloads:/profile/Downloads:rw" \
+  -v "$root/jobs:/jobs:rw" -v "$root/profile:/profile:rw" -v "$root/downloads:/profile/Downloads:rw" \
   -v "$root/egress:/egress:ro" -v "$root/control:/control:rw" \
   openscience-chatgpt-browser:initial
 echo 'BROWSER_STARTED UI=127.0.0.1:6081; login and image generation not yet observed'
