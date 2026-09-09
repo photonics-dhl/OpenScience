@@ -1,5 +1,11 @@
 # Progress
 
+## 2026-09-09 — 纠正全文理解方向（候选）
+- 浏览器已恢复；实际向原Chat发送任务并读取6 Pro回复：全文综合→六维组织→来源核对，同次调用，来源失败保留草稿。
+- runtime skill v2允许跨章节概括隐含方法，区分论文类型、假设/适用域/极限；extractor不再要求先选证据再填表。
+- 新增unverifiedSummaries只读待核对摘要，保持core/evidence隔离，UI明确技术失败不等于论文未报告。没有新模型轮次/重试版本。
+- 尚未部署或重新处理论文；此前科学忠实性问题不能因此宣称修复。
+
 ## 2026-09-09 — 来源分段与格式恢复已部署，科学忠实性仍未完成
 - production11ae6200 / rollbackfa751b16；--no-tests部署exit0，日志1788945551137-935b9b0c-8548-4835-9e08-d29c08fac925。
 - 当前Agent5dba592b retry1返回五字段，method缺失（passage_ids_required）；grounded-passages-v2/sourceMapReused=true。

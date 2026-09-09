@@ -1,5 +1,10 @@
 # Hermes Research Intelligence CURRENT Handoff
 
+## 最新用户纠正与候选
+- 六维是展示组织，不是论文章节模板。method可隐含在推导、结果、图注或附录；先全文综合，再组织六维与核对来源。不能把来源格式失败称为论文缺失。
+- 本轮浏览器恢复：getTab用60秒成功，实际发送原Chat对话，网页6 Pro回复已读取，主张同次调用全文综合→六维组织→来源核对，来源失败保留草稿待核对。后续可复用CUA directChat.playwright.domSnapshot（比AX快）。
+- 候选已改Hermes runtime skill v2和extractor提示；unverifiedSummaries只保留有界未绑定摘要，不写core/evidence；UI明确来源整理失败与待核对草稿，自动展开诊断。尚未部署/未重新处理当前论文。
+
 ## Goal / constraints
 - PDF→服务器OCR/全文理解→六字段凝练+独立原文→Hermes规划→服务器Codex生图→画廊。视频暂停。
 - 用户禁止测试、预检、CI测试、本地运行/构建。允许本地编辑/静态阅读/传输及必要服务器构建部署、实际产品处理。不删除文件、不读取打印密钥，不手写论文结果冒充服务器能力。
@@ -29,7 +34,7 @@
 - content-driven-image-v1 profile（最多7tasks）及1–6静态场景、Hermes真实绘图brief≤1500chars、审核后原文绑定/生成前来源identity重验、结果画廊均已部署。当前论文尚无新图片。
 
 ## Browser / routing / validation
-- 用户已经登录并回复已恢复，但最近CUA getState仍nodeRepl.fetch request failed，browsers为空；此前createBrowserTab亦超时。不是网站HTTP失败证据。未拿到tab，无本轮Chat复核/截图，不能宣称网页参与。
+- 本轮已恢复原Chat并获得6 Pro规划复核，未做产品改后截图；旧nodeRepl超时记录不代表当前浏览器不可用。
 - Sol/medium extractor/OCR、Terra/medium UI、Sol/high定点静态复核，root集成部署。整体token节省比例无基线，不能编造。
 - 没有测试/本机构建；必要服务器编译首次4d499743发现两处类型遗漏，913002b8修正后后续发布成功。静态复核不能代替运行结果。
 

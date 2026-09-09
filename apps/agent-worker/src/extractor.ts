@@ -50,6 +50,8 @@ export interface ExtractionResult extends Record<string, unknown> {
   reason?: 'canonical_partial_validation_exhausted';
   /** Exact final guard reasons for unresolved fields; explicitly missing fields are omitted. */
   fieldDiagnostics?: Record<string, string>;
+  /** Read-only drafts whose source binding failed; never canonical core or evidence. */
+  unverifiedSummaries?: Record<string, string>;
   /** Server-owned canonical selection contract used to prevent obsolete paid repair loops. */
   canonicalExtractionContract?: 'windowed-source-v2' | 'exact-quote-v1' | 'grounded-summary-v1' | 'grounded-passages-v1' | 'grounded-passages-v2';
 }
@@ -471,11 +473,13 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
   guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: () => string | undefined;
   validationDiagnostic: () => string | undefined;
-  partialResult: () => { proposal: ExtractedProposal; fieldDiagnostics: Record<string, CanonicalFieldValidationReason> } | undefined;
+  partialResult: () => { proposal: ExtractedProposal; fieldDiagnostics: Record<string, CanonicalFieldValidationReason>; unverifiedSummaries: Record<string, string> } | undefined;
   mergeRetained: () => ExtractedProposal;
 } {
   const allowed = new Map(passages.map((passage) => [passage.id, passage]));
   const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
+  const draftSummaries = new Map<(typeof SDF_CORE_FIELDS)[number], string>();
+  const draftFailures = new Map<(typeof SDF_CORE_FIELDS)[number], { reason: CanonicalFieldValidationReason; detail?: string }>();
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
   let invalidDetails = new Map<string, string>();
   const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason; detail?: string } => {
@@ -539,8 +543,27 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
       // retries repair only unresolved fields and cannot replace that verified result.
       if (previous?.needsMoreInformation === false) continue;
       const validation = validateField(fields[field]);
-      if (validation.candidate) retained.set(field, validation.candidate);
+      if (validation.candidate) {
+        const previousFailure = draftFailures.get(field);
+        if (validation.candidate.needsMoreInformation && draftSummaries.has(field) && previousFailure) {
+          invalidFields.set(field, previousFailure.reason);
+          if (previousFailure.detail) invalidDetails.set(field, previousFailure.detail);
+          continue;
+        }
+        retained.set(field, validation.candidate);
+        draftSummaries.delete(field);
+        draftFailures.delete(field);
+      }
       else {
+        const draft = fields[field];
+        if (draft && typeof draft === 'object' && !Array.isArray(draft)) {
+          const item = draft as Record<string, unknown>;
+          if (item.needsMoreInformation === false && typeof item.summary === 'string'
+            && item.summary.trim() && item.summary.length <= MAX_CANONICAL_CORE_CHARS) {
+            draftSummaries.set(field, item.summary.trim());
+            draftFailures.set(field, { reason: validation.reason!, detail: validation.detail });
+          }
+        }
         invalidFields.set(field, validation.reason!);
         if (validation.detail) invalidDetails.set(field, validation.detail);
       }
@@ -559,16 +582,18 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     validationDiagnostic: () => invalidFields.size === 0
       ? undefined : [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(','),
     partialResult: () => {
-      if (!SDF_CORE_FIELDS.some((field) => retained.get(field)?.needsMoreInformation === false)) return undefined;
+      if (!SDF_CORE_FIELDS.some((field) => retained.get(field)?.needsMoreInformation === false) && draftSummaries.size === 0) return undefined;
       const responseReason = invalidFields.get('response');
       const fieldDiagnostics: Record<string, CanonicalFieldValidationReason> = {};
       const fields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
         const candidate = retained.get(field);
-        if (candidate) return [field, candidate];
+        if (candidate && !invalidFields.has(field) && !responseReason) return [field, candidate];
+        if (candidate?.needsMoreInformation === false) return [field, candidate];
         fieldDiagnostics[field] = invalidFields.get(field) ?? responseReason ?? 'malformed_item';
         return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true } satisfies ExtractedFieldProposal];
       })) as ExtractedProposal['fields'];
-      return { proposal: { schemaVersion: SDF_CORE_VERSION, fields }, fieldDiagnostics };
+      return { proposal: { schemaVersion: SDF_CORE_VERSION, fields }, fieldDiagnostics,
+        unverifiedSummaries: Object.fromEntries([...draftSummaries].filter(([field]) => Object.hasOwn(fieldDiagnostics, field))) };
     },
     mergeRetained: () => ({
       schemaVersion: SDF_CORE_VERSION,
@@ -716,17 +741,17 @@ export async function extractHandler(
   const passages = canonicalSourceMap ? canonicalPassages(canonicalSourceMap) : undefined;
   const prompt = [
     { role: 'system' as const, content: [
-      '你是科研结构化提取器。从给定 SOURCE 片段提取 SDF 六字段 problem/insight/method/results/limitations/reproducibility。',
+      '你是Hermes科研阅读助手。综合给定全文理解论文，再用SDF六个展示维度 problem/insight/method/results/limitations/reproducibility 组织凝练内容；字段不对应固定章节或固定原文段落。',
       '保持证据类型与认识边界：明确区分实验实测、理论估计、数值仿真、作者归因或解释、以及讨论中的能力或上限；不得把其中一种改写成另一种，也不得把讨论上限写成已验证性能。',
       '保持物理量身份：明确区分入射量与局域量、场振幅与强度、脉冲能量与功率，并保留数值、单位、比例的对象和适用条件；除非原文明确给出关系，不得自行换算或混用。',
-      '先选择原文证据，再形成字段结果。所选原文必须保留每个数字、比较、因果、能力限定和必要条件；不得跨越缺失的中间论证拼接新结论。作者提出的原因必须保留为作者归因，不能写成已证因果。',
+      '先理解全文研究逻辑并形成有依据的综合概括，再关联支持各项断言的来源。可以跨章节整合分散的建模、推导和研究步骤，不要求存在同名章节或单段总结；不得补造原文不存在的中间论证。来源须支撑数字、比较、因果、能力限定与必要条件；作者归因不能改写成已证因果。',
       '方法或配置披露不等于独立复现完成；reproducibility 只能概括原文明示的材料、参数、步骤、数据或代码可用性及其缺口。若某个条款缺少直接证据，从 summary 删除该条款；若字段已无可支持内容，则按缺失字段返回 needsMoreInformation=true。',
       ...(passages ? [
         RESEARCH_UNDERSTANDING_SKILL.instructions,
         '只输出JSON：schemaVersion="0.1.0"，fields下六个字段必须且只能是 {"summary":string,"sourcePassageIds":string[],"needsMoreInformation":boolean}。不得返回引文、窗口ID或来源正文。',
         `完整输出结构如下（这是空结构，不是论文结论；必须用原文支持的摘要与实际P编号填充）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: '', sourcePassageIds: [], needsMoreInformation: true }])) })}`,
         'sourcePassageIds必须是字符串数组，例如["P00001"]，不能填页码、对象或区间字符串。JSON字符串中的反斜杠必须转义；摘要优先使用普通文字与Unicode数学符号，避免输出不合法的LaTeX转义。',
-        '每字段凝练成中文摘要，解释该论文的核心要点，避免重复同一证据填不同字段。每个非空摘要选择1–6个足以支持全部实质断言的sourcePassageIds；ID只能来自下方标签，服务端会从这些ID回读原始SourceMap，模型不要复制或改写证据。',
+        '每字段凝练成中文摘要，解释该论文的核心要点。同一来源可以支撑不同展示维度，但各维度概括的语义应不同，不能复制同一摘要。每个非空摘要选择1–6个足以支持全部实质断言的sourcePassageIds；ID只能来自下方标签，服务端会从这些ID回读原始SourceMap，模型不要复制或改写证据。方法来源可以分布于全文不同章节。',
         `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个原始块。每个passage最多5个原始块、1200字符，标签给出实际blocks和chars预算；6个互不重叠ID通常最多展开30块、约7205字符。优先选择足够支持结论的最少ID。若同一原始块内选择多个passage，服务端会保留首尾选中片段之间的全部原文，不能跳过中间内容；选择时必须把该完整范围计入限额。`,
         '选择能完整支持主语、条件、否定、数字和单位的最少passage。不要为了符合限额扩大或改写结论。若无充分证据，summary="",sourcePassageIds=[],needsMoreInformation=true；缺失字段里的解释会被服务端丢弃，不影响其他有证据字段。无法辨认的公式不要猜写。',
       ] : [
@@ -754,6 +779,7 @@ export async function extractHandler(
         ...materializeCanonicalProposal(partial.proposal),
         reason: 'canonical_partial_validation_exhausted',
         fieldDiagnostics: partial.fieldDiagnostics,
+        unverifiedSummaries: partial.unverifiedSummaries,
       };
     }
     const proposal = validation.mergeRetained();
