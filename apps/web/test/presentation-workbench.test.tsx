@@ -14,13 +14,13 @@ it.each([
   { canWrite: false, loading: false, loadFailed: false, showsEditor: false },
   { canWrite: true, loading: true, loadFailed: false, showsEditor: false },
   { canWrite: true, loading: false, loadFailed: true, showsEditor: false },
-])('offers an editor next step only for a loaded writable empty version: %j', ({ showsEditor, ...state }) => {
+])('offers a source-review next step only for a loaded writable empty version: %j', ({ showsEditor, ...state }) => {
   const markup = renderToStaticMarkup(createElement(PresentationWorkbench, {
     researchObjectId: 'ro-1', claims: [], assets: [],
     version: { versionId: 'v', versionNo: 1, status: 'draft' },
     onCreateClaim: vi.fn(), onGenerate: vi.fn(), onTransition: vi.fn(), ...state,
   }));
-  expect(markup.includes('href="/research-objects/ro-1/edit"')).toBe(showsEditor);
+  expect(markup.includes('href="/research-objects/ro-1/hermes"')).toBe(showsEditor);
   expect(markup.includes('emptyPreviewNeedsSources')).toBe(showsEditor);
 });
 

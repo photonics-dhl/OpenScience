@@ -57,7 +57,7 @@ describe('Research Folio product system', () => {
     expect(stage).toContain("if (event.pointerType !== 'touch') event.currentTarget.setPointerCapture(event.pointerId)");
     expect(stage).toContain('Math.hypot(dx, dy) > 10');
     expect(stage).toContain('if (!event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.setPointerCapture(event.pointerId)');
-    expect(stage).toContain('return presentation?.anchor ? createPortal(stageElement, presentation.anchor) : stageElement');
+    expect(stage).toContain('return anchored && presentation?.anchor ? createPortal(stageElement, presentation.anchor) : stageElement');
     expect(adapter).toContain('router.push(href)');
     expect(adapter).not.toContain('window.location.assign');
     expect(stage).toContain('menuFeedbackTimerRef');

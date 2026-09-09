@@ -23,7 +23,7 @@ describe('workspace readability foundation', () => {
   });
 
   it('gives Hermes actions explicit readable control states', () => {
-    const actions = globals.match(/\.hermes-companion-actions button,[\s\S]*?\n\}/)?.[0] ?? '';
+    const actions = globals.match(/^\.hermes-companion-actions button,[\s\S]*?\n\}/m)?.[0] ?? '';
     expect(actions).toContain('font-size: var(--text-control)');
     expect(actions).toMatch(/background:\s*rgb\(/);
     expect(actions).toContain('cursor: pointer');

@@ -160,7 +160,7 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).toContain('data-hermes-rig-status="starting"');
     expect(markup).toContain('data-hermes-input-ready="false"');
     expect(markup).not.toContain('data-runtime-ready');
-    expect(markup).toContain('src="/hermes/wanko-static.png"');
+    expect(markup).toContain('src="/hermes/wanko-static-transparent.png"');
     expect(markup).not.toContain('<picture');
     expect(markup.match(/<img/g) ?? []).toHaveLength(1);
     expect(markup).toContain('class="hermes-portrait');
@@ -169,7 +169,7 @@ describe('Hermes dashboard guidance', () => {
     const reduced = renderToStaticMarkup(createElement(HermesVisualAdapter, {
       reducedMotion: true, state: 'idle', suggestion: neutralSuggestion, onInvoke: () => undefined,
     }));
-    expect(reduced).toContain('src="/hermes/wanko-static.png"');
+    expect(reduced).toContain('src="/hermes/wanko-static-transparent.png"');
     expect(reduced).not.toContain('<picture');
     expect(reduced.match(/<img/g) ?? []).toHaveLength(1);
     expect(reduced).toContain('class="hermes-portrait');
@@ -182,7 +182,7 @@ describe('Hermes dashboard guidance', () => {
       const markup = renderToStaticMarkup(createElement(HermesVisualAdapter, { state, suggestion: neutralSuggestion, onInvoke: () => undefined }));
       expect(markup).toContain(`data-hermes-state="${state}"`);
       expect(markup).toContain('data-hermes-renderer="articulated-mesh"');
-      expect(markup).toContain('src="/hermes/wanko-static.png"');
+      expect(markup).toContain('src="/hermes/wanko-static-transparent.png"');
       expect(markup).not.toContain('<picture');
       expect(markup.match(/<img/g) ?? []).toHaveLength(1);
       expect(markup).toContain('class="hermes-portrait');
