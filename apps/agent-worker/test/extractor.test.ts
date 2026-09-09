@@ -564,11 +564,11 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     const result = await extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap });
 
     expect(call).toBe(mode === 'two-failed-attempts' ? 3 : 2);
-    expect(result.core.problem).toBe('Retained problem');
+    expect(result.core.problem).toBe('Exact source block 1\nExact source block 2');
     expect(result.evidenceSegments?.problem.map((segment) => segment.quote)).toEqual([
       'Exact source block 1', 'Exact source block 2',
     ]);
-    expect(result.core.method).toBe('Repaired method');
+    expect(result.core.method).toBe('Exact source block 3\nExact source block 4');
     expect(result.evidenceSegments?.method.map((segment) => segment.quote)).toEqual([
       'Exact source block 3', 'Exact source block 4',
     ]);
@@ -582,13 +582,13 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(retryRequest).toContain('results:duplicate_ids');
     expect(retryRequest).toContain('limitations:missing_requires_empty');
     expect(retryRequest).toContain('only the invalid fields');
-    expect(retryRequest).toContain('select 1-32 blocks');
+    expect(retryRequest).toContain('must contain 1-32 blocks');
     expect(retryRequest).toContain('may never have an empty sourceBlockIds array');
     expect(retryRequest).not.toContain('Reverse order is invalid');
     expect(retryRequest).not.toContain('Must be empty when missing');
   });
 
-  it('rejects a six-field missing collapse and repairs supported fields within the structured retry budget', async () => {
+  it('rejects a six-field missing result immediately instead of manufacturing a supported field', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-all-missing', contentHash: 'd'.repeat(64), parser: { name: 'cascade', version: '1' },
       pages: [{ page: 1, width: 100, height: 100, blocks: [{
@@ -598,28 +598,18 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     };
     const missing: { summary: string; sourceBlockIds: string[]; needsMoreInformation: boolean } = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
     const allMissing = { schemaVersion: '0.1.0', fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, missing])) };
-    const repaired = structuredClone(allMissing);
-    repaired.fields.results = { summary: 'The measured response increased under the calibrated condition.', sourceBlockIds: ['B000001'], needsMoreInformation: false };
-    const requests: Array<{ messages: Array<{ content: string }> }> = [];
     let calls = 0;
-    const provider: Provider = { name: 'all-missing-repair', model: 'all-missing-repair', complete: async (request) => {
-      requests.push(request as typeof requests[number]);
+    const provider: Provider = { name: 'all-missing-repair', model: 'all-missing-repair', complete: async () => {
       calls += 1;
-      return { text: JSON.stringify(calls === 1 ? allMissing : repaired), usage: { inputTokens: 1, outputTokens: 1 }, model: 'all-missing-repair' };
+      return { text: JSON.stringify(allMissing), usage: { inputTokens: 1, outputTokens: 1 }, model: 'all-missing-repair' };
     } };
 
-    const result = await extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap });
-
-    expect(calls).toBe(2);
-    expect(result.core.results).toContain('measured response');
-    expect(result.needsMoreInformation).toEqual(['problem', 'insight', 'method', 'limitations', 'reproducibility']);
-    const repairPrompt = JSON.stringify(requests[1]);
-    for (const field of SDF_CORE_FIELDS) expect(repairPrompt).toContain(`${field}:all_fields_missing`);
-    expect(repairPrompt).toContain('Re-examine every field independently');
-    expect(repairPrompt).toContain('Do not invent or weaken evidence requirements');
+    await expect(extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap }))
+      .rejects.toMatchObject({ code: 'SCHEMA_VALIDATION', message: 'canonical_all_fields_missing' });
+    expect(calls).toBe(1);
   });
 
-  it('fails with a safe canonical marker after three six-field missing responses', async () => {
+  it('fails with a safe canonical marker after one valid six-field missing response', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-all-missing-exhausted', contentHash: 'e'.repeat(64), parser: { name: 'cascade', version: '1' },
       pages: [{ page: 1, width: 100, height: 100, blocks: [{
@@ -637,10 +627,10 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
 
     await expect(extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap }))
       .rejects.toMatchObject({ code: 'SCHEMA_VALIDATION', message: 'canonical_all_fields_missing' });
-    expect(calls).toBe(3);
+    expect(calls).toBe(1);
   });
 
-  it('does not mislabel a provider failure after two all-missing rejections', async () => {
+  it('does not call the provider again after a valid all-missing response', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-provider-failure', contentHash: 'f'.repeat(64), parser: { name: 'cascade', version: '1' },
       pages: [{ page: 1, width: 100, height: 100, blocks: [{ id: 'paper-result', kind: 'paragraph',
@@ -652,13 +642,12 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     let calls = 0;
     const provider: Provider = { name: 'provider-failure', model: 'provider-failure', complete: async () => {
       calls += 1;
-      if (calls === 3) throw new Error('provider unavailable');
       return { text: JSON.stringify(response), usage: { inputTokens: 1, outputTokens: 1 }, model: 'provider-failure' };
     } };
 
     await expect(extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap }))
-      .rejects.not.toMatchObject({ message: 'canonical_all_fields_missing' });
-    expect(calls).toBe(3);
+      .rejects.toMatchObject({ message: 'canonical_all_fields_missing' });
+    expect(calls).toBe(1);
   });
 
   it('错误 schemaVersion 的响应不缓存其中看似合法的字段', async () => {
@@ -691,7 +680,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.needsMoreInformation).toContain('problem');
   });
 
-  it('重试耗尽时拒绝整份结果而不返回已缓存的局部字段', async () => {
+  it('重试耗尽时保留已验证字段并明确标记其余字段', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-1', contentHash: 'c'.repeat(64), parser: { name: 'cascade', version: '1' },
       pages: [{ page: 1, width: 100, height: 100, blocks: Array.from({ length: 3 }, (_, index) => ({
@@ -716,8 +705,13 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       return { text: JSON.stringify(invalid), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
     } };
 
-    await expect(extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap }))
-      .rejects.toThrow(/重试上限/);
+    const result = await extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap });
+    expect(result).toMatchObject({
+      core: { problem: 'Exact 1', insight: '' },
+      reason: 'canonical_partial_validation_exhausted',
+      fieldDiagnostics: { insight: 'ordered_ids_required' },
+      missingDetails: { insight: { cause: 'validation_rejected' } },
+    });
     expect(calls).toBe(3);
   });
 
@@ -936,13 +930,13 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.needsMoreInformation).toEqual(['results']);
   });
 
-  it('uses ordered noncontiguous canonical blocks without including unrelated text or rewriting fragmented formulas', async () => {
+  it('expands ordered anchors to one exact continuous canonical span without rewriting fragmented formulas', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-segments', contentHash: 'e'.repeat(64), parser: { name: 'cascade', version: '1' },
       pages: [{ page: 1, width: 600, height: 800, blocks: [
         { id: 'line-a', kind: 'paragraph', text: 'The optical-', boundingBox: { x: 10, y: 10, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
         { id: 'line-b', kind: 'paragraph', text: 'field obeys Φ_CEP ≠ 0 under calibrated condi-', boundingBox: { x: 10, y: 20, width: 300, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
-        { id: 'unrelated', kind: 'paragraph', text: 'Copyright and running header.', boundingBox: { x: 10, y: 25, width: 200, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'bridge', kind: 'paragraph', text: 'under the documented setup and boundary condi-', boundingBox: { x: 10, y: 25, width: 200, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
         { id: 'line-c', kind: 'paragraph', text: 'tions.', boundingBox: { x: 10, y: 30, width: 50, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
       ] }],
     };
@@ -959,12 +953,13 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] });
     const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
 
-    expect(result.core.problem).toContain('nonzero CEP');
-    expect(result.evidence.problem.quote).toBe('The optical-\nfield obeys Φ_CEP ≠ 0 under calibrated condi-\ntions.');
+    expect(result.core.problem).toBe('The optical-\nfield obeys Φ_CEP ≠ 0 under calibrated condi-\nunder the documented setup and boundary condi-\ntions.');
+    expect(result.evidence.problem.quote).toBe(result.core.problem);
     expect(result.evidenceLocation?.problem).toMatchObject({ status: 'cross_block', reason: 'match-spans-blocks' });
     expect(result.evidenceSegments?.problem).toEqual([
       expect.objectContaining({ quote: 'The optical-', sourceLocator: expect.objectContaining({ blockId: 'line-a', charRange: { start: 0, end: 12 } }) }),
       expect.objectContaining({ quote: 'field obeys Φ_CEP ≠ 0 under calibrated condi-', sourceLocator: expect.objectContaining({ blockId: 'line-b' }) }),
+      expect.objectContaining({ quote: 'under the documented setup and boundary condi-', sourceLocator: expect.objectContaining({ blockId: 'bridge' }) }),
       expect.objectContaining({ quote: 'tions.', sourceLocator: expect.objectContaining({ blockId: 'line-c' }) }),
     ]);
   });
@@ -1155,6 +1150,6 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     const gateway = new AiGateway({ providers: [{ name: 'oversize', model: 'oversize', complete: async () => ({
       text: JSON.stringify({ schemaVersion: '0.1.0', fields }), usage: { inputTokens: 1, outputTokens: 1 }, model: 'oversize',
     }) }] });
-    await expect(extractHandler(gateway, { payload: {} }, { sourceMap })).rejects.toThrow(/重试上限/);
+    await expect(extractHandler(gateway, { payload: {} }, { sourceMap })).rejects.toThrow('canonical_validation_exhausted');
   });
 });

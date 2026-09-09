@@ -76,23 +76,25 @@ describe('canonical extractor → confirmation → frozen research record',()=>{
     const source=await getResearchRecordSource(f.deps,{researchObjectId:RO,versionId:saved.confirmation.versionId,evidenceId:f.db.evidenceRecords[0].id,userId:f.user.id});
     expect(source.text).toBe('Same  result.');
   });
-  it('persists canonical noncontiguous segments as independent Evidence rows for one Claim',async()=>{
-    const f=await extractedFixture(['The optical-','field obeys Φ_CEP ≠ 0.','Unrelated header.','Calibration required.'],['B000001','B000002','B000004']);
+  it('persists every block in a canonical continuous span as independent Evidence rows for one Claim',async()=>{
+    const f=await extractedFixture(['The optical-','field obeys Φ_CEP ≠ 0.','under the documented setup.','Calibration required.'],['B000001','B000002','B000004']);
     expect(f.result.evidenceLocation?.problem).toMatchObject({status:'cross_block',reason:'match-spans-blocks'});
     expect(f.result.evidenceSegments?.problem.map(segment=>({quote:segment.quote,blockId:segment.sourceLocator.blockId}))).toEqual([
-      {quote:'The optical-',blockId:'block0'}, {quote:'field obeys Φ_CEP ≠ 0.',blockId:'block1'}, {quote:'Calibration required.',blockId:'block3'},
+      {quote:'The optical-',blockId:'block0'}, {quote:'field obeys Φ_CEP ≠ 0.',blockId:'block1'},
+      {quote:'under the documented setup.',blockId:'block2'}, {quote:'Calibration required.',blockId:'block3'},
     ]);
-    expect(f.result.evidence.problem.quote).toBe('The optical-\nfield obeys Φ_CEP ≠ 0.\nCalibration required.');
+    expect(f.result.evidence.problem.quote).toBe('The optical-\nfield obeys Φ_CEP ≠ 0.\nunder the documented setup.\nCalibration required.');
     const {view}=await f.confirm();
     expect(f.db.claimNodes).toHaveLength(1);
-    expect(f.db.evidenceRecords).toHaveLength(3);
+    expect(f.db.evidenceRecords).toHaveLength(4);
     expect(new Set(f.db.evidenceRecords.map(row=>row.claimId))).toEqual(new Set([f.db.claimNodes[0].id]));
     expect(f.db.evidenceRecords.map(row=>({quote:row.exactQuote,blockId:row.locator.blockId,relation:row.relation,verifiedByUserId:row.verifiedByUserId}))).toEqual([
       {quote:'The optical-',blockId:'block0',relation:'context',verifiedByUserId:null},
       {quote:'field obeys Φ_CEP ≠ 0.',blockId:'block1',relation:'context',verifiedByUserId:null},
+      {quote:'under the documented setup.',blockId:'block2',relation:'context',verifiedByUserId:null},
       {quote:'Calibration required.',blockId:'block3',relation:'context',verifiedByUserId:null},
     ]);
-    expect(view.record).toMatchObject({sdf:{problem:'Reported result'},evidence:[{verified:false},{verified:false},{verified:false}]});
+    expect(view.record).toMatchObject({sdf:{problem:'The optical-\nfield obeys Φ_CEP ≠ 0.\nunder the documented setup.\nCalibration required.'},evidence:[{verified:false},{verified:false},{verified:false},{verified:false}]});
     expect(view.record.manifest).toHaveLength(1);
     expect(view.record.manifest[0].artifactId).toBe(ARTIFACT);
   });
