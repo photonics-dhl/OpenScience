@@ -140,7 +140,7 @@ export async function workspaceGuideHandler(
         'target 指明用户正在讨论的界面或段落；sdf-* 对应给定 core 字段，其中 sdf-evidence 对应 reproducibility。优先回应所选段落；target 为 null 时不得假定用户选择了某一段。',
         'InterestContext 仅用于排序关注点；rejectedSignals 是明确排除项，不得反向推断敏感属性或站外行为。',
         '只输出一个 JSON 对象，根字段只能是 summary、nextSteps、needsMoreInformation、presentationDraft。needsMoreInformation 必须是 boolean，不得输出问题数组。',
-        'nextSteps 最多 1 项；每项只能包含 label、intent、targetId，禁止 title、description 或其他字段。',
+        'nextSteps 最多 1 项；每个 nextSteps 项只能包含 label、intent、targetId，禁止 title、description 或其他字段。',
         '仅当 presentationContext 存在且用户目标适合用讲解分镜表达时，才输出 presentationDraft；它只能包含 action、instruction、researchObjectId、versionId。action 必须是 storyboard.create，两个 id 必须逐字使用 presentationContext，instruction 必须是基于给定版本字段的可编辑分镜指令，不得声称已生成、批准或发布。不得输出主张或来源 id。',
         'intent 只能是 open-task、open-ro、start-import。open-task/open-ro 必须带 targetId；start-import 必须省略 targetId。',
         `open-task 只能使用下列 task id：${taskIds.length ? taskIds.join(', ') : '（无；禁止输出 open-task）'}。`,
