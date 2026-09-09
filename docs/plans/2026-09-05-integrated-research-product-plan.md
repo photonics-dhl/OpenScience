@@ -657,3 +657,5 @@ Source: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec . Request act
 实际续接：9741ec53已部署（rollback a0b47065）。同材料正式分析6ef59171-714c-4b35-9ba5-163b5573690a显示词级碎片改善，但results contiguous_ids_required、problem/insight断尾。未确认结果；当前继续修复稀疏输入上下文与过早保留字段，不重复上传或手工填文。
 
 1df9f617上下文版已部署，真实Agentc4d23d59仍有断句/results段数失败。下一候选改模型输出原文quote和窗口id，服务器唯一精确匹配并映射block内charRange回读，不使用模型summary写core，不放宽证据。材料状态标签直接采用同任务最新proposal detail，避免已完成仍显示排队中。
+
+1267e298精确选句正式部署完成。实际f286cc57仍partial：problem/results quote_not_found，method/insight完整、reproducibility非空，limitations断头；页面待确认状态已实际同步。未确认/未称全流程完成。quote_not_found现混合0匹配、locator异常、拼接差异，原始quote未存日志，后续需精确失败原因后定向修复，避免盲调与反复扣费。

@@ -1,5 +1,10 @@
 # Progress
 
+## 2026-09-09 — 精确选句已部署，完整提取尚未完成
+- 生产1267e298 / rollback1df9f617，SSH中断两次后部署exit0，日志1788936975803-c258f311-74ba-4fd0-8c37-030fe1e13227。
+- 实际Agentf286cc57-3b16-4daf-b6ba-79887ae91772：exact-quote-v1，problem/results quote_not_found，洞见/方法完整、可复现性首次非空、局限仍断头。页面自动显示新结果及待确认，不再排队中；未确认。
+- 根因诊断缺口：quote_not_found合并0匹配/locator异常/拼接不一致；现有日志不保存原始模型quote，无法回溯区别。后续需安全区分失败类别并让服务器定向修复，不再盲目调prompt重复付费。未运行测试/本机构建。
+
 ## 2026-09-09 — 连续上下文已部署，精确选句修复中
 - 生产1df9f617 / rollback9741ec53，日志1788935312552-c41241ae-a743-4eec-b440-6110e2e70315，部署exit0、未测试。
 - Agentc4d23d59-e247-4de9-9446-14771b75d26c真实返回：problem完整，insight/limitations仍截断或混入其他内容；results段数失败、reproducibility缺失，不合格未确认。
