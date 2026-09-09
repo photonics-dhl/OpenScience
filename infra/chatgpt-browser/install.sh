@@ -8,6 +8,12 @@ if [[ -e "$root" ]]; then
   [[ ${2:-} == --resume-build && ! -e /etc/systemd/system/openscience-chatgpt-browser-bridge.service ]] || exit 66
   ! docker container inspect openscience-chatgpt-browser >/dev/null 2>&1 || exit 66
 fi
+# systemd resolves the host account even when User is numeric.
+if ! getent group 11040 >/dev/null; then groupadd --gid 11040 xgs-browser; fi
+if ! getent passwd 11040 >/dev/null; then
+  useradd --uid 11040 --gid 11040 --no-create-home --home-dir "$root/profile" --shell /usr/sbin/nologin xgs-browser
+fi
+[[ $(getent passwd 11040 | cut -d: -f1) == xgs-browser && $(getent group 11040 | cut -d: -f1) == xgs-browser ]] || exit 67
 install -d -m 0755 "$root" "$root/scripts"
 install -d -o 11040 -g 11040 -m 0700 "$root/profile" "$root/downloads" "$root/egress" "$root/control"
 for file in Dockerfile start.sh relay.mjs host.mjs seccomp.json; do install -m 0444 "$source_root/$file" "$root/scripts/$file"; done

@@ -1,6 +1,6 @@
 # Server ChatGPT browser — operator login research
 
-Status: CANDIDATE, not a production image provider. No webpage login or generated image observed yet.
+Status: image built272a5ed57d27 using existing server assets; host bridge active after creating dedicated host UID/GID11040. Browser container start failed before application logs; restart disabled. No webpage login or generated image observed yet, not a production image provider.
 
 ## Prerequisites
 - Read server-capabilities.md first. Reuse the installed ScanSci image's full Chrome revision1234, Xvfb and libraries, plus existing Node/media-font layers. Only x11vnc/noVNC/websockify are additional packages; do not download Chromium again.

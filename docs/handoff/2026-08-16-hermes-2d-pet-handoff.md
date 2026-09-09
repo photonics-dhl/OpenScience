@@ -7,7 +7,7 @@
 
 ## Server browser continuation (2026-09-09)
 - 用户要求服务器任务先查能力清单；已新增 docs/runbooks/server-capabilities.md 并写入AGENTS。发现共享缓存与ScanSci镜像已有完整Chrome+Xvfb，已停止重复下载，改为复用镜像，仅补远程桌面组件。
-- 独立浏览器仍构建中；生产release未变，尚未登录/网页生图/回传。固定SSH6081隧道已启动，CUA仍fetch失败。不得按下方旧Codex retry步骤重复消耗额度。
+- 独立浏览器镜像272a5ed57d27已构建；bridge补宿主账号后active，容器启动运行时错误，已停止自动重启，正在定向定位；生产release未变，尚未登录/网页生图/回传。固定SSH6081隧道已启动，CUA仍fetch失败。不得按下方旧Codex retry步骤重复消耗额度。
 
 ## Versions
 - worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
