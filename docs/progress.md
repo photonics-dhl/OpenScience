@@ -1,10 +1,10 @@
 # Progress
 
-## 2026-09-09 — Hermes 体验优化第一批（进行中）
+## 2026-09-09 — Hermes 体验优化第一批（已部署）
 - 已在原网页会话实际与6 Pro讨论并读回4m36s完整答复；采纳“真实建议入草稿→上下文/编辑保留→侧栏和主动作→共享视觉收敛”的顺序。
-- Sol/medium已完成第一批候选：既有workspace.guide真实建议字段、编辑草稿预填/保护、账号与RO/版本隔离、侧栏层级；待服务器构建部署。无新框架/依赖/测试/预检，不重跑媒体。
+- Sol/medium已完成第一批候选：既有workspace.guide真实建议字段、编辑草稿预填/保护、账号与RO/版本隔离、侧栏层级；已部署45dabd7a，服务器构建与启动完成。无新框架/依赖/测试/预检，不重跑媒体。
 - 内置浏览器控制可用但每次动作较慢；Chat已登录。产品页当前未登录，不声称登录后页面截图或交互已验收。
-- 生产marker新读取仍为3446f309；本地HEAD e1c61f3c加本批未提交改动。计划见docs/plans/2026-09-05-integrated-research-product-plan.md的2026-09-09段。
+- 生产45dabd7a / rollback3446f309；部署日志1788917875578-5f990ae8-3be2-480a-b0dc-cd7a6335a1f8 exit0；后续HEAD仅同步文档。计划见docs/plans/2026-09-05-integrated-research-product-plan.md的2026-09-09段。
 
 ## 2026-09-09 — Hermes 内容驱动方法讲解流程完成
 - 生产3446f309 / rollback583d201e；服务器canonical --no-tests构建部署完成。未运行本地构建、测试、预检或CI测试。

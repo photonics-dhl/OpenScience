@@ -603,3 +603,5 @@ Source: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec . Request act
 参考使用：Emil负责交互反馈与可中断过渡；Impeccable借鉴保持原视觉体系、最小层级修改；Diagram Design为科研内容表达参考；story-to-handdrawn-video不替换已完成动画；不照搬安装/检测/预检流程。
 
 实施负责人：Sol/medium子任务hermes_ux_delivery，负责本批代码；主线程负责来源/范围核对、文档、集成与服务器部署。独立high仅聚焦跨账号草稿和建议作用域/付费边界；不新增检查工具。跨设备同步、多人合并、复杂侧栏拖拽、新媒体能力留后续。
+
+落实状态：首批已部署45dabd7a（rollback3446f309），真实storyboard.create建议进入可编辑表单，账号/RO/实际版本草稿隔离与清空保留、侧栏层级已落地。canonical --no-tests服务器构建启动exit0；未运行测试、媒体重生成或独立预检。产品浏览器未登录，尚未观察登录后界面；全站字体/布局与跨页主动作仍是后续工作。
