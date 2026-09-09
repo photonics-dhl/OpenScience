@@ -1474,7 +1474,7 @@ export async function createSandboxJob(
 }
 
 export interface IngestionTaskDetail {
-  task: { id: string; artifactId: string; logicalPath: string; state: string; retryCount: number; error: string | null; agentTaskId: string | null; result: Record<string, unknown> | null };
+  task: IngestionTaskSummary & { result: Record<string, unknown> | null };
   batchId: string;
   researchObjectId: string;
   version: number;
