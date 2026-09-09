@@ -6,6 +6,9 @@
 - Preserve scientific sources, workspace permissions, user approval, billing and sandbox boundaries.
 
 ## Active upload-to-draft task
+- 当前追加：用户要求提升其余五字段提取。只读服务器确认task7a28a7c8-90f7-429b-a519-53397cf58856 / agent0373e9fb-adfc-42e3-8599-159de1094e65 创建2026-08-28，旧core+chars证据，无sourceMapRef/evidenceSegments；不是当前canonical链路新结果，不能据旧空项断言当前OCR失败。
+- 实施中：同IngestionTask保留入口，事务内正常计费创建新sdf.extract AgentTask/CAS绑定，旧AgentTask/result保留；显式旧材料refresh、严格旧shape/未确认/owner/RO/artifact/幂等，沿现有dispatch，不原地清result、不建第二batch。Sol/medium负责代码，Sol/high复核，主负责网页/文档/部署。
+- 网页1（原3）6Pro实际新讨论2m38s：复用artifact、新分析保留旧结果、预算/幂等/人工修改保护、不承诺补齐无证据字段。产品2（原4）连接已恢复，旧字段状态仍在；下一步完成候选→服务器部署→正常产品更新这份旧材料，不测试/重传/强改DB。
 - User nowrequiresPDFupload automaticallyextract+AIorganize editablefields withminimalmanualoperations. Chat tab3 sameconversation actualplan3m29s read; producttab4 authenticated remainsedit. No tests/preflights/reupload/paidgeneration.
 - 候选实现完成：ArtifactUploader直接startIngestionBatch；未确认任务内联自动预填；用户/RO/版本/task草稿；逐字段编辑/清空保护；唯一可编辑表单；原确认API及来源边界不变。Sol/medium实现、Sol/high静态复核已收敛覆盖/丢弃/重试/并发冲突问题，未测试或运行。
 - Explorer confirmed rawuploader edit/files nevercreatesingestion; newintakealreadyautoextracts; edit?ingestionTask rejectsunconfirmed. getIngestionTask result.core isexistingproducer. Don'tduplicateuploadraw+ingest.

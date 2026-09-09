@@ -14,7 +14,7 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, confirmIngestionTask, apiRequest, getHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
+import { ApiClientError, confirmIngestionTask, apiRequest, getHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, isLegacyCharacterEvidenceExtraction, refreshLegacyIngestionTask, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
@@ -123,6 +123,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
   const paidReanalysis = canonicalAllMissing || (detail?.task.state === 'failed_retryable' && detail.task.retryCount === 1);
   const compensatedReanalysis = detail?.task.state === 'failed_retryable' && detail.task.retryCount === 2;
   const proposalUnavailable = detail ? isRetryableSdfExtraction(detail.task) : false;
+  const legacyRefreshAvailable = detail ? isLegacyCharacterEvidenceExtraction(detail.task) : false;
   const approvalOpen = detail?.task.state === 'needs_review' && !proposalUnavailable;
   const reviewSuggestion = useMemo(() => detail ? ({
     bodyKey: 'guide.review.body',
@@ -152,6 +153,25 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
       if (mounted.current) setReload((value) => value + 1);
     } catch (cause) {
       if (mounted.current) setError(cause instanceof ApiClientError ? cause.message : t('proposalRetryError'));
+    } finally {
+      if (mounted.current) setSaving(false);
+    }
+  }
+  async function refreshLegacyExtraction() {
+    if (!detail?.task.agentTaskId || !legacyRefreshAvailable || saving || detail.researchObjectId !== routeParams.id) return;
+    setSaving(true); setError('');
+    try {
+      await refreshLegacyIngestionTask(taskId, detail.task.agentTaskId);
+      if (mounted.current) setReload((value) => value + 1);
+    } catch (cause) {
+      try {
+        const current = await getIngestionTask(taskId);
+        if (current.task.agentTaskId && current.task.agentTaskId !== detail.task.agentTaskId) {
+          if (mounted.current) setReload((value) => value + 1);
+          return;
+        }
+      } catch { /* The same task remains recoverable by its stable refresh request. */ }
+      if (mounted.current) setError(t('legacyRefreshUncertain'));
     } finally {
       if (mounted.current) setSaving(false);
     }
@@ -206,6 +226,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
             <p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t(compensatedReanalysis ? 'proposalCompensationBody' : paidReanalysis ? 'proposalReanalysisBody' : 'proposalUnavailableBody')}</p>
             <button type="button" disabled={saving} onClick={() => void retryExtraction()} className="mt-5 min-h-11 touch-manipulation rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('proposalRetrying') : t(compensatedReanalysis ? 'proposalCompensation' : paidReanalysis ? 'proposalReanalysis' : 'proposalRetry')}</button>
           </section> : <><p className="mb-4 text-sm text-os-muted-paper">{t('reviewPending')}</p>
+          {legacyRefreshAvailable ? <section className="mb-5 border-l-2 border-os-vermilion-ink pl-4"><h2 className="text-lg font-semibold text-os-ink">{t('legacyRefreshTitle')}</h2><p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t('legacyRefreshBody')}</p><button type="button" disabled={saving} onClick={() => void refreshLegacyExtraction()} className="mt-3 min-h-11 rounded-panel border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink disabled:opacity-40">{saving ? t('legacyRefreshing') : t('legacyRefreshAction')}</button></section> : null}
           <section aria-label={t('fieldLabel')} className="surface-folio-sheet divide-y divide-os-rule-paper border-y border-os-rule-paper">
             {fields.map((field, index) => <div key={field} className="grid gap-3 px-4 py-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:px-6">
               <label htmlFor={`hermes-review-${field}`}><span className="block font-data text-xs text-os-vermilion-ink">0{index + 1}</span><span className="mt-1 block text-sm font-semibold text-os-ink">{fieldT(field)}</span>{!core[field].trim() && <span className="block text-sm text-os-muted-paper">{t('missing')}</span>}</label>

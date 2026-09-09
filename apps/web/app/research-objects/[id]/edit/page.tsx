@@ -25,8 +25,10 @@ import {
   getCurrentUser,
   getIngestionTask,
   getResearchObject,
+  isLegacyCharacterEvidenceExtraction,
   listVersions,
   retryAgentTask,
+  refreshLegacyIngestionTask,
   submitExtractTask,
   updateSdf,
   type ArtifactReference,
@@ -112,6 +114,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [confirmingIngestion, setConfirmingIngestion] = useState(false);
   const [confirmationIntent, setConfirmationIntent] = useState<IngestionProposal | null>(null);
   const [confirmedIngestion, setConfirmedIngestion] = useState(false);
+  const [refreshingLegacyIngestion, setRefreshingLegacyIngestion] = useState(false);
   const [activeField, setActiveField] = useState<FieldKey | null>('problem');
   const [workspaceId, setWorkspaceId] = useState<string>('');
   const [objectMeta, setObjectMeta] = useState<{ title: string; visibility: string }>({
@@ -352,6 +355,33 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       setIngestionMessage(cause instanceof Error ? cause.message : t('ingestionConfirmFailed'));
     } finally {
       setConfirmingIngestion(false);
+    }
+  }
+
+  async function refreshLegacyProposal() {
+    if (!ingestionProposal?.detail.task.agentTaskId || refreshingLegacyIngestion || !isLegacyCharacterEvidenceExtraction(ingestionProposal.detail.task)) return;
+    setRefreshingLegacyIngestion(true);
+    setIngestionMessage(null);
+    try {
+      const task = await refreshLegacyIngestionTask(ingestionProposal.detail.task.id, ingestionProposal.detail.task.agentTaskId);
+      setIngestionProposal(null);
+      setConfirmationIntent(null);
+      setIngestionTasks((current) => current.map((candidate) => candidate.id === task.id ? { ...task, confirmation: null } : candidate));
+      setIngestionMessage(t('legacyRefreshStarted'));
+    } catch (cause) {
+      try {
+        const detail = await getIngestionTask(ingestionProposal.detail.task.id);
+        if (detail.task.agentTaskId && detail.task.agentTaskId !== ingestionProposal.detail.task.agentTaskId) {
+          setIngestionProposal(null);
+          setConfirmationIntent(null);
+          setIngestionTasks((current) => current.map((candidate) => candidate.id === detail.task.id ? { ...detail.task, confirmation: null } : candidate));
+          setIngestionMessage(t('legacyRefreshStarted'));
+          return;
+        }
+      } catch { /* Keep the same task selected so the user can reconcile it again. */ }
+      setIngestionMessage(t('legacyRefreshUncertain'));
+    } finally {
+      setRefreshingLegacyIngestion(false);
     }
   }
 
@@ -760,6 +790,12 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                   </label>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-os-muted-paper">{t('ingestionProposalBody')}</p>
+                {ingestionProposal && isLegacyCharacterEvidenceExtraction(ingestionProposal.detail.task) ? (
+                  <div className="mt-4 border-l-2 border-os-vermilion-ink pl-4">
+                    <p className="text-sm leading-6 text-os-muted-paper">{t('legacyRefreshBody')}</p>
+                    <button type="button" className="mt-3 min-h-11 rounded-panel border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink disabled:opacity-50" disabled={refreshingLegacyIngestion || confirmingIngestion} onClick={() => void refreshLegacyProposal()}>{refreshingLegacyIngestion ? t('legacyRefreshing') : t('legacyRefreshAction')}</button>
+                  </div>
+                ) : null}
                 {ingestionLoading ? <p className="mt-3 text-sm text-os-ink" role="status">{t('ingestionLoading')}</p> : null}
                 {ingestionMessage ? <p className="mt-3 text-sm text-os-ink" role="status">{ingestionMessage}</p> : null}
                 {showIngestionRecoveryLink ? <Link className="mt-3 inline-block border-b border-os-vermilion-ink pb-1 text-sm text-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(roId)}/hermes?task=${encodeURIComponent(selectedIngestionTask!.id)}`}>{t('openIngestionRecovery')}</Link> : null}
@@ -776,7 +812,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                     {extractMissingSdfFields(ingestionProposal.detail.task.result).length ? <p className="text-sm text-os-muted-paper">{t('ingestionMissingFields', { fields: extractMissingSdfFields(ingestionProposal.detail.task.result).map((field) => t(field)).join('、') })}</p> : null}
                     {!ingestionProposalHasContent ? <p className="text-sm text-state-danger" role="alert">{t('emptyIngestionProposal')}</p> : null}
                     <div className="flex flex-wrap items-center gap-4 border-t border-os-rule-paper pt-4">
-                      <button className="min-h-11 rounded-panel bg-os-vermilion-ink px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={confirmingIngestion || !ingestionProposalHasContent} onClick={() => void confirmIngestionProposal()}>{confirmingIngestion ? t('confirmingIngestion') : confirmationIntent ? t('reconcileIngestionConfirmation') : t('confirmIngestionProposal')}</button>
+                      <button className="min-h-11 rounded-panel bg-os-vermilion-ink px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={confirmingIngestion || refreshingLegacyIngestion || !ingestionProposalHasContent} onClick={() => void confirmIngestionProposal()}>{confirmingIngestion ? t('confirmingIngestion') : confirmationIntent ? t('reconcileIngestionConfirmation') : t('confirmIngestionProposal')}</button>
                       <span className="text-xs leading-5 text-os-muted-paper">{confirmationIntent ? t('ambiguousIngestionConfirmation') : t('confirmIngestionNotice')}</span>
                     </div>
                   </div>

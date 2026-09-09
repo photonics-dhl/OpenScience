@@ -1566,6 +1566,45 @@ export async function retryIngestionTask(taskId: string): Promise<IngestionTaskS
   return result.task;
 }
 
+export async function refreshLegacyIngestionTask(taskId: string, sourceAgentTaskId: string): Promise<IngestionTaskSummary> {
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/refresh`, {
+    method: 'POST',
+    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId }),
+  });
+  return result.task;
+}
+
+const LEGACY_INGESTION_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+
+/** Public-result guard for the old character-offset extraction contract. */
+export function isLegacyCharacterEvidenceExtraction(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount' | 'agentTaskId'>): boolean {
+  if (task.state !== 'needs_review' || task.retryCount !== 0 || !task.agentTaskId || !task.result
+    || typeof task.result !== 'object' || Array.isArray(task.result)) return false;
+  const result = task.result as Record<string, unknown>;
+  const core = result.core;
+  const evidence = result.evidence;
+  const missing = result.needsMoreInformation;
+  if (Object.keys(result).sort().join(',') !== ['core', 'evidence', 'needsMoreInformation'].sort().join(',')
+    || !core || typeof core !== 'object' || Array.isArray(core)
+    || !evidence || typeof evidence !== 'object' || Array.isArray(evidence)
+    || !Array.isArray(missing)) return false;
+  const coreRecord = core as Record<string, unknown>;
+  const evidenceRecord = evidence as Record<string, unknown>;
+  return Object.keys(coreRecord).sort().join(',') === ['schemaVersion', ...LEGACY_INGESTION_FIELDS].sort().join(',')
+    && LEGACY_INGESTION_FIELDS.every((field) => typeof coreRecord[field] === 'string')
+    && LEGACY_INGESTION_FIELDS.some((field) => String(coreRecord[field]).trim())
+    && Object.keys(evidenceRecord).sort().join(',') === [...LEGACY_INGESTION_FIELDS].sort().join(',')
+    && LEGACY_INGESTION_FIELDS.every((field) => {
+      const item = evidenceRecord[field];
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+      const record = item as Record<string, unknown>;
+      return Object.keys(record).sort().join(',') === ['locator', 'quote'].join(',')
+        && typeof record.quote === 'string' && typeof record.locator === 'string'
+        && (record.locator === '' || /^chars:\d+-\d+$/.test(record.locator));
+    })
+    && missing.every((field) => LEGACY_INGESTION_FIELDS.includes(field as typeof LEGACY_INGESTION_FIELDS[number]));
+}
+
 export async function getIngestionTask(taskId: string): Promise<IngestionTaskDetail> {
   return apiRequest(`/api/ingestion/tasks/${taskId}`);
 }

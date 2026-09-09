@@ -646,3 +646,8 @@ Source: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec . Request act
 - fc503808已部署exit0 / rollback e0ff364e。实际已有论文task自动预填洞见、五项缺失如实可见，确认操作在同页。438px截图发现长材料名导致横向滚动，追加source picker宽度修正；不重新提取或确认论文。
 
 - 最终宽度补丁18b69b3c已部署exit0 / rollback fc503808，日志1788929188544-a0121f14-9763-45f2-8ed3-691b1fe9bf3c。内置浏览器刷新出现ERR_TIMED_OUT，最终截图未取得；不称全站体验或新上传流程全面验收。下一步先恢复页面观察，继续Hermes不遮正文的布局与文献提取覆盖度。
+
+### 旧材料分析升级（当前执行）
+- 服务器只读证据：Quantization任务7a28a7c8-90f7-429b-a519-53397cf58856的agent0373e9fb-adfc-42e3-8599-159de1094e65创建于2026-08-28，payload含artifactId/researchObjectId；result只有旧core/evidence(chars)/needsMoreInformation，只有insight非空。无现代sourceMapRef/evidenceSegments，旧输出不能证明当前解析器失败。
+- 当前retry拒绝旧部分成功任务，缺少复用上传资料升级入口。采用同IngestionTask下独立新AgentTask、事务扣费与CAS绑定，旧AgentTask/result保留；不修改已确认版本，不重传、不原地清空旧结果、不宽泛放开失败重试。
+- 网页6Pro实际2m38s方案：一次适用预算授权、新分析可恢复/幂等、未触碰字段接续、旧证据不冒充新证据；不为了填满而编造。Sol/medium实现、Sol/high定点静态复核，无测试/本地运行。

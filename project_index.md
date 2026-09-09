@@ -555,3 +555,4 @@
 | `apps/web/public/hermes/wanko-static-transparent.png` | 登录与Hermes加载态透明背景衍生图（imagegen，原图保留） | 已随b03263de部署，登录实际无褐底；见CURRENT handoff |
 
 | `apps/web/lib/ingestion-proposal-draft.ts` | 用户/RO/版本/task隔离的提取建议草稿与已触碰字段保存 | 已部署18b69b3c；CURRENT handoff与集成计划记录证据 |
+| `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` | 旧字符证据分析升级：POST ingestion/:taskId/refresh，复用artifact、新AgentTask事务扣费与CAS关联、旧结果保留；现有提取与确认边界不变 | 候选完成；CURRENT handoff及集成计划记录部署与真实结果 |
