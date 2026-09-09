@@ -621,7 +621,7 @@ if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
   compose_embedding_current "run --rm --no-deps -T --entrypoint python embedding-worker /app/model-init.py --validate --seed /opt/bge-m3-seed --target /models/bge-m3"
   if [ "$NO_TESTS" -eq 0 ]; then
     compose_embedding_current "run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs"
-    log "[5a] embedding model manifest、runtime identity 与真实向量 verified"
+    log "[5a] embedding model manifest and runtime identity verified"
   else
     log "UNVERIFIED_ACCEPTANCE: 跳过 embedding health/vector runtime probe；保留模型 manifest 校验与容器 startup health"
   fi
