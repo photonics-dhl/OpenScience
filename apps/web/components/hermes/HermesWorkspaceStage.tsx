@@ -214,9 +214,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
     return () => { release(); setRegistryVersion((version) => version + 1); };
   }, []);
   useEffect(() => {
-    if (pathname === '/research-objects/new') setGuideTarget('ro-title');
-    else if (/^\/research-objects\/[^/]+\/edit$/.test(pathname)) setGuideTarget('sdf-problem');
-    else setGuideTarget(null);
+    setGuideTarget(null);
   }, [pathname]);
   useEffect(() => {
     setRouteAssistantOpen(false); setRouteState('idle'); setWriting(false);
