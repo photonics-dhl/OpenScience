@@ -676,9 +676,10 @@ async function repairCanonicalPartial(
   const candidateIds = new Set(repairFields.flatMap((field) => partial.unverifiedSourcePassageIds[field]!));
   const candidatePassages = passages.filter((passage) => candidateIds.has(passage.id));
   const repaired = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
+  const repairFailures = new Map<(typeof SDF_CORE_FIELDS)[number], string>();
 
   const selectEvidence = (claims: Array<{ text: string; supportSets: string[][] }>, allowedIds: Set<string>): ExtractedFieldProposal | undefined => {
-    const summary = claims.map((claim) => claim.text.trim()).join('');
+    const summary = `${claims.map((claim) => claim.text.trim().replace(/[。；！？.!?]+$/u, '')).join('；')}。`;
     if (!summary || summary.length > MAX_CANONICAL_CORE_CHARS) return undefined;
     let unions: Array<Set<string>> = [new Set()];
     for (const claim of claims) {
@@ -726,29 +727,37 @@ async function repairCanonicalPartial(
     if (Object.keys(fields).sort().join(',') !== repairFields.slice().sort().join(',')) return false;
     for (const field of repairFields) {
       const item = fields[field];
-      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      if (!item || typeof item !== 'object' || Array.isArray(item)) { repairFailures.set(field, 'malformed_field'); continue; }
       const candidate = item as Record<string, unknown>;
       if (Object.keys(candidate).sort().join(',') !== 'claims,needsMoreInformation'
-        || typeof candidate.needsMoreInformation !== 'boolean' || !Array.isArray(candidate.claims)) continue;
+        || typeof candidate.needsMoreInformation !== 'boolean' || !Array.isArray(candidate.claims)) {
+        repairFailures.set(field, 'malformed_field_contract');
+        continue;
+      }
       if (candidate.needsMoreInformation) {
         if (candidate.claims.length === 0) repaired.set(field, {
           summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true,
         });
+        else repairFailures.set(field, 'missing_requires_empty_claims');
         continue;
       }
-      if (candidate.claims.length < 1 || candidate.claims.length > 8) continue;
+      if (candidate.claims.length < 1 || candidate.claims.length > 8) { repairFailures.set(field, 'claim_count_1_to_8'); continue; }
       const claims: Array<{ text: string; supportSets: string[][] }> = [];
       let valid = true;
       for (const claimValue of candidate.claims) {
-        if (!claimValue || typeof claimValue !== 'object' || Array.isArray(claimValue)) { valid = false; break; }
+        if (!claimValue || typeof claimValue !== 'object' || Array.isArray(claimValue)) { valid = false; repairFailures.set(field, 'malformed_claim'); break; }
         const claim = claimValue as Record<string, unknown>;
         if (Object.keys(claim).sort().join(',') !== 'supportSets,text' || typeof claim.text !== 'string'
-          || !claim.text.trim() || claim.text.length > 800 || !/[。；！？.!?]$/u.test(claim.text.trim())
-          || !Array.isArray(claim.supportSets) || claim.supportSets.length < 1 || claim.supportSets.length > 3) { valid = false; break; }
+          || !claim.text.trim() || claim.text.length > 800
+          || !Array.isArray(claim.supportSets) || claim.supportSets.length < 1 || claim.supportSets.length > 3) {
+          valid = false; repairFailures.set(field, 'malformed_claim_contract'); break;
+        }
         const supportSets: string[][] = [];
         for (const supportValue of claim.supportSets) {
           if (!Array.isArray(supportValue) || supportValue.length < 1 || supportValue.length > MAX_SOURCE_PASSAGE_IDS
-            || supportValue.some((id) => typeof id !== 'string') || new Set(supportValue).size !== supportValue.length) { valid = false; break; }
+            || supportValue.some((id) => typeof id !== 'string') || new Set(supportValue).size !== supportValue.length) {
+            valid = false; repairFailures.set(field, 'malformed_support_set'); break;
+          }
           supportSets.push(supportValue as string[]);
         }
         if (!valid) break;
@@ -757,6 +766,7 @@ async function repairCanonicalPartial(
       if (!valid) continue;
       const proposal = selectEvidence(claims, candidatesByField.get(field)!);
       if (proposal) repaired.set(field, proposal);
+      else repairFailures.set(field, 'no_feasible_support_union');
     }
     return true;
   };
@@ -768,7 +778,7 @@ async function repairCanonicalPartial(
   try {
     await gateway.completeStructured(guard, [{ role: 'system', content: [
       '你是Hermes科研证据修订器。只修复先前因证据容量失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序仅核对来源身份、主张覆盖组合和预算。',
-      '每个claims条目是一句完整主张，text必须以标点结束；supportSets列出1到3个可独立充分支持该主张的P编号组合。组合内来源共同支持，组合之间可替代。不得把诊断摘要当作真值，允许据原文纠错和去重。',
+      '每个claims条目是一句完整主张；supportSets列出1到3个可独立充分支持该主张的P编号组合。组合内来源共同支持，组合之间可替代。不得把诊断摘要当作真值，允许据原文纠错和去重。',
       '保留字段的关键假设、步骤、条件与验证；不得为预算删掉核心主张。若候选不足、矛盾未解或任何核心主张没有充分来源，返回claims=[]且needsMoreInformation=true。不得把容量或技术失败写成作者未报告。只输出JSON。',
       `输出schemaVersion="${SDF_CORE_VERSION}"，fields必须且只能包含${repairFields.join(',')}。每字段只能包含claims与needsMoreInformation。`,
     ].join(' ') }, { role: 'user', content: [
@@ -779,7 +789,14 @@ async function repairCanonicalPartial(
       }])))}`,
       canonicalPassagePrompt(candidatePassages),
     ].join('\n\n') }], { temperature: 0.1, maxRetries: 0 });
-  } catch { return partial; }
+  } catch {
+    for (const field of repairFields) repairFailures.set(field, 'structured_response_failed');
+  }
+  for (const field of repairFields) {
+    if (repaired.has(field)) continue;
+    const existing = partial.fieldDiagnosticsDetails[field];
+    partial.fieldDiagnosticsDetails[field] = [existing, `focusedRepair=${repairFailures.get(field) ?? 'unresolved'}`].filter(Boolean).join(';');
+  }
   if (!repaired.size) return partial;
   for (const [field, candidate] of repaired) {
     partial.proposal.fields[field] = candidate;
