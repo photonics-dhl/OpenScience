@@ -491,6 +491,18 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         if (run.version !== input.expectedVersion) {
           throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before retrying generation');
         }
+        if (run.status === 'stopped' && run.error === 'reviewed Claim or Evidence binding changed'
+          && run.steps.every(step => step.stage === 'source_ingestion')
+          && await validateReviewedSources(tx, run) === 'ready') {
+          const restored = await tx.hermesResearchRun.updateMany({ where: {
+            id: run.id, actorId: input.actorId, status: 'stopped', version: input.expectedVersion,
+          }, data: { status: 'awaiting_claim_review', error: null, version: { increment: 1 } } });
+          if (restored.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed while resuming source review');
+          await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId,
+            action: 'hermes.research_run.source_review_resume', targetType: 'hermes_research_run', targetId: run.id,
+            metadata: { requestDigest, previousVersion: run.version } }, ctx);
+          return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [] as string[] };
+        }
         const plan = await inspectGenerationRecovery(tx, run, deps.canResumeImageBeforeSubmission);
         if (!plan) throw new HermesResearchRunError('SOURCE_NOT_READY', 'This failed generation cannot be retried safely');
 
@@ -653,7 +665,11 @@ async function validateReviewedSources(tx: Prisma.TransactionClient, run: RunRow
     const provenance = jsonRecord(claim.provenance);
     const lineage = provenance.sourceTaskLineage ?? provenance.sourceTaskId;
     if (typeof lineage === 'string') lineageByClaim.set(claim.id, lineage);
-    return provenance.source !== 'reviewed_ingestion' || typeof lineage !== 'string' || !ingestionIds.has(lineage);
+    // Normal Claim review records human provenance while retaining ingestion lineage.
+    // Evidence below must still bind to that exact ingestion artifact and content hash.
+    const reviewedSource = provenance.source === 'reviewed_ingestion'
+      || (provenance.source === 'human' && typeof provenance.sourceTaskLineage === 'string');
+    return !reviewedSource || typeof lineage !== 'string' || !ingestionIds.has(lineage);
   })) return 'invalid';
   if (claims.some((claim) => claim.extractionStatus === 'failed')) return 'invalid';
   if (claims.some((claim) => claim.extractionStatus !== 'succeeded')) return 'pending';

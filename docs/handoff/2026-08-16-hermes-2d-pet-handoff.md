@@ -1,64 +1,45 @@
-## 当前推进：订阅生图 skill 接入候选
-- 2000f508发布在服务器build期间SSH重置退出255；production仍85f65451，无部署进程/残留journal，未应用新迁移。
-- imagegen-skill.md/imagegen-prompting.md复制自官方预设skill，固定只读注入Codex内置生图，不走API fallback、不开放其他工具。install同步bundle。单图宽幅展示，多图2xl双列。候选待发布。
-
-## 最新断点：图片授权数据库约束（优先读）
-- 实际production85f6545134553b17fc0f383a58d86797f0074435，rollbackc40350a350d5143dec5fff466debe46edaf930fc，部署日志1788950296619-aff8791b-43cb-4870-98de-0925e70069ff。
-- 当前论文Agentadfc1d11-2935-4768-8257-aca5beb3eae4重新分析完成但仍partial，method/reproducibility未绑定，limitations有科学问题。没有将有疑问内容用于媒体。
-- 用户授权继续推进：仅采用服务器生成并经原文支持的problem写入此前全空SDF（没有手写论文内容）。正常confirmIngestionTask已成功：versionId58a45cb5-758f-4d6f-9e94-533b460e8b06，versionNo2，ROversion3；ingestion现confirmed，不再可直接refresh。原Agent所有草稿保留。
-- 正常createHermesResearchRun已成功，run46442dc4-44d4-4f63-bf39-75bd985f3218，sourceTask7a28a7c8；目标概念图，只用problem、不触发视频。
-- confirmHermesSourceReview（image-v1/max7）实际被DB旧hermes_research_runs_generation_grant_check拒绝，事务回滚，无新Claim半成品。
-- 本地候选infra/migrations/20260909010000_hermes_image_generation_grant增加image7合法组合，保留旧null/onchip7/video8；rollback保留additive schema和数据。尚未部署。High reviewer因额度耗尽失败，没有本次复核结论。
-- 下一步先发布迁移（必要服务器构建与migrate --no-tests），再重新读取run.version及preview snapshotToken，正常confirmHermesSourceReview：sourceField problem，kind core，statement使用preview.reviewedStatement，attachSourceQuote true，profile content-driven-image-v1/max7。随后正常verifyEvidence/Claim流程触发Hermes规划。禁止改数据库伪装video或手工生成图。
-
 # Hermes Research Intelligence CURRENT Handoff
 
-## 当前执行：用户已要求重新处理论文
-- c40350a3已部署（rollback a9b6c154），日志1788949741674-de929049-bb2b-4e58-aa3d-5a768a40f899。新Agent5cc63d4d-cb71-47f6-aa13-0b26454526ab正常重新分析已返回，sourceMapReused=true、understandingSkill v2。
-- problem/insight/limitations/reproducibility在core；method/results留unverifiedSummaries，诊断passage_ids_required，尚未确认/生图。候选仅移除独立6ID上限，改为32IDs但最终32原blocks/8k原文约束不变，提示简洁归纳而非逐式重抄。待部署后正常再分析。
-- 候选补齐用户主动重新分析入口，当前v2成功解析结果可显式点击重新分析，沿现有sourceAgent稳定key/事务CAS/正常credit保留旧任务并复用OCR。仅用户请求触发，不增加自动重试或新contract版本。服务器实际当前Agent仍5dba592b、retry1、needs_review。
-
-## 最新用户纠正与候选
-- 六维是展示组织，不是论文章节模板。method可隐含在推导、结果、图注或附录；先全文综合，再组织六维与核对来源。不能把来源格式失败称为论文缺失。
-- 本轮浏览器恢复：getTab用60秒成功，实际发送原Chat对话，网页6 Pro回复已读取，主张同次调用全文综合→六维组织→来源核对，来源失败保留草稿待核对。后续可复用CUA directChat.playwright.domSnapshot（比AX快）。
-- 已部署Hermes runtime skill v2和extractor提示；unverifiedSummaries只保留有界未绑定摘要，不写core/evidence；UI明确来源整理失败与待核对草稿，自动展开诊断。服务器部署成功；未重新处理当前论文。
-
 ## Goal / constraints
-- PDF→服务器OCR/全文理解→六字段凝练+独立原文→Hermes规划→服务器Codex生图→画廊。视频暂停。
-- 用户禁止测试、预检、CI测试、本地运行/构建。允许本地编辑/静态阅读/传输及必要服务器构建部署、实际产品处理。不删除文件、不读取打印密钥，不手写论文结果冒充服务器能力。
-- Parser保持无网络/Secret、非root、只读、512MiB；保留权限、来源、计费、确认与回滚。
+- PDF→服务器OCR/全文理解→六维凝练与独立原文→Hermes规划→服务器Codex订阅生图→画廊。视频暂停。
+- 用户已批准服务器生图、应用预设imagegen skill、真实流程观察与页面优化。禁止测试/预检/CI测试/本地构建；保留必要服务器构建部署、权限/计费/来源核对。不删除文件、不读打印密钥。
+- 六维不是同名章节模板；方法可隐含在全文推导/结果/附录。来源整理失败≠论文未报告，不能把错误内容放行。
 
 ## Version
 - worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- production/code release a9b6c1545905a94b5d330c6cb91bd5f13f7a4f1a；rollback 11ae62000e59fa07f1c556f76e1b73638198c048。
-- canonical --no-tests部署exit0，日志1788949130443-30772096-3fba-4f5f-b77b-e4a344100593。
-- 后续仅状态文档提交不代表新production。其他worktree/main有独立改动，不覆盖。
+- production/HEAD 1ad54c72f794ba46ee5f423875b9f231d32d4ea1，rollback85f6545134553b17fc0f383a58d86797f0074435；部署exit0，日志1788952477772-69e8c3de-c876-41e9-b399-78092b8474d0。宿主runner install成功同SHA。
+- 2000f508部署在build时SSH重置exit255；已确认没有部署进程/残留journal，生产未切换。保留日志1788952221719-d0fcbd4b-f96c-42d4-9f1a-d8a8b7414254。
 
-## Actual paper and current blocker
+## Actual paper / run
 - RO9067a2d5-42ad-4c06-b234-753728b71064；ingestion7a28a7c8-90f7-429b-a519-53397cf58856；artifact4b94c626-1748-4c5a-934b-2bb94585bd9c。
-- Quantization of a Deep-Subwavelength-Aperture-Confined Optical Near Field.pdf，15页。
-- 当前Agent5dba592b-62f5-4bbd-ba80-97d2c5cc4aab，retry1，status succeeded但reason canonical_partial_validation_exhausted；grounded-passages-v2，sourceMapReused=true。
-- 已返回problem/insight/results/limitations/reproducibility，method为空，诊断passage_ids_required。未确认、未进入Hermes生图。不能把Agent succeeded称为论文处理成功。
-- 更重大问题：模型摘要不忠实。原文Eq40明确applies from near field to far field；limitations却把两种极限写成公式成立条件并声称范围外未讨论。results把j1(x)≈x/3混称为完整形式因子的极限；来源中完整因子是3j1(x)/x。局限还从特定模型假设过度推出不能推广，而所选结论原文明确讨论可推广。必须修复语义忠实性再确认，不能仅放宽schema或手改内容。
-- 所选证据保存精确但可能不充分：results/limitations来源文本已实际读到。来源可定位并不等于摘要有充分支持，需要服务器语义复核/定向修复。
+- Quantization of a Deep-Subwavelength-Aperture-Confined Optical Near Field.pdf，15页。当前Agentadfc1d11-2935-4768-8257-aca5beb3eae4，OCR sourceMapReused=true，understanding skill v2。
+- Agent succeeded但canonical_partial_validation_exhausted：method passage_ids_required、reproducibility source_text_limit_8000；limitations仍有科学问题，不得称完整论文处理成功。
+- 只确认服务器生成且原文支持的problem到此前全空SDF。version58a45cb5-758f-4d6f-9e94-533b460e8b06，versionNo2，ROversion3；ingestion confirmed，不再直接refresh。其余草稿保留，未手写结果。
+- Hermes run46442dc4-44d4-4f63-bf39-75bd985f3218；最新实际status stopped/version4：正常updateClaim审核后source变human，旧validateReviewedSources误判失效。目标仅problem概念图；尚无图片。
+- owner10baa655-772e-4aca-9a5d-00ca0547084f；workspace28d7f25f-aba8-4ffb-adcb-46b4739f2f75。
 
-## Delivered implementation
-- OCR已实际成功：native公式标记→sidecar PNG→worker权限绑定→MiniMax视觉，4页串行批、最多32修复页；原native和OCR独立provenance均保留，OCR为页级bbox。
-- 已修worker vision开关位置、refresh session误约束、CN/global视觉endpoint与同key文本endpoint不一致。没有读取更改key，备用仅明确quota时切换。
-- grounded-passages-v2：模型输出摘要+来源编号；每P≤5原blocks/1200chars，全文≤120k无静默裁剪；来源最多6IDs/32blocks/8k、摘要4k。同原block多个片段按首尾连续原文展开，再locator roundtrip，不能省中间。
-- 提示包含每段blocks/chars、完整六字段JSON形状、字符串ID与转义说明；JSONparse失败固定格式修复反馈；同一次结构化重试保留此前已验证字段，最后JSON错误不会丢弃有效partial。固定最多3次调用未增加。
-- 正常analysis refresh按旧contract版本升级，保持owner/active session/RO/artifact/hash/存储digest、CAS、稳定付费idempotency key，保留旧Agent/results。v2不进入现有refresh或passageBudgetRecovery。不要再为单篇失败不断增版本或扩大免费重试。
-- 旧grounded-summary→passage-v1、passage-v1→v2升级复用成功SourceMap，实际sourceMapReused=true，无重复OCR。新analysis正常扣1平台credit；已有一次retry复用原reservation，审计保留旧partial。
-- content-driven-image-v1 profile（最多7tasks）及1–6静态场景、Hermes真实绘图brief≤1500chars、审核后原文绑定/生成前来源identity重验、结果画廊均已部署。当前论文尚无新图片。
-
-## Browser / routing / validation
-- 本轮已恢复原Chat并获得6 Pro规划复核，未做产品改后截图；旧nodeRepl超时记录不代表当前浏览器不可用。
-- Sol/medium extractor/OCR、Terra/medium UI、Sol/high定点静态复核，root集成部署。整体token节省比例无基线，不能编造。
-- 没有测试/本机构建；必要服务器编译首次4d499743发现两处类型遗漏，913002b8修正后后续发布成功。静态复核不能代替运行结果。
+## Implemented / deployment candidates
+- OCR实际可用并复用；native/vision原文独立来源，parser隔离无网络/secret、非root、readonly、512MiB。
+- extractor完整全文≤120k，摘要4k，32source IDs/32原blocks/8k证据。未绑定摘要保留只读unverifiedSummaries。最多3次固定结构化尝试。
+- Hermes scene-image planner实际模型调用产生详细brief：对象/物理属性/关系/构图/风格/标签/科学限定，≤1500chars，不猜乱码公式。
+- 2000f508新增image grant迁移，保留null/null、onchip7、video8，增加image7；rollback保留additive schema与数据。独立High静态复核无阻塞。
+- 1ad54c72：container-client固定读取官方预设imagegen skill/prompting只读副本注入；执行限制优先，只用内置image_gen，禁止API fallback/其他工具/重试/第二图。install已复制新md到immutablebundle；独立High静态复核无阻塞。
+- 必须在应用deploy后单独运行canonical infra/codex-image-runner/install.sh --confirm --source /opt/openscience-releases/<sha>更新宿主服务；应用部署不会自动更新该bundle。
+- PresentationResultGallery单图全宽，多图只在2xl双列。尚无浏览器视觉观察，不称页面验收完成。
 
 ## Next
-- 首先解决科学忠实性与method来源选择：字段总结须与选中证据逐项对照，纠正适用条件/极限、物理量身份和原文未声明的排除性结论。需要服务器正常处理路径的能力，不能Codex手写稿或盲目重复付费调用。
-- 复用当前上传/OCR和保留旧结果；不要再加单篇专用contract版本/免费重试。设计可重复的用户发起重新分析与服务端语义修复边界后实施。
-- 内容正确后正常confirmIngestionTask→Hermes run/source/claim review→image profile规划与服务器Codex图片。不要执行视频。
-- 浏览器控制恢复后再观察登录页、Hermes跨页闪烁与画廊布局；用户登录状态不需重置。
-- 需求基线 docs/OpenScience_Kimi_Development_Spec.md §5.4/§9，UX方向见docs/plans/2026-09-05-integrated-research-product-plan.md。
+1. 候选修复正常human review lineage兼容；retryHermesGeneration仅恢复exact来源错误且无生成steps、完整来源ready的stopped run。部署后正常retry原run；不重建批次。
+2. fresh run.version与previewIngestionClaimEvidenceBridge snapshotToken→confirmHermesSourceReview。version如上；sourceField problem/kind core/statement用preview.reviewedStatement/attachSourceQuote true；generationGrant content-driven-image-v1/max7；idempotency quantization-problem-image-source。
+3. 正常verifyEvidence定位原文、updateClaim设置经支持assessment并保留正文；自动worker续跑Hermes规划。读真实storyboard后批准，再由服务器生图；不要直接DB改状态或手写图解。
+4. 查看真实图片与画廊；完整论文科学忠实性仍需修复，不能将本次局部概念图当全部完成。
+
+## Routing / browser
+- 本轮Sol/high独立迁移及runner复核成功；两个实现agent额度限制失败，root实际接手。不能编造节省比例。
+- 原网页Chat6Pro已给全文综合→六维→来源核对规划。当前CUA getState连续两次nodeRepl.fetch失败；没有本轮Chat回复或产品截图。
+- 浏览器原对话https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec。
+- 本轮没有测试/本机构建；部署编译是交付步骤。
+
+## Read first
+- docs/OpenScience_Kimi_Development_Spec.md §5.4/§9。
+- docs/plans/2026-09-05-integrated-research-product-plan.md。
+- docs/runbooks/deployment.md；服务器只走显式Git Bash+E:/Miscellaneous/XGS/infra/scripts/ssh-run.sh。
