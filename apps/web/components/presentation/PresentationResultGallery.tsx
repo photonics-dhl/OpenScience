@@ -9,7 +9,7 @@ interface Props { researchObjectId: string; versionId: string; assets: Presentat
 
 export function PresentationResultGallery({ researchObjectId, versionId, assets, allAssets, claimsById, canWrite, working, onTransition }: Props) {
   const t = useTranslations('presentation');
-  return <div className="grid min-w-0 gap-6 lg:grid-cols-2">{assets.map((asset, index) => {
+  return <div className={`grid min-w-0 items-start gap-6 ${assets.length > 1 ? '2xl:grid-cols-2' : ''}`}>{assets.map((asset, index) => {
     const linkedClaims = asset.sourceClaimIds.map((id) => claimsById.get(id)?.statement).filter((value): value is string => Boolean(value));
     const parent = asset.sceneImage ? allAssets.find((candidate) => candidate.id === asset.sceneImage?.storyboardAssetId)?.storyboard : undefined;
     const title = parent?.document.scenes[asset.sceneImage?.sceneIndex ?? -1]?.title || t('imageNumber', { number: index + 1 });

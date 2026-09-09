@@ -119,7 +119,7 @@ install -d -o root -g 11000 -m 2750 "$root/results"
 install -d -o root -g root -m 0700 "$root/private"
 [ ! -e "$bundle" ] || { echo 'Bundle already exists; inspect existing service before reuse'; exit 69; }
 install -d -m 0755 "$bundle/infra/codex-image-runner" "$bundle/packages/ai-gateway/dist"
-for file in core.mjs runner.mjs sandbox.mjs proxy.mjs container-client.mjs; do install -m 0444 "$source_root/infra/codex-image-runner/$file" "$bundle/infra/codex-image-runner/$file"; done
+for file in core.mjs runner.mjs sandbox.mjs proxy.mjs container-client.mjs imagegen-skill.md imagegen-prompting.md; do install -m 0444 "$source_root/infra/codex-image-runner/$file" "$bundle/infra/codex-image-runner/$file"; done
 # Compiled Gateway has only built-in Node runtime imports; copy its complete dist to preserve the protocol/validator version.
 find "$source_root/packages/ai-gateway/dist" -maxdepth 1 -type f -name '*.js' -exec install -m 0444 -t "$bundle/packages/ai-gateway/dist" {} +
 # Load the complete compiled runtime before changing any existing service.

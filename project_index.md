@@ -562,3 +562,5 @@
 | `apps/agent-worker/src/skills/research-understanding.ts` / `apps/web/components/presentation/PresentationResultGallery.tsx` | Hermes运行时理解skill与图片结果画廊 | 2026-09-09已部署c00c6233；实际结果见CURRENT handoff |
 
 | `infra/migrations/20260909010000_hermes_image_generation_grant/` | 增加图片7任务授权组合；应用回滚保留扩展约束与图片记录 | CANDIDATE |
+
+- CANDIDATE: infra/codex-image-runner/imagegen-skill.md / imagegen-prompting.md：官方预设imagegen指导的服务器只读副本，由container-client固定注入；install同步。PresentationResultGallery单图宽幅、多图2xl双列。

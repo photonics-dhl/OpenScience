@@ -1,3 +1,7 @@
+## 当前推进：订阅生图 skill 接入候选
+- 2000f508发布在服务器build期间SSH重置退出255；production仍85f65451，无部署进程/残留journal，未应用新迁移。
+- imagegen-skill.md/imagegen-prompting.md复制自官方预设skill，固定只读注入Codex内置生图，不走API fallback、不开放其他工具。install同步bundle。单图宽幅展示，多图2xl双列。候选待发布。
+
 ## 最新断点：图片授权数据库约束（优先读）
 - 实际production85f6545134553b17fc0f383a58d86797f0074435，rollbackc40350a350d5143dec5fff466debe46edaf930fc，部署日志1788950296619-aff8791b-43cb-4870-98de-0925e70069ff。
 - 当前论文Agentadfc1d11-2935-4768-8257-aca5beb3eae4重新分析完成但仍partial，method/reproducibility未绑定，limitations有科学问题。没有将有疑问内容用于媒体。
