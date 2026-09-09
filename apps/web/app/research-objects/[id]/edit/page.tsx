@@ -785,7 +785,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                       router.replace(taskId ? `/research-objects/${encodeURIComponent(roId)}/edit?ingestionTask=${encodeURIComponent(taskId)}` : `/research-objects/${encodeURIComponent(roId)}/edit`);
                     }}>
                       <option value="">{t('chooseIngestionSource')}</option>
-                      {ingestionTasks.map((task) => <option key={task.id} value={task.id}>{task.logicalPath} · {ingestionStatusT(task.state)}</option>)}
+                      {ingestionTasks.map((task) => <option key={task.id} value={task.id}>{task.logicalPath} · {ingestionStatusT(ingestionProposal?.detail.task.id === task.id ? ingestionProposal.detail.task.state : task.state)}</option>)}
                     </select>
                   </label>
                 </div>

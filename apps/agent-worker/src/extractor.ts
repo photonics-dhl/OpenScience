@@ -24,6 +24,8 @@ interface ExtractedFieldProposal {
   summary: string;
   sourceQuote: string;
   sourceBlockIds?: string[];
+  sourceWindowId?: string;
+  sourceRange?: EvidenceMatch;
   sourceLocator?: string;
   needsMoreInformation: boolean;
 }
@@ -46,7 +48,7 @@ export interface ExtractionResult extends Record<string, unknown> {
   /** Exact final guard reasons for unresolved fields; explicitly missing fields are omitted. */
   fieldDiagnostics?: Record<string, string>;
   /** Server-owned canonical selection contract used to prevent obsolete paid repair loops. */
-  canonicalExtractionContract?: 'windowed-source-v2';
+  canonicalExtractionContract?: 'windowed-source-v2' | 'exact-quote-v1';
 }
 
 export type EvidenceLocation = {
@@ -94,7 +96,7 @@ const MAX_EXCERPT_CHARS = 24_000;
 const MAX_EVIDENCE_SEGMENTS = 32;
 const MAX_FIELD_EVIDENCE_CHARS = 8_000;
 const MAX_CANONICAL_CORE_CHARS = 4_000;
-const CANONICAL_EXTRACTION_CONTRACT = 'windowed-source-v2';
+const CANONICAL_EXTRACTION_CONTRACT = 'exact-quote-v1';
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
 export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
@@ -271,6 +273,16 @@ interface PromptCanonicalBlock extends CanonicalTextBlock {
   text: string;
 }
 
+interface PromptCanonicalWindow {
+  id: string;
+  startOrdinal: number;
+  endOrdinal: number;
+  textStart: number;
+  textEnd: number;
+  text: string;
+  blocks: readonly PromptCanonicalBlock[];
+}
+
 function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[] {
   const blocks: CanonicalTextBlock[] = [];
   let cursor = 0;
@@ -356,24 +368,74 @@ function selectCanonicalBlocks(sourceMap: DocumentSourceMap): PromptCanonicalBlo
   });
 }
 
-function canonicalBlockPrompt(blocks: PromptCanonicalBlock[]): string {
-  let activeWindow = '';
-  return blocks.map((block) => {
-    const boundary = block.windowId === activeWindow ? '' : `--- SOURCE_WINDOW id:${block.windowId} ---\n`;
-    activeWindow = block.windowId;
-    return `${boundary}[${block.promptId}] ${block.text}`;
-  }).join('\n\n');
+function canonicalWindows(blocks: readonly PromptCanonicalBlock[]): readonly PromptCanonicalWindow[] {
+  const windows: PromptCanonicalWindow[] = [];
+  for (const block of blocks) {
+    const current = windows.at(-1);
+    if (!current || current.id !== block.windowId) {
+      windows.push({
+        id: block.windowId,
+        startOrdinal: block.ordinal,
+        endOrdinal: block.ordinal,
+        textStart: block.textStart,
+        textEnd: block.textEnd,
+        text: block.text,
+        blocks: [block],
+      });
+      continue;
+    }
+    current.endOrdinal = block.ordinal;
+    current.textEnd = block.textEnd;
+    current.text += `\n${block.text}`;
+    current.blocks = [...current.blocks, block];
+  }
+  return windows.map((window) => Object.freeze({ ...window, blocks: Object.freeze([...window.blocks]) }));
+}
+
+function canonicalWindowPrompt(windows: readonly PromptCanonicalWindow[]): string {
+  return windows.map((window) => [
+    `--- SOURCE_WINDOW id:${window.id} originalRange:B${String(window.startOrdinal + 1).padStart(6, '0')}-B${String(window.endOrdinal + 1).padStart(6, '0')} ---`,
+    window.text,
+    `--- END_SOURCE_WINDOW id:${window.id} ---`,
+  ].join('\n')).join('\n\n');
+}
+
+function canonicalSegmentsForRange(
+  sourceMap: DocumentSourceMap,
+  blocks: readonly PromptCanonicalBlock[],
+  range: EvidenceMatch,
+): Array<{ quote: string; sourceLocator: SourceLocator }> {
+  return blocks.filter((block) => block.textEnd > range.start && block.textStart < range.end).map((block) => {
+    const localStart = Math.max(0, range.start - block.textStart);
+    const localEnd = Math.min(block.text.length, range.end - block.textStart);
+    const quote = block.text.slice(localStart, localEnd);
+    const sourceLocator = validateSourceLocator({
+      artifactId: sourceMap.artifactId,
+      contentHash: sourceMap.contentHash,
+      blockId: block.id,
+      page: block.page,
+      boundingBox: block.boundingBox,
+      charRange: { start: block.originalStart + localStart, end: block.originalStart + localEnd },
+    });
+    const resolved = resolveSourceLocator(sourceMap, sourceLocator);
+    const located = resolved.text?.slice(sourceLocator.charRange!.start, sourceLocator.charRange!.end);
+    if (resolved.id !== block.id || located !== quote) {
+      throw new Error('canonical source locator round-trip failed');
+    }
+    return { quote, sourceLocator };
+  });
 }
 
 type CanonicalFieldValidationReason =
   | 'malformed_item'
   | 'missing_requires_empty'
   | 'summary_required'
+  | 'window_required'
+  | 'unknown_window'
+  | 'quote_required'
+  | 'quote_not_found'
+  | 'quote_ambiguous'
   | 'segment_count_1_to_32'
-  | 'duplicate_ids'
-  | 'unknown_ids'
-  | 'ordered_ids_required'
-  | 'contiguous_ids_required'
   | 'source_text_limit_8000'
   | 'core_text_limit_4000';
 
@@ -382,61 +444,71 @@ interface CanonicalRepairResponse {
   fields: Record<string, unknown>;
 }
 
-function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
+function canonicalProposalValidation(sourceMap: DocumentSourceMap, blocks: PromptCanonicalBlock[]): {
   guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: (value: unknown) => string | undefined;
   validationDiagnostic: (value: unknown) => string | undefined;
   partialResult: () => { proposal: ExtractedProposal; fieldDiagnostics: Record<string, CanonicalFieldValidationReason> } | undefined;
   mergeRetained: () => ExtractedProposal;
 } {
-  const allowed = new Map(blocks.map((block) => [block.promptId, block]));
-  const allowedByOrdinal = new Map(blocks.map((block) => [block.ordinal, block]));
+  const windows = canonicalWindows(blocks);
+  const allowedWindows = new Map(windows.map((window) => [window.id, window]));
   const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
   const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason } => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return { reason: 'malformed_item' };
     const candidate = item as Record<string, unknown>;
-    if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourceBlockIds,summary'
+    if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourceQuote,sourceWindowId,summary'
       || typeof candidate.summary !== 'string' || typeof candidate.needsMoreInformation !== 'boolean'
-      || !Array.isArray(candidate.sourceBlockIds) || candidate.sourceBlockIds.some((id) => typeof id !== 'string')) {
+      || typeof candidate.sourceQuote !== 'string' || typeof candidate.sourceWindowId !== 'string') {
       return { reason: 'malformed_item' };
     }
-    const ids = candidate.sourceBlockIds as string[];
     if (candidate.needsMoreInformation) {
-      return candidate.summary.trim() || ids.length > 0
+      return candidate.summary.trim() || candidate.sourceQuote.trim() || candidate.sourceWindowId.trim()
         ? { reason: 'missing_requires_empty' }
         : { candidate: candidate as unknown as ExtractedFieldProposal };
     }
     if (!candidate.summary.trim()) return { reason: 'summary_required' };
-    if (ids.length === 0 || ids.length > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32' };
-    if (new Set(ids).size !== ids.length) return { reason: 'duplicate_ids' };
-    if (ids.some((id) => !allowed.has(id))) return { reason: 'unknown_ids' };
-    const selected = ids.map((id) => allowed.get(id)!);
-    if (selected.some((block) => block.windowId !== selected[0]!.windowId)) {
-      return { reason: 'contiguous_ids_required' };
-    }
-    if (selected.some((block, index) => index > 0 && block.ordinal <= selected[index - 1]!.ordinal)) {
-      return { reason: 'ordered_ids_required' };
-    }
-    const firstOrdinal = selected[0]!.ordinal;
-    const lastOrdinal = selected[selected.length - 1]!.ordinal;
-    const expanded: PromptCanonicalBlock[] = [];
-    for (let ordinal = firstOrdinal; ordinal <= lastOrdinal; ordinal += 1) {
-      const block = allowedByOrdinal.get(ordinal);
-      if (!block) return { reason: 'contiguous_ids_required' };
-      expanded.push(block);
-    }
-    if (expanded.length > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32' };
-    if (expanded.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
+    if (!candidate.sourceWindowId.trim()) return { reason: 'window_required' };
+    const window = allowedWindows.get(candidate.sourceWindowId);
+    if (!window) return { reason: 'unknown_window' };
+    if (!candidate.sourceQuote.trim()) return { reason: 'quote_required' };
+    const matches = findEvidenceMatches(window.text, candidate.sourceQuote);
+    if (matches.length === 0) return { reason: 'quote_not_found' };
+    if (matches.length !== 1) return { reason: 'quote_ambiguous' };
+    const match = matches[0]!;
+    const sourceRange: EvidenceMatch = {
+      start: window.textStart + match.start,
+      end: window.textStart + match.end,
+      matching: match.matching,
+    };
+    const selected = window.blocks.filter((block) => block.textEnd > sourceRange.start && block.textStart < sourceRange.end);
+    if (selected.length === 0 || selected.length > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32' };
+    const evidenceLength = selected.reduce((total, block) => total
+      + Math.max(0, Math.min(block.textEnd, sourceRange.end) - Math.max(block.textStart, sourceRange.start)), 0);
+    if (evidenceLength > MAX_FIELD_EVIDENCE_CHARS) {
       return { reason: 'source_text_limit_8000' };
     }
-    if (expanded.map((block) => block.text).join('\n').length > MAX_CANONICAL_CORE_CHARS) {
+    const sourceQuote = window.text.slice(match.start, match.end);
+    if (sourceQuote.length > MAX_CANONICAL_CORE_CHARS) {
       return { reason: 'core_text_limit_4000' };
+    }
+    try {
+      const segments = canonicalSegmentsForRange(sourceMap, selected, sourceRange);
+      if (segments.length !== selected.length || segments.map((segment) => segment.quote).join('\n') !== sourceQuote) {
+        return { reason: 'quote_not_found' };
+      }
+    } catch {
+      return { reason: 'quote_not_found' };
     }
     return {
       candidate: {
-        ...candidate,
-        sourceBlockIds: expanded.map((block) => block.promptId),
+        summary: candidate.summary,
+        sourceQuote,
+        sourceWindowId: window.id,
+        sourceBlockIds: selected.map((block) => block.promptId),
+        sourceRange,
+        needsMoreInformation: false,
       } as unknown as ExtractedFieldProposal,
     };
   };
@@ -477,10 +549,10 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
         'Previous JSON failed canonical validation.',
         `Invalid fields and reason codes: ${details}.`,
         'Return schemaVersion and all six fields again. Repair the invalid fields and recheck every other field for complete grammatical and argument boundaries; the server retains the last valid supported candidate for each field.',
-        'For each non-missing field, choose a span entirely within one explicitly labelled SOURCE_WINDOW. Never select anchors from different SOURCE_WINDOW sections: omitted text exists between those windows. A window edge may itself cut through a longer sentence or argument; select a complete supported point inside the window, or mark the field missing when that window contains no complete point. sourceBlockIds may contain the first and last anchors or an ordered subset within that one window; the server expands them to every supplied SOURCE_BLOCK in that range. A non-missing field may never have an empty sourceBlockIds array. The expanded span must contain 1-32 blocks. Prefer a short complete span of at most 600 characters, but never truncate qualifiers, units, or necessary evidence to meet that preference. The exact joined source text, not summary, becomes the canonical core.',
-        'A missing field must have summary="", sourceBlockIds=[], needsMoreInformation=true. Do not include a nonempty explanation in a missing field.',
-        'A field is missing only when no supplied SOURCE_BLOCK span states a supported point for that field. Preserve whether a point is measured, theoretical, simulated, or author-attributed.',
-        'Do not quote or repeat source text in this correction instruction; use the SOURCE_BLOCK ids already provided.',
+        'For each non-missing field, copy one shortest complete supported passage exactly from inside one explicitly labelled SOURCE_WINDOW. Return that window id and the copied passage as sourceQuote. Never combine text from different windows or omit words inside the copied passage. A window edge may itself cut through a longer sentence or argument; choose a complete supported point inside the window, or mark the field missing when it contains no complete point. Prefer at most 600 characters, but never truncate the subject, qualifiers, units, or necessary evidence to meet that preference. The server uniquely matches sourceQuote and materializes the matched original text as canonical core; summary does not become core.',
+        'A missing field must have summary="", sourceWindowId="", sourceQuote="", needsMoreInformation=true. Do not include a nonempty explanation in a missing field.',
+        'A field is missing only when no supplied SOURCE_WINDOW passage states a supported point for that field. Preserve whether a point is measured, theoretical, simulated, or author-attributed.',
+        'Do not normalize, paraphrase, splice, or reconstruct sourceQuote. Copy its characters from one window; line-break and space runs may differ, but words, symbols, punctuation, numbers, and order must not.',
       ].join(' ');
     },
     validationDiagnostic: () => invalidFields.size === 0
@@ -495,7 +567,7 @@ function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
         if (candidate) return [field, candidate];
         fieldDiagnostics[field] = invalidFields.get(field) ?? responseReason ?? 'malformed_item';
         return [field, {
-          summary: '', sourceQuote: '', sourceBlockIds: [], needsMoreInformation: true,
+          summary: '', sourceQuote: '', sourceWindowId: '', sourceBlockIds: [], needsMoreInformation: true,
         } satisfies ExtractedFieldProposal];
       })) as ExtractedProposal['fields'];
       return { proposal: { schemaVersion: SDF_CORE_VERSION, fields }, fieldDiagnostics };
@@ -516,7 +588,6 @@ function materializeCanonicalProposal(
   sourceMap: DocumentSourceMap,
   promptBlocks: PromptCanonicalBlock[],
 ): ExtractionResult {
-  const byPromptId = new Map(promptBlocks.map((block) => [block.promptId, block]));
   const core = { schemaVersion: SDF_CORE_VERSION } as ExtractedCore;
   const evidence = {} as ExtractionResult['evidence'];
   const evidenceLocation = {} as NonNullable<ExtractionResult['evidenceLocation']>;
@@ -533,23 +604,17 @@ function materializeCanonicalProposal(
       needsMoreInformation.push(field);
       continue;
     }
-    const segments = ids.map((id) => {
-      const block = byPromptId.get(id)!;
-      const sourceLocator = validateSourceLocator({
-        artifactId: sourceMap.artifactId, contentHash: sourceMap.contentHash,
-        blockId: block.id, page: block.page, boundingBox: block.boundingBox,
-        charRange: { start: block.originalStart, end: block.originalStart + block.text.length },
-      });
-      return { quote: block.text, sourceLocator };
-    });
+    if (!candidate.sourceRange) throw new Error('canonical source range is missing');
+    const segments = canonicalSegmentsForRange(sourceMap, promptBlocks, candidate.sourceRange);
     // Canonical core is source text. The model summary remains wire-compatible metadata only.
     const quote = segments.map((segment) => segment.quote).join('\n');
+    if (quote !== candidate.sourceQuote) throw new Error('canonical source materialization changed');
     core[field] = quote;
     evidence[field] = { quote, locator: `blocks:${ids.join(',')}` };
     evidenceSegments[field] = segments;
     evidenceLocation[field] = segments.length === 1
-      ? { status: 'located', sourceLocator: segments[0]!.sourceLocator, origin: 'model_quote', matching: 'exact' }
-      : { status: 'cross_block', origin: 'model_quote', matching: 'exact', reason: 'match-spans-blocks' };
+      ? { status: 'located', sourceLocator: segments[0]!.sourceLocator, origin: 'model_quote', matching: candidate.sourceRange.matching }
+      : { status: 'cross_block', origin: 'model_quote', matching: candidate.sourceRange.matching, reason: 'match-spans-blocks' };
   }
   return { core, evidence, needsMoreInformation, evidenceLocation, evidenceSegments,
     canonicalExtractionContract: CANONICAL_EXTRACTION_CONTRACT };
@@ -655,6 +720,7 @@ export async function extractHandler(
     throw new Error('缺少正文（payload.manuscriptText）');
   }
   const promptBlocks = canonicalSourceMap ? selectCanonicalBlocks(canonicalSourceMap) : undefined;
+  const promptWindows = promptBlocks ? canonicalWindows(promptBlocks) : undefined;
   const prompt = [
     { role: 'system' as const, content: [
       '你是科研结构化提取器。从给定 SOURCE 片段提取 SDF 六字段 problem/insight/method/results/limitations/reproducibility。',
@@ -663,24 +729,24 @@ export async function extractHandler(
       '先选择原文证据，再形成字段结果。所选原文必须保留每个数字、比较、因果、能力限定和必要条件；不得跨越缺失的中间论证拼接新结论。作者提出的原因必须保留为作者归因，不能写成已证因果。',
       '方法或配置披露不等于独立复现完成；reproducibility 只能概括原文明示的材料、参数、步骤、数据或代码可用性及其缺口。若某个条款缺少直接证据，从 summary 删除该条款；若字段已无可支持内容，则按缺失字段返回 needsMoreInformation=true。',
       ...(promptBlocks ? [
-        '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能是 {"summary": string, "sourceBlockIds": string[], "needsMoreInformation": boolean}，不得把字段写成字符串、数组或增加其他键。',
-        `每个非缺失字段先在一个明确标注的 SOURCE_WINDOW 内确定连续 SOURCE_BLOCK 跨度，不得跨 SOURCE_WINDOW 选择首尾锚点，因为窗口之间存在未提供的原文。窗口边缘自身也可能截断更长的句子或论证；必须选择窗口内部完整且受支持的论点，若没有完整论点则将该字段标为缺失，不得用限额为截断辩解。sourceBlockIds 可列出同一窗口内的首尾锚点或递增子集，服务端会补齐该范围内所有已提供的中间块。补齐后的跨度必须包含 1-${MAX_EVIDENCE_SEGMENTS} 个块，证据合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符，拼接后的 canonical core 不超过 ${MAX_CANONICAL_CORE_CHARS} 字符；不得改写、倒序或重复 id。`,
-        '逐字段独立判断：先选择能直接陈述一个核心要点的最短完整连续跨度，优先不超过600字符；600字符只是偏好，不得为缩短而丢失否定、适用条件、数值单位、实验或理论性质。服务端会把所选块原文以换行拼接为 canonical core，不使用模型自由概括。',
+        '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能是 {"summary": string, "sourceWindowId": string, "sourceQuote": string, "needsMoreInformation": boolean}，不得把字段写成字符串、数组或增加其他键。',
+        `每个非缺失字段只能从一个明确标注的 SOURCE_WINDOW 正文中逐字复制一个连续 sourceQuote，并填写该窗口 id。不得跨窗口拼接，因为窗口之间存在未提供的原文。窗口边缘自身也可能截断更长的句子或论证；必须选择窗口内部完整且受支持的论点，若没有完整论点则将该字段标为缺失，不得用限额为截断辩解。服务端只接受窗口内唯一的精确匹配或仅空白连续段有差异的匹配，并从服务器原文还原 core 与来源位置；不接受模糊匹配、改写、重排或省略。映射后的证据必须包含 1-${MAX_EVIDENCE_SEGMENTS} 个原始块，证据合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符，canonical core 不超过 ${MAX_CANONICAL_CORE_CHARS} 字符。`,
+        '逐字段独立判断：先复制能直接陈述一个核心要点的最短完整句段，优先不超过600字符；600字符只是偏好，不得为缩短而丢失主语、否定、适用条件、数值单位、实验或理论性质。sourceQuote 和 summary 都不能替代服务器原文；最终 core 只取服务器匹配到的原文。',
         '自然语言证据跨度必须包含完整主语、完整句子或完整论证起止，不得从句中术语或未闭合从句开始，也不得在未完成的词组、限定条件或因果链中结束；可向前后扩展连续块以保留这些条件。公式、参数或符号可保留其自身完整上下文，不要求机械按句号裁切。不同字段应各自选择最直接、独立支持其字段含义的跨度。',
         'summary 仅为兼容现有 JSON wire shape，填写非空简短说明；它不会进入 canonical core。若完整证据需超过32块或4000字符，应缩小到仍完整受支持的单一要点，不能任意截断必要证据。不要因一个字段缺失而清空其他字段。',
-        '跨行示例（仅说明结构，不是 SOURCE，严禁引用示例 ID）：EXAMPLE_1="方法甲测量"、EXAMPLE_2="量乙。"共同支持"方法甲测量量乙。"；正式输出只能使用用户输入的 SOURCE_BLOCK id。',
+        '跨行文字可以作为同一个 sourceQuote，但只能来自同一窗口内连续原文；允许空格或换行连续段不同，文字、符号、标点、数字及顺序必须保持。',
         '严格区分理论预测、仿真与实测，不能把缺少主语或限定词的片段扩写成实验结论；results 中的理论或仿真结果必须明确注明其性质。',
-        '只有在全部已给 SOURCE_BLOCK 中找不到该字段任何受支持要点时，才将 summary 置空、sourceBlockIds=[]、needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
+        '只有在全部已给 SOURCE_WINDOW 中找不到该字段任何受支持要点时，才将 summary、sourceWindowId、sourceQuote 置空并令 needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
       ] : [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须含 summary、sourceQuote、needsMoreInformation。',
         'sourceQuote 必须逐字复制 SOURCE 中支持 summary 的最短充分原文；不得概括、改写或虚构引文。',
         '若材料不足，summary 与 sourceQuote 置空，needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
       ]),
     ].join(' ') },
-    { role: 'user' as const, content: promptBlocks ? canonicalBlockPrompt(promptBlocks) : selectManuscriptEvidence(manuscriptText) },
+    { role: 'user' as const, content: promptWindows ? canonicalWindowPrompt(promptWindows) : selectManuscriptEvidence(manuscriptText) },
   ];
   if (canonicalSourceMap && promptBlocks) {
-    const validation = canonicalProposalValidation(promptBlocks);
+    const validation = canonicalProposalValidation(canonicalSourceMap, promptBlocks);
     try {
       await gateway.completeStructured(validation.guard, prompt, {
         temperature: 0.2,

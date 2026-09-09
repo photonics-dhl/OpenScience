@@ -79,9 +79,11 @@ function isLegacyCharacterEvidenceResult(value: unknown): boolean {
 const CANONICAL_DIAGNOSTICS = new Set([
   'malformed_item', 'missing_requires_empty', 'summary_required', 'segment_count_1_to_32',
   'duplicate_ids', 'unknown_ids', 'ordered_ids_required', 'contiguous_ids_required',
+  'window_required', 'unknown_window', 'quote_required', 'quote_not_found', 'quote_ambiguous',
   'source_text_limit_8000', 'core_text_limit_4000',
 ]);
-type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1' | 'canonical_window_contract_v1';
+type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1'
+  | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1';
 
 function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
   if (isLegacyCharacterEvidenceResult(value)) return 'legacy_character_evidence_v1';
@@ -101,6 +103,8 @@ function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha25
     const reference = parseDocumentSourceMapReference(result.sourceMapRef);
     if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
       || reference.contentHash !== artifact.blobSha256) return undefined;
+    if (result.canonicalExtractionContract === 'windowed-source-v2'
+      && entries.every(([, reason]) => reason === 'segment_count_1_to_32')) return 'canonical_exact_quote_v1';
     if (result.canonicalExtractionContract !== undefined) return undefined;
     if (entries.some(([, reason]) => reason === 'segment_count_1_to_32')) return 'native_pdf_fragmentation_v1';
     if (entries.every(([, reason]) => reason === 'contiguous_ids_required')) return 'canonical_window_contract_v1';
@@ -445,7 +449,7 @@ export async function refreshIngestionAnalysis(
   }
   const keyPrefix = `ingestion-analysis-refresh:${input.taskId}:${input.sourceAgentTaskId}:`;
   const replay = await deps.prisma.agentTask.findFirst({
-    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`] } },
+    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`] } },
     include: { session: true },
   });
   if (replay) {

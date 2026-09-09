@@ -1,5 +1,10 @@
 # Progress
 
+## 2026-09-09 — 连续上下文已部署，精确选句修复中
+- 生产1df9f617 / rollback9741ec53，日志1788935312552-c41241ae-a743-4eec-b440-6110e2e70315，部署exit0、未测试。
+- Agentc4d23d59-e247-4de9-9446-14771b75d26c真实返回：problem完整，insight/limitations仍截断或混入其他内容；results段数失败、reproducibility缺失，不合格未确认。
+- Sol/medium实现exact sourceQuote路线、Sol/high定点评审：纯原文窗口→唯一精确/仅空白匹配→原block部分charRange及locator回读→服务端原文core，保留科学边界。另修正完成提案仍显示排队中的状态标签。
+
 ## 2026-09-09 — 原生PDF分段已部署，提取上下文继续修复
 - 生产9741ec53 / rollback a0b47065，canonical服务器部署exit0，日志1788933712696-9f11e2e6-906e-4db7-adc4-2177d6d5bbed；无测试。
 - 正式UI同材料新Agent6ef59171-714c-4b35-9ba5-163b5573690a完成，SourceMap由946595降为520107bytes；词级碎片改善，但results诊断contiguous_ids_required，problem/insight断尾，三字段仍缺，未确认。

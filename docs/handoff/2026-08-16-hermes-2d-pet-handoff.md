@@ -6,6 +6,8 @@
 - Preserve scientific sources, workspace permissions, user approval, billing and sandbox boundaries.
 
 ## Active upload-to-draft task
+- exact-quote候选已实现：SOURCE_WINDOW纯原文、sourceQuote唯一精确/仅空白匹配，首尾partial charRange+逐段locator回读，core取服务器slice；旧windowed-source-v2且仅段数失败可一次正常恢复，新exact-quote-v1阻止重复刷新。同步修当前已完成材料仍排队中的标签。
+- 1df9f617c242a70ede2bbb6af6f6208549d43122已部署exit0/rollback9741ec53，日志1788935312552-c41241ae-a743-4eec-b440-6110e2e70315。新正式Agentc4d23d59-e247-4de9-9446-14771b75d26c仍partial：results segment_count_1_to_32，missingresults/reproducibility；problem完整但insight/limitations不合格，未确认。下一步原文选段→精确locator设计，不能继续只调prompt盲重跑。
 - 后续候选：24k按正文计预算、关键词连续上下文窗、显式SOURCE_WINDOW阻止跨缺口、六字段重审保留最后有效来源；windowed-source-v2结果标记，严格旧line-runs.1+仅contiguous诊断一次付费恢复。网页6Pro实际2m45s复核；不引入自由概括替换证据。
 - 9741ec53服务器部署exit0，rollback a0b47065；首次SSH中断未切release，确认事务退出后同候选重试成功，日志1788933712696-9f11e2e6-906e-4db7-adc4-2177d6d5bbed。
 - 新正式UI分析Agent6ef59171-714c-4b35-9ba5-163b5573690a succeeded/needs_review；sourceMap520107bytes。逐词改善但results contiguous_ids_required、problem/insight断尾，仍缺results/limitations/reproducibility，未确认。下一步修selectCanonicalBlocks稀疏裁切与字段提前锁定；不是继续重复相同分析。
@@ -31,7 +33,7 @@
 
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release; branch codex/onchip-video-release.
-- Production 9741ec53db3dbdfb734e5ac8cd520cc8eb7e36b9; rollback a0b470651c817beda301f753029ccfc36cacb60e. 后续仅文档同步不代表新部署。
+- Production 1df9f617c242a70ede2bbb6af6f6208549d43122; rollback 9741ec53db3dbdfb734e5ac8cd520cc8eb7e36b9. 后续仅文档同步不代表新部署。
 - Recovery commits1df4e047 +3446f309 deployed through canonical --confirm --no-tests. First candidate failed server compile due to type-only Prisma import; fixed before switch.
 - Root dirty main and token-smart-live-workflow worktree are separate; preserve them and concurrent R1 hardening.
 
