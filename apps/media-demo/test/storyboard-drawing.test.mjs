@@ -18,9 +18,9 @@ test('uses each supplied image, contains edges, blends scenes and renders determ
     const scenes = artwork.map((_, i) => ({title:`Title ${i}`, start:i*5, duration:5, cues:[]}));
     await page.evaluate(installStoryboardDrawing, {scenes, artwork, total:15, visualStyle:'watercolor', locale:'en'});
     const sample = await page.evaluate(() => {
-      const pixel = t => {window.render(t); return [...document.querySelector('canvas').getContext('2d').getImageData(640,350,1,1).data];};
+      const pixel = t => {window.render(t); return [...document.querySelector('canvas').getContext('2d').getImageData(1073,337,1,1).data];};
       const red = pixel(3);
-      const edge = [...document.querySelector('canvas').getContext('2d').getImageData(78,350,1,1).data];
+      const edge = [...document.querySelector('canvas').getContext('2d').getImageData(933,337,1,1).data];
       return {red, edge, blue:pixel(8), green:pixel(13), transition:pixel(5.3), same:window.render(3) === window.render(3)};
     });
     assert.ok(sample.red[0] > 240 && sample.red[2] < 20);
