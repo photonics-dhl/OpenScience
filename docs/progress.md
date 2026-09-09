@@ -1,3 +1,9 @@
+## 2026-09-09 登录页面资源白名单漏项已补
+- 用户截图无样式且验证码提交无响应；实际auth-cdn.oaistatic.com被拒70次。补该域名与日志内3个OpenAI域名，只重启bridge并active，保留浏览器登录会话；待用户刷新远程Chrome，尚未确认登录/生图。
+
+## 2026-09-09 本机远程桌面拒绝连接已修
+- SSH connection reset导致原隧道退出，服务器bridge/browser/UI一直正常；新增browser-tunnel.ps1断线重连并隐藏启动，localhost6081实际页面HTTP200。等待用户刷新并在服务器浏览器登录，未生图。
+
 ## 2026-09-09 服务器浏览器启动故障已修，待登录
 - 实际失败启动trace定位openat2 EPERM→255、clone3 EPERM→134、pkey/chroot拒绝→133；已定点修复，保留完整沙箱。镜像272a5ed57d27复用不重下，浏览器running、bridge active、远程UI HTTP200。
 - Sol/high独立静态审查通过；无测试。CUA连接仍fetch失败，open_in_codex返回queued。用户需打开localhost6081的noVNC，在服务器完成登录；尚未生图/回传。生产应用release未变。

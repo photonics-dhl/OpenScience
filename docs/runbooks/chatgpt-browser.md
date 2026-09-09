@@ -36,3 +36,11 @@ Sources: https://playwright.dev/docs/docker ; https://github.com/novnc/websockif
 - Failed initialization: openat2 returned EPERM then init exited255. After allowing it, Node clone3 EPERM caused SIGABRT; ENOSYS enables fallback to existing clone. Chrome then hit pkey_alloc/chroot denials; targeted allowances restored startup. Nonroot/capdropALL/NNP/network-none/Chrome sandbox retained; independent High review accepted the scoped change.
 - Raw-argument, failed-syscall-only trace used briefly for the known startup failure; tracing detached, no credential/page contents collected. No test suite or local runtime executed.
 - Failed containers retained stopped for diagnosis; active container22176c5c uses image272a5ed57d27 and persistent private profile. No browser redownload.
+
+## Windows tunnel recovery
+- Start infra/scripts/browser-tunnel.ps1 in a hidden PowerShell process. It runs the existing fixed-port SSH wrapper and reconnects after disconnects; it does not restart Codex or the server browser. Keep one instance only.
+- 2026-09-09: original SSH connection reset left no local6081 listener. Reconnecting restored local page HTTP200; server bridge/browser remained running throughout.
+
+## Login assets (2026-09-09)
+- Unstyled OTP screen and unresponsive Continue coincided with70 denied CONNECTs to auth-cdn.oaistatic.com. Added that exact host and observed OpenAI hosts cdn.openai.com/api.oaistatsig.com/bzr.openai.com, consistent with OpenAI network recommendations. Restarted only bridge; browser/profile retained. User must refresh the remote Chrome page; login success not yet observed.
+- Source: https://help.openai.com/en/articles/9247338-network-recommendations-for-chatgpt-errors-on-web-and-apps . Never record OTP values.
