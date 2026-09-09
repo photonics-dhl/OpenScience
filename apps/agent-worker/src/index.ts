@@ -439,7 +439,6 @@ function buildIngestionExternalProcessingPolicy(prisma: ReturnType<typeof create
       || task.agentTask.id !== context.taskId || task.agentTask.kind !== 'sdf.extract'
       || task.agentTask.status !== 'running' || task.agentTask.session.status !== 'active'
       || task.agentTask.session.userId !== context.actorId || task.batch.userId !== context.actorId
-      || task.batch.agentSessionId !== task.agentTask.sessionId
       || task.agentTask.session.researchObjectId !== task.batch.researchObjectId
       || (payload as Record<string, unknown>).artifactId !== task.artifactId
       || (payload as Record<string, unknown>).researchObjectId !== task.batch.researchObjectId
