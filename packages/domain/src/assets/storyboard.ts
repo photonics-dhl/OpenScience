@@ -25,11 +25,12 @@ export interface StoryboardView {
     baseAssetId?: string;
 }
 function invalid(reason: string): never { throw new PresentationAssetError('VALIDATION_ERROR', `storyboard:${reason}`); }
+function hasControlCharacter(value: string): boolean { return [...value].some(character => character.charCodeAt(0) <= 0x1f); }
 function object(value: unknown, reason: string): Record<string, unknown> { if (!value || typeof value !== 'object' || Array.isArray(value))
     return invalid(reason); return value as Record<string, unknown>; }
 function keys(value: Record<string, unknown>, required: string[], optional: string[], reason: string) { if (required.some(k => !(k in value)) || Object.keys(value).some(k => !required.includes(k) && !optional.includes(k)))
     invalid(reason); }
-function text(value: unknown, max: number, reason: string): string { if (typeof value !== 'string' || !value.trim() || value.length > max || /[\u0000-\u001f]/.test(value))
+function text(value: unknown, max: number, reason: string): string { if (typeof value !== 'string' || !value.trim() || value.length > max || hasControlCharacter(value))
     return invalid(reason); return value; }
 export function parseStoryboardRequest(value: unknown): StoryboardRequest {
     const v = object(value, 'request_shape');

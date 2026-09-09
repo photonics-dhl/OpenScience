@@ -13,6 +13,9 @@ export interface AnimationAction {
 }
 export interface SceneAnimation { objects: AnimationObject[]; actions: AnimationAction[] }
 function invalid(reason: string): never { throw new PresentationAssetError('VALIDATION_ERROR', `animation:${reason}`); }
+function hasControlCharacter(value: string): boolean {
+  return [...value].some((character) => character.charCodeAt(0) <= 0x1f);
+}
 function record(value: unknown, reason: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid(reason);
   return value as Record<string, unknown>;
@@ -40,7 +43,7 @@ export function parseSceneAnimation(value: unknown, sceneClaimIds: readonly stri
     if (!Array.isArray(item.sourceClaimIds) || item.sourceClaimIds.length < 1 || item.sourceClaimIds.length > 12
       || new Set(item.sourceClaimIds).size !== item.sourceClaimIds.length
       || item.sourceClaimIds.some(id => typeof id !== 'string' || !sceneClaimIds.includes(id))) return invalid(`${prefix}:source_claims`);
-    if (item.kind === 'label' && (typeof item.label !== 'string' || !item.label.trim() || item.label.length > 60 || /[\u0000-\u001f]/.test(item.label))) return invalid(`${prefix}:label`);
+    if (item.kind === 'label' && (typeof item.label !== 'string' || !item.label.trim() || item.label.length > 60 || hasControlCharacter(item.label))) return invalid(`${prefix}:label`);
     if (item.kind === 'trace' || item.kind === 'arrow') {
       if (!Array.isArray(item.points) || item.points.length < 2 || item.points.length > 32
         || (item.kind === 'arrow' && item.points.length !== 2)) return invalid(`${prefix}:points_count`);
@@ -58,7 +61,7 @@ export function parseSceneAnimation(value: unknown, sceneClaimIds: readonly stri
     if (!['enter', 'fade', 'translate', 'pulse', 'draw', 'highlight'].includes(String(item.kind))) return invalid(`${prefix}:kind`);
     if (!unit(item.start) || !unit(item.end) || item.start >= item.end) return invalid(`${prefix}:timing`);
     const basis = record(item.basis, `${prefix}:basis_shape`); keys(basis, ['claimId', 'quote'], `${prefix}:basis_keys`);
-    if (typeof item.meaning !== 'string' || !item.meaning.trim() || item.meaning.length > 180 || /[\u0000-\u001f]/.test(item.meaning)
+    if (typeof item.meaning !== 'string' || !item.meaning.trim() || item.meaning.length > 180 || hasControlCharacter(item.meaning)
       || typeof basis.claimId !== 'string' || !target.sourceClaimIds.includes(basis.claimId)
       || typeof basis.quote !== 'string' || basis.quote.trim().length < 12 || basis.quote.length > 400) return invalid(`${prefix}:meaning_basis`);
     if (item.kind === 'translate' && (!unit(item.toX) || !unit(item.toY)
