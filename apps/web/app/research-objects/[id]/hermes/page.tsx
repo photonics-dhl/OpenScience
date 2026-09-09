@@ -38,6 +38,9 @@ export function isCanonicalAllMissingExtraction(task: Pick<IngestionTaskDetail['
 }
 export function isRetryableSdfExtraction(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount'> & { error?: string | null }): boolean {
   const result = task.result;
+  if (task.state === 'needs_review' && task.retryCount >= 0 && task.retryCount < 2 && result
+    && result.status === 'needs_review' && result.reason === 'unresolved pages remain'
+    && result.sourceMapAvailable === true && !Object.hasOwn(result, 'core')) return true;
   return isCanonicalAllMissingExtraction(task) || (task.state === 'failed_retryable' && (task.retryCount < 2 || (task.retryCount === 2 && ['结构化输出超过重试上限', 'canonical_validation_exhausted'].includes(task.error ?? '')))) || (task.retryCount === 0 && ((task.state === 'needs_review' && Boolean(result && typeof result === 'object'
     && (result as Record<string, unknown>).status === 'needs_review'
     && ((result as Record<string, unknown>).reason === 'sdf-proposal-unavailable'

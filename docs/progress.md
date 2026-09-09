@@ -1,7 +1,7 @@
 # Progress
 
 ## 2026-09-09 — 全文凝练、定向OCR与图片优先（已部署，论文处理中）
-- production/代码HEAD c00c6233 / rollback1267e298，canonical --no-tests部署exit0。5c393844的API output编译遗漏已修复；日志1788940513640-798ed351-568a-4382-96ce-6a198d852fb0。
+- production/代码HEAD62e71a86 / rollback5b724c0b，canonical --no-tests部署exit0，日志1788941404324-a4c83871-6710-4386-90ae-54b662621072。先前API output编译遗漏、worker flag位置和refresh session授权已修复。
 - 修正core=原文摘抄：Hermes runtime skill凝练六字段，独立原文证据精确回读；全文≤120k不静默裁中间；更长文档尚需分层处理。
 - 受控sidecar PNG→worker授权MiniMax视觉OCR；公式信号和quota-only备用。现有主/备用已配置，未读写secret；候选compose开启vision。
 - image-only profile让图片审批后完成，不自动制作视频；规划/绘图读取已审核原文并绑定来源变化。
@@ -15,3 +15,6 @@
 - 已部署上传自动整理/预填、人工编辑保护与Hermes导航/窄屏修复；当前问题清单和历史实际观察见集成产品计划。
 - 先前另一论文方法讲解四图和23.459秒视频可用，不能替代当前论文全文理解或自动流程结论。
 - 更早逐轮记录由Git历史保留；本轮不恢复旧测试清单。
+- 62e71a86部署后，同Agent1eafa17f通过正常retry入口queued/retry1；复用原credit，保留旧parser结果审计，正在实际处理。
+
+- retry1已实际触发4次视觉请求，均provider_status失败；查文本CN/视觉默认global地区不一致，候选修缺省地区继承与数字错误码；恢复上限2次，原credit复用。当前不称解析或生图完成。

@@ -322,19 +322,19 @@ export async function retryIngestionTask(
         const result = task.agentTask?.result;
         let legacyProposalFailure = false;
         let parserRecovery = false;
-        if (task.state === 'needs_review' && task.retryCount === 0 && task.agentTask?.kind === 'sdf.extract'
-          && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === 0
+        if (task.state === 'needs_review' && task.retryCount >= 0 && task.retryCount < 2 && task.agentTask?.kind === 'sdf.extract'
+          && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === task.retryCount
           && result && typeof result === 'object' && !Array.isArray(result)) {
           const record = result as Record<string, unknown>;
           try {
             const reference = parseDocumentSourceMapReference(record.sourceMapRef);
-            legacyProposalFailure = record.status === 'needs_review' && record.reason === 'sdf-proposal-unavailable'
+            legacyProposalFailure = task.retryCount === 0 && record.status === 'needs_review' && record.reason === 'sdf-proposal-unavailable'
               && !Object.hasOwn(record, 'core') && reference.parserStatus === 'succeeded'
               && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256;
             if (record.status === 'needs_review' && record.reason === 'unresolved pages remain'
               && !Object.hasOwn(record, 'core') && reference.parserStatus === 'needs_review'
               && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256
-              && task.agentTask.executionAttempt === 1 && task.batch.userId === input.userId) {
+              && task.agentTask.executionAttempt === task.retryCount + 1 && task.batch.userId === input.userId) {
               const session = await tx.agentSession.findUnique({ where: { id: task.agentTask.sessionId } });
               parserRecovery = session?.userId === input.userId && session.status === 'active'
                 && session.researchObjectId === task.batch.researchObjectId;
@@ -354,7 +354,7 @@ export async function retryIngestionTask(
           const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
           canonicalAllMissingRecovery = session?.userId === input.userId && session.status === 'active';
         }
-        const retryAttempt = canonicalAllMissingRecovery ? 2 : failedRetry ? task.retryCount + 1 : 1;
+        const retryAttempt = parserRecovery ? task.retryCount + 1 : canonicalAllMissingRecovery ? 2 : failedRetry ? task.retryCount + 1 : 1;
         let activeFailedRetryOwner = false;
         let paidFailedRetry = false;
         let compensatedSchemaRetry = false;
@@ -413,7 +413,7 @@ export async function retryIngestionTask(
             id: task.agentTaskId!, kind: 'sdf.extract', retryCount: retryAttempt - 1,
             status: legacyProposalFailure || canonicalAllMissingRecovery || parserRecovery ? 'succeeded' : 'failed',
             ...(canonicalAllMissingRecovery ? { executionAttempt: 2 }
-              : authorizedFailedRetry ? { executionAttempt: retryAttempt } : {}),
+              : authorizedFailedRetry || parserRecovery ? { executionAttempt: retryAttempt } : {}),
           },
           data: {
             status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,

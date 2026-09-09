@@ -422,6 +422,9 @@ export class AiGateway {
         };
       } catch (error) {
         const code = normalizeOcrProviderError(error);
+        const status = code === 'provider_status' && error instanceof Error
+          ? /^MiniMax vision status (\d{1,8})$/.exec(error.message)?.[1] : undefined;
+        const diagnostic = status ? `${code}:${status}` : code;
         await this.record(ocrLog({
           request,
           provider: provider.name,
@@ -432,13 +435,13 @@ export class AiGateway {
           retryCount: index,
           fallbackReason: boundedFallbackReason(fallbackNotes),
           outcome: 'failed',
-          error: code,
+          error: diagnostic,
           inputTokens: null,
           outputTokens: null,
           actualCostUsdMicros: null,
         }));
         fallbackNotes.push(`${provider.name}:${code}`);
-        this.logger?.warn?.(`AI OCR provider ${provider.name} failed with ${code}; trying configured fallback`);
+        this.logger?.warn?.(`AI OCR provider ${provider.name} failed with ${diagnostic}; trying configured fallback`);
       }
     }
     return { status: 'failed', pageNumber: request.pageNumber, code: 'providers_unavailable', retryable: true };

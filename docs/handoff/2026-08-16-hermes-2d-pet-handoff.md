@@ -7,7 +7,7 @@
 
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- 代码HEAD/production c00c62330dbc8d8dc873de7199fee76157d016f5；canonical --no-tests部署exit0，rollback1267e298。后续文档commit不代表新部署。
+- 代码HEAD/production 62e71a86f7c529ce6273674377f212626cd99912；canonical --no-tests部署exit0，rollback5b724c0b。后续文档commit不代表新部署。
 - 部署日志1788940513640-798ed351-568a-4382-96ce-6a198d852fb0；首轮上传EPIPE，5c393844应用构建API漏output失败，c00c6233修复后部署成功。
 - root main和其他worktree有独立改动，不覆盖。
 
@@ -32,7 +32,7 @@
 - 沿用已批准产品方向。Sol/medium负责OCR、Terra/medium负责图片合同/UI、Sol/high定向静态复核，主线程集成摘要/来源和部署。没有可证明的本轮tokens节省比例。
 
 ## Next action
-- 5b724c0b正在部署worker vision flag与refresh session授权修正（当前部署事务rollback c00c6233）。追加正常parser retry恢复入口候选：一次复用原credit，严格owner/active session/RO/artifact/retry0/attempt1，无core且仅unresolved pages；audit保留前次结果，不新建batch。完成后续接Agent1eafa17f。没有运行测试/预检。
+- 62e71a86已部署exit0（日志1788941404324-a4c83871-6710-4386-90ae-54b662621072）。worker实际visionEnabled=true且未禁用；原Agent1eafa17f通过正常retryIngestionTask入口queued/retry1，复用原credit，audit保留前次parser结果。实际retry1后4次minimax-vision provider_status失败，0文本；公开配置发现text token-plan origin为api.minimaxi.com而vision默认global。候选修vision缺省地区继承已配置text origin并记安全数字状态码；parser恢复最多2次，CAS/owner/原credit保持，不再扩次数。无测试/预检。
 - 浏览器恢复后从现有任务正常重新分析，确认可读摘要/公式与证据，按正常授权生成图片并观察展示；不重复上传、不改DB强过、不制作视频。
 - 如浏览器控制仍不可用，如实记录已部署与未观察到的产品结果，不反复要求用户登录。
 

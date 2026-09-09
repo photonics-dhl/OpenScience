@@ -641,7 +641,11 @@ function imageOrigin(env: NodeJS.ProcessEnv): string {
 }
 
 function visionOrigin(env: NodeJS.ProcessEnv): string {
-  const region = env.MINIMAX_VISION_REGION ?? 'global';
+  // Vision uses the same Coding Plan credential as text. An unset region must not
+  // send a configured China-plan key to the global endpoint.
+  let textOrigin: string | undefined;
+  try { textOrigin = new URL(env.MINIMAX_TOKEN_PLAN_BASE_URL ?? '').origin; } catch { /* default global */ }
+  const region = env.MINIMAX_VISION_REGION ?? (textOrigin === 'https://api.minimaxi.com' ? 'cn' : 'global');
   if (region === 'global') return 'https://api.minimax.io';
   if (region === 'cn') return 'https://api.minimaxi.com';
   throw new Error('MINIMAX_VISION_REGION must be global or cn');
