@@ -647,7 +647,13 @@ fi
 
 log "[5d] 切换 API/Web/Worker 并等待 healthy..."
 verify_candidate_switch_contract pre-worker-switch
-compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-worker"
+compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-worker" || {
+  # Preserve the failing process log before rollback replaces its container.
+  startup_log=$(umask 077; mktemp "$REMOTE_ROOT/.worker-startup-$RELEASE_SHA.XXXXXX.log")
+  docker logs --tail 80 openscience-prod-agent-worker-1 > "$startup_log" 2>&1 || true
+  log "Worker startup log retained privately: $startup_log"
+  false
+}
 verify_running_container_image agent-worker "$FINAL_WORKER_IMAGE_ID"
 verify_running_container_image document-parser "$FINAL_PARSER_IMAGE_ID"
 wait_for_healthy api web agent-worker

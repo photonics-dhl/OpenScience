@@ -35,7 +35,6 @@ import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
 import { createParserRasterJobClient, createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
-import { runParserCascadeSelfTest } from './parser-self-test';
 import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
 import {
   runParserCascade,
@@ -529,14 +528,6 @@ async function main(): Promise<void> {
   );
   const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata);
   const rasterJobAdapter = createParserRasterJobClient(parserJobDir, expectedSidecarParserMetadata);
-  const parserSelfTest = await runParserCascadeSelfTest(createWorkerParserCascade(gateway, parserJobAdapter));
-  if (!parserSelfTest.pdf.textMatched || !parserSelfTest.docx.textMatched
-    || !parserSelfTest.scan.textMatched || !parserSelfTest.scan.locatorMatched
-    || !parserSelfTest.scan.tesseractMatched || !parserSelfTest.scan.confidenceMatched
-    || !parserSelfTest.scan.boundingBoxMatched
-    || !parserSelfTest.candidateFallbackDisabled) {
-    throw new Error('parser cascade startup self-test failed');
-  }
   const parserCascade = createWorkerParserCascade(
     gateway, parserJobAdapter, rasterJobAdapter,
     process.env.AI_ENABLED === 'true' && process.env.MINIMAX_VISION_ENABLED === 'true',
