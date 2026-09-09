@@ -1,5 +1,9 @@
 # Progress
 
+## 图片流程实际推进
+- production85f65451，分析Agentadfc1d11仍partial，保留全部草稿；只确认有明确来源的problem到version58a45cb5，并创建Hermes run46442dc4（图片流程）。
+- confirmSourceReview实际发现DB旧grant约束遗漏image-v1，事务已回滚。新增仅扩展image7组合的迁移，回滚保留扩展schema不删记录。待部署后继续。
+
 ## 实际重新分析已返回
 - production c40350a3 / rollback a9b6c154。Agent5cc63d4d使用skill v2且OCRreuse=true，method/results综合草稿保留但source ID约束未通过。候选移除独立6ID上限（32blocks/8k证据总量不变），继续实际处理。未确认或生图。
 

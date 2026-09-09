@@ -1,3 +1,12 @@
+## 最新断点：图片授权数据库约束（优先读）
+- 实际production85f6545134553b17fc0f383a58d86797f0074435，rollbackc40350a350d5143dec5fff466debe46edaf930fc，部署日志1788950296619-aff8791b-43cb-4870-98de-0925e70069ff。
+- 当前论文Agentadfc1d11-2935-4768-8257-aca5beb3eae4重新分析完成但仍partial，method/reproducibility未绑定，limitations有科学问题。没有将有疑问内容用于媒体。
+- 用户授权继续推进：仅采用服务器生成并经原文支持的problem写入此前全空SDF（没有手写论文内容）。正常confirmIngestionTask已成功：versionId58a45cb5-758f-4d6f-9e94-533b460e8b06，versionNo2，ROversion3；ingestion现confirmed，不再可直接refresh。原Agent所有草稿保留。
+- 正常createHermesResearchRun已成功，run46442dc4-44d4-4f63-bf39-75bd985f3218，sourceTask7a28a7c8；目标概念图，只用problem、不触发视频。
+- confirmHermesSourceReview（image-v1/max7）实际被DB旧hermes_research_runs_generation_grant_check拒绝，事务回滚，无新Claim半成品。
+- 本地候选infra/migrations/20260909010000_hermes_image_generation_grant增加image7合法组合，保留旧null/onchip7/video8；rollback保留additive schema和数据。尚未部署。High reviewer因额度耗尽失败，没有本次复核结论。
+- 下一步先发布迁移（必要服务器构建与migrate --no-tests），再重新读取run.version及preview snapshotToken，正常confirmHermesSourceReview：sourceField problem，kind core，statement使用preview.reviewedStatement，attachSourceQuote true，profile content-driven-image-v1/max7。随后正常verifyEvidence/Claim流程触发Hermes规划。禁止改数据库伪装video或手工生成图。
+
 # Hermes Research Intelligence CURRENT Handoff
 
 ## 当前执行：用户已要求重新处理论文

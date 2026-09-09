@@ -560,3 +560,5 @@
 | `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` | POST ingestion/:taskId/refresh：复用artifact、新AgentTask事务扣费/CAS、旧结果保留；限定旧字符证据或旧native分段超限修复 | 旧字符升级已部署a0b47065；分段修复候选，CURRENT handoff记录真实结果 |
 
 | `apps/agent-worker/src/skills/research-understanding.ts` / `apps/web/components/presentation/PresentationResultGallery.tsx` | Hermes运行时理解skill与图片结果画廊 | 2026-09-09已部署c00c6233；实际结果见CURRENT handoff |
+
+| `infra/migrations/20260909010000_hermes_image_generation_grant/` | 增加图片7任务授权组合；应用回滚保留扩展约束与图片记录 | CANDIDATE |
