@@ -1,6 +1,8 @@
 # Hermes Research Intelligence CURRENT Handoff
 
 ## 当前执行：用户已要求重新处理论文
+- c40350a3已部署（rollback a9b6c154），日志1788949741674-de929049-bb2b-4e58-aa3d-5a768a40f899。新Agent5cc63d4d-cb71-47f6-aa13-0b26454526ab正常重新分析已返回，sourceMapReused=true、understandingSkill v2。
+- problem/insight/limitations/reproducibility在core；method/results留unverifiedSummaries，诊断passage_ids_required，尚未确认/生图。候选仅移除独立6ID上限，改为32IDs但最终32原blocks/8k原文约束不变，提示简洁归纳而非逐式重抄。待部署后正常再分析。
 - 候选补齐用户主动重新分析入口，当前v2成功解析结果可显式点击重新分析，沿现有sourceAgent稳定key/事务CAS/正常credit保留旧任务并复用OCR。仅用户请求触发，不增加自动重试或新contract版本。服务器实际当前Agent仍5dba592b、retry1、needs_review。
 
 ## 最新用户纠正与候选

@@ -1,5 +1,8 @@
 # Progress
 
+## 实际重新分析已返回
+- production c40350a3 / rollback a9b6c154。Agent5cc63d4d使用skill v2且OCRreuse=true，method/results综合草稿保留但source ID约束未通过。候选移除独立6ID上限（32blocks/8k证据总量不变），继续实际处理。未确认或生图。
+
 ## 2026-09-09 — 按用户要求重新处理（进行中）
 - 补齐当前格式的显式重新分析入口，沿现有计费/权限/幂等与OCR复用，不再为单篇新增contract版本。候选未部署，实际旧任务仍needs_review。
 
