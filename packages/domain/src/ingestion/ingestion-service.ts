@@ -314,7 +314,9 @@ export async function listActionableIngestionTasks(
   }
   const tasks = await deps.prisma.ingestionTask.findMany({
     where: {
-      batch: input.researchObjectId === undefined ? { userId: input.userId } : { researchObjectId: input.researchObjectId },
+      batch: input.researchObjectId === undefined
+        ? { userId: input.userId, researchObject: { status: { not: 'archived' } } }
+        : { researchObjectId: input.researchObjectId },
       state: { in: [...ACTIONABLE_INGESTION_STATES] },
     },
     include: { artifact: true, batch: { include: { researchObject: true } } },
@@ -639,6 +641,131 @@ export async function refreshIngestionAnalysis(
     }
   }
   if (!queued?.agentTaskId) throw new IngestionError('INGESTION_NOT_FOUND', 'Refreshed ingestion task not found');
+  await dispatchAgentTask(deps, queued.agentTaskId);
+  return taskToView(queued);
+}
+
+/** Starts a separately confirmable analysis generation without changing confirmed history. */
+export async function reanalyzeConfirmedIngestion(
+  deps: IngestionDeps,
+  input: { userId: string; taskId: string; sourceAgentTaskId: string; processingConsent: boolean; idempotencyKey: string },
+  ctx: AuditContext = {},
+): Promise<IngestionTaskView> {
+  if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
+  if (!input.idempotencyKey || input.idempotencyKey.length > 64) throw new IngestionError('VALIDATION_ERROR', 'A bounded idempotency key is required');
+  const initial = await deps.prisma.ingestionTask.findUnique({
+    where: { id: input.taskId },
+    include: { artifact: true, agentTask: { include: { session: true } }, batch: { include: { researchObject: true } } },
+  });
+  if (!initial) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+  const { workspace, membership } = await requireActiveMembership(deps.prisma, initial.batch.researchObject.workspaceId, input.userId);
+  if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+  const sourceAgent = initial.agentTask;
+  const sourcePayload = sourceAgent?.payload;
+  if (initial.state !== 'confirmed' || initial.agentTaskId !== input.sourceAgentTaskId
+    || initial.batch.userId !== input.userId || initial.artifact.workspaceId !== workspace.id
+    || !sourceAgent || sourceAgent.kind !== 'sdf.extract' || sourceAgent.status !== 'succeeded'
+    || sourceAgent.session.userId !== input.userId || sourceAgent.session.researchObjectId !== initial.batch.researchObjectId
+    || !exactRecordKeys(sourcePayload, ['artifactId', 'researchObjectId'])
+    || sourcePayload.artifactId !== initial.artifactId || sourcePayload.researchObjectId !== initial.batch.researchObjectId
+    || analysisRefreshPolicy(sourceAgent.result, initial.artifact) !== 'user_requested_reanalysis'
+    || !await savedConfirmation(deps, initial.id, initial.batch.researchObjectId)) {
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only a scoped confirmed extraction can create a new analysis draft');
+  }
+  const reference = parseDocumentSourceMapReference((sourceAgent.result as Record<string, unknown>).sourceMapRef);
+  await loadDocumentSourceMapReference(deps.storage, reference);
+  const sourceMapProof = { objectKey: reference.objectKey, serializedSha256: reference.serializedSha256 };
+  const batchKey = `ingestion-reanalysis:${initial.id}:${input.idempotencyKey}`;
+  const requestDigest = createHash('sha256').update(JSON.stringify({
+    taskId: initial.id, sourceAgentTaskId: sourceAgent.id, artifactId: initial.artifactId,
+    sourceMapSha256: sourceMapProof.serializedSha256,
+  })).digest('hex');
+  let queued: Prisma.IngestionTaskGetPayload<{ include: { artifact: true } }> | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      queued = await deps.prisma.$transaction(async (tx) => {
+        const source = await tx.ingestionTask.findUnique({
+          where: { id: initial.id },
+          include: { artifact: true, agentTask: { include: { session: true } }, batch: { include: { researchObject: true } } },
+        });
+        if (!source) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+        const { workspace: transactionWorkspace, membership: transactionMembership } = await requireActiveMembership(
+          tx, source.batch.researchObject.workspaceId, input.userId,
+        );
+        if (!INGESTION_WRITE_ROLES.has(transactionMembership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+        const scoped = { ...deps, prisma: tx as IngestionDeps['prisma'] };
+        const transactionPayload = source.agentTask?.payload;
+        if (source.state !== 'confirmed' || source.agentTaskId !== sourceAgent.id
+          || source.batch.userId !== input.userId || source.batch.researchObjectId !== initial.batch.researchObjectId
+          || source.artifactId !== initial.artifactId || source.artifact.workspaceId !== transactionWorkspace.id
+          || !source.agentTask || source.agentTask.kind !== 'sdf.extract' || source.agentTask.status !== 'succeeded'
+          || source.agentTask.session.userId !== input.userId || source.agentTask.session.researchObjectId !== initial.batch.researchObjectId
+          || !exactRecordKeys(transactionPayload, ['artifactId', 'researchObjectId'])
+          || transactionPayload.artifactId !== source.artifactId || transactionPayload.researchObjectId !== source.batch.researchObjectId
+          || analysisRefreshPolicy(source.agentTask.result, source.artifact) !== 'user_requested_reanalysis'
+          || !await savedConfirmation(scoped, source.id, source.batch.researchObjectId)) {
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Confirmed extraction changed while creating a new draft');
+        }
+        const replay = await tx.ingestionBatch.findUnique({
+          where: { idempotencyKey: batchKey },
+          include: { tasks: { include: { artifact: true, agentTask: { include: { session: true } } } } },
+        });
+        if (replay) {
+          const candidate = replay.tasks[0];
+          const payload = candidate?.agentTask?.payload;
+          if (replay.userId !== input.userId || replay.researchObjectId !== initial.batch.researchObjectId
+            || replay.requestDigest !== requestDigest || replay.tasks.length !== 1 || !candidate?.agentTask
+            || candidate.artifactId !== initial.artifactId || candidate.agentTask.kind !== 'sdf.extract'
+            || candidate.agentTask.session.userId !== input.userId
+            || candidate.agentTask.session.researchObjectId !== initial.batch.researchObjectId
+            || candidate.agentTask.idempotencyKey !== `ingestion-analysis-reanalysis:${candidate.id}:${sourceAgent.id}`
+            || !exactRecordKeys(payload, ['artifactId', 'researchObjectId'])
+            || payload.artifactId !== initial.artifactId || payload.researchObjectId !== initial.batch.researchObjectId) {
+            throw new IngestionError('VALIDATION_ERROR', 'Confirmed analysis replay scope does not match');
+          }
+          return tx.ingestionTask.findUniqueOrThrow({ where: { id: candidate.id }, include: { artifact: true } });
+        }
+        const transactionReference = parseDocumentSourceMapReference((source.agentTask.result as Record<string, unknown>).sourceMapRef);
+        if (transactionReference.objectKey !== sourceMapProof.objectKey
+          || transactionReference.serializedSha256 !== sourceMapProof.serializedSha256) {
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction source map changed while creating a new draft');
+        }
+        const batch = await tx.ingestionBatch.create({ data: {
+          researchObjectId: source.batch.researchObjectId, userId: input.userId,
+          idempotencyKey: batchKey, requestDigest,
+        } });
+        const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
+          userId: input.userId, researchObjectId: source.batch.researchObjectId, kind: 'ingestion',
+          title: `Ingestion reanalysis ${source.id}`, idempotencyKey: `${batchKey}:session`,
+        }, ctx);
+        await tx.ingestionBatch.update({ where: { id: batch.id }, data: { agentSessionId: session.id } });
+        const newIngestion = await tx.ingestionTask.create({ data: {
+          batchId: batch.id, artifactId: source.artifactId, state: 'queued',
+        } });
+        const { task: analysis } = await persistAgentTaskInTransaction(deps, tx, {
+          sessionId: session.id, userId: input.userId, kind: 'sdf.extract',
+          payload: { artifactId: source.artifactId, researchObjectId: source.batch.researchObjectId },
+          idempotencyKey: `ingestion-analysis-reanalysis:${newIngestion.id}:${sourceAgent.id}`,
+        }, ctx);
+        const attached = await tx.ingestionTask.updateMany({
+          where: { id: newIngestion.id, agentTaskId: null, state: 'queued' }, data: { agentTaskId: analysis.id },
+        });
+        if (attached.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'New analysis draft changed while attaching its task');
+        await recordAudit(deps, tx, {
+          actorId: input.userId, action: 'ingestion.task.reanalyze', workspaceId: transactionWorkspace.id,
+          targetType: 'ingestion_task', targetId: newIngestion.id,
+          metadata: { sourceIngestionTaskId: source.id, sourceAgentTaskId: sourceAgent.id, newAgentTaskId: analysis.id,
+            artifactId: source.artifactId, sourceMapSha256: sourceMapProof.serializedSha256, confirmationPolicy: 'new_draft' },
+        }, ctx);
+        return tx.ingestionTask.findUniqueOrThrow({ where: { id: newIngestion.id }, include: { artifact: true } });
+      }, { isolationLevel: 'Serializable' });
+      break;
+    } catch (error) {
+      if (attempt < 2 && ['P2002', 'P2034'].includes(String((error as { code?: unknown }).code))) continue;
+      throw error;
+    }
+  }
+  if (!queued?.agentTaskId) throw new IngestionError('INGESTION_NOT_FOUND', 'New analysis draft was not created');
   await dispatchAgentTask(deps, queued.agentTaskId);
   return taskToView(queued);
 }

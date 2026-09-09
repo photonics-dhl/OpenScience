@@ -1574,6 +1574,22 @@ export async function refreshIngestionAnalysis(taskId: string, sourceAgentTaskId
   return result.task;
 }
 
+export async function reanalyzeConfirmedIngestion(taskId: string, sourceAgentTaskId: string, idempotencyKey: string): Promise<IngestionTaskSummary> {
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/reanalyze`, {
+    method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey },
+    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId }),
+  });
+  return result.task;
+}
+
+export function isConfirmedIngestionReanalysisSource(task: IngestionTaskDetail['task']): boolean {
+  return task.state === 'confirmed' && Boolean(task.agentTaskId) && Boolean(task.result
+    && typeof task.result === 'object' && !Array.isArray(task.result)
+    && task.result.canonicalExtractionContract === 'grounded-passages-v2'
+    && task.result.sourceMapAvailable === true);
+}
+
 const LEGACY_INGESTION_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
 
 /** Public-result guard for the old character-offset extraction contract. */

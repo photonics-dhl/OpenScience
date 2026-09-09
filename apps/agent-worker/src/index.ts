@@ -294,6 +294,38 @@ export function createHandlers(
           || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable document source identity changed');
         reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
       }
+      const reanalysis = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36})$/.exec(ownerTask.idempotencyKey ?? '');
+      if (reanalysis) {
+        const ingestion = await deps.prisma.ingestionTask.findUnique({
+          where: { id: reanalysis[1]! }, include: { batch: true },
+        });
+        const previous = await deps.prisma.agentTask.findUnique({
+          where: { id: reanalysis[2]! }, include: { session: true, ingestionTask: { include: { batch: true } } },
+        });
+        const previousResult = previous?.result as Record<string, unknown> | null;
+        const previousPayload = previous?.payload as Record<string, unknown> | null;
+        const confirmation = previous?.ingestionTask
+          ? await deps.prisma.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${previous.ingestionTask.id}` } })
+          : null;
+        if (!serverDerivedEligibility || !externalProcessingEligible || refresh
+          || ingestion?.agentTaskId !== ownerTask.id || ingestion.artifactId !== artifact.id
+          || ingestion.batch.userId !== ownerTask.session.userId || ingestion.batch.researchObjectId !== ownerResearchObject.id
+          || !['queued', 'parsing'].includes(ingestion.state) || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
+          || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
+          || previous.ingestionTask?.state !== 'confirmed' || previous.ingestionTask.artifactId !== artifact.id
+          || previous.ingestionTask.batch.userId !== ownerTask.session.userId
+          || previous.ingestionTask.batch.researchObjectId !== ownerResearchObject.id
+          || confirmation?.researchObjectId !== ownerResearchObject.id
+          || !previousPayload || Object.keys(previousPayload).sort().join(',') !== 'artifactId,researchObjectId'
+          || previousPayload.artifactId !== artifact.id || previousPayload.researchObjectId !== ownerResearchObject.id
+          || previousResult?.canonicalExtractionContract !== 'grounded-passages-v2') {
+          throw new Error('[blocked] Reusable confirmed analysis scope is invalid');
+        }
+        const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
+        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable confirmed source identity changed');
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+      }
       const parsed: ParserExtractionResult<DocumentSourceMap> = reusableSourceMap
         ? { status: 'succeeded', sourceMap: reusableSourceMap, warnings: [] }
         : await options.parserCascade({

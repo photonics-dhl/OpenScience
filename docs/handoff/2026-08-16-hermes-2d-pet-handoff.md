@@ -8,8 +8,11 @@
 ## Full-flow optimization — current batch
 - 用户明确先完成附件预览→自动全文凝练→用户确认→选图/视频→生成审核→发布→公开RO；2–3篇高质量精选完成并获认可前暂停冷启动。
 - 普通Chat6aa162f9已实际发送/读回完整产品建议；旧Chat6a9e7dac本轮接口无匹配，不推断Chat整体不可用。此次没有截图评审。
-- 本批候选：ArtifactViewer、媒体类型选择、公开页顺序/去重、索引从草稿改读发布manifest、归档过滤、理解skill v3精确来源恢复。尚未部署/重新提取；问题台账在integrated-research-product-plan最新节。
-- 服务器只读确认production7f8e47d9。18旧demo-source记录及个人测试草稿待正常domain可恢复归档，脚本archive-legacy-showcase；实际3篇论文保护，不删文件/账号/公开版本。
+- 本批已部署c2d11326：ArtifactViewer、媒体类型选择、公开页顺序/去重、索引从草稿改读发布manifest、归档过滤、理解skill v3精确来源恢复。尚未重新提取；问题台账在integrated-research-product-plan最新节。
+- 服务器部署exit0，production c2d113263ee48f276e9dedc4e4dc8a3229b4ceed / rollback7f8e47d931b751cc28c1000325128c2ca86566cb。已正常domain可恢复归档18旧demo-source记录与16个人测试草稿（共34），脚本archive-legacy-showcase；实际3篇论文保护，不删文件/账号/公开版本。
+
+- 下一批候选：已确认论文重新分析为独立待确认草稿（复用SourceMap，事务内权限/408与429幂等修复）、归档Hermes任务过滤、MaterialQueue预览、Hermes默认紧凑静态回退。网页spool接入另批仍在修复，不随此批启用。
+- 用户已登录服务器产品页；实际Overview可截图，工作台旧9任务/Hermes常驻重试问题已记录。Chat截图上传未完成，不称截图评审。
 
 ## Server browser continuation (2026-09-09)
 - 用户要求服务器任务先查能力清单；已新增 docs/runbooks/server-capabilities.md 并写入AGENTS。发现共享缓存与ScanSci镜像已有完整Chrome+Xvfb，已停止重复下载，改为复用镜像，仅补远程桌面组件。
@@ -22,7 +25,7 @@
 
 ## Versions
 - worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- production7f8e47d931b751cc28c1000325128c2ca86566cb，rollback929667dd2b5655666eea15c30bf30fe3dd5629aa。
+- production c2d113263ee48f276e9dedc4e4dc8a3229b4ceed，rollback7f8e47d931b751cc28c1000325128c2ca86566cb。
 - 部署exit0，日志1788953754740-78c2a47b-196d-4fce-8cfa-98cf09c48cf0。没有运行中的部署。
 - 宿主Codex runner独立bundle1ad54c72f794ba46ee5f423875b9f231d32d4ea1，canonical install成功，含预设skill；此后应用版本没有runner代码变化，不需重装。
 - 早先2000f508 build阶段SSH重置exit255，生产无切换/无journal。后续1ad54c72/929667dd/7f8e47d9均部署exit0。

@@ -25,8 +25,10 @@ import {
   getCurrentUser,
   getIngestionTask,
   getResearchObject,
+  isConfirmedIngestionReanalysisSource,
   isRefreshableIngestionAnalysis,
   listVersions,
+  reanalyzeConfirmedIngestion,
   retryAgentTask,
   refreshIngestionAnalysis,
   submitExtractTask,
@@ -115,6 +117,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [confirmationIntent, setConfirmationIntent] = useState<IngestionProposal | null>(null);
   const [confirmedIngestion, setConfirmedIngestion] = useState(false);
   const [refreshingLegacyIngestion, setRefreshingLegacyIngestion] = useState(false);
+  const [reanalyzingConfirmedIngestion, setReanalyzingConfirmedIngestion] = useState(false);
+  const [confirmedReanalysisSource, setConfirmedReanalysisSource] = useState<{ taskId: string; agentTaskId: string } | null>(null);
   const [activeField, setActiveField] = useState<FieldKey | null>('problem');
   const [workspaceId, setWorkspaceId] = useState<string>('');
   const [objectMeta, setObjectMeta] = useState<{ title: string; visibility: string }>({
@@ -143,6 +147,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const protectedEditorDraftFields = useRef<Set<SdfField>>(new Set());
   const serverCore = useRef<SdfCore>(emptyCore());
   const serverVersion = useRef(1);
+  const confirmedReanalysisIntent = useRef<{ sourceTaskId: string; sourceAgentTaskId: string; idempotencyKey: string } | null>(null);
 
   // 加载 RO + SDF + 版本
   useEffect(() => {
@@ -188,6 +193,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   useEffect(() => {
     if (!editorLoaded || draftPrompt || !selectedIngestionTaskId) {
       setIngestionProposal(null);
+      setConfirmedReanalysisSource(null);
       setIngestionLoading(false);
       return;
     }
@@ -195,13 +201,31 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     if (!summary) {
       setIngestionMessage(t('ingestionScopeMismatch'));
       setIngestionProposal(null);
+      setConfirmedReanalysisSource(null);
       return;
     }
     if (summary.confirmation) {
-      setIngestionMessage(t('ingestionAlreadyConfirmed'));
       setIngestionProposal(null);
-      return;
+      setConfirmedReanalysisSource(null);
+      setIngestionLoading(true);
+      let active = true;
+      void getIngestionTask(summary.id).then((detail) => {
+        if (!active) return;
+        const eligible = detail.researchObjectId === roId && detail.task.id === summary.id
+          && detail.task.artifactId === summary.artifactId && isConfirmedIngestionReanalysisSource(detail.task)
+          && Boolean(detail.task.agentTaskId);
+        setConfirmedReanalysisSource(eligible
+          ? { taskId: detail.task.id, agentTaskId: detail.task.agentTaskId! }
+          : null);
+        setIngestionMessage(t('ingestionAlreadyConfirmed'));
+      }).catch(() => {
+        if (active) setIngestionMessage(t('ingestionAlreadyConfirmed'));
+      }).finally(() => {
+        if (active) setIngestionLoading(false);
+      });
+      return () => { active = false; };
     }
+    setConfirmedReanalysisSource(null);
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     setIngestionLoading(true);
@@ -382,6 +406,44 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       setIngestionMessage(t('legacyRefreshUncertain'));
     } finally {
       setRefreshingLegacyIngestion(false);
+    }
+  }
+
+  async function createConfirmedReanalysisDraft() {
+    const source = ingestionTasks.find((task) => task.id === selectedIngestionTaskId);
+    if (!source?.confirmation || confirmedReanalysisSource?.taskId !== source.id || reanalyzingConfirmedIngestion) return;
+    const sourceAgentTaskId = confirmedReanalysisSource.agentTaskId;
+    const storageKey = `openscience:ingestion-reanalysis:${roId}:${source.id}:${sourceAgentTaskId}`;
+    const storedIdempotencyKey = window.localStorage.getItem(storageKey);
+    const intent = confirmedReanalysisIntent.current?.sourceTaskId === source.id
+      && confirmedReanalysisIntent.current.sourceAgentTaskId === sourceAgentTaskId
+      ? confirmedReanalysisIntent.current
+      : { sourceTaskId: source.id, sourceAgentTaskId, idempotencyKey: storedIdempotencyKey || crypto.randomUUID() };
+    confirmedReanalysisIntent.current = intent;
+    window.localStorage.setItem(storageKey, intent.idempotencyKey);
+    setReanalyzingConfirmedIngestion(true);
+    setIngestionMessage(null);
+    try {
+      const task = await reanalyzeConfirmedIngestion(intent.sourceTaskId, intent.sourceAgentTaskId, intent.idempotencyKey);
+      confirmedReanalysisIntent.current = null;
+      window.localStorage.removeItem(storageKey);
+      setIngestionTasks((current) => [...current.filter((candidate) => candidate.id !== task.id), { ...task, confirmation: null }]);
+      setSelectedIngestionTaskId(task.id);
+      setConfirmedIngestion(false);
+      setConfirmedReanalysisSource(null);
+      setIngestionMessage(t('confirmedReanalysisStarted'));
+      router.replace(`/research-objects/${encodeURIComponent(roId)}/edit?ingestionTask=${encodeURIComponent(task.id)}`);
+    } catch (cause) {
+      if (cause instanceof ApiClientError && cause.status > 0 && cause.status < 500
+        && cause.status !== 408 && cause.status !== 429) {
+        confirmedReanalysisIntent.current = null;
+        window.localStorage.removeItem(storageKey);
+        setIngestionMessage(cause.message);
+      } else {
+        setIngestionMessage(t('confirmedReanalysisUncertain'));
+      }
+    } finally {
+      setReanalyzingConfirmedIngestion(false);
     }
   }
 
@@ -778,7 +840,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                   </div>
                   <label className="grid w-full min-w-0 gap-1 text-xs text-os-muted-paper sm:w-auto sm:max-w-full">
                     {t('ingestionSource')}
-                    <select className="block min-h-10 w-full min-w-0 max-w-full truncate border border-os-rule-paper bg-white px-3 text-sm text-os-ink" disabled={confirmingIngestion || Boolean(confirmationIntent)} value={selectedIngestionTaskId} onChange={(event) => {
+                    <select className="block min-h-10 w-full min-w-0 max-w-full truncate border border-os-rule-paper bg-white px-3 text-sm text-os-ink" disabled={confirmingIngestion || reanalyzingConfirmedIngestion || Boolean(confirmationIntent)} value={selectedIngestionTaskId} onChange={(event) => {
                       const taskId = event.target.value;
                       setSelectedIngestionTaskId(taskId);
                       setIngestionProposal(null);
@@ -794,6 +856,12 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                   <div className="mt-4 border-l-2 border-os-vermilion-ink pl-4">
                     <p className="text-sm leading-6 text-os-muted-paper">{t('legacyRefreshBody')}</p>
                     <button type="button" className="mt-3 min-h-11 rounded-panel border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink disabled:opacity-50" disabled={refreshingLegacyIngestion || confirmingIngestion} onClick={() => void refreshLegacyProposal()}>{refreshingLegacyIngestion ? t('legacyRefreshing') : t('legacyRefreshAction')}</button>
+                  </div>
+                ) : null}
+                {selectedIngestionTask?.confirmation && confirmedReanalysisSource?.taskId === selectedIngestionTask.id ? (
+                  <div className="mt-4 border-l-2 border-os-vermilion-ink pl-4">
+                    <p className="text-sm leading-6 text-os-muted-paper">{t('confirmedReanalysisBody')}</p>
+                    <button type="button" className="mt-3 min-h-11 rounded-panel border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink transition-transform active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50" disabled={reanalyzingConfirmedIngestion || confirmingIngestion} onClick={() => void createConfirmedReanalysisDraft()}>{reanalyzingConfirmedIngestion ? t('confirmedReanalyzing') : t('confirmedReanalysisAction')}</button>
                   </div>
                 ) : null}
                 {ingestionLoading ? <p className="mt-3 text-sm text-os-ink" role="status">{t('ingestionLoading')}</p> : null}

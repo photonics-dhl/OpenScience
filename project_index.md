@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-09:** production7f8e47d9 / rollback929667dd；runner1ad54c72。Hermes已实际规划并下发服务器Codex，订阅usage limit导致无图片；完整论文仍partial。唯一状态入口为Hermes CURRENT handoff。
+> **CURRENT 2026-09-09:** production c2d11326 / rollback7f8e47d9。附件预览、媒体选择、公开快照索引已部署，34条旧记录已归档；网页单次生图成功但未入产品，完整论文仍partial。唯一状态入口为Hermes CURRENT handoff。
 > 当前执行：上传预览→Hermes六维确认→选图/视频→发布与公开阅读；网页已生成私有PNG但队列回传仍待接入。先做2–3篇精选，暂停批量冷启动。
 > 最新部署：图片grant、预设imagegen指导、人工审核lineage与修订指令修复；页面布局已部署但视觉未观察。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
@@ -579,4 +579,4 @@
 
 - `infra/chatgpt-browser/runner.cjs`：服务器私有网页任务执行/续取/Save下载；2026-09-09分步实际生成并保存1张PNG，通用编排及生产Provider尚未完整落地；Chat接口可用性见AGENTS。
 
-| `apps/web/components/research/ArtifactViewer.tsx` / `scripts/archive-legacy-showcase.mjs` | 附件预览与可恢复旧演示归档；关联完整旅程计划 | 2026-09-09候选，部署与归档结果见CURRENT handoff |
+| `apps/web/components/research/ArtifactViewer.tsx` / `scripts/archive-legacy-showcase.mjs` | 附件预览与可恢复旧演示归档；关联完整旅程计划 | 2026-09-09已部署c2d11326，34条归档；真实流程状态见CURRENT handoff |
