@@ -83,7 +83,7 @@ const CANONICAL_DIAGNOSTICS = new Set([
   'source_text_limit_8000', 'core_text_limit_4000', 'noncontiguous_block_passages',
 ]);
 type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1'
-  | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1' | 'grounded_summary_v1';
+  | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1' | 'grounded_summary_v1' | 'grounded_passages_v1';
 
 function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
   if (isLegacyCharacterEvidenceResult(value)) return 'legacy_character_evidence_v1';
@@ -91,12 +91,14 @@ function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha25
   const result = value as Record<string, unknown>;
   const diagnostics = result.fieldDiagnostics;
   const core = result.core;
-  if (result.canonicalExtractionContract === 'exact-quote-v1'
+  if ((result.canonicalExtractionContract === 'exact-quote-v1'
+      || (result.canonicalExtractionContract === 'grounded-summary-v1' && result.reason === 'canonical_partial_validation_exhausted'))
     && exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) && validateSdfDraftCore(core).ok) {
     try {
       const reference = parseDocumentSourceMapReference(result.sourceMapRef);
       if (reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
-        && reference.contentHash === artifact.blobSha256) return 'grounded_summary_v1';
+        && reference.contentHash === artifact.blobSha256) return result.canonicalExtractionContract === 'grounded-summary-v1'
+          ? 'grounded_passages_v1' : 'grounded_summary_v1';
     } catch { return undefined; }
   }
   if (result.reason !== 'canonical_partial_validation_exhausted' || !diagnostics
@@ -468,7 +470,7 @@ export async function refreshIngestionAnalysis(
   }
   const keyPrefix = `ingestion-analysis-refresh:${input.taskId}:${input.sourceAgentTaskId}:`;
   const replay = await deps.prisma.agentTask.findFirst({
-    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`, `${keyPrefix}grounded-summary-v1`] } },
+    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`, `${keyPrefix}grounded-summary-v1`, `${keyPrefix}grounded-passages-v1`] } },
     include: { session: true },
   });
   if (replay) {
@@ -485,21 +487,23 @@ export async function refreshIngestionAnalysis(
   const oldAgent = await deps.prisma.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
   const oldPayload = oldAgent?.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload)
     ? oldAgent.payload as Record<string, unknown> : null;
-  if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review' || initial.retryCount !== 0
-    || !oldAgent || oldAgent.kind !== 'sdf.extract' || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== 0
-    || oldAgent.executionAttempt !== 1 || oldAgent.session.userId !== input.userId
+  const policy = oldAgent ? analysisRefreshPolicy(oldAgent.result, initial.artifact) : undefined;
+  const allowedRetries = policy === 'grounded_passages_v1' ? 2 : 0;
+  if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review' || initial.retryCount < 0 || initial.retryCount > allowedRetries
+    || !oldAgent || oldAgent.kind !== 'sdf.extract' || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== initial.retryCount
+    || oldAgent.executionAttempt !== initial.retryCount + 1 || oldAgent.session.userId !== input.userId
     || oldAgent.session.researchObjectId !== initial.batch.researchObjectId || oldAgent.session.status !== 'active'
     || !oldPayload || oldPayload.artifactId !== initial.artifactId || oldPayload.researchObjectId !== initial.batch.researchObjectId
     || await savedConfirmation(deps, initial.id, initial.batch.researchObjectId)) {
     throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the scoped unconfirmed extraction can be refreshed');
   }
-  const policy = oldAgent ? analysisRefreshPolicy(oldAgent.result, initial.artifact) : undefined;
+
   if (!policy) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction is not eligible for analysis refresh');
   let sourceMapProof: { objectKey: string; serializedSha256: string } | undefined;
   if (policy !== 'legacy_character_evidence_v1') {
     const reference = parseDocumentSourceMapReference((oldAgent!.result as Record<string, unknown>).sourceMapRef);
     const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
-    const affected = policy === 'grounded_summary_v1' ? true : policy === 'native_pdf_fragmentation_v1'
+    const affected = policy === 'grounded_summary_v1' || policy === 'grounded_passages_v1' ? true : policy === 'native_pdf_fragmentation_v1'
       ? isOldFragmentedNativePdfMap(sourceMap)
       : isLineRunNativePdfMap(sourceMap);
     if (!affected) {
@@ -536,9 +540,9 @@ export async function refreshIngestionAnalysis(
         }
 
         const oldAgent = await tx.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
-        if (source.agentTaskId !== input.sourceAgentTaskId || source.state !== 'needs_review' || source.retryCount !== 0
+        if (source.agentTaskId !== input.sourceAgentTaskId || source.state !== 'needs_review' || source.retryCount !== initial.retryCount
           || !oldAgent || oldAgent.id !== input.sourceAgentTaskId || oldAgent.kind !== 'sdf.extract'
-          || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== 0 || oldAgent.executionAttempt !== 1
+          || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== source.retryCount || oldAgent.executionAttempt !== source.retryCount + 1
           || oldAgent.session.userId !== input.userId || oldAgent.session.researchObjectId !== source.batch.researchObjectId
           || oldAgent.session.status !== 'active' || analysisRefreshPolicy(oldAgent.result, source.artifact) !== policy) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the scoped unconfirmed extraction can be refreshed');
@@ -573,7 +577,7 @@ export async function refreshIngestionAnalysis(
           idempotencyKey: stableKey,
         }, ctx);
         const changed = await tx.ingestionTask.updateMany({
-          where: { id: source.id, agentTaskId: input.sourceAgentTaskId, state: 'needs_review', retryCount: 0 },
+          where: { id: source.id, agentTaskId: input.sourceAgentTaskId, state: 'needs_review', retryCount: initial.retryCount },
           data: { agentTaskId: replacement.id, state: 'queued', retryCount: 0, error: null },
         });
         if (changed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Legacy extraction changed while refreshing');

@@ -1,42 +1,45 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-## Goal and authorization
-- 当前目标：上传PDF→服务器OCR/全文理解→凝练六字段和独立原文证据→Hermes内容驱动图解规划→服务器Codex生图→结果画廊。当前先停在图片，不运行视频。
-- 用户禁止测试/预检/演练/CI测试、本机构建/运行；只编辑、静态阅读、传输及必要服务器构建/部署/启动。不得用手写论文内容冒充服务器生成。
-- 保留来源、权限、确认、计费、回滚和parser无网络无secret非root只读512MiB边界；不删除文件、不打印凭据。
+## Goal and constraints
+- 当前目标：PDF→服务器OCR/全文理解→六字段凝练+独立原文证据→Hermes规划→服务器Codex生图→结果画廊。先停在图片，不执行视频。
+- 用户禁止测试/预检/演练/CI测试和本机构建/运行；只编辑、静态阅读、传输及必要服务器构建/部署/启动。不得手写论文结果冒充服务器自动能力。
+- 保留科学来源、权限、确认、计费、回滚与parser无网络/无secret/非root/只读/512MiB边界；不删除文件，不读写打印密钥。
 
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- 代码HEAD/production 62e71a86f7c529ce6273674377f212626cd99912；canonical --no-tests部署exit0，rollback5b724c0b。后续文档commit不代表新部署。
-- 部署日志1788940513640-798ed351-568a-4382-96ce-6a198d852fb0；首轮上传EPIPE，5c393844应用构建API漏output失败，c00c6233修复后部署成功。
-- root main和其他worktree有独立改动，不覆盖。
+- 当前production/代码HEAD40e78370a7425008a64b8df2d2db7cbf91719e27；rollback62e71a86f7c529ce6273674377f212626cd99912。
+- canonical --no-tests部署exit0，日志1788942112589-01cc12db-cd07-420c-a3b8-00ffe5dee2cc。新passage-ID候选未提交/未部署。
+- main和其他worktree为独立任务，不覆盖。
 
-## Current implementation
-- 旧extractor错误地core=quote，summary被丢弃。本轮改grounded-summary-v1：中文凝练与1–3段原文分离，唯一精确/空白定位后回读原文；每block单一连续range、最多32段/8k证据，summary≤4k；不支持则保留缺口。
-- 内置research-understanding skill实际加入server extractor系统提示并记录id/version；全文输入≤120k字符，不再静默仅选24k头尾；更长文档显式停下，尚无分层长文聚合。
-- 未确认exact-quote-v1结果可按现有scope/consent/credit/CAS/幂等入口一次升级；grounded-summary本身不能无限付费刷新。
-- OCR候选：隔离sidecar返回有界PNG，worker复核任务/上传同意/成员权限后调用官方MiniMax视觉识别；公式信号触发定向修复。主key保持，结构化额度耗尽才切备用。
-- production worker实读AI开启、vision关闭、imageProvider=codex；主/备用均已配置（只读bool，未读secret）。候选compose明确开启vision。8/27凭据轮换旧记录未确认，不据此声称当前key已轮换或仍是旧key。
-- 新content-driven-image-v1/7任务profile，1–6幅图片规划无动画/时长要求；图片审批齐全直接succeeded，不创建video；旧video profiles保留。
-- storyboard/scene planner读取已审核EvidenceRecord原文，与摘要分开；生成前及落盘核对证据身份，图片须匹配父规划证据。每图真正调用Hermes生成≤1500字符科学绘图brief再交服务器Codex。
-- 页面以结果画廊为主，来源/规划折叠，视频次级，保留修改、审批、错误恢复和完整尺寸入口；待服务器部署后实际观察。
+## Deployed capability and actual corrections
+- 已接通受控OCR：native公式标记→sidecar有界PNG→worker同task/actor/session/RO/artifact/member校验→MiniMax视觉；每批4页串行、每文档最多32需修复页；原native保留，OCR有独立页级bbox/processor provenance。
+- 已修root compose flag误放API：worker当前visionEnabled=true且未禁用。已修refresh新session被错误要求等于初始batch session。
+- 已修地区：文本token-plan endpoint是api.minimaxi.com，视觉未配置地区时原默认global导致provider_status；现在沿同key的显式text CN origin，仍允许vision region override。最近text primary成功，不换key；备用仅明确quota切换。
+- 新content-driven-image-v1/7 profile：1–6幅静态图，无视频时长/动画要求，图片审批齐全直接succeeded；旧video profiles保持。
+- storyboard/scene planner读审核后的EvidenceRecord原文，与摘要分开；生成前/落盘与父规划来源identity绑定；每图真实调用Hermes凝练≤1500字符brief后交服务器Codex。
+- runtime research-understanding skill实际进extractor系统提示并返回id/version；≤120k全文，不静默只选24k头尾。更长文档尚无分层聚合。
+- 画廊、场景标题、完整尺寸入口、折叠来源/规划、图片优先文案和错误恢复已部署；浏览器控制不可用，未做本轮截图观察。
 
-## Actual paper state (processing; not confirmed)
+## Current real paper (not confirmed)
 - RO9067a2d5-42ad-4c06-b234-753728b71064；ingestion7a28a7c8-90f7-429b-a519-53397cf58856；artifact4b94c626-1748-4c5a-934b-2bb94585bd9c。
-- Paper: Quantization of a Deep-Subwavelength-Aperture-Confined Optical Near Field.pdf，15页。
-- 旧Agentf286cc57保留未确认partial；部署后通过服务器domain.refreshIngestionAnalysis正常scope/consent/credit入口创建新Agent1eafa17f-e31b-4932-9683-740ef9d5ec1a，返回parser needs_review/unresolved pages remain，未进入理解；审计无OCR调用。发现root误把vision flag加到API而非worker；已改正确worker区，待部署。未重复上传、未直接改DB。
-- 先前不同论文run13e3fcd5-a6f0-48d6-82d7-33263e06fe33曾SUCCEEDED，四图/23.459秒视频，但仅方法Claims且有人工审批/恢复；不能充当当前全文自动能力证据。
+- Quantization of a Deep-Subwavelength-Aperture-Confined Optical Near Field.pdf，15页。
+- 旧Agentf286cc57保留；正常refresh创建Agent1eafa17f-e31b-4932-9683-740ef9d5ec1a；两次正常parser retry复用原credit，旧parser结果在audit，无重复上传/手工DB重置。
+- retry2真实OCR接通，多页minimax-vision succeeded（每页7–11s），SourceMap parserStatus=succeeded。
+- 随后grounded-summary-v1仍partial：仅insight成功；problem/method/results/limitations quote_not_found，reproducibility missing_requires_empty。不可确认、不称论文处理完成，尚无这篇论文的新图片。
+
+## Active fix: server passage IDs
+- Sol/medium负责extractor：模型输出summary+sourcePassageIds，不再逐字复制quote；服务器从全文自然段/句生成编号，再按选中ID精确回读证据。最多6 IDs/field，≤8k证据/32原块，保留科学条件。
+- 同块多个passages按明确合同覆盖首尾连续原文范围，绝不拼接省中间；缺失字段规范化为空，不为缺失解释浪费重试。
+- root负责新grounded_passages_v1升级入口：仅旧grounded-summary-v1 partial+成功SourceMap，旧retry0..2且attempt对齐，同owner/RO/artifact/未确认/事务CAS；新任务正常计费，旧结果保留，新contract不能无限刷新。
+- root index候选只对该升级验证current ingestion→newAgent、previous同owner/RO/旧contract/succeeded及成功SourceMap的artifact hash和存储digest，复用成功OCR只跑理解，不重复OCR调用。
+- Web helper已改读public sourceMapAvailable（私有sourceMapRef被API删去），按对应旧contract显示升级入口。
 
 ## Browser and routing
-- 用户已登录产品。用户回复浏览器已恢复后，CUA getState仍nodeRepl.fetch request failed，apps/browsers为空；失败在控制连接，不是网页HTTP。重置亦无效，本轮没有Chat回复或截图，不能声称网页复核。
-- 沿用已批准产品方向。Sol/medium负责OCR、Terra/medium负责图片合同/UI、Sol/high定向静态复核，主线程集成摘要/来源和部署。没有可证明的本轮tokens节省比例。
+- 用户已登录产品。回复“已恢复”后CUA getState仍nodeRepl.fetch失败；直接createBrowserTab也超时，未拿到可控tab。本轮无Chat回复/截图，不据此声称网站HTTP失败。
+- Sol/medium OCR与extractor，Terra/medium图片合同/UI，Sol/high定点静态复核，root集成/服务器交付。没有可证明的整体tokens节省比例。
 
-## Next action
-- 62e71a86已部署exit0（日志1788941404324-a4c83871-6710-4386-90ae-54b662621072）。worker实际visionEnabled=true且未禁用；原Agent1eafa17f通过正常retryIngestionTask入口queued/retry1，复用原credit，audit保留前次parser结果。实际retry1后4次minimax-vision provider_status失败，0文本；公开配置发现text token-plan origin为api.minimaxi.com而vision默认global。候选修vision缺省地区继承已配置text origin并记安全数字状态码；parser恢复最多2次，CAS/owner/原credit保持，不再扩次数。无测试/预检。
-- 浏览器恢复后从现有任务正常重新分析，确认可读摘要/公式与证据，按正常授权生成图片并观察展示；不重复上传、不改DB强过、不制作视频。
-- 如浏览器控制仍不可用，如实记录已部署与未观察到的产品结果，不反复要求用户登录。
-
-## Read-first
-- docs/OpenScience_Kimi_Development_Spec.md §5.4/§9；docs/plans/2026-09-05-integrated-research-product-plan.md当前范围。
-- infra/scripts/deploy.sh；docs/runbooks/deployment.md §2.0 no-tests。
-- 历史逐轮日志在Git历史，不恢复旧exact-quote产品目标。
+## Next
+- 完成passage-ID候选及定点来源/权限复核，commit/deploy --no-tests，rollback取当前40e78370。
+- 通过正常refresh升级现有Agent1eafa17f，必须看到sourceMapReused=true，读取实际六字段及来源再确认；不再增加parser retry次数、不重复OCR/上传。
+- 正常Hermes image profile推进规划/图片。浏览器恢复后观察实际展示；没有真实图片前不能标记全流程完成。
+- 精确需求读docs/OpenScience_Kimi_Development_Spec.md §5.4/§9，UX方案见集成产品计划；历史视频仅另一论文方法案例，不能代替当前全文能力。

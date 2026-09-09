@@ -1,20 +1,11 @@
 # Progress
 
-## 2026-09-09 — 全文凝练、定向OCR与图片优先（已部署，论文处理中）
-- production/代码HEAD62e71a86 / rollback5b724c0b，canonical --no-tests部署exit0，日志1788941404324-a4c83871-6710-4386-90ae-54b662621072。先前API output编译遗漏、worker flag位置和refresh session授权已修复。
-- 修正core=原文摘抄：Hermes runtime skill凝练六字段，独立原文证据精确回读；全文≤120k不静默裁中间；更长文档尚需分层处理。
-- 受控sidecar PNG→worker授权MiniMax视觉OCR；公式信号和quota-only备用。现有主/备用已配置，未读写secret；候选compose开启vision。
-- image-only profile让图片审批后完成，不自动制作视频；规划/绘图读取已审核原文并绑定来源变化。
-- 结果画廊、来源折叠、独立图片规划和错误恢复候选完成；服务器部署及实际页面观察待继续。
-- 用户回复浏览器恢复后CUA仍nodeRepl.fetch失败；本轮没访问Chat/没有截图，代码继续推进。
-- 未运行测试、预检或本机构建；仅静态阅读和必要生产配置bool读取。
-- 当前论文已通过domain.refreshIngestionAnalysis正常入口提交新Agent1eafa17f-e31b-4932-9683-740ef9d5ec1a，返回parser needs_review、未调用OCR。根因是root compose flag误放API，修正worker配置中；旧结果保留，未重复上传。尚无新图片结果。
-
-## Retained production facts
-- production1267e298部署exit0，日志1788936975803-c258f311-74ba-4fd0-8c37-030fe1e13227；旧exact-quote提取仍不满足用户目标。
-- 已部署上传自动整理/预填、人工编辑保护与Hermes导航/窄屏修复；当前问题清单和历史实际观察见集成产品计划。
-- 先前另一论文方法讲解四图和23.459秒视频可用，不能替代当前论文全文理解或自动流程结论。
-- 更早逐轮记录由Git历史保留；本轮不恢复旧测试清单。
-- 62e71a86部署后，同Agent1eafa17f通过正常retry入口queued/retry1；复用原credit，保留旧parser结果审计，正在实际处理。
-
-- retry1已实际触发4次视觉请求，均provider_status失败；查文本CN/视觉默认global地区不一致，候选修缺省地区继承与数字错误码；恢复上限2次，原credit复用。当前不称解析或生图完成。
+## 2026-09-09 — OCR已实际接通，来源选择协议修复中
+- production/代码HEAD40e78370 / rollback62e71a86；canonical --no-tests部署exit0，日志1788942112589-01cc12db-cd07-420c-a3b8-00ffe5dee2cc。
+- 受控页面视觉识别已实际成功；修过worker开关位置、refresh session授权、CN/global endpoint不一致。主/备用key未读取改动。
+- 当前Agent1eafa17f retry2完成：成功OCR后，grounded-summary-v1仍仅insight，其他字段引文匹配失败或缺失结构冲突；未确认、未生图。
+- 当前候选改为server passage IDs：模型凝练摘要并选择编号，服务器回读证据；不再让模型逐字抄引文。旧成功SourceMap按严格scope/hash复用，避免重跑OCR。
+- 新image profile、真实绘图brief规划、已审核原文绑定及结果画廊已部署。新passage协议尚未部署。
+- 用户登录后浏览器控制仍nodeRepl.fetch/createTab超时，本轮没有Chat复核/截图。
+- 未运行测试、预检或本机构建；进行了必要服务器构建/部署与真实文献处理。旧结果/audit保留，无重复上传/手工DB重置。
+- 唯一CURRENT handoff记录当前任务、代码所有权、生产版本和下一步。旧视频案例不能代替本论文的完成结论。

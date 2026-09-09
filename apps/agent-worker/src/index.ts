@@ -13,7 +13,8 @@ import {
 } from '@openscience/ai-gateway';
 import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
-  AGENT_TASK_QUEUE, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference, type AgentDeps,
+  AGENT_TASK_QUEUE, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference,
+  parseDocumentSourceMapReference, loadDocumentSourceMapReference, type AgentDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -276,7 +277,26 @@ export function createHandlers(
         && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
       const externalProcessingEligible = serverDerivedEligibility
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
-      const parsed = await options.parserCascade({
+      let reusableSourceMap: DocumentSourceMap | undefined;
+      const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):grounded-passages-v1$/.exec(ownerTask.idempotencyKey ?? '');
+      if (refresh) {
+        const ingestion = await deps.prisma.ingestionTask.findUnique({ where: { id: refresh[1]! } });
+        const previous = await deps.prisma.agentTask.findUnique({ where: { id: refresh[2]! }, include: { session: true } });
+        const previousResult = previous?.result as Record<string, unknown> | null;
+        if (!serverDerivedEligibility || !externalProcessingEligible || ingestion?.agentTaskId !== ownerTask.id
+          || ingestion.artifactId !== artifact.id || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
+          || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
+          || previousResult?.canonicalExtractionContract !== 'grounded-summary-v1') {
+          throw new Error('[blocked] Reusable document analysis scope is invalid');
+        }
+        const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
+        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable document source identity changed');
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+      }
+      const parsed: ParserExtractionResult = reusableSourceMap
+        ? { status: 'succeeded', sourceMap: reusableSourceMap, warnings: [] }
+        : await options.parserCascade({
         artifactId: artifact.id,
         contentHash: artifact.blobSha256,
         content: bytes,
@@ -299,6 +319,7 @@ export function createHandlers(
       if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
       return {
         ...await extractHandler(gateway, { payload: { manuscriptText } }, { sourceMap: parsed.sourceMap }),
+        ...(reusableSourceMap ? { sourceMapReused: true } : {}),
         sourceMapRef,
       };
     },

@@ -1578,12 +1578,19 @@ const LEGACY_INGESTION_FIELDS = ['problem', 'insight', 'method', 'results', 'lim
 
 /** Public-result guard for the old character-offset extraction contract. */
 export function isRefreshableIngestionAnalysis(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount' | 'agentTaskId'>): boolean {
-  if (task.state !== 'needs_review' || task.retryCount !== 0 || !task.agentTaskId || !task.result
+  if (task.state !== 'needs_review' || !task.agentTaskId || !task.result
     || typeof task.result !== 'object' || Array.isArray(task.result)) return false;
   const result = task.result as Record<string, unknown>;
-  const groundedSummaryRefresh = result.canonicalExtractionContract === 'exact-quote-v1'
-    && result.sourceMapRef && typeof result.sourceMapRef === 'object' && !Array.isArray(result.sourceMapRef);
+  const exactQuoteRefresh = task.retryCount === 0
+    && result.canonicalExtractionContract === 'exact-quote-v1'
+    && result.sourceMapAvailable === true;
+  if (exactQuoteRefresh) return true;
+  const groundedSummaryRefresh = task.retryCount >= 0 && task.retryCount <= 2
+    && result.canonicalExtractionContract === 'grounded-summary-v1'
+    && result.reason === 'canonical_partial_validation_exhausted'
+    && result.sourceMapAvailable === true;
   if (groundedSummaryRefresh) return true;
+  if (task.retryCount !== 0) return false;
   const core = result.core;
   const evidence = result.evidence;
   const missing = result.needsMoreInformation;
