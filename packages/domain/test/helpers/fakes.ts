@@ -1027,6 +1027,24 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const row = db.hermesResearchRuns.find((run) => where.id ? run.id === where.id : run.idempotencyKey === where.idempotencyKey) ?? null;
         return row ? hermesRunWithSteps(row, include) : null;
       },
+      findFirst: async ({ where, include }: any) => {
+        const row = db.hermesResearchRuns.find((run) => {
+          if (where.researchObjectId !== undefined && run.researchObjectId !== where.researchObjectId) return false;
+          if (where.versionId !== undefined && run.versionId !== where.versionId) return false;
+          if (where.profile !== undefined && run.profile !== where.profile) return false;
+          if (where.status !== undefined && (where.status?.in ? !where.status.in.includes(run.status) : run.status !== where.status)) return false;
+          if (where.steps?.some) {
+            const stepWhere = where.steps.some;
+            const hasStep = db.hermesResearchSteps.some((step) => step.runId === run.id
+              && (stepWhere.stage === undefined || step.stage === stepWhere.stage)
+              && (stepWhere.presentationAssetId?.in === undefined
+                || stepWhere.presentationAssetId.in.includes(step.presentationAssetId)));
+            if (!hasStep) return false;
+          }
+          return true;
+        }) ?? null;
+        return row ? hermesRunWithSteps(row, include) : null;
+      },
       findMany: async ({ where, include, take }: any) => db.hermesResearchRuns
         .filter((run) => where.status === undefined || (where.status?.in ? where.status.in.includes(run.status) : run.status === where.status))
         .slice(0, take ?? db.hermesResearchRuns.length)
