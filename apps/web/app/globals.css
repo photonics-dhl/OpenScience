@@ -2355,8 +2355,12 @@ body {
 }
 
 .hermes-workspace-stage[data-hermes-guide-target] .hermes-motion-enable {
+  position: absolute;
   top: .25rem;
   right: .25rem;
+  bottom: auto;
+  height: auto;
+  white-space: nowrap;
 }
 
 .hermes-presence-control summary {

@@ -350,6 +350,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     phase: 'idle', routeStart: null, settledSource: null, timelineCount: 0,
   });
   const hasUsableAnchor = anchorRect !== null;
+  const compactStage = compactGuide || (viewportSize.width > 0 && viewportSize.width < 1024) || presenceMode !== 'original';
   const autonomousAction = resolveHermesAutonomousAction(behavior, { seed: HERMES_BEHAVIOR_SEED, patrolEnvelopeSafe });
   const visualAction = menuFeedback?.action ?? autonomousAction;
   const guidePlanCountRef = useRef(0);
@@ -555,14 +556,14 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     setDockStored(stored);
     setCustomDock(stored);
     if (stored || !hasUsableAnchor) {
-      const size = resolveHermesStageSize(false, kind === 'mobile' || presenceMode !== 'original');
+      const size = resolveHermesStageSize(false, compactStage);
       const resolved = resolveHermesDock(preferences, { height: window.innerHeight, width: window.innerWidth }, { height: size, width: size }, true);
       positionRef.current = resolved;
       setPosition(resolved);
     }
     setDockKind(kind);
     setDockReady(true);
-  }, [compactGuide, hasUsableAnchor, presenceMode, workspaceId]);
+  }, [compactStage, hasUsableAnchor, workspaceId]);
 
   React.useLayoutEffect(() => {
     const currentPathname = window.location.pathname;
@@ -580,7 +581,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const currentKind = dockKind ?? viewportClass();
     const currentContextMatches = origin.workspaceId === workspaceId && origin.dockKind === currentKind
       && origin.customDock === customDock && origin.pathname === currentPathname;
-    const half = resolveHermesStageSize(false, currentKind === 'mobile') / 2;
+    const half = resolveHermesStageSize(false, compactStage) / 2;
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, currentKind);
     const stored = hasStoredHermesDockPreferences(window.localStorage, workspaceId, currentKind);
     const desired = currentContextMatches
@@ -616,7 +617,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     setGuideRestoreActive(true);
     positionRef.current = restored;
     setPosition(restored);
-  }, [customDock, dockKind, dockReady, dragging, guideTarget, pathname, workspaceId]);
+  }, [compactStage, customDock, dockKind, dockReady, dragging, guideTarget, pathname, workspaceId]);
 
   const consumeSettledMove = useCallback(() => {
     const stage = stageRef.current;
@@ -997,7 +998,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   useEffect(() => {
     if (!dockReady || viewportSize.width <= 0 || viewportSize.height <= 0) return;
     if (guideTarget) return;
-    const size = resolveHermesStageSize(false, compactGuide || presenceMode !== 'original');
+    const size = resolveHermesStageSize(false, compactStage);
     const half = size / 2;
     const viewportLeft = 0;
     const viewportTop = 0;
@@ -1009,7 +1010,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       y: Math.min(viewportBottom - half, Math.max(viewportTop + half, current.y)),
     };
     if (Math.hypot(next.x - current.x, next.y - current.y) >= .05) setPosition(next);
-  }, [compactGuide, dockReady, guideTarget, presenceMode, viewportSize]);
+  }, [compactStage, dockReady, guideTarget, viewportSize]);
 
   React.useLayoutEffect(() => {
     if (customDock || dockStored !== false || !dockReady || dockKind !== 'desktop' || dockKind !== viewportClass() || dragging || guideTarget || speech.cue
@@ -1018,7 +1019,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const travelHull = stage?.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]');
     if (!stage || !travelHull) return;
     const stageBounds = stage.getBoundingClientRect();
-    const stageSize = resolveHermesStageSize(false, false);
+    const stageSize = resolveHermesStageSize(false, compactStage);
     const anchorCenter = { x: anchorRect.left + anchorRect.width / 2, y: anchorRect.top + anchorRect.height / 2 };
     if (Math.abs(stageBounds.width - stageSize) >= 1 || Math.abs(stageBounds.height - stageSize) >= 1
       || Math.abs(stageBounds.left - (anchorCenter.x - stageSize / 2)) >= 1
@@ -1043,7 +1044,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     setSettlingDockReady(false);
     setSettlingNewDock(true);
     setCustomDock(true);
-  }, [anchorRect, customDock, dockKind, dockReady, dockStored, dragging, guideTarget, protectedGeometryVersion,
+  }, [anchorRect, compactStage, customDock, dockKind, dockReady, dockStored, dragging, guideTarget, protectedGeometryVersion,
     reducedMotion, speech.cue, stageMotionVersion, viewportSize, workspaceId]);
 
   React.useLayoutEffect(() => {
@@ -1062,7 +1063,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const stage = stageRef.current;
     if (!stage) return;
     const stageBounds = stage.getBoundingClientRect();
-    const settledStageSize = resolveHermesStageSize(false, dockKind === 'mobile' || presenceMode !== 'original');
+    const settledStageSize = resolveHermesStageSize(false, compactStage);
     if (Math.abs(stageBounds.width - settledStageSize) >= 1 || Math.abs(stageBounds.height - settledStageSize) >= 1) return;
     if (Math.abs(stageBounds.left - (position.x - settledStageSize / 2)) >= 1
       || Math.abs(stageBounds.top - (position.y - settledStageSize / 2)) >= 1) return;
@@ -1126,7 +1127,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       xRatio: settled.point.x / window.innerWidth,
       yRatio: settled.point.y / window.innerHeight,
     });
-  }, [behavior.primary, customDock, dockKind, dockReady, dragging, guideTarget, position, presenceMode, protectedGeometryVersion,
+  }, [behavior.primary, compactStage, customDock, dockKind, dockReady, dragging, guideTarget, position, protectedGeometryVersion,
     settlingDockReady, settlingNewDock, stageMotionVersion, viewportSize, workspaceId]);
 
   useEffect(() => {
@@ -1343,7 +1344,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   };
 
   const anchored = Boolean(anchorRect && !customDock);
-  const stageSize = resolveHermesStageSize(false, compactGuide || presenceMode !== 'original');
+  const stageSize = resolveHermesStageSize(false, compactStage);
   const stageCenterX = anchored && anchorRect ? anchorRect.left + anchorRect.width / 2 : position.x;
   const stageCenterY = anchored && anchorRect ? anchorRect.top + anchorRect.height / 2 : position.y;
   const fallbackBubbleHorizontal = viewportSize.width > 0 && stageCenterX < (viewportSize.left + viewportSize.right) / 2 ? 'right' : 'left';
