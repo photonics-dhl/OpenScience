@@ -3,7 +3,7 @@
 ## 最新用户纠正与候选
 - 六维是展示组织，不是论文章节模板。method可隐含在推导、结果、图注或附录；先全文综合，再组织六维与核对来源。不能把来源格式失败称为论文缺失。
 - 本轮浏览器恢复：getTab用60秒成功，实际发送原Chat对话，网页6 Pro回复已读取，主张同次调用全文综合→六维组织→来源核对，来源失败保留草稿待核对。后续可复用CUA directChat.playwright.domSnapshot（比AX快）。
-- 候选已改Hermes runtime skill v2和extractor提示；unverifiedSummaries只保留有界未绑定摘要，不写core/evidence；UI明确来源整理失败与待核对草稿，自动展开诊断。尚未部署/未重新处理当前论文。
+- 已部署Hermes runtime skill v2和extractor提示；unverifiedSummaries只保留有界未绑定摘要，不写core/evidence；UI明确来源整理失败与待核对草稿，自动展开诊断。服务器部署成功；未重新处理当前论文。
 
 ## Goal / constraints
 - PDF→服务器OCR/全文理解→六字段凝练+独立原文→Hermes规划→服务器Codex生图→画廊。视频暂停。
@@ -12,8 +12,8 @@
 
 ## Version
 - worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- production/code HEAD 11ae62000e59fa07f1c556f76e1b73638198c048；rollback fa751b165865af30954ad4df17fd020ad8847483。
-- canonical --no-tests部署exit0，日志1788945551137-935b9b0c-8548-4835-9e08-d29c08fac925。
+- production/code release a9b6c1545905a94b5d330c6cb91bd5f13f7a4f1a；rollback 11ae62000e59fa07f1c556f76e1b73638198c048。
+- canonical --no-tests部署exit0，日志1788949130443-30772096-3fba-4f5f-b77b-e4a344100593。
 - 后续仅状态文档提交不代表新production。其他worktree/main有独立改动，不覆盖。
 
 ## Actual paper and current blocker

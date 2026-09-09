@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-09:** production11ae6200 / rollbackfa751b16；passage-v2与JSON恢复已部署；当前Agent5dba592b五字段+method缺失，存在科学忠实性错误，未确认/未生图。唯一状态入口为Hermes CURRENT handoff。
-> 最新候选：按用户纠正和网页6 Pro复核落实全文综合、跨章节方法概括与未核对草稿；尚未部署，详见CURRENT handoff。
+> **CURRENT 2026-09-09:** productiona9b6c154 / rollback11ae6200；passage-v2与JSON恢复已部署；当前Agent5dba592b五字段+method缺失，存在科学忠实性错误，未确认/未生图。唯一状态入口为Hermes CURRENT handoff。
+> 最新部署：按用户纠正和网页6 Pro复核落实全文综合、跨章节方法概括与未核对草稿；未重新处理当前论文，详见CURRENT handoff。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
