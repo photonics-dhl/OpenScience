@@ -26,9 +26,11 @@ try {
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => document.querySelector('[data-hermes-rig="live2d-wanko"]')?.getAttribute('data-hermes-rig-status') === 'ready');
   const stage = page.locator('[data-hermes-workspace-stage]');
+  const stageSize = Number(await stage.getAttribute('data-hermes-stage-size'));
   const canvasBounds = await page.locator('[data-hermes-articulated-canvas]').boundingBox();
-  assert.ok(canvasBounds && canvasBounds.width >= 210 && canvasBounds.height >= 210,
-    `Dashboard Hermes must remain readable at product size, got ${JSON.stringify(canvasBounds)}`);
+  assert.equal(stageSize, 200, 'Dashboard Hermes must use the approved compact product stage');
+  assert.ok(canvasBounds && canvasBounds.width >= stageSize * 0.64 && canvasBounds.height >= stageSize * 0.64,
+    `Dashboard Hermes canvas must remain readable inside the compact product stage, got ${JSON.stringify(canvasBounds)}`);
   assert.ok(await stage.getAttribute('data-hermes-action-kind'), 'workspace stage must expose the director action kind');
 
   const started = Date.now();
