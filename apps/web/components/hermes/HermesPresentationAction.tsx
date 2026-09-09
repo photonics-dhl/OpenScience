@@ -80,7 +80,7 @@ export function HermesPresentationAction(props: Props) {
   const locked=busy || uncertain || bridgeBusy;
   async function submit(event: React.FormEvent) {
     event.preventDefault(); if(busy || bridgeBusy || !canWrite || ready!==scope || !validSources || (action!=='scene.image' && !validPresentationInstruction(instruction)))return;
-    const request=action==='scene.image' ? {storyboardAssetId:parent!.id,sceneIndex:scene} : {locale:language,style,instruction:instruction.trim(),...(parent ? {baseAssetId:parent.id}: {})};
+    const request=action==='scene.image' ? {storyboardAssetId:parent!.id,sceneIndex:scene} : {locale:language,style,output:'image' as const,instruction:instruction.trim(),...(parent ? {baseAssetId:parent.id}: {})};
     submission.current.draft={action,instruction,style,language,selected:[...selected],parentId,scene};
     const key=submission.current.begin(JSON.stringify([ro,versionId,action,ids,request])); if(!key)return;
     const current=controller.current; setBusy(true); setError('');

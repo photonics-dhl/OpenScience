@@ -7,6 +7,7 @@ import { requireAnimationSourceSupport } from './animation';
 
 export const ONCHIP_FIELD_SAMPLING_PROFILE = 'onchip-field-sampling-v1' as const;
 export const CONTENT_DRIVEN_PROFILE = 'content-driven-v1' as const;
+export const CONTENT_DRIVEN_IMAGE_PROFILE = 'content-driven-image-v1' as const;
 export const ONCHIP_SOURCE_CONTENT_HASH = 'd57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a';
 export const ONCHIP_SCENE_ROLES = [
   'driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction',

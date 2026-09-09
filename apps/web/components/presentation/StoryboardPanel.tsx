@@ -23,12 +23,13 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
   const currentLocale = useLocale();
   const [locale, setLocale] = useState<'zh' | 'en'>(storyboard?.locale ?? (currentLocale === 'zh' ? 'zh' : 'en'));
   const [style, setStyle] = useState<StoryboardRequest['style']>(storyboard?.style ?? 'watercolor');
+  const output: StoryboardRequest['output'] = storyboard?.output ?? 'image';
   const [instruction, setInstruction] = useState(baseAssetId ? '' : t('defaultInstruction'));
   const names = new Map(claims.map((claim) => [claim.id, claim.statement]));
   function sceneContent(scene: StoryboardView['document']['scenes'][number] | undefined) {
     return scene ? <div className="min-w-0 space-y-3 break-words [overflow-wrap:anywhere]">
       <h4 className="m-0 font-semibold">{scene.title}</h4>
-      <p className="m-0 text-xs text-os-muted-paper">{t('seconds', { count: scene.durationSeconds })}</p>
+      {scene.durationSeconds === undefined ? null : <p className="m-0 text-xs text-os-muted-paper">{t('seconds', { count: scene.durationSeconds })}</p>}
       <div><p className="m-0 text-xs font-semibold text-os-muted-paper">{t('narration')}</p><p className="m-0 mt-1 text-sm leading-6">{scene.narration}</p></div>
       <div><p className="m-0 text-xs font-semibold text-os-muted-paper">{t('visualAction')}</p><p className="m-0 mt-1 text-sm leading-6">{scene.visualAction}</p></div>
       {scene.animation ? <details><summary className="min-h-11 cursor-pointer py-3 text-xs font-semibold">{t('animationPlan')}</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-control bg-os-ink p-3 font-data text-xs leading-5 text-os-paper">{JSON.stringify(scene.animation, null, 2)}</pre></details> : null}
@@ -53,7 +54,7 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
     {canGenerate && onGenerate ? <form className="mt-5 space-y-4 border-t border-os-rule-paper pt-5" onSubmit={(event) => {
       event.preventDefault();
       if (!selectedClaimIds.length || !instruction.trim()) return;
-      onGenerate(selectedClaimIds, { locale, style, instruction: instruction.trim(), ...(baseAssetId ? { baseAssetId } : {}) });
+      onGenerate(selectedClaimIds, { locale, style, output, instruction: instruction.trim(), ...(baseAssetId ? { baseAssetId } : {}) });
     }}>
       <p className="m-0 font-semibold">{t(baseAssetId ? 'reviseTitle' : 'createTitle')}</p>
       <div className="grid gap-4 sm:grid-cols-2">

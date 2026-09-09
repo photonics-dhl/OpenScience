@@ -659,3 +659,12 @@ Source: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec . Request act
 1df9f617上下文版已部署，真实Agentc4d23d59仍有断句/results段数失败。下一候选改模型输出原文quote和窗口id，服务器唯一精确匹配并映射block内charRange回读，不使用模型summary写core，不放宽证据。材料状态标签直接采用同任务最新proposal detail，避免已完成仍显示排队中。
 
 1267e298精确选句正式部署完成。实际f286cc57仍partial：problem/results quote_not_found，method/insight完整、reproducibility非空，limitations断头；页面待确认状态已实际同步。未确认/未称全流程完成。quote_not_found现混合0匹配、locator异常、拼接差异，原始quote未存日志，后续需精确失败原因后定向修复，避免盲调与反复扣费。
+
+## 2026-09-09 — 当前范围更新：理解论文到图片
+
+- 用户明确先做到生图，视频不执行。此前视频规划保留为后续能力，不作为本批交付前提。
+- 纠正六字段直接复制原文：Hermes凝练可编辑摘要，原文证据独立存储和回读；低质量公式先定向OCR，不根据乱码猜测。
+- 图片规划必须基于审核后的实际原文，包含对象、关系、布局、短标注与科学条件；服务器Codex负责生成，不由开发者手写图替代。
+- 新图片profile1–6幅，图片批准后完成；UI画廊优先、规划/来源折叠、视频次级。
+- 本轮浏览器控制连接失败，尚无新Chat复核或改后截图；复用先前批准方向，不谎称视觉观察。
+- 当前改动版本/部署/未决事项只以CURRENT handoff为准，禁止重复测试或按旧清单阻塞交付。

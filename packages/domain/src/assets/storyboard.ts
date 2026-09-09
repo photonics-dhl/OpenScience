@@ -4,6 +4,8 @@ export interface StoryboardRequest {
     locale: 'zh' | 'en';
     style: 'watercolor' | 'technical' | 'ink';
     instruction: string;
+    /** Omitted legacy requests are animation storyboards. */
+    output: 'image' | 'video';
     baseAssetId?: string;
 }
 export interface StoryboardDocument {
@@ -13,7 +15,7 @@ export interface StoryboardDocument {
         title: string;
         narration: string;
         visualAction: string;
-        durationSeconds: number;
+        durationSeconds?: number;
         sourceClaimIds: string[];
         animation?: SceneAnimation;
     }>;
@@ -22,6 +24,8 @@ export interface StoryboardView {
     document: StoryboardDocument;
     locale: StoryboardRequest['locale'];
     style: StoryboardRequest['style'];
+    /** Older API fixtures omit this; persisted plans are normalized to video. */
+    output?: StoryboardRequest['output'];
     baseAssetId?: string;
 }
 function invalid(reason: string): never { throw new PresentationAssetError('VALIDATION_ERROR', `storyboard:${reason}`); }
@@ -33,47 +37,46 @@ function text(value: unknown, max: number, reason: string): string { if (typeof 
     return invalid(reason); return value; }
 export function parseStoryboardRequest(value: unknown): StoryboardRequest {
     const v = object(value, 'request_shape');
-    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId'], 'request_keys');
-    if (typeof v.locale !== 'string' || !['zh', 'en'].includes(v.locale) || typeof v.style !== 'string' || !['watercolor', 'technical', 'ink'].includes(v.style) || typeof v.instruction !== 'string' || !v.instruction.trim() || v.instruction.length > 1000 || ('baseAssetId' in v && (typeof v.baseAssetId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.baseAssetId))))
-        return invalid('request_values');
-    return { locale: v.locale as StoryboardRequest['locale'], style: v.style as StoryboardRequest['style'], instruction: v.instruction.trim(), ...(v.baseAssetId ? { baseAssetId: v.baseAssetId as string } : {}) };
+    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'output'], 'request_keys');
+    if (typeof v.locale !== 'string' || !['zh', 'en'].includes(v.locale) || typeof v.style !== 'string' || !['watercolor', 'technical', 'ink'].includes(v.style) || typeof v.instruction !== 'string' || !v.instruction.trim() || v.instruction.length > 1000 || ('baseAssetId' in v && (typeof v.baseAssetId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.baseAssetId))) || ('output' in v && v.output !== 'image' && v.output !== 'video')) return invalid('request_values');
+    return { locale: v.locale as StoryboardRequest['locale'], style: v.style as StoryboardRequest['style'], instruction: v.instruction.trim(), output: (v.output ?? 'video') as StoryboardRequest['output'], ...(v.baseAssetId ? { baseAssetId: v.baseAssetId as string } : {}) };
 }
-export function parseStoryboardDocument(value: unknown, selected: readonly string[]): StoryboardDocument {
+export function parseStoryboardDocument(value: unknown, selected: readonly string[], output: StoryboardRequest['output'] = 'video'): StoryboardDocument {
     const v = object(value, 'document_shape');
     keys(v, ['schemaVersion', 'title', 'scenes'], [], 'document_keys');
     if (v.schemaVersion !== 1) return invalid('schema_version');
-    if (!Array.isArray(v.scenes) || v.scenes.length < 3 || v.scenes.length > 6)
+    if (!Array.isArray(v.scenes) || v.scenes.length < (output === 'image' ? 1 : 3) || v.scenes.length > 6)
         return invalid('scene_count');
     const covered = new Set<string>();
     const scenes = v.scenes.map((raw, index) => {
         const prefix = `scene_${index}`;
         const s = object(raw, `${prefix}:shape`);
-        keys(s, ['title', 'narration', 'visualAction', 'durationSeconds', 'sourceClaimIds'], ['animation'], `${prefix}:keys`);
-        if (!Number.isInteger(s.durationSeconds) || Number(s.durationSeconds) < 4 || Number(s.durationSeconds) > 20)
+        keys(s, output === 'video' ? ['title', 'narration', 'visualAction', 'durationSeconds', 'sourceClaimIds'] : ['title', 'narration', 'visualAction', 'sourceClaimIds'], output === 'video' ? ['animation'] : [], `${prefix}:keys`);
+        if (output === 'video' && (!Number.isInteger(s.durationSeconds) || Number(s.durationSeconds) < 4 || Number(s.durationSeconds) > 20))
             return invalid(`${prefix}:duration`);
         if (!Array.isArray(s.sourceClaimIds) || s.sourceClaimIds.length < 1 || s.sourceClaimIds.length > 12 || new Set(s.sourceClaimIds).size !== s.sourceClaimIds.length || s.sourceClaimIds.some(id => typeof id !== 'string' || !selected.includes(id)))
             return invalid(`${prefix}:source_claims`);
         const ids = s.sourceClaimIds as string[];
         ids.forEach(id => covered.add(id));
         let animation: SceneAnimation | undefined;
-        if ('animation' in s) {
+        if (output === 'video' && 'animation' in s) {
             try { animation = parseSceneAnimation(s.animation, ids); }
             catch (error) {
                 if (error instanceof PresentationAssetError && error.message.startsWith('animation:')) invalid(`${prefix}:${error.message}`);
                 throw error;
             }
         }
-        return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(s.visualAction, 1000, `${prefix}:visual_action`), durationSeconds: s.durationSeconds as number, sourceClaimIds: [...ids], ...(animation ? { animation } : {}) };
+        return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(s.visualAction, 1000, `${prefix}:visual_action`), ...(output === 'video' ? { durationSeconds: s.durationSeconds as number } : {}), sourceClaimIds: [...ids], ...(animation ? { animation } : {}) };
     });
-    const duration = scenes.reduce((n, s) => n + s.durationSeconds, 0);
-    if (duration < 24 || duration > 90) return invalid('total_duration');
+    const duration = scenes.reduce((n, s) => n + (s.durationSeconds ?? 0), 0);
+    if (output === 'video' && (duration < 24 || duration > 90)) return invalid('total_duration');
     if (selected.some(id => !covered.has(id))) return invalid('claim_coverage');
     const hasDynamicAction = scenes.some(scene => {
         if (!scene.animation) return false;
         const objects = new Map(scene.animation.objects.map(item => [item.id, item]));
         return scene.animation.actions.some(action => ['translate', 'pulse', 'draw'].includes(action.kind) && objects.get(action.target)?.kind !== 'label');
     });
-    if (scenes.some(scene => scene.animation) && !hasDynamicAction) return invalid('dynamic_action_required');
+    if (output === 'video' && scenes.some(scene => scene.animation) && !hasDynamicAction) return invalid('dynamic_action_required');
     return { schemaVersion: 1, title: text(v.title, 120, 'title'), scenes };
 }
 /** Never expose arbitrary provenance or a malformed saved plan. */
@@ -86,7 +89,7 @@ export function presentationStoryboardView(asset: {
         if (asset.kind !== 'interactive_html' || p.subtype !== 'sourced_storyboard')
             return undefined;
         const settings = parseStoryboardRequest({ ...object(p.storyboardSettings, 'saved_settings') });
-        return { document: parseStoryboardDocument(p.storyboardDocument, claimIds), locale: settings.locale, style: settings.style, ...(settings.baseAssetId ? { baseAssetId: settings.baseAssetId } : {}) };
+        return { document: parseStoryboardDocument(p.storyboardDocument, claimIds, settings.output), locale: settings.locale, style: settings.style, output: settings.output, ...(settings.baseAssetId ? { baseAssetId: settings.baseAssetId } : {}) };
     }
     catch {
         return undefined;

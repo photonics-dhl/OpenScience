@@ -313,6 +313,21 @@ function mergePdfLineRuns(items: readonly PdfLineRun[]): PdfLineRun[] {
   return merged;
 }
 
+function isLikelyEquationRun(text: string): boolean {
+  const normalized = text.trim();
+  if (normalized.length < 3) return false;
+  const explicitMath = normalized.match(/[∑∫∏∂∇√∞≈≠≤≥±×÷∝⊗⊕∈∉⊂⊆→↔]/gu)?.length ?? 0;
+  const operators = normalized.match(/[=+*/^_<>−]/gu)?.length ?? 0;
+  const mathAtoms = normalized.match(/[A-Za-z0-9α-ωΑ-Ω]/gu)?.length ?? 0;
+  const proseWords = normalized.match(/[A-Za-z]{4,}/gu)?.length ?? 0;
+  const relationIndex = normalized.search(/[=<>≤≥≈≠]/u);
+  const relationHasAtomsOnBothSides = relationIndex > 0
+    && /[A-Za-z0-9α-ωΑ-Ω]/u.test(normalized.slice(0, relationIndex))
+    && /[A-Za-z0-9α-ωΑ-Ω]/u.test(normalized.slice(relationIndex + 1));
+  return (explicitMath >= 1 && (operators >= 1 || mathAtoms >= 3) && proseWords <= 8)
+    || (relationHasAtomsOnBothSides && mathAtoms >= 2 && proseWords <= 4);
+}
+
 export async function parseStructuredPdfResult(content: Buffer): Promise<ParserStageResult> {
   const loadRuntimeModule = createRequire(__filename);
   const { PDFParse } = loadRuntimeModule('pdf-parse') as PdfParseModule;
@@ -392,7 +407,8 @@ export async function parseStructuredPdfResult(content: Buffer): Promise<ParserS
         blockCount += mergedRuns.length;
         if (blockCount > MAX_PDF_BLOCKS) throw new Error('PDF text item limit exceeded');
         const blocks: StagePage['blocks'] = mergedRuns.map((run) => ({
-          kind: 'paragraph', text: run.text, boundingBox: run.boundingBox,
+          kind: isLikelyEquationRun(run.text) ? 'equation' : 'paragraph',
+          text: run.text, boundingBox: run.boundingBox,
         }));
         if (pageHasUnrepresentableTextGeometry) partialResult = true;
         pages.push({

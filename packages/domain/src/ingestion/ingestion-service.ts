@@ -80,10 +80,10 @@ const CANONICAL_DIAGNOSTICS = new Set([
   'malformed_item', 'missing_requires_empty', 'summary_required', 'segment_count_1_to_32',
   'duplicate_ids', 'unknown_ids', 'ordered_ids_required', 'contiguous_ids_required',
   'window_required', 'unknown_window', 'quote_required', 'quote_not_found', 'quote_ambiguous',
-  'source_text_limit_8000', 'core_text_limit_4000',
+  'source_text_limit_8000', 'core_text_limit_4000', 'noncontiguous_block_passages',
 ]);
 type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1'
-  | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1';
+  | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1' | 'grounded_summary_v1';
 
 function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
   if (isLegacyCharacterEvidenceResult(value)) return 'legacy_character_evidence_v1';
@@ -91,6 +91,14 @@ function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha25
   const result = value as Record<string, unknown>;
   const diagnostics = result.fieldDiagnostics;
   const core = result.core;
+  if (result.canonicalExtractionContract === 'exact-quote-v1'
+    && exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) && validateSdfDraftCore(core).ok) {
+    try {
+      const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+      if (reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
+        && reference.contentHash === artifact.blobSha256) return 'grounded_summary_v1';
+    } catch { return undefined; }
+  }
   if (result.reason !== 'canonical_partial_validation_exhausted' || !diagnostics
     || typeof diagnostics !== 'object' || Array.isArray(diagnostics)
     || !exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) || !validateSdfDraftCore(core).ok
@@ -449,7 +457,7 @@ export async function refreshIngestionAnalysis(
   }
   const keyPrefix = `ingestion-analysis-refresh:${input.taskId}:${input.sourceAgentTaskId}:`;
   const replay = await deps.prisma.agentTask.findFirst({
-    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`] } },
+    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`, `${keyPrefix}grounded-summary-v1`] } },
     include: { session: true },
   });
   if (replay) {
@@ -480,7 +488,7 @@ export async function refreshIngestionAnalysis(
   if (policy !== 'legacy_character_evidence_v1') {
     const reference = parseDocumentSourceMapReference((oldAgent!.result as Record<string, unknown>).sourceMapRef);
     const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
-    const affected = policy === 'native_pdf_fragmentation_v1'
+    const affected = policy === 'grounded_summary_v1' ? true : policy === 'native_pdf_fragmentation_v1'
       ? isOldFragmentedNativePdfMap(sourceMap)
       : isLineRunNativePdfMap(sourceMap);
     if (!affected) {

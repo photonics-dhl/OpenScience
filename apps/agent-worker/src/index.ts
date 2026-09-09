@@ -32,7 +32,7 @@ import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
-import { createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
+import { createParserRasterJobClient, createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
 import { runParserCascadeSelfTest } from './parser-self-test';
 import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
 import {
@@ -136,6 +136,8 @@ export type TaskHandler = (
 export function createWorkerParserCascade(
   gateway: Pick<AiGateway, 'ocr'>,
   parserJobAdapter: TextStageAdapter,
+  rasterJobAdapter?: ReturnType<typeof createParserRasterJobClient>,
+  llmOcr = false,
 ): ParserCascadeRunner {
   const extractText = createTextExtractor({
     pdf: parserJobAdapter,
@@ -147,7 +149,7 @@ export function createWorkerParserCascade(
     detectLayout: false,
     grobid: false,
     localOcr: true,
-    llmOcr: false,
+    llmOcr,
   });
   return Object.assign(
     (input: ParserInput, authorization: ParserCascadeAuthorization) => runParserCascade(input, {
@@ -170,6 +172,17 @@ export function createWorkerParserCascade(
             mediaType: stageInput.mediaType,
             options: { pageNumbers: pages.map(({ page }) => page) },
           }, Buffer.from(stageInput.content)),
+          renderPages: (stageInput, pageNumbers) => {
+            if (!rasterJobAdapter) throw new Error('isolated raster adapter unavailable');
+            return rasterJobAdapter({
+              schemaVersion: 2,
+              operation: 'render_page',
+              artifactId: stageInput.artifactId,
+              contentHash: stageInput.contentHash,
+              mediaType: stageInput.mediaType,
+              options: { pageNumbers: [...pageNumbers] },
+            }, Buffer.from(stageInput.content));
+          },
         },
       },
       aiGateway: gateway,
@@ -411,6 +424,35 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
   };
 }
 
+function buildIngestionExternalProcessingPolicy(prisma: ReturnType<typeof createPrismaClient>): ExternalProcessingPolicy {
+  return async (context) => {
+    const task = await prisma.ingestionTask.findUnique({
+      where: { agentTaskId: context.taskId },
+      include: {
+        artifact: true,
+        batch: { include: { researchObject: { include: { workspace: true } } } },
+        agentTask: { include: { session: true } },
+      },
+    });
+    const payload = task?.agentTask?.payload;
+    if (!task?.agentTask || !payload || typeof payload !== 'object' || Array.isArray(payload)
+      || task.agentTask.id !== context.taskId || task.agentTask.kind !== 'sdf.extract'
+      || task.agentTask.status !== 'running' || task.agentTask.session.status !== 'active'
+      || task.agentTask.session.userId !== context.actorId || task.batch.userId !== context.actorId
+      || task.batch.agentSessionId !== task.agentTask.sessionId
+      || task.agentTask.session.researchObjectId !== task.batch.researchObjectId
+      || (payload as Record<string, unknown>).artifactId !== task.artifactId
+      || (payload as Record<string, unknown>).researchObjectId !== task.batch.researchObjectId
+      || task.batch.researchObject.workspaceId !== context.workspaceId
+      || task.artifact.workspaceId !== context.workspaceId || task.batch.researchObject.workspace.status !== 'active') return false;
+    const membership = await prisma.membership.findUnique({
+      where: { workspaceId_userId: { workspaceId: context.workspaceId, userId: context.actorId } },
+    });
+    return membership?.workspaceId === context.workspaceId && membership.userId === context.actorId
+      && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
+  };
+}
+
 /** 主循环（独立进程入口，云上 systemd/nohup 常驻）。 */
 async function main(): Promise<void> {
   const parserJobDir = process.env.PARSER_JOB_DIR;
@@ -425,7 +467,7 @@ async function main(): Promise<void> {
     mailer: { send: async () => undefined },
   };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
-  const externalProcessingPolicy: ExternalProcessingPolicy = async () => false;
+  const externalProcessingPolicy = buildIngestionExternalProcessingPolicy(prisma);
   const gateway = buildGateway(
     process.env,
     globalThis.fetch,
@@ -433,8 +475,8 @@ async function main(): Promise<void> {
     externalProcessingPolicy,
   );
   const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata);
-  const parserCascade = createWorkerParserCascade(gateway, parserJobAdapter);
-  const parserSelfTest = await runParserCascadeSelfTest(parserCascade);
+  const rasterJobAdapter = createParserRasterJobClient(parserJobDir, expectedSidecarParserMetadata);
+  const parserSelfTest = await runParserCascadeSelfTest(createWorkerParserCascade(gateway, parserJobAdapter));
   if (!parserSelfTest.pdf.textMatched || !parserSelfTest.docx.textMatched
     || !parserSelfTest.scan.textMatched || !parserSelfTest.scan.locatorMatched
     || !parserSelfTest.scan.tesseractMatched || !parserSelfTest.scan.confidenceMatched
@@ -442,6 +484,10 @@ async function main(): Promise<void> {
     || !parserSelfTest.candidateFallbackDisabled) {
     throw new Error('parser cascade startup self-test failed');
   }
+  const parserCascade = createWorkerParserCascade(
+    gateway, parserJobAdapter, rasterJobAdapter,
+    process.env.AI_ENABLED === 'true' && process.env.MINIMAX_VISION_ENABLED === 'true',
+  );
   const handlers = createHandlers(gateway, {
     parserCascade,
     externalProcessingPolicy,
@@ -517,10 +563,13 @@ export function buildGateway(
       ? [new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim() })] : [])
     : (env.HERMES_SCENE_IMAGE_PROVIDER === undefined || env.HERMES_SCENE_IMAGE_PROVIDER === 'minimax') && env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
     ? [new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher)] : [];
-  const ocrProviders = env.NODE_ENV !== 'production' && env.MINIMAX_VISION_ENABLED === 'true' && keys[0]
+  const visionPrimaryKey = env.MINIMAX_API_KEY?.trim();
+  const visionBackupKey = env.MINIMAX_API_KEY_2?.trim();
+  const ocrProviders = env.AI_ENABLED === 'true' && env.MINIMAX_VISION_ENABLED === 'true' && visionPrimaryKey
     ? [new MiniMaxCodingPlanVisionProvider('minimax-vision', {
         baseUrl: visionOrigin(env),
-        apiKey: keys[0],
+        apiKey: visionPrimaryKey,
+        ...(visionBackupKey && visionBackupKey !== visionPrimaryKey ? { backupApiKey: visionBackupKey } : {}),
         model: env.MINIMAX_VISION_MODEL ?? 'coding-plan-vlm',
         pricing: visionPricing(env),
         maxPageBytes: optionalBoundedInteger(env.MINIMAX_VISION_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'MINIMAX_VISION_MAX_PAGE_BYTES'),

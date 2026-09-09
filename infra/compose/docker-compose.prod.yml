@@ -90,6 +90,8 @@ services:
       - /opt/openscience/.env.prod
     environment:
       MINIMAX_IMAGE_ENABLED: "true"
+      # Worker enforces ingestion consent and sends only selected page rasters.
+      MINIMAX_VISION_ENABLED: "true"
       HERMES_SCENE_IMAGE_PROVIDER: ${HERMES_SCENE_IMAGE_PROVIDER:-minimax}
       HERMES_VIDEO_ENABLED: ${HERMES_VIDEO_ENABLED:-false}
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox

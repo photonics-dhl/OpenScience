@@ -288,7 +288,7 @@ export interface HermesResearchRun {
   status: HermesResearchRunStatus;
   version: number;
   versionId: string | null;
-  profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | null;
+  profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | 'content-driven-image-v1' | null;
   maxAgentTasks: number | null;
   canRetryGeneration?: boolean;
   chargeableAttempts?: number;
@@ -333,7 +333,7 @@ export function submitHermesSourceReview(
   input: {
     expectedVersion: number;
     versionId: string;
-    generationGrant: { profile: 'content-driven-v1'; maxAgentTasks: 8 };
+    generationGrant: { profile: 'content-driven-v1'; maxAgentTasks: 8 } | { profile: 'content-driven-image-v1'; maxAgentTasks: 7 };
     reviews: HermesSourceReview[];
   },
   idempotencyKey: string,
@@ -1581,6 +1581,9 @@ export function isRefreshableIngestionAnalysis(task: Pick<IngestionTaskDetail['t
   if (task.state !== 'needs_review' || task.retryCount !== 0 || !task.agentTaskId || !task.result
     || typeof task.result !== 'object' || Array.isArray(task.result)) return false;
   const result = task.result as Record<string, unknown>;
+  const groundedSummaryRefresh = result.canonicalExtractionContract === 'exact-quote-v1'
+    && result.sourceMapRef && typeof result.sourceMapRef === 'object' && !Array.isArray(result.sourceMapRef);
+  if (groundedSummaryRefresh) return true;
   const core = result.core;
   const evidence = result.evidence;
   const missing = result.needsMoreInformation;

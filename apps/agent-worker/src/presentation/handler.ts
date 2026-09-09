@@ -18,6 +18,33 @@ function presentationClaimContent(claims: readonly PresentationClaim[]): string 
   })));
 }
 
+async function readReviewedPresentationEvidence(
+  prisma: Pick<Prisma.TransactionClient, 'evidenceRecord'>,
+  scope: { researchObjectId: string; versionId: string; sourceClaimIds: string[] },
+  lineageByClaim?: ReadonlyMap<string, unknown>,
+) {
+  const candidates = await prisma.evidenceRecord.findMany({ where: {
+    researchObjectId: scope.researchObjectId, versionId: scope.versionId,
+    claimId: { in: scope.sourceClaimIds }, extractionStatus: 'succeeded', exactQuote: { not: null },
+  }, orderBy: [{ claimId: 'asc' }, { id: 'asc' }] });
+  const rows = lineageByClaim ? candidates.filter((row) => {
+    const origin = row.provenance as Record<string, unknown> | null;
+    const lineage = lineageByClaim.get(row.claimId);
+    return typeof lineage === 'string' && origin?.source === 'reviewed_ingestion' && origin.sourceTaskId === lineage;
+  }) : candidates;
+  if (scope.sourceClaimIds.some((id) => !rows.some((row) => row.claimId === id && row.exactQuote?.trim()))) {
+    throw new Error('[blocked] Each source Claim needs reviewed original evidence before scientific media planning');
+  }
+  return rows;
+}
+
+function presentationEvidenceIdentity(rows: Awaited<ReturnType<typeof readReviewedPresentationEvidence>>): string {
+  return createHash('sha256').update(JSON.stringify(rows.map(({ id, claimId, artifactId, contentHash,
+    exactQuote, relation, locator, extractionStatus, updatedAt, provenance }) => ({
+    id, claimId, artifactId, contentHash, exactQuote, relation, locator, extractionStatus, updatedAt, provenance,
+  })))).digest('hex');
+}
+
 async function readPresentationInput(storage: NonNullable<Parameters<TaskHandler>[0]['storage']>, objectKey: string, expectedHash: string): Promise<Buffer> {
   const object = await storage.getObject(objectKey);
   if (object.size <= 0 || object.size > 10 * 1024 * 1024) throw new Error('[blocked] video input size is invalid');
@@ -80,9 +107,39 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       || claimRows.some((claim) => claim.extractionStatus !== 'succeeded')) {
       throw new Error('[blocked] source Claims are not verified in the exact version');
     }
-    const claims = canonicalPresentationClaims(claimRows as PresentationClaim[]);
+    const scientificMedia = Boolean(payload.storyboard || payload.sceneImage || payload.video);
+    const lineageByClaim = payload.hermesRunAuthority ? new Map(claimRows.map((claim) => {
+      const origin = claim.provenance as Record<string, unknown> | null;
+      return [claim.id, origin?.sourceTaskLineage ?? origin?.sourceTaskId] as const;
+    })) : undefined;
+    const sourceEvidence = scientificMedia ? await readReviewedPresentationEvidence(deps.prisma, payload, lineageByClaim) : [];
+    if (payload.hermesRunAuthority && scientificMedia) {
+      for (const claim of claimRows) {
+        const provenance = claim.provenance as Record<string, unknown>;
+        const lineage = provenance.sourceTaskLineage ?? provenance.sourceTaskId;
+        if (!sourceEvidence.some((row) => {
+          const origin = row.provenance as Record<string, unknown>;
+          return row.claimId === claim.id && origin.source === 'reviewed_ingestion'
+            && typeof lineage === 'string' && origin.sourceTaskId === lineage;
+        })) throw new Error('[blocked] Hermes media evidence does not match the reviewed ingestion');
+      }
+    }
+    const sourceEvidenceIdentity = presentationEvidenceIdentity(sourceEvidence);
+    const claims = canonicalPresentationClaims(claimRows.map((claim) => ({ ...claim,
+      sourcePassages: sourceEvidence.filter((row) => row.claimId === claim.id)
+        .map((row) => ({ evidenceId: row.id, text: row.exactQuote!, relation: row.relation })),
+    })) as PresentationClaim[]);
+    const requireUnchangedEvidence = async (prisma: Pick<Prisma.TransactionClient, 'evidenceRecord'>) => {
+      if (scientificMedia && presentationEvidenceIdentity(await readReviewedPresentationEvidence(prisma, payload, lineageByClaim)) !== sourceEvidenceIdentity) {
+        throw new Error('[blocked] Reviewed source evidence changed during media generation');
+      }
+    };
     const base = await requireStoryboardBase(deps.prisma, payload);
     const sceneParent = await requireSceneImageParent(deps.prisma, payload);
+    if (sceneParent && ((sceneParent.view.output === 'image' && !sceneParent.sourceEvidenceIdentity)
+      || (sceneParent.sourceEvidenceIdentity && sceneParent.sourceEvidenceIdentity !== sourceEvidenceIdentity))) {
+      throw new Error('[blocked] Storyboard evidence has changed; revise the illustration plan before generating images');
+    }
     const videoParents = await requireVideoGenerationParents(deps.prisma, payload);
     let storyboardDocument: StoryboardDocument | undefined;
     let bytes: Buffer;
@@ -116,6 +173,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         || currentParents?.identity !== videoParents.identity) {
         throw new Error('[blocked] approved video inputs changed before rendering');
       }
+      await requireUnchangedEvidence(deps.prisma);
       const result = await options.videoSpool.generate({
         taskId: task.id, executionAttempt: task.executionAttempt, profile: payload.video.profile,
         ...(payload.video.profile === 'onchip-field-sampling-v1' ? { sceneRoles: payload.video.sceneRoles } : {}),
@@ -141,6 +199,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if ((await requireSceneImageParent(deps.prisma, payload))?.identity !== sceneParent.identity) throw new Error('[blocked] approved storyboard changed before image generation');
       const currentClaims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
       if (presentationClaimContent(currentClaims as PresentationClaim[]) !== presentationClaimContent(claims)) throw new Error('[blocked] source Claims changed before image generation');
+      await requireUnchangedEvidence(deps.prisma);
       const result = await options.gateway.generateImage({ prompt, requestId: task.id });
       bytes = result.bytes; contentType = result.contentType; extension = imageExtension(contentType);
       imageProvider = result.provider;
@@ -189,10 +248,11 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if (base && (await requireStoryboardBase(tx, payload))?.identity !== base.identity) throw new Error('[blocked] base storyboard changed before completion');
       if (sceneParent && (await requireSceneImageParent(tx, payload))?.identity !== sceneParent.identity) throw new Error('[blocked] approved storyboard changed before scene image completion');
       if (videoParents && (await requireVideoGenerationParents(tx, payload))?.identity !== videoParents.identity) throw new Error('[blocked] approved video inputs changed before completion');
+      await requireUnchangedEvidence(tx);
       const created = await tx.presentationAsset.create({ data: {
         id: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind,
         objectKey, contentHash, generator, generatorVersion, promptHash, label: PRESENTATION_ASSET_LABEL,
-        provenance: { source: payload.sceneImage ? 'approved_storyboard_scene' : payload.video ? 'approved_storyboard_video' : 'verified_claims', ...(payload.sceneImage && sceneParent ? { subtype: 'storyboard_scene_image', sceneImage: { ...payload.sceneImage }, parentIdentity: sceneParent.identity, storyboardContentHash: sceneParent.contentHash } : {}), ...(videoProvenance ?? {}), taskId: task.id, sourceClaimIds: payload.sourceClaimIds, contentType, ...(storyboardDocument && payload.storyboard ? { subtype: 'sourced_storyboard', storyboardDocument: JSON.parse(JSON.stringify(storyboardDocument)), storyboardSettings: JSON.parse(JSON.stringify(payload.storyboard)) } : {}) },
+        provenance: { ...(scientificMedia ? { sourceEvidenceIdentity, sourceEvidenceIds: sourceEvidence.map((row) => row.id) } : {}), source: payload.sceneImage ? 'approved_storyboard_scene' : payload.video ? 'approved_storyboard_video' : 'verified_claims', ...(payload.sceneImage && sceneParent ? { subtype: 'storyboard_scene_image', sceneImage: { ...payload.sceneImage }, parentIdentity: sceneParent.identity, storyboardContentHash: sceneParent.contentHash } : {}), ...(videoProvenance ?? {}), taskId: task.id, sourceClaimIds: payload.sourceClaimIds, contentType, ...(storyboardDocument && payload.storyboard ? { subtype: 'sourced_storyboard', storyboardDocument: JSON.parse(JSON.stringify(storyboardDocument)), storyboardSettings: JSON.parse(JSON.stringify(payload.storyboard)) } : {}) },
       } });
       await tx.presentationAssetClaim.createMany({ data: payload.sourceClaimIds.map((claimId) => ({ presentationAssetId: created.id, claimId, researchObjectId: payload.researchObjectId, versionId: payload.versionId })) });
       if (storyboardDocument) await deps.audit?.record({ actorId: scope.userId, action: 'presentation_asset.generated', workspaceId: researchObject.workspaceId, targetType: 'presentation_asset', targetId: created.id, metadata: { taskId: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, subtype: 'sourced_storyboard', baseAssetId: payload.storyboard?.baseAssetId ?? null } }, tx);

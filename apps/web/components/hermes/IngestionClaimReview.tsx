@@ -82,7 +82,7 @@ export function IngestionClaimReview({ researchObjectId: ro, versionId, onComple
         ? await submitHermesSourceReview(ro, sourceReview.runId, {
           expectedVersion: sourceReview.expectedVersion,
           versionId,
-          generationGrant: { profile: 'content-driven-v1', maxAgentTasks: 8 },
+          generationGrant: { profile: 'content-driven-image-v1', maxAgentTasks: 7 },
           reviews: [{ ingestionTaskId: candidate.taskId, ...body }],
         }, key)
         : await confirmIngestionClaims(ro, versionId, candidate.taskId, body, key, abort?.signal);

@@ -8,6 +8,7 @@ import {
   type SourceLocator,
 } from '@openscience/domain';
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
+import { RESEARCH_UNDERSTANDING_SKILL } from './skills/research-understanding.js';
 
 /** 六字段 core 结构（§5.1：schemaVersion + 6 字段，全部 string）。 */
 export interface ExtractedCore {
@@ -26,6 +27,7 @@ interface ExtractedFieldProposal {
   sourceBlockIds?: string[];
   sourceWindowId?: string;
   sourceRange?: EvidenceMatch;
+  verifiedSegments?: Array<{ quote: string; sourceLocator: SourceLocator }>;
   sourceLocator?: string;
   needsMoreInformation: boolean;
 }
@@ -48,7 +50,7 @@ export interface ExtractionResult extends Record<string, unknown> {
   /** Exact final guard reasons for unresolved fields; explicitly missing fields are omitted. */
   fieldDiagnostics?: Record<string, string>;
   /** Server-owned canonical selection contract used to prevent obsolete paid repair loops. */
-  canonicalExtractionContract?: 'windowed-source-v2' | 'exact-quote-v1';
+  canonicalExtractionContract?: 'windowed-source-v2' | 'exact-quote-v1' | 'grounded-summary-v1';
 }
 
 export type EvidenceLocation = {
@@ -96,7 +98,7 @@ const MAX_EXCERPT_CHARS = 24_000;
 const MAX_EVIDENCE_SEGMENTS = 32;
 const MAX_FIELD_EVIDENCE_CHARS = 8_000;
 const MAX_CANONICAL_CORE_CHARS = 4_000;
-const CANONICAL_EXTRACTION_CONTRACT = 'exact-quote-v1';
+const CANONICAL_EXTRACTION_CONTRACT = 'grounded-summary-v1';
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
 export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
@@ -287,7 +289,10 @@ function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[]
   const blocks: CanonicalTextBlock[] = [];
   let cursor = 0;
   for (const page of sourceMap.pages) {
-    for (const block of page.blocks) {
+    // Keep native blocks in the stored map, but do not feed duplicate garbled text beside
+    // the page's vision transcription. Its own OCR locator and page-level bounds remain.
+    const visionBlocks = page.blocks.filter((block) => block.parser.name === 'llm_ocr_candidate' && block.text?.trim());
+    for (const block of visionBlocks.length ? visionBlocks : page.blocks) {
       const text = block.text?.trim();
       if (!text) continue;
       if (blocks.length > 0) cursor += 1;
@@ -311,63 +316,11 @@ function promptCanonicalBlocks(sourceMap: DocumentSourceMap): PromptCanonicalBlo
 
 function selectCanonicalBlocks(sourceMap: DocumentSourceMap): PromptCanonicalBlock[] {
   const blocks = promptCanonicalBlocks(sourceMap);
-  const selected = new Set<number>();
-  let remaining = MAX_EXCERPT_CHARS;
-  // The source budget measures evidence text. Stable IDs and boundary labels must not
-  // displace manuscript content simply because the parser produced more blocks.
-  const sourceLength = (block: PromptCanonicalBlock) => block.text.length + 1;
-  const addRange = (start: number, end: number): boolean => {
-    const candidates = blocks.slice(start, end + 1).filter((block) => !selected.has(block.ordinal));
-    const cost = candidates.reduce((total, block) => total + sourceLength(block), 0);
-    if (cost > remaining) return false;
-    candidates.forEach((block) => selected.add(block.ordinal));
-    remaining -= cost;
-    return true;
-  };
-  const contextualRange = (ordinal: number): { start: number; end: number } => {
-    let start = ordinal;
-    let end = ordinal;
-    let before = 0;
-    let after = 0;
-    while (start > 0 && before < 1_200) {
-      start -= 1;
-      before += sourceLength(blocks[start]!);
-    }
-    while (end < blocks.length - 1 && after < 1_800) {
-      end += 1;
-      after += sourceLength(blocks[end]!);
-    }
-    return { start, end };
-  };
-  let headCost = 0;
-  for (let index = 0; index < blocks.length; index += 1) {
-    const cost = sourceLength(blocks[index]!);
-    if (headCost + cost > 8_000 || !addRange(index, index)) break;
-    headCost += cost;
-  }
-  for (const block of blocks) {
-    if (remaining <= 8_000) break;
-    KEY_EVIDENCE.lastIndex = 0;
-    if (KEY_EVIDENCE.test(block.text)) {
-      const range = contextualRange(block.ordinal);
-      addRange(range.start, range.end);
-    }
-  }
-  let tailCost = 0;
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const cost = selected.has(index) ? 0 : sourceLength(blocks[index]!);
-    if (tailCost + cost > 8_000 || !addRange(index, index)) break;
-    tailCost += cost;
-  }
-  let window = 0;
-  let previousOrdinal: number | undefined;
-  return blocks.filter((block) => selected.has(block.ordinal)).map((block) => {
-    if (previousOrdinal === undefined || block.ordinal !== previousOrdinal + 1) window += 1;
-    previousOrdinal = block.ordinal;
-    return { ...block, windowId: `W${String(window).padStart(3, '0')}` };
-  });
+  // Read the entire paper within the bounded model input, never silently discard its middle.
+  const total = blocks.reduce((sum, block) => sum + block.text.length + 1, 0);
+  if (total > 120_000) throw new Error('[blocked] Paper exceeds the full-document understanding limit; split the document into research sections before analysis');
+  return blocks.map((block) => ({ ...block, windowId: `W${String(block.page).padStart(3, '0')}` }));
 }
-
 function canonicalWindows(blocks: readonly PromptCanonicalBlock[]): readonly PromptCanonicalWindow[] {
   const windows: PromptCanonicalWindow[] = [];
   for (const block of blocks) {
@@ -435,6 +388,7 @@ type CanonicalFieldValidationReason =
   | 'quote_required'
   | 'quote_not_found'
   | 'quote_ambiguous'
+  | 'noncontiguous_block_passages'
   | 'segment_count_1_to_32'
   | 'source_text_limit_8000'
   | 'core_text_limit_4000';
@@ -458,59 +412,53 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, blocks: Promp
   const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason } => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return { reason: 'malformed_item' };
     const candidate = item as Record<string, unknown>;
-    if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourceQuote,sourceWindowId,summary'
+    if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sources,summary'
       || typeof candidate.summary !== 'string' || typeof candidate.needsMoreInformation !== 'boolean'
-      || typeof candidate.sourceQuote !== 'string' || typeof candidate.sourceWindowId !== 'string') {
-      return { reason: 'malformed_item' };
-    }
+      || !Array.isArray(candidate.sources)) return { reason: 'malformed_item' };
     if (candidate.needsMoreInformation) {
-      return candidate.summary.trim() || candidate.sourceQuote.trim() || candidate.sourceWindowId.trim()
+      return candidate.summary.trim() || candidate.sources.length
         ? { reason: 'missing_requires_empty' }
-        : { candidate: candidate as unknown as ExtractedFieldProposal };
+        : { candidate: { summary: '', sourceQuote: '', needsMoreInformation: true } };
     }
     if (!candidate.summary.trim()) return { reason: 'summary_required' };
-    if (!candidate.sourceWindowId.trim()) return { reason: 'window_required' };
-    const window = allowedWindows.get(candidate.sourceWindowId);
-    if (!window) return { reason: 'unknown_window' };
-    if (!candidate.sourceQuote.trim()) return { reason: 'quote_required' };
-    const matches = findEvidenceMatches(window.text, candidate.sourceQuote);
-    if (matches.length === 0) return { reason: 'quote_not_found' };
-    if (matches.length !== 1) return { reason: 'quote_ambiguous' };
-    const match = matches[0]!;
-    const sourceRange: EvidenceMatch = {
-      start: window.textStart + match.start,
-      end: window.textStart + match.end,
-      matching: match.matching,
-    };
-    const selected = window.blocks.filter((block) => block.textEnd > sourceRange.start && block.textStart < sourceRange.end);
-    if (selected.length === 0 || selected.length > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32' };
-    const evidenceLength = selected.reduce((total, block) => total
-      + Math.max(0, Math.min(block.textEnd, sourceRange.end) - Math.max(block.textStart, sourceRange.start)), 0);
-    if (evidenceLength > MAX_FIELD_EVIDENCE_CHARS) {
-      return { reason: 'source_text_limit_8000' };
-    }
-    const sourceQuote = window.text.slice(match.start, match.end);
-    if (sourceQuote.length > MAX_CANONICAL_CORE_CHARS) {
-      return { reason: 'core_text_limit_4000' };
-    }
-    try {
-      const segments = canonicalSegmentsForRange(sourceMap, selected, sourceRange);
-      if (segments.length !== selected.length || segments.map((segment) => segment.quote).join('\n') !== sourceQuote) {
-        return { reason: 'quote_not_found' };
+    if (candidate.summary.length > MAX_CANONICAL_CORE_CHARS) return { reason: 'core_text_limit_4000' };
+    if (candidate.sources.length < 1 || candidate.sources.length > 3) return { reason: 'quote_required' };
+    const ranges = new Map<string, { block: PromptCanonicalBlock; start: number; end: number }>();
+    for (const source of candidate.sources) {
+      if (!source || typeof source !== 'object' || Array.isArray(source)) return { reason: 'malformed_item' };
+      const passage = source as Record<string, unknown>;
+      if (Object.keys(passage).sort().join(',') !== 'sourceQuote,sourceWindowId'
+        || typeof passage.sourceWindowId !== 'string' || typeof passage.sourceQuote !== 'string') return { reason: 'malformed_item' };
+      const window = allowedWindows.get(passage.sourceWindowId);
+      if (!window) return { reason: 'unknown_window' };
+      if (!passage.sourceQuote.trim()) return { reason: 'quote_required' };
+      const matches = findEvidenceMatches(window.text, passage.sourceQuote);
+      if (!matches.length) return { reason: 'quote_not_found' };
+      if (matches.length !== 1) return { reason: 'quote_ambiguous' };
+      const match = matches[0]!;
+      const start = window.textStart + match.start;
+      const end = window.textStart + match.end;
+      for (const block of window.blocks.filter((entry) => entry.textEnd > start && entry.textStart < end)) {
+        const previous = ranges.get(block.id);
+        const localStart = Math.max(block.textStart, start);
+        const localEnd = Math.min(block.textEnd, end);
+        // Existing consumers require one range per block. Do not add unselected text.
+        if (previous && (localStart > previous.end || localEnd < previous.start)) return { reason: 'noncontiguous_block_passages' };
+        ranges.set(block.id, { block,
+          start: Math.min(previous?.start ?? Infinity, Math.max(block.textStart, start)),
+          end: Math.max(previous?.end ?? -Infinity, Math.min(block.textEnd, end)),
+        });
       }
-    } catch {
-      return { reason: 'quote_not_found' };
     }
-    return {
-      candidate: {
-        summary: candidate.summary,
-        sourceQuote,
-        sourceWindowId: window.id,
-        sourceBlockIds: selected.map((block) => block.promptId),
-        sourceRange,
-        needsMoreInformation: false,
-      } as unknown as ExtractedFieldProposal,
-    };
+    if (!ranges.size || ranges.size > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32' };
+    const ordered = [...ranges.values()].sort((a, b) => a.block.ordinal - b.block.ordinal);
+    try {
+      const segments = ordered.flatMap(({ block, start, end }) => canonicalSegmentsForRange(sourceMap, [block], { start, end, matching: 'exact' }));
+      const sourceQuote = segments.map((segment) => segment.quote).join('\n');
+      if (sourceQuote.length > MAX_FIELD_EVIDENCE_CHARS) return { reason: 'source_text_limit_8000' };
+      return { candidate: { summary: candidate.summary.trim(), sourceQuote,
+        sourceBlockIds: ordered.map(({ block }) => block.promptId), verifiedSegments: segments, needsMoreInformation: false } };
+    } catch { return { reason: 'quote_not_found' }; }
   };
   const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
     invalidFields = new Map();
@@ -549,8 +497,9 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, blocks: Promp
         'Previous JSON failed canonical validation.',
         `Invalid fields and reason codes: ${details}.`,
         'Return schemaVersion and all six fields again. Repair the invalid fields and recheck every other field for complete grammatical and argument boundaries; the server retains the last valid supported candidate for each field.',
-        'For each non-missing field, copy one shortest complete supported passage exactly from inside one explicitly labelled SOURCE_WINDOW. Return that window id and the copied passage as sourceQuote. Never combine text from different windows or omit words inside the copied passage. A window edge may itself cut through a longer sentence or argument; choose a complete supported point inside the window, or mark the field missing when it contains no complete point. Prefer at most 600 characters, but never truncate the subject, qualifiers, units, or necessary evidence to meet that preference. The server uniquely matches sourceQuote and materializes the matched original text as canonical core; summary does not become core.',
-        'A missing field must have summary="", sourceWindowId="", sourceQuote="", needsMoreInformation=true. Do not include a nonempty explanation in a missing field.',
+        'Each supported field has a concise scientific summary and sources:[{sourceWindowId,sourceQuote}] with 1–3 independent exact passages supporting every substantive assertion. The server stores the summary separately and reconstructs evidence from original source slices. Preserve complete subjects, qualifications and units; never splice a passage or invent a quote.',
+        'A missing field must have summary="", sources:[], needsMoreInformation=true.',
+        'For noncontiguous_block_passages, choose one complete passage explicitly including the intervening text, or keep only one supported passage from that block; do not splice quotes.',
         'A field is missing only when no supplied SOURCE_WINDOW passage states a supported point for that field. Preserve whether a point is measured, theoretical, simulated, or author-attributed.',
         'Do not normalize, paraphrase, splice, or reconstruct sourceQuote. Copy its characters from one window; line-break and space runs may differ, but words, symbols, punctuation, numbers, and order must not.',
       ].join(' ');
@@ -585,8 +534,6 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, blocks: Promp
 
 function materializeCanonicalProposal(
   proposal: ExtractedProposal,
-  sourceMap: DocumentSourceMap,
-  promptBlocks: PromptCanonicalBlock[],
 ): ExtractionResult {
   const core = { schemaVersion: SDF_CORE_VERSION } as ExtractedCore;
   const evidence = {} as ExtractionResult['evidence'];
@@ -604,19 +551,19 @@ function materializeCanonicalProposal(
       needsMoreInformation.push(field);
       continue;
     }
-    if (!candidate.sourceRange) throw new Error('canonical source range is missing');
-    const segments = canonicalSegmentsForRange(sourceMap, promptBlocks, candidate.sourceRange);
-    // Canonical core is source text. The model summary remains wire-compatible metadata only.
+    const segments = candidate.verifiedSegments;
+    if (!segments?.length) throw new Error('verified canonical evidence is missing');
     const quote = segments.map((segment) => segment.quote).join('\n');
     if (quote !== candidate.sourceQuote) throw new Error('canonical source materialization changed');
-    core[field] = quote;
+    core[field] = candidate.summary;
     evidence[field] = { quote, locator: `blocks:${ids.join(',')}` };
     evidenceSegments[field] = segments;
     evidenceLocation[field] = segments.length === 1
-      ? { status: 'located', sourceLocator: segments[0]!.sourceLocator, origin: 'model_quote', matching: candidate.sourceRange.matching }
-      : { status: 'cross_block', origin: 'model_quote', matching: candidate.sourceRange.matching, reason: 'match-spans-blocks' };
+      ? { status: 'located', sourceLocator: segments[0]!.sourceLocator, origin: 'model_quote', matching: 'exact' }
+      : { status: 'cross_block', origin: 'model_quote', matching: 'exact', reason: 'match-spans-blocks' };
   }
   return { core, evidence, needsMoreInformation, evidenceLocation, evidenceSegments,
+    understandingSkill: { id: RESEARCH_UNDERSTANDING_SKILL.id, version: RESEARCH_UNDERSTANDING_SKILL.version },
     canonicalExtractionContract: CANONICAL_EXTRACTION_CONTRACT };
 }
 
@@ -729,14 +676,11 @@ export async function extractHandler(
       '先选择原文证据，再形成字段结果。所选原文必须保留每个数字、比较、因果、能力限定和必要条件；不得跨越缺失的中间论证拼接新结论。作者提出的原因必须保留为作者归因，不能写成已证因果。',
       '方法或配置披露不等于独立复现完成；reproducibility 只能概括原文明示的材料、参数、步骤、数据或代码可用性及其缺口。若某个条款缺少直接证据，从 summary 删除该条款；若字段已无可支持内容，则按缺失字段返回 needsMoreInformation=true。',
       ...(promptBlocks ? [
-        '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能是 {"summary": string, "sourceWindowId": string, "sourceQuote": string, "needsMoreInformation": boolean}，不得把字段写成字符串、数组或增加其他键。',
-        `每个非缺失字段只能从一个明确标注的 SOURCE_WINDOW 正文中逐字复制一个连续 sourceQuote，并填写该窗口 id。不得跨窗口拼接，因为窗口之间存在未提供的原文。窗口边缘自身也可能截断更长的句子或论证；必须选择窗口内部完整且受支持的论点，若没有完整论点则将该字段标为缺失，不得用限额为截断辩解。服务端只接受窗口内唯一的精确匹配或仅空白连续段有差异的匹配，并从服务器原文还原 core 与来源位置；不接受模糊匹配、改写、重排或省略。映射后的证据必须包含 1-${MAX_EVIDENCE_SEGMENTS} 个原始块，证据合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符，canonical core 不超过 ${MAX_CANONICAL_CORE_CHARS} 字符。`,
-        '逐字段独立判断：先复制能直接陈述一个核心要点的最短完整句段，优先不超过600字符；600字符只是偏好，不得为缩短而丢失主语、否定、适用条件、数值单位、实验或理论性质。sourceQuote 和 summary 都不能替代服务器原文；最终 core 只取服务器匹配到的原文。',
-        '自然语言证据跨度必须包含完整主语、完整句子或完整论证起止，不得从句中术语或未闭合从句开始，也不得在未完成的词组、限定条件或因果链中结束；可向前后扩展连续块以保留这些条件。公式、参数或符号可保留其自身完整上下文，不要求机械按句号裁切。不同字段应各自选择最直接、独立支持其字段含义的跨度。',
-        'summary 仅为兼容现有 JSON wire shape，填写非空简短说明；它不会进入 canonical core。若完整证据需超过32块或4000字符，应缩小到仍完整受支持的单一要点，不能任意截断必要证据。不要因一个字段缺失而清空其他字段。',
-        '跨行文字可以作为同一个 sourceQuote，但只能来自同一窗口内连续原文；允许空格或换行连续段不同，文字、符号、标点、数字及顺序必须保持。',
-        '严格区分理论预测、仿真与实测，不能把缺少主语或限定词的片段扩写成实验结论；results 中的理论或仿真结果必须明确注明其性质。',
-        '只有在全部已给 SOURCE_WINDOW 中找不到该字段任何受支持要点时，才将 summary、sourceWindowId、sourceQuote 置空并令 needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
+        RESEARCH_UNDERSTANDING_SKILL.instructions,
+        '只输出JSON：schemaVersion="0.1.0"，fields下六个字段必须且只能是 {"summary":string,"sources":[{"sourceWindowId":string,"sourceQuote":string}],"needsMoreInformation":boolean}。',
+        '每字段凝练成中文摘要，解释该论文的核心要点，避免重复同一段内容填不同字段。每个非空摘要必须由1–3段独立来源充分支持；每段从声明的SOURCE_WINDOW连续逐字复制，不能跨窗口或省略中间文字。允许换行空白差异，不允许文字、符号、单位、数字改变。服务端精确回读来源，摘要与证据分别存储。',
+        `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}块。选择最短但足以支持摘要的完整句段，不截断主语、条件、否定或数量单位。不为了符合限额扩大或改写结论。`,
+        '若无充分证据，summary="",sources=[],needsMoreInformation=true；不要把模型解释写进缺失字段，不要因一个字段缺失清空其他字段。无法辨认的公式不要猜写，可仅概括仍被清晰原文支持的科学关系。',
       ] : [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须含 summary、sourceQuote、needsMoreInformation。',
         'sourceQuote 必须逐字复制 SOURCE 中支持 summary 的最短充分原文；不得概括、改写或虚构引文。',
@@ -759,7 +703,7 @@ export async function extractHandler(
       const partial = validation.partialResult();
       if (!partial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
       return {
-        ...materializeCanonicalProposal(partial.proposal, canonicalSourceMap, promptBlocks),
+        ...materializeCanonicalProposal(partial.proposal),
         reason: 'canonical_partial_validation_exhausted',
         fieldDiagnostics: partial.fieldDiagnostics,
       };
@@ -768,7 +712,7 @@ export async function extractHandler(
     if (SDF_CORE_FIELDS.every((field) => proposal.fields[field].needsMoreInformation)) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_all_fields_missing');
     }
-    return materializeCanonicalProposal(proposal, canonicalSourceMap, promptBlocks);
+    return materializeCanonicalProposal(proposal);
   }
   const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
   return materializeProposal(proposal, manuscriptText);

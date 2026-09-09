@@ -22,7 +22,10 @@ const selectionSchema = z.object({
 const sourceReviewSchema = z.object({
   expectedVersion: z.number().int().positive(),
   versionId: z.string().uuid(),
-  generationGrant: z.object({ profile: z.literal('content-driven-v1'), maxAgentTasks: z.literal(8) }).strict(),
+  generationGrant: z.union([
+    z.object({ profile: z.literal('content-driven-v1'), maxAgentTasks: z.literal(8) }).strict(),
+    z.object({ profile: z.literal('content-driven-image-v1'), maxAgentTasks: z.literal(7) }).strict(),
+  ]),
   reviews: z.array(z.object({
     ingestionTaskId: z.string().uuid(), snapshotToken: z.string().regex(/^[a-f0-9]{64}$/),
     selections: z.array(selectionSchema).min(1).max(12),
