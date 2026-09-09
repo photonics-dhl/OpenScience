@@ -608,3 +608,5 @@ Source: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec . Request act
 
 ### 2026-09-09 — 编辑来源与缺失状态（进行中）
 用户提供正文编辑截图：空字段占据过大区域、逐字段重复缺失提示、疑似大纲遮挡；这只是案例，要求覆盖整个研究工作区体验。静态定位发现编辑AI提取只序列化state.core，不读上传PDF；artifactId ingestion才走服务器parser/OCR/sourceMap。不能把截图推定为PDF解析失败。原网页6 Pro会话已实际收到新问题（文字转述截图，未附图），已读回4m21s完整建议并采纳来源纠偏、缺口聚合和编辑专属密度；候选行为摘要第二轮已送达等待复核。Sol/medium复用同一实现者处理来源说明、空正文拦截、现有文献审核入口、缺失摘要及编辑密度。未执行测试/预检/提取重跑。生产仍45dabd7a，当前候选未部署。
+
+第二轮网页复核已读回2m14s：支持先上线此有界批次，未确认阻塞；提醒artifact续跑/草稿保留/移动栏宽。静态核对artifact走独立ingestion续跑、当前正文retry保持排除artifact、现有RO草稿恢复仍在、栏宽只在桌面media query。未上传截图，不称视觉验收。1cdb18e0已部署，rollback45dabd7a；服务器canonical --no-tests构建启动exit0，日志1788920554267-b1b32e67-7192-4d38-8f8e-c5d831217b64。后续需处理单一Hermes面板、跨页状态和疑似描边；既有草稿保存有1秒debounce，快速离开编辑页的flush可在接续导航工作中补齐。

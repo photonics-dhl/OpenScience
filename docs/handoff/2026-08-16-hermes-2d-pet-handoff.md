@@ -7,7 +7,7 @@
 
 ## Version tuple
 - Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release; branch codex/onchip-video-release.
-- Production45dabd7a25ba7bd1b7d5cc8ba1e226d6eb26ecd8; rollback3446f309480fe0a9a38a25c8669e0ccedf7aa0bd. Subsequent HEAD is docs-only handoff, not a new deployed release.
+- Production1cdb18e05313b86cd952a031c7f81c58e14e7078; rollback45dabd7a25ba7bd1b7d5cc8ba1e226d6eb26ecd8. Subsequent HEAD is docs-only handoff, not a new deployed release.
 - Recovery commits1df4e047 +3446f309 deployed through canonical --confirm --no-tests. First candidate failed server compile due to type-only Prisma import; fixed before switch.
 - Root dirty main and token-smart-live-workflow worktree are separate; preserve them and concurrent R1 hardening.
 
@@ -33,6 +33,9 @@
 - Main retains selected model; Sol/medium implementation, Sol/high credit/authority review; prior WebChat6Pro architecture advice reused. No reliable overall Codex savings percentage established.
 
 ## Next action and evidence
+- Editor UX deployed1cdb18e0; log1788920554267-b1b32e67-7192-4d38-8f8e-c5d831217b64 exit0, server build/start --no-tests. Six-field input excludes schemaVersion; blank new/retry text protected before debit; explicit current-text vs same-RO Hermes literature flow; collapsed missing details, truthful no-suggestion state, editor-only compact typography/rails.
+- Web6Pro actual new discussion4m21s plus candidate review2m14s complete, same URL. User screenshot only text-described to Chat (no image upload); no visual acceptance. Chrome control Debugger unattached, iab3 works with single slow actions. Do not claim screenshotRO9067a2d5 PDF parser failed: editor did not read uploads; actual task payload not inspected.
+- Remaining: single Hermes/suggestions area, cross-page state/nav and visual polish, suspected clipped outline actual-page observation. Existing editor draft saves after1s debounce; fast-navigation flush remains navigation follow-up. Do not rerun paper/media or tests.
 - WebChat6Pro UX discussion submitted/read back4m36s (same known URL); adopted sequence in docs/plans/2026-09-05-integrated-research-product-plan.md. First batch deployed45dabd7a: real guide storyboard.create suggestions + account/RO/actual-version scoped session drafts + sidebar hierarchy. Edited/cleared values win; paid submit remains explicit. Sol/medium implementation and focused Sol/high static review complete.
 - UX deploy log1788917875578-5f990ae8-3be2-480a-b0dc-cd7a6335a1f8 exit0; canonical --no-tests server build/start completed. No tests/media reruns; product browser currently unauthenticated, so logged-in UI/visual behavior unobserved. Next: sidebar primary actions, cross-page navigation/state and shared typography/spacing; no whole-site polish completion claim.
 - This selected-method vertical flow is complete. Current authorized phase: improve user experience/page layout/visual polish; retain server-owned generation. Full-paper extraction completeness and pronunciation quality remain distinct limitations.

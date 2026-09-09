@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-09:** production45dabd7a / rollback3446f309；当前论文方法讲解run已SUCCEEDED，四张图及23.459秒视频已批准；进入Hermes交互、草稿与全站一致性优化，唯一CURRENT状态见handoff。
+> **CURRENT 2026-09-09:** production1cdb18e0 / rollback45dabd7a；当前论文方法讲解run已SUCCEEDED，四张图及23.459秒视频已批准；进入Hermes交互、草稿与全站一致性优化，唯一CURRENT状态见handoff。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -45,6 +45,7 @@
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/login-recovery.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO及登录恢复/错误语义回归 | DEPLOYED4d39808；login单元10、账号浏览器14及公网登录/资料验收通过 |
 
 | `apps/web/app/me/{page,layout}.tsx` / `apps/web/app/settings/page.tsx` / `apps/web/components/navigation/{AccountLink,ProductRouteNavigation}.tsx` / `apps/web/components/profile/MyResearchProjects.tsx` / `apps/web/components/settings/{AcademicIdentityControl,MotionPreferenceControl}.tsx` / `apps/web/components/hermes/HermesWorkspaceStage.tsx` / `apps/web/components/shell/DashboardShell.tsx` | frontend/nanqing 个人主页/设置分离、身份恢复与移动导航整合 | DEPLOYED 6478aa8 |
+| `apps/web/app/research-objects/[id]/edit/page.tsx` / `apps/web/components/editor/` / `apps/web/components/shell/research-workspace.module.css` / `packages/domain/src/agent/agent.ts` | 编辑来源区分、空文本新建/重试保护、缺口摘要与编辑专属密度 | DEPLOYED1cdb18e0；服务器构建启动完成，未运行测试；真实截图验收待续 |
 | `apps/web/lib/api.ts` / `apps/web/lib/hermes/draft-state.ts` / `apps/web/components/hermes/{HermesAssistantDrawer,HermesPresentationReview,HermesPresentationAction}.tsx` | guide会话与范围恢复、真实建议入可编辑草稿、账号/RO/版本草稿隔离 | DEPLOYED45dabd7a；服务器构建/启动完成，未运行测试；登录后UI未观察 |
 | `apps/web/playwright.release.config.ts` / `apps/web/package.json` / `apps/web/test/e2e/{academic-identity-recovery,product-release,auth-dashboard,hermes-blank-ro-flow,hermes-dashboard,hermes-workspace-stage,hermes-field-guide}.spec.ts` | 合并同事浏览器用例，既有 release suite 纳入 continuation，scoped task fixtures | DEPLOYED 6478aa8 |
 | `packages/domain/src/ingestion/ingestion-service.ts` / `packages/domain/test/{ingestion-service.test.ts,helpers/fakes.ts}` / `apps/api/src/routes/ingestion.ts` | RO membership 范围内任务查询，过滤先于 limit，个人 feed 兼容 | DEPLOYED 6478aa8；无迁移 |
