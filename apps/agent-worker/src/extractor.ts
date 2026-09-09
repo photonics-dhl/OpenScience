@@ -485,11 +485,19 @@ interface CanonicalRepairResponse {
   fields: Record<string, unknown>;
 }
 
+interface CanonicalPartialResult {
+  proposal: ExtractedProposal;
+  fieldDiagnostics: Record<string, CanonicalFieldValidationReason>;
+  fieldDiagnosticsDetails: Record<string, string>;
+  unverifiedSummaries: Record<string, string>;
+  unverifiedSourcePassageIds: Record<string, string[]>;
+}
+
 function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: readonly CanonicalPassage[]): {
   guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: () => string | undefined;
   validationDiagnostic: () => string | undefined;
-  partialResult: () => { proposal: ExtractedProposal; fieldDiagnostics: Record<string, CanonicalFieldValidationReason>; fieldDiagnosticsDetails: Record<string, string>; unverifiedSummaries: Record<string, string>; unverifiedSourcePassageIds: Record<string, string[]> } | undefined;
+  partialResult: () => CanonicalPartialResult | undefined;
   mergeRetained: () => ExtractedProposal;
 } {
   const allowed = new Map(passages.map((passage) => [passage.id, passage]));
@@ -651,6 +659,136 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
       })) as ExtractedProposal['fields'],
     }),
   };
+}
+
+async function repairCanonicalPartial(
+  gateway: AiGateway,
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  partial: CanonicalPartialResult,
+): Promise<CanonicalPartialResult> {
+  const passageById = new Map(passages.map((passage) => [passage.id, passage]));
+  const repairFields = SDF_CORE_FIELDS.filter((field) => partial.fieldDiagnostics[field]
+    && partial.unverifiedSummaries[field]?.trim()
+    && partial.unverifiedSourcePassageIds[field]?.length);
+  if (!repairFields.length) return partial;
+  const candidatesByField = new Map(repairFields.map((field) => [field, new Set(partial.unverifiedSourcePassageIds[field]!)]));
+  const candidateIds = new Set(repairFields.flatMap((field) => partial.unverifiedSourcePassageIds[field]!));
+  const candidatePassages = passages.filter((passage) => candidateIds.has(passage.id));
+  const repaired = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
+
+  const selectEvidence = (claims: Array<{ text: string; supportSets: string[][] }>, allowedIds: Set<string>): ExtractedFieldProposal | undefined => {
+    const summary = claims.map((claim) => claim.text.trim()).join('');
+    if (!summary || summary.length > MAX_CANONICAL_CORE_CHARS) return undefined;
+    let unions: Array<Set<string>> = [new Set()];
+    for (const claim of claims) {
+      const next = new Map<string, Set<string>>();
+      for (const existing of unions) {
+        for (const supportSet of claim.supportSets) {
+          if (!supportSet.length || supportSet.some((id) => !allowedIds.has(id))) continue;
+          const union = new Set([...existing, ...supportSet]);
+          if (union.size > MAX_SOURCE_PASSAGE_IDS) continue;
+          const ids = passages.filter((passage) => union.has(passage.id)).map((passage) => passage.id);
+          const budget = selectedPassageBudget(ids, passageById);
+          if (budget.segmentCount <= MAX_EVIDENCE_SEGMENTS && budget.evidenceChars <= MAX_FIELD_EVIDENCE_CHARS) {
+            next.set(ids.join(','), union);
+          }
+        }
+      }
+      unions = [...next.values()];
+      if (!unions.length) return undefined;
+    }
+    const choices = unions.map((union) => {
+      const ids = passages.filter((passage) => union.has(passage.id)).map((passage) => passage.id);
+      return { ids, budget: selectedPassageBudget(ids, passageById) };
+    }).sort((left, right) => left.budget.evidenceChars - right.budget.evidenceChars
+      || left.budget.segmentCount - right.budget.segmentCount || left.ids.length - right.ids.length);
+    const sourcePassageIds = choices[0]!.ids;
+    let verifiedSegments: Array<{ quote: string; sourceLocator: SourceLocator }>;
+    try { verifiedSegments = segmentsForPassages(sourceMap, sourcePassageIds, passageById); }
+    catch { return undefined; }
+    return {
+      summary,
+      sourceQuote: verifiedSegments.map((segment) => segment.quote).join('\n'),
+      sourcePassageIds,
+      sourceBlockIds: verifiedSegments.map((segment) => segment.sourceLocator.blockId!),
+      verifiedSegments,
+      needsMoreInformation: false,
+    };
+  };
+
+  const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const response = value as Record<string, unknown>;
+    if (Object.keys(response).sort().join(',') !== 'fields,schemaVersion' || response.schemaVersion !== SDF_CORE_VERSION
+      || !response.fields || typeof response.fields !== 'object' || Array.isArray(response.fields)) return false;
+    const fields = response.fields as Record<string, unknown>;
+    if (Object.keys(fields).sort().join(',') !== repairFields.slice().sort().join(',')) return false;
+    for (const field of repairFields) {
+      const item = fields[field];
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      const candidate = item as Record<string, unknown>;
+      if (Object.keys(candidate).sort().join(',') !== 'claims,needsMoreInformation'
+        || typeof candidate.needsMoreInformation !== 'boolean' || !Array.isArray(candidate.claims)) continue;
+      if (candidate.needsMoreInformation) {
+        if (candidate.claims.length === 0) repaired.set(field, {
+          summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true,
+        });
+        continue;
+      }
+      if (candidate.claims.length < 1 || candidate.claims.length > 8) continue;
+      const claims: Array<{ text: string; supportSets: string[][] }> = [];
+      let valid = true;
+      for (const claimValue of candidate.claims) {
+        if (!claimValue || typeof claimValue !== 'object' || Array.isArray(claimValue)) { valid = false; break; }
+        const claim = claimValue as Record<string, unknown>;
+        if (Object.keys(claim).sort().join(',') !== 'supportSets,text' || typeof claim.text !== 'string'
+          || !claim.text.trim() || claim.text.length > 800 || !/[。；！？.!?]$/u.test(claim.text.trim())
+          || !Array.isArray(claim.supportSets) || claim.supportSets.length < 1 || claim.supportSets.length > 3) { valid = false; break; }
+        const supportSets: string[][] = [];
+        for (const supportValue of claim.supportSets) {
+          if (!Array.isArray(supportValue) || supportValue.length < 1 || supportValue.length > MAX_SOURCE_PASSAGE_IDS
+            || supportValue.some((id) => typeof id !== 'string') || new Set(supportValue).size !== supportValue.length) { valid = false; break; }
+          supportSets.push(supportValue as string[]);
+        }
+        if (!valid) break;
+        claims.push({ text: claim.text.trim(), supportSets });
+      }
+      if (!valid) continue;
+      const proposal = selectEvidence(claims, candidatesByField.get(field)!);
+      if (proposal) repaired.set(field, proposal);
+    }
+    return true;
+  };
+
+  const supportedContext = Object.fromEntries(SDF_CORE_FIELDS.flatMap((field) => {
+    const candidate = partial.proposal.fields[field];
+    return candidate.needsMoreInformation ? [] : [[field, candidate.summary]];
+  }));
+  try {
+    await gateway.completeStructured(guard, [{ role: 'system', content: [
+      '你是Hermes科研证据修订器。只修复先前因证据容量失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序仅核对来源身份、主张覆盖组合和预算。',
+      '每个claims条目是一句完整主张，text必须以标点结束；supportSets列出1到3个可独立充分支持该主张的P编号组合。组合内来源共同支持，组合之间可替代。不得把诊断摘要当作真值，允许据原文纠错和去重。',
+      '保留字段的关键假设、步骤、条件与验证；不得为预算删掉核心主张。若候选不足、矛盾未解或任何核心主张没有充分来源，返回claims=[]且needsMoreInformation=true。不得把容量或技术失败写成作者未报告。只输出JSON。',
+      `输出schemaVersion="${SDF_CORE_VERSION}"，fields必须且只能包含${repairFields.join(',')}。每字段只能包含claims与needsMoreInformation。`,
+    ].join(' ') }, { role: 'user', content: [
+      `已验证字段只读语境：${JSON.stringify(supportedContext)}`,
+      `待修订诊断摘要（未验证）：${JSON.stringify(Object.fromEntries(repairFields.map((field) => [field, partial.unverifiedSummaries[field]])))}`,
+      `此前失败与实算预算：${JSON.stringify(Object.fromEntries(repairFields.map((field) => [field, {
+        reason: partial.fieldDiagnostics[field], detail: partial.fieldDiagnosticsDetails[field] ?? '',
+      }])))}`,
+      canonicalPassagePrompt(candidatePassages),
+    ].join('\n\n') }], { temperature: 0.1, maxRetries: 0 });
+  } catch { return partial; }
+  if (!repaired.size) return partial;
+  for (const [field, candidate] of repaired) {
+    partial.proposal.fields[field] = candidate;
+    delete partial.fieldDiagnostics[field];
+    delete partial.fieldDiagnosticsDetails[field];
+    delete partial.unverifiedSummaries[field];
+    delete partial.unverifiedSourcePassageIds[field];
+  }
+  return partial;
 }
 
 function materializeCanonicalProposal(proposal: ExtractedProposal): ExtractionResult {
@@ -816,12 +954,15 @@ export async function extractHandler(
         temperature: 0.2,
         validationFeedback: validation.validationFeedback,
         validationDiagnostic: validation.validationDiagnostic,
+        maxRetries: 0,
       });
     } catch (error) {
       if (!(error instanceof AiGatewayError) || !['SCHEMA_VALIDATION', 'STRUCTURED_JSON_INVALID'].includes(error.code)) throw error;
       if (!(error.cause instanceof AiGatewayError) || !['SCHEMA_VALIDATION', 'STRUCTURED_JSON_INVALID'].includes(error.cause.code)) throw error;
-      const partial = validation.partialResult();
-      if (!partial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
+      const initialPartial = validation.partialResult();
+      if (!initialPartial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
+      const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, initialPartial);
+      if (Object.keys(partial.fieldDiagnostics).length === 0) return materializeCanonicalProposal(partial.proposal);
       return {
         ...materializeCanonicalProposal(partial.proposal),
         reason: 'canonical_partial_validation_exhausted',
