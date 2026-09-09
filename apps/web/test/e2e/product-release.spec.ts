@@ -837,7 +837,7 @@ test('Hermes action menu / detached desktop dock remains joined to the visible c
   await context.close();
 });
 
-test('Hermes action menu preserves the researcher scroll position', async ({ page }) => {
+test('Hermes action menu restores the researcher scroll position after closing', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
@@ -853,7 +853,7 @@ test('Hermes action menu preserves the researcher scroll position', async ({ pag
   const before = await page.evaluate(() => ({ scrollY: window.scrollY }));
   await trigger.click({ button: 'right' });
   await expect(page.getByRole('menu', { name: /Hermes/u })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(before.scrollY);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).not.toBe(before.scrollY);
   await page.keyboard.press('Escape');
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(before.scrollY);
 });

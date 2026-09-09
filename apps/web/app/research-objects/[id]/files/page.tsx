@@ -4,7 +4,7 @@ import { PackageCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import ArtifactUploader from '@/components/editor/ArtifactUploader';
@@ -81,7 +81,14 @@ export default function FilesPage({ params }: { params: { id: string } }) {
   const t = useTranslations('productSurfaces');
   const [object, setObject] = useState<FilesResearchObject | null>(null);
   const [error, setError] = useState<ApiClientError | Error | null>(null);
-  useEffect(() => { void getResearchObject(params.id).then(({ researchObject }) => setObject(researchObject)).catch(setError); }, [params.id]);
+  const objectRequestRef = useRef<{ id: string; request: ReturnType<typeof getResearchObject> } | null>(null);
+  useEffect(() => {
+    const request = objectRequestRef.current?.id === params.id
+      ? objectRequestRef.current.request
+      : getResearchObject(params.id);
+    objectRequestRef.current = { id: params.id, request };
+    void request.then(({ researchObject }) => setObject(researchObject)).catch(setError);
+  }, [params.id]);
   if (error) return <ResearchSurfaceStateShell active="files" detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} objectId={params.id} title={t('state.errorTitle')} />;
   if (!object) return <ResearchSurfaceStateShell active="files" detail={t('state.loadingBody')} kind="loading" objectId={params.id} title={t('files.title')} />;
   return <ResearchObjectFilesContent object={object} />;

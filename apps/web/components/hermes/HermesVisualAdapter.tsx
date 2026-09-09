@@ -252,14 +252,16 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         { attachment: 'left', left: actorBounds.left - menuBounds.width - 32 },
         { attachment: 'right', left: actorBounds.right + 32 },
       ] as const;
-      const candidate = horizontalCandidates.flatMap(({ attachment, left }) => verticalCandidates.map((top) => ({ attachment, left, top })))
+      const candidates = horizontalCandidates.flatMap(({ attachment, left }) => verticalCandidates.map((top) => ({ attachment, left, top })));
+      const candidate = candidates
         .find(({ left, top }) => {
           const right = left + menuBounds.width;
           const bottom = top + menuBounds.height;
           if (left < 8 || right > window.innerWidth - 8) return false;
           return protectedBounds.every((bounds) => right + 8 <= bounds.left || left - 8 >= bounds.right
             || bottom + 8 <= bounds.top || top - 8 >= bounds.bottom);
-        });
+        }) ?? candidates.find(({ left, top }) => left >= 8 && left + menuBounds.width <= window.innerWidth - 8
+          && top >= minimumTop && top + menuBounds.height <= viewport.bottom - 8);
       if (!candidate) return false;
       menu.setAttribute('data-hermes-menu-attachment', candidate.attachment);
       menu.style.setProperty('--hermes-menu-correction-x', `${candidate.left - menuBounds.left}px`);
@@ -337,6 +339,15 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       menu.style.setProperty('--hermes-menu-correction-y', '0px');
       const actorTopAfterLayout = getActorBounds()?.top;
       if (actorTopAfterLayout === undefined) return;
+      if (compactMenu && anchored && window.matchMedia('(max-width: 640px)').matches) {
+        // The mobile sheet reserves document flow below the long-press point.
+        // Counter-scroll that reflow so the actor stays under the finger while
+        // the newly opened band clears the protected content above it.
+        window.scrollTo({ behavior: 'auto', top: window.scrollY + actorTopAfterLayout - layout.actorTop });
+        alignMenuToCrown();
+        menuFrame = window.requestAnimationFrame(alignMenuToCrown);
+        return;
+      }
       const reflowShift = anchored ? layout.actorTop - actorTopAfterLayout : 0;
       if (anchored && stage && Math.abs(reflowShift) > .5) {
         stage.style.translate = `0 ${reflowShift}px`;
@@ -431,6 +442,14 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     window.scrollTo({ behavior: 'auto', top: layout.scrollY });
     menuLayoutRef.current = null;
   }, []);
+
+  useClientLayoutEffect(() => {
+    if (!menuOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      menuContentRef.current?.querySelector<HTMLElement>('[data-hermes-action-key]')?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [menuOpen]);
 
   const dispatchContextMenu = () => {
     const trigger = linkRef.current;
