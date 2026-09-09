@@ -45,10 +45,9 @@ try {
   await stage.waitFor();
   assert.equal(await stage.getAttribute('data-hermes-footprint-source'), 'carrier-travel-hull');
   await target.waitFor();
-  const outline = page.getByRole('navigation', { name: /Outline|大纲/ });
-  await outline.getByRole('button', { name: /02 Insight|02 洞察/, exact: true }).click();
+  await page.locator('[data-sdf-node="2"] > button').click();
   await page.waitForFunction(() => document.querySelector('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-guide-target') === 'sdf-insight');
-  await outline.getByRole('button', { name: /01 Problem|01 问题/, exact: true }).click();
+  await page.locator('[data-sdf-node="1"] > button').click();
   await page.locator('[data-hermes-guide-bubble]').waitFor();
   assert.equal(await stage.getAttribute('data-hermes-guide-motion'), 'static', 'a saved user dock must stay static until the user explicitly requests guide travel');
   const stationary = await page.evaluate(() => {
