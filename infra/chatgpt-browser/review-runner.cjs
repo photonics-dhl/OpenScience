@@ -207,7 +207,11 @@ async function assistantResponseText(page, assistantId, domText) {
       writeText: async text => { window.__xgsScienceReviewCopy = String(text); },
     } });
   });
-  await copy.click();
+  // ChatGPT may render a transparent turn-action overlay above the visible copy
+  // control after a long Pro response. The button is already uniquely scoped to
+  // the anchored assistant turn, so invoke its DOM click handler directly rather
+  // than waiting for pointer hit-testing against unrelated overlay geometry.
+  await copy.evaluate(element => element.click());
   await page.waitForFunction(() => typeof window.__xgsScienceReviewCopy === 'string' && window.__xgsScienceReviewCopy.length > 0, null, { timeout: 3000 }).catch(() => {});
   return page.evaluate(() => window.__xgsScienceReviewCopy ?? '').catch(() => '');
 }
