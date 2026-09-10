@@ -548,6 +548,7 @@ export async function refreshIngestionAnalysis(
   const oldPayload = oldAgent?.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload)
     ? oldAgent.payload as Record<string, unknown> : null;
   const policy = oldAgent ? analysisRefreshPolicy(oldAgent.result, initial.artifact) : undefined;
+  if (!policy) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction is not eligible for analysis refresh');
   const allowedRetries = policy === 'user_requested_reanalysis' ? initial.retryCount : policy === 'grounded_passages_v1' ? 2 : policy === 'grounded_passages_v2' ? 1 : 0;
   if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review' || initial.retryCount < 0 || initial.retryCount > allowedRetries
     || !oldAgent || oldAgent.kind !== 'sdf.extract' || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== initial.retryCount
@@ -558,7 +559,6 @@ export async function refreshIngestionAnalysis(
     throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the scoped unconfirmed extraction can be refreshed');
   }
 
-  if (!policy) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction is not eligible for analysis refresh');
   let sourceMapProof: { objectKey: string; serializedSha256: string } | undefined;
   if (policy !== 'legacy_character_evidence_v1') {
     const reference = parseDocumentSourceMapReference((oldAgent!.result as Record<string, unknown>).sourceMapRef);
