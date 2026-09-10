@@ -77,6 +77,9 @@ export async function executeWebImage(config, request, privateDir) {
   if (innerResult.bytes !== raw.length || innerResult.width !== raw.readUInt32BE(16) || innerResult.height !== raw.readUInt32BE(20)) throw uncertain();
   const rawPath = join(privateDir, 'browser-result.png');
   await atomicWrite(rawPath, raw, 0o444);
+  // The systemd UMask intentionally tightens new files. The isolated
+  // normalizer runs as uid 1000 and needs read-only access to this exact PNG.
+  await chmod(rawPath, 0o444);
   const normalized = join(privateDir, 'normalized');
   await prepareDirectory(normalized, 1000);
   const container = 'xgs-chatgpt-web-normalize-' + request.id;
