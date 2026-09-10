@@ -188,13 +188,9 @@ async function findPreparedPage(context) {
 }
 async function imageComposer(page) {
   const rich = page.locator('#prompt-textarea');
-  if (await rich.count() === 1 && await rich.isVisible()) return rich;
-  if (page.url() !== 'https://chatgpt.com/images/'
+  if (await rich.count() !== 1 || !await rich.isVisible()
     || await page.getByTestId('accounts-profile-button').count() < 1) return null;
-  const fallback = page.locator('textarea[aria-label="Chat with ChatGPT"][placeholder="Describe a new image"]');
-  if (await fallback.count() !== 1 || !await fallback.isVisible()) return null;
-  const send = page.getByRole('button', { name: 'Send prompt', exact: true });
-  return await send.count() === 1 && await send.isVisible() ? fallback : null;
+  return rich;
 }
 async function composerText(composer) {
   return await composer.evaluate(element => element instanceof HTMLTextAreaElement ? element.value : element.innerText);
@@ -252,6 +248,12 @@ async function claimAuthenticatedImagePage(context) {
     if (!page) {
       page = await context.newPage();
       await page.goto('https://chatgpt.com/images/', { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
+      let ready = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 5000));
+      if (!ready) {
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
+        ready = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 15000));
+      }
+      if (!ready) throw Error('IMAGE_COMPOSER_NOT_FOUND');
       await page.evaluate(name => { window.name = name; }, `xgs-image-${id}`);
     }
   }
