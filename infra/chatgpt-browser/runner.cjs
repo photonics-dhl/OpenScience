@@ -183,13 +183,15 @@ async function findPreparedPage(context) {
   if (matches.length !== 1) throw Error('EXACT_PREPARED_PAGE_NOT_FOUND');
   return matches[0];
 }
-async function claimAuthenticatedHomePage(context) {
-  for (const page of context.pages()) {
-    if (page.url() !== 'https://chatgpt.com/' || await page.evaluate(() => window.name).catch(() => '')) continue;
-    const composer = page.locator('#prompt-textarea');
-    if (await composer.count() !== 1 || (await composer.innerText().catch(() => '')).trim()) continue;
-    await page.evaluate(name => { window.name = name; }, `xgs-image-${id}`);
-    return page;
+async function claimAuthenticatedImagePage(context) {
+  for (const url of ['https://chatgpt.com/images/', 'https://chatgpt.com/']) {
+    for (const page of context.pages()) {
+      if (page.url() !== url || await page.evaluate(() => window.name).catch(() => '')) continue;
+      const composer = page.locator('#prompt-textarea');
+      if (await composer.count() !== 1 || (await composer.innerText().catch(() => '')).trim()) continue;
+      await page.evaluate(name => { window.name = name; }, `xgs-image-${id}`);
+      return page;
+    }
   }
 }
 (async () => {
@@ -222,7 +224,7 @@ async function claimAuthenticatedHomePage(context) {
   if (mode === 'send') {
     page = await findPreparedPage(context);
   } else {
-    page = await claimAuthenticatedHomePage(context);
+    page = await claimAuthenticatedImagePage(context);
     if (!page) {
       page = await context.newPage();
       await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
