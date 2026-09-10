@@ -4,6 +4,7 @@ import { createDefaultIngestionAdapters } from './ingestion-parser';
 import {
   createSidecarParserStageProcessor,
   processParserJobsOnce,
+  recoverInterruptedParserJobs,
   reapParserJobOrphans,
 } from './parser-job-isolation';
 import { SafeParserErrorCode } from './parsers/job-protocol';
@@ -16,6 +17,7 @@ async function main(): Promise<void> {
   const configuredConcurrency = Number.parseInt(process.env.PARSER_WORKER_CONCURRENCY ?? '2', 10);
   const concurrency = Number.isFinite(configuredConcurrency)
     ? Math.min(4, Math.max(1, configuredConcurrency)) : 2;
+  await recoverInterruptedParserJobs(jobDir);
   let nextHeartbeat = 0;
   const processJobs = async () => {
     while (true) {
@@ -38,5 +40,7 @@ async function main(): Promise<void> {
 
 void main().catch(() => {
   console.error('document parser service failed', SafeParserErrorCode.SERVICE_FAILED);
-  process.exitCode = 1;
+  // Do not leave a deceptively healthy process with one or more dead worker
+  // loops. Compose restarts the service and startup recovery requeues claims.
+  process.exit(1);
 });

@@ -180,6 +180,39 @@ export async function reapParserJobOrphans(
   return reaped;
 }
 
+/** Requeue only jobs left in the claimed state by a previous parser process. */
+export async function recoverInterruptedParserJobs(jobDir: string): Promise<number> {
+  await mkdir(jobDir, { recursive: true });
+  const entries = await readdir(jobDir);
+  let recovered = 0;
+  for (const name of entries.filter((entry) => entry.endsWith('.processing.json')).sort()) {
+    const id = name.replace(/\.processing\.json$/, '');
+    if (!/^[0-9a-f-]{36}$/.test(id)) continue;
+    const processingPath = jobPath(jobDir, id, 'processing.json');
+    const requestPath = jobPath(jobDir, id, 'request.json');
+    try {
+      await access(jobPath(jobDir, id, 'cancelled'));
+      continue;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
+      await access(jobPath(jobDir, id, 'response.json'));
+      continue;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
+      await access(jobPath(jobDir, id, 'input'));
+      await rename(processingPath, requestPath);
+      recovered += 1;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+  return recovered;
+}
+
 function createParserJobClient(
   jobDir: string,
   expectedParser: DocumentParserMetadata | readonly DocumentParserMetadata[]
@@ -434,7 +467,9 @@ export async function processParserJobsOnce(
   if (!stageProcessor) throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_UNAVAILABLE);
   await mkdir(jobDir, { recursive: true });
   const entries = await readdir(jobDir);
-  const requests = entries.filter((name) => name.endsWith('.request.json') || name.endsWith('.processing.json')).sort();
+  // A request becomes exclusively owned when its atomic rename succeeds. Other
+  // workers must never treat the claimed .processing file as fresh work.
+  const requests = entries.filter((name) => name.endsWith('.request.json')).sort();
   let processed = 0;
   for (const name of requests) {
     if (processed >= (options.maxJobs ?? Number.POSITIVE_INFINITY)) break;
