@@ -1151,6 +1151,7 @@ test('Hermes research action shows its reaction before navigating to a real work
   await firstTrigger.scrollIntoViewIfNeeded();
   await firstTrigger.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: /Hermes/u });
+  await menu.getByRole('menuitem', { name: 'Research tools', exact: true }).click();
   await menu.locator('[data-hermes-action-key="sources"]').click();
   await expect(page.locator('[data-hermes-menu-feedback="true"]')).toHaveAttribute('data-hermes-feedback-action', 'citation-trace');
   await page.waitForTimeout(300);
@@ -1161,7 +1162,9 @@ test('Hermes research action shows its reaction before navigating to a real work
   const secondTrigger = page.locator('[data-hermes-input-owner="true"]');
   await secondTrigger.scrollIntoViewIfNeeded();
   await secondTrigger.click({ button: 'right' });
-  await page.getByRole('menu', { name: /Hermes/u }).locator('[data-hermes-action-key="compare"]').click();
+  const secondMenu = page.getByRole('menu', { name: /Hermes/u });
+  await secondMenu.getByRole('menuitem', { name: 'Research tools', exact: true }).click();
+  await secondMenu.locator('[data-hermes-action-key="compare"]').click();
   await expect(page.locator('[data-hermes-menu-feedback="true"]')).toBeVisible();
   await page.goto(`${baseUrl}/settings`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1100);

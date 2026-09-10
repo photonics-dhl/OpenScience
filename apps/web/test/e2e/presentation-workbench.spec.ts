@@ -380,13 +380,12 @@ test('Hermes plans and revises sourced scenes, retaining the original through ap
   const original = page.locator('[data-presentation-asset="plan-original"]');
   await expect(original).toBeVisible();
   expect(keys[0]).toBe(keys[1]);
-  expect(requests[1]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', instruction: 'Explain propagation.' } });
-  await original.locator('details').filter({ has: page.locator('[data-storyboard-panel]') }).locator('summary').first().click();
+  expect(requests[1]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', output: 'image', instruction: 'Explain propagation.' } });
   await original.getByLabel('What should Hermes change?').fill('Show interference.');
   await original.getByRole('button', { name: 'Create revised draft · 1 AI credit' }).click();
   const revision = page.locator('[data-presentation-asset="plan-revision"]');
   await expect(revision).toBeVisible();
-  expect(requests[2].storyboard).toEqual({ locale: 'en', style: 'ink', instruction: 'Show interference.', baseAssetId: 'plan-original' });
+  expect(requests[2].storyboard).toEqual({ locale: 'en', style: 'ink', output: 'image', instruction: 'Show interference.', baseAssetId: 'plan-original' });
   expect(keys[2]).not.toBe(keys[1]);
   await expect(revision).toContainText('Original narration 0');
   await expect(revision).toContainText('Revised visual 0');
@@ -426,7 +425,6 @@ test('approved scene produces an independently reviewable image with stable retr
     items[1] = { ...items[1], status: 'approved' }; return json(route, { asset: items[1] });
   });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
-  await page.locator('[data-presentation-asset="approved-plan"] details').filter({ has: page.locator('[data-storyboard-panel]') }).locator('summary').first().click();
   const action = page.locator('[data-scene-image="1"]');
   await expect(action).toBeVisible();
   await expect(page.getByText('One image costs 1 AI credit.', { exact: false }).first()).toBeVisible();
