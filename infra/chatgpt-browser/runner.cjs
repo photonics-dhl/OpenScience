@@ -195,6 +195,32 @@ async function imageComposer(page) {
 async function composerText(composer) {
   return await composer.evaluate(element => element instanceof HTMLTextAreaElement ? element.value : element.innerText);
 }
+async function imageModeActive(composer) {
+  const form = composer.locator('xpath=ancestor::form[1]');
+  if (await form.count() !== 1) return false;
+  const marker = form.getByText('Create image', { exact: true });
+  return await marker.count() === 1 && await marker.isVisible().catch(() => false);
+}
+async function activateImageMode(page, composer, deadlineAt) {
+  if (await imageModeActive(composer)) return true;
+  const form = composer.locator('xpath=ancestor::form[1]');
+  const plus = form.getByTestId('composer-plus-btn');
+  if (await plus.count() !== 1 || !await plus.isVisible().catch(() => false)) return false;
+  await plus.click();
+  const choice = page.getByText('Create image', { exact: true });
+  const choiceDeadline = Math.min(deadlineAt, Date.now() + 5000);
+  while (Date.now() < choiceDeadline) {
+    if (await choice.count() === 1 && await choice.isVisible().catch(() => false)) break;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  if (await choice.count() !== 1 || !await choice.isVisible().catch(() => false)) return false;
+  await choice.click();
+  while (Date.now() < deadlineAt) {
+    if (await imageModeActive(composer).catch(() => false)) return true;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  return false;
+}
 function bounded(promise, timeout = 3000) {
   return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(Error('PAGE_UNRESPONSIVE')), timeout))]);
 }
@@ -207,7 +233,7 @@ async function waitForImageComposer(page, deadlineAt) {
   return null;
 }
 async function claimAuthenticatedImagePage(context) {
-  for (const url of ['https://chatgpt.com/images/', 'https://chatgpt.com/']) {
+  for (const url of ['https://chatgpt.com/']) {
     for (const page of context.pages()) {
       if (page.url() !== url || await bounded(page.evaluate(() => window.name), 2000).catch(() => 'unresponsive')) continue;
       const composer = await bounded(imageComposer(page), 2000).catch(() => null);
@@ -250,7 +276,7 @@ async function claimAuthenticatedImagePage(context) {
     page = await claimAuthenticatedImagePage(context);
     if (!page) {
       page = await context.newPage();
-      await page.goto('https://chatgpt.com/images/', { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
+      await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
       let ready = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 5000));
       for (let attempt = 0; !ready && attempt < 3; attempt += 1) {
         await new Promise(resolve => setTimeout(resolve, 5000));
@@ -268,6 +294,7 @@ async function claimAuthenticatedImagePage(context) {
   ].join('\n');
   const composer = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 15000));
   if (!composer) throw Error('IMAGE_COMPOSER_NOT_FOUND');
+  if (!await activateImageMode(page, composer, Math.min(request.deadlineAt, Date.now() + 10000))) throw Error('IMAGE_MODE_NOT_READY');
   if (mode === 'prepare' || mode === 'execute') {
     await composer.fill(prompt);
     console.log('PREPARED');
