@@ -988,6 +988,41 @@ function previousCanonicalPartial(
     unverifiedSummaries, unverifiedSourcePassageIds };
 }
 
+function persistedScientificReviewProposal(
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  partial: CanonicalPartialResult,
+): ExtractedProposal | undefined {
+  const passageById = new Map(passages.map((passage) => [passage.id, passage]));
+  const fields = {} as ExtractedProposal['fields'];
+  for (const field of SDF_CORE_FIELDS) {
+    const current = partial.proposal.fields[field];
+    if (!current.needsMoreInformation) {
+      fields[field] = current;
+      continue;
+    }
+    const summary = partial.unverifiedSummaries[field]?.trim();
+    const ids = partial.unverifiedSourcePassageIds[field];
+    if (!summary || !ids?.length) {
+      fields[field] = current;
+      continue;
+    }
+    if (new Set(ids).size !== ids.length || ids.some((id) => !passageById.has(id))) return undefined;
+    let verifiedSegments: Array<{ quote: string; sourceLocator: SourceLocator }>;
+    try { verifiedSegments = segmentsForPassages(sourceMap, ids, passageById); }
+    catch { return undefined; }
+    fields[field] = {
+      summary,
+      sourceQuote: verifiedSegments.map((segment) => segment.quote).join('\n'),
+      sourcePassageIds: [...ids],
+      sourceBlockIds: verifiedSegments.map((segment) => segment.sourceLocator.blockId!),
+      verifiedSegments,
+      needsMoreInformation: false,
+    };
+  }
+  return { schemaVersion: SDF_CORE_VERSION, fields };
+}
+
 async function repairCanonicalPartial(
   gateway: AiGateway,
   sourceMap: DocumentSourceMap,
@@ -1572,6 +1607,16 @@ export async function extractHandler(
   if (canonicalSourceMap && passages && trustedContext.previousResult) {
     const previousPartial = previousCanonicalPartial(canonicalSourceMap, passages, trustedContext.previousResult);
     if (previousPartial) {
+      const reusableAttempt = trustedContext.scientificReview?.reusableAttempt;
+      const persistedProposal = reusableAttempt
+        ? persistedScientificReviewProposal(canonicalSourceMap, passages, previousPartial)
+        : undefined;
+      if (persistedProposal && sha256Json({ schemaVersion: SDF_CORE_VERSION, fields: persistedProposal.fields })
+        === reusableAttempt?.reviewedCandidateHash) {
+        return reviewAndMaterializeCanonicalProposal(
+          gateway, canonicalSourceMap, passages, persistedProposal, trustedContext.scientificReview,
+        );
+      }
       const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, previousPartial);
       return Object.keys(partial.fieldDiagnostics).length === 0
         ? reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal, trustedContext.scientificReview)
