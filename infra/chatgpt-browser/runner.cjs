@@ -233,6 +233,11 @@ async function imageModeActive(composer) {
   const marker = form.getByText('Create image', { exact: true });
   return await marker.count() === 1 && await marker.isVisible().catch(() => false);
 }
+async function model6ProActive(composer) {
+  const form = composer.locator('xpath=ancestor::form[1]');
+  if (await form.count() !== 1) return false;
+  return /(?:^|\s)6\s+Pro(?:\s|$)/.test(await form.innerText().catch(() => ''));
+}
 async function activateImageMode(page, composer, deadlineAt) {
   if (await imageModeActive(composer)) return true;
   const form = composer.locator('xpath=ancestor::form[1]');
@@ -334,6 +339,7 @@ async function closeStaleOperatorPages(context) {
   const composer = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 15000));
   if (!composer) throw Error('IMAGE_COMPOSER_NOT_FOUND');
   if (!await activateImageMode(page, composer, Math.min(request.deadlineAt, Date.now() + 10000))) throw Error('IMAGE_MODE_NOT_READY');
+  if (!await model6ProActive(composer)) throw Error('MODEL_6_PRO_NOT_READY');
   if (mode === 'prepare' || mode === 'execute') {
     await composer.fill(prompt);
     console.log('PREPARED');
