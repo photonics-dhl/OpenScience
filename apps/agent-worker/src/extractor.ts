@@ -675,8 +675,6 @@ async function repairCanonicalPartial(
     const prior = partial.unverifiedSourcePassageIds[field];
     return [field, new Set(prior?.length ? prior : allPassageIds)] as const;
   }));
-  const candidateIds = new Set(repairFields.flatMap((field) => [...candidatesByField.get(field)!]));
-  const candidatePassages = passages.filter((passage) => candidateIds.has(passage.id));
   const repaired = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
   const repairFailures = new Map<(typeof SDF_CORE_FIELDS)[number], string>();
 
@@ -720,79 +718,97 @@ async function repairCanonicalPartial(
     };
   };
 
-  const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const response = value as Record<string, unknown>;
-    if (Object.keys(response).sort().join(',') !== 'fields,schemaVersion' || response.schemaVersion !== SDF_CORE_VERSION
-      || !response.fields || typeof response.fields !== 'object' || Array.isArray(response.fields)) return false;
-    const fields = response.fields as Record<string, unknown>;
-    if (Object.keys(fields).sort().join(',') !== repairFields.slice().sort().join(',')) return false;
-    for (const field of repairFields) {
+  const supportedContext = Object.fromEntries(SDF_CORE_FIELDS.flatMap((field) => {
+    const candidate = partial.proposal.fields[field];
+    return candidate.needsMoreInformation ? [] : [[field, candidate.summary]];
+  }));
+  for (const field of repairFields) {
+    const allowedIds = candidatesByField.get(field)!;
+    const candidatePassages = passages.filter((passage) => allowedIds.has(passage.id));
+    const claimBudget = field === 'reproducibility' ? 2 : 3;
+    let repairedField: ExtractedFieldProposal | undefined;
+    let repairFailure = 'unresolved';
+    const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) { repairFailure = 'malformed_response'; return false; }
+      const response = value as Record<string, unknown>;
+      if (Object.keys(response).sort().join(',') !== 'fields,schemaVersion' || response.schemaVersion !== SDF_CORE_VERSION
+        || !response.fields || typeof response.fields !== 'object' || Array.isArray(response.fields)) {
+        repairFailure = 'malformed_response_contract';
+        return false;
+      }
+      const fields = response.fields as Record<string, unknown>;
+      if (Object.keys(fields).join(',') !== field) { repairFailure = 'unexpected_fields'; return false; }
       const item = fields[field];
-      if (!item || typeof item !== 'object' || Array.isArray(item)) { repairFailures.set(field, 'malformed_field'); continue; }
+      if (!item || typeof item !== 'object' || Array.isArray(item)) { repairFailure = 'malformed_field'; return false; }
       const candidate = item as Record<string, unknown>;
       if (Object.keys(candidate).sort().join(',') !== 'claims,needsMoreInformation'
         || typeof candidate.needsMoreInformation !== 'boolean' || !Array.isArray(candidate.claims)) {
-        repairFailures.set(field, 'malformed_field_contract');
-        continue;
+        repairFailure = 'malformed_field_contract';
+        return false;
       }
       if (candidate.needsMoreInformation) {
-        if (candidate.claims.length === 0) repaired.set(field, {
+        if (candidate.claims.length === 0) repairedField = {
           summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true,
-        });
-        else repairFailures.set(field, 'missing_requires_empty_claims');
-        continue;
+        };
+        else { repairFailure = 'missing_requires_empty_claims'; return false; }
+        return true;
       }
-      if (candidate.claims.length < 1 || candidate.claims.length > 8) { repairFailures.set(field, 'claim_count_1_to_8'); continue; }
+      if (candidate.claims.length < 1 || candidate.claims.length > 8) { repairFailure = 'claim_count_1_to_8'; return false; }
       const claims: Array<{ text: string; supportSets: string[][] }> = [];
-      let valid = true;
       for (const claimValue of candidate.claims) {
-        if (!claimValue || typeof claimValue !== 'object' || Array.isArray(claimValue)) { valid = false; repairFailures.set(field, 'malformed_claim'); break; }
+        if (!claimValue || typeof claimValue !== 'object' || Array.isArray(claimValue)) { repairFailure = 'malformed_claim'; return false; }
         const claim = claimValue as Record<string, unknown>;
         if (Object.keys(claim).sort().join(',') !== 'supportSets,text' || typeof claim.text !== 'string'
           || !claim.text.trim() || claim.text.length > 800
           || !Array.isArray(claim.supportSets) || claim.supportSets.length < 1 || claim.supportSets.length > 3) {
-          valid = false; repairFailures.set(field, 'malformed_claim_contract'); break;
+          repairFailure = 'malformed_claim_contract';
+          return false;
         }
         const supportSets: string[][] = [];
         for (const supportValue of claim.supportSets) {
           if (!Array.isArray(supportValue) || supportValue.length < 1 || supportValue.length > MAX_SOURCE_PASSAGE_IDS
             || supportValue.some((id) => typeof id !== 'string') || new Set(supportValue).size !== supportValue.length) {
-            valid = false; repairFailures.set(field, 'malformed_support_set'); break;
+            repairFailure = 'malformed_support_set';
+            return false;
           }
           supportSets.push(supportValue as string[]);
         }
-        if (!valid) break;
         claims.push({ text: claim.text.trim(), supportSets });
       }
-      if (!valid) continue;
-      const proposal = selectEvidence(claims, candidatesByField.get(field)!);
-      if (proposal) repaired.set(field, proposal);
-      else repairFailures.set(field, 'no_feasible_support_union');
+      const proposal = selectEvidence(claims, allowedIds);
+      if (!proposal) { repairFailure = 'no_feasible_support_union'; return false; }
+      repairedField = proposal;
+      return true;
+    };
+    try {
+      await gateway.completeStructured(guard, [{ role: 'system', content: [
+        '你是Hermes科研证据修订器。每次只处理一个首轮留空或因证据容量失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序仅核对来源身份、主张覆盖组合和预算。',
+        '每个claims条目是一句完整且可独立核验的主张；supportSets列出1到3个可独立充分支持该主张的P编号组合。组合内来源共同支持，组合之间可替代。不得把诊断摘要当作真值，允许据原文纠错和去重。',
+        `本轮${field}生成预算最多${claimBudget}条claims；这不改变服务端1到8条的既有合约。保留必要条件与科学限定，不得把多个独立结论塞入一句来绕过预算。`,
+        '若候选不足、矛盾未解或任何核心主张没有充分来源，返回claims=[]且needsMoreInformation=true。只有全文、图注及已提供附件均已覆盖时，才能把确实缺失的信息视为原文未报告；OCR缺失、附件未取得、容量或技术失败只能保持待核验。只输出JSON。',
+        `输出schemaVersion="${SDF_CORE_VERSION}"，fields必须且只能包含${field}。该字段只能包含claims与needsMoreInformation。`,
+      ].join(' ') }, { role: 'user', content: [
+        `已验证字段只读语境：${JSON.stringify(supportedContext)}`,
+        `待修订诊断摘要（未验证；空字符串表示首轮未形成摘要）：${JSON.stringify({ [field]: partial.unverifiedSummaries[field] ?? '' })}`,
+        `此前失败与实算预算：${JSON.stringify({ [field]: {
+          reason: partial.fieldDiagnostics[field], detail: partial.fieldDiagnosticsDetails[field] ?? '',
+        } })}`,
+        canonicalPassagePrompt(candidatePassages),
+      ].join('\n\n') }], {
+        temperature: 0.1,
+        maxRetries: 1,
+        validationDiagnostic: () => `${field}:${repairFailure}`,
+        validationFeedback: () => [
+          `仅修复字段${field}，失败原因=${repairFailure}。`,
+          `返回且只返回${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: { [field]: { claims: [{ text: '一条有充分原文支持且保留必要限定的核心主张', supportSets: [['P00001']] }], needsMoreInformation: false } } })}形状的JSON。`,
+          '若上一轮是数量或内容错误，收敛为1条最核心且证据充分的claim；若是结构错误，只修结构。P编号必须来自本轮候选。无法充分支持则claims=[]且needsMoreInformation=true。',
+        ].join(' '),
+      });
+    } catch {
+      if (!repairedField) repairFailure = 'structured_response_failed';
     }
-    return true;
-  };
-
-  const supportedContext = Object.fromEntries(SDF_CORE_FIELDS.flatMap((field) => {
-    const candidate = partial.proposal.fields[field];
-    return candidate.needsMoreInformation ? [] : [[field, candidate.summary]];
-  }));
-  try {
-    await gateway.completeStructured(guard, [{ role: 'system', content: [
-      '你是Hermes科研证据修订器。只处理首轮留空或因证据容量失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序仅核对来源身份、主张覆盖组合和预算。',
-      '每个claims条目是一句完整主张；supportSets列出1到3个可独立充分支持该主张的P编号组合。组合内来源共同支持，组合之间可替代。不得把诊断摘要当作真值，允许据原文纠错和去重。',
-      '保留字段的关键假设、步骤、条件与验证；不得为预算删掉核心主张。若候选不足、矛盾未解或任何核心主张没有充分来源，返回claims=[]且needsMoreInformation=true。不得把容量或技术失败写成作者未报告。只输出JSON。',
-      `输出schemaVersion="${SDF_CORE_VERSION}"，fields必须且只能包含${repairFields.join(',')}。每字段只能包含claims与needsMoreInformation。`,
-    ].join(' ') }, { role: 'user', content: [
-      `已验证字段只读语境：${JSON.stringify(supportedContext)}`,
-      `待修订诊断摘要（未验证；空字符串表示首轮未形成摘要）：${JSON.stringify(Object.fromEntries(repairFields.map((field) => [field, partial.unverifiedSummaries[field] ?? ''])))}`,
-      `此前失败与实算预算：${JSON.stringify(Object.fromEntries(repairFields.map((field) => [field, {
-        reason: partial.fieldDiagnostics[field], detail: partial.fieldDiagnosticsDetails[field] ?? '',
-      }])))}`,
-      canonicalPassagePrompt(candidatePassages),
-    ].join('\n\n') }], { temperature: 0.1, maxRetries: 1 });
-  } catch {
-    for (const field of repairFields) repairFailures.set(field, 'structured_response_failed');
+    if (repairedField) repaired.set(field, repairedField);
+    else repairFailures.set(field, repairFailure);
   }
   for (const field of repairFields) {
     if (repaired.has(field)) continue;
