@@ -278,6 +278,7 @@ export function createHandlers(
       const externalProcessingEligible = serverDerivedEligibility
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
       let reusableSourceMap: DocumentSourceMap | undefined;
+      let reusableExtractionResult: Record<string, unknown> | undefined;
       const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
       if (refresh) {
         const ingestion = await deps.prisma.ingestionTask.findUnique({ where: { id: refresh[1]! } });
@@ -293,6 +294,7 @@ export function createHandlers(
         if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
           || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable document source identity changed');
         reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+        if (previousResult.canonicalExtractionContract === 'grounded-passages-v2') reusableExtractionResult = previousResult;
       }
       const reanalysis = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36})$/.exec(ownerTask.idempotencyKey ?? '');
       if (reanalysis) {
@@ -350,7 +352,10 @@ export function createHandlers(
       const manuscriptText = sourceMapToManuscriptText(parsed.sourceMap);
       if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
       return {
-        ...await extractHandler(gateway, { payload: { manuscriptText } }, { sourceMap: parsed.sourceMap }),
+        ...await extractHandler(gateway, { payload: { manuscriptText } }, {
+          sourceMap: parsed.sourceMap,
+          previousResult: reusableExtractionResult,
+        }),
         ...(reusableSourceMap ? { sourceMapReused: true } : {}),
         sourceMapRef,
       };

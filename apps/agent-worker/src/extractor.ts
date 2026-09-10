@@ -105,6 +105,20 @@ const MAX_EXCERPT_CHARS = 24_000;
 const MAX_EVIDENCE_SEGMENTS = 32;
 const MAX_FIELD_EVIDENCE_CHARS = 8_000;
 const MAX_CANONICAL_CORE_CHARS = 4_000;
+const CHINESE_NARRATION = /[\u3400-\u9fff]/u;
+const BROKEN_SCIENTIFIC_NOTATION = /[⁺⁻](?![⁰¹²³⁴⁵⁶⁷⁸⁹])|\b\d+(?:\.\d+)?e[+-](?!\d)|10\^\{\s*\}/iu;
+
+function canonicalSummaryQualityReason(text: string): 'language_violation' | 'math_integrity_error' | undefined {
+  if (!CHINESE_NARRATION.test(text)) return 'language_violation';
+  if (BROKEN_SCIENTIFIC_NOTATION.test(text)) return 'math_integrity_error';
+  return undefined;
+}
+
+function hasDirectQuantitativeResultCandidate(passages: readonly CanonicalPassage[]): boolean {
+  const resultLanguage = /\b(?:calculated|measured|obtained|achieved|shows?|yielded|increased|decreased)\b|(?:计算|测得|得到|达到|显示|增加|降低)/iu;
+  const quantity = /(?:\d+(?:\.\d+)?\s*(?:as|fs|ps|ns|Hz|kHz|MHz|GHz|THz|PHz|nm|μm|mm|cm|mJ|pC|MeV|W\/m²|%)|[ζτν]\s*[≈=<>])/iu;
+  return passages.some((passage) => resultLanguage.test(passage.text) && quantity.test(passage.text));
+}
 const CANONICAL_EXTRACTION_CONTRACT = 'grounded-passages-v2';
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
@@ -478,7 +492,9 @@ type CanonicalFieldValidationReason =
   | 'locator_roundtrip_failed'
   | 'segment_count_1_to_32'
   | 'source_text_limit_8000'
-  | 'core_text_limit_4000';
+  | 'core_text_limit_4000'
+  | 'language_violation'
+  | 'math_integrity_error';
 
 interface CanonicalRepairResponse {
   schemaVersion: string;
@@ -515,10 +531,13 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
       || typeof candidate.summary !== 'string' || typeof candidate.needsMoreInformation !== 'boolean'
       || !Array.isArray(candidate.sourcePassageIds)) return { reason: 'malformed_item' };
     if (candidate.needsMoreInformation) {
+      if (candidate.summary.trim() || candidate.sourcePassageIds.length) return { reason: 'missing_requires_empty' };
       return { candidate: { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true } };
     }
     if (!candidate.summary.trim()) return { reason: 'summary_required' };
     if (candidate.summary.length > MAX_CANONICAL_CORE_CHARS) return { reason: 'core_text_limit_4000' };
+    const qualityReason = canonicalSummaryQualityReason(candidate.summary);
+    if (qualityReason) return { reason: qualityReason };
     const invalidIdType = candidate.sourcePassageIds.some((id) => typeof id !== 'string');
     if (candidate.sourcePassageIds.length < 1 || candidate.sourcePassageIds.length > MAX_SOURCE_PASSAGE_IDS
       || invalidIdType) return {
@@ -661,6 +680,77 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
   };
 }
 
+function previousCanonicalPartial(
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  value: unknown,
+): CanonicalPartialResult | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const previous = value as Record<string, unknown>;
+  if (previous.canonicalExtractionContract !== CANONICAL_EXTRACTION_CONTRACT
+    || !previous.core || typeof previous.core !== 'object' || Array.isArray(previous.core)
+    || !previous.evidence || typeof previous.evidence !== 'object' || Array.isArray(previous.evidence)
+    || !Array.isArray(previous.needsMoreInformation)) return undefined;
+  const core = previous.core as Record<string, unknown>;
+  const evidence = previous.evidence as Record<string, unknown>;
+  const needs = previous.needsMoreInformation;
+  if (needs.some((field) => typeof field !== 'string' || !SDF_CORE_FIELDS.includes(field as (typeof SDF_CORE_FIELDS)[number]))
+    || new Set(needs).size !== needs.length) return undefined;
+  const needsSet = new Set(needs as Array<(typeof SDF_CORE_FIELDS)[number]>);
+  const passageById = new Map(passages.map((passage) => [passage.id, passage]));
+  const previousDrafts = previous.unverifiedSummaries && typeof previous.unverifiedSummaries === 'object'
+    && !Array.isArray(previous.unverifiedSummaries) ? previous.unverifiedSummaries as Record<string, unknown> : {};
+  const previousDraftIds = previous.unverifiedSourcePassageIds && typeof previous.unverifiedSourcePassageIds === 'object'
+    && !Array.isArray(previous.unverifiedSourcePassageIds) ? previous.unverifiedSourcePassageIds as Record<string, unknown> : {};
+  const previousDetails = previous.fieldDiagnosticsDetails && typeof previous.fieldDiagnosticsDetails === 'object'
+    && !Array.isArray(previous.fieldDiagnosticsDetails) ? previous.fieldDiagnosticsDetails as Record<string, unknown> : {};
+  const fields = {} as ExtractedProposal['fields'];
+  const fieldDiagnostics: Record<string, CanonicalFieldValidationReason> = {};
+  const fieldDiagnosticsDetails: Record<string, string> = {};
+  const unverifiedSummaries: Record<string, string> = {};
+  const unverifiedSourcePassageIds: Record<string, string[]> = {};
+  for (const field of SDF_CORE_FIELDS) {
+    const summary = core[field];
+    const evidenceItem = evidence[field];
+    if (typeof summary !== 'string' || !evidenceItem || typeof evidenceItem !== 'object' || Array.isArray(evidenceItem)) return undefined;
+    const evidenceRecord = evidenceItem as Record<string, unknown>;
+    if (typeof evidenceRecord.quote !== 'string' || typeof evidenceRecord.locator !== 'string') return undefined;
+    const match = /^passages:(P\d{5}(?:,P\d{5})*)$/.exec(evidenceRecord.locator);
+    const ids = match ? match[1]!.split(',') : [];
+    const validIds = ids.length > 0 && new Set(ids).size === ids.length && ids.every((id) => passageById.has(id));
+    const qualityReason = summary.trim() ? canonicalSummaryQualityReason(summary) : undefined;
+    if (needsSet.has(field) || qualityReason) {
+      fields[field] = { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true };
+      fieldDiagnostics[field] = qualityReason ?? 'malformed_item';
+      const draft = typeof previousDrafts[field] === 'string' && previousDrafts[field] ? previousDrafts[field] as string : summary;
+      if (draft) unverifiedSummaries[field] = draft;
+      const draftIds = Array.isArray(previousDraftIds[field])
+        ? (previousDraftIds[field] as unknown[]).filter((id): id is string => typeof id === 'string' && passageById.has(id))
+        : validIds ? ids : [];
+      if (draftIds.length) unverifiedSourcePassageIds[field] = [...new Set(draftIds)];
+      const detail = previousDetails[field];
+      if (typeof detail === 'string' && detail) fieldDiagnosticsDetails[field] = detail;
+      continue;
+    }
+    if (!summary.trim() || qualityReason || !validIds) return undefined;
+    let verifiedSegments: Array<{ quote: string; sourceLocator: SourceLocator }>;
+    try { verifiedSegments = segmentsForPassages(sourceMap, ids, passageById); }
+    catch { return undefined; }
+    const sourceQuote = verifiedSegments.map((segment) => segment.quote).join('\n');
+    if (sourceQuote !== evidenceRecord.quote) return undefined;
+    fields[field] = {
+      summary,
+      sourceQuote,
+      sourcePassageIds: ids,
+      sourceBlockIds: verifiedSegments.map((segment) => segment.sourceLocator.blockId!),
+      verifiedSegments,
+      needsMoreInformation: false,
+    };
+  }
+  return { proposal: { schemaVersion: SDF_CORE_VERSION, fields }, fieldDiagnostics, fieldDiagnosticsDetails,
+    unverifiedSummaries, unverifiedSourcePassageIds };
+}
+
 async function repairCanonicalPartial(
   gateway: AiGateway,
   sourceMap: DocumentSourceMap,
@@ -726,6 +816,10 @@ async function repairCanonicalPartial(
     const allowedIds = candidatesByField.get(field)!;
     const candidatePassages = passages.filter((passage) => allowedIds.has(passage.id));
     const claimBudget = field === 'reproducibility' ? 2 : 3;
+    const hasGroundedDraft = Boolean(partial.unverifiedSummaries[field]?.trim()
+      && partial.unverifiedSourcePassageIds[field]?.length);
+    const evidenceLikelyPresent = hasGroundedDraft
+      || (field === 'results' && hasDirectQuantitativeResultCandidate(candidatePassages));
     let repairedField: ExtractedFieldProposal | undefined;
     let repairFailure = 'unresolved';
     const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
@@ -747,6 +841,7 @@ async function repairCanonicalPartial(
         return false;
       }
       if (candidate.needsMoreInformation) {
+        if (evidenceLikelyPresent) { repairFailure = 'evidence_present_but_no_claim'; return false; }
         if (candidate.claims.length === 0) repairedField = {
           summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true,
         };
@@ -775,6 +870,9 @@ async function repairCanonicalPartial(
         }
         claims.push({ text: claim.text.trim(), supportSets });
       }
+      const draftSummary = `${claims.map((claim) => claim.text.trim().replace(/[。；！？.!?]+$/u, '')).join('；')}。`;
+      const qualityReason = canonicalSummaryQualityReason(draftSummary);
+      if (qualityReason) { repairFailure = qualityReason; return false; }
       const proposal = selectEvidence(claims, allowedIds);
       if (!proposal) { repairFailure = 'no_feasible_support_union'; return false; }
       repairedField = proposal;
@@ -783,6 +881,7 @@ async function repairCanonicalPartial(
     try {
       await gateway.completeStructured(guard, [{ role: 'system', content: [
         '你是Hermes科研证据修订器。每次只处理一个首轮留空或因证据容量失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序仅核对来源身份、主张覆盖组合和预算。',
+        '所有摘要、claim及说明必须使用中文；术语、单位和数学符号可保留，SourceMap原文保持原样。科学计数法指数、上下标和数学定界符必须完整；原文也残缺时不要猜写该表达。',
         '每个claims条目是一句完整且可独立核验的主张；supportSets列出1到3个可独立充分支持该主张的P编号组合。组合内来源共同支持，组合之间可替代。不得把诊断摘要当作真值，允许据原文纠错和去重。',
         `本轮${field}生成预算最多${claimBudget}条claims；这不改变服务端1到8条的既有合约。保留必要条件与科学限定，不得把多个独立结论塞入一句来绕过预算。`,
         '若候选不足、矛盾未解或任何核心主张没有充分来源，返回claims=[]且needsMoreInformation=true。只有全文、图注及已提供附件均已覆盖时，才能把确实缺失的信息视为原文未报告；OCR缺失、附件未取得、容量或技术失败只能保持待核验。只输出JSON。',
@@ -801,7 +900,7 @@ async function repairCanonicalPartial(
         validationFeedback: () => [
           `仅修复字段${field}，失败原因=${repairFailure}。`,
           `返回且只返回${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: { [field]: { claims: [{ text: '一条有充分原文支持且保留必要限定的核心主张', supportSets: [['P00001']] }], needsMoreInformation: false } } })}形状的JSON。`,
-          '若上一轮是数量或内容错误，收敛为1条最核心且证据充分的claim；若是结构错误，只修结构。P编号必须来自本轮候选。无法充分支持则claims=[]且needsMoreInformation=true。',
+          `若上一轮是数量、内容或evidence_present_but_no_claim错误，收敛为1条中文核心claim，保留条件、数值、单位与比较对象；若是结构错误，只修结构。P编号必须来自本轮候选。${evidenceLikelyPresent ? '当前候选含直接证据信号，不得因格式修复困难返回空claims；若无法形成合规主张则保持repair_failed。' : '确无充分证据时才可返回claims=[]且needsMoreInformation=true。'}`,
         ].join(' '),
       });
     } catch {
@@ -947,7 +1046,7 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
 export async function extractHandler(
   gateway: AiGateway,
   task: { payload: Record<string, unknown> },
-  trustedContext: { sourceMap?: DocumentSourceMap } = {},
+  trustedContext: { sourceMap?: DocumentSourceMap; previousResult?: unknown } = {},
 ): Promise<ExtractionResult> {
   const canonicalSourceMap = trustedContext.sourceMap
     ? parseDocumentSourceMap(trustedContext.sourceMap)
@@ -959,6 +1058,21 @@ export async function extractHandler(
     throw new Error('缺少正文（payload.manuscriptText）');
   }
   const passages = canonicalSourceMap ? canonicalPassages(canonicalSourceMap) : undefined;
+  if (canonicalSourceMap && passages && trustedContext.previousResult) {
+    const previousPartial = previousCanonicalPartial(canonicalSourceMap, passages, trustedContext.previousResult);
+    if (previousPartial) {
+      const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, previousPartial);
+      if (Object.keys(partial.fieldDiagnostics).length === 0) return materializeCanonicalProposal(partial.proposal);
+      return {
+        ...materializeCanonicalProposal(partial.proposal),
+        reason: 'canonical_partial_validation_exhausted',
+        fieldDiagnostics: partial.fieldDiagnostics,
+        fieldDiagnosticsDetails: partial.fieldDiagnosticsDetails,
+        unverifiedSummaries: partial.unverifiedSummaries,
+        unverifiedSourcePassageIds: partial.unverifiedSourcePassageIds,
+      };
+    }
+  }
   const prompt = [
     { role: 'system' as const, content: [
       '你是Hermes科研阅读助手。综合给定全文理解论文，再用SDF六个展示维度 problem/insight/method/results/limitations/reproducibility 组织凝练内容；字段不对应固定章节或固定原文段落。',
