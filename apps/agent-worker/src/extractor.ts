@@ -790,7 +790,7 @@ async function repairCanonicalPartial(
         reason: partial.fieldDiagnostics[field], detail: partial.fieldDiagnosticsDetails[field] ?? '',
       }])))}`,
       canonicalPassagePrompt(candidatePassages),
-    ].join('\n\n') }], { temperature: 0.1, maxRetries: 0 });
+    ].join('\n\n') }], { temperature: 0.1, maxRetries: 1 });
   } catch {
     for (const field of repairFields) repairFailures.set(field, 'structured_response_failed');
   }
@@ -973,7 +973,7 @@ export async function extractHandler(
         temperature: 0.2,
         validationFeedback: validation.validationFeedback,
         validationDiagnostic: validation.validationDiagnostic,
-        maxRetries: 0,
+        maxRetries: 1,
       });
     } catch (error) {
       if (!(error instanceof AiGatewayError) || !['SCHEMA_VALIDATION', 'STRUCTURED_JSON_INVALID'].includes(error.code)) throw error;
