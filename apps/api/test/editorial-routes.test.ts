@@ -34,7 +34,7 @@ describe('Editorial collection routes', () => {
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
       collectionId: COLLECTION.id,
       state: 'published',
-      researchObject: { visibility: 'public' },
+      researchObject: { visibility: 'public', status: { not: 'archived' } },
       version: { status: 'published' },
     } }));
   });
