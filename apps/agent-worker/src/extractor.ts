@@ -1375,10 +1375,11 @@ async function webScientificReviewCanonicalProposal(
         bytes: Uint8Array.from(context.sourceDocument.bytes),
       }] } : {}),
     });
-    let parsed = parseJsonObject(response.text);
-    if (!scientificReviewGuard(parsed, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_response', {
+    const parsedResponse = parseJsonObject(response.text);
+    if (!scientificReviewGuard(parsedResponse, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_response', {
       promptHash: response.promptHash, responseHash: response.responseHash,
     });
+    let parsed: ScientificReviewResponse = parsedResponse;
     let finalAttemptId = attemptId;
     let evidenceManifestHash: string | undefined;
     let evidencePages: Array<{ pageNumber: number; imageSha256: string }> | undefined;
