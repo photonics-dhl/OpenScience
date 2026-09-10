@@ -128,7 +128,10 @@ async function waitAndDownload(browser, page, request) {
   const completionDeadline = request.deadlineAt - 45000;
   while (Date.now() < completionDeadline) {
     if (page.isClosed()) throw Error('PAGE_CLOSED_NO_RESEND');
-    const generated = page.getByRole('button', { name: /^Generated image:/ });
+    // The Images workspace can show an older gallery image while the new
+    // conversation still has a temporary WEB: URL. Never accept that image.
+    try { canonicalUrl(page.url()); } catch { await new Promise(resolve => setTimeout(resolve, 2000)); continue; }
+    const generated = page.getByRole('button', { name: /^(?:Generated image:|Open image:)/ });
     if (await generated.count() === 1 && await generated.isVisible()) {
       const url = await resolveCanonicalConversation(page, completionDeadline);
       if (!fs.existsSync(path.join(dir, 'conversation.json'))) once('conversation.json', { url });
@@ -143,7 +146,7 @@ async function waitAndDownload(browser, page, request) {
 async function downloadImage(browser, page, request, conversation) {
   if (fs.existsSync(path.join(dir, 'result.json'))) throw Error('OUTPUT_EXISTS');
   if (canonicalUrl(page.url()) !== canonicalUrl(conversation)) throw Error('CONVERSATION_CHANGED');
-  const generated = page.getByRole('button', { name: /^Generated image:/ });
+  const generated = page.getByRole('button', { name: /^(?:Generated image:|Open image:)/ });
   if (await generated.count() !== 1) throw Error('EXPECTED_ONE_GENERATED_IMAGE');
   const dialog = page.getByRole('dialog');
   if (await dialog.count() === 0) await generated.click();
