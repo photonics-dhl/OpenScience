@@ -299,7 +299,7 @@ export function createHandlers(
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
       let reusableSourceMap: DocumentSourceMap | undefined;
       let reusableExtractionResult: Record<string, unknown> | undefined;
-      let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string } | undefined;
+      let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string } | undefined;
       const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v3|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
       if (refresh) {
         const ingestion = await deps.prisma.ingestionTask.findUnique({ where: { id: refresh[1]! } });
@@ -330,6 +330,7 @@ export function createHandlers(
                 reusableScientificReviewAttempt = {
                   attemptId: candidate.attemptId as string,
                   reviewedCandidateHash: candidate.reviewedCandidateHash as string,
+                  parentRequestId: previous.id,
                 };
               }
             }

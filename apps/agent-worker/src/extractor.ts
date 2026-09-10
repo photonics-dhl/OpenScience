@@ -634,7 +634,7 @@ interface CanonicalPartialResult {
 interface ScientificReviewContext {
   requestId: string;
   authorizationContext: Readonly<OcrAuthorizationContext>;
-  reusableAttempt?: { attemptId: string; reviewedCandidateHash: string };
+  reusableAttempt?: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string };
   coveragePassageIds?: readonly string[];
   renderPages?: (pageNumbers: readonly number[]) => Promise<ParserRasterResult>;
   sourceDocument?: { fileName: 'source.pdf'; mediaType: 'application/pdf'; sha256: string; bytes: Uint8Array };
@@ -1386,7 +1386,12 @@ async function webScientificReviewCanonicalProposal(
       evidencePages = imageAttachments.length
         ? imageAttachments.map(({ pageNumber, sha256 }) => ({ pageNumber, imageSha256: sha256 }))
         : undefined;
-      finalAttemptId = reviewAttemptId(context.requestId, sourceMapHash, candidateHash, evidence.manifestHash);
+      finalAttemptId = reviewAttemptId(
+        context.reusableAttempt?.parentRequestId ?? context.requestId,
+        sourceMapHash,
+        candidateHash,
+        evidence.manifestHash,
+      );
       const supplementalPrompt = [
         '这是同一论文候选的定点原始材料补证续审。上一轮审稿保持不可变；本轮是新的review attempt。附件是原始 PDF 或原始页图，可作为公式符号与版面的直接证据；OCR与视觉转录均是未验证辅助，不得替代附件原件。',
         `上一轮attempt=${attemptId}；本轮evidenceManifestHash=${evidence.manifestHash}。逐项解决上一轮needsMoreEvidence；若附件仍不足则继续填写needsMoreEvidence，不猜测。`,
