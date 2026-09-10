@@ -668,10 +668,44 @@ function reviewAttemptId(parentTaskId: string, sourceMapHash: string, candidateH
 
 function parseJsonObject(text: string): unknown {
   const cleaned = text.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
-  try { return JSON.parse(cleaned); } catch { /* extract one bounded object below */ }
+  const parse = (value: string) => {
+    try { return JSON.parse(value); }
+    catch {
+      let normalized = '', inString = false, escaped = false;
+      for (const character of value) {
+        if (!inString) {
+          normalized += character;
+          if (character === '"') inString = true;
+          continue;
+        }
+        if (escaped) {
+          normalized += character;
+          escaped = false;
+          continue;
+        }
+        if (character === '\\') {
+          normalized += character;
+          escaped = true;
+          continue;
+        }
+        if (character === '"') {
+          normalized += character;
+          inString = false;
+          continue;
+        }
+        const code = character.charCodeAt(0);
+        normalized += code < 0x20
+          ? ({ '\b': '\\b', '\f': '\\f', '\n': '\\n', '\r': '\\r', '\t': '\\t' }[character]
+            ?? `\\u${code.toString(16).padStart(4, '0')}`)
+          : character;
+      }
+      return JSON.parse(normalized);
+    }
+  };
+  try { return parse(cleaned); } catch { /* extract one bounded object below */ }
   const start = cleaned.indexOf('{'), end = cleaned.lastIndexOf('}');
   if (start < 0 || end <= start) throw new Error('scientific review response is not JSON');
-  return JSON.parse(cleaned.slice(start, end + 1));
+  return parse(cleaned.slice(start, end + 1));
 }
 
 function selectScienceReviewPassages(passages: readonly CanonicalPassage[], proposal: ExtractedProposal, coveragePassageIds: readonly string[] = []): CanonicalPassage[] {
