@@ -325,18 +325,23 @@ export function createHandlers(
             const review = previousResult.scientificReview;
             if (review && typeof review === 'object' && !Array.isArray(review)) {
               const candidate = review as Record<string, unknown>;
+              const previousRefresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v3|user-requested-reanalysis)$/.exec(previous.idempotencyKey ?? '');
               if (SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))) {
                 persistedScientificReviewCandidateHash = candidate.reviewedCandidateHash as string;
               }
-              if (UUID_PATTERN.test(String(candidate.attemptId ?? ''))
-                && SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))
-                && candidate.previousAttemptId === undefined
-                && (candidate.evidenceManifestHash === undefined
-                  || ['provider_unavailable', 'invalid_response'].includes(String(candidate.continuationStatus ?? '')))) {
+              const initialAttemptId = UUID_PATTERN.test(String(candidate.previousAttemptId ?? ''))
+                ? candidate.previousAttemptId as string
+                : UUID_PATTERN.test(String(candidate.attemptId ?? ''))
+                  && candidate.previousAttemptId === undefined
+                  && (candidate.evidenceManifestHash === undefined
+                    || ['provider_unavailable', 'invalid_response'].includes(String(candidate.continuationStatus ?? '')))
+                  ? candidate.attemptId as string
+                  : undefined;
+              if (initialAttemptId && SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))) {
                 reusableScientificReviewAttempt = {
-                  attemptId: candidate.attemptId as string,
+                  attemptId: initialAttemptId,
                   reviewedCandidateHash: candidate.reviewedCandidateHash as string,
-                  parentRequestId: previous.id,
+                  parentRequestId: candidate.previousAttemptId !== undefined && previousRefresh ? previousRefresh[2]! : previous.id,
                 };
               }
             }
