@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import type { PresentationAsset, PresentationClaim, VersionSummary } from '@/lib/api';
-import { presentationAssetContentUrl, type SceneImageRequest, type StoryboardRequest } from '@/lib/api';
+import { type SceneImageRequest, type StoryboardRequest } from '@/lib/api';
 import { StoryboardPanel } from './StoryboardPanel';
 import { MechanismVideoPanel } from './MechanismVideoPanel';
 import { PresentationResultGallery } from './PresentationResultGallery';
@@ -54,9 +54,8 @@ export function PresentationWorkbench({
   const [statement, setStatement] = useState('');
   const eligibleIds = useMemo(() => new Set(claims.filter((claim) => claim.extractionStatus === 'succeeded').map((claim) => claim.id)), [claims]);
   const claimsById = useMemo(() => new Map(claims.map((claim) => [claim.id, claim])), [claims]);
-  const imageAssets = useMemo(() => assets.filter((asset) => !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg')), [assets]);
+  const resultAssets = useMemo(() => assets.filter((asset) => !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg' || asset.kind === 'video')), [assets]);
   const storyboardAssets = useMemo(() => assets.filter((asset) => Boolean(asset.storyboard)), [assets]);
-  const videoAssets = useMemo(() => assets.filter((asset) => asset.kind === 'video'), [assets]);
 
   useEffect(() => {
     setSelected((current) => current.filter((id) => eligibleIds.has(id)));
@@ -90,14 +89,14 @@ export function PresentationWorkbench({
               <h2 id="presentation-preview-heading" className="m-0 text-xl font-semibold tracking-[-0.012em]">{t('previewTitle')}</h2>
               {assets.length > 0 ? <span className="font-data text-sm tabular-nums text-os-muted-paper">{assets.length}</span> : null}
             </div>
-            {loading ? <p className="m-0 py-7 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : loadFailed ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{t('scopeLoadFailed')}</p> : imageAssets.length === 0 ? (
+            {loading ? <p className="m-0 py-7 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : loadFailed ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{t('scopeLoadFailed')}</p> : resultAssets.length === 0 ? (
               <div className="mt-5 rounded-control border border-os-rule-paper bg-os-paper-strong p-5 sm:p-6">
                 <h3 className="m-0 text-base font-semibold">{t('emptyPreviewTitle')}</h3>
                 <p className="m-0 mt-2 max-w-2xl text-pretty text-base leading-7 text-os-muted-paper">{canWrite ? t(eligibleIds.size === 0 ? 'emptyPreviewNeedsSources' : 'emptyPreview') : t('emptyPreviewReadonly')}</p>
                 {canWrite && eligibleIds.size === 0 && researchObjectId ? <Link className="mt-4 inline-flex min-h-11 items-center rounded-control border border-os-rule-paper px-4 text-sm font-semibold text-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/hermes`}>{t('openSourceReview')}</Link> : canWrite ? <a className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href="#presentation-source-heading">{t('startVisual')}</a> : null}
               </div>
             ) : (
-              <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={imageAssets} allAssets={assets} claimsById={claimsById} canWrite={canWrite} working={working} onTransition={onTransition} />
+              <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={resultAssets} allAssets={assets} claimsById={claimsById} canWrite={canWrite} working={working} onTransition={onTransition} />
             )}
           </section>
             {task && task.status !== 'succeeded' ? (
@@ -115,13 +114,12 @@ export function PresentationWorkbench({
 
             {error ? <div className="mt-5 border-l-2 border-state-danger pl-4" role="alert"><p className="m-0 text-sm leading-6 text-state-danger">{error}</p><a className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href="#presentation-source-heading">{t('recoverInSources')}</a></div> : null}
             {loadFailed && onRetryData ? <button type="button" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onRetryData}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('retryScopeLoad')}</button> : null}
-          {(storyboardAssets.length > 0 || videoAssets.length > 0) ? <details className="surface-folio-sheet mt-8 px-5 py-5 sm:px-6">
+          {storyboardAssets.length > 0 ? <details className="surface-folio-sheet mt-8 px-5 py-5 sm:px-6">
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"><span className="text-base font-semibold">{t('planningHistoryTitle')}</span><ChevronDown className="size-4 shrink-0" aria-hidden="true" /></summary>
             <p className="m-0 mt-2 max-w-3xl text-pretty text-sm leading-6 text-os-muted-paper">{t('planningHistoryBody')}</p>
             {storyboardAssets.map((asset) => <div className="mt-5 border-t border-os-rule-paper pt-4" key={asset.id}><StoryboardPanel storyboard={asset.storyboard} parent={assets.find((item) => item.id === asset.storyboard?.baseAssetId)?.storyboard} baseAssetId={asset.id} claims={claims} selectedClaimIds={asset.sourceClaimIds} canGenerate={canWrite && !loading && !loadFailed && !working && asset.status !== 'rejected'} onGenerate={onGenerateStoryboard} canGenerateImage={canWrite && !loading && !loadFailed && !working && asset.status === 'approved' && asset.canGenerateSceneImage === true} onGenerateImage={onGenerateSceneImage} />{canWrite && onGenerateVideo ? <MechanismVideoPanel parent={asset} assets={assets} disabled={working || loading || loadFailed} onGenerate={onGenerateVideo} /> : null}</div>)}
-            {videoAssets.map((asset) => <div className="mt-5 border-t border-os-rule-paper pt-4" key={asset.id}><h3 className="m-0 text-balance text-base font-semibold">{asset.label || t('videoTitle')}</h3><p className="m-0 mt-2 text-pretty text-sm leading-6 text-os-muted-paper">{t('videoSecondary')}</p><a className="mt-3 inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={presentationAssetContentUrl(researchObjectId, version.versionId, asset.id)} target="_blank" rel="noreferrer">{t('openVideo')}</a></div>)}
           </details> : null}
-          <details className="surface-folio-sheet mt-8 px-5 py-5 sm:px-6" data-source-tools="true" open={imageAssets.length === 0 || loading || loadFailed || Boolean(error) || Boolean(task && task.status !== 'succeeded') || undefined}>
+          <details className="surface-folio-sheet mt-8 px-5 py-5 sm:px-6" data-source-tools="true" open={resultAssets.length === 0 || loading || loadFailed || Boolean(error) || Boolean(task && task.status !== 'succeeded') || undefined}>
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink">
               <span id="presentation-source-heading" className="text-base font-semibold">{t('sourceTitle')}</span>
               <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />

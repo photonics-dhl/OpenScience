@@ -26,7 +26,7 @@ const PRIORITY: Record<string, number> = {
 };
 
 export function selectPriorityHermesTask<T extends HermesStateInput>(tasks: T[]): T | undefined {
-  return tasks.reduce<T | undefined>((selected, task) => {
+  return tasks.filter((task) => (PRIORITY[task.state] ?? 0) > 0).reduce<T | undefined>((selected, task) => {
     if (!selected || (PRIORITY[task.state] ?? 0) > (PRIORITY[selected.state] ?? 0)) return task;
     return selected;
   }, undefined);

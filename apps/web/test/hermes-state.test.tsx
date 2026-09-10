@@ -111,7 +111,7 @@ describe('Hermes dashboard guidance', () => {
 
     expect(deriveHermesGuide({ tasks: [task], researchObjects: [] })).toEqual({
       kind: 'actionable-task', titleKey: 'guide.review.title', bodyKey: 'guide.review.body',
-      href: '/research-objects/ro-1/hermes?task=ingestion-1', taskId: 'ingestion-1', researchObjectId: 'ro-1',
+      href: '/research-objects/ro-1/hermes?task=ingestion-1', taskId: 'ingestion-1', taskLabel: 'paper.pdf', researchObjectId: 'ro-1',
     });
     expect(deriveHermesGuide({ tasks: [{ ...task, state: 'failed_retryable' }], researchObjects: [] }).titleKey).toBe('guide.failed.title');
     expect(deriveHermesGuide({ tasks: [{ ...task, state: 'parsing' }], researchObjects: [] }).titleKey).toBe('guide.processing.title');
