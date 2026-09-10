@@ -155,6 +155,28 @@ export function createWorkerParserCascade(
     localOcr: true,
     llmOcr,
   });
+  const renderPages = async (input: ParserInput, pageNumbers: readonly number[]): Promise<ParserRasterResult> => {
+    if (!rasterJobAdapter) throw new Error('isolated raster adapter unavailable');
+    let parser: ParserRasterResult['parser'] | undefined;
+    const pages: ParserRasterResult['pages'][number][] = [];
+    for (let offset = 0; offset < pageNumbers.length; offset += 4) {
+      const result = await rasterJobAdapter({
+        schemaVersion: 2,
+        operation: 'render_page',
+        artifactId: input.artifactId,
+        contentHash: input.contentHash,
+        mediaType: input.mediaType,
+        options: { pageNumbers: pageNumbers.slice(offset, offset + 4) },
+      }, Buffer.from(input.content));
+      if (parser && JSON.stringify(parser) !== JSON.stringify(result.parser)) {
+        throw new Error('isolated raster parser identity changed between batches');
+      }
+      parser ??= result.parser;
+      pages.push(...result.pages);
+    }
+    if (!parser) throw new Error('isolated raster request has no pages');
+    return { schemaVersion: 2, kind: 'raster', parser, pages };
+  };
   return Object.assign(
     (input: ParserInput, authorization: ParserCascadeAuthorization) => runParserCascade(input, {
       adapters: {
@@ -177,15 +199,7 @@ export function createWorkerParserCascade(
             options: { pageNumbers: pages.map(({ page }) => page) },
           }, Buffer.from(stageInput.content)),
           renderPages: (stageInput, pageNumbers) => {
-            if (!rasterJobAdapter) throw new Error('isolated raster adapter unavailable');
-            return rasterJobAdapter({
-              schemaVersion: 2,
-              operation: 'render_page',
-              artifactId: stageInput.artifactId,
-              contentHash: stageInput.contentHash,
-              mediaType: stageInput.mediaType,
-              options: { pageNumbers: [...pageNumbers] },
-            }, Buffer.from(stageInput.content));
+            return renderPages(stageInput, pageNumbers);
           },
         },
       },
@@ -196,17 +210,7 @@ export function createWorkerParserCascade(
     }),
     {
       featureFlags,
-      renderPages: (input: ParserInput, pageNumbers: readonly number[]) => {
-        if (!rasterJobAdapter) throw new Error('isolated raster adapter unavailable');
-        return rasterJobAdapter({
-          schemaVersion: 2,
-          operation: 'render_page',
-          artifactId: input.artifactId,
-          contentHash: input.contentHash,
-          mediaType: input.mediaType,
-          options: { pageNumbers: [...pageNumbers] },
-        }, Buffer.from(input.content));
-      },
+      renderPages,
     },
   );
 }
