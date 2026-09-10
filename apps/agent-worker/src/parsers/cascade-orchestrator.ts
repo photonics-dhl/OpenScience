@@ -161,13 +161,27 @@ function mergeDeterministicMaps(
   const ids = new Set(pages.flatMap((page) => page.blocks.map(({ id }) => id)));
   for (const incomingPage of incoming.pages) {
     let page = pages.find(({ page: pageNumber }) => pageNumber === incomingPage.page);
+    let incomingBlocks = incomingPage.blocks;
     if (!page) {
       page = { page: incomingPage.page, width: incomingPage.width, height: incomingPage.height, blocks: [] };
       pages.push(page);
     } else if (page.width !== incomingPage.width || page.height !== incomingPage.height) {
-      return undefined;
+      const baseAspectRatio = page.width / page.height;
+      const incomingAspectRatio = incomingPage.width / incomingPage.height;
+      if (Math.abs(baseAspectRatio - incomingAspectRatio) / baseAspectRatio > 0.01) return undefined;
+      const scaleX = page.width / incomingPage.width;
+      const scaleY = page.height / incomingPage.height;
+      incomingBlocks = incomingPage.blocks.map((block) => ({
+        ...block,
+        boundingBox: {
+          x: block.boundingBox.x * scaleX,
+          y: block.boundingBox.y * scaleY,
+          width: block.boundingBox.width * scaleX,
+          height: block.boundingBox.height * scaleY,
+        },
+      }));
     }
-    for (const incomingBlock of incomingPage.blocks) {
+    for (const incomingBlock of incomingBlocks) {
       const matching = matchingBlock(page.blocks, incomingBlock);
       if (matching) {
         const index = page.blocks.indexOf(matching);
@@ -273,11 +287,18 @@ function inventorySourceMap(input: ParserInput, result: ParserStageResult): Docu
   }
 }
 
-function unresolvedPages(sourceMap: DocumentSourceMap): Array<StagePage & { reason: OcrSelectionReason }> {
+function unresolvedPages(sourceMap: DocumentSourceMap): Array<StagePage & {
+  reason: OcrSelectionReason;
+  localOcrRequired: boolean;
+}> {
   return stagePages(sourceMap).flatMap((page) => {
     const assessment = assessPageQuality(page);
     if (!assessment.localOcrRequired && !assessment.llmCandidateReason) return [];
-    return [{ ...page, reason: assessment.llmCandidateReason ?? 'low_confidence' }];
+    return [{
+      ...page,
+      reason: assessment.llmCandidateReason ?? 'low_confidence',
+      localOcrRequired: assessment.localOcrRequired,
+    }];
   }).sort((left, right) => Number(right.reason === 'formula') - Number(left.reason === 'formula') || left.page - right.page);
 }
 
@@ -380,38 +401,42 @@ export async function runParserCascade(
   if (context.featureFlags.localOcr
     && (context.adapters.isolatedLocalOcr || context.adapters.localOcr)
     && initialUnresolved.length > 0) {
-    const selected = initialUnresolved.slice(0, 4);
-    try {
-      const result = context.adapters.isolatedLocalOcr
-        ? await context.adapters.isolatedLocalOcr.ocrPages(adapterInput(canonicalInput), selected)
-        : await ocrSelectedPages(adapterInput(canonicalInput), selected, context.adapters.localOcr!);
-      const localMap = localOcrSourceMap(canonicalInput, result);
-      const merged = localMap ? mergeDeterministicMaps(current, localMap) : undefined;
-      if (!merged) reasons.push('critical locator could not round-trip');
-      else {
-        current = merged;
-        const mergedPages = new Map(stagePages(current).map((page) => [page.page, page]));
-        for (const page of result.pages) {
-          const mergedPage = mergedPages.get(page.page);
-          const rawOcrAssessment = assessPageQuality({
-            ...page, signals: { localOcrApplied: true },
-          });
-          const mergedAssessment = mergedPage && assessPageQuality(mergedPage);
-          const mergedHasStructuralConcern = mergedAssessment?.reasons.some(
-            (reason) => reason !== 'low_confidence',
-          );
-          if (page.blocks.length > 0
-            && initialReasonByPage.get(page.page) === 'low_confidence'
-            && rawOcrAssessment.llmCandidateReason === undefined
-            && mergedHasStructuralConcern === false) {
-            locallyResolved.add(page.page);
+    // Native formula blocks need visual transcription, not a full-page Tesseract pass.
+    // Reserve local OCR for pages whose text layer is actually missing or unreliable.
+    const selected = initialUnresolved.filter(({ localOcrRequired }) => localOcrRequired).slice(0, 4);
+    if (selected.length > 0) {
+      try {
+        const result = context.adapters.isolatedLocalOcr
+          ? await context.adapters.isolatedLocalOcr.ocrPages(adapterInput(canonicalInput), selected)
+          : await ocrSelectedPages(adapterInput(canonicalInput), selected, context.adapters.localOcr!);
+        const localMap = localOcrSourceMap(canonicalInput, result);
+        const merged = localMap ? mergeDeterministicMaps(current, localMap) : undefined;
+        if (!merged) reasons.push('critical locator could not round-trip');
+        else {
+          current = merged;
+          const mergedPages = new Map(stagePages(current).map((page) => [page.page, page]));
+          for (const page of result.pages) {
+            const mergedPage = mergedPages.get(page.page);
+            const rawOcrAssessment = assessPageQuality({
+              ...page, signals: { localOcrApplied: true },
+            });
+            const mergedAssessment = mergedPage && assessPageQuality(mergedPage);
+            const mergedHasStructuralConcern = mergedAssessment?.reasons.some(
+              (reason) => reason !== 'low_confidence',
+            );
+            if (page.blocks.length > 0
+              && initialReasonByPage.get(page.page) === 'low_confidence'
+              && rawOcrAssessment.llmCandidateReason === undefined
+              && mergedHasStructuralConcern === false) {
+              locallyResolved.add(page.page);
+            }
           }
         }
+        localStageSucceeded ||= locallyResolved.size > 0;
+        warnings.push(...result.warnings);
+      } catch {
+        reasons.push('local_ocr failed');
       }
-      localStageSucceeded ||= locallyResolved.size > 0;
-      warnings.push(...result.warnings);
-    } catch {
-      reasons.push('local_ocr failed');
     }
   }
 
