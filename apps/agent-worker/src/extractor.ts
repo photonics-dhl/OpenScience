@@ -882,46 +882,6 @@ async function repairCanonicalPartial(
   const repaired = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
   const repairFailures = new Map<(typeof SDF_CORE_FIELDS)[number], string>();
 
-  const selectEvidence = (claims: Array<{ text: string; supportSets: string[][] }>, allowedIds: Set<string>): ExtractedFieldProposal | undefined => {
-    const summary = `${claims.map((claim) => claim.text.trim().replace(/[。；！？.!?]+$/u, '')).join('；')}。`;
-    if (!summary || summary.length > MAX_CANONICAL_CORE_CHARS) return undefined;
-    let unions: Array<Set<string>> = [new Set()];
-    for (const claim of claims) {
-      const next = new Map<string, Set<string>>();
-      for (const existing of unions) {
-        for (const supportSet of claim.supportSets) {
-          if (!supportSet.length || supportSet.some((id) => !allowedIds.has(id))) continue;
-          const union = new Set([...existing, ...supportSet]);
-          if (union.size > MAX_SOURCE_PASSAGE_IDS) continue;
-          const ids = passages.filter((passage) => union.has(passage.id)).map((passage) => passage.id);
-          const budget = selectedPassageBudget(ids, passageById);
-          if (budget.segmentCount <= MAX_EVIDENCE_SEGMENTS && budget.evidenceChars <= MAX_FIELD_EVIDENCE_CHARS) {
-            next.set(ids.join(','), union);
-          }
-        }
-      }
-      unions = [...next.values()];
-      if (!unions.length) return undefined;
-    }
-    const choices = unions.map((union) => {
-      const ids = passages.filter((passage) => union.has(passage.id)).map((passage) => passage.id);
-      return { ids, budget: selectedPassageBudget(ids, passageById) };
-    }).sort((left, right) => left.budget.evidenceChars - right.budget.evidenceChars
-      || left.budget.segmentCount - right.budget.segmentCount || left.ids.length - right.ids.length);
-    const sourcePassageIds = choices[0]!.ids;
-    let verifiedSegments: Array<{ quote: string; sourceLocator: SourceLocator }>;
-    try { verifiedSegments = segmentsForPassages(sourceMap, sourcePassageIds, passageById); }
-    catch { return undefined; }
-    return {
-      summary,
-      sourceQuote: verifiedSegments.map((segment) => segment.quote).join('\n'),
-      sourcePassageIds,
-      sourceBlockIds: verifiedSegments.map((segment) => segment.sourceLocator.blockId!),
-      verifiedSegments,
-      needsMoreInformation: false,
-    };
-  };
-
   const supportedContext = Object.fromEntries(SDF_CORE_FIELDS.flatMap((field) => {
     const candidate = partial.proposal.fields[field];
     return candidate.needsMoreInformation ? [] : [[field, candidate.summary]];
@@ -929,10 +889,8 @@ async function repairCanonicalPartial(
   for (const field of repairFields) {
     const allowedIds = candidatesByField.get(field)!;
     const allCandidatePassages = passages.filter((passage) => allowedIds.has(passage.id));
-    const candidatePassages = field === 'results' && partial.fieldDiagnostics[field] === 'results_not_outcome'
-      ? focusedQuantitativeResultPassages(allCandidatePassages)
-      : allCandidatePassages;
-    const claimBudget = field === 'reproducibility' ? 2 : 3;
+    const focusedResults = field === 'results' ? focusedQuantitativeResultPassages(allCandidatePassages) : [];
+    const candidatePassages = focusedResults.length ? focusedResults : allCandidatePassages;
     const hasGroundedDraft = Boolean(partial.unverifiedSummaries[field]?.trim()
       && partial.unverifiedSourcePassageIds[field]?.length);
     const evidenceLikelyPresent = hasGroundedDraft
@@ -945,73 +903,60 @@ async function repairCanonicalPartial(
       : supportedContext;
     let repairedField: ExtractedFieldProposal | undefined;
     let repairFailure = 'unresolved';
-    const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
+    const guard: SchemaGuard<Record<string, unknown>> = (value: unknown): value is Record<string, unknown> => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) { repairFailure = 'malformed_response'; return false; }
-      const response = value as Record<string, unknown>;
-      if (Object.keys(response).sort().join(',') !== 'fields,schemaVersion' || response.schemaVersion !== SDF_CORE_VERSION
-        || !response.fields || typeof response.fields !== 'object' || Array.isArray(response.fields)) {
-        repairFailure = 'malformed_response_contract';
-        return false;
-      }
-      const fields = response.fields as Record<string, unknown>;
-      if (Object.keys(fields).join(',') !== field) { repairFailure = 'unexpected_fields'; return false; }
-      const item = fields[field];
-      if (!item || typeof item !== 'object' || Array.isArray(item)) { repairFailure = 'malformed_field'; return false; }
-      const candidate = item as Record<string, unknown>;
-      if (Object.keys(candidate).sort().join(',') !== 'claims,needsMoreInformation'
-        || typeof candidate.needsMoreInformation !== 'boolean' || !Array.isArray(candidate.claims)) {
+      const candidate = value as Record<string, unknown>;
+      if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourcePassageIds,summary'
+        || typeof candidate.needsMoreInformation !== 'boolean' || typeof candidate.summary !== 'string'
+        || !Array.isArray(candidate.sourcePassageIds)) {
         repairFailure = 'malformed_field_contract';
         return false;
       }
       if (candidate.needsMoreInformation) {
         if (evidenceLikelyPresent) { repairFailure = 'evidence_present_but_no_claim'; return false; }
-        if (candidate.claims.length === 0) repairedField = {
+        if (!candidate.summary.trim() && candidate.sourcePassageIds.length === 0) repairedField = {
           summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true,
         };
-        else { repairFailure = 'missing_requires_empty_claims'; return false; }
+        else { repairFailure = 'missing_requires_empty'; return false; }
         return true;
       }
-      if (candidate.claims.length < 1 || candidate.claims.length > 8) { repairFailure = 'claim_count_1_to_8'; return false; }
-      const claims: Array<{ text: string; supportSets: string[][] }> = [];
-      for (const claimValue of candidate.claims) {
-        if (!claimValue || typeof claimValue !== 'object' || Array.isArray(claimValue)) { repairFailure = 'malformed_claim'; return false; }
-        const claim = claimValue as Record<string, unknown>;
-        if (Object.keys(claim).sort().join(',') !== 'supportSets,text' || typeof claim.text !== 'string'
-          || !claim.text.trim() || claim.text.length > 800
-          || !Array.isArray(claim.supportSets) || claim.supportSets.length < 1 || claim.supportSets.length > 3) {
-          repairFailure = 'malformed_claim_contract';
-          return false;
-        }
-        const supportSets: string[][] = [];
-        for (const supportValue of claim.supportSets) {
-          if (!Array.isArray(supportValue) || supportValue.length < 1 || supportValue.length > MAX_SOURCE_PASSAGE_IDS
-            || supportValue.some((id) => typeof id !== 'string') || new Set(supportValue).size !== supportValue.length) {
-            repairFailure = 'malformed_support_set';
-            return false;
-          }
-          supportSets.push(supportValue as string[]);
-        }
-        claims.push({ text: claim.text.trim(), supportSets });
-      }
-      const draftSummary = `${claims.map((claim) => claim.text.trim().replace(/[。；！？.!?]+$/u, '')).join('；')}。`;
+      const draftSummary = candidate.summary.trim();
+      if (!draftSummary || draftSummary.length > MAX_CANONICAL_CORE_CHARS) { repairFailure = 'summary_required'; return false; }
       const qualityReason = canonicalSummaryQualityReason(draftSummary);
       if (qualityReason) { repairFailure = qualityReason; return false; }
       const resultQualityReason = field === 'results' ? resultSummaryQualityReason(draftSummary, candidatePassages) : undefined;
       if (resultQualityReason) { repairFailure = resultQualityReason; return false; }
-      const proposal = selectEvidence(claims, allowedIds);
-      if (!proposal) { repairFailure = 'no_feasible_support_union'; return false; }
-      repairedField = proposal;
+      if (candidate.sourcePassageIds.length < 1 || candidate.sourcePassageIds.length > MAX_SOURCE_PASSAGE_IDS
+        || candidate.sourcePassageIds.some((id) => typeof id !== 'string')
+        || new Set(candidate.sourcePassageIds).size !== candidate.sourcePassageIds.length) {
+        repairFailure = 'passage_ids_required'; return false;
+      }
+      const sourcePassageIds = candidate.sourcePassageIds as string[];
+      if (sourcePassageIds.some((id) => !allowedIds.has(id))) { repairFailure = 'unknown_passage'; return false; }
+      const budget = selectedPassageBudget(sourcePassageIds, passageById);
+      if (budget.segmentCount > MAX_EVIDENCE_SEGMENTS || budget.evidenceChars > MAX_FIELD_EVIDENCE_CHARS) {
+        repairFailure = 'evidence_budget'; return false;
+      }
+      let verifiedSegments: Array<{ quote: string; sourceLocator: SourceLocator }>;
+      try { verifiedSegments = segmentsForPassages(sourceMap, sourcePassageIds, passageById); }
+      catch { repairFailure = 'locator_roundtrip_failed'; return false; }
+      repairedField = {
+        summary: draftSummary,
+        sourceQuote: verifiedSegments.map((segment) => segment.quote).join('\n'),
+        sourcePassageIds,
+        sourceBlockIds: verifiedSegments.map((segment) => segment.sourceLocator.blockId!),
+        verifiedSegments,
+        needsMoreInformation: false,
+      };
       return true;
     };
     try {
       await gateway.completeStructured(guard, [{ role: 'system', content: [
-        '你是Hermes科研证据修订器。每次只处理一个首轮留空或因证据容量失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序仅核对来源身份、主张覆盖组合和预算。',
-        '所有摘要、claim及说明必须使用中文；术语、单位和数学符号可保留，SourceMap原文保持原样。科学计数法指数、上下标和数学定界符必须完整；原文也残缺时不要猜写该表达。',
-        '每个claims条目是一句完整且可独立核验的主张；supportSets列出1到3个可独立充分支持该主张的P编号组合。组合内来源共同支持，组合之间可替代。不得把诊断摘要当作真值，允许据原文纠错和去重。',
+        '你是Hermes科研证据修订器。每次只处理一个首轮留空或证据绑定失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序会回读P编号并核对来源身份与预算。',
+        'summary必须使用中文；术语、单位和数学符号可保留。科学计数法指数、上下标和数学定界符必须完整；原文残缺时不要猜写。sourcePassageIds只选共同充分支持summary中全部主张的最小P编号集合。',
         ...(field === 'results' ? ['results必须报告论文在具体参数或条件下实际给出的结果，不得只复述方法、判据或研究目标。理论估计、数值计算、仿真与实验实测必须明确标注证据类型；同一主张只组合属于同一算例的数据，严禁把不同材料、结构或单电子/电子束条件混写。若候选有定量输出，优先保留一组参数完整且最能代表主要结论的数值、单位与比较。'] : []),
-        `本轮${field}生成预算最多${claimBudget}条claims；这不改变服务端1到8条的既有合约。保留必要条件与科学限定，不得把多个独立结论塞入一句来绕过预算。`,
-        '若候选不足、矛盾未解或任何核心主张没有充分来源，返回claims=[]且needsMoreInformation=true。只有全文、图注及已提供附件均已覆盖时，才能把确实缺失的信息视为原文未报告；OCR缺失、附件未取得、容量或技术失败只能保持待核验。只输出JSON。',
-        `输出schemaVersion="${SDF_CORE_VERSION}"，fields必须且只能包含${field}。该字段只能包含claims与needsMoreInformation。`,
+        '若候选不足、矛盾未解或任何核心主张没有充分来源，返回summary="",sourcePassageIds=[],needsMoreInformation=true。只有全文、图注及已提供附件均已覆盖时，才能把确实缺失的信息视为原文未报告；OCR缺失、附件未取得、容量或技术失败只能保持待核验。',
+        '只输出一个JSON对象，且只能包含summary、sourcePassageIds、needsMoreInformation三个键。',
       ].join(' ') }, { role: 'user', content: [
         `已验证字段只读语境：${JSON.stringify(readOnlyContext)}`,
         `待修订诊断摘要（未验证；空字符串表示首轮未形成摘要）：${JSON.stringify({ [field]: partial.unverifiedSummaries[field] ?? '' })}`,
@@ -1025,12 +970,12 @@ async function repairCanonicalPartial(
         validationDiagnostic: () => `${field}:${repairFailure}`,
         validationFeedback: () => [
           `仅修复字段${field}，失败原因=${repairFailure}。`,
-          `返回且只返回${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: { [field]: { claims: [{ text: '一条有充分原文支持且保留必要限定的核心主张', supportSets: [['P00001']] }], needsMoreInformation: false } } })}形状的JSON。`,
-          `若上一轮是数量、内容或evidence_present_but_no_claim错误，收敛为1条中文核心claim，保留条件、数值、单位与比较对象；若是结构错误，只修结构。P编号必须来自本轮候选。${evidenceLikelyPresent ? '当前候选含直接证据信号，不得因格式修复困难返回空claims；若无法形成合规主张则保持repair_failed。' : '确无充分证据时才可返回claims=[]且needsMoreInformation=true。'}`,
+          `返回且只返回${JSON.stringify({ summary: '有充分原文支持且保留必要限定的中文摘要', sourcePassageIds: ['P00001'], needsMoreInformation: false })}形状的JSON。`,
+          `若上一轮是内容或证据错误，收敛摘要并保留条件、数值、单位与比较对象；若是结构错误，只修结构。P编号必须来自本轮候选。${evidenceLikelyPresent ? '当前候选含直接证据信号，不得因格式修复困难声称缺失。' : '确无充分证据时才返回空summary、空sourcePassageIds且needsMoreInformation=true。'}`,
         ].join(' '),
       });
     } catch {
-      if (!repairedField) repairFailure = 'structured_response_failed';
+      if (!repairedField && repairFailure === 'unresolved') repairFailure = 'structured_response_failed';
     }
     if (repairedField) repaired.set(field, repairedField);
     else repairFailures.set(field, repairFailure);
@@ -1049,6 +994,52 @@ async function repairCanonicalPartial(
     delete partial.unverifiedSourcePassageIds[field];
   }
   return partial;
+}
+
+async function physicsReviewCanonicalProposal(
+  gateway: AiGateway,
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  proposal: ExtractedProposal,
+): Promise<ExtractedProposal> {
+  const selected = new Set(SDF_CORE_FIELDS.flatMap((field) => proposal.fields[field].sourcePassageIds ?? []));
+  for (const passage of focusedQuantitativeResultPassages(passages)) selected.add(passage.id);
+  const reviewPassages = passages.filter((passage) => selected.has(passage.id));
+  if (!reviewPassages.length) return proposal;
+  const validation = canonicalProposalValidation(sourceMap, reviewPassages);
+  const current = Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
+    summary: proposal.fields[field].summary,
+    sourcePassageIds: proposal.fields[field].sourcePassageIds ?? [],
+    needsMoreInformation: proposal.fields[field].needsMoreInformation,
+  }]));
+  try {
+    await gateway.completeStructured(validation.guard, [{ role: 'system', content: [
+      PAPER_ANALYSIS_SKILL.instructions,
+      '你正在执行独立physics-review。逐字段对照原文修正摘要和证据选择，不沿用未经核对的措辞。',
+      '保留原文中的≈、=、<、>、∝及适用条件；区分理论推导、模型计算、数值模拟、实验测量、作者讨论和确定性换算。不得把作者的类比或判据写成普适定律或独立验证。',
+      '检查容易混淆的物理对象及尺度，例如局域量与入射量、结构尺寸与场宽、单粒子与束流、场振幅与强度、主峰与旁瓣。原文没有出现的限定不新增，原文明确存在的限定不省略。',
+      'results只保留具体条件下的研究输出；method保留输入、假设和处理链；insight保留机制或认识；reproducibility保留复现所需参数、材料、步骤、数据/代码披露及缺口。移除跨字段错位和无证据重复。',
+      `返回严格JSON：schemaVersion="${SDF_CORE_VERSION}"；fields必须且只能包含六字段，每项只能包含summary、sourcePassageIds、needsMoreInformation。P编号只能来自本轮原文。`,
+    ].join(' ') }, { role: 'user', content: [
+      `待复核建议：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: current })}`,
+      canonicalPassagePrompt(reviewPassages),
+    ].join('\n\n') }], {
+      temperature: 0.1,
+      maxRetries: 1,
+      validationFeedback: validation.validationFeedback,
+      validationDiagnostic: validation.validationDiagnostic,
+    });
+    const reviewed = validation.mergeRetained();
+    for (const field of SDF_CORE_FIELDS) {
+      if (reviewed.fields[field].needsMoreInformation && !proposal.fields[field].needsMoreInformation) {
+        reviewed.fields[field] = proposal.fields[field];
+      }
+    }
+    return reviewed;
+  } catch (error) {
+    console.error('paper-analysis physics-review unavailable; preserving validated proposal', error instanceof Error ? error.message : String(error));
+    return proposal;
+  }
 }
 
 function materializeCanonicalProposal(proposal: ExtractedProposal): ExtractionResult {
@@ -1188,7 +1179,10 @@ export async function extractHandler(
     const previousPartial = previousCanonicalPartial(canonicalSourceMap, passages, trustedContext.previousResult);
     if (previousPartial) {
       const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, previousPartial);
-      if (Object.keys(partial.fieldDiagnostics).length === 0) return materializeCanonicalProposal(partial.proposal);
+      if (Object.keys(partial.fieldDiagnostics).length === 0) {
+        const reviewed = await physicsReviewCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal);
+        return materializeCanonicalProposal(reviewed);
+      }
       return {
         ...materializeCanonicalProposal(partial.proposal),
         reason: 'canonical_partial_validation_exhausted',
@@ -1245,7 +1239,10 @@ export async function extractHandler(
       const initialPartial = validation.partialResult();
       if (!initialPartial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
       const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, initialPartial);
-      if (Object.keys(partial.fieldDiagnostics).length === 0) return materializeCanonicalProposal(partial.proposal);
+      if (Object.keys(partial.fieldDiagnostics).length === 0) {
+        const reviewed = await physicsReviewCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal);
+        return materializeCanonicalProposal(reviewed);
+      }
       return {
         ...materializeCanonicalProposal(partial.proposal),
         reason: 'canonical_partial_validation_exhausted',
@@ -1269,7 +1266,8 @@ export async function extractHandler(
     if (SDF_CORE_FIELDS.every((field) => proposal.fields[field].needsMoreInformation)) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_all_fields_missing');
     }
-    return materializeCanonicalProposal(proposal);
+    const reviewed = await physicsReviewCanonicalProposal(gateway, canonicalSourceMap, passages, proposal);
+    return materializeCanonicalProposal(reviewed);
   }
   const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
   return materializeProposal(proposal, manuscriptText);
