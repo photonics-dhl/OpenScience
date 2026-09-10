@@ -1,9 +1,9 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-09:** production ea95e63c / rollback c2d11326。附件预览、媒体选择、公开快照索引已部署，34条旧记录已归档；网页单次生图成功但未入产品，完整论文仍partial。唯一状态入口为Hermes CURRENT handoff。
-> 当前执行：上传预览→Hermes六维确认→选图/视频→发布与公开阅读；网页已生成私有PNG但队列回传仍待接入。先做2–3篇精选，暂停批量冷启动。
-> 最新部署：图片grant、预设imagegen指导、人工审核lineage与修订指令修复；页面布局已部署但视觉未观察。
+> **CURRENT 2026-09-10:** production `d850fadb` / rollback `0c635525`。真实Hermes网页生图任务已回传产品 `draft`（PNG 1280×720）；主画廊隐藏rejected历史项，生产页面已观察。唯一状态入口为 `docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
+> 当前执行：用户批准当前exact-hash图片→发布预览→明确确认后公开RO；随后上传不同的第二篇论文继续精选。视频暂停，批量冷启动暂停。
+> 最新部署：精确完成结果证明、原prompt/result恢复、浏览器重启后exact canonical续取且不重发、产品画廊整理。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -571,14 +571,14 @@
 
 - RESEARCH ADR-013补充自定义GPT/Image Generation + Action文件回传候选，未实施或验收。
 
-- CANDIDATE infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：独立服务器交互浏览器、loopback SSH登录界面，未接入生产Provider；infra/scripts/ssh-run.sh固定browser-tunnel。
+- DEPLOYED infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：服务器交互浏览器与生产 `chatgpt-web` provider；真实Hermes任务已回传产品草稿；infra/scripts/ssh-run.sh固定browser-tunnel。
 
 - CURRENT docs/runbooks/server-capabilities.md：服务器已有服务、镜像、浏览器/模型路径与复用边界；服务器任务先查，新增安装只补缺失能力（2026-09-09）。
 
 - `infra/scripts/browser-tunnel.ps1`：Windows隐藏SSH隧道断线重连；固定localhost6081，复用ssh-run.sh，2026-09-09本机页面恢复HTTP200。
 
-- `infra/chatgpt-browser/runner.cjs`：服务器私有网页任务执行/续取/Save下载；2026-09-09分步实际生成并保存1张PNG，通用编排及生产Provider尚未完整落地；Chat接口可用性见AGENTS。
+- `infra/chatgpt-browser/runner.cjs`：服务器私有网页任务执行/续取/精确canonical恢复/Save下载；2026-09-10真实产品任务端到端成功，提交后不重发；Chat接口可用性见AGENTS。
 
 | `apps/web/components/research/ArtifactViewer.tsx` / `scripts/archive-legacy-showcase.mjs` | 附件预览与可恢复旧演示归档；关联完整旅程计划 | 2026-09-09已部署c2d11326，34条归档；真实流程状态见CURRENT handoff |
 
-| infra/chatgpt-browser/broker.mjs | 服务器网页生图队列broker；Gateway、权限、提交恢复与草稿回传 | 候选，静态High复核完成，真实执行待部署 |
+| infra/chatgpt-browser/broker.mjs | 服务器网页生图队列broker；Gateway、权限、提交恢复与草稿回传 | DEPLOYED `0c635525`；真实task/asset `eb48809b…` succeeded/draft，精确会话恢复且不重发 |

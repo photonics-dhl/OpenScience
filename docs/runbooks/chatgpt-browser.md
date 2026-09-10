@@ -1,6 +1,6 @@
 # Server ChatGPT browser — operator login research
 
-Status: server browser running, host bridge active, localhost noVNC page HTTP200 (2026-09-09). User login and one actual webpage generation/download completed; not yet an integrated production image provider.
+Status: server browser, host bridge, broker timer and production `chatgpt-web` provider are running (2026-09-10). A real Hermes task generated through the logged-in webpage and returned a PNG product draft; scientific approval and publication remain explicit user actions.
 
 ## Prerequisites
 - Read server-capabilities.md first. Reuse the installed ScanSci image's full Chrome revision1234, Xvfb and libraries, plus existing Node/media-font layers. Only x11vnc/noVNC/websockify are additional packages; do not download Chromium again.
@@ -56,11 +56,11 @@ Sources: https://playwright.dev/docs/docker ; https://github.com/novnc/websockif
 - Scientific review: revision required. Image adds a plate/aperture geometry and field lines despite the brief requesting abstract objects without reconstructed geometry. Not published to product gallery and not approved as scientific evidence.
 
 ## Reusable runner
-- `infra/chatgpt-browser/runner.cjs` provides prepare/send/status/download plus execute (prepare→send→wait→download) and resume (wait/download only). Current server copy `/jobs/runner.cjs`; canonical image installs `/app/runner.cjs`.
+- `infra/chatgpt-browser/runner.cjs` provides prepare/send/status/download plus execute (prepare→send→wait→download), resume (wait/download only) and recover (open the exact stored canonical conversation and download only). Current server copy `/jobs/runner.cjs`; canonical image installs `/app/runner.cjs`.
 - Trusted operator exports only `{id,prompt,source}` to `/jobs/<UUID>/request.json`. Prompt comes from the already approved Hermes request; caller owns authorization/scene identity. Do not expose this runner as a public endpoint.
 - Run only with `docker exec openscience-chatgpt-browser flock -n /jobs/runner.lock node /jobs/runner.cjs <mode> <UUID>` (use `/app/runner.cjs` after canonical image rollout). UUID/mode are fixed validated arguments; no prompt in argv, no arbitrary URLs/selectors/scripts accepted.
-- Submitted marker is exclusive and fsynced before Send. A timeout/crash after submission must be investigated/resumed, never blindly re-executed. Human should not manipulate the same page during execution.
-- Actual prepare/send/download operations above succeeded. General execute/resume orchestration is saved but has not been independently run end-to-end; no tests performed. Production Hermes queue/Gateway provider and asset-import identity checks remain separate required integration work.
+- Submitted marker is exclusive and fsynced before Send. A timeout/crash after submission may restart the browser once and recover only from the exact stored canonical conversation; it must never resend. Human should not manipulate the same page during execution.
+- Production task `eb48809b-c402-4983-969d-ee82d0fe6200` completed end-to-end. Gateway recovery verifies request/result/provider/task/prompt hash and PNG identity, then reuses the original prompt/result without replanning. Result is a draft product asset pending user review. No tests were run.
 ## 2026-09-09 Product page control
 - Added exact OpenScience hostname to CONNECT allowlist for actual product-page review. No other egress widening. Landing and login loaded on server; screenshot showed the transparent Hermes illustration (no brown panel).
 - Playwright browser-wide CDP initialization hung after WebSocket connected (8s then25s). Browser946MiB/2GiB,277/512pids, no OOM/pids events. Do not diagnose quota/network/memory without evidence.
@@ -70,8 +70,8 @@ Sources: https://playwright.dev/docs/docker ; https://github.com/novnc/websockif
 
 - After normal Chat page reload, screenshot attachment preview appeared and dashboard-c2d11326.jpg was sent once for 6 Pro review. Do not repeat that request; reply pending.
 
-## Production web image provider candidate
-- Distinct chatgpt-web Gateway provider reuses the existing request/result spool and pending scientific-review asset pipeline. It does not mark the previous failed Codex task succeeded, approve assets, or publish automatically.
+## Production web image provider
+- Distinct chatgpt-web Gateway provider reuses the existing request/result spool and pending scientific-review asset pipeline. It never approves assets or publishes automatically.
 - Install from built immutable release with install.sh --confirm-provider --source /opt/openscience-releases/<SHA> --renderer-image <existing immutable FFmpeg image digest>; then select HERMES_SCENE_IMAGE_PROVIDER=chatgpt-web for API/worker. No account/profile reinstallation is needed.
 - Results root:1000 mode2750 propagates worker-readable group ownership; only worker mounts inbox rw/results ro. Broker uses the shared browser lock, one exclusive submission marker, strict canonical conversation, and aspect-preserving padding.
-- First attach failure may trigger one Chat-target reload and one attach retry only before any submission. Submitted jobs never use recovery reload/resend. Static High review completed; production execution is still pending.
+- First attach failure may trigger one Chat-target reload and one attach retry only before any submission. A submitted job may restart the browser once and run `recover` against its exact canonical conversation; it never reloads the composer or resends. Production execution succeeded on 2026-09-10: canonical `6aa23223-62f8-83e9-9b43-19d424eb51a6`, PNG 1280×720/971354 bytes, product asset/task `eb48809b-c402-4983-969d-ee82d0fe6200` in `draft`.

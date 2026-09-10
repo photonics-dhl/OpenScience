@@ -12,11 +12,11 @@
 
 | 能力 | 已有位置 / 入口 | 状态与复用方式 |
 |---|---|---|
-| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | 本次列表显示运行；release `c2d11326`，rollback `7f8e47d9` 继承 CURRENT 记录。不要混用本地候选与线上版本 |
+| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | 2026-09-10 release `d850fadbbe579481f68ab4d57f53f6910dee4120`，rollback `0c635525e3bffcd7a30199b0770cc3af37d3bc1b`；真实网页生图任务已回传产品草稿。不要混用本地候选与线上版本 |
 | 完整图形 Chrome | 宿主 `/opt/openscience-tool-cache/playwright/chromium-1234/chrome-linux64/chrome`；ScanSci镜像内 `/opt/scansci-browsers/chromium-1234/chrome-linux64/chrome` | 已静态确认完整二进制。可复用现有镜像与配套资源；不是只存在 headless shell |
 | 无头 Chromium | 宿主 `/root/.cache/ms-playwright/chromium_headless_shell-1234/` 与共享缓存同名目录；ScanSci镜像 `/opt/scansci-browsers/chromium_headless_shell-1234/` | 现成截图/渲染资源；不能用“仅此目录存在”的旧记录推断没有完整浏览器 |
 | 浏览器运行依赖 / Xvfb | `openscience-scansci-mcp:7f8e47d931b751cc28c1000325128c2ca86566cb`；镜像 `/usr/bin/Xvfb` | 已有图形库与Xvfb；独立浏览器可派生镜像，不启动或修改生产ScanSci服务、不挂载其登录卷 |
-| 网页远程桌面 | `infra/chatgpt-browser/`；服务器 `/opt/openscience-chatgpt-browser` | 镜像9f44e1267fba复用完成（加入既有Playwright-core），桥接active，浏览器running，noVNC HTTP200；启动seccomp兼容故障已修。用户已登录，服务器Playwright执行一次网页生图并保存PNG成功；通用runner与生产Hermes队列尚未整体接入。Chrome/Xvfb复用上行，仅补远程桌面组件依赖。已证明登录与单次生图保存，未接产品回传；入口见 [浏览器手册](chatgpt-browser.md) |
+| 网页远程桌面与生图 provider | `infra/chatgpt-browser/`；服务器 `/opt/openscience-chatgpt-browser` | 浏览器、桥接、broker timer 与 `chatgpt-web` provider 已运行；生产 provider bundle `0c635525…`。真实 Hermes task `eb48809b…` 已从网页6 Pro生图会话回传PNG 1280×720产品草稿。提交后只可重启浏览器并回到精确canonical续取，禁止重发；入口见 [浏览器手册](chatgpt-browser.md) |
 | Node / Python | 宿主 `/usr/bin/node`、`/usr/bin/python3`；现有 `node:22-bookworm`、`python:3.12-slim` 镜像 | 已有；必要时复用镜像中的Node。不要默认全局安装 |
 | 视频 / 字体 / FFmpeg | `openscience-media-demo:b361f4f7781b760583b3a312829877c4d6310e8a` 等已有media镜像；源码 `apps/media-demo/Dockerfile` | 镜像包含FFmpeg、CJK字体与无头浏览器；demo镜像可复用运行依赖，不代表Hermes完整视频产品链路通过 |
 | 语音模型 | `/opt/openscience-models/qwen3-tts-customvoice-0c0e305`；`openscience/tts-audition:qwen0.1.1` | 目录与镜像存在，本轮未调用；不要重复下载模型，也不推断生产已接入 |
@@ -33,4 +33,4 @@
 - 漏查 `/opt/openscience-tool-cache/playwright` 与ScanSci镜像，导致重复下载Chromium。已中止重复构建，改用已有完整浏览器与依赖。不要重复该路径判断错误。
 - 本清单不是自动扫描脚本；只在相关能力发生变化时更新，避免每轮全盘扫描与重复消耗。
 
-- 2026-09-09：用户接受现有本机出口；直接Chat会话接口已实际读取本轮生成任务，CUA失败不能推断Chat不可用。浏览器pids上限已改512；当前web产图需要科学内容修订，未入产品画廊。
+- 2026-09-10：用户接受现有本机出口；直接Chat会话接口与服务器网页执行分别判断，CUA失败不能推断Chat不可用。浏览器pids上限512；当前web图已入产品草稿画廊，科学证据核对完成，等待用户批准后才可发布。

@@ -1,4 +1,15 @@
-## 2026-09-09 新分析已运行：精确来源区间修复中
+## 2026-09-10 服务器网页生图已进入真实产品草稿
+
+- version tuple：branch `codex/onchip-video-release` / HEAD与production `d850fadbbe579481f68ab4d57f53f6910dee4120` / rollback `0c635525e3bffcd7a30199b0770cc3af37d3bc1b`。
+- Hermes真实任务/资产 `eb48809b-c402-4983-969d-ee82d0fe6200` 已由服务器 `chatgpt-web` provider完成并回传 `draft`；PNG 1280×720、971354 bytes，content hash `773ed60431c3f04c07463df0f24fae54db9f1ea5ab003c04d7e8907268ef76be`。
+- canonical会话 `6aa23223-62f8-83e9-9b43-19d424eb51a6`；图片绑定source claim `7397c444-19d4-4900-b060-b9e1004261f4` 与approved storyboard `5076fcc6-54a8-4ee0-a40b-517c38e58090`。
+- 已部署精确恢复：核对request/result/provider/task/prompt hash和PNG后复用原结果；提交后浏览器异常只重启一次并回到精确canonical续取，绝不重发prompt；失败仍打开circuit。
+- 主画廊不展示rejected历史资产但保留审计；生产截图已观察当前单张草稿和审核控件。原文证据支持图中自由空间传播模、Bethe经典描述边界与局域孔径模式量子化问题；仍待用户视觉及科学批准，尚未发布。
+- 服务器页面已确认规划会话为6 Pro；本轮同一请求及一次Retry均返回Chat网页平台错误，未取得新回复，停止重复消耗。此前6 Pro的单写入者、精确canonical、不重发、人工科学审核方案继续生效。
+- 三条有效RO中两条为同一Quantization PDF；`deep-sub-cycle pulse`没有附件/ingestion/artifact。第二篇精选需用户上传不同PDF，不能把重复论文计作两篇。
+- 本轮未运行测试、预检或CI；只执行服务器部署所需构建、启动与真实产品观察。当前执行入口见 `docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
+
+## HISTORICAL 2026-09-09 新分析已运行：精确来源区间修复中
 
 production ea95e63c / rollback c2d11326。网页broker已安装、timer成功，API/worker已选择chatgpt-web；尚无产品图片回传。真实新分析task c22927f9已复用SourceMap并返回needs_review，method/reproducibility仍因8000字符/32段限制失败。根因之一是同一block的不连续passage被min/max扩成中间全文；正改为精确range union及所有消费者的有序不重叠校验。直接Chat正常并返回方案；本机Chrome控制桥重启后仍无法枚举标签页。
 

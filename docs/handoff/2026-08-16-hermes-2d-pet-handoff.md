@@ -1,4 +1,6 @@
-# Hermes Research Intelligence CURRENT Handoff
+# Hermes Research Intelligence Handoff
+
+> DEPRECATED → CURRENT: `docs/handoff/2026-09-10-hermes-web-image-handoff.md`
 
 ## Goal / constraints
 - PDF→服务器OCR/全文理解→六维凝练与原文→Hermes规划→服务器网页生图→画廊（Codex原失败记录保留）。视频暂停。
