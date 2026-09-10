@@ -89,7 +89,7 @@ Requires=docker.service openscience-chatgpt-browser-bridge.service
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/flock -n $root/jobs/science-review-runner.lock /usr/bin/node $bundle/infra/chatgpt-browser/review-broker.mjs --config $review_config
-TimeoutStartSec=660
+TimeoutStartSec=1860
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

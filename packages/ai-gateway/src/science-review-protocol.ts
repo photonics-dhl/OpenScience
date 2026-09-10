@@ -5,7 +5,7 @@ import { sha256Text, type OcrAuthorizationContext, type OcrSourceIdentity } from
 export const SCIENCE_REVIEW_MAX_PROMPT_CHARS = 60 * 1024;
 export const SCIENCE_REVIEW_MAX_RESPONSE_BYTES = 64 * 1024;
 export const SCIENCE_REVIEW_MAX_JSON_BYTES = 96 * 1024;
-export const SCIENCE_REVIEW_MAX_DEADLINE_MS = 600_000;
+export const SCIENCE_REVIEW_MAX_DEADLINE_MS = 1_800_000;
 export const SCIENCE_REVIEW_READY_MAX_AGE_MS = 60_000;
 export const SCIENCE_REVIEW_MAX_ATTACHMENTS = 8;
 export const SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;

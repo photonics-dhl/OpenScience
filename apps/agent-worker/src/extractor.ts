@@ -634,6 +634,7 @@ interface CanonicalPartialResult {
 interface ScientificReviewContext {
   requestId: string;
   authorizationContext: Readonly<OcrAuthorizationContext>;
+  reusableAttempt?: { attemptId: string; reviewedCandidateHash: string };
   coveragePassageIds?: readonly string[];
   renderPages?: (pageNumbers: readonly number[]) => Promise<ParserRasterResult>;
   sourceDocument?: { fileName: 'source.pdf'; mediaType: 'application/pdf'; sha256: string; bytes: Uint8Array };
@@ -1221,7 +1222,9 @@ async function webScientificReviewCanonicalProposal(
 ): Promise<{ partial: CanonicalPartialResult; review: ExtractionResult['scientificReview'] }> {
   const candidateHash = sha256Json({ schemaVersion: SDF_CORE_VERSION, fields: proposal.fields });
   const sourceMapHash = sha256Json(sourceMap);
-  const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
+  const attemptId = context?.reusableAttempt?.reviewedCandidateHash === candidateHash
+    ? context.reusableAttempt.attemptId
+    : reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
   const blockAll = (status: 'awaiting_review_evidence' | 'blocked_scientific_review', detail: string, metadata: {
     attemptId?: string; promptHash?: string; responseHash?: string; previousAttemptId?: string;
     evidenceManifestHash?: string; evidencePages?: Array<{ pageNumber: number; imageSha256: string }>;

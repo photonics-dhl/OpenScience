@@ -40,7 +40,7 @@ function validateRequest(request, recover = false) {
     || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 64 * 1024
     || !SHA256.test(request.promptHash || '') || !Number.isSafeInteger(request.deadlineAt)
     || (recover ? request.deadlineAt + RECOVERY_GRACE_MS <= Date.now() : request.deadlineAt <= Date.now())
-    || request.deadlineAt - Date.now() > 600000 || !source || typeof source.artifactId !== 'string' || !validAttachments
+    || request.deadlineAt - Date.now() > 1800000 || !source || typeof source.artifactId !== 'string' || !validAttachments
     || !SHA256.test(source.documentSha256 || '') || !SHA256.test(source.candidateHash || '') || !SHA256.test(source.sourceMapHash || '')) throw Error('INVALID_REQUEST');
   return request;
 }
