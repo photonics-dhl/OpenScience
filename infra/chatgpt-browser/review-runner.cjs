@@ -295,7 +295,7 @@ let activePage;
   once('conversation.json', { url });
   await recoverUserAnchor(page, request, Math.min(request.deadlineAt, Date.now() + 30000));
   await waitForReview(page, request, request.deadlineAt);
-  await page.close().catch(() => {}); activePage = undefined;
+  await page.close().catch(() => {}); activePage = undefined; process.exit(0);
 })().catch(async error => {
   if (!fs.existsSync(path.join(dir, 'submitted.json')) && activePage) {
     await bounded(activePage.close({ runBeforeUnload: false }), 3000).catch(() => {});
