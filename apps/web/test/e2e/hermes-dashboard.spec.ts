@@ -604,7 +604,7 @@ test('Hermes disposes and restores its mesh when the persistent motion control c
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
 });
 
-test('Hermes replaces a lost canvas when approval ends live', async ({ page }) => {
+test('Hermes keeps its canvas while approval mode changes live', async ({ page }) => {
   await page.goto(`${baseUrl}/_visual/hermes-articulation`, { waitUntil: 'networkidle' });
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
@@ -617,7 +617,7 @@ test('Hermes replaces a lost canvas when approval ends live', async ({ page }) =
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   const resumedCanvas = await page.locator('[data-hermes-articulated-canvas="true"]').elementHandle();
 
-  expect(await firstCanvas?.evaluate((first, second) => first !== second, resumedCanvas)).toBe(true);
+  expect(await firstCanvas?.evaluate((first, second) => first === second, resumedCanvas)).toBe(true);
 });
 
 test('Hermes releases a fallback WebGL context when WebGL2 initialization fails', async ({ page }) => {
@@ -685,12 +685,14 @@ test('Hermes applies offscreen suspension after delayed initialization', async (
   const offscreenStyle = await page.addStyleTag({ content: '[data-hermes-rig="live2d-wanko"] { transform: translateY(1800px) !important; }' });
   await page.waitForTimeout(120);
   releaseTexture?.();
+  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  const suspendedDrawAt = await rig.getAttribute('data-hermes-last-draw-at');
+  expect(suspendedDrawAt).not.toBeNull();
   await page.waitForTimeout(600);
-  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'starting');
-  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).not.toHaveAttribute('data-hermes-head', /.+/);
+  await expect(rig).toHaveAttribute('data-hermes-last-draw-at', suspendedDrawAt!);
 
   await offscreenStyle.evaluate((style) => style.remove());
-  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect.poll(async () => await rig.getAttribute('data-hermes-last-draw-at')).not.toBe(suspendedDrawAt);
 });
 
 test('Hermes aborts and releases a pending initialization on SPA unmount', async ({ page }) => {

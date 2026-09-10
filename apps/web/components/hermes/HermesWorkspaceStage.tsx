@@ -193,7 +193,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
   const [presentation, setPresentation] = useState<HermesStagePresentation | null>(null);
   const [routeAssistantOpen, setRouteAssistantOpen] = useState(false);
   const [routeState, setRouteState] = useState<HermesVisualState>('idle');
-  const [guideTarget, setGuideTarget] = useState<HermesAnchorId | null>(null);
+  const [guideState, setGuideState] = useState<{ pathname: string; target: HermesAnchorId | null }>(() => ({ pathname, target: null }));
   const [registryVersion, setRegistryVersion] = useState(0);
   const [writing, setWriting] = useState(false);
   const registryRef = useRef<HermesAnchorRegistry>(createHermesAnchorRegistry());
@@ -214,12 +214,11 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
     return () => { release(); setRegistryVersion((version) => version + 1); };
   }, []);
   useEffect(() => {
-    setGuideTarget(null);
-  }, [pathname]);
-  useEffect(() => {
     setRouteAssistantOpen(false); setRouteState('idle'); setWriting(false);
   }, [pathname]);
-  const context = useMemo(() => ({ register, registerAnchor, requestGuide: setGuideTarget, setRouteState, setWriting }), [register, registerAnchor]);
+  const guideTarget = guideState.pathname === pathname ? guideState.target : null;
+  const requestGuide = useCallback((target: HermesAnchorId | null) => setGuideState({ pathname, target }), [pathname]);
+  const context = useMemo(() => ({ register, registerAnchor, requestGuide, setRouteState, setWriting }), [register, registerAnchor, requestGuide]);
   const route = pathname === '/research-objects/new' ? 'research-object-new' : 'research-object-edit';
   const researchObjectId = researchObjectFromHermesPath(pathname);
   const routeContext: WorkspaceGuidePayload['context'] = researchObjectId
@@ -238,7 +237,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
           fallbackWorkspaceId={researchObjectId ?? 'workspace-current'}
           fallbackAssistantOpen={routeAssistantOpen}
           fallbackOnInvoke={() => setRouteAssistantOpen(true)}
-          onDismissGuide={() => setGuideTarget(null)}
+          onDismissGuide={() => requestGuide(null)}
           presentation={presentation}
           registry={registryRef.current}
           registryVersion={registryVersion}
