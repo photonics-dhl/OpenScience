@@ -330,7 +330,9 @@ export function createHandlers(
               }
               if (UUID_PATTERN.test(String(candidate.attemptId ?? ''))
                 && SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))
-                && candidate.previousAttemptId === undefined && candidate.evidenceManifestHash === undefined) {
+                && candidate.previousAttemptId === undefined
+                && (candidate.evidenceManifestHash === undefined
+                  || ['provider_unavailable', 'invalid_response'].includes(String(candidate.continuationStatus ?? '')))) {
                 reusableScientificReviewAttempt = {
                   attemptId: candidate.attemptId as string,
                   reviewedCandidateHash: candidate.reviewedCandidateHash as string,

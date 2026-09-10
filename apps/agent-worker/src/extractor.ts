@@ -72,6 +72,8 @@ export interface ExtractionResult extends Record<string, unknown> {
     previousAttemptId?: string;
     evidenceManifestHash?: string;
     evidencePages?: Array<{ pageNumber: number; imageSha256: string }>;
+    continuationStatus?: 'provider_unavailable' | 'invalid_response';
+    continuationAttemptId?: string;
   };
 }
 
@@ -1379,11 +1381,14 @@ async function webScientificReviewCanonicalProposal(
     if (!scientificReviewGuard(parsedResponse, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_response', {
       promptHash: response.promptHash, responseHash: response.responseHash,
     });
+    const initialResponse = response;
+    const initialReview = parsedResponse;
     let parsed: ScientificReviewResponse = parsedResponse;
     let finalAttemptId = attemptId;
     let evidenceManifestHash: string | undefined;
     let evidencePages: Array<{ pageNumber: number; imageSha256: string }> | undefined;
-    let supplementalUnavailable = false;
+    let continuationStatus: 'provider_unavailable' | 'invalid_response' | undefined;
+    let continuationAttemptId: string | undefined;
     let supplementalBlockedFields = new Set<(typeof SDF_CORE_FIELDS)[number]>();
     if (parsed.needsMoreEvidence.length > 0) {
       if (!context.sourceDocument && !context.renderPages) return blockAll('awaiting_review_evidence', 'scientificReview=evidence_renderer_unavailable', {
@@ -1446,14 +1451,22 @@ async function webScientificReviewCanonicalProposal(
           attachments: evidence.attachments,
         });
         const supplementalParsed = parseJsonObject(response.text);
-        if (!scientificReviewGuard(supplementalParsed, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_supplemental_response', {
-          attemptId: finalAttemptId, previousAttemptId: attemptId, promptHash: response.promptHash,
-          responseHash: response.responseHash, evidenceManifestHash, evidencePages,
-        });
-        parsed = supplementalParsed;
+        if (scientificReviewGuard(supplementalParsed, allowedIds)) parsed = supplementalParsed;
+        else {
+          continuationStatus = 'invalid_response';
+          continuationAttemptId = finalAttemptId;
+          finalAttemptId = attemptId;
+          response = initialResponse;
+          parsed = initialReview;
+          const explicitlyAffected = fieldsAffectedByReviewEvidence(parsed);
+          supplementalBlockedFields = explicitlyAffected.size ? explicitlyAffected : new Set(SDF_CORE_FIELDS);
+        }
       } catch {
-        supplementalUnavailable = true;
+        continuationStatus = 'provider_unavailable';
+        continuationAttemptId = finalAttemptId;
         finalAttemptId = attemptId;
+        response = initialResponse;
+        parsed = initialReview;
         const explicitlyAffected = fieldsAffectedByReviewEvidence(parsed);
         supplementalBlockedFields = explicitlyAffected.size ? explicitlyAffected : new Set(SDF_CORE_FIELDS);
       }
@@ -1473,7 +1486,7 @@ async function webScientificReviewCanonicalProposal(
       partial: {
         proposal: { schemaVersion: SDF_CORE_VERSION, fields: reviewedFields },
         fieldDiagnostics: Object.fromEntries(blockedFields.map((field) => [field, 'malformed_item' as const])),
-        fieldDiagnosticsDetails: Object.fromEntries(blockedFields.map((field) => [field, `scientificReview=${parsed.fields[field].issues.map((issue) => `${issue.code}:${issue.problem}`).join('|') || 'blocked'}${supplementalUnavailable ? '|supplementalReview=unavailable' : ''}`])),
+        fieldDiagnosticsDetails: Object.fromEntries(blockedFields.map((field) => [field, `scientificReview=${parsed.fields[field].issues.map((issue) => `${issue.code}:${issue.problem}`).join('|') || 'blocked'}${continuationStatus ? `|supplementalReview=${continuationStatus}` : ''}`])),
         unverifiedSummaries: Object.fromEntries(blockedFields.map((field) => [field, parsed.fields[field].summary || proposal.fields[field].summary])),
         unverifiedSourcePassageIds: Object.fromEntries(blockedFields.map((field) => [field, parsed.fields[field].sourcePassageIds.length ? parsed.fields[field].sourcePassageIds : proposal.fields[field].sourcePassageIds ?? []])),
       },
@@ -1481,7 +1494,8 @@ async function webScientificReviewCanonicalProposal(
         status: reviewStatus,
         attemptId: finalAttemptId, ...(finalAttemptId === attemptId ? {} : { previousAttemptId: attemptId }),
         promptHash: response.promptHash, responseHash: response.responseHash, reviewedCandidateHash: candidateHash,
-        ...(evidenceManifestHash ? { evidenceManifestHash } : {}), ...(evidencePages ? { evidencePages } : {}) },
+        ...(evidenceManifestHash ? { evidenceManifestHash } : {}), ...(evidencePages ? { evidencePages } : {}),
+        ...(continuationStatus && continuationAttemptId ? { continuationStatus, continuationAttemptId } : {}) },
     };
   } catch (error) {
     console.error('paper-analysis web scientific review unavailable; preserving proposals as unverified', error instanceof Error ? error.message : String(error));
