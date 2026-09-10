@@ -14,7 +14,9 @@ export function PresentationResultGallery({ researchObjectId, versionId, assets,
     const linkedClaims = asset.sourceClaimIds.map((id) => claimsById.get(id)?.statement).filter((value): value is string => Boolean(value));
     const parent = asset.sceneImage ? allAssets.find((candidate) => candidate.id === asset.sceneImage?.storyboardAssetId)?.storyboard : undefined;
     const isVideo = asset.kind === 'video';
-    const title = asset.label || parent?.document.scenes[asset.sceneImage?.sceneIndex ?? -1]?.title || (isVideo ? t('videoTitle') : t('imageNumber', { number: index + 1 }));
+    const title = asset.sceneImage && parent
+      ? t('imageSource', { title: parent.document.title, number: asset.sceneImage.sceneIndex + 1 })
+      : asset.label || (isVideo ? t('videoTitle') : t('imageNumber', { number: index + 1 }));
     const sourceUrl = presentationAssetContentUrl(researchObjectId, versionId, asset.id);
     return <article key={asset.id} className="surface-folio-sheet min-w-0 overflow-hidden" data-presentation-result={asset.id} data-presentation-asset={asset.id}>
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-os-rule-paper px-5 py-4 sm:px-6"><div className="min-w-0"><p data-reading-role="caption" className="m-0 text-os-vermilion-ink">{t(isVideo ? 'videoTitle' : 'imageTitle')}</p><h3 className="m-0 mt-1 text-balance text-lg font-semibold leading-6">{title}</h3></div><span className="rounded-control border border-os-rule-paper px-2 py-1 text-xs text-os-muted-paper">{t(`assetStatus.${asset.status}`)}</span></div>

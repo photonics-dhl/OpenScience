@@ -169,9 +169,9 @@ test('saved materials survive Files refresh and same-name attachments create a m
   let submitted: unknown;
   await page.route('**/api/research-objects/journey-ro/commits', async route => { submitted = route.request().postDataJSON(); await route.fulfill({ json: { commit: { versionId: 'new' } } }); });
   await page.goto('/research-objects/journey-ro/files');
-  await expect(page.locator('a[download][href="/api/artifacts/original/download"]')).toBeVisible();
+  await expect(page.locator('a[download][href="/api/artifacts/original/download"]').filter({ hasText: 'paper.pdf' })).toBeVisible();
   await page.reload();
-  await expect(page.locator('a[download][href="/api/artifacts/original/download"]')).toBeVisible();
+  await expect(page.locator('a[download][href="/api/artifacts/original/download"]').filter({ hasText: 'paper.pdf' })).toBeVisible();
   await page.getByTestId('artifact-input').setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('controlled fixture') });
   await page.getByRole('button', { name: 'Attach to new version', exact: true }).click();
   await expect.poll(() => submitted).toMatchObject({ version: 1, artifacts: [original, { artifactId: 'added', logicalPath: 'paper.pdf.1' }] });
@@ -277,7 +277,7 @@ for (const recoveryPhase of ['initial', 'after-save'] as const) {
       await route.fulfill({ json: { commit: { versionId: 'accepted' } } });
     });
     await page.goto('/research-objects/journey-ro/files');
-    await expect(page.locator('a[download][href="/api/artifacts/original/download"]')).toBeVisible();
+    await expect(page.locator('a[download][href="/api/artifacts/original/download"]').filter({ hasText: 'paper.pdf' })).toBeVisible();
     if (recoveryPhase === 'after-save') {
       await page.getByTestId('artifact-input').setInputFiles({ name: 'first.txt', mimeType: 'text/plain', buffer: Buffer.from('first') });
       await page.getByRole('button', { name: 'Attach to new version', exact: true }).click();

@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, Image as ImageIcon, Plus, RotateCw, ShieldCheck } from 'lucide-react';
+import { Check, ChevronDown, Image as ImageIcon, Plus, RotateCw, ShieldCheck, X } from 'lucide-react';
 import * as React from 'react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -117,7 +117,16 @@ export function PresentationWorkbench({
           {storyboardAssets.length > 0 ? <details className="surface-folio-sheet mt-8 px-5 py-5 sm:px-6" open>
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"><span className="text-base font-semibold">{t('planningHistoryTitle')}</span><ChevronDown className="size-4 shrink-0" aria-hidden="true" /></summary>
             <p className="m-0 mt-2 max-w-3xl text-pretty text-sm leading-6 text-os-muted-paper">{t('planningHistoryBody')}</p>
-            {storyboardAssets.map((asset) => <div className="mt-5 border-t border-os-rule-paper pt-4" data-presentation-asset={asset.id} key={asset.id}><StoryboardPanel storyboard={asset.storyboard} parent={assets.find((item) => item.id === asset.storyboard?.baseAssetId)?.storyboard} baseAssetId={asset.id} claims={claims} selectedClaimIds={asset.sourceClaimIds} canGenerate={canWrite && !loading && !loadFailed && !working && asset.status !== 'rejected'} onGenerate={onGenerateStoryboard} canGenerateImage={canWrite && !loading && !loadFailed && !working && asset.status === 'approved' && asset.canGenerateSceneImage === true} onGenerateImage={onGenerateSceneImage} />{canWrite && onGenerateVideo ? <MechanismVideoPanel parent={asset} assets={assets} disabled={working || loading || loadFailed} onGenerate={onGenerateVideo} /> : null}</div>)}
+            {storyboardAssets.map((asset) => <div className="mt-5 border-t border-os-rule-paper pt-4" data-presentation-asset={asset.id} key={asset.id}>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <span className="rounded-control border border-os-rule-paper px-2 py-1 text-xs text-os-muted-paper">{t(`assetStatus.${asset.status}`)}</span>
+                {asset.status === 'draft' && canWrite && asset.canTransition ? <div className="flex flex-wrap gap-3">
+                  <button type="button" disabled={working} onClick={() => onTransition(asset, 'approved')} className="bg-accent-primary-strong inline-flex min-h-11 items-center gap-2 rounded-control px-4 text-sm font-semibold disabled:opacity-40"><Check className="size-4" aria-hidden="true" />{t('approve')}</button>
+                  <button type="button" disabled={working} onClick={() => onTransition(asset, 'rejected')} className="inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold disabled:opacity-40"><X className="size-4" aria-hidden="true" />{t('reject')}</button>
+                </div> : null}
+              </div>
+              <StoryboardPanel storyboard={asset.storyboard} parent={assets.find((item) => item.id === asset.storyboard?.baseAssetId)?.storyboard} baseAssetId={asset.id} claims={claims} selectedClaimIds={asset.sourceClaimIds} canGenerate={canWrite && !loading && !loadFailed && !working && asset.status !== 'rejected'} onGenerate={onGenerateStoryboard} canGenerateImage={canWrite && !loading && !loadFailed && !working && asset.status === 'approved' && asset.canGenerateSceneImage === true} onGenerateImage={onGenerateSceneImage} />{canWrite && onGenerateVideo ? <MechanismVideoPanel parent={asset} assets={assets} disabled={working || loading || loadFailed} onGenerate={onGenerateVideo} /> : null}
+            </div>)}
           </details> : null}
           <details className="surface-folio-sheet mt-8 px-5 py-5 sm:px-6" data-source-tools="true" open={resultAssets.length === 0 || loading || loadFailed || Boolean(error) || Boolean(task && task.status !== 'succeeded') || undefined}>
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink">
