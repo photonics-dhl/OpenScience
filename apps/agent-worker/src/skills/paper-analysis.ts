@@ -1,7 +1,7 @@
 /** Runtime Hermes paper-analysis skill. The worker executes these phases; this is not a developer prompt. */
 export const PAPER_ANALYSIS_SKILL = {
   id: 'paper-analysis',
-  version: '3',
+  version: '4',
   sources: [
     'Future-House/paper-qa (Apache-2.0, reviewed 57e89f7): retrieval, reranking, contextual evidence and async pattern',
     'K-Dense-AI/scientific-agent-skills (MIT, reviewed 9cf7d9a): bounded paperclip map/reduce and peer-review pattern',
@@ -19,7 +19,8 @@ export const PAPER_ANALYSIS_SKILL = {
     'MiniMax负责section-map与global-reduce初稿，不拥有最终科学放行权。最终建议前把完整六字段、去重直接原文、相邻限定、公式/图注与跨字段冲突索引交给网页ChatGPT 6 Pro独立复核。',
     '科学审稿包以6–9k token为压缩目标而非截断上限；不得只传支持候选的段落。网页要求补证时只从既有SourceMap定向回读，最多补充一轮，不重解析全文。',
     '网页回复收到、科学问题解决与用户确认分别记录。网页不可用、回应漏审、引用不存在、版本不符或补证后仍无法裁定时进入阻断状态，不回退MiniMax自审。',
-    '六字段各司其职：results写有条件的研究输出，method写输入与处理链，insight写机制或认识，reproducibility写复现所需披露及缺口。跨字段重复或结果误放到复现字段时应重写，不能靠填满字段通过。',
+    '六字段各司其职且都来自全文综合：problem写问题与缺口，insight写机制或认识，method写跨章节重建的研究路径，results写有条件的研究输出，limitations写适用边界，reproducibility写依据全文可重建的最小配方及作者未披露的实现缺口。缺少同名章节或集中式步骤不等于字段缺失；跨字段重复或结果误放到复现字段时应重写。',
+    '用户看到的六字段必须是凝练精华。软目标为problem 70–120字、insight 90–150字、method和results及reproducibility各140–220字、limitations 80–150字；必要限定优先于长度。不逐式重抄、堆参数或暴露审阅过程。生图与视频所需的构图、镜头、动画、视觉元素和完整参数只进入后续机器brief，不进入SDF摘要。',
     '证据限制用于防止无来源断言，不用于删除正确内容。单次输出容纳不下时分批保存和续读；容量失败不得改写为论文缺失。',
     '科学复核检查量纲、数量级、适用条件、不同算例混用、理论/模拟/实验身份和图文一致性。自动检查只能发现部分错误，不能声称证明物理正确。',
     '输出只进入建议区。用户确认科研内容后才能写入RO；分镜、实际图片和公开发布分别保留独立确认。',

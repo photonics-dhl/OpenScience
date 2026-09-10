@@ -84,7 +84,7 @@ const CANONICAL_DIAGNOSTICS = new Set([
 ]);
 type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1'
   | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1' | 'grounded_summary_v1' | 'grounded_passages_v1' | 'grounded_passages_v2'
-  | 'scientific_review_v3' | 'user_requested_reanalysis';
+  | 'scientific_review_v4' | 'user_requested_reanalysis';
 
 function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
   if (isLegacyCharacterEvidenceResult(value)) return 'legacy_character_evidence_v1';
@@ -101,7 +101,7 @@ function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha25
         const review = result.scientificReview;
         const reviewed = review && typeof review === 'object' && !Array.isArray(review)
           && (review as Record<string, unknown>).status === 'review_received';
-        return reviewed ? 'user_requested_reanalysis' : 'scientific_review_v3';
+        return reviewed ? 'user_requested_reanalysis' : 'scientific_review_v4';
       }
     } catch { return undefined; }
   }
@@ -157,8 +157,8 @@ function validRefreshSourceExecution(
 ): boolean {
   const expectedAttempt = agent.retryCount + 1;
   if (agent.executionAttempt === expectedAttempt) return true;
-  if (policy !== 'scientific_review_v3' || agent.executionAttempt < expectedAttempt) return false;
-  return new RegExp(`^ingestion-analysis-refresh:${ingestionTaskId}:[0-9a-f-]{36}:(?:grounded-passages-v[12]|scientific-review-v3|user-requested-reanalysis)$`).test(agent.idempotencyKey ?? '')
+  if (policy !== 'scientific_review_v4' || agent.executionAttempt < expectedAttempt) return false;
+  return new RegExp(`^ingestion-analysis-refresh:${ingestionTaskId}:[0-9a-f-]{36}:(?:grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$`).test(agent.idempotencyKey ?? '')
     || new RegExp(`^ingestion-analysis-reanalysis:${ingestionTaskId}:[0-9a-f-]{36}$`).test(agent.idempotencyKey ?? '');
 }
 
@@ -530,7 +530,7 @@ export async function refreshIngestionAnalysis(
   }
   const keyPrefix = `ingestion-analysis-refresh:${input.taskId}:${input.sourceAgentTaskId}:`;
   const replay = await deps.prisma.agentTask.findFirst({
-    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`, `${keyPrefix}grounded-summary-v1`, `${keyPrefix}grounded-passages-v1`, `${keyPrefix}grounded-passages-v2`, `${keyPrefix}scientific-review-v3`, `${keyPrefix}user-requested-reanalysis`] } },
+    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`, `${keyPrefix}grounded-summary-v1`, `${keyPrefix}grounded-passages-v1`, `${keyPrefix}grounded-passages-v2`, `${keyPrefix}scientific-review-v3`, `${keyPrefix}scientific-review-v4`, `${keyPrefix}user-requested-reanalysis`] } },
     include: { session: true },
   });
   if (replay) {
@@ -563,7 +563,7 @@ export async function refreshIngestionAnalysis(
   if (policy !== 'legacy_character_evidence_v1') {
     const reference = parseDocumentSourceMapReference((oldAgent!.result as Record<string, unknown>).sourceMapRef);
     const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
-    const affected = policy === 'scientific_review_v3' || policy === 'user_requested_reanalysis' || policy === 'grounded_summary_v1' || policy === 'grounded_passages_v1' || policy === 'grounded_passages_v2' ? true : policy === 'native_pdf_fragmentation_v1'
+    const affected = policy === 'scientific_review_v4' || policy === 'user_requested_reanalysis' || policy === 'grounded_summary_v1' || policy === 'grounded_passages_v1' || policy === 'grounded_passages_v2' ? true : policy === 'native_pdf_fragmentation_v1'
       ? isOldFragmentedNativePdfMap(sourceMap)
       : isLineRunNativePdfMap(sourceMap);
     if (!affected) {

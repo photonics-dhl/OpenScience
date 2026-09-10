@@ -29,7 +29,7 @@ import type { OcrAuthorizationContext } from '@openscience/ai-gateway';
 import type { DocumentSourceMap, ExtractionResult as ParserExtractionResult } from '@openscience/domain';
 import { createHash } from 'node:crypto';
 import type { Readable } from 'node:stream';
-import { extractHandler, sourceMapToManuscriptText } from './extractor';
+import { extractHandler, SCIENCE_REVIEW_CONTRACT_VERSION, sourceMapToManuscriptText } from './extractor';
 import { MAX_PARSER_INPUT, type IngestionAdapters } from './ingestion-parser';
 import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
@@ -300,8 +300,8 @@ export function createHandlers(
       let reusableSourceMap: DocumentSourceMap | undefined;
       let reusableExtractionResult: Record<string, unknown> | undefined;
       let persistedScientificReviewCandidateHash: string | undefined;
-      let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string } | undefined;
-      const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v3|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
+      let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
+      const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
       if (refresh) {
         const ingestion = await deps.prisma.ingestionTask.findUnique({ where: { id: refresh[1]! } });
         const previous = await deps.prisma.agentTask.findUnique({ where: { id: refresh[2]! }, include: { session: true } });
@@ -309,7 +309,7 @@ export function createHandlers(
         if (!serverDerivedEligibility || !externalProcessingEligible || ingestion?.agentTaskId !== ownerTask.id
           || ingestion.artifactId !== artifact.id || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
           || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
-          || previousResult?.canonicalExtractionContract !== (['scientific-review-v3', 'user-requested-reanalysis'].includes(refresh[3]!) ? 'grounded-passages-v2' : refresh[3] === 'grounded-passages-v2' ? 'grounded-passages-v1' : 'grounded-summary-v1')) {
+          || previousResult?.canonicalExtractionContract !== (['scientific-review-v3', 'scientific-review-v4', 'user-requested-reanalysis'].includes(refresh[3]!) ? 'grounded-passages-v2' : refresh[3] === 'grounded-passages-v2' ? 'grounded-passages-v1' : 'grounded-summary-v1')) {
           throw new Error('[blocked] Reusable document analysis scope is invalid');
         }
         const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
@@ -325,7 +325,7 @@ export function createHandlers(
             const review = previousResult.scientificReview;
             if (review && typeof review === 'object' && !Array.isArray(review)) {
               const candidate = review as Record<string, unknown>;
-              const previousRefresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v3|user-requested-reanalysis)$/.exec(previous.idempotencyKey ?? '');
+              const previousRefresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$/.exec(previous.idempotencyKey ?? '');
               if (SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))) {
                 persistedScientificReviewCandidateHash = candidate.reviewedCandidateHash as string;
               }
@@ -337,11 +337,13 @@ export function createHandlers(
                     || ['provider_unavailable', 'invalid_response'].includes(String(candidate.continuationStatus ?? '')))
                   ? candidate.attemptId as string
                   : undefined;
-              if (initialAttemptId && SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))) {
+              if (initialAttemptId && SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))
+                && candidate.contractVersion === SCIENCE_REVIEW_CONTRACT_VERSION) {
                 reusableScientificReviewAttempt = {
                   attemptId: initialAttemptId,
                   reviewedCandidateHash: candidate.reviewedCandidateHash as string,
                   parentRequestId: candidate.previousAttemptId !== undefined && previousRefresh ? previousRefresh[2]! : previous.id,
+                  contractVersion: SCIENCE_REVIEW_CONTRACT_VERSION,
                 };
               }
             }
