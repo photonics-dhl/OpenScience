@@ -54,7 +54,8 @@ export function PresentationWorkbench({
   const [statement, setStatement] = useState('');
   const eligibleIds = useMemo(() => new Set(claims.filter((claim) => claim.extractionStatus === 'succeeded').map((claim) => claim.id)), [claims]);
   const claimsById = useMemo(() => new Map(claims.map((claim) => [claim.id, claim])), [claims]);
-  const imageAssets = useMemo(() => assets.filter((asset) => !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg')), [assets]);
+  const imageAssets = useMemo(() => assets.filter((asset) => asset.status !== 'rejected'
+    && !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg')), [assets]);
   const storyboardAssets = useMemo(() => assets.filter((asset) => Boolean(asset.storyboard)), [assets]);
   const videoAssets = useMemo(() => assets.filter((asset) => asset.kind === 'video'), [assets]);
 
@@ -88,7 +89,7 @@ export function PresentationWorkbench({
           <section className="mt-6" aria-labelledby="presentation-preview-heading">
             <div className="flex items-center justify-between gap-4 border-b border-os-rule-paper pb-3">
               <h2 id="presentation-preview-heading" className="m-0 text-xl font-semibold tracking-[-0.012em]">{t('previewTitle')}</h2>
-              {assets.length > 0 ? <span className="font-data text-sm tabular-nums text-os-muted-paper">{assets.length}</span> : null}
+              {imageAssets.length > 0 ? <span className="font-data text-sm tabular-nums text-os-muted-paper">{imageAssets.length}</span> : null}
             </div>
             {loading ? <p className="m-0 py-7 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : loadFailed ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{t('scopeLoadFailed')}</p> : imageAssets.length === 0 ? (
               <div className="mt-5 rounded-control border border-os-rule-paper bg-os-paper-strong p-5 sm:p-6">
