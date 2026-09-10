@@ -13,6 +13,7 @@ import {
   type ScienceReviewInput,
   type ScienceReviewProvider,
   type ScienceReviewProviderResult,
+  type ScienceReviewRequest,
 } from './science-review-protocol';
 
 export interface ChatGptWebScienceReviewConfig {
@@ -66,6 +67,31 @@ async function publish(path: string, data: string): Promise<boolean> {
   } finally { await unlink(temporary); }
 }
 
+async function successfulOutput(resultsDir: string, request: ScienceReviewRequest): Promise<ScienceReviewProviderResult | null> {
+  const output = join(resultsDir, request.id);
+  try { await directory(output); } catch (error) { if (missing(error)) return null; throw error; }
+  let primary;
+  try {
+    primary = validateScienceReviewResult(JSON.parse((await boundedRead(join(output, 'result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+  } catch (error) { if (missing(error)) return null; throw error; }
+  if (primary.id !== request.id || primary.promptHash !== request.promptHash) fail();
+  if (primary.status === 'succeeded') {
+    const response = await boundedRead(join(output, 'response.txt'), SCIENCE_REVIEW_MAX_RESPONSE_BYTES);
+    if (sha256Text(response.toString('utf8')) !== primary.responseHash) fail();
+    return { text: response.toString('utf8'), promptHash: request.promptHash, responseHash: primary.responseHash! };
+  }
+  try {
+    const recovered = validateScienceReviewResult(JSON.parse((await boundedRead(join(output, 'recovered-result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+    if (recovered.id !== request.id || recovered.promptHash !== request.promptHash || recovered.status !== 'succeeded') fail();
+    const response = await boundedRead(join(output, 'recovered-response.txt'), SCIENCE_REVIEW_MAX_RESPONSE_BYTES);
+    if (sha256Text(response.toString('utf8')) !== recovered.responseHash) fail();
+    return { text: response.toString('utf8'), promptHash: request.promptHash, responseHash: recovered.responseHash! };
+  } catch (error) {
+    if (missing(error)) throw new Error(primary.errorCode ?? (primary.status === 'uncertain' ? 'UNCERTAIN' : 'EXECUTION_FAILED'));
+    throw error;
+  }
+}
+
 export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
   readonly name = 'chatgpt-web-science-review';
   readonly model = 'chatgpt-web/6-pro';
@@ -102,22 +128,18 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
       request = validateScienceReviewRequest(JSON.parse((await boundedRead(reservation, SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
       if (request.promptHash !== sha256Text(input.prompt) || request.source.candidateHash !== input.source.candidateHash) fail();
     }
+    const existingOutput = await successfulOutput(this.config.resultsDir, request);
+    if (existingOutput) return existingOutput;
     validateScienceReviewRequest(request, this.now());
     const queued = join(this.config.inboxDir, `${input.requestId}.json`);
     if (!await publish(queued, JSON.stringify(request))) {
       const existing = validateScienceReviewRequest(JSON.parse((await boundedRead(queued, SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
       if (existing.promptHash !== request.promptHash) fail();
     }
-    const output = join(this.config.resultsDir, input.requestId);
     while (this.now() < request.deadlineAt) {
       try {
-        await directory(output);
-        const result = validateScienceReviewResult(JSON.parse((await boundedRead(join(output, 'result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
-        if (result.id !== request.id || result.promptHash !== request.promptHash) fail();
-        if (result.status !== 'succeeded') throw new Error(result.errorCode ?? (result.status === 'uncertain' ? 'UNCERTAIN' : 'EXECUTION_FAILED'));
-        const response = await boundedRead(join(output, 'response.txt'), SCIENCE_REVIEW_MAX_RESPONSE_BYTES);
-        if (sha256Text(response.toString('utf8')) !== result.responseHash) fail();
-        return { text: response.toString('utf8'), promptHash: request.promptHash, responseHash: result.responseHash! };
+        const result = await successfulOutput(this.config.resultsDir, request);
+        if (result) return result;
       } catch (error) {
         if (!missing(error)) throw error;
       }

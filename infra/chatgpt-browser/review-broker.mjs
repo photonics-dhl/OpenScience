@@ -8,12 +8,14 @@ import {
   SCIENCE_REVIEW_MAX_JSON_BYTES,
   SCIENCE_REVIEW_MAX_RESPONSE_BYTES,
   validateScienceReviewRequest,
+  validateScienceReviewResult,
 } from '../../packages/ai-gateway/dist/index.js';
 
 const exec = promisify(execFile);
 const ROOT = '/opt/openscience-chatgpt-browser/';
 const CONVERSATION = /^https:\/\/chatgpt\.com\/c\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const RECOVERY_GRACE_MS = 60 * 60 * 1000;
 const exists = async path => { try { await stat(path); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; } };
 async function safeRead(path, maximum) {
   const before = await lstat(path);
@@ -49,9 +51,37 @@ async function publish(results, request, status, errorCode, response) {
   await atomicWrite(join(output, 'result.json'), JSON.stringify({ schemaVersion: 1, provider: request.provider,
     id: request.id, promptHash: request.promptHash, ...(responseHash ? { responseHash } : {}), status, ...(errorCode ? { errorCode } : {}) }), 0o640);
 }
+async function publishRecovery(results, request, response) {
+  const output = join(results, request.id);
+  const primary = validateScienceReviewResult(JSON.parse((await safeRead(join(output, 'result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+  if (primary.id !== request.id || primary.promptHash !== request.promptHash || primary.status === 'succeeded') throw uncertain();
+  if (await exists(join(output, 'recovered-result.json'))) return;
+  const responseHash = createHash('sha256').update(response).digest('hex');
+  await atomicWrite(join(output, 'recovered-response.txt'), response, 0o640);
+  await atomicWrite(join(output, 'recovered-result.json'), JSON.stringify({ schemaVersion: 1, provider: request.provider,
+    id: request.id, promptHash: request.promptHash, responseHash, status: 'succeeded' }), 0o640);
+}
 function same(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
 function uncertain() { const error = Error('UNCERTAIN'); error.code = 'UNCERTAIN'; return error; }
 async function docker(args, timeout) { return exec('docker', args, { timeout, maxBuffer: 32 * 1024, encoding: 'utf8' }); }
+async function jobResponse(job, request) {
+  const recovered = await exists(join(job, 'recovered-result.json'));
+  const resultName = recovered ? 'recovered-result.json' : 'result.json';
+  const responseName = recovered ? 'recovered-response.txt' : 'response.txt';
+  if (!await exists(join(job, resultName))) throw await exists(join(job, 'submitted.json')) ? uncertain() : Error('EXECUTION_FAILED');
+  const persisted = JSON.parse((await safeRead(join(job, 'request.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8'));
+  const result = JSON.parse((await safeRead(join(job, resultName), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8'));
+  const expected = { schemaVersion: 1, provider: request.provider, id: request.id, prompt: request.prompt,
+    promptHash: request.promptHash, deadlineAt: request.deadlineAt, source: request.source };
+  if (!same(persisted, expected) || result?.schemaVersion !== 1 || result.state !== 'received' || result.provider !== request.provider
+    || result.id !== request.id || result.promptHash !== request.promptHash || !same(result.source, request.source)
+    || result.file !== responseName || typeof result.responseHash !== 'string' || !/^[a-f0-9]{64}$/.test(result.responseHash)
+    || !UUID.test(result.userMessageId || '') || !UUID.test(result.assistantMessageId || '')
+    || typeof result.conversation !== 'string' || !CONVERSATION.test(result.conversation)) throw uncertain();
+  const response = await safeRead(join(job, responseName), SCIENCE_REVIEW_MAX_RESPONSE_BYTES);
+  if (createHash('sha256').update(response).digest('hex') !== result.responseHash) throw uncertain();
+  return response;
+}
 async function execute(config, request) {
   const job = join(config.jobs, 'review', request.id);
   if (await exists(job)) throw uncertain();
@@ -62,30 +92,46 @@ async function execute(config, request) {
   await atomicWrite(requestPath, JSON.stringify(inner)); await chown(requestPath, 11040, 11040);
   const seconds = Math.floor((request.deadlineAt - Date.now() - 30000) / 1000);
   if (seconds < 45) throw Error('EXPIRED');
-  try {
-    await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', String(seconds),
-      'node', '/jobs/provider/review-runner.cjs', 'execute', request.id], (seconds + 10) * 1000);
-  } catch {
-    if (!await exists(join(job, 'result.json')) && await exists(join(job, 'submitted.json'))) {
+  let retriedBeforeSubmission = false;
+  for (;;) {
+    try {
       const remaining = Math.floor((request.deadlineAt - Date.now() - 30000) / 1000);
-      if (await exists(join(job, 'conversation.json')) && remaining >= 45) {
-        await docker(['restart', config.browserContainer], 45000).catch(() => {});
-        await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', String(remaining),
-          'node', '/jobs/provider/review-runner.cjs', 'recover', request.id], (remaining + 10) * 1000).catch(() => {});
-      }
+      if (remaining < 45) break;
+      await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', String(remaining),
+        'node', '/jobs/provider/review-runner.cjs', 'execute', request.id], (remaining + 10) * 1000);
+      break;
+    } catch {
+      if (!await exists(join(job, 'submitted.json')) && !retriedBeforeSubmission) { retriedBeforeSubmission = true; continue; }
+      break;
     }
   }
-  if (!await exists(join(job, 'result.json'))) throw await exists(join(job, 'submitted.json')) ? uncertain() : Error('EXECUTION_FAILED');
-  const persisted = JSON.parse((await safeRead(requestPath, SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8'));
-  const result = JSON.parse((await safeRead(join(job, 'result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8'));
-  if (!same(persisted, inner) || result?.schemaVersion !== 1 || result.state !== 'received' || result.provider !== request.provider
-    || result.id !== request.id || result.promptHash !== request.promptHash || !same(result.source, request.source)
-    || result.file !== 'response.txt' || typeof result.responseHash !== 'string' || !/^[a-f0-9]{64}$/.test(result.responseHash)
-    || !UUID.test(result.userMessageId || '') || !UUID.test(result.assistantMessageId || '')
-    || typeof result.conversation !== 'string' || !CONVERSATION.test(result.conversation)) throw uncertain();
-  const response = await safeRead(join(job, 'response.txt'), SCIENCE_REVIEW_MAX_RESPONSE_BYTES);
-  if (createHash('sha256').update(response).digest('hex') !== result.responseHash) throw uncertain();
-  return response;
+  if (!await exists(join(job, 'result.json')) && !await exists(join(job, 'recovered-result.json')) && await exists(join(job, 'submitted.json'))) {
+    try {
+      if (!await exists(join(job, 'result.json')) && await exists(join(job, 'submitted.json'))) {
+        const remaining = Math.floor((request.deadlineAt - Date.now() - 30000) / 1000);
+        if (await exists(join(job, 'conversation.json')) && remaining >= 45) {
+          await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', String(remaining),
+            'node', '/jobs/provider/review-runner.cjs', 'recover', request.id], (remaining + 10) * 1000);
+        }
+      }
+    } catch {}
+  }
+  return jobResponse(job, request);
+}
+async function recoverPublishedFailure(config, request) {
+  const job = join(config.jobs, 'review', request.id), output = join(config.results, request.id);
+  if (request.deadlineAt + RECOVERY_GRACE_MS <= Date.now() || !await exists(join(output, 'result.json'))
+    || await exists(join(output, 'recovered-result.json')) || !await exists(join(job, 'submitted.json'))
+    || !await exists(join(job, 'conversation.json'))) return false;
+  const primary = validateScienceReviewResult(JSON.parse((await safeRead(join(output, 'result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+  if (primary.id !== request.id || primary.promptHash !== request.promptHash || primary.status === 'succeeded') return false;
+  if (!await exists(join(job, 'recovered-result.json'))) {
+    await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', '40',
+      'node', '/jobs/provider/review-runner.cjs', 'recover', request.id], 50000).catch(() => {});
+  }
+  if (!await exists(join(job, 'recovered-result.json'))) return false;
+  await publishRecovery(config.results, request, await jobResponse(job, request));
+  return true;
 }
 async function main() {
   if (process.getuid?.() !== 0 || process.argv.length !== 4 || process.argv[2] !== '--config') throw Error('CONFIG_REQUIRED');
@@ -101,6 +147,15 @@ async function main() {
   await atomicWrite(join(config.results, '.ready'), JSON.stringify({ schemaVersion: 1, provider: 'chatgpt-web-science-review', updatedAt: Date.now() }), 0o640);
   const queued = (await readdir(config.inbox)).filter(name => name.endsWith('.json') && !name.endsWith('.submitted.json') && UUID.test(name.slice(0, -5))).map(name => name.slice(0, -5));
   const existing = (await readdir(config.privateRoot)).filter(name => UUID.test(name));
+  const recoverable = [];
+  for (const id of existing) {
+    try {
+      const request = validateScienceReviewRequest(JSON.parse((await safeRead(join(config.privateRoot, id, 'request.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+      if (request.deadlineAt + RECOVERY_GRACE_MS > Date.now()) recoverable.push(request);
+    } catch {}
+  }
+  recoverable.sort((left, right) => right.deadlineAt - left.deadlineAt);
+  for (const request of recoverable) if (await recoverPublishedFailure(config, request)) return;
   for (const id of [...new Set([...existing, ...queued])].sort().slice(0, 1)) {
     const incoming = join(config.inbox, `${id}.json`), claimed = join(config.privateRoot, id);
     if (!await exists(claimed)) await prepare(claimed, 0);
