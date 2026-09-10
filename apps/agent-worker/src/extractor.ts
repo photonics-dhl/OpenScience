@@ -1320,9 +1320,9 @@ async function webScientificReviewCanonicalProposal(
     };
   };
   if (!context) return blockAll('blocked_scientific_review', 'scientificReview=trusted_context_unavailable');
-  const reviewPassages = selectScienceReviewPassages(passages, proposal, context.coveragePassageIds);
+  let reviewPassages = selectScienceReviewPassages(passages, proposal, context.coveragePassageIds);
   if (!reviewPassages.length) return blockAll('awaiting_review_evidence', 'scientificReview=no_review_evidence');
-  const allowedIds = new Set(reviewPassages.map((passage) => passage.id));
+  let allowedIds = new Set(reviewPassages.map((passage) => passage.id));
   const current = Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
     summary: proposal.fields[field].summary,
     sourcePassageIds: proposal.fields[field].sourcePassageIds ?? [],
@@ -1332,7 +1332,7 @@ async function webScientificReviewCanonicalProposal(
     const prompt = [
       '对一篇论文的六字段中文候选做独立科学复核。候选不是证据；只能用下方带P编号的直接原文。六字段必须同包审阅。',
       '逐字段检查物理对象、角度/坐标定义、关系符、主峰与异号旁瓣、近远场、适用条件、背景比较范围、理论/模拟/实验身份、字段归属和限定词。不要因文字流畅而放行。',
-      'accepted表示候选逐项受证据支持；revised表示用证据纠正摘要；blocked表示证据不足或冲突未解。需要原公式、图注或相邻段时填写needsMoreEvidence，本轮全部字段保持待审。',
+      'accepted表示候选逐项受证据支持；revised表示用证据纠正摘要；blocked表示该字段证据不足或冲突未解。需要原公式、图注或相邻段时填写needsMoreEvidence，并只阻断受影响字段；其余字段必须独立accepted或revised。',
       `只返回JSON对象，完整空结构如下：${JSON.stringify({
         fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
           verdict: 'blocked', summary: '', sourcePassageIds: [], issues: [],
@@ -1392,17 +1392,25 @@ async function webScientificReviewCanonicalProposal(
         candidateHash,
         evidence.manifestHash,
       );
+      const supplementalPassages = passages.filter((passage) => pageNumbers.some(
+        (pageNumber) => passage.pageStart <= pageNumber && passage.pageEnd >= pageNumber,
+      ));
+      reviewPassages = [...new Map([...reviewPassages, ...supplementalPassages]
+        .map((passage) => [passage.id, passage] as const)).values()]
+        .sort((left, right) => left.pageStart - right.pageStart || left.id.localeCompare(right.id));
+      allowedIds = new Set(reviewPassages.map((passage) => passage.id));
       const supplementalPrompt = [
         '这是同一论文候选的定点原始材料补证续审。上一轮审稿保持不可变；本轮是新的review attempt。附件是原始 PDF 或原始页图，可作为公式符号与版面的直接证据；OCR与视觉转录均是未验证辅助，不得替代附件原件。',
-        `上一轮attempt=${attemptId}；本轮evidenceManifestHash=${evidence.manifestHash}。逐项解决上一轮needsMoreEvidence；若附件仍不足则继续填写needsMoreEvidence，不猜测。`,
+        `上一轮attempt=${attemptId}；本轮evidenceManifestHash=${evidence.manifestHash}。逐项解决上一轮needsMoreEvidence；若附件仍不足则继续填写needsMoreEvidence，不猜测。只阻断仍缺证的字段，其他字段必须独立accepted或revised。`,
         `输出结构和裁定规则与上一轮相同，只返回JSON：${JSON.stringify({
           fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
             verdict: 'blocked', summary: '', sourcePassageIds: [], issues: [],
           }])), needsMoreEvidence: [],
-        })}。sourcePassageIds仍只能引用上一轮允许的P编号；图片用于核对这些P编号内公式和定义的准确性。`,
+        })}。sourcePassageIds可以引用下方新增页段中的P编号；附件用于核对这些P编号内公式和定义的准确性。`,
         `固定候选（hash=${candidateHash}）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: current })}`,
         `上一轮科学复核：${JSON.stringify(parsed)}`,
         `冻结图像证据清单：${JSON.stringify(evidence.manifest)}`,
+        `补证页对应的可引用原文段：\n${canonicalPassagePrompt(supplementalPassages)}`,
       ].join('\n\n');
       if (supplementalPrompt.length > SCIENCE_REVIEW_MAX_PROMPT_CHARS) return blockAll('awaiting_review_evidence', 'scientificReview=supplemental_packet_too_large', {
         promptHash: response.promptHash, responseHash: response.responseHash, evidenceManifestHash, evidencePages,
@@ -1420,10 +1428,6 @@ async function webScientificReviewCanonicalProposal(
         responseHash: response.responseHash, evidenceManifestHash, evidencePages,
       });
     }
-    if (parsed.needsMoreEvidence.length > 0) return blockAll('awaiting_review_evidence', 'scientificReview=requested_more_evidence', {
-      attemptId: finalAttemptId, ...(finalAttemptId === attemptId ? {} : { previousAttemptId: attemptId }),
-      promptHash: response.promptHash, responseHash: response.responseHash, evidenceManifestHash, evidencePages,
-    });
     const reviewedFields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
       const reviewed = parsed.fields[field];
       if (reviewed.verdict === 'blocked') return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }];
@@ -1432,6 +1436,9 @@ async function webScientificReviewCanonicalProposal(
         sourcePassageIds: reviewed.sourcePassageIds, verifiedSegments: segments, needsMoreInformation: false }];
     })) as ExtractedProposal['fields'];
     const blockedFields = SDF_CORE_FIELDS.filter((field) => parsed.fields[field].verdict === 'blocked');
+    const reviewStatus = parsed.needsMoreEvidence.length
+      ? 'awaiting_review_evidence'
+      : blockedFields.length ? 'blocked_scientific_review' : 'review_received';
     return {
       partial: {
         proposal: { schemaVersion: SDF_CORE_VERSION, fields: reviewedFields },
@@ -1441,7 +1448,7 @@ async function webScientificReviewCanonicalProposal(
         unverifiedSourcePassageIds: Object.fromEntries(blockedFields.map((field) => [field, proposal.fields[field].sourcePassageIds ?? []])),
       },
       review: { provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
-        status: blockedFields.length ? 'blocked_scientific_review' : 'review_received',
+        status: reviewStatus,
         attemptId: finalAttemptId, ...(finalAttemptId === attemptId ? {} : { previousAttemptId: attemptId }),
         promptHash: response.promptHash, responseHash: response.responseHash, reviewedCandidateHash: candidateHash,
         ...(evidenceManifestHash ? { evidenceManifestHash } : {}), ...(evidencePages ? { evidencePages } : {}) },
