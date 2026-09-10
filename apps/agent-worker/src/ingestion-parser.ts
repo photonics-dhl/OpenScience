@@ -109,7 +109,9 @@ async function runDoclingPdf(content: Buffer, serviceUrl: string): Promise<Parse
   form.append('to_formats', 'text');
   form.append('image_export_mode', 'placeholder');
   form.append('pdf_backend', 'dlparse_v2');
-  form.append('do_ocr', 'true');
+  // Born-digital PDFs use Docling layout/text. Existing page-quality routing invokes
+  // isolated Tesseract or authorized vision OCR only for unreadable pages.
+  form.append('do_ocr', 'false');
   form.append('force_ocr', 'false');
   form.append('do_table_structure', 'true');
   form.append('do_formula_enrichment', process.env.DOCLING_FORMULA_ENRICHMENT === 'true' ? 'true' : 'false');
