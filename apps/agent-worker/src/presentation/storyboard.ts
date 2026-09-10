@@ -35,7 +35,9 @@ export async function generateStoryboard(gateway: Pick<AiGateway, 'completeStruc
         throw new Error('[blocked] Selected Claims and base storyboard exceed planner input bounds; select fewer Claims');
     const ids = claims.map(c => c.id);
     function singleLine(value: unknown): unknown {
-        return typeof value === 'string' ? value.replace(/[\u0000-\u001f]+/g, ' ').replace(/\s{2,}/g, ' ').trim() : value;
+        return typeof value === 'string'
+            ? [...value].map(character => character.charCodeAt(0) <= 31 ? ' ' : character).join('').replace(/\s{2,}/g, ' ').trim()
+            : value;
     }
     function materialize(value: unknown): unknown {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return value;

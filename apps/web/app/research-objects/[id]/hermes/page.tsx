@@ -184,7 +184,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
     try {
       await refreshIngestionAnalysis(taskId, detail.task.agentTaskId);
       if (mounted.current) setReload((value) => value + 1);
-    } catch (cause) {
+    } catch {
       try {
         const current = await getIngestionTask(taskId);
         if (current.task.agentTaskId && current.task.agentTaskId !== detail.task.agentTaskId) {

@@ -408,7 +408,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       setConfirmationIntent(null);
       setIngestionTasks((current) => current.map((candidate) => candidate.id === task.id ? { ...task, confirmation: null } : candidate));
       setIngestionMessage(t('legacyRefreshStarted'));
-    } catch (cause) {
+    } catch {
       try {
         const detail = await getIngestionTask(ingestionProposal.detail.task.id);
         if (detail.task.agentTaskId && detail.task.agentTaskId !== ingestionProposal.detail.task.agentTaskId) {
