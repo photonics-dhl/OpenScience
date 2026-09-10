@@ -151,7 +151,8 @@ export class AiGateway {
           estimatedOutputTokens: null, estimatedCostUsdMicros: 0, actualCostUsdMicros: 0, currency: 'USD',
           pricingVersion: 'chatgpt-subscription', pricingEffectiveDate: null, serviceTier: 'subscription',
           latencyMs: elapsed, totalLatencyMs: elapsed, promptHash: sha256Text(input.prompt),
-          inputContentHash: input.source.documentSha256, pageNumbers: [], pageCount: 0,
+          inputContentHash: input.source.documentSha256,
+          pageNumbers: input.attachments?.map(({ pageNumber }) => pageNumber) ?? [], pageCount: input.attachments?.length ?? 0,
           selectionReason: 'high_risk_scientific_review', outcome,
           error: outcome === 'failed' ? 'scientific_review_failed' : null, fallbackReason: null, retryCount: 0,
         });

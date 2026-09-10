@@ -8,6 +8,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const SHA256 = /^[a-f0-9]{64}$/;
 const crypto = require('node:crypto');
 const RECOVERY_GRACE_MS = 60 * 60 * 1000;
+const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 24 * 1024 * 1024;
 if (!['execute', 'recover'].includes(mode) || !UUID.test(id || '')) process.exit(64);
 const dir = path.join('/jobs/review', id);
 function read(name, maximum = 96 * 1024) {
@@ -22,13 +24,47 @@ function once(name, data) {
 }
 function validateRequest(request, recover = false) {
   const source = request?.source;
+  const attachments = request?.attachments;
+  const validAttachments = attachments === undefined || (Array.isArray(attachments) && attachments.length >= 1 && attachments.length <= 8
+    && new Set(attachments.map(value => value?.fileName)).size === attachments.length
+    && attachments.every(value => value && /^page-[1-9][0-9]{0,4}\.png$/u.test(value.fileName)
+      && value.mediaType === 'image/png' && Number.isSafeInteger(value.pageNumber) && value.pageNumber > 0
+      && Number.isSafeInteger(value.width) && value.width > 0 && value.width <= 8192
+      && Number.isSafeInteger(value.height) && value.height > 0 && value.height <= 8192
+      && value.width * value.height <= 40000000 && SHA256.test(value.sha256 || '')));
   if (request?.schemaVersion !== 1 || request?.provider !== 'chatgpt-web-science-review' || request?.id !== id
     || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 64 * 1024
     || !SHA256.test(request.promptHash || '') || !Number.isSafeInteger(request.deadlineAt)
     || (recover ? request.deadlineAt + RECOVERY_GRACE_MS <= Date.now() : request.deadlineAt <= Date.now())
-    || request.deadlineAt - Date.now() > 600000 || !source || typeof source.artifactId !== 'string'
+    || request.deadlineAt - Date.now() > 600000 || !source || typeof source.artifactId !== 'string' || !validAttachments
     || !SHA256.test(source.documentSha256 || '') || !SHA256.test(source.candidateHash || '') || !SHA256.test(source.sourceMapHash || '')) throw Error('INVALID_REQUEST');
   return request;
+}
+function reviewAttachments(request) {
+  let total = 0;
+  return (request.attachments ?? []).map(attachment => {
+    const file = path.join(dir, 'attachments', attachment.fileName), stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 1 || stat.size > MAX_ATTACHMENT_BYTES) throw Error('INVALID_ATTACHMENT');
+    const bytes = fs.readFileSync(file); total += bytes.byteLength;
+    if (total > MAX_TOTAL_ATTACHMENT_BYTES || crypto.createHash('sha256').update(bytes).digest('hex') !== attachment.sha256
+      || bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a'
+      || bytes.readUInt32BE(16) !== attachment.width || bytes.readUInt32BE(20) !== attachment.height) throw Error('INVALID_ATTACHMENT');
+    return { attachment, file };
+  });
+}
+async function uploadAttachments(input, request) {
+  const attachments = reviewAttachments(request);
+  if (!attachments.length) return;
+  const form = input.locator('xpath=ancestor::form[1]');
+  const fileInput = form.locator('input[type="file"]');
+  if (await form.count() !== 1 || await fileInput.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
+  await fileInput.setInputFiles(attachments.map(({ file }) => file));
+  for (const { attachment } of attachments) {
+    const chip = form.getByText(attachment.fileName, { exact: true });
+    if (await chip.count() < 1 || !await chip.first().waitFor({ state: 'visible', timeout: 30000 }).then(() => true).catch(() => false)) {
+      throw Error('ATTACHMENT_UPLOAD_NOT_CONFIRMED');
+    }
+  }
 }
 function normalizeUserText(value) { return String(value ?? '').replace(/\u00a0/g, ' ').trim(); }
 function reviewPrompt(request) {
@@ -226,9 +262,11 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
   if (prompt.length > 64 * 1024) throw Error('PROMPT_TOO_LARGE');
   const baseline = await page.locator('[data-message-author-role="assistant"]').count();
   await input.fill(prompt);
+  await uploadAttachments(input, request);
   const send = page.getByRole('button', { name: 'Send prompt', exact: true });
   if (!await send.isEnabled().catch(() => false)) throw Error('SEND_NOT_READY');
-  once('submitted.json', { phase: 'submitted', id, promptHash: request.promptHash, assistantCount: baseline, submittedAt: new Date().toISOString() });
+  once('submitted.json', { phase: 'submitted', id, promptHash: request.promptHash, assistantCount: baseline,
+    attachments: (request.attachments ?? []).map(({ fileName, sha256 }) => ({ fileName, sha256 })), submittedAt: new Date().toISOString() });
   await send.click();
   const url = await resolveCanonicalConversation(page, Math.min(request.deadlineAt - 30000, Date.now() + 30000));
   once('conversation.json', { url });

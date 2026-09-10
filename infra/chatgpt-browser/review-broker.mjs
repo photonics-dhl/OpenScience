@@ -6,6 +6,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   SCIENCE_REVIEW_MAX_JSON_BYTES,
+  SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES,
+  SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES,
   SCIENCE_REVIEW_MAX_RESPONSE_BYTES,
   validateScienceReviewRequest,
   validateScienceReviewResult,
@@ -64,6 +66,20 @@ async function publishRecovery(results, request, response) {
 function same(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
 function uncertain() { const error = Error('UNCERTAIN'); error.code = 'UNCERTAIN'; return error; }
 async function docker(args, timeout) { return exec('docker', args, { timeout, maxBuffer: 32 * 1024, encoding: 'utf8' }); }
+async function copyAttachments(config, job, request) {
+  if (!request.attachments?.length) return;
+  const target = join(job, 'attachments');
+  await prepare(target, 11040);
+  let total = 0;
+  for (const attachment of request.attachments) {
+    const bytes = await safeRead(join(config.inbox, `${request.id}.${attachment.fileName}`), SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES);
+    total += bytes.byteLength;
+    if (total > SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES
+      || createHash('sha256').update(bytes).digest('hex') !== attachment.sha256) throw Error('INVALID_ATTACHMENT');
+    const path = join(target, attachment.fileName);
+    await atomicWrite(path, bytes); await chown(path, 11040, 11040);
+  }
+}
 async function jobResponse(job, request) {
   const recovered = await exists(join(job, 'recovered-result.json'));
   const resultName = recovered ? 'recovered-result.json' : 'result.json';
@@ -72,7 +88,8 @@ async function jobResponse(job, request) {
   const persisted = JSON.parse((await safeRead(join(job, 'request.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8'));
   const result = JSON.parse((await safeRead(join(job, resultName), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8'));
   const expected = { schemaVersion: 1, provider: request.provider, id: request.id, prompt: request.prompt,
-    promptHash: request.promptHash, deadlineAt: request.deadlineAt, source: request.source };
+    promptHash: request.promptHash, deadlineAt: request.deadlineAt, source: request.source,
+    ...(request.attachments?.length ? { attachments: request.attachments } : {}) };
   if (!same(persisted, expected) || result?.schemaVersion !== 1 || result.state !== 'received' || result.provider !== request.provider
     || result.id !== request.id || result.promptHash !== request.promptHash || !same(result.source, request.source)
     || result.file !== responseName || typeof result.responseHash !== 'string' || !/^[a-f0-9]{64}$/.test(result.responseHash)
@@ -86,8 +103,10 @@ async function execute(config, request) {
   const job = join(config.jobs, 'review', request.id);
   if (await exists(job)) throw uncertain();
   await prepare(job, 11040);
+  await copyAttachments(config, job, request);
   const inner = { schemaVersion: 1, provider: request.provider, id: request.id, prompt: request.prompt,
-    promptHash: request.promptHash, deadlineAt: request.deadlineAt, source: request.source };
+    promptHash: request.promptHash, deadlineAt: request.deadlineAt, source: request.source,
+    ...(request.attachments?.length ? { attachments: request.attachments } : {}) };
   const requestPath = join(job, 'request.json');
   await atomicWrite(requestPath, JSON.stringify(inner)); await chown(requestPath, 11040, 11040);
   const seconds = Math.floor((request.deadlineAt - Date.now() - 30000) / 1000);

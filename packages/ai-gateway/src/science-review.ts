@@ -1,12 +1,14 @@
 import { constants } from 'node:fs';
 import { lstat, open, link, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { sha256Text } from './ocr';
 import {
   SCIENCE_REVIEW_MAX_DEADLINE_MS,
+  SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES,
   SCIENCE_REVIEW_MAX_JSON_BYTES,
   SCIENCE_REVIEW_MAX_RESPONSE_BYTES,
+  SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES,
   SCIENCE_REVIEW_READY_MAX_AGE_MS,
   validateScienceReviewRequest,
   validateScienceReviewResult,
@@ -50,7 +52,7 @@ async function boundedRead(path: string, limit: number): Promise<Buffer> {
     return data.subarray(0, bytesRead);
   } finally { await file.close(); }
 }
-async function publish(path: string, data: string): Promise<boolean> {
+async function publish(path: string, data: string | Uint8Array): Promise<boolean> {
   const temporary = `${path}.${randomUUID()}.tmp`;
   const file = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
   try { await file.writeFile(data); await file.sync(); } finally { await file.close(); }
@@ -65,6 +67,13 @@ async function publish(path: string, data: string): Promise<boolean> {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
     throw error;
   } finally { await unlink(temporary); }
+}
+
+function attachmentDimensions(bytes: Uint8Array): { width: number; height: number } {
+  const value = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (value.length < 24 || value.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a'
+    || value.readUInt32BE(8) !== 13 || value.subarray(12, 16).toString('ascii') !== 'IHDR') fail();
+  return { width: value.readUInt32BE(16), height: value.readUInt32BE(20) };
 }
 
 async function successfulOutput(resultsDir: string, request: ScienceReviewRequest): Promise<ScienceReviewProviderResult | null> {
@@ -113,6 +122,14 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
     const ready = await lstat(join(this.config.resultsDir, '.ready'));
     if (this.now() - ready.mtimeMs > SCIENCE_REVIEW_READY_MAX_AGE_MS || ready.mtimeMs > this.now() + 5000) fail();
     const createdAt = this.now();
+    const attachments = input.attachments?.map(({ bytes, ...attachment }) => {
+      if (!(bytes instanceof Uint8Array) || bytes.byteLength < 1 || bytes.byteLength > SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES
+        || createHash('sha256').update(bytes).digest('hex') !== attachment.sha256) fail();
+      const dimensions = attachmentDimensions(bytes);
+      if (dimensions.width !== attachment.width || dimensions.height !== attachment.height) fail();
+      return { record: attachment, bytes: Uint8Array.from(bytes) };
+    });
+    if ((attachments?.reduce((total, attachment) => total + attachment.bytes.byteLength, 0) ?? 0) > SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES) fail();
     let request = validateScienceReviewRequest({
       schemaVersion: 1,
       provider: this.name,
@@ -122,11 +139,21 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
       createdAt,
       deadlineAt: createdAt + this.timeout,
       source: input.source,
+      ...(attachments?.length ? { attachments: attachments.map(({ record }) => record) } : {}),
     });
+    for (const attachment of attachments ?? []) {
+      const path = join(this.config.inboxDir, `${request.id}.${attachment.record.fileName}`);
+      if (!await publish(path, attachment.bytes)) {
+        const existing = await boundedRead(path, SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES);
+        if (existing.byteLength !== attachment.bytes.byteLength
+          || createHash('sha256').update(existing).digest('hex') !== attachment.record.sha256) fail();
+      }
+    }
     const reservation = join(this.config.inboxDir, `${input.requestId}.submitted.json`);
     if (!await publish(reservation, JSON.stringify(request))) {
       request = validateScienceReviewRequest(JSON.parse((await boundedRead(reservation, SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
-      if (request.promptHash !== sha256Text(input.prompt) || request.source.candidateHash !== input.source.candidateHash) fail();
+      if (request.promptHash !== sha256Text(input.prompt) || request.source.candidateHash !== input.source.candidateHash
+        || JSON.stringify(request.attachments ?? []) !== JSON.stringify(attachments?.map(({ record }) => record) ?? [])) fail();
     }
     const existingOutput = await successfulOutput(this.config.resultsDir, request);
     if (existingOutput) return existingOutput;

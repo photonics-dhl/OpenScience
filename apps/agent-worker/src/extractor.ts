@@ -1,4 +1,4 @@
-import { AiGatewayError, SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type OcrAuthorizationContext, type SchemaGuard } from '@openscience/ai-gateway';
+import { AiGatewayError, SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type OcrAuthorizationContext, type SchemaGuard, type ScienceReviewAttachment } from '@openscience/ai-gateway';
 import { createHash } from 'node:crypto';
 import {
   createBlockSourceLocator,
@@ -11,6 +11,7 @@ import {
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
 import { RESEARCH_UNDERSTANDING_SKILL } from './skills/research-understanding.js';
 import { PAPER_ANALYSIS_SKILL } from './skills/paper-analysis.js';
+import type { ParserRasterResult } from './parsers/job-protocol';
 
 /** 六字段 core 结构（§5.1：schemaVersion + 6 字段，全部 string）。 */
 export interface ExtractedCore {
@@ -68,6 +69,9 @@ export interface ExtractionResult extends Record<string, unknown> {
     promptHash?: string;
     responseHash?: string;
     reviewedCandidateHash: string;
+    previousAttemptId?: string;
+    evidenceManifestHash?: string;
+    evidencePages?: Array<{ pageNumber: number; imageSha256: string }>;
   };
 }
 
@@ -631,6 +635,7 @@ interface ScientificReviewContext {
   requestId: string;
   authorizationContext: Readonly<OcrAuthorizationContext>;
   coveragePassageIds?: readonly string[];
+  renderPages?: (pageNumbers: readonly number[]) => Promise<ParserRasterResult>;
 }
 
 type ScientificReviewField = {
@@ -648,8 +653,11 @@ function sha256Json(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-function reviewAttemptId(parentTaskId: string, sourceMapHash: string, candidateHash: string): string {
-  const hex = createHash('sha256').update(`${parentTaskId}\0${sourceMapHash}\0${candidateHash}`).digest('hex').slice(0, 32).split('');
+function reviewAttemptId(parentTaskId: string, sourceMapHash: string, candidateHash: string, evidenceManifestHash?: string): string {
+  const seed = evidenceManifestHash
+    ? `${parentTaskId}\0${sourceMapHash}\0${candidateHash}\0${evidenceManifestHash}`
+    : `${parentTaskId}\0${sourceMapHash}\0${candidateHash}`;
+  const hex = createHash('sha256').update(seed).digest('hex').slice(0, 32).split('');
   hex[12] = '5';
   hex[16] = ['8', '9', 'a', 'b'][Number.parseInt(hex[16]!, 16) % 4]!;
   const value = hex.join('');
@@ -1111,6 +1119,81 @@ async function repairCanonicalPartial(
   return partial;
 }
 
+function requestedEquationNumbers(review: ScientificReviewResponse): Set<number> {
+  const text = JSON.stringify({ needsMoreEvidence: review.needsMoreEvidence,
+    issues: Object.values(review.fields).flatMap((field) => field.issues) });
+  const result = new Set<number>();
+  for (const match of text.matchAll(/Eq(?:uation)?s?\.?\s*(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?/giu)) {
+    const start = Number(match[1]), end = Number(match[2] ?? match[1]);
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start || end - start > 64) continue;
+    for (let value = start; value <= end; value += 1) result.add(value);
+  }
+  return result;
+}
+
+function equationNumber(text: string | undefined): number | undefined {
+  const match = /\(\s*(\d{1,3})\s*\)\s*$/u.exec(text?.trim() ?? '');
+  const value = Number(match?.[1]);
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
+function supplementalPageNumbers(sourceMap: DocumentSourceMap, passages: readonly CanonicalPassage[], review: ScientificReviewResponse): number[] {
+  const requested = requestedEquationNumbers(review);
+  const formulaPages = new Set<number>();
+  for (const page of sourceMap.pages) {
+    if (page.blocks.some((block) => block.kind === 'equation' && requested.has(equationNumber(block.text) ?? -1))) formulaPages.add(page.page);
+  }
+  const contextPages = new Set<number>();
+  const byId = new Map(passages.map((passage) => [passage.id, passage]));
+  for (const id of Object.values(review.fields).flatMap((field) => field.issues.flatMap((issue) => issue.sourcePassageIds))) {
+    const passage = byId.get(id);
+    if (!passage) continue;
+    for (let page = passage.pageStart; page <= passage.pageEnd; page += 1) contextPages.add(page);
+  }
+  return [...formulaPages].sort((left, right) => left - right)
+    .concat([...contextPages].filter((page) => !formulaPages.has(page)).sort((left, right) => left - right)).slice(0, 8);
+}
+
+function supplementalEvidence(
+  sourceMap: DocumentSourceMap,
+  raster: ParserRasterResult,
+  pageNumbers: readonly number[],
+  review: ScientificReviewResponse,
+): { manifest: Record<string, unknown>; manifestHash: string; attachments: ScienceReviewAttachment[] } {
+  const requested = requestedEquationNumbers(review);
+  const rendered = new Map(raster.pages.map((page) => [page.pageNumber, page]));
+  const pages = pageNumbers.map((pageNumber) => {
+    const sourcePage = sourceMap.pages.find((page) => page.page === pageNumber);
+    const image = rendered.get(pageNumber);
+    if (!sourcePage || !image) throw new Error('scientific review evidence page missing');
+    const equations = sourcePage.blocks.filter((block) => block.kind === 'equation'
+      && requested.has(equationNumber(block.text) ?? -1)).map((block) => ({
+      blockId: block.id, boundingBox: block.boundingBox, unverifiedNativeText: block.text ?? '',
+    }));
+    const vision = sourcePage.blocks.filter((block) => block.parser.name === 'llm_ocr_candidate' && block.text?.trim()).map((block) => ({
+      blockId: block.id,
+      transcriptionHash: createHash('sha256').update(block.text!).digest('hex'),
+      unverifiedTranscription: block.text!.slice(0, 4_000),
+      provider: block.parser.version,
+    }));
+    const evidenceId = `IMG-${createHash('sha256').update(JSON.stringify({ artifactId: sourceMap.artifactId,
+      contentHash: sourceMap.contentHash, pageNumber, equations: equations.map(({ blockId, boundingBox }) => ({ blockId, boundingBox })) }))
+      .digest('hex').slice(0, 20)}`;
+    return { evidenceId, pageNumber, pageWidth: sourcePage.width, pageHeight: sourcePage.height,
+      imageSha256: image.contentHash, renderWidth: image.width, renderHeight: image.height, equations, vision };
+  });
+  const manifest = { schemaVersion: 1, source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash },
+    requestedQuestions: review.needsMoreEvidence, pages };
+  const manifestHash = sha256Json(manifest);
+  const attachments = pageNumbers.map((pageNumber) => {
+    const image = rendered.get(pageNumber)!;
+    return { fileName: `page-${pageNumber}.png`, mediaType: 'image/png' as const, pageNumber,
+      width: image.width, height: image.height, sha256: image.contentHash,
+      bytes: Uint8Array.from(Buffer.from(image.bytesBase64, 'base64')) };
+  });
+  return { manifest, manifestHash, attachments };
+}
+
 async function webScientificReviewCanonicalProposal(
   gateway: AiGateway,
   sourceMap: DocumentSourceMap,
@@ -1121,7 +1204,10 @@ async function webScientificReviewCanonicalProposal(
   const candidateHash = sha256Json({ schemaVersion: SDF_CORE_VERSION, fields: proposal.fields });
   const sourceMapHash = sha256Json(sourceMap);
   const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
-  const blockAll = (status: 'awaiting_review_evidence' | 'blocked_scientific_review', detail: string, hashes: { promptHash?: string; responseHash?: string } = {}) => {
+  const blockAll = (status: 'awaiting_review_evidence' | 'blocked_scientific_review', detail: string, metadata: {
+    attemptId?: string; promptHash?: string; responseHash?: string; previousAttemptId?: string;
+    evidenceManifestHash?: string; evidencePages?: Array<{ pageNumber: number; imageSha256: string }>;
+  } = {}) => {
     const affected = SDF_CORE_FIELDS.filter((field) => !proposal.fields[field].needsMoreInformation);
     return {
       partial: {
@@ -1134,7 +1220,13 @@ async function webScientificReviewCanonicalProposal(
         unverifiedSourcePassageIds: Object.fromEntries(affected.map((field) => [field, proposal.fields[field].sourcePassageIds ?? []])),
       },
       review: { provider: 'chatgpt-web-science-review' as const, model: 'chatgpt-web/6-pro' as const,
-        status, attemptId, reviewedCandidateHash: candidateHash, ...hashes },
+        status, attemptId: metadata.attemptId ?? attemptId, reviewedCandidateHash: candidateHash,
+        ...(metadata.promptHash ? { promptHash: metadata.promptHash } : {}),
+        ...(metadata.responseHash ? { responseHash: metadata.responseHash } : {}),
+        ...(metadata.previousAttemptId ? { previousAttemptId: metadata.previousAttemptId } : {}),
+        ...(metadata.evidenceManifestHash ? { evidenceManifestHash: metadata.evidenceManifestHash } : {}),
+        ...(metadata.evidencePages ? { evidencePages: metadata.evidencePages } : {}),
+      },
     };
   };
   if (!context) return blockAll('blocked_scientific_review', 'scientificReview=trusted_context_unavailable');
@@ -1163,16 +1255,71 @@ async function webScientificReviewCanonicalProposal(
     if (prompt.length > SCIENCE_REVIEW_MAX_PROMPT_CHARS) {
       return blockAll('awaiting_review_evidence', 'scientificReview=review_packet_too_large');
     }
-    const response = await gateway.reviewScientific({
+    let response = await gateway.reviewScientific({
       requestId: attemptId,
       authorizationContext: context.authorizationContext,
       source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash,
         candidateHash, sourceMapHash },
       prompt,
     });
-    const parsed = parseJsonObject(response.text);
-    if (!scientificReviewGuard(parsed, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_response', response);
-    if (parsed.needsMoreEvidence.length > 0) return blockAll('awaiting_review_evidence', 'scientificReview=requested_more_evidence', response);
+    let parsed = parseJsonObject(response.text);
+    if (!scientificReviewGuard(parsed, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_response', {
+      promptHash: response.promptHash, responseHash: response.responseHash,
+    });
+    let finalAttemptId = attemptId;
+    let evidenceManifestHash: string | undefined;
+    let evidencePages: Array<{ pageNumber: number; imageSha256: string }> | undefined;
+    if (parsed.needsMoreEvidence.length > 0) {
+      if (!context.renderPages) return blockAll('awaiting_review_evidence', 'scientificReview=evidence_renderer_unavailable', {
+        promptHash: response.promptHash, responseHash: response.responseHash,
+      });
+      const pageNumbers = supplementalPageNumbers(sourceMap, reviewPassages, parsed);
+      if (!pageNumbers.length) return blockAll('awaiting_review_evidence', 'scientificReview=requested_evidence_not_located', {
+        promptHash: response.promptHash, responseHash: response.responseHash,
+      });
+      let evidence;
+      try {
+        evidence = supplementalEvidence(sourceMap, await context.renderPages(pageNumbers), pageNumbers, parsed);
+      } catch {
+        return blockAll('awaiting_review_evidence', 'scientificReview=evidence_render_failed', {
+          promptHash: response.promptHash, responseHash: response.responseHash,
+        });
+      }
+      evidenceManifestHash = evidence.manifestHash;
+      evidencePages = evidence.attachments.map(({ pageNumber, sha256 }) => ({ pageNumber, imageSha256: sha256 }));
+      finalAttemptId = reviewAttemptId(context.requestId, sourceMapHash, candidateHash, evidence.manifestHash);
+      const supplementalPrompt = [
+        '这是同一论文候选的定点图像补证续审。上一轮审稿保持不可变；本轮是新的review attempt。只把附件原始页图视为公式符号与版面的直接证据，OCR与视觉转录均是未验证辅助，不得替代图片。',
+        `上一轮attempt=${attemptId}；本轮evidenceManifestHash=${evidence.manifestHash}。逐项解决上一轮needsMoreEvidence；若附件仍不足则继续填写needsMoreEvidence，不猜测。`,
+        `输出结构和裁定规则与上一轮相同，只返回JSON：${JSON.stringify({
+          fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
+            verdict: 'blocked', summary: '', sourcePassageIds: [], issues: [],
+          }])), needsMoreEvidence: [],
+        })}。sourcePassageIds仍只能引用上一轮允许的P编号；图片用于核对这些P编号内公式和定义的准确性。`,
+        `固定候选（hash=${candidateHash}）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: current })}`,
+        `上一轮科学复核：${JSON.stringify(parsed)}`,
+        `冻结图像证据清单：${JSON.stringify(evidence.manifest)}`,
+      ].join('\n\n');
+      if (supplementalPrompt.length > SCIENCE_REVIEW_MAX_PROMPT_CHARS) return blockAll('awaiting_review_evidence', 'scientificReview=supplemental_packet_too_large', {
+        promptHash: response.promptHash, responseHash: response.responseHash, evidenceManifestHash, evidencePages,
+      });
+      response = await gateway.reviewScientific({
+        requestId: finalAttemptId,
+        authorizationContext: context.authorizationContext,
+        source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash, candidateHash, sourceMapHash },
+        prompt: supplementalPrompt,
+        attachments: evidence.attachments,
+      });
+      parsed = parseJsonObject(response.text);
+      if (!scientificReviewGuard(parsed, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_supplemental_response', {
+        attemptId: finalAttemptId, previousAttemptId: attemptId, promptHash: response.promptHash,
+        responseHash: response.responseHash, evidenceManifestHash, evidencePages,
+      });
+    }
+    if (parsed.needsMoreEvidence.length > 0) return blockAll('awaiting_review_evidence', 'scientificReview=requested_more_evidence', {
+      attemptId: finalAttemptId, ...(finalAttemptId === attemptId ? {} : { previousAttemptId: attemptId }),
+      promptHash: response.promptHash, responseHash: response.responseHash, evidenceManifestHash, evidencePages,
+    });
     const reviewedFields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
       const reviewed = parsed.fields[field];
       if (reviewed.verdict === 'blocked') return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }];
@@ -1191,7 +1338,9 @@ async function webScientificReviewCanonicalProposal(
       },
       review: { provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
         status: blockedFields.length ? 'blocked_scientific_review' : 'review_received',
-        attemptId, promptHash: response.promptHash, responseHash: response.responseHash, reviewedCandidateHash: candidateHash },
+        attemptId: finalAttemptId, ...(finalAttemptId === attemptId ? {} : { previousAttemptId: attemptId }),
+        promptHash: response.promptHash, responseHash: response.responseHash, reviewedCandidateHash: candidateHash,
+        ...(evidenceManifestHash ? { evidenceManifestHash } : {}), ...(evidencePages ? { evidencePages } : {}) },
     };
   } catch (error) {
     console.error('paper-analysis web scientific review unavailable; preserving proposals as unverified', error instanceof Error ? error.message : String(error));

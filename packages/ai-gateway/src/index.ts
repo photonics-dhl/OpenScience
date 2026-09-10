@@ -24,6 +24,9 @@ export {
 export { ChatGptWebScienceReviewProvider, type ChatGptWebScienceReviewConfig } from './science-review';
 export {
   SCIENCE_REVIEW_MAX_DEADLINE_MS,
+  SCIENCE_REVIEW_MAX_ATTACHMENTS,
+  SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES,
+  SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES,
   SCIENCE_REVIEW_MAX_JSON_BYTES,
   SCIENCE_REVIEW_MAX_PROMPT_CHARS,
   SCIENCE_REVIEW_MAX_RESPONSE_BYTES,
@@ -31,6 +34,8 @@ export {
   validateScienceReviewRequest,
   validateScienceReviewResult,
   type ScienceReviewInput,
+  type ScienceReviewAttachment,
+  type ScienceReviewAttachmentRecord,
   type ScienceReviewProvider,
   type ScienceReviewProviderResult,
   type ScienceReviewRequest,

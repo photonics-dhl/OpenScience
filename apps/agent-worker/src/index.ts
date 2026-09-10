@@ -43,6 +43,7 @@ import {
 } from './parsers/cascade-orchestrator';
 import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
 import type { ParserInput } from './parsers/types';
+import type { ParserRasterResult } from './parsers/job-protocol';
 import { canonicalParserMediaType } from './parser-media-type';
 import { HostVideoSpool } from './presentation/host-video-spool';
 import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
@@ -126,6 +127,7 @@ export type ParserCascadeRunner = ((
   authorization: ParserCascadeAuthorization,
 ) => Promise<ParserExtractionResult<DocumentSourceMap>>) & {
   readonly featureFlags: Readonly<ParserCascadeFeatureFlags>;
+  renderPages(input: ParserInput, pageNumbers: readonly number[]): Promise<ParserRasterResult>;
 };
 
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
@@ -192,7 +194,20 @@ export function createWorkerParserCascade(
       externalProcessingEligible: authorization.externalProcessingEligible,
       featureFlags,
     }),
-    { featureFlags },
+    {
+      featureFlags,
+      renderPages: (input: ParserInput, pageNumbers: readonly number[]) => {
+        if (!rasterJobAdapter) throw new Error('isolated raster adapter unavailable');
+        return rasterJobAdapter({
+          schemaVersion: 2,
+          operation: 'render_page',
+          artifactId: input.artifactId,
+          contentHash: input.contentHash,
+          mediaType: input.mediaType,
+          options: { pageNumbers: [...pageNumbers] },
+        }, Buffer.from(input.content));
+      },
+    },
   );
 }
 
@@ -361,7 +376,16 @@ export function createHandlers(
         ...await extractHandler(gateway, { payload: { manuscriptText } }, {
           sourceMap: parsed.sourceMap,
           previousResult: reusableExtractionResult,
-          scientificReview: { requestId: ownerTask.id, authorizationContext: trustedAuthorizationContext },
+          scientificReview: {
+            requestId: ownerTask.id,
+            authorizationContext: trustedAuthorizationContext,
+            renderPages: (pageNumbers) => options.parserCascade!.renderPages({
+              artifactId: artifact.id,
+              contentHash: artifact.blobSha256,
+              content: bytes,
+              mediaType: canonicalParserMediaType(artifact.logicalPath, artifact.mimeType),
+            }, pageNumbers),
+          },
         }),
         ...(reusableSourceMap ? { sourceMapReused: true } : {}),
         sourceMapRef,
