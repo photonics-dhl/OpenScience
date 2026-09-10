@@ -124,7 +124,7 @@ test('a foreign imported paper cannot be silently attached or committed', async 
   await fixtures(page);
   await page.route('**/api/ingestion/tasks/journey-task', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjectId: 'foreign-ro', version: 1, task: { ...task, state: 'confirmed', result: { core } } }) }));
   await page.goto('/research-objects/journey-ro/edit?ingestionTask=journey-task');
-  await expect(page.locator('main').getByRole('alert')).toContainText('This material has no confirmed version');
+  await expect(page.locator('main').getByRole('alert')).toContainText('does not belong to the current Research Object');
   await expect(page.getByRole('button', { name: 'Create commit', exact: true })).toBeDisabled();
   await expect(page.getByText('paper.pdf', { exact: true })).toHaveCount(0);
 });
@@ -169,9 +169,9 @@ test('saved materials survive Files refresh and same-name attachments create a m
   let submitted: unknown;
   await page.route('**/api/research-objects/journey-ro/commits', async route => { submitted = route.request().postDataJSON(); await route.fulfill({ json: { commit: { versionId: 'new' } } }); });
   await page.goto('/research-objects/journey-ro/files');
-  await expect(page.locator('a[href="/api/artifacts/original/download"]')).toHaveText('paper.pdf');
+  await expect(page.getByRole('link', { name: 'paper.pdf', exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.locator('a[href="/api/artifacts/original/download"]')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'paper.pdf', exact: true })).toBeVisible();
   await page.getByTestId('artifact-input').setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('controlled fixture') });
   await page.getByRole('button', { name: 'Attach to new version', exact: true }).click();
   await expect.poll(() => submitted).toMatchObject({ version: 1, artifacts: [original, { artifactId: 'added', logicalPath: 'paper.pdf.1' }] });
@@ -277,7 +277,7 @@ for (const recoveryPhase of ['initial', 'after-save'] as const) {
       await route.fulfill({ json: { commit: { versionId: 'accepted' } } });
     });
     await page.goto('/research-objects/journey-ro/files');
-    await expect(page.locator('a[href="/api/artifacts/original/download"]')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'paper.pdf', exact: true })).toBeVisible();
     if (recoveryPhase === 'after-save') {
       await page.getByTestId('artifact-input').setInputFiles({ name: 'first.txt', mimeType: 'text/plain', buffer: Buffer.from('first') });
       await page.getByRole('button', { name: 'Attach to new version', exact: true }).click();

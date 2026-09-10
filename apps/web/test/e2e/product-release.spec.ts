@@ -1147,7 +1147,9 @@ test('Hermes research action shows its reaction before navigating to a real work
   await page.setViewportSize({ width: 1440, height: 900 });
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/research-objects/ro-release/edit`, { waitUntil: 'networkidle' });
-  await page.locator('[data-hermes-input-owner="true"]').click({ button: 'right' });
+  const firstTrigger = page.locator('[data-hermes-input-owner="true"]');
+  await firstTrigger.scrollIntoViewIfNeeded();
+  await firstTrigger.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: /Hermes/u });
   await menu.locator('[data-hermes-action-key="sources"]').click();
   await expect(page.locator('[data-hermes-menu-feedback="true"]')).toHaveAttribute('data-hermes-feedback-action', 'citation-trace');
@@ -1156,7 +1158,9 @@ test('Hermes research action shows its reaction before navigating to a real work
   await expect(page).toHaveURL(/\/research-objects\/ro-release\/files$/, { timeout: 3000 });
 
   await page.goto(`${baseUrl}/research-objects/ro-release/edit`, { waitUntil: 'networkidle' });
-  await page.locator('[data-hermes-input-owner="true"]').click({ button: 'right' });
+  const secondTrigger = page.locator('[data-hermes-input-owner="true"]');
+  await secondTrigger.scrollIntoViewIfNeeded();
+  await secondTrigger.click({ button: 'right' });
   await page.getByRole('menu', { name: /Hermes/u }).locator('[data-hermes-action-key="compare"]').click();
   await expect(page.locator('[data-hermes-menu-feedback="true"]')).toBeVisible();
   await page.goto(`${baseUrl}/settings`, { waitUntil: 'networkidle' });

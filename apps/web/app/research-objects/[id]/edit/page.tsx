@@ -120,6 +120,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [selectedIngestionTaskId, setSelectedIngestionTaskId] = useState(ingestionTaskId);
   const [ingestionProposal, setIngestionProposal] = useState<IngestionProposal | null>(null);
   const [ingestionLoading, setIngestionLoading] = useState(false);
+  const [ingestionScopeBlocked, setIngestionScopeBlocked] = useState(false);
   const [ingestionMessage, setIngestionMessage] = useState<string | null>(null);
   const [confirmingIngestion, setConfirmingIngestion] = useState(false);
   const [confirmationIntent, setConfirmationIntent] = useState<IngestionProposal | null>(null);
@@ -208,6 +209,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
   useEffect(() => {
     if (!editorLoaded || draftPrompt || !selectedIngestionTaskId) {
+      setIngestionScopeBlocked(false);
       setIngestionProposal(null);
       setConfirmedReanalysisSource(null);
       setIngestionLoading(false);
@@ -215,6 +217,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     }
     const summary = ingestionTasks.find((task) => task.id === selectedIngestionTaskId);
     if (!summary) {
+      setIngestionScopeBlocked(true);
       setIngestionMessage(t('ingestionScopeMismatch'));
       setIngestionProposal(null);
       setConfirmedReanalysisSource(null);
@@ -227,6 +230,13 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       let active = true;
       void getIngestionTask(summary.id).then((detail) => {
         if (!active) return;
+        if (detail.researchObjectId !== roId || detail.task.id !== summary.id || detail.task.artifactId !== summary.artifactId) {
+          setIngestionScopeBlocked(true);
+          setConfirmedReanalysisSource(null);
+          setIngestionMessage(t('ingestionScopeMismatch'));
+          return;
+        }
+        setIngestionScopeBlocked(false);
         const eligible = detail.researchObjectId === roId && detail.task.id === summary.id
           && detail.task.artifactId === summary.artifactId && isConfirmedIngestionReanalysisSource(detail.task)
           && Boolean(detail.task.agentTaskId);
@@ -242,6 +252,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       return () => { active = false; };
     }
     setConfirmedReanalysisSource(null);
+    setIngestionScopeBlocked(false);
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     setIngestionLoading(true);
@@ -251,6 +262,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         const [viewer, detail] = await Promise.all([getCurrentUser(), getIngestionTask(selectedIngestionTaskId)]);
         if (!active) return;
         if (detail.researchObjectId !== roId || detail.task.id !== summary.id || detail.task.artifactId !== summary.artifactId) {
+          setIngestionScopeBlocked(true);
           setIngestionMessage(t('ingestionScopeMismatch'));
           setIngestionProposal(null);
           return;
@@ -881,7 +893,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   const saveState = saveError ? 'error' : saving ? 'saving' : state.dirty ? 'dirty' : 'saved';
-  const interactionBlocked = draftPrompt || !!conflict || saving || committing;
+  const interactionBlocked = draftPrompt || !!conflict || saving || committing || ingestionScopeBlocked;
   const selectedIngestionTask = ingestionTasks.find((task) => task.id === selectedIngestionTaskId);
   const ingestionReviewActive = Boolean(selectedIngestionTask && !selectedIngestionTask.confirmation);
   const ingestionProposalHasContent = Boolean(ingestionProposal && SDF_FIELDS.some((field) => ingestionProposal.core[field].trim()));
@@ -1005,7 +1017,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                   </div>
                 ) : null}
                 {ingestionLoading ? <p className="mt-3 text-sm text-os-ink" role="status">{t('ingestionLoading')}</p> : null}
-                {ingestionMessage ? <p className="mt-3 text-sm text-os-ink" role="status">{ingestionMessage}</p> : null}
+                {ingestionMessage ? <p className="mt-3 text-sm text-os-ink" role={ingestionScopeBlocked ? 'alert' : 'status'}>{ingestionMessage}</p> : null}
                 {showIngestionRecoveryLink ? <Link className="mt-3 inline-block border-b border-os-vermilion-ink pb-1 text-sm text-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(roId)}/hermes?task=${encodeURIComponent(selectedIngestionTask!.id)}`}>{t('openIngestionRecovery')}</Link> : null}
                 {ingestionProposal ? (
                   <div className="mt-5 space-y-5">

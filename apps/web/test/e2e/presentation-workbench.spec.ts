@@ -477,7 +477,7 @@ test('global Hermes reviews an exact revision and retries one uncertain submissi
   await review.getByRole('button', { name: 'Retry the same submission' }).click();
   await expect(page).toHaveURL(/version=version-2&task=presentation-task/);
   expect(keys).toHaveLength(2); expect(keys[0]).toBeTruthy(); expect(keys[1]).toBe(keys[0]);
-  expect(bodies[0]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', instruction: 'Revise the storyboard to explain diffraction clearly', baseAssetId: parent.id } });
+  expect(bodies[0]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', output: 'image', instruction: 'Revise the storyboard to explain diffraction clearly', baseAssetId: parent.id } });
   expect(bodies[1]).toEqual(bodies[0]);
   await page.locator('[data-hermes-input-owner="true"]').click();
   await expect(review).toHaveCount(0);
