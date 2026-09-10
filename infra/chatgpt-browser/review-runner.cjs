@@ -142,6 +142,23 @@ async function visibleFailureCode(page) {
   if (/network error|connection error|failed to fetch|网络错误|连接错误/.test(text)) return 'NETWORK_ERROR';
   return null;
 }
+async function assistantResponseText(page, assistantId, domText) {
+  const visible = String(domText ?? '').trim();
+  if (visible) return visible;
+  const assistant = page.locator(`[data-message-author-role="assistant"][data-message-id="${assistantId}"]`);
+  if (await assistant.count() !== 1) return '';
+  const copy = assistant.locator('xpath=ancestor::section[1]').getByTestId('copy-turn-action-button');
+  if (await copy.count() !== 1 || !await copy.isVisible().catch(() => false)) return '';
+  await page.evaluate(() => {
+    window.__xgsScienceReviewCopy = null;
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      writeText: async text => { window.__xgsScienceReviewCopy = String(text); },
+    } });
+  });
+  await copy.click();
+  await page.waitForFunction(() => typeof window.__xgsScienceReviewCopy === 'string' && window.__xgsScienceReviewCopy.length > 0, null, { timeout: 3000 }).catch(() => {});
+  return page.evaluate(() => window.__xgsScienceReviewCopy ?? '').catch(() => '');
+}
 async function waitForReview(page, request, deadlineAt, recovered = false) {
   const conversation = canonicalUrl(read('conversation.json').url);
   const anchor = read('anchor.json');
@@ -162,8 +179,8 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
     }, { messageId: anchor.userMessageId, expected: expectedPrompt }).catch(() => null);
     if (anchored?.promptMatches && UUID.test(anchored.assistantId)
       && crypto.createHash('sha256').update(expectedPrompt).digest('hex') === anchor.userMessageHash) {
-      const text = anchored.assistantText.trim();
       const stopVisible = await page.getByRole('button', { name: /Stop|停止/ }).isVisible().catch(() => false);
+      const text = stopVisible ? '' : (await assistantResponseText(page, anchored.assistantId, anchored.assistantText)).trim();
       if (text.length >= 20 && !stopVisible) {
         if (text === stable) stableCount += 1; else { stable = text; stableCount = 0; }
         if (stableCount >= 2) {

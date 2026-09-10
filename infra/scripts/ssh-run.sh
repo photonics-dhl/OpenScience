@@ -87,6 +87,8 @@ SSH_HOST="$(pick SERVER_HOST SSH_HOST 公网ip)" || { echo "错误：.env 缺少
 SSH_USER="$(pick SERVER_USER SSH_USER 用户名)" || { echo "错误：.env 缺少用户名键（SERVER_USER/SSH_USER/用户名）" >&2; exit 66; }
 SSH_PORT="$(pick SERVER_PORT SSH_PORT SSH端口 || true)"
 SSH_PORT="${SSH_PORT:-22}"
+SSH_KEY="$HOME/.ssh/id_ed25519_xgs"
+[ -f "$SSH_KEY" ] || { echo "SSH 认证失败：未找到项目密钥 $SSH_KEY" >&2; exit 66; }
 
 if [ "${BROWSER_TUNNEL:-0}" -eq 1 ]; then
   exec ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes \
@@ -100,7 +102,7 @@ SSH_ERR="$(mktemp)"
 trap 'rm -f "$SSH_ERR"' EXIT
 
 set +e
-ssh -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "$REMOTE_CMD" 2>"$SSH_ERR"
+ssh -o BatchMode=yes -o ConnectTimeout=10 -i "$SSH_KEY" -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "$REMOTE_CMD" 2>"$SSH_ERR"
 rc=$?
 set -e
 
