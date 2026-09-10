@@ -37,8 +37,15 @@ RELEASE_SHA="$(node "$PROJECT_ROOT/scripts/verify-release-source.mjs" --root "$P
   || { echo "错误：部署源不是 release-ref 的干净精确 tree" >&2; exit 66; }
 ROLLBACK_SHA=""
 if [ -n "$ROLLBACK_REF" ]; then
-  ROLLBACK_SHA="$(git -C "$PROJECT_ROOT" rev-parse --verify "$ROLLBACK_REF^{commit}")" \
-    || { echo "错误：rollback-ref '$ROLLBACK_REF' 不存在" >&2; exit 66; }
+  if [[ "$ROLLBACK_REF" =~ ^[0-9a-f]{40}$ ]]; then
+    # The active immutable release can outlive the local clone that created it.
+    # The locked server transaction verifies this exact SHA against .release-id
+    # before its first production mutation.
+    ROLLBACK_SHA="$ROLLBACK_REF"
+  else
+    ROLLBACK_SHA="$(git -C "$PROJECT_ROOT" rev-parse --verify "$ROLLBACK_REF^{commit}")" \
+      || { echo "错误：rollback-ref '$ROLLBACK_REF' 不存在" >&2; exit 66; }
+  fi
   [[ "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "错误：rollback-ref 必须解析为完整 commit SHA" >&2; exit 66; }
 fi
 
