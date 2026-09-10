@@ -634,6 +634,7 @@ interface CanonicalPartialResult {
 interface ScientificReviewContext {
   requestId: string;
   authorizationContext: Readonly<OcrAuthorizationContext>;
+  persistedCandidateHash?: string;
   reusableAttempt?: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string };
   coveragePassageIds?: readonly string[];
   renderPages?: (pageNumbers: readonly number[]) => Promise<ParserRasterResult>;
@@ -1654,11 +1655,13 @@ export async function extractHandler(
     const previousPartial = previousCanonicalPartial(canonicalSourceMap, passages, trustedContext.previousResult);
     if (previousPartial) {
       const reusableAttempt = trustedContext.scientificReview?.reusableAttempt;
-      const persistedProposal = reusableAttempt
+      const persistedCandidateHash = trustedContext.scientificReview?.persistedCandidateHash
+        ?? reusableAttempt?.reviewedCandidateHash;
+      const persistedProposal = persistedCandidateHash
         ? persistedScientificReviewProposal(canonicalSourceMap, passages, previousPartial)
         : undefined;
       if (persistedProposal && sha256Json({ schemaVersion: SDF_CORE_VERSION, fields: persistedProposal.fields })
-        === reusableAttempt?.reviewedCandidateHash) {
+        === persistedCandidateHash) {
         return reviewAndMaterializeCanonicalProposal(
           gateway, canonicalSourceMap, passages, persistedProposal, trustedContext.scientificReview,
         );

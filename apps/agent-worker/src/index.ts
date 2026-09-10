@@ -299,6 +299,7 @@ export function createHandlers(
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
       let reusableSourceMap: DocumentSourceMap | undefined;
       let reusableExtractionResult: Record<string, unknown> | undefined;
+      let persistedScientificReviewCandidateHash: string | undefined;
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string } | undefined;
       const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v3|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
       if (refresh) {
@@ -324,6 +325,9 @@ export function createHandlers(
             const review = previousResult.scientificReview;
             if (review && typeof review === 'object' && !Array.isArray(review)) {
               const candidate = review as Record<string, unknown>;
+              if (SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))) {
+                persistedScientificReviewCandidateHash = candidate.reviewedCandidateHash as string;
+              }
               if (UUID_PATTERN.test(String(candidate.attemptId ?? ''))
                 && SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))
                 && candidate.previousAttemptId === undefined && candidate.evidenceManifestHash === undefined) {
@@ -400,6 +404,7 @@ export function createHandlers(
           scientificReview: {
             requestId: ownerTask.id,
             authorizationContext: trustedAuthorizationContext,
+            ...(persistedScientificReviewCandidateHash ? { persistedCandidateHash: persistedScientificReviewCandidateHash } : {}),
             ...(reusableScientificReviewAttempt ? { reusableAttempt: reusableScientificReviewAttempt } : {}),
             renderPages: (pageNumbers) => options.parserCascade!.renderPages({
               artifactId: artifact.id,
