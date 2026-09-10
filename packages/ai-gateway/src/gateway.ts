@@ -163,6 +163,19 @@ export class AiGateway {
     try { return await provider.canResumeFromCompletedResult(requestId) === true; } catch { return false; }
   }
 
+  async resumeImageFromCompletedResult(requestId: string): Promise<ImageResult> {
+    const provider = this.imageProviders[0];
+    if (!provider?.resumeFromCompletedResult || !(await this.providerEnabled(provider.name, 'image')).enabled) {
+      throw new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image provider unavailable');
+    }
+    try {
+      const result = await provider.resumeFromCompletedResult(requestId);
+      return { ...result, model: provider.model, provider: provider.name };
+    } catch {
+      throw new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image recovery failed');
+    }
+  }
+
   /** 文本补全：primary → fallbacks 逐级回退（§9.3 回退策略配置管理）。 */
   async complete(messages: ChatMessage[], opts: { temperature?: number; maxTokens?: number } = {}): Promise<ProviderResult> {
     const totalStart = Date.now();

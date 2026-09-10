@@ -62,7 +62,7 @@ async function readPresentationInput(storage: NonNullable<Parameters<TaskHandler
   return result;
 }
 
-export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'generateImage' | 'canResumeImageBeforeSubmission' | 'canResumeImageFromCompletedResult'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool } = {}): TaskHandler {
+export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'generateImage' | 'canResumeImageBeforeSubmission' | 'canResumeImageFromCompletedResult' | 'resumeImageFromCompletedResult'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool } = {}): TaskHandler {
   return async (deps, task) => {
     if (!deps.storage) throw new Error('[blocked] presentation object storage unavailable');
     const payload = parsePresentationGenerationPayload(task.payload);
@@ -90,6 +90,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       && task.executionAttempt === 2 && task.retryCount === 1 && task.recoveryContract === HERMES_AUTHORITY_REARM_MARKER;
     const completedProviderRecovery = payload.sceneImage && task.executionAttempt > 1
       && Boolean(options.gateway?.canResumeImageFromCompletedResult)
+      && Boolean(options.gateway?.resumeImageFromCompletedResult)
       && await options.gateway!.canResumeImageFromCompletedResult!(task.id);
     if (payload.sceneImage && task.executionAttempt > 1 && !preProviderAuthorityRearm && !completedProviderRecovery) {
       throw new Error('[blocked] Previous paid image attempt has no saved result; explicit new generation is required');
@@ -197,7 +198,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       const user = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
       if (user?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media generation requires a platform administrator');
       if (!options.gateway?.generateImage) throw new Error('[blocked] scene image gateway unavailable');
-      const prompt = await planSceneImagePrompt(options.gateway, claims, sceneParent.view, payload.sceneImage.sceneIndex);
+      const prompt = completedProviderRecovery ? null
+        : await planSceneImagePrompt(options.gateway, claims, sceneParent.view, payload.sceneImage.sceneIndex);
       await requirePresentationWriteScope(deps.prisma, scope);
       const currentUser = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
       if (currentUser?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media authority changed');
@@ -205,7 +207,9 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       const currentClaims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
       if (presentationClaimContent(currentClaims as PresentationClaim[]) !== presentationClaimContent(claims)) throw new Error('[blocked] source Claims changed before image generation');
       await requireUnchangedEvidence(deps.prisma);
-      const result = await options.gateway.generateImage({ prompt, requestId: task.id });
+      const result = completedProviderRecovery
+        ? await options.gateway.resumeImageFromCompletedResult!(task.id)
+        : await options.gateway.generateImage({ prompt: prompt!, requestId: task.id });
       bytes = result.bytes; contentType = result.contentType; extension = imageExtension(contentType);
       imageProvider = result.provider;
       generator = `OpenScience Hermes scene image / ${result.provider}`; generatorVersion = result.model; promptHash = result.promptHash;

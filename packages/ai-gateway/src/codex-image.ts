@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { lstat, open, link, unlink } from 'node:fs/promises';
 import { isAbsolute, join, dirname, parse } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { validateImageRequest, validateImageBytes, type ImageProvider, type ImageRequest, type ImageProviderResult } from './image';
+import { validateImageRequest, validateImageBytes, type CompletedImageProviderResult, type ImageProvider, type ImageRequest, type ImageProviderResult } from './image';
 import { sha256Text } from './ocr';
 import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, validateCodexImageRequest, validateCodexImageResult, type ImageSpoolProvider } from './codex-image-protocol';
 export interface CodexSpoolImageConfig { inboxDir: string; resultsDir: string; timeoutMs?: number; pollIntervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void> }
@@ -57,24 +57,24 @@ abstract class SpoolImageProvider implements ImageProvider {
     }
   }
   async canResumeFromCompletedResult(id: string): Promise<boolean> {
-    if (!CODEX_IMAGE_ID_PATTERN.test(id)) return false;
-    try {
-      await directory(this.config.inboxDir); await directory(this.config.resultsDir);
-      const request = validateCodexImageRequest(JSON.parse((await boundedRead(
-        join(this.config.inboxDir, id + '.submitted.json'), CODEX_IMAGE_MAX_JSON_BYTES,
-      )).toString('utf8')), undefined, this.spoolProvider);
-      const output = join(this.config.resultsDir, id);
-      await directory(output);
-      const result = validateCodexImageResult(JSON.parse((await boundedRead(
-        join(output, 'result.json'), CODEX_IMAGE_MAX_JSON_BYTES,
-      )).toString('utf8')), this.spoolProvider);
-      if (request.id !== id || result.id !== id || result.status !== 'succeeded'
-        || result.promptHash !== request.promptHash) return false;
-      const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
-      return image.contentType === 'image/png';
-    } catch {
-      return false;
-    }
+    try { await this.resumeFromCompletedResult(id); return true; } catch { return false; }
+  }
+  async resumeFromCompletedResult(id: string): Promise<CompletedImageProviderResult> {
+    if (!CODEX_IMAGE_ID_PATTERN.test(id)) fail();
+    await directory(this.config.inboxDir); await directory(this.config.resultsDir);
+    const request = validateCodexImageRequest(JSON.parse((await boundedRead(
+      join(this.config.inboxDir, id + '.submitted.json'), CODEX_IMAGE_MAX_JSON_BYTES,
+    )).toString('utf8')), undefined, this.spoolProvider);
+    const output = join(this.config.resultsDir, id);
+    await directory(output);
+    const result = validateCodexImageResult(JSON.parse((await boundedRead(
+      join(output, 'result.json'), CODEX_IMAGE_MAX_JSON_BYTES,
+    )).toString('utf8')), this.spoolProvider);
+    if (request.id !== id || result.id !== id || result.status !== 'succeeded'
+      || result.promptHash !== request.promptHash) fail();
+    const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
+    if (image.contentType !== 'image/png') fail();
+    return { ...image, promptHash: result.promptHash };
   }
   async generate(input: ImageRequest): Promise<ImageProviderResult> {
     const prompt = validateImageRequest(input); const id = input.requestId;
