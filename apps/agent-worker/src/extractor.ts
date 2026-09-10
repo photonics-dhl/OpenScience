@@ -128,6 +128,22 @@ function resultSummaryQualityReason(
   const evidenceClass = /(?:理论|数值|模拟|仿真|计算|预测|估计|实验|实测|测量|观测|观察)/u;
   return evidenceClass.test(summary) ? undefined : 'results_not_outcome';
 }
+
+function focusedQuantitativeResultPassages(passages: readonly CanonicalPassage[]): CanonicalPassage[] {
+  const resultLanguage = /\b(?:calculated|measured|obtained|achieved|shows?|yielded|increased|decreased|predicted|estimated)\b|(?:计算|测得|得到|达到|显示|增加|降低|预测|估计)/giu;
+  const quantities = /\d+(?:\.\d+)?\s*(?:as|fs|ps|ns|Hz|kHz|MHz|GHz|THz|PHz|nm|μm|mm|cm|mJ|pC|MeV|W\/m²|%)/giu;
+  const ranked = passages.map((passage, index) => {
+    const resultSignals = passage.text.match(resultLanguage)?.length ?? 0;
+    const quantitySignals = passage.text.match(quantities)?.length ?? 0;
+    const figureSignal = /\bFig(?:ure)?\.?\s*[A-Z]?\d+/iu.test(passage.text) ? 1 : 0;
+    const comparisonSignal = /\b(?:agree|compared|versus|vs\.?|corresponding|same)\b|(?:一致|相比|对应)/iu.test(passage.text) ? 1 : 0;
+    return { passage, index, score: resultSignals * 4 + Math.min(quantitySignals, 6) * 2 + figureSignal * 2 + comparisonSignal };
+  }).filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, 24);
+  const selected = new Set(ranked.map((candidate) => candidate.passage.id));
+  return passages.filter((passage) => selected.has(passage.id));
+}
 const CANONICAL_EXTRACTION_CONTRACT = 'grounded-passages-v2';
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
@@ -830,7 +846,10 @@ async function repairCanonicalPartial(
   }));
   for (const field of repairFields) {
     const allowedIds = candidatesByField.get(field)!;
-    const candidatePassages = passages.filter((passage) => allowedIds.has(passage.id));
+    const allCandidatePassages = passages.filter((passage) => allowedIds.has(passage.id));
+    const candidatePassages = field === 'results' && partial.fieldDiagnostics[field] === 'results_not_outcome'
+      ? focusedQuantitativeResultPassages(allCandidatePassages)
+      : allCandidatePassages;
     const claimBudget = field === 'reproducibility' ? 2 : 3;
     const hasGroundedDraft = Boolean(partial.unverifiedSummaries[field]?.trim()
       && partial.unverifiedSourcePassageIds[field]?.length);
