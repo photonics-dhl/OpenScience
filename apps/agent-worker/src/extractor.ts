@@ -140,7 +140,7 @@ function focusedQuantitativeResultPassages(passages: readonly CanonicalPassage[]
     return { passage, index, score: resultSignals * 4 + Math.min(quantitySignals, 6) * 2 + figureSignal * 2 + comparisonSignal };
   }).filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score || left.index - right.index)
-    .slice(0, 24);
+    .slice(0, 12);
   const selected = new Set(ranked.map((candidate) => candidate.passage.id));
   return passages.filter((passage) => selected.has(passage.id));
 }
@@ -855,6 +855,12 @@ async function repairCanonicalPartial(
       && partial.unverifiedSourcePassageIds[field]?.length);
     const evidenceLikelyPresent = hasGroundedDraft
       || (field === 'results' && hasDirectQuantitativeResultCandidate(candidatePassages));
+    const readOnlyContext = field === 'results'
+      ? Object.fromEntries(['method', 'limitations', 'reproducibility'].flatMap((name) => {
+        const value = supportedContext[name];
+        return typeof value === 'string' ? [[name, value]] : [];
+      }))
+      : supportedContext;
     let repairedField: ExtractedFieldProposal | undefined;
     let repairFailure = 'unresolved';
     const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
@@ -925,7 +931,7 @@ async function repairCanonicalPartial(
         '若候选不足、矛盾未解或任何核心主张没有充分来源，返回claims=[]且needsMoreInformation=true。只有全文、图注及已提供附件均已覆盖时，才能把确实缺失的信息视为原文未报告；OCR缺失、附件未取得、容量或技术失败只能保持待核验。只输出JSON。',
         `输出schemaVersion="${SDF_CORE_VERSION}"，fields必须且只能包含${field}。该字段只能包含claims与needsMoreInformation。`,
       ].join(' ') }, { role: 'user', content: [
-        `已验证字段只读语境：${JSON.stringify(supportedContext)}`,
+        `已验证字段只读语境：${JSON.stringify(readOnlyContext)}`,
         `待修订诊断摘要（未验证；空字符串表示首轮未形成摘要）：${JSON.stringify({ [field]: partial.unverifiedSummaries[field] ?? '' })}`,
         `此前失败与实算预算：${JSON.stringify({ [field]: {
           reason: partial.fieldDiagnostics[field], detail: partial.fieldDiagnosticsDetails[field] ?? '',
