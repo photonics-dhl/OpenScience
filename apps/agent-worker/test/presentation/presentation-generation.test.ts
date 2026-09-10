@@ -19,6 +19,19 @@ const claims = [
   { id: CLAIM_A, kind: 'core', statement: 'Transfer completes in 43 fs', assessment: 'supported', conditions: [], limitations: [], extractionStatus: 'succeeded' },
 ];
 
+const reviewedEvidence = claims.map((claim, index) => ({
+  id: `evidence-${index + 1}`,
+  claimId: claim.id,
+  artifactId: 'artifact-1',
+  contentHash: 'a'.repeat(64),
+  exactQuote: claim.statement,
+  relation: 'supports',
+  locator: { page: 1 },
+  extractionStatus: 'succeeded',
+  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  provenance: { source: 'human_review' },
+}));
+
 function scopeTables() {
   return {
     version: { findUnique: async () => ({ id: VERSION, researchObjectId: RO, status: 'draft', researchObject: { id: RO, workspaceId: WORKSPACE } }), updateMany: async () => ({ count: 1 }) },
@@ -35,6 +48,7 @@ function authorityFixture() {
     workspace: { findUnique: async () => ({ id: WORKSPACE, status: authority.workspace }) },
     membership: { findUnique: async () => authority.member ? { userId: USER, workspaceId: WORKSPACE, role: authority.role } : null },
     claimNode: { findMany: async () => claims.map((claim) => ({ ...claim, statement: authority.statement ?? claim.statement, extractionStatus: authority.claimStatus })) },
+    evidenceRecord: { findMany: async () => reviewedEvidence },
     presentationAsset: { findUnique: async () => null, create: async ({ data }: any) => { const row = { ...data, status: 'draft' }; rows.push(row); return row; } },
     presentationAssetClaim: { createMany: async () => ({ count: 2 }) },
     $transaction: async (work: (tx: any) => Promise<unknown>) => work(prisma),
