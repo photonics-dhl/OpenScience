@@ -293,8 +293,13 @@ export function createHandlers(
         const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
         if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
           || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable document source identity changed');
-        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
-        if (previousResult.canonicalExtractionContract === 'grounded-passages-v2') reusableExtractionResult = previousResult;
+        // Contract-generation migrations may reuse an unchanged SourceMap. An explicit
+        // user reanalysis must run the currently deployed parser so parser upgrades
+        // (layout, formula, figure/caption ordering) actually reach Hermes.
+        if (refresh[3] !== 'user-requested-reanalysis') {
+          reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+          if (previousResult.canonicalExtractionContract === 'grounded-passages-v2') reusableExtractionResult = previousResult;
+        }
       }
       const reanalysis = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36})$/.exec(ownerTask.idempotencyKey ?? '');
       if (reanalysis) {

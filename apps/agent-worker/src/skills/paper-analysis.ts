@@ -1,7 +1,7 @@
 /** Runtime Hermes paper-analysis skill. The worker executes these phases; this is not a developer prompt. */
 export const PAPER_ANALYSIS_SKILL = {
   id: 'paper-analysis',
-  version: '1',
+  version: '2',
   sources: [
     'Future-House/paper-qa (Apache-2.0): evidence retrieval and contextual synthesis pattern',
     'K-Dense-AI/claude-scientific-skills paperclip: bounded map/reduce and resume pattern',
