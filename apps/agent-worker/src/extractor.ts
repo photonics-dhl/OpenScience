@@ -1001,45 +1001,110 @@ async function physicsReviewCanonicalProposal(
   sourceMap: DocumentSourceMap,
   passages: readonly CanonicalPassage[],
   proposal: ExtractedProposal,
-): Promise<ExtractedProposal> {
+): Promise<CanonicalPartialResult> {
   const selected = new Set(SDF_CORE_FIELDS.flatMap((field) => proposal.fields[field].sourcePassageIds ?? []));
   for (const passage of focusedQuantitativeResultPassages(passages)) selected.add(passage.id);
   const reviewPassages = passages.filter((passage) => selected.has(passage.id));
-  if (!reviewPassages.length) return proposal;
-  const validation = canonicalProposalValidation(sourceMap, reviewPassages);
+  if (!reviewPassages.length) return { proposal, fieldDiagnostics: {}, fieldDiagnosticsDetails: {}, unverifiedSummaries: {}, unverifiedSourcePassageIds: {} };
+  const allowedIds = new Set(reviewPassages.map((passage) => passage.id));
   const current = Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
     summary: proposal.fields[field].summary,
     sourcePassageIds: proposal.fields[field].sourcePassageIds ?? [],
     needsMoreInformation: proposal.fields[field].needsMoreInformation,
   }]));
+  type PhysicsIssue = { field: (typeof SDF_CORE_FIELDS)[number]; code: 'RELATION_MISMATCH' | 'EVIDENCE_TYPE_OVERCLAIM' | 'FIELD_MISPLACED' | 'QUALIFIER_LOSS'; problem: string; sourcePassageIds: string[]; blocking: boolean };
+  let issues: PhysicsIssue[] = [];
+  const issueGuard: SchemaGuard<{ issues: PhysicsIssue[] }> = (value: unknown): value is { issues: PhysicsIssue[] } => {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).join(',') !== 'issues') return false;
+    const list = (value as Record<string, unknown>).issues;
+    if (!Array.isArray(list) || list.length > 12) return false;
+    const seen = new Set<string>();
+    for (const item of list) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+      const issue = item as Record<string, unknown>;
+      if (Object.keys(issue).sort().join(',') !== 'blocking,code,field,problem,sourcePassageIds'
+        || typeof issue.field !== 'string' || !SDF_CORE_FIELDS.includes(issue.field as (typeof SDF_CORE_FIELDS)[number])
+        || !['RELATION_MISMATCH', 'EVIDENCE_TYPE_OVERCLAIM', 'FIELD_MISPLACED', 'QUALIFIER_LOSS'].includes(String(issue.code))
+        || typeof issue.problem !== 'string' || !issue.problem.trim() || issue.problem.length > 500
+        || typeof issue.blocking !== 'boolean' || !Array.isArray(issue.sourcePassageIds)
+        || issue.sourcePassageIds.length < 1 || issue.sourcePassageIds.length > MAX_SOURCE_PASSAGE_IDS
+        || issue.sourcePassageIds.some((id) => typeof id !== 'string' || !allowedIds.has(id))) return false;
+      const key = `${issue.field}:${issue.code}:${issue.problem}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+    }
+    issues = list as PhysicsIssue[];
+    return true;
+  };
   try {
-    await gateway.completeStructured(validation.guard, [{ role: 'system', content: [
+    await gateway.completeStructured(issueGuard, [{ role: 'system', content: [
       PAPER_ANALYSIS_SKILL.instructions,
-      '你正在执行独立physics-review。逐字段对照原文修正摘要和证据选择，不沿用未经核对的措辞。',
+      '你正在执行独立physics-review。只报告有原文定位依据的科学问题，不直接重写建议。',
       '保留原文中的≈、=、<、>、∝及适用条件；区分理论推导、模型计算、数值模拟、实验测量、作者讨论和确定性换算。不得把作者的类比或判据写成普适定律或独立验证。',
       '检查容易混淆的物理对象及尺度，例如局域量与入射量、结构尺寸与场宽、单粒子与束流、场振幅与强度、主峰与旁瓣。原文没有出现的限定不新增，原文明确存在的限定不省略。',
-      'results只保留具体条件下的研究输出；method保留输入、假设和处理链；insight保留机制或认识；reproducibility保留复现所需参数、材料、步骤、数据/代码披露及缺口。移除跨字段错位和无证据重复。',
-      `返回严格JSON：schemaVersion="${SDF_CORE_VERSION}"；fields必须且只能包含六字段，每项只能包含summary、sourcePassageIds、needsMoreInformation。P编号只能来自本轮原文。`,
+      'results只保留具体条件下的研究输出；method保留输入、假设和处理链；insight保留机制或认识；reproducibility保留复现所需参数、材料、步骤、数据/代码披露及缺口。',
+      '每个问题返回字段、错误码、问题说明、直接支撑判断的P编号和是否阻断。关系符改变、证据类型升级、字段职责错位、关键限定丢失均应blocking=true。无问题返回空issues。',
+      '只输出JSON对象 {"issues":[]}。错误码只能是 RELATION_MISMATCH、EVIDENCE_TYPE_OVERCLAIM、FIELD_MISPLACED、QUALIFIER_LOSS。',
     ].join(' ') }, { role: 'user', content: [
       `待复核建议：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: current })}`,
       canonicalPassagePrompt(reviewPassages),
     ].join('\n\n') }], {
       temperature: 0.1,
       maxRetries: 1,
-      validationFeedback: validation.validationFeedback,
-      validationDiagnostic: validation.validationDiagnostic,
+      validationFeedback: () => '只返回形如 {"issues":[{"field":"method","code":"RELATION_MISMATCH","problem":"候选把原文近似关系写成严格等式","sourcePassageIds":["P00001"],"blocking":true}]} 的JSON；无问题时返回 {"issues":[]}。',
+      validationDiagnostic: () => 'physics_review_contract',
     });
-    const reviewed = validation.mergeRetained();
-    for (const field of SDF_CORE_FIELDS) {
-      if (reviewed.fields[field].needsMoreInformation && !proposal.fields[field].needsMoreInformation) {
-        reviewed.fields[field] = proposal.fields[field];
-      }
-    }
-    return reviewed;
+    const blocking = issues.filter((issue) => issue.blocking);
+    if (!blocking.length) return { proposal, fieldDiagnostics: {}, fieldDiagnosticsDetails: {}, unverifiedSummaries: {}, unverifiedSourcePassageIds: {} };
+    const blockedFields = new Set(blocking.map((issue) => issue.field));
+    const partial: CanonicalPartialResult = {
+      proposal: {
+        schemaVersion: SDF_CORE_VERSION,
+        fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, blockedFields.has(field)
+          ? { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }
+          : proposal.fields[field]])) as ExtractedProposal['fields'],
+      },
+      fieldDiagnostics: Object.fromEntries([...blockedFields].map((field) => [field, 'malformed_item'])),
+      fieldDiagnosticsDetails: Object.fromEntries([...blockedFields].map((field) => [field, `physicsReview=${blocking.filter((issue) => issue.field === field).map((issue) => `${issue.code}:${issue.problem}`).join('|')}`])),
+      unverifiedSummaries: Object.fromEntries([...blockedFields].map((field) => [field, proposal.fields[field].summary])),
+      unverifiedSourcePassageIds: Object.fromEntries([...blockedFields].map((field) => [field, proposal.fields[field].sourcePassageIds ?? []])),
+    };
+    return repairCanonicalPartial(gateway, sourceMap, passages, partial);
   } catch (error) {
-    console.error('paper-analysis physics-review unavailable; preserving validated proposal', error instanceof Error ? error.message : String(error));
-    return proposal;
+    console.error('paper-analysis physics-review unavailable; preserving proposals as unverified', error instanceof Error ? error.message : String(error));
+    const affected = SDF_CORE_FIELDS.filter((field) => !proposal.fields[field].needsMoreInformation);
+    return {
+      proposal: {
+        schemaVersion: SDF_CORE_VERSION,
+        fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, affected.includes(field)
+          ? { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }
+          : proposal.fields[field]])) as ExtractedProposal['fields'],
+      },
+      fieldDiagnostics: Object.fromEntries(affected.map((field) => [field, 'malformed_item'])),
+      fieldDiagnosticsDetails: Object.fromEntries(affected.map((field) => [field, 'physicsReview=unavailable'])),
+      unverifiedSummaries: Object.fromEntries(affected.map((field) => [field, proposal.fields[field].summary])),
+      unverifiedSourcePassageIds: Object.fromEntries(affected.map((field) => [field, proposal.fields[field].sourcePassageIds ?? []])),
+    };
   }
+}
+
+async function reviewAndMaterializeCanonicalProposal(
+  gateway: AiGateway,
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  proposal: ExtractedProposal,
+): Promise<ExtractionResult> {
+  const reviewed = await physicsReviewCanonicalProposal(gateway, sourceMap, passages, proposal);
+  const result = materializeCanonicalProposal(reviewed.proposal);
+  if (Object.keys(reviewed.fieldDiagnostics).length === 0) return result;
+  return {
+    ...result,
+    reason: 'canonical_partial_validation_exhausted',
+    fieldDiagnostics: reviewed.fieldDiagnostics,
+    fieldDiagnosticsDetails: reviewed.fieldDiagnosticsDetails,
+    unverifiedSummaries: reviewed.unverifiedSummaries,
+    unverifiedSourcePassageIds: reviewed.unverifiedSourcePassageIds,
+  };
 }
 
 function materializeCanonicalProposal(proposal: ExtractedProposal): ExtractionResult {
@@ -1180,8 +1245,7 @@ export async function extractHandler(
     if (previousPartial) {
       const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, previousPartial);
       if (Object.keys(partial.fieldDiagnostics).length === 0) {
-        const reviewed = await physicsReviewCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal);
-        return materializeCanonicalProposal(reviewed);
+        return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal);
       }
       return {
         ...materializeCanonicalProposal(partial.proposal),
@@ -1240,8 +1304,7 @@ export async function extractHandler(
       if (!initialPartial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
       const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, initialPartial);
       if (Object.keys(partial.fieldDiagnostics).length === 0) {
-        const reviewed = await physicsReviewCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal);
-        return materializeCanonicalProposal(reviewed);
+        return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal);
       }
       return {
         ...materializeCanonicalProposal(partial.proposal),
@@ -1266,8 +1329,7 @@ export async function extractHandler(
     if (SDF_CORE_FIELDS.every((field) => proposal.fields[field].needsMoreInformation)) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_all_fields_missing');
     }
-    const reviewed = await physicsReviewCanonicalProposal(gateway, canonicalSourceMap, passages, proposal);
-    return materializeCanonicalProposal(reviewed);
+    return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, proposal);
   }
   const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
   return materializeProposal(proposal, manuscriptText);
