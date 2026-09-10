@@ -1270,6 +1270,16 @@ export function createTemporaryDocumentDownloadLink(documentId: string): Promise
   return request(`/api/temporary-documents/${documentId}/download-link`, { method: 'POST' });
 }
 
+export function importTemporaryDocumentToResearchObject(
+  documentId: string,
+  researchObjectId: string,
+): Promise<StartIngestionResult> {
+  return request(`/api/temporary-documents/${documentId}/import-to-research-object`, {
+    method: 'POST',
+    body: JSON.stringify({ processingConsent: true, researchObjectId }),
+  });
+}
+
 // ===== P1D-9：公开页数据（§4.3 必显）=====
 
 export interface PublicClaim {

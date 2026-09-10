@@ -4,13 +4,17 @@ import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
 import {
   AgentError,
+  authorizeIngestionWrite,
+  createIngestionBatch,
+  IngestionError,
   issueTemporaryDownloadToken,
+  type IngestionDeps,
   verifyTemporaryDownloadToken,
 } from '@openscience/domain';
 import type { StorageAdapter } from '@openscience/storage';
 import { requireCurrentUser } from './session-guard';
 
-export type TemporaryDocumentRouteDeps = AuthDeps & {
+export type TemporaryDocumentRouteDeps = AuthDeps & IngestionDeps & {
   storage: StorageAdapter;
   downloadSigningSecret: string;
   downloadSigningKeyId: string;
@@ -18,11 +22,46 @@ export type TemporaryDocumentRouteDeps = AuthDeps & {
 };
 
 const idParams = z.object({ id: z.string().uuid() });
+const importBody = z.object({
+  processingConsent: z.literal(true),
+  researchObjectId: z.string().uuid(),
+}).strict();
+const MAX_IMPORT_BYTES = 100 * 1024 * 1024;
+
+async function boundedDocumentBuffer(body: AsyncIterable<Buffer | Uint8Array | string>, expectedBytes: number): Promise<Buffer> {
+  if (expectedBytes > MAX_IMPORT_BYTES) throw new IngestionError('FILE_TOO_LARGE', 'Individual file exceeds 100 MB');
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of body) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > expectedBytes || size > MAX_IMPORT_BYTES) {
+      throw new Error('[blocked] temporary document integrity mismatch');
+    }
+    chunks.push(buffer);
+  }
+  if (size !== expectedBytes) throw new Error('[blocked] temporary document integrity mismatch');
+  return Buffer.concat(chunks);
+}
+
+function ingestionFilename(title: string, mimeType: string, documentId: string): string {
+  const extension = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? '.docx' : '.pdf';
+  const stem = title
+    .normalize('NFKC')
+    .replace(/[\u0000-\u001f\u007f/\\]/g, ' ')
+    .replace(/\.{2,}/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\.(?:pdf|docx)$/i, '')
+    .slice(0, 180)
+    .trim();
+  return `${stem || `openscience-source-${documentId}`}${extension}`;
+}
 
 async function requireDownloadableDocument(deps: TemporaryDocumentRouteDeps, documentId: string, userId: string) {
   const document = await deps.prisma.temporaryDocument.findUnique({
     where: { id: documentId },
-    include: { rightsDecision: true },
+    include: { externalSource: true, rightsDecision: true },
   });
   if (!document || document.state !== 'active' || document.expiresAt <= new Date()) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '临时文档不存在或已过期');
@@ -58,6 +97,48 @@ async function requireDownloadableDocument(deps: TemporaryDocumentRouteDeps, doc
 }
 
 export function registerTemporaryDocumentRoutes(app: FastifyInstance, deps: TemporaryDocumentRouteDeps): void {
+  app.post('/temporary-documents/:id/import-to-research-object', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = idParams.parse(req.params);
+    const body = importBody.parse(req.body);
+    const document = await requireDownloadableDocument(deps, id, user.userId);
+    const { researchObject } = await authorizeIngestionWrite(deps, {
+      userId: user.userId,
+      researchObjectId: body.researchObjectId,
+    });
+    if (researchObject.workspaceId !== document.workspaceId) {
+      throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '临时文档不存在或已过期');
+    }
+    const head = await deps.storage.headObject(document.objectKey);
+    const expectedBytes = Number(document.sizeBytes);
+    if (!head || head.size !== expectedBytes || head.sha256 !== document.contentHash) {
+      throw new Error('[blocked] temporary document integrity mismatch');
+    }
+    const object = await deps.storage.getObject(document.objectKey);
+    const content = await boundedDocumentBuffer(object.body, expectedBytes);
+    const actualHash = createHash('sha256').update(content).digest('hex');
+    if (actualHash !== document.contentHash) throw new Error('[blocked] temporary document integrity mismatch');
+    const idempotencyKey = `temporary-import:${document.id}:${researchObject.id}:v${researchObject.version}:${document.contentHash}`;
+    const batch = await createIngestionBatch(deps, {
+      userId: user.userId,
+      researchObjectId: researchObject.id,
+      processingConsent: body.processingConsent,
+      idempotencyKey,
+      files: [{
+        filename: ingestionFilename(document.externalSource.title, document.mimeType, document.id),
+        content,
+        mimeType: document.mimeType,
+      }],
+    }, { requestId: String(req.id), ip: req.ip });
+    return reply.status(202).send({
+      batchId: batch.batchId,
+      researchObjectId: batch.researchObjectId,
+      artifacts: batch.tasks.map((task) => ({ artifactId: task.artifactId, logicalPath: task.logicalPath })),
+      tasks: batch.tasks,
+    });
+  });
+
   app.post('/temporary-documents/:id/download-link', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;

@@ -9,6 +9,7 @@ import {
   createTemporaryDocumentDownloadLink,
   getCurrentUser,
   getAgentTask,
+  importTemporaryDocumentToResearchObject,
   listSourceRetrieveTasks,
   retryAgentTask,
   submitLiteratureAcquisition,
@@ -139,6 +140,7 @@ export function LiteratureAcquisition({
   const [error, setError] = React.useState('');
   const [reconnecting, setReconnecting] = React.useState(false);
   const [downloading, setDownloading] = React.useState<string | null>(null);
+  const [importing, setImporting] = React.useState<string | null>(null);
   const [submissionPending, setSubmissionPending] = React.useState(false);
   const [retryPending, setRetryPending] = React.useState(false);
   const [internalRecovery, setInternalRecovery] = React.useState({
@@ -415,6 +417,23 @@ export function LiteratureAcquisition({
     }
   }
 
+  async function importDocument(documentId: string) {
+    if (target.kind !== 'research_object') return;
+    const operation = { ...scope.current };
+    setImporting(documentId);
+    setError('');
+    try {
+      const batch = await importTemporaryDocumentToResearchObject(documentId, target.researchObjectId);
+      if (!isCurrentScope(operation.key, operation.generation)) return;
+      const taskId = batch.tasks[0]?.id;
+      window.location.assign(`/research-objects/${encodeURIComponent(target.researchObjectId)}/edit${taskId ? `?ingestionTask=${encodeURIComponent(taskId)}` : ''}`);
+    } catch {
+      if (isCurrentScope(operation.key, operation.generation)) setError(t('importError'));
+    } finally {
+      if (isCurrentScope(operation.key, operation.generation)) setImporting(null);
+    }
+  }
+
   const searchControls = <>
     <div>
       <label className={`block text-sm font-semibold ${ink}`} htmlFor={queryId}>{t('queryLabel')}</label>
@@ -475,7 +494,8 @@ export function LiteratureAcquisition({
                   </div>
                   <div className="flex flex-wrap gap-3">
                     {identifier ? <button className={`min-h-11 min-w-11 border-b border-os-vermilion px-1 text-sm font-semibold ${ink} transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`} disabled={active || submissionPending || !recoveryReady || !effectiveUserId} onClick={() => void submit({ query: source.title ?? query, identifier })} type="button">{t('getFullText')}</button> : null}
-                    {source.temporaryDocumentId ? <button className={`min-h-11 border px-3 text-sm font-semibold ${dark ? 'border-os-paper text-os-paper' : 'border-os-ink text-os-ink'} transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`} disabled={submissionPending || downloading === source.temporaryDocumentId} onClick={() => void download(source.temporaryDocumentId!)} type="button">{t('download')}</button> : null}
+                    {source.temporaryDocumentId && researchObjectTarget ? <button aria-busy={importing === source.temporaryDocumentId} className="min-h-11 bg-os-vermilion px-3 text-sm font-semibold text-white transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={submissionPending || importing === source.temporaryDocumentId || downloading === source.temporaryDocumentId} onClick={() => void importDocument(source.temporaryDocumentId!)} type="button">{t(importing === source.temporaryDocumentId ? 'importingToRo' : 'importToRo')}</button> : null}
+                    {source.temporaryDocumentId ? <button className={`min-h-11 border px-3 text-sm font-semibold ${dark ? 'border-os-paper text-os-paper' : 'border-os-ink text-os-ink'} transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`} disabled={submissionPending || importing === source.temporaryDocumentId || downloading === source.temporaryDocumentId} onClick={() => void download(source.temporaryDocumentId!)} type="button">{t('download')}</button> : null}
                   </div>
                 </li>
               );

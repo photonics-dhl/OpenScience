@@ -49,6 +49,7 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   '/research-objects/:id/ingest': { limit: 5, windowSec: 60 },
   '/ingestion/:taskId/retry': { limit: 10, windowSec: 60 },
   '/temporary-documents/:id/download-link': { limit: 10, windowSec: 60 },
+  '/temporary-documents/:id/import-to-research-object': { limit: 5, windowSec: 60 },
   '/temporary-documents/:id/download/:accessId': { limit: 20, windowSec: 60 },
 };
 
