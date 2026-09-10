@@ -308,7 +308,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const [pageInterruptionActive, setPageInterruptionActive] = useState(false);
   const [customDock, setCustomDock] = useState(false);
   const [compactGuide, setCompactGuide] = useState(false);
-  const [presenceMode, setPresenceMode] = useState<HermesPresenceMode>(() => pathname === '/dashboard' ? 'compact' : 'original');
+  const [presenceMode, setPresenceMode] = useState<HermesPresenceMode>('compact');
   const [viewportSize, setViewportSize] = useState<HermesViewportRect>({ bottom: 0, height: 0, left: 0, right: 0, top: 0, width: 0 });
   const [dockReady, setDockReady] = useState(false);
   const [dockKind, setDockKind] = useState<HermesViewportClass | null>(null);
@@ -425,7 +425,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const stored = window.localStorage.getItem(`openscience:hermes-presence:${workspaceId}`);
     setPresenceMode(stored === 'original' || stored === 'compact' || stored === 'quiet'
       ? stored
-      : pathname === '/dashboard' ? 'compact' : 'original');
+      : 'compact');
   }, [pathname, workspaceId]);
 
   const movePositionAwaitingSettledReplan = useCallback((point: { x: number; y: number }, contextKey: string) => {
@@ -1493,7 +1493,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
           visible={anchored || Boolean(bubblePlacement)}
         />
       ) : null}
-      {reducedMotion !== null ? <button
+      {reducedMotion !== null && motionControl.action !== 'retry' ? <button
         className="hermes-motion-enable"
         data-hermes-motion-toggle
         data-motion-active={reducedMotion ? 'false' : 'true'}
@@ -1501,11 +1501,6 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         disabled={motionControl.action === 'none'}
         onClick={(event) => {
           event.stopPropagation();
-          if (motionControl.action === 'retry') {
-            contextLossRecoveriesRef.current = 0;
-            setRuntimeStatus((current) => reduceHermesRuntimeStatus(current, { type: 'retry' }));
-            return;
-          }
           const preference = reducedMotion ? 'full' : 'reduced';
           saveHermesMotionPreference(window.localStorage, preference);
           setReducedMotion(preference === 'reduced');
@@ -1513,9 +1508,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         onPointerDown={(event) => event.stopPropagation()}
         type="button"
       >{t(motionControl.label === 'enable' ? 'enableMotion'
-        : motionControl.label === 'disable' ? 'disableMotion'
-          : motionControl.label === 'retry' ? 'retryMotion'
-            : 'startingMotion')}</button> : null}
+        : motionControl.label === 'disable' ? 'disableMotion' : 'startingMotion')}</button> : null}
       {pathname.startsWith('/research-objects/') ? <HermesPresenceControl
         mode={presenceMode}
         onChange={(nextMode) => {

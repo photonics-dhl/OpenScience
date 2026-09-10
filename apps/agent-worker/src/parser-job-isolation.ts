@@ -9,6 +9,7 @@ import {
   inventoryPdfPages,
   ocrSelectedPages,
   PDF_PAGE_INVENTORY_METADATA,
+  PDF_PAGE_RENDER_METADATA,
   TESSERACT_METADATA,
   type LocalOcrAdapter,
 } from './parsers/ocr-parser';
@@ -27,11 +28,13 @@ import {
   type ParserJobRequestV2,
   type ParserJobResponseV2,
   type ParserStageResult,
+  type ParserRasterResult,
+  type ParserJobResult,
   type DocumentParserMetadata,
 } from './parsers/job-protocol';
 
 type ParserKind = 'pdf' | 'docx' | 'image' | 'xlsx';
-export type ParserStageProcessor = (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult>;
+export type ParserStageProcessor = (request: ParserJobRequestV2, content: Buffer) => Promise<ParserJobResult>;
 export const TRANSITION_PARSER_METADATA = Object.freeze({ name: 'v1-text-transition', version: '2.0.0' });
 const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 const MAX_REQUEST_BYTES = 64 * 1024;
@@ -57,7 +60,8 @@ export function expectedSidecarParserMetadata(
   request: Pick<ParserJobRequestV2, 'operation' | 'mediaType'>,
 ): DocumentParserMetadata {
   if (request.operation === 'inventory_pages') return PDF_PAGE_INVENTORY_METADATA;
-  if (request.operation === 'render_page' || request.operation === 'ocr_page') return TESSERACT_METADATA;
+  if (request.operation === 'render_page') return PDF_PAGE_RENDER_METADATA;
+  if (request.operation === 'ocr_page') return TESSERACT_METADATA;
   if (request.operation === 'extract_text' && request.mediaType === 'application/pdf') {
     return PDF_TEXT_ITEM_METADATA;
   }
@@ -175,12 +179,12 @@ export async function reapParserJobOrphans(
   return reaped;
 }
 
-export function createParserStageJobClient(
+function createParserJobClient(
   jobDir: string,
   expectedParser: DocumentParserMetadata | ((request: ParserJobRequestV2) => DocumentParserMetadata),
   timeoutMs = 75_000,
-): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult> {
-  return async (requestValue: ParserJobRequestV2, content: Buffer): Promise<ParserStageResult> => {
+): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserJobResult> {
+  return async (requestValue: ParserJobRequestV2, content: Buffer): Promise<ParserJobResult> => {
     const serializedRequest = serializeParserJobRequestV2(requestValue);
     const request = parseParserJobRequestV2(JSON.parse(serializedRequest));
     if (!Buffer.isBuffer(content) || content.byteLength > MAX_INPUT_BYTES) {
@@ -232,6 +236,34 @@ export function createParserStageJobClient(
         rm(jobPath(jobDir, id, suffix), { force: true }).catch(() => undefined)
       )));
     }
+  };
+}
+
+
+export function createParserStageJobClient(
+  jobDir: string,
+  expectedParser: DocumentParserMetadata | ((request: ParserJobRequestV2) => DocumentParserMetadata),
+  timeoutMs = 75_000,
+): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult> {
+  const client = createParserJobClient(jobDir, expectedParser, timeoutMs);
+  return async (request, content) => {
+    const result = await client(request, content);
+    if ('kind' in result) throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_RESPONSE);
+    return result;
+  };
+}
+
+export function createParserRasterJobClient(
+  jobDir: string,
+  expectedParser: DocumentParserMetadata | ((request: ParserJobRequestV2) => DocumentParserMetadata),
+  timeoutMs = 75_000,
+): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserRasterResult> {
+  const client = createParserJobClient(jobDir, expectedParser, timeoutMs);
+  return async (request, content) => {
+    if (request.operation !== 'render_page') throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
+    const result = await client(request, content);
+    if (!('kind' in result) || result.kind !== 'raster') throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_RESPONSE);
+    return result;
   };
 }
 
@@ -332,18 +364,21 @@ export function createSidecarParserStageProcessor(
       throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
     }
     if (request.operation === 'render_page') {
+      if (pageNumbers.length > 4) throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_REQUEST);
       const rendered = await localOcr.renderPdfPages(input, pageNumbers, localOcr.timeoutMs);
-      return parseParserStageResult({
+      return {
         schemaVersion: 2,
-        parser: { ...localOcr.metadata },
+        kind: 'raster',
+        parser: { ...PDF_PAGE_RENDER_METADATA },
         pages: rendered.map((page) => ({
-          page: page.pageNumber,
+          pageNumber: page.pageNumber,
+          mediaType: 'image/png' as const,
+          bytesBase64: Buffer.from(page.bytes).toString('base64'),
           width: page.width,
           height: page.height,
-          blocks: [],
+          contentHash: page.contentHash,
         })),
-        warnings: [],
-      });
+      };
     }
     if (request.operation === 'ocr_page') {
       const pageInventory = await inventory(input, localOcr.timeoutMs);

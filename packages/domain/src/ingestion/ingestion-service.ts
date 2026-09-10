@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
 import { createArtifact } from '../artifact/artifacts';
-import { AI_CREDIT_RESOURCE, createAgentSession, dispatchAgentTask, projectAgentTaskResult, submitAgentTask, type AgentDeps } from '../agent/agent';
+import { AI_CREDIT_RESOURCE, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, projectAgentTaskResult, submitAgentTask, type AgentDeps } from '../agent/agent';
 import { AgentError } from '../agent/errors';
 import { requireActive, requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { WorkspaceError } from '../workspace/errors';
@@ -16,7 +16,7 @@ import { SDF_NODE_TYPES } from '../research-object/types';
 import type { SdfDocumentView } from '../research-object/sdf';
 import { carryVersionEvidence, writeIngestionEvidence } from './ingestion-evidence';
 import { IngestionError } from './errors';
-import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
+import { loadDocumentSourceMapReference, parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { recordEntry } from '../usage/ledger';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
 import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
@@ -55,6 +55,115 @@ function isCanonicalAllFieldsMissingResult(value: unknown, artifact: { id: strin
   } catch {
     return false;
   }
+}
+
+function isLegacyCharacterEvidenceResult(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const result = value as Record<string, unknown>;
+  if (!exactRecordKeys(result, ['core', 'evidence', 'needsMoreInformation'])
+    || Object.hasOwn(result, 'sourceMapRef') || Object.hasOwn(result, 'evidenceSegments')) return false;
+  const core = result.core;
+  if (!exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) || !validateSdfDraftCore(core).ok
+    || SDF_NODE_TYPES.some((field) => typeof core[field] !== 'string')
+    || !SDF_NODE_TYPES.some((field) => String(core[field]).trim())) return false;
+  if (!exactRecordKeys(result.evidence, SDF_NODE_TYPES)) return false;
+  const evidence = result.evidence;
+  if (SDF_NODE_TYPES.some((field) => {
+    const item = evidence[field];
+    return !exactRecordKeys(item, ['quote', 'locator']) || typeof item.quote !== 'string' || typeof item.locator !== 'string'
+      || (item.locator !== '' && !/^chars:\d+-\d+$/.test(item.locator));
+  })) return false;
+  return Array.isArray(result.needsMoreInformation)
+    && result.needsMoreInformation.every((field) => SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number]));
+}
+
+const CANONICAL_DIAGNOSTICS = new Set([
+  'malformed_item', 'missing_requires_empty', 'summary_required', 'segment_count_1_to_32',
+  'duplicate_ids', 'unknown_ids', 'ordered_ids_required', 'contiguous_ids_required',
+  'window_required', 'unknown_window', 'quote_required', 'quote_not_found', 'quote_ambiguous',
+  'source_text_limit_8000', 'core_text_limit_4000', 'noncontiguous_block_passages',
+]);
+type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1'
+  | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1' | 'grounded_summary_v1' | 'grounded_passages_v1' | 'grounded_passages_v2' | 'user_requested_reanalysis';
+
+function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
+  if (isLegacyCharacterEvidenceResult(value)) return 'legacy_character_evidence_v1';
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const result = value as Record<string, unknown>;
+  const diagnostics = result.fieldDiagnostics;
+  const core = result.core;
+  if (result.canonicalExtractionContract === 'grounded-passages-v2'
+    && exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) && validateSdfDraftCore(core).ok) {
+    try {
+      const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+      if (reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
+        && reference.contentHash === artifact.blobSha256) return 'user_requested_reanalysis';
+    } catch { return undefined; }
+  }
+  if (result.canonicalExtractionContract === 'grounded-passages-v1'
+    && result.reason === 'canonical_partial_validation_exhausted'
+    && exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) && validateSdfDraftCore(core).ok
+    && diagnostics && typeof diagnostics === 'object' && !Array.isArray(diagnostics)) {
+    const entries = Object.entries(diagnostics);
+    if (entries.length && entries.every(([field, reason]) => SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number])
+      && ['passage_ids_required', 'segment_count_1_to_32', 'source_text_limit_8000'].includes(String(reason)))) {
+      try {
+        const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+        if (reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
+          && reference.contentHash === artifact.blobSha256) return 'grounded_passages_v2';
+      } catch { return undefined; }
+    }
+  }
+  if ((result.canonicalExtractionContract === 'exact-quote-v1'
+      || (result.canonicalExtractionContract === 'grounded-summary-v1' && result.reason === 'canonical_partial_validation_exhausted'))
+    && exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) && validateSdfDraftCore(core).ok) {
+    try {
+      const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+      if (reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
+        && reference.contentHash === artifact.blobSha256) return result.canonicalExtractionContract === 'grounded-summary-v1'
+          ? 'grounded_passages_v1' : 'grounded_summary_v1';
+    } catch { return undefined; }
+  }
+  if (result.reason !== 'canonical_partial_validation_exhausted' || !diagnostics
+    || typeof diagnostics !== 'object' || Array.isArray(diagnostics)
+    || !exactRecordKeys(core, ['schemaVersion', ...SDF_NODE_TYPES]) || !validateSdfDraftCore(core).ok
+    || SDF_NODE_TYPES.some((field) => typeof core[field] !== 'string')
+    || !SDF_NODE_TYPES.some((field) => String(core[field]).trim())) return undefined;
+  const entries = Object.entries(diagnostics);
+  if (entries.length === 0 || entries.some(([field, reason]) => !SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number])
+    || typeof reason !== 'string' || !CANONICAL_DIAGNOSTICS.has(reason))) return undefined;
+  try {
+    const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+    if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+      || reference.contentHash !== artifact.blobSha256) return undefined;
+    if (result.canonicalExtractionContract === 'windowed-source-v2'
+      && entries.every(([, reason]) => reason === 'segment_count_1_to_32')) return 'canonical_exact_quote_v1';
+    if (result.canonicalExtractionContract !== undefined) return undefined;
+    if (entries.some(([, reason]) => reason === 'segment_count_1_to_32')) return 'native_pdf_fragmentation_v1';
+    if (entries.every(([, reason]) => reason === 'contiguous_ids_required')) return 'canonical_window_contract_v1';
+    return undefined;
+  } catch { return undefined; }
+}
+
+function isOldFragmentedNativePdfMap(sourceMap: Awaited<ReturnType<typeof loadDocumentSourceMapReference>>): boolean {
+  const oldVersion = '2.4.5+pdfjs-dist.5.4.296';
+  const newVersion = '2.4.5+pdfjs-dist.5.4.296.line-runs.1';
+  const blocks = sourceMap.pages.flatMap((page) => page.blocks);
+  return sourceMap.parser.name === 'openscience-parser-cascade' && sourceMap.parser.version === '1.0.0'
+    && blocks.some((block) => block.parser.name === 'pdf-parse-pdfjs-text-items' && block.parser.version === oldVersion
+      && block.transformations.some((item) => item.stage === 'extract_text'
+        && item.processor.name === 'pdf-parse-pdfjs-text-items' && item.processor.version === oldVersion))
+    && !blocks.some((block) => block.parser.name === 'pdf-parse-pdfjs-text-items' && block.parser.version === newVersion
+      || block.transformations.some((item) => item.processor.name === 'pdf-parse-pdfjs-text-items' && item.processor.version === newVersion));
+}
+
+function isLineRunNativePdfMap(sourceMap: Awaited<ReturnType<typeof loadDocumentSourceMapReference>>): boolean {
+  const version = '2.4.5+pdfjs-dist.5.4.296.line-runs.1';
+  const blocks = sourceMap.pages.flatMap((page) => page.blocks);
+  return sourceMap.parser.name === 'openscience-parser-cascade' && sourceMap.parser.version === '1.0.0'
+    && blocks.some((block) => block.parser.name === 'pdf-parse-pdfjs-text-items' && block.parser.version === version
+      && block.transformations.some((item) => item.stage === 'extract_text'
+        && item.processor.name === 'pdf-parse-pdfjs-text-items' && item.processor.version === version));
 }
 
 export async function authorizeIngestionWrite(
@@ -210,7 +319,9 @@ export async function listActionableIngestionTasks(
   }
   const tasks = await deps.prisma.ingestionTask.findMany({
     where: {
-      batch: input.researchObjectId === undefined ? { userId: input.userId } : { researchObjectId: input.researchObjectId },
+      batch: input.researchObjectId === undefined
+        ? { userId: input.userId, researchObject: { status: { not: 'archived' } } }
+        : { researchObjectId: input.researchObjectId },
       state: { in: [...ACTIONABLE_INGESTION_STATES] },
     },
     include: { artifact: true, batch: { include: { researchObject: true } } },
@@ -241,15 +352,41 @@ export async function retryIngestionTask(
         if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
         const result = task.agentTask?.result;
         let legacyProposalFailure = false;
-        if (task.state === 'needs_review' && task.retryCount === 0 && task.agentTask?.kind === 'sdf.extract'
-          && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === 0
+        let parserRecovery = false;
+        let passageBudgetRecovery = false;
+        if (task.state === 'needs_review' && task.retryCount >= 0 && task.retryCount < 2 && task.agentTask?.kind === 'sdf.extract'
+          && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === task.retryCount
           && result && typeof result === 'object' && !Array.isArray(result)) {
           const record = result as Record<string, unknown>;
           try {
             const reference = parseDocumentSourceMapReference(record.sourceMapRef);
-            legacyProposalFailure = record.status === 'needs_review' && record.reason === 'sdf-proposal-unavailable'
+            legacyProposalFailure = task.retryCount === 0 && record.status === 'needs_review' && record.reason === 'sdf-proposal-unavailable'
               && !Object.hasOwn(record, 'core') && reference.parserStatus === 'succeeded'
               && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256;
+            if (task.retryCount === 0 && task.agentTask.executionAttempt === 1
+              && record.sourceMapReused === true
+              && /^ingestion-analysis-refresh:[0-9a-f-]{36}:[0-9a-f-]{36}:grounded-passages-v1$/.test(task.agentTask.idempotencyKey ?? '')
+              && task.batch.userId === input.userId && record.canonicalExtractionContract === 'grounded-passages-v1'
+              && record.reason === 'canonical_partial_validation_exhausted'
+              && reference.parserStatus === 'succeeded' && reference.artifactId === task.artifactId
+              && reference.contentHash === task.artifact.blobSha256
+              && record.fieldDiagnostics && typeof record.fieldDiagnostics === 'object' && !Array.isArray(record.fieldDiagnostics)) {
+              const entries = Object.entries(record.fieldDiagnostics);
+              const session = await tx.agentSession.findUnique({ where: { id: task.agentTask.sessionId } });
+              passageBudgetRecovery = entries.length > 0 && entries.every(([field, reason]) =>
+                SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number])
+                && ['passage_ids_required', 'segment_count_1_to_32', 'source_text_limit_8000'].includes(String(reason)))
+                && session?.userId === input.userId && session.status === 'active'
+                && session.researchObjectId === task.batch.researchObjectId;
+            }
+            if (record.status === 'needs_review' && record.reason === 'unresolved pages remain'
+              && !Object.hasOwn(record, 'core') && reference.parserStatus === 'needs_review'
+              && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256
+              && task.agentTask.executionAttempt === task.retryCount + 1 && task.batch.userId === input.userId) {
+              const session = await tx.agentSession.findUnique({ where: { id: task.agentTask.sessionId } });
+              parserRecovery = session?.userId === input.userId && session.status === 'active'
+                && session.researchObjectId === task.batch.researchObjectId;
+            }
           } catch {
             legacyProposalFailure = false;
           }
@@ -265,7 +402,7 @@ export async function retryIngestionTask(
           const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
           canonicalAllMissingRecovery = session?.userId === input.userId && session.status === 'active';
         }
-        const retryAttempt = canonicalAllMissingRecovery ? 2 : failedRetry ? task.retryCount + 1 : 1;
+        const retryAttempt = parserRecovery ? task.retryCount + 1 : canonicalAllMissingRecovery ? 2 : failedRetry ? task.retryCount + 1 : 1;
         let activeFailedRetryOwner = false;
         let paidFailedRetry = false;
         let compensatedSchemaRetry = false;
@@ -296,10 +433,11 @@ export async function retryIngestionTask(
         }
         const authorizedFailedRetry = failedRetry && activeFailedRetryOwner
           && (task.retryCount === 0 || paidFailedRetry || compensatedSchemaRetry);
-        if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery) {
+        if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery && !parserRecovery && !passageBudgetRecovery) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
         }
-        const recovery = canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
+        const recovery = passageBudgetRecovery ? 'canonical_passage_budget' : parserRecovery ? 'unresolved_parser_pages'
+          : canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
           : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable'
             : compensatedSchemaRetry ? 'canonical_schema_exhaustion_compensation'
               : paidFailedRetry ? 'failed_retryable_paid' : 'failed_retryable';
@@ -321,9 +459,9 @@ export async function retryIngestionTask(
         const resetAgent = await tx.agentTask.updateMany({
           where: {
             id: task.agentTaskId!, kind: 'sdf.extract', retryCount: retryAttempt - 1,
-            status: legacyProposalFailure || canonicalAllMissingRecovery ? 'succeeded' : 'failed',
+            status: legacyProposalFailure || canonicalAllMissingRecovery || parserRecovery || passageBudgetRecovery ? 'succeeded' : 'failed',
             ...(canonicalAllMissingRecovery ? { executionAttempt: 2 }
-              : authorizedFailedRetry ? { executionAttempt: retryAttempt } : {}),
+              : authorizedFailedRetry || parserRecovery || passageBudgetRecovery ? { executionAttempt: retryAttempt } : {}),
           },
           data: {
             status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
@@ -340,6 +478,8 @@ export async function retryIngestionTask(
           actorId: input.userId, action: 'ingestion.task.retry', workspaceId: workspace.id,
           targetType: 'ingestion_task', targetId: task.id,
           metadata: { recovery, agentTaskId: task.agentTaskId, retryAttempt,
+            ...(parserRecovery ? { previousParserResult: result } : {}),
+            ...(passageBudgetRecovery ? { previousExtractionResult: result } : {}),
             creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation'
               : paidFailedRetry ? 'charged-on-retry'
                 : compensatedSchemaRetry ? 'reuse-paid-remediation' : 'reuse-original-reservation' },
@@ -356,6 +496,282 @@ export async function retryIngestionTask(
   if (queued.agentTaskId) {
     await dispatchAgentTask(deps, queued.agentTaskId);
   }
+  return taskToView(queued);
+}
+
+/** Explicit paid refresh for a narrowly recognized extraction generation. */
+export async function refreshIngestionAnalysis(
+  deps: IngestionDeps,
+  input: { userId: string; taskId: string; sourceAgentTaskId: string; processingConsent: boolean },
+  ctx: AuditContext = {},
+): Promise<IngestionTaskView> {
+  if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
+  const initial = await deps.prisma.ingestionTask.findUnique({
+    where: { id: input.taskId }, include: { artifact: true, batch: { include: { researchObject: true } } },
+  });
+  if (!initial) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+  const { workspace, membership } = await requireActiveMembership(deps.prisma, initial.batch.researchObject.workspaceId, input.userId);
+  if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+  if (initial.batch.userId !== input.userId || initial.artifact.workspaceId !== workspace.id) {
+    throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion analysis source is unavailable');
+  }
+  const keyPrefix = `ingestion-analysis-refresh:${input.taskId}:${input.sourceAgentTaskId}:`;
+  const replay = await deps.prisma.agentTask.findFirst({
+    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`, `${keyPrefix}grounded-summary-v1`, `${keyPrefix}grounded-passages-v1`, `${keyPrefix}grounded-passages-v2`, `${keyPrefix}user-requested-reanalysis`] } },
+    include: { session: true },
+  });
+  if (replay) {
+    const payload = replay.payload && typeof replay.payload === 'object' && !Array.isArray(replay.payload) ? replay.payload as Record<string, unknown> : null;
+    if (initial.agentTaskId !== replay.id || replay.kind !== 'sdf.extract' || replay.session.userId !== input.userId
+      || replay.session.researchObjectId !== initial.batch.researchObjectId || replay.session.status !== 'active'
+      || !payload || !exactRecordKeys(payload, ['artifactId', 'researchObjectId'])
+      || payload.artifactId !== initial.artifactId || payload.researchObjectId !== initial.batch.researchObjectId) {
+      throw new IngestionError('VALIDATION_ERROR', 'Analysis refresh replay scope does not match');
+    }
+    await dispatchAgentTask(deps, replay.id);
+    return taskToView(initial);
+  }
+  const oldAgent = await deps.prisma.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
+  const oldPayload = oldAgent?.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload)
+    ? oldAgent.payload as Record<string, unknown> : null;
+  const policy = oldAgent ? analysisRefreshPolicy(oldAgent.result, initial.artifact) : undefined;
+  const allowedRetries = policy === 'user_requested_reanalysis' ? initial.retryCount : policy === 'grounded_passages_v1' ? 2 : policy === 'grounded_passages_v2' ? 1 : 0;
+  if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review' || initial.retryCount < 0 || initial.retryCount > allowedRetries
+    || !oldAgent || oldAgent.kind !== 'sdf.extract' || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== initial.retryCount
+    || oldAgent.executionAttempt !== initial.retryCount + 1 || oldAgent.session.userId !== input.userId
+    || oldAgent.session.researchObjectId !== initial.batch.researchObjectId || oldAgent.session.status !== 'active'
+    || !oldPayload || oldPayload.artifactId !== initial.artifactId || oldPayload.researchObjectId !== initial.batch.researchObjectId
+    || await savedConfirmation(deps, initial.id, initial.batch.researchObjectId)) {
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the scoped unconfirmed extraction can be refreshed');
+  }
+
+  if (!policy) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction is not eligible for analysis refresh');
+  let sourceMapProof: { objectKey: string; serializedSha256: string } | undefined;
+  if (policy !== 'legacy_character_evidence_v1') {
+    const reference = parseDocumentSourceMapReference((oldAgent!.result as Record<string, unknown>).sourceMapRef);
+    const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+    const affected = policy === 'user_requested_reanalysis' || policy === 'grounded_summary_v1' || policy === 'grounded_passages_v1' || policy === 'grounded_passages_v2' ? true : policy === 'native_pdf_fragmentation_v1'
+      ? isOldFragmentedNativePdfMap(sourceMap)
+      : isLineRunNativePdfMap(sourceMap);
+    if (!affected) {
+      throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction does not use the affected analysis generation');
+    }
+    sourceMapProof = { objectKey: reference.objectKey, serializedSha256: reference.serializedSha256 };
+  }
+  const stableKey = `${keyPrefix}${policy.replaceAll('_', '-')}`;
+  let queued: Prisma.IngestionTaskGetPayload<{ include: { artifact: true } }> | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      queued = await deps.prisma.$transaction(async (tx) => {
+        const source = await tx.ingestionTask.findUnique({
+          where: { id: input.taskId },
+          include: { artifact: true, batch: { include: { researchObject: true } } },
+        });
+        if (!source) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+        const { workspace, membership } = await requireActiveMembership(tx, source.batch.researchObject.workspaceId, input.userId);
+        if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+        if (source.batch.userId !== input.userId || source.artifact.workspaceId !== workspace.id) {
+          throw new IngestionError('INGESTION_NOT_FOUND', 'Legacy ingestion source is unavailable');
+        }
+
+        const transactionReplay = await tx.agentTask.findUnique({ where: { idempotencyKey: stableKey }, include: { session: true } });
+        if (transactionReplay) {
+          const payload = transactionReplay.payload && typeof transactionReplay.payload === 'object' && !Array.isArray(transactionReplay.payload) ? transactionReplay.payload as Record<string, unknown> : null;
+          if (source.agentTaskId !== transactionReplay.id || transactionReplay.kind !== 'sdf.extract'
+            || transactionReplay.session.userId !== input.userId || transactionReplay.session.researchObjectId !== source.batch.researchObjectId
+            || transactionReplay.session.status !== 'active' || !payload || !exactRecordKeys(payload, ['artifactId', 'researchObjectId'])
+            || payload.artifactId !== source.artifactId || payload.researchObjectId !== source.batch.researchObjectId) {
+            throw new IngestionError('VALIDATION_ERROR', 'Legacy refresh replay scope does not match');
+          }
+          return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
+        }
+
+        const oldAgent = await tx.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
+        if (source.agentTaskId !== input.sourceAgentTaskId || source.state !== 'needs_review' || source.retryCount !== initial.retryCount
+          || !oldAgent || oldAgent.id !== input.sourceAgentTaskId || oldAgent.kind !== 'sdf.extract'
+          || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== source.retryCount || oldAgent.executionAttempt !== source.retryCount + 1
+          || oldAgent.session.userId !== input.userId || oldAgent.session.researchObjectId !== source.batch.researchObjectId
+          || oldAgent.session.status !== 'active' || analysisRefreshPolicy(oldAgent.result, source.artifact) !== policy) {
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the scoped unconfirmed extraction can be refreshed');
+        }
+        const oldPayload = oldAgent.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload) ? oldAgent.payload as Record<string, unknown> : null;
+        if (!oldPayload || oldPayload.artifactId !== source.artifactId || oldPayload.researchObjectId !== source.batch.researchObjectId) {
+          throw new IngestionError('VALIDATION_ERROR', 'Legacy extraction source does not match its artifact');
+        }
+        if (policy !== 'legacy_character_evidence_v1') {
+          const reference = parseDocumentSourceMapReference((oldAgent.result as Record<string, unknown>).sourceMapRef);
+          if (!sourceMapProof || reference.objectKey !== sourceMapProof.objectKey
+            || reference.serializedSha256 !== sourceMapProof.serializedSha256) {
+            throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction source map changed while refreshing');
+          }
+        }
+        if (await savedConfirmation({ ...deps, prisma: tx as IngestionDeps['prisma'] }, source.id, source.batch.researchObjectId)) {
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Confirmed ingestion cannot be refreshed');
+        }
+
+        const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
+          userId: input.userId,
+          researchObjectId: source.batch.researchObjectId,
+          kind: 'ingestion',
+          title: `Ingestion analysis refresh ${source.id}`,
+          idempotencyKey: `${stableKey}:session`,
+        }, ctx);
+        const { task: replacement } = await persistAgentTaskInTransaction(deps, tx, {
+          sessionId: session.id,
+          userId: input.userId,
+          kind: 'sdf.extract',
+          payload: { artifactId: source.artifactId, researchObjectId: source.batch.researchObjectId },
+          idempotencyKey: stableKey,
+        }, ctx);
+        const changed = await tx.ingestionTask.updateMany({
+          where: { id: source.id, agentTaskId: input.sourceAgentTaskId, state: 'needs_review', retryCount: initial.retryCount },
+          data: { agentTaskId: replacement.id, state: 'queued', retryCount: 0, error: null },
+        });
+        if (changed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Legacy extraction changed while refreshing');
+        await recordAudit(deps, tx, {
+          actorId: input.userId,
+          action: 'ingestion.task.analysis_refresh',
+          workspaceId: workspace.id,
+          targetType: 'ingestion_task',
+          targetId: source.id,
+          metadata: { policy, oldAgentTaskId: input.sourceAgentTaskId, newAgentTaskId: replacement.id, artifactId: source.artifactId,
+            sourceMapSha256: sourceMapProof?.serializedSha256 ?? null, creditPolicy: 'charged_ingestion_analysis_refresh' },
+        }, ctx);
+        return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
+      }, { isolationLevel: 'Serializable' });
+      break;
+    } catch (error) {
+      if ((error as { code?: unknown }).code === 'P2034' && attempt < 2) continue;
+      throw error;
+    }
+  }
+  if (!queued?.agentTaskId) throw new IngestionError('INGESTION_NOT_FOUND', 'Refreshed ingestion task not found');
+  await dispatchAgentTask(deps, queued.agentTaskId);
+  return taskToView(queued);
+}
+
+/** Starts a separately confirmable analysis generation without changing confirmed history. */
+export async function reanalyzeConfirmedIngestion(
+  deps: IngestionDeps,
+  input: { userId: string; taskId: string; sourceAgentTaskId: string; processingConsent: boolean; idempotencyKey: string },
+  ctx: AuditContext = {},
+): Promise<IngestionTaskView> {
+  if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
+  if (!input.idempotencyKey || input.idempotencyKey.length > 64) throw new IngestionError('VALIDATION_ERROR', 'A bounded idempotency key is required');
+  const initial = await deps.prisma.ingestionTask.findUnique({
+    where: { id: input.taskId },
+    include: { artifact: true, agentTask: { include: { session: true } }, batch: { include: { researchObject: true } } },
+  });
+  if (!initial) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+  const { workspace, membership } = await requireActiveMembership(deps.prisma, initial.batch.researchObject.workspaceId, input.userId);
+  if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+  const sourceAgent = initial.agentTask;
+  const sourcePayload = sourceAgent?.payload;
+  if (initial.state !== 'confirmed' || initial.agentTaskId !== input.sourceAgentTaskId
+    || initial.batch.userId !== input.userId || initial.artifact.workspaceId !== workspace.id
+    || !sourceAgent || sourceAgent.kind !== 'sdf.extract' || sourceAgent.status !== 'succeeded'
+    || sourceAgent.session.userId !== input.userId || sourceAgent.session.researchObjectId !== initial.batch.researchObjectId
+    || !exactRecordKeys(sourcePayload, ['artifactId', 'researchObjectId'])
+    || sourcePayload.artifactId !== initial.artifactId || sourcePayload.researchObjectId !== initial.batch.researchObjectId
+    || analysisRefreshPolicy(sourceAgent.result, initial.artifact) !== 'user_requested_reanalysis'
+    || !await savedConfirmation(deps, initial.id, initial.batch.researchObjectId)) {
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only a scoped confirmed extraction can create a new analysis draft');
+  }
+  const reference = parseDocumentSourceMapReference((sourceAgent.result as Record<string, unknown>).sourceMapRef);
+  await loadDocumentSourceMapReference(deps.storage, reference);
+  const sourceMapProof = { objectKey: reference.objectKey, serializedSha256: reference.serializedSha256 };
+  const batchKey = `ingestion-reanalysis:${initial.id}:${input.idempotencyKey}`;
+  const requestDigest = createHash('sha256').update(JSON.stringify({
+    taskId: initial.id, sourceAgentTaskId: sourceAgent.id, artifactId: initial.artifactId,
+    sourceMapSha256: sourceMapProof.serializedSha256,
+  })).digest('hex');
+  let queued: Prisma.IngestionTaskGetPayload<{ include: { artifact: true } }> | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      queued = await deps.prisma.$transaction(async (tx) => {
+        const source = await tx.ingestionTask.findUnique({
+          where: { id: initial.id },
+          include: { artifact: true, agentTask: { include: { session: true } }, batch: { include: { researchObject: true } } },
+        });
+        if (!source) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+        const { workspace: transactionWorkspace, membership: transactionMembership } = await requireActiveMembership(
+          tx, source.batch.researchObject.workspaceId, input.userId,
+        );
+        if (!INGESTION_WRITE_ROLES.has(transactionMembership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+        const scoped = { ...deps, prisma: tx as IngestionDeps['prisma'] };
+        const transactionPayload = source.agentTask?.payload;
+        if (source.state !== 'confirmed' || source.agentTaskId !== sourceAgent.id
+          || source.batch.userId !== input.userId || source.batch.researchObjectId !== initial.batch.researchObjectId
+          || source.artifactId !== initial.artifactId || source.artifact.workspaceId !== transactionWorkspace.id
+          || !source.agentTask || source.agentTask.kind !== 'sdf.extract' || source.agentTask.status !== 'succeeded'
+          || source.agentTask.session.userId !== input.userId || source.agentTask.session.researchObjectId !== initial.batch.researchObjectId
+          || !exactRecordKeys(transactionPayload, ['artifactId', 'researchObjectId'])
+          || transactionPayload.artifactId !== source.artifactId || transactionPayload.researchObjectId !== source.batch.researchObjectId
+          || analysisRefreshPolicy(source.agentTask.result, source.artifact) !== 'user_requested_reanalysis'
+          || !await savedConfirmation(scoped, source.id, source.batch.researchObjectId)) {
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Confirmed extraction changed while creating a new draft');
+        }
+        const replay = await tx.ingestionBatch.findUnique({
+          where: { idempotencyKey: batchKey },
+          include: { tasks: { include: { artifact: true, agentTask: { include: { session: true } } } } },
+        });
+        if (replay) {
+          const candidate = replay.tasks[0];
+          const payload = candidate?.agentTask?.payload;
+          if (replay.userId !== input.userId || replay.researchObjectId !== initial.batch.researchObjectId
+            || replay.requestDigest !== requestDigest || replay.tasks.length !== 1 || !candidate?.agentTask
+            || candidate.artifactId !== initial.artifactId || candidate.agentTask.kind !== 'sdf.extract'
+            || candidate.agentTask.session.userId !== input.userId
+            || candidate.agentTask.session.researchObjectId !== initial.batch.researchObjectId
+            || candidate.agentTask.idempotencyKey !== `ingestion-analysis-reanalysis:${candidate.id}:${sourceAgent.id}`
+            || !exactRecordKeys(payload, ['artifactId', 'researchObjectId'])
+            || payload.artifactId !== initial.artifactId || payload.researchObjectId !== initial.batch.researchObjectId) {
+            throw new IngestionError('VALIDATION_ERROR', 'Confirmed analysis replay scope does not match');
+          }
+          return tx.ingestionTask.findUniqueOrThrow({ where: { id: candidate.id }, include: { artifact: true } });
+        }
+        const transactionReference = parseDocumentSourceMapReference((source.agentTask.result as Record<string, unknown>).sourceMapRef);
+        if (transactionReference.objectKey !== sourceMapProof.objectKey
+          || transactionReference.serializedSha256 !== sourceMapProof.serializedSha256) {
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction source map changed while creating a new draft');
+        }
+        const batch = await tx.ingestionBatch.create({ data: {
+          researchObjectId: source.batch.researchObjectId, userId: input.userId,
+          idempotencyKey: batchKey, requestDigest,
+        } });
+        const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
+          userId: input.userId, researchObjectId: source.batch.researchObjectId, kind: 'ingestion',
+          title: `Ingestion reanalysis ${source.id}`, idempotencyKey: `${batchKey}:session`,
+        }, ctx);
+        await tx.ingestionBatch.update({ where: { id: batch.id }, data: { agentSessionId: session.id } });
+        const newIngestion = await tx.ingestionTask.create({ data: {
+          batchId: batch.id, artifactId: source.artifactId, state: 'queued',
+        } });
+        const { task: analysis } = await persistAgentTaskInTransaction(deps, tx, {
+          sessionId: session.id, userId: input.userId, kind: 'sdf.extract',
+          payload: { artifactId: source.artifactId, researchObjectId: source.batch.researchObjectId },
+          idempotencyKey: `ingestion-analysis-reanalysis:${newIngestion.id}:${sourceAgent.id}`,
+        }, ctx);
+        const attached = await tx.ingestionTask.updateMany({
+          where: { id: newIngestion.id, agentTaskId: null, state: 'queued' }, data: { agentTaskId: analysis.id },
+        });
+        if (attached.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'New analysis draft changed while attaching its task');
+        await recordAudit(deps, tx, {
+          actorId: input.userId, action: 'ingestion.task.reanalyze', workspaceId: transactionWorkspace.id,
+          targetType: 'ingestion_task', targetId: newIngestion.id,
+          metadata: { sourceIngestionTaskId: source.id, sourceAgentTaskId: sourceAgent.id, newAgentTaskId: analysis.id,
+            artifactId: source.artifactId, sourceMapSha256: sourceMapProof.serializedSha256, confirmationPolicy: 'new_draft' },
+        }, ctx);
+        return tx.ingestionTask.findUniqueOrThrow({ where: { id: newIngestion.id }, include: { artifact: true } });
+      }, { isolationLevel: 'Serializable' });
+      break;
+    } catch (error) {
+      if (attempt < 2 && ['P2002', 'P2034'].includes(String((error as { code?: unknown }).code))) continue;
+      throw error;
+    }
+  }
+  if (!queued?.agentTaskId) throw new IngestionError('INGESTION_NOT_FOUND', 'New analysis draft was not created');
+  await dispatchAgentTask(deps, queued.agentTaskId);
   return taskToView(queued);
 }
 

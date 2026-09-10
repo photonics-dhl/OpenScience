@@ -148,18 +148,29 @@ async function loadSnapshot(
       if (!Array.isArray(segments) || segments.length > 32) throw new ClaimEvidenceError('ORIGINAL_MISSING', 'Canonical evidence segments are invalid');
       let total = 0;
       let priorPage = 0;
-      const blockIds = new Set<string>();
-      sources = segments.map((value) => {
+      let priorLocator: ReturnType<typeof validateSourceLocator> | undefined;
+      let priorRangeEnd = 0;
+      const closedBlockIds = new Set<string>();
+      sources = segments.map((value, index) => {
         const segment = record(value);
         if (typeof segment.quote !== 'string') throw new ClaimEvidenceError('ORIGINAL_MISSING', 'Canonical evidence segment quote is invalid');
         const locator = validateSourceLocator(segment.sourceLocator);
-        total += segment.quote.length;
+        total += segment.quote.length + (index > 0 ? 1 : 0);
+        const sameBlock = locator.blockId === priorLocator?.blockId;
+        const invalidSameBlockRange = sameBlock && priorLocator !== undefined && locator.charRange !== undefined && (
+          locator.page !== priorLocator.page
+          || !isDeepStrictEqual(locator.boundingBox, priorLocator.boundingBox)
+          || locator.charRange.start < priorRangeEnd
+        );
         if (locator.artifactId !== reference.artifactId || locator.contentHash !== reference.contentHash
           || !locator.blockId || !locator.charRange || locator.charRange.end - locator.charRange.start !== segment.quote.length
-          || blockIds.has(locator.blockId) || (locator.page ?? 0) < priorPage || total > 8_000) {
+          || (locator.page ?? 0) < priorPage || invalidSameBlockRange
+          || (!sameBlock && closedBlockIds.has(locator.blockId)) || total > 8_000) {
           throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical evidence segments do not match the extraction source');
         }
-        blockIds.add(locator.blockId);
+        if (!sameBlock && priorLocator?.blockId) closedBlockIds.add(priorLocator.blockId);
+        priorLocator = locator;
+        priorRangeEnd = locator.charRange.end;
         priorPage = locator.page ?? priorPage;
         return { quote: segment.quote, locator };
       });

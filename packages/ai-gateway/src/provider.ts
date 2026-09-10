@@ -233,6 +233,7 @@ export interface MiniMaxVisionConfig extends ProviderConfig {
   maxPageBytes?: number;
   timeoutMs?: number;
   maxResponseBytes?: number;
+  backupApiKey?: string;
 }
 
 const OFFICIAL_MINIMAX_VISION_ORIGINS = new Set(['https://api.minimax.io', 'https://api.minimaxi.com']);
@@ -286,6 +287,15 @@ export class MiniMaxCodingPlanVisionProvider implements OcrProvider {
 
   async recognize(request: OcrProviderPageRequest): Promise<OcrProviderResult> {
     validateProviderPageRequest(request, this.maxPageBytes);
+    try {
+      return await this.recognizeWithKey(request, this.cfg.apiKey);
+    } catch (error) {
+      if (!(error instanceof OcrProviderError) || error.code !== 'provider_quota' || !this.cfg.backupApiKey) throw error;
+      return this.recognizeWithKey(request, this.cfg.backupApiKey);
+    }
+  }
+
+  private async recognizeWithKey(request: OcrProviderPageRequest, apiKey: string): Promise<OcrProviderResult> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -293,10 +303,7 @@ export class MiniMaxCodingPlanVisionProvider implements OcrProvider {
       try {
         response = await this.fetcher(`${this.cfg.baseUrl.replace(/\/$/, '')}/v1/coding_plan/vlm`, {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            authorization: `Bearer ${this.cfg.apiKey}`,
-          },
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
             prompt: request.prompt,
             image_url: `data:${request.mediaType};base64,${Buffer.from(request.bytes).toString('base64')}`,
@@ -307,25 +314,21 @@ export class MiniMaxCodingPlanVisionProvider implements OcrProvider {
         if (error instanceof Error && error.name === 'AbortError') throw new OcrProviderError('provider_timeout', 'MiniMax vision timeout');
         throw new OcrProviderError('provider_error', 'MiniMax vision request failed');
       }
-      if (!response.ok) throw new OcrProviderError('provider_http', `MiniMax vision HTTP ${response.status}`);
       const raw = await readBoundedResponse(response, this.maxResponseBytes);
       let data: unknown;
-      try {
-        data = JSON.parse(raw);
-      } catch {
+      try { data = JSON.parse(raw); } catch {
+        if (!response.ok) throw new OcrProviderError('provider_http', `MiniMax vision HTTP ${response.status}`);
         throw new OcrProviderError('provider_response_invalid', 'MiniMax vision returned invalid JSON');
       }
+      if (!response.ok) throw new OcrProviderError('provider_http', `MiniMax vision HTTP ${response.status}`);
       if (!isMiniMaxVisionResponse(data)) throw new OcrProviderError('provider_response_invalid', 'MiniMax vision response shape invalid');
-      const status = data.base_resp?.status_code ?? 0;
+      const status = miniMaxVisionStatus(data) ?? 0;
+      if (status === 1008 || status === 2056) throw new OcrProviderError('provider_quota', 'MiniMax vision quota exhausted');
       if (status !== 0) throw new OcrProviderError('provider_status', `MiniMax vision status ${status}`);
       if (typeof data.content !== 'string' || data.content.trim().length === 0) {
         throw new OcrProviderError('provider_response_invalid', 'MiniMax vision returned empty content');
       }
-      return {
-        text: data.content,
-        usage: { inputTokens: null, outputTokens: null },
-        actualCostUsdMicros: null,
-      };
+      return { text: data.content, usage: { inputTokens: null, outputTokens: null }, actualCostUsdMicros: null };
     } finally {
       clearTimeout(timer);
     }
@@ -360,6 +363,14 @@ async function readBoundedResponse(response: Response, limit: number): Promise<s
     offset += chunk.byteLength;
   }
   return new TextDecoder().decode(joined);
+}
+
+function miniMaxVisionStatus(value: unknown): number | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const base = (value as { base_resp?: unknown }).base_resp;
+  if (typeof base !== 'object' || base === null || Array.isArray(base)) return undefined;
+  const status = (base as { status_code?: unknown }).status_code;
+  return typeof status === 'number' && Number.isSafeInteger(status) ? status : undefined;
 }
 
 function isMiniMaxVisionResponse(value: unknown): value is {

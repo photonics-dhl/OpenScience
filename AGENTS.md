@@ -6,6 +6,13 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 
 ## 产品落地优先：强约束（用户明确要求，2026-09-08）
 
+- 2026-09-09：先完成2–3篇真实论文的上传、Hermes全文凝练与用户确认、图片生成审核、发布和公开RO展示；用户确认流程及产物质量前，不运行批量冷启动或扩充演示数量。清理已识别旧演示/测试数据优先可恢复归档，保护真实论文与已公开版本/标识。
+
+
+- Chat能力按接口分别判断：用户已确认直接Chat会话接口可读取普通Chat；浏览器控制桥的fetch失败不等于Chat不可用。优先使用可用的直接会话接口处理规划/讨论，写入结果另行确认；服务器网页生图由服务器执行器负责，不依赖本机浏览器控制桥。
+
+- Hermes必须先综合全文理解研究逻辑，再按六个展示维度凝练并核对来源。方法可隐含于推导、结果、图注或附录；不得按同名章节/统一模板判断缺失。来源格式或预算失败是系统待核对状态，不是论文未报告；未核对草稿与正式内容分开。
+
 - 本次任务最新指令：不允许再测试；不得主动触发测试、预检或演练，包括 CI 测试。直接实现与部署，保留必要构建、服务启动和回滚机制。
 
 - 第一优先级是把用户需要的服务器产品功能实现并部署，不得用预检、测试、评审工具建设或重复分析替代交付。
@@ -30,6 +37,7 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 
 ## 云服务器（2026-07-31 上线）
 - 阿里云 ECS（Alibaba Cloud Linux 4），代码在 `/opt/openscience`；Node 22 + docker compose 插件 + nginx + acme.sh（cronie 续期）。
+- 所有服务器相关任务先读 `docs/runbooks/server-capabilities.md` 相关条目；安装/下载前查现有服务、镜像和共享缓存，只补缺失部分并说明无法复用的原因。能力变化后同步清单与Hermes台账；此规则不触发测试或全盘预检。
 - 远程操作只走 `infra/scripts/ssh-run.sh` / `checkup.sh`（项目专用密钥 `~/.ssh/id_ed25519_xgs`，服务器仅 publickey）。Windows 必须由 PowerShell 显式调用 `C:\Program Files\Git\bin\bash.exe`；禁止裸 `bash`、系统 `bash.exe` 或 WSL。日志出现 `wsl: Failed to translate` 说明选错 shell，不得误报 SSH key 失效。
 - DNS/公网入口：`OpenScience.428312321.xyz` 已切到 ECS 常驻 Cloudflare Tunnel（proxied CNAME，回源 ECS Nginx）；`portainer.428312321.xyz` 仍为 DNS-only → ECS 公网 IP。面板 `https://portainer.428312321.xyz`。
 - 安全组放行 22/80/443；dev 栈端口仅 127.0.0.1；云上写操作前需用户确认。

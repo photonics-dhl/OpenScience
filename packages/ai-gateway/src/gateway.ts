@@ -288,11 +288,16 @@ export class AiGateway {
       temperature?: number;
       validationFeedback?: (value: unknown) => string | undefined;
       validationDiagnostic?: (value: unknown) => string | undefined;
+      maxRetries?: number;
     } = {},
   ): Promise<T> {
+    const retryLimit = opts.maxRetries ?? MAX_STRUCTURED_RETRIES;
+    if (!Number.isSafeInteger(retryLimit) || retryLimit < 0 || retryLimit > MAX_STRUCTURED_RETRIES) {
+      throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid structured retry limit');
+    }
     let lastError: unknown;
     let retryMessages = messages;
-    for (let attempt = 0; attempt <= MAX_STRUCTURED_RETRIES; attempt++) {
+    for (let attempt = 0; attempt <= retryLimit; attempt++) {
       try {
         const result = await this.complete(retryMessages, { temperature: opts.temperature, maxTokens: 4096 });
         let parsed: unknown;
@@ -300,7 +305,11 @@ export class AiGateway {
           parsed = parseStructuredJson(result.text);
         } catch (error) {
           const finishReason = result.finishReason ?? 'unknown';
-          this.logger?.warn?.(`structured.output.rejected stage=json_parse attempt=${attempt + 1}/${MAX_STRUCTURED_RETRIES + 1} finish=${finishReason}`);
+          this.logger?.warn?.(`structured.output.rejected stage=json_parse attempt=${attempt + 1}/${retryLimit + 1} finish=${finishReason}`);
+          retryMessages = [...retryMessages.filter((message) => message.content !== 'The previous response was not valid JSON. Return exactly one complete JSON object following the requested schema. Use double-quoted keys and strings, escape backslashes, and include no Markdown or commentary.'), {
+            role: 'system',
+            content: 'The previous response was not valid JSON. Return exactly one complete JSON object following the requested schema. Use double-quoted keys and strings, escape backslashes, and include no Markdown or commentary.',
+          }];
           throw new AiGatewayError('STRUCTURED_JSON_INVALID', 'structured JSON invalid', error);
         }
         if (!guard(parsed)) {
@@ -310,7 +319,7 @@ export class AiGateway {
           }
           const diagnostic = opts.validationDiagnostic?.(parsed)?.trim();
           const safeDiagnostic = diagnostic && /^[a-z0-9_,:-]{1,512}$/i.test(diagnostic) ? ` diagnostic=${diagnostic}` : '';
-          this.logger?.warn?.(`structured.output.rejected stage=schema_validation attempt=${attempt + 1}/${MAX_STRUCTURED_RETRIES + 1}${safeDiagnostic}`);
+          this.logger?.warn?.(`structured.output.rejected stage=schema_validation attempt=${attempt + 1}/${retryLimit + 1}${safeDiagnostic}`);
           throw new AiGatewayError('SCHEMA_VALIDATION', `结构化输出未通过 Schema 校验（第 ${attempt + 1} 次）`);
         }
         return parsed;
@@ -319,8 +328,8 @@ export class AiGateway {
         // complete() already exhausted the configured provider pool. Repeating the
         // same transport cycle is neither a schema repair nor a useful fallback.
         if (e instanceof AiGatewayError && e.code === 'ALL_PROVIDERS_FAILED') throw e;
-        if (attempt < MAX_STRUCTURED_RETRIES) {
-          this.logger?.warn?.(`structured.output.retry next_attempt=${attempt + 2}/${MAX_STRUCTURED_RETRIES + 1}`);
+        if (attempt < retryLimit) {
+          this.logger?.warn?.(`structured.output.retry next_attempt=${attempt + 2}/${retryLimit + 1}`);
         }
       }
     }
@@ -422,6 +431,9 @@ export class AiGateway {
         };
       } catch (error) {
         const code = normalizeOcrProviderError(error);
+        const status = code === 'provider_status' && error instanceof Error
+          ? /^MiniMax vision status (\d{1,8})$/.exec(error.message)?.[1] : undefined;
+        const diagnostic = status ? `${code}:${status}` : code;
         await this.record(ocrLog({
           request,
           provider: provider.name,
@@ -432,13 +444,13 @@ export class AiGateway {
           retryCount: index,
           fallbackReason: boundedFallbackReason(fallbackNotes),
           outcome: 'failed',
-          error: code,
+          error: diagnostic,
           inputTokens: null,
           outputTokens: null,
           actualCostUsdMicros: null,
         }));
         fallbackNotes.push(`${provider.name}:${code}`);
-        this.logger?.warn?.(`AI OCR provider ${provider.name} failed with ${code}; trying configured fallback`);
+        this.logger?.warn?.(`AI OCR provider ${provider.name} failed with ${diagnostic}; trying configured fallback`);
       }
     }
     return { status: 'failed', pageNumber: request.pageNumber, code: 'providers_unavailable', retryable: true };

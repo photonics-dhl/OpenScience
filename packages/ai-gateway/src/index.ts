@@ -47,5 +47,5 @@ export {
   type ProviderCapabilityPolicy,
 } from './ocr';
 
-export { CodexSpoolImageProvider, type CodexSpoolImageConfig } from './codex-image';
+export { CodexSpoolImageProvider, ChatGptWebSpoolImageProvider, type CodexSpoolImageConfig } from './codex-image';
 export * from './codex-image-protocol';

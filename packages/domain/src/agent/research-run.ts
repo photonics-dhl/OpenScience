@@ -8,7 +8,7 @@ import { now } from '../workspace/types';
 import { confirmIngestionClaimEvidenceBridge, type IngestionClaimSelection } from '../ingestion/claim-evidence-bridge';
 import type { IngestionDeps } from '../ingestion/ingestion-service';
 import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
-import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE } from '../assets/video';
+import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE } from '../assets/video';
 import { parsePresentationGenerationPayload, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
 import { presentationStoryboardView } from '../assets/storyboard';
 import { presentationSceneImageView, requireSceneImageParent } from '../assets/scene-image';
@@ -18,12 +18,14 @@ const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 const READY_INGESTION_STATES = new Set(['needs_review', 'confirmed', 'written']);
 const FAILED_INGESTION_STATES = new Set(['failed_retryable', 'failed_blocked']);
 const RUN_INCLUDE = { steps: { orderBy: { ordinal: 'asc' as const } } } as const;
-type GenerationProfile = typeof ONCHIP_FIELD_SAMPLING_PROFILE | typeof CONTENT_DRIVEN_PROFILE;
+type GenerationProfile = typeof ONCHIP_FIELD_SAMPLING_PROFILE | typeof CONTENT_DRIVEN_PROFILE | typeof CONTENT_DRIVEN_IMAGE_PROFILE;
 type GenerationGrant = { profile: typeof ONCHIP_FIELD_SAMPLING_PROFILE; maxAgentTasks: 7 }
-  | { profile: typeof CONTENT_DRIVEN_PROFILE; maxAgentTasks: 8 };
+  | { profile: typeof CONTENT_DRIVEN_PROFILE; maxAgentTasks: 8 }
+  | { profile: typeof CONTENT_DRIVEN_IMAGE_PROFILE; maxAgentTasks: 7 };
 function validGrant(value: { profile: string | null; maxAgentTasks: number | null }): boolean {
   return (value.profile === ONCHIP_FIELD_SAMPLING_PROFILE && value.maxAgentTasks === 7)
-    || (value.profile === CONTENT_DRIVEN_PROFILE && value.maxAgentTasks === 8);
+    || (value.profile === CONTENT_DRIVEN_PROFILE && value.maxAgentTasks === 8)
+    || (value.profile === CONTENT_DRIVEN_IMAGE_PROFILE && value.maxAgentTasks === 7);
 }
 
 export type HermesResearchRunStatus = 'running' | 'awaiting_source_review' | 'awaiting_claim_review'
@@ -241,7 +243,7 @@ async function inspectGenerationRecovery(
   run: RunRow,
   canResumeImageBeforeSubmission?: (requestId: string) => Promise<boolean>,
 ): Promise<(GenerationRecoveryPlan & { chargeableAttempts: number }) | null> {
-  if (run.status !== 'failed' || run.profile !== CONTENT_DRIVEN_PROFILE || run.maxAgentTasks !== 8
+  if (run.status !== 'failed' || !((run.profile === CONTENT_DRIVEN_PROFILE && run.maxAgentTasks === 8) || (run.profile === CONTENT_DRIVEN_IMAGE_PROFILE && run.maxAgentTasks === 7))
     || !run.versionId || run.sourceClaimIds.length === 0) return null;
   if (await validateReviewedSources(tx, run) !== 'ready') return null;
   const storyboardStep = run.steps.find(step => step.stage === 'storyboard');
@@ -253,7 +255,7 @@ async function inspectGenerationRecovery(
     && storyboard.researchObjectId === run.researchObjectId && storyboard.versionId === run.versionId
     && isDeepStrictEqual(storyboardClaimIds, run.sourceClaimIds)
     ? presentationStoryboardView(storyboard, storyboardClaimIds) : undefined;
-  if (!storyboard || !storyboardView || storyboardView.document.scenes.some(scene => !scene.animation)) return null;
+  if (!storyboard || !storyboardView || (run.profile === CONTENT_DRIVEN_PROFILE && (storyboardView.output !== 'video' || storyboardView.document.scenes.some(scene => !scene.animation))) || (run.profile === CONTENT_DRIVEN_IMAGE_PROFILE && storyboardView.output !== 'image')) return null;
   const sceneSteps = run.steps.filter(step => step.stage === 'scene_image').sort((a, b) => a.ordinal - b.ordinal);
   if (sceneSteps.length !== storyboardView.document.scenes.length
     || sceneSteps.some((step, index) => step.ordinal !== index || !step.agentTaskId)) return null;
@@ -305,7 +307,7 @@ async function inspectGenerationRecovery(
     kind: 'presentation.generate',
     payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id },
   } });
-  const futureVideoTasks = run.steps.some(step => step.stage === 'video') ? 0 : 1;
+  const futureVideoTasks = run.profile === CONTENT_DRIVEN_IMAGE_PROFILE || run.steps.some(step => step.stage === 'video') ? 0 : 1;
   if (historicalTasks + plan.chargeable.length + futureVideoTasks > run.maxAgentTasks) return null;
   return { ...plan, chargeableAttempts: plan.chargeable.length };
 }
@@ -489,6 +491,18 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         if (run.version !== input.expectedVersion) {
           throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before retrying generation');
         }
+        if (run.status === 'stopped' && run.error === 'reviewed Claim or Evidence binding changed'
+          && run.steps.every(step => step.stage === 'source_ingestion')
+          && await validateReviewedSources(tx, run) === 'ready') {
+          const restored = await tx.hermesResearchRun.updateMany({ where: {
+            id: run.id, actorId: input.actorId, status: 'stopped', version: input.expectedVersion,
+          }, data: { status: 'awaiting_claim_review', error: null, version: { increment: 1 } } });
+          if (restored.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed while resuming source review');
+          await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId,
+            action: 'hermes.research_run.source_review_resume', targetType: 'hermes_research_run', targetId: run.id,
+            metadata: { requestDigest, previousVersion: run.version } }, ctx);
+          return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [] as string[] };
+        }
         const plan = await inspectGenerationRecovery(tx, run, deps.canResumeImageBeforeSubmission);
         if (!plan) throw new HermesResearchRunError('SOURCE_NOT_READY', 'This failed generation cannot be retried safely');
 
@@ -651,7 +665,11 @@ async function validateReviewedSources(tx: Prisma.TransactionClient, run: RunRow
     const provenance = jsonRecord(claim.provenance);
     const lineage = provenance.sourceTaskLineage ?? provenance.sourceTaskId;
     if (typeof lineage === 'string') lineageByClaim.set(claim.id, lineage);
-    return provenance.source !== 'reviewed_ingestion' || typeof lineage !== 'string' || !ingestionIds.has(lineage);
+    // Normal Claim review records human provenance while retaining ingestion lineage.
+    // Evidence below must still bind to that exact ingestion artifact and content hash.
+    const reviewedSource = provenance.source === 'reviewed_ingestion'
+      || (provenance.source === 'human' && typeof provenance.sourceTaskLineage === 'string');
+    return !reviewedSource || typeof lineage !== 'string' || !ingestionIds.has(lineage);
   })) return 'invalid';
   if (claims.some((claim) => claim.extractionStatus === 'failed')) return 'invalid';
   if (claims.some((claim) => claim.extractionStatus !== 'succeeded')) return 'pending';
@@ -690,7 +708,8 @@ async function findApprovedStoryboardRevision(
 ) {
   const expectedClaimIds = [...input.sourceClaimIds].sort();
   const baseClaimIds = input.baseAsset.sourceClaims.map((link) => link.claimId).sort();
-  if (!presentationStoryboardView(input.baseAsset, baseClaimIds)
+  const baseView = presentationStoryboardView(input.baseAsset, baseClaimIds);
+  if (!baseView
     || !isDeepStrictEqual(baseClaimIds, expectedClaimIds)) return null;
   const revisions = await tx.presentationAsset.findMany({
     where: {
@@ -708,7 +727,7 @@ async function findApprovedStoryboardRevision(
   const revision = revisions[0]!;
   const revisionClaimIds = revision.sourceClaims.map((link) => link.claimId).sort();
   const view = presentationStoryboardView(revision, revisionClaimIds);
-  if (!view || view.baseAssetId !== input.baseAsset.id
+  if (!view || view.output !== baseView.output || view.baseAssetId !== input.baseAsset.id
     || !isDeepStrictEqual(revisionClaimIds, expectedClaimIds)) return null;
   const provenance = jsonRecord(revision.provenance);
   if (provenance.source !== 'verified_claims' || provenance.taskId !== revision.id
@@ -725,7 +744,7 @@ async function findApprovedStoryboardRevision(
     return null;
   }
   if (payload.researchObjectId !== input.researchObjectId || payload.versionId !== input.versionId
-    || payload.kind !== 'interactive_html' || payload.storyboard?.baseAssetId !== input.baseAsset.id
+    || payload.kind !== 'interactive_html' || payload.storyboard?.baseAssetId !== input.baseAsset.id || payload.storyboard.output !== baseView.output
     || !isDeepStrictEqual(payload.sourceClaimIds, expectedClaimIds)) return null;
   return revision;
 }
@@ -837,7 +856,7 @@ export async function reconcileHermesResearchRuns(
             await createPresentationSteps(deps, tx, run, 'storyboard', [{ ordinal: 0, payload: {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
               kind: 'interactive_html', sourceClaimIds: run.sourceClaimIds,
-              storyboard: { locale: 'zh', style: 'technical', instruction: '根据当前已审核Claims自主选择讲解重点、场景数量、时长和动态表现。只讲来源支持的内容；若只提取到方法，就仅讲方法。不套用任何特定论文或固定科学机制，不为凑场景补写结果。' },
+              storyboard: { locale: 'zh', style: 'technical', output: run.profile === CONTENT_DRIVEN_IMAGE_PROFILE ? 'image' : 'video', instruction: run.profile === CONTENT_DRIVEN_IMAGE_PROFILE ? '根据当前已审核Claims规划1至6幅相互补充的科研图解。只讲来源支持的内容；若只提取到方法，就仅讲方法。不套用任何特定论文或固定科学机制，不为凑画面补写结果。' : '根据当前已审核Claims自主选择讲解重点、场景数量、时长和动态表现。只讲来源支持的内容；若只提取到方法，就仅讲方法。不套用任何特定论文或固定科学机制，不为凑场景补写结果。' },
             } }]);
             return moveRun(deps, tx, run, 'generating_storyboard', ro.workspaceId);
           }
@@ -921,14 +940,14 @@ export async function reconcileHermesResearchRuns(
           if (run.status === 'awaiting_storyboard_review') {
             const storyboardAssetId = assets[0]!.id;
             const approved = presentationStoryboardView(assets[0]!, run.sourceClaimIds);
-            if (!approved || (run.profile === CONTENT_DRIVEN_PROFILE && approved.document.scenes.some(scene => !scene.animation))) {
+            if (!approved || (run.profile === CONTENT_DRIVEN_PROFILE && (approved.output !== 'video' || approved.document.scenes.some(scene => !scene.animation))) || (run.profile === CONTENT_DRIVEN_IMAGE_PROFILE && approved.output !== 'image')) {
               return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Approved storyboard requires a content-driven animation plan');
             }
             const sceneCount = approved.document.scenes.length;
             if (run.profile === ONCHIP_FIELD_SAMPLING_PROFILE && sceneCount !== 5) {
               return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Legacy generation grant requires upgrade for this storyboard');
             }
-            if (sceneCount + 2 > run.maxAgentTasks!) return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Hermes generation grant cannot cover this storyboard');
+            if (sceneCount + (run.profile === CONTENT_DRIVEN_IMAGE_PROFILE ? 1 : 2) > run.maxAgentTasks!) return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Hermes generation grant cannot cover this storyboard');
             await createPresentationSteps(deps, tx, run, 'scene_image', Array.from({ length: sceneCount }, (_, ordinal) => ({ ordinal, payload: {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
               kind: 'image', sourceClaimIds: run.sourceClaimIds, sceneImage: { storyboardAssetId, sceneIndex: ordinal },
@@ -936,6 +955,7 @@ export async function reconcileHermesResearchRuns(
             return moveRun(deps, tx, run, 'generating_scene_images', ro.workspaceId);
           }
           if (run.status === 'awaiting_scene_images_review') {
+            if (run.profile === CONTENT_DRIVEN_IMAGE_PROFILE) return moveRun(deps, tx, run, 'succeeded', ro.workspaceId);
             const storyboard = run.steps.find((step) => step.stage === 'storyboard')?.presentationAssetId;
             if (!storyboard) return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Storyboard binding is missing');
             await createPresentationSteps(deps, tx, run, 'video', [{ ordinal: 0, payload: {

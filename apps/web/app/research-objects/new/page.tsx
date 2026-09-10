@@ -235,7 +235,7 @@ export default function NewResearchObjectPage() {
               <div className="mt-8 border-y border-os-vermilion-ink py-6">
                 <h2 className="text-2xl font-normal text-os-ink">{intakeT('reviewReady')}</h2>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  {reviewTasks.map((material) => <Link className="border-b border-os-vermilion-ink pb-1 text-sm text-os-vermilion-ink" key={material.localId} href={`/research-objects/${researchObjectId}/hermes?task=${material.taskId}`}>{material.file.name} →</Link>)}
+                  {reviewTasks.map((material) => <Link className="border-b border-os-vermilion-ink pb-1 text-sm text-os-vermilion-ink" key={material.localId} href={`/research-objects/${encodeURIComponent(researchObjectId)}/edit?ingestionTask=${encodeURIComponent(material.taskId!)}`}>{material.file.name} →</Link>)}
                 </div>
               </div>
             ) : null}

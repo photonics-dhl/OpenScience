@@ -1,33 +1,22 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-## Goal and authorization
-- Server-owned paper extraction → content-selected storyboard/images → animated video. Hermes chooses each paper narrative; no fixed paper/five-scene template or manually authored Claims.
-- NO tests/preflights/benchmarks/local runtime/build/CI tests. Necessary server build/deploy and actual authorized product generation only. No direct DB resets, duplicate uploads or deletion.
-- Preserve scientific sources, workspace permissions, user approval, billing and sandbox boundaries.
+## Goal / constraints
+- PDF→服务器OCR/全文理解→六维凝练与原文→Hermes规划→服务器网页生图→画廊（Codex原失败记录保留）。视频暂停。
+- 用户已批准实际生图、预设imagegen skill和页面优化。禁止测试/预检/CI测试/本地构建；允许必要服务器部署与真实任务。保留权限、计费、来源、回滚；不删除文件、不读取打印密钥。
+- 六维不是章节模板；方法可隐含在推导/结果/附录。来源整理失败不等于论文未报告。不能放行科学错误。
 
-## Current user journey work
-- 2026-09-09 actual landing→login (user completed authentication)→dashboard→Quantization review→presentation→edit→files→overview observed in iab tab4. Chat tab3 same planning conversation; two actual messages sent, first reply1m26s, second reply1m29s read. No tests/preflights/media generation.
-- b03263de deployed exit0; log1788922978762-a8a31114-2020-4e91-af90-952b6f490165. Full11issue record in existing integrated plan. Sol/medium implemented Hermes, main page fixes, Sol/high found hiddenanchor dock initialization issue which was fixed beforecommit.
-- Post-release observed overview continues exact existing task, Hermes ready and editor drawer opens. Screenshot then exposed stretched motion button (top+bottom fixed) and oversized narrow stage; hotfix1ec98fc6 corrects bound positioning and consistent200px geometry, deployed as fb61cf63 exit0; screenshot confirms blackpill removed and200px character. Final delta: stop route auto-guide obstruction and align assistant palette; candidate pending.
-- Product browser logged in; preserve session. Do not claim wholeUXcomplete; afterdeployment observe newpages, then draft-fastnavigation/singleassistant/remainingvisualconsistency.
+## Full-flow optimization — current batch
+- 用户明确先完成附件预览→自动全文凝练→用户确认→选图/视频→生成审核→发布→公开RO；2–3篇高质量精选完成并获认可前暂停冷启动。
+- 普通Chat6aa162f9已实际发送/读回完整产品建议；旧Chat6a9e7dac本轮接口无匹配，不推断Chat整体不可用。此次没有截图评审。
+- 本批已部署c2d11326：ArtifactViewer、媒体类型选择、公开页顺序/去重、索引从草稿改读发布manifest、归档过滤、理解skill v3精确来源恢复。尚未重新提取；问题台账在integrated-research-product-plan最新节。
+- 服务器部署exit0，production c2d113263ee48f276e9dedc4e4dc8a3229b4ceed / rollback7f8e47d931b751cc28c1000325128c2ca86566cb。已正常domain可恢复归档18旧demo-source记录与16个人测试草稿（共34），脚本archive-legacy-showcase；3条实际研究记录保护（其中2条同一PDF，不能计作3篇精选），不删文件/账号/公开版本。
 
-## Version tuple
-- Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release; branch codex/onchip-video-release.
-- Productionfb61cf63d5bbeb9dcd5601656c28471b610312f6; rollbackb03263de4823d6468728ca2cc737ca87e266d7fe. Subsequent HEAD is docs-only handoff, not a new deployed release.
-- Recovery commits1df4e047 +3446f309 deployed through canonical --confirm --no-tests. First candidate failed server compile due to type-only Prisma import; fixed before switch.
-- Root dirty main and token-smart-live-workflow worktree are separate; preserve them and concurrent R1 hardening.
+- 下一批候选：已确认论文重新分析为独立待确认草稿（复用SourceMap，事务内权限/408与429幂等修复）、归档Hermes任务过滤、MaterialQueue预览、Hermes默认紧凑静态回退。网页spool接入另批已完成静态修复/High复核，尚未启用或实际回传。
+- 用户已登录服务器产品页；实际Overview可截图，工作台旧9任务/Hermes常驻重试问题已记录。Chat截图在页面reload后上传成功并实际发送6 Pro，已收到视觉建议并实现紧凑工作台/队列3条折叠/长任务名换行；此前文字讨论已返回。
 
-## Actual completed product run
-- Run13e3fcd5-a6f0-48d6-82d7-33263e06fe33: SUCCEEDED, version13; all seven steps succeeded. Actual state log1788890593924-64b87a32-e61f-44d5-877a-0b2d1e10ab1e.
-- Actor a15edcab-7ec8-4e75-86d7-aa9c0498a829 (ordinary user); workspace6b83001a-75c1-4337-ab76-629908615a39.
-- RO714a0c2d-8c00-4471-a4f9-4a1270eafcdb; version1011dcdb-66fa-4221-beab-5880e38f3939; content-driven-v1, generation grant8.
-- Paper arXiv2009.06045v1,25pages; source artifact6864cc65-f944-474a-af40-bab7ca8c65d7; SHA d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a.
-- Ingestion19149438-6f2a-4a95-aba0-b0db31d4f62e; extractor11675dd1-684f-4df8-af8d-6fe52edc0bb4 is PARTIAL. Only original method Claim1b75d4c6-ab34-4810-b34d-88f4bc4a1289 selected;23 Evidence reviewed. Success does NOT mean complete-paper understanding/results verification.
-- Approved storyboard0cdebc04-8bfa-42fd-b303-8f2293c8165e: server MiniMax-M3 selected four functional-diagram scenes; Main+High scientific review, normal user API approval.
-- Image assets in scene order:2958e4a6-49d1-4f21-8da6-9ad9dc454fdb,ba919962-34a3-4e95-b9a8-136eae5c2807,085fb3ad-39f3-4510-a489-6762f71b6304,6db79e78-bc81-48b1-9454-62472afe999b. Actual images viewed, all ordinary API200 approved (log1788890283240-336c0706-c08c-4ab9-af2b-b90aaac44016).
-- Server automatically created video task/asset c033b30c-eb1c-4fff-ad72-154ed7d8c6b7 after image approvals; succeeded and ordinary API200 approved (log1788890553412-5e4aea9b-33e9-452f-9ffd-2f989eb29eda).
-- Video SHA ba9295e8e4ebd535dc90bd856753b6672d5ed37b878679bafc8b13d067df837b;23.459s,1280x720,24fps,H264/AAC; content-driven-animation, continuous Qwen3-TTS/Serena. Rendering reports0freshPaidApiCalls (not a whole-workflow cost metric).
-- Actual video frames viewed: four scenes, source-based functional relations, readable narration captions, drawn arrows/objects, conceptual/not-measured notice. Antenna/chip artwork is conceptual, NOT verified device geometry. Audio track present; pronunciation was not individually listened to/reviewed.
+## Server browser continuation (2026-09-09)
+- 用户要求服务器任务先查能力清单；已新增 docs/runbooks/server-capabilities.md 并写入AGENTS。发现共享缓存与ScanSci镜像已有完整Chrome+Xvfb，已停止重复下载，改为复用镜像，仅补远程桌面组件。
+- 独立浏览器镜像272a5ed57d27已构建；bridge与浏览器已运行，noVNC HTTP200；trace定位openat2/clone3/pkey/chroot并修复seccomp兼容，用户已登录且网页生成/保存一次PNG成功，见下方最新记录；生产release未变，产品资产回传尚未接入。固定SSH6081隧道已启动，CUA仍fetch失败。不得按下方旧Codex retry步骤重复消耗额度。
 
 ## R1 record hardening integration
 - Branch codex/r1-record-hardening now integrates production3446f309 plus Stage2 source identity, missing-cause, evidence and conflict fixes. Existing frozen records remain immutable; nine-PDF Stage2 replay is pending exact candidate deployment.
@@ -41,15 +30,62 @@
 - Early image0 approval during generating state returned403; normal user review is allowed once whole batch reaches awaiting_scene_images_review. No permission code change was needed.
 - Main retains selected model; Sol/medium implementation, Sol/high credit/authority review; prior WebChat6Pro architecture advice reused. No reliable overall Codex savings percentage established.
 
-## Next action and evidence
-- Editor UX deployed1cdb18e0; log1788920554267-b1b32e67-7192-4d38-8f8e-c5d831217b64 exit0, server build/start --no-tests. Six-field input excludes schemaVersion; blank new/retry text protected before debit; explicit current-text vs same-RO Hermes literature flow; collapsed missing details, truthful no-suggestion state, editor-only compact typography/rails.
-- Web6Pro actual new discussion4m21s plus candidate review2m14s complete, same URL. User screenshot only text-described to Chat (no image upload); no visual acceptance. Chrome control Debugger unattached, iab3 works with single slow actions. Do not claim screenshotRO9067a2d5 PDF parser failed: editor did not read uploads; actual task payload not inspected.
-- Remaining: single Hermes/suggestions area, cross-page state/nav and visual polish, suspected clipped outline actual-page observation. Existing editor draft saves after1s debounce; fast-navigation flush remains navigation follow-up. Do not rerun paper/media or tests.
-- WebChat6Pro UX discussion submitted/read back4m36s (same known URL); adopted sequence in docs/plans/2026-09-05-integrated-research-product-plan.md. First batch deployed45dabd7a: real guide storyboard.create suggestions + account/RO/actual-version scoped session drafts + sidebar hierarchy. Edited/cleared values win; paid submit remains explicit. Sol/medium implementation and focused Sol/high static review complete.
-- UX deploy log1788917875578-5f990ae8-3be2-480a-b0dc-cd7a6335a1f8 exit0; canonical --no-tests server build/start completed. No tests/media reruns; product browser currently unauthenticated, so logged-in UI/visual behavior unobserved. Next: sidebar primary actions, cross-page navigation/state and shared typography/spacing; no whole-site polish completion claim.
-- This selected-method vertical flow is complete. Current authorized phase: improve user experience/page layout/visual polish; retain server-owned generation. Full-paper extraction completeness and pronunciation quality remain distinct limitations.
-- Production deploy log1788889080559-d6d3bd46-c388-467d-bc24-bd2fc6ef0c07 exit0; logs C:/Users/Mac/AppData/Local/Temp/token-smart-checks.
-- Video runtime source583d201e; renderer sha256:ff6042f6247c0365f89ff545953400920ee15cc8fd3134e83d41f2fe873c509e; TTS sha256:a215840921a40a9e066ed970d2bf49dcf25bc20af0f7e569d55c0867343ba0ab; modelqwen3-tts-customvoice-0c0e305. Recovery did not rebuild runtime.
-- Helper/media directory E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow/apps/web/test/visual/out/token-smart-release: hermes-content-driven-method.mp4,hermes-video-frames.png,current-scene-0/1/2/3.png. Copies for viewing; generation occurred entirely on server.
-- Server media /opt/openscience-video/results/c033b30c-eb1c-4fff-ad72-154ed7d8c6b7/result.mp4; normal API source remains product asset. Do not substitute historical manually assisted ca0908bb video.
-- SSH only root infra/scripts/ssh-run.sh via C:/Program Files/Git/bin/bash.exe; no .env/credentials output. Read-first requirement baseline docs/OpenScience_Kimi_Development_Spec.md + this handoff.
+## Latest actual web image
+- 服务器执行/Save成功：会话6aa162f9-d0e4-83ea-afbf-243f7aae8a22；私有jobs/f6f29af4-b3c8-4609-93ac-4572970cc4b8/output/image.png，PNG1225x1284/1556710bytes。仅一次提交，原Codex失败任务未伪改成功。
+- 图片额外画了孔板几何/场线，违背brief，需网页修订后才可产品展示。通用runner已保存，execute/resume尚未整体运行，Gateway/生产队列与资产回传尚未接入。
+- 用户确认并本轮验证直接Chat可读；CUA坏不等于Chat不可用。用户接受本机出口，不因此停工。资源pids512、镜像9f44e1267fba、CDP仅容器loopback9233，状态细节见browser runbook。
+
+## Versions
+- worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
+- production ea95e63cc2d62eba7c65494fc713856d7416df42，rollback c2d113263ee48f276e9dedc4e4dc8a3229b4ceed。
+- 部署exit0，日志1788953754740-78c2a47b-196d-4fce-8cfa-98cf09c48cf0。没有运行中的部署。
+- 宿主Codex runner独立bundle1ad54c72f794ba46ee5f423875b9f231d32d4ea1，canonical install成功，含预设skill；此后应用版本没有runner代码变化，不需重装。
+- 早先2000f508 build阶段SSH重置exit255，生产无切换/无journal。后续1ad54c72/929667dd/7f8e47d9均部署exit0。
+
+## Actual paper / run
+- RO9067a2d5-42ad-4c06-b234-753728b71064；ingestion7a28a7c8-90f7-429b-a519-53397cf58856；artifact4b94c626-1748-4c5a-934b-2bb94585bd9c。
+- Quantization of a Deep-Subwavelength-Aperture-Confined Optical Near Field.pdf，15页。分析Agentadfc1d11-2935-4768-8257-aca5beb3eae4，sourceMapReused=true，understanding skill v2。
+- 分析仍partial：method passage_ids_required，reproducibility source_text_limit_8000，limitations有科学问题。不能称完整论文分析成功。
+- 只将有原文支持的服务器problem确认到此前空SDF，其余草稿保留。version58a45cb5-758f-4d6f-9e94-533b460e8b06，ROversion3，ingestion confirmed。
+- owner10baa655-772e-4aca-9a5d-00ca0547084f；workspace28d7f25f-aba8-4ffb-adcb-46b4739f2f75。
+- Hermes run46442dc4-44d4-4f63-bf39-75bd985f3218，当前failed/version9/error image generation failed。
+- Claim7397c444-19d4-4900-b060-b9e1004261f4：正文未改，仅normal updateClaim assessment supported；15条normal verifyEvidence成功。
+- 初稿asset3a809f33-823b-41bb-8829-b501dee66ffb与第一修订833a2def-ce90-4471-8da4-991cb1be5cb5存在虚构波矢谱/亚纳米等同，均未批准。
+- 修复提示后第二修订asset10f36f01-3521-47b5-bdbd-f491ec3f5b8a正常生成并approved。仅1幅定性研究动机图：原框架、Bethe经典描述局限、局域孔径模式量子化目标；无虚构谱线/场图。
+- 原run自动采用approved revision并创建scene_image task f6f29af4-b3c8-4609-93ac-4572970cc4b8。Hermes真实详细brief已读取，含构图/标签/条件/非实验声明；不是Codex手工代写。
+
+## ACTUAL BLOCKER: server Codex subscription exhausted
+- 服务器Codex实际启动thread01a085fa-2111-7392-a4c1-a12427c55cc4，events明确turn.failed：You've hit your usage limit，返回Sep15 2026 1:35 AM（原工具文本，时区未确认）。
+- 证据 /opt/openscience-codex/private/f6f29af4-b3c8-4609-93ac-4572970cc4b8/work/events.jsonl；无图片生成。
+- spool results同task result.json errorCode EXECUTION_FAILED；应用目前只显示image generation failed，尚未把额度原因细分显示。
+- 不重复重试/切API key/消费reset。恢复订阅额度或用户明确授权其它可用账号/额度后，正常retryHermesGeneration；先fresh GET对账，复用approved plan与原论文，不能重跑OCR。
+
+## Delivered
+- 2000f508 additive DB grant：保留null/null、onchip7、video8，增加image7；已随1ad54c72部署。
+- 1ad54c72 runner固定只读注入官方imagegen skill/prompting；仅内置image_gen、low reasoning、现有订阅登录；无API fallback/额外工具/重试/第二图。install复制bundle。独立High复核无阻塞。
+- PresentationResultGallery单图全宽、多图2xl双列已部署；浏览器未能视觉查看。
+- 929667dd兼容正常人工审核保留的sourceTaskLineage，严格原Evidence/task/artifact/hash不变；只恢复exact误停且无生成steps、来源ready的run。正常retry已成功，后续自动规划。
+- 7f8e47d9 image planner明确执行修订，base非科学权威，独立user指令但科学system优先，禁止重新引入被拒特征；不增加正常模型调用轮次。第二修订实际遵循。
+- OCR隔离和成功reuse保持；全文提取的科学忠实性/部分来源整理仍待修复。
+
+## Next
+1. 当前先修订已保存的网页图片，再接入Hermes正常队列/Gateway/资产导入；Codex旧任务受额度阻塞，未经恢复不重试、不换计费。
+2. 恢复后读取run最新版本与正常retry能力，正常retry原run生成已批准的1图；随后实际查看图片，不因任务succeeded自动认可图像科学质量。
+3. 页面视觉：本机CUA仍失败，但服务器Playwright可操作/截图，直接Chat可读；不要因此再次阻塞网页工作。
+4. 全论文method/reproducibility/limitations仍未解决。本次问题概念图不能冒充完整论文分析能力，产品端科学语义复核仍需落地。
+5. 额度错误需从runner传为用户可理解原因；现generic错误不能称体验完善。
+
+## Routing / sources
+- Sol/high独立复核迁移、runner、lineage恢复、修订提示均通过。两个实现agent额度失败，root实现与部署；不能编造节省比例。
+- 网页Chat此前给出全文综合→六维→来源核对；本批直接Chat已取回完整旅程建议，见上方。
+- 原Chat https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec。
+- 需求docs/OpenScience_Kimi_Development_Spec.md §5.4/§9；计划docs/plans/2026-09-05-integrated-research-product-plan.md。
+- 服务器只走显式Git Bash+E:/Miscellaneous/XGS/infra/scripts/ssh-run.sh，发布docs/runbooks/deployment.md。所有本轮运行均在服务器，未测试。
+- b9e326b2部署首轮SSH reset exit255，进程退出后release仍c2d11326且journal清空；重试明确因agent-worker unhealthy回滚，release仍c2d11326。模块无网络加载成功，但不代表启动成功。已移除违反用户禁测试要求的自动fixture self-test；不能未经日志断言它是根因。
+
+- 后续候选含网页provider、UI整理、浅色PDF预览，以及启动失败回滚前私有日志保留。当前尚未部署。实际PDF预览已截图显示15页。
+
+- ea95e63c正式部署exit0；新分析/网页provider/UI已上线。网页broker安装成功，timer active/service success；在生产锁内将API/worker HERMES_SCENE_IMAGE_PROVIDER切换chatgpt-web并启动成功。回滚需恢复selector codex。
+- 已通过用户已登录的服务器页面，从原confirmed task点击一次Reanalyze and create new draft，新任务已排队，旧记录保留；新taskID待读取。尚未得到新六维结果/产品图。
+- 新任务c22927f9-68c5-4671-a3df-a81475f2c849已返回needs_review并复用SourceMap；method仍source_text_limit_8000，reproducibility仍segment_count_1_to_32。定位到同一block不连续passage被min/max错误扩成整段，精确range union及下游有序不重叠guard正在修复。
+- Codex重启后直接Chat接口正常，6 Pro已返回精确range/失败字段单次修订建议；约4分钟。CUA浏览器枚举经一次重试和内核重置仍nodeRepl.fetch失败，无法比较本机Chrome另一账号；服务器网页生图执行器不依赖该桥。

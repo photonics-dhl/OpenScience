@@ -4,7 +4,7 @@ import { isAbsolute, join, dirname, parse } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validateImageRequest, validateImageBytes, type ImageProvider, type ImageRequest, type ImageProviderResult } from './image';
 import { sha256Text } from './ocr';
-import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, validateCodexImageRequest, validateCodexImageResult } from './codex-image-protocol';
+import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, validateCodexImageRequest, validateCodexImageResult, type ImageSpoolProvider } from './codex-image-protocol';
 export interface CodexSpoolImageConfig { inboxDir: string; resultsDir: string; timeoutMs?: number; pollIntervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void> }
 const fail = (): never => { throw new Error('INVALID_OUTPUT'); };
 async function directory(path: string): Promise<void> {
@@ -32,8 +32,10 @@ async function publish(path: string, data: string): Promise<boolean> {
   try { await file.writeFile(data); await file.sync(); } finally { await file.close(); }
   try { await link(temp, path); if (process.platform !== 'win32') { const parent = await open(dirname(path), constants.O_RDONLY); try { await parent.sync(); } finally { await parent.close(); } } return true; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false; throw error; } finally { await unlink(temp); }
 }
-export class CodexSpoolImageProvider implements ImageProvider {
-  readonly name = 'codex-image'; readonly model = 'codex-cli-0.153.0/imagegen';
+abstract class SpoolImageProvider implements ImageProvider {
+  abstract readonly name: string;
+  abstract readonly model: string;
+  protected abstract readonly spoolProvider: ImageSpoolProvider;
   private readonly now: () => number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly timeout: number;
@@ -63,26 +65,26 @@ export class CodexSpoolImageProvider implements ImageProvider {
     if (this.now() - ready.mtimeMs > CODEX_IMAGE_READY_MAX_AGE_MS || ready.mtimeMs > this.now() + 5000) fail();
     const output = join(this.config.resultsDir, id);
     const createdAt = this.now();
-    let request = validateCodexImageRequest({ schemaVersion: 1, id, prompt, promptHash: sha256Text(prompt), createdAt, deadlineAt: createdAt + this.timeout });
+    let request = validateCodexImageRequest({ schemaVersion: 1, ...(this.spoolProvider === 'chatgpt-web' ? { provider: this.spoolProvider } : {}), id, prompt, promptHash: sha256Text(prompt), createdAt, deadlineAt: createdAt + this.timeout }, undefined, this.spoolProvider);
     // This immutable reservation remains after the runner claims the active request.
     const reservation = join(this.config.inboxDir, id + '.submitted.json');
     if (!await publish(reservation, JSON.stringify(request))) {
-      request = validateCodexImageRequest(JSON.parse((await boundedRead(reservation, CODEX_IMAGE_MAX_JSON_BYTES)).toString('utf8')));
+      request = validateCodexImageRequest(JSON.parse((await boundedRead(reservation, CODEX_IMAGE_MAX_JSON_BYTES)).toString('utf8')), undefined, this.spoolProvider);
       if (request.id !== id || request.promptHash !== sha256Text(prompt)) fail();
     }
-    validateCodexImageRequest(request, this.now());
+    validateCodexImageRequest(request, this.now(), this.spoolProvider);
     // Repair a crash between reservation and publication. The runner's private
     // durable execution ledger makes a repeated delivery safe after a claim.
     const inbox = join(this.config.inboxDir, id + '.json');
     if (!await publish(inbox, JSON.stringify(request))) {
-      const existing = validateCodexImageRequest(JSON.parse((await boundedRead(inbox, CODEX_IMAGE_MAX_JSON_BYTES)).toString('utf8')));
+      const existing = validateCodexImageRequest(JSON.parse((await boundedRead(inbox, CODEX_IMAGE_MAX_JSON_BYTES)).toString('utf8')), undefined, this.spoolProvider);
       if (existing.id !== id || existing.promptHash !== request.promptHash) fail();
     }
     while (this.now() < request.deadlineAt) {
       let bytes: Buffer | undefined;
       try { await directory(output); bytes = await boundedRead(join(output, 'result.json'), CODEX_IMAGE_MAX_JSON_BYTES); } catch (error) { if (!missing(error)) throw error; }
       if (bytes) {
-        const result = validateCodexImageResult(JSON.parse(bytes.toString('utf8')));
+        const result = validateCodexImageResult(JSON.parse(bytes.toString('utf8')), this.spoolProvider);
         if (result.id !== id || result.promptHash !== request.promptHash) fail();
         if (result.status !== 'succeeded') throw new Error(result.errorCode ?? (result.status === 'uncertain' ? 'UNCERTAIN' : 'EXECUTION_FAILED'));
         const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
@@ -94,3 +96,15 @@ export class CodexSpoolImageProvider implements ImageProvider {
   }
 }
 
+export class CodexSpoolImageProvider extends SpoolImageProvider {
+  readonly name = 'codex-image';
+  readonly model = 'codex-cli-0.153.0/imagegen';
+  protected readonly spoolProvider = 'codex' as const;
+}
+
+/** ChatGPT subscription UI transport; this identity does not claim a webpage model label. */
+export class ChatGptWebSpoolImageProvider extends SpoolImageProvider {
+  readonly name = 'chatgpt-web';
+  readonly model = 'chatgpt-web/image-generation-tool';
+  protected readonly spoolProvider = 'chatgpt-web' as const;
+}

@@ -288,7 +288,7 @@ export interface HermesResearchRun {
   status: HermesResearchRunStatus;
   version: number;
   versionId: string | null;
-  profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | null;
+  profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | 'content-driven-image-v1' | null;
   maxAgentTasks: number | null;
   canRetryGeneration?: boolean;
   chargeableAttempts?: number;
@@ -333,7 +333,7 @@ export function submitHermesSourceReview(
   input: {
     expectedVersion: number;
     versionId: string;
-    generationGrant: { profile: 'content-driven-v1'; maxAgentTasks: 8 };
+    generationGrant: { profile: 'content-driven-v1'; maxAgentTasks: 8 } | { profile: 'content-driven-image-v1'; maxAgentTasks: 7 };
     reviews: HermesSourceReview[];
   },
   idempotencyKey: string,
@@ -1474,7 +1474,7 @@ export async function createSandboxJob(
 }
 
 export interface IngestionTaskDetail {
-  task: { id: string; artifactId: string; logicalPath: string; state: string; retryCount: number; error: string | null; agentTaskId: string | null; result: Record<string, unknown> | null };
+  task: IngestionTaskSummary & { result: Record<string, unknown> | null };
   batchId: string;
   researchObjectId: string;
   version: number;
@@ -1584,6 +1584,93 @@ export async function retryIngestionTask(taskId: string): Promise<IngestionTaskS
     body: JSON.stringify({}),
   });
   return result.task;
+}
+
+export async function refreshIngestionAnalysis(taskId: string, sourceAgentTaskId: string): Promise<IngestionTaskSummary> {
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/refresh`, {
+    method: 'POST',
+    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId }),
+  });
+  return result.task;
+}
+
+export async function reanalyzeConfirmedIngestion(taskId: string, sourceAgentTaskId: string, idempotencyKey: string): Promise<IngestionTaskSummary> {
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/reanalyze`, {
+    method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey },
+    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId }),
+  });
+  return result.task;
+}
+
+export function isConfirmedIngestionReanalysisSource(task: IngestionTaskDetail['task']): boolean {
+  return task.state === 'confirmed' && Boolean(task.agentTaskId) && Boolean(task.result
+    && typeof task.result === 'object' && !Array.isArray(task.result)
+    && task.result.canonicalExtractionContract === 'grounded-passages-v2'
+    && task.result.sourceMapAvailable === true);
+}
+
+const LEGACY_INGESTION_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+
+/** Public-result guard for the old character-offset extraction contract. */
+export function isRefreshableIngestionAnalysis(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount' | 'agentTaskId'>): boolean {
+  if (task.state !== 'needs_review' || !task.agentTaskId || !task.result
+    || typeof task.result !== 'object' || Array.isArray(task.result)) return false;
+  const result = task.result as Record<string, unknown>;
+  if (result.canonicalExtractionContract === 'grounded-passages-v2' && result.sourceMapAvailable === true) return true;
+  const exactQuoteRefresh = task.retryCount === 0
+    && result.canonicalExtractionContract === 'exact-quote-v1'
+    && result.sourceMapAvailable === true;
+  if (exactQuoteRefresh) return true;
+  const groundedSummaryRefresh = task.retryCount >= 0 && task.retryCount <= 2
+    && result.canonicalExtractionContract === 'grounded-summary-v1'
+    && result.reason === 'canonical_partial_validation_exhausted'
+    && result.sourceMapAvailable === true;
+  if (groundedSummaryRefresh) return true;
+  const passageDiagnostics = result.fieldDiagnostics;
+  if (task.retryCount >= 0 && task.retryCount <= 1 && result.canonicalExtractionContract === 'grounded-passages-v1'
+    && result.reason === 'canonical_partial_validation_exhausted' && result.sourceMapAvailable === true
+    && passageDiagnostics && typeof passageDiagnostics === 'object' && !Array.isArray(passageDiagnostics)
+    && Object.keys(passageDiagnostics).length > 0
+    && Object.entries(passageDiagnostics).every(([field, reason]) => LEGACY_INGESTION_FIELDS.includes(field as typeof LEGACY_INGESTION_FIELDS[number])
+      && ['passage_ids_required', 'segment_count_1_to_32', 'source_text_limit_8000'].includes(String(reason)))) return true;
+  if (task.retryCount !== 0) return false;
+  const core = result.core;
+  const evidence = result.evidence;
+  const missing = result.needsMoreInformation;
+  const diagnostics = result.fieldDiagnostics;
+  const canonicalReasons = diagnostics && typeof diagnostics === 'object' && !Array.isArray(diagnostics)
+    ? Object.values(diagnostics) : [];
+  const refreshableCanonical = result.reason === 'canonical_partial_validation_exhausted'
+    && diagnostics && typeof diagnostics === 'object' && !Array.isArray(diagnostics)
+    && Object.keys(diagnostics).length > 0
+    && Object.entries(diagnostics).every(([field, reason]) => LEGACY_INGESTION_FIELDS.includes(field as typeof LEGACY_INGESTION_FIELDS[number])
+      && ['malformed_item', 'missing_requires_empty', 'summary_required', 'segment_count_1_to_32', 'duplicate_ids', 'unknown_ids', 'ordered_ids_required', 'contiguous_ids_required', 'source_text_limit_8000', 'core_text_limit_4000'].includes(String(reason)))
+    && ((result.canonicalExtractionContract === undefined
+      && (canonicalReasons.some((reason) => reason === 'segment_count_1_to_32')
+        || canonicalReasons.every((reason) => reason === 'contiguous_ids_required')))
+      || (result.canonicalExtractionContract === 'windowed-source-v2'
+        && canonicalReasons.every((reason) => reason === 'segment_count_1_to_32')));
+  if (refreshableCanonical) return true;
+  if (Object.keys(result).sort().join(',') !== ['core', 'evidence', 'needsMoreInformation'].sort().join(',')
+    || !core || typeof core !== 'object' || Array.isArray(core)
+    || !evidence || typeof evidence !== 'object' || Array.isArray(evidence)
+    || !Array.isArray(missing)) return false;
+  const coreRecord = core as Record<string, unknown>;
+  const evidenceRecord = evidence as Record<string, unknown>;
+  return Object.keys(coreRecord).sort().join(',') === ['schemaVersion', ...LEGACY_INGESTION_FIELDS].sort().join(',')
+    && LEGACY_INGESTION_FIELDS.every((field) => typeof coreRecord[field] === 'string')
+    && LEGACY_INGESTION_FIELDS.some((field) => String(coreRecord[field]).trim())
+    && Object.keys(evidenceRecord).sort().join(',') === [...LEGACY_INGESTION_FIELDS].sort().join(',')
+    && LEGACY_INGESTION_FIELDS.every((field) => {
+      const item = evidenceRecord[field];
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+      const record = item as Record<string, unknown>;
+      return Object.keys(record).sort().join(',') === ['locator', 'quote'].join(',')
+        && typeof record.quote === 'string' && typeof record.locator === 'string'
+        && (record.locator === '' || /^chars:\d+-\d+$/.test(record.locator));
+    })
+    && missing.every((field) => LEGACY_INGESTION_FIELDS.includes(field as typeof LEGACY_INGESTION_FIELDS[number]));
 }
 
 export async function getIngestionTask(taskId: string): Promise<IngestionTaskDetail> {

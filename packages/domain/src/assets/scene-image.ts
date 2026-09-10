@@ -31,5 +31,8 @@ export async function requireSceneImageParent(prisma: Pick<Prisma.TransactionCli
   const view = asset && presentationStoryboardView(asset, ids);
   if (!asset || asset.researchObjectId !== payload.researchObjectId || asset.versionId !== payload.versionId || asset.status !== 'approved'
     || !view || !view.document.scenes[settings.sceneIndex] || JSON.stringify(ids) !== JSON.stringify(payload.sourceClaimIds)) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image requires an approved storyboard with the exact version and Claims');
-  return { view, contentHash: asset.contentHash, identity: JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids }) };
+  const provenance = asset.provenance as Record<string, unknown>;
+  return { view, contentHash: asset.contentHash,
+    sourceEvidenceIdentity: typeof provenance.sourceEvidenceIdentity === 'string' ? provenance.sourceEvidenceIdentity : undefined,
+    identity: JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids }) };
 }

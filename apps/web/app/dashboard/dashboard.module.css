@@ -13,7 +13,7 @@
 
 .desk .main {
   max-width: 1440px;
-  padding: 32px 40px 64px;
+  padding: 24px 40px 48px;
 }
 
 .utilities {
@@ -28,7 +28,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(380px, 400px);
   align-items: start;
-  gap: 24px;
+  gap: 16px;
   margin-inline: auto;
 }
 
@@ -36,7 +36,7 @@
 
 .heading {
   grid-column: 1 / -1;
-  padding: 0 0 8px;
+  padding: 0;
 }
 
 .eyebrow {
@@ -45,7 +45,7 @@
 }
 
 .desk .title {
-  margin-top: 8px;
+  margin-top: 4px;
   color: #20252b;
   font-size: clamp(26px, 2.6vw, 34px);
   font-weight: 600;
@@ -55,7 +55,7 @@
 
 .welcome {
   max-width: 65ch;
-  margin-top: 8px;
+  margin-top: 4px;
   color: #626c76;
   font-size: 14px;
   line-height: 1.7;
@@ -77,7 +77,7 @@
 .literature > section,
 .library > section,
 .taskRail > aside {
-  padding: 24px;
+  padding: 20px;
   border: 1px solid #dce1e5;
   border-radius: 12px;
   background: #fff;
@@ -142,8 +142,8 @@
 .taskRail li > a:hover { background: #f7f8fa; }
 
 @media (max-width: 1023px) {
-  .desk .main { padding: 24px 20px 48px; }
-  .layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .desk .main { padding: 20px 20px 40px; }
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .taskRail { grid-column: 1; grid-row: auto; }
 }
 

@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-09:** production e0ff364e / rollback fb61cf63；当前论文方法讲解 run 已 SUCCEEDED，四张图及 23.459 秒视频已批准。R1 来源身份、缺失归因、非空证据链与冲突修复已合入当前 Hermes 与编辑体验，候选须重新通过精确门禁、部署和九篇 Stage2 复验；旧固定快照保持不变。
-> 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
+> **CURRENT 2026-09-10:** production `8aa21251` 运行附件预览、媒体选择、公开快照索引和图片流程；`codex/r1-record-hardening` 正在合并来源身份、缺失归因、非空证据链、冲突处理与 Hermes 路由修复。合并候选必须重新通过精确门禁、部署和九篇 Stage2 复验；旧固定快照保持不变。
+> 当前执行：上传预览→Hermes 六维确认→来源核对→选图/视频→发布与公开阅读。不同格式兼容性测试已完成，所有无关样本建议均未确认。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
 ## 当前产品交付
@@ -21,7 +21,7 @@
 | `packages/domain/src/ingestion/source-identity.ts` / `packages/domain/test/source-identity.test.ts` | 来源身份候选、逐项确认与固定快照契约 | Stage2候选，服务器验证待完成 |
 | `apps/web/components/hermes/HermesSourceIdentityReview.tsx` / `apps/web/test/source-identity-review.test.tsx` | 原文身份逐项来源核对 | Stage2候选 |
 | `apps/web/components/hermes/HermesMissingCause.tsx` / `apps/web/test/hermes-missing-cause.test.tsx` | 提取缺失归因与未知原因保护 | Stage2候选 |
-| `apps/agent-worker/src/parsers/native-pdf-text-items.ts` / `apps/agent-worker/src/parsers/cascade-orchestrator.ts` / `apps/agent-worker/src/parsers/text-extractor.ts` | 保留科学文本的 PDF 几何与 CMSY 否定符恢复，无法证明保真时保持待核查 | 已部署 17eb209；本候选合入，复核中 |
+| `apps/agent-worker/src/parsers/native-pdf-text-items.ts` / `apps/agent-worker/src/parsers/cascade-orchestrator.ts` / `apps/agent-worker/src/parsers/text-extractor.ts` | 保留科学文本的 PDF 几何、同行 run 与 CMSY 否定符恢复；无法证明保真时保持待核查 | line-runs.1 已部署；来源身份候选合入后复核中 |
 | `apps/agent-worker/test/extraction-confirmation.test.ts` | 真实 extractHandler → 确认 → 冻结 API 的组合回归；位置歧义与错误身份不能升级为确定证据 | 最终修复 f199b4fd；14组合回归通过，复审中 |
 | `docs/plans/2026-09-07-open-research-publication-plan.md` | 原子导入确认、材料一致性、来源核查和每 RO 只读 API；独立审查与精确 SHA 发布 | IN PROGRESS；codex/open-research-publication，生产基线 5e4b4d4 / rollback 8e4ecb2 |
 | `packages/domain/src/ingestion/{ingestion-service,ingestion-evidence}.ts` / `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/ingestion.ts` / corresponding ingestion tests | 确认原子创建真实 Version、幂等重放、材料恢复与保守来源匹配；保留既有草稿图谱编辑 | CANDIDATE 0822515；76 domain / 8 API，独立复审通过；未部署 |
@@ -41,7 +41,7 @@
 | `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准；LOCAL 空状态下一步/16测试通过，未部署 | DEPLOYED64ae872；媒体优先、桌面双列/手机单列、来源折叠、任务错误可见；公网中英文四组播放/seek/键盘/无溢出验收通过 |
 | `apps/web/app/research-objects/[id]/edit/page.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` / `apps/web/package.json` / `apps/web/playwright.release.config.ts` | 已确认论文带入版本提交并保留原 manifest 附件；图解用例加入既有 release suite | DEPLOYED390afc0；真实PDF入版本，续接9项与CI99通过 |
 | `packages/domain/src/research-intelligence/claim-evidence-service.ts` / `packages/domain/test/research-intelligence/claim-evidence-service.test.ts` / `apps/agent-worker/src/presentation/chart-generator.ts` / `apps/agent-worker/src/presentation/interactive-html.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | Claim 变更/删除的关联资产失效；真实表述与换行图解 | DEPLOYED390afc0；实际编辑使旧批准图rejected，重新生成通过；无迁移 |
-| `apps/agent-worker/src/extractor.ts` / `apps/agent-worker/test/extractor.test.ts` | 摘录选择跳过头尾及已覆盖中段关键词，保留正文证据预算 | DEPLOYED390afc0；27项通过；生产重验仍缺method/results/reproducibility，不声称完整度提升 |
+| `apps/agent-worker/src/extractor.ts` / `apps/agent-worker/test/extractor.test.ts` | 科学原文提取、连续来源窗口与精确来源绑定 | 1267e298 exact-quote已部署；真实problem/results回查失败，完整提取未完成，未运行测试，见CURRENT handoff |
 | `packages/domain/src/assets/presentation-asset.ts` / `packages/domain/src/index.ts` / `packages/domain/test/assets/presentation-asset.test.ts` / `apps/agent-worker/src/presentation/handler.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | 展示资产内容写角色、draft Version 与 Worker 提交时权限/Claim 重验；沿用 Serializable draft fence | DEPLOYED83b2933；含媒体canTransition与管理员审批约束；复用既有版本锁/Claim失效，当前证据见CURRENT handoff |
 
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/ContinueResearch.tsx` / `apps/web/components/research/ResearchWorkspaceNav.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/components/hermes/HermesTaskEntry.tsx` / `apps/web/messages/{zh,en}.json` | 同 RO 待确认优先、Hermes 常驻导航、真实任务入口与错误恢复、现有助手连接 | DEPLOYED 6478aa8；用户效果待验收 |
@@ -555,4 +555,31 @@
 - `packages/domain/src/assets/animation.ts`：内容驱动动画声明式合同，已部署9236dbf7；对象/动作/原文依据，禁止模型代码。
 - `infra/migrations/20260908030000_hermes_content_driven_video/`：扩展明确的内容驱动生成授权，已部署9236dbf7；旧授权不自动扩大。
 
-| `apps/web/public/hermes/wanko-static-transparent.png` | 登录与Hermes加载态透明背景衍生图（imagegen，原图保留） | 2026-09-09候选，见CURRENT handoff |
+| `apps/web/public/hermes/wanko-static-transparent.png` | 登录与Hermes加载态透明背景衍生图（imagegen，原图保留） | 已随b03263de部署，登录实际无褐底；见CURRENT handoff |
+
+| `apps/web/lib/ingestion-proposal-draft.ts` | 用户/RO/版本/task隔离的提取建议草稿与已触碰字段保存 | 已部署18b69b3c；CURRENT handoff与集成计划记录证据 |
+| `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` | POST ingestion/:taskId/refresh：复用artifact、新AgentTask事务扣费/CAS、旧结果保留；限定旧字符证据或旧native分段超限修复 | 旧字符升级已部署a0b47065；分段修复候选，CURRENT handoff记录真实结果 |
+
+| `apps/agent-worker/src/skills/research-understanding.ts` / `apps/web/components/presentation/PresentationResultGallery.tsx` | Hermes运行时理解skill与图片结果画廊 | 2026-09-09已部署c00c6233；实际结果见CURRENT handoff |
+
+| `infra/migrations/20260909010000_hermes_image_generation_grant/` | 增加图片7任务授权组合；应用回滚保留扩展约束与图片记录 | CANDIDATE |
+
+- CANDIDATE: infra/codex-image-runner/imagegen-skill.md / imagegen-prompting.md：官方预设imagegen指导的服务器只读副本，由container-client固定注入；install同步。PresentationResultGallery单图宽幅、多图2xl双列。
+
+- CANDIDATE apps/agent-worker/src/presentation/storyboard.ts：明确图片修订指令优先于旧draft、保留科学约束，定性表达替代无依据的量化图形。
+
+- RESEARCH 2026-09-09：docs/decisions/ADR-013-admin-codex-image-evaluation.md 已补网页生图额度与服务器登录可行性；无生产代码变化，未建立无人值守网页后端。
+
+- RESEARCH ADR-013补充自定义GPT/Image Generation + Action文件回传候选，未实施或验收。
+
+- CANDIDATE infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：独立服务器交互浏览器、loopback SSH登录界面，未接入生产Provider；infra/scripts/ssh-run.sh固定browser-tunnel。
+
+- CURRENT docs/runbooks/server-capabilities.md：服务器已有服务、镜像、浏览器/模型路径与复用边界；服务器任务先查，新增安装只补缺失能力（2026-09-09）。
+
+- `infra/scripts/browser-tunnel.ps1`：Windows隐藏SSH隧道断线重连；固定localhost6081，复用ssh-run.sh，2026-09-09本机页面恢复HTTP200。
+
+- `infra/chatgpt-browser/runner.cjs`：服务器私有网页任务执行/续取/Save下载；2026-09-09分步实际生成并保存1张PNG，通用编排及生产Provider尚未完整落地；Chat接口可用性见AGENTS。
+
+| `apps/web/components/research/ArtifactViewer.tsx` / `scripts/archive-legacy-showcase.mjs` | 附件预览与可恢复旧演示归档；关联完整旅程计划 | 2026-09-09已部署c2d11326，34条归档；真实流程状态见CURRENT handoff |
+
+| infra/chatgpt-browser/broker.mjs | 服务器网页生图队列broker；Gateway、权限、提交恢复与草稿回传 | 候选，静态High复核完成，真实执行待部署 |

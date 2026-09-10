@@ -25,8 +25,15 @@ const PRIORITY: Record<string, number> = {
   queued: 2,
 };
 
+export function selectPriorityHermesTask<T extends HermesStateInput>(tasks: T[]): T | undefined {
+  return tasks.reduce<T | undefined>((selected, task) => {
+    if (!selected || (PRIORITY[task.state] ?? 0) > (PRIORITY[selected.state] ?? 0)) return task;
+    return selected;
+  }, undefined);
+}
+
 export function deriveHermesVisualState(tasks: HermesStateInput[]): HermesVisualState {
-  const task = [...tasks].sort((a, b) => (PRIORITY[b.state] ?? 0) - (PRIORITY[a.state] ?? 0))[0];
+  const task = selectPriorityHermesTask(tasks);
   if (!task) return 'idle';
   // A review waiting in the Dashboard queue is a suggestion to visit the
   // review surface, not an approval interaction that is already open.

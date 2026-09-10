@@ -5,6 +5,7 @@ import {
   MiniMaxCodingPlanVisionProvider,
   MiniMaxImageProvider,
   CodexSpoolImageProvider,
+  ChatGptWebSpoolImageProvider,
   MutableProviderKillSwitch,
   OpenAiCompatProvider,
   type ExternalProcessingPolicy,
@@ -13,7 +14,8 @@ import {
 } from '@openscience/ai-gateway';
 import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
-  AGENT_TASK_QUEUE, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference, type AgentDeps,
+  AGENT_TASK_QUEUE, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference,
+  parseDocumentSourceMapReference, loadDocumentSourceMapReference, type AgentDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -32,8 +34,7 @@ import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
-import { createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
-import { runParserCascadeSelfTest } from './parser-self-test';
+import { createParserRasterJobClient, createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
 import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
 import {
   runParserCascade,
@@ -136,6 +137,8 @@ export type TaskHandler = (
 export function createWorkerParserCascade(
   gateway: Pick<AiGateway, 'ocr'>,
   parserJobAdapter: TextStageAdapter,
+  rasterJobAdapter?: ReturnType<typeof createParserRasterJobClient>,
+  llmOcr = false,
 ): ParserCascadeRunner {
   const extractText = createTextExtractor({
     pdf: parserJobAdapter,
@@ -147,7 +150,7 @@ export function createWorkerParserCascade(
     detectLayout: false,
     grobid: false,
     localOcr: true,
-    llmOcr: false,
+    llmOcr,
   });
   return Object.assign(
     (input: ParserInput, authorization: ParserCascadeAuthorization) => runParserCascade(input, {
@@ -170,6 +173,17 @@ export function createWorkerParserCascade(
             mediaType: stageInput.mediaType,
             options: { pageNumbers: pages.map(({ page }) => page) },
           }, Buffer.from(stageInput.content)),
+          renderPages: (stageInput, pageNumbers) => {
+            if (!rasterJobAdapter) throw new Error('isolated raster adapter unavailable');
+            return rasterJobAdapter({
+              schemaVersion: 2,
+              operation: 'render_page',
+              artifactId: stageInput.artifactId,
+              contentHash: stageInput.contentHash,
+              mediaType: stageInput.mediaType,
+              options: { pageNumbers: [...pageNumbers] },
+            }, Buffer.from(stageInput.content));
+          },
         },
       },
       aiGateway: gateway,
@@ -263,7 +277,58 @@ export function createHandlers(
         && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
       const externalProcessingEligible = serverDerivedEligibility
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
-      const parsed = await options.parserCascade({
+      let reusableSourceMap: DocumentSourceMap | undefined;
+      const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
+      if (refresh) {
+        const ingestion = await deps.prisma.ingestionTask.findUnique({ where: { id: refresh[1]! } });
+        const previous = await deps.prisma.agentTask.findUnique({ where: { id: refresh[2]! }, include: { session: true } });
+        const previousResult = previous?.result as Record<string, unknown> | null;
+        if (!serverDerivedEligibility || !externalProcessingEligible || ingestion?.agentTaskId !== ownerTask.id
+          || ingestion.artifactId !== artifact.id || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
+          || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
+          || previousResult?.canonicalExtractionContract !== (refresh[3] === 'user-requested-reanalysis' ? 'grounded-passages-v2' : refresh[3] === 'grounded-passages-v2' ? 'grounded-passages-v1' : 'grounded-summary-v1')) {
+          throw new Error('[blocked] Reusable document analysis scope is invalid');
+        }
+        const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
+        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable document source identity changed');
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+      }
+      const reanalysis = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36})$/.exec(ownerTask.idempotencyKey ?? '');
+      if (reanalysis) {
+        const ingestion = await deps.prisma.ingestionTask.findUnique({
+          where: { id: reanalysis[1]! }, include: { batch: true },
+        });
+        const previous = await deps.prisma.agentTask.findUnique({
+          where: { id: reanalysis[2]! }, include: { session: true, ingestionTask: { include: { batch: true } } },
+        });
+        const previousResult = previous?.result as Record<string, unknown> | null;
+        const previousPayload = previous?.payload as Record<string, unknown> | null;
+        const confirmation = previous?.ingestionTask
+          ? await deps.prisma.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${previous.ingestionTask.id}` } })
+          : null;
+        if (!serverDerivedEligibility || !externalProcessingEligible || refresh
+          || ingestion?.agentTaskId !== ownerTask.id || ingestion.artifactId !== artifact.id
+          || ingestion.batch.userId !== ownerTask.session.userId || ingestion.batch.researchObjectId !== ownerResearchObject.id
+          || !['queued', 'parsing'].includes(ingestion.state) || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
+          || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
+          || previous.ingestionTask?.state !== 'confirmed' || previous.ingestionTask.artifactId !== artifact.id
+          || previous.ingestionTask.batch.userId !== ownerTask.session.userId
+          || previous.ingestionTask.batch.researchObjectId !== ownerResearchObject.id
+          || confirmation?.researchObjectId !== ownerResearchObject.id
+          || !previousPayload || Object.keys(previousPayload).sort().join(',') !== 'artifactId,researchObjectId'
+          || previousPayload.artifactId !== artifact.id || previousPayload.researchObjectId !== ownerResearchObject.id
+          || previousResult?.canonicalExtractionContract !== 'grounded-passages-v2') {
+          throw new Error('[blocked] Reusable confirmed analysis scope is invalid');
+        }
+        const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
+        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable confirmed source identity changed');
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+      }
+      const parsed: ParserExtractionResult<DocumentSourceMap> = reusableSourceMap
+        ? { status: 'succeeded', sourceMap: reusableSourceMap, warnings: [] }
+        : await options.parserCascade({
         artifactId: artifact.id,
         contentHash: artifact.blobSha256,
         content: bytes,
@@ -286,6 +351,7 @@ export function createHandlers(
       if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
       return {
         ...await extractHandler(gateway, { payload: { manuscriptText } }, { sourceMap: parsed.sourceMap }),
+        ...(reusableSourceMap ? { sourceMapReused: true } : {}),
         sourceMapRef,
       };
     },
@@ -411,6 +477,34 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
   };
 }
 
+function buildIngestionExternalProcessingPolicy(prisma: ReturnType<typeof createPrismaClient>): ExternalProcessingPolicy {
+  return async (context) => {
+    const task = await prisma.ingestionTask.findUnique({
+      where: { agentTaskId: context.taskId },
+      include: {
+        artifact: true,
+        batch: { include: { researchObject: { include: { workspace: true } } } },
+        agentTask: { include: { session: true } },
+      },
+    });
+    const payload = task?.agentTask?.payload;
+    if (!task?.agentTask || !payload || typeof payload !== 'object' || Array.isArray(payload)
+      || task.agentTask.id !== context.taskId || task.agentTask.kind !== 'sdf.extract'
+      || task.agentTask.status !== 'running' || task.agentTask.session.status !== 'active'
+      || task.agentTask.session.userId !== context.actorId || task.batch.userId !== context.actorId
+      || task.agentTask.session.researchObjectId !== task.batch.researchObjectId
+      || (payload as Record<string, unknown>).artifactId !== task.artifactId
+      || (payload as Record<string, unknown>).researchObjectId !== task.batch.researchObjectId
+      || task.batch.researchObject.workspaceId !== context.workspaceId
+      || task.artifact.workspaceId !== context.workspaceId || task.batch.researchObject.workspace.status !== 'active') return false;
+    const membership = await prisma.membership.findUnique({
+      where: { workspaceId_userId: { workspaceId: context.workspaceId, userId: context.actorId } },
+    });
+    return membership?.workspaceId === context.workspaceId && membership.userId === context.actorId
+      && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
+  };
+}
+
 /** 主循环（独立进程入口，云上 systemd/nohup 常驻）。 */
 async function main(): Promise<void> {
   const parserJobDir = process.env.PARSER_JOB_DIR;
@@ -425,7 +519,7 @@ async function main(): Promise<void> {
     mailer: { send: async () => undefined },
   };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
-  const externalProcessingPolicy: ExternalProcessingPolicy = async () => false;
+  const externalProcessingPolicy = buildIngestionExternalProcessingPolicy(prisma);
   const gateway = buildGateway(
     process.env,
     globalThis.fetch,
@@ -433,15 +527,11 @@ async function main(): Promise<void> {
     externalProcessingPolicy,
   );
   const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata);
-  const parserCascade = createWorkerParserCascade(gateway, parserJobAdapter);
-  const parserSelfTest = await runParserCascadeSelfTest(parserCascade);
-  if (!parserSelfTest.pdf.textMatched || !parserSelfTest.docx.textMatched
-    || !parserSelfTest.scan.textMatched || !parserSelfTest.scan.locatorMatched
-    || !parserSelfTest.scan.tesseractMatched || !parserSelfTest.scan.confidenceMatched
-    || !parserSelfTest.scan.boundingBoxMatched
-    || !parserSelfTest.candidateFallbackDisabled) {
-    throw new Error('parser cascade startup self-test failed');
-  }
+  const rasterJobAdapter = createParserRasterJobClient(parserJobDir, expectedSidecarParserMetadata);
+  const parserCascade = createWorkerParserCascade(
+    gateway, parserJobAdapter, rasterJobAdapter,
+    process.env.AI_ENABLED === 'true' && process.env.MINIMAX_VISION_ENABLED === 'true',
+  );
   const handlers = createHandlers(gateway, {
     parserCascade,
     externalProcessingPolicy,
@@ -512,15 +602,22 @@ export function buildGateway(
   });
 
   const imageApiKey = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].map(key => key?.trim()).find(Boolean);
-  const imageProviders = env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
-    ? (env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).includes('codex-image')
-      ? [new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim() })] : [])
-    : (env.HERMES_SCENE_IMAGE_PROVIDER === undefined || env.HERMES_SCENE_IMAGE_PROVIDER === 'minimax') && env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
-    ? [new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher)] : [];
-  const ocrProviders = env.NODE_ENV !== 'production' && env.MINIMAX_VISION_ENABLED === 'true' && keys[0]
+  const disabledImageProviders = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).filter(Boolean));
+  const imageProviders = env.HERMES_SCENE_IMAGE_PROVIDER === 'chatgpt-web'
+    ? (env.AI_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim() && env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('chatgpt-web')
+      ? [new ChatGptWebSpoolImageProvider({ inboxDir: env.CHATGPT_WEB_IMAGE_INBOX_DIR.trim(), resultsDir: env.CHATGPT_WEB_IMAGE_RESULTS_DIR.trim() })] : [])
+    : env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
+      ? (env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('codex-image')
+        ? [new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim() })] : [])
+      : (env.HERMES_SCENE_IMAGE_PROVIDER === undefined || env.HERMES_SCENE_IMAGE_PROVIDER === 'minimax') && env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
+        ? [new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher)] : [];
+  const visionPrimaryKey = env.MINIMAX_API_KEY?.trim();
+  const visionBackupKey = env.MINIMAX_API_KEY_2?.trim();
+  const ocrProviders = env.AI_ENABLED === 'true' && env.MINIMAX_VISION_ENABLED === 'true' && visionPrimaryKey
     ? [new MiniMaxCodingPlanVisionProvider('minimax-vision', {
         baseUrl: visionOrigin(env),
-        apiKey: keys[0],
+        apiKey: visionPrimaryKey,
+        ...(visionBackupKey && visionBackupKey !== visionPrimaryKey ? { backupApiKey: visionBackupKey } : {}),
         model: env.MINIMAX_VISION_MODEL ?? 'coding-plan-vlm',
         pricing: visionPricing(env),
         maxPageBytes: optionalBoundedInteger(env.MINIMAX_VISION_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'MINIMAX_VISION_MAX_PAGE_BYTES'),
@@ -593,7 +690,11 @@ function imageOrigin(env: NodeJS.ProcessEnv): string {
 }
 
 function visionOrigin(env: NodeJS.ProcessEnv): string {
-  const region = env.MINIMAX_VISION_REGION ?? 'global';
+  // Vision uses the same Coding Plan credential as text. An unset region must not
+  // send a configured China-plan key to the global endpoint.
+  let textOrigin: string | undefined;
+  try { textOrigin = new URL(env.MINIMAX_TOKEN_PLAN_BASE_URL ?? '').origin; } catch { /* default global */ }
+  const region = env.MINIMAX_VISION_REGION ?? (textOrigin === 'https://api.minimaxi.com' ? 'cn' : 'global');
   if (region === 'global') return 'https://api.minimax.io';
   if (region === 'cn') return 'https://api.minimaxi.com';
   throw new Error('MINIMAX_VISION_REGION must be global or cn');

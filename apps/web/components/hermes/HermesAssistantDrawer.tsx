@@ -305,7 +305,7 @@ function HermesAssistantDrawerContent({
 
         {suggestion.href ? (
           <Link className="mt-5 inline-flex border-b border-os-vermilion pb-1 text-sm text-os-ink" href={suggestion.href}>
-            {t('guide.openContext')} →
+            {suggestion.taskLabel ? t('guide.openTask', { task: suggestion.taskLabel }) : t('guide.openContext')} →
           </Link>
         ) : null}
 
