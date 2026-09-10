@@ -357,7 +357,7 @@ it('accepts charged storyboard settings and preserves the validated DTO on appro
     ctx.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM });
     const approved = await ctx.app.inject({ method: 'PATCH', url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/${ASSET}`, ...writeAuth(ctx.token, ctx.csrfCookie, ctx.csrfToken), payload: { status: 'approved', expectedUpdatedAt: updatedAt.toISOString() } });
     expect(approved.statusCode).toBe(200);
-    expect(approved.json().asset.storyboard).toEqual({ document, locale: 'en', style: 'ink' });
+    expect(approved.json().asset.storyboard).toEqual({ document, locale: 'en', style: 'ink', output: 'video' });
     expect(approved.json().asset.sourceClaimIds).toEqual([CLAIM]);
     expect(approved.body).not.toContain('secret');
     expect(approved.body).not.toContain('instruction');

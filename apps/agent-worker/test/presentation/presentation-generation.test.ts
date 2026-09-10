@@ -19,6 +19,19 @@ const claims = [
   { id: CLAIM_A, kind: 'core', statement: 'Transfer completes in 43 fs', assessment: 'supported', conditions: [], limitations: [], extractionStatus: 'succeeded' },
 ];
 
+const reviewedEvidence = claims.map((claim, index) => ({
+  id: `evidence-${index + 1}`,
+  claimId: claim.id,
+  artifactId: 'artifact-1',
+  contentHash: 'a'.repeat(64),
+  exactQuote: claim.statement,
+  relation: 'supports',
+  locator: { page: 1 },
+  extractionStatus: 'succeeded',
+  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  provenance: { source: 'human_review' },
+}));
+
 function scopeTables() {
   return {
     version: { findUnique: async () => ({ id: VERSION, researchObjectId: RO, status: 'draft', researchObject: { id: RO, workspaceId: WORKSPACE } }), updateMany: async () => ({ count: 1 }) },
@@ -35,6 +48,7 @@ function authorityFixture() {
     workspace: { findUnique: async () => ({ id: WORKSPACE, status: authority.workspace }) },
     membership: { findUnique: async () => authority.member ? { userId: USER, workspaceId: WORKSPACE, role: authority.role } : null },
     claimNode: { findMany: async () => claims.map((claim) => ({ ...claim, statement: authority.statement ?? claim.statement, extractionStatus: authority.claimStatus })) },
+    evidenceRecord: { findMany: async () => reviewedEvidence },
     presentationAsset: { findUnique: async () => null, create: async ({ data }: any) => { const row = { ...data, status: 'draft' }; rows.push(row); return row; } },
     presentationAssetClaim: { createMany: async () => ({ count: 2 }) },
     $transaction: async (work: (tx: any) => Promise<unknown>) => work(prisma),
@@ -45,6 +59,22 @@ function authorityFixture() {
 }
 
 describe('deterministic presentation generation', () => {
+  it.each([false, true])('video recovery replays persisted assets but never resubmits an uncertain task (saved=%s)', async (saved) => {
+    const ctx = authorityFixture();
+    const existing = { id: TASK, kind: 'video', status: 'draft', contentHash: 'a'.repeat(64) };
+    ctx.prisma.presentationAsset.findUnique = async () => saved ? existing : null;
+    const generate = vi.fn();
+    const task = { ...ctx.task, executionAttempt: 2, payload: { ...ctx.task.payload, kind: 'video', video: {
+      profile: 'onchip-field-sampling-v1', storyboardAssetId: '70000000-0000-4000-8000-000000000001',
+      sceneImageAssetIds: Array.from({ length: 5 }, (_, index) => `80000000-0000-4000-8000-00000000000${index + 1}`),
+      sceneRoles: ['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'],
+    } } };
+    const pending = createPresentationGenerationHandler({ videoSpool: { generate } as any })(ctx.deps as any, task as any);
+    if (saved) await expect(pending).resolves.toMatchObject({ assetId: TASK, kind: existing.kind, status: existing.status, contentHash: existing.contentHash });
+    else await expect(pending).rejects.toThrow('explicit new generation');
+    expect(generate).not.toHaveBeenCalled();
+    expect(ctx.putObject).not.toHaveBeenCalled();
+  });
   it.each(['viewer', 'reviewer'])('blocks %s before generating or storing output', async (role) => {
     const ctx = authorityFixture();
     ctx.authority.role = role;
@@ -269,7 +299,7 @@ it.each(['already-approved', 'model', 'storage'])('creates an independent revisi
   expect(JSON.stringify(base.provenance)).toBe(originalContent);
   expect(ctx.rows).toHaveLength(1);
   expect(ctx.rows[0]).toMatchObject({ id: TASK, status: 'draft' });
-  expect(presentationStoryboardView(ctx.rows[0], [CLAIM_A, CLAIM_B])).toEqual({ document: revised, locale: 'en', style: 'ink', baseAssetId: base.id });
+  expect(presentationStoryboardView(ctx.rows[0], [CLAIM_A, CLAIM_B])).toEqual({ document: revised, locale: 'en', style: 'ink', output: 'video', baseAssetId: base.id });
   expect(joins).toHaveBeenCalledWith({ data: [CLAIM_A, CLAIM_B].map(claimId => ({ presentationAssetId: TASK, claimId, researchObjectId: RO, versionId: VERSION })) });
   expect(completeStructured).toHaveBeenCalledTimes(1);
   expect(ctx.putObject).toHaveBeenCalledTimes(1);
@@ -320,16 +350,22 @@ it('refuses uncertain paid replay with no saved asset before calling either mode
   expect(ctx.completeStructured).not.toHaveBeenCalled();
   expect(ctx.generateImage).not.toHaveBeenCalled();
 });
-it('blocks a changed parent after text planning before paid image generation',async()=>{
+it('blocks a changed parent after deterministic prompt assembly before paid image generation',async()=>{
   const ctx=sceneHandlerFixture();
-  ctx.completeStructured.mockImplementation(async()=>{ctx.parent.status='rejected';return {teachingPoint:'Wave diffraction',subjects:'Slit and wavefronts',arrangement:'Slit left, outgoing wavefronts right',mechanism:'Wave spreads after the slit',fidelity:'Room temperature; limited sample; illustration not evidence'};});
+  let parentReads=0;
+  ctx.prisma.presentationAsset.findUnique=async({where}:any)=>{
+    if(where.id===PARENT){parentReads+=1;if(parentReads===2)ctx.parent.status='rejected';return ctx.parent;}
+    return ctx.rows[0]??null;
+  };
   await expect(ctx.handler(ctx.deps as never,ctx.task)).rejects.toThrow();
+  expect(ctx.completeStructured).not.toHaveBeenCalled();
   expect(ctx.generateImage).not.toHaveBeenCalled();
 });
-it('rejects oversized condensed prompts without silently truncating or invoking image provider',async()=>{
+it('rejects oversized approved source prompts without silently truncating or invoking either provider',async()=>{
   const ctx=sceneHandlerFixture();
-  ctx.completeStructured.mockResolvedValue({...{teachingPoint:'Wave diffraction',subjects:'Slit and wavefronts',arrangement:'Slit left, outgoing wavefronts right',mechanism:'Wave spreads after the slit',fidelity:'Room temperature; limited sample; illustration not evidence'},mechanism:'x'.repeat(1501)});
+  ctx.authority.statement='x'.repeat(800);
   await expect(ctx.handler(ctx.deps as never,ctx.task)).rejects.toThrow();
+  expect(ctx.completeStructured).not.toHaveBeenCalled();
   expect(ctx.generateImage).not.toHaveBeenCalled();
 });
 

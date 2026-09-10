@@ -45,7 +45,7 @@ export async function listResearchObjects(
   input: { userId: string; limit?: number },
 ): Promise<ResearchObjectListItem[]> {
   const rows = await deps.prisma.researchObject.findMany({
-    where: { workspace: { members: { some: { userId: input.userId } } } },
+    where: { status: { not: 'archived' }, workspace: { members: { some: { userId: input.userId } } } },
     orderBy: { updatedAt: 'desc' },
     take: Math.min(Math.max(input.limit ?? 20, 1), 100),
   });

@@ -5,6 +5,7 @@ import {
   MiniMaxCodingPlanVisionProvider,
   MiniMaxImageProvider,
   CodexSpoolImageProvider,
+  ChatGptWebSpoolImageProvider,
   MutableProviderKillSwitch,
   OpenAiCompatProvider,
   type ExternalProcessingPolicy,
@@ -12,8 +13,9 @@ import {
   type ProviderCapabilityPolicy,
 } from '@openscience/ai-gateway';
 import {
-  claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
-  AGENT_TASK_QUEUE, persistDocumentSourceMapReference, type AgentDeps,
+  claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
+  AGENT_TASK_QUEUE, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference,
+  parseDocumentSourceMapReference, loadDocumentSourceMapReference, type AgentDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -42,6 +44,7 @@ import {
 import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
 import type { ParserInput } from './parsers/types';
 import { canonicalParserMediaType } from './parser-media-type';
+import { HostVideoSpool } from './presentation/host-video-spool';
 import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
 import { createTavilyAdapter } from './retrieval/tavily';
 import { createScanSciAdapter } from './retrieval/scansci';
@@ -128,7 +131,7 @@ export type ParserCascadeRunner = ((
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
 export type TaskHandler = (
   deps: WorkerDeps,
-  task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number },
+  task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number; retryCount?: number; recoveryContract?: string },
 ) => Promise<Record<string, unknown>>;
 
 /** Production-safe cascade composition: one V2 sidecar stage plus disabled candidate routes. */
@@ -203,6 +206,7 @@ export function createHandlers(
     parserCascade?: ParserCascadeRunner;
     externalProcessingPolicy?: ExternalProcessingPolicy;
     sourceRetrieveHandler?: TaskHandler;
+    videoSpool?: HostVideoSpool;
   } = {},
 ): Record<string, TaskHandler> {
   return {
@@ -261,7 +265,58 @@ export function createHandlers(
         && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
       const externalProcessingEligible = serverDerivedEligibility
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
-      const parsed = await options.parserCascade({
+      let reusableSourceMap: DocumentSourceMap | undefined;
+      const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
+      if (refresh) {
+        const ingestion = await deps.prisma.ingestionTask.findUnique({ where: { id: refresh[1]! } });
+        const previous = await deps.prisma.agentTask.findUnique({ where: { id: refresh[2]! }, include: { session: true } });
+        const previousResult = previous?.result as Record<string, unknown> | null;
+        if (!serverDerivedEligibility || !externalProcessingEligible || ingestion?.agentTaskId !== ownerTask.id
+          || ingestion.artifactId !== artifact.id || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
+          || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
+          || previousResult?.canonicalExtractionContract !== (refresh[3] === 'user-requested-reanalysis' ? 'grounded-passages-v2' : refresh[3] === 'grounded-passages-v2' ? 'grounded-passages-v1' : 'grounded-summary-v1')) {
+          throw new Error('[blocked] Reusable document analysis scope is invalid');
+        }
+        const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
+        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable document source identity changed');
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+      }
+      const reanalysis = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36})$/.exec(ownerTask.idempotencyKey ?? '');
+      if (reanalysis) {
+        const ingestion = await deps.prisma.ingestionTask.findUnique({
+          where: { id: reanalysis[1]! }, include: { batch: true },
+        });
+        const previous = await deps.prisma.agentTask.findUnique({
+          where: { id: reanalysis[2]! }, include: { session: true, ingestionTask: { include: { batch: true } } },
+        });
+        const previousResult = previous?.result as Record<string, unknown> | null;
+        const previousPayload = previous?.payload as Record<string, unknown> | null;
+        const confirmation = previous?.ingestionTask
+          ? await deps.prisma.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${previous.ingestionTask.id}` } })
+          : null;
+        if (!serverDerivedEligibility || !externalProcessingEligible || refresh
+          || ingestion?.agentTaskId !== ownerTask.id || ingestion.artifactId !== artifact.id
+          || ingestion.batch.userId !== ownerTask.session.userId || ingestion.batch.researchObjectId !== ownerResearchObject.id
+          || !['queued', 'parsing'].includes(ingestion.state) || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
+          || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
+          || previous.ingestionTask?.state !== 'confirmed' || previous.ingestionTask.artifactId !== artifact.id
+          || previous.ingestionTask.batch.userId !== ownerTask.session.userId
+          || previous.ingestionTask.batch.researchObjectId !== ownerResearchObject.id
+          || confirmation?.researchObjectId !== ownerResearchObject.id
+          || !previousPayload || Object.keys(previousPayload).sort().join(',') !== 'artifactId,researchObjectId'
+          || previousPayload.artifactId !== artifact.id || previousPayload.researchObjectId !== ownerResearchObject.id
+          || previousResult?.canonicalExtractionContract !== 'grounded-passages-v2') {
+          throw new Error('[blocked] Reusable confirmed analysis scope is invalid');
+        }
+        const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
+        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable confirmed source identity changed');
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+      }
+      const parsed: ParserExtractionResult<DocumentSourceMap> = reusableSourceMap
+        ? { status: 'succeeded', sourceMap: reusableSourceMap, warnings: [] }
+        : await options.parserCascade({
         artifactId: artifact.id,
         contentHash: artifact.blobSha256,
         content: bytes,
@@ -282,15 +337,15 @@ export function createHandlers(
       }
       const manuscriptText = sourceMapToManuscriptText(parsed.sourceMap);
       if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
-      try {
-        return { ...await extractHandler(gateway, { payload: { manuscriptText } }), sourceMapRef };
-      } catch {
-        return { status: 'needs_review', format, reason: 'sdf-proposal-unavailable', sourceMapRef };
-      }
+      return {
+        ...await extractHandler(gateway, { payload: { manuscriptText } }, { sourceMap: parsed.sourceMap }),
+        ...(reusableSourceMap ? { sourceMapReused: true } : {}),
+        sourceMapRef,
+      };
     },
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
-    'presentation.generate': createPresentationGenerationHandler({ gateway }),
+    'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool }),
     'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
     ...(options.searchIndexer === undefined ? {} : {
       'search.index': async (_deps: WorkerDeps, task) =>
@@ -307,6 +362,37 @@ export async function sleep(ms: number): Promise<void> {
 }
 
 const AGENT_TASK_PROCESSING_QUEUE = `${AGENT_TASK_QUEUE}:processing`;
+
+export async function reconcileResearchRunsTick(
+  deps: WorkerDeps,
+  reconcile: typeof reconcileHermesResearchRuns = reconcileHermesResearchRuns,
+  onError: (error: unknown) => void = (error) => console.error('Hermes research run reconcile error', error),
+): Promise<boolean> {
+  try {
+    await reconcile(deps, { limit: 20 });
+    return true;
+  } catch (error) {
+    onError(error);
+    return false;
+  }
+}
+
+export function createResearchRunReconcileScheduler(options: {
+  intervalMs?: number;
+  now?: () => number;
+  reconcile?: typeof reconcileHermesResearchRuns;
+  onError?: (error: unknown) => void;
+} = {}): (deps: WorkerDeps) => Promise<boolean> {
+  const intervalMs = options.intervalMs ?? 5_000;
+  const clock = options.now ?? (() => performance.now());
+  let nextAt = Number.NEGATIVE_INFINITY;
+  return async (deps) => {
+    const current = clock();
+    if (current < nextAt) return false;
+    nextAt = current + intervalMs;
+    return reconcileResearchRunsTick(deps, options.reconcile, options.onError);
+  };
+}
 
 /** Single-consumer startup recovery for tasks stranded by a previous worker process. */
 export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> {
@@ -329,7 +415,9 @@ export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> 
  * 轮询 Redis 队列 → handler 执行 → markTaskProgress（状态机前进，succeeded 后重放 skip）。
  */
 export async function createPollOnce(handlers: Record<string, TaskHandler>): Promise<(deps: WorkerDeps) => Promise<boolean>> {
+  const reconcileRuns = createResearchRunReconcileScheduler();
   return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
+    await reconcileRuns(deps);
     await recoverUndispatchedAgentTasks(deps);
     // BRPOPLPUSH：原子弹出 → 处理中队列（崩溃恢复用）
     const taskId = await deps.redis.brpoplpush(AGENT_TASK_QUEUE, AGENT_TASK_PROCESSING_QUEUE, 1);
@@ -351,6 +439,8 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
         payload: (task.payload ?? {}) as Record<string, unknown>,
         interestContext: task.interestContext,
         executionAttempt: claimed.executionAttempt,
+        retryCount: claimed.retryCount,
+        ...(claimed.result?.hermesRecovery === HERMES_AUTHORITY_REARM_MARKER ? { recoveryContract: HERMES_AUTHORITY_REARM_MARKER } : {}),
       });
       await markTaskProgress(deps, {
         taskId,
@@ -375,6 +465,34 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
   };
 }
 
+function buildIngestionExternalProcessingPolicy(prisma: ReturnType<typeof createPrismaClient>): ExternalProcessingPolicy {
+  return async (context) => {
+    const task = await prisma.ingestionTask.findUnique({
+      where: { agentTaskId: context.taskId },
+      include: {
+        artifact: true,
+        batch: { include: { researchObject: { include: { workspace: true } } } },
+        agentTask: { include: { session: true } },
+      },
+    });
+    const payload = task?.agentTask?.payload;
+    if (!task?.agentTask || !payload || typeof payload !== 'object' || Array.isArray(payload)
+      || task.agentTask.id !== context.taskId || task.agentTask.kind !== 'sdf.extract'
+      || task.agentTask.status !== 'running' || task.agentTask.session.status !== 'active'
+      || task.agentTask.session.userId !== context.actorId || task.batch.userId !== context.actorId
+      || task.agentTask.session.researchObjectId !== task.batch.researchObjectId
+      || (payload as Record<string, unknown>).artifactId !== task.artifactId
+      || (payload as Record<string, unknown>).researchObjectId !== task.batch.researchObjectId
+      || task.batch.researchObject.workspaceId !== context.workspaceId
+      || task.artifact.workspaceId !== context.workspaceId || task.batch.researchObject.workspace.status !== 'active') return false;
+    const membership = await prisma.membership.findUnique({
+      where: { workspaceId_userId: { workspaceId: context.workspaceId, userId: context.actorId } },
+    });
+    return membership?.workspaceId === context.workspaceId && membership.userId === context.actorId
+      && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
+  };
+}
+
 /** 主循环（独立进程入口，云上 systemd/nohup 常驻）。 */
 async function main(): Promise<void> {
   const parserJobDir = process.env.PARSER_JOB_DIR;
@@ -389,7 +507,7 @@ async function main(): Promise<void> {
     mailer: { send: async () => undefined },
   };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
-  const externalProcessingPolicy: ExternalProcessingPolicy = async () => false;
+  const externalProcessingPolicy = buildIngestionExternalProcessingPolicy(prisma);
   const gateway = buildGateway(
     process.env,
     globalThis.fetch,
@@ -411,6 +529,13 @@ async function main(): Promise<void> {
     externalProcessingPolicy,
     searchIndexer: buildSearchIndexerFromEnv(process.env),
     sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
+    ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HOST_VIDEO_INBOX_DIR?.trim()
+      && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {
+        videoSpool: new HostVideoSpool({
+          inboxDir: process.env.HOST_VIDEO_INBOX_DIR.trim(),
+          resultsDir: process.env.HOST_VIDEO_RESULTS_DIR.trim(),
+        }),
+      } : {}),
   });
   const pollOnce = await createPollOnce(handlers);
   await recoverProcessingQueue(deps);
@@ -469,15 +594,22 @@ export function buildGateway(
   });
 
   const imageApiKey = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].map(key => key?.trim()).find(Boolean);
-  const imageProviders = env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
-    ? (env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).includes('codex-image')
-      ? [new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim() })] : [])
-    : (env.HERMES_SCENE_IMAGE_PROVIDER === undefined || env.HERMES_SCENE_IMAGE_PROVIDER === 'minimax') && env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
-    ? [new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher)] : [];
-  const ocrProviders = env.NODE_ENV !== 'production' && env.MINIMAX_VISION_ENABLED === 'true' && keys[0]
+  const disabledImageProviders = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).filter(Boolean));
+  const imageProviders = env.HERMES_SCENE_IMAGE_PROVIDER === 'chatgpt-web'
+    ? (env.AI_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim() && env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('chatgpt-web')
+      ? [new ChatGptWebSpoolImageProvider({ inboxDir: env.CHATGPT_WEB_IMAGE_INBOX_DIR.trim(), resultsDir: env.CHATGPT_WEB_IMAGE_RESULTS_DIR.trim() })] : [])
+    : env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
+      ? (env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('codex-image')
+        ? [new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim() })] : [])
+      : (env.HERMES_SCENE_IMAGE_PROVIDER === undefined || env.HERMES_SCENE_IMAGE_PROVIDER === 'minimax') && env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
+        ? [new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher)] : [];
+  const visionPrimaryKey = env.MINIMAX_API_KEY?.trim();
+  const visionBackupKey = env.MINIMAX_API_KEY_2?.trim();
+  const ocrProviders = env.AI_ENABLED === 'true' && env.MINIMAX_VISION_ENABLED === 'true' && visionPrimaryKey
     ? [new MiniMaxCodingPlanVisionProvider('minimax-vision', {
         baseUrl: visionOrigin(env),
-        apiKey: keys[0],
+        apiKey: visionPrimaryKey,
+        ...(visionBackupKey && visionBackupKey !== visionPrimaryKey ? { backupApiKey: visionBackupKey } : {}),
         model: env.MINIMAX_VISION_MODEL ?? 'coding-plan-vlm',
         pricing: visionPricing(env),
         maxPageBytes: optionalBoundedInteger(env.MINIMAX_VISION_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'MINIMAX_VISION_MAX_PAGE_BYTES'),
@@ -550,7 +682,11 @@ function imageOrigin(env: NodeJS.ProcessEnv): string {
 }
 
 function visionOrigin(env: NodeJS.ProcessEnv): string {
-  const region = env.MINIMAX_VISION_REGION ?? 'global';
+  // Vision uses the same Coding Plan credential as text. An unset region must not
+  // send a configured China-plan key to the global endpoint.
+  let textOrigin: string | undefined;
+  try { textOrigin = new URL(env.MINIMAX_TOKEN_PLAN_BASE_URL ?? '').origin; } catch { /* default global */ }
+  const region = env.MINIMAX_VISION_REGION ?? (textOrigin === 'https://api.minimaxi.com' ? 'cn' : 'global');
   if (region === 'global') return 'https://api.minimax.io';
   if (region === 'cn') return 'https://api.minimaxi.com';
   throw new Error('MINIMAX_VISION_REGION must be global or cn');

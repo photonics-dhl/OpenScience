@@ -306,6 +306,68 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(view.kind).toBe('demo.echo');
   });
 
+  it('projects a validated evidence identity through the public task view without exposing SourceMap storage details', async () => {
+    const { deps, user, ro, db } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'bounded' } });
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+    const contentHash = 'A'.repeat(64);
+    const serializedSha256 = 'b'.repeat(64);
+    const evidence = Object.fromEntries(fields.map((field) => [field, {
+      quote: field === 'method' ? 'Original source sentence.' : '',
+      locator: field === 'method' ? 'chars:0-25' : '',
+    }]));
+    const evidenceLocation = Object.fromEntries(fields.map((field) => [field, field === 'method' ? {
+      status: 'located', origin: 'model_quote', matching: 'exact', sourceLocator: {
+        artifactId: 'artifact-A', contentHash: contentHash.toLowerCase(), blockId: 'block-2', page: 2,
+        charRange: { start: 0, end: 25 },
+      },
+    } : { status: 'missing', origin: 'model_quote', reason: 'empty-quote' }]));
+    const storedResult = {
+      core: Object.fromEntries(fields.map((field) => [field, field === 'method' ? 'Method summary' : ''])),
+      evidence,
+      evidenceLocation,
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, field === 'method' ? [{
+        quote: 'Original source sentence.', sourceLocator: evidenceLocation.method.sourceLocator,
+      }] : []])),
+      needsMoreInformation: fields.filter((field) => field !== 'method'),
+      sourceMapRef: {
+        schemaVersion: 1, parserStatus: 'succeeded', artifactId: 'artifact-A', contentHash,
+        objectKey: `derived/source-maps/${serializedSha256}.json`, serializedSha256, size: 100,
+      },
+      sourceMapAvailable: false,
+      sourceMapIdentity: { artifactId: 'forged-artifact', contentHash: 'f'.repeat(64) },
+    };
+    const storedTask = db.agentTasks.find((candidate) => candidate.id === task.id)!;
+    Object.assign(storedTask, { status: 'succeeded', progress: 100, result: storedResult });
+
+    const view = await getAgentTask(deps, { userId: user.id, taskId: task.id });
+    expect(view.result).toMatchObject({
+      sourceMapAvailable: true,
+      sourceMapIdentity: { artifactId: 'artifact-A', contentHash: contentHash.toLowerCase() },
+      evidence,
+      evidenceLocation,
+      evidenceSegments: storedResult.evidenceSegments,
+    });
+    expect(JSON.stringify(view.result)).not.toMatch(/objectKey|serializedSha256|derived\/source-maps/);
+
+    const mismatchedResult = {
+      ...storedResult,
+      evidenceLocation: {
+        ...evidenceLocation,
+        method: {
+          ...evidenceLocation.method,
+          sourceLocator: { ...evidenceLocation.method.sourceLocator, artifactId: 'artifact-B' },
+        },
+      },
+    };
+    Object.assign(storedTask, { result: mismatchedResult });
+    const rejected = await getAgentTask(deps, { userId: user.id, taskId: task.id });
+    expect(rejected.result).not.toHaveProperty('sourceMapIdentity');
+    expect(rejected.result).toHaveProperty('sourceMapAvailable', true);
+    expect(JSON.stringify(rejected.result)).not.toMatch(/objectKey|serializedSha256|derived\/source-maps/);
+  });
+
   it('lists only the current user actionable tasks with a redacted public DTO and RO context', async () => {
     const { deps, user, ro, db } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
@@ -553,7 +615,13 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const { deps, user, ro } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {} });
-    expect(await claimAgentTask(deps, task.id)).toMatchObject({ status: 'running', executionAttempt: 1 });
+    const claimed = await claimAgentTask(deps, task.id);
+    expect(claimed).toMatchObject({ status: 'running', executionAttempt: 1 });
+    expect(await claimAgentTask(deps, task.id)).toBeNull();
+    await markTaskProgress(deps, {
+      taskId: task.id, status: 'failed', error: 'structured output exhausted',
+      expectedExecutionAttempt: claimed!.executionAttempt,
+    });
     expect(await claimAgentTask(deps, task.id)).toBeNull();
   });
 
@@ -917,7 +985,9 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
   it('永久阻断错误同步为 failed_blocked，不允许普通 retry', async () => {
     const { deps, user, ro, db } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'ingestion' });
-    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: {} });
+    const task = await submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'Source text.' },
+    });
     db.ingestionTasks.push({
       id: 'ingestion-task-1', batchId: 'batch-1', artifactId: 'artifact-1', agentTaskId: task.id,
       state: 'parsing', retryCount: 0, error: null, createdAt: new Date(), updatedAt: new Date(),

@@ -1,11 +1,239 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
+import type { AuditSink } from '@openscience/observability';
+import type { Prisma } from '@prisma/client';
 import { createFakePrisma, seedUser } from './helpers/fakes';
-import { authorizeIngestionWrite, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask } from '../src/ingestion/ingestion-service';
+import { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, retryIngestionTask } from '../src/ingestion/ingestion-service';
+import { persistDocumentSourceMapReference } from '../src/research-intelligence/source-map-ref';
+import { createCommit } from '../src/commit/commits';
+import { updateClaim } from '../src/research-intelligence/claim-evidence-service';
 import { markTaskProgress } from '../src/agent/agent';
+import { projectSourceIdentity } from '../src/ingestion/source-identity';
 
 const TEST_RO_ID = '00000000-0000-4000-8000-000000000101';
+const CORE = { schemaVersion: '0.1.0', problem: 'Question', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
+
+async function confirmationFixture() {
+  const fixture = makeDeps();
+  const { deps, db, user } = fixture;
+  Object.assign(deps.prisma.ingestionTask, { findUniqueOrThrow: async (args: Parameters<typeof deps.prisma.ingestionTask.findUnique>[0]) => deps.prisma.ingestionTask.findUnique(args) });
+  db.sdfDocuments.push({ id: 'sdf-1', researchObjectId: TEST_RO_ID, coreJson: { ...CORE, problem: 'Before' } });
+  for (const nodeType of Object.keys(CORE).filter(key => key !== 'schemaVersion')) db.sdfNodes.push({ id: nodeType, sdfDocumentId: 'sdf-1', nodeType, content: '' });
+  const batch = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('notes.md')] });
+  db.ingestionTasks[0].state = 'needs_review';
+  db.agentTasks[0].result = { core: CORE, evidence: {}, needsMoreInformation: ['insight', 'method', 'results', 'limitations', 'reproducibility'] };
+  return { ...fixture, input: { userId: user.id, taskId: batch.tasks[0].id, version: 1, core: CORE } };
+}
+
+describe('ingestion confirmation research record', () => {
+  it('rejects a parser-review task with no SDF proposal before creating a version', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    db.agentTasks[0].result = { status: 'needs_review', reason: 'native PDF text fidelity requires review' };
+    await expect(confirmIngestionTask(deps, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.versions).toHaveLength(0);
+    expect(db.commits).toHaveLength(0);
+    expect(db.ingestionTasks[0].state).toBe('needs_review');
+  });
+
+  it('rejects an entirely empty proposal and confirmation before creating a version', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const empty = { ...CORE, problem: '' };
+    db.agentTasks[0].result = { core: empty, evidence: {}, needsMoreInformation: Object.keys(empty).filter(key => key !== 'schemaVersion') };
+    await expect(confirmIngestionTask(deps, { ...input, core: empty })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.versions).toHaveLength(0);
+    expect(db.commits).toHaveLength(0);
+  });
+
+  it('creates an immutable version with original material and replays the same result', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const first = await confirmIngestionTask(deps, input);
+    expect(db.versions).toHaveLength(1);
+    expect(db.manifestEntries[0].artifactId).toBe(db.artifacts[0].id);
+    expect(first).toMatchObject({ confirmation: { versionId: db.versions[0].id, evidenceStatus: 'needs_review' } });
+    expect(await confirmIngestionTask(deps, input)).toEqual(first);
+    expect(db.versions).toHaveLength(1);
+    expect(db.researchObjects[0].version).toBe(2);
+  });
+
+  it('rolls back every write when confirmation state cannot be claimed', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    vi.spyOn(deps.prisma.ingestionTask, 'updateMany').mockResolvedValueOnce({ count: 0 });
+    await expect(confirmIngestionTask(deps, input)).rejects.toThrow();
+    expect(db.versions).toHaveLength(0);
+    expect(db.commits).toHaveLength(0);
+    expect(db.researchObjects[0].version).toBe(1);
+    expect(db.sdfDocuments[0].coreJson.problem).toBe('Before');
+  });
+
+  it('rejects a stale version without partial writes', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    await expect(confirmIngestionTask(deps, { ...input, version: 0 })).rejects.toMatchObject({ code: 'CONCURRENT_UPDATE' });
+    expect(db.versions).toHaveLength(0);
+    expect(db.ingestionTasks[0].state).toBe('needs_review');
+  });
+
+  it('retains earlier materials with colliding names and recovers confirmed imports without a task URL', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    db.artifacts.push({ ...db.artifacts[0], id: 'previous-artifact' });
+    await createCommit(deps, { researchObjectId: TEST_RO_ID, userId: input.userId, version: 1, message: 'Earlier material', artifacts: [{ logicalPath: 'notes.md', artifactId: 'previous-artifact' }] });
+    const result = await confirmIngestionTask(deps, { ...input, version: 2 });
+    const manifest = db.versionManifests.find(row => row.versionId === result.confirmation.versionId);
+    const entries = db.manifestEntries.filter(row => row.manifestId === manifest.id);
+    expect(entries.map(row => row.artifactId)).toEqual(['previous-artifact', db.artifacts[0].id]);
+    expect(new Set(entries.map(row => row.logicalPath)).size).toBe(2);
+    const recovered = await getResearchObjectIngestion(deps, { userId: input.userId, researchObjectId: TEST_RO_ID });
+    expect(recovered.latestConfirmation).toEqual(result.confirmation);
+    expect(recovered.tasks[0].state).toBe('confirmed');
+    await expect(getResearchObjectIngestion(deps, { userId: 'outsider', researchObjectId: TEST_RO_ID })).rejects.toThrow();
+  });
+
+  it('simultaneous confirmation creates exactly one version', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const results = await Promise.all([confirmIngestionTask(deps, input), confirmIngestionTask(deps, input)]);
+    expect(results[0]).toEqual(results[1]);
+    expect(db.versions).toHaveLength(1);
+  });
+
+  it('keeps previous Claim/Evidence history and carries its graph as pending into the new version', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const prior = await createCommit(deps, { researchObjectId: TEST_RO_ID, userId: input.userId, version: 1,
+      message: 'Prior record', artifacts: [{ logicalPath: 'notes.md', artifactId: db.artifacts[0].id }] });
+    db.claimNodes.push({ id: 'old-claim', researchObjectId: TEST_RO_ID, versionId: prior.versionId, kind: 'core', statement: 'Earlier claim', assessment: 'supported', conditions: [], limitations: [], provenance: { source: 'human' }, extractionStatus: 'succeeded' });
+    db.evidenceRecords.push({ id: 'old-evidence', researchObjectId: TEST_RO_ID, workspaceId: 'ws-1', versionId: prior.versionId, claimId: 'old-claim', artifactId: db.artifacts[0].id, kind: 'passage', title: 'Earlier source', exactQuote: 'Earlier quote', relation: 'supports', locator: {}, contentHash: db.artifacts[0].blobSha256, provenance: { source: 'human' }, extractionStatus: 'succeeded', verifiedByUserId: input.userId });
+    const originals = structuredClone({ claim: db.claimNodes[0], evidence: db.evidenceRecords[0] });
+    const next = await confirmIngestionTask(deps, { ...input, version: 2 });
+    expect(db.claimNodes[0]).toEqual(originals.claim);
+    expect(db.evidenceRecords[0]).toEqual(originals.evidence);
+    expect(db.claimNodes[1]).toMatchObject({ versionId: next.confirmation.versionId, statement: 'Earlier claim', extractionStatus: 'needs_review' });
+    expect(db.evidenceRecords[1]).toMatchObject({ versionId: next.confirmation.versionId, claimId: db.claimNodes[1].id, verifiedByUserId: null, extractionStatus: 'needs_review' });
+  });
+
+  it('enforces write permission on replay and keeps the original SDF snapshot after later edits', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const first = await confirmIngestionTask(deps, input);
+    db.sdfDocuments[0].coreJson = { ...CORE, problem: 'Later work' };
+    expect(await confirmIngestionTask(deps, { ...input, core: { ...CORE, problem: 'Replay changes' } })).toEqual(first);
+    db.memberships[0].role = 'viewer';
+    await expect(confirmIngestionTask(deps, input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.versions).toHaveLength(1);
+  });
+
+  it.each(['exact', 'missing', 'ambiguous', 'edited'])('persists only verifiable source evidence: %s', async mode => {
+    const { deps, db, input } = await confirmationFixture();
+    const quote = 'Original source question.';
+    const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, {
+      artifactId: db.artifacts[0].id,
+      contentHash: db.artifacts[0].blobSha256, parser: { name: 'fixture', version: '1' },
+      pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'block-1', kind: 'paragraph',
+        text: mode === 'ambiguous' ? `${quote} ${quote}` : quote,
+        boundingBox: { x: 10, y: 20, width: 300, height: 30 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }],
+    }, 'succeeded');
+    db.agentTasks[0].result = { core: CORE, evidence: { problem: { quote: mode === 'missing' ? 'Invented quote' : quote, locator: 'page 999' } }, sourceMapRef };
+    await confirmIngestionTask(deps, mode === 'edited' ? { ...input, core: { ...CORE, problem: 'Changed claim' } } : input);
+    expect(db.evidenceRecords).toHaveLength(mode === 'exact' ? 1 : 0);
+    if (mode === 'exact') {
+      expect(db.evidenceRecords[0]).toMatchObject({ exactQuote: quote, extractionStatus: 'needs_review', verifiedByUserId: null, locator: { page: 1, blockId: 'block-1', charRange: { start: 0, end: quote.length } } });
+      expect(db.claimNodes[0]).toMatchObject({ assessment: 'missing', extractionStatus: 'needs_review' });
+    }
+  });
+
+  it('freezes explicitly accepted source identity without changing platform identity', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const quote = 'A source-grounded title';
+    const artifactId = db.artifacts[0].id;
+    const contentHash = db.artifacts[0].blobSha256;
+    const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, { artifactId, contentHash,
+      parser: { name: 'fixture', version: '1' }, pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'title', kind: 'paragraph', text: quote,
+        boundingBox: { x: 0, y: 0, width: 200, height: 20 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }] }, 'succeeded');
+    const sourceLocator = { artifactId, contentHash, page: 1, blockId: 'title', charRange: { start: 0, end: quote.length },
+      boundingBox: { x: 0, y: 0, width: 200, height: 20 } };
+    const sourceIdentity = { schemaVersion: '0.1.0', title: { state: 'proposed', value: quote, evidenceSegments: [{ quote, sourceLocator }] },
+      authors: { state: 'not_extracted', value: [], evidenceSegments: [] }, doi: { state: 'not_extracted', value: '', evidenceSegments: [] },
+      articleLicense: { state: 'not_extracted', value: '', evidenceSegments: [] } };
+    db.agentTasks[0].result = { core: CORE, evidence: {}, sourceMapRef, sourceIdentity };
+    const token = projectSourceIdentity({ taskId: input.taskId, artifactId, contentHash, result: db.agentTasks[0].result })!.sourceIdentityToken;
+    const result = await confirmIngestionTask(deps, { ...input, sourceIdentityReview: { token, acceptedFields: ['title'] } });
+    expect(result.confirmation.sourceIdentity).toMatchObject({ reviewed: true, title: { state: 'recorded', value: quote },
+      authors: { state: 'not_recorded' } });
+    const frozen = db.versions[0].researchRecord as { dto: { schemaVersion: string; identity: Record<string, unknown> } };
+    expect(frozen.dto).toMatchObject({ schemaVersion: '1.1.0', identity: { source: result.confirmation.sourceIdentity } });
+    expect(frozen.dto.identity).toMatchObject({ originalAuthors: { state: 'not_recorded' }, originalDoi: { state: 'not_recorded' } });
+  });
+
+  it('atomically rejects source identity when the proposal was not explicitly reviewed', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const artifactId = db.artifacts[0].id;
+    const contentHash = db.artifacts[0].blobSha256;
+    const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, { artifactId, contentHash,
+      parser: { name: 'fixture', version: '1' }, pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'title', kind: 'paragraph', text: 'Title',
+        boundingBox: { x: 0, y: 0, width: 100, height: 20 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }] }, 'succeeded');
+    db.agentTasks[0].result = { core: CORE, evidence: {}, sourceMapRef, sourceIdentity: { schemaVersion: '0.1.0',
+      title: { state: 'proposed', value: 'Title', evidenceSegments: [{ quote: 'Title', sourceLocator: { artifactId, contentHash, page: 1,
+        blockId: 'title', charRange: { start: 0, end: 5 }, boundingBox: { x: 0, y: 0, width: 100, height: 20 } } }] },
+      authors: { state: 'not_extracted', value: [], evidenceSegments: [] }, doi: { state: 'not_extracted', value: '', evidenceSegments: [] },
+      articleLicense: { state: 'not_extracted', value: '', evidenceSegments: [] } } };
+    await expect(confirmIngestionTask(deps, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.versions).toHaveLength(0);
+    expect(db.commits).toHaveLength(0);
+    expect(db.ingestionTasks[0].state).toBe('needs_review');
+  });
+
+  it('clears a prior paper identity when a new ingestion has no source identity proposal', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const prior = await createCommit(deps, { researchObjectId: TEST_RO_ID, userId: input.userId, version: 1,
+      message: 'Paper A', artifacts: [{ logicalPath: 'paper-a.md', artifactId: db.artifacts[0].id }] });
+    const priorVersion = db.versions.find(version => version.id === prior.versionId)!;
+    const priorFrozen = priorVersion.researchRecord as { dto: { identity: Record<string, unknown> } };
+    const paperAIdentity = { schemaVersion: '0.1.0', reviewed: true,
+      title: { state: 'needs_review', value: 'Paper A', evidenceSegments: [] },
+      authors: { state: 'not_recorded', value: [], evidenceSegments: [] }, doi: { state: 'not_recorded', value: '', evidenceSegments: [] },
+      articleLicense: { state: 'not_recorded', value: '', evidenceSegments: [] } };
+    priorFrozen.dto.identity.source = paperAIdentity;
+    const priorBytes = JSON.stringify(priorVersion.researchRecord);
+
+    const result = await confirmIngestionTask(deps, { ...input, version: 2 });
+    const nextVersion = db.versions.find(version => version.id === result.confirmation.versionId)!;
+    const nextDto = (nextVersion.researchRecord as { dto: { schemaVersion: string; identity: Record<string, unknown> } }).dto;
+    expect(nextDto.schemaVersion).toBe('1.0.0');
+    expect(nextDto.identity).not.toHaveProperty('source');
+    expect(JSON.stringify(priorVersion.researchRecord)).toBe(priorBytes);
+  });
+
+  it('atomically rejects a source map reference bound to another artifact', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, {
+      artifactId: 'other-artifact', contentHash: db.artifacts[0].blobSha256, parser: { name: 'fixture', version: '1' },
+      pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'block-1', kind: 'paragraph', text: 'Original source question.',
+        boundingBox: { x: 10, y: 20, width: 300, height: 30 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }],
+    }, 'succeeded');
+    db.agentTasks[0].result = { core: CORE, evidence: { problem: { quote: 'Original source question.' } }, sourceMapRef };
+    await expect(confirmIngestionTask(deps, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.versions).toHaveLength(0);
+    expect(db.commits).toHaveLength(0);
+    expect(db.claimNodes).toHaveLength(0);
+    expect(db.evidenceRecords).toHaveLength(0);
+  });
+
+  it.each(['method', 'limitations'])('imports an editable root claim for %s without inventing a parent', async field => {
+    const { deps, db, input } = await confirmationFixture();
+    const core = { ...CORE, [field]: 'Source-grounded statement' };
+    const quote = 'Original source passage.';
+    const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, {
+      artifactId: db.artifacts[0].id, contentHash: db.artifacts[0].blobSha256, parser: { name: 'fixture', version: '1' },
+      pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'source', kind: 'paragraph', text: quote,
+        boundingBox: { x: 0, y: 0, width: 100, height: 20 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }],
+    }, 'succeeded');
+    db.agentTasks[0].result = { core, evidence: { [field]: { quote } }, sourceMapRef };
+    const result = await confirmIngestionTask(deps, { ...input, core });
+    const claim = db.claimNodes[0];
+    const updated = await updateClaim(deps, { userId: input.userId, researchObjectId: TEST_RO_ID,
+      versionId: result.confirmation.versionId, claimId: claim.id, expectedUpdatedAt: claim.updatedAt,
+      patch: { statement: 'Human edited statement' } });
+    expect(updated.statement).toBe('Human edited statement');
+    expect(updated.kind).toBe('core');
+  });
+});
 
 function makeDeps() {
   const { prisma, db } = createFakePrisma();
@@ -26,7 +254,13 @@ function makeDeps() {
     deleteObject: vi.fn(async (key) => void objects.delete(key)),
   };
   const redis = { lpush: vi.fn().mockResolvedValue(1) };
-  return { db, user, deps: { prisma, storage, redis } as never, redis };
+  const audit: AuditSink = {
+    record: async (event, tx) => {
+      if (!tx) throw new Error('Ingestion audit must share the business transaction');
+      await tx.auditLog.create({ data: { ...event, metadata: event.metadata as Prisma.InputJsonValue | undefined } });
+    },
+  };
+  return { db, user, deps: { prisma, storage, redis, audit } as never, redis };
 }
 
 const file = (filename: string) => {
@@ -134,14 +368,34 @@ describe('multi-format ingestion service', () => {
     });
     const ingestionTask = db.ingestionTasks.find((row) => row.id === batch.tasks[0].id)!;
     const agentTask = db.agentTasks.find((row) => row.id === ingestionTask.agentTaskId)!;
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+    const contentHash = 'a'.repeat(64);
+    const serializedSha256 = 'b'.repeat(64);
     agentTask.result = {
-      core: { title: 'Parsed title' },
-      sourceMapRef: { objectKey: 'derived/source-maps/internal.json', serializedSha256: 'secret-internal-digest' },
+      core: { schemaVersion: '0.1.0', ...Object.fromEntries(fields.map((field) => [field, field === 'method' ? 'Parsed method' : ''])) },
+      evidence: Object.fromEntries(fields.map((field) => [field, {
+        quote: field === 'method' ? 'Original source sentence.' : '', locator: field === 'method' ? 'chars:0-25' : '',
+      }])),
+      evidenceLocation: Object.fromEntries(fields.map((field) => [field, field === 'method' ? {
+        status: 'located', origin: 'model_quote', matching: 'exact', sourceLocator: {
+          artifactId: agentTask.payload.artifactId, contentHash, blockId: 'block-2', charRange: { start: 0, end: 25 },
+        },
+      } : { status: 'missing', origin: 'model_quote', reason: 'empty-quote' }])),
+      needsMoreInformation: fields.filter((field) => field !== 'method'),
+      sourceMapRef: {
+        schemaVersion: 1, parserStatus: 'succeeded', artifactId: agentTask.payload.artifactId, contentHash,
+        objectKey: `derived/source-maps/${serializedSha256}.json`, serializedSha256, size: 100,
+      },
+      sourceMapAvailable: false,
+      sourceMapIdentity: { artifactId: 'forged-artifact', contentHash: 'f'.repeat(64) },
     };
 
     const response = await getIngestionTask(deps, { userId: user.id, taskId: ingestionTask.id });
 
-    expect(response.task.result).toEqual({ core: { title: 'Parsed title' }, sourceMapAvailable: true });
+    expect(response.task.result).toMatchObject({
+      sourceMapAvailable: true,
+      sourceMapIdentity: { artifactId: agentTask.payload.artifactId, contentHash },
+    });
     expect(JSON.stringify(response)).not.toContain('derived/source-maps');
     expect(JSON.stringify(response)).not.toContain('secret-internal-digest');
   });
@@ -218,20 +472,201 @@ describe('multi-format ingestion service', () => {
     const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id);
     task.state = 'failed_retryable';
     task.error = 'provider timeout';
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    agentTask.status = 'failed';
+    agentTask.error = 'provider timeout';
+    agentTask.kind = 'sdf.extract';
+    agentTask.retryCount = 0;
+    agentTask.executionAttempt = 1;
     const retried = await retryIngestionTask(deps, { userId: user.id, taskId: task.id });
     expect(retried).toMatchObject({ state: 'queued', retryCount: 1, error: null });
     expect(redis.lpush).toHaveBeenLastCalledWith('agent:queue', task.agentTaskId);
     await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id })).rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
   });
 
-  it('retry dispatch 失败会恢复 failed_retryable 状态', async () => {
+  it('requeues only the legacy SDF proposal-unavailable result on the same AgentTask binding', async () => {
+    const { deps, db, user, redis } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    const digest = 'a'.repeat(64);
+    task.state = 'needs_review';
+    agentTask.status = 'succeeded';
+    agentTask.progress = 100;
+    agentTask.result = {
+      status: 'needs_review', format: 'pdf', reason: 'sdf-proposal-unavailable',
+      sourceMapRef: {
+        schemaVersion: 1, parserStatus: 'succeeded', artifactId: task.artifactId,
+        contentHash: db.artifacts.find((row) => row.id === task.artifactId)!.blobSha256,
+        objectKey: `derived/source-maps/${digest}.json`, serializedSha256: digest, size: 10,
+      },
+    };
+
+    const retried = await retryIngestionTask(deps, { userId: user.id, taskId: task.id });
+
+    expect(retried).toMatchObject({ id: task.id, agentTaskId: agentTask.id, state: 'queued', retryCount: 1, error: null });
+    expect(agentTask).toMatchObject({ status: 'pending', progress: 0, retryCount: 1, result: null, error: null });
+    expect(redis.lpush).toHaveBeenLastCalledWith('agent:queue', agentTask.id);
+    expect(db.auditLogs).toContainEqual(expect.objectContaining({
+      actorId: user.id, action: 'ingestion.task.retry', targetId: task.id,
+      metadata: expect.objectContaining({ recovery: 'legacy_sdf_proposal_unavailable', agentTaskId: agentTask.id }),
+    }));
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
+  });
+
+  it('charges one idempotent credit and requeues only the exact canonical all-missing remediation on attempt two', async () => {
+    const { deps, db, user, redis } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+    const digest = 'b'.repeat(64);
+    task.state = 'needs_review';
+    task.retryCount = 1;
+    agentTask.status = 'succeeded';
+    agentTask.progress = 100;
+    agentTask.retryCount = 1;
+    agentTask.executionAttempt = 2;
+    agentTask.result = {
+      core: { schemaVersion: '0.1.0', ...Object.fromEntries(fields.map((field) => [field, ''])) },
+      evidence: Object.fromEntries(fields.map((field) => [field, { quote: '', locator: '' }])),
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, []])),
+      needsMoreInformation: [...fields],
+      sourceMapRef: {
+        schemaVersion: 1, parserStatus: 'succeeded', artifactId: task.artifactId,
+        contentHash: db.artifacts.find((row) => row.id === task.artifactId)!.blobSha256,
+        objectKey: `derived/source-maps/${digest}.json`, serializedSha256: digest, size: 10,
+      },
+    };
+
+    const outcomes = await Promise.allSettled([
+      retryIngestionTask(deps, { userId: user.id, taskId: task.id }),
+      retryIngestionTask(deps, { userId: user.id, taskId: task.id }),
+    ]);
+    const fulfilled = outcomes.filter((outcome): outcome is PromiseFulfilledResult<Awaited<ReturnType<typeof retryIngestionTask>>> => outcome.status === 'fulfilled');
+    expect(fulfilled).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.status === 'rejected')).toHaveLength(1);
+    const retried = fulfilled[0]!.value;
+
+    expect(retried).toMatchObject({ id: task.id, agentTaskId: agentTask.id, state: 'queued', retryCount: 2, error: null });
+    expect(agentTask).toMatchObject({ status: 'pending', progress: 0, retryCount: 2, result: null, error: null });
+    expect(redis.lpush).toHaveBeenLastCalledWith('agent:queue', agentTask.id);
+    expect(db.usageLedger).toContainEqual(expect.objectContaining({
+      userId: user.id, resource: 'ai_credit', delta: BigInt(-1), kind: 'consume',
+      idempotencyKey: `agent-task-recovery:${agentTask.id}:2`,
+      metadata: expect.objectContaining({ retryAttempt: 2, policy: 'charged-on-remediation' }),
+    }));
+    expect(db.auditLogs).toContainEqual(expect.objectContaining({
+      actorId: user.id, action: 'ingestion.task.retry', targetId: task.id,
+      metadata: expect.objectContaining({ recovery: 'canonical_all_fields_missing', retryAttempt: 2, creditPolicy: 'charged-on-remediation' }),
+    }));
+    expect(db.usageLedger.filter((entry) => entry.idempotencyKey === `agent-task-recovery:${agentTask.id}:2`)).toHaveLength(1);
+  });
+
+  it('fails closed without charging or changing state when canonical all-missing remediation has no credit', async () => {
+    const { deps, db, user } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+    const digest = 'c'.repeat(64);
+    task.state = 'needs_review'; task.retryCount = 1;
+    agentTask.status = 'succeeded'; agentTask.retryCount = 1; agentTask.executionAttempt = 2;
+    agentTask.result = {
+      core: { schemaVersion: '0.1.0', ...Object.fromEntries(fields.map((field) => [field, ''])) },
+      evidence: Object.fromEntries(fields.map((field) => [field, { quote: '', locator: '' }])),
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, []])), needsMoreInformation: [...fields],
+      sourceMapRef: { schemaVersion: 1, parserStatus: 'succeeded', artifactId: task.artifactId,
+        contentHash: db.artifacts.find((row) => row.id === task.artifactId)!.blobSha256,
+        objectKey: `derived/source-maps/${digest}.json`, serializedSha256: digest, size: 10 },
+    };
+    db.usageLedger.find((entry) => entry.id === 'credit-1')!.delta = 1;
+    const beforeLedgerSize = db.usageLedger.length;
+
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toMatchObject({ code: 'INSUFFICIENT_CREDIT' });
+    expect(task).toMatchObject({ state: 'needs_review', retryCount: 1 });
+    expect(agentTask).toMatchObject({ status: 'succeeded', retryCount: 1, executionAttempt: 2 });
+    expect(db.usageLedger).toHaveLength(beforeLedgerSize);
+  });
+
+  it('does not charge or requeue canonical all-missing work from a closed AgentSession', async () => {
+    const { deps, db, user } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+    const digest = 'd'.repeat(64);
+    task.state = 'needs_review'; task.retryCount = 1;
+    agentTask.status = 'succeeded'; agentTask.retryCount = 1; agentTask.executionAttempt = 2;
+    agentTask.result = {
+      core: { schemaVersion: '0.1.0', ...Object.fromEntries(fields.map((field) => [field, ''])) },
+      evidence: Object.fromEntries(fields.map((field) => [field, { quote: '', locator: '' }])),
+      evidenceSegments: Object.fromEntries(fields.map((field) => [field, []])), needsMoreInformation: [...fields],
+      sourceMapRef: { schemaVersion: 1, parserStatus: 'succeeded', artifactId: task.artifactId,
+        contentHash: db.artifacts.find((row) => row.id === task.artifactId)!.blobSha256,
+        objectKey: `derived/source-maps/${digest}.json`, serializedSha256: digest, size: 10 },
+    };
+    db.agentSessions.find((session) => session.id === agentTask.sessionId)!.status = 'closed';
+    const beforeLedgerSize = db.usageLedger.length;
+
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
+    expect(task).toMatchObject({ state: 'needs_review', retryCount: 1 });
+    expect(agentTask).toMatchObject({ status: 'succeeded', retryCount: 1, executionAttempt: 2 });
+    expect(db.usageLedger).toHaveLength(beforeLedgerSize);
+  });
+
+  it('does not requeue a genuine reviewable SDF result', async () => {
+    const { deps, db, user } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    task.state = 'needs_review';
+    agentTask.status = 'succeeded';
+    agentTask.progress = 100;
+    agentTask.result = { core: CORE, evidence: {}, needsMoreInformation: [] };
+
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
+  });
+
+  it('rechecks active write membership inside the retry transaction', async () => {
+    const { deps, db, user } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    task.state = 'failed_retryable';
+    agentTask.status = 'failed';
+    const transaction = deps.prisma.$transaction.bind(deps.prisma);
+    deps.prisma.$transaction = (async (...args: Parameters<typeof transaction>) => {
+      db.memberships.splice(0, db.memberships.length);
+      return transaction(...args);
+    }) as typeof deps.prisma.$transaction;
+
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toMatchObject({ code: 'WORKSPACE_NOT_FOUND' });
+    expect(task).toMatchObject({ state: 'failed_retryable', retryCount: 0 });
+    expect(agentTask).toMatchObject({ status: 'failed', retryCount: 0 });
+  });
+
+  it('retry dispatch failure leaves the pending task for durable outbox recovery', async () => {
     const { deps, db, user, redis } = makeDeps();
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
     task.state = 'failed_retryable';
+    task.error = 'provider timeout';
+    const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
+    agentTask.status = 'failed';
+    agentTask.error = 'provider timeout';
+    agentTask.kind = 'sdf.extract';
+    agentTask.retryCount = 0;
+    agentTask.executionAttempt = 1;
     redis.lpush.mockRejectedValueOnce(new Error('redis unavailable'));
     await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/redis unavailable/);
-    expect(task.state).toBe('failed_retryable');
+    expect(task).toMatchObject({ state: 'queued', retryCount: 1, error: null });
+    expect(agentTask).toMatchObject({ status: 'pending', retryCount: 1, dispatchedAt: null });
   });
 
   it('resumes the same batch idempotently without duplicating artifacts, sessions, or tasks', async () => {

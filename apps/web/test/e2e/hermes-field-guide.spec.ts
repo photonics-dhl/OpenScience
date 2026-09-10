@@ -917,7 +917,7 @@ test('route and breakpoint changes adopt the matching stored dock instead of a s
     __setHermesVisualViewportRect(rectangle: { height: number; left: number; top: number; width: number }): void;
   }).__setHermesVisualViewportRect({ height: 600, left: 100, top: 100, width: 700 }));
   await expect(stage).toHaveAttribute('data-hermes-guide-phase', 'source-settle', { timeout: 10_000 });
-  await page.evaluate(() => window.history.pushState({}, '', '/research-objects/ro-guide/edit?hermes-motion=full'));
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=full`, { waitUntil: 'networkidle' });
   await expect(page).toHaveURL(/\/research-objects\/ro-guide\/edit/);
   await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-problem', { timeout: 10_000 });
   await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: desktopKey, value: routeDock });

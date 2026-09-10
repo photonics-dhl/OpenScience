@@ -6,6 +6,16 @@ import * as React from 'react';
 
 import { hermesTaskHref } from './hermes-state';
 
+const localizedTaskStates: Record<string, 'queued' | 'uploading' | 'parsing' | 'stored' | 'needsReview' | 'failedRetryable' | 'failedBlocked'> = {
+  queued: 'queued',
+  uploading: 'uploading',
+  parsing: 'parsing',
+  stored: 'stored',
+  needs_review: 'needsReview',
+  failed_retryable: 'failedRetryable',
+  failed_blocked: 'failedBlocked',
+};
+
 export interface HermesRailTask {
   id: string;
   researchObjectId: string;
@@ -18,6 +28,12 @@ export interface HermesRailTask {
 
 export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
   const t = useTranslations('dashboard');
+  const [expanded, setExpanded] = React.useState(false);
+  const collapsedTasks = [
+    ...tasks.filter((task) => task.state.startsWith('failed_')),
+    ...tasks.filter((task) => !task.state.startsWith('failed_')),
+  ];
+  const visibleTasks = expanded ? tasks : collapsedTasks.slice(0, 3);
 
   return (
     <aside
@@ -35,10 +51,11 @@ export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
 
       {tasks.length === 0 ? (
         <p className="py-6 text-sm leading-6 text-os-muted-paper">{t('hermes.empty')}</p>
-      ) : (
+      ) : <>
         <ol className="list-none divide-y divide-os-rule-paper p-0">
-          {tasks.map((task, index) => (
-            <li key={task.id}>
+          {visibleTasks.map((task, index) => {
+            const stateKey = localizedTaskStates[task.state];
+            return <li key={task.id}>
               <Link
                 className="group grid grid-cols-[2.2rem_minmax(0,1fr)_auto] items-start gap-3 py-4 outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"
                 href={hermesTaskHref(task)}
@@ -49,12 +66,20 @@ export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
                   <span data-reading-role="caption" className="mt-1 block truncate font-data text-os-muted-paper">{task.logicalPath}</span>
                   {task.error ? <span className="mt-1 block text-sm text-os-vermilion-ink">{task.error}</span> : null}
                 </span>
-                <span data-reading-role="caption" className="font-data text-os-muted-paper">{task.state.replaceAll('_', ' ')}</span>
+                <span data-reading-role="caption" className="font-data text-os-muted-paper">
+                  {stateKey ? t(`hermes.taskStates.${stateKey}`) : task.state.replaceAll('_', ' ')}
+                </span>
               </Link>
-            </li>
-          ))}
+            </li>;
+          })}
         </ol>
-      )}
+        {tasks.length > 3 ? <button
+          aria-expanded={expanded}
+          className="mt-3 min-h-11 border-b border-os-rule-paper text-sm text-os-ink hover:border-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"
+          onClick={() => setExpanded((current) => !current)}
+          type="button"
+        >{expanded ? t('hermes.showLess') : t('hermes.showMore', { count: tasks.length - 3 })}</button> : null}
+      </>}
     </aside>
   );
 }

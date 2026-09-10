@@ -1,5 +1,18 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { editorReducer, emptyCore, saveDraft, loadDraft, clearDraft, draftKey } from '../lib/editor-state';
+import {
+  chooseConflictField,
+  clearDraft,
+  conflictChoicesComplete,
+  coreFieldsChanged,
+  createCoreConflict,
+  draftKey,
+  editorReducer,
+  emptyCore,
+  loadDraft,
+  resolveCoreConflict,
+  resolveDraftChoice,
+  saveDraft,
+} from '../lib/editor-state';
 import { suggestionReducer, applySuggestionsToCore, demoSuggestions } from '../lib/suggestions';
 
 /** §5.1 六字段（对齐 SDF_CORE_FIELDS，合同测试本地常量避免跨包依赖）。 */
@@ -56,6 +69,14 @@ describe('editorReducer', () => {
     expect(s.lastSavedAt).not.toBeNull();
   });
 
+  it('replace keeps restored local text dirty against the current server revision', () => {
+    const s = editorReducer({ core: core(), version: 2, dirty: false, lastSavedAt: 10 }, {
+      type: 'replace', core: { ...core(), problem: 'Recovered locally' }, version: 4, dirty: true,
+    });
+    expect(s).toMatchObject({ version: 4, dirty: true, lastSavedAt: 10 });
+    expect(s.core.problem).toBe('Recovered locally');
+  });
+
   it('六字段全可编辑（§5.1 SDF_CORE_FIELDS）', () => {
     for (const field of SDF_CORE_FIELDS) {
       const s = editorReducer({ core: core(), version: 1, dirty: false, lastSavedAt: null }, { type: 'edit_field', field, value: `新${field}` });
@@ -64,7 +85,56 @@ describe('editorReducer', () => {
   });
 });
 
+describe('editor conflict resolution', () => {
+  it('keeps local input untouched until every changed field has an explicit choice', () => {
+    const local = { ...core(), problem: 'My problem', results: 'My result' };
+    const server = { ...core(), problem: 'Server problem', results: 'Server result' };
+    const conflict = createCoreConflict(local, server, 8);
+    expect(conflict.fields).toEqual(['problem', 'results']);
+    expect(resolveCoreConflict(chooseConflictField(conflict, 'problem', 'mine'))).toBeNull();
+    expect(conflict.localCore).toEqual(local);
+  });
+
+  it('merges field choices and advances the save base without claiming the local choice is saved', () => {
+    const local = { ...core(), problem: 'My problem', results: 'My result' };
+    const server = { ...core(), problem: 'Server problem', results: 'Server result' };
+    let conflict = createCoreConflict(local, server, 8);
+    conflict = chooseConflictField(conflict, 'problem', 'mine');
+    conflict = chooseConflictField(conflict, 'results', 'server');
+    expect(conflictChoicesComplete(conflict)).toBe(true);
+    expect(resolveCoreConflict(conflict)).toEqual({
+      core: { ...server, problem: 'My problem' }, version: 8, dirty: true,
+    });
+  });
+
+  it('choosing server content for all changes produces a clean current-revision state', () => {
+    const local = { ...core(), method: 'My method' };
+    const server = { ...core(), method: 'Server method' };
+    const conflict = chooseConflictField(createCoreConflict(local, server, 9), 'method', 'server');
+    expect(resolveCoreConflict(conflict)).toEqual({ core: server, version: 9, dirty: false });
+  });
+
+  it('still requires applying the newer revision when another field outside SDF caused the conflict', () => {
+    const conflict = createCoreConflict(core(), core(), 10);
+    expect(conflictChoicesComplete(conflict)).toBe(true);
+    expect(resolveCoreConflict(conflict)).toEqual({ core: core(), version: 10, dirty: false });
+  });
+
+  it('diffs forward-compatible fields so unseen extensions cannot be overwritten silently', () => {
+    const local = { ...core(), futureField: 'mine' } as unknown as ReturnType<typeof core>;
+    const server = { ...core(), futureField: 'server' } as unknown as ReturnType<typeof core>;
+    expect(coreFieldsChanged(local, server)).toEqual(['futureField']);
+  });
+});
+
 describe('草稿持久化（§18.3）', () => {
+
+  it('requires an explicit restore or discard choice against server content', () => {
+    const server = { core: core(), version: 6 };
+    const draft = { core: { ...core(), problem: 'Local recovery' }, savedAt: 10 };
+    expect(resolveDraftChoice(server, draft, 'restore')).toEqual({ core: draft.core, version: 6, dirty: true });
+    expect(resolveDraftChoice(server, draft, 'discard')).toEqual({ core: server.core, version: 6, dirty: false });
+  });
 
   it('saveDraft + loadDraft 往返', () => {
     const c = core();

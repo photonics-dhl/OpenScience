@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { IngestionProgress } from './IngestionProgress';
 import type { IntakeMaterial, MaterialRole } from './intake-model';
 import { MaterialRoleSelect } from './MaterialRoleSelect';
+import { ArtifactViewer } from '@/components/research/ArtifactViewer';
 
 export function MaterialQueue({ materials, onRoleChange, onPrimaryChange, onRemove, onRetry }: {
   materials: IntakeMaterial[];
@@ -25,12 +26,13 @@ export function MaterialQueue({ materials, onRoleChange, onPrimaryChange, onRemo
             <div className="min-w-0">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="truncate font-medium" id={titleId}>{material.file.name}</h3>
+                  <h3 className="break-all font-medium" id={titleId}>{material.file.name}</h3>
                   <p className="mt-1 text-sm text-os-muted-paper">{(material.file.size / 1024).toFixed(1)} KB · {t(`status.${material.status}`)}</p>
                 </div>
                 {!locked ? <button className="border-0 bg-transparent p-0 text-sm text-os-muted-paper underline-offset-4 hover:text-os-ink hover:underline" type="button" onClick={() => onRemove(material.localId)}>{t('remove')}</button> : null}
               </div>
               <div className="mt-4"><IngestionProgress progress={material.progress} status={material.status} /></div>
+              {material.artifactId ? <div className="mt-3"><ArtifactViewer artifactId={material.artifactId} logicalPath={material.file.name} /></div> : null}
               {material.errorCode ? <p className="mt-3 text-sm text-state-danger" role="alert">{material.errorCode}</p> : null}
             </div>
             <MaterialRoleSelect labelledBy={titleId} onChange={(role) => onRoleChange(material.localId, role)} value={material.role} />

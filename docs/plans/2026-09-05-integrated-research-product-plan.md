@@ -1,9 +1,41 @@
 # Integrated Research Product Delivery Plan
 
 > 执行者使用 executing-plans；只有独立且有明确 owner 的工作才委派。
-> 状态：CURRENT；2026-09-06 收尾与页面调查完成，见末尾审计。应用4d39808 / rollback f144eb7（PR102选择性同事UX已部署）；独立动画demo9848411。整体联调和改版先经 grill-me 讨论，旧任务顺序不构成继续实施授权。
+> 状态：CURRENT；当前版本以 Hermes CURRENT handoff 为准。2026-09-09 已授权沿真实用户流程全面优化并直接服务器部署；下方旧审计/版本为历史，不构成预检或重复设计审批要求。
 
+
+### 2026-09-09 当前交付：质量优先完整旅程
+
+用户要求先完成2–3篇精选，再恢复批量冷启动。Chat已实际发送并取回完整产品方案：https://chatgpt.com/c/6aa162f9-d0e4-83ea-afbf-243f7aae8a22 （先文字讨论；后已发送dashboard-c2d11326.jpg并收到6 Pro视觉建议）。
+
+| 问题 | 依据 | 处理 / 当前状态 |
+| --- | --- | --- |
+| 上传后附件只有文件名，无法就地查看 | ArtifactUploader/ArtifactRow | c2d11326已部署受认证下载支持的PDF/位图预览，其他格式下载；关闭/换材料取消请求 |
+| 来源确认固定授权图片，没有视频选择 | IngestionClaimReview固定image-v1/7 | c2d11326已部署图片/视频单选，沿用已有image7/video8授权；不改变来源确认要求 |
+| 公开索引与详情内容不一致，可能暴露草稿摘要 | explore读取sdfDocument，详情读manifest | c2d11326已改用已发布manifest检索和展示；公开版本不原地改写 |
+| 公开页重复问题、媒体埋在页尾 | PublicReadingSurface | c2d11326已去重，问题/图解/研究正文/主张来源/引用；换版本清除旧证据抽屉 |
+| method无P编号、reproducibility来源超限 | 原论文实际partial记录 | 理解skill v3与定向反馈要求更少且足够的精确来源；未运行新提取，不能称科学问题解决 |
+| 旧目录型展示与个人测试记录占据列表 | 服务器定向查询18条demo-source及测试命名草稿 | 可恢复归档，保留正文、文件、发布版本和公开标识；实际论文保留；c2d11326部署后已正常归档34条并写审计 |
+| 归档RO的旧任务仍显示在工作台 | 已登录服务器工作台9条Production acceptance | 默认任务列表增加RO archived过滤；待部署 |
+| Hermes静态回退仍常驻重试动效，形象下沉 | 已登录Overview实际截图 | 改善静态回退与布局；待部署 |
+| 确认过的论文缺少新分析入口 | 现有refresh只允许needs_review | 新建可确认分析草稿、复用SourceMap、保留旧版本；权限/幂等静态复核已修，待部署 |
+| 网页图片未进产品 | 上轮真实PNG仅位于私有jobs | P0未完成：runner→Hermes队列/Gateway→草稿资产→审核→发布 |
+
+截图复核新增：工作台留白收紧、重复标题去除、队列默认3条可展开且失败优先、Hermes入口长文件名换行；已形成下一批代码，尚未部署观察。
+
+采纳Chat：来源处理失败不等于论文未报告；区分作者局限、适用边界和系统讨论点；生成/审核/发布三种状态分开；公开正文优先、证据按需展开。未采纳机械“六项都有文本才通过”：允许有依据的未报告，不能为了完整度编造。精选选常规实验、跨章节理论（保留当前孔径论文）、信息不完整但边界表达可靠的论文；具体2–3篇在附件/内容质量核对后确定，不能把旧demo目录当作完整论文成果。
+
+本批c2d11326已服务器部署exit0；附件/媒体选择/公开页/提取prompt已上线，但未重新提取或视觉验收。索引按最新发布快照批次扫描，稀疏搜索存在扩容性能债务。
+
+本段覆盖下方历史测试计划；不跑测试/预检，只有必要服务器构建启动和真实产品操作。未闭环项保持未完成。
 **Goal:** 分段交付工作区—Hermes—RO、多模态展示与语音编辑完整产品体验。
+
+### 2026-09-09 用户纠正：全文理解优先
+
+- 六字段是展示维度，不是论文模板。Hermes先辨认理论/实验/数值/混合等研究路径，综合全文，允许从推导、结果、图注和附录归纳方法，再关联支持各断言的来源。
+- 同次模型调用完成理解、组织和来源核对，不新增规划轮次。区分有依据的跨章节归纳与虚构步骤/因果；区分假设、适用域、完整公式与极限近似。
+- 来源整理失败保留`unverifiedSummaries`只读草稿及字段诊断，不写canonical core/evidence，不作已验证来源；不能误报论文没有方法。资源上限保持，不截断证据或补造结果。
+- 网页6 Pro已在原规划对话实际复核上述方向：[讨论记录](https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec)。技术格式通过不代表科学忠实性已验证。
 
 当前调查入口：[2026-09-06 收尾与页面审计](#closeout-20260906)。以下实施任务保留为历史/候选，等待用户讨论后重排。
 
@@ -529,3 +561,142 @@ User confirmed extending the accepted pale/ink/teal direction to the full entry 
 3. Focused existing auth/dashboard tests, Web build, desktop/mobile login/register visual inspection and route checks; independent release review. Deploy through existing script over verified8e4ecb2, retaining rollback. No full business-pipeline completion claim.
 
 Entry continuity delivered5e4b4d4 with rollback8e4ecb2. Server canonical acceptance and public auth8/product8 checks passed; optional signup profile collapsed after actual mobile inspection. Existing37 unit and5 browser fixtures passed. Shared styling covers DashboardShell routes, but route-specific redesign and full research business flow remain open; user visual acceptance is pending.
+## 2026-09-08 user correction: server-owned Hermes media capability
+
+User approved the real53.875s video, but requires a reusable server product: a user asks Hermes to generate from workspace literature; Codex must not manually prepare Claims, select asset IDs, or drive each stage. This supersedes treating one accepted sample as product completion.
+
+Current evidence at production97aa06a5:
+- Server image,offline TTS,render,storage,queue,asset approval and playback work. The accepted sample was generated on ECS, not rendered on the desktop and uploaded.
+- Main/Chat supplied scientific refinements and selected/reviewed inputs; ignored local acceptance scripts submitted each task. This is assisted acceptance, not autonomous UX.
+- Generic Hermes task kinds exclude presentation.generate (domain agent.ts). Dedicated presentation-assets route creates tasks, but no server-owned multi-stage coordinator or approval-resume chain exists.
+- Worker image/video paths require platform_admin. Video domain fixes onchip-field-sampling-v1, five approved images and one-paper source contract. Removing the profile check would render wrong physics; do not do that.
+
+Implementation sequence and acceptance:
+1. Add a server-owned Hermes media intent bound to current workspace/RO/version and source snapshot. Reuse existing membership,queue/outbox,task IDs,idempotency and parent/source revalidation. Ordinary authorized workspace users need an explicit supported capability, not a blanket administrator role.
+2. Persist generation stages and resume on server: source readiness→grounded draft Claims/storyboard→image tasks→voice/render→reviewable result. User generation consent does not auto-verify scientific evidence or publish content. Any necessary review must be a visible Hermes task state with resume, not Codex intervention or implicit approval.
+3. Generalize supported data-only rendering programs from grounded source/storyboard; keep the on-chip profile as a tested example. No arbitrary model-generated executable code, wrong-paper template reuse or fake simulation. Unsupported mechanisms must be explicit, not silently converted into the fixed paper's physics or a still-image slideshow.
+4. Product UI: one primary instruction/action, visible stage/progress and recoverable error, final player/gallery; source detail and rejected/history assets in secondary disclosure. Remove internal asset labels; preserve scientific provenance and review. Desktop/mobile layout uses current A/Folio design and Hermes identity.
+5. Real acceptance uses a normal workspace user and another supported paper without hand-written Claims or local orchestration scripts. Submit through Hermes, close client, let server finish/resume after worker restart, reopen and see result. Test duplicate submission and scope changes without duplicate spend or cross-user exposure. Finish source correctness, actual motion/voice, playback and permissions before declaring product capability complete.
+
+High-risk review focuses on authorization/cost scope, durable-stage retries and scientific source binding. Existing server primitives are reused; do not create parallel worker infrastructure merely to satisfy this plan. Browser Chat planning remains authorized but current controls fail (in-app read timeout; Chrome Debugger unattached); do not claim a new web plan was received.
+
+### Capability wiring audit and user priority (2026-09-08)
+
+- User explicitly orders: complete server-owned real workflow using existing capabilities first; improve UX/layout/aesthetics second; equip further Hermes capabilities afterward.
+- Read-only audit at97aa06a confirms local OCR via index.ts136–180/cascade-orchestrator.ts231–249; ScanSci via index.ts522–554 and retrieval/handler.ts80–84; sdf.extract and presentation.generate registered at index.ts260–305. These are executable integrations, not only registry entries.
+- Existing durable Redis/DB outbox and worker loop can run without Codex. Missing capability is coordinated transition among retrieval, extraction, grounded planning and media, preserving user/workspace/source identity and resumable reviews.
+- Production LLM OCR is disabled (index.ts146–151); use existing local OCR first, do not claim vision fallback is available or enable it without evaluating need and deployment constraints.
+- Browser Chat planning remains NOT submitted: after the user switched Chrome to the correct conversation, getTab returned Debugger unattached. No new Chat recommendation exists. Explorer audit is local source evidence, not the requested external plan.
+
+### Chat planning retrieved (2026-09-08, 6 Pro)
+
+Source: https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec . Request actually sent15:06; final answer visibly completed after8m33s. This is a summary, not a verbatim export.
+
+- Adopt a constrained server orchestration entry using existing AgentTask/domain services/worker/outbox. Persist stages and child/result references; review waits release worker capacity and authorized review resumes through durable dispatch. Verify transaction, lease and provider idempotency support before implementation; outbox alone is not exactly-once execution.
+- First vertical slice: ordinary member uploads the currently supported paper; automatic source-grounded SDF/Claim drafts; product batch review and same-version commit; storyboard/images/voice/animation; private result. No manually authored Claims or local stage-driving scripts.
+- Native extraction first; OCR only problematic pages; ScanSci acquisition/supplements when needed and rights permit; BGE finds evidence within authorized sources, then use exact original blocks. Keep local OCR and existing parser isolation; no unverified vision fallback claim.
+- Separate scoped generation authority from scientific verification/publication; carry member/RO/version/source checks through execution and result access. Reuse successful stages, bound resources, and reconcile uncertain external responses rather than blindly repeating paid calls.
+- Retain onchip-specific physics guard. Add only supported data-driven animation primitives with explicit scientific/source constraints for another paper; unsupported mechanisms stop clearly. No arbitrary model code or fake simulation.
+- Required acceptance: normal user, upload and literature clue entry, client closure, worker restart, duplicate dispatch, source/review changes, revoked access, real motion/audio/private playback, another supported paper.
+- Main corrections: second-paper functional acceptance precedes UX polish per user priority; Chat's unexplained Serena name is not an established local capability and is not adopted. No implementation or deployment success is implied by receiving this plan.
+- Browser diagnosis: individual Chrome calls took about43s;60s single-action limits succeeded. Default30s and combined slow actions caused resets. This does not establish every prior Debugger unattached root cause.
+
+### First server slice implementation checkpoint
+
+- Actual route: Terra/medium implemented source-readiness decisions (8 focused tests); Sol/medium owns run metadata/API/worker implementation; independent Sol/high reviewed permissions/concurrency. No measured end-to-end Codex savings percentage.
+- First slice attaches existing authorized ingestion tasks and server reconciliation advances only to awaiting_source_review. It does not yet submit a new full research journey, create/verify Claims, resume after approval, or generate media. Names must not imply Claims already exist.
+- Persistent run/step rows address missing cross-stage identity; request digest detects idempotency-key input changes. last_reconciled_at addresses starvation when a bounded scan repeatedly visits early unfinished rows. No separate paid coordination task or queue.
+- Review found excessive tick writes, per-row error isolation, missing Serializable create retry, and absent transition audit; fixes and regression validation are required before release.
+- Fresh production checkup passed (log1788852190942-86abf97c-1194-4e50-a3a6-9ad9cc3b0ac3); source/public release lookup log1788852567786-fb37d0d0-b45c-4374-b8cf-2339bc2f76c4. Production remains97aa06a, rollbackc5b0dd7.
+- Local Docker Linux engine unavailable; migration forward/rollback/reapply runtime test is still missing. Additive SQL/schema validation cannot replace that evidence. No production migration or deployment performed for this slice.
+
+## 2026-09-08 — 内容驱动媒体（当前实施范围）
+
+用户明确废止把固定论文样例当通用产品能力。固定的是安全执行原语和授权上限；论文SHA、场景顺序、科学对象/关系不得写死。Hermes依据同版已审核Claims及来源自主选取3–6幕（当前资源范围），给出旁白、时长和声明式对象/动作。每个动作附原文依据及含义；结构校验不等于科学审查。
+
+复用现有研究run、版本、来源、分镜修订、素材、任务/outbox、费用、图片与离线Qwen连续配音。新增content-driven-v1授权最多8个阶段任务，旧7任务授权由产品入口明确升级；不改旧授权或重复来源入库。renderer仅解释有限形状/箭头/示意轨迹/标签及受限运动，不执行模型代码、不抓外部URL；主画布由同一计划生成，图片是独立参考插图。常显概念/非实测/非仿真/尺寸时间非比例说明，不能借免责声明编造过程。
+
+已知限制：当前输出是中文有据概念动画，不是任意数值仿真或任意科学图形的万能生成器。缺证据或原语不足应缩小范围/留待修订，不回退某篇论文模板。用户禁止测试套件；当前交付通过实际产品任务推进，服务器必要构建部署，尚未以新MP4证明闭环。
+
+网页完整规划： https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec （8m10s答复，主线程已读）。它的扩展状态/测试矩阵属建议，不覆盖用户不测试的约束；本轮不新建Agent框架或复制整套合同。
+## 2026-09-09 — 网页6 Pro讨论后的产品落地批次（CURRENT）
+
+网页会话：https://chatgpt.com/c/6a9e7dac-e4c8-83ea-9857-4c52ad66c8ec 。已实际提交完整约束并读回4m36s完成答复；本轮未附当前截图，不称截图评审。源任务已经SUCCEEDED，生产3446f309，详情以Hermes CURRENT handoff为准。
+
+用户明确：产品落地第一；不运行测试、预检、演练或CI测试。本机仅静态读取/编辑，服务器按需构建部署并观察产品。既定暖纸/墨色/青绿、连续研究工作区、上下文Hermes侧栏、Wanko保留，不重新选择设计方向，不安装设计仓库。
+
+采纳的实施顺序：
+1. 真实服务器建议→可编辑草稿；区分“按上下文预填”与“Hermes建议”，先恢复草稿，再填未触碰字段；清空也算用户修改；迟到响应不得跨RO/版本覆盖；不因展开/导航新增模型调用。
+2. Hermes顶部呈现当前上下文与一项主要动作，长来源/日志次级展开；收起不被轮询强行打开。草稿/任务/媒体入口保留版本及返回上下文，已有批准成果优先查看；来源PARTIAL与媒体完成分开显示。
+3. 在现有tokens与控件收敛字号/间距/圆角/颜色，保留阅读与工具密度差异，不用全局选择器误伤公式/PDF/媒体。桌面侧栏约320–360px，空间不足转流内布局；移动主要触控44px，输入与正文不遮挡。
+
+第一批实际代码缺口：workspace.guide目前只有summary/nextSteps/needsMoreInformation，无独立建议字段；媒体指令路由目前只复制用户输入；HermesAssistantDrawer路由上下文变化清空草稿；SubmissionIntent仅保护不确定提交，不能冒充完整草稿持久化。优先在既有gateway/guide输出路径补有界建议，复用当前表单与确认逻辑，保留权限及提交幂等。
+
+参考使用：Emil负责交互反馈与可中断过渡；Impeccable借鉴保持原视觉体系、最小层级修改；Diagram Design为科研内容表达参考；story-to-handdrawn-video不替换已完成动画；不照搬安装/检测/预检流程。
+
+实施负责人：Sol/medium子任务hermes_ux_delivery，负责本批代码；主线程负责来源/范围核对、文档、集成与服务器部署。独立high仅聚焦跨账号草稿和建议作用域/付费边界；不新增检查工具。跨设备同步、多人合并、复杂侧栏拖拽、新媒体能力留后续。
+
+落实状态：首批已部署45dabd7a（rollback3446f309），真实storyboard.create建议进入可编辑表单，账号/RO/实际版本草稿隔离与清空保留、侧栏层级已落地。canonical --no-tests服务器构建启动exit0；未运行测试、媒体重生成或独立预检。产品浏览器未登录，尚未观察登录后界面；全站字体/布局与跨页主动作仍是后续工作。
+
+### 2026-09-09 — 编辑来源与缺失状态（进行中）
+用户提供正文编辑截图：空字段占据过大区域、逐字段重复缺失提示、疑似大纲遮挡；这只是案例，要求覆盖整个研究工作区体验。静态定位发现编辑AI提取只序列化state.core，不读上传PDF；artifactId ingestion才走服务器parser/OCR/sourceMap。不能把截图推定为PDF解析失败。原网页6 Pro会话已实际收到新问题（文字转述截图，未附图），已读回4m21s完整建议并采纳来源纠偏、缺口聚合和编辑专属密度；候选行为摘要第二轮已送达等待复核。Sol/medium复用同一实现者处理来源说明、空正文拦截、现有文献审核入口、缺失摘要及编辑密度。未执行测试/预检/提取重跑。生产仍45dabd7a，当前候选未部署。
+
+第二轮网页复核已读回2m14s：支持先上线此有界批次，未确认阻塞；提醒artifact续跑/草稿保留/移动栏宽。静态核对artifact走独立ingestion续跑、当前正文retry保持排除artifact、现有RO草稿恢复仍在、栏宽只在桌面media query。未上传截图，不称视觉验收。1cdb18e0已部署，rollback45dabd7a；服务器canonical --no-tests构建启动exit0，日志1788920554267-b1b32e67-7192-4d38-8f8e-c5d831217b64。后续需处理单一Hermes面板、跨页状态和疑似描边；既有草稿保存有1秒debounce，快速离开编辑页的flush可在接续导航工作中补齐。
+
+## 2026-09-09 — 实际用户旅程问题记录（b03263de）
+已实际从 landing 点击登录，用户完成认证后走 dashboard → 当前论文来源审核 → 图解与视频 → 编辑。未运行测试/预检，未确认论文内容或重生成媒体。网页6 Pro已实际返回本轮建议（1m26s）。
+
+| 问题 | 证据/原因 | 修复与状态 |
+| --- | --- | --- |
+| Hermes长时间动效启动中 | 审核和图解页实际AX；首帧前可见性暂停会取消渲染 | 首帧后暂停，状态切换复用canvas；候选 |
+| 跨页短暂消失/露底 | 用户报告；Stage条件卸载、空fallback、被动anchor注册 | 常驻支持路由、静态fallback、layout effect；候选，未改后观察 |
+| 登录形象褐色底板 | 用户报告，源PNG实际观察有不透明米褐底 | imagegen生成透明背景衍生图，原图保留；候选 |
+| 桌面Hermes占大量留白 | dashboard实际截图 | 默认compact与紧凑anchor；保留用户选项；候选 |
+| 中文页面显示内部英文状态 | 实际suggesting/needs review | 翻译Hermes/任务状态；候选 |
+| 登录/注册标签标题固定英文 | 登录实际观察+auth metadata代码 | 使用现有语言资源；候选 |
+| 审核空字段大块黄底输入框 | 实际审核截图，5rows/text-lg/暖底 | 空项2行、16px、白底、24px标题；候选 |
+| 无主张时引导回编辑/手工操作，自动媒体文案过时 | 当前论文图解页实际AX | 优先文献提取审核入口，明确服务器生成；候选 |
+| 图解返回编辑整页加载 | 内部链接使用普通a静态证据 | Next Link，保留共享布局；候选 |
+
+补充已修复候选：窄屏编辑隐藏右栏内Hermes锚点导致不可见，改有效浮动定位与独立drawer；概览已有文献任务仍显示从论文开始，改读取同RO任务并提供继续入口。合计11类问题。
+仍需：改后服务器页面观察、完整跨页一致性、编辑快速离开草稿保护。此次894px截图不代表390px移动端验收，当前论文仅洞见字段有提取内容，不宣称全文分析完成。
+### 实际改后观察与继续修正
+- b03263de服务器构建部署exit0；概览已显示继续已有文献并链接原任务、Hermes不再持续启动中、窄屏编辑入口及drawer可用、登录褐底消失且标题中文、正常登录回dashboard与中文任务状态已观察。
+- 同一真实旅程发现第12项：动效按钮guide top与fixed bottom共同生效形成整屏黑条，1ec98fc6修position/bottom，随fb61cf63部署exit0；改后截图黑条消失且200px形象生效。
+- 第13项：进入编辑自动字段引导遮导航。第14项：助手drawer旧暖黄/大标题/橙色与灰白青绿工作区不一致。继续取消切页自动引导、保留主动请求，并局部统一助手样式。
+- 统计14类（问题不等于14个独立用户流程均完成）。未重生成论文、未提交来源确认、未运行测试/预检。仍需全部主流程的后续视觉一致性、快速离开编辑的草稿保存和来源到主张的自然承接。
+最终发布e0ff364e / rollbackfb61cf63，canonical --no-tests exit0；日志1788924361937-cc8f3b7c-7bca-4fb2-9b47-3070fa9d65db。最终截图确认黑条/自动批注消失，形象为紧凑浮动入口；切换期间一次502随后恢复。改后抽屉最终配色尚未重新截图，浮动形象仍可能占部分正文，后续需单一流内助手布局，不能宣称全站体验全部完成。
+
+## 2026-09-09 — 上传即整理并预填草稿（已部署）
+- 用户要求：PDF等材料上传后自动提取、AI整理待填写字段，用户只做必要核对和少量修改；继续网页Chat规划，不增加测试/预检。
+- 已证实断点：edit/files ArtifactUploader只存artifact；new intake已有同RO ingestion→parser/OCR→AI；编辑页拒绝未确认task，未接result.core。此次复用现有batch/task/confirmation能力，不新增解析服务或迁移。
+- 网页6 Pro实际发送并读回3m29s方案：统一上传入口；完成即入未触碰草稿字段；用户/RO/版本/来源/task隔离；修改和清空都保护；多文件不混合；保存草稿≠确认来源；沿既有权限/预算/幂等。
+- 实施：文献直接startIngestionBatch而非先rawupload再重复上传；普通附件保持存储；上传可见说明自动分析；已有任务只读恢复。编辑内显示当前文件、真实阶段、自动预填及原文证据；一次明确确认调用既有confirmIngestionTask，普通保存不绕过来源边界。
+- 路由：Luna/low有界取证；Sol/medium单负责人实现；Sol/high确认边界独立审查；主线程网页、集成和部署。禁止本地测试/构建/预检及重复媒体生成，服务器按需构建部署。
+- 候选静态复核已收敛：仅一个可编辑建议表单；逐字段保留人工修改/清空；恢复/丢弃草稿先决策再预填；同task重提取刷新未触碰字段；确认歧义保留原提交、明确4xx解锁、409保留用户冲突文本并提示；人工内容与原始证据分开。全空建议不能确认。
+- 边界：不自动合并多篇论文；新上传文献自动分析，普通非文献附件仍走存储。此次不重新上传/生成，不据此声称新上传运行已验收。原网页6 Pro候选复核实际读回1m27s，支持有界上线；补当前任务详情/恢复链接，沿既有失败续接。已完成服务器部署。
+- fc503808已部署exit0 / rollback e0ff364e。实际已有论文task自动预填洞见、五项缺失如实可见，确认操作在同页。438px截图发现长材料名导致横向滚动，追加source picker宽度修正；不重新提取或确认论文。
+
+- 最终宽度补丁18b69b3c已部署exit0 / rollback fc503808，日志1788929188544-a0121f14-9763-45f2-8ed3-691b1fe9bf3c。内置浏览器刷新出现ERR_TIMED_OUT，最终截图未取得；不称全站体验或新上传流程全面验收。下一步先恢复页面观察，继续Hermes不遮正文的布局与文献提取覆盖度。
+
+### 旧材料分析升级（当前执行）
+- 服务器只读证据：Quantization任务7a28a7c8-90f7-429b-a519-53397cf58856的agent0373e9fb-adfc-42e3-8599-159de1094e65创建于2026-08-28，payload含artifactId/researchObjectId；result只有旧core/evidence(chars)/needsMoreInformation，只有insight非空。无现代sourceMapRef/evidenceSegments，旧输出不能证明当前解析器失败。
+- 当前retry拒绝旧部分成功任务，缺少复用上传资料升级入口。采用同IngestionTask下独立新AgentTask、事务扣费与CAS绑定，旧AgentTask/result保留；不修改已确认版本，不重传、不原地清空旧结果、不宽泛放开失败重试。
+- 网页6Pro实际2m38s方案：一次适用预算授权、新分析可恢复/幂等、未触碰字段接续、旧证据不冒充新证据；不为了填满而编造。Sol/medium实现、Sol/high定点静态复核，无测试/本地运行。
+- a0b47065已部署exit0 / rollback18b69b3c；正式UI更新原文献生成018b0c76-ef08-4db9-8dd7-8703d6195fd0。从1字段到3字段但不合格：断句及results段数超32，旧成功Agent结果仍保留。
+- 只读真实sourceMap确认15页、2000余块，PDF.js词/run一对一段落导致同一行碎裂。修复native-pdf文本run保守同行归并、坐标union及新processor版本；保持证据块/字数上限，补通用完整句span提示。只允许明确旧分段版本+segment_count诊断独立新Agent恢复，不对一般partial无限付费重试。
+
+实际续接：9741ec53已部署（rollback a0b47065）。同材料正式分析6ef59171-714c-4b35-9ba5-163b5573690a显示词级碎片改善，但results contiguous_ids_required、problem/insight断尾。未确认结果；当前继续修复稀疏输入上下文与过早保留字段，不重复上传或手工填文。
+
+1df9f617上下文版已部署，真实Agentc4d23d59仍有断句/results段数失败。下一候选改模型输出原文quote和窗口id，服务器唯一精确匹配并映射block内charRange回读，不使用模型summary写core，不放宽证据。材料状态标签直接采用同任务最新proposal detail，避免已完成仍显示排队中。
+
+1267e298精确选句正式部署完成。实际f286cc57仍partial：problem/results quote_not_found，method/insight完整、reproducibility非空，limitations断头；页面待确认状态已实际同步。未确认/未称全流程完成。quote_not_found现混合0匹配、locator异常、拼接差异，原始quote未存日志，后续需精确失败原因后定向修复，避免盲调与反复扣费。
+
+## 2026-09-09 — 当前范围更新：理解论文到图片
+
+- 用户明确先做到生图，视频不执行。此前视频规划保留为后续能力，不作为本批交付前提。
+- 纠正六字段直接复制原文：Hermes凝练可编辑摘要，原文证据独立存储和回读；低质量公式先定向OCR，不根据乱码猜测。
+- 图片规划必须基于审核后的实际原文，包含对象、关系、布局、短标注与科学条件；服务器Codex负责生成，不由开发者手写图替代。
+- 新图片profile1–6幅，图片批准后完成；UI画廊优先、规划/来源折叠、视频次级。
+- 本轮浏览器控制连接失败，尚无新Chat复核或改后截图；复用先前批准方向，不谎称视觉观察。
+- 当前改动版本/部署/未决事项只以CURRENT handoff为准，禁止重复测试或按旧清单阻塞交付。

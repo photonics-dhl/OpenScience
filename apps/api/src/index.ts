@@ -4,6 +4,7 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { createPersonalWorkspace } from '@openscience/domain';
 import { createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
+import { CodexSpoolImageProvider } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 
 async function main(): Promise<void> {
@@ -17,12 +18,25 @@ async function main(): Promise<void> {
   // P1B-3：对象存储（S3_* env，dev 缺省 MinIO 127.0.0.1:9000）
   const storage = createStorageAdapter(env.storage);
   const logger = createLogger({ level: env.nodeEnv === 'production' ? 'info' : 'debug' });
+  const codexImageInboxDir = process.env.CODEX_IMAGE_INBOX_DIR?.trim();
+  const codexImageResultsDir = process.env.CODEX_IMAGE_RESULTS_DIR?.trim();
+  const codexImageProvider = env.ai.sceneImageEnabled && process.env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
+    && codexImageInboxDir && codexImageResultsDir
+    ? new CodexSpoolImageProvider({
+        inboxDir: codexImageInboxDir,
+        resultsDir: codexImageResultsDir,
+      })
+    : undefined;
   const app = await buildApp({
     prisma,
     redis,
     mailer,
     storage,
     sceneImageEnabled: env.ai.sceneImageEnabled,
+    videoEnabled: env.ai.videoEnabled,
+    ...(codexImageProvider ? {
+      canResumeImageBeforeSubmission: (requestId: string) => codexImageProvider.canResumeBeforeSubmission(requestId),
+    } : {}),
     // P1A-6：审计落库（domain/auth 写操作 + authz.deny 经 deps.audit 流出）
     audit: createPrismaAuditSink(prisma),
     // P1A-4：邮箱验证通过同事务创建 Personal Workspace（回调注入，避免 auth→domain 反向依赖）

@@ -45,6 +45,9 @@ try {
   await stage.waitFor();
   assert.equal(await stage.getAttribute('data-hermes-footprint-source'), 'carrier-travel-hull');
   await target.waitFor();
+  await page.locator('[data-sdf-node="2"] > button').click();
+  await page.waitForFunction(() => document.querySelector('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-guide-target') === 'sdf-insight');
+  await page.locator('[data-sdf-node="1"] > button').click();
   await page.locator('[data-hermes-guide-bubble]').waitFor();
   assert.equal(await stage.getAttribute('data-hermes-guide-motion'), 'static', 'a saved user dock must stay static until the user explicitly requests guide travel');
   const stationary = await page.evaluate(() => {

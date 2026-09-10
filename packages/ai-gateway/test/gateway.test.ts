@@ -64,9 +64,77 @@ describe('结构化输出 + Schema 校验（§9.3）', () => {
     expect(calls).toBe(2);
   });
 
-  it('超过重试上限 → SCHEMA_VALIDATION', async () => {
+  it('无效 JSON 超过重试上限 → STRUCTURED_JSON_INVALID', async () => {
     const gw = new AiGateway({ providers: [fakeProvider('p', async () => OK('bad'))] });
-    await expect(gw.completeStructured(isStringMap, [{ role: 'user', content: 'x' }])).rejects.toThrow(/重试上限/);
+    await expect(gw.completeStructured(isStringMap, [{ role: 'user', content: 'x' }])).rejects.toMatchObject({
+      code: 'STRUCTURED_JSON_INVALID',
+    });
+  });
+
+  it('Schema 失败重试可附加有界反馈且不回显原始响应', async () => {
+    const requests: unknown[] = [];
+    let calls = 0;
+    const provider: Provider = {
+      name: 'p', model: 'p',
+      complete: async (request) => {
+        requests.push(request);
+        calls += 1;
+        return OK(calls === 1 ? '{"secretRaw":"do-not-repeat"}' : '{"method":"m"}');
+      },
+    };
+    const gw = new AiGateway({ providers: [provider] });
+    const hasMethod = (value: unknown): value is { method: string } => typeof value === 'object' && value !== null
+      && typeof (value as { method?: unknown }).method === 'string';
+    const out = await gw.completeStructured(hasMethod, [{ role: 'user', content: 'x' }], {
+      validationFeedback: () => 'method:malformed_item',
+    });
+    expect(out).toEqual({ method: 'm' });
+    expect(JSON.stringify(requests[0])).not.toContain('malformed_item');
+    expect(JSON.stringify(requests[1])).toContain('method:malformed_item');
+    expect(JSON.stringify(requests[1])).not.toContain('do-not-repeat');
+  });
+
+  it('记录结构化失败阶段和受限诊断码但不记录响应内容', async () => {
+    const warnings: string[] = [];
+    const gw = new AiGateway({
+      providers: [fakeProvider('p', async () => OK('{"secretRaw":"do-not-log"}'))],
+      logger: { info: vi.fn(), error: vi.fn(), warn: (message) => warnings.push(message) },
+    });
+    const hasMethod = (value: unknown): value is { method: string } => typeof value === 'object' && value !== null
+      && typeof (value as { method?: unknown }).method === 'string';
+
+    await expect(gw.completeStructured(hasMethod, [{ role: 'user', content: 'x' }], {
+      validationDiagnostic: () => 'method:malformed_item',
+    })).rejects.toThrow(/重试上限/);
+
+    expect(warnings).toContain('structured.output.rejected stage=schema_validation attempt=1/3 diagnostic=method:malformed_item');
+    expect(warnings.join('\n')).not.toContain('do-not-log');
+  });
+
+  it('反馈回调异常不会泄漏原始异常或绕过有限重试', async () => {
+    let calls = 0;
+    const gw = new AiGateway({ providers: [fakeProvider('p', async () => {
+      calls += 1;
+      return OK('{"bad":"shape"}');
+    })] });
+    const hasMethod = (value: unknown): value is { method: string } => typeof value === 'object' && value !== null
+      && typeof (value as { method?: unknown }).method === 'string';
+    await expect(gw.completeStructured(hasMethod, [{ role: 'user', content: 'x' }], {
+      validationFeedback: () => { throw new Error('feedback callback secret'); },
+    })).rejects.toThrow(/重试上限/);
+    expect(calls).toBe(3);
+  });
+
+  it('传输失败不伪装成 structured 校验失败或重复同一 provider cycle', async () => {
+    let calls = 0;
+    const gw = new AiGateway({ providers: [fakeProvider('p', async () => {
+      calls += 1;
+      throw new Error('transport down');
+    })] });
+    await expect(gw.completeStructured(isStringMap, [{ role: 'user', content: 'x' }], {
+      validationFeedback: () => 'response:malformed_item',
+    })).rejects.toMatchObject({ code: 'ALL_PROVIDERS_FAILED' });
+    expect(calls).toBe(1);
   });
 });
 

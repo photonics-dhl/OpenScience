@@ -26,14 +26,18 @@ function seedIndex() {
     { id: 'v-private', researchObjectId: 'ro-private', versionNo: 1, status: 'published', publicVersionId: 'OSR-2026-999999-v1', createdAt: now },
   );
   db.versionManifests.push(
-    { id: 'm-1', versionId: 'v-1', coreJson: {}, createdAt: now },
-    { id: 'm-2', versionId: 'v-2', coreJson: {}, createdAt: now },
+    { id: 'm-1', versionId: 'v-1', coreJson: { insight: 'A measured femtosecond response.', method: 'Pump probe spectroscopy' }, createdAt: now },
+    { id: 'm-2', versionId: 'v-2', coreJson: { method: 'Versioned atmospheric workflow' }, createdAt: now },
   );
   db.manifestEntries.push(
     { id: 'e-1', manifestId: 'm-1', logicalPath: 'figure.png', artifactId: 'a-1', blobSha256: '1'.repeat(64) },
     { id: 'e-2', manifestId: 'm-2', logicalPath: 'analysis.py', artifactId: 'a-2', blobSha256: '2'.repeat(64) },
   );
   db.authors.push({ id: 'author-1', researchObjectId: 'ro-1', userId: 'u-1', sortOrder: 0 });
+  db.publications.push(
+    { id: 'publication-1', versionId: 'v-1', publishedAt: now },
+    { id: 'publication-2', versionId: 'v-2', publishedAt: now },
+  );
   return { prisma, db };
 }
 

@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`，rollback tree 为 `0aaf52fed29e79bb19b15517ba9ef50545510f72`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。OA、ZJU subscription-only PDF、四入口、72h/600s、presentation replay、真实 publish/public journey 与 exact aggregate gate 均已通过；现行完成态见 §5.66。
+> 状态：**CURRENT 操作手册**。实际 production/application source、rollback 与未完成验收以 `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` 和服务器精确 release 核验为准；下方阶段记录保留历史版本，不能据此恢复旧 release 或跳过当前验收。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -35,11 +35,31 @@ Git Bash 会沿用 Windows 用户目录中的 SSH 配置和项目专用密钥。
 
 ## 2. 执行步骤
 
+### 2.0 显式无测试部署
+
+默认发布合同保持 Parser acceptance、ScanSci capability canary、embedding runtime probe 与公网 auth 探针。标准命令仍为：
+
+```bash
+infra/scripts/deploy.sh --confirm --require-parser-acceptance \
+  --rollback-ref <current-active-ref> <release-ref>
+```
+
+只有在操作者已明确授权部署但同时明确禁止本次测试/预检时，才使用互斥的 `--no-tests`：
+
+```bash
+infra/scripts/deploy.sh --confirm --no-tests \
+  --rollback-ref <current-active-ref> <release-ref>
+```
+
+`--no-tests` 会跳过所有 `verify-document-parser-acceptance.mjs` report gate、ScanSci MCP/Worker 与 OA real-PDF/network capability probes、embedding health/vector runtime probes（包括失败回滚中的功能 probe），以及公网 `/auth/me`、`/admin/` 功能探针；同 SHA no-op 路径应用相同边界。该模式不生成、伪造或接受 Parser report，日志会持续标记 `UNVERIFIED_ACCEPTANCE`。因此发布只能记为“服务已启动且 release identity 已切换，产品验收未验证”，不得宣称 Parser、ScanSci、embedding 或鉴权验收通过。
+
+该选项不跳过 immutable source manifest、运行闭包权限归一化、生产 FD9 lock、active/rollback 精确匹配、durable journal、镜像构建与身份检查、模型 manifest 校验、数据库物理隔离和迁移（除非另有 `--skip-migrate`）、Parser/ScanSci/API/Web/Worker 与 embedding（启用时）的 Compose startup health、Nginx 配置检查、主页与 `/__release` 公网状态、capability publish、active CAS、失败回滚或 retention 安全检查。回滚仍恢复精确旧镜像并等待服务 healthy，只省略功能性 probe。
+
 ### 2.1 同步代码（`scripts/cloud-sync.mjs`）
 
 ```bash
 infra/scripts/deploy.sh --rollback-ref <known-good-ref> <release-ref> # dry-run
-infra/scripts/deploy.sh --confirm --rollback-ref <known-good-ref> <release-ref>
+infra/scripts/deploy.sh --confirm --require-parser-acceptance --rollback-ref <known-good-ref> <release-ref>
 # deploy 只接受 clean HEAD；完整 git archive 落到 /opt/openscience-releases/<40-char-sha>。
 # 不使用文件白名单；.dockerignore 等所有 tracked build input 必须进入归档。
 # /opt/openscience/.env.prod 与 .release-id 是稳定运行状态，不进入 release 目录。
@@ -2510,3 +2530,9 @@ Use the existing exact-source rollback procedure targeting8e4ecb2b5f9e291385b0df
 ### 验证命令
 
 Canonical build/parser16/core36/search2/BGE/ScanSci/container health passed; public/loopback200 and egress204. Journal cleared and retention completed. Public auth8 and product8 read-only checks passed with0business writes and controlled session closed. Evidence: ignored entry-deploy.log, entry-final-checkup.log, entry-shots.json and entry-product-evidence.json under apps/web/test/visual/out/research-journey/. No full research-pipeline or CI completion claim.
+
+### Hermes 同流程图片恢复（2026-09-09）
+
+API 使用组 11000 只读挂载 `/opt/openscience-codex/inbox` 与 `results`，仅核对候选任务的提交记录是否存在；不挂载运行器 private/state/auth，也不获得写入或执行图片权限。恢复接口必须先确认所有候选均无提交记录，才在事务内创建付费替代任务；Worker 执行前再次核对并消费一次性恢复标记。其他 Provider 缺少该能力时拒绝这类恢复。
+
+部署仍走既有 `deploy.sh --confirm --no-tests --rollback-ref <当前版本> <候选版本>`，应用构建和服务启动完成后使用正常用户界面的“继续未完成生成”。来源、资产、余额或版本发生变化时由接口拒绝；不得直接改任务状态。若回滚应用，使用记录的前一 release 及其 compose；本次不新增迁移，不清理已有图片和提交记录。

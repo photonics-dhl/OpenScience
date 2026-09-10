@@ -85,6 +85,7 @@ describe('MiniMax worker gateway config', () => {
       return new Response(JSON.stringify({ content: 'OCR result', base_resp: { status_code: 0 } }), { status: 200 });
     });
     const gateway = buildGateway({
+      AI_ENABLED: 'true',
       MINIMAX_API_KEY: 'test-token-plan-key',
       MINIMAX_VISION_ENABLED: 'true',
       MINIMAX_VISION_MODEL: 'coding-plan-vlm',
@@ -155,7 +156,7 @@ describe('MiniMax worker gateway config', () => {
       return new Response(JSON.stringify({ content: 'OCR result', base_resp: { status_code: 0 } }), { status: 200 });
     });
     const gateway = buildGateway(
-      { MINIMAX_API_KEY: 'test-key', MINIMAX_VISION_ENABLED: 'true', MINIMAX_VISION_REGION: 'cn' },
+      { AI_ENABLED: 'true', MINIMAX_API_KEY: 'test-key', MINIMAX_VISION_ENABLED: 'true', MINIMAX_VISION_REGION: 'cn' },
       fetchMock as never,
       undefined,
       async () => true,

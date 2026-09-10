@@ -9,7 +9,7 @@ import {
 } from '@openscience/domain';
 import { runDocumentParser } from './base-parser';
 import { enrichWithGrobid, type GrobidEnrichmentResult } from './grobid-parser';
-import type { ParserStageResult, StagePage } from './job-protocol';
+import { SafeParserWarningCode, type ParserStageResult, type StagePage } from './job-protocol';
 import {
   PARSER_CASCADE_METADATA,
   runLlmOcrFallback,
@@ -17,6 +17,7 @@ import {
 } from './llm-ocr-fallback';
 import { ocrSelectedPages, type LocalOcrAdapter } from './ocr-parser';
 import { assessPageQuality } from './page-quality';
+import { PDF_TEXT_ITEM_METADATA } from './native-pdf-contract';
 import type { DocumentParser, ParserInput } from './types';
 
 export const CASCADE_ORCHESTRATOR_METADATA: DocumentParserMetadata = PARSER_CASCADE_METADATA;
@@ -82,6 +83,13 @@ function emptySourceMap(input: ParserInput): DocumentSourceMap {
     parser: metadataCopy(CASCADE_ORCHESTRATOR_METADATA),
     pages: [],
   };
+}
+
+function hasNativePdfTextBlocks(sourceMap: DocumentSourceMap): boolean {
+  return sourceMap.pages.some((page) => page.blocks.some((block) => (
+    block.parser.name === PDF_TEXT_ITEM_METADATA.name
+    && block.parser.version === PDF_TEXT_ITEM_METADATA.version
+  )));
 }
 
 function normalizedText(value: string | undefined): string | undefined {
@@ -293,6 +301,8 @@ export async function runParserCascade(
   const warnings: string[] = [];
   let current = emptySourceMap(canonicalInput);
   let localStageSucceeded = false;
+  const nativeFidelityPages = new Set<number>();
+  let nativeFidelityUnscoped = false;
 
   try {
     const extracted = await runDocumentParser(adapterInput(canonicalInput), context.adapters.extractText);
@@ -300,6 +310,23 @@ export async function runParserCascade(
     if (extracted.status === 'failed') {
       reasons.push('extract_text failed');
     } else {
+      const nativeTextFidelityReview = canonicalInput.mediaType === 'application/pdf'
+        && extracted.status === 'succeeded'
+        && extracted.warnings.includes(SafeParserWarningCode.PARTIAL_RESULT)
+        && hasNativePdfTextBlocks(extracted.sourceMap);
+      if (nativeTextFidelityReview) {
+        // The native PDF parser fails a page closed by returning no blocks when
+        // any text item on that page cannot be represented safely. Keep the
+        // affected page identities so successful OCR can clear only the pages
+        // it actually recovered, without weakening the document-level gate.
+        for (const page of extracted.sourceMap.pages) {
+          if (page.blocks.length === 0) nativeFidelityPages.add(page.page);
+        }
+        // Keep the document-level latch when an adapter reports native text
+        // loss without identifying an empty page. Only concrete page recovery
+        // may clear this condition.
+        nativeFidelityUnscoped = nativeFidelityPages.size === 0;
+      }
       const stamped = withOrchestratorMetadata(extracted.sourceMap);
       if (!stamped) reasons.push('critical locator could not round-trip');
       else {
@@ -307,7 +334,9 @@ export async function runParserCascade(
         localStageSucceeded = current.pages.some((page) => page.blocks.length > 0);
       }
       if (extracted.status === 'needs_review') reasons.push(...extracted.reasons);
-      else warnings.push(...extracted.warnings);
+      else warnings.push(...extracted.warnings.filter((warning) => (
+        !nativeTextFidelityReview || warning !== SafeParserWarningCode.PARTIAL_RESULT
+      )));
     }
   } catch {
     reasons.push('extract_text failed');
@@ -360,7 +389,19 @@ export async function runParserCascade(
     }
   }
 
-  const initialUnresolved = unresolvedPages(current);
+  const qualityUnresolved = unresolvedPages(current);
+  const initialUnresolvedByPage = new Map(qualityUnresolved.map((page) => [page.page, page]));
+  // Layout enrichment may add blocks to a native page that failed closed, but
+  // it is not a replacement for text OCR. Force every such page through the
+  // same bounded OCR quality checks before its fidelity reason can disappear.
+  const currentStagePages = new Map(stagePages(current).map((page) => [page.page, page]));
+  for (const pageNumber of nativeFidelityPages) {
+    if (initialUnresolvedByPage.has(pageNumber)) continue;
+    const page = currentStagePages.get(pageNumber);
+    if (page) initialUnresolvedByPage.set(pageNumber, { ...page, reason: 'low_confidence' });
+  }
+  const initialUnresolved = [...initialUnresolvedByPage.values()]
+    .sort((left, right) => left.page - right.page);
   const initialReasonByPage = new Map(initialUnresolved.map(({ page, reason }) => [page, reason]));
   const locallyResolved = new Set<number>();
   if (context.featureFlags.localOcr
@@ -435,6 +476,11 @@ export async function runParserCascade(
 
   if (!localStageSucceeded) reasons.push('all local parser stages failed');
   if (remaining.length > 0) reasons.push('unresolved pages remain');
+  const unresolvedPageNumbers = new Set(remaining.map(({ page }) => page));
+  if (nativeFidelityUnscoped
+    || [...nativeFidelityPages].some((page) => unresolvedPageNumbers.has(page))) {
+    reasons.push('native PDF text fidelity requires review');
+  }
   const sourceMap = withOrchestratorMetadata(current) ?? emptySourceMap(canonicalInput);
   const recoveredReasons = localStageSucceeded
     ? reasons.filter((reason) => reason !== 'empty-parsed-text' && reason !== 'extract_text failed')

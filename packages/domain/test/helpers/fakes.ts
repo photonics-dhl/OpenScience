@@ -49,12 +49,14 @@ interface FakeDb {
   presentationAssets: any[];
   presentationAssetClaims: any[];
   researchIdentityProfiles: any[];
+  hermesResearchRuns: any[];
+  hermesResearchSteps: any[];
   auditLogs: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], presentationAssetClaims: [], researchIdentityProfiles: [], auditLogs: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], presentationAssetClaims: [], researchIdentityProfiles: [], hermesResearchRuns: [], hermesResearchSteps: [], auditLogs: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = (modelName?: string, target?: string | string[]) => {
@@ -100,6 +102,41 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     const memberWhere = workspaceWhere?.members?.some;
     return !memberWhere || db.memberships.some((membership) => membership.workspaceId === workspace.id
       && (memberWhere.userId === undefined || membership.userId === memberWhere.userId));
+  };
+
+  const hermesRunWithSteps = (run: any, include: any) => {
+    const researchObject = include?.researchObject ? db.researchObjects.find((row) => row.id === run.researchObjectId) ?? null : undefined;
+    if (!include?.steps) return { ...run, ...(include?.researchObject ? { researchObject } : {}) };
+    let steps = db.hermesResearchSteps.filter((step) => step.runId === run.id);
+    if (include.steps.where?.stage !== undefined) steps = steps.filter((step) => step.stage === include.steps.where.stage);
+    if (include.steps.where?.ordinal !== undefined) steps = steps.filter((step) => step.ordinal === include.steps.where.ordinal);
+    if (include.steps.orderBy?.ordinal === 'asc') steps = steps.toSorted((left, right) => left.ordinal - right.ordinal);
+    return {
+      ...run,
+      ...(include?.researchObject ? { researchObject } : {}),
+      steps: steps.map((step) => {
+        const extra = {
+          ...(include.steps.include?.agentTask ? { agentTask: db.agentTasks.find((task) => task.id === step.agentTaskId) ?? null } : {}),
+          ...(include.steps.include?.presentationAsset ? { presentationAsset: (() => {
+            const asset = db.presentationAssets.find((candidate) => candidate.id === step.presentationAssetId) ?? null;
+            return asset && include.steps.include.presentationAsset.include?.sourceClaims
+              ? { ...asset, sourceClaims: db.presentationAssetClaims.filter((link) => link.presentationAssetId === asset.id) } : asset;
+          })() } : {}),
+        };
+        if (!include.steps.include?.ingestionTask) return { ...step, ...extra };
+        const ingestionTask = db.ingestionTasks.find((task) => task.id === step.ingestionTaskId) ?? null;
+        if (!ingestionTask) return { ...step, ...extra, ingestionTask: null };
+        return {
+          ...step,
+          ...extra,
+          ingestionTask: {
+            ...ingestionTask,
+            batch: db.ingestionBatches.find((batch) => batch.id === ingestionTask.batchId) ?? null,
+            agentTask: db.agentTasks.find((task) => task.id === ingestionTask.agentTaskId) ?? null,
+          },
+        };
+      }),
+    };
   };
 
   const prisma: any = {
@@ -584,7 +621,8 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const rows = db.versions.filter(
           (v) =>
             (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId) &&
-            (where.commitId === undefined || v.commitId === where.commitId),
+            (where.commitId === undefined || v.commitId === where.commitId) &&
+            (where.commit?.branchId === undefined || db.commits.some(c => c.id === v.commitId && c.branchId === where.commit.branchId)),
         );
         if (orderBy?.versionNo === 'desc') rows.sort((a, b) => b.versionNo - a.versionNo);
         const row = rows[0] ?? null;
@@ -601,6 +639,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const row = db.versions.find((v) => v.id === where.id) ?? null;
         if (!row) return null;
         const out: any = { ...row };
+        if (include?.publications) out.publications = db.publications.filter(p => p.versionId === row.id);
         if (include?.researchObject) {
           const ro = db.researchObjects.find((r) => r.id === row.researchObjectId) ?? null;
           out.researchObject = ro
@@ -638,6 +677,23 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)),
     },
     claimNode: {
+      count: async ({ where }: any) => db.claimNodes.filter(row => Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value))).length,
+      deleteMany: async ({ where }: any) => {
+        const before = db.claimNodes.length;
+        db.claimNodes = db.claimNodes.filter(row => !Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value)));
+        return { count: before - db.claimNodes.length };
+      },
+      findUnique: async ({ where }: any) => db.claimNodes.find(row => row.id === where.id) ?? null,
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.claimNodes.filter(row => row.id === where.id && row.updatedAt.getTime() === where.updatedAt.getTime());
+        rows.forEach(row => Object.assign(row, data, { updatedAt: new Date(row.updatedAt.getTime() + 1) }));
+        return { count: rows.length };
+      },
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), conditions: [], limitations: [], ...data };
+        db.claimNodes.push(row);
+        return row;
+      },
       findMany: async ({ where }: any) =>
         db.claimNodes.filter((claim) =>
           (where.id?.in === undefined || where.id.in.includes(claim.id)) &&
@@ -653,7 +709,20 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     evidenceRecord: {
+      count: async ({ where }: any) => db.evidenceRecords.filter(row => Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value))).length,
+      deleteMany: async ({ where }: any) => {
+        const before = db.evidenceRecords.length;
+        db.evidenceRecords = db.evidenceRecords.filter(row => !Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value)));
+        return { count: before - db.evidenceRecords.length };
+      },
+      findUnique: async ({ where }: any) => db.evidenceRecords.find(row => row.id === where.id) ?? null,
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), verifiedByUserId: null, ...data };
+        db.evidenceRecords.push(row);
+        return row;
+      },
       findMany: async ({ where }: any) => db.evidenceRecords.filter((evidence) =>
+        (where.claimId?.in === undefined || where.claimId.in.includes(evidence.claimId)) &&
         (where.researchObjectId === undefined || evidence.researchObjectId === where.researchObjectId) &&
         (where.versionId === undefined || evidence.versionId === where.versionId)),
       findFirst: async ({ where, orderBy }: any) => {
@@ -687,6 +756,11 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     presentationAssetClaim: {
+      deleteMany: async ({ where }: any) => {
+        const before = db.presentationAssetClaims.length;
+        db.presentationAssetClaims = db.presentationAssetClaims.filter(row => !Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value)));
+        return { count: before - db.presentationAssetClaims.length };
+      },
       findMany: async ({ where }: any) => db.presentationAssetClaims.filter(source => source.presentationAssetId === where.presentationAssetId),
       createMany: async ({ data }: any) => {
         db.presentationAssetClaims.push(...data);
@@ -720,6 +794,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     publication: {
+      findMany: async ({ where }: any) => db.publications.filter(p => !where?.version?.researchObjectId || db.versions.some(v => v.id === p.versionId && v.researchObjectId === where.version.researchObjectId)),
       create: async ({ data }: any) => {
         const row = { id: nextId(), ...data };
         db.publications.push(row);
@@ -883,7 +958,10 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           const executionAttempt = data.executionAttempt?.increment
             ? row.executionAttempt + data.executionAttempt.increment
             : (data.executionAttempt ?? row.executionAttempt);
-          Object.assign(row, { ...data, ...(data.result === Prisma.JsonNull ? { result: null } : {}), executionAttempt, updatedAt: new Date() });
+          const retryCount = data.retryCount?.increment
+            ? row.retryCount + data.retryCount.increment
+            : (data.retryCount ?? row.retryCount);
+          Object.assign(row, { ...data, ...(data.result === Prisma.JsonNull ? { result: null } : {}), executionAttempt, retryCount, updatedAt: new Date() });
         });
         return { count: rows.length };
       },
@@ -930,6 +1008,90 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return { ...row };
       },
     },
+    hermesResearchRun: {
+      create: async ({ data, include }: any) => {
+        if (db.hermesResearchRuns.some((run) => run.idempotencyKey === data.idempotencyKey)) throw p2002();
+        const row = {
+          id: nextId(), status: 'running', version: 1, versionId: null, profile: null, maxAgentTasks: null,
+          sourceClaimIds: [], sourceReviewDigest: null, error: null, lastReconciledAt: null,
+          createdAt: new Date(), updatedAt: new Date(), ...data,
+        };
+        delete row.steps;
+        db.hermesResearchRuns.push(row);
+        for (const step of data.steps?.create ?? []) {
+          db.hermesResearchSteps.push({ id: nextId(), runId: row.id, status: 'waiting', error: null, createdAt: new Date(), updatedAt: new Date(), ...step });
+        }
+        return hermesRunWithSteps(row, include);
+      },
+      findUnique: async ({ where, include }: any) => {
+        const row = db.hermesResearchRuns.find((run) => where.id ? run.id === where.id : run.idempotencyKey === where.idempotencyKey) ?? null;
+        return row ? hermesRunWithSteps(row, include) : null;
+      },
+      findFirst: async ({ where, include }: any) => {
+        const row = db.hermesResearchRuns.find((run) => {
+          if (where.researchObjectId !== undefined && run.researchObjectId !== where.researchObjectId) return false;
+          if (where.versionId !== undefined && run.versionId !== where.versionId) return false;
+          if (where.profile !== undefined && run.profile !== where.profile) return false;
+          if (where.status !== undefined && (where.status?.in ? !where.status.in.includes(run.status) : run.status !== where.status)) return false;
+          if (where.steps?.some) {
+            const stepWhere = where.steps.some;
+            const hasStep = db.hermesResearchSteps.some((step) => step.runId === run.id
+              && (stepWhere.stage === undefined || step.stage === stepWhere.stage)
+              && (stepWhere.presentationAssetId?.in === undefined
+                || stepWhere.presentationAssetId.in.includes(step.presentationAssetId)));
+            if (!hasStep) return false;
+          }
+          return true;
+        }) ?? null;
+        return row ? hermesRunWithSteps(row, include) : null;
+      },
+      findMany: async ({ where, include, take }: any) => db.hermesResearchRuns
+        .filter((run) => where.status === undefined || (where.status?.in ? where.status.in.includes(run.status) : run.status === where.status))
+        .slice(0, take ?? db.hermesResearchRuns.length)
+        .map((run) => hermesRunWithSteps(run, include)),
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.hermesResearchRuns.filter((run) =>
+          (where.id === undefined || run.id === where.id) && (where.status === undefined || run.status === where.status)
+          && (where.version === undefined || run.version === where.version));
+        rows.forEach((row) => Object.assign(row, data, {
+          version: data.version?.increment ? row.version + data.version.increment : (data.version ?? row.version), updatedAt: new Date(),
+        }));
+        return { count: rows.length };
+      },
+    },
+    hermesResearchStep: {
+      count: async ({ where }: any) => db.hermesResearchSteps.filter((step) =>
+        (where.runId === undefined || step.runId === where.runId)
+        && (where.stage?.in === undefined || where.stage.in.includes(step.stage))
+        && (where.agentTaskId?.not !== null || step.agentTaskId != null)).length,
+      findFirst: async ({ where, include }: any) => {
+        const step = db.hermesResearchSteps.find((candidate) => {
+          const run = db.hermesResearchRuns.find((row) => row.id === candidate.runId);
+          const scoped = where.run;
+          const profileScopes = scoped.OR ?? [{ profile: scoped.profile, maxAgentTasks: scoped.maxAgentTasks }];
+          return candidate.presentationAssetId === where.presentationAssetId && candidate.status === where.status && run
+            && run.actorId === scoped.actorId && run.researchObjectId === scoped.researchObjectId
+            && run.versionId === scoped.versionId
+            && profileScopes.some((profile: any) => run.profile === profile.profile && run.maxAgentTasks === profile.maxAgentTasks)
+            && scoped.status.in.includes(run.status);
+        }) ?? null;
+        return step && include?.run ? { ...step, run: db.hermesResearchRuns.find((run) => run.id === step.runId) } : step;
+      },
+      upsert: async ({ where, create, update }: any) => {
+        let row = db.hermesResearchSteps.find((step) => step.runId === where.runId_stage_ordinal.runId
+          && step.stage === where.runId_stage_ordinal.stage && step.ordinal === where.runId_stage_ordinal.ordinal);
+        if (row) Object.assign(row, update, { updatedAt: new Date() });
+        else { row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), error: null, ...create }; db.hermesResearchSteps.push(row); }
+        return row;
+      },
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.hermesResearchSteps.filter((step) =>
+          (where.id === undefined || step.id === where.id) && (where.runId === undefined || step.runId === where.runId)
+          && (where.stage === undefined || step.stage === where.stage) && (where.status === undefined || step.status === where.status));
+        rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
+        return { count: rows.length };
+      },
+    },
     ingestionTask: {
       create: async ({ data }: any) => {
         const row = { id: nextId(), state: 'queued', retryCount: 0, error: null, createdAt: new Date(), updatedAt: new Date(), ...data };
@@ -953,7 +1115,8 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       findMany: async ({ where, include, orderBy, take }: any) => {
         let rows = db.ingestionTasks.filter((task) => {
           const batch = db.ingestionBatches.find((candidate) => candidate.id === task.batchId);
-          return (where?.batch?.userId === undefined || batch?.userId === where.batch.userId) &&
+          return (where?.id?.in === undefined || where.id.in.includes(task.id)) &&
+            (where?.batch?.userId === undefined || batch?.userId === where.batch.userId) &&
             (where?.batch?.researchObjectId === undefined || batch?.researchObjectId === where.batch.researchObjectId) &&
             (where?.state?.in === undefined || where.state.in.includes(task.state));
         });
@@ -969,6 +1132,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
             ...row,
             artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId),
             batch: batch ? { ...batch, researchObject } : null,
+            agentTask: include.agentTask ? db.agentTasks.find((task) => task.id === row.agentTaskId) ?? null : undefined,
           };
         });
       },
@@ -982,6 +1146,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const rows = db.ingestionTasks.filter((task) =>
           (where.agentTaskId === undefined || task.agentTaskId === where.agentTaskId) &&
           (where.id === undefined || task.id === where.id) &&
+          (where.retryCount === undefined || task.retryCount === where.retryCount) &&
           (where.state === undefined || task.state === where.state),
         );
         rows.forEach((row) => {

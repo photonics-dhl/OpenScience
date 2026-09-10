@@ -6,6 +6,7 @@ export interface WorkspaceGuidePayload extends Record<string, unknown> {
   context: {
     tasks: Array<{ id: string; researchObjectId: string; state: string }>;
     researchObjects: Array<{ id: string; title: string; status: string }>;
+    presentation?: { researchObjectId: string; versionId?: string };
   };
 }
 
@@ -35,7 +36,7 @@ export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayloa
   }
   if (!payload.context || typeof payload.context !== 'object' || Array.isArray(payload.context)) throw new Error('workspace.guide context 无效');
   const context = payload.context as Record<string, unknown>;
-  if (!hasOnlyKeys(context, ['tasks', 'researchObjects'])) throw new Error('workspace.guide context 包含未知字段');
+  if (!hasOnlyKeys(context, ['tasks', 'researchObjects', 'presentation'])) throw new Error('workspace.guide context 包含未知字段');
   if (!Array.isArray(context.tasks) || context.tasks.length > 20 || !Array.isArray(context.researchObjects) || context.researchObjects.length > 20) {
     throw new Error('workspace.guide context 超出边界');
   }
@@ -53,5 +54,20 @@ export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayloa
     if (!shortString(research.id, 100) || !shortString(research.title, 240) || !shortString(research.status, 64)) throw new Error('workspace.guide research context 无效');
     return { id: research.id, title: research.title, status: research.status };
   });
-  return { goal, locale: payload.locale, route: payload.route, target: payload.target as WorkspaceGuideTarget, context: { tasks, researchObjects } };
+  let presentation: WorkspaceGuidePayload['context']['presentation'];
+  if (context.presentation !== undefined) {
+    if (!context.presentation || typeof context.presentation !== 'object' || Array.isArray(context.presentation)) throw new Error('workspace.guide presentation context 无效');
+    const candidate = context.presentation as Record<string, unknown>;
+    if (!hasOnlyKeys(candidate, ['researchObjectId', 'versionId']) || !shortString(candidate.researchObjectId, 100)
+      || (candidate.versionId !== undefined && !shortString(candidate.versionId, 100))) throw new Error('workspace.guide presentation context 无效');
+    if (!researchObjects.some((item) => item.id === candidate.researchObjectId)) throw new Error('workspace.guide presentation context 不属于研究上下文');
+    presentation = { researchObjectId: candidate.researchObjectId, ...(candidate.versionId ? { versionId: candidate.versionId } : {}) };
+  }
+  return {
+    goal,
+    locale: payload.locale,
+    route: payload.route,
+    target: payload.target as WorkspaceGuideTarget,
+    context: { tasks, researchObjects, ...(presentation ? { presentation } : {}) },
+  };
 }

@@ -23,10 +23,10 @@ async function publish(results,request,status,errorCode,bytes){
  const dir=join(results,request.id);await mkdir(dir,{recursive:true,mode:0o755});await directory(dir);
  if(await exists(join(dir,'result.json')))return;
  if(bytes)await atomicWrite(join(dir,'result.png'),bytes);
- await atomicWrite(join(dir,'result.json'),JSON.stringify({schemaVersion:1,id:request.id,promptHash:request.promptHash,status,...(errorCode?{errorCode}:{})}));
+ await atomicWrite(join(dir,'result.json'),JSON.stringify({schemaVersion:1,...(request.provider?{provider:request.provider}:{}),id:request.id,promptHash:request.promptHash,status,...(errorCode?{errorCode}:{})}));
 }
 /** Caller holds the host flock for the entire runner lifetime. Private ledger is never mounted in Worker. */
-export async function runOne({inbox,results,privateRoot,execute,now=Date.now}){
+export async function runOne({inbox,results,privateRoot,provider,execute,now=Date.now}){
  for(const p of [inbox,results,privateRoot])await directory(p);
  const queued=(await readdir(inbox)).filter(n=>n.endsWith('.json')&&UUID.test(n.slice(0,-5))).map(n=>n.slice(0,-5));
  const claimed=(await readdir(privateRoot)).filter(n=>UUID.test(n));
@@ -42,7 +42,7 @@ export async function runOne({inbox,results,privateRoot,execute,now=Date.now}){
    await syncDirectory(privateDir);await syncDirectory(inbox);
   }
   let request;
-  try{request=validateCodexImageRequest(JSON.parse((await safeRead(requestPath,16384)).toString()));if(request.id!==id)throw Error('REQUEST_ID_MISMATCH');}
+  try{request=validateCodexImageRequest(JSON.parse((await safeRead(requestPath,16384)).toString()),undefined,provider);if(request.id!==id)throw Error('REQUEST_ID_MISMATCH');}
   catch{
    const quarantine=join(privateRoot,'quarantine');await mkdir(quarantine,{recursive:true,mode:0o700});await directory(quarantine);
    await rename(privateDir,join(quarantine,id+'-'+randomUUID()));await syncDirectory(quarantine);await syncDirectory(privateRoot);
@@ -58,8 +58,9 @@ export async function runOne({inbox,results,privateRoot,execute,now=Date.now}){
    if(request.deadlineAt<=now())throw Error('EXPIRED');
    await publish(results,request,'succeeded',undefined,bytes);
    return {id,status:'succeeded'};
-  }catch{
-   await publish(results,request,'failed','EXECUTION_FAILED');return {id,status:'failed'};
+  }catch(error){
+   const uncertain=error?.code==='UNCERTAIN';
+   await publish(results,request,uncertain?'uncertain':'failed',uncertain?'UNCERTAIN':'EXECUTION_FAILED');return {id,status:uncertain?'uncertain':'failed'};
   }
  }
  return null;

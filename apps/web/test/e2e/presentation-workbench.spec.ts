@@ -178,6 +178,26 @@ test('creates a human claim, retries stable intents, generates a chart, refreshe
   await page.screenshot({ path: 'test/visual/out/presentation-workbench-desktop.png', fullPage: true });
 });
 
+test('gives an empty writable presentation a visible source-review next step without a misleading zero count', async ({ page }) => {
+  await fixtures(page, { startEmpty: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+
+  const workbench = page.locator('[data-presentation-workbench]');
+  await expect(workbench.getByRole('heading', { name: /Build a visual explanation/i })).toBeVisible();
+  await expect(workbench.getByText(/This version has no usable claims for a visual explanation yet/i)).toBeVisible();
+  await expect(workbench.getByRole('link', { name: /Review literature and extraction/i })).toHaveAttribute('href', `/research-objects/${ro.id}/hermes`);
+  await expect(workbench.locator('#presentation-preview-heading + span')).toHaveCount(0);
+  await expect(workbench.locator('[data-source-tools]')).toHaveAttribute('open', '');
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/token-smart-release/ux-empty-local-desktop.png', fullPage: true });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(workbench.getByRole('link', { name: /Review literature and extraction/i })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/token-smart-release/ux-empty-local-mobile.png', fullPage: true });
+});
+
 test('requires both a draft version and an active writer membership', async ({ page }) => {
   await fixtures(page, { role: 'viewer' });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
@@ -360,13 +380,12 @@ test('Hermes plans and revises sourced scenes, retaining the original through ap
   const original = page.locator('[data-presentation-asset="plan-original"]');
   await expect(original).toBeVisible();
   expect(keys[0]).toBe(keys[1]);
-  expect(requests[1]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', instruction: 'Explain propagation.' } });
-  await original.locator('details').filter({ has: page.locator('[data-storyboard-panel]') }).locator('summary').first().click();
+  expect(requests[1]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', output: 'image', instruction: 'Explain propagation.' } });
   await original.getByLabel('What should Hermes change?').fill('Show interference.');
   await original.getByRole('button', { name: 'Create revised draft · 1 AI credit' }).click();
   const revision = page.locator('[data-presentation-asset="plan-revision"]');
   await expect(revision).toBeVisible();
-  expect(requests[2].storyboard).toEqual({ locale: 'en', style: 'ink', instruction: 'Show interference.', baseAssetId: 'plan-original' });
+  expect(requests[2].storyboard).toEqual({ locale: 'en', style: 'ink', output: 'image', instruction: 'Show interference.', baseAssetId: 'plan-original' });
   expect(keys[2]).not.toBe(keys[1]);
   await expect(revision).toContainText('Original narration 0');
   await expect(revision).toContainText('Revised visual 0');
@@ -406,7 +425,6 @@ test('approved scene produces an independently reviewable image with stable retr
     items[1] = { ...items[1], status: 'approved' }; return json(route, { asset: items[1] });
   });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
-  await page.locator('[data-presentation-asset="approved-plan"] details').filter({ has: page.locator('[data-storyboard-panel]') }).locator('summary').first().click();
   const action = page.locator('[data-scene-image="1"]');
   await expect(action).toBeVisible();
   await expect(page.getByText('One image costs 1 AI credit.', { exact: false }).first()).toBeVisible();
@@ -449,13 +467,15 @@ test('global Hermes reviews an exact revision and retries one uncertain submissi
   const buttonColors = await review.getByRole('button', { name: 'Confirm · 1 AI credit' }).evaluate(node => { const style = getComputedStyle(node); return { background: style.backgroundColor, color: style.color }; });
   expect(buttonColors.background).not.toBe('rgba(0, 0, 0, 0)');
   expect(buttonColors.background).not.toBe(buttonColors.color);
+  await review.getByRole('button', { name: 'Confirm · 1 AI credit' }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test/visual/out/token-smart-release/hermes-presentation-confirm-contrast.png', fullPage: true });
   await review.getByRole('button', { name: 'Confirm · 1 AI credit' }).click();
   await expect(review.getByRole('alert')).toContainText('outcome is unknown');
   await expect(review.getByLabel('Storyboard instructions')).toBeDisabled();
   await review.getByRole('button', { name: 'Retry the same submission' }).click();
   await expect(page).toHaveURL(/version=version-2&task=presentation-task/);
   expect(keys).toHaveLength(2); expect(keys[0]).toBeTruthy(); expect(keys[1]).toBe(keys[0]);
-  expect(bodies[0]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', instruction: 'Revise the storyboard to explain diffraction clearly', baseAssetId: parent.id } });
+  expect(bodies[0]).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: { locale: 'en', style: 'ink', output: 'image', instruction: 'Revise the storyboard to explain diffraction clearly', baseAssetId: parent.id } });
   expect(bodies[1]).toEqual(bodies[0]);
   await page.locator('[data-hermes-input-owner="true"]').click();
   await expect(review).toHaveCount(0);

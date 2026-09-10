@@ -15,6 +15,9 @@ export interface RouteRule {
  * 中间件零改动。key = 完整路径（含 prefix）。
  */
 export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
+  '/research-objects/:id/versions/:versionId/record': { limit: 120, windowSec: 60 },
+  '/research-objects/:id/versions/:versionId/record/export': { limit: 60, windowSec: 60 },
+  '/research-objects/:id/versions/:versionId/record/evidence/:evidenceId/source': { limit: 60, windowSec: 60 },
   '/auth/login': { limit: 5, windowSec: 60 },
   '/auth/request-signup-code': { limit: 3, windowSec: 300 },
   '/auth/confirm-signup': { limit: 10, windowSec: 300 },
@@ -37,6 +40,8 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   // Hermes/AI task submission: authenticated and credit-gated, but still bound burst traffic.
   '/agent/tasks': { limit: 20, windowSec: 60 },
   '/agent/tasks/:id/retry': { limit: 10, windowSec: 60 },
+  '/research-objects/:id/hermes-runs': { limit: 10, windowSec: 60 },
+  '/research-objects/:id/hermes-runs/:runId/source-review': { limit: 10, windowSec: 60 },
   // Unified browser entry point for literature retrieval (provider selection is server-owned).
   '/literature/acquisitions': { limit: 10, windowSec: 60 },
   '/research-objects/:researchObjectId/versions/:versionId/presentation-assets/generations': { limit: 10, windowSec: 60 },

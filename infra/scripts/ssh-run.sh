@@ -19,7 +19,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="${XGS_CONFIG_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 ENV_FILE="$PROJECT_ROOT/.env"
 
 usage() {
@@ -29,6 +29,11 @@ usage() {
 
 # --- 参数解析 ---
 CONFIRM=0
+if [ "${1:-}" = '--browser-tunnel' ]; then
+  [ $# -eq 1 ] || usage
+  BROWSER_TUNNEL=1
+  set -- ':'
+fi
 if [ "${1:-}" = "--confirm" ]; then
   CONFIRM=1
   shift
@@ -82,6 +87,13 @@ SSH_HOST="$(pick SERVER_HOST SSH_HOST 公网ip)" || { echo "错误：.env 缺少
 SSH_USER="$(pick SERVER_USER SSH_USER 用户名)" || { echo "错误：.env 缺少用户名键（SERVER_USER/SSH_USER/用户名）" >&2; exit 66; }
 SSH_PORT="$(pick SERVER_PORT SSH_PORT SSH端口 || true)"
 SSH_PORT="${SSH_PORT:-22}"
+
+if [ "${BROWSER_TUNNEL:-0}" -eq 1 ]; then
+  exec ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+    -i "$HOME/.ssh/id_ed25519_xgs" -p "$SSH_PORT" \
+    -L 127.0.0.1:6081:127.0.0.1:6081 "${SSH_USER}@${SSH_HOST}"
+fi
 
 # --- 执行（BatchMode：无密钥即失败，绝不提示密码）---
 SSH_ERR="$(mktemp)"

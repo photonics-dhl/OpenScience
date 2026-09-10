@@ -183,6 +183,7 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
     return reply.send({
       research: {
         publicId,
+        recordUrl: `/api/research-objects/${ro.id}/versions/${version.id}/record`,
         title: ro.title,
         url: `/research/${publicId}/v/${versionNo}`,
         visibility: ro.visibility,

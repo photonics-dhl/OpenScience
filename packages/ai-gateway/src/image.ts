@@ -6,7 +6,12 @@ import { encodedImageDimensions, type OcrMediaType } from './ocr';
 export interface ImageRequest { prompt: string; requestId?: string }
 export interface ImageProviderResult { bytes: Buffer; contentType: OcrMediaType }
 export interface ImageResult extends ImageProviderResult { model: string; provider: string; promptHash: string }
-export interface ImageProvider { readonly name: string; readonly model: string; generate(request: ImageRequest): Promise<ImageProviderResult> }
+export interface ImageProvider {
+  readonly name: string;
+  readonly model: string;
+  generate(request: ImageRequest): Promise<ImageProviderResult>;
+  canResumeBeforeSubmission?(requestId: string): Promise<boolean>;
+}
 export interface MiniMaxImageConfig { baseUrl: string; apiKey: string; model: string }
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64 * 1024;

@@ -7,6 +7,7 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { PresentationWorkbench, type PresentationTaskState } from '@/components/presentation/PresentationWorkbench';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
@@ -14,7 +15,8 @@ import {
   ApiClientError,
   createPresentationClaim,
   generatePresentationChart,
-  generatePresentationStoryboard, generatePresentationSceneImage,
+  generatePresentationStoryboard, generatePresentationSceneImage, generatePresentationVideo,
+  type PresentationVideoRequest,
   type StoryboardRequest, type SceneImageRequest,
   getPresentationTask,
   getResearchObject,
@@ -287,17 +289,19 @@ export default function PresentationPage({ params }: { params: { id: string } })
     }
   }
 
-  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest) {
+  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest, video?: PresentationVideoRequest) {
     if (!version || !canWrite || !scopeReady) return;
     const scope = scopeRef.current;
     if (!scopeIsCurrent(scope)) return;
-    const signature = JSON.stringify([scope.key, [...sourceClaimIds].sort(), storyboard ?? null, sceneImage ?? null]);
+    const signature = JSON.stringify([scope.key, [...sourceClaimIds].sort(), storyboard ?? null, sceneImage ?? null, video ?? null]);
     if (generationIntent.current?.signature !== signature) generationIntent.current = { signature, key: crypto.randomUUID() };
     const intent = generationIntent.current;
     setWorking(true);
     setError('');
     try {
-      const { task } = sceneImage
+      const { task } = video
+        ? await generatePresentationVideo(params.id, version.versionId, sourceClaimIds, video, intent.key, scope.controller.signal)
+        : sceneImage
         ? await generatePresentationSceneImage(params.id, version.versionId, sourceClaimIds, sceneImage, intent.key, scope.controller.signal)
         : storyboard
         ? await generatePresentationStoryboard(params.id, version.versionId, sourceClaimIds, storyboard, intent.key, scope.controller.signal)
@@ -382,7 +386,7 @@ export default function PresentationPage({ params }: { params: { id: string } })
                 {versions.map((item) => <option key={item.versionId} value={item.versionId}>{t('versionOption', { number: item.versionNo, status: t(`versionStatus.${item.status}`) })}</option>)}
               </select>
             </label>
-            <a className="inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')}</a>
+            <Link className="inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')}</Link>
           </div>
           <PresentationWorkbench
             key={scopeKey}
@@ -400,6 +404,7 @@ export default function PresentationPage({ params }: { params: { id: string } })
             onGenerate={(ids) => void generate(ids)}
             onGenerateStoryboard={(ids, request) => void generate(ids, request)}
             onGenerateSceneImage={(ids, request) => void generate(ids, undefined, request)}
+            onGenerateVideo={(ids, request) => void generate(ids, undefined, undefined, request)}
             onResumeTask={() => setResumeNonce((current) => current + 1)}
             onRetryData={() => setLoadNonce((current) => current + 1)}
             onTransition={(assetItem, status) => void transition(assetItem, status)}
@@ -414,8 +419,8 @@ export default function PresentationPage({ params }: { params: { id: string } })
             <h1>{t('startTitle')}</h1><p className={styles.intro}>{t('startBody')}</p>
             <ol className={styles.steps}>{[1,2,3].map(step => <li key={step}><span>0{step}</span><div><h2>{t(`step${step}`)}</h2><p>{t(`step${step}Body`)}</p></div></li>)}</ol>
             <div className={styles.actions}>
-              <a className={styles.primary} href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')} →</a>
-              <a href={`/research-objects/${encodeURIComponent(params.id)}/versions`}>{t('openVersions')}</a>
+              <Link className={styles.primary} href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')} →</Link>
+              <Link href={`/research-objects/${encodeURIComponent(params.id)}/versions`}>{t('openVersions')}</Link>
             </div>
           </>}
         </section>

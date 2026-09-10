@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import type { DashboardResearch } from './ResearchList';
 import type { HermesRailTask } from '@/components/hermes/HermesRail';
-import { hermesTaskHref } from '@/components/hermes/hermes-state';
+import { hermesTaskHref, selectPriorityHermesTask } from '@/components/hermes/hermes-state';
 
 export interface ContinueResearchProps {
   research: DashboardResearch | null;
@@ -39,8 +39,9 @@ export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps
     );
   }
 
-  const review = tasks.find((task) => task.researchObjectId === research.id && task.state === 'needs_review');
-  const href = review ? hermesTaskHref(review)
+  const task = selectPriorityHermesTask(tasks.filter((candidate) => candidate.researchObjectId === research.id));
+  const review = task?.state === 'needs_review';
+  const href = task ? hermesTaskHref(task)
     : `/research-objects/${encodeURIComponent(research.id)}/${research.pendingCount > 0 ? 'hermes' : 'overview'}`;
   return (
     <section
@@ -49,10 +50,7 @@ export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps
       data-continuation-priority="primary"
       data-hermes-protected="true"
     >
-      <p data-reading-role="caption" className="text-os-vermilion-ink">
-        {t('continue.title')}
-      </p>
-      <h2 id="continue-title" className="mt-4 max-w-3xl text-3xl leading-[1.1] text-os-ink transition-colors group-hover:text-os-vermilion-ink sm:text-4xl">
+      <h2 id="continue-title" className="max-w-3xl text-3xl leading-[1.1] text-os-ink transition-colors group-hover:text-os-vermilion-ink sm:text-4xl">
         {research.title}
       </h2>
       <div data-reading-role="caption" className="mt-4 flex flex-wrap gap-x-5 gap-y-1 font-data text-os-muted-paper">

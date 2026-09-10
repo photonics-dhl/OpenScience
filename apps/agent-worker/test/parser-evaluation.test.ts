@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -210,7 +210,8 @@ describe('document parser evaluation script', () => {
         [evaluationScriptArgument, '--print-run-contract', 'current-parser'],
         { cwd: unrelatedWorkspace, encoding: 'utf8' },
       ));
-      const expectedSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+      const releaseMarker = join(repositoryRoot, '.release-source');
+      const expectedSha = existsSync(releaseMarker) ? readFileSync(releaseMarker, 'utf8').trim() : execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: repositoryRoot,
         encoding: 'utf8',
       }).trim();

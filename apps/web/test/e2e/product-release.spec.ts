@@ -80,6 +80,20 @@ async function installClientFixtures(page: Page) {
     { versionId: 'version-4', versionNo: 4, status: 'draft' },
     { versionId: 'version-3', versionNo: 3, status: 'published' },
   ] }));
+  await page.route('**/api/research-objects/ro-release/ingestion', (route) => json(route, { researchObjectId: 'ro-release', version: researchObject.version, tasks: [], latestConfirmation: null }));
+  await page.route('**/api/research-objects/ro-release/versions/*/record', (route) => {
+    const versionId = new URL(route.request().url()).pathname.split('/').at(-2)!;
+    const recordUrl = `/api/research-objects/ro-release/versions/${versionId}/record`;
+    return json(route, { record: {
+      schemaVersion: '1.0.0', objectId: researchObject.id, versionId, versionNo: Number(versionId.split('-').at(-1)), recordState: 'not_recorded',
+      citation: { uri: `urn:openscience:${researchObject.id}:version:${versionId}`, url: recordUrl, title: null, createdAt: researchObject.createdAt },
+      identity: { originalAuthors: { state: 'not_recorded', items: [] }, originalDoi: { state: 'not_recorded', value: null }, platformAuthors: [], licenses: [] },
+      sdf: researchObject.sdf.core, claims: [], evidence: [], manifest: [],
+      missing: { sdfFields: [], claims: 'not_recorded', evidence: 'not_recorded', materials: 'not_recorded' },
+      collections: { complete: true, pagination: 'none', order: 'claims/evidence:id; manifest:logicalPath; authors:sortOrder; licenses:type,identifier' },
+      links: { self: recordUrl, export: `${recordUrl}/export`, schema: '/api/research-record/schema', openapi: '/api/research-record/openapi' },
+    } });
+  });
   await page.route('**/api/research-objects/ro-release/issues**', (route) => json(route, { issues: [] }));
   await page.route('**/api/research-objects/ro-release/versions/version-4/presentation-assets', (route) => json(route, { assets: [] }));
   await page.route('**/api/research-objects/ro-release/author-change-info', (route) => json(route, {}));
@@ -900,7 +914,7 @@ test('Hermes dashboard introduction stops when the researcher starts searching',
   await page.setViewportSize({ width: 1440, height: 900 });
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
-  await expect(page.locator('[data-hermes-menu-feedback="true"]')).toBeVisible({ timeout: 2500 });
+  await expect(page.locator('[data-hermes-menu-feedback="true"]')).toHaveCount(0);
   const search = page.locator('input[type="search"]');
   await search.fill('carrier');
   await expect(page.locator('[data-hermes-menu-feedback="true"]')).toHaveCount(0);
@@ -1042,6 +1056,10 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   const stage = page.locator('[data-hermes-workspace-stage="true"]');
   const presence = page.locator('[data-hermes-presence-control="true"]');
   const trigger = page.locator('[data-hermes-input-owner="true"]');
+  // The expanded source guidance can place the companion below the initial
+  // viewport. Offscreen renderers suspend, so expose it before requiring a frame.
+  await trigger.scrollIntoViewIfNeeded();
+  await expect(trigger).toBeInViewport();
   await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await expect(presence).toBeVisible();
   await presence.locator('summary').click();
@@ -1129,8 +1147,11 @@ test('Hermes research action shows its reaction before navigating to a real work
   await page.setViewportSize({ width: 1440, height: 900 });
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/research-objects/ro-release/edit`, { waitUntil: 'networkidle' });
-  await page.locator('[data-hermes-input-owner="true"]').click({ button: 'right' });
+  const firstTrigger = page.locator('[data-hermes-input-owner="true"]');
+  await firstTrigger.scrollIntoViewIfNeeded();
+  await firstTrigger.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: /Hermes/u });
+  await menu.getByRole('menuitem', { name: 'Research tools', exact: true }).click();
   await menu.locator('[data-hermes-action-key="sources"]').click();
   await expect(page.locator('[data-hermes-menu-feedback="true"]')).toHaveAttribute('data-hermes-feedback-action', 'citation-trace');
   await page.waitForTimeout(300);
@@ -1138,8 +1159,12 @@ test('Hermes research action shows its reaction before navigating to a real work
   await expect(page).toHaveURL(/\/research-objects\/ro-release\/files$/, { timeout: 3000 });
 
   await page.goto(`${baseUrl}/research-objects/ro-release/edit`, { waitUntil: 'networkidle' });
-  await page.locator('[data-hermes-input-owner="true"]').click({ button: 'right' });
-  await page.getByRole('menu', { name: /Hermes/u }).locator('[data-hermes-action-key="compare"]').click();
+  const secondTrigger = page.locator('[data-hermes-input-owner="true"]');
+  await secondTrigger.scrollIntoViewIfNeeded();
+  await secondTrigger.click({ button: 'right' });
+  const secondMenu = page.getByRole('menu', { name: /Hermes/u });
+  await secondMenu.getByRole('menuitem', { name: 'Research tools', exact: true }).click();
+  await secondMenu.locator('[data-hermes-action-key="compare"]').click();
   await expect(page.locator('[data-hermes-menu-feedback="true"]')).toBeVisible();
   await page.goto(`${baseUrl}/settings`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1100);

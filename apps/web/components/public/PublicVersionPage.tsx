@@ -204,6 +204,14 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
   }, []);
 
   React.useEffect(() => {
+    setSelectedEvidence(null);
+    setEvidenceSource(null);
+    setSourceError(false);
+    setSourceLoading(false);
+    setSheetOpen(false);
+  }, [research.publicId, version.versionNo]);
+
+  React.useEffect(() => {
     if (!selectedEvidence) return;
     let active = true;
     setSourceLoading(true);
@@ -248,26 +256,29 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             <p>{version.core.insight || t('none')}</p>
           </section>
 
-          <ClaimNarrative claims={research.claims} evidence={research.evidence} onInspect={inspectEvidence} />
-
           <section className="pub-reading-abstract" aria-labelledby="public-abstract-heading">
-            <h2 id="public-abstract-heading">{t('abstract')}</h2>
-            <p data-reading-role="body">{version.core.problem || t('none')}</p>
+            <h2 id="public-abstract-heading">{t('problem')}</h2>
+            <p className="whitespace-pre-wrap" data-reading-role="body" data-sdf-node="problem">{version.core.problem || t('none')}</p>
           </section>
+
+          <PresentationAssetGallery assets={research.presentationAssets} />
 
           <section className="pub-reading-sdf" aria-labelledby="public-sdf-heading">
             <h2 id="public-sdf-heading">{t('coreFields')}</h2>
-            {PUBLIC_SDF_NODES.filter(([key]) => key !== 'insight').map(([key, label]) => {
+            {PUBLIC_SDF_NODES.filter(([key]) => key !== 'insight' && key !== 'problem').map(([key, label]) => {
               const value = version.core[key];
               return <section key={key} data-sdf-node={key} data-sdf-state={value ? 'confirmed' : 'empty'}>
-                <h3>{t(label)}</h3><p data-reading-role="reading">{value || t('none')}</p>
+                <h3>{t(label)}</h3><p className="whitespace-pre-wrap" data-reading-role="reading">{value || t('none')}</p>
               </section>;
             })}
           </section>
 
+          <ClaimNarrative claims={research.claims} evidence={research.evidence} onInspect={inspectEvidence} />
+
           <section className="pub-reading-citation" data-public-citation="true" data-print-landmark="citation">
             <h2>{t('citation')}</h2>
             <p>{research.citation}</p>
+            {research.recordUrl && <p><a href={research.recordUrl}>Research API</a> · <a href="/api/research-record/openapi">OpenAPI</a></p>}
             <ProvenanceCaption label={t('versionId')} value={version.publicVersionId} landmark="provenance" />
             <ProvenanceCaption label={t('publishedAt')} value={publishedAt} landmark="provenance" />
             <ProvenanceCaption label={t('versionHash')} value={hashShort} landmark="provenance" />
@@ -286,7 +297,6 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             <h2>{t('artifactProvenance')}</h2>
             {research.artifactPaths.map((artifact) => <ProvenanceCaption key={`${artifact.logicalPath}-${artifact.blobSha256}`} label={artifact.logicalPath} value={`${artifact.blobSha256.slice(0, 8)}…${artifact.blobSha256.slice(-8)}`} landmark="provenance" />)}
           </section>}
-          <PresentationAssetGallery assets={research.presentationAssets} />
           <footer className="pub-disclaimer" data-print-landmark="provenance"><h3>{t('legalDisclaimer')}</h3><p>{disclaimer}</p></footer>
         </article>
         <div className="pub-reading-sidecar">

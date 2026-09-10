@@ -373,7 +373,7 @@ describe('code-based auth forms', () => {
     const login = renderToStaticMarkup(createElement(LoginForm, { returnTo: '/dashboard' }));
 
     expect(context).toContain('data-research-identity-context="create"');
-    expect(decodeURIComponent(context)).toContain('/hermes/wanko-static.png');
+    expect(decodeURIComponent(context)).toContain('/hermes/wanko-static-transparent.png');
     expect(context).toContain('<h2');
     expect(signup).toContain('data-auth-flow="signup-code"');
     expect(login).toContain('data-auth-flow="login"');

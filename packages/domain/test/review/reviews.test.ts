@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { StorageAdapter } from '@openscience/storage';
+import { getBlobStorageKey } from '@openscience/storage';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
 import { createCommit } from '../../src/commit/commits';
@@ -9,6 +10,10 @@ import { setLicenses } from '../../src/license/licenses';
 import { createBranch } from '../../src/branch/branches';
 import { createPullRequest } from '../../src/pr/prs';
 import { createReview, listReviews, mergePullRequest, assessHighRisk } from '../../src/review/reviews';
+import { getResearchRecord, getResearchRecordSource } from '../../src/commit/research-record';
+import { persistDocumentSourceMapReference } from '../../src/research-intelligence/source-map-ref';
+import { createBlockSourceLocator } from '../../src/research-intelligence/source-locator';
+import { updateClaim, deleteClaim, deleteEvidence } from '../../src/research-intelligence/claim-evidence-service';
 
 function memoryStorage(): StorageAdapter & { store: Map<string, { body: Buffer }> } {
   const store = new Map<string, { body: Buffer }>();
@@ -177,5 +182,143 @@ describe('mergePullRequest（§8.3 + §3.3 + Q2/Q3/Q4）', () => {
     await expect(
       mergePullRequest(deps, { prId: pr.id, userId: owner.id, confirmHighRisk: false }),
     ).rejects.toThrow(/仅 open/);
+  });
+});
+
+async function makeGraphPr() {
+  const f = await makeRoWithPr();
+  const source = f.db.versions.find(v => v.versionNo === 2)!;
+  const bytes = Buffer.from('Source quote');
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  const artifactId = '00000000-0000-4000-8000-000000009901';
+  await f.deps.storage.putObject(getBlobStorageKey(hash), bytes);
+  f.db.artifacts.push({ id: artifactId, workspaceId: 'ws-1', logicalPath: 'source.txt', blobSha256: hash, size: BigInt(bytes.length), mimeType: 'text/plain' });
+  const manifest = f.db.versionManifests.find(m => m.versionId === source.id)!;
+  f.db.manifestEntries.push({ id: 'source-entry', manifestId: manifest.id, logicalPath: 'source.txt', artifactId, blobSha256: hash });
+  const sourceMap = { artifactId, contentHash: hash, parser: { name: 'fixture', version: '1' }, pages: [{ page: 1, width: 600, height: 800,
+    blocks: [{ id: 'source-block', kind: 'paragraph' as const, text: bytes.toString(), boundingBox: { x: 0, y: 0, width: 100, height: 20 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }] };
+  const sourceMapRef = await persistDocumentSourceMapReference(f.deps.storage, sourceMap, 'succeeded');
+  const root = await f.deps.prisma.claimNode.create({ data: {
+    researchObjectId: f.ro.id, versionId: source.id, kind: 'core', statement: 'Source claim',
+    assessment: 'supported', extractionStatus: 'succeeded', conditions: [], limitations: [], provenance: {},
+  } });
+  await f.deps.prisma.claimNode.create({ data: {
+    researchObjectId: f.ro.id, versionId: source.id, parentClaimId: root.id, kind: 'supporting',
+    statement: 'Source child', assessment: 'missing', extractionStatus: 'needs_review', conditions: [], limitations: [], provenance: {},
+  } });
+  const evidence = await f.deps.prisma.evidenceRecord.create({ data: {
+    researchObjectId: f.ro.id, versionId: source.id, workspaceId: 'ws-1', claimId: root.id,
+    artifactId, kind: 'passage', title: 'Original evidence', exactQuote: 'Source quote', relation: 'supports',
+    locator: createBlockSourceLocator(sourceMap, 'source-block', { charRange: { start: 0, end: bytes.length } }) as never,
+    contentHash: hash, extractionStatus: 'succeeded', verifiedByUserId: f.owner.id,
+    provenance: { source: 'human', sourceMapRef } as never,
+  } });
+  return { ...f, source, root, evidence };
+}
+
+describe('merge research graph continuity', () => {
+  it('inherits source identity from the merged source version', async () => {
+    const f = await makeGraphPr();
+    const sourceIdentity = { schemaVersion: '0.1.0', reviewed: true,
+      title: { state: 'recorded', value: 'Feature paper', evidenceSegments: [{ quote: 'Source quote', sourceLocator: {
+        artifactId: f.evidence.artifactId, contentHash: f.evidence.contentHash, page: 1, blockId: 'source-block', charRange: { start: 0, end: 12 },
+        boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+      } }] },
+      authors: { state: 'not_recorded', value: [], evidenceSegments: [] }, doi: { state: 'not_recorded', value: '', evidenceSegments: [] },
+      articleLicense: { state: 'not_recorded', value: '', evidenceSegments: [] } };
+    f.source.researchRecord = { dto: { identity: { source: sourceIdentity } } };
+    await mergePullRequest(f.deps, { prId: f.pr.id, userId: f.owner.id, confirmHighRisk: false });
+    const merged = f.db.versions.toSorted((a, b) => b.versionNo - a.versionNo)[0]!;
+    const frozen = merged.researchRecord as { dto: { identity: { source: unknown } } };
+    expect(frozen.dto.identity.source).toEqual(sourceIdentity);
+  });
+
+  it.each(['unchanged', 'edit', 'delete'] as const)('freezes the merge graph and continues its current rows: %s', async mode => {
+    const f = await makeGraphPr();
+    const author = seedUser(f.db, { id: 'merged-author', displayName: 'Merged author' });
+    await f.deps.prisma.pullRequest.update({ where: { id: f.pr.id }, data: {
+      newContributors: [{ userId: author.id }], codeLicense: 'Apache-2.0',
+    } });
+    await mergePullRequest(f.deps, { prId: f.pr.id, userId: f.owner.id, confirmHighRisk: true });
+    const merged = f.db.versions.toSorted((a, b) => b.versionNo - a.versionNo)[0]!;
+    expect(merged.id).not.toBe(f.source.id);
+    const claims = f.db.claimNodes.filter(c => c.versionId === merged.id);
+    expect(claims).toHaveLength(2);
+    const root = claims.find(c => c.kind === 'core')!;
+    expect(root.id).not.toBe(f.root.id);
+    expect(claims.find(c => c.kind === 'supporting')!.parentClaimId).toBe(root.id);
+    expect(root).toMatchObject({ assessment: 'missing', extractionStatus: 'needs_review' });
+    const evidence = f.db.evidenceRecords.find(e => e.versionId === merged.id)!;
+    expect(evidence).toMatchObject({ claimId: root.id, exactQuote: 'Source quote', verifiedByUserId: null, extractionStatus: 'needs_review' });
+    expect(evidence.id).not.toBe(f.evidence.id);
+    const scope = { researchObjectId: f.ro.id, versionId: merged.id, userId: f.owner.id };
+    const frozen = await getResearchRecord(f.deps, scope);
+    expect(frozen.record.identity.platformAuthors).toContainEqual(expect.objectContaining({ name: 'Merged author' }));
+    expect(frozen.record.identity.licenses).toContainEqual({ type: 'code', identifier: 'Apache-2.0' });
+    expect(frozen.record.claims).toHaveLength(2);
+    expect((await getResearchRecordSource(f.deps, { ...scope, evidenceId: evidence.id })).text).toBe('Source quote');
+    if (mode === 'edit') await updateClaim(f.deps, { ...scope, claimId: root.id, expectedUpdatedAt: root.updatedAt, patch: { statement: 'Edited after merge' } });
+    if (mode === 'delete') {
+      await deleteEvidence(f.deps, { ...scope, evidenceId: evidence.id, expectedUpdatedAt: evidence.updatedAt });
+      const child = claims.find(c => c.kind === 'supporting')!;
+      await deleteClaim(f.deps, { ...scope, claimId: child.id, expectedUpdatedAt: child.updatedAt });
+      await deleteClaim(f.deps, { ...scope, claimId: root.id, expectedUpdatedAt: root.updatedAt });
+    }
+    const revision = f.db.researchObjects.find(r => r.id === f.ro.id)!.version;
+    expect(revision).toBeGreaterThan(merged.versionNo);
+    const next = await createCommit(f.deps, { researchObjectId: f.ro.id, userId: f.owner.id, version: revision, message: 'Continue merged work', sdfCore: CORE,
+      artifacts: [{ artifactId: evidence.artifactId, logicalPath: 'source.txt' }] });
+    expect(next.versionNo).toBeGreaterThan(merged.versionNo);
+    const continued = await getResearchRecord(f.deps, { ...scope, versionId: next.versionId });
+    expect(continued.record.claims).toHaveLength(mode === 'delete' ? 0 : 2);
+    expect(continued.record.evidence).toHaveLength(mode === 'delete' ? 0 : 1);
+    if (mode !== 'delete') expect((await getResearchRecordSource(f.deps, { ...scope, versionId: next.versionId, evidenceId: continued.record.evidence[0].id })).text).toBe('Source quote');
+    if (mode !== 'delete') expect(continued.record.claims).toContainEqual(expect.objectContaining({ statement: mode === 'edit' ? 'Edited after merge' : 'Source claim' }));
+    expect(await getResearchRecord(f.deps, scope)).toEqual(frozen);
+  });
+
+  it('uses the logical source tip and allocates beyond sparse existing versions and RO revisions', async () => {
+    const f = await makeGraphPr();
+    await f.deps.prisma.researchObject.update({ where: { id: f.ro.id }, data: { version: 8 } });
+    const tip = await createCommit(f.deps, { researchObjectId: f.ro.id, userId: f.owner.id, version: 8, branchId: f.feature.id, message: 'Latest source', sdfCore: CORE });
+    for (const commit of f.db.commits) commit.createdAt = new Date('2026-09-07T00:00:00Z');
+    await mergePullRequest(f.deps, { prId: f.pr.id, userId: f.owner.id, confirmHighRisk: false });
+    const merged = f.db.versions.toSorted((a, b) => b.versionNo - a.versionNo)[0]!;
+    expect(merged).toMatchObject({ commitId: tip.commitId, versionNo: 9 });
+    expect(f.db.researchObjects.find(r => r.id === f.ro.id)!.version).toBe(10);
+    expect(f.db.claimNodes.filter(c => c.versionId === merged.id)).toHaveLength(2);
+  });
+
+  it('rolls back graph, manifest, revision, authors, licenses, branch and PR if freezing fails', async () => {
+    const f = await makeGraphPr();
+    const before = structuredClone(f.db);
+    const original = f.deps.prisma.version.update.bind(f.deps.prisma.version);
+    const fail = vi.spyOn(f.deps.prisma.version, 'update').mockImplementation(async args => {
+      if (args.data.researchRecord) throw new Error('injected freeze failure');
+      return original(args);
+    });
+    await expect(mergePullRequest(f.deps, { prId: f.pr.id, userId: f.owner.id, confirmHighRisk: false })).rejects.toThrow('injected freeze failure');
+    fail.mockRestore();
+    expect(f.db).toEqual(before);
+  });
+
+  it('repairs the allocation fence when a legacy merge left RO revision behind versionNo', async () => {
+    const f = await makeGraphPr();
+    await f.deps.prisma.version.update({ where: { id: f.source.id }, data: { versionNo: 20 } });
+    await mergePullRequest(f.deps, { prId: f.pr.id, userId: f.owner.id, confirmHighRisk: false });
+    expect(f.db.versions.map(v => v.versionNo)).toEqual([1, 20, 21]);
+    expect(f.db.researchObjects.find(r => r.id === f.ro.id)!.version).toBe(22);
+    const next = await createCommit(f.deps, { researchObjectId: f.ro.id, userId: f.owner.id, version: 22, message: 'Continue legacy merge' });
+    expect(next.versionNo).toBe(22);
+  });
+
+  it('rechecks PR state inside the transaction so duplicate merge requests allocate only once', async () => {
+    const f = await makeGraphPr();
+    const input = { prId: f.pr.id, userId: f.owner.id, confirmHighRisk: false };
+    const outcomes = await Promise.allSettled([mergePullRequest(f.deps, input), mergePullRequest(f.deps, input)]);
+    expect(outcomes.filter(o => o.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter(o => o.status === 'rejected')).toHaveLength(1);
+    expect(f.db.versions.map(v => v.versionNo)).toEqual([1, 2, 3]);
+    expect(f.db.researchObjects.find(r => r.id === f.ro.id)!.version).toBe(4);
   });
 });

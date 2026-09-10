@@ -131,6 +131,134 @@ function baseContext(extractText: DocumentParser): CascadeContext {
 }
 
 describe('runParserCascade', () => {
+  it('clears only the recovered native-page fidelity review while preserving healthy neighboring pages', async () => {
+    const textMetadata = { name: 'pdf-parse-pdfjs-text-items', version: '2.4.5+pdfjs-dist.5.4.296' };
+    const tesseract = { name: 'tesseract', version: '5.3.0' };
+    const extractText = parser(textMetadata, () => ({
+      status: 'succeeded',
+      sourceMap: map(textMetadata, [
+        { page: 1, blocks: [block('native-1', 'Healthy native page one has sufficient scientific evidence density', 1, textMetadata)] },
+        { page: 2, blocks: [] },
+        { page: 3, blocks: [block('native-3', 'Healthy native page three has sufficient scientific evidence density', 1, textMetadata)] },
+      ]),
+      warnings: ['partial_result'],
+    }));
+    const inventoryPages = vi.fn();
+    const ocrPages = vi.fn().mockResolvedValue({
+      schemaVersion: 2, parser: tesseract,
+      pages: [{ page: 2, width: 500, height: 700, blocks: [{
+        kind: 'paragraph',
+        text: 'OCR recovered scientific relation with sufficient evidence',
+        confidence: 0.97,
+        boundingBox: { x: 72, y: 200, width: 300, height: 24 },
+      }] }],
+      warnings: ['ocr_applied'],
+    });
+
+    const result = await runParserCascade(input(), {
+      adapters: { extractText, isolatedLocalOcr: { inventoryPages, ocrPages } },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: true, llmOcr: false },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') throw new Error('expected targeted OCR recovery');
+    expect(result.warnings).not.toContain('partial_result');
+    expect(result.sourceMap.pages[0]?.blocks[0]?.text).toBe('Healthy native page one has sufficient scientific evidence density');
+    expect(result.sourceMap.pages[1]?.blocks[0]).toMatchObject({
+      text: 'OCR recovered scientific relation with sufficient evidence',
+      parser: tesseract,
+      transformations: [{ stage: 'ocr', processor: tesseract }, { stage: 'merge' }],
+    });
+    expect(result.sourceMap.pages[2]?.blocks[0]?.text).toBe('Healthy native page three has sufficient scientific evidence density');
+    expect(inventoryPages).not.toHaveBeenCalled();
+    expect(ocrPages).toHaveBeenCalledWith(expect.anything(), [{
+      page: 2, width: 500, height: 700, blocks: [], reason: 'low_confidence',
+    }]);
+  });
+
+  it('keeps the document in needs_review when targeted OCR cannot recover a failed-closed page', async () => {
+    const textMetadata = { name: 'pdf-parse-pdfjs-text-items', version: '2.4.5+pdfjs-dist.5.4.296' };
+    const extractText = parser(textMetadata, () => ({
+      status: 'succeeded',
+      sourceMap: map(textMetadata, [
+        { page: 1, blocks: [block('native-1', 'Healthy native page one has sufficient scientific evidence density', 1, textMetadata)] },
+        { page: 2, blocks: [] },
+      ]),
+      warnings: ['partial_result'],
+    }));
+    const ocrPages = vi.fn().mockRejectedValue(new Error('OCR runtime failed'));
+
+    const result = await runParserCascade(input(), {
+      adapters: { extractText, isolatedLocalOcr: { inventoryPages: vi.fn(), ocrPages } },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: true, llmOcr: false },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('needs_review');
+    if (result.status !== 'needs_review') throw new Error('expected OCR failure to need review');
+    expect(result.reasons).toEqual([
+      'local_ocr failed',
+      'unresolved pages remain',
+      'native PDF text fidelity requires review',
+    ]);
+    expect(result.sourceMap.pages[1]?.blocks).toEqual([]);
+  });
+
+  it('keeps an unscoped native fidelity warning when the adapter does not identify a recoverable page', async () => {
+    const textMetadata = { name: 'pdf-parse-pdfjs-text-items', version: '2.4.5+pdfjs-dist.5.4.296' };
+    const extractText = parser(textMetadata, () => ({
+      status: 'succeeded',
+      sourceMap: map(textMetadata, [{
+        page: 1,
+        blocks: [block('native-1', 'Healthy native text remains, but the adapter reported unscoped loss', 1, textMetadata)],
+      }]),
+      warnings: ['partial_result'],
+    }));
+
+    const result = await runParserCascade(input(), {
+      adapters: { extractText },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: false, llmOcr: false },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('needs_review');
+    if (result.status !== 'needs_review') throw new Error('expected unscoped fidelity review');
+    expect(result.reasons).toEqual(['native PDF text fidelity requires review']);
+  });
+
+  it('does not let high-confidence OCR clear fidelity review when every native page failed closed', async () => {
+    const textMetadata = { name: 'openscience-text-extractor', version: '1.0.0' };
+    const tesseract = { name: 'tesseract', version: '5.3.0' };
+    const extractText = parser(textMetadata, () => ({
+      status: 'needs_review',
+      sourceMap: map(textMetadata, []),
+      reasons: ['native PDF text fidelity requires review'],
+    }));
+    const inventoryPages = vi.fn().mockResolvedValue({
+      schemaVersion: 2, parser: { name: 'pdfjs-page-inventory', version: '2.4.5' },
+      pages: [{ page: 1, width: 612, height: 792, blocks: [] }], warnings: [],
+    });
+    const ocrPages = vi.fn().mockResolvedValue({
+      schemaVersion: 2, parser: tesseract,
+      pages: [{ page: 1, width: 612, height: 792, blocks: [{
+        kind: 'paragraph', text: 'f CEO 4 0 high confidence but scientifically wrong', confidence: 0.99,
+        boundingBox: { x: 72, y: 370, width: 200, height: 20 },
+      }] }], warnings: ['ocr_applied'],
+    });
+
+    const result = await runParserCascade(input(), {
+      adapters: { extractText, isolatedLocalOcr: { inventoryPages, ocrPages } },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: true, llmOcr: false },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('needs_review');
+    if (result.status !== 'needs_review') throw new Error('expected retained scientific review');
+    expect(result.reasons).toEqual(['native PDF text fidelity requires review']);
+    expect(result.sourceMap.pages[0]?.blocks[0]?.text).toBe('f CEO 4 0 high confidence but scientifically wrong');
+  });
+
   it('uses isolated V2 page inventory and selected-page OCR for an image-only PDF', async () => {
     const textMetadata = { name: 'sidecar-text', version: '2.0.0' };
     const tesseract = { name: 'tesseract', version: '5.3.0' };

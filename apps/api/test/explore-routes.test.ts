@@ -9,6 +9,8 @@ describe('GET /explore contract', () => {
     const now = new Date('2026-08-10T00:00:00.000Z');
     db.researchObjects.push({ id: 'ro-1', publicId: 'OSR-2026-000001', title: 'Open method', visibility: 'public', status: 'published', version: 1, updatedAt: now, createdAt: now });
     db.versions.push({ id: 'v-1', researchObjectId: 'ro-1', versionNo: 1, status: 'published', publicVersionId: 'OSR-2026-000001-v1', createdAt: now });
+    db.versionManifests.push({ id: 'manifest-1', versionId: 'v-1', coreJson: { method: 'Open protocol' }, createdAt: now });
+    db.publications.push({ id: 'publication-1', versionId: 'v-1', publishedAt: now, createdAt: now });
     db.sdfDocuments.push({ id: 'sdf-1', researchObjectId: 'ro-1', coreJson: {}, createdAt: now, updatedAt: now });
     db.sdfNodes.push({ id: 'node-1', sdfDocumentId: 'sdf-1', nodeType: 'method', content: 'Open protocol', sortOrder: 0 });
     const app = Fastify();

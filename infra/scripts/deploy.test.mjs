@@ -530,6 +530,8 @@ test('release materialization is write-once and cleans only a failed stage', asy
 test('deployment keeps an application rollback trap until public health succeeds', () => {
   assert.match(source, /--rollback-ref/);
   assert.match(source, /ROLLBACK_SHA=/);
+  assert.match(source, /\[\[ "\$ROLLBACK_REF" =~ \^\[0-9a-f\]\{40\}\$ \]\]/);
+  assert.match(source, /verifies this exact SHA against \.release-id/);
   assert.match(source, /ACTIVE_RELEASE_SHA=.*\.release-id/);
   assert.match(source, /PREVIOUS_RELEASE_SHA="\$ACTIVE_RELEASE_SHA"/);
   assert.match(source, /transaction_rollback_application\(\)/);

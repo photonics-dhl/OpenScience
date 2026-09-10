@@ -42,9 +42,11 @@
 .workspace [data-workspace-plane='25']>:global(.mt-8) { border:0; margin-top:12px; }
 @media(min-width:1280px) {
  .workspace:not(:global(.research-reading-surface)) [data-workspace-planes] { grid-template-columns:200px minmax(0,1fr) 390px; }
+ .workspace:global(.editor-workspace) [data-workspace-planes] { grid-template-columns:168px minmax(0,1fr) 400px; }
 }
 @media(min-width:1024px) and (max-width:1279px) {
  .workspace:not(:global(.research-reading-surface)) [data-workspace-planes] { grid-template-columns:160px minmax(0,1fr) 370px; }
+ .workspace:global(.editor-workspace) [data-workspace-planes] { grid-template-columns:160px minmax(0,1fr) 400px; }
 }
 
 .workspace :global(.bg-os-paper) { background:#f7f8fa; }
