@@ -19,6 +19,16 @@ function once(name, data) {
   try { fs.writeFileSync(fd, JSON.stringify(data)); fs.fsyncSync(fd); }
   finally { fs.closeSync(fd); }
 }
+function visibleFailureCode(page) {
+  return page.locator('[role="alert"]:visible, [data-testid*="toast"]:visible').allInnerTexts().then(values => {
+    const text = values.join(' ').toLowerCase();
+    if (/log in|sign in|登录/.test(text)) return 'LOGIN_REQUIRED';
+    if (/usage limit|reached .*limit|try again after|额度|已达.*上限/.test(text)) return 'USAGE_LIMIT';
+    if (/network error|connection error|failed to fetch|网络错误|连接错误/.test(text)) return 'NETWORK_ERROR';
+    if (/unable to generate|couldn.t generate|generation failed|无法生成|生成失败/.test(text)) return 'IMAGE_GENERATION_FAILED';
+    return null;
+  }).catch(() => null);
+}
 function devtoolsJson(pathname, timeout = 3000) {
   return new Promise((resolve, reject) => {
     const request = http.get({ host: '127.0.0.1', port: 9233, path: pathname, timeout }, response => {
@@ -124,23 +134,45 @@ async function resolveCanonicalConversation(page, deadlineAt) {
   }
   throw Error('CANONICAL_CONVERSATION_TIMEOUT_NO_RESEND');
 }
-async function waitAndDownload(browser, page, request) {
-  const completionDeadline = request.deadlineAt - 45000;
-  while (Date.now() < completionDeadline) {
+async function observeConversation(browser, page, request, conversation, deadlineAt) {
+  while (Date.now() < deadlineAt) {
     if (page.isClosed()) throw Error('PAGE_CLOSED_NO_RESEND');
-    // The Images workspace can show an older gallery image while the new
-    // conversation still has a temporary WEB: URL. Never accept that image.
-    try { canonicalUrl(page.url()); } catch { await new Promise(resolve => setTimeout(resolve, 2000)); continue; }
+    if (canonicalUrl(page.url()) !== conversation) throw Error('CONVERSATION_CHANGED');
+    const failure = await visibleFailureCode(page);
+    if (failure) throw Error(failure);
     const generated = page.getByRole('button', { name: /^(?:Generated image:|Open image:)/ });
     if (await generated.count() === 1 && await generated.isVisible()) {
-      const url = await resolveCanonicalConversation(page, completionDeadline);
-      if (!fs.existsSync(path.join(dir, 'conversation.json'))) once('conversation.json', { url });
-      if (canonicalUrl(page.url()) !== url) throw Error('CONVERSATION_CHANGED');
-      await downloadImage(browser, page, request, url);
-      return;
+      await downloadImage(browser, page, request, conversation);
+      return true;
     }
     await new Promise(resolve => setTimeout(resolve, 5000));
   }
+  return false;
+}
+async function recoverFromImages(browser, context, request, conversation, deadlineAt) {
+  const gallery = await context.newPage();
+  try {
+    await gallery.evaluate(name => { window.name = name; }, `xgs-image-gallery-${id}`);
+    await gallery.goto('https://chatgpt.com/images/', { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, deadlineAt - Date.now())) });
+    const exact = gallery.locator(`a[href="${conversation}"]`);
+    while (Date.now() < deadlineAt && await exact.count() !== 1) await new Promise(resolve => setTimeout(resolve, 2000));
+    if (await exact.count() !== 1) return false;
+    await exact.click();
+    await gallery.waitForURL(conversation, { timeout: Math.min(15000, Math.max(1, deadlineAt - Date.now())) });
+    return await observeConversation(browser, gallery, request, conversation, deadlineAt);
+  } finally {
+    await gallery.close().catch(() => {});
+  }
+}
+async function waitAndDownload(browser, page, request) {
+  const conversation = canonicalUrl(read('conversation.json').url);
+  const firstDeadline = request.deadlineAt - 105000;
+  if (await observeConversation(browser, page, request, conversation, firstDeadline)) return;
+  once('recovery.json', { phase: 'reload_original_once', conversation, at: new Date().toISOString() });
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now() - 75000)) });
+  if (canonicalUrl(page.url()) !== conversation) throw Error('CONVERSATION_CHANGED');
+  if (await observeConversation(browser, page, request, conversation, request.deadlineAt - 70000)) return;
+  if (await recoverFromImages(browser, page.context(), request, conversation, request.deadlineAt - 45000)) return;
   throw Error('RESULT_TIMEOUT_NO_RESEND');
 }
 async function downloadImage(browser, page, request, conversation) {
@@ -243,6 +275,12 @@ async function claimAuthenticatedImagePage(context) {
     }
   }
 }
+async function closeStaleOperatorPages(context) {
+  for (const page of context.pages()) {
+    const name = await bounded(page.evaluate(() => window.name), 2000).catch(() => '');
+    if (/^xgs-image-(?:gallery-)?[0-9a-f-]{36}$/i.test(name) && name !== `xgs-image-${id}`) await page.close().catch(() => {});
+  }
+}
 (async () => {
   const stat = fs.lstatSync(dir);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw Error('INVALID_JOB_DIRECTORY');
@@ -258,6 +296,7 @@ async function claimAuthenticatedImagePage(context) {
   }
   const context = browser.contexts()[0];
   if (!context) throw Error('BROWSER_CONTEXT_NOT_FOUND');
+  await closeStaleOperatorPages(context);
   if (mode === 'status' || mode === 'download' || mode === 'resume') {
     const url = canonicalUrl(read('conversation.json').url);
     const pages = context.pages().filter(page => page.url() === url);
@@ -313,10 +352,11 @@ async function claimAuthenticatedImagePage(context) {
   once('submitted.json', { phase: 'submitted', provider: 'chatgpt-web', id, promptHash: request.promptHash, source: request.source, submittedAt: new Date().toISOString() });
   await send.click();
   console.log('SUBMITTED');
-  if (mode === 'execute') await waitAndDownload(browser, page, request);
-  else {
-    const url = await resolveCanonicalConversation(page, request.deadlineAt - 45000);
-    once('conversation.json', { url });
+  const url = await resolveCanonicalConversation(page, Math.min(request.deadlineAt - 45000, Date.now() + 30000));
+  once('conversation.json', { url });
+  if (mode === 'execute') {
+    await waitAndDownload(browser, page, request);
+    await page.close().catch(() => {});
   }
   process.exit(0);
 })().catch(error => {

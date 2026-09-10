@@ -111,7 +111,7 @@ systemctl enable --now openscience-chatgpt-browser-bridge
 docker run -d --name openscience-chatgpt-browser --init --restart unless-stopped \
   --network none --user 11040:11040 --read-only --cap-drop ALL \
   --security-opt no-new-privileges --security-opt "seccomp=$root/scripts/seccomp.json" \
-  --memory 2g --memory-swap 2g --cpus 2 --pids-limit 512 --shm-size 256m \
+  --memory 4g --memory-swap 4g --cpus 4 --pids-limit 1024 --shm-size 512m \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m,mode=1777 \
   -v "$root/jobs:/jobs:rw" -v "$root/profile:/profile:rw" -v "$root/downloads:/profile/Downloads:rw" \
   -v "$root/egress:/egress:ro" -v "$root/control:/control:rw" \

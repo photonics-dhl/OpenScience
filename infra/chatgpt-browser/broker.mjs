@@ -47,6 +47,8 @@ function uncertain() {
 }
 export async function executeWebImage(config, request, privateDir) {
   validateCodexImageRequest(request, Date.now(), 'chatgpt-web');
+  const circuit = join(config.privateRoot, 'web-image-circuit.json');
+  if (await exists(circuit)) throw Error('WEB_IMAGE_CIRCUIT_OPEN');
   const jobDir = join(config.jobs, request.id);
   if (await exists(jobDir)) throw uncertain();
   await prepareDirectory(jobDir, 11040);
@@ -62,7 +64,11 @@ export async function executeWebImage(config, request, privateDir) {
   } catch (error) {
     if (await exists(join(jobDir, 'result.json'))) {
       // Continue into exact result verification; stdout and exit status are never success evidence.
-    } else if (await exists(join(jobDir, 'submitted.json'))) throw uncertain();
+    } else if (await exists(join(jobDir, 'submitted.json'))) {
+      await atomicWrite(circuit, JSON.stringify({ schemaVersion: 1, state: 'open', taskId: request.id,
+        promptHash: request.promptHash, openedAt: Date.now(), reason: 'submitted_without_verified_png' }), 0o600);
+      throw uncertain();
+    }
     else throw error;
   }
   const persistedRequest = JSON.parse((await safeRead(innerRequestPath, 32768)).toString('utf8'));
