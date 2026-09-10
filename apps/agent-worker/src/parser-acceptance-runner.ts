@@ -118,7 +118,10 @@ async function main(): Promise<void> {
     const parserCascade = Object.assign(async (...args: Parameters<typeof canonicalCascade>) => {
       cascadeResult = await canonicalCascade(...args);
       return cascadeResult;
-    }, { featureFlags: canonicalCascade.featureFlags });
+    }, {
+      featureFlags: canonicalCascade.featureFlags,
+      renderPages: canonicalCascade.renderPages,
+    });
     const handlers = createHandlers(gateway, { parserCascade, externalProcessingPolicy: async () => false });
     const malwareScanner = async () => undefined;
     const derivedObjects = new Map<string, Buffer>();
