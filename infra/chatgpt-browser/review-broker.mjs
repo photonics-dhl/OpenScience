@@ -175,7 +175,7 @@ async function main() {
   }
   recoverable.sort((left, right) => right.deadlineAt - left.deadlineAt);
   for (const request of recoverable) if (await recoverPublishedFailure(config, request)) return;
-  for (const id of [...new Set([...existing, ...queued])].sort().slice(0, 1)) {
+  for (const id of [...new Set([...existing, ...queued])].sort()) {
     const incoming = join(config.inbox, `${id}.json`), claimed = join(config.privateRoot, id);
     if (!await exists(claimed)) await prepare(claimed, 0);
     const requestPath = join(claimed, 'request.json');
