@@ -14,6 +14,7 @@ import {
   loadHermesDockPreferences,
   resolveHermesDock,
   saveHermesDockPreferences,
+  type HermesDockPreferences,
   type HermesViewportClass,
 } from '@/lib/hermes/dock-preferences';
 import {
@@ -98,7 +99,10 @@ type GuideDockContext = {
   pathname: string;
   workspaceId: string;
 };
-type GuideDockOrigin = GuideDockContext & { point: { x: number; y: number } };
+type GuideDockOrigin = GuideDockContext & {
+  point: { x: number; y: number };
+  storedPreferences: HermesDockPreferences | null;
+};
 type GuideRestoreTransaction = GuideDockContext & { epoch: number; point: { x: number; y: number } };
 type GuideSettledReplan = {
   contextKey: string;
@@ -566,7 +570,14 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const currentPathname = window.location.pathname;
     if (guideTarget && dockReady && dockKind) {
       if (!guideOriginRef.current) guideOriginRef.current = {
-        customDock, dockKind, pathname: currentPathname, point: { ...positionRef.current }, workspaceId,
+        customDock,
+        dockKind,
+        pathname: currentPathname,
+        point: { ...positionRef.current },
+        storedPreferences: hasStoredHermesDockPreferences(window.localStorage, workspaceId, dockKind)
+          ? loadHermesDockPreferences(window.localStorage, workspaceId, dockKind)
+          : null,
+        workspaceId,
       };
       return;
     }
@@ -581,10 +592,12 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const half = resolveHermesStageSize(false, compactStage) / 2;
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, currentKind);
     const stored = hasStoredHermesDockPreferences(window.localStorage, workspaceId, currentKind);
-    const desired = currentContextMatches
+    const storedPreferences = stored ? preferences : null;
+    const storedPreferencesChanged = JSON.stringify(origin.storedPreferences) !== JSON.stringify(storedPreferences);
+    const desired = currentContextMatches && !storedPreferencesChanged
       ? origin.point
       : resolveHermesDock(preferences, { height: window.innerHeight, width: window.innerWidth }, { height: half * 2, width: half * 2 }, true);
-    if (!currentContextMatches) setCustomDock(stored);
+    if (!currentContextMatches || storedPreferencesChanged) setCustomDock(stored);
     const restored = {
       x: Math.min(window.innerWidth - half, Math.max(half, desired.x)),
       y: Math.min(window.innerHeight - half, Math.max(half, desired.y)),
@@ -603,7 +616,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const epoch = nextGuideRestoreEpochRef.current + 1;
     nextGuideRestoreEpochRef.current = epoch;
     restoringGuideDockRef.current = {
-      customDock: currentContextMatches ? origin.customDock : stored,
+      customDock: currentContextMatches && !storedPreferencesChanged ? origin.customDock : stored,
       dockKind: currentKind,
       epoch,
       pathname: currentPathname,
