@@ -1711,8 +1711,12 @@ export async function extractHandler(
       const persistedProposal = persistedCandidateHash
         ? persistedScientificReviewProposal(canonicalSourceMap, passages, previousPartial)
         : undefined;
-      if (persistedProposal && sha256Json({ schemaVersion: SDF_CORE_VERSION, fields: persistedProposal.fields })
-        === persistedCandidateHash) {
+      // Candidate reuse and review-response reuse are separate decisions. The
+      // server has already rebound every retained/unverified field to this exact
+      // SourceMap above, so it can be reviewed directly even when prior review
+      // revisions changed the old candidate hash. webScientificReviewCanonicalProposal
+      // still reuses a paid response only for an exact candidate hash + contract.
+      if (persistedProposal) {
         return reviewAndMaterializeCanonicalProposal(
           gateway, canonicalSourceMap, passages, persistedProposal, trustedContext.scientificReview,
         );
