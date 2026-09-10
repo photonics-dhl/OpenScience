@@ -34,7 +34,8 @@ import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
-import { createParserRasterJobClient, createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
+import { createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
+import { runParserCascadeSelfTest } from './parser-self-test';
 import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
 import {
   runParserCascade,
@@ -137,8 +138,6 @@ export type TaskHandler = (
 export function createWorkerParserCascade(
   gateway: Pick<AiGateway, 'ocr'>,
   parserJobAdapter: TextStageAdapter,
-  rasterJobAdapter?: ReturnType<typeof createParserRasterJobClient>,
-  llmOcr = false,
 ): ParserCascadeRunner {
   const extractText = createTextExtractor({
     pdf: parserJobAdapter,
@@ -150,7 +149,7 @@ export function createWorkerParserCascade(
     detectLayout: false,
     grobid: false,
     localOcr: true,
-    llmOcr,
+    llmOcr: false,
   });
   return Object.assign(
     (input: ParserInput, authorization: ParserCascadeAuthorization) => runParserCascade(input, {
@@ -173,17 +172,6 @@ export function createWorkerParserCascade(
             mediaType: stageInput.mediaType,
             options: { pageNumbers: pages.map(({ page }) => page) },
           }, Buffer.from(stageInput.content)),
-          renderPages: (stageInput, pageNumbers) => {
-            if (!rasterJobAdapter) throw new Error('isolated raster adapter unavailable');
-            return rasterJobAdapter({
-              schemaVersion: 2,
-              operation: 'render_page',
-              artifactId: stageInput.artifactId,
-              contentHash: stageInput.contentHash,
-              mediaType: stageInput.mediaType,
-              options: { pageNumbers: [...pageNumbers] },
-            }, Buffer.from(stageInput.content));
-          },
         },
       },
       aiGateway: gateway,
@@ -527,11 +515,15 @@ async function main(): Promise<void> {
     externalProcessingPolicy,
   );
   const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata);
-  const rasterJobAdapter = createParserRasterJobClient(parserJobDir, expectedSidecarParserMetadata);
-  const parserCascade = createWorkerParserCascade(
-    gateway, parserJobAdapter, rasterJobAdapter,
-    process.env.AI_ENABLED === 'true' && process.env.MINIMAX_VISION_ENABLED === 'true',
-  );
+  const parserCascade = createWorkerParserCascade(gateway, parserJobAdapter);
+  const parserSelfTest = await runParserCascadeSelfTest(parserCascade);
+  if (!parserSelfTest.pdf.textMatched || !parserSelfTest.docx.textMatched
+    || !parserSelfTest.scan.textMatched || !parserSelfTest.scan.locatorMatched
+    || !parserSelfTest.scan.tesseractMatched || !parserSelfTest.scan.confidenceMatched
+    || !parserSelfTest.scan.boundingBoxMatched
+    || !parserSelfTest.candidateFallbackDisabled) {
+    throw new Error('parser cascade startup self-test failed');
+  }
   const handlers = createHandlers(gateway, {
     parserCascade,
     externalProcessingPolicy,
