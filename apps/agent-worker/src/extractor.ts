@@ -1279,6 +1279,10 @@ async function webScientificReviewCanonicalProposal(
       source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash,
         candidateHash, sourceMapHash },
       prompt,
+      ...(context.sourceDocument ? { attachments: [{
+        ...context.sourceDocument,
+        bytes: Uint8Array.from(context.sourceDocument.bytes),
+      }] } : {}),
     });
     let parsed = parseJsonObject(response.text);
     if (!scientificReviewGuard(parsed, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_response', {
@@ -1388,6 +1392,44 @@ async function reviewAndMaterializeCanonicalProposal(
     fieldDiagnosticsDetails: reviewed.partial.fieldDiagnosticsDetails,
     unverifiedSummaries: reviewed.partial.unverifiedSummaries,
     unverifiedSourcePassageIds: reviewed.partial.unverifiedSourcePassageIds,
+  };
+}
+
+async function reviewAndMaterializeCanonicalPartial(
+  gateway: AiGateway,
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  partial: CanonicalPartialResult,
+  context?: ScientificReviewContext,
+): Promise<ExtractionResult> {
+  const reviewed = await reviewAndMaterializeCanonicalProposal(gateway, sourceMap, passages, partial.proposal, context);
+  const unresolved = SDF_CORE_FIELDS.filter((field) => partial.fieldDiagnostics[field] && !reviewed.core[field]?.trim());
+  if (!unresolved.length) return reviewed;
+  const fieldDiagnostics = { ...(reviewed.fieldDiagnostics ?? {}) };
+  const fieldDiagnosticsDetails = { ...(reviewed.fieldDiagnosticsDetails ?? {}) };
+  const unverifiedSummaries = { ...(reviewed.unverifiedSummaries ?? {}) };
+  const unverifiedSourcePassageIds = { ...(reviewed.unverifiedSourcePassageIds ?? {}) };
+  for (const field of unresolved) {
+    fieldDiagnostics[field] ??= partial.fieldDiagnostics[field]!;
+    const details = [...new Set([
+      fieldDiagnosticsDetails[field],
+      partial.fieldDiagnosticsDetails[field],
+    ].filter((value): value is string => Boolean(value)))];
+    if (details.length) fieldDiagnosticsDetails[field] = details.join(';');
+    if (!unverifiedSummaries[field] && partial.unverifiedSummaries[field]) {
+      unverifiedSummaries[field] = partial.unverifiedSummaries[field]!;
+    }
+    if (!unverifiedSourcePassageIds[field]?.length && partial.unverifiedSourcePassageIds[field]?.length) {
+      unverifiedSourcePassageIds[field] = [...partial.unverifiedSourcePassageIds[field]!];
+    }
+  }
+  return {
+    ...reviewed,
+    reason: 'canonical_partial_validation_exhausted',
+    fieldDiagnostics,
+    fieldDiagnosticsDetails,
+    unverifiedSummaries,
+    unverifiedSourcePassageIds,
   };
 }
 
@@ -1528,17 +1570,9 @@ export async function extractHandler(
     const previousPartial = previousCanonicalPartial(canonicalSourceMap, passages, trustedContext.previousResult);
     if (previousPartial) {
       const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, previousPartial);
-      if (Object.keys(partial.fieldDiagnostics).length === 0) {
-        return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal, trustedContext.scientificReview);
-      }
-      return {
-        ...materializeCanonicalProposal(partial.proposal),
-        reason: 'canonical_partial_validation_exhausted',
-        fieldDiagnostics: partial.fieldDiagnostics,
-        fieldDiagnosticsDetails: partial.fieldDiagnosticsDetails,
-        unverifiedSummaries: partial.unverifiedSummaries,
-        unverifiedSourcePassageIds: partial.unverifiedSourcePassageIds,
-      };
+      return Object.keys(partial.fieldDiagnostics).length === 0
+        ? reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal, trustedContext.scientificReview)
+        : reviewAndMaterializeCanonicalPartial(gateway, canonicalSourceMap, passages, partial, trustedContext.scientificReview);
     }
   }
   const synthesis = canonicalSourceMap && passages ? await buildPaperReadingSynthesis(gateway, passages) : undefined;
@@ -1591,17 +1625,9 @@ export async function extractHandler(
       const initialPartial = validation.partialResult();
       if (!initialPartial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
       const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, initialPartial);
-      if (Object.keys(partial.fieldDiagnostics).length === 0) {
-        return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal, scientificReview);
-      }
-      return {
-        ...materializeCanonicalProposal(partial.proposal),
-        reason: 'canonical_partial_validation_exhausted',
-        fieldDiagnostics: partial.fieldDiagnostics,
-        fieldDiagnosticsDetails: partial.fieldDiagnosticsDetails,
-        unverifiedSummaries: partial.unverifiedSummaries,
-        unverifiedSourcePassageIds: partial.unverifiedSourcePassageIds,
-      };
+      return Object.keys(partial.fieldDiagnostics).length === 0
+        ? reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal, scientificReview)
+        : reviewAndMaterializeCanonicalPartial(gateway, canonicalSourceMap, passages, partial, scientificReview);
     }
     let proposal = validation.mergeRetained();
     if (SDF_CORE_FIELDS.some((field) => proposal.fields[field].needsMoreInformation)) {
