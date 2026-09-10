@@ -195,9 +195,12 @@ async function imageComposer(page) {
 async function composerText(composer) {
   return await composer.evaluate(element => element instanceof HTMLTextAreaElement ? element.value : element.innerText);
 }
+function bounded(promise, timeout = 3000) {
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(Error('PAGE_UNRESPONSIVE')), timeout))]);
+}
 async function waitForImageComposer(page, deadlineAt) {
   while (Date.now() < deadlineAt) {
-    const composer = await imageComposer(page).catch(() => null);
+    const composer = await bounded(imageComposer(page), 2000).catch(() => null);
     if (composer) return composer;
     await new Promise(resolve => setTimeout(resolve, 500));
   }
@@ -206,8 +209,8 @@ async function waitForImageComposer(page, deadlineAt) {
 async function claimAuthenticatedImagePage(context) {
   for (const url of ['https://chatgpt.com/images/', 'https://chatgpt.com/']) {
     for (const page of context.pages()) {
-      if (page.url() !== url || await page.evaluate(() => window.name).catch(() => '')) continue;
-      const composer = await imageComposer(page);
+      if (page.url() !== url || await bounded(page.evaluate(() => window.name), 2000).catch(() => 'unresponsive')) continue;
+      const composer = await bounded(imageComposer(page), 2000).catch(() => null);
       if (!composer || (await composerText(composer).catch(() => '')).trim()) continue;
       await page.evaluate(name => { window.name = name; }, `xgs-image-${id}`);
       return page;
@@ -249,7 +252,8 @@ async function claimAuthenticatedImagePage(context) {
       page = await context.newPage();
       await page.goto('https://chatgpt.com/images/', { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
       let ready = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 5000));
-      if (!ready) {
+      for (let attempt = 0; !ready && attempt < 3; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
         await page.reload({ waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
         ready = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 15000));
       }
