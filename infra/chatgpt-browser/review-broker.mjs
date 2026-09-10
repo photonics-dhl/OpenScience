@@ -163,33 +163,37 @@ async function main() {
   }
   await directory(config.inbox, 1000, 0o700); await directory(config.results, 0, 0o750);
   await directory(config.privateRoot, 0, 0o700); await directory(config.jobs, 11040, 0o700);
-  await atomicWrite(join(config.results, '.ready'), JSON.stringify({ schemaVersion: 1, provider: 'chatgpt-web-science-review', updatedAt: Date.now() }), 0o640);
-  const queued = (await readdir(config.inbox)).filter(name => name.endsWith('.json') && !name.endsWith('.submitted.json') && UUID.test(name.slice(0, -5))).map(name => name.slice(0, -5));
-  const existing = (await readdir(config.privateRoot)).filter(name => UUID.test(name));
-  const recoverable = [];
-  for (const id of existing) {
-    try {
-      const request = validateScienceReviewRequest(JSON.parse((await safeRead(join(config.privateRoot, id, 'request.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
-      if (request.deadlineAt + RECOVERY_GRACE_MS > Date.now()) recoverable.push(request);
-    } catch {}
-  }
-  recoverable.sort((left, right) => right.deadlineAt - left.deadlineAt);
-  for (const request of recoverable) if (await recoverPublishedFailure(config, request)) return;
-  for (const id of [...new Set([...existing, ...queued])].sort()) {
-    const incoming = join(config.inbox, `${id}.json`), claimed = join(config.privateRoot, id);
-    if (!await exists(claimed)) await prepare(claimed, 0);
-    const requestPath = join(claimed, 'request.json');
-    if (!await exists(requestPath)) await rename(incoming, requestPath);
-    let request;
-    try { request = validateScienceReviewRequest(JSON.parse((await safeRead(requestPath, SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')), Date.now()); }
-    catch { continue; }
-    if (request.id !== id || await exists(join(config.results, id, 'result.json'))) continue;
-    const started = join(claimed, 'started');
-    if (await exists(started)) { await publish(config.results, request, 'uncertain', 'UNCERTAIN'); return; }
-    await atomicWrite(started, String(Date.now()));
-    try { await publish(config.results, request, 'succeeded', undefined, await execute(config, request)); }
-    catch (error) { const isUncertain = error?.code === 'UNCERTAIN'; await publish(config.results, request, isUncertain ? 'uncertain' : 'failed', isUncertain ? 'UNCERTAIN' : 'EXECUTION_FAILED'); }
-    return;
-  }
+  const heartbeat = () => atomicWrite(join(config.results, '.ready'), JSON.stringify({ schemaVersion: 1, provider: 'chatgpt-web-science-review', updatedAt: Date.now() }), 0o640);
+  await heartbeat();
+  const heartbeatTimer = setInterval(() => { heartbeat().catch(() => {}); }, 15_000);
+  try {
+    const queued = (await readdir(config.inbox)).filter(name => name.endsWith('.json') && !name.endsWith('.submitted.json') && UUID.test(name.slice(0, -5))).map(name => name.slice(0, -5));
+    const existing = (await readdir(config.privateRoot)).filter(name => UUID.test(name));
+    const recoverable = [];
+    for (const id of existing) {
+      try {
+        const request = validateScienceReviewRequest(JSON.parse((await safeRead(join(config.privateRoot, id, 'request.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+        if (request.deadlineAt + RECOVERY_GRACE_MS > Date.now()) recoverable.push(request);
+      } catch {}
+    }
+    recoverable.sort((left, right) => right.deadlineAt - left.deadlineAt);
+    for (const request of recoverable) if (await recoverPublishedFailure(config, request)) return;
+    for (const id of [...new Set([...existing, ...queued])].sort()) {
+      const incoming = join(config.inbox, `${id}.json`), claimed = join(config.privateRoot, id);
+      if (!await exists(claimed)) await prepare(claimed, 0);
+      const requestPath = join(claimed, 'request.json');
+      if (!await exists(requestPath)) await rename(incoming, requestPath);
+      let request;
+      try { request = validateScienceReviewRequest(JSON.parse((await safeRead(requestPath, SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')), Date.now()); }
+      catch { continue; }
+      if (request.id !== id || await exists(join(config.results, id, 'result.json'))) continue;
+      const started = join(claimed, 'started');
+      if (await exists(started)) { await publish(config.results, request, 'uncertain', 'UNCERTAIN'); return; }
+      await atomicWrite(started, String(Date.now()));
+      try { await publish(config.results, request, 'succeeded', undefined, await execute(config, request)); }
+      catch (error) { const isUncertain = error?.code === 'UNCERTAIN'; await publish(config.results, request, isUncertain ? 'uncertain' : 'failed', isUncertain ? 'UNCERTAIN' : 'EXECUTION_FAILED'); }
+      return;
+    }
+  } finally { clearInterval(heartbeatTimer); }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(() => { console.error('WEB_SCIENCE_REVIEW_BROKER_FAILED'); process.exitCode = 1; });

@@ -651,6 +651,7 @@ type ScientificReviewResponse = {
   fields: Record<(typeof SDF_CORE_FIELDS)[number], ScientificReviewField>;
   needsMoreEvidence: Array<{ question: string; requestedContext: string }>;
 };
+const SCIENCE_REVIEW_SUPPLEMENTAL_CONTRACT_VERSION = '2';
 
 function sha256Json(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -658,7 +659,7 @@ function sha256Json(value: unknown): string {
 
 function reviewAttemptId(parentTaskId: string, sourceMapHash: string, candidateHash: string, evidenceManifestHash?: string): string {
   const seed = evidenceManifestHash
-    ? `${parentTaskId}\0${sourceMapHash}\0${candidateHash}\0${evidenceManifestHash}`
+    ? `${parentTaskId}\0${sourceMapHash}\0${candidateHash}\0${evidenceManifestHash}\0supplemental-v${SCIENCE_REVIEW_SUPPLEMENTAL_CONTRACT_VERSION}`
     : `${parentTaskId}\0${sourceMapHash}\0${candidateHash}`;
   const hex = createHash('sha256').update(seed).digest('hex').slice(0, 32).split('');
   hex[12] = '5';
@@ -775,6 +776,23 @@ function scientificReviewGuard(value: unknown, allowedIds: ReadonlySet<string>):
     }
   }
   return true;
+}
+
+function fieldsAffectedByReviewEvidence(review: ScientificReviewResponse): Set<(typeof SDF_CORE_FIELDS)[number]> {
+  const affected = new Set<(typeof SDF_CORE_FIELDS)[number]>();
+  for (const need of review.needsMoreEvidence) {
+    const scope = /^【影响([^】]+)】/.exec(need.question.trim())?.[1];
+    if (!scope) return new Set();
+    let matched = false;
+    for (const field of SDF_CORE_FIELDS) {
+      if (new RegExp(`(?:^|[^a-z])${field}(?:[^a-z]|$)`, 'i').test(scope)) {
+        affected.add(field);
+        matched = true;
+      }
+    }
+    if (!matched) return new Set();
+  }
+  return affected;
 }
 
 function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: readonly CanonicalPassage[]): {
@@ -1364,6 +1382,8 @@ async function webScientificReviewCanonicalProposal(
     let finalAttemptId = attemptId;
     let evidenceManifestHash: string | undefined;
     let evidencePages: Array<{ pageNumber: number; imageSha256: string }> | undefined;
+    let supplementalUnavailable = false;
+    let supplementalBlockedFields = new Set<(typeof SDF_CORE_FIELDS)[number]>();
     if (parsed.needsMoreEvidence.length > 0) {
       if (!context.sourceDocument && !context.renderPages) return blockAll('awaiting_review_evidence', 'scientificReview=evidence_renderer_unavailable', {
         promptHash: response.promptHash, responseHash: response.responseHash,
@@ -1416,27 +1436,35 @@ async function webScientificReviewCanonicalProposal(
       if (supplementalPrompt.length > SCIENCE_REVIEW_MAX_PROMPT_CHARS) return blockAll('awaiting_review_evidence', 'scientificReview=supplemental_packet_too_large', {
         promptHash: response.promptHash, responseHash: response.responseHash, evidenceManifestHash, evidencePages,
       });
-      response = await gateway.reviewScientific({
-        requestId: finalAttemptId,
-        authorizationContext: context.authorizationContext,
-        source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash, candidateHash, sourceMapHash },
-        prompt: supplementalPrompt,
-        attachments: evidence.attachments,
-      });
-      parsed = parseJsonObject(response.text);
-      if (!scientificReviewGuard(parsed, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_supplemental_response', {
-        attemptId: finalAttemptId, previousAttemptId: attemptId, promptHash: response.promptHash,
-        responseHash: response.responseHash, evidenceManifestHash, evidencePages,
-      });
+      try {
+        response = await gateway.reviewScientific({
+          requestId: finalAttemptId,
+          authorizationContext: context.authorizationContext,
+          source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash, candidateHash, sourceMapHash },
+          prompt: supplementalPrompt,
+          attachments: evidence.attachments,
+        });
+        const supplementalParsed = parseJsonObject(response.text);
+        if (!scientificReviewGuard(supplementalParsed, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_supplemental_response', {
+          attemptId: finalAttemptId, previousAttemptId: attemptId, promptHash: response.promptHash,
+          responseHash: response.responseHash, evidenceManifestHash, evidencePages,
+        });
+        parsed = supplementalParsed;
+      } catch {
+        supplementalUnavailable = true;
+        finalAttemptId = attemptId;
+        const explicitlyAffected = fieldsAffectedByReviewEvidence(parsed);
+        supplementalBlockedFields = explicitlyAffected.size ? explicitlyAffected : new Set(SDF_CORE_FIELDS);
+      }
     }
     const reviewedFields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
       const reviewed = parsed.fields[field];
-      if (reviewed.verdict === 'blocked') return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }];
+      if (reviewed.verdict === 'blocked' || supplementalBlockedFields.has(field)) return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }];
       const segments = segmentsForPassages(sourceMap, reviewed.sourcePassageIds, new Map(reviewPassages.map((passage) => [passage.id, passage])));
       return [field, { summary: reviewed.summary.trim(), sourceQuote: segments.map((segment) => segment.quote).join('\n'),
         sourcePassageIds: reviewed.sourcePassageIds, verifiedSegments: segments, needsMoreInformation: false }];
     })) as ExtractedProposal['fields'];
-    const blockedFields = SDF_CORE_FIELDS.filter((field) => parsed.fields[field].verdict === 'blocked');
+    const blockedFields = SDF_CORE_FIELDS.filter((field) => parsed.fields[field].verdict === 'blocked' || supplementalBlockedFields.has(field));
     const reviewStatus = parsed.needsMoreEvidence.length
       ? 'awaiting_review_evidence'
       : blockedFields.length ? 'blocked_scientific_review' : 'review_received';
@@ -1444,9 +1472,9 @@ async function webScientificReviewCanonicalProposal(
       partial: {
         proposal: { schemaVersion: SDF_CORE_VERSION, fields: reviewedFields },
         fieldDiagnostics: Object.fromEntries(blockedFields.map((field) => [field, 'malformed_item' as const])),
-        fieldDiagnosticsDetails: Object.fromEntries(blockedFields.map((field) => [field, `scientificReview=${parsed.fields[field].issues.map((issue) => `${issue.code}:${issue.problem}`).join('|') || 'blocked'}`])),
-        unverifiedSummaries: Object.fromEntries(blockedFields.map((field) => [field, proposal.fields[field].summary])),
-        unverifiedSourcePassageIds: Object.fromEntries(blockedFields.map((field) => [field, proposal.fields[field].sourcePassageIds ?? []])),
+        fieldDiagnosticsDetails: Object.fromEntries(blockedFields.map((field) => [field, `scientificReview=${parsed.fields[field].issues.map((issue) => `${issue.code}:${issue.problem}`).join('|') || 'blocked'}${supplementalUnavailable ? '|supplementalReview=unavailable' : ''}`])),
+        unverifiedSummaries: Object.fromEntries(blockedFields.map((field) => [field, parsed.fields[field].summary || proposal.fields[field].summary])),
+        unverifiedSourcePassageIds: Object.fromEntries(blockedFields.map((field) => [field, parsed.fields[field].sourcePassageIds.length ? parsed.fields[field].sourcePassageIds : proposal.fields[field].sourcePassageIds ?? []])),
       },
       review: { provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
         status: reviewStatus,
