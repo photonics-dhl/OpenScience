@@ -17,7 +17,7 @@ export interface ScienceReviewSource extends OcrSourceIdentity {
   sourceMapHash: string;
 }
 
-export interface ScienceReviewAttachmentRecord {
+export interface ScienceReviewImageAttachmentRecord {
   fileName: string;
   mediaType: 'image/png';
   pageNumber: number;
@@ -26,9 +26,14 @@ export interface ScienceReviewAttachmentRecord {
   sha256: string;
 }
 
-export interface ScienceReviewAttachment extends ScienceReviewAttachmentRecord {
-  bytes: Uint8Array;
+export interface ScienceReviewDocumentAttachmentRecord {
+  fileName: 'source.pdf';
+  mediaType: 'application/pdf';
+  sha256: string;
 }
+
+export type ScienceReviewAttachmentRecord = ScienceReviewImageAttachmentRecord | ScienceReviewDocumentAttachmentRecord;
+export type ScienceReviewAttachment = ScienceReviewAttachmentRecord & { bytes: Uint8Array };
 
 export interface ScienceReviewInput {
   requestId: string;
@@ -90,6 +95,10 @@ function validSource(value: unknown): value is ScienceReviewSource {
 
 function validAttachment(value: unknown): value is ScienceReviewAttachmentRecord {
   const attachment = record(value);
+  if (attachment.mediaType === 'application/pdf') {
+    return Object.keys(attachment).sort().join(',') === 'fileName,mediaType,sha256'
+      && attachment.fileName === 'source.pdf' && hash(attachment.sha256);
+  }
   return Object.keys(attachment).sort().join(',') === 'fileName,height,mediaType,pageNumber,sha256,width'
     && typeof attachment.fileName === 'string' && /^page-[1-9][0-9]{0,4}\.png$/u.test(attachment.fileName)
     && attachment.mediaType === 'image/png' && Number.isSafeInteger(attachment.pageNumber) && (attachment.pageNumber as number) > 0
@@ -114,7 +123,8 @@ export function validateScienceReviewRequest(value: unknown, now?: number): Scie
     || (attachments !== undefined && (!Array.isArray(attachments) || attachments.length < 1
       || attachments.length > SCIENCE_REVIEW_MAX_ATTACHMENTS || !attachments.every(validAttachment)
       || new Set(attachments.map((attachment) => attachment.fileName)).size !== attachments.length
-      || new Set(attachments.map((attachment) => attachment.pageNumber)).size !== attachments.length))) return invalid();
+      || new Set(attachments.filter((attachment) => attachment.mediaType === 'image/png').map((attachment) => attachment.pageNumber)).size
+        !== attachments.filter((attachment) => attachment.mediaType === 'image/png').length))) return invalid();
   if (now !== undefined && ((v.deadlineAt as number) <= now || (v.createdAt as number) > now)) throw new Error('EXPIRED');
   return v as unknown as ScienceReviewRequest;
 }

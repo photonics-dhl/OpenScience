@@ -27,11 +27,15 @@ function validateRequest(request, recover = false) {
   const attachments = request?.attachments;
   const validAttachments = attachments === undefined || (Array.isArray(attachments) && attachments.length >= 1 && attachments.length <= 8
     && new Set(attachments.map(value => value?.fileName)).size === attachments.length
-    && attachments.every(value => value && /^page-[1-9][0-9]{0,4}\.png$/u.test(value.fileName)
-      && value.mediaType === 'image/png' && Number.isSafeInteger(value.pageNumber) && value.pageNumber > 0
-      && Number.isSafeInteger(value.width) && value.width > 0 && value.width <= 8192
-      && Number.isSafeInteger(value.height) && value.height > 0 && value.height <= 8192
-      && value.width * value.height <= 40000000 && SHA256.test(value.sha256 || '')));
+    && attachments.every(value => value && SHA256.test(value.sha256 || '') && (
+      (value.fileName === 'source.pdf' && value.mediaType === 'application/pdf'
+        && Object.keys(value).sort().join(',') === 'fileName,mediaType,sha256')
+      || (/^page-[1-9][0-9]{0,4}\.png$/u.test(value.fileName) && value.mediaType === 'image/png'
+        && Number.isSafeInteger(value.pageNumber) && value.pageNumber > 0
+        && Number.isSafeInteger(value.width) && value.width > 0 && value.width <= 8192
+        && Number.isSafeInteger(value.height) && value.height > 0 && value.height <= 8192
+        && value.width * value.height <= 40000000)
+    )));
   if (request?.schemaVersion !== 1 || request?.provider !== 'chatgpt-web-science-review' || request?.id !== id
     || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 64 * 1024
     || !SHA256.test(request.promptHash || '') || !Number.isSafeInteger(request.deadlineAt)
@@ -46,9 +50,11 @@ function reviewAttachments(request) {
     const file = path.join(dir, 'attachments', attachment.fileName), stat = fs.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 1 || stat.size > MAX_ATTACHMENT_BYTES) throw Error('INVALID_ATTACHMENT');
     const bytes = fs.readFileSync(file); total += bytes.byteLength;
-    if (total > MAX_TOTAL_ATTACHMENT_BYTES || crypto.createHash('sha256').update(bytes).digest('hex') !== attachment.sha256
-      || bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a'
-      || bytes.readUInt32BE(16) !== attachment.width || bytes.readUInt32BE(20) !== attachment.height) throw Error('INVALID_ATTACHMENT');
+    if (total > MAX_TOTAL_ATTACHMENT_BYTES || crypto.createHash('sha256').update(bytes).digest('hex') !== attachment.sha256) throw Error('INVALID_ATTACHMENT');
+    if (attachment.mediaType === 'image/png' && (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a'
+      || bytes.readUInt32BE(16) !== attachment.width || bytes.readUInt32BE(20) !== attachment.height)) throw Error('INVALID_ATTACHMENT');
+    if (attachment.mediaType === 'application/pdf' && (bytes.length < 16 || bytes.subarray(0, 5).toString('ascii') !== '%PDF-'
+      || !bytes.subarray(Math.max(0, bytes.length - 2048)).includes(Buffer.from('%%EOF')))) throw Error('INVALID_ATTACHMENT');
     return { attachment, file };
   });
 }

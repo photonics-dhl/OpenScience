@@ -76,6 +76,12 @@ function attachmentDimensions(bytes: Uint8Array): { width: number; height: numbe
   return { width: value.readUInt32BE(16), height: value.readUInt32BE(20) };
 }
 
+function validPdf(bytes: Uint8Array): boolean {
+  const value = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return value.length >= 16 && value.subarray(0, 5).toString('ascii') === '%PDF-'
+    && value.subarray(Math.max(0, value.length - 2048)).includes(Buffer.from('%%EOF'));
+}
+
 async function successfulOutput(resultsDir: string, request: ScienceReviewRequest): Promise<ScienceReviewProviderResult | null> {
   const output = join(resultsDir, request.id);
   try { await directory(output); } catch (error) { if (missing(error)) return null; throw error; }
@@ -125,8 +131,10 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
     const attachments = input.attachments?.map(({ bytes, ...attachment }) => {
       if (!(bytes instanceof Uint8Array) || bytes.byteLength < 1 || bytes.byteLength > SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES
         || createHash('sha256').update(bytes).digest('hex') !== attachment.sha256) fail();
-      const dimensions = attachmentDimensions(bytes);
-      if (dimensions.width !== attachment.width || dimensions.height !== attachment.height) fail();
+      if (attachment.mediaType === 'image/png') {
+        const dimensions = attachmentDimensions(bytes);
+        if (dimensions.width !== attachment.width || dimensions.height !== attachment.height) fail();
+      } else if (!validPdf(bytes)) fail();
       return { record: attachment, bytes: Uint8Array.from(bytes) };
     });
     if ((attachments?.reduce((total, attachment) => total + attachment.bytes.byteLength, 0) ?? 0) > SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES) fail();

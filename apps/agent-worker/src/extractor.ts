@@ -636,6 +636,7 @@ interface ScientificReviewContext {
   authorizationContext: Readonly<OcrAuthorizationContext>;
   coveragePassageIds?: readonly string[];
   renderPages?: (pageNumbers: readonly number[]) => Promise<ParserRasterResult>;
+  sourceDocument?: { fileName: 'source.pdf'; mediaType: 'application/pdf'; sha256: string; bytes: Uint8Array };
 }
 
 type ScientificReviewField = {
@@ -1194,6 +1195,23 @@ function supplementalEvidence(
   return { manifest, manifestHash, attachments };
 }
 
+function supplementalDocumentEvidence(
+  sourceMap: DocumentSourceMap,
+  pageNumbers: readonly number[],
+  review: ScientificReviewResponse,
+  sourceDocument: NonNullable<ScientificReviewContext['sourceDocument']>,
+): { manifest: Record<string, unknown>; manifestHash: string; attachments: ScienceReviewAttachment[] } {
+  if (sourceDocument.sha256 !== sourceMap.contentHash) throw new Error('scientific review source document identity mismatch');
+  const manifest = {
+    schemaVersion: 1,
+    source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash },
+    requestedQuestions: review.needsMoreEvidence,
+    requestedPages: [...pageNumbers],
+    attachment: { fileName: sourceDocument.fileName, mediaType: sourceDocument.mediaType, sha256: sourceDocument.sha256 },
+  };
+  return { manifest, manifestHash: sha256Json(manifest), attachments: [{ ...sourceDocument, bytes: Uint8Array.from(sourceDocument.bytes) }] };
+}
+
 async function webScientificReviewCanonicalProposal(
   gateway: AiGateway,
   sourceMap: DocumentSourceMap,
@@ -1270,7 +1288,7 @@ async function webScientificReviewCanonicalProposal(
     let evidenceManifestHash: string | undefined;
     let evidencePages: Array<{ pageNumber: number; imageSha256: string }> | undefined;
     if (parsed.needsMoreEvidence.length > 0) {
-      if (!context.renderPages) return blockAll('awaiting_review_evidence', 'scientificReview=evidence_renderer_unavailable', {
+      if (!context.sourceDocument && !context.renderPages) return blockAll('awaiting_review_evidence', 'scientificReview=evidence_renderer_unavailable', {
         promptHash: response.promptHash, responseHash: response.responseHash,
       });
       const pageNumbers = supplementalPageNumbers(sourceMap, reviewPassages, parsed);
@@ -1279,17 +1297,22 @@ async function webScientificReviewCanonicalProposal(
       });
       let evidence;
       try {
-        evidence = supplementalEvidence(sourceMap, await context.renderPages(pageNumbers), pageNumbers, parsed);
+        evidence = context.sourceDocument
+          ? supplementalDocumentEvidence(sourceMap, pageNumbers, parsed, context.sourceDocument)
+          : supplementalEvidence(sourceMap, await context.renderPages!(pageNumbers), pageNumbers, parsed);
       } catch {
         return blockAll('awaiting_review_evidence', 'scientificReview=evidence_render_failed', {
           promptHash: response.promptHash, responseHash: response.responseHash,
         });
       }
       evidenceManifestHash = evidence.manifestHash;
-      evidencePages = evidence.attachments.map(({ pageNumber, sha256 }) => ({ pageNumber, imageSha256: sha256 }));
+      const imageAttachments = evidence.attachments.filter((attachment) => attachment.mediaType === 'image/png');
+      evidencePages = imageAttachments.length
+        ? imageAttachments.map(({ pageNumber, sha256 }) => ({ pageNumber, imageSha256: sha256 }))
+        : undefined;
       finalAttemptId = reviewAttemptId(context.requestId, sourceMapHash, candidateHash, evidence.manifestHash);
       const supplementalPrompt = [
-        '这是同一论文候选的定点图像补证续审。上一轮审稿保持不可变；本轮是新的review attempt。只把附件原始页图视为公式符号与版面的直接证据，OCR与视觉转录均是未验证辅助，不得替代图片。',
+        '这是同一论文候选的定点原始材料补证续审。上一轮审稿保持不可变；本轮是新的review attempt。附件是原始 PDF 或原始页图，可作为公式符号与版面的直接证据；OCR与视觉转录均是未验证辅助，不得替代附件原件。',
         `上一轮attempt=${attemptId}；本轮evidenceManifestHash=${evidence.manifestHash}。逐项解决上一轮needsMoreEvidence；若附件仍不足则继续填写needsMoreEvidence，不猜测。`,
         `输出结构和裁定规则与上一轮相同，只返回JSON：${JSON.stringify({
           fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {

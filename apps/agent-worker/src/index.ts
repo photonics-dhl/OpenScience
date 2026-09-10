@@ -353,13 +353,14 @@ export function createHandlers(
           || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable confirmed source identity changed');
         reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
       }
+      const parserMediaType = canonicalParserMediaType(artifact.logicalPath, artifact.mimeType);
       const parsed: ParserExtractionResult<DocumentSourceMap> = reusableSourceMap
         ? { status: 'succeeded', sourceMap: reusableSourceMap, warnings: [] }
         : await options.parserCascade({
         artifactId: artifact.id,
         contentHash: artifact.blobSha256,
         content: bytes,
-        mediaType: canonicalParserMediaType(artifact.logicalPath, artifact.mimeType),
+        mediaType: parserMediaType,
       }, { trustedAuthorizationContext, externalProcessingEligible });
       const format = artifact.logicalPath.split('.').at(-1)?.toLowerCase() ?? 'unknown';
       if (parsed.status === 'blocked') throw new Error(`[blocked] ${parsed.code}`);
@@ -387,8 +388,12 @@ export function createHandlers(
               artifactId: artifact.id,
               contentHash: artifact.blobSha256,
               content: bytes,
-              mediaType: canonicalParserMediaType(artifact.logicalPath, artifact.mimeType),
+              mediaType: parserMediaType,
             }, pageNumbers),
+            ...(parserMediaType === 'application/pdf' ? {
+              sourceDocument: { fileName: 'source.pdf' as const, mediaType: 'application/pdf' as const,
+                sha256: artifact.blobSha256, bytes: Uint8Array.from(bytes) },
+            } : {}),
           },
         }),
         ...(reusableSourceMap ? { sourceMapReused: true } : {}),
