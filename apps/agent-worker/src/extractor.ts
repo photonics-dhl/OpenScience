@@ -11,7 +11,6 @@ import {
   type SourceLocator,
 } from '@openscience/domain';
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
-import { RESEARCH_UNDERSTANDING_SKILL } from './skills/research-understanding.js';
 
 /** 六字段 core 结构（§5.1：schemaVersion + 6 字段，全部 string）。 */
 export interface ExtractedCore {
@@ -28,10 +27,6 @@ interface ExtractedFieldProposal {
   summary: string;
   sourceQuote: string;
   sourceBlockIds?: string[];
-  sourceWindowId?: string;
-  sourcePassageIds?: string[];
-  sourceRange?: EvidenceMatch;
-  verifiedSegments?: Array<{ quote: string; sourceLocator: SourceLocator }>;
   sourceLocator?: string;
   needsMoreInformation: boolean;
 }
@@ -47,7 +42,9 @@ export interface ExtractionResult extends Record<string, unknown> {
   core: ExtractedCore;
   evidence: Record<(typeof SDF_CORE_FIELDS)[number], { quote: string; locator: string }>;
   needsMoreInformation: Array<(typeof SDF_CORE_FIELDS)[number]>;
-  missingDetails?: Partial<Record<(typeof SDF_CORE_FIELDS)[number], { cause: ExtractionMissingCause }>>;
+  missingDetails?: Partial<Record<(typeof SDF_CORE_FIELDS)[number], {
+    cause: ExtractionMissingCause;
+  }>>;
   sourceIdentity?: SourceIdentityProposal;
   /** Present only when trusted canonical parser context was supplied outside the user payload. */
   evidenceLocation?: Record<(typeof SDF_CORE_FIELDS)[number], EvidenceLocation>;
@@ -57,14 +54,6 @@ export interface ExtractionResult extends Record<string, unknown> {
   reason?: 'canonical_partial_validation_exhausted';
   /** Exact final guard reasons for unresolved fields; explicitly missing fields are omitted. */
   fieldDiagnostics?: Record<string, string>;
-  /** Numeric validation context for unresolved fields; never contains source text. */
-  fieldDiagnosticsDetails?: Record<string, string>;
-  /** Read-only drafts whose source binding failed; never canonical core or evidence. */
-  unverifiedSummaries?: Record<string, string>;
-  /** Bounded, known canonical passage IDs from failed fields; never canonical evidence. */
-  unverifiedSourcePassageIds?: Record<string, string[]>;
-  /** Server-owned canonical selection contract used to prevent obsolete paid repair loops. */
-  canonicalExtractionContract?: 'windowed-source-v2' | 'exact-quote-v1' | 'grounded-summary-v1' | 'grounded-passages-v1' | 'grounded-passages-v2';
 }
 
 export type EvidenceLocation = {
@@ -108,11 +97,15 @@ const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown): value
 };
 
 const KEY_EVIDENCE = /limitations?|constraints?|uncertaint|data availability|code availability|reproduc|materials? and methods?|experimental setup|results?|discussion|局限|限制|不确定|数据可用|代码可用|复现|方法|结果/gi;
+const AVAILABILITY_HEADING = /^(?:(?:data|code|data and code) availability|availability of data(?: and materials)?|availability of data and code)$/iu;
+const AVAILABILITY_STOP_HEADING = /^(?:supplementary materials?|references?|acknowledg(?:e)?ments?|funding|author contributions?|competing interests?|conflicts? of interest)$/iu;
+const LIMITATION_EVIDENCE = /\b(?:limitations?|constraints?|uncertaint(?:y|ies)|assum(?:e|ed|es|ing|ption|ptions)|estimat(?:e|ed|es|ing|ion|ions)|sensitivity|not available|remain(?:s|ed)? un(?:known|verified)|future work)\b|局限|限制|不确定|假设|估算|敏感性/iu;
 const MAX_EXCERPT_CHARS = 24_000;
 const MAX_EVIDENCE_SEGMENTS = 32;
 const MAX_FIELD_EVIDENCE_CHARS = 8_000;
+const MAX_AVAILABILITY_CHARS = 3_000;
+const MAX_LIMITATION_CHARS = 5_000;
 const MAX_CANONICAL_CORE_CHARS = 4_000;
-const CANONICAL_EXTRACTION_CONTRACT = 'grounded-passages-v2';
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
 export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
@@ -282,30 +275,79 @@ interface CanonicalTextBlock {
   boundingBox: SourceLocator['boundingBox'];
 }
 
+interface PromptCanonicalBlock extends CanonicalTextBlock {
+  promptId: string;
+  ordinal: number;
+  text: string;
+}
+
+interface CanonicalAvailabilityWindow {
+  headingOrdinals: number[];
+  contentOrdinals: number[];
+  complete: boolean;
+}
+
 function normalizedSelectionText(value: string): string {
   return value.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLocaleLowerCase('en-US');
+}
+
+function headingSpanLength(
+  blocks: PromptCanonicalBlock[],
+  start: number,
+  pattern: RegExp,
+): number {
+  let joined = '';
+  for (let length = 1; length <= 4 && start + length <= blocks.length; length += 1) {
+    joined = normalizedSelectionText(`${joined} ${blocks[start + length - 1]!.text}`);
+    pattern.lastIndex = 0;
+    if (pattern.test(joined)) return length;
+  }
+  return 0;
+}
+
+function canonicalAvailabilityWindows(blocks: PromptCanonicalBlock[]): CanonicalAvailabilityWindow[] {
+  const windows: CanonicalAvailabilityWindow[] = [];
+  for (let index = 0; index < blocks.length;) {
+    const headingLength = headingSpanLength(blocks, index, AVAILABILITY_HEADING);
+    if (headingLength === 0) {
+      index += 1;
+      continue;
+    }
+    const headingOrdinals = blocks.slice(index, index + headingLength).map(({ ordinal }) => ordinal);
+    const contentOrdinals: number[] = [];
+    let characters = 0;
+    let complete = true;
+    let cursor = index + headingLength;
+    while (cursor < blocks.length) {
+      if (headingSpanLength(blocks, cursor, AVAILABILITY_STOP_HEADING) > 0
+        || headingSpanLength(blocks, cursor, AVAILABILITY_HEADING) > 0) break;
+      const block = blocks[cursor]!;
+      if (characters + block.text.length > MAX_AVAILABILITY_CHARS) {
+        complete = false;
+        break;
+      }
+      contentOrdinals.push(block.ordinal);
+      characters += block.text.length;
+      cursor += 1;
+    }
+    windows.push({ headingOrdinals, contentOrdinals, complete });
+    index = Math.max(cursor, index + headingLength);
+  }
+  return windows;
 }
 
 function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[] {
   const blocks: CanonicalTextBlock[] = [];
   let cursor = 0;
   for (const page of sourceMap.pages) {
-    // Keep native blocks in the stored map. When a vision transcription exists,
-    // use that canonical page representation without duplicating garbled native text.
-    const visionBlocks = page.blocks.filter((block) => block.parser.name === 'llm_ocr_candidate' && block.text?.trim());
-    for (const block of visionBlocks.length ? visionBlocks : page.blocks) {
+    for (const block of page.blocks) {
       const text = block.text?.trim();
       if (!text) continue;
       if (blocks.length > 0) cursor += 1;
       const originalStart = block.text!.indexOf(text);
       blocks.push({
-        id: block.id,
-        text,
-        textStart: cursor,
-        textEnd: cursor + text.length,
-        originalStart,
-        page: page.page,
-        boundingBox: block.boundingBox,
+        id: block.id, text, textStart: cursor, textEnd: cursor + text.length, originalStart,
+        page: page.page, boundingBox: block.boundingBox,
       });
       cursor += text.length;
     }
@@ -313,181 +355,98 @@ function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[]
   return blocks;
 }
 
-interface CanonicalPassageSlice {
-  block: CanonicalTextBlock;
-  start: number;
-  end: number;
+function promptCanonicalBlocks(sourceMap: DocumentSourceMap): PromptCanonicalBlock[] {
+  const canonical = canonicalTextBlocks(sourceMap);
+  return canonical.map((block, ordinal) => ({
+    ...block, ordinal, promptId: `B${String(ordinal + 1).padStart(6, '0')}`,
+  }));
 }
 
-interface CanonicalPassage {
-  id: string;
-  pageStart: number;
-  pageEnd: number;
-  fragmented: boolean;
-  blockCount: number;
-  evidenceChars: number;
-  text: string;
-  slices: readonly CanonicalPassageSlice[];
-}
-
-const PASSAGE_TARGET_MIN_CHARS = 800;
-const PASSAGE_MAX_CHARS = 1_200;
-const MAX_PASSAGE_BLOCKS = 5;
-const MAX_SOURCE_PASSAGE_IDS = MAX_EVIDENCE_SEGMENTS;
-const USUAL_SOURCE_PASSAGE_IDS = 6;
-
-function splitCanonicalBlock(block: CanonicalTextBlock): CanonicalPassageSlice[] {
-  const result: CanonicalPassageSlice[] = [];
-  let start = 0;
-  while (start < block.text.length) {
-    const maximum = Math.min(block.text.length, start + PASSAGE_MAX_CHARS);
-    let end = maximum;
-    if (maximum < block.text.length) {
-      const minimum = Math.min(maximum, start + PASSAGE_TARGET_MIN_CHARS);
-      const candidate = block.text.slice(minimum, maximum);
-      const boundaries = [...candidate.matchAll(/[.!?。！？;；](?:\s|$)/gu)];
-      const natural = boundaries.at(-1);
-      if (natural?.index !== undefined) end = minimum + natural.index + natural[0].length;
-      else {
-        const whitespace = block.text.slice(minimum, maximum).search(/\s(?=\S)/u);
-        if (whitespace >= 0) end = minimum + whitespace + 1;
-      }
-    }
-    if (end <= start) end = maximum;
-    result.push({ block, start, end });
-    start = end;
-  }
-  return result;
-}
-
-function passageText(slices: readonly CanonicalPassageSlice[]): string {
-  return slices.map((slice, index) => {
-    const separator = index > 0 && slices[index - 1]!.block.id !== slice.block.id ? '\n' : '';
-    return `${separator}${slice.block.text.slice(slice.start, slice.end)}`;
-  }).join('');
-}
-
-function canonicalPassages(sourceMap: DocumentSourceMap): CanonicalPassage[] {
-  const blocks = canonicalTextBlocks(sourceMap);
-  const total = blocks.reduce((sum, block) => sum + block.text.length, 0) + Math.max(0, blocks.length - 1);
-  if (total > 120_000) throw new Error('[blocked] Paper exceeds the full-document understanding limit; split the document into research sections before analysis');
-  const passages: CanonicalPassage[] = [];
-  let pending: CanonicalPassageSlice[] = [];
-  const flush = () => {
-    if (!pending.length) return;
-    const id = `P${String(passages.length + 1).padStart(5, '0')}`;
-    passages.push(Object.freeze({
-      id,
-      pageStart: pending[0]!.block.page,
-      pageEnd: pending.at(-1)!.block.page,
-      fragmented: pending.some((slice) => slice.start > 0 || slice.end < slice.block.text.length),
-      blockCount: new Set(pending.map((slice) => slice.block.id)).size,
-      evidenceChars: passageText(pending).length,
-      text: passageText(pending),
-      slices: Object.freeze(pending.map((slice) => Object.freeze({ ...slice }))),
-    }));
-    pending = [];
+function selectCanonicalBlocks(sourceMap: DocumentSourceMap): PromptCanonicalBlock[] {
+  const blocks = promptCanonicalBlocks(sourceMap);
+  const selected = new Set<number>();
+  let remaining = MAX_EXCERPT_CHARS;
+  const renderedLength = (block: PromptCanonicalBlock) => `--- SOURCE_BLOCK id:${block.promptId} ---\n${block.text}\n\n`.length;
+  const addRange = (start: number, end: number): boolean => {
+    const candidates = blocks.slice(start, end + 1).filter((block) => !selected.has(block.ordinal));
+    const cost = candidates.reduce((total, block) => total + renderedLength(block), 0);
+    if (cost > remaining) return false;
+    candidates.forEach((block) => selected.add(block.ordinal));
+    remaining -= cost;
+    return true;
   };
-  for (const slice of blocks.flatMap(splitCanonicalBlock)) {
-    const candidateSlices = [...pending, slice];
-    const candidate = passageText(candidateSlices);
-    const candidateBlockCount = new Set(candidateSlices.map((entry) => entry.block.id)).size;
-    if (pending.length && (candidate.length > PASSAGE_MAX_CHARS || candidateBlockCount > MAX_PASSAGE_BLOCKS)) flush();
-    pending.push(slice);
-    if (passageText(pending).length >= PASSAGE_TARGET_MIN_CHARS
-      || new Set(pending.map((entry) => entry.block.id)).size >= MAX_PASSAGE_BLOCKS) flush();
+  // Availability statements are short, source-defined reproducibility facts.
+  // Reserve them before repeated Methods/Results headings can consume the
+  // middle budget. Exact source blocks and locators remain unchanged.
+  let availabilitySpent = 0;
+  for (const window of canonicalAvailabilityWindows(blocks)) {
+    const ordinals = [...window.headingOrdinals, ...window.contentOrdinals];
+    const first = ordinals[0]!;
+    const last = ordinals.at(-1)!;
+    const before = remaining;
+    if (addRange(first, last)) availabilitySpent += before - remaining;
+    if (availabilitySpent >= MAX_AVAILABILITY_CHARS) break;
   }
-  flush();
-  return passages;
-}
 
-function canonicalPassagePrompt(passages: readonly CanonicalPassage[]): string {
-  return passages.map((passage) => {
-    const page = passage.pageStart === passage.pageEnd ? `${passage.pageStart}` : `${passage.pageStart}-${passage.pageEnd}`;
-    return `[${passage.id} page:${page} blocks:${passage.blockCount} chars:${passage.evidenceChars}${passage.fragmented ? ' fragment:true' : ''}]\n${passage.text}\n[/${passage.id}]`;
-  }).join('\n\n');
-}
-
-interface SelectedPassageRange {
-  block: CanonicalTextBlock;
-  start: number;
-  end: number;
-}
-
-function selectedPassageRanges(
-  passageIds: readonly string[],
-  allowed: ReadonlyMap<string, CanonicalPassage>,
-): SelectedPassageRange[] {
-  const byBlock = new Map<string, SelectedPassageRange[]>();
-  for (const id of passageIds) {
-    const passage = allowed.get(id);
-    if (!passage) throw new Error('unknown canonical passage');
-    for (const slice of passage.slices) {
-      const ranges = byBlock.get(slice.block.id) ?? [];
-      ranges.push({ block: slice.block, start: slice.start, end: slice.end });
-      byBlock.set(slice.block.id, ranges);
-    }
+  // Give explicit limitations, assumptions, estimates, and uncertainty
+  // contexts their own bounded allowance. Rank explicit headings first, then
+  // restore document order in the final prompt.
+  const limitationCandidates = blocks
+    .filter((block) => LIMITATION_EVIDENCE.test(normalizedSelectionText(block.text)))
+    .map((block) => {
+      const text = normalizedSelectionText(block.text);
+      return {
+        block,
+        priority: /^(?:limitations?|constraints?|uncertaint(?:y|ies)|局限|限制|不确定)$/iu.test(text)
+          ? 0
+          : /\b(?:limitations?|constraints?|uncertaint(?:y|ies)|not available|remain(?:s|ed)? un(?:known|verified))\b|局限|限制|不确定/iu.test(text)
+            ? 1
+            : 2,
+      };
+    })
+    .sort((left, right) => left.priority - right.priority || left.block.ordinal - right.block.ordinal);
+  let limitationSpent = 0;
+  for (const { block } of limitationCandidates) {
+    if (limitationSpent >= MAX_LIMITATION_CHARS) break;
+    const before = remaining;
+    const start = Math.max(0, block.ordinal - 2);
+    const end = Math.min(blocks.length - 1, block.ordinal + 2);
+    if (addRange(start, end)) limitationSpent += before - remaining;
   }
-  const union: SelectedPassageRange[] = [];
-  for (const ranges of byBlock.values()) {
-    ranges.sort((left, right) => left.start - right.start || left.end - right.end);
-    for (const range of ranges) {
-      const previous = union.at(-1);
-      if (previous?.block.id === range.block.id && range.start <= previous.end) {
-        previous.end = Math.max(previous.end, range.end);
-      } else {
-        union.push({ ...range });
-      }
-    }
+
+  let headCost = 0;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const cost = renderedLength(blocks[index]!);
+    if (headCost + cost > 8_000 || !addRange(index, index)) break;
+    headCost += cost;
   }
-  return union.sort((left, right) => left.block.textStart - right.block.textStart || left.start - right.start);
+  for (const block of blocks) {
+    if (remaining <= 8_000) break;
+    KEY_EVIDENCE.lastIndex = 0;
+    if (KEY_EVIDENCE.test(block.text)) addRange(Math.max(0, block.ordinal - 3), Math.min(blocks.length - 1, block.ordinal + 3));
+  }
+  let tailCost = 0;
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const cost = selected.has(index) ? 0 : renderedLength(blocks[index]!);
+    if (tailCost + cost > 8_000 || !addRange(index, index)) break;
+    tailCost += cost;
+  }
+  return blocks.filter((block) => selected.has(block.ordinal));
 }
 
-function selectedPassageBudget(
-  passageIds: readonly string[],
-  allowed: ReadonlyMap<string, CanonicalPassage>,
-): { segmentCount: number; evidenceChars: number } {
-  const ranges = selectedPassageRanges(passageIds, allowed);
-  return {
-    segmentCount: ranges.length,
-    evidenceChars: ranges.reduce((sum, range) => sum + range.end - range.start, 0)
-      + Math.max(0, ranges.length - 1),
-  };
-}
-
-function segmentsForPassages(
-  sourceMap: DocumentSourceMap,
-  passageIds: readonly string[],
-  allowed: ReadonlyMap<string, CanonicalPassage>,
-): Array<{ quote: string; sourceLocator: SourceLocator }> {
-  const ordered = selectedPassageRanges(passageIds, allowed);
-  if (!ordered.length || ordered.length > MAX_EVIDENCE_SEGMENTS) throw new Error('segment_count_1_to_32');
-  return ordered.map(({ block, start, end }) => {
-    const quote = block.text.slice(start, end);
-    const sourceLocator = validateSourceLocator({
-      artifactId: sourceMap.artifactId,
-      contentHash: sourceMap.contentHash,
-      blockId: block.id,
-      page: block.page,
-      boundingBox: block.boundingBox,
-      charRange: { start: block.originalStart + start, end: block.originalStart + end },
-    });
-    const resolved = resolveSourceLocator(sourceMap, sourceLocator);
-    const located = resolved.text?.slice(sourceLocator.charRange!.start, sourceLocator.charRange!.end);
-    if (resolved.id !== block.id || located !== quote) throw new Error('canonical source locator round-trip failed');
-    return { quote, sourceLocator };
-  });
+function canonicalBlockPrompt(blocks: PromptCanonicalBlock[]): string {
+  return blocks.map((block) => `--- SOURCE_BLOCK id:${block.promptId} ---\n${block.text}`).join('\n\n');
 }
 
 type CanonicalFieldValidationReason =
   | 'malformed_item'
   | 'missing_requires_empty'
   | 'summary_required'
-  | 'passage_ids_required'
-  | 'unknown_passage'
-  | 'duplicate_passage'
-  | 'locator_roundtrip_failed'
   | 'segment_count_1_to_32'
+  | 'duplicate_ids'
+  | 'unknown_ids'
+  | 'ordered_ids_required'
+  | 'contiguous_ids_required'
   | 'source_text_limit_8000'
   | 'core_text_limit_4000';
 
@@ -496,70 +455,65 @@ interface CanonicalRepairResponse {
   fields: Record<string, unknown>;
 }
 
-interface CanonicalPartialResult {
-  proposal: ExtractedProposal;
-  fieldDiagnostics: Record<string, CanonicalFieldValidationReason>;
-  fieldDiagnosticsDetails: Record<string, string>;
-  unverifiedSummaries: Record<string, string>;
-  unverifiedSourcePassageIds: Record<string, string[]>;
-}
-
-function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: readonly CanonicalPassage[]): {
+function canonicalProposalValidation(blocks: PromptCanonicalBlock[]): {
   guard: SchemaGuard<CanonicalRepairResponse>;
-  validationFeedback: () => string | undefined;
-  validationDiagnostic: () => string | undefined;
-  partialResult: () => CanonicalPartialResult | undefined;
+  validationFeedback: (value: unknown) => string | undefined;
+  validationDiagnostic: (value: unknown) => string | undefined;
+  validationRejectedFields: () => ReadonlySet<string>;
+  partialResult: () => { proposal: ExtractedProposal; fieldDiagnostics: Record<string, CanonicalFieldValidationReason> } | undefined;
   mergeRetained: () => ExtractedProposal;
 } {
-  const allowed = new Map(passages.map((passage) => [passage.id, passage]));
+  const allowed = new Map(blocks.map((block) => [block.promptId, block]));
+  const allowedByOrdinal = new Map(blocks.map((block) => [block.ordinal, block]));
   const retained = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
-  const draftSummaries = new Map<(typeof SDF_CORE_FIELDS)[number], string>();
-  const draftPassageIds = new Map<(typeof SDF_CORE_FIELDS)[number], string[]>();
-  const draftFailures = new Map<(typeof SDF_CORE_FIELDS)[number], { reason: CanonicalFieldValidationReason; detail?: string }>();
-  let expectedFields: Array<(typeof SDF_CORE_FIELDS)[number]> = [...SDF_CORE_FIELDS];
+  const rejectedFields = new Set<string>();
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
-  let invalidDetails = new Map<string, string>();
-  const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason; detail?: string } => {
+  const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason } => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return { reason: 'malformed_item' };
     const candidate = item as Record<string, unknown>;
-    if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourcePassageIds,summary'
+    if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourceBlockIds,summary'
       || typeof candidate.summary !== 'string' || typeof candidate.needsMoreInformation !== 'boolean'
-      || !Array.isArray(candidate.sourcePassageIds)) return { reason: 'malformed_item' };
+      || !Array.isArray(candidate.sourceBlockIds) || candidate.sourceBlockIds.some((id) => typeof id !== 'string')) {
+      return { reason: 'malformed_item' };
+    }
+    const ids = candidate.sourceBlockIds as string[];
     if (candidate.needsMoreInformation) {
-      return { candidate: { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true } };
+      return candidate.summary.trim() || ids.length > 0
+        ? { reason: 'missing_requires_empty' }
+        : { candidate: candidate as unknown as ExtractedFieldProposal };
     }
     if (!candidate.summary.trim()) return { reason: 'summary_required' };
-    if (candidate.summary.length > MAX_CANONICAL_CORE_CHARS) return { reason: 'core_text_limit_4000' };
-    const invalidIdType = candidate.sourcePassageIds.some((id) => typeof id !== 'string');
-    if (candidate.sourcePassageIds.length < 1 || candidate.sourcePassageIds.length > MAX_SOURCE_PASSAGE_IDS
-      || invalidIdType) return {
-        reason: 'passage_ids_required',
-        detail: `selectedIds=${candidate.sourcePassageIds.length};limit=${MAX_SOURCE_PASSAGE_IDS};invalidIdType=${invalidIdType}`,
-      };
-    const ids = candidate.sourcePassageIds as string[];
-    if (new Set(ids).size !== ids.length) return { reason: 'duplicate_passage' };
-    if (ids.some((id) => !allowed.has(id))) return { reason: 'unknown_passage' };
-    const budget = selectedPassageBudget(ids, allowed);
-    const detail = `selectedIds=${ids.length};expandedSegments=${budget.segmentCount};expandedChars=${budget.evidenceChars}`;
-    if (budget.segmentCount > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32', detail };
-    if (budget.evidenceChars > MAX_FIELD_EVIDENCE_CHARS) return { reason: 'source_text_limit_8000', detail };
-    let segments: Array<{ quote: string; sourceLocator: SourceLocator }>;
-    try { segments = segmentsForPassages(sourceMap, ids, allowed); }
-    catch (error) {
-      return { reason: error instanceof Error && error.message === 'segment_count_1_to_32'
-        ? 'segment_count_1_to_32' : 'locator_roundtrip_failed' };
+    if (ids.length === 0 || ids.length > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32' };
+    if (new Set(ids).size !== ids.length) return { reason: 'duplicate_ids' };
+    if (ids.some((id) => !allowed.has(id))) return { reason: 'unknown_ids' };
+    const selected = ids.map((id) => allowed.get(id)!);
+    if (selected.some((block, index) => index > 0 && block.ordinal <= selected[index - 1]!.ordinal)) {
+      return { reason: 'ordered_ids_required' };
     }
-    const sourceQuote = segments.map((segment) => segment.quote).join('\n');
-    if (sourceQuote.length > MAX_FIELD_EVIDENCE_CHARS) return { reason: 'source_text_limit_8000', detail };
-    return { candidate: {
-      summary: candidate.summary.trim(), sourceQuote, sourcePassageIds: [...ids],
-      sourceBlockIds: segments.map((segment) => segment.sourceLocator.blockId!),
-      verifiedSegments: segments, needsMoreInformation: false,
-    } };
+    const firstOrdinal = selected[0]!.ordinal;
+    const lastOrdinal = selected[selected.length - 1]!.ordinal;
+    const expanded: PromptCanonicalBlock[] = [];
+    for (let ordinal = firstOrdinal; ordinal <= lastOrdinal; ordinal += 1) {
+      const block = allowedByOrdinal.get(ordinal);
+      if (!block) return { reason: 'contiguous_ids_required' };
+      expanded.push(block);
+    }
+    if (expanded.length > MAX_EVIDENCE_SEGMENTS) return { reason: 'segment_count_1_to_32' };
+    if (expanded.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
+      return { reason: 'source_text_limit_8000' };
+    }
+    if (expanded.map((block) => block.text).join('\n').length > MAX_CANONICAL_CORE_CHARS) {
+      return { reason: 'core_text_limit_4000' };
+    }
+    return {
+      candidate: {
+        ...candidate,
+        sourceBlockIds: expanded.map((block) => block.promptId),
+      } as unknown as ExtractedFieldProposal,
+    };
   };
   const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
     invalidFields = new Map();
-    invalidDetails = new Map();
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       invalidFields.set('response', 'malformed_item');
       return false;
@@ -570,51 +524,18 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
       return false;
     }
     const fields = proposal.fields as Record<string, unknown>;
-    const fieldsToValidate = [...expectedFields];
-    if (Object.keys(fields).sort().join(',') !== fieldsToValidate.slice().sort().join(',')) {
-      invalidFields.set('response', 'malformed_item');
-      return false;
-    }
-    for (const field of fieldsToValidate) {
+    for (const field of SDF_CORE_FIELDS) {
       const previous = retained.get(field);
-      // Once a supported field has passed server-side passage materialization, schema
-      // retries repair only unresolved fields and cannot replace that verified result.
-      if (previous?.needsMoreInformation === false) continue;
+      // Every valid field, including an explicit missing field, is final for
+      // this response. Repair prompts request only invalid fields; allowing a
+      // later attempt to rewrite a retained missing field made that contract
+      // contradictory and could exhaust retries on otherwise valid output.
+      if (previous) continue;
       const validation = validateField(fields[field]);
-      if (validation.candidate) {
-        const previousFailure = draftFailures.get(field);
-        if (validation.candidate.needsMoreInformation && draftSummaries.has(field) && previousFailure) {
-          invalidFields.set(field, previousFailure.reason);
-          if (previousFailure.detail) invalidDetails.set(field, previousFailure.detail);
-          continue;
-        }
-        retained.set(field, validation.candidate);
-        draftSummaries.delete(field);
-        draftPassageIds.delete(field);
-        draftFailures.delete(field);
-      }
-      else {
-        const draft = fields[field];
-        if (draft && typeof draft === 'object' && !Array.isArray(draft)) {
-          const item = draft as Record<string, unknown>;
-          if (item.needsMoreInformation === false && typeof item.summary === 'string'
-            && item.summary.trim() && item.summary.length <= MAX_CANONICAL_CORE_CHARS) {
-            draftSummaries.set(field, item.summary.trim());
-            draftFailures.set(field, { reason: validation.reason!, detail: validation.detail });
-            const sourcePassageIds = Array.isArray(item.sourcePassageIds) ? item.sourcePassageIds : [];
-            const knownPassageIds = sourcePassageIds.every((id): id is string => typeof id === 'string' && allowed.has(id))
-              ? sourcePassageIds : undefined;
-            if (knownPassageIds && knownPassageIds.length >= 1
-              && knownPassageIds.length <= MAX_SOURCE_PASSAGE_IDS
-              && new Set(knownPassageIds).size === knownPassageIds.length) {
-              draftPassageIds.set(field, [...knownPassageIds]);
-            } else {
-              draftPassageIds.delete(field);
-            }
-          }
-        }
+      if (validation.candidate) retained.set(field, validation.candidate);
+      else if (!previous) {
         invalidFields.set(field, validation.reason!);
-        if (validation.detail) invalidDetails.set(field, validation.detail);
+        rejectedFields.add(field);
       }
     }
     return invalidFields.size === 0;
@@ -623,43 +544,34 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     guard,
     validationFeedback: () => {
       if (invalidFields.size === 0) return undefined;
-      const nextExpectedFields = invalidFields.has('response') ? expectedFields : [...invalidFields.keys()].filter(
-          (field): field is (typeof SDF_CORE_FIELDS)[number] => SDF_CORE_FIELDS.includes(field as (typeof SDF_CORE_FIELDS)[number]),
-        );
-      const priorSelections = nextExpectedFields.flatMap((field) => {
-        const ids = draftPassageIds.get(field);
-        return ids ? [`${field} priorSelection=${ids.join(',')}`] : [];
-      });
-      const rejected = priorSelections.length ? ` Rejected IDs: ${priorSelections.join('; ')}.` : '';
-      const failure = [...invalidFields].map(([field, reason]) => `${field}:${reason}${invalidDetails.get(field) ? `(${invalidDetails.get(field)})` : ''}`).join(',');
-      const shape = Object.fromEntries(nextExpectedFields.map((field) => [field, {
-        summary: '', sourcePassageIds: [], needsMoreInformation: true,
-      }]));
-      const compactFeedback = `Repair only the failed canonical fields. Failure=${failure}.${rejected} Return exactly one JSON object shaped ${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: shape })}; fields must have exactly these keys: ${nextExpectedFields.join(',')}. Other fields already passed server validation and are retained. For each nonempty summary use needsMoreInformation=false and valid P labels. For source_text_limit_8000 or segment_count_1_to_32, remove nonessential claims first, then remove only passages no retained claim needs; never truncate source or leave a retained claim unsupported. Method may use dispersed key assumptions, steps and validation without every derivation. Reproducibility uses only directly disclosed parameters, materials, procedures, data/code availability and explicit access gaps. Expanded evidence must fit 32 segments and 8000 chars. If the smallest sufficient evidence cannot fit, return that field empty with needsMoreInformation=true; never call a capacity failure an author omission. Do not return quotes or commentary.`;
-      const fallbackFeedback = `Repair only failed fields (${failure}). Return exactly schemaVersion and fields with these keys: ${nextExpectedFields.join(',')}; each field has exactly summary, sourcePassageIds, needsMoreInformation. Keep the smallest sufficient valid P-label set within 32 segments/8000 chars, but never drop evidence for a retained claim or truncate source. If sufficient evidence cannot fit, return that field empty with needsMoreInformation=true. Other fields are already retained. No quotes or commentary.`;
-      expectedFields = nextExpectedFields;
-      return compactFeedback.length <= 1_900 ? compactFeedback : fallbackFeedback;
+      const details = [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(', ');
+      return [
+        'Previous JSON failed canonical validation.',
+        `Invalid fields and reason codes: ${details}.`,
+        'Return schemaVersion and fields containing only the invalid fields listed above; already validated fields are retained locally and need not be repeated.',
+        'For each repaired non-missing field, first identify one continuous original-order span whose exact joined text states one supported core point with all necessary conditions. sourceBlockIds may contain the first and last anchors or an ordered subset; the server expands them to every already supplied SOURCE_BLOCK in that ordinal range. A non-missing field may never have an empty sourceBlockIds array. The expanded span must contain 1-32 blocks. Prefer a short complete span of at most 600 characters, but never truncate qualifiers, units, or necessary evidence to meet that preference. The exact joined source text, not summary, becomes the canonical core.',
+        'A missing field must have summary="", sourceBlockIds=[], needsMoreInformation=true. Do not include a nonempty explanation in a missing field.',
+        'A field is missing only when no supplied SOURCE_BLOCK span states a supported point for that field. Preserve whether a point is measured, theoretical, simulated, or author-attributed.',
+        'Do not quote or repeat source text in this correction instruction; use the SOURCE_BLOCK ids already provided.',
+      ].join(' ');
     },
     validationDiagnostic: () => invalidFields.size === 0
-      ? undefined : [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(','),
+      ? undefined
+      : [...invalidFields].map(([field, reason]) => `${field}:${reason}`).join(','),
+    validationRejectedFields: () => rejectedFields,
     partialResult: () => {
-      if (!SDF_CORE_FIELDS.some((field) => retained.get(field)?.needsMoreInformation === false) && draftSummaries.size === 0) return undefined;
+      if (!SDF_CORE_FIELDS.some((field) => retained.get(field)?.needsMoreInformation === false)) return undefined;
       const responseReason = invalidFields.get('response');
       const fieldDiagnostics: Record<string, CanonicalFieldValidationReason> = {};
-      const fieldDiagnosticsDetails: Record<string, string> = {};
       const fields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
         const candidate = retained.get(field);
-        if (candidate && !invalidFields.has(field) && !responseReason) return [field, candidate];
-        if (candidate?.needsMoreInformation === false) return [field, candidate];
+        if (candidate) return [field, candidate];
         fieldDiagnostics[field] = invalidFields.get(field) ?? responseReason ?? 'malformed_item';
-        const detail = invalidDetails.get(field) ?? invalidDetails.get('response');
-        if (detail) fieldDiagnosticsDetails[field] = detail;
-        return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true } satisfies ExtractedFieldProposal];
+        return [field, {
+          summary: '', sourceQuote: '', sourceBlockIds: [], needsMoreInformation: true,
+        } satisfies ExtractedFieldProposal];
       })) as ExtractedProposal['fields'];
-      return { proposal: { schemaVersion: SDF_CORE_VERSION, fields }, fieldDiagnostics, fieldDiagnosticsDetails,
-        unverifiedSummaries: Object.fromEntries([...draftSummaries].filter(([field]) => Object.hasOwn(fieldDiagnostics, field))),
-        unverifiedSourcePassageIds: Object.fromEntries([...draftPassageIds]
-          .filter(([field]) => Object.hasOwn(fieldDiagnostics, field))) };
+      return { proposal: { schemaVersion: SDF_CORE_VERSION, fields }, fieldDiagnostics };
     },
     mergeRetained: () => ({
       schemaVersion: SDF_CORE_VERSION,
@@ -672,156 +584,7 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
   };
 }
 
-async function repairCanonicalPartial(
-  gateway: AiGateway,
-  sourceMap: DocumentSourceMap,
-  passages: readonly CanonicalPassage[],
-  partial: CanonicalPartialResult,
-): Promise<CanonicalPartialResult> {
-  const passageById = new Map(passages.map((passage) => [passage.id, passage]));
-  const repairFields = SDF_CORE_FIELDS.filter((field) => partial.proposal.fields[field].needsMoreInformation);
-  if (!repairFields.length) return partial;
-  const allPassageIds = passages.map((passage) => passage.id);
-  const candidatesByField = new Map(repairFields.map((field) => {
-    const prior = partial.unverifiedSourcePassageIds[field];
-    return [field, new Set(prior?.length ? prior : allPassageIds)] as const;
-  }));
-  const candidateIds = new Set(repairFields.flatMap((field) => [...candidatesByField.get(field)!]));
-  const candidatePassages = passages.filter((passage) => candidateIds.has(passage.id));
-  const repaired = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
-  const repairFailures = new Map<(typeof SDF_CORE_FIELDS)[number], string>();
-
-  const selectEvidence = (claims: Array<{ text: string; supportSets: string[][] }>, allowedIds: Set<string>): ExtractedFieldProposal | undefined => {
-    const summary = `${claims.map((claim) => claim.text.trim().replace(/[。；！？.!?]+$/u, '')).join('；')}。`;
-    if (!summary || summary.length > MAX_CANONICAL_CORE_CHARS) return undefined;
-    let unions: Array<Set<string>> = [new Set()];
-    for (const claim of claims) {
-      const next = new Map<string, Set<string>>();
-      for (const existing of unions) {
-        for (const supportSet of claim.supportSets) {
-          if (!supportSet.length || supportSet.some((id) => !allowedIds.has(id))) continue;
-          const union = new Set([...existing, ...supportSet]);
-          if (union.size > MAX_SOURCE_PASSAGE_IDS) continue;
-          const ids = passages.filter((passage) => union.has(passage.id)).map((passage) => passage.id);
-          const budget = selectedPassageBudget(ids, passageById);
-          if (budget.segmentCount <= MAX_EVIDENCE_SEGMENTS && budget.evidenceChars <= MAX_FIELD_EVIDENCE_CHARS) {
-            next.set(ids.join(','), union);
-          }
-        }
-      }
-      unions = [...next.values()];
-      if (!unions.length) return undefined;
-    }
-    const choices = unions.map((union) => {
-      const ids = passages.filter((passage) => union.has(passage.id)).map((passage) => passage.id);
-      return { ids, budget: selectedPassageBudget(ids, passageById) };
-    }).sort((left, right) => left.budget.evidenceChars - right.budget.evidenceChars
-      || left.budget.segmentCount - right.budget.segmentCount || left.ids.length - right.ids.length);
-    const sourcePassageIds = choices[0]!.ids;
-    let verifiedSegments: Array<{ quote: string; sourceLocator: SourceLocator }>;
-    try { verifiedSegments = segmentsForPassages(sourceMap, sourcePassageIds, passageById); }
-    catch { return undefined; }
-    return {
-      summary,
-      sourceQuote: verifiedSegments.map((segment) => segment.quote).join('\n'),
-      sourcePassageIds,
-      sourceBlockIds: verifiedSegments.map((segment) => segment.sourceLocator.blockId!),
-      verifiedSegments,
-      needsMoreInformation: false,
-    };
-  };
-
-  const guard: SchemaGuard<CanonicalRepairResponse> = (value: unknown): value is CanonicalRepairResponse => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const response = value as Record<string, unknown>;
-    if (Object.keys(response).sort().join(',') !== 'fields,schemaVersion' || response.schemaVersion !== SDF_CORE_VERSION
-      || !response.fields || typeof response.fields !== 'object' || Array.isArray(response.fields)) return false;
-    const fields = response.fields as Record<string, unknown>;
-    if (Object.keys(fields).sort().join(',') !== repairFields.slice().sort().join(',')) return false;
-    for (const field of repairFields) {
-      const item = fields[field];
-      if (!item || typeof item !== 'object' || Array.isArray(item)) { repairFailures.set(field, 'malformed_field'); continue; }
-      const candidate = item as Record<string, unknown>;
-      if (Object.keys(candidate).sort().join(',') !== 'claims,needsMoreInformation'
-        || typeof candidate.needsMoreInformation !== 'boolean' || !Array.isArray(candidate.claims)) {
-        repairFailures.set(field, 'malformed_field_contract');
-        continue;
-      }
-      if (candidate.needsMoreInformation) {
-        if (candidate.claims.length === 0) repaired.set(field, {
-          summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true,
-        });
-        else repairFailures.set(field, 'missing_requires_empty_claims');
-        continue;
-      }
-      if (candidate.claims.length < 1 || candidate.claims.length > 8) { repairFailures.set(field, 'claim_count_1_to_8'); continue; }
-      const claims: Array<{ text: string; supportSets: string[][] }> = [];
-      let valid = true;
-      for (const claimValue of candidate.claims) {
-        if (!claimValue || typeof claimValue !== 'object' || Array.isArray(claimValue)) { valid = false; repairFailures.set(field, 'malformed_claim'); break; }
-        const claim = claimValue as Record<string, unknown>;
-        if (Object.keys(claim).sort().join(',') !== 'supportSets,text' || typeof claim.text !== 'string'
-          || !claim.text.trim() || claim.text.length > 800
-          || !Array.isArray(claim.supportSets) || claim.supportSets.length < 1 || claim.supportSets.length > 3) {
-          valid = false; repairFailures.set(field, 'malformed_claim_contract'); break;
-        }
-        const supportSets: string[][] = [];
-        for (const supportValue of claim.supportSets) {
-          if (!Array.isArray(supportValue) || supportValue.length < 1 || supportValue.length > MAX_SOURCE_PASSAGE_IDS
-            || supportValue.some((id) => typeof id !== 'string') || new Set(supportValue).size !== supportValue.length) {
-            valid = false; repairFailures.set(field, 'malformed_support_set'); break;
-          }
-          supportSets.push(supportValue as string[]);
-        }
-        if (!valid) break;
-        claims.push({ text: claim.text.trim(), supportSets });
-      }
-      if (!valid) continue;
-      const proposal = selectEvidence(claims, candidatesByField.get(field)!);
-      if (proposal) repaired.set(field, proposal);
-      else repairFailures.set(field, 'no_feasible_support_union');
-    }
-    return true;
-  };
-
-  const supportedContext = Object.fromEntries(SDF_CORE_FIELDS.flatMap((field) => {
-    const candidate = partial.proposal.fields[field];
-    return candidate.needsMoreInformation ? [] : [[field, candidate.summary]];
-  }));
-  try {
-    await gateway.completeStructured(guard, [{ role: 'system', content: [
-      '你是Hermes科研证据修订器。只处理首轮留空或因证据容量失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序仅核对来源身份、主张覆盖组合和预算。',
-      '每个claims条目是一句完整主张；supportSets列出1到3个可独立充分支持该主张的P编号组合。组合内来源共同支持，组合之间可替代。不得把诊断摘要当作真值，允许据原文纠错和去重。',
-      '保留字段的关键假设、步骤、条件与验证；不得为预算删掉核心主张。若候选不足、矛盾未解或任何核心主张没有充分来源，返回claims=[]且needsMoreInformation=true。不得把容量或技术失败写成作者未报告。只输出JSON。',
-      `输出schemaVersion="${SDF_CORE_VERSION}"，fields必须且只能包含${repairFields.join(',')}。每字段只能包含claims与needsMoreInformation。`,
-    ].join(' ') }, { role: 'user', content: [
-      `已验证字段只读语境：${JSON.stringify(supportedContext)}`,
-      `待修订诊断摘要（未验证；空字符串表示首轮未形成摘要）：${JSON.stringify(Object.fromEntries(repairFields.map((field) => [field, partial.unverifiedSummaries[field] ?? ''])))}`,
-      `此前失败与实算预算：${JSON.stringify(Object.fromEntries(repairFields.map((field) => [field, {
-        reason: partial.fieldDiagnostics[field], detail: partial.fieldDiagnosticsDetails[field] ?? '',
-      }])))}`,
-      canonicalPassagePrompt(candidatePassages),
-    ].join('\n\n') }], { temperature: 0.1, maxRetries: 0 });
-  } catch {
-    for (const field of repairFields) repairFailures.set(field, 'structured_response_failed');
-  }
-  for (const field of repairFields) {
-    if (repaired.has(field)) continue;
-    const existing = partial.fieldDiagnosticsDetails[field];
-    partial.fieldDiagnosticsDetails[field] = [existing, `focusedRepair=${repairFailures.get(field) ?? 'unresolved'}`].filter(Boolean).join(';');
-  }
-  if (!repaired.size) return partial;
-  for (const [field, candidate] of repaired) {
-    partial.proposal.fields[field] = candidate;
-    delete partial.fieldDiagnostics[field];
-    delete partial.fieldDiagnosticsDetails[field];
-    delete partial.unverifiedSummaries[field];
-    delete partial.unverifiedSourcePassageIds[field];
-  }
-  return partial;
-}
-
-function fullBlockSegment(sourceMap: DocumentSourceMap, block: CanonicalTextBlock) {
+function fullBlockSegment(sourceMap: DocumentSourceMap, block: PromptCanonicalBlock) {
   return {
     quote: block.text,
     sourceLocator: validateSourceLocator({
@@ -840,26 +603,32 @@ function emptyIdentityItem(field: 'authors' | 'scalar'): SourceIdentityProposalI
 }
 
 type IdentityField = 'title' | 'authors' | 'doi' | 'articleLicense';
-type GeometricCanonicalTextBlock = CanonicalTextBlock & {
-  boundingBox: NonNullable<CanonicalTextBlock['boundingBox']>;
+type GeometricPromptCanonicalBlock = PromptCanonicalBlock & {
+  boundingBox: NonNullable<PromptCanonicalBlock['boundingBox']>;
 };
 
-function geometricBlocksOrUndefined(blocks: CanonicalTextBlock[]): GeometricCanonicalTextBlock[] | undefined {
+function geometricBlocksOrUndefined(
+  blocks: PromptCanonicalBlock[],
+): GeometricPromptCanonicalBlock[] | undefined {
   if (blocks.some((block) => block.boundingBox === undefined)) return undefined;
-  return blocks as GeometricCanonicalTextBlock[];
+  return blocks as GeometricPromptCanonicalBlock[];
 }
 
 function reviewIdentityItem(field: IdentityField): SourceIdentityProposalItem {
   return { state: 'needs_review', value: field === 'authors' ? [] : '', evidenceSegments: [] };
 }
 
-function finalizeSourceIdentityProposal(proposal: SourceIdentityProposal, sourceMap: DocumentSourceMap): SourceIdentityProposal {
+function finalizeSourceIdentityProposal(
+  proposal: SourceIdentityProposal,
+  sourceMap: DocumentSourceMap,
+): SourceIdentityProposal {
   try {
     return parseSourceIdentityProposal(proposal, {
       artifactId: sourceMap.artifactId,
       contentHash: sourceMap.contentHash,
     });
   } catch {
+    // Supplemental metadata must not make valid SDF extraction unavailable.
     return parseSourceIdentityProposal({
       schemaVersion: '0.1.0',
       title: reviewIdentityItem('title'),
@@ -870,18 +639,23 @@ function finalizeSourceIdentityProposal(proposal: SourceIdentityProposal, source
   }
 }
 
-function boundedIdentitySegments(sourceMap: DocumentSourceMap, blocks: CanonicalTextBlock[]) {
+function boundedIdentitySegments(sourceMap: DocumentSourceMap, blocks: PromptCanonicalBlock[]) {
   const geometricBlocks = geometricBlocksOrUndefined(blocks);
   if (!geometricBlocks || geometricBlocks.length === 0 || geometricBlocks.length > MAX_EVIDENCE_SEGMENTS
     || blocks.some((block) => block.text.length > MAX_FIELD_EVIDENCE_CHARS)
-    || blocks.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) return undefined;
-  try { return geometricBlocks.map((block) => fullBlockSegment(sourceMap, block)); }
-  catch { return undefined; }
+    || blocks.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
+    return undefined;
+  }
+  try {
+    return geometricBlocks.map((block) => fullBlockSegment(sourceMap, block));
+  } catch {
+    return undefined;
+  }
 }
 
 function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdentityProposal {
   const pageNumber = sourceMap.pages[0]?.page;
-  const blocks = canonicalTextBlocks(sourceMap).filter((block) => block.page === pageNumber);
+  const blocks = promptCanonicalBlocks(sourceMap).filter((block) => block.page === pageNumber);
   const proposal = {
     schemaVersion: '0.1.0',
     title: emptyIdentityItem('scalar'),
@@ -896,10 +670,17 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
         contentHash: sourceMap.contentHash,
       });
       proposal[field] = parsed[field];
-    } catch { proposal[field] = reviewIdentityItem(field); }
+    } catch {
+      // Metadata is supplemental to SDF extraction. Preserve a review state
+      // rather than letting an oversized or malformed metadata candidate fail
+      // the six scientific fields.
+      proposal[field] = reviewIdentityItem(field);
+    }
   };
 
-  const doiCandidates = new Map<string, CanonicalTextBlock>();
+  // The paper DOI is expected in first-page article metadata. Restricting the
+  // search to page 1 avoids accidentally selecting a DOI from References.
+  const doiCandidates = new Map<string, PromptCanonicalBlock>();
   for (const block of blocks) {
     for (const match of block.text.matchAll(/10\.\d{4,9}\/[^\s|<>]+/giu)) {
       const value = match[0].replace(/[),.;:\]}]+$/u, '').toLocaleLowerCase('en-US');
@@ -909,7 +690,9 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
   if (doiCandidates.size === 1) {
     const [value, block] = [...doiCandidates][0]!;
     const evidenceSegments = boundedIdentitySegments(sourceMap, [block]);
-    assign('doi', evidenceSegments ? { state: 'proposed', value, evidenceSegments } : reviewIdentityItem('doi'));
+    assign('doi', evidenceSegments
+      ? { state: 'proposed', value, evidenceSegments }
+      : reviewIdentityItem('doi'));
   } else if (doiCandidates.size > 1) {
     const seen = new Set<string>();
     const candidateBlocks = [...doiCandidates.values()].filter((block) => {
@@ -918,13 +701,16 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
       return true;
     });
     const evidenceSegments = boundedIdentitySegments(sourceMap, candidateBlocks);
-    assign('doi', evidenceSegments ? { state: 'needs_review', value: '', evidenceSegments } : reviewIdentityItem('doi'));
+    assign('doi', evidenceSegments
+      ? { state: 'needs_review', value: '', evidenceSegments }
+      : reviewIdentityItem('doi'));
   }
 
   const licenseIndex = blocks.findIndex((block) => /\bcc\s*by\s*4\.0\b/iu.test(block.text));
   if (licenseIndex >= 0) {
     const context = blocks.slice(Math.max(0, licenseIndex - 2), licenseIndex + 1);
-    if (/creative\s+commons\s+attribution\s+license[\s\S]*cc\s*by\s*4\.0/iu.test(context.map(({ text }) => text).join(' '))) {
+    if (/creative\s+commons\s+attribution\s+license[\s\S]*cc\s*by\s*4\.0/iu
+      .test(context.map(({ text }) => text).join(' '))) {
       const evidenceSegments = boundedIdentitySegments(sourceMap, context);
       assign('articleLicense', evidenceSegments
         ? { state: 'proposed', value: 'CC-BY-4.0', evidenceSegments }
@@ -946,10 +732,16 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
     let headerGeometryComplete = true;
     for (let index = articleTypeIndex + 1; index < Math.min(blocks.length, articleTypeIndex + 24); index += 1) {
       const block = blocks[index]!;
-      if (!block.boundingBox) { headerGeometryComplete = false; break; }
+      if (!block.boundingBox) {
+        headerGeometryComplete = false;
+        break;
+      }
       const normalized = normalizedSelectionText(block.text);
       const numericOrPunctuation = /^[\d,.*†‡\s]+$/u.test(normalized);
-      if (!numericOrPunctuation && block.boundingBox.height < titleHeight * 0.8) { authorStart = index; break; }
+      if (!numericOrPunctuation && block.boundingBox.height < titleHeight * 0.8) {
+        authorStart = index;
+        break;
+      }
     }
     if (!headerGeometryComplete) {
       assign('title', reviewIdentityItem('title'));
@@ -961,8 +753,14 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
         assign('authors', reviewIdentityItem('authors'));
         return finalizeSourceIdentityProposal(proposal, sourceMap);
       }
-      const superscriptDigits: Record<string, string> = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
-      const subscriptDigits: Record<string, string> = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉' };
+      const superscriptDigits: Record<string, string> = {
+        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+      };
+      const subscriptDigits: Record<string, string> = {
+        '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+        '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+      };
       let ambiguousScript = false;
       const titleValue = titleBlocks.map((block, blockIndex) => {
         const text = block.text.trim();
@@ -973,23 +771,33 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
           && Math.abs((candidate.boundingBox.y + candidate.boundingBox.height / 2)
             - (block.boundingBox.y + block.boundingBox.height / 2)) <= titleHeight
         ));
-        if (neighboringLargeBlocks.length === 0) { ambiguousScript = true; return text; }
+        if (neighboringLargeBlocks.length === 0) {
+          ambiguousScript = true;
+          return text;
+        }
         const referenceCenter = neighboringLargeBlocks.reduce((total, candidate) => (
           total + candidate.boundingBox.y + candidate.boundingBox.height / 2
         ), 0) / neighboringLargeBlocks.length;
-        const verticalDelta = referenceCenter - (block.boundingBox.y + block.boundingBox.height / 2);
+        const center = block.boundingBox.y + block.boundingBox.height / 2;
+        const verticalDelta = referenceCenter - center;
         const threshold = Math.max(1, titleHeight * 0.15);
-        if (verticalDelta > threshold) return [...text].map((digit) => superscriptDigits[digit] ?? digit).join('');
-        if (verticalDelta < -threshold) return [...text].map((digit) => subscriptDigits[digit] ?? digit).join('');
+        if (verticalDelta > threshold) {
+          return [...text].map((digit) => superscriptDigits[digit] ?? digit).join('');
+        }
+        if (verticalDelta < -threshold) {
+          return [...text].map((digit) => subscriptDigits[digit] ?? digit).join('');
+        }
         ambiguousScript = true;
         return text;
-      }).join(' ').replace(/\s+([⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉]+)/gu, '$1').replace(/\s+/gu, ' ');
+      }).join(' ')
+        .replace(/\s+([⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉]+)/gu, '$1')
+        .replace(/\s+/gu, ' ');
       const titleEvidence = boundedIdentitySegments(sourceMap, titleBlocks);
       assign('title', titleEvidence && titleValue.length <= 1_000
         ? { state: ambiguousScript ? 'needs_review' : 'proposed', value: titleValue, evidenceSegments: titleEvidence }
         : reviewIdentityItem('title'));
 
-      const authorBlocks: CanonicalTextBlock[] = [];
+      const authorBlocks: PromptCanonicalBlock[] = [];
       const authors: string[] = [];
       let uncertain = false;
       let authorBoundaryFound = false;
@@ -1000,24 +808,34 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
         const block = blocks[index]!;
         const previous = index > authorStart ? blocks[index - 1] : undefined;
         const previousBox = previous?.boundingBox;
-        if (!block.boundingBox || (previous && !previousBox) || !authorStartBlock.boundingBox) { authorGeometryComplete = false; break; }
+        if (!block.boundingBox || (previous && !previousBox) || !authorStartBlock.boundingBox) {
+          authorGeometryComplete = false;
+          break;
+        }
         const next = blocks[index + 1];
         const normalized = normalizedSelectionText(block.text);
         const affiliationMarker = /^\d+(?:,\d+)*[\s*†‡§]*$/u.test(normalized)
           && block.boundingBox.x <= authorStartBlock.boundingBox.x + 8
           && (!!next && /\b(?:university|institute|laborator(?:y|ies)|department|school|centre|center|academy|hospital|infrastructure)\b/iu.test(next.text)
             || previousBox !== undefined && block.boundingBox.y - previousBox.y > 16);
-        if (affiliationMarker) { authorBoundaryFound = true; break; }
+        if (affiliationMarker) {
+          authorBoundaryFound = true;
+          break;
+        }
         if (/^[\d,.*†‡§\s]+$/u.test(normalized)) continue;
-        const name = block.text.replace(/^\s*,?\s*(?:and\s+)?/iu, '').replace(/[,*†‡\s]+$/gu, '').trim();
+        const name = block.text
+          .replace(/^\s*,?\s*(?:and\s+)?/iu, '')
+          .replace(/[,*†‡\s]+$/gu, '')
+          .trim();
         if (!name) continue;
         if (!/^[\p{L}\p{M}.'’-]+(?:\s+[\p{L}\p{M}.'’-]+){1,7}$/u.test(name)) uncertain = true;
         authors.push(name);
         authorBlocks.push(block);
       }
       if (!authorBoundaryFound && authorScanEnd < blocks.length) uncertain = true;
-      if (!authorGeometryComplete) assign('authors', reviewIdentityItem('authors'));
-      else if (authors.length > 0) {
+      if (!authorGeometryComplete) {
+        assign('authors', reviewIdentityItem('authors'));
+      } else if (authors.length > 0) {
         const authorEvidence = boundedIdentitySegments(sourceMap, authorBlocks);
         const boundedAuthors = authors.length <= 100 && authors.every((author) => author.length <= 300);
         assign('authors', authorEvidence && boundedAuthors
@@ -1026,12 +844,46 @@ function sourceIdentityFromFirstPage(sourceMap: DocumentSourceMap): SourceIdenti
       }
     }
   }
+
   return finalizeSourceIdentityProposal(proposal, sourceMap);
+}
+
+function deterministicAvailabilityProposal(
+  sourceMap: DocumentSourceMap,
+  promptBlocks: PromptCanonicalBlock[],
+): { status: 'absent' | 'unrepresentable'; proposal?: undefined }
+  | { status: 'usable'; proposal: ExtractedFieldProposal } {
+  const allBlocks = promptCanonicalBlocks(sourceMap);
+  const windows = canonicalAvailabilityWindows(allBlocks);
+  if (windows.length === 0) return { status: 'absent' };
+  const selected = new Set(promptBlocks.map(({ promptId }) => promptId));
+  const content = windows.flatMap((window) => window.contentOrdinals.map((ordinal) => allBlocks[ordinal]!));
+  if (windows.some((window) => !window.complete)
+    || content.length === 0 || content.length > MAX_EVIDENCE_SEGMENTS
+    || content.some((block) => !selected.has(block.promptId))
+    || content.reduce((total, block) => total + block.text.length, 0) > MAX_FIELD_EVIDENCE_CHARS) {
+    // Never truncate a request condition, negation, or repository URL merely
+    // to fit the evidence contract. An availability section that cannot be
+    // represented completely remains explicitly missing.
+    return { status: 'unrepresentable' };
+  }
+  return {
+    status: 'usable',
+    proposal: {
+      // Preserve the source wording and line boundaries. In particular, do not
+      // silently repair printed hyphens or URLs in a scientific source.
+      summary: content.map(({ text }) => text).join('\n'),
+      sourceQuote: '',
+      sourceBlockIds: content.map(({ promptId }) => promptId),
+      needsMoreInformation: false,
+    },
+  };
 }
 
 function canonicalMissingCause(
   field: (typeof SDF_CORE_FIELDS)[number],
   sourceMap: DocumentSourceMap,
+  promptBlocks: PromptCanonicalBlock[],
   validationRejectedFields: ReadonlySet<string>,
 ): ExtractionMissingCause {
   if (validationRejectedFields.has(field)) return 'validation_rejected';
@@ -1040,54 +892,77 @@ function canonicalMissingCause(
     insight: /\b(?:insight|demonstrat|reveal|show(?:s|n)?|find(?:s|ing)?)\b|洞见|发现/iu,
     method: /\b(?:methods?|experimental setup|procedure|protocol)\b|方法|实验装置/iu,
     results: /\b(?:results?|we (?:find|show|demonstrate|observe|measure))\b|结果|我们(?:发现|观察|测量)/iu,
-    limitations: /\b(?:limitations?|constraints?|uncertaint(?:y|ies))\b|局限|限制|不确定/iu,
+    limitations: LIMITATION_EVIDENCE,
     reproducibility: /\b(?:data|code) availability\b|\breproduc|数据可用|代码可用|复现/iu,
   };
   const pattern = cuePatterns[field];
-  return canonicalTextBlocks(sourceMap).some((block) => {
+  const selectedIds = new Set(promptBlocks.map(({ id }) => id));
+  let cueSelected = false;
+  let cueOutsideSelection = false;
+  for (const block of promptCanonicalBlocks(sourceMap)) {
     pattern.lastIndex = 0;
-    return pattern.test(normalizedSelectionText(block.text));
-  }) ? 'model_no_supported_summary' : 'undetermined';
+    if (!pattern.test(normalizedSelectionText(block.text))) continue;
+    if (selectedIds.has(block.id)) cueSelected = true;
+    else cueOutsideSelection = true;
+  }
+  if (cueOutsideSelection && !cueSelected) return 'not_selected';
+  return cueSelected ? 'model_no_supported_summary' : 'undetermined';
 }
 
 function materializeCanonicalProposal(
   proposal: ExtractedProposal,
   sourceMap: DocumentSourceMap,
+  promptBlocks: PromptCanonicalBlock[],
   validationRejectedFields: ReadonlySet<string> = new Set(),
 ): ExtractionResult {
+  const byPromptId = new Map(promptBlocks.map((block) => [block.promptId, block]));
   const core = { schemaVersion: SDF_CORE_VERSION } as ExtractedCore;
   const evidence = {} as ExtractionResult['evidence'];
   const evidenceLocation = {} as NonNullable<ExtractionResult['evidenceLocation']>;
   const evidenceSegments = {} as NonNullable<ExtractionResult['evidenceSegments']>;
   const needsMoreInformation: ExtractionResult['needsMoreInformation'] = [];
   const missingDetails: NonNullable<ExtractionResult['missingDetails']> = {};
+  const availability = deterministicAvailabilityProposal(sourceMap, promptBlocks);
   for (const field of SDF_CORE_FIELDS) {
-    const candidate = proposal.fields[field];
-    const ids = candidate.sourcePassageIds ?? [];
+    const availabilityUnavailable = field === 'reproducibility' && availability.status === 'unrepresentable';
+    const candidate = field === 'reproducibility' && availability.status === 'usable'
+      ? availability.proposal
+      : availabilityUnavailable
+        ? { summary: '', sourceQuote: '', sourceBlockIds: [], needsMoreInformation: true }
+        : proposal.fields[field];
+    const ids = candidate.sourceBlockIds ?? [];
     if (candidate.needsMoreInformation) {
       core[field] = '';
       evidence[field] = { quote: '', locator: '' };
       evidenceSegments[field] = [];
       evidenceLocation[field] = { status: 'missing', origin: 'model_quote', reason: 'empty-quote' };
       needsMoreInformation.push(field);
-      missingDetails[field] = { cause: canonicalMissingCause(field, sourceMap, validationRejectedFields) };
+      missingDetails[field] = {
+        cause: availabilityUnavailable
+          ? 'validation_rejected'
+          : canonicalMissingCause(field, sourceMap, promptBlocks, validationRejectedFields),
+      };
       continue;
     }
-    const segments = candidate.verifiedSegments;
-    if (!segments?.length) throw new Error('verified canonical evidence is missing');
+    const segments = ids.map((id) => {
+      const block = byPromptId.get(id)!;
+      const sourceLocator = validateSourceLocator({
+        artifactId: sourceMap.artifactId, contentHash: sourceMap.contentHash,
+        blockId: block.id, page: block.page, boundingBox: block.boundingBox,
+        charRange: { start: block.originalStart, end: block.originalStart + block.text.length },
+      });
+      return { quote: block.text, sourceLocator };
+    });
+    // Canonical core is source text. The model summary remains wire-compatible metadata only.
     const quote = segments.map((segment) => segment.quote).join('\n');
-    if (quote !== candidate.sourceQuote) throw new Error('canonical source materialization changed');
-    core[field] = candidate.summary;
-    evidence[field] = { quote, locator: `passages:${ids.join(',')}` };
+    core[field] = quote;
+    evidence[field] = { quote, locator: `blocks:${ids.join(',')}` };
     evidenceSegments[field] = segments;
     evidenceLocation[field] = segments.length === 1
       ? { status: 'located', sourceLocator: segments[0]!.sourceLocator, origin: 'model_quote', matching: 'exact' }
       : { status: 'cross_block', origin: 'model_quote', matching: 'exact', reason: 'match-spans-blocks' };
   }
-  return { core, evidence, needsMoreInformation, missingDetails, evidenceLocation, evidenceSegments,
-    sourceIdentity: sourceIdentityFromFirstPage(sourceMap),
-    understandingSkill: { id: RESEARCH_UNDERSTANDING_SKILL.id, version: RESEARCH_UNDERSTANDING_SKILL.version },
-    canonicalExtractionContract: CANONICAL_EXTRACTION_CONTRACT };
+  return { core, evidence, needsMoreInformation, missingDetails, evidenceLocation, evidenceSegments };
 }
 
 function locateCanonicalEvidence(
@@ -1192,70 +1067,58 @@ export async function extractHandler(
   if (!manuscriptText.trim()) {
     throw new Error('缺少正文（payload.manuscriptText）');
   }
-  const passages = canonicalSourceMap ? canonicalPassages(canonicalSourceMap) : undefined;
+  const promptBlocks = canonicalSourceMap ? selectCanonicalBlocks(canonicalSourceMap) : undefined;
   const prompt = [
     { role: 'system' as const, content: [
-      '你是Hermes科研阅读助手。综合给定全文理解论文，再用SDF六个展示维度 problem/insight/method/results/limitations/reproducibility 组织凝练内容；字段不对应固定章节或固定原文段落。',
+      '你是科研结构化提取器。从给定 SOURCE 片段提取 SDF 六字段 problem/insight/method/results/limitations/reproducibility。',
       '保持证据类型与认识边界：明确区分实验实测、理论估计、数值仿真、作者归因或解释、以及讨论中的能力或上限；不得把其中一种改写成另一种，也不得把讨论上限写成已验证性能。',
       '保持物理量身份：明确区分入射量与局域量、场振幅与强度、脉冲能量与功率，并保留数值、单位、比例的对象和适用条件；除非原文明确给出关系，不得自行换算或混用。',
-      '先理解全文研究逻辑并形成有依据的综合概括，再关联支持各项断言的来源。可以跨章节整合分散的建模、推导和研究步骤，不要求存在同名章节或单段总结；不得补造原文不存在的中间论证。来源须支撑数字、比较、因果、能力限定与必要条件；作者归因不能改写成已证因果。',
+      '先选择原文证据，再形成字段结果。所选原文必须保留每个数字、比较、因果、能力限定和必要条件；不得跨越缺失的中间论证拼接新结论。作者提出的原因必须保留为作者归因，不能写成已证因果。',
       '方法或配置披露不等于独立复现完成；reproducibility 只能概括原文明示的材料、参数、步骤、数据或代码可用性及其缺口。若某个条款缺少直接证据，从 summary 删除该条款；若字段已无可支持内容，则按缺失字段返回 needsMoreInformation=true。',
-      ...(passages ? [
-        RESEARCH_UNDERSTANDING_SKILL.instructions,
-        '只输出JSON：schemaVersion="0.1.0"，fields下六个字段必须且只能是 {"summary":string,"sourcePassageIds":string[],"needsMoreInformation":boolean}。不得返回引文、窗口ID或来源正文。',
-        `完整输出结构如下（这是空结构，不是论文结论；必须用原文支持的摘要与实际P编号填充）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: '', sourcePassageIds: [], needsMoreInformation: true }])) })}`,
-        'sourcePassageIds必须是字符串数组，例如["P00001"]，不能填页码、对象或区间字符串。JSON字符串中的反斜杠必须转义；摘要优先使用普通文字与Unicode数学符号，避免输出不合法的LaTeX转义。',
-        `每字段凝练成中文摘要，通常120–300字，方法可用简洁步骤；优先解释研究逻辑，不逐式重抄推导。同一来源可以支撑不同展示维度，但各维度概括的语义应不同。先完成全文综合，再为每个非空摘要选择通常1–${USUAL_SOURCE_PASSAGE_IDS}个关键sourcePassageIds作为最小充分集合；只有确有必要时才能增加，但不得超过${MAX_SOURCE_PASSAGE_IDS}个硬上限。ID只能来自下方标签，服务端回读原始SourceMap，模型不要复制或改写证据。`,
-        `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个精确来源段。每个passage最多5个原始块、1200字符，标签给出实际blocks和chars预算。方法用分布于全文的关键passage证明主要假设、研究步骤和验证，不需要引用每段中间推导；reproducibility只选择直接披露参数、材料、步骤、数据或代码可用性及明确缺口的passage，不要附上整条方法链。同一原始块内重叠或相邻的选段会合并，彼此分隔的选段保留为独立来源段并分别计入限额。`,
-        '选择能完整支持主语、条件、否定、数字和单位的最少passage。不要为了符合限额扩大或改写结论。若无充分证据，summary="",sourcePassageIds=[],needsMoreInformation=true；缺失字段里的解释会被服务端丢弃，不影响其他有证据字段。无法辨认的公式不要猜写。',
+      ...(promptBlocks ? [
+        '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须且只能是 {"summary": string, "sourceBlockIds": string[], "needsMoreInformation": boolean}，不得把字段写成字符串、数组或增加其他键。',
+        `每个非缺失字段先确定一个原始 ordinal 连续的 SOURCE_BLOCK 跨度；sourceBlockIds 可列出首尾锚点或跨度内的递增子集，服务端会补齐该范围内所有已提供的中间块。补齐后的跨度必须包含 1-${MAX_EVIDENCE_SEGMENTS} 个块，证据合计不超过 ${MAX_FIELD_EVIDENCE_CHARS} 字符，拼接后的 canonical core 不超过 ${MAX_CANONICAL_CORE_CHARS} 字符；不得改写、倒序或重复 id，也不得依赖输入中未提供的中间块。`,
+        '逐字段独立判断：先选择能直接陈述一个核心要点的最短完整连续跨度，优先不超过600字符；600字符只是偏好，不得为缩短而丢失否定、适用条件、数值单位、实验或理论性质。服务端会把所选块原文以换行拼接为 canonical core，不使用模型自由概括。',
+        'summary 仅为兼容现有 JSON wire shape，填写非空简短说明；它不会进入 canonical core。若完整证据需超过32块或4000字符，应缩小到仍完整受支持的单一要点，不能任意截断必要证据。不要因一个字段缺失而清空其他字段。',
+        '跨行示例（仅说明结构，不是 SOURCE，严禁引用示例 ID）：EXAMPLE_1="方法甲测量"、EXAMPLE_2="量乙。"共同支持"方法甲测量量乙。"；正式输出只能使用用户输入的 SOURCE_BLOCK id。',
+        '严格区分理论预测、仿真与实测，不能把缺少主语或限定词的片段扩写成实验结论；results 中的理论或仿真结果必须明确注明其性质。',
+        '只有在全部已给 SOURCE_BLOCK 中找不到该字段任何受支持要点时，才将 summary 置空、sourceBlockIds=[]、needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
       ] : [
         '只输出 JSON：schemaVersion="0.1.0"，fields 下每个字段必须含 summary、sourceQuote、needsMoreInformation。',
         'sourceQuote 必须逐字复制 SOURCE 中支持 summary 的最短充分原文；不得概括、改写或虚构引文。',
         '若材料不足，summary 与 sourceQuote 置空，needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
       ]),
     ].join(' ') },
-    { role: 'user' as const, content: passages ? canonicalPassagePrompt(passages) : selectManuscriptEvidence(manuscriptText) },
+    { role: 'user' as const, content: promptBlocks ? canonicalBlockPrompt(promptBlocks) : selectManuscriptEvidence(manuscriptText) },
   ];
-  if (canonicalSourceMap && passages) {
-    const validation = canonicalProposalValidation(canonicalSourceMap, passages);
+  if (canonicalSourceMap && promptBlocks) {
+    const validation = canonicalProposalValidation(promptBlocks);
     try {
       await gateway.completeStructured(validation.guard, prompt, {
         temperature: 0.2,
         validationFeedback: validation.validationFeedback,
         validationDiagnostic: validation.validationDiagnostic,
-        maxRetries: 0,
       });
     } catch (error) {
-      if (!(error instanceof AiGatewayError) || !['SCHEMA_VALIDATION', 'STRUCTURED_JSON_INVALID'].includes(error.code)) throw error;
-      if (!(error.cause instanceof AiGatewayError) || !['SCHEMA_VALIDATION', 'STRUCTURED_JSON_INVALID'].includes(error.cause.code)) throw error;
-      const initialPartial = validation.partialResult();
-      if (!initialPartial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
-      const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, initialPartial);
-      if (Object.keys(partial.fieldDiagnostics).length === 0) return materializeCanonicalProposal(partial.proposal, canonicalSourceMap);
+      if (!(error instanceof AiGatewayError) || error.code !== 'SCHEMA_VALIDATION') throw error;
+      if (!(error.cause instanceof AiGatewayError) || error.cause.code !== 'SCHEMA_VALIDATION') throw error;
+      const partial = validation.partialResult();
+      if (!partial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
       return {
-        ...materializeCanonicalProposal(partial.proposal, canonicalSourceMap, new Set(Object.keys(partial.fieldDiagnostics))),
+        ...materializeCanonicalProposal(partial.proposal, canonicalSourceMap, promptBlocks, validation.validationRejectedFields()),
+        sourceIdentity: sourceIdentityFromFirstPage(canonicalSourceMap),
         reason: 'canonical_partial_validation_exhausted',
         fieldDiagnostics: partial.fieldDiagnostics,
-        fieldDiagnosticsDetails: partial.fieldDiagnosticsDetails,
-        unverifiedSummaries: partial.unverifiedSummaries,
-        unverifiedSourcePassageIds: partial.unverifiedSourcePassageIds,
       };
     }
-    let proposal = validation.mergeRetained();
-    if (SDF_CORE_FIELDS.some((field) => proposal.fields[field].needsMoreInformation)) {
-      const focused = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, {
-        proposal,
-        fieldDiagnostics: {},
-        fieldDiagnosticsDetails: {},
-        unverifiedSummaries: {},
-        unverifiedSourcePassageIds: {},
-      });
-      proposal = focused.proposal;
-    }
+    const proposal = validation.mergeRetained();
     if (SDF_CORE_FIELDS.every((field) => proposal.fields[field].needsMoreInformation)) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_all_fields_missing');
     }
-    return materializeCanonicalProposal(proposal, canonicalSourceMap);
+    return {
+      ...materializeCanonicalProposal(proposal, canonicalSourceMap, promptBlocks, validation.validationRejectedFields()),
+      sourceIdentity: sourceIdentityFromFirstPage(canonicalSourceMap),
+    };
   }
   const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
   return materializeProposal(proposal, manuscriptText);

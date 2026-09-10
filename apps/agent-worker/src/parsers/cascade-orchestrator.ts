@@ -9,7 +9,7 @@ import {
 } from '@openscience/domain';
 import { runDocumentParser } from './base-parser';
 import { enrichWithGrobid, type GrobidEnrichmentResult } from './grobid-parser';
-import { SafeParserWarningCode, type ParserRasterResult, type ParserStageResult, type StagePage } from './job-protocol';
+import { SafeParserWarningCode, type ParserStageResult, type StagePage } from './job-protocol';
 import {
   PARSER_CASCADE_METADATA,
   runLlmOcrFallback,
@@ -37,7 +37,6 @@ interface ParserCascadeAdapters {
   isolatedLocalOcr?: {
     inventoryPages(input: ParserInput): Promise<ParserStageResult>;
     ocrPages(input: ParserInput, pages: readonly (StagePage & { reason: OcrSelectionReason })[]): Promise<ParserStageResult>;
-    renderPages(input: ParserInput, pageNumbers: readonly number[]): Promise<ParserRasterResult>;
   };
 }
 
@@ -278,7 +277,7 @@ function unresolvedPages(sourceMap: DocumentSourceMap): Array<StagePage & { reas
     const assessment = assessPageQuality(page);
     if (!assessment.localOcrRequired && !assessment.llmCandidateReason) return [];
     return [{ ...page, reason: assessment.llmCandidateReason ?? 'low_confidence' }];
-  }).sort((left, right) => Number(right.reason === 'formula') - Number(left.reason === 'formula') || left.page - right.page);
+  });
 }
 
 function boundedUniqueStrings(values: readonly string[]): string[] {
@@ -444,63 +443,35 @@ export async function runParserCascade(
   }
 
   let remaining = initialUnresolved.filter(({ page }) => !locallyResolved.has(page));
-  if (context.featureFlags.llmOcr && remaining.length > 0
-    && (context.adapters.isolatedLocalOcr || context.adapters.localOcr)) {
-    const eligible = remaining.slice(0, 32);
-    const unresolvedProcessed: typeof remaining = [];
-    let stoppedAt = eligible.length;
-    for (let offset = 0; offset < eligible.length; offset += 4) {
-      const selected = eligible.slice(offset, offset + 4);
-      try {
-        const rasters = context.adapters.isolatedLocalOcr
-          ? (await context.adapters.isolatedLocalOcr.renderPages(
-              adapterInput(canonicalInput),
-              selected.map(({ page }) => page),
-            )).pages.map((page) => ({
-              pageNumber: page.pageNumber,
-              mediaType: page.mediaType,
-              bytes: Uint8Array.from(Buffer.from(page.bytesBase64, 'base64')),
-              width: page.width,
-              height: page.height,
-              contentHash: page.contentHash,
-            }))
-          : await context.adapters.localOcr!.renderPdfPages(
-              adapterInput(canonicalInput),
-              selected.map(({ page }) => page),
-            );
-        const reasonsByPage = new Map(selected.map((page) => [page.page, page.reason]));
-        const candidates: LlmOcrCandidatePage[] = rasters.map((raster) => ({
-          ...raster,
-          selectionReason: reasonsByPage.get(raster.pageNumber) ?? 'low_confidence',
-        }));
-        const fallback = await runLlmOcrFallback(canonicalInput, current, candidates, {
-          aiGateway: context.aiGateway,
-          enabled: context.featureFlags.llmOcr,
-          externalProcessingEligible: context.externalProcessingEligible,
-          trustedAuthorizationContext: context.trustedAuthorizationContext,
-        });
-        current = fallback.sourceMap;
-        warnings.push(...fallback.warnings);
-        const unresolvedSet = new Set(fallback.unresolvedPageNumbers);
-        const rastered = new Set(candidates.map(({ pageNumber }) => pageNumber));
-        const batchUnresolved = selected.filter(({ page }) => !rastered.has(page) || unresolvedSet.has(page));
-        unresolvedProcessed.push(...batchUnresolved);
-        if (batchUnresolved.length === selected.length) {
-          stoppedAt = offset + selected.length;
-          break;
-        }
-      } catch {
-        warnings.push('llm OCR unavailable');
-        unresolvedProcessed.push(...selected);
-        stoppedAt = offset + selected.length;
-        break;
-      }
+  if (context.featureFlags.llmOcr && remaining.length > 0 && context.adapters.localOcr) {
+    const selected = remaining.slice(0, 4);
+    try {
+      const rasters = await context.adapters.localOcr.renderPdfPages(
+        adapterInput(canonicalInput),
+        selected.map(({ page }) => page),
+      );
+      const reasonsByPage = new Map(selected.map((page) => [page.page, page.reason]));
+      const candidates: LlmOcrCandidatePage[] = rasters.map((raster) => ({
+        ...raster,
+        selectionReason: reasonsByPage.get(raster.pageNumber) ?? 'low_confidence',
+      }));
+      const fallback = await runLlmOcrFallback(canonicalInput, current, candidates, {
+        aiGateway: context.aiGateway,
+        enabled: context.featureFlags.llmOcr,
+        externalProcessingEligible: context.externalProcessingEligible,
+        trustedAuthorizationContext: context.trustedAuthorizationContext,
+      });
+      current = fallback.sourceMap;
+      warnings.push(...fallback.warnings);
+      const unresolvedSet = new Set(fallback.unresolvedPageNumbers);
+      const rastered = new Set(candidates.map(({ pageNumber }) => pageNumber));
+      remaining = [
+        ...selected.filter(({ page }) => !rastered.has(page) || unresolvedSet.has(page)),
+        ...remaining.slice(4),
+      ];
+    } catch {
+      warnings.push('llm OCR unavailable');
     }
-    remaining = [
-      ...unresolvedProcessed,
-      ...eligible.slice(stoppedAt),
-      ...remaining.slice(32),
-    ];
   }
 
   if (!localStageSucceeded) reasons.push('all local parser stages failed');

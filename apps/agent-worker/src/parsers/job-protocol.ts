@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { isProxy } from 'node:util/types';
 
 const DOCUMENT_BLOCK_KINDS = [
@@ -113,31 +112,13 @@ export interface ParserStageResult {
   warnings: SafeParserWarningCode[];
 }
 
-export interface ParserRasterPage {
-  pageNumber: number;
-  mediaType: 'image/png';
-  bytesBase64: string;
-  width: number;
-  height: number;
-  contentHash: string;
-}
-
-export interface ParserRasterResult {
-  schemaVersion: 2;
-  kind: 'raster';
-  parser: DocumentParserMetadata;
-  pages: ParserRasterPage[];
-}
-
-export type ParserJobResult = ParserStageResult | ParserRasterResult;
-
 export type ParserJobResponseV2 =
   | {
     schemaVersion: 2;
     ok: true;
     artifactId: string;
     contentHash: string;
-    result: ParserJobResult;
+    result: ParserStageResult;
   }
   | {
     schemaVersion: 2;
@@ -164,13 +145,6 @@ const MAX_TEXT_LENGTH = 50_000;
 const MAX_TEXT_CHARACTERS = 5_000_000;
 const MAX_WARNING_COUNT = 100;
 const MAX_SERIALIZED_STRING_CHARACTERS = 8_000_000;
-const MAX_RASTER_PAGES = 4;
-const MAX_RASTER_PAGE_BYTES = 4 * 1024 * 1024;
-const MAX_RASTER_TOTAL_BYTES = 8 * 1024 * 1024;
-const MAX_RASTER_DIMENSION = 8192;
-const MAX_RASTER_PIXELS = 40_000_000;
-const SHA256 = /^[a-f0-9]{64}$/;
-const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const TEXT_BEARING_KINDS = new Set<DocumentBlockKind>(['heading', 'paragraph', 'caption', 'reference']);
 const SAFE_ERROR_CODES = new Set<string>(Object.values(SafeParserErrorCode));
 const SAFE_WARNING_CODES = new Set<string>(Object.values(SafeParserWarningCode));
@@ -438,42 +412,6 @@ export function parseParserStageResult(value: unknown): ParserStageResult {
   return safeObject({ schemaVersion: PARSER_JOB_SCHEMA_VERSION, parser, pages, warnings });
 }
 
-export function parseParserRasterResult(value: unknown): ParserRasterResult {
-  const code = SafeParserErrorCode.INVALID_RESPONSE;
-  const fields = dataObject(value, 'ParserRasterResult', ['schemaVersion', 'kind', 'parser', 'pages'], code);
-  if (required(fields, 'schemaVersion', 'schemaVersion', code) !== PARSER_JOB_SCHEMA_VERSION
-    || required(fields, 'kind', 'kind', code) !== 'raster') fail(code, 'raster result identity mismatch');
-  const budget: StringBudget = { total: 0 };
-  const parser = canonicalMetadata(required(fields, 'parser', 'parser', code), code, budget);
-  let totalBytes = 0;
-  const seen = new Set<number>();
-  const pages = safeArray(dataArray(required(fields, 'pages', 'pages', code), 'raster pages', MAX_RASTER_PAGES, code).map((entry) => {
-    const pageFields = dataObject(entry, 'ParserRasterPage', ['pageNumber', 'mediaType', 'bytesBase64', 'width', 'height', 'contentHash'], code);
-    const pageNumber = positiveInteger(required(pageFields, 'pageNumber', 'pageNumber', code), 'pageNumber', MAX_PAGE_COUNT, code);
-    if (seen.has(pageNumber)) fail(code, 'raster page numbers must be unique');
-    seen.add(pageNumber);
-    if (required(pageFields, 'mediaType', 'mediaType', code) !== 'image/png') fail(code, 'raster media type must be image/png');
-    const bytesBase64 = required(pageFields, 'bytesBase64', 'bytesBase64', code);
-    if (typeof bytesBase64 !== 'string' || !bytesBase64 || !BASE64.test(bytesBase64)) fail(code, 'raster bytes must be canonical base64');
-    const bytes = Buffer.from(bytesBase64, 'base64');
-    if (!bytes.byteLength || bytes.byteLength > MAX_RASTER_PAGE_BYTES || bytes.toString('base64') !== bytesBase64) fail(code, 'raster page byte limit exceeded');
-    totalBytes += bytes.byteLength;
-    if (totalBytes > MAX_RASTER_TOTAL_BYTES) fail(code, 'raster total byte limit exceeded');
-    if (bytes.byteLength < 24 || !bytes.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]))
-      || bytes.readUInt32BE(8) !== 13 || bytes.subarray(12, 16).toString('ascii') !== 'IHDR') fail(code, 'raster page is not a valid PNG');
-    const encodedWidth = bytes.readUInt32BE(16);
-    const encodedHeight = bytes.readUInt32BE(20);
-    const width = positiveInteger(required(pageFields, 'width', 'width', code), 'width', MAX_RASTER_DIMENSION, code);
-    const height = positiveInteger(required(pageFields, 'height', 'height', code), 'height', MAX_RASTER_DIMENSION, code);
-    if (width !== encodedWidth || height !== encodedHeight || width * height > MAX_RASTER_PIXELS) fail(code, 'raster dimensions are invalid');
-    const hash = required(pageFields, 'contentHash', 'contentHash', code);
-    if (typeof hash !== 'string' || !SHA256.test(hash) || createHash('sha256').update(bytes).digest('hex') !== hash) fail(code, 'raster content hash mismatch');
-    return safeObject({ pageNumber, mediaType: 'image/png' as const, bytesBase64, width, height, contentHash: hash });
-  }));
-  if (pages.length === 0) fail(code, 'raster pages must not be empty');
-  return safeObject({ schemaVersion: PARSER_JOB_SCHEMA_VERSION, kind: 'raster' as const, parser, pages });
-}
-
 function canonicalResponse(value: unknown): ParserJobResponseV2 {
   const code = SafeParserErrorCode.INVALID_RESPONSE;
   if (isProxy(value)) fail(code, 'ParserJobResponseV2 must not be a Proxy');
@@ -499,12 +437,7 @@ function canonicalResponse(value: unknown): ParserJobResponseV2 {
       ok: true,
       artifactId,
       contentHash: hash,
-      result: (() => {
-        const raw = required(fields, 'result', 'result', code);
-        if (isProxy(raw)) fail(code, 'parser result must not be a Proxy');
-        const kind = raw && typeof raw === 'object' ? Object.getOwnPropertyDescriptor(raw, 'kind')?.value : undefined;
-        return kind === 'raster' ? parseParserRasterResult(raw) : parseParserStageResult(raw);
-      })(),
+      result: parseParserStageResult(required(fields, 'result', 'result', code)),
     });
   }
   const errorCode = required(fields, 'errorCode', 'errorCode', code);
@@ -550,9 +483,6 @@ export function deserializeParserJobResponseV2(
   const response = canonicalResponse(parsed);
   if (response.artifactId !== expectedRequest.artifactId || response.contentHash !== expectedRequest.contentHash) {
     fail(SafeParserErrorCode.IDENTITY_MISMATCH, 'response identity does not match request');
-  }
-  if (response.ok && ((expectedRequest.operation === 'render_page') !== ('kind' in response.result && response.result.kind === 'raster'))) {
-    fail(SafeParserErrorCode.INVALID_RESPONSE, 'response result kind does not match operation');
   }
   if (response.ok && expectedParser && (
     response.result.parser.name !== expectedParser.name
