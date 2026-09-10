@@ -9,10 +9,11 @@ if (fs.existsSync(root + '/egress/egress.sock')) {
 const hosts = new Set(['chatgpt.com', 'auth.openai.com', 'auth0.openai.com', 'cdn.auth0.com',
   'challenges.cloudflare.com', 'persistent.oaistatic.com', 'cdn.oaistatic.com', 'ab.chatgpt.com',
   'files.oaiusercontent.com', 'auth-cdn.oaistatic.com', 'cdn.openai.com',
-  'api.oaistatsig.com', 'bzr.openai.com', 'ws.chatgpt.com', 'openscience.428312321.xyz',
-  'sdmntprwestus.oaiusercontent.com']);
+  'api.oaistatsig.com', 'bzr.openai.com', 'ws.chatgpt.com', 'openscience.428312321.xyz']);
+const hostSuffixes = ['.oaiusercontent.com'];
 const allowed = authority => typeof authority === 'string' && authority.endsWith(':443')
-  && hosts.has(authority.slice(0, -4));
+  && (hosts.has(authority.slice(0, -4))
+    || hostSuffixes.some(suffix => authority.slice(0, -4).endsWith(suffix)));
 let active = 0;
 const egress = http.createServer({ maxHeaderSize: 8192 }, (_, res) => { res.writeHead(405); res.end(); });
 egress.on('connect', (req, client, head) => {
