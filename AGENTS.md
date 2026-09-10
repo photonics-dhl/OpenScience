@@ -21,7 +21,7 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
 - `apps/`：`api` 提供账号、工作区、RO/SDF/版本、协作、Hermes、发布和沙箱端点；`web` 提供 SDF 编辑、公开 RO、协作、可视化和国际化界面；`agent-worker` 处理提取/审核队列；`science-worker` 负责隔离执行和产物收集。以源码和 `project_index.md` 为完整能力清单。
 - `packages/`：共享数据库、存储、认证、领域模型、配置、可观测性、SDF schema、diff、版本、身份、AI 网关与搜索能力；搜索使用独立 `SEARCH_DATABASE_URL`。
-- `infra/`：包含 dev/monitor/prod compose、Nginx、部署/备份、沙箱和 Prisma 迁移 1–40（均有 rollback.sql）；生产数据网与应用网隔离，文档解析 sidecar 无网络、非 root、只读并限制 512 MiB。迁移细节以账本和 ADR 为准。
+- `infra/`：包含 dev/monitor/prod compose、Nginx、部署/备份、沙箱和 Prisma 迁移 1–41（均有 rollback.sql）；生产数据网与应用网隔离，文档解析 sidecar 无网络、非 root、只读并限制 512 MiB。迁移细节以账本和 ADR 为准。
 - 常用命令：`npx pnpm@9.15.0 install`、`npx pnpm@9.15.0 build`、`npx pnpm@9.15.0 typecheck`、`npx pnpm@9.15.0 lint`（ESLint 9 全仓检查 + `scripts/verify-workspace.mjs` 结构校验）。
 - API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）；配额 seed CLI：`node scripts/seed-quota.mjs --dry-run|--confirm`（P1A-7 占位值幂等 upsert，数值集中 `packages/domain/src/usage/seed-data.ts`）。
 - 卫生审计：`npx pnpm@9.15.0 audit:knip`（未用文件/导出/依赖）、`audit:dep`（dependency-cruiser：循环依赖/跨包深引用/orphan 告警）、`audit:dup`（jscpd 重复代码）、`audit:deps`（syncpack 版本一致性）、`docs:lint`（markdownlint 文档门禁）、`audit:docs-sync`（`scripts/docs/check-docs-sync.mjs`：索引路径存在性 + 文档反向登记 + AGENTS 迁移数一致性，已挂入 lint 与 CI）。
