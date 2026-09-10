@@ -58,12 +58,22 @@ async function uploadAttachments(input, request) {
   const form = input.locator('xpath=ancestor::form[1]');
   const fileInput = form.locator('input[type="file"]');
   if (await form.count() !== 1 || await fileInput.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
-  await fileInput.setInputFiles(attachments.map(({ file }) => file));
   for (const { attachment } of attachments) {
-    const chip = form.getByText(attachment.fileName, { exact: true });
-    if (await chip.count() < 1 || !await chip.first().waitFor({ state: 'visible', timeout: 30000 }).then(() => true).catch(() => false)) {
-      throw Error('ATTACHMENT_UPLOAD_NOT_CONFIRMED');
+    const groups = form.locator('[role="group"][aria-label]');
+    const before = await groups.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
+    await fileInput.setInputFiles(file);
+    const dot = attachment.fileName.lastIndexOf('.');
+    const stem = attachment.fileName.slice(0, dot).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const extension = attachment.fileName.slice(dot).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const acceptedName = new RegExp(`^${stem}(?:\\(\\d+\\))?${extension}$`);
+    const deadline = Date.now() + 30000;
+    let confirmed = false;
+    while (Date.now() < deadline) {
+      const labels = await groups.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? '')).catch(() => []);
+      if (labels.length > before.length && labels.some(label => acceptedName.test(label))) { confirmed = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 250));
     }
+    if (!confirmed) throw Error('ATTACHMENT_UPLOAD_NOT_CONFIRMED');
   }
 }
 function normalizeUserText(value) { return String(value ?? '').replace(/\u00a0/g, ' ').trim(); }
@@ -235,6 +245,7 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
   }
   throw Error('RESULT_TIMEOUT_NO_RESEND');
 }
+let activePage;
 (async () => {
   const stat = fs.lstatSync(dir); if (!stat.isDirectory() || stat.isSymbolicLink()) throw Error('INVALID_JOB_DIRECTORY');
   const request = validateRequest(read('request.json'), mode === 'recover');
@@ -245,6 +256,7 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
     if (fs.existsSync(path.join(dir, 'recovered-result.json'))) process.exit(0);
     const url = canonicalUrl(read('conversation.json').url);
     page = context.pages().find(candidate => { try { return canonicalUrl(candidate.url()) === url; } catch { return false; } }) || await context.newPage();
+    activePage = page;
     if (page.url() !== url) await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     const recoveryDeadline = Math.min(request.deadlineAt + RECOVERY_GRACE_MS, Date.now() + 30000);
     await recoverUserAnchor(page, request, recoveryDeadline);
@@ -253,6 +265,7 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
   }
   if (fs.existsSync(path.join(dir, 'submitted.json'))) throw Error('SUBMITTED_DO_NOT_RESEND');
   page = await context.newPage();
+  activePage = page;
   await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
   const input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000));
   if (!input) throw Error('CHAT_COMPOSER_NOT_FOUND');
@@ -272,8 +285,11 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
   once('conversation.json', { url });
   await recoverUserAnchor(page, request, Math.min(request.deadlineAt, Date.now() + 30000));
   await waitForReview(page, request, request.deadlineAt);
-  await page.close().catch(() => {});
-})().catch(error => {
+  await page.close().catch(() => {}); activePage = undefined;
+})().catch(async error => {
+  if (!fs.existsSync(path.join(dir, 'submitted.json')) && activePage) {
+    await bounded(activePage.close({ runBeforeUnload: false }), 3000).catch(() => {});
+  }
   console.log(JSON.stringify({ state: fs.existsSync(path.join(dir, 'submitted.json')) ? 'ambiguous_no_resend' : 'not_submitted', error: /^[A-Z_]+$/.test(error.message) ? error.message : error.name }));
   process.exit(1);
 });
