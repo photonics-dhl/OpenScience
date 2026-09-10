@@ -27,6 +27,13 @@ if [[ ${1:-} == --confirm-provider ]]; then
   fi
   exec 9<>"$root/jobs/runner.lock"
   flock -n 9 || { echo 'Browser operator is active; provider install did not change it'; exit 71; }
+  for lock_name in image-runner.lock science-review-runner.lock; do
+    if [[ -e "$root/jobs/$lock_name" ]]; then
+      [[ -f "$root/jobs/$lock_name" && ! -L "$root/jobs/$lock_name" ]] || exit 68
+    else
+      install -o 11040 -g 11040 -m 0600 /dev/null "$root/jobs/$lock_name"
+    fi
+  done
   [[ ! -e $bundle ]] || { echo 'Web image bundle already exists; inspect before reuse'; exit 69; }
   install -d -m 0755 "$bundle/infra/chatgpt-browser" "$bundle/infra/codex-image-runner" "$bundle/packages/ai-gateway/dist"
   install -m 0444 "$source_release/infra/chatgpt-browser/broker.mjs" "$source_release/infra/chatgpt-browser/runner.cjs" "$source_release/infra/chatgpt-browser/review-broker.mjs" "$source_release/infra/chatgpt-browser/review-runner.cjs" "$bundle/infra/chatgpt-browser/"
@@ -53,7 +60,7 @@ After=docker.service openscience-chatgpt-browser-bridge.service
 Requires=docker.service openscience-chatgpt-browser-bridge.service
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/flock -n $root/jobs/runner.lock /usr/bin/node $bundle/infra/chatgpt-browser/broker.mjs --config $config
+ExecStart=/usr/bin/flock -n $root/jobs/image-runner.lock /usr/bin/node $bundle/infra/chatgpt-browser/broker.mjs --config $config
 TimeoutStartSec=660
 NoNewPrivileges=true
 PrivateTmp=true
@@ -81,7 +88,7 @@ After=docker.service openscience-chatgpt-browser-bridge.service
 Requires=docker.service openscience-chatgpt-browser-bridge.service
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/flock -n $root/jobs/runner.lock /usr/bin/node $bundle/infra/chatgpt-browser/review-broker.mjs --config $review_config
+ExecStart=/usr/bin/flock -n $root/jobs/science-review-runner.lock /usr/bin/node $bundle/infra/chatgpt-browser/review-broker.mjs --config $review_config
 TimeoutStartSec=660
 NoNewPrivileges=true
 PrivateTmp=true
