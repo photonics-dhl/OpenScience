@@ -119,6 +119,15 @@ function hasDirectQuantitativeResultCandidate(passages: readonly CanonicalPassag
   const quantity = /(?:\d+(?:\.\d+)?\s*(?:as|fs|ps|ns|Hz|kHz|MHz|GHz|THz|PHz|nm|μm|mm|cm|mJ|pC|MeV|W\/m²|%)|[ζτν]\s*[≈=<>])/iu;
   return passages.some((passage) => resultLanguage.test(passage.text) && quantity.test(passage.text));
 }
+
+function resultSummaryQualityReason(
+  summary: string,
+  passages: readonly CanonicalPassage[],
+): 'results_not_outcome' | undefined {
+  if (!hasDirectQuantitativeResultCandidate(passages)) return undefined;
+  const evidenceClass = /(?:理论|数值|模拟|仿真|计算|预测|估计|实验|实测|测量|观测|观察)/u;
+  return evidenceClass.test(summary) ? undefined : 'results_not_outcome';
+}
 const CANONICAL_EXTRACTION_CONTRACT = 'grounded-passages-v2';
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
@@ -494,7 +503,8 @@ type CanonicalFieldValidationReason =
   | 'source_text_limit_8000'
   | 'core_text_limit_4000'
   | 'language_violation'
-  | 'math_integrity_error';
+  | 'math_integrity_error'
+  | 'results_not_outcome';
 
 interface CanonicalRepairResponse {
   schemaVersion: string;
@@ -524,7 +534,7 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
   let expectedFields: Array<(typeof SDF_CORE_FIELDS)[number]> = [...SDF_CORE_FIELDS];
   let invalidFields = new Map<string, CanonicalFieldValidationReason>();
   let invalidDetails = new Map<string, string>();
-  const validateField = (item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason; detail?: string } => {
+  const validateField = (field: (typeof SDF_CORE_FIELDS)[number], item: unknown): { candidate?: ExtractedFieldProposal; reason?: CanonicalFieldValidationReason; detail?: string } => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return { reason: 'malformed_item' };
     const candidate = item as Record<string, unknown>;
     if (Object.keys(candidate).sort().join(',') !== 'needsMoreInformation,sourcePassageIds,summary'
@@ -538,6 +548,8 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     if (candidate.summary.length > MAX_CANONICAL_CORE_CHARS) return { reason: 'core_text_limit_4000' };
     const qualityReason = canonicalSummaryQualityReason(candidate.summary);
     if (qualityReason) return { reason: qualityReason };
+    const resultQualityReason = field === 'results' ? resultSummaryQualityReason(candidate.summary, passages) : undefined;
+    if (resultQualityReason) return { reason: resultQualityReason };
     const invalidIdType = candidate.sourcePassageIds.some((id) => typeof id !== 'string');
     if (candidate.sourcePassageIds.length < 1 || candidate.sourcePassageIds.length > MAX_SOURCE_PASSAGE_IDS
       || invalidIdType) return {
@@ -588,7 +600,7 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
       // Once a supported field has passed server-side passage materialization, schema
       // retries repair only unresolved fields and cannot replace that verified result.
       if (previous?.needsMoreInformation === false) continue;
-      const validation = validateField(fields[field]);
+      const validation = validateField(field, fields[field]);
       if (validation.candidate) {
         const previousFailure = draftFailures.get(field);
         if (validation.candidate.needsMoreInformation && draftSummaries.has(field) && previousFailure) {
@@ -718,7 +730,9 @@ function previousCanonicalPartial(
     const match = /^passages:(P\d{5}(?:,P\d{5})*)$/.exec(evidenceRecord.locator);
     const ids = match ? match[1]!.split(',') : [];
     const validIds = ids.length > 0 && new Set(ids).size === ids.length && ids.every((id) => passageById.has(id));
-    const qualityReason = summary.trim() ? canonicalSummaryQualityReason(summary) : undefined;
+    const qualityReason = summary.trim()
+      ? canonicalSummaryQualityReason(summary) ?? (field === 'results' ? resultSummaryQualityReason(summary, passages) : undefined)
+      : undefined;
     if (needsSet.has(field) || qualityReason) {
       fields[field] = { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true };
       fieldDiagnostics[field] = qualityReason ?? 'malformed_item';
@@ -727,7 +741,7 @@ function previousCanonicalPartial(
       const draftIds = Array.isArray(previousDraftIds[field])
         ? (previousDraftIds[field] as unknown[]).filter((id): id is string => typeof id === 'string' && passageById.has(id))
         : validIds ? ids : [];
-      if (draftIds.length) unverifiedSourcePassageIds[field] = [...new Set(draftIds)];
+      if (draftIds.length && qualityReason !== 'results_not_outcome') unverifiedSourcePassageIds[field] = [...new Set(draftIds)];
       const detail = previousDetails[field];
       if (typeof detail === 'string' && detail) fieldDiagnosticsDetails[field] = detail;
       continue;
@@ -762,7 +776,9 @@ async function repairCanonicalPartial(
   if (!repairFields.length) return partial;
   const allPassageIds = passages.map((passage) => passage.id);
   const candidatesByField = new Map(repairFields.map((field) => {
-    const prior = partial.unverifiedSourcePassageIds[field];
+    const prior = partial.fieldDiagnostics[field] === 'results_not_outcome'
+      ? undefined
+      : partial.unverifiedSourcePassageIds[field];
     return [field, new Set(prior?.length ? prior : allPassageIds)] as const;
   }));
   const repaired = new Map<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>();
@@ -873,6 +889,8 @@ async function repairCanonicalPartial(
       const draftSummary = `${claims.map((claim) => claim.text.trim().replace(/[。；！？.!?]+$/u, '')).join('；')}。`;
       const qualityReason = canonicalSummaryQualityReason(draftSummary);
       if (qualityReason) { repairFailure = qualityReason; return false; }
+      const resultQualityReason = field === 'results' ? resultSummaryQualityReason(draftSummary, candidatePassages) : undefined;
+      if (resultQualityReason) { repairFailure = resultQualityReason; return false; }
       const proposal = selectEvidence(claims, allowedIds);
       if (!proposal) { repairFailure = 'no_feasible_support_union'; return false; }
       repairedField = proposal;
@@ -883,6 +901,7 @@ async function repairCanonicalPartial(
         '你是Hermes科研证据修订器。每次只处理一个首轮留空或因证据容量失败的字段；候选原文来自同一已验证SourceMap。科学取舍由你完成，程序仅核对来源身份、主张覆盖组合和预算。',
         '所有摘要、claim及说明必须使用中文；术语、单位和数学符号可保留，SourceMap原文保持原样。科学计数法指数、上下标和数学定界符必须完整；原文也残缺时不要猜写该表达。',
         '每个claims条目是一句完整且可独立核验的主张；supportSets列出1到3个可独立充分支持该主张的P编号组合。组合内来源共同支持，组合之间可替代。不得把诊断摘要当作真值，允许据原文纠错和去重。',
+        ...(field === 'results' ? ['results必须报告论文在具体参数或条件下实际给出的结果，不得只复述方法、判据或研究目标。理论估计、数值计算、仿真与实验实测必须明确标注证据类型；同一主张只组合属于同一算例的数据，严禁把不同材料、结构或单电子/电子束条件混写。若候选有定量输出，优先保留一组参数完整且最能代表主要结论的数值、单位与比较。'] : []),
         `本轮${field}生成预算最多${claimBudget}条claims；这不改变服务端1到8条的既有合约。保留必要条件与科学限定，不得把多个独立结论塞入一句来绕过预算。`,
         '若候选不足、矛盾未解或任何核心主张没有充分来源，返回claims=[]且needsMoreInformation=true。只有全文、图注及已提供附件均已覆盖时，才能把确实缺失的信息视为原文未报告；OCR缺失、附件未取得、容量或技术失败只能保持待核验。只输出JSON。',
         `输出schemaVersion="${SDF_CORE_VERSION}"，fields必须且只能包含${field}。该字段只能包含claims与needsMoreInformation。`,
@@ -1078,6 +1097,7 @@ export async function extractHandler(
       '你是Hermes科研阅读助手。综合给定全文理解论文，再用SDF六个展示维度 problem/insight/method/results/limitations/reproducibility 组织凝练内容；字段不对应固定章节或固定原文段落。',
       '保持证据类型与认识边界：明确区分实验实测、理论估计、数值仿真、作者归因或解释、以及讨论中的能力或上限；不得把其中一种改写成另一种，也不得把讨论上限写成已验证性能。',
       '保持物理量身份：明确区分入射量与局域量、场振幅与强度、脉冲能量与功率，并保留数值、单位、比例的对象和适用条件；除非原文明确给出关系，不得自行换算或混用。',
+      'results必须写论文在具体条件下得到的研究输出，不得只复述方法、成立判据或研究目标；若原文有定量结果，优先给出同一算例中参数完整的代表性数值。明确标注理论估计、数值计算、仿真或实验实测，禁止把不同材料、结构或单电子/电子束算例拼接为一个结果。',
       '先理解全文研究逻辑并形成有依据的综合概括，再关联支持各项断言的来源。可以跨章节整合分散的建模、推导和研究步骤，不要求存在同名章节或单段总结；不得补造原文不存在的中间论证。来源须支撑数字、比较、因果、能力限定与必要条件；作者归因不能改写成已证因果。',
       '方法或配置披露不等于独立复现完成；reproducibility 只能概括原文明示的材料、参数、步骤、数据或代码可用性及其缺口。若某个条款缺少直接证据，从 summary 删除该条款；若字段已无可支持内容，则按缺失字段返回 needsMoreInformation=true。',
       ...(passages ? [
