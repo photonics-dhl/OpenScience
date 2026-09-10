@@ -299,7 +299,7 @@ it.each(['already-approved', 'model', 'storage'])('creates an independent revisi
   expect(JSON.stringify(base.provenance)).toBe(originalContent);
   expect(ctx.rows).toHaveLength(1);
   expect(ctx.rows[0]).toMatchObject({ id: TASK, status: 'draft' });
-  expect(presentationStoryboardView(ctx.rows[0], [CLAIM_A, CLAIM_B])).toEqual({ document: revised, locale: 'en', style: 'ink', baseAssetId: base.id });
+  expect(presentationStoryboardView(ctx.rows[0], [CLAIM_A, CLAIM_B])).toEqual({ document: revised, locale: 'en', style: 'ink', output: 'video', baseAssetId: base.id });
   expect(joins).toHaveBeenCalledWith({ data: [CLAIM_A, CLAIM_B].map(claimId => ({ presentationAssetId: TASK, claimId, researchObjectId: RO, versionId: VERSION })) });
   expect(completeStructured).toHaveBeenCalledTimes(1);
   expect(ctx.putObject).toHaveBeenCalledTimes(1);
