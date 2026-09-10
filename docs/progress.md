@@ -1,3 +1,12 @@
+## 2026-09-11 真实论文已形成四字段可确认提案
+
+- version tuple：branch/HEAD与production `codex/onchip-video-release` / `36e6a8c48ad4a67664ef3cd3b0fbeb36e6480a93`，rollback `3485e329325a97f64368ef34cfda51f42c1625c6`；网页provider bundle同为`36e6a8c4…`。
+- 真实PDF `Deep-sub-cycle-ultrafast-optical-pulses.pdf`（3770010 bytes）经服务器产品链完成6 Pro初审与补证。初审`3420ed0e…`给出四个revised字段并只阻断method/reproducibility；补证`03bc4bee…`原始答复保留为invalid_response审计产物。
+- 修复科学broker长任务期间`.ready`过期：实际运行超过60秒后心跳age仍为11秒；同任务补证不再1毫秒拒绝。补证attempt加入协议版本，刷新链从幂等键恢复父任务与初审attempt。
+- task `103de6d5-a305-408c-8e0f-fa6e4d082803`在新增网页调用0次的情况下复用两份已有答复并完成：problem/insight/results/limitations分别398/471/1230/552字符；method/reproducibility保持待审且保存未验证草稿、问题和来源。真实编辑页显示两项缺口，确认按钮可用；用户确认前未写canonical、未生图或发布。
+- Chat 6 Pro复核同意readiness根因、逐字段保留与幂等方向，要求不从模糊文本猜影响范围；实现只接受`【影响…】`显式范围，无法确认时整包待审但不删除内容。
+- 未运行测试、预检或CI；仅执行生产部署所需构建/类型检查、容器startup health与真实产品任务。
+
 ## 2026-09-10 服务器网页生图已进入真实产品草稿
 
 - version tuple：branch `codex/onchip-video-release` / HEAD与production `d850fadbbe579481f68ab4d57f53f6910dee4120` / rollback `0c635525e3bffcd7a30199b0770cc3af37d3bc1b`。

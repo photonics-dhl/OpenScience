@@ -1,6 +1,6 @@
 # Server ChatGPT browser — operator login research
 
-Status: server browser, host bridge, broker timer and production `chatgpt-web` provider are running (2026-09-10). A real Hermes task generated through the logged-in webpage and returned a PNG product draft; scientific approval and publication remain explicit user actions.
+Status: server browser, host bridge, broker timers and production `chatgpt-web` provider are running at bundle `36e6a8c4…` (2026-09-11). A real Hermes task returned a PNG product draft; a Deep-sub-cycle PDF completed initial and supplemental 6 Pro review, with four fields retained for confirmation and two explicit scientific gaps. Approval and publication remain explicit user actions.
 
 ## Prerequisites
 - Read server-capabilities.md first. Reuse the installed ScanSci image's full Chrome revision1234, Xvfb and libraries, plus existing Node/media-font layers. Only x11vnc/noVNC/websockify are additional packages; do not download Chromium again.
@@ -20,7 +20,7 @@ Status: server browser, host bridge, broker timer and production `chatgpt-web` p
 - If the image build was interrupted before either the bridge unit or browser container exists, resume with `bash <staging>/install.sh --confirm --resume-build`. This mode refuses to overwrite a running installation or logged-in profile.
 - Stop only openscience-chatgpt-browser container and openscience-chatgpt-browser-bridge service when retiring this research environment; keep profile/downloads and scripts intact.
 - Do not restart production or overwrite its Codex auth. Existing image provider remains unchanged.
-- A denied CONNECT log may identify a necessary hostname; review it before narrowly adding it. No wildcard proxy or direct-connect fallback.
+- A denied CONNECT log may identify a necessary hostname; review it before narrowly adding it. ChatGPT attachment storage uses dynamic regional subdomains, so the bridge permits `oaiusercontent.com` and legal subdomains with a DNS-label boundary; it does not permit arbitrary suffix matches. No wildcard proxy or direct-connect fallback.
 - IPC socket pathnames may be renewed only after type checking that they are sockets; ordinary files are never removed.
 
 ## Observing actual operation
@@ -29,6 +29,7 @@ Status: server browser, host bridge, broker timer and production `chatgpt-web` p
 - UI accepts only localhost Host and same-origin requests; WebSocket requires same-origin. No Docker published ports or public VNC. CDP9233 is restricted to loopback inside the network-none container; no host relay.
 - Proxy logs only denied CONNECT hostnames. It never logs headers, cookies, content, or full URLs.
 - Fresh validation is limited to actual startup/login/image workflow; no tests or preflight suites.
+- The science broker refreshes `.ready` every 15 seconds only while its flock-owned process is alive. The continuation identity includes parent attempt, candidate/source hashes, evidence manifest and supplemental contract version. A failed or invalid continuation preserves the initial review and blocks only fields explicitly scoped by `【影响…】`; an ambiguous scope blocks the bundle without deleting the stored drafts.
 
 Sources: https://playwright.dev/docs/docker ; https://github.com/novnc/websockify ; https://help.openai.com/en/articles/11084440-chatgpt-images-faq .
 
@@ -75,3 +76,10 @@ Sources: https://playwright.dev/docs/docker ; https://github.com/novnc/websockif
 - Install from built immutable release with install.sh --confirm-provider --source /opt/openscience-releases/<SHA> --renderer-image <existing immutable FFmpeg image digest>; then select HERMES_SCENE_IMAGE_PROVIDER=chatgpt-web for API/worker. No account/profile reinstallation is needed.
 - Results root:1000 mode2750 propagates worker-readable group ownership; only worker mounts inbox rw/results ro. Broker uses the shared browser lock, one exclusive submission marker, strict canonical conversation, and aspect-preserving padding.
 - First attach failure may trigger one Chat-target reload and one attach retry only before any submission. A submitted job may restart the browser once and run `recover` against its exact canonical conversation; it never reloads the composer or resends. Production execution succeeded on 2026-09-10: canonical `6aa23223-62f8-83e9-9b43-19d424eb51a6`, PNG 1280×720/971354 bytes, product asset/task `eb48809b-c402-4983-969d-ee82d0fe6200` in `draft`.
+
+## Scientific review execution — 2026-09-11
+- The original 3770010-byte PDF uploaded successfully after replacing the single `sdmntprwestus.oaiusercontent.com` host entry with the bounded `oaiusercontent.com` subdomain rule. Regional hosts observed in prior failures remain covered without opening unrelated egress.
+- A 6 Pro response can exceed the previous 10-minute protocol window. The scientific-review request and systemd service now allow 1800 seconds; image generation remains 660 seconds.
+- A recovered response may be reused only for the exact stored attempt when the freshly computed candidate hash equals `reviewedCandidateHash`. A mismatch creates one new content-bound review with the original PDF; it never adapts or copies the old answer.
+- Long 6 Pro turns can expose a visible Copy control beneath a transparent action layer. The runner invokes the uniquely anchored button's DOM handler instead of pointer hit-testing, and exits explicitly after persisting the response so the broker publishes immediately.
+- Product task `f95761f7-1b2a-468a-99fe-70826af34d1e` completed initial review `1b0bbec7…` and PDF supplement `42674980…`. Both responses are stored. The supplement contained one raw control character inside a JSON string; deterministic string-only escaping is pending deployment, after which the same responses can be consumed without another Chat request.

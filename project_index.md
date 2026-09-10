@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-10:** production `d850fadb` / rollback `0c635525`。真实Hermes网页生图任务已回传产品 `draft`（PNG 1280×720）；主画廊隐藏rejected历史项，生产页面已观察。唯一状态入口为 `docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
-> 当前执行：用户批准当前exact-hash图片→发布预览→明确确认后公开RO；随后上传不同的第二篇论文继续精选。视频暂停，批量冷启动暂停。
+> **CURRENT 2026-09-11:** production `36e6a8c4` / rollback `3485e329`；provider bundle同版。Deep-sub-cycle真实PDF已形成problem/insight/results/limitations四字段可确认提案，method/reproducibility保留明确科学缺口；task `103de6d5…`新增网页调用0次。唯一下一步见 `docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
+> 当前执行：用户确认四字段提案及两项显式留空→Hermes内容驱动生图→审核→发布预览→明确确认后公开RO；随后上传不同的第二篇论文继续精选。视频暂停，批量冷启动暂停。
 > 最新部署：精确完成结果证明、原prompt/result恢复、浏览器重启后exact canonical续取且不重发、产品画廊整理。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
@@ -571,7 +571,7 @@
 
 - RESEARCH ADR-013补充自定义GPT/Image Generation + Action文件回传候选，未实施或验收。
 
-- DEPLOYED infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：服务器交互浏览器与生产 `chatgpt-web` provider；真实Hermes任务已回传产品草稿；infra/scripts/ssh-run.sh固定browser-tunnel。
+- DEPLOYED infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：服务器交互浏览器与生产 `chatgpt-web` provider；真实Hermes图片已回传，真实PDF完成6 Pro初审与补证；区域附件子域、图片/科学审阅独立锁、30分钟窗口、15秒science heartbeat、协议版本化幂等和逐字段保留部署于`36e6a8c4`；infra/scripts/ssh-run.sh固定browser-tunnel。
 
 - CURRENT docs/runbooks/server-capabilities.md：服务器已有服务、镜像、浏览器/模型路径与复用边界；服务器任务先查，新增安装只补缺失能力（2026-09-09）。
 

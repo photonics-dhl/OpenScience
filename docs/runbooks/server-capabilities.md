@@ -1,6 +1,6 @@
 # 服务器能力与复用清单
 
-2026-09-10 实时盘点。先查本页，再查相关条目的入口；能力或服务变动后同一任务内更新。文件存在、服务运行、产品调用成功是不同状态。本页记录部署位置与复用方式；Hermes语义能力/供应商政策见 [能力台账](hermes-capability-registry.md)，实时产品任务见 CURRENT handoff。
+2026-09-11 实时盘点。先查本页，再查相关条目的入口；能力或服务变动后同一任务内更新。文件存在、服务运行、产品调用成功是不同状态。本页记录部署位置与复用方式；Hermes语义能力/供应商政策见 [能力台账](hermes-capability-registry.md)，实时产品任务见 CURRENT handoff。
 
 ## 使用规则
 - 所有服务器相关任务先读本页相关条目。新增下载/安装前，依次查已有服务、镜像、共享缓存；优先原入口调用、复用镜像层或只读运行文件。
@@ -12,12 +12,12 @@
 
 | 能力 | 已有位置 / 入口 | 状态与复用方式 |
 |---|---|---|
-| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | 2026-09-10 实测 release `35223f2baf221d4f4a4b92d415b96bb1340ecb87`，rollback `460d79e356c3d762c4f9842b46d3aff870d07477`；API/Worker healthy，Web running。不要混用本地候选与线上版本 |
+| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | 2026-09-11 release `36e6a8c48ad4a67664ef3cd3b0fbeb36e6480a93`，rollback `3485e329325a97f64368ef34cfda51f42c1625c6`；部署所需构建、迁移与全部容器startup health完成。不要混用本地候选与线上版本 |
 | 主机资源 | ECS 16 CPU、30 GiB RAM、无 NVIDIA GPU | 盘点时约22 GiB可用；CPU解析器必须有界并发。Marker/MinerU等GPU高质量模式不能按GPU吞吐数据推断本机效果 |
 | 完整图形 Chrome | 宿主 `/opt/openscience-tool-cache/playwright/chromium-1234/chrome-linux64/chrome`；ScanSci镜像内 `/opt/scansci-browsers/chromium-1234/chrome-linux64/chrome` | 已静态确认完整二进制。可复用现有镜像与配套资源；不是只存在 headless shell |
 | 无头 Chromium | 宿主 `/root/.cache/ms-playwright/chromium_headless_shell-1234/` 与共享缓存同名目录；ScanSci镜像 `/opt/scansci-browsers/chromium_headless_shell-1234/` | 现成截图/渲染资源；不能用“仅此目录存在”的旧记录推断没有完整浏览器 |
 | 浏览器运行依赖 / Xvfb | `openscience-scansci-mcp:7f8e47d931b751cc28c1000325128c2ca86566cb`；镜像 `/usr/bin/Xvfb` | 已有图形库与Xvfb；独立浏览器可派生镜像，不启动或修改生产ScanSci服务、不挂载其登录卷 |
-| 网页远程桌面与生图 provider | `infra/chatgpt-browser/`；服务器 `/opt/openscience-chatgpt-browser` | 浏览器、桥接、broker timer 与 `chatgpt-web` provider 已运行；生产 provider bundle `0c635525…`。真实 Hermes task `eb48809b…` 已从网页6 Pro生图会话回传PNG 1280×720产品草稿。提交后只可重启浏览器并回到精确canonical续取，禁止重发；入口见 [浏览器手册](chatgpt-browser.md) |
+| 网页远程桌面、生图与科学审阅 provider | `infra/chatgpt-browser/`；服务器 `/opt/openscience-chatgpt-browser` | 浏览器、桥接、broker timers与`chatgpt-web` provider运行，bundle `36e6a8c4…`。真实生图task `eb48809b…`已回传PNG；Deep-sub-cycle原PDF完成初审与补证。图片窗口660秒，科学审阅1800秒；科学broker持锁期间15秒heartbeat，request按候选/证据/协议版本幂等；入口见[浏览器手册](chatgpt-browser.md) |
 | Node / Python | 宿主 `/usr/bin/node`、`/usr/bin/python3`；现有 `node:22-bookworm`、`python:3.12-slim` 镜像 | 已有；必要时复用镜像中的Node。不要默认全局安装 |
 | 视频 / 字体 / FFmpeg | `openscience-media-demo:b361f4f7781b760583b3a312829877c4d6310e8a` 等已有media镜像；源码 `apps/media-demo/Dockerfile` | 镜像包含FFmpeg、CJK字体与无头浏览器；demo镜像可复用运行依赖，不代表Hermes完整视频产品链路通过 |
 | 语音模型 | `/opt/openscience-models/qwen3-tts-customvoice-0c0e305`；`openscience/tts-audition:qwen0.1.1` | 目录与镜像存在，本轮未调用；不要重复下载模型，也不推断生产已接入 |
