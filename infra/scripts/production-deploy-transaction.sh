@@ -4,15 +4,17 @@
 
 set -eEuo pipefail
 
-[ "$#" -eq 3 ] || [ "$#" -eq 4 ] || { echo "错误：生产事务 runner 参数不完整" >&2; exit 64; }
+[ "$#" -ge 3 ] && [ "$#" -le 5 ] || { echo "错误：生产事务 runner 参数不完整" >&2; exit 64; }
 RELEASE_SHA="$1"
 ROLLBACK_SHA="$2"
 SKIP_MIGRATE="$3"
 NO_TESTS="${4:-0}"
+REUSE_UNCHANGED_CAPABILITY_IMAGES="${5:-0}"
 [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]] \
   || { echo "错误：生产事务 SHA 非法" >&2; exit 64; }
 [[ "$SKIP_MIGRATE" =~ ^[01]$ ]] || { echo "错误：skip-migrate 标志非法" >&2; exit 64; }
 [[ "$NO_TESTS" =~ ^[01]$ ]] || { echo "错误：no-tests 标志非法" >&2; exit 64; }
+[[ "$REUSE_UNCHANGED_CAPABILITY_IMAGES" =~ ^[01]$ ]] || { echo "错误：能力镜像复用标志非法" >&2; exit 64; }
 
 REMOTE_ROOT="/opt/openscience"
 RELEASE_ROOT="/opt/openscience-releases/$RELEASE_SHA"
@@ -158,7 +160,7 @@ expect_http_body() {
 
 log() { printf '%s\n' "$*"; }
 
-log "=== 执行单一 SSH/flock 生产事务（release=$RELEASE_SHA rollback=$ROLLBACK_SHA no-tests=$NO_TESTS）==="
+log "=== 执行单一 SSH/flock 生产事务（release=$RELEASE_SHA rollback=$ROLLBACK_SHA no-tests=$NO_TESTS reuse-capabilities=$REUSE_UNCHANGED_CAPABILITY_IMAGES）==="
 [ "$NO_TESTS" -eq 0 ] || log "UNVERIFIED_ACCEPTANCE: Parser、ScanSci 与 embedding 功能验收已由 --no-tests 显式跳过"
 acquire_production_deploy_lock
 assert_production_deploy_lock
@@ -396,10 +398,45 @@ assert_production_deploy_lock
 assert_production_deploy_lock
 
 log "[2b] 构建 SHA-tagged release 镜像..."
-compose_current "build scansci-mcp"
+if [ "$REUSE_UNCHANGED_CAPABILITY_IMAGES" -eq 1 ] && [ "$PREVIOUS_HAS_SCANSCI" -eq 1 ]; then
+  if node "$SCRIPT_DIR/verify-reusable-capability-inputs.mjs" \
+    --current-root "$RELEASE_ROOT" --current-sha "$RELEASE_SHA" \
+    --previous-root "$PREVIOUS_RELEASE_ROOT" --previous-sha "$PREVIOUS_RELEASE_SHA" \
+    --capability scansci; then
+    [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-mcp:$PREVIOUS_RELEASE_SHA")" = "$PREVIOUS_SCANSCI_MCP_IMAGE_ID" ]
+    run_remote "printf '%s\n' 'FROM openscience-scansci-mcp:$PREVIOUS_RELEASE_SHA' 'LABEL org.openscience.source=$RELEASE_SHA' | docker build --network none --label org.openscience.source='$RELEASE_SHA' -t openscience-scansci-mcp:$RELEASE_SHA -"
+    log "REUSED_CAPABILITY_IMAGE: scansci-mcp old_release=$PREVIOUS_RELEASE_SHA old_image=$PREVIOUS_SCANSCI_MCP_IMAGE_ID reason=identical-input-manifest"
+  else
+    log "REBUILD_CAPABILITY_IMAGE: scansci-mcp reason=changed-input-manifest"
+    compose_current "build scansci-mcp"
+  fi
+else
+  compose_current "build scansci-mcp"
+fi
 compose_current "build agent-worker document-parser"
 if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
-  compose_embedding_current "build embedding-worker"
+  if [ "$REUSE_UNCHANGED_CAPABILITY_IMAGES" -eq 1 ] \
+    && [ "$PREVIOUS_HAS_EMBEDDING" -eq 1 ] \
+    && [ "$BGE_M3_MODEL_VERSION_ID" = "$PREVIOUS_BGE_M3_MODEL_VERSION_ID" ] \
+    && [ "$BGE_M3_MODEL_REVISION" = "$PREVIOUS_BGE_M3_MODEL_REVISION" ] \
+    && [ "$BGE_M3_SOURCE_SHA256" = "$PREVIOUS_BGE_M3_SOURCE_SHA256" ] \
+    && [ "$BGE_M3_PACKAGE_FREEZE_SHA256" = "$PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256" ] \
+    && [ "$BGE_M3_MODEL_MANIFEST_SHA256" = "$PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256" ]; then
+    if node "$SCRIPT_DIR/verify-reusable-capability-inputs.mjs" \
+      --current-root "$RELEASE_ROOT" --current-sha "$RELEASE_SHA" \
+      --previous-root "$PREVIOUS_RELEASE_ROOT" --previous-sha "$PREVIOUS_RELEASE_SHA" \
+      --capability embedding; then
+      PREVIOUS_EMBEDDING_IMAGE_ID="$(run_remote "docker image inspect --format='{{.Id}}' openscience-embedding-worker:$PREVIOUS_RELEASE_SHA")"
+      require_match previous_embedding_image_id "$PREVIOUS_EMBEDDING_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
+      run_remote "docker image tag openscience-embedding-worker:$PREVIOUS_RELEASE_SHA openscience-embedding-worker:$RELEASE_SHA"
+      log "REUSED_CAPABILITY_IMAGE: embedding-worker old_release=$PREVIOUS_RELEASE_SHA old_image=$PREVIOUS_EMBEDDING_IMAGE_ID reason=identical-input-manifest-and-model-identity"
+    else
+      log "REBUILD_CAPABILITY_IMAGE: embedding-worker reason=changed-input-manifest"
+      compose_embedding_current "build embedding-worker"
+    fi
+  else
+    compose_embedding_current "build embedding-worker"
+  fi
 fi
 
 PARSER_ACCEPTANCE_REPORT="/opt/openscience-acceptance/document-parser/$RELEASE_SHA/report.json"

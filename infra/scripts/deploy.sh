@@ -13,6 +13,7 @@ SKIP_BUILD=0
 SKIP_MIGRATE=0
 REQUIRE_PARSER_ACCEPTANCE=0
 NO_TESTS=0
+REUSE_UNCHANGED_CAPABILITY_IMAGES=0
 ROLLBACK_REF=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -21,12 +22,13 @@ while [ $# -gt 0 ]; do
     --skip-migrate) SKIP_MIGRATE=1; shift ;;
     --require-parser-acceptance) REQUIRE_PARSER_ACCEPTANCE=1; shift ;;
     --no-tests) NO_TESTS=1; shift ;;
+    --reuse-unchanged-capability-images) REUSE_UNCHANGED_CAPABILITY_IMAGES=1; shift ;;
     --rollback-ref) [ $# -ge 2 ] || { echo "错误：--rollback-ref 缺少值" >&2; exit 64; }; ROLLBACK_REF="$2"; shift 2 ;;
     -*) echo "未知参数: $1" >&2; exit 64 ;;
     *) RELEASE_REF="$1"; shift ;;
   esac
 done
-[ -n "${RELEASE_REF:-}" ] || { echo "用法: deploy.sh [--confirm] [--require-parser-acceptance|--no-tests] --rollback-ref <active-release-ref> <release-ref>" >&2; exit 64; }
+[ -n "${RELEASE_REF:-}" ] || { echo "用法: deploy.sh [--confirm] [--require-parser-acceptance|--no-tests] [--reuse-unchanged-capability-images] --rollback-ref <active-release-ref> <release-ref>" >&2; exit 64; }
 [ "$SKIP_BUILD" -eq 0 ] || { echo "错误：精确 Git tree 部署必须重新 build，禁止 --skip-build" >&2; exit 64; }
 [ "$NO_TESTS" -eq 0 ] || [ "$REQUIRE_PARSER_ACCEPTANCE" -eq 0 ] || {
   echo "错误：--no-tests 与 --require-parser-acceptance 不能同时使用" >&2
@@ -76,6 +78,9 @@ if [ "$CONFIRM" -ne 1 ]; then
   else
     [ "$REQUIRE_PARSER_ACCEPTANCE" -eq 1 ] || plan "执行 --confirm 前必须补 --require-parser-acceptance"
   fi
+  if [ "$REUSE_UNCHANGED_CAPABILITY_IMAGES" -eq 1 ]; then
+    plan "精确比较当前与 rollback release 的能力构建输入；仅复用未变化的 ScanSci/BGE 镜像"
+  fi
   exit 0
 fi
 [ -n "$ROLLBACK_SHA" ] || { echo "错误：--confirm 必须提供 --rollback-ref" >&2; exit 64; }
@@ -92,5 +97,5 @@ git -C "$PROJECT_ROOT" show "$RELEASE_SHA:infra/scripts/production-deploy-transa
   || { echo "错误：候选 transaction runner 缺少 nginx 收敛合同" >&2; exit 66; }
 REMOTE_TRANSACTION_RUNNER="/opt/openscience-releases/$RELEASE_SHA/infra/scripts/production-deploy-transaction.sh"
 ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" \
-  "exec /bin/bash '$REMOTE_TRANSACTION_RUNNER' '$RELEASE_SHA' '$ROLLBACK_SHA' '$SKIP_MIGRATE' '$NO_TESTS' </dev/null" \
+  "exec /bin/bash '$REMOTE_TRANSACTION_RUNNER' '$RELEASE_SHA' '$ROLLBACK_SHA' '$SKIP_MIGRATE' '$NO_TESTS' '$REUSE_UNCHANGED_CAPABILITY_IMAGES' </dev/null" \
   </dev/null
