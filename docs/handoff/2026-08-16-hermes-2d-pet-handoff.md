@@ -14,10 +14,6 @@
 - 下一批候选：已确认论文重新分析为独立待确认草稿（复用SourceMap，事务内权限/408与429幂等修复）、归档Hermes任务过滤、MaterialQueue预览、Hermes默认紧凑静态回退。网页spool接入另批已完成静态修复/High复核，尚未启用或实际回传。
 - 用户已登录服务器产品页；实际Overview可截图，工作台旧9任务/Hermes常驻重试问题已记录。Chat截图在页面reload后上传成功并实际发送6 Pro，已收到视觉建议并实现紧凑工作台/队列3条折叠/长任务名换行；此前文字讨论已返回。
 
-## Server browser continuation (2026-09-09)
-- 用户要求服务器任务先查能力清单；已新增 docs/runbooks/server-capabilities.md 并写入AGENTS。发现共享缓存与ScanSci镜像已有完整Chrome+Xvfb，已停止重复下载，改为复用镜像，仅补远程桌面组件。
-- 独立浏览器镜像272a5ed57d27已构建；bridge与浏览器已运行，noVNC HTTP200；trace定位openat2/clone3/pkey/chroot并修复seccomp兼容，用户已登录且网页生成/保存一次PNG成功，见下方最新记录；生产release未变，产品资产回传尚未接入。固定SSH6081隧道已启动，CUA仍fetch失败。不得按下方旧Codex retry步骤重复消耗额度。
-
 ## R1 record hardening integration
 - Branch codex/r1-record-hardening now integrates production3446f309 plus Stage2 source identity, missing-cause, evidence and conflict fixes. Existing frozen records remain immutable; nine-PDF Stage2 replay is pending exact candidate deployment.
 
@@ -29,18 +25,6 @@
 - Recovery helper ALREADY submitted HTTP202 using keyhermes-recover-image-service-v1, log1788889410160-5a331eff-da10-4492-b4d3-31d8da774eae. Never blindly resubmit any prior generation helper.
 - Early image0 approval during generating state returned403; normal user review is allowed once whole batch reaches awaiting_scene_images_review. No permission code change was needed.
 - Main retains selected model; Sol/medium implementation, Sol/high credit/authority review; prior WebChat6Pro architecture advice reused. No reliable overall Codex savings percentage established.
-
-## Latest actual web image
-- 服务器执行/Save成功：会话6aa162f9-d0e4-83ea-afbf-243f7aae8a22；私有jobs/f6f29af4-b3c8-4609-93ac-4572970cc4b8/output/image.png，PNG1225x1284/1556710bytes。仅一次提交，原Codex失败任务未伪改成功。
-- 图片额外画了孔板几何/场线，违背brief，需网页修订后才可产品展示。通用runner已保存，execute/resume尚未整体运行，Gateway/生产队列与资产回传尚未接入。
-- 用户确认并本轮验证直接Chat可读；CUA坏不等于Chat不可用。用户接受本机出口，不因此停工。资源pids512、镜像9f44e1267fba、CDP仅容器loopback9233，状态细节见browser runbook。
-
-## Versions
-- worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- production ea95e63cc2d62eba7c65494fc713856d7416df42，rollback c2d113263ee48f276e9dedc4e4dc8a3229b4ceed。
-- 部署exit0，日志1788953754740-78c2a47b-196d-4fce-8cfa-98cf09c48cf0。没有运行中的部署。
-- 宿主Codex runner独立bundle1ad54c72f794ba46ee5f423875b9f231d32d4ea1，canonical install成功，含预设skill；此后应用版本没有runner代码变化，不需重装。
-- 早先2000f508 build阶段SSH重置exit255，生产无切换/无journal。后续1ad54c72/929667dd/7f8e47d9均部署exit0。
 
 ## Actual paper / run
 - RO9067a2d5-42ad-4c06-b234-753728b71064；ingestion7a28a7c8-90f7-429b-a519-53397cf58856；artifact4b94c626-1748-4c5a-934b-2bb94585bd9c。
