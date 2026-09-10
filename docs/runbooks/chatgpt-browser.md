@@ -1,6 +1,6 @@
 # Server ChatGPT browser — operator login research
 
-Status: server browser, host bridge, broker timers and production `chatgpt-web` provider are running at bundle `36e6a8c4…` (2026-09-11). A real Hermes task returned a PNG product draft; a Deep-sub-cycle PDF completed initial and supplemental 6 Pro review, with four fields retained for confirmation and two explicit scientific gaps. Approval and publication remain explicit user actions.
+Status: server browser, host bridge, broker timers and production `chatgpt-web` provider are running at bundle `4b4e365c…` (2026-09-11). A real Hermes task returned a PNG product draft; the Deep-sub-cycle PDF completed science-v4 6 Pro whole-paper review with six concise nonempty fields and no evidence request. User confirmation and publication remain explicit actions.
 
 ## Prerequisites
 - Read server-capabilities.md first. Reuse the installed ScanSci image's full Chrome revision1234, Xvfb and libraries, plus existing Node/media-font layers. Only x11vnc/noVNC/websockify are additional packages; do not download Chromium again.
@@ -82,4 +82,6 @@ Sources: https://playwright.dev/docs/docker ; https://github.com/novnc/websockif
 - A 6 Pro response can exceed the previous 10-minute protocol window. The scientific-review request and systemd service now allow 1800 seconds; image generation remains 660 seconds.
 - A recovered response may be reused only for the exact stored attempt when the freshly computed candidate hash equals `reviewedCandidateHash`. A mismatch creates one new content-bound review with the original PDF; it never adapts or copies the old answer.
 - Long 6 Pro turns can expose a visible Copy control beneath a transparent action layer. The runner invokes the uniquely anchored button's DOM handler instead of pointer hit-testing, and exits explicitly after persisting the response so the broker publishes immediately.
+- science-v4 defines all six SDF fields as user-facing whole-paper syntheses. Missing a same-named section or complete implementation disclosure is not a field absence; reproducibility includes a bounded reconstruction recipe plus disclosed gaps. `needsMoreEvidence` now carries structured `affectedFields` and is reserved for unreadable/missing source needed to judge a core claim.
+- Production task `1e324308-fd26-4cc1-8612-8a1c269909a9`, attempt `6cc0a17c-e4df-5655-8819-34788e45bced`, returned `review_received`, six nonempty summaries and no supplemental request. The visible product proposal matches the stored result; no canonical write occurred.
 - Product task `f95761f7-1b2a-468a-99fe-70826af34d1e` completed initial review `1b0bbec7…` and PDF supplement `42674980…`. Both responses are stored. The supplement contained one raw control character inside a JSON string; deterministic string-only escaping is pending deployment, after which the same responses can be consumed without another Chat request.

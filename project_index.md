@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-11:** production `36e6a8c4` / rollback `3485e329`；provider bundle同版。Deep-sub-cycle真实PDF已形成problem/insight/results/limitations四字段可确认提案，method/reproducibility保留明确科学缺口；task `103de6d5…`新增网页调用0次。唯一下一步见 `docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
-> 当前执行：用户确认四字段提案及两项显式留空→Hermes内容驱动生图→审核→发布预览→明确确认后公开RO；随后上传不同的第二篇论文继续精选。视频暂停，批量冷启动暂停。
+> **CURRENT 2026-09-11:** production/provider `4b4e365c` / rollback `d60ab631`。Deep-sub-cycle真实PDF经science-v4一次6 Pro全文复核形成六项非空、凝练、可追溯提案；task `1e324308…` / review `6cc0a17c…` 均成功，无补证项。唯一下一步见 `docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
+> 当前执行：用户确认六字段提案→Hermes从确认版本生成独立内部生图brief→网页生图→审核→发布预览→明确确认后公开RO；随后上传不同的第二篇论文继续精选。视频暂停，批量冷启动暂停。
 > 最新部署：精确完成结果证明、原prompt/result恢复、浏览器重启后exact canonical续取且不重发、产品画廊整理。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。

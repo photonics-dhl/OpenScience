@@ -1,4 +1,12 @@
-## 2026-09-11 真实论文已形成四字段可确认提案
+## 2026-09-11 — Hermes全文理解语义纠偏已部署
+
+- Chat 6 Pro明确复核：SDF六字段是整篇论文的用户精华，不是同名章节抽取；披露不完整与摘要不可靠、核心物理未解必须分开。
+- production/provider `4b4e365c…` / rollback `d60ab631…`。science-v4加入跨段受约束综合、结构化`affectedFields`、字段软长度目标和用户SDF/内部MediaBrief分离；旧合同答复不会复用。
+- Deep-sub-cycle真实任务`1e324308…`、6 Pro attempt`6cc0a17c…`成功；六字段110/129/182/206/143/191字符，均非空且无补证。服务器页面已观察六项textarea与数据库一致，尚未替用户确认写入。
+- 本次合同升级在候选复用优化部署前对method/reproducibility各产生一次MiniMax定点修复；没有重跑OCR或全文map/reduce。后续已拆分候选复用与答复复用，合同升级可直接复核同一SourceMap草案。
+- 未运行测试、预检或CI；两次部署均只执行发布必需构建/类型检查与服务启动。第一次候选`b1887444`在切换前因字面量类型失败，修正后部署成功，生产无中断。
+
+## HISTORICAL 2026-09-11 四字段阶段（已被science-v4六字段结果取代）
 
 - version tuple：branch/HEAD与production `codex/onchip-video-release` / `36e6a8c48ad4a67664ef3cd3b0fbeb36e6480a93`，rollback `3485e329325a97f64368ef34cfda51f42c1625c6`；网页provider bundle同为`36e6a8c4…`。
 - 真实PDF `Deep-sub-cycle-ultrafast-optical-pulses.pdf`（3770010 bytes）经服务器产品链完成6 Pro初审与补证。初审`3420ed0e…`给出四个revised字段并只阻断method/reproducibility；补证`03bc4bee…`原始答复保留为invalid_response审计产物。
