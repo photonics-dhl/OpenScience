@@ -190,7 +190,7 @@ async function imageComposer(page) {
   const rich = page.locator('#prompt-textarea');
   if (await rich.count() === 1 && await rich.isVisible()) return rich;
   if (page.url() !== 'https://chatgpt.com/images/'
-    || await page.getByTestId('accounts-profile-button').count() !== 1) return null;
+    || await page.getByTestId('accounts-profile-button').count() < 1) return null;
   const fallback = page.locator('textarea[aria-label="Chat with ChatGPT"][placeholder="Describe a new image"]');
   if (await fallback.count() !== 1 || !await fallback.isVisible()) return null;
   const send = page.getByRole('button', { name: 'Send prompt', exact: true });
