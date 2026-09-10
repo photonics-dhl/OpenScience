@@ -268,9 +268,15 @@ async function claimAuthenticatedImagePage(context) {
     if (mode === 'prepare') process.exit(0);
   }
   const normalize = value => value.replace(/\s+/g, ' ').trim();
-  if (normalize(await composerText(composer)) !== normalize(prompt)) throw Error('PROMPT_CHANGED');
   const send = page.getByRole('button', { name: 'Send prompt', exact: true });
-  if (!await send.isEnabled()) throw Error('SEND_NOT_READY');
+  const readyDeadline = Math.min(request.deadlineAt, Date.now() + 10000);
+  while (Date.now() < readyDeadline) {
+    if (normalize(await composerText(composer).catch(() => '')) === normalize(prompt)
+      && await send.isEnabled().catch(() => false)) break;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  if (normalize(await composerText(composer).catch(() => '')) !== normalize(prompt)) throw Error('PROMPT_CHANGED');
+  if (!await send.isEnabled().catch(() => false)) throw Error('SEND_NOT_READY');
   once('submitted.json', { phase: 'submitted', provider: 'chatgpt-web', id, promptHash: request.promptHash, source: request.source, submittedAt: new Date().toISOString() });
   await send.click();
   console.log('SUBMITTED');
