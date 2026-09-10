@@ -62,7 +62,7 @@ async function readPresentationInput(storage: NonNullable<Parameters<TaskHandler
   return result;
 }
 
-export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'generateImage' | 'canResumeImageBeforeSubmission'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool } = {}): TaskHandler {
+export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'generateImage' | 'canResumeImageBeforeSubmission' | 'canResumeImageFromCompletedResult'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool } = {}): TaskHandler {
   return async (deps, task) => {
     if (!deps.storage) throw new Error('[blocked] presentation object storage unavailable');
     const payload = parsePresentationGenerationPayload(task.payload);
@@ -88,7 +88,12 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     if (existing) return { assetId: existing.id, kind: existing.kind, status: existing.status, contentHash: existing.contentHash, sourceClaimIds: payload.sourceClaimIds };
     const preProviderAuthorityRearm = payload.sceneImage && payload.hermesRunAuthority
       && task.executionAttempt === 2 && task.retryCount === 1 && task.recoveryContract === HERMES_AUTHORITY_REARM_MARKER;
-    if (payload.sceneImage && task.executionAttempt > 1 && !preProviderAuthorityRearm) throw new Error('[blocked] Previous paid image attempt has no saved result; explicit new generation is required');
+    const completedProviderRecovery = payload.sceneImage && task.executionAttempt > 1
+      && Boolean(options.gateway?.canResumeImageFromCompletedResult)
+      && await options.gateway!.canResumeImageFromCompletedResult!(task.id);
+    if (payload.sceneImage && task.executionAttempt > 1 && !preProviderAuthorityRearm && !completedProviderRecovery) {
+      throw new Error('[blocked] Previous paid image attempt has no saved result; explicit new generation is required');
+    }
     if (preProviderAuthorityRearm) {
       if (!options.gateway?.canResumeImageBeforeSubmission
         || !await options.gateway.canResumeImageBeforeSubmission(task.id)) {

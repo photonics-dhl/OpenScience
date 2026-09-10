@@ -11,6 +11,7 @@ export interface ImageProvider {
   readonly model: string;
   generate(request: ImageRequest): Promise<ImageProviderResult>;
   canResumeBeforeSubmission?(requestId: string): Promise<boolean>;
+  canResumeFromCompletedResult?(requestId: string): Promise<boolean>;
 }
 export interface MiniMaxImageConfig { baseUrl: string; apiKey: string; model: string }
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
