@@ -58,7 +58,7 @@ async function uploadAttachments(input, request) {
   const form = input.locator('xpath=ancestor::form[1]');
   const fileInput = form.locator('input[type="file"]');
   if (await form.count() !== 1 || await fileInput.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
-  for (const { attachment } of attachments) {
+  for (const { attachment, file } of attachments) {
     const groups = form.locator('[role="group"][aria-label]');
     const before = await groups.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
     await fileInput.setInputFiles(file);
