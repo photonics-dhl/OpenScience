@@ -150,6 +150,18 @@ function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha25
   } catch { return undefined; }
 }
 
+function validRefreshSourceExecution(
+  policy: AnalysisRefreshPolicy,
+  ingestionTaskId: string,
+  agent: { executionAttempt: number; retryCount: number; idempotencyKey: string | null },
+): boolean {
+  const expectedAttempt = agent.retryCount + 1;
+  if (agent.executionAttempt === expectedAttempt) return true;
+  if (policy !== 'scientific_review_v3' || agent.executionAttempt < expectedAttempt) return false;
+  return new RegExp(`^ingestion-analysis-refresh:${ingestionTaskId}:[0-9a-f-]{36}:(?:grounded-passages-v[12]|scientific-review-v3|user-requested-reanalysis)$`).test(agent.idempotencyKey ?? '')
+    || new RegExp(`^ingestion-analysis-reanalysis:${ingestionTaskId}:[0-9a-f-]{36}$`).test(agent.idempotencyKey ?? '');
+}
+
 function isOldFragmentedNativePdfMap(sourceMap: Awaited<ReturnType<typeof loadDocumentSourceMapReference>>): boolean {
   const oldVersion = '2.4.5+pdfjs-dist.5.4.296';
   const newVersion = '2.4.5+pdfjs-dist.5.4.296.line-runs.1';
@@ -539,7 +551,7 @@ export async function refreshIngestionAnalysis(
   const allowedRetries = policy === 'user_requested_reanalysis' ? initial.retryCount : policy === 'grounded_passages_v1' ? 2 : policy === 'grounded_passages_v2' ? 1 : 0;
   if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review' || initial.retryCount < 0 || initial.retryCount > allowedRetries
     || !oldAgent || oldAgent.kind !== 'sdf.extract' || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== initial.retryCount
-    || oldAgent.executionAttempt !== initial.retryCount + 1 || oldAgent.session.userId !== input.userId
+    || !validRefreshSourceExecution(policy, initial.id, oldAgent) || oldAgent.session.userId !== input.userId
     || oldAgent.session.researchObjectId !== initial.batch.researchObjectId || oldAgent.session.status !== 'active'
     || !oldPayload || oldPayload.artifactId !== initial.artifactId || oldPayload.researchObjectId !== initial.batch.researchObjectId
     || await savedConfirmation(deps, initial.id, initial.batch.researchObjectId)) {
@@ -590,7 +602,7 @@ export async function refreshIngestionAnalysis(
         const oldAgent = await tx.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
         if (source.agentTaskId !== input.sourceAgentTaskId || source.state !== 'needs_review' || source.retryCount !== initial.retryCount
           || !oldAgent || oldAgent.id !== input.sourceAgentTaskId || oldAgent.kind !== 'sdf.extract'
-          || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== source.retryCount || oldAgent.executionAttempt !== source.retryCount + 1
+          || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== source.retryCount || !validRefreshSourceExecution(policy, source.id, oldAgent)
           || oldAgent.session.userId !== input.userId || oldAgent.session.researchObjectId !== source.batch.researchObjectId
           || oldAgent.session.status !== 'active' || analysisRefreshPolicy(oldAgent.result, source.artifact) !== policy) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the scoped unconfirmed extraction can be refreshed');
