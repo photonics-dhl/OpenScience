@@ -64,8 +64,21 @@ abstract class SpoolImageProvider implements ImageProvider {
     const ready = await lstat(join(this.config.resultsDir, '.ready'));
     if (this.now() - ready.mtimeMs > CODEX_IMAGE_READY_MAX_AGE_MS || ready.mtimeMs > this.now() + 5000) fail();
     const output = join(this.config.resultsDir, id);
+    const expectedPromptHash = sha256Text(prompt);
+    try {
+      await directory(output);
+      const existingResult = validateCodexImageResult(JSON.parse((await boundedRead(join(output, 'result.json'), CODEX_IMAGE_MAX_JSON_BYTES)).toString('utf8')), this.spoolProvider);
+      if (existingResult.id !== id || existingResult.promptHash !== expectedPromptHash) fail();
+      if (existingResult.status === 'succeeded') {
+        const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
+        if (image.contentType !== 'image/png') fail();
+        return image;
+      }
+    } catch (error) {
+      if (!missing(error)) throw error;
+    }
     const createdAt = this.now();
-    let request = validateCodexImageRequest({ schemaVersion: 1, ...(this.spoolProvider === 'chatgpt-web' ? { provider: this.spoolProvider } : {}), id, prompt, promptHash: sha256Text(prompt), createdAt, deadlineAt: createdAt + this.timeout }, undefined, this.spoolProvider);
+    let request = validateCodexImageRequest({ schemaVersion: 1, ...(this.spoolProvider === 'chatgpt-web' ? { provider: this.spoolProvider } : {}), id, prompt, promptHash: expectedPromptHash, createdAt, deadlineAt: createdAt + this.timeout }, undefined, this.spoolProvider);
     // This immutable reservation remains after the runner claims the active request.
     const reservation = join(this.config.inboxDir, id + '.submitted.json');
     if (!await publish(reservation, JSON.stringify(request))) {
@@ -105,6 +118,6 @@ export class CodexSpoolImageProvider extends SpoolImageProvider {
 /** ChatGPT subscription UI transport; this identity does not claim a webpage model label. */
 export class ChatGptWebSpoolImageProvider extends SpoolImageProvider {
   readonly name = 'chatgpt-web';
-  readonly model = 'chatgpt-web/image-generation-tool';
+  readonly model = 'chatgpt-web/6-pro-image-generation-tool';
   protected readonly spoolProvider = 'chatgpt-web' as const;
 }
