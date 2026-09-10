@@ -36,6 +36,7 @@ import {
 type ParserKind = 'pdf' | 'docx' | 'image' | 'xlsx';
 export type ParserStageProcessor = (request: ParserJobRequestV2, content: Buffer) => Promise<ParserJobResult>;
 export const TRANSITION_PARSER_METADATA = Object.freeze({ name: 'v1-text-transition', version: '2.0.0' });
+export const DOCLING_PARSER_METADATA = Object.freeze({ name: 'docling-serve-cpu', version: '1.30.0' });
 const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 const MAX_REQUEST_BYTES = 64 * 1024;
 const JOB_SUFFIXES = ['input', 'request.json', 'processing.json', 'response.tmp', 'response.json', 'cancelled'] as const;
@@ -58,12 +59,12 @@ class SafeParserBoundaryError extends Error {
 
 export function expectedSidecarParserMetadata(
   request: Pick<ParserJobRequestV2, 'operation' | 'mediaType'>,
-): DocumentParserMetadata {
+): DocumentParserMetadata | readonly DocumentParserMetadata[] {
   if (request.operation === 'inventory_pages') return PDF_PAGE_INVENTORY_METADATA;
   if (request.operation === 'render_page') return PDF_PAGE_RENDER_METADATA;
   if (request.operation === 'ocr_page') return TESSERACT_METADATA;
   if (request.operation === 'extract_text' && request.mediaType === 'application/pdf') {
-    return PDF_TEXT_ITEM_METADATA;
+    return [DOCLING_PARSER_METADATA, PDF_TEXT_ITEM_METADATA];
   }
   return TRANSITION_PARSER_METADATA;
 }
@@ -181,7 +182,8 @@ export async function reapParserJobOrphans(
 
 function createParserJobClient(
   jobDir: string,
-  expectedParser: DocumentParserMetadata | ((request: ParserJobRequestV2) => DocumentParserMetadata),
+  expectedParser: DocumentParserMetadata | readonly DocumentParserMetadata[]
+    | ((request: ParserJobRequestV2) => DocumentParserMetadata | readonly DocumentParserMetadata[]),
   timeoutMs = 75_000,
 ): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserJobResult> {
   return async (requestValue: ParserJobRequestV2, content: Buffer): Promise<ParserJobResult> => {
@@ -242,7 +244,8 @@ function createParserJobClient(
 
 export function createParserStageJobClient(
   jobDir: string,
-  expectedParser: DocumentParserMetadata | ((request: ParserJobRequestV2) => DocumentParserMetadata),
+  expectedParser: DocumentParserMetadata | readonly DocumentParserMetadata[]
+    | ((request: ParserJobRequestV2) => DocumentParserMetadata | readonly DocumentParserMetadata[]),
   timeoutMs = 75_000,
 ): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult> {
   const client = createParserJobClient(jobDir, expectedParser, timeoutMs);
@@ -255,7 +258,8 @@ export function createParserStageJobClient(
 
 export function createParserRasterJobClient(
   jobDir: string,
-  expectedParser: DocumentParserMetadata | ((request: ParserJobRequestV2) => DocumentParserMetadata),
+  expectedParser: DocumentParserMetadata | readonly DocumentParserMetadata[]
+    | ((request: ParserJobRequestV2) => DocumentParserMetadata | readonly DocumentParserMetadata[]),
   timeoutMs = 75_000,
 ): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserRasterResult> {
   const client = createParserJobClient(jobDir, expectedParser, timeoutMs);
@@ -294,10 +298,10 @@ export function createTransitionParserStageProcessor(adapters: IngestionAdapters
     if (kind === 'pdf' || kind === 'xlsx') {
       try {
         const result = parseParserStageResult(parsed);
-        const expected = kind === 'pdf' ? PDF_TEXT_ITEM_METADATA : TRANSITION_PARSER_METADATA;
-        if (result.parser.name !== expected.name
-          || result.parser.version !== expected.version
-          || result.parser.modelHash !== undefined) {
+        const expected = kind === 'pdf' ? [DOCLING_PARSER_METADATA, PDF_TEXT_ITEM_METADATA] : [TRANSITION_PARSER_METADATA];
+        if (!expected.some((candidate) => result.parser.name === candidate.name
+          && result.parser.version === candidate.version
+          && result.parser.modelHash === undefined)) {
           throw new Error('unexpected structured parser identity');
         }
         return result;
@@ -422,6 +426,7 @@ export async function processParserJobsOnce(
   jobDir: string,
   processorOrRemovedV1Adapters: ParserStageProcessor | IngestionAdapters,
   v2Processor?: ParserStageProcessor,
+  options: { maxJobs?: number } = {},
 ): Promise<number> {
   const stageProcessor = typeof processorOrRemovedV1Adapters === 'function'
     ? processorOrRemovedV1Adapters
@@ -432,6 +437,7 @@ export async function processParserJobsOnce(
   const requests = entries.filter((name) => name.endsWith('.request.json') || name.endsWith('.processing.json')).sort();
   let processed = 0;
   for (const name of requests) {
+    if (processed >= (options.maxJobs ?? Number.POSITIVE_INFINITY)) break;
     const id = name.replace(/\.(?:request|processing)\.json$/, '');
     if (!/^[0-9a-f-]{36}$/.test(id)) continue;
     const processingPath = jobPath(jobDir, id, 'processing.json');

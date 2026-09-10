@@ -9,6 +9,7 @@ import {
 } from '@openscience/domain';
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
 import { RESEARCH_UNDERSTANDING_SKILL } from './skills/research-understanding.js';
+import { PAPER_ANALYSIS_SKILL } from './skills/paper-analysis.js';
 
 /** 六字段 core 结构（§5.1：schemaVersion + 6 字段，全部 string）。 */
 export interface ExtractedCore {
@@ -102,8 +103,8 @@ const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown): value
 
 const KEY_EVIDENCE = /limitations?|constraints?|uncertaint|data availability|code availability|reproduc|materials? and methods?|experimental setup|results?|discussion|局限|限制|不确定|数据可用|代码可用|复现|方法|结果/gi;
 const MAX_EXCERPT_CHARS = 24_000;
-const MAX_EVIDENCE_SEGMENTS = 32;
-const MAX_FIELD_EVIDENCE_CHARS = 8_000;
+const MAX_EVIDENCE_SEGMENTS = 64;
+const MAX_FIELD_EVIDENCE_CHARS = 24_000;
 const MAX_CANONICAL_CORE_CHARS = 4_000;
 const CHINESE_NARRATION = /[\u3400-\u9fff]/u;
 const BROKEN_SCIENTIFIC_NOTATION = /[⁺⁻](?![⁰¹²³⁴⁵⁶⁷⁸⁹])|\b\d+(?:\.\d+)?e[+-](?!\d)|10\^\{\s*\}/iu;
@@ -145,6 +146,87 @@ function focusedQuantitativeResultPassages(passages: readonly CanonicalPassage[]
   return passages.filter((passage) => selected.has(passage.id));
 }
 const CANONICAL_EXTRACTION_CONTRACT = 'grounded-passages-v2';
+
+interface ReadingMapResult {
+  summary: string;
+  sourcePassageIds: string[];
+}
+
+interface PaperReadingSynthesis {
+  overview: string;
+  fields: Record<(typeof SDF_CORE_FIELDS)[number], { summary: string; sourcePassageIds: string[] }>;
+}
+
+function readingMapGuard(allowedIds: ReadonlySet<string>): SchemaGuard<ReadingMapResult> {
+  return (value: unknown): value is ReadingMapResult => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const item = value as Record<string, unknown>;
+    return typeof item.summary === 'string' && item.summary.trim().length > 0 && item.summary.length <= 6_000
+      && Array.isArray(item.sourcePassageIds) && item.sourcePassageIds.length > 0 && item.sourcePassageIds.length <= 32
+      && item.sourcePassageIds.every((id) => typeof id === 'string' && allowedIds.has(id));
+  };
+}
+
+const paperSynthesisGuard: SchemaGuard<PaperReadingSynthesis> = (value): value is PaperReadingSynthesis => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  if (typeof item.overview !== 'string' || !item.overview.trim() || item.overview.length > 8_000
+    || !item.fields || typeof item.fields !== 'object' || Array.isArray(item.fields)) return false;
+  const fields = item.fields as Record<string, unknown>;
+  return SDF_CORE_FIELDS.every((field) => {
+    const candidate = fields[field];
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
+    const record = candidate as Record<string, unknown>;
+    return typeof record.summary === 'string' && record.summary.length <= 4_000
+      && Array.isArray(record.sourcePassageIds) && record.sourcePassageIds.length <= 32
+      && record.sourcePassageIds.every((id) => typeof id === 'string');
+  });
+};
+
+async function buildPaperReadingSynthesis(gateway: AiGateway, passages: readonly CanonicalPassage[]): Promise<PaperReadingSynthesis | undefined> {
+  const windows: CanonicalPassage[][] = [];
+  let current: CanonicalPassage[] = [];
+  let currentChars = 0;
+  for (const passage of passages) {
+    if (current.length && currentChars + passage.text.length > 18_000) {
+      windows.push(current);
+      current = [];
+      currentChars = 0;
+    }
+    current.push(passage);
+    currentChars += passage.text.length;
+  }
+  if (current.length) windows.push(current);
+  if (windows.length < 2) return undefined;
+  const maps = new Array<ReadingMapResult>(windows.length);
+  let nextWindow = 0;
+  const worker = async () => {
+    while (nextWindow < windows.length) {
+      const index = nextWindow;
+      nextWindow += 1;
+      const window = windows[index]!;
+      maps[index] = await gateway.completeStructured(readingMapGuard(new Set(window.map((passage) => passage.id))), [
+        { role: 'system', content: `${PAPER_ANALYSIS_SKILL.instructions}\n你正在执行section-map。完整阅读本窗口，输出一个JSON对象：summary为中文阅读记录，sourcePassageIds为支撑这些观察的P编号。记录研究对象、条件、假设、方法、公式、结果、局限、图表关系及与其他章节的依赖；不能按六字段机械摘抄，不能猜测乱码。` },
+        { role: 'user', content: canonicalPassagePrompt(window) },
+      ], { temperature: 0.1, maxRetries: 1 });
+    }
+  };
+  try {
+    await Promise.all(Array.from({ length: Math.min(2, windows.length) }, () => worker()));
+    const knownIds = new Set(passages.map((passage) => passage.id));
+    const reduced = await gateway.completeStructured(paperSynthesisGuard, [
+      { role: 'system', content: `${PAPER_ANALYSIS_SKILL.instructions}\n你正在执行global-reduce。综合全部section-map阅读记录，重建论文完整研究逻辑并按六个SDF维度给出候选综合。输出严格JSON：overview字符串；fields包含problem/insight/method/results/limitations/reproducibility，每项只有summary和sourcePassageIds。不同算例不能混合，明确理论、模拟和实验身份；ID只能来自输入。` },
+      { role: 'user', content: JSON.stringify(maps) },
+    ], { temperature: 0.1, maxRetries: 1 });
+    for (const field of SDF_CORE_FIELDS) {
+      reduced.fields[field].sourcePassageIds = reduced.fields[field].sourcePassageIds.filter((id) => knownIds.has(id));
+    }
+    return reduced;
+  } catch (error) {
+    console.error('paper-analysis map/reduce unavailable; preserving canonical single-pass fallback', error instanceof Error ? error.message : String(error));
+    return undefined;
+  }
+}
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
 export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
@@ -671,8 +753,8 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
       const shape = Object.fromEntries(nextExpectedFields.map((field) => [field, {
         summary: '', sourcePassageIds: [], needsMoreInformation: true,
       }]));
-      const compactFeedback = `Repair only the failed canonical fields. Failure=${failure}.${rejected} Return exactly one JSON object shaped ${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: shape })}; fields must have exactly these keys: ${nextExpectedFields.join(',')}. Other fields already passed server validation and are retained. For each nonempty summary use needsMoreInformation=false and valid P labels. For source_text_limit_8000 or segment_count_1_to_32, remove nonessential claims first, then remove only passages no retained claim needs; never truncate source or leave a retained claim unsupported. Method may use dispersed key assumptions, steps and validation without every derivation. Reproducibility uses only directly disclosed parameters, materials, procedures, data/code availability and explicit access gaps. Expanded evidence must fit 32 segments and 8000 chars. If the smallest sufficient evidence cannot fit, return that field empty with needsMoreInformation=true; never call a capacity failure an author omission. Do not return quotes or commentary.`;
-      const fallbackFeedback = `Repair only failed fields (${failure}). Return exactly schemaVersion and fields with these keys: ${nextExpectedFields.join(',')}; each field has exactly summary, sourcePassageIds, needsMoreInformation. Keep the smallest sufficient valid P-label set within 32 segments/8000 chars, but never drop evidence for a retained claim or truncate source. If sufficient evidence cannot fit, return that field empty with needsMoreInformation=true. Other fields are already retained. No quotes or commentary.`;
+      const compactFeedback = `Repair only the failed canonical fields. Failure=${failure}.${rejected} Return exactly one JSON object shaped ${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: shape })}; fields must have exactly these keys: ${nextExpectedFields.join(',')}. Other fields already passed server validation and are retained. For each nonempty summary use needsMoreInformation=false and valid P labels. For capacity errors, remove redundant wording and passages no retained claim needs; never truncate a scientific condition or leave a retained claim unsupported. Method may use dispersed key assumptions, steps and validation without every derivation. Reproducibility uses only directly disclosed parameters, materials, procedures, data/code availability and explicit access gaps. Expanded evidence must fit ${MAX_EVIDENCE_SEGMENTS} segments and ${MAX_FIELD_EVIDENCE_CHARS} chars. If one response cannot contain sufficient evidence, preserve the candidate as an unresolved capacity issue; never call it an author omission. Do not return quotes or commentary.`;
+      const fallbackFeedback = `Repair only failed fields (${failure}). Return exactly schemaVersion and fields with these keys: ${nextExpectedFields.join(',')}; each field has exactly summary, sourcePassageIds, needsMoreInformation. Keep the smallest sufficient valid P-label set within ${MAX_EVIDENCE_SEGMENTS} segments/${MAX_FIELD_EVIDENCE_CHARS} chars, but never drop evidence for a retained claim or truncate a scientific condition. If one response cannot contain sufficient evidence, preserve the candidate as an unresolved capacity issue. Other fields are already retained. No quotes or commentary.`;
       expectedFields = nextExpectedFields;
       return compactFeedback.length <= 1_900 ? compactFeedback : fallbackFeedback;
     },
@@ -998,7 +1080,7 @@ function materializeCanonicalProposal(proposal: ExtractedProposal): ExtractionRe
       : { status: 'cross_block', origin: 'model_quote', matching: 'exact', reason: 'match-spans-blocks' };
   }
   return { core, evidence, needsMoreInformation, evidenceLocation, evidenceSegments,
-    understandingSkill: { id: RESEARCH_UNDERSTANDING_SKILL.id, version: RESEARCH_UNDERSTANDING_SKILL.version },
+    understandingSkill: { id: PAPER_ANALYSIS_SKILL.id, version: PAPER_ANALYSIS_SKILL.version },
     canonicalExtractionContract: CANONICAL_EXTRACTION_CONTRACT };
 }
 
@@ -1117,6 +1199,11 @@ export async function extractHandler(
       };
     }
   }
+  const synthesis = canonicalSourceMap && passages ? await buildPaperReadingSynthesis(gateway, passages) : undefined;
+  const reducedPassages = synthesis && passages
+    ? passages.filter((passage) => SDF_CORE_FIELDS.some((field) => synthesis.fields[field].sourcePassageIds.includes(passage.id)))
+    : undefined;
+  const analysisPassages = reducedPassages?.length ? reducedPassages : passages;
   const prompt = [
     { role: 'system' as const, content: [
       '你是Hermes科研阅读助手。综合给定全文理解论文，再用SDF六个展示维度 problem/insight/method/results/limitations/reproducibility 组织凝练内容；字段不对应固定章节或固定原文段落。',
@@ -1127,10 +1214,12 @@ export async function extractHandler(
       '方法或配置披露不等于独立复现完成；reproducibility 只能概括原文明示的材料、参数、步骤、数据或代码可用性及其缺口。若某个条款缺少直接证据，从 summary 删除该条款；若字段已无可支持内容，则按缺失字段返回 needsMoreInformation=true。',
       ...(passages ? [
         RESEARCH_UNDERSTANDING_SKILL.instructions,
+        PAPER_ANALYSIS_SKILL.instructions,
+        ...(synthesis ? [`section-map与global-reduce已完成。下面的综合记录用于保持全文逻辑，最终主张仍只能引用随附的原始P段：${JSON.stringify(synthesis)}`] : []),
         '只输出JSON：schemaVersion="0.1.0"，fields下六个字段必须且只能是 {"summary":string,"sourcePassageIds":string[],"needsMoreInformation":boolean}。不得返回引文、窗口ID或来源正文。',
         `完整输出结构如下（这是空结构，不是论文结论；必须用原文支持的摘要与实际P编号填充）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: '', sourcePassageIds: [], needsMoreInformation: true }])) })}`,
         'sourcePassageIds必须是字符串数组，例如["P00001"]，不能填页码、对象或区间字符串。JSON字符串中的反斜杠必须转义；摘要优先使用普通文字与Unicode数学符号，避免输出不合法的LaTeX转义。',
-        `每字段凝练成中文摘要，通常120–300字，方法可用简洁步骤；优先解释研究逻辑，不逐式重抄推导。同一来源可以支撑不同展示维度，但各维度概括的语义应不同。先完成全文综合，再为每个非空摘要选择通常1–${USUAL_SOURCE_PASSAGE_IDS}个关键sourcePassageIds作为最小充分集合；只有确有必要时才能增加，但不得超过${MAX_SOURCE_PASSAGE_IDS}个硬上限。ID只能来自下方标签，服务端回读原始SourceMap，模型不要复制或改写证据。`,
+        `每字段凝练成中文摘要，通常120–300字，方法可用简洁步骤；优先解释研究逻辑，不逐式重抄推导。同一来源可以支撑不同展示维度，但各维度概括的语义应不同。先完成全文综合，再为每个非空摘要选择通常1–${USUAL_SOURCE_PASSAGE_IDS}个关键sourcePassageIds作为最小充分集合；确有必要时可增加，容量不足应保留待续读状态，不能把容量失败改写成论文缺失。ID只能来自下方标签，服务端回读原始SourceMap，模型不要复制或改写证据。`,
         `摘要最多${MAX_CANONICAL_CORE_CHARS}字符；来源展开后合计最多${MAX_FIELD_EVIDENCE_CHARS}字符、${MAX_EVIDENCE_SEGMENTS}个精确来源段。每个passage最多5个原始块、1200字符，标签给出实际blocks和chars预算。方法用分布于全文的关键passage证明主要假设、研究步骤和验证，不需要引用每段中间推导；reproducibility只选择直接披露参数、材料、步骤、数据或代码可用性及明确缺口的passage，不要附上整条方法链。同一原始块内重叠或相邻的选段会合并，彼此分隔的选段保留为独立来源段并分别计入限额。`,
         '选择能完整支持主语、条件、否定、数字和单位的最少passage。不要为了符合限额扩大或改写结论。若无充分证据，summary="",sourcePassageIds=[],needsMoreInformation=true；缺失字段里的解释会被服务端丢弃，不影响其他有证据字段。无法辨认的公式不要猜写。',
       ] : [
@@ -1139,7 +1228,7 @@ export async function extractHandler(
         '若材料不足，summary 与 sourceQuote 置空，needsMoreInformation=true；尤其不得把作者未声明的局限或复现条件补写出来。',
       ]),
     ].join(' ') },
-    { role: 'user' as const, content: passages ? canonicalPassagePrompt(passages) : selectManuscriptEvidence(manuscriptText) },
+    { role: 'user' as const, content: analysisPassages ? canonicalPassagePrompt(analysisPassages) : selectManuscriptEvidence(manuscriptText) },
   ];
   if (canonicalSourceMap && passages) {
     const validation = canonicalProposalValidation(canonicalSourceMap, passages);

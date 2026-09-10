@@ -537,7 +537,7 @@ export function serializeParserJobResponseV2(value: unknown): string {
 export function deserializeParserJobResponseV2(
   serialized: string | Buffer,
   expectedRequest: ParserJobRequestV2,
-  expectedParser?: DocumentParserMetadata,
+  expectedParser?: DocumentParserMetadata | readonly DocumentParserMetadata[],
 ): ParserJobResponseV2 {
   const byteLength = typeof serialized === 'string' ? Buffer.byteLength(serialized) : serialized.byteLength;
   if (byteLength > PARSER_JOB_RESPONSE_MAX_BYTES) fail(SafeParserErrorCode.RESPONSE_TOO_LARGE, 'response exceeds byte ceiling');
@@ -554,11 +554,12 @@ export function deserializeParserJobResponseV2(
   if (response.ok && ((expectedRequest.operation === 'render_page') !== ('kind' in response.result && response.result.kind === 'raster'))) {
     fail(SafeParserErrorCode.INVALID_RESPONSE, 'response result kind does not match operation');
   }
-  if (response.ok && expectedParser && (
-    response.result.parser.name !== expectedParser.name
-    || response.result.parser.version !== expectedParser.version
-    || response.result.parser.modelHash !== expectedParser.modelHash
-  )) {
+  const allowedParsers = expectedParser ? (Array.isArray(expectedParser) ? expectedParser : [expectedParser]) : undefined;
+  if (response.ok && allowedParsers && !allowedParsers.some((candidate) => (
+    response.result.parser.name === candidate.name
+    && response.result.parser.version === candidate.version
+    && response.result.parser.modelHash === candidate.modelHash
+  ))) {
     fail(SafeParserErrorCode.METADATA_MISMATCH, 'response parser metadata does not match selected parser');
   }
   return response;

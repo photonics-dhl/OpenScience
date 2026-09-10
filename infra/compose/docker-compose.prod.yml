@@ -192,6 +192,7 @@ services:
       SCANSCI_ENABLED: "true"
       SCANSCI_MCP_URL: http://scansci-mcp:8000/mcp
       SCANSCI_PAPERS_DIR: /data/papers
+      AGENT_WORKER_CONCURRENCY: "4"
     depends_on:
       postgres:
         condition: service_healthy
@@ -267,8 +268,38 @@ services:
       - retrieval_net
     restart: unless-stopped
 
+  paper-analysis:
+    # CPU-only Docling service. It has no production secrets, host port or route to app/data networks.
+    image: ghcr.io/docling-project/docling-serve-cpu:v1.30.0@sha256:061d35c03611bc15b73d024c8e8387bcf0624279f8b57c16c1567326f214ba56
+    environment:
+      DOCLING_SERVE_ENG_KIND: local
+      DOCLING_SERVE_ENG_LOC_NUM_WORKERS: "2"
+      DOCLING_NUM_THREADS: "3"
+      OMP_NUM_THREADS: "3"
+      DOCLING_SERVE_MAX_SYNC_WAIT: "900"
+      DOCLING_SERVE_ENABLE_UI: "false"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2g,nosuid,nodev
+    mem_limit: 8g
+    cpus: 6
+    pids_limit: 512
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5001/health',timeout=3).status == 200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 30
+      start_period: 300s
+    networks:
+      - parser_net
+    restart: unless-stopped
+
   document-parser:
-    # Hostile binary parsing is isolated from production secrets and all networks.
+    # Hostile binary parsing can reach only the secretless Docling service on an internal network.
     build:
       context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
       dockerfile: apps/agent-worker/Dockerfile.parser
@@ -287,7 +318,12 @@ services:
       NODE_ENV: production
       PARSER_JOB_DIR: /parser-jobs
       TESSERACT_LANGS: eng+chi_sim
-    network_mode: none
+      DOCLING_SERVE_URL: http://paper-analysis:5001
+      DOCLING_FORMULA_ENRICHMENT: "false"
+      PARSER_WORKER_CONCURRENCY: "2"
+    depends_on:
+      paper-analysis:
+        condition: service_healthy
     user: node
     read_only: true
     tmpfs:
@@ -299,6 +335,8 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    networks:
+      - parser_net
     healthcheck:
       test: ["CMD-SHELL", "find /parser-jobs/.ready -mmin -1 -print -quit 2>/dev/null | grep -q ."]
       interval: 10s
@@ -409,7 +447,10 @@ networks:
     ipam:
       config:
         - subnet: 172.24.0.0/24
-          gateway: 172.24.0.1
+        gateway: 172.24.0.1
+  parser_net:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres-data:

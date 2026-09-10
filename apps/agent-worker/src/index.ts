@@ -431,11 +431,17 @@ export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> 
  * P1D-2/3 agent-worker 消费者（§14.1 + §9.3 长任务异步 + §16 幂等）：
  * 轮询 Redis 队列 → handler 执行 → markTaskProgress（状态机前进，succeeded 后重放 skip）。
  */
-export async function createPollOnce(handlers: Record<string, TaskHandler>): Promise<(deps: WorkerDeps) => Promise<boolean>> {
-  const reconcileRuns = createResearchRunReconcileScheduler();
+export async function createPollOnce(
+  handlers: Record<string, TaskHandler>,
+  options: { runMaintenance?: boolean } = {},
+): Promise<(deps: WorkerDeps) => Promise<boolean>> {
+  const runMaintenance = options.runMaintenance ?? true;
+  const reconcileRuns = runMaintenance ? createResearchRunReconcileScheduler() : undefined;
   return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
-    await reconcileRuns(deps);
-    await recoverUndispatchedAgentTasks(deps);
+    if (reconcileRuns) {
+      await reconcileRuns(deps);
+      await recoverUndispatchedAgentTasks(deps);
+    }
     // BRPOPLPUSH：原子弹出 → 处理中队列（崩溃恢复用）
     const taskId = await deps.redis.brpoplpush(AGENT_TASK_QUEUE, AGENT_TASK_PROCESSING_QUEUE, 1);
     if (!taskId) return false;
@@ -531,7 +537,7 @@ async function main(): Promise<void> {
     createPrismaAuditSink(prisma),
     externalProcessingPolicy,
   );
-  const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata);
+  const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata, 16 * 60_000);
   const rasterJobAdapter = createParserRasterJobClient(parserJobDir, expectedSidecarParserMetadata);
   const parserCascade = createWorkerParserCascade(
     gateway, parserJobAdapter, rasterJobAdapter,
@@ -550,7 +556,12 @@ async function main(): Promise<void> {
         }),
       } : {}),
   });
-  const pollOnce = await createPollOnce(handlers);
+  const configuredConcurrency = Number.parseInt(process.env.AGENT_WORKER_CONCURRENCY ?? '4', 10);
+  const workerConcurrency = Number.isFinite(configuredConcurrency)
+    ? Math.min(8, Math.max(1, configuredConcurrency)) : 4;
+  const pollers = await Promise.all(Array.from({ length: workerConcurrency }, (_, index) => (
+    createPollOnce(handlers, { runMaintenance: index === 0 })
+  )));
   await recoverProcessingQueue(deps);
   let cleanupRunning = false;
   const cleanupTimer = setInterval(() => {
@@ -565,15 +576,17 @@ async function main(): Promise<void> {
   }, 60_000);
   cleanupTimer.unref();
   await collectExpiredTemporaryDocuments({ prisma, storage }, { workerId: `agent-worker-${process.pid}` });
-  console.log('agent-worker 启动（P1D-2/3）');
-  while (true) {
-    try {
-      await pollOnce(deps);
-    } catch (e) {
-      console.error('poll error', e);
-      await sleep(2000);
+  console.log(`agent-worker 启动（P1D-2/3, concurrency=${workerConcurrency}）`);
+  await Promise.all(pollers.map(async (pollOnce, index) => {
+    while (true) {
+      try {
+        await pollOnce(deps);
+      } catch (e) {
+        console.error(`poll error lane=${index}`, e);
+        await sleep(2000);
+      }
     }
-  }
+  }));
 }
 
 /** 从 env 构造 Gateway（AI_ENABLED=false 或缺密钥 → 占位 gateway，sdf.extract 会失败；§24 待确认）。 */

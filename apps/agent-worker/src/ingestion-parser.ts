@@ -21,6 +21,126 @@ export interface IngestionAdapters {
   xlsx?: (content: Buffer) => Promise<ParserStageResult>;
 }
 
+type DoclingRecord = Record<string, unknown>;
+
+function record(value: unknown): DoclingRecord | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as DoclingRecord : undefined;
+}
+
+function doclingPageSize(document: DoclingRecord, pageNumber: number): { width: number; height: number } {
+  const pages = record(document.pages);
+  const page = record(pages?.[String(pageNumber)] ?? (Array.isArray(document.pages) ? document.pages[pageNumber - 1] : undefined));
+  const size = record(page?.size);
+  const width = typeof size?.width === 'number' && size.width > 0 ? size.width : 612;
+  const height = typeof size?.height === 'number' && size.height > 0 ? size.height : 792;
+  return { width, height };
+}
+
+function doclingBoundingBox(value: unknown, page: { width: number; height: number }) {
+  const bbox = record(value);
+  const values = Array.isArray(value) && value.length === 4 ? value : undefined;
+  const left = typeof bbox?.l === 'number' ? bbox.l : typeof values?.[0] === 'number' ? values[0] : 0;
+  const top = typeof bbox?.t === 'number' ? bbox.t : typeof values?.[1] === 'number' ? values[1] : page.height;
+  const right = typeof bbox?.r === 'number' ? bbox.r : typeof values?.[2] === 'number' ? values[2] : page.width;
+  const bottom = typeof bbox?.b === 'number' ? bbox.b : typeof values?.[3] === 'number' ? values[3] : 0;
+  const origin = typeof bbox?.coord_origin === 'string' ? bbox.coord_origin : 'BOTTOMLEFT';
+  const x = Math.max(0, Math.min(page.width - 0.001, Math.min(left, right)));
+  const width = Math.max(0.001, Math.min(page.width - x, Math.abs(right - left)));
+  const rawY = origin === 'TOPLEFT' ? Math.min(top, bottom) : page.height - Math.max(top, bottom);
+  const y = Math.max(0, Math.min(page.height - 0.001, rawY));
+  const height = Math.max(0.001, Math.min(page.height - y, Math.abs(top - bottom)));
+  return { x, y, width, height };
+}
+
+function doclingKind(label: unknown): 'heading' | 'paragraph' | 'equation' | 'caption' | 'reference' {
+  if (label === 'title' || label === 'section_header') return 'heading';
+  if (label === 'formula') return 'equation';
+  if (label === 'caption') return 'caption';
+  if (label === 'reference') return 'reference';
+  return 'paragraph';
+}
+
+function doclingResult(payload: unknown): ParserStageResult {
+  const response = record(payload);
+  const documentResponse = record(response?.document);
+  const document = record(documentResponse?.json_content);
+  if (!response || !documentResponse || !document || !['success', 'partial_success'].includes(String(response.status))) {
+    throw new Error('Docling returned no usable document');
+  }
+  const byPage = new Map<number, StagePage['blocks']>();
+  const append = (itemValue: unknown, forcedKind?: 'table' | 'figure') => {
+    const item = record(itemValue);
+    const provenance = Array.isArray(item?.prov) ? item.prov : [];
+    const text = typeof item?.text === 'string' && item.text.trim() ? item.text.trim()
+      : typeof item?.orig === 'string' && item.orig.trim() ? item.orig.trim() : undefined;
+    for (const provenanceValue of provenance) {
+      const prov = record(provenanceValue);
+      const pageNumber = typeof prov?.page_no === 'number' && Number.isInteger(prov.page_no) && prov.page_no > 0 ? prov.page_no : 1;
+      const page = doclingPageSize(document, pageNumber);
+      const kind = forcedKind ?? doclingKind(item?.label);
+      const block = { kind, ...(text ? { text } : {}), boundingBox: doclingBoundingBox(prov?.bbox, page) };
+      byPage.set(pageNumber, [...(byPage.get(pageNumber) ?? []), block]);
+    }
+  };
+  for (const item of Array.isArray(document.texts) ? document.texts : []) append(item);
+  for (const item of Array.isArray(document.tables) ? document.tables : []) append(item, 'table');
+  for (const item of Array.isArray(document.pictures) ? document.pictures : []) append(item, 'figure');
+  if (byPage.size === 0 && typeof documentResponse.text_content === 'string' && documentResponse.text_content.trim()) {
+    byPage.set(1, [{ kind: 'paragraph', text: documentResponse.text_content.trim(), boundingBox: { x: 0, y: 0, width: 612, height: 792 } }]);
+  }
+  if (byPage.size === 0) throw new Error('Docling produced no source-located content');
+  const pages = [...byPage.entries()].sort(([left], [right]) => left - right).map(([pageNumber, blocks]) => {
+    const size = doclingPageSize(document, pageNumber);
+    return { page: pageNumber, ...size, blocks };
+  });
+  return parseParserStageResult({
+    schemaVersion: 2,
+    parser: { name: 'docling-serve-cpu', version: '1.30.0' },
+    pages,
+    warnings: response.status === 'partial_success' ? ['partial_result'] : [],
+  });
+}
+
+async function runDoclingPdf(content: Buffer, serviceUrl: string): Promise<ParserStageResult> {
+  const form = new FormData();
+  form.append('files', new Blob([content], { type: 'application/pdf' }), 'document.pdf');
+  form.append('from_formats', 'pdf');
+  form.append('to_formats', 'json');
+  form.append('to_formats', 'text');
+  form.append('image_export_mode', 'placeholder');
+  form.append('pdf_backend', 'dlparse_v2');
+  form.append('do_ocr', 'true');
+  form.append('force_ocr', 'false');
+  form.append('do_table_structure', 'true');
+  form.append('do_formula_enrichment', process.env.DOCLING_FORMULA_ENRICHMENT === 'true' ? 'true' : 'false');
+  form.append('abort_on_error', 'false');
+  const baseUrl = serviceUrl.replace(/\/$/u, '');
+  const submission = await fetch(`${baseUrl}/v1/convert/file/async`, {
+    method: 'POST', body: form, signal: AbortSignal.timeout(60_000),
+  });
+  if (!submission.ok) throw new Error(`Docling submission failed: ${submission.status}`);
+  const task = record(await submission.json());
+  if (typeof task?.task_id !== 'string' || !task.task_id) throw new Error('Docling returned no task id');
+  const deadline = Date.now() + 15 * 60_000;
+  while (Date.now() < deadline) {
+    const statusResponse = await fetch(`${baseUrl}/v1/status/poll/${encodeURIComponent(task.task_id)}`, {
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!statusResponse.ok) throw new Error(`Docling status failed: ${statusResponse.status}`);
+    const status = record(await statusResponse.json());
+    if (status?.task_status === 'failure') throw new Error('Docling task failed');
+    if (status?.task_status === 'success') {
+      const result = await fetch(`${baseUrl}/v1/result/${encodeURIComponent(task.task_id)}`, {
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!result.ok) throw new Error(`Docling result failed: ${result.status}`);
+      return doclingResult(await result.json());
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error('Docling task timed out');
+}
+
 export type LegacyIngestionAdapters = Omit<IngestionAdapters, 'pdf'> & {
   pdf?: (content: Buffer) => Promise<string | ParserStageResult>;
 };
@@ -900,8 +1020,18 @@ async function runStructuredXlsxStageChild(): Promise<void> {
 }
 
 export function createDefaultIngestionAdapters(): IngestionAdapters {
+  const doclingUrl = process.env.DOCLING_SERVE_URL?.trim();
   return {
-    pdf: (content) => parseStructuredStageIsolated('pdf', content),
+    pdf: async (content) => {
+      if (doclingUrl) {
+        try {
+          return await runDoclingPdf(content, doclingUrl);
+        } catch (error) {
+          console.error('advanced PDF parser failed; using native fallback', error instanceof Error ? error.message : String(error));
+        }
+      }
+      return parseStructuredStageIsolated('pdf', content);
+    },
     docx: (content) => parseBinaryIsolated('docx', content),
     image: runTesseractOcr,
     xlsx: (content) => parseStructuredStageIsolated('xlsx', content),
