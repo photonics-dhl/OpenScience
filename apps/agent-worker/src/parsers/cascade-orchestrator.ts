@@ -165,22 +165,7 @@ function mergeDeterministicMaps(
     if (!page) {
       page = { page: incomingPage.page, width: incomingPage.width, height: incomingPage.height, blocks: [] };
       pages.push(page);
-    } else if (page.width !== incomingPage.width || page.height !== incomingPage.height) {
-      const baseAspectRatio = page.width / page.height;
-      const incomingAspectRatio = incomingPage.width / incomingPage.height;
-      if (Math.abs(baseAspectRatio - incomingAspectRatio) / baseAspectRatio > 0.01) return undefined;
-      const scaleX = page.width / incomingPage.width;
-      const scaleY = page.height / incomingPage.height;
-      incomingBlocks = incomingPage.blocks.map((block) => ({
-        ...block,
-        boundingBox: {
-          x: block.boundingBox.x * scaleX,
-          y: block.boundingBox.y * scaleY,
-          width: block.boundingBox.width * scaleX,
-          height: block.boundingBox.height * scaleY,
-        },
-      }));
-    }
+    } else if (page.width !== incomingPage.width || page.height !== incomingPage.height) return undefined;
     for (const incomingBlock of incomingBlocks) {
       const matching = matchingBlock(page.blocks, incomingBlock);
       if (matching) {

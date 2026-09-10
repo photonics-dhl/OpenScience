@@ -6,6 +6,7 @@ import {
   MiniMaxImageProvider,
   CodexSpoolImageProvider,
   ChatGptWebSpoolImageProvider,
+  ChatGptWebScienceReviewProvider,
   MutableProviderKillSwitch,
   OpenAiCompatProvider,
   type ExternalProcessingPolicy,
@@ -279,7 +280,7 @@ export function createHandlers(
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
       let reusableSourceMap: DocumentSourceMap | undefined;
       let reusableExtractionResult: Record<string, unknown> | undefined;
-      const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
+      const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v3|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
       if (refresh) {
         const ingestion = await deps.prisma.ingestionTask.findUnique({ where: { id: refresh[1]! } });
         const previous = await deps.prisma.agentTask.findUnique({ where: { id: refresh[2]! }, include: { session: true } });
@@ -287,7 +288,7 @@ export function createHandlers(
         if (!serverDerivedEligibility || !externalProcessingEligible || ingestion?.agentTaskId !== ownerTask.id
           || ingestion.artifactId !== artifact.id || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
           || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
-          || previousResult?.canonicalExtractionContract !== (refresh[3] === 'user-requested-reanalysis' ? 'grounded-passages-v2' : refresh[3] === 'grounded-passages-v2' ? 'grounded-passages-v1' : 'grounded-summary-v1')) {
+          || previousResult?.canonicalExtractionContract !== (['scientific-review-v3', 'user-requested-reanalysis'].includes(refresh[3]!) ? 'grounded-passages-v2' : refresh[3] === 'grounded-passages-v2' ? 'grounded-passages-v1' : 'grounded-summary-v1')) {
           throw new Error('[blocked] Reusable document analysis scope is invalid');
         }
         const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
@@ -360,6 +361,7 @@ export function createHandlers(
         ...await extractHandler(gateway, { payload: { manuscriptText } }, {
           sourceMap: parsed.sourceMap,
           previousResult: reusableExtractionResult,
+          scientificReview: { requestId: ownerTask.id, authorizationContext: trustedAuthorizationContext },
         }),
         ...(reusableSourceMap ? { sourceMapReused: true } : {}),
         sourceMapRef,
@@ -646,6 +648,13 @@ export function buildGateway(
         maxPageBytes: optionalBoundedInteger(env.MINIMAX_VISION_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'MINIMAX_VISION_MAX_PAGE_BYTES'),
       }, fetcher)]
     : [];
+  const scientificReviewProvider = env.AI_ENABLED === 'true' && env.CHATGPT_WEB_SCIENCE_REVIEW_ENABLED === 'true'
+    && env.CHATGPT_WEB_REVIEW_INBOX_DIR?.trim() && env.CHATGPT_WEB_REVIEW_RESULTS_DIR?.trim()
+    ? new ChatGptWebScienceReviewProvider({
+        inboxDir: env.CHATGPT_WEB_REVIEW_INBOX_DIR.trim(),
+        resultsDir: env.CHATGPT_WEB_REVIEW_RESULTS_DIR.trim(),
+      })
+    : undefined;
   const staticallyDisabled = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
   const killSwitch: ProviderCapabilityPolicy = {
     async isEnabled(provider, capability) {
@@ -662,6 +671,7 @@ export function buildGateway(
     providers,
     ocrProviders,
     imageProviders,
+    scientificReviewProvider,
     audit,
     logger: console,
     killSwitch,

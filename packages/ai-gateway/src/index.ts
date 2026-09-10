@@ -21,6 +21,22 @@ export {
   type MiniMaxVisionConfig,
   type MiniMaxVisionPricing,
 } from './provider';
+export { ChatGptWebScienceReviewProvider, type ChatGptWebScienceReviewConfig } from './science-review';
+export {
+  SCIENCE_REVIEW_MAX_DEADLINE_MS,
+  SCIENCE_REVIEW_MAX_JSON_BYTES,
+  SCIENCE_REVIEW_MAX_PROMPT_CHARS,
+  SCIENCE_REVIEW_MAX_RESPONSE_BYTES,
+  SCIENCE_REVIEW_READY_MAX_AGE_MS,
+  validateScienceReviewRequest,
+  validateScienceReviewResult,
+  type ScienceReviewInput,
+  type ScienceReviewProvider,
+  type ScienceReviewProviderResult,
+  type ScienceReviewRequest,
+  type ScienceReviewResultRecord,
+  type ScienceReviewSource,
+} from './science-review-protocol';
 export {
   DEFAULT_OCR_LIMITS,
   MutableProviderKillSwitch,

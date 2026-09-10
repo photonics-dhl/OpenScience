@@ -83,7 +83,8 @@ const CANONICAL_DIAGNOSTICS = new Set([
   'source_text_limit_8000', 'core_text_limit_4000', 'noncontiguous_block_passages',
 ]);
 type AnalysisRefreshPolicy = 'legacy_character_evidence_v1' | 'native_pdf_fragmentation_v1'
-  | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1' | 'grounded_summary_v1' | 'grounded_passages_v1' | 'grounded_passages_v2' | 'user_requested_reanalysis';
+  | 'canonical_window_contract_v1' | 'canonical_exact_quote_v1' | 'grounded_summary_v1' | 'grounded_passages_v1' | 'grounded_passages_v2'
+  | 'scientific_review_v3' | 'user_requested_reanalysis';
 
 function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
   if (isLegacyCharacterEvidenceResult(value)) return 'legacy_character_evidence_v1';
@@ -96,7 +97,12 @@ function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha25
     try {
       const reference = parseDocumentSourceMapReference(result.sourceMapRef);
       if (reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
-        && reference.contentHash === artifact.blobSha256) return 'user_requested_reanalysis';
+        && reference.contentHash === artifact.blobSha256) {
+        const review = result.scientificReview;
+        const reviewed = review && typeof review === 'object' && !Array.isArray(review)
+          && (review as Record<string, unknown>).status === 'review_received';
+        return reviewed ? 'user_requested_reanalysis' : 'scientific_review_v3';
+      }
     } catch { return undefined; }
   }
   if (result.canonicalExtractionContract === 'grounded-passages-v1'
@@ -512,7 +518,7 @@ export async function refreshIngestionAnalysis(
   }
   const keyPrefix = `ingestion-analysis-refresh:${input.taskId}:${input.sourceAgentTaskId}:`;
   const replay = await deps.prisma.agentTask.findFirst({
-    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`, `${keyPrefix}grounded-summary-v1`, `${keyPrefix}grounded-passages-v1`, `${keyPrefix}grounded-passages-v2`, `${keyPrefix}user-requested-reanalysis`] } },
+    where: { idempotencyKey: { in: [`${keyPrefix}legacy-character-evidence-v1`, `${keyPrefix}native-pdf-fragmentation-v1`, `${keyPrefix}canonical-window-contract-v1`, `${keyPrefix}canonical-exact-quote-v1`, `${keyPrefix}grounded-summary-v1`, `${keyPrefix}grounded-passages-v1`, `${keyPrefix}grounded-passages-v2`, `${keyPrefix}scientific-review-v3`, `${keyPrefix}user-requested-reanalysis`] } },
     include: { session: true },
   });
   if (replay) {
@@ -545,7 +551,7 @@ export async function refreshIngestionAnalysis(
   if (policy !== 'legacy_character_evidence_v1') {
     const reference = parseDocumentSourceMapReference((oldAgent!.result as Record<string, unknown>).sourceMapRef);
     const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
-    const affected = policy === 'user_requested_reanalysis' || policy === 'grounded_summary_v1' || policy === 'grounded_passages_v1' || policy === 'grounded_passages_v2' ? true : policy === 'native_pdf_fragmentation_v1'
+    const affected = policy === 'scientific_review_v3' || policy === 'user_requested_reanalysis' || policy === 'grounded_summary_v1' || policy === 'grounded_passages_v1' || policy === 'grounded_passages_v2' ? true : policy === 'native_pdf_fragmentation_v1'
       ? isOldFragmentedNativePdfMap(sourceMap)
       : isLineRunNativePdfMap(sourceMap);
     if (!affected) {

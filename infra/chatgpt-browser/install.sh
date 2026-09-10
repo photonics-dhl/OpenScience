@@ -10,11 +10,15 @@ if [[ ${1:-} == --confirm-provider ]]; then
   docker container inspect openscience-chatgpt-browser >/dev/null
   docker image inspect "$renderer_image" >/dev/null
   root=/opt/openscience-chatgpt-browser; bundle="$root/releases/$release_sha"
-  for target in "$root" "$root/jobs" "$root/spool" "$root/spool/inbox" "$root/spool/results" "$root/private" "$root/releases"; do [[ ! -L $target ]] || exit 67; done
-  install -d -m 0755 "$root/spool" "$root/releases"
+  for target in "$root" "$root/jobs" "$root/spool" "$root/spool/inbox" "$root/spool/results" "$root/private" "$root/review-spool" "$root/review-spool/inbox" "$root/review-spool/results" "$root/review-private" "$root/releases"; do [[ ! -L $target ]] || exit 67; done
+  install -d -m 0755 "$root/spool" "$root/review-spool" "$root/releases"
   install -d -o 1000 -g 1000 -m 0700 "$root/spool/inbox"
   install -d -o root -g 1000 -m 2750 "$root/spool/results"
   install -d -o root -g root -m 0700 "$root/private"
+  install -d -o 1000 -g 1000 -m 0700 "$root/review-spool/inbox"
+  install -d -o root -g 1000 -m 2750 "$root/review-spool/results"
+  install -d -o root -g root -m 0700 "$root/review-private"
+  install -d -o 11040 -g 11040 -m 0700 "$root/jobs/review"
   [[ $(stat -c '%u %g %a' "$root/jobs") == '11040 11040 700' ]] || exit 68
   if [[ -e "$root/jobs/runner.lock" ]]; then
     [[ -f "$root/jobs/runner.lock" && ! -L "$root/jobs/runner.lock" ]] || exit 68
@@ -25,17 +29,23 @@ if [[ ${1:-} == --confirm-provider ]]; then
   flock -n 9 || { echo 'Browser operator is active; provider install did not change it'; exit 71; }
   [[ ! -e $bundle ]] || { echo 'Web image bundle already exists; inspect before reuse'; exit 69; }
   install -d -m 0755 "$bundle/infra/chatgpt-browser" "$bundle/infra/codex-image-runner" "$bundle/packages/ai-gateway/dist"
-  install -m 0444 "$source_release/infra/chatgpt-browser/broker.mjs" "$source_release/infra/chatgpt-browser/runner.cjs" "$bundle/infra/chatgpt-browser/"
+  install -m 0444 "$source_release/infra/chatgpt-browser/broker.mjs" "$source_release/infra/chatgpt-browser/runner.cjs" "$source_release/infra/chatgpt-browser/review-broker.mjs" "$source_release/infra/chatgpt-browser/review-runner.cjs" "$bundle/infra/chatgpt-browser/"
   install -m 0444 "$source_release/infra/codex-image-runner/core.mjs" "$bundle/infra/codex-image-runner/core.mjs"
   find "$source_release/packages/ai-gateway/dist" -maxdepth 1 -type f -name '*.js' -exec install -m 0444 -t "$bundle/packages/ai-gateway/dist" {} +
   install -d -o root -g 11040 -m 0750 "$root/jobs/provider"
   install -o root -g 11040 -m 0440 "$source_release/infra/chatgpt-browser/runner.cjs" "$root/jobs/provider/runner.cjs"
+  install -o root -g 11040 -m 0440 "$source_release/infra/chatgpt-browser/review-runner.cjs" "$root/jobs/provider/review-runner.cjs"
   config="$root/config-$release_sha.json"
   printf '{"inbox":"%s/spool/inbox","results":"%s/spool/results","privateRoot":"%s/private","jobs":"%s/jobs","browserContainer":"openscience-chatgpt-browser","rendererImage":"%s"}\n' "$root" "$root" "$root" "$root" "$renderer_image" > "$config"
   chmod 0600 "$config"
+  review_config="$root/review-config-$release_sha.json"
+  printf '{"inbox":"%s/review-spool/inbox","results":"%s/review-spool/results","privateRoot":"%s/review-private","jobs":"%s/jobs","browserContainer":"openscience-chatgpt-browser"}\n' "$root" "$root" "$root" "$root" > "$review_config"
+  chmod 0600 "$review_config"
   service=/etc/systemd/system/openscience-chatgpt-web-image.service
   timer=/etc/systemd/system/openscience-chatgpt-web-image.timer
-  [[ ! -L $service && ! -L $timer ]] || exit 70
+  review_service=/etc/systemd/system/openscience-chatgpt-web-science-review.service
+  review_timer=/etc/systemd/system/openscience-chatgpt-web-science-review.timer
+  [[ ! -L $service && ! -L $timer && ! -L $review_service && ! -L $review_timer ]] || exit 70
   cat > "$service" <<EOF
 [Unit]
 Description=OpenScience ChatGPT web image spool broker
@@ -64,9 +74,38 @@ Unit=openscience-chatgpt-web-image.service
 [Install]
 WantedBy=timers.target
 EOF
-  chmod 0644 "$service" "$timer"
+  cat > "$review_service" <<EOF
+[Unit]
+Description=OpenScience ChatGPT web scientific review spool broker
+After=docker.service openscience-chatgpt-browser-bridge.service
+Requires=docker.service openscience-chatgpt-browser-bridge.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock -n $root/jobs/runner.lock /usr/bin/node $bundle/infra/chatgpt-browser/review-broker.mjs --config $review_config
+TimeoutStartSec=660
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=$root
+InaccessiblePaths=$root/profile $root/downloads $root/egress $root/control
+UMask=0027
+EOF
+  cat > "$review_timer" <<EOF
+[Unit]
+Description=Poll OpenScience ChatGPT web scientific review spool
+[Timer]
+OnBootSec=8
+OnUnitActiveSec=15
+AccuracySec=1
+Unit=openscience-chatgpt-web-science-review.service
+[Install]
+WantedBy=timers.target
+EOF
+  chmod 0644 "$service" "$timer" "$review_service" "$review_timer"
   systemctl daemon-reload
   systemctl enable --now openscience-chatgpt-web-image.timer
+  systemctl enable --now openscience-chatgpt-web-science-review.timer
   echo "CHATGPT_WEB_IMAGE_PROVIDER_INSTALLED source=$release_sha"
   exit 0
 fi

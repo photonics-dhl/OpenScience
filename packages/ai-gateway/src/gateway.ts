@@ -22,10 +22,11 @@ import {
   type ProviderCapabilityPolicy,
 } from './ocr';
 import { TextProviderError, type ChatMessage, type Provider, type ProviderResult } from './provider';
+import type { ScienceReviewInput, ScienceReviewProvider, ScienceReviewProviderResult } from './science-review-protocol';
 
 /** 调用日志（§9.3 + §17 脱敏：只记元数据，绝不记 prompt/附件/密钥）。 */
 export interface GatewayCallLog {
-  operation: 'text' | 'ocr' | 'image';
+  operation: 'text' | 'ocr' | 'image' | 'scientific_review';
   provider: string;
   model: string;
   inputTokens: number | null;
@@ -58,6 +59,7 @@ export interface AiGatewayOptions {
   /** Dedicated vision/OCR provider pool; text providers never receive images. */
   ocrProviders?: OcrProvider[];
   imageProviders?: ImageProvider[];
+  scientificReviewProvider?: ScienceReviewProvider;
   /** 缺省：第一条为 primary。 */
   primaryIndex?: number;
   /** §17 审计：调用日志落 AuditSink（action='ai.gateway.call'）；缺省 no-op。 */
@@ -94,6 +96,7 @@ export class AiGateway {
   private readonly providers: Provider[];
   private readonly ocrProviders: OcrProvider[];
   private readonly imageProviders: ImageProvider[];
+  private readonly scientificReviewProvider?: ScienceReviewProvider;
   private readonly primaryIndex: number;
   private readonly audit?: AuditSink;
   private readonly logger?: Pick<Console, 'info' | 'warn' | 'error'>;
@@ -108,7 +111,9 @@ export class AiGateway {
     assertProviderPool(opts.providers, 'text');
     assertProviderPool(opts.ocrProviders ?? [], 'ocr');
     assertProviderPool(opts.imageProviders ?? [], 'image');
+    if (opts.scientificReviewProvider) assertProviderPool([opts.scientificReviewProvider], 'scientific review');
     this.imageProviders = [...(opts.imageProviders ?? [])];
+    this.scientificReviewProvider = opts.scientificReviewProvider;
     this.providers = [...opts.providers];
     this.ocrProviders = [...(opts.ocrProviders ?? [])];
     this.primaryIndex = opts.primaryIndex ?? 0;
@@ -117,6 +122,41 @@ export class AiGateway {
     this.killSwitch = opts.killSwitch;
     this.externalProcessingPolicy = opts.externalProcessingPolicy;
     this.ocrLimits = { ...(opts.ocrLimits ?? {}) };
+  }
+
+  /** Dedicated high-risk review route. It never falls back to the drafting model. */
+  async reviewScientific(input: ScienceReviewInput): Promise<ScienceReviewProviderResult> {
+    const provider = this.scientificReviewProvider;
+    if (!provider || !(await this.providerEnabled(provider.name, 'text')).enabled) {
+      throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'scientific review provider unavailable');
+    }
+    let allowed: unknown = false;
+    try { allowed = await this.externalProcessingPolicy?.(Object.freeze({ ...input.authorizationContext })) ?? false; }
+    catch { allowed = false; }
+    if (allowed !== true) throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'external processing denied');
+    const start = Date.now();
+    let outcome: 'succeeded' | 'failed' = 'failed';
+    try {
+      const result = await provider.review(input);
+      outcome = 'succeeded';
+      return result;
+    } catch (error) {
+      throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'scientific review provider failed', error);
+    } finally {
+      const elapsed = Date.now() - start;
+      try {
+        await this.record({
+          operation: 'scientific_review', provider: provider.name, model: provider.model,
+          inputTokens: null, outputTokens: null, estimatedInputTokens: Math.ceil([...input.prompt].length / 3),
+          estimatedOutputTokens: null, estimatedCostUsdMicros: 0, actualCostUsdMicros: 0, currency: 'USD',
+          pricingVersion: 'chatgpt-subscription', pricingEffectiveDate: null, serviceTier: 'subscription',
+          latencyMs: elapsed, totalLatencyMs: elapsed, promptHash: sha256Text(input.prompt),
+          inputContentHash: input.source.documentSha256, pageNumbers: [], pageCount: 0,
+          selectionReason: 'high_risk_scientific_review', outcome,
+          error: outcome === 'failed' ? 'scientific_review_failed' : null, fallbackReason: null, retryCount: 0,
+        });
+      } catch { this.logger?.error?.('ai.gateway.scientific_review audit failed'); }
+    }
   }
 
   /** One paid image attempt. Never retry or fall back, including after audit failure. */

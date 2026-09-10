@@ -1,4 +1,5 @@
-import { AiGatewayError, type AiGateway, type SchemaGuard } from '@openscience/ai-gateway';
+import { AiGatewayError, SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type OcrAuthorizationContext, type SchemaGuard } from '@openscience/ai-gateway';
+import { createHash } from 'node:crypto';
 import {
   createBlockSourceLocator,
   parseDocumentSourceMap,
@@ -59,6 +60,15 @@ export interface ExtractionResult extends Record<string, unknown> {
   unverifiedSourcePassageIds?: Record<string, string[]>;
   /** Server-owned canonical selection contract used to prevent obsolete paid repair loops. */
   canonicalExtractionContract?: 'windowed-source-v2' | 'exact-quote-v1' | 'grounded-summary-v1' | 'grounded-passages-v1' | 'grounded-passages-v2';
+  scientificReview?: {
+    provider: 'chatgpt-web-science-review';
+    model: 'chatgpt-web/6-pro';
+    status: 'review_received' | 'awaiting_review_evidence' | 'blocked_scientific_review';
+    attemptId: string;
+    promptHash?: string;
+    responseHash?: string;
+    reviewedCandidateHash: string;
+  };
 }
 
 export type EvidenceLocation = {
@@ -617,6 +627,111 @@ interface CanonicalPartialResult {
   unverifiedSourcePassageIds: Record<string, string[]>;
 }
 
+interface ScientificReviewContext {
+  requestId: string;
+  authorizationContext: Readonly<OcrAuthorizationContext>;
+  coveragePassageIds?: readonly string[];
+}
+
+type ScientificReviewField = {
+  verdict: 'accepted' | 'revised' | 'blocked';
+  summary: string;
+  sourcePassageIds: string[];
+  issues: Array<{ code: 'RELATION_MISMATCH' | 'EVIDENCE_TYPE_OVERCLAIM' | 'FIELD_MISPLACED' | 'QUALIFIER_LOSS' | 'PHYSICS_MISINTERPRETATION'; problem: string; sourcePassageIds: string[] }>;
+};
+type ScientificReviewResponse = {
+  fields: Record<(typeof SDF_CORE_FIELDS)[number], ScientificReviewField>;
+  needsMoreEvidence: Array<{ question: string; requestedContext: string }>;
+};
+
+function sha256Json(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function reviewAttemptId(parentTaskId: string, sourceMapHash: string, candidateHash: string): string {
+  const hex = createHash('sha256').update(`${parentTaskId}\0${sourceMapHash}\0${candidateHash}`).digest('hex').slice(0, 32).split('');
+  hex[12] = '5';
+  hex[16] = ['8', '9', 'a', 'b'][Number.parseInt(hex[16]!, 16) % 4]!;
+  const value = hex.join('');
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
+
+function parseJsonObject(text: string): unknown {
+  const cleaned = text.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
+  try { return JSON.parse(cleaned); } catch { /* extract one bounded object below */ }
+  const start = cleaned.indexOf('{'), end = cleaned.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('scientific review response is not JSON');
+  return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+function selectScienceReviewPassages(passages: readonly CanonicalPassage[], proposal: ExtractedProposal, coveragePassageIds: readonly string[] = []): CanonicalPassage[] {
+  const selected = new Set(SDF_CORE_FIELDS.flatMap((field) => proposal.fields[field].sourcePassageIds ?? []));
+  for (const id of coveragePassageIds) selected.add(id);
+  for (const passage of focusedQuantitativeResultPassages(passages)) selected.add(passage.id);
+  const conflictTerms = /(?:φ|ϕ|theta|θ|angle|collision|head-on|perpendicular|polar|unipolar|bipolar|side.?lobe|symmetr|far.?field|near.?field|bandwidth|limitation|approximately|≈|正碰|垂直|极性|旁瓣|对称|远场|近场|带宽|局限)/iu;
+  passages.forEach((passage, index) => {
+    if (!conflictTerms.test(passage.text)) return;
+    selected.add(passage.id);
+    if (index > 0) selected.add(passages[index - 1]!.id);
+    if (index + 1 < passages.length) selected.add(passages[index + 1]!.id);
+  });
+  const boundaryPatterns = [
+    /(?:condition|assuming|assumption|provided that|only when|valid for|where\s|denote|defined as|条件|假设|定义|适用)/iu,
+    /(?:limitation|however|except|restricted|cannot|does not|局限|限制|然而|不能|不适用)/iu,
+    /(?:compared with|relative to|baseline|reference|previous|prior|对比|相比|基准|已有工作)/iu,
+    /(?:discussion|conclusion|we demonstrate|we show|we find|本文表明|结论|讨论)/iu,
+  ];
+  for (const pattern of boundaryPatterns) {
+    for (const passage of passages.filter((candidate) => pattern.test(candidate.text)).slice(0, 2)) selected.add(passage.id);
+  }
+  const required = new Set([...SDF_CORE_FIELDS.flatMap((field) => proposal.fields[field].sourcePassageIds ?? []), ...coveragePassageIds]);
+  const ordered = passages.filter((passage) => selected.has(passage.id));
+  const result: CanonicalPassage[] = [];
+  let characters = 0;
+  for (const passage of ordered.sort((left, right) => Number(required.has(right.id)) - Number(required.has(left.id)) || left.pageStart - right.pageStart)) {
+    if (!required.has(passage.id) && characters + passage.evidenceChars > 26_000) continue;
+    result.push(passage); characters += passage.evidenceChars;
+  }
+  return result.sort((left, right) => left.pageStart - right.pageStart || left.id.localeCompare(right.id));
+}
+
+function scientificReviewGuard(value: unknown, allowedIds: ReadonlySet<string>): value is ScientificReviewResponse {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const root = value as Record<string, unknown>;
+  if (Object.keys(root).sort().join(',') !== 'fields,needsMoreEvidence' || !root.fields || typeof root.fields !== 'object' || Array.isArray(root.fields)
+    || !Array.isArray(root.needsMoreEvidence) || root.needsMoreEvidence.length > 8) return false;
+  for (const need of root.needsMoreEvidence) {
+    if (!need || typeof need !== 'object' || Array.isArray(need)) return false;
+    const item = need as Record<string, unknown>;
+    if (Object.keys(item).sort().join(',') !== 'question,requestedContext' || typeof item.question !== 'string' || !item.question.trim() || item.question.length > 500
+      || typeof item.requestedContext !== 'string' || !item.requestedContext.trim() || item.requestedContext.length > 500) return false;
+  }
+  const fields = root.fields as Record<string, unknown>;
+  if (Object.keys(fields).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(',')) return false;
+  for (const field of SDF_CORE_FIELDS) {
+    const candidate = fields[field];
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
+    const item = candidate as Record<string, unknown>;
+    if (Object.keys(item).sort().join(',') !== 'issues,sourcePassageIds,summary,verdict'
+      || !['accepted', 'revised', 'blocked'].includes(String(item.verdict)) || typeof item.summary !== 'string' || item.summary.length > MAX_CANONICAL_CORE_CHARS
+      || !Array.isArray(item.sourcePassageIds) || item.sourcePassageIds.length > MAX_SOURCE_PASSAGE_IDS
+      || new Set(item.sourcePassageIds).size !== item.sourcePassageIds.length
+      || item.sourcePassageIds.some((id) => typeof id !== 'string' || !allowedIds.has(id))
+      || !Array.isArray(item.issues) || item.issues.length > 8) return false;
+    if (item.verdict === 'blocked' ? item.summary !== '' || item.sourcePassageIds.length !== 0 : !item.summary.trim() || item.sourcePassageIds.length === 0) return false;
+    for (const issue of item.issues) {
+      if (!issue || typeof issue !== 'object' || Array.isArray(issue)) return false;
+      const entry = issue as Record<string, unknown>;
+      if (Object.keys(entry).sort().join(',') !== 'code,problem,sourcePassageIds'
+        || !['RELATION_MISMATCH', 'EVIDENCE_TYPE_OVERCLAIM', 'FIELD_MISPLACED', 'QUALIFIER_LOSS', 'PHYSICS_MISINTERPRETATION'].includes(String(entry.code))
+        || typeof entry.problem !== 'string' || !entry.problem.trim() || entry.problem.length > 500
+        || !Array.isArray(entry.sourcePassageIds) || entry.sourcePassageIds.length < 1
+        || entry.sourcePassageIds.some((id) => typeof id !== 'string' || !allowedIds.has(id))) return false;
+    }
+  }
+  return true;
+}
+
 function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: readonly CanonicalPassage[]): {
   guard: SchemaGuard<CanonicalRepairResponse>;
   validationFeedback: () => string | undefined;
@@ -996,95 +1111,91 @@ async function repairCanonicalPartial(
   return partial;
 }
 
-async function physicsReviewCanonicalProposal(
+async function webScientificReviewCanonicalProposal(
   gateway: AiGateway,
   sourceMap: DocumentSourceMap,
   passages: readonly CanonicalPassage[],
   proposal: ExtractedProposal,
-): Promise<CanonicalPartialResult> {
-  const selected = new Set(SDF_CORE_FIELDS.flatMap((field) => proposal.fields[field].sourcePassageIds ?? []));
-  for (const passage of focusedQuantitativeResultPassages(passages)) selected.add(passage.id);
-  const reviewPassages = passages.filter((passage) => selected.has(passage.id));
-  if (!reviewPassages.length) return { proposal, fieldDiagnostics: {}, fieldDiagnosticsDetails: {}, unverifiedSummaries: {}, unverifiedSourcePassageIds: {} };
+  context: ScientificReviewContext | undefined,
+): Promise<{ partial: CanonicalPartialResult; review: ExtractionResult['scientificReview'] }> {
+  const candidateHash = sha256Json({ schemaVersion: SDF_CORE_VERSION, fields: proposal.fields });
+  const sourceMapHash = sha256Json(sourceMap);
+  const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
+  const blockAll = (status: 'awaiting_review_evidence' | 'blocked_scientific_review', detail: string, hashes: { promptHash?: string; responseHash?: string } = {}) => {
+    const affected = SDF_CORE_FIELDS.filter((field) => !proposal.fields[field].needsMoreInformation);
+    return {
+      partial: {
+        proposal: { schemaVersion: SDF_CORE_VERSION, fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, affected.includes(field)
+          ? { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }
+          : proposal.fields[field]])) as ExtractedProposal['fields'] },
+        fieldDiagnostics: Object.fromEntries(affected.map((field) => [field, 'malformed_item' as const])),
+        fieldDiagnosticsDetails: Object.fromEntries(affected.map((field) => [field, detail])),
+        unverifiedSummaries: Object.fromEntries(affected.map((field) => [field, proposal.fields[field].summary])),
+        unverifiedSourcePassageIds: Object.fromEntries(affected.map((field) => [field, proposal.fields[field].sourcePassageIds ?? []])),
+      },
+      review: { provider: 'chatgpt-web-science-review' as const, model: 'chatgpt-web/6-pro' as const,
+        status, attemptId, reviewedCandidateHash: candidateHash, ...hashes },
+    };
+  };
+  if (!context) return blockAll('blocked_scientific_review', 'scientificReview=trusted_context_unavailable');
+  const reviewPassages = selectScienceReviewPassages(passages, proposal, context.coveragePassageIds);
+  if (!reviewPassages.length) return blockAll('awaiting_review_evidence', 'scientificReview=no_review_evidence');
   const allowedIds = new Set(reviewPassages.map((passage) => passage.id));
   const current = Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
     summary: proposal.fields[field].summary,
     sourcePassageIds: proposal.fields[field].sourcePassageIds ?? [],
     needsMoreInformation: proposal.fields[field].needsMoreInformation,
   }]));
-  type PhysicsIssue = { field: (typeof SDF_CORE_FIELDS)[number]; code: 'RELATION_MISMATCH' | 'EVIDENCE_TYPE_OVERCLAIM' | 'FIELD_MISPLACED' | 'QUALIFIER_LOSS'; problem: string; sourcePassageIds: string[]; blocking: boolean };
-  let issues: PhysicsIssue[] = [];
-  const issueGuard: SchemaGuard<{ issues: PhysicsIssue[] }> = (value: unknown): value is { issues: PhysicsIssue[] } => {
-    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).join(',') !== 'issues') return false;
-    const list = (value as Record<string, unknown>).issues;
-    if (!Array.isArray(list) || list.length > 12) return false;
-    const seen = new Set<string>();
-    for (const item of list) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
-      const issue = item as Record<string, unknown>;
-      if (Object.keys(issue).sort().join(',') !== 'blocking,code,field,problem,sourcePassageIds'
-        || typeof issue.field !== 'string' || !SDF_CORE_FIELDS.includes(issue.field as (typeof SDF_CORE_FIELDS)[number])
-        || !['RELATION_MISMATCH', 'EVIDENCE_TYPE_OVERCLAIM', 'FIELD_MISPLACED', 'QUALIFIER_LOSS'].includes(String(issue.code))
-        || typeof issue.problem !== 'string' || !issue.problem.trim() || issue.problem.length > 500
-        || typeof issue.blocking !== 'boolean' || !Array.isArray(issue.sourcePassageIds)
-        || issue.sourcePassageIds.length < 1 || issue.sourcePassageIds.length > MAX_SOURCE_PASSAGE_IDS
-        || issue.sourcePassageIds.some((id) => typeof id !== 'string' || !allowedIds.has(id))) return false;
-      const key = `${issue.field}:${issue.code}:${issue.problem}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-    }
-    issues = list as PhysicsIssue[];
-    return true;
-  };
   try {
-    await gateway.completeStructured(issueGuard, [{ role: 'system', content: [
-      PAPER_ANALYSIS_SKILL.instructions,
-      '你正在执行独立physics-review。只报告有原文定位依据的科学问题，不直接重写建议。',
-      '保留原文中的≈、=、<、>、∝及适用条件；区分理论推导、模型计算、数值模拟、实验测量、作者讨论和确定性换算。不得把作者的类比或判据写成普适定律或独立验证。',
-      '检查容易混淆的物理对象及尺度，例如局域量与入射量、结构尺寸与场宽、单粒子与束流、场振幅与强度、主峰与旁瓣。原文没有出现的限定不新增，原文明确存在的限定不省略。',
-      'results只保留具体条件下的研究输出；method保留输入、假设和处理链；insight保留机制或认识；reproducibility保留复现所需参数、材料、步骤、数据/代码披露及缺口。',
-      '每个问题返回字段、错误码、问题说明、直接支撑判断的P编号和是否阻断。关系符改变、证据类型升级、字段职责错位、关键限定丢失均应blocking=true。无问题返回空issues。',
-      '只输出JSON对象 {"issues":[]}。错误码只能是 RELATION_MISMATCH、EVIDENCE_TYPE_OVERCLAIM、FIELD_MISPLACED、QUALIFIER_LOSS。',
-    ].join(' ') }, { role: 'user', content: [
-      `待复核建议：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: current })}`,
-      canonicalPassagePrompt(reviewPassages),
-    ].join('\n\n') }], {
-      temperature: 0.1,
-      maxRetries: 1,
-      validationFeedback: () => '只返回形如 {"issues":[{"field":"method","code":"RELATION_MISMATCH","problem":"候选把原文近似关系写成严格等式","sourcePassageIds":["P00001"],"blocking":true}]} 的JSON；无问题时返回 {"issues":[]}。',
-      validationDiagnostic: () => 'physics_review_contract',
+    const prompt = [
+      '对一篇论文的六字段中文候选做独立科学复核。候选不是证据；只能用下方带P编号的直接原文。六字段必须同包审阅。',
+      '逐字段检查物理对象、角度/坐标定义、关系符、主峰与异号旁瓣、近远场、适用条件、背景比较范围、理论/模拟/实验身份、字段归属和限定词。不要因文字流畅而放行。',
+      'accepted表示候选逐项受证据支持；revised表示用证据纠正摘要；blocked表示证据不足或冲突未解。需要原公式、图注或相邻段时填写needsMoreEvidence，本轮全部字段保持待审。',
+      `只返回JSON对象，完整空结构如下：${JSON.stringify({
+        fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
+          verdict: 'blocked', summary: '', sourcePassageIds: [], issues: [],
+        }])),
+        needsMoreEvidence: [],
+      })}。每个verdict只能是accepted、revised或blocked；issues元素必须且只能含code、problem、sourcePassageIds，code只能是RELATION_MISMATCH、EVIDENCE_TYPE_OVERCLAIM、FIELD_MISPLACED、QUALIFIER_LOSS、PHYSICS_MISINTERPRETATION。六字段都必须出现。blocked字段summary为空、sourcePassageIds为空；其他字段保留或给出完整中文修订。需要补证时needsMoreEvidence元素必须且只能含question、requestedContext。`,
+      `固定候选（hash=${candidateHash}）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: current })}`,
+      `直接证据与冲突上下文（sourceMapHash=${sourceMapHash}）：\n${canonicalPassagePrompt(reviewPassages)}`,
+    ].join('\n\n');
+    if (prompt.length > SCIENCE_REVIEW_MAX_PROMPT_CHARS) {
+      return blockAll('awaiting_review_evidence', 'scientificReview=review_packet_too_large');
+    }
+    const response = await gateway.reviewScientific({
+      requestId: attemptId,
+      authorizationContext: context.authorizationContext,
+      source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash,
+        candidateHash, sourceMapHash },
+      prompt,
     });
-    const blocking = issues.filter((issue) => issue.blocking);
-    if (!blocking.length) return { proposal, fieldDiagnostics: {}, fieldDiagnosticsDetails: {}, unverifiedSummaries: {}, unverifiedSourcePassageIds: {} };
-    const blockedFields = new Set(blocking.map((issue) => issue.field));
-    const partial: CanonicalPartialResult = {
-      proposal: {
-        schemaVersion: SDF_CORE_VERSION,
-        fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, blockedFields.has(field)
-          ? { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }
-          : proposal.fields[field]])) as ExtractedProposal['fields'],
-      },
-      fieldDiagnostics: Object.fromEntries([...blockedFields].map((field) => [field, 'malformed_item'])),
-      fieldDiagnosticsDetails: Object.fromEntries([...blockedFields].map((field) => [field, `physicsReview=${blocking.filter((issue) => issue.field === field).map((issue) => `${issue.code}:${issue.problem}`).join('|')}`])),
-      unverifiedSummaries: Object.fromEntries([...blockedFields].map((field) => [field, proposal.fields[field].summary])),
-      unverifiedSourcePassageIds: Object.fromEntries([...blockedFields].map((field) => [field, proposal.fields[field].sourcePassageIds ?? []])),
-    };
-    return repairCanonicalPartial(gateway, sourceMap, passages, partial);
-  } catch (error) {
-    console.error('paper-analysis physics-review unavailable; preserving proposals as unverified', error instanceof Error ? error.message : String(error));
-    const affected = SDF_CORE_FIELDS.filter((field) => !proposal.fields[field].needsMoreInformation);
+    const parsed = parseJsonObject(response.text);
+    if (!scientificReviewGuard(parsed, allowedIds)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_response', response);
+    if (parsed.needsMoreEvidence.length > 0) return blockAll('awaiting_review_evidence', 'scientificReview=requested_more_evidence', response);
+    const reviewedFields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
+      const reviewed = parsed.fields[field];
+      if (reviewed.verdict === 'blocked') return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }];
+      const segments = segmentsForPassages(sourceMap, reviewed.sourcePassageIds, new Map(reviewPassages.map((passage) => [passage.id, passage])));
+      return [field, { summary: reviewed.summary.trim(), sourceQuote: segments.map((segment) => segment.quote).join('\n'),
+        sourcePassageIds: reviewed.sourcePassageIds, verifiedSegments: segments, needsMoreInformation: false }];
+    })) as ExtractedProposal['fields'];
+    const blockedFields = SDF_CORE_FIELDS.filter((field) => parsed.fields[field].verdict === 'blocked');
     return {
-      proposal: {
-        schemaVersion: SDF_CORE_VERSION,
-        fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, affected.includes(field)
-          ? { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }
-          : proposal.fields[field]])) as ExtractedProposal['fields'],
+      partial: {
+        proposal: { schemaVersion: SDF_CORE_VERSION, fields: reviewedFields },
+        fieldDiagnostics: Object.fromEntries(blockedFields.map((field) => [field, 'malformed_item' as const])),
+        fieldDiagnosticsDetails: Object.fromEntries(blockedFields.map((field) => [field, `scientificReview=${parsed.fields[field].issues.map((issue) => `${issue.code}:${issue.problem}`).join('|') || 'blocked'}`])),
+        unverifiedSummaries: Object.fromEntries(blockedFields.map((field) => [field, proposal.fields[field].summary])),
+        unverifiedSourcePassageIds: Object.fromEntries(blockedFields.map((field) => [field, proposal.fields[field].sourcePassageIds ?? []])),
       },
-      fieldDiagnostics: Object.fromEntries(affected.map((field) => [field, 'malformed_item'])),
-      fieldDiagnosticsDetails: Object.fromEntries(affected.map((field) => [field, 'physicsReview=unavailable'])),
-      unverifiedSummaries: Object.fromEntries(affected.map((field) => [field, proposal.fields[field].summary])),
-      unverifiedSourcePassageIds: Object.fromEntries(affected.map((field) => [field, proposal.fields[field].sourcePassageIds ?? []])),
+      review: { provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
+        status: blockedFields.length ? 'blocked_scientific_review' : 'review_received',
+        attemptId, promptHash: response.promptHash, responseHash: response.responseHash, reviewedCandidateHash: candidateHash },
     };
+  } catch (error) {
+    console.error('paper-analysis web scientific review unavailable; preserving proposals as unverified', error instanceof Error ? error.message : String(error));
+    return blockAll('blocked_scientific_review', 'scientificReview=unavailable');
   }
 }
 
@@ -1093,17 +1204,18 @@ async function reviewAndMaterializeCanonicalProposal(
   sourceMap: DocumentSourceMap,
   passages: readonly CanonicalPassage[],
   proposal: ExtractedProposal,
+  context?: ScientificReviewContext,
 ): Promise<ExtractionResult> {
-  const reviewed = await physicsReviewCanonicalProposal(gateway, sourceMap, passages, proposal);
-  const result = materializeCanonicalProposal(reviewed.proposal);
-  if (Object.keys(reviewed.fieldDiagnostics).length === 0) return result;
+  const reviewed = await webScientificReviewCanonicalProposal(gateway, sourceMap, passages, proposal, context);
+  const result = { ...materializeCanonicalProposal(reviewed.partial.proposal), scientificReview: reviewed.review };
+  if (Object.keys(reviewed.partial.fieldDiagnostics).length === 0) return result;
   return {
     ...result,
     reason: 'canonical_partial_validation_exhausted',
-    fieldDiagnostics: reviewed.fieldDiagnostics,
-    fieldDiagnosticsDetails: reviewed.fieldDiagnosticsDetails,
-    unverifiedSummaries: reviewed.unverifiedSummaries,
-    unverifiedSourcePassageIds: reviewed.unverifiedSourcePassageIds,
+    fieldDiagnostics: reviewed.partial.fieldDiagnostics,
+    fieldDiagnosticsDetails: reviewed.partial.fieldDiagnosticsDetails,
+    unverifiedSummaries: reviewed.partial.unverifiedSummaries,
+    unverifiedSourcePassageIds: reviewed.partial.unverifiedSourcePassageIds,
   };
 }
 
@@ -1228,7 +1340,7 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
 export async function extractHandler(
   gateway: AiGateway,
   task: { payload: Record<string, unknown> },
-  trustedContext: { sourceMap?: DocumentSourceMap; previousResult?: unknown } = {},
+  trustedContext: { sourceMap?: DocumentSourceMap; previousResult?: unknown; scientificReview?: ScientificReviewContext } = {},
 ): Promise<ExtractionResult> {
   const canonicalSourceMap = trustedContext.sourceMap
     ? parseDocumentSourceMap(trustedContext.sourceMap)
@@ -1245,7 +1357,7 @@ export async function extractHandler(
     if (previousPartial) {
       const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, previousPartial);
       if (Object.keys(partial.fieldDiagnostics).length === 0) {
-        return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal);
+        return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal, trustedContext.scientificReview);
       }
       return {
         ...materializeCanonicalProposal(partial.proposal),
@@ -1258,6 +1370,10 @@ export async function extractHandler(
     }
   }
   const synthesis = canonicalSourceMap && passages ? await buildPaperReadingSynthesis(gateway, passages) : undefined;
+  const scientificReview = trustedContext.scientificReview && synthesis
+    ? { ...trustedContext.scientificReview,
+        coveragePassageIds: [...new Set(SDF_CORE_FIELDS.flatMap((field) => synthesis.fields[field].sourcePassageIds))] }
+    : trustedContext.scientificReview;
   const reducedPassages = synthesis && passages
     ? passages.filter((passage) => SDF_CORE_FIELDS.some((field) => synthesis.fields[field].sourcePassageIds.includes(passage.id)))
     : undefined;
@@ -1304,7 +1420,7 @@ export async function extractHandler(
       if (!initialPartial) throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_validation_exhausted', error);
       const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, initialPartial);
       if (Object.keys(partial.fieldDiagnostics).length === 0) {
-        return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal);
+        return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal, scientificReview);
       }
       return {
         ...materializeCanonicalProposal(partial.proposal),
@@ -1329,7 +1445,7 @@ export async function extractHandler(
     if (SDF_CORE_FIELDS.every((field) => proposal.fields[field].needsMoreInformation)) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_all_fields_missing');
     }
-    return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, proposal);
+    return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, proposal, scientificReview);
   }
   const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
   return materializeProposal(proposal, manuscriptText);
