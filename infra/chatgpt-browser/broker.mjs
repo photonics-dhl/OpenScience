@@ -65,9 +65,17 @@ export async function executeWebImage(config, request, privateDir) {
     if (await exists(join(jobDir, 'result.json'))) {
       // Continue into exact result verification; stdout and exit status are never success evidence.
     } else if (await exists(join(jobDir, 'submitted.json'))) {
-      await atomicWrite(circuit, JSON.stringify({ schemaVersion: 1, state: 'open', taskId: request.id,
-        promptHash: request.promptHash, openedAt: Date.now(), reason: 'submitted_without_verified_png' }), 0o600);
-      throw uncertain();
+      const remainingSeconds = Math.floor((request.deadlineAt - Date.now() - 45000) / 1000);
+      if (await exists(join(jobDir, 'conversation.json')) && remainingSeconds >= 45) {
+        await docker(['restart', config.browserContainer], 45000).catch(() => {});
+        await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', String(remainingSeconds),
+          'node', '/jobs/provider/runner.cjs', 'recover', request.id], (remainingSeconds + 10) * 1000).catch(() => {});
+      }
+      if (!await exists(join(jobDir, 'result.json'))) {
+        await atomicWrite(circuit, JSON.stringify({ schemaVersion: 1, state: 'open', taskId: request.id,
+          promptHash: request.promptHash, openedAt: Date.now(), reason: 'submitted_without_verified_png' }), 0o600);
+        throw uncertain();
+      }
     }
     else throw error;
   }

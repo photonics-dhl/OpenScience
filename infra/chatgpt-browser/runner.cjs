@@ -6,7 +6,7 @@ const { chromium } = require('/app/node_modules/playwright-core');
 const [mode, id] = process.argv.slice(2);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA256 = /^[a-f0-9]{64}$/;
-if (!['prepare', 'send', 'status', 'download', 'execute', 'resume'].includes(mode) || !UUID.test(id || '')) process.exit(64);
+if (!['prepare', 'send', 'status', 'download', 'execute', 'resume', 'recover'].includes(mode) || !UUID.test(id || '')) process.exit(64);
 const dir = path.join('/jobs', id);
 function read(name, maximum = 32768) {
   const file = path.join(dir, name);
@@ -302,13 +302,22 @@ async function closeStaleOperatorPages(context) {
   const context = browser.contexts()[0];
   if (!context) throw Error('BROWSER_CONTEXT_NOT_FOUND');
   await closeStaleOperatorPages(context);
-  if (mode === 'status' || mode === 'download' || mode === 'resume') {
+  if (mode === 'status' || mode === 'download' || mode === 'resume' || mode === 'recover') {
     const url = canonicalUrl(read('conversation.json').url);
-    const pages = context.pages().filter(page => page.url() === url);
-    if (pages.length !== 1) throw Error('EXACT_CONVERSATION_NOT_FOUND');
-    const page = pages[0];
+    const pages = context.pages().filter(page => canonicalUrl(page.url()) === url);
+    if (pages.length > 1 || (mode !== 'recover' && pages.length !== 1)) throw Error('EXACT_CONVERSATION_NOT_FOUND');
+    const created = mode === 'recover' && pages.length === 0;
+    const page = pages[0] || await context.newPage();
+    if (created) {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now() - 45000)) });
+      if (canonicalUrl(page.url()) !== url) throw Error('CONVERSATION_CHANGED');
+    }
     if (mode === 'download') { await downloadImage(browser, page, request, url); process.exit(0); }
-    if (mode === 'resume') { await waitAndDownload(browser, page, request); process.exit(0); }
+    if (mode === 'resume' || mode === 'recover') {
+      await waitAndDownload(browser, page, request);
+      if (created) await page.close().catch(() => {});
+      process.exit(0);
+    }
     console.log(JSON.stringify({ state: fs.existsSync(path.join(dir, 'result.json')) ? 'downloaded' : 'submitted', id }));
     process.exit(0);
   }
