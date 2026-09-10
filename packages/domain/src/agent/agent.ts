@@ -168,6 +168,9 @@ function evaluateAgentTaskRetryEligibility(
   if (task.kind === 'sdf.extract') {
     return { authorityValid: true, canRetry: typeof payload.manuscriptText === 'string' && Boolean(payload.manuscriptText.trim()) && !('artifactId' in payload) };
   }
+  if (task.kind === 'presentation.generate') {
+    return { authorityValid: true, canRetry: true };
+  }
   if (task.kind !== 'source.retrieve' || payload.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
     return { authorityValid: true, canRetry: false };
   }
