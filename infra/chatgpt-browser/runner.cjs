@@ -183,6 +183,15 @@ async function findPreparedPage(context) {
   if (matches.length !== 1) throw Error('EXACT_PREPARED_PAGE_NOT_FOUND');
   return matches[0];
 }
+async function claimAuthenticatedHomePage(context) {
+  for (const page of context.pages()) {
+    if (page.url() !== 'https://chatgpt.com/' || await page.evaluate(() => window.name).catch(() => '')) continue;
+    const composer = page.locator('#prompt-textarea');
+    if (await composer.count() !== 1 || (await composer.innerText().catch(() => '')).trim()) continue;
+    await page.evaluate(name => { window.name = name; }, `xgs-image-${id}`);
+    return page;
+  }
+}
 (async () => {
   const stat = fs.lstatSync(dir);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw Error('INVALID_JOB_DIRECTORY');
@@ -213,9 +222,12 @@ async function findPreparedPage(context) {
   if (mode === 'send') {
     page = await findPreparedPage(context);
   } else {
-    page = await context.newPage();
-    await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
-    await page.evaluate(name => { window.name = name; }, `xgs-image-${id}`);
+    page = await claimAuthenticatedHomePage(context);
+    if (!page) {
+      page = await context.newPage();
+      await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
+      await page.evaluate(name => { window.name = name; }, `xgs-image-${id}`);
+    }
   }
   const prompt = [
     '请使用图像生成工具严格生成一张图片，不要只回复文字，不要生成第二张。',
