@@ -17,7 +17,7 @@ function ObjectHeader({ objectId, title, version, visibility, saveState, actions
 
   return (
     <div
-      className="flex w-full min-w-0 items-center justify-between gap-3 overflow-hidden text-sm text-os-muted-paper"
+      className="flex w-full min-w-0 flex-col items-stretch justify-between gap-3 text-sm text-os-muted-paper sm:flex-row sm:items-center"
       data-object-header="true"
     >
       <div className="min-w-0 flex-1">
@@ -32,7 +32,7 @@ function ObjectHeader({ objectId, title, version, visibility, saveState, actions
           <span data-save-state={saveState}>{saveStateLabel}</span>
         </div>
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2 normal-case tracking-normal">{actions}</div>}
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2 normal-case tracking-normal">{actions}</div>}
     </div>
   );
 }

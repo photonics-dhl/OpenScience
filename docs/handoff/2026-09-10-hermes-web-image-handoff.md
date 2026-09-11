@@ -22,6 +22,9 @@
 - v2暴露旧衔接故障：createCommit未同步live SDF；carryVersionEvidence把12条继承Claim全部降needs_review。已执行单事务定向恢复：5条未改Claim、50条对应Evidence恢复原状态，改动problem和原pending保留；AuditLog action maintenance.repair_version_carry保存前后状态，冻结v2未改。正常carry修复已部署，勿重跑恢复。
 - 52a52829下正常创建v3 e9a168a4-8314-47c8-ad9a-11e77ec9ffd2 / commit0ca271fc-0d41-45fe-8ebd-76b256ca304d，2026-09-11T05:42:44Z；刷新后live SDF保留正确新问题，制作页5条可选材料，仍draft。
 - 制作/发布CSS从主栏160px修成两栏，服务器实际DOM为819.2px+320px。截图需先bringToFront；后台tab截图会超时，不等于Chat/CDP故障。
+- v3单图方案45e2f739经Hermes修订为253e0750-0b5d-4a7a-bc36-fe2413901dd2，已批准；删除易误读的汇聚波前/接收弧面，保留三联机制与异号旁瓣。图片任务3814f844-cb8e-41b9-b403-74d6a0d40eb9已实际提交服务器网页，会话6aa3963b-63bc-83ea-87a3-a0900002008f明确返回“You’ve hit your rate limit.”。任务failed/10%，无新图片，不重发；v3尚未发布。
+- 网页最初空白但出现Like this image，随后原会话恢复显示限额；服务器恢复关闭了产品tab，已复用原登录重开。产品任务目前保留通用错误“image generation failed”，后置恢复原因尚未同步到任务展示。
+- 小屏正文存在，首张截图渲染不完整；DOM证实preview正文2672px高。真实header问题是固定操作区挤掉标题，已改成小屏两行并收紧三步导航，待最后部署。
 
 ## Chat / routing
 - Chrome6Pro会话 https://chatgpt.com/c/6aa2df58-0c20-83ea-838d-4e1129091d79 已给出本轮连续工作台/共编/公开布局规划；追加复核明确限流，没有重发。
@@ -30,9 +33,9 @@
 - 服务器网页生图仍走既有Create image provider；科学规划6Pro与原生图片模式独立。现有图片是真实服务器Hermes→网页→下载/存储→画廊，不是Codex手工导入。
 
 ## Next actions
-1. v3工作台已向服务器Hermes提交一张“狭缝近场空间限域→接收时间压缩”核心机制图的规划；继续现有任务，不重复提交。
-2. 审核新方案，通过既有服务器网页provider生图，核对科学和美观后审核发布；不要公开旧两图或凑六图。
-3. 最后观察真实桌面/手机工作台与公开RO排版，记录未完成项。暂停视频、批量冷启动；不重做已经成功的共编调用。
+1. 完成当前界面小修部署与手机实际页面观察；勿重跑共编/OCR。
+2. 图片额度恢复后由产品重试当前已批准方案253e0750；当前3814f844已明确限额，不是仍在生成，不可盲目恢复/重发或换账号。
+3. 新图科学/视觉核对通过后审核发布v3，再看公开RO。不要公开旧两图或凑六图；视频、批量冷启动暂停。尚未完成项另含后置限额原因同步到产品错误文案。
 
 ## Changed surfaces
 - /edit持有共享草稿并组合ResearchPresentation/ResearchPublication；旧路由仍可用。

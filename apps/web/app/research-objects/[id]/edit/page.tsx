@@ -864,9 +864,9 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   return (
     <EditorLayout
         objectId={roId}
-        workflow={<nav className="flex flex-wrap items-center gap-2 px-4 py-3" aria-label={tw('navigation')}>
-          {(['content', 'media', 'publish'] as const).map((item, index) => <button type="button" className={`min-h-11 rounded-panel px-4 text-sm transition-colors ${stage === item ? 'bg-os-vermilion-ink font-semibold text-white' : 'text-os-muted-paper hover:bg-os-paper-strong'} disabled:opacity-40`} aria-current={stage === item ? 'step' : undefined} disabled={item !== 'content' && (!snapshotReady || !versions.length || state.dirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal))} key={item} onClick={() => { if (item === 'media') setOpenedMedia(true); if (item === 'publish') setPublicationVisit((value) => value + 1); setStage(item); }}>{index + 1} · {tw(item)}</button>)}
-          <Link className="ml-auto min-h-11 px-3 py-3 text-sm text-os-muted-paper underline" href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
+        workflow={<nav className="grid grid-cols-3 gap-2 px-4 py-3 sm:flex sm:flex-wrap sm:items-center" aria-label={tw('navigation')}>
+          {(['content', 'media', 'publish'] as const).map((item, index) => <button type="button" className={`min-h-11 min-w-0 rounded-panel px-2 text-xs leading-5 transition-colors sm:px-4 sm:text-sm ${stage === item ? 'bg-os-vermilion-ink font-semibold text-white' : 'text-os-muted-paper hover:bg-os-paper-strong'} disabled:opacity-40`} aria-current={stage === item ? 'step' : undefined} disabled={item !== 'content' && (!snapshotReady || !versions.length || state.dirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal))} key={item} onClick={() => { if (item === 'media') setOpenedMedia(true); if (item === 'publish') setPublicationVisit((value) => value + 1); setStage(item); }}>{index + 1} · {tw(item)}</button>)}
+          <Link className="col-span-3 ml-auto min-h-11 px-3 py-3 text-sm text-os-muted-paper underline" href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
         </nav>}
         header={
           <ObjectHeader
