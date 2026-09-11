@@ -1,6 +1,6 @@
 # Server ChatGPT browser — operator login research
 
-- CURRENT 2026-09-11：应用378a9506/rollback9c5088ea，provider d1630135/rollback92cc416e。b19核心图真实取回、科学审核、Hermes对话发布全部完成；v10=f4e2dc71已公开为OSR-2026-000022-v10，匿名页面200及图片加载已观察。发布恢复与审核顺序修复已部署；无新软件。详见唯一CURRENT handoff，不再沿用旧“无PNG/未公开”状态。
+- CURRENT 2026-09-11：应用363257aa / rollbackc0fdc389，provider d1630135 / rollback92cc416e。研究桌面、单一资料入口、公开大图/真实索引与共享会话已部署；/me200并续7天Cookie，实际跨页账号保持。19/20/21可恢复归档完成，22/v10真实图文公开保留。无新软件/模型调用；长期会话与Hermes进一步能力见唯一CURRENT handoff。
 
 - 最新2026-09-11：第二账号已正常登录，实际账户设置与用户指定账号匹配（Pro）；noVNC实际可视可操作。旧“等用户密码”状态已完成，不要再次要求登录。6Pro截图规划会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581已回复。
 - 新模型菜单使用Thinking effort→Power，键盘右移到第5档时实际显示6 Pro。收起后正文可能分成6换行Pro，识别需允许空白。不要因菜单变化降级模型或反复重发。
@@ -8,7 +8,11 @@
 
 HISTORICAL（旧任务记录，以CURRENT handoff为准）: production `9b97522f…`, provider `f4832487…` (2026-09-11). Deep-sub-cycle has two real draft images of six planned. The old usage-limit conversation was reconciled without resending. A group retry reached version8 then failed before web submission because image mode shows Extra High, not the science planner label 6 Pro (run now failed/version9). The provider-only fix removed that incorrect image-mode requirement while retaining 6 Pro for scientific review. A new scene0 task `8b0ca4c9-eb20-4478-a79c-d1b8e0dadc25` then succeeded through the product button: Hermes prompt, native web image generation, download, storage and automatic gallery display. Scientific review and publication remain pending.
 
-## Current product observations
+## 当前截图与操作方式
+- Chrome125%下截图用Page.getLayoutMetrics的非css layoutViewport尺寸作Page.captureScreenshot clip，已取得完整1424×816画面；旧截图裁切不等于网站溢出。
+- 打开Hermes模态Drawer后先用其关闭按钮退出再导航；Next链接点击后等待目标URL再截图，旧页面同名标题不能当新路由已完成。
+
+## 历史产品观察
 - 2026-09-11账号切换：用户授权指定第二账号。当前服务器账户菜单未出现Add account，故按正常退出/登录处理；输入目标邮箱后OpenAI转Google OAuth。bridge明确拒绝accounts.google.com:443；随后认证页停在Loading，唯一外部AccountsSignInUi脚本www.gstatic.com也被拒。仅补这两个精确域名，保留443和其余allowlist限制。其他Google/字体/头像域未放行。实际部署/登录完成状态见CURRENT handoff；不会自动跨账号重放旧会话。
 - A failed AgentTask/run can coexist with its already-persisted image after an old completion conflict. Read product presentation-assets before assuming the PNG needs importing.
 - Terminal rate-limit text occurs inside the assistant turn, not necessarily an alert. The broker now preserves USAGE_LIMIT without restarting or resending.

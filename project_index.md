@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-11:** applicationc0fdc389 / rollback4909e11b；browser providerd1630135 / rollback92cc416e。b19科学审核通过，v10=f4e2dc71已由Hermes对话发布OSR-2026-000022-v10；匿名页面和图片已实际加载。发布审核恢复修复已部署。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-11:** application363257aa / rollbackc0fdc389；browser providerd1630135 / rollback92cc416e。研究桌面/编辑资料/公開阅读/真实缩略图/跨页会话已部署并实际观察；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 当前执行：用户已批准高保真风格并要求突出六栏目，正式工作台与公开阅读页已上线；继续处理正确生图/发布闭环，不重新访谈已确定方向。
 > 最新部署：17ebc7f7，实际服务器构建/启动完成，不运行测试/预检；后续docs-only变更不是应用部署。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
@@ -13,9 +13,9 @@
 |---|---|---|
 | `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 参考目录；相关结构/风格已获用户批准，未安装新能力 |
 | `docs/proposals/2026-09-11-ro-workbench-wireframe.html` | 成稿/Hermes/图视频/公开预览可点击灰度线框，两个主要确认节点 | 已在服务器浏览器打开供用户讨论；无生产接口/真实媒体/发布，非生产UI部署 |
-| `apps/web/components/auth/SessionProvider.tsx` / `apps/web/components/landing/SiteHeader.tsx` / `apps/api/src/routes/session-guard.ts` | 跨导航账户状态、有效会话Cookie续期、跨标签会话同步 | 4909e11b已部署；状态与部署见唯一CURRENT handoff |
-| `apps/web/components/explore/ResearchCard.tsx` / `apps/web/components/explore/research-discovery.module.css` / `packages/domain/src/explore/explore.ts` | 首页与探索复用真实公开版卡片/图片；稳定倒序游标 | 4909e11b已部署；不把最新公开冒称精选 |
-| `apps/web/components/dashboard/HermesConversationCard.tsx` / `apps/web/components/hermes/HermesRail.tsx` | Hermes唯一对话入口、需处理/后台任务、历史去重与可见页更新 | 4909e11b已部署；保持真实并发和恢复入口 |
+| `apps/web/components/auth/SessionProvider.tsx` / `apps/web/components/landing/SiteHeader.tsx` / `apps/api/src/routes/session-guard.ts` | 跨导航账户状态、有效会话Cookie续期、跨标签会话同步 | 363257aa已部署；状态与部署见唯一CURRENT handoff |
+| `apps/web/components/explore/ResearchCard.tsx` / `apps/web/components/explore/research-discovery.module.css` / `packages/domain/src/explore/explore.ts` | 首页与探索复用真实公开版卡片/图片；稳定倒序游标 | 363257aa已部署；不把最新公开冒称精选 |
+| `apps/web/components/dashboard/HermesConversationCard.tsx` / `apps/web/components/hermes/HermesRail.tsx` | Hermes唯一对话入口、需处理/后台任务、历史去重与可见页更新 | 363257aa已部署；保持真实并发和恢复入口 |
 | `docs/proposals/2026-09-11-ro-product-preview.html` | 保留已认可布局的视觉与Hermes对话交互稿，固定输入、精简制作确认、公开媒体与正文共享状态 | 已批准的视觉参考；原样稿仅预设短句/内存演示，生产实现与未决事项见CURRENT handoff |
 | `apps/web/lib/hermes/conversation-action.ts` / `apps/web/components/hermes/HermesMediaReview.tsx` | Hermes对话确认的前端动作接口、当前版本实际素材审核及结果回写 | DEPLOYED1cdd4602；复用原权限/版本/updatedAt；实际观察与未决项见CURRENT |
 | `apps/web/app/research-product.css` / `apps/web/app/research-objects/[id]/edit/workbench.module.css` / `apps/web/components/public/PublicReadingProduct.module.css` | 已批准高保真风格的正式工作台与公开阅读样式，六栏目标题强调、图视频直显和固定Hermes对话输入 | DEPLOYED17ebc7f7；无测试/预检，实际页面观察及限制见CURRENT handoff |
@@ -522,11 +522,11 @@
 | `apps/web/public/research-journey/d2nn-artwork.png` | 复用已验收science-video/source-artwork.png原文件；后续生成的D2NN机制解释图，非论文原始证据 | LOCAL PROTOTYPE；保留原图字节，非新生图 |
 | `apps/web/test/e2e/research-journey-review.spec.ts` | 三态连接、修改/撤销、移动端焦点、中英文及截图 | LOCAL PROTOTYPE validation |
 
-| `apps/web/app/dashboard/dashboard.module.css` | 正式研究桌面首片局部浅灰白/深青展示层；page保留真实组件/权限/恢复与全局Wanko | LOCAL CANDIDATE；DEPLOYED080fa74；完整CI/server/public验收通过 |
+| `apps/web/app/dashboard/dashboard.module.css` | 正式研究桌面首片局部浅灰白/深青展示层；page保留真实组件/权限/恢复与全局Wanko | 当前363257aa产品布局已部署，实际浏览与限制见CURRENT handoff；080fa74为历史 |
 
 | `apps/web/components/visual/ResearchWorkbenchHermes.tsx` | 复用原Wanko Live2D与静态fallback；增加样稿紧凑尺寸，未修改renderer | LOCAL CANDIDATE；单实例/减少动效/头像身份复用 |
 
-| `apps/web/app/research-objects/[id]/overview/overview.module.css` / `apps/web/test/e2e/research-overview.spec.ts` | 真实概览完整叙述、最新已提交版本审核资产、段落Hermes目标；桌面/移动端与历史版本过滤验证 | LOCAL CANDIDATE；DEPLOYED080fa74；完整CI/server/public验收通过 |
+| `apps/web/app/research-objects/[id]/overview/overview.module.css` / `apps/web/test/e2e/research-overview.spec.ts` | 真实概览完整叙述、最新已提交版本审核资产、段落Hermes目标；桌面/移动端与历史版本过滤验证 | 当前363257aa产品布局已部署，实际浏览与限制见CURRENT handoff；080fa74为历史 |
 
 | `apps/agent-worker/src/workspace-guide.ts` / `apps/agent-worker/test/workspace-guide.test.ts` | 将现有已验证target传入Gateway模型上下文；解释sdf-evidence→reproducibility映射；段落引导回归 | RELEASE CANDIDATE；不新增API字段或权限 |
 
@@ -594,4 +594,4 @@
 | infra/chatgpt-browser/broker.mjs | 服务器网页生图队列broker；Gateway、权限、提交恢复与草稿回传 | DEPLOYED `0c635525`；真实task/asset `eb48809b…` succeeded/draft，精确会话恢复且不重发 |
 
 | `.agents/skills/apple-design/` / `.agents/skills/emil-design-eng/` / `.agents/skills/design-artifact/` / `.agents/skills/html-prototype/` | 用户授权的项目设计Skills，固定上游提交/原始引用/MIT许可证；由frontend-design按需应用 | 2026-09-11安装；来源见各SOURCE.md，最新实现/部署见CURRENT handoff |
-| `apps/web/components/presentation/ResearchMediaDeck.tsx` / `apps/web/components/presentation/ResearchMediaDeck.module.css` | 工作台/公开页共用单图与多图HTML幻灯片、图片视频占位和真实图注 | 2026-09-11候选；公开只用发布版本已审资产，部署见CURRENT handoff |
+| `apps/web/components/presentation/ResearchMediaDeck.tsx` / `apps/web/components/presentation/ResearchMediaDeck.module.css` | 工作台/公开页共用单图与多图HTML幻灯片、图片视频占位和真实图注 | 已部署；公开只用发布版本已审资产，多图真实样本尚未完成，见CURRENT handoff |

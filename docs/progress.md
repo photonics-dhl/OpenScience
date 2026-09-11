@@ -1,30 +1,27 @@
 # OpenScience 当前进度
 
-## 2026-09-11 — 产品体验改造已部署，视觉收尾中
-- 应用c0fdc389 / rollback4909e11b；provider d1630135不变。服务器必要构建启动exit0，未运行测试/CI/本机build。
-- Chat6Pro规划、项目apple-design/emil-design-eng/frontend-design及Sol High复核已用于实际实现。
-- 研究桌面/共享会话/单一资料入口/公开大图/真实缩略图已部署；公开22/v10与图实际打开。
-- 三条19/20/21 Task/E2E可恢复归档已完成，公开index只剩22，原文件/版本保留。
-- 实际跨桌面/编辑器/探索/公开页保持账号；/me200及7天Cookie续期已观察。补修重复global头像、初次任务loading/失败fallback和单条探索横卡，待部署；最终状态见唯一CURRENT handoff。
+## 2026-09-11 — 研究桌面与公开阅读体验已部署
+- branch codex/onchip-video-release；worktree .worktrees/onchip-video-release。ECS应用/源码363257aa2a98a47e847f676aa32fd675f53f1ad6，rollbackc0fdc389d06d0dfd49213945d0641644854e7090；provider d1630135/rollback92cc416e不变。后续docs-only HEAD不是新的应用release。
+- 服务器必要build/start完成，deploy --no-tests --skip-migrate --reuse-unchanged-capability-images exit0；未运行测试/CI/本机构建。。日志C:/Users/Mac/AppData/Local/Temp/xgs-ui-final-deploy-20260911.log。无测试、CI、本机构建或新模型/生图调用。
+- 研究桌面明确继续研究与需处理/后台任务；保留真实并发与历史；初次读取、部分失败、真实无任务分开，专用任务接口失败不吞掉global成功结果，可见页/focus静默更新。
+- Hermes卡片保留透明形象与实际对话Drawer，关闭桌面旧全局重复头像。研究卡片直达编辑器；加载期与成品背景一致。
+- 编辑器四个大块资料归入文末“资料与修改记录”；未确认AI提取只在正文实际操作处展示，保留必要来源/缺失字段确认。
+- 公开页贡献→完整核心图/可选视频→六字段→折叠来源历史；版本/日期/复制引用同行，无内部枚举和假图；不存在的视频保留短行。
+- 探索与首页复用已发布版本真实缩略图/标题/洞见；只有一条结果时图文横卡。“最新公开”按publicId倒序，不冒称人工精选或最新版本时间排序。
+- 3条Task/E2E（19/20/21）经既有domain脚本可恢复归档完成；实际公开index仅22，原文件/Publication/公开ID保留。
+- 根SessionProvider、validated /me Cookie续期、跨标签状态和迟到请求竞态已实现；实际/me200且Set-Cookie续604800秒，桌面→编辑器→探索→公开页账号保持。未复现真实401，不能以短期浏览证明长期绝不失效。
+- 363最终实页：桌面floating stage=0、卡片头像=1，真实2项需处理任务和6条历史可見；对话Drawer可打开/关闭，未发送新模型请求；探索单篇横卡图文同屏且账户保持。已查看最终桌面/探索及未变化的c0fd公开/编辑器截图。
+- 项目apple-design/emil-design-eng/frontend-design实际用于实现，入口skill增加页面职责/缩略图/资料层级约束；无重复安装。Chat6Pro完整产品规划已取得并采纳；Sol Medium桌面、Sol High会话及独立风险复核，未降低科学标准。
+- 实际截图发现的旧global头像和假空任务已再修，不因必要构建通过就宣称页面完美。完整截图使用非css CDP layoutViewport尺寸，已解决Chrome125%造成的取图裁切。
 
-## 2026-09-11 — 第一篇真实带图 RO 已公开
-- 历史发布节点：branch codex/onchip-video-release；worktree .worktrees/onchip-video-release。应用/code378a950697e3addd390c05a3dc29af0362328807已部署exit0，rollback9c5088ea；provider d1630135/rollback92cc416e，无新软件。后续docs-only提交不代表新release。
-- 公开成果：https://openscience.428312321.xyz/research/OSR-2026-000022/v/10 。v10=f4e2dc71，RO c896802c；已纠正旧v7误记。Hermes对话发布201，时间2026-09-11T14:39:38.371Z；匿名HTTP200，核心图片实际加载。
-- b19a65bd原Chat刷新后取回PNG1672×941/622483bytes，原任务retry入库，无重复生成。主会话/Sol High/Chat6Pro真实图片科学审核通过，Hermes“采用1”批准。e0旧错误图仍rejected。
-- 原PDF/高级解析与服务器Hermes凝练复用，无重跑OCR。48条context来源经人工逐组确认，2条只有章节标题的关联移除，102条Evidence/原PDF/历史保留。两重复Claim归为对应核心的supporting，12claims/6core、所有ID/text/证据及b19来源不变。
-- 已交付发布恢复：已有Claim图校验纳入review，保留publish终检；未公开版本Hermes“继续编辑”撤回审核到draft实际200，权限/Serializable/Publication存在保护/审计和审核失效完整。
-- 贡献→图视频→六字段→折叠资料已实际观察；图片居主要位置，视频保留占位。项目apple-design/emil-design-eng/design-artifact/html-prototype已安装登记；冷白/墨色/青绿与共享网格沿用。
-- 普通Chat6Pro实际回复支持当前图作为概念示意公开，并讨论受限撤回审核方案；Sol High做发布并发/权限及实际数据变更静态复核。未下调科学要求，未宣称量化token节省比例。
-- 没有运行测试/CI/本机build；仅服务器部署必要编译启动及用户授权真实产品操作。部署日志C:/Users/Mac/AppData/Local/Temp/xgs-deploy-publish-recovery-20260911.log。
+## 真实带图公开成果（保持）
+- https://openscience.428312321.xyz/research/OSR-2026-000022/v/10 ，RO c896802c，正式v10=f4e2dc71，草稿修订11。
+- Hermes对话发布201，2026-09-11T14:39:38.371Z；b19核心PNG1672×941经主会话/Sol High/Chat6Pro审阅并approved，公开naturalWidth1280。
+- 复用原高级解析和Hermes六字段；48context来源人工确认、2标题引用移除、重复节点归supporting，102Evidence/12claims/6core、原PDF/历史/图片来源保留。
+- 既有发布恢复与review校验前移已部署；不放宽publish终检，不放行旧rejected科学错误。
+- 本轮没有重新提取或生图。既有完整样例含人工浏览器恢复、证据确认与节点整理，不能冒充任意论文全自动可靠处理。
 
-## 本轮真实问题与修复
-- Chat空白并不等于没生成：刷新原会话找回图；只关闭不响应空主页恢复CDP，不重启全浏览器或重发请求。provider已移除自动整浏览器重启及单任务uncertain全局阻断。
-- 页面3分钟停止等待、retry空JSON问题已由9c修复；这轮不再重跑这些检查。
-- 发布review遗漏主张图校验，导致approved后无法编辑：378将同一规则前移并添加显式撤回审核，避免困住用户。
-- DOM截图受Chrome125%缩放裁切，实际clientWidth=scrollWidth=1140；不据裁切误报网站横向溢出，也不宣称完整视觉验收。
-- 原稿科学错误/旧素材拒绝保留，不用历史演示代替当前图。
-
-## 尚未完成与入口
-- 当前一篇带图发布已闭环；视频、真实多图HTML样本/独立导出、其余精选论文和更大范围旧数据归档尚未全部完成。暂停视频与批量冷启动。
-- 本次包含人工浏览器恢复、证据确认和重复节点整理；通用全自动异常恢复未证明，不把展示样例冒充所有新论文已自动可靠处理。
-- 唯一CURRENT：docs/handoff/2026-09-10-hermes-web-image-handoff.md；详细产品证据、风险、版本、控制入口按该文档。
+## 下一阶段与边界
+- 本轮UI之后再提升Hermes全文理解、来源关联、去重和科学自审，减少人工纠错；不以减少按钮替代科学质量。
+- 当前一篇真实带图公开；2–3篇精选目标尚未全部完成。视频、真实多图HTML样本/独立导出与更大范围旧数据清理仍待后续，暂停批量冷启动。
+- 唯一CURRENT：docs/handoff/2026-09-10-hermes-web-image-handoff.md；版本、原始素材ID、归档和控制入口以其为准。

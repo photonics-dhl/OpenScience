@@ -1,9 +1,9 @@
 # Hermes Capability Registry
 
-- CURRENT 2026-09-11：应用378a9506/rollback9c5088ea，provider d1630135/rollback92cc416e。b19核心图真实取回、科学审核、Hermes对话发布全部完成；v10=f4e2dc71已公开为OSR-2026-000022-v10，匿名页面200及图片加载已观察。发布恢复与审核顺序修复已部署；无新软件。详见唯一CURRENT handoff，不再沿用旧“无PNG/未公开”状态。
+- CURRENT 2026-09-11：应用363257aa / rollbackc0fdc389，provider d1630135 / rollback92cc416e。研究桌面、单一资料入口、公开大图/真实索引与共享会话已部署；/me200并续7天Cookie，实际跨页账号保持。19/20/21可恢复归档完成，22/v10真实图文公开保留。无新软件/模型调用；长期会话与Hermes进一步能力见唯一CURRENT handoff。
 
 - 最新2026-09-11：服务器第二Chat账号已确认登录为Pro，远程桌面已可操作；Chat6Pro实际收到三张产品截图并回复规划，会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。当前无需用户继续密码认证。
-- 本轮媒体画廊/Hermes同工作台/公开阅读及发布合同修复已部署b05aaeac，实际部署和未决科学问题见CURRENT handoff。未新增服务、模型或插件，未实施自动账号轮换。
+- 历史媒体画廊/Hermes同工作台/公开阅读及发布合同修复已部署b05aaeac，实际部署和未决科学问题见CURRENT handoff。未新增服务、模型或插件，未实施自动账号轮换。
 
 > 状态：**CURRENT**
 > 最后核验：2026-09-11
