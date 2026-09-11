@@ -696,14 +696,23 @@ async function waitForSerializableRetry(attempt: number): Promise<void> {
 }
 
 export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<AgentTaskView | null> {
-  const task = await deps.prisma.$transaction(async (tx) => {
-    const claimed = await tx.agentTask.updateMany({
-      where: { id: taskId, status: 'pending' },
-      data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } },
-    });
-    if (claimed.count !== 1) return null;
-    return tx.agentTask.findUnique({ where: { id: taskId } });
-  }, { isolationLevel: 'Serializable' });
+  let task: AgentTask | null = null;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      task = await deps.prisma.$transaction(async (tx) => {
+        const claimed = await tx.agentTask.updateMany({
+          where: { id: taskId, status: 'pending' },
+          data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } },
+        });
+        if (claimed.count !== 1) return null;
+        return tx.agentTask.findUnique({ where: { id: taskId } });
+      }, { isolationLevel: 'Serializable' });
+      break;
+    } catch (error) {
+      if (!isSerializableWriteConflict(error) || attempt >= SERIALIZABLE_RETRY_DELAYS_MS.length) throw error;
+      await waitForSerializableRetry(attempt);
+    }
+  }
   if (!task) return null;
   await syncIngestionState(deps, task.id, 'running');
   return taskToView(task);

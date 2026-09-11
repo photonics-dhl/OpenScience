@@ -261,7 +261,7 @@ export const HERMES_AUTHORITY_REARM_MARKER = 'hermes-authority-pre-provider-v1';
 type GenerationRecoveryPlan = {
   storyboardAssetId: string;
   chargeable: Array<{ stepId: string; ordinal: number; oldTaskId: string; sessionId: string; payload: Record<string, unknown> }>;
-  rearm: Array<{ stepId: string; ordinal: number; taskId: string; error: string }>;
+  rearm: Array<{ stepId: string; ordinal: number; taskId: string; error: string; executionAttempt: number }>;
   resume: Array<{ stepId: string; ordinal: number; taskId: string }>;
   preserved: Array<{ stepId: string; taskId: string; assetId: string }>;
 };
@@ -322,16 +322,18 @@ async function inspectGenerationRecovery(
       }
       continue;
     }
-    if (task.status !== 'failed' || task.executionAttempt !== 1 || task.retryCount !== 0 || task.result !== null || asset) return null;
+    if (task.status !== 'failed' || ![0, 1].includes(task.executionAttempt) || task.retryCount !== 0 || task.result !== null || asset) return null;
     let recoveryState: Awaited<ReturnType<NonNullable<HermesResearchRunDeps['inspectImageRecoveryState']>>> | undefined;
     if (inspectImageRecoveryState) {
       try { recoveryState = await inspectImageRecoveryState(task.id); } catch { return null; }
     }
+    // A claim transaction can fail before its first execution or provider submission.
+    if (task.executionAttempt === 0 && recoveryState !== 'before_submission') return null;
     if (recoveryState === 'completed') {
       plan.resume.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id });
     } else if (recoveryState === 'before_submission'
       || (!inspectImageRecoveryState && task.error === HERMES_AUTHORITY_ERROR)) {
-      plan.rearm.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id, error: task.error! });
+      plan.rearm.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id, error: task.error!, executionAttempt: task.executionAttempt });
     } else if ((recoveryState === 'failed' || recoveryState === 'usage_limited' || !inspectImageRecoveryState)
       && task.error && !task.error.startsWith('[blocked]')) {
       plan.chargeable.push({ stepId: step.id, ordinal: step.ordinal, oldTaskId: task.id, sessionId: task.sessionId, payload: payload as unknown as Record<string, unknown> });
@@ -558,7 +560,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         }
         for (const item of plan.rearm) {
           const taskChanged = await tx.agentTask.updateMany({ where: {
-            id: item.taskId, status: 'failed', retryCount: 0, executionAttempt: 1,
+            id: item.taskId, status: 'failed', retryCount: 0, executionAttempt: item.executionAttempt,
             error: item.error, result: { equals: Prisma.DbNull },
           }, data: {
             status: 'pending', progress: 0, retryCount: 1, error: null, dispatchedAt: null,

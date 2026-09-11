@@ -3,7 +3,7 @@
 2026-09-11 实时盘点。先查本页，再查相关条目的入口；能力或服务变动后同一任务内更新。文件存在、服务运行、产品调用成功是不同状态。本页记录部署位置与复用方式；Hermes语义能力/供应商政策见 [能力台账](hermes-capability-registry.md)，实时产品任务见 CURRENT handoff。
 
 ## CURRENT 2026-09-11 产品回传
-- production/provider `6a9f650e50aa5358c50522c3c680977879190b18`，rollback `3ee10d6e2d5efb9df8f4a09fa4febd7feda60857`；构建和服务启动完成。
+- production/provider `48d9fa65db134575f53cf2a30724aa47a14eeea4`，rollback `6a9f650e50aa5358c50522c3c680977879190b18`；构建和服务启动完成。
 - Deep-sub-cycle图36a4…实际已由Hermes/chatgpt-web保存为产品draft。页面已显示1/6进度、查看入口和审核按钮，剩余五图未完成。
 - 服务器CDP可连接；7d8…原会话明确限流，旧UNCERTAIN已原会话续取为failed/USAGE_LIMIT，未重发。不能再误诊成网络或浏览器不可用。
 - `paper-analysis`与`document-parser`均运行且healthy；高级解析和六维成果已复用，不重跑OCR。下方旧Tesseract-only描述为历史基线，不代表当前高级分析服务未投入使用。
@@ -19,12 +19,12 @@
 
 | 能力 | 已有位置 / 入口 | 状态与复用方式 |
 |---|---|---|
-| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | production `6a9f650e…` / rollback `3ee10d6e…`；首批构建启动完成，真实页面已观察1/6、限流与成果入口 |
+| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | production `48d9fa65…` / rollback `6a9f650e…`；首批构建启动完成，真实页面已观察1/6、限流与成果入口 |
 | 主机资源 | ECS 16 CPU、30 GiB RAM、无 NVIDIA GPU | 盘点时约22 GiB可用；CPU解析器必须有界并发。Marker/MinerU等GPU高质量模式不能按GPU吞吐数据推断本机效果 |
 | 完整图形 Chrome | 宿主 `/opt/openscience-tool-cache/playwright/chromium-1234/chrome-linux64/chrome`；ScanSci镜像内 `/opt/scansci-browsers/chromium-1234/chrome-linux64/chrome` | 已静态确认完整二进制。可复用现有镜像与配套资源；不是只存在 headless shell |
 | 无头 Chromium | 宿主 `/root/.cache/ms-playwright/chromium_headless_shell-1234/` 与共享缓存同名目录；ScanSci镜像 `/opt/scansci-browsers/chromium_headless_shell-1234/` | 现成截图/渲染资源；不能用“仅此目录存在”的旧记录推断没有完整浏览器 |
 | 浏览器运行依赖 / Xvfb | `openscience-scansci-mcp:7f8e47d931b751cc28c1000325128c2ca86566cb`；镜像 `/usr/bin/Xvfb` | 已有图形库与Xvfb；独立浏览器可派生镜像，不启动或修改生产ScanSci服务、不挂载其登录卷 |
-| 网页远程桌面、生图与科学审阅 provider | `infra/chatgpt-browser/`；`/opt/openscience-chatgpt-browser` | bundle `6a9f650e…`；真实Deep-sub-cycle图片36a4…已回传，7d8…明确USAGE_LIMIT。复用原浏览器/登录、独立图片及科学审阅锁；入口见[浏览器手册](chatgpt-browser.md) |
+| 网页远程桌面、生图与科学审阅 provider | `infra/chatgpt-browser/`；`/opt/openscience-chatgpt-browser` | bundle `48d9fa65…`；真实Deep-sub-cycle图片36a4…已回传，7d8…明确USAGE_LIMIT。复用原浏览器/登录、独立图片及科学审阅锁；入口见[浏览器手册](chatgpt-browser.md) |
 | Node / Python | 宿主 `/usr/bin/node`、`/usr/bin/python3`；现有 `node:22-bookworm`、`python:3.12-slim` 镜像 | 已有；必要时复用镜像中的Node。不要默认全局安装 |
 | 视频 / 字体 / FFmpeg | `openscience-media-demo:b361f4f7781b760583b3a312829877c4d6310e8a` 等已有media镜像；源码 `apps/media-demo/Dockerfile` | 镜像包含FFmpeg、CJK字体与无头浏览器；demo镜像可复用运行依赖，不代表Hermes完整视频产品链路通过 |
 | 语音模型 | `/opt/openscience-models/qwen3-tts-customvoice-0c0e305`；`openscience/tts-audition:qwen0.1.1` | 目录与镜像存在，本轮未调用；不要重复下载模型，也不推断生产已接入 |

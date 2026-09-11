@@ -87,7 +87,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     const existing = await deps.prisma.presentationAsset.findUnique({ where: { id: task.id }, include: { sourceClaims: true } });
     if (existing) return { assetId: existing.id, kind: existing.kind, status: existing.status, contentHash: existing.contentHash, sourceClaimIds: payload.sourceClaimIds };
     const preProviderAuthorityRearm = payload.sceneImage && payload.hermesRunAuthority
-      && task.executionAttempt === 2 && task.retryCount === 1 && task.recoveryContract === HERMES_AUTHORITY_REARM_MARKER;
+      && [1, 2].includes(task.executionAttempt) && task.retryCount === 1 && task.recoveryContract === HERMES_AUTHORITY_REARM_MARKER;
     const completedProviderRecovery = payload.sceneImage && task.executionAttempt > 1
       && Boolean(options.gateway?.canResumeImageFromCompletedResult)
       && Boolean(options.gateway?.resumeImageFromCompletedResult)
@@ -101,7 +101,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         throw new Error('[blocked] Image retry has no durable pre-submission proof');
       }
       const consumed = await deps.prisma.agentTask.updateMany({ where: {
-        id: task.id, status: 'running', executionAttempt: 2, retryCount: 1,
+        id: task.id, status: 'running', executionAttempt: task.executionAttempt, retryCount: 1,
         result: { equals: { hermesRecovery: HERMES_AUTHORITY_REARM_MARKER } },
       }, data: { result: Prisma.DbNull } });
       if (consumed.count !== 1) throw new Error('[blocked] Hermes authority retry marker is invalid');

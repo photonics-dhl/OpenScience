@@ -8,9 +8,10 @@
 ## Version tuple
 - worktree: E:/Miscellaneous/XGS/.worktrees/onchip-video-release
 - branch: codex/onchip-video-release
-- application / production / browser bundle: 6a9f650e50aa5358c50522c3c680977879190b18
-- rollback: 3ee10d6e2d5efb9df8f4a09fa4febd7feda60857
-- 首批已部署，实际页面显示1/6图解、限流说明、成果入口。第二批候选：折叠AI绘图细节、288px侧栏、提示词可见标签/内部规则分层、显式恢复时复用已保存图片。
+- application / production / browser bundle: 48d9fa65db134575f53cf2a30724aa47a14eeea4
+- rollback: 6a9f650e50aa5358c50522c3c680977879190b18
+- 第二批已部署：折叠AI绘图细节、288px侧栏、提示词可见标签/内部规则分层、显式恢复时复用已保存图片。provider同版本，7d8明确限流后匹配的旧不确定熔断已归档，无新生图。
+- 当前小修候选：领取事务P2034时有界重试；executionAttempt=0且provider证明before_submission的旧失败任务可经原产品恢复入口重新排队。不得放行未确认提交状态。
 
 ## Actual product facts (2026-09-11)
 - RO c896802c-35dd-4b59-8db1-5f374f83a6d8；version 4ed2b16d-0c5f-41a5-a57d-54eff5dbab11；run 436ff261-1f49-42ea-827a-cccfb2fce45b。
@@ -29,9 +30,22 @@
 - 生成汇总保留已完成资产和权限/版本校验，等待其他已派发任务结束，避免单图失败取消其余场景authority。
 
 ## Next actions
-1. 部署第二批候选及对应provider bundle，复用已有浏览器和renderer，不下载；--confirm --no-tests --reuse-unchanged-capability-images。
-2. 7d8现已明确USAGE_LIMIT，只解除该任务不确定状态的旧熔断记录；不发起新生成。后续由既有显式继续入口处理限额恢复后的剩余图。
+1. 部署领取/零次执行恢复小修；--confirm --no-tests --reuse-unchanged-capability-images。provider未改动，保留48d9。
+2. 用户已批准单次继续。新版入口预计保留36a4已完成图，重排未提交6a2，四个明确失败任务新建一次；若再次限流不循环重试。
 3. 真实产品页已观察1/6、来源与审核按钮。现图把内部限制反复画进画面，还有游离>2标记；保持草稿，不能精选发布。
 4. 剩余图等待网页使用限制解除；不靠重复重启/新账号切换绕过限制，不以1张声称6张完成。
 5. 同步本handoff、server-capabilities、capability registry、progress和index中的精确版本。
 - Chat6 Pro再次GO：折叠机器细节、缩小侧栏、区分制作规则与可见标签、同任务已落库图片经完整作用域检查后零生成复用。其“两个机制”的替换例子不受论文证据支持，未采纳。
+
+## 本轮问题与修正
+| 问题 | 修正与边界 |
+|---|---|
+| 提取页反复闪动 | 原1.5秒轮询清空页面并用reload作面板key；现保留内容、稳定key、3秒后台更新 |
+| 一张失败阻断其他正在生成的图 | 保留独立步骤，其他已派发任务持久化后再汇总失败；权限和版本仍逐步核对 |
+| 已有图片却显示全失败且无入口 | 依据实际资产显示1/6与待审状态，失败run仍可打开成果 |
+| 读取原Chat会话立即异常 | 不再把/images、产品页传入严格canonical转换，仅匹配已记录的会话 |
+| 限流被误判为结果不明 | 识别assistant turn里的准确限流消息，传递USAGE_LIMIT，不重启或自动重发 |
+| 已保存图导致继续入口永久拒绝 | 显式恢复时验证同版本/父方案/Claims及completed结果，复用同任务的资产 |
+| 机器绘图细节占据阅读区 | 默认折叠，保留标题和简洁讲解；可展开查看 |
+| Hermes宽侧栏挤占图片 | 宽屏侧栏288px，小屏主内容优先 |
+| 制作指令画进图里 | 提示词分开内部规则和可见标签；原图保留draft，尚未重生成证明质量改善 |
