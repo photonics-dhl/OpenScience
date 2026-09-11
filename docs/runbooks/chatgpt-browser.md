@@ -1,6 +1,6 @@
 # Server ChatGPT browser — operator login research
 
-Status: production `9b97522f…`, provider `48d9fa65…` (2026-09-11). Deep-sub-cycle has one real product draft image of six planned. The old exact conversation's usage limit was reconciled without resending; its matching uncertainty circuit was archived. One user-authorized product retry returned 202 (run version8), preserving that image and dispatching five unfinished scenes; these then failed before web submission because the native image composer shows Extra High, not the science planner label 6 Pro. A provider-only fix is pending. Image review and publication remain pending.
+Status: production `9b97522f…`, provider `f4832487…` (2026-09-11). Deep-sub-cycle has two real draft images of six planned. The old usage-limit conversation was reconciled without resending. A group retry reached version8 then failed before web submission because image mode shows Extra High, not the science planner label 6 Pro (run now failed/version9). The provider-only fix removed that incorrect image-mode requirement while retaining 6 Pro for scientific review. A new scene0 task `8b0ca4c9-eb20-4478-a79c-d1b8e0dadc25` then succeeded through the product button: Hermes prompt, native web image generation, download, storage and automatic gallery display. Scientific review and publication remain pending.
 
 ## Current product observations
 - A failed AgentTask/run can coexist with its already-persisted image after an old completion conflict. Read product presentation-assets before assuming the PNG needs importing.

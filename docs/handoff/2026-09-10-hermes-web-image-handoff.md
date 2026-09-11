@@ -9,7 +9,7 @@
 - worktree: E:/Miscellaneous/XGS/.worktrees/onchip-video-release
 - branch: codex/onchip-video-release
 - application / production: 9b97522f282951cf9328f673dbde8c53eaafb8f8
-- browser bundle: 48d9fa65db134575f53cf2a30724aa47a14eeea4（本次仅应用领取/恢复逻辑变化，provider复用）
+- browser bundle: f48324870f25b50c3a21eaad898beea87fb0aa1d；provider rollback48d9fa65，application rollback48d9fa65
 - rollback: 48d9fa65db134575f53cf2a30724aa47a14eeea4
 - 第二批已部署：折叠AI绘图细节、288px侧栏、提示词可见标签/内部规则分层、显式恢复时复用已保存图片。provider同版本，7d8明确限流后匹配的旧不确定熔断已归档，无新生图。
 - 已部署领取事务P2034有界重试和attempt0的未提交恢复；Chrome6 Pro已复核GO。未运行测试，服务器发布构建/启动完成。
@@ -18,7 +18,7 @@
 - RO c896802c-35dd-4b59-8db1-5f374f83a6d8；version 4ed2b16d-0c5f-41a5-a57d-54eff5dbab11；run 436ff261-1f49-42ea-827a-cccfb2fce45b。
 - Deep-sub-cycle PDF已完成高级解析及Hermes全文凝练，task 1e324308-fd26-4cc1-8612-8a1c269909a9；六字段已由用户确认并写入版本；6 claims/54 evidence已确认。
 - 修订图解方案5fc9ab10-b3f8-4e68-ae31-0eb57c294c4e已经批准，六个场景任务已创建。
-- 图片36a4f82b-10bc-40f4-b43c-bc1d8990f6c9实际已由服务器chatgpt-web保存到产品为draft，sceneIndex4；并非只存在spool。authenticated presentation-assets GET已返回该图片与两份方案。
+- 真实产品现有2/6图：原36a4f82b-10bc-40f4-b43c-bc1d8990f6c9（scene4）及新8b0ca4c9-eb20-4478-a79c-d1b8e0dadc25（scene0），均draft。新任务succeeded/progress100/provider completed；服务器从Hermes提示词→网页提交→下载/规范化→存储→页面自动展示走通，无人工图片导入。
 - 六图未全完成。7d8fafce-390c-4a4e-9024-ec89650de631的精确会话明确显示“You’ve hit your rate limit.”；服务器Pro菜单禁用。浏览器CDP实际连接成功，无需重启或重装。
 - 8f4f6f79… /986ff3d9… 是EXPIRED；1f2d0677… 是EXECUTION_FAILED；6a2cc3bf…尚无provider结果；7d8…已只读续取原会话确认为failed/USAGE_LIMIT。旧结果和失败marker已归档，无重发。
 - 通过真实页面点击一次“Continue unfinished generation”，POST202；run已generating_scene_images/version8。原36a4保留、6a2原id重排，四个新task：ordinal0=5db130af-5ada-4f55-a70f-36fb8f690c9b，2=edc98363-60e1-470a-a77d-e4442c3f47ff，3=64f186c1-0409-4762-a38a-0959e69bf5a3，5=eb1819af-1b22-4d73-9ecf-6998d6494a3f。随后五项均在发送前失败；run已failed/version9，原图step已正确awaiting_approval。定位MODEL_6_PRO_NOT_READY：生图form仅显示Create image/Extra High，硬性6Pro文案检查错误。未写submitted.json、未发送网页prompt。
@@ -31,10 +31,10 @@
 - 生成汇总保留已完成资产和权限/版本校验，等待其他已派发任务结束，避免单图失败取消其余场景authority。
 
 ## Next actions
-1. 部署仅provider的小修：图片只要求实际登录及Create image模式，6Pro要求仅用于科学审阅；保留所有来源/发送次数检查，错误码允许数字以免吞掉MODEL_6_PRO_NOT_READY。
-2. 通过批准方案的既有单张生图产品入口生成一张观察；不改旧终态、不重跑解析。新图回产品后查看物理关系/可见标签/整体画面，不自动批准或发布。
+1. provider f4832487已单独部署。只离线复用依赖，生成Prisma客户端后定向构建observability/ai-gateway，无应用重启、无新浏览器下载。
+2. 单张8b0ca4c9已成功并自动进入成果页：1280×720、完整加载，有查看原图/审核入口；精确会话https://chatgpt.com/c/6aa3731b-bd24-83ea-9e19-90b4b2f732ee。该任务来自批准方案scene0产品按钮，原批量run仍failed/version9，不能冒充批量已恢复。
 3. 真实产品页已观察1/6、来源与审核按钮。现图把内部限制反复画进画面，还有游离>2标记；保持草稿，不能精选发布。
-4. 不靠重复重启/新账号切换绕过使用限制，不以1张声称6张完成。实际成果页图片已完整加载1280×720，机器细节默认关闭，viewport1151时无横向溢出。
+4. 仍缺scene1/2/3/5四图；旧scene4有制作指令外露，新scene0未见该问题但物理细节未完成独立科学验收，均保持draft。发布/公开精选未完成。机器细节默认关闭，viewport1151时无横向溢出。
 5. 同步本handoff、server-capabilities、capability registry、progress和index中的精确版本。
 - Chat6 Pro再次GO：折叠机器细节、缩小侧栏、区分制作规则与可见标签、同任务已落库图片经完整作用域检查后零生成复用。其“两个机制”的替换例子不受论文证据支持，未采纳。
 
