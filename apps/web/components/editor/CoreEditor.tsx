@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { HermesAnchor } from '@/components/hermes/HermesAnchor';
@@ -106,7 +106,7 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, s
                   data-reading-role="reading"
                   data-sdf-math-display="true"
                   onClick={() => { setEditingField(field); onSelectField(field); }}
-                  onKeyDown={(event) => {
+                  onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
                     if (event.key !== 'Enter' && event.key !== ' ') return;
                     event.preventDefault();
                     setEditingField(field);
