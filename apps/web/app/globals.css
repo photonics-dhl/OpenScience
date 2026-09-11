@@ -1274,16 +1274,20 @@ textarea::placeholder {
 
 .pub-reading-surface {
   min-height: 100dvh;
-  padding: clamp(2.5rem, 6vw, 6.75rem) clamp(1rem, 4vw, 4rem);
+  padding: 3rem clamp(1rem, 4vw, 4rem) 5rem;
   background: var(--os-paper);
 }
 
 .pub-reading-layout {
   display: grid;
-  grid-template-columns: minmax(0, 760px) minmax(240px, 280px);
+  grid-template-columns: minmax(0, 760px);
   gap: clamp(2rem, 5vw, 5rem);
   justify-content: center;
   align-items: start;
+}
+
+@media (min-width: 901px) {
+  .pub-reading-surface[data-has-evidence='true'] .pub-reading-layout { grid-template-columns: minmax(0, 760px) minmax(240px, 280px); }
 }
 
 .pub-reading-column {
@@ -1298,9 +1302,9 @@ textarea::placeholder {
 .pub-reading-identity h1 {
   max-width: 27ch;
   margin: .6rem 0 1.25rem;
-  font-family: var(--font-reading-serif);
-  font-size: clamp(2.2rem, 4.2vw, 4rem);
-  font-weight: 400;
+  font-family: var(--font-ui);
+  font-size: 2.25rem;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -1337,14 +1341,14 @@ textarea::placeholder {
 
 .pub-reading-summary {
   max-width: 42rem;
-  margin: 0 0 clamp(2.5rem, 5vw, 4rem);
+  margin: 0 0 2rem;
   padding: 1.5rem 0 0;
   border-top: 2px solid #125d66;
 }
 
 .pub-reading-summary > p:last-child {
   margin: .75rem 0 0;
-  font-size: clamp(1.2rem, 1.9vw, 1.45rem);
+  font-size: 1.125rem;
   line-height: 1.7;
 }
 
@@ -1360,9 +1364,9 @@ textarea::placeholder {
 
 .pub-reading-sdf > section {
   display: grid;
-  grid-template-columns: minmax(7rem, .24fr) minmax(0, .76fr);
-  gap: 1.25rem;
-  padding: 1.25rem 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .5rem;
+  padding: 1.5rem 0;
   border-top: 1px solid var(--os-rule-paper);
 }
 
@@ -1661,7 +1665,7 @@ textarea::placeholder {
 
 @media (max-width: 640px) {
   .pub-reading-surface { padding: 2rem 1rem 4rem; }
-  .pub-reading-identity h1 { font-size: clamp(2.25rem, 11vw, 3.25rem); }
+  .pub-reading-identity h1 { font-size: 1.75rem; }
   .pub-reading-citation .pub-reading-rail { grid-template-columns: 1fr; }
   .pub-claim-boundaries,
   .pub-presentation-grid { grid-template-columns: 1fr; }

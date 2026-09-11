@@ -923,7 +923,7 @@ export async function setVersionLicenses(roId: string, versionId: string, licens
 }
 
 export async function runPublicationReview(versionId: string): Promise<{ review: PublicationReview }> {
-  return request(`/api/versions/${versionId}/review`, { method: 'POST' });
+  return request(`/api/versions/${versionId}/review`, { method: 'POST', body: JSON.stringify({}) });
 }
 
 export async function getPublicationReview(versionId: string): Promise<{ review: PublicationReview | null }> {

@@ -27,7 +27,7 @@ function PublicShell({
     <div
       className={cn(
         'min-h-dvh',
-        tone === 'dark' ? 'surface-workbench' : 'surface-evidence',
+        tone === 'dark' ? 'surface-workbench' : 'surface-evidence surface-product-app',
         className,
       )}
       data-os-surface="public"

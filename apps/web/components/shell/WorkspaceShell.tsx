@@ -35,7 +35,7 @@ function WorkspaceShell({
 }: WorkspaceShellProps) {
   const usesMobilePlaneSwitcher = Boolean(mobileNavigation);
   return (
-    <div className={cn('surface-folio min-h-dvh', styles.workspace, className)} data-os-surface="workspace" {...props}>
+    <div className={cn('surface-folio surface-product-app min-h-dvh', styles.workspace, className)} data-os-surface="workspace" {...props}>
       <SkipLink tone="paper">{skipLabel}</SkipLink>
       <ShellHeader
         actions={<ProductRouteNavigation />}

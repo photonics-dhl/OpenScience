@@ -235,7 +235,7 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
   };
 
   return (
-    <div className="pub-reading-surface" data-public-reading-surface="true">
+    <div className="pub-reading-surface" data-public-reading-surface="true" data-has-evidence={Boolean(selectedEvidence)}>
       <div className="pub-reading-layout">
         <article className="pub-reading-column" data-public-reading-column="true">
           <header className="pub-reading-identity" data-public-identity="true">
@@ -305,8 +305,6 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
         {selectedEvidence && <div className="pub-reading-sidecar"><EvidenceRail evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} /></div>}
       </div>
       <EvidenceSheet open={sheetOpen} onOpenChange={setSheetOpen} onReturnFocus={() => lastEvidenceTrigger.current?.focus()} evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} />
-      <div data-public-deep-navigation="true" className="pub-reading-tabs"><TabNavigation activeTab={activeTab} onTabChange={onTabChange} /></div>
-      {activeTab !== 'overview' && <ComingSoonTab tabName={t(`tab.${activeTab}`)} />}
     </div>
   );
 }

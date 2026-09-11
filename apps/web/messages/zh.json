@@ -1,9 +1,9 @@
 {
   "workbench": {
-    "hermesScope": "改文字、做图解、准备发布",
-    "talkToHermes": "对话",
     "requestVideo": "生成视频",
     "requestImage": "生成图片",
+    "hermesScope": "改文字、做图解、准备发布",
+    "talkToHermes": "对话",
     "resolveBeforePublish": "返回内容，处理需要确认的项目",
     "approvePlan": "批准方案，允许制作",
     "planReadyTitle": "查看与确认图解方案",
@@ -495,12 +495,6 @@
       }
     },
     "presentation": {
-    "manualToolsTitle": "来源与手动工具",
-    "requestImage": "生成图片",
-    "requestVideo": "生成视频",
-    "emptyHermesBody": "告诉 Hermes 想解释的重点，制作进度与成果会保留在这里。",
-    "askHermes": "让 Hermes 生成",
-    "manualToolsBody": "需要精确控制时，再展开来源主张与制作工具。",
       "kicker": "研究展示",
       "title": "富媒体导览",
       "notEvidence": "以下内容用于帮助理解与传播，不作为科学证据。请以关联主张及其原始证据为准。",
@@ -1121,9 +1115,18 @@
     "artifacts": { "document": "文档", "image": "图片", "data": "数据", "code": "代码", "video": "视频", "other": "其他" }
   },
   "presentation": {
+    "askHermes": "交给 Hermes 制作",
+    "emptyHermesBody": "告诉 Hermes 想解释的重点，制作进度与成果会保留在这里。",
+    "manualToolsTitle": "来源与手动工具",
+    "manualToolsBody": "需要精细调整时，再展开来源主张和制作工具。",
+    "requestImage": "生成图片",
+    "requestVideo": "生成视频",
     "sceneProgress": "已生成 {current} / {total}",
     "partialImages": "先查看已生成的图解，其余图片尚未完成。每张图片都可以独立核对；确认后的内容才会用于发布。",
-    "storyboard": {"aiDrawingDetails": "给 AI 的绘图细节",
+    "storyboard": {
+      "manualDetails": "详细指令与旁白",
+      "styleDescription": {"watercolor":"柔和色彩与绘画质感","technical":"清晰准确的科学示意","ink":"简洁线条与结构表达"},
+      "aiDrawingDetails": "给 AI 的绘图细节",
       "generateImage": "生成这一幕的插图",
       "imageCharge": "每次生成 1 张图片，消耗 1 AI credit。生成后请核对画面再审批。",
       "imageSource": "来源分镜：{title} · 第 {number} 幕",
@@ -1168,7 +1171,7 @@
     "sourceTitle": "来源主张、概念图与分镜", "sourceBody": "Hermes 根据所选主张规划概念图或分镜；请先核对主张与来源，完成必要审核后，服务器再生成图片或视频。", "openSourceReview": "查看文献与提取结果", "selectClaims": "选择主张", "selectedLimit": "已选择 {count} / {max} 项", "generate": "生成概念图", "starting": "正在启动…",
     "claimStatementLabel": "核心主张", "claimStatementPlaceholder": "用一句准确的话描述一个结果或机制", "claimDraftNote": "这会保存为人工撰写的草稿；在证据审阅完成前，科学支持状态保持为“待补”。", "addClaim": "添加主张", "claimSaveFailed": "主张暂时无法保存；重试会继续使用同一份草稿。",
     "noClaims": "这个版本还没有主张，请在上方添加第一条核心主张。", "noClaimsReadonly": "这个版本没有记录主张。", "loadingSources": "正在读取这个版本的主张…", "scopeLoadFailed": "主张和展示内容尚未完整载入，因此修改操作保持禁用。", "retryScopeLoad": "重新加载主张和展示内容", "openEditor": "打开 SDF 编辑器", "openVersions": "查看版本",
-    "previewTitle": "研究可视化", "emptyPreviewTitle": "从研究主张开始，构建可视化", "emptyPreviewNeedsSources": "当前版本还没有可用于图解的主张。请先查看已有文献与提取结果，核对主张与来源后再继续；也可以在下方手动起草。", "emptyPreview": "选择可用主张，创建概念图或分镜。", "startVisual": "选择主张并创建图解", "emptyPreviewReadonly": "这个版本没有记录展示内容。", "loadingPreviews": "正在读取这个版本的展示内容…", "assetTitle": "主张概念图", "generatedByPlatform": "由 OpenScience 图解引擎生成", "notEvidence": "用于解释研究，不替代原始证据。", "linkedClaims": "依据这些主张", "linkedClaimsUnavailable": "当前视图无法显示关联主张的正文。", "viewFullSize": "打开完整尺寸图解", "imageNumber": "图解 {number}", "planningHistoryTitle": "规划与既有媒体", "planningHistoryBody": "分镜笔记和可选视频保留在这里，让图解审阅保持聚焦。", "videoSecondary": "这是后续的可选媒体，请与图解分开审阅。", "recoverInSources": "查看来源并继续", "openAsset": "打开展示文件", "approve": "审批并纳入发布", "reject": "拒绝草稿", "rejectedNote": "该草稿已被拒绝，不能再次审批。请针对当前版本创建新草稿。",
+    "previewTitle": "研究可视化", "emptyPreviewTitle": "还没有图片或视频", "emptyPreviewNeedsSources": "当前版本还没有可用于图解的主张。请先查看已有文献与提取结果，核对主张与来源后再继续；也可以在下方手动起草。", "emptyPreview": "选择可用主张，创建概念图或分镜。", "startVisual": "选择主张并创建图解", "emptyPreviewReadonly": "这个版本没有记录展示内容。", "loadingPreviews": "正在读取这个版本的展示内容…", "assetTitle": "主张概念图", "generatedByPlatform": "由 OpenScience 图解引擎生成", "notEvidence": "用于解释研究，不替代原始证据。", "linkedClaims": "依据这些主张", "linkedClaimsUnavailable": "当前视图无法显示关联主张的正文。", "viewFullSize": "打开完整尺寸图解", "imageNumber": "图解 {number}", "planningHistoryTitle": "详细制作指令", "planningHistoryBody": "Hermes 自动整理制作指令，需要查看或自定义时再展开。", "videoSecondary": "这是后续的可选媒体，请与图解分开审阅。", "recoverInSources": "查看来源并继续", "openAsset": "打开展示文件", "approve": "审批并纳入发布", "reject": "拒绝草稿", "rejectedNote": "该草稿已被拒绝，不能再次审批。请针对当前版本创建新草稿。",
     "assetStatus": { "draft": "待审阅", "approved": "已审批", "rejected": "已拒绝" }, "assessment": { "supported": "标记为支持", "partial": "标记为部分支持", "disputed": "标记为有争议", "missing": "尚未记录证据支持" }, "claimStatus": { "needs_review": "提取结果需审阅后才能使用", "blocked": "提取被阻断", "failed": "提取失败" },
     "provenance": "素材绑定当前版本与来源主张；主张修改后，相关素材会失效。",
     "loading": "正在加载展示工作区…", "loadError": "展示工作区暂时无法加载。", "generationStartFailed": "生成任务暂时无法启动；重试会继续使用同一次请求。", "generationFailed": "生成任务失败，请重试。", "transitionFailed": "展示内容状态暂时无法更新。",
@@ -1212,7 +1215,7 @@
       "addMore": "可在上方添加更多材料。",
       "kicker": "证据存储", "title": "文件", "body": "上传论文、数据、代码、图片或视频。只有创建提交后，文件才会成为版本的一部分。", "provenance": "证据来源", "provenanceBody": "上传会记录内容哈希与逻辑路径；提交会把它绑定到不可变的 Research Object 版本。", "defaultCommit": "绑定证据", "commitMessage": "提交说明", "attaching": "正在创建提交…", "attach": "绑定到新版本", "empty": "请先在上方选择文件。", "committed": "证据已提交，新版本已经出现在版本页面。" },
     "sandbox": { "kicker": "可复现实验", "title": "沙箱", "body": "在服务器上运行受边界约束的科研脚本，检查输出，并把执行环境保留在 Research Object 旁。", "context": "Research Object 可视化", "environment": "执行环境", "script": "Python 脚本", "starting": "启动中…", "run": "在沙箱运行", "notFound": "没有找到这个沙箱任务。", "result": "可视化结果", "close": "关闭", "runtime": "运行时间", "download": "下载到本设备", "viewScript": "查看 Python 脚本", "logs": "执行日志", "modify": "修改脚本", "previewError": "无法生成修改预览。", "executeError": "无法创建修改后的任务。", "modifyPrompt": "描述你想要的修改", "modifyPlaceholder": "例如：改变曲线颜色、添加标题或调整 x 轴标签。", "previewing": "正在生成预览…", "preview": "生成预览", "policyPassed": "策略检查通过", "policyBlocked": "策略检查阻断", "diff": "脚本差异", "confirmExecute": "确认执行" },
-    "publish": { "kicker": "发布控制", "title": "发布", "body": "发布是高影响操作：选择版本、记录三类许可、通过发布审核，再确认不可变的公开记录。", "permanence": "公开记录", "permanenceBody": "已发布版本会获得稳定公开 ID、UTC 时间戳和内容哈希，并向所有人公开，不能原地修改。", "version": "要发布的版本", "licenses": "许可", "license": { "text": "正文", "code": "代码", "data": "数据" }, "checking": "正在审核…", "review": "保存许可并审核", "action": "审阅变更", "readiness": "发布就绪度", "notReviewed": "尚未审核", "reviewStatus": { "passed": "审核通过", "blocked": "发布被阻断" }, "emptyTitle": "还没有可发布版本", "emptyBody": "先创建一个提交版本，再进入发布控制。", "published": "已发布公开版本", "confirmTitle": "确认不可变发布", "confirmBody": "这是 R3 操作。确认后，所选版本会获得永久公开 URL，Research Object 的可见性将扩展为所有人可访问；版本、许可、时间戳和内容哈希将成为不可变公开记录。", "cancel": "取消", "confirm": "发布版本", "close": "关闭审阅" },
+    "publish": { "kicker": "发布控制", "title": "发布", "body": "发布是高影响操作：选择版本、记录三类许可、通过发布审核，再确认不可变的公开记录。", "permanence": "公开记录", "permanenceBody": "发布后可通过永久链接公开访问。之后的修改将记录为新版本。", "version": "要发布的版本", "licenses": "许可", "license": { "text": "正文", "code": "代码", "data": "数据" }, "checking": "正在审核…", "review": "保存许可并审核", "action": "发布研究对象", "readiness": "发布就绪度", "notReviewed": "尚未审核", "reviewStatus": { "passed": "审核通过", "blocked": "发布被阻断" }, "emptyTitle": "还没有可发布版本", "emptyBody": "先创建一个提交版本，再进入发布控制。", "published": "已发布公开版本", "confirmTitle": "确认公开这份研究？", "confirmBody": "这个版本及已审核的图片将向所有人公开，并获得永久链接。请确认内容和许可无误；发布后的修改会记录为新版本。", "cancel": "取消", "confirm": "发布版本", "close": "关闭审阅" },
     "settings": { "navigation": "账户设置", "skip": "跳到设置内容", "kicker": "账户 / 偏好", "title": "设置", "body": "管理 OpenScience 的身份、语言和会话。", "identity": "科研身份", "name": "显示名称", "email": "邮箱", "level": "访问级别", "preferences": "偏好", "language": "语言", "evidenceCollapsed": "默认折叠证据", "evidenceCollapsedHint": "公开 RO 仍会完整加载证据，页面上先以摘要高度展示；打印和辅助技术始终保留全文。", "preferenceSaved": "阅读偏好已保存。", "preferenceConflict": "另一会话已更新偏好，已载入最新设置。", "preferenceError": "偏好暂时无法保存，请重试。", "signOut": "退出登录" }
   },
   "editorial": {

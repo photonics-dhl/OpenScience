@@ -7,8 +7,8 @@
 
 ## Version tuple
 - worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- 本轮代码候选尚未部署；起始HEAD 9adcd603，实际HEAD查Git。
-- application production f909c3a48a3c75e952735d8c71aeead393a404dc；rollback8c2832f01136fd47a62fe6f4a4e5e07c2a994c63。
+- 核心改动已部署cec596e8；本轮继续修实际页面的文案分组、主题/阅读栏和审核空JSON故障，实际HEAD查Git。
+- application production cec596e809a558139ea1b391a65605c104dc64ba；rollback f909c3a48a3c75e952735d8c71aeead393a404dc。
 - browser provider f48324870f25b50c3a21eaad898beea87fb0aa1d；provider rollback48d9fa65db134575f53cf2a30724aa47a14eeea4。
 - OAuth bridge补丁独立：/opt/openscience-chatgpt-browser/scripts/host.mjs，备份host.mjs.before-google-oauth-20260911。
 
@@ -25,7 +25,7 @@
 - fd719902整图仍有科学错误：FWHMₛ标成横向y缝宽，论文对应沿电子路径z的场宽；不得凭approved状态发布。v1旧图也有已记录科学问题。
 - v2一次性5Claim/50Evidence恢复已审计，冻结快照未改；不要重跑。
 
-## Candidate changes
+## Implemented changes
 - API客户端正确解包许可证；公开确认一次后依次保存许可、审核、推进状态、发布；blocked保留真实原因，失败刷新状态，成功可重开公开链接。
 - 发布事务用同一已审核当前Claim/Evidence和有效许可证重建最终public record，防止公开旧commit快照。版本许可证三项原子写入并与发布竞争同一Version行，已公开版本不可再改。
 - 禁止无内容变化的空commit，但附件新增/替换可正常创建版本；阶段/版本URL与Hermes上下文衔接，不因普通切页造版本。
@@ -34,6 +34,11 @@
 - 未来ingestion确认按明确字段/producer/lineage复用新canonical Claim，保留人工/不同来源Claim；只按精确来源身份去重证据。不修改历史生产行，不按同文去重或自动验证。
 - 视频保持已有服务的真实素材前置要求，不声称已生成新视频；没有可用Claim或批准方案时明确下一步。
 - 请求不确定时保存原 action/sourceIds/完整指令与同一幂等键，切换版本保留原请求；已完成操作可发起独立新任务。冗余pending不再覆盖有一致已验证证据的succeeded Claim；独立High定向收尾，未运行测试。
+
+## Latest live findings
+- cec596e8服务器构建/启动完成；实际v6许可证PUT200。审核POST因空JSON请求体触发Fastify错误，候选已加{}；未绕过审核。
+- 实际页面发现翻译误放public.presentation子组、工作台漏接统一主题，修正键归属和控件边框/色彩。公开页改为默认760px居中单栏，证据仅展开后占侧栏，标题36px/移动28px。
+- OSR-2026-000020/v/2仍是旧E2E内容，不是最新论文凝练结果；只用于观察现有公开页，不能当作新精选。
 
 ## Routing / next
 - 网页6Pro负责截图方案；Sol medium负责媒体页和ingestion producer修复；Terra medium负责公开页与Hermes面板；Sol High独立复核发布/并发/来源与请求边界；主会话整合部署。
