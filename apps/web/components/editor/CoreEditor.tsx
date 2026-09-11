@@ -124,7 +124,7 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, s
                   label={t(field)}
                   onBlur={() => setEditingField((editing) => editing === field ? null : editing)}
                   onChange={(value) => onEdit(field, value)}
-                  onFocus={() => onSelectField(field)}
+                  onFocus={() => { setEditingField(field); onSelectField(field); }}
                   placeholder={t(`hints.${field}`)}
                   value={core[field]}
                 />
