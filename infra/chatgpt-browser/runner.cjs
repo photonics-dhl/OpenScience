@@ -300,7 +300,15 @@ async function claimAuthenticatedImagePage(context) {
 async function closeStaleOperatorPages(context) {
   for (const page of context.pages()) {
     const name = await bounded(page.evaluate(() => window.name), 2000).catch(() => '');
-    if (/^xgs-image-(?:gallery-)?[0-9a-f-]{36}$/i.test(name) && name !== `xgs-image-${id}`) await page.close().catch(() => {});
+    if (/^xgs-image-(?:gallery-)?[0-9a-f-]{36}$/i.test(name) && name !== `xgs-image-${id}`) {
+      const gallery = name.startsWith('xgs-image-gallery-');
+      const oldDir = path.join('/jobs', name.replace(/^xgs-image-(?:gallery-)?/, ''));
+      // A previous submitted conversation may still be generating. Only close
+      // helper pages or tasks that have not sent / already downloaded a result.
+      if (gallery || !fs.existsSync(path.join(oldDir, 'submitted.json')) || fs.existsSync(path.join(oldDir, 'result.json'))) {
+        await page.close().catch(() => {});
+      }
+    }
   }
 }
 (async () => {
