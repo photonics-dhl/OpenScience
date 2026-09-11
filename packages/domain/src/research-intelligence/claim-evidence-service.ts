@@ -458,21 +458,20 @@ export function validateCanonicalEvidenceSources(
     throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence segment count is invalid');
   }
   const blocks = new Map<string, {
-    ordinal: number; page: number; pageWidth: number; pageHeight: number;
+    blockOrdinal: number; page: number; pageWidth: number; pageHeight: number;
     text?: string; boundingBox: NonNullable<SourceLocator['boundingBox']>;
   }>();
-  let ordinal = 0;
   for (const page of sourceMap.pages) {
-    for (const block of page.blocks) {
+    for (const [blockOrdinal, block] of page.blocks.entries()) {
       if (!block.text?.trim()) continue;
       blocks.set(block.id, {
-        ordinal, page: page.page, pageWidth: page.width, pageHeight: page.height,
+        blockOrdinal, page: page.page, pageWidth: page.width, pageHeight: page.height,
         text: block.text, boundingBox: block.boundingBox,
       });
-      ordinal += 1;
     }
   }
-  let priorOrdinal: number | undefined;
+  let priorPage = 0;
+  let priorBlockOrdinal = -1;
   let priorBlockId: string | undefined;
   let priorRangeEnd = 0;
   let total = 0;
@@ -486,13 +485,14 @@ export function validateCanonicalEvidenceSources(
       || !locator.charRange || typeof block.text !== 'string'
       || block.text.slice(locator.charRange.start, locator.charRange.end) !== source.quote
       || locator.charRange.end - locator.charRange.start !== source.quote.length
-      || (priorOrdinal !== undefined && (
-        block.ordinal < priorOrdinal
-        || (block.ordinal === priorOrdinal && (locator.blockId !== priorBlockId || locator.charRange.start < priorRangeEnd))
-      ))) {
+      || block.page < priorPage
+      || (block.page === priorPage && (locator.blockId === priorBlockId
+        ? block.blockOrdinal !== priorBlockOrdinal || locator.charRange.start < priorRangeEnd
+        : block.blockOrdinal <= priorBlockOrdinal))) {
       throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence does not match strictly ordered exact source blocks');
     }
-    priorOrdinal = block.ordinal;
+    priorPage = block.page;
+    priorBlockOrdinal = block.blockOrdinal;
     priorBlockId = locator.blockId;
     priorRangeEnd = locator.charRange.end;
     total += source.quote.length + (resolved.length > 0 ? 1 : 0);
