@@ -76,6 +76,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
   const [tasks, setTasks] = useState<DashboardTaskApi[]>([]);
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
+  const loaded = useRef(false);
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
@@ -87,7 +88,8 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true); setError(''); setDetail(null); setCore(emptyCore()); setSaved(false); setConfirmation(null);
+    if (!loaded.current) setLoading(true);
+    setError('');
     const load = taskId ? Promise.all([loadScopedHermesReview(routeParams.id, taskId, getIngestionTask), getResearchIngestion(routeParams.id)]).then(async ([value, recovery]) => {
       if (cancelled) return;
       const confirmed = recovery.tasks.find((task) => task.id === taskId)?.confirmation ?? null;
@@ -112,13 +114,13 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
         router.replace(`/auth/login?returnTo=${encodeURIComponent(`/research-objects/${routeParams.id}/hermes${taskId ? `?task=${encodeURIComponent(taskId)}` : ''}`)}`);
       }
       setError(cause instanceof Error && cause.message === 'HERMES_TASK_SCOPE_MISMATCH' ? t('scopeMismatch') : cause instanceof Error ? cause.message : t('loadError'));
-    }).finally(() => { if (!cancelled) setLoading(false); });
+    }).finally(() => { if (!cancelled) { loaded.current = true; setLoading(false); } });
     return () => { cancelled = true; };
   }, [taskId, routeParams.id, reload, router, t]);
 
   useEffect(() => {
     if (!detail || !['queued', 'stored', 'parsing'].includes(detail.task.state)) return;
-    const timer = window.setTimeout(() => setReload((value) => value + 1), 1_500);
+    const timer = window.setTimeout(() => setReload((value) => value + 1), 3_000);
     return () => window.clearTimeout(timer);
   }, [detail]);
 
@@ -197,7 +199,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
     <DashboardShell mainClassName="p-0" navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
       {workspaceNavigation}
       <div className="min-h-[calc(100dvh-7rem)] px-4 py-7 text-os-ink sm:px-8 lg:px-12"><HermesTaskEntry researchObjectId={routeParams.id} researchTitle={researchTitle} tasks={tasks} loading={loading} error={error} onRetry={() => setReload((value) => value + 1)} />
-        {!loading && !error ? <HermesResearchRunPanel key={`${runId}:${reload}`} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
+        {!loading && !error ? <HermesResearchRunPanel key={runId} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
         {!loading && !error && claimReview && run?.status === 'awaiting_claim_review' ? <HermesClaimEvidenceReview researchObjectId={routeParams.id} run={run} onDone={() => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`)} /> : null}
         {!loading && !error && <button type="button" className="mt-5 min-h-11 rounded-panel border border-os-vermilion-ink px-4 py-2 font-semibold text-os-vermilion-ink" onClick={() => setHermesOpen(true)}>{t('askHermes')}</button>}
         {literatureEntry}
@@ -218,7 +220,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
       {literatureEntry}
       {error && <p className="mt-6 max-w-3xl border-l-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{error}</p>}
       {!detail && error && <div className="mt-4 flex flex-wrap items-center gap-5"><button type="button" onClick={() => setReload((value) => value + 1)} className="min-h-11 font-semibold text-os-vermilion-ink underline">{t('retry')}</button><Link className="min-h-11 py-3 text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/hermes`}>{t('allTasks')}</Link></div>}
-      {runId ? <HermesResearchRunPanel key={`${runId}:${reload}`} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
+      {runId ? <HermesResearchRunPanel key={runId} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
       {loading ? <p className="mt-10 text-base text-os-muted-paper" role="status">{t('loading')}</p> : !detail ? null : <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-os-rule-paper py-3 text-sm text-os-muted-paper">

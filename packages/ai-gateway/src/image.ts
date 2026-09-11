@@ -7,7 +7,7 @@ export interface ImageRequest { prompt: string; requestId?: string }
 export interface ImageProviderResult { bytes: Buffer; contentType: OcrMediaType }
 export interface CompletedImageProviderResult extends ImageProviderResult { promptHash: string }
 export interface ImageResult extends ImageProviderResult { model: string; provider: string; promptHash: string }
-export type ImageRecoveryState = 'before_submission' | 'completed' | 'failed' | 'uncertain' | 'submitted_without_result' | 'unsafe';
+export type ImageRecoveryState = 'before_submission' | 'completed' | 'failed' | 'usage_limited' | 'uncertain' | 'submitted_without_result' | 'unsafe';
 export interface ImageProvider {
   readonly name: string;
   readonly model: string;

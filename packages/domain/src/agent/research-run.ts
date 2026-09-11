@@ -53,7 +53,7 @@ export class HermesResearchRunError extends Error {
 
 export interface HermesResearchRunDeps extends AgentDeps {
   canResumeImageBeforeSubmission?: (requestId: string) => Promise<boolean>;
-  inspectImageRecoveryState?: (requestId: string) => Promise<'before_submission' | 'completed' | 'failed' | 'uncertain' | 'submitted_without_result' | 'unsafe'>;
+  inspectImageRecoveryState?: (requestId: string) => Promise<'before_submission' | 'completed' | 'failed' | 'usage_limited' | 'uncertain' | 'submitted_without_result' | 'unsafe'>;
 }
 export interface HermesSourceReviewDeps extends HermesResearchRunDeps { storage: IngestionDeps['storage'] }
 
@@ -72,6 +72,8 @@ export interface HermesResearchRunView {
   updatedAt: Date;
   canRetryGeneration?: boolean;
   chargeableAttempts?: number;
+  availableImageCount?: number;
+  imageUsageLimited?: boolean;
   steps: Array<{
     id: string;
     stage: HermesResearchStage;
@@ -81,6 +83,8 @@ export interface HermesResearchRunView {
     artifactId: string | null;
     agentTaskId: string | null;
     presentationAssetId: string | null;
+    availableAssetId?: string;
+    availableAssetStatus?: string;
     error: string | null;
   }>;
 }
@@ -226,7 +230,29 @@ export async function getHermesResearchRun(
     .catch((cause) => { throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found', { cause }); });
   const recovery = WRITE_ROLES.has(authority.membership.role)
     ? await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
-  return toView(run, recovery ?? undefined);
+  const view = toView(run, recovery ?? undefined);
+  const imageSteps = run.steps.filter(step => step.stage === 'scene_image' && step.agentTaskId);
+  if (run.versionId && imageSteps.length) {
+    const assets = await deps.prisma.presentationAsset.findMany({ where: {
+      id: { in: imageSteps.map(step => step.agentTaskId!) }, researchObjectId: run.researchObjectId,
+      versionId: run.versionId, kind: 'image', status: { in: ['draft', 'approved'] },
+    }, include: { sourceClaims: { select: { claimId: true } } } });
+    const parentId = run.steps.find(step => step.stage === 'storyboard')?.presentationAssetId;
+    for (const asset of assets) {
+      const image = presentationSceneImageView(asset);
+      const step = view.steps.find(item => item.agentTaskId === asset.id);
+      if (!step || !image || image.storyboardAssetId !== parentId || image.sceneIndex !== step.ordinal
+        || !isDeepStrictEqual(asset.sourceClaims.map(link => link.claimId).sort(), [...run.sourceClaimIds].sort())) continue;
+      step.availableAssetId = asset.id;
+      step.availableAssetStatus = asset.status;
+    }
+    view.availableImageCount = view.steps.filter(step => Boolean(step.availableAssetId)).length;
+    if (deps.inspectImageRecoveryState && run.status === 'failed') {
+      const states = await Promise.all(imageSteps.map(step => deps.inspectImageRecoveryState!(step.agentTaskId!).catch(() => 'unsafe')));
+      view.imageUsageLimited = states.includes('usage_limited');
+    }
+  }
+  return view;
 }
 
 const HERMES_AUTHORITY_ERROR = '[blocked] Hermes run authority is invalid';
@@ -290,7 +316,7 @@ async function inspectGenerationRecovery(
       continue;
     }
     if (task.status !== 'failed' || task.executionAttempt !== 1 || task.retryCount !== 0 || task.result !== null || asset) return null;
-    let recoveryState: 'before_submission' | 'completed' | 'failed' | 'uncertain' | 'submitted_without_result' | 'unsafe' | undefined;
+    let recoveryState: Awaited<ReturnType<NonNullable<HermesResearchRunDeps['inspectImageRecoveryState']>>> | undefined;
     if (inspectImageRecoveryState) {
       try { recoveryState = await inspectImageRecoveryState(task.id); } catch { return null; }
     }
@@ -781,7 +807,9 @@ async function moveRun(
   if (to === 'failed' || to === 'stopped') {
     for (const step of run.steps) {
       if (step.status === 'succeeded') continue;
-      await tx.hermesResearchStep.updateMany({ where: { id: step.id, runId: run.id }, data: { status: to, error } });
+      await tx.hermesResearchStep.updateMany({ where: {
+        id: step.id, runId: run.id, ...(to === 'failed' ? { presentationAssetId: null } : {}),
+      }, data: { status: to, error } });
     }
   }
   await recordAudit(deps, tx, { actorId: run.actorId, action: `hermes.research_run.${to}`, workspaceId,
@@ -886,15 +914,8 @@ export async function reconcileHermesResearchRuns(
           const steps = run.steps.filter((step) => step.stage === stage);
           if (run.status.startsWith('generating_')) {
             const failed = steps.find((step) => step.agentTask?.status === 'failed');
-            if (failed) {
-              await tx.hermesResearchStep.updateMany({ where: { id: failed.id }, data: { status: 'failed', error: failed.agentTask?.error ?? 'Generation failed' } });
-              return moveRun(deps, tx, run, 'failed', ro.workspaceId, failed.agentTask?.error ?? 'Generation failed');
-            }
-            if (!steps.length || steps.some((step) => step.agentTask?.status !== 'succeeded')) {
-              await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
-              return null;
-            }
-            for (const step of steps) {
+            const inFlight = steps.some((step) => step.agentTask?.status === 'pending' || step.agentTask?.status === 'running');
+            for (const step of steps.filter(item => item.agentTask?.status === 'succeeded')) {
               const asset = await tx.presentationAsset.findUnique({ where: { id: step.agentTaskId! }, include: { sourceClaims: { select: { claimId: true } } } });
               if (!asset || asset.researchObjectId !== run.researchObjectId || asset.versionId !== run.versionId
                 || !isDeepStrictEqual(asset.sourceClaims.map((link) => link.claimId).sort(), run.sourceClaimIds)) {
@@ -902,6 +923,14 @@ export async function reconcileHermesResearchRuns(
               }
               await tx.hermesResearchStep.updateMany({ where: { id: step.id, status: 'running' },
                 data: { status: 'awaiting_approval', presentationAssetId: asset.id } });
+            }
+            if (failed && !inFlight) {
+              await tx.hermesResearchStep.updateMany({ where: { id: failed.id }, data: { status: 'failed', error: failed.agentTask?.error ?? 'Generation failed' } });
+              return moveRun(deps, tx, run, 'failed', ro.workspaceId, failed.agentTask?.error ?? 'Generation failed');
+            }
+            if (!steps.length || steps.some((step) => step.agentTask?.status !== 'succeeded')) {
+              await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
+              return null;
             }
             const waiting = stage === 'storyboard' ? 'awaiting_storyboard_review' : stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_video_review';
             return moveRun(deps, tx, run, waiting, ro.workspaceId);

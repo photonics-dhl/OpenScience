@@ -174,7 +174,10 @@ export class AiGateway {
       const result = validateImageBytes(generated.bytes);
       succeeded = true;
       return { ...result, model: provider.model, provider: provider.name, promptHash };
-    } catch { throw new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image generation failed'); }
+    } catch (error) {
+      throw new AiGatewayError('IMAGE_PROVIDER_FAILED', error instanceof Error && error.message === 'USAGE_LIMIT'
+        ? 'IMAGE_USAGE_LIMIT' : 'image generation failed');
+    }
     finally {
       // Separate metadata-only audit: an audit sink exception may contain credentials.
       try {

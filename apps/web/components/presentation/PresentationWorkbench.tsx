@@ -57,6 +57,10 @@ export function PresentationWorkbench({
   const imageAssets = useMemo(() => assets.filter((asset) => asset.status !== 'rejected'
     && !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg')), [assets]);
   const storyboardAssets = useMemo(() => assets.filter((asset) => Boolean(asset.storyboard)), [assets]);
+  const approvedStoryboards = useMemo(() => storyboardAssets.filter(asset => asset.status === 'approved'), [storyboardAssets]);
+  const plannedImageCount = approvedStoryboards.reduce((sum, asset) => sum + (asset.storyboard?.document.scenes.length ?? 0), 0);
+  const readySceneCount = new Set(imageAssets.filter(asset => asset.sceneImage && approvedStoryboards.some(parent => parent.id === asset.sceneImage!.storyboardAssetId))
+    .map(asset => `${asset.sceneImage!.storyboardAssetId}:${asset.sceneImage!.sceneIndex}`)).size;
   const videoAssets = useMemo(() => assets.filter((asset) => asset.kind === 'video'), [assets]);
 
   useEffect(() => {
@@ -89,9 +93,10 @@ export function PresentationWorkbench({
           <section className="mt-6" aria-labelledby="presentation-preview-heading">
             <div className="flex items-center justify-between gap-4 border-b border-os-rule-paper pb-3">
               <h2 id="presentation-preview-heading" className="m-0 text-xl font-semibold tracking-[-0.012em]">{t('previewTitle')}</h2>
-              {imageAssets.length > 0 ? <span className="font-data text-sm tabular-nums text-os-muted-paper">{imageAssets.length}</span> : null}
+              {plannedImageCount > 0 ? <span className="font-data text-sm tabular-nums text-os-muted-paper">{t('sceneProgress', { current: readySceneCount, total: plannedImageCount })}</span> : imageAssets.length > 0 ? <span className="font-data text-sm tabular-nums text-os-muted-paper">{imageAssets.length}</span> : null}
             </div>
-            {loading ? <p className="m-0 py-7 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : loadFailed ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{t('scopeLoadFailed')}</p> : imageAssets.length === 0 ? (
+            {plannedImageCount > readySceneCount && imageAssets.length > 0 ? <p className="my-4 max-w-2xl text-sm leading-6 text-os-muted-paper">{t('partialImages')}</p> : null}
+            {loading && imageAssets.length === 0 ? <p className="m-0 py-7 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : loadFailed && imageAssets.length === 0 ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{t('scopeLoadFailed')}</p> : imageAssets.length === 0 ? (
               <div className="mt-5 rounded-control border border-os-rule-paper bg-os-paper-strong p-5 sm:p-6">
                 <h3 className="m-0 text-base font-semibold">{t('emptyPreviewTitle')}</h3>
                 <p className="m-0 mt-2 max-w-2xl text-pretty text-base leading-7 text-os-muted-paper">{canWrite ? t(eligibleIds.size === 0 ? 'emptyPreviewNeedsSources' : 'emptyPreview') : t('emptyPreviewReadonly')}</p>

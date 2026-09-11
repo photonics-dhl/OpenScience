@@ -58,32 +58,40 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
     ?? eligibleTasks[0]
     ?? null;
 
-  const loadRun = React.useCallback(async (signal?: AbortSignal) => {
+  const loadRun = React.useCallback(async (signal?: AbortSignal, background = false) => {
     if (!runId) return;
-    setLoading(true);
+    if (!background) setLoading(true);
     try {
       const result = await getHermesResearchRun(researchObjectId, runId, signal);
+      if (signal?.aborted) return;
       setRun(result.run);
       setError('');
     } catch (cause) {
       if (signal?.aborted) return;
       setError(cause instanceof ApiClientError ? cause.message : t('loadError'));
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (!signal?.aborted && !background) setLoading(false);
     }
   }, [researchObjectId, runId, t]);
 
   React.useEffect(() => {
     if (!runId) { setRun(null); setError(''); setLoading(false); return undefined; }
     const controller = new AbortController();
+    setRun(null);
     void loadRun(controller.signal);
     return () => controller.abort();
   }, [loadRun, runId]);
 
   React.useEffect(() => {
     if (!runId || !run || ['succeeded', 'failed', 'stopped'].includes(run.status)) return undefined;
-    const timer = window.setInterval(() => { void loadRun(); }, 5_000);
-    return () => window.clearInterval(timer);
+    const controller = new AbortController();
+    let timer: number;
+    const refresh = async () => {
+      await loadRun(controller.signal, true);
+      if (!controller.signal.aborted) timer = window.setTimeout(() => { void refresh(); }, 5_000);
+    };
+    timer = window.setTimeout(() => { void refresh(); }, 5_000);
+    return () => { controller.abort(); window.clearTimeout(timer); };
   }, [loadRun, run?.status, runId]);
 
   async function start() {
@@ -133,10 +141,11 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
   const sourceReady = run?.status === 'awaiting_source_review';
   const claimReviewReady = run?.status === 'awaiting_claim_review' && Boolean(run.versionId);
   const terminal = run?.status === 'failed' || run?.status === 'stopped';
-  const presentationReady = Boolean(run?.versionId && [
+  const presentationReady = Boolean(run?.versionId && (run.steps.some(step => step.stage !== 'source_ingestion') || [
     'generating_storyboard', 'awaiting_storyboard_review',
     'generating_scene_images', 'awaiting_scene_images_review', 'generating_video', 'awaiting_video_review', 'succeeded',
-  ].includes(run.status));
+  ].includes(run.status)));
+  const imageSteps = run?.steps.filter(step => step.stage === 'scene_image') ?? [];
   const legacyGrantNeedsUpgrade = Boolean(run
     && ['awaiting_claim_review', 'awaiting_storyboard_review'].includes(run.status)
     && run.profile === 'onchip-field-sampling-v1' && run.maxAgentTasks === 7);
@@ -152,11 +161,12 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, activeT
     {error ? <div className="mt-4 border-l-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{error}</div> : null}
     {run ? <div className="mt-4 border-t border-os-rule-paper pt-4">
       <p className="font-semibold text-os-ink">{t(`status.${run.status}`)}</p>
-      <p className="mt-2 leading-7 text-os-muted-paper">{t(`description.${run.status}`)}</p>
+      <p className="mt-2 text-sm leading-6 text-os-muted-paper">{run.imageUsageLimited ? t('usageLimited') : run.profile === 'content-driven-image-v1' && run.status === 'awaiting_scene_images_review' ? t('imageReviewDescription') : t(`description.${run.status}`)}</p>
+      {imageSteps.length ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
       <ol className="mt-4 divide-y divide-os-rule-paper border-y border-os-rule-paper">
-        {run.steps.map((step) => <li key={step.id} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{t(step.stage === 'source_ingestion' ? 'source' : 'stepName', { number: step.ordinal + 1 })}</span><span className="font-data text-os-muted-paper">{t(`step.${step.status}`)}</span></li>)}
+        {run.steps.map((step) => <li key={step.id} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{t(`stage.${step.stage}`, { number: step.ordinal + 1 })}</span><span className="font-data text-os-muted-paper">{step.availableAssetId ? t(step.availableAssetStatus === 'approved' ? 'step.succeeded' : 'step.awaiting_approval') : t(`step.${step.status}`)}</span></li>)}
       </ol>
-      {run.error ? <p className="mt-3 text-sm text-os-vermilion-ink">{run.error}</p> : null}
+      {run.error && !run.imageUsageLimited ? <p className="mt-3 text-sm text-os-vermilion-ink">{t(/write conflict|deadlock|P2034/i.test(run.error) ? 'saveConflict' : 'stepFailed')}</p> : null}
       {run.canRetryGeneration && run.chargeableAttempts !== undefined ? <p className="mt-3 text-sm leading-6 text-os-muted-paper">{t('retryDescription', { count: run.chargeableAttempts })}</p> : null}
       <nav className="mt-5 flex flex-wrap gap-4" aria-label={t('actions')}>
         {run.canRetryGeneration ? <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="inline-flex min-h-11 items-center rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : 'retryGeneration')}</button> : null}

@@ -19,11 +19,14 @@ function once(name, data) {
   try { fs.writeFileSync(fd, JSON.stringify(data)); fs.fsyncSync(fd); }
   finally { fs.closeSync(fd); }
 }
-function visibleFailureCode(page) {
+async function visibleFailureCode(page) {
+  // Chat renders this terminal response inside the assistant turn, not an alert.
+  const limited = page.locator('main .agent-turn').getByText(/^(?:You[’']ve hit your rate limit\.|You[’']ve reached your image creation limit\.)$/);
+  if (await limited.first().isVisible().catch(() => false)) return 'USAGE_LIMIT';
   return page.locator('[role="alert"]:visible, [data-testid*="toast"]:visible').allInnerTexts().then(values => {
     const text = values.join(' ').toLowerCase();
     if (/log in|sign in|登录/.test(text)) return 'LOGIN_REQUIRED';
-    if (/usage limit|reached .*limit|try again after|额度|已达.*上限/.test(text)) return 'USAGE_LIMIT';
+    if (/usage limit|rate limit|reached .*limit|try again after|额度|已达.*上限/.test(text)) return 'USAGE_LIMIT';
     if (/network error|connection error|failed to fetch|网络错误|连接错误/.test(text)) return 'NETWORK_ERROR';
     if (/unable to generate|couldn.t generate|generation failed|无法生成|生成失败/.test(text)) return 'IMAGE_GENERATION_FAILED';
     return null;
@@ -312,7 +315,7 @@ async function closeStaleOperatorPages(context) {
   await closeStaleOperatorPages(context);
   if (mode === 'status' || mode === 'download' || mode === 'resume' || mode === 'recover' || mode === 'recover-late') {
     const url = canonicalUrl(read('conversation.json').url);
-    const pages = context.pages().filter(page => canonicalUrl(page.url()) === url);
+    const pages = context.pages().filter(page => page.url() === url);
     const recoveryMode = mode === 'recover' || mode === 'recover-late';
     if (pages.length > 1 || (!recoveryMode && pages.length !== 1)) throw Error('EXACT_CONVERSATION_NOT_FOUND');
     const created = recoveryMode && pages.length === 0;

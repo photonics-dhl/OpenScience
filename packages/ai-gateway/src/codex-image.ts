@@ -82,7 +82,7 @@ abstract class SpoolImageProvider implements ImageProvider {
       const result = validateCodexImageResult(JSON.parse(resultBytes.toString('utf8')), this.spoolProvider);
       if (request.id !== id || result.id !== id || result.promptHash !== request.promptHash) return 'unsafe';
       if (result.status === 'uncertain') return 'uncertain';
-      if (result.status === 'failed') return 'failed';
+      if (result.status === 'failed') return result.errorCode === 'USAGE_LIMIT' ? 'usage_limited' : 'failed';
       const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
       return image.contentType === 'image/png' ? 'completed' : 'unsafe';
     } catch {

@@ -60,7 +60,7 @@ export async function runOne({inbox,results,privateRoot,provider,execute,now=Dat
    return {id,status:'succeeded'};
   }catch(error){
    const uncertain=error?.code==='UNCERTAIN';
-   await publish(results,request,uncertain?'uncertain':'failed',uncertain?'UNCERTAIN':'EXECUTION_FAILED');return {id,status:uncertain?'uncertain':'failed'};
+   await publish(results,request,uncertain?'uncertain':'failed',uncertain?'UNCERTAIN':error?.message==='USAGE_LIMIT'?'USAGE_LIMIT':'EXECUTION_FAILED');return {id,status:uncertain?'uncertain':'failed'};
   }
  }
  return null;

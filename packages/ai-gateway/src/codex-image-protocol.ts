@@ -6,7 +6,7 @@ export const CODEX_IMAGE_READY_MAX_AGE_MS = 60_000;
 export const CODEX_IMAGE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export type ImageSpoolProvider = 'codex' | 'chatgpt-web';
 export interface CodexImageRequest { schemaVersion: 1; provider?: ImageSpoolProvider; id: string; prompt: string; promptHash: string; createdAt: number; deadlineAt: number }
-export type CodexImageErrorCode = 'EXECUTION_FAILED' | 'UNCERTAIN' | 'EXPIRED' | 'INVALID_OUTPUT';
+export type CodexImageErrorCode = 'EXECUTION_FAILED' | 'UNCERTAIN' | 'EXPIRED' | 'INVALID_OUTPUT' | 'USAGE_LIMIT';
 export interface CodexImageResult { schemaVersion: 1; provider?: ImageSpoolProvider; id: string; promptHash: string; status: 'succeeded' | 'failed' | 'uncertain'; errorCode?: CodexImageErrorCode }
 const invalid = (): never => { throw new Error('INVALID_OUTPUT'); };
 function record(value: unknown): Record<string, unknown> {
@@ -25,6 +25,6 @@ export function validateCodexImageRequest(value: unknown, now?: number, expected
 export function validateCodexImageResult(value: unknown, expectedProvider?: ImageSpoolProvider): CodexImageResult {
   const v = record(value);
   const provider = v.provider === undefined ? 'codex' : v.provider;
-  if (Object.keys(v).some(k => !['schemaVersion', 'provider', 'id', 'promptHash', 'status', 'errorCode'].includes(k)) || !['codex', 'chatgpt-web'].includes(provider as string) || (expectedProvider !== undefined && provider !== expectedProvider) || (expectedProvider === 'chatgpt-web' && v.provider === undefined) || !['succeeded', 'failed', 'uncertain'].includes(v.status as string) || (v.errorCode !== undefined && !['EXECUTION_FAILED', 'UNCERTAIN', 'EXPIRED', 'INVALID_OUTPUT'].includes(v.errorCode as string)) || (v.status === 'succeeded' && v.errorCode !== undefined)) return invalid();
+  if (Object.keys(v).some(k => !['schemaVersion', 'provider', 'id', 'promptHash', 'status', 'errorCode'].includes(k)) || !['codex', 'chatgpt-web'].includes(provider as string) || (expectedProvider !== undefined && provider !== expectedProvider) || (expectedProvider === 'chatgpt-web' && v.provider === undefined) || !['succeeded', 'failed', 'uncertain'].includes(v.status as string) || (v.errorCode !== undefined && !['EXECUTION_FAILED', 'UNCERTAIN', 'EXPIRED', 'INVALID_OUTPUT', 'USAGE_LIMIT'].includes(v.errorCode as string)) || (v.status === 'succeeded' && v.errorCode !== undefined)) return invalid();
   return v as unknown as CodexImageResult;
 }

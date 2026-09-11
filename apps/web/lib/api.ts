@@ -292,6 +292,8 @@ export interface HermesResearchRun {
   maxAgentTasks: number | null;
   canRetryGeneration?: boolean;
   chargeableAttempts?: number;
+  availableImageCount?: number;
+  imageUsageLimited?: boolean;
   sourceClaimIds: string[];
   error: string | null;
   createdAt: string;
@@ -305,6 +307,8 @@ export interface HermesResearchRun {
     artifactId?: string;
     agentTaskId?: string | null;
     presentationAssetId?: string;
+    availableAssetId?: string;
+    availableAssetStatus?: string;
     error: string | null;
   }>;
 }

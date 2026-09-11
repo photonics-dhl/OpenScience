@@ -46,6 +46,12 @@ function uncertain() {
   error.code = 'UNCERTAIN';
   return error;
 }
+function isUsageLimit(error) {
+  try {
+    const report = JSON.parse(String(error?.stdout ?? '').trim());
+    return report.error === 'USAGE_LIMIT' && ['ambiguous_no_resend', 'not_submitted'].includes(report.state);
+  } catch { return false; }
+}
 export async function executeWebImage(config, request, privateDir) {
   validateCodexImageRequest(request, Date.now(), 'chatgpt-web');
   const circuit = join(config.privateRoot, 'web-image-circuit.json');
@@ -65,6 +71,8 @@ export async function executeWebImage(config, request, privateDir) {
   } catch (error) {
     if (await exists(join(jobDir, 'result.json'))) {
       // Continue into exact result verification; stdout and exit status are never success evidence.
+    } else if (isUsageLimit(error)) {
+      throw Error('USAGE_LIMIT');
     } else if (await exists(join(jobDir, 'submitted.json'))) {
       const remainingSeconds = Math.floor((request.deadlineAt - Date.now() - 45000) / 1000);
       if (await exists(join(jobDir, 'conversation.json')) && remainingSeconds >= 45) {
@@ -130,8 +138,18 @@ async function recoverUncertainWebImage(config) {
         || await exists(join(privateDir, 'late-recovery.started'))) continue;
       await atomicWrite(join(privateDir, 'late-recovery.started'), String(Date.now()), 0o600);
       if (!await exists(join(jobDir, 'result.json'))) {
-        await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', '330',
-          'node', '/jobs/provider/runner.cjs', 'recover-late', id], 340000).catch(() => {});
+        try {
+          await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', '330',
+            'node', '/jobs/provider/runner.cjs', 'recover-late', id], 340000);
+        } catch (error) {
+          if (isUsageLimit(error)) {
+            await rename(join(resultDir, 'result.json'), join(resultDir, 'result.uncertain.json'));
+            await atomicWrite(join(resultDir, 'result.json'), JSON.stringify({ schemaVersion: 1, provider: 'chatgpt-web',
+              id, promptHash: request.promptHash, status: 'failed', errorCode: 'USAGE_LIMIT' }));
+            // Preserve the circuit: an operator can resume after the account limit recovers.
+            return id;
+          }
+        }
       }
       if (!await exists(join(jobDir, 'result.json'))) continue;
       const bytes = await finalizeWebImage(config, request, privateDir, jobDir, Date.now() + 45_000);
