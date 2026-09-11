@@ -1,6 +1,6 @@
 # Server ChatGPT browser — operator login research
 
-- 2026-09-11当前应用release b05aaeac / rollback cec596e8；界面与发布接口修复已部署，无新服务/模型。服务器Chat6Pro正在审阅v6证据；Hermes方案1956a2c5格式失败，修正反馈候选待部署。后续状态以CURRENT handoff为准。
+- 2026-09-11当前应用release 25917596 / rollback b05aaeac；界面与发布接口修复已部署，无新服务/模型。服务器Chat6Pro正在审阅v6证据；Hermes方案1956a2c5格式失败，修正反馈候选待部署。后续状态以CURRENT handoff为准。
 
 - 最新2026-09-11：第二账号已正常登录，实际账户设置与用户指定账号匹配（Pro）；noVNC实际可视可操作。旧“等用户密码”状态已完成，不要再次要求登录。6Pro截图规划会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581已回复。
 - 新模型菜单使用Thinking effort→Power，键盘右移到第5档时实际显示6 Pro。收起后正文可能分成6换行Pro，识别需允许空白。不要因菜单变化降级模型或反复重发。

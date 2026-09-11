@@ -1,12 +1,17 @@
 # OpenScience 当前进度
 
 ## 2026-09-11 — 媒体工作台、Hermes与公开页已部署
-- branch：codex/onchip-video-release；worktree：.worktrees/onchip-video-release；代码HEAD/release b05aaeacf810516670776f851b99794e23c8851e，rollback cec596e809a558139ea1b391a65605c104dc64ba；browser provider f4832487未变。
+- branch：codex/onchip-video-release；worktree：.worktrees/onchip-video-release；代码HEAD/release 25917596e640cdda5451a4b15a00c7245a832566，rollback b05aaeacf810516670776f851b99794e23c8851e；browser provider f4832487未变。
 - Chat6Pro实际接收用户截图、给出规划和上线后复核；服务器第二账号已登录。会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581，无需再要求登录。
 - 已部署画廊优先/详细指令折叠、同工作台Hermes图片视频操作、统一主题色与控件、公开760px居中阅读栏、次要信息折叠；实际服务器页面已观察。
 - 已修许可证嵌套响应导致PUT400，以及审核请求空JSON导致500；真实v6审核已创建，唯一阻断evidence_unverified。未修改发布审核规则。
 - 已修空commit、附件单独变更提交、Hermes模糊失败的完整请求重放、切版本保存幂等记录，以及最终公开快照和许可证事务一致性。Sol High定向静态复核通过。
 - 服务器必要构建/启动已完成；没有运行测试、CI、预检或重跑OCR。初次编译遗漏publicId后已补齐前后端并成功部署。
+
+## 最新实际处理（25917596之后）
+- 新任务742c8351再次失败，精确原因为visualAction1398字符超过1000；候选改图片4000，视频新生成100/旧资产1000兼容，High静态复核通过。用户短文案预算不变。
+- Chat6Pro逐项复核完成：46可确认、8需上下文/公式批注、4纯页码非证据；核心SDF物理含义无所列误述。正在通过产品API落实真实复核。
+- 页面初次载入不再先显示伪“未命名/版本1/已保存”；候选保留简短加载和失败出口。
 
 ## 当前真实论文的后续任务
 - RO c896802c-35dd-4b59-8db1-5f374f83a6d8，v6 47e82df5-7694-42e6-9c61-3675d0c2963a仍draft、暂无图片。v3旧图FWHM_s误画横向缝宽，不能发布或挪到v6。

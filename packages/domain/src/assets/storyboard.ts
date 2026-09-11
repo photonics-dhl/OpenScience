@@ -1,5 +1,8 @@
 import { PresentationAssetError } from './errors';
 import { parseSceneAnimation, type SceneAnimation } from './animation';
+export const STORYBOARD_IMAGE_VISUAL_ACTION_MAX = 4000;
+export const STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX = 100;
+export const STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX = 1000;
 export interface StoryboardRequest {
     locale: 'zh' | 'en';
     style: 'watercolor' | 'technical' | 'ink';
@@ -72,7 +75,7 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
                 throw error;
             }
         }
-        return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(s.visualAction, 1000, `${prefix}:visual_action`), ...(output === 'video' ? { durationSeconds: s.durationSeconds as number } : {}), sourceClaimIds: [...ids], ...(animation ? { animation } : {}) };
+        return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(s.visualAction, output === 'image' ? STORYBOARD_IMAGE_VISUAL_ACTION_MAX : STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, `${prefix}:visual_action`), ...(output === 'video' ? { durationSeconds: s.durationSeconds as number } : {}), sourceClaimIds: [...ids], ...(animation ? { animation } : {}) };
     });
     const duration = scenes.reduce((n, s) => n + (s.durationSeconds ?? 0), 0);
     if (output === 'video' && (duration < 24 || duration > 90)) return invalid('total_duration');

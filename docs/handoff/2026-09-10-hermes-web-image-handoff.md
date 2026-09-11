@@ -8,7 +8,7 @@
 ## Version tuple
 - worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
 - 本轮应用已部署b05aaeac，实际HEAD查Git；文案分组、主题/阅读栏和审核空JSON均已修。
-- application production b05aaeacf810516670776f851b99794e23c8851e；rollback cec596e809a558139ea1b391a65605c104dc64ba。
+- application production 25917596e640cdda5451a4b15a00c7245a832566；rollback b05aaeacf810516670776f851b99794e23c8851e。
 - browser provider f48324870f25b50c3a21eaad898beea87fb0aa1d；provider rollback48d9fa65db134575f53cf2a30724aa47a14eeea4。
 - OAuth bridge补丁独立：/opt/openscience-chatgpt-browser/scripts/host.mjs，备份host.mjs.before-google-oauth-20260911。
 

@@ -888,6 +888,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     document.querySelector('[data-hermes-anchor="hermes-diff"]')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
+  if (!editorLoaded) return <EditorLayout objectId={roId} outline={null} aside={null} workflow={<div className="h-16" aria-hidden="true" />} main={<div className="py-8"><p role={errorMsg ? 'alert' : 'status'} className="text-sm leading-6 text-os-muted-paper">{errorMsg || tw('loadingVersion')}</p>{errorMsg && <Link className="mt-4 inline-flex min-h-11 items-center text-sm underline" href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>}</div>} />;
+
   return (
     <EditorLayout
         objectId={roId}

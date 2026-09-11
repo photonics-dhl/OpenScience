@@ -1,6 +1,6 @@
 # 服务器能力与复用清单
 
-- 2026-09-11当前应用release b05aaeac / rollback cec596e8；界面与发布接口修复已部署，无新服务/模型。服务器Chat6Pro正在审阅v6证据；Hermes方案1956a2c5格式失败，修正反馈候选待部署。后续状态以CURRENT handoff为准。
+- 2026-09-11当前应用release 25917596 / rollback b05aaeac；界面与发布接口修复已部署，无新服务/模型。服务器Chat6Pro正在审阅v6证据；Hermes方案1956a2c5格式失败，修正反馈候选待部署。后续状态以CURRENT handoff为准。
 
 - 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。
 - Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。最新工作台/公开阅读与许可证400修复为待部署候选，服务器现有release未变。
