@@ -1240,7 +1240,7 @@ export function updateReadingPreference(input: {
 }
 
 export async function retryAgentTask(taskId: string): Promise<{ task: AgentTaskView }> {
-  return request(`/api/agent/tasks/${taskId}/retry`, { method: 'POST' });
+  return request(`/api/agent/tasks/${taskId}/retry`, { method: 'POST', body: '{}' });
 }
 
 export interface LiteratureAcquisitionResult {

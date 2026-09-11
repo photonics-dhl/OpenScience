@@ -1,50 +1,48 @@
 # Hermes / Workbench CURRENT Handoff
 
-## Active 2026-09-11 continuation (supersedes older Next below)
-- 用户最新：贡献→核心图/视频（需要占位；多图HTML幻灯片）→六字段精华→折叠附件/证据/历史；各区对齐，Hermes继续作为操作入口。授权项目设计skills安装及服务器真实生图审核发布全流程，不扩展全仓测试。
-- 当前未部署候选：UI worker负责媒体占位/HTML轮播/排序及4项项目设计skill安装；主负责AGENTS/frontend-design规则和workspace-guide简短summary，生产release仍1cdd4602。
-- 真实产品已由Hermes精炼正文并自动保存；新正式v7=f4e2dc71-1fe8-406f-8c19-e1849503d698，draft修订11。只人工删去results中把特定算例泛化为常规结论的短句；未重新解析原文。
-- 新单场景方案1582087a-e93c-40d0-a721-c3d2bcb00f41由服务器Hermes生成，仍draft；修正半高宽在半高水平段、k⊥z且E⊥k、异号旁瓣、束团展宽独立注脚；ecfc/710a为前两版保留。不沿用v6旧错方案。
-- 服务器Chat6Pro已答复媒体顺序/占位稳定；/jobs/core-media-hierarchy-chat-20260911.txt。158方案6Pro已明确可生图，/jobs/core-plan-chat-review-20260911.txt；实际Hermes对话采用1→PATCH200 approved，未发布。最终方案/jobs/core-plan-final-review-20260911.json。
-- 真实暴露路由bug：guide cf2f42de输出scene.image+非空长instruction，被前端转storyboard.revise，任务1f3c8255实际返回interactive_html而非图片。候选修正image动作/指令互斥及定向模型反馈、传入已授权当前plan状态；保留既有视频流程。High发现原presentation引用缺少会话/成员绑定，已在读取version前绑定当前session+trustedResearch；待最终静态复核后部署。不要把1f3任务当生图成功，也不要批准其新方案。浏览器/登录/CDP复用，无重启。
-
-## Objective / approved direction
-- 用户2026-09-11再次纠偏：保持批准的冷白/墨色/青绿、正文成果主屏+Hermes完整形象侧栏；主界面不再出现保存/提交/步骤/选主张/选风格等旧表单。普通选择、制作/审核/公开通过对话处置，详细指令按需展开。
-- 六个研究栏目标题突出；正文可直接编辑也可让Hermes改写。实际费用与公开范围仍明确说明，输入“确认制作”/“确认公开发布”承接当前动作，不能放行科学错误。
+## 当前任务与已确认方向
+- 用户最新要求：贡献说明 → 核心概念图/视频（始终有占位；多图采用HTML幻灯片）→ 六字段精华 → 折叠附件、证据、历史。对齐网格、冷白/墨色/青绿风格，Hermes是主要操作入口。
+- 已授权项目设计skills安装、本次服务器真实带图流程、代为科学审核及公开发布。不得恢复本机测试、全仓回归、CI、视频生成或批量冷启动。
+- 工作树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release。根目录其他脏文件不碰。
 - 基线 docs/OpenScience_Kimi_Development_Spec.md；设计 docs/specs/2026-09-05-integrated-research-product-design.md；服务器先读 docs/runbooks/server-capabilities.md。
 
-## Version / environment
-- worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release；根目录他人脏文件不碰。
-- 应用 code/release 1cdd4602e39c253630678785fc90cfaf886c837a；rollback 17ebc7f7004b8920531fb39c6ce30c0365311d35。服务器无测试构建/启动/切换已完成，deploy exit0；后续docs-only HEAD不等于应用release。
-- browser provider f48324870f25b50c3a21eaad898beea87fb0aa1d；provider rollback 48d9fa65db134575f53cf2a30724aa47a14eeea4。
-- 服务器Chrome/CDP127.0.0.1:9233及现有playwright-core复用；第二账号已登录，普通Chat实际6Pro。noVNC http://127.0.0.1:6081/vnc.html?autoconnect=true&resize=scale。
-- file:///jobs/ro-product-preview-20260911.html 是历史交互样稿，非生产；不要把它的占位/预设对话当成生产能力。真实edit页和Chat在另两个已开标签。
+## 精确版本
+- 应用 release 1a862027a76d6065cf3087b8eef93428672821b9；rollback 1cdd4602e39c253630678785fc90cfaf886c837a；已完成服务器构建/启动/切换，exit0，已push，未合并main。
+- 生图 provider 92cc416ee3fe921f62c75cbe6f69e48d0b55227d；可用rollback f48324870f25b50c3a21eaad898beea87fb0aa1d。9ce51f11是中间修复版本，不作为可用回滚基线。
+- provider独立更新；Chrome/profile/登录复用，无新安装或账号轮换。Gateway源与f483完全未变，复用其已编译dist；不能复用/opt/openscience根目录的旧dist（缺少当前导出，曾使新broker启动失败，已纠正）。
+- 本地未部署小修：apps/web/lib/api.ts retryAgentTask加入空JSON对象，避免Content-Type JSON+无body导致服务器拒绝。其余当前脏文件为文档同步；后续docs-only HEAD不得写成应用release。
 
-## Constraints
-- 不测试、不预检、不CI、本机不运行应用；服务器必要构建/启动允许；SSH仅项目wrapper+Windows显式Git bash。
-- 不输出.env、Cookie、密码或验证码；不重启/重新安装浏览器、不轮换账号绕限额。保护原论文/附件/版本与已公开标识。
-- 暂停视频生成和批量冷启动；2–3篇真实论文质量优先。成功提交/生成/页面改版不等于科学质量或全部链路通过。
+## 本轮已交付
+- 应用1a：媒体优先、图视频稳定占位、共享网格、HTML多图单帧轮播/键盘翻页、真实图片放大。仅单图实际流程已运行，多图未做真实样本验收；不是独立可下载HTML文件。
+- 公共页仅使用精确已发布版本的approved素材；SVG仍为原安全下载，不内嵌。Sol medium实现、Sol high独立静态复核。
+- 项目内安装apple-design、emil-design-eng、design-artifact、html-prototype，保留完整引用/许可与固定来源SHA，登记索引。frontend-design及AGENTS已固化布局与使用要求。
+- image路由修复：scene.image仅接受空instruction，修改指令必须storyboard.revise；现有视频协议未改。版本/方案读取已绑定当前会话和成员授权，不能引用其他RO。
+- provider92cc：主图识别与缩略图分开，旧唯一按钮兼容；Save菜单点击Download image，取当前主图而非整组下载。既有任务、会话、submitted marker和原deadline均保留。
+- 本机Git Bash回读曾因继承PATH查找挂住；本任务临时限定PATH后恢复，不宣称系统级修复。CUA一次超时不能代表服务器Chat不可用。
 
-## This correction
-- 已部署：移除工作台多层表单/流程按钮，嵌入媒体仅真实成果/状态；保留折叠附件/证据/历史和必要错误恢复。
-- Hermes普通指令仍服务端MiniMax语义理解；style进入实际任务参数；制作/公开改为同对话确认。onPrepareVersion自动完成准确版本提交，发布仍调用原权限/审核/许可证/公开API。
-- 素材/方案审核在对话中显示真实待审内容，采用N/拒绝N调用原权限与updatedAt条件更新；结果按RO/version刷新左侧。只有明确沿用已审方案时允许空instruction直达生图/视频，非空改动先修订方案。
-- 主会话负责集成；Sol medium负责工作台；Sol high静态复核。本轮不运行测试、不重新提取、不生成新图/视频、不公开错误论文。
-- High指出准备A期间手改B/移除附件可能错误确认A，已改为准备闭包捕获core/artifacts并在返回/确认/公开前核对；没有新hash/数据库合同。主prompt与style协议矛盾已修正。
-- Chat6Pro同会话 https://chatgpt.com/c/6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581 已回复本次纠偏：迁移执行入口而非藏按钮；必须连接草稿自动保存/内部版本，以及确认执行/真实回执。不得将其产品逻辑建议称作视觉通过。
-- 本轮实现服务端updateSdf自动保存与prepareVersion共用串行写入；模糊失败保留草稿、不循环重试。High最终定向复核无剩余P1/P2。
-- 新版实际页面加载：初始可见button仅收起/发送；六栏目/正文和折叠资料已出现。DOM宽1151、页面scrollWidth1139、侧栏x839–1119、输入y489–636，无横向溢出；截图依旧受DPR1.25裁切，停止扩展截图诊断。未触发新模型、收费生成或公开操作，不声称全流程通过。
-- Chat本次纠偏答复保存 /jobs/hermes-conversation-correction-chat-20260911.txt；部署日志本机Temp/xgs-dialogue-ui-deploy-20260911.log；图仅截图工具异常记录 /jobs/hermes-conversation-live{-css}-20260911.jpg。
-- 上轮真实DOM1151×653窗口输入区y489–636可见；后续截图缩放异常已停止反复截图并恢复原视口，不据此判断产品/Chat不可用。
+## 当前真实论文与成果
+- RO c896802c-35dd-4b59-8db1-5f374f83a6d8，deep-sub-cycle pulse。
+- v7=f4e2dc71-1fe8-406f-8c19-e1849503d698；草稿修订11。六字段由服务器Hermes凝练并自动保存；仅人工删除results的一句无依据概括。104条既有Evidence及原PDF/高级解析复用，无重跑OCR。
+- 已审单场景方案1582087a-e93c-40d0-a721-c3d2bcb00f41曾经Chat6Pro批准进入生图。
+- 真实图片任务/资产e0f842fa-8917-445a-aea0-88dc09ad6e71，源plan158/scene0，已succeeded入库draft（executionAttempt2，retryCount1）。
+- 原Chat https://chatgpt.com/c/6aa3f53d-9318-83ea-9625-dbb3f4aa2411 已产生图片。下载器旧按钮计数/Save菜单故障曾导致任务failed。按明确故障分别归档该任务失败恢复marker一次；从原会话取回，未重发prompt。gateway验证同任务/同prompt结果后经现有retry接口恢复入库。
+- 原图1672×941/847730bytes；服务器 /jobs/e0f842fa-8917-445a-aea0-88dc09ad6e71/output/image.png；本机静态副本 C:/Users/Mac/AppData/Local/Temp/xgs-core-image-e0.png。
+- e0成图暂不能公开：z空间轴贯穿E(t)图、S(z)未标明。主与Chat6Pro均要求两点修正；/jobs/core-image-science-review-20260911.txt。不得用方案审核代替实际图审核。
+- 修订plan43cc8da1-4f62-4579-958c-ad3fb3b57f3c引入错误（入射k变出射k、水平电子z变竖轴），不能采用。随后服务器生成plan3a6ed136-002a-4301-8505-ca14e3dbbc53，已通过Hermes对话采用（PATCH200 approved）；左右轴独立、k入射竖直/电子水平。43cc及e0均已对话拒绝（PATCH200 rejected）。修正图任务fe764f82-959d-46f3-8ec0-8dce61ca17bd已提交一次，running，created2026-09-11T13:20:43.792Z；不要重发。
+- 原1f3c8255-cacf-45e3-ac9c-28e3f6e0590a是错误路由产生的interactive_html，不是图片；禁止误记为生图成功。
+- 更早fd719902旧图FWHM画成横向几何宽；8fcbe321旧plan光/电子同z却正交、非零面积；4017673f即使approved也不科学正确。以上不继承或发布。
+- 旧公开OSR-2026-000020/v/2是旧内容，不是本次新版样例；v7尚未公开。
 
-## Actual paper state — reuse, do not restart extraction
-- RO c896802c-35dd-4b59-8db1-5f374f83a6d8；v6 47e82df5-7694-42e6-9c61-3675d0c2963a 未发布、无合格图片；Draft revision7不是v7。
-- PDF artifact7bb96cc1-bb6f-4d3b-b0bf-352f41971faf；advanced extraction1e324308-fd26-4cc1-8612-8a1c269909a9已有六字段/54来源；104 Evidence succeeded且verified已实际读取，勿重跑OCR。
-- 旧v3图fd719902真实服务器网页生成回传，但FWHM_s误为横向缝宽；不能挪至v6/发布。
-- 方案8fcbe321-9e48-407f-a507-bc801de30422仍draft：光与电子同沿z却称正交、非零电场面积表达有误。4017673f虽approved但科学有误，不能因状态直接生成。157a3951/904809e2亦draft；71c0c79c旧chart rejected。
-- 正确解释：S(z)是沿电子路径的功率密度幅值；空间FWHM不是几何缝宽、场振幅或向量z分量。区分传播/偏振/电子轴；不混19as/99as算例；保留异号旁瓣、有限束团、平均光子数≪1；理论/数值不能冒充实验。
-- OSR-2026-000020/v/2仅旧E2E页面布局观察，不是新精选展示。
+## 续做（不得重复已完成生成）
+1. 观察已提交修正图任务fe764f82-959d-46f3-8ec0-8dce61ca17bd；不得再次提交。Guide ef1799cd已实际输出scene.image+空instruction。
+2. 等新任务完成、取实际图并科学复核。不要放行轴方向/S(z)物理量错误；只针对实际错误修改，避免冗长指令层层改写引入科学漂移。
+3. 图合格后通过Hermes媒体列表采用，准备公开发布，确认范围/许可证/正文后确认公开发布；打开返回的真实publicId版本确认展示。用户已授权代审代发。
+4. apps/web/lib/api.ts小修仍须应用部署；部署避免中断运行中的生图任务。同步本文件、索引、progress和服务器清单。
+5. 暂停视频与批量冷启动。本轮尚未完成全部公开流程。
 
-## Next
-- 本轮对话收口已部署并打开真实edit页；不再回到样稿或重复访谈。
-- 随后修正当前科学图方案并在既有服务器网页生图链路执行、审核/发布正确成果。不得称本次界面交付已完成科学闭环。
+## 现有控制入口
+- 服务器容器openscience-chatgpt-browser，CDP127.0.0.1:9233，/app/node_modules/playwright-core。
+- 普通规划/科学复核Chat6Pro：https://chatgpt.com/c/6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581；已有两轮规划、两轮方案/实图科学讨论，不重复发送。
+- noVNC http://127.0.0.1:6081/vnc.html?autoconnect=true&resize=scale；file:///jobs/ro-product-preview-20260911.html仅历史样稿。
+- SSH使用infra/scripts/ssh-run.sh；Windows明确Git bash，XGS_CONFIG_ROOT=E:/Miscellaneous/XGS。禁止读取/输出.env、Cookie、密码/OTP。
+- 本轮部署日志 C:/Users/Mac/AppData/Local/Temp/xgs-core-media-deploy-20260911.log。

@@ -1,10 +1,10 @@
 # OpenScience 当前进度
 
 ## 2026-09-11 — 媒体优先与真实生图推进（当前进行中）
-- 当前候选沿用branch codex/onchip-video-release；生产仍1cdd4602，rollback17ebc7f7。安装4项项目设计skills并登记来源/MIT；贡献→图视频→六字段→折叠资料，统一网格、多图HTML幻灯片，等待部署。
+- 已部署application1a862027 / rollback1cdd4602，browser provider92cc416e / rollbackf4832487。4项项目设计skills、贡献→图视频→六字段→折叠资料、统一网格、多图HTML幻灯片已经交付。
 - 用户已授权本次服务器真实带图流程/代为科学审核/公开发布，未恢复全仓测试、CI或本机运行。
 - 服务器Hermes已精炼正文/自动保存/准备v7=f4e2dc71-1fe8-406f-8c19-e1849503d698；单场景1582087a已由主与Chat6Pro科学审阅后在对话中采用，PATCH200 approved。
-- 真实发现guide的scene.image+长instruction被客户端隐式转成方案修订：1f3c8255实际interactive_html，不能记为生图成功。根已收紧已有image动作/指令协议、定向校验反馈并提供真实plan状态；部署后续跑正确的已审158方案。
+- 真实发现guide的scene.image+长instruction被客户端隐式转成方案修订：1f3c8255实际interactive_html，不能记为生图成功。根已收紧已有image动作/指令协议、定向校验反馈并提供真实plan状态；部署后已实际提交image请求，引用已审158/scene0；e0f842fa同会话下载恢复入库，无重复网页提交。成图坐标/S(z)标注未通过科学审核，现已rejected；已审修正plan3a6ed136待新图。
 - High定向静态发现并修复presentation跨RO读取缺少会话/成员绑定；SVG仍走原安全下载、不可当inline图片。最新状态入口仍CURRENT handoff。
 
 ## 2026-09-11 — 收口为正文成果 + Hermes对话
