@@ -54,8 +54,8 @@ function isUsageLimit(error) {
 }
 export async function executeWebImage(config, request, privateDir) {
   validateCodexImageRequest(request, Date.now(), 'chatgpt-web');
-  const circuit = join(config.privateRoot, 'web-image-circuit.json');
-  if (await exists(circuit)) throw Error('WEB_IMAGE_CIRCUIT_OPEN');
+  // Each explicit product request has its own ledger. An uncertain prior request
+  // must not prevent a different request from using the browser.
   const jobDir = join(config.jobs, request.id);
   if (await exists(jobDir)) throw uncertain();
   await prepareDirectory(jobDir, 11040);
@@ -76,13 +76,12 @@ export async function executeWebImage(config, request, privateDir) {
     } else if (await exists(join(jobDir, 'submitted.json'))) {
       const remainingSeconds = Math.floor((request.deadlineAt - Date.now() - 45000) / 1000);
       if (await exists(join(jobDir, 'conversation.json')) && remainingSeconds >= 45) {
-        await docker(['restart', config.browserContainer], 45000).catch(() => {});
+        // Preserve the submitted page and its connection to the generator.
+        // Transport/observer errors are not evidence that Chrome needs restarting.
         await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', String(remainingSeconds),
           'node', '/jobs/provider/runner.cjs', 'recover', request.id], (remainingSeconds + 10) * 1000).catch(() => {});
       }
       if (!await exists(join(jobDir, 'result.json'))) {
-        await atomicWrite(circuit, JSON.stringify({ schemaVersion: 1, state: 'open', taskId: request.id,
-          promptHash: request.promptHash, openedAt: Date.now(), reason: 'submitted_without_verified_png' }), 0o600);
         throw uncertain();
       }
     }
