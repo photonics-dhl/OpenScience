@@ -31,6 +31,7 @@ export interface ResearchObjectSummary {
 }
 
 export interface ResearchObjectDetail extends ResearchObjectSummary {
+  publicId: string | null;
   sdf: { core: Record<string, string>; nodes: Array<{ nodeType: string; content: string }> };
 }
 
@@ -277,6 +278,7 @@ export async function getResearchObject(
   const core = (ro.sdfDocument?.coreJson as Record<string, string>) ?? {};
   return {
     id: ro.id,
+    publicId: ro.publicId,
     workspaceId: ro.workspaceId,
     title: ro.title,
     status: ro.status,
