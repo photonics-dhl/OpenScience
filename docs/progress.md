@@ -1,7 +1,7 @@
 ## 2026-09-11 — 共编实际走通，修复版本与材料续用
 - 用户确认三阶段工作台、科研阅读优先、核心图优先、Hermes侧栏与页面双向改稿；授权Codex充当测试用户审核发布，科学和来源判断仍需完成。
 - Chat6Pro已给出实施方案；后续边界复核明确usage limit，无重试，改由一次Sol High有界只读复核。
-- productiond6dce2e2 / rollback661d0926 / provider f4832487。服务器构建部署完成；实际Hermes精炼问题、正文同步、撤销、用户补回强度FWHM定义并确认v2已完成。首次JSON/schema失败已修提示合同。v2 b0c9d2c0暴露旧commit未同步live SDF、全部Claim降待审；Sol medium已修2文件，Sol high复核中。实际160px预览挤压定位到CSS三栏覆盖，已补两栏规则。
+- production52a52829 / rollbackd6dce2e2 / provider f4832487。服务器构建部署完成；实际Hermes精炼问题、正文同步、撤销、用户补回强度FWHM定义并确认v2已完成。首次JSON/schema失败已修提示合同。Sol medium修复旧commit/live SDF与继承全降级，Sol high最终复核通过，正常v3保存刷新一致。实际160px预览挤压已改为两栏；新核心图方案经Hermes修订，待图片审核发布。新发现方案折叠在历史中导致下一步不明显，补自动展开与准确入口。
 - 不跑测试/预检/CI。待服务器必要构建部署、真实产品操作、现有图科学审核与发布；不补齐旧六场景、不重跑OCR。
 
 ## 2026-09-11 — 成果已保存，收敛到产品体验

@@ -1,6 +1,8 @@
 {
   "workbench": {
     "approvePlan": "批准方案，允许制作",
+    "planReadyTitle": "查看与确认图解方案",
+    "planReadyBody": "Hermes 已准备好下方的图解方案。可先提出修改，再确认方案并生成图片。",
     "sourceReview": "材料解析与确认记录",
     "confirmedSources": "已确认的内容可直接在正文或 Hermes 对话中修改。仅在需要复查材料时切换下方来源。",
     "loadingVersion": "正在读取已确认版本…",

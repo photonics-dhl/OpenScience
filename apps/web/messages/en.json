@@ -1,6 +1,8 @@
 {
   "workbench": {
     "approvePlan": "Approve this plan for production",
+    "planReadyTitle": "Review the illustration plan",
+    "planReadyBody": "Hermes has prepared an illustration plan below. Review it, request changes if needed, then approve it and generate the image.",
     "sourceReview": "Source analysis and confirmation history",
     "confirmedSources": "Edit confirmed content in the editor or with Hermes. Select a source below only when you need to revisit its analysis.",
     "loadingVersion": "Reading the confirmed version…",
