@@ -22,7 +22,7 @@
 
 ## 当前真实论文与成果
 - RO c896802c-35dd-4b59-8db1-5f374f83a6d8，deep-sub-cycle pulse。
-- v7=f4e2dc71-1fe8-406f-8c19-e1849503d698；草稿修订11。六字段由服务器Hermes凝练并自动保存；仅人工删除results的一句无依据概括。104条既有Evidence及原PDF/高级解析复用，无重跑OCR。
+- v10=f4e2dc71-1fe8-406f-8c19-e1849503d698（GET versions已纠正旧v7误记）；草稿修订11。六字段由服务器Hermes凝练并自动保存；仅人工删除results的一句无依据概括。原PDF/高级解析复用，无重跑OCR。
 - 已审单场景方案1582087a-e93c-40d0-a721-c3d2bcb00f41曾经Chat6Pro批准进入生图。
 - 真实图片任务/资产e0f842fa-8917-445a-aea0-88dc09ad6e71，源plan158/scene0，已succeeded入库draft（executionAttempt2，retryCount1）。
 - 原Chat https://chatgpt.com/c/6aa3f53d-9318-83ea-9625-dbb3f4aa2411 已产生图片。下载器旧按钮计数/Save菜单故障曾导致任务failed。按明确故障分别归档该任务失败恢复marker一次；从原会话取回，未重发prompt。gateway验证同任务/同prompt结果后经现有retry接口恢复入库。
@@ -31,14 +31,16 @@
 - 修订plan43cc8da1-4f62-4579-958c-ad3fb3b57f3c引入错误（入射k变出射k、水平电子z变竖轴），不能采用。随后服务器生成plan3a6ed136-002a-4301-8505-ca14e3dbbc53，已通过Hermes对话采用（PATCH200 approved）；左右轴独立、k入射竖直/电子水平。43cc及e0均已对话拒绝（PATCH200 rejected）。修正图任务fe764f82-959d-46f3-8ec0-8dce61ca17bd已提交一次，running，created2026-09-11T13:20:43.792Z；不要重发。
 - 原1f3c8255-cacf-45e3-ac9c-28e3f6e0590a是错误路由产生的interactive_html，不是图片；禁止误记为生图成功。
 - 更早fd719902旧图FWHM画成横向几何宽；8fcbe321旧plan光/电子同z却正交、非零面积；4017673f即使approved也不科学正确。以上不继承或发布。
-- 旧公开OSR-2026-000020/v/2是旧内容，不是本次新版样例；v7尚未公开。
+- 旧公开OSR-2026-000020/v/2是旧内容，不是本次新版样例；v10尚未公开。
 
 ## 续做（不得重复已完成生成）
 1. fe764f82原Chat完成空白回复；刷新/原会话恢复无PNG，产品failed、provider uncertain。用户明确要求尝试新对话；726f21c5在网页提交前被全局circuit拒绝（未生图）。Sol High复核后，锁内按state/taskId/promptHash/reason精确归档fe的circuit，旧记录与可能迟到结果仍保留。新任务02ec70bf-2add-4a3b-952a-74d990a6c1ce于13:42:04Z由Hermes提交202，沿用已审3a方案；不要重复发送。
 2. 02ec70bf未提交网页即failed：新页renderer不响应，刷新后恢复控制但其中一页ERR_EMPTY_RESPONSE。13:46已观察到Chat主页/编辑框实际可用，沿用产品原生成API新建b19a65bd-6497-4b61-bb81-0154b264d58c（202），页面已切换此task。不得重发；等实际图并科学审核。直接API创建的这笔不冒充新一轮Hermes对话，prompt仍由已审Hermes方案与服务器组装。
-3. b19新Chat6aa4065f已实际出现50%但再次空白结束；provider uncertain，无PNG。停止新生成；这不是完全走通。Chat6Pro建议先去掉自动整浏览器重启/全局熔断，现有证据不能区分Chat生成失败与附件回传异常，也不能证明重启取消后台任务。
-4. 上述broker独立部署已完成（复用92cc已编译Gateway，源diff0）；下一步只针对新策略下的实际回传问题取证：Chat6Pro建议区分生成失败与图片引用/资源加载失败，不靠空DOM推断根因。不要自动再生成。原会话有图后才能科学审核、公开发布，旧图rejected保留。没有测试、CI或本机构建。
-5. 暂停视频与批量冷启动。本轮尚未完成全部公开流程。
+3. 已完成恢复：刷新b19原Chat6aa4065f后实际图片出现；仅关闭两张不响应的空主页恢复CDP，未关原会话。锁内归档该任务精确恢复marker后取回PNG1672×941/622483bytes，provider succeeded；原任务retry重新入库，无重复生图。需如实保留人工恢复参与，不能称全自动恢复已验证。
+4. b19经主会话与Sol High真实PNG科学审查通过，通过Hermes“采用1”批准并实际在工作台加载。当前图源plan3a6ed136，左右S(z)/E(t)独立，空间FWHM/异号旁瓣正确。实际图发给Chat6Pro但最终回复尚未取回，不冒称其批准。
+5. 实际发布先因evidence_unverified阻断；Sol High逐组复核后通过既有API确认48条context证据，移除2条仅章节标题的关联（备份与审计保留原PDF/历史）。102条Evidence保留；原记录/jobs/evidence-association-review-20260911-backup.json及result.json。
+6. 第二次发布review passed，状态推进至approved后publish400：8个核心Claim超过已有3–7规则。当前v10=approved，未公开。候选修复：把已有Claim图校验放入审核；未发布approved/under_review可撤回审核到draft，权限/事务/Publication不存在/审计不放宽；Hermes对话“继续编辑”。正在Sol High复核，未部署。
+7. 下一步部署候选，然后归并两条不作为图片来源的重复节点：old problem63f69141→supporting/new problem345b609e；new insight4c6dc9ec→supporting/old insightbb75515b。保留实际图所引用bb755节点的kind/text，不能因整理而把已审图永久置rejected。重新发布并观察匿名公开页图片/正文/折叠资料顺序。暂停视频与批量冷启动。
 
 ## 现有控制入口
 - 服务器容器openscience-chatgpt-browser，CDP127.0.0.1:9233，/app/node_modules/playwright-core。

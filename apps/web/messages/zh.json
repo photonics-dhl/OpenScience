@@ -12,6 +12,8 @@
     "publicationLicense": "当前许可：正文 {text}，代码 {code}，数据 {data}。",
     "publicationMaterials": "本版本的 {count} 项材料记录（下载仍遵循原有权限）",
     "confirmPublicationInChat": "确认上述公开范围与许可后，回复“确认公开发布”。",
+    "resumePublicationEditing": "需要修改内容时，回复“继续编辑”即可撤回本次审核。",
+    "publicationEditingResumed": "已恢复编辑，内容与图片保留。修改完成后再告诉我准备发布。",
     "draftChanged": "正文已改变，之前的安排已过期。请告诉我新的制作或发布要求，我会基于当前正文重新准备。",
     "actionNotReady": "这项操作还没有准备好，请先查看上方的具体状态。",
     "prepareVersionFailed": "当前正文尚未整理成可用版本，请查看具体原因后继续。",

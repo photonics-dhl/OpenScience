@@ -354,6 +354,18 @@ function HermesAssistantDrawerContent({
     if (pendingPayload.current && normalized !== pendingPayload.current.goal) { setError(tc('retrySame')); return; }
     const command = normalized.replace(/[。！!\.]+$/u, '').trim();
     const action = offeredAction.current;
+    if (action?.resumeEditing && /^(?:继续编辑|退回编辑|撤回审核|resume editing|return to draft)$/iu.test(command)) {
+      if (!actionScopeIsCurrent()) { setError(tc('draftChanged')); return; }
+      if (!action.ready) { setError(tc('actionNotReady')); return; }
+      submittingRef.current = true; setActionBusy(true); setError('');
+      try {
+        await action.resumeEditing();
+        setPublicationVersion(''); offeredAction.current = null; setGoal('');
+        setLocalMessage(tc('publicationEditingResumed'));
+      } catch (cause) { setError(cause instanceof Error ? cause.message : tc('actionNotReady')); }
+      finally { submittingRef.current = false; setActionBusy(false); }
+      return;
+    }
     const confirms = action?.kind === 'media-review' ? /^(?:采用|拒绝|approve|reject)\s*\d+$/iu.test(command) : action?.kind === 'production'
       ? /^(?:确认(?:制作|生成)?|开始制作|同意|confirm(?: production)?|start production)$/iu.test(command)
       : action?.kind === 'publication' && /^(?:确认公开发布|确认发布|confirm publication|publish publicly)$/iu.test(command);

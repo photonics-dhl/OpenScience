@@ -12,6 +12,8 @@
     "publicationLicense": "Current licenses: text {text}, code {code}, data {data}.",
     "publicationMaterials": "{count} material records in this version (existing download permissions apply)",
     "confirmPublicationInChat": "After reviewing this public scope and licenses, reply “confirm publication”.",
+    "resumePublicationEditing": "To make changes, reply “resume editing” to withdraw this review.",
+    "publicationEditingResumed": "Editing is available again. Your content and images are preserved. Tell me when you are ready to publish.",
     "draftChanged": "The text changed, so the previous arrangement is no longer current. Tell me your production or publication request again to use the current draft.",
     "actionNotReady": "This action is not ready yet. Please see its status above.",
     "prepareVersionFailed": "The current draft could not be prepared as a usable version. See the specific reason before continuing.",

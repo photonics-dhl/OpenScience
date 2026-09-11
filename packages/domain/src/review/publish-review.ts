@@ -5,6 +5,8 @@ import { notify } from '../notification/notifications';
 import { getEffectiveLicenses } from '../license/licenses';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import { evaluateEvidencePublicationBlocks } from '../research-intelligence/publication-evidence';
+import { validateClaimGraph } from '../research-intelligence/claim-graph';
+import { ResearchIntelligenceValidationError } from '../research-intelligence/validation';
 import {
   loadPublicationNarrativeSnapshot,
   publicationNarrativeText,
@@ -96,6 +98,16 @@ async function runPublicationReviewAttempt(
   }
 
   // 8. Claim/Evidence 可定位性、冲突披露、展示资产与分发授权（Research Intelligence §5.3）。
+  // Run the existing publication invariant before the UI advances the version.
+  try {
+    validateClaimGraph(narrativeSnapshot.claims.map((claim) => ({
+      ...claim, researchObjectId: version.researchObjectId, versionId: version.id,
+      parentClaimId: claim.parentClaimId ?? undefined,
+    })));
+  } catch (error) {
+    if (!(error instanceof ResearchIntelligenceValidationError)) throw error;
+    blocks.push({ code: 'claim_graph_invalid', reason: '研究主张的层级或数量需要整理，请先在工作台修订，再重新发布。' });
+  }
   blocks.push(...await evaluateEvidencePublicationBlocks(deps, {
     researchObjectId: version.researchObjectId,
     versionId: version.id,

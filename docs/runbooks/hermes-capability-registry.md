@@ -1,6 +1,6 @@
 # Hermes Capability Registry
 
-- CURRENT 2026-09-11：应用 release 9c5088ea / rollback 1a862027；生图 provider d1630135 / rollback 92cc416e。已部署静默持续更新任务、retry空JSON，以及提交后不自动重启浏览器、不全局阻断新请求、不关闭未决旧会话。b19a65bd新Chat曾显示50%后为空白，provider uncertain、无PNG；e0旧图已科学审核rejected，v7未公开。详见唯一CURRENT handoff。
+- CURRENT 2026-09-11：应用9c5088ea/rollback1a862027；provider d1630135/rollback92cc416e。刷新原Chat后b19核心图成功取回、入库、科学审核approved并在工作台显示；无重复生图。102条证据整理完成。v10=f4e2dc71当前approved，发布被8个核心Claim超限阻断；恢复编辑与审核顺序候选待部署。详见唯一CURRENT handoff；无需重新登录/安装浏览器。
 
 - 最新2026-09-11：服务器第二Chat账号已确认登录为Pro，远程桌面已可操作；Chat6Pro实际收到三张产品截图并回复规划，会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。当前无需用户继续密码认证。
 - 本轮媒体画廊/Hermes同工作台/公开阅读及发布合同修复已部署b05aaeac，实际部署和未决科学问题见CURRENT handoff。未新增服务、模型或插件，未实施自动账号轮换。

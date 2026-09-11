@@ -1,6 +1,6 @@
 # 服务器能力与复用清单
 
-- CURRENT 2026-09-11：应用 release 9c5088ea / rollback 1a862027；生图 provider d1630135 / rollback 92cc416e。已部署静默持续更新任务、retry空JSON，以及提交后不自动重启浏览器、不全局阻断新请求、不关闭未决旧会话。b19a65bd新Chat曾显示50%后为空白，provider uncertain、无PNG；e0旧图已科学审核rejected，v7未公开。详见唯一CURRENT handoff。
+- CURRENT 2026-09-11：应用9c5088ea/rollback1a862027；provider d1630135/rollback92cc416e。刷新原Chat后b19核心图成功取回、入库、科学审核approved并在工作台显示；无重复生图。102条证据整理完成。v10=f4e2dc71当前approved，发布被8个核心Claim超限阻断；恢复编辑与审核顺序候选待部署。详见唯一CURRENT handoff；无需重新登录/安装浏览器。
 
 - 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。
 - Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。历史许可证400修复已经部署；当前正式工作台/公开阅读版本见本页CURRENT，不恢复旧候选结论。

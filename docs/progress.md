@@ -1,11 +1,12 @@
 # OpenScience 当前进度
 
-## 2026-09-11 — 媒体优先与真实生图推进（当前进行中）
-- CURRENT：应用9c5088ea/回滚1a862027部署exit0；provider d1630135/回滚92cc416e独立部署exit0。持续等待任务、retry空JSON、提交后不自动整浏览器重启/不全局阻断新请求/保留未决旧页已交付。Sol High静态复核与Chat6Pro建议一致；没有运行测试。b19新Chat曾50%后为空白，仍无PNG，停止重复提交，尚未公开。
-- 最新：按用户建议刷新并新建对话。fe任务空白结果保留uncertain；精确circuit归档经Sol High只读复核。726/02未网页提交；b19a65bd实际新Chat6aa4065f已显示生图进度。修复页面3分钟硬停（等待终态，前台2→5s/后台15s）与retry空JSON，尚待应用部署；未扩展测试。
+## 2026-09-11 — 真实图片完成，收尾发布（当前进行中）
+- CURRENT：应用9c5088ea/回滚1a862027，provider d1630135/回滚92cc416e均部署exit0。b19原Chat刷新后取回PNG1672×941/622483bytes，原任务retry入库，未重新生图。主会话/Sol High科学审核通过，Hermes“采用1”已approved，工作台实际加载。
+- v10=f4e2dc71（旧v7误记已纠正）实际发布遇到两项旧问题：48条context待人工来源确认+2条只有章节标题的关联，现已逐组审核并经API整理，保留102条Evidence/原PDF/历史与操作备份；随后review通过但publish被8个核心Claim超限阻断，当前approved尚未公开。
+- 候选已通过Sol High静态复核：将原Claim图校验移到审核阶段，保留发布终检；未公开approved/under_review通过Hermes“继续编辑”撤回审核到draft，保留权限、事务、Publication存在保护、旧review失效与审计。准备服务器无测试部署；两条待归并节点不被任何presentation引用（实际API返回空），不会破坏已审图片。
 - 已部署application1a862027 / rollback1cdd4602，browser provider92cc416e / rollbackf4832487。4项项目设计skills、贡献→图视频→六字段→折叠资料、统一网格、多图HTML幻灯片已经交付。
 - 用户已授权本次服务器真实带图流程/代为科学审核/公开发布，未恢复全仓测试、CI或本机运行。
-- 服务器Hermes已精炼正文/自动保存/准备v7=f4e2dc71-1fe8-406f-8c19-e1849503d698；单场景1582087a已由主与Chat6Pro科学审阅后在对话中采用，PATCH200 approved。
+- 服务器Hermes已精炼正文/自动保存/准备v10=f4e2dc71-1fe8-406f-8c19-e1849503d698；当前实际图b19引用已审plan3a6ed136；旧158相关图e0已拒绝，不混为当前成果。
 - 真实发现guide的scene.image+长instruction被客户端隐式转成方案修订：1f3c8255实际interactive_html，不能记为生图成功。根已收紧已有image动作/指令协议、定向校验反馈并提供真实plan状态；部署后已实际提交image请求，引用已审158/scene0；e0f842fa同会话下载恢复入库，无重复网页提交。成图坐标/S(z)标注未通过科学审核，现已rejected；已审修正plan3a6ed136待新图。
 - High定向静态发现并修复presentation跨RO读取缺少会话/成员绑定；SVG仍走原安全下载、不可当inline图片。最新状态入口仍CURRENT handoff。
 

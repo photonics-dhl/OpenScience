@@ -112,9 +112,28 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
     } finally { if (current()) setWorking(false); }
   }
   const latestPublish = useRef(publish); latestPublish.current = publish;
+  async function resumeEditing() {
+    if (!selected || !ready || working) return;
+    const target = selected;
+    const current = () => activeScope.current === scope;
+    setWorking(true); setError('');
+    try {
+      beforePublish?.();
+      await transitionVersionStatus(target.versionId, 'draft');
+      if (!current()) return;
+      setVersions((items) => items.map((item) => item.versionId === target.versionId ? { ...item, status: 'draft' } : item));
+      setReview(null);
+    } catch (cause) {
+      if (current()) setError(cause instanceof Error ? cause.message : String(cause));
+      throw cause;
+    } finally { if (current()) setWorking(false); }
+  }
+  const latestResume = useRef(resumeEditing); latestResume.current = resumeEditing;
   useEffect(() => {
     if (!conversation || !onConfirmationChange) return;
-    onConfirmationChange({ kind: 'publication', ready: ready && !working && selected?.status !== 'published', canDismiss: !working, confirm: () => latestPublish.current() });
+    onConfirmationChange({ kind: 'publication', ready: ready && !working && selected?.status !== 'published', canDismiss: !working, confirm: () => latestPublish.current(),
+      ...(['under_review', 'approved'].includes(selected?.status ?? '') ? { resumeEditing: () => latestResume.current() } : {}),
+    });
     return () => onConfirmationChange(null);
   }, [conversation, onConfirmationChange, ready, working, scope, selected?.status]);
   if (conversation) return <section className="hermes-message hermes-message-assistant" data-conversation-publication="true">
@@ -126,6 +145,7 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
       <p className="mt-2 text-sm">{tc('publicationLicense', { text: licenses.text, code: licenses.code, data: licenses.data })}</p>
       {materialNames.length > 0 && <details className="mt-3 text-sm"><summary>{tc('publicationMaterials', { count: materialNames.length })}</summary><ul className="mt-2 list-inside list-disc">{materialNames.map((name) => <li className="break-all" key={name}>{name}</li>)}</ul></details>}
       {review?.hardBlocks.map((block, index) => <p className="mt-2 text-sm text-state-danger" key={index}>{block.reason}</p>)}
+      {['under_review', 'approved'].includes(selected?.status ?? '') && <p className="mt-2 text-sm">{tc('resumePublicationEditing')}</p>}
       <p className="mt-3 text-sm" role="status">{working ? t('publish.checking') : selected?.status === 'published' ? t('publish.published') : tc('confirmPublicationInChat')}</p>
     </>}
   </section>;

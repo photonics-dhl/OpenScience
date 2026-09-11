@@ -4,4 +4,5 @@ export interface HermesConversationAction {
   ready: boolean;
   canDismiss: boolean;
   confirm(message?: string): Promise<void>;
+  resumeEditing?(): Promise<void>;
 }
