@@ -1,12 +1,29 @@
 # 服务器能力与复用清单
 
-- CURRENT 2026-09-11：应用363257aa / rollbackc0fdc389，provider d1630135 / rollback92cc416e。研究桌面、单一资料入口、公开大图/真实索引与共享会话已部署；/me200并续7天Cookie，实际跨页账号保持。19/20/21可恢复归档完成，22/v10真实图文公开保留。无新软件/模型调用；长期会话与Hermes进一步能力见唯一CURRENT handoff。
+- CURRENT 2026-09-12：第1项文档与公式能力正在交付，应用release仍363257aa（下一次部署回滚目标），旧rollbackc0fdc389。仅补齐Docling已有镜像缺失的CodeFormulaV2权重；KaTeX与解析/理解指令已实现，部署状态见唯一CURRENT handoff。后续写作与图片/视频风格能力按[能力台账](hermes-capability-registry.md)顺序推进。
 
 - 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。
 - Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。历史许可证400修复已经部署；当前正式工作台/公开阅读版本见本页CURRENT，不恢复旧候选结论。
 - 画面恢复日志 jobs/x11vnc-login-recovery.log：曾无RFB greeting、后有端口占用；目前真实画面与交互正常，未证明XDamage或浏览器根因。无新安装。
 
-2026-09-11 实时盘点。先查本页，再查相关条目的入口；能力或服务变动后同一任务内更新。文件存在、服务运行、产品调用成功是不同状态。本页记录部署位置与复用方式；Hermes语义能力/供应商政策见 [能力台账](hermes-capability-registry.md)，实时产品任务见 CURRENT handoff。
+2026-09-12 定向实时盘点。先查本页，再查相关条目的入口；能力或服务变动后同一任务内更新。文件存在、服务运行、产品调用成功是不同状态。本页记录部署位置与复用方式；Hermes语义能力/供应商政策见 [能力台账](hermes-capability-registry.md)，实时产品任务见 CURRENT handoff。
+
+## 2026-09-12 文档与公式能力接入
+
+- 缺失公式权重已下载到`/opt/openscience-models/docling-codeformula-v2/docling-project--CodeFormulaV2`；模型`docling-project/CodeFormulaV2`，revision`ecedbe111d15c2dc60bfd4a823cbe80127b58af4`，权重630993616字节，CDLA-Permissive-2.0，来源及revision留在父目录`SOURCE.json`和模型卡。复用已有Docling镜像与宿主代理，仅下载此模型配置/权重/tokenizer；未下载另一套OCR、浏览器或完整工具栈。
+- 部署compose只读挂入既有模型缓存的同名子目录，不遮住镜像中的布局/表格/OCR模型。`HF_HUB_OFFLINE=1`，解析服务仍仅内网、无Secret；原2worker/3threads、6CPU/8GiB不变。document-parser启用`DOCLING_FORMULA_ENRICHMENT=true`。回滚应用363257aa的compose可恢复关闭状态，保留缓存无需删除。
+- Docling识别公式写入TextItem.text；应用保留页码/bbox并补明确TeX分隔符。空识别/乱码保留原文并标low_confidence；高级解析失败的普通文本回退标partial_result/low_confidence。不会根据识别状态声称物理正确。
+- Web复用锁文件已有KaTeX0.16.47，新增应用直接依赖及统一ScientificText；仅渲染明确公式、不信任HTML/链接命令，失败保留原文。研究理解skill v5经现有Worker真实导入，强调公式/单位/条件与来源核对、六字段保持凝练。
+
+以下为开启前定向盘点，保留其判定依据：
+
+- `paper-analysis`运行镜像`ghcr.io/docling-project/docling-serve-cpu:v1.30.0`，不是旧candidate；依赖元数据包含docling-core2.91.0、docling-ibm-models3.13.3、docling-parse7.10.0、RapidOCR3.9.2、torch2.13.0+cpu。这些是包存在证据，不表示每个模型都在每次任务中调用。
+- `document-parser`实际`DOCLING_SERVE_URL=http://paper-analysis:5001`、`DOCLING_FORMULA_ENRICHMENT=false`、并发2；高级服务workers2、threads3。源码`ingestion-parser.ts`先走Docling异步PDF路径，保留JSON页码/bbox/公式标签；请求关闭Docling整页OCR，难读页交既有页质量/OCR路由。`detectLayout:false/grobid:false`控制另一路可选阶段，不能推断Docling未启用。
+- Node轻量解析镜像通过mammoth/pdf-parse/yauzl和Tesseract解码；本次两个解析容器包元数据及产品源码未发现MarkItDown接入。宿主PATH未发现Pandoc/TeX/FFmpeg；已有媒体镜像可含FFmpeg，不能由宿主PATH缺失判全服务器未安装。
+- 生产论文理解加载`apps/agent-worker/src/skills/paper-analysis.ts`和`research-understanding.ts`，由extractor显式导入；没有自动扫描`/opt/hermes-agent/skills`的产品通用加载器。宿主已有MIT `research/research-paper-writing/SKILL.md`（Orchestra Research、偏ML/AI稿件），属于文件可复用，尚非产品撰稿能力。
+- 应用源码未发现KaTeX/MathJax/remark-math/rehype-katex统一数学渲染；现有`manuscript/paper.md`导出是六字段拼装，不是独立论文写作与精美排版产品。
+- 本轮运行列表包含web/api/agent-worker/document-parser/paper-analysis/embedding-worker/scansci/browser及DB/Redis/对象存储/扫描/运维服务；旧dev/migration容器未出现在运行列表，不据此推断已删除。
+- 开启前未触发解析；关闭公式增强是已确认缺口，不是所有乱码的已证实唯一根因。新模型实际运行结果以后续CURRENT记录为准。
 
 ## 历史产品回传（早于当前 release，保留复用依据）
 - 最新产品任务fd719902已在原服务器会话成功生图100%并入库，旧3814f844限额不能代表新任务不可用；图片科学问题见CURRENT handoff。用户指定新Chat账号后已正常退出旧账号；随后已完成登录（见本页最新更新）。
@@ -38,13 +55,13 @@
 | Node / Python | 宿主 `/usr/bin/node`、`/usr/bin/python3`；现有 `node:22-bookworm`、`python:3.12-slim` 镜像 | 已有；必要时复用镜像中的Node。不要默认全局安装 |
 | 视频 / 字体 / FFmpeg | `openscience-media-demo:b361f4f7781b760583b3a312829877c4d6310e8a` 等已有media镜像；源码 `apps/media-demo/Dockerfile` | 镜像包含FFmpeg、CJK字体与无头浏览器；demo镜像可复用运行依赖，不代表Hermes完整视频产品链路通过 |
 | 语音模型 | `/opt/openscience-models/qwen3-tts-customvoice-0c0e305`；`openscience/tts-audition:qwen0.1.1` | 目录与镜像存在，本轮未调用；不要重复下载模型，也不推断生产已接入 |
-| PDF解析 / OCR | `openscience-prod-document-parser-1`、`openscience-prod-paper-analysis-1`，已有解析镜像与模型 | 两服务运行且healthy；本次复用真实PDF高级解析及六维凝练成果，没有重跑OCR。具体引擎以任务来源记录和能力台账为准，不再以历史Tesseract-only列表否认已上线能力 |
+| PDF解析 / OCR | `openscience-prod-document-parser-1`、`openscience-prod-paper-analysis-1`；Docling Serve CPU v1.30.0及Node/Tesseract轻量链 | 2026-09-12两服务运行healthy，Docling路径已接通，公式增强false；具体选用阶段按任务来源判断。未重跑OCR，不由运行状态推断任意论文识别正确 |
 | BGE-M3 | `openscience-prod-embedding-worker-1`；模型卷 `bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89` | 容器运行；既有模型卷复用。BGE生成向量，实际存储由现有检索/数据库链路负责 |
 | ScanSci | `openscience-prod-scansci-mcp-1`；项目 `apps/scansci-mcp` | 容器运行；复用MCP取文献，不另装一份；认证状态不读取或打印 |
 | Hermes / MiniMax | 生产agent-worker及AI Gateway；另有 `/opt/hermes-agent` 源码目录 | 源码目录存在不等于独立服务已启用；经现有Worker/Gateway调用，限额以实际供应商响应为准 |
 | Codex订阅生图 | `/opt/openscience-codex`；独立runner bundle `1ad54c72` | 已有runner/预设skill；最新真实任务报usage limit，无新图。不得重新安装或重新登录当作额度恢复 |
 | DB / 缓存 / 对象存储 / 文件扫描 | `openscience-prod-{postgres,redis,object-storage,malware-scanner}-1` | 本次列表显示运行；复用内部服务，不暴露公网，不读取环境变量凭据 |
-| 非生产容器 | `openscience-dev-{postgres,redis}-1`；`xgs-hermes-migration-a72b5e1c` | 仍在运行但不属于生产论文链路；清理前必须确认无开发会话、迁移、回滚或数据引用，不因名称直接删除 |
+| 历史非生产容器 | `openscience-dev-{postgres,redis}-1`；`xgs-hermes-migration-a72b5e1c` | 2026-09-12未在docker ps运行列表出现；停止/删除状态未另查。不得据旧条目称仍在运行，也不因名称直接删除 |
 | 出网与访问 | 宿主Squid `127.0.0.1:7891`；项目SSH wrapper；Cloudflare Tunnel | 既有出网仍依赖本机上游（CURRENT研究记录）；远程浏览器界面仅SSH localhost6081。服务器驻留不等于出口已独立 |
 
 ## 本次取证与教训

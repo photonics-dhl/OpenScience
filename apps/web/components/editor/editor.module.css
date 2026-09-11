@@ -71,6 +71,23 @@
   box-shadow: 0 0 0 3px rgba(18, 106, 112, 0.18);
 }
 
+.mathSurface {
+  min-height: 62px;
+  margin: 0;
+  padding: 5px 8px 5px 32px;
+  border-radius: 8px;
+  color: #263743;
+  cursor: text;
+  font-size: 18px;
+  line-height: 1.72;
+}
+
+.mathSurface:focus-visible {
+  outline: none;
+  background: #f2f8f7;
+  box-shadow: 0 0 0 3px rgba(18, 106, 112, 0.18);
+}
+
 .sourceLink {
   display: inline-flex;
   min-height: 40px;
@@ -147,15 +164,18 @@
 }
 
 @media (hover: hover) {
-  .proseInput:hover { background: rgba(234, 245, 243, 0.55); }
+  .proseInput:hover,
+  .mathSurface:hover { background: rgba(234, 245, 243, 0.55); }
 }
 
 @media (max-width: 640px) {
   .passage { padding-block: 17px 20px; }
   .proseInput { padding-left: 0; font-size: 17px; }
   .sourceLink { margin-left: 0; }
+  .mathSurface { padding-left: 0; font-size: 17px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .proseInput { transition: none; }
+  .proseInput,
+  .mathSurface { transition: none; }
 }

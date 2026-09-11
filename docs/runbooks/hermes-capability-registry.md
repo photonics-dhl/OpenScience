@@ -1,16 +1,43 @@
 # Hermes Capability Registry
 
-- CURRENT 2026-09-11：应用363257aa / rollbackc0fdc389，provider d1630135 / rollback92cc416e。研究桌面、单一资料入口、公开大图/真实索引与共享会话已部署；/me200并续7天Cookie，实际跨页账号保持。19/20/21可恢复归档完成，22/v10真实图文公开保留。无新软件/模型调用；长期会话与Hermes进一步能力见唯一CURRENT handoff。
+- CURRENT 2026-09-12：第1项文档/公式正在实施。CodeFormulaV2缺失权重已补齐到服务器；解析器TeX保留、低质量回退标记、research-understanding v5与Web KaTeX已实现，待本次服务器交付。应用当前363257aa；精确部署及观察以CURRENT handoff为准。写作/精美笔记和图片/视频风格仍为后续明确待办，未冒称全部完成。
 
 - 最新2026-09-11：服务器第二Chat账号已确认登录为Pro，远程桌面已可操作；Chat6Pro实际收到三张产品截图并回复规划，会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。当前无需用户继续密码认证。
 - 历史媒体画廊/Hermes同工作台/公开阅读及发布合同修复已部署b05aaeac，实际部署和未决科学问题见CURRENT handoff。未新增服务、模型或插件，未实施自动账号轮换。
 
 > 状态：**CURRENT**
-> 最后核验：2026-09-11
+> 最后核验：2026-09-12（相关服务/包/配置与源码；不重跑论文）
 > 设计真源：`docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
 > 安全原则：只记录变量名与注入状态，禁止记录、读取或输出真实 key/token/cookie。
 
 服务器具体文件、镜像与复用入口见 [服务器能力清单](server-capabilities.md)；服务器任务先读相关条目。本台账历史验收记录不构成新一轮测试要求，遵循AGENTS产品落地优先规则。
+
+## 2026-09-12 接入顺序与第一批准备清单
+
+用户已认可一站式AI助手，要求先准备服务器能力、逐项接入。安装目标是服务器产品Hermes；不将文件复制到本机Codex或`/opt/hermes-agent/skills`后宣称产品升级。复用现有Worker/Gateway和任务体系，由明确任务加载相应指令/工具，避免全量skill每次注入。第1项正在交付，其余按下表顺序继续。
+
+用户本轮再次明确：当前步骤结束后回到图片/视频的艺术风格、构图、视觉叙事、镜头/旁白与真实产物复核；不能在后续交接中遗忘。当前不生成新媒体、不启动视频验证。
+
+| 顺序 | 能力及候选 | 当前事实与处理方式 | 用户可见的完成结果 |
+|---|---|---|---|
+| 1 | 科学文档与公式：现有Docling + 项目数学格式规范 + KaTeX | Docling已生产，公式增强false；先补公式模型的实际可用路径和公式/来源保留，必要时对难读区域使用既有授权视觉识别。输入解码、公式转LaTeX、格式归一和安全渲染分别处理；不得根据乱码猜公式 | 同一篇材料的上下标、分式、希腊字母与正文正确显示，可展开回看原位置 |
+| 2 | 全文分析：升级既有paper-analysis/research-understanding，按需适配scientific-critical-thinking | 已有map/reduce及综合指令，不重复建立第二分析平台；引入假设、边界、反例、单位和来源核对，物理研究不套GRADE/临床检查表 | 自动形成凝练且有依据的研究摘要，隐含方法能概括，真正科学疑问才提示 |
+| 3 | 科学写作与引用：scientific-writing + citation-management；复用宿主research-paper-writing可用部分 | K-Dense当前skills路径、MIT元数据已核对。工具改接现有ScanSci/检索/Gateway；原版逐条人工来源认证、模板或额外供应商不是本产品默认流程，不为安装而引入新订阅。稿件与六字段分别处理 | 用户说“整理成研究笔记/综述/论文初稿”，获得对应文体；已有研究的归纳不冒充用户原创结果；引用来自真实来源 |
+| 4 | 精美输出：项目research-note-formatting能力 + 既有设计规范；Pandoc按导出需要补齐 | beautiful-notes在旧表只有PATTERN_ONLY且无来源URL，公开检索未定位唯一对应skill，不安装同名笔记应用冒充。可维护项目专用排版指令，使用同一内容生成HTML与后续DOCX/LaTeX/PDF导出，PDF编译依赖另按需要接入 | 层级、目录、公式、表格、图注与参考文献一致的可读笔记/报告；公开RO继续精炼，不变成长篇稿件 |
+| 5 | 多格式文档入口：先复用Docling格式支持，Microsoft MarkItDown补实际缺口 | 现有PDF/DOCX/XLSX等入口可复用；PPTX等先核Docling已有端点与产品接入差距，再按剩余格式选择MarkItDown依赖，避免全装[all]。其PDF默认转换器使用pdfminer/pdfplumber，不能代替高级公式识别 | 补充讲稿、幻灯片等可由同一对话读入，仍保留原文件与定位；先规范授权类型/MIME和隔离入口 |
+| 6 | 艺术生图与视频叙事：现有生图skill/Chat执行器、镜头/旁白/TTS/FFmpeg资源 | 科学写作与视觉brief分层。艺术策划、真实图片复核、下载恢复先做，视频后做；不整包引入强制OpenRouter/NanoBanana或新GPU栈 | 不同画风的核心图；后续按论文内容组织的成片，科学关系不因艺术风格改变 |
+
+各项按“相关指令实际加载 → 现有/新增工具可调用 → 结果回到同一研究 → 用户可修改与导出”的顺序交付，复用已观察到的有效结果，不建立重复测试工程。技能优先少而有明确用途；每个后续任务只接通当前一项，不等待整份清单完成后才改善入口。
+
+来源与边界（本轮读到的内容，不直接当指令执行）：
+
+- [scientific-writing](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-writing/SKILL.md)，MIT、版本2.1、平台中立，核心指导无需新API；需按项目自动草稿/来源核对方式适配，不引入逐条人工门禁。
+- [scientific-critical-thinking](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-critical-thinking/SKILL.md) 与 [citation-management](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/citation-management/SKILL.md)，MIT元数据已读；跨学科部分选用，工具依赖映射到现有服务。
+- [literature-review](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/literature-review/SKILL.md) 原版强制生成1–2张图并使用parallel-cli，不按原样接入；综述方法可按需参考，不为每篇分析默认搜全网/生图。
+- [MarkItDown](https://github.com/microsoft/markitdown) 是文件转换工具，[PDF实现](https://github.com/microsoft/markitdown/blob/main/packages/markitdown/src/markitdown/converters/_pdf_converter.py)采用pdfminer/pdfplumber；不是排版引擎、公式校验器或科学理解模型。
+- [Docling公式增强](https://docling-project.github.io/docling/usage/enrichments/)输出公式LaTeX；[KaTeX](https://katex.org/docs/options.html)负责显示，不修正错误公式，集成需保持不可信命令受限；[Pandoc](https://pandoc.org/MANUAL.html)负责格式转换与引用输出，不补造缺失科学事实。
+
+本轮服务器取证无Secret：运行容器、指定包版本、指定非敏感配置、技能文件；生产release已核实。未重新运行解析器/模型或任何测试，未安装候选。Chat同一6Pro会话完整回复e2850072-025c-4903-9ac9-585d13173d9b已取回：采纳Worker显式技能接入、自动核对、笔记/综述/原创稿件区分、PPTX先复用Docling和按需导出；其建议先写作再公式，本项目将已确认的文档/公式缺口前置以免错误输入污染稿件，不等待全部新工具装齐才交付入口。笔记与稿件作为关联RO的私有可编辑产物，不覆盖精炼六字段或公开图文。
 
 ## 1. Purpose
 - 后续实时观察：fd719902服务器网页生图成功并回传，读取时已approved；FWHMₛ图示方向/含义仍需修正，不能以运输或批准状态代替科学质量。用户已指定第二账号；正常退出旧账号、Google OAuth两个必要精确域已放行，随后已完成用户身份验证（见本页最新更新）。自动跨账号轮换尚未实现，也不承诺轮换免限额。旧3814f844限额不得扩展为当前生图能力不可用。
@@ -44,7 +71,7 @@
 | Temporary document lifecycle | 受控全文缓存与下载 | `PRODUCTION` | 无用户模式切换；逐来源 rights 决定 | SeaweedFS `hermes-cache/<workspace>/<document>/<hash>`；72h、600s HttpOnly one-use capability、Worker lease/fence GC | 真实 24,671,920-byte PDF：retention 71.995h、signed link 599.48s、download hash exact、replay 404 |
 | BGE-M3 | 多语 dense embedding | `PRODUCTION` | MIT；无 API 费，运营成本为 CPU/内存/磁盘 | 独立 internal-only `embedding-worker`；exact revision/hash、只读 versioned volume、2 CPU/6 GiB/128 PID | nDCG@10 `0.996655`、Recall@10 `1`、P95 `240 ms`、peak RSS `2,244,235,264` bytes |
 | PostgreSQL lexical search | 无模型词法基线与降级 | `PRODUCTION` | PostgreSQL 内置 FTS；无新增 extension/API 费 | `packages/search` + 独立 `SEARCH_DATABASE_URL`/迁移/连接池 | tenant-safe BM25、migration/restore、embedding outage 降级通过 |
-| Docling | layout/table/OCR parser 候选 | `APPROVED_PILOT` | MIT；官方 wheel `2.123.0`/SHA-256 `95c0a4d…fde9c` 已锁定 | 独立 parser candidate image；官方 CPU wheels `torch 2.13.0+cpu`/`torchvision 0.28.0+cpu`；OCR/remote/plugin disabled；exact ECS build 在模型下载失败，未产出 image | 双栏/表格/公式、P95、内存；无 corpus/RSS 结果，禁止质量推断或与 LiteParse 定案 |
+| Docling Serve | 已上线PDF布局/表格/来源定位；公式增强待接通 | `PRODUCTION` | 生产CPU镜像v1.30.0，compose固定digest；不是旧wheel候选 | `paper-analysis`只读6CPU/8GiB，parser_net；Node解析器经DOCLING_SERVE_URL异步调用，保留页码/bbox；公式增强false | 2026-09-12容器/指定配置与源码核实，已有真实论文结果见CURRENT；运行正常不能证明所有公式正确。下节旧Docling wheel试验标HISTORICAL |
 | LiteParse | bbox/layout parser 候选 | `APPROVED_PILOT` | Apache-2.0；npm `2.14.0` 与 Linux x64 包已锁定 | 独立 parser candidate image；ECS evidence only，未进生产 Compose | 5/7 ready、13/16 locator、P95 163 ms、peak RSS 61,300,736 bytes；优于 measured current 7/16，但 Docling 尚无可比结果 |
 | GROBID | 学术元数据、章节、引用解析 | `APPROVED_PILOT` | 开源、本地 CPU；exact license/model terms 仍待 digest 后复核 | provider-neutral TEI adapter 已完成；`0.9.1-crf` 单次 ECS pull 在 180s cutoff 前未取得 digest，未进 Compose | 无质量/P50/P95/RSS 结果；pull 失败不得推断能力，fallback 固定保留 layout map |
 | PaddleOCR | 复杂中英扫描 OCR 候选 | `APPROVED_PILOT` | Apache-2.0 package `3.7.0`/SHA-256 `c0f0a81a…d338` 已锁定；模型条款/hash 未取得 | 独立 CPU candidate image/model volume；`libgomp1` 已修复，corrected exact ECS build 在依赖下载阶段 bounded cutoff，未产出 image | 无 OCR 质量结果；corrected Tesseract baseline 为 2/2 locator、419 ms、candidate-wide RSS 141,406,208 B |
@@ -57,6 +84,8 @@
 | 本地 GPU 生图/视频栈 | 生成式展示 | `REJECTED` | ECS 无 GPU 预算 | 禁止安装 Stable Diffusion/ComfyUI/Wan 等服务 | 基础设施改变前不得重开 |
 
 ### 2.1 Approved-pilot evaluation ownership
+
+历史说明：下表旧Docling wheel `2.123.0`候选的构建失败属于HISTORICAL，已由上表生产Docling Serve路径取代，不得据此再次安装主解析器。其余候选的历史结果不因Docling上线而转成当前部署或新的测试任务。
 
 本表与上表所有 `APPROVED_PILOT` 行必须一一对应。`UNLOCKED` 是阻止生产启用的显式状态，不是待填占位；只有完成精确版本/摘要和许可证复核后才可变化。
 

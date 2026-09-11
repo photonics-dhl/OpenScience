@@ -33,6 +33,7 @@ import { SDF_FIELDS } from '@/lib/suggestions';
 import { ResearchPublication } from '@/components/research/ResearchPublication';
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 import { HermesMediaReview } from './HermesMediaReview';
+import { ScientificText } from '@/components/content/ScientificText';
 
 type LiteratureIntent = Extract<RoutedHermesIntent, { kind: 'literature.acquire' }>;
 
@@ -483,7 +484,7 @@ function HermesAssistantDrawerContent({
           <p className="hermes-message hermes-message-assistant">{dashboardContext.editorDraft ? tc('welcomeEditor') : t(suggestion.bodyKey)}</p>
           {turns.map((turn) => <React.Fragment key={turn.id}>
             {turn.user && <p className="hermes-message hermes-message-user">{turn.user}</p>}
-            <p className="hermes-message hermes-message-assistant">{turn.summary}</p>
+            <ScientificText className="hermes-message hermes-message-assistant">{turn.summary}</ScientificText>
           </React.Fragment>)}
           {sentGoal && <p className="hermes-message hermes-message-user">{sentGoal}</p>}
           {busy && <p className="hermes-message hermes-message-assistant hermes-conversation-status" role="status">{t('guide.working')}</p>}
@@ -492,13 +493,13 @@ function HermesAssistantDrawerContent({
             {error && activeTask && <button type="button" onClick={() => setError('')}>{t('guide.resume')}</button>}
           </div>}
           {!submitting && result && <div className="hermes-message hermes-message-assistant">
-            <p>{result.summary}</p>
+            <ScientificText as="p">{result.summary}</ScientificText>
             {result.draftEdit && <div className="hermes-conversation-change">
               <p role="status">{editOutcome ? tw(editOutcome.conflicts ? 'editConflict' : 'editApplied', { count: editOutcome.applied }) : tw('editProposal')}</p>
               {Boolean(editOutcome?.applied) && onUndoDraftEdit && <button type="button" onClick={() => { onUndoDraftEdit(); setEditOutcome(null); }}>{tw('undo')}</button>}
               <details><summary>{tw('viewChanges')}</summary>
                 {Object.entries(result.draftEdit.changes).map(([field, value]) => <div className="hermes-conversation-field" key={field}>
-                  <h4>{fieldLabel(field)}</h4><p>{value}</p>
+                  <h4>{fieldLabel(field)}</h4><ScientificText as="p">{value}</ScientificText>
                   {onDraftEdit && (restoredTask || Boolean(editOutcome?.conflicts) || (!editOutcome && task && appliedTasks.current.has(task.id))) && <button type="button" onClick={() => setEditOutcome(onDraftEdit({ ...result.draftEdit!, changes: { [field]: value } }, true))}>{tw('useField')}</button>}
                 </div>)}
               </details>

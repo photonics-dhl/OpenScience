@@ -60,7 +60,7 @@ function doclingKind(label: unknown): 'heading' | 'paragraph' | 'equation' | 'ca
   return 'paragraph';
 }
 
-function doclingResult(payload: unknown): ParserStageResult {
+function doclingResult(payload: unknown, formulaEnrichment: boolean): ParserStageResult {
   const response = record(payload);
   const documentResponse = record(response?.document);
   const document = record(documentResponse?.json_content);
@@ -68,11 +68,28 @@ function doclingResult(payload: unknown): ParserStageResult {
     throw new Error('Docling returned no usable document');
   }
   const byPage = new Map<number, StagePage['blocks']>();
+  let unreadableFormula = false;
   const append = (itemValue: unknown, forcedKind?: 'table' | 'figure') => {
     const item = record(itemValue);
     const provenance = Array.isArray(item?.prov) ? item.prov : [];
-    const text = typeof item?.text === 'string' && item.text.trim() ? item.text.trim()
-      : typeof item?.orig === 'string' && item.orig.trim() ? item.orig.trim() : undefined;
+    const recognizedText = typeof item?.text === 'string' ? item.text.trim() : '';
+    let text = recognizedText || (typeof item?.orig === 'string' && item.orig.trim() ? item.orig.trim() : undefined);
+    if (item?.label === 'formula') {
+      if (formulaEnrichment && (!recognizedText || recognizedText.includes('\uFFFD'))) {
+        text = typeof item.orig === 'string' && item.orig.trim() ? item.orig.trim() : undefined;
+      }
+      if (!formulaEnrichment || !recognizedText || recognizedText.includes('\uFFFD')) {
+        // Keep the native source fallback and its page/bbox; never guess missing symbols.
+        unreadableFormula = true;
+      } else if (!(recognizedText.startsWith('\\[') && recognizedText.endsWith('\\]'))
+        && !(recognizedText.startsWith('$$') && recognizedText.endsWith('$$'))
+        && !(recognizedText.startsWith('\\(') && recognizedText.endsWith('\\)'))
+        && !(recognizedText.startsWith('$') && recognizedText.endsWith('$'))) {
+        // Docling's enabled formula stage writes LaTeX to TextItem.text.
+        // Delimit it for downstream understanding/display without changing the expression.
+        text = `\\[${recognizedText}\\]`;
+      }
+    }
     for (const provenanceValue of provenance) {
       const prov = record(provenanceValue);
       const pageNumber = typeof prov?.page_no === 'number' && Number.isInteger(prov.page_no) && prov.page_no > 0 ? prov.page_no : 1;
@@ -97,11 +114,15 @@ function doclingResult(payload: unknown): ParserStageResult {
     schemaVersion: 2,
     parser: { name: 'docling-serve-cpu', version: '1.30.0' },
     pages,
-    warnings: response.status === 'partial_success' ? ['partial_result'] : [],
+    warnings: [
+      ...(response.status === 'partial_success' ? ['partial_result'] : []),
+      ...(unreadableFormula ? ['low_confidence'] : []),
+    ],
   });
 }
 
 async function runDoclingPdf(content: Buffer, serviceUrl: string): Promise<ParserStageResult> {
+  const formulaEnrichment = process.env.DOCLING_FORMULA_ENRICHMENT === 'true';
   const form = new FormData();
   form.append('files', new Blob([content], { type: 'application/pdf' }), 'document.pdf');
   form.append('from_formats', 'pdf');
@@ -114,7 +135,7 @@ async function runDoclingPdf(content: Buffer, serviceUrl: string): Promise<Parse
   form.append('do_ocr', 'false');
   form.append('force_ocr', 'false');
   form.append('do_table_structure', 'true');
-  form.append('do_formula_enrichment', process.env.DOCLING_FORMULA_ENRICHMENT === 'true' ? 'true' : 'false');
+  form.append('do_formula_enrichment', formulaEnrichment ? 'true' : 'false');
   form.append('abort_on_error', 'false');
   const baseUrl = serviceUrl.replace(/\/$/u, '');
   const submission = await fetch(`${baseUrl}/v1/convert/file/async`, {
@@ -136,7 +157,7 @@ async function runDoclingPdf(content: Buffer, serviceUrl: string): Promise<Parse
         signal: AbortSignal.timeout(60_000),
       });
       if (!result.ok) throw new Error(`Docling result failed: ${result.status}`);
-      return doclingResult(await result.json());
+      return doclingResult(await result.json(), formulaEnrichment);
     }
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
@@ -1030,6 +1051,8 @@ export function createDefaultIngestionAdapters(): IngestionAdapters {
           return await runDoclingPdf(content, doclingUrl);
         } catch (error) {
           console.error('advanced PDF parser failed; using native fallback', error instanceof Error ? error.message : String(error));
+          const fallback = await parseStructuredStageIsolated('pdf', content);
+          return { ...fallback, warnings: [...new Set<ParserStageResult['warnings'][number]>([...fallback.warnings, 'partial_result', 'low_confidence'])] };
         }
       }
       return parseStructuredStageIsolated('pdf', content);

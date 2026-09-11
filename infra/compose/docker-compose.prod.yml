@@ -287,6 +287,11 @@ services:
       OMP_NUM_THREADS: "3"
       DOCLING_SERVE_MAX_SYNC_WAIT: "900"
       DOCLING_SERVE_ENABLE_UI: "false"
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      # Supplement the image's existing layout/OCR cache without replacing it.
+      # CodeFormulaV2 revision ecedbe111d15c2dc60bfd4a823cbe80127b58af4.
+      - /opt/openscience-models/docling-codeformula-v2/docling-project--CodeFormulaV2:/opt/app-root/src/.cache/docling/models/docling-project--CodeFormulaV2:ro
     read_only: true
     tmpfs:
       # PyTorch/Docling JIT maps generated CPU kernels from this private tmpfs.
@@ -329,7 +334,7 @@ services:
       PARSER_JOB_DIR: /parser-jobs
       TESSERACT_LANGS: eng+chi_sim
       DOCLING_SERVE_URL: http://paper-analysis:5001
-      DOCLING_FORMULA_ENRICHMENT: "false"
+      DOCLING_FORMULA_ENRICHMENT: "true"
       PARSER_WORKER_CONCURRENCY: "2"
     depends_on:
       paper-analysis:

@@ -13,6 +13,7 @@ import type { Locale } from "../i18n/locale";
 import { HermesWorkspaceStageProvider } from "../components/hermes/HermesWorkspaceStage";
 import { SessionProvider } from "../components/auth/SessionProvider";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 
 // next/font downloads at image-build time and serves the files from our own origin.
 // The four roles deliberately separate display, editorial, CJK and data voices.

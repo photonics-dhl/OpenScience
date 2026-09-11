@@ -1,7 +1,7 @@
 # Hermes / Workbench CURRENT Handoff
 
 ## 目标与执行约束
-- 用户当前要求：研究桌面、编辑器、公开RO与探索/首页统一产品叙事、布局与跨页会话；之后再提升Hermes理解/科学自审能力。
+- 用户2026-09-12批准逐项实施，当前第1项文档/公式：缺失CodeFormulaV2已下载服务器，解析TeX与质量回退标记、理解skill v5、Web KaTeX已改，待本轮部署。清单见server-capabilities/hermes-capability-registry；统一创建/持续对话等后续方案尚未实施。
 - 主屏顺序：贡献 → 核心概念图/可选视频 → 凝练六字段 → 文末资料。Hermes对话为主要操作入口；不恢复冗余制作表单。
 - 本机只编辑/静态阅读/传输；禁止测试、预检、CI、本机构建。只做服务器部署必要build/start及授权真实产品操作；视频和批量冷启动暂停。
 - 工作树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。根目录无关脏文件不碰。
@@ -12,6 +12,7 @@
 - 服务器必要build/start完成，deploy --no-tests --skip-migrate --reuse-unchanged-capability-images exit0；未运行测试/CI/本机构建。
 - 日志 C:/Users/Mac/AppData/Local/Temp/xgs-ui-final-deploy-20260911.log；首批4909日志xgs-ui-deploy-20260911.log。
 - provider d1630135d569d28364d295380bb4e0333c3ee264 / rollback92cc416ee3fe921f62c75cbe6f69e48d0b55227d；本轮未改供应商、安装软件、轮换账号或重跑模型。
+- 2026-09-12实际只读盘点：.release-id仍363257aa，Docling Serve CPU1.30.0已运行；公式增强false、parser并发2。Worker加载内置TS技能，宿主research-paper-writing文件不等于产品可用；应用无统一数学渲染。旧Docling candidate未上线结论已纠正；候选技能/工具尚未安装，顺序见能力台账。
 
 ## 已实现的产品改造
 - 研究桌面：继续研究直达编辑器；每项真实任务归“需要我处理/后台进行”，相同ID去重，保留真实并发和历史恢复入口；有后台任务时仅可见页定时静默更新，focus可恢复失败读取；区分初次loading/局部unavailable/真实empty。专用读取失败使用成功global结果，失败不清屏。
@@ -46,6 +47,7 @@
 - 已部署378历史修复：review前移Claim图校验，publish终检保留；未公开审核版本Hermes“继续编辑”可撤回draft，权限/Serializable/Publication保护及审计保留。
 
 ## 后续工作与边界
+- 用户再次要求牢记：文档/理解/写作准备后继续图片/视频的艺术风格、构图、叙事、镜头/旁白与实际产物复核。此项未开始，不因当前公式步骤完成而丢失。
 - 本轮UI交付后才提升Hermes全文理解、来源关联、去重和科学自审；必须把上述人工整理变为可靠服务器能力，不能以UI简化取消科学正确性。
 - 目前一篇真实带图发布；其余2–3篇精选、视频、真实多图HTML样本/独立导出及广泛旧数据清理未全部完成；不批量凑数。
 - 全自动浏览器异常恢复、任意新论文准确理解尚未证明；不声称量化token节省比例。

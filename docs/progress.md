@@ -1,5 +1,21 @@
 # OpenScience 当前进度
 
+## 2026-09-12 — 第1项文档与公式能力实施中
+- 用户批准按清单逐项落实，并明确保留后续图片/视频艺术风格、构图、叙事、镜头/旁白能力。本轮只交付文档/公式，不开启媒体或批量冷启动。
+- 服务器复用Docling Serve镜像，仅补缺失CodeFormulaV2 0.3B模型，revision ecedbe111，权重630993616字节。只读独立缓存挂载、公式增强开关；解析保留TeX/页码/bbox，公式空识别与高级回退明确标记质量下降。
+- Web增加KaTeX统一科学文本，研究理解skill v5通过Worker显式导入；主线程实现解析/部署、Sol Medium做Web、Sol High定向风险复核。当前release363257aa，本次候选尚未部署，无测试/本机构建。
+
+## 2026-09-12 — 服务器能力盘点与接入顺序
+- 用户认可一站式方案，先要求准备论文理解、科学写作/撰稿、精美输出与文档/公式能力。通过项目SSH入口只读查看生产release、容器、指定包/非敏感配置与已有skill，release仍363257aa；未安装、部署、测试或重跑论文。
+- 确认Docling Serve CPU1.30.0已生产，公式增强false，应用缺少统一数学渲染；宿主research-paper-writing存在但Worker只显式加载内置分析skill。已纠正旧candidate表对当前Docling状态的误导。
+- 已查原始仓库：K-Dense科学写作/批判分析/引用技能可按项目适配；MarkItDown补格式入口，不能代替公式OCR；beautiful-notes未定位唯一来源，不冒装同名App。按文档公式→理解→写作引用→精美输出→格式扩展→媒体顺序记录到能力台账。
+- 当前只有文档变化；完整准备清单位于docs/runbooks/hermes-capability-registry.md，具体运行入口位于server-capabilities.md。Chat6Pro完整回复e2850072已取回；采纳实际技能加载、分离文档类型、格式优先复用Docling、按需导出；文档公式缺口前置。静态git diff --check通过。
+
+## 2026-09-12 — Hermes持续协作与创作能力方案，尚未实施
+- 用户只要求先思考给方案；已定向阅读创建页、对话合同与媒体编排，确认旧blank/import分流、必填标题、空上下文和有限风格合同；方案原地追加于2026-09-05产品设计spec。
+- 建议统一首次创建/追加附件/再次分析，自动形成可撤销草稿并保护手改；移除形象大小切换，随后增强全文理解、视觉策划、多风格生图和视频叙事。
+- 本轮仅文档方案；源码HEAD4b2dda83，沿用上轮生产363257aa/rollbackc0fdc389记录，未重新查询服务器、改产品代码、部署或运行测试。Chat同一6Pro会话完整回复a9aa220b已取回并纳入；已明确制作指令不重复确认。静态git diff --check通过。
+
 ## 2026-09-11 — 研究桌面与公开阅读体验已部署
 - branch codex/onchip-video-release；worktree .worktrees/onchip-video-release。ECS应用/源码363257aa2a98a47e847f676aa32fd675f53f1ad6，rollbackc0fdc389d06d0dfd49213945d0641644854e7090；provider d1630135/rollback92cc416e不变。后续docs-only HEAD不是新的应用release。
 - 服务器必要build/start完成，deploy --no-tests --skip-migrate --reuse-unchanged-capability-images exit0；未运行测试/CI/本机构建。。日志C:/Users/Mac/AppData/Local/Temp/xgs-ui-final-deploy-20260911.log。无测试、CI、本机构建或新模型/生图调用。
