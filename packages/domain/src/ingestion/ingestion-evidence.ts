@@ -14,6 +14,8 @@ type IngestionEvidenceSource = {
   locator: ReturnType<typeof validateSourceLocator>;
 };
 
+type SdfField = typeof SDF_NODE_TYPES[number];
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -24,8 +26,55 @@ function claimProvenance(value: unknown): Record<string, unknown> {
   return provenance;
 }
 
+function ingestionFieldClaim(value: unknown): SdfField | undefined {
+  const provenance = record(value);
+  const field = provenance.field;
+  if (typeof field !== 'string' || !SDF_NODE_TYPES.includes(field as SdfField)
+    || typeof provenance.ingestionTaskId !== 'string' || !provenance.ingestionTaskId) return undefined;
+  const recognized = (provenance.source === 'deterministic' && provenance.provider === 'ingestion-source-match')
+    || (provenance.source === 'human' && provenance.provider === 'ingestion-confirmation');
+  return recognized ? field as SdfField : undefined;
+}
+
+function evidenceProvenance(value: unknown): Record<string, unknown> {
+  const provenance = { ...record(value) };
+  delete provenance.previousVersionId;
+  delete provenance.previousEvidenceId;
+  delete provenance.previousEvidenceIds;
+  return provenance;
+}
+
+function sameEvidenceSource(left: {
+  artifactId: string; contentHash: string; kind: unknown; relation: unknown; exactQuote: string | null;
+  title: string; locator: unknown; provenance: unknown;
+}, right: {
+  artifactId: string; contentHash: string; kind: unknown; relation: unknown; exactQuote: string | null;
+  title: string; locator: unknown; provenance: unknown;
+}): boolean {
+  return left.artifactId === right.artifactId && left.contentHash === right.contentHash
+    && left.kind === right.kind && left.relation === right.relation && left.exactQuote === right.exactQuote
+    && left.title === right.title && isDeepStrictEqual(left.locator, right.locator)
+    && isDeepStrictEqual(evidenceProvenance(left.provenance), evidenceProvenance(right.provenance));
+}
+
+function sameEvidenceSources(left: Array<Parameters<typeof sameEvidenceSource>[0]>, right: Array<Parameters<typeof sameEvidenceSource>[1]>): boolean {
+  if (left.length !== right.length) return false;
+  const unmatched = [...right];
+  for (const source of left) {
+    const index = unmatched.findIndex(candidate => sameEvidenceSource(source, candidate));
+    if (index < 0) return false;
+    unmatched.splice(index, 1);
+  }
+  return true;
+}
+
 /** Carry the prior graph into a new version without rewriting its immutable source rows. */
-export async function carryVersionEvidence(tx: Prisma.TransactionClient, input: { researchObjectId: string; previousVersionId: string; versionId: string }) {
+export async function carryVersionEvidence(tx: Prisma.TransactionClient, input: {
+  researchObjectId: string;
+  previousVersionId: string;
+  versionId: string;
+  replacementClaimIds?: Partial<Record<SdfField, string>>;
+}) {
   const [previous, target, previousManifest, targetManifest] = await Promise.all([
     tx.version.findUnique({ where: { id: input.previousVersionId } }),
     tx.version.findUnique({ where: { id: input.versionId } }),
@@ -41,6 +90,19 @@ export async function carryVersionEvidence(tx: Prisma.TransactionClient, input: 
   const where = { researchObjectId: input.researchObjectId, versionId: input.previousVersionId };
   const claims = await tx.claimNode.findMany({ where });
   const evidence = await tx.evidenceRecord.findMany({ where });
+  const replacementIds = new Set(Object.values(input.replacementClaimIds ?? {}).filter((id): id is string => Boolean(id)));
+  const replacementRows = new Map<string, {
+    id: string; statement: string; assessment: typeof claims[number]['assessment'];
+    extractionStatus: typeof claims[number]['extractionStatus']; provenance: unknown;
+  }>();
+  if (replacementIds.size > 0) {
+    const replacements = await tx.claimNode.findMany({
+      where: { id: { in: [...replacementIds] }, researchObjectId: input.researchObjectId, versionId: input.versionId },
+      select: { id: true, statement: true, assessment: true, extractionStatus: true, provenance: true },
+    });
+    if (replacements.length !== replacementIds.size) throw new Error('Replacement Claim scope mismatch');
+    for (const replacement of replacements) replacementRows.set(replacement.id, replacement);
+  }
   const previousCore = record(previousManifest.coreJson);
   const targetCore = record(targetManifest.coreJson);
   const changedFields = new Set(SDF_NODE_TYPES.filter(field => !isDeepStrictEqual(previousCore[field], targetCore[field])));
@@ -85,10 +147,61 @@ export async function carryVersionEvidence(tx: Prisma.TransactionClient, input: 
     }
   }
   const invalidEvidence = new Set(carriedEvidence.filter(item => reviewClaims.has(item.claimId)).map(item => item.id));
-  const ids = new Map(carriedClaims.map(claim => [claim.id, randomUUID()]));
+  const replacementClaims = new Set<string>();
+  const ids = new Map(carriedClaims.map(claim => {
+    const field = ingestionFieldClaim(claim.provenance);
+    const replacementId = field && !claim.parentClaimId ? input.replacementClaimIds?.[field] : undefined;
+    if (replacementId) replacementClaims.add(claim.id);
+    return [claim.id, replacementId ?? randomUUID()];
+  }));
+  const replacedClaimsByTarget = new Map<string, typeof claims>();
+  for (const claim of carriedClaims) {
+    if (!replacementClaims.has(claim.id)) continue;
+    const replacementId = ids.get(claim.id)!;
+    replacedClaimsByTarget.set(replacementId, [...(replacedClaimsByTarget.get(replacementId) ?? []), claim]);
+  }
+  const identityStableReplacementClaims = new Set<string>();
+  for (const [replacementId, candidates] of replacedClaimsByTarget) {
+    const replacement = replacementRows.get(replacementId)!;
+    const previousClaimIds = candidates.map(claim => claim.id).sort();
+    const field = ingestionFieldClaim(candidates[0]!.provenance)!;
+    const candidateEvidence = evidence.filter(item => previousClaimIds.includes(item.claimId));
+    const succeededCandidates = candidates.filter(claim => claim.extractionStatus === 'succeeded');
+    const sourcesByClaim = new Map<string, typeof evidence>();
+    const eligibleSucceeded = succeededCandidates.every(claim => {
+      const sources = candidateEvidence.filter(item => item.claimId === claim.id);
+      sourcesByClaim.set(claim.id, sources);
+      const valid = sources.length > 0 && sources.every(item => {
+        const locator = record(item.locator);
+        return targetArtifacts.has(`${item.artifactId}:${item.contentHash}`)
+          && locator.artifactId === item.artifactId && locator.contentHash === item.contentHash;
+      }) && sources.some(item => item.extractionStatus === 'succeeded' && Boolean(item.verifiedByUserId));
+      if (!changedFields.has(field) && claim.statement === replacement.statement && valid) {
+        identityStableReplacementClaims.add(claim.id);
+      }
+      return !changedFields.has(field) && claim.statement === replacement.statement && valid;
+    });
+    const assessments = new Set(succeededCandidates.map(claim => claim.assessment));
+    const referenceSources = succeededCandidates[0] ? sourcesByClaim.get(succeededCandidates[0].id) ?? [] : [];
+    const sourceIdentityConsistent = succeededCandidates.every(claim => sameEvidenceSources(
+      sourcesByClaim.get(claim.id) ?? [], referenceSources,
+    ));
+    const preserveReview = succeededCandidates.length > 0 && eligibleSucceeded
+      && assessments.size === 1 && sourceIdentityConsistent;
+    const provenance = {
+      ...record(replacement.provenance), previousVersionId: input.previousVersionId,
+      previousClaimId: previousClaimIds[0], previousClaimIds,
+    } as Prisma.InputJsonValue;
+    await tx.claimNode.update({
+      where: { id: replacementId },
+      data: preserveReview
+        ? { assessment: succeededCandidates[0]!.assessment, extractionStatus: 'succeeded', provenance }
+        : { assessment: 'missing', extractionStatus: 'needs_review', provenance },
+    });
+  }
   // Insert parents first; source data already obeys the scoped parent foreign key.
-  const pending = [...carriedClaims];
-  const inserted = new Set<string>();
+  const pending = carriedClaims.filter(claim => !replacementClaims.has(claim.id));
+  const inserted = new Set(replacementClaims);
   while (pending.length) {
     const index = pending.findIndex(claim => !claim.parentClaimId || inserted.has(claim.parentClaimId));
     if (index < 0) throw new Error('Existing Claim graph cannot be copied');
@@ -108,16 +221,63 @@ export async function carryVersionEvidence(tx: Prisma.TransactionClient, input: 
     } });
     inserted.add(claim.id);
   }
-  for (const item of carriedEvidence) {
+  const existingTargetEvidence = replacementIds.size > 0
+    ? await tx.evidenceRecord.findMany({ where: { researchObjectId: input.researchObjectId, versionId: input.versionId,
+        claimId: { in: [...replacementIds] } } })
+    : [];
+  for (const item of carriedEvidence.filter(candidate => !replacementClaims.has(candidate.claimId))) {
+    const claimId = ids.get(item.claimId)!;
     const sourceRemoved = invalidEvidence.has(item.id);
     await tx.evidenceRecord.create({ data: {
       researchObjectId: input.researchObjectId, versionId: input.versionId, workspaceId: item.workspaceId,
-      claimId: ids.get(item.claimId)!, artifactId: item.artifactId, kind: item.kind, title: item.title,
+      claimId, artifactId: item.artifactId, kind: item.kind, title: item.title,
       exactQuote: item.exactQuote, relation: item.relation, locator: item.locator as Prisma.InputJsonValue,
       contentHash: item.contentHash, extractionConfidence: item.extractionConfidence,
       extractionStatus: sourceRemoved ? 'needs_review' : item.extractionStatus,
       verifiedByUserId: sourceRemoved ? null : item.verifiedByUserId,
       provenance: { ...record(item.provenance), previousVersionId: input.previousVersionId, previousEvidenceId: item.id } as Prisma.InputJsonValue,
+    } });
+  }
+  const replacementEvidenceGroups: Array<typeof carriedEvidence> = [];
+  for (const item of carriedEvidence.filter(candidate => replacementClaims.has(candidate.claimId)).sort((a, b) => a.id.localeCompare(b.id))) {
+    const group = replacementEvidenceGroups.find(items => sameEvidenceSource(items[0]!, item));
+    if (group) group.push(item);
+    else replacementEvidenceGroups.push([item]);
+  }
+  for (const group of replacementEvidenceGroups) {
+    const representative = group[0]!;
+    const claimId = ids.get(representative.claimId)!;
+    const previousEvidenceIds = group.map(item => item.id).sort();
+    const verified = group.filter(item => identityStableReplacementClaims.has(item.claimId) && !invalidEvidence.has(item.id)
+      && item.extractionStatus === 'succeeded' && Boolean(item.verifiedByUserId))
+      .sort((a, b) => `${a.verifiedByUserId}:${a.id}`.localeCompare(`${b.verifiedByUserId}:${b.id}`))[0];
+    const existing = existingTargetEvidence.filter(item => item.claimId === claimId && sameEvidenceSource(item, representative))
+      .sort((a, b) => a.id.localeCompare(b.id))[0];
+    if (existing) {
+      await tx.evidenceRecord.update({
+        where: { id: existing.id },
+        data: {
+          extractionStatus: verified ? 'succeeded' : 'needs_review',
+          verifiedByUserId: verified?.verifiedByUserId ?? null,
+          provenance: {
+            ...record(existing.provenance), previousVersionId: input.previousVersionId,
+            previousEvidenceId: previousEvidenceIds[0], previousEvidenceIds,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      continue;
+    }
+    const source = verified ?? representative;
+    await tx.evidenceRecord.create({ data: {
+      researchObjectId: input.researchObjectId, versionId: input.versionId, workspaceId: source.workspaceId,
+      claimId, artifactId: source.artifactId, kind: source.kind, title: source.title,
+      exactQuote: source.exactQuote, relation: source.relation, locator: source.locator as Prisma.InputJsonValue,
+      contentHash: source.contentHash, extractionConfidence: source.extractionConfidence,
+      extractionStatus: verified ? 'succeeded' : 'needs_review', verifiedByUserId: verified?.verifiedByUserId ?? null,
+      provenance: {
+        ...record(source.provenance), previousVersionId: input.previousVersionId,
+        previousEvidenceId: previousEvidenceIds[0], previousEvidenceIds,
+      } as Prisma.InputJsonValue,
     } });
   }
 }
@@ -134,6 +294,7 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
   core: Record<string, string>;
 }) {
   const { task } = input;
+  const claimIds: Partial<Record<SdfField, string>> = {};
   const result = record(task.agentTask?.result);
   const proposed = record(result.core);
   const evidence = record(result.evidence);
@@ -305,6 +466,7 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
       kind: 'core',
       statement, assessment: 'missing', extractionStatus: 'needs_review', provenance: provenance as Prisma.InputJsonValue,
     } });
+    claimIds[field] = claim.id;
     for (const [segmentIndex, source] of sources.entries()) await deps.prisma.evidenceRecord.create({ data: {
       researchObjectId: task.batch.researchObjectId, versionId: input.versionId, workspaceId: task.artifact.workspaceId,
       claimId: claim.id, artifactId: task.artifactId, kind: 'passage', title: field, exactQuote: source.quote,
@@ -313,4 +475,5 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
       provenance: { ...provenance, segmentIndex, sourceMapRef: { ...reference! } } as Prisma.InputJsonValue,
     } });
   }
+  return claimIds;
 }

@@ -1,5 +1,10 @@
 {
   "workbench": {
+    "hermesScope": "改文字、做图解、准备发布",
+    "talkToHermes": "对话",
+    "requestVideo": "生成视频",
+    "requestImage": "生成图片",
+    "resolveBeforePublish": "返回内容，处理需要确认的项目",
     "approvePlan": "批准方案，允许制作",
     "planReadyTitle": "查看与确认图解方案",
     "planReadyBody": "Hermes 已准备好下方的图解方案。可先提出修改，再确认方案并生成图片。",
@@ -490,6 +495,12 @@
       }
     },
     "presentation": {
+    "manualToolsTitle": "来源与手动工具",
+    "requestImage": "生成图片",
+    "requestVideo": "生成视频",
+    "emptyHermesBody": "告诉 Hermes 想解释的重点，制作进度与成果会保留在这里。",
+    "askHermes": "让 Hermes 生成",
+    "manualToolsBody": "需要精确控制时，再展开来源主张与制作工具。",
       "kicker": "研究展示",
       "title": "富媒体导览",
       "notEvidence": "以下内容用于帮助理解与传播，不作为科学证据。请以关联主张及其原始证据为准。",
@@ -1552,6 +1563,19 @@
     "kind_core": "核心主张", "kind_supporting": "支持主张", "kind_method": "方法", "kind_boundary": "边界条件", "kind_counter": "反向主张"
   },
   "hermesPresentation": {
+    "prepareVideoPlan": "整理视频制作指令",
+    "planWillBePrepared": "Hermes 会先整理这张图的制作指令。",
+    "eligibleSources": "已选用 {count} 项可用研究主张。",
+    "image": "图解",
+    "advanced": "详细指令与来源",
+    "needsEligibleSources": "请先确认提取的研究内容，再交给 Hermes 制作。",
+    "briefWillUpdate": "你的修改会写入新方案，原图与原方案保留。",
+    "updateBrief": "更新制作指令",
+    "needsApprovedScenes": "视频需要已确认的分镜与对应图片。先完成素材后即可制作。",
+    "mediaIntent": "制作什么",
+    "preparePlan": "整理制作指令",
+    "usingApprovedPlan": "使用当前已确认的制作方案。",
+    "video": "视频",
     "entry": "分镜与配图",
     "chooseResearch": "选择要处理的研究",
     "noResearch": "先创建或打开一项研究",

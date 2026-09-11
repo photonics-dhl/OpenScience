@@ -15,6 +15,7 @@ import {
   reviewSnapshotDigest,
 } from '../research-intelligence/publication-snapshot';
 import { PublishError } from './errors';
+import { finalizePublicationResearchRecord } from '../commit/research-record-snapshot';
 
 export type VersionStatus = 'draft' | 'under_review' | 'approved' | 'published' | 'revised' | 'withdrawn' | 'rejected' | 'restricted';
 
@@ -241,6 +242,7 @@ export async function publishVersion(
     const publishedAt = new Date();
     const visibilityFrom = currentVersion.researchObject.visibility;
 
+    await finalizePublicationResearchRecord(tx, { researchObjectId: version.researchObjectId, versionId: version.id });
     await tx.version.update({ where: { id: version.id }, data: { status: 'published', publicVersionId } });
     if (visibilityFrom !== 'public') {
       await tx.researchObject.update({ where: { id: version.researchObjectId }, data: { visibility: 'public' } });

@@ -896,8 +896,10 @@ export async function confirmIngestionTask(
           for (const nodeType of SDF_NODE_TYPES) await tx.sdfNode.update({
             where: { sdfDocumentId_nodeType: { sdfDocumentId: document.id, nodeType } }, data: { content: input.core[nodeType] ?? '' },
           });
-          if (latest) await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: latest.id, versionId: commit.versionId });
-          await writeIngestionEvidence(scoped, { task, versionId: commit.versionId, core: input.core });
+          const replacementClaimIds = await writeIngestionEvidence(scoped, { task, versionId: commit.versionId, core: input.core });
+          if (latest) await carryVersionEvidence(tx, {
+            researchObjectId: ro.id, previousVersionId: latest.id, versionId: commit.versionId, replacementClaimIds,
+          });
           await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: commit.versionId });
           const updated = await tx.ingestionTask.updateMany({ where: { id: task.id, state: 'needs_review' }, data: { state: 'confirmed', error: null } });
           if (updated.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Task changed while confirming');

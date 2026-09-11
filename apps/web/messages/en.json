@@ -1,5 +1,10 @@
 {
   "workbench": {
+    "hermesScope": "Edit writing, create visuals, prepare publication",
+    "talkToHermes": "Chat",
+    "requestVideo": "Generate a video",
+    "requestImage": "Generate an image",
+    "resolveBeforePublish": "Return to content and resolve the highlighted items",
     "approvePlan": "Approve this plan for production",
     "planReadyTitle": "Review the illustration plan",
     "planReadyBody": "Hermes has prepared an illustration plan below. Review it, request changes if needed, then approve it and generate the image.",
@@ -490,6 +495,12 @@
       }
     },
     "presentation": {
+    "manualToolsTitle": "Sources and manual tools",
+    "requestImage": "Generate an image",
+    "requestVideo": "Generate a video",
+    "emptyHermesBody": "Tell Hermes what to explain. Progress and results stay here.",
+    "askHermes": "Ask Hermes to create",
+    "manualToolsBody": "Open source claims and production tools when you need precise control.",
       "kicker": "Research presentation",
       "title": "Multimedia guide",
       "notEvidence": "The following media aids understanding and communication; it is not scientific evidence. Refer to the linked claims and original evidence.",
@@ -1516,6 +1527,19 @@
     "kind_core": "Core claim", "kind_supporting": "Supporting claim", "kind_method": "Method", "kind_boundary": "Boundary", "kind_counter": "Counterclaim"
   },
   "hermesPresentation": {
+    "prepareVideoPlan": "Prepare video brief",
+    "planWillBePrepared": "Hermes will first prepare the illustration brief.",
+    "eligibleSources": "{count} eligible research claims selected.",
+    "image": "Illustration",
+    "advanced": "Detailed instructions and sources",
+    "needsEligibleSources": "Confirm the extracted research content before asking Hermes to create visuals.",
+    "briefWillUpdate": "Your edits will create a revised brief. Existing images and plans are preserved.",
+    "updateBrief": "Update production brief",
+    "needsApprovedScenes": "Video needs an approved storyboard and its corresponding images. Prepare those assets first.",
+    "mediaIntent": "What to create",
+    "preparePlan": "Prepare production brief",
+    "usingApprovedPlan": "Using the current approved production brief.",
+    "video": "Video",
     "entry": "Storyboards and scene images",
     "chooseResearch": "Choose a research object",
     "noResearch": "Create or open a research object first",

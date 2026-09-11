@@ -1,12 +1,11 @@
 'use client';
 
-import { ChevronDown, Image as ImageIcon, Plus, RotateCw, ShieldCheck } from 'lucide-react';
-import * as React from 'react';
+import { ChevronDown, Image as ImageIcon, Plus, RotateCw } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import type { PresentationAsset, PresentationClaim, VersionSummary } from '@/lib/api';
-import { presentationAssetContentUrl, type SceneImageRequest, type StoryboardRequest } from '@/lib/api';
+import type { SceneImageRequest, StoryboardRequest } from '@/lib/api';
 import { StoryboardPanel } from './StoryboardPanel';
 import { MechanismVideoPanel } from './MechanismVideoPanel';
 import { PresentationResultGallery } from './PresentationResultGallery';
@@ -33,6 +32,7 @@ export interface PresentationWorkbenchProps {
   task?: PresentationTaskState | null;
   onCreateClaim: (statement: string) => Promise<boolean>;
   onGenerate: (claimIds: string[]) => void;
+  onAskHermes?: (kind: 'image' | 'video') => void;
   onGenerateSceneImage?: (claimIds: string[], request: SceneImageRequest) => void;
   onGenerateVideo?: (claimIds: string[], request: PresentationVideoRequest) => void;
   onGenerateStoryboard?: (claimIds: string[], request: StoryboardRequest) => void;
@@ -47,7 +47,7 @@ const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onGenerate, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryData, onTransition, working = false, error = '',
+  onCreateClaim, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryData, onTransition, working = false, error = '',
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const tw = useTranslations('workbench');
@@ -56,12 +56,9 @@ export function PresentationWorkbench({
   const [statement, setStatement] = useState('');
   const eligibleIds = useMemo(() => new Set(claims.filter((claim) => claim.extractionStatus === 'succeeded').map((claim) => claim.id)), [claims]);
   const claimsById = useMemo(() => new Map(claims.map((claim) => [claim.id, claim])), [claims]);
-  const imageAssets = useMemo(() => assets.filter((asset) => asset.status !== 'rejected'
-    && !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg')), [assets]);
+  const mediaAssets = useMemo(() => assets.filter((asset) => asset.status !== 'rejected'
+    && !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg' || asset.kind === 'video')), [assets]);
   const storyboardAssets = useMemo(() => assets.filter((asset) => Boolean(asset.storyboard)), [assets]);
-  const hasActivePlan = storyboardAssets.some((asset) => asset.status === 'draft'
-    || (asset.status === 'approved' && imageAssets.length === 0));
-  const videoAssets = useMemo(() => assets.filter((asset) => asset.kind === 'video'), [assets]);
 
   useEffect(() => {
     setSelected((current) => selectionTouched.current ? current.filter((id) => eligibleIds.has(id)) : [...eligibleIds].slice(0, MAX_SELECTED_CLAIMS));
@@ -83,28 +80,22 @@ export function PresentationWorkbench({
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-7 text-os-ink sm:px-8 sm:py-9 lg:px-12" data-presentation-workbench="true">
-      <header className="border-b border-os-rule-paper pb-5">
-        <p data-reading-role="caption" className="m-0 break-words text-os-vermilion-ink [overflow-wrap:anywhere]">{researchTitle || t('kicker')} <span className="text-os-muted-paper">· {t('versionNumber', { number: version.versionNo })}</span></p>
-        <h1 className="m-0 mt-2 max-w-2xl text-balance text-[1.75rem] font-semibold leading-tight tracking-[-0.022em] sm:text-[2rem]">{t('title')}</h1>
-        <p className="m-0 mt-3 max-w-2xl text-pretty text-sm leading-6 text-os-muted-paper sm:text-base">{t('description')}</p>
-        <p className="m-0 mt-3 flex max-w-4xl items-start gap-2 text-xs leading-5 text-os-muted-paper"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{t('provenance')}</p>
+    <div className="mx-auto max-w-6xl px-4 py-6 text-os-ink sm:px-8 lg:px-12" data-presentation-workbench="true">
+      <header className="border-b border-os-rule-paper pb-3">
+        <p data-reading-role="caption" className="m-0 truncate text-xs text-os-muted-paper">{researchTitle || t('kicker')} · {t('versionNumber', { number: version.versionNo })}</p>
+        <h1 className="m-0 mt-1 text-xl font-semibold leading-tight tracking-[-0.012em]">{t('previewTitle')}</h1>
       </header>
 
-          <section className="mt-6" aria-labelledby="presentation-preview-heading">
-            <div className="flex items-center justify-between gap-4 border-b border-os-rule-paper pb-3">
-              <h2 id="presentation-preview-heading" className="m-0 text-xl font-semibold tracking-[-0.012em]">{t('previewTitle')}</h2>
-              <span className="text-sm tabular-nums text-os-muted-paper">{tw('imageCount', { count: imageAssets.length })}</span>
-            </div>
-            <p className="my-4 max-w-2xl text-sm leading-6 text-os-muted-paper">{tw('coreImageFirst')}</p>
-            {loading && imageAssets.length === 0 ? <p className="m-0 py-7 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : loadFailed && imageAssets.length === 0 ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{t('scopeLoadFailed')}</p> : imageAssets.length === 0 ? (
-              <div className="mt-5 rounded-control border border-os-rule-paper bg-os-paper-strong p-5 sm:p-6">
+          <section className="mt-5" aria-labelledby="presentation-preview-heading">
+            <h2 id="presentation-preview-heading" className="sr-only">{t('previewTitle')}</h2>
+            {loading && mediaAssets.length === 0 ? <p className="m-0 py-7 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : loadFailed && mediaAssets.length === 0 ? <p className="m-0 py-7 text-sm leading-6 text-os-muted-paper">{t('scopeLoadFailed')}</p> : mediaAssets.length === 0 ? (
+              <div className="rounded-control border border-dashed border-os-rule-dark bg-os-paper-strong px-5 py-8 sm:px-7">
                 <h3 className="m-0 text-base font-semibold">{t('emptyPreviewTitle')}</h3>
-                <p className="m-0 mt-2 max-w-2xl text-pretty text-base leading-7 text-os-muted-paper">{canWrite ? hasActivePlan ? tw('planReadyBody') : t(eligibleIds.size === 0 ? 'emptyPreviewNeedsSources' : 'emptyPreview') : t('emptyPreviewReadonly')}</p>
-                {canWrite && hasActivePlan ? <a className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold" href="#presentation-plan-heading">{tw('planReadyTitle')}</a> : canWrite && eligibleIds.size === 0 && researchObjectId ? <Link className="mt-4 inline-flex min-h-11 items-center rounded-control border border-os-rule-paper px-4 text-sm font-semibold text-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/hermes`}>{t('openSourceReview')}</Link> : canWrite ? <a className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href="#presentation-source-heading">{t('startVisual')}</a> : null}
+                <p className="m-0 mt-2 max-w-xl text-sm leading-6 text-os-muted-paper">{canWrite ? t('emptyHermesBody') : t('emptyPreviewReadonly')}</p>
+                {canWrite && onAskHermes ? <button type="button" className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" onClick={() => onAskHermes('image')}>{t('askHermes')}</button> : canWrite && researchObjectId ? <Link className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/hermes`}>{t('askHermes')}</Link> : null}
               </div>
             ) : (
-              <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={imageAssets} allAssets={assets} claimsById={claimsById} canWrite={canWrite} working={working} onTransition={onTransition} />
+              <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={mediaAssets} allAssets={assets} claimsById={claimsById} canWrite={canWrite} working={working} onTransition={onTransition} />
             )}
           </section>
             {task && task.status !== 'succeeded' ? (
@@ -122,18 +113,17 @@ export function PresentationWorkbench({
 
             {error ? <div className="mt-5 border-l-2 border-state-danger pl-4" role="alert"><p className="m-0 text-sm leading-6 text-state-danger">{error}</p><a className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href="#presentation-source-heading">{t('recoverInSources')}</a></div> : null}
             {loadFailed && onRetryData ? <button type="button" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onRetryData}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('retryScopeLoad')}</button> : null}
-          {(storyboardAssets.length > 0 || videoAssets.length > 0) ? <details className="surface-folio-sheet mt-8 px-5 py-5 sm:px-6" open={canWrite && hasActivePlan || undefined}>
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"><span id="presentation-plan-heading" className="text-base font-semibold">{hasActivePlan ? tw('planReadyTitle') : t('planningHistoryTitle')}</span><ChevronDown className="size-4 shrink-0" aria-hidden="true" /></summary>
+          {storyboardAssets.length > 0 ? <details className="mt-7 border-t border-os-rule-paper pt-2">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"><span id="presentation-plan-heading" className="text-sm font-semibold">{t('planningHistoryTitle')}</span><ChevronDown className="size-4 shrink-0" aria-hidden="true" /></summary>
             <p className="m-0 mt-2 max-w-3xl text-pretty text-sm leading-6 text-os-muted-paper">{t('planningHistoryBody')}</p>
             {storyboardAssets.map((asset) => <div className="mt-5 border-t border-os-rule-paper pt-4" key={asset.id}><StoryboardPanel storyboard={asset.storyboard} parent={assets.find((item) => item.id === asset.storyboard?.baseAssetId)?.storyboard} baseAssetId={asset.id} claims={claims} selectedClaimIds={asset.sourceClaimIds} canGenerate={canWrite && !loading && !loadFailed && !working && asset.status !== 'rejected'} onGenerate={onGenerateStoryboard} canGenerateImage={canWrite && !loading && !loadFailed && !working && asset.status === 'approved' && asset.canGenerateSceneImage === true} onGenerateImage={onGenerateSceneImage} />{canWrite && asset.status === 'draft' && asset.canTransition ? <div className="mt-4 flex flex-wrap gap-3"><button type="button" disabled={working} className="min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold disabled:opacity-50" onClick={() => onTransition(asset, 'approved')}>{tw('approvePlan')}</button><button type="button" disabled={working} className="min-h-11 rounded-control border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => onTransition(asset, 'rejected')}>{t('reject')}</button></div> : null}{canWrite && onGenerateVideo ? <MechanismVideoPanel parent={asset} assets={assets} disabled={working || loading || loadFailed} onGenerate={onGenerateVideo} /> : null}</div>)}
-            {videoAssets.map((asset) => <div className="mt-5 border-t border-os-rule-paper pt-4" key={asset.id}><h3 className="m-0 text-balance text-base font-semibold">{asset.label || t('videoTitle')}</h3><p className="m-0 mt-2 text-pretty text-sm leading-6 text-os-muted-paper">{t('videoSecondary')}</p><a className="mt-3 inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={presentationAssetContentUrl(researchObjectId, version.versionId, asset.id)} target="_blank" rel="noreferrer">{t('openVideo')}</a></div>)}
           </details> : null}
-          <details className="surface-folio-sheet mt-8 px-5 py-5 sm:px-6" data-source-tools="true" open={(imageAssets.length === 0 && !hasActivePlan) || loadFailed || Boolean(error) || undefined}>
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink">
-              <span id="presentation-source-heading" className="text-base font-semibold">{t('sourceTitle')}</span>
+          <details className="mt-5 border-t border-os-rule-paper pt-2" data-source-tools="true" open={(loadFailed || Boolean(error)) || undefined}>
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink">
+              <span id="presentation-source-heading" className="text-sm font-semibold">{t('manualToolsTitle')}</span>
               <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
             </summary>
-            <p className="m-0 mt-2 max-w-3xl text-sm leading-6 text-os-muted-paper">{t('sourceBody')}</p>
+            <p className="m-0 mt-1 max-w-3xl text-sm leading-6 text-os-muted-paper">{t('manualToolsBody')}</p>
 
             {canWrite ? (
               <form className="mt-6 border-y border-os-rule-paper py-5" onSubmit={(event) => void submitClaim(event)}>

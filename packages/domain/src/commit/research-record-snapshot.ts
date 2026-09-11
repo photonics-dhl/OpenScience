@@ -10,8 +10,22 @@ const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 export async function freezeResearchRecord(tx: Prisma.TransactionClient, input: {
   researchObjectId: string; versionId: string;
 }) {
+  return writeResearchRecord(tx, input, false);
+}
+
+/** Final public snapshot, called only inside the publication transaction. */
+export async function finalizePublicationResearchRecord(tx: Prisma.TransactionClient, input: {
+  researchObjectId: string; versionId: string;
+}) {
+  return writeResearchRecord(tx, input, true);
+}
+
+async function writeResearchRecord(tx: Prisma.TransactionClient, input: {
+  researchObjectId: string; versionId: string;
+}, publication: boolean) {
   const version = await tx.version.findUnique({ where: { id: input.versionId }, include: { researchObject: true, manifest: { include: { entries: true } } } });
-  if (!version || version.researchObjectId !== input.researchObjectId || version.researchRecord != null) throw new Error('Research record cannot be frozen');
+  if (!version || version.researchObjectId !== input.researchObjectId
+    || (publication ? version.status !== 'approved' : version.researchRecord != null)) throw new Error('Research record cannot be frozen');
   const where = { researchObjectId: version.researchObjectId, versionId: version.id };
   const [claims, evidence, authors, licenses] = await Promise.all([
     tx.claimNode.findMany({ where, orderBy: { id: 'asc' } }),
@@ -19,6 +33,11 @@ export async function freezeResearchRecord(tx: Prisma.TransactionClient, input: 
     tx.author.findMany({ where: { researchObjectId: version.researchObjectId }, include: { user: true }, orderBy: { sortOrder: 'asc' } }),
     tx.licenseAssignment.findMany({ where: { researchObjectId: version.researchObjectId } }),
   ]);
+  const licenseTypes = ['text', 'code', 'data'];
+  const versionLicenses = licenses.filter(l => l.versionId === version.id);
+  const effectiveLicenses = licenseTypes.every(type => versionLicenses.some(l => l.licenseType === type))
+    ? versionLicenses : licenses.filter(l => l.versionId === null);
+  if (publication && !licenseTypes.every(type => effectiveLicenses.some(l => l.licenseType === type))) throw new Error('Publication licenses are incomplete');
   const manifest = (version.manifest?.entries ?? []).map(e => ({ logicalPath: e.logicalPath, artifactId: e.artifactId, blobSha256: e.blobSha256, downloadUrl: `/api/artifacts/${e.artifactId}/download`, downloadAccess: 'workspace_member' })).sort((a,b) => compare(a.logicalPath,b.logicalPath));
   const entries = new Map(manifest.map(e => [e.artifactId, e]));
   const core = recordValue(version.manifest?.coreJson);
@@ -43,7 +62,10 @@ export async function freezeResearchRecord(tx: Prisma.TransactionClient, input: 
       title: version.researchObject.title, createdAt: version.createdAt.toISOString() },
     identity: { originalAuthors: { state: 'not_recorded', items: [] }, originalDoi: { state: 'not_recorded', value: null },
       platformAuthors: authors.sort((a,b) => a.sortOrder-b.sortOrder || compare(a.id,b.id)).map(a => ({ name: a.user?.displayName ?? null, affiliation: a.affiliation ?? null, isCorresponding: a.isCorresponding ?? false })),
-      licenses: licenses.filter(l => l.versionId === null || l.versionId === version.id).map(l => ({ type: l.licenseType, identifier: l.licenseId })).sort((a,b) => compare(a.type,b.type) || compare(a.identifier,b.identifier)) },
+      licenses: licenseTypes.flatMap(type => {
+        const license = effectiveLicenses.find(l => l.licenseType === type);
+        return license ? [{ type, identifier: license.licenseId }] : [];
+      }) },
     sdf, claims: claims.sort((a,b) => compare(a.id,b.id)).map(c => ({ id: c.id, parentClaimId: c.parentClaimId ?? null, kind: c.kind, statement: c.statement,
       assessment: c.assessment, conditions: c.conditions, limitations: c.limitations,
       extractionStatus: c.extractionStatus })), evidence: frozenEvidence, manifest,

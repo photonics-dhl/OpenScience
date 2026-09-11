@@ -8,7 +8,7 @@ export function PresentationAssetGallery({ assets, leading = false }: { assets: 
   const t = useTranslations('public.presentation');
   if (assets.length === 0) return null;
   const headingId = `public-presentation-${assets[0].id}`;
-  return <section className="pub-presentation-gallery" data-presentation-gallery="true" aria-label={leading ? t('title') : undefined} aria-labelledby={leading ? undefined : headingId}>
+  return <section className={`pub-presentation-gallery${leading ? ' pub-presentation-gallery--lead' : ''}`} data-presentation-gallery="true" aria-label={leading ? t('title') : undefined} aria-labelledby={leading ? undefined : headingId}>
     {!leading && <div className="pub-section-intro">
       <p className="pub-kicker">{t('kicker')}</p>
       <h2 id={headingId}>{t('title')}</h2>

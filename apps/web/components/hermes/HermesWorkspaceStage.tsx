@@ -232,7 +232,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
   return (
     <HermesWorkspaceStageContext.Provider value={context}>
       {children}
-      {supportedPath(pathname) ? (
+      {supportedPath(pathname) && !/^\/research-objects\/[^/]+\/edit\/?$/.test(pathname) ? (
         <React.Suspense fallback={<HermesWorkspaceStageFallback />}><HermesWorkspaceStage
           guideTarget={guideTarget}
           fallbackWorkspaceId={researchObjectId ?? 'workspace-current'}
@@ -246,7 +246,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
           writing={writing}
         /></React.Suspense>
       ) : null}
-      {pathname !== '/dashboard' && supportedPath(pathname) && !presentation ? (
+      {pathname !== '/dashboard' && supportedPath(pathname) && !presentation && !/^\/research-objects\/[^/]+\/edit\/?$/.test(pathname) ? (
         <HermesAssistantDrawer
           dashboardContext={routeContext}
           locale={locale}

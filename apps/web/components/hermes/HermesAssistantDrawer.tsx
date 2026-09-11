@@ -23,7 +23,7 @@ import { routeHermesLiteratureIntent, type RoutedHermesIntent } from '@/lib/herm
 import { createLiteratureIntentFingerprint } from '@/lib/literature-acquisition-state';
 
 import { routeHermesPresentationIntent, type HermesPresentationIntent } from '@/lib/hermes/presentation-intent';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { HermesPresentationReview } from './HermesPresentationReview';
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, loadHermesGuideGoal, saveHermesGuideGoal, type HermesDraftScope } from '@/lib/hermes/draft-state';
@@ -79,6 +79,8 @@ export interface HermesAssistantDrawerProps {
   target?: WorkspaceGuidePayload['target'];
   onDraftEdit?(edit: NonNullable<WorkspaceGuideResult['draftEdit']>, replace?: boolean): { applied: number; conflicts: number };
   onUndoDraftEdit?(): void;
+  /** Optional caller-provided text to prefill and route through the same Hermes conversation. */
+  initialGoal?: string;
   docked?: boolean;
 }
 
@@ -123,7 +125,7 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
 }
 
 function HermesAssistantDrawerContent({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, docked = false,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, docked = false,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
   const [wide, setWide] = useState(false);
@@ -140,6 +142,7 @@ function HermesAssistantDrawerContent({
   const [restoredTask, setRestoredTask] = useState(false);
   const [guideStored, setGuideStored] = useState(false);
   const requestedVersion = useSearchParams()?.get('version') ?? '';
+  const router = useRouter();
   const currentOwner = `${route}:${routeResearchObjectId ?? ''}:${requestedVersion}`;
   const [resolvedGuide, setResolvedGuide] = useState({ owner: currentOwner, versionId: requestedVersion });
   const resolvedGuideVersion = resolvedGuide.owner === currentOwner ? resolvedGuide.versionId : '';
@@ -150,6 +153,7 @@ function HermesAssistantDrawerContent({
   const submittingRef = useRef(false);
   const goalTouched = useRef(false);
   const [goal, setGoal] = useState('');
+  const injectedGoal = useRef('');
   const [task, setTask] = useState<AgentTaskView | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -180,11 +184,20 @@ function HermesAssistantDrawerContent({
     : undefined;
 
   useEffect(() => {
-    presentationSubmissions.current.clear();
     appliedTasks.current.clear(); setEditOutcome(null);
     setPresentationIntent(null); setPresentationSuggestion(undefined); setLiteratureIntent(null); setTask(null); setGoal(''); setError(''); setSubmitting(false); setRestoredTask(false); setGuideStored(false);
     sessionId.current = null; sessionKey.current = null; taskKey.current = null; submittingRef.current = false; goalTouched.current = false;
   }, [currentOwner]);
+
+  useEffect(() => {
+    if (!open) { injectedGoal.current = ''; return; }
+    const next = initialGoal?.trim() ?? '';
+    if (!next || injectedGoal.current === `${currentOwner}:${next}`) return;
+    injectedGoal.current = `${currentOwner}:${next}`;
+    goalTouched.current = true; setGoal(next);
+    const presentation = routeHermesPresentationIntent(next);
+    if (presentation) { setPresentationSuggestion(undefined); setPresentationIntent(presentation); }
+  }, [currentOwner, initialGoal, open]);
 
   useEffect(() => {
     let active = true;
@@ -250,6 +263,12 @@ function HermesAssistantDrawerContent({
     const normalized = goal.trim();
     if (!normalized || busy || submittingRef.current) return;
     const owner = currentOwner;
+    if (route === 'research-object-edit' && routeResearchObjectId && /(?:发布|发表|\b(?:publish|release)\b)/iu.test(normalized) && !/(?:不要|别|不|don't|do not)/iu.test(normalized)) {
+      const version = requestedVersion || resolvedGuideVersion;
+      router.push(`/research-objects/${encodeURIComponent(routeResearchObjectId)}/edit?${new URLSearchParams({ stage: 'publish', ...(version ? { version } : {}) })}`);
+      onOpenChange(false);
+      return;
+    }
     const presentation = routeHermesPresentationIntent(normalized);
     if (presentation) { setPresentationSuggestion(undefined); setPresentationIntent(presentation); return; }
     submittingRef.current = true;
@@ -324,10 +343,9 @@ function HermesAssistantDrawerContent({
       side="right"
     >
       <section className="hermes-guide-drawer" data-hermes-drawer-state={presentationIntent ? 'presentation' : literatureIntent ? 'literature' : busy ? 'working' : task?.status ?? 'ready'} data-literature-routing="deterministic">
-        <header className="border-b border-os-rule-paper pb-5">
-          <p className="font-mono text-[0.68rem] uppercase tracking-[0.2em] text-os-vermilion">{t('guide.eyebrow')}</p>
-          <h2 className="mt-2 font-editorial text-3xl text-os-ink">{dashboardContext.editorDraft ? tw('coeditTitle') : t('guide.title')}</h2>
-          <p className="mt-3 max-w-prose text-sm leading-6 text-os-muted-paper">{dashboardContext.editorDraft ? tw('coeditBody') : t(suggestion.bodyKey)}</p>
+        <header className="border-b border-os-rule-paper pb-3">
+          <h2 className="m-0 text-base font-semibold text-os-ink">{dashboardContext.editorDraft ? tw('coeditTitle') : t('guide.title')}</h2>
+          {!presentationIntent ? <p className="mt-1 max-w-prose text-sm leading-6 text-os-muted-paper">{dashboardContext.editorDraft ? tw('coeditBody') : t(suggestion.bodyKey)}</p> : null}
         </header>
 
         {suggestion.href && !dashboardContext.editorDraft ? (

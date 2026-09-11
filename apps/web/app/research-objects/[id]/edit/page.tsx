@@ -15,7 +15,6 @@ import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
 import { ObjectHeader } from '../../../../components/research/ObjectHeader';
 import { HermesAnchor } from '../../../../components/hermes/HermesAnchor';
 import { HermesAssistantDrawer } from '../../../../components/hermes/HermesAssistantDrawer';
-import { HermesDockAnchor } from '../../../../components/hermes/HermesDockAnchor';
 import { HermesDraftDiff, type HermesDraftTarget } from '../../../../components/hermes/HermesDraftDiff';
 import { HermesExtractionEvidence } from '../../../../components/hermes/HermesExtractionEvidence';
 import type { HermesGuideSuggestion } from '../../../../components/hermes/hermes-guide';
@@ -103,6 +102,12 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [openedMedia, setOpenedMedia] = useState(initialStage === 'media');
   const [publicationVisit, setPublicationVisit] = useState(0);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  useEffect(() => {
+    if (initialStage === 'content' || initialStage === 'media' || initialStage === 'publish') {
+      setStage(initialStage);
+      if (initialStage === 'media') setOpenedMedia(true);
+    }
+  }, [initialStage]);
   const ingestionStatusT = useTranslations('ingestion.status');
   const locale = useLocale() as Locale;
   const roId = params.id;
@@ -126,7 +131,18 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const lastHermesEdit = useRef<WorkspaceGuideResult['draftEdit']>(undefined);
   const [suggestions, dispatchSuggestions] = useReducer(suggestionReducer, []);
   const [artifacts, setArtifacts] = useState<ArtifactReference[]>([]);
+  const [committedArtifacts, setCommittedArtifacts] = useState<ArtifactReference[]>([]);
+  const artifactsDirty = artifacts.length !== committedArtifacts.length || artifacts.some((item) =>
+    !committedArtifacts.some((saved) => saved.artifactId === item.artifactId && saved.logicalPath === item.logicalPath));
   const [versions, setVersions] = useState<VersionRow[]>([]);
+  const newestVersionId = versions[0]?.versionId;
+  useEffect(() => {
+    if (!newestVersionId) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('version') === newestVersionId) return;
+    url.searchParams.set('version', newestVersionId); url.searchParams.delete('task');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
+  }, [newestVersionId]);
   const [checkedSnapshotVersion, setCheckedSnapshotVersion] = useState('');
   const snapshotReady = Boolean(versions[0] && checkedSnapshotVersion === versions[0].versionId);
   useEffect(() => {
@@ -166,6 +182,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [committing, setCommitting] = useState(false);
   const [commitMsg, setCommitMsg] = useState('');
   const [hermesOpen, setHermesOpen] = useState(false);
+  const [hermesGoal, setHermesGoal] = useState('');
+  useEffect(() => { if (window.matchMedia('(min-width: 1024px)').matches) setHermesOpen(true); }, []);
   // P1D-3：AI 提取状态（§5.4 + §18.3 进度可恢复）
   const [extracting, setExtracting] = useState(false);
   const [extractProgress, setExtractProgress] = useState(0);
@@ -209,7 +227,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         const restored = await loadResearchMaterials(roId);
         const vs = { versions: restored.versions };
         if (cancelled) return;
-        setArtifacts(restored.artifacts);
+        setArtifacts(restored.artifacts); setCommittedArtifacts(restored.artifacts);
         setIngestionTasks(restored.ingestion.tasks);
         if (!cancelled) {
           setVersions(vs.versions ?? []);
@@ -337,7 +355,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         if (current.ingestion.tasks.find((task) => task.id === frozen.detail.task.id)?.confirmation) {
           const ro = await getResearchObject(roId);
           clearIngestionProposalDraft(getIngestionProposalStorage(), frozen.scope);
-          setArtifacts(current.artifacts);
+          setArtifacts(current.artifacts); setCommittedArtifacts(current.artifacts);
           setVersions(current.versions);
           setIngestionTasks(current.ingestion.tasks);
           dispatch({ type: 'init', core: ro.researchObject.sdf?.core ?? frozen.core, version: ro.researchObject.version });
@@ -351,7 +369,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       await confirmIngestionTask(frozen.detail.task.id, { version: frozen.detail.version, core: frozen.core });
       clearIngestionProposalDraft(getIngestionProposalStorage(), frozen.scope);
       const [restored, ro] = await Promise.all([loadResearchMaterials(roId), getResearchObject(roId)]);
-      setArtifacts(restored.artifacts);
+      setArtifacts(restored.artifacts); setCommittedArtifacts(restored.artifacts);
       setVersions(restored.versions);
       setIngestionTasks(restored.ingestion.tasks);
       dispatch({ type: 'init', core: ro.researchObject.sdf?.core ?? frozen.core, version: ro.researchObject.version });
@@ -379,7 +397,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           const nextScope = { ...frozen.scope, researchObjectVersion: ro.researchObject.version };
           clearIngestionProposalDraft(getIngestionProposalStorage(), frozen.scope);
           saveIngestionProposalDraft(getIngestionProposalStorage(), nextScope, { core: rebasedCore, touched: rebasedTouched, savedAt: Date.now() });
-          setArtifacts(restored.artifacts);
+          setArtifacts(restored.artifacts); setCommittedArtifacts(restored.artifacts);
           setVersions(restored.versions);
           setIngestionTasks(restored.ingestion.tasks);
           dispatch({ type: 'init', core: currentCore, version: ro.researchObject.version });
@@ -398,7 +416,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         if (confirmed) {
           const ro = await getResearchObject(roId);
           clearIngestionProposalDraft(getIngestionProposalStorage(), frozen.scope);
-          setArtifacts(restored.artifacts);
+          setArtifacts(restored.artifacts); setCommittedArtifacts(restored.artifacts);
           setVersions(restored.versions);
           setIngestionTasks(restored.ingestion.tasks);
           dispatch({ type: 'init', core: ro.researchObject.sdf?.core ?? frozen.core, version: ro.researchObject.version });
@@ -616,7 +634,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
   const draftCore = ingestionProposal?.core ?? state.core;
   const draftScope = ingestionProposal ? `ingestion:${ingestionProposal.detail.task.id}` : 'sdf';
-  useEffect(() => { if (state.dirty) setNeedsConfirmation(true); if (state.dirty || ingestionProposal || needsConfirmation) setStage('content'); }, [state.dirty, ingestionProposal, needsConfirmation]);
+  useEffect(() => { if (state.dirty) setNeedsConfirmation(true); if (state.dirty || artifactsDirty || ingestionProposal || needsConfirmation) setStage('content'); }, [state.dirty, artifactsDirty, ingestionProposal, needsConfirmation]);
   const editorDraft: NonNullable<WorkspaceGuidePayload['context']['editorDraft']> = {
     researchObjectId: roId, scope: draftScope, version: state.version,
     core: { problem: draftCore.problem, insight: draftCore.insight, method: draftCore.method, results: draftCore.results, limitations: draftCore.limitations, reproducibility: draftCore.reproducibility },
@@ -789,6 +807,10 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   /** 创建提交（P1B-4，版本快照）。 */
   async function handleCommit(continueToMedia = false) {
     if (writingDraft.current || !editorLoaded || ingestionReviewActive || confirmingIngestion || confirmationIntent) return;
+    if (versions.length && !state.dirty && !needsConfirmation && !artifactsDirty) {
+      if (continueToMedia) { setOpenedMedia(true); setStage('media'); }
+      return;
+    }
     if (continueToMedia && !SDF_FIELDS.every((field) => state.core[field].trim())) return;
     writingDraft.current = true;
     setCommitting(true);
@@ -800,6 +822,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         sdfCore: state.core,
         artifacts,
       });
+      setCommittedArtifacts(artifacts);
       dispatch({ type: 'saved', version: state.version + 1, core: state.core });
       serverCore.current = state.core; serverVersion.current = state.version + 1;
       const unchanged = SDF_FIELDS.every((field) => currentCore.current[field] === state.core[field]);
@@ -812,6 +835,10 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       setCommitMsg('');
       const vs = await listVersions(roId);
       setVersions(vs.versions ?? []);
+      if (vs.versions[0]) {
+        const url = new URL(window.location.href); url.searchParams.set('version', vs.versions[0].versionId); url.searchParams.delete('task');
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
+      }
       if (continueToMedia && unchanged) { setOpenedMedia(true); setStage('media'); }
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : String(e));
@@ -865,8 +892,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     <EditorLayout
         objectId={roId}
         workflow={<nav className="grid grid-cols-3 gap-2 px-4 py-3 sm:flex sm:flex-wrap sm:items-center" aria-label={tw('navigation')}>
-          {(['content', 'media', 'publish'] as const).map((item, index) => <button type="button" className={`min-h-11 min-w-0 rounded-panel px-2 text-xs leading-5 transition-colors sm:px-4 sm:text-sm ${stage === item ? 'bg-os-vermilion-ink font-semibold text-white' : 'text-os-muted-paper hover:bg-os-paper-strong'} disabled:opacity-40`} aria-current={stage === item ? 'step' : undefined} disabled={item !== 'content' && (!snapshotReady || !versions.length || state.dirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal))} key={item} onClick={() => { if (item === 'media') setOpenedMedia(true); if (item === 'publish') setPublicationVisit((value) => value + 1); setStage(item); }}>{index + 1} · {tw(item)}</button>)}
-          <Link className="col-span-3 ml-auto min-h-11 px-3 py-3 text-sm text-os-muted-paper underline" href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
+          {(['content', 'media', 'publish'] as const).map((item, index) => <button type="button" className={`min-h-11 min-w-0 rounded-panel px-2 text-xs leading-5 transition-colors sm:px-4 sm:text-sm ${stage === item ? 'bg-os-vermilion-ink font-semibold text-white' : 'text-os-muted-paper hover:bg-os-paper-strong'} disabled:opacity-40`} aria-current={stage === item ? 'step' : undefined} disabled={item !== 'content' && (!snapshotReady || !versions.length || state.dirty || artifactsDirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal))} key={item} onClick={() => { if (item === 'media') setOpenedMedia(true); if (item === 'publish') setPublicationVisit((value) => value + 1); setStage(item); }}>{index + 1} · {tw(item)}</button>)}
+          <div className="col-span-3 ml-auto flex items-center justify-end gap-2"><button type="button" className="min-h-11 rounded-panel border-0 bg-os-paper-strong px-3 text-sm font-semibold text-os-vermilion-ink" onClick={() => { setHermesGoal(''); setHermesOpen(true); }}>Hermes</button><Link className="min-h-11 px-3 py-3 text-sm text-os-muted-paper underline" href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link></div>
         </nav>}
         header={
           <ObjectHeader
@@ -884,7 +911,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                   value={commitMsg}
                   onChange={(event) => setCommitMsg(event.target.value)}
                 />
-                <button className="min-h-9 rounded-panel border-0 bg-os-vermilion px-3 font-semibold text-os-black-0 disabled:opacity-40" onClick={() => void handleCommit()} disabled={committing || !editorLoaded || ingestionReviewActive}><span className="hidden sm:inline">{t('commit')}</span><span className="sm:hidden">{t('commitShort')}</span></button>
+                <button className="min-h-9 rounded-panel border-0 bg-os-vermilion px-3 font-semibold text-os-black-0 disabled:opacity-40" onClick={() => void handleCommit()} disabled={committing || !editorLoaded || ingestionReviewActive || (versions.length > 0 && !state.dirty && !artifactsDirty && !needsConfirmation)}><span className="hidden sm:inline">{t('commit')}</span><span className="sm:hidden">{t('commitShort')}</span></button>
               </>
             }
             objectId={roId}
@@ -991,14 +1018,14 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
             {!ingestionReviewActive && <div className="sticky bottom-0 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-os-rule-paper bg-os-paper-strong p-4">
               <p className="max-w-lg text-sm leading-6 text-os-muted-paper">{tw(state.dirty ? 'reconfirmNotice' : 'contentReady')}</p>
-              <button type="button" className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 text-sm font-semibold text-white disabled:opacity-50" disabled={!editorLoaded || committing || saving || !SDF_FIELDS.every((field) => state.core[field].trim())} onClick={() => state.dirty || needsConfirmation || !versions.length ? void handleCommit(true) : (setOpenedMedia(true), setStage('media'))}>{committing ? tw('savingContent') : tw('confirmContinue')}</button>
+              <button type="button" className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 text-sm font-semibold text-white disabled:opacity-50" disabled={!editorLoaded || committing || saving || !SDF_FIELDS.every((field) => state.core[field].trim())} onClick={() => state.dirty || artifactsDirty || needsConfirmation || !versions.length ? void handleCommit(true) : (setOpenedMedia(true), setStage('media'))}>{committing ? tw('savingContent') : tw('confirmContinue')}</button>
             </div>}
             </div>
             {stage !== 'content' && !snapshotReady && <p role="status">{tw('loadingVersion')}</p>}
-            <div hidden={stage !== 'media'}>{openedMedia && versions[0] && snapshotReady && !needsConfirmation && <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} />}
-              <div className="mt-5 flex justify-end"><button className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 text-sm font-semibold text-white disabled:opacity-50" disabled={!snapshotReady || state.dirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal)} onClick={() => { setPublicationVisit((value) => value + 1); setStage('publish'); }}>{tw('previewPublish')}</button></div>
+            <div hidden={stage !== 'media'}>{openedMedia && versions[0] && snapshotReady && !needsConfirmation && <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} onAskHermes={(kind) => { setHermesGoal(tw(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); }} />}
+              <div className="mt-5 flex justify-end"><button className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 text-sm font-semibold text-white disabled:opacity-50" disabled={!snapshotReady || state.dirty || artifactsDirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal)} onClick={() => { setPublicationVisit((value) => value + 1); setStage('publish'); }}>{tw('previewPublish')}</button></div>
             </div>
-            {stage === 'publish' && versions[0] && snapshotReady && !needsConfirmation && !state.dirty && !ingestionReviewActive && <ResearchPublication key={`${versions[0].versionId}:${publicationVisit}`} researchObjectId={roId} selectedVersionId={versions[0].versionId} embedded />}
+            {stage === 'publish' && versions[0] && snapshotReady && !needsConfirmation && !state.dirty && !artifactsDirty && !ingestionReviewActive && <ResearchPublication key={`${versions[0].versionId}:${publicationVisit}`} researchObjectId={roId} selectedVersionId={versions[0].versionId} embedded />}
           </>
         }
         aside={
@@ -1020,12 +1047,14 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 sourceHref={`/research-objects/${encodeURIComponent(roId)}/hermes`}
               />
             </HermesAnchor></details>}
-            <div className="mt-8 border-t border-os-rule-paper pt-4">
-              <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={hermesRouteState} suggestion={editorSuggestion} workspaceId={roId} />
+            <div className="mb-4 flex items-center justify-between gap-3 border-b border-os-rule-paper pb-3">
+              <div><h2 className="m-0 text-base font-semibold">Hermes</h2><p className="mt-1 text-xs leading-5 text-os-muted-paper">{tw('hermesScope')}</p></div>
+              {!hermesOpen && <button type="button" className="min-h-11 rounded-panel bg-os-paper-strong px-3 text-sm text-os-vermilion-ink" onClick={() => { setHermesGoal(''); setHermesOpen(true); }}>{tw('talkToHermes')}</button>}
             </div>
             <HermesAssistantDrawer
               docked
-              dashboardContext={{ tasks: [], researchObjects: [{ id: roId, title: objectMeta.title, status: 'draft' }], ...(editorLoaded ? { editorDraft } : {}) }}
+              initialGoal={hermesGoal}
+              dashboardContext={{ tasks: [], researchObjects: [{ id: roId, title: objectMeta.title, status: 'draft' }], ...(versions[0] ? { presentation: { researchObjectId: roId, versionId: versions[0].versionId } } : {}), ...(editorLoaded ? { editorDraft } : {}) }}
               onDraftEdit={applyHermesEdit}
               onUndoDraftEdit={undoHermesEdit}
               locale={locale}

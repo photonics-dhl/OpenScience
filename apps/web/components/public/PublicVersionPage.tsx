@@ -247,27 +247,18 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
                 {author.displayName}{author.affiliation ? `, ${author.affiliation}` : ''} · {author.identityStatus}{author.isCorresponding ? ` · ${t('correspondingAuthor')}` : ''}
               </span>)}
             </div>
-            <div className="pub-license-line" data-public-license="true">
-              <span>{t('license')}</span>
-              <span>{Object.entries(research.licenses).map(([type, id]) => `${t(`licenseType.${type}`)}: ${LICENSE_NAMES[id] || id}`).join(' · ')}</span>
-            </div>
           </header>
 
-          <section className="pub-reading-insight" data-reading-role="body" data-sdf-node="insight" data-sdf-state={version.core.insight ? 'confirmed' : 'empty'}>
-            <p className="pub-kicker">{t('insight')}</p>
-            <p>{version.core.insight || t('none')}</p>
-          </section>
-
-          <section className="pub-reading-abstract" aria-labelledby="public-abstract-heading">
-            <h2 id="public-abstract-heading">{t('problem')}</h2>
-            <p className="whitespace-pre-wrap" data-reading-role="body" data-sdf-node="problem">{version.core.problem || t('none')}</p>
+          <section className="pub-reading-summary" aria-labelledby="public-summary-heading">
+            <p className="pub-kicker">{t('abstract')}</p>
+            <p id="public-summary-heading" className="whitespace-pre-wrap" data-reading-role="body">{version.core.insight || version.core.problem || t('none')}</p>
           </section>
 
           {leadFigure && <PresentationAssetGallery assets={[leadFigure]} leading />}
 
           <section className="pub-reading-sdf" aria-labelledby="public-sdf-heading">
             <h2 id="public-sdf-heading">{t('coreFields')}</h2>
-            {PUBLIC_SDF_NODES.filter(([key]) => key !== 'insight' && key !== 'problem').map(([key, label]) => {
+            {PUBLIC_SDF_NODES.map(([key, label]) => {
               const value = version.core[key];
               return <section key={key} data-sdf-node={key} data-sdf-state={value ? 'confirmed' : 'empty'}>
                 <h3>{t(label)}</h3><p className="whitespace-pre-wrap" data-reading-role="reading">{value || t('none')}</p>
@@ -281,17 +272,23 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             <ClaimNarrative claims={research.claims} evidence={research.evidence} onInspect={inspectEvidence} />
           </details>
 
-          <section className="pub-reading-citation" data-public-citation="true" data-print-landmark="citation">
-            <h2>{t('citation')}</h2>
-            <p>{research.citation}</p>
-            {research.recordUrl && <p><a href={research.recordUrl}>Research API</a> · <a href="/api/research-record/openapi">OpenAPI</a></p>}
+          <details className="pub-reading-details pub-reading-license" data-public-license="true">
+            <summary>{t('license')}</summary>
+            <div className="pub-license-line">
+              {Object.entries(research.licenses).map(([type, id]) => <p key={type}><span>{t(`licenseType.${type}`)}</span>{LICENSE_NAMES[id] || id}</p>)}
+            </div>
+          </details>
+          <details className="pub-reading-details pub-reading-citation" data-public-citation="true" data-print-landmark="citation">
+            <summary>{t('citation')}</summary>
+            <CitationRail publicId={research.publicId} versionId={version.publicVersionId} objectCitation={objectCitation} versionCitation={research.citation} />
+            {research.recordUrl && <p className="pub-record-links"><a href={research.recordUrl}>Research API</a> · <a href="/api/research-record/openapi">OpenAPI</a></p>}
             <ProvenanceCaption label={t('versionId')} value={version.publicVersionId} landmark="provenance" />
             <ProvenanceCaption label={t('publishedAt')} value={publishedAt} landmark="provenance" />
             <ProvenanceCaption label={t('versionHash')} value={hashShort} landmark="provenance" />
-          </section>
-          {research.aiReview && <section className="pub-reading-review" data-ai-review={research.aiReview.status}>
-            <h2>{t('aiReview')}</h2><p>{t('status')}: {research.aiReview.status === 'passed' ? t('passed') : research.aiReview.status}</p>
-          </section>}
+          </details>
+          {research.aiReview && <details className="pub-reading-details pub-reading-review" data-ai-review={research.aiReview.status}>
+            <summary>{t('aiReview')}</summary><p>{t('status')}: {research.aiReview.status === 'passed' ? t('passed') : research.aiReview.status}</p>
+          </details>}
           {research.history.length > 0 && <details className="pub-reading-history pub-reading-details" data-public-version-history="true">
             <summary>{t('history.title')}</summary>
             <ol>{research.history.map((item) => <li key={item.publicVersionId}>
@@ -303,12 +300,9 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             <summary>{t('artifactProvenance')}</summary>
             {research.artifactPaths.map((artifact) => <ProvenanceCaption key={`${artifact.logicalPath}-${artifact.blobSha256}`} label={artifact.logicalPath} value={`${artifact.blobSha256.slice(0, 8)}…${artifact.blobSha256.slice(-8)}`} landmark="provenance" />)}
           </details>}
-          <footer className="pub-disclaimer" data-print-landmark="provenance"><h3>{t('legalDisclaimer')}</h3><p>{disclaimer}</p></footer>
+          <details className="pub-disclaimer" data-print-landmark="provenance"><summary>{t('legalDisclaimer')}</summary><p>{disclaimer}</p></details>
         </article>
-        <div className="pub-reading-sidecar">
-          <EvidenceRail evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} />
-          <CitationRail publicId={research.publicId} versionId={version.publicVersionId} objectCitation={objectCitation} versionCitation={research.citation} />
-        </div>
+        {selectedEvidence && <div className="pub-reading-sidecar"><EvidenceRail evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} /></div>}
       </div>
       <EvidenceSheet open={sheetOpen} onOpenChange={setSheetOpen} onReturnFocus={() => lastEvidenceTrigger.current?.focus()} evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} />
       <div data-public-deep-navigation="true" className="pub-reading-tabs"><TabNavigation activeTab={activeTab} onTabChange={onTabChange} /></div>

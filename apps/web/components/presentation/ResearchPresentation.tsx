@@ -92,11 +92,12 @@ function standaloneUrl(roId: string, versionId: string, taskId?: string): string
   return `/research-objects/${encodeURIComponent(roId)}/presentation?${query.toString()}`;
 }
 
-export function ResearchPresentation({ params, embedded = false, selectedVersionId }: { params: { id: string }; embedded?: boolean; selectedVersionId?: string }) {
+export function ResearchPresentation({ params, embedded = false, selectedVersionId, onAskHermes }: { params: { id: string }; embedded?: boolean; selectedVersionId?: string; onAskHermes?: (kind: 'image' | 'video') => void }) {
   const t = useTranslations('presentation');
   const locale = useLocale() as 'zh' | 'en';
   const companion = useTranslations('productSurfaces.overview');
   const [hermesOpen, setHermesOpen] = useState(false);
+  const [hermesGoal, setHermesGoal] = useState('');
   const [assistantObject, setAssistantObject] = useState<ResearchObjectSummary | null>(null);
   const suggestion = { bodyKey: 'guide.continue.body', href: `/research-objects/${encodeURIComponent(params.id)}/edit`, kind: 'continue-research' as const, researchObjectId: params.id, titleKey: 'guide.continue.title' };
   const router = useRouter();
@@ -416,6 +417,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             onTransition={(assetItem, status) => void transition(assetItem, status)}
             working={working}
             error={error}
+            onAskHermes={onAskHermes ?? ((kind) => { setHermesGoal(t(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); })}
           />
         </>
       ) : (
@@ -435,7 +437,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
         <p className={styles.eyebrow}>HERMES</p><h2>{companion('companionTitle')}</h2><p>{companion('companionBody')}</p>
         <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state="idle" suggestion={suggestion} workspaceId={params.id} />
       </aside> : null}</div>
-      {!embedded && assistantObject?.id === params.id ? <HermesAssistantDrawer key={params.id} dashboardContext={{ tasks: [], researchObjects: [{ id: params.id, status: assistantObject.status, title: researchTitle }] }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={params.id} suggestion={suggestion} target={null} /> : null}
+      {!embedded && assistantObject?.id === params.id ? <HermesAssistantDrawer key={params.id} initialGoal={hermesGoal} dashboardContext={{ tasks: [], researchObjects: [{ id: params.id, status: assistantObject.status, title: researchTitle }] }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={params.id} suggestion={suggestion} target={null} /> : null}
     </>);
   return embedded ? content : <DashboardShell className={workspaceStyles.workspace} mainClassName="p-0" navigationLabel={t('navigation')} skipLabel={t('skip')}>{content}</DashboardShell>;
 }

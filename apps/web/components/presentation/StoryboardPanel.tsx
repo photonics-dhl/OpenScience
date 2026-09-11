@@ -57,15 +57,21 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
       if (!selectedClaimIds.length || !instruction.trim()) return;
       onGenerate(selectedClaimIds, { locale, style, output, instruction: instruction.trim(), ...(baseAssetId ? { baseAssetId } : {}) });
     }}>
-      <p className="m-0 font-semibold">{t(baseAssetId ? 'reviseTitle' : 'createTitle')}</p>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="grid gap-2 text-sm">{t('style')}<select className={control} value={style} onChange={(event) => setStyle(event.target.value as StoryboardRequest['style'])}>{(['watercolor', 'technical', 'ink'] as const).map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></label>
-        <label className="grid gap-2 text-sm">{t('language')}<select className={control} value={locale} onChange={(event) => setLocale(event.target.value as 'en' | 'zh')}><option value="zh">中文</option><option value="en">English</option></select></label>
-      </div>
-      <label className="grid gap-2 text-sm">{t(baseAssetId ? 'feedback' : 'instruction')}<textarea className={`${control} min-h-24 resize-y`} maxLength={1000} required value={instruction} onChange={(event) => setInstruction(event.target.value)} /></label>
-      <p className="m-0 text-sm leading-6 text-os-muted-paper">{t('charge')}</p>
+      <p className="m-0 text-sm font-semibold">{t(baseAssetId ? 'reviseTitle' : 'createTitle')}</p>
+      <fieldset className="border-0 p-0">
+        <legend className="mb-2 text-xs font-semibold text-os-muted-paper">{t('style')}</legend>
+        <div className="grid gap-2 sm:grid-cols-3">{(['watercolor', 'technical', 'ink'] as const).map((value) => <label key={value} className={`cursor-pointer rounded-control border px-3 py-3 text-sm ${style === value ? 'border-os-vermilion-ink bg-os-paper-strong' : 'border-os-rule-paper bg-os-paper'}`}><input className="sr-only" type="radio" name={`storyboard-style-${baseAssetId ?? 'new'}`} value={value} checked={style === value} onChange={() => setStyle(value)} /><span className="block font-semibold">{t(value)}</span><span className="mt-1 block text-xs leading-5 text-os-muted-paper">{t(`styleDescription.${value}`)}</span></label>)}</div>
+      </fieldset>
+      <details className="rounded-control border border-os-rule-paper px-3">
+        <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink">{t('manualDetails')}</summary>
+        <div className="grid gap-4 pb-4">
+          <label className="grid gap-2 text-sm">{t('language')}<select className={control} value={locale} onChange={(event) => setLocale(event.target.value as 'en' | 'zh')}><option value="zh">中文</option><option value="en">English</option></select></label>
+          <label className="grid gap-2 text-sm">{t(baseAssetId ? 'feedback' : 'instruction')}<textarea className={`${control} min-h-24 resize-y`} maxLength={1000} required value={instruction} onChange={(event) => setInstruction(event.target.value)} /></label>
+        </div>
+      </details>
+      <p className="m-0 text-xs leading-5 text-os-muted-paper">{t('charge')}</p>
       {baseAssetId ? <p className="m-0 text-xs leading-5 text-os-muted-paper">{t('retained')}</p> : null}
-      <button className="bg-accent-primary-strong min-h-11 rounded-control px-4 text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-40 motion-reduce:transform-none" type="submit" disabled={!selectedClaimIds.length || !instruction.trim()}>{t(baseAssetId ? 'revise' : 'generate')}</button>
+      <button className="min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-40 motion-reduce:transform-none" type="submit" disabled={!selectedClaimIds.length || !instruction.trim()}>{t(baseAssetId ? 'revise' : 'generate')}</button>
     </form> : null}
   </section>;
 }

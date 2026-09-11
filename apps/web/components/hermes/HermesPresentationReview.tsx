@@ -20,11 +20,12 @@ export function HermesPresentationReview({ intent, routeResearchObjectId, resear
   const roId = pathRo ?? routeResearchObjectId ?? selectedRo;
   const scopedSuggestion = suggestion?.researchObjectId === roId ? suggestion : undefined;
   const version = scopedSuggestion?.versionId ?? (pathRo === roId ? search.get('version') ?? undefined : undefined);
+  const actionableIntent = scopedSuggestion ? { action: 'storyboard.create' as const, instruction: scopedSuggestion.instruction } : intent;
   const owner = `${roId}:${version ?? ''}`;
   const previousOwner = useRef(owner);
   useEffect(() => {
     if (previousOwner.current !== owner) {
-      submissionRecords.clear(); setLocked(false);
+      setLocked(false);
       if (previousOwner.current !== ':') onBack();
       previousOwner.current = owner;
     }
@@ -36,7 +37,7 @@ export function HermesPresentationReview({ intent, routeResearchObjectId, resear
         {researchObjects.map(ro => <option key={ro.id} value={ro.id}>{ro.title}</option>)}
       </select>
     </label> : null}
-    {roId ? <HermesPresentationAction key={`${roId}:${version ?? ''}`} researchObjectId={roId} requestedVersionId={version} intent={intent} suggestion={scopedSuggestion} userId={userId} submissionRecords={submissionRecords} onBusyChange={setLocked} onBack={onBack} onSubmitted={url => { router.push(url); onDone(); }} /> : <>
+    {roId ? <HermesPresentationAction key={`${roId}:${version ?? ''}`} researchObjectId={roId} requestedVersionId={version} intent={actionableIntent} userId={userId} submissionRecords={submissionRecords} onBusyChange={setLocked} onBack={onBack} onSubmitted={url => { router.push(url); onDone(); }} /> : <>
       {!researchObjects.length ? <p className="text-sm text-os-ink">{t('noResearch')}</p> : null}
       <button type="button" className="min-h-11 text-sm text-os-ink underline" onClick={onBack}>{t('back')}</button>
     </>}

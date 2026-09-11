@@ -8,7 +8,7 @@ export interface HermesDraftScope {
 }
 
 export interface StoredPresentationDraft {
-  action: 'storyboard.create' | 'storyboard.revise' | 'scene.image';
+  action: 'storyboard.create' | 'storyboard.revise' | 'scene.image' | 'video.create';
   instruction: string;
   style: 'watercolor' | 'technical' | 'ink';
   language: 'zh' | 'en';
@@ -50,7 +50,7 @@ export function loadHermesPresentationDraft(storage: Storage | null, scope: Herm
     const raw = storage.getItem(key(scope));
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<StoredPresentationDraft> & { version?: unknown };
-    if (value.version !== 1 || !['storyboard.create', 'storyboard.revise', 'scene.image'].includes(String(value.action))
+    if (value.version !== 1 || !['storyboard.create', 'storyboard.revise', 'scene.image', 'video.create'].includes(String(value.action))
       || typeof value.instruction !== 'string' || value.instruction.length > 1_000
       || !['watercolor', 'technical', 'ink'].includes(String(value.style)) || (value.language !== 'zh' && value.language !== 'en')
       || !Array.isArray(value.selected) || value.selected.length > 12 || value.selected.some((id) => typeof id !== 'string' || id.length > 100)

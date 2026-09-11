@@ -913,7 +913,8 @@ export interface PublicationReview {
 }
 
 export async function getLicenses(roId: string, versionId?: string): Promise<{ licenses: LicenseSet | null; source: 'version' | 'ro' | 'none' }> {
-  return request(`/api/research-objects/${roId}/licenses${versionId ? `/${versionId}` : ''}`);
+  const result = await request<{ licenses: { licenses: LicenseSet | null; source: 'version' | 'ro' | 'none' } }>(`/api/research-objects/${roId}/licenses${versionId ? `/${versionId}` : ''}`);
+  return result.licenses;
 }
 
 export async function setVersionLicenses(roId: string, versionId: string, licenses: LicenseSet): Promise<void> {
