@@ -221,7 +221,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
       {error && <p className="mt-6 max-w-3xl border-l-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{error}</p>}
       {!detail && error && <div className="mt-4 flex flex-wrap items-center gap-5"><button type="button" onClick={() => setReload((value) => value + 1)} className="min-h-11 font-semibold text-os-vermilion-ink underline">{t('retry')}</button><Link className="min-h-11 py-3 text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/hermes`}>{t('allTasks')}</Link></div>}
       {runId ? <HermesResearchRunPanel key={runId} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
-      {loading ? <p className="mt-10 text-base text-os-muted-paper" role="status">{t('loading')}</p> : !detail ? null : <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+      {loading ? <p className="mt-10 text-base text-os-muted-paper" role="status">{t('loading')}</p> : !detail ? null : <div className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_288px]">
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-os-rule-paper py-3 text-sm text-os-muted-paper">
             <span className="font-data">{detail.task.logicalPath}</span>

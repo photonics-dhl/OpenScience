@@ -304,15 +304,22 @@ async function inspectGenerationRecovery(
       || authority.ordinal !== step.ordinal || authority.profile !== run.profile
       || !isDeepStrictEqual(payload.sourceClaimIds, run.sourceClaimIds)) return null;
     const asset = await tx.presentationAsset.findUnique({ where: { id: task.id }, include: { sourceClaims: { select: { claimId: true } } } });
-    if (task.status === 'succeeded') {
-      const image = asset && asset.status === 'draft' ? presentationSceneImageView(asset) : undefined;
+    if (task.status === 'succeeded' || asset) {
+      const image = asset && ['draft', 'approved'].includes(asset.status) ? presentationSceneImageView(asset) : undefined;
       const parent = await requireSceneImageParent(tx, payload).catch(() => undefined);
       const provenance = asset?.provenance as Record<string, unknown> | null | undefined;
       if (!asset || !image || !parent || provenance?.parentIdentity !== parent.identity
         || image.storyboardAssetId !== storyboard.id || image.sceneIndex !== step.ordinal
         || asset.researchObjectId !== run.researchObjectId || asset.versionId !== run.versionId
         || !isDeepStrictEqual(asset.sourceClaims.map(link => link.claimId).sort(), run.sourceClaimIds)) return null;
-      plan.preserved.push({ stepId: step.id, taskId: task.id, assetId: asset.id });
+      if (task.status === 'succeeded') {
+        plan.preserved.push({ stepId: step.id, taskId: task.id, assetId: asset.id });
+      } else {
+        if (task.status !== 'failed' || task.executionAttempt !== 1 || task.retryCount !== 0
+          || task.result !== null || task.error?.startsWith('[blocked]') || !inspectImageRecoveryState
+          || await inspectImageRecoveryState(task.id) !== 'completed') return null;
+        plan.resume.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id });
+      }
       continue;
     }
     if (task.status !== 'failed' || task.executionAttempt !== 1 || task.retryCount !== 0 || task.result !== null || asset) return null;
@@ -325,7 +332,7 @@ async function inspectGenerationRecovery(
     } else if (recoveryState === 'before_submission'
       || (!inspectImageRecoveryState && task.error === HERMES_AUTHORITY_ERROR)) {
       plan.rearm.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id, error: task.error! });
-    } else if ((recoveryState === 'failed' || !inspectImageRecoveryState)
+    } else if ((recoveryState === 'failed' || recoveryState === 'usage_limited' || !inspectImageRecoveryState)
       && task.error && !task.error.startsWith('[blocked]')) {
       plan.chargeable.push({ stepId: step.id, ordinal: step.ordinal, oldTaskId: task.id, sessionId: task.sessionId, payload: payload as unknown as Record<string, unknown> });
     } else return null;

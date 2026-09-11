@@ -31,7 +31,7 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
       <h4 className="m-0 font-semibold">{scene.title}</h4>
       {scene.durationSeconds === undefined ? null : <p className="m-0 text-xs text-os-muted-paper">{t('seconds', { count: scene.durationSeconds })}</p>}
       <div><p className="m-0 text-xs font-semibold text-os-muted-paper">{t('narration')}</p><p className="m-0 mt-1 text-sm leading-6">{scene.narration}</p></div>
-      <div><p className="m-0 text-xs font-semibold text-os-muted-paper">{t('visualAction')}</p><p className="m-0 mt-1 text-sm leading-6">{scene.visualAction}</p></div>
+      <details className="rounded-control border border-os-rule-paper px-3"><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-os-vermilion-ink">{t('aiDrawingDetails')}</summary><p className="m-0 pb-3 text-sm leading-6 text-os-muted-paper">{scene.visualAction}</p></details>
       {scene.animation ? <details><summary className="min-h-11 cursor-pointer py-3 text-xs font-semibold">{t('animationPlan')}</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-control bg-os-ink p-3 font-data text-xs leading-5 text-os-paper">{JSON.stringify(scene.animation, null, 2)}</pre></details> : null}
       <details><summary className="min-h-11 cursor-pointer py-3 text-xs font-semibold">{t('sources')}</summary><ul className="space-y-2 text-sm leading-6">{scene.sourceClaimIds.map((id) => <li key={id}>{names.get(id) ?? t('sourceUnavailable')}</li>)}</ul></details>
     </div> : <p className="text-sm text-os-muted-paper">{t('noScene')}</p>;

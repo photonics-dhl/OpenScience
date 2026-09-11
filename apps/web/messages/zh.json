@@ -941,7 +941,7 @@
     "stage": { "source_ingestion": "论文理解", "storyboard": "图解方案", "scene_image": "图解 {number}", "video": "视频制作" },
     "retryGeneration": "继续未完成生成", "retrying": "正在恢复生成…", "retryError": "无法恢复生成，请查看错误原因后重试。", "retryDescription": "已完成的结果会保留。本次新增 {count} 个生成任务，按现有额度规则计费。",
     "title": "论文与图解", "startDescription": "Hermes 会在服务器上跟踪这篇论文。你可以离开后再回来；每次来源和媒体审核仍由你决定。", "unavailableDescription": "论文正在准备可跟踪的分析任务。任务可用后可从这里启动工作流。", "startFor": "让 Hermes 跟踪：{source}", "sourceLabel": "要跟踪的论文材料", "starting": "正在建立工作流…", "loading": "正在恢复 Hermes 工作流…", "loadError": "无法恢复 Hermes 工作流。", "startError": "无法建立 Hermes 工作流。", "grantError": "无法记录论文内容驱动的媒体授权。", "upgradeGrant": "改用论文内容驱动的媒体流程", "granting": "正在更新媒体授权…", "actions": "工作流操作", "source": "来源材料 {number}", "stepName": "工作流步骤 {number}", "reopen": "保存此工作流链接", "reviewSource": "审核论文结构与来源", "reviewPresentation": "查看图解与生成方案", "openFiles": "查看研究材料", "sourceReviewSection": "继续 Hermes 来源审核", "confirmedVersion": "使用已确认的草稿版本 {number}。", "reviewClaims": "审核主张与来源证据", "claimReviewTitle": "审核主张与来源证据", "claimReviewDescription": "请核对每段来源原文是否支持关联主张。Hermes 会在审核被记录前保持暂停。", "claimLoadError": "无法读取主张或来源证据，因此无法确认任何条目。", "claimVerifyError": "无法确认这条证据。请刷新后重试。", "claimSourceError": "无法读取原文来源。", "claimSourceUnavailable": "这条证据没有可显示的原文。", "claimStatement": "正在核对的主张", "claimConditions": "适用条件", "claimLimitations": "局限", "viewSource": "查看原文来源", "loadingSource": "正在读取原文…", "sourcePage": "原文第 {page} 页", "sourceLocation": "已提供来源定位", "evidenceVerified": "已确认", "verifying": "正在确认…", "verifyEvidence": "确认这条来源证据", "claimReviewEmpty": "当前工作流没有可审核的来源证据。", "returnToRun": "返回 Hermes 工作流",
-    "status": { "running": "正在分析来源材料", "awaiting_source_review": "需要审核论文结构与来源", "awaiting_claim_review": "需要审核主张与候选证据", "generating_storyboard": "正在生成分镜", "awaiting_storyboard_review": "需要审核分镜", "generating_scene_images": "正在生成场景图", "awaiting_scene_images_review": "需要审核场景图", "generating_video": "正在生成视频", "awaiting_video_review": "需要审核视频", "succeeded": "工作流已完成", "failed": "工作流已停止", "stopped": "工作流已停止" },
+    "status": { "running": "正在分析来源材料", "awaiting_source_review": "需要审核论文结构与来源", "awaiting_claim_review": "需要审核主张与候选证据", "generating_storyboard": "正在生成分镜", "awaiting_storyboard_review": "需要审核分镜", "generating_scene_images": "正在生成场景图", "awaiting_scene_images_review": "需要审核场景图", "generating_video": "正在生成视频", "awaiting_video_review": "需要审核视频", "succeeded": "工作流已完成", "failed": "部分步骤未完成", "stopped": "工作流已停止" },
     "description": { "running": "分析在服务器上继续进行；关闭此页面不会取消它。", "awaiting_source_review": "请先核对六项研究结构和原文来源。确认前 Hermes 不会开始媒体生成。", "awaiting_claim_review": "主张和候选证据需要科学复核；它们不会因此被标为已验证。", "generating_storyboard": "服务器正在执行已授权的后续媒体任务。", "awaiting_storyboard_review": "请审核分镜后再继续生成场景图。", "generating_scene_images": "已授权的场景图正在服务器上生成。", "awaiting_scene_images_review": "请审核全部场景图后再继续视频。", "generating_video": "已授权的视频正在服务器上生成。", "awaiting_video_review": "请审核视频；完成不会自动发布研究成果。", "succeeded": "已审核的媒体工作流已完成。", "failed": "某个服务器步骤未完成。请查看错误后决定下一步。", "stopped": "工作流因研究对象或权限范围变化而安全停止。" },
     "step": { "waiting": "等待中", "running": "进行中", "awaiting_approval": "等待审核", "succeeded": "已完成", "failed": "失败", "stopped": "已停止" }
   },
@@ -1072,7 +1072,7 @@
   "presentation": {
     "sceneProgress": "已生成 {current} / {total}",
     "partialImages": "先查看已生成的图解，其余图片尚未完成。每张图片都可以独立核对；确认后的内容才会用于发布。",
-    "storyboard": {
+    "storyboard": {"aiDrawingDetails": "给 AI 的绘图细节",
       "generateImage": "生成这一幕的插图",
       "imageCharge": "每次生成 1 张图片，消耗 1 AI credit。生成后请核对画面再审批。",
       "imageSource": "来源分镜：{title} · 第 {number} 幕",

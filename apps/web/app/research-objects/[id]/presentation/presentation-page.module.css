@@ -17,8 +17,8 @@
 .content { min-width:0; }
 .content .start { margin:0; }
 .content [data-presentation-workbench] { padding:24px 0; }
-.companion { min-width:0; padding-top:16px; }
+.companion { min-width:0; padding-top:16px; align-self:start; }
 .companion h2 { font-size:18px; line-height:1.5; margin:12px 0; }
 .companion>p:not(.eyebrow) { max-width:30ch; font-size:14px; line-height:1.7; color:#626c76; }
-@media(min-width:1200px) { .layout:has(.companion) { grid-template-columns:minmax(0,1fr) 380px; } }
+@media(min-width:1200px) { .layout:has(.companion) { grid-template-columns:minmax(0,1fr) 288px; gap:32px; }.companion { position:sticky; top:24px; } }
 @media(max-width:640px) { .layout { padding:0 12px; }.content .start { margin:0; } }

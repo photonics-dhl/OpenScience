@@ -8,9 +8,9 @@
 ## Version tuple
 - worktree: E:/Miscellaneous/XGS/.worktrees/onchip-video-release
 - branch: codex/onchip-video-release
-- base HEAD / production / browser bundle: 3ee10d6e2d5efb9df8f4a09fa4febd7feda60857
-- rollback: 36200a72f05659b998ea730d48f0411a22dd61e5
-- 当前未提交候选：成果可见性、静默刷新、独立场景失败汇总和网页限流识别；未部署。
+- application / production / browser bundle: 6a9f650e50aa5358c50522c3c680977879190b18
+- rollback: 3ee10d6e2d5efb9df8f4a09fa4febd7feda60857
+- 首批已部署，实际页面显示1/6图解、限流说明、成果入口。第二批候选：折叠AI绘图细节、288px侧栏、提示词可见标签/内部规则分层、显式恢复时复用已保存图片。
 
 ## Actual product facts (2026-09-11)
 - RO c896802c-35dd-4b59-8db1-5f374f83a6d8；version 4ed2b16d-0c5f-41a5-a57d-54eff5dbab11；run 436ff261-1f49-42ea-827a-cccfb2fce45b。
@@ -18,7 +18,7 @@
 - 修订图解方案5fc9ab10-b3f8-4e68-ae31-0eb57c294c4e已经批准，六个场景任务已创建。
 - 图片36a4f82b-10bc-40f4-b43c-bc1d8990f6c9实际已由服务器chatgpt-web保存到产品为draft，sceneIndex4；并非只存在spool。authenticated presentation-assets GET已返回该图片与两份方案。
 - 六图未全完成。7d8fafce-390c-4a4e-9024-ec89650de631的精确会话明确显示“You’ve hit your rate limit.”；服务器Pro菜单禁用。浏览器CDP实际连接成功，无需重启或重装。
-- 8f4f6f79… /986ff3d9… 是EXPIRED；1f2d0677… 是EXECUTION_FAILED；6a2cc3bf…尚无provider结果；7d8…旧外层状态UNCERTAIN。不要自动重发。
+- 8f4f6f79… /986ff3d9… 是EXPIRED；1f2d0677… 是EXECUTION_FAILED；6a2cc3bf…尚无provider结果；7d8…已只读续取原会话确认为failed/USAGE_LIMIT。旧结果和失败marker已归档，无重发。
 - run仍failed/version7，旧P2034事务冲突错误掩盖已保存结果。失败run隐藏成果入口、1.5秒轮询重置整页和面板key，是当前直接体验问题。
 
 ## Candidate / Chat review
@@ -29,8 +29,9 @@
 - 生成汇总保留已完成资产和权限/版本校验，等待其他已派发任务结束，避免单图失败取消其余场景authority。
 
 ## Next actions
-1. 提交候选，用--confirm --no-tests --reuse-unchanged-capability-images部署；复用已有浏览器和renderer，不下载。
-2. 安装对应provider bundle；仅归档7d8的失败late-recovery两个marker，运行一次同会话恢复以把已观察限流落为USAGE_LIMIT；不重发prompt。
-3. 从真实产品页面查看现有draft图片、1/6状态和新的成果入口，截图继续修整页面。用户尚未审核图片，不能发布。
+1. 部署第二批候选及对应provider bundle，复用已有浏览器和renderer，不下载；--confirm --no-tests --reuse-unchanged-capability-images。
+2. 7d8现已明确USAGE_LIMIT，只解除该任务不确定状态的旧熔断记录；不发起新生成。后续由既有显式继续入口处理限额恢复后的剩余图。
+3. 真实产品页已观察1/6、来源与审核按钮。现图把内部限制反复画进画面，还有游离>2标记；保持草稿，不能精选发布。
 4. 剩余图等待网页使用限制解除；不靠重复重启/新账号切换绕过限制，不以1张声称6张完成。
 5. 同步本handoff、server-capabilities、capability registry、progress和index中的精确版本。
+- Chat6 Pro再次GO：折叠机器细节、缩小侧栏、区分制作规则与可见标签、同任务已落库图片经完整作用域检查后零生成复用。其“两个机制”的替换例子不受论文证据支持，未采纳。

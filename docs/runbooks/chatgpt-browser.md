@@ -1,6 +1,13 @@
 # Server ChatGPT browser — operator login research
 
-Status: server browser, host bridge, broker timers and production `chatgpt-web` provider are running at bundle `4b4e365c…` (2026-09-11). A real Hermes task returned a PNG product draft; the Deep-sub-cycle PDF completed science-v4 6 Pro whole-paper review with six concise nonempty fields and no evidence request. User confirmation and publication remain explicit actions.
+Status: production/provider `6a9f650e…` (2026-09-11). Deep-sub-cycle has one real product draft image of six planned. The exact remaining conversation shows a usage limit, now recorded as failed/USAGE_LIMIT without resubmission. Source and plan were confirmed; image review and publication remain pending.
+
+## Current product observations
+- A failed AgentTask/run can coexist with its already-persisted image after an old completion conflict. Read product presentation-assets before assuming the PNG needs importing.
+- Terminal rate-limit text occurs inside the assistant turn, not necessarily an alert. The broker now preserves USAGE_LIMIT without restarting or resending.
+- Recovery compares the stored canonical URL directly; unrelated product and /images tabs must not be passed to a throwing canonical parser.
+- Two failed 7d8 recovery markers were renamed to `*.invalid-target-archived` before one same-conversation reconciliation. No request deadline or prompt was rewritten.
+- The current image visibly includes internal production instructions and an orphan numerical annotation. It remains draft: successful transport is not scientific or visual approval.
 
 ## Prerequisites
 - Read server-capabilities.md first. Reuse the installed ScanSci image's full Chrome revision1234, Xvfb and libraries, plus existing Node/media-font layers. Only x11vnc/noVNC/websockify are additional packages; do not download Chromium again.

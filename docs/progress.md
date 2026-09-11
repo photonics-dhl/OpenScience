@@ -1,5 +1,5 @@
 ## 2026-09-11 — 成果已保存，收敛到产品体验
-- production/provider 3ee10d6e，rollback36200a72；候选修复尚未部署。
+- production/provider 6a9f650e，rollback3ee10d6e；首批已部署，实际观察1/6、限流说明和成果入口。第二批页面/prompt候选正在交付。
 - Deep-sub-cycle六维已确认；approved方案六图中36a4已为真实产品draft image。7d8网页明确rate limit，CDP可连接，不是网络/浏览器附着故障。
 - Chat6 Pro实际GO：保存成果可见性独立于run失败，限流不重发，其他场景保存后再汇总失败。
 - 正在落实：限流识别、同会话恢复匹配、已有图片进度、失败成果入口、提取页及run静默刷新。视频暂停，剩余五图未完成，不自动批准/发布。

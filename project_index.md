@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-11:** production/provider `3ee10d6e` / rollback `36200a72`。Deep-sub-cycle已确认六维和图解方案；六图中一张已为产品draft，余图未完成，网页明确限流。成果展示/静默刷新修复候选未部署。唯一入口：`docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
+> **CURRENT 2026-09-11:** production/provider `6a9f650e` / rollback `3ee10d6e`。实际页面已显示1/6、限流与成果入口；静默刷新已部署。第二批页面/prompt小修候选未部署，图片质量待改善。唯一入口：`docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
 > 当前执行：用户确认六字段提案→Hermes从确认版本生成独立内部生图brief→网页生图→审核→发布预览→明确确认后公开RO；随后上传不同的第二篇论文继续精选。视频暂停，批量冷启动暂停。
 > 最新部署：精确完成结果证明、原prompt/result恢复、浏览器重启后exact canonical续取且不重发、产品画廊整理。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。

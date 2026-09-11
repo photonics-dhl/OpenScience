@@ -146,7 +146,14 @@ async function recoverUncertainWebImage(config) {
             await rename(join(resultDir, 'result.json'), join(resultDir, 'result.uncertain.json'));
             await atomicWrite(join(resultDir, 'result.json'), JSON.stringify({ schemaVersion: 1, provider: 'chatgpt-web',
               id, promptHash: request.promptHash, status: 'failed', errorCode: 'USAGE_LIMIT' }));
-            // Preserve the circuit: an operator can resume after the account limit recovers.
+            // A visible terminal rejection resolves uncertainty; only an explicit product retry can resubmit.
+            const circuit = join(config.privateRoot, 'web-image-circuit.json');
+            if (await exists(circuit)) {
+              const state = JSON.parse((await safeRead(circuit, 16384)).toString('utf8'));
+              if (state.taskId === id && state.promptHash === request.promptHash) {
+                await rename(circuit, join(config.privateRoot, `web-image-circuit.resolved-${id}.json`));
+              }
+            }
             return id;
           }
         }
@@ -196,7 +203,7 @@ async function main() {
   const timer = setInterval(() => { heartbeat().catch(() => {}); }, 15000);
   try {
     const recovered = await recoverUncertainWebImage(config);
-    if (recovered) { console.log(JSON.stringify({ id: recovered, status: 'recovered' })); return; }
+    if (recovered) { console.log(JSON.stringify({ id: recovered, status: 'reconciled' })); return; }
     const result = await runOne({ ...config, provider: 'chatgpt-web', execute: (request, dir) => executeWebImage(config, request, dir) });
     if (result) console.log(JSON.stringify(result));
   } finally {
