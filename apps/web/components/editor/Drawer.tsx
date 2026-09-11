@@ -13,6 +13,7 @@ export default function Drawer({
   closeLabel = 'Close',
   className = '',
   overlayClassName = '',
+  inline = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -22,6 +23,7 @@ export default function Drawer({
   closeLabel?: string;
   className?: string;
   overlayClassName?: string;
+  inline?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
@@ -41,7 +43,7 @@ export default function Drawer({
 
   // Esc 关闭 + focus trap
   useEffect(() => {
-    if (!open) return;
+    if (!open || inline) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         onClose();
@@ -65,9 +67,12 @@ export default function Drawer({
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, onClose, inline]);
 
   if (!open) return null;
+  if (inline) return <div ref={ref} role="complementary" aria-label={label} className="hermes-inline-assistant" tabIndex={-1}>
+    <button className="mb-3 min-h-11 text-sm text-os-muted-paper underline" onClick={onClose}>{closeLabel}</button>{children}
+  </div>;
   return (
     <div className={`drawer-overlay ${overlayClassName}`.trim()} onClick={onClose}>
       <div

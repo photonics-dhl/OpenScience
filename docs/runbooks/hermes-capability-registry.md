@@ -9,6 +9,8 @@
 
 ## 1. Purpose
 
+2026-09-11候选：现有workspace-guide/Gateway扩展为显式对话改稿；仅返回与当前RO、草稿范围和版本绑定的六字段修改，页面保留冲突并支持撤销，正式写入仍走原编辑/提交API。无新服务、模型或插件。Chat6Pro规划已收到，追加复核明确限流；一次Sol High只读边界复核已完成。尚待本轮部署与实际使用，不标记PRODUCTION。
+
 本台账防止 Hermes 能力在后续迭代中被重复安装、遗忘、误判或污染服务器。新增、升级、启用、停用、替换或删除任何 Skill、MCP、模型、parser、provider 或运行容器时，必须同步本文件与 `project_index.md`。
 
 状态定义：

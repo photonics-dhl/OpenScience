@@ -1121,6 +1121,7 @@ export interface WorkspaceGuidePayload {
     tasks: Array<{ id: string; researchObjectId: string; state: string }>;
     researchObjects: Array<{ id: string; title: string; status: string }>;
     presentation?: { researchObjectId: string; versionId?: string };
+    editorDraft?: { researchObjectId: string; scope: string; version: number; core: Omit<SdfCore, 'schemaVersion'> };
   };
 }
 
@@ -1132,6 +1133,7 @@ export interface WorkspaceGuideResult {
     targetId?: string;
   }>;
   needsMoreInformation: boolean;
+  draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: Partial<Omit<SdfCore, 'schemaVersion'>> };
   presentationDraft?: {
     action: 'storyboard.create';
     instruction: string;

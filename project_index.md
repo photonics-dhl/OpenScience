@@ -2,7 +2,7 @@
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
 > **CURRENT 2026-09-11:** production `9b97522f` / provider `f4832487` / rollback `48d9fa65`。页面及任务恢复小修均已部署；真实产品继续入口返回202，run生成中/version8，已有1/6保留，五项网页提交前失败，已定位图片模式错误要求6Pro文本，provider小修已发布；通过产品按钮单图8b0ca4c9已生成并自动展示，现2/6；科学审核/公开发布未完成。唯一入口：`docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
-> 当前执行：用户确认六字段提案→Hermes从确认版本生成独立内部生图brief→网页生图→审核→发布预览→明确确认后公开RO；随后上传不同的第二篇论文继续精选。视频暂停，批量冷启动暂停。
+> 当前执行：已确认连续`/edit`工作台、Hermes与页面双向草稿、默认一张核心图、科研阅读公开页。用户授权Codex在测试阶段审核发布；当前候选未部署。Chat6Pro规划已收取，边界复核限额后改Sol High。视频和批量冷启动暂停。
 > 最新部署：精确完成结果证明、原prompt/result恢复、浏览器重启后exact canonical续取且不重发、产品画廊整理。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
@@ -11,6 +11,7 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
+| `apps/web/components/presentation/ResearchPresentation.tsx` / `apps/web/components/research/ResearchPublication.tsx` | 连续工作台复用制作及版本绑定发布预览，旧独立路由保留 | CANDIDATE / 服务器部署待执行 |
 | `infra/scripts/verify-hermes-user-journey.mjs` | 服务器真实普通账号浏览器上传/启动/恢复取证，禁止手工生成各媒体阶段 | ACCEPTANCE TOOL；待运行，不代表产品流程通过 |
 | `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |
 | `packages/domain/src/agent/research-run.ts` / `apps/api/src/routes/research-runs.ts` / `infra/migrations/20260908010000_hermes_research_runs/` / `infra/migrations/20260908020000_hermes_research_workflow/` | 持久流程、来源审核、限定生成授权与保留成功资产的失败生成续跑 | DEPLOYED3446f309；恢复API已实际202，原论文方法讲解流程SUCCEEDED/视频approved，真实状态见CURRENT handoff |

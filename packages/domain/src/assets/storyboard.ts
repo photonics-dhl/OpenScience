@@ -70,7 +70,7 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
     });
     const duration = scenes.reduce((n, s) => n + (s.durationSeconds ?? 0), 0);
     if (output === 'video' && (duration < 24 || duration > 90)) return invalid('total_duration');
-    if (selected.some(id => !covered.has(id))) return invalid('claim_coverage');
+    if (output === 'video' && selected.some(id => !covered.has(id))) return invalid('claim_coverage');
     const hasDynamicAction = scenes.some(scene => {
         if (!scene.animation) return false;
         const objects = new Map(scene.animation.objects.map(item => [item.id, item]));

@@ -13,12 +13,14 @@ export default function EditorLayout({
   outline,
   main,
   aside,
+  workflow,
 }: {
   header?: ReactNode;
   objectId: string;
   outline: ReactNode;
   main: ReactNode;
   aside: ReactNode;
+  workflow?: ReactNode;
 }) {
   const t = useTranslations('editor');
   const [mobileTab, setMobileTab] = useState<MobileTab>('edit');
@@ -39,7 +41,7 @@ export default function EditorLayout({
       rightRail={aside}
       skipLabel={t('skipToWorkspace')}
       workspaceModes={
-        <ResearchWorkspaceNav active="sdf" objectId={objectId} />
+        workflow ?? <ResearchWorkspaceNav active="sdf" objectId={objectId} />
       }
     >
       <div className="min-h-[calc(100dvh-13.25rem)] px-4 pb-24 pt-5 lg:min-h-[calc(100dvh-10.25rem)] lg:p-6">{main}</div>

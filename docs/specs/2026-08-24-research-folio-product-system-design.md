@@ -1,5 +1,15 @@
 # OpenScience Research Folio Product System Design
 
+## 2026-09-11 approved product flow
+
+- `/edit` is the continuous research workbench: preview/upload materials, review Hermes' concise whole-paper synthesis, choose visual output, then preview and publish. Keep deep links for independent access without forcing repeated navigation.
+- Hermes is the contextual research assistant inside the same workbench. Direct edits and conversational edits share the active draft; asynchronous suggestions must not overwrite fields edited since submission. Ordinary draft changes are reversible; content confirmation and publication remain explicit.
+- Produce a core illustration first. Hermes recommends themes and optional additional figures based on the paper; neither six fixed figures nor completion of all suggested media is a publication prerequisite.
+- Public RO serves researchers, with accessible cross-disciplinary explanations. Lead with identity, the central finding and an approved representative figure. Interleave concise research text and relevant visuals. Keep evidence, files, citation and version details accessible; exclude internal prompts and task logs.
+- Preserve the restrained paper/ink/teal visual system and existing Hermes artwork. Stable task feedback replaces flashing/remounting; mobile retains the same actions.
+- The user authorizes Codex to act as the real reviewer/publisher for current test-stage examples after checking scientific content and source rights. Do not publish known incorrect media or represent source-paper authorship as the curator's original work.
+- Chat 6 Pro discussion: https://chatgpt.com/c/6aa2df58-0c20-83ea-838d-4e1129091d79. Product plan received: reuse `/edit`, field-level draft patches with conflict protection/undo, selected-version publication preview, core-image-first flow. Follow-up boundary review reached the account limit; a bounded Sol High reviewer takes over that review. No new framework or browser installation.
+
 > **CURRENT non-Landing product visual specification, approved by user direction on 2026-08-24.** This specification supersedes the instrument-black treatment for authenticated and public product surfaces. Landing remains unchanged. Functional requirements and data contracts continue to come from `docs/OpenScience_Kimi_Development_Spec.md`.
 
 ## 1. Problem and scope

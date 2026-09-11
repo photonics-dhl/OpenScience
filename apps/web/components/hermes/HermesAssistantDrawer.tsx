@@ -28,6 +28,7 @@ import { HermesPresentationReview } from './HermesPresentationReview';
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, loadHermesGuideGoal, saveHermesGuideGoal, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesGuideSuggestion } from './hermes-guide';
+import { SDF_FIELDS } from '@/lib/suggestions';
 
 type LiteratureIntent = Extract<RoutedHermesIntent, { kind: 'literature.acquire' }>;
 
@@ -76,6 +77,9 @@ export interface HermesAssistantDrawerProps {
   route?: WorkspaceGuidePayload['route'];
   routeResearchObjectId?: string;
   target?: WorkspaceGuidePayload['target'];
+  onDraftEdit?(edit: NonNullable<WorkspaceGuideResult['draftEdit']>, replace?: boolean): { applied: number; conflicts: number };
+  onUndoDraftEdit?(): void;
+  docked?: boolean;
 }
 
 function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
@@ -102,7 +106,16 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
       versionId: candidate.versionId as string,
     };
   }
-  return { summary: value.summary, nextSteps, needsMoreInformation: value.needsMoreInformation, ...(presentationDraft ? { presentationDraft } : {}) };
+  let draftEdit: WorkspaceGuideResult['draftEdit'];
+  if (value.draftEdit !== undefined) {
+    const edit = value.draftEdit as NonNullable<WorkspaceGuideResult['draftEdit']>;
+    if (!edit?.base || typeof edit.base.researchObjectId !== 'string' || typeof edit.base.scope !== 'string' || !Number.isSafeInteger(edit.base.version)
+      || !edit.base.core || !SDF_FIELDS.every((field) => typeof edit.base.core[field] === 'string')
+      || !edit.changes || typeof edit.changes !== 'object' || Array.isArray(edit.changes)
+      || !Object.entries(edit.changes).every(([field, text]) => SDF_FIELDS.includes(field as typeof SDF_FIELDS[number]) && typeof text === 'string' && text.length <= 4000)) return null;
+    draftEdit = edit;
+  }
+  return { summary: value.summary, nextSteps, needsMoreInformation: value.needsMoreInformation, ...(presentationDraft ? { presentationDraft } : {}), ...(draftEdit ? { draftEdit } : {}) };
 }
 
 export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
@@ -110,9 +123,15 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
 }
 
 function HermesAssistantDrawerContent({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, docked = false,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
+  const [wide, setWide] = useState(false);
+  useEffect(() => { const media = window.matchMedia('(min-width: 1024px)'); const update = () => setWide(media.matches); update(); media.addEventListener('change', update); return () => media.removeEventListener('change', update); }, []);
+  const tw = useTranslations('workbench');
+  const fieldLabel = useTranslations('editor');
+  const appliedTasks = useRef(new Set<string>());
+  const [editOutcome, setEditOutcome] = useState<{ applied: number; conflicts: number } | null>(null);
   const tp = useTranslations('hermesPresentation');
   const presentationSubmissions = useRef(new Map<string, SubmissionIntent>());
   const [presentationIntent, setPresentationIntent] = useState<HermesPresentationIntent | null>(null);
@@ -139,6 +158,11 @@ function HermesAssistantDrawerContent({
   const busy = submitting || activeTask;
   const result = task?.status === 'succeeded' ? resultFromTask(task) : null;
   const invalidResult = task?.status === 'succeeded' && !result;
+  useEffect(() => {
+    if (!task || !result?.draftEdit || !onDraftEdit || restoredTask || appliedTasks.current.has(task.id)) return;
+    appliedTasks.current.add(task.id);
+    setEditOutcome(onDraftEdit(result.draftEdit));
+  }, [task, result, restoredTask, onDraftEdit]);
   const guideDraftScope: HermesDraftScope | null = viewerId ? {
     userId: viewerId,
     researchObjectId: routeResearchObjectId ?? route,
@@ -157,6 +181,7 @@ function HermesAssistantDrawerContent({
 
   useEffect(() => {
     presentationSubmissions.current.clear();
+    appliedTasks.current.clear(); setEditOutcome(null);
     setPresentationIntent(null); setPresentationSuggestion(undefined); setLiteratureIntent(null); setTask(null); setGoal(''); setError(''); setSubmitting(false); setRestoredTask(false); setGuideStored(false);
     sessionId.current = null; sessionKey.current = null; taskKey.current = null; submittingRef.current = false; goalTouched.current = false;
   }, [currentOwner]);
@@ -229,6 +254,7 @@ function HermesAssistantDrawerContent({
     if (presentation) { setPresentationSuggestion(undefined); setPresentationIntent(presentation); return; }
     submittingRef.current = true;
     setError('');
+    setEditOutcome(null);
     setSubmitting(true);
     try {
       const routed = await createDrawerLiteratureIntent({
@@ -288,6 +314,7 @@ function HermesAssistantDrawerContent({
 
   const drawer = (
     <Drawer
+      inline={docked && wide}
       className="hermes-assistant-shell"
       closeLabel={t('guide.close')}
       label={t('guide.dialogLabel')}
@@ -356,7 +383,17 @@ function HermesAssistantDrawerContent({
         {!presentationIntent && !literatureIntent && result ? (
           <section className="mt-7 border-t border-os-rule-paper pt-5" aria-live="polite">
             <h3 className="text-sm font-semibold text-os-ink">{t('guide.result')}</h3>
-            <p className="mt-3 text-sm leading-6 text-os-muted-paper">{result.summary}</p>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-os-muted-paper">{result.summary}</p>
+            {result.draftEdit && <div className="mt-4 rounded-panel bg-os-paper-strong p-4 text-sm">
+              <p role="status">{editOutcome ? tw(editOutcome.conflicts ? 'editConflict' : 'editApplied', { count: editOutcome.applied }) : tw('editProposal')}</p>
+              {editOutcome?.applied && onUndoDraftEdit ? <button type="button" className="min-h-11 text-os-vermilion-ink underline" onClick={() => { onUndoDraftEdit(); setEditOutcome(null); }}>{tw('undo')}</button> : null}
+              <details><summary className="min-h-11 cursor-pointer py-3">{tw('viewChanges')}</summary>
+                {Object.entries(result.draftEdit.changes).map(([field, value]) => <div className="border-t border-os-rule-paper py-3" key={field}>
+                  <h4 className="font-semibold">{fieldLabel(field)}</h4><p className="mt-2 whitespace-pre-wrap leading-6">{value}</p>
+                  {onDraftEdit && (restoredTask || Boolean(editOutcome?.conflicts)) ? <button className="min-h-11 text-os-vermilion-ink underline" type="button" onClick={() => setEditOutcome(onDraftEdit({ ...result.draftEdit!, changes: { [field]: value } }, true))}>{tw('useField')}</button> : null}
+                </div>)}
+              </details>
+            </div>}
             {result.needsMoreInformation ? <p className="mt-3 text-sm text-os-vermilion">{t('guide.needsMoreInformation')}</p> : null}
             {scopedPresentationDraft ? <div className="mt-5 border-l-2 border-os-vermilion bg-os-paper-strong px-4 py-3">
               <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-os-vermilion">{t('guide.presentationSuggestionLabel')}</p>
@@ -375,5 +412,5 @@ function HermesAssistantDrawerContent({
       </section>
     </Drawer>
   );
-  return typeof document === 'undefined' ? drawer : createPortal(drawer, document.body);
+  return (docked && wide) || typeof document === 'undefined' ? drawer : createPortal(drawer, document.body);
 }

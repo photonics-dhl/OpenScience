@@ -1,3 +1,9 @@
+## 2026-09-11 — 连续工作台与Hermes共编（实施中）
+- 用户确认三阶段工作台、科研阅读优先、核心图优先、Hermes侧栏与页面双向改稿；授权Codex充当测试用户审核发布，科学和来源判断仍需完成。
+- Chat6Pro已给出实施方案；后续边界复核明确usage limit，无重试，改由一次Sol High有界只读复核。
+- 候选实现：`/edit`组合制作/发布面板，Hermes字段修改/冲突保留/撤销，版本绑定发布预览，公开图片不裁切、来源折叠；公开API及下载入口排除内部storyboard。尚未部署，production仍9b97522f，provider f4832487。
+- 不跑测试/预检/CI。待服务器必要构建部署、真实产品操作、现有图科学审核与发布；不补齐旧六场景、不重跑OCR。
+
 ## 2026-09-11 — 成果已保存，收敛到产品体验
 - production9b97522f / providerf4832487 / rollback48d9fa65；页面/prompt和零次执行恢复、领取冲突小修均已部署。实际产品点击继续得到202，run生成中/version8：保留原图、重排一项未提交任务、新建四项失败重试，随后五项在网页提交前失败；run failed/version9。已定位图片模式错误要求6Pro文本，provider小修已发布；通过产品按钮单图8b0ca4c9已完整生成回传，succeeded/100%，页面自动显示2/6。
 - Deep-sub-cycle六维已确认；approved方案六图中36a4已为真实产品draft image。7d8网页明确rate limit，CDP可连接，不是网络/浏览器附着故障。

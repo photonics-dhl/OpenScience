@@ -20,11 +20,12 @@ const control = 'min-h-11 w-full rounded-control border border-os-rule-paper bg-
 
 export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selectedClaimIds = [], canGenerate, onGenerate, canGenerateImage = false, onGenerateImage }: Props) {
   const t = useTranslations('presentation.storyboard');
+  const tw = useTranslations('workbench');
   const currentLocale = useLocale();
   const [locale, setLocale] = useState<'zh' | 'en'>(storyboard?.locale ?? (currentLocale === 'zh' ? 'zh' : 'en'));
   const [style, setStyle] = useState<StoryboardRequest['style']>(storyboard?.style ?? 'watercolor');
   const output: StoryboardRequest['output'] = storyboard?.output ?? 'image';
-  const [instruction, setInstruction] = useState(baseAssetId ? '' : t('defaultInstruction'));
+  const [instruction, setInstruction] = useState(baseAssetId ? '' : tw('coreImageInstruction'));
   const names = new Map(claims.map((claim) => [claim.id, claim.statement]));
   function sceneContent(scene: StoryboardView['document']['scenes'][number] | undefined) {
     return scene ? <div className="min-w-0 space-y-3 break-words [overflow-wrap:anywhere]">

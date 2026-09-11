@@ -11,6 +11,8 @@ export interface WorkspaceGuideResult extends Record<string, unknown> {
     targetId?: string;
   }>;
   needsMoreInformation: boolean;
+  draftChanges?: Partial<Record<'problem' | 'insight' | 'method' | 'results' | 'limitations' | 'reproducibility', string>>;
+  draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: NonNullable<WorkspaceGuideResult['draftChanges']> };
   presentationDraft?: {
     action: 'storyboard.create';
     instruction: string;
@@ -40,7 +42,14 @@ function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[])
 export const workspaceGuideResultGuard: SchemaGuard<WorkspaceGuideResult> = (value): value is WorkspaceGuideResult => {
   if (!value || typeof value !== 'object') return false;
   const result = value as Record<string, unknown>;
-  if (!hasOnlyKeys(result, ['summary', 'nextSteps', 'needsMoreInformation', 'presentationDraft'])) return false;
+  if (!hasOnlyKeys(result, ['summary', 'nextSteps', 'needsMoreInformation', 'presentationDraft', 'draftChanges'])) return false;
+  if (result.draftChanges !== undefined) {
+    if (!result.draftChanges || typeof result.draftChanges !== 'object' || Array.isArray(result.draftChanges)) return false;
+    const changes = result.draftChanges as Record<string, unknown>;
+    if (!Object.keys(changes).length || !hasOnlyKeys(changes, ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'])
+      || !Object.values(changes).every((text) => typeof text === 'string' && text.trim().length > 0 && text.length <= 4_000)
+      || JSON.stringify(changes).length > 18_000) return false;
+  }
   if (typeof result.summary !== 'string' || result.summary.trim().length === 0 || result.summary.length > 1200) return false;
   if (typeof result.needsMoreInformation !== 'boolean' || !Array.isArray(result.nextSteps) || result.nextSteps.length > 1) return false;
   const validSteps = result.nextSteps.every((candidate) => {
@@ -88,6 +97,8 @@ export async function workspaceGuideHandler(
   });
   if (!ownerTask || ownerTask.kind !== 'workspace.guide') throw new Error('workspace.guide 服务端任务上下文无效');
   const userId = ownerTask.session.userId;
+  const editorDraft = payload.context.editorDraft;
+  if (editorDraft && ownerTask.session.researchObjectId !== editorDraft.researchObjectId) throw new Error('Workspace editor draft session mismatch');
   const requestedTaskIds = [...new Set(payload.context.tasks.map((item) => item.id))];
   const requestedResearchIds = [...new Set(payload.context.researchObjects.map((item) => item.id))];
   const [trustedTasks, trustedResearch] = await Promise.all([
@@ -133,7 +144,7 @@ export async function workspaceGuideHandler(
   if (requestedPresentation && !presentationVersion) throw new Error('workspace.guide presentation version 未通过服务端授权');
   const taskIds = trustedPayload.context.tasks.map((item) => item.id);
   const researchObjectIds = trustedPayload.context.researchObjects.map((item) => item.id);
-  const system = payload.locale === 'zh'
+  let system = payload.locale === 'zh'
     ? [
         '你是 OpenScience 的 Hermes 科研引导员。根据给定的真实研究对象字段，指出最重要的审核或补充事项，并只提供安全导航。',
         '不得声称已经执行写入、删除、合并、发布或权限变更。不得杜撰上下文中没有的事实。',
@@ -160,6 +171,9 @@ export async function workspaceGuideHandler(
         `open-ro may use only these research object ids: ${researchObjectIds.length ? researchObjectIds.join(', ') : '(none; do not emit open-ro)'}.`,
         'Exact example: {"summary":"Review finding and gap","nextSteps":[{"label":"Open the research object","intent":"open-ro","targetId":"an allowed id"}],"needsMoreInformation":true}',
       ].join('\n');
+  if (editorDraft) system += '\n' + (payload.locale === 'zh'
+    ? '你同时是当前工作台的共编助手。editorDraft是用户此刻正在编辑的草稿，不是新证据。用户明确要求改写、凝练、翻译或调整内容时，可额外输出draftChanges：只包含实际改动的六字段键与完整替换文本。咨询、评价、导航不改稿。保留科学条件、公式、单位、限制和来源含义，不编造论文内容；证据不足时解释，不用猜测填充。除draftChanges外上述根字段限制保持。summary说明改了什么，不能声称已保存、定稿或发布。不得修改未要求的字段；只修改草稿，最终定稿另行确认。'
+    : 'You also co-edit the active workbench. editorDraft is the current user draft, not new evidence. Only for an explicit revision, condensation, translation or editing request may you add draftChanges, containing only changed SDF field keys and full replacement text. Questions, review and navigation do not edit. Preserve scientific conditions, equations, units, limitations and source meaning; never invent paper content. Explain insufficient evidence instead of filling guesses. All other root restrictions remain. Summarize changes without claiming they were saved, confirmed or published. Do not change unrequested fields.');
   const userMessageBudget = Math.max(0, 30_000 - system.length);
   const serializeUser = (maxCharsPerField: number) => JSON.stringify({
     goal: trustedPayload.goal,
@@ -168,6 +182,7 @@ export async function workspaceGuideHandler(
     interestContext,
     context: {
       tasks: trustedPayload.context.tasks,
+      ...(editorDraft ? { editorDraft } : {}),
       researchObjects: trustedResearch.map((item) => ({
         id: item.id,
         title: item.title,
@@ -213,6 +228,11 @@ export async function workspaceGuideHandler(
     || result.presentationDraft.researchObjectId !== presentationVersion.researchObjectId
     || result.presentationDraft.versionId !== presentationVersion.id)) {
     throw new Error('workspace.guide presentation draft 不在允许的版本上下文中');
+  }
+  if (result.draftChanges) {
+    if (!editorDraft || result.needsMoreInformation) throw new Error('No applicable workspace draft changes');
+    const { draftChanges, ...answer } = result;
+    return { ...answer, draftEdit: { base: editorDraft, changes: draftChanges } };
   }
   return result;
 }
