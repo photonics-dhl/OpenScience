@@ -62,7 +62,7 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
     {error ? <p className={styles.feedback} role="alert">{error}</p> : null}
     {loading && !page.items.length ? <p className={styles.feedback} role="status">{t('loading')}</p> : null}
     {!loading && !page.items.length && !error ? <p className={styles.feedback}>{t('empty')}</p> : null}
-    <ol className={styles.cards}>{page.items.map(item => <li key={item.publicId}><ResearchCard item={item} /></li>)}</ol>
+    <ol className={styles.cards}>{page.items.map(item => <li key={item.publicId}><ResearchCard item={item} prominent={page.items.length === 1} /></li>)}</ol>
     {page.nextCursor ? <button className={styles.loadMore} disabled={loading} type="button" onClick={() => void load(page.nextCursor!, true)}>{loading ? t('loading') : t('loadMore')}</button> : null}
   </section>;
 }

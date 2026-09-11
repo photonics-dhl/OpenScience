@@ -232,7 +232,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
   return (
     <HermesWorkspaceStageContext.Provider value={context}>
       {children}
-      {supportedPath(pathname) && !/^\/research-objects\/[^/]+\/edit\/?$/.test(pathname) ? (
+      {pathname !== '/dashboard' && supportedPath(pathname) && !/^\/research-objects\/[^/]+\/edit\/?$/.test(pathname) ? (
         <React.Suspense fallback={<HermesWorkspaceStageFallback />}><HermesWorkspaceStage
           guideTarget={guideTarget}
           fallbackWorkspaceId={researchObjectId ?? 'workspace-current'}

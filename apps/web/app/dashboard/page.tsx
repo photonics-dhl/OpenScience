@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const [researchObjects, setResearchObjects] = useState<DashboardResearch[]>([]);
   const [tasks, setTasks] = useState<HermesRailTask[]>([]);
   const [taskHistory, setTaskHistory] = useState<HermesRailTask[]>([]);
+  const [taskLoadState, setTaskLoadState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [error, setError] = useState('');
   const [hermesOpen, setHermesOpen] = useState(false);
   const [guideTask, setGuideTask] = useState<AgentTaskView | null>(null);
@@ -52,11 +53,12 @@ export default function DashboardPage() {
         let latestId = currentResearch[0]?.id;
         let globalTasks: HermesRailTask[] = [];
         let latestTasks: HermesRailTask[] = [];
+        let latestTasksAvailable = false;
         let refreshTimer: number | undefined;
         let refreshRunning = false;
         const showAvailableTasks = () => {
           if (!active) return;
-          const visibleTasks = latestId
+          const visibleTasks = latestId && latestTasksAvailable
             ? [...latestTasks, ...globalTasks.filter((task) => task.researchObjectId !== latestId)]
             : globalTasks;
           applyDashboardTasks(currentResearch, visibleTasks, setResearchObjects, setTasks, setTaskHistory);
@@ -69,7 +71,7 @@ export default function DashboardPage() {
           refreshTimer = window.setTimeout(() => { void refreshTasks(); }, 30_000);
         }
         async function refreshTasks() {
-          if (!active || refreshRunning || document.visibilityState !== 'visible' || !hasBackgroundWork()) return;
+          if (!active || refreshRunning || document.visibilityState !== 'visible') return;
           refreshRunning = true;
           try {
             const overview = await getDashboardOverview();
@@ -77,13 +79,20 @@ export default function DashboardPage() {
             currentResearch = overview.researchObjects;
             globalTasks = overview.tasks;
             latestId = currentResearch[0]?.id;
+            let loadFailed = false;
+            latestTasksAvailable = false;
             if (latestId) {
               try {
                 latestTasks = (await listResearchIngestionTasks(latestId)).tasks;
-              } catch { /* The global task view still refreshes the visible desk. */ }
+                latestTasksAvailable = true;
+              } catch { loadFailed = true; }
             } else latestTasks = [];
+            if (!active) return;
             showAvailableTasks();
-          } catch { /* Keep the current desk intact and retry on the next visible interval. */ }
+            setTaskLoadState(loadFailed ? 'unavailable' : 'ready');
+          } catch {
+            if (active) setTaskLoadState('unavailable');
+          }
           finally {
             refreshRunning = false;
             scheduleRefresh();
@@ -102,6 +111,19 @@ export default function DashboardPage() {
         };
         setUser(currentUser);
         applyDashboardTasks(currentResearch, [], setResearchObjects, setTasks, setTaskHistory);
+        let remainingTaskLoads = latestId ? 2 : 1;
+        let taskLoadFailed = false;
+        refreshRunning = true;
+        const finishTaskLoad = () => {
+          remainingTaskLoads -= 1;
+          if (remainingTaskLoads === 0) {
+            refreshRunning = false;
+            if (active) {
+              setTaskLoadState(taskLoadFailed ? 'unavailable' : 'ready');
+              scheduleRefresh();
+            }
+          }
+        };
 
         void apiRequest<{ tasks: HermesRailTask[] }>('/api/ingestion?actionable=true')
           .then(({ tasks: availableTasks }) => {
@@ -109,16 +131,19 @@ export default function DashboardPage() {
             showAvailableTasks();
             scheduleRefresh();
           })
-          .catch(() => undefined);
+          .catch(() => { taskLoadFailed = true; })
+          .finally(finishTaskLoad);
 
         if (latestId) {
           void listResearchIngestionTasks(latestId)
             .then(({ tasks: availableTasks }) => {
               latestTasks = availableTasks;
+              latestTasksAvailable = true;
               showAvailableTasks();
               scheduleRefresh();
             })
-            .catch(() => undefined);
+            .catch(() => { taskLoadFailed = true; })
+            .finally(finishTaskLoad);
         }
       })
       .catch((cause) => {
@@ -221,7 +246,7 @@ export default function DashboardPage() {
         </div>
         <div className={styles.taskRail}>
           <HermesConversationCard onInvoke={() => setHermesOpen(true)} working={guideWorking} />
-          <HermesRail historyTasks={taskHistory} tasks={tasks} />
+          <HermesRail historyTasks={taskHistory} tasks={tasks} loadState={taskLoadState} />
         </div>
         <div className={styles.startResearch}>
           <ImportStage />

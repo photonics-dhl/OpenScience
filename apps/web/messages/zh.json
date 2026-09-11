@@ -1076,6 +1076,8 @@
       "activity": {
         "eyebrow": "当前研究状态",
         "title": "研究进展",
+        "loading": "正在读取研究进展…",
+        "unavailable": "部分进展暂未更新；已有研究仍可继续编辑。",
         "attention": "需要我处理",
         "background": "后台进行",
         "history": "较早记录（{count}）"

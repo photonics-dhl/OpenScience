@@ -1076,6 +1076,8 @@
       "activity": {
         "eyebrow": "Current research status",
         "title": "Research progress",
+        "loading": "Loading research progress…",
+        "unavailable": "Some progress is temporarily unavailable. You can keep editing your research.",
         "attention": "Needs your attention",
         "background": "Running in the background",
         "history": "Earlier records ({count})"

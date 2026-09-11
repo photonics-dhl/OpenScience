@@ -26,7 +26,7 @@ export interface HermesRailTask {
   error: string | null;
 }
 
-export function HermesRail({ historyTasks = [], tasks }: { historyTasks?: HermesRailTask[]; tasks: HermesRailTask[] }) {
+export function HermesRail({ historyTasks = [], tasks, loadState = 'ready' }: { historyTasks?: HermesRailTask[]; tasks: HermesRailTask[]; loadState?: 'loading' | 'ready' | 'unavailable' }) {
   const t = useTranslations('dashboard');
   const [expanded, setExpanded] = React.useState(false);
   const attentionTasks = tasks.filter((task) => task.state === 'needs_review' || task.state.startsWith('failed_'));
@@ -68,7 +68,8 @@ export function HermesRail({ historyTasks = [], tasks }: { historyTasks?: Hermes
         </div>
       </div>
 
-      {tasks.length === 0 ? (
+      {loadState !== 'ready' ? <p role="status" className="py-3 text-sm leading-6 text-os-muted-paper">{t(loadState === 'loading' ? 'hermes.activity.loading' : 'hermes.activity.unavailable')}</p> : null}
+      {tasks.length === 0 && loadState === 'ready' ? (
         <p className="py-6 text-sm leading-6 text-os-muted-paper">{t('hermes.empty')}</p>
       ) : <>
         {visibleAttention.length > 0 ? <section className="mt-4" aria-labelledby="hermes-attention-title">

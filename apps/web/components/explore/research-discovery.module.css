@@ -7,6 +7,7 @@
 .allLink { flex-shrink: 0; color: #126a70; font-size: 14px; font-weight: 650; text-underline-offset: 4px; }
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; list-style: none; margin: 28px 0 0; padding: 0; }
 .cards > li { min-width: 0; }
+.cards > li:only-child { grid-column: 1 / -1; }
 .card { min-width: 0; height: 100%; border: 1px solid #dce4e8; border-radius: 14px; background: #fff; overflow: hidden; transition: border-color 150ms ease, box-shadow 150ms ease; }
 .cardLink { display: flex; flex-direction: column; height: 100%; color: inherit; text-decoration: none; }
 .cover { display: grid; aspect-ratio: 16 / 9; place-items: center; padding: 12px; border-bottom: 1px solid #edf1f3; background: #fff; }

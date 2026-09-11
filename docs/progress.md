@@ -1,11 +1,11 @@
 # OpenScience 当前进度
 
 ## 2026-09-11 — 产品体验改造已部署，视觉收尾中
-- 应用4909e11b / rollback378a9506；provider d1630135不变。服务器必要构建启动exit0，未运行测试/CI/本机build。
+- 应用c0fdc389 / rollback4909e11b；provider d1630135不变。服务器必要构建启动exit0，未运行测试/CI/本机build。
 - Chat6Pro规划、项目apple-design/emil-design-eng/frontend-design及Sol High复核已用于实际实现。
 - 研究桌面/共享会话/单一资料入口/公开大图/真实缩略图已部署；公开22/v10与图实际打开。
 - 三条19/20/21 Task/E2E可恢复归档已完成，公开index只剩22，原文件/版本保留。
-- 正收尾Hermes遮挡、研究卡片直达编辑器、加载色彩与引用行；最终状态见唯一CURRENT handoff。
+- 实际跨桌面/编辑器/探索/公开页保持账号；/me200及7天Cookie续期已观察。补修重复global头像、初次任务loading/失败fallback和单条探索横卡，待部署；最终状态见唯一CURRENT handoff。
 
 ## 2026-09-11 — 第一篇真实带图 RO 已公开
 - 历史发布节点：branch codex/onchip-video-release；worktree .worktrees/onchip-video-release。应用/code378a950697e3addd390c05a3dc29af0362328807已部署exit0，rollback9c5088ea；provider d1630135/rollback92cc416e，无新软件。后续docs-only提交不代表新release。
