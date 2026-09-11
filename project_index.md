@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-11:** production f909c3a4 / rollback8c2832f0 / browser providerf4832487；第二Chat账号与noVNC实际可用。6Pro截图方案已收到，制作/Hermes/公开布局及许可证400修复候选整合中，尚未部署。v6draft；v3图有科学问题，未公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-11:** production b05aaeac / rollback cec596e8 / browser provider f4832487；媒体/Hermes/公开布局与发布两处接口故障已修并部署。v6真实审核唯一阻断evidence_unverified，Chat6Pro正在集中核对58项；新Hermes方案任务1956a2c5格式失败，修正候选待部署。旧v3图科学问题未放行。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 当前执行：按用户批准的连续工作台和核心图优先流程完成剩余衔接；Chat6Pro规划已收取、限流不重试，Sol medium有界实现+Sol high边界复核。用户授权Codex审核发布，科学内容需真实核对；视频和批量冷启动暂停。
 > 最新部署：精确完成结果证明、原prompt/result恢复、浏览器重启后exact canonical续取且不重发、产品画廊整理。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
@@ -11,7 +11,7 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `apps/web/components/presentation/ResearchPresentation.tsx` / `apps/web/components/research/ResearchPublication.tsx` | 连续工作台复用制作及版本绑定发布预览，旧独立路由保留 | CANDIDATE / 服务器部署待执行 |
+| `apps/web/components/presentation/ResearchPresentation.tsx` / `apps/web/components/research/ResearchPublication.tsx` | 连续工作台复用制作及版本绑定发布预览，旧独立路由保留 | DEPLOYED b05aaeac；最新真实状态见CURRENT handoff |
 | `infra/scripts/verify-hermes-user-journey.mjs` | 服务器真实普通账号浏览器上传/启动/恢复取证，禁止手工生成各媒体阶段 | ACCEPTANCE TOOL；待运行，不代表产品流程通过 |
 | `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |
 | `packages/domain/src/agent/research-run.ts` / `apps/api/src/routes/research-runs.ts` / `infra/migrations/20260908010000_hermes_research_runs/` / `infra/migrations/20260908020000_hermes_research_workflow/` | 持久流程、来源审核、限定生成授权与保留成功资产的失败生成续跑 | DEPLOYED3446f309；恢复API已实际202，原论文方法讲解流程SUCCEEDED/视频approved，真实状态见CURRENT handoff |

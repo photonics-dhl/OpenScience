@@ -7,8 +7,8 @@
 
 ## Version tuple
 - worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。
-- 核心改动已部署cec596e8；本轮继续修实际页面的文案分组、主题/阅读栏和审核空JSON故障，实际HEAD查Git。
-- application production cec596e809a558139ea1b391a65605c104dc64ba；rollback f909c3a48a3c75e952735d8c71aeead393a404dc。
+- 本轮应用已部署b05aaeac，实际HEAD查Git；文案分组、主题/阅读栏和审核空JSON均已修。
+- application production b05aaeacf810516670776f851b99794e23c8851e；rollback cec596e809a558139ea1b391a65605c104dc64ba。
 - browser provider f48324870f25b50c3a21eaad898beea87fb0aa1d；provider rollback48d9fa65db134575f53cf2a30724aa47a14eeea4。
 - OAuth bridge补丁独立：/opt/openscience-chatgpt-browser/scripts/host.mjs，备份host.mjs.before-google-oauth-20260911。
 
@@ -40,7 +40,13 @@
 - 实际页面发现翻译误放public.presentation子组、工作台漏接统一主题，修正键归属和控件边框/色彩。公开页改为默认760px居中单栏，证据仅展开后占侧栏，标题36px/移动28px。
 - OSR-2026-000020/v/2仍是旧E2E内容，不是最新论文凝练结果；只用于观察现有公开页，不能当作新精选。
 
+## Active content work
+- v6真实发布审核唯一阻断evidence_unverified；所有108项locator已在该审核解析，无其他block。50已验证、58待审；严格同来源+同Claim检查可继承0，不修改审核规则/不批量假通过。
+- Chat6Pro已实际收到publication-review-v6-20260911.json（服务器/jobs，161042bytes，58项+13对照，隐私字段已去除），已发送逐项语义审阅要求，等待结果。原件PDF不重跑。
+- 同版新Hermes方案1956a2c5-7aa1-49cf-bc69-0f645220675c已从媒体页Hermes操作栏提交，要求FWHM_s沿电子z路径、保留旁瓣和有限束团限制，已失败于storyboard:scene_0:visual_action；候选细分字段诊断并使用图片专用修正反馈，待部署后继续实际制作。
+- Chat上线后复核已答复：旧六字段确认不追认为证据已核对。未来批量确认需明确涵盖主张和对应证据；本轮先实际核对，科学问题不能放行。
+
 ## Routing / next
 - 网页6Pro负责截图方案；Sol medium负责媒体页和ingestion producer修复；Terra medium负责公开页与Hermes面板；Sol High独立复核发布/并发/来源与请求边界；主会话整合部署。
-- 完成High问题修复与翻译→现有deploy.sh --no-tests部署→实际页面观察许可证请求、发布流和新布局。禁止恢复旧阶段预检清单。
+- 图像方案格式诊断与失败不展开手动工具已修且High静态复核完成→现有deploy.sh --no-tests部署→继续实际同版方案、生图和语义审阅后的发布。禁止恢复旧阶段预检清单。
 - 当前论文科学问题/存量重复Claim仍需有来源的定向处理后才可公开；只改UI/省略测试不等于科研内容通过。

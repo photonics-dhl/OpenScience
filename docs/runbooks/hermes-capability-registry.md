@@ -1,7 +1,9 @@
 # Hermes Capability Registry
 
+- 2026-09-11当前应用release b05aaeac / rollback cec596e8；界面与发布接口修复已部署，无新服务/模型。服务器Chat6Pro正在审阅v6证据；Hermes方案1956a2c5格式失败，修正反馈候选待部署。后续状态以CURRENT handoff为准。
+
 - 最新2026-09-11：服务器第二Chat账号已确认登录为Pro，远程桌面已可操作；Chat6Pro实际收到三张产品截图并回复规划，会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。当前无需用户继续密码认证。
-- 本轮媒体画廊/Hermes同工作台/公开阅读及发布合同修复为候选，实际部署和未决科学问题见CURRENT handoff。未新增服务、模型或插件，未实施自动账号轮换。
+- 本轮媒体画廊/Hermes同工作台/公开阅读及发布合同修复已部署b05aaeac，实际部署和未决科学问题见CURRENT handoff。未新增服务、模型或插件，未实施自动账号轮换。
 
 > 状态：**CURRENT**
 > 最后核验：2026-09-11

@@ -1121,6 +1121,8 @@
     "manualToolsBody": "需要精细调整时，再展开来源主张和制作工具。",
     "requestImage": "生成图片",
     "requestVideo": "生成视频",
+    "briefNeedsRevision": "Hermes 尚未整理好制作指令，内容已保留。可请 Hermes 调整指令后继续。",
+    "failureDetails": "查看失败详情",
     "sceneProgress": "已生成 {current} / {total}",
     "partialImages": "先查看已生成的图解，其余图片尚未完成。每张图片都可以独立核对；确认后的内容才会用于发布。",
     "storyboard": {

@@ -1121,6 +1121,8 @@
     "manualToolsBody": "Open source claims and production tools when you need precise control.",
     "requestImage": "Generate an image",
     "requestVideo": "Generate a video",
+    "briefNeedsRevision": "Hermes could not finish the production brief. Your content is saved; ask Hermes to adjust the instructions and continue.",
+    "failureDetails": "Failure details",
     "sceneProgress": "{current} of {total} generated",
     "partialImages": "Review the available illustrations while the others remain unfinished. Each image can be reviewed individually; only approved content can be published.",
     "storyboard": {

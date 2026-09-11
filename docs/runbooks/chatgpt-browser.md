@@ -1,10 +1,12 @@
 # Server ChatGPT browser — operator login research
 
+- 2026-09-11当前应用release b05aaeac / rollback cec596e8；界面与发布接口修复已部署，无新服务/模型。服务器Chat6Pro正在审阅v6证据；Hermes方案1956a2c5格式失败，修正反馈候选待部署。后续状态以CURRENT handoff为准。
+
 - 最新2026-09-11：第二账号已正常登录，实际账户设置与用户指定账号匹配（Pro）；noVNC实际可视可操作。旧“等用户密码”状态已完成，不要再次要求登录。6Pro截图规划会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581已回复。
 - 新模型菜单使用Thinking effort→Power，键盘右移到第5档时实际显示6 Pro。收起后正文可能分成6换行Pro，识别需允许空白。不要因菜单变化降级模型或反复重发。
 - noVNC故障恢复仅操作x11vnc，未关闭Chrome会话。一次后续启动日志显示5900已占用，现有进程随后正常传输画面；根因未完全确定，不重复盲重启或添加无证据参数。
 
-Status: production `9b97522f…`, provider `f4832487…` (2026-09-11). Deep-sub-cycle has two real draft images of six planned. The old usage-limit conversation was reconciled without resending. A group retry reached version8 then failed before web submission because image mode shows Extra High, not the science planner label 6 Pro (run now failed/version9). The provider-only fix removed that incorrect image-mode requirement while retaining 6 Pro for scientific review. A new scene0 task `8b0ca4c9-eb20-4478-a79c-d1b8e0dadc25` then succeeded through the product button: Hermes prompt, native web image generation, download, storage and automatic gallery display. Scientific review and publication remain pending.
+HISTORICAL（旧任务记录，以CURRENT handoff为准）: production `9b97522f…`, provider `f4832487…` (2026-09-11). Deep-sub-cycle has two real draft images of six planned. The old usage-limit conversation was reconciled without resending. A group retry reached version8 then failed before web submission because image mode shows Extra High, not the science planner label 6 Pro (run now failed/version9). The provider-only fix removed that incorrect image-mode requirement while retaining 6 Pro for scientific review. A new scene0 task `8b0ca4c9-eb20-4478-a79c-d1b8e0dadc25` then succeeded through the product button: Hermes prompt, native web image generation, download, storage and automatic gallery display. Scientific review and publication remain pending.
 
 ## Current product observations
 - 2026-09-11账号切换：用户授权指定第二账号。当前服务器账户菜单未出现Add account，故按正常退出/登录处理；输入目标邮箱后OpenAI转Google OAuth。bridge明确拒绝accounts.google.com:443；随后认证页停在Loading，唯一外部AccountsSignInUi脚本www.gstatic.com也被拒。仅补这两个精确域名，保留443和其余allowlist限制。其他Google/字体/头像域未放行。实际部署/登录完成状态见CURRENT handoff；不会自动跨账号重放旧会话。

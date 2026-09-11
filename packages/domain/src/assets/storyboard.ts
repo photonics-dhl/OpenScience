@@ -33,8 +33,14 @@ function object(value: unknown, reason: string): Record<string, unknown> { if (!
     return invalid(reason); return value as Record<string, unknown>; }
 function keys(value: Record<string, unknown>, required: string[], optional: string[], reason: string) { if (required.some(k => !(k in value)) || Object.keys(value).some(k => !required.includes(k) && !optional.includes(k)))
     invalid(reason); }
-function text(value: unknown, max: number, reason: string): string { if (typeof value !== 'string' || !value.trim() || value.length > max || /[\u0000-\u001f]/.test(value))
-    return invalid(reason); return value; }
+function text(value: unknown, max: number, reason: string): string {
+    if (typeof value !== 'string') return invalid(`${reason}:type_${value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value}`);
+    if (!value.trim()) return invalid(`${reason}:empty`);
+    if (value.length > max) return invalid(`${reason}:length_${value.length}:max_${max}`);
+    const control = value.match(/[\u0000-\u001f]/);
+    if (control) return invalid(`${reason}:control_u${control[0].charCodeAt(0).toString(16).padStart(4, '0')}`);
+    return value;
+}
 export function parseStoryboardRequest(value: unknown): StoryboardRequest {
     const v = object(value, 'request_shape');
     keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'output'], 'request_keys');

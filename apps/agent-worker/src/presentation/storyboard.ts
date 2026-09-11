@@ -34,6 +34,7 @@ export async function generateStoryboard(gateway: Pick<AiGateway, 'completeStruc
     if (input.length > 100000)
         throw new Error('[blocked] Selected Claims and base storyboard exceed planner input bounds; select fewer Claims');
     const ids = claims.map(c => c.id);
+    const imageOutput = settings.output === 'image';
     function singleLine(value: unknown): unknown {
         return typeof value === 'string' ? value.replace(/[\u0000-\u001f]+/g, ' ').replace(/\s{2,}/g, ' ').trim() : value;
     }
@@ -50,6 +51,7 @@ export async function generateStoryboard(gateway: Pick<AiGateway, 'completeStruc
                 narration: singleLine(scene.narration),
                 visualAction: singleLine(scene.visualAction),
             };
+            if (imageOutput) return normalizedScene;
             if (!scene.animation || typeof scene.animation !== 'object' || Array.isArray(scene.animation)) return normalizedScene;
             const animation = scene.animation as Record<string, unknown>;
             if (!Array.isArray(animation.actions)) return normalizedScene;
@@ -66,7 +68,6 @@ export async function generateStoryboard(gateway: Pick<AiGateway, 'completeStruc
             }) } };
         }) };
     }
-    const imageOutput = settings.output === 'image';
     const contentSceneRule = imageOutput ? 'Default to one core illustration that explains the central mechanism or result. Additional illustrations are optional, only when explicitly requested or essential for distinct concepts; never create one picture per SDF field. Select only Claims actually depicted, while respecting conditions in the supplied context.' : 'Choose 3–6 scenes within the service budget; narrow evidence usually needs fewer.';
     const outputDiscipline = imageOutput
         ? 'STATIC BRIEF: Every visualAction must be a detailed still-image brief within 1000 characters: specify only source-supported objects, relationships, layout, scientific conditions and limitations, and any necessary labels. Do not include animation, duration, movement, camera direction, timing, scripts, HTML, CSS, URLs, file paths or extra fields.'
@@ -106,7 +107,9 @@ ${outputDiscipline}` : videoSystemPrompt;
         output = await gateway.completeStructured(guard, messages, {
             temperature: 0.3,
             validationDiagnostic: () => lastValidationCode,
-            validationFeedback: () => `The previous draft was rejected by this exact validation rule: ${lastValidationCode}. Return a corrected complete JSON document. Use the exact keys and kind-specific fields from the schema; do not add null placeholders. Keep positions plus sizes within 1, choose actual sourcePassages quoteId references, and preserve supported scientific meaning. Fix the reported structural issue instead of copying the same invalid shape. Do not add facts to repair a missing source.`,
+            validationFeedback: () => imageOutput
+                ? `The previous illustration plan was rejected by this exact validation rule: ${lastValidationCode}. Return a corrected complete JSON document using the exact image-plan keys from the schema, without null placeholders. Every visualAction must be a nonempty single-line string of 1–1000 characters.${lastValidationCode.includes('visual_action:length_') ? ' The rejected visualAction is over the limit; rewrite it to about 850–900 characters while preserving source-supported physical distinctions, conditions, and limitations.' : ''} Preserve supported scientific meaning and fix the reported field instead of copying the invalid value. Do not add facts to repair missing source support.`
+                : `The previous draft was rejected by this exact validation rule: ${lastValidationCode}. Return a corrected complete JSON document. Use the exact keys and kind-specific fields from the schema; do not add null placeholders. Keep positions plus sizes within 1, choose actual sourcePassages quoteId references, and preserve supported scientific meaning. Fix the reported structural issue instead of copying the same invalid shape. Do not add facts to repair a missing source.`,
         });
     } catch (error) {
         if (error instanceof AiGatewayError && error.code === 'ALL_PROVIDERS_FAILED') lastValidationCode = 'provider_pool_exhausted';
