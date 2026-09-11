@@ -209,3 +209,28 @@
   .fields { margin-top: 32px; }
   .gallery { margin: 32px 0; }
 }
+
+/* Keep the explanation dominant; optional material stays one level deeper. */
+.surface :global(.pub-reading-layout) { grid-template-columns: minmax(0, 1000px); }
+.surface :global(.pub-reading-column) > * { width: min(100%, 840px); }
+.surface :global(.pub-reading-column) > .gallery { width: 100%; }
+.sourceLine { display: flex; flex-wrap: wrap; gap: 16px; }
+.readingActions { display: flex; justify-content: flex-end; margin-block: 10px 20px; }
+.readingActions button { min-height: 40px; border: 1px solid #dce4e8; border-radius: 8px; padding: 8px 14px; background: #fff; color: #126a70; font-size: 13px; }
+.surface .contribution { margin-block: 0 32px; border-radius: 0 10px 10px 0; }
+.surface .gallery { margin-block: 0 36px; }
+.leadingMedia { gap: 24px; }
+.leadingMedia[data-has-video='false'] { grid-template-columns: minmax(0, 1fr); }
+.leadingMedia[data-has-video='false'] > section:last-child { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: center; gap: 20px; padding-top: 8px; }
+.leadingMedia[data-has-video='false'] > section:last-child h3 { font-size: 15px; margin: 0; }
+.leadingMedia[data-has-video='false'] [data-media-placeholder='true'] { display: flex; align-items: center; background: #f5f8fa; }
+.leadingMedia[data-has-video='false'] [data-media-placeholder='true'] > div:first-child { aspect-ratio: auto; flex: 0 0 64px; padding: 14px; background: transparent; }
+.leadingMedia[data-has-video='false'] [data-media-placeholder='true'] svg { width: 28px; height: 28px; }
+.resources { margin-block: 32px 0; border-top: 1px solid #dce4e8; }
+.resources > summary { min-height: 48px; padding-block: 14px; cursor: pointer; color: #596875; font-size: 14px; font-weight: 600; }
+.resourcesBody { padding: 0 20px 10px; border: 1px solid #dce4e8; border-radius: 10px; background: #fff; }
+.resourcesBody :global(.pub-reading-details) { margin: 0; border-top: 0; border-bottom: 1px solid #edf1f3; }
+.resourcesBody :global(.pub-reading-details) > summary, .resourcesBody :global(.pub-disclaimer) > summary { min-height: 44px; padding-block: 12px; font-size: 14px; }
+@media (min-width: 760px) { .fields > section { grid-template-columns: 130px minmax(0, 1fr); gap: 28px; padding-block: 26px; } .fields > section h3 { align-items: flex-start; padding-top: 2px; font-size: 18px; } .fields > section h3::before { margin-top: 4px; } }
+@media (max-width: 640px) { .leadingMedia[data-has-video='false'] > section:last-child { grid-template-columns: minmax(0, 1fr); gap: 10px; } .readingActions { justify-content: flex-start; } }
+@media print { .resources:not([open]) > .resourcesBody { display: block; } .readingActions { display: none; } }

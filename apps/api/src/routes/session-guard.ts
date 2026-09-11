@@ -3,6 +3,21 @@ import { getCurrentUser, type AuthDeps, type CurrentUser } from '@openscience/au
 import { buildErrorBody } from '@openscience/observability';
 
 export const SESSION_COOKIE = 'openscience_session';
+export const SESSION_MAX_AGE_SECONDS = 7 * 24 * 3600;
+
+export function refreshSessionCookie(
+  reply: FastifyReply,
+  token: string,
+  secure: boolean,
+): void {
+  void reply.setCookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    path: '/',
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+}
 
 export function sessionTokenFrom(req: FastifyRequest): string | null {
   return req.cookies[SESSION_COOKIE] ?? null;

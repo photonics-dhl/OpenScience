@@ -1,5 +1,5 @@
 import type { PublicEvidenceSource, PublicResearchVersion } from './api';
-import type { EditorialCollectionApi } from './api';
+import type { EditorialCollectionApi, ResearchIndexPageApi } from './api';
 
 export class PublicServerApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -11,8 +11,8 @@ function serverApiOrigin() {
   return (process.env.API_ORIGIN ?? 'http://127.0.0.1:3001').replace(/\/$/, '');
 }
 
-async function serverRequest<T>(path: string): Promise<T> {
-  const response = await fetch(`${serverApiOrigin()}${path}`, { cache: 'no-store' });
+async function serverRequest<T>(path: string, timeoutMs?: number): Promise<T> {
+  const response = await fetch(`${serverApiOrigin()}${path}`, { cache: 'no-store', ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}) });
   if (!response.ok) throw new PublicServerApiError(response.status, `Public API request failed (${response.status})`);
   return response.json() as Promise<T>;
 }
@@ -35,4 +35,8 @@ export async function getLatestPublicResearchVersion(publicId: string) {
 
 export function getPublicEditorialCollection(slug: string) {
   return serverRequest<{ collection: EditorialCollectionApi }>(`/editorial/collections/${encodeURIComponent(slug)}`);
+}
+
+export function getServerResearchIndex(limit = 20) {
+  return serverRequest<ResearchIndexPageApi>(`/explore?limit=${limit}`, 8000);
 }

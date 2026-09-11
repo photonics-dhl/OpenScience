@@ -50,7 +50,7 @@
     "approvePlan": "批准方案，允许制作",
     "planReadyTitle": "查看与确认图解方案",
     "planReadyBody": "Hermes 已准备好下方的图解方案。可先提出修改，再确认方案并生成图片。",
-    "sourceReview": "材料解析与确认记录",
+    "sourceReview": "论文分析记录",
     "confirmedSources": "已确认的内容可直接在正文或 Hermes 对话中修改。仅在需要复查材料时切换下方来源。",
     "loadingVersion": "正在读取已确认版本…",
     "coeditTitle": "和 Hermes 一起完善内容",
@@ -89,7 +89,10 @@
     "previewPublish": "预览并发布",
     "imageCount": "{count} 张图解",
     "coreImageFirst": "先做好一张核心图；补充图片按需制作。已核对的内容与图片可以先发布。",
-    "coreImageInstruction": "基于全文理解，优先规划一张解释核心机制或结论的科学图解。选择真正相关的主张，不套六张模板；其他图仅作为按需补充。"
+    "coreImageInstruction": "基于全文理解，优先规划一张解释核心机制或结论的科学图解。选择真正相关的主张，不套六张模板；其他图仅作为按需补充。",
+    "supportingMaterials": "资料与修改记录",
+    "pendingSuggestions": "待处理的修改建议",
+    "versionRecord": "查看版本记录"
   },
   "versionRecord": {
     "export": "导出固定记录",
@@ -462,7 +465,7 @@
     "correspondingAuthor": "通讯作者",
     "contributions": "贡献",
     "abstract": "摘要",
-    "coreFields": "核心字段",
+    "coreFields": "研究要点",
     "problem": "研究问题",
     "insight": "核心洞察",
     "method": "方法",
@@ -581,7 +584,8 @@
       "pull-requests": "拉取请求",
       "reviews": "评审与讨论",
       "citations": "引用与相关工作"
-    }
+    },
+    "readingResources": "原文来源、引用与版本记录"
   },
   "landing": {
     "nav": {
@@ -798,8 +802,8 @@
   },
   "dashboard": {
     "eyebrow": "个人工作区",
-    "title": "科研工作台",
-    "welcome": "{name}，从最近的研究上下文继续，或开始一个新的研究对象。",
+    "title": "研究桌面",
+    "welcome": "{name}，继续手头的研究，或和 Hermes 一起梳理下一步。",
     "loading": "正在恢复研究上下文…",
     "context": {
       "navigation": "工作台工具",
@@ -811,16 +815,22 @@
       "title": "继续研究",
       "emptyTitle": "导入第一份科研资料",
       "emptyBody": "Hermes 会先保留来源证据，再提出可供你确认的 SDF 字段。",
-      "open": "继续研究",
+      "open": "继续编辑研究",
       "version": "版本 {version}",
-      "pending": "{count} 项等待处理"
+      "pending": "{count} 项等待处理",
+      "draftRevision": "草稿修订 {version}",
+      "needsAttention": "{count} 项需要你处理",
+      "background": "Hermes 正在后台处理",
+      "review": "核对这份资料",
+      "recover": "查看问题并继续",
+      "progress": "查看处理进度"
     },
     "import": {
-      "eyebrow": "新的研究上下文",
-      "title": "开始一个研究对象",
-      "description": "导入现有科研资料，或从空白的结构化对象开始。",
-      "upload": "上传资料",
-      "blank": "创建空白 RO"
+      "eyebrow": "开始新的研究",
+      "title": "添加论文或研究资料",
+      "description": "上传 PDF 等现有资料交给 Hermes 整理，也可以从空白开始。",
+      "upload": "上传 PDF 或资料",
+      "blank": "从空白开始"
     },
     "literature": {
       "eyebrow": "个人文献",
@@ -851,10 +861,10 @@
       "expires": "可用至 {expiresAt}",
       "retry": "再次尝试",
       "noResults": "尚未找到匹配的元数据。",
-      "error": "无法完成这次来源请求，请重试。"
-      ,"pendingIntent": "请先完成或恢复当前来源请求，再开始新的请求。"
-      ,"reconnecting": "正在重新连接任务…"
-      ,"recoveryError": "无法继续恢复这项任务，你可以重新发起来源请求。"
+      "error": "无法完成这次来源请求，请重试。",
+      "pendingIntent": "请先完成或恢复当前来源请求，再开始新的请求。",
+      "reconnecting": "正在重新连接任务…",
+      "recoveryError": "无法继续恢复这项任务，你可以重新发起来源请求。"
     },
     "hermes": {
       "title": "Hermes 任务",
@@ -864,8 +874,24 @@
       "retry": "重试任务",
       "view": "查看进度",
       "progress": "{current}/{total} 个字段",
-      "states": { "idle": "待命", "guiding": "引导中", "scanning": "读取中", "suggesting": "有建议", "awaiting_approval": "等待确认", "failed": "需要处理" },
-      "taskStates": { "queued": "排队中", "uploading": "上传中", "parsing": "解析中", "stored": "已整理", "needsReview": "等待核对", "failedRetryable": "可重试", "failedBlocked": "已阻断" },
+      "states": {
+        "idle": "待命",
+        "guiding": "引导中",
+        "scanning": "读取中",
+        "suggesting": "有建议",
+        "awaiting_approval": "等待确认",
+        "failed": "需要处理"
+      },
+      "taskStates": {
+        "queued": "排队中",
+        "uploading": "上传中",
+        "parsing": "解析中",
+        "stored": "已整理",
+        "needsReview": "等待核对",
+        "failedRetryable": "可重试",
+        "failedBlocked": "已阻断",
+        "working": "处理中"
+      },
       "showMore": "展开其余 {count} 项任务",
       "showLess": "收起其余任务",
       "guide": {
@@ -873,54 +899,162 @@
         "presentationSuggestionLabel": "Hermes 生成的分镜建议",
         "usePresentationSuggestion": "在可编辑分镜中使用",
         "browserSessionDraft": "草稿保存在此浏览器会话，并按账号、研究对象和版本隔离。",
-        "actionable": { "title": "有一项研究任务可以继续", "body": "我会从当前优先级最高的任务开始，帮你判断下一步。" },
-        "review": { "title": "有证据等待你确认", "body": "当前任务已明确标记为待审核。我们可以从证据确认开始。" },
-        "failed": { "title": "有一项任务需要排查", "body": "当前任务未能完成。我可以先解释失败信息，再给出安全的恢复路径。" },
-        "processing": { "title": "Hermes 正在整理材料", "body": "当前任务仍在处理中。我可以说明进度，并帮你准备完成后的检查步骤。" },
-        "queued": { "title": "研究任务已进入队列", "body": "任务尚未开始处理。我可以先帮你安排接下来的研究步骤。" },
-        "continue": { "title": "继续最近的研究", "body": "我可以围绕现有研究对象梳理下一步，不会改动未经你确认的内容。" },
-        "neutral": { "title": "告诉我今天想推进什么", "body": "我会先理解目标，再给出可核查、可执行的研究路径。" },
-      "invoke": "唤起 Hermes",
-      "invokeTask": "打开 {task}",
-      "eyebrow": "Hermes / 情境引导员",
-      "menu": {
-        "trigger": "Hermes：点击打开助手，右键或长按打开动作菜单",
-        "label": "Hermes 动作菜单",
-        "eyebrow": "Hermes · 和你一起",
-        "title": "想一起做什么？",
-        "evidence": "查看证据与来源",
-        "evidenceNote": "回到当前科研对象的证据清单",
-        "explore": "打开研究索引",
-        "exploreNote": "在公开研究记录中继续查找",
-        "quiet": "陪我安静读一会",
-        "quietNote": "收起提醒，留在页边",
-        "quietFeedback": "我在。我们慢慢想。",
-        "companion": "陪伴",
-        "groups": { "companion": "和 Hermes 一起", "research": "研究工具" },
-        "intro": {
-          "presence": "我在，也替你留着刚才的位置。",
-          "actionable": "有一份证据，正等你来确认。",
-          "continue": "最近的研究已经可以接着做了。",
-          "neutral": "从你现在最想弄明白的事开始吧。"
+        "actionable": {
+          "title": "有一项研究任务可以继续",
+          "body": "我会从当前优先级最高的任务开始，帮你判断下一步。"
         },
-        "actions": {
-          "greet": { "label": "打个招呼", "feedback": { "one": "你来了，我也在。", "two": "找到你了，刚才的位置还留着。", "three": "你好呀，今天想弄明白什么？" } },
-          "encourage": { "label": "给我一点鼓励", "feedback": { "one": "已经走到这里了，再往前一点。", "two": "难题在动，你也在往前走。", "three": "认真走好一小步，也算进展。" } },
-          "think": { "label": "一起想想", "feedback": { "one": "先停一下，我陪你把线索理顺。", "two": "给我一点时间，这些线索能连起来。", "three": "先把问题稳稳放在这里，再看一遍。" } },
-          "listen": { "label": "听我说", "feedback": { "one": "我在听，你慢慢说。", "two": "继续说，我正顺着你的思路走。", "three": "告诉我，哪一部分还让你放心不下？" } },
-          "stretch": { "label": "伸个懒腰", "feedback": { "one": "一起伸伸懒腰，肩膀放松一下。", "two": "来，伸展开，给后背留一点空间。", "three": "舒展一下，回来再用新的眼光看。" } },
-          "rest": { "label": "安静一会", "feedback": { "one": "先歇一会，我替你守着这一页。", "two": "安静一会也好，这里的东西不会跑。", "three": "闭眼缓一口气，我帮你看着这一页。" } },
-          "celebrate": { "label": "庆祝这一步", "feedback": { "one": "这一步完成了，值得庆祝一下。", "two": "这次进展，值得认真高兴一下。", "three": "研究往前走了，把这一刻记下来吧。" } },
-          "read-together": { "label": "陪我读", "feedback": { "one": "翻到这里了，我陪你再读一段。", "two": "这一段，我们按主张一条条读。", "three": "我陪你守着文字，你来决定速度。" } },
-          "continue": { "label": "继续这一步", "feedback": { "one": "回到刚才那一步，我们接着做。", "two": "找到刚才的位置了，从这里继续。", "three": "下一步已经在这里，准备好就出发。" } },
-          "evidence": { "label": "核对证据", "feedback": { "one": "这条结论先别过，和我核对证据。", "two": "看看究竟是哪份来源支撑了这条主张。", "three": "先看证据，再决定结果说明了什么。" } },
-          "sources": { "label": "追溯来源", "feedback": { "one": "沿着引用往回走，看看它从哪里来。", "two": "我陪你顺着参考文献一路找回去。", "three": "看看这条主张最早从哪里进入记录。" } },
-          "compare": { "label": "对照版本", "feedback": { "one": "把两个版本并排放好，我们看差异。", "two": "我来对齐变化，别让细节从眼前溜走。", "three": "同一项研究的两个时刻，看看哪里变了。" } }
+        "review": {
+          "title": "有证据等待你确认",
+          "body": "当前任务已明确标记为待审核。我们可以从证据确认开始。"
         },
-        "keyboardHint": "Shift+F10 或菜单键打开 · Esc 关闭",
-        "mobileHint": "长按 Hermes 打开 · 点按仍进入助手"
-      },
-      "dialogLabel": "Hermes 科研引导员",
+        "failed": {
+          "title": "有一项任务需要排查",
+          "body": "当前任务未能完成。我可以先解释失败信息，再给出安全的恢复路径。"
+        },
+        "processing": {
+          "title": "Hermes 正在整理材料",
+          "body": "当前任务仍在处理中。我可以说明进度，并帮你准备完成后的检查步骤。"
+        },
+        "queued": {
+          "title": "研究任务已进入队列",
+          "body": "任务尚未开始处理。我可以先帮你安排接下来的研究步骤。"
+        },
+        "continue": {
+          "title": "继续最近的研究",
+          "body": "我可以围绕现有研究对象梳理下一步，不会改动未经你确认的内容。"
+        },
+        "neutral": {
+          "title": "告诉我今天想推进什么",
+          "body": "我会先理解目标，再给出可核查、可执行的研究路径。"
+        },
+        "invoke": "唤起 Hermes",
+        "invokeTask": "打开 {task}",
+        "eyebrow": "Hermes / 情境引导员",
+        "menu": {
+          "trigger": "Hermes：点击打开助手，右键或长按打开动作菜单",
+          "label": "Hermes 动作菜单",
+          "eyebrow": "Hermes · 和你一起",
+          "title": "想一起做什么？",
+          "evidence": "查看证据与来源",
+          "evidenceNote": "回到当前科研对象的证据清单",
+          "explore": "打开研究索引",
+          "exploreNote": "在公开研究记录中继续查找",
+          "quiet": "陪我安静读一会",
+          "quietNote": "收起提醒，留在页边",
+          "quietFeedback": "我在。我们慢慢想。",
+          "companion": "陪伴",
+          "groups": {
+            "companion": "和 Hermes 一起",
+            "research": "研究工具"
+          },
+          "intro": {
+            "presence": "我在，也替你留着刚才的位置。",
+            "actionable": "有一份证据，正等你来确认。",
+            "continue": "最近的研究已经可以接着做了。",
+            "neutral": "从你现在最想弄明白的事开始吧。"
+          },
+          "actions": {
+            "greet": {
+              "label": "打个招呼",
+              "feedback": {
+                "one": "你来了，我也在。",
+                "two": "找到你了，刚才的位置还留着。",
+                "three": "你好呀，今天想弄明白什么？"
+              }
+            },
+            "encourage": {
+              "label": "给我一点鼓励",
+              "feedback": {
+                "one": "已经走到这里了，再往前一点。",
+                "two": "难题在动，你也在往前走。",
+                "three": "认真走好一小步，也算进展。"
+              }
+            },
+            "think": {
+              "label": "一起想想",
+              "feedback": {
+                "one": "先停一下，我陪你把线索理顺。",
+                "two": "给我一点时间，这些线索能连起来。",
+                "three": "先把问题稳稳放在这里，再看一遍。"
+              }
+            },
+            "listen": {
+              "label": "听我说",
+              "feedback": {
+                "one": "我在听，你慢慢说。",
+                "two": "继续说，我正顺着你的思路走。",
+                "three": "告诉我，哪一部分还让你放心不下？"
+              }
+            },
+            "stretch": {
+              "label": "伸个懒腰",
+              "feedback": {
+                "one": "一起伸伸懒腰，肩膀放松一下。",
+                "two": "来，伸展开，给后背留一点空间。",
+                "three": "舒展一下，回来再用新的眼光看。"
+              }
+            },
+            "rest": {
+              "label": "安静一会",
+              "feedback": {
+                "one": "先歇一会，我替你守着这一页。",
+                "two": "安静一会也好，这里的东西不会跑。",
+                "three": "闭眼缓一口气，我帮你看着这一页。"
+              }
+            },
+            "celebrate": {
+              "label": "庆祝这一步",
+              "feedback": {
+                "one": "这一步完成了，值得庆祝一下。",
+                "two": "这次进展，值得认真高兴一下。",
+                "three": "研究往前走了，把这一刻记下来吧。"
+              }
+            },
+            "read-together": {
+              "label": "陪我读",
+              "feedback": {
+                "one": "翻到这里了，我陪你再读一段。",
+                "two": "这一段，我们按主张一条条读。",
+                "three": "我陪你守着文字，你来决定速度。"
+              }
+            },
+            "continue": {
+              "label": "继续这一步",
+              "feedback": {
+                "one": "回到刚才那一步，我们接着做。",
+                "two": "找到刚才的位置了，从这里继续。",
+                "three": "下一步已经在这里，准备好就出发。"
+              }
+            },
+            "evidence": {
+              "label": "核对证据",
+              "feedback": {
+                "one": "这条结论先别过，和我核对证据。",
+                "two": "看看究竟是哪份来源支撑了这条主张。",
+                "three": "先看证据，再决定结果说明了什么。"
+              }
+            },
+            "sources": {
+              "label": "追溯来源",
+              "feedback": {
+                "one": "沿着引用往回走，看看它从哪里来。",
+                "two": "我陪你顺着参考文献一路找回去。",
+                "three": "看看这条主张最早从哪里进入记录。"
+              }
+            },
+            "compare": {
+              "label": "对照版本",
+              "feedback": {
+                "one": "把两个版本并排放好，我们看差异。",
+                "two": "我来对齐变化，别让细节从眼前溜走。",
+                "three": "同一项研究的两个时刻，看看哪里变了。"
+              }
+            }
+          },
+          "keyboardHint": "Shift+F10 或菜单键打开 · Esc 关闭",
+          "mobileHint": "长按 Hermes 打开 · 点按仍进入助手"
+        },
+        "dialogLabel": "Hermes 科研引导员",
         "title": "从目标开始，我来带路。",
         "close": "关闭 Hermes",
         "openContext": "打开当前任务",
@@ -928,12 +1062,22 @@
         "goalLabel": "你今天想推进什么？",
         "goalPlaceholder": "例如：整理刚导入的论文，建立一份可复用的 RO 结构",
         "submit": "请 Hermes 规划",
-      "working": "Hermes 正在组织证据…",
-      "progress": "任务进度 {progress}%",
-      "resume": "继续查询这个任务",
-      "result": "建议的研究路径",
-      "needsMoreInformation": "我还需要你补充一点信息，再继续给出可靠建议。",
-      "error": "Hermes 暂时无法完成这次规划。你的目标仍保留，可以重试。"
+        "working": "Hermes 正在组织证据…",
+        "progress": "任务进度 {progress}%",
+        "resume": "继续查询这个任务",
+        "result": "建议的研究路径",
+        "needsMoreInformation": "我还需要你补充一点信息，再继续给出可靠建议。",
+        "error": "Hermes 暂时无法完成这次规划。你的目标仍保留，可以重试。"
+      },
+      "conversation": {
+        "label": "与 Hermes 对话"
+      },
+      "activity": {
+        "eyebrow": "当前研究状态",
+        "title": "研究进展",
+        "attention": "需要我处理",
+        "background": "后台进行",
+        "history": "较早记录（{count}）"
       }
     },
     "research": {
@@ -949,7 +1093,8 @@
         "published": "已发布",
         "revised": "已修订",
         "archived": "已归档"
-      }
+      },
+      "draftRevision": "草稿修订 {version}"
     },
     "errors": {
       "kicker": "系统 / 已中断",
@@ -1156,24 +1301,46 @@
   },
   "explore": {
     "eyebrow": "公开研究索引",
-    "title": "值得检验的研究。",
-    "description": "通过验证的公开科研对象将在这里呈现，并保留其证据、SDF 结构、版本、许可与评审历史。",
+    "title": "发现研究，读懂贡献。",
+    "description": "先看核心图解和研究要点，再深入原文、方法与来源。",
     "empty": "当前索引条件下没有公开 Research Object。",
     "create": "创建科研对象",
     "indexLabel": "已发布 Research Object 索引",
-    "search": "搜索标题或 SDF 证据",
-    "field": "SDF 字段",
-    "artifactType": "Artifact 类型",
-    "allFields": "全部 SDF 字段",
-    "allArtifacts": "全部 Artifact",
+    "search": "搜索研究标题或内容",
+    "field": "内容范围",
+    "artifactType": "资料类型",
+    "allFields": "全部内容",
+    "allArtifacts": "全部资料",
     "apply": "应用筛选",
     "loading": "正在读取公开索引…",
     "error": "暂时无法加载公开索引。",
     "loadMore": "继续浏览索引",
     "unknownAuthor": "作者记录待补充",
     "noArtifacts": "暂无 Artifact",
-    "fields": { "problem": "问题", "insight": "洞见", "method": "方法", "results": "结果", "limitations": "局限", "reproducibility": "可复现性" },
-    "artifacts": { "document": "文档", "image": "图片", "data": "数据", "code": "代码", "video": "视频", "other": "其他" }
+    "fields": {
+      "problem": "问题",
+      "insight": "洞见",
+      "method": "方法",
+      "results": "结果",
+      "limitations": "局限",
+      "reproducibility": "可复现性"
+    },
+    "artifacts": {
+      "document": "文档",
+      "image": "图片",
+      "data": "数据",
+      "code": "代码",
+      "video": "视频",
+      "other": "其他"
+    },
+    "searchAction": "搜索",
+    "refineSearch": "细化搜索范围",
+    "recentFirst": "新公开的研究在前 · 展示各研究的最新公开版本",
+    "imageFor": "《{title}》的核心概念图",
+    "readResearch": "阅读研究",
+    "recentTitle": "最新公开研究",
+    "recentDescription": "从一张图读懂核心思路，继续了解研究结论与适用边界。",
+    "browseAll": "探索全部研究"
   },
   "presentation": {
     "askHermes": "交给 Hermes 制作",

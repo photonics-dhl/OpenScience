@@ -13,6 +13,9 @@
 |---|---|---|
 | `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 参考目录；相关结构/风格已获用户批准，未安装新能力 |
 | `docs/proposals/2026-09-11-ro-workbench-wireframe.html` | 成稿/Hermes/图视频/公开预览可点击灰度线框，两个主要确认节点 | 已在服务器浏览器打开供用户讨论；无生产接口/真实媒体/发布，非生产UI部署 |
+| `apps/web/components/auth/SessionProvider.tsx` / `apps/web/components/landing/SiteHeader.tsx` / `apps/api/src/routes/session-guard.ts` | 跨导航账户状态、有效会话Cookie续期、跨标签会话同步 | 本轮候选；状态与部署见唯一CURRENT handoff |
+| `apps/web/components/explore/ResearchCard.tsx` / `apps/web/components/explore/research-discovery.module.css` / `packages/domain/src/explore/explore.ts` | 首页与探索复用真实公开版卡片/图片；稳定倒序游标 | 本轮候选；不把最新公开冒称精选 |
+| `apps/web/components/dashboard/HermesConversationCard.tsx` / `apps/web/components/hermes/HermesRail.tsx` | Hermes唯一对话入口、需处理/后台任务、历史去重与可见页更新 | 本轮候选；保持真实并发和恢复入口 |
 | `docs/proposals/2026-09-11-ro-product-preview.html` | 保留已认可布局的视觉与Hermes对话交互稿，固定输入、精简制作确认、公开媒体与正文共享状态 | 已批准的视觉参考；原样稿仅预设短句/内存演示，生产实现与未决事项见CURRENT handoff |
 | `apps/web/lib/hermes/conversation-action.ts` / `apps/web/components/hermes/HermesMediaReview.tsx` | Hermes对话确认的前端动作接口、当前版本实际素材审核及结果回写 | DEPLOYED1cdd4602；复用原权限/版本/updatedAt；实际观察与未决项见CURRENT |
 | `apps/web/app/research-product.css` / `apps/web/app/research-objects/[id]/edit/workbench.module.css` / `apps/web/components/public/PublicReadingProduct.module.css` | 已批准高保真风格的正式工作台与公开阅读样式，六栏目标题强调、图视频直显和固定Hermes对话输入 | DEPLOYED17ebc7f7；无测试/预检，实际页面观察及限制见CURRENT handoff |

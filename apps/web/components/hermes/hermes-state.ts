@@ -51,5 +51,5 @@ export function deriveHermesCompositeVisualState(tasks: HermesStateInput[], guid
 }
 
 export function hermesTaskHref(task: HermesTaskLink): string {
-  return `/research-objects/${encodeURIComponent(task.researchObjectId)}/hermes?task=${encodeURIComponent(task.id)}`;
+  return `/research-objects/${encodeURIComponent(task.researchObjectId)}/edit?ingestionTask=${encodeURIComponent(task.id)}`;
 }

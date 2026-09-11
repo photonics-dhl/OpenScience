@@ -90,6 +90,25 @@ export interface ArtifactReference {
 }
 
 let csrfToken: string | null = null;
+let currentUserRequest: Promise<CurrentUser> | null = null;
+let sessionRevision = 0;
+export const SESSION_INVALIDATED_EVENT = 'openscience-session-invalidated';
+export const SESSION_CHANGED_EVENT = 'openscience-session-changed';
+
+export function invalidateSessionClientCache(): void {
+  sessionRevision += 1;
+  currentUserRequest = null;
+}
+
+function notifySessionInvalidated(): void {
+  invalidateSessionClientCache();
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(SESSION_INVALIDATED_EVENT));
+}
+
+function notifySessionChanged(): void {
+  invalidateSessionClientCache();
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
+}
 
 const PUBLIC_AUTH_WRITES = new Set([
   '/api/auth/request-signup-code',
@@ -141,6 +160,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit, csrfRetry 
   if (!headers['content-type']) headers['content-type'] = 'application/json';
   if (isProtectedWrite(path, init)) headers['x-csrf-token'] = await getCsrfToken();
 
+  const requestSessionRevision = sessionRevision;
   const res = await fetch(path, {
     ...init,
     credentials: 'include',
@@ -149,6 +169,10 @@ export async function apiRequest<T>(path: string, init?: RequestInit, csrfRetry 
   if (!res.ok) {
     let body: ApiErrorBody | undefined;
     try { body = await res.json() as ApiErrorBody; } catch { /* 非 JSON */ }
+    const route = path.split('?')[0] ?? path;
+    if (res.status === 401 && body?.error.code === 'SESSION_INVALID'
+      && requestSessionRevision === sessionRevision
+      && route !== '/api/auth/me' && !PUBLIC_AUTH_WRITES.has(route)) notifySessionInvalidated();
     if (csrfRetry && isProtectedWrite(path, init) && isCsrfFailure(res.status, body)) {
       csrfToken = null;
       return apiRequest<T>(path, init, false);
@@ -188,24 +212,44 @@ export async function requestSignupCode(input: { email: string }): Promise<{ ok:
 
 /** Confirm the code and finish account creation in one explicit step. */
 export async function confirmSignup(input: ConfirmSignupInput): Promise<AuthResult> {
-  return request('/api/auth/confirm-signup', {
+  const result = await request<AuthResult>('/api/auth/confirm-signup', {
     method: 'POST',
     body: JSON.stringify(input),
   });
+  notifySessionChanged();
+  return result;
 }
 
 export async function loginWithPassword(input: {
   email: string;
   password: string;
 }): Promise<AuthResult> {
-  return request('/api/auth/login', {
+  const result = await request<AuthResult>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify(input),
   });
+  notifySessionChanged();
+  return result;
 }
 
-export async function getCurrentUser(): Promise<CurrentUser> {
-  return request('/api/auth/me');
+export async function getCurrentUser(options: { fresh?: boolean } = {}): Promise<CurrentUser> {
+  if (options.fresh) {
+    sessionRevision += 1;
+    currentUserRequest = null;
+  }
+  if (currentUserRequest && !options.fresh) return currentUserRequest;
+  const pending = request<CurrentUser>('/api/auth/me');
+  const tracked = pending
+    .catch((cause) => {
+      if (currentUserRequest === tracked && cause instanceof ApiClientError
+        && cause.status === 401 && cause.code === 'SESSION_INVALID') notifySessionInvalidated();
+      throw cause;
+    })
+    .finally(() => {
+      if (currentUserRequest === tracked) currentUserRequest = null;
+    });
+  currentUserRequest = tracked;
+  return tracked;
 }
 
 export interface AcademicIdentityStatus {
@@ -387,6 +431,7 @@ export async function getDashboardOverview(): Promise<{
 export async function logout(): Promise<void> {
   try {
     await request('/api/auth/logout', { method: 'POST' });
+    notifySessionInvalidated();
   } finally {
     if (typeof window !== 'undefined') {
       const [{ clearAllPendingLiteratureIntents }, { clearAllHermesDrafts, getHermesDraftStorage }] = await Promise.all([
@@ -413,6 +458,7 @@ export interface ResearchIndexItemApi {
   fields: string[];
   artifactTypes: string[];
   authors: string[];
+  thumbnail?: { url: string; label: string } | null;
 }
 
 export interface ResearchIndexPageApi {

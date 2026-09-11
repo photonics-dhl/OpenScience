@@ -16,6 +16,7 @@ export interface ResearchIndexItem {
   fields: SdfNodeType[];
   artifactTypes: ExploreArtifactType[];
   authors: string[];
+  thumbnail: { url: string; label: string } | null;
 }
 
 export interface ResearchIndexPage {
@@ -48,17 +49,24 @@ export async function listPublicResearchIndex(
     where: {
       visibility: 'public',
       status: { not: 'archived' },
-      publicId: { not: null, ...(cursor ? { gt: cursor } : {}) },
+      publicId: { not: null, ...(cursor ? { lt: cursor } : {}) },
       versions: { some: { status: 'published', publications: { some: {} } } },
     },
     include: {
       versions: {
         where: { status: 'published', publications: { some: {} } }, orderBy: { versionNo: 'desc' }, take: 1,
-        include: { manifest: { include: { entries: true } }, publications: true },
+        include: {
+          manifest: { include: { entries: true } }, publications: true,
+          presentationAssets: {
+            where: { status: 'approved', kind: { in: ['image', 'chart'] } },
+            select: { id: true, label: true },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 1,
+          },
+        },
       },
       authors: { orderBy: { sortOrder: 'asc' }, include: { user: { select: { displayName: true } } } },
     },
-    orderBy: { publicId: 'asc' },
+    orderBy: { publicId: 'desc' },
     take: 100,
   });
   // Evaluate all content filters against the same latest published snapshot that
@@ -91,7 +99,7 @@ export async function listPublicResearchIndex(
     return {
       publicId: row.publicId!,
       title: row.title,
-      url: `/research/${row.publicId}`,
+      url: `/research/${row.publicId}/v/${version.versionNo}`,
       latestVersion: version.versionNo,
       publishedAt: version.publications[0]?.publishedAt.toISOString() ?? null,
       updatedAt: row.updatedAt.toISOString(),
@@ -99,6 +107,10 @@ export async function listPublicResearchIndex(
       fields: [...fields],
       artifactTypes,
       authors: row.authors.map((author) => author.user.displayName),
+      thumbnail: version.presentationAssets[0] ? {
+        url: `/api/research/${row.publicId}/v/${version.versionNo}/presentation-assets/${version.presentationAssets[0].id}`,
+        label: version.presentationAssets[0].label,
+      } : null,
     };
   });
   return { items, nextCursor: hasMore ? items.at(-1)?.publicId ?? null : null };

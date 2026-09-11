@@ -13,7 +13,7 @@ import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
 import { ObjectHeader } from '../../../../components/research/ObjectHeader';
 import { HermesAnchor } from '../../../../components/hermes/HermesAnchor';
 import { HermesAssistantDrawer } from '../../../../components/hermes/HermesAssistantDrawer';
-import { HermesDraftDiff, type HermesDraftTarget } from '../../../../components/hermes/HermesDraftDiff';
+import { type HermesDraftTarget } from '../../../../components/hermes/HermesDraftDiff';
 import { HermesExtractionEvidence } from '../../../../components/hermes/HermesExtractionEvidence';
 import type { HermesGuideSuggestion } from '../../../../components/hermes/hermes-guide';
 import { useOptionalHermesWorkspaceStage } from '../../../../components/hermes/HermesWorkspaceStage';
@@ -955,89 +955,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     router.push(`/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versionId)}`);
   }
 
-  const fieldForTarget: Record<HermesDraftTarget, FieldKey> = {
-    'sdf-problem': 'problem',
-    'sdf-insight': 'insight',
-    'sdf-method': 'method',
-    'sdf-evidence': 'reproducibility',
-    'sdf-results': 'results',
-    'sdf-limitations': 'limitations',
-  };
-  const revealDiff = (target: HermesDraftTarget) => {
-    setActiveField(fieldForTarget[target]);
-    document.querySelector('[data-hermes-anchor="hermes-diff"]')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  };
-
-  if (!editorLoaded) return <EditorLayout objectId={roId} outline={null} aside={null} workflow={<div className="h-16" aria-hidden="true" />} main={<div className="py-8"><p role={errorMsg ? 'alert' : 'status'} className="text-sm leading-6 text-os-muted-paper">{errorMsg || tw('loadingVersion')}</p>{errorMsg && <Link className="mt-4 inline-flex min-h-11 items-center text-sm underline" href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>}</div>} />;
-
-  return (
-    <EditorLayout
-        objectId={roId}
-        workspaceClassName={`editor-workspace research-product ${styles.workbenchShell}`}
-        workflow={<div className={styles.workbenchNav}>
-          <span className={styles.navContext}>{tw('navigation')}</span>
-          <span className={styles.navSpacer} />
-          <Link className={styles.detailsLink} href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
-        </div>}
-        header={
-          <ObjectHeader
-            objectId={roId}
-            saveState={serverSaveState === 'saving' ? 'saving' : serverSaveState === 'error' && state.dirty ? 'error' : state.dirty ? 'dirty' : 'saved'}
-            title={objectMeta.title}
-            version={state.version}
-            visibility={objectMeta.visibility}
-          />
-        }
-        outline={null}
-        main={
-          <div className={styles.document}>
-            <section className={styles.leadSection} aria-label={tw('contribution')}>
-              <p className={styles.contribution}>{state.core.insight || state.core.results || state.core.problem || tw('contributionPlaceholder')}</p>
-              {draftPrompt && (
-              <div className={styles.notice}>
-                <span>{t('draftFound')}</span>
-                <button className={styles.secondaryButton} onClick={restoreDraft}>{t('restoreDraft')}</button>
-                <button className={styles.secondaryButton} onClick={discardDraft}>{t('discardDraft')}</button>
-              </div>
-              )}
-              {errorMsg && (
-              <div className={styles.errorNotice} role="alert">
-                <span>{errorMsg}</span>
-                <button className={styles.secondaryButton} onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
-              </div>
-              )}
-            </section>
-
-            <section className={styles.productSection} id="workbench-media" data-workbench-section="media">
-              <header className={styles.productSectionHeader}><h2>{tw('media')}</h2></header>
-              {versions.length > 0 && !snapshotReady ? <p className={styles.lockedMessage} role="status">{tw('loadingVersion')}</p> : null}
-              {versions[0] && snapshotReady ? <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} /> : null}
-              {versions.length === 0 ? <div className={styles.mediaFallbackGrid}>
-                <div><h3>{tw('coreImage')}</h3><p>{tw('mediaNeedsVersion')}</p></div>
-                <div><h3>{tw('researchVideo')}</h3><p>{tw('mediaNeedsVersion')}</p></div>
-              </div> : null}
-            </section>
-
-            <section className={styles.contentSection} id="workbench-content" data-workbench-section="content">
-
-            {!ingestionReviewActive ? <CoreEditor sourceHref={versions[0] ? `/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versions[0].versionId)}#version-evidence` : undefined} core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} /> : null}
-
-            <details className={styles.disclosure}>
-              <summary><span>{t('artifacts')}</span><small>{tw('confirmedSources')}</small></summary>
-              <div className={styles.disclosureBody}>
-                <ArtifactUploader workspaceId={workspaceId} researchObjectId={roId} artifacts={artifacts} onArtifactsChange={setArtifacts} onIngestionStarted={(task) => {
-                  setIngestionTasks((current) => [...current.filter((candidate) => candidate.id !== task.id), { ...task, confirmation: null }]);
-                  setSelectedIngestionTaskId(task.id);
-                  router.replace(`/research-objects/${encodeURIComponent(roId)}/edit?ingestionTask=${encodeURIComponent(task.id)}`);
-                }} />
-                {!ingestionReviewActive ? <HermesDraftDiff
-                  disabled={extracting}
-                  onCheck={revealDiff}
-                  onDraft={(target) => { revealDiff(target); void handleExtract(); }}
-                /> : null}
-              </div>
-            </details>
-            {ingestionTasks.length > 0 ? (<details className={styles.disclosure} open={ingestionReviewActive || ingestionTasks.some((task) => !task.confirmation) || undefined}>
+  const sourceReviewPanel = ingestionTasks.length > 0 ? (<details className={ingestionReviewActive ? styles.activeReview : styles.subDisclosure} open={ingestionReviewActive || undefined}>
               <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-os-vermilion-ink">{tw('sourceReview')}</summary>
               <section className="mb-6 border-y border-os-rule-paper bg-white px-4 py-5 text-os-ink" aria-labelledby="ingestion-proposal-heading">
                 <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1093,9 +1011,80 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                   </div>
                 ) : null}
               </section></details>
-            ) : null}
-            {!ingestionReviewActive ? <details className={styles.disclosure}>
-              <summary><span>{tw('analysisSuggestions')}</span><small>{t('suggestions')}</small></summary>
+            ) : null;
+
+  if (!editorLoaded) return <EditorLayout objectId={roId} outline={null} aside={null} workflow={<div className="h-16" aria-hidden="true" />} main={<div className="py-8"><p role={errorMsg ? 'alert' : 'status'} className="text-sm leading-6 text-os-muted-paper">{errorMsg || tw('loadingVersion')}</p>{errorMsg && <Link className="mt-4 inline-flex min-h-11 items-center text-sm underline" href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>}</div>} />;
+
+  return (
+    <EditorLayout
+        objectId={roId}
+        workspaceClassName={`editor-workspace research-product ${styles.workbenchShell}`}
+        workflow={<div className={styles.workbenchNav}>
+          <span className={styles.navContext}>{tw('navigation')}</span>
+          <span className={styles.navSpacer} />
+          <Link className={styles.detailsLink} href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
+        </div>}
+        header={
+          <ObjectHeader
+            objectId={roId}
+            saveState={serverSaveState === 'saving' ? 'saving' : serverSaveState === 'error' && state.dirty ? 'error' : state.dirty ? 'dirty' : 'saved'}
+            title={objectMeta.title}
+            version={state.version}
+            visibility={objectMeta.visibility}
+          />
+        }
+        outline={null}
+        main={
+          <div className={styles.document}>
+            <section className={styles.leadSection} aria-label={tw('contribution')}>
+              <p className={styles.contribution}>{state.core.insight || state.core.results || state.core.problem || tw('contributionPlaceholder')}</p>
+              {draftPrompt && (
+              <div className={styles.notice}>
+                <span>{t('draftFound')}</span>
+                <button className={styles.secondaryButton} onClick={restoreDraft}>{t('restoreDraft')}</button>
+                <button className={styles.secondaryButton} onClick={discardDraft}>{t('discardDraft')}</button>
+              </div>
+              )}
+              {errorMsg && (
+              <div className={styles.errorNotice} role="alert">
+                <span>{errorMsg}</span>
+                <button className={styles.secondaryButton} onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
+              </div>
+              )}
+            </section>
+
+            <section className={styles.productSection} id="workbench-media" data-workbench-section="media">
+              <header className={styles.productSectionHeader}><h2>{tw('media')}</h2></header>
+              {versions.length > 0 && !snapshotReady ? <p className={styles.lockedMessage} role="status">{tw('loadingVersion')}</p> : null}
+              {versions[0] && snapshotReady ? <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} /> : null}
+              {versions.length === 0 ? <div className={styles.mediaFallbackGrid}>
+                <div><h3>{tw('coreImage')}</h3><p>{tw('mediaNeedsVersion')}</p></div>
+                <div><h3>{tw('researchVideo')}</h3><p>{tw('mediaNeedsVersion')}</p></div>
+              </div> : null}
+            </section>
+
+            <section className={styles.contentSection} id="workbench-content" data-workbench-section="content">
+
+            {ingestionReviewActive ? sourceReviewPanel : null}
+            {!ingestionReviewActive ? <CoreEditor sourceHref={versions[0] ? `/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versions[0].versionId)}#version-evidence` : undefined} core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} /> : null}
+
+            <details className={styles.disclosure}>
+              <summary>{tw('supportingMaterials')}</summary>
+              <div className={styles.supportingBody}>
+            <details className={styles.subDisclosure}>
+              <summary><span>{t('artifacts')}</span><small>{artifacts.length}</small></summary>
+              <div className={styles.disclosureBody}>
+                <ArtifactUploader workspaceId={workspaceId} researchObjectId={roId} artifacts={artifacts} onArtifactsChange={setArtifacts} onIngestionStarted={(task) => {
+                  setIngestionTasks((current) => [...current.filter((candidate) => candidate.id !== task.id), { ...task, confirmation: null }]);
+                  setSelectedIngestionTaskId(task.id);
+                  router.replace(`/research-objects/${encodeURIComponent(roId)}/edit?ingestionTask=${encodeURIComponent(task.id)}`);
+                }} />
+
+              </div>
+            </details>
+            {!ingestionReviewActive ? sourceReviewPanel : null}
+            {!ingestionReviewActive && (extracting || extractError || missingFields.length > 0 || suggestions.some((suggestion) => suggestion.status === 'pending')) ? <details className={styles.subDisclosure}>
+              <summary><span>{tw('pendingSuggestions')}</span></summary>
               <div className={styles.disclosureBody}>
                 <HermesAnchor id="hermes-diff" sides={HERMES_DIFF_SIDES}>
                   <SuggestionsPanel
@@ -1117,8 +1106,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               </div>
             </details> : null}
 
-            <details className={styles.disclosure}>
-              <summary><span>{t('versions')}</span><small>{versions.length ? t('draftRevision', { version: state.version }) : tw('loadingVersion')}</small></summary>
+            <details className={styles.subDisclosure}>
+              <summary><span>{tw('versionRecord')}</span></summary>
               <div className={styles.versionList}>
                 {versions.slice(0, 8).map((version) => (
                   <button key={version.versionId} onClick={() => handleVersionSelect(version.versionId)} type="button">
@@ -1129,6 +1118,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               </div>
             </details>
 
+              </div>
+            </details>
             </section>
           </div>
         }

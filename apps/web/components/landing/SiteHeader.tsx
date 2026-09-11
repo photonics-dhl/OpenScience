@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 
+import { useSession } from '@/components/auth/SessionProvider';
 import { cn } from '@/lib/utils';
 
 interface SiteHeaderProps {
@@ -13,6 +14,11 @@ interface SiteHeaderProps {
 
 export default function SiteHeader({ active, context = 'landing', tone = 'dark' }: SiteHeaderProps) {
   const t = useTranslations('landing');
+  const accountT = useTranslations('myAccount');
+  const { status, user } = useSession();
+  const authenticatedUser = status === 'authenticated' ? user : null;
+  const accountHref = authenticatedUser ? (context === 'landing' ? '/dashboard' : '/me') : status === 'anonymous' ? '/auth/login' : '/dashboard';
+  const accountLabel = authenticatedUser ? (context === 'landing' ? t('nav.desk') : authenticatedUser.displayName) : status === 'anonymous' ? t('nav.login') : t('nav.desk');
   const linkClassName = cn(
     'inline-flex items-center px-2 text-sm no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:px-3',
     context === 'landing' ? 'min-h-10 max-[359px]:hidden' : 'min-h-11',
@@ -33,7 +39,8 @@ export default function SiteHeader({ active, context = 'landing', tone = 'dark' 
       <Link data-reading-role="control" href="/research-objects/new" className={linkClassName}>{t('nav.create')}</Link>
       <Link
         data-reading-role="control"
-        href="/auth/login"
+        href={accountHref}
+        aria-label={authenticatedUser && context === 'public-product' ? accountT('accountLink', { name: authenticatedUser.displayName }) : undefined}
         className={cn(
           'inline-flex items-center rounded-panel border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:px-4',
           context === 'landing' ? 'min-h-10' : 'min-h-11',
@@ -42,7 +49,7 @@ export default function SiteHeader({ active, context = 'landing', tone = 'dark' 
             : 'border-os-rule-paper text-os-ink hover:border-os-ink',
         )}
       >
-        {t('nav.login')}
+        {accountLabel}
       </Link>
     </div>
   );

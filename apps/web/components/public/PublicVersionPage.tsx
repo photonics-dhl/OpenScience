@@ -1,5 +1,6 @@
 'use client';
 import * as React from 'react';
+import Link from 'next/link';
 import { getPublicEvidenceSource, getPublicResearchVersion, getReadingPreference, type PublicEvidence, type PublicEvidenceSource } from '../../lib/api';
 import { writeLocalEvidenceDefaultCollapsed } from '../../lib/evidence-reading-preference';
 import { LEGAL_DISCLAIMER_DEFAULT, LICENSE_NAMES } from '../../lib/constants';
@@ -242,14 +243,15 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
           <header className={`pub-reading-identity ${styles.identity}`} data-public-identity="true">
             <p className="pub-kicker">{t('researchObject')}</p>
             <h1>{research.title}</h1>
-            <p className={styles.sourceLine}>{research.publicId} · {version.publicVersionId}</p>
+            <p className={styles.sourceLine}>{version.publicVersionId}<span>{publishedAt}</span></p>
             <div className={`pub-author-line ${styles.authorLine}`}>
               {research.authors.map((author) => <span key={`${author.displayName}-${author.sortOrder}`} data-corresponding-author={author.isCorresponding ? 'true' : undefined}>
-                {author.displayName}{author.affiliation ? `, ${author.affiliation}` : ''} · {author.identityStatus}{author.isCorresponding ? ` · ${t('correspondingAuthor')}` : ''}
+                {author.displayName}{author.affiliation ? `, ${author.affiliation}` : ''}{author.isCorresponding ? ` · ${t('correspondingAuthor')}` : ''}
               </span>)}
             </div>
           </header>
 
+          <div className={styles.readingActions}><CopyButton text={research.citation} label={t('copyCitation')} /></div>
           <section className={`pub-reading-summary ${styles.contribution}`} aria-labelledby="public-summary-heading">
             <p id="public-summary-heading" className="whitespace-pre-wrap" data-reading-role="body">{version.core.insight || version.core.problem || t('none')}</p>
           </section>
@@ -267,6 +269,9 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
           </section>
 
           <PresentationAssetGallery assets={supplementaryMedia} />
+          <details className={styles.resources}>
+            <summary>{t('readingResources')}</summary>
+            <div className={styles.resourcesBody}>
           <details className="pub-reading-details">
             <summary>{t('claimReader.title')}</summary>
             <ClaimNarrative claims={research.claims} evidence={research.evidence} onInspect={inspectEvidence} />
@@ -292,7 +297,7 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
           {research.history.length > 0 && <details className="pub-reading-history pub-reading-details" data-public-version-history="true">
             <summary>{t('history.title')}</summary>
             <ol>{research.history.map((item) => <li key={item.publicVersionId}>
-              <a href={item.url}>{item.publicVersionId}</a>
+              <Link href={item.url}>{item.publicVersionId}</Link>
               <span>{item.publishedAt.slice(0, 10)} · {item.contentSha256.slice(0, 8)}…{item.contentSha256.slice(-8)}</span>
             </li>)}</ol>
           </details>}
@@ -301,6 +306,8 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             {research.artifactPaths.map((artifact) => <ProvenanceCaption key={`${artifact.logicalPath}-${artifact.blobSha256}`} label={artifact.logicalPath} value={`${artifact.blobSha256.slice(0, 8)}…${artifact.blobSha256.slice(-8)}`} landmark="provenance" />)}
           </details>}
           <details className="pub-disclaimer" data-print-landmark="provenance"><summary>{t('legalDisclaimer')}</summary><p>{disclaimer}</p></details>
+            </div>
+          </details>
         </article>
         {selectedEvidence && <div className="pub-reading-sidecar"><EvidenceRail evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} /></div>}
       </div>

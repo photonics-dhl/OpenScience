@@ -1,5 +1,11 @@
 # OpenScience 当前进度
 
+## 2026-09-11 — 产品体验改造候选待部署
+- 继续codex/onchip-video-release，生产实读378a9506/providerd1630135不变；准备本轮UI与会话修复release。
+- 实际使用项目apple-design/emil-design-eng与frontend-design；入口skill已加入每个UI目的、页面职责、真实缩略图和任务状态约束。Chat6Pro本轮完整产品规划已取回并采纳。
+- 候选：一个资料/修改入口、公开核心大图/可选视频短行、真实公开研究卡片、任务分组及可见页静默更新、Next站内导航和共享会话/Cookie续期。
+- Sol High独立会话/公开数据/归档风险复核已完成，已修漏接续期和迟到会话响应、缺失字段确认入口；无测试或本机运行。
+- 尚待服务器build/start、真实浏览及三条已识别Task/E2E记录可恢复归档；不将候选记为已部署。
 ## 2026-09-11 — 第一篇真实带图 RO 已公开
 - CURRENT：branch codex/onchip-video-release；worktree .worktrees/onchip-video-release。应用/code378a950697e3addd390c05a3dc29af0362328807已部署exit0，rollback9c5088ea；provider d1630135/rollback92cc416e，无新软件。后续docs-only提交不代表新release。
 - 公开成果：https://openscience.428312321.xyz/research/OSR-2026-000022/v/10 。v10=f4e2dc71，RO c896802c；已纠正旧v7误记。Hermes对话发布201，时间2026-09-11T14:39:38.371Z；匿名HTTP200，核心图片实际加载。

@@ -11,6 +11,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import type { Locale } from "../i18n/locale";
 import { HermesWorkspaceStageProvider } from "../components/hermes/HermesWorkspaceStage";
+import { SessionProvider } from "../components/auth/SessionProvider";
 import "./globals.css";
 
 // next/font downloads at image-build time and serves the files from our own origin.
@@ -85,7 +86,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           }}
         />
         <NextIntlClientProvider messages={messages}>
-          <HermesWorkspaceStageProvider>{children}</HermesWorkspaceStageProvider>
+          <SessionProvider>
+            <HermesWorkspaceStageProvider>{children}</HermesWorkspaceStageProvider>
+          </SessionProvider>
         </NextIntlClientProvider>
       </body>
     </html>

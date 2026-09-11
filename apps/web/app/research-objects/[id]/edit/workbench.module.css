@@ -125,9 +125,18 @@
 
 .disclosure {
   max-width: 840px;
-  margin: 20px auto 0;
+  margin: 32px auto 0;
   border-top: 1px solid #dce4e8;
 }
+
+.supportingBody { padding: 0 18px 12px; border: 1px solid #dce4e8; border-radius: 10px; background: #f9fbfc; }
+.subDisclosure { margin: 0; border-bottom: 1px solid #e5ebee; }
+.subDisclosure:last-child { border-bottom: 0; }
+.subDisclosure > summary { min-height: 46px; font-size: 14px; font-weight: 550; }
+.subDisclosure .disclosureBody { padding: 4px 0 18px; }
+.activeReview { margin: 0 auto 28px; max-width: 840px; }
+.activeReview > summary { min-height: 44px; color: #126a70; font-size: 16px; font-weight: 650; cursor: pointer; }
+.activeReview > section { margin-bottom: 0; border-radius: 10px; }
 
 .disclosure summary {
   display: flex;

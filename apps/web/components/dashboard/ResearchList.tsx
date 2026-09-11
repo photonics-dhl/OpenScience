@@ -72,7 +72,7 @@ export function ResearchList({ researchObjects }: ResearchListProps) {
                     {research.title}
                   </span>
                   <span data-reading-role="caption" className="mt-1 block font-data text-os-muted-paper">
-                    {t('research.version', { version: research.versionNo })}
+                    {t('research.draftRevision', { version: research.versionNo })}
                   </span>
                 </span>
                 <span data-reading-role="caption" className="font-data text-os-muted-paper">

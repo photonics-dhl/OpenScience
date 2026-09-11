@@ -50,7 +50,7 @@
     "approvePlan": "Approve this plan for production",
     "planReadyTitle": "Review the illustration plan",
     "planReadyBody": "Hermes has prepared an illustration plan below. Review it, request changes if needed, then approve it and generate the image.",
-    "sourceReview": "Source analysis and confirmation history",
+    "sourceReview": "Paper analysis history",
     "confirmedSources": "Edit confirmed content in the editor or with Hermes. Select a source below only when you need to revisit its analysis.",
     "loadingVersion": "Reading the confirmed version…",
     "coeditTitle": "Write with Hermes",
@@ -89,7 +89,10 @@
     "previewPublish": "Preview and publish",
     "imageCount": "{count} illustrations",
     "coreImageFirst": "Start with one core illustration. Add more when useful; reviewed content and images can be published first.",
-    "coreImageInstruction": "Understand the paper and plan one core scientific illustration explaining its central mechanism or finding. Select genuinely relevant claims, without a fixed six-image template. Additional illustrations are optional."
+    "coreImageInstruction": "Understand the paper and plan one core scientific illustration explaining its central mechanism or finding. Select genuinely relevant claims, without a fixed six-image template. Additional illustrations are optional.",
+    "supportingMaterials": "Materials and revision history",
+    "pendingSuggestions": "Changes awaiting review",
+    "versionRecord": "Version history"
   },
   "versionRecord": {
     "export": "Export fixed record",
@@ -462,7 +465,7 @@
     "correspondingAuthor": "Corresponding author",
     "contributions": "Contributions",
     "abstract": "Abstract",
-    "coreFields": "Core fields",
+    "coreFields": "Research at a glance",
     "problem": "Research question",
     "insight": "Core insight",
     "method": "Method",
@@ -581,7 +584,8 @@
       "pull-requests": "Pull Requests",
       "reviews": "Reviews & Discussions",
       "citations": "Citations & Related Work"
-    }
+    },
+    "readingResources": "Sources, citation and version history"
   },
   "landing": {
     "nav": {
@@ -798,8 +802,8 @@
   },
   "dashboard": {
     "eyebrow": "Personal workspace",
-    "title": "Research dashboard",
-    "welcome": "{name}, continue from your latest research context or begin a new research object.",
+    "title": "Research desk",
+    "welcome": "{name}, continue your current research or work out the next step with Hermes.",
     "loading": "Restoring your research context…",
     "context": {
       "navigation": "Dashboard utilities",
@@ -811,16 +815,22 @@
       "title": "Continue research",
       "emptyTitle": "Import your first research material",
       "emptyBody": "Hermes preserves source evidence before proposing SDF fields for your confirmation.",
-      "open": "Continue research",
+      "open": "Continue editing",
       "version": "Version {version}",
-      "pending": "{count} items need attention"
+      "pending": "{count} items need attention",
+      "draftRevision": "Draft revision {version}",
+      "needsAttention": "{count} need your attention",
+      "background": "Hermes is working in the background",
+      "review": "Review this material",
+      "recover": "See what needs attention",
+      "progress": "View processing progress"
     },
     "import": {
-      "eyebrow": "New research context",
-      "title": "Start a research object",
-      "description": "Bring existing material or begin with a blank structured object.",
-      "upload": "Upload materials",
-      "blank": "Create blank RO"
+      "eyebrow": "Start new research",
+      "title": "Add a paper or research material",
+      "description": "Upload a PDF or other material for Hermes to organise, or begin from a blank record.",
+      "upload": "Upload PDF or material",
+      "blank": "Start from blank"
     },
     "literature": {
       "eyebrow": "Personal literature",
@@ -851,10 +861,10 @@
       "expires": "Available until {expiresAt}",
       "retry": "Try again",
       "noResults": "No matching metadata yet.",
-      "error": "The source request could not be completed. Please try again."
-      ,"pendingIntent": "Finish or recover the current source request before starting another."
-      ,"reconnecting": "Reconnecting to the task…"
-      ,"recoveryError": "The task could no longer be recovered. You can start a new source request."
+      "error": "The source request could not be completed. Please try again.",
+      "pendingIntent": "Finish or recover the current source request before starting another.",
+      "reconnecting": "Reconnecting to the task…",
+      "recoveryError": "The task could no longer be recovered. You can start a new source request."
     },
     "hermes": {
       "title": "Hermes tasks",
@@ -864,8 +874,24 @@
       "retry": "Retry task",
       "view": "View progress",
       "progress": "{current} of {total} fields",
-      "states": { "idle": "Ready", "guiding": "Guiding", "scanning": "Reading", "suggesting": "Suggestion ready", "awaiting_approval": "Awaiting confirmation", "failed": "Needs attention" },
-      "taskStates": { "queued": "Queued", "uploading": "Uploading", "parsing": "Parsing", "stored": "Prepared", "needsReview": "Needs review", "failedRetryable": "Retry available", "failedBlocked": "Blocked" },
+      "states": {
+        "idle": "Ready",
+        "guiding": "Guiding",
+        "scanning": "Reading",
+        "suggesting": "Suggestion ready",
+        "awaiting_approval": "Awaiting confirmation",
+        "failed": "Needs attention"
+      },
+      "taskStates": {
+        "queued": "Queued",
+        "uploading": "Uploading",
+        "parsing": "Parsing",
+        "stored": "Prepared",
+        "needsReview": "Needs review",
+        "failedRetryable": "Retry available",
+        "failedBlocked": "Blocked",
+        "working": "In progress"
+      },
       "showMore": "Show {count} more tasks",
       "showLess": "Show fewer tasks",
       "guide": {
@@ -873,54 +899,162 @@
         "presentationSuggestionLabel": "Storyboard brief generated by Hermes",
         "usePresentationSuggestion": "Use in the editable storyboard",
         "browserSessionDraft": "This draft is kept in this browser session and separated by account, research object, and version.",
-        "actionable": { "title": "A research task can move forward", "body": "I can start with the highest-priority task and help determine the next step." },
-        "review": { "title": "Evidence needs your review", "body": "The current task is explicitly marked for review. We can begin by checking the evidence." },
-        "failed": { "title": "A task needs investigation", "body": "The current task did not complete. I can explain the failure and suggest a safe recovery path." },
-        "processing": { "title": "Hermes is organising the material", "body": "The current task is still processing. I can explain its progress and prepare the checks that follow." },
-        "queued": { "title": "A research task is queued", "body": "The task has not started yet. I can help organise the research steps that come next." },
-        "continue": { "title": "Continue your latest research", "body": "I can organise the next step around this research object without changing anything you have not approved." },
-        "neutral": { "title": "What would you like to advance today?", "body": "I will understand the goal first, then propose a verifiable and actionable research path." },
-      "invoke": "Invoke Hermes",
-      "invokeTask": "Open {task}",
-      "eyebrow": "Hermes / contextual guide",
-      "menu": {
-        "trigger": "Hermes: click for the assistant; right-click or long-press for actions",
-        "label": "Hermes action menu",
-        "eyebrow": "Hermes · with you",
-        "title": "What shall we do?",
-        "evidence": "Inspect evidence and sources",
-        "evidenceNote": "Return to this research object's evidence ledger",
-        "explore": "Open the research index",
-        "exploreNote": "Continue through public research records",
-        "quiet": "Read quietly with me",
-        "quietNote": "Put reminders aside and stay in the margin",
-        "quietFeedback": "I’m here. Let’s think slowly.",
-        "companion": "Companion",
-        "groups": { "companion": "With Hermes", "research": "Research tools" },
-        "intro": {
-          "presence": "I’m here. I’ve kept your place.",
-          "actionable": "There is evidence ready for your review.",
-          "continue": "Your latest research is ready to continue.",
-          "neutral": "We can begin with whatever you want to understand."
+        "actionable": {
+          "title": "A research task can move forward",
+          "body": "I can start with the highest-priority task and help determine the next step."
         },
-        "actions": {
-          "greet": { "label": "Say hello", "feedback": { "one": "Hello — I’m right here.", "two": "There you are. I kept your place.", "three": "Hi. What are we curious about today?" } },
-          "encourage": { "label": "Encourage me", "feedback": { "one": "You’ve come this far. Let’s take one more step.", "two": "The difficult part is moving. So are you.", "three": "One careful step is still progress." } },
-          "think": { "label": "Think together", "feedback": { "one": "Let’s pause and sort the clues together.", "two": "Give me a moment — these pieces do connect.", "three": "Let’s hold the question still and look again." } },
-          "listen": { "label": "Listen to me", "feedback": { "one": "I’m listening. Take your time.", "two": "Go on. I’m following the thread.", "three": "Tell me the part that still feels unresolved." } },
-          "stretch": { "label": "Take a stretch", "feedback": { "one": "Stretch with me — let your shoulders soften.", "two": "Up we go. Give your back a little room.", "three": "A small stretch, then we return with fresh eyes." } },
-          "rest": { "label": "Rest a moment", "feedback": { "one": "Rest a moment. I’ll keep your place.", "two": "We can be quiet. Nothing here will run away.", "three": "Close your eyes for a breath; I’ll watch the page." } },
-          "celebrate": { "label": "Mark this step", "feedback": { "one": "This step is done. Let’s celebrate it.", "two": "That deserves a proper little victory.", "three": "We moved the work forward — mark this moment." } },
-          "read-together": { "label": "Read with me", "feedback": { "one": "We’re here. I’ll read the next passage with you.", "two": "Let’s follow this paragraph one claim at a time.", "three": "I’ll stay with the text; you set the pace." } },
-          "continue": { "label": "Continue this step", "feedback": { "one": "Back to our last step — let’s continue.", "two": "I found our place. We can carry on from here.", "three": "The next step is ready when you are." } },
-          "evidence": { "label": "Review evidence", "feedback": { "one": "Hold this conclusion — let’s check its evidence.", "two": "Let’s see which source actually supports this claim.", "three": "Evidence first. Then we decide what the result means." } },
-          "sources": { "label": "Trace sources", "feedback": { "one": "Let’s trace the citation back to its source.", "two": "I’ll follow the reference trail with you.", "three": "Let’s find where this claim first entered the record." } },
-          "compare": { "label": "Compare versions", "feedback": { "one": "Let’s place the versions side by side and inspect the differences.", "two": "I’ll line up the changes so nothing slips past us.", "three": "Same research, two moments — let’s see what changed." } }
+        "review": {
+          "title": "Evidence needs your review",
+          "body": "The current task is explicitly marked for review. We can begin by checking the evidence."
         },
-        "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
-        "mobileHint": "Long-press Hermes to open · tap still enters the assistant"
-      },
-      "dialogLabel": "Hermes research guide",
+        "failed": {
+          "title": "A task needs investigation",
+          "body": "The current task did not complete. I can explain the failure and suggest a safe recovery path."
+        },
+        "processing": {
+          "title": "Hermes is organising the material",
+          "body": "The current task is still processing. I can explain its progress and prepare the checks that follow."
+        },
+        "queued": {
+          "title": "A research task is queued",
+          "body": "The task has not started yet. I can help organise the research steps that come next."
+        },
+        "continue": {
+          "title": "Continue your latest research",
+          "body": "I can organise the next step around this research object without changing anything you have not approved."
+        },
+        "neutral": {
+          "title": "What would you like to advance today?",
+          "body": "I will understand the goal first, then propose a verifiable and actionable research path."
+        },
+        "invoke": "Invoke Hermes",
+        "invokeTask": "Open {task}",
+        "eyebrow": "Hermes / contextual guide",
+        "menu": {
+          "trigger": "Hermes: click for the assistant; right-click or long-press for actions",
+          "label": "Hermes action menu",
+          "eyebrow": "Hermes · with you",
+          "title": "What shall we do?",
+          "evidence": "Inspect evidence and sources",
+          "evidenceNote": "Return to this research object's evidence ledger",
+          "explore": "Open the research index",
+          "exploreNote": "Continue through public research records",
+          "quiet": "Read quietly with me",
+          "quietNote": "Put reminders aside and stay in the margin",
+          "quietFeedback": "I’m here. Let’s think slowly.",
+          "companion": "Companion",
+          "groups": {
+            "companion": "With Hermes",
+            "research": "Research tools"
+          },
+          "intro": {
+            "presence": "I’m here. I’ve kept your place.",
+            "actionable": "There is evidence ready for your review.",
+            "continue": "Your latest research is ready to continue.",
+            "neutral": "We can begin with whatever you want to understand."
+          },
+          "actions": {
+            "greet": {
+              "label": "Say hello",
+              "feedback": {
+                "one": "Hello — I’m right here.",
+                "two": "There you are. I kept your place.",
+                "three": "Hi. What are we curious about today?"
+              }
+            },
+            "encourage": {
+              "label": "Encourage me",
+              "feedback": {
+                "one": "You’ve come this far. Let’s take one more step.",
+                "two": "The difficult part is moving. So are you.",
+                "three": "One careful step is still progress."
+              }
+            },
+            "think": {
+              "label": "Think together",
+              "feedback": {
+                "one": "Let’s pause and sort the clues together.",
+                "two": "Give me a moment — these pieces do connect.",
+                "three": "Let’s hold the question still and look again."
+              }
+            },
+            "listen": {
+              "label": "Listen to me",
+              "feedback": {
+                "one": "I’m listening. Take your time.",
+                "two": "Go on. I’m following the thread.",
+                "three": "Tell me the part that still feels unresolved."
+              }
+            },
+            "stretch": {
+              "label": "Take a stretch",
+              "feedback": {
+                "one": "Stretch with me — let your shoulders soften.",
+                "two": "Up we go. Give your back a little room.",
+                "three": "A small stretch, then we return with fresh eyes."
+              }
+            },
+            "rest": {
+              "label": "Rest a moment",
+              "feedback": {
+                "one": "Rest a moment. I’ll keep your place.",
+                "two": "We can be quiet. Nothing here will run away.",
+                "three": "Close your eyes for a breath; I’ll watch the page."
+              }
+            },
+            "celebrate": {
+              "label": "Mark this step",
+              "feedback": {
+                "one": "This step is done. Let’s celebrate it.",
+                "two": "That deserves a proper little victory.",
+                "three": "We moved the work forward — mark this moment."
+              }
+            },
+            "read-together": {
+              "label": "Read with me",
+              "feedback": {
+                "one": "We’re here. I’ll read the next passage with you.",
+                "two": "Let’s follow this paragraph one claim at a time.",
+                "three": "I’ll stay with the text; you set the pace."
+              }
+            },
+            "continue": {
+              "label": "Continue this step",
+              "feedback": {
+                "one": "Back to our last step — let’s continue.",
+                "two": "I found our place. We can carry on from here.",
+                "three": "The next step is ready when you are."
+              }
+            },
+            "evidence": {
+              "label": "Review evidence",
+              "feedback": {
+                "one": "Hold this conclusion — let’s check its evidence.",
+                "two": "Let’s see which source actually supports this claim.",
+                "three": "Evidence first. Then we decide what the result means."
+              }
+            },
+            "sources": {
+              "label": "Trace sources",
+              "feedback": {
+                "one": "Let’s trace the citation back to its source.",
+                "two": "I’ll follow the reference trail with you.",
+                "three": "Let’s find where this claim first entered the record."
+              }
+            },
+            "compare": {
+              "label": "Compare versions",
+              "feedback": {
+                "one": "Let’s place the versions side by side and inspect the differences.",
+                "two": "I’ll line up the changes so nothing slips past us.",
+                "three": "Same research, two moments — let’s see what changed."
+              }
+            }
+          },
+          "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
+          "mobileHint": "Long-press Hermes to open · tap still enters the assistant"
+        },
+        "dialogLabel": "Hermes research guide",
         "title": "Start with the goal. I will guide the route.",
         "close": "Close Hermes",
         "openContext": "Open current task",
@@ -928,12 +1062,22 @@
         "goalLabel": "What would you like to advance today?",
         "goalPlaceholder": "For example: organise the imported paper into a reusable RO structure",
         "submit": "Ask Hermes to plan",
-      "working": "Hermes is organising the evidence…",
-      "progress": "Task progress {progress}%",
-      "resume": "Resume this task",
-      "result": "Suggested research path",
-      "needsMoreInformation": "I need a little more context before I can offer reliable guidance.",
-      "error": "Hermes could not complete this plan. Your goal is preserved so you can retry."
+        "working": "Hermes is organising the evidence…",
+        "progress": "Task progress {progress}%",
+        "resume": "Resume this task",
+        "result": "Suggested research path",
+        "needsMoreInformation": "I need a little more context before I can offer reliable guidance.",
+        "error": "Hermes could not complete this plan. Your goal is preserved so you can retry."
+      },
+      "conversation": {
+        "label": "Talk with Hermes"
+      },
+      "activity": {
+        "eyebrow": "Current research status",
+        "title": "Research progress",
+        "attention": "Needs your attention",
+        "background": "Running in the background",
+        "history": "Earlier records ({count})"
       }
     },
     "research": {
@@ -949,7 +1093,8 @@
         "published": "Published",
         "revised": "Revised",
         "archived": "Archived"
-      }
+      },
+      "draftRevision": "Draft revision {version}"
     },
     "errors": {
       "kicker": "System / interrupted",
@@ -1156,24 +1301,46 @@
   },
   "explore": {
     "eyebrow": "Public research index",
-    "title": "Research worth inspecting.",
-    "description": "Verified public Research Objects will appear here with their evidence, SDF structure, versions, licenses, and review history intact.",
+    "title": "Discover research. Understand its contribution.",
+    "description": "Start with the concept image and key findings, then explore the methods and original sources.",
     "empty": "No public Research Objects match this index view.",
     "create": "Create a Research Object",
     "indexLabel": "Published Research Object index",
-    "search": "Search title or SDF evidence",
-    "field": "SDF field",
-    "artifactType": "Artifact type",
-    "allFields": "All SDF fields",
-    "allArtifacts": "All artifacts",
+    "search": "Search research titles or content",
+    "field": "Content",
+    "artifactType": "Material type",
+    "allFields": "All content",
+    "allArtifacts": "All materials",
     "apply": "Apply filters",
     "loading": "Reading the public index…",
     "error": "The public index could not be loaded.",
     "loadMore": "Continue index",
     "unknownAuthor": "Author record pending",
     "noArtifacts": "No artifacts",
-    "fields": { "problem": "Problem", "insight": "Insight", "method": "Method", "results": "Results", "limitations": "Limitations", "reproducibility": "Reproducibility" },
-    "artifacts": { "document": "Documents", "image": "Images", "data": "Data", "code": "Code", "video": "Video", "other": "Other" }
+    "fields": {
+      "problem": "Problem",
+      "insight": "Insight",
+      "method": "Method",
+      "results": "Results",
+      "limitations": "Limitations",
+      "reproducibility": "Reproducibility"
+    },
+    "artifacts": {
+      "document": "Documents",
+      "image": "Images",
+      "data": "Data",
+      "code": "Code",
+      "video": "Video",
+      "other": "Other"
+    },
+    "searchAction": "Search",
+    "refineSearch": "Refine search",
+    "recentFirst": "Newly public research first · Latest published version of each study",
+    "imageFor": "Core concept image for {title}",
+    "readResearch": "Read research",
+    "recentTitle": "Recently shared research",
+    "recentDescription": "See the central idea, then explore the findings and their limits.",
+    "browseAll": "Explore all research"
   },
   "presentation": {
     "askHermes": "Ask Hermes to create",

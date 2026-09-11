@@ -5,6 +5,21 @@ description: "Use when building or modifying any UI page, component, or layout �
 
 # Frontend Design — 前端视觉与交互规范
 
+## 当前产品判断（2026-09-11）
+
+先回答每个可见模块：谁会在什么情境使用它，完成什么动作，为什么此刻需要看到它。不能回答的模块不放进主屏；旧实现不是不可更改的需求。
+
+- 研究桌面：继续当前研究、需要我处理、后台进行；失败保留具体恢复入口，同一资料的旧尝试进入历史，不能隐藏不同资料或并发任务。
+- 编辑器：贡献 → 图/视频 → 凝练正文；真实待确认结果在正文位置，确认后回到正文。原文预览、来源与版本记录收进一个次级入口，不常驻空建议面板。
+- 公开阅读：读者先理解研究贡献，核心图完整显示，视频可选；原文/引用/历史按需展开。不能把已公开说成同行评审通过，不能显示内部认证枚举或制作提示词。
+- 发现/首页：使用对应公开版本的已批准图片，完整缩略显示科学图，不裁掉标注。精选必须来自实际编辑选择；“最新公开”不能冒称精选。
+- 操作主要在 Hermes 对话内，正文可直接编辑；保留必要的明确公开授权与撤销，避免同一动作有多套面板。
+- 使用项目已安装的 [Apple Design](../apple-design/SKILL.md) 的目的/层级/即时反馈，以及 [Emil Design Engineering](../emil-design-eng/SKILL.md) 的相关动效原则。当前采用冷白、墨色、青绿、统一网格；普通UI响应约120–180ms，不用整页淡出、装饰延迟或大动画掩盖加载。
+
+成熟产品参考：[Apple HIG](https://developer.apple.com/design/human-interface-guidelines)、[Linear Inbox](https://linear.app/docs/inbox)、[Linear My Issues](https://linear.app/docs/my-issues)。借鉴信息层级与任务归类，结合本项目科学阅读目的；不得照搬项目管理软件的密集状态控件。
+
+以下旧清单中的三栏/固定审批仅在当前需求仍适用时采用；用户最新认可的连续成稿布局优先。运行验证遵循 AGENTS 的服务器与不测试约束。
+
 ## 当前产品设计优先规则（用户确认，2026-09-11）
 
 - 界面改动读取项目 `apple-design` / `emil-design-eng` 相关章节；HTML展示读取 `design-artifact` / `html-prototype`。保持已批准冷白、墨色、青绿。第三方规则不覆盖用户指令、科学真实性或项目权限。

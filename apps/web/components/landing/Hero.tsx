@@ -1,4 +1,5 @@
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 
 import { AcceptedOpticalSurface } from '@/components/optical-lab/AcceptedOpticalSurface';
 
@@ -46,12 +47,12 @@ export default function Hero({ locale }: HeroProps) {
             {t('hero.subtitle')}
           </p>
           <div className="grid gap-3 sm:grid-cols-2 sm:gap-8">
-            <a className="group inline-flex min-h-12 items-center justify-between gap-8 border-b border-os-vermilion pb-1 font-semibold text-os-paper no-underline transition-colors hover:text-os-vermilion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:col-start-2" data-hero-action="primary" href="/explore">
+            <Link className="group inline-flex min-h-12 items-center justify-between gap-8 border-b border-os-vermilion pb-1 font-semibold text-os-paper no-underline transition-colors hover:text-os-vermilion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:col-start-2" data-hero-action="primary" href="/explore">
               {t('hero.ctaExplore')} <span aria-hidden="true">→</span>
-            </a>
-            <a className="group inline-flex min-h-12 items-center justify-between gap-8 border-b border-os-rule-dark pb-1 font-semibold text-os-muted-dark no-underline transition-colors hover:border-os-paper hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:col-start-1 sm:row-start-1" data-hero-action="secondary" href="/research-objects/new">
+            </Link>
+            <Link className="group inline-flex min-h-12 items-center justify-between gap-8 border-b border-os-rule-dark pb-1 font-semibold text-os-muted-dark no-underline transition-colors hover:border-os-paper hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:col-start-1 sm:row-start-1" data-hero-action="secondary" href="/research-objects/new">
               {t('hero.ctaCreate')} <span aria-hidden="true">↗</span>
-            </a>
+            </Link>
           </div>
         </div>
 

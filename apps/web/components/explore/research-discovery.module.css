@@ -1,0 +1,37 @@
+.discovery { color: #1d2935; background: #f5f8fa; padding: clamp(28px, 5vw, 64px) 24px 72px; }
+.inner { width: min(100%, 1120px); margin-inline: auto; }
+.heading { display: flex; align-items: end; justify-content: space-between; gap: 32px; margin-bottom: 32px; }
+.eyebrow { margin: 0 0 10px; color: #126a70; font-size: 13px; font-weight: 650; letter-spacing: .06em; }
+.heading h1, .heading h2 { margin: 0; color: #1d2935; font: 650 clamp(28px, 4vw, 40px)/1.2 var(--font-ui), sans-serif; letter-spacing: -.025em; }
+.intro { max-width: 440px; margin: 12px 0 0; color: #596875; font-size: 15px; line-height: 1.7; }
+.allLink { flex-shrink: 0; color: #126a70; font-size: 14px; font-weight: 650; text-underline-offset: 4px; }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; list-style: none; margin: 28px 0 0; padding: 0; }
+.cards > li { min-width: 0; }
+.card { min-width: 0; height: 100%; border: 1px solid #dce4e8; border-radius: 14px; background: #fff; overflow: hidden; transition: border-color 150ms ease, box-shadow 150ms ease; }
+.cardLink { display: flex; flex-direction: column; height: 100%; color: inherit; text-decoration: none; }
+.cover { display: grid; aspect-ratio: 16 / 9; place-items: center; padding: 12px; border-bottom: 1px solid #edf1f3; background: #fff; }
+.cover img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.cardBody { display: flex; flex: 1; flex-direction: column; padding: 24px; }
+.meta { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; color: #6a7883; font-size: 12px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.card h2 { margin: 0; color: #1d2935; font: 650 24px/1.3 var(--font-ui), sans-serif; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.abstract { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; margin: 14px 0 0; color: #475764; font-size: 15px; line-height: 1.8; }
+.authors { margin: 16px 0 22px; color: #6a7883; font-size: 13px; line-height: 1.5; }
+.read { display: flex; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 16px; border-top: 1px solid #edf1f3; color: #126a70; font-size: 14px; font-weight: 650; }
+.prominent .cardLink { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: center; }
+.prominent .cover { border-bottom: 0; }
+.prominent .cardBody { padding: 32px; }
+.search { display: flex; gap: 10px; align-items: center; }
+.search input { width: 100%; min-width: 0; height: 46px; border: 1px solid #dce4e8; border-radius: 9px; padding: 0 14px; background: #fff; font: inherit; font-size: 15px; color: #1d2935; }
+.search button, .loadMore { min-height: 44px; border: 0; border-radius: 9px; padding: 10px 20px; background: #126a70; color: #fff; font: 650 14px/1.5 var(--font-ui), sans-serif; white-space: nowrap; }
+.filters { margin-top: 8px; color: #596875; font-size: 13px; }
+.filters summary { width: fit-content; min-height: 44px; padding-block: 12px; cursor: pointer; }
+.filterControls { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; }
+.filterControls label { display: grid; flex: 1; gap: 6px; min-width: 180px; }
+.filterControls select { min-height: 42px; border: 1px solid #dce4e8; border-radius: 8px; padding: 8px 12px; background: #fff; color: #1d2935; }
+.count { margin: 8px 0 0; color: #6a7883; font-size: 13px; }
+.feedback { margin: 20px 0; color: #596875; font-size: 15px; line-height: 1.7; }
+.loadMore { display: block; margin: 28px auto 0; }
+.cardLink:focus-visible, .search input:focus-visible, .search button:focus-visible, .filters summary:focus-visible, .filters select:focus-visible, .loadMore:focus-visible, .allLink:focus-visible { outline: 3px solid #80b7b6; outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .card:hover { border-color: #99b8bb; box-shadow: 0 8px 24px #233b4810; } .search button:hover, .loadMore:hover { background: #0d5960; } }
+@media (max-width: 700px) { .discovery { padding-inline: 18px; } .heading { display: block; } .allLink { display: inline-flex; margin-top: 16px; } .cards, .prominent .cardLink { grid-template-columns: minmax(0, 1fr); } .cardBody, .prominent .cardBody { padding: 20px; } .card h2 { font-size: 22px; } }
+@media (prefers-reduced-motion: reduce) { .card { transition: none; } }

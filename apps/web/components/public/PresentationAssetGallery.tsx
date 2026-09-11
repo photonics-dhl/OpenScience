@@ -20,7 +20,7 @@ export function PresentationAssetGallery({ assets, leading = false }: { assets: 
     const videoSlides = assets.filter((asset) => asset.kind === 'video').map((asset, index) => toSlide(asset, 'video', index === 0 ? t('videoTitle') : t('videoNumber', { number: index + 1 })));
     return <section className={`${styles.gallery} ${styles.leadingGallery}`} data-presentation-gallery="true" aria-label={t('title')}>
       <h2 className="sr-only">{t('title')}</h2>
-      <div className={styles.leadingMedia}>
+      <div className={styles.leadingMedia} data-has-video={videoSlides.length > 0}>
         <ResearchMediaDeck title={t('coreImageTitle')} slides={imageSlides} emptyTitle={t('imagePlaceholderTitle')} emptyBody={t('imagePlaceholderBody')} emptyKind="image" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} detailsLabel={t('sourceDetails')} eager />
         <ResearchMediaDeck title={t('videoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} detailsLabel={t('sourceDetails')} />
       </div>

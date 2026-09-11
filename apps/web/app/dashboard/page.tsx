@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import LocaleSwitcher from '@/components/LocaleSwitcher';
 import { AccountLink } from '@/components/navigation/AccountLink';
 import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
+import { HermesConversationCard } from '@/components/dashboard/HermesConversationCard';
 import { ImportStage } from '@/components/dashboard/ImportStage';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { ResearchList } from '@/components/dashboard/ResearchList';
@@ -17,7 +18,7 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { deriveHermesGuide } from '@/components/hermes/hermes-guide';
 import { deriveHermesCompositeVisualState } from '@/components/hermes/hermes-state';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, getCurrentUser, getDashboardOverview, listResearchIngestionTasks, listSourceRetrieveTasks, type AgentTaskView, type CurrentUser } from '@/lib/api';
+import { apiRequest, ApiClientError, getCurrentUser, getDashboardOverview, listResearchIngestionTasks, listSourceRetrieveTasks, type AgentTaskView, type CurrentUser, type DashboardResearchApi } from '@/lib/api';
 import type { DashboardResearch } from '@/components/dashboard/ResearchList';
 import type { Locale } from '@/i18n/locale';
 
@@ -30,6 +31,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [researchObjects, setResearchObjects] = useState<DashboardResearch[]>([]);
   const [tasks, setTasks] = useState<HermesRailTask[]>([]);
+  const [taskHistory, setTaskHistory] = useState<HermesRailTask[]>([]);
   const [error, setError] = useState('');
   const [hermesOpen, setHermesOpen] = useState(false);
   const [guideTask, setGuideTask] = useState<AgentTaskView | null>(null);
@@ -41,25 +43,85 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([getCurrentUser(), getDashboardOverview(), listSourceRetrieveTasks({ kind: 'personal' })])
-      .then(async ([currentUser, overview, retrieval]) => {
-        const latestId = overview.researchObjects[0]?.id;
-        const latestTasks = latestId ? (await listResearchIngestionTasks(latestId)).tasks : [];
-        const visibleTasks = latestId ? [...latestTasks, ...overview.tasks.filter((task) => task.researchObjectId !== latestId)] : overview.tasks;
+    let stopTaskRefresh: (() => void) | undefined;
+    void Promise.all([
+      getCurrentUser(),
+      apiRequest<{ researchObjects: DashboardResearchApi[] }>('/api/research-objects?limit=20'),
+    ])
+      .then(([currentUser, researchOverview]) => {
         if (!active) return;
+        let currentResearch = researchOverview.researchObjects;
+        let latestId = currentResearch[0]?.id;
+        let globalTasks: HermesRailTask[] = [];
+        let latestTasks: HermesRailTask[] = [];
+        let refreshTimer: number | undefined;
+        let refreshRunning = false;
+        const showAvailableTasks = () => {
+          if (!active) return;
+          const visibleTasks = latestId
+            ? [...latestTasks, ...globalTasks.filter((task) => task.researchObjectId !== latestId)]
+            : globalTasks;
+          applyDashboardTasks(currentResearch, visibleTasks, setResearchObjects, setTasks, setTaskHistory);
+        };
+        const hasBackgroundWork = () => [...latestTasks, ...globalTasks].some((task) => isBackgroundTask(task));
+        function scheduleRefresh() {
+          if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+          refreshTimer = undefined;
+          if (!active || document.visibilityState !== 'visible' || !hasBackgroundWork()) return;
+          refreshTimer = window.setTimeout(() => { void refreshTasks(); }, 30_000);
+        }
+        async function refreshTasks() {
+          if (!active || refreshRunning || document.visibilityState !== 'visible' || !hasBackgroundWork()) return;
+          refreshRunning = true;
+          try {
+            const overview = await getDashboardOverview();
+            if (!active) return;
+            currentResearch = overview.researchObjects;
+            globalTasks = overview.tasks;
+            latestId = currentResearch[0]?.id;
+            if (latestId) {
+              try {
+                latestTasks = (await listResearchIngestionTasks(latestId)).tasks;
+              } catch { /* The global task view still refreshes the visible desk. */ }
+            } else latestTasks = [];
+            showAvailableTasks();
+          } catch { /* Keep the current desk intact and retry on the next visible interval. */ }
+          finally {
+            refreshRunning = false;
+            scheduleRefresh();
+          }
+        }
+        function refreshWhenVisible() {
+          if (document.visibilityState === 'visible') void refreshTasks();
+          else if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+        }
+        window.addEventListener('focus', refreshWhenVisible);
+        document.addEventListener('visibilitychange', refreshWhenVisible);
+        stopTaskRefresh = () => {
+          if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+          window.removeEventListener('focus', refreshWhenVisible);
+          document.removeEventListener('visibilitychange', refreshWhenVisible);
+        };
         setUser(currentUser);
-        const mappedResearch = overview.researchObjects.map((research) => ({
-          id: research.id,
-          publicId: research.publicId ?? `DRAFT-${research.id.slice(0, 8)}`,
-          title: research.title,
-          versionNo: research.version,
-          status: research.status,
-          pendingCount: visibleTasks.filter((task) => task.researchObjectId === research.id).length,
-        }));
-        setResearchObjects(mappedResearch);
-        setTasks(visibleTasks);
-        setLiteratureTask(retrieval.tasks[0] ?? null);
-        setLiteratureRecovered(true);
+        applyDashboardTasks(currentResearch, [], setResearchObjects, setTasks, setTaskHistory);
+
+        void apiRequest<{ tasks: HermesRailTask[] }>('/api/ingestion?actionable=true')
+          .then(({ tasks: availableTasks }) => {
+            globalTasks = availableTasks;
+            showAvailableTasks();
+            scheduleRefresh();
+          })
+          .catch(() => undefined);
+
+        if (latestId) {
+          void listResearchIngestionTasks(latestId)
+            .then(({ tasks: availableTasks }) => {
+              latestTasks = availableTasks;
+              showAvailableTasks();
+              scheduleRefresh();
+            })
+            .catch(() => undefined);
+        }
       })
       .catch((cause) => {
         if (!active) return;
@@ -69,8 +131,22 @@ export default function DashboardPage() {
         }
         setError(cause instanceof Error ? cause.message : t('errors.load'));
       });
+
+    void listSourceRetrieveTasks({ kind: 'personal' })
+      .then((retrieval) => {
+        if (active) setLiteratureTask(retrieval.tasks[0] ?? null);
+      })
+      .catch((cause) => {
+        if (active && cause instanceof ApiClientError && cause.status === 401) {
+          router.replace('/auth/login?returnTo=%2Fdashboard');
+        }
+      })
+      .finally(() => {
+        if (active) setLiteratureRecovered(true);
+      });
     return () => {
       active = false;
+      stopTaskRefresh?.();
     };
   }, [router, t]);
 
@@ -147,8 +223,10 @@ export default function DashboardPage() {
           <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
         </div>
         <div className={styles.taskRail}>
-          <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={visualState} suggestion={suggestion} />
-          <HermesRail tasks={tasks} />
+          <HermesConversationCard>
+            <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={visualState} suggestion={suggestion} />
+          </HermesConversationCard>
+          <HermesRail historyTasks={taskHistory} tasks={tasks} />
         </div>
         <div className={styles.startResearch}>
           <ImportStage />
@@ -175,4 +253,51 @@ export default function DashboardPage() {
       />
     </DashboardShell>
   );
+}
+
+function needsUserAttention(task: HermesRailTask): boolean {
+  return task.state === 'needs_review' || task.state.startsWith('failed_');
+}
+
+function isBackgroundTask(task: HermesRailTask): boolean {
+  return ['queued', 'uploading', 'parsing', 'stored'].includes(task.state);
+}
+
+function applyDashboardTasks(
+  research: DashboardResearchApi[],
+  sourceTasks: HermesRailTask[],
+  setResearch: React.Dispatch<React.SetStateAction<DashboardResearch[]>>,
+  setCurrent: React.Dispatch<React.SetStateAction<HermesRailTask[]>>,
+  setHistory: React.Dispatch<React.SetStateAction<HermesRailTask[]>>,
+): void {
+  const taskPortfolio = organizeDashboardTasks(sourceTasks);
+  setResearch(research.map((item) => ({
+    id: item.id,
+    publicId: item.publicId ?? `DRAFT-${item.id.slice(0, 8)}`,
+    title: item.title,
+    versionNo: item.version,
+    status: item.status,
+    pendingCount: taskPortfolio.current.filter((task) => task.researchObjectId === item.id && needsUserAttention(task)).length,
+  })));
+  setCurrent(taskPortfolio.current);
+  setHistory(taskPortfolio.history);
+}
+
+function organizeDashboardTasks(tasks: HermesRailTask[]): { current: HermesRailTask[]; history: HermesRailTask[] } {
+  const seenIds = new Set<string>();
+  const seenSources = new Set<string>();
+  const current: HermesRailTask[] = [];
+  const history: HermesRailTask[] = [];
+
+  for (const task of tasks) {
+    if (seenIds.has(task.id)) continue;
+    seenIds.add(task.id);
+    const path = task.logicalPath.trim().toLocaleLowerCase();
+    const sourceKey = path ? `${task.researchObjectId}\u0000${path}` : task.id;
+    if (seenSources.has(sourceKey) && needsUserAttention(task)) history.push(task);
+    else current.push(task);
+    seenSources.add(sourceKey);
+  }
+
+  return { current, history };
 }

@@ -20,8 +20,7 @@ import {
 } from '@openscience/auth';
 import type { AuditContext } from '@openscience/observability';
 import { RESEARCH_IDENTITIES, validateResearchIdentityProfile } from '@openscience/domain';
-import { SESSION_COOKIE, sessionTokenFrom } from './session-guard';
-import { buildErrorBody } from '@openscience/observability';
+import { refreshSessionCookie, requireCurrentUser, SESSION_COOKIE, sessionTokenFrom } from './session-guard';
 
 export interface AuthRouteDeps extends AuthDeps {
   secureCookies: boolean;
@@ -33,8 +32,6 @@ export interface AuthRouteDeps extends AuthDeps {
 function auditCtx(req: FastifyRequest): AuditContext {
   return { requestId: String(req.id), ip: req.ip };
 }
-
-const SESSION_MAX_AGE_SECONDS = 7 * 24 * 3600;
 
 const passwordSchema = z
   .string()
@@ -79,16 +76,6 @@ const neutralResearchIdentity = validateResearchIdentityProfile({
   languages: [] as string[],
 });
 
-function setSessionCookie(reply: FastifyReply, token: string, secure: boolean): void {
-  void reply.setCookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure,
-    path: '/',
-    maxAge: SESSION_MAX_AGE_SECONDS,
-  });
-}
-
 function academicIdentityDeps(deps: AuthRouteDeps) {
   return {
     ...deps,
@@ -98,12 +85,7 @@ function academicIdentityDeps(deps: AuthRouteDeps) {
 }
 
 async function currentUserId(req: FastifyRequest, reply: FastifyReply, deps: AuthRouteDeps): Promise<string | null> {
-  const token = sessionTokenFrom(req);
-  if (!token) {
-    await reply.status(401).send(buildErrorBody('SESSION_INVALID', '未登录', String(req.id)));
-    return null;
-  }
-  return (await getCurrentUser(deps, token)).userId;
+  return (await requireCurrentUser(deps, req, reply))?.userId ?? null;
 }
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
@@ -133,7 +115,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         });
       },
     );
-    setSessionCookie(reply, result.sessionToken, deps.secureCookies);
+    refreshSessionCookie(reply, result.sessionToken, deps.secureCookies);
     return reply.status(201).send({ userId: result.userId, status: result.status });
   });
 
@@ -148,7 +130,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   app.post('/verify-email', async (req, reply) => {
     const body = verifyBody.parse(req.body);
     const result = await verifyEmail(deps, body, auditCtx(req));
-    setSessionCookie(reply, result.sessionToken, deps.secureCookies);
+    refreshSessionCookie(reply, result.sessionToken, deps.secureCookies);
     return reply.send({ userId: result.userId, status: result.status });
   });
 
@@ -161,7 +143,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   app.post('/login', async (req, reply) => {
     const body = loginBody.parse(req.body);
     const result = await login(deps, body, auditCtx(req));
-    setSessionCookie(reply, result.sessionToken, deps.secureCookies);
+    refreshSessionCookie(reply, result.sessionToken, deps.secureCookies);
     return reply.send({ userId: result.userId, status: result.status });
   });
 
@@ -173,9 +155,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   });
 
   app.get('/me', async (req, reply) => {
+    void reply.header('Cache-Control', 'private, no-store').header('Vary', 'Cookie');
     const token = sessionTokenFrom(req);
-    if (!token) return reply.status(401).send(buildErrorBody('SESSION_INVALID', '未登录', String(req.id)));
-    const me = await getCurrentUser(deps, token);
+    const me = await requireCurrentUser(deps, req, reply);
+    if (!me || !token) return;
+    refreshSessionCookie(reply, token, deps.secureCookies);
     return reply.send(me);
   });
 
@@ -196,7 +180,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     const token = sessionTokenFrom(req);
     if (!token) return reply.redirect('/auth/login?returnTo=%2Fsettings');
     let userId: string;
-    try { userId = (await getCurrentUser(deps, token)).userId; } catch {
+    try {
+      userId = (await getCurrentUser(deps, token)).userId;
+      refreshSessionCookie(reply, token, deps.secureCookies);
+    } catch {
       return reply.redirect('/auth/login?returnTo=%2Fsettings');
     }
     try {
