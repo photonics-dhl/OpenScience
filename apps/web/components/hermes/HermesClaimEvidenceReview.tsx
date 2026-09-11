@@ -1,5 +1,7 @@
 'use client';
 
+import { ScientificText } from '@/components/content/ScientificText';
+
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
@@ -67,10 +69,10 @@ export function HermesClaimEvidenceReview({ researchObjectId, run, onDone }: { r
         {claim?.conditions.length ? <p className="mt-2 text-sm leading-6 text-os-muted-paper"><span className="font-semibold text-os-ink">{t('claimConditions')}:</span> {claim.conditions.join('; ')}</p> : null}
         {claim?.limitations.length ? <p className="mt-2 text-sm leading-6 text-os-muted-paper"><span className="font-semibold text-os-ink">{t('claimLimitations')}:</span> {claim.limitations.join('; ')}</p> : null}
         <p className="mt-4 font-semibold">{row.title}</p>
-        {row.exactQuote ? <blockquote className="mt-2 border-l-2 border-os-rule-paper pl-3 text-sm leading-6">{row.exactQuote}</blockquote> : null}
+        {row.exactQuote ? <ScientificText as="blockquote" className="mt-2 border-l-2 border-os-rule-paper pl-3 text-sm leading-6">{row.exactQuote}</ScientificText> : null}
         <p className="mt-2 text-sm text-os-muted-paper">{row.locator.page ? t('sourcePage', { page: row.locator.page }) : t('sourceLocation')}</p>
         <button type="button" disabled={sourceLoading} onClick={() => void viewSource(row)} className="mt-2 min-h-11 text-sm font-semibold text-os-vermilion-ink underline disabled:opacity-40">{sourceLoading && sourceRowId === row.id ? t('loadingSource') : t('viewSource')}</button>
-        {sourceRowId === row.id && !sourceLoading ? sourceText ? <blockquote className="mt-2 border-l-2 border-os-rule-paper pl-3 text-sm leading-6">{sourceText}</blockquote> : <p className="mt-2 text-sm text-os-muted-paper">{t('claimSourceUnavailable')}</p> : null}
+        {sourceRowId === row.id && !sourceLoading ? sourceText ? <ScientificText as="blockquote" className="mt-2 border-l-2 border-os-rule-paper pl-3 text-sm leading-6">{sourceText}</ScientificText> : <p className="mt-2 text-sm text-os-muted-paper">{t('claimSourceUnavailable')}</p> : null}
         {row.verifiedByUserId ? <p className="mt-3 text-sm text-os-muted-paper">{t('evidenceVerified')}</p> : <button type="button" disabled={Boolean(busy) || loading || Boolean(error)} onClick={() => void verify(row)} className="mt-3 min-h-11 rounded-panel border border-os-vermilion-ink px-4 py-2 text-sm font-semibold text-os-vermilion-ink disabled:opacity-40">{busy === row.id ? t('verifying') : t('verifyEvidence')}</button>}
       </article>;
     })}

@@ -1,5 +1,7 @@
 'use client';
 
+import { ScientificText } from '@/components/content/ScientificText';
+
 import { useTranslations } from 'next-intl';
 import { getSuggestionEvidenceLocation, getSuggestionEvidenceSegments } from '@/lib/suggestion-evidence';
 
@@ -21,7 +23,7 @@ export function HermesExtractionEvidence({ field, result }: { field: string; res
     {typeof unverifiedSummary === 'string' && unverifiedSummary.trim() ? <section className="mb-3 border-l-2 border-os-vermilion-ink pl-3" aria-label={t('unverifiedSummaryTitle')}><p className="m-0 text-sm font-semibold text-os-ink">{t('unverifiedSummaryTitle')}</p><p className="m-0 mt-1 text-pretty leading-6 text-os-muted-paper">{t('unverifiedSummaryBody')}</p><p className="m-0 mt-2 whitespace-pre-wrap break-words leading-6 text-os-ink">{unverifiedSummary}</p></section> : null}
     {sources.length ? <ol className="space-y-3 pl-5">{sources.map((source, index) => <li key={index}>
       <p className="text-xs text-os-muted-paper">{source.location.page ? t('page', { page: source.location.page }) : t('sourceLocated')}</p>
-      <blockquote className="m-0 whitespace-pre-wrap break-words border-l-2 border-os-rule-paper pl-3 leading-6 text-os-ink">{source.quote}</blockquote>
+      <ScientificText as="blockquote" className="m-0 whitespace-pre-wrap break-words border-l-2 border-os-rule-paper pl-3 leading-6 text-os-ink">{source.quote}</ScientificText>
     </li>)}</ol> : <p>{t('noQuote')}</p>}
   </details>;
 }

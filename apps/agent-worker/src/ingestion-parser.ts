@@ -5,6 +5,7 @@ import { VIRTUAL_LINE_HEIGHT, VIRTUAL_PAGE_WIDTH } from '@openscience/domain/vir
 import {
   PARSER_JOB_RESPONSE_MAX_BYTES,
   parseParserStageResult,
+  SafeParserWarningCode,
   type ParserStageResult,
   type StagePage,
 } from './parsers/job-protocol';
@@ -1052,7 +1053,7 @@ export function createDefaultIngestionAdapters(): IngestionAdapters {
         } catch (error) {
           console.error('advanced PDF parser failed; using native fallback', error instanceof Error ? error.message : String(error));
           const fallback = await parseStructuredStageIsolated('pdf', content);
-          return { ...fallback, warnings: [...new Set<ParserStageResult['warnings'][number]>([...fallback.warnings, 'partial_result', 'low_confidence'])] };
+          return { ...fallback, warnings: [...new Set([...fallback.warnings, SafeParserWarningCode.PARTIAL_RESULT, SafeParserWarningCode.LOW_CONFIDENCE])] };
         }
       }
       return parseStructuredStageIsolated('pdf', content);
