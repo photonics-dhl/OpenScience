@@ -5,11 +5,12 @@ import { useLocale, useTranslations } from 'next-intl';
 import { ApiClientError, generatePresentationSceneImage, generatePresentationStoryboard, generatePresentationVideo, getResearchObject, listMyWorkspaces, listPresentationAssets, listVersionClaims, listVersions, type PresentationAsset, type PresentationClaim, type StoryboardRequest, type VersionSummary, type WorkspaceApi } from '@/lib/api';
 import { hasCurrentPresentationSources, newestEligibleStoryboard, presentationSources, selectEligiblePresentationClaims, selectPresentationVersion, SubmissionIntent, type PresentationAction } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, loadHermesPresentationDraft, saveHermesPresentationDraft, type HermesDraftScope } from '@/lib/hermes/draft-state';
+import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 
-interface Props { researchObjectId: string; requestedVersionId?: string; intent: { action: PresentationAction; instruction: string; sceneIndex?: number }; userId?: string; onBack(): void; onSubmitted(url: string): void; submissionRecords?: Map<string, SubmissionIntent>; onBusyChange?(locked: boolean): void }
+interface Props { researchObjectId: string; requestedVersionId?: string; intent: { action: PresentationAction; instruction: string; sceneIndex?: number; style?: StoryboardRequest['style'] }; userId?: string; onBack(): void; onSubmitted(url: string): void; submissionRecords?: Map<string, SubmissionIntent>; onBusyChange?(locked: boolean): void; onConfirmationChange?(action: HermesConversationAction | null): void }
 const control = 'min-h-11 w-full rounded border border-os-rule-paper bg-os-paper px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink';
 
-export function HermesPresentationAction({ researchObjectId: ro, requestedVersionId, intent, userId, onBack, onSubmitted, submissionRecords, onBusyChange }: Props) {
+export function HermesPresentationAction({ researchObjectId: ro, requestedVersionId, intent, userId, onBack, onSubmitted, submissionRecords, onBusyChange, onConfirmationChange }: Props) {
   const t = useTranslations('hermesPresentation'); const locale = useLocale();
   const tc = useTranslations('hermesConversation');
   const [data, setData] = useState<{ title: string; versions: VersionSummary[]; workspace?: WorkspaceApi }>();
@@ -44,9 +45,9 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   }, [ro, versionId]);
   useEffect(() => {
     const stored = draftScope ? loadHermesPresentationDraft(getHermesDraftStorage(), draftScope) : null;
-    if (stored && !intent.instruction.trim()) { setAction(stored.action); setInstruction(stored.instruction); setStyle(stored.style); setParentId(stored.parentId); setScene(stored.scene); setUpdateBrief(stored.action === 'storyboard.revise'); return; }
-    setAction(intent.action); setInstruction(intent.instruction); setStyle('technical'); setParentId(''); setScene(intent.sceneIndex ?? 0); setUpdateBrief(false);
-  }, [draftScope?.researchObjectId, draftScope?.userId, draftScope?.versionId, intent.action, intent.instruction, intent.sceneIndex]);
+    if (stored && !intent.instruction.trim() && !onConfirmationChange) { setAction(stored.action); setInstruction(stored.instruction); setStyle(stored.style); setParentId(stored.parentId); setScene(stored.scene); setUpdateBrief(stored.action === 'storyboard.revise'); return; }
+    setAction(intent.action); setInstruction(intent.instruction); setStyle(intent.style ?? 'technical'); setParentId(''); setScene(intent.sceneIndex ?? 0); setUpdateBrief(false);
+  }, [draftScope?.researchObjectId, draftScope?.userId, draftScope?.versionId, intent.action, intent.instruction, intent.sceneIndex, intent.style, onConfirmationChange]);
 
   const version = data?.versions.find((candidate) => candidate.versionId === versionId);
   const canWrite = version?.status === 'draft' && data?.workspace?.status === 'active' && ['owner', 'maintainer', 'author', 'contributor'].includes(data.workspace.role ?? '');
@@ -69,7 +70,7 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   const requestScope = uncertainEntry?.[0] ?? `${ro}:${versionId}:${effectiveAction}`; const scopeRef = useRef(requestScope); scopeRef.current = requestScope;
   const canReplay = Boolean(uncertainDraft && replayRequest && sourcesValid);
   useEffect(() => { if (!uncertainDraft && !parentId && newestParent) setParentId(newestParent.id); }, [newestParent, parentId, uncertainDraft]);
-  useEffect(() => { onBusyChange?.(locked); }, [locked, onBusyChange]);
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
   useEffect(() => {
     const record = records.get(requestScope);
     if (!record?.isUncertain || !record.draft) return;
@@ -83,8 +84,8 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   }, [records, requestScope]);
   useEffect(() => { if (!uncertainDraft && draftScope) saveHermesPresentationDraft(getHermesDraftStorage(), draftScope, { action, instruction, style, language: locale === 'zh' ? 'zh' : 'en', selected: eligibleClaimIds, parentId, scene }); }, [action, draftScope, eligibleClaimIds, instruction, locale, parentId, scene, style, uncertainDraft]);
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
+  async function submit(event?: React.FormEvent) {
+    event?.preventDefault();
     if (busy || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)) return;
     const request = replayRequest?.payload ?? (effectiveAction === 'scene.image' ? { storyboardAssetId: parent!.id, sceneIndex: scene }
       : effectiveAction === 'video.create' ? { profile: 'content-driven-v1' as const, storyboardAssetId: parent!.id, sceneImageAssetIds: videoImageIds }
@@ -108,6 +109,22 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
       record.fail(ambiguous); setBusy(false); setUncertain(ambiguous); setError(ambiguous ? 'uncertain' : 'submitError');
     }
   }
+  const confirmationReady = !busy && Boolean(canWrite) && ready && sourcesValid && videoReady && (!needsInstruction || Boolean(instruction.trim())) && (!uncertain || canReplay);
+  const latestSubmit = useRef(submit); latestSubmit.current = submit;
+  useEffect(() => {
+    onConfirmationChange?.({ kind: 'production', ready: confirmationReady, canDismiss: !locked, confirm: () => latestSubmit.current() });
+    return () => onConfirmationChange?.(null);
+  }, [onConfirmationChange, confirmationReady, requestScope, locked]);
+  if (onConfirmationChange) return <div className="hermes-message hermes-message-assistant" data-hermes-presentation-action="true">
+    <p>{tc('productionScope', { kind: t(action === 'video.create' ? 'video' : 'image'), style: t(!needsInstruction && parent?.storyboard ? parent.storyboard.style : style) })}</p>
+    {effectiveAction === 'scene.image' && parent?.storyboard && <p className="mt-2 text-sm">{parent.storyboard.document.title} · {t('scene')} {scene + 1}: {parent.storyboard.document.scenes[scene]?.title}</p>}
+    <p className="mt-2 text-sm">{t('charge')}</p>
+    <p className="mt-2 text-sm" role="status">{busy ? t('submitting') : !ready ? t('loading') : !canWrite ? t('readOnly') : !sourcesValid ? t('needsEligibleSources') : !videoReady ? t('needsApprovedScenes') : needsInstruction && !instruction.trim() ? tc('needsProductionInstruction') : tc(uncertain ? 'retryProductionInChat' : 'confirmProductionInChat')}</p>
+    {error && <p role="alert" className="mt-2 text-sm text-state-danger">{t(error)}</p>}
+    <details className="hermes-production-settings mt-3"><summary>{tc('productionInstruction')}</summary>
+      <textarea aria-label={t('instruction')} className={`${control} mt-2 min-h-28`} value={instruction} maxLength={1000} disabled={locked} onChange={(event) => { setInstruction(event.target.value); if (parent) setUpdateBrief(true); }} />
+    </details>
+  </div>;
   return <section className="min-w-0 rounded-xl bg-os-paper p-4 text-os-ink" data-hermes-presentation-action="true">
     <p className="m-0 text-sm font-semibold">{data?.title ?? t('loading')}</p><p className="mt-1 text-xs text-os-muted-paper">{version ? t('versionLabel', { number: version.versionNo, status: version.status }) : t('chooseVersion')}</p>
     <p className="hermes-production-summary">{t(action === 'video.create' ? 'video' : 'image')} · {t(style)}</p>

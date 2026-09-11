@@ -1,9 +1,9 @@
 # 服务器能力与复用清单
 
-- CURRENT 2026-09-11：应用 release 329ad2e8 / rollback 25917596，browser provider f4832487；无新增服务/模型。图片方案预算修正已部署。104条Evidence已通过实际审阅确认，但v6没有合格图片、尚未公开，最新8fc方案有物理矛盾不能放行。当前先按用户要求讨论信息架构，三张新截图已交Chat6Pro；完整状态见CURRENT handoff。下方旧任务记录不覆盖本段。
+- CURRENT 2026-09-11：应用 release 17ebc7f7 / rollback cb173542，browser provider f4832487；已部署批准的工作台/公开阅读风格与Hermes真实对话路由，首屏发送框适配。无新服务/模型。104条Evidence已确认，但v6仍无合格图片/未发布，8fc方案科学问题未放行；完整状态见CURRENT handoff。下方历史任务不覆盖本段。
 
 - 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。
-- Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。最新工作台/公开阅读与许可证400修复为待部署候选，服务器现有release未变。
+- Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。历史许可证400修复已经部署；当前正式工作台/公开阅读版本见本页CURRENT，不恢复旧候选结论。
 - 画面恢复日志 jobs/x11vnc-login-recovery.log：曾无RFB greeting、后有端口占用；目前真实画面与交互正常，未证明XDamage或浏览器根因。无新安装。
 
 2026-09-11 实时盘点。先查本页，再查相关条目的入口；能力或服务变动后同一任务内更新。文件存在、服务运行、产品调用成功是不同状态。本页记录部署位置与复用方式；Hermes语义能力/供应商政策见 [能力台账](hermes-capability-registry.md)，实时产品任务见 CURRENT handoff。

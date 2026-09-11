@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ResearchPresentation } from '@/components/presentation/ResearchPresentation';
-import { ResearchPublication } from '@/components/research/ResearchPublication';
 import type { WorkspaceGuidePayload, WorkspaceGuideResult } from '@/lib/api';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
@@ -73,6 +72,9 @@ import type { Locale } from '../../../../i18n/locale';
 import styles from './workbench.module.css';
 
 type FieldKey = keyof Omit<SdfCore, 'schemaVersion'>;
+type EditorDraft = WorkspaceGuidePayload['context']['editorDraft'];
+type PreparedVersion = { versionId: string; assertCurrent(): void };
+type PrepareVersionIntent = { signature: string; idempotencyKey: string; promise?: Promise<PreparedVersion> };
 type ActiveExtraction = Pick<ExtractReviewCheckpoint, 'idempotencyKey' | 'taskId' | 'retryAvailable' | 'dismissedFields' | 'acknowledgedMissingFields'> & {
   manuscriptText: string;
   sourceCore: SdfCore;
@@ -96,24 +98,11 @@ export default function EditorPage(props: EditorPageProps) {
 function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const t = useTranslations('editor');
   const tw = useTranslations('workbench');
-  const query = useSearchParams();
-  const initialStage = query.get('stage');
-  const [stage, setStage] = useState<'content' | 'media' | 'publish'>(initialStage === 'media' || initialStage === 'publish' ? initialStage : 'content');
-  const [publicationVisit, setPublicationVisit] = useState(0);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
-  useEffect(() => {
-    if (initialStage === 'content' || initialStage === 'media' || initialStage === 'publish') {
-      setStage(initialStage);
-    }
-  }, [initialStage]);
   const ingestionStatusT = useTranslations('ingestion.status');
   const locale = useLocale() as Locale;
   const roId = params.id;
   const router = useRouter();
-  useEffect(() => {
-    const url = new URL(window.location.href); url.searchParams.set('stage', stage);
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
-  }, [stage]);
   const ingestionTaskId = typeof searchParams?.ingestionTask === 'string' ? searchParams.ingestionTask : '';
   const editorSuggestion = useMemo<HermesGuideSuggestion>(() => ({
     bodyKey: 'guide.continue.body',
@@ -125,22 +114,16 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [state, dispatch] = useReducer(editorReducer, { core: emptyCore(), version: 1, dirty: false, lastSavedAt: null } as EditorState);
   const currentCore = useRef(state.core); currentCore.current = state.core;
   const writingDraft = useRef(false);
+  const activeWrite = useRef<Promise<unknown> | null>(null);
+  const prepareVersionIntent = useRef<PrepareVersionIntent | null>(null);
   const confirmedSnapshot = useRef<SdfCore | null>(null);
   const lastHermesEdit = useRef<WorkspaceGuideResult['draftEdit']>(undefined);
   const [suggestions, dispatchSuggestions] = useReducer(suggestionReducer, []);
   const [artifacts, setArtifacts] = useState<ArtifactReference[]>([]);
+  const currentArtifacts = useRef(artifacts); currentArtifacts.current = artifacts;
   const [committedArtifacts, setCommittedArtifacts] = useState<ArtifactReference[]>([]);
-  const artifactsDirty = artifacts.length !== committedArtifacts.length || artifacts.some((item) =>
-    !committedArtifacts.some((saved) => saved.artifactId === item.artifactId && saved.logicalPath === item.logicalPath));
+  const currentCommittedArtifacts = useRef(committedArtifacts); currentCommittedArtifacts.current = committedArtifacts;
   const [versions, setVersions] = useState<VersionRow[]>([]);
-  const newestVersionId = versions[0]?.versionId;
-  useEffect(() => {
-    if (!newestVersionId) return;
-    const url = new URL(window.location.href);
-    if (url.searchParams.get('version') === newestVersionId) return;
-    url.searchParams.set('version', newestVersionId); url.searchParams.delete('task');
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
-  }, [newestVersionId]);
   const [checkedSnapshotVersion, setCheckedSnapshotVersion] = useState('');
   const snapshotReady = Boolean(versions[0] && checkedSnapshotVersion === versions[0].versionId);
   useEffect(() => {
@@ -163,10 +146,18 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [ingestionMessage, setIngestionMessage] = useState<string | null>(null);
   const [confirmingIngestion, setConfirmingIngestion] = useState(false);
   const [confirmationIntent, setConfirmationIntent] = useState<IngestionProposal | null>(null);
-  const [confirmedIngestion, setConfirmedIngestion] = useState(false);
   const [refreshingLegacyIngestion, setRefreshingLegacyIngestion] = useState(false);
   const [reanalyzingConfirmedIngestion, setReanalyzingConfirmedIngestion] = useState(false);
   const [confirmedReanalysisSource, setConfirmedReanalysisSource] = useState<{ taskId: string; agentTaskId: string } | null>(null);
+  const selectedIngestionTask = ingestionTasks.find((task) => task.id === selectedIngestionTaskId);
+  const ingestionReviewActive = Boolean(selectedIngestionTask && !selectedIngestionTask.confirmation);
+  const ingestionProposalHasContent = Boolean(ingestionProposal && SDF_FIELDS.some((field) => ingestionProposal.core[field].trim()));
+  const showIngestionRecoveryLink = Boolean(selectedIngestionTask && (
+    selectedIngestionTask.state === 'failed_retryable'
+    || selectedIngestionTask.state === 'failed_blocked'
+    || (!ingestionLoading && !ingestionProposal && !selectedIngestionTask.confirmation && Boolean(ingestionMessage))
+    || (ingestionProposal && !ingestionProposalHasContent)
+  ));
   const [activeField, setActiveField] = useState<FieldKey | null>('problem');
   const [workspaceId, setWorkspaceId] = useState<string>('');
   const [objectMeta, setObjectMeta] = useState<{ title: string; visibility: string }>({
@@ -174,11 +165,10 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     visibility: 'private',
   });
   const [draftPrompt, setDraftPrompt] = useState(false);
+  const ingestionWriteBlocked = useRef(false);
+  ingestionWriteBlocked.current = Boolean(draftPrompt || ingestionReviewActive || ingestionProposal || confirmationIntent || confirmingIngestion);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [committing, setCommitting] = useState(false);
-  const [commitMsg, setCommitMsg] = useState('');
+  const [serverSaveState, setServerSaveState] = useState<'dirty' | 'saving' | 'saved' | 'error'>('saved');
   const [hermesOpen, setHermesOpen] = useState(false);
   const [hermesGoal, setHermesGoal] = useState('');
   useEffect(() => { if (window.matchMedia('(min-width: 1024px)').matches) setHermesOpen(true); }, []);
@@ -189,15 +179,6 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [extractionComplete, setExtractionComplete] = useState(false);
   const [missingFields, setMissingFields] = useState<SdfField[]>([]);
   const [editorLoaded, setEditorLoaded] = useState(false);
-  const previousScrollStage = useRef(stage);
-  useEffect(() => {
-    if (!editorLoaded || (stage === 'content' && previousScrollStage.current === 'content')) return;
-    previousScrollStage.current = stage;
-    const frame = window.requestAnimationFrame(() => {
-      document.getElementById(`workbench-${stage}`)?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [editorLoaded, stage]);
   const [activeExtraction, setActiveExtraction] = useState<ActiveExtraction | null>(null);
   const [recoverableExtraction, setRecoverableExtraction] = useState<ActiveExtraction | null>(null);
   const hermesStage = useOptionalHermesWorkspaceStage();
@@ -368,7 +349,6 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           dispatch({ type: 'init', core: ro.researchObject.sdf?.core ?? frozen.core, version: ro.researchObject.version });
           setIngestionProposal(null);
           setConfirmationIntent(null);
-          setConfirmedIngestion(true);
           setIngestionMessage(t('ingestionConfirmed'));
           return;
         }
@@ -383,7 +363,6 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       clearDraft(roId);
       setIngestionProposal(null);
       setConfirmationIntent(null);
-      setConfirmedIngestion(true);
       setIngestionMessage(t('ingestionConfirmed'));
     } catch (cause) {
       if (cause instanceof ApiClientError && cause.status === 409) {
@@ -429,7 +408,6 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           dispatch({ type: 'init', core: ro.researchObject.sdf?.core ?? frozen.core, version: ro.researchObject.version });
           setIngestionProposal(null);
           setConfirmationIntent(null);
-          setConfirmedIngestion(true);
           setIngestionMessage(t('ingestionConfirmed'));
           return;
         }
@@ -488,7 +466,6 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       window.localStorage.removeItem(storageKey);
       setIngestionTasks((current) => [...current.filter((candidate) => candidate.id !== task.id), { ...task, confirmation: null }]);
       setSelectedIngestionTaskId(task.id);
-      setConfirmedIngestion(false);
       setConfirmedReanalysisSource(null);
       setIngestionMessage(t('confirmedReanalysisStarted'));
       window.history.replaceState(
@@ -510,14 +487,59 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     }
   }
 
-  // 自动保存草稿（§18.3，debounce 1s）
+  async function saveCurrentDraftToServer() {
+    while (activeWrite.current) {
+      const pending = activeWrite.current;
+      const versionBeforeWait = serverVersion.current;
+      try { await pending; } catch {
+        // A prepared commit can succeed and then reject because the user edited while it was writing.
+        // In that known-success case the advanced server version is safe to use for the newer draft.
+        if (serverVersion.current === versionBeforeWait) return;
+      }
+    }
+    if (!editorLoaded || ingestionWriteBlocked.current) return;
+    const frozenCore = { ...currentCore.current };
+    if (SDF_FIELDS.every((field) => frozenCore[field] === serverCore.current[field])) return;
+    const baseVersion = serverVersion.current;
+    let run!: Promise<void>;
+    run = (async (): Promise<void> => {
+      writingDraft.current = true;
+      setServerSaveState('saving');
+      setErrorMsg(null);
+      try {
+        await updateSdf(roId, baseVersion, frozenCore);
+        serverCore.current = frozenCore;
+        serverVersion.current = baseVersion + 1;
+        const unchanged = SDF_FIELDS.every((field) => currentCore.current[field] === frozenCore[field]);
+        dispatch({ type: 'saved', version: baseVersion + 1, core: frozenCore });
+        setNeedsConfirmation(!confirmedSnapshot.current
+          || SDF_FIELDS.some((field) => currentCore.current[field] !== confirmedSnapshot.current![field]));
+        if (unchanged) clearDraft(roId);
+        setServerSaveState(unchanged ? 'saved' : 'dirty');
+      } catch (cause) {
+        const error = cause instanceof Error ? cause : new Error(String(cause));
+        setServerSaveState('error');
+        setErrorMsg(error.message);
+        throw error;
+      } finally {
+        writingDraft.current = false;
+        if (activeWrite.current === run) activeWrite.current = null;
+      }
+    })();
+    activeWrite.current = run;
+    try { await run; } catch { /* Keep the browser draft and wait for a new edit before retrying. */ }
+  }
+
+  // 浏览器草稿与服务端 SDF 自动保存共用一次 debounce；服务端失败后不循环重试。
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      if (state.dirty) saveDraft(roId, state.core);
+      if (!state.dirty) return;
+      saveDraft(roId, state.core);
+      void saveCurrentDraftToServer();
     }, 1000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [state.core, state.dirty, roId]);
+  }, [confirmationIntent, confirmingIngestion, draftPrompt, editorLoaded, ingestionProposal, ingestionReviewActive, roId, state.core, state.dirty]);
 
   // 刷新后恢复同一个已计费任务或尚未完成的逐字段 review。
   useEffect(() => {
@@ -648,7 +670,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   };
   function applyHermesEdit(edit: NonNullable<WorkspaceGuideResult['draftEdit']>, replace = false) {
     const changed = SDF_FIELDS.filter((field) => typeof edit.changes[field] === 'string');
-    if (!editorLoaded || confirmingIngestion || confirmationIntent || saving || committing || edit.base.researchObjectId !== roId || edit.base.scope !== draftScope || edit.base.version !== state.version) return { applied: 0, conflicts: changed.length };
+    if (!editorLoaded || confirmingIngestion || confirmationIntent || writingDraft.current || edit.base.researchObjectId !== roId || edit.base.scope !== draftScope || edit.base.version !== state.version) return { applied: 0, conflicts: changed.length };
     const applied: typeof edit.changes = {};
     const base = { ...editorDraft, core: { ...editorDraft.core } };
     let conflicts = 0;
@@ -786,74 +808,133 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     setActiveExtraction(run);
   }
 
-  /** 保存到 SDF（乐观锁，§16）。 */
-  async function handleSave() {
-    if (writingDraft.current || !editorLoaded || ingestionReviewActive) return;
-    writingDraft.current = true;
-    setSaving(true);
-    setSaveError(null);
-    setErrorMsg(null);
-    try {
-      await updateSdf(roId, state.version, state.core);
-      serverCore.current = state.core; serverVersion.current = state.version + 1;
-      dispatch({ type: 'saved', version: state.version + 1, core: state.core });
-      if (SDF_FIELDS.every((field) => currentCore.current[field] === state.core[field])) clearDraft(roId);
-      if (!suggestions.some((item) => item.status === 'pending') && missingFields.length === 0) {
-        clearExtractReviewState(window.localStorage, roId);
-      }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      setSaveError(message);
-      setErrorMsg(message);
-    } finally {
-      writingDraft.current = false;
-      setSaving(false);
+  const prepareVersion = useCallback(async (expected: EditorDraft): Promise<PreparedVersion> => {
+    if (!expected) throw new Error(tw('versionMismatch'));
+    if (expected.researchObjectId !== roId || expected.scope !== 'sdf') throw new Error(tw('versionMismatch'));
+    const inFlightPrepare = prepareVersionIntent.current;
+    if (inFlightPrepare?.promise) {
+      const currentSignature = JSON.stringify([
+        expected.researchObjectId,
+        serverVersion.current,
+        SDF_FIELDS.map((field) => expected.core[field]),
+        currentArtifacts.current.map((artifact) => [artifact.artifactId, artifact.logicalPath]),
+      ]);
+      const sameCore = SDF_FIELDS.every((field) => expected.core[field] === currentCore.current[field]);
+      if (!sameCore || currentSignature !== inFlightPrepare.signature) throw new Error(tw('versionMismatch'));
+      return inFlightPrepare.promise;
     }
-  }
+    while (activeWrite.current) {
+      const pending = activeWrite.current;
+      const concurrentPrepare = prepareVersionIntent.current;
+      if (concurrentPrepare?.promise === pending) {
+        const currentSignature = JSON.stringify([
+          expected.researchObjectId,
+          serverVersion.current,
+          SDF_FIELDS.map((field) => expected.core[field]),
+          currentArtifacts.current.map((artifact) => [artifact.artifactId, artifact.logicalPath]),
+        ]);
+        const sameCore = SDF_FIELDS.every((field) => expected.core[field] === currentCore.current[field]);
+        if (!sameCore || currentSignature !== concurrentPrepare.signature) throw new Error(tw('versionMismatch'));
+        return concurrentPrepare.promise;
+      }
+      await pending;
+    }
+    const coreMatches = SDF_FIELDS.every((field) => expected.core[field] === currentCore.current[field]);
+    if (!editorLoaded || !coreMatches) throw new Error(tw('versionMismatch'));
+    if (ingestionWriteBlocked.current) {
+      throw new Error(t('ingestionProposalBody'));
+    }
 
-  /** 创建提交（P1B-4，版本快照）。 */
-  async function handleCommit(continueToMedia = false) {
-    if (writingDraft.current || !editorLoaded || ingestionReviewActive || confirmingIngestion || confirmationIntent) return;
-    if (versions.length && !state.dirty && !needsConfirmation && !artifactsDirty) {
-      if (continueToMedia) setStage('media');
-      return;
+    const frozenCore: SdfCore = { ...currentCore.current };
+    const frozenArtifacts = [...currentArtifacts.current];
+    const baseVersion = serverVersion.current;
+    const assertCurrent = () => {
+      const coreIsCurrent = expected.researchObjectId === roId
+        && expected.scope === 'sdf'
+        && SDF_FIELDS.every((field) => currentCore.current[field] === frozenCore[field]);
+      const currentArtifactList = currentArtifacts.current;
+      const artifactsAreCurrent = currentArtifactList.length === frozenArtifacts.length
+        && frozenArtifacts.every((artifact, index) => artifact.artifactId === currentArtifactList[index]?.artifactId
+          && artifact.logicalPath === currentArtifactList[index]?.logicalPath);
+      if (!coreIsCurrent || !artifactsAreCurrent) throw new Error(tw('versionMismatch'));
+    };
+    const coreSavedToServer = SDF_FIELDS.every((field) => frozenCore[field] === serverCore.current[field]);
+    const savedArtifactList = currentCommittedArtifacts.current;
+    const artifactsSavedToServer = savedArtifactList.length === frozenArtifacts.length
+      && frozenArtifacts.every((artifact, index) => artifact.artifactId === savedArtifactList[index]?.artifactId
+        && artifact.logicalPath === savedArtifactList[index]?.logicalPath);
+    if (versions[0] && snapshotReady && coreSavedToServer && artifactsSavedToServer && !needsConfirmation
+      && confirmedSnapshot.current && SDF_FIELDS.every((field) => confirmedSnapshot.current![field] === expected.core[field])) {
+      assertCurrent();
+      return { versionId: versions[0].versionId, assertCurrent };
     }
-    if (continueToMedia && !SDF_FIELDS.every((field) => state.core[field].trim())) return;
-    writingDraft.current = true;
-    setCommitting(true);
-    setErrorMsg(null);
-    try {
-      await createCommit(roId, {
-        message: commitMsg || t('draftRevision', { version: state.version }),
-        version: state.version,
-        sdfCore: state.core,
-        artifacts,
-      });
-      setCommittedArtifacts(artifacts);
-      dispatch({ type: 'saved', version: state.version + 1, core: state.core });
-      serverCore.current = state.core; serverVersion.current = state.version + 1;
-      const unchanged = SDF_FIELDS.every((field) => currentCore.current[field] === state.core[field]);
-      if (unchanged) setNeedsConfirmation(false);
-      confirmedSnapshot.current = state.core;
-      if (unchanged) clearDraft(roId);
-      if (!suggestions.some((item) => item.status === 'pending') && missingFields.length === 0) {
-        clearExtractReviewState(window.localStorage, roId);
+
+    const signature = JSON.stringify([
+      expected.researchObjectId,
+      baseVersion,
+      SDF_FIELDS.map((field) => expected.core[field]),
+      frozenArtifacts.map((artifact) => [artifact.artifactId, artifact.logicalPath]),
+    ]);
+    const previous = prepareVersionIntent.current;
+    if (previous && previous.signature !== signature) throw new Error(tw('versionMismatch'));
+    if (previous?.promise) return previous.promise;
+    if (writingDraft.current || activeWrite.current) throw new Error(tw('savingContent'));
+
+    const intent: PrepareVersionIntent = previous ?? { signature, idempotencyKey: crypto.randomUUID() };
+    let run!: Promise<PreparedVersion>;
+    run = (async (): Promise<PreparedVersion> => {
+      writingDraft.current = true;
+      setErrorMsg(null);
+      try {
+        const result = await createCommit(roId, {
+          message: t('draftRevision', { version: baseVersion }),
+          version: baseVersion,
+          sdfCore: frozenCore,
+          artifacts: frozenArtifacts,
+        }, intent.idempotencyKey);
+        const nextObjectVersion = baseVersion + 1;
+        const unchanged = SDF_FIELDS.every((field) => currentCore.current[field] === frozenCore[field]);
+        setCommittedArtifacts(frozenArtifacts);
+        serverCore.current = frozenCore;
+        serverVersion.current = nextObjectVersion;
+        dispatch({ type: 'saved', version: nextObjectVersion, core: frozenCore });
+        confirmedSnapshot.current = frozenCore;
+        setNeedsConfirmation(!unchanged);
+        if (unchanged) clearDraft(roId);
+        if (!suggestions.some((item) => item.status === 'pending') && missingFields.length === 0) {
+          clearExtractReviewState(window.localStorage, roId);
+        }
+        setCheckedSnapshotVersion(result.commit.versionId);
+        try {
+          const refreshed = await listVersions(roId);
+          setVersions(refreshed.versions ?? []);
+        } catch {
+          setVersions((current) => [
+            { versionId: result.commit.versionId, versionNo: result.commit.versionNo, status: 'draft' },
+            ...current.filter((version) => version.versionId !== result.commit.versionId),
+          ]);
+        }
+        prepareVersionIntent.current = null;
+        assertCurrent();
+        return { versionId: result.commit.versionId, assertCurrent };
+      } catch (cause) {
+        const ambiguous = !(cause instanceof ApiClientError)
+          || cause.status === 0 || cause.status === 408 || cause.status === 429 || cause.status >= 500;
+        if (!ambiguous) prepareVersionIntent.current = null;
+        const error = cause instanceof Error ? cause : new Error(String(cause));
+        setErrorMsg(error.message);
+        throw error;
+      } finally {
+        writingDraft.current = false;
+        if (activeWrite.current === run) activeWrite.current = null;
+        if (prepareVersionIntent.current === intent) intent.promise = undefined;
       }
-      setCommitMsg('');
-      const vs = await listVersions(roId);
-      setVersions(vs.versions ?? []);
-      if (vs.versions[0]) {
-        const url = new URL(window.location.href); url.searchParams.set('version', vs.versions[0].versionId); url.searchParams.delete('task');
-        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
-      }
-      if (continueToMedia && unchanged) setStage('media');
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
-    } finally {
-      writingDraft.current = false;
-      setCommitting(false);
-    }
-  }
+    })();
+    intent.promise = run;
+    prepareVersionIntent.current = intent;
+    activeWrite.current = run;
+    return run;
+  }, [editorLoaded, missingFields, needsConfirmation, roId, snapshotReady, suggestions, t, tw, versions]);
 
   function restoreDraft() {
     setDraftPrompt(false);
@@ -861,6 +942,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
   function discardDraft() {
     clearDraft(roId);
+    setErrorMsg(null);
+    setServerSaveState('saved');
     protectedEditorDraftFields.current = new Set();
     dispatch({ type: 'init', core: serverCore.current, version: serverVersion.current });
     currentCore.current = serverCore.current;
@@ -872,16 +955,6 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     router.push(`/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versionId)}`);
   }
 
-  const saveState = saveError ? 'error' : saving ? 'saving' : state.dirty ? 'dirty' : 'saved';
-  const selectedIngestionTask = ingestionTasks.find((task) => task.id === selectedIngestionTaskId);
-  const ingestionReviewActive = Boolean(selectedIngestionTask && !selectedIngestionTask.confirmation);
-  const ingestionProposalHasContent = Boolean(ingestionProposal && SDF_FIELDS.some((field) => ingestionProposal.core[field].trim()));
-  const showIngestionRecoveryLink = Boolean(selectedIngestionTask && (
-    selectedIngestionTask.state === 'failed_retryable'
-    || selectedIngestionTask.state === 'failed_blocked'
-    || (!ingestionLoading && !ingestionProposal && !selectedIngestionTask.confirmation && Boolean(ingestionMessage))
-    || (ingestionProposal && !ingestionProposalHasContent)
-  ));
   const fieldForTarget: Record<HermesDraftTarget, FieldKey> = {
     'sdf-problem': 'problem',
     'sdf-insight': 'insight',
@@ -901,33 +974,15 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     <EditorLayout
         objectId={roId}
         workspaceClassName={`editor-workspace research-product ${styles.workbenchShell}`}
-        workflow={<nav className={styles.workbenchNav} aria-label={tw('navigation')}>
-          {(['content', 'media', 'publish'] as const).map((item) => <button type="button" className={stage === item ? styles.navActive : styles.navLink} aria-current={stage === item ? 'location' : undefined} key={item} onClick={() => { if (item === 'publish') setPublicationVisit((value) => value + 1); setStage(item); }}>{tw(item)}</button>)}
+        workflow={<div className={styles.workbenchNav}>
+          <span className={styles.navContext}>{tw('navigation')}</span>
           <span className={styles.navSpacer} />
-          <button type="button" className={styles.hermesButton} onClick={() => { setHermesGoal(''); setHermesOpen(true); }}>Hermes</button>
           <Link className={styles.detailsLink} href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
-        </nav>}
+        </div>}
         header={
           <ObjectHeader
-            actions={
-              <>
-                <button aria-label={t('saveToSdf')} className={styles.headerButton} onClick={handleSave} disabled={saving || !state.dirty || !editorLoaded || ingestionReviewActive}>
-                  {saving ? t('common.saving') ?? '…' : t('saveToSdf')}
-                </button>
-                <input
-                  aria-label={t('commitMessage')}
-                  disabled={!editorLoaded || committing}
-                  className={styles.commitInput}
-                  data-reading-role="control"
-                  placeholder={t('commitMessage')}
-                  value={commitMsg}
-                  onChange={(event) => setCommitMsg(event.target.value)}
-                />
-                <button className={styles.headerPrimary} onClick={() => void handleCommit()} disabled={committing || !editorLoaded || ingestionReviewActive || (versions.length > 0 && !state.dirty && !artifactsDirty && !needsConfirmation)}>{t('commit')}</button>
-              </>
-            }
             objectId={roId}
-            saveState={saveState}
+            saveState={serverSaveState === 'saving' ? 'saving' : serverSaveState === 'error' && state.dirty ? 'error' : state.dirty ? 'dirty' : 'saved'}
             title={objectMeta.title}
             version={state.version}
             visibility={objectMeta.visibility}
@@ -1023,7 +1078,6 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                     </div>
                   </div>
                 ) : null}
-                {confirmedIngestion || ingestionMessage === t('ingestionAlreadyConfirmed') ? <button className="mt-4 min-h-11 text-sm text-os-vermilion-ink underline" onClick={() => setStage('media')}>{tw('continueMedia')}</button> : null}
               </section></details>
             ) : null}
             {!ingestionReviewActive ? <details className={styles.disclosure}>
@@ -1061,25 +1115,13 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               </div>
             </details>
 
-            {!ingestionReviewActive && (needsConfirmation || state.dirty || artifactsDirty || !versions.length) && <div className={styles.confirmBar}>
-              <p>{tw(state.dirty ? 'reconfirmNotice' : 'contentReady')}</p>
-              <button type="button" className={styles.primaryButton} disabled={!editorLoaded || committing || saving || !SDF_FIELDS.every((field) => state.core[field].trim())} onClick={() => state.dirty || artifactsDirty || needsConfirmation || !versions.length ? void handleCommit(true) : setStage('media')}>{committing ? tw('savingContent') : tw('confirmContinue')}</button>
-            </div>}
             </section>
 
             <section className={styles.productSection} id="workbench-media" data-workbench-section="media">
-              <header className={styles.productSectionHeader}><h2>{tw('media')}</h2><span>{tw('coreImageFirst')}</span></header>
-              {!snapshotReady ? <p className={styles.lockedMessage} role="status">{tw('loadingVersion')}</p> : null}
-              {versions[0] && snapshotReady && !needsConfirmation && !state.dirty && !artifactsDirty && !ingestionReviewActive && !ingestionProposal ? <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} onAskHermes={(kind) => { setHermesGoal(tw(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); }} /> : null}
-              <div className={styles.sectionAction}><button className={styles.primaryButton} disabled={!snapshotReady || state.dirty || artifactsDirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal)} onClick={() => { setPublicationVisit((value) => value + 1); setStage('publish'); }}>{tw('previewPublish')}</button></div>
+              <header className={styles.productSectionHeader}><h2>{tw('media')}</h2></header>
+              {versions.length > 0 && !snapshotReady ? <p className={styles.lockedMessage} role="status">{tw('loadingVersion')}</p> : null}
+              {versions[0] && snapshotReady ? <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} /> : null}
             </section>
-
-            <details className={styles.publicationDisclosure} id="workbench-publish" open={stage === 'publish' || undefined}>
-              <summary><span><strong>{tw('publish')}</strong><small>{tw('publishPreviewBody')}</small></span></summary>
-              <div className={styles.publicationBody}>
-                {versions[0] && snapshotReady && !needsConfirmation && !state.dirty && !artifactsDirty && !ingestionReviewActive && <ResearchPublication key={`${versions[0].versionId}:${publicationVisit}`} researchObjectId={roId} selectedVersionId={versions[0].versionId} embedded />}
-              </div>
-            </details>
           </div>
         }
         aside={
@@ -1090,6 +1132,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               initialGoal={hermesGoal}
               dashboardContext={{ tasks: [], researchObjects: [{ id: roId, title: objectMeta.title, status: 'draft' }], ...(versions[0] ? { presentation: { researchObjectId: roId, versionId: versions[0].versionId } } : {}), ...(editorLoaded ? { editorDraft } : {}) }}
               onDraftEdit={applyHermesEdit}
+              onPrepareVersion={prepareVersion}
               onUndoDraftEdit={undoHermesEdit}
               locale={locale}
               onOpenChange={setHermesOpen}

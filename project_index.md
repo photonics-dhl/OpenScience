@@ -1,9 +1,9 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-11:** production / code HEAD 329ad2e8，rollback 25917596，browser provider f4832487；实读生产与当前产品状态。104条Evidence已实际确认，v6尚无合格图片/未发布；最新8fc方案仍有科学矛盾不可放行。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
-> 当前执行：用户要求暂停局部UI补丁，先研究 effective-html / Apple 等 skills，结合当前截图和Chat6Pro分析后 grill-me 逐项讨论展示内容。用户授权审核发布仍有效，但不放行已知错误；视频和批量冷启动暂停。
-> 最新部署：图片方案4000字符预算、视频原边界兼容、避免初始伪版本；本轮无新部署。当前文档变更不代表新代码已发布。
+> **CURRENT 2026-09-11:** production / code 17ebc7f7，rollback cb173542，browser provider f4832487；基础风格已部署；最新对话收口候选移除旧操作表单、连通制作/审核/公开回调，尚待部署。104条Evidence已确认；v6尚无合格图片/未发布，8fc方案仍不可放行。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> 当前执行：用户已批准高保真风格并要求突出六栏目，正式工作台与公开阅读页已上线；继续处理正确生图/发布闭环，不重新访谈已确定方向。
+> 最新部署：17ebc7f7，实际服务器构建/启动完成，不运行测试/预检；后续docs-only变更不是应用部署。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -11,11 +11,12 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 研究/待讨论；不是批准实施方案，未安装新能力 |
+| `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 参考目录；相关结构/风格已获用户批准，未安装新能力 |
 | `docs/proposals/2026-09-11-ro-workbench-wireframe.html` | 成稿/Hermes/图视频/公开预览可点击灰度线框，两个主要确认节点 | 已在服务器浏览器打开供用户讨论；无生产接口/真实媒体/发布，非生产UI部署 |
-| `docs/proposals/2026-09-11-ro-product-preview.html` | 保留已认可布局的视觉与Hermes对话交互稿，固定输入、精简制作确认、公开媒体与正文共享状态 | 已在服务器浏览器呈现；仅预设短句/内存演示，真实Hermes自主处置及生产接入待完成 |
-| `apps/web/app/research-product.css` / `apps/web/app/research-objects/[id]/edit/workbench.module.css` / `apps/web/components/public/PublicReadingProduct.module.css` | 已批准高保真风格的正式工作台与公开阅读样式，六栏目标题强调、图视频直显和固定Hermes对话输入 | 2026-09-11候选；无测试/预检，部署状态见CURRENT handoff |
-| `apps/agent-worker/src/workspace-guide.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/components/hermes/HermesPresentationAction.tsx` | 同会话服务端上下文、模型语义路由、可撤销草稿回显、折叠制作确认与发布预览；保留权限/版本/明确制作发布确认 | 2026-09-11候选；不以请求成功代替科学产物通过 |
+| `docs/proposals/2026-09-11-ro-product-preview.html` | 保留已认可布局的视觉与Hermes对话交互稿，固定输入、精简制作确认、公开媒体与正文共享状态 | 已批准的视觉参考；原样稿仅预设短句/内存演示，生产实现与未决事项见CURRENT handoff |
+| `apps/web/lib/hermes/conversation-action.ts` / `apps/web/components/hermes/HermesMediaReview.tsx` | Hermes对话确认的前端动作接口、当前版本实际素材审核及结果回写 | 本轮候选；复用原权限/版本/updatedAt，部署状态见CURRENT |
+| `apps/web/app/research-product.css` / `apps/web/app/research-objects/[id]/edit/workbench.module.css` / `apps/web/components/public/PublicReadingProduct.module.css` | 已批准高保真风格的正式工作台与公开阅读样式，六栏目标题强调、图视频直显和固定Hermes对话输入 | DEPLOYED17ebc7f7；无测试/预检，实际页面观察及限制见CURRENT handoff |
+| `apps/agent-worker/src/workspace-guide.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/components/hermes/HermesPresentationAction.tsx` | 同会话服务端上下文、模型语义路由、可撤销草稿回显、折叠制作确认与发布预览；保留权限/版本/明确制作发布确认 | DEPLOYED17ebc7f7；不以请求成功代替科学产物通过 |
 | `apps/web/components/presentation/ResearchPresentation.tsx` / `apps/web/components/research/ResearchPublication.tsx` | 连续工作台复用制作及版本绑定发布预览，旧独立路由保留 | DEPLOYED b05aaeac；最新真实状态见CURRENT handoff |
 | `infra/scripts/verify-hermes-user-journey.mjs` | 服务器真实普通账号浏览器上传/启动/恢复取证，禁止手工生成各媒体阶段 | ACCEPTANCE TOOL；待运行，不代表产品流程通过 |
 | `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |

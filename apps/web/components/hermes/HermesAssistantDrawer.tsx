@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import Drawer from '@/components/editor/Drawer';
 import { LiteratureAcquisition } from '@/components/dashboard/LiteratureAcquisition';
@@ -30,6 +30,9 @@ import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, loadHermesGuideGoal, saveHermesGuideGoal, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import { SDF_FIELDS } from '@/lib/suggestions';
+import { ResearchPublication } from '@/components/research/ResearchPublication';
+import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
+import { HermesMediaReview } from './HermesMediaReview';
 
 type LiteratureIntent = Extract<RoutedHermesIntent, { kind: 'literature.acquire' }>;
 
@@ -69,6 +72,7 @@ export async function createDrawerLiteratureIntent({
 }
 
 export interface HermesAssistantDrawerProps {
+  onPrepareVersion?(expected: WorkspaceGuidePayload['context']['editorDraft']): Promise<{ versionId: string; assertCurrent(): void }>;
   open: boolean;
   onOpenChange(open: boolean): void;
   locale: 'zh' | 'en';
@@ -92,7 +96,7 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
     if (!step || typeof step !== 'object') return false;
     const candidate = step as Record<string, unknown>;
     return typeof candidate.label === 'string'
-      && ['open-task', 'open-ro', 'start-import', 'prepare-publication'].includes(String(candidate.intent))
+      && ['open-task', 'open-ro', 'start-import', 'prepare-publication', 'review-media'].includes(String(candidate.intent))
       && (candidate.targetId === undefined || typeof candidate.targetId === 'string');
   }).slice(0, 1);
   if (nextSteps.length !== value.nextSteps.length) return null;
@@ -100,13 +104,15 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
   if (value.presentationDraft !== undefined) {
     const candidate = value.presentationDraft as Record<string, unknown>;
     if (!candidate || typeof candidate !== 'object' || !['storyboard.create', 'storyboard.revise', 'scene.image', 'video.create'].includes(String(candidate.action))
-      || typeof candidate.instruction !== 'string' || !candidate.instruction.trim() || candidate.instruction.length > 1_000
+      || typeof candidate.instruction !== 'string' || (!candidate.instruction.trim() && !['scene.image', 'video.create'].includes(String(candidate.action))) || candidate.instruction.length > 1_000
+      || (candidate.style !== undefined && !['technical', 'ink', 'watercolor'].includes(String(candidate.style)))
       || typeof candidate.researchObjectId !== 'string' || typeof candidate.versionId !== 'string') return null;
     presentationDraft = {
       action: candidate.action as NonNullable<WorkspaceGuideResult['presentationDraft']>['action'],
       instruction: candidate.instruction as string,
       researchObjectId: candidate.researchObjectId as string,
       versionId: candidate.versionId as string,
+      ...(candidate.style ? { style: candidate.style as 'technical' | 'ink' | 'watercolor' } : {}),
     };
   }
   let draftEdit: WorkspaceGuideResult['draftEdit'];
@@ -126,7 +132,7 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
 }
 
 function HermesAssistantDrawerContent({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, docked = false,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, docked = false, onPrepareVersion,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
   const [wide, setWide] = useState(false);
@@ -139,12 +145,29 @@ function HermesAssistantDrawerContent({
   const presentationSubmissions = useRef(new Map<string, SubmissionIntent>());
   const [presentationIntent, setPresentationIntent] = useState<HermesPresentationIntent | null>(null);
   const [presentationSuggestion, setPresentationSuggestion] = useState<WorkspaceGuideResult['presentationDraft']>();
+  const [publicationVersion, setPublicationVersion] = useState('');
+  const [mediaReviewVersion, setMediaReviewVersion] = useState('');
+  const [localMessage, setLocalMessage] = useState('');
+  const [publicUrl, setPublicUrl] = useState('');
+  const [preparing, setPreparing] = useState(false);
+  const offeredAction = useRef<HermesConversationAction | null>(null);
+  const registerAction = useCallback((action: HermesConversationAction | null) => { offeredAction.current = action; }, []);
+  const offeredDraft = useRef<WorkspaceGuidePayload['context']['editorDraft']>();
+  const assertPrepared = useRef<(() => void) | null>(null);
+  const currentDraft = useRef(dashboardContext.editorDraft); currentDraft.current = dashboardContext.editorDraft;
+  const submittedDraft = useRef<WorkspaceGuidePayload['context']['editorDraft']>();
+  const submittedPresentationVersion = useRef('');
+  const actionScopeIsCurrent = () => {
+    try { assertPrepared.current?.(); } catch { return false; }
+    const base = offeredDraft.current; const current = currentDraft.current;
+    return !base || Boolean(current && base.researchObjectId === current.researchObjectId && base.scope === current.scope && SDF_FIELDS.every((field) => base.core[field] === current.core[field]));
+  };
   const [viewerId, setViewerId] = useState('');
   const [restoredTask, setRestoredTask] = useState(false);
   const [guideStored, setGuideStored] = useState(false);
   const requestedVersion = useSearchParams()?.get('version') ?? '';
   const router = useRouter();
-  const currentOwner = `${route}:${routeResearchObjectId ?? ''}:${requestedVersion}`;
+  const currentOwner = `${route}:${routeResearchObjectId ?? ''}`;
   const [resolvedGuide, setResolvedGuide] = useState({ owner: currentOwner, versionId: requestedVersion });
   const resolvedGuideVersion = resolvedGuide.owner === currentOwner ? resolvedGuide.versionId : '';
   const ownerRef = useRef(currentOwner); ownerRef.current = currentOwner;
@@ -185,7 +208,7 @@ function HermesAssistantDrawerContent({
   }, [open, docked, wide]);
   const [literatureIntent, setLiteratureIntent] = useState<DrawerLiteratureIntent | null>(null);
   const activeTask = task?.status === 'pending' || task?.status === 'running';
-  const busy = submitting || activeTask;
+  const busy = submitting || activeTask || preparing;
   const result = task?.status === 'succeeded' ? resultFromTask(task) : null;
   const invalidResult = task?.status === 'succeeded' && !result;
   useEffect(() => {
@@ -204,7 +227,7 @@ function HermesAssistantDrawerContent({
   const scopedPresentationDraft = result?.presentationDraft
     && route === 'research-object-edit'
     && result.presentationDraft.researchObjectId === routeResearchObjectId
-    && (!requestedVersion || result.presentationDraft.versionId === requestedVersion)
+    && (!submittedPresentationVersion.current || result.presentationDraft.versionId === submittedPresentationVersion.current)
     && (!restoredTask || Boolean(requestedVersion))
     ? result.presentationDraft
     : undefined;
@@ -213,8 +236,13 @@ function HermesAssistantDrawerContent({
     appliedTasks.current.clear(); setEditOutcome(null);
     preparedTasks.current.clear(); setTurns([]); setSentGoal(''); followTranscript.current = true;
     setPresentationIntent(null); setPresentationSuggestion(undefined); setLiteratureIntent(null); setTask(null); setGoal(''); setError(''); setSubmitting(false); setRestoredTask(false); setGuideStored(false);
+    setPublicationVersion(''); setMediaReviewVersion(''); setLocalMessage(''); setPublicUrl(''); setPreparing(false); offeredAction.current = null; offeredDraft.current = undefined; assertPrepared.current = null;
     sessionId.current = null; sessionKey.current = null; taskKey.current = null; pendingPayload.current = null; submittingRef.current = false; goalTouched.current = false; setActionBusy(false);
   }, [currentOwner]);
+  useEffect(() => {
+    setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion('');
+    offeredAction.current = null; assertPrepared.current = null;
+  }, [requestedVersion]);
 
   useEffect(() => {
     if (!open) { injectedGoal.current = ''; return; }
@@ -227,21 +255,38 @@ function HermesAssistantDrawerContent({
   useEffect(() => {
     const pane = transcript.current;
     if (pane && followTranscript.current) pane.scrollTop = pane.scrollHeight;
-  }, [open, sentGoal, turns, task?.status, result?.summary, presentationIntent, editOutcome]);
+  }, [open, sentGoal, turns, task?.status, result?.summary, presentationIntent, editOutcome, localMessage, publicationVersion, preparing]);
 
   useEffect(() => {
     if (!task || !result || result.needsMoreInformation || restoredTask || preparedTasks.current.has(task.id)) return;
     preparedTasks.current.add(task.id);
-    if (scopedPresentationDraft) {
-      setPresentationSuggestion(scopedPresentationDraft);
-      setPresentationIntent({ action: scopedPresentationDraft.action, instruction: scopedPresentationDraft.instruction });
-    }
     const preview = result.nextSteps.find((step) => step.intent === 'prepare-publication' && step.targetId === routeResearchObjectId);
-    if (preview && route === 'research-object-edit' && routeResearchObjectId) {
-      const version = requestedVersion || resolvedGuideVersion;
-      router.push(`/research-objects/${encodeURIComponent(routeResearchObjectId)}/edit?${new URLSearchParams({ stage: 'publish', ...(version ? { version } : {}) })}`);
-    }
-  }, [task, result, restoredTask, scopedPresentationDraft, requestedVersion, resolvedGuideVersion, route, routeResearchObjectId, router]);
+    const mediaReview = result.nextSteps.find((step) => step.intent === 'review-media' && step.targetId === routeResearchObjectId);
+    if (!scopedPresentationDraft && !preview && !mediaReview) return;
+    const owner = currentOwner;
+    const base = submittedDraft.current;
+    setPreparing(true);
+    void (async () => {
+      try {
+        const prepared = onPrepareVersion ? await onPrepareVersion(base) : null;
+        const version = prepared?.versionId || scopedPresentationDraft?.versionId || requestedVersion || resolvedGuideVersion;
+        if (ownerRef.current !== owner) return;
+        if (!version) throw new Error(tc('prepareVersionFailed'));
+        prepared?.assertCurrent();
+        assertPrepared.current = prepared?.assertCurrent ?? null;
+        offeredDraft.current = base;
+        if (scopedPresentationDraft) {
+          setPresentationSuggestion({ ...scopedPresentationDraft, versionId: version });
+          setPresentationIntent({ action: scopedPresentationDraft.action, instruction: scopedPresentationDraft.instruction });
+        } else if (route === 'research-object-edit' && routeResearchObjectId) {
+          if (mediaReview) setMediaReviewVersion(version);
+          else setPublicationVersion(version);
+        }
+      } catch (cause) {
+        if (ownerRef.current === owner) setError(cause instanceof Error ? cause.message : tc('prepareVersionFailed'));
+      } finally { if (ownerRef.current === owner) setPreparing(false); }
+    })();
+  }, [task, result, restoredTask, scopedPresentationDraft, requestedVersion, resolvedGuideVersion, route, routeResearchObjectId, currentOwner, onPrepareVersion, tc]);
 
   useEffect(() => {
     let active = true;
@@ -307,10 +352,32 @@ function HermesAssistantDrawerContent({
     const normalized = goal.trim();
     if (!normalized || busy || actionBusy || submittingRef.current) return;
     if (pendingPayload.current && normalized !== pendingPayload.current.goal) { setError(tc('retrySame')); return; }
+    const command = normalized.replace(/[。！!\.]+$/u, '').trim();
+    const action = offeredAction.current;
+    const confirms = action?.kind === 'media-review' ? /^(?:采用|拒绝|approve|reject)\s*\d+$/iu.test(command) : action?.kind === 'production'
+      ? /^(?:确认(?:制作|生成)?|开始制作|同意|confirm(?: production)?|start production)$/iu.test(command)
+      : action?.kind === 'publication' && /^(?:确认公开发布|确认发布|confirm publication|publish publicly)$/iu.test(command);
+    if (confirms && action) {
+      if (!actionScopeIsCurrent()) { setError(tc('draftChanged')); return; }
+      if (!action.ready) { setError(tc('actionNotReady')); return; }
+      submittingRef.current = true; setActionBusy(true); setError(''); setGoal('');
+      setTurns((previous) => [...previous, { id: crypto.randomUUID(), user: normalized, summary: '' }].slice(-12));
+      try { await action.confirm(command); }
+      catch (cause) { setError(cause instanceof Error ? cause.message : tc('actionNotReady')); }
+      finally { submittingRef.current = false; setActionBusy(false); }
+      return;
+    }
+    if (action && !action.canDismiss) { setError(tc('retryProductionInChat')); return; }
+    if (/^(?:撤销(?:上次修改)?|undo)$/iu.test(command) && onUndoDraftEdit && editOutcome?.applied) {
+      onUndoDraftEdit(); setEditOutcome(null); setGoal(''); setLocalMessage(tc('undone')); return;
+    }
+    if (/^(?:取消(?:制作|发布|审核)?|cancel)$/iu.test(command) && (presentationIntent || publicationVersion || mediaReviewVersion)) {
+      setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion(''); offeredAction.current = null; setGoal(''); setLocalMessage(tc('cancelled')); return;
+    }
     const owner = currentOwner;
     if (task && result) setTurns((previous) => previous.some((turn) => turn.id === task.id) ? previous : [...previous, { id: task.id, user: sentGoal, summary: result.summary }].slice(-12));
     setSentGoal(normalized); followTranscript.current = true;
-    setPresentationIntent(null); setPresentationSuggestion(undefined);
+    setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion(''); offeredAction.current = null; setLocalMessage(''); setPublicUrl('');
     submittingRef.current = true;
     setError('');
     setEditOutcome(null);
@@ -336,10 +403,10 @@ function HermesAssistantDrawerContent({
       taskKey.current ??= crypto.randomUUID();
       pendingPayload.current ??= {
         goal: normalized, locale, route, target,
-        context: dashboardContext.presentation && resolvedGuideVersion
-          ? { ...dashboardContext, presentation: { ...dashboardContext.presentation, versionId: resolvedGuideVersion } }
-          : dashboardContext,
+        context: dashboardContext,
       };
+      submittedDraft.current = pendingPayload.current.context.editorDraft;
+      submittedPresentationVersion.current = pendingPayload.current.context.presentation?.versionId ?? '';
       const response = await submitWorkspaceGuideTask({
         sessionId: sessionId.current,
         idempotencyKey: taskKey.current,
@@ -425,8 +492,7 @@ function HermesAssistantDrawerContent({
               </details>
             </div>}
             {result.needsMoreInformation && <p className="hermes-conversation-question">{t('guide.needsMoreInformation')}</p>}
-            {scopedPresentationDraft && !presentationIntent && <button type="button" className="hermes-conversation-link" onClick={() => { setPresentationSuggestion(scopedPresentationDraft); setPresentationIntent({ action: scopedPresentationDraft.action, instruction: scopedPresentationDraft.instruction }); }}>{tc('productionOptions')}</button>}
-            {!presentationIntent && result.nextSteps.map((step, index) => {
+            {!presentationIntent && !publicationVersion && !mediaReviewVersion && !preparing && result.nextSteps.filter((step) => !['prepare-publication', 'review-media'].includes(step.intent)).map((step, index) => {
               const href = actionHref(step);
               return href ? <Link className="hermes-conversation-link" href={href} key={index}>{step.label} →</Link> : <p key={index}>{step.label}</p>;
             })}
@@ -434,10 +500,14 @@ function HermesAssistantDrawerContent({
           {presentationIntent && <React.Suspense fallback={<p role="status">{t('guide.working')}</p>}>
             <HermesPresentationReview intent={presentationIntent} suggestion={presentationSuggestion} userId={viewerId}
               submissionRecords={presentationSubmissions.current} routeResearchObjectId={routeResearchObjectId}
-              researchObjects={dashboardContext.researchObjects} onBusyChange={setActionBusy}
+              researchObjects={dashboardContext.researchObjects} onBusyChange={setActionBusy} onConfirmationChange={registerAction}
               onBack={() => { setPresentationIntent(null); setActionBusy(false); }}
-              onDone={() => { setPresentationIntent(null); setPresentationSuggestion(undefined); setActionBusy(false); setGoal(''); if (resolvedDraftScope) saveHermesGuideGoal(draftStorage, resolvedDraftScope, ''); }} />
+              onDone={() => { setPresentationIntent(null); setPresentationSuggestion(undefined); setActionBusy(false); setGoal(''); setLocalMessage(tc('productionSubmitted')); if (resolvedDraftScope) saveHermesGuideGoal(draftStorage, resolvedDraftScope, ''); }} />
           </React.Suspense>}
+          {publicationVersion && routeResearchObjectId && <ResearchPublication key={`${routeResearchObjectId}:${publicationVersion}`} researchObjectId={routeResearchObjectId} selectedVersionId={publicationVersion} embedded conversation onConfirmationChange={registerAction} beforePublish={() => { if (!actionScopeIsCurrent()) throw new Error(tc('draftChanged')); }} onPublished={(url) => { setPublicUrl(url); setLocalMessage(tc('published')); }} />}
+          {mediaReviewVersion && routeResearchObjectId && <HermesMediaReview key={`${routeResearchObjectId}:${mediaReviewVersion}`} researchObjectId={routeResearchObjectId} versionId={mediaReviewVersion} onConfirmationChange={registerAction} beforeReview={() => { if (!actionScopeIsCurrent()) throw new Error(tc('draftChanged')); }} onReviewed={() => window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId: routeResearchObjectId, versionId: mediaReviewVersion } }))} />}
+          {localMessage && <p className="hermes-message hermes-message-assistant" role="status">{localMessage}</p>}
+          {publicUrl && <Link className="hermes-conversation-link" href={publicUrl}>{tw('openPublic')} →</Link>}
           {literatureIntent && <div className="hermes-conversation-acquisition">
             <button type="button" onClick={() => setLiteratureIntent(null)}>{t('guide.backToGuide')}</button>
             <LiteratureAcquisition initialRequest={literatureIntent.input} instanceId="hermes-drawer-literature"

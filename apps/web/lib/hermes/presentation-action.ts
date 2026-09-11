@@ -42,7 +42,7 @@ export function selectEligiblePresentationClaims(claims: PresentationClaim[]): s
 }
 export function newestEligibleStoryboard(assets: PresentationAsset[], action: PresentationAction): PresentationAsset | undefined {
   return assets
-    .filter((asset) => Boolean(asset.storyboard) && asset.status === 'approved'
+    .filter((asset) => Boolean(asset.storyboard) && (asset.status === 'approved' || (action === 'storyboard.revise' && asset.status === 'draft'))
       && (action !== 'scene.image' || asset.canGenerateSceneImage === true)
       && (action !== 'video.create' || asset.canGenerateVideo === true))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];

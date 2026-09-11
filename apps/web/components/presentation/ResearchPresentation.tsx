@@ -150,6 +150,16 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   const role = workspace?.role ?? '';
   const canWrite = Boolean(version && version.status === 'draft' && workspace?.status === 'active' && WRITER_ROLES.has(role));
 
+  useEffect(() => {
+    function refreshReviewedMedia(event: Event) {
+      const detail = (event as CustomEvent<{ researchObjectId?: string; versionId?: string }>).detail;
+      if (detail?.researchObjectId !== params.id || detail.versionId !== versionId) return;
+      setLoadNonce((value) => value + 1);
+    }
+    window.addEventListener('hermes-media-updated', refreshReviewedMedia);
+    return () => window.removeEventListener('hermes-media-updated', refreshReviewedMedia);
+  }, [params.id, versionId]);
+
   function scopeIsCurrent(scope: ActiveScope): boolean {
     return !scope.controller.signal.aborted
       && renderedScopeKey.current === scope.key
@@ -417,6 +427,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             onTransition={(assetItem, status) => void transition(assetItem, status)}
             working={working}
             error={error}
+            resultsOnly={embedded}
             onAskHermes={onAskHermes ?? ((kind) => { setHermesGoal(t(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); })}
           />
         </>

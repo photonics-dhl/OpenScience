@@ -7,12 +7,14 @@ import { ResearchSurfaceShell } from './ResearchSurfaceShell';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { apiRequest, getLicenses, getPublicationReview, getResearchObject, listVersions, listPresentationAssets, presentationAssetContentUrl, publishVersion, runPublicationReview, setVersionLicenses, transitionVersionStatus, type LicenseSet, type PublicationReview, type ResearchObjectSummary, type VersionSummary, type SdfCore, type PresentationAsset } from '@/lib/api';
 import { SDF_FIELDS } from '@/lib/suggestions';
+import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 
 const defaults: LicenseSet = { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' };
 const control = 'min-h-11 rounded-panel border border-os-rule-paper bg-white px-3 text-sm text-os-ink disabled:opacity-50';
 
-export function ResearchPublication({ researchObjectId, selectedVersionId, embedded = false }: { researchObjectId: string; selectedVersionId?: string; embedded?: boolean }) {
+export function ResearchPublication({ researchObjectId, selectedVersionId, embedded = false, conversation = false, onConfirmationChange, beforePublish, onPublished }: { researchObjectId: string; selectedVersionId?: string; embedded?: boolean; conversation?: boolean; onConfirmationChange?(action: HermesConversationAction | null): void; beforePublish?(): void; onPublished?(url: string): void }) {
   const t = useTranslations('productSurfaces');
+  const tc = useTranslations('hermesConversation');
   const tw = useTranslations('workbench');
   const [object, setObject] = useState<ResearchObjectSummary | null>(null);
   const [versions, setVersions] = useState<VersionSummary[]>([]);
@@ -22,6 +24,7 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
   const [review, setReview] = useState<PublicationReview | null>(null);
   const [core, setCore] = useState<SdfCore | null>(null);
   const [assets, setAssets] = useState<PresentationAsset[]>([]);
+  const [materialNames, setMaterialNames] = useState<string[]>([]);
   const [readyScope, setReadyScope] = useState('');
   const scope = `${researchObjectId}:${selectedId}`;
   const activeScope = useRef(scope); activeScope.current = scope;
@@ -43,16 +46,17 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
 
   useEffect(() => {
     let active = true;
-    setReadyScope(''); setReview(null); setCore(null); setAssets([]); setConfirmOpen(false); setPublicUrl(''); setError('');
+    setReadyScope(''); setReview(null); setCore(null); setAssets([]); setMaterialNames([]); setConfirmOpen(false); setPublicUrl(''); setError('');
     if (!selectedId) return;
     void Promise.all([
       getLicenses(researchObjectId, selectedId), getPublicationReview(selectedId),
-      apiRequest<{ record: { objectId: string; versionId: string; sdf: SdfCore } }>(`/api/research-objects/${encodeURIComponent(researchObjectId)}/versions/${encodeURIComponent(selectedId)}/record`),
+      apiRequest<{ record: { objectId: string; versionId: string; sdf: SdfCore; manifest?: Array<{ logicalPath: string }> } }>(`/api/research-objects/${encodeURIComponent(researchObjectId)}/versions/${encodeURIComponent(selectedId)}/record`),
       listPresentationAssets(researchObjectId, selectedId),
     ]).then(([licenseResult, reviewResult, recordResult, media]) => {
       if (!active) return;
       if (recordResult.record.objectId !== researchObjectId || recordResult.record.versionId !== selectedId) throw new Error(tw('versionMismatch'));
       setLicenses(licenseResult.licenses ?? defaults); setReview(reviewResult.review); setCore(recordResult.record.sdf);
+      setMaterialNames((recordResult.record.manifest ?? []).map((item) => item.logicalPath));
       setAssets(media.assets.filter((asset) => asset.status === 'approved' && !asset.storyboard)); setReadyScope(scope);
     }).catch((cause: Error) => { if (active) setError(cause.message); });
     return () => { active = false; };
@@ -64,6 +68,7 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
     const current = () => activeScope.current === scope;
     setWorking(true); setError('');
     try {
+      beforePublish?.();
       await setVersionLicenses(researchObjectId, target.versionId, licenses);
       if (!current()) return;
       const result = await runPublicationReview(target.versionId);
@@ -82,9 +87,21 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
         if (!current()) return;
         setVersions((items) => items.map((item) => item.versionId === target.versionId ? { ...item, status: 'approved' } : item));
       }
+      beforePublish?.();
+      // Approval is closed for this version after the status transitions above.
+      // Reconcile the displayed media scope before the final irreversible write.
+      if (conversation) {
+        const latest = await listPresentationAssets(researchObjectId, target.versionId);
+        if (!current()) return;
+        const reviewed = latest.assets.filter((asset) => asset.status === 'approved' && !asset.storyboard);
+        if (reviewed.length !== assets.length || reviewed.some((asset) => !assets.some((shown) => shown.id === asset.id && shown.updatedAt === asset.updatedAt))) {
+          setAssets(reviewed); throw new Error(tc('publicMediaChanged'));
+        }
+      }
       const publication = await publishVersion(target.versionId);
       if (!current()) return;
       setPublicUrl(`/research/${encodeURIComponent(publication.published.publicId)}/v/${target.versionNo}`);
+      onPublished?.(`/research/${encodeURIComponent(publication.published.publicId)}/v/${target.versionNo}`);
       setVersions((items) => items.map((item) => item.versionId === target.versionId ? { ...item, status: 'published' } : item)); setConfirmOpen(false);
     } catch (cause) {
       if (!current()) return;
@@ -94,6 +111,24 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
       if (current() && history) setVersions(history.versions);
     } finally { if (current()) setWorking(false); }
   }
+  const latestPublish = useRef(publish); latestPublish.current = publish;
+  useEffect(() => {
+    if (!conversation || !onConfirmationChange) return;
+    onConfirmationChange({ kind: 'publication', ready: ready && !working && selected?.status !== 'published', canDismiss: !working, confirm: () => latestPublish.current() });
+    return () => onConfirmationChange(null);
+  }, [conversation, onConfirmationChange, ready, working, scope, selected?.status]);
+  if (conversation) return <section className="hermes-message hermes-message-assistant" data-conversation-publication="true">
+    {error && <p role="alert" className="text-sm text-state-danger">{error}</p>}
+    {!ready && !error && <p role="status">{t('state.loadingBody')}</p>}
+    {ready && <>
+      <p>{tc('publicationScope', { title: object?.title ?? '', version: selected?.versionNo ?? 0, count: assets.filter((asset) => ['image', 'chart', 'video'].includes(asset.kind)).length })}</p>
+      <p className="mt-2 text-sm">{t('publish.permanenceBody')}</p>
+      <p className="mt-2 text-sm">{tc('publicationLicense', { text: licenses.text, code: licenses.code, data: licenses.data })}</p>
+      {materialNames.length > 0 && <details className="mt-3 text-sm"><summary>{tc('publicationMaterials', { count: materialNames.length })}</summary><ul className="mt-2 list-inside list-disc">{materialNames.map((name) => <li className="break-all" key={name}>{name}</li>)}</ul></details>}
+      {review?.hardBlocks.map((block, index) => <p className="mt-2 text-sm text-state-danger" key={index}>{block.reason}</p>)}
+      <p className="mt-3 text-sm" role="status">{working ? t('publish.checking') : selected?.status === 'published' ? t('publish.published') : tc('confirmPublicationInChat')}</p>
+    </>}
+  </section>;
   const content = <div className="mx-auto max-w-4xl text-os-ink" data-workbench-publication="true">
     <header className="mb-6"><h1 className="text-2xl font-semibold">{tw('publishPreview')}</h1><p className="mt-2 text-sm leading-6 text-os-muted-paper">{tw('publishPreviewBody')}</p></header>
     {!embedded && <label className="mb-5 flex items-center gap-3 text-sm">{t('publish.version')}<select className={control} disabled={working} value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>{versions.map((item) => <option key={item.versionId} value={item.versionId}>v{item.versionNo} · {item.status}</option>)}</select></label>}

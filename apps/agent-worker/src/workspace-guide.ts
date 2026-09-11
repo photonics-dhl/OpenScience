@@ -1,7 +1,7 @@
 import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
 import { buildInterestContext, parseWorkspaceGuidePayload, validateInterestContext, type AgentDeps, type WorkspaceGuidePayload } from '@openscience/domain';
 
-type WorkspaceGuideIntent = 'open-task' | 'open-ro' | 'start-import' | 'prepare-publication';
+type WorkspaceGuideIntent = 'open-task' | 'open-ro' | 'start-import' | 'prepare-publication' | 'review-media';
 
 export interface WorkspaceGuideResult extends Record<string, unknown> {
   summary: string;
@@ -15,13 +15,14 @@ export interface WorkspaceGuideResult extends Record<string, unknown> {
   draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: NonNullable<WorkspaceGuideResult['draftChanges']> };
   presentationDraft?: {
     action: 'storyboard.create' | 'storyboard.revise' | 'scene.image' | 'video.create';
+    style?: 'technical' | 'ink' | 'watercolor';
     instruction: string;
     researchObjectId: string;
     versionId: string;
   };
 }
 
-const INTENTS = new Set<WorkspaceGuideIntent>(['open-task', 'open-ro', 'start-import', 'prepare-publication']);
+const INTENTS = new Set<WorkspaceGuideIntent>(['open-task', 'open-ro', 'start-import', 'prepare-publication', 'review-media']);
 const CORE_FIELDS = ['problem', 'insight', 'method', 'evidence', 'results', 'limitations', 'reproducibility'] as const;
 
 function boundedCore(value: unknown, maxCharsPerField = 1_200): Record<string, string> {
@@ -66,10 +67,11 @@ export const workspaceGuideResultGuard: SchemaGuard<WorkspaceGuideResult> = (val
   if (!validSteps || result.presentationDraft === undefined) return validSteps;
   if (!result.presentationDraft || typeof result.presentationDraft !== 'object' || Array.isArray(result.presentationDraft)) return false;
   const draft = result.presentationDraft as Record<string, unknown>;
-  return hasOnlyKeys(draft, ['action', 'instruction', 'researchObjectId', 'versionId'])
+  return hasOnlyKeys(draft, ['action', 'instruction', 'style', 'researchObjectId', 'versionId'])
+    && (draft.style === undefined || ['technical', 'ink', 'watercolor'].includes(String(draft.style)))
     && ['storyboard.create', 'storyboard.revise', 'scene.image', 'video.create'].includes(String(draft.action))
     && typeof draft.instruction === 'string'
-    && draft.instruction.trim().length > 0
+    && (draft.instruction.trim().length > 0 || draft.action === 'scene.image' || draft.action === 'video.create')
     && draft.instruction.length <= 1_000
     && typeof draft.researchObjectId === 'string'
     && draft.researchObjectId.length > 0
@@ -164,8 +166,8 @@ export async function workspaceGuideHandler(
         'InterestContext 仅用于排序关注点；rejectedSignals 是明确排除项，不得反向推断敏感属性或站外行为。',
         `只输出一个 JSON 对象，必填根字段为 summary（非空字符串）、nextSteps（数组）、needsMoreInformation（boolean）；可选字段为 presentationDraft${editorDraft ? '、draftChanges' : ''}。不适用的可选字段必须省略，不得填 null。禁止Markdown或JSON外的文字。`,
         'nextSteps 最多 1 项；每项只能包含 label、intent、targetId，禁止 title、description 或其他字段。',
-        '仅当 presentationContext 存在且用户目标适合用讲解分镜表达时，才输出 presentationDraft；它只能包含 action、instruction、researchObjectId、versionId。action 根据请求选择 storyboard.create、storyboard.revise、scene.image 或 video.create，两个 id 必须逐字使用 presentationContext，instruction 必须是基于给定版本字段的可编辑分镜指令，不得声称已生成、批准或发布。不得输出主张或来源 id。',
-        'intent 只能是 open-task、open-ro、start-import、prepare-publication。除 start-import 外必须带授权 targetId；start-import 必须省略 targetId。',
+        '仅当 presentationContext 存在且用户目标适合用讲解分镜表达时，才输出 presentationDraft；它包含 action、instruction、researchObjectId、versionId，可选 style（technical、ink、watercolor）。action 根据请求选择 storyboard.create、storyboard.revise、scene.image 或 video.create，两个 id 必须逐字使用 presentationContext，instruction 必须是基于给定版本字段的可编辑分镜指令，不得声称已生成、批准或发布。不得输出主张或来源 id。',
+        'intent 只能是 open-task、open-ro、start-import、prepare-publication、review-media。除 start-import 外必须带授权 targetId；start-import 必须省略 targetId。',
         `open-task 只能使用下列 task id：${taskIds.length ? taskIds.join(', ') : '（无；禁止输出 open-task）'}。`,
         `open-ro 只能使用下列 research object id：${researchObjectIds.length ? researchObjectIds.join(', ') : '（无；禁止输出 open-ro）'}。`,
         editorDraft ? '编辑输出示例（实际仅修改用户要求的字段）：{"summary":"已给出问题字段的精炼草稿。","nextSteps":[],"needsMoreInformation":false,"draftChanges":{"problem":"完整替换文本"}}' : '严格示例：{"summary":"审核结论与缺口","nextSteps":[{"label":"打开研究对象复核","intent":"open-ro","targetId":"允许的 id"}],"needsMoreInformation":true}',
@@ -177,8 +179,8 @@ export async function workspaceGuideHandler(
         'Use InterestContext only to prioritize attention. rejectedSignals are explicit exclusions; never infer sensitive traits or off-site behavior.',
         `Return exactly one JSON object. Required keys: summary (nonempty string), nextSteps (array), needsMoreInformation (boolean). Optional keys: presentationDraft${editorDraft ? ', draftChanges' : ''}. Omit unused optional keys; never set them to null. No Markdown or text outside JSON.`,
         'nextSteps has at most one item. It may contain only label, intent, and targetId; title and description are forbidden.',
-        'Emit presentationDraft only when presentationContext exists and the goal benefits from an explanatory storyboard. It may contain only action, instruction, researchObjectId, and versionId. action must match the request: storyboard.create, storyboard.revise, scene.image or video.create; copy both ids exactly from presentationContext. instruction is an editable storyboard brief grounded in the supplied version fields. Never claim it was generated, approved, or published, and never emit Claim or source ids.',
-        'intent must be open-task, open-ro, start-import or prepare-publication. All except start-import require an authorized targetId; start-import must omit targetId.',
+        'Emit presentationDraft only when presentationContext exists and the goal benefits from an explanatory storyboard. It contains action, instruction, researchObjectId, versionId, and optional style (technical, ink, watercolor). action must match the request: storyboard.create, storyboard.revise, scene.image or video.create; copy both ids exactly from presentationContext. instruction is an editable storyboard brief grounded in the supplied version fields. Never claim it was generated, approved, or published, and never emit Claim or source ids.',
+        'intent must be open-task, open-ro, start-import, prepare-publication or review-media. All except start-import require an authorized targetId; start-import must omit targetId.',
         `open-task may use only these task ids: ${taskIds.length ? taskIds.join(', ') : '(none; do not emit open-task)'}.`,
         `open-ro may use only these research object ids: ${researchObjectIds.length ? researchObjectIds.join(', ') : '(none; do not emit open-ro)'}.`,
         editorDraft ? 'Editing example (change only the fields actually requested): {"summary":"Proposed a concise problem statement.","nextSteps":[],"needsMoreInformation":false,"draftChanges":{"problem":"Full replacement text"}}' : 'Exact example: {"summary":"Review finding and gap","nextSteps":[{"label":"Open the research object","intent":"open-ro","targetId":"an allowed id"}],"needsMoreInformation":true}',
@@ -188,6 +190,8 @@ export async function workspaceGuideHandler(
     : 'You also co-edit the active workbench. editorDraft is the current user draft, not new evidence. Only for an explicit revision, condensation, translation or editing request may you add draftChanges, containing only changed SDF field keys and full replacement text. Questions, review and navigation do not edit. Preserve scientific conditions, equations, units, limitations and source meaning; never invent paper content. Explain insufficient evidence instead of filling guesses. All other root restrictions remain. Summarize changes without claiming they were saved, confirmed or published. Do not change unrequested fields.');
   if (editorDraft) system += '\n' + 'draftChanges must be a JSON object, never an array or JSON Patch. Allowed keys: problem, insight, method, results, limitations, reproducibility. Each value is the full replacement string (1–4000 characters); use English keys even when the text is Chinese. Omit unchanged fields. For a completed edit set needsMoreInformation=false and nextSteps=[].';
   system += '\n' + [
+    'An additional nextSteps intent review-media opens the current research object media/plan review in this conversation. Use it when the user wants to review, adopt, reject or inspect existing images, videos or plans; targetId must be the CURRENT authorized research object id. This only opens review; it never approves an asset itself. For an explicit request to generate from the already approved plan without changing any instruction, use scene.image or video.create with instruction=""; if the user requests any revision, use storyboard.revise with a full nonempty instruction. Never represent a plan task as a completed image or video.',
+    'For presentationDraft, one additional optional field style is allowed: technical, ink, or watercolor. Infer it from the user request and conversation; use technical only when no preference is expressed. Put any more specific visual preference into instruction. Do not ask users to choose routine parameters or return a list of buttons. For a pure style change prepare a revised instruction for the current media request. Do not combine draftChanges with presentationDraft or prepare-publication in one response: finish edits first so the next operation uses the displayed draft.',
     'Conversation history contains prior user requests and assistant proposals, not new evidence or proof that actions completed. Resolve follow-up requests using it, but prefer the current draft and version context.',
     'Choose the requested operation semantically; a request to illustrate the research means scene.image; a video request means video.create. The client prepares missing plans and shows a scoped confirmation before any generation charge. Supply a grounded detailed instruction (maximum 1000 characters), never invent completed assets. Questions about capabilities or negated requests must not return an action.',
     'nextSteps may also contain prepare-publication, only for an explicit request to prepare or publish the CURRENT research object. Use its authorized id as targetId; this opens the final preview only and never publishes. Never claim publication has happened. When preparing production or publication, set needsMoreInformation=false only if the request is clear; otherwise explain the concrete question without an action.',
@@ -242,7 +246,7 @@ export async function workspaceGuideHandler(
     temperature: 0.2,
     validationFeedback: () => 'The previous JSON did not match the output contract. Return summary as a nonempty string (max 1200 characters), nextSteps as an array with at most one {label,intent,targetId} entry, and needsMoreInformation as a boolean. Omit unused optional fields; no nulls, patches, wrappers or extra keys. '
       + (editorDraft ? 'For editing use nextSteps:[], needsMoreInformation:false and draftChanges:{problem:"full text"} with only requested English field keys (problem,insight,method,results,limitations,reproducibility); string values only, max 4000 characters each, max 18000 in total. Omit presentationDraft unless a valid presentationContext exists.'
-        : 'The only optional root key is presentationDraft; include it only for an applicable presentationContext, with action, instruction, researchObjectId and versionId. Never emit draftChanges or edits. Navigation intent must be open-task, open-ro, start-import or prepare-publication and use only authorized IDs.'),
+        : 'The only optional root key is presentationDraft; include it only for an applicable presentationContext, with action, instruction, researchObjectId, versionId and optional style. Never emit draftChanges or edits. Navigation intent must be open-task, open-ro, start-import, prepare-publication or review-media and use only authorized IDs.'),
     validationDiagnostic: (value) => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return 'guide:root';
       const shape = value as Record<string, unknown>;
@@ -262,7 +266,7 @@ export async function workspaceGuideHandler(
     (step.intent === 'open-task' && (!step.targetId || !allowedTaskIds.has(step.targetId)))
     || (step.intent === 'open-ro' && (!step.targetId || !allowedResearchObjectIds.has(step.targetId)))
     || (step.intent === 'start-import' && step.targetId !== undefined)
-    || (step.intent === 'prepare-publication' && (!step.targetId || step.targetId !== ownerTask.session.researchObjectId || !allowedResearchObjectIds.has(step.targetId)))
+    || (['prepare-publication', 'review-media'].includes(step.intent) && (!step.targetId || step.targetId !== ownerTask.session.researchObjectId || !allowedResearchObjectIds.has(step.targetId)))
   ));
   if (invalidTarget) throw new Error('workspace.guide result target 不在允许的上下文中');
   if (result.presentationDraft && (!presentationVersion

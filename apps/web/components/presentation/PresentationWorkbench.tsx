@@ -41,13 +41,14 @@ export interface PresentationWorkbenchProps {
   onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => void;
   working?: boolean;
   error?: string;
+  resultsOnly?: boolean;
 }
 
 const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryData, onTransition, working = false, error = '',
+  onCreateClaim, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryData, onTransition, working = false, error = '', resultsOnly = false,
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const tw = useTranslations('workbench');
@@ -77,6 +78,31 @@ export function PresentationWorkbench({
     const value = statement.trim();
     if (!value) return;
     if (await onCreateClaim(value)) setStatement('');
+  }
+
+  if (resultsOnly) {
+    return (
+      <div className="min-w-0 text-os-ink" data-presentation-results="true">
+        {loading && mediaAssets.length === 0 ? <p className="m-0 py-5 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : null}
+        {mediaAssets.length > 0 ? (
+          <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={mediaAssets} allAssets={assets} claimsById={claimsById} canWrite={false} working={working} onTransition={onTransition} />
+        ) : null}
+        {task && task.status !== 'succeeded' ? (
+          <div className="mt-5 border-t border-os-rule-paper pt-5" data-presentation-task={task.status}>
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="font-semibold">{task.paused ? t('taskPaused') : t(`taskStatus.${task.status}`)}</span>
+              <span className="font-data tabular-nums text-os-muted-paper">{task.progress}%</span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-control bg-os-rule-paper" role="progressbar" aria-label={t('taskProgress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={task.progress}>
+              <span className="block h-full bg-os-vermilion-ink transition-[width] motion-reduce:transition-none" style={{ width: `${task.progress}%` }} />
+            </div>
+            {task.paused && onResumeTask ? <button type="button" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onResumeTask}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('resumeTask')}</button> : null}
+          </div>
+        ) : null}
+        {error ? <div className="mt-5 border-l-2 border-state-danger pl-4" role="alert">{error.includes('Storyboard output rejected:') ? <><p className="m-0 text-sm leading-6 text-state-danger">{t('briefNeedsRevision')}</p><details className="mt-2 text-xs leading-5"><summary className="cursor-pointer py-2">{t('failureDetails')}</summary><p className="break-words">{error}</p></details></> : <p className="m-0 text-sm leading-6 text-state-danger">{error}</p>}</div> : null}
+        {loadFailed && onRetryData ? <button type="button" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onRetryData}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('retryScopeLoad')}</button> : null}
+      </div>
+    );
   }
 
   return (
