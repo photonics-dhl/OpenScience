@@ -20,6 +20,7 @@ import {
   type DocumentSourceMapReference,
 } from './source-map-ref';
 import { ClaimEvidenceError } from './claim-evidence-errors';
+import { MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from '../ingestion/canonical-evidence-contract';
 
 const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 // A published Version row is immutable forever. The legacy `published -> revised`
@@ -453,7 +454,7 @@ export function validateCanonicalEvidenceSources(
   sourceMap: DocumentSourceMap,
   sources: readonly CanonicalEvidenceSource[],
 ): ResolvedEvidenceSource[] {
-  if (sources.length === 0 || sources.length > 32) {
+  if (sources.length === 0 || sources.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) {
     throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence segment count is invalid');
   }
   const blocks = new Map<string, {
@@ -472,6 +473,8 @@ export function validateCanonicalEvidenceSources(
     }
   }
   let priorOrdinal: number | undefined;
+  let priorBlockId: string | undefined;
+  let priorRangeEnd = 0;
   let total = 0;
   const resolved: ResolvedEvidenceSource[] = [];
   for (const source of sources) {
@@ -483,11 +486,16 @@ export function validateCanonicalEvidenceSources(
       || !locator.charRange || typeof block.text !== 'string'
       || block.text.slice(locator.charRange.start, locator.charRange.end) !== source.quote
       || locator.charRange.end - locator.charRange.start !== source.quote.length
-      || (priorOrdinal !== undefined && block.ordinal <= priorOrdinal)) {
+      || (priorOrdinal !== undefined && (
+        block.ordinal < priorOrdinal
+        || (block.ordinal === priorOrdinal && (locator.blockId !== priorBlockId || locator.charRange.start < priorRangeEnd))
+      ))) {
       throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence does not match strictly ordered exact source blocks');
     }
     priorOrdinal = block.ordinal;
-    total += source.quote.length;
+    priorBlockId = locator.blockId;
+    priorRangeEnd = locator.charRange.end;
+    total += source.quote.length + (resolved.length > 0 ? 1 : 0);
     const box = block.boundingBox;
     resolved.push({
       text: source.quote,
@@ -499,7 +507,7 @@ export function validateCanonicalEvidenceSources(
       },
     });
   }
-  if (total > 8_000) throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence passage is too large');
+  if (total > MAX_CANONICAL_EVIDENCE_CHARS) throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical Evidence passage is too large');
   return resolved;
 }
 
