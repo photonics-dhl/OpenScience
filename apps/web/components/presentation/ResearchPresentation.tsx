@@ -33,7 +33,6 @@ import {
 } from '@/lib/api';
 
 const WRITER_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
-const TASK_POLL_ATTEMPTS = 90;
 const TASK_POLL_INTERVAL_MS = 2_000;
 
 interface ActiveScope {
@@ -240,7 +239,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
 
     void (async () => {
       try {
-        for (let attempt = 0; attempt < TASK_POLL_ATTEMPTS; attempt += 1) {
+        for (let attempt = 0; !controller.signal.aborted; attempt += 1) {
           const current = (await getPresentationTask(params.id, versionId, taskId, controller.signal)).task;
           if (!scopeIsCurrent(scope) || controller.signal.aborted) return;
           setTaskState({ status: current.status, progress: current.progress, paused: false });
@@ -259,11 +258,8 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             setWorking(false);
             return;
           }
-          await abortableDelay(TASK_POLL_INTERVAL_MS, controller.signal);
-        }
-        if (scopeIsCurrent(scope) && !controller.signal.aborted) {
-          setTaskState((current) => ({ status: current?.status ?? 'running', progress: current?.progress ?? 0, paused: true }));
-          setWorking(false);
+          const interval = document.hidden ? 15_000 : attempt < 15 ? TASK_POLL_INTERVAL_MS : 5_000;
+          await abortableDelay(interval, controller.signal);
         }
       } catch (cause) {
         if (!scopeIsCurrent(scope) || controller.signal.aborted || isAbort(cause)) return;

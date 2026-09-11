@@ -1,6 +1,7 @@
 # OpenScience 当前进度
 
 ## 2026-09-11 — 媒体优先与真实生图推进（当前进行中）
+- 最新：按用户建议刷新并新建对话。fe任务空白结果保留uncertain；精确circuit归档经Sol High只读复核。726/02未网页提交；b19a65bd实际新Chat6aa4065f已显示生图进度。修复页面3分钟硬停（等待终态，前台2→5s/后台15s）与retry空JSON，尚待应用部署；未扩展测试。
 - 已部署application1a862027 / rollback1cdd4602，browser provider92cc416e / rollbackf4832487。4项项目设计skills、贡献→图视频→六字段→折叠资料、统一网格、多图HTML幻灯片已经交付。
 - 用户已授权本次服务器真实带图流程/代为科学审核/公开发布，未恢复全仓测试、CI或本机运行。
 - 服务器Hermes已精炼正文/自动保存/准备v7=f4e2dc71-1fe8-406f-8c19-e1849503d698；单场景1582087a已由主与Chat6Pro科学审阅后在对话中采用，PATCH200 approved。

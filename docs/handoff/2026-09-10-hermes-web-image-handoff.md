@@ -34,8 +34,8 @@
 - 旧公开OSR-2026-000020/v/2是旧内容，不是本次新版样例；v7尚未公开。
 
 ## 续做（不得重复已完成生成）
-1. 观察已提交修正图任务fe764f82-959d-46f3-8ec0-8dce61ca17bd；不得再次提交。Guide ef1799cd已实际输出scene.image+空instruction。
-2. 等新任务完成、取实际图并科学复核。不要放行轴方向/S(z)物理量错误；只针对实际错误修改，避免冗长指令层层改写引入科学漂移。
+1. fe764f82原Chat完成空白回复；刷新/原会话恢复无PNG，产品failed、provider uncertain。用户明确要求尝试新对话；726f21c5在网页提交前被全局circuit拒绝（未生图）。Sol High复核后，锁内按state/taskId/promptHash/reason精确归档fe的circuit，旧记录与可能迟到结果仍保留。新任务02ec70bf-2add-4a3b-952a-74d990a6c1ce于13:42:04Z由Hermes提交202，沿用已审3a方案；不要重复发送。
+2. 02ec70bf未提交网页即failed：新页renderer不响应，刷新后恢复控制但其中一页ERR_EMPTY_RESPONSE。13:46已观察到Chat主页/编辑框实际可用，沿用产品原生成API新建b19a65bd-6497-4b61-bb81-0154b264d58c（202），页面已切换此task。不得重发；等实际图并科学审核。直接API创建的这笔不冒充新一轮Hermes对话，prompt仍由已审Hermes方案与服务器组装。
 3. 图合格后通过Hermes媒体列表采用，准备公开发布，确认范围/许可证/正文后确认公开发布；打开返回的真实publicId版本确认展示。用户已授权代审代发。
 4. apps/web/lib/api.ts小修仍须应用部署；部署避免中断运行中的生图任务。同步本文件、索引、progress和服务器清单。
 5. 暂停视频与批量冷启动。本轮尚未完成全部公开流程。
@@ -43,6 +43,7 @@
 ## 现有控制入口
 - 服务器容器openscience-chatgpt-browser，CDP127.0.0.1:9233，/app/node_modules/playwright-core。
 - 普通规划/科学复核Chat6Pro：https://chatgpt.com/c/6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581；已有两轮规划、两轮方案/实图科学讨论，不重复发送。
+- 13:35读取我们新增的只读/images/标签挂起，使Playwright全浏览器连接超时；精确关闭该标签后连接立即恢复。不是全部Chat不可用，不重启Chrome或重新登录。
 - noVNC http://127.0.0.1:6081/vnc.html?autoconnect=true&resize=scale；file:///jobs/ro-product-preview-20260911.html仅历史样稿。
 - SSH使用infra/scripts/ssh-run.sh；Windows明确Git bash，XGS_CONFIG_ROOT=E:/Miscellaneous/XGS。禁止读取/输出.env、Cookie、密码/OTP。
 - 本轮部署日志 C:/Users/Mac/AppData/Local/Temp/xgs-core-media-deploy-20260911.log。

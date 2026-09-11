@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-11:** application1a862027 / rollback1cdd4602；browser provider92cc416e / rollbackf4832487；媒体优先布局与4项项目设计skills已部署。e0f842fa已由服务器从原Chat恢复并入库，未审/未发布；当前修正成图的坐标与S(z)标注。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-11:** application1a862027 / rollback1cdd4602；browser provider92cc416e / rollbackf4832487。e0图科学审核rejected；fe空白回复已按用户指示尝试新对话，b19a65bd实际网页生图中。静默持续更新任务与retry空JSON小修待部署。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 当前执行：用户已批准高保真风格并要求突出六栏目，正式工作台与公开阅读页已上线；继续处理正确生图/发布闭环，不重新访谈已确定方向。
 > 最新部署：17ebc7f7，实际服务器构建/启动完成，不运行测试/预检；后续docs-only变更不是应用部署。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
