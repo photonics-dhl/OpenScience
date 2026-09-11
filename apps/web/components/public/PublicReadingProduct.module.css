@@ -24,7 +24,6 @@
 
 .identity {
   padding-bottom: 24px;
-  border-bottom: 1px solid var(--public-product-rule);
 }
 
 .identity :global(.pub-kicker) {
@@ -215,7 +214,9 @@
 .surface :global(.pub-reading-column) > * { width: min(100%, 840px); }
 .surface :global(.pub-reading-column) > .gallery { width: 100%; }
 .sourceLine { display: flex; flex-wrap: wrap; gap: 16px; }
-.readingActions { display: flex; justify-content: flex-end; margin-block: 10px 20px; }
+.identityMeta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; margin-top: 14px; }
+.identityMeta .sourceLine { margin: 0; }
+.readingActions { display: flex; }
 .readingActions button { min-height: 40px; border: 1px solid #dce4e8; border-radius: 8px; padding: 8px 14px; background: #fff; color: #126a70; font-size: 13px; }
 .surface .contribution { margin-block: 0 32px; border-radius: 0 10px 10px 0; }
 .surface .gallery { margin-block: 0 36px; }

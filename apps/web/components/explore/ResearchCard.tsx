@@ -12,7 +12,7 @@ export function ResearchCard({ item, prominent = false }: { item: ResearchIndexI
         <p className={styles.meta}>{item.publicId}<span>v{item.latestVersion}</span>{item.publishedAt ? <time dateTime={item.publishedAt}>{item.publishedAt.slice(0, 10)}</time> : null}</p>
         <h2>{item.title}</h2>
         {item.insight ? <p className={styles.abstract}>{item.insight}</p> : null}
-        <p className={styles.authors}>{item.authors.join(' · ') || t('unknownAuthor')}</p>
+        {item.authors.length > 0 ? <p className={styles.authors}>{item.authors.join(' · ')}</p> : null}
         <span className={styles.read}>{t('readResearch')} <span aria-hidden="true">↗</span></span>
       </div>
     </Link>

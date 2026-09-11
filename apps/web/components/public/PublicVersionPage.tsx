@@ -18,15 +18,19 @@ type PublicResearch = Awaited<ReturnType<typeof getPublicResearchVersion>>['rese
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const t = useTranslations('public');
-  const [copied, setCopied] = React.useState(false);
+  const [status, setStatus] = React.useState<'idle' | 'copied' | 'failed'>('idle');
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus('copied');
+    } catch {
+      setStatus('failed');
+    }
+    setTimeout(() => setStatus('idle'), 2000);
   };
   return (
-    <button onClick={handleCopy} className="copy-btn" title={label ?? t('copy')}>
-      {copied ? t('copied') : t('copy')}
+    <button type="button" onClick={handleCopy} className="copy-btn" title={label ?? t('copy')} aria-live="polite">
+      {status === 'copied' ? t('copied') : status === 'failed' ? t('copyFailed') : label ?? t('copy')}
     </button>
   );
 }
@@ -243,15 +247,17 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
           <header className={`pub-reading-identity ${styles.identity}`} data-public-identity="true">
             <p className="pub-kicker">{t('researchObject')}</p>
             <h1>{research.title}</h1>
-            <p className={styles.sourceLine}>{version.publicVersionId}<span>{publishedAt}</span></p>
-            <div className={`pub-author-line ${styles.authorLine}`}>
+            <div className={styles.identityMeta}>
+              <p className={styles.sourceLine}>{version.publicVersionId}<span>{publishedAt}</span></p>
+              <div className={styles.readingActions}><CopyButton text={research.citation} label={t('copyCitation')} /></div>
+            </div>
+            {research.authors.length > 0 && <div className={`pub-author-line ${styles.authorLine}`}>
               {research.authors.map((author) => <span key={`${author.displayName}-${author.sortOrder}`} data-corresponding-author={author.isCorresponding ? 'true' : undefined}>
                 {author.displayName}{author.affiliation ? `, ${author.affiliation}` : ''}{author.isCorresponding ? ` · ${t('correspondingAuthor')}` : ''}
               </span>)}
-            </div>
+            </div>}
           </header>
 
-          <div className={styles.readingActions}><CopyButton text={research.citation} label={t('copyCitation')} /></div>
           <section className={`pub-reading-summary ${styles.contribution}`} aria-labelledby="public-summary-heading">
             <p id="public-summary-heading" className="whitespace-pre-wrap" data-reading-role="body">{version.core.insight || version.core.problem || t('none')}</p>
           </section>

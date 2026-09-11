@@ -1070,7 +1070,8 @@
         "error": "Hermes 暂时无法完成这次规划。你的目标仍保留，可以重试。"
       },
       "conversation": {
-        "label": "与 Hermes 对话"
+        "label": "与 Hermes 对话",
+        "body": "一起整理思路、修改内容，继续你的研究。"
       },
       "activity": {
         "eyebrow": "当前研究状态",

@@ -14,9 +14,7 @@ import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/Literatu
 import { ResearchList } from '@/components/dashboard/ResearchList';
 import { HermesRail, type HermesRailTask } from '@/components/hermes/HermesRail';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
-import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { deriveHermesGuide } from '@/components/hermes/hermes-guide';
-import { deriveHermesCompositeVisualState } from '@/components/hermes/hermes-state';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import { apiRequest, ApiClientError, getCurrentUser, getDashboardOverview, listResearchIngestionTasks, listSourceRetrieveTasks, type AgentTaskView, type CurrentUser, type DashboardResearchApi } from '@/lib/api';
 import type { DashboardResearch } from '@/components/dashboard/ResearchList';
@@ -185,7 +183,6 @@ export default function DashboardPage() {
   }
 
   const guideWorking = guideTask?.status === 'pending' || guideTask?.status === 'running';
-  const visualState = deriveHermesCompositeVisualState(tasks, guideWorking);
   const suggestion = deriveHermesGuide({ tasks, researchObjects });
   const dashboardContext = {
     tasks: tasks.slice(0, 20).map((task) => ({ id: task.id, researchObjectId: task.researchObjectId, state: task.state })),
@@ -223,9 +220,7 @@ export default function DashboardPage() {
           <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
         </div>
         <div className={styles.taskRail}>
-          <HermesConversationCard>
-            <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={visualState} suggestion={suggestion} />
-          </HermesConversationCard>
+          <HermesConversationCard onInvoke={() => setHermesOpen(true)} working={guideWorking} />
           <HermesRail historyTasks={taskHistory} tasks={tasks} />
         </div>
         <div className={styles.startResearch}>

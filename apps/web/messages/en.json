@@ -1070,7 +1070,8 @@
         "error": "Hermes could not complete this plan. Your goal is preserved so you can retry."
       },
       "conversation": {
-        "label": "Talk with Hermes"
+        "label": "Talk with Hermes",
+        "body": "Refine ideas, edit content and move your research forward."
       },
       "activity": {
         "eyebrow": "Current research status",

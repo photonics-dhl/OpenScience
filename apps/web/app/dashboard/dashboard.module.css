@@ -36,7 +36,7 @@
 
 .heading {
   grid-column: 1 / -1;
-  padding: 2px 0 6px;
+  padding: 2px 0 0;
 }
 
 .eyebrow {
@@ -89,13 +89,18 @@
 
 .continueResearch > section {
   border-top: 3px solid #125d66;
-  min-height: 230px;
+  min-height: 0;
 }
 
 .taskRail > :global(.hermes-conversation-card) {
   position: relative;
   overflow: hidden;
-  padding: 0 12px;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 24px 20px;
+  min-height: 180px;
   border-color: #b9d3d3;
   background: linear-gradient(145deg, #ffffff 0%, #f3f9f8 100%);
 }
@@ -167,6 +172,11 @@
 .library li > a:hover,
 .taskRail li > a:hover { background: #f7f8fa; }
 
+.taskRail :global(.hermes-conversation-card) > img { display: block; width: 104px; height: 120px; object-fit: contain; }
+.taskRail :global(.hermes-conversation-card) h2 { margin: 0; font-size: 23px; }
+.taskRail :global(.hermes-conversation-card) p { margin: 6px 0 12px; color: #596875; font-size: 14px; line-height: 1.65; }
+.taskRail :global(.hermes-conversation-card) button { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: #126a70; font: 650 14px/1.5 var(--font-ui), sans-serif; }
+
 @media (max-width: 1023px) {
   .desk .main { padding: 20px 20px 40px; }
   .layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
@@ -181,7 +191,8 @@
   .literature > section,
   .library > section,
   .taskRail > aside { padding: 20px 16px; }
-  .taskRail > :global(.hermes-conversation-card) { padding-inline: 6px; }
+  .taskRail > :global(.hermes-conversation-card) { grid-template-columns: 80px minmax(0, 1fr); padding: 18px 16px; }
+  .taskRail :global(.hermes-conversation-card) > img { width: 80px; height: 100px; }
   .utilities { flex-wrap: wrap; }
   .taskRail li > a { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
@@ -204,3 +215,5 @@
   .layout :is(a, button) { transition: none; }
   .layout :is(a, button):active { transform: none; }
 }
+.desk .heading p { margin-block: 0 10px; }
+.desk .heading h1 { margin-block: 0 10px; }
