@@ -8,9 +8,9 @@
 
 ## 精确版本
 - 应用 release 9c5088ea72b88f40be1a4809216813caf34f0627；rollback 1a862027a76d6065cf3087b8eef93428672821b9；静默持续更新任务与retry空JSON已完成服务器构建/启动/切换，exit0，未合并main。
-- 生图 provider 92cc416ee3fe921f62c75cbe6f69e48d0b55227d；可用rollback f48324870f25b50c3a21eaad898beea87fb0aa1d。9ce51f11是中间修复版本，不作为可用回滚基线。
+- 生图 provider d1630135d569d28364d295380bb4e0333c3ee264，独立部署exit0；rollback 92cc416ee3fe921f62c75cbe6f69e48d0b55227d。source HEAD=d1630135，后续docs-only提交不等于应用release。
 - provider独立更新；Chrome/profile/登录复用，无新安装或账号轮换。Gateway源与f483完全未变，复用其已编译dist；不能复用/opt/openscience根目录的旧dist（缺少当前导出，曾使新broker启动失败，已纠正）。
-- broker新修待独立部署：提交后不再自动重启整个浏览器；单任务uncertain保留在任务ledger，不再全局拒绝新UUID。submitted防重发、原会话恢复、host flock、限额/PNG/科学审核均保留，Sol High与Chat6Pro定向复核。
+- broker新修已部署：提交后不再自动重启整个浏览器；单任务uncertain保留在任务ledger，不再全局拒绝新UUID。submitted防重发、原会话恢复、host flock、限额/PNG/科学审核均保留，Sol High与Chat6Pro定向复核。未决旧会话页不再被新任务自动关闭；只关闭helper/未发送/已有PNG的旧页。
 
 ## 本轮已交付
 - 应用1a：媒体优先、图视频稳定占位、共享网格、HTML多图单帧轮播/键盘翻页、真实图片放大。仅单图实际流程已运行，多图未做真实样本验收；不是独立可下载HTML文件。
@@ -37,7 +37,7 @@
 1. fe764f82原Chat完成空白回复；刷新/原会话恢复无PNG，产品failed、provider uncertain。用户明确要求尝试新对话；726f21c5在网页提交前被全局circuit拒绝（未生图）。Sol High复核后，锁内按state/taskId/promptHash/reason精确归档fe的circuit，旧记录与可能迟到结果仍保留。新任务02ec70bf-2add-4a3b-952a-74d990a6c1ce于13:42:04Z由Hermes提交202，沿用已审3a方案；不要重复发送。
 2. 02ec70bf未提交网页即failed：新页renderer不响应，刷新后恢复控制但其中一页ERR_EMPTY_RESPONSE。13:46已观察到Chat主页/编辑框实际可用，沿用产品原生成API新建b19a65bd-6497-4b61-bb81-0154b264d58c（202），页面已切换此task。不得重发；等实际图并科学审核。直接API创建的这笔不冒充新一轮Hermes对话，prompt仍由已审Hermes方案与服务器组装。
 3. b19新Chat6aa4065f已实际出现50%但再次空白结束；provider uncertain，无PNG。停止新生成；这不是完全走通。Chat6Pro建议先去掉自动整浏览器重启/全局熔断，现有证据不能区分Chat生成失败与附件回传异常，也不能证明重启取消后台任务。
-4. 先完成上述broker独立部署。后续原会话有图才进行科学审核和公开发布，保留旧图rejected。应用9c部署exit0；没有运行测试、CI或本机构建。
+4. 上述broker独立部署已完成（复用92cc已编译Gateway，源diff0）；下一步只针对新策略下的实际回传问题取证：Chat6Pro建议区分生成失败与图片引用/资源加载失败，不靠空DOM推断根因。不要自动再生成。原会话有图后才能科学审核、公开发布，旧图rejected保留。没有测试、CI或本机构建。
 5. 暂停视频与批量冷启动。本轮尚未完成全部公开流程。
 
 ## 现有控制入口
