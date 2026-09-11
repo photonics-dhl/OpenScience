@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-2026-09-11 production 52a52829：workspace-guide/Gateway显式对话改稿已实际用于当前论文，单字段修改、正文同步、撤销及确认版本已观察成功。首次JSON/schema失败已修复提示与纠错反馈；旧commit/live SDF衔接与继承全降级已修复，v3保存刷新一致。请求绑定RO/草稿范围/版本，正式写入走原API；无新服务、模型或插件。不能据共编成功声称整个发布流程已完成。Chat6Pro规划已收到，追加复核限流；Sol medium实现、Sol high复核完成。
+2026-09-11 production f909c3a4：workspace-guide/Gateway显式对话改稿已实际用于当前论文，单字段修改、正文同步、撤销及确认版本已观察成功。首次JSON/schema失败已修复提示与纠错反馈；旧commit/live SDF衔接与继承全降级已修复，v3保存刷新一致。请求绑定RO/草稿范围/版本，正式写入走原API；无新服务、模型或插件。单图方案经Hermes修订批准，新图片任务3814f844明确网页rate limit，未发布；不能据共编成功声称整个发布流程已完成。Chat6Pro规划已收到，追加复核限流；Sol medium实现、Sol high复核完成。
 
 本台账防止 Hermes 能力在后续迭代中被重复安装、遗忘、误判或污染服务器。新增、升级、启用、停用、替换或删除任何 Skill、MCP、模型、parser、provider 或运行容器时，必须同步本文件与 `project_index.md`。
 

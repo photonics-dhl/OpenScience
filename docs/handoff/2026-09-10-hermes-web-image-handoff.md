@@ -8,8 +8,9 @@
 ## Version tuple
 - worktree: E:/Miscellaneous/XGS/.worktrees/onchip-video-release
 - branch: codex/onchip-video-release
-- application HEAD / production: 52a52829d06c198d2671d7ff7caf54732443a0a3
-- application rollback: d6dce2e2852dd3154f8698f02659088cc196b934
+- application production: f909c3a48a3c75e952735d8c71aeead393a404dc
+- application rollback: 8c2832f01136fd47a62fe6f4a4e5e07c2a994c63
+- branch HEAD 后续允许仅文档同步提交；不可把文档commit当作服务器release。
 - browser provider: f48324870f25b50c3a21eaad898beea87fb0aa1d / provider rollback: 48d9fa65db134575f53cf2a30724aa47a14eeea4
 - 默认分支草稿同步、选择性继承审核、两栏布局CSS、小屏入口及方案审核按钮已通过Sol High静态复核，服务器构建部署完成（exit 0）；无测试/CI。
 
@@ -24,7 +25,8 @@
 - 制作/发布CSS从主栏160px修成两栏，服务器实际DOM为819.2px+320px。截图需先bringToFront；后台tab截图会超时，不等于Chat/CDP故障。
 - v3单图方案45e2f739经Hermes修订为253e0750-0b5d-4a7a-bc36-fe2413901dd2，已批准；删除易误读的汇聚波前/接收弧面，保留三联机制与异号旁瓣。图片任务3814f844-cb8e-41b9-b403-74d6a0d40eb9已实际提交服务器网页，会话6aa3963b-63bc-83ea-87a3-a0900002008f明确返回“You’ve hit your rate limit.”。任务failed/10%，无新图片，不重发；v3尚未发布。
 - 网页最初空白但出现Like this image，随后原会话恢复显示限额；服务器恢复关闭了产品tab，已复用原登录重开。产品任务目前保留通用错误“image generation failed”，后置恢复原因尚未同步到任务展示。
-- 小屏正文存在，首张截图渲染不完整；DOM证实preview正文2672px高。真实header问题是固定操作区挤掉标题，已改成小屏两行并收紧三步导航，待最后部署。
+- 小屏正文存在，DOM证实preview正文2672px高；固定发布footer在小屏遮挡较多，后续可再收紧。header固定操作区挤掉标题已修复，f909c3a4下实际截图见标题、独立操作行、并排三步导航。服务器截图需同一次CDP连接设置视口并截图，断开后仿真尺寸不保持。
+- f909c3a4服务器构建部署exit 0；发布服务healthy，无测试/CI。8c2832f0方案自动展开入口已在真实页面出现；旧方案45e2f739已通过产品按钮拒绝，修订253e0750保持approved。
 
 ## Chat / routing
 - Chrome6Pro会话 https://chatgpt.com/c/6aa2df58-0c20-83ea-838d-4e1129091d79 已给出本轮连续工作台/共编/公开布局规划；追加复核明确限流，没有重发。
@@ -33,9 +35,9 @@
 - 服务器网页生图仍走既有Create image provider；科学规划6Pro与原生图片模式独立。现有图片是真实服务器Hermes→网页→下载/存储→画廊，不是Codex手工导入。
 
 ## Next actions
-1. 完成当前界面小修部署与手机实际页面观察；勿重跑共编/OCR。
-2. 图片额度恢复后由产品重试当前已批准方案253e0750；当前3814f844已明确限额，不是仍在生成，不可盲目恢复/重发或换账号。
-3. 新图科学/视觉核对通过后审核发布v3，再看公开RO。不要公开旧两图或凑六图；视频、批量冷启动暂停。尚未完成项另含后置限额原因同步到产品错误文案。
+1. 图片额度恢复后由产品重试当前已批准方案253e0750；当前3814f844已明确限额，不是仍在生成，不可盲目恢复/重发或换账号。无需重跑共编/OCR。
+2. 新图科学/视觉核对通过后审核发布v3，再看公开RO。不要公开旧两图或凑六图；视频、批量冷启动暂停。
+3. 后续体验小修：后置限额原因同步到产品错误文案；发布footer小屏占高再收紧。不能据共编与部署成功声称新代表图/公开全流程已完成。
 
 ## Changed surfaces
 - /edit持有共享草稿并组合ResearchPresentation/ResearchPublication；旧路由仍可用。
