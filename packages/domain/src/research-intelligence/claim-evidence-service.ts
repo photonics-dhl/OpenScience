@@ -156,6 +156,13 @@ function boundedText(value: string, label: string, maximum: number): string {
   return normalized;
 }
 
+function boundedExactQuote(value: string, maximum: number): string {
+  if (!value.trim() || value.length > maximum) {
+    throw new ClaimEvidenceError('VALIDATION_ERROR', 'Evidence exactQuote is invalid');
+  }
+  return value;
+}
+
 function boundedList(values: string[] | undefined, label: string): string[] {
   const result = values ?? [];
   if (result.length > MAX_LIST_ITEMS) throw new ClaimEvidenceError('VALIDATION_ERROR', `${label} has too many values`);
@@ -627,7 +634,7 @@ async function createEvidenceInTransaction(
   }
   await requireScopedClaim(deps, input);
   const title = boundedText(input.title, 'Evidence title', 500);
-  const exactQuote = input.exactQuote === undefined ? undefined : boundedText(input.exactQuote, 'Evidence exactQuote', 20_000);
+  const exactQuote = input.exactQuote === undefined ? undefined : boundedExactQuote(input.exactQuote, 20_000);
   if (input.extractionConfidence !== undefined && (!Number.isFinite(input.extractionConfidence)
     || input.extractionConfidence < 0 || input.extractionConfidence > 1)) {
     throw new ClaimEvidenceError('VALIDATION_ERROR', 'Evidence extractionConfidence must be between 0 and 1');
@@ -688,7 +695,7 @@ async function updateEvidenceInTransaction(
   await requireScopedClaim(deps, { claimId, researchObjectId: input.researchObjectId, versionId: input.versionId });
   const title = input.patch.title === undefined ? existing.title : boundedText(input.patch.title, 'Evidence title', 500);
   const exactQuote = Object.prototype.hasOwnProperty.call(input.patch, 'exactQuote')
-    ? (input.patch.exactQuote == null ? undefined : boundedText(input.patch.exactQuote, 'Evidence exactQuote', 20_000))
+    ? (input.patch.exactQuote == null ? undefined : boundedExactQuote(input.patch.exactQuote, 20_000))
     : existing.exactQuote ?? undefined;
   const extractionConfidence = Object.prototype.hasOwnProperty.call(input.patch, 'extractionConfidence')
     ? input.patch.extractionConfidence ?? undefined : existing.extractionConfidence ?? undefined;
@@ -871,7 +878,7 @@ export async function createClaimEvidenceBatch(
     const complete = { ...base, ...evidence } satisfies EvidenceInput;
     const locator = validateSourceLocator(complete.locator);
     const exactQuote = complete.exactQuote === undefined
-      ? undefined : boundedText(complete.exactQuote, 'Evidence exactQuote', 20_000);
+      ? undefined : boundedExactQuote(complete.exactQuote, 20_000);
     if (exactQuote === undefined) throw new ClaimEvidenceError('VALIDATION_ERROR', 'Reviewed ingestion Evidence requires an exact quote');
     if (complete.artifactId !== authority.artifactId || locator.artifactId !== complete.artifactId
       || locator.contentHash !== authority.contentHash) {
@@ -972,7 +979,7 @@ export async function createClaimEvidenceBatch(
         }
         const title = boundedText(evidenceInput.title, 'Evidence title', 500);
         const exactQuote = evidenceInput.exactQuote === undefined
-          ? undefined : boundedText(evidenceInput.exactQuote, 'Evidence exactQuote', 20_000);
+          ? undefined : boundedExactQuote(evidenceInput.exactQuote, 20_000);
         const locator = validateSourceLocator(evidenceInput.locator);
         const rights = normalizedRights(evidenceInput.rights);
         const provenanceInput = {
@@ -1042,7 +1049,7 @@ export async function createEvidence(deps: ArtifactDeps, input: EvidenceInput, c
   await versionContext(deps, input, true);
   await requireScopedClaim(deps, input);
   const locator = validateSourceLocator(input.locator);
-  const exactQuote = input.exactQuote === undefined ? undefined : boundedText(input.exactQuote, 'Evidence exactQuote', 20_000);
+  const exactQuote = input.exactQuote === undefined ? undefined : boundedExactQuote(input.exactQuote, 20_000);
   const title = boundedText(input.title, 'Evidence title', 500);
   const rights = normalizedRights(input.rights);
   const provenanceHash = inputHash({
@@ -1081,7 +1088,7 @@ export async function updateEvidence(deps: ArtifactDeps, input: UpdateEvidenceIn
   }
   const artifactId = input.patch.artifactId ?? existing.artifactId;
   const exactQuote = Object.prototype.hasOwnProperty.call(input.patch, 'exactQuote')
-    ? (input.patch.exactQuote == null ? undefined : boundedText(input.patch.exactQuote, 'Evidence exactQuote', 20_000))
+    ? (input.patch.exactQuote == null ? undefined : boundedExactQuote(input.patch.exactQuote, 20_000))
     : existing.exactQuote ?? undefined;
   const locator = validateSourceLocator(input.patch.locator ?? existing.locator);
   const existingProvenance = recordValue(existing.provenance);
