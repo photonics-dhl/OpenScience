@@ -137,14 +137,22 @@ async function resolveCanonicalConversation(page, deadlineAt) {
   }
   throw Error('CANONICAL_CONVERSATION_TIMEOUT_NO_RESEND');
 }
+async function primaryGeneratedImage(page) {
+  const candidates = page.getByRole('button', { name: /^(?:Generated image:|Open image:)/ });
+  // Current Chat adds thumbnail buttons beside the one full-size image opener.
+  const primary = candidates.and(page.locator('[role="button"][aria-labelledby]'));
+  if (await primary.count() === 1 && await primary.isVisible()) return primary;
+  if (await primary.count() === 0 && await candidates.count() === 1 && await candidates.isVisible()) return candidates;
+  return null;
+}
 async function observeConversation(browser, page, request, conversation, deadlineAt) {
   while (Date.now() < deadlineAt) {
     if (page.isClosed()) throw Error('PAGE_CLOSED_NO_RESEND');
     if (canonicalUrl(page.url()) !== conversation) throw Error('CONVERSATION_CHANGED');
     const failure = await visibleFailureCode(page);
     if (failure) throw Error(failure);
-    const generated = page.getByRole('button', { name: /^(?:Generated image:|Open image:)/ });
-    if (await generated.count() === 1 && await generated.isVisible()) {
+    const generated = await primaryGeneratedImage(page);
+    if (generated) {
       await downloadImage(browser, page, request, conversation);
       return true;
     }
@@ -181,8 +189,8 @@ async function waitAndDownload(browser, page, request) {
 async function downloadImage(browser, page, request, conversation) {
   if (fs.existsSync(path.join(dir, 'result.json'))) throw Error('OUTPUT_EXISTS');
   if (canonicalUrl(page.url()) !== canonicalUrl(conversation)) throw Error('CONVERSATION_CHANGED');
-  const generated = page.getByRole('button', { name: /^(?:Generated image:|Open image:)/ });
-  if (await generated.count() !== 1) throw Error('EXPECTED_ONE_GENERATED_IMAGE');
+  const generated = await primaryGeneratedImage(page);
+  if (!generated) throw Error('EXPECTED_ONE_GENERATED_IMAGE');
   const dialog = page.getByRole('dialog');
   if (await dialog.count() === 0) await generated.click();
   await dialog.getByRole('button', { name: 'Save', exact: true }).waitFor({ timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now() - 45000)) });
