@@ -27,15 +27,15 @@ export default function EditorLayout({
 
   return (
     <WorkspaceShell
-      activeMobilePlane={mobileTab === 'outline' ? 'left' : mobileTab === 'panel' ? 'right' : 'main'}
+      activeMobilePlane={!outline ? 'main' : mobileTab === 'outline' ? 'left' : mobileTab === 'panel' ? 'right' : 'main'}
       className="editor-workspace"
       leftRail={outline}
       mainClassName="p-0 lg:p-0"
-      mobileNavigation={
+      mobileNavigation={outline ?
         <div className="fixed inset-x-0 bottom-0 z-(--z-header) border-t border-os-rule-paper bg-os-paper pb-[max(.5rem,env(safe-area-inset-bottom))] pl-2 pr-2 pt-2 lg:hidden" data-mobile-workspace-navigation="true">
           <MobileTabs active={mobileTab} onSelect={setMobileTab} />
         </div>
-      }
+      : undefined}
       navigationLabel={t('workspaceNavigation')}
       objectHeader={header}
       rightRail={aside}

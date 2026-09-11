@@ -26,41 +26,100 @@ function claimProvenance(value: unknown): Record<string, unknown> {
 
 /** Carry the prior graph into a new version without rewriting its immutable source rows. */
 export async function carryVersionEvidence(tx: Prisma.TransactionClient, input: { researchObjectId: string; previousVersionId: string; versionId: string }) {
-  const [previous, target] = await Promise.all([
+  const [previous, target, previousManifest, targetManifest] = await Promise.all([
     tx.version.findUnique({ where: { id: input.previousVersionId } }),
     tx.version.findUnique({ where: { id: input.versionId } }),
+    tx.versionManifest.findUnique({ where: { versionId: input.previousVersionId }, include: { entries: true } }),
+    tx.versionManifest.findUnique({ where: { versionId: input.versionId }, include: { entries: true } }),
   ]);
   if (!previous || !target || previous.id === target.id || previous.researchObjectId !== input.researchObjectId
-    || target.researchObjectId !== input.researchObjectId) throw new Error('Research graph scope mismatch');
+    || target.researchObjectId !== input.researchObjectId || !previousManifest || !targetManifest) {
+    throw new Error('Research graph scope mismatch');
+  }
   // Share the predecessor row fence with graph edits before reading its working rows.
   await tx.version.update({ where: { id: previous.id }, data: { status: previous.status } });
   const where = { researchObjectId: input.researchObjectId, versionId: input.previousVersionId };
   const claims = await tx.claimNode.findMany({ where });
   const evidence = await tx.evidenceRecord.findMany({ where });
-  const ids = new Map(claims.map(claim => [claim.id, randomUUID()]));
+  const previousCore = record(previousManifest.coreJson);
+  const targetCore = record(targetManifest.coreJson);
+  const changedFields = new Set(SDF_NODE_TYPES.filter(field => !isDeepStrictEqual(previousCore[field], targetCore[field])));
+  const targetArtifacts = new Set(targetManifest.entries.map(entry => `${entry.artifactId}:${entry.blobSha256}`));
+  const claimFields = new Map<string, typeof SDF_NODE_TYPES[number] | undefined>();
+  for (const claim of claims) {
+    const field = record(claim.provenance).field;
+    claimFields.set(claim.id, typeof field === 'string' && SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number])
+      ? field as typeof SDF_NODE_TYPES[number] : undefined);
+  }
+  const changedClaims = new Set(claims.filter(claim => {
+    const field = claimFields.get(claim.id);
+    return field ? changedFields.has(field) : false;
+  }).map(claim => claim.id));
+  const omittedClaims = new Set(claims.filter(claim => {
+    const field = claimFields.get(claim.id);
+    return field && changedFields.has(field) && !String(targetCore[field] ?? '').trim();
+  }).map(claim => claim.id));
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const claim of claims) {
+      if (!omittedClaims.has(claim.id) && claim.parentClaimId && omittedClaims.has(claim.parentClaimId)) {
+        omittedClaims.add(claim.id);
+        changed = true;
+      }
+    }
+  }
+  const carriedClaims = claims.filter(claim => !omittedClaims.has(claim.id));
+  const carriedClaimIds = new Set(carriedClaims.map(claim => claim.id));
+  const carriedEvidence = evidence.filter(item => carriedClaimIds.has(item.claimId));
+  const reviewClaims = new Set([
+    ...changedClaims,
+    ...carriedEvidence.filter(item => !targetArtifacts.has(`${item.artifactId}:${item.contentHash}`)).map(item => item.claimId),
+  ]);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const claim of carriedClaims) {
+      if (!reviewClaims.has(claim.id) && claim.parentClaimId && reviewClaims.has(claim.parentClaimId)) {
+        reviewClaims.add(claim.id);
+        changed = true;
+      }
+    }
+  }
+  const invalidEvidence = new Set(carriedEvidence.filter(item => reviewClaims.has(item.claimId)).map(item => item.id));
+  const ids = new Map(carriedClaims.map(claim => [claim.id, randomUUID()]));
   // Insert parents first; source data already obeys the scoped parent foreign key.
-  const pending = [...claims];
+  const pending = [...carriedClaims];
   const inserted = new Set<string>();
   while (pending.length) {
     const index = pending.findIndex(claim => !claim.parentClaimId || inserted.has(claim.parentClaimId));
     if (index < 0) throw new Error('Existing Claim graph cannot be copied');
     const claim = pending.splice(index, 1)[0]!;
+    const provenance = claimProvenance(claim.provenance);
+    const field = claimFields.get(claim.id);
+    const fieldChanged = field ? changedFields.has(field) : false;
+    const requiresReview = reviewClaims.has(claim.id);
     await tx.claimNode.create({ data: {
       id: ids.get(claim.id)!, researchObjectId: input.researchObjectId, versionId: input.versionId,
       parentClaimId: claim.parentClaimId ? ids.get(claim.parentClaimId) : undefined,
-      kind: claim.kind, statement: claim.statement, assessment: claim.assessment === 'supported' ? 'missing' : claim.assessment,
-      conditions: claim.conditions, limitations: claim.limitations, extractionStatus: 'needs_review',
-      provenance: { ...claimProvenance(claim.provenance), previousVersionId: input.previousVersionId, previousClaimId: claim.id } as Prisma.InputJsonValue,
+      kind: claim.kind, statement: fieldChanged ? String(targetCore[field!] ?? '') : claim.statement,
+      assessment: requiresReview ? 'missing' : claim.assessment,
+      conditions: claim.conditions, limitations: claim.limitations,
+      extractionStatus: requiresReview ? 'needs_review' : claim.extractionStatus,
+      provenance: { ...provenance, previousVersionId: input.previousVersionId, previousClaimId: claim.id } as Prisma.InputJsonValue,
     } });
     inserted.add(claim.id);
   }
-  for (const item of evidence) await tx.evidenceRecord.create({ data: {
-    researchObjectId: input.researchObjectId, versionId: input.versionId, workspaceId: item.workspaceId,
-    claimId: ids.get(item.claimId)!, artifactId: item.artifactId, kind: item.kind, title: item.title,
-    exactQuote: item.exactQuote, relation: item.relation, locator: item.locator as Prisma.InputJsonValue,
-    contentHash: item.contentHash, extractionConfidence: item.extractionConfidence, extractionStatus: 'needs_review', verifiedByUserId: null,
-    provenance: { ...record(item.provenance), previousVersionId: input.previousVersionId, previousEvidenceId: item.id } as Prisma.InputJsonValue,
-  } });
+  for (const item of carriedEvidence) {
+    const sourceRemoved = invalidEvidence.has(item.id);
+    await tx.evidenceRecord.create({ data: {
+      researchObjectId: input.researchObjectId, versionId: input.versionId, workspaceId: item.workspaceId,
+      claimId: ids.get(item.claimId)!, artifactId: item.artifactId, kind: item.kind, title: item.title,
+      exactQuote: item.exactQuote, relation: item.relation, locator: item.locator as Prisma.InputJsonValue,
+      contentHash: item.contentHash, extractionConfidence: item.extractionConfidence,
+      extractionStatus: sourceRemoved ? 'needs_review' : item.extractionStatus,
+      verifiedByUserId: sourceRemoved ? null : item.verifiedByUserId,
+      provenance: { ...record(item.provenance), previousVersionId: input.previousVersionId, previousEvidenceId: item.id } as Prisma.InputJsonValue,
+    } });
+  }
 }
 
 /** Only exact, unambiguous source matches become evidence. SDF acceptance is not evidence verification. */

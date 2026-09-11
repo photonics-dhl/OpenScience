@@ -390,7 +390,7 @@ function HermesAssistantDrawerContent({
               <details><summary className="min-h-11 cursor-pointer py-3">{tw('viewChanges')}</summary>
                 {Object.entries(result.draftEdit.changes).map(([field, value]) => <div className="border-t border-os-rule-paper py-3" key={field}>
                   <h4 className="font-semibold">{fieldLabel(field)}</h4><p className="mt-2 whitespace-pre-wrap leading-6">{value}</p>
-                  {onDraftEdit && (restoredTask || Boolean(editOutcome?.conflicts)) ? <button className="min-h-11 text-os-vermilion-ink underline" type="button" onClick={() => setEditOutcome(onDraftEdit({ ...result.draftEdit!, changes: { [field]: value } }, true))}>{tw('useField')}</button> : null}
+                  {onDraftEdit && (restoredTask || Boolean(editOutcome?.conflicts) || (!editOutcome && task && appliedTasks.current.has(task.id))) ? <button className="min-h-11 text-os-vermilion-ink underline" type="button" onClick={() => setEditOutcome(onDraftEdit({ ...result.draftEdit!, changes: { [field]: value } }, true))}>{tw('useField')}</button> : null}
                 </div>)}
               </details>
             </div>}

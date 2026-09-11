@@ -1,52 +1,41 @@
-# Hermes Web Image CURRENT Handoff
+# Hermes / Workbench CURRENT Handoff
 
 ## Goal and constraints
-- 用户当前要求：连续研究工作台（上传→全文凝练与确认→核心图→预览发布）；公开RO科研阅读优先；Hermes侧栏与页面双向编辑同一草稿。先核心图、补图按需，不凑齐六图作为发布前提。Chat6Pro规划后落实。
-- 本机仅编辑/静态阅读；不运行测试、预检、CI。服务器执行发布必需构建/启动和实际产品操作。视频仍暂停；用户已授权Codex在测试阶段充当真实用户审核发布，需实际核对科学内容与来源，不能放行已知错误。
-- Hermes全文理解后给用户六维精炼总结，机器绘图提示词单独详述。禁止同名章节模板和手工内容代替服务器能力。
+- 连续研究工作台：上传/预览→Hermes全文凝练与用户确认→核心图→预览发布。用户可直接编辑，或让Hermes修改同一草稿；科研阅读公开页优先。核心图优先，旧六场景不是门槛。
+- 本机仅编辑/静态阅读；不跑测试、预检、CI。服务器执行必要构建/启动和实际产品操作。用户已授权Codex充当真实审核发布用户；不能公开已知错误。视频、批量冷启动暂停。
+- 保留原文科学条件和精炼六字段，详细制作提示只供AI使用。复用高级解析，不重跑OCR。无新服务/插件/模型安装。
 
 ## Version tuple
 - worktree: E:/Miscellaneous/XGS/.worktrees/onchip-video-release
 - branch: codex/onchip-video-release
-- application / production: 661d0926d5bfa8ef4126a93fd021fda012f395cf
-- browser bundle: f48324870f25b50c3a21eaad898beea87fb0aa1d；provider rollback48d9fa65，application rollback48d9fa65
-- application rollback: 9b97522f282951cf9328f673dbde8c53eaafb8f8；provider rollback仍48d9fa65
-- 第二批已部署：折叠AI绘图细节、288px侧栏、提示词可见标签/内部规则分层、显式恢复时复用已保存图片。provider同版本，7d8明确限流后匹配的旧不确定熔断已归档，无新生图。
-- 已部署领取事务P2034有界重试和attempt0的未提交恢复；Chrome6 Pro已复核GO。未运行测试，服务器发布构建/启动完成。
+- HEAD / production: d6dce2e2852dd3154f8698f02659088cc196b934
+- application rollback: 661d0926d5bfa8ef4126a93fd021fda012f395cf
+- browser provider: f48324870f25b50c3a21eaad898beea87fb0aa1d / provider rollback: 48d9fa65db134575f53cf2a30724aa47a14eeea4
+- 当前另有未提交候选：默认分支草稿同步、选择性继承审核、两栏布局CSS修正、小屏入口及方案审核按钮。待SolHigh复核和服务器构建部署。
 
 ## Actual product facts (2026-09-11)
-- RO c896802c-35dd-4b59-8db1-5f374f83a6d8；version 4ed2b16d-0c5f-41a5-a57d-54eff5dbab11；run 436ff261-1f49-42ea-827a-cccfb2fce45b。
-- Deep-sub-cycle PDF已完成高级解析及Hermes全文凝练，task 1e324308-fd26-4cc1-8612-8a1c269909a9；六字段已由用户确认并写入版本；6 claims/54 evidence已确认。
-- 修订图解方案5fc9ab10-b3f8-4e68-ae31-0eb57c294c4e已经批准，六个场景任务已创建。
-- 真实产品现有2/6图：原36a4f82b-10bc-40f4-b43c-bc1d8990f6c9（scene4）及新8b0ca4c9-eb20-4478-a79c-d1b8e0dadc25（scene0），均draft。新任务succeeded/progress100/provider completed；服务器从Hermes提示词→网页提交→下载/规范化→存储→页面自动展示走通，无人工图片导入。
-- 六图未全完成。7d8fafce-390c-4a4e-9024-ec89650de631的精确会话明确显示“You’ve hit your rate limit.”；服务器Pro菜单禁用。浏览器CDP实际连接成功，无需重启或重装。
-- 8f4f6f79… /986ff3d9… 是EXPIRED；1f2d0677… 是EXECUTION_FAILED；6a2cc3bf…尚无provider结果；7d8…已只读续取原会话确认为failed/USAGE_LIMIT。旧结果和失败marker已归档，无重发。
-- 通过真实页面点击一次“Continue unfinished generation”，POST202；run已generating_scene_images/version8。原36a4保留、6a2原id重排，四个新task：ordinal0=5db130af-5ada-4f55-a70f-36fb8f690c9b，2=edc98363-60e1-470a-a77d-e4442c3f47ff，3=64f186c1-0409-4762-a38a-0959e69bf5a3，5=eb1819af-1b22-4d73-9ecf-6998d6494a3f。随后五项均在发送前失败；run已failed/version9，原图step已正确awaiting_approval。定位MODEL_6_PRO_NOT_READY：生图form仅显示Create image/Extra High，硬性6Pro文案检查错误。未写submitted.json、未发送网页prompt。
+- RO c896802c-35dd-4b59-8db1-5f374f83a6d8。Deep-sub-cycle高级解析 task 1e324308-fd26-4cc1-8612-8a1c269909a9，原6字段/54证据已完成；本轮无重跑。
+- v1: 4ed2b16d-0c5f-41a5-a57d-54eff5dbab11；旧run436ff261-1f49-42ea-827a-cccfb2fce45b仍failed/version9。保留历史，不自动恢复六图。
+- v1两图8b0ca4c9-eb20-4478-a79c-d1b8e0dadc25、36a4f82b-10bc-40f4-b43c-bc1d8990f6c9已在04:07被设approved（本轮live API核实，早前“均draft”记录不再有效）。前者球面/散射源几何有疑点，后者制作指令外露；不能因状态approved便公开。
+- 已实际使用新工作台：Hermes修改“问题”字段→正文同步→撤销恢复原稿→人工补回“强度半高全宽”科学定义→确认进入制作。d6dce2e2下共编成功，其他五字段不改。首次661d0926调用曾JSON/schema失败，已修正提示合同及纠错反馈。
+- 新v2 b0c9d2c0-37ce-4980-a095-be115c2437cf；commit3246c609-6e8d-428c-9848-a92585f38b14，2026-09-11T05:13:55Z；仍draft、无新图片。新问题文本已写入快照。
+- v2暴露旧衔接故障：createCommit未同步live SDF；carryVersionEvidence把12条继承Claim全部降needs_review。已执行单事务定向恢复：5条未改Claim、50条对应Evidence恢复原状态，改动problem和原pending保留；AuditLog action maintenance.repair_version_carry保存前后状态，冻结v2未改。正常carry修复仍待部署。
+- 制作/发布真实CSS仍覆盖成3栏，把无大纲时主内容压成160px；已定位module规则并准备两栏覆盖。截图需先bringToFront；后台tab截图会超时，不等于Chat/CDP故障。
 
-## Candidate / Chat review
-- Chrome会话 https://chatgpt.com/c/6aa2df58-0c20-83ea-838d-4e1129091d79，6 Pro已实际回复GO：成果可见性与run失败分开；明确限流不自动重启/重发；其他场景持久化后再汇总失败。
-- 修复runner对所有标签调用canonicalUrl导致遇到/images或产品页即抛错；只对记录的canonical目标做严格匹配。
-- 限流消息原来不在alert/toast而在assistant turn，旧代码漏判。新增明确USAGE_LIMIT传递；既有不确定任务只返回同一会话确认失败，不提交新图。
-- GET run可按同RO/version/parent/Claims返回已有图片元数据，保留数据库真实失败状态；前端显示独立图解进度和成果入口。
-- 生成汇总保留已完成资产和权限/版本校验，等待其他已派发任务结束，避免单图失败取消其余场景authority。
+## Chat / routing
+- Chrome6Pro会话 https://chatgpt.com/c/6aa2df58-0c20-83ea-838d-4e1129091d79 已给出本轮连续工作台/共编/公开布局规划；追加复核明确限流，没有重发。
+- SolHigh workbench_boundary_review已关闭共编/发布四处异步边界问题；正在复核2文件提交/继承修复。
+- Sol medium draft_commit_sync实现仅两个Domain文件；主线程整合前端和部署。无测试/模型A-B，无节省比例声称。
+- 服务器网页生图仍走既有Create image provider；科学规划6Pro与原生图片模式独立。现有图片是真实服务器Hermes→网页→下载/存储→画廊，不是Codex手工导入。
 
 ## Next actions
-1. 用户访谈完成：连续/edit、工作台主导、Hermes侧栏双向改稿；核心图优先，不再补齐旧六场景。测试阶段已授权Codex审核发布，须真实核对科学内容/来源。
-2. 661d0926已完成服务器构建/部署，三阶段工作台实际可打开；公开API和直接下载排除内部storyboard。真实对话改稿请求失败：一次JSON解析失败、两次结构校验失败，原草稿保持未改。当前候选消除只导航/根字段规则冲突，明确改稿JSON和现有Gateway纠错反馈；同步折叠已确认材料、改正共编入口文案。待重新部署后继续同一实际任务。
-3. Chat6Pro已实际交付规划；第二次有界复核返回usage limit，禁止盲重试。Sol High已完成有界只读复核，四处草稿/版本异步边界问题已修正并复核关闭；待服务器必要构建和部署。
-4. 真实新图8b0ca4c9已打开：公式与标注可读，观察球面中心和散射源几何仍需与原文对照；旧图36a4有制作指令外露，不能发布。原批量run失败仍保留，gallery2张草稿。
-5. 部署后用当前RO走通工作台、对话改稿、审核代表图与公开发布；禁止重跑全文提取或补四图冒充本轮完成。
-## 本轮问题与修正
-| 问题 | 修正与边界 |
-|---|---|
-| 提取页反复闪动 | 原1.5秒轮询清空页面并用reload作面板key；现保留内容、稳定key、3秒后台更新 |
-| 一张失败阻断其他正在生成的图 | 保留独立步骤，其他已派发任务持久化后再汇总失败；权限和版本仍逐步核对 |
-| 已有图片却显示全失败且无入口 | 依据实际资产显示1/6与待审状态，失败run仍可打开成果 |
-| 读取原Chat会话立即异常 | 不再把/images、产品页传入严格canonical转换，仅匹配已记录的会话 |
-| 限流被误判为结果不明 | 识别assistant turn里的准确限流消息，传递USAGE_LIMIT，不重启或自动重发 |
-| 已保存图导致继续入口永久拒绝 | 显式恢复时验证同版本/父方案/Claims及completed结果，复用同任务的资产 |
-| 领取冲突造成零次执行任务阻挡整组恢复 | claim只对P2034做有界事务重试；attempt0仅在provider证明未提交时复用原任务排队，精确CAS且仅一次 |
-| 机器绘图细节占据阅读区 | 默认折叠，保留标题和简洁讲解；可展开查看 |
-| Hermes宽侧栏挤占图片 | 宽屏侧栏288px，小屏主内容优先 |
-| 制作指令画进图里 | 提示词分开内部规则和可见标签；原图保留draft，尚未重生成证明质量改善 |
-| 原生生图入口显示Extra High却被要求6Pro文字 | 移除图片runner的规划模型门槛，保留Create image/登录与发送限制；科学审阅仍用6Pro |
+1. 完成2文件高风险复核，提交当前小修并服务器无测试部署；更新精确release/rollback。
+2. v2状态恢复已完成，下一步正常确认v3冻结正确记录。勿重复恢复；主浏览器仍保留v2最新已确认文本，部署后不要从旧live SDF覆盖它。
+3. 在工作台继续新版本：只生成一张解释“狭缝近场空间限域→接收时间压缩”的核心机制图，核对后审核发布；不要公开旧两图或凑六图。
+4. 最后观察真实桌面/手机工作台与公开RO排版，记录未完成项。暂停视频、批量冷启动；不重做已经成功的共编调用。
+
+## Changed surfaces
+- /edit持有共享草稿并组合ResearchPresentation/ResearchPublication；旧路由仍可用。
+- 公共API列表和直接下载均排除内部storyboard；公开画廊图片contain、元信息折叠，版本数据按冻结记录展示。
+- 恢复上次Hermes结果不自动写入；明确改稿才apply，字段冲突保留用户修改，undo不覆盖后续修改。
+- 服务器入口和复用位置见 docs/runbooks/server-capabilities.md；旧任务细节从Git历史按需查，不恢复旧next action。

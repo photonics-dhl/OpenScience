@@ -2,12 +2,14 @@ import { carryVersionEvidence } from '../ingestion/ingestion-evidence';
 import { freezeResearchRecord } from './research-record-snapshot';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import { getBlobStorageKey } from '@openscience/storage';
+import { validateSdfCore, validateSdfDraftCore } from '@openscience/sdf-schema';
 import { buildSnapshot, diffSdfCore, type ManifestEntryInput, type VersionSnapshot } from '@openscience/versioning';
 import type { Prisma } from '@prisma/client';
 import type { AuditContext } from '@openscience/observability';
 import { requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
 import { CommitError } from './errors';
+import { SDF_NODE_TYPES } from '../research-object/types';
 
 export type { VersionSnapshot };
 
@@ -113,25 +115,21 @@ export async function createCommit(
 
   // §2.2-3 不可原地修改：commit 总是产生新版本（versionNo=RO.version 递增），永不修改已发布版本行；
   // 「已公开不可变」由 publishVersion/发布管线保证（P1D-8），新 commit 生成增量版本合法。
-  const latestVersion = await deps.prisma.version.findFirst({
-    where: { researchObjectId: ro.id },
-    orderBy: { versionNo: 'desc' },
-  });
   // 默认 main 分支（P1C-2 多分支扩展：指定 branchId 则落到目标分支）
-  let branch: { id: string; name: string; headCommitId: string | null };
+  let branch: { id: string; name: string; headCommitId: string | null; isDefault: boolean };
   if (input.branchId) {
     const target = await deps.prisma.branch.findFirst({ where: { id: input.branchId, researchObjectId: ro.id } });
     if (!target) throw new CommitError('VALIDATION_ERROR', '目标分支不存在');
-    branch = { id: target.id, name: target.name, headCommitId: target.headCommitId };
+    branch = { id: target.id, name: target.name, headCommitId: target.headCommitId, isDefault: target.isDefault };
   } else {
     const existing = await deps.prisma.branch.findFirst({ where: { researchObjectId: ro.id, name: DEFAULT_BRANCH } });
     if (existing) {
-      branch = { id: existing.id, name: existing.name, headCommitId: existing.headCommitId };
+      branch = { id: existing.id, name: existing.name, headCommitId: existing.headCommitId, isDefault: existing.isDefault };
     } else {
       const created = await deps.prisma.branch.create({
         data: { researchObjectId: ro.id, name: DEFAULT_BRANCH, isDefault: true },
       });
-      branch = { id: created.id, name: created.name, headCommitId: created.headCommitId };
+      branch = { id: created.id, name: created.name, headCommitId: created.headCommitId, isDefault: created.isDefault };
     }
   }
 
@@ -148,27 +146,36 @@ export async function createCommit(
     parentCommit = await deps.prisma.commit.findUnique({ where: { id: branch.headCommitId } });
   }
 
-  // SDF diff（§7.2.5）
-  const currentCore = (ro.sdfDocument?.coreJson as Record<string, unknown>) ?? {};
-  const changesets: Array<{ kind: string; payload: Prisma.InputJsonValue }> = [];
-  let finalCore = currentCore;
-  if (input.sdfCore) {
-    const patch = diffSdfCore(currentCore, input.sdfCore);
-    if (patch.length) {
-      changesets.push({ kind: 'sdf_core', payload: patch as unknown as Prisma.InputJsonValue });
-      finalCore = input.sdfCore;
-    }
-  }
-
-  // artifact diff：对比上版本 Manifest entries
-  const prevManifest = latestVersion
+  const predecessorVersion = branchTipVersion ?? (parentCommit
+    ? await deps.prisma.version.findFirst({ where: { commitId: parentCommit.id }, orderBy: { versionNo: 'desc' } })
+    : null);
+  const prevManifest = predecessorVersion
     ? await deps.prisma.versionManifest.findUnique({
-        where: { versionId: latestVersion.id },
+        where: { versionId: predecessorVersion.id },
         include: { entries: true },
       })
     : null;
+
+  // SDF diff（§7.2.5）：ChangeSet 始终相对分支前驱；默认分支缺省提交已保存的 live draft。
+  const predecessorCore = (prevManifest?.coreJson as Record<string, unknown> | undefined)
+    ?? (ro.sdfDocument?.coreJson as Record<string, unknown> | undefined)
+    ?? {};
+  const liveCore = (ro.sdfDocument?.coreJson as Record<string, unknown> | undefined) ?? predecessorCore;
+  const changesets: Array<{ kind: string; payload: Prisma.InputJsonValue }> = [];
+  const finalCore = input.sdfCore ?? (branch.isDefault ? liveCore : predecessorCore);
+  const check = ro.status === 'draft' ? validateSdfDraftCore(finalCore) : validateSdfCore(finalCore);
+  if (!check.ok) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
+  const patch = diffSdfCore(predecessorCore, finalCore);
+  if (patch.length) {
+    changesets.push({ kind: 'sdf_core', payload: patch as unknown as Prisma.InputJsonValue });
+  }
+
+  // artifact diff：对比目标分支前驱 Manifest entries
   const prevEntries = new Map((prevManifest?.entries ?? []).map((e) => [e.logicalPath, e.artifactId]));
-  const newRefs = input.artifacts ?? [];
+  const newRefs = input.artifacts ?? (prevManifest?.entries ?? []).map((entry) => ({
+    logicalPath: entry.logicalPath,
+    artifactId: entry.artifactId,
+  }));
   const newMap = new Map(newRefs.map((a) => [a.logicalPath, a.artifactId]));
   for (const ref of newRefs) {
     if (!prevEntries.has(ref.logicalPath)) {
@@ -228,12 +235,24 @@ export async function createCommit(
       data: {
         versionId: version.id,
         coreJson: finalCore as object,
-        entries: { create: manifestArtifacts },
+        ...(manifestArtifacts.length > 0 ? { entries: { create: manifestArtifacts } } : {}),
       },
     });
+    if (branch.isDefault && input.sdfCore) {
+      if (!ro.sdfDocument) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不存在');
+      await tx.sdfDocument.update({
+        where: { researchObjectId: ro.id },
+        data: { coreJson: input.sdfCore as object },
+      });
+      for (const nodeType of SDF_NODE_TYPES) {
+        await tx.sdfNode.update({
+          where: { sdfDocumentId_nodeType: { sdfDocumentId: ro.sdfDocument.id, nodeType } },
+          data: { content: String(input.sdfCore[nodeType] ?? '') },
+        });
+      }
+    }
     if (!transaction) {
-      const predecessor = parentCommit ? await tx.version.findFirst({ where: { commitId: parentCommit.id }, orderBy: { versionNo: 'desc' } }) : null;
-      if (predecessor) await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: predecessor.id, versionId: version.id });
+      if (predecessorVersion) await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: predecessorVersion.id, versionId: version.id });
       await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: version.id });
     }
     await recordAudit(

@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-11:** production `9b97522f` / provider `f4832487` / rollback `48d9fa65`。页面及任务恢复小修均已部署；真实产品继续入口返回202，run生成中/version8，已有1/6保留，五项网页提交前失败，已定位图片模式错误要求6Pro文本，provider小修已发布；通过产品按钮单图8b0ca4c9已生成并自动展示，现2/6；科学审核/公开发布未完成。唯一入口：`docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
-> 当前执行：已确认连续`/edit`工作台、Hermes与页面双向草稿、默认一张核心图、科研阅读公开页。用户授权Codex在测试阶段审核发布；当前候选未部署。Chat6Pro规划已收取，边界复核限额后改Sol High。视频和批量冷启动暂停。
+> **CURRENT 2026-09-11:** production `d6dce2e2` / rollback `661d0926` / browser provider `f4832487`。连续工作台已部署；实际Hermes改稿、撤销、用户编辑并确认v2已走通。当前修复提交后live草稿不同步、证据全降级和无大纲时三栏CSS挤压。代表图与公开发布待完成；唯一入口：`docs/handoff/2026-09-10-hermes-web-image-handoff.md`。
+> 当前执行：按用户批准的连续工作台和核心图优先流程完成剩余衔接；Chat6Pro规划已收取、限流不重试，Sol medium有界实现+Sol high边界复核。用户授权Codex审核发布，科学内容需真实核对；视频和批量冷启动暂停。
 > 最新部署：精确完成结果证明、原prompt/result恢复、浏览器重启后exact canonical续取且不重发、产品画廊整理。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
@@ -260,7 +260,7 @@
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
 | `apps/web/components/hermes/HermesPresentationAction.tsx` / `apps/web/components/hermes/HermesPresentationReview.tsx` / `apps/web/lib/hermes/presentation-action.ts` / `apps/web/lib/hermes/presentation-intent.ts` / `apps/web/test/hermes-presentation-action.test.ts` / `apps/web/test/hermes-presentation-intent.test.ts` | Global Hermes scoped storyboard/revision/image review using existing presentation API and task page; Drawer/Stage, zh/en, hermes-state and presentation-workbench tests updated | DEPLOYED f144eb7; real revision/task/audit and final contrast/Chinese/read-only acceptance passed |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT：Hermes内容驱动媒体、durable run与版本元组 | **CURRENT active-memory**；当前生产与任务状态以handoff顶部及最新执行段为准，历史固定样片不算通用能力 |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 历史Hermes任务与版本记录；当前入口为2026-09-10 handoff | **HISTORICAL → docs/handoff/2026-09-10-hermes-web-image-handoff.md**；历史固定样片不算通用能力 |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |

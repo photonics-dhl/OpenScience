@@ -37,6 +37,7 @@
 }
 
 .workspace :global(.bg-os-vermilion) { color:#fff; background:#125d66; }
+.workspace :global(.bg-os-vermilion-ink) { color:#fff; background:#125d66; }
 .workspace :global(.hermes-visual-state-label) { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
 .workspace :global(.hermes-visual) { border:0; }
 .workspace [data-workspace-plane='25']>:global(.mt-8) { border:0; margin-top:12px; }
@@ -51,3 +52,6 @@
 
 .workspace :global(.bg-os-paper) { background:#f7f8fa; }
 .workspace :global(.bg-accent-primary-strong):hover { background:#0d4d55; }
+@media(min-width:1024px) {
+ .workspace:global(.editor-workspace) [data-workspace-planes][data-workspace-has-outline='false'] { grid-template-columns:minmax(0,1fr) 320px; }
+}

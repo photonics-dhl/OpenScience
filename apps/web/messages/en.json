@@ -1,5 +1,6 @@
 {
   "workbench": {
+    "approvePlan": "Approve this plan for production",
     "sourceReview": "Source analysis and confirmation history",
     "confirmedSources": "Edit confirmed content in the editor or with Hermes. Select a source below only when you need to revisit its analysis.",
     "loadingVersion": "Reading the confirmed version…",
@@ -25,7 +26,7 @@
     "viewChanges": "View changes",
     "useField": "Use this field",
     "publishPreview": "Preview & publish",
-    "publishPreviewBody": "Review this version's research content and approved images, then publish together. Unselected images do not block publication.",
+    "publishPreviewBody": "Review this version's research content and approved images, then publish together. Unreviewed images stay private; you do not need to finish every illustration.",
     "previewLabel": "Publication preview",
     "versionMismatch": "Version content does not match. Reopen the current version.",
     "rightsNotice": "Confirm that you have the right to publish this text and media. Preserve attribution to source papers; uploading a paper does not grant redistribution rights.",

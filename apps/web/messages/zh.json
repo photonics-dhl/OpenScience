@@ -1,5 +1,6 @@
 {
   "workbench": {
+    "approvePlan": "批准方案，允许制作",
     "sourceReview": "材料解析与确认记录",
     "confirmedSources": "已确认的内容可直接在正文或 Hermes 对话中修改。仅在需要复查材料时切换下方来源。",
     "loadingVersion": "正在读取已确认版本…",
@@ -25,7 +26,7 @@
     "viewChanges": "查看修改内容",
     "useField": "采用这一项",
     "publishPreview": "预览与发布",
-    "publishPreviewBody": "核对本次版本的研究内容和已批准图片，然后集中完成发布。未选图片不会阻挡发布。",
+    "publishPreviewBody": "核对本次版本的研究内容和已批准图片，然后集中完成发布。未审核图片保持私有，不要求一次完成所有图片。",
     "previewLabel": "发布内容预览",
     "versionMismatch": "版本内容不一致，请重新打开当前版本。",
     "rightsNotice": "请确认你有权发布这些文字与素材。引用他人论文需保留来源；上传原文不等于获得转载授权。",

@@ -3,12 +3,12 @@
 2026-09-11 实时盘点。先查本页，再查相关条目的入口；能力或服务变动后同一任务内更新。文件存在、服务运行、产品调用成功是不同状态。本页记录部署位置与复用方式；Hermes语义能力/供应商政策见 [能力台账](hermes-capability-registry.md)，实时产品任务见 CURRENT handoff。
 
 ## CURRENT 2026-09-11 产品回传
-- 当前production661d0926 / rollback9b97522f，三阶段工作台已打开；共编首次真实请求遇JSON/结构输出错误，未写入草稿，正在修复提示合同。无新增服务/模型安装。用户已授权Codex充当审核发布用户，核心图优先，不再把旧六场景全部完成作为前提。以下9b97522f段落为上一发布事实。
-- production `9b97522f282951cf9328f673dbde8c53eaafb8f8`，provider `f48324870f25b50c3a21eaad898beea87fb0aa1d` / rollback `48d9fa65db134575f53cf2a30724aa47a14eeea4`；构建和服务启动完成。单次真实产品恢复已202，五个场景领取成功但在网页提交前因MODEL_6_PRO_NOT_READY退出。
-- Deep-sub-cycle原36a4…及新8b0ca4c9…均为真实产品draft，页面自动显示2/6；新任务succeeded/provider completed，完整1280×720图已加载，有查看原图与审核按钮。尚缺四个场景，科学审核/发布未完成。
-- 服务器CDP可连接；7d8…原会话明确限流，旧UNCERTAIN已原会话续取为failed/USAGE_LIMIT，未重发。不能再误诊成网络或浏览器不可用。
-- `paper-analysis`与`document-parser`均运行且healthy；高级解析和六维成果已复用，不重跑OCR。下方旧Tesseract-only描述为历史基线，不代表当前高级分析服务未投入使用。
-- 浏览器和renderer沿用既有镜像及授权登录，不下载新浏览器；视频暂停。图像仍有制作指令外露的质量问题，未批准发布。
+- production `d6dce2e2852dd3154f8698f02659088cc196b934` / application rollback `661d0926d5bfa8ef4126a93fd021fda012f395cf`；browser provider `f48324870f25b50c3a21eaad898beea87fb0aa1d` / provider rollback `48d9fa65db134575f53cf2a30724aa47a14eeea4`。
+- 服务器必要构建/启动完成；连续工作台可打开，Hermes实际单字段共编、撤销、用户修订并确认v2已成功。无新增服务/安装；仍复用MiniMax/Gateway。
+- 新候选修复默认分支提交后草稿同步、未改内容选择性保留审核和制作/发布两栏布局。v2一次性状态恢复已审计：5 Claim/50 Evidence，原pending和改动problem保留，冻结记录未改。
+- 旧v1两图8b0ca4c9与36a4已被标approved，但科学/视觉问题未消失，尚未发布；旧六图run仍failed。当前只要求一张合格核心图，不继续凑六场景。
+- CDP与已授权服务器浏览器可用。截图先bringToFront；后台截图超时不代表网络或Chat不可用。Chat6Pro规划已收到，追加复核明确限流，未重试/换账号。
+- 高级paper-analysis/document-parser及BGE/ScanSci继续使用；无新OCR，视频暂停。用户已授权代为科学审核发布，不能放行已知错误。
 
 ## 使用规则
 - 所有服务器相关任务先读本页相关条目。新增下载/安装前，依次查已有服务、镜像、共享缓存；优先原入口调用、复用镜像层或只读运行文件。
@@ -20,7 +20,7 @@
 
 | 能力 | 已有位置 / 入口 | 状态与复用方式 |
 |---|---|---|
-| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | production `9b97522f…` / rollback `48d9fa65…`；构建启动完成，真实页面恢复POST202/run version8，已有1/6图片保留 |
+| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | production `d6dce2e2…` / rollback `661d0926…`；共编与工作台已实际使用，当前版本衔接修复见CURRENT handoff |
 | 主机资源 | ECS 16 CPU、30 GiB RAM、无 NVIDIA GPU | 盘点时约22 GiB可用；CPU解析器必须有界并发。Marker/MinerU等GPU高质量模式不能按GPU吞吐数据推断本机效果 |
 | 完整图形 Chrome | 宿主 `/opt/openscience-tool-cache/playwright/chromium-1234/chrome-linux64/chrome`；ScanSci镜像内 `/opt/scansci-browsers/chromium-1234/chrome-linux64/chrome` | 已静态确认完整二进制。可复用现有镜像与配套资源；不是只存在 headless shell |
 | 无头 Chromium | 宿主 `/root/.cache/ms-playwright/chromium_headless_shell-1234/` 与共享缓存同名目录；ScanSci镜像 `/opt/scansci-browsers/chromium_headless_shell-1234/` | 现成截图/渲染资源；不能用“仅此目录存在”的旧记录推断没有完整浏览器 |
