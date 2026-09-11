@@ -1,6 +1,6 @@
 # Server ChatGPT browser — operator login research
 
-- CURRENT 2026-09-11：应用9c5088ea/rollback1a862027；provider d1630135/rollback92cc416e。刷新原Chat后b19核心图成功取回、入库、科学审核approved并在工作台显示；无重复生图。102条证据整理完成。v10=f4e2dc71当前approved，发布被8个核心Claim超限阻断；恢复编辑与审核顺序候选待部署。详见唯一CURRENT handoff；无需重新登录/安装浏览器。
+- CURRENT 2026-09-11：应用378a9506/rollback9c5088ea，provider d1630135/rollback92cc416e。b19核心图真实取回、科学审核、Hermes对话发布全部完成；v10=f4e2dc71已公开为OSR-2026-000022-v10，匿名页面200及图片加载已观察。发布恢复与审核顺序修复已部署；无新软件。详见唯一CURRENT handoff，不再沿用旧“无PNG/未公开”状态。
 
 - 最新2026-09-11：第二账号已正常登录，实际账户设置与用户指定账号匹配（Pro）；noVNC实际可视可操作。旧“等用户密码”状态已完成，不要再次要求登录。6Pro截图规划会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581已回复。
 - 新模型菜单使用Thinking effort→Power，键盘右移到第5档时实际显示6 Pro。收起后正文可能分成6换行Pro，识别需允许空白。不要因菜单变化降级模型或反复重发。

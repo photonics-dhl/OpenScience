@@ -1,32 +1,23 @@
 # OpenScience 当前进度
 
-## 2026-09-11 — 真实图片完成，收尾发布（当前进行中）
-- CURRENT：应用9c5088ea/回滚1a862027，provider d1630135/回滚92cc416e均部署exit0。b19原Chat刷新后取回PNG1672×941/622483bytes，原任务retry入库，未重新生图。主会话/Sol High科学审核通过，Hermes“采用1”已approved，工作台实际加载。
-- v10=f4e2dc71（旧v7误记已纠正）实际发布遇到两项旧问题：48条context待人工来源确认+2条只有章节标题的关联，现已逐组审核并经API整理，保留102条Evidence/原PDF/历史与操作备份；随后review通过但publish被8个核心Claim超限阻断，当前approved尚未公开。
-- 候选已通过Sol High静态复核：将原Claim图校验移到审核阶段，保留发布终检；未公开approved/under_review通过Hermes“继续编辑”撤回审核到draft，保留权限、事务、Publication存在保护、旧review失效与审计。准备服务器无测试部署；两条待归并节点不被任何presentation引用（实际API返回空），不会破坏已审图片。
-- 已部署application1a862027 / rollback1cdd4602，browser provider92cc416e / rollbackf4832487。4项项目设计skills、贡献→图视频→六字段→折叠资料、统一网格、多图HTML幻灯片已经交付。
-- 用户已授权本次服务器真实带图流程/代为科学审核/公开发布，未恢复全仓测试、CI或本机运行。
-- 服务器Hermes已精炼正文/自动保存/准备v10=f4e2dc71-1fe8-406f-8c19-e1849503d698；当前实际图b19引用已审plan3a6ed136；旧158相关图e0已拒绝，不混为当前成果。
-- 真实发现guide的scene.image+长instruction被客户端隐式转成方案修订：1f3c8255实际interactive_html，不能记为生图成功。根已收紧已有image动作/指令协议、定向校验反馈并提供真实plan状态；部署后已实际提交image请求，引用已审158/scene0；e0f842fa同会话下载恢复入库，无重复网页提交。成图坐标/S(z)标注未通过科学审核，现已rejected；已审修正plan3a6ed136待新图。
-- High定向静态发现并修复presentation跨RO读取缺少会话/成员绑定；SVG仍走原安全下载、不可当inline图片。最新状态入口仍CURRENT handoff。
+## 2026-09-11 — 第一篇真实带图 RO 已公开
+- CURRENT：branch codex/onchip-video-release；worktree .worktrees/onchip-video-release。应用/code378a950697e3addd390c05a3dc29af0362328807已部署exit0，rollback9c5088ea；provider d1630135/rollback92cc416e，无新软件。后续docs-only提交不代表新release。
+- 公开成果：https://openscience.428312321.xyz/research/OSR-2026-000022/v/10 。v10=f4e2dc71，RO c896802c；已纠正旧v7误记。Hermes对话发布201，时间2026-09-11T14:39:38.371Z；匿名HTTP200，核心图片实际加载。
+- b19a65bd原Chat刷新后取回PNG1672×941/622483bytes，原任务retry入库，无重复生成。主会话/Sol High/Chat6Pro真实图片科学审核通过，Hermes“采用1”批准。e0旧错误图仍rejected。
+- 原PDF/高级解析与服务器Hermes凝练复用，无重跑OCR。48条context来源经人工逐组确认，2条只有章节标题的关联移除，102条Evidence/原PDF/历史保留。两重复Claim归为对应核心的supporting，12claims/6core、所有ID/text/证据及b19来源不变。
+- 已交付发布恢复：已有Claim图校验纳入review，保留publish终检；未公开版本Hermes“继续编辑”撤回审核到draft实际200，权限/Serializable/Publication存在保护/审计和审核失效完整。
+- 贡献→图视频→六字段→折叠资料已实际观察；图片居主要位置，视频保留占位。项目apple-design/emil-design-eng/design-artifact/html-prototype已安装登记；冷白/墨色/青绿与共享网格沿用。
+- 普通Chat6Pro实际回复支持当前图作为概念示意公开，并讨论受限撤回审核方案；Sol High做发布并发/权限及实际数据变更静态复核。未下调科学要求，未宣称量化token节省比例。
+- 没有运行测试/CI/本机build；仅服务器部署必要编译启动及用户授权真实产品操作。部署日志C:/Users/Mac/AppData/Local/Temp/xgs-deploy-publish-recovery-20260911.log。
 
-## 2026-09-11 — 收口为正文成果 + Hermes对话
-- branch codex/onchip-video-release；worktree .worktrees/onchip-video-release；生产应用release/code1cdd4602e39c253630678785fc90cfaf886c837a；rollback17ebc7f7004b8920531fb39c6ce30c0365311d35；provider f4832487。服务器无测试部署exit0，后续docs-only提交不改变应用release。
-- 用户已批准视觉风格，最新纠偏是删除仍遗留的选择/保存/阶段表单；普通操作经Hermes，正文可直改，主区只展示正文/真实成果。开始制作和最终公开的明确确认改在对话内完成。
-- 已部署：工作台多层表单移除、resultsOnly真实媒体、同对话制作/公开/素材审核、当前草稿自动版本准备、style实参路由、scope变化拒绝旧确认；既有权限与幂等保留。
-- Chat6Pro已完整答复：迁移执行入口而非藏按钮，必须接通自动保存/内部版本和确认/真实回执。普通模型不替用户审核科学错误。
-- Sol medium工作台、主会话Hermes集成、Sol high定向静态复核。P1旧snapshot可能越过当前手改/附件变化已修闭包；P2风格prompt矛盾已修；最终静态复核无剩余P1/P2，服务器已完成必要构建/启动。
-- 本轮真实页面已打开，首屏可见按钮仅收起/发送；DOM侧栏和输入区在视口内，无横向溢出。截图仍因DPR裁切，不据此宣称视觉验收通过；未重跑模型/生成/审核发布。
-- 服务端自动保存已接回原updateSdf，和制作/发布的版本准备串行；失败保留浏览器草稿。
-- 不测试、不预检、不CI、不本机build。复用服务器现有服务/浏览器/模型，没有安装新软件。
+## 本轮真实问题与修复
+- Chat空白并不等于没生成：刷新原会话找回图；只关闭不响应空主页恢复CDP，不重启全浏览器或重发请求。provider已移除自动整浏览器重启及单任务uncertain全局阻断。
+- 页面3分钟停止等待、retry空JSON问题已由9c修复；这轮不再重跑这些检查。
+- 发布review遗漏主张图校验，导致approved后无法编辑：378将同一规则前移并添加显式撤回审核，避免困住用户。
+- DOM截图受Chrome125%缩放裁切，实际clientWidth=scrollWidth=1140；不据裁切误报网站横向溢出，也不宣称完整视觉验收。
+- 原稿科学错误/旧素材拒绝保留，不用历史演示代替当前图。
 
-## 实际产品与未完工作
-- 17ebc7f7已上线连续正文/六栏目强调、公开图视频同显与固定Hermes对话输入；仍有旧操作表单，故用户要求本轮收口。
-- 上轮生产1151×653真实DOM输入区完整可见。截图缩放异常已停止重复尝试、恢复原视口。file:///jobs/ro-product-preview-20260911.html是已批准历史样稿，非真实业务页面。
-- RO c896802c-35dd-4b59-8db1-5f374f83a6d8，v6 47e82df5-7694-42e6-9c61-3675d0c2963a无合格图、未发布。原PDF与高级解析复用；104条Evidence succeeded/verified已读取。
-- 旧v3图真实网页生成/回传，但FWHM_s标注错误。8fc方案有传播/电子轴和电场面积问题；4017673f虽approved但错误，不可沿用。
-- 公开OSR-2026-000020/v/2是旧E2E内容，不能当新精选。正确新图/科学审核/发布闭环仍未完成；不批量冷启动、不新跑视频。
-
-## 入口
-- 唯一CURRENT：docs/handoff/2026-09-10-hermes-web-image-handoff.md；基线与设计按该文档read-first。
-- 部署仅必要构建/启动、保留回滚；已实现/已部署/实际观察/科学通过分开报告。
+## 尚未完成与入口
+- 当前一篇带图发布已闭环；视频、真实多图HTML样本/独立导出、其余精选论文和更大范围旧数据归档尚未全部完成。暂停视频与批量冷启动。
+- 本次包含人工浏览器恢复、证据确认和重复节点整理；通用全自动异常恢复未证明，不把展示样例冒充所有新论文已自动可靠处理。
+- 唯一CURRENT：docs/handoff/2026-09-10-hermes-web-image-handoff.md；详细产品证据、风险、版本、控制入口按该文档。

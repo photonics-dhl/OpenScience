@@ -1,6 +1,6 @@
 # 服务器能力与复用清单
 
-- CURRENT 2026-09-11：应用9c5088ea/rollback1a862027；provider d1630135/rollback92cc416e。刷新原Chat后b19核心图成功取回、入库、科学审核approved并在工作台显示；无重复生图。102条证据整理完成。v10=f4e2dc71当前approved，发布被8个核心Claim超限阻断；恢复编辑与审核顺序候选待部署。详见唯一CURRENT handoff；无需重新登录/安装浏览器。
+- CURRENT 2026-09-11：应用378a9506/rollback9c5088ea，provider d1630135/rollback92cc416e。b19核心图真实取回、科学审核、Hermes对话发布全部完成；v10=f4e2dc71已公开为OSR-2026-000022-v10，匿名页面200及图片加载已观察。发布恢复与审核顺序修复已部署；无新软件。详见唯一CURRENT handoff，不再沿用旧“无PNG/未公开”状态。
 
 - 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。
 - Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。历史许可证400修复已经部署；当前正式工作台/公开阅读版本见本页CURRENT，不恢复旧候选结论。
@@ -29,12 +29,12 @@
 
 | 能力 | 已有位置 / 入口 | 状态与复用方式 |
 |---|---|---|
-| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | production `329ad2e8…` / rollback `25917596…`；已部署能力与尚未通过的科学/体验问题见CURRENT handoff |
+| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | application `378a9506…` / rollback `9c5088ea…`；真实带图公开成果与剩余范围见CURRENT handoff |
 | 主机资源 | ECS 16 CPU、30 GiB RAM、无 NVIDIA GPU | 盘点时约22 GiB可用；CPU解析器必须有界并发。Marker/MinerU等GPU高质量模式不能按GPU吞吐数据推断本机效果 |
 | 完整图形 Chrome | 宿主 `/opt/openscience-tool-cache/playwright/chromium-1234/chrome-linux64/chrome`；ScanSci镜像内 `/opt/scansci-browsers/chromium-1234/chrome-linux64/chrome` | 已静态确认完整二进制。可复用现有镜像与配套资源；不是只存在 headless shell |
 | 无头 Chromium | 宿主 `/root/.cache/ms-playwright/chromium_headless_shell-1234/` 与共享缓存同名目录；ScanSci镜像 `/opt/scansci-browsers/chromium_headless_shell-1234/` | 现成截图/渲染资源；不能用“仅此目录存在”的旧记录推断没有完整浏览器 |
 | 浏览器运行依赖 / Xvfb | `openscience-scansci-mcp:7f8e47d931b751cc28c1000325128c2ca86566cb`；镜像 `/usr/bin/Xvfb` | 已有图形库与Xvfb；独立浏览器可派生镜像，不启动或修改生产ScanSci服务、不挂载其登录卷 |
-| 网页远程桌面、生图与科学审阅 provider | `infra/chatgpt-browser/`；`/opt/openscience-chatgpt-browser` | bundle `f4832487…`；原生Create image与6Pro科学审阅分开，新8b0ca4c9…已自动回传，合计2/6；旧7d8…明确USAGE_LIMIT。复用原浏览器/登录、独立图片及科学审阅锁；入口见[浏览器手册](chatgpt-browser.md) |
+| 网页远程桌面、生图与科学审阅 provider | `infra/chatgpt-browser/`；`/opt/openscience-chatgpt-browser` | bundle `d1630135…`；原生Create image与6Pro科学审阅分开，b19核心图已取回并在正式RO公开。复用原浏览器/登录、独立图片及科学审阅锁；人工恢复参与与边界见[浏览器手册](chatgpt-browser.md) |
 | Node / Python | 宿主 `/usr/bin/node`、`/usr/bin/python3`；现有 `node:22-bookworm`、`python:3.12-slim` 镜像 | 已有；必要时复用镜像中的Node。不要默认全局安装 |
 | 视频 / 字体 / FFmpeg | `openscience-media-demo:b361f4f7781b760583b3a312829877c4d6310e8a` 等已有media镜像；源码 `apps/media-demo/Dockerfile` | 镜像包含FFmpeg、CJK字体与无头浏览器；demo镜像可复用运行依赖，不代表Hermes完整视频产品链路通过 |
 | 语音模型 | `/opt/openscience-models/qwen3-tts-customvoice-0c0e305`；`openscience/tts-audition:qwen0.1.1` | 目录与镜像存在，本轮未调用；不要重复下载模型，也不推断生产已接入 |
