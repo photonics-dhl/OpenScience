@@ -165,6 +165,24 @@ function HermesAssistantDrawerContent({
   const transcript = useRef<HTMLDivElement>(null);
   const followTranscript = useRef(true);
   const preparedTasks = useRef(new Set<string>());
+  useEffect(() => {
+    if (!open || !docked || !wide) return;
+    const shell = transcript.current?.closest<HTMLElement>('.hermes-inline-assistant');
+    if (!shell) return;
+    let frame = 0;
+    const resize = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        shell.style.setProperty('--hermes-available-height', `${Math.max(280, window.innerHeight - Math.max(16, shell.getBoundingClientRect().top) - 16)}px`);
+      });
+    };
+    resize();
+    const observer = new ResizeObserver(resize);
+    if (shell.parentElement) observer.observe(shell.parentElement);
+    window.addEventListener('resize', resize);
+    window.addEventListener('scroll', resize, { passive: true });
+    return () => { observer.disconnect(); window.cancelAnimationFrame(frame); window.removeEventListener('resize', resize); window.removeEventListener('scroll', resize); };
+  }, [open, docked, wide]);
   const [literatureIntent, setLiteratureIntent] = useState<DrawerLiteratureIntent | null>(null);
   const activeTask = task?.status === 'pending' || task?.status === 'running';
   const busy = submitting || activeTask;

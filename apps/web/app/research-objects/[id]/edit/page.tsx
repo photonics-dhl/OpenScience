@@ -951,6 +951,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               </div>
             )}
 
+            {!ingestionReviewActive ? <CoreEditor sourceHref={versions[0] ? `/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versions[0].versionId)}#version-evidence` : undefined} core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} /> : null}
+
             <details className={styles.disclosure} open={ingestionReviewActive || undefined}>
               <summary><span>{t('artifacts')}</span><small>{tw('confirmedSources')}</small></summary>
               <div className={styles.disclosureBody}>
@@ -1024,8 +1026,6 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 {confirmedIngestion || ingestionMessage === t('ingestionAlreadyConfirmed') ? <button className="mt-4 min-h-11 text-sm text-os-vermilion-ink underline" onClick={() => setStage('media')}>{tw('continueMedia')}</button> : null}
               </section></details>
             ) : null}
-            {!ingestionReviewActive ? <CoreEditor sourceHref={versions[0] ? `/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versions[0].versionId)}#version-evidence` : undefined} core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} /> : null}
-
             {!ingestionReviewActive ? <details className={styles.disclosure}>
               <summary><span>{tw('analysisSuggestions')}</span><small>{t('suggestions')}</small></summary>
               <div className={styles.disclosureBody}>
@@ -1084,10 +1084,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         }
         aside={
           <>
-            <div className="mb-4 flex items-center justify-between gap-3 border-b border-os-rule-paper pb-3">
-              <div><h2 className="m-0 text-base font-semibold">Hermes</h2><p className="mt-1 text-xs leading-5 text-os-muted-paper">{tw('hermesScope')}</p></div>
-              {!hermesOpen && <button type="button" className="min-h-11 rounded-panel bg-os-paper-strong px-3 text-sm text-os-vermilion-ink" onClick={() => { setHermesGoal(''); setHermesOpen(true); }}>{tw('talkToHermes')}</button>}
-            </div>
+            {!hermesOpen && <button type="button" className={styles.hermesButton} onClick={() => { setHermesGoal(''); setHermesOpen(true); }}>Hermes · {tw('talkToHermes')}</button>}
             <HermesAssistantDrawer
               docked
               initialGoal={hermesGoal}

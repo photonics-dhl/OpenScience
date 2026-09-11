@@ -47,7 +47,7 @@
   box-shadow: 0 4px 20px rgb(29 41 53 / .055);
   min-width: 0;
 }
-.hermes-inline-assistant.hermes-conversation-shell { top: 24px; height: min(780px, calc(100dvh - 48px)); max-height: calc(100dvh - 48px); }
+.hermes-inline-assistant.hermes-conversation-shell { top: 24px; height: var(--hermes-available-height, calc(100dvh - 240px)); max-height: min(780px, calc(100dvh - 32px)); }
 .drawer.hermes-assistant-shell.hermes-conversation-shell { width: min(400px, calc(100vw - 24px)); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); top: 12px; right: 12px; }
 .hermes-conversation { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .hermes-conversation-header { display: flex; align-items: center; gap: 10px; flex: none; padding: 14px 14px 10px; border-bottom: 1px solid var(--rp-rule); }
