@@ -66,6 +66,7 @@ export interface ResearchIdentityProfile extends ResearchIdentityProfileInput {
 }
 
 export interface ResearchObjectSummary {
+  publicId?: string | null;
   id: string;
   workspaceId: string;
   title: string;
