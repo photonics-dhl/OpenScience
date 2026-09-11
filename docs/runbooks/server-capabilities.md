@@ -1,6 +1,6 @@
 # 服务器能力与复用清单
 
-- CURRENT 2026-09-11：应用 release 17ebc7f7 / rollback cb173542，browser provider f4832487；已部署批准的工作台/公开阅读风格与Hermes真实对话路由，首屏发送框适配。无新服务/模型。104条Evidence已确认，但v6仍无合格图片/未发布，8fc方案科学问题未放行；完整状态见CURRENT handoff。下方历史任务不覆盖本段。
+- CURRENT 2026-09-11：应用 release 1cdd4602 / rollback 17ebc7f7，browser provider f4832487；本轮移除旧工作台流程表单，自动保存与Hermes对话制作/审核/公开回调已部署，未安装新服务；已部署批准的工作台/公开阅读风格与Hermes真实对话路由，首屏发送框适配。无新服务/模型。104条Evidence已确认，但v6仍无合格图片/未发布，8fc方案科学问题未放行；完整状态见CURRENT handoff。下方历史任务不覆盖本段。
 
 - 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。
 - Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。历史许可证400修复已经部署；当前正式工作台/公开阅读版本见本页CURRENT，不恢复旧候选结论。

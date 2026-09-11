@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-11:** production / code 17ebc7f7，rollback cb173542，browser provider f4832487；基础风格已部署；最新对话收口候选移除旧操作表单、连通制作/审核/公开回调，尚待部署。104条Evidence已确认；v6尚无合格图片/未发布，8fc方案仍不可放行。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-11:** production / code 1cdd4602，rollback 17ebc7f7，browser provider f4832487；基础风格已部署；最新对话收口已部署：移除旧操作表单、连通自动保存/制作/审核/公开回调；未触发新科学流程。104条Evidence已确认；v6尚无合格图片/未发布，8fc方案仍不可放行。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 当前执行：用户已批准高保真风格并要求突出六栏目，正式工作台与公开阅读页已上线；继续处理正确生图/发布闭环，不重新访谈已确定方向。
 > 最新部署：17ebc7f7，实际服务器构建/启动完成，不运行测试/预检；后续docs-only变更不是应用部署。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
@@ -14,7 +14,7 @@
 | `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 参考目录；相关结构/风格已获用户批准，未安装新能力 |
 | `docs/proposals/2026-09-11-ro-workbench-wireframe.html` | 成稿/Hermes/图视频/公开预览可点击灰度线框，两个主要确认节点 | 已在服务器浏览器打开供用户讨论；无生产接口/真实媒体/发布，非生产UI部署 |
 | `docs/proposals/2026-09-11-ro-product-preview.html` | 保留已认可布局的视觉与Hermes对话交互稿，固定输入、精简制作确认、公开媒体与正文共享状态 | 已批准的视觉参考；原样稿仅预设短句/内存演示，生产实现与未决事项见CURRENT handoff |
-| `apps/web/lib/hermes/conversation-action.ts` / `apps/web/components/hermes/HermesMediaReview.tsx` | Hermes对话确认的前端动作接口、当前版本实际素材审核及结果回写 | 本轮候选；复用原权限/版本/updatedAt，部署状态见CURRENT |
+| `apps/web/lib/hermes/conversation-action.ts` / `apps/web/components/hermes/HermesMediaReview.tsx` | Hermes对话确认的前端动作接口、当前版本实际素材审核及结果回写 | DEPLOYED1cdd4602；复用原权限/版本/updatedAt；实际观察与未决项见CURRENT |
 | `apps/web/app/research-product.css` / `apps/web/app/research-objects/[id]/edit/workbench.module.css` / `apps/web/components/public/PublicReadingProduct.module.css` | 已批准高保真风格的正式工作台与公开阅读样式，六栏目标题强调、图视频直显和固定Hermes对话输入 | DEPLOYED17ebc7f7；无测试/预检，实际页面观察及限制见CURRENT handoff |
 | `apps/agent-worker/src/workspace-guide.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/components/hermes/HermesPresentationAction.tsx` | 同会话服务端上下文、模型语义路由、可撤销草稿回显、折叠制作确认与发布预览；保留权限/版本/明确制作发布确认 | DEPLOYED17ebc7f7；不以请求成功代替科学产物通过 |
 | `apps/web/components/presentation/ResearchPresentation.tsx` / `apps/web/components/research/ResearchPublication.tsx` | 连续工作台复用制作及版本绑定发布预览，旧独立路由保留 | DEPLOYED b05aaeac；最新真实状态见CURRENT handoff |

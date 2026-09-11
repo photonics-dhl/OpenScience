@@ -1,11 +1,13 @@
 # OpenScience 当前进度
 
 ## 2026-09-11 — 收口为正文成果 + Hermes对话
-- branch codex/onchip-video-release；worktree .worktrees/onchip-video-release；生产应用release/code17ebc7f7004b8920531fb39c6ce30c0365311d35；rollback cb17354259d378fc16bf99d9bad4a4dc16eef578；provider f4832487。本轮对话收口是待部署候选。
+- branch codex/onchip-video-release；worktree .worktrees/onchip-video-release；生产应用release/code1cdd4602e39c253630678785fc90cfaf886c837a；rollback17ebc7f7004b8920531fb39c6ce30c0365311d35；provider f4832487。服务器无测试部署exit0，后续docs-only提交不改变应用release。
 - 用户已批准视觉风格，最新纠偏是删除仍遗留的选择/保存/阶段表单；普通操作经Hermes，正文可直改，主区只展示正文/真实成果。开始制作和最终公开的明确确认改在对话内完成。
-- 候选：工作台多层表单移除、resultsOnly真实媒体、同对话制作/公开/素材审核、当前草稿自动版本准备、style实参路由、scope变化拒绝旧确认；既有权限与幂等保留。
+- 已部署：工作台多层表单移除、resultsOnly真实媒体、同对话制作/公开/素材审核、当前草稿自动版本准备、style实参路由、scope变化拒绝旧确认；既有权限与幂等保留。
 - Chat6Pro已完整答复：迁移执行入口而非藏按钮，必须接通自动保存/内部版本和确认/真实回执。普通模型不替用户审核科学错误。
-- Sol medium工作台、主会话Hermes集成、Sol high定向静态复核。P1旧snapshot可能越过当前手改/附件变化已修闭包；P2风格prompt矛盾已修；最后复核与服务器部署待完成。
+- Sol medium工作台、主会话Hermes集成、Sol high定向静态复核。P1旧snapshot可能越过当前手改/附件变化已修闭包；P2风格prompt矛盾已修；最终静态复核无剩余P1/P2，服务器已完成必要构建/启动。
+- 本轮真实页面已打开，首屏可见按钮仅收起/发送；DOM侧栏和输入区在视口内，无横向溢出。截图仍因DPR裁切，不据此宣称视觉验收通过；未重跑模型/生成/审核发布。
+- 服务端自动保存已接回原updateSdf，和制作/发布的版本准备串行；失败保留浏览器草稿。
 - 不测试、不预检、不CI、不本机build。复用服务器现有服务/浏览器/模型，没有安装新软件。
 
 ## 实际产品与未完工作

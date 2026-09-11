@@ -7,7 +7,7 @@
 
 ## Version / environment
 - worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release；根目录他人脏文件不碰。
-- 已部署应用 code/release 17ebc7f7004b8920531fb39c6ce30c0365311d35；rollback cb17354259d378fc16bf99d9bad4a4dc16eef578；本轮对话收口候选尚待部署，不能把本地diff当生产。
+- 应用 code/release 1cdd4602e39c253630678785fc90cfaf886c837a；rollback 17ebc7f7004b8920531fb39c6ce30c0365311d35。服务器无测试构建/启动/切换已完成，deploy exit0；后续docs-only HEAD不等于应用release。
 - browser provider f48324870f25b50c3a21eaad898beea87fb0aa1d；provider rollback 48d9fa65db134575f53cf2a30724aa47a14eeea4。
 - 服务器Chrome/CDP127.0.0.1:9233及现有playwright-core复用；第二账号已登录，普通Chat实际6Pro。noVNC http://127.0.0.1:6081/vnc.html?autoconnect=true&resize=scale。
 - file:///jobs/ro-product-preview-20260911.html 是历史交互样稿，非生产；不要把它的占位/预设对话当成生产能力。真实edit页和Chat在另两个已开标签。
@@ -18,12 +18,15 @@
 - 暂停视频生成和批量冷启动；2–3篇真实论文质量优先。成功提交/生成/页面改版不等于科学质量或全部链路通过。
 
 ## This correction
-- 本地实现：移除工作台多层表单/流程按钮，嵌入媒体仅真实成果/状态；保留折叠附件/证据/历史和必要错误恢复。
+- 已部署：移除工作台多层表单/流程按钮，嵌入媒体仅真实成果/状态；保留折叠附件/证据/历史和必要错误恢复。
 - Hermes普通指令仍服务端MiniMax语义理解；style进入实际任务参数；制作/公开改为同对话确认。onPrepareVersion自动完成准确版本提交，发布仍调用原权限/审核/许可证/公开API。
 - 素材/方案审核在对话中显示真实待审内容，采用N/拒绝N调用原权限与updatedAt条件更新；结果按RO/version刷新左侧。只有明确沿用已审方案时允许空instruction直达生图/视频，非空改动先修订方案。
 - 主会话负责集成；Sol medium负责工作台；Sol high静态复核。本轮不运行测试、不重新提取、不生成新图/视频、不公开错误论文。
 - High指出准备A期间手改B/移除附件可能错误确认A，已改为准备闭包捕获core/artifacts并在返回/确认/公开前核对；没有新hash/数据库合同。主prompt与style协议矛盾已修正。
 - Chat6Pro同会话 https://chatgpt.com/c/6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581 已回复本次纠偏：迁移执行入口而非藏按钮；必须连接草稿自动保存/内部版本，以及确认执行/真实回执。不得将其产品逻辑建议称作视觉通过。
+- 本轮实现服务端updateSdf自动保存与prepareVersion共用串行写入；模糊失败保留草稿、不循环重试。High最终定向复核无剩余P1/P2。
+- 新版实际页面加载：初始可见button仅收起/发送；六栏目/正文和折叠资料已出现。DOM宽1151、页面scrollWidth1139、侧栏x839–1119、输入y489–636，无横向溢出；截图依旧受DPR1.25裁切，停止扩展截图诊断。未触发新模型、收费生成或公开操作，不声称全流程通过。
+- Chat本次纠偏答复保存 /jobs/hermes-conversation-correction-chat-20260911.txt；部署日志本机Temp/xgs-dialogue-ui-deploy-20260911.log；图仅截图工具异常记录 /jobs/hermes-conversation-live{-css}-20260911.jpg。
 - 上轮真实DOM1151×653窗口输入区y489–636可见；后续截图缩放异常已停止反复截图并恢复原视口，不据此判断产品/Chat不可用。
 
 ## Actual paper state — reuse, do not restart extraction
@@ -35,5 +38,5 @@
 - OSR-2026-000020/v/2仅旧E2E页面布局观察，不是新精选展示。
 
 ## Next
-- 收齐当前静态复核，完成此对话收口版本服务器无测试部署并打开真实页；不再回到样稿或重复访谈。
+- 本轮对话收口已部署并打开真实edit页；不再回到样稿或重复访谈。
 - 随后修正当前科学图方案并在既有服务器网页生图链路执行、审核/发布正确成果。不得称本次界面交付已完成科学闭环。
