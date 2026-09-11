@@ -9,6 +9,7 @@ import { parseDocumentSourceMapReference } from '../research-intelligence/source
 import { ClaimEvidenceError } from '../research-intelligence/claim-evidence-errors';
 import { createClaimEvidenceBatch } from '../research-intelligence/claim-evidence-service';
 import { authorizeIngestionWrite, type IngestionDeps } from './ingestion-service';
+import { MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from './canonical-evidence-contract';
 
 export const INGESTION_BRIDGE_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
 export type IngestionBridgeField = typeof INGESTION_BRIDGE_FIELDS[number];
@@ -145,7 +146,7 @@ async function loadSnapshot(
     let sources: Array<{ quote: string; locator: SourceLocator }> = [];
     if (segmentBundle) {
       const segments = segmentBundle[sourceField];
-      if (!Array.isArray(segments) || segments.length > 32) throw new ClaimEvidenceError('ORIGINAL_MISSING', 'Canonical evidence segments are invalid');
+      if (!Array.isArray(segments) || segments.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) throw new ClaimEvidenceError('ORIGINAL_MISSING', 'Canonical evidence segments are invalid');
       let total = 0;
       let priorPage = 0;
       let priorLocator: ReturnType<typeof validateSourceLocator> | undefined;
@@ -165,7 +166,7 @@ async function loadSnapshot(
         if (locator.artifactId !== reference.artifactId || locator.contentHash !== reference.contentHash
           || !locator.blockId || !locator.charRange || locator.charRange.end - locator.charRange.start !== segment.quote.length
           || (locator.page ?? 0) < priorPage || invalidSameBlockRange
-          || (!sameBlock && closedBlockIds.has(locator.blockId)) || total > 8_000) {
+          || (!sameBlock && closedBlockIds.has(locator.blockId)) || total > MAX_CANONICAL_EVIDENCE_CHARS) {
           throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Canonical evidence segments do not match the extraction source');
         }
         if (!sameBlock && priorLocator?.blockId) closedBlockIds.add(priorLocator.blockId);

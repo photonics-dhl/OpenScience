@@ -2,6 +2,8 @@ import { AiGatewayError, SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type O
 import { createHash } from 'node:crypto';
 import {
   createBlockSourceLocator,
+  MAX_CANONICAL_EVIDENCE_CHARS,
+  MAX_CANONICAL_EVIDENCE_SEGMENTS,
   parseDocumentSourceMap,
   resolveSourceLocator,
   validateSourceLocator,
@@ -120,8 +122,8 @@ const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown): value
 
 const KEY_EVIDENCE = /limitations?|constraints?|uncertaint|data availability|code availability|reproduc|materials? and methods?|experimental setup|results?|discussion|局限|限制|不确定|数据可用|代码可用|复现|方法|结果/gi;
 const MAX_EXCERPT_CHARS = 24_000;
-const MAX_EVIDENCE_SEGMENTS = 64;
-const MAX_FIELD_EVIDENCE_CHARS = 24_000;
+const MAX_EVIDENCE_SEGMENTS = MAX_CANONICAL_EVIDENCE_SEGMENTS;
+const MAX_FIELD_EVIDENCE_CHARS = MAX_CANONICAL_EVIDENCE_CHARS;
 const MAX_CANONICAL_CORE_CHARS = 4_000;
 const CHINESE_NARRATION = /[\u3400-\u9fff]/u;
 const BROKEN_SCIENTIFIC_NOTATION = /[⁺⁻](?![⁰¹²³⁴⁵⁶⁷⁸⁹])|\b\d+(?:\.\d+)?e[+-](?!\d)|10\^\{\s*\}/iu;

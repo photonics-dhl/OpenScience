@@ -239,6 +239,7 @@ export {
   type ReviewedIngestionClaimEvidenceBatchInput,
 } from './research-intelligence/claim-evidence-service';
 export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, reanalyzeConfirmedIngestion, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
+export { MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from './ingestion/canonical-evidence-contract';
 export {
   INGESTION_BRIDGE_FIELDS,
   confirmIngestionClaimEvidenceBridge,

@@ -7,6 +7,7 @@ import { loadDocumentSourceMapReference, parseDocumentSourceMapReference } from 
 import { createBlockSourceLocator, resolveSourceLocator } from '../research-intelligence/source-locator';
 import { validateSourceLocator } from '../research-intelligence/validation';
 import { IngestionError } from './errors';
+import { MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from './canonical-evidence-contract';
 
 type IngestionEvidenceSource = {
   quote: string;
@@ -111,7 +112,7 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
     }
     for (const field of SDF_NODE_TYPES) {
       const values = segmentBundle[field] as unknown[];
-      if (values.length > 32) throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence exceeds the segment limit');
+      if (values.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence exceeds the segment limit');
       const fieldSources: IngestionEvidenceSource[] = [];
       let total = 0;
       let previousPage = 0;
@@ -145,7 +146,7 @@ export async function writeIngestionEvidence(deps: IngestionDeps, input: {
           throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence segments are out of source order');
         }
         total += segment.quote.length + (index > 0 ? 1 : 0);
-        if (total > 8_000) throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence exceeds the quote limit');
+        if (total > MAX_CANONICAL_EVIDENCE_CHARS) throw new IngestionError('VALIDATION_ERROR', 'Canonical ingestion evidence exceeds the quote limit');
         previousBlockId = locator.blockId;
         previousRangeEnd = locator.charRange.end;
         previousBlockOrdinal = blockOrdinal;
