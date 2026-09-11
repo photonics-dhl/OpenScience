@@ -236,11 +236,6 @@ async function imageModeActive(composer) {
   const marker = form.getByText('Create image', { exact: true });
   return await marker.count() === 1 && await marker.isVisible().catch(() => false);
 }
-async function model6ProActive(composer) {
-  const form = composer.locator('xpath=ancestor::form[1]');
-  if (await form.count() !== 1) return false;
-  return /(?:^|\s)6\s+Pro(?:\s|$)/.test(await form.innerText().catch(() => ''));
-}
 async function activateImageMode(page, composer, deadlineAt) {
   if (await imageModeActive(composer)) return true;
   const form = composer.locator('xpath=ancestor::form[1]');
@@ -360,7 +355,8 @@ async function closeStaleOperatorPages(context) {
   const composer = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 15000));
   if (!composer) throw Error('IMAGE_COMPOSER_NOT_FOUND');
   if (!await activateImageMode(page, composer, Math.min(request.deadlineAt, Date.now() + 10000))) throw Error('IMAGE_MODE_NOT_READY');
-  if (!await model6ProActive(composer)) throw Error('MODEL_6_PRO_NOT_READY');
+  // Image mode has its own controls (for example "Extra High"). The 6 Pro
+  // requirement belongs to scientific review, not the native image composer.
   if (mode === 'prepare' || mode === 'execute') {
     await composer.fill(prompt);
     console.log('PREPARED');
@@ -388,6 +384,6 @@ async function closeStaleOperatorPages(context) {
   process.exit(0);
 })().catch(error => {
   // Never print page contents, login data, request payload, conversation URL or CDP transport errors.
-  console.log(JSON.stringify({ state: fs.existsSync(path.join(dir, 'submitted.json')) ? 'ambiguous_no_resend' : 'not_submitted', error: /^[A-Z_]+$/.test(error.message) ? error.message : error.name }));
+  console.log(JSON.stringify({ state: fs.existsSync(path.join(dir, 'submitted.json')) ? 'ambiguous_no_resend' : 'not_submitted', error: /^[A-Z0-9_]+$/.test(error.message) ? error.message : error.name }));
   process.exit(1);
 });

@@ -175,6 +175,6 @@
 日志出现 `wsl: Failed to translate` 代表误用了 WSL，不代表 SSH key 失效。详细根因与禁令见 `docs/runbooks/deployment.md` §1.1。
 
 ## CURRENT 2026-09-11 — Chat网页图解与产品回传
-- production/provider48d9fa65：Deep-sub-cycle来源及方案已确认，一张1280×720 PNG已由Hermes/chatgpt-web入产品draft，另五张未完成；原会话明确USAGE_LIMIT。没有切换API或重跑全文分析/生图。
-- 原图有内部制作指令外露，不能精选发布。候选把内部规则与可见标签分开，支持注明非按比例的概念图；尚未生成新图确认改善。
+- production9b97522f/provider48d9fa65：Deep-sub-cycle来源及方案已确认，一张1280×720 PNG已由Hermes/chatgpt-web入产品draft，另五张未完成；原会话明确USAGE_LIMIT。没有切换API或重跑全文分析。已通过产品入口单次继续五个未完成场景，POST202/run version8；五项在网页提交前失败，正修复图片模式误要求6Pro文本的条件。
+- 原图有内部制作指令外露，不能精选发布。已部署prompt把内部规则与可见标签分开，支持注明非按比例的概念图；尚未生成新图确认改善。
 - 继续使用既有API、队列、版本/权限和人工审核；未来真实并发增长后再引入API生图，不扩建恢复框架。

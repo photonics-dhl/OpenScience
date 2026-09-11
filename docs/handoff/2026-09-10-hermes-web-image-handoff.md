@@ -8,10 +8,11 @@
 ## Version tuple
 - worktree: E:/Miscellaneous/XGS/.worktrees/onchip-video-release
 - branch: codex/onchip-video-release
-- application / production / browser bundle: 48d9fa65db134575f53cf2a30724aa47a14eeea4
-- rollback: 6a9f650e50aa5358c50522c3c680977879190b18
+- application / production: 9b97522f282951cf9328f673dbde8c53eaafb8f8
+- browser bundle: 48d9fa65db134575f53cf2a30724aa47a14eeea4（本次仅应用领取/恢复逻辑变化，provider复用）
+- rollback: 48d9fa65db134575f53cf2a30724aa47a14eeea4
 - 第二批已部署：折叠AI绘图细节、288px侧栏、提示词可见标签/内部规则分层、显式恢复时复用已保存图片。provider同版本，7d8明确限流后匹配的旧不确定熔断已归档，无新生图。
-- 当前小修候选：领取事务P2034时有界重试；executionAttempt=0且provider证明before_submission的旧失败任务可经原产品恢复入口重新排队。不得放行未确认提交状态。
+- 已部署领取事务P2034有界重试和attempt0的未提交恢复；Chrome6 Pro已复核GO。未运行测试，服务器发布构建/启动完成。
 
 ## Actual product facts (2026-09-11)
 - RO c896802c-35dd-4b59-8db1-5f374f83a6d8；version 4ed2b16d-0c5f-41a5-a57d-54eff5dbab11；run 436ff261-1f49-42ea-827a-cccfb2fce45b。
@@ -20,7 +21,7 @@
 - 图片36a4f82b-10bc-40f4-b43c-bc1d8990f6c9实际已由服务器chatgpt-web保存到产品为draft，sceneIndex4；并非只存在spool。authenticated presentation-assets GET已返回该图片与两份方案。
 - 六图未全完成。7d8fafce-390c-4a4e-9024-ec89650de631的精确会话明确显示“You’ve hit your rate limit.”；服务器Pro菜单禁用。浏览器CDP实际连接成功，无需重启或重装。
 - 8f4f6f79… /986ff3d9… 是EXPIRED；1f2d0677… 是EXECUTION_FAILED；6a2cc3bf…尚无provider结果；7d8…已只读续取原会话确认为failed/USAGE_LIMIT。旧结果和失败marker已归档，无重发。
-- run仍failed/version7，旧P2034事务冲突错误掩盖已保存结果。失败run隐藏成果入口、1.5秒轮询重置整页和面板key，是当前直接体验问题。
+- 通过真实页面点击一次“Continue unfinished generation”，POST202；run已generating_scene_images/version8。原36a4保留、6a2原id重排，四个新task：ordinal0=5db130af-5ada-4f55-a70f-36fb8f690c9b，2=edc98363-60e1-470a-a77d-e4442c3f47ff，3=64f186c1-0409-4762-a38a-0959e69bf5a3，5=eb1819af-1b22-4d73-9ecf-6998d6494a3f。随后五项均在发送前失败；run已failed/version9，原图step已正确awaiting_approval。定位MODEL_6_PRO_NOT_READY：生图form仅显示Create image/Extra High，硬性6Pro文案检查错误。未写submitted.json、未发送网页prompt。
 
 ## Candidate / Chat review
 - Chrome会话 https://chatgpt.com/c/6aa2df58-0c20-83ea-838d-4e1129091d79，6 Pro已实际回复GO：成果可见性与run失败分开；明确限流不自动重启/重发；其他场景持久化后再汇总失败。
@@ -30,10 +31,10 @@
 - 生成汇总保留已完成资产和权限/版本校验，等待其他已派发任务结束，避免单图失败取消其余场景authority。
 
 ## Next actions
-1. 部署领取/零次执行恢复小修；--confirm --no-tests --reuse-unchanged-capability-images。provider未改动，保留48d9。
-2. 用户已批准单次继续。新版入口预计保留36a4已完成图，重排未提交6a2，四个明确失败任务新建一次；若再次限流不循环重试。
+1. 部署仅provider的小修：图片只要求实际登录及Create image模式，6Pro要求仅用于科学审阅；保留所有来源/发送次数检查，错误码允许数字以免吞掉MODEL_6_PRO_NOT_READY。
+2. 通过批准方案的既有单张生图产品入口生成一张观察；不改旧终态、不重跑解析。新图回产品后查看物理关系/可见标签/整体画面，不自动批准或发布。
 3. 真实产品页已观察1/6、来源与审核按钮。现图把内部限制反复画进画面，还有游离>2标记；保持草稿，不能精选发布。
-4. 剩余图等待网页使用限制解除；不靠重复重启/新账号切换绕过限制，不以1张声称6张完成。
+4. 不靠重复重启/新账号切换绕过使用限制，不以1张声称6张完成。实际成果页图片已完整加载1280×720，机器细节默认关闭，viewport1151时无横向溢出。
 5. 同步本handoff、server-capabilities、capability registry、progress和index中的精确版本。
 - Chat6 Pro再次GO：折叠机器细节、缩小侧栏、区分制作规则与可见标签、同任务已落库图片经完整作用域检查后零生成复用。其“两个机制”的替换例子不受论文证据支持，未采纳。
 
@@ -46,6 +47,8 @@
 | 读取原Chat会话立即异常 | 不再把/images、产品页传入严格canonical转换，仅匹配已记录的会话 |
 | 限流被误判为结果不明 | 识别assistant turn里的准确限流消息，传递USAGE_LIMIT，不重启或自动重发 |
 | 已保存图导致继续入口永久拒绝 | 显式恢复时验证同版本/父方案/Claims及completed结果，复用同任务的资产 |
+| 领取冲突造成零次执行任务阻挡整组恢复 | claim只对P2034做有界事务重试；attempt0仅在provider证明未提交时复用原任务排队，精确CAS且仅一次 |
 | 机器绘图细节占据阅读区 | 默认折叠，保留标题和简洁讲解；可展开查看 |
 | Hermes宽侧栏挤占图片 | 宽屏侧栏288px，小屏主内容优先 |
 | 制作指令画进图里 | 提示词分开内部规则和可见标签；原图保留draft，尚未重生成证明质量改善 |
+| 原生生图入口显示Extra High却被要求6Pro文字 | 移除图片runner的规划模型门槛，保留Create image/登录与发送限制；科学审阅仍用6Pro |

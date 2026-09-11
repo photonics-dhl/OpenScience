@@ -1,5 +1,5 @@
 ## 2026-09-11 — 成果已保存，收敛到产品体验
-- production/provider 48d9fa65，rollback6a9f650e；第二批页面/prompt已部署，实际观察1/6、限流说明和成果入口。零次执行旧任务恢复与领取冲突小修待发布。
+- production9b97522f / provider48d9fa65 / rollback48d9fa65；页面/prompt和零次执行恢复、领取冲突小修均已部署。实际产品点击继续得到202，run生成中/version8：保留原图、重排一项未提交任务、新建四项失败重试，随后五项在网页提交前失败；run failed/version9。已定位图片模式错误要求6Pro文本，provider小修待发布。
 - Deep-sub-cycle六维已确认；approved方案六图中36a4已为真实产品draft image。7d8网页明确rate limit，CDP可连接，不是网络/浏览器附着故障。
 - Chat6 Pro实际GO：保存成果可见性独立于run失败，限流不重发，其他场景保存后再汇总失败。
 - 已部署限流识别、同会话恢复匹配、已有图片进度、失败成果入口、提取页及run静默刷新。7d8限流对应旧不确定熔断已归档。视频暂停，剩余五图未完成，不自动批准/发布。

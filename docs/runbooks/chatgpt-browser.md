@@ -1,6 +1,6 @@
 # Server ChatGPT browser — operator login research
 
-Status: production/provider `48d9fa65…` (2026-09-11). Deep-sub-cycle has one real product draft image of six planned. The exact remaining conversation shows a usage limit, now recorded as failed/USAGE_LIMIT without resubmission. Source and plan were confirmed; image review and publication remain pending.
+Status: production `9b97522f…`, provider `48d9fa65…` (2026-09-11). Deep-sub-cycle has one real product draft image of six planned. The old exact conversation's usage limit was reconciled without resending; its matching uncertainty circuit was archived. One user-authorized product retry returned 202 (run version8), preserving that image and dispatching five unfinished scenes; these then failed before web submission because the native image composer shows Extra High, not the science planner label 6 Pro. A provider-only fix is pending. Image review and publication remain pending.
 
 ## Current product observations
 - A failed AgentTask/run can coexist with its already-persisted image after an old completion conflict. Read product presentation-assets before assuming the PNG needs importing.
