@@ -6,7 +6,7 @@ const { chromium } = require('/app/node_modules/playwright-core');
 const [mode, id] = process.argv.slice(2);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA256 = /^[a-f0-9]{64}$/;
-if (!['prepare', 'send', 'status', 'download', 'execute', 'resume', 'recover'].includes(mode) || !UUID.test(id || '')) process.exit(64);
+if (!['prepare', 'send', 'status', 'download', 'execute', 'resume', 'recover', 'recover-late'].includes(mode) || !UUID.test(id || '')) process.exit(64);
 const dir = path.join('/jobs', id);
 function read(name, maximum = 32768) {
   const file = path.join(dir, name);
@@ -99,11 +99,11 @@ async function reloadChatTargetsAfterAttachFailure() {
     throw Error('STALE_CHAT_TARGET');
   }));
 }
-function validateRequest(request) {
+function validateRequest(request, allowExpired = false) {
   const source = request?.source;
   if (request?.id !== id || request.provider !== 'chatgpt-web' || !SHA256.test(request.promptHash || '')
     || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 1500
-    || !Number.isSafeInteger(request.deadlineAt) || request.deadlineAt <= Date.now() || request.deadlineAt - Date.now() > 600000
+    || !Number.isSafeInteger(request.deadlineAt) || (!allowExpired && request.deadlineAt <= Date.now()) || request.deadlineAt - Date.now() > 600000
     || !source || source.kind !== 'hermes-scene-image' || source.requestId !== id || source.promptHash !== request.promptHash
     || Object.keys(source).some(key => !['kind', 'requestId', 'promptHash'].includes(key))
     || Object.keys(request).some(key => !['id', 'provider', 'prompt', 'promptHash', 'deadlineAt', 'source'].includes(key))) throw Error('INVALID_REQUEST');
@@ -289,7 +289,15 @@ async function closeStaleOperatorPages(context) {
 (async () => {
   const stat = fs.lstatSync(dir);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw Error('INVALID_JOB_DIRECTORY');
-  const request = validateRequest(read('request.json'));
+  let request = validateRequest(read('request.json'), mode === 'recover-late');
+  if (mode === 'recover-late') {
+    if (request.deadlineAt + 60 * 60 * 1000 <= Date.now() || fs.existsSync(path.join(dir, 'result.json'))
+      || !fs.existsSync(path.join(dir, 'submitted.json')) || !fs.existsSync(path.join(dir, 'conversation.json'))) {
+      throw Error('LATE_RECOVERY_UNAVAILABLE');
+    }
+    once('late-recovery.json', { phase: 'original_conversation_only', at: new Date().toISOString() });
+    request = { ...request, deadlineAt: Date.now() + 5 * 60 * 1000 };
+  }
   let browser;
   try {
     browser = await chromium.connectOverCDP('http://127.0.0.1:9233', { timeout: 15000 });
@@ -302,18 +310,19 @@ async function closeStaleOperatorPages(context) {
   const context = browser.contexts()[0];
   if (!context) throw Error('BROWSER_CONTEXT_NOT_FOUND');
   await closeStaleOperatorPages(context);
-  if (mode === 'status' || mode === 'download' || mode === 'resume' || mode === 'recover') {
+  if (mode === 'status' || mode === 'download' || mode === 'resume' || mode === 'recover' || mode === 'recover-late') {
     const url = canonicalUrl(read('conversation.json').url);
     const pages = context.pages().filter(page => canonicalUrl(page.url()) === url);
-    if (pages.length > 1 || (mode !== 'recover' && pages.length !== 1)) throw Error('EXACT_CONVERSATION_NOT_FOUND');
-    const created = mode === 'recover' && pages.length === 0;
+    const recoveryMode = mode === 'recover' || mode === 'recover-late';
+    if (pages.length > 1 || (!recoveryMode && pages.length !== 1)) throw Error('EXACT_CONVERSATION_NOT_FOUND');
+    const created = recoveryMode && pages.length === 0;
     const page = pages[0] || await context.newPage();
     if (created) {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now() - 45000)) });
       if (canonicalUrl(page.url()) !== url) throw Error('CONVERSATION_CHANGED');
     }
     if (mode === 'download') { await downloadImage(browser, page, request, url); process.exit(0); }
-    if (mode === 'resume' || mode === 'recover') {
+    if (mode === 'resume' || mode === 'recover' || mode === 'recover-late') {
       await waitAndDownload(browser, page, request);
       if (created) await page.close().catch(() => {});
       process.exit(0);

@@ -85,6 +85,8 @@ services:
       # Read-only submission evidence for credit-safe generation recovery.
       - /opt/openscience-codex/inbox:/codex-jobs/inbox:ro
       - /opt/openscience-codex/results:/codex-jobs/results:ro
+      - /opt/openscience-chatgpt-browser/spool/inbox:/chatgpt-web-image-jobs/inbox:ro
+      - /opt/openscience-chatgpt-browser/spool/results:/chatgpt-web-image-jobs/results:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
@@ -95,6 +97,8 @@ services:
       HERMES_VIDEO_ENABLED: ${HERMES_VIDEO_ENABLED:-false}
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
+      CHATGPT_WEB_IMAGE_INBOX_DIR: /chatgpt-web-image-jobs/inbox
+      CHATGPT_WEB_IMAGE_RESULTS_DIR: /chatgpt-web-image-jobs/results
       S3_DRIVER: minio
       S3_ENDPOINT: object-storage
       S3_PORT: "8333"

@@ -4,7 +4,7 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { createPersonalWorkspace } from '@openscience/domain';
 import { createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
-import { CodexSpoolImageProvider } from '@openscience/ai-gateway';
+import { ChatGptWebSpoolImageProvider, CodexSpoolImageProvider } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 
 async function main(): Promise<void> {
@@ -27,6 +27,13 @@ async function main(): Promise<void> {
         resultsDir: codexImageResultsDir,
       })
     : undefined;
+  const chatGptImageInboxDir = process.env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim();
+  const chatGptImageResultsDir = process.env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim();
+  const chatGptImageProvider = env.ai.sceneImageEnabled && process.env.HERMES_SCENE_IMAGE_PROVIDER === 'chatgpt-web'
+    && chatGptImageInboxDir && chatGptImageResultsDir
+    ? new ChatGptWebSpoolImageProvider({ inboxDir: chatGptImageInboxDir, resultsDir: chatGptImageResultsDir })
+    : undefined;
+  const recoveryImageProvider = chatGptImageProvider ?? codexImageProvider;
   const app = await buildApp({
     prisma,
     redis,
@@ -34,8 +41,9 @@ async function main(): Promise<void> {
     storage,
     sceneImageEnabled: env.ai.sceneImageEnabled,
     videoEnabled: env.ai.videoEnabled,
-    ...(codexImageProvider ? {
-      canResumeImageBeforeSubmission: (requestId: string) => codexImageProvider.canResumeBeforeSubmission(requestId),
+    ...(recoveryImageProvider ? {
+      canResumeImageBeforeSubmission: (requestId: string) => recoveryImageProvider.canResumeBeforeSubmission(requestId),
+      inspectImageRecoveryState: (requestId: string) => recoveryImageProvider.inspectRecoveryState(requestId),
     } : {}),
     // P1A-6：审计落库（domain/auth 写操作 + authz.deny 经 deps.audit 流出）
     audit: createPrismaAuditSink(prisma),

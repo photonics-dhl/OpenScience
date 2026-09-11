@@ -53,6 +53,7 @@ export class HermesResearchRunError extends Error {
 
 export interface HermesResearchRunDeps extends AgentDeps {
   canResumeImageBeforeSubmission?: (requestId: string) => Promise<boolean>;
+  inspectImageRecoveryState?: (requestId: string) => Promise<'before_submission' | 'completed' | 'failed' | 'uncertain' | 'submitted_without_result' | 'unsafe'>;
 }
 export interface HermesSourceReviewDeps extends HermesResearchRunDeps { storage: IngestionDeps['storage'] }
 
@@ -224,7 +225,7 @@ export async function getHermesResearchRun(
   const authority = await requireActiveMembership(deps.prisma, ro.workspaceId, input.actorId)
     .catch((cause) => { throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found', { cause }); });
   const recovery = WRITE_ROLES.has(authority.membership.role)
-    ? await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission).catch(() => null) : null;
+    ? await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
   return toView(run, recovery ?? undefined);
 }
 
@@ -235,6 +236,7 @@ type GenerationRecoveryPlan = {
   storyboardAssetId: string;
   chargeable: Array<{ stepId: string; ordinal: number; oldTaskId: string; sessionId: string; payload: Record<string, unknown> }>;
   rearm: Array<{ stepId: string; ordinal: number; taskId: string; error: string }>;
+  resume: Array<{ stepId: string; ordinal: number; taskId: string }>;
   preserved: Array<{ stepId: string; taskId: string; assetId: string }>;
 };
 
@@ -242,6 +244,7 @@ async function inspectGenerationRecovery(
   tx: Prisma.TransactionClient,
   run: RunRow,
   canResumeImageBeforeSubmission?: (requestId: string) => Promise<boolean>,
+  inspectImageRecoveryState?: HermesResearchRunDeps['inspectImageRecoveryState'],
 ): Promise<(GenerationRecoveryPlan & { chargeableAttempts: number }) | null> {
   if (run.status !== 'failed' || !((run.profile === CONTENT_DRIVEN_PROFILE && run.maxAgentTasks === 8) || (run.profile === CONTENT_DRIVEN_IMAGE_PROFILE && run.maxAgentTasks === 7))
     || !run.versionId || run.sourceClaimIds.length === 0) return null;
@@ -260,7 +263,7 @@ async function inspectGenerationRecovery(
   if (sceneSteps.length !== storyboardView.document.scenes.length
     || sceneSteps.some((step, index) => step.ordinal !== index || !step.agentTaskId)) return null;
 
-  const plan: GenerationRecoveryPlan = { storyboardAssetId: storyboard.id, chargeable: [], rearm: [], preserved: [] };
+  const plan: GenerationRecoveryPlan = { storyboardAssetId: storyboard.id, chargeable: [], rearm: [], resume: [], preserved: [] };
   for (const step of sceneSteps) {
     const task = await tx.agentTask.findUnique({ where: { id: step.agentTaskId! }, include: { session: true } });
     if (!task || task.kind !== 'presentation.generate' || task.session.userId !== run.actorId
@@ -287,28 +290,29 @@ async function inspectGenerationRecovery(
       continue;
     }
     if (task.status !== 'failed' || task.executionAttempt !== 1 || task.retryCount !== 0 || task.result !== null || asset) return null;
-    // This error alone is not pre-provider proof. Recovery planning and the
-    // worker independently require absence of a durable provider submission.
-    if (task.error === HERMES_AUTHORITY_ERROR) {
-      plan.rearm.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id, error: task.error });
-    } else if (task.error && !task.error.startsWith('[blocked]')) {
+    let recoveryState: 'before_submission' | 'completed' | 'failed' | 'uncertain' | 'submitted_without_result' | 'unsafe' | undefined;
+    if (inspectImageRecoveryState) {
+      try { recoveryState = await inspectImageRecoveryState(task.id); } catch { return null; }
+    }
+    if (recoveryState === 'completed') {
+      plan.resume.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id });
+    } else if (recoveryState === 'before_submission'
+      || (!inspectImageRecoveryState && task.error === HERMES_AUTHORITY_ERROR)) {
+      plan.rearm.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id, error: task.error! });
+    } else if ((recoveryState === 'failed' || !inspectImageRecoveryState)
+      && task.error && !task.error.startsWith('[blocked]')) {
       plan.chargeable.push({ stepId: step.id, ordinal: step.ordinal, oldTaskId: task.id, sessionId: task.sessionId, payload: payload as unknown as Record<string, unknown> });
     } else return null;
   }
-  // A failed run must have one actual generation failure. Authority-cascade tasks
-  // alone never establish permission for another external provider attempt.
-  if (plan.chargeable.length === 0) return null;
+  if (plan.chargeable.length + plan.rearm.length + plan.resume.length === 0) return null;
   for (const item of plan.rearm) {
     if (!canResumeImageBeforeSubmission) return null;
     try { if (await canResumeImageBeforeSubmission(item.taskId) !== true) return null; }
     catch { return null; }
   }
-  const historicalTasks = await tx.agentTask.count({ where: {
-    kind: 'presentation.generate',
-    payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id },
-  } });
   const futureVideoTasks = run.profile === CONTENT_DRIVEN_IMAGE_PROFILE || run.steps.some(step => step.stage === 'video') ? 0 : 1;
-  if (historicalTasks + plan.chargeable.length + futureVideoTasks > run.maxAgentTasks) return null;
+  const logicalTaskCount = 1 + sceneSteps.length + futureVideoTasks;
+  if (logicalTaskCount > run.maxAgentTasks!) return null;
   return { ...plan, chargeableAttempts: plan.chargeable.length };
 }
 
@@ -503,7 +507,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             metadata: { requestDigest, previousVersion: run.version } }, ctx);
           return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [] as string[] };
         }
-        const plan = await inspectGenerationRecovery(tx, run, deps.canResumeImageBeforeSubmission);
+        const plan = await inspectGenerationRecovery(tx, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState);
         if (!plan) throw new HermesResearchRunError('SOURCE_NOT_READY', 'This failed generation cannot be retried safely');
 
         const fenced = await tx.hermesResearchRun.updateMany({ where: {
@@ -533,12 +537,29 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
           if (taskChanged.count !== 1 || stepChanged.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Authority-blocked scene changed during retry');
           pendingIds.push(item.taskId);
         }
+        for (const item of plan.resume) {
+          const taskChanged = await tx.agentTask.updateMany({ where: {
+            id: item.taskId, status: 'failed', retryCount: 0, executionAttempt: 1,
+            result: { equals: Prisma.DbNull },
+          }, data: { status: 'pending', progress: 0, retryCount: 1, error: null, dispatchedAt: null } });
+          const stepChanged = await tx.hermesResearchStep.updateMany({ where: {
+            id: item.stepId, runId: run.id, stage: 'scene_image', ordinal: item.ordinal, agentTaskId: item.taskId,
+          }, data: { status: 'running', presentationAssetId: null, error: null } });
+          if (taskChanged.count !== 1 || stepChanged.count !== 1) {
+            throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Completed scene result changed during recovery');
+          }
+          pendingIds.push(item.taskId);
+        }
         for (const item of plan.chargeable) {
           const { task, replayed } = await persistAgentTaskInTransaction(deps, tx, {
             sessionId: item.sessionId, userId: input.actorId, kind: 'presentation.generate', payload: item.payload,
             idempotencyKey: `${recoveryPrefix}${item.ordinal}`,
           }, ctx);
           if (replayed) throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Generation retry task already exists without a committed run transition');
+          const retryMarked = await tx.agentTask.updateMany({
+            where: { id: task.id, status: 'pending', retryCount: 0 }, data: { retryCount: 1 },
+          });
+          if (retryMarked.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Replacement scene retry marker changed');
           const stepChanged = await tx.hermesResearchStep.updateMany({ where: {
             id: item.stepId, runId: run.id, stage: 'scene_image', ordinal: item.ordinal, agentTaskId: item.oldTaskId,
           }, data: { status: 'running', agentTaskId: task.id, presentationAssetId: null, error: null } });
@@ -551,6 +572,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             chargeableAttempts: plan.chargeable.length,
             replacedTaskIds: plan.chargeable.map(item => item.oldTaskId),
             rearmedTaskIds: plan.rearm.map(item => item.taskId),
+            resumedTaskIds: plan.resume.map(item => item.taskId),
             preservedAssetIds: plan.preserved.map(item => item.assetId),
             creditPolicy: 'new-provider-attempts-charged;pre-provider-authority-rearms-reuse-reservation',
           },

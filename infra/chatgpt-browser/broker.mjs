@@ -1,14 +1,15 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { chmod, chown, lstat, mkdir, realpath } from 'node:fs/promises';
+import { chmod, chown, lstat, mkdir, readdir, realpath, rename } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runOne, safeRead, atomicWrite, exists } from '../codex-image-runner/core.mjs';
-import { validateCodexImageRequest, validateImageBytes } from '../../packages/ai-gateway/dist/index.js';
+import { validateCodexImageRequest, validateCodexImageResult, validateImageBytes } from '../../packages/ai-gateway/dist/index.js';
 
 const exec = promisify(execFile);
 const CONVERSATION = /^https:\/\/chatgpt\.com\/c\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ROOT = '/opt/openscience-chatgpt-browser/';
+const RECOVERY_GRACE_MS = 60 * 60 * 1000;
 async function docker(args, timeout = 30000) {
   return exec('docker', args, { timeout, maxBuffer: 32 * 1024, encoding: 'utf8' });
 }
@@ -79,6 +80,11 @@ export async function executeWebImage(config, request, privateDir) {
     }
     else throw error;
   }
+  return finalizeWebImage(config, request, privateDir, jobDir);
+}
+async function finalizeWebImage(config, request, privateDir, jobDir, operationDeadlineAt = request.deadlineAt) {
+  const innerRequest = exactInnerRequest(request);
+  const innerRequestPath = join(jobDir, 'request.json');
   const persistedRequest = JSON.parse((await safeRead(innerRequestPath, 32768)).toString('utf8'));
   const innerResult = JSON.parse((await safeRead(join(jobDir, 'result.json'), 32768)).toString('utf8'));
   if (!sameJson(persistedRequest, innerRequest) || innerResult?.state !== 'downloaded' || innerResult.provider !== 'chatgpt-web'
@@ -104,11 +110,46 @@ export async function executeWebImage(config, request, privateDir) {
       '--entrypoint', '/usr/bin/ffmpeg', config.rendererImage, '-v', 'error', '-nostdin', '-threads', '1', '-i', '/input.png',
       '-map_metadata', '-1', '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=0xf7f2e8',
       '-frames:v', '1', '-threads', '1', '-pix_fmt', 'rgb24', '/output/result.png'],
-    Math.min(45000, Math.max(1, request.deadlineAt - Date.now())));
+    Math.min(45000, Math.max(1, operationDeadlineAt - Date.now())));
     return validateImageBytes(await safeRead(join(normalized, 'result.png'), 10 * 1024 * 1024)).bytes;
   } finally {
     await docker(['rm', '-f', container]).catch(() => {});
   }
+}
+async function recoverUncertainWebImage(config) {
+  for (const id of (await readdir(config.privateRoot)).filter(name => /^[0-9a-f-]{36}$/i.test(name))) {
+    const privateDir = join(config.privateRoot, id);
+    try {
+      const request = validateCodexImageRequest(JSON.parse((await safeRead(join(privateDir, 'request.json'), 16384)).toString('utf8')), undefined, 'chatgpt-web');
+      if (request.id !== id || request.deadlineAt + RECOVERY_GRACE_MS <= Date.now()) continue;
+      const resultDir = join(config.results, id);
+      const result = validateCodexImageResult(JSON.parse((await safeRead(join(resultDir, 'result.json'), 16384)).toString('utf8')), 'chatgpt-web');
+      if (result.id !== id || result.promptHash !== request.promptHash || result.status !== 'uncertain') continue;
+      const jobDir = join(config.jobs, id);
+      if (!await exists(join(jobDir, 'submitted.json')) || !await exists(join(jobDir, 'conversation.json'))
+        || await exists(join(privateDir, 'late-recovery.started'))) continue;
+      await atomicWrite(join(privateDir, 'late-recovery.started'), String(Date.now()), 0o600);
+      if (!await exists(join(jobDir, 'result.json'))) {
+        await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', '330',
+          'node', '/jobs/provider/runner.cjs', 'recover-late', id], 340000).catch(() => {});
+      }
+      if (!await exists(join(jobDir, 'result.json'))) continue;
+      const bytes = await finalizeWebImage(config, request, privateDir, jobDir, Date.now() + 45_000);
+      await rename(join(resultDir, 'result.json'), join(resultDir, 'result.uncertain.json'));
+      await atomicWrite(join(resultDir, 'result.png'), bytes);
+      await atomicWrite(join(resultDir, 'result.json'), JSON.stringify({ schemaVersion: 1, provider: 'chatgpt-web',
+        id, promptHash: request.promptHash, status: 'succeeded' }));
+      const circuit = join(config.privateRoot, 'web-image-circuit.json');
+      if (await exists(circuit)) {
+        const state = JSON.parse((await safeRead(circuit, 16384)).toString('utf8'));
+        if (state.taskId === id && state.promptHash === request.promptHash) {
+          await rename(circuit, join(config.privateRoot, `web-image-circuit.resolved-${id}.json`));
+        }
+      }
+      return id;
+    } catch {}
+  }
+  return null;
 }
 async function main() {
   if (process.getuid?.() !== 0) throw Error('ROOT_BROKER_REQUIRED');
@@ -136,6 +177,8 @@ async function main() {
   await heartbeat();
   const timer = setInterval(() => { heartbeat().catch(() => {}); }, 15000);
   try {
+    const recovered = await recoverUncertainWebImage(config);
+    if (recovered) { console.log(JSON.stringify({ id: recovered, status: 'recovered' })); return; }
     const result = await runOne({ ...config, provider: 'chatgpt-web', execute: (request, dir) => executeWebImage(config, request, dir) });
     if (result) console.log(JSON.stringify(result));
   } finally {

@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { lstat, open, link, unlink } from 'node:fs/promises';
 import { isAbsolute, join, dirname, parse } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { validateImageRequest, validateImageBytes, type CompletedImageProviderResult, type ImageProvider, type ImageRequest, type ImageProviderResult } from './image';
+import { validateImageRequest, validateImageBytes, type CompletedImageProviderResult, type ImageProvider, type ImageRecoveryState, type ImageRequest, type ImageProviderResult } from './image';
 import { sha256Text } from './ocr';
 import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, validateCodexImageRequest, validateCodexImageResult, type ImageSpoolProvider } from './codex-image-protocol';
 export interface CodexSpoolImageConfig { inboxDir: string; resultsDir: string; timeoutMs?: number; pollIntervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void> }
@@ -54,6 +54,39 @@ abstract class SpoolImageProvider implements ImageProvider {
         && await absent(join(this.config.resultsDir, id));
     } catch {
       return false;
+    }
+  }
+  async inspectRecoveryState(id: string): Promise<ImageRecoveryState> {
+    if (!CODEX_IMAGE_ID_PATTERN.test(id)) return 'unsafe';
+    try {
+      await directory(this.config.inboxDir); await directory(this.config.resultsDir);
+      const reservationPath = join(this.config.inboxDir, id + '.submitted.json');
+      const queuedPath = join(this.config.inboxDir, id + '.json');
+      const hasReservation = !await absent(reservationPath);
+      const output = join(this.config.resultsDir, id);
+      let resultBytes: Buffer | undefined;
+      try {
+        await directory(output);
+        resultBytes = await boundedRead(join(output, 'result.json'), CODEX_IMAGE_MAX_JSON_BYTES);
+      } catch (error) {
+        if (!missing(error)) throw error;
+      }
+      if (!resultBytes) {
+        if (!hasReservation) return await absent(queuedPath) ? 'before_submission' : 'unsafe';
+        return 'submitted_without_result';
+      }
+      if (!hasReservation) return 'unsafe';
+      const request = validateCodexImageRequest(JSON.parse((await boundedRead(
+        reservationPath, CODEX_IMAGE_MAX_JSON_BYTES,
+      )).toString('utf8')), undefined, this.spoolProvider);
+      const result = validateCodexImageResult(JSON.parse(resultBytes.toString('utf8')), this.spoolProvider);
+      if (request.id !== id || result.id !== id || result.promptHash !== request.promptHash) return 'unsafe';
+      if (result.status === 'uncertain') return 'uncertain';
+      if (result.status === 'failed') return 'failed';
+      const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
+      return image.contentType === 'image/png' ? 'completed' : 'unsafe';
+    } catch {
+      return 'unsafe';
     }
   }
   async canResumeFromCompletedResult(id: string): Promise<boolean> {
