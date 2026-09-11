@@ -195,7 +195,10 @@ async function downloadImage(browser, page, request, conversation) {
   if (await dialog.count() === 0) await generated.click();
   await dialog.getByRole('button', { name: 'Save', exact: true }).waitFor({ timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now() - 45000)) });
   const output = path.join(dir, 'output');
-  fs.mkdirSync(output, { mode: 0o700 });
+  if (fs.existsSync(output)) {
+    const outputStat = fs.lstatSync(output);
+    if (!outputStat.isDirectory() || outputStat.isSymbolicLink() || fs.readdirSync(output).length) throw Error('OUTPUT_EXISTS');
+  } else fs.mkdirSync(output, { mode: 0o700 });
   const cdp = await browser.newBrowserCDPSession();
   await cdp.send('Browser.setDownloadBehavior', { behavior: 'allowAndName', downloadPath: output, eventsEnabled: true });
   const completed = new Promise((resolve, reject) => {
@@ -206,6 +209,14 @@ async function downloadImage(browser, page, request, conversation) {
     });
   });
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  // Multi-image responses expose Save as a menu; download only the displayed core image.
+  const singleImage = page.getByRole('menuitem', { name: 'Download image', exact: true });
+  await Promise.race([
+    completed,
+    singleImage.waitFor({ state: 'visible', timeout: 5000 }).then(() => singleImage.click()).catch(error => {
+      if (error.name !== 'TimeoutError') throw error;
+    }),
+  ]);
   const guid = await completed;
   if (!/^[a-zA-Z0-9-]+$/.test(guid)) throw Error('INVALID_DOWNLOAD_ID');
   const file = path.join(output, guid);
