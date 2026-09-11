@@ -3,6 +3,7 @@
 Status: production `9b97522f…`, provider `f4832487…` (2026-09-11). Deep-sub-cycle has two real draft images of six planned. The old usage-limit conversation was reconciled without resending. A group retry reached version8 then failed before web submission because image mode shows Extra High, not the science planner label 6 Pro (run now failed/version9). The provider-only fix removed that incorrect image-mode requirement while retaining 6 Pro for scientific review. A new scene0 task `8b0ca4c9-eb20-4478-a79c-d1b8e0dadc25` then succeeded through the product button: Hermes prompt, native web image generation, download, storage and automatic gallery display. Scientific review and publication remain pending.
 
 ## Current product observations
+- 2026-09-11账号切换：用户授权指定第二账号。当前服务器账户菜单未出现Add account，故按正常退出/登录处理；输入目标邮箱后OpenAI转Google OAuth。bridge明确拒绝accounts.google.com:443；随后认证页停在Loading，唯一外部AccountsSignInUi脚本www.gstatic.com也被拒。仅补这两个精确域名，保留443和其余allowlist限制。其他Google/字体/头像域未放行。实际部署/登录完成状态见CURRENT handoff；不会自动跨账号重放旧会话。
 - A failed AgentTask/run can coexist with its already-persisted image after an old completion conflict. Read product presentation-assets before assuming the PNG needs importing.
 - Terminal rate-limit text occurs inside the assistant turn, not necessarily an alert. The broker now preserves USAGE_LIMIT without restarting or resending.
 - Recovery compares the stored canonical URL directly; unrelated product and /images tabs must not be passed to a throwing canonical parser.

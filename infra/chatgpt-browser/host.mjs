@@ -7,6 +7,7 @@ if (fs.existsSync(root + '/egress/egress.sock')) {
   fs.unlinkSync(root + '/egress/egress.sock');
 }
 const hosts = new Set(['chatgpt.com', 'auth.openai.com', 'auth0.openai.com', 'cdn.auth0.com',
+  'accounts.google.com', 'www.gstatic.com',
   'challenges.cloudflare.com', 'persistent.oaistatic.com', 'cdn.oaistatic.com', 'ab.chatgpt.com',
   'files.oaiusercontent.com', 'auth-cdn.oaistatic.com', 'cdn.openai.com',
   'api.oaistatsig.com', 'bzr.openai.com', 'ws.chatgpt.com', 'openscience.428312321.xyz']);
