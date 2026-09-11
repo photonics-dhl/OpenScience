@@ -14,6 +14,7 @@ export default function EditorLayout({
   main,
   aside,
   workflow,
+  workspaceClassName,
 }: {
   header?: ReactNode;
   objectId: string;
@@ -21,6 +22,7 @@ export default function EditorLayout({
   main: ReactNode;
   aside: ReactNode;
   workflow?: ReactNode;
+  workspaceClassName?: string;
 }) {
   const t = useTranslations('editor');
   const [mobileTab, setMobileTab] = useState<MobileTab>('edit');
@@ -28,7 +30,7 @@ export default function EditorLayout({
   return (
     <WorkspaceShell
       activeMobilePlane={!outline ? 'main' : mobileTab === 'outline' ? 'left' : mobileTab === 'panel' ? 'right' : 'main'}
-      className="editor-workspace"
+      className={workspaceClassName ?? 'editor-workspace'}
       leftRail={outline}
       mainClassName="p-0 lg:p-0"
       mobileNavigation={outline ?

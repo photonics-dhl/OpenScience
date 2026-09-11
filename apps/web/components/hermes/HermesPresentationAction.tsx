@@ -11,6 +11,7 @@ const control = 'min-h-11 w-full rounded border border-os-rule-paper bg-os-paper
 
 export function HermesPresentationAction({ researchObjectId: ro, requestedVersionId, intent, userId, onBack, onSubmitted, submissionRecords, onBusyChange }: Props) {
   const t = useTranslations('hermesPresentation'); const locale = useLocale();
+  const tc = useTranslations('hermesConversation');
   const [data, setData] = useState<{ title: string; versions: VersionSummary[]; workspace?: WorkspaceApi }>();
   const [versionId, setVersionId] = useState(''); const [action, setAction] = useState<PresentationAction>(intent.action);
   const [instruction, setInstruction] = useState(intent.instruction); const [style, setStyle] = useState<StoryboardRequest['style']>('technical');
@@ -43,7 +44,7 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   }, [ro, versionId]);
   useEffect(() => {
     const stored = draftScope ? loadHermesPresentationDraft(getHermesDraftStorage(), draftScope) : null;
-    if (stored) { setAction(stored.action); setInstruction(stored.instruction); setStyle(stored.style); setParentId(stored.parentId); setScene(stored.scene); setUpdateBrief(stored.action === 'storyboard.revise'); return; }
+    if (stored && !intent.instruction.trim()) { setAction(stored.action); setInstruction(stored.instruction); setStyle(stored.style); setParentId(stored.parentId); setScene(stored.scene); setUpdateBrief(stored.action === 'storyboard.revise'); return; }
     setAction(intent.action); setInstruction(intent.instruction); setStyle('technical'); setParentId(''); setScene(intent.sceneIndex ?? 0); setUpdateBrief(false);
   }, [draftScope?.researchObjectId, draftScope?.userId, draftScope?.versionId, intent.action, intent.instruction, intent.sceneIndex]);
 
@@ -59,7 +60,7 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   const selectedParent = assets.find((asset) => asset.id === parentId);
   const parent = selectedParent && newestEligibleStoryboard([selectedParent], action) ? selectedParent : newestParent;
   const effectiveAction = replayRequest?.action ?? ((action === 'scene.image' || action === 'video.create') && !parent ? 'storyboard.create'
-    : (action === 'scene.image' || action === 'video.create') && updateBrief ? 'storyboard.revise' : action);
+    : (action === 'scene.image' || action === 'video.create') && (updateBrief || Boolean(instruction.trim())) ? 'storyboard.revise' : action);
   const sourceIds = replayRequest?.sourceIds ?? presentationSources(effectiveAction, selectedClaimIds, parent, scene);
   const sourcesValid = hasCurrentPresentationSources(sourceIds, claims);
   const videoImageIds = parent?.storyboard?.document.scenes.map((_, index) => assets.find((asset) => asset.kind === 'image' && asset.status === 'approved' && asset.sceneImage?.storyboardAssetId === parent.id && asset.sceneImage.sceneIndex === index)?.id ?? '') ?? [];
@@ -109,12 +110,16 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   }
   return <section className="min-w-0 rounded-xl bg-os-paper p-4 text-os-ink" data-hermes-presentation-action="true">
     <p className="m-0 text-sm font-semibold">{data?.title ?? t('loading')}</p><p className="mt-1 text-xs text-os-muted-paper">{version ? t('versionLabel', { number: version.versionNo, status: version.status }) : t('chooseVersion')}</p>
+    <p className="hermes-production-summary">{t(action === 'video.create' ? 'video' : 'image')} · {t(style)}</p>
+    {effectiveAction === 'scene.image' && parent?.storyboard && <p className="mt-2 text-sm leading-6">{t('scene')}: {scene + 1}. {parent.storyboard.document.scenes[scene]?.title}</p>}
     <form className="mt-5 space-y-4" onSubmit={submit}><fieldset className="m-0 min-w-0 space-y-4 border-0 p-0" disabled={locked}>
+      <details className="hermes-production-settings"><summary>{tc('adjustProduction')}</summary>
       <div className="grid grid-cols-2 gap-2" aria-label={t('mediaIntent')}>{(['image', 'video'] as const).map((kind) => <button key={kind} className={`min-h-11 rounded border px-3 text-sm ${action === 'video.create' === (kind === 'video') ? 'border-os-ink font-semibold' : 'border-os-rule-paper'}`} type="button" onClick={() => setAction(kind === 'video' ? 'video.create' : parent ? 'scene.image' : 'storyboard.create')}>{t(kind)}</button>)}</div>
       <label className="grid gap-2 text-sm">{t('style')}<select className={control} value={style} onChange={(event) => { setStyle(event.target.value as StoryboardRequest['style']); if ((action === 'scene.image' || action === 'video.create') && parent) setUpdateBrief(true); }}>{(['technical', 'ink', 'watercolor'] as const).map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></label>
-      <label className="grid gap-2 text-sm">{t('instruction')}<textarea className={`${control} min-h-28`} maxLength={1000} required={needsInstruction} value={instruction} onChange={(event) => { setInstruction(event.target.value); if ((action === 'scene.image' || action === 'video.create') && parent) setUpdateBrief(true); }} /></label>
+      <label className="grid gap-2 text-sm">{t('instruction')}<textarea className={`${control} min-h-28`} maxLength={1000} value={instruction} onChange={(event) => { setInstruction(event.target.value); if ((action === 'scene.image' || action === 'video.create') && parent) setUpdateBrief(true); }} /></label>
       {effectiveAction === 'scene.image' && parent?.storyboard ? <label className="grid gap-2 text-sm">{t('scene')}<select className={control} value={scene} onChange={(event) => setScene(Number(event.target.value))}>{parent.storyboard.document.scenes.map((item, index) => <option key={index} value={index}>{index + 1}. {item.title}</option>)}</select></label> : null}
       <details><summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">{t('advanced')}</summary>{parent ? <p className="mt-3 text-xs leading-5 text-os-muted-paper">{t('usingApprovedPlan')}</p> : null}<p className="mt-3 text-xs leading-5 text-os-muted-paper">{t('eligibleSources', { count: selectedClaimIds.length })}</p></details>
+      </details>
     </fieldset>{!canWrite && data ? <p role="status" className="text-sm">{t('readOnly')}</p> : null}{(action === 'scene.image' || action === 'video.create') && !parent ? <p className="text-sm leading-6 text-os-muted-paper">{t('planWillBePrepared')}</p> : null}{effectiveAction === 'storyboard.revise' ? <p className="text-sm leading-6 text-os-muted-paper">{t('briefWillUpdate')}</p> : null}{!selectedClaimIds.length ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t('needsEligibleSources')}</p> : null}{effectiveAction === 'video.create' && !videoReady ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t('needsApprovedScenes')}</p> : null}{error ? <p role="alert" className="text-sm text-os-vermilion">{t(error)}</p> : null}<p className="text-xs leading-5 text-os-muted-paper">{t('charge')}</p><button className="min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" disabled={busy || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)} type="submit">{t(busy ? 'submitting' : uncertain ? 'retry' : effectiveAction === 'storyboard.create' && action === 'video.create' ? 'prepareVideoPlan' : effectiveAction === 'storyboard.create' ? 'preparePlan' : effectiveAction === 'storyboard.revise' ? 'updateBrief' : 'confirm')}</button></form>
     <button className="mt-3 min-h-11 px-2 text-sm underline" disabled={locked} onClick={onBack} type="button">{t('back')}</button>
   </section>;

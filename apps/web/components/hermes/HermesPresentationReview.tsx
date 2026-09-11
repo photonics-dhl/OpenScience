@@ -8,10 +8,11 @@ import { researchObjectFromHermesPath, type HermesPresentationIntent } from '@/l
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { HermesPresentationAction } from './HermesPresentationAction';
 
-export function HermesPresentationReview({ intent, routeResearchObjectId, researchObjects, submissionRecords, suggestion, userId, onBack, onDone }: {
+export function HermesPresentationReview({ intent, routeResearchObjectId, researchObjects, submissionRecords, suggestion, userId, onBack, onDone, onBusyChange }: {
   intent: HermesPresentationIntent; routeResearchObjectId?: string; submissionRecords: Map<string, SubmissionIntent>;
   researchObjects: WorkspaceGuidePayload['context']['researchObjects']; onBack(): void; onDone(): void;
   suggestion?: WorkspaceGuideResult['presentationDraft']; userId?: string;
+  onBusyChange?(busy: boolean): void;
 }) {
   const t = useTranslations('hermesPresentation');
   const pathname = usePathname(); const search = useSearchParams(); const router = useRouter();
@@ -20,7 +21,7 @@ export function HermesPresentationReview({ intent, routeResearchObjectId, resear
   const roId = pathRo ?? routeResearchObjectId ?? selectedRo;
   const scopedSuggestion = suggestion?.researchObjectId === roId ? suggestion : undefined;
   const version = scopedSuggestion?.versionId ?? (pathRo === roId ? search.get('version') ?? undefined : undefined);
-  const actionableIntent = scopedSuggestion ? { action: 'storyboard.create' as const, instruction: scopedSuggestion.instruction } : intent;
+  const actionableIntent = scopedSuggestion ? { action: scopedSuggestion.action, instruction: scopedSuggestion.instruction } : intent;
   const owner = `${roId}:${version ?? ''}`;
   const previousOwner = useRef(owner);
   useEffect(() => {
@@ -37,7 +38,7 @@ export function HermesPresentationReview({ intent, routeResearchObjectId, resear
         {researchObjects.map(ro => <option key={ro.id} value={ro.id}>{ro.title}</option>)}
       </select>
     </label> : null}
-    {roId ? <HermesPresentationAction key={`${roId}:${version ?? ''}`} researchObjectId={roId} requestedVersionId={version} intent={actionableIntent} userId={userId} submissionRecords={submissionRecords} onBusyChange={setLocked} onBack={onBack} onSubmitted={url => { router.push(url); onDone(); }} /> : <>
+    {roId ? <HermesPresentationAction key={`${roId}:${version ?? ''}`} researchObjectId={roId} requestedVersionId={version} intent={actionableIntent} userId={userId} submissionRecords={submissionRecords} onBusyChange={(busy) => { setLocked(busy); onBusyChange?.(busy); }} onBack={onBack} onSubmitted={url => { router.push(url); onDone(); }} /> : <>
       {!researchObjects.length ? <p className="text-sm text-os-ink">{t('noResearch')}</p> : null}
       <button type="button" className="min-h-11 text-sm text-os-ink underline" onClick={onBack}>{t('back')}</button>
     </>}

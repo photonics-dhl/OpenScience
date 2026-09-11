@@ -1,11 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 
-import { SDFNode } from '@/components/research/SDFNode';
 import { HermesAnchor } from '@/components/hermes/HermesAnchor';
 import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
 import type { HermesAnchorId } from '@/lib/hermes/anchor-registry';
@@ -24,13 +21,53 @@ const HERMES_FIELD_ANCHORS: Record<keyof Omit<SdfCore, 'schemaVersion'>, HermesA
   reproducibility: 'sdf-evidence',
 };
 
-export default function CoreEditor({
-  core,
-  onEdit,
-  activeField,
-  onSelectField,
-  sourceHref,
-}: {
+function ProseTextarea({ field, label, value, placeholder, onChange, onFocus }: {
+  field: keyof Omit<SdfCore, 'schemaVersion'>;
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  onFocus: () => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const resize = () => {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    };
+    resize();
+    const observed = textarea.parentElement;
+    let lastWidth = observed?.getBoundingClientRect().width ?? 0;
+    const observer = observed && typeof ResizeObserver !== 'undefined' ? new ResizeObserver((entries) => {
+      const nextWidth = entries[0]?.contentRect.width;
+      if (!nextWidth || nextWidth === lastWidth) return;
+      lastWidth = nextWidth;
+      resize();
+    }) : null;
+    if (observed && observer) observer.observe(observed);
+    return () => observer?.disconnect();
+  }, [value]);
+
+  return (
+    <textarea
+      aria-label={label}
+      className={styles.proseInput}
+      data-reading-role="reading"
+      id={`sdf-field-${field}`}
+      onChange={(event) => onChange(event.target.value)}
+      onFocus={onFocus}
+      placeholder={placeholder}
+      ref={textareaRef}
+      rows={1}
+      value={value}
+    />
+  );
+}
+
+export default function CoreEditor({ core, onEdit, activeField, onSelectField, sourceHref }: {
   core: SdfCore;
   onEdit: (field: keyof Omit<SdfCore, 'schemaVersion'>, value: string) => void;
   activeField: keyof Omit<SdfCore, 'schemaVersion'> | null;
@@ -38,7 +75,6 @@ export default function CoreEditor({
   sourceHref?: string;
 }) {
   const t = useTranslations('editor');
-  const [preview, setPreview] = useState(false);
   const current = activeField ?? 'problem';
   const hermesStage = useOptionalHermesWorkspaceStage();
 
@@ -47,46 +83,31 @@ export default function CoreEditor({
   }, [current, hermesStage]);
 
   return (
-    <div className={styles.core} data-reading-role="body">
-      <div className="flex items-end justify-between border-b border-os-rule-dark pb-4">
-        <div>
-          <p data-reading-role="caption" className="m-0 font-data uppercase tracking-[0.1em] text-os-muted-dark">{t('sdfCoreLabel')}</p>
-          <h1 className="mb-0 mt-1 font-editorial text-[1.375rem] font-semibold tracking-[-0.025em] text-os-paper">{t('coreEdit')}</h1>
-        </div>
-        <button data-reading-role="control" className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" onClick={() => setPreview(!preview)}>
-          {preview ? t('edit') : t('preview')}
-        </button>
-      </div>
-      <p className={styles.guide}>{t('editingGuide')}</p>
-      {FIELDS.map((field, index) => (
-        <SDFNode
-          active={current === field}
-          hint={t(`hints.${field}`)}
-          key={field}
-          label={t(field)}
-          number={index + 1}
-          onActivate={() => onSelectField(field)}
-        >
-          {preview ? (
-            <div data-reading-role="reading" className="surface-evidence min-h-36 p-5 text-[1.0625rem] leading-[var(--leading-reading)]">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{core[field]}</ReactMarkdown>
-            </div>
-          ) : (
+    <article aria-label={t('coreEdit')} className={styles.core} data-reading-role="body">
+      <div className={styles.prose}>
+        {FIELDS.map((field, index) => (
+          <section className={styles.passage} data-active={current === field ? 'true' : undefined} data-sdf-node={index + 1} id={`research-section-${field}`} key={field}>
+            <h2 className={styles.sectionHeading}>
+              <span aria-hidden="true" className={styles.sectionMarker} />
+              <label htmlFor={`sdf-field-${field}`}>{t(field)}</label>
+              <span className={styles.sectionNumber}>{String(index + 1).padStart(2, '0')}</span>
+            </h2>
             <HermesAnchor id={HERMES_FIELD_ANCHORS[field]}>
-              <textarea
-                data-reading-role="reading"
-                className="min-h-24 w-full resize-y border border-os-rule-dark bg-os-black-1 p-3 font-editorial text-base leading-7 text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-                rows={3}
-                value={core[field]}
-                onChange={(event) => onEdit(field, event.target.value)}
+              <ProseTextarea
+                field={field}
+                label={t(field)}
+                onChange={(value) => onEdit(field, value)}
+                onFocus={() => onSelectField(field)}
                 placeholder={t(`hints.${field}`)}
-                aria-label={t(field)}
+                value={core[field]}
               />
             </HermesAnchor>
-          )}
-          {sourceHref && (field === 'insight' || field === 'results') && <a className="mt-2 inline-flex min-h-11 items-center text-sm text-os-vermilion-ink underline" href={sourceHref}>{t('savedVersionSources')}</a>}
-        </SDFNode>
-      ))}
-    </div>
+            {sourceHref && (field === 'insight' || field === 'results') ? (
+              <a className={styles.sourceLink} href={sourceHref}>{t('savedVersionSources')}</a>
+            ) : null}
+          </section>
+        ))}
+      </div>
+    </article>
   );
 }

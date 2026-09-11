@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import type { PublicClaim, PublicEvidence } from '../../lib/api';
 import { EvidenceDisclosure } from './EvidenceDisclosure';
+import styles from './PublicReadingProduct.module.css';
 
 function ClaimCard({
   claim,
@@ -65,9 +66,8 @@ export function ClaimNarrative({
   const t = useTranslations('public.claimReader');
   const roots = claims.filter((claim) => !claim.parentClaimId || !claims.some((candidate) => candidate.id === claim.parentClaimId));
   return (
-    <section className="pub-claim-narrative" data-claim-narrative="true" aria-labelledby="public-claims-heading">
-      <div className="pub-section-intro">
-        <p className="pub-kicker">{t('kicker')}</p>
+    <section className={`pub-claim-narrative ${styles.claimNarrative}`} data-claim-narrative="true" aria-labelledby="public-claims-heading">
+      <div className={styles.sectionIntro}>
         <h2 id="public-claims-heading">{t('title')}</h2>
         <p>{t('description')}</p>
       </div>

@@ -14,6 +14,7 @@ export default function Drawer({
   className = '',
   overlayClassName = '',
   inline = false,
+  hideCloseButton = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -24,13 +25,14 @@ export default function Drawer({
   className?: string;
   overlayClassName?: string;
   inline?: boolean;
+  hideCloseButton?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
 
   // 记录触发按钮（还原焦点用）
   useEffect(() => {
-    if (open) {
+    if (open && !inline) {
       triggerRef.current = document.activeElement;
       const first = ref.current?.querySelector<HTMLElement>(
         'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])',
@@ -39,7 +41,7 @@ export default function Drawer({
     } else if (triggerRef.current instanceof HTMLElement) {
       triggerRef.current.focus();
     }
-  }, [open]);
+  }, [open, inline]);
 
   // Esc 关闭 + focus trap
   useEffect(() => {
@@ -70,8 +72,8 @@ export default function Drawer({
   }, [open, onClose, inline]);
 
   if (!open) return null;
-  if (inline) return <div ref={ref} role="complementary" aria-label={label} className="hermes-inline-assistant" tabIndex={-1}>
-    <button className="mb-3 min-h-11 text-sm text-os-muted-paper underline" onClick={onClose}>{closeLabel}</button>{children}
+  if (inline) return <div ref={ref} role="complementary" aria-label={label} className={`hermes-inline-assistant ${className}`} tabIndex={-1}>
+    {!hideCloseButton && <button className="mb-3 min-h-11 text-sm text-os-muted-paper underline" onClick={onClose}>{closeLabel}</button>}{children}
   </div>;
   return (
     <div className={`drawer-overlay ${overlayClassName}`.trim()} onClick={onClose}>
@@ -85,9 +87,9 @@ export default function Drawer({
         onClick={(e) => e.stopPropagation()}
       >
         {children}
-        <button className="btn drawer-close" onClick={onClose} aria-label={closeLabel}>
+        {!hideCloseButton && <button className="btn drawer-close" onClick={onClose} aria-label={closeLabel}>
           ×
-        </button>
+        </button>}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 # 服务器能力与复用清单
 
-- 2026-09-11当前应用release 25917596 / rollback b05aaeac；界面与发布接口修复已部署，无新服务/模型。服务器Chat6Pro正在审阅v6证据；Hermes方案1956a2c5格式失败，修正反馈候选待部署。后续状态以CURRENT handoff为准。
+- CURRENT 2026-09-11：应用 release 329ad2e8 / rollback 25917596，browser provider f4832487；无新增服务/模型。图片方案预算修正已部署。104条Evidence已通过实际审阅确认，但v6没有合格图片、尚未公开，最新8fc方案有物理矛盾不能放行。当前先按用户要求讨论信息架构，三张新截图已交Chat6Pro；完整状态见CURRENT handoff。下方旧任务记录不覆盖本段。
 
 - 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。
 - Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。最新工作台/公开阅读与许可证400修复为待部署候选，服务器现有release未变。
@@ -8,7 +8,7 @@
 
 2026-09-11 实时盘点。先查本页，再查相关条目的入口；能力或服务变动后同一任务内更新。文件存在、服务运行、产品调用成功是不同状态。本页记录部署位置与复用方式；Hermes语义能力/供应商政策见 [能力台账](hermes-capability-registry.md)，实时产品任务见 CURRENT handoff。
 
-## CURRENT 2026-09-11 产品回传
+## 历史产品回传（早于当前 release，保留复用依据）
 - 最新产品任务fd719902已在原服务器会话成功生图100%并入库，旧3814f844限额不能代表新任务不可用；图片科学问题见CURRENT handoff。用户指定新Chat账号后已正常退出旧账号；随后已完成登录（见本页最新更新）。
 - Google OAuth bridge补丁：仅在/opt/openscience-chatgpt-browser/scripts/host.mjs加入accounts.google.com与www.gstatic.com两个精确443域（日志与认证页脚本证明必需），Sol High复核通过；bridge重启active，浏览器/应用未重启。备份host.mjs.before-google-oauth-20260911。无Google通配符扩展、无新安装。
 - production `f909c3a48a3c75e952735d8c71aeead393a404dc` / application rollback `8c2832f01136fd47a62fe6f4a4e5e07c2a994c63`；browser provider `f48324870f25b50c3a21eaad898beea87fb0aa1d` / provider rollback `48d9fa65db134575f53cf2a30724aa47a14eeea4`。
@@ -29,7 +29,7 @@
 
 | 能力 | 已有位置 / 入口 | 状态与复用方式 |
 |---|---|---|
-| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | production `f909c3a4…` / rollback `8c2832f0…`；共编、版本衔接与手机布局已实际使用，见CURRENT handoff |
+| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | production `329ad2e8…` / rollback `25917596…`；已部署能力与尚未通过的科学/体验问题见CURRENT handoff |
 | 主机资源 | ECS 16 CPU、30 GiB RAM、无 NVIDIA GPU | 盘点时约22 GiB可用；CPU解析器必须有界并发。Marker/MinerU等GPU高质量模式不能按GPU吞吐数据推断本机效果 |
 | 完整图形 Chrome | 宿主 `/opt/openscience-tool-cache/playwright/chromium-1234/chrome-linux64/chrome`；ScanSci镜像内 `/opt/scansci-browsers/chromium-1234/chrome-linux64/chrome` | 已静态确认完整二进制。可复用现有镜像与配套资源；不是只存在 headless shell |
 | 无头 Chromium | 宿主 `/root/.cache/ms-playwright/chromium_headless_shell-1234/` 与共享缓存同名目录；ScanSci镜像 `/opt/scansci-browsers/chromium_headless_shell-1234/` | 现成截图/渲染资源；不能用“仅此目录存在”的旧记录推断没有完整浏览器 |

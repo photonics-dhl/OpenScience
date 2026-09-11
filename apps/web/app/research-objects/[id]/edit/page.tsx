@@ -8,7 +8,6 @@ import type { WorkspaceGuidePayload, WorkspaceGuideResult } from '@/lib/api';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import EditorLayout from '../../../../components/editor/EditorLayout';
-import OutlinePanel from '../../../../components/editor/OutlinePanel';
 import CoreEditor from '../../../../components/editor/CoreEditor';
 import SuggestionsPanel from '../../../../components/editor/SuggestionsPanel';
 import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
@@ -71,6 +70,7 @@ import {
   type IngestionProposalScope,
 } from '../../../../lib/ingestion-proposal-draft';
 import type { Locale } from '../../../../i18n/locale';
+import styles from './workbench.module.css';
 
 type FieldKey = keyof Omit<SdfCore, 'schemaVersion'>;
 type ActiveExtraction = Pick<ExtractReviewCheckpoint, 'idempotencyKey' | 'taskId' | 'retryAvailable' | 'dismissedFields' | 'acknowledgedMissingFields'> & {
@@ -99,13 +99,11 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const query = useSearchParams();
   const initialStage = query.get('stage');
   const [stage, setStage] = useState<'content' | 'media' | 'publish'>(initialStage === 'media' || initialStage === 'publish' ? initialStage : 'content');
-  const [openedMedia, setOpenedMedia] = useState(initialStage === 'media');
   const [publicationVisit, setPublicationVisit] = useState(0);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   useEffect(() => {
     if (initialStage === 'content' || initialStage === 'media' || initialStage === 'publish') {
       setStage(initialStage);
-      if (initialStage === 'media') setOpenedMedia(true);
     }
   }, [initialStage]);
   const ingestionStatusT = useTranslations('ingestion.status');
@@ -191,6 +189,15 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [extractionComplete, setExtractionComplete] = useState(false);
   const [missingFields, setMissingFields] = useState<SdfField[]>([]);
   const [editorLoaded, setEditorLoaded] = useState(false);
+  const previousScrollStage = useRef(stage);
+  useEffect(() => {
+    if (!editorLoaded || (stage === 'content' && previousScrollStage.current === 'content')) return;
+    previousScrollStage.current = stage;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`workbench-${stage}`)?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editorLoaded, stage]);
   const [activeExtraction, setActiveExtraction] = useState<ActiveExtraction | null>(null);
   const [recoverableExtraction, setRecoverableExtraction] = useState<ActiveExtraction | null>(null);
   const hermesStage = useOptionalHermesWorkspaceStage();
@@ -634,7 +641,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
   const draftCore = ingestionProposal?.core ?? state.core;
   const draftScope = ingestionProposal ? `ingestion:${ingestionProposal.detail.task.id}` : 'sdf';
-  useEffect(() => { if (state.dirty) setNeedsConfirmation(true); if (state.dirty || artifactsDirty || ingestionProposal || needsConfirmation) setStage('content'); }, [state.dirty, artifactsDirty, ingestionProposal, needsConfirmation]);
+  useEffect(() => { if (state.dirty) setNeedsConfirmation(true); }, [state.dirty]);
   const editorDraft: NonNullable<WorkspaceGuidePayload['context']['editorDraft']> = {
     researchObjectId: roId, scope: draftScope, version: state.version,
     core: { problem: draftCore.problem, insight: draftCore.insight, method: draftCore.method, results: draftCore.results, limitations: draftCore.limitations, reproducibility: draftCore.reproducibility },
@@ -808,7 +815,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   async function handleCommit(continueToMedia = false) {
     if (writingDraft.current || !editorLoaded || ingestionReviewActive || confirmingIngestion || confirmationIntent) return;
     if (versions.length && !state.dirty && !needsConfirmation && !artifactsDirty) {
-      if (continueToMedia) { setOpenedMedia(true); setStage('media'); }
+      if (continueToMedia) setStage('media');
       return;
     }
     if (continueToMedia && !SDF_FIELDS.every((field) => state.core[field].trim())) return;
@@ -839,7 +846,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         const url = new URL(window.location.href); url.searchParams.set('version', vs.versions[0].versionId); url.searchParams.delete('task');
         window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
       }
-      if (continueToMedia && unchanged) { setOpenedMedia(true); setStage('media'); }
+      if (continueToMedia && unchanged) setStage('media');
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : String(e));
     } finally {
@@ -893,27 +900,30 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   return (
     <EditorLayout
         objectId={roId}
-        workflow={<nav className="grid grid-cols-3 gap-2 px-4 py-3 sm:flex sm:flex-wrap sm:items-center" aria-label={tw('navigation')}>
-          {(['content', 'media', 'publish'] as const).map((item, index) => <button type="button" className={`min-h-11 min-w-0 rounded-panel px-2 text-xs leading-5 transition-colors sm:px-4 sm:text-sm ${stage === item ? 'bg-os-vermilion-ink font-semibold text-white' : 'text-os-muted-paper hover:bg-os-paper-strong'} disabled:opacity-40`} aria-current={stage === item ? 'step' : undefined} disabled={item !== 'content' && (!snapshotReady || !versions.length || state.dirty || artifactsDirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal))} key={item} onClick={() => { if (item === 'media') setOpenedMedia(true); if (item === 'publish') setPublicationVisit((value) => value + 1); setStage(item); }}>{index + 1} · {tw(item)}</button>)}
-          <div className="col-span-3 ml-auto flex items-center justify-end gap-2"><button type="button" className="min-h-11 rounded-panel border-0 bg-os-paper-strong px-3 text-sm font-semibold text-os-vermilion-ink" onClick={() => { setHermesGoal(''); setHermesOpen(true); }}>Hermes</button><Link className="min-h-11 px-3 py-3 text-sm text-os-muted-paper underline" href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link></div>
+        workspaceClassName={`editor-workspace research-product ${styles.workbenchShell}`}
+        workflow={<nav className={styles.workbenchNav} aria-label={tw('navigation')}>
+          {(['content', 'media', 'publish'] as const).map((item) => <button type="button" className={stage === item ? styles.navActive : styles.navLink} aria-current={stage === item ? 'location' : undefined} key={item} onClick={() => { if (item === 'publish') setPublicationVisit((value) => value + 1); setStage(item); }}>{tw(item)}</button>)}
+          <span className={styles.navSpacer} />
+          <button type="button" className={styles.hermesButton} onClick={() => { setHermesGoal(''); setHermesOpen(true); }}>Hermes</button>
+          <Link className={styles.detailsLink} href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
         </nav>}
         header={
           <ObjectHeader
             actions={
               <>
-                <button aria-label={t('saveToSdf')} className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper disabled:opacity-40" onClick={handleSave} disabled={saving || !state.dirty || !editorLoaded || ingestionReviewActive}>
-                  <span className="hidden sm:inline">{saving ? t('common.saving') ?? '…' : t('saveToSdf')}</span><span className="sm:hidden">SDF</span>
+                <button aria-label={t('saveToSdf')} className={styles.headerButton} onClick={handleSave} disabled={saving || !state.dirty || !editorLoaded || ingestionReviewActive}>
+                  {saving ? t('common.saving') ?? '…' : t('saveToSdf')}
                 </button>
                 <input
                   aria-label={t('commitMessage')}
                   disabled={!editorLoaded || committing}
-                  className="h-9 w-20 min-w-0 border border-os-rule-dark bg-os-black-1 px-2 text-sm text-os-paper placeholder:text-os-muted-dark sm:w-40 sm:px-3"
+                  className={styles.commitInput}
                   data-reading-role="control"
                   placeholder={t('commitMessage')}
                   value={commitMsg}
                   onChange={(event) => setCommitMsg(event.target.value)}
                 />
-                <button className="min-h-9 rounded-panel border-0 bg-os-vermilion px-3 font-semibold text-os-black-0 disabled:opacity-40" onClick={() => void handleCommit()} disabled={committing || !editorLoaded || ingestionReviewActive || (versions.length > 0 && !state.dirty && !artifactsDirty && !needsConfirmation)}><span className="hidden sm:inline">{t('commit')}</span><span className="sm:hidden">{t('commitShort')}</span></button>
+                <button className={styles.headerPrimary} onClick={() => void handleCommit()} disabled={committing || !editorLoaded || ingestionReviewActive || (versions.length > 0 && !state.dirty && !artifactsDirty && !needsConfirmation)}>{t('commit')}</button>
               </>
             }
             objectId={roId}
@@ -923,41 +933,39 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             visibility={objectMeta.visibility}
           />
         }
-        outline={
-          stage === 'content' ? <OutlinePanel
-            core={state.core}
-            activeField={activeField}
-            onSelectField={setActiveField}
-            versions={versions}
-            onSelectVersion={handleVersionSelect}
-          /> : null
-        }
+        outline={null}
         main={
-          <>
-            <div hidden={stage !== 'content'}>
-            <ArtifactUploader workspaceId={workspaceId} researchObjectId={roId} artifacts={artifacts} onArtifactsChange={setArtifacts} onIngestionStarted={(task) => {
-              setIngestionTasks((current) => [...current.filter((candidate) => candidate.id !== task.id), { ...task, confirmation: null }]);
-              setSelectedIngestionTaskId(task.id);
-              router.replace(`/research-objects/${encodeURIComponent(roId)}/edit?ingestionTask=${encodeURIComponent(task.id)}`);
-            }} />
-            {!ingestionReviewActive ? <HermesDraftDiff
-              disabled={extracting}
-              onCheck={revealDiff}
-              onDraft={(target) => { revealDiff(target); void handleExtract(); }}
-            /> : null}
+          <div className={styles.document}>
+            <section className={styles.contentSection} id="workbench-content" data-workbench-section="content">
             {draftPrompt && (
-              <div className="mb-5 flex flex-wrap items-center gap-3 border-y border-os-rule-dark py-3 text-sm text-os-paper">
+              <div className={styles.notice}>
                 <span>{t('draftFound')}</span>
-                <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={restoreDraft}>{t('restoreDraft')}</button>
-                <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={discardDraft}>{t('discardDraft')}</button>
+                <button className={styles.secondaryButton} onClick={restoreDraft}>{t('restoreDraft')}</button>
+                <button className={styles.secondaryButton} onClick={discardDraft}>{t('discardDraft')}</button>
               </div>
             )}
             {errorMsg && (
-              <div className="mb-5 flex items-center justify-between gap-4 border-l-2 border-os-vermilion py-2 pl-4 text-sm text-os-paper" role="alert">
+              <div className={styles.errorNotice} role="alert">
                 <span>{errorMsg}</span>
-                <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
+                <button className={styles.secondaryButton} onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
               </div>
             )}
+
+            <details className={styles.disclosure} open={ingestionReviewActive || undefined}>
+              <summary><span>{t('artifacts')}</span><small>{tw('confirmedSources')}</small></summary>
+              <div className={styles.disclosureBody}>
+                <ArtifactUploader workspaceId={workspaceId} researchObjectId={roId} artifacts={artifacts} onArtifactsChange={setArtifacts} onIngestionStarted={(task) => {
+                  setIngestionTasks((current) => [...current.filter((candidate) => candidate.id !== task.id), { ...task, confirmation: null }]);
+                  setSelectedIngestionTaskId(task.id);
+                  router.replace(`/research-objects/${encodeURIComponent(roId)}/edit?ingestionTask=${encodeURIComponent(task.id)}`);
+                }} />
+                {!ingestionReviewActive ? <HermesDraftDiff
+                  disabled={extracting}
+                  onCheck={revealDiff}
+                  onDraft={(target) => { revealDiff(target); void handleExtract(); }}
+                /> : null}
+              </div>
+            </details>
             {ingestionTasks.length > 0 ? (<details className="mb-5" open={ingestionReviewActive || Boolean(selectedIngestionTaskId) || ingestionTasks.some((task) => !task.confirmation) || undefined}>
               <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-os-vermilion-ink">{tw('sourceReview')}</summary>
               <section className="mb-6 border-y border-os-rule-paper bg-white px-4 py-5 text-os-ink" aria-labelledby="ingestion-proposal-heading">
@@ -1013,42 +1021,69 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                     </div>
                   </div>
                 ) : null}
-                {confirmedIngestion || ingestionMessage === t('ingestionAlreadyConfirmed') ? <button className="mt-4 min-h-11 text-sm text-os-vermilion-ink underline" onClick={() => { setOpenedMedia(true); setStage('media'); }}>{tw('continueMedia')}</button> : null}
+                {confirmedIngestion || ingestionMessage === t('ingestionAlreadyConfirmed') ? <button className="mt-4 min-h-11 text-sm text-os-vermilion-ink underline" onClick={() => setStage('media')}>{tw('continueMedia')}</button> : null}
               </section></details>
             ) : null}
             {!ingestionReviewActive ? <CoreEditor sourceHref={versions[0] ? `/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versions[0].versionId)}#version-evidence` : undefined} core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} /> : null}
 
-            {!ingestionReviewActive && <div className="sticky bottom-0 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-os-rule-paper bg-os-paper-strong p-4">
-              <p className="max-w-lg text-sm leading-6 text-os-muted-paper">{tw(state.dirty ? 'reconfirmNotice' : 'contentReady')}</p>
-              <button type="button" className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 text-sm font-semibold text-white disabled:opacity-50" disabled={!editorLoaded || committing || saving || !SDF_FIELDS.every((field) => state.core[field].trim())} onClick={() => state.dirty || artifactsDirty || needsConfirmation || !versions.length ? void handleCommit(true) : (setOpenedMedia(true), setStage('media'))}>{committing ? tw('savingContent') : tw('confirmContinue')}</button>
+            {!ingestionReviewActive ? <details className={styles.disclosure}>
+              <summary><span>{tw('analysisSuggestions')}</span><small>{t('suggestions')}</small></summary>
+              <div className={styles.disclosureBody}>
+                <HermesAnchor id="hermes-diff" sides={HERMES_DIFF_SIDES}>
+                  <SuggestionsPanel
+                    suggestions={suggestions}
+                    missingFields={missingFields}
+                    onAcknowledgeMissing={acknowledgeMissing}
+                    onApply={applySuggestion}
+                    onDismiss={dismissSuggestion}
+                    onExtract={handleExtract}
+                    extracting={extracting}
+                    extractProgress={extractProgress}
+                    extractError={extractError}
+                    extractionComplete={extractionComplete}
+                    canExtract={Boolean(aggregateCoreText(state.core)) || Boolean(recoverableExtraction?.taskId && !recoverableExtraction.retryAvailable)}
+                    resumeExtraction={Boolean(recoverableExtraction?.taskId && !recoverableExtraction.retryAvailable)}
+                    sourceHref={`/research-objects/${encodeURIComponent(roId)}/hermes`}
+                  />
+                </HermesAnchor>
+              </div>
+            </details> : null}
+
+            <details className={styles.disclosure}>
+              <summary><span>{t('versions')}</span><small>{versions.length ? t('draftRevision', { version: state.version }) : tw('loadingVersion')}</small></summary>
+              <div className={styles.versionList}>
+                {versions.slice(0, 8).map((version) => (
+                  <button key={version.versionId} onClick={() => handleVersionSelect(version.versionId)} type="button">
+                    <span>v{version.versionNo}</span><span>{t(`versionStatus.${version.status}`)}</span>
+                  </button>
+                ))}
+                <Link href={`/research-objects/${encodeURIComponent(roId)}/versions`}>{t('versions')}</Link>
+              </div>
+            </details>
+
+            {!ingestionReviewActive && (needsConfirmation || state.dirty || artifactsDirty || !versions.length) && <div className={styles.confirmBar}>
+              <p>{tw(state.dirty ? 'reconfirmNotice' : 'contentReady')}</p>
+              <button type="button" className={styles.primaryButton} disabled={!editorLoaded || committing || saving || !SDF_FIELDS.every((field) => state.core[field].trim())} onClick={() => state.dirty || artifactsDirty || needsConfirmation || !versions.length ? void handleCommit(true) : setStage('media')}>{committing ? tw('savingContent') : tw('confirmContinue')}</button>
             </div>}
-            </div>
-            {stage !== 'content' && !snapshotReady && <p role="status">{tw('loadingVersion')}</p>}
-            <div hidden={stage !== 'media'}>{openedMedia && versions[0] && snapshotReady && !needsConfirmation && <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} onAskHermes={(kind) => { setHermesGoal(tw(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); }} />}
-              <div className="mt-5 flex justify-end"><button className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 text-sm font-semibold text-white disabled:opacity-50" disabled={!snapshotReady || state.dirty || artifactsDirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal)} onClick={() => { setPublicationVisit((value) => value + 1); setStage('publish'); }}>{tw('previewPublish')}</button></div>
-            </div>
-            {stage === 'publish' && versions[0] && snapshotReady && !needsConfirmation && !state.dirty && !artifactsDirty && !ingestionReviewActive && <ResearchPublication key={`${versions[0].versionId}:${publicationVisit}`} researchObjectId={roId} selectedVersionId={versions[0].versionId} embedded />}
-          </>
+            </section>
+
+            <section className={styles.productSection} id="workbench-media" data-workbench-section="media">
+              <header className={styles.productSectionHeader}><h2>{tw('media')}</h2><span>{tw('coreImageFirst')}</span></header>
+              {!snapshotReady ? <p className={styles.lockedMessage} role="status">{tw('loadingVersion')}</p> : null}
+              {versions[0] && snapshotReady && !needsConfirmation && !state.dirty && !artifactsDirty && !ingestionReviewActive && !ingestionProposal ? <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} onAskHermes={(kind) => { setHermesGoal(tw(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); }} /> : null}
+              <div className={styles.sectionAction}><button className={styles.primaryButton} disabled={!snapshotReady || state.dirty || artifactsDirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal)} onClick={() => { setPublicationVisit((value) => value + 1); setStage('publish'); }}>{tw('previewPublish')}</button></div>
+            </section>
+
+            <details className={styles.publicationDisclosure} id="workbench-publish" open={stage === 'publish' || undefined}>
+              <summary><span><strong>{tw('publish')}</strong><small>{tw('publishPreviewBody')}</small></span></summary>
+              <div className={styles.publicationBody}>
+                {versions[0] && snapshotReady && !needsConfirmation && !state.dirty && !artifactsDirty && !ingestionReviewActive && <ResearchPublication key={`${versions[0].versionId}:${publicationVisit}`} researchObjectId={roId} selectedVersionId={versions[0].versionId} embedded />}
+              </div>
+            </details>
+          </div>
         }
         aside={
           <>
-            {!hermesOpen && stage === 'content' && <details><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">{tw('analysisSuggestions')}</summary><HermesAnchor id="hermes-diff" sides={HERMES_DIFF_SIDES}>
-              <SuggestionsPanel
-                suggestions={suggestions}
-                missingFields={missingFields}
-                onAcknowledgeMissing={acknowledgeMissing}
-                onApply={applySuggestion}
-                onDismiss={dismissSuggestion}
-                onExtract={handleExtract}
-                extracting={extracting}
-                extractProgress={extractProgress}
-                extractError={extractError}
-                extractionComplete={extractionComplete}
-                canExtract={Boolean(aggregateCoreText(state.core)) || Boolean(recoverableExtraction?.taskId && !recoverableExtraction.retryAvailable)}
-                resumeExtraction={Boolean(recoverableExtraction?.taskId && !recoverableExtraction.retryAvailable)}
-                sourceHref={`/research-objects/${encodeURIComponent(roId)}/hermes`}
-              />
-            </HermesAnchor></details>}
             <div className="mb-4 flex items-center justify-between gap-3 border-b border-os-rule-paper pb-3">
               <div><h2 className="m-0 text-base font-semibold">Hermes</h2><p className="mt-1 text-xs leading-5 text-os-muted-paper">{tw('hermesScope')}</p></div>
               {!hermesOpen && <button type="button" className="min-h-11 rounded-panel bg-os-paper-strong px-3 text-sm text-os-vermilion-ink" onClick={() => { setHermesGoal(''); setHermesOpen(true); }}>{tw('talkToHermes')}</button>}

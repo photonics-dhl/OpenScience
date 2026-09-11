@@ -1,4 +1,17 @@
 {
+  "hermesConversation": {
+    "role": "你的研究协作助手",
+    "conversation": "与 Hermes 的对话",
+    "welcomeEditor": "告诉我你想调整什么。我可以凝练正文、准备图解或视频，也可以带你预览发布。修改会回到这份研究稿中。",
+    "inputLabel": "发送指令给 Hermes",
+    "placeholder": "例如：把洞见写得更精炼，或为这篇研究做一张图",
+    "inputHint": "Enter 发送 · Shift+Enter 换行",
+    "send": "发送",
+    "retry": "继续确认",
+    "retrySame": "上次请求尚未确认，请继续同一请求，避免重复提交。",
+    "productionOptions": "查看制作安排",
+    "adjustProduction": "调整风格与详细指令"
+  },
   "workbench": {
     "requestVideo": "生成视频",
     "requestImage": "生成图片",

@@ -1,9 +1,9 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-11:** production 25917596 / rollback b05aaeac / browser provider f4832487；媒体/Hermes/公开布局与发布两处接口故障已修并部署。v6真实审核唯一阻断evidence_unverified，Chat6Pro正在集中核对58项；新Hermes方案任务1956a2c5格式失败，修正候选待部署。旧v3图科学问题未放行。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
-> 当前执行：按用户批准的连续工作台和核心图优先流程完成剩余衔接；Chat6Pro规划已收取、限流不重试，Sol medium有界实现+Sol high边界复核。用户授权Codex审核发布，科学内容需真实核对；视频和批量冷启动暂停。
-> 最新部署：精确完成结果证明、原prompt/result恢复、浏览器重启后exact canonical续取且不重发、产品画廊整理。
+> **CURRENT 2026-09-11:** production / code HEAD 329ad2e8，rollback 25917596，browser provider f4832487；实读生产与当前产品状态。104条Evidence已实际确认，v6尚无合格图片/未发布；最新8fc方案仍有科学矛盾不可放行。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> 当前执行：用户要求暂停局部UI补丁，先研究 effective-html / Apple 等 skills，结合当前截图和Chat6Pro分析后 grill-me 逐项讨论展示内容。用户授权审核发布仍有效，但不放行已知错误；视频和批量冷启动暂停。
+> 最新部署：图片方案4000字符预算、视频原边界兼容、避免初始伪版本；本轮无新部署。当前文档变更不代表新代码已发布。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -11,6 +11,11 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
+| `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 研究/待讨论；不是批准实施方案，未安装新能力 |
+| `docs/proposals/2026-09-11-ro-workbench-wireframe.html` | 成稿/Hermes/图视频/公开预览可点击灰度线框，两个主要确认节点 | 已在服务器浏览器打开供用户讨论；无生产接口/真实媒体/发布，非生产UI部署 |
+| `docs/proposals/2026-09-11-ro-product-preview.html` | 保留已认可布局的视觉与Hermes对话交互稿，固定输入、精简制作确认、公开媒体与正文共享状态 | 已在服务器浏览器呈现；仅预设短句/内存演示，真实Hermes自主处置及生产接入待完成 |
+| `apps/web/app/research-product.css` / `apps/web/app/research-objects/[id]/edit/workbench.module.css` / `apps/web/components/public/PublicReadingProduct.module.css` | 已批准高保真风格的正式工作台与公开阅读样式，六栏目标题强调、图视频直显和固定Hermes对话输入 | 2026-09-11候选；无测试/预检，部署状态见CURRENT handoff |
+| `apps/agent-worker/src/workspace-guide.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/components/hermes/HermesPresentationAction.tsx` | 同会话服务端上下文、模型语义路由、可撤销草稿回显、折叠制作确认与发布预览；保留权限/版本/明确制作发布确认 | 2026-09-11候选；不以请求成功代替科学产物通过 |
 | `apps/web/components/presentation/ResearchPresentation.tsx` / `apps/web/components/research/ResearchPublication.tsx` | 连续工作台复用制作及版本绑定发布预览，旧独立路由保留 | DEPLOYED b05aaeac；最新真实状态见CURRENT handoff |
 | `infra/scripts/verify-hermes-user-journey.mjs` | 服务器真实普通账号浏览器上传/启动/恢复取证，禁止手工生成各媒体阶段 | ACCEPTANCE TOOL；待运行，不代表产品流程通过 |
 | `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |
@@ -25,7 +30,7 @@
 | `apps/agent-worker/test/extraction-confirmation.test.ts` | 真实 extractHandler → 确认 → 冻结 API 的组合回归；位置歧义与错误身份不能升级为确定证据 | 最终修复 f199b4fd；14组合回归通过，复审中 |
 | `docs/plans/2026-09-07-open-research-publication-plan.md` | 原子导入确认、材料一致性、来源核查和每 RO 只读 API；独立审查与精确 SHA 发布 | IN PROGRESS；codex/open-research-publication，生产基线 5e4b4d4 / rollback 8e4ecb2 |
 | `packages/domain/src/ingestion/{ingestion-service,ingestion-evidence}.ts` / `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/ingestion.ts` / corresponding ingestion tests | 确认原子创建真实 Version、幂等重放、材料恢复与保守来源匹配；保留既有草稿图谱编辑 | CANDIDATE 0822515；76 domain / 8 API，独立复审通过；未部署 |
-| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；已确认RO工作区/概览/Hermes侧栏/研究桌面职责；官方参考实查完成；A配色三态本地样稿，待用户视觉验收 |
+| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；科学解释和连续工作台 | CURRENT；2026-09-11确认成稿主屏、公开图视频同显、开始制作/公开发布两个主要确认节点；目标交互不等于已部署 |
 | `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；收尾/22路由审计和选择性同事UX整合；PR102应用4d39808已部署、动画demo9848411；主线确认，PR103/104正式桌面/概览/段落助手已部署验收 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | DEPLOYED3d518af；runner10、安装预检、真实Task/Credit/来源/草稿/PNG/权限验收通过 |

@@ -11,6 +11,7 @@ import { ClaimNarrative } from './ClaimNarrative';
 import { EvidenceRail } from './EvidenceRail';
 import { EvidenceSheet } from './EvidenceSheet';
 import { PresentationAssetGallery } from './PresentationAssetGallery';
+import styles from './PublicReadingProduct.module.css';
 
 type PublicResearch = Awaited<ReturnType<typeof getPublicResearchVersion>>['research'];
 
@@ -186,8 +187,8 @@ const PUBLIC_SDF_NODES = [
 export function PublicReadingSurface({ research, activeTab = 'overview', onTabChange = () => undefined }: { research: PublicResearch; activeTab?: TabId; onTabChange?: (tab: TabId) => void }) {
   const t = useTranslations('public');
   const version = research.version;
-  const leadFigure = research.presentationAssets.find((asset) => asset.kind === 'image' || asset.kind === 'chart');
-  const supplementaryMedia = research.presentationAssets.filter((asset) => asset.id !== leadFigure?.id);
+  const directPresentation = research.presentationAssets.filter((asset) => asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'video');
+  const supplementaryMedia = research.presentationAssets.filter((asset) => !directPresentation.some((presentation) => presentation.id === asset.id));
   const [selectedEvidence, setSelectedEvidence] = React.useState<PublicEvidence | null>(null);
   const [evidenceSource, setEvidenceSource] = React.useState<PublicEvidenceSource | null>(null);
   const [sourceLoading, setSourceLoading] = React.useState(false);
@@ -235,32 +236,31 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
   };
 
   return (
-    <div className="pub-reading-surface" data-public-reading-surface="true" data-has-evidence={Boolean(selectedEvidence)}>
+    <div className={`pub-reading-surface research-product ${styles.surface}`} data-public-reading-surface="true" data-has-evidence={Boolean(selectedEvidence)}>
       <div className="pub-reading-layout">
         <article className="pub-reading-column" data-public-reading-column="true">
-          <header className="pub-reading-identity" data-public-identity="true">
+          <header className={`pub-reading-identity ${styles.identity}`} data-public-identity="true">
             <p className="pub-kicker">{t('researchObject')}</p>
             <h1>{research.title}</h1>
-            <p className="pub-version-id">{research.publicId} · {version.publicVersionId}</p>
-            <div className="pub-author-line">
+            <p className={styles.sourceLine}>{research.publicId} · {version.publicVersionId}</p>
+            <div className={`pub-author-line ${styles.authorLine}`}>
               {research.authors.map((author) => <span key={`${author.displayName}-${author.sortOrder}`} data-corresponding-author={author.isCorresponding ? 'true' : undefined}>
                 {author.displayName}{author.affiliation ? `, ${author.affiliation}` : ''} · {author.identityStatus}{author.isCorresponding ? ` · ${t('correspondingAuthor')}` : ''}
               </span>)}
             </div>
           </header>
 
-          <section className="pub-reading-summary" aria-labelledby="public-summary-heading">
-            <p className="pub-kicker">{t('abstract')}</p>
+          <section className={`pub-reading-summary ${styles.contribution}`} aria-labelledby="public-summary-heading">
             <p id="public-summary-heading" className="whitespace-pre-wrap" data-reading-role="body">{version.core.insight || version.core.problem || t('none')}</p>
           </section>
 
-          {leadFigure && <PresentationAssetGallery assets={[leadFigure]} leading />}
+          {directPresentation.length > 0 && <PresentationAssetGallery assets={directPresentation} leading />}
 
-          <section className="pub-reading-sdf" aria-labelledby="public-sdf-heading">
-            <h2 id="public-sdf-heading">{t('coreFields')}</h2>
+          <section className={`pub-reading-sdf ${styles.fields}`} aria-labelledby="public-sdf-heading">
+            <div className={styles.sectionTitle}><h2 id="public-sdf-heading">{t('coreFields')}</h2></div>
             {PUBLIC_SDF_NODES.map(([key, label]) => {
               const value = version.core[key];
-              return <section key={key} data-sdf-node={key} data-sdf-state={value ? 'confirmed' : 'empty'}>
+              return <section key={key} className={key === 'limitations' ? styles.limitation : undefined} data-sdf-node={key} data-sdf-state={value ? 'confirmed' : 'empty'}>
                 <h3>{t(label)}</h3><p className="whitespace-pre-wrap" data-reading-role="reading">{value || t('none')}</p>
               </section>;
             })}

@@ -1131,13 +1131,13 @@ export interface WorkspaceGuideResult {
   summary: string;
   nextSteps: Array<{
     label: string;
-    intent: 'open-task' | 'open-ro' | 'start-import';
+    intent: 'open-task' | 'open-ro' | 'start-import' | 'prepare-publication';
     targetId?: string;
   }>;
   needsMoreInformation: boolean;
   draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: Partial<Omit<SdfCore, 'schemaVersion'>> };
   presentationDraft?: {
-    action: 'storyboard.create';
+    action: 'storyboard.create' | 'storyboard.revise' | 'scene.image' | 'video.create';
     instruction: string;
     researchObjectId: string;
     versionId: string;

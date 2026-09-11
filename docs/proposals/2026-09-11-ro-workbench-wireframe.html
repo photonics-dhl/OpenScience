@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RO 工作台与公开页 · 布局讨论样稿</title>
+<style>
+  :root{--ink:#222;--muted:#666;--paper:#f5f5f5;--panel:#fff;--rule:#d2d2d2;--soft:#ececec;--accent:#333}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Segoe UI","Noto Sans SC",sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-visible,summary:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.shell{max-width:1280px;margin:auto;padding:0 22px}.notice{background:#e8e8e8;text-align:center;font-size:13px;padding:7px}.top{min-height:62px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--rule)}.brand{font-weight:700}.switch{display:flex;gap:4px;padding:3px;background:var(--soft)}.switch button{border:0;background:transparent;padding:6px 10px;color:var(--muted)}.switch button.active{background:#fff;color:var(--ink)}.mode{display:none}.mode.active{display:block}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:26px;padding:26px 0 48px}.workspace.wide{grid-template-columns:minmax(0,1fr) 48px}.folio{min-width:0;background:var(--panel);padding:clamp(20px,4vw,52px)}.meta{font-size:13px;color:var(--muted)}h1{font-size:clamp(26px,3.2vw,36px);line-height:1.18;margin:10px 0 15px;font-weight:650}h2{font-size:18px;margin:34px 0 10px}h3{font-size:15px;margin:0 0 4px}p{margin:0 0 13px}.contribution{border-left:3px solid var(--accent);padding:10px 0 10px 15px;font-size:18px;line-height:1.55}.anchors{display:flex;gap:14px;flex-wrap:wrap;border-block:1px solid var(--rule);padding:9px 0;margin:25px 0}.anchors a{color:var(--ink)}.fields{display:grid;gap:16px}.field{padding:0}.limit{background:#efefef;padding:14px 16px;border-left:3px solid #555}.side{min-width:0}.hermes{position:sticky;top:14px;background:#fff;border:1px solid var(--rule);padding:16px}.hermes header{display:flex;justify-content:space-between;align-items:center}.hermes textarea{width:100%;min-height:76px;margin:12px 0;padding:9px;border:1px solid var(--rule);resize:vertical}.row{display:flex;gap:8px;flex-wrap:wrap}.primary{background:var(--ink);color:white;border:0;padding:9px 13px}.quiet{background:transparent;border:1px solid var(--rule);padding:8px 11px}.status{margin:13px 0;padding:9px 11px;background:var(--soft);font-size:13px}.media-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:24px 0}.media-box{min-height:240px;padding:18px;background:#eee;border:1px dashed #999;display:grid;place-items:center;text-align:center;color:var(--muted)}.media-box strong{color:var(--ink);display:block}details{border-top:1px solid var(--rule);padding:13px 0}summary{cursor:pointer;font-weight:600}.public{max-width:760px;margin:0 auto;padding:42px 0 70px}.public .folio{background:transparent;padding:0}.byline{color:var(--muted);margin-bottom:25px}.banner{display:none;margin:14px 0;padding:10px;background:#e8e8e8}.hidden{display:none!important}dialog{max-width:520px;width:calc(100% - 28px);border:1px solid var(--rule);padding:22px;box-shadow:0 10px 35px #0003}dialog::backdrop{background:#0005}dialog label{display:grid;gap:5px;margin:12px 0}dialog select,dialog textarea{width:100%;padding:8px;border:1px solid var(--rule)}dialog textarea{min-height:90px}.foot{font-size:13px;color:var(--muted);margin-top:30px}@media(max-width:820px){.workspace,.workspace.wide{grid-template-columns:1fr}.hermes{position:static}.media-grid{grid-template-columns:1fr}.shell{padding:0 14px}.public{padding-top:25px}.top{min-height:55px}}
+.workspace.wide .hermes{padding:0;border:0;background:transparent}.workspace.wide .hermes header>strong{display:none}.workspace.wide #collapse{writing-mode:vertical-rl;padding:12px 8px}.media-grid:has(.media-box.hidden){grid-template-columns:1fr}.top{flex-wrap:wrap;padding:10px 0}#fields p[contenteditable=true]{outline:1px dashed #777;outline-offset:5px}#fields p[contenteditable=true]:focus-visible{outline:2px solid #333} @media(max-width:820px){.workspace.wide #collapse{writing-mode:horizontal-tb}.hermes{margin-top:10px}} </style></head>
+<body>
+<div class="notice">布局讨论样稿 · 不连接生产、不调用 AI、不生成媒体、不公开发布</div>
+<div class="shell"><header class="top"><span class="brand">OpenScience · Research Object</span><nav class="switch" aria-label="样稿视图"><button class="active" data-view="work">工作台</button><button data-view="public">公开预览</button></nav></header>
+<main id="work" class="mode active"><div class="workspace" id="workspace"><article class="folio"><p class="meta">研究草稿 · 布局样稿 · 样稿内变动不持久保存</p><h1>Deep-sub-cycle pulse</h1><p class="meta">署名与来源：待作者确认</p><p class="contribution">以纳米缝近场的深亚波长空间限域和相对论接收时间压缩，形成更短的散射脉冲。</p><nav class="anchors"><a href="#content">研究成稿</a><a href="#media">图片与视频</a><a href="#record">附件、证据与历史</a></nav><section id="content"><div class="row"><button class="quiet" id="edit">编辑正文（样稿）</button></div><h2>研究内容</h2><div class="fields" id="fields"><section class="field"><h3>问题</h3><p>如何产生强度半高全宽短于半个散射光周期的深亚周期脉冲，并克服单电子光子数过低的限制。</p></section><section class="field"><h3>洞见</h3><p>利用纳米缝近场的深亚波长空间限域，借相对论接收时间压缩形成更短的散射脉冲。</p></section><section class="field"><h3>方法</h3><p>结合 COMSOL 近场计算、电子散射角分布与到达时间，再按高斯束团叠加得到波形和频谱。</p></section><section class="field"><h3>结果</h3><p>数值算例显示可获得深亚周期散射脉冲；有限束团时宽会展宽输出。不同算例的数值不可混用。</p></section><section class="field"><h3>限制</h3><p class="limit">本文为理论与数值研究，并非实验光源验证；单电子平均光子数可远小于 1，波形仍有异号旁瓣。</p></section><section class="field"><h3>可复现性</h3><p>重建需要几何、驱动光、电子束团与数值求解设置；现有材料中的设置缺口与公式疑义需要保留说明。</p></section></div></section>
+<section id="media"><h2>核心媒体</h2><div class="media-grid" id="media-grid"><button class="media-box" type="button" data-media="图像"><span><strong>核心图展示位置</strong>经确认的图片在此完整展示</span></button><button class="media-box" type="button" data-media="视频"><span><strong>核心视频展示位置</strong>经确认的视频在此直接展示</span></button></div><div class="row"><button class="primary" id="make">确认内容并开始制作</button><button class="quiet" id="undo">撤销样稿内凝练</button></div><p id="sample-status" class="status">样稿场景：整理完成（可编辑）。</p><label class="meta">样稿场景 <select id="scenario"><option value="ready">整理完成</option><option value="making">制作中</option><option value="media">媒体已就绪</option></select></label></section>
+<section id="record"><details><summary>附件与证据（折叠）</summary><p>PDF、原始计算、证据定位与来源版本在此保留；本样稿不载入真实文件。</p></details><details><summary>版本历史（折叠）</summary><p>此处查看修订记录与已公开版本；当前展示为讨论样稿，不指定真实版本。</p></details><details><summary>详细 AI 制作指令（折叠）</summary><p>仅在需要时查看与修改。样稿不会把指令发送给任何服务。</p></details><div class="row"><button class="quiet" id="publish">预览公开确认</button></div></section></article>
+<aside class="side"><section class="hermes"><header><strong>Hermes 协助</strong><button class="quiet" id="collapse" aria-expanded="true">收起</button></header><div id="chat"><p class="meta">样稿演示边界：这里显示建议与当前任务，不连接真实 AI。</p><div class="status">当前任务：等待确认内容与媒体类型</div><textarea id="ask" aria-label="向 Hermes 提问" placeholder="例如：凝练这段，或直接提出科学疑问"></textarea><div class="row"><button class="primary" id="send">发送（样稿）</button><button class="quiet" id="suggest">凝练这段</button></div></div></section></aside></div></main>
+<main id="public" class="mode"><article class="public"><div class="folio"><p class="meta">公开预览 · 尚未确认公开</p><h1>Deep-sub-cycle pulse</h1><p class="byline">署名、机构、来源标识：待确认 · 理论与数值研究</p><p class="contribution">以纳米缝近场的深亚波长空间限域和相对论接收时间压缩，形成更短的散射脉冲。</p><div class="media-grid"><div class="media-box"><span><strong>核心图展示位置</strong>经确认的图片在此展示</span></div><div class="media-box"><span><strong>核心视频展示位置</strong>经确认的视频在此展示</span></div></div><h2>研究要点</h2><div class="fields" id="public-fields"></div><details><summary>引文、许可与版本元数据</summary><p>待作者、许可与持久标识确认。</p></details><button class="primary" id="final">记录公开确认（仅样稿）</button><p class="foot">最后确认节点：同时审阅研究内容和媒体后，才可执行真实发布。</p><p id="public-status" class="banner">样稿已记录公开确认点击；未发生真实发布。</p></div></article></main></div>
+<dialog id="dialog"><form method="dialog"><h2>开始制作（样稿）</h2><p>这是第一个主要确认节点：选择制作类型与风格。</p><label>类型<select id="type"><option value="both">图片与视频</option><option value="image">图片</option><option value="video">视频</option></select></label><label>风格<select><option>技术图解</option><option>墨线</option><option>水彩</option></select></label><details><summary>详细制作指令</summary><textarea placeholder="可选；本样稿不会发送"></textarea></details><div class="row"><button value="cancel" class="quiet">取消</button><button value="default" class="primary" id="confirm">确认开始（样稿）</button></div></form></dialog>
+<script>
+const $ = s => document.querySelector(s);
+const fields = $('#fields');
+let editing = false, lastChange = null;
+const note = text => { $('#sample-status').textContent = text; };
+function syncPublic() {
+  const sections = [...fields.querySelectorAll('.field')].map(source => {
+    const section = document.createElement('section');
+    section.className = 'field';
+    const heading = document.createElement('h3');
+    const paragraph = document.createElement('p');
+    heading.textContent = source.querySelector('h3').textContent;
+    paragraph.textContent = source.querySelector('p').textContent;
+    if (source.querySelector('p').classList.contains('limit')) paragraph.className = 'limit';
+    section.append(heading, paragraph);
+    return section;
+  });
+  $('#public-fields').replaceChildren(...sections);
+}
+function setScene(value) {
+  $('#scenario').value = value;
+  const messages = {
+    ready: '整理完成：查看并修改研究内容，再选择制作图片或视频。',
+    making: '制作中：Hermes 在后台规划与生成，你可以继续编辑研究内容。',
+    media: '媒体展示状态：图与视频位置同时可见，实际样稿没有生成媒体。'
+  };
+  note('样稿场景 · ' + messages[value]);
+  $('#chat .status').textContent = messages[value];
+  $('#make').disabled = value === 'making';
+  $('#make').textContent = value === 'making' ? '正在制作（样稿状态）' : '确认内容并开始制作';
+}
+function selectMedia(value) {
+  document.querySelectorAll('.media-grid').forEach(grid => {
+    [...grid.children].forEach((item, i) => item.classList.toggle('hidden', (value === 'image' && i === 1) || (value === 'video' && i === 0)));
+  });
+}
+document.querySelectorAll('[data-view]').forEach(button => {
+  button.onclick = () => {
+    syncPublic();
+    document.querySelectorAll('[data-view]').forEach(item => { const active = item === button; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); });
+    document.querySelectorAll('.mode').forEach(item => item.classList.toggle('active', item.id === button.dataset.view));
+    window.scrollTo(0, 0);
+  };
+});
+$('#make').onclick = () => $('#dialog').showModal();
+$('#confirm').onclick = () => { selectMedia($('#type').value); setScene('making'); };
+$('#edit').onclick = () => {
+  editing = !editing;
+  fields.querySelectorAll('p').forEach(p => { p.contentEditable = editing ? 'plaintext-only' : 'false'; });
+  $('#edit').textContent = editing ? '结束编辑' : '编辑正文（样稿）';
+  $('#edit').setAttribute('aria-pressed', String(editing));
+  if (editing) fields.querySelector('p').focus();
+  note(editing ? '已开启正文编辑；变动仅保留在本次样稿页面。' : '样稿正文已更新，公开预览显示同一份内容。');
+};
+fields.addEventListener('input', syncPublic);
+$('#undo').disabled = true;
+$('#undo').onclick = () => {
+  if (!lastChange) return;
+  if (lastChange.node.textContent !== lastChange.after) {
+    note('这段内容在凝练后又被修改，已保留你的修改；可直接编辑正文。');
+    return;
+  }
+  lastChange.node.textContent = lastChange.before;
+  lastChange = null;
+  $('#undo').disabled = true;
+  syncPublic();
+  note('已撤销最近一次 Hermes 样稿凝练，其他修改保留。');
+};
+$('#suggest').onclick = () => {
+  const node = fields.querySelector('.field:nth-child(2) p');
+  const after = '纳米缝近场限域与相对论接收时间压缩共同形成更短的散射脉冲。';
+  if (node.textContent === after) { note('洞见已是这个凝练版本。'); return; }
+  lastChange = { node, before: node.textContent, after };
+  node.textContent = after;
+  $('#undo').disabled = false;
+  syncPublic();
+  note('已演示凝练“洞见”，可撤销；这里没有调用真实 AI。');
+};
+$('#send').onclick = () => note($('#ask').value.trim() ? '你的问题保留在样稿输入框中。真实 Hermes 对话将在产品中接入。' : '请先输入希望 Hermes 修改或讨论的内容。');
+$('#scenario').onchange = e => setScene(e.target.value);
+$('#publish').onclick = () => document.querySelector('[data-view="public"]').click();
+$('#final').onclick = () => { $('#public-status').style.display = 'block'; };
+$('#collapse').onclick = e => {
+  const collapsed = $('#chat').classList.toggle('hidden');
+  e.currentTarget.textContent = collapsed ? '展开 Hermes' : '收起';
+  e.currentTarget.setAttribute('aria-expanded', String(!collapsed));
+  $('#workspace').classList.toggle('wide', collapsed);
+};
+document.querySelectorAll('[data-media]').forEach(button => { button.onclick = () => note(button.dataset.media + '：此处只演示媒体展示位置，不含真实文件。'); });
+syncPublic();
+setScene('ready');
+</script></body></html>

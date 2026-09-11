@@ -1,4 +1,17 @@
 {
+  "hermesConversation": {
+    "role": "Your research collaborator",
+    "conversation": "Conversation with Hermes",
+    "welcomeEditor": "Tell me what you would like to change. I can refine the text, prepare an illustration or video, or open the publication preview. Edits return to this research draft.",
+    "inputLabel": "Send an instruction to Hermes",
+    "placeholder": "For example: make the insight more concise, or illustrate this research",
+    "inputHint": "Enter to send · Shift+Enter for a new line",
+    "send": "Send",
+    "retry": "Continue request",
+    "retrySame": "The previous request is unconfirmed. Continue the same request to avoid duplicate submissions.",
+    "productionOptions": "View production details",
+    "adjustProduction": "Adjust style and detailed instructions"
+  },
   "workbench": {
     "requestVideo": "Generate a video",
     "requestImage": "Generate an image",
