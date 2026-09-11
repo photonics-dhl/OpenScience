@@ -104,7 +104,7 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
   if (value.presentationDraft !== undefined) {
     const candidate = value.presentationDraft as Record<string, unknown>;
     if (!candidate || typeof candidate !== 'object' || !['storyboard.create', 'storyboard.revise', 'scene.image', 'video.create'].includes(String(candidate.action))
-      || typeof candidate.instruction !== 'string' || (!candidate.instruction.trim() && !['scene.image', 'video.create'].includes(String(candidate.action))) || candidate.instruction.length > 1_000
+      || typeof candidate.instruction !== 'string' || (candidate.action === 'scene.image' ? candidate.instruction !== '' : !candidate.instruction.trim() && candidate.action !== 'video.create') || candidate.instruction.length > 1_000
       || (candidate.style !== undefined && !['technical', 'ink', 'watercolor'].includes(String(candidate.style)))
       || typeof candidate.researchObjectId !== 'string' || typeof candidate.versionId !== 'string') return null;
     presentationDraft = {

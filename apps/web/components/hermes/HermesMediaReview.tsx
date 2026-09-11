@@ -12,6 +12,9 @@ export function HermesMediaReview({ researchObjectId, versionId, onConfirmationC
   onReviewed(): void;
 }) {
   const t = useTranslations('hermesConversation');
+  const tp = useTranslations('presentation');
+  const mediaTitle = (asset: PresentationAsset) => asset.storyboard?.document.title
+    || (asset.label && asset.label !== 'presentation_not_evidence' ? asset.label : tp(asset.kind === 'video' ? 'researchVideoTitle' : 'coreImageTitle'));
   const [assets, setAssets] = useState<PresentationAsset[]>([]);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -41,7 +44,7 @@ export function HermesMediaReview({ researchObjectId, versionId, onConfirmationC
       const { asset: next } = await transitionPresentationAsset(researchObjectId, versionId, asset.id, status, asset.updatedAt);
       if (ownerRef.current !== owner) return;
       setAssets((items) => items.map((item) => item.id === asset.id ? { ...item, status: next.status, updatedAt: next.updatedAt, canTransition: false } : item));
-      setMessage(t(status === 'approved' ? 'mediaApproved' : 'mediaRejected', { title: asset.label })); onReviewed();
+      setMessage(t(status === 'approved' ? 'mediaApproved' : 'mediaRejected', { title: mediaTitle(asset) })); onReviewed();
     } catch (cause) {
       if (ownerRef.current === owner) setError(cause instanceof Error ? cause.message : String(cause));
     } finally { writing.current = false; if (ownerRef.current === owner) setBusy(false); }
@@ -54,7 +57,7 @@ export function HermesMediaReview({ researchObjectId, versionId, onConfirmationC
   return <section className="hermes-message hermes-message-assistant" data-hermes-media-review="true">
     {!ready && !error && <p role="status">{t('mediaReviewLoading')}</p>}
     {ready && <><p>{assets.length ? t('mediaReviewInstruction') : t('mediaReviewEmpty')}</p>
-      {assets.map((asset, index) => <details className="mt-3" key={asset.id}><summary>{index + 1}. {asset.label} · {t(asset.status === 'approved' ? 'adopted' : asset.status === 'rejected' ? 'rejected' : 'awaitingReview')}</summary>
+      {assets.map((asset, index) => <details className="mt-3" key={asset.id}><summary>{index + 1}. {mediaTitle(asset)} · {t(asset.status === 'approved' ? 'adopted' : asset.status === 'rejected' ? 'rejected' : 'awaitingReview')}</summary>
         {asset.storyboard ? <div className="mt-2 text-sm leading-6">{asset.storyboard.document.scenes.map((scene, sceneIndex) => <div className="mt-2" key={sceneIndex}><p>{sceneIndex + 1}. {scene.title}</p><p>{scene.narration}</p><p className="mt-2 whitespace-pre-wrap">{scene.visualAction}</p></div>)}</div> : <p className="mt-2 text-sm">{t('reviewOnLeft')}</p>}
       </details>)}
     </>}

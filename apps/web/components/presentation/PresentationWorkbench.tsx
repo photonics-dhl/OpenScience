@@ -4,11 +4,12 @@ import { ChevronDown, Image as ImageIcon, Plus, RotateCw } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import type { PresentationAsset, PresentationClaim, VersionSummary } from '@/lib/api';
+import { presentationAssetContentUrl, type PresentationAsset, type PresentationClaim, type VersionSummary } from '@/lib/api';
 import type { SceneImageRequest, StoryboardRequest } from '@/lib/api';
 import { StoryboardPanel } from './StoryboardPanel';
 import { MechanismVideoPanel } from './MechanismVideoPanel';
 import { PresentationResultGallery } from './PresentationResultGallery';
+import { ResearchMediaDeck, type ResearchMediaSlide } from './ResearchMediaDeck';
 import type { PresentationVideoRequest } from '@/lib/api';
 
 type PresentationVersion = Pick<VersionSummary, 'versionId' | 'versionNo' | 'status'>;
@@ -81,12 +82,36 @@ export function PresentationWorkbench({
   }
 
   if (resultsOnly) {
+    const toSlide = (asset: PresentationAsset, kind: ResearchMediaSlide['kind'], fallbackLabel: string): ResearchMediaSlide => {
+      const linkedClaims = asset.sourceClaimIds.map((id) => claimsById.get(id)?.statement).filter((value): value is string => Boolean(value));
+      const parentStoryboard = asset.sceneImage
+        ? assets.find((candidate) => candidate.id === asset.sceneImage?.storyboardAssetId)?.storyboard
+        : undefined;
+      const scene = parentStoryboard?.document.scenes[asset.sceneImage?.sceneIndex ?? -1];
+      const recordedLabel = asset.label.trim() && asset.label !== 'presentation_not_evidence' ? asset.label.trim() : '';
+      return {
+        id: asset.id,
+        kind,
+        label: recordedLabel || scene?.title?.trim() || scene?.narration?.trim() || fallbackLabel,
+        url: presentationAssetContentUrl(researchObjectId, version.versionId, asset.id),
+        description: `${t(`assetStatus.${asset.status}`)} · ${t('notEvidence')}`,
+        details: [t('generatedBy', { name: asset.generator }), ...linkedClaims.map((claim) => `“${claim}”`)],
+      };
+    };
+    const imageSlides = mediaAssets.filter((asset) => asset.kind !== 'video' && asset.kind !== 'svg').sort((left, right) => {
+      const approval = Number(right.status === 'approved') - Number(left.status === 'approved');
+      if (approval) return approval;
+      const visualRank = (asset: PresentationAsset) => asset.sceneImage?.sceneIndex === 0 ? 0 : asset.sceneImage ? 1 : asset.kind === 'image' ? 2 : 3;
+      return visualRank(left) - visualRank(right) || left.createdAt.localeCompare(right.createdAt);
+    }).map((asset, index) => toSlide(asset, 'image', index === 0 ? t('coreImageTitle') : t('imageNumber', { number: index + 1 })));
+    const videoSlides = mediaAssets.filter((asset) => asset.kind === 'video').map((asset) => toSlide(asset, 'video', t('researchVideoTitle')));
     return (
       <div className="min-w-0 text-os-ink" data-presentation-results="true">
-        {loading && mediaAssets.length === 0 ? <p className="m-0 py-5 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : null}
-        {mediaAssets.length > 0 ? (
-          <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={mediaAssets} allAssets={assets} claimsById={claimsById} canWrite={false} working={working} onTransition={onTransition} />
-        ) : null}
+        {loading ? <p className="m-0 pb-4 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : null}
+        <div className="grid min-w-0 gap-8 md:grid-cols-[minmax(0,3fr)_minmax(220px,2fr)]">
+          <ResearchMediaDeck title={t('coreImageTitle')} slides={imageSlides} emptyTitle={t('imagePlaceholderTitle')} emptyBody={t('imagePlaceholderBody')} emptyKind="image" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} detailsLabel={t('sourceDetails')} eager />
+          <ResearchMediaDeck title={t('researchVideoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} detailsLabel={t('sourceDetails')} />
+        </div>
         {task && task.status !== 'succeeded' ? (
           <div className="mt-5 border-t border-os-rule-paper pt-5" data-presentation-task={task.status}>
             <div className="flex items-center justify-between gap-4 text-sm">

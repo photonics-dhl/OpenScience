@@ -71,7 +71,7 @@ export const workspaceGuideResultGuard: SchemaGuard<WorkspaceGuideResult> = (val
     && (draft.style === undefined || ['technical', 'ink', 'watercolor'].includes(String(draft.style)))
     && ['storyboard.create', 'storyboard.revise', 'scene.image', 'video.create'].includes(String(draft.action))
     && typeof draft.instruction === 'string'
-    && (draft.instruction.trim().length > 0 || draft.action === 'scene.image' || draft.action === 'video.create')
+    && (draft.action === 'scene.image' ? draft.instruction === '' : draft.instruction.trim().length > 0 || draft.action === 'video.create')
     && draft.instruction.length <= 1_000
     && typeof draft.researchObjectId === 'string'
     && draft.researchObjectId.length > 0
@@ -144,6 +144,10 @@ export async function workspaceGuideHandler(
     },
   };
   const requestedPresentation = trustedPayload.context.presentation;
+  if (requestedPresentation && (ownerTask.session.researchObjectId !== requestedPresentation.researchObjectId
+    || !trustedResearch.some((research) => research.id === requestedPresentation.researchObjectId))) {
+    throw new Error('workspace.guide presentation scope must match the authorized session research object');
+  }
   const presentationVersion = requestedPresentation
     ? await deps.prisma.version.findFirst({
         where: {
@@ -156,6 +160,16 @@ export async function workspaceGuideHandler(
       })
     : null;
   if (requestedPresentation && !presentationVersion) throw new Error('workspace.guide presentation version 未通过服务端授权');
+  const currentPlans = presentationVersion ? await deps.prisma.presentationAsset.findMany({
+    where: { researchObjectId: presentationVersion.researchObjectId, versionId: presentationVersion.id,
+      kind: 'interactive_html', status: { in: ['draft', 'approved'] } },
+    select: { status: true, updatedAt: true, provenance: true }, orderBy: { updatedAt: 'desc' }, take: 8,
+  }) : [];
+  const planState = currentPlans.flatMap((asset) => {
+    const provenance = asset.provenance && typeof asset.provenance === 'object' && !Array.isArray(asset.provenance) ? asset.provenance : {};
+    if (!('storyboardDocument' in provenance)) return [];
+    return [{ status: asset.status, updatedAt: asset.updatedAt.toISOString() }];
+  });
   const taskIds = trustedPayload.context.tasks.map((item) => item.id);
   const researchObjectIds = trustedPayload.context.researchObjects.map((item) => item.id);
   let system = payload.locale === 'zh'
@@ -190,10 +204,11 @@ export async function workspaceGuideHandler(
     : 'You also co-edit the active workbench. editorDraft is the current user draft, not new evidence. Only for an explicit revision, condensation, translation or editing request may you add draftChanges, containing only changed SDF field keys and full replacement text. Questions, review and navigation do not edit. Preserve scientific conditions, equations, units, limitations and source meaning; never invent paper content. Explain insufficient evidence instead of filling guesses. All other root restrictions remain. Summarize changes without claiming they were saved, confirmed or published. Do not change unrequested fields.');
   if (editorDraft) system += '\n' + 'draftChanges must be a JSON object, never an array or JSON Patch. Allowed keys: problem, insight, method, results, limitations, reproducibility. Each value is the full replacement string (1–4000 characters); use English keys even when the text is Chinese. Omit unchanged fields. For a completed edit set needsMoreInformation=false and nextSteps=[].';
   system += '\n' + [
+    'Keep summary to one or two short reader-facing sentences describing the actual proposed change or next action. Do not repeat the user request or copy production instructions into summary: detailed AI-facing content belongs only in presentationDraft.instruction. Do not claim a requested length or scientific check was satisfied unless the returned content actually satisfies it. When condensing research prose, preserve the causal mechanism and scope, remove incidental parameter lists when requested, and never broaden findings from a specified case into a general law.',
     'An additional nextSteps intent review-media opens the current research object media/plan review in this conversation. Use it when the user wants to review, adopt, reject or inspect existing images, videos or plans; targetId must be the CURRENT authorized research object id. This only opens review; it never approves an asset itself. For an explicit request to generate from the already approved plan without changing any instruction, use scene.image or video.create with instruction=""; if the user requests any revision, use storyboard.revise with a full nonempty instruction. Never represent a plan task as a completed image or video.',
     'For presentationDraft, one additional optional field style is allowed: technical, ink, or watercolor. Infer it from the user request and conversation; use technical only when no preference is expressed. Put any more specific visual preference into instruction. Do not ask users to choose routine parameters or return a list of buttons. For a pure style change prepare a revised instruction for the current media request. Do not combine draftChanges with presentationDraft or prepare-publication in one response: finish edits first so the next operation uses the displayed draft.',
     'Conversation history contains prior user requests and assistant proposals, not new evidence or proof that actions completed. Resolve follow-up requests using it, but prefer the current draft and version context.',
-    'Choose the requested operation semantically; a request to illustrate the research means scene.image; a video request means video.create. The client prepares missing plans and shows a scoped confirmation before any generation charge. Supply a grounded detailed instruction (maximum 1000 characters), never invent completed assets. Questions about capabilities or negated requests must not return an action.',
+    'For images, action names the NEXT actual operation: storyboard.create or storyboard.revise REQUIRES a complete nonempty instruction (maximum 1000 characters); scene.image REQUIRES instruction="" exactly to use the existing approved plan unchanged. Never repeat an approved brief in instruction when generating from it. Consult presentationContext.planState: create an image plan if none exists, revise when the user requests changes, and use scene.image only for an explicit request to execute an approved plan unchanged. For video preserve the existing flow: video.create with a complete nonempty instruction prepares a missing/revised video plan; video.create with instruction="" executes an approved video plan unchanged. A plan-only request must not generate media. Questions about capabilities or negated requests must not return an action. Never invent completed assets.',
     'nextSteps may also contain prepare-publication, only for an explicit request to prepare or publish the CURRENT research object. Use its authorized id as targetId; this opens the final preview only and never publishes. Never claim publication has happened. When preparing production or publication, set needsMoreInformation=false only if the request is clear; otherwise explain the concrete question without an action.',
   ].join('\n');
   const userMessageBudget = Math.max(0, 30_000 - system.length);
@@ -216,6 +231,7 @@ export async function workspaceGuideHandler(
         presentationContext: {
           researchObjectId: presentationVersion.researchObjectId,
           versionId: presentationVersion.id,
+          planState,
           core: boundedCore(presentationVersion.manifest?.coreJson, maxCharsPerField),
         },
       } : {}),
@@ -244,7 +260,7 @@ export async function workspaceGuideHandler(
     { role: 'user', content: user },
   ], {
     temperature: 0.2,
-    validationFeedback: () => 'The previous JSON did not match the output contract. Return summary as a nonempty string (max 1200 characters), nextSteps as an array with at most one {label,intent,targetId} entry, and needsMoreInformation as a boolean. Omit unused optional fields; no nulls, patches, wrappers or extra keys. '
+    validationFeedback: () => 'The previous JSON did not match the output contract. For scene.image instruction MUST be exactly "" to execute an approved image plan unchanged. For image changes use storyboard.revise with a complete nonempty instruction; for a new image plan use storyboard.create. Do not mix image execution and plan instructions. Video.create retains its existing empty-approved/nonempty-plan instruction flow. Return summary as a nonempty string (max 1200 characters), nextSteps as an array with at most one {label,intent,targetId} entry, and needsMoreInformation as a boolean. Omit unused optional fields; no nulls, patches, wrappers or extra keys. '
       + (editorDraft ? 'For editing use nextSteps:[], needsMoreInformation:false and draftChanges:{problem:"full text"} with only requested English field keys (problem,insight,method,results,limitations,reproducibility); string values only, max 4000 characters each, max 18000 in total. Omit presentationDraft unless a valid presentationContext exists.'
         : 'The only optional root key is presentationDraft; include it only for an applicable presentationContext, with action, instruction, researchObjectId, versionId and optional style. Never emit draftChanges or edits. Navigation intent must be open-task, open-ro, start-import, prepare-publication or review-media and use only authorized IDs.'),
     validationDiagnostic: (value) => {

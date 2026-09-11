@@ -1,5 +1,13 @@
 # Hermes / Workbench CURRENT Handoff
 
+## Active 2026-09-11 continuation (supersedes older Next below)
+- 用户最新：贡献→核心图/视频（需要占位；多图HTML幻灯片）→六字段精华→折叠附件/证据/历史；各区对齐，Hermes继续作为操作入口。授权项目设计skills安装及服务器真实生图审核发布全流程，不扩展全仓测试。
+- 当前未部署候选：UI worker负责媒体占位/HTML轮播/排序及4项项目设计skill安装；主负责AGENTS/frontend-design规则和workspace-guide简短summary，生产release仍1cdd4602。
+- 真实产品已由Hermes精炼正文并自动保存；新正式v7=f4e2dc71-1fe8-406f-8c19-e1849503d698，draft修订11。只人工删去results中把特定算例泛化为常规结论的短句；未重新解析原文。
+- 新单场景方案1582087a-e93c-40d0-a721-c3d2bcb00f41由服务器Hermes生成，仍draft；修正半高宽在半高水平段、k⊥z且E⊥k、异号旁瓣、束团展宽独立注脚；ecfc/710a为前两版保留。不沿用v6旧错方案。
+- 服务器Chat6Pro已答复媒体顺序/占位稳定；/jobs/core-media-hierarchy-chat-20260911.txt。158方案6Pro已明确可生图，/jobs/core-plan-chat-review-20260911.txt；实际Hermes对话采用1→PATCH200 approved，未发布。最终方案/jobs/core-plan-final-review-20260911.json。
+- 真实暴露路由bug：guide cf2f42de输出scene.image+非空长instruction，被前端转storyboard.revise，任务1f3c8255实际返回interactive_html而非图片。候选修正image动作/指令互斥及定向模型反馈、传入已授权当前plan状态；保留既有视频流程。High发现原presentation引用缺少会话/成员绑定，已在读取version前绑定当前session+trustedResearch；待最终静态复核后部署。不要把1f3任务当生图成功，也不要批准其新方案。浏览器/登录/CDP复用，无重启。
+
 ## Objective / approved direction
 - 用户2026-09-11再次纠偏：保持批准的冷白/墨色/青绿、正文成果主屏+Hermes完整形象侧栏；主界面不再出现保存/提交/步骤/选主张/选风格等旧表单。普通选择、制作/审核/公开通过对话处置，详细指令按需展开。
 - 六个研究栏目标题突出；正文可直接编辑也可让Hermes改写。实际费用与公开范围仍明确说明，输入“确认制作”/“确认公开发布”承接当前动作，不能放行科学错误。

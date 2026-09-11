@@ -991,24 +991,38 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         outline={null}
         main={
           <div className={styles.document}>
-            <section className={styles.contentSection} id="workbench-content" data-workbench-section="content">
-            {draftPrompt && (
+            <section className={styles.leadSection} aria-label={tw('contribution')}>
+              <p className={styles.contribution}>{state.core.insight || state.core.results || state.core.problem || tw('contributionPlaceholder')}</p>
+              {draftPrompt && (
               <div className={styles.notice}>
                 <span>{t('draftFound')}</span>
                 <button className={styles.secondaryButton} onClick={restoreDraft}>{t('restoreDraft')}</button>
                 <button className={styles.secondaryButton} onClick={discardDraft}>{t('discardDraft')}</button>
               </div>
-            )}
-            {errorMsg && (
+              )}
+              {errorMsg && (
               <div className={styles.errorNotice} role="alert">
                 <span>{errorMsg}</span>
                 <button className={styles.secondaryButton} onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
               </div>
-            )}
+              )}
+            </section>
+
+            <section className={styles.productSection} id="workbench-media" data-workbench-section="media">
+              <header className={styles.productSectionHeader}><h2>{tw('media')}</h2></header>
+              {versions.length > 0 && !snapshotReady ? <p className={styles.lockedMessage} role="status">{tw('loadingVersion')}</p> : null}
+              {versions[0] && snapshotReady ? <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} /> : null}
+              {versions.length === 0 ? <div className={styles.mediaFallbackGrid}>
+                <div><h3>{tw('coreImage')}</h3><p>{tw('mediaNeedsVersion')}</p></div>
+                <div><h3>{tw('researchVideo')}</h3><p>{tw('mediaNeedsVersion')}</p></div>
+              </div> : null}
+            </section>
+
+            <section className={styles.contentSection} id="workbench-content" data-workbench-section="content">
 
             {!ingestionReviewActive ? <CoreEditor sourceHref={versions[0] ? `/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versions[0].versionId)}#version-evidence` : undefined} core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} /> : null}
 
-            <details className={styles.disclosure} open={ingestionReviewActive || undefined}>
+            <details className={styles.disclosure}>
               <summary><span>{t('artifacts')}</span><small>{tw('confirmedSources')}</small></summary>
               <div className={styles.disclosureBody}>
                 <ArtifactUploader workspaceId={workspaceId} researchObjectId={roId} artifacts={artifacts} onArtifactsChange={setArtifacts} onIngestionStarted={(task) => {
@@ -1023,7 +1037,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 /> : null}
               </div>
             </details>
-            {ingestionTasks.length > 0 ? (<details className="mb-5" open={ingestionReviewActive || Boolean(selectedIngestionTaskId) || ingestionTasks.some((task) => !task.confirmation) || undefined}>
+            {ingestionTasks.length > 0 ? (<details className={styles.disclosure} open={ingestionReviewActive || ingestionTasks.some((task) => !task.confirmation) || undefined}>
               <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-os-vermilion-ink">{tw('sourceReview')}</summary>
               <section className="mb-6 border-y border-os-rule-paper bg-white px-4 py-5 text-os-ink" aria-labelledby="ingestion-proposal-heading">
                 <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1115,12 +1129,6 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               </div>
             </details>
 
-            </section>
-
-            <section className={styles.productSection} id="workbench-media" data-workbench-section="media">
-              <header className={styles.productSectionHeader}><h2>{tw('media')}</h2></header>
-              {versions.length > 0 && !snapshotReady ? <p className={styles.lockedMessage} role="status">{tw('loadingVersion')}</p> : null}
-              {versions[0] && snapshotReady ? <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} /> : null}
             </section>
           </div>
         }

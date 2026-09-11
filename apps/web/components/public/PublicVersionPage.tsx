@@ -254,7 +254,7 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             <p id="public-summary-heading" className="whitespace-pre-wrap" data-reading-role="body">{version.core.insight || version.core.problem || t('none')}</p>
           </section>
 
-          {directPresentation.length > 0 && <PresentationAssetGallery assets={directPresentation} leading />}
+          <PresentationAssetGallery assets={directPresentation} leading />
 
           <section className={`pub-reading-sdf ${styles.fields}`} aria-labelledby="public-sdf-heading">
             <div className={styles.sectionTitle}><h2 id="public-sdf-heading">{t('coreFields')}</h2></div>

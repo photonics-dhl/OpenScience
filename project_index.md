@@ -589,3 +589,6 @@
 | `apps/web/components/research/ArtifactViewer.tsx` / `scripts/archive-legacy-showcase.mjs` | 附件预览与可恢复旧演示归档；关联完整旅程计划 | 2026-09-09已部署c2d11326，34条归档；真实流程状态见CURRENT handoff |
 
 | infra/chatgpt-browser/broker.mjs | 服务器网页生图队列broker；Gateway、权限、提交恢复与草稿回传 | DEPLOYED `0c635525`；真实task/asset `eb48809b…` succeeded/draft，精确会话恢复且不重发 |
+
+| `.agents/skills/apple-design/` / `.agents/skills/emil-design-eng/` / `.agents/skills/design-artifact/` / `.agents/skills/html-prototype/` | 用户授权的项目设计Skills，固定上游提交/原始引用/MIT许可证；由frontend-design按需应用 | 2026-09-11安装；来源见各SOURCE.md，最新实现/部署见CURRENT handoff |
+| `apps/web/components/presentation/ResearchMediaDeck.tsx` / `apps/web/components/presentation/ResearchMediaDeck.module.css` | 工作台/公开页共用单图与多图HTML幻灯片、图片视频占位和真实图注 | 2026-09-11候选；公开只用发布版本已审资产，部署见CURRENT handoff |
