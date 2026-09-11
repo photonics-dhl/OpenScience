@@ -684,6 +684,17 @@ export async function prepareAgentTaskForCrashRecovery(deps: AgentDeps, taskId: 
   return reset.count === 1;
 }
 
+const SERIALIZABLE_RETRY_DELAYS_MS = [10, 25, 50, 100, 200] as const;
+
+function isSerializableWriteConflict(error: unknown): boolean {
+  return (error as { code?: unknown })?.code === 'P2034';
+}
+
+async function waitForSerializableRetry(attempt: number): Promise<void> {
+  const delayMs = SERIALIZABLE_RETRY_DELAYS_MS[attempt] ?? 200;
+  await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+}
+
 export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<AgentTaskView | null> {
   const task = await deps.prisma.$transaction(async (tx) => {
     const claimed = await tx.agentTask.updateMany({
@@ -792,6 +803,27 @@ export async function markTaskProgress(
     expectedExecutionAttempt?: number;
   },
 ): Promise<AgentTaskView> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await markTaskProgressOnce(deps, input);
+    } catch (error) {
+      if (!isSerializableWriteConflict(error) || attempt >= SERIALIZABLE_RETRY_DELAYS_MS.length) throw error;
+      await waitForSerializableRetry(attempt);
+    }
+  }
+}
+
+async function markTaskProgressOnce(
+  deps: AgentDeps,
+  input: {
+    taskId: string;
+    status: AgentTaskStatus;
+    progress?: number;
+    result?: Record<string, unknown>;
+    error?: string | null;
+    expectedExecutionAttempt?: number;
+  },
+): Promise<AgentTaskView> {
   const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
   if (!task) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   const from = task.status as AgentTaskStatus;
@@ -827,10 +859,22 @@ export async function markTaskProgress(
   }
 
   const updated = await deps.prisma.$transaction(async (tx) => {
+    const current = await tx.agentTask.findUnique({ where: { id: input.taskId } });
+    if (!current) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+    const currentStatus = current.status as AgentTaskStatus;
+    if (input.expectedExecutionAttempt !== undefined
+      && current.executionAttempt !== input.expectedExecutionAttempt) {
+      throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
+    }
+    if (currentStatus === 'succeeded') return current;
+    if (currentStatus === input.status) return current;
+    if (!(ALLOWED[currentStatus] ?? []).includes(input.status)) {
+      throw new AgentError('ILLEGAL_TRANSITION', `任务状态 ${currentStatus} → ${input.status} 非法`);
+    }
     const changed = await tx.agentTask.updateMany({
       where: {
-        id: task.id,
-        status: from,
+        id: current.id,
+        status: currentStatus,
         ...(input.expectedExecutionAttempt === undefined
           ? {}
           : { executionAttempt: input.expectedExecutionAttempt }),
@@ -843,7 +887,7 @@ export async function markTaskProgress(
       },
     });
     if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
-    const row = await tx.agentTask.findUnique({ where: { id: task.id } });
+    const row = await tx.agentTask.findUnique({ where: { id: current.id } });
     if (!row) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
     return row;
   });

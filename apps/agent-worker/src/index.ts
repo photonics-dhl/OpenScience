@@ -518,6 +518,8 @@ export async function createPollOnce(
     if (!taskId) return false;
 
     let claimed: Awaited<ReturnType<typeof claimAgentTask>> = null;
+    let handlerCompleted = false;
+    let processingEntryRequeued = false;
     try {
       const task = await deps.prisma.agentTask.findUnique({
         where: { id: taskId },
@@ -536,6 +538,7 @@ export async function createPollOnce(
         retryCount: claimed.retryCount,
         ...(claimed.result?.hermesRecovery === HERMES_AUTHORITY_REARM_MARKER ? { recoveryContract: HERMES_AUTHORITY_REARM_MARKER } : {}),
       });
+      handlerCompleted = true;
       await markTaskProgress(deps, {
         taskId,
         status: 'succeeded',
@@ -545,6 +548,16 @@ export async function createPollOnce(
       });
       return true;
     } catch (e) {
+      if (handlerCompleted && (e as { code?: unknown })?.code === 'P2034') {
+        const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
+        if (!retryable) throw e;
+        processingEntryRequeued = true;
+        await deps.redis.multi()
+          .lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId)
+          .lpush(AGENT_TASK_QUEUE, taskId)
+          .exec();
+        return true;
+      }
       await markTaskProgress(deps, {
         taskId,
         status: 'failed',
@@ -554,7 +567,9 @@ export async function createPollOnce(
       return true;
     } finally {
       // 从处理中队列移除（已完成）
-      await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId).catch(() => undefined);
+      if (!processingEntryRequeued) {
+        await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId).catch(() => undefined);
+      }
     }
   };
 }

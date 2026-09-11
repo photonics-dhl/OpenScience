@@ -13,6 +13,7 @@ import { requireAnimationSourceSupport } from './animation';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KINDS = ['chart', 'interactive_html', 'image', 'video'] as const;
+const SERIALIZABLE_RETRY_DELAYS_MS = [10, 25, 50, 100, 200] as const;
 export const DETERMINISTIC_PRESENTATION_GENERATOR = 'OpenScience deterministic renderer';
 export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-presentation-v2';
 export type PresentationGenerationKind = (typeof KINDS)[number];
@@ -119,7 +120,11 @@ export async function withPresentationAssetWrite<T>(
         return operation(tx, version);
       }, { isolationLevel: 'Serializable' });
     } catch (error) {
-      if ((error as { code?: unknown })?.code === 'P2034' && attempt < 2) continue;
+      if ((error as { code?: unknown })?.code === 'P2034' && attempt < SERIALIZABLE_RETRY_DELAYS_MS.length) {
+        const delayMs = SERIALIZABLE_RETRY_DELAYS_MS[attempt] ?? 200;
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
       throw error;
     }
   }
