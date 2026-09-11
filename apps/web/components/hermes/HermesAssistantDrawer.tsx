@@ -326,11 +326,11 @@ function HermesAssistantDrawerContent({
       <section className="hermes-guide-drawer" data-hermes-drawer-state={presentationIntent ? 'presentation' : literatureIntent ? 'literature' : busy ? 'working' : task?.status ?? 'ready'} data-literature-routing="deterministic">
         <header className="border-b border-os-rule-paper pb-5">
           <p className="font-mono text-[0.68rem] uppercase tracking-[0.2em] text-os-vermilion">{t('guide.eyebrow')}</p>
-          <h2 className="mt-2 font-editorial text-3xl text-os-ink">{t('guide.title')}</h2>
-          <p className="mt-3 max-w-prose text-sm leading-6 text-os-muted-paper">{t(suggestion.bodyKey)}</p>
+          <h2 className="mt-2 font-editorial text-3xl text-os-ink">{dashboardContext.editorDraft ? tw('coeditTitle') : t('guide.title')}</h2>
+          <p className="mt-3 max-w-prose text-sm leading-6 text-os-muted-paper">{dashboardContext.editorDraft ? tw('coeditBody') : t(suggestion.bodyKey)}</p>
         </header>
 
-        {suggestion.href ? (
+        {suggestion.href && !dashboardContext.editorDraft ? (
           <Link className="mt-5 inline-flex border-b border-os-vermilion pb-1 text-sm text-os-ink" href={suggestion.href}>
             {suggestion.taskLabel ? t('guide.openTask', { task: suggestion.taskLabel }) : t('guide.openContext')} →
           </Link>
@@ -355,7 +355,7 @@ function HermesAssistantDrawerContent({
           </div>
         ) : <form className="mt-8 border-t border-os-rule-paper pt-6" onSubmit={submit}>
           <button type="button" className="mb-4 min-h-11 rounded border border-os-rule-paper px-3 text-sm text-os-ink disabled:opacity-50" disabled={busy} onClick={() => { setPresentationSuggestion(undefined); setPresentationIntent({ action: 'storyboard.create', instruction: goal.trim() }); }}>{tp('entry')}</button>
-          <label className="block text-sm font-medium text-os-ink" htmlFor="hermes-guide-goal">{t('guide.goalLabel')}</label>
+          <label className="block text-sm font-medium text-os-ink" htmlFor="hermes-guide-goal">{dashboardContext.editorDraft ? tw('coeditGoal') : t('guide.goalLabel')}</label>
           <textarea
             className="mt-3 min-h-28 w-full resize-y border border-os-rule-paper bg-transparent p-3 text-sm leading-6 text-os-ink outline-none focus:border-os-vermilion"
             disabled={busy}
@@ -366,7 +366,7 @@ function HermesAssistantDrawerContent({
             value={goal}
           />
           <button className="mt-3 border-b border-os-vermilion pb-1 text-sm font-semibold text-os-ink disabled:opacity-50" disabled={busy || !goal.trim()} type="submit">
-            {busy ? t('guide.working') : t('guide.submit')}
+            {busy ? t('guide.working') : dashboardContext.editorDraft ? tw('coeditSend') : t('guide.submit')}
           </button>
         </form>}
 

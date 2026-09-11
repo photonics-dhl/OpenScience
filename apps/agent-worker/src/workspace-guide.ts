@@ -146,34 +146,35 @@ export async function workspaceGuideHandler(
   const researchObjectIds = trustedPayload.context.researchObjects.map((item) => item.id);
   let system = payload.locale === 'zh'
     ? [
-        '你是 OpenScience 的 Hermes 科研引导员。根据给定的真实研究对象字段，指出最重要的审核或补充事项，并只提供安全导航。',
+        editorDraft ? '你是 OpenScience 的 Hermes 工作台共编助手，按用户明确的编辑要求修改当前草稿；仅咨询时给建议。' : '你是 OpenScience 的 Hermes 科研引导员。根据给定的真实研究对象字段，指出最重要的审核或补充事项，并只提供安全导航。',
         '不得声称已经执行写入、删除、合并、发布或权限变更。不得杜撰上下文中没有的事实。',
         'target 指明用户正在讨论的界面或段落；sdf-* 对应给定 core 字段，其中 sdf-evidence 对应 reproducibility。优先回应所选段落；target 为 null 时不得假定用户选择了某一段。',
         'InterestContext 仅用于排序关注点；rejectedSignals 是明确排除项，不得反向推断敏感属性或站外行为。',
-        '只输出一个 JSON 对象，根字段只能是 summary、nextSteps、needsMoreInformation、presentationDraft。needsMoreInformation 必须是 boolean，不得输出问题数组。',
+        `只输出一个 JSON 对象，必填根字段为 summary（非空字符串）、nextSteps（数组）、needsMoreInformation（boolean）；可选字段为 presentationDraft${editorDraft ? '、draftChanges' : ''}。不适用的可选字段必须省略，不得填 null。禁止Markdown或JSON外的文字。`,
         'nextSteps 最多 1 项；每项只能包含 label、intent、targetId，禁止 title、description 或其他字段。',
         '仅当 presentationContext 存在且用户目标适合用讲解分镜表达时，才输出 presentationDraft；它只能包含 action、instruction、researchObjectId、versionId。action 必须是 storyboard.create，两个 id 必须逐字使用 presentationContext，instruction 必须是基于给定版本字段的可编辑分镜指令，不得声称已生成、批准或发布。不得输出主张或来源 id。',
         'intent 只能是 open-task、open-ro、start-import。open-task/open-ro 必须带 targetId；start-import 必须省略 targetId。',
         `open-task 只能使用下列 task id：${taskIds.length ? taskIds.join(', ') : '（无；禁止输出 open-task）'}。`,
         `open-ro 只能使用下列 research object id：${researchObjectIds.length ? researchObjectIds.join(', ') : '（无；禁止输出 open-ro）'}。`,
-        '严格示例：{"summary":"审核结论与缺口","nextSteps":[{"label":"打开研究对象复核","intent":"open-ro","targetId":"允许的 id"}],"needsMoreInformation":true}',
+        editorDraft ? '编辑输出示例（实际仅修改用户要求的字段）：{"summary":"已给出问题字段的精炼草稿。","nextSteps":[],"needsMoreInformation":false,"draftChanges":{"problem":"完整替换文本"}}' : '严格示例：{"summary":"审核结论与缺口","nextSteps":[{"label":"打开研究对象复核","intent":"open-ro","targetId":"允许的 id"}],"needsMoreInformation":true}',
       ].join('\n')
     : [
-        'You are Hermes, the OpenScience research guide. Review the supplied real research-object fields, identify the most important verification or completion work, and provide safe navigation only.',
+        editorDraft ? 'You are Hermes, the OpenScience workbench co-editor. Revise the current draft for explicit editing requests; give advice without edits for questions.' : 'You are Hermes, the OpenScience research guide. Review the supplied real research-object fields, identify the most important verification or completion work, and provide safe navigation only.',
         'Never claim to have written, deleted, merged, published, or changed permissions. Do not invent facts absent from the context.',
         'target identifies the selected interface or passage; sdf-* refers to the supplied core field, except sdf-evidence means reproducibility. Prioritize the selected passage; null means no passage was selected.',
         'Use InterestContext only to prioritize attention. rejectedSignals are explicit exclusions; never infer sensitive traits or off-site behavior.',
-        'Return exactly one JSON object whose only root keys are summary, nextSteps, needsMoreInformation, and presentationDraft. needsMoreInformation must be a boolean, never an array.',
+        `Return exactly one JSON object. Required keys: summary (nonempty string), nextSteps (array), needsMoreInformation (boolean). Optional keys: presentationDraft${editorDraft ? ', draftChanges' : ''}. Omit unused optional keys; never set them to null. No Markdown or text outside JSON.`,
         'nextSteps has at most one item. It may contain only label, intent, and targetId; title and description are forbidden.',
         'Emit presentationDraft only when presentationContext exists and the goal benefits from an explanatory storyboard. It may contain only action, instruction, researchObjectId, and versionId. action must be storyboard.create; copy both ids exactly from presentationContext. instruction is an editable storyboard brief grounded in the supplied version fields. Never claim it was generated, approved, or published, and never emit Claim or source ids.',
         'intent must be open-task, open-ro, or start-import. open-task/open-ro require targetId; start-import must omit targetId.',
         `open-task may use only these task ids: ${taskIds.length ? taskIds.join(', ') : '(none; do not emit open-task)'}.`,
         `open-ro may use only these research object ids: ${researchObjectIds.length ? researchObjectIds.join(', ') : '(none; do not emit open-ro)'}.`,
-        'Exact example: {"summary":"Review finding and gap","nextSteps":[{"label":"Open the research object","intent":"open-ro","targetId":"an allowed id"}],"needsMoreInformation":true}',
+        editorDraft ? 'Editing example (change only the fields actually requested): {"summary":"Proposed a concise problem statement.","nextSteps":[],"needsMoreInformation":false,"draftChanges":{"problem":"Full replacement text"}}' : 'Exact example: {"summary":"Review finding and gap","nextSteps":[{"label":"Open the research object","intent":"open-ro","targetId":"an allowed id"}],"needsMoreInformation":true}',
       ].join('\n');
   if (editorDraft) system += '\n' + (payload.locale === 'zh'
     ? '你同时是当前工作台的共编助手。editorDraft是用户此刻正在编辑的草稿，不是新证据。用户明确要求改写、凝练、翻译或调整内容时，可额外输出draftChanges：只包含实际改动的六字段键与完整替换文本。咨询、评价、导航不改稿。保留科学条件、公式、单位、限制和来源含义，不编造论文内容；证据不足时解释，不用猜测填充。除draftChanges外上述根字段限制保持。summary说明改了什么，不能声称已保存、定稿或发布。不得修改未要求的字段；只修改草稿，最终定稿另行确认。'
     : 'You also co-edit the active workbench. editorDraft is the current user draft, not new evidence. Only for an explicit revision, condensation, translation or editing request may you add draftChanges, containing only changed SDF field keys and full replacement text. Questions, review and navigation do not edit. Preserve scientific conditions, equations, units, limitations and source meaning; never invent paper content. Explain insufficient evidence instead of filling guesses. All other root restrictions remain. Summarize changes without claiming they were saved, confirmed or published. Do not change unrequested fields.');
+  if (editorDraft) system += '\n' + 'draftChanges must be a JSON object, never an array or JSON Patch. Allowed keys: problem, insight, method, results, limitations, reproducibility. Each value is the full replacement string (1–4000 characters); use English keys even when the text is Chinese. Omit unchanged fields. For a completed edit set needsMoreInformation=false and nextSteps=[].';
   const userMessageBudget = Math.max(0, 30_000 - system.length);
   const serializeUser = (maxCharsPerField: number) => JSON.stringify({
     goal: trustedPayload.goal,
@@ -215,7 +216,24 @@ export async function workspaceGuideHandler(
   const result = await gateway.completeStructured(workspaceGuideResultGuard, [
     { role: 'system', content: system },
     { role: 'user', content: user },
-  ], { temperature: 0.2 });
+  ], {
+    temperature: 0.2,
+    validationFeedback: () => 'The previous JSON did not match the output contract. Return summary as a nonempty string (max 1200 characters), nextSteps as an array with at most one {label,intent,targetId} entry, and needsMoreInformation as a boolean. Omit unused optional fields; no nulls, patches, wrappers or extra keys. '
+      + (editorDraft ? 'For editing use nextSteps:[], needsMoreInformation:false and draftChanges:{problem:"full text"} with only requested English field keys (problem,insight,method,results,limitations,reproducibility); string values only, max 4000 characters each, max 18000 in total. Omit presentationDraft unless a valid presentationContext exists.'
+        : 'The only optional root key is presentationDraft; include it only for an applicable presentationContext, with action, instruction, researchObjectId and versionId. Never emit draftChanges or edits. Navigation intent must be open-task, open-ro or start-import and use only authorized IDs.'),
+    validationDiagnostic: (value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return 'guide:root';
+      const shape = value as Record<string, unknown>;
+      const issues: string[] = [];
+      if (!hasOnlyKeys(shape, ['summary', 'nextSteps', 'needsMoreInformation', 'presentationDraft', 'draftChanges'])) issues.push('root_keys');
+      if (typeof shape.summary !== 'string' || !shape.summary.trim() || shape.summary.length > 1200) issues.push('summary');
+      if (typeof shape.needsMoreInformation !== 'boolean') issues.push('needs_more_information');
+      if (!Array.isArray(shape.nextSteps) || shape.nextSteps.length > 1) issues.push('next_steps');
+      if (shape.draftChanges !== undefined && (!shape.draftChanges || typeof shape.draftChanges !== 'object' || Array.isArray(shape.draftChanges))) issues.push('draft_shape');
+      if (shape.presentationDraft === null) issues.push('presentation_null');
+      return 'guide:' + (issues.join(',') || 'nested_fields');
+    },
+  });
   const allowedTaskIds = new Set(taskIds);
   const allowedResearchObjectIds = new Set(researchObjectIds);
   const invalidTarget = result.nextSteps.some((step) => (

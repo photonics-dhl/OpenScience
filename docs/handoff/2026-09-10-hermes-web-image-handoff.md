@@ -8,9 +8,9 @@
 ## Version tuple
 - worktree: E:/Miscellaneous/XGS/.worktrees/onchip-video-release
 - branch: codex/onchip-video-release
-- application / production: 9b97522f282951cf9328f673dbde8c53eaafb8f8
+- application / production: 661d0926d5bfa8ef4126a93fd021fda012f395cf
 - browser bundle: f48324870f25b50c3a21eaad898beea87fb0aa1d；provider rollback48d9fa65，application rollback48d9fa65
-- rollback: 48d9fa65db134575f53cf2a30724aa47a14eeea4
+- application rollback: 9b97522f282951cf9328f673dbde8c53eaafb8f8；provider rollback仍48d9fa65
 - 第二批已部署：折叠AI绘图细节、288px侧栏、提示词可见标签/内部规则分层、显式恢复时复用已保存图片。provider同版本，7d8明确限流后匹配的旧不确定熔断已归档，无新生图。
 - 已部署领取事务P2034有界重试和attempt0的未提交恢复；Chrome6 Pro已复核GO。未运行测试，服务器发布构建/启动完成。
 
@@ -32,7 +32,7 @@
 
 ## Next actions
 1. 用户访谈完成：连续/edit、工作台主导、Hermes侧栏双向改稿；核心图优先，不再补齐旧六场景。测试阶段已授权Codex审核发布，须真实核对科学内容/来源。
-2. 当前未提交候选已组合ResearchPresentation/ResearchPublication面板、异步字段改稿/撤销、版本锁/冲突保留、公开图文排版；公开API和直接下载排除内部storyboard。
+2. 661d0926已完成服务器构建/部署，三阶段工作台实际可打开；公开API和直接下载排除内部storyboard。真实对话改稿请求失败：一次JSON解析失败、两次结构校验失败，原草稿保持未改。当前候选消除只导航/根字段规则冲突，明确改稿JSON和现有Gateway纠错反馈；同步折叠已确认材料、改正共编入口文案。待重新部署后继续同一实际任务。
 3. Chat6Pro已实际交付规划；第二次有界复核返回usage limit，禁止盲重试。Sol High已完成有界只读复核，四处草稿/版本异步边界问题已修正并复核关闭；待服务器必要构建和部署。
 4. 真实新图8b0ca4c9已打开：公式与标注可读，观察球面中心和散射源几何仍需与原文对照；旧图36a4有制作指令外露，不能发布。原批量run失败仍保留，gallery2张草稿。
 5. 部署后用当前RO走通工作台、对话改稿、审核代表图与公开发布；禁止重跑全文提取或补四图冒充本轮完成。

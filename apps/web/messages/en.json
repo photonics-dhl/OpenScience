@@ -1,5 +1,12 @@
 {
   "workbench": {
+    "sourceReview": "Source analysis and confirmation history",
+    "confirmedSources": "Edit confirmed content in the editor or with Hermes. Select a source below only when you need to revisit its analysis.",
+    "loadingVersion": "Reading the confirmed version…",
+    "coeditTitle": "Write with Hermes",
+    "coeditBody": "I can see this draft. Tell me what to change and edits will appear in the editor. You can keep editing or undo my changes.",
+    "coeditGoal": "What would you like to change or discuss?",
+    "coeditSend": "Send to Hermes",
     "navigation": "Research workbench",
     "content": "Sources & content",
     "media": "Images & video",

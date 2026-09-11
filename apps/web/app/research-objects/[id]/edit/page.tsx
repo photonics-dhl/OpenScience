@@ -929,7 +929,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
               </div>
             )}
-            {ingestionTasks.length > 0 ? (
+            {ingestionTasks.length > 0 ? (<details className="mb-5" open={ingestionReviewActive || Boolean(selectedIngestionTaskId) || ingestionTasks.some((task) => !task.confirmation) || undefined}>
+              <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-os-vermilion-ink">{tw('sourceReview')}</summary>
               <section className="mb-6 border-y border-os-rule-paper bg-white px-4 py-5 text-os-ink" aria-labelledby="ingestion-proposal-heading">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -949,7 +950,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                     </select>
                   </label>
                 </div>
-                <p className="mt-3 text-sm leading-6 text-os-muted-paper">{t('ingestionProposalBody')}</p>
+                <p className="mt-3 text-sm leading-6 text-os-muted-paper">{ingestionReviewActive ? t('ingestionProposalBody') : tw('confirmedSources')}</p>
                 {ingestionProposal && isRefreshableIngestionAnalysis(ingestionProposal.detail.task) ? (
                   <div className="mt-4 border-l-2 border-os-vermilion-ink pl-4">
                     <p className="text-sm leading-6 text-os-muted-paper">{t('legacyRefreshBody')}</p>
@@ -984,7 +985,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                   </div>
                 ) : null}
                 {confirmedIngestion || ingestionMessage === t('ingestionAlreadyConfirmed') ? <button className="mt-4 min-h-11 text-sm text-os-vermilion-ink underline" onClick={() => { setOpenedMedia(true); setStage('media'); }}>{tw('continueMedia')}</button> : null}
-              </section>
+              </section></details>
             ) : null}
             {!ingestionReviewActive ? <CoreEditor sourceHref={versions[0] ? `/research-objects/${encodeURIComponent(roId)}/versions?version=${encodeURIComponent(versions[0].versionId)}#version-evidence` : undefined} core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} /> : null}
 
@@ -993,7 +994,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               <button type="button" className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 text-sm font-semibold text-white disabled:opacity-50" disabled={!editorLoaded || committing || saving || !SDF_FIELDS.every((field) => state.core[field].trim())} onClick={() => state.dirty || needsConfirmation || !versions.length ? void handleCommit(true) : (setOpenedMedia(true), setStage('media'))}>{committing ? tw('savingContent') : tw('confirmContinue')}</button>
             </div>}
             </div>
-            {stage !== 'content' && !snapshotReady && <p role="status">{tw('savingContent')}</p>}
+            {stage !== 'content' && !snapshotReady && <p role="status">{tw('loadingVersion')}</p>}
             <div hidden={stage !== 'media'}>{openedMedia && versions[0] && snapshotReady && !needsConfirmation && <ResearchPresentation key={versions[0].versionId} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} />}
               <div className="mt-5 flex justify-end"><button className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 text-sm font-semibold text-white disabled:opacity-50" disabled={!snapshotReady || state.dirty || needsConfirmation || ingestionReviewActive || Boolean(ingestionProposal)} onClick={() => { setPublicationVisit((value) => value + 1); setStage('publish'); }}>{tw('previewPublish')}</button></div>
             </div>

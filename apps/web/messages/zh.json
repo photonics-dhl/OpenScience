@@ -1,5 +1,12 @@
 {
   "workbench": {
+    "sourceReview": "材料解析与确认记录",
+    "confirmedSources": "已确认的内容可直接在正文或 Hermes 对话中修改。仅在需要复查材料时切换下方来源。",
+    "loadingVersion": "正在读取已确认版本…",
+    "coeditTitle": "和 Hermes 一起完善内容",
+    "coeditBody": "我能看到当前草稿。告诉我需要改哪里，修改会同步到正文；你可以继续编辑或撤销。",
+    "coeditGoal": "想修改什么，或讨论哪个问题？",
+    "coeditSend": "发送给 Hermes",
     "navigation": "研究工作台",
     "content": "资料与内容",
     "media": "图片与视频",
