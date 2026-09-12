@@ -2,17 +2,17 @@
 
 ## 当前状态（2026-09-12）
 - 媒体增强已部署0df87c9b：scientific-art-direction v1 / scientific-video-direction v1已接入现有分镜与图片brief；跨图风格/标签连续、来源约束叙事及旁白，不增加生成轮次。视频locale/style沿原storyboard文件传递，不新增哈希或存储；独立runner已先于新Worker部署成功，旧请求兼容。中文视频入口限制保持；尚无新图片/视频实产证据。
-- ECS应用f2a533836f8ab949d6b9b07731b8cc867e13d490 / rollback0be34695891754fd49ef2d3d1b57b2138002d883；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- ECS应用236dfdb88c101c0a4e476e2ea597fe7026d6e8c5 / rollbackf2a533836f8ab949d6b9b07731b8cc867e13d490；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 用户已明确授权按写作指令，将当前研究私稿/必要摘录发送MiniMax。普通问答不自动触发写作；生产不依赖Chat科学定稿。
 - 真实a1c0da49的语义bridge第一次成功42191tokens/124574ms，final主接口空正文、备用HTTP401，六字段未产出。旧空响应final用量未知，不是0；科学结果未采用。
 - 科学写作v3/来源origin/完整100563字符输入与旧稿引用恢复已实产；M3生成修订后仍有错引/阈值夸大，最终40e23948由真实UI做4处来源约束校正，41引用/57式，保存/重载/下载成功，独立内容复核通过；保持user_edited，不代表自动初稿已可靠。
-- 最新0a9555bc bridge成功且semanticStage已保存；final输出32768达到上限、text0/thinking1，六字段未采用。候选只将final上限提至65536，保留adaptive/300s和原guard；同源仅续final，实际复用尚待观察。桥接结构修复已部署f2a53383，不新增调用/强转/截断。
+- 4099a967已真实复用0a9555bc成功stage，一次final10724输出/104012ms产出六字段，但独立科学复核否决4项实质错误，未采用。当前source-only final候选High已审：字段P并集+原文，移除候选措辞/分组/chosenCase；v3同算例/条件/阈值位置/复现规则。保留final65536/adaptive/300s，无新增调用。
 - 无新增服务/供应商/OCR/浏览器。禁止测试/预检/CI/本机构建；必要服务器build/start与真实产品操作按授权推进。
 
 | 顺序 | 能力 | 当前状态与剩余 |
 |---|---|---|
 | 1 | 科学文档与公式 | Docling1.30/CodeFormulaV2/TeX来源/KaTeX已生产；26页32式中28可排版、4损坏标记。两个代表式对原页，非全篇物理验收。 |
-| 2 | 全文理解与凝练 | paper-analysis v8/scientific-summary v2，长文map→semantic reduce→final，短文/旧候选P bridge→final；bridge正常，最新final空正文。保留原确认稿，待诊断续作。 |
+| 2 | 全文理解与凝练 | paper-analysis v8；stage复用已实证，final结构成功但科学质量未通过。source-only scientific-summary v3候选待实产核读；原确认稿保留。 |
 | 3 | 科学写作与引用 | 68a0e6b2已部署：明确写作才加载SourceMap，私有note/review/manuscript，同用户/RO校验，程序绑定引用；直接保存不调用模型，修订一次provider cycle。 |
 | 4 | 精美笔记 | 68a0e6b2已部署：运行时research-note-formatting，Hermes草稿卡、宽阅读/编辑弹层、折叠来源、安全Markdown/KaTeX、真实保存和Markdown下载。多格式文档导出按具体需求补齐。 |
 | 5 | 多格式附件 | XLSX/PPTX/HTML已生产，派生副本清洗、原件保留；真实多样样本兼容未观察。复用已有解析器，未另装MarkItDown全套。 |
