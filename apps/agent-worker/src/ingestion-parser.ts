@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { once } from 'node:events';
 import type { Readable } from 'node:stream';
-import type { Archiver, ZipOptions } from 'archiver';
+import type { Archiver, ZipOptions } from 'archiver' with { 'resolution-mode': 'import' };
 import katex from 'katex';
 import { VIRTUAL_LINE_HEIGHT, VIRTUAL_PAGE_WIDTH } from '@openscience/domain/virtual-page';
 import {
