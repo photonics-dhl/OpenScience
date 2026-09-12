@@ -1,6 +1,6 @@
 # Hermes Capability Registry
 
-- CURRENT 2026-09-12：第1项文档/公式正在实施。CodeFormulaV2缺失权重已补齐到服务器；解析器TeX保留、低质量回退标记、research-understanding v5与Web KaTeX已实现，待本次服务器交付。应用当前363257aa；精确部署及观察以CURRENT handoff为准。写作/精美笔记和图片/视频风格仍为后续明确待办，未冒称全部完成。
+- CURRENT 2026-09-12：第1项文档/公式已部署76ead135，rollback5c655bea。真实PDF经Docling Serve 1.30.0完成26页、32个公式，warnings为空，未退回普通解析；结果保留于/parser-jobs/formula-reading-20260912.json。逐式科学正确性和新公式在实际产品页的显示尚未逐项确认。写作/精美笔记和图片/视频风格仍为后续明确待办。
 
 - 最新2026-09-11：服务器第二Chat账号已确认登录为Pro，远程桌面已可操作；Chat6Pro实际收到三张产品截图并回复规划，会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。当前无需用户继续密码认证。
 - 历史媒体画廊/Hermes同工作台/公开阅读及发布合同修复已部署b05aaeac，实际部署和未决科学问题见CURRENT handoff。未新增服务、模型或插件，未实施自动账号轮换。
@@ -20,7 +20,7 @@
 
 | 顺序 | 能力及候选 | 当前事实与处理方式 | 用户可见的完成结果 |
 |---|---|---|---|
-| 1 | 科学文档与公式：现有Docling + 项目数学格式规范 + KaTeX | Docling已生产，公式增强false；先补公式模型的实际可用路径和公式/来源保留，必要时对难读区域使用既有授权视觉识别。输入解码、公式转LaTeX、格式归一和安全渲染分别处理；不得根据乱码猜公式 | 同一篇材料的上下标、分式、希腊字母与正文正确显示，可展开回看原位置 |
+| 1 | 科学文档与公式：现有Docling + 项目数学格式规范 + KaTeX | 76ead135已部署，CodeFormulaV2与公式增强true、TeX/来源保留、理解指令v5和安全渲染已接入；真实26页输出32个公式。取得输出不等于逐式正确性已确认；不得根据乱码猜公式 | 已取得真实公式输出；逐式原图比对与新公式产品显示仍需针对实际结果观察 |
 | 2 | 全文分析：升级既有paper-analysis/research-understanding，按需适配scientific-critical-thinking | 已有map/reduce及综合指令，不重复建立第二分析平台；引入假设、边界、反例、单位和来源核对，物理研究不套GRADE/临床检查表 | 自动形成凝练且有依据的研究摘要，隐含方法能概括，真正科学疑问才提示 |
 | 3 | 科学写作与引用：scientific-writing + citation-management；复用宿主research-paper-writing可用部分 | K-Dense当前skills路径、MIT元数据已核对。工具改接现有ScanSci/检索/Gateway；原版逐条人工来源认证、模板或额外供应商不是本产品默认流程，不为安装而引入新订阅。稿件与六字段分别处理 | 用户说“整理成研究笔记/综述/论文初稿”，获得对应文体；已有研究的归纳不冒充用户原创结果；引用来自真实来源 |
 | 4 | 精美输出：项目research-note-formatting能力 + 既有设计规范；Pandoc按导出需要补齐 | beautiful-notes在旧表只有PATTERN_ONLY且无来源URL，公开检索未定位唯一对应skill，不安装同名笔记应用冒充。可维护项目专用排版指令，使用同一内容生成HTML与后续DOCX/LaTeX/PDF导出，PDF编译依赖另按需要接入 | 层级、目录、公式、表格、图注与参考文献一致的可读笔记/报告；公开RO继续精炼，不变成长篇稿件 |

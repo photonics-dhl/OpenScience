@@ -1,9 +1,9 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-11:** application363257aa / rollbackc0fdc389；browser providerd1630135 / rollback92cc416e。研究桌面/编辑资料/公開阅读/真实缩略图/跨页会话已部署并实际观察；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-12:** application76ead135 / rollback5c655bea；browser providerd1630135 / rollback92cc416e。公式能力已部署、真实26页/32公式输出取得；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 当前执行：用户批准Hermes能力清单逐项落实，先交付文档/公式；图片/视频艺术风格与叙事已登记后续。统一创建/持续对话等方案保留，不恢复旧冗余表单。
-> 最新应用部署仍363257aa；本轮候选含公式模型接入、解析质量标记、理解skill v5和Web KaTeX。部署状态以CURRENT handoff为准。
+> 最新应用部署76ead135，包含公式模型接入、解析质量标记、理解skill v5和Web KaTeX；逐式正确性与新公式实页显示尚未确认。docs-only HEAD不等于新的应用release。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -11,8 +11,8 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `apps/web/components/content/ScientificText.tsx` / `ScientificText.module.css` | 有界、安全的TeX显示，编辑器/公开RO/发布/Hermes统一复用 | 本轮实现，待服务器部署；原始内容与现有保存合同不变 |
-| `apps/agent-worker/src/ingestion-parser.ts` / `apps/agent-worker/src/skills/research-understanding.ts` | Docling公式来源保留、降级标记、Hermes数学表达与科学上下文指令 | 第1项能力交付中；运行模型与后续图片/视频能力见服务器清单及Hermes台账 |
+| `apps/web/components/content/ScientificText.tsx` / `ScientificText.module.css` | 有界、安全的TeX显示，编辑器/公开RO/发布/Hermes及来源引用统一复用 | 已部署76ead135；原始内容与现有保存合同不变，新公式实际显示尚待观察 |
+| `apps/agent-worker/src/ingestion-parser.ts` / `apps/agent-worker/src/skills/research-understanding.ts` | Docling公式来源保留、降级标记、Hermes数学表达与科学上下文指令 | 已部署76ead135，真实26页/32公式输出；逐式质量与后续能力见服务器清单及Hermes台账 |
 | `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 参考目录；相关结构/风格已获用户批准，未安装新能力 |
 | `docs/proposals/2026-09-11-ro-workbench-wireframe.html` | 成稿/Hermes/图视频/公开预览可点击灰度线框，两个主要确认节点 | 已在服务器浏览器打开供用户讨论；无生产接口/真实媒体/发布，非生产UI部署 |
 | `apps/web/components/auth/SessionProvider.tsx` / `apps/web/components/landing/SiteHeader.tsx` / `apps/api/src/routes/session-guard.ts` | 跨导航账户状态、有效会话Cookie续期、跨标签会话同步 | 363257aa已部署；状态与部署见唯一CURRENT handoff |
@@ -445,7 +445,7 @@
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
 | `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE/ScanSci 隔离、Windows Git Bash）；§5.49–5.66 为历史/发布 evidence，现行 Docker cache 维护见 §5.67 | **CURRENT运维手册**；2026-09-06缓存清理753.4MB、cache1.005GB、应用f144eb7/rollback b23102b；历史版本证据不作当前部署锚点 |
 | `infra/scripts/evaluate-scansci-upstream-mcp.{sh,test.mjs}` | 上游 `v1.13.1` 官方 MCP 有界 ECS 正向试点：wheel hash、17 tools、真实 OA PDF、exact trap cleanup | **TASK 1 ECS ACCEPTED**；24,671,920 bytes / `d57dc94c…f484a`，临时容器/卷 `0/0` |
-| `docs/runbooks/hermes-capability-registry.md` | Hermes实际技能/工具加载、科学文档/公式、写作引用、精美笔记和媒体能力顺序 | **CURRENT 2026-09-12盘点**；Docling Serve已生产、公式增强关闭，内置TS技能已加载，宿主写作SKILL未接入；新增能力清单不等于已安装，历史评测不是新测试门禁 |
+| `docs/runbooks/hermes-capability-registry.md` | Hermes实际技能/工具加载、科学文档/公式、写作引用、精美笔记和媒体能力顺序 | **CURRENT 2026-09-12**；公式增强开启并取得真实输出，内置TS技能v5已加载；科学写作/精美输出/媒体风格仍待后续，历史评测不是新测试门禁 |
 | `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；验证后临时库按用户授权精确清理 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
@@ -585,7 +585,7 @@
 
 - DEPLOYED infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：服务器交互浏览器与生产 `chatgpt-web` provider；真实Hermes图片已回传，真实PDF完成6 Pro初审与补证；区域附件子域、图片/科学审阅独立锁、30分钟窗口、15秒science heartbeat、协议版本化幂等和逐字段保留部署于`36e6a8c4`；infra/scripts/ssh-run.sh固定browser-tunnel。
 
-- CURRENT docs/runbooks/server-capabilities.md：2026-09-12只读盘点服务/包/指定配置/skill路径，release363257aa；Docling与公式、写作加载和数学显示缺口已记录；服务器任务先查，安装只补缺失能力。
+- CURRENT docs/runbooks/server-capabilities.md：2026-09-12应用76ead135；CodeFormulaV2与只读缓存、公式增强true、实际26页/32公式输出已登记；服务器任务先查，安装只补缺失能力。
 
 - `infra/scripts/browser-tunnel.ps1`：Windows隐藏SSH隧道断线重连；固定localhost6081，复用ssh-run.sh，2026-09-09本机页面恢复HTTP200。
 

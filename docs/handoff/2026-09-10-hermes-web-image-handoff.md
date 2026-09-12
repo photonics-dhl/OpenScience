@@ -1,18 +1,18 @@
 # Hermes / Workbench CURRENT Handoff
 
 ## 目标与执行约束
-- 用户2026-09-12批准逐项实施，当前第1项文档/公式：缺失CodeFormulaV2已下载服务器，解析TeX与质量回退标记、理解skill v5、Web KaTeX已改，待本轮部署。清单见server-capabilities/hermes-capability-registry；统一创建/持续对话等后续方案尚未实施。
+- 用户2026-09-12批准逐项实施，当前第1项文档/公式已部署76ead135：CodeFormulaV2、解析TeX与质量回退标记、理解skill v5、Web KaTeX。真实PDF已返回26页/32公式；统一创建/持续对话等后续方案尚未实施。
 - 主屏顺序：贡献 → 核心概念图/可选视频 → 凝练六字段 → 文末资料。Hermes对话为主要操作入口；不恢复冗余制作表单。
 - 本机只编辑/静态阅读/传输；禁止测试、预检、CI、本机构建。只做服务器部署必要build/start及授权真实产品操作；视频和批量冷启动暂停。
 - 工作树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。根目录无关脏文件不碰。
 - Read first：docs/OpenScience_Kimi_Development_Spec.md、docs/specs/2026-09-05-integrated-research-product-design.md、docs/runbooks/server-capabilities.md。
 
 ## 精确版本
-- 应用源码提交 / ECS release：363257aa2a98a47e847f676aa32fd675f53f1ad6；rollbackc0fdc389d06d0dfd49213945d0641644854e7090。后续docs-only HEAD以git为准，不等于新的应用release；未合并main。
+- 应用源码提交 / ECS release：76ead13551a4272228ac8049ed9658d63b9add3c；rollback5c655beac5d8639f02e8ccdb31bc0ee08b254e12。后续docs-only HEAD以git为准，不等于新的应用release；未合并main。
 - 服务器必要build/start完成，deploy --no-tests --skip-migrate --reuse-unchanged-capability-images exit0；未运行测试/CI/本机构建。
-- 日志 C:/Users/Mac/AppData/Local/Temp/xgs-ui-final-deploy-20260911.log；首批4909日志xgs-ui-deploy-20260911.log。
-- provider d1630135d569d28364d295380bb4e0333c3ee264 / rollback92cc416ee3fe921f62c75cbe6f69e48d0b55227d；本轮未改供应商、安装软件、轮换账号或重跑模型。
-- 2026-09-12实际只读盘点：.release-id仍363257aa，Docling Serve CPU1.30.0已运行；公式增强false、parser并发2。Worker加载内置TS技能，宿主research-paper-writing文件不等于产品可用；应用无统一数学渲染。旧Docling candidate未上线结论已纠正；候选技能/工具尚未安装，顺序见能力台账。
+- 日志 C:/Users/Mac/AppData/Local/Temp/xgs-formula-deploy-focus-20260912.log；5c日志xgs-formula-deploy-final-20260912.log。早期两次构建发现类型错误后修复，未切换线上。
+- provider d1630135d569d28364d295380bb4e0333c3ee264 / rollback92cc416ee3fe921f62c75cbe6f69e48d0b55227d；供应商/账号不变，仅补公式模型、KaTeX依赖与既有理解指令。
+- 2026-09-12实际交付：Docling1.30.0+CodeFormulaV2只读缓存，公式增强true、parser并发2；公式TeX/位置保留、空/乱码/降级明确标记；理解skill v5实际导入。统一KaTeX覆盖编辑、公开、发布、Hermes及来源引用。其余候选不冒称已安装。
 
 ## 已实现的产品改造
 - 研究桌面：继续研究直达编辑器；每项真实任务归“需要我处理/后台进行”，相同ID去重，保留真实并发和历史恢复入口；有后台任务时仅可见页定时静默更新，focus可恢复失败读取；区分初次loading/局部unavailable/真实empty。专用读取失败使用成功global结果，失败不清屏。
@@ -27,6 +27,7 @@
 - Sol Medium负责桌面，Sol High负责会话连续性，独立Sol High复核鉴权/公开数据/归档；已修续期漏接、晚401/切换账号竞态与缺失字段确认入口。未运行测试。
 
 ## 实际观察与范围
+- 2026-09-12重新读取生产.release-id仍76ead135；真实PDF结果/parser-jobs/formula-reading-20260912.json：docling-serve-cpu1.30.0、26页、32公式、warnings=[]。来源artifact7bb96cc1，未修改RO/SDF/发布数据；尚未逐式原图核对，不能据无warning宣称全正确。现有公开v10图文已观察正常，但其正文无TeX，不能作为新公式显示的证明。
 - 4909与c0fd部署exit0。真实桌面→编辑器→探索→公开页保持同一账号；/me200，实际Set-Cookie Max-Age604800。公开22-v10图片naturalWidth1280。c0fd截图发现旧global重复头像与短暂假空任务，363定向修复。
 - 363最终实页：桌面floating stage=0、卡片头像=1，真实2项需处理任务和6条历史可見；对话Drawer可打开/关闭，未发送新模型请求；探索单篇横卡图文同屏且账户保持。已查看最终桌面/探索及未变化的c0fd公开/编辑器截图。
 - 部署前未复现真实401：/auth/me为200、Cookie存在。已修硬编码“登录”、Cookie与Redis续期不一致；短期实际导航观察不能证明七天后或所有网络条件下永不掉线。

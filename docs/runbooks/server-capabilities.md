@@ -1,6 +1,6 @@
 # 服务器能力与复用清单
 
-- CURRENT 2026-09-12：第1项文档与公式能力正在交付，应用release仍363257aa（下一次部署回滚目标），旧rollbackc0fdc389。仅补齐Docling已有镜像缺失的CodeFormulaV2权重；KaTeX与解析/理解指令已实现，部署状态见唯一CURRENT handoff。后续写作与图片/视频风格能力按[能力台账](hermes-capability-registry.md)顺序推进。
+- CURRENT 2026-09-12：第1项文档与公式能力已部署，应用release76ead135、rollback5c655bea；关闭公式增强的旧release363257aa保留。仅补齐Docling已有镜像缺失的CodeFormulaV2权重，KaTeX与解析/理解指令已交付。实际结果见CURRENT handoff；后续写作与图片/视频风格按[能力台账](hermes-capability-registry.md)顺序推进。
 
 - 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。
 - Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。历史许可证400修复已经部署；当前正式工作台/公开阅读版本见本页CURRENT，不恢复旧候选结论。
@@ -14,6 +14,7 @@
 - 部署compose只读挂入既有模型缓存的同名子目录，不遮住镜像中的布局/表格/OCR模型。`HF_HUB_OFFLINE=1`，解析服务仍仅内网、无Secret；原2worker/3threads、6CPU/8GiB不变。document-parser启用`DOCLING_FORMULA_ENRICHMENT=true`。回滚应用363257aa的compose可恢复关闭状态，保留缓存无需删除。
 - Docling识别公式写入TextItem.text；应用保留页码/bbox并补明确TeX分隔符。空识别/乱码保留原文并标low_confidence；高级解析失败的普通文本回退标partial_result/low_confidence。不会根据识别状态声称物理正确。
 - Web复用锁文件已有KaTeX0.16.47，新增应用直接依赖及统一ScientificText；仅渲染明确公式、不信任HTML/链接命令，失败保留原文。研究理解skill v5经现有Worker真实导入，强调公式/单位/条件与来源核对、六字段保持凝练。
+- 实际论文读取已完成：/parser-jobs/formula-reading-20260912.json，docling-serve-cpu1.30.0、26页、32公式、warnings=[]，没有普通解析回退。保留原公开内容；逐式正确性和新公式产品显示仍待对应原文观察，不由模型成功返回推断。
 
 以下为开启前定向盘点，保留其判定依据：
 
@@ -46,7 +47,7 @@
 
 | 能力 | 已有位置 / 入口 | 状态与复用方式 |
 |---|---|---|
-| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | application `363257aa…` / rollback `c0fdc389…`；真实带图公开成果与剩余范围见CURRENT handoff |
+| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | application `76ead135…` / rollback `5c655bea…`；真实带图公开成果与剩余范围见CURRENT handoff |
 | 主机资源 | ECS 16 CPU、30 GiB RAM、无 NVIDIA GPU | 盘点时约22 GiB可用；CPU解析器必须有界并发。Marker/MinerU等GPU高质量模式不能按GPU吞吐数据推断本机效果 |
 | 完整图形 Chrome | 宿主 `/opt/openscience-tool-cache/playwright/chromium-1234/chrome-linux64/chrome`；ScanSci镜像内 `/opt/scansci-browsers/chromium-1234/chrome-linux64/chrome` | 已静态确认完整二进制。可复用现有镜像与配套资源；不是只存在 headless shell |
 | 无头 Chromium | 宿主 `/root/.cache/ms-playwright/chromium_headless_shell-1234/` 与共享缓存同名目录；ScanSci镜像 `/opt/scansci-browsers/chromium_headless_shell-1234/` | 现成截图/渲染资源；不能用“仅此目录存在”的旧记录推断没有完整浏览器 |
@@ -55,7 +56,7 @@
 | Node / Python | 宿主 `/usr/bin/node`、`/usr/bin/python3`；现有 `node:22-bookworm`、`python:3.12-slim` 镜像 | 已有；必要时复用镜像中的Node。不要默认全局安装 |
 | 视频 / 字体 / FFmpeg | `openscience-media-demo:b361f4f7781b760583b3a312829877c4d6310e8a` 等已有media镜像；源码 `apps/media-demo/Dockerfile` | 镜像包含FFmpeg、CJK字体与无头浏览器；demo镜像可复用运行依赖，不代表Hermes完整视频产品链路通过 |
 | 语音模型 | `/opt/openscience-models/qwen3-tts-customvoice-0c0e305`；`openscience/tts-audition:qwen0.1.1` | 目录与镜像存在，本轮未调用；不要重复下载模型，也不推断生产已接入 |
-| PDF解析 / OCR | `openscience-prod-document-parser-1`、`openscience-prod-paper-analysis-1`；Docling Serve CPU v1.30.0及Node/Tesseract轻量链 | 2026-09-12两服务运行healthy，Docling路径已接通，公式增强false；具体选用阶段按任务来源判断。未重跑OCR，不由运行状态推断任意论文识别正确 |
+| PDF解析 / OCR | `openscience-prod-document-parser-1`、`openscience-prod-paper-analysis-1`；Docling Serve CPU v1.30.0及Node/Tesseract轻量链 | 76ead135公式增强true，真实26页/32公式输出已取得；具体选用阶段按任务来源判断，不由运行状态推断任意论文识别正确 |
 | BGE-M3 | `openscience-prod-embedding-worker-1`；模型卷 `bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89` | 容器运行；既有模型卷复用。BGE生成向量，实际存储由现有检索/数据库链路负责 |
 | ScanSci | `openscience-prod-scansci-mcp-1`；项目 `apps/scansci-mcp` | 容器运行；复用MCP取文献，不另装一份；认证状态不读取或打印 |
 | Hermes / MiniMax | 生产agent-worker及AI Gateway；另有 `/opt/hermes-agent` 源码目录 | 源码目录存在不等于独立服务已启用；经现有Worker/Gateway调用，限额以实际供应商响应为准 |

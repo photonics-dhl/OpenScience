@@ -1,9 +1,10 @@
 # OpenScience 当前进度
 
-## 2026-09-12 — 第1项文档与公式能力实施中
+## 2026-09-12 — 第1项文档与公式已部署、取得真实输出
 - 用户批准按清单逐项落实，并明确保留后续图片/视频艺术风格、构图、叙事、镜头/旁白能力。本轮只交付文档/公式，不开启媒体或批量冷启动。
 - 服务器复用Docling Serve镜像，仅补缺失CodeFormulaV2 0.3B模型，revision ecedbe111，权重630993616字节。只读独立缓存挂载、公式增强开关；解析保留TeX/页码/bbox，公式空识别与高级回退明确标记质量下降。
-- Web增加KaTeX统一科学文本，研究理解skill v5通过Worker显式导入；主线程实现解析/部署、Sol Medium做Web、Sol High定向风险复核。当前release363257aa，本次候选尚未部署，无测试/本机构建。
+- Web增加KaTeX统一科学文本，研究理解skill v5通过Worker显式导入；主线程实现解析/部署、Sol Medium做Web、Sol High定向风险复核。当前release76ead135、rollback5c655bea，服务器必要build/start完成，无测试/CI/本机构建。
+- 真实论文经docling-serve-cpu1.30.0完成26页、32公式，warnings=[]，原结果/parser-jobs/formula-reading-20260912.json。未修改RO/SDF/发布内容；逐式原图核对与新公式产品显示尚未确认。旧公开图文已观察正常，不能替代公式质量结论。
 
 ## 2026-09-12 — 服务器能力盘点与接入顺序
 - 用户认可一站式方案，先要求准备论文理解、科学写作/撰稿、精美输出与文档/公式能力。通过项目SSH入口只读查看生产release、容器、指定包/非敏感配置与已有skill，release仍363257aa；未安装、部署、测试或重跑论文。
