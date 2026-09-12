@@ -270,7 +270,7 @@ export default function NewResearchObjectPage() {
 
         <form className="surface-folio-sheet mx-auto mt-10 max-w-4xl px-5 py-6 sm:px-8 sm:py-8" onSubmit={submit}>
           <section className="grid gap-5 border-b border-os-rule-paper pb-7 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
-            <div className="flex justify-center sm:justify-start">
+            <div className="relative mx-auto h-52 w-52 shrink-0 [&_.hermes-dock-anchor]:h-52 [&_.hermes-dock-anchor]:!min-h-52 [&_.hermes-workspace-stage]:!mt-0 sm:mx-0">
               <HermesDockAnchor assistantOpen state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} onInvoke={() => goalInput.current?.focus()} />
             </div>
             <label data-reading-role="control" className="grid gap-3 text-sm font-medium text-os-ink">
@@ -280,7 +280,7 @@ export default function NewResearchObjectPage() {
           </section>
 
           <div className="pt-7">
-            <EvidenceIntake literature={{ instanceId: 'research-start-literature', onAuthenticationRequired: () => router.replace('/auth/login?returnTo=%2Fresearch-objects%2Fnew'), target: researchObjectId ? { kind: 'research_object', researchObjectId } : { kind: 'personal' }, withinForm: true }} materials={materials} onChange={changeMaterials} />
+            <EvidenceIntake literature={{ instanceId: 'research-start-literature', onAuthenticationRequired: () => router.replace('/auth/login?returnTo=%2Fresearch-objects%2Fnew'), target: researchObjectId ? { kind: 'research_object', researchObjectId } : { kind: 'personal' }, withinForm: true }} materials={materials} onChange={changeMaterials} variant="research-start" />
           </div>
 
           <details className="mt-7 border-t border-os-rule-paper pt-5">

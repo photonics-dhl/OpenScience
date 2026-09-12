@@ -1263,6 +1263,11 @@
     "intake": {
       "title": "Arrange the evidence set",
       "stepLabel": "02 / Evidence intake",
+      "researchStartTitle": "Research materials (optional)",
+      "researchStartDescription": "Add papers or research materials and Hermes will organise them for you.",
+      "researchStartDropTitle": "Drop papers or research materials here",
+      "commonFormats": "Common formats: PDF · DOCX · PPTX · HTML · Markdown · images · XLSX",
+      "allFormats": "View all supported formats",
       "localOnly": "Files remain on this device until you explicitly create the Research Object.",
       "dropTitle": "Drop source material into the working set",
       "formats": "PDF · DOCX/PPTX · HTML · TeX/ZIP · Markdown · images · CSV/TSV/XLSX · JSON/YAML · Notebook · Python/R (DOC/generic ZIP are not auto-parsed)",

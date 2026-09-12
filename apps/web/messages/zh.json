@@ -1263,6 +1263,11 @@
     "intake": {
       "title": "编排证据集合",
       "stepLabel": "02 / 证据接收",
+      "researchStartTitle": "研究资料（可选）",
+      "researchStartDescription": "添加论文或资料，Hermes 会为你整理。",
+      "researchStartDropTitle": "拖入论文或研究资料",
+      "commonFormats": "常见格式：PDF · DOCX · PPTX · HTML · Markdown · 图片 · XLSX",
+      "allFormats": "查看完整支持格式",
       "localOnly": "在您明确创建 Research Object 前，文件只保留在当前设备。",
       "dropTitle": "将原始材料放入工作集合",
       "formats": "PDF · DOCX/PPTX · HTML · TeX/ZIP · Markdown · 图片 · CSV/TSV/XLSX · JSON/YAML · Notebook · Python/R（DOC/通用ZIP暂不自动解析）",
