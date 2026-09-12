@@ -234,7 +234,7 @@ function HermesAssistantDrawerContent({
     if (task.id === initialTaskId && initialTaskAutoApply) onInitialTaskConsumed?.();
   }, [initialTaskAutoApply, initialTaskId, onDraftEdit, onInitialTaskConsumed, result, restoredTask, task]);
   useEffect(() => {
-    if (!initialTaskAutoApply || task?.id !== initialTaskId || !['succeeded', 'failed'].includes(task.status)
+    if (!task || !initialTaskAutoApply || task.id !== initialTaskId || !['succeeded', 'failed'].includes(task.status)
       || result?.draftEdit) return;
     onInitialTaskConsumed?.();
   }, [initialTaskAutoApply, initialTaskId, onInitialTaskConsumed, result?.draftEdit, task]);
