@@ -1,7 +1,7 @@
 # Hermes / Workbench CURRENT Handoff
 
 ## 目标与执行约束
-- 本轮继续候选：真实公式28/32可渲染，4条格式损坏；修复坏识别回退/区域confidence，新增逐观察阅读/来源限定保留与科学自省运行时skill。Chat6Pro方案已取回；候选待部署，生产仍76ead135。
+- 本轮已部署b254400e、rollback76ead135：坏公式回退/区域confidence、逐观察阅读/来源限定保留、科学自省runtime skill。真实MiniMax阅读发现无额外限定时省略qualifierPassageIds导致guard拒绝，当前小修接受缺省并归一为空数组，待部署。原返回保存在/parser-jobs/hermes-reading-stage2-candidates-20260912.json，可按相同输入经新guard复用，勿重新调用所有map。
 - 用户2026-09-12批准逐项实施，当前第1项文档/公式已部署76ead135：CodeFormulaV2、解析TeX与质量回退标记、理解skill v5、Web KaTeX。真实PDF已返回26页/32公式；统一创建/持续对话等后续方案尚未实施。
 - 主屏顺序：贡献 → 核心概念图/可选视频 → 凝练六字段 → 文末资料。Hermes对话为主要操作入口；不恢复冗余制作表单。
 - 本机只编辑/静态阅读/传输；禁止测试、预检、CI、本机构建。只做服务器部署必要build/start及授权真实产品操作；视频和批量冷启动暂停。
@@ -9,7 +9,7 @@
 - Read first：docs/OpenScience_Kimi_Development_Spec.md、docs/specs/2026-09-05-integrated-research-product-design.md、docs/runbooks/server-capabilities.md。
 
 ## 精确版本
-- 应用源码提交 / ECS release：76ead13551a4272228ac8049ed9658d63b9add3c；rollback5c655beac5d8639f02e8ccdb31bc0ee08b254e12。后续docs-only HEAD以git为准，不等于新的应用release；未合并main。
+- 应用源码提交 / ECS release：b254400eb184d0ada0337de5e8bb319b1486f601；rollback76ead13551a4272228ac8049ed9658d63b9add3c。后续docs-only HEAD以git为准，不等于新的应用release；未合并main。
 - 服务器必要build/start完成，deploy --no-tests --skip-migrate --reuse-unchanged-capability-images exit0；未运行测试/CI/本机构建。
 - 日志 C:/Users/Mac/AppData/Local/Temp/xgs-formula-deploy-focus-20260912.log；5c日志xgs-formula-deploy-final-20260912.log。早期两次构建发现类型错误后修复，未切换线上。
 - provider d1630135d569d28364d295380bb4e0333c3ee264 / rollback92cc416ee3fe921f62c75cbe6f69e48d0b55227d；供应商/账号不变，仅补公式模型、KaTeX依赖与既有理解指令。

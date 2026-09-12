@@ -174,7 +174,7 @@ interface ReadingObservation {
   basis: 'reported' | 'synthesis' | 'uncertain';
   caseLabel: string;
   sourcePassageIds: string[];
-  qualifierPassageIds: string[];
+  qualifierPassageIds?: string[];
 }
 
 interface ReadingMapResult {
@@ -183,6 +183,7 @@ interface ReadingMapResult {
 
 interface IdentifiedReadingObservation extends ReadingObservation {
   id: string;
+  qualifierPassageIds: string[];
 }
 
 interface PaperReadingReduction {
@@ -213,7 +214,7 @@ function readingMapGuard(allowedIds: ReadonlySet<string>): SchemaGuard<ReadingMa
           && typeof observation.summary === 'string' && observation.summary.trim().length > 0 && observation.summary.length <= 1_200
           && typeof observation.caseLabel === 'string' && observation.caseLabel.length <= 160
           && idsValid(observation.sourcePassageIds) && (observation.sourcePassageIds as unknown[]).length > 0
-          && idsValid(observation.qualifierPassageIds);
+          && (observation.qualifierPassageIds === undefined || idsValid(observation.qualifierPassageIds));
       });
   };
 }
@@ -270,14 +271,14 @@ async function buildPaperReadingSynthesis(gateway: AiGateway, passages: readonly
     await Promise.all(Array.from({ length: Math.min(2, windows.length) }, () => worker()));
     // Identities and source expansion belong to the program, never the model.
     const observations = maps.flatMap((map, windowIndex) => map.observations.map((observation, index) => ({
-      ...observation, id: `W${windowIndex + 1}O${index + 1}`,
+      ...observation, qualifierPassageIds: observation.qualifierPassageIds ?? [], id: `W${windowIndex + 1}O${index + 1}`,
     })));
     const byId = new Map(observations.map((observation) => [observation.id, observation]));
     const reduced = await gateway.completeStructured(paperSynthesisGuard(new Set(byId.keys())), [
       { role: 'system', content: `${PAPER_ANALYSIS_SKILL.globalReduceInstructions}\n${SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions}\n输出严格JSON：overview字符串；fields包含problem/insight/method/results/limitations/reproducibility，每项只有summary和observationIds字符串数组。空摘要允许空数组；非空摘要必须引用实际观察。` },
       { role: 'user', content: JSON.stringify(observations) },
     ], { temperature: 0.1, maxRetries: 1, validationFeedback: () => `六字段每项必须含summary和observationIds；非空摘要必须有依据。不要使用P编号或编造观察，只能引用：${[...byId.keys()].join(',')}。` });
-    const expand = (items: readonly ReadingObservation[]) => [...new Set(items.flatMap((item) => [...item.sourcePassageIds, ...item.qualifierPassageIds]))];
+    const expand = (items: readonly ReadingObservation[]) => [...new Set(items.flatMap((item) => [...item.sourcePassageIds, ...(item.qualifierPassageIds ?? [])]))];
     const fields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
       const candidate = reduced.fields[field];
       return [field, { ...candidate, sourcePassageIds: expand(candidate.observationIds.map((id) => byId.get(id)!)) }];

@@ -1,5 +1,9 @@
 # OpenScience 当前进度
 
+## 2026-09-12 — 第2项已部署，真实阅读格式纠错收尾
+- b254400e部署exit0，rollback76ead135，parser/worker已启动；日志xgs-stage2-deploy-20260912.log。未运行测试/CI/本机构建。
+- 真实MiniMax-M3阅读返回内容但部分观察省略空qualifierPassageIds，旧guard拒绝并产生无效重试。修复仅接受缺省，内部归一[]；已有ID和非法值继续严格校验，High定向复核无阻断。真实候选已保留，可经新guard复用，只需继续reduce。完整理解尚未取得，不声称科学质量通过。
+
 ## 2026-09-12 — 公式缺陷修复与第2项理解能力候选
 - 已查看原PDF第2/3页，两个代表公式与原图一致；产品ScientificText生成实际阅读HTML，32式中28式可排版，4式重复/混入正文/括号损坏，不能将此前warnings=[]视为全正确。未修改公开RO。
 - 候选修复：隔离parser接入既有KaTeX依赖，坏公式保留orig与页/bbox、confidence0/low_confidence；不猜补公式，不重跑整篇PDF。受限识别结果仍需来源上下文判断。
