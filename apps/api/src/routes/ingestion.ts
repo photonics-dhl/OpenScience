@@ -115,8 +115,8 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { taskId } = z.object({ taskId: z.string().uuid() }).parse(req.params);
-    const body = z.object({ version: z.number().int().nonnegative(), core: z.record(z.string(), z.string()) }).parse(req.body);
-    return reply.send(await confirmIngestionTask(deps, { userId: user.userId, taskId, version: body.version, core: body.core }, auditCtx(req)));
+    const body = z.object({ version: z.number().int().nonnegative(), sourceAgentTaskId: z.string().uuid(), core: z.record(z.string(), z.string()) }).strict().parse(req.body);
+    return reply.send(await confirmIngestionTask(deps, { userId: user.userId, taskId, ...body }, auditCtx(req)));
   });
 
   const bridgeParams = z.object({ id: z.string().uuid(), versionId: z.string().uuid() }).strict();

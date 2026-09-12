@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
-> **CURRENT 2026-09-12:** application ec14fd91 / rollback236dfdb8；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。真实笔记已核读编辑保存，自动六字段仍阻塞，唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
-> 最新d5cad55d实际重解析13OCR+4map后结构失败；并未仅续final。旧4099/0a955成功stage仍保留，v3已部署未实产；正在补显式compose-only入口，见CURRENT。原22-v10图文公开保留。
+> **CURRENT 2026-09-12:** application c1e694e4 / rollbackec14fd91；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。真实笔记已核读编辑保存，自动六字段仍阻塞，唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> c1显式compose-only已实证b6复用4099来源+stage；科学仍有两处错误，v4/证据预算/审核UI修复候选待部署核读。原22-v10图文公开保留，任务未完成。
 > 真实私有笔记40e23948经独立原文复核和UI局部校正后保存/重载/下载完成，保持user_edited。用户已明确继续处理当前研究私稿与语义续跑，旧“等待批准”已失效。
 > 公式/多格式资料、单一创建对话与附件、Hermes任务接续已部署；艺术图片/视频叙事与元数据传递本批已部署，无新媒体实产，不恢复旧冗余表单。
 > 无测试/预检/CI/本机运行；必要服务器build/start按授权继续。维护索引，历史版本不覆盖CURRENT；集成保留PRD v1.1已有能力。

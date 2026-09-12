@@ -1061,7 +1061,7 @@ export async function getResearchObjectIngestion(deps: IngestionDeps, input: { u
 /** A human confirmation creates one version, working SDF and source records atomically. */
 export async function confirmIngestionTask(
   deps: IngestionDeps,
-  input: { userId: string; taskId: string; version: number; core: Record<string, string> },
+  input: { userId: string; taskId: string; version: number; sourceAgentTaskId: string; core: Record<string, string> },
   ctx: AuditContext = {},
 ): Promise<{ task: IngestionTaskView; sdf: SdfDocumentView; confirmation: IngestionConfirmation }> {
   for (let attempt = 0; ; attempt += 1) {
@@ -1074,6 +1074,9 @@ export async function confirmIngestionTask(
         const { researchObject: ro } = await authorizeIngestionWrite(scoped, { userId: input.userId, researchObjectId: task.batch.researchObjectId });
         let commit = await savedConfirmation(scoped, task.id, ro.id);
         if (!commit) {
+          if (!input.sourceAgentTaskId || task.agentTaskId !== input.sourceAgentTaskId) {
+            throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Analysis changed; review the current proposal before confirming');
+          }
           if (task.state !== 'needs_review') throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only tasks awaiting review can be confirmed');
           const check = ro.status === 'draft' ? validateSdfDraftCore(input.core) : validateSdfCore(input.core);
           if (!check.ok) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
@@ -1099,10 +1102,10 @@ export async function confirmIngestionTask(
             researchObjectId: ro.id, previousVersionId: latest.id, versionId: commit.versionId, replacementClaimIds,
           });
           await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: commit.versionId });
-          const updated = await tx.ingestionTask.updateMany({ where: { id: task.id, state: 'needs_review' }, data: { state: 'confirmed', error: null } });
+          const updated = await tx.ingestionTask.updateMany({ where: { id: task.id, agentTaskId: input.sourceAgentTaskId, state: 'needs_review' }, data: { state: 'confirmed', error: null } });
           if (updated.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Task changed while confirming');
           await recordAudit(deps, tx, { actorId: input.userId, action: 'ingestion.confirm', workspaceId: ro.workspaceId,
-            targetType: 'ingestion_task', targetId: task.id, metadata: { versionId: commit.versionId, evidenceStatus: 'needs_review' } }, ctx);
+            targetType: 'ingestion_task', targetId: task.id, metadata: { versionId: commit.versionId, sourceAgentTaskId: input.sourceAgentTaskId, evidenceStatus: 'needs_review' } }, ctx);
         }
         const core = commit.snapshot.core as Record<string, string>;
         return { task: { ...taskToView(task), state: 'confirmed', error: null },

@@ -1740,6 +1740,9 @@ export async function getIngestionTask(taskId: string): Promise<IngestionTaskDet
   return apiRequest(`/api/ingestion/tasks/${taskId}`);
 }
 
-export async function confirmIngestionTask(taskId: string, input: { version: number; core: SdfCore }): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore }; confirmation: IngestionConfirmation }> {
+export async function confirmIngestionTask(
+  taskId: string,
+  input: { version: number; core: SdfCore; sourceAgentTaskId: string },
+): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore }; confirmation: IngestionConfirmation }> {
   return apiRequest(`/api/ingestion/${taskId}/confirm`, { method: 'POST', body: JSON.stringify(input) });
 }

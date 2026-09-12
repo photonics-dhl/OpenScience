@@ -130,7 +130,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
   const compensatedReanalysis = detail?.task.state === 'failed_retryable' && detail.task.retryCount === 2;
   const proposalUnavailable = detail ? isRetryableSdfExtraction(detail.task) : false;
   const legacyRefreshAvailable = detail ? isRefreshableIngestionAnalysis(detail.task) : false;
-  const approvalOpen = detail?.task.state === 'needs_review' && !proposalUnavailable;
+  const approvalOpen = detail?.task.state === 'needs_review' && Boolean(detail.task.agentTaskId) && !proposalUnavailable;
   const reviewSuggestion = useMemo(() => detail ? ({
     bodyKey: 'guide.review.body',
     href: `/research-objects/${encodeURIComponent(detail.researchObjectId)}/edit`,
@@ -140,10 +140,14 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
     titleKey: 'guide.review.title',
   }) : ({ bodyKey: 'guide.neutral.body', kind: 'neutral' as const, titleKey: 'guide.neutral.title' }), [detail, taskId]);
   async function confirm() {
-    if (!detail || !approvalOpen || saving || saved || detail.researchObjectId !== routeParams.id) return;
+    if (!detail?.task.agentTaskId || !approvalOpen || saving || saved || detail.researchObjectId !== routeParams.id) return;
     setSaving(true); setError('');
     try {
-      const result = await confirmIngestionTask(taskId, { version: detail.version, core });
+      const result = await confirmIngestionTask(taskId, {
+        version: detail.version,
+        core,
+        sourceAgentTaskId: detail.task.agentTaskId,
+      });
       if (!mounted.current) return;
       setSaved(true); setConfirmation(result.confirmation);
       if (!runId) router.push(`/research-objects/${encodeURIComponent(routeParams.id)}/versions?version=${encodeURIComponent(result.confirmation.versionId)}`);
