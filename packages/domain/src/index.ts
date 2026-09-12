@@ -250,7 +250,14 @@ export {
   type IngestionClaimEvidenceSuggestion,
   type IngestionClaimSelection,
 } from './ingestion/claim-evidence-bridge';
-export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';
+export {
+  parseWorkspaceGuidePayload,
+  type WorkspaceGuidePayload,
+  type WorkspaceWritingCitation,
+  type WorkspaceWritingDraft,
+  type WorkspaceWritingDraftInput,
+  type WorkspaceWritingKind,
+} from './agent/workspace-guide-contract';
 export {
   RESEARCH_IDENTITIES,
   CLAIM_KINDS,

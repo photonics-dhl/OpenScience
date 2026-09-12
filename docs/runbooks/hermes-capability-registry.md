@@ -1,25 +1,22 @@
 # Hermes Capability Registry
 
 ## 当前状态（2026-09-12）
-- 57f00dc9语义归约/直接P bridge+final已部署，但真实5b615d36的bridge两次schema拒绝，无final/正文，未采用/发布；窗口用量79119tokens/280533ms。已发现prompt未完整提供精确字段骨架及部分长度约束，补齐契约/安全定位反馈中，不能归因为M3科学能力不足或论文缺内容。新建页淡化状态已修、实际opacity1。
-- 生产应用57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e，rollbackd8de966f40ca2922956d7fe82858eb1f5cff6fab；服务器网页生图provider d1630135、rollback92cc416e，路线未改。唯一任务接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
-- 生产用现有MiniMax-M3，不要求新API。Anthropic兼容接口显式adaptive thinking；分段16k/180s、整合32k/300s，temperature1/top_p.95。主机skills不自动注入产品，Worker必须显式加载。
-- 真实任务62ae384d已完成，但旧最终自检仍产出长稿和过强表述，未采用/未发布。正常响应、来源编号存在、review_received均不等于科学正确。
-- Chat6Pro已按用户明确授权完成开发诊断，/jobs/hermes-m3-actual-diagnosis-20260912.txt：最终步骤改为来源约束的短成稿，避免审稿schema/长候选锚定；不增加预算或更换供应商。生产不依赖Chat科学定稿。
-- 已部署scientific-summary v1及统一创建/首条指令接续。真实final0e38446e使用M3 12083输入+7297输出，较旧最终步少51.83%，但多算例和科学限定仍不够，未采用。第二次Chat6Pro诊断已收到；当前v2候选让语义点连同条件/比较/操作对象进入final，旧候选与短文直接读P段bridge，正常长文map→semantic reduce→final，移除默认中间长稿调用。创建页布局/资料文案d8de966f已部署，208×208实测；淡化状态一行修复待同批发布。
-- 新增“私有草稿+摘录→MiniMax写作”曾被自动审批拒绝，精确问题仍待用户答复。写作合同/来源/引用/排版指令仅准备，未接通；不能写成已部署。Chat开发材料外发已另获明确批准。
-- 禁止测试/预检/CI/本机构建；保留必要服务器build/start及真实产品任务。变化后同步本台账、server-capabilities.md、索引。
+- ECS应用a1ff2db9ecc6f8f598c2a72d05aaee3c7dfd1889 / rollback57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e；网页生图provider d1630135 / rollback92cc416e。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 用户已明确授权按写作指令，将当前研究私稿/必要摘录发送MiniMax。普通问答不自动触发写作；生产不依赖Chat科学定稿。
+- 真实a1c0da49的语义bridge第一次成功42191tokens/124574ms，final主接口空正文、备用HTTP401，六字段未产出。旧空响应final用量未知，不是0；科学结果未采用。
+- 写作/笔记、空响应诊断已实现待部署。语义复用补丁因自动审批拒绝停止，已披露理由并请求明确批准；不能声称已有断点续跑。
+- 无新增服务/供应商/OCR/浏览器。禁止测试/预检/CI/本机构建；必要服务器build/start与真实产品操作按授权推进。
 
-| 顺序 | 能力 | 真实状态 / 后续 |
+| 顺序 | 能力 | 当前状态与剩余 |
 |---|---|---|
-| 1 | 科学文档与公式 | Docling Serve1.30.0 + CodeFormulaV2缓存 + TeX/页/bbox + 安全KaTeX已部署；26页32式中28式可排版、4式损坏标低置信保留原文。两个代表式已对原页，不声称全部物理正确。 |
-| 2 | 全文理解与凝练 | paper-analysis v7、research-understanding v6、critical-thinking v2及M3思考已接入。真实5窗口+reduce118秒、66观察/94段；最终成稿质量未过。scientific-summary v1已部署并只重跑final，19380 tokens；仍有语义过强和算例堆砌，质量未达标，原确认稿保留。 |
-| 3 | 科学写作与引用 | 未接通。独立私有note/review/manuscript，真实SourceMap和程序引用；不挤六字段、不把文献实验当用户原创。scientific-writing.ts/citation-management.ts/scientific-writing-source.ts待调用授权与整合。 |
-| 4 | 精美笔记/报告 | research-note-formatting运行时指令已准备、未加载；复用已安装前端设计与KaTeX，默认精炼、真实来源按需展开。Markdown/HTML及后续文档导出尚待接入。beautiful-notes没有唯一来源，不能冒名安装。 |
-| 5 | 多格式附件 | XLSX/PPTX/HTML已接入上传/MIME/现有解析链；HTML资源和PPTX外链仅清洗派生副本，原件保留，PPTX媒体流式复制；archiver7.0.1复用，parser独立锁保留5项依赖。真实多样文件兼容尚未观察。没有另装OCR/浏览器。 |
-| 6 | 艺术图片与视频 | 明确保留后续：不同画风、构图、视觉叙事、镜头/旁白、TTS/FFmpeg。先做好科学内容与写作，再按已讨论方案补齐；网页生图现有路线不变，视频和批量冷启动暂缓。 |
+| 1 | 科学文档与公式 | Docling1.30/CodeFormulaV2/TeX来源/KaTeX已生产；26页32式中28可排版、4损坏标记。两个代表式对原页，非全篇物理验收。 |
+| 2 | 全文理解与凝练 | paper-analysis v8/scientific-summary v2，长文map→semantic reduce→final，短文/旧候选P bridge→final；bridge正常，最新final空正文。保留原确认稿，待诊断续作。 |
+| 3 | 科学写作与引用 | 已实现待部署：明确写作才加载SourceMap，私有note/review/manuscript，同用户/RO校验，程序绑定引用；直接保存不调用模型，修订一次provider cycle。 |
+| 4 | 精美笔记 | 已实现待部署：运行时research-note-formatting，Hermes草稿卡、宽阅读/编辑弹层、折叠来源、安全Markdown/KaTeX、真实保存和Markdown下载。多格式文档导出按具体需求补齐。 |
+| 5 | 多格式附件 | XLSX/PPTX/HTML已生产，派生副本清洗、原件保留；真实多样样本兼容未观察。复用已有解析器，未另装MarkItDown全套。 |
+| 6 | 艺术图片与视频 | 后续保留：画风/构图、视觉叙事、镜头/旁白/TTS/FFmpeg。现有网页生图路线不变，视频与批量冷启动暂缓。 |
 
-用户流程：一句话或附件开始同一私有研究 → Hermes后台理解/自动整理 → 用户少量修改/确认 → 图或视频 → 审核发布。主屏标题/贡献→核心媒体→六字段→文末资料；长笔记是独立产物。
+用户流程：一句话或附件开始同一私有研究 → Hermes理解整理 → 用户少量修改/确认 → 图片或视频 → 审核发布。主屏标题/贡献→核心媒体→六字段→文末资料；长笔记独立阅读。
 
 ## 来源与选择
 - [K-Dense scientific-writing](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-writing)、[critical-thinking](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-critical-thinking)、[citation-management](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/citation-management)：此前已核来源/MIT元数据，项目适配方法，工具映射现有Gateway/ScanSci/SourceMap，不复制额外供应商或逐条人工门禁。

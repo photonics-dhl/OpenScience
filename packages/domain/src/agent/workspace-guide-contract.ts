@@ -1,3 +1,5 @@
+import type { SourceLocator } from '../research-intelligence/types';
+
 export interface WorkspaceGuidePayload extends Record<string, unknown> {
   goal: string;
   locale: 'zh' | 'en';
@@ -8,7 +10,36 @@ export interface WorkspaceGuidePayload extends Record<string, unknown> {
     researchObjects: Array<{ id: string; title: string; status: string }>;
     presentation?: { researchObjectId: string; versionId?: string };
     editorDraft?: WorkspaceEditorDraft;
+    writingDraft?: WorkspaceWritingDraftInput;
   };
+}
+
+export type WorkspaceWritingKind = 'note' | 'review' | 'manuscript';
+
+export interface WorkspaceWritingDraftInput {
+  /** The succeeded workspace.guide task that owns the displayed private draft. */
+  baseDraftTaskId: string;
+  title: string;
+  body: string;
+}
+
+export interface WorkspaceWritingCitation {
+  id: string;
+  marker: string;
+  quote: string;
+  sourceLocator: SourceLocator;
+}
+
+export interface WorkspaceWritingDraft {
+  title: string;
+  kind: WorkspaceWritingKind;
+  body: string;
+  /** Server-selected succeeded sdf.extract task that owns the SourceMap lineage. */
+  sourceTaskId: string;
+  /** Prior workspace.guide draft task, when this result revises or saves an earlier draft. */
+  baseDraftTaskId?: string;
+  citations: WorkspaceWritingCitation[];
+  sourceStatus: 'grounded' | 'grounded_with_unresolved_review' | 'user_edited';
 }
 
 export const WORKSPACE_DRAFT_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
@@ -25,6 +56,8 @@ type WorkspaceGuideTarget =
   | 'sdf-results' | 'sdf-limitations' | 'hermes-diff' | 'commit' | null;
 
 const shortString = (value: unknown, max: number): value is string => typeof value === 'string' && value.length > 0 && value.length <= max;
+const uuid = (value: unknown): value is string => typeof value === 'string'
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value);
 const hasOnlyKeys = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every((key) => keys.includes(key));
 
 /** Shared API/worker trust-boundary parser. Keep persistence and execution on one exact contract. */
@@ -45,7 +78,7 @@ export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayloa
   }
   if (!payload.context || typeof payload.context !== 'object' || Array.isArray(payload.context)) throw new Error('workspace.guide context 无效');
   const context = payload.context as Record<string, unknown>;
-  if (!hasOnlyKeys(context, ['tasks', 'researchObjects', 'presentation', 'editorDraft'])) throw new Error('workspace.guide context 包含未知字段');
+  if (!hasOnlyKeys(context, ['tasks', 'researchObjects', 'presentation', 'editorDraft', 'writingDraft'])) throw new Error('workspace.guide context 包含未知字段');
   if (!Array.isArray(context.tasks) || context.tasks.length > 20 || !Array.isArray(context.researchObjects) || context.researchObjects.length > 20) {
     throw new Error('workspace.guide context 超出边界');
   }
@@ -87,11 +120,28 @@ export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayloa
       || JSON.stringify(core).length > 18_000) throw new Error('Workspace editor draft exceeds bounds');
     editorDraft = { researchObjectId: draft.researchObjectId, scope: draft.scope, version: Number(draft.version), core: core as WorkspaceEditorDraft['core'] };
   }
+  let writingDraft: WorkspaceWritingDraftInput | undefined;
+  if (context.writingDraft !== undefined) {
+    const draft = context.writingDraft as Record<string, unknown>;
+    if (!draft || typeof draft !== 'object' || Array.isArray(draft)
+      || !hasOnlyKeys(draft, ['baseDraftTaskId', 'title', 'body'])
+      || !uuid(draft.baseDraftTaskId) || !shortString(draft.title, 240)
+      || typeof draft.body !== 'string' || draft.body.length > 60_000) {
+      throw new Error('Workspace writing draft exceeds bounds');
+    }
+    writingDraft = { baseDraftTaskId: draft.baseDraftTaskId, title: draft.title, body: draft.body };
+  }
   return {
     goal,
     locale: payload.locale,
     route: payload.route,
     target: payload.target as WorkspaceGuideTarget,
-    context: { tasks, researchObjects, ...(presentation ? { presentation } : {}), ...(editorDraft ? { editorDraft } : {}) },
+    context: {
+      tasks,
+      researchObjects,
+      ...(presentation ? { presentation } : {}),
+      ...(editorDraft ? { editorDraft } : {}),
+      ...(writingDraft ? { writingDraft } : {}),
+    },
   };
 }

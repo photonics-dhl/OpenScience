@@ -1,5 +1,20 @@
 import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
-import { buildInterestContext, parseWorkspaceGuidePayload, validateInterestContext, type AgentDeps, type WorkspaceGuidePayload } from '@openscience/domain';
+import type { StorageAdapter } from '@openscience/storage';
+import {
+  buildInterestContext,
+  parseWorkspaceGuidePayload,
+  validateInterestContext,
+  type AgentDeps,
+  type WorkspaceGuidePayload,
+  type WorkspaceWritingCitation,
+  type WorkspaceWritingDraft,
+  type WorkspaceWritingKind,
+} from '@openscience/domain';
+import { createWritingSourcePacket, materializeWritingCitations } from './citation-management';
+import { SCIENTIFIC_SYNTHESIS_OPTIONS } from './scientific-generation-options';
+import { resolveScientificWritingSource } from './scientific-writing-source';
+import { RESEARCH_NOTE_FORMATTING_SKILL } from './skills/research-note-formatting';
+import { SCIENTIFIC_WRITING_SKILL } from './skills/scientific-writing';
 
 type WorkspaceGuideIntent = 'open-task' | 'open-ro' | 'start-import' | 'prepare-publication' | 'review-media';
 
@@ -11,6 +26,7 @@ export interface WorkspaceGuideResult extends Record<string, unknown> {
     targetId?: string;
   }>;
   needsMoreInformation: boolean;
+  writingDraft?: WorkspaceWritingDraft;
   draftChanges?: Partial<Record<'problem' | 'insight' | 'method' | 'results' | 'limitations' | 'reproducibility', string>>;
   draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: NonNullable<WorkspaceGuideResult['draftChanges']> };
   presentationDraft?: {
@@ -24,6 +40,25 @@ export interface WorkspaceGuideResult extends Record<string, unknown> {
 
 const INTENTS = new Set<WorkspaceGuideIntent>(['open-task', 'open-ro', 'start-import', 'prepare-publication', 'review-media']);
 const CORE_FIELDS = ['problem', 'insight', 'method', 'evidence', 'results', 'limitations', 'reproducibility'] as const;
+const WRITING_UNRESOLVED_CODES = new Set([
+  'source_packet_incomplete',
+  'source_support_insufficient',
+  'source_formula_unreadable',
+  'user_research_missing',
+]);
+
+interface ScientificWritingResponse {
+  title: string;
+  kind: WorkspaceWritingKind;
+  body: string;
+  usedSourceIds: string[];
+  unresolvedSourceIssues: Array<{ code: string; sourceIds: string[] }>;
+}
+
+interface WritingIntent {
+  mode: 'generate' | 'save';
+  requestedKind?: WorkspaceWritingKind;
+}
 
 function boundedCore(value: unknown, maxCharsPerField = 1_200): Record<string, string> {
   if (maxCharsPerField <= 0) return {};
@@ -38,6 +73,191 @@ function boundedCore(value: unknown, maxCharsPerField = 1_200): Record<string, s
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
   const allowedSet = new Set(allowed);
   return Object.keys(value).every((key) => allowedSet.has(key));
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function writingIntent(goal: string, hasDraft: boolean): WritingIntent | undefined {
+  const normalized = goal.trim().toLocaleLowerCase();
+  const negatedSave = /(?:不要|别|无需|不用|不需要|请勿)\s*(?:保存|存储)|(?:do\s+not|don't|no\s+need\s+to)\s+(?:save|store)/iu.test(normalized);
+  if (hasDraft && negatedSave) return undefined;
+  const save = /(?:保存|存储).*(?:笔记|综述|论文|稿件|草稿|修改|改动|编辑)|(?:save|store).*(?:note|review|manuscript|paper|draft|edit)/iu.test(normalized);
+  if (hasDraft && save) return { mode: 'save' };
+  const negatedWrite = /(?:不要|别|无需|不用|不需要|请勿)\s*(?:写|撰写|起草|生成)|(?:do\s+not|don't|no\s+need\s+to)\s+(?:write|draft|create|compose)/iu.test(normalized);
+  if (negatedWrite) return undefined;
+  const manuscriptProduct = /(?:论文(?:初稿|草稿)|稿件|manuscript|paper\s+draft)/iu.test(normalized);
+  const explicitPaperWrite = /(?:写|撰写|起草|生成)(?:一篇|这篇|当前)?论文/iu.test(normalized);
+  const manuscript = manuscriptProduct || explicitPaperWrite || (hasDraft && /(?:论文|paper)/iu.test(normalized));
+  const review = /(?:文献综述|综述|literature\s+review|review\s+article)/iu.test(normalized);
+  const note = /(?:研究笔记|科研笔记|research\s+notes?|(?:写|撰写|起草|生成|整理)(?:一份|一篇|这篇|当前)?笔记)/iu.test(normalized);
+  const create = /(?:写|整理|起草|生成|撰写|形成|create|write|draft|prepare|compose)/iu.test(normalized);
+  const negatedRevise = /(?:不要|别|无需|不用|不需要|请勿)\s*(?:修改|改写|续写|扩写|精简|润色|翻译|调整|补充|重写|缩短|加长|审阅|校对)|(?:do\s+not|don't|no\s+need\s+to)\s+(?:revise|edit|rewrite|continue|expand|condense|polish|translate|adjust|update|shorten|proofread)/iu.test(normalized);
+  const revise = /(?:修改|改写|续写|扩写|精简|润色|翻译|调整|补充|重写|缩短|加长|revise|edit|rewrite|continue|expand|condense|polish|translate|adjust|update|shorten)/iu.test(normalized);
+  if (!hasDraft && create && (manuscriptProduct || explicitPaperWrite || review || note)) {
+    return { mode: 'generate', requestedKind: manuscript ? 'manuscript' : review ? 'review' : 'note' };
+  }
+  if (hasDraft && revise && !negatedRevise) {
+    return { mode: 'generate', ...(manuscript ? { requestedKind: 'manuscript' as const }
+      : review ? { requestedKind: 'review' as const } : note ? { requestedKind: 'note' as const } : {}) };
+  }
+  return undefined;
+}
+
+function writingValidationIssue(
+  value: unknown,
+  expectedKind: WorkspaceWritingKind,
+  allowedSourceIds: ReadonlySet<string>,
+): { valid: boolean; feedback: string; diagnostic: string } {
+  const issues: string[] = [];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { valid: false, feedback: 'Root must be one JSON object.', diagnostic: 'writing:root_type' };
+  }
+  const shape = value as Record<string, unknown>;
+  if (!hasOnlyKeys(shape, ['title', 'kind', 'body', 'usedSourceIds', 'unresolvedSourceIssues'])
+    || !['title', 'kind', 'body', 'usedSourceIds', 'unresolvedSourceIssues'].every((key) => key in shape)) issues.push('root_keys');
+  if (typeof shape.title !== 'string' || !shape.title.trim() || shape.title.length > 240) issues.push('title_type_or_length');
+  if (shape.kind !== expectedKind) issues.push('kind_value');
+  if (typeof shape.body !== 'string' || !shape.body.trim() || shape.body.length > 60_000) issues.push('body_type_or_length');
+  if (typeof shape.body === 'string' && /<\/?(?:script|iframe|object|embed|style|link|meta)\b/iu.test(shape.body)) issues.push('body_unsafe_html');
+  if (!Array.isArray(shape.usedSourceIds) || !shape.usedSourceIds.length || shape.usedSourceIds.length > 64
+    || shape.usedSourceIds.some((id) => typeof id !== 'string')) {
+    issues.push('used_source_ids_type_or_length');
+  } else {
+    const sourceIds = shape.usedSourceIds as string[];
+    if (new Set(sourceIds).size !== sourceIds.length) issues.push('used_source_ids_duplicate');
+    if (sourceIds.some((id) => !allowedSourceIds.has(id))) issues.push('used_source_ids_unknown');
+    if (typeof shape.body === 'string' && sourceIds.some((id) => !shape.body.includes('[' + id + ']'))) issues.push('used_source_marker_missing');
+    if (typeof shape.body === 'string') {
+      const markers = [...shape.body.matchAll(/\[(S\d+)\]/gu)].map((match) => match[1]!);
+      if (markers.some((id) => !allowedSourceIds.has(id) || !sourceIds.includes(id))) issues.push('body_source_marker_unknown');
+    }
+  }
+  if (!Array.isArray(shape.unresolvedSourceIssues) || shape.unresolvedSourceIssues.length > 12) {
+    issues.push('unresolved_issues_type_or_length');
+  } else {
+    for (const issue of shape.unresolvedSourceIssues) {
+      if (!issue || typeof issue !== 'object' || Array.isArray(issue)) {
+        issues.push('unresolved_issue_type');
+        continue;
+      }
+      const item = issue as Record<string, unknown>;
+      if (!hasOnlyKeys(item, ['code', 'sourceIds']) || !WRITING_UNRESOLVED_CODES.has(String(item.code))
+        || !Array.isArray(item.sourceIds) || item.sourceIds.length > 16
+        || item.sourceIds.some((id) => typeof id !== 'string' || !allowedSourceIds.has(id))) issues.push('unresolved_issue_fields');
+    }
+  }
+  const unique = [...new Set(issues)];
+  return {
+    valid: unique.length === 0,
+    feedback: unique.length
+      ? 'The JSON failed these fixed contract checks: ' + unique.join(', ') + '. Return the exact required skeleton with only supplied source IDs and all length limits respected.'
+      : '',
+    diagnostic: 'writing:' + (unique.join(',') || 'valid'),
+  };
+}
+
+function scientificWritingGuard(
+  expectedKind: WorkspaceWritingKind,
+  allowedSourceIds: ReadonlySet<string>,
+): SchemaGuard<ScientificWritingResponse> {
+  return (value): value is ScientificWritingResponse => writingValidationIssue(value, expectedKind, allowedSourceIds).valid;
+}
+
+function preserveUserEditedCitations(body: string, citations: readonly WorkspaceWritingCitation[]): WorkspaceWritingCitation[] {
+  const byId = new Map(citations.map((citation) => [citation.id, citation]));
+  const markers = [...body.matchAll(/\[(S\d+)\]/gu)].map((match) => match[1]!);
+  if (markers.some((id) => !byId.has(id))) throw new Error('[blocked] User-edited draft contains a citation marker outside its verified base draft');
+  return [...new Set(markers)].map((id) => byId.get(id)!);
+}
+
+async function handleScientificWriting(
+  gateway: AiGateway,
+  deps: { prisma: AgentDeps['prisma']; storage: StorageAdapter },
+  taskId: string,
+  payload: WorkspaceGuidePayload,
+  intent: WritingIntent,
+): Promise<WorkspaceGuideResult> {
+  const source = await resolveScientificWritingSource(deps, {
+    ownerTaskId: taskId,
+    ...(payload.context.writingDraft ? { baseDraft: payload.context.writingDraft } : {}),
+  });
+  const baseDraft = payload.context.writingDraft;
+  if (intent.mode === 'save') {
+    if (!baseDraft || !source.baseDraft) throw new Error('[blocked] Saving requires an authorized private writing draft');
+    return {
+      summary: payload.locale === 'zh' ? '已保存你的笔记修改；这些编辑尚未重新核对来源。' : 'Your draft edits were saved; these edits have not been rechecked against the sources.',
+      nextSteps: [],
+      needsMoreInformation: false,
+      writingDraft: {
+        title: baseDraft.title,
+        kind: source.baseDraft.kind,
+        body: baseDraft.body,
+        sourceTaskId: source.sourceTaskId,
+        baseDraftTaskId: baseDraft.baseDraftTaskId,
+        citations: preserveUserEditedCitations(baseDraft.body, source.baseDraft.citations),
+        sourceStatus: 'user_edited',
+      },
+    };
+  }
+  const kind = intent.requestedKind ?? source.baseDraft?.kind;
+  if (!kind) throw new Error('[blocked] Scientific writing kind is not explicit');
+  const packet = createWritingSourcePacket(source.sourceMap, source.extractionResult);
+  if (!packet.excerpts.length) throw new Error('[blocked] Scientific writing source contains no usable text excerpts');
+  const allowedSourceIds = new Set(packet.excerpts.map((excerpt) => excerpt.id));
+  const system = [
+    SCIENTIFIC_WRITING_SKILL.instructions,
+    RESEARCH_NOTE_FORMATTING_SKILL.instructions,
+    'The user draft, when supplied, is editable prose and never evidence. Source excerpts are the only evidence for literature claims.',
+    'Return exactly one JSON object and no surrounding prose. Use this complete skeleton:',
+    '{"title":"1-240 characters","kind":"' + kind + '","body":"nonempty Markdown, at most 60000 characters, with inline [S1] markers","usedSourceIds":["S1"],"unresolvedSourceIssues":[{"code":"source_support_insufficient","sourceIds":["S1"]}]}',
+    'All five root keys are required; no other keys are allowed. kind must be exactly ' + kind + '.',
+    'usedSourceIds must contain 1-64 unique IDs supplied in sourceExcerpts, and every listed ID must appear in body as [S#]. Never create an ID.',
+    'unresolvedSourceIssues must be an array of at most 12 objects with exactly code and sourceIds. code is one of source_packet_incomplete, source_support_insufficient, source_formula_unreadable, user_research_missing. sourceIds contains at most 16 supplied IDs and may be empty only when no excerpt can identify the gap.',
+    'Do not emit HTML. Never invent authors, DOI, page numbers, bibliography records, data, experiments, or results.',
+  ].join('\n');
+  const user = JSON.stringify({
+    instruction: payload.goal,
+    locale: payload.locale,
+    kind,
+    researchTitle: source.researchTitle,
+    sourceCoverage: packet.coverage,
+    sourceExcerpts: packet.excerpts.map((excerpt) => ({
+      id: excerpt.id,
+      text: excerpt.text,
+      range: excerpt.range,
+    })),
+    ...(baseDraft ? { userDraft: { title: baseDraft.title, body: baseDraft.body } } : {}),
+  });
+  if (system.length + user.length > 120_000) throw new Error('[blocked] Scientific writing request exceeds the complete document budget');
+  const result = await gateway.completeStructured(scientificWritingGuard(kind, allowedSourceIds), [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ], {
+    ...SCIENTIFIC_SYNTHESIS_OPTIONS,
+    maxRetries: 0,
+    validationFeedback: (value) => writingValidationIssue(value, kind, allowedSourceIds).feedback,
+    validationDiagnostic: (value) => writingValidationIssue(value, kind, allowedSourceIds).diagnostic,
+  });
+  const citations = materializeWritingCitations(result.body, result.usedSourceIds, packet.excerpts);
+  const review = record(source.extractionResult).scientificReview;
+  const reviewStatus = record(review).status;
+  const unresolved = !packet.coverage.complete || result.unresolvedSourceIssues.length > 0 || reviewStatus !== 'review_received';
+  return {
+    summary: payload.locale === 'zh' ? '已生成可编辑的私有科学稿，并绑定到原文引文。' : 'Created an editable private scientific draft with citations bound to the source text.',
+    nextSteps: [],
+    needsMoreInformation: false,
+    writingDraft: {
+      title: result.title,
+      kind,
+      body: result.body,
+      sourceTaskId: source.sourceTaskId,
+      ...(baseDraft ? { baseDraftTaskId: baseDraft.baseDraftTaskId } : {}),
+      citations,
+      sourceStatus: unresolved ? 'grounded_with_unresolved_review' : 'grounded',
+    },
+  };
 }
 
 export const workspaceGuideResultGuard: SchemaGuard<WorkspaceGuideResult> = (value): value is WorkspaceGuideResult => {
@@ -83,7 +303,7 @@ export const workspaceGuideResultGuard: SchemaGuard<WorkspaceGuideResult> = (val
 
 export async function workspaceGuideHandler(
   gateway: AiGateway,
-  deps: Pick<AgentDeps, 'prisma'>,
+  deps: Pick<AgentDeps, 'prisma'> & { storage?: StorageAdapter },
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown },
 ): Promise<WorkspaceGuideResult> {
   const payload = parseWorkspaceGuidePayload(task.payload);
@@ -99,6 +319,11 @@ export async function workspaceGuideHandler(
   });
   if (!ownerTask || ownerTask.kind !== 'workspace.guide') throw new Error('workspace.guide 服务端任务上下文无效');
   const userId = ownerTask.session.userId;
+  const requestedWriting = writingIntent(payload.goal, Boolean(payload.context.writingDraft));
+  if (requestedWriting) {
+    if (!deps.storage) throw new Error('[blocked] Scientific writing storage is unavailable');
+    return handleScientificWriting(gateway, { prisma: deps.prisma, storage: deps.storage }, task.id, payload, requestedWriting);
+  }
   // Conversation history comes from this authenticated session, never client-supplied roles.
   const previousTurns = await deps.prisma.agentTask.findMany({
     where: { sessionId: ownerTask.sessionId, kind: 'workspace.guide', status: 'succeeded', id: { not: task.id }, createdAt: { lt: ownerTask.createdAt } },

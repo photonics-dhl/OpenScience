@@ -1,24 +1,17 @@
 # OpenScience (XGS) 项目文件索引
 
-> 已部署57f00dc9：`extractor.ts`、`skills/paper-analysis.ts`、`skills/scientific-summary.ts`和未确认v1刷新适配。真实agent5b615d36被bridge schema阻断；精确契约/安全诊断修复中，当前不能宣称能力走通。创建页Hermes淡化修复已实际opacity1。旧v1用量/质量仅为历史对照。
-
-> 已部署e4bd：`apps/agent-worker/src/skills/scientific-summary.ts`及extractor最终成稿适配，实际final少51.83%tokens但质量仍未达标。Chat诊断已收到，v2语义点归约/原文bridge+final为后续候选；`skills/scientific-writing.ts` / `skills/research-note-formatting.ts`仅离线准备，未加载。创建页与Hermes一次性task衔接已部署e4bd，d8de966f局部布局/资料文案修复已部署。
-
-> 已部署bbe4e4a6：M3最终科学自检（model_self_check）、paper-analysis v7中文凝练；XLSX/PPTX/HTML复用Docling、安全清洗与archiver7.0.1。`apps/agent-worker/src/citation-management.ts` / `scientific-writing-source.ts`与workspace-guide-contract为未接通写作准备，不纳入当前发布。
-
-> 已部署0d059852：apps/agent-worker/src/scientific-generation-options.ts 统一科学任务的显式思考、预算与超时；Gateway透传并记录请求模式，截断不按同预算重试。MiniMax仍为主，生产科学路由待后续结果确认。
-
-> 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-12:** application57f00dc9 / rollbackd8de966f；browser providerd1630135 / rollback92cc416e。文档/公式与逐观察阅读已部署；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
-> 当前执行：第2项全文理解/科学自省取得真实内部候选，成稿修复和统一创建接续收尾后推进科学写作/引用；图片/视频艺术风格与叙事明确保留后续。统一创建/持续对话方案保留，不恢复旧冗余表单。
-> 历史阅读f2889c86的67观察/94段只作来源记录；当前真实质量失败与成稿修复见CURRENT handoff。公式语法可排版不等于物理正确，docs-only HEAD不是应用release。
-> 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
-> 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
+> **CURRENT 2026-09-12:** application a1ff2db9 / rollback57f00dc9；browser provider d1630135 / rollback92cc416e。唯一任务入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> 真实a1c0da49语义bridge成功，final空正文/备用401，无新六字段；原22-v10图文公开保留。失败final用量未知，不能记0或宣称质量不降节约。
+> 写作/引用与精美笔记、空响应安全诊断已实现待发布；用户已允许按写作指令处理当前研究私稿。语义结果复用补丁因自动审批拒绝待明确批准。
+> 公式/多格式资料、单一创建对话与附件、Hermes任务接续已部署；艺术图片/视频叙事为后续第6项，不恢复旧冗余表单。
+> 无测试/预检/CI/本机运行；必要服务器build/start按授权继续。维护索引，历史版本不覆盖CURRENT；集成保留PRD v1.1已有能力。
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
+| `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | 用户已精确授权，接通中；尚未部署，不覆盖SDF或公开版本 |
+| `apps/web/components/hermes/HermesWritingDraft.tsx` / `HermesWritingDraft.module.css` / `HermesAssistantDrawer.tsx` / `apps/web/lib/api.ts` | 常驻对话中的独立稿件阅读、编辑、Markdown下载与折叠来源 | 按已安装设计skill实现中；user_edited不标科学通过，尚未部署 |
 | `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 已部署7c6b7975；真实67观察/94段，内部候选经Chat6Pro复核收尾，不自动放行科学结论 |
 | `apps/agent-worker/parser-image/package.json` / `package-lock.json` / `apps/agent-worker/src/ingestion-parser.ts` | 隔离parser的KaTeX语法兼容、坏公式orig回退及区域低置信标记 | 已部署7c6b7975；格式失败可识别和保留原文，不表示4条坏公式已科学修正 |
 | `apps/web/components/content/ScientificText.tsx` / `ScientificText.module.css` | 有界、安全的TeX显示，编辑器/公开RO/发布/Hermes及来源引用统一复用 | 已部署；同一组件的真实阅读HTML显示28/32式，两个代表式对照原图；不是已保存的RO公式内容 |
@@ -595,7 +588,7 @@
 
 - DEPLOYED infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：服务器交互浏览器与生产 `chatgpt-web` provider；真实Hermes图片已回传，真实PDF完成6 Pro初审与补证；区域附件子域、图片/科学审阅独立锁、30分钟窗口、15秒science heartbeat、协议版本化幂等和逐字段保留部署于`36e6a8c4`；infra/scripts/ssh-run.sh固定browser-tunnel。
 
-- CURRENT docs/runbooks/server-capabilities.md：2026-09-12应用f2889c86；CodeFormulaV2/KaTeX损坏标记、逐观察全文分析及科学自省已登记；服务器任务先查，安装只补缺失能力。
+- CURRENT docs/runbooks/server-capabilities.md：2026-09-12应用a1ff2db9；Docling/M3/公式已部署，写作/笔记与诊断待发布；服务器任务先读，只补真实缺口。
 
 - `infra/scripts/browser-tunnel.ps1`：Windows隐藏SSH隧道断线重连；固定localhost6081，复用ssh-run.sh，2026-09-09本机页面恢复HTTP200。
 

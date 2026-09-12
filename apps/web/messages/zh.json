@@ -39,7 +39,41 @@
     "retry": "继续确认",
     "retrySame": "上次请求尚未确认，请继续同一请求，避免重复提交。",
     "productionOptions": "查看制作安排",
-    "adjustProduction": "调整风格与详细指令"
+    "adjustProduction": "调整风格与详细指令",
+    "writing": {
+      "kind": {
+        "note": "研究笔记",
+        "review": "文献综述",
+        "manuscript": "论文初稿"
+      },
+      "status": {
+        "grounded": "已关联原文来源",
+        "grounded_with_unresolved_review": "部分内容仍待核对",
+        "user_edited": "你的修改，未重新核对来源"
+      },
+      "localChanges": "本地修改尚未保存",
+      "open": "打开稿件",
+      "close": "关闭稿件",
+      "dialogLabel": "Hermes 私有科学稿件",
+      "revisionPlaceholder": "继续告诉我：缩短第二段、补充局限，或改成论文初稿",
+      "edit": "编辑",
+      "done": "完成",
+      "download": "下载 Markdown",
+      "save": "保存修改",
+      "saveCommand": "保存笔记修改",
+      "titleLabel": "稿件标题",
+      "bodyLabel": "Markdown 正文",
+      "editNote": "这里的修改暂存在当前页面。点击“保存修改”后，Hermes 会将它保存为新的私有稿件。",
+      "sources": "来源",
+      "sourcesCount": "来源（{count}）",
+      "page": "第 {page} 页",
+      "block": "段落 {block}",
+      "characters": "字符 {start}–{end}",
+      "table": "表格",
+      "tableCell": "{sheet} · 第 {row} 行第 {column} 列",
+      "codeRange": "{path} · 第 {start}–{end} 行",
+      "artifact": "材料 {artifact}"
+    }
   },
   "workbench": {
     "requestVideo": "生成视频",

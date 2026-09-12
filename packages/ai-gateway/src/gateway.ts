@@ -53,6 +53,7 @@ export interface GatewayCallLog {
   finishReason?: ProviderResult['finishReason'];
   requestedThinking?: TextGenerationOptions['thinking'];
   maxOutputTokens?: number;
+  responseBlockCounts?: { text: number; thinking: number; other: number };
 }
 
 export interface AiGatewayOptions {
@@ -289,12 +290,13 @@ export class AiGateway {
       } catch (e) {
         lastError = e;
         const failure = textProviderFailure(e);
+        const responseDetails = e instanceof TextProviderError ? e.details : undefined;
         await this.record({
           operation: 'text',
           provider: provider.name,
           model: provider.model,
-          inputTokens: 0,
-          outputTokens: 0,
+          inputTokens: responseDetails?.inputTokens ?? null,
+          outputTokens: responseDetails?.outputTokens ?? null,
           estimatedInputTokens: null,
           estimatedOutputTokens: null,
           estimatedCostUsdMicros: null,
@@ -312,11 +314,18 @@ export class AiGateway {
           selectionReason: null,
           outcome: 'failed',
           error: failure,
+          ...(responseDetails?.finishReason ? { finishReason: responseDetails.finishReason } : {}),
+          ...(responseDetails?.blockCounts ? { responseBlockCounts: responseDetails.blockCounts } : {}),
           ...(opts.thinking ? { requestedThinking: opts.thinking } : {}),
           ...(opts.maxTokens ? { maxOutputTokens: opts.maxTokens } : {}),
           fallbackReason: boundedFallbackReason(fallbackNotes),
           retryCount: i,
         });
+        // A completed response exhausted its output allowance; another provider
+        // at the same allowance is not a transport recovery and spends it again.
+        if (responseDetails?.finishReason === 'length') {
+          throw new AiGatewayError('STRUCTURED_OUTPUT_TRUNCATED', 'Provider exhausted output allowance before producing text', e);
+        }
         fallbackNotes.push(`${provider.name}:${failure}`);
         this.logger?.warn?.(`AI provider ${provider.name} failed category=${failure}; trying configured fallback`);
       }
@@ -450,7 +459,7 @@ export class AiGateway {
     } catch (error) {
       this.logger?.error?.(`ai.gateway.audit failed: ${error instanceof Error ? error.message : String(error)}`);
     }
-    this.logger?.info?.(`ai.gateway.call operation=${log.operation} provider=${log.provider} model=${log.model} outcome=${log.outcome} in=${log.inputTokens ?? 'unknown'} out=${log.outputTokens ?? 'unknown'} ms=${log.latencyMs}`);
+    this.logger?.info?.(`ai.gateway.call operation=${log.operation} provider=${log.provider} model=${log.model} outcome=${log.outcome} in=${log.inputTokens ?? 'unknown'} out=${log.outputTokens ?? 'unknown'} ms=${log.latencyMs}${log.finishReason ? ` finish=${log.finishReason}` : ''}${log.responseBlockCounts ? ` blocks=text:${log.responseBlockCounts.text},thinking:${log.responseBlockCounts.thinking},other:${log.responseBlockCounts.other}` : ''}`);
   }
 
   private async routeOcrPage(

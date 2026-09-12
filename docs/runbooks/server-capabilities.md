@@ -1,13 +1,14 @@
 # 服务器能力与复用清单
 
-当前应用57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e / rollbackd8de966f40ca2922956d7fe82858eb1f5cff6fab；网页生图provider d1630135 / rollback92cc416e。2026-09-12完成必要服务器build/start，无测试/CI/本机运行。
-- paper-analysis v8/scientific-summary v2已部署；真实5b615d36原文bridge两次SCHEMA_VALIDATION，无final，未采用。窗口用量79119tokens/280533ms；已定位提示契约未完整描述的问题并修复中。semantic/final成功才有分阶段元数据，失败用量来自本次调用时间窗Gateway记录；不当作任务完全归属的计费账单。未新增服务/供应商。
+当前应用a1ff2db9ecc6f8f598c2a72d05aaee3c7dfd1889 / rollback57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成，无测试/CI/本机运行。
 
-- 已部署：MiniMax-M3显式adaptive thinking（16k/32k预算）、最终model_self_check、paper-analysis v7；Docling CPU1.30/CodeFormulaV2/安全KaTeX；XLSX/PPTX/HTML解析和派生副本清洗。
-- 真实论文62ae384d已完成，但正文过长并有物理条件泛化，未采用/发布。已部署scientific-summary v1，实际未确认refresh0e38446e复用原文只跑final；19380tokens比旧final少51.83%，但仍有科学语义缺陷，未采用。Chat6Pro有来源诊断已回，v2语义归约/原文bridge+final为本地候选，部署前不重复生成。
-- 统一Hermes创建/附件/首条指令接续已部署e4bd；实际页面可打开；anchor布局和资料区文案修复d8de966f已部署，实际208×208。写作/精美笔记模块仅准备未接通；后续艺术图片与视频能力按台账继续。
-- 现有服务器浏览器、已登录Chat6Pro及网页图片路线可复用；不因本机控制桥错误判其不可用。无需下载新的浏览器或OCR。账号登录情况按服务器实际可见会话判断，不自动跨账号轮换。
-- 当前版本和真实质量以CURRENT handoff及[Hermes能力台账](hermes-capability-registry.md)为准。服务有变化必须同步；下列技术条目保留历史来源，旧release不覆盖上文。
+- 当前真实a1c0da49原P语义整理第一次成功：42191tokens/124574ms。final主接口空正文、备用HTTP401，未得到新六字段，原确认稿/公开版保留。旧Adapter丢失失败usage/stop，final用量未知，不能记0。
+- paper-analysis v8/scientific-summary v2、M3显式adaptive、Docling CPU1.30/CodeFormulaV2、安全KaTeX、XLSX/PPTX/HTML已部署。候选编号/模型返回成功不代表科学正确。
+- 统一Hermes创建/附件/首条指令已部署，实际portrait208×208/opacity1。写作与精美笔记已实现待部署；用户已允许按写作指令处理当前研究私稿/必要摘录。
+- 待发布空响应诊断记录安全usage/finish/block数量，缺失usage为null；明确length时不原预算fallback。不能反推旧空响应原因。
+- 保留成功语义结果并续final的补丁受自动审批阻断，已向用户披露并请求明确批准；尚未实现。不要声称hash能恢复旧候选。
+- 没有新增服务、供应商、浏览器或OCR；复用既有服务器浏览器/Chat6Pro/网页生图。艺术图片和视频为后续能力，按台账继续。
+- 当前任务/状态以[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)和[Hermes台账](hermes-capability-registry.md)为准。下文历史部署只用于能力复用，不能覆盖当前事实。
 
 ## 2026-09-12 文档与公式能力接入
 

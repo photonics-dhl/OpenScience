@@ -1170,6 +1170,7 @@ export interface WorkspaceGuidePayload {
     researchObjects: Array<{ id: string; title: string; status: string }>;
     presentation?: { researchObjectId: string; versionId?: string };
     editorDraft?: { researchObjectId: string; scope: string; version: number; core: Omit<SdfCore, 'schemaVersion'> };
+    writingDraft?: { baseDraftTaskId: string; title: string; body: string };
   };
 }
 
@@ -1188,6 +1189,15 @@ export interface WorkspaceGuideResult {
     instruction: string;
     researchObjectId: string;
     versionId: string;
+  };
+  writingDraft?: {
+    title: string;
+    kind: 'note' | 'review' | 'manuscript';
+    body: string;
+    sourceTaskId: string;
+    baseDraftTaskId?: string;
+    citations: Array<{ id: string; marker: string; quote: string; sourceLocator: SourceLocator }>;
+    sourceStatus: 'grounded' | 'grounded_with_unresolved_review' | 'user_edited';
   };
 }
 

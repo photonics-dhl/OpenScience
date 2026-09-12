@@ -39,7 +39,41 @@
     "retry": "Continue request",
     "retrySame": "The previous request is unconfirmed. Continue the same request to avoid duplicate submissions.",
     "productionOptions": "View production details",
-    "adjustProduction": "Adjust style and detailed instructions"
+    "adjustProduction": "Adjust style and detailed instructions",
+    "writing": {
+      "kind": {
+        "note": "Research note",
+        "review": "Literature review",
+        "manuscript": "Manuscript draft"
+      },
+      "status": {
+        "grounded": "Linked to source text",
+        "grounded_with_unresolved_review": "Some content still needs review",
+        "user_edited": "Your edits; sources have not been rechecked"
+      },
+      "localChanges": "Local changes have not been saved",
+      "open": "Open draft",
+      "close": "Close draft",
+      "dialogLabel": "Private scientific draft from Hermes",
+      "revisionPlaceholder": "Continue here: shorten section two, add limitations, or turn this into a manuscript",
+      "edit": "Edit",
+      "done": "Done",
+      "download": "Download Markdown",
+      "save": "Save edits",
+      "saveCommand": "Save draft edits",
+      "titleLabel": "Draft title",
+      "bodyLabel": "Markdown body",
+      "editNote": "Changes here remain in this page until you choose Save edits. Hermes will then preserve them as a new private draft.",
+      "sources": "Sources",
+      "sourcesCount": "Sources ({count})",
+      "page": "Page {page}",
+      "block": "Block {block}",
+      "characters": "Characters {start}–{end}",
+      "table": "Table",
+      "tableCell": "{sheet} · row {row}, column {column}",
+      "codeRange": "{path} · lines {start}–{end}",
+      "artifact": "Artifact {artifact}"
+    }
   },
   "workbench": {
     "requestVideo": "Generate a video",

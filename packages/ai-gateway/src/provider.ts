@@ -57,11 +57,22 @@ export type TextProviderErrorCode =
   | 'provider_error';
 
 /** Safe transport/response category only; never contains response bodies or credentials. */
+export interface TextProviderFailureDetails {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  finishReason: ProviderResult['finishReason'];
+  blockCounts?: { text: number; thinking: number; other: number };
+}
+
 export class TextProviderError extends Error {
-  constructor(readonly code: TextProviderErrorCode, message: string, readonly httpStatus?: number) {
+  constructor(readonly code: TextProviderErrorCode, message: string, readonly httpStatus?: number, readonly details?: TextProviderFailureDetails) {
     super(message);
     this.name = new.target.name;
   }
+}
+
+function reportedTokens(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
 function finishReason(value: unknown): ProviderResult['finishReason'] {
@@ -135,7 +146,11 @@ export class OpenAiCompatProvider implements Provider {
         throw new TextProviderError('provider_response_shape', `Provider ${this.name} response shape invalid`);
       }
       const text = choice.message.content;
-      if (!text.trim()) throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`);
+      if (!text.trim()) throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`, undefined, {
+        inputTokens: reportedTokens(data.usage?.prompt_tokens),
+        outputTokens: reportedTokens(data.usage?.completion_tokens),
+        finishReason: finishReason(choice.finish_reason),
+      });
       return {
         text,
         usage: {
@@ -214,10 +229,19 @@ export class AnthropicCompatProvider implements Provider {
         throw new TextProviderError('provider_response_shape', `Provider ${this.name} response shape invalid`);
       }
       const text = data.content
-        ?.filter((block) => block.type === 'text' && typeof block.text === 'string')
+        ?.filter((block) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
         .map((block) => block.text)
         .join('\n') ?? '';
-      if (!text.trim()) throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`);
+      if (!text.trim()) {
+        const textBlocks = data.content.filter((block) => block && typeof block === 'object' && block.type === 'text').length;
+        const thinkingBlocks = data.content.filter((block) => block && typeof block === 'object' && block.type === 'thinking').length;
+        throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`, undefined, {
+          inputTokens: reportedTokens(data.usage?.input_tokens),
+          outputTokens: reportedTokens(data.usage?.output_tokens),
+          finishReason: finishReason(data.stop_reason),
+          blockCounts: { text: textBlocks, thinking: thinkingBlocks, other: data.content.length - textBlocks - thinkingBlocks },
+        });
+      }
       return {
         text,
         usage: {

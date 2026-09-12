@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Drawer from '@/components/editor/Drawer';
 import { LiteratureAcquisition } from '@/components/dashboard/LiteratureAcquisition';
@@ -34,6 +34,7 @@ import { ResearchPublication } from '@/components/research/ResearchPublication';
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 import { HermesMediaReview } from './HermesMediaReview';
 import { ScientificText } from '@/components/content/ScientificText';
+import { HermesWritingDraft, type HermesWritingDraftValue } from './HermesWritingDraft';
 
 type LiteratureIntent = Extract<RoutedHermesIntent, { kind: 'literature.acquire' }>;
 
@@ -135,7 +136,66 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
       || !Object.entries(edit.changes).every(([field, text]) => SDF_FIELDS.includes(field as typeof SDF_FIELDS[number]) && typeof text === 'string' && text.length <= 4000)) return null;
     draftEdit = edit;
   }
-  return { summary: value.summary, nextSteps, needsMoreInformation: value.needsMoreInformation, ...(presentationDraft ? { presentationDraft } : {}), ...(draftEdit ? { draftEdit } : {}) };
+  let writingDraft: WorkspaceGuideResult['writingDraft'];
+  if (value.writingDraft !== undefined) {
+    const candidate = value.writingDraft as Record<string, unknown>;
+    const citations = candidate?.citations;
+    if (!candidate || typeof candidate !== 'object'
+      || typeof candidate.title !== 'string' || !candidate.title.trim() || candidate.title.length > 240
+      || !['note', 'review', 'manuscript'].includes(String(candidate.kind))
+      || typeof candidate.body !== 'string' || candidate.body.length > 60_000
+      || typeof candidate.sourceTaskId !== 'string' || !candidate.sourceTaskId
+      || (candidate.baseDraftTaskId !== undefined && (typeof candidate.baseDraftTaskId !== 'string' || !candidate.baseDraftTaskId))
+      || !['grounded', 'grounded_with_unresolved_review', 'user_edited'].includes(String(candidate.sourceStatus))
+      || !Array.isArray(citations) || citations.length > 120
+      || !citations.every((citation) => {
+        if (!citation || typeof citation !== 'object') return false;
+        const row = citation as Record<string, unknown>;
+        const locator = row.sourceLocator as Record<string, unknown> | undefined;
+        return typeof row.id === 'string' && Boolean(row.id) && typeof row.marker === 'string' && /^\[S\d{1,4}\]$/u.test(row.marker)
+          && typeof row.quote === 'string' && Boolean(row.quote.trim()) && row.quote.length <= 8_000
+          && locator !== undefined && typeof locator.artifactId === 'string' && Boolean(locator.artifactId)
+          && typeof locator.contentHash === 'string' && Boolean(locator.contentHash)
+          && (locator.blockId === undefined || typeof locator.blockId === 'string')
+          && (locator.page === undefined || Number.isSafeInteger(locator.page))
+          && (locator.charRange === undefined || (typeof locator.charRange === 'object' && locator.charRange !== null
+            && Number.isSafeInteger((locator.charRange as Record<string, unknown>).start) && Number.isSafeInteger((locator.charRange as Record<string, unknown>).end)))
+          && (locator.tableCell === undefined || (typeof locator.tableCell === 'object' && locator.tableCell !== null
+            && ((locator.tableCell as Record<string, unknown>).sheet === undefined || typeof (locator.tableCell as Record<string, unknown>).sheet === 'string')
+            && Number.isSafeInteger((locator.tableCell as Record<string, unknown>).row) && Number.isSafeInteger((locator.tableCell as Record<string, unknown>).column)))
+          && (locator.codeRange === undefined || (typeof locator.codeRange === 'object' && locator.codeRange !== null
+            && typeof (locator.codeRange as Record<string, unknown>).commit === 'string' && typeof (locator.codeRange as Record<string, unknown>).path === 'string'
+            && Number.isSafeInteger((locator.codeRange as Record<string, unknown>).startLine) && Number.isSafeInteger((locator.codeRange as Record<string, unknown>).endLine)));
+      })) return null;
+    const markers = citations.map((citation) => (citation as Record<string, unknown>).marker as string);
+    const citationIds = citations.map((citation) => (citation as Record<string, unknown>).id as string);
+    if (new Set(markers).size !== markers.length || new Set(citationIds).size !== citationIds.length || markers.some((marker) => !(candidate.body as string).includes(marker))
+      || Boolean(draftEdit || presentationDraft)) return null;
+    writingDraft = candidate as unknown as NonNullable<WorkspaceGuideResult['writingDraft']>;
+  }
+  return { summary: value.summary, nextSteps, needsMoreInformation: value.needsMoreInformation, ...(presentationDraft ? { presentationDraft } : {}), ...(draftEdit ? { draftEdit } : {}), ...(writingDraft ? { writingDraft } : {}) };
+}
+
+function isWritingInstruction(value: string) {
+  const normalized = value.trim().toLocaleLowerCase();
+  const action = '(?:保存|存储|修改|改写|续写|扩写|精简|润色|翻译|调整|补充|重写|缩短|加长)';
+  const denied = new RegExp(`(?:不要|别|无需|不用|不需要|请勿|暂不|先不|不想|不打算|不)\\s*(?:(?:再|先|现在|请|请你|帮我|麻烦你)\\s*){0,2}(?:${action}|改)`, 'iu')
+    .test(normalized) || /(?:do\s+not|don't|please\s+don't|no\s+need\s+to|not\s+now|not\s+going\s+to|without)\s+(?:save|store|revise|edit|rewrite|continue|expand|condense|polish|translate|adjust|update)/iu.test(normalized);
+  if (denied) return false;
+  const statusQuestion = new RegExp(`(?:是否|有没有|是不是|已经).{0,16}${action}|${action}.{0,8}(?:了吗|了没|没有|是否|进度|状态|情况|到哪|怎样|怎么样|如何|吗|么)`, 'iu')
+    .test(normalized) || new RegExp(`^(?:查看|显示|列出|看看|查询|告诉我|说明|解释).{0,20}${action}|${action}.{0,8}(?:建议|方法|方式|方案|情况|记录|历史|结果)`, 'iu').test(normalized)
+    || /^(?:did|have|has|was|were|is|are)\b.*\b(?:saved?|stored?|revised?|edited?|rewritten|updated?)\b|^(?:edit|revision|save)\s+(?:history|status|suggestions?|options?)\b/iu.test(normalized);
+  if (statusQuestion) return false;
+  const save = /(?:保存|存储).*(?:笔记|综述|论文|稿件|草稿|修改|改动|编辑)|(?:把|将).*(?:笔记|综述|论文|稿件|草稿|修改|改动|编辑).*(?:保存|存储)|\b(?:save|store)\b.*\b(?:note|review|manuscript|paper|draft|edits?)\b/iu.test(normalized);
+  if (save) return true;
+  const chineseRevision = /^(?:请|帮我|麻烦|给我|替我|继续|再|重新)?\s*(?:修改|改写|续写|扩写|精简|润色|翻译|调整|补充|重写|缩短|加长)/iu.test(normalized)
+    || /(?:把|将).{0,40}(?:修改|改写|续写|扩写|精简|润色|翻译|调整|补充|重写|缩短|加长)/iu.test(normalized)
+    || /(?:这篇|本文|上述内容|稿件|草稿|正文|第[一二三四五六七八九十\d]+(?:段|节|章)|措辞|语气|结构|字数).{0,16}(?:改|调整|缩短|加长|更(?:短|长|精炼|正式|学术))/iu.test(normalized);
+  const englishRevision = /^(?:please\s+)?(?:revise|edit|rewrite|continue|expand|condense|polish|translate|adjust|update|shorten)\b/iu.test(normalized)
+    || /\b(?:please|can you|could you|would you|i want you to)\s+(?:revise|edit|rewrite|continue|expand|condense|polish|translate|adjust|update|shorten)\b/iu.test(normalized)
+    || /\bmake\s+(?:it|this|the\s+(?:note|review|manuscript|draft|section|paragraph|abstract|title))\s+(?:shorter|longer|clearer|more\s+(?:formal|academic))\b/iu.test(normalized)
+    || /\b(?:change|adjust)\s+(?:the\s+)?(?:tone|wording|structure|length)\b/iu.test(normalized);
+  return chineseRevision || englishRevision;
 }
 
 export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
@@ -178,7 +238,7 @@ function HermesAssistantDrawerContent({
   const [guideStored, setGuideStored] = useState(false);
   const requestedVersion = useSearchParams()?.get('version') ?? '';
   const router = useRouter();
-  const currentOwner = `${route}:${routeResearchObjectId ?? ''}`;
+  const currentOwner = `${viewerId || 'pending'}:${route}:${routeResearchObjectId ?? ''}`;
   const [resolvedGuide, setResolvedGuide] = useState({ owner: currentOwner, versionId: requestedVersion });
   const resolvedGuideVersion = resolvedGuide.owner === currentOwner ? resolvedGuide.versionId : '';
   const ownerRef = useRef(currentOwner); ownerRef.current = currentOwner;
@@ -197,6 +257,12 @@ function HermesAssistantDrawerContent({
   const [actionBusy, setActionBusy] = useState(false);
   const [sentGoal, setSentGoal] = useState('');
   const [turns, setTurns] = useState<Array<{ id: string; user: string; summary: string }>>([]);
+  const [writingDraft, setWritingDraft] = useState<{ value: HermesWritingDraftValue; taskId: string } | null>(null);
+  const [writingDirty, setWritingDirty] = useState(false);
+  const latestWritingTask = useRef<{ id: string; createdAt: string } | null>(null);
+  const displayOnlyWritingTasks = useRef(new Set<string>());
+  const writingSaveGoal = useRef('');
+  const composer = useRef<HTMLFormElement>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const followTranscript = useRef(true);
   const preparedTasks = useRef(new Set<string>());
@@ -221,8 +287,19 @@ function HermesAssistantDrawerContent({
   const [literatureIntent, setLiteratureIntent] = useState<DrawerLiteratureIntent | null>(null);
   const activeTask = task?.status === 'pending' || task?.status === 'running';
   const busy = submitting || activeTask || preparing;
-  const result = task?.status === 'succeeded' ? resultFromTask(task) : null;
+  const result = useMemo(() => task?.status === 'succeeded' ? resultFromTask(task) : null, [task]);
   const invalidResult = task?.status === 'succeeded' && !result;
+  useEffect(() => {
+    if (!task || !result?.writingDraft) return;
+    if (route === 'research-object-edit' ? task.researchObjectId !== routeResearchObjectId : Boolean(task.researchObjectId)) return;
+    if (displayOnlyWritingTasks.current.has(task.id)) return;
+    const latest = latestWritingTask.current;
+    if (restoredTask && latest && latest.id !== task.id) return;
+    if (latest && latest.id !== task.id && latest.createdAt > task.createdAt) return;
+    latestWritingTask.current = { id: task.id, createdAt: task.createdAt };
+    setWritingDraft({ value: result.writingDraft, taskId: task.id });
+    setWritingDirty(false);
+  }, [result?.writingDraft, restoredTask, route, routeResearchObjectId, task]);
   useEffect(() => {
     if (initialTaskId && task?.id === initialTaskId && !initialTaskAutoApply) setRestoredTask(true);
   }, [initialTaskAutoApply, initialTaskId, task?.id]);
@@ -257,9 +334,9 @@ function HermesAssistantDrawerContent({
   useEffect(() => {
     appliedTasks.current.clear(); setEditOutcome(null);
     preparedTasks.current.clear(); setTurns([]); setSentGoal(''); followTranscript.current = true;
-    setPresentationIntent(null); setPresentationSuggestion(undefined); setLiteratureIntent(null); setTask(null); setGoal(''); setError(''); setSubmitting(false); setRestoredTask(false); setGuideStored(false);
+    setPresentationIntent(null); setPresentationSuggestion(undefined); setLiteratureIntent(null); setTask(null); setGoal(''); setError(''); setSubmitting(false); setRestoredTask(false); setGuideStored(false); setWritingDraft(null); setWritingDirty(false);
     setPublicationVersion(''); setMediaReviewVersion(''); setLocalMessage(''); setPublicUrl(''); setPreparing(false); offeredAction.current = null; offeredDraft.current = undefined; assertPrepared.current = null;
-    sessionId.current = null; sessionKey.current = null; taskKey.current = null; pendingPayload.current = null; submittingRef.current = false; dismissedInitialTask.current = ''; goalTouched.current = false; setActionBusy(false);
+    sessionId.current = null; sessionKey.current = null; taskKey.current = null; pendingPayload.current = null; submittingRef.current = false; dismissedInitialTask.current = ''; goalTouched.current = false; writingSaveGoal.current = ''; latestWritingTask.current = null; displayOnlyWritingTasks.current.clear(); setActionBusy(false);
   }, [currentOwner]);
   useEffect(() => {
     setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion('');
@@ -277,7 +354,7 @@ function HermesAssistantDrawerContent({
   useEffect(() => {
     const pane = transcript.current;
     if (pane && followTranscript.current) pane.scrollTop = pane.scrollHeight;
-  }, [open, sentGoal, turns, task?.status, result?.summary, presentationIntent, editOutcome, localMessage, publicationVersion, preparing]);
+  }, [open, sentGoal, turns, task?.status, result?.summary, result?.writingDraft, presentationIntent, editOutcome, localMessage, publicationVersion, preparing, writingDirty]);
 
   useEffect(() => {
     if (!task || !result || result.needsMoreInformation || restoredTask || preparedTasks.current.has(task.id)) return;
@@ -349,12 +426,24 @@ function HermesAssistantDrawerContent({
     const restore = () => {
       attempts += 1;
       const loadTasks = initialTaskId
-        ? getAgentTask('', initialTaskId).then(({ task: exactTask }) => ({ tasks: [exactTask] }))
+        ? Promise.all([getAgentTask('', initialTaskId), listAgentTasks()]).then(([{ task: exactTask }, { tasks }]) => ({
+          tasks: [exactTask, ...tasks.filter((candidate) => candidate.id !== exactTask.id)],
+        }))
         : listAgentTasks();
       void loadTasks.then(({ tasks }) => {
           if (cancelled || submittingRef.current || sessionId.current || dismissedInitialTask.current === initialTaskId) return;
+          const restoredWriting = tasks.filter((candidate) => (route === 'research-object-edit'
+            ? candidate.researchObjectId === routeResearchObjectId
+            : !candidate.researchObjectId) && candidate.status === 'succeeded' && Boolean(resultFromTask(candidate)?.writingDraft))
+            .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+          const restoredWritingResult = restoredWriting ? resultFromTask(restoredWriting)?.writingDraft : undefined;
+          if (restoredWriting && restoredWritingResult) {
+            latestWritingTask.current = { id: restoredWriting.id, createdAt: restoredWriting.createdAt };
+            setWritingDraft({ value: restoredWritingResult, taskId: restoredWriting.id }); setWritingDirty(false);
+          }
           const restored = selectRestorableGuide(tasks, route, routeResearchObjectId, initialTaskId);
           if (restored) {
+            if (restoredWriting && restored.id !== restoredWriting.id) displayOnlyWritingTasks.current.add(restored.id);
             sessionId.current = restored.sessionId;
             setRestoredTask(!(initialTaskAutoApply && restored.id === initialTaskId));
             setTask(restored);
@@ -368,7 +457,7 @@ function HermesAssistantDrawerContent({
     };
     restore();
     return () => { cancelled = true; if (retryTimer) window.clearTimeout(retryTimer); };
-  }, [initialTaskAutoApply, initialTaskId, open, route, routeResearchObjectId, task, taskRestoreReady, t]);
+  }, [currentOwner, initialTaskAutoApply, initialTaskId, open, route, routeResearchObjectId, task, taskRestoreReady, t]);
 
   useEffect(() => {
     if (!activeTask || !task || error) return;
@@ -383,7 +472,9 @@ function HermesAssistantDrawerContent({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const normalized = goal.trim();
+    const savesWritingDraft = Boolean(writingSaveGoal.current);
+    const normalized = writingSaveGoal.current || goal.trim();
+    writingSaveGoal.current = '';
     if (!normalized || busy || actionBusy || submittingRef.current) return;
     if (pendingPayload.current && normalized !== pendingPayload.current.goal) { setError(tc('retrySame')); return; }
     const command = normalized.replace(/[。！!\.]+$/u, '').trim();
@@ -454,7 +545,17 @@ function HermesAssistantDrawerContent({
       taskKey.current ??= crypto.randomUUID();
       pendingPayload.current ??= {
         goal: normalized, locale, route, target,
-        context: dashboardContext,
+        context: {
+          tasks: dashboardContext.tasks,
+          researchObjects: dashboardContext.researchObjects,
+          ...(dashboardContext.presentation ? { presentation: dashboardContext.presentation } : {}),
+          ...(dashboardContext.editorDraft ? { editorDraft: dashboardContext.editorDraft } : {}),
+          ...(writingDraft && isWritingInstruction(normalized) ? { writingDraft: {
+            baseDraftTaskId: writingDraft.taskId,
+            title: writingDraft.value.title,
+            body: writingDraft.value.body,
+          } } : {}),
+        },
       };
       submittedDraft.current = pendingPayload.current.context.editorDraft;
       submittedPresentationVersion.current = pendingPayload.current.context.presentation?.versionId ?? '';
@@ -466,8 +567,10 @@ function HermesAssistantDrawerContent({
       if (ownerRef.current !== owner) return;
       setTask(response.task);
       setRestoredTask(false);
-      setGoal('');
-      if (resolvedDraftScope) saveHermesGuideGoal(draftStorage, resolvedDraftScope, '');
+      if (!savesWritingDraft) {
+        setGoal('');
+        if (resolvedDraftScope) saveHermesGuideGoal(draftStorage, resolvedDraftScope, '');
+      }
       taskKey.current = null;
       pendingPayload.current = null;
     } catch (cause) {
@@ -548,6 +651,9 @@ function HermesAssistantDrawerContent({
               return href ? <Link className="hermes-conversation-link" href={href} key={index}>{step.label} →</Link> : <p key={index}>{step.label}</p>;
             })}
           </div>}
+          {writingDraft && <HermesWritingDraft draft={writingDraft.value} draftTaskId={writingDraft.taskId} dirty={writingDirty} disabled={busy || actionBusy}
+            onChange={(next) => { setWritingDraft({ ...writingDraft, value: next }); setWritingDirty(true); }}
+            onSave={() => { writingSaveGoal.current = tc('writing.saveCommand'); composer.current?.requestSubmit(); }} />}
           {presentationIntent && <React.Suspense fallback={<p role="status">{t('guide.working')}</p>}>
             <HermesPresentationReview intent={presentationIntent} suggestion={presentationSuggestion} userId={viewerId}
               submissionRecords={presentationSubmissions.current} routeResearchObjectId={routeResearchObjectId}
@@ -568,11 +674,11 @@ function HermesAssistantDrawerContent({
           </div>}
         </div>
 
-        <form className="hermes-conversation-composer" onSubmit={submit}>
+        <form className="hermes-conversation-composer" onSubmit={submit} ref={composer}>
           <label className="sr-only" htmlFor="hermes-guide-goal">{tc('inputLabel')}</label>
           <textarea id="hermes-guide-goal" rows={2} maxLength={2000}
             disabled={busy || actionBusy || Boolean(pendingPayload.current)}
-            placeholder={tc('placeholder')} value={goal}
+            placeholder={writingDraft ? tc('writing.revisionPlaceholder') : tc('placeholder')} value={goal}
             onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}
             onChange={(event) => { const next = event.target.value; goalTouched.current = true; setGoal(next); if (resolvedDraftScope) setGuideStored(saveHermesGuideGoal(draftStorage, resolvedDraftScope, next)); }} />
           <div><span>{pendingPayload.current ? tc('retrySame') : tc('inputHint')}</span>

@@ -1,19 +1,13 @@
 # OpenScience 当前进度
 
-## 2026-09-12 — 凝练成稿与统一研究入口
-- 57f00dc9已完成服务器必要构建/启动，Sol Medium实现+Sol High独立静态复核；paper-analysis v8/scientific-summary v2实际接入。真实agent5b615d36的bridge两次SCHEMA_VALIDATION、6字段空、无final；79119tokens/280533ms未产出可用稿，未采用/发布。已发现prompt精确骨架/长度说明缺口，正在补齐安全具体反馈；不归因为论文内容缺失。新建页Hermes实际208×208/opacity1。
-- branch codex/onchip-video-release；ECS 57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e / rollbackd8de966f40ca2922956d7fe82858eb1f5cff6fab。唯一接续入口 docs/handoff/2026-09-10-hermes-web-image-handoff.md。
-- 已部署M3显式thinking、最终自检、PPTX/XLSX/HTML解析，以及Hermes大小按钮移除。必要服务器构建与启动完成，未运行测试/CI/本机构建。
-- 真实论文最终任务62ae384d虽完成，但六段仍过长并有物理条件泛化；未采用/发布，旧确认稿和图文公开版保留。M3最终调用19256输入/20974输出，不能称科学通过。
-- 已获用户授权并收到Chat6Pro诊断，当前候选替换最后成稿步骤为scientific-summary v1：原文优先、每段≤220字符、引用独立、条件和归因保留、没有简单截断。只对未确认旧结果复用原文重跑final，节约重复读取。
-- 统一创建页候选：同一Hermes对话/附件入口、标题与工作空间按需展开、首条指令与编辑草稿接续；账号隔离/附件与对话范围竞态已修并部署，实际首次新稿衔接未单独运行。
-- 写作与精美笔记运行时指令/引用来源代码已准备未接通；新增私有长稿模型调用的自动审批拒绝仍待精确用户回答。不得混同Chat开发讨论授权。
-- e4bd已完成服务器部署。真实新final0e38446e/M3：12083输入7297输出=19380，比旧final40230少51.83%；仍有科学语义和凝练不足，未采用/发布，不能算质量不降的验收收益。Chat6Pro已给出有来源诊断；semantic reduce+final v2候选正在收口，不按旧配置再次生成。
-- 统一创建页已实际打开；anchor0×464导致空白已定位，d8de966f局部槽位/间距与资料文案已部署，DOM实际208×208、stage已anchored，无横溢出。后续等待科学诊断、写作授权；艺术图片/视频风格、构图与叙事/旁白保留后续。
+## 2026-09-12 — 私有科学写作与失败诊断
+- branch codex/onchip-video-release；ECS a1ff2db9ecc6f8f598c2a72d05aaee3c7dfd1889 / rollback57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e；唯一任务接续 docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+- 实际agent a1c0da49 bridge首次成功42191tokens/124574ms；final主接口provider_empty、备用HTTP401，六字段为空，未采用/公开。失败final用量未知，不能依据旧0值计费或推断原因。
+- MiniMax-M3、Docling/公式/KaTeX、多格式解析、统一创建入口均已部署；新建页Hermes实际208×208/opacity1。
+- 用户明确批准按写作指令处理当前研究私有草稿/必要摘录。backend科学写作/引用、frontend宽阅读/编辑/Markdown下载已实现待部署。High修普通问答误触发、旧链接覆盖新稿；直接保存不调用模型。
+- 空响应诊断High静态复核通过，缺失usage记null、安全finish/block数量，明确length停止同预算fallback，待部署。
+- 语义结果复用补丁两次自动审批拒绝（新增复用校验必要性说明不足），已停止并披露，待用户明确批准；extractor无残留。只存hash不能恢复旧bridge正文。
+- 未测试/预检/CI/本机运行；下一步完成定向review与必要服务器build/start，按实际结果继续。原RO正式v10/已审核心图保持，2–3精选、多图真实样本/视频尚未全部完成。
+- 图片/视频艺术风格、构图、叙事/旁白仍列第6项，写作落地后继续，不改服务器网页图片路线。
 
-## 已有事实与保护范围
-- Docling/CodeFormulaV2/安全KaTeX已部署，26页32式中28式可排版，4式损坏保留低置信原文；两个代表式对原页，不等于全部物理正确。
-- M3全文读取5窗口并发2+reduce，118秒66观察94段、34276输入24503输出；只是内部候选，不能据此算Codex节省比例。
-- 公开OSR-2026-000022/v/10已带批准图，RO c896802c-35dd-4b59-8db1-5f374f83a6d8和修订11受保护；新840e24f9 ingestion未确认。
-- 桌面静默更新/分组、资料归文末、公开图文及缩略图、跨页登录已部署；短期观察不等于长期普遍保证。旧19/20/21可恢复归档，2–3篇精选尚未全部完成。
-- 用户要求产品落地优先，禁止测试/预检/CI/本机运行；仅服务器必要build/start和本次真实产品任务。历史细节见Git及CURRENT handoff。
+历史完整进度见Git；当前结果/成本边界和受保护ID见CURRENT handoff。
