@@ -432,10 +432,11 @@ function HermesAssistantDrawerContent({
         : listAgentTasks();
       void loadTasks.then(({ tasks }) => {
           if (cancelled || submittingRef.current || sessionId.current || dismissedInitialTask.current === initialTaskId) return;
-          const restoredWriting = tasks.filter((candidate) => (route === 'research-object-edit'
+          const writingTasks = tasks.filter((candidate) => (route === 'research-object-edit'
             ? candidate.researchObjectId === routeResearchObjectId
             : !candidate.researchObjectId) && candidate.status === 'succeeded' && Boolean(resultFromTask(candidate)?.writingDraft))
-            .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+            .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+          const restoredWriting = writingTasks.find((candidate) => candidate.id === initialTaskId) ?? writingTasks[0];
           const restoredWritingResult = restoredWriting ? resultFromTask(restoredWriting)?.writingDraft : undefined;
           if (restoredWriting && restoredWritingResult) {
             latestWritingTask.current = { id: restoredWriting.id, createdAt: restoredWriting.createdAt };
