@@ -3,6 +3,7 @@
 ## 2026-09-12 — 接续写作部署
 - 实际生产仍a1ff2db9、rollback57f00dc9；aa5d2e85上次已进入服务器构建，但Web因lib/api.ts漏导入/导出SourceLocator而失败，尚未切换应用。日志xgs-hermes-writing-deploy-20260912.log。
 - 按systematic-debugging/architecture-guard定向静态定位，复用domain已有类型，仅补Web类型导入/导出；继续必要服务器build/start，无测试/预检/CI。
+- 836d6018服务器Web构建完成，Worker随后报TS18046（引用检查回调丢失shape.body类型收窄）；改用已收窄局部变量，引用校验行为不变。该轮未切换生产；日志xgs-hermes-writing-fixed-deploy-20260912.log。
 - 沿用已批准的私有写作与Chat开发复核范围。语义续跑补丁仍单独待定，不阻塞写作部署；后续媒体艺术、构图、叙事与旁白继续。
 
 ## 2026-09-12 — 私有科学写作与失败诊断

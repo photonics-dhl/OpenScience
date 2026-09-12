@@ -128,9 +128,10 @@ function writingValidationIssue(
     const sourceIds = shape.usedSourceIds as string[];
     if (new Set(sourceIds).size !== sourceIds.length) issues.push('used_source_ids_duplicate');
     if (sourceIds.some((id) => !allowedSourceIds.has(id))) issues.push('used_source_ids_unknown');
-    if (typeof shape.body === 'string' && sourceIds.some((id) => !shape.body.includes('[' + id + ']'))) issues.push('used_source_marker_missing');
-    if (typeof shape.body === 'string') {
-      const markers = [...shape.body.matchAll(/\[(S\d+)\]/gu)].map((match) => match[1]!);
+    const body = shape.body;
+    if (typeof body === 'string') {
+      if (sourceIds.some((id) => !body.includes('[' + id + ']'))) issues.push('used_source_marker_missing');
+      const markers = [...body.matchAll(/\[(S\d+)\]/gu)].map((match) => match[1]!);
       if (markers.some((id) => !allowedSourceIds.has(id) || !sourceIds.includes(id))) issues.push('body_source_marker_unknown');
     }
   }
