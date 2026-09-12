@@ -1,6 +1,8 @@
 # Hermes Capability Registry
 
 ## 当前状态（2026-09-13）
+- 最新质量证据：既有基稿4bed经完整来源writingDraft修订为797→867ce8b9，后者1605字符/19引用、独立High科学/引用PASS，真实阅读逐字等API、Markdown导出13420字符全来源完整；无人工正文替换、无新代码/部署/依赖/OCR。两次限定任务证明来源绑定的局部修订可行，不证明六字段全自动可靠。
+- 该路径从服务端基稿精确绑定sourceTaskId，回查同用户/RO/artifact/hash/quote，再复用完整packet与citation remap/materialize；不同于旧editorDraft的手工goal片段。纯文本draftChanges目前无字段证据回写，不直接给它塞全文；sdf/多PDF不猜latest。runtime scientific-writing v3与research-note-formatting在真实调用中复用。
 - 当前应用1e6271776a9ef5a542c3e0f4b50d2188ef808c67 / rollback a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a；必要服务器build/start exit0，真实页面release200同SHA。独立browser provider d1630135 / rollback92cc416e、video runner0df87c9b不变。
 - 1bf审校current/source均为4b46，复用既有scientificReviewPrompt/Guard与critical-thinking v2，保存真实verdict/issues/lineage。新d5c6f699仍接受错method/limitations且扩写三案、漏条件；NOT ACCEPTED，不再整稿自省循环。
 - 现有完整来源写作实产4bedbb4b：具体问“变换I还是E/相位/积分”后正确找回链，独立High核心科学PASS，1246字符/15引用；建议语仍缺远场/正峰同步、超700字。五问63e2acc5再次出错，不足以支持通用自动审校。
@@ -14,7 +16,7 @@
 |---|---|---|
 | 1 | 科学文档与公式 | Docling1.30/CodeFormulaV2/TeX来源/KaTeX已生产；26页32式中28可排版、4损坏标记。两个代表式对原页，非全篇物理验收。 |
 | 2 | 全文理解与凝练 | paper-analysis v8/summary v6/reviewOnly已部署；d5c6审校仍未通过；单问题回读4bed核心科学PASS，自动整稿仍不可靠；92人工审校稿保留。 |
-| 3 | 科学写作与引用 | 68a0e6b2已部署：明确写作才加载SourceMap，私有note/review/manuscript，同用户/RO校验，程序绑定引用；直接保存不调用模型，修订一次provider cycle。 |
+| 3 | 科学写作与引用 | 既有SourceMap与基稿血缘/精确引用重映射已复用；867方法笔记来源绑定局部修订真实科学PASS及阅读/导出通过。纯文本editorDraft不具备同等来源闭环；多PDF初次写作latest fallback尚未改。 |
 | 4 | 精美笔记 | 68a0e6b2已部署：运行时research-note-formatting，Hermes草稿卡、宽阅读/编辑弹层、折叠来源、安全Markdown/KaTeX、真实保存和Markdown下载。多格式文档导出按具体需求补齐。 |
 | 5 | 多格式附件 | XLSX/PPTX/HTML已生产，派生副本清洗、原件保留；真实多样样本兼容未观察。复用已有解析器，未另装MarkItDown全套。 |
 | 6 | 艺术图片与视频 | 0df87c9b已部署：艺术指导/构图、视觉叙事/旁白与locale/style传递；真实新图/成片未观察。现有网页生图路线不变，视频与批量冷启动暂缓。 |
@@ -22,7 +24,7 @@
 用户流程：一句话或附件开始同一私有研究 → Hermes理解整理 → 用户少量修改/确认 → 图片或视频 → 审核发布。主屏标题/贡献→核心媒体→六字段→文末资料；长笔记独立阅读。
 
 ## 来源与选择
-- 用户要求复用优先，已读取下列GitHub源文件并对照实际调用；不凭README或sources注释声称集成。2026-09-13用现有完整来源写作实产具体问题回读→引用引导共编；未安装完整PaperQA或其它第三方能力。
+- 用户要求复用优先，已读取下列GitHub源文件并对照实际调用；不凭README或sources注释声称集成。2026-09-13已从具体问题回读继续走完整来源基稿修订，867经独立科学/引用核对PASS；复用已有runtime，不安装完整PaperQA或其它第三方能力。
 
 | 上游 | 实际复用/本次发现 | 接续边界 |
 |---|---|---|

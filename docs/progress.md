@@ -1,5 +1,7 @@
 # CURRENT Progress Window
 
+- 2026-09-13质量推进：复用现成完整来源writingDraft修订链，4bed→79751c95→867ce8b9两次有界服务器M3修订，无人工正文替换/新代码/部署/OCR。867方法笔记1605字符/19引用，经独立High原文复核PASS；保留完整运算链、√I场幅、远场与电子/束团中心正峰同步。797本身科学可用，仅有球面几何的紧邻引用缺口，不能把清晰度增强误报为科学纠错。
+- 实际867页面阅读/只读编辑/来源逐字等保存API；点击Markdown下载13420字符，正文及19条来源完整。前文叙述保留，一处引用更正；末段582字符，尚非短六字段稿。证据Temp/xgs-grounded-method-{revision,final}-*及服务器/jobs/hermes-grounded-method-*。可行路线为来源基稿→全文绑定→局部修订→独立原文核对；六字段自动稿仍未通过，未采用/发布，92/40e/v10/已批图保护。
 - 2026-09-13：当前应用1e6271776a9ef5a542c3e0f4b50d2188ef808c67 / rollback a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a；必要服务器build/start exit0，xgs-explicit-writing-deploy-20260913.log，真实页面/__release200同SHA。branch codex/onchip-video-release，后续docs-only HEAD不是release，未合并main。
 - 实际私有92链接曾显示92摘要/较新失败63e正文；1e627修复恢复逻辑为同RO合法writing优先initialTaskId，独立High复核通过。部署后真实打开/编辑只读/回阅读/展开来源/截图成功：1118字符/17引用逐字等保存API与此前原文复核稿，user_edited保留，无63e替代、保存按钮或排版错误。Temp/xgs-explicit-writing-{reading,saved}-20260913.*与服务器/jobs/hermes-explicit-writing-*为本轮证据。
 - 1bf已将reviewOnly接入既有scientificReviewPrompt/Guard，保持授权/CAS和SourceMap/bridge复用。实产d5c6f699审校4b46仍不通过：接受错误method/limitations、把代表结果扩成三案且漏条件；不能将review_received或空issues当科学通过。
@@ -10,4 +12,4 @@
 - 浏览器底层Mojo分配原因未明，空编码override已清理。旧generatingPages=1来自整页历史关键词，不能证实活动；复用既有Stop/停止控件，14页stop/composer/dirty均0、三锁/空队列/持久化确认后仅重启一次成功，登录保留。实际current-ingestion六字段/35引用与API一致、revision11；Playwright握手仍会超时，现有raw target-CDP完成私有92回读，不称长期稳定已解决。
 - 私有92cafb82审校稿保留（1118字符/17引用、user_edited、独立原文复核及真实保存/重载/下载一致）；原40e23948、公开v10、revision11及已批图保护。新自动稿未采用/发布，视频/批量暂停。
 - 现有GitHub来源方法复用与实际调用对照见hermes-capability-registry“来源与选择”；未安装第三方能力，不将方法借鉴称为完整PaperQA集成。
-- 无测试/预检/CI/本机运行。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md；下一步用户审阅92稿，确认后才采用/公开，当前采用来源辅助+人工逐项校正路径，自动全文质量仍未解决。
+- 无测试/预检/CI/本机运行。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md；后续局部修订复用已验证的writingDraft精确来源路径，采用/公开仍待用户质量确认；自动全文质量尚未解决。

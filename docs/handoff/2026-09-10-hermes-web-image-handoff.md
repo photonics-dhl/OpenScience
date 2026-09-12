@@ -41,6 +41,14 @@
 - 普通editorDraft仍不自动加载全文；本次由既有写作任务的原文引用传入goal完成桥接。这是来源引导的共编路径，尚不是端到端自动纠错。
 - 证据本机Temp：xgs-focused-method-v2-result-20260913.json、xgs-focused-case-result-20260913.json、xgs-focused-method-thinking-result-20260913.json、xgs-focused-method-edit-{submit,read}-20260913.sh；服务器/jobs/hermes-focused-*。
 
+## Grounded writing revision: bounded quality PASS (2026-09-13)
+- 用户继续要求推进质量。新取证：普通editorDraft没有自动全文/字段来源回写；旧手工请求甚至把agentTaskId放入ingestion scope（真实UI是ingestionTaskId）。不可把手工截取goal当完整来源路径。独立High建议复用已有writingDraft修订，不扩展纯文本draftChanges以免继续挂旧字段证据。
+- 既有handleScientificWriting→resolveScientificWritingSource从服务端基稿绑定sourceTaskId，校验同用户/RO/workspace/artifact/hash/旧quote，加载全文SourceMap并重映射引用；无latest猜测、无新API/服务/依赖/应用代码改动，无OCR/map重跑。runtime scientific-writing v3与research-note-formatting真实复用。
+- 4bed基稿→79751c95-8857-461e-b357-264d9791cadd：只要求修订末段，未给成稿；原标题/前文逐字保留，1487字符/17引用。独立复核最终结论为科学PASS，球面几何缺紧邻locator。√I省略与单电子同步不是科学错误，新增φ90°及θ积分限有原文明文支持，不能误删。
+- 797→867ce8b9-1e48-4412-b1bf-1800a5d64dc9：第二个限定修订请求增强√I表述/电子或束团中心同步，收窄为有引用的远场近似；仍由服务器M3成稿，无人工正文替换。全稿1605字符/19引用，末段582字符，原标题/前文叙述逐字未变，第5步一处引用由S84改S235。独立High原文核对最终PASS，无必要修正；不将初轮过严判断写成模型科学错误。
+- 867真实页面打开/只读编辑/展开来源：正文逐字等保存API，19条quote全相等，0保存按钮/0KaTeX错误（正文主要为文本符号，不代表全公式排版）。实际点击Markdown下载，13420字符含完整正文和19来源；截图阅读可用。服务器/jobs/hermes-grounded-method-{revision,final}-*及本机Temp/xgs-grounded-method-{revision,final}-20260913相关文件为证据。
+- 可用路径已推进为“已有来源基稿→全文绑定→限定局部修订→独立原文核对→真实阅读/导出”，并非全自动纠错或六字段质量通过；两次有界任务的scope/目标不同，不再重试旧editorDraft路线。普通editorDraft与多PDF初次写作latest fallback仍是后续边界；未采用/发布任何新内容。
+
 ## Browser recovery
 - v6新页12个JS ERR_INSUFFICIENT_RESOURCES，一次重载后空白；1bf单个替代#claim-review页仍13个CSS/JS失败，只显示壳。未循环重载。
 - 只读诊断定位Chrome压缩内容解码的Mojo data-pipe创建失败：Network.ContentDecodingInterceptor.CreateDataPipeSuccess.URLLoaderThrottle计324中14失败。PID/内存/fd/socket/shared memory/disk余量未触限，无OOM/crash；底层分配失败原因仍未知。
@@ -51,7 +59,7 @@
 - 1e627实际打开92、切编辑只读正文、完成后展开来源并截图：1118字符/17引用，正文与全部引用逐字等保存API及此前独立复核稿，user_edited保留、0保存按钮/0排版错误、无63e卡片；未修改或采用内容。证据本机Temp/xgs-explicit-writing-{reading,saved}-20260913.*、服务器/jobs/hermes-explicit-writing-*。截图阅读正常；浏览器底层分配根因及长期稳定性仍未知。
 
 ## Next and read-first
-- a8部署完成且10799ba3已实产/独立原文复核失败；不要再重跑同一路径或堆提示词。单问题回读可辅助审校，最终精华稿仍需人工逐项校正，现成92稿可用。
-- 指定稿件恢复已完成部署及实际回读；下一步由用户审阅92质量稿，确认后才采用到研究正文/进入图片与公开发布。可行的当前路径为来源辅助+人工逐项校正；自动全文质量仍未解决，不再重复同路线模型生成或浏览器重启，视频/批量暂停。
+- 867方法笔记已完成服务器来源修订、独立科学/引用核对及真实UI/下载，92六字段人工审校稿仍保留；后续局部修订优先复用已验证writingDraft来源路径，不能回到无来源editorDraft盲改或整稿重生成。
+- 私有方法稿入口：同RO edit?hermesTask=867ce8b9-1e48-4412-b1bf-1800a5d64dc9；92精华稿供最终采用审阅。采用到研究正文及公开发布待用户质量确认，视频/批量暂停；六字段全自动科学质量与浏览器长期稳定性仍未解决。
 - GitHub源文件/真实调用对照见hermes-capability-registry“来源与选择”；用户复用优先已入AGENTS/Memory。优先单个争议回读与最小改动，不能宣称M3全自动文献凝练已可靠。
 - 继续前读此handoff、需求基线相关章节、server-capabilities；当前版本看Git/服务器，不恢复旧MVP next action。
