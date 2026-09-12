@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse } from 'node:path';
-import type { StoryboardDocument } from '@openscience/domain';
+import type { StoryboardDocument, StoryboardView } from '@openscience/domain';
 
 const MAX_JSON = 128 * 1024;
 const MAX_PNG = 10 * 1024 * 1024;
@@ -27,6 +27,8 @@ export interface HostVideoInput {
   sceneRoles?: readonly ['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'];
   sourceClaimIds: string[];
   storyboard: StoryboardDocument;
+  locale?: StoryboardView['locale'];
+  style?: StoryboardView['style'];
   sceneImages: Buffer[];
 }
 
@@ -132,7 +134,13 @@ export class HostVideoSpool {
     input.sceneImages.forEach((bytes) => {
       if (bytes.length < 33 || bytes.length > MAX_PNG || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') fail('INVALID_VIDEO_INPUT');
     });
-    const storyboardBytes = Buffer.from(JSON.stringify(input.storyboard));
+    if ((input.locale !== undefined && !['zh', 'en'].includes(input.locale))
+      || (input.style !== undefined && !['watercolor', 'technical', 'ink'].includes(input.style))) fail('INVALID_VIDEO_INPUT');
+    const storyboardBytes = Buffer.from(JSON.stringify({
+      ...input.storyboard,
+      ...(input.locale !== undefined ? { locale: input.locale } : {}),
+      ...(input.style !== undefined ? { style: input.style } : {}),
+    }));
     if (storyboardBytes.length === 0 || storyboardBytes.length > MAX_JSON) fail('INVALID_VIDEO_INPUT');
     const files = {
       storyboard: { name: 'storyboard.json', size: storyboardBytes.length, sha256: createHash('sha256').update(storyboardBytes).digest('hex') },

@@ -1,20 +1,21 @@
 # Hermes Capability Registry
 
 ## 当前状态（2026-09-12）
-- ECS应用a1ff2db9ecc6f8f598c2a72d05aaee3c7dfd1889 / rollback57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e；网页生图provider d1630135 / rollback92cc416e。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 媒体增强候选：scientific-art-direction v1 / scientific-video-direction v1已接入现有分镜与图片brief；跨图风格/标签连续、来源约束叙事及旁白，不增加生成轮次。视频locale/style沿原storyboard文件传递，不新增哈希或存储；独立runner须先于新Worker部署。中文视频入口限制保持；尚无新图片/视频实产证据。
+- ECS应用68a0e6b248891b308a963f75988bf230f1b832c4 / rollbacka1ff2db9ecc6f8f598c2a72d05aaee3c7dfd1889；网页生图provider d1630135 / rollback92cc416e。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 用户已明确授权按写作指令，将当前研究私稿/必要摘录发送MiniMax。普通问答不自动触发写作；生产不依赖Chat科学定稿。
 - 真实a1c0da49的语义bridge第一次成功42191tokens/124574ms，final主接口空正文、备用HTTP401，六字段未产出。旧空响应final用量未知，不是0；科学结果未采用。
-- 写作/笔记、空响应诊断已实现待部署。语义复用补丁因自动审批拒绝停止，已披露理由并请求明确批准；不能声称已有断点续跑。
+- 写作/笔记、空响应诊断已部署，首份真实稿件尚未生成。语义复用补丁因自动审批拒绝停止，已披露理由并请求明确批准；不能声称已有断点续跑。
 - 无新增服务/供应商/OCR/浏览器。禁止测试/预检/CI/本机构建；必要服务器build/start与真实产品操作按授权推进。
 
 | 顺序 | 能力 | 当前状态与剩余 |
 |---|---|---|
 | 1 | 科学文档与公式 | Docling1.30/CodeFormulaV2/TeX来源/KaTeX已生产；26页32式中28可排版、4损坏标记。两个代表式对原页，非全篇物理验收。 |
 | 2 | 全文理解与凝练 | paper-analysis v8/scientific-summary v2，长文map→semantic reduce→final，短文/旧候选P bridge→final；bridge正常，最新final空正文。保留原确认稿，待诊断续作。 |
-| 3 | 科学写作与引用 | 已实现待部署：明确写作才加载SourceMap，私有note/review/manuscript，同用户/RO校验，程序绑定引用；直接保存不调用模型，修订一次provider cycle。 |
-| 4 | 精美笔记 | 已实现待部署：运行时research-note-formatting，Hermes草稿卡、宽阅读/编辑弹层、折叠来源、安全Markdown/KaTeX、真实保存和Markdown下载。多格式文档导出按具体需求补齐。 |
+| 3 | 科学写作与引用 | 68a0e6b2已部署：明确写作才加载SourceMap，私有note/review/manuscript，同用户/RO校验，程序绑定引用；直接保存不调用模型，修订一次provider cycle。 |
+| 4 | 精美笔记 | 68a0e6b2已部署：运行时research-note-formatting，Hermes草稿卡、宽阅读/编辑弹层、折叠来源、安全Markdown/KaTeX、真实保存和Markdown下载。多格式文档导出按具体需求补齐。 |
 | 5 | 多格式附件 | XLSX/PPTX/HTML已生产，派生副本清洗、原件保留；真实多样样本兼容未观察。复用已有解析器，未另装MarkItDown全套。 |
-| 6 | 艺术图片与视频 | 后续保留：画风/构图、视觉叙事、镜头/旁白/TTS/FFmpeg。现有网页生图路线不变，视频与批量冷启动暂缓。 |
+| 6 | 艺术图片与视频 | 本批候选：艺术指导/构图、视觉叙事/旁白与locale/style传递。现有网页生图路线不变，视频与批量冷启动暂缓。 |
 
 用户流程：一句话或附件开始同一私有研究 → Hermes理解整理 → 用户少量修改/确认 → 图片或视频 → 审核发布。主屏标题/贡献→核心媒体→六字段→文末资料；长笔记独立阅读。
 

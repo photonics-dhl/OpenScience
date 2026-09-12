@@ -1,6 +1,8 @@
 # OpenScience 当前进度
 
 ## 2026-09-12 — 接续写作部署
+- 68a0e6b2已部署exit0，rollbacka1ff2db9；公网/__release与.release-id一致、API/Worker healthy。写作/引用/笔记阅读编辑保存下载及失败用量诊断上线，首份真实写作稿件未生成；日志xgs-hermes-writing-build-fix-deploy-20260912.log。
+- 媒体增强候选已实现：图片艺术指导/风格连续与视频叙事/旁白runtime指令，保留科学来源边界；视频元数据沿既有storyboard文件完整性机制传入runner，旧请求默认保持。独立High静态review无阻塞，尚未部署或生成新媒体。
 - 实际生产仍a1ff2db9、rollback57f00dc9；aa5d2e85上次已进入服务器构建，但Web因lib/api.ts漏导入/导出SourceLocator而失败，尚未切换应用。日志xgs-hermes-writing-deploy-20260912.log。
 - 按systematic-debugging/architecture-guard定向静态定位，复用domain已有类型，仅补Web类型导入/导出；继续必要服务器build/start，无测试/预检/CI。
 - 836d6018服务器Web构建完成，Worker随后报TS18046（引用检查回调丢失shape.body类型收窄）；改用已收窄局部变量，引用校验行为不变。该轮未切换生产；日志xgs-hermes-writing-fixed-deploy-20260912.log。

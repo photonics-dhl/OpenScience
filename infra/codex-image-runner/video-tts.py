@@ -9,7 +9,10 @@ from pathlib import Path
 import soundfile as sf
 import torch
 from qwen_tts import Qwen3TTSModel
-INSTRUCTION = '用自然平实的普通话连贯地解释，语气放松，语速适中。'
+NARRATION_SETTINGS = {
+    'zh': ('Chinese', '用自然平实的普通话连贯地解释，语气放松，语速适中。', ''),
+    'en': ('English', 'Explain naturally in clear, conversational English, with a relaxed tone and a moderate pace.', ' '),
+}
 MODEL_ROOT = Path('/models/qwen3-tts-12hz-1.7b-customvoice')
 
 
@@ -29,6 +32,10 @@ def main():
     scenes = source.get('scenes')
     if source.get('schemaVersion') != 1 or not isinstance(scenes, list) or not 3 <= len(scenes) <= 6:
         raise ValueError('invalid storyboard')
+    locale = source.get('locale', 'zh')
+    if not isinstance(locale, str) or locale not in NARRATION_SETTINGS:
+        raise ValueError('invalid narration locale')
+    language, instruction, separator = NARRATION_SETTINGS[locale]
     texts = []
     for scene in scenes:
         text = scene.get('narration') if isinstance(scene, dict) else None
@@ -44,12 +51,12 @@ def main():
         str(MODEL_ROOT), device_map='cpu', dtype=torch.bfloat16,
         attn_implementation='sdpa', local_files_only=True,
     )
-    full_text = ''.join(texts)
+    full_text = separator.join(texts)
     if len(full_text) > 450:
         raise ValueError('narration exceeds fixed 90-second preflight bound')
     with torch.inference_mode():
         waves, rate = model.generate_custom_voice(
-            text=full_text, language='Chinese', speaker='Serena', instruct=INSTRUCTION, max_new_tokens=2048,
+            text=full_text, language=language, speaker='Serena', instruct=instruction, max_new_tokens=2048,
         )
     wave = validate_waveform(waves[0], rate)
     duration = len(wave) / rate

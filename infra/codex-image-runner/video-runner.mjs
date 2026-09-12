@@ -20,6 +20,12 @@ async function directory(path){const s=await lstat(path);if(!s.isDirectory()||s.
 function strictObject(value,keys){if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join(',')!==[...keys].sort().join(','))invalid();return value;}
 function unit(value){return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1;}
 function boundedText(value,max){if(typeof value!=='string'||!value.trim()||value.length>max)invalid();return value;}
+function storyboardPresentation(value){
+ const locale=value?.locale===undefined?'zh':value.locale;
+ const style=value?.style===undefined?'technical':value.style;
+ if(!['zh','en'].includes(locale)||!['watercolor','technical','ink'].includes(style))invalid();
+ return {locale,style};
+}
 function validateAnimation(value,sceneClaimIds){
  const plan=strictObject(value,['objects','actions']);
  if(!Array.isArray(plan.objects)||plan.objects.length<1||plan.objects.length>12||!Array.isArray(plan.actions)||plan.actions.length<1||plan.actions.length>16)invalid();
@@ -50,7 +56,8 @@ function validateAnimation(value,sceneClaimIds){
  return {objects,actions,hasDynamic:actions.some(action=>['translate','pulse','draw'].includes(action.kind)&&byId.get(action.target).kind!=='label')};
 }
 function validateContentStoryboard(bytes,request){
- const value=strictObject(JSON.parse(bytes.toString()),['schemaVersion','title','scenes']);
+ const raw=JSON.parse(bytes.toString());
+ const value=strictObject(raw,['schemaVersion','title','scenes',...(Object.hasOwn(raw??{},'locale')?['locale']:[]),...(Object.hasOwn(raw??{},'style')?['style']:[])]);
  if(value.schemaVersion!==1||!Array.isArray(value.scenes)||value.scenes.length<3||value.scenes.length>6||value.scenes.length!==request.files.scenes.length)invalid();
  boundedText(value.title,120);
  const allowedClaims=new Set(request.sourceClaimIds);const covered=new Set();let hasDynamic=false;
@@ -85,8 +92,9 @@ async function snapshotVideoRequest(dir,id,now=Date.now()){
   const bytes=await safeRead(join(dir,name),limit);if(bytes.length!==spec.size||createHash('sha256').update(bytes).digest('hex')!==spec.sha256)invalid();buffers.push(bytes);
  }
  if(createHash('sha256').update(JSON.stringify(files)).digest('hex')!==request.inputHash)invalid();
- if(contentDriven)validateContentStoryboard(buffers[0],request);
- return {request,storyboard:buffers[0],scenes:buffers.slice(1)};
+ const storyboard=contentDriven?validateContentStoryboard(buffers[0],request):JSON.parse(buffers[0].toString());
+ const presentation=storyboardPresentation(storyboard);
+ return {request,storyboard:buffers[0],scenes:buffers.slice(1),presentation};
 }
 export async function validateVideoRequest(dir,id,now=Date.now()){return (await snapshotVideoRequest(dir,id,now)).request;}
 
@@ -161,7 +169,7 @@ export async function runVideoOne(config,dependencies={}){
   await docker([...common(`xgs-video-tts-${id}`,'12g','4','256'),'--user','10001:10001','-v',`${config.model}:/models/qwen3-tts-12hz-1.7b-customvoice:ro`,'-v',`${config.scripts}:/scripts:ro`,'-v',`${ttsInput}:/input:ro`,'-v',`${tts}:/output:rw`,'--entrypoint','python',config.ttsImage,'/scripts/video-tts.py'],Math.max(1,request.deadlineAt-Date.now()));
   const narration=JSON.parse((await safeRead(join(tts,'narration.json'),128*1024)).toString());
   const storyboard=JSON.parse(snapshot.storyboard.toString());
-  const renderStoryboard={schemaVersion:1,title:storyboard.title,locale:'zh',style:'technical',provider:narration.provider,speaker:narration.speaker,profile:request.profile,scenes:storyboard.scenes.map((scene,i)=>({title:scene.title,artwork:`scene-${i}.png`,start:narration.scenes[i].start,cues:narration.scenes[i].cues,...(contentDriven?{sourceClaimIds:scene.sourceClaimIds,animation:scene.animation}:{role:ROLES[i]})}))};
+  const renderStoryboard={schemaVersion:1,title:storyboard.title,...snapshot.presentation,provider:narration.provider,speaker:narration.speaker,profile:request.profile,scenes:storyboard.scenes.map((scene,i)=>({title:scene.title,artwork:`scene-${i}.png`,start:narration.scenes[i].start,cues:narration.scenes[i].cues,...(contentDriven?{sourceClaimIds:scene.sourceClaimIds,animation:scene.animation}:{role:ROLES[i]})}))};
   await writeOwnedExclusive(join(renderInput,'storyboard.json'),Buffer.from(JSON.stringify(renderStoryboard)),1000);
   await writeOwnedExclusive(join(renderInput,'narration.wav'),await safeRead(join(tts,'narration.wav'),32*1024*1024),1000);
   await docker([...common(`xgs-video-render-${id}`,'4g','2','128'),'--user','1000:1000','-v',`${renderInput}:/input:ro`,'-v',`${output}:/output:rw`,config.rendererImage,'--input','/input','--output','/output'],Math.max(1,request.deadlineAt-Date.now()));

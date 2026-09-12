@@ -1,9 +1,9 @@
 # OpenScience (XGS) 项目文件索引
 
-> **CURRENT 2026-09-12:** application a1ff2db9 / rollback57f00dc9；browser provider d1630135 / rollback92cc416e。唯一任务入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-12:** application 68a0e6b2 / rollbacka1ff2db9；browser provider d1630135 / rollback92cc416e。唯一任务入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 真实a1c0da49语义bridge成功，final空正文/备用401，无新六字段；原22-v10图文公开保留。失败final用量未知，不能记0或宣称质量不降节约。
-> 写作/引用与精美笔记、空响应安全诊断已实现待发布；用户已允许按写作指令处理当前研究私稿。语义结果复用补丁因自动审批拒绝待明确批准。
-> 公式/多格式资料、单一创建对话与附件、Hermes任务接续已部署；艺术图片/视频叙事为后续第6项，不恢复旧冗余表单。
+> 写作/引用与精美笔记、空响应安全诊断已部署，首份实产尚未生成；用户已允许按写作指令处理当前研究私稿。语义结果复用补丁因自动审批拒绝待明确批准。
+> 公式/多格式资料、单一创建对话与附件、Hermes任务接续已部署；艺术图片/视频叙事与元数据传递为本批候选，不恢复旧冗余表单。
 > 无测试/预检/CI/本机运行；必要服务器build/start按授权继续。维护索引，历史版本不覆盖CURRENT；集成保留PRD v1.1已有能力。
 
 ## 当前产品交付
@@ -510,7 +510,8 @@
 
 | `scripts/import-presentation-media.test.mjs` | 维护CLI实际启动回归，防止根目录workspace别名解析失败 | 本地实际入口测试与CI通过；ECS预检成功 |
 
-| `packages/domain/src/assets/storyboard.ts` / `packages/domain/test/assets/storyboard.test.ts` / `apps/agent-worker/src/presentation/storyboard.ts` / `apps/web/components/presentation/StoryboardPanel.tsx` / `apps/web/test/storyboard-panel.test.tsx` | Sourced storyboard contract, Gateway planner and Hermes revision UI | DEPLOYED d6507ea; 3 tasks/4 MiniMax-M3 calls/3 credits, reviewed 45s plan approved; create/revise/compare/replay/browser accepted |
+| `packages/domain/src/assets/storyboard.ts` / `packages/domain/test/assets/storyboard.test.ts` / `apps/agent-worker/src/presentation/storyboard.ts` / `apps/web/components/presentation/StoryboardPanel.tsx` / `apps/web/test/storyboard-panel.test.tsx` | Sourced storyboard contract, Gateway planner and Hermes revision UI | 既有生产能力；2026-09-12艺术指导/叙事增强候选，实际release见CURRENT handoff |
+| `apps/agent-worker/src/skills/media-direction.ts` | 图片艺术指导、跨图一致性、科学叙事及旁白；由storyboard/scene-image现有Gateway调用按阶段加载 | 2026-09-12候选；不增加模型轮次，不据提示词宣称成片质量通过 |
 
 | `packages/ai-gateway/src/image.ts` / `packages/ai-gateway/test/image.test.ts` | Bounded MiniMax single-image provider and Gateway contract tests | DEPLOYED615ca2d; explicit CN region, real image and ECS decode verified; no automatic paid retry |
 | `packages/domain/src/assets/scene-image.ts` / `apps/agent-worker/src/presentation/scene-image.ts` | Approved storyboard scene binding and source-aware image prompt planning | DEPLOYED615ca2d; exact parent/Claims, separate image draft, parent invalidation; first image quality pending |

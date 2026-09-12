@@ -7,10 +7,10 @@
 
 ## 版本
 - 工作树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；HEAD以Git为准，未合并main；根目录无关改动不碰。
-- ECS应用 a1ff2db9ecc6f8f598c2a72d05aaee3c7dfd1889；rollback 57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e。
-- 干净发布树 E:/Miscellaneous/XGS/.worktrees/deploy-m3-thinking。aa5d2e85写作与空响应诊断尚未部署：上次服务器Web构建因lib/api.ts漏导入/导出SourceLocator失败；本次补齐domain类型后继续部署。
+- ECS应用 68a0e6b248891b308a963f75988bf230f1b832c4；rollback a1ff2db9ecc6f8f598c2a72d05aaee3c7dfd1889。
+- 干净发布树 E:/Miscellaneous/XGS/.worktrees/deploy-m3-thinking。aa5d2e85写作/诊断在本次修复两处编译错误后已上线：Web漏SourceLocator导入/导出、Worker回调正文类型收窄丢失。
 - 网页生图provider d1630135d569d28364d295380bb4e0333c3ee264；rollback 92cc416ee3fe921f62c75cbe6f69e48d0b55227d；浏览器/会话/出口路线未改。
-- 必要服务器build/start成功，日志 C:/Users/Mac/AppData/Local/Temp/xgs-hermes-semantic-contract-deploy-20260912.log exit0；不等于科学质量通过。
+- 必要服务器build/start exit0，公网/__release与.release-id一致、API/Worker healthy；日志 C:/Users/Mac/AppData/Local/Temp/xgs-hermes-writing-build-fix-deploy-20260912.log。不等于真实写作质量通过。
 
 ## 最新真实论文结果
 - 未确认ingestion 840e24f9-cf9b-471f-a38c-7331705b1003 当前agent a1c0da49-d2ea-4407-b3e6-b68eadd72ceb；任务succeeded、scientificReview blocked，六字段空，未采用/发布。
@@ -26,16 +26,16 @@
 - 单一创建对话/附件入口及首条Hermes接续、去除大小按钮；新建页实际portrait208×208/opacity1。未另造数据验证首次创建。
 - 桌面静默任务更新、编辑资料在文末、公开图文/缩略图、SessionProvider已部署；短期观察不证明所有长期登录情况。
 
-## 本轮待发布
+## 本轮写作已部署／媒体候选
 - 科学写作backend：同用户/RO/当前membership校验，SourceMap程序引用，私有note/review/manuscript。明确写作/修订才加载全文，普通问答及否定指令不触发。
 - 直接保存不调用模型；生成/修订maxRetries0（一次provider cycle，供应商fallback可能多次）。写作稿不覆盖SDF或发布。
 - 笔记frontend：Hermes卡片进入宽阅读/编辑弹层，安全Markdown/公式、来源折叠、下载、真实保存。同用户/RO恢复；sourceTaskId是提取来源，baseDraftTaskId是写作任务。
-- High静态审阅已修backend触发/重试问题；frontend正在修普通提问携带整稿、旧task链接覆盖最新稿。禁止把实现完成当部署。
+- High静态审阅发现的误触发、普通提问携带整稿、旧task链接覆盖最新稿均已修复并上线；首份真实写作产物仍待用户选择。
 - 空响应诊断High静态复核通过：失败usage缺失记null、记录规范化finish/block计数，无正文/thinking/Secret；明确length才停止同预算fallback，不能反推旧故障。
 - 语义续跑两版补丁均遭自动审批拒绝（新增复用校验必要性不足），已停止并撤销extractor本轮片段。现已向用户说明具体故障/风险并请求明确批准；未收到前不重试或换工具绕过。
 - 待批准方案：仅在现有私有semanticStage保留已成功reduction与P绑定，复用现有来源hash/授权/schema校验；同源原文时只续final。不新增存储层/hash/锁，不采用候选。
 - 用户尚未选择首份写作产物（笔记/评述/暂不生成），不能把部署授权当具体生成指令。
-- 后续第6项：艺术图片/构图/视频镜头叙事/旁白；现有网页生图路线不变。视频和批量冷启动暂缓。
+- 第6项候选：media-direction运行时艺术/叙事指令已接入原分镜/图片规划，视频locale/style沿既有storyboard文件传递；独立High静态review无阻塞。先升级兼容旧请求的video runner，再部署新Worker；复用镜像/模型。中文视频入口保持，未生成新媒体；视频和批量冷启动暂缓。
 
 ## 保护内容
 - RO c896802c-35dd-4b59-8db1-5f374f83a6d8；正式v10 f4e2dc71-1fe8-406f-8c19-e1849503d698，草稿修订11。
@@ -44,10 +44,10 @@
 - 旧19/20/21可恢复归档，原文件/公共ID保留。一篇带图已发布；2–3篇精选、多图真实样本、视频未全部完成。
 
 ## 后续
-1. frontend定向High复核已收尾，aa5d2e85已提交；补齐SourceLocator类型导入/导出后继续服务器build/start部署，复用此前审阅；保持申请续跑批准单独待定。
+1. 写作/诊断68a0e6b2部署完成。媒体High审阅收尾后，先更新独立runner再部署应用；保持申请续跑批准单独待定。
 2. 续跑授权后再实现复用机制并审阅。从当前a1c做一次未确认refresh；旧bridge正文未存，不虚称可直接恢复。
 3. 读实际final与usage/stop，核对原文科学关系；不合格不写原确认稿/公开版本。
-4. 用户指定写作产物后经服务器实产，记录真实保存与阅读；写作落地后补媒体艺术能力。
+4. 用户指定写作产物后经服务器实产，记录真实保存与阅读；媒体代码与上线不能代替新图/成片质量观察。
 
 ## 历史比较
 - 62ae final40230tokens过长/条件泛化；0e final19380少51.83%但语义不合格：不是质量不降节约率，也非Codex总量。

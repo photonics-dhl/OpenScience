@@ -184,6 +184,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         taskId: task.id, executionAttempt: task.executionAttempt, profile: payload.video.profile,
         ...(payload.video.profile === 'onchip-field-sampling-v1' ? { sceneRoles: payload.video.sceneRoles } : {}),
         sourceClaimIds: payload.sourceClaimIds, storyboard: videoParents.storyboardView.document, sceneImages,
+        locale: videoParents.storyboardView.locale, style: videoParents.storyboardView.style,
       });
       bytes = Buffer.alloc(0); contentType = result.contentType; extension = 'mp4';
       generator = result.generator; generatorVersion = result.generatorVersion; promptHash = result.inputHash;
