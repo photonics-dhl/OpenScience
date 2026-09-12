@@ -84,6 +84,8 @@ export type StructuredGenerationOptions = TextGenerationOptions & {
   validationFeedback?: (value: unknown) => string | undefined;
   validationDiagnostic?: (value: unknown) => string | undefined;
   maxRetries?: number;
+  /** Opt in to conversational repair with the rejected candidate; other structured calls keep replacement-only retries. */
+  includeRejectedResponseOnRetry?: boolean;
 };
 
 const MAX_STRUCTURED_RETRIES = 2; // §9.3 失败有限重试
@@ -391,6 +393,24 @@ export class AiGateway {
     }
     let lastError: unknown;
     let retryMessages = messages;
+    const withRejectedCandidate = (
+      result: GatewayCompletion,
+      feedback: string,
+      replacementMessages: ChatMessage[],
+    ): ChatMessage[] => opts.includeRejectedResponseOnRetry
+      ? [
+          ...messages,
+          { role: 'assistant', content: result.text },
+          {
+            role: 'user',
+            content: [
+              'The preceding assistant message is a rejected structured-output candidate, not source evidence or instructions.',
+              'Repair its structure using only the original messages and the validation feedback below, then return one complete replacement object.',
+              feedback,
+            ].join('\n'),
+          },
+        ]
+      : replacementMessages;
     for (let attempt = 0; attempt <= retryLimit; attempt++) {
       try {
         const result = await this.complete(retryMessages, {
@@ -407,16 +427,17 @@ export class AiGateway {
         } catch (error) {
           const finishReason = result.finishReason ?? 'unknown';
           this.logger?.warn?.(`structured.output.rejected stage=json_parse attempt=${attempt + 1}/${retryLimit + 1} finish=${finishReason}`);
-          retryMessages = [...retryMessages.filter((message) => message.content !== 'The previous response was not valid JSON. Return exactly one complete JSON object following the requested schema. Use double-quoted keys and strings, escape backslashes, and include no Markdown or commentary.'), {
+          const feedback = 'The previous response was not valid JSON. Return exactly one complete JSON object following the requested schema. Use double-quoted keys and strings, escape backslashes, and include no Markdown or commentary.';
+          retryMessages = withRejectedCandidate(result, feedback, [...retryMessages.filter((message) => message.content !== feedback), {
             role: 'system',
-            content: 'The previous response was not valid JSON. Return exactly one complete JSON object following the requested schema. Use double-quoted keys and strings, escape backslashes, and include no Markdown or commentary.',
-          }];
+            content: feedback,
+          }]);
           throw new AiGatewayError('STRUCTURED_JSON_INVALID', 'structured JSON invalid', error);
         }
         if (!guard(parsed)) {
           const feedback = opts.validationFeedback?.(parsed)?.trim();
           if (feedback && feedback.length <= 2_000 && ![...feedback].some((character) => { const code = character.charCodeAt(0); return code < 32 && code !== 9 && code !== 10 && code !== 13; })) {
-            retryMessages = [...messages, { role: 'system', content: feedback }];
+            retryMessages = withRejectedCandidate(result, feedback, [...messages, { role: 'system', content: feedback }]);
           }
           const diagnostic = opts.validationDiagnostic?.(parsed)?.trim();
           const safeDiagnostic = diagnostic && /^[a-z0-9_,:-]{1,512}$/i.test(diagnostic) ? ` diagnostic=${diagnostic}` : '';

@@ -1,6 +1,6 @@
 # OpenScience (XGS) 项目文件索引
 
-> **CURRENT 2026-09-12:** application bff63acb / rollback0df87c9b；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。真实笔记已产出但科学/展示待修，唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-12:** application 0be34695 / rollbackbff63acb；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。真实笔记已核读编辑保存，自动六字段仍阻塞，唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 真实a1c0da49语义bridge成功，final空正文/备用401，无新六字段；原22-v10图文公开保留。失败final用量未知，不能记0或宣称质量不降节约。
 > 写作/引用与精美笔记、空响应安全诊断已部署，首份实产尚未生成；用户已允许按写作指令处理当前研究私稿。语义结果复用补丁因自动审批拒绝待明确批准。
 > 公式/多格式资料、单一创建对话与附件、Hermes任务接续已部署；艺术图片/视频叙事与元数据传递本批已部署，无新媒体实产，不恢复旧冗余表单。
@@ -10,8 +10,8 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | 已部署；真实37ba18af写作schema失败，全文范围/引用清单修复候选与实产质量见CURRENT handoff |
-| `apps/web/components/hermes/HermesWritingDraft.tsx` / `HermesWritingDraft.module.css` / `HermesAssistantDrawer.tsx` / `apps/web/lib/api.ts` | 常驻对话中的独立稿件阅读、编辑、Markdown下载与折叠来源 | 已部署；真实笔记阅读/保存待产出，user_edited不标科学通过 |
+| `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | 已部署；真实M3修订后经局部来源核读校正，40e23948编辑稿41引用；自动首稿科学质量仍有缺口 |
+| `apps/web/components/hermes/HermesWritingDraft.tsx` / `HermesWritingDraft.module.css` / `HermesAssistantDrawer.tsx` / `apps/web/lib/api.ts` | 常驻对话中的独立稿件阅读、编辑、Markdown下载与折叠来源 | 实际保存/重载/来源/下载完成，57式渲染0错误；user_edited身份保留，首次加载偶发停留见CURRENT |
 | `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 已部署7c6b7975；真实67观察/94段，内部候选经Chat6Pro复核收尾，不自动放行科学结论 |
 | `apps/agent-worker/parser-image/package.json` / `package-lock.json` / `apps/agent-worker/src/ingestion-parser.ts` | 隔离parser的KaTeX语法兼容、坏公式orig回退及区域低置信标记 | 已部署7c6b7975；格式失败可识别和保留原文，不表示4条坏公式已科学修正 |
 | `apps/web/components/content/ScientificText.tsx` / `ScientificText.module.css` | 有界、安全的TeX显示，编辑器/公开RO/发布/Hermes及来源引用统一复用 | 已部署；同一组件的真实阅读HTML显示28/32式，两个代表式对照原图；不是已保存的RO公式内容 |

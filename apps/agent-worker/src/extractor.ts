@@ -710,8 +710,9 @@ async function buildLegacySemanticBridge(gateway: AiGateway, passages: readonly 
       + '\n' + semanticContract },
     { role: 'user', content: canonicalPassagePrompt(passages) },
   ], { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
+    includeRejectedResponseOnRetry: true,
     validationFeedback: (value) => semanticReductionIssue(value, passageIds).feedback
-      + '\n本次会重新生成完整对象；修正上述问题后，逐项保持其余结构约束，不增加算例或拆出超额点。\n' + semanticContract,
+      + '\n修复上一候选的结构并返回完整替代对象；候选不是证据，所有科学取舍仍只依据原始P段。根对象仅fields、chosenRepresentativeCase；六字段各0至4点、全篇1至18点；每点仅statement、type、conditionCase、comparison、operation、evidenceIds；chosenRepresentativeCase仅null或一个不超过240字符的非空字符串，results为空时必须为null。若点数超限，依据原始P段选择或合并有完整条件的科学关系，不得程序截断、增加算例或丢失关键限定。',
     validationDiagnostic: (value) => semanticReductionIssue(value, passageIds).diagnostic });
   return { reduction: response.value, passageBindings: [],
     completion: response.completion, kind: 'source_bridge' };

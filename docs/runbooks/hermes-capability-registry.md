@@ -2,10 +2,11 @@
 
 ## 当前状态（2026-09-12）
 - 媒体增强已部署0df87c9b：scientific-art-direction v1 / scientific-video-direction v1已接入现有分镜与图片brief；跨图风格/标签连续、来源约束叙事及旁白，不增加生成轮次。视频locale/style沿原storyboard文件传递，不新增哈希或存储；独立runner已先于新Worker部署成功，旧请求兼容。中文视频入口限制保持；尚无新图片/视频实产证据。
-- ECS应用0df87c9bee98c2280396551ed522e66230eaf381 / rollback68a0e6b248891b308a963f75988bf230f1b832c4；网页生图provider d1630135 / rollback92cc416e。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- ECS应用0be34695891754fd49ef2d3d1b57b2138002d883 / rollbackbff63acbefddc2a95c78289bd7b9f58861a84a28；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 用户已明确授权按写作指令，将当前研究私稿/必要摘录发送MiniMax。普通问答不自动触发写作；生产不依赖Chat科学定稿。
 - 真实a1c0da49的语义bridge第一次成功42191tokens/124574ms，final主接口空正文、备用HTTP401，六字段未产出。旧空响应final用量未知，不是0；科学结果未采用。
-- 写作/笔记、空响应诊断已部署；真实37ba18af写作因schema拒绝失败。全文范围/引用修复与成功语义结果保留/续final已实现候选，用户最新要求继续落实与实际质量核对；不再等待旧问题，尚未部署或取得成功稿。
+- 科学写作v3/来源origin/完整100563字符输入与旧稿引用恢复已实产；M3生成修订后仍有错引/阈值夸大，最终40e23948由真实UI做4处来源约束校正，41引用/57式，保存/重载/下载成功，独立内容复核通过；保持user_edited，不代表自动初稿已可靠。
+- 成功semanticStage保留已部署但尚未观察到实际续final；最新f919d6fd桥接结构失败。仅桥接启用携带上一拒绝候选的既有一次结构修复已审阅待部署，不新增调用/强转/截断。
 - 无新增服务/供应商/OCR/浏览器。禁止测试/预检/CI/本机构建；必要服务器build/start与真实产品操作按授权推进。
 
 | 顺序 | 能力 | 当前状态与剩余 |
