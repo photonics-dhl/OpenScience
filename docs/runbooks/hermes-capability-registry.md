@@ -1,8 +1,8 @@
 # Hermes Capability Registry
 
 ## 当前状态（2026-09-12）
-- 媒体增强候选：scientific-art-direction v1 / scientific-video-direction v1已接入现有分镜与图片brief；跨图风格/标签连续、来源约束叙事及旁白，不增加生成轮次。视频locale/style沿原storyboard文件传递，不新增哈希或存储；独立runner须先于新Worker部署。中文视频入口限制保持；尚无新图片/视频实产证据。
-- ECS应用68a0e6b248891b308a963f75988bf230f1b832c4 / rollbacka1ff2db9ecc6f8f598c2a72d05aaee3c7dfd1889；网页生图provider d1630135 / rollback92cc416e。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 媒体增强已部署0df87c9b：scientific-art-direction v1 / scientific-video-direction v1已接入现有分镜与图片brief；跨图风格/标签连续、来源约束叙事及旁白，不增加生成轮次。视频locale/style沿原storyboard文件传递，不新增哈希或存储；独立runner已先于新Worker部署成功，旧请求兼容。中文视频入口限制保持；尚无新图片/视频实产证据。
+- ECS应用0df87c9bee98c2280396551ed522e66230eaf381 / rollback68a0e6b248891b308a963f75988bf230f1b832c4；网页生图provider d1630135 / rollback92cc416e。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 用户已明确授权按写作指令，将当前研究私稿/必要摘录发送MiniMax。普通问答不自动触发写作；生产不依赖Chat科学定稿。
 - 真实a1c0da49的语义bridge第一次成功42191tokens/124574ms，final主接口空正文、备用HTTP401，六字段未产出。旧空响应final用量未知，不是0；科学结果未采用。
 - 写作/笔记、空响应诊断已部署，首份真实稿件尚未生成。语义复用补丁因自动审批拒绝停止，已披露理由并请求明确批准；不能声称已有断点续跑。
@@ -15,7 +15,7 @@
 | 3 | 科学写作与引用 | 68a0e6b2已部署：明确写作才加载SourceMap，私有note/review/manuscript，同用户/RO校验，程序绑定引用；直接保存不调用模型，修订一次provider cycle。 |
 | 4 | 精美笔记 | 68a0e6b2已部署：运行时research-note-formatting，Hermes草稿卡、宽阅读/编辑弹层、折叠来源、安全Markdown/KaTeX、真实保存和Markdown下载。多格式文档导出按具体需求补齐。 |
 | 5 | 多格式附件 | XLSX/PPTX/HTML已生产，派生副本清洗、原件保留；真实多样样本兼容未观察。复用已有解析器，未另装MarkItDown全套。 |
-| 6 | 艺术图片与视频 | 本批候选：艺术指导/构图、视觉叙事/旁白与locale/style传递。现有网页生图路线不变，视频与批量冷启动暂缓。 |
+| 6 | 艺术图片与视频 | 0df87c9b已部署：艺术指导/构图、视觉叙事/旁白与locale/style传递；真实新图/成片未观察。现有网页生图路线不变，视频与批量冷启动暂缓。 |
 
 用户流程：一句话或附件开始同一私有研究 → Hermes理解整理 → 用户少量修改/确认 → 图片或视频 → 审核发布。主屏标题/贡献→核心媒体→六字段→文末资料；长笔记独立阅读。
 

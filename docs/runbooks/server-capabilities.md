@@ -1,14 +1,15 @@
 # 服务器能力与复用清单
 
-当前应用68a0e6b248891b308a963f75988bf230f1b832c4 / rollbacka1ff2db9ecc6f8f598c2a72d05aaee3c7dfd1889；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成，公网release一致，API/Worker healthy；无测试/CI/本机运行。
+当前应用0df87c9bee98c2280396551ed522e66230eaf381 / rollback68a0e6b248891b308a963f75988bf230f1b832c4；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成，公网release一致，API/Worker healthy；无测试/CI/本机运行。
 
 - 当前真实a1c0da49原P语义整理第一次成功：42191tokens/124574ms。final主接口空正文、备用HTTP401，未得到新六字段，原确认稿/公开版保留。旧Adapter丢失失败usage/stop，final用量未知，不能记0。
 - paper-analysis v8/scientific-summary v2、M3显式adaptive、Docling CPU1.30/CodeFormulaV2、安全KaTeX、XLSX/PPTX/HTML已部署。候选编号/模型返回成功不代表科学正确。
 - 统一Hermes创建/附件/首条指令已部署，实际portrait208×208/opacity1。私有写作/引用与笔记阅读编辑/保存/下载已部署，首稿尚未生成；用户已允许按写作指令处理当前研究私稿/必要摘录。
 - 已部署空响应诊断记录安全usage/finish/block数量，缺失usage为null；明确length时不原预算fallback。不能反推旧空响应原因。
 - 保留成功语义结果并续final的补丁受自动审批阻断，已向用户披露并请求明确批准；尚未实现。不要声称hash能恢复旧候选。
-- 没有新增服务、供应商、浏览器或OCR；艺术/叙事runtime与video locale/style传递为本批媒体候选。现有独立video-runner active，TTS/renderer镜像和模型可复用，升级走infra/codex-image-runner/install.sh --confirm-video；未生成新视频。
+- 没有新增服务、供应商、浏览器或OCR；艺术/叙事runtime与video locale/style传递已随0df87c9b部署。现有独立video-runner active，TTS/renderer镜像和模型可复用，升级走infra/codex-image-runner/install.sh --confirm-video；未生成新视频。
 - 当前任务/状态以[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)和[Hermes台账](hermes-capability-registry.md)为准。下文历史部署只用于能力复用，不能覆盖当前事实。
+- 2026-09-12媒体部署：独立video runner bundle已更新0df87c9bee98c2280396551ed522e66230eaf381，install exit0并启动；TTS镜像a2158409、renderer镜像ff6042f6、qwen3-tts-customvoice-0c0e305原样复用，无新增生成任务。旧service备份/opt/openscience-video/service-before-0df87c9bee98c2280396551ed522e66230eaf381，先回退应用至68a0再按需恢复service，不让新Worker对接旧runner。
 
 ## 2026-09-12 文档与公式能力接入
 

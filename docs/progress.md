@@ -1,8 +1,9 @@
 # OpenScience 当前进度
 
 ## 2026-09-12 — 接续写作部署
+- 最终应用0df87c9bee98c2280396551ed522e66230eaf381 / rollback68a0e6b248891b308a963f75988bf230f1b832c4，媒体部署exit0；公网release一致，API/Worker healthy。video runner同0df87c9b，active/accepting，复用原镜像/模型和未变化的Gateway编译产物；旧service已留备份。日志xgs-media-direction-deploy-20260912.log、xgs-media-runner-deploy-20260912.log。没有新媒体任务。
 - 68a0e6b2已部署exit0，rollbacka1ff2db9；公网/__release与.release-id一致、API/Worker healthy。写作/引用/笔记阅读编辑保存下载及失败用量诊断上线，首份真实写作稿件未生成；日志xgs-hermes-writing-build-fix-deploy-20260912.log。
-- 媒体增强候选已实现：图片艺术指导/风格连续与视频叙事/旁白runtime指令，保留科学来源边界；视频元数据沿既有storyboard文件完整性机制传入runner，旧请求默认保持。独立High静态review无阻塞，尚未部署或生成新媒体。
+- 媒体增强已部署：图片艺术指导/风格连续与视频叙事/旁白runtime指令，保留科学来源边界；视频元数据沿既有storyboard文件完整性机制传入runner，旧请求默认保持。独立High静态review无阻塞；中文视频入口保持，英文语音与新图/成片质量未观察。
 - 实际生产仍a1ff2db9、rollback57f00dc9；aa5d2e85上次已进入服务器构建，但Web因lib/api.ts漏导入/导出SourceLocator而失败，尚未切换应用。日志xgs-hermes-writing-deploy-20260912.log。
 - 按systematic-debugging/architecture-guard定向静态定位，复用domain已有类型，仅补Web类型导入/导出；继续必要服务器build/start，无测试/预检/CI。
 - 836d6018服务器Web构建完成，Worker随后报TS18046（引用检查回调丢失shape.body类型收窄）；改用已收窄局部变量，引用校验行为不变。该轮未切换生产；日志xgs-hermes-writing-fixed-deploy-20260912.log。
