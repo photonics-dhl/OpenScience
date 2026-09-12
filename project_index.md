@@ -1,6 +1,6 @@
 # OpenScience (XGS) 项目文件索引
 
-> **CURRENT 2026-09-13:** application 0685a846 / rollback 1e627177；必要服务器build/start exit0，真实页面/__release200同SHA。video runner0df87c9b；browser provider d1630135 / rollback92cc416e。branch codex/onchip-video-release，docs-only HEAD不是release，未合并main。
+> **CURRENT 2026-09-13:** application 08ed3b35 / rollback df94fae0；必要服务器build/start exit0，真实页面/__release200同SHA。video runner0df87c9b；browser provider d1630135 / rollback92cc416e。branch codex/onchip-video-release，docs-only HEAD不是release，未合并main。
 > 最新质量推进：867方法笔记与3f68d30b结果/边界笔记均经服务器来源绑定修订及独立High科学/引用PASS，后者1745字符/19引用、实际Markdown20620字符完整。0685已修复Markdown改变TeX间距，实读26/26公式源逐字相等、6处间距保留，正文/引用/导出不变。通用来源机制已固化，具体指导与独立科学复核仍由本会话承担；六字段全自动仍失败，跨论文质量尚未确认，未采用/发布。
 > 唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。当前自动agent d5c6f699真实字段审校仍失败；4bedbb4b具体方法回读核心科学PASS，但多问与局部共编仍丢条件。a8修复笔记漏路由/科学共编推理配置，10799ba3实产仍经High原文复核拒绝；停止重试，保留人工审校流程。
 > 私有92cafb82人工原文审校稿1118字符/17引用：1e627修复指定任务被较新失败63e正文覆盖，实际打开/只读编辑/回阅读/展开来源/截图均成功，正文和全部引用逐字等保存API与此前复核稿，user_edited保留；原40e23948、公开v10与已批图保留，尚未采用新稿/发布，视频/批量暂停。
@@ -15,7 +15,7 @@
 | `packages/domain/package.json` / `packages/domain/src/agent/agent.ts` / `packages/domain/src/ingestion/canonical-evidence-contract.ts` / `apps/web/lib/suggestion-evidence.ts` | API/web复用既有64段/24000字符证据边界，纯常量subpath与同block范围一致 | 9f已部署；身份/定位限制保留，097六栏引用4/2/13/4/7/11均显示，旧d680无需模型重跑也恢复引用 |
 | `apps/web/app/research-objects/[id]/{edit,hermes}/page.tsx` / `apps/web/lib/ingestion-proposal-draft.ts` / `apps/web/messages/{zh,en}.json` | 原始建议sourceCore与编辑core分离、agentTaskId隔离草稿、保护实际未保存改动与跨代合并 | 0fc已部署；实际六栏逐字等新API，未自动采用，RO仍revision11 |
 | `apps/agent-worker/src/skills/scientific-summary.ts` / `apps/agent-worker/src/extractor.ts` | v6复用语义分组的来源导航，不传旧语义文字，global P并集/既有预算定位不变 | 479已部署，High代码复核；4b46真实原文核对仍有三类科学错误，不能称自动质量通过 |
-| `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | 既有writingDraft完整来源基稿修订867科学/引用PASS、1605字符19引用、实读/导出完整；无新代码。旧editorDraft 10799失败，92/40e保留；不宣称六字段自动质量通过 |
+| `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | 08ed已部署初次writingSource显式选择和来源metadata压缩；Quantization真实UI来源准确，来源JSON143941字符，首稿e758未通过；来源指导修订71ed6fae科学/引用PASS，3643字符40引用、57式实读/27609字符导出完整。867/3f68原文核对成功保留；六字段自动质量未通过 |
 | `apps/web/components/hermes/HermesWritingDraft.tsx` / `HermesWritingDraft.module.css` / `HermesAssistantDrawer.tsx` / `apps/web/lib/api.ts` | 独立稿件阅读、编辑、Markdown下载、来源及显式任务恢复；非代码数学原文保护 | 0685已部署，3f68正文/19引用与API一致，26式源逐字相等、导出20620字符不变；1e指定task恢复修复保留，浏览器长期稳定未确认 |
 | `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 已部署7c6b7975；真实67观察/94段，内部候选经Chat6Pro复核收尾，不自动放行科学结论 |
 | `apps/agent-worker/parser-image/package.json` / `package-lock.json` / `apps/agent-worker/src/ingestion-parser.ts` | 隔离parser的KaTeX语法兼容、坏公式orig回退及区域低置信标记 | 已部署7c6b7975；格式失败可识别和保留原文，不表示4条坏公式已科学修正 |

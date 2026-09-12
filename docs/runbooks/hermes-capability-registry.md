@@ -1,9 +1,10 @@
 # Hermes Capability Registry
 
 ## 当前状态（2026-09-13）
-- 最新质量证据：方法稿867ce8b9与结果/边界稿3f68d30b均经服务器来源指导修订和独立High科学/引用PASS，后者1745字符/19引用。实读发现Markdown吞TeX转义，0685已修复；同一3f68正文/引用等API、26/26公式源逐字相等、6处间距正确，Markdown20620字符完整且未变。没有人工正文替换或新依赖/OCR，不能据此称六字段全自动或跨论文质量可靠。
-- 该路径从服务端基稿精确绑定sourceTaskId，回查同用户/RO/artifact/hash/quote，再复用完整packet与citation remap/materialize；不同于旧editorDraft的手工goal片段。纯文本draftChanges目前无字段证据回写；基稿修订不走latest，多PDF首次写作仍有latest回退。runtime scientific-writing v3与research-note-formatting在真实调用中复用。
-- 当前应用0685a846cd3c32ec8cdf0c9d33d5c76670b8f304 / rollback 1e6271776a9ef5a542c3e0f4b50d2188ef808c67；必要服务器build/start exit0，真实页面release200同SHA。独立browser provider d1630135 / rollback92cc416e、video runner0df87c9b不变。
+- 第二篇Quantization复用已解析SourceMap（15页/2201 excerpts/53954正文字符）；任务eda892b4及c4f3ce06均模型前budget失败。08ed仅共享kind/parser、每片段保留confidence/id/text/部分range，来源JSON由353628降到143941字符，完整locator与180k预算保留。服务器只读量测及High复核完成；e758f33f实产2374字符/14引用、来源960ffcc1准确，UI等API；High发现S3–S14重编号误绑和基底/亚1nm/功率公式错误，NOT ACCEPTED；e758→918→b66→71ed6fae来源指导修订后，最终3643字符/40引用、独立High科学/引用PASS；真实UI正文/quotes等API、57/57 TeX源一致/0错误，Markdown27609字符完整，RO仍private/draft/version3。无人工正文替换；sourceStatus仍grounded_with_unresolved_review，外部High未冒充内部自动审校。
+- 第一篇既有质量证据：方法稿867ce8b9与结果/边界稿3f68d30b均经服务器来源指导修订和独立High科学/引用PASS，后者1745字符/19引用。实读发现Markdown吞TeX转义，0685已修复；同一3f68正文/引用等API、26/26公式源逐字相等、6处间距正确，Markdown20620字符完整且未变。没有人工正文替换或新依赖/OCR，不能据此称六字段全自动或跨论文质量可靠。
+- 该路径从服务端基稿精确绑定sourceTaskId，回查同用户/RO/artifact/hash/quote，再复用完整packet与citation remap/materialize；不同于旧editorDraft的手工goal片段。纯文本draftChanges目前无字段证据回写；基稿修订不走latest，602首次写作已接显式ingestion来源，多artifact未选择时先提示，所选未就绪不回退其它原文。runtime scientific-writing v3与research-note-formatting在真实调用中复用。
+- 当前应用08ed3b35113a512fbd414524ab8958ec4f87deeb / rollback df94fae0e25b109791f41d71691611bb88d78ebd；必要服务器build/start exit0，真实页面release200同SHA。独立browser provider d1630135 / rollback92cc416e、video runner0df87c9b不变。
 - 1bf审校current/source均为4b46，复用既有scientificReviewPrompt/Guard与critical-thinking v2，保存真实verdict/issues/lineage。新d5c6f699仍接受错method/limitations且扩写三案、漏条件；NOT ACCEPTED，不再整稿自省循环。
 - 现有完整来源写作实产4bedbb4b：具体问“变换I还是E/相位/积分”后正确找回链，独立High核心科学PASS，1246字符/15引用；建议语仍缺远场/正峰同步、超700字。五问63e2acc5再次出错，不足以支持通用自动审校。
 - 普通共编8ff290f5纠正Fourier对象但漏强度支路/明确同步。代码取证发现editorDraft沿导航默认thinking off；a8仅科学共编复用现有SCIENTIFIC_SYNTHESIS_OPTIONS，导航不变。明确写作修饰语漏路由也已修复，精确diff High静态通过；新配置实产10799ba3仍经High原文复核判NOT ACCEPTED（起始链/√I/同步丢失），停止重试。
@@ -16,7 +17,7 @@
 |---|---|---|
 | 1 | 科学文档与公式 | Docling1.30/CodeFormulaV2/TeX来源/KaTeX已生产；26页32式中28可排版、4损坏标记。两个代表式对原页，非全篇物理验收。 |
 | 2 | 全文理解与凝练 | paper-analysis v8/summary v6/reviewOnly已部署；d5c6审校仍未通过；单问题回读4bed核心科学PASS，自动整稿仍不可靠；92人工审校稿保留。 |
-| 3 | 科学写作与引用 | 既有SourceMap、基稿血缘与精确引用重映射是通用实现；867方法稿与3f68结果稿来源指导修订后科学/引用PASS。具体指导和独立复核未自动产品化；editorDraft缺同等来源，多PDF初次writing仍latest fallback。 |
+| 3 | 科学写作与引用 | 既有SourceMap、基稿血缘与精确引用重映射是通用实现；867方法稿与3f68结果稿来源指导修订后科学/引用PASS。具体指导和独立复核未自动产品化；editorDraft缺同等来源；602首次writing显式来源已实际传递，第二篇来源指导修订71科学/引用PASS，自动首稿失败保留。 |
 | 4 | 精美笔记 | 既有research-note-formatting、阅读/编辑、折叠来源与Markdown下载；0685已保护数学原文经过Markdown后逐字还原，复用splitMath与安全KaTeX。同一真实稿26式全部匹配；多格式导出按需补齐。 |
 | 5 | 多格式附件 | XLSX/PPTX/HTML已生产，派生副本清洗、原件保留；真实多样样本兼容未观察。复用已有解析器，未另装MarkItDown全套。 |
 | 6 | 艺术图片与视频 | 0df87c9b已部署：艺术指导/构图、视觉叙事/旁白与locale/style传递；真实新图/成片未观察。现有网页生图路线不变，视频与批量冷启动暂缓。 |
@@ -24,11 +25,11 @@
 用户流程：一句话或附件开始同一私有研究 → Hermes理解整理 → 用户少量修改/确认 → 图片或视频 → 审核发布。主屏标题/贡献→核心媒体→六字段→文末资料；长笔记独立阅读。
 
 ## 通用能力与人工环节（2026-09-13代码复核）
-- 已部署通用实现：`workspace-guide.ts:170`实际调用全文来源写作；`scientific-writing-source.ts:70`从服务端基稿恢复并授权精确来源；`citation-management.ts:51`组装来源、重映射并回写精确引用。这些代码与release0685a846一致，不含当前论文标题、专名或结果数值硬编码；本轮仅新增2组件的通用数学源显示保护。
+- 已部署通用实现：`workspace-guide.ts:170`实际调用全文来源写作；`scientific-writing-source.ts:70`从服务端基稿恢复并授权精确来源；`citation-management.ts:51`组装来源、重映射并回写精确引用。这些实现随08ed3b35部署，无当前论文标题、专名或结果硬编码；数学源保护、初次writingSource选择和逐片段metadata压缩均为通用代码。
 - `skills/scientific-writing.ts:14-20`已固化同一算例、条件、运算对象、研究类型和披露范围等通用指令；借鉴K-Dense方法并接入现有Gateway，不是本会话临时加载后才能使用。但指令存在不等于模型稳定遵循，63e等失败结果必须保留。
 - 本会话承担的人工环节：指出具体来源冲突、限定修改范围、独立逐句原文复核。服务器负责读取来源和成稿；独立High复核不是Hermes内部自动执行步骤，不得称自动发现错误→修订→科学验收已经产品化。
 - 结构校验只证明合法来源编号及精确quote/locator，不能证明引用在语义上支持断言；UI的`grounded`显示为“已关联原文来源”，不是“科学通过”。用户篇幅要求也仍由模型遵循，现成60000字符硬上限不等于遵守700字目标。
-- 适用边界：已有来源基稿的局部修订可跨论文复用；跨论文科学质量尚未实际观察。同RO多PDF的首次写作仍按成功提取更新时间选候选（`scientific-writing-source.ts:102-116`），应完善显式来源选择；当前修订有baseDraft，不走该回退。普通六字段editorDraft亦没有同等全文与字段证据回写。
+- 适用边界：已有来源基稿的局部修订可跨论文复用；第二篇Quantization首稿科学/引用失败，3次来源指导修订后71独立复核通过；实际适用范围已跨论文，但不能称自动质量稳定。初次写作从现有source select传ingestionTaskId，同用户/RO/workspace/artifact校验后绑定所选来源；未选择且多artifact（含未完成）先提示，修订baseDraft优先。真实Quantization UI已准确传递；多artifact提示分支尚无真实样本观察。普通六字段editorDraft亦没有同等全文与字段证据回写。
 
 ## 来源与选择
 - 用户要求复用优先，已读取下列GitHub源文件并对照实际调用；不凭README或sources注释声称集成。2026-09-13已从具体问题回读继续走完整来源基稿修订，867经独立科学/引用核对PASS；复用已有runtime，不安装完整PaperQA或其它第三方能力。

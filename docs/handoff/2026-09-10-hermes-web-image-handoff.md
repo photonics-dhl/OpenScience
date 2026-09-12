@@ -6,8 +6,8 @@
 - 本机仅编辑/静态阅读/传输；无测试、预检、CI或本机构建。必要服务器build/start与实际产品生成/阅读按授权执行。
 
 ## Version and workspace
-- 交付树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；代码提交0685a846cd3c32ec8cdf0c9d33d5c76670b8f304已推送部署，2组件数学原文保护经独立High复核；后续docs-only HEAD不是新release。
-- 当前应用release 0685a846cd3c32ec8cdf0c9d33d5c76670b8f304 / rollback 1e6271776a9ef5a542c3e0f4b50d2188ef808c67；xgs-writing-math-escapes-deploy-20260913.log exit0，必要服务器build/start完成，实际页面/__release200同SHA。1e/a8为历史应用版本。
+- 交付树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；代码08ed3b35113a512fbd414524ab8958ec4f87deeb已推送部署；含602c6c09显式来源选择及分片metadata压缩，独立High复核通过；后续docs-only HEAD不是新release。
+- 当前应用release 08ed3b35113a512fbd414524ab8958ec4f87deeb / rollback df94fae0e25b109791f41d71691611bb88d78ebd；xgs-writing-source-confidence-deploy-20260913.log exit0，必要服务器build/start完成，实际页面/__release200同SHA。1e/a8为历史应用版本。
 - 根目录旧dirty main不是生产基线；未合并main。unrelated dirty docs/specs/2026-09-05-integrated-research-product-design.md不得覆盖/提交。
 - 网页生图provider d1630135d569d28364d295380bb4e0333c3ee264 / rollback92cc416ee3fe921f62c75cbe6f69e48d0b55227d；video runner0df87c9bee98c2280396551ed522e66230eaf381。
 - TTS a2158409、renderer ff6042f6、模型qwen3-tts-customvoice-0c0e305复用；无新服务/依赖/媒体实产，媒体版本不能混作应用release。
@@ -47,26 +47,26 @@
 - 4bed基稿→79751c95-8857-461e-b357-264d9791cadd：只要求修订末段，未给成稿；原标题/前文逐字保留，1487字符/17引用。独立复核最终结论为科学PASS，球面几何缺紧邻locator。√I省略与单电子同步不是科学错误，新增φ90°及θ积分限有原文明文支持，不能误删。
 - 797→867ce8b9-1e48-4412-b1bf-1800a5d64dc9：第二个限定修订请求增强√I表述/电子或束团中心同步，收窄为有引用的远场近似；仍由服务器M3成稿，无人工正文替换。全稿1605字符/19引用，末段582字符，原标题/前文叙述逐字未变，第5步一处引用由S84改S235。独立High原文核对最终PASS，无必要修正；不将初轮过严判断写成模型科学错误。
 - 867真实页面打开/只读编辑/展开来源：正文逐字等保存API，19条quote全相等，0保存按钮/0KaTeX错误（正文主要为文本符号，不代表全公式排版）。实际点击Markdown下载，13420字符含完整正文和19来源；截图阅读可用。服务器/jobs/hermes-grounded-method-{revision,final}-*及本机Temp/xgs-grounded-method-{revision,final}-20260913相关文件为证据。
-- 可用路径已推进为“已有来源基稿→全文绑定→限定局部修订→独立原文核对→真实阅读/导出”，并非全自动纠错或六字段质量通过；两次有界任务的scope/目标不同，不再重试旧editorDraft路线。普通editorDraft与多PDF初次写作latest fallback仍是后续边界；未采用/发布任何新内容。
+- 可用路径已推进为“已有来源基稿→全文绑定→限定局部修订→独立原文核对→真实阅读/导出”，并非全自动纠错或六字段质量通过；两次有界任务的scope/目标不同，不再重试旧editorDraft路线。普通editorDraft的来源回写仍是后续边界；未采用/发布任何新内容。
 
 ## Results revision and general capability (2026-09-13)
-- 代码High复核确认已部署写作/来源/引用机制无本论文硬编码，scientific-writing v3已有同算例、条件、物理量和披露范围指令；具体问题提示与独立原文复核仍由本会话承担，不是Hermes内部自动审校闭环。跨论文质量未观察，多PDF首次写作latest来源选择仍待完善，见Hermes台账“通用能力与人工环节”。
+- 代码High复核确认已部署写作/来源/引用机制无本论文硬编码，scientific-writing v3已有同算例、条件、物理量和披露范围指令；具体问题提示与独立原文复核仍由本会话承担，不是Hermes内部自动审校闭环。第二篇首稿仍科学/引用失败，来源指导修订后通过；602c6c09已接通显式来源选择，多个artifact未选择时先提示，见Hermes台账“通用能力与人工环节”。
 - 63e→74d38bc8-e168-4216-b158-a82030979ecd：441字错误类别指导，无手写数值答案，服务器生成1731字符/19引用，修正垂直几何、条件性单电子产额、扫描变量、30dB上限和披露过度断言；仍保留“仅保持”及两处参数引用不全，不能直接PASS。
 - 74→3f68d30b-5cab-44f9-9623-2f057aada7ff：266字最小指导，只删“仅”并补Fig.S7与扫描的参数来源；1745字符/19引用，原标题/其余正文/全部quote和locator均未变。独立High最终科学/引用PASS，无人工正文替换、无OCR重跑、未采用/发布；实际任务为两次，未宣称已核实供应商调用数。
 - 3f68实际打开/只读编辑/展开来源与保存API逐字一致，Markdown实下载20620字符包含完整正文与19来源。但截图暴露通用Markdown转义缺陷：26个KaTeX式0errors仍有6处TeX间距反斜杠丢失变逗号。真实DOM annotation与保存源已确认；本轮修复显示层，稿件无需重生成。证据Temp/xgs-grounded-case-{revision,final}-*，服务器/jobs/hermes-grounded-case-*及hermes-writing-math-escapes-before-20260913.json。
 - 0685已修复部署：ScientificText既有splitMath用于数学区ASCII标点保护，Hermes在非代码区域累计原文后转换；不新增解析器/依赖，60k预处理匹配既有稿件合同，渲染默认50k及全部TeX安全/数量边界不变。部署后重新打开3f68，26/26 MathML annotation逐字等保存TeX、6处间距全保留、0公式错误，截图正常；正文/19引用逐字等API，实下载20620字符与部署前完全相同。证据Temp/xgs-writing-math-escapes-{reading,export,download}-20260913.*。
 
 ## Browser recovery
-- v6新页12个JS ERR_INSUFFICIENT_RESOURCES，一次重载后空白；1bf单个替代#claim-review页仍13个CSS/JS失败，只显示壳。未循环重载。
-- 只读诊断定位Chrome压缩内容解码的Mojo data-pipe创建失败：Network.ContentDecodingInterceptor.CreateDataPipeSuccess.URLLoaderThrottle计324中14失败。PID/内存/fd/socket/shared memory/disk余量未触限，无OOM/crash；底层分配失败原因仍未知。
-- 单target空编码实际reload已发生：31个200、0资源不足，但7个gzip/zstd脚本仍压缩而被当明文解析，SyntaxError阻止挂载；override已清理。两次调用中首次同URLnavigate无load，不算完整重载。证据/jobs/hermes-claim-review-{recovery,reload-recovery}-20260913.json。
-- 旧generatingPages=1来自整页历史文本关键词，并非实际生成控件，不能作为活动证据。复用review-runner既有Stop/停止控件判断后，14页stop/composer/dirty均0；三锁持有、队列空、profile/jobs持久化核对后，2026-09-12T18:55:50Z仅重启浏览器一次，exit0/CDP恢复且登录保留。证据/jobs/hermes-browser-{actual-state,pre-restart-actual,restart-container}-20260913b.json。
-- 实际current-ingestion阅读成功：6字段与保存API逐字相等、35条来源全部显示、RO revision11。科学失败结论不变。证据/jobs/hermes-restored-reading-20260913b.json及hermes-restored-ingestion-reading-20260913b.png。
-- 后续Playwright CDP握手仍超时，现成raw target-CDP可用。仅重载私有92页后发现摘要为92而正文为较新的失败63e；恢复逻辑忽略initialTaskId、按时间选最新writing，1e627已部署为同RO合法writing中优先指定任务，无指定writing则原latest回退。
-- 1e627实际打开92、切编辑只读正文、完成后展开来源并截图：1118字符/17引用，正文与全部引用逐字等保存API及此前独立复核稿，user_edited保留、0保存按钮/0排版错误、无63e卡片；未修改或采用内容。证据本机Temp/xgs-explicit-writing-{reading,saved}-20260913.*、服务器/jobs/hermes-explicit-writing-*。截图阅读正常；浏览器底层分配根因及长期稳定性仍未知。
-
-## Next and read-first
-- 867方法稿与3f68结果/边界稿已完成来源修订、独立科学/引用核对及真实阅读/导出，92六字段人工审校稿保留；下一步完善多PDF首次来源选择，再用下一篇真实论文观察迁移质量。自动科学审校仍未产品化，不得回到无来源editorDraft或整稿循环。
-- 私有方法稿入口：同RO edit?hermesTask=867ce8b9-1e48-4412-b1bf-1800a5d64dc9；92精华稿供最终采用审阅。采用到研究正文及公开发布待用户质量确认，视频/批量暂停；六字段全自动科学质量与浏览器长期稳定性仍未解决。
-- GitHub源文件/真实调用对照见hermes-capability-registry“来源与选择”；用户复用优先已入AGENTS/Memory。优先单个争议回读与最小改动，不能宣称M3全自动文献凝练已可靠。
-- 继续前读此handoff、需求基线相关章节、server-capabilities；当前版本看Git/服务器，不恢复旧MVP next action。
+- Chrome曾报ERR_INSUFFICIENT_RESOURCES；Mojo压缩解码data-pipe 14/324创建失败，根因未定。空编码override已清理。依据Stop/停止控件确认14页空闲、三锁/空队列及profile/jobs持久化后，仅在2026-09-12T18:55:50Z重启一次，登录保留；不复用旧整页关键词generatingPages判定，不再循环重启。历史诊断见server-capabilities及/jobs/hermes-browser-*-20260913b.json。
+- Playwright CDP握手仍偶发超时，现有raw per-target CDP可用。current-ingestion已实读6字段/35来源等API，revision11；质量仍失败。私有92链接曾出现摘要92/正文最新63e，1e627已部署同RO合法writing优先initialTaskId；实际92正文1118字符/17引用逐字等保存API、无63e替代，user_edited保留。
+- 证据Temp/xgs-explicit-writing-{reading,saved}-20260913.*、/jobs/hermes-restored-reading-20260913b.json。后续Quantization复用server tab D2790CF1E8E440EB316D387CDE119E69；浏览器长期稳定未确认，不重开第一篇已验证流程。
+## Second paper and next action
+- 602c6c09六文件接通严格context.writingSource.ingestionTaskId，复用现有select；base优先，所选不可用不降级；无选择按artifact分组，多原文（含未完成）先提示。High安全/合同/并发复核通过；真实UI选择cee71443准确传递。多artifact提示分支尚无真实样本观察。
+- Quantization RO9067a2d5-42ad-4c06-b234-753728b71064；ingestion cee71443-ae46-4ed1-b4e4-6c5b59e674ef / source agent960ffcc1-75f6-4418-b9a6-8bf413f4e18d / artifact4b94c626-1748-4c5a-934b-2bb94585bd9c。复用15页旧SourceMap，source导出Temp/xgs-quantization-writing-source-20260913.json；无新Parser/OCR。
+- eda892b4、c4f3ce06均模型前超180k失败。服务器只读量测：原source JSON353628字符，含confidence连续分组208568/1079组；08ed逐片保留confidence、仅共享kind/parser后143941/70组，2201 id/text、16部分range、53954全文及完整locator保留，180k不变。证据Temp/xgs-quantization-source-budget-confidence-20260913.json，勿重复预估或盲增limit。
+- 首稿e758f33f-1cd1-42f9-b4d1-bb548acf98fb（2374字符/14引用）NOT ACCEPTED：把source IDs按脚注重排、错误基底/亚1nm设定/功率与能流式/极化率算符说法。实际UI来源指导修订链 e758→918b9ca4-6fbc-4493-aae4-a83f8372c40e→b66fc123-cd68-4982-b527-24cdf7c97626→71ed6fae-21c3-49d2-bfff-e394bf307323，均精确base/source；最后仅补S2029/S2030和去裸ID说明，原38引用/其余科学内容不变。最终71独立High科学/引用PASS，无Codex正文替换；不是自动首稿质量通过。
+- 最终71《深度亚波长小孔限制光学近场的量子化：Bethe偶极到Weyl角谱》：3643字符/40引用；真实UI正文/quotes逐字等API，57/57 TeX源一致/0排版错误；截图实读可用，Markdown27609字符完整。证据Temp/xgs-quantization-writing-citation-{task,result,reading,math,tail,export,download}-20260913.*及服务器/jobs/hermes-quantization-writing-citation-*。RO实读仍private/draft/version3；sourceStatus仍grounded_with_unresolved_review，外部High结论未冒充产品自动审校状态。
+- 最终私有入口：https://openscience.428312321.xyz/research-objects/9067a2d5-42ad-4c06-b234-753728b71064/edit?hermesTask=71ed6fae-21c3-49d2-bfff-e394bf307323 。第一篇92/40e/867/3f68及v10/已批图保留；采用/公开仍待用户质量确认，视频/批量暂停。
+- 下一步优先把真实暴露的“来源key被脚注重排、quote不支持断言”接入既有写作/审校能力；目前结构校验只能确认ID/quote/locator真实，独立科学核对与具体修订指导仍由本会话承担。第二篇证明通用来源与修订流程可用，不能称跨论文自动科学质量稳定；不回到无来源editorDraft或整稿自省循环。
+- 长综述ROaa450f1e旧任务因163815字符超过120k理解上限模型前失败，24页完整SourceMap已定位：derived/source-maps/1bdef65fc775a9b89e71ca81fb71988c9cbaa07f71209ea3ecc581406a4222c0.json（4,661,218 bytes）。ref未挂失败任务、无普通retry；后续复用既有解析收敛续跑路线，未实现新恢复能力，勿重解析或只增limit。
+- 继续前读此handoff、需求基线相关章节、server-capabilities；GitHub方法及真实调用对照见Hermes台账。当前版本看Git/服务器，不恢复旧MVP next action。
