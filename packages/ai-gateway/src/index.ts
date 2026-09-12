@@ -5,6 +5,8 @@ export {
   type AiGatewayOptions,
   type GatewayCallLog,
   type SchemaGuard,
+  type StructuredGenerationOptions,
+  type GatewayCompletion,
 } from './gateway';
 export {
   OpenAiCompatProvider,

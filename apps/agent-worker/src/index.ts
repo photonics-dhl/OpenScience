@@ -337,7 +337,9 @@ export function createHandlers(
                     || ['provider_unavailable', 'invalid_response'].includes(String(candidate.continuationStatus ?? '')))
                   ? candidate.attemptId as string
                   : undefined;
-              if (initialAttemptId && SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))
+              if (candidate.provider === 'chatgpt-web-science-review'
+                && (candidate.kind === undefined || candidate.kind === 'independent_review')
+                && initialAttemptId && SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))
                 && candidate.contractVersion === SCIENCE_REVIEW_CONTRACT_VERSION) {
                 reusableScientificReviewAttempt = {
                   attemptId: initialAttemptId,

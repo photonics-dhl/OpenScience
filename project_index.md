@@ -1,9 +1,11 @@
 # OpenScience (XGS) 项目文件索引
 
-> 候选：apps/agent-worker/src/scientific-generation-options.ts 统一科学任务的显式思考、预算与超时；Gateway透传并记录请求模式，截断不按同预算重试。MiniMax仍为主，生产科学路由待后续结果确认。
+> 本轮候选：M3最终科学自检（model_self_check）、paper-analysis v7中文凝练；XLSX/PPTX/HTML复用Docling、安全清洗与archiver7.0.1。`apps/agent-worker/src/citation-management.ts` / `scientific-writing-source.ts`与workspace-guide-contract为未接通写作准备，不纳入当前发布。
+
+> 已部署0d059852：apps/agent-worker/src/scientific-generation-options.ts 统一科学任务的显式思考、预算与超时；Gateway透传并记录请求模式，截断不按同预算重试。MiniMax仍为主，生产科学路由待后续结果确认。
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-12:** applicationf2889c86 / rollback7c6b7975；browser providerd1630135 / rollback92cc416e。文档/公式与逐观察阅读已部署；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-12:** application0d059852 / rollbackf2889c86；browser providerd1630135 / rollback92cc416e。文档/公式与逐观察阅读已部署；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 当前执行：第2项全文理解/科学自省取得真实内部候选，复核收尾后推进科学写作/引用；图片/视频艺术风格与叙事明确保留后续。统一创建/持续对话方案保留，不恢复旧冗余表单。
 > 最新应用f2889c86保留67观察/94原段及限定来源，公式32条中4条损坏仍需针对性处理，不能以语法通过冒称物理正确。docs-only HEAD不等于新的应用release。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
@@ -40,7 +42,7 @@
 | `apps/agent-worker/test/extraction-confirmation.test.ts` | 真实 extractHandler → 确认 → 冻结 API 的组合回归；位置歧义与错误身份不能升级为确定证据 | 最终修复 f199b4fd；14组合回归通过，复审中 |
 | `docs/plans/2026-09-07-open-research-publication-plan.md` | 原子导入确认、材料一致性、来源核查和每 RO 只读 API；独立审查与精确 SHA 发布 | IN PROGRESS；codex/open-research-publication，生产基线 5e4b4d4 / rollback 8e4ecb2 |
 | `packages/domain/src/ingestion/{ingestion-service,ingestion-evidence}.ts` / `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/ingestion.ts` / corresponding ingestion tests | 确认原子创建真实 Version、幂等重放、材料恢复与保守来源匹配；保留既有草稿图谱编辑 | CANDIDATE 0822515；76 domain / 8 API，独立复审通过；未部署 |
-| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；科学解释和连续工作台 | CURRENT；追加2026-09-12统一创建/持续对话/再分析/艺术媒体方案，待用户讨论、未实施；已认可阅读布局保持；方案不等于已部署 |
+| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；科学解释和连续工作台 | CURRENT；2026-09-12统一创建/持续对话/再分析/艺术媒体方案已获用户批准，按能力顺序实施；已认可阅读布局保持；方案不等于已部署 |
 | `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；收尾/22路由审计和选择性同事UX整合；PR102应用4d39808已部署、动画demo9848411；主线确认，PR103/104正式桌面/概览/段落助手已部署验收 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | DEPLOYED3d518af；runner10、安装预检、真实Task/Credit/来源/草稿/PNG/权限验收通过 |

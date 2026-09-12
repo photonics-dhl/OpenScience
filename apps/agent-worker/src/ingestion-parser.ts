@@ -1,6 +1,9 @@
 import { extname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { once } from 'node:events';
+import type { Readable } from 'node:stream';
+import type { Archiver, ZipOptions } from 'archiver';
 import katex from 'katex';
 import { VIRTUAL_LINE_HEIGHT, VIRTUAL_PAGE_WIDTH } from '@openscience/domain/virtual-page';
 import {
@@ -19,6 +22,8 @@ export type ParsedIngestion =
 export interface IngestionAdapters {
   pdf?: (content: Buffer) => Promise<ParserStageResult>;
   docx?: (content: Buffer) => Promise<string>;
+  pptx?: (content: Buffer) => Promise<ParserStageResult>;
+  html?: (content: Buffer) => Promise<ParserStageResult>;
   image?: (content: Buffer) => Promise<string>;
   xlsx?: (content: Buffer) => Promise<ParserStageResult>;
 }
@@ -163,19 +168,27 @@ function doclingResult(payload: unknown, formulaEnrichment: boolean): ParserStag
   });
 }
 
-async function runDoclingPdf(content: Buffer, serviceUrl: string): Promise<ParserStageResult> {
-  const formulaEnrichment = process.env.DOCLING_FORMULA_ENRICHMENT === 'true';
+async function runDoclingDocument(
+  content: Buffer,
+  serviceUrl: string,
+  input: { format: 'pdf' | 'pptx' | 'html'; mediaType: string; filename: string },
+): Promise<ParserStageResult> {
+  const formulaEnrichment = input.format === 'pdf' && process.env.DOCLING_FORMULA_ENRICHMENT === 'true';
+  const doclingContent = input.format === 'html' ? sanitizeHtmlForDocling(content)
+    : input.format === 'pptx' ? await sanitizePptxForDocling(content) : content;
   const form = new FormData();
-  form.append('files', new Blob([content], { type: 'application/pdf' }), 'document.pdf');
-  form.append('from_formats', 'pdf');
+  form.append('files', new Blob([doclingContent], { type: input.mediaType }), input.filename);
+  form.append('from_formats', input.format);
   form.append('to_formats', 'json');
   form.append('to_formats', 'text');
   form.append('image_export_mode', 'placeholder');
-  form.append('pdf_backend', 'dlparse_v2');
-  // Born-digital PDFs use Docling layout/text. Existing page-quality routing invokes
-  // isolated Tesseract or authorized vision OCR only for unreadable pages.
-  form.append('do_ocr', 'false');
-  form.append('force_ocr', 'false');
+  if (input.format === 'pdf') {
+    form.append('pdf_backend', 'dlparse_v2');
+    // Born-digital PDFs use Docling layout/text. Existing page-quality routing invokes
+    // isolated Tesseract or authorized vision OCR only for unreadable pages.
+    form.append('do_ocr', 'false');
+    form.append('force_ocr', 'false');
+  }
   form.append('do_table_structure', 'true');
   form.append('do_formula_enrichment', formulaEnrichment ? 'true' : 'false');
   form.append('abort_on_error', 'false');
@@ -269,6 +282,14 @@ const MAX_ZIP_ENTRIES = 256;
 const MAX_ZIP_ENTRY_BYTES = 8 * 1024 * 1024;
 const MAX_ZIP_EXPANDED_BYTES = 24 * 1024 * 1024;
 const MAX_ZIP_COMPRESSION_RATIO = 100;
+const MAX_PPTX_ZIP_ENTRIES = 4_096;
+const MAX_PPTX_ENTRY_BYTES = 128 * 1024 * 1024;
+const MAX_PPTX_EXPANDED_BYTES = 384 * 1024 * 1024;
+const MAX_PPTX_RELATIONSHIP_BYTES = 512 * 1024;
+const MAX_PPTX_RELATIONSHIP_TOTAL_BYTES = 4 * 1024 * 1024;
+const MAX_PPTX_SANITIZED_XML_BYTES = 4 * 1024 * 1024;
+const MAX_PPTX_SANITIZED_XML_TOTAL_BYTES = 32 * 1024 * 1024;
+const MAX_PPTX_SANITIZED_ARCHIVE_BYTES = 64 * 1024 * 1024;
 const MAX_SHARED_STRINGS = 100_000;
 const MAX_XLSX_CELLS = 9_900;
 const MAX_XLSX_BLOCKS = 10_000;
@@ -298,7 +319,7 @@ interface ZipFile {
   on(event: 'error', listener: (error: Error) => void): this;
   openReadStream(
     entry: ZipEntry,
-    callback: (error: Error | null, stream?: NodeJS.ReadableStream & { destroy(error?: Error): void }) => void,
+    callback: (error: Error | null, stream?: Readable) => void,
   ): void;
 }
 
@@ -313,9 +334,34 @@ interface YauzlModule {
 export class XlsxParsingLimitError extends Error {}
 
 const yauzl = loadRuntimeModule('yauzl') as YauzlModule;
+const archiverFactory = loadRuntimeModule('archiver') as (format: 'zip', options?: ZipOptions) => Archiver;
 
 function decodeUtf8(content: Buffer): string {
   return new TextDecoder('utf-8', { fatal: true }).decode(content);
+}
+
+function sanitizeHtmlForDocling(content: Buffer): Buffer {
+  const text = decodeUtf8(content);
+  const withoutHtml5Doctype = text.replace(/<!doctype\s+html\s*>/giu, '');
+  if (!text.trim() || text.includes('\u0000')
+    || /<!DOCTYPE|<!ENTITY|<script\b|on[a-z]+\s*=|<(?:iframe|object|embed)\b/iu.test(withoutHtml5Doctype)) {
+    throw new Error('active or externally linked HTML is not accepted');
+  }
+  let unmatched = withoutHtml5Doctype;
+  for (const match of withoutHtml5Doctype.matchAll(/\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/giu)) {
+    const raw = match[1]!;
+    const target = (raw.startsWith('"') || raw.startsWith("'")) ? raw.slice(1, -1).trim() : raw.trim();
+    if (target.startsWith('\\\\') || target.startsWith('//')) throw new Error('unsafe HTML link target');
+    const scheme = /^([a-z][a-z\d+.-]*):/iu.exec(target)?.[1]?.toLowerCase();
+    if (scheme && !['http', 'https', 'mailto'].includes(scheme)) throw new Error('unsafe HTML link target');
+    unmatched = unmatched.replace(match[0], '');
+  }
+  if (/\bhref\s*=/iu.test(unmatched)) throw new Error('malformed HTML link target');
+  const inert = text
+    .replace(/<style\b[^>]*>[\s\S]*?(?:<\/style\s*>|$)/giu, '')
+    .replace(/<(?:meta|link|base)\b[^>]*>/giu, '')
+    .replace(/\s+(?:(?:xlink:)?href|src|srcset|action|formaction|poster|background|style)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/giu, '');
+  return Buffer.from(inert, 'utf8');
 }
 
 function readZipEntry(zipFile: ZipFile, entry: ZipEntry): Promise<Buffer> {
@@ -401,6 +447,87 @@ function readBoundedXlsxEntries(content: Buffer): Promise<Map<string, Buffer>> {
         if (settled) return;
         settled = true;
         resolve(entries);
+      });
+      zipFile.readEntry();
+    });
+  });
+}
+
+function openZipEntryStream(zipFile: ZipFile, entry: ZipEntry): Promise<Readable> {
+  return new Promise((resolve, reject) => {
+    zipFile.openReadStream(entry, (error, stream) => {
+      if (error || !stream) reject(error ?? new Error('ZIP entry stream unavailable'));
+      else resolve(stream);
+    });
+  });
+}
+
+interface PptxSanitizationPlan {
+  relationshipReplacements: Map<string, Buffer>;
+  hyperlinkIdsByOwner: Map<string, Set<string>>;
+}
+
+function relationshipOwnerPath(path: string): string | undefined {
+  const match = /^(.*\/)?_rels\/([^/]+)\.rels$/u.exec(path);
+  return match ? `${match[1] ?? ''}${match[2]}` : undefined;
+}
+
+function inspectBoundedPptxContainer(content: Buffer): Promise<PptxSanitizationPlan> {
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(content, { lazyEntries: true, decodeStrings: true, validateEntrySizes: true }, (openError, zipFile) => {
+      if (openError || !zipFile) { reject(openError ?? new Error('PPTX ZIP unavailable')); return; }
+      let settled = false;
+      let count = 0;
+      let expandedBytes = 0;
+      let relationshipBytes = 0;
+      let hasContentTypes = false;
+      let hasPresentation = false;
+      const names = new Set<string>();
+      const relationshipReplacements = new Map<string, Buffer>();
+      const hyperlinkIdsByOwner = new Map<string, Set<string>>();
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        zipFile.close();
+        reject(error);
+      };
+      if (zipFile.entryCount > MAX_PPTX_ZIP_ENTRIES) { fail(new XlsxParsingLimitError()); return; }
+      zipFile.on('error', fail);
+      zipFile.on('entry', (entry) => {
+        void (async () => {
+          count += 1;
+          if (count > MAX_PPTX_ZIP_ENTRIES || (entry.generalPurposeBitFlag & 0x1) !== 0
+            || entry.uncompressedSize > MAX_PPTX_ENTRY_BYTES
+            || entry.fileName.includes('\\') || entry.fileName.startsWith('/')
+            || entry.fileName.split('/').includes('..') || names.has(entry.fileName)) throw new XlsxParsingLimitError();
+          names.add(entry.fileName);
+          expandedBytes += entry.uncompressedSize;
+          if (expandedBytes > MAX_PPTX_EXPANDED_BYTES
+            || (entry.uncompressedSize > 0 && entry.uncompressedSize / Math.max(1, entry.compressedSize) > MAX_ZIP_COMPRESSION_RATIO)) {
+            throw new XlsxParsingLimitError();
+          }
+          if (entry.fileName === '[Content_Types].xml') hasContentTypes = true;
+          if (entry.fileName === 'ppt/presentation.xml') hasPresentation = true;
+          if (!entry.fileName.endsWith('/') && entry.fileName.endsWith('.rels')) {
+            relationshipBytes += entry.uncompressedSize;
+            if (entry.uncompressedSize > MAX_PPTX_RELATIONSHIP_BYTES
+              || relationshipBytes > MAX_PPTX_RELATIONSHIP_TOTAL_BYTES) throw new XlsxParsingLimitError();
+            const sanitized = sanitizePptxRelationshipXml(await readZipEntry(zipFile, entry));
+            if (sanitized.removedIds.size) {
+              const owner = relationshipOwnerPath(entry.fileName);
+              if (!owner) throw new Error('PPTX external hyperlink has no package owner');
+              relationshipReplacements.set(entry.fileName, sanitized.content);
+              hyperlinkIdsByOwner.set(owner, sanitized.removedIds);
+            }
+          }
+          zipFile.readEntry();
+        })().catch(fail);
+      });
+      zipFile.on('end', () => {
+        if (settled) return;
+        settled = true;
+        if (!hasContentTypes || !hasPresentation) reject(new Error('PPTX container is missing required members'));
+        else resolve({ relationshipReplacements, hyperlinkIdsByOwner });
       });
       zipFile.readEntry();
     });
@@ -672,6 +799,194 @@ function parseStrictXml(content: Buffer): XmlNode {
   }
   if (!root || stack.length) throw new Error('malformed XML document');
   return root;
+}
+
+function xmlEscape(value: string, attribute = false): string {
+  return value.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;')
+    .replace(attribute ? /"/gu : /$^/gu, '&quot;').replace(attribute ? /'/gu : /$^/gu, '&apos;');
+}
+
+function serializeStrictXml(node: XmlNode): string {
+  const attributes = [...node.attributes].map(([name, value]) => ` ${name}="${xmlEscape(value, true)}"`).join('');
+  const body = `${xmlEscape(node.text)}${node.children.map(serializeStrictXml).join('')}`;
+  return body ? `<${node.name}${attributes}>${body}</${node.name}>` : `<${node.name}${attributes}/>`;
+}
+
+function sanitizePptxRelationshipXml(content: Buffer): { content: Buffer; removedIds: Set<string> } {
+  const root = parseStrictXml(content);
+  assertElement(root, 'Relationships', PACKAGE_RELATIONSHIPS_NAMESPACE);
+  assertAttributes(root, []);
+  assertOnlyChildren(root, ['Relationship'], PACKAGE_RELATIONSHIPS_NAMESPACE);
+  const ids = new Set<string>();
+  const removedIds = new Set<string>();
+  for (const relationship of root.children) {
+    assertAttributes(relationship, ['Id', 'Type', 'Target', 'TargetMode']);
+    if (relationship.children.length || relationship.text.trim()) throw new Error('relationship must be empty');
+    const id = relationship.attributes.get('Id');
+    const type = relationship.attributes.get('Type');
+    const target = relationship.attributes.get('Target');
+    const mode = relationship.attributes.get('TargetMode');
+    if (!id || !type || !target || ids.has(id)
+      || (mode !== undefined && mode !== 'External' && mode !== 'Internal')) {
+      throw new Error('malformed PPTX relationship');
+    }
+    ids.add(id);
+    if (mode !== 'External') {
+      if (/^[a-z][a-z\d+.-]*:/iu.test(target) || target.startsWith('//') || target.includes('\\')) {
+        throw new Error('unsupported PPTX internal relationship target');
+      }
+      continue;
+    }
+    if (!type.endsWith('/hyperlink') || /[\u0000-\u001f\u007f\\]/u.test(target)
+      || !/^(?:https?:\/\/|mailto:)/iu.test(target)) {
+      throw new Error('unsupported PPTX external relationship');
+    }
+    removedIds.add(id);
+  }
+  root.children = root.children.filter((relationship) => !removedIds.has(relationship.attributes.get('Id') ?? ''));
+  const sanitized = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>${serializeStrictXml(root)}`, 'utf8');
+  if (sanitized.byteLength > MAX_PPTX_RELATIONSHIP_BYTES) throw new XlsxParsingLimitError();
+  return { content: sanitized, removedIds };
+}
+
+function sanitizePptxOwnerXml(content: Buffer, removedIds: ReadonlySet<string>): Buffer {
+  if (content.byteLength > MAX_PPTX_SANITIZED_XML_BYTES) throw new XlsxParsingLimitError();
+  const root = parseStrictXml(content);
+  const removeReferences = (node: XmlNode): void => {
+    node.children = node.children.filter((child) => {
+      const relationshipId = [...child.attributes].find(([name]) => (
+        name === 'r:id' || (child.attributeNamespaces.get(name) === OFFICE_RELATIONSHIPS_NAMESPACE && xmlLocalName(name) === 'id')
+      ))?.[1];
+      return !(['hlinkClick', 'hlinkHover'].includes(child.localName) && relationshipId && removedIds.has(relationshipId));
+    });
+    node.children.forEach(removeReferences);
+  };
+  removeReferences(root);
+  const sanitized = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>${serializeStrictXml(root)}`, 'utf8');
+  if (sanitized.byteLength > MAX_PPTX_SANITIZED_XML_BYTES) throw new XlsxParsingLimitError();
+  return sanitized;
+}
+
+async function sanitizePptxForDocling(content: Buffer): Promise<Buffer> {
+  const plan = await inspectBoundedPptxContainer(content);
+  if (plan.relationshipReplacements.size === 0) return content;
+
+  const archive: Archiver = archiverFactory('zip', { zlib: { level: 6 } });
+  const chunks: Buffer[] = [];
+  let outputBytes = 0;
+  let outputSettled = false;
+  let outputError: unknown;
+  let settleOutput!: () => void;
+  const outputDone = new Promise<void>((resolve) => {
+    settleOutput = resolve;
+    archive.on('data', (chunk: Buffer) => {
+      if (outputSettled) return;
+      outputBytes += chunk.byteLength;
+      if (outputBytes > MAX_PPTX_SANITIZED_ARCHIVE_BYTES) {
+        outputSettled = true;
+        outputError = new XlsxParsingLimitError();
+        archive.abort();
+        resolve();
+        return;
+      }
+      chunks.push(Buffer.from(chunk));
+    });
+    archive.once('error', (error) => {
+      if (outputSettled) return;
+      outputSettled = true;
+      outputError = error;
+      resolve();
+    });
+    archive.once('end', () => {
+      if (outputSettled) return;
+      outputSettled = true;
+      resolve();
+    });
+  });
+
+  const seenRelationships = new Set<string>();
+  const seenOwners = new Set<string>();
+  let sanitizedXmlBytes = 0;
+  let currentZipFile: ZipFile | undefined;
+  const rewriteEntries = new Promise<void>((resolve, reject) => {
+    yauzl.fromBuffer(content, { lazyEntries: true, decodeStrings: true, validateEntrySizes: true }, (openError, zipFile) => {
+      if (openError || !zipFile) { reject(openError ?? new Error('PPTX ZIP unavailable')); return; }
+      currentZipFile = zipFile;
+      let settled = false;
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        zipFile.close();
+        reject(error);
+      };
+      zipFile.on('error', fail);
+      zipFile.on('entry', (entry) => {
+        void (async () => {
+          if (entry.fileName.endsWith('/')) {
+            zipFile.readEntry();
+            return;
+          }
+
+          const relationshipReplacement = plan.relationshipReplacements.get(entry.fileName);
+          if (relationshipReplacement) {
+            seenRelationships.add(entry.fileName);
+            archive.append(relationshipReplacement, { name: entry.fileName });
+            zipFile.readEntry();
+            return;
+          }
+
+          const removedIds = plan.hyperlinkIdsByOwner.get(entry.fileName);
+          if (removedIds) {
+            sanitizedXmlBytes += entry.uncompressedSize;
+            if (entry.uncompressedSize > MAX_PPTX_SANITIZED_XML_BYTES
+              || sanitizedXmlBytes > MAX_PPTX_SANITIZED_XML_TOTAL_BYTES) throw new XlsxParsingLimitError();
+            seenOwners.add(entry.fileName);
+            archive.append(sanitizePptxOwnerXml(await readZipEntry(zipFile, entry), removedIds), { name: entry.fileName });
+            zipFile.readEntry();
+            return;
+          }
+
+          const stream = await openZipEntryStream(zipFile, entry);
+          const streamEnd = once(stream, 'end');
+          archive.append(stream, { name: entry.fileName });
+          await Promise.race([
+            streamEnd,
+            outputDone.then(() => {
+              if (outputError) throw outputError;
+            }),
+          ]);
+          zipFile.readEntry();
+        })().catch(fail);
+      });
+      zipFile.on('end', () => {
+        if (settled) return;
+        settled = true;
+        if (seenRelationships.size !== plan.relationshipReplacements.size
+          || seenOwners.size !== plan.hyperlinkIdsByOwner.size) {
+          reject(new Error('PPTX hyperlink owner is missing'));
+        } else resolve();
+      });
+      zipFile.readEntry();
+    });
+  });
+
+  try {
+    await rewriteEntries;
+    await archive.finalize();
+    await outputDone;
+    if (outputError) throw outputError;
+    return Buffer.concat(chunks, outputBytes);
+  } catch (error) {
+    currentZipFile?.close();
+    archive.abort();
+    if (!outputSettled) {
+      outputSettled = true;
+      outputError = error;
+      settleOutput();
+    }
+    await outputDone;
+    throw error;
+  }
 }
 
 function assertAttributes(node: XmlNode, allowed: readonly string[]): void {
@@ -1089,7 +1404,7 @@ export function createDefaultIngestionAdapters(): IngestionAdapters {
     pdf: async (content) => {
       if (doclingUrl) {
         try {
-          return await runDoclingPdf(content, doclingUrl);
+          return await runDoclingDocument(content, doclingUrl, { format: 'pdf', mediaType: 'application/pdf', filename: 'document.pdf' });
         } catch (error) {
           console.error('advanced PDF parser failed; using native fallback', error instanceof Error ? error.message : String(error));
           const fallback = await parseStructuredStageIsolated('pdf', content);
@@ -1099,6 +1414,14 @@ export function createDefaultIngestionAdapters(): IngestionAdapters {
       return parseStructuredStageIsolated('pdf', content);
     },
     docx: (content) => parseBinaryIsolated('docx', content),
+    ...(doclingUrl ? {
+      pptx: (content: Buffer) => runDoclingDocument(content, doclingUrl, {
+        format: 'pptx', mediaType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', filename: 'presentation.pptx',
+      }),
+      html: (content: Buffer) => runDoclingDocument(content, doclingUrl, {
+        format: 'html', mediaType: 'text/html', filename: 'document.html',
+      }),
+    } : {}),
     image: runTesseractOcr,
     xlsx: (content) => parseStructuredStageIsolated('xlsx', content),
   };

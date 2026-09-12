@@ -1,64 +1,26 @@
 # OpenScience 当前进度
 
-## 2026-09-12 — MiniMax 调用方式纠正
-- 2026-09-12 最新纠正：生产继续使用现有 MiniMax-M3，不要求额外强模型 API。官方 Anthropic 文档明确 M3 默认 thinking 关闭；当前适配器未传 thinking，structured 固定4096、超时60s。不能将此前错误直接归因于模型能力。候选已接入科学阶段 adaptive、16k/32k预算、180/300s超时及截断不重放；尚待部署和实际结果。Chat只作开发诊断，网页生产硬依赖尚待替换，绝不把已知错误放行。
-- 写作共享合同、私有来源解析与引用映射由Sol Medium继续；新增模型写作调用被自动审批拒绝敏感载荷授权范围，已向用户请求明确授权，未绕过。Hermes大小选择器按用户要求移除候选。无测试、预检或本机构建。
+## 2026-09-12 — MiniMax 主路由与多格式接入收尾
+- branch codex/onchip-video-release；生产0d059852ebd4eb835815a670a99156c1640af00b，rollbackf2889c86；browser provider d1630135/rollback92cc416e。当前候选尚未部署，唯一接续入口 docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+- 已部署：MiniMax-M3显式adaptive thinking、分段16k/180s、整合32k/300s；Hermes形象大小按钮移除。实际部署日志xgs-m3-thinking-deploy-20260912.log exit0，无测试/CI/本机构建。
+- 已观察：同一PDF既有解析结果由M3真实阅读118秒，5窗口+reduce，66观察/94段/27限定段；34276输入/24503输出tokens，无截断重试，6次thinking开启。内部结果仍过长/部分过强，未写RO，不当作定稿；不能据此推算Codex整体节省率。
+- 当前候选：最终六字段经现有M3科学自检，真实provider/model/usage与model_self_check身份记录；paper-analysis v7中文凝练；未解公式仅影响相关字段，保护确认稿。Sol High定向复核无生产路由阻断。
+- 格式候选：XLSX/PPTX/HTML复用Docling，PPTX外链清洗副本/媒体流式保留、HTML资源剥离；archiver7.0.1复用原锁，parser独立锁保留KaTeX/yauzl。没有新OCR或浏览器。
+- 用户本轮已明确批准技术方案及必要论文候选发到Chat6Pro，m3-production-route-20260912已实际发送，待收回复。不能将此前自动审批拒绝称为Chat网络不通。
+- 新增私有稿件+摘录发MiniMax写作曾被自动审批拒绝；精确授权问题未答。共享写作合同/来源/引用映射代码仍未接通，不纳入发布。
+- 下一步：部署候选→同一真实论文产品再分析→继续统一创建/持续聊天附件与写作/笔记；图片视频艺术风格、叙事/旁白明确保留后续。
 
-## 2026-09-12 — 用户要求重新审视网页科学复核的稳定性
-- 用户质疑“科学定稿交6Pro”是否不稳定。已明确区分本次开发辅助分析与服务器生产路径；现有extractor的确将网页6Pro作为独立科学复核必经节点，故障会阻断，不能称其只是临时诊断工具。暂停扩展该硬依赖，待讨论生产可恢复的理解/校正路径；也不直接移除复核放行已知错误。既有网页生图授权方案保持。
-- 本次已发的Chat最终综合仅作开发校准候选，不能冒称已改变生产路由或已科学定稿；f2889c86部署不受该说明改变。
+## 当前能力与产品结果
+- Docling CodeFormulaV2增强、来源定位和安全KaTeX已部署；26页/32式中28式可排版，4式损坏保留低置信原文，已核两个代表原式；不是全部物理正确。源/parser-jobs/formula-reading-20260912.json。
+- 已部署桌面任务分组/静默更新、跨页会话延续、简化编辑器资料、公开图文及探索卡片；实际账号跨桌面/编辑/探索/公开保持，短期观察不等于所有网络条件或7天后已证明。
+- 用户认可冷白/青绿风格；贡献→核心图/可选视频→精华六字段→文末资料，Hermes主要对话入口。统一创建仍待改，不能恢复冗余选择/长制作指令。
+- 已带图公开22-v10，RO c896802c-35dd-4b59-8db1-5f374f83a6d8；正式版本f4e2dc71-1fe8-406f-8c19-e1849503d698、草稿修订11，图b19a65bd-6497-4b61-bb81-0154b264d58c。保护已确认内容与公共ID。
+- 旧19/20/21测试数据可恢复归档；真实论文、附件、Publication未删除。2–3篇精选、其余清理、视频和实际多图HTML尚未全部完成。
+- 前序科学复核发现不同算例混用、相位/强度叠加限定遗漏；旧thinking关闭/4096预算结果不作模型能力上限证据。既有Chat校准仅开发参考，生产不能依赖网页科学定稿。
+- 完整前序实现/部署日志与历史进度保留Git历史；当前只从唯一handoff与能力清单接续。
 
-## 2026-09-12 — 第2项已部署并取得真实全文整合
-- branch codex/onchip-video-release，应用/ECSf2889c867826c30ceb72c6172f8b7d74434a93fa，rollback7c6b79754da20f28ac71080e5809cce62db396f5；必要build/start及精确release切换exit0。日志xgs-stage2-semantics-deploy-20260912.log。无测试/CI/本机构建。
-- 修复MiniMax省略空qualifierPassageIds导致有效结果被拒绝；缺省归一[]，非法类型/来源仍拒绝，Sol High定向复核无阻断。复用5个保存的实际map，新reduce47秒、7753输入/3002输出token，形成67观察、94覆盖原段与32限定上下文；结果/parser-jobs/hermes-reading-stage2-final-20260912.json。没有重跑PDF；这是本次辅助恢复，不是自动断点缓存或总体节省比例。
-- Chat6Pro真实复核已回：识别问题混入论文限制、角分布公式误合并、叠加强度/规定相位遗漏、复现措辞过强。v6理解/分析及v2自省已部署。MiniMax一次定向修订17秒/24667输入/3008输出，仍混19与66/99 as、把已披露条件说成缺失；结果hermes-reading-stage2-revised-20260912.json拒绝作为科学成稿。停止低模型语义重试，转同一已读全文Chat6Pro直接产出最终六字段，等待返回；不写入SDF/发布。
-- 第3项准备定位了现有workspace-guide的1200字符summary/六字段改写限制，写作需独立私有可编辑文档及真实来源，不能仅复制skill宣称接通。图片/视频艺术风格、构图、叙事和旁白明确保留后续；本轮无新媒体或RO数据写入。
-
-## 2026-09-12 — 第2项实施依据（候选已由上方release部署）
-- 已查看原PDF第2/3页，两个代表公式与原图一致；产品ScientificText生成实际阅读HTML，32式中28式可排版，4式重复/混入正文/括号损坏，不能将此前warnings=[]视为全正确。未修改公开RO。
-- 隔离parser接入既有KaTeX依赖，坏公式保留orig与页/bbox、confidence0/low_confidence；不猜补公式，不重跑整篇PDF。受限识别结果仍需来源上下文判断。
-- Chat6Pro实际回复“观察—来源—适用条件”结构建议，原回复/jobs/hermes-stage2-chat-plan-20260912.txt。按观察保留来源/限定/算例，程序分配ID并展开原文，保留未选假设/限制/不确定材料，非法ID不再静默删除。
-- scientific-critical-thinking项目运行时适配已实现，map/reduce/final按阶段注入，复用Gateway与现有独立科学复核，不改DB或发布权限。部署事实以顶部为准。
-
-## 2026-09-12 — 第1项文档与公式已部署、取得真实输出
-- 用户批准按清单逐项落实，并明确保留后续图片/视频艺术风格、构图、叙事、镜头/旁白能力。本轮只交付文档/公式，不开启媒体或批量冷启动。
-- 服务器复用Docling Serve镜像，仅补缺失CodeFormulaV2 0.3B模型，revision ecedbe111，权重630993616字节。只读独立缓存挂载、公式增强开关；解析保留TeX/页码/bbox，公式空识别与高级回退明确标记质量下降。
-- Web增加KaTeX统一科学文本，研究理解skill v5通过Worker显式导入；主线程实现解析/部署、Sol Medium做Web、Sol High定向风险复核。当前release76ead135、rollback5c655bea，服务器必要build/start完成，无测试/CI/本机构建。
-- 真实论文经docling-serve-cpu1.30.0完成26页、32公式，warnings=[]，原结果/parser-jobs/formula-reading-20260912.json。未修改RO/SDF/发布内容；逐式原图核对与新公式产品显示尚未确认。旧公开图文已观察正常，不能替代公式质量结论。
-
-## 2026-09-12 — 服务器能力盘点与接入顺序
-- 用户认可一站式方案，先要求准备论文理解、科学写作/撰稿、精美输出与文档/公式能力。通过项目SSH入口只读查看生产release、容器、指定包/非敏感配置与已有skill，release仍363257aa；未安装、部署、测试或重跑论文。
-- 确认Docling Serve CPU1.30.0已生产，公式增强false，应用缺少统一数学渲染；宿主research-paper-writing存在但Worker只显式加载内置分析skill。已纠正旧candidate表对当前Docling状态的误导。
-- 已查原始仓库：K-Dense科学写作/批判分析/引用技能可按项目适配；MarkItDown补格式入口，不能代替公式OCR；beautiful-notes未定位唯一来源，不冒装同名App。按文档公式→理解→写作引用→精美输出→格式扩展→媒体顺序记录到能力台账。
-- 当前只有文档变化；完整准备清单位于docs/runbooks/hermes-capability-registry.md，具体运行入口位于server-capabilities.md。Chat6Pro完整回复e2850072已取回；采纳实际技能加载、分离文档类型、格式优先复用Docling、按需导出；文档公式缺口前置。静态git diff --check通过。
-
-## 2026-09-12 — Hermes持续协作与创作能力方案，尚未实施
-- 用户只要求先思考给方案；已定向阅读创建页、对话合同与媒体编排，确认旧blank/import分流、必填标题、空上下文和有限风格合同；方案原地追加于2026-09-05产品设计spec。
-- 建议统一首次创建/追加附件/再次分析，自动形成可撤销草稿并保护手改；移除形象大小切换，随后增强全文理解、视觉策划、多风格生图和视频叙事。
-- 本轮仅文档方案；源码HEAD4b2dda83，沿用上轮生产363257aa/rollbackc0fdc389记录，未重新查询服务器、改产品代码、部署或运行测试。Chat同一6Pro会话完整回复a9aa220b已取回并纳入；已明确制作指令不重复确认。静态git diff --check通过。
-
-## 2026-09-11 — 研究桌面与公开阅读体验已部署
-- branch codex/onchip-video-release；worktree .worktrees/onchip-video-release。ECS应用/源码363257aa2a98a47e847f676aa32fd675f53f1ad6，rollbackc0fdc389d06d0dfd49213945d0641644854e7090；provider d1630135/rollback92cc416e不变。后续docs-only HEAD不是新的应用release。
-- 服务器必要build/start完成，deploy --no-tests --skip-migrate --reuse-unchanged-capability-images exit0；未运行测试/CI/本机构建。。日志C:/Users/Mac/AppData/Local/Temp/xgs-ui-final-deploy-20260911.log。无测试、CI、本机构建或新模型/生图调用。
-- 研究桌面明确继续研究与需处理/后台任务；保留真实并发与历史；初次读取、部分失败、真实无任务分开，专用任务接口失败不吞掉global成功结果，可见页/focus静默更新。
-- Hermes卡片保留透明形象与实际对话Drawer，关闭桌面旧全局重复头像。研究卡片直达编辑器；加载期与成品背景一致。
-- 编辑器四个大块资料归入文末“资料与修改记录”；未确认AI提取只在正文实际操作处展示，保留必要来源/缺失字段确认。
-- 公开页贡献→完整核心图/可选视频→六字段→折叠来源历史；版本/日期/复制引用同行，无内部枚举和假图；不存在的视频保留短行。
-- 探索与首页复用已发布版本真实缩略图/标题/洞见；只有一条结果时图文横卡。“最新公开”按publicId倒序，不冒称人工精选或最新版本时间排序。
-- 3条Task/E2E（19/20/21）经既有domain脚本可恢复归档完成；实际公开index仅22，原文件/Publication/公开ID保留。
-- 根SessionProvider、validated /me Cookie续期、跨标签状态和迟到请求竞态已实现；实际/me200且Set-Cookie续604800秒，桌面→编辑器→探索→公开页账号保持。未复现真实401，不能以短期浏览证明长期绝不失效。
-- 363最终实页：桌面floating stage=0、卡片头像=1，真实2项需处理任务和6条历史可見；对话Drawer可打开/关闭，未发送新模型请求；探索单篇横卡图文同屏且账户保持。已查看最终桌面/探索及未变化的c0fd公开/编辑器截图。
-- 项目apple-design/emil-design-eng/frontend-design实际用于实现，入口skill增加页面职责/缩略图/资料层级约束；无重复安装。Chat6Pro完整产品规划已取得并采纳；Sol Medium桌面、Sol High会话及独立风险复核，未降低科学标准。
-- 实际截图发现的旧global头像和假空任务已再修，不因必要构建通过就宣称页面完美。完整截图使用非css CDP layoutViewport尺寸，已解决Chrome125%造成的取图裁切。
-
-## 真实带图公开成果（保持）
-- https://openscience.428312321.xyz/research/OSR-2026-000022/v/10 ，RO c896802c，正式v10=f4e2dc71，草稿修订11。
-- Hermes对话发布201，2026-09-11T14:39:38.371Z；b19核心PNG1672×941经主会话/Sol High/Chat6Pro审阅并approved，公开naturalWidth1280。
-- 复用原高级解析和Hermes六字段；48context来源人工确认、2标题引用移除、重复节点归supporting，102Evidence/12claims/6core、原PDF/历史/图片来源保留。
-- 既有发布恢复与review校验前移已部署；不放宽publish终检，不放行旧rejected科学错误。
-- 本轮没有重新提取或生图。既有完整样例含人工浏览器恢复、证据确认与节点整理，不能冒充任意论文全自动可靠处理。
-
-## 下一阶段与边界
-- 本轮UI之后再提升Hermes全文理解、来源关联、去重和科学自审，减少人工纠错；不以减少按钮替代科学质量。
-- 当前一篇真实带图公开；2–3篇精选目标尚未全部完成。视频、真实多图HTML样本/独立导出与更大范围旧数据清理仍待后续，暂停批量冷启动。
-- 唯一CURRENT：docs/handoff/2026-09-10-hermes-web-image-handoff.md；版本、原始素材ID、归档和控制入口以其为准。
+## 执行约束
+- 用户禁止测试/预检/CI/本地构建；必要服务器build/start属于部署，实际产品任务按授权继续；不得以没有测试宣称质量已验证。
+- 全文理解/写作由服务器Hermes调用已配MiniMax完成，不能用Codex手工内容冒充产品自动能力。
+- 能力变化同步server-capabilities.md与hermes-capability-registry.md；安装前查现有缓存/服务，勿重复装浏览器/OCR。
+- 发现产品叙事或科学事实方向错误及时对齐，不沿旧规划继续扩大。

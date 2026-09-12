@@ -25,6 +25,7 @@ import type { DocumentParser, ParserInput } from './types';
 
 const XLSX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const DOCX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const PPTX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 const SUPPORTED_MEDIA_TYPES = new Set([
   'text/markdown',
   'text/x-markdown',
@@ -36,6 +37,8 @@ const SUPPORTED_MEDIA_TYPES = new Set([
   'text/csv',
   XLSX_MEDIA_TYPE,
   DOCX_MEDIA_TYPE,
+  PPTX_MEDIA_TYPE,
+  'text/html',
   'application/pdf',
   'image/jpeg',
   'image/png',
@@ -59,6 +62,8 @@ export type TextStageAdapter = (request: ParserJobRequestV2, content: Buffer) =>
 export interface TextExtractionAdapters {
   pdf?: TextStageAdapter;
   docx?: TextStageAdapter;
+  pptx?: TextStageAdapter;
+  html?: TextStageAdapter;
   image?: TextStageAdapter;
   xlsx?: TextStageAdapter;
 }
@@ -353,7 +358,7 @@ function buildStructuredXlsxPages(result: ParserStageResult): SourceMapPageDraft
 async function parseBinary(
   input: ParserInput,
   adapter: TextStageAdapter | undefined,
-  kind: 'pdf' | 'docx' | 'image' | 'xlsx',
+  kind: 'pdf' | 'docx' | 'pptx' | 'html' | 'image' | 'xlsx',
 ) {
   if (!adapter) return needsReview(input, 'parser-unavailable');
   const result = parseParserStageResult(await adapter(stageRequest(input), Buffer.from(input.content)));
@@ -367,7 +372,7 @@ async function parseBinary(
     assertStructuredTableSourceMap(sourceMap, 'xlsx');
     return succeededSourceMap(sourceMap, []);
   }
-  if (kind === 'pdf' || kind === 'image') {
+  if (kind === 'pdf' || kind === 'pptx' || kind === 'html' || kind === 'image') {
     const pages = buildPhysicalPages(result.pages, result.parser);
     assertSourceMapBudgets(pages);
     if (!pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {
@@ -522,6 +527,8 @@ export function createTextExtractor(adapters: TextExtractionAdapters): DocumentP
         const type = mediaType(input);
         if (type === 'application/pdf') return await parseBinary(input, adapters.pdf, 'pdf');
         if (type === DOCX_MEDIA_TYPE) return await parseBinary(input, adapters.docx, 'docx');
+        if (type === PPTX_MEDIA_TYPE) return await parseBinary(input, adapters.pptx ?? adapters.pdf, 'pptx');
+        if (type === 'text/html') return await parseBinary(input, adapters.html ?? adapters.pdf, 'html');
         if (type === XLSX_MEDIA_TYPE && adapters.xlsx) return await parseBinary(input, adapters.xlsx, 'xlsx');
         if (type.startsWith('image/')) return await parseBinary(input, adapters.image, 'image');
         const pages = type === 'text/csv'

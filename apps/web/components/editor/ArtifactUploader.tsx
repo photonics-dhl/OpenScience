@@ -19,7 +19,8 @@ interface UploadJob {
   error?: string;
 }
 
-const MANUSCRIPT_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'tex', 'zip', 'md', 'markdown']);
+const MANUSCRIPT_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'pptx', 'tex', 'zip', 'md', 'markdown', 'html', 'htm', 'xlsx']);
+const ARTIFACT_ACCEPT = '.pdf,.doc,.docx,.pptx,.tex,.zip,.md,.markdown,.html,.htm,.png,.jpg,.jpeg,.webp,.svg,.csv,.tsv,.xlsx,.json,.yaml,.yml,.ipynb,.py,.r';
 
 /** 附件上传（P1B-3 管线，XHR 进度条 + 失败重试，§18.3 可恢复进度）。 */
 export default function ArtifactUploader({
@@ -118,6 +119,7 @@ export default function ArtifactUploader({
             ref={fileRef}
             className="sr-only"
             type="file"
+            accept={ARTIFACT_ACCEPT}
             disabled={uploadPending}
             data-testid="artifact-input"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.currentTarget.value = ''; }}

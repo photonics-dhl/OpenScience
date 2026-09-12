@@ -33,7 +33,7 @@ import {
   type DocumentParserMetadata,
 } from './parsers/job-protocol';
 
-type ParserKind = 'pdf' | 'docx' | 'image' | 'xlsx';
+type ParserKind = 'pdf' | 'docx' | 'pptx' | 'html' | 'image' | 'xlsx';
 export type ParserStageProcessor = (request: ParserJobRequestV2, content: Buffer) => Promise<ParserJobResult>;
 export const TRANSITION_PARSER_METADATA = Object.freeze({ name: 'v1-text-transition', version: '2.0.0' });
 export const DOCLING_PARSER_METADATA = Object.freeze({ name: 'docling-serve-cpu', version: '1.30.0' });
@@ -66,6 +66,9 @@ export function expectedSidecarParserMetadata(
   if (request.operation === 'extract_text' && request.mediaType === 'application/pdf') {
     return [DOCLING_PARSER_METADATA, PDF_TEXT_ITEM_METADATA];
   }
+  if (request.operation === 'extract_text' && [
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/html',
+  ].includes(request.mediaType)) return DOCLING_PARSER_METADATA;
   return TRANSITION_PARSER_METADATA;
 }
 
@@ -316,9 +319,13 @@ export function createTransitionParserStageProcessor(adapters: IngestionAdapters
         ? 'docx'
         : request.mediaType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           ? 'xlsx'
-        : request.mediaType.startsWith('image/')
-          ? 'image'
-          : undefined;
+          : request.mediaType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+            ? 'pptx'
+            : request.mediaType === 'text/html'
+              ? 'html'
+              : request.mediaType.startsWith('image/')
+                ? 'image'
+                : undefined;
     if (!kind) throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
     const adapter = adapters[kind];
     if (!adapter) throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_UNAVAILABLE);
@@ -328,10 +335,12 @@ export function createTransitionParserStageProcessor(adapters: IngestionAdapters
     } catch {
       throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_FAILED);
     }
-    if (kind === 'pdf' || kind === 'xlsx') {
+    if (kind === 'pdf' || kind === 'pptx' || kind === 'html' || kind === 'xlsx') {
       try {
         const result = parseParserStageResult(parsed);
-        const expected = kind === 'pdf' ? [DOCLING_PARSER_METADATA, PDF_TEXT_ITEM_METADATA] : [TRANSITION_PARSER_METADATA];
+        const expected = kind === 'xlsx' ? [TRANSITION_PARSER_METADATA]
+          : kind === 'pdf' ? [DOCLING_PARSER_METADATA, PDF_TEXT_ITEM_METADATA]
+            : [DOCLING_PARSER_METADATA];
         if (!expected.some((candidate) => result.parser.name === candidate.name
           && result.parser.version === candidate.version
           && result.parser.modelHash === undefined)) {

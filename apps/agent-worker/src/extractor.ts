@@ -66,8 +66,11 @@ export interface ExtractionResult extends Record<string, unknown> {
   /** Server-owned canonical selection contract used to prevent obsolete paid repair loops. */
   canonicalExtractionContract?: 'windowed-source-v2' | 'exact-quote-v1' | 'grounded-summary-v1' | 'grounded-passages-v1' | 'grounded-passages-v2';
   scientificReview?: {
-    provider: 'chatgpt-web-science-review';
-    model: 'chatgpt-web/6-pro';
+    provider: string | null;
+    model: string | null;
+    kind?: 'model_self_check' | 'independent_review';
+    usage?: { inputTokens: number; outputTokens: number };
+    finishReason?: 'stop' | 'length' | 'other' | 'unknown';
     contractVersion: '4';
     status: 'review_received' | 'awaiting_review_evidence' | 'blocked_scientific_review';
     attemptId: string;
@@ -695,6 +698,7 @@ interface CanonicalPartialResult {
 }
 
 interface ScientificReviewContext {
+  mode?: 'model' | 'web';
   requestId: string;
   authorizationContext: Readonly<OcrAuthorizationContext>;
   persistedCandidateHash?: string;
@@ -1364,6 +1368,112 @@ function supplementalDocumentEvidence(
   return { manifest, manifestHash: sha256Json(manifest), attachments: [{ ...sourceDocument, bytes: Uint8Array.from(sourceDocument.bytes) }] };
 }
 
+function scientificReviewPrompt(
+  candidateHash: string, sourceMapHash: string, current: Record<string, unknown>,
+  reviewPassages: readonly CanonicalPassage[], hasAttachment: boolean,
+): string {
+  return [
+    hasAttachment ? '已提供原PDF，可核对原页。' : '本轮只有带P编号的解析原文，没有原页图像。不要声称已查看PDF/原图。先独立重建研究逻辑，再用原文纠正候选；解析疑点只影响相关断言，不把技术缺陷写成论文局限。',
+      '对一篇论文的六字段中文候选做科学校正。六字段是对整篇论文的六种用户视角，不是同名章节抽取；先理解提供的原文证据及下方P编号段落的研究逻辑，再检查候选。候选不是证据，最终实质断言必须由P编号原文支撑。六字段必须同包审阅。',
+      'problem凝练研究缺口与具体问题；insight凝练核心新认识或贡献；method跨引言、模型、推导、实验设置、结果分析、图注和附录，概括作者实际如何得到结果；results凝练有条件的关键输出；limitations凝练假设、适用边界与未解决问题；reproducibility给出依据全文可重建的最小研究配方，并明确作者未披露、因此不能独立复现的细节。缺少同名章节、作者未把步骤集中书写或未披露全部实现细节，都不等于Method或Reproducibility没有可概括内容。',
+      '允许受约束的跨段综合：可以连接原文分别给出的研究对象、关系式、步骤和条件，但必须用“综合全文”“文中给出/由所列关系可得”等表述区分作者明示与Hermes综合；不得补造论文未给出的数值、步骤、实验或因果。未披露细节写成限定或复现缺口，不得把它改写成已完成步骤。',
+      '六项summary直接展示给用户，采用凝练连贯的自然语言。软目标：problem 70–120字，insight 90–150字，method 140–220字，results 140–220字，limitations 80–150字，reproducibility 140–220字；必要限定优先于长度。不要照抄公式、枚举所有参数或写成审计报告。保留决定科学身份的理论/数值/实验性质、关键条件、代表性定量结果及会改变结论的限定。生图或视频所需的镜头、构图、视觉元素、动画和完整参数另由内部brief生成，禁止写入六项summary。',
+      '逐字段检查物理对象、角度/坐标定义、关系符、主峰与异号旁瓣、近远场、适用条件、背景比较范围、理论/模拟/实验身份、字段归属和限定词。不要因文字流畅而放行。',
+      'accepted表示候选已是有证据的凝练综合；revised表示用证据纠正、补足限定或压缩摘要；blocked仅用于现有全文无法形成任何科学上负责的字段摘要，或未解冲突会使所有可写摘要都误导。只要能写成准确的受限摘要，就必须accepted或revised，不能因局部未披露而清空整栏。',
+      'needsMoreEvidence仅用于附件或当前P段中本应存在但不可读、缺页，或核验摘要核心主张所必需的特定公式/图注/相邻段尚未进入复核上下文；它不是“作者没有报告实现细节”的标记。作者未报告的事项应在reproducibility或limitations摘要中明确限定。当前提供的是解析原文；只在实际收到附件时才可声称查阅原PDF。affectedFields必须结构化列出所有受影响字段，不能把范围藏在question文本里。',
+      `只返回JSON对象，完整空结构如下：${JSON.stringify({
+        fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
+          verdict: 'blocked', summary: '', sourcePassageIds: [], issues: [],
+        }])),
+        needsMoreEvidence: [],
+      })}。每个verdict只能是accepted、revised或blocked；issues元素必须且只能含code、problem、sourcePassageIds，code只能是RELATION_MISMATCH、EVIDENCE_TYPE_OVERCLAIM、FIELD_MISPLACED、QUALIFIER_LOSS、PHYSICS_MISINTERPRETATION。六字段都必须出现。blocked字段summary为空、sourcePassageIds为空；其他字段必须给出可直接面向用户的完整中文凝练摘要。需要补证时needsMoreEvidence元素必须且只能含affectedFields、question、requestedContext；affectedFields是非空、无重复的六字段英文名数组。`,
+      `固定候选（hash=${candidateHash}）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: current })}`,
+      `直接证据与冲突上下文（sourceMapHash=${sourceMapHash}）：\n${canonicalPassagePrompt(reviewPassages)}`,
+    ].join('\n\n');
+}
+
+
+async function modelScientificReviewCanonicalProposal(
+  gateway: AiGateway,
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  proposal: ExtractedProposal,
+  context?: ScientificReviewContext,
+): Promise<{ partial: CanonicalPartialResult; review: ExtractionResult['scientificReview'] }> {
+  const candidateHash = sha256Json({ schemaVersion: SDF_CORE_VERSION, fields: proposal.fields });
+  const sourceMapHash = sha256Json(sourceMap);
+  const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
+  const reviewPassages = selectScienceReviewPassages(passages, proposal, context?.coveragePassageIds);
+  const allowedIds = new Set(reviewPassages.map((passage) => passage.id));
+  const current = Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
+    summary: proposal.fields[field].summary,
+    sourcePassageIds: proposal.fields[field].sourcePassageIds ?? [],
+    needsMoreInformation: proposal.fields[field].needsMoreInformation,
+  }]));
+  let completion: Awaited<ReturnType<AiGateway['complete']>> | undefined;
+  let parsed: ScientificReviewResponse | undefined;
+  let failure = 'trusted_context_unavailable';
+  let prompt = '';
+  if (context && reviewPassages.length) {
+    prompt = scientificReviewPrompt(candidateHash, sourceMapHash, current, reviewPassages, false);
+    try {
+      const response = await gateway.completeStructuredWithMetadata<ScientificReviewResponse>(
+        (value): value is ScientificReviewResponse => scientificReviewGuard(value, allowedIds),
+        [{ role: 'system', content: SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions },
+          { role: 'user', content: prompt }],
+        { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
+          validationFeedback: () => '严格按给定六字段结构返回完整JSON；来源只能选原文P编号。不要复制长原文或新增字段。' },
+      );
+      completion = response.completion;
+      parsed = response.value;
+    } catch (error) {
+      failure = error instanceof AiGatewayError ? error.code : 'scientific_correction_unavailable';
+    }
+  }
+  const blocked = parsed ? fieldsAffectedByReviewEvidence(parsed) : new Set(SDF_CORE_FIELDS);
+  const fieldDiagnosticsDetails: Record<string, string> = {};
+  const byId = new Map(reviewPassages.map((passage) => [passage.id, passage]));
+  const fields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
+    const reviewed = parsed?.fields[field];
+    if (reviewed?.verdict === 'blocked') blocked.add(field);
+    if (reviewed && !blocked.has(field)) {
+      try {
+        const segments = segmentsForPassages(sourceMap, reviewed.sourcePassageIds, byId);
+        return [field, { summary: reviewed.summary.trim(), sourceQuote: segments.map((segment) => segment.quote).join('\n'),
+          sourcePassageIds: reviewed.sourcePassageIds, verifiedSegments: segments, needsMoreInformation: false }];
+      } catch {
+        blocked.add(field);
+        fieldDiagnosticsDetails[field] = 'scientificReview=source_binding_failed';
+      }
+    }
+    fieldDiagnosticsDetails[field] ??= parsed
+      ? `scientificReview=${reviewed?.issues.map((issue) => issue.code + ':' + issue.problem).join('|') || 'needs_source_evidence'}`
+      : `scientificReview=${failure}`;
+    return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }];
+  })) as ExtractedProposal['fields'];
+  const status = parsed?.needsMoreEvidence.length ? 'awaiting_review_evidence'
+    : blocked.size ? 'blocked_scientific_review' : 'review_received';
+  return {
+    partial: {
+      proposal: { schemaVersion: SDF_CORE_VERSION, fields },
+      fieldDiagnostics: Object.fromEntries([...blocked].map((field) => [field, 'malformed_item' as const])),
+      fieldDiagnosticsDetails,
+      unverifiedSummaries: Object.fromEntries([...blocked].map((field) => [field, parsed?.fields[field].summary || proposal.fields[field].summary])),
+      unverifiedSourcePassageIds: Object.fromEntries([...blocked].map((field) =>
+        [field, parsed?.fields[field].sourcePassageIds.length ? parsed.fields[field].sourcePassageIds : proposal.fields[field].sourcePassageIds ?? []])),
+    },
+    review: {
+      provider: completion?.provider ?? null,
+      model: completion?.model ?? null,
+      kind: 'model_self_check', contractVersion: '4', status, attemptId,
+      reviewedCandidateHash: candidateHash,
+      ...(completion ? { promptHash: completion.promptHash } : {}),
+      ...(completion ? { responseHash: createHash('sha256').update(completion.text).digest('hex'),
+        usage: completion.usage, finishReason: completion.finishReason } : {}),
+    },
+  };
+}
+
 async function webScientificReviewCanonicalProposal(
   gateway: AiGateway,
   sourceMap: DocumentSourceMap,
@@ -1413,23 +1523,7 @@ async function webScientificReviewCanonicalProposal(
     needsMoreInformation: proposal.fields[field].needsMoreInformation,
   }]));
   try {
-    const prompt = [
-      '对一篇论文的六字段中文候选做独立科学复核。六字段是对整篇论文的六种用户视角，不是同名章节抽取；先理解附件原文及下方P编号段落的完整研究逻辑，再检查候选。候选不是证据，最终实质断言必须由P编号原文支撑。六字段必须同包审阅。',
-      'problem凝练研究缺口与具体问题；insight凝练核心新认识或贡献；method跨引言、模型、推导、实验设置、结果分析、图注和附录，概括作者实际如何得到结果；results凝练有条件的关键输出；limitations凝练假设、适用边界与未解决问题；reproducibility给出依据全文可重建的最小研究配方，并明确作者未披露、因此不能独立复现的细节。缺少同名章节、作者未把步骤集中书写或未披露全部实现细节，都不等于Method或Reproducibility没有可概括内容。',
-      '允许受约束的跨段综合：可以连接原文分别给出的研究对象、关系式、步骤和条件，但必须用“综合全文”“文中给出/由所列关系可得”等表述区分作者明示与Hermes综合；不得补造论文未给出的数值、步骤、实验或因果。未披露细节写成限定或复现缺口，不得把它改写成已完成步骤。',
-      '六项summary直接展示给用户，采用凝练连贯的自然语言。软目标：problem 70–120字，insight 90–150字，method 140–220字，results 140–220字，limitations 80–150字，reproducibility 140–220字；必要限定优先于长度。不要照抄公式、枚举所有参数或写成审计报告。保留决定科学身份的理论/数值/实验性质、关键条件、代表性定量结果及会改变结论的限定。生图或视频所需的镜头、构图、视觉元素、动画和完整参数另由内部brief生成，禁止写入六项summary。',
-      '逐字段检查物理对象、角度/坐标定义、关系符、主峰与异号旁瓣、近远场、适用条件、背景比较范围、理论/模拟/实验身份、字段归属和限定词。不要因文字流畅而放行。',
-      'accepted表示候选已是有证据的凝练综合；revised表示用证据纠正、补足限定或压缩摘要；blocked仅用于现有全文无法形成任何科学上负责的字段摘要，或未解冲突会使所有可写摘要都误导。只要能写成准确的受限摘要，就必须accepted或revised，不能因局部未披露而清空整栏。',
-      'needsMoreEvidence仅用于附件或当前P段中本应存在但不可读、缺页，或核验摘要核心主张所必需的特定公式/图注/相邻段尚未进入复核上下文；它不是“作者没有报告实现细节”的标记。作者未报告的事项应在reproducibility或limitations摘要中明确限定。提出needsMoreEvidence前先查阅随附原PDF；affectedFields必须结构化列出所有受影响字段，不能把范围藏在question文本里。',
-      `只返回JSON对象，完整空结构如下：${JSON.stringify({
-        fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
-          verdict: 'blocked', summary: '', sourcePassageIds: [], issues: [],
-        }])),
-        needsMoreEvidence: [],
-      })}。每个verdict只能是accepted、revised或blocked；issues元素必须且只能含code、problem、sourcePassageIds，code只能是RELATION_MISMATCH、EVIDENCE_TYPE_OVERCLAIM、FIELD_MISPLACED、QUALIFIER_LOSS、PHYSICS_MISINTERPRETATION。六字段都必须出现。blocked字段summary为空、sourcePassageIds为空；其他字段必须给出可直接面向用户的完整中文凝练摘要。需要补证时needsMoreEvidence元素必须且只能含affectedFields、question、requestedContext；affectedFields是非空、无重复的六字段英文名数组。`,
-      `固定候选（hash=${candidateHash}）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: current })}`,
-      `直接证据与冲突上下文（sourceMapHash=${sourceMapHash}）：\n${canonicalPassagePrompt(reviewPassages)}`,
-    ].join('\n\n');
+    const prompt = scientificReviewPrompt(candidateHash, sourceMapHash, current, reviewPassages, Boolean(context.sourceDocument));
     if (prompt.length > SCIENCE_REVIEW_MAX_PROMPT_CHARS) {
       return blockAll('awaiting_review_evidence', 'scientificReview=review_packet_too_large');
     }
@@ -1578,7 +1672,9 @@ async function reviewAndMaterializeCanonicalProposal(
   proposal: ExtractedProposal,
   context?: ScientificReviewContext,
 ): Promise<ExtractionResult> {
-  const reviewed = await webScientificReviewCanonicalProposal(gateway, sourceMap, passages, proposal, context);
+  const reviewed = context?.mode === 'web'
+    ? await webScientificReviewCanonicalProposal(gateway, sourceMap, passages, proposal, context)
+    : await modelScientificReviewCanonicalProposal(gateway, sourceMap, passages, proposal, context);
   const result = { ...materializeCanonicalProposal(reviewed.partial.proposal), scientificReview: reviewed.review };
   if (Object.keys(reviewed.partial.fieldDiagnostics).length === 0) return result;
   return {

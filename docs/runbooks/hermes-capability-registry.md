@@ -1,6 +1,9 @@
 # Hermes Capability Registry
 
-- 2026-09-12 最新纠正：生产继续使用现有 MiniMax-M3，不要求额外强模型 API。官方 Anthropic 文档明确 M3 默认 thinking 关闭；当前适配器未传 thinking，structured 固定4096、超时60s。不能将此前错误直接归因于模型能力。候选已接入科学阶段 adaptive、16k/32k预算、180/300s超时及截断不重放；尚待部署和实际结果。Chat只作开发诊断，网页生产硬依赖尚待替换，绝不把已知错误放行。
+- 2026-09-12 当前：生产0d059852/rollbackf2889c86，M3已显式thinking与16k/32k预算；真实118秒阅读66观察/94段但仍是内部候选。后续M3最终model_self_check、paper-analysis v7及XLSX/PPTX/HTML接入尚待本轮部署。Chat开发复核授权已获用户明确批准，生产科学理解不要求新API或网页定稿；完整状态以CURRENT handoff为准。
+- 2026-09-12 实测更新：0d059852已部署，回滚f2889c86；M3新参数在服务器真实读取同一PDF解析结果，118秒完成5窗口+1整合，66观察/94段，6次响应全部thinkingEmitted=true/end_turn。实际输入34276、输出24503 tokens（M3接口报告），没有截断或重试；内部结果仍过长/部分过强，未写入RO，不能视为科学定稿。结果/parser-jobs/hermes-reading-m3-thinking-20260912.json。后续候选将最终六字段校正纳入MiniMax并标明model_self_check，网页不作必经定稿；当前未部署该后续候选。
+
+- 2026-09-12 最新纠正：生产继续使用现有 MiniMax-M3，不要求额外强模型 API。官方 Anthropic 文档明确 M3 默认 thinking 关闭；0d059852之前适配器未传 thinking、structured固定4096、超时60s。不能将此前错误直接归因于模型能力。0d059852已接入科学阶段adaptive、16k/32k预算、180/300s超时及截断不重放；实际结果见顶部。Chat只作开发诊断，网页生产硬依赖尚待替换，绝不把已知错误放行。
 
 - CURRENT 2026-09-12：文档/公式与第2项逐观察阅读已部署f2889c86，rollback7c6b7975。真实67观察/94原段已返回；内部候选的科学复核收尾，不直接写入RO。26页/32公式中4条损坏仍需针对性处理，不能把原warnings为空视作全正确。写作/精美笔记及图片/视频风格仍按顺序待办。
 

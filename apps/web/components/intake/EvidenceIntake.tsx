@@ -9,7 +9,7 @@ import { LiteratureAcquisitionDisclosure, type LiteratureAcquisitionProps } from
 import { MaterialQueue } from './MaterialQueue';
 import { createIntakeMaterials, setPrimaryMaterial, type IntakeMaterial, type MaterialRole } from './intake-model';
 
-const EVIDENCE_ACCEPT = '.pdf,.doc,.docx,.tex,.zip,.md,.markdown,.png,.jpg,.jpeg,.webp,.svg,.csv,.tsv,.json,.yaml,.yml,.ipynb,.py,.r';
+const EVIDENCE_ACCEPT = '.pdf,.doc,.docx,.pptx,.tex,.zip,.md,.markdown,.html,.htm,.png,.jpg,.jpeg,.webp,.svg,.csv,.tsv,.xlsx,.json,.yaml,.yml,.ipynb,.py,.r';
 
 export function EvidenceIntake({ literature, materials, onChange, onRetry }: {
   literature?: LiteratureAcquisitionProps;

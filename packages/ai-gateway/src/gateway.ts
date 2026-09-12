@@ -77,6 +77,14 @@ export interface AiGatewayOptions {
 /** 结构化输出 Schema 校验器（§9.3：JSON 输出必须经 Schema 校验）。 */
 export type SchemaGuard<T> = (value: unknown) => value is T;
 
+export type GatewayCompletion = ProviderResult & { provider: string; promptHash: string };
+
+export type StructuredGenerationOptions = TextGenerationOptions & {
+  validationFeedback?: (value: unknown) => string | undefined;
+  validationDiagnostic?: (value: unknown) => string | undefined;
+  maxRetries?: number;
+};
+
 const MAX_STRUCTURED_RETRIES = 2; // §9.3 失败有限重试
 
 function parseStructuredJson(text: string): unknown {
@@ -224,7 +232,7 @@ export class AiGateway {
   }
 
   /** 文本补全：primary → fallbacks 逐级回退（§9.3 回退策略配置管理）。 */
-  async complete(messages: ChatMessage[], opts: TextGenerationOptions = {}): Promise<ProviderResult> {
+  async complete(messages: ChatMessage[], opts: TextGenerationOptions = {}): Promise<GatewayCompletion> {
     const totalStart = Date.now();
     const promptHash = sha256Text(JSON.stringify(messages));
     let lastError: unknown;
@@ -277,7 +285,7 @@ export class AiGateway {
           ...(opts.thinking ? { requestedThinking: opts.thinking } : {}),
           ...(opts.maxTokens ? { maxOutputTokens: opts.maxTokens } : {}),
         });
-        return result;
+        return { ...result, provider: provider.name, promptHash };
       } catch (e) {
         lastError = e;
         const failure = textProviderFailure(e);
@@ -358,12 +366,16 @@ export class AiGateway {
   async completeStructured<T>(
     guard: SchemaGuard<T>,
     messages: ChatMessage[],
-    opts: TextGenerationOptions & {
-      validationFeedback?: (value: unknown) => string | undefined;
-      validationDiagnostic?: (value: unknown) => string | undefined;
-      maxRetries?: number;
-    } = {},
+    opts: StructuredGenerationOptions = {},
   ): Promise<T> {
+    return (await this.completeStructuredWithMetadata(guard, messages, opts)).value;
+  }
+
+  async completeStructuredWithMetadata<T>(
+    guard: SchemaGuard<T>,
+    messages: ChatMessage[],
+    opts: StructuredGenerationOptions = {},
+  ): Promise<{ value: T; completion: GatewayCompletion }> {
     const retryLimit = opts.maxRetries ?? MAX_STRUCTURED_RETRIES;
     if (!Number.isSafeInteger(retryLimit) || retryLimit < 0 || retryLimit > MAX_STRUCTURED_RETRIES) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid structured retry limit');
@@ -402,7 +414,7 @@ export class AiGateway {
           this.logger?.warn?.(`structured.output.rejected stage=schema_validation attempt=${attempt + 1}/${retryLimit + 1}${safeDiagnostic}`);
           throw new AiGatewayError('SCHEMA_VALIDATION', `结构化输出未通过 Schema 校验（第 ${attempt + 1} 次）`);
         }
-        return parsed;
+        return { value: parsed, completion: result };
       } catch (e) {
         lastError = e;
         // complete() already exhausted the configured provider pool. Repeating the
