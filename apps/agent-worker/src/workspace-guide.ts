@@ -12,7 +12,7 @@ import {
 } from '@openscience/domain';
 import { createWritingSourcePacket, materializeWritingCitations, normalizeWritingCitationMarkers, remapWritingDraftCitations, writingCitationIds } from './citation-management';
 import { SCIENTIFIC_SYNTHESIS_OPTIONS } from './scientific-generation-options';
-import { resolveScientificWritingSource } from './scientific-writing-source';
+import { resolveScientificWritingSource, WritingSourceChoiceError } from './scientific-writing-source';
 import { RESEARCH_NOTE_FORMATTING_SKILL } from './skills/research-note-formatting';
 import { SCIENTIFIC_WRITING_SKILL } from './skills/scientific-writing';
 
@@ -174,10 +174,27 @@ async function handleScientificWriting(
   payload: WorkspaceGuidePayload,
   intent: WritingIntent,
 ): Promise<WorkspaceGuideResult> {
-  const source = await resolveScientificWritingSource(deps, {
-    ownerTaskId: taskId,
-    ...(payload.context.writingDraft ? { baseDraft: payload.context.writingDraft } : {}),
-  });
+  let source: Awaited<ReturnType<typeof resolveScientificWritingSource>>;
+  try {
+    source = await resolveScientificWritingSource(deps, {
+      ownerTaskId: taskId,
+      ...(payload.context.writingDraft ? { baseDraft: payload.context.writingDraft } : {}),
+      ...(payload.context.writingSource ? { writingSource: payload.context.writingSource } : {}),
+    });
+  } catch (error) {
+    if (!(error instanceof WritingSourceChoiceError)) throw error;
+    return {
+      summary: payload.locale === 'zh'
+        ? error.reason === 'multiple'
+          ? '这里有多份原文资料。请在资料的来源选择框中选定本次写作使用的原文，再发送写作要求。'
+          : '本次原文还没有可用的全文解析。请先完成所选资料的处理，再发送写作要求。'
+        : error.reason === 'multiple'
+          ? 'This research has multiple source documents. Select the source in the materials section, then send your writing request again.'
+          : 'The source does not yet have a usable full-text analysis. Complete its processing, then send your writing request again.',
+      nextSteps: [],
+      needsMoreInformation: true,
+    };
+  }
   const baseDraft = payload.context.writingDraft;
   if (intent.mode === 'save') {
     if (!baseDraft || !source.baseDraft) throw new Error('[blocked] Saving requires an authorized private writing draft');

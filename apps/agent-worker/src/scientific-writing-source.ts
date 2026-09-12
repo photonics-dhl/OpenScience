@@ -13,6 +13,13 @@ import {
 interface ResolveWritingSourceInput {
   ownerTaskId: string;
   baseDraft?: WorkspaceWritingDraftInput;
+  writingSource?: { ingestionTaskId: string };
+}
+
+export class WritingSourceChoiceError extends Error {
+  constructor(readonly reason: 'multiple' | 'unavailable') {
+    super(`Scientific writing source ${reason}`);
+  }
 }
 
 export interface ResolvedWritingSource {
@@ -86,6 +93,7 @@ export async function resolveScientificWritingSource(
   if (!membership) throw new Error('[blocked] Scientific writing workspace membership was revoked');
 
   let sourceTaskId: string | undefined;
+  let inferredArtifactId: string | undefined;
   let baseDraft: WorkspaceWritingDraft | undefined;
   if (input.baseDraft) {
     const baseTask = await deps.prisma.agentTask.findUnique({
@@ -97,6 +105,32 @@ export async function resolveScientificWritingSource(
       ? parseStoredWritingDraft(baseTask.result) : undefined;
     sourceTaskId = baseDraft?.sourceTaskId;
     if (!sourceTaskId) throw new Error('[blocked] Scientific writing base draft is outside the authorized research scope');
+  } else if (input.writingSource) {
+    const selected = await deps.prisma.ingestionTask.findUnique({
+      where: { id: input.writingSource.ingestionTaskId },
+      include: { batch: true, artifact: true },
+    });
+    if (!selected || selected.batch.userId !== userId || selected.batch.researchObjectId !== ownerResearch.id
+      || selected.artifact.workspaceId !== ownerResearch.workspaceId) {
+      throw new Error('[blocked] Scientific writing source is outside the authorized research scope');
+    }
+    if (!selected.agentTaskId) throw new WritingSourceChoiceError('unavailable');
+    sourceTaskId = selected.agentTaskId;
+  } else {
+    // Count documents, not recent attempts: one PDF may have many analyses.
+    // An unfinished second document is still ambiguous when no source is chosen.
+    const sources = await deps.prisma.ingestionTask.groupBy({
+      by: ['artifactId'],
+      where: {
+        batch: { userId, researchObjectId: ownerResearch.id },
+        artifact: { workspaceId: ownerResearch.workspaceId },
+      },
+      orderBy: { artifactId: 'asc' },
+      take: 2,
+    });
+    if (sources.length > 1) throw new WritingSourceChoiceError('multiple');
+    if (!sources.length) throw new WritingSourceChoiceError('unavailable');
+    inferredArtifactId = sources[0]!.artifactId;
   }
 
   const candidates = sourceTaskId
@@ -109,7 +143,7 @@ export async function resolveScientificWritingSource(
           kind: 'sdf.extract',
           status: 'succeeded',
           session: { userId, researchObjectId: ownerResearch.id },
-          ingestionTask: { isNot: null },
+          ingestionTask: { artifactId: inferredArtifactId },
         },
         include: { session: true, ingestionTask: { include: { batch: true, artifact: true } } },
         orderBy: { updatedAt: 'desc' },
@@ -122,6 +156,9 @@ export async function resolveScientificWritingSource(
     try {
       const reference = parseDocumentSourceMapReference(extractionResult.sourceMapRef);
       let ingestionTask = candidate.ingestionTask;
+      if (!baseDraft && input.writingSource && ingestionTask?.id !== input.writingSource.ingestionTaskId) {
+        throw new WritingSourceChoiceError('unavailable');
+      }
       if (!ingestionTask && sourceTaskId) {
         const payload = record(candidate.payload);
         if (payload.artifactId !== reference.artifactId || payload.researchObjectId !== ownerResearch.id) continue;
@@ -160,8 +197,9 @@ export async function resolveScientificWritingSource(
         ...(baseDraft ? { baseDraft } : {}),
       };
     } catch {
-      if (sourceTaskId) throw new Error('[blocked] Scientific writing base source is no longer available');
+      if (baseDraft) throw new Error('[blocked] Scientific writing base source is no longer available');
+      if (input.writingSource) throw new WritingSourceChoiceError('unavailable');
     }
   }
-  throw new Error('[blocked] No successful SourceMap-backed sdf.extract task is available for this research');
+  throw new WritingSourceChoiceError('unavailable');
 }

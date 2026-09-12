@@ -11,6 +11,7 @@ export interface WorkspaceGuidePayload extends Record<string, unknown> {
     presentation?: { researchObjectId: string; versionId?: string };
     editorDraft?: WorkspaceEditorDraft;
     writingDraft?: WorkspaceWritingDraftInput;
+    writingSource?: { ingestionTaskId: string };
   };
 }
 
@@ -78,7 +79,7 @@ export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayloa
   }
   if (!payload.context || typeof payload.context !== 'object' || Array.isArray(payload.context)) throw new Error('workspace.guide context 无效');
   const context = payload.context as Record<string, unknown>;
-  if (!hasOnlyKeys(context, ['tasks', 'researchObjects', 'presentation', 'editorDraft', 'writingDraft'])) throw new Error('workspace.guide context 包含未知字段');
+  if (!hasOnlyKeys(context, ['tasks', 'researchObjects', 'presentation', 'editorDraft', 'writingDraft', 'writingSource'])) throw new Error('workspace.guide context 包含未知字段');
   if (!Array.isArray(context.tasks) || context.tasks.length > 20 || !Array.isArray(context.researchObjects) || context.researchObjects.length > 20) {
     throw new Error('workspace.guide context 超出边界');
   }
@@ -131,6 +132,15 @@ export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayloa
     }
     writingDraft = { baseDraftTaskId: draft.baseDraftTaskId, title: draft.title, body: draft.body };
   }
+  let writingSource: WorkspaceGuidePayload['context']['writingSource'];
+  if (context.writingSource !== undefined) {
+    const source = context.writingSource as Record<string, unknown>;
+    if (!source || typeof source !== 'object' || Array.isArray(source)
+      || !hasOnlyKeys(source, ['ingestionTaskId']) || !uuid(source.ingestionTaskId)) {
+      throw new Error('Invalid workspace writing source');
+    }
+    writingSource = { ingestionTaskId: source.ingestionTaskId };
+  }
   return {
     goal,
     locale: payload.locale,
@@ -142,6 +152,7 @@ export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayloa
       ...(presentation ? { presentation } : {}),
       ...(editorDraft ? { editorDraft } : {}),
       ...(writingDraft ? { writingDraft } : {}),
+      ...(writingSource ? { writingSource } : {}),
     },
   };
 }

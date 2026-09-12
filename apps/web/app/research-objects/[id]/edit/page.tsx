@@ -1241,7 +1241,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               initialTaskAutoApply={hermesHandoffAuthorized}
               onInitialTaskConsumed={consumeHermesHandoff}
               taskRestoreReady={editorLoaded && hermesHandoffResolved}
-              dashboardContext={{ tasks: [], researchObjects: [{ id: roId, title: objectMeta.title, status: 'draft' }], ...(versions[0] ? { presentation: { researchObjectId: roId, versionId: versions[0].versionId } } : {}), ...(editorLoaded ? { editorDraft } : {}) }}
+              dashboardContext={{ tasks: [], researchObjects: [{ id: roId, title: objectMeta.title, status: 'draft' }], ...(versions[0] ? { presentation: { researchObjectId: roId, versionId: versions[0].versionId } } : {}), ...(editorLoaded ? { editorDraft } : {}), ...(selectedIngestionTaskId ? { writingSource: { ingestionTaskId: selectedIngestionTaskId } } : {}) }}
               onDraftEdit={applyHermesEdit}
               onPrepareVersion={prepareVersion}
               onUndoDraftEdit={undoHermesEdit}

@@ -551,6 +551,7 @@ function HermesAssistantDrawerContent({
           researchObjects: dashboardContext.researchObjects,
           ...(dashboardContext.presentation ? { presentation: dashboardContext.presentation } : {}),
           ...(dashboardContext.editorDraft ? { editorDraft: dashboardContext.editorDraft } : {}),
+          ...(dashboardContext.writingSource ? { writingSource: dashboardContext.writingSource } : {}),
           ...(writingDraft && isWritingInstruction(normalized) ? { writingDraft: {
             baseDraftTaskId: writingDraft.taskId,
             title: writingDraft.value.title,

@@ -1171,6 +1171,7 @@ export interface WorkspaceGuidePayload {
     presentation?: { researchObjectId: string; versionId?: string };
     editorDraft?: { researchObjectId: string; scope: string; version: number; core: Omit<SdfCore, 'schemaVersion'> };
     writingDraft?: { baseDraftTaskId: string; title: string; body: string };
+    writingSource?: { ingestionTaskId: string };
   };
 }
 
