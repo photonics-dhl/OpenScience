@@ -1,6 +1,6 @@
 # Hermes Capability Registry
 
-- CURRENT 2026-09-12：第1项文档/公式已部署76ead135，rollback5c655bea。真实PDF经Docling Serve 1.30.0完成26页、32个公式，warnings为空，未退回普通解析；结果保留于/parser-jobs/formula-reading-20260912.json。逐式科学正确性和新公式在实际产品页的显示尚未逐项确认。写作/精美笔记和图片/视频风格仍为后续明确待办。
+- CURRENT 2026-09-12：文档/公式与第2项逐观察阅读已部署7c6b7975，rollbackb254400e。真实67观察/94原段已返回；内部候选的科学复核收尾，不直接写入RO。26页/32公式中4条损坏仍需针对性处理，不能把原warnings为空视作全正确。写作/精美笔记及图片/视频风格仍按顺序待办。
 
 - 最新2026-09-11：服务器第二Chat账号已确认登录为Pro，远程桌面已可操作；Chat6Pro实际收到三张产品截图并回复规划，会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。当前无需用户继续密码认证。
 - 历史媒体画廊/Hermes同工作台/公开阅读及发布合同修复已部署b05aaeac，实际部署和未决科学问题见CURRENT handoff。未新增服务、模型或插件，未实施自动账号轮换。
@@ -14,16 +14,17 @@
 
 ## 2026-09-12 接入顺序与第一批准备清单
 
-- 第2项候选（生产尚未切换）：新增产品内置scientific-critical-thinking v1，项目中文适配参考K-Dense同名v1.3/MIT元数据，实际导入global-reduce，短文直接综合时按需加载；不依赖宿主SKILL目录或新供应商。逐观察保留来源/限定/算例，程序展开原文并保留未选假设/定义/限制/不确定材料。Chat6Pro回复已采纳，原文/jobs/hermes-stage2-chat-plan-20260912.txt。
-- 第1项观察更新：28/32公式可排版，两个代表式已核原图；4条格式损坏尚未修复成正确公式。候选新增识别失败回退原文/区域confidence，不将语法通过声称为科学正确。
-用户已认可一站式AI助手，要求先准备服务器能力、逐项接入。安装目标是服务器产品Hermes；不将文件复制到本机Codex或`/opt/hermes-agent/skills`后宣称产品升级。复用现有Worker/Gateway和任务体系，由明确任务加载相应指令/工具，避免全量skill每次注入。第1项正在交付，其余按下表顺序继续。
+- 第2项已部署：产品内置scientific-critical-thinking v1，项目中文适配参考K-Dense同名v1.3/MIT元数据，实际导入global-reduce，短文直接综合时按需加载；不依赖宿主SKILL目录或新供应商。逐观察保留来源/限定/算例，程序展开原文并保留未选假设/定义/限制/不确定材料。Chat6Pro方案原文/jobs/hermes-stage2-chat-plan-20260912.txt。
+- 第1项观察更新：28/32公式可排版，两个代表式已核原图；4条格式损坏尚未修复成正确公式。识别失败回退原文/区域confidence已部署，不将语法通过声称为科学正确。
+- 真实阅读恢复：5个MiniMax分段按相同输入经新guard复用，单次reduce47秒/7753输入/3002输出token；结果67观察、94覆盖原段、32限定上下文。原guard把省略空限定数组误判已修，非法类型/来源仍拒绝。这是本次人工恢复，不是自动缓存能力；不据单次计量推算总体节省比例。
+用户已认可一站式AI助手，要求先准备服务器能力、逐项接入。安装目标是服务器产品Hermes；不将文件复制到本机Codex或`/opt/hermes-agent/skills`后宣称产品升级。复用现有Worker/Gateway和任务体系，由明确任务加载相应指令/工具，避免全量skill每次注入。当前第2项科学复核收尾，随后按下表继续。
 
 用户本轮再次明确：当前步骤结束后回到图片/视频的艺术风格、构图、视觉叙事、镜头/旁白与真实产物复核；不能在后续交接中遗忘。当前不生成新媒体、不启动视频验证。
 
 | 顺序 | 能力及候选 | 当前事实与处理方式 | 用户可见的完成结果 |
 |---|---|---|---|
-| 1 | 科学文档与公式：现有Docling + 项目数学格式规范 + KaTeX | 76ead135已部署，CodeFormulaV2与公式增强true、TeX/来源保留、理解指令v5和安全渲染已接入；真实26页输出32个公式。取得输出不等于逐式正确性已确认；不得根据乱码猜公式 | 已取得真实公式输出；逐式原图比对与新公式产品显示仍需针对实际结果观察 |
-| 2 | 全文分析：升级既有paper-analysis/research-understanding，按需适配scientific-critical-thinking | 已有map/reduce及综合指令，不重复建立第二分析平台；引入假设、边界、反例、单位和来源核对，物理研究不套GRADE/临床检查表 | 自动形成凝练且有依据的研究摘要，隐含方法能概括，真正科学疑问才提示 |
+| 1 | 科学文档与公式：现有Docling + 项目数学格式规范 + KaTeX | 已部署7c6b7975，CodeFormulaV2增强true、TeX/来源保留、理解v5及安全渲染；32式中28式可排版，已核两个代表原式；4条损坏已可标记/保留原文，不猜写 | 科学文本能显示；针对性识别缺口仍需处理，不冒称所有公式物理正确 |
+| 2 | 全文分析：paper-analysis v5/research-understanding v5/scientific-critical-thinking v1 | 已生产实际加载，逐观察绑定来源/限定/算例；67观察和94段真实结果，32段限定上下文保留；短阶段指令替代反复全量注入 | 已取得内部整合；还需纠正识别缺口混入论文限制和复现强措辞，再生成用户精华，不能以有输出代替准确理解 |
 | 3 | 科学写作与引用：scientific-writing + citation-management；复用宿主research-paper-writing可用部分 | K-Dense当前skills路径、MIT元数据已核对。工具改接现有ScanSci/检索/Gateway；原版逐条人工来源认证、模板或额外供应商不是本产品默认流程，不为安装而引入新订阅。稿件与六字段分别处理 | 用户说“整理成研究笔记/综述/论文初稿”，获得对应文体；已有研究的归纳不冒充用户原创结果；引用来自真实来源 |
 | 4 | 精美输出：项目research-note-formatting能力 + 既有设计规范；Pandoc按导出需要补齐 | beautiful-notes在旧表只有PATTERN_ONLY且无来源URL，公开检索未定位唯一对应skill，不安装同名笔记应用冒充。可维护项目专用排版指令，使用同一内容生成HTML与后续DOCX/LaTeX/PDF导出，PDF编译依赖另按需要接入 | 层级、目录、公式、表格、图注与参考文献一致的可读笔记/报告；公开RO继续精炼，不变成长篇稿件 |
 | 5 | 多格式文档入口：先复用Docling格式支持，Microsoft MarkItDown补实际缺口 | 现有PDF/DOCX/XLSX等入口可复用；PPTX等先核Docling已有端点与产品接入差距，再按剩余格式选择MarkItDown依赖，避免全装[all]。其PDF默认转换器使用pdfminer/pdfplumber，不能代替高级公式识别 | 补充讲稿、幻灯片等可由同一对话读入，仍保留原文件与定位；先规范授权类型/MIME和隔离入口 |
@@ -39,7 +40,7 @@
 - [MarkItDown](https://github.com/microsoft/markitdown) 是文件转换工具，[PDF实现](https://github.com/microsoft/markitdown/blob/main/packages/markitdown/src/markitdown/converters/_pdf_converter.py)采用pdfminer/pdfplumber；不是排版引擎、公式校验器或科学理解模型。
 - [Docling公式增强](https://docling-project.github.io/docling/usage/enrichments/)输出公式LaTeX；[KaTeX](https://katex.org/docs/options.html)负责显示，不修正错误公式，集成需保持不可信命令受限；[Pandoc](https://pandoc.org/MANUAL.html)负责格式转换与引用输出，不补造缺失科学事实。
 
-本轮服务器取证无Secret：运行容器、指定包版本、指定非敏感配置、技能文件；生产release已核实。未重新运行解析器/模型或任何测试，未安装候选。Chat同一6Pro会话完整回复e2850072-025c-4903-9ac9-585d13173d9b已取回：采纳Worker显式技能接入、自动核对、笔记/综述/原创稿件区分、PPTX先复用Docling和按需导出；其建议先写作再公式，本项目将已确认的文档/公式缺口前置以免错误输入污染稿件，不等待全部新工具装齐才交付入口。笔记与稿件作为关联RO的私有可编辑产物，不覆盖精炼六字段或公开图文。
+以上候选来源在2026-09-12最初只读盘点阶段核对，当时未安装；后续实际接入状态以本页顶部为准。Chat同一6Pro会话回复e2850072-025c-4903-9ac9-585d13173d9b已取回：采纳Worker显式技能接入、自动核对、笔记/综述/原创稿件区分、PPTX先复用Docling和按需导出；其建议先写作再公式，本项目将已确认的文档/公式缺口前置以免错误输入污染稿件，不等待全部新工具装齐才交付入口。笔记与稿件作为关联RO的私有可编辑产物，不覆盖精炼六字段或公开图文。
 
 ## 1. Purpose
 - 后续实时观察：fd719902服务器网页生图成功并回传，读取时已approved；FWHMₛ图示方向/含义仍需修正，不能以运输或批准状态代替科学质量。用户已指定第二账号；正常退出旧账号、Google OAuth两个必要精确域已放行，随后已完成用户身份验证（见本页最新更新）。自动跨账号轮换尚未实现，也不承诺轮换免限额。旧3814f844限额不得扩展为当前生图能力不可用。
@@ -73,7 +74,7 @@
 | Temporary document lifecycle | 受控全文缓存与下载 | `PRODUCTION` | 无用户模式切换；逐来源 rights 决定 | SeaweedFS `hermes-cache/<workspace>/<document>/<hash>`；72h、600s HttpOnly one-use capability、Worker lease/fence GC | 真实 24,671,920-byte PDF：retention 71.995h、signed link 599.48s、download hash exact、replay 404 |
 | BGE-M3 | 多语 dense embedding | `PRODUCTION` | MIT；无 API 费，运营成本为 CPU/内存/磁盘 | 独立 internal-only `embedding-worker`；exact revision/hash、只读 versioned volume、2 CPU/6 GiB/128 PID | nDCG@10 `0.996655`、Recall@10 `1`、P95 `240 ms`、peak RSS `2,244,235,264` bytes |
 | PostgreSQL lexical search | 无模型词法基线与降级 | `PRODUCTION` | PostgreSQL 内置 FTS；无新增 extension/API 费 | `packages/search` + 独立 `SEARCH_DATABASE_URL`/迁移/连接池 | tenant-safe BM25、migration/restore、embedding outage 降级通过 |
-| Docling Serve | 已上线PDF布局/表格/来源定位；公式增强待接通 | `PRODUCTION` | 生产CPU镜像v1.30.0，compose固定digest；不是旧wheel候选 | `paper-analysis`只读6CPU/8GiB，parser_net；Node解析器经DOCLING_SERVE_URL异步调用，保留页码/bbox；公式增强false | 2026-09-12容器/指定配置与源码核实，已有真实论文结果见CURRENT；运行正常不能证明所有公式正确。下节旧Docling wheel试验标HISTORICAL |
+| Docling Serve | PDF布局/表格/来源与公式增强 | `PRODUCTION` | CPU镜像v1.30.0固定digest；CodeFormulaV2只读缓存已接入 | `paper-analysis`只读6CPU/8GiB，parser_net；Node经DOCLING_SERVE_URL异步调用，保留页码/bbox；公式增强true | 真实26页/32公式，4条坏式须区分处理；运行正常不能证明所有公式正确。旧wheel试验保持HISTORICAL |
 | LiteParse | bbox/layout parser 候选 | `APPROVED_PILOT` | Apache-2.0；npm `2.14.0` 与 Linux x64 包已锁定 | 独立 parser candidate image；ECS evidence only，未进生产 Compose | 5/7 ready、13/16 locator、P95 163 ms、peak RSS 61,300,736 bytes；优于 measured current 7/16，但 Docling 尚无可比结果 |
 | GROBID | 学术元数据、章节、引用解析 | `APPROVED_PILOT` | 开源、本地 CPU；exact license/model terms 仍待 digest 后复核 | provider-neutral TEI adapter 已完成；`0.9.1-crf` 单次 ECS pull 在 180s cutoff 前未取得 digest，未进 Compose | 无质量/P50/P95/RSS 结果；pull 失败不得推断能力，fallback 固定保留 layout map |
 | PaddleOCR | 复杂中英扫描 OCR 候选 | `APPROVED_PILOT` | Apache-2.0 package `3.7.0`/SHA-256 `c0f0a81a…d338` 已锁定；模型条款/hash 未取得 | 独立 CPU candidate image/model volume；`libgomp1` 已修复，corrected exact ECS build 在依赖下载阶段 bounded cutoff，未产出 image | 无 OCR 质量结果；corrected Tesseract baseline 为 2/2 locator、419 ms、candidate-wide RSS 141,406,208 B |

@@ -1,17 +1,17 @@
 # Hermes / Workbench CURRENT Handoff
 
 ## 目标与执行约束
-- 本轮已部署b254400e、rollback76ead135：坏公式回退/区域confidence、逐观察阅读/来源限定保留、科学自省runtime skill。真实MiniMax阅读发现无额外限定时省略qualifierPassageIds导致guard拒绝，当前小修接受缺省并归一为空数组，待部署。原返回保存在/parser-jobs/hermes-reading-stage2-candidates-20260912.json，可按相同输入经新guard复用，勿重新调用所有map。
-- 用户2026-09-12批准逐项实施，当前第1项文档/公式已部署76ead135：CodeFormulaV2、解析TeX与质量回退标记、理解skill v5、Web KaTeX。真实PDF已返回26页/32公式；统一创建/持续对话等后续方案尚未实施。
+- 本轮第2项已部署7c6b7975、rollbackb254400e；Chat6Pro真实科学复核已收到，明确角分布误合并、叠加强度/规定相位遗漏、泛化与伪复现措辞。当前候选paper-analysis/research-understanding v6及自省v2补强这些通用规则，待部署后仅修订综合结果，不重跑map/PDF。
+- 用户2026-09-12批准逐项实施。第1项CodeFormulaV2/TeX/KaTeX已接入；真实26页/32公式中28式可排版、4式损坏。统一创建/持续对话、科学写作/引用、精美输出与媒体风格仍按顺序继续，不能冒称全部完成。
 - 主屏顺序：贡献 → 核心概念图/可选视频 → 凝练六字段 → 文末资料。Hermes对话为主要操作入口；不恢复冗余制作表单。
 - 本机只编辑/静态阅读/传输；禁止测试、预检、CI、本机构建。只做服务器部署必要build/start及授权真实产品操作；视频和批量冷启动暂停。
 - 工作树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release。根目录无关脏文件不碰。
 - Read first：docs/OpenScience_Kimi_Development_Spec.md、docs/specs/2026-09-05-integrated-research-product-design.md、docs/runbooks/server-capabilities.md。
 
 ## 精确版本
-- 应用源码提交 / ECS release：b254400eb184d0ada0337de5e8bb319b1486f601；rollback76ead13551a4272228ac8049ed9658d63b9add3c。后续docs-only HEAD以git为准，不等于新的应用release；未合并main。
+- 应用源码提交 / ECS release：7c6b79754da20f28ac71080e5809cce62db396f5；rollbackb254400eb184d0ada0337de5e8bb319b1486f601。已重新读取.release-id；后续docs-only HEAD以git为准，不等于新的应用release；未合并main。
 - 服务器必要build/start完成，deploy --no-tests --skip-migrate --reuse-unchanged-capability-images exit0；未运行测试/CI/本机构建。
-- 日志 C:/Users/Mac/AppData/Local/Temp/xgs-formula-deploy-focus-20260912.log；5c日志xgs-formula-deploy-final-20260912.log。早期两次构建发现类型错误后修复，未切换线上。
+- 部署日志 C:/Users/Mac/AppData/Local/Temp/xgs-stage2-deploy-20260912.log 和 xgs-stage2-qualifier-deploy-20260912.log；两次均exit0。Sol Medium负责公式回退，Sol High定向复核源码/依赖与空值修复。
 - provider d1630135d569d28364d295380bb4e0333c3ee264 / rollback92cc416ee3fe921f62c75cbe6f69e48d0b55227d；供应商/账号不变，仅补公式模型、KaTeX依赖与既有理解指令。
 - 2026-09-12实际交付：Docling1.30.0+CodeFormulaV2只读缓存，公式增强true、parser并发2；公式TeX/位置保留、空/乱码/降级明确标记；理解skill v5实际导入。统一KaTeX覆盖编辑、公开、发布、Hermes及来源引用。其余候选不冒称已安装。
 
@@ -29,7 +29,8 @@
 
 ## 实际观察与范围
 - 本轮已对照原PDF第2/3页两个代表公式；同一ScientificText生成/jobs/formula-reading-20260912.html，32式中28式可排版，4式识别重复/混入正文/缺配对符，不等于32式物理正确。源Docling任务缓存404，不重跑26页；原解析输出保留。阅读截图/jobs/formula-reader-20260912.png已查看，公开RO未改。
-- 2026-09-12重新读取生产.release-id仍76ead135；真实PDF结果/parser-jobs/formula-reading-20260912.json：docling-serve-cpu1.30.0、26页、32公式、warnings=[]。来源artifact7bb96cc1，未修改RO/SDF/发布数据；尚未逐式原图核对，不能据无warning宣称全正确。现有公开v10图文已观察正常，但其正文无TeX，不能作为新公式显示的证明。
+- 真实阅读结果/parser-jobs/hermes-reading-stage2-final-20260912.json：5个已保存MiniMax分段经相同输入/新guard复用，67观察、覆盖94段、保留32段限定上下文；仅新增一次MiniMax-M3 reduce，47秒，报告7753输入/3002输出token。这是本次人工恢复复用，不是已实现自动断点缓存；不据此推算整体节省比例。
+- 原候选/parser-jobs/hermes-reading-stage2-candidates-20260912.json仍保留；Chat6Pro复核原文/jobs/hermes-stage2-chat-scientific-review-20260912.txt已取回。原页数组顺序1–26，发送包误用了pageNumber导致页属性缺省，内容完整；任何具体页号须对原结果page字段核实。候选不直接写入SDF/发布，公开v10未改。
 - 4909与c0fd部署exit0。真实桌面→编辑器→探索→公开页保持同一账号；/me200，实际Set-Cookie Max-Age604800。公开22-v10图片naturalWidth1280。c0fd截图发现旧global重复头像与短暂假空任务，363定向修复。
 - 363最终实页：桌面floating stage=0、卡片头像=1，真实2项需处理任务和6条历史可見；对话Drawer可打开/关闭，未发送新模型请求；探索单篇横卡图文同屏且账户保持。已查看最终桌面/探索及未变化的c0fd公开/编辑器截图。
 - 部署前未复现真实401：/auth/me为200、Cookie存在。已修硬编码“登录”、Cookie与Redis续期不一致；短期实际导航观察不能证明七天后或所有网络条件下永不掉线。

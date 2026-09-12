@@ -1,9 +1,9 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-12:** application76ead135 / rollback5c655bea；browser providerd1630135 / rollback92cc416e。公式能力已部署、真实26页/32公式输出取得；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
-> 当前执行：用户批准Hermes能力清单逐项落实，先交付文档/公式；图片/视频艺术风格与叙事已登记后续。统一创建/持续对话等方案保留，不恢复旧冗余表单。
-> 最新应用部署76ead135，包含公式模型接入、解析质量标记、理解skill v5和Web KaTeX；逐式正确性与新公式实页显示尚未确认。docs-only HEAD不等于新的应用release。
+> **CURRENT 2026-09-12:** application7c6b7975 / rollbackb254400e；browser providerd1630135 / rollback92cc416e。文档/公式与逐观察阅读已部署；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> 当前执行：第2项全文理解/科学自省取得真实内部候选，复核收尾后推进科学写作/引用；图片/视频艺术风格与叙事明确保留后续。统一创建/持续对话方案保留，不恢复旧冗余表单。
+> 最新应用7c6b7975保留67观察/94原段及限定来源，公式32条中4条损坏仍需针对性处理，不能以语法通过冒称物理正确。docs-only HEAD不等于新的应用release。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -11,9 +11,9 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 第2项候选，待服务器部署；Chat6Pro方案已取回；不改公开或自动放行科学结论 |
-| `apps/agent-worker/parser-image/package.json` / `package-lock.json` / `apps/agent-worker/src/ingestion-parser.ts` | 隔离parser的KaTeX语法兼容、坏公式orig回退及区域低置信标记 | 真实32公式中4条缺陷的修复候选；不猜改公式，生产仍76ead135 |
-| `apps/web/components/content/ScientificText.tsx` / `ScientificText.module.css` | 有界、安全的TeX显示，编辑器/公开RO/发布/Hermes及来源引用统一复用 | 已部署76ead135；原始内容与现有保存合同不变，新公式实际显示尚待观察 |
+| `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 已部署7c6b7975；真实67观察/94段，内部候选经Chat6Pro复核收尾，不自动放行科学结论 |
+| `apps/agent-worker/parser-image/package.json` / `package-lock.json` / `apps/agent-worker/src/ingestion-parser.ts` | 隔离parser的KaTeX语法兼容、坏公式orig回退及区域低置信标记 | 已部署7c6b7975；格式失败可识别和保留原文，不表示4条坏公式已科学修正 |
+| `apps/web/components/content/ScientificText.tsx` / `ScientificText.module.css` | 有界、安全的TeX显示，编辑器/公开RO/发布/Hermes及来源引用统一复用 | 已部署；同一组件的真实阅读HTML显示28/32式，两个代表式对照原图；不是已保存的RO公式内容 |
 | `apps/agent-worker/src/ingestion-parser.ts` / `apps/agent-worker/src/skills/research-understanding.ts` | Docling公式来源保留、降级标记、Hermes数学表达与科学上下文指令 | 已部署76ead135，真实26页/32公式输出；逐式质量与后续能力见服务器清单及Hermes台账 |
 | `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 参考目录；相关结构/风格已获用户批准，未安装新能力 |
 | `docs/proposals/2026-09-11-ro-workbench-wireframe.html` | 成稿/Hermes/图视频/公开预览可点击灰度线框，两个主要确认节点 | 已在服务器浏览器打开供用户讨论；无生产接口/真实媒体/发布，非生产UI部署 |
@@ -587,7 +587,7 @@
 
 - DEPLOYED infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：服务器交互浏览器与生产 `chatgpt-web` provider；真实Hermes图片已回传，真实PDF完成6 Pro初审与补证；区域附件子域、图片/科学审阅独立锁、30分钟窗口、15秒science heartbeat、协议版本化幂等和逐字段保留部署于`36e6a8c4`；infra/scripts/ssh-run.sh固定browser-tunnel。
 
-- CURRENT docs/runbooks/server-capabilities.md：2026-09-12应用76ead135；CodeFormulaV2与只读缓存、公式增强true、实际26页/32公式输出已登记；服务器任务先查，安装只补缺失能力。
+- CURRENT docs/runbooks/server-capabilities.md：2026-09-12应用7c6b7975；CodeFormulaV2/KaTeX损坏标记、逐观察全文分析及科学自省已登记；服务器任务先查，安装只补缺失能力。
 
 - `infra/scripts/browser-tunnel.ps1`：Windows隐藏SSH隧道断线重连；固定localhost6081，复用ssh-run.sh，2026-09-09本机页面恢复HTTP200。
 

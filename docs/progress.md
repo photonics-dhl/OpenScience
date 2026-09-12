@@ -1,14 +1,16 @@
 # OpenScience 当前进度
 
-## 2026-09-12 — 第2项已部署，真实阅读格式纠错收尾
-- b254400e部署exit0，rollback76ead135，parser/worker已启动；日志xgs-stage2-deploy-20260912.log。未运行测试/CI/本机构建。
-- 真实MiniMax-M3阅读返回内容但部分观察省略空qualifierPassageIds，旧guard拒绝并产生无效重试。修复仅接受缺省，内部归一[]；已有ID和非法值继续严格校验，High定向复核无阻断。真实候选已保留，可经新guard复用，只需继续reduce。完整理解尚未取得，不声称科学质量通过。
+## 2026-09-12 — 第2项已部署并取得真实全文整合
+- branch codex/onchip-video-release，应用/ECS7c6b79754da20f28ac71080e5809cce62db396f5，rollbackb254400eb184d0ada0337de5e8bb319b1486f601；已重新读取.release-id，必要build/start exit0。日志xgs-stage2-qualifier-deploy-20260912.log。无测试/CI/本机构建。
+- 修复MiniMax省略空qualifierPassageIds导致有效结果被拒绝；缺省归一[]，非法类型/来源仍拒绝，Sol High定向复核无阻断。复用5个保存的实际map，新reduce47秒、7753输入/3002输出token，形成67观察、94覆盖原段与32限定上下文；结果/parser-jobs/hermes-reading-stage2-final-20260912.json。没有重跑PDF；这是本次辅助恢复，不是自动断点缓存或总体节省比例。
+- Chat6Pro真实复核已回：识别问题混入论文限制、角分布公式误合并、叠加强度/规定相位遗漏、复现措辞过强。原回复/jobs/hermes-stage2-chat-scientific-review-20260912.txt；当前v6理解/分析及v2自省补强候选待部署，仅修订综合结果，不写入SDF/发布。隐含方法已纳入观察，有输出不等于科学质量通过。
+- 第3项准备定位了现有workspace-guide的1200字符summary/六字段改写限制，写作需独立私有可编辑文档及真实来源，不能仅复制skill宣称接通。图片/视频艺术风格、构图、叙事和旁白明确保留后续；本轮无新媒体或RO数据写入。
 
-## 2026-09-12 — 公式缺陷修复与第2项理解能力候选
+## 2026-09-12 — 第2项实施依据（候选已由上方release部署）
 - 已查看原PDF第2/3页，两个代表公式与原图一致；产品ScientificText生成实际阅读HTML，32式中28式可排版，4式重复/混入正文/括号损坏，不能将此前warnings=[]视为全正确。未修改公开RO。
-- 候选修复：隔离parser接入既有KaTeX依赖，坏公式保留orig与页/bbox、confidence0/low_confidence；不猜补公式，不重跑整篇PDF。受限识别结果仍需来源上下文判断。
-- Chat6Pro实际回复“观察—来源—适用条件”结构建议，原回复/jobs/hermes-stage2-chat-plan-20260912.txt。候选按观察保留来源/限定/算例，程序分配ID并展开原文，保留未选假设/限制/不确定材料，非法ID不再静默删除。
-- scientific-critical-thinking项目运行时适配已实现，map/reduce/final按阶段注入，复用Gateway与现有独立科学复核，不改DB或发布权限。当前生产仍76ead135；候选待服务器必要构建/部署与真实理解观察。图片/视频风格及写作后续保留。
+- 隔离parser接入既有KaTeX依赖，坏公式保留orig与页/bbox、confidence0/low_confidence；不猜补公式，不重跑整篇PDF。受限识别结果仍需来源上下文判断。
+- Chat6Pro实际回复“观察—来源—适用条件”结构建议，原回复/jobs/hermes-stage2-chat-plan-20260912.txt。按观察保留来源/限定/算例，程序分配ID并展开原文，保留未选假设/限制/不确定材料，非法ID不再静默删除。
+- scientific-critical-thinking项目运行时适配已实现，map/reduce/final按阶段注入，复用Gateway与现有独立科学复核，不改DB或发布权限。部署事实以顶部为准。
 
 ## 2026-09-12 — 第1项文档与公式已部署、取得真实输出
 - 用户批准按清单逐项落实，并明确保留后续图片/视频艺术风格、构图、叙事、镜头/旁白能力。本轮只交付文档/公式，不开启媒体或批量冷启动。
