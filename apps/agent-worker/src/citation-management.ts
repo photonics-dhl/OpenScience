@@ -22,7 +22,9 @@ export interface WritingSourcePacket {
   };
 }
 
-const MAX_SOURCE_PACKET_CHARACTERS = 48_000;
+// Match the existing full-document analysis envelope; the previous 48k packet
+// omitted 193 segments of the current 100,563-character paper.
+const MAX_SOURCE_PACKET_CHARACTERS = 120_000;
 const MAX_EXCERPT_CHARACTERS = 1_600;
 
 function record(value: unknown): Record<string, unknown> {
@@ -124,4 +126,37 @@ export function materializeWritingCitations(
     throw new Error('Scientific writing draft contains an invented citation marker');
   }
   return citations;
+}
+
+/** Equivalent grouped source notation is expanded before resolving exact IDs. */
+export function normalizeWritingCitationMarkers(body: string): string {
+  return body.replace(/\[(S\d+(?:\s*[,，;；]\s*S\d+)*)\]/gu, (_match, group: string) =>
+    group.split(/\s*[,，;；]\s*/u).map((id) => `[${id}]`).join(''));
+}
+
+export function writingCitationIds(body: string): string[] {
+  return [...new Set([...normalizeWritingCitationMarkers(body).matchAll(/\[(S\d+)\]/gu)].map((match) => match[1]!))];
+}
+
+/** Preserve the source of each old marker when a later packet assigns different IDs. */
+export function remapWritingDraftCitations(
+  body: string,
+  citations: readonly WorkspaceWritingCitation[],
+  sources: readonly WritingSourceExcerpt[],
+): string {
+  const byId = new Map(citations.map((citation) => [citation.id, citation]));
+  return normalizeWritingCitationMarkers(body).replace(/\[(S\d+)\]/gu, (_match, id: string) => {
+    const citation = byId.get(id);
+    if (!citation) throw new Error('[blocked] Draft citation is outside its verified base draft');
+    const locator = citation.sourceLocator;
+    const source = sources.find((candidate) =>
+      candidate.sourceLocator.artifactId === locator.artifactId
+      && candidate.sourceLocator.contentHash === locator.contentHash
+      && candidate.sourceLocator.blockId === locator.blockId
+      && candidate.sourceLocator.charRange?.start === locator.charRange?.start
+      && candidate.sourceLocator.charRange?.end === locator.charRange?.end
+      && candidate.text === citation.quote);
+    if (!source) throw new Error('[blocked] Draft citation is not covered by the current authorized source excerpts');
+    return `[${source.id}]`;
+  });
 }

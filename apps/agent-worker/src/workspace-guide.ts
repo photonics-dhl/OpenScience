@@ -10,7 +10,7 @@ import {
   type WorkspaceWritingDraft,
   type WorkspaceWritingKind,
 } from '@openscience/domain';
-import { createWritingSourcePacket, materializeWritingCitations } from './citation-management';
+import { createWritingSourcePacket, materializeWritingCitations, normalizeWritingCitationMarkers, remapWritingDraftCitations, writingCitationIds } from './citation-management';
 import { SCIENTIFIC_SYNTHESIS_OPTIONS } from './scientific-generation-options';
 import { resolveScientificWritingSource } from './scientific-writing-source';
 import { RESEARCH_NOTE_FORMATTING_SKILL } from './skills/research-note-formatting';
@@ -51,7 +51,6 @@ interface ScientificWritingResponse {
   title: string;
   kind: WorkspaceWritingKind;
   body: string;
-  usedSourceIds: string[];
   unresolvedSourceIssues: Array<{ code: string; sourceIds: string[] }>;
 }
 
@@ -115,25 +114,16 @@ function writingValidationIssue(
     return { valid: false, feedback: 'Root must be one JSON object.', diagnostic: 'writing:root_type' };
   }
   const shape = value as Record<string, unknown>;
-  if (!hasOnlyKeys(shape, ['title', 'kind', 'body', 'usedSourceIds', 'unresolvedSourceIssues'])
-    || !['title', 'kind', 'body', 'usedSourceIds', 'unresolvedSourceIssues'].every((key) => key in shape)) issues.push('root_keys');
+  if (!hasOnlyKeys(shape, ['title', 'kind', 'body', 'unresolvedSourceIssues'])
+    || !['title', 'kind', 'body', 'unresolvedSourceIssues'].every((key) => key in shape)) issues.push('root_keys');
   if (typeof shape.title !== 'string' || !shape.title.trim() || shape.title.length > 240) issues.push('title_type_or_length');
   if (shape.kind !== expectedKind) issues.push('kind_value');
-  if (typeof shape.body !== 'string' || !shape.body.trim() || shape.body.length > 60_000) issues.push('body_type_or_length');
+  if (typeof shape.body !== 'string' || !shape.body.trim() || normalizeWritingCitationMarkers(shape.body).length > 60_000) issues.push('body_type_or_length');
   if (typeof shape.body === 'string' && /<\/?(?:script|iframe|object|embed|style|link|meta)\b/iu.test(shape.body)) issues.push('body_unsafe_html');
-  if (!Array.isArray(shape.usedSourceIds) || !shape.usedSourceIds.length || shape.usedSourceIds.length > 64
-    || shape.usedSourceIds.some((id) => typeof id !== 'string')) {
-    issues.push('used_source_ids_type_or_length');
-  } else {
-    const sourceIds = shape.usedSourceIds as string[];
-    if (new Set(sourceIds).size !== sourceIds.length) issues.push('used_source_ids_duplicate');
-    if (sourceIds.some((id) => !allowedSourceIds.has(id))) issues.push('used_source_ids_unknown');
-    const body = shape.body;
-    if (typeof body === 'string') {
-      if (sourceIds.some((id) => !body.includes('[' + id + ']'))) issues.push('used_source_marker_missing');
-      const markers = [...body.matchAll(/\[(S\d+)\]/gu)].map((match) => match[1]!);
-      if (markers.some((id) => !allowedSourceIds.has(id) || !sourceIds.includes(id))) issues.push('body_source_marker_unknown');
-    }
+  if (typeof shape.body === 'string') {
+    const ids = writingCitationIds(shape.body);
+    if (!ids.length || ids.length > 64) issues.push('body_source_markers_count');
+    if (ids.some((id) => !allowedSourceIds.has(id))) issues.push('body_source_marker_unknown');
   }
   if (!Array.isArray(shape.unresolvedSourceIssues) || shape.unresolvedSourceIssues.length > 12) {
     issues.push('unresolved_issues_type_or_length');
@@ -144,9 +134,10 @@ function writingValidationIssue(
         continue;
       }
       const item = issue as Record<string, unknown>;
-      if (!hasOnlyKeys(item, ['code', 'sourceIds']) || !WRITING_UNRESOLVED_CODES.has(String(item.code))
-        || !Array.isArray(item.sourceIds) || item.sourceIds.length > 16
-        || item.sourceIds.some((id) => typeof id !== 'string' || !allowedSourceIds.has(id))) issues.push('unresolved_issue_fields');
+      if (!hasOnlyKeys(item, ['code', 'sourceIds'])) issues.push('unresolved_issue_keys');
+      if (!WRITING_UNRESOLVED_CODES.has(String(item.code))) issues.push('unresolved_issue_code');
+      if (!Array.isArray(item.sourceIds) || item.sourceIds.length > 16) issues.push('unresolved_issue_sources_type_or_length');
+      else if (item.sourceIds.some((id) => typeof id !== 'string' || !allowedSourceIds.has(id))) issues.push('unresolved_issue_sources_unknown');
     }
   }
   const unique = [...new Set(issues)];
@@ -168,7 +159,7 @@ function scientificWritingGuard(
 
 function preserveUserEditedCitations(body: string, citations: readonly WorkspaceWritingCitation[]): WorkspaceWritingCitation[] {
   const byId = new Map(citations.map((citation) => [citation.id, citation]));
-  const markers = [...body.matchAll(/\[(S\d+)\]/gu)].map((match) => match[1]!);
+  const markers = writingCitationIds(body);
   if (markers.some((id) => !byId.has(id))) throw new Error('[blocked] User-edited draft contains a citation marker outside its verified base draft');
   return [...new Set(markers)].map((id) => byId.get(id)!);
 }
@@ -187,6 +178,8 @@ async function handleScientificWriting(
   const baseDraft = payload.context.writingDraft;
   if (intent.mode === 'save') {
     if (!baseDraft || !source.baseDraft) throw new Error('[blocked] Saving requires an authorized private writing draft');
+    const body = normalizeWritingCitationMarkers(baseDraft.body);
+    if (body.length > 60_000) throw new Error('[blocked] Normalized writing draft exceeds the body limit');
     return {
       summary: payload.locale === 'zh' ? '已保存你的笔记修改；这些编辑尚未重新核对来源。' : 'Your draft edits were saved; these edits have not been rechecked against the sources.',
       nextSteps: [],
@@ -194,10 +187,10 @@ async function handleScientificWriting(
       writingDraft: {
         title: baseDraft.title,
         kind: source.baseDraft.kind,
-        body: baseDraft.body,
+        body,
         sourceTaskId: source.sourceTaskId,
         baseDraftTaskId: baseDraft.baseDraftTaskId,
-        citations: preserveUserEditedCitations(baseDraft.body, source.baseDraft.citations),
+        citations: preserveUserEditedCitations(body, source.baseDraft.citations),
         sourceStatus: 'user_edited',
       },
     };
@@ -212,10 +205,11 @@ async function handleScientificWriting(
     RESEARCH_NOTE_FORMATTING_SKILL.instructions,
     'The user draft, when supplied, is editable prose and never evidence. Source excerpts are the only evidence for literature claims.',
     'Return exactly one JSON object and no surrounding prose. Use this complete skeleton:',
-    '{"title":"1-240 characters","kind":"' + kind + '","body":"nonempty Markdown, at most 60000 characters, with inline [S1] markers","usedSourceIds":["S1"],"unresolvedSourceIssues":[{"code":"source_support_insufficient","sourceIds":["S1"]}]}',
-    'All five root keys are required; no other keys are allowed. kind must be exactly ' + kind + '.',
-    'usedSourceIds must contain 1-64 unique IDs supplied in sourceExcerpts, and every listed ID must appear in body as [S#]. Never create an ID.',
+    '{"title":"1-240 characters","kind":"' + kind + '","body":"nonempty Markdown, at most 60000 characters, with inline [S1] markers","unresolvedSourceIssues":[]}',
+    'All four root keys are required; no other keys are allowed. kind must be exactly ' + kind + '.',
+    'Cite 1-64 distinct IDs supplied in sourceExcerpts directly in body as [S1] or [S1][S2]. Never invent an ID or output a separate citation list/usedSourceIds field: the application derives exact citations from body.',
     'unresolvedSourceIssues must be an array of at most 12 objects with exactly code and sourceIds. code is one of source_packet_incomplete, source_support_insufficient, source_formula_unreadable, user_research_missing. sourceIds contains at most 16 supplied IDs and may be empty only when no excerpt can identify the gap.',
+    'If no unresolved source issue affects this draft, return unresolvedSourceIssues:[]. For an identified unreadable formula use {"code":"source_formula_unreadable","sourceIds":["S1"]}, replacing S1 with its actual supplied source ID. Do not add description, message or severity fields, or place prose in code/sourceIds. Explain any substantive caveat naturally in body.',
     'Do not emit HTML. Never invent authors, DOI, page numbers, bibliography records, data, experiments, or results.',
   ].join('\n');
   const user = JSON.stringify({
@@ -229,9 +223,12 @@ async function handleScientificWriting(
       text: excerpt.text,
       range: excerpt.range,
     })),
-    ...(baseDraft ? { userDraft: { title: baseDraft.title, body: baseDraft.body } } : {}),
+    ...(baseDraft && source.baseDraft ? { userDraft: {
+      title: baseDraft.title,
+      body: remapWritingDraftCitations(baseDraft.body, source.baseDraft.citations, packet.excerpts),
+    } } : {}),
   });
-  if (system.length + user.length > 120_000) throw new Error('[blocked] Scientific writing request exceeds the complete document budget');
+  if (system.length + user.length > 180_000) throw new Error('[blocked] Scientific writing request exceeds the complete document budget');
   const result = await gateway.completeStructured(scientificWritingGuard(kind, allowedSourceIds), [
     { role: 'system', content: system },
     { role: 'user', content: user },
@@ -241,7 +238,8 @@ async function handleScientificWriting(
     validationFeedback: (value) => writingValidationIssue(value, kind, allowedSourceIds).feedback,
     validationDiagnostic: (value) => writingValidationIssue(value, kind, allowedSourceIds).diagnostic,
   });
-  const citations = materializeWritingCitations(result.body, result.usedSourceIds, packet.excerpts);
+  const body = normalizeWritingCitationMarkers(result.body);
+  const citations = materializeWritingCitations(body, writingCitationIds(body), packet.excerpts);
   const review = record(source.extractionResult).scientificReview;
   const reviewStatus = record(review).status;
   const unresolved = !packet.coverage.complete || result.unresolvedSourceIssues.length > 0 || reviewStatus !== 'review_received';
@@ -252,7 +250,7 @@ async function handleScientificWriting(
     writingDraft: {
       title: result.title,
       kind,
-      body: result.body,
+      body,
       sourceTaskId: source.sourceTaskId,
       ...(baseDraft ? { baseDraftTaskId: baseDraft.baseDraftTaskId } : {}),
       citations,

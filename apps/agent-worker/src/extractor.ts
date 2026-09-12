@@ -92,9 +92,14 @@ export interface ExtractionResult extends Record<string, unknown> {
       finishReason: 'stop' | 'length' | 'other' | 'unknown';
       promptHash: string;
       responseHash: string;
+      source: { artifactId: string; contentHash: string; sourceMapHash: string };
+      reduction: PaperSemanticReduction;
+      passageBindings: SemanticPassageBinding[];
     };
   };
 }
+
+type PersistedSemanticStage = NonNullable<NonNullable<ExtractionResult['scientificReview']>['semanticStage']>;
 
 export type EvidenceLocation = {
   status: 'located';
@@ -227,10 +232,16 @@ type PaperSemanticReduction = {
   fields: Record<(typeof SDF_CORE_FIELDS)[number], SemanticPoint[]>;
   chosenRepresentativeCase: string | null;
 };
+type SemanticPassageBinding = {
+  observationId: string;
+  sourcePassageIds: string[];
+  qualifierPassageIds: string[];
+};
 type SemanticStage = {
   reduction: PaperSemanticReduction;
-  observations: IdentifiedReadingObservation[];
-  completion: Awaited<ReturnType<AiGateway['complete']>>;
+  passageBindings: SemanticPassageBinding[];
+  completion?: Awaited<ReturnType<AiGateway['complete']>>;
+  persistedMetadata?: PersistedSemanticStage;
   kind: 'semantic_reduce' | 'source_bridge';
 };
 
@@ -408,7 +419,14 @@ function semanticReductionIssue(value: unknown, knownIds: ReadonlySet<string>): 
   return fail('semantic_schema_unknown', '输出未通过语义结构校验；请严格重建完整六字段骨架，不复用上一响应的结构。');
 }
 
-function semanticStageMetadata(stage: SemanticStage): NonNullable<ExtractionResult['scientificReview']>['semanticStage'] {
+function semanticStageMetadata(
+  sourceMap: DocumentSourceMap,
+  stage: SemanticStage,
+): PersistedSemanticStage {
+  if (stage.persistedMetadata) return stage.persistedMetadata;
+  if (!stage.completion) throw new Error('semantic stage completion metadata is missing');
+  const referencedObservationIds = new Set(SDF_CORE_FIELDS.flatMap((field) =>
+    stage.reduction.fields[field].flatMap((point) => point.evidenceIds)));
   return {
     kind: stage.kind,
     provider: stage.completion.provider,
@@ -417,16 +435,23 @@ function semanticStageMetadata(stage: SemanticStage): NonNullable<ExtractionResu
     finishReason: stage.completion.finishReason ?? 'unknown',
     promptHash: stage.completion.promptHash,
     responseHash: createHash('sha256').update(stage.completion.text).digest('hex'),
+    source: {
+      artifactId: sourceMap.artifactId,
+      contentHash: sourceMap.contentHash,
+      sourceMapHash: sha256Json(sourceMap),
+    },
+    reduction: stage.reduction,
+    passageBindings: stage.passageBindings.filter((binding) => referencedObservationIds.has(binding.observationId)),
   };
 }
 
 function expandSemanticPassages(stage: SemanticStage): Record<(typeof SDF_CORE_FIELDS)[number], string[]> {
-  const observations = new Map(stage.observations.map((observation) => [observation.id, observation]));
+  const bindings = new Map(stage.passageBindings.map((binding) => [binding.observationId, binding]));
   const forField = (field: (typeof SDF_CORE_FIELDS)[number]) => [...new Set(stage.reduction.fields[field].flatMap((point) =>
     stage.kind === 'source_bridge' ? point.evidenceIds : point.evidenceIds.flatMap((id) => {
-      const observation = observations.get(id);
-      if (!observation) throw new Error('unknown semantic observation');
-      return [...observation.sourcePassageIds, ...observation.qualifierPassageIds];
+      const binding = bindings.get(id);
+      if (!binding) throw new Error('unknown semantic observation');
+      return [...binding.sourcePassageIds, ...binding.qualifierPassageIds];
     })))];
   return {
     problem: forField('problem'),
@@ -455,6 +480,78 @@ function readingMapGuard(allowedIds: ReadonlySet<string>): SchemaGuard<ReadingMa
           && idsValid(observation.sourcePassageIds) && (observation.sourcePassageIds as unknown[]).length > 0
           && (observation.qualifierPassageIds === undefined || idsValid(observation.qualifierPassageIds));
       });
+  };
+}
+
+function reusableSemanticStage(
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  previousResult: unknown,
+): SemanticStage | undefined {
+  if (!previousResult || typeof previousResult !== 'object' || Array.isArray(previousResult)) return undefined;
+  const result = previousResult as Record<string, unknown>;
+  if (result.canonicalExtractionContract !== CANONICAL_EXTRACTION_CONTRACT
+    || !result.scientificReview || typeof result.scientificReview !== 'object' || Array.isArray(result.scientificReview)) return undefined;
+  const review = result.scientificReview as Record<string, unknown>;
+  if (!review.semanticStage || typeof review.semanticStage !== 'object' || Array.isArray(review.semanticStage)) return undefined;
+  const stage = review.semanticStage as Record<string, unknown>;
+  if (Object.keys(stage).sort().join(',')
+    !== 'finishReason,kind,model,passageBindings,promptHash,provider,reduction,responseHash,source,usage') return undefined;
+  if (!['semantic_reduce', 'source_bridge'].includes(String(stage.kind))
+    || typeof stage.provider !== 'string' || !stage.provider.trim()
+    || typeof stage.model !== 'string' || !stage.model.trim()
+    || !['stop', 'length', 'other', 'unknown'].includes(String(stage.finishReason))
+    || typeof stage.promptHash !== 'string' || !/^[0-9a-f]{64}$/u.test(stage.promptHash)
+    || typeof stage.responseHash !== 'string' || !/^[0-9a-f]{64}$/u.test(stage.responseHash)
+    || !stage.source || typeof stage.source !== 'object' || Array.isArray(stage.source)
+    || !stage.usage || typeof stage.usage !== 'object' || Array.isArray(stage.usage)
+    || !Array.isArray(stage.passageBindings)) return undefined;
+  const source = stage.source as Record<string, unknown>;
+  const usage = stage.usage as Record<string, unknown>;
+  if (Object.keys(source).sort().join(',') !== 'artifactId,contentHash,sourceMapHash'
+    || source.artifactId !== sourceMap.artifactId
+    || source.contentHash !== sourceMap.contentHash
+    || source.sourceMapHash !== sha256Json(sourceMap)
+    || Object.keys(usage).sort().join(',') !== 'inputTokens,outputTokens'
+    || !Number.isSafeInteger(usage.inputTokens) || (usage.inputTokens as number) < 0
+    || !Number.isSafeInteger(usage.outputTokens) || (usage.outputTokens as number) < 0) return undefined;
+
+  const canonicalPassageIds = new Set(passages.map((passage) => passage.id));
+  const bindings = stage.passageBindings as unknown[];
+  const parsedBindings: SemanticPassageBinding[] = [];
+  const observationIds = new Set<string>();
+  for (const candidate of bindings) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return undefined;
+    const binding = candidate as Record<string, unknown>;
+    if (Object.keys(binding).sort().join(',') !== 'observationId,qualifierPassageIds,sourcePassageIds'
+      || typeof binding.observationId !== 'string' || !binding.observationId
+      || observationIds.has(binding.observationId)
+      || !Array.isArray(binding.sourcePassageIds) || binding.sourcePassageIds.length < 1
+      || binding.sourcePassageIds.length > MAX_SOURCE_PASSAGE_IDS
+      || !Array.isArray(binding.qualifierPassageIds) || binding.qualifierPassageIds.length > MAX_SOURCE_PASSAGE_IDS
+      || binding.sourcePassageIds.some((id) => typeof id !== 'string' || !canonicalPassageIds.has(id))
+      || binding.qualifierPassageIds.some((id) => typeof id !== 'string' || !canonicalPassageIds.has(id))) return undefined;
+    observationIds.add(binding.observationId);
+    parsedBindings.push({
+      observationId: binding.observationId,
+      sourcePassageIds: binding.sourcePassageIds as string[],
+      qualifierPassageIds: binding.qualifierPassageIds as string[],
+    });
+  }
+  const knownEvidenceIds = stage.kind === 'source_bridge' ? canonicalPassageIds : observationIds;
+  if ((stage.kind === 'source_bridge' && parsedBindings.length !== 0)
+    || (stage.kind === 'semantic_reduce' && parsedBindings.length === 0)
+    || !semanticReductionGuard(knownEvidenceIds)(stage.reduction)) return undefined;
+  const referencedEvidenceIds = new Set(SDF_CORE_FIELDS.flatMap((field) =>
+    (stage.reduction as PaperSemanticReduction).fields[field].flatMap((point) => point.evidenceIds)));
+  if (stage.kind === 'semantic_reduce'
+    && (referencedEvidenceIds.size !== observationIds.size
+      || [...observationIds].some((id) => !referencedEvidenceIds.has(id)))) return undefined;
+  return {
+    kind: stage.kind as SemanticStage['kind'],
+    reduction: stage.reduction as PaperSemanticReduction,
+    passageBindings: parsedBindings,
+    persistedMetadata: stage as PersistedSemanticStage,
   };
 }
 
@@ -588,7 +685,16 @@ async function buildMappedSemanticStage(gateway: AiGateway, passages: readonly C
   ], { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
     validationFeedback: (value) => semanticReductionIssue(value, knownIds).feedback,
     validationDiagnostic: (value) => semanticReductionIssue(value, knownIds).diagnostic });
-  return { reduction: response.value, observations, completion: response.completion, kind: 'semantic_reduce' };
+  return {
+    reduction: response.value,
+    passageBindings: observations.map((observation) => ({
+      observationId: observation.id,
+      sourcePassageIds: observation.sourcePassageIds,
+      qualifierPassageIds: observation.qualifierPassageIds,
+    })),
+    completion: response.completion,
+    kind: 'semantic_reduce',
+  };
 }
 
 async function buildLegacySemanticBridge(gateway: AiGateway, passages: readonly CanonicalPassage[]): Promise<SemanticStage> {
@@ -606,7 +712,7 @@ async function buildLegacySemanticBridge(gateway: AiGateway, passages: readonly 
   ], { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
     validationFeedback: (value) => semanticReductionIssue(value, passageIds).feedback,
     validationDiagnostic: (value) => semanticReductionIssue(value, passageIds).diagnostic });
-  return { reduction: response.value, observations: [],
+  return { reduction: response.value, passageBindings: [],
     completion: response.completion, kind: 'source_bridge' };
 }
 
@@ -1836,19 +1942,14 @@ async function modelScientificComposeSemantic(
   const selectedIds = new Set(SDF_CORE_FIELDS.flatMap((field) => idsByField[field]));
   const selectedPassages = passages.filter((passage) => selectedIds.has(passage.id));
   if (!selectedPassages.length) throw new AiGatewayError('SCHEMA_VALIDATION', 'semantic_stage_selected_no_source');
-  const observationBindings = stage.observations
-    .filter((observation) => stage.reduction.fields.problem.concat(
+  const observationBindings = stage.passageBindings
+    .filter((binding) => stage.reduction.fields.problem.concat(
       stage.reduction.fields.insight,
       stage.reduction.fields.method,
       stage.reduction.fields.results,
       stage.reduction.fields.limitations,
       stage.reduction.fields.reproducibility,
-    ).some((point) => point.evidenceIds.includes(observation.id)))
-    .map((observation) => ({
-      observationId: observation.id,
-      sourcePassageIds: observation.sourcePassageIds,
-      qualifierPassageIds: observation.qualifierPassageIds,
-    }));
+    ).some((point) => point.evidenceIds.includes(binding.observationId)));
   const allowedIds = new Set(selectedPassages.map((passage) => passage.id));
   const prompt = [
     '语义点只是待核对候选。只用语义点、程序展开的来源绑定和下列原始P段写最终六字段，不读取或沿用任何旧summary。',
@@ -1934,7 +2035,7 @@ async function modelScientificComposeSemantic(
       : blocked.size ? 'blocked_scientific_review' : 'review_received',
     attemptId,
     reviewedCandidateHash: candidateHash,
-    semanticStage: semanticStageMetadata(stage),
+    semanticStage: semanticStageMetadata(sourceMap, stage),
     ...(completion ? {
       promptHash: completion.promptHash,
       responseHash: createHash('sha256').update(completion.text).digest('hex'),
@@ -1962,6 +2063,7 @@ function blockedSemanticStageResult(
   phase: 'section_map' | 'semantic_reduce' | 'source_bridge',
   failure: unknown,
   context?: ScientificReviewContext,
+  semanticStage?: SemanticStage,
 ): ExtractionResult {
   const emptyField = (): ExtractedFieldProposal => ({
     summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true,
@@ -2019,6 +2121,7 @@ function blockedSemanticStageResult(
       status: 'blocked_scientific_review',
       attemptId: reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, reviewedCandidateHash),
       reviewedCandidateHash,
+      ...(semanticStage ? { semanticStage: semanticStageMetadata(sourceMap, semanticStage) } : {}),
     },
   };
 }
@@ -2409,9 +2512,14 @@ export async function extractHandler(
   const passages = canonicalSourceMap ? canonicalPassages(canonicalSourceMap) : undefined;
   if (canonicalSourceMap && passages && trustedContext.scientificReview?.mode !== 'web') {
     let phase: 'section_map' | 'semantic_reduce' | 'source_bridge' = trustedContext.previousResult ? 'source_bridge' : 'section_map';
+    let semanticStage: SemanticStage | undefined;
     try {
-      let semanticStage: SemanticStage;
-      if (trustedContext.previousResult) {
+      semanticStage = trustedContext.previousResult
+        ? reusableSemanticStage(canonicalSourceMap, passages, trustedContext.previousResult)
+        : undefined;
+      if (semanticStage) {
+        phase = semanticStage.kind;
+      } else if (trustedContext.previousResult) {
         semanticStage = await buildLegacySemanticBridge(gateway, passages);
       } else {
         const mapped = await buildMappedSemanticStage(gateway, passages);
@@ -2428,7 +2536,14 @@ export async function extractHandler(
     } catch (error) {
       const failedPhase = error instanceof AiGatewayError && error.message.startsWith('section_map:')
         ? 'section_map' : phase;
-      return blockedSemanticStageResult(canonicalSourceMap, passages, failedPhase, error, trustedContext.scientificReview);
+      return blockedSemanticStageResult(
+        canonicalSourceMap,
+        passages,
+        failedPhase,
+        error,
+        trustedContext.scientificReview,
+        semanticStage,
+      );
     }
   }
   if (canonicalSourceMap && passages && trustedContext.previousResult) {

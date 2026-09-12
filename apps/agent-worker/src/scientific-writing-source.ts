@@ -117,15 +117,28 @@ export async function resolveScientificWritingSource(
       });
   for (const candidate of candidates) {
     if (!candidate || candidate.kind !== 'sdf.extract' || candidate.status !== 'succeeded'
-      || candidate.session.userId !== userId || candidate.session.researchObjectId !== ownerResearch.id
-      || !candidate.ingestionTask || candidate.ingestionTask.batch.userId !== userId
-      || candidate.ingestionTask.batch.researchObjectId !== ownerResearch.id
-      || candidate.ingestionTask.artifact.workspaceId !== ownerResearch.workspaceId) continue;
+      || candidate.session.userId !== userId || candidate.session.researchObjectId !== ownerResearch.id) continue;
     const extractionResult = record(candidate.result);
     try {
       const reference = parseDocumentSourceMapReference(extractionResult.sourceMapRef);
-      if (reference.parserStatus !== 'succeeded' || reference.artifactId !== candidate.ingestionTask.artifactId
-        || reference.contentHash !== candidate.ingestionTask.artifact.blobSha256) continue;
+      let ingestionTask = candidate.ingestionTask;
+      if (!ingestionTask && sourceTaskId) {
+        const payload = record(candidate.payload);
+        if (payload.artifactId !== reference.artifactId || payload.researchObjectId !== ownerResearch.id) continue;
+        ingestionTask = await deps.prisma.ingestionTask.findFirst({
+          where: {
+            artifactId: reference.artifactId,
+            batch: { userId, researchObjectId: ownerResearch.id },
+          },
+          include: { batch: true, artifact: true },
+          orderBy: { updatedAt: 'desc' },
+        });
+      }
+      if (!ingestionTask || ingestionTask.batch.userId !== userId
+        || ingestionTask.batch.researchObjectId !== ownerResearch.id
+        || ingestionTask.artifact.workspaceId !== ownerResearch.workspaceId
+        || reference.parserStatus !== 'succeeded' || reference.artifactId !== ingestionTask.artifactId
+        || reference.contentHash !== ingestionTask.artifact.blobSha256) continue;
       const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
       if (baseDraft?.citations.some((citation) => {
         if (citation.sourceLocator.artifactId !== sourceMap.artifactId

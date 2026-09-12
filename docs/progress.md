@@ -1,5 +1,13 @@
 # OpenScience 当前进度
 
+## 2026-09-12 — 真实质量闭环进行中
+- 用户明确继续落实并实际校验质量；已开始当前论文私有约1000字中文笔记与已说明的语义续跑修复，不再等待旧问题。当前应用仍0df87c9b/rollback68a0e6b2。
+- 真实写作37ba18af失败于结构化schema（used_source_marker_missing,unresolved_issue_fields），M3 16366输入+3598输出/34990ms/stop；没有成功稿，不把任务调用当质量通过。
+- 读取生产SourceMap发现写作48k packet仅113摘录、遗漏193段；完整原文100563字符/290 blocks。正在修复为已有120k全文范围，程序从正文派生引用清单，保留未知ID拒绝与原输出/重试预算。
+- extractor候选保留现有semanticStage的成功reduction/最小P绑定，同源续final，旧数据自然回到bridge；High静态审阅无阻塞。尚未部署/实际续跑。
+- 引用High审阅发现并修复旧packet编号漂移、合并引用保存丢失；另修复论文refresh后旧笔记反向提取关联失效，仍按原私有sourceMap/已验证引用保存与修订。
+- 已独立核对原论文10项科学要点；下一步修复上线后取真实成稿逐段比对，并验证实际阅读、引用和编辑保存。媒体成片/多样格式兼容未完成。
+
 ## 2026-09-12 — 接续写作部署
 - 最终应用0df87c9bee98c2280396551ed522e66230eaf381 / rollback68a0e6b248891b308a963f75988bf230f1b832c4，媒体部署exit0；公网release一致，API/Worker healthy。video runner同0df87c9b，active/accepting，复用原镜像/模型和未变化的Gateway编译产物；旧service已留备份。日志xgs-media-direction-deploy-20260912.log、xgs-media-runner-deploy-20260912.log。没有新媒体任务。
 - 68a0e6b2已部署exit0，rollbacka1ff2db9；公网/__release与.release-id一致、API/Worker healthy。写作/引用/笔记阅读编辑保存下载及失败用量诊断上线，首份真实写作稿件未生成；日志xgs-hermes-writing-build-fix-deploy-20260912.log。
