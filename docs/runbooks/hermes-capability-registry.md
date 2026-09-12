@@ -1,6 +1,6 @@
 # Hermes Capability Registry
 
-- CURRENT 2026-09-12：文档/公式与第2项逐观察阅读已部署7c6b7975，rollbackb254400e。真实67观察/94原段已返回；内部候选的科学复核收尾，不直接写入RO。26页/32公式中4条损坏仍需针对性处理，不能把原warnings为空视作全正确。写作/精美笔记及图片/视频风格仍按顺序待办。
+- CURRENT 2026-09-12：文档/公式与第2项逐观察阅读已部署f2889c86，rollback7c6b7975。真实67观察/94原段已返回；内部候选的科学复核收尾，不直接写入RO。26页/32公式中4条损坏仍需针对性处理，不能把原warnings为空视作全正确。写作/精美笔记及图片/视频风格仍按顺序待办。
 
 - 最新2026-09-11：服务器第二Chat账号已确认登录为Pro，远程桌面已可操作；Chat6Pro实际收到三张产品截图并回复规划，会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。当前无需用户继续密码认证。
 - 历史媒体画廊/Hermes同工作台/公开阅读及发布合同修复已部署b05aaeac，实际部署和未决科学问题见CURRENT handoff。未新增服务、模型或插件，未实施自动账号轮换。
@@ -14,17 +14,18 @@
 
 ## 2026-09-12 接入顺序与第一批准备清单
 
-- 第2项已部署：产品内置scientific-critical-thinking v1，项目中文适配参考K-Dense同名v1.3/MIT元数据，实际导入global-reduce，短文直接综合时按需加载；不依赖宿主SKILL目录或新供应商。逐观察保留来源/限定/算例，程序展开原文并保留未选假设/定义/限制/不确定材料。Chat6Pro方案原文/jobs/hermes-stage2-chat-plan-20260912.txt。
+- 第2项已部署：产品内置scientific-critical-thinking v2，项目中文适配参考K-Dense同名v1.3/MIT元数据，实际导入global-reduce，短文直接综合时按需加载；不依赖宿主SKILL目录或新供应商。paper-analysis/research-understanding v6结合Chat6Pro真实复核补强运算对象、相位/归一化、公式冲突与范围措辞。方案原文/jobs/hermes-stage2-chat-plan-20260912.txt，实际复核同目录hermes-stage2-chat-scientific-review-20260912.txt。
 - 第1项观察更新：28/32公式可排版，两个代表式已核原图；4条格式损坏尚未修复成正确公式。识别失败回退原文/区域confidence已部署，不将语法通过声称为科学正确。
 - 真实阅读恢复：5个MiniMax分段按相同输入经新guard复用，单次reduce47秒/7753输入/3002输出token；结果67观察、94覆盖原段、32限定上下文。原guard把省略空限定数组误判已修，非法类型/来源仍拒绝。这是本次人工恢复，不是自动缓存能力；不据单次计量推算总体节省比例。
+- 科学路由实际结果：MiniMax定向修订仍混算例并保留旧错句，17秒/24667输入/3008输出，不能采纳；停止同模型语义重试，转已读原文的Chat6Pro直接综合。观察/来源定位可交MiniMax，复杂科学综合与最终校正须保留更强模型；不能因写了自省skill宣称已自动保证正确。具体最终返回见CURRENT handoff。
 用户已认可一站式AI助手，要求先准备服务器能力、逐项接入。安装目标是服务器产品Hermes；不将文件复制到本机Codex或`/opt/hermes-agent/skills`后宣称产品升级。复用现有Worker/Gateway和任务体系，由明确任务加载相应指令/工具，避免全量skill每次注入。当前第2项科学复核收尾，随后按下表继续。
 
 用户本轮再次明确：当前步骤结束后回到图片/视频的艺术风格、构图、视觉叙事、镜头/旁白与真实产物复核；不能在后续交接中遗忘。当前不生成新媒体、不启动视频验证。
 
 | 顺序 | 能力及候选 | 当前事实与处理方式 | 用户可见的完成结果 |
 |---|---|---|---|
-| 1 | 科学文档与公式：现有Docling + 项目数学格式规范 + KaTeX | 已部署7c6b7975，CodeFormulaV2增强true、TeX/来源保留、理解v5及安全渲染；32式中28式可排版，已核两个代表原式；4条损坏已可标记/保留原文，不猜写 | 科学文本能显示；针对性识别缺口仍需处理，不冒称所有公式物理正确 |
-| 2 | 全文分析：paper-analysis v5/research-understanding v5/scientific-critical-thinking v1 | 已生产实际加载，逐观察绑定来源/限定/算例；67观察和94段真实结果，32段限定上下文保留；短阶段指令替代反复全量注入 | 已取得内部整合；还需纠正识别缺口混入论文限制和复现强措辞，再生成用户精华，不能以有输出代替准确理解 |
+| 1 | 科学文档与公式：现有Docling + 项目数学格式规范 + KaTeX | 已部署7c6b7975，CodeFormulaV2增强true、TeX/来源保留、理解v6及安全渲染；32式中28式可排版，已核两个代表原式；4条损坏已可标记/保留原文，不猜写 | 科学文本能显示；针对性识别缺口仍需处理，不冒称所有公式物理正确 |
+| 2 | 全文分析：paper-analysis v6/research-understanding v6/scientific-critical-thinking v2 | 已生产实际加载，逐观察绑定来源/限定/算例；67观察和94段真实结果，32段限定上下文保留；短阶段指令替代反复全量注入 | Chat6Pro真实科学复核已收到并落实通用修订规则；本次综合修订结果见handoff，不能以有输出代替准确理解 |
 | 3 | 科学写作与引用：scientific-writing + citation-management；复用宿主research-paper-writing可用部分 | K-Dense当前skills路径、MIT元数据已核对。工具改接现有ScanSci/检索/Gateway；原版逐条人工来源认证、模板或额外供应商不是本产品默认流程，不为安装而引入新订阅。稿件与六字段分别处理 | 用户说“整理成研究笔记/综述/论文初稿”，获得对应文体；已有研究的归纳不冒充用户原创结果；引用来自真实来源 |
 | 4 | 精美输出：项目research-note-formatting能力 + 既有设计规范；Pandoc按导出需要补齐 | beautiful-notes在旧表只有PATTERN_ONLY且无来源URL，公开检索未定位唯一对应skill，不安装同名笔记应用冒充。可维护项目专用排版指令，使用同一内容生成HTML与后续DOCX/LaTeX/PDF导出，PDF编译依赖另按需要接入 | 层级、目录、公式、表格、图注与参考文献一致的可读笔记/报告；公开RO继续精炼，不变成长篇稿件 |
 | 5 | 多格式文档入口：先复用Docling格式支持，Microsoft MarkItDown补实际缺口 | 现有PDF/DOCX/XLSX等入口可复用；PPTX等先核Docling已有端点与产品接入差距，再按剩余格式选择MarkItDown依赖，避免全装[all]。其PDF默认转换器使用pdfminer/pdfplumber，不能代替高级公式识别 | 补充讲稿、幻灯片等可由同一对话读入，仍保留原文件与定位；先规范授权类型/MIME和隔离入口 |

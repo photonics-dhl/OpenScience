@@ -1,6 +1,6 @@
 # 服务器能力与复用清单
 
-- CURRENT 2026-09-12：应用release7c6b7975、rollbackb254400e，已重新读取.release-id；文档公式、逐观察全文分析与科学自省runtime skill已部署。真实阅读保留67观察/94原段；这只是内部候选，科学复核与实际范围见CURRENT handoff。写作及图片/视频风格按[能力台账](hermes-capability-registry.md)继续。
+- CURRENT 2026-09-12：应用releasef2889c86、rollback7c6b7975，部署脚本已确认精确release；文档公式、逐观察全文分析与科学自省runtime skill已部署。真实阅读保留67观察/94原段；这只是内部候选，科学复核与实际范围见CURRENT handoff。写作及图片/视频风格按[能力台账](hermes-capability-registry.md)继续。
 
 - 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。
 - Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。历史许可证400修复已经部署；当前正式工作台/公开阅读版本见本页CURRENT，不恢复旧候选结论。
@@ -11,11 +11,11 @@
 ## 2026-09-12 文档与公式能力接入
 
 - 实际观察更正：旧warnings=[]漏掉4条坏公式；ScientificText实际28/32可渲染，第2/3页两个代表式已对照原页。已部署parser-image/worker的KaTeX0.16.47依赖，格式失败保留orig并标confidence0/low_confidence；不改变网络/Secret/512MiB边界，不宣称已修正4条公式的物理内容。
-- 第2项复用现有Worker/Gateway/MiniMax-M3，并发仍为2：paper-analysis v5逐观察map/reduce、scientific-critical-thinking v1按整合阶段加载。宿主skills目录仍不自动注入产品；本次是TS runtime显式导入，无新服务或模型。真实结果/parser-jobs/hermes-reading-stage2-final-20260912.json，原map候选同目录hermes-reading-stage2-candidates-20260912.json供本次恢复复用。
+- 第2项复用现有Worker/Gateway/MiniMax-M3，并发仍为2：paper-analysis/research-understanding v6、scientific-critical-thinking v2按阶段加载。Chat6Pro实际复核后补强运算对象/相位/来源冲突与非普适性；宿主skills目录仍不自动注入产品，本次是TS runtime显式导入，无新服务或模型。初次结果/parser-jobs/hermes-reading-stage2-final-20260912.json，原map候选同目录hermes-reading-stage2-candidates-20260912.json供本次恢复复用。
 - 缺失公式权重已下载到`/opt/openscience-models/docling-codeformula-v2/docling-project--CodeFormulaV2`；模型`docling-project/CodeFormulaV2`，revision`ecedbe111d15c2dc60bfd4a823cbe80127b58af4`，权重630993616字节，CDLA-Permissive-2.0，来源及revision留在父目录`SOURCE.json`和模型卡。复用已有Docling镜像与宿主代理，仅下载此模型配置/权重/tokenizer；未下载另一套OCR、浏览器或完整工具栈。
 - 部署compose只读挂入既有模型缓存的同名子目录，不遮住镜像中的布局/表格/OCR模型。`HF_HUB_OFFLINE=1`，解析服务仍仅内网、无Secret；原2worker/3threads、6CPU/8GiB不变。document-parser启用`DOCLING_FORMULA_ENRICHMENT=true`。回滚应用363257aa的compose可恢复关闭状态，保留缓存无需删除。
 - Docling识别公式写入TextItem.text；应用保留页码/bbox并补明确TeX分隔符。空识别/乱码保留原文并标low_confidence；高级解析失败的普通文本回退标partial_result/low_confidence。不会根据识别状态声称物理正确。
-- Web复用锁文件已有KaTeX0.16.47，新增应用直接依赖及统一ScientificText；仅渲染明确公式、不信任HTML/链接命令，失败保留原文。研究理解skill v5经现有Worker真实导入，强调公式/单位/条件与来源核对、六字段保持凝练。
+- Web复用锁文件已有KaTeX0.16.47，新增应用直接依赖及统一ScientificText；仅渲染明确公式、不信任HTML/链接命令，失败保留原文。研究理解skill v6经现有Worker真实导入，强调公式/单位/条件与来源核对、六字段保持凝练。
 - 实际论文解析原结果/parser-jobs/formula-reading-20260912.json：26页/32公式，旧warnings=[]不能作为正确性证据。ScientificText同组件阅读HTML与截图位于浏览器/jobs/formula-reading-20260912.html、formula-reader-20260912.png；未写入RO。5个真实map复用后单次reduce用47秒，未重跑PDF；这不是已交付自动断点缓存。
 
 以下为开启前定向盘点，保留其判定依据：
@@ -49,7 +49,7 @@
 
 | 能力 | 已有位置 / 入口 | 状态与复用方式 |
 |---|---|---|
-| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | application `7c6b7975…` / rollback `b254400e…`；真实带图公开成果与剩余范围见CURRENT handoff |
+| 生产应用 | `/opt/openscience`；`openscience-prod-{web,api,agent-worker}-1` | application `f2889c86…` / rollback `7c6b7975…`；真实带图公开成果与剩余范围见CURRENT handoff |
 | 主机资源 | ECS 16 CPU、30 GiB RAM、无 NVIDIA GPU | 盘点时约22 GiB可用；CPU解析器必须有界并发。Marker/MinerU等GPU高质量模式不能按GPU吞吐数据推断本机效果 |
 | 完整图形 Chrome | 宿主 `/opt/openscience-tool-cache/playwright/chromium-1234/chrome-linux64/chrome`；ScanSci镜像内 `/opt/scansci-browsers/chromium-1234/chrome-linux64/chrome` | 已静态确认完整二进制。可复用现有镜像与配套资源；不是只存在 headless shell |
 | 无头 Chromium | 宿主 `/root/.cache/ms-playwright/chromium_headless_shell-1234/` 与共享缓存同名目录；ScanSci镜像 `/opt/scansci-browsers/chromium_headless_shell-1234/` | 现成截图/渲染资源；不能用“仅此目录存在”的旧记录推断没有完整浏览器 |

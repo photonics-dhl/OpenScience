@@ -1,9 +1,13 @@
 # OpenScience 当前进度
 
+## 2026-09-12 — 用户要求重新审视网页科学复核的稳定性
+- 用户质疑“科学定稿交6Pro”是否不稳定。已明确区分本次开发辅助分析与服务器生产路径；现有extractor的确将网页6Pro作为独立科学复核必经节点，故障会阻断，不能称其只是临时诊断工具。暂停扩展该硬依赖，待讨论生产可恢复的理解/校正路径；也不直接移除复核放行已知错误。既有网页生图授权方案保持。
+- 本次已发的Chat最终综合仅作开发校准候选，不能冒称已改变生产路由或已科学定稿；f2889c86部署不受该说明改变。
+
 ## 2026-09-12 — 第2项已部署并取得真实全文整合
-- branch codex/onchip-video-release，应用/ECS7c6b79754da20f28ac71080e5809cce62db396f5，rollbackb254400eb184d0ada0337de5e8bb319b1486f601；已重新读取.release-id，必要build/start exit0。日志xgs-stage2-qualifier-deploy-20260912.log。无测试/CI/本机构建。
+- branch codex/onchip-video-release，应用/ECSf2889c867826c30ceb72c6172f8b7d74434a93fa，rollback7c6b79754da20f28ac71080e5809cce62db396f5；必要build/start及精确release切换exit0。日志xgs-stage2-semantics-deploy-20260912.log。无测试/CI/本机构建。
 - 修复MiniMax省略空qualifierPassageIds导致有效结果被拒绝；缺省归一[]，非法类型/来源仍拒绝，Sol High定向复核无阻断。复用5个保存的实际map，新reduce47秒、7753输入/3002输出token，形成67观察、94覆盖原段与32限定上下文；结果/parser-jobs/hermes-reading-stage2-final-20260912.json。没有重跑PDF；这是本次辅助恢复，不是自动断点缓存或总体节省比例。
-- Chat6Pro真实复核已回：识别问题混入论文限制、角分布公式误合并、叠加强度/规定相位遗漏、复现措辞过强。原回复/jobs/hermes-stage2-chat-scientific-review-20260912.txt；当前v6理解/分析及v2自省补强候选待部署，仅修订综合结果，不写入SDF/发布。隐含方法已纳入观察，有输出不等于科学质量通过。
+- Chat6Pro真实复核已回：识别问题混入论文限制、角分布公式误合并、叠加强度/规定相位遗漏、复现措辞过强。v6理解/分析及v2自省已部署。MiniMax一次定向修订17秒/24667输入/3008输出，仍混19与66/99 as、把已披露条件说成缺失；结果hermes-reading-stage2-revised-20260912.json拒绝作为科学成稿。停止低模型语义重试，转同一已读全文Chat6Pro直接产出最终六字段，等待返回；不写入SDF/发布。
 - 第3项准备定位了现有workspace-guide的1200字符summary/六字段改写限制，写作需独立私有可编辑文档及真实来源，不能仅复制skill宣称接通。图片/视频艺术风格、构图、叙事和旁白明确保留后续；本轮无新媒体或RO数据写入。
 
 ## 2026-09-12 — 第2项实施依据（候选已由上方release部署）

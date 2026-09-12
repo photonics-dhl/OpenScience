@@ -1,9 +1,9 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-12:** application7c6b7975 / rollbackb254400e；browser providerd1630135 / rollback92cc416e。文档/公式与逐观察阅读已部署；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-12:** applicationf2889c86 / rollback7c6b7975；browser providerd1630135 / rollback92cc416e。文档/公式与逐观察阅读已部署；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 当前执行：第2项全文理解/科学自省取得真实内部候选，复核收尾后推进科学写作/引用；图片/视频艺术风格与叙事明确保留后续。统一创建/持续对话方案保留，不恢复旧冗余表单。
-> 最新应用7c6b7975保留67观察/94原段及限定来源，公式32条中4条损坏仍需针对性处理，不能以语法通过冒称物理正确。docs-only HEAD不等于新的应用release。
+> 最新应用f2889c86保留67观察/94原段及限定来源，公式32条中4条损坏仍需针对性处理，不能以语法通过冒称物理正确。docs-only HEAD不等于新的应用release。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。
 > 集成约束：保留已部署 PRD v1.1 的研究记录、核查与每 RO API 能力；不代表其四阶段全部完成。
 
@@ -447,7 +447,7 @@
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
 | `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE/ScanSci 隔离、Windows Git Bash）；§5.49–5.66 为历史/发布 evidence，现行 Docker cache 维护见 §5.67 | **CURRENT运维手册**；2026-09-06缓存清理753.4MB、cache1.005GB、应用f144eb7/rollback b23102b；历史版本证据不作当前部署锚点 |
 | `infra/scripts/evaluate-scansci-upstream-mcp.{sh,test.mjs}` | 上游 `v1.13.1` 官方 MCP 有界 ECS 正向试点：wheel hash、17 tools、真实 OA PDF、exact trap cleanup | **TASK 1 ECS ACCEPTED**；24,671,920 bytes / `d57dc94c…f484a`，临时容器/卷 `0/0` |
-| `docs/runbooks/hermes-capability-registry.md` | Hermes实际技能/工具加载、科学文档/公式、写作引用、精美笔记和媒体能力顺序 | **CURRENT 2026-09-12**；公式增强开启并取得真实输出，内置TS技能v5已加载；科学写作/精美输出/媒体风格仍待后续，历史评测不是新测试门禁 |
+| `docs/runbooks/hermes-capability-registry.md` | Hermes实际技能/工具加载、科学文档/公式、写作引用、精美笔记和媒体能力顺序 | **CURRENT 2026-09-12**；公式增强开启并取得真实输出，分析/理解v6与科学自省v2已加载；科学写作/精美输出/媒体风格仍待后续，历史评测不是新测试门禁 |
 | `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；验证后临时库按用户授权精确清理 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
@@ -587,7 +587,7 @@
 
 - DEPLOYED infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：服务器交互浏览器与生产 `chatgpt-web` provider；真实Hermes图片已回传，真实PDF完成6 Pro初审与补证；区域附件子域、图片/科学审阅独立锁、30分钟窗口、15秒science heartbeat、协议版本化幂等和逐字段保留部署于`36e6a8c4`；infra/scripts/ssh-run.sh固定browser-tunnel。
 
-- CURRENT docs/runbooks/server-capabilities.md：2026-09-12应用7c6b7975；CodeFormulaV2/KaTeX损坏标记、逐观察全文分析及科学自省已登记；服务器任务先查，安装只补缺失能力。
+- CURRENT docs/runbooks/server-capabilities.md：2026-09-12应用f2889c86；CodeFormulaV2/KaTeX损坏标记、逐观察全文分析及科学自省已登记；服务器任务先查，安装只补缺失能力。
 
 - `infra/scripts/browser-tunnel.ps1`：Windows隐藏SSH隧道断线重连；固定localhost6081，复用ssh-run.sh，2026-09-09本机页面恢复HTTP200。
 
