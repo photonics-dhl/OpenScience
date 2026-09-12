@@ -345,7 +345,7 @@ function HermesAssistantDrawerContent({
     if (!open || task || !taskRestoreReady) return;
     let cancelled = false;
     let attempts = 0;
-    let retryTimer: ReturnType<typeof window.setTimeout> | undefined;
+    let retryTimer: number | undefined;
     const restore = () => {
       attempts += 1;
       const loadTasks = initialTaskId

@@ -111,7 +111,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   useEffect(() => {
     if (!hermesTaskId) { setHermesHandoffResolved(true); setHermesHandoffAuthorized(false); return; }
     let active = true;
-    let expiryTimer: ReturnType<typeof window.setTimeout> | undefined;
+    let expiryTimer: number | undefined;
     getCurrentUser().then((viewer) => {
       if (!active) return;
       const key = `openscience.hermes-handoff:${viewer.userId}:${roId}:${hermesTaskId}`;
