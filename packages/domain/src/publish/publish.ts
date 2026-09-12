@@ -15,14 +15,15 @@ import {
   reviewSnapshotDigest,
 } from '../research-intelligence/publication-snapshot';
 import { PublishError } from './errors';
+import { finalizePublicationResearchRecord } from '../commit/research-record-snapshot';
 
 export type VersionStatus = 'draft' | 'under_review' | 'approved' | 'published' | 'revised' | 'withdrawn' | 'rejected' | 'restricted';
 
 /** §4.1 状态机合法迁移（含补充态）。终态不可前进。 */
 const TRANSITIONS: Record<VersionStatus, VersionStatus[]> = {
   draft: ['under_review', 'rejected', 'withdrawn'],
-  under_review: ['approved', 'rejected'],
-  approved: ['withdrawn'],
+  under_review: ['draft', 'approved', 'rejected'],
+  approved: ['draft', 'withdrawn'],
   published: ['revised', 'withdrawn', 'restricted'],
   revised: ['under_review', 'withdrawn'],
   withdrawn: [],
@@ -68,6 +69,21 @@ export async function transitionVersionStatus(
     if (from === input.status) return { id: version.id, status: from };
     if (!(TRANSITIONS[from] ?? []).includes(input.status)) {
       throw new PublishError('ILLEGAL_TRANSITION', `版本状态 ${from} → ${input.status} 非法（§4.1）`);
+    }
+    // Withdrawing an unpublished review must never reopen a public version.
+    if (input.status === 'draft') {
+      const publication = await tx.publication.findFirst({ where: { versionId: version.id } });
+      if (publication || version.publicVersionId) {
+        throw new PublishError('ILLEGAL_TRANSITION', 'Published versions cannot return to draft');
+      }
+      await tx.aiReview.updateMany({
+        where: { versionId: version.id },
+        data: {
+          status: 'blocked',
+          hardBlocks: [{ code: 'review_stale', reason: '已撤回审核并恢复编辑，发布前需要重新审核。' }] as never,
+          verdict: 'Publication review withdrawn for editing',
+        },
+      });
     }
     const updated = await tx.version.update({ where: { id: version.id }, data: { status: input.status } });
     await recordAudit(deps, tx, {
@@ -241,6 +257,7 @@ export async function publishVersion(
     const publishedAt = new Date();
     const visibilityFrom = currentVersion.researchObject.visibility;
 
+    await finalizePublicationResearchRecord(tx, { researchObjectId: version.researchObjectId, versionId: version.id });
     await tx.version.update({ where: { id: version.id }, data: { status: 'published', publicVersionId } });
     if (visibilityFrom !== 'public') {
       await tx.researchObject.update({ where: { id: version.researchObjectId }, data: { visibility: 'public' } });

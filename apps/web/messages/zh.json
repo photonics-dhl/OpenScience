@@ -1,4 +1,165 @@
 {
+  "hermesConversation": {
+    "role": "你的研究协作助手",
+    "conversation": "与 Hermes 的对话",
+    "welcomeEditor": "告诉我你想怎么改、想做什么图或视频。正文可以直接修改，制作和公开发布也在这里继续。",
+    "productionScope": "将为当前研究准备{style}风格的{kind}。需要换风格或调整内容，直接告诉我。",
+    "productionInstruction": "查看或修改详细指令",
+    "needsProductionInstruction": "当前没有可直接使用的已审核方案。请告诉我需要制作的内容，我会先整理详细指令。",
+    "confirmProductionInChat": "回复“确认制作”继续；也可以直接提出修改或说“取消”。",
+    "retryProductionInChat": "上次制作请求尚未确认。回复“确认制作”续接同一请求，避免重复扣费。",
+    "publicationScope": "即将公开《{title}》第{version}版正文及{count}项已审核的图片或视频。未审核素材不公开。",
+    "publicationLicense": "当前许可：正文 {text}，代码 {code}，数据 {data}。",
+    "publicationMaterials": "本版本的 {count} 项材料记录（下载仍遵循原有权限）",
+    "confirmPublicationInChat": "确认上述公开范围与许可后，回复“确认公开发布”。",
+    "resumePublicationEditing": "需要修改内容时，回复“继续编辑”即可撤回本次审核。",
+    "publicationEditingResumed": "已恢复编辑，内容与图片保留。修改完成后再告诉我准备发布。",
+    "draftChanged": "正文已改变，之前的安排已过期。请告诉我新的制作或发布要求，我会基于当前正文重新准备。",
+    "actionNotReady": "这项操作还没有准备好，请先查看上方的具体状态。",
+    "prepareVersionFailed": "当前正文尚未整理成可用版本，请查看具体原因后继续。",
+    "productionSubmitted": "制作任务已交给服务器，成果会回到左侧。任务完成前仍可编辑正文。",
+    "published": "已公开发布，可以打开正式研究页面。",
+    "undone": "已请求撤销上次修改；正文和保存状态显示在左侧。",
+    "cancelled": "已取消这次待确认的安排。",
+    "mediaReviewLoading": "正在读取当前研究的待审素材…",
+    "mediaReviewInstruction": "查看左侧成果或展开方案内容，核对科学内容后告诉我“采用1”或“拒绝1”（数字对应下方编号）。有疑问可以直接提出修改。",
+    "mediaReviewUnavailable": "该素材当前不能审核，请查看其状态和权限。",
+    "mediaReviewEmpty": "当前版本没有待审核的素材。",
+    "mediaApproved": "已采用“{title}”。若采用的是方案，可继续告诉我“按已审核方案生成图片”。",
+    "mediaRejected": "已拒绝“{title}”，不会将它作为公开成果。",
+    "adopted": "已采用",
+    "rejected": "已拒绝",
+    "awaitingReview": "待审核",
+    "reviewOnLeft": "请核对左侧对应的图片或视频。",
+    "publicMediaChanged": "已审核素材刚刚有变化，已更新公开范围。请核对后再次回复“确认公开发布”。",
+    "inputLabel": "发送指令给 Hermes",
+    "placeholder": "例如：把洞见写得更精炼，或为这篇研究做一张图",
+    "inputHint": "Enter 发送 · Shift+Enter 换行",
+    "send": "发送",
+    "retry": "继续确认",
+    "retrySame": "上次请求尚未确认，请继续同一请求，避免重复提交。",
+    "productionOptions": "查看制作安排",
+    "adjustProduction": "调整风格与详细指令",
+    "writing": {
+      "kind": {
+        "note": "研究笔记",
+        "review": "文献综述",
+        "manuscript": "论文初稿"
+      },
+      "status": {
+        "grounded": "已关联原文来源",
+        "grounded_with_unresolved_review": "部分内容仍待核对",
+        "user_edited": "你的修改，未重新核对来源"
+      },
+      "localChanges": "本地修改尚未保存",
+      "open": "打开稿件",
+      "close": "关闭稿件",
+      "dialogLabel": "Hermes 私有科学稿件",
+      "revisionPlaceholder": "继续告诉我：缩短第二段、补充局限，或改成论文初稿",
+      "edit": "编辑",
+      "done": "完成",
+      "download": "下载 Markdown",
+      "save": "保存修改",
+      "saveCommand": "保存笔记修改",
+      "titleLabel": "稿件标题",
+      "bodyLabel": "Markdown 正文",
+      "editNote": "这里的修改暂存在当前页面。点击“保存修改”后，Hermes 会将它保存为新的私有稿件。",
+      "sources": "来源",
+      "sourcesCount": "来源（{count}）",
+      "page": "第 {page} 页",
+      "block": "段落 {block}",
+      "characters": "字符 {start}–{end}",
+      "table": "表格",
+      "tableCell": "{sheet} · 第 {row} 行第 {column} 列",
+      "codeRange": "{path} · 第 {start}–{end} 行",
+      "artifact": "材料 {artifact}"
+    }
+  },
+  "workbench": {
+    "requestVideo": "生成视频",
+    "requestImage": "生成图片",
+    "hermesScope": "改文字、做图解、准备发布",
+    "talkToHermes": "对话",
+    "resolveBeforePublish": "返回内容，处理需要确认的项目",
+    "approvePlan": "批准方案，允许制作",
+    "planReadyTitle": "查看与确认图解方案",
+    "planReadyBody": "Hermes 已准备好下方的图解方案。可先提出修改，再确认方案并生成图片。",
+    "sourceReview": "论文分析记录",
+    "confirmedSources": "已确认的内容可直接在正文或 Hermes 对话中修改。仅在需要复查材料时切换下方来源。",
+    "loadingVersion": "正在读取已确认版本…",
+    "coeditTitle": "和 Hermes 一起完善内容",
+    "coeditBody": "我能看到当前草稿。告诉我需要改哪里，修改会同步到正文；你可以继续编辑或撤销。",
+    "coeditGoal": "想修改什么，或讨论哪个问题？",
+    "coeditSend": "发送给 Hermes",
+    "navigation": "研究工作台",
+    "contribution": "一句话贡献",
+    "contributionPlaceholder": "在六字段正文中写下这项研究最重要的贡献。",
+    "content": "资料与内容",
+    "media": "图片与视频",
+    "coreImage": "核心概念图",
+    "researchVideo": "研究讲解视频",
+    "mediaNeedsVersion": "准备正式版本后，Hermes 制作的真实成果会在此原位显示。",
+    "publish": "预览与发布",
+    "details": "研究详情",
+    "continueMedia": "继续制作图解",
+    "confirmContinue": "确认内容，继续制作",
+    "savingContent": "正在保存内容…",
+    "contentReady": "内容和 Hermes 共用同一份草稿。确认后即可选择图解。",
+    "reconfirmNotice": "内容已修改；重新确认后生成新的版本，并核对相关图解。",
+    "analysisSuggestions": "提取建议与来源",
+    "editApplied": "已更新 {count} 项草稿内容，尚未定稿。",
+    "editConflict": "已更新 {count} 项；其余内容期间有改动，已保留你的编辑。",
+    "editProposal": "这是之前的修改建议，尚未应用到当前草稿。",
+    "undo": "撤销这次修改",
+    "viewChanges": "查看修改内容",
+    "useField": "采用这一项",
+    "publishPreview": "预览与发布",
+    "publishPreviewBody": "核对本次版本的研究内容和已批准图片，然后集中完成发布。未审核图片保持私有，不要求一次完成所有图片。",
+    "previewLabel": "发布内容预览",
+    "versionMismatch": "版本内容不一致，请重新打开当前版本。",
+    "rightsNotice": "请确认你有权发布这些文字与素材。引用他人论文需保留来源；上传原文不等于获得转载授权。",
+    "openPublic": "查看公开 RO",
+    "reviewForPublication": "审核发布内容",
+    "previewPublish": "预览并发布",
+    "imageCount": "{count} 张图解",
+    "coreImageFirst": "先做好一张核心图；补充图片按需制作。已核对的内容与图片可以先发布。",
+    "coreImageInstruction": "基于全文理解，优先规划一张解释核心机制或结论的科学图解。选择真正相关的主张，不套六张模板；其他图仅作为按需补充。",
+    "supportingMaterials": "资料与修改记录",
+    "pendingSuggestions": "待处理的修改建议",
+    "versionRecord": "查看版本记录"
+  },
+  "versionRecord": {
+    "export": "导出固定记录",
+    "api": "研究 API",
+    "legacy": "此旧版本未保存固定的论断与证据记录，仅提供当时的 SDF 和材料。",
+    "noRegion": "此来源暂不提供区域高亮。",
+    "loading": "正在加载版本…",
+    "mismatch": "版本快照不匹配",
+    "reviewBoundary": "生成版本时保存的固定研究记录。后续草稿编辑不会改变此记录；证据仍可能需要人工核查。",
+    "missing": "未提供 · 待补充",
+    "checkEvidence": "核查论断与来源",
+    "evidence": "论断与来源核查",
+    "noLocator": "暂无可核查的原文定位，需要人工核查。",
+    "assessment": "评估：{assessment}",
+    "openSource": "查看原文段落",
+    "verified": "已人工核查",
+    "pending": "待核查",
+    "noPage": "此来源未提供页码。",
+    "materials": "版本材料"
+  },
+  "mechanismVideo": {
+    "driver_signal": "强驱动与弱信号",
+    "tip_enhancement": "尖端局域场增强",
+    "emission_collection": "门控发射与收集",
+    "delay_scan": "扫描延迟与平均电流",
+    "field_reconstruction": "局域场与入射场",
+    "title": "制作光场采样机制动画",
+    "scope": "此动画适用于片上光场采样：双脉冲、尖端增强、电子收集、延迟扫描，以及局域场与入射场的区别。请确认五场已审分镜确实描述这一机制。",
+    "chooseImage": "选择已批准的配图",
+    "missingImage": "请先生成并批准这场配图",
+    "review": "将生成说明性动画与一次完整的 Serena 连续旁白，不代表测量数据或数值模拟。批准前须复核科学内容、发音和场景时间；估算时间不等于已验证对齐。",
+    "generate": "确认场景对应并生成视频草稿"
+  },
   "common": {
     "save": "保存",
     "cancel": "取消",
@@ -26,6 +187,8 @@
     "settingsShort": "设置"
   },
   "editor": {
+    "savedVersionSources":"核查最近保存版本的来源",
+    "draftRevision": "草稿修订 {version}",
     "common": {
       "cancel": "取消"
     },
@@ -56,6 +219,48 @@
     "saveToSdf": "保存到 SDF",
     "uploadArtifact": "上传附件",
     "uploadFailed": "上传失败",
+    "ingestionUploadNotice": "PDF、DOCX、PPTX、HTML、TeX、Markdown 和 XLSX 会进入服务器解析与 AI 整理，并可能消耗账户 AI 额度；提案经你核对确认后才写入。旧版 DOC 和通用 ZIP 可上传，但暂不支持自动解析，可能需要另行处理。其他附件仅存储。",
+    "ingestionQueued": "已开始自动分析",
+    "ingestionTaskMissing": "服务器未返回材料分析任务",
+    "ingestionProposalKicker": "来源提案",
+    "ingestionProposalTitle": "核对自动整理结果",
+    "ingestionProposalBody": "以下内容来自所选材料，可逐项修改。普通保存和提交在提案确认前暂停；只有下方确认操作会把这份提案写入新的 SDF 版本。",
+    "ingestionSource": "当前材料",
+    "chooseIngestionSource": "选择一份材料",
+    "ingestionLoading": "正在读取这份材料的服务器结果…",
+    "ingestionProcessing": "{file} 正在服务器解析和整理，可离开后再回来。",
+    "ingestionScopeMismatch": "这项分析不属于当前科研对象或当前材料，未加载其内容。",
+    "ingestionVersionChanged": "科研对象版本已变化。此提案保持未确认，请从材料列表重新选择并核对。",
+    "ingestionUnavailable": "这份材料尚无可编辑的整理结果。",
+    "openIngestionRecovery": "查看任务详情与恢复",
+    "ingestionAlreadyConfirmed": "这份材料的提案已经确认，可查看对应版本。",
+    "originalExtractionProposal": "查看本次分析的原始提案",
+    "originalExtractionProposalBody": "当前编辑内容已保留。采用这一项只会更新待确认提案；整份提案确认前不会写入 SDF。",
+    "originalExtractionEvidence": "内容已由你修改或受现有正文保护；下方证据仅对应最初提取结果。",
+    "ingestionMissingFields": "仍缺少可核查内容：{fields}",
+    "emptyIngestionProposal": "提案六个字段均为空，无法确认。请先填写至少一项可核查内容。",
+    "confirmIngestionProposal": "确认提案并写入新版本",
+    "confirmingIngestion": "正在确认…",
+    "reconcileIngestionConfirmation": "核对结果并重试原确认",
+    "ambiguousIngestionConfirmation": "上次确认结果尚不明确。内容已锁定；此操作只会核对服务器状态并重试同一份确认内容。",
+    "confirmIngestionNotice": "确认会以当前版本为边界提交；若版本已变化，服务器会拒绝并保留此会话草稿。",
+    "ingestionConfirmFailed": "提案未能确认，当前编辑仍保存在本次会话中。",
+    "ingestionGenerationChanged": "材料分析已更新。上一轮提案编辑已按原分析保留；请核对当前服务器返回的新提案。",
+    "ingestionRebased": "当前版本已变化。已保留你的提案修改，并优先保留服务器上同时发生的字段变更；请重新核对后确认。",
+    "ingestionRebasedConflicts": "当前版本已变化，且这些字段同时被修改：{fields}。你的提案内容仍保留在编辑框中；请与当前版本核对后再决定是否确认覆盖。",
+    "ingestionConfirmed": "提案已确认并写入新的 SDF 版本。",
+    "continueHermesResearch": "继续 Hermes 主张与来源核查",
+    "legacyRefreshBody": "当前分析记录会保留。重新分析同一份已上传材料会使用更新后的解析与来源定位能力并消耗 1 个 AI 额度，不会重新上传文件或自动确认结果。",
+    "legacyRefreshAction": "重新分析已上传材料 · 1 额度",
+    "legacyRefreshing": "正在创建重新分析任务…",
+    "legacyRefreshStarted": "重新分析已在服务器开始；完成后会在当前提案中更新未编辑字段，原分析记录仍可追溯。",
+    "legacyRefreshFailed": "未能开始重新分析。",
+    "confirmedReanalysisBody": "当前已确认的 SDF 和版本会保持不变。Hermes 将复用这份材料已核验的解析来源，创建一份新的分析草稿；只有你核对并确认新草稿后，才会写入新版本。",
+    "confirmedReanalysisAction": "重新分析并创建新草稿",
+    "confirmedReanalyzing": "正在创建新分析草稿…",
+    "confirmedReanalysisStarted": "新分析已在服务器开始。当前已确认内容保持不变；完成后请核对新草稿。",
+    "confirmedReanalysisUncertain": "新草稿请求结果尚未确认。再次点击会沿用同一请求，不会重复创建分析。",
+    "legacyRefreshUncertain": "重新分析请求的结果暂未确认。旧分析历史仍会保留；可在当前任务中再次核对并续接同一次请求。",
     "restoreDraft": "恢复草稿",
     "discardDraft": "放弃草稿",
     "draftFound": "检测到未保存的草稿",
@@ -63,6 +268,18 @@
     "noSuggestions": "暂无 AI 建议",
     "extract": "AI 提取",
     "extracting": "提取中…",
+    "extractCurrentContent": "整理当前内容",
+    "resumeExtraction": "查看已有结果",
+    "currentEditorSource": "当前编辑内容",
+    "currentEditorScope": "仅处理下方六个研究字段，不读取已上传文献。",
+    "extractNeedsContent": "当前六个研究字段都是空的。请先填写内容，或前往 Hermes 导入并确认来源材料。",
+    "extractFailed": "AI 提取未完成，请稍后重试或前往 Hermes 检查来源任务。",
+    "noUsableSuggestions": "本次提取没有生成可用建议。现有内容未被修改。",
+    "missingEvidenceSummary": "{count} 个字段缺少可核查证据",
+    "missingEvidenceSummaryBody": "这些字段保持原样。展开核对每一项，或先补充来源材料。",
+    "acknowledgeMissingEvidenceNote": "隐藏提示只整理当前列表，不表示证据问题已经解决。",
+    "sourceNextStep": "PDF、文献和待确认材料由当前研究对象的 Hermes 来源流程处理。",
+    "openSourceWorkflow": "从文献提取或核对来源",
     "commitMessage": "提交说明",
     "commit": "创建提交",
     "commitShort": "提交",
@@ -88,6 +305,14 @@
       "researcherPrompt": "研究者提示",
       "sourceLocatorUnavailable": "来源位置暂不可用",
       "currentSdfAggregate": "当前 SDF 聚合内容",
+      "evidenceLocationLocated": "已定位",
+      "evidenceLocationAmbiguous": "多处匹配",
+      "evidenceLocationCrossBlock": "跨块引文",
+      "evidenceLocationMissing": "未定位",
+      "evidenceLocationUnverified": "未验证",
+      "evidenceLocationPage": "第 {page} 页",
+      "evidenceLocationBlock": "块 {blockId}",
+      "evidenceLocationNotice": "以下是按原文顺序排列的独立摘录，段落可能不连续。每个位置只对应该段引文，不代表结论正确。",
       "artifactStored": "已存储素材",
       "artifactStatus": {
         "uploading": "上传中",
@@ -128,9 +353,9 @@
     "returnToProposal": "返回",
     "applyReviewedChange": "应用已审阅变更",
     "missingEvidenceTitle": "证据缺失 · {field}",
-    "missingEvidenceDescription": "没有找到支持{field}的证据。Hermes 保持该字段为空，不会编造内容。",
-    "missingResultsEvidence": "没有结果证据。Hermes 保持结果字段为空，不会编造研究发现。",
-    "acknowledgeMissingEvidence": "知悉并继续",
+    "missingEvidenceDescription": "本次输入未提供支持{field}的充分证据，Hermes 未提出新建议。现有编辑内容保持不变。",
+    "missingResultsEvidence": "本次输入没有足够的结果证据，Hermes 未提出研究发现建议。现有编辑内容保持不变。",
+    "acknowledgeMissingEvidence": "隐藏此提示",
     "hints": {
       "problem": "界定科学问题及其边界。",
       "insight": "陈述核心洞见，避免宣传性语言。",
@@ -277,7 +502,7 @@
     "correspondingAuthor": "通讯作者",
     "contributions": "贡献",
     "abstract": "摘要",
-    "coreFields": "核心字段",
+    "coreFields": "研究要点",
     "problem": "研究问题",
     "insight": "核心洞察",
     "method": "方法",
@@ -363,7 +588,21 @@
       "downloadOnly": "该格式不会在页面内执行，可安全下载后查看。",
       "download": "下载展示文件",
       "generatedBy": "生成工具：{name} {version}",
-      "sourceClaims": "关联主张"
+      "sourceClaims": "关联主张",
+      "sourceClaimsCount": "关联主张：{count} 项",
+      "sourceDetails": "来源与制作信息",
+      "coreImageTitle": "核心概念图",
+      "videoTitle": "研究讲解视频",
+      "imageNumber": "图解 {number}",
+      "videoNumber": "研究讲解视频 {number}",
+      "imagePlaceholderTitle": "本版本尚无公开核心图",
+      "imagePlaceholderBody": "只有审核通过并随此版本发布的真实图片才会出现在这里。",
+      "videoPlaceholderTitle": "本版本尚无公开视频",
+      "videoPlaceholderBody": "只有审核通过并随此版本发布的真实视频才会出现在这里。",
+      "previousSlide": "上一张图",
+      "nextSlide": "下一张图",
+      "viewFullSize": "打开完整尺寸图片",
+      "slidePosition": "{current} / {total}"
     },
     "history": {
       "title": "公开版本历史"
@@ -382,7 +621,8 @@
       "pull-requests": "拉取请求",
       "reviews": "评审与讨论",
       "citations": "引用与相关工作"
-    }
+    },
+    "readingResources": "原文来源、引用与版本记录"
   },
   "landing": {
     "nav": {
@@ -524,6 +764,15 @@
     "accept": "接受",
     "reject": "排除"
   },
+  "attachmentViewer": {
+    "preview": "预览",
+    "download": "下载",
+    "close": "关闭",
+    "loading": "正在加载预览…",
+    "unavailable": "无法预览此附件。请下载原始文件后查看。",
+    "safePreviewNotice": "查看原始附件。PDF 和图片支持预览，其他格式可下载。",
+    "documentTitle": "预览：{name}"
+  },
   "auth": {
     "identity": {
       "skipToForm": "跳转到身份表单",
@@ -590,8 +839,8 @@
   },
   "dashboard": {
     "eyebrow": "个人工作区",
-    "title": "科研工作台",
-    "welcome": "{name}，从最近的研究上下文继续，或开始一个新的研究对象。",
+    "title": "研究桌面",
+    "welcome": "{name}，继续手头的研究，或和 Hermes 一起梳理下一步。",
     "loading": "正在恢复研究上下文…",
     "context": {
       "navigation": "工作台工具",
@@ -603,16 +852,22 @@
       "title": "继续研究",
       "emptyTitle": "导入第一份科研资料",
       "emptyBody": "Hermes 会先保留来源证据，再提出可供你确认的 SDF 字段。",
-      "open": "继续研究",
+      "open": "继续编辑研究",
       "version": "版本 {version}",
-      "pending": "{count} 项等待处理"
+      "pending": "{count} 项等待处理",
+      "draftRevision": "草稿修订 {version}",
+      "needsAttention": "{count} 项需要你处理",
+      "background": "Hermes 正在后台处理",
+      "review": "核对这份资料",
+      "recover": "查看问题并继续",
+      "progress": "查看处理进度"
     },
     "import": {
-      "eyebrow": "新的研究上下文",
-      "title": "开始一个研究对象",
-      "description": "导入现有科研资料，或从空白的结构化对象开始。",
-      "upload": "上传资料",
-      "blank": "创建空白 RO"
+      "eyebrow": "开始新的研究",
+      "title": "添加论文或研究资料",
+      "description": "上传 PDF 等现有资料交给 Hermes 整理，也可以从空白开始。",
+      "upload": "上传 PDF 或资料",
+      "blank": "从空白开始"
     },
     "literature": {
       "eyebrow": "个人文献",
@@ -630,6 +885,9 @@
       "getFullText": "获取全文",
       "disclosure": "获取全文",
       "download": "下载来源",
+      "importToRo": "导入当前 RO 并自动提取",
+      "importingToRo": "正在导入并提取…",
+      "importError": "无法把来源导入当前科研对象，请重试。",
       "statusPending": "正在队列中等待",
       "statusRunning": "正在获取来源",
       "statusAuthRequired": "获取全文前需要处理机构访问权限。",
@@ -640,10 +898,10 @@
       "expires": "可用至 {expiresAt}",
       "retry": "再次尝试",
       "noResults": "尚未找到匹配的元数据。",
-      "error": "无法完成这次来源请求，请重试。"
-      ,"pendingIntent": "请先完成或恢复当前来源请求，再开始新的请求。"
-      ,"reconnecting": "正在重新连接任务…"
-      ,"recoveryError": "无法继续恢复这项任务，你可以重新发起来源请求。"
+      "error": "无法完成这次来源请求，请重试。",
+      "pendingIntent": "请先完成或恢复当前来源请求，再开始新的请求。",
+      "reconnecting": "正在重新连接任务…",
+      "recoveryError": "无法继续恢复这项任务，你可以重新发起来源请求。"
     },
     "hermes": {
       "title": "Hermes 任务",
@@ -653,67 +911,213 @@
       "retry": "重试任务",
       "view": "查看进度",
       "progress": "{current}/{total} 个字段",
+      "states": {
+        "idle": "待命",
+        "guiding": "引导中",
+        "scanning": "读取中",
+        "suggesting": "有建议",
+        "awaiting_approval": "等待确认",
+        "failed": "需要处理"
+      },
+      "taskStates": {
+        "queued": "排队中",
+        "uploading": "上传中",
+        "parsing": "解析中",
+        "stored": "已整理",
+        "needsReview": "等待核对",
+        "failedRetryable": "可重试",
+        "failedBlocked": "已阻断",
+        "working": "处理中"
+      },
+      "showMore": "展开其余 {count} 项任务",
+      "showLess": "收起其余任务",
       "guide": {
         "backToGuide": "返回研究引导",
-        "actionable": { "title": "有一项研究任务可以继续", "body": "我会从当前优先级最高的任务开始，帮你判断下一步。" },
-        "review": { "title": "有证据等待你确认", "body": "当前任务已明确标记为待审核。我们可以从证据确认开始。" },
-        "failed": { "title": "有一项任务需要排查", "body": "当前任务未能完成。我可以先解释失败信息，再给出安全的恢复路径。" },
-        "processing": { "title": "Hermes 正在整理材料", "body": "当前任务仍在处理中。我可以说明进度，并帮你准备完成后的检查步骤。" },
-        "queued": { "title": "研究任务已进入队列", "body": "任务尚未开始处理。我可以先帮你安排接下来的研究步骤。" },
-        "continue": { "title": "继续最近的研究", "body": "我可以围绕现有研究对象梳理下一步，不会改动未经你确认的内容。" },
-        "neutral": { "title": "告诉我今天想推进什么", "body": "我会先理解目标，再给出可核查、可执行的研究路径。" },
-      "invoke": "唤起 Hermes",
-      "eyebrow": "Hermes / 情境引导员",
-      "menu": {
-        "trigger": "Hermes：点击打开助手，右键或长按打开动作菜单",
-        "label": "Hermes 动作菜单",
-        "eyebrow": "Hermes · 和你一起",
-        "title": "想一起做什么？",
-        "evidence": "查看证据与来源",
-        "evidenceNote": "回到当前科研对象的证据清单",
-        "explore": "打开研究索引",
-        "exploreNote": "在公开研究记录中继续查找",
-        "quiet": "陪我安静读一会",
-        "quietNote": "收起提醒，留在页边",
-        "quietFeedback": "我在。我们慢慢想。",
-        "companion": "陪伴",
-        "groups": { "companion": "和 Hermes 一起", "research": "研究工具" },
-        "intro": {
-          "presence": "我在，也替你留着刚才的位置。",
-          "actionable": "有一份证据，正等你来确认。",
-          "continue": "最近的研究已经可以接着做了。",
-          "neutral": "从你现在最想弄明白的事开始吧。"
+        "presentationSuggestionLabel": "Hermes 生成的分镜建议",
+        "usePresentationSuggestion": "在可编辑分镜中使用",
+        "browserSessionDraft": "草稿保存在此浏览器会话，并按账号、研究对象和版本隔离。",
+        "actionable": {
+          "title": "有一项研究任务可以继续",
+          "body": "我会从当前优先级最高的任务开始，帮你判断下一步。"
         },
-        "actions": {
-          "greet": { "label": "打个招呼", "feedback": { "one": "你来了，我也在。", "two": "找到你了，刚才的位置还留着。", "three": "你好呀，今天想弄明白什么？" } },
-          "encourage": { "label": "给我一点鼓励", "feedback": { "one": "已经走到这里了，再往前一点。", "two": "难题在动，你也在往前走。", "three": "认真走好一小步，也算进展。" } },
-          "think": { "label": "一起想想", "feedback": { "one": "先停一下，我陪你把线索理顺。", "two": "给我一点时间，这些线索能连起来。", "three": "先把问题稳稳放在这里，再看一遍。" } },
-          "listen": { "label": "听我说", "feedback": { "one": "我在听，你慢慢说。", "two": "继续说，我正顺着你的思路走。", "three": "告诉我，哪一部分还让你放心不下？" } },
-          "stretch": { "label": "伸个懒腰", "feedback": { "one": "一起伸伸懒腰，肩膀放松一下。", "two": "来，伸展开，给后背留一点空间。", "three": "舒展一下，回来再用新的眼光看。" } },
-          "rest": { "label": "安静一会", "feedback": { "one": "先歇一会，我替你守着这一页。", "two": "安静一会也好，这里的东西不会跑。", "three": "闭眼缓一口气，我帮你看着这一页。" } },
-          "celebrate": { "label": "庆祝这一步", "feedback": { "one": "这一步完成了，值得庆祝一下。", "two": "这次进展，值得认真高兴一下。", "three": "研究往前走了，把这一刻记下来吧。" } },
-          "read-together": { "label": "陪我读", "feedback": { "one": "翻到这里了，我陪你再读一段。", "two": "这一段，我们按主张一条条读。", "three": "我陪你守着文字，你来决定速度。" } },
-          "continue": { "label": "继续这一步", "feedback": { "one": "回到刚才那一步，我们接着做。", "two": "找到刚才的位置了，从这里继续。", "three": "下一步已经在这里，准备好就出发。" } },
-          "evidence": { "label": "核对证据", "feedback": { "one": "这条结论先别过，和我核对证据。", "two": "看看究竟是哪份来源支撑了这条主张。", "three": "先看证据，再决定结果说明了什么。" } },
-          "sources": { "label": "追溯来源", "feedback": { "one": "沿着引用往回走，看看它从哪里来。", "two": "我陪你顺着参考文献一路找回去。", "three": "看看这条主张最早从哪里进入记录。" } },
-          "compare": { "label": "对照版本", "feedback": { "one": "把两个版本并排放好，我们看差异。", "two": "我来对齐变化，别让细节从眼前溜走。", "three": "同一项研究的两个时刻，看看哪里变了。" } }
+        "review": {
+          "title": "有证据等待你确认",
+          "body": "当前任务已明确标记为待审核。我们可以从证据确认开始。"
         },
-        "keyboardHint": "Shift+F10 或菜单键打开 · Esc 关闭",
-        "mobileHint": "长按 Hermes 打开 · 点按仍进入助手"
-      },
-      "dialogLabel": "Hermes 科研引导员",
+        "failed": {
+          "title": "有一项任务需要排查",
+          "body": "当前任务未能完成。我可以先解释失败信息，再给出安全的恢复路径。"
+        },
+        "processing": {
+          "title": "Hermes 正在整理材料",
+          "body": "当前任务仍在处理中。我可以说明进度，并帮你准备完成后的检查步骤。"
+        },
+        "queued": {
+          "title": "研究任务已进入队列",
+          "body": "任务尚未开始处理。我可以先帮你安排接下来的研究步骤。"
+        },
+        "continue": {
+          "title": "继续最近的研究",
+          "body": "我可以围绕现有研究对象梳理下一步，不会改动未经你确认的内容。"
+        },
+        "neutral": {
+          "title": "告诉我今天想推进什么",
+          "body": "我会先理解目标，再给出可核查、可执行的研究路径。"
+        },
+        "invoke": "唤起 Hermes",
+        "invokeTask": "打开 {task}",
+        "eyebrow": "Hermes / 情境引导员",
+        "menu": {
+          "trigger": "Hermes：点击打开助手，右键或长按打开动作菜单",
+          "label": "Hermes 动作菜单",
+          "eyebrow": "Hermes · 和你一起",
+          "title": "想一起做什么？",
+          "evidence": "查看证据与来源",
+          "evidenceNote": "回到当前科研对象的证据清单",
+          "explore": "打开研究索引",
+          "exploreNote": "在公开研究记录中继续查找",
+          "quiet": "陪我安静读一会",
+          "quietNote": "收起提醒，留在页边",
+          "quietFeedback": "我在。我们慢慢想。",
+          "companion": "陪伴",
+          "groups": {
+            "companion": "和 Hermes 一起",
+            "research": "研究工具"
+          },
+          "intro": {
+            "presence": "我在，也替你留着刚才的位置。",
+            "actionable": "有一份证据，正等你来确认。",
+            "continue": "最近的研究已经可以接着做了。",
+            "neutral": "从你现在最想弄明白的事开始吧。"
+          },
+          "actions": {
+            "greet": {
+              "label": "打个招呼",
+              "feedback": {
+                "one": "你来了，我也在。",
+                "two": "找到你了，刚才的位置还留着。",
+                "three": "你好呀，今天想弄明白什么？"
+              }
+            },
+            "encourage": {
+              "label": "给我一点鼓励",
+              "feedback": {
+                "one": "已经走到这里了，再往前一点。",
+                "two": "难题在动，你也在往前走。",
+                "three": "认真走好一小步，也算进展。"
+              }
+            },
+            "think": {
+              "label": "一起想想",
+              "feedback": {
+                "one": "先停一下，我陪你把线索理顺。",
+                "two": "给我一点时间，这些线索能连起来。",
+                "three": "先把问题稳稳放在这里，再看一遍。"
+              }
+            },
+            "listen": {
+              "label": "听我说",
+              "feedback": {
+                "one": "我在听，你慢慢说。",
+                "two": "继续说，我正顺着你的思路走。",
+                "three": "告诉我，哪一部分还让你放心不下？"
+              }
+            },
+            "stretch": {
+              "label": "伸个懒腰",
+              "feedback": {
+                "one": "一起伸伸懒腰，肩膀放松一下。",
+                "two": "来，伸展开，给后背留一点空间。",
+                "three": "舒展一下，回来再用新的眼光看。"
+              }
+            },
+            "rest": {
+              "label": "安静一会",
+              "feedback": {
+                "one": "先歇一会，我替你守着这一页。",
+                "two": "安静一会也好，这里的东西不会跑。",
+                "three": "闭眼缓一口气，我帮你看着这一页。"
+              }
+            },
+            "celebrate": {
+              "label": "庆祝这一步",
+              "feedback": {
+                "one": "这一步完成了，值得庆祝一下。",
+                "two": "这次进展，值得认真高兴一下。",
+                "three": "研究往前走了，把这一刻记下来吧。"
+              }
+            },
+            "read-together": {
+              "label": "陪我读",
+              "feedback": {
+                "one": "翻到这里了，我陪你再读一段。",
+                "two": "这一段，我们按主张一条条读。",
+                "three": "我陪你守着文字，你来决定速度。"
+              }
+            },
+            "continue": {
+              "label": "继续这一步",
+              "feedback": {
+                "one": "回到刚才那一步，我们接着做。",
+                "two": "找到刚才的位置了，从这里继续。",
+                "three": "下一步已经在这里，准备好就出发。"
+              }
+            },
+            "evidence": {
+              "label": "核对证据",
+              "feedback": {
+                "one": "这条结论先别过，和我核对证据。",
+                "two": "看看究竟是哪份来源支撑了这条主张。",
+                "three": "先看证据，再决定结果说明了什么。"
+              }
+            },
+            "sources": {
+              "label": "追溯来源",
+              "feedback": {
+                "one": "沿着引用往回走，看看它从哪里来。",
+                "two": "我陪你顺着参考文献一路找回去。",
+                "three": "看看这条主张最早从哪里进入记录。"
+              }
+            },
+            "compare": {
+              "label": "对照版本",
+              "feedback": {
+                "one": "把两个版本并排放好，我们看差异。",
+                "two": "我来对齐变化，别让细节从眼前溜走。",
+                "three": "同一项研究的两个时刻，看看哪里变了。"
+              }
+            }
+          },
+          "keyboardHint": "Shift+F10 或菜单键打开 · Esc 关闭",
+          "mobileHint": "长按 Hermes 打开 · 点按仍进入助手"
+        },
+        "dialogLabel": "Hermes 科研引导员",
         "title": "从目标开始，我来带路。",
         "close": "关闭 Hermes",
         "openContext": "打开当前任务",
+        "openTask": "打开 {task}",
         "goalLabel": "你今天想推进什么？",
         "goalPlaceholder": "例如：整理刚导入的论文，建立一份可复用的 RO 结构",
         "submit": "请 Hermes 规划",
-      "working": "Hermes 正在组织证据…",
-      "progress": "任务进度 {progress}%",
-      "resume": "继续查询这个任务",
-      "result": "建议的研究路径",
-      "needsMoreInformation": "我还需要你补充一点信息，再继续给出可靠建议。",
-      "error": "Hermes 暂时无法完成这次规划。你的目标仍保留，可以重试。"
+        "working": "Hermes 正在组织证据…",
+        "progress": "任务进度 {progress}%",
+        "resume": "继续查询这个任务",
+        "result": "建议的研究路径",
+        "needsMoreInformation": "我还需要你补充一点信息，再继续给出可靠建议。",
+        "error": "Hermes 暂时无法完成这次规划。你的目标仍保留，可以重试。"
+      },
+      "conversation": {
+        "label": "与 Hermes 对话",
+        "body": "一起整理思路、修改内容，继续你的研究。"
+      },
+      "activity": {
+        "eyebrow": "当前研究状态",
+        "title": "研究进展",
+        "loading": "正在读取研究进展…",
+        "unavailable": "部分进展暂未更新；已有研究仍可继续编辑。",
+        "attention": "需要我处理",
+        "background": "后台进行",
+        "history": "较早记录（{count}）"
       }
     },
     "research": {
@@ -729,7 +1133,8 @@
         "published": "已发布",
         "revised": "已修订",
         "archived": "已归档"
-      }
+      },
+      "draftRevision": "草稿修订 {version}"
     },
     "errors": {
       "kicker": "系统 / 已中断",
@@ -740,16 +1145,25 @@
   },
   "createResearch": {
     "back": "返回研究驾驶舱",
-    "title": "创建 Research Object",
-    "description": "从空白结构开始，或附加原始研究资料。文件始终作为证据保留；Hermes 只在安全存储后提出结构建议。",
+    "title": "从一句话开始研究",
+    "description": "告诉 Hermes 你想研究什么，也可以直接附上资料。创建后会进入同一个私有研究空间继续对话和整理。",
     "workspace": "工作空间",
     "workspaceLoading": "正在加载工作空间…",
     "researchTitle": "研究标题",
+    "hermesPrompt": "和 Hermes 开始",
+    "hermesPromptNote": "一句话或附件即可",
+    "hermesPlaceholder": "例如：帮我梳理这篇论文的核心问题、方法和证据",
+    "details": "工作空间与标题",
+    "optionalTitle": "标题（可选）",
+    "titlePlaceholder": "留空时使用你的描述或文件名作为临时标题",
+    "untitled": "未命名研究",
     "materials": "原始资料（可选）",
     "materialsHint": "支持 PDF、DOCX、TeX/ZIP、Markdown 与常见科研图片；创建后进入上传处理。",
     "materialsRequired": "请至少选择一份源文件后再开始导入。",
-    "create": "创建 Research Object",
-    "creating": "正在创建…",
+    "create": "开始研究",
+    "continue": "继续进入研究",
+    "creating": "正在建立私有研究空间…",
+    "privacyNote": "你的指令和附件只进入当前工作空间；附件后台处理，Hermes 在编辑器中继续回应。",
     "error": "无法创建 Research Object。",
     "evidenceTitle": "先保留证据，再进行自动化",
     "evidenceBody": "原始 Artifact、提取建议与您的决定保持分离并可追溯。",
@@ -764,6 +1178,10 @@
     "eyebrow": "OpenScience / Research Object"
   },
   "hermesReview": {
+    "snapshotLoadError": "无法读取已确认的版本快照，请重试后查看保存内容。",
+    "legacyConfirmation":"此旧导入未记录确认快照，请核查已有版本后再使用其证据。",
+    "reviewPending": "提取内容待人工核查；未提供的信息请留空，不需要补写推测。",
+    "missing": "未提供 · 待补充",
     "missingTask": "缺少任务标识。",
     "back": "返回工作台",
     "eyebrow": "Hermes / 证据审核",
@@ -772,13 +1190,30 @@
     "loading": "正在读取材料与建议…",
     "loadError": "无法加载 Hermes 建议",
     "confirmError": "确认失败，请刷新后重试",
+    "proposalUnavailableTitle": "结构化建议未生成",
+    "proposalUnavailableBody": "原文已安全保存并完成解析，但 Hermes 的结构化结果未通过校验。你可以重试同一份材料，无需重新上传。",
+    "proposalRetry": "重试结构化提取",
+    "proposalReanalysisTitle": "结构化结果缺少可审阅证据",
+    "proposalReanalysisBody": "Hermes 已保留原文，但上次分析没有提取出任何有来源支持的 SDF 字段。重新分析同一份材料将使用 1 AI credit，无需重新上传。",
+    "proposalReanalysis": "重新分析 · 1 AI credit",
+    "proposalCompensation": "继续分析 · 不重复扣费",
+    "proposalCompensationBody": "上次已付费分析遇到结构化输出错误。符合恢复条件时可继续同一任务一次，复用已付费用，无需重新上传。",
+    "partialExtractionNotice": "此字段的提取校验尚未完成，不代表原文没有相关信息。其他已提取内容可以继续审核。",
+    "proposalRetrying": "正在重新提取…",
+    "proposalRetryError": "无法重试结构化提取，请稍后再试",
+    "legacyRefreshTitle": "使用当前解析器重新分析",
+    "legacyRefreshBody": "当前分析记录会保留。重新分析同一份已上传材料会使用更新后的解析与来源定位能力并消耗 1 个 AI 额度，不会重新上传或自动确认。",
+    "legacyRefreshAction": "重新分析已上传材料 · 1 额度",
+    "legacyRefreshing": "正在创建重新分析任务…",
+    "legacyRefreshError": "无法开始重新分析；旧分析未改变。",
+    "legacyRefreshUncertain": "重新分析请求的结果暂未确认。旧分析历史仍会保留；请在当前任务中再次核对并续接。",
     "fieldLabel": "SDF 字段审阅",
     "taskState": "任务状态：{state}",
     "boundary": "建议边界",
     "boundaryNote": "角色保持安静；右键或长按可查看当前证据工具。",
     "saved": "已确认并写入新版本。",
     "ready": "六项内容已填写，可以确认。",
-    "incomplete": "请补齐所有字段后确认。",
+    "incomplete": "缺失字段可保留为空，确认后继续核查。",
     "saving": "正在写入…",
     "confirmed": "已确认",
     "confirm": "确认并创建版本",
@@ -796,6 +1231,19 @@
     "allTasks": "返回研究任务",
     "scopeMismatch": "此任务不属于当前研究对象。请返回当前研究的任务列表继续。",
     "viewVersions": "查看版本记录"
+  },
+  "hermesRun": {
+    "usageLimited": "图片生成服务暂时达到使用上限。已生成的图片已保留，可以先查看和审核；其余图片待额度恢复后继续。",
+    "imageProgress": "已有 {current} / {total} 张图解可查看",
+    "imageReviewDescription": "图解已就绪。请核对科学内容与视觉表达；确认不会自动发布。",
+    "saveConflict": "部分任务的完成状态未同步。已保存的图片仍可查看，无需重复生成。",
+    "stepFailed": "部分步骤未完成，已保存的内容仍然保留。可以先查看成果和研究材料。",
+    "stage": { "source_ingestion": "论文理解", "storyboard": "图解方案", "scene_image": "图解 {number}", "video": "视频制作" },
+    "retryGeneration": "继续未完成生成", "retrying": "正在恢复生成…", "retryError": "无法恢复生成，请查看错误原因后重试。", "retryDescription": "已完成的结果会保留。本次新增 {count} 个生成任务，按现有额度规则计费。",
+    "title": "论文与图解", "startDescription": "Hermes 会在服务器上跟踪这篇论文。你可以离开后再回来；每次来源和媒体审核仍由你决定。", "unavailableDescription": "论文正在准备可跟踪的分析任务。任务可用后可从这里启动工作流。", "startFor": "让 Hermes 跟踪：{source}", "sourceLabel": "要跟踪的论文材料", "starting": "正在建立工作流…", "loading": "正在恢复 Hermes 工作流…", "loadError": "无法恢复 Hermes 工作流。", "startError": "无法建立 Hermes 工作流。", "grantError": "无法记录论文内容驱动的媒体授权。", "upgradeGrant": "改用论文内容驱动的媒体流程", "granting": "正在更新媒体授权…", "actions": "工作流操作", "source": "来源材料 {number}", "stepName": "工作流步骤 {number}", "reopen": "保存此工作流链接", "reviewSource": "审核论文结构与来源", "reviewPresentation": "查看图解与生成方案", "openFiles": "查看研究材料", "sourceReviewSection": "继续 Hermes 来源审核", "confirmedVersion": "使用已确认的草稿版本 {number}。", "reviewClaims": "审核主张与来源证据", "claimReviewTitle": "审核主张与来源证据", "claimReviewDescription": "请核对每段来源原文是否支持关联主张。Hermes 会在审核被记录前保持暂停。", "claimLoadError": "无法读取主张或来源证据，因此无法确认任何条目。", "claimVerifyError": "无法确认这条证据。请刷新后重试。", "claimSourceError": "无法读取原文来源。", "claimSourceUnavailable": "这条证据没有可显示的原文。", "claimStatement": "正在核对的主张", "claimConditions": "适用条件", "claimLimitations": "局限", "viewSource": "查看原文来源", "loadingSource": "正在读取原文…", "sourcePage": "原文第 {page} 页", "sourceLocation": "已提供来源定位", "evidenceVerified": "已确认", "verifying": "正在确认…", "verifyEvidence": "确认这条来源证据", "claimReviewEmpty": "当前工作流没有可审核的来源证据。", "returnToRun": "返回 Hermes 工作流",
+    "status": { "running": "正在分析来源材料", "awaiting_source_review": "需要审核论文结构与来源", "awaiting_claim_review": "需要审核主张与候选证据", "generating_storyboard": "正在生成分镜", "awaiting_storyboard_review": "需要审核分镜", "generating_scene_images": "正在生成场景图", "awaiting_scene_images_review": "需要审核场景图", "generating_video": "正在生成视频", "awaiting_video_review": "需要审核视频", "succeeded": "工作流已完成", "failed": "部分步骤未完成", "stopped": "工作流已停止" },
+    "description": { "running": "分析在服务器上继续进行；关闭此页面不会取消它。", "awaiting_source_review": "请先核对六项研究结构和原文来源。确认前 Hermes 不会开始媒体生成。", "awaiting_claim_review": "主张和候选证据需要科学复核；它们不会因此被标为已验证。", "generating_storyboard": "服务器正在执行已授权的后续媒体任务。", "awaiting_storyboard_review": "请审核分镜后再继续生成场景图。", "generating_scene_images": "已授权的场景图正在服务器上生成。", "awaiting_scene_images_review": "请审核全部场景图后再继续视频。", "generating_video": "已授权的视频正在服务器上生成。", "awaiting_video_review": "请审核视频；完成不会自动发布研究成果。", "succeeded": "已审核的媒体工作流已完成。", "failed": "某个服务器步骤未完成。请查看错误后决定下一步。", "stopped": "工作流因研究对象或权限范围变化而安全停止。" },
+    "step": { "waiting": "等待中", "running": "进行中", "awaiting_approval": "等待审核", "succeeded": "已完成", "failed": "失败", "stopped": "已停止" }
   },
   "ingestion": {
     "status": {
@@ -852,9 +1300,14 @@
     "intake": {
       "title": "编排证据集合",
       "stepLabel": "02 / 证据接收",
+      "researchStartTitle": "研究资料（可选）",
+      "researchStartDescription": "添加论文或资料，Hermes 会为你整理。",
+      "researchStartDropTitle": "拖入论文或研究资料",
+      "commonFormats": "常见格式：PDF · DOCX · PPTX · HTML · Markdown · 图片 · XLSX",
+      "allFormats": "查看完整支持格式",
       "localOnly": "在您明确创建 Research Object 前，文件只保留在当前设备。",
       "dropTitle": "将原始材料放入工作集合",
-      "formats": "PDF · Word · TeX/ZIP · Markdown · 图片 · CSV/TSV · JSON/YAML · Notebook · Python/R",
+      "formats": "PDF · DOCX/PPTX · HTML · TeX/ZIP · Markdown · 图片 · CSV/TSV/XLSX · JSON/YAML · Notebook · Python/R（DOC/通用ZIP暂不自动解析）",
       "browse": "选择文件",
       "remove": "移除",
       "retry": "重试",
@@ -902,27 +1355,71 @@
   },
   "explore": {
     "eyebrow": "公开研究索引",
-    "title": "值得检验的研究。",
-    "description": "通过验证的公开科研对象将在这里呈现，并保留其证据、SDF 结构、版本、许可与评审历史。",
+    "title": "发现研究，读懂贡献。",
+    "description": "先看核心图解和研究要点，再深入原文、方法与来源。",
     "empty": "当前索引条件下没有公开 Research Object。",
     "create": "创建科研对象",
     "indexLabel": "已发布 Research Object 索引",
-    "search": "搜索标题或 SDF 证据",
-    "field": "SDF 字段",
-    "artifactType": "Artifact 类型",
-    "allFields": "全部 SDF 字段",
-    "allArtifacts": "全部 Artifact",
+    "search": "搜索研究标题或内容",
+    "field": "内容范围",
+    "artifactType": "资料类型",
+    "allFields": "全部内容",
+    "allArtifacts": "全部资料",
     "apply": "应用筛选",
     "loading": "正在读取公开索引…",
     "error": "暂时无法加载公开索引。",
     "loadMore": "继续浏览索引",
     "unknownAuthor": "作者记录待补充",
     "noArtifacts": "暂无 Artifact",
-    "fields": { "problem": "问题", "insight": "洞见", "method": "方法", "results": "结果", "limitations": "局限", "reproducibility": "可复现性" },
-    "artifacts": { "document": "文档", "image": "图片", "data": "数据", "code": "代码", "video": "视频", "other": "其他" }
+    "fields": {
+      "problem": "问题",
+      "insight": "洞见",
+      "method": "方法",
+      "results": "结果",
+      "limitations": "局限",
+      "reproducibility": "可复现性"
+    },
+    "artifacts": {
+      "document": "文档",
+      "image": "图片",
+      "data": "数据",
+      "code": "代码",
+      "video": "视频",
+      "other": "其他"
+    },
+    "searchAction": "搜索",
+    "refineSearch": "细化搜索范围",
+    "recentFirst": "新公开的研究在前 · 展示各研究的最新公开版本",
+    "imageFor": "《{title}》的核心概念图",
+    "readResearch": "阅读研究",
+    "recentTitle": "最新公开研究",
+    "recentDescription": "从一张图读懂核心思路，继续了解研究结论与适用边界。",
+    "browseAll": "探索全部研究"
   },
   "presentation": {
+    "askHermes": "交给 Hermes 制作",
+    "emptyHermesBody": "告诉 Hermes 想解释的重点，制作进度与成果会保留在这里。",
+    "manualToolsTitle": "来源与手动工具",
+    "manualToolsBody": "需要精细调整时，再展开来源主张和制作工具。",
+    "requestImage": "生成图片",
+    "requestVideo": "生成视频",
+    "coreImageTitle": "核心概念图",
+    "researchVideoTitle": "研究讲解视频",
+    "imagePlaceholderTitle": "核心概念图尚未完成",
+    "imagePlaceholderBody": "请在 Hermes 对话中说明要解释的核心机制或结论，真实图片会在完成后原位替换此区域。",
+    "videoPlaceholderTitle": "研究讲解视频尚未完成",
+    "videoPlaceholderBody": "视频是可选的后续成果。可在 Hermes 对话中提出需求，完成后会在此显示。",
+    "previousSlide": "上一张图",
+    "nextSlide": "下一张图",
+    "slidePosition": "{current} / {total}",
+    "briefNeedsRevision": "Hermes 尚未整理好制作指令，内容已保留。可请 Hermes 调整指令后继续。",
+    "failureDetails": "查看失败详情",
+    "sceneProgress": "已生成 {current} / {total}",
+    "partialImages": "先查看已生成的图解，其余图片尚未完成。每张图片都可以独立核对；确认后的内容才会用于发布。",
     "storyboard": {
+      "manualDetails": "详细指令与旁白",
+      "styleDescription": {"watercolor":"柔和色彩与绘画质感","technical":"清晰准确的科学示意","ink":"简洁线条与结构表达"},
+      "aiDrawingDetails": "给 AI 的绘图细节",
       "generateImage": "生成这一幕的插图",
       "imageCharge": "每次生成 1 张图片，消耗 1 AI credit。生成后请核对画面再审批。",
       "imageSource": "来源分镜：{title} · 第 {number} 幕",
@@ -946,10 +1443,11 @@
       "revise": "创建修订草稿 · 1 AI credit",
       "narration": "口述旁白",
       "visualAction": "画面动作",
+      "animationPlan": "完整动画计划 · 对象、动作与来源依据",
       "seconds": "{count} 秒",
       "scene": "场景 {number}",
-      "sources": "来源主张",
-      "sourceUnavailable": "来源主张暂不可用",
+      "sources": "已审核原文证据",
+      "sourceUnavailable": "已审核原文证据暂不可用",
       "previous": "原方案",
       "current": "新草稿",
       "noScene": "此方案无对应场景。",
@@ -963,10 +1461,10 @@
     "openVideo": "在新窗口播放视频",
     "mediaAdminApproval": "图片和视频当前由具备本工作区编辑权限的平台管理员审批。",
     "navigation": "图解与视频", "skip": "跳到图解内容", "kicker": "围绕主张的图解", "title": "图解与视频", "description": "先看研究做了什么、如何实现，再展开来源主张，核对解释的依据。",
-    "sourceTitle": "来源主张、概念图与分镜", "sourceBody": "添加或选择已完成提取的主张，生成文字结构概念图。论文插图与视频需经制作和审阅后导入。", "selectClaims": "选择主张", "selectedLimit": "已选择 {count} / {max} 项", "generate": "生成概念图", "starting": "正在启动…",
+    "sourceTitle": "来源主张、概念图与分镜", "sourceBody": "Hermes 根据所选主张规划概念图或分镜；请先核对主张与来源，完成必要审核后，服务器再生成图片或视频。", "openSourceReview": "查看文献与提取结果", "selectClaims": "选择主张", "selectedLimit": "已选择 {count} / {max} 项", "generate": "生成概念图", "starting": "正在启动…",
     "claimStatementLabel": "核心主张", "claimStatementPlaceholder": "用一句准确的话描述一个结果或机制", "claimDraftNote": "这会保存为人工撰写的草稿；在证据审阅完成前，科学支持状态保持为“待补”。", "addClaim": "添加主张", "claimSaveFailed": "主张暂时无法保存；重试会继续使用同一份草稿。",
     "noClaims": "这个版本还没有主张，请在上方添加第一条核心主张。", "noClaimsReadonly": "这个版本没有记录主张。", "loadingSources": "正在读取这个版本的主张…", "scopeLoadFailed": "主张和展示内容尚未完整载入，因此修改操作保持禁用。", "retryScopeLoad": "重新加载主张和展示内容", "openEditor": "打开 SDF 编辑器", "openVersions": "查看版本",
-    "previewTitle": "研究可视化", "emptyPreview": "选择可用主张，创建概念图或分镜。", "emptyPreviewReadonly": "这个版本没有记录展示内容。", "loadingPreviews": "正在读取这个版本的展示内容…", "assetTitle": "主张概念图", "generatedByPlatform": "由 OpenScience 图解引擎生成", "notEvidence": "用于解释研究，不替代原始证据。", "linkedClaims": "依据这些主张", "linkedClaimsUnavailable": "当前视图无法显示关联主张的正文。", "viewFullSize": "打开完整尺寸图解", "openAsset": "打开展示文件", "approve": "审批并纳入发布", "reject": "拒绝草稿", "rejectedNote": "该草稿已被拒绝，不能再次审批。请针对当前版本创建新草稿。",
+    "previewTitle": "研究可视化", "emptyPreviewTitle": "还没有图片或视频", "emptyPreviewNeedsSources": "当前版本还没有可用于图解的主张。请先查看已有文献与提取结果，核对主张与来源后再继续；也可以在下方手动起草。", "emptyPreview": "选择可用主张，创建概念图或分镜。", "startVisual": "选择主张并创建图解", "emptyPreviewReadonly": "这个版本没有记录展示内容。", "loadingPreviews": "正在读取这个版本的展示内容…", "assetTitle": "主张概念图", "generatedByPlatform": "由 OpenScience 图解引擎生成", "notEvidence": "用于解释研究，不替代原始证据。", "linkedClaims": "依据这些主张", "linkedClaimsUnavailable": "当前视图无法显示关联主张的正文。", "viewFullSize": "打开完整尺寸图解", "imageNumber": "图解 {number}", "planningHistoryTitle": "详细制作指令", "planningHistoryBody": "Hermes 自动整理制作指令，需要查看或自定义时再展开。", "videoSecondary": "这是后续的可选媒体，请与图解分开审阅。", "recoverInSources": "查看来源并继续", "openAsset": "打开展示文件", "approve": "审批并纳入发布", "reject": "拒绝草稿", "rejectedNote": "该草稿已被拒绝，不能再次审批。请针对当前版本创建新草稿。",
     "assetStatus": { "draft": "待审阅", "approved": "已审批", "rejected": "已拒绝" }, "assessment": { "supported": "标记为支持", "partial": "标记为部分支持", "disputed": "标记为有争议", "missing": "尚未记录证据支持" }, "claimStatus": { "needs_review": "提取结果需审阅后才能使用", "blocked": "提取被阻断", "failed": "提取失败" },
     "provenance": "素材绑定当前版本与来源主张；主张修改后，相关素材会失效。",
     "loading": "正在加载展示工作区…", "loadError": "展示工作区暂时无法加载。", "generationStartFailed": "生成任务暂时无法启动；重试会继续使用同一次请求。", "generationFailed": "生成任务失败，请重试。", "transitionFailed": "展示内容状态暂时无法更新。",
@@ -991,7 +1489,7 @@
       "hermes": "Hermes", "presentation": "图解与视频", "overview": "概览", "sdf": "编辑", "files": "文件", "versions": "版本", "collaboration": "协作", "publish": "发布", "sandbox": "沙箱",
       "more": "更多工具"
     },
-    "overview": { "imageTitle": "机制解释图", "videoTitle": "研究讲解视频", "mediaVersion": "来自已提交版本 v{number}；当前正文可能包含后续编辑。", "sources": "来源与原始证据", "desk": "研究桌面", "manageMedia": "查看与管理展示资产", "discuss": "与 Hermes 讨论这一段", "media": "可视化解释", "notEvidence": "审核通过的解释性资产，不替代原始论文、图表或代码证据。", "noMedia": "当前版本还没有审核通过的图片或视频。", "mediaFailed": "暂时无法加载展示资产；研究正文仍可阅读。", "retry": "重试加载", "sourceBody": "在来源文件中核对原始论文、图表和代码；在版本记录中追踪研究改动。", "openSources": "打开来源文件", "kicker": "对象概览", "title": "概览", "body": "安静地呈现这个 Research Object 的主张、证据和当前版本状态。", "status": "对象状态", "visibility": "可见性", "history": "已记录版本", "emptyTitle": "从一篇论文开始", "emptyBody": "添加原文，让 Hermes 帮你提炼问题、方法与发现。你可以随时核对证据、修改内容。", "continue": "打开 SDF 编辑器", "inspect": "查看版本",
+    "overview": { "imageTitle": "机制解释图", "videoTitle": "研究讲解视频", "mediaVersion": "来自已提交版本 v{number}；当前正文可能包含后续编辑。", "sources": "来源与原始证据", "desk": "研究桌面", "manageMedia": "查看与管理展示资产", "discuss": "与 Hermes 讨论这一段", "media": "可视化解释", "notEvidence": "审核通过的解释性资产，不替代原始论文、图表或代码证据。", "noMedia": "当前版本还没有审核通过的图片或视频。", "mediaFailed": "暂时无法加载展示资产；研究正文仍可阅读。", "retry": "重试加载", "sourceBody": "在来源文件中核对原始论文、图表和代码；在版本记录中追踪研究改动。", "openSources": "打开来源文件", "kicker": "对象概览", "title": "概览", "body": "安静地呈现这个 Research Object 的主张、证据和当前版本状态。", "status": "对象状态", "visibility": "可见性", "history": "已记录版本", "emptyTitle": "从一篇论文开始", "emptyBody": "添加原文，让 Hermes 帮你提炼问题、方法与发现。你可以随时核对证据、修改内容。", "ingestionTitle": "继续整理已有文献", "ingestionBody": "文献已经进入 Hermes 流程。继续查看提取结果并核对需要确认的内容。", "ingestionLoadingTitle": "正在查看研究进度", "ingestionLoadingBody": "研究对象已经建立；Hermes 正在读取已有文献与任务状态。", "ingestionUnknownTitle": "继续这个研究对象", "ingestionUnknownBody": "暂时无法读取文献处理状态。你仍可打开 Hermes 查看任务与来源。", "continueIngestion": "继续文献整理与核对", "openHermes": "打开 Hermes", "continue": "打开 SDF 编辑器", "inspect": "查看版本",
       "upload": "添加论文",
       "ask": "让 Hermes 帮我整理",
       "companionTitle": "一起读懂这项研究",
@@ -1003,10 +1501,14 @@
       "stepTwoBody": "根据已核对的内容制作图解和视频。",
       "emptyMedia": "内容整理完成后，在这里展示图解与视频。"
     },
-    "versions": { "kicker": "版本历史", "title": "版本", "body": "快照是不可变记录。选择两个版本，比较确切的 SDF 与证据清单。", "compare": "比较", "emptyTitle": "还没有已提交版本", "emptyBody": "在 SDF 编辑器或文件页面创建第一次提交。", "diff": "确定性比较" },
-    "files": { "kicker": "证据存储", "title": "文件", "body": "上传论文、数据、代码、图片或视频。只有创建提交后，文件才会成为版本的一部分。", "provenance": "证据来源", "provenanceBody": "上传会记录内容哈希与逻辑路径；提交会把它绑定到不可变的 Research Object 版本。", "defaultCommit": "绑定证据", "commitMessage": "提交说明", "attaching": "正在创建提交…", "attach": "绑定到新版本", "empty": "请先在上方选择文件。", "committed": "证据已提交，新版本已经出现在版本页面。" },
+    "versions": { "notFound": "当前研究中没有这个版本。",
+      "kicker": "版本历史", "title": "版本", "body": "快照是不可变记录。选择两个版本，比较确切的 SDF 与证据清单。", "compare": "比较", "emptyTitle": "还没有已提交版本", "emptyBody": "在 SDF 编辑器或文件页面创建第一次提交。", "diff": "确定性比较" },
+    "files": { "savedMaterials": "已有材料与导入记录",
+      "snapshotVersion": "快照版本 {version}",
+      "addMore": "可在上方添加更多材料。",
+      "kicker": "证据存储", "title": "文件", "body": "上传论文、数据、代码、图片或视频。只有创建提交后，文件才会成为版本的一部分。", "provenance": "证据来源", "provenanceBody": "上传会记录内容哈希与逻辑路径；提交会把它绑定到不可变的 Research Object 版本。", "defaultCommit": "绑定证据", "commitMessage": "提交说明", "attaching": "正在创建提交…", "attach": "绑定到新版本", "empty": "请先在上方选择文件。", "committed": "证据已提交，新版本已经出现在版本页面。" },
     "sandbox": { "kicker": "可复现实验", "title": "沙箱", "body": "在服务器上运行受边界约束的科研脚本，检查输出，并把执行环境保留在 Research Object 旁。", "context": "Research Object 可视化", "environment": "执行环境", "script": "Python 脚本", "starting": "启动中…", "run": "在沙箱运行", "notFound": "没有找到这个沙箱任务。", "result": "可视化结果", "close": "关闭", "runtime": "运行时间", "download": "下载到本设备", "viewScript": "查看 Python 脚本", "logs": "执行日志", "modify": "修改脚本", "previewError": "无法生成修改预览。", "executeError": "无法创建修改后的任务。", "modifyPrompt": "描述你想要的修改", "modifyPlaceholder": "例如：改变曲线颜色、添加标题或调整 x 轴标签。", "previewing": "正在生成预览…", "preview": "生成预览", "policyPassed": "策略检查通过", "policyBlocked": "策略检查阻断", "diff": "脚本差异", "confirmExecute": "确认执行" },
-    "publish": { "kicker": "发布控制", "title": "发布", "body": "发布是高影响操作：选择版本、记录三类许可、通过发布审核，再确认不可变的公开记录。", "permanence": "公开记录", "permanenceBody": "已发布版本会获得稳定公开 ID、UTC 时间戳和内容哈希，并向所有人公开，不能原地修改。", "version": "要发布的版本", "licenses": "许可", "license": { "text": "正文", "code": "代码", "data": "数据" }, "checking": "正在审核…", "review": "保存许可并审核", "action": "审阅变更", "readiness": "发布就绪度", "notReviewed": "尚未审核", "reviewStatus": { "passed": "审核通过", "blocked": "发布被阻断" }, "emptyTitle": "还没有可发布版本", "emptyBody": "先创建一个提交版本，再进入发布控制。", "published": "已发布公开版本", "confirmTitle": "确认不可变发布", "confirmBody": "这是 R3 操作。确认后，所选版本会获得永久公开 URL，Research Object 的可见性将扩展为所有人可访问；版本、许可、时间戳和内容哈希将成为不可变公开记录。", "cancel": "取消", "confirm": "发布版本", "close": "关闭审阅" },
+    "publish": { "kicker": "发布控制", "title": "发布", "body": "发布是高影响操作：选择版本、记录三类许可、通过发布审核，再确认不可变的公开记录。", "permanence": "公开记录", "permanenceBody": "发布后可通过永久链接公开访问。之后的修改将记录为新版本。", "version": "要发布的版本", "licenses": "许可", "license": { "text": "正文", "code": "代码", "data": "数据" }, "checking": "正在审核…", "review": "保存许可并审核", "action": "发布研究对象", "readiness": "发布就绪度", "notReviewed": "尚未审核", "reviewStatus": { "passed": "审核通过", "blocked": "发布被阻断" }, "emptyTitle": "还没有可发布版本", "emptyBody": "先创建一个提交版本，再进入发布控制。", "published": "已发布公开版本", "confirmTitle": "确认公开这份研究？", "confirmBody": "这个版本及已审核的图片将向所有人公开，并获得永久链接。请确认内容和许可无误；发布后的修改会记录为新版本。", "cancel": "取消", "confirm": "发布版本", "close": "关闭审阅" },
     "settings": { "navigation": "账户设置", "skip": "跳到设置内容", "kicker": "账户 / 偏好", "title": "设置", "body": "管理 OpenScience 的身份、语言和会话。", "identity": "科研身份", "name": "显示名称", "email": "邮箱", "level": "访问级别", "preferences": "偏好", "language": "语言", "evidenceCollapsed": "默认折叠证据", "evidenceCollapsedHint": "公开 RO 仍会完整加载证据，页面上先以摘要高度展示；打印和辅助技术始终保留全文。", "preferenceSaved": "阅读偏好已保存。", "preferenceConflict": "另一会话已更新偏好，已载入最新设置。", "preferenceError": "偏好暂时无法保存，请重试。", "signOut": "退出登录" }
   },
   "editorial": {
@@ -1340,12 +1842,47 @@
     "gpuTime": "GPU 帧时",
     "bounds": "稳定边界"
   },
+  "ingestionClaimReview": {
+    "duplicateAssociation": "本批次中，同一组原文只关联一条主张；拆分出的其他主张可先不重复关联原文。",
+    "reviewEvidence": "核对原文段落",
+    "evidenceNotice": "以下独立摘录按原文顺序排列，段落可能不连续，省略部分未展示。每段保留独立出处。请核对这些段落是否完整支持建议内容及其条件、局限；定位本身不代表科学结论正确。",
+    "sourceReconciliationFailed": "此字段的来源整理尚未完成；这不代表论文没有报告相关内容。",
+    "unverifiedSummaryTitle": "综合草稿 · 来源待核对",
+    "unverifiedSummaryBody": "这只是一份阅读辅助，不能视为已验证证据，也不能确认或写入研究记录。",
+    "title": "从论文分析整理主张", "boundary": "从当前已保存版本选择、编辑主张。原文引文只是候选依据；确认本批次不会将主张或证据标为已验证。", "runTitle": "确认主张与来源，选择研究可视化", "runBoundary": "确认后将记录当前来源审核，并按下方选择继续图片或视频流程。每条已选择的 Hermes 结论都必须保留其显示的原文引文。每个方案和图解仍会停下等待你的审核；主张和证据不会因此自动标为已验证。", "generationGrant": "本次授权仅适用于当前研究对象和图解配置，后续图解任务硬上限为 7 个。", "mediaChoice": "确认后生成什么？", "mediaImage": "图片示意", "mediaVideo": "视频示意（包含分镜与图片）", "videoGenerationGrant": "仅授权当前研究对象：最多 8 个后续任务，包括方案、图片与视频。Hermes 根据论文内容规划，生成结果仍需审核。", "runConfirm": "确认来源并继续所选流程", "runComplete": "来源审核已记录。Hermes 会在服务器上继续，并在下一个审核点暂停。",
+    "load": "预览已确认的论文分析", "refresh": "重新加载预览", "loading": "正在加载预览…", "empty": "当前版本没有匹配的已确认论文分析。请先确认 Hermes 建议并保存版本。",
+    "source": "来源文献", "statement": "主张内容", "changed": "内容与原提取不同，请重新核对引文关联", "kind": "主张类型", "parent": "本批次的上级主张", "chooseParent": "选择上级主张", "conditions": "适用条件（每行一项）", "limitations": "局限（每行一项）",
+    "page": "原文第 {page} 页", "sourceLocated": "已提供来源定位", "associate": "我已核对引文与此主张的关系，将它作为待复核的候选证据关联。", "runAssociate": "此 Hermes 结论会保留引文，作为下一步审核的证据。", "noQuote": "没有可信引文可关联，此主张将保留为无附加证据。", "split": "从此项再拆出一条主张",
+    "invalid": "请为子主张选择上级、消除循环，并填写非空内容（最多 4,000 字符）。每批最多选择 12 条。适用条件和局限各限 100 个非空行，每行最多 500 字符。", "runQuoteRequired": "每条已选择的 Hermes 结论都必须有显示的原文引文。请取消没有引文的结论后再继续。", "confirm": "确认所选主张及候选证据", "saving": "正在保存…", "retry": "重试同一批次", "complete": "已保存到当前版本。主张与证据仍需科学复核，现在可以选择这些主张生成分镜。",
+    "loadError": "预览加载失败，请重新加载。", "submitError": "本批次未被接受，请重新加载并核对选择。", "stale": "版本或来源已经变化，请重新加载预览后确认。", "uncertain": "响应中断，提交结果尚未确定。请保持当前选择，重试同一批次以核对结果。",
+    "field_problem": "研究问题", "field_insight": "核心见解", "field_method": "方法", "field_results": "结果", "field_limitations": "局限", "field_reproducibility": "可复现性",
+    "kind_core": "核心主张", "kind_supporting": "支持主张", "kind_method": "方法", "kind_boundary": "边界条件", "kind_counter": "反向主张"
+  },
   "hermesPresentation": {
+    "prepareVideoPlan": "整理视频制作指令",
+    "planWillBePrepared": "Hermes 会先整理这张图的制作指令。",
+    "eligibleSources": "已选用 {count} 项可用研究主张。",
+    "image": "图解",
+    "advanced": "详细指令与来源",
+    "needsEligibleSources": "请先确认提取的研究内容，再交给 Hermes 制作。",
+    "briefWillUpdate": "你的修改会写入新方案，原图与原方案保留。",
+    "updateBrief": "更新制作指令",
+    "needsApprovedScenes": "视频需要已确认的分镜与对应图片。先完成素材后即可制作。",
+    "mediaIntent": "制作什么",
+    "preparePlan": "整理制作指令",
+    "usingApprovedPlan": "使用当前已确认的制作方案。",
+    "video": "视频",
     "entry": "分镜与配图",
     "chooseResearch": "选择要处理的研究",
     "noResearch": "先创建或打开一项研究",
     "back": "返回对话",
     "boundary": "演示材料不作为研究证据。原版本保留，每项生成结果都需要你审核。",
+    "suggestedDraft": "Hermes 生成的可编辑建议",
+    "replaceWithSuggestion": "用此建议替换当前指令",
+    "suggestionApplied": "建议已填入；你可以继续编辑。",
+    "sourcesManual": "请在下方确认用于生成的主张与来源。",
+    "deterministicDefaults": "已按当前设置预填语言和画面风格，均可修改；确认生成后计费。",
+    "browserSessionDraft": "编辑内容保存在此浏览器会话，并按账号、研究对象和版本隔离。退出登录时会清除。",
     "version": "研究版本",
     "chooseVersion": "请选择版本",
     "versionLabel": "版本 {number} · {status}",

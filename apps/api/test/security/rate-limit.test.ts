@@ -116,6 +116,8 @@ describe('registerRateLimit（Fastify 封装）', () => {
     ['/research-objects/:id/ingest', '/research-objects/ro-1/ingest', 5],
     ['/ingestion/:taskId/retry', '/ingestion/task-1/retry', 10],
     ['/agent/tasks', '/agent/tasks', 20],
+    ['/research-objects/:id/hermes-runs', '/research-objects/ro-1/hermes-runs', 10],
+    ['/research-objects/:id/hermes-runs/:runId/source-review', '/research-objects/ro-1/hermes-runs/run-1/source-review', 10],
     ['/agent/tasks/:id/retry', '/agent/tasks/00000000-0000-4000-8000-000000000001/retry', 10],
     ['/literature/acquisitions', '/literature/acquisitions', 10],
     ['/research-objects/:researchObjectId/versions/:versionId/presentation-assets/generations', '/research-objects/00000000-0000-4000-8000-000000000001/versions/00000000-0000-4000-8000-000000000002/presentation-assets/generations', 10],

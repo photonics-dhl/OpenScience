@@ -5,20 +5,46 @@ export {
   type AiGatewayOptions,
   type GatewayCallLog,
   type SchemaGuard,
+  type StructuredGenerationOptions,
+  type GatewayCompletion,
 } from './gateway';
 export {
   OpenAiCompatProvider,
   AnthropicCompatProvider,
+  TextProviderError,
   MiniMaxCodingPlanVisionProvider,
   type Provider,
   type ProviderConfig,
   type ProviderResult,
   type ChatMessage,
   type CompleteOptions,
+  type TextGenerationOptions,
   type Usage,
+  type TextProviderErrorCode,
   type MiniMaxVisionConfig,
   type MiniMaxVisionPricing,
 } from './provider';
+export { ChatGptWebScienceReviewProvider, type ChatGptWebScienceReviewConfig } from './science-review';
+export {
+  SCIENCE_REVIEW_MAX_DEADLINE_MS,
+  SCIENCE_REVIEW_MAX_ATTACHMENTS,
+  SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES,
+  SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES,
+  SCIENCE_REVIEW_MAX_JSON_BYTES,
+  SCIENCE_REVIEW_MAX_PROMPT_CHARS,
+  SCIENCE_REVIEW_MAX_RESPONSE_BYTES,
+  SCIENCE_REVIEW_READY_MAX_AGE_MS,
+  validateScienceReviewRequest,
+  validateScienceReviewResult,
+  type ScienceReviewInput,
+  type ScienceReviewAttachment,
+  type ScienceReviewAttachmentRecord,
+  type ScienceReviewProvider,
+  type ScienceReviewProviderResult,
+  type ScienceReviewRequest,
+  type ScienceReviewResultRecord,
+  type ScienceReviewSource,
+} from './science-review-protocol';
 export {
   DEFAULT_OCR_LIMITS,
   MutableProviderKillSwitch,
@@ -45,5 +71,5 @@ export {
   type ProviderCapabilityPolicy,
 } from './ocr';
 
-export { CodexSpoolImageProvider, type CodexSpoolImageConfig } from './codex-image';
+export { CodexSpoolImageProvider, ChatGptWebSpoolImageProvider, type CodexSpoolImageConfig } from './codex-image';
 export * from './codex-image-protocol';

@@ -1,4 +1,5 @@
-import type { Prisma, SdfNodeType } from '@prisma/client';
+import type { SdfNodeType } from '@prisma/client';
+import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import type { WorkspaceDeps } from '../workspace/types';
 
 export const EXPLORE_ARTIFACT_TYPES = ['document', 'image', 'data', 'code', 'video', 'other'] as const;
@@ -15,6 +16,7 @@ export interface ResearchIndexItem {
   fields: SdfNodeType[];
   artifactTypes: ExploreArtifactType[];
   authors: string[];
+  thumbnail: { url: string; label: string } | null;
 }
 
 export interface ResearchIndexPage {
@@ -30,14 +32,6 @@ const EXTENSIONS: Record<Exclude<ExploreArtifactType, 'other'>, string[]> = {
   video: ['.mp4', '.webm', '.mov', '.avi'],
 };
 
-function entryCondition(type: ExploreArtifactType): Prisma.ManifestEntryWhereInput {
-  const known = Object.values(EXTENSIONS).flat();
-  if (type === 'other') {
-    return { AND: known.map((extension) => ({ logicalPath: { not: { endsWith: extension, mode: 'insensitive' } } })) };
-  }
-  return { OR: EXTENSIONS[type].map((extension) => ({ logicalPath: { endsWith: extension, mode: 'insensitive' } })) };
-}
-
 export function classifyExploreArtifact(logicalPath: string): ExploreArtifactType {
   const normalized = logicalPath.toLocaleLowerCase();
   for (const [type, extensions] of Object.entries(EXTENSIONS) as Array<[Exclude<ExploreArtifactType, 'other'>, string[]]>) {
@@ -50,57 +44,73 @@ export async function listPublicResearchIndex(
   deps: Pick<WorkspaceDeps, 'prisma'>,
   input: { query?: string; cursor?: string; limit: number; field?: SdfNodeType; artifactType?: ExploreArtifactType },
 ): Promise<ResearchIndexPage> {
-  const query = input.query?.trim();
-  const and: Prisma.ResearchObjectWhereInput[] = [];
-  if (query) {
-    and.push({ OR: [
-      { title: { contains: query, mode: 'insensitive' } },
-      { sdfDocument: { nodes: { some: { content: { contains: query, mode: 'insensitive' } } } } },
-    ] });
-  }
-  if (input.field) {
-    and.push({ sdfDocument: { nodes: { some: { nodeType: input.field, content: { not: '' } } } } });
-  }
-  if (input.artifactType) {
-    and.push({ versions: { some: { status: 'published', manifest: { is: { entries: { some: entryCondition(input.artifactType) } } } } } });
-  }
-
-  const rows = await deps.prisma.researchObject.findMany({
+  const query = input.query?.trim().toLocaleLowerCase();
+  const loadPage = (cursor?: string) => deps.prisma.researchObject.findMany({
     where: {
       visibility: 'public',
-      publicId: { not: null, ...(input.cursor ? { gt: input.cursor } : {}) },
-      versions: { some: { status: 'published' } },
-      ...(and.length ? { AND: and } : {}),
+      status: { not: 'archived' },
+      publicId: { not: null, ...(cursor ? { lt: cursor } : {}) },
+      versions: { some: { status: 'published', publications: { some: {} } } },
     },
     include: {
-      sdfDocument: { include: { nodes: { orderBy: { sortOrder: 'asc' } } } },
       versions: {
-        where: { status: 'published' }, orderBy: { versionNo: 'desc' }, take: 1,
-        include: { manifest: { include: { entries: true } }, publications: true },
+        where: { status: 'published', publications: { some: {} } }, orderBy: { versionNo: 'desc' }, take: 1,
+        include: {
+          manifest: { include: { entries: true } }, publications: true,
+          presentationAssets: {
+            where: { status: 'approved', kind: { in: ['image', 'chart'] } },
+            select: { id: true, label: true },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 1,
+          },
+        },
       },
       authors: { orderBy: { sortOrder: 'asc' }, include: { user: { select: { displayName: true } } } },
     },
-    orderBy: { publicId: 'asc' },
-    take: input.limit + 1,
+    orderBy: { publicId: 'desc' },
+    take: 100,
   });
+  // Evaluate all content filters against the same latest published snapshot that
+  // is displayed. In particular, never search unpublished SDF edits.
+  const rows: Awaited<ReturnType<typeof loadPage>> = [];
+  let cursor = input.cursor;
+  while (rows.length <= input.limit) {
+    const page = await loadPage(cursor);
+    if (page.length === 0) break;
+    for (const row of page) {
+      const manifest = row.versions[0].manifest;
+      const core = (manifest?.coreJson ?? {}) as Record<string, unknown>;
+      if (query && ![row.title, ...SDF_CORE_FIELDS.map(field => core[field])].some(value => typeof value === 'string' && value.toLocaleLowerCase().includes(query))) continue;
+      if (input.field && (typeof core[input.field] !== 'string' || !(core[input.field] as string).trim())) continue;
+      if (input.artifactType && !manifest?.entries.some(entry => classifyExploreArtifact(entry.logicalPath) === input.artifactType)) continue;
+      rows.push(row);
+      if (rows.length > input.limit) break;
+    }
+    if (page.length < 100) break;
+    cursor = page[page.length - 1].publicId!;
+  }
 
   const hasMore = rows.length > input.limit;
   const visible = rows.slice(0, input.limit);
   const items = visible.map((row): ResearchIndexItem => {
     const version = row.versions[0];
-    const nodes = row.sdfDocument?.nodes.filter((node) => node.content.trim()) ?? [];
+    const core = (version.manifest?.coreJson ?? {}) as Record<string, unknown>;
+    const fields = SDF_CORE_FIELDS.filter((field) => typeof core[field] === 'string' && (core[field] as string).trim());
     const artifactTypes = [...new Set((version?.manifest?.entries ?? []).map((entry) => classifyExploreArtifact(entry.logicalPath)))];
     return {
       publicId: row.publicId!,
       title: row.title,
-      url: `/research/${row.publicId}`,
+      url: `/research/${row.publicId}/v/${version.versionNo}`,
       latestVersion: version.versionNo,
       publishedAt: version.publications[0]?.publishedAt.toISOString() ?? null,
       updatedAt: row.updatedAt.toISOString(),
-      insight: nodes.find((node) => node.nodeType === 'insight')?.content ?? null,
-      fields: nodes.map((node) => node.nodeType),
+      insight: typeof core.insight === 'string' && core.insight.trim() ? core.insight : null,
+      fields: [...fields],
       artifactTypes,
       authors: row.authors.map((author) => author.user.displayName),
+      thumbnail: version.presentationAssets[0] ? {
+        url: `/api/research/${row.publicId}/v/${version.versionNo}/presentation-assets/${version.presentationAssets[0].id}`,
+        label: version.presentationAssets[0].label,
+      } : null,
     };
   });
   return { items, nextCursor: hasMore ? items.at(-1)?.publicId ?? null : null };

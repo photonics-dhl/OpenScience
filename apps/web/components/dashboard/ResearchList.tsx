@@ -64,7 +64,7 @@ export function ResearchList({ researchObjects }: ResearchListProps) {
           {visible.map((research) => (
             <li key={research.id}>
               <Link
-                href={`/research-objects/${encodeURIComponent(research.id)}/overview`}
+                href={`/research-objects/${encodeURIComponent(research.id)}/edit`}
                 className="group grid min-h-14 gap-2 px-1 py-4 outline-none sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"
               >
                 <span className="min-w-0">
@@ -72,7 +72,7 @@ export function ResearchList({ researchObjects }: ResearchListProps) {
                     {research.title}
                   </span>
                   <span data-reading-role="caption" className="mt-1 block font-data text-os-muted-paper">
-                    {t('research.version', { version: research.versionNo })}
+                    {t('research.draftRevision', { version: research.versionNo })}
                   </span>
                 </span>
                 <span data-reading-role="caption" className="font-data text-os-muted-paper">

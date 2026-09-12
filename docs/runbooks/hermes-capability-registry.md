@@ -1,11 +1,59 @@
 # Hermes Capability Registry
 
-> 状态：**CURRENT**
-> 最后核验：2026-09-05
-> 设计真源：`docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
-> 安全原则：只记录变量名与注入状态，禁止记录、读取或输出真实 key/token/cookie。
+## 当前状态（2026-09-13）
+- 第二篇Quantization复用已解析SourceMap（15页/2201 excerpts/53954正文字符）；任务eda892b4及c4f3ce06均模型前budget失败。08ed仅共享kind/parser、每片段保留confidence/id/text/部分range，来源JSON由353628降到143941字符，完整locator与180k预算保留。服务器只读量测及High复核完成；e758f33f实产2374字符/14引用、来源960ffcc1准确，UI等API；High发现S3–S14重编号误绑和基底/亚1nm/功率公式错误，NOT ACCEPTED；e758→918→b66→71ed6fae来源指导修订后，最终3643字符/40引用、独立High科学/引用PASS；真实UI正文/quotes等API、57/57 TeX源一致/0错误，Markdown27609字符完整，RO仍private/draft/version3。无人工正文替换；sourceStatus仍grounded_with_unresolved_review，外部High未冒充内部自动审校。
+- 第一篇既有质量证据：方法稿867ce8b9与结果/边界稿3f68d30b均经服务器来源指导修订和独立High科学/引用PASS，后者1745字符/19引用。实读发现Markdown吞TeX转义，0685已修复；同一3f68正文/引用等API、26/26公式源逐字相等、6处间距正确，Markdown20620字符完整且未变。没有人工正文替换或新依赖/OCR，不能据此称六字段全自动或跨论文质量可靠。
+- 该路径从服务端基稿精确绑定sourceTaskId，回查同用户/RO/artifact/hash/quote，再复用完整packet与citation remap/materialize；不同于旧editorDraft的手工goal片段。纯文本draftChanges目前无字段证据回写；基稿修订不走latest，602首次写作已接显式ingestion来源，多artifact未选择时先提示，所选未就绪不回退其它原文。runtime scientific-writing v3与research-note-formatting在真实调用中复用。
+- 当前应用08ed3b35113a512fbd414524ab8958ec4f87deeb / rollback df94fae0e25b109791f41d71691611bb88d78ebd；必要服务器build/start exit0，真实页面release200同SHA。独立browser provider d1630135 / rollback92cc416e、video runner0df87c9b不变。
+- 1bf审校current/source均为4b46，复用既有scientificReviewPrompt/Guard与critical-thinking v2，保存真实verdict/issues/lineage。新d5c6f699仍接受错method/limitations且扩写三案、漏条件；NOT ACCEPTED，不再整稿自省循环。
+- 现有完整来源写作实产4bedbb4b：具体问“变换I还是E/相位/积分”后正确找回链，独立High核心科学PASS，1246字符/15引用；建议语仍缺远场/正峰同步、超700字。五问63e2acc5再次出错，不足以支持通用自动审校。
+- 普通共编8ff290f5纠正Fourier对象但漏强度支路/明确同步。代码取证发现editorDraft沿导航默认thinking off；a8仅科学共编复用现有SCIENTIFIC_SYNTHESIS_OPTIONS，导航不变。明确写作修饰语漏路由也已修复，精确diff High静态通过；新配置实产10799ba3仍经High原文复核判NOT ACCEPTED（起始链/√I/同步丢失），停止重试。
+- 来源桥接使用已有writingDraft引用→editorDraft.goal；共编本身仍未自动加载全文。这是引导的来源修订，不能写成端到端自动纠错能力。
+- 浏览器Mojo分配底层原因未明，空编码override已清理。旧生成标记来自整页历史文本，实际Stop/composer/dirty均0；三锁/空队列/持久化条件下仅重启一次成功，登录保留。current-ingestion实际六字段/35条来源与API一致、revision11。私有92链接暴露最新63e覆盖正文的真实UI错误；1e627已部署优先指定合法writing，独立High复核通过。真实打开92/只读编辑正文/回阅读/展开来源和截图：1118字符/17引用逐字等保存API与此前原文复核稿，user_edited、无63e替代，未写入研究正文。后续Playwright握手仍超时，复用既有raw target-CDP，不重复重启。
+- 私有92cafb82经人工校正、独立原文复核与真实保存/重载/来源/下载，1118字符/17引用、user_edited；原40e23948为2696字符/41引用/57式，均保留。公开v10、revision11、已批图保护。
+- 无新增服务/供应商/OCR/浏览器或第三方安装。无测试/预检/CI/本机构建；必要服务器build/start及实际产品生成/阅读按授权推进。视频/批量暂停，采用/发布待用户确认。
+
+| 顺序 | 能力 | 当前状态与剩余 |
+|---|---|---|
+| 1 | 科学文档与公式 | Docling1.30/CodeFormulaV2/TeX来源/KaTeX已生产；26页32式中28可排版、4损坏标记。两个代表式对原页，非全篇物理验收。 |
+| 2 | 全文理解与凝练 | paper-analysis v8/summary v6/reviewOnly已部署；d5c6审校仍未通过；单问题回读4bed核心科学PASS，自动整稿仍不可靠；92人工审校稿保留。 |
+| 3 | 科学写作与引用 | 既有SourceMap、基稿血缘与精确引用重映射是通用实现；867方法稿与3f68结果稿来源指导修订后科学/引用PASS。具体指导和独立复核未自动产品化；editorDraft缺同等来源；602首次writing显式来源已实际传递，第二篇来源指导修订71科学/引用PASS，自动首稿失败保留。 |
+| 4 | 精美笔记 | 既有research-note-formatting、阅读/编辑、折叠来源与Markdown下载；0685已保护数学原文经过Markdown后逐字还原，复用splitMath与安全KaTeX。同一真实稿26式全部匹配；多格式导出按需补齐。 |
+| 5 | 多格式附件 | XLSX/PPTX/HTML已生产，派生副本清洗、原件保留；真实多样样本兼容未观察。复用已有解析器，未另装MarkItDown全套。 |
+| 6 | 艺术图片与视频 | 0df87c9b已部署：艺术指导/构图、视觉叙事/旁白与locale/style传递；真实新图/成片未观察。现有网页生图路线不变，视频与批量冷启动暂缓。 |
+
+用户流程：一句话或附件开始同一私有研究 → Hermes理解整理 → 用户少量修改/确认 → 图片或视频 → 审核发布。主屏标题/贡献→核心媒体→六字段→文末资料；长笔记独立阅读。
+
+## 通用能力与人工环节（2026-09-13代码复核）
+- 已部署通用实现：`workspace-guide.ts:170`实际调用全文来源写作；`scientific-writing-source.ts:70`从服务端基稿恢复并授权精确来源；`citation-management.ts:51`组装来源、重映射并回写精确引用。这些实现随08ed3b35部署，无当前论文标题、专名或结果硬编码；数学源保护、初次writingSource选择和逐片段metadata压缩均为通用代码。
+- `skills/scientific-writing.ts:14-20`已固化同一算例、条件、运算对象、研究类型和披露范围等通用指令；借鉴K-Dense方法并接入现有Gateway，不是本会话临时加载后才能使用。但指令存在不等于模型稳定遵循，63e等失败结果必须保留。
+- 本会话承担的人工环节：指出具体来源冲突、限定修改范围、独立逐句原文复核。服务器负责读取来源和成稿；独立High复核不是Hermes内部自动执行步骤，不得称自动发现错误→修订→科学验收已经产品化。
+- 结构校验只证明合法来源编号及精确quote/locator，不能证明引用在语义上支持断言；UI的`grounded`显示为“已关联原文来源”，不是“科学通过”。用户篇幅要求也仍由模型遵循，现成60000字符硬上限不等于遵守700字目标。
+- 适用边界：已有来源基稿的局部修订可跨论文复用；第二篇Quantization首稿科学/引用失败，3次来源指导修订后71独立复核通过；实际适用范围已跨论文，但不能称自动质量稳定。初次写作从现有source select传ingestionTaskId，同用户/RO/workspace/artifact校验后绑定所选来源；未选择且多artifact（含未完成）先提示，修订baseDraft优先。真实Quantization UI已准确传递；多artifact提示分支尚无真实样本观察。普通六字段editorDraft亦没有同等全文与字段证据回写。
+
+## 来源与选择
+- 用户要求复用优先，已读取下列GitHub源文件并对照实际调用；不凭README或sources注释声称集成。2026-09-13已从具体问题回读继续走完整来源基稿修订，867经独立科学/引用核对PASS；复用已有runtime，不安装完整PaperQA或其它第三方能力。
+
+| 上游 | 实际复用/本次发现 | 接续边界 |
+|---|---|---|
+| [PaperQA prompts.py](https://github.com/Future-House/paper-qa/blob/main/src/paperqa/prompts.py) | 现有paper-analysis记录其证据召回/上下文摘要思路，Worker已有map/reduce；未安装或调用完整PaperQA。上游最终回答使用上下文证据摘要与有效引用键；本项目final仅收原P并集，语义文字被有意排除 | 这是待核对的设计差异，不能断言为全部科学错误根因；不可直接把有错的旧summary作为事实重新灌入 |
+| [K-Dense scientific-critical-thinking](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-critical-thinking/SKILL.md) | 已改编为项目runtime v2，extractor的reduce/bridge系统消息实际注入；研究类型/适用边界/来源区分已有代码 | 已使用方法，不等于安装整个技能库或得到科学正确性保证 |
+| [K-Dense peer-review](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/peer-review/SKILL.md) / [claim evidence template](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/peer-review/assets/claim_evidence_matrix_template.csv) | 本次重新读取v2.2及模板：逐主张关联结果/图表，核方向、量级、对象与限制，提出最小修订。此前泛称peer-review借鉴不能算其完整流程已落地 | 优先用于已知错误的局部来源修订；不引入其CLI门禁、临床清单或新的模型轮次 |
+| [claude-scholar literature workflow](https://github.com/Galaxy-Dawn/claude-scholar/blob/main/skills/obsidian-literature-workflow/SKILL.md) / [claim extraction](https://github.com/Galaxy-Dawn/claude-scholar/blob/main/skills/obsidian-literature-workflow/references/CLAIM-EXTRACTION.md) | 本次新发现并读取：证据支持的措辞与禁止扩大的措辞随主张保留。现有SemanticPoint已含statement/type/conditionCase/comparison/operation/evidenceIds，无需另造同类结构 | 尚未接入；借鉴限定随主张流转的方法，不移植Obsidian目录体系，不新增一套Claim数据库 |
+
+- 代码取证：extractor.ts导入与第614/682/708行附近的实际消息注入；SemanticPoint与expandSemanticPassages；modelScientificComposeSemantic第1977行附近明确只传原P。引用/结构验证可证明定位和格式，不能证明主张与证据在科学含义上一致。
+- 独立High建议已于479落实并复核：由现有evidenceIds/passageBindings构造分组键/支撑P/限定P导航，保留global原P并集与跨字段引用，不传旧语义文字，不新建schema、工具或数据库。真实v6仍有科学错误，不能把接入导航称为质量解决；1bf真实来源审校与a8局部共编也已实产失败；4bed单问题来源回读有效，但不能据此称最终自动修订可靠。
+- [K-Dense scientific-writing](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-writing)、[critical-thinking](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-critical-thinking)、[citation-management](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/citation-management)：此前已核来源/MIT元数据，项目适配方法，工具映射现有Gateway/ScanSci/SourceMap，不复制额外供应商或逐条人工门禁。
+- [Docling公式增强](https://docling-project.github.io/docling/usage/enrichments/)用于TeX识别；[KaTeX](https://katex.org/docs/options.html)只负责受限排版；两者不证明公式物理正确。
+- [Microsoft MarkItDown](https://github.com/microsoft/markitdown)是转换工具，不是科学理解或公式校验器。已有Docling/结构化XLSX先复用；只为实际格式缺口增加依赖，不装all整包。
+- [Pandoc](https://pandoc.org/MANUAL.html)只在具体导出需要时补齐；未安装/未接通状态不写成可用。
+
+以下为既有能力与历史部署记录；涉及当前版本/质量的判断以上文及CURRENT handoff为准。
 
 ## 1. Purpose
+- 后续实时观察：fd719902服务器网页生图成功并回传，读取时已approved；FWHMₛ图示方向/含义仍需修正，不能以运输或批准状态代替科学质量。用户已指定第二账号；正常退出旧账号、Google OAuth两个必要精确域已放行，随后已完成用户身份验证（见本页最新更新）。自动跨账号轮换尚未实现，也不承诺轮换免限额。旧3814f844限额不得扩展为当前生图能力不可用。
+
+2026-09-11 production f909c3a4：workspace-guide/Gateway显式对话改稿已实际用于当前论文，单字段修改、正文同步、撤销及确认版本已观察成功。首次JSON/schema失败已修复提示与纠错反馈；旧commit/live SDF衔接与继承全降级已修复，v3保存刷新一致。请求绑定RO/草稿范围/版本，正式写入走原API；无新服务、模型或插件。单图方案经Hermes修订批准，新图片任务3814f844明确网页rate limit，未发布；不能据共编成功声称整个发布流程已完成。Chat6Pro规划已收到，追加复核限流；Sol medium实现、Sol high复核完成。
 
 本台账防止 Hermes 能力在后续迭代中被重复安装、遗忘、误判或污染服务器。新增、升级、启用、停用、替换或删除任何 Skill、MCP、模型、parser、provider 或运行容器时，必须同步本文件与 `project_index.md`。
 
@@ -27,13 +75,14 @@
 | ClamAV | 上传文件恶意内容扫描 | `PRODUCTION` | 免费、本地 CPU | agent-worker/隔离边界；fail-closed | signature freshness、blocked path、资源峰值 |
 | MiniMax text/vision | LLM OCR、复杂表格/公式补救 | `APPROVED_PILOT / BLOCKED` | 自动平台处理；最少页；凭据已在聊天暴露，轮换前不得调用 vision | 仅 AI Gateway；`openscience-ocr-v1` route 已实现但默认 disabled + external-policy deny；生产 worker 当前有变量注入，文档不记录值 | locator 复验、页成本、数据外发、错误率、审计 |
 | MiniMax image/video | 代表性 RO 展示资产 | `APPROVED_PILOT / BLOCKED` | 仅管理员；逐项批准公开；凭据轮换前阻断 | 外部 API，经 AI Gateway；不在 CPU 服务器部署模型 | 科学真实性、成本、prompt/source provenance、可撤回 |
+| ChatGPT web image/science review | 内容驱动生图与原PDF独立科学复核 | `PRODUCTION` | 使用已授权服务器浏览器会话；不计入Codex调用；精确canonical续取、禁止重发，最终确认仍由用户完成 | 当前release/provider `4b4e365c…`；图片与科学审阅独立锁；附件仅经受限OpenAI域名；科学审阅1800秒、持锁期间15秒heartbeat；science-v4合同 | 已回传真实PNG；Deep-sub-cycle task `1e324308…` / attempt `6cc0a17c…`六字段非空、无补证。候选可按SourceMap复用，网页答复仍要求候选hash+合同版本完全相同 |
 | Tavily MCP/API | 通用网页发现 | `PRODUCTION / BLOCKED` | 生产 Secret 已注入；四个授权 key 的最小探测均返回供应商套餐/单 key 额度耗尽 | `source.retrieve` discovery-only adapter；不得成为唯一来源 | quota 恢复前稳定 `unavailable/rate_limited`；source precision、成本、隐私 |
 | Semantic Scholar MCP/API | 论文、作者、引用关系 | `PRODUCTION` | 有效 Secret 由既有本地 Secret 安全注入；真实 Hermes 任务返回 3 sources，连续请求仍可能 429 | `source.retrieve` native-fetch adapter；provider schema 不越过 Domain | metadata/OA/rights accuracy、1 req/s、429 显式降级 |
 | ScanSci PDF | 全文发现/下载 | `PRODUCTION` | 官方 MCP；浙江大学认证作为平台持久 session；管理员在普通浏览器认证后以官方 `cookie_import` 导入，不部署第二 browser/auth 服务。官方来源策略默认不覆盖，17 tools 均保留 | release `b32d81c…` / rollback `0aaf52f…`；`scansci-pdf==1.13.1`，CPU-only、固定 Squid、持久 `scansci-data`、瞬态 `scansci-papers` | MCP 版本/17 tools/Worker、24,671,920-byte OA、1,873,303-byte ZJU subscription-only Nature、四入口、72h/600s/one-use 全通过；ScienceDirect 等待官方 entitlement |
 | Temporary document lifecycle | 受控全文缓存与下载 | `PRODUCTION` | 无用户模式切换；逐来源 rights 决定 | SeaweedFS `hermes-cache/<workspace>/<document>/<hash>`；72h、600s HttpOnly one-use capability、Worker lease/fence GC | 真实 24,671,920-byte PDF：retention 71.995h、signed link 599.48s、download hash exact、replay 404 |
 | BGE-M3 | 多语 dense embedding | `PRODUCTION` | MIT；无 API 费，运营成本为 CPU/内存/磁盘 | 独立 internal-only `embedding-worker`；exact revision/hash、只读 versioned volume、2 CPU/6 GiB/128 PID | nDCG@10 `0.996655`、Recall@10 `1`、P95 `240 ms`、peak RSS `2,244,235,264` bytes |
 | PostgreSQL lexical search | 无模型词法基线与降级 | `PRODUCTION` | PostgreSQL 内置 FTS；无新增 extension/API 费 | `packages/search` + 独立 `SEARCH_DATABASE_URL`/迁移/连接池 | tenant-safe BM25、migration/restore、embedding outage 降级通过 |
-| Docling | layout/table/OCR parser 候选 | `APPROVED_PILOT` | MIT；官方 wheel `2.123.0`/SHA-256 `95c0a4d…fde9c` 已锁定 | 独立 parser candidate image；官方 CPU wheels `torch 2.13.0+cpu`/`torchvision 0.28.0+cpu`；OCR/remote/plugin disabled；exact ECS build 在模型下载失败，未产出 image | 双栏/表格/公式、P95、内存；无 corpus/RSS 结果，禁止质量推断或与 LiteParse 定案 |
+| Docling Serve | PDF布局/表格/来源与公式增强 | `PRODUCTION` | CPU镜像v1.30.0固定digest；CodeFormulaV2只读缓存已接入 | `paper-analysis`只读6CPU/8GiB，parser_net；Node经DOCLING_SERVE_URL异步调用，保留页码/bbox；公式增强true | 真实26页/32公式，4条坏式须区分处理；运行正常不能证明所有公式正确。旧wheel试验保持HISTORICAL |
 | LiteParse | bbox/layout parser 候选 | `APPROVED_PILOT` | Apache-2.0；npm `2.14.0` 与 Linux x64 包已锁定 | 独立 parser candidate image；ECS evidence only，未进生产 Compose | 5/7 ready、13/16 locator、P95 163 ms、peak RSS 61,300,736 bytes；优于 measured current 7/16，但 Docling 尚无可比结果 |
 | GROBID | 学术元数据、章节、引用解析 | `APPROVED_PILOT` | 开源、本地 CPU；exact license/model terms 仍待 digest 后复核 | provider-neutral TEI adapter 已完成；`0.9.1-crf` 单次 ECS pull 在 180s cutoff 前未取得 digest，未进 Compose | 无质量/P50/P95/RSS 结果；pull 失败不得推断能力，fallback 固定保留 layout map |
 | PaddleOCR | 复杂中英扫描 OCR 候选 | `APPROVED_PILOT` | Apache-2.0 package `3.7.0`/SHA-256 `c0f0a81a…d338` 已锁定；模型条款/hash 未取得 | 独立 CPU candidate image/model volume；`libgomp1` 已修复，corrected exact ECS build 在依赖下载阶段 bounded cutoff，未产出 image | 无 OCR 质量结果；corrected Tesseract baseline 为 2/2 locator、419 ms、candidate-wide RSS 141,406,208 B |
@@ -46,6 +95,8 @@
 | 本地 GPU 生图/视频栈 | 生成式展示 | `REJECTED` | ECS 无 GPU 预算 | 禁止安装 Stable Diffusion/ComfyUI/Wan 等服务 | 基础设施改变前不得重开 |
 
 ### 2.1 Approved-pilot evaluation ownership
+
+历史说明：下表旧Docling wheel `2.123.0`候选的构建失败属于HISTORICAL，已由上表生产Docling Serve路径取代，不得据此再次安装主解析器。其余候选的历史结果不因Docling上线而转成当前部署或新的测试任务。
 
 本表与上表所有 `APPROVED_PILOT` 行必须一一对应。`UNLOCKED` 是阻止生产启用的显式状态，不是待填占位；只有完成精确版本/摘要和许可证复核后才可变化。
 
@@ -170,3 +221,8 @@
 ```
 
 日志出现 `wsl: Failed to translate` 代表误用了 WSL，不代表 SSH key 失效。详细根因与禁令见 `docs/runbooks/deployment.md` §1.1。
+
+## CURRENT 2026-09-11 — Chat网页图解与产品回传
+- production9b97522f/providerf4832487：Deep-sub-cycle来源及方案已确认，两张1280×720 PNG已由Hermes/chatgpt-web入产品draft，尚缺四个场景；原会话明确USAGE_LIMIT。没有切换API或重跑全文分析。已通过产品入口单次继续五个未完成场景，POST202/run version8；五项在网页提交前失败后，provider已修正图片模式误要求6Pro文本的条件。真实产品单图8b0ca4c9成功回传并自动展示，原批量run仍failed/version9。
+- 原图有内部制作指令外露，不能精选发布。已部署prompt把内部规则与可见标签分开，支持注明非按比例的概念图；新scene0未见原图的重复禁止文案，但科学细节仍需审核；旧scene4仍保留draft。
+- 继续使用既有API、队列、版本/权限和人工审核；未来真实并发增长后再引入API生图，不扩建恢复框架。

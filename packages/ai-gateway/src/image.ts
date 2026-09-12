@@ -5,8 +5,18 @@ import { encodedImageDimensions, type OcrMediaType } from './ocr';
 
 export interface ImageRequest { prompt: string; requestId?: string }
 export interface ImageProviderResult { bytes: Buffer; contentType: OcrMediaType }
+export interface CompletedImageProviderResult extends ImageProviderResult { promptHash: string }
 export interface ImageResult extends ImageProviderResult { model: string; provider: string; promptHash: string }
-export interface ImageProvider { readonly name: string; readonly model: string; generate(request: ImageRequest): Promise<ImageProviderResult> }
+export type ImageRecoveryState = 'before_submission' | 'completed' | 'failed' | 'usage_limited' | 'uncertain' | 'submitted_without_result' | 'unsafe';
+export interface ImageProvider {
+  readonly name: string;
+  readonly model: string;
+  generate(request: ImageRequest): Promise<ImageProviderResult>;
+  canResumeBeforeSubmission?(requestId: string): Promise<boolean>;
+  canResumeFromCompletedResult?(requestId: string): Promise<boolean>;
+  resumeFromCompletedResult?(requestId: string): Promise<CompletedImageProviderResult>;
+  inspectRecoveryState?(requestId: string): Promise<ImageRecoveryState>;
+}
 export interface MiniMaxImageConfig { baseUrl: string; apiKey: string; model: string }
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64 * 1024;

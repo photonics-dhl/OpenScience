@@ -13,19 +13,19 @@ export interface EditorState {
 }
 
 export type EditorAction =
-  | { type: 'init'; core: SdfCore; version: number }
+  | { type: 'init'; core: SdfCore; version: number; dirty?: boolean }
   | { type: 'edit_field'; field: keyof Omit<SdfCore, 'schemaVersion'>; value: string }
-  | { type: 'saved'; version: number }
+  | { type: 'saved'; version: number; core?: SdfCore }
   | { type: 'reset' };
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
     case 'init':
-      return { core: { ...emptyCore(), ...action.core }, version: action.version, dirty: false, lastSavedAt: Date.now() };
+      return { core: { ...emptyCore(), ...action.core }, version: action.version, dirty: action.dirty ?? false, lastSavedAt: Date.now() };
     case 'edit_field':
       return { ...state, core: { ...state.core, [action.field]: action.value }, dirty: true };
     case 'saved':
-      return { ...state, version: action.version, dirty: false, lastSavedAt: Date.now() };
+      return { ...state, version: action.version, dirty: Boolean(action.core && Object.keys(emptyCore()).some((field) => state.core[field as keyof SdfCore] !== action.core![field as keyof SdfCore])), lastSavedAt: Date.now() };
     case 'reset':
       return { ...state, dirty: false };
     default:

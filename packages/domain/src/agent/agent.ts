@@ -1,6 +1,8 @@
 import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
 import { Prisma, type AgentSession, type AgentTask } from '@prisma/client';
+import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
+import { MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from '../ingestion/canonical-evidence-contract';
 import {
   parseDurableSourceRetrievePayload,
   SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION,
@@ -16,7 +18,8 @@ import { AgentError } from './errors';
 import type { InterestContext } from '../research-intelligence/types';
 import { buildInterestContext, validateInterestContext } from '../research-intelligence/interest-context';
 import { ResearchIdentityProfileError, validateResearchIdentityProfileState } from '../research-intelligence/identity-profile-service';
-import { ResearchIntelligenceValidationError } from '../research-intelligence/validation';
+import { ResearchIntelligenceValidationError, validateSourceLocator } from '../research-intelligence/validation';
+import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
 import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 
@@ -164,7 +167,10 @@ function evaluateAgentTaskRetryEligibility(
     ? task.payload as Record<string, unknown>
     : {};
   if (task.kind === 'sdf.extract') {
-    return { authorityValid: true, canRetry: typeof payload.manuscriptText === 'string' && !('artifactId' in payload) };
+    return { authorityValid: true, canRetry: typeof payload.manuscriptText === 'string' && Boolean(payload.manuscriptText.trim()) && !('artifactId' in payload) };
+  }
+  if (task.kind === 'presentation.generate') {
+    return { authorityValid: true, canRetry: true };
   }
   if (task.kind !== 'source.retrieve' || payload.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
     return { authorityValid: true, canRetry: false };
@@ -502,6 +508,10 @@ async function persistAgentTaskCoreInTransaction(
       return { task: existing, replayed: true };
     }
   }
+  if (input.kind === 'sdf.extract' && !artifactId
+    && (typeof input.payload.manuscriptText !== 'string' || !input.payload.manuscriptText.trim())) {
+    throw new AgentError('VALIDATION_ERROR', '当前编辑内容为空，请先填写内容或选择文献提取');
+  }
   const interestContext = await resolveInterestContext(
     tx,
     input.userId,
@@ -662,29 +672,48 @@ export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50)
   return dispatched;
 }
 
-/** Convert an interrupted running claim into the existing retryable failed state. */
+/** Convert only a crash-interrupted claim back to pending before its processing-list entry is requeued. */
 export async function prepareAgentTaskForCrashRecovery(deps: AgentDeps, taskId: string): Promise<boolean> {
   const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
   if (!task) return false;
   if (task.status === 'pending') return true;
-  if (task.status === 'failed' && task.error === '[retryable] worker interrupted') return true;
-  if (task.status !== 'running') return false;
+  if (task.status !== 'running' && !(task.status === 'failed' && task.error === '[retryable] worker interrupted')) return false;
   const reset = await deps.prisma.agentTask.updateMany({
-    where: { id: taskId, status: 'running' },
-    data: { status: 'failed', error: '[retryable] worker interrupted' },
+    where: { id: taskId, status: task.status, ...(task.status === 'failed' ? { error: '[retryable] worker interrupted' } : {}) },
+    data: { status: 'pending', error: null },
   });
   return reset.count === 1;
 }
 
+const SERIALIZABLE_RETRY_DELAYS_MS = [10, 25, 50, 100, 200] as const;
+
+function isSerializableWriteConflict(error: unknown): boolean {
+  return (error as { code?: unknown })?.code === 'P2034';
+}
+
+async function waitForSerializableRetry(attempt: number): Promise<void> {
+  const delayMs = SERIALIZABLE_RETRY_DELAYS_MS[attempt] ?? 200;
+  await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+}
+
 export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<AgentTaskView | null> {
-  const task = await deps.prisma.$transaction(async (tx) => {
-    const claimed = await tx.agentTask.updateMany({
-      where: { id: taskId, status: { in: ['pending', 'failed'] } },
-      data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } },
-    });
-    if (claimed.count !== 1) return null;
-    return tx.agentTask.findUnique({ where: { id: taskId } });
-  }, { isolationLevel: 'Serializable' });
+  let task: AgentTask | null = null;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      task = await deps.prisma.$transaction(async (tx) => {
+        const claimed = await tx.agentTask.updateMany({
+          where: { id: taskId, status: 'pending' },
+          data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } },
+        });
+        if (claimed.count !== 1) return null;
+        return tx.agentTask.findUnique({ where: { id: taskId } });
+      }, { isolationLevel: 'Serializable' });
+      break;
+    } catch (error) {
+      if (!isSerializableWriteConflict(error) || attempt >= SERIALIZABLE_RETRY_DELAYS_MS.length) throw error;
+      await waitForSerializableRetry(attempt);
+    }
+  }
   if (!task) return null;
   await syncIngestionState(deps, task.id, 'running');
   return taskToView(task);
@@ -694,14 +723,15 @@ export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<A
 export async function getAgentTask(
   deps: AgentDeps,
   input: { userId: string; taskId: string },
-): Promise<AgentTaskView> {
+): Promise<AgentTaskView & { researchObjectId: string | null }> {
   const task = await deps.prisma.agentTask.findUnique({
     where: { id: input.taskId }, include: retryAuthorityInclude(input.userId),
   });
   if (!task || task.session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   }
-  return taskToView(task, evaluateAgentTaskRetryEligibility(task, input.userId).canRetry);
+  return { ...taskToView(task, evaluateAgentTaskRetryEligibility(task, input.userId).canRetry),
+    researchObjectId: task.session.researchObjectId };
 }
 
 /** One explicit, idempotent-cost retry of a failed task. The original credit reservation is reused. */
@@ -784,6 +814,27 @@ export async function markTaskProgress(
     expectedExecutionAttempt?: number;
   },
 ): Promise<AgentTaskView> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await markTaskProgressOnce(deps, input);
+    } catch (error) {
+      if (!isSerializableWriteConflict(error) || attempt >= SERIALIZABLE_RETRY_DELAYS_MS.length) throw error;
+      await waitForSerializableRetry(attempt);
+    }
+  }
+}
+
+async function markTaskProgressOnce(
+  deps: AgentDeps,
+  input: {
+    taskId: string;
+    status: AgentTaskStatus;
+    progress?: number;
+    result?: Record<string, unknown>;
+    error?: string | null;
+    expectedExecutionAttempt?: number;
+  },
+): Promise<AgentTaskView> {
   const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
   if (!task) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   const from = task.status as AgentTaskStatus;
@@ -819,10 +870,22 @@ export async function markTaskProgress(
   }
 
   const updated = await deps.prisma.$transaction(async (tx) => {
+    const current = await tx.agentTask.findUnique({ where: { id: input.taskId } });
+    if (!current) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+    const currentStatus = current.status as AgentTaskStatus;
+    if (input.expectedExecutionAttempt !== undefined
+      && current.executionAttempt !== input.expectedExecutionAttempt) {
+      throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
+    }
+    if (currentStatus === 'succeeded') return current;
+    if (currentStatus === input.status) return current;
+    if (!(ALLOWED[currentStatus] ?? []).includes(input.status)) {
+      throw new AgentError('ILLEGAL_TRANSITION', `任务状态 ${currentStatus} → ${input.status} 非法`);
+    }
     const changed = await tx.agentTask.updateMany({
       where: {
-        id: task.id,
-        status: from,
+        id: current.id,
+        status: currentStatus,
         ...(input.expectedExecutionAttempt === undefined
           ? {}
           : { executionAttempt: input.expectedExecutionAttempt }),
@@ -835,7 +898,7 @@ export async function markTaskProgress(
       },
     });
     if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
-    const row = await tx.agentTask.findUnique({ where: { id: task.id } });
+    const row = await tx.agentTask.findUnique({ where: { id: current.id } });
     if (!row) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
     return row;
   });
@@ -862,19 +925,135 @@ async function syncIngestionState(
   });
 }
 
+type JsonRecord = Record<string, unknown>;
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(value: JsonRecord, keys: readonly string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && actual.every((key) => keys.includes(key));
+}
+
+const EVIDENCE_ORIGINS = ['model_quote', 'explicit_field_label'] as const;
+const EVIDENCE_MATCHING = ['exact', 'whitespace'] as const;
+const EVIDENCE_UNLOCATED_STATUSES = ['ambiguous', 'cross_block', 'missing'] as const;
+const EVIDENCE_UNLOCATED_REASONS = [
+  'empty-quote', 'multiple-matches', 'match-spans-blocks', 'no-match', 'locator-roundtrip-failed',
+] as const;
+
+function hasValidEvidenceLocation(value: unknown, reference: DocumentSourceMapReference): boolean {
+  if (!isJsonRecord(value) || !EVIDENCE_ORIGINS.includes(value.origin as typeof EVIDENCE_ORIGINS[number])) return false;
+  if (value.status === 'located') {
+    if (!hasExactKeys(value, ['status', 'sourceLocator', 'origin', 'matching'])
+      || !EVIDENCE_MATCHING.includes(value.matching as typeof EVIDENCE_MATCHING[number])) return false;
+    try {
+      const locator = validateSourceLocator(value.sourceLocator);
+      return locator.artifactId === reference.artifactId && locator.contentHash === reference.contentHash;
+    } catch {
+      return false;
+    }
+  }
+  if (!EVIDENCE_UNLOCATED_STATUSES.includes(value.status as typeof EVIDENCE_UNLOCATED_STATUSES[number])
+    || !EVIDENCE_UNLOCATED_REASONS.includes(value.reason as typeof EVIDENCE_UNLOCATED_REASONS[number])) return false;
+  const expectedKeys = value.matching === undefined
+    ? ['status', 'origin', 'reason']
+    : ['status', 'origin', 'matching', 'reason'];
+  return hasExactKeys(value, expectedKeys)
+    && (value.matching === undefined || EVIDENCE_MATCHING.includes(value.matching as typeof EVIDENCE_MATCHING[number]));
+}
+
+function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMapReference): boolean {
+  if (!isJsonRecord(result.evidence) || !isJsonRecord(result.evidenceLocation)
+    || !hasExactKeys(result.evidence, SDF_CORE_FIELDS)
+    || !hasExactKeys(result.evidenceLocation, SDF_CORE_FIELDS)) return false;
+  const evidenceByField = result.evidence;
+  const locationsByField = result.evidenceLocation;
+  const baseValid = SDF_CORE_FIELDS.every((field) => {
+    const evidence = evidenceByField[field];
+    return isJsonRecord(evidence)
+      && hasExactKeys(evidence, ['quote', 'locator'])
+      && typeof evidence.quote === 'string'
+      && typeof evidence.locator === 'string'
+      && hasValidEvidenceLocation(locationsByField[field], reference);
+  });
+  if (!baseValid || result.evidenceSegments === undefined) return baseValid;
+  if (!isJsonRecord(result.evidenceSegments) || !hasExactKeys(result.evidenceSegments, SDF_CORE_FIELDS)
+    || !isJsonRecord(result.core) || !Array.isArray(result.needsMoreInformation)) return false;
+  const segmentBundle = result.evidenceSegments;
+  const core = result.core;
+  const missingFields = new Set(result.needsMoreInformation);
+  return SDF_CORE_FIELDS.every((field) => {
+    const segments = segmentBundle[field];
+    if (!Array.isArray(segments) || segments.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) return false;
+    let total = 0;
+    let priorPage = 0;
+    let priorLocator: ReturnType<typeof validateSourceLocator> | undefined;
+    let priorRangeEnd = 0;
+    const closedBlockIds = new Set<string>();
+    for (const [index, segment] of segments.entries()) {
+      if (!isJsonRecord(segment) || !hasExactKeys(segment, ['quote', 'sourceLocator']) || typeof segment.quote !== 'string') return false;
+      let locator;
+      try { locator = validateSourceLocator(segment.sourceLocator); } catch { return false; }
+      const sameBlock = locator.blockId === priorLocator?.blockId;
+      const invalidSameBlockRange = sameBlock && priorLocator !== undefined && locator.charRange !== undefined && (
+        locator.page !== priorLocator.page
+        || !isDeepStrictEqual(locator.boundingBox, priorLocator.boundingBox)
+        || locator.charRange.start < priorRangeEnd
+      );
+      if (locator.artifactId !== reference.artifactId || locator.contentHash !== reference.contentHash
+        || !locator.blockId || !locator.charRange || locator.charRange.end - locator.charRange.start !== segment.quote.length
+        || (locator.page ?? 0) < priorPage || invalidSameBlockRange
+        || (!sameBlock && closedBlockIds.has(locator.blockId))) return false;
+      if (!sameBlock && priorLocator?.blockId) closedBlockIds.add(priorLocator.blockId);
+      priorLocator = locator;
+      priorRangeEnd = locator.charRange.end;
+      priorPage = locator.page ?? priorPage;
+      total += segment.quote.length + (index > 0 ? 1 : 0);
+    }
+    const evidence = evidenceByField[field] as Record<string, unknown>;
+    const location = locationsByField[field] as Record<string, unknown>;
+    const missing = missingFields.has(field);
+    return total <= MAX_CANONICAL_EVIDENCE_CHARS && evidence.quote === segments.map((segment) => (segment as Record<string, unknown>).quote).join('\n')
+      && missing === (segments.length === 0) && missing === !(typeof core[field] === 'string' && core[field].trim())
+      && (segments.length !== 0 || location.status === 'missing')
+      && (segments.length !== 1 || (location.status === 'located'
+        && isJsonRecord(location.sourceLocator)
+        && isDeepStrictEqual(location.sourceLocator, (segments[0] as JsonRecord).sourceLocator)))
+      && (segments.length <= 1 || location.status === 'cross_block');
+  });
+}
+
+/** Builds the public task result while keeping the private SourceMap storage reference server-side. */
+export function projectAgentTaskResult(rawResult: unknown, kind: string): Record<string, unknown> | null {
+  if (!isJsonRecord(rawResult)) return null;
+  const sourceMapRef = rawResult.sourceMapRef;
+  const publicResult = { ...rawResult };
+  delete publicResult.sourceMapRef;
+  delete publicResult.sourceMapAvailable;
+  delete publicResult.sourceMapIdentity;
+  if (sourceMapRef === undefined) return publicResult;
+  try {
+    const reference = parseDocumentSourceMapReference(sourceMapRef);
+    return {
+      ...publicResult,
+      sourceMapAvailable: true,
+      ...(kind === 'sdf.extract' && hasValidEvidenceBundle(publicResult, reference)
+        ? { sourceMapIdentity: { artifactId: reference.artifactId, contentHash: reference.contentHash } }
+        : {}),
+    };
+  } catch {
+    return publicResult;
+  }
+}
+
 function taskToView(task: {
   id: string; sessionId: string; kind: string; status: AgentTaskStatus;
   progress: number; retryCount: number; executionAttempt: number;
   result: unknown; error: string | null; createdAt: Date; updatedAt: Date;
 }, canRetry = false): AgentTaskView {
-  let result: Record<string, unknown> | null = null;
-  if (task.result && typeof task.result === 'object' && !Array.isArray(task.result)) {
-    const { sourceMapRef, ...publicResult } = task.result as Record<string, unknown>;
-    result = {
-      ...publicResult,
-      ...(sourceMapRef === undefined ? {} : { sourceMapAvailable: true }),
-    };
-  }
+  const result = projectAgentTaskResult(task.result, task.kind);
   return {
     id: task.id, sessionId: task.sessionId, kind: task.kind, status: task.status,
     progress: task.progress, retryCount: task.retryCount, executionAttempt: task.executionAttempt,

@@ -6,6 +6,7 @@ export interface PresentationClaim {
   conditions: string[];
   limitations: string[];
   extractionStatus: string;
+  sourcePassages?: Array<{ evidenceId: string; text: string; relation: string }>;
 }
 
 function xml(value: string): string {

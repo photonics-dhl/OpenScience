@@ -154,6 +154,14 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
+  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration,
+  requireHermesPresentationTaskAuthority,
+  HERMES_AUTHORITY_REARM_MARKER,
+  HermesResearchRunError,
+  type HermesResearchRunDeps, type HermesSourceReviewDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
+  type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,
+} from './agent/research-run';
+export {
   claimAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
   submitAgentTask, persistAgentTaskInTransaction, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
@@ -212,6 +220,7 @@ export { ClaimEvidenceError, type ClaimEvidenceErrorCode } from './research-inte
 export { evaluateEvidencePublicationBlocks } from './research-intelligence/publication-evidence';
 export {
   createClaim,
+  createClaimEvidenceBatch,
   createEvidence,
   deleteClaim,
   deleteEvidence,
@@ -227,9 +236,28 @@ export {
   type EvidenceRightsInput,
   type UpdateClaimInput,
   type UpdateEvidenceInput,
+  type ReviewedIngestionClaimEvidenceBatchInput,
 } from './research-intelligence/claim-evidence-service';
-export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
-export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';
+export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, reanalyzeConfirmedIngestion, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
+export { MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from './ingestion/canonical-evidence-contract';
+export {
+  INGESTION_BRIDGE_FIELDS,
+  confirmIngestionClaimEvidenceBridge,
+  listIngestionClaimEvidenceCandidates,
+  previewIngestionClaimEvidenceBridge,
+  type IngestionBridgeField,
+  type IngestionClaimEvidencePreview,
+  type IngestionClaimEvidenceSuggestion,
+  type IngestionClaimSelection,
+} from './ingestion/claim-evidence-bridge';
+export {
+  parseWorkspaceGuidePayload,
+  type WorkspaceGuidePayload,
+  type WorkspaceWritingCitation,
+  type WorkspaceWritingDraft,
+  type WorkspaceWritingDraftInput,
+  type WorkspaceWritingKind,
+} from './agent/workspace-guide-contract';
 export {
   RESEARCH_IDENTITIES,
   CLAIM_KINDS,
@@ -275,6 +303,7 @@ export {
   PresentationAssetError,
   type PresentationGenerationKind,
   type PresentationGenerationPayload,
+  type HermesPresentationAuthority,
   type PresentationAssetView,
 } from './assets/presentation-asset';
 export {
@@ -383,8 +412,12 @@ export {
 
 export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from './assets/reviewed-media-import';
 
-export { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
+export { STORYBOARD_IMAGE_VISUAL_ACTION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
+export { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
+export { parseSceneAnimation, requireAnimationSourceSupport, type SceneAnimation, type AnimationObject, type AnimationAction } from './assets/animation';
 
 export { requireStoryboardBase } from './assets/presentation-asset';
 
 export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, type SceneImageRequest } from './assets/scene-image';
+
+export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';

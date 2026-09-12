@@ -1,5 +1,6 @@
 'use client';
 import * as React from 'react';
+import Link from 'next/link';
 import { getPublicEvidenceSource, getPublicResearchVersion, getReadingPreference, type PublicEvidence, type PublicEvidenceSource } from '../../lib/api';
 import { writeLocalEvidenceDefaultCollapsed } from '../../lib/evidence-reading-preference';
 import { LEGAL_DISCLAIMER_DEFAULT, LICENSE_NAMES } from '../../lib/constants';
@@ -11,20 +12,26 @@ import { ClaimNarrative } from './ClaimNarrative';
 import { EvidenceRail } from './EvidenceRail';
 import { EvidenceSheet } from './EvidenceSheet';
 import { PresentationAssetGallery } from './PresentationAssetGallery';
+import { ScientificText } from '@/components/content/ScientificText';
+import styles from './PublicReadingProduct.module.css';
 
 type PublicResearch = Awaited<ReturnType<typeof getPublicResearchVersion>>['research'];
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const t = useTranslations('public');
-  const [copied, setCopied] = React.useState(false);
+  const [status, setStatus] = React.useState<'idle' | 'copied' | 'failed'>('idle');
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus('copied');
+    } catch {
+      setStatus('failed');
+    }
+    setTimeout(() => setStatus('idle'), 2000);
   };
   return (
-    <button onClick={handleCopy} className="copy-btn" title={label ?? t('copy')}>
-      {copied ? t('copied') : t('copy')}
+    <button type="button" onClick={handleCopy} className="copy-btn" title={label ?? t('copy')} aria-live="polite">
+      {status === 'copied' ? t('copied') : status === 'failed' ? t('copyFailed') : label ?? t('copy')}
     </button>
   );
 }
@@ -186,6 +193,8 @@ const PUBLIC_SDF_NODES = [
 export function PublicReadingSurface({ research, activeTab = 'overview', onTabChange = () => undefined }: { research: PublicResearch; activeTab?: TabId; onTabChange?: (tab: TabId) => void }) {
   const t = useTranslations('public');
   const version = research.version;
+  const directPresentation = research.presentationAssets.filter((asset) => asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'video');
+  const supplementaryMedia = research.presentationAssets.filter((asset) => !directPresentation.some((presentation) => presentation.id === asset.id));
   const [selectedEvidence, setSelectedEvidence] = React.useState<PublicEvidence | null>(null);
   const [evidenceSource, setEvidenceSource] = React.useState<PublicEvidenceSource | null>(null);
   const [sourceLoading, setSourceLoading] = React.useState(false);
@@ -202,6 +211,14 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
       .then((preference) => writeLocalEvidenceDefaultCollapsed(preference.evidenceDefaultCollapsed))
       .catch(() => undefined);
   }, []);
+
+  React.useEffect(() => {
+    setSelectedEvidence(null);
+    setEvidenceSource(null);
+    setSourceError(false);
+    setSourceLoading(false);
+    setSheetOpen(false);
+  }, [research.publicId, version.versionNo]);
 
   React.useEffect(() => {
     if (!selectedEvidence) return;
@@ -225,78 +242,83 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
   };
 
   return (
-    <div className="pub-reading-surface" data-public-reading-surface="true">
+    <div className={`pub-reading-surface research-product ${styles.surface}`} data-public-reading-surface="true" data-has-evidence={Boolean(selectedEvidence)}>
       <div className="pub-reading-layout">
         <article className="pub-reading-column" data-public-reading-column="true">
-          <header className="pub-reading-identity" data-public-identity="true">
+          <header className={`pub-reading-identity ${styles.identity}`} data-public-identity="true">
             <p className="pub-kicker">{t('researchObject')}</p>
             <h1>{research.title}</h1>
-            <p className="pub-version-id">{research.publicId} · {version.publicVersionId}</p>
-            <div className="pub-author-line">
+            <div className={styles.identityMeta}>
+              <p className={styles.sourceLine}>{version.publicVersionId}<span>{publishedAt}</span></p>
+              <div className={styles.readingActions}><CopyButton text={research.citation} label={t('copyCitation')} /></div>
+            </div>
+            {research.authors.length > 0 && <div className={`pub-author-line ${styles.authorLine}`}>
               {research.authors.map((author) => <span key={`${author.displayName}-${author.sortOrder}`} data-corresponding-author={author.isCorresponding ? 'true' : undefined}>
-                {author.displayName}{author.affiliation ? `, ${author.affiliation}` : ''} · {author.identityStatus}{author.isCorresponding ? ` · ${t('correspondingAuthor')}` : ''}
+                {author.displayName}{author.affiliation ? `, ${author.affiliation}` : ''}{author.isCorresponding ? ` · ${t('correspondingAuthor')}` : ''}
               </span>)}
-            </div>
-            <div className="pub-license-line" data-public-license="true">
-              <span>{t('license')}</span>
-              <span>{Object.entries(research.licenses).map(([type, id]) => `${t(`licenseType.${type}`)}: ${LICENSE_NAMES[id] || id}`).join(' · ')}</span>
-            </div>
+            </div>}
           </header>
 
-          <section className="pub-reading-insight" data-reading-role="body" data-sdf-node="insight" data-sdf-state={version.core.insight ? 'confirmed' : 'empty'}>
-            <p className="pub-kicker">{t('insight')}</p>
-            <p>{version.core.insight || t('none')}</p>
+          <section className={`pub-reading-summary ${styles.contribution}`} aria-labelledby="public-summary-heading">
+            <ScientificText as="p" id="public-summary-heading" data-reading-role="body">{version.core.insight || version.core.problem || t('none')}</ScientificText>
           </section>
 
-          <ClaimNarrative claims={research.claims} evidence={research.evidence} onInspect={inspectEvidence} />
+          <PresentationAssetGallery assets={directPresentation} leading />
 
-          <section className="pub-reading-abstract" aria-labelledby="public-abstract-heading">
-            <h2 id="public-abstract-heading">{t('abstract')}</h2>
-            <p data-reading-role="body">{version.core.problem || t('none')}</p>
-          </section>
-
-          <section className="pub-reading-sdf" aria-labelledby="public-sdf-heading">
-            <h2 id="public-sdf-heading">{t('coreFields')}</h2>
-            {PUBLIC_SDF_NODES.filter(([key]) => key !== 'insight').map(([key, label]) => {
+          <section className={`pub-reading-sdf ${styles.fields}`} aria-labelledby="public-sdf-heading">
+            <div className={styles.sectionTitle}><h2 id="public-sdf-heading">{t('coreFields')}</h2></div>
+            {PUBLIC_SDF_NODES.map(([key, label]) => {
               const value = version.core[key];
-              return <section key={key} data-sdf-node={key} data-sdf-state={value ? 'confirmed' : 'empty'}>
-                <h3>{t(label)}</h3><p data-reading-role="reading">{value || t('none')}</p>
+              return <section key={key} className={key === 'limitations' ? styles.limitation : undefined} data-sdf-node={key} data-sdf-state={value ? 'confirmed' : 'empty'}>
+                <h3>{t(label)}</h3><ScientificText as="p" data-reading-role="reading">{value || t('none')}</ScientificText>
               </section>;
             })}
           </section>
 
-          <section className="pub-reading-citation" data-public-citation="true" data-print-landmark="citation">
-            <h2>{t('citation')}</h2>
-            <p>{research.citation}</p>
+          <PresentationAssetGallery assets={supplementaryMedia} />
+          <details className={styles.resources}>
+            <summary>{t('readingResources')}</summary>
+            <div className={styles.resourcesBody}>
+          <details className="pub-reading-details">
+            <summary>{t('claimReader.title')}</summary>
+            <ClaimNarrative claims={research.claims} evidence={research.evidence} onInspect={inspectEvidence} />
+          </details>
+
+          <details className="pub-reading-details pub-reading-license" data-public-license="true">
+            <summary>{t('license')}</summary>
+            <div className="pub-license-line">
+              {Object.entries(research.licenses).map(([type, id]) => <p key={type}><span>{t(`licenseType.${type}`)}</span>{LICENSE_NAMES[id] || id}</p>)}
+            </div>
+          </details>
+          <details className="pub-reading-details pub-reading-citation" data-public-citation="true" data-print-landmark="citation">
+            <summary>{t('citation')}</summary>
+            <CitationRail publicId={research.publicId} versionId={version.publicVersionId} objectCitation={objectCitation} versionCitation={research.citation} />
+            {research.recordUrl && <p className="pub-record-links"><a href={research.recordUrl}>Research API</a> · <a href="/api/research-record/openapi">OpenAPI</a></p>}
             <ProvenanceCaption label={t('versionId')} value={version.publicVersionId} landmark="provenance" />
             <ProvenanceCaption label={t('publishedAt')} value={publishedAt} landmark="provenance" />
             <ProvenanceCaption label={t('versionHash')} value={hashShort} landmark="provenance" />
-          </section>
-          {research.aiReview && <section className="pub-reading-review" data-ai-review={research.aiReview.status}>
-            <h2>{t('aiReview')}</h2><p>{t('status')}: {research.aiReview.status === 'passed' ? t('passed') : research.aiReview.status}</p>
-          </section>}
-          {research.history.length > 0 && <section className="pub-reading-history" data-public-version-history="true">
-            <h2>{t('history.title')}</h2>
+          </details>
+          {research.aiReview && <details className="pub-reading-details pub-reading-review" data-ai-review={research.aiReview.status}>
+            <summary>{t('aiReview')}</summary><p>{t('status')}: {research.aiReview.status === 'passed' ? t('passed') : research.aiReview.status}</p>
+          </details>}
+          {research.history.length > 0 && <details className="pub-reading-history pub-reading-details" data-public-version-history="true">
+            <summary>{t('history.title')}</summary>
             <ol>{research.history.map((item) => <li key={item.publicVersionId}>
-              <a href={item.url}>{item.publicVersionId}</a>
+              <Link href={item.url}>{item.publicVersionId}</Link>
               <span>{item.publishedAt.slice(0, 10)} · {item.contentSha256.slice(0, 8)}…{item.contentSha256.slice(-8)}</span>
             </li>)}</ol>
-          </section>}
-          {research.artifactPaths.length > 0 && <section className="pub-reading-artifacts" data-print-landmark="provenance">
-            <h2>{t('artifactProvenance')}</h2>
+          </details>}
+          {research.artifactPaths.length > 0 && <details className="pub-reading-artifacts pub-reading-details" data-print-landmark="provenance">
+            <summary>{t('artifactProvenance')}</summary>
             {research.artifactPaths.map((artifact) => <ProvenanceCaption key={`${artifact.logicalPath}-${artifact.blobSha256}`} label={artifact.logicalPath} value={`${artifact.blobSha256.slice(0, 8)}…${artifact.blobSha256.slice(-8)}`} landmark="provenance" />)}
-          </section>}
-          <PresentationAssetGallery assets={research.presentationAssets} />
-          <footer className="pub-disclaimer" data-print-landmark="provenance"><h3>{t('legalDisclaimer')}</h3><p>{disclaimer}</p></footer>
+          </details>}
+          <details className="pub-disclaimer" data-print-landmark="provenance"><summary>{t('legalDisclaimer')}</summary><p>{disclaimer}</p></details>
+            </div>
+          </details>
         </article>
-        <div className="pub-reading-sidecar">
-          <EvidenceRail evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} />
-          <CitationRail publicId={research.publicId} versionId={version.publicVersionId} objectCitation={objectCitation} versionCitation={research.citation} />
-        </div>
+        {selectedEvidence && <div className="pub-reading-sidecar"><EvidenceRail evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} /></div>}
       </div>
       <EvidenceSheet open={sheetOpen} onOpenChange={setSheetOpen} onReturnFocus={() => lastEvidenceTrigger.current?.focus()} evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} />
-      <div data-public-deep-navigation="true" className="pub-reading-tabs"><TabNavigation activeTab={activeTab} onTabChange={onTabChange} /></div>
-      {activeTab !== 'overview' && <ComingSoonTab tabName={t(`tab.${activeTab}`)} />}
     </div>
   );
 }

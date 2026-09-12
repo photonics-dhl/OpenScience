@@ -12,6 +12,10 @@ const roParams = z.object({ publicId: z.string() });
 const versionParams = z.object({ publicId: z.string(), versionNo: z.coerce.number().int().positive() });
 const evidenceSourceParams = versionParams.extend({ evidenceId: z.string().uuid() });
 const presentationAssetParams = versionParams.extend({ assetId: z.string().uuid() });
+function internalPresentationPlan(asset: { generator: string; provenance: unknown }): boolean {
+  const provenance = asset.provenance && typeof asset.provenance === 'object' && !Array.isArray(asset.provenance) ? asset.provenance as Record<string, unknown> : null;
+  return provenance?.subtype === 'sourced_storyboard' || asset.generator === 'OpenScience Hermes storyboard planner';
+}
 const publicLocatorSchema = z.object({
   blockId: z.string().min(1).optional(),
   page: z.number().int().positive().optional(),
@@ -154,6 +158,7 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
         select: {
           id: true, kind: true, contentHash: true, label: true,
           generator: true, generatorVersion: true,
+          provenance: true,
           sourceClaims: { select: { claimId: true }, orderBy: { claimId: 'asc' } },
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -183,6 +188,7 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
     return reply.send({
       research: {
         publicId,
+        recordUrl: `/api/research-objects/${ro.id}/versions/${version.id}/record`,
         title: ro.title,
         url: `/research/${publicId}/v/${versionNo}`,
         visibility: ro.visibility,
@@ -228,7 +234,7 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
             contentHash: item.contentHash,
           },
         })),
-        presentationAssets: presentationAssets.map((asset) => ({
+        presentationAssets: presentationAssets.filter((asset) => !internalPresentationPlan(asset)).map((asset) => ({
           id: asset.id,
           kind: asset.kind,
           label: asset.label,
@@ -272,7 +278,7 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
     const asset = await deps.prisma.presentationAsset.findFirst({ where: {
       id: assetId, researchObjectId: ro.id, versionId: version.id, status: 'approved',
     } });
-    if (!asset) throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
+    if (!asset || internalPresentationPlan(asset)) throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
 
     return sendPresentationAssetContent(deps.storage, asset, reply, 'public', req.headers);
   });

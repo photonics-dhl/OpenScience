@@ -12,6 +12,8 @@ CONFIRM=0
 SKIP_BUILD=0
 SKIP_MIGRATE=0
 REQUIRE_PARSER_ACCEPTANCE=0
+NO_TESTS=0
+REUSE_UNCHANGED_CAPABILITY_IMAGES=0
 ROLLBACK_REF=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -19,13 +21,19 @@ while [ $# -gt 0 ]; do
     --skip-build) SKIP_BUILD=1; shift ;;
     --skip-migrate) SKIP_MIGRATE=1; shift ;;
     --require-parser-acceptance) REQUIRE_PARSER_ACCEPTANCE=1; shift ;;
+    --no-tests) NO_TESTS=1; shift ;;
+    --reuse-unchanged-capability-images) REUSE_UNCHANGED_CAPABILITY_IMAGES=1; shift ;;
     --rollback-ref) [ $# -ge 2 ] || { echo "错误：--rollback-ref 缺少值" >&2; exit 64; }; ROLLBACK_REF="$2"; shift 2 ;;
     -*) echo "未知参数: $1" >&2; exit 64 ;;
     *) RELEASE_REF="$1"; shift ;;
   esac
 done
-[ -n "${RELEASE_REF:-}" ] || { echo "用法: deploy.sh [--confirm] [--require-parser-acceptance] --rollback-ref <active-release-ref> <release-ref>" >&2; exit 64; }
+[ -n "${RELEASE_REF:-}" ] || { echo "用法: deploy.sh [--confirm] [--require-parser-acceptance|--no-tests] [--reuse-unchanged-capability-images] --rollback-ref <active-release-ref> <release-ref>" >&2; exit 64; }
 [ "$SKIP_BUILD" -eq 0 ] || { echo "错误：精确 Git tree 部署必须重新 build，禁止 --skip-build" >&2; exit 64; }
+[ "$NO_TESTS" -eq 0 ] || [ "$REQUIRE_PARSER_ACCEPTANCE" -eq 0 ] || {
+  echo "错误：--no-tests 与 --require-parser-acceptance 不能同时使用" >&2
+  exit 64
+}
 
 RELEASE_SHA="$(node "$PROJECT_ROOT/scripts/verify-release-source.mjs" --root "$PROJECT_ROOT" --ref "$RELEASE_REF")" \
   || { echo "错误：部署源不是 release-ref 的干净精确 tree" >&2; exit 66; }
@@ -65,11 +73,20 @@ if [ "$CONFIRM" -ne 1 ]; then
   plan "随后由单一前台 SSH runner 自持 FD9 flock 完成 build/migrate/switch/health/publish/rollback"
   plan "事务在首次生产 mutation 前发布 durable journal；残留 journal 阻断下一次部署"
   [ -n "$ROLLBACK_REF" ] || plan "执行 --confirm 前必须补 --rollback-ref <已验证 Git ref>"
-  [ "$REQUIRE_PARSER_ACCEPTANCE" -eq 1 ] || plan "执行 --confirm 前必须补 --require-parser-acceptance"
+  if [ "$NO_TESTS" -eq 1 ]; then
+    plan "--no-tests：跳过 Parser acceptance、ScanSci capability canary 与 embedding runtime probe；发布结果保持验收未验证"
+  else
+    [ "$REQUIRE_PARSER_ACCEPTANCE" -eq 1 ] || plan "执行 --confirm 前必须补 --require-parser-acceptance"
+  fi
+  if [ "$REUSE_UNCHANGED_CAPABILITY_IMAGES" -eq 1 ]; then
+    plan "精确比较当前与 rollback release 的能力构建输入；仅复用未变化的 ScanSci/BGE 镜像"
+  fi
   exit 0
 fi
 [ -n "$ROLLBACK_SHA" ] || { echo "错误：--confirm 必须提供 --rollback-ref" >&2; exit 64; }
-[ "$REQUIRE_PARSER_ACCEPTANCE" -eq 1 ] || { echo "错误：--confirm 必须提供 --require-parser-acceptance" >&2; exit 64; }
+if [ "$NO_TESTS" -eq 0 ]; then
+  [ "$REQUIRE_PARSER_ACCEPTANCE" -eq 1 ] || { echo "错误：--confirm 必须提供 --require-parser-acceptance 或显式 --no-tests" >&2; exit 64; }
+fi
 
 log "[1] 物化 immutable Git candidate（不改变 active production）..."
 XGS_SOURCE_ROOT="$PROJECT_ROOT" XGS_CONFIG_ROOT="$CONFIG_ROOT" XGS_RELEASE_SHA="$RELEASE_SHA" node "$PROJECT_ROOT/scripts/cloud-sync.mjs"
@@ -80,5 +97,5 @@ git -C "$PROJECT_ROOT" show "$RELEASE_SHA:infra/scripts/production-deploy-transa
   || { echo "错误：候选 transaction runner 缺少 nginx 收敛合同" >&2; exit 66; }
 REMOTE_TRANSACTION_RUNNER="/opt/openscience-releases/$RELEASE_SHA/infra/scripts/production-deploy-transaction.sh"
 ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" \
-  "exec /bin/bash '$REMOTE_TRANSACTION_RUNNER' '$RELEASE_SHA' '$ROLLBACK_SHA' '$SKIP_MIGRATE' </dev/null" \
+  "exec /bin/bash '$REMOTE_TRANSACTION_RUNNER' '$RELEASE_SHA' '$ROLLBACK_SHA' '$SKIP_MIGRATE' '$NO_TESTS' '$REUSE_UNCHANGED_CAPABILITY_IMAGES' </dev/null" \
   </dev/null

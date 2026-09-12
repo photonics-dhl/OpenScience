@@ -13,7 +13,7 @@
 
 .desk .main {
   max-width: 1440px;
-  padding: 32px 40px 64px;
+  padding: 28px 40px 56px;
 }
 
 .utilities {
@@ -26,9 +26,9 @@
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(380px, 400px);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 380px);
   align-items: start;
-  gap: 24px;
+  gap: 18px;
   margin-inline: auto;
 }
 
@@ -36,7 +36,7 @@
 
 .heading {
   grid-column: 1 / -1;
-  padding: 0 0 8px;
+  padding: 2px 0 0;
 }
 
 .eyebrow {
@@ -45,7 +45,7 @@
 }
 
 .desk .title {
-  margin-top: 8px;
+  margin-top: 4px;
   color: #20252b;
   font-size: clamp(26px, 2.6vw, 34px);
   font-weight: 600;
@@ -55,10 +55,10 @@
 
 .welcome {
   max-width: 65ch;
-  margin-top: 8px;
+  margin-top: 4px;
   color: #626c76;
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.55;
 }
 
 .continueResearch,
@@ -68,6 +68,8 @@
 .taskRail {
   grid-column: 2;
   grid-row: 2 / span 3;
+  display: grid;
+  gap: 12px;
 }
 
 .library { grid-column: 1 / -1; }
@@ -76,8 +78,9 @@
 .startResearch > section,
 .literature > section,
 .library > section,
-.taskRail > aside {
-  padding: 24px;
+.taskRail > aside,
+.taskRail > section {
+  padding: 20px;
   border: 1px solid #dce1e5;
   border-radius: 12px;
   background: #fff;
@@ -86,6 +89,28 @@
 
 .continueResearch > section {
   border-top: 3px solid #125d66;
+  min-height: 0;
+}
+
+.taskRail > :global(.hermes-conversation-card) {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 24px 20px;
+  min-height: 180px;
+  border-color: #b9d3d3;
+  background: linear-gradient(145deg, #ffffff 0%, #f3f9f8 100%);
+}
+
+.taskRail > :global(.hermes-conversation-card)::after {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: #125d66;
+  content: '';
 }
 
 .desk .layout h2 {
@@ -124,6 +149,12 @@
 
 .layout :is(a, button, input, select) { min-height: 44px; }
 
+.layout :is(a, button) {
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease, transform 100ms ease-out;
+}
+
+.layout :is(a, button):active { transform: scale(0.985); }
+
 .layout :is(a, button, input, select):focus-visible {
   outline: 2px solid #125d66;
   outline-offset: 3px;
@@ -141,10 +172,16 @@
 .library li > a:hover,
 .taskRail li > a:hover { background: #f7f8fa; }
 
+.taskRail :global(.hermes-conversation-card) > img { display: block; width: 104px; height: 120px; object-fit: contain; }
+.taskRail :global(.hermes-conversation-card) h2 { margin: 0; font-size: 23px; }
+.taskRail :global(.hermes-conversation-card) p { margin: 6px 0 12px; color: #596875; font-size: 14px; line-height: 1.65; }
+.taskRail :global(.hermes-conversation-card) button { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: #126a70; font: 650 14px/1.5 var(--font-ui), sans-serif; }
+
 @media (max-width: 1023px) {
-  .desk .main { padding: 24px 20px 48px; }
-  .layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .desk .main { padding: 20px 20px 40px; }
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .taskRail { grid-column: 1; grid-row: auto; }
+  .continueResearch > section { min-height: 0; }
 }
 
 @media (max-width: 479px) {
@@ -154,8 +191,10 @@
   .literature > section,
   .library > section,
   .taskRail > aside { padding: 20px 16px; }
+  .taskRail > :global(.hermes-conversation-card) { grid-template-columns: 80px minmax(0, 1fr); padding: 18px 16px; }
+  .taskRail :global(.hermes-conversation-card) > img { width: 80px; height: 100px; }
   .utilities { flex-wrap: wrap; }
-  .taskRail li > a { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .taskRail li > a { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
 
 .desk .layout a { color:#125d66; text-decoration:none; }
@@ -171,3 +210,10 @@
 .literature > details[open] > summary { border-bottom: 1px solid #dce1e5; }
 .desk .layout p { text-wrap: pretty; }
 @media(max-width:479px) { .literature > details { padding-inline: 16px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .layout :is(a, button) { transition: none; }
+  .layout :is(a, button):active { transform: none; }
+}
+.desk .heading p { margin-block: 0 10px; }
+.desk .heading h1 { margin-block: 0 10px; }

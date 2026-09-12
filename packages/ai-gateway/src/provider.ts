@@ -19,6 +19,20 @@ export interface CompleteOptions {
   messages: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
+  /** Scientific tasks opt in; short calls retain provider defaults. */
+  thinking?: 'adaptive' | 'disabled';
+  topP?: number;
+  timeoutMs?: number;
+}
+
+export type TextGenerationOptions = Omit<CompleteOptions, 'model' | 'messages'>;
+
+function textTimeout(options: CompleteOptions): number {
+  const timeout = options.timeoutMs ?? 60_000;
+  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 300_000) {
+    throw new TextProviderError('provider_error', 'Invalid text timeout');
+  }
+  return timeout;
 }
 
 export interface Usage {
@@ -30,6 +44,41 @@ export interface ProviderResult {
   text: string;
   usage: Usage;
   model: string;
+  /** Provider-controlled stop reason normalized before it reaches logs. */
+  finishReason?: 'stop' | 'length' | 'other' | 'unknown';
+}
+
+export type TextProviderErrorCode =
+  | 'provider_timeout'
+  | 'provider_http'
+  | 'provider_response_json'
+  | 'provider_response_shape'
+  | 'provider_empty'
+  | 'provider_error';
+
+/** Safe transport/response category only; never contains response bodies or credentials. */
+export interface TextProviderFailureDetails {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  finishReason: ProviderResult['finishReason'];
+  blockCounts?: { text: number; thinking: number; other: number };
+}
+
+export class TextProviderError extends Error {
+  constructor(readonly code: TextProviderErrorCode, message: string, readonly httpStatus?: number, readonly details?: TextProviderFailureDetails) {
+    super(message);
+    this.name = new.target.name;
+  }
+}
+
+function reportedTokens(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function finishReason(value: unknown): ProviderResult['finishReason'] {
+  if (value === 'stop' || value === 'end_turn') return 'stop';
+  if (value === 'length' || value === 'max_tokens') return 'length';
+  return typeof value === 'string' && value ? 'other' : 'unknown';
 }
 
 export interface ProviderConfig {
@@ -62,7 +111,7 @@ export class OpenAiCompatProvider implements Provider {
 
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000); // 60s 超时（§9.3 长任务异步）
+    const timer = setTimeout(() => controller.abort(), textTimeout(opts));
     try {
       const res = await this.fetcher(`${this.cfg.baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
@@ -75,28 +124,48 @@ export class OpenAiCompatProvider implements Provider {
           messages: opts.messages,
           temperature: opts.temperature,
           max_tokens: opts.maxTokens,
+          ...(opts.thinking ? { thinking: { type: opts.thinking } } : {}),
+          top_p: opts.topP,
           stream: false,
         }),
         signal: controller.signal,
       });
-      if (!res.ok) {
-        throw new Error(`Provider ${this.name} HTTP ${res.status}`);
-      }
-      const data = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
+      if (!res.ok) throw new TextProviderError('provider_http', `Provider ${this.name} HTTP ${res.status}`, res.status);
+      let data: {
+        choices?: Array<{ message?: { content?: string }; finish_reason?: unknown }>;
         usage?: { prompt_tokens?: number; completion_tokens?: number };
         model?: string;
       };
-      const text = data.choices?.[0]?.message?.content ?? '';
-      if (!text) throw new Error(`Provider ${this.name} 空响应`);
+      try { data = await res.json() as typeof data; }
+      catch (error) {
+        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+        throw new TextProviderError('provider_response_json', `Provider ${this.name} response JSON invalid`);
+      }
+      const choice = data && typeof data === 'object' && Array.isArray(data.choices) ? data.choices[0] : undefined;
+      if (!choice || !choice.message || typeof choice.message !== 'object' || typeof choice.message.content !== 'string') {
+        throw new TextProviderError('provider_response_shape', `Provider ${this.name} response shape invalid`);
+      }
+      const text = choice.message.content;
+      if (!text.trim()) throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`, undefined, {
+        inputTokens: reportedTokens(data.usage?.prompt_tokens),
+        outputTokens: reportedTokens(data.usage?.completion_tokens),
+        finishReason: finishReason(choice.finish_reason),
+      });
       return {
         text,
         usage: {
           inputTokens: data.usage?.prompt_tokens ?? 0,
           outputTokens: data.usage?.completion_tokens ?? 0,
         },
-        model: data.model ?? opts.model,
+        model: typeof data.model === 'string' && data.model ? data.model : opts.model,
+        finishReason: finishReason(choice.finish_reason),
       };
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw new TextProviderError('provider_timeout', `Provider ${this.name} timed out`);
+      }
+      if (error instanceof TextProviderError) throw error;
+      throw new TextProviderError('provider_error', `Provider ${this.name} request failed`);
     } finally {
       clearTimeout(timer);
     }
@@ -117,7 +186,7 @@ export class AnthropicCompatProvider implements Provider {
 
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000);
+    const timer = setTimeout(() => controller.abort(), textTimeout(opts));
     try {
       const system = opts.messages
         .filter((message) => message.role === 'system')
@@ -139,28 +208,55 @@ export class AnthropicCompatProvider implements Provider {
           messages,
           temperature: opts.temperature,
           max_tokens: opts.maxTokens ?? 4096,
+          ...(opts.thinking ? { thinking: { type: opts.thinking } } : {}),
+          top_p: opts.topP,
         }),
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error(`Provider ${this.name} HTTP ${res.status}`);
-      const data = (await res.json()) as {
+      if (!res.ok) throw new TextProviderError('provider_http', `Provider ${this.name} HTTP ${res.status}`, res.status);
+      let data: {
         content?: Array<{ type?: string; text?: string }>;
         usage?: { input_tokens?: number; output_tokens?: number };
         model?: string;
+        stop_reason?: unknown;
       };
+      try { data = await res.json() as typeof data; }
+      catch (error) {
+        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+        throw new TextProviderError('provider_response_json', `Provider ${this.name} response JSON invalid`);
+      }
+      if (!data || typeof data !== 'object' || !Array.isArray(data.content)) {
+        throw new TextProviderError('provider_response_shape', `Provider ${this.name} response shape invalid`);
+      }
       const text = data.content
-        ?.filter((block) => block.type === 'text' && typeof block.text === 'string')
+        ?.filter((block) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
         .map((block) => block.text)
         .join('\n') ?? '';
-      if (!text) throw new Error(`Provider ${this.name} 空响应`);
+      if (!text.trim()) {
+        const textBlocks = data.content.filter((block) => block && typeof block === 'object' && block.type === 'text').length;
+        const thinkingBlocks = data.content.filter((block) => block && typeof block === 'object' && block.type === 'thinking').length;
+        throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`, undefined, {
+          inputTokens: reportedTokens(data.usage?.input_tokens),
+          outputTokens: reportedTokens(data.usage?.output_tokens),
+          finishReason: finishReason(data.stop_reason),
+          blockCounts: { text: textBlocks, thinking: thinkingBlocks, other: data.content.length - textBlocks - thinkingBlocks },
+        });
+      }
       return {
         text,
         usage: {
           inputTokens: data.usage?.input_tokens ?? 0,
           outputTokens: data.usage?.output_tokens ?? 0,
         },
-        model: data.model ?? opts.model,
+        model: typeof data.model === 'string' && data.model ? data.model : opts.model,
+        finishReason: finishReason(data.stop_reason),
       };
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw new TextProviderError('provider_timeout', `Provider ${this.name} timed out`);
+      }
+      if (error instanceof TextProviderError) throw error;
+      throw new TextProviderError('provider_error', `Provider ${this.name} request failed`);
     } finally {
       clearTimeout(timer);
     }
@@ -179,6 +275,7 @@ export interface MiniMaxVisionConfig extends ProviderConfig {
   maxPageBytes?: number;
   timeoutMs?: number;
   maxResponseBytes?: number;
+  backupApiKey?: string;
 }
 
 const OFFICIAL_MINIMAX_VISION_ORIGINS = new Set(['https://api.minimax.io', 'https://api.minimaxi.com']);
@@ -232,6 +329,15 @@ export class MiniMaxCodingPlanVisionProvider implements OcrProvider {
 
   async recognize(request: OcrProviderPageRequest): Promise<OcrProviderResult> {
     validateProviderPageRequest(request, this.maxPageBytes);
+    try {
+      return await this.recognizeWithKey(request, this.cfg.apiKey);
+    } catch (error) {
+      if (!(error instanceof OcrProviderError) || error.code !== 'provider_quota' || !this.cfg.backupApiKey) throw error;
+      return this.recognizeWithKey(request, this.cfg.backupApiKey);
+    }
+  }
+
+  private async recognizeWithKey(request: OcrProviderPageRequest, apiKey: string): Promise<OcrProviderResult> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -239,10 +345,7 @@ export class MiniMaxCodingPlanVisionProvider implements OcrProvider {
       try {
         response = await this.fetcher(`${this.cfg.baseUrl.replace(/\/$/, '')}/v1/coding_plan/vlm`, {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            authorization: `Bearer ${this.cfg.apiKey}`,
-          },
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
             prompt: request.prompt,
             image_url: `data:${request.mediaType};base64,${Buffer.from(request.bytes).toString('base64')}`,
@@ -253,25 +356,21 @@ export class MiniMaxCodingPlanVisionProvider implements OcrProvider {
         if (error instanceof Error && error.name === 'AbortError') throw new OcrProviderError('provider_timeout', 'MiniMax vision timeout');
         throw new OcrProviderError('provider_error', 'MiniMax vision request failed');
       }
-      if (!response.ok) throw new OcrProviderError('provider_http', `MiniMax vision HTTP ${response.status}`);
       const raw = await readBoundedResponse(response, this.maxResponseBytes);
       let data: unknown;
-      try {
-        data = JSON.parse(raw);
-      } catch {
+      try { data = JSON.parse(raw); } catch {
+        if (!response.ok) throw new OcrProviderError('provider_http', `MiniMax vision HTTP ${response.status}`);
         throw new OcrProviderError('provider_response_invalid', 'MiniMax vision returned invalid JSON');
       }
+      if (!response.ok) throw new OcrProviderError('provider_http', `MiniMax vision HTTP ${response.status}`);
       if (!isMiniMaxVisionResponse(data)) throw new OcrProviderError('provider_response_invalid', 'MiniMax vision response shape invalid');
-      const status = data.base_resp?.status_code ?? 0;
+      const status = miniMaxVisionStatus(data) ?? 0;
+      if (status === 1008 || status === 2056) throw new OcrProviderError('provider_quota', 'MiniMax vision quota exhausted');
       if (status !== 0) throw new OcrProviderError('provider_status', `MiniMax vision status ${status}`);
       if (typeof data.content !== 'string' || data.content.trim().length === 0) {
         throw new OcrProviderError('provider_response_invalid', 'MiniMax vision returned empty content');
       }
-      return {
-        text: data.content,
-        usage: { inputTokens: null, outputTokens: null },
-        actualCostUsdMicros: null,
-      };
+      return { text: data.content, usage: { inputTokens: null, outputTokens: null }, actualCostUsdMicros: null };
     } finally {
       clearTimeout(timer);
     }
@@ -306,6 +405,14 @@ async function readBoundedResponse(response: Response, limit: number): Promise<s
     offset += chunk.byteLength;
   }
   return new TextDecoder().decode(joined);
+}
+
+function miniMaxVisionStatus(value: unknown): number | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const base = (value as { base_resp?: unknown }).base_resp;
+  if (typeof base !== 'object' || base === null || Array.isArray(base)) return undefined;
+  const status = (base as { status_code?: unknown }).status_code;
+  return typeof status === 'number' && Number.isSafeInteger(status) ? status : undefined;
 }
 
 function isMiniMaxVisionResponse(value: unknown): value is {

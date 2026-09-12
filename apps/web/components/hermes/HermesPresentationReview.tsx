@@ -3,26 +3,32 @@ import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import type { WorkspaceGuidePayload } from '@/lib/api';
+import type { WorkspaceGuidePayload, WorkspaceGuideResult } from '@/lib/api';
 import { researchObjectFromHermesPath, type HermesPresentationIntent } from '@/lib/hermes/presentation-intent';
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { HermesPresentationAction } from './HermesPresentationAction';
+import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 
-export function HermesPresentationReview({ intent, routeResearchObjectId, researchObjects, submissionRecords, onBack, onDone }: {
+export function HermesPresentationReview({ intent, routeResearchObjectId, researchObjects, submissionRecords, suggestion, userId, onBack, onDone, onBusyChange, onConfirmationChange }: {
   intent: HermesPresentationIntent; routeResearchObjectId?: string; submissionRecords: Map<string, SubmissionIntent>;
   researchObjects: WorkspaceGuidePayload['context']['researchObjects']; onBack(): void; onDone(): void;
+  suggestion?: WorkspaceGuideResult['presentationDraft']; userId?: string;
+  onBusyChange?(busy: boolean): void;
+  onConfirmationChange?(action: HermesConversationAction | null): void;
 }) {
   const t = useTranslations('hermesPresentation');
   const pathname = usePathname(); const search = useSearchParams(); const router = useRouter();
   const pathRo = researchObjectFromHermesPath(pathname);
   const [selectedRo, setSelectedRo] = useState(''); const [locked, setLocked] = useState(false);
   const roId = pathRo ?? routeResearchObjectId ?? selectedRo;
-  const version = pathRo === roId ? search.get('version') ?? undefined : undefined;
+  const scopedSuggestion = suggestion?.researchObjectId === roId ? suggestion : undefined;
+  const version = scopedSuggestion?.versionId ?? (pathRo === roId ? search.get('version') ?? undefined : undefined);
+  const actionableIntent = scopedSuggestion ? { action: scopedSuggestion.action, instruction: scopedSuggestion.instruction, style: scopedSuggestion.style } : intent;
   const owner = `${roId}:${version ?? ''}`;
   const previousOwner = useRef(owner);
   useEffect(() => {
     if (previousOwner.current !== owner) {
-      submissionRecords.clear(); setLocked(false);
+      setLocked(false);
       if (previousOwner.current !== ':') onBack();
       previousOwner.current = owner;
     }
@@ -34,7 +40,7 @@ export function HermesPresentationReview({ intent, routeResearchObjectId, resear
         {researchObjects.map(ro => <option key={ro.id} value={ro.id}>{ro.title}</option>)}
       </select>
     </label> : null}
-    {roId ? <HermesPresentationAction key={`${roId}:${version ?? ''}`} researchObjectId={roId} requestedVersionId={version} intent={intent} submissionRecords={submissionRecords} onBusyChange={setLocked} onBack={onBack} onSubmitted={url => { router.push(url); onDone(); }} /> : <>
+    {roId ? <HermesPresentationAction key={`${roId}:${version ?? ''}`} researchObjectId={roId} requestedVersionId={version} intent={actionableIntent} userId={userId} submissionRecords={submissionRecords} onConfirmationChange={onConfirmationChange} onBusyChange={(busy) => { setLocked(busy); onBusyChange?.(busy); }} onBack={onBack} onSubmitted={url => { router.push(url); onDone(); }} /> : <>
       {!researchObjects.length ? <p className="text-sm text-os-ink">{t('noResearch')}</p> : null}
       <button type="button" className="min-h-11 text-sm text-os-ink underline" onClick={onBack}>{t('back')}</button>
     </>}

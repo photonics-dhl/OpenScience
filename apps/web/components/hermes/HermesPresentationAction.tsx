@@ -2,94 +2,142 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ApiClientError, getResearchObject, listVersions, listMyWorkspaces, listVersionClaims, listPresentationAssets, generatePresentationStoryboard, generatePresentationSceneImage, type PresentationClaim, type PresentationAsset, type VersionSummary, type WorkspaceApi, type StoryboardRequest } from '@/lib/api';
-import { validPresentationInstruction, hasCurrentPresentationSources, presentationSources, selectPresentationVersion, SubmissionIntent, type PresentationAction } from '@/lib/hermes/presentation-action';
-interface Props { researchObjectId: string; requestedVersionId?: string; intent: { action: PresentationAction; instruction: string; sceneIndex?: number }; onBack: () => void; onSubmitted: (url: string) => void; submissionRecords?: Map<string, SubmissionIntent>; onBusyChange?: (locked: boolean) => void }
+import { ApiClientError, generatePresentationSceneImage, generatePresentationStoryboard, generatePresentationVideo, getResearchObject, listMyWorkspaces, listPresentationAssets, listVersionClaims, listVersions, type PresentationAsset, type PresentationClaim, type StoryboardRequest, type VersionSummary, type WorkspaceApi } from '@/lib/api';
+import { hasCurrentPresentationSources, newestEligibleStoryboard, presentationSources, selectEligiblePresentationClaims, selectPresentationVersion, SubmissionIntent, type PresentationAction } from '@/lib/hermes/presentation-action';
+import { getHermesDraftStorage, loadHermesPresentationDraft, saveHermesPresentationDraft, type HermesDraftScope } from '@/lib/hermes/draft-state';
+import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
+
+interface Props { researchObjectId: string; requestedVersionId?: string; intent: { action: PresentationAction; instruction: string; sceneIndex?: number; style?: StoryboardRequest['style'] }; userId?: string; onBack(): void; onSubmitted(url: string): void; submissionRecords?: Map<string, SubmissionIntent>; onBusyChange?(locked: boolean): void; onConfirmationChange?(action: HermesConversationAction | null): void }
 const control = 'min-h-11 w-full rounded border border-os-rule-paper bg-os-paper px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink';
-export function HermesPresentationAction(props: Props) {
+
+export function HermesPresentationAction({ researchObjectId: ro, requestedVersionId, intent, userId, onBack, onSubmitted, submissionRecords, onBusyChange, onConfirmationChange }: Props) {
   const t = useTranslations('hermesPresentation'); const locale = useLocale();
-  const {researchObjectId: ro, requestedVersionId, intent, onBack, onSubmitted} = props;
-  const context = JSON.stringify([ro, requestedVersionId, intent]); const rendered = useRef(context); rendered.current = context;
-  const [data, setData] = useState<{context:string; title:string; versions:VersionSummary[]; workspace?:WorkspaceApi} | null>(null);
-  const [versionId, setVersionId] = useState(''); const [action,setAction] = useState(intent.action);
-  const [instruction,setInstruction] = useState(intent.instruction); const [style,setStyle] = useState<StoryboardRequest['style']>('watercolor');
-  const [language,setLanguage] = useState<'zh'|'en'>(locale==='zh'?'zh':'en');
-  const [claims,setClaims] = useState<PresentationClaim[]>([]); const [assets,setAssets] = useState<PresentationAsset[]>([]);
-  const [selected,setSelected] = useState<string[]>([]); const [parentId,setParentId] = useState(''); const [scene,setScene] = useState(intent.sceneIndex ?? 0);
-  const [ready,setReady] = useState(''); const [error,setError] = useState(''); const [busy,setBusy] = useState(false); const [uncertain,setUncertain] = useState(false); const [reload,setReload] = useState(0);
-  const localRecords = useRef(new Map<string, SubmissionIntent>());
-  const records = props.submissionRecords ?? localRecords.current;
-  const submission = useRef(new SubmissionIntent()); const controller = useRef<AbortController | null>(null);
-  const scope = `${context}:${versionId}`; const renderedScope = useRef(scope); renderedScope.current = scope;
+  const tc = useTranslations('hermesConversation');
+  const [data, setData] = useState<{ title: string; versions: VersionSummary[]; workspace?: WorkspaceApi }>();
+  const [versionId, setVersionId] = useState(''); const [action, setAction] = useState<PresentationAction>(intent.action);
+  const [instruction, setInstruction] = useState(intent.instruction); const [style, setStyle] = useState<StoryboardRequest['style']>('technical');
+  const [claims, setClaims] = useState<PresentationClaim[]>([]); const [assets, setAssets] = useState<PresentationAsset[]>([]);
+  const [parentId, setParentId] = useState(''); const [scene, setScene] = useState(intent.sceneIndex ?? 0);
+  const [updateBrief, setUpdateBrief] = useState(false);
+  const [ready, setReady] = useState(false); const [busy, setBusy] = useState(false); const [uncertain, setUncertain] = useState(false); const [error, setError] = useState('');
+  const localRecords = useRef(new Map<string, SubmissionIntent>()); const records = submissionRecords ?? localRecords.current;
+  const submissionController = useRef<AbortController | null>(null);
+  const draftScope: HermesDraftScope | null = userId && versionId ? { userId, researchObjectId: ro, versionId, purpose: 'presentation' } : null;
+
   useEffect(() => {
-    let active = true; setData(null); setVersionId(''); setError(''); setAction(intent.action); setInstruction(intent.instruction); setStyle('watercolor'); setLanguage(locale==='zh'?'zh':'en'); setScene(intent.sceneIndex ?? 0);
-    void Promise.all([getResearchObject(ro),listVersions(ro),listMyWorkspaces()]).then(([r,v,w]) => {
-      if (!active || rendered.current !== context) return;
-      setData({context,title:r.researchObject.title,versions:v.versions,workspace:w.find(x=>x.id===r.researchObject.workspaceId)});
-      setVersionId(selectPresentationVersion(v.versions,requestedVersionId)?.versionId ?? '');
-    }).catch(()=>{if(active && rendered.current===context)setError('loadError');});
-    return()=>{active=false;};
-  },[context,ro,requestedVersionId,reload,locale,intent.action,intent.instruction,intent.sceneIndex]);
-  useEffect(()=>{
-    const abort = new AbortController(); controller.current=abort; let record=records.get(scope); if(!record){record=new SubmissionIntent();records.set(scope,record);} submission.current=record;
-    setReady(''); setClaims([]); setAssets([]); setSelected([]); setParentId(''); setBusy(false); setUncertain(record.isUncertain);
-    if(record.isUncertain && record.draft){const d=record.draft;setAction(d.action);setInstruction(d.instruction);setStyle(d.style);setLanguage(d.language ?? (locale==='zh'?'zh':'en'));setSelected(d.selected);setParentId(d.parentId);setScene(d.scene);}
-    if(versionId && data?.context===context) void Promise.all([listVersionClaims(ro,versionId,abort.signal),listPresentationAssets(ro,versionId,abort.signal)]).then(([c,a])=>{
-      if(abort.signal.aborted || renderedScope.current!==scope)return;
-      setClaims(c.claims.filter(x=>x.researchObjectId===ro && x.versionId===versionId)); setAssets(a.assets.filter(x=>x.researchObjectId===ro && x.versionId===versionId)); setReady(scope);
-    }).catch(()=>{if(!abort.signal.aborted && renderedScope.current===scope)setError('loadError');});
-    return()=>{if(record.isBusy)record.fail(true);if(!record.isUncertain)records.delete(scope);abort.abort();};
-  },[context,data,locale,records,ro,scope,versionId]);
-  useEffect(()=>{props.onBusyChange?.(busy || uncertain);},[busy,uncertain,props.onBusyChange]);
-  const version=data?.context===context ? data.versions.find(x=>x.versionId===versionId) : undefined;
-  const canWrite=version?.status==='draft' && data?.workspace?.status==='active' && ['owner','maintainer','author','contributor'].includes(data.workspace.role ?? '');
-  const parents=assets.filter(x=>x.storyboard && (x.status==='draft' || x.status==='approved') && (action!=='scene.image' || (x.status==='approved' && x.canGenerateSceneImage===true)));
-  const parent=parents.find(x=>x.id===parentId);
-  const ids=presentationSources(action,selected,parent,scene);
-  const validSources=hasCurrentPresentationSources(ids,claims);
-  const locked=busy || uncertain;
-  async function submit(event: React.FormEvent) {
-    event.preventDefault(); if(!canWrite || ready!==scope || !validSources || (action!=='scene.image' && !validPresentationInstruction(instruction)))return;
-    const request=action==='scene.image' ? {storyboardAssetId:parent!.id,sceneIndex:scene} : {locale:language,style,instruction:instruction.trim(),...(parent ? {baseAssetId:parent.id}: {})};
-    submission.current.draft={action,instruction,style,language,selected:[...selected],parentId,scene};
-    const key=submission.current.begin(JSON.stringify([ro,versionId,action,ids,request])); if(!key)return;
-    const current=controller.current; setBusy(true); setError('');
+    let active = true; setReady(false); setError('');
+    void Promise.all([getResearchObject(ro), listVersions(ro), listMyWorkspaces()]).then(([research, versions, workspaces]) => {
+      if (!active) return;
+      setData({ title: research.researchObject.title, versions: versions.versions, workspace: workspaces.find((workspace) => workspace.id === research.researchObject.workspaceId) });
+      setVersionId(selectPresentationVersion(versions.versions, requestedVersionId)?.versionId ?? '');
+    }).catch(() => active && setError('loadError'));
+    return () => { active = false; };
+  }, [ro, requestedVersionId]);
+  useEffect(() => {
+    if (!versionId) return;
+    const abort = new AbortController(); setReady(false); setError('');
+    void Promise.all([listVersionClaims(ro, versionId, abort.signal), listPresentationAssets(ro, versionId, abort.signal)]).then(([claimResult, assetResult]) => {
+      if (abort.signal.aborted) return;
+      setClaims(claimResult.claims.filter((claim) => claim.researchObjectId === ro && claim.versionId === versionId));
+      setAssets(assetResult.assets.filter((asset) => asset.researchObjectId === ro && asset.versionId === versionId)); setReady(true);
+    }).catch(() => !abort.signal.aborted && setError('loadError'));
+    return () => abort.abort();
+  }, [ro, versionId]);
+  useEffect(() => {
+    const stored = draftScope ? loadHermesPresentationDraft(getHermesDraftStorage(), draftScope) : null;
+    if (stored && !intent.instruction.trim() && !onConfirmationChange) { setAction(stored.action); setInstruction(stored.instruction); setStyle(stored.style); setParentId(stored.parentId); setScene(stored.scene); setUpdateBrief(stored.action === 'storyboard.revise'); return; }
+    setAction(intent.action); setInstruction(intent.instruction); setStyle(intent.style ?? 'technical'); setParentId(''); setScene(intent.sceneIndex ?? 0); setUpdateBrief(false);
+  }, [draftScope?.researchObjectId, draftScope?.userId, draftScope?.versionId, intent.action, intent.instruction, intent.sceneIndex, intent.style, onConfirmationChange]);
+
+  const version = data?.versions.find((candidate) => candidate.versionId === versionId);
+  const canWrite = version?.status === 'draft' && data?.workspace?.status === 'active' && ['owner', 'maintainer', 'author', 'contributor'].includes(data.workspace.role ?? '');
+  const eligibleClaimIds = selectEligiblePresentationClaims(claims);
+  const uncertainEntry = [...records.entries()].find(([key, record]) => key.startsWith(`${ro}:${versionId}:`) && record.isUncertain);
+  const uncertainRecord = uncertainEntry?.[1];
+  const replayRequest = uncertainRecord?.request;
+  const uncertainDraft = uncertainRecord?.draft;
+  const selectedClaimIds = uncertainDraft?.selected ?? eligibleClaimIds;
+  const newestParent = newestEligibleStoryboard(assets, action);
+  const selectedParent = assets.find((asset) => asset.id === parentId);
+  const parent = selectedParent && newestEligibleStoryboard([selectedParent], action) ? selectedParent : newestParent;
+  const effectiveAction = replayRequest?.action ?? ((action === 'scene.image' || action === 'video.create') && !parent ? 'storyboard.create'
+    : (action === 'scene.image' || action === 'video.create') && (updateBrief || Boolean(instruction.trim())) ? 'storyboard.revise' : action);
+  const sourceIds = replayRequest?.sourceIds ?? presentationSources(effectiveAction, selectedClaimIds, parent, scene);
+  const sourcesValid = hasCurrentPresentationSources(sourceIds, claims);
+  const videoImageIds = parent?.storyboard?.document.scenes.map((_, index) => assets.find((asset) => asset.kind === 'image' && asset.status === 'approved' && asset.sceneImage?.storyboardAssetId === parent.id && asset.sceneImage.sceneIndex === index)?.id ?? '') ?? [];
+  const videoReady = Boolean(replayRequest) || effectiveAction !== 'video.create' || Boolean(parent?.canGenerateVideo && videoImageIds.length >= 3 && videoImageIds.every(Boolean));
+  const needsInstruction = effectiveAction === 'storyboard.create' || effectiveAction === 'storyboard.revise'; const locked = busy || uncertain || Boolean(uncertainRecord);
+  const requestScope = uncertainEntry?.[0] ?? `${ro}:${versionId}:${effectiveAction}`; const scopeRef = useRef(requestScope); scopeRef.current = requestScope;
+  const canReplay = Boolean(uncertainDraft && replayRequest && sourcesValid);
+  useEffect(() => { if (!uncertainDraft && !parentId && newestParent) setParentId(newestParent.id); }, [newestParent, parentId, uncertainDraft]);
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
+  useEffect(() => {
+    const record = records.get(requestScope);
+    if (!record?.isUncertain || !record.draft) return;
+    setAction(record.draft.action); setInstruction(record.draft.instruction); setStyle(record.draft.style); setParentId(record.draft.parentId); setScene(record.draft.scene); setUpdateBrief(record.draft.updateBrief ?? record.draft.action === 'storyboard.revise'); setUncertain(true);
+  }, [records, requestScope]);
+  useEffect(() => () => {
+    const record = records.get(requestScope);
+    if (!record?.isBusy) return;
+    submissionController.current?.abort();
+    record.fail(true);
+  }, [records, requestScope]);
+  useEffect(() => { if (!uncertainDraft && draftScope) saveHermesPresentationDraft(getHermesDraftStorage(), draftScope, { action, instruction, style, language: locale === 'zh' ? 'zh' : 'en', selected: eligibleClaimIds, parentId, scene }); }, [action, draftScope, eligibleClaimIds, instruction, locale, parentId, scene, style, uncertainDraft]);
+
+  async function submit(event?: React.FormEvent) {
+    event?.preventDefault();
+    if (busy || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)) return;
+    const request = replayRequest?.payload ?? (effectiveAction === 'scene.image' ? { storyboardAssetId: parent!.id, sceneIndex: scene }
+      : effectiveAction === 'video.create' ? { profile: 'content-driven-v1' as const, storyboardAssetId: parent!.id, sceneImageAssetIds: videoImageIds }
+      : { locale: locale === 'zh' ? 'zh' as const : 'en' as const, style, output: effectiveAction === 'storyboard.revise' ? parent?.storyboard?.output ?? 'image' : action === 'video.create' ? 'video' as const : 'image' as const, instruction: instruction.trim(), ...(effectiveAction === 'storyboard.revise' && parent ? { baseAssetId: parent.id } : {}) });
+    const record = records.get(requestScope) ?? new SubmissionIntent(); records.set(requestScope, record); const key = record.begin(JSON.stringify([ro, versionId, effectiveAction, sourceIds, request])); if (!key) return;
+    if (!record.isUncertain) {
+      record.draft = { action, instruction, style, language: locale === 'zh' ? 'zh' : 'en', selected: [...sourceIds], parentId: parent?.id ?? '', scene, updateBrief };
+      record.request = { action: effectiveAction, sourceIds: [...sourceIds], payload: request };
+    }
+    const activeController = new AbortController(); submissionController.current = activeController;
+    setBusy(true); setError('');
     try {
-      const result=action==='scene.image' ? await generatePresentationSceneImage(ro,versionId,ids,request as {storyboardAssetId:string;sceneIndex:number},key,current?.signal) : await generatePresentationStoryboard(ro,versionId,ids,request as StoryboardRequest,key,current?.signal);
-      if(current?.signal.aborted || renderedScope.current!==scope)return;
-      submission.current.complete(); props.onBusyChange?.(false);
-      onSubmitted(`/research-objects/${encodeURIComponent(ro)}/presentation?${new URLSearchParams({version:versionId,task:result.task.id})}`);
-    } catch(cause) {
-      if(current?.signal.aborted || renderedScope.current!==scope)return;
-      const ambiguous=!(cause instanceof ApiClientError) || cause.status===0 || cause.status===408 || cause.status===429 || cause.status>=500;
-      submission.current.fail(ambiguous); setUncertain(ambiguous); setError(ambiguous?'uncertain':'submitError'); setBusy(false);
+      const result = effectiveAction === 'scene.image' ? await generatePresentationSceneImage(ro, versionId, sourceIds, request as { storyboardAssetId: string; sceneIndex: number }, key, activeController?.signal)
+        : effectiveAction === 'video.create' ? await generatePresentationVideo(ro, versionId, sourceIds, request as { profile: 'content-driven-v1'; storyboardAssetId: string; sceneImageAssetIds: string[] }, key, activeController?.signal)
+          : await generatePresentationStoryboard(ro, versionId, sourceIds, request as StoryboardRequest, key, activeController?.signal);
+      if (activeController.signal.aborted || scopeRef.current !== requestScope) return;
+      record.complete(); records.delete(requestScope); setBusy(false); onSubmitted(`/research-objects/${encodeURIComponent(ro)}/edit?${new URLSearchParams({ stage: 'media', version: versionId, task: result.task.id })}`);
+    } catch (cause) {
+      if (activeController.signal.aborted || scopeRef.current !== requestScope) return;
+      const ambiguous = !(cause instanceof ApiClientError) || cause.status === 0 || cause.status === 408 || cause.status === 429 || cause.status >= 500;
+      record.fail(ambiguous); setBusy(false); setUncertain(ambiguous); setError(ambiguous ? 'uncertain' : 'submitError');
     }
   }
+  const confirmationReady = !busy && Boolean(canWrite) && ready && sourcesValid && videoReady && (!needsInstruction || Boolean(instruction.trim())) && (!uncertain || canReplay);
+  const latestSubmit = useRef(submit); latestSubmit.current = submit;
+  useEffect(() => {
+    onConfirmationChange?.({ kind: 'production', ready: confirmationReady, canDismiss: !locked, confirm: () => latestSubmit.current() });
+    return () => onConfirmationChange?.(null);
+  }, [onConfirmationChange, confirmationReady, requestScope, locked]);
+  if (onConfirmationChange) return <div className="hermes-message hermes-message-assistant" data-hermes-presentation-action="true">
+    <p>{tc('productionScope', { kind: t(action === 'video.create' ? 'video' : 'image'), style: t(!needsInstruction && parent?.storyboard ? parent.storyboard.style : style) })}</p>
+    {effectiveAction === 'scene.image' && parent?.storyboard && <p className="mt-2 text-sm">{parent.storyboard.document.title} · {t('scene')} {scene + 1}: {parent.storyboard.document.scenes[scene]?.title}</p>}
+    <p className="mt-2 text-sm">{t('charge')}</p>
+    <p className="mt-2 text-sm" role="status">{busy ? t('submitting') : !ready ? t('loading') : !canWrite ? t('readOnly') : !sourcesValid ? t('needsEligibleSources') : !videoReady ? t('needsApprovedScenes') : needsInstruction && !instruction.trim() ? tc('needsProductionInstruction') : tc(uncertain ? 'retryProductionInChat' : 'confirmProductionInChat')}</p>
+    {error && <p role="alert" className="mt-2 text-sm text-state-danger">{t(error)}</p>}
+    <details className="hermes-production-settings mt-3"><summary>{tc('productionInstruction')}</summary>
+      <textarea aria-label={t('instruction')} className={`${control} mt-2 min-h-28`} value={instruction} maxLength={1000} disabled={locked} onChange={(event) => { setInstruction(event.target.value); if (parent) setUpdateBrief(true); }} />
+    </details>
+  </div>;
   return <section className="min-w-0 rounded-xl bg-os-paper p-4 text-os-ink" data-hermes-presentation-action="true">
-    <h3 className="m-0 text-lg font-semibold">{t('entry')}</h3><p className="text-sm leading-6">{t('boundary')}</p>
-    <form onSubmit={submit} className="space-y-4">
-      <fieldset disabled={locked} className="m-0 min-w-0 space-y-4 border-0 p-0">
-        <p className="break-words text-sm font-semibold">{data?.context===context?data.title:t('loading')}</p>
-        <label className="grid gap-2 text-sm">{t('version')}<select className={control} value={versionId} onChange={e=>{setAction(intent.action);setInstruction('');setStyle('watercolor');setLanguage(locale==='zh'?'zh':'en');setScene(0);setError('');setVersionId(e.target.value);}}><option value="">{t('chooseVersion')}</option>{data?.context===context?data.versions.map(v=><option key={v.versionId} value={v.versionId}>{t('versionLabel',{number:v.versionNo,status:v.status})}</option>):null}</select></label>
-        <label className="grid gap-2 text-sm">{t('action')}<select className={control} value={action} onChange={e=>{setAction(e.target.value as PresentationAction);setParentId('');}}>{(['storyboard.create','storyboard.revise','scene.image'] as const).map(a=><option key={a} value={a}>{t(a.replace('.','_'))}</option>)}</select></label>
-        {action==='storyboard.create'?<div><p className="text-sm">{t('claims')}</p>{claims.filter(c=>c.extractionStatus==='succeeded').map(c=><label key={c.id} className="flex min-h-11 items-start gap-2 py-2 text-sm"><input type="checkbox" checked={selected.includes(c.id)} disabled={!selected.includes(c.id) && selected.length>=12} onChange={e=>setSelected(e.target.checked?[...selected,c.id]:selected.filter(id=>id!==c.id))}/><span className="min-w-0 break-words">{c.statement}</span></label>)}</div>:<>
-          <label className="grid gap-2 text-sm">{t('parent')}<select className={control} value={parentId} onChange={e=>{setParentId(e.target.value);setScene(intent.sceneIndex ?? 0);const next=parents.find(p=>p.id===e.target.value);if(next?.storyboard){setStyle(next.storyboard.style);setLanguage(next.storyboard.locale);}}}><option value="">{t('chooseParent')}</option>{parents.map(p=><option key={p.id} value={p.id}>{p.storyboard?.document.title} · {t(p.status)}</option>)}</select></label>
-          {parent?<ul className="space-y-2 pl-5 text-sm">{parent.sourceClaimIds.map(id=><li key={id}>{claims.find(c=>c.id===id)?.statement ?? t('staleSources')}</li>)}</ul>:null}
-        </>}
-        {action==='scene.image'?<><p className="text-sm leading-6">{t('imageInstruction')}</p><label className="grid gap-2 text-sm">{t('scene')}<select className={control} value={scene} onChange={e=>setScene(Number(e.target.value))}>{parent?.storyboard?.document.scenes.map((s,i)=><option key={i} value={i}>{i+1}. {s.title}</option>)}</select></label>{parent?.storyboard?.document.scenes[scene]?<p className="text-sm leading-6">{parent.storyboard.document.scenes[scene].visualAction}</p>:null}</>:<>
-          <label className="grid gap-2 text-sm">{t('style')}<select className={control} value={style} onChange={e=>setStyle(e.target.value as StoryboardRequest['style'])}>{(['watercolor','technical','ink'] as const).map(s=><option key={s} value={s}>{t(s)}</option>)}</select></label>
-          <label className="grid gap-2 text-sm">{t('language')}<select className={control} value={language} onChange={e=>setLanguage(e.target.value as 'zh'|'en')}><option value="zh">中文</option><option value="en">English</option></select></label>
-          <label className="grid gap-2 text-sm">{t('instruction')}<textarea className={`${control} min-h-24`} maxLength={1000} required value={instruction} onChange={e=>setInstruction(e.target.value)}/></label>
-        </>}
-      </fieldset>
-      {!canWrite && data?<p role="status" className="text-sm">{t('readOnly')}</p>:null}
-      <p className="text-sm leading-6">{t('charge')}</p>
-      {action!=='scene.image' && instruction.length>1000?<p role="alert" className="text-sm">{t('instructionLimit')}</p>:null}
-      {parent && !validSources?<p role="alert" className="text-sm">{t('staleSources')}</p>:null}
-      {error?<p role="alert" className="text-sm">{t(error)}</p>:null}
-      {!locked && (error==='loadError' || error==='submitError' || (parent && !validSources))?<button type="button" className={control} onClick={()=>setReload(x=>x+1)}>{t('refresh')}</button>:null}
-      <button type="submit" className="min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-os-paper disabled:opacity-40" disabled={busy || !canWrite || ready!==scope || !validSources || (action!=='scene.image' && !validPresentationInstruction(instruction))}>{t(busy?'submitting':uncertain?'retry':'confirm')}</button>
-    </form>
-    <button type="button" className="mt-3 min-h-11 px-2 text-sm underline" disabled={busy || uncertain} onClick={onBack}>{t('back')}</button>
+    <p className="m-0 text-sm font-semibold">{data?.title ?? t('loading')}</p><p className="mt-1 text-xs text-os-muted-paper">{version ? t('versionLabel', { number: version.versionNo, status: version.status }) : t('chooseVersion')}</p>
+    <p className="hermes-production-summary">{t(action === 'video.create' ? 'video' : 'image')} · {t(style)}</p>
+    {effectiveAction === 'scene.image' && parent?.storyboard && <p className="mt-2 text-sm leading-6">{t('scene')}: {scene + 1}. {parent.storyboard.document.scenes[scene]?.title}</p>}
+    <form className="mt-5 space-y-4" onSubmit={submit}><fieldset className="m-0 min-w-0 space-y-4 border-0 p-0" disabled={locked}>
+      <details className="hermes-production-settings"><summary>{tc('adjustProduction')}</summary>
+      <div className="grid grid-cols-2 gap-2" aria-label={t('mediaIntent')}>{(['image', 'video'] as const).map((kind) => <button key={kind} className={`min-h-11 rounded border px-3 text-sm ${action === 'video.create' === (kind === 'video') ? 'border-os-ink font-semibold' : 'border-os-rule-paper'}`} type="button" onClick={() => setAction(kind === 'video' ? 'video.create' : parent ? 'scene.image' : 'storyboard.create')}>{t(kind)}</button>)}</div>
+      <label className="grid gap-2 text-sm">{t('style')}<select className={control} value={style} onChange={(event) => { setStyle(event.target.value as StoryboardRequest['style']); if ((action === 'scene.image' || action === 'video.create') && parent) setUpdateBrief(true); }}>{(['technical', 'ink', 'watercolor'] as const).map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></label>
+      <label className="grid gap-2 text-sm">{t('instruction')}<textarea className={`${control} min-h-28`} maxLength={1000} value={instruction} onChange={(event) => { setInstruction(event.target.value); if ((action === 'scene.image' || action === 'video.create') && parent) setUpdateBrief(true); }} /></label>
+      {effectiveAction === 'scene.image' && parent?.storyboard ? <label className="grid gap-2 text-sm">{t('scene')}<select className={control} value={scene} onChange={(event) => setScene(Number(event.target.value))}>{parent.storyboard.document.scenes.map((item, index) => <option key={index} value={index}>{index + 1}. {item.title}</option>)}</select></label> : null}
+      <details><summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">{t('advanced')}</summary>{parent ? <p className="mt-3 text-xs leading-5 text-os-muted-paper">{t('usingApprovedPlan')}</p> : null}<p className="mt-3 text-xs leading-5 text-os-muted-paper">{t('eligibleSources', { count: selectedClaimIds.length })}</p></details>
+      </details>
+    </fieldset>{!canWrite && data ? <p role="status" className="text-sm">{t('readOnly')}</p> : null}{(action === 'scene.image' || action === 'video.create') && !parent ? <p className="text-sm leading-6 text-os-muted-paper">{t('planWillBePrepared')}</p> : null}{effectiveAction === 'storyboard.revise' ? <p className="text-sm leading-6 text-os-muted-paper">{t('briefWillUpdate')}</p> : null}{!selectedClaimIds.length ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t('needsEligibleSources')}</p> : null}{effectiveAction === 'video.create' && !videoReady ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t('needsApprovedScenes')}</p> : null}{error ? <p role="alert" className="text-sm text-os-vermilion">{t(error)}</p> : null}<p className="text-xs leading-5 text-os-muted-paper">{t('charge')}</p><button className="min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" disabled={busy || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)} type="submit">{t(busy ? 'submitting' : uncertain ? 'retry' : effectiveAction === 'storyboard.create' && action === 'video.create' ? 'prepareVideoPlan' : effectiveAction === 'storyboard.create' ? 'preparePlan' : effectiveAction === 'storyboard.revise' ? 'updateBrief' : 'confirm')}</button></form>
+    <button className="mt-3 min-h-11 px-2 text-sm underline" disabled={locked} onClick={onBack} type="button">{t('back')}</button>
   </section>;
 }

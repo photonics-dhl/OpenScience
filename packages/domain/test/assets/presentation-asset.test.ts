@@ -147,6 +147,15 @@ describe('Presentation asset domain contract', () => {
     expect(() => parsePresentationGenerationPayload({
       schemaVersion: 1, researchObjectId: RO, versionId: VERSION, kind: 'chart', sourceClaimIds: [], extra: true,
     })).toThrow(/payload/i);
+    const internal = parsePresentationGenerationPayload({
+      schemaVersion: 1, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', sourceClaimIds: [CLAIM],
+      storyboard: { locale: 'zh', style: 'technical', instruction: 'Five reviewed scenes' },
+      hermesRunAuthority: { runId: ASSET, stage: 'storyboard', ordinal: 0, profile: 'onchip-field-sampling-v1' },
+    });
+    expect(internal.hermesRunAuthority).toEqual({ runId: ASSET, stage: 'storyboard', ordinal: 0, profile: 'onchip-field-sampling-v1' });
+    expect(() => parsePresentationGenerationPayload({ ...internal,
+      hermesRunAuthority: { ...internal.hermesRunAuthority, profile: 'arbitrary-profile' },
+    })).toThrow(/authority/i);
 
     const ctx = fixture();
     const updatedAt = new Date('2026-09-05T00:00:00.000Z');
@@ -182,6 +191,28 @@ describe('Presentation asset domain contract', () => {
       userId: USER, researchObjectId: RO, versionId: VERSION, assetId: ASSET,
       status: 'approved', expectedUpdatedAt: new Date('2026-09-04T00:00:00.000Z'),
     })).rejects.toMatchObject({ code: 'CONCURRENT_UPDATE' });
+  });
+
+  it('lets only the owning run actor review its exactly bound media asset', async () => {
+    const ctx = fixture();
+    const updatedAt = new Date('2026-09-08T00:00:00.000Z');
+    ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'image',
+      status: 'draft', label: 'presentation_not_evidence', provenance: {}, updatedAt });
+    ctx.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM, researchObjectId: RO, versionId: VERSION });
+    ctx.db.hermesResearchRuns.push({ id: '70000000-0000-4000-8000-000000000001', actorId: USER,
+      researchObjectId: RO, versionId: VERSION, profile: 'onchip-field-sampling-v1', maxAgentTasks: 7,
+      sourceClaimIds: [CLAIM], status: 'awaiting_scene_images_review' });
+    ctx.db.hermesResearchSteps.push({ id: 'step', runId: ctx.db.hermesResearchRuns[0].id, stage: 'scene_image',
+      ordinal: 0, status: 'awaiting_approval', presentationAssetId: ASSET });
+    await expect(transitionPresentationAsset(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION,
+      assetId: ASSET, status: 'approved', expectedUpdatedAt: updatedAt })).resolves.toMatchObject({ status: 'approved' });
+
+    const denied = fixture();
+    denied.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'image',
+      status: 'draft', label: 'presentation_not_evidence', provenance: {}, updatedAt });
+    denied.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM, researchObjectId: RO, versionId: VERSION });
+    await expect(transitionPresentationAsset(denied as never, { userId: USER, researchObjectId: RO, versionId: VERSION,
+      assetId: ASSET, status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' });
   });
 
   it('lists only public metadata and exact source Claim identities', async () => {

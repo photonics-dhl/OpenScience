@@ -1,4 +1,165 @@
 {
+  "hermesConversation": {
+    "role": "Your research collaborator",
+    "conversation": "Conversation with Hermes",
+    "welcomeEditor": "Tell me what to change or what image or video you need. You can edit the text directly and continue production or publication here.",
+    "productionScope": "I will prepare a {kind} in the {style} style for this research. Tell me directly if you want a different style or content.",
+    "productionInstruction": "View or edit detailed instructions",
+    "needsProductionInstruction": "There is no approved plan ready to use. Tell me what to create so I can prepare the instructions first.",
+    "confirmProductionInChat": "Reply “confirm production” to continue, request changes, or say “cancel”.",
+    "retryProductionInChat": "The previous production request is unconfirmed. Reply “confirm production” to continue that request without duplicate charges.",
+    "publicationScope": "You are about to publish version {version} of “{title}”, including the text and {count} approved images or videos. Unreviewed media remain private.",
+    "publicationLicense": "Current licenses: text {text}, code {code}, data {data}.",
+    "publicationMaterials": "{count} material records in this version (existing download permissions apply)",
+    "confirmPublicationInChat": "After reviewing this public scope and licenses, reply “confirm publication”.",
+    "resumePublicationEditing": "To make changes, reply “resume editing” to withdraw this review.",
+    "publicationEditingResumed": "Editing is available again. Your content and images are preserved. Tell me when you are ready to publish.",
+    "draftChanged": "The text changed, so the previous arrangement is no longer current. Tell me your production or publication request again to use the current draft.",
+    "actionNotReady": "This action is not ready yet. Please see its status above.",
+    "prepareVersionFailed": "The current draft could not be prepared as a usable version. See the specific reason before continuing.",
+    "productionSubmitted": "The server has received the production task. Results will appear on the left; you can keep editing in the meantime.",
+    "published": "Published successfully. You can open the public research page.",
+    "undone": "Requested undo of the last edit. The text and save status are shown on the left.",
+    "cancelled": "Cancelled the arrangement awaiting confirmation.",
+    "mediaReviewLoading": "Loading media awaiting review…",
+    "mediaReviewInstruction": "Review the results on the left or expand a plan, then say “approve 1” or “reject 1” using its number below. You can also request revisions directly.",
+    "mediaReviewUnavailable": "This item cannot be reviewed in its current state or with your permissions.",
+    "mediaReviewEmpty": "This version has no media awaiting review.",
+    "mediaApproved": "Approved “{title}”. If this was a plan, you can now ask to generate an image from the approved plan.",
+    "mediaRejected": "Rejected “{title}”. It will not be used as a public result.",
+    "adopted": "Approved",
+    "rejected": "Rejected",
+    "awaitingReview": "Awaiting review",
+    "reviewOnLeft": "Review the corresponding image or video on the left.",
+    "publicMediaChanged": "Approved media changed. The public scope is now updated; review it and reply “confirm publication” again.",
+    "inputLabel": "Send an instruction to Hermes",
+    "placeholder": "For example: make the insight more concise, or illustrate this research",
+    "inputHint": "Enter to send · Shift+Enter for a new line",
+    "send": "Send",
+    "retry": "Continue request",
+    "retrySame": "The previous request is unconfirmed. Continue the same request to avoid duplicate submissions.",
+    "productionOptions": "View production details",
+    "adjustProduction": "Adjust style and detailed instructions",
+    "writing": {
+      "kind": {
+        "note": "Research note",
+        "review": "Literature review",
+        "manuscript": "Manuscript draft"
+      },
+      "status": {
+        "grounded": "Linked to source text",
+        "grounded_with_unresolved_review": "Some content still needs review",
+        "user_edited": "Your edits; sources have not been rechecked"
+      },
+      "localChanges": "Local changes have not been saved",
+      "open": "Open draft",
+      "close": "Close draft",
+      "dialogLabel": "Private scientific draft from Hermes",
+      "revisionPlaceholder": "Continue here: shorten section two, add limitations, or turn this into a manuscript",
+      "edit": "Edit",
+      "done": "Done",
+      "download": "Download Markdown",
+      "save": "Save edits",
+      "saveCommand": "Save draft edits",
+      "titleLabel": "Draft title",
+      "bodyLabel": "Markdown body",
+      "editNote": "Changes here remain in this page until you choose Save edits. Hermes will then preserve them as a new private draft.",
+      "sources": "Sources",
+      "sourcesCount": "Sources ({count})",
+      "page": "Page {page}",
+      "block": "Block {block}",
+      "characters": "Characters {start}–{end}",
+      "table": "Table",
+      "tableCell": "{sheet} · row {row}, column {column}",
+      "codeRange": "{path} · lines {start}–{end}",
+      "artifact": "Artifact {artifact}"
+    }
+  },
+  "workbench": {
+    "requestVideo": "Generate a video",
+    "requestImage": "Generate an image",
+    "hermesScope": "Edit writing, create visuals, prepare publication",
+    "talkToHermes": "Chat",
+    "resolveBeforePublish": "Return to content and resolve the highlighted items",
+    "approvePlan": "Approve this plan for production",
+    "planReadyTitle": "Review the illustration plan",
+    "planReadyBody": "Hermes has prepared an illustration plan below. Review it, request changes if needed, then approve it and generate the image.",
+    "sourceReview": "Paper analysis history",
+    "confirmedSources": "Edit confirmed content in the editor or with Hermes. Select a source below only when you need to revisit its analysis.",
+    "loadingVersion": "Reading the confirmed version…",
+    "coeditTitle": "Write with Hermes",
+    "coeditBody": "I can see this draft. Tell me what to change and edits will appear in the editor. You can keep editing or undo my changes.",
+    "coeditGoal": "What would you like to change or discuss?",
+    "coeditSend": "Send to Hermes",
+    "navigation": "Research workbench",
+    "contribution": "Contribution in one sentence",
+    "contributionPlaceholder": "State the research's most important contribution in the six-field draft.",
+    "content": "Sources & content",
+    "media": "Images & video",
+    "coreImage": "Core concept image",
+    "researchVideo": "Research explainer video",
+    "mediaNeedsVersion": "After a formal version is prepared, real media created with Hermes will replace this space.",
+    "publish": "Preview & publish",
+    "details": "Research details",
+    "continueMedia": "Continue to visuals",
+    "confirmContinue": "Confirm content and continue",
+    "savingContent": "Saving content…",
+    "contentReady": "The editor and Hermes share this draft. Confirm it to continue to visuals.",
+    "reconfirmNotice": "Content changed. Confirm a new version and review any affected illustrations.",
+    "analysisSuggestions": "Extraction suggestions & sources",
+    "editApplied": "Updated {count} draft fields. Content is not yet confirmed.",
+    "editConflict": "Updated {count} fields. Your intervening edits were preserved in the remaining fields.",
+    "editProposal": "This previous suggestion has not been applied to the current draft.",
+    "undo": "Undo this edit",
+    "viewChanges": "View changes",
+    "useField": "Use this field",
+    "publishPreview": "Preview & publish",
+    "publishPreviewBody": "Review this version's research content and approved images, then publish together. Unreviewed images stay private; you do not need to finish every illustration.",
+    "previewLabel": "Publication preview",
+    "versionMismatch": "Version content does not match. Reopen the current version.",
+    "rightsNotice": "Confirm that you have the right to publish this text and media. Preserve attribution to source papers; uploading a paper does not grant redistribution rights.",
+    "openPublic": "View public RO",
+    "reviewForPublication": "Review publication content",
+    "previewPublish": "Preview and publish",
+    "imageCount": "{count} illustrations",
+    "coreImageFirst": "Start with one core illustration. Add more when useful; reviewed content and images can be published first.",
+    "coreImageInstruction": "Understand the paper and plan one core scientific illustration explaining its central mechanism or finding. Select genuinely relevant claims, without a fixed six-image template. Additional illustrations are optional.",
+    "supportingMaterials": "Materials and revision history",
+    "pendingSuggestions": "Changes awaiting review",
+    "versionRecord": "Version history"
+  },
+  "versionRecord": {
+    "export": "Export fixed record",
+    "api": "Research API",
+    "legacy": "This older version has no frozen claim or evidence record. Only its saved SDF and materials are available.",
+    "noRegion": "Region highlighting is unavailable for this source.",
+    "loading": "Loading version…",
+    "mismatch": "Version snapshot mismatch",
+    "reviewBoundary": "Frozen research record captured when this version was created. Later draft edits do not change this record. Evidence may still need human review.",
+    "missing": "Not provided · pending",
+    "checkEvidence": "Check claims and sources",
+    "evidence": "Claims and source verification",
+    "noLocator": "No verified source location is available. Human review is needed.",
+    "assessment": "Assessment: {assessment}",
+    "openSource": "Open original passage",
+    "verified": "Human verified",
+    "pending": "Needs review",
+    "noPage": "No page number is available for this source.",
+    "materials": "Version materials"
+  },
+  "mechanismVideo": {
+    "driver_signal": "Driver and weak signal",
+    "tip_enhancement": "Local enhancement at the tip",
+    "emission_collection": "Gated emission and collection",
+    "delay_scan": "Delay scan and average current",
+    "field_reconstruction": "Local versus incident field",
+    "title": "Animate the optical field sampling mechanism",
+    "scope": "This animation is specific to on-chip optical field sampling: two pulses, tip enhancement, electron collection, delay scanning, and the distinction between local and incident fields. Confirm that the five reviewed scenes describe this mechanism.",
+    "chooseImage": "Choose an approved image",
+    "missingImage": "Generate and approve this scene image first",
+    "review": "Creates an explanatory animation with one continuous Serena narration. It is not measured data or a numerical simulation. Review the science, pronunciation and scene timing before approval; estimated timing is not verified alignment.",
+    "generate": "Confirm scene roles and generate video draft"
+  },
   "common": {
     "save": "Save",
     "cancel": "Cancel",
@@ -26,6 +187,8 @@
     "settingsShort": "Settings"
   },
   "editor": {
+    "savedVersionSources":"Check sources in the latest saved version",
+    "draftRevision": "Draft revision {version}",
     "common": {
       "cancel": "Cancel"
     },
@@ -56,6 +219,48 @@
     "saveToSdf": "Save to SDF",
     "uploadArtifact": "Upload artifact",
     "uploadFailed": "Upload failed",
+    "ingestionUploadNotice": "PDF, DOCX, PPTX, HTML, TeX, Markdown, and XLSX go to server parsing and AI organization and may use account AI quota. Nothing is written until you review and confirm the proposal. Legacy DOC and generic ZIP files can be uploaded but are not automatically parsed yet and may need separate handling. Other attachments are stored only.",
+    "ingestionQueued": "Automatic analysis started",
+    "ingestionTaskMissing": "The server did not return a material analysis task",
+    "ingestionProposalKicker": "Source proposal",
+    "ingestionProposalTitle": "Review the organized result",
+    "ingestionProposalBody": "This editable proposal comes from the selected material. Ordinary save and commit are paused until it is resolved; only the confirmation below writes it to a new SDF version.",
+    "ingestionSource": "Current material",
+    "chooseIngestionSource": "Choose one material",
+    "ingestionLoading": "Loading this material's server result…",
+    "ingestionProcessing": "{file} is being parsed and organized on the server. You can leave and return.",
+    "ingestionScopeMismatch": "This analysis does not belong to the current Research Object or material, so its content was not loaded.",
+    "ingestionVersionChanged": "The Research Object version changed. This proposal remains unconfirmed; select the material again and review it against the current version.",
+    "ingestionUnavailable": "This material does not yet have an editable organized result.",
+    "openIngestionRecovery": "View task details and recovery",
+    "ingestionAlreadyConfirmed": "This material's proposal is already confirmed; its version is available for review.",
+    "originalExtractionProposal": "View this analysis's original proposal",
+    "originalExtractionProposalBody": "Your current edit is preserved. Using this field only updates the proposal under review; nothing is written to the SDF until you confirm the full proposal.",
+    "originalExtractionEvidence": "You edited this content or existing text was protected. The evidence below applies only to the original extraction.",
+    "ingestionMissingFields": "Verifiable content is still missing for: {fields}",
+    "emptyIngestionProposal": "All six proposal fields are empty. Add at least one reviewable field before confirming.",
+    "confirmIngestionProposal": "Confirm proposal and write new version",
+    "confirmingIngestion": "Confirming…",
+    "reconcileIngestionConfirmation": "Check result and retry same confirmation",
+    "ambiguousIngestionConfirmation": "The last confirmation outcome is unclear. The content is locked; this action only checks server state and retries the same submitted content.",
+    "confirmIngestionNotice": "Confirmation uses the current version as its boundary. If it changed, the server rejects the write and this session draft remains available.",
+    "ingestionConfirmFailed": "The proposal was not confirmed. Your edits remain in this session.",
+    "ingestionGenerationChanged": "The material analysis changed. Your earlier proposal edits remain stored with that analysis; review the new proposal returned by the server.",
+    "ingestionRebased": "The current version changed. Your proposal edits were retained while concurrent server field changes took precedence. Review it again before confirming.",
+    "ingestionRebasedConflicts": "The current version changed, and these fields were edited in both places: {fields}. Your proposal text remains in the editor; compare it with the current version before deciding whether to confirm it.",
+    "ingestionConfirmed": "The proposal was confirmed and written to a new SDF version.",
+    "continueHermesResearch": "Continue Hermes claim and source review",
+    "legacyRefreshBody": "The current analysis record remains in history. Reanalyzing the same uploaded material uses the updated parser and source location and costs 1 AI credit; it does not re-upload or confirm the result.",
+    "legacyRefreshAction": "Reanalyze uploaded material · 1 credit",
+    "legacyRefreshing": "Creating reanalysis task…",
+    "legacyRefreshStarted": "Reanalysis started on the server. Untouched proposal fields will refresh when it completes, and the earlier analysis remains traceable.",
+    "legacyRefreshFailed": "Reanalysis could not be started.",
+    "confirmedReanalysisBody": "The confirmed SDF and version remain unchanged. Hermes will reuse this material's verified parsed source to create a separate analysis draft; a new version is written only after you review and confirm that draft.",
+    "confirmedReanalysisAction": "Reanalyze and create new draft",
+    "confirmedReanalyzing": "Creating new analysis draft…",
+    "confirmedReanalysisStarted": "The new analysis started on the server. Confirmed content remains unchanged; review the new draft when it finishes.",
+    "confirmedReanalysisUncertain": "The new draft request is not yet confirmed. Trying again reuses the same request and does not create a duplicate analysis.",
+    "legacyRefreshUncertain": "The reanalysis request outcome is not yet confirmed. The old analysis remains in history; check this task again to resume the same request.",
     "restoreDraft": "Restore draft",
     "discardDraft": "Discard draft",
     "draftFound": "Unsaved draft found",
@@ -63,6 +268,18 @@
     "noSuggestions": "No AI suggestions",
     "extract": "AI Extract",
     "extracting": "Extracting…",
+    "extractCurrentContent": "Organize current content",
+    "resumeExtraction": "Check existing result",
+    "currentEditorSource": "Current editor content",
+    "currentEditorScope": "Uses only the six research fields below. Uploaded literature is not read here.",
+    "extractNeedsContent": "All six research fields are empty. Add text first, or import and confirm source material in Hermes.",
+    "extractFailed": "AI extraction did not complete. Try again later or inspect the source task in Hermes.",
+    "noUsableSuggestions": "This extraction produced no usable suggestions. Existing content was not changed.",
+    "missingEvidenceSummary": "{count} fields lack verifiable evidence",
+    "missingEvidenceSummaryBody": "These fields remain unchanged. Review each item or add source material first.",
+    "acknowledgeMissingEvidenceNote": "Hiding a notice only tidies this list; it does not resolve the evidence gap.",
+    "sourceNextStep": "PDFs, literature, and material awaiting confirmation are handled in this research object's Hermes source workflow.",
+    "openSourceWorkflow": "Extract from literature or review sources",
     "commitMessage": "Commit message",
     "commit": "Create commit",
     "commitShort": "Commit",
@@ -88,6 +305,14 @@
       "researcherPrompt": "Researcher prompt",
       "sourceLocatorUnavailable": "Source locator unavailable",
       "currentSdfAggregate": "Current SDF aggregate",
+      "evidenceLocationLocated": "Located",
+      "evidenceLocationAmbiguous": "Multiple matches",
+      "evidenceLocationCrossBlock": "Cross-block",
+      "evidenceLocationMissing": "Not located",
+      "evidenceLocationUnverified": "Unverified",
+      "evidenceLocationPage": "page {page}",
+      "evidenceLocationBlock": "block {blockId}",
+      "evidenceLocationNotice": "These are separate source excerpts in original order and may not be contiguous. Each location identifies its own quote; it does not establish whether the conclusion is correct.",
       "artifactStored": "Stored artifact",
       "artifactStatus": {
         "uploading": "Uploading",
@@ -128,9 +353,9 @@
     "returnToProposal": "Return",
     "applyReviewedChange": "Apply reviewed change",
     "missingEvidenceTitle": "Evidence missing · {field}",
-    "missingEvidenceDescription": "No supporting evidence was found for {field}. Hermes left this field empty rather than inventing content.",
-    "missingResultsEvidence": "No result evidence was found. Hermes left Results empty rather than inventing a finding.",
-    "acknowledgeMissingEvidence": "Acknowledge and continue",
+    "missingEvidenceDescription": "This input did not provide sufficient evidence for a new {field} suggestion. Your existing edits are unchanged.",
+    "missingResultsEvidence": "This input did not provide sufficient evidence for a findings suggestion. Your existing edits are unchanged.",
+    "acknowledgeMissingEvidence": "Hide this notice",
     "hints": {
       "problem": "Define the scientific question and its boundary.",
       "insight": "State the central insight without promotional language.",
@@ -277,7 +502,7 @@
     "correspondingAuthor": "Corresponding author",
     "contributions": "Contributions",
     "abstract": "Abstract",
-    "coreFields": "Core fields",
+    "coreFields": "Research at a glance",
     "problem": "Research question",
     "insight": "Core insight",
     "method": "Method",
@@ -363,7 +588,21 @@
       "downloadOnly": "This format is never executed in the page. Download it to inspect safely.",
       "download": "Download presentation file",
       "generatedBy": "Generated by {name} {version}",
-      "sourceClaims": "Linked claims"
+      "sourceClaims": "Linked claims",
+      "sourceClaimsCount": "Linked claims: {count}",
+      "sourceDetails": "Source and production details",
+      "coreImageTitle": "Core concept image",
+      "videoTitle": "Research explainer video",
+      "imageNumber": "Image {number}",
+      "videoNumber": "Research explainer video {number}",
+      "imagePlaceholderTitle": "No public core image in this version",
+      "imagePlaceholderBody": "Only real images approved and published with this version appear here.",
+      "videoPlaceholderTitle": "No public video in this version",
+      "videoPlaceholderBody": "Only real videos approved and published with this version appear here.",
+      "previousSlide": "Previous image",
+      "nextSlide": "Next image",
+      "viewFullSize": "Open full-size image",
+      "slidePosition": "{current} / {total}"
     },
     "history": {
       "title": "Public version history"
@@ -382,7 +621,8 @@
       "pull-requests": "Pull Requests",
       "reviews": "Reviews & Discussions",
       "citations": "Citations & Related Work"
-    }
+    },
+    "readingResources": "Sources, citation and version history"
   },
   "landing": {
     "nav": {
@@ -524,6 +764,15 @@
     "accept": "Accept",
     "reject": "Exclude"
   },
+  "attachmentViewer": {
+    "preview": "Preview",
+    "download": "Download",
+    "close": "Close",
+    "loading": "Loading preview…",
+    "unavailable": "This attachment could not be previewed. Download it to view the original file.",
+    "safePreviewNotice": "View the original attachment. PDFs and images support preview; other formats can be downloaded.",
+    "documentTitle": "Preview of {name}"
+  },
   "auth": {
     "identity": {
       "skipToForm": "Skip to identity form",
@@ -590,8 +839,8 @@
   },
   "dashboard": {
     "eyebrow": "Personal workspace",
-    "title": "Research dashboard",
-    "welcome": "{name}, continue from your latest research context or begin a new research object.",
+    "title": "Research desk",
+    "welcome": "{name}, continue your current research or work out the next step with Hermes.",
     "loading": "Restoring your research context…",
     "context": {
       "navigation": "Dashboard utilities",
@@ -603,16 +852,22 @@
       "title": "Continue research",
       "emptyTitle": "Import your first research material",
       "emptyBody": "Hermes preserves source evidence before proposing SDF fields for your confirmation.",
-      "open": "Continue research",
+      "open": "Continue editing",
       "version": "Version {version}",
-      "pending": "{count} items need attention"
+      "pending": "{count} items need attention",
+      "draftRevision": "Draft revision {version}",
+      "needsAttention": "{count} need your attention",
+      "background": "Hermes is working in the background",
+      "review": "Review this material",
+      "recover": "See what needs attention",
+      "progress": "View processing progress"
     },
     "import": {
-      "eyebrow": "New research context",
-      "title": "Start a research object",
-      "description": "Bring existing material or begin with a blank structured object.",
-      "upload": "Upload materials",
-      "blank": "Create blank RO"
+      "eyebrow": "Start new research",
+      "title": "Add a paper or research material",
+      "description": "Upload a PDF or other material for Hermes to organise, or begin from a blank record.",
+      "upload": "Upload PDF or material",
+      "blank": "Start from blank"
     },
     "literature": {
       "eyebrow": "Personal literature",
@@ -630,6 +885,9 @@
       "getFullText": "Get full text",
       "disclosure": "Get full text",
       "download": "Download source",
+      "importToRo": "Import to this RO and extract",
+      "importingToRo": "Importing and extracting…",
+      "importError": "The source could not be imported into this research object. Please try again.",
       "statusPending": "Waiting in queue",
       "statusRunning": "Retrieving source",
       "statusAuthRequired": "Institutional access needs attention before full text can be retrieved.",
@@ -640,10 +898,10 @@
       "expires": "Available until {expiresAt}",
       "retry": "Try again",
       "noResults": "No matching metadata yet.",
-      "error": "The source request could not be completed. Please try again."
-      ,"pendingIntent": "Finish or recover the current source request before starting another."
-      ,"reconnecting": "Reconnecting to the task…"
-      ,"recoveryError": "The task could no longer be recovered. You can start a new source request."
+      "error": "The source request could not be completed. Please try again.",
+      "pendingIntent": "Finish or recover the current source request before starting another.",
+      "reconnecting": "Reconnecting to the task…",
+      "recoveryError": "The task could no longer be recovered. You can start a new source request."
     },
     "hermes": {
       "title": "Hermes tasks",
@@ -653,67 +911,213 @@
       "retry": "Retry task",
       "view": "View progress",
       "progress": "{current} of {total} fields",
+      "states": {
+        "idle": "Ready",
+        "guiding": "Guiding",
+        "scanning": "Reading",
+        "suggesting": "Suggestion ready",
+        "awaiting_approval": "Awaiting confirmation",
+        "failed": "Needs attention"
+      },
+      "taskStates": {
+        "queued": "Queued",
+        "uploading": "Uploading",
+        "parsing": "Parsing",
+        "stored": "Prepared",
+        "needsReview": "Needs review",
+        "failedRetryable": "Retry available",
+        "failedBlocked": "Blocked",
+        "working": "In progress"
+      },
+      "showMore": "Show {count} more tasks",
+      "showLess": "Show fewer tasks",
       "guide": {
         "backToGuide": "Back to research guidance",
-        "actionable": { "title": "A research task can move forward", "body": "I can start with the highest-priority task and help determine the next step." },
-        "review": { "title": "Evidence needs your review", "body": "The current task is explicitly marked for review. We can begin by checking the evidence." },
-        "failed": { "title": "A task needs investigation", "body": "The current task did not complete. I can explain the failure and suggest a safe recovery path." },
-        "processing": { "title": "Hermes is organising the material", "body": "The current task is still processing. I can explain its progress and prepare the checks that follow." },
-        "queued": { "title": "A research task is queued", "body": "The task has not started yet. I can help organise the research steps that come next." },
-        "continue": { "title": "Continue your latest research", "body": "I can organise the next step around this research object without changing anything you have not approved." },
-        "neutral": { "title": "What would you like to advance today?", "body": "I will understand the goal first, then propose a verifiable and actionable research path." },
-      "invoke": "Invoke Hermes",
-      "eyebrow": "Hermes / contextual guide",
-      "menu": {
-        "trigger": "Hermes: click for the assistant; right-click or long-press for actions",
-        "label": "Hermes action menu",
-        "eyebrow": "Hermes · with you",
-        "title": "What shall we do?",
-        "evidence": "Inspect evidence and sources",
-        "evidenceNote": "Return to this research object's evidence ledger",
-        "explore": "Open the research index",
-        "exploreNote": "Continue through public research records",
-        "quiet": "Read quietly with me",
-        "quietNote": "Put reminders aside and stay in the margin",
-        "quietFeedback": "I’m here. Let’s think slowly.",
-        "companion": "Companion",
-        "groups": { "companion": "With Hermes", "research": "Research tools" },
-        "intro": {
-          "presence": "I’m here. I’ve kept your place.",
-          "actionable": "There is evidence ready for your review.",
-          "continue": "Your latest research is ready to continue.",
-          "neutral": "We can begin with whatever you want to understand."
+        "presentationSuggestionLabel": "Storyboard brief generated by Hermes",
+        "usePresentationSuggestion": "Use in the editable storyboard",
+        "browserSessionDraft": "This draft is kept in this browser session and separated by account, research object, and version.",
+        "actionable": {
+          "title": "A research task can move forward",
+          "body": "I can start with the highest-priority task and help determine the next step."
         },
-        "actions": {
-          "greet": { "label": "Say hello", "feedback": { "one": "Hello — I’m right here.", "two": "There you are. I kept your place.", "three": "Hi. What are we curious about today?" } },
-          "encourage": { "label": "Encourage me", "feedback": { "one": "You’ve come this far. Let’s take one more step.", "two": "The difficult part is moving. So are you.", "three": "One careful step is still progress." } },
-          "think": { "label": "Think together", "feedback": { "one": "Let’s pause and sort the clues together.", "two": "Give me a moment — these pieces do connect.", "three": "Let’s hold the question still and look again." } },
-          "listen": { "label": "Listen to me", "feedback": { "one": "I’m listening. Take your time.", "two": "Go on. I’m following the thread.", "three": "Tell me the part that still feels unresolved." } },
-          "stretch": { "label": "Take a stretch", "feedback": { "one": "Stretch with me — let your shoulders soften.", "two": "Up we go. Give your back a little room.", "three": "A small stretch, then we return with fresh eyes." } },
-          "rest": { "label": "Rest a moment", "feedback": { "one": "Rest a moment. I’ll keep your place.", "two": "We can be quiet. Nothing here will run away.", "three": "Close your eyes for a breath; I’ll watch the page." } },
-          "celebrate": { "label": "Mark this step", "feedback": { "one": "This step is done. Let’s celebrate it.", "two": "That deserves a proper little victory.", "three": "We moved the work forward — mark this moment." } },
-          "read-together": { "label": "Read with me", "feedback": { "one": "We’re here. I’ll read the next passage with you.", "two": "Let’s follow this paragraph one claim at a time.", "three": "I’ll stay with the text; you set the pace." } },
-          "continue": { "label": "Continue this step", "feedback": { "one": "Back to our last step — let’s continue.", "two": "I found our place. We can carry on from here.", "three": "The next step is ready when you are." } },
-          "evidence": { "label": "Review evidence", "feedback": { "one": "Hold this conclusion — let’s check its evidence.", "two": "Let’s see which source actually supports this claim.", "three": "Evidence first. Then we decide what the result means." } },
-          "sources": { "label": "Trace sources", "feedback": { "one": "Let’s trace the citation back to its source.", "two": "I’ll follow the reference trail with you.", "three": "Let’s find where this claim first entered the record." } },
-          "compare": { "label": "Compare versions", "feedback": { "one": "Let’s place the versions side by side and inspect the differences.", "two": "I’ll line up the changes so nothing slips past us.", "three": "Same research, two moments — let’s see what changed." } }
+        "review": {
+          "title": "Evidence needs your review",
+          "body": "The current task is explicitly marked for review. We can begin by checking the evidence."
         },
-        "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
-        "mobileHint": "Long-press Hermes to open · tap still enters the assistant"
-      },
-      "dialogLabel": "Hermes research guide",
+        "failed": {
+          "title": "A task needs investigation",
+          "body": "The current task did not complete. I can explain the failure and suggest a safe recovery path."
+        },
+        "processing": {
+          "title": "Hermes is organising the material",
+          "body": "The current task is still processing. I can explain its progress and prepare the checks that follow."
+        },
+        "queued": {
+          "title": "A research task is queued",
+          "body": "The task has not started yet. I can help organise the research steps that come next."
+        },
+        "continue": {
+          "title": "Continue your latest research",
+          "body": "I can organise the next step around this research object without changing anything you have not approved."
+        },
+        "neutral": {
+          "title": "What would you like to advance today?",
+          "body": "I will understand the goal first, then propose a verifiable and actionable research path."
+        },
+        "invoke": "Invoke Hermes",
+        "invokeTask": "Open {task}",
+        "eyebrow": "Hermes / contextual guide",
+        "menu": {
+          "trigger": "Hermes: click for the assistant; right-click or long-press for actions",
+          "label": "Hermes action menu",
+          "eyebrow": "Hermes · with you",
+          "title": "What shall we do?",
+          "evidence": "Inspect evidence and sources",
+          "evidenceNote": "Return to this research object's evidence ledger",
+          "explore": "Open the research index",
+          "exploreNote": "Continue through public research records",
+          "quiet": "Read quietly with me",
+          "quietNote": "Put reminders aside and stay in the margin",
+          "quietFeedback": "I’m here. Let’s think slowly.",
+          "companion": "Companion",
+          "groups": {
+            "companion": "With Hermes",
+            "research": "Research tools"
+          },
+          "intro": {
+            "presence": "I’m here. I’ve kept your place.",
+            "actionable": "There is evidence ready for your review.",
+            "continue": "Your latest research is ready to continue.",
+            "neutral": "We can begin with whatever you want to understand."
+          },
+          "actions": {
+            "greet": {
+              "label": "Say hello",
+              "feedback": {
+                "one": "Hello — I’m right here.",
+                "two": "There you are. I kept your place.",
+                "three": "Hi. What are we curious about today?"
+              }
+            },
+            "encourage": {
+              "label": "Encourage me",
+              "feedback": {
+                "one": "You’ve come this far. Let’s take one more step.",
+                "two": "The difficult part is moving. So are you.",
+                "three": "One careful step is still progress."
+              }
+            },
+            "think": {
+              "label": "Think together",
+              "feedback": {
+                "one": "Let’s pause and sort the clues together.",
+                "two": "Give me a moment — these pieces do connect.",
+                "three": "Let’s hold the question still and look again."
+              }
+            },
+            "listen": {
+              "label": "Listen to me",
+              "feedback": {
+                "one": "I’m listening. Take your time.",
+                "two": "Go on. I’m following the thread.",
+                "three": "Tell me the part that still feels unresolved."
+              }
+            },
+            "stretch": {
+              "label": "Take a stretch",
+              "feedback": {
+                "one": "Stretch with me — let your shoulders soften.",
+                "two": "Up we go. Give your back a little room.",
+                "three": "A small stretch, then we return with fresh eyes."
+              }
+            },
+            "rest": {
+              "label": "Rest a moment",
+              "feedback": {
+                "one": "Rest a moment. I’ll keep your place.",
+                "two": "We can be quiet. Nothing here will run away.",
+                "three": "Close your eyes for a breath; I’ll watch the page."
+              }
+            },
+            "celebrate": {
+              "label": "Mark this step",
+              "feedback": {
+                "one": "This step is done. Let’s celebrate it.",
+                "two": "That deserves a proper little victory.",
+                "three": "We moved the work forward — mark this moment."
+              }
+            },
+            "read-together": {
+              "label": "Read with me",
+              "feedback": {
+                "one": "We’re here. I’ll read the next passage with you.",
+                "two": "Let’s follow this paragraph one claim at a time.",
+                "three": "I’ll stay with the text; you set the pace."
+              }
+            },
+            "continue": {
+              "label": "Continue this step",
+              "feedback": {
+                "one": "Back to our last step — let’s continue.",
+                "two": "I found our place. We can carry on from here.",
+                "three": "The next step is ready when you are."
+              }
+            },
+            "evidence": {
+              "label": "Review evidence",
+              "feedback": {
+                "one": "Hold this conclusion — let’s check its evidence.",
+                "two": "Let’s see which source actually supports this claim.",
+                "three": "Evidence first. Then we decide what the result means."
+              }
+            },
+            "sources": {
+              "label": "Trace sources",
+              "feedback": {
+                "one": "Let’s trace the citation back to its source.",
+                "two": "I’ll follow the reference trail with you.",
+                "three": "Let’s find where this claim first entered the record."
+              }
+            },
+            "compare": {
+              "label": "Compare versions",
+              "feedback": {
+                "one": "Let’s place the versions side by side and inspect the differences.",
+                "two": "I’ll line up the changes so nothing slips past us.",
+                "three": "Same research, two moments — let’s see what changed."
+              }
+            }
+          },
+          "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
+          "mobileHint": "Long-press Hermes to open · tap still enters the assistant"
+        },
+        "dialogLabel": "Hermes research guide",
         "title": "Start with the goal. I will guide the route.",
         "close": "Close Hermes",
         "openContext": "Open current task",
+        "openTask": "Open {task}",
         "goalLabel": "What would you like to advance today?",
         "goalPlaceholder": "For example: organise the imported paper into a reusable RO structure",
         "submit": "Ask Hermes to plan",
-      "working": "Hermes is organising the evidence…",
-      "progress": "Task progress {progress}%",
-      "resume": "Resume this task",
-      "result": "Suggested research path",
-      "needsMoreInformation": "I need a little more context before I can offer reliable guidance.",
-      "error": "Hermes could not complete this plan. Your goal is preserved so you can retry."
+        "working": "Hermes is organising the evidence…",
+        "progress": "Task progress {progress}%",
+        "resume": "Resume this task",
+        "result": "Suggested research path",
+        "needsMoreInformation": "I need a little more context before I can offer reliable guidance.",
+        "error": "Hermes could not complete this plan. Your goal is preserved so you can retry."
+      },
+      "conversation": {
+        "label": "Talk with Hermes",
+        "body": "Refine ideas, edit content and move your research forward."
+      },
+      "activity": {
+        "eyebrow": "Current research status",
+        "title": "Research progress",
+        "loading": "Loading research progress…",
+        "unavailable": "Some progress is temporarily unavailable. You can keep editing your research.",
+        "attention": "Needs your attention",
+        "background": "Running in the background",
+        "history": "Earlier records ({count})"
       }
     },
     "research": {
@@ -729,7 +1133,8 @@
         "published": "Published",
         "revised": "Revised",
         "archived": "Archived"
-      }
+      },
+      "draftRevision": "Draft revision {version}"
     },
     "errors": {
       "kicker": "System / interrupted",
@@ -740,16 +1145,25 @@
   },
   "createResearch": {
     "back": "Dashboard",
-    "title": "Create a research object",
-    "description": "Start with a blank structured object or attach source material. Files remain evidence; Hermes proposes structure only after storage.",
+    "title": "Start with one thought",
+    "description": "Tell Hermes what you want to explore, attach source material, or do both. You will continue in the same private research space.",
     "workspace": "Workspace",
     "workspaceLoading": "Loading workspaces…",
     "researchTitle": "Research title",
+    "hermesPrompt": "Start with Hermes",
+    "hermesPromptNote": "One thought or an attachment is enough",
+    "hermesPlaceholder": "For example: help me trace this paper's central question, method, and evidence",
+    "details": "Workspace and title",
+    "optionalTitle": "Title (optional)",
+    "titlePlaceholder": "Leave blank to use your description or filename as a temporary title",
+    "untitled": "Untitled research",
     "materials": "Source materials (optional)",
     "materialsHint": "PDF, DOCX, TeX/ZIP, Markdown and common research images. Upload processing continues in the next step.",
     "materialsRequired": "Choose at least one source file to start an import.",
-    "create": "Create research object",
-    "creating": "Creating…",
+    "create": "Start research",
+    "continue": "Continue to research",
+    "creating": "Creating your private research space…",
+    "privacyNote": "Your instruction and attachments stay in this workspace. Files continue processing while Hermes responds in the editor.",
     "error": "The research object could not be created.",
     "evidenceTitle": "Evidence before automation",
     "evidenceBody": "The original artifact, extraction proposal and your decisions remain separate and traceable.",
@@ -764,6 +1178,10 @@
     "eyebrow": "OpenScience / Research Object"
   },
   "hermesReview": {
+    "snapshotLoadError": "The saved confirmation snapshot could not be loaded. Retry to view its contents.",
+    "legacyConfirmation":"This older import has no recorded confirmation snapshot. Review the saved versions before relying on its evidence.",
+    "reviewPending": "Extracted content needs human review. Leave unavailable information empty; do not fill it with assumptions.",
+    "missing": "Not provided · pending",
     "missingTask": "The task identifier is missing.",
     "back": "Back to Dashboard",
     "eyebrow": "Hermes / Evidence review",
@@ -772,13 +1190,30 @@
     "loading": "Reading the material and suggestions…",
     "loadError": "Unable to load the Hermes suggestion",
     "confirmError": "Confirmation failed. Refresh and try again.",
+    "proposalUnavailableTitle": "The structured suggestion was not generated",
+    "proposalUnavailableBody": "The source is safely stored and parsed, but Hermes did not produce a result that passed validation. Retry the same material without uploading it again.",
+    "proposalRetry": "Retry structured extraction",
+    "proposalReanalysisTitle": "The structured result has no reviewable evidence",
+    "proposalReanalysisBody": "Hermes kept the source, but the previous analysis extracted no source-supported SDF fields. Reanalyzing the same material uses 1 AI credit; no upload is needed.",
+    "proposalReanalysis": "Reanalyze · 1 AI credit",
+    "proposalCompensation": "Continue analysis · No additional charge",
+    "proposalCompensationBody": "The paid analysis encountered a structured-output error. Eligible tasks can continue once using the existing payment, without another upload.",
+    "partialExtractionNotice": "Extraction validation is incomplete for this field; the paper may contain relevant information. Other extracted content remains available for review.",
+    "proposalRetrying": "Extracting again…",
+    "proposalRetryError": "Structured extraction could not be retried. Try again later.",
+    "legacyRefreshTitle": "Reanalyze with the current parser",
+    "legacyRefreshBody": "The current analysis record remains in history. Reanalyzing the same uploaded material uses the updated parser and source location and costs 1 AI credit; it does not re-upload or auto-confirm.",
+    "legacyRefreshAction": "Reanalyze uploaded material · 1 credit",
+    "legacyRefreshing": "Creating reanalysis task…",
+    "legacyRefreshError": "Reanalysis could not start. The old analysis was not changed.",
+    "legacyRefreshUncertain": "The reanalysis request outcome is not yet confirmed. The old analysis remains in history; check this task again to resume it.",
     "fieldLabel": "Review SDF fields",
     "taskState": "Task status: {state}",
     "boundary": "Suggestion boundary",
     "boundaryNote": "Hermes stays quiet here. Right-click or long-press for the current evidence tools.",
     "saved": "Confirmed and recorded in a new version.",
     "ready": "All six fields are complete and ready to confirm.",
-    "incomplete": "Complete all fields before confirming.",
+    "incomplete": "Missing fields may remain empty. Continue verification after confirmation.",
     "saving": "Recording…",
     "confirmed": "Confirmed",
     "confirm": "Confirm and create version",
@@ -796,6 +1231,19 @@
     "allTasks": "All research tasks",
     "scopeMismatch": "This task does not belong to the current research object. Return to its task list to continue.",
     "viewVersions": "View versions"
+  },
+  "hermesRun": {
+    "usageLimited": "The image service has reached its usage limit. Saved images remain available for review; the remaining images can continue after the limit resets.",
+    "imageProgress": "{current} of {total} illustrations available",
+    "imageReviewDescription": "Your illustrations are ready. Review their scientific content and visual clarity; approval does not publish them.",
+    "saveConflict": "Some completion states did not sync. Saved images remain available and do not need to be generated again.",
+    "stepFailed": "Some steps did not finish. Saved content remains available; you can review the results and research materials.",
+    "stage": { "source_ingestion": "Paper analysis", "storyboard": "Illustration plan", "scene_image": "Illustration {number}", "video": "Video production" },
+    "retryGeneration": "Continue unfinished generation", "retrying": "Resuming generation…", "retryError": "Generation could not resume. Review the error before retrying.", "retryDescription": "Completed results are preserved. This adds {count} generation tasks under the existing credit policy.",
+    "title": "Paper and illustrations", "startDescription": "Hermes tracks this paper on the server. You may leave and return; every source and media review remains your decision.", "unavailableDescription": "The paper is preparing a trackable analysis task. Start this workflow when one is available.", "startFor": "Ask Hermes to track: {source}", "sourceLabel": "Paper material to track", "starting": "Creating workflow…", "loading": "Restoring Hermes workflow…", "loadError": "The Hermes workflow could not be restored.", "startError": "The Hermes workflow could not be created.", "grantError": "The content-driven media authorization could not be recorded.", "upgradeGrant": "Use the paper-driven media workflow", "granting": "Updating media authorization…", "actions": "Workflow actions", "source": "Source material {number}", "stepName": "Workflow step {number}", "reopen": "Save this workflow link", "reviewSource": "Review paper structure and sources", "reviewPresentation": "View illustrations and generation plan", "openFiles": "Open research materials", "sourceReviewSection": "Continue Hermes source review", "confirmedVersion": "Using confirmed draft version {number}.", "reviewClaims": "Review claims and evidence", "claimReviewTitle": "Review claims and source evidence", "claimReviewDescription": "Check each source passage and confirm it supports the linked claim. Hermes remains paused until this review is recorded.", "claimLoadError": "The claims or source evidence could not be loaded, so nothing can be confirmed.", "claimVerifyError": "This evidence could not be confirmed. Refresh and try again.", "claimSourceError": "The exact source could not be loaded.", "claimSourceUnavailable": "No source text is available for this evidence.", "claimStatement": "Claim being checked", "claimConditions": "Conditions", "claimLimitations": "Limitations", "viewSource": "View exact source", "loadingSource": "Loading source…", "sourcePage": "Source page {page}", "sourceLocation": "Source location available", "evidenceVerified": "Confirmed", "verifying": "Confirming…", "verifyEvidence": "Confirm this source evidence", "claimReviewEmpty": "No source evidence is available for this workflow.", "returnToRun": "Return to Hermes workflow",
+    "status": { "running": "Analyzing source material", "awaiting_source_review": "Paper structure and sources need review", "awaiting_claim_review": "Claims and candidate evidence need review", "generating_storyboard": "Generating storyboard", "awaiting_storyboard_review": "Storyboard needs review", "generating_scene_images": "Generating scene images", "awaiting_scene_images_review": "Scene images need review", "generating_video": "Generating video", "awaiting_video_review": "Video needs review", "succeeded": "Workflow complete", "failed": "Some steps need attention", "stopped": "Workflow stopped" },
+    "description": { "running": "Analysis continues on the server; closing this page does not cancel it.", "awaiting_source_review": "Review the six research fields and source passages first. Hermes will not start media before confirmation.", "awaiting_claim_review": "Claims and candidate evidence need scientific review; they are not thereby verified.", "generating_storyboard": "The server is running authorized follow-on media work.", "awaiting_storyboard_review": "Review the storyboard before scene images continue.", "generating_scene_images": "Authorized scene images are being generated on the server.", "awaiting_scene_images_review": "Review every scene image before video continues.", "generating_video": "The authorized video is being generated on the server.", "awaiting_video_review": "Review the video; completion never publishes research automatically.", "succeeded": "The reviewed media workflow is complete.", "failed": "A server step did not finish. Inspect the error before deciding what to do next.", "stopped": "The workflow stopped safely because its research object or permission scope changed." },
+    "step": { "waiting": "Waiting", "running": "In progress", "awaiting_approval": "Awaiting review", "succeeded": "Complete", "failed": "Failed", "stopped": "Stopped" }
   },
   "ingestion": {
     "status": {
@@ -852,9 +1300,14 @@
     "intake": {
       "title": "Arrange the evidence set",
       "stepLabel": "02 / Evidence intake",
+      "researchStartTitle": "Research materials (optional)",
+      "researchStartDescription": "Add papers or research materials and Hermes will organise them for you.",
+      "researchStartDropTitle": "Drop papers or research materials here",
+      "commonFormats": "Common formats: PDF · DOCX · PPTX · HTML · Markdown · images · XLSX",
+      "allFormats": "View all supported formats",
       "localOnly": "Files remain on this device until you explicitly create the Research Object.",
       "dropTitle": "Drop source material into the working set",
-      "formats": "PDF · Word · TeX/ZIP · Markdown · images · CSV/TSV · JSON/YAML · Notebook · Python/R",
+      "formats": "PDF · DOCX/PPTX · HTML · TeX/ZIP · Markdown · images · CSV/TSV/XLSX · JSON/YAML · Notebook · Python/R (DOC/generic ZIP are not auto-parsed)",
       "browse": "Choose files",
       "remove": "Remove",
       "retry": "Retry",
@@ -902,27 +1355,71 @@
   },
   "explore": {
     "eyebrow": "Public research index",
-    "title": "Research worth inspecting.",
-    "description": "Verified public Research Objects will appear here with their evidence, SDF structure, versions, licenses, and review history intact.",
+    "title": "Discover research. Understand its contribution.",
+    "description": "Start with the concept image and key findings, then explore the methods and original sources.",
     "empty": "No public Research Objects match this index view.",
     "create": "Create a Research Object",
     "indexLabel": "Published Research Object index",
-    "search": "Search title or SDF evidence",
-    "field": "SDF field",
-    "artifactType": "Artifact type",
-    "allFields": "All SDF fields",
-    "allArtifacts": "All artifacts",
+    "search": "Search research titles or content",
+    "field": "Content",
+    "artifactType": "Material type",
+    "allFields": "All content",
+    "allArtifacts": "All materials",
     "apply": "Apply filters",
     "loading": "Reading the public index…",
     "error": "The public index could not be loaded.",
     "loadMore": "Continue index",
     "unknownAuthor": "Author record pending",
     "noArtifacts": "No artifacts",
-    "fields": { "problem": "Problem", "insight": "Insight", "method": "Method", "results": "Results", "limitations": "Limitations", "reproducibility": "Reproducibility" },
-    "artifacts": { "document": "Documents", "image": "Images", "data": "Data", "code": "Code", "video": "Video", "other": "Other" }
+    "fields": {
+      "problem": "Problem",
+      "insight": "Insight",
+      "method": "Method",
+      "results": "Results",
+      "limitations": "Limitations",
+      "reproducibility": "Reproducibility"
+    },
+    "artifacts": {
+      "document": "Documents",
+      "image": "Images",
+      "data": "Data",
+      "code": "Code",
+      "video": "Video",
+      "other": "Other"
+    },
+    "searchAction": "Search",
+    "refineSearch": "Refine search",
+    "recentFirst": "Newly public research first · Latest published version of each study",
+    "imageFor": "Core concept image for {title}",
+    "readResearch": "Read research",
+    "recentTitle": "Recently shared research",
+    "recentDescription": "See the central idea, then explore the findings and their limits.",
+    "browseAll": "Explore all research"
   },
   "presentation": {
+    "askHermes": "Ask Hermes to create",
+    "emptyHermesBody": "Tell Hermes what to explain. Progress and results stay here.",
+    "manualToolsTitle": "Sources and manual tools",
+    "manualToolsBody": "Open source claims and production tools when you need precise control.",
+    "requestImage": "Generate an image",
+    "requestVideo": "Generate a video",
+    "coreImageTitle": "Core concept image",
+    "researchVideoTitle": "Research explainer video",
+    "imagePlaceholderTitle": "The core concept image is not ready",
+    "imagePlaceholderBody": "Tell Hermes which mechanism or finding to explain. The real image will replace this space when it is ready.",
+    "videoPlaceholderTitle": "The research explainer video is not ready",
+    "videoPlaceholderBody": "Video is an optional follow-on result. Request it in the Hermes conversation and it will appear here when ready.",
+    "previousSlide": "Previous image",
+    "nextSlide": "Next image",
+    "slidePosition": "{current} / {total}",
+    "briefNeedsRevision": "Hermes could not finish the production brief. Your content is saved; ask Hermes to adjust the instructions and continue.",
+    "failureDetails": "Failure details",
+    "sceneProgress": "{current} of {total} generated",
+    "partialImages": "Review the available illustrations while the others remain unfinished. Each image can be reviewed individually; only approved content can be published.",
     "storyboard": {
+      "manualDetails": "Detailed instructions and narration",
+      "styleDescription": {"watercolor":"Soft color and texture","technical":"Clear scientific diagrams","ink":"Concise line illustrations"},
+      "aiDrawingDetails": "Drawing details for AI",
       "generateImage": "Illustrate this scene",
       "imageCharge": "One image costs 1 AI credit. Review the drawing before approving it.",
       "imageSource": "Storyboard: {title} · Scene {number}",
@@ -946,10 +1443,11 @@
       "revise": "Create revised draft · 1 AI credit",
       "narration": "Spoken narration",
       "visualAction": "Visual action",
+      "animationPlan": "Full animation plan · objects, actions and source basis",
       "seconds": "{count} seconds",
       "scene": "Scene {number}",
-      "sources": "Source Claims",
-      "sourceUnavailable": "Source Claim unavailable",
+      "sources": "Reviewed original evidence",
+      "sourceUnavailable": "Reviewed original evidence unavailable",
       "previous": "Previous plan",
       "current": "New draft",
       "noScene": "No scene in this plan.",
@@ -963,10 +1461,10 @@
     "openVideo": "Play video in a new window",
     "mediaAdminApproval": "Images and videos currently require approval by a platform administrator with editing access to this workspace.",
     "navigation": "Visual explanations", "skip": "Skip to presentation", "kicker": "Claim-led presentation", "title": "Visual explanations", "description": "See what the research does and how it works, then explore the claims behind each explanation.",
-    "sourceTitle": "Source claims, concept maps and storyboards", "sourceBody": "Add or select completed claims to generate a text-based concept map. Research illustrations and videos are imported after production and review.", "selectClaims": "Select claims", "selectedLimit": "{count} of {max} selected", "generate": "Generate concept map", "starting": "Starting…",
+    "sourceTitle": "Source claims, concept maps and storyboards", "sourceBody": "Hermes plans a concept map or storyboard from the selected claims. Review the claims and their sources first; after the required review, the server generates the images or video.", "openSourceReview": "Review literature and extraction", "selectClaims": "Select claims", "selectedLimit": "{count} of {max} selected", "generate": "Generate concept map", "starting": "Starting…",
     "claimStatementLabel": "Core claim statement", "claimStatementPlaceholder": "State one result or mechanism in a precise sentence", "claimDraftNote": "Saved as a human-authored draft with scientific support marked as missing until evidence is reviewed.", "addClaim": "Add claim", "claimSaveFailed": "The claim could not be saved. Retry to continue with the same draft.",
     "noClaims": "No claims are recorded for this version yet. Add the first core claim above.", "noClaimsReadonly": "No claims were recorded for this version.", "loadingSources": "Loading claims for this version…", "scopeLoadFailed": "Claims and presentation content were not loaded, so changes remain disabled.", "retryScopeLoad": "Retry loading claims and presentation content", "openEditor": "Open the SDF editor", "openVersions": "View versions",
-    "previewTitle": "Research visuals", "emptyPreview": "Select available claims to create a concept map or storyboard.", "emptyPreviewReadonly": "No presentation content was recorded for this version.", "loadingPreviews": "Loading presentation content for this version…", "assetTitle": "Claim concept map", "generatedByPlatform": "Generated by the OpenScience diagram engine", "notEvidence": "An explanation of the research, not original evidence.", "linkedClaims": "Based on these claims", "linkedClaimsUnavailable": "The linked claim text is unavailable in this view.", "viewFullSize": "Open full-size diagram", "openAsset": "Open presentation file", "approve": "Approve for publication", "reject": "Reject draft", "rejectedNote": "This draft was rejected and cannot be approved. Create a new draft for the current version.",
+    "previewTitle": "Research visuals", "emptyPreviewTitle": "No visuals yet", "emptyPreviewNeedsSources": "This version has no usable claims for a visual explanation yet. Review the existing literature and extraction first, then check each claim against its source; you can also draft one manually below.", "emptyPreview": "Select available claims to create a concept map or storyboard.", "startVisual": "Choose claims and create an illustration", "emptyPreviewReadonly": "No presentation content was recorded for this version.", "loadingPreviews": "Loading presentation content for this version…", "assetTitle": "Claim concept map", "generatedByPlatform": "Generated by the OpenScience diagram engine", "notEvidence": "An explanation of the research, not original evidence.", "linkedClaims": "Based on these claims", "linkedClaimsUnavailable": "The linked claim text is unavailable in this view.", "viewFullSize": "Open full-size diagram", "imageNumber": "Illustration {number}", "planningHistoryTitle": "Detailed instructions", "planningHistoryBody": "Hermes prepares the production instructions. Expand them only to review or customize details.", "videoSecondary": "Optional follow-up media. Review it separately from the illustration.", "recoverInSources": "Review sources and continue", "openAsset": "Open presentation file", "approve": "Approve for publication", "reject": "Reject draft", "rejectedNote": "This draft was rejected and cannot be approved. Create a new draft for the current version.",
     "assetStatus": { "draft": "Needs review", "approved": "Approved", "rejected": "Rejected" }, "assessment": { "supported": "Marked supported", "partial": "Marked partly supported", "disputed": "Marked disputed", "missing": "Evidence support not recorded" }, "claimStatus": { "needs_review": "Extraction needs review before use", "blocked": "Extraction is blocked", "failed": "Extraction failed" },
     "provenance": "Media is linked to this version and its claims. Changes to source claims retire affected media.",
     "loading": "Loading presentation workspace…", "loadError": "The presentation workspace could not be loaded.", "generationStartFailed": "The generation task could not be started. Retry to continue with the same request.", "generationFailed": "The generation task failed. Please retry.", "transitionFailed": "The presentation status could not be updated.",
@@ -991,7 +1489,7 @@
       "hermes": "Hermes", "presentation": "Visual explanations", "overview": "Overview", "sdf": "Edit", "files": "Files", "versions": "Versions", "collaboration": "Collaboration", "publish": "Publish", "sandbox": "Sandbox",
       "more": "More"
     },
-    "overview": { "imageTitle": "Mechanism illustration", "videoTitle": "Research explanation video", "mediaVersion": "From committed version v{number}; the text may include later edits.", "sources": "Sources and original evidence", "desk": "Research desk", "manageMedia": "View and manage visual assets", "discuss": "Discuss this passage with Hermes", "media": "Visual explanation", "notEvidence": "Approved explanatory assets do not replace original papers, figures or code evidence.", "noMedia": "This version has no approved image or video yet.", "mediaFailed": "Visual assets could not be loaded. The research text is still available.", "retry": "Retry loading", "sourceBody": "Check original papers, figures and code in source files, and trace research changes through versions.", "openSources": "Open source files", "kicker": "Object overview", "title": "Overview", "body": "A quiet index of what this Research Object claims, how it is evidenced, and where its current version stands.", "status": "Object state", "visibility": "Visibility", "history": "Recorded versions", "emptyTitle": "Start with a paper", "emptyBody": "Add the source paper. Let Hermes help you shape its question, method and findings, then review and refine them.", "continue": "Open SDF editor", "inspect": "Inspect versions",
+    "overview": { "imageTitle": "Mechanism illustration", "videoTitle": "Research explanation video", "mediaVersion": "From committed version v{number}; the text may include later edits.", "sources": "Sources and original evidence", "desk": "Research desk", "manageMedia": "View and manage visual assets", "discuss": "Discuss this passage with Hermes", "media": "Visual explanation", "notEvidence": "Approved explanatory assets do not replace original papers, figures or code evidence.", "noMedia": "This version has no approved image or video yet.", "mediaFailed": "Visual assets could not be loaded. The research text is still available.", "retry": "Retry loading", "sourceBody": "Check original papers, figures and code in source files, and trace research changes through versions.", "openSources": "Open source files", "kicker": "Object overview", "title": "Overview", "body": "A quiet index of what this Research Object claims, how it is evidenced, and where its current version stands.", "status": "Object state", "visibility": "Visibility", "history": "Recorded versions", "emptyTitle": "Start with a paper", "emptyBody": "Add the source paper. Let Hermes help you shape its question, method and findings, then review and refine them.", "ingestionTitle": "Continue with the existing literature", "ingestionBody": "The literature is already in the Hermes workflow. Continue to review the extraction and anything that needs your attention.", "ingestionLoadingTitle": "Checking research progress", "ingestionLoadingBody": "This research object already exists. Hermes is reading its literature and task status.", "ingestionUnknownTitle": "Continue this research object", "ingestionUnknownBody": "The literature processing status is temporarily unavailable. You can still open Hermes to view tasks and sources.", "continueIngestion": "Continue literature review", "openHermes": "Open Hermes", "continue": "Open SDF editor", "inspect": "Inspect versions",
       "upload": "Add a paper",
       "ask": "Help me get started",
       "companionTitle": "Your research companion",
@@ -1003,10 +1501,14 @@
       "stepTwoBody": "Turn reviewed ideas into illustrations and video.",
       "emptyMedia": "Illustrations and videos will appear here once your research is ready."
     },
-    "versions": { "kicker": "Version history", "title": "Versions", "body": "Snapshots are immutable records. Select two to compare their exact SDF and evidence manifest.", "compare": "Compare", "emptyTitle": "No committed versions", "emptyBody": "Create the first commit from the SDF editor or Files surface.", "diff": "Deterministic comparison" },
-    "files": { "kicker": "Evidence store", "title": "Files", "body": "Upload manuscripts, data, code, images or video. Files become part of a version only when you create a commit.", "provenance": "Evidence provenance", "provenanceBody": "The upload records a content hash and logical path. A commit binds it to an immutable Research Object version.", "defaultCommit": "Attach evidence", "commitMessage": "Commit message", "attaching": "Creating commit…", "attach": "Attach to new version", "empty": "Choose one or more files above to prepare a version.", "committed": "Evidence committed. The new version is now available in Versions." },
+    "versions": { "notFound": "This version is not in this research object.",
+      "kicker": "Version history", "title": "Versions", "body": "Snapshots are immutable records. Select two to compare their exact SDF and evidence manifest.", "compare": "Compare", "emptyTitle": "No committed versions", "emptyBody": "Create the first commit from the SDF editor or Files surface.", "diff": "Deterministic comparison" },
+    "files": { "savedMaterials": "Saved materials and imports",
+      "snapshotVersion": "Version {version}",
+      "addMore": "Add more materials above.",
+      "kicker": "Evidence store", "title": "Files", "body": "Upload manuscripts, data, code, images or video. Files become part of a version only when you create a commit.", "provenance": "Evidence provenance", "provenanceBody": "The upload records a content hash and logical path. A commit binds it to an immutable Research Object version.", "defaultCommit": "Attach evidence", "commitMessage": "Commit message", "attaching": "Creating commit…", "attach": "Attach to new version", "empty": "Choose one or more files above to prepare a version.", "committed": "Evidence committed. The new version is now available in Versions." },
     "sandbox": { "kicker": "Reproducible execution", "title": "Sandbox", "body": "Run a bounded scientific script on the server, inspect its output, and keep the environment alongside the Research Object.", "context": "Research Object visualization", "environment": "Execution environment", "script": "Python script", "starting": "Starting…", "run": "Run in sandbox", "notFound": "The sandbox job was not found.", "result": "Visualization result", "close": "Close", "runtime": "Runtime", "download": "Download locally", "viewScript": "View Python script", "logs": "Execution logs", "modify": "Modify script", "previewError": "Could not generate a preview.", "executeError": "Could not create the modified job.", "modifyPrompt": "Describe the change", "modifyPlaceholder": "For example: change the curve colour, add a title, or adjust the x-axis label.", "previewing": "Generating preview…", "preview": "Generate preview", "policyPassed": "Policy check passed", "policyBlocked": "Policy check blocked", "diff": "Script diff", "confirmExecute": "Confirm execution" },
-    "publish": { "kicker": "Release control", "title": "Publish", "body": "Publication is a high-impact operation: choose a version, record all three licences, pass the release review, then confirm the immutable public record.", "permanence": "Public record", "permanenceBody": "A published version receives a stable public ID, UTC timestamp and content hash, becomes visible to everyone, and cannot be edited in place.", "version": "Version to release", "licenses": "Licences", "license": { "text": "Text", "code": "Code", "data": "Data" }, "checking": "Running review…", "review": "Save licences and review", "action": "Review changes", "readiness": "Release readiness", "notReviewed": "Not reviewed", "reviewStatus": { "passed": "Review passed", "blocked": "Release blocked" }, "emptyTitle": "Nothing is ready to publish", "emptyBody": "Create a committed version before opening release control.", "published": "Published public version", "confirmTitle": "Confirm immutable publication", "confirmBody": "This is an R3 action. Confirming creates a permanent public URL and expands the Research Object visibility to everyone; the version, licences, timestamp, and content hash become an immutable public record.", "cancel": "Cancel", "confirm": "Publish version", "close": "Close review" },
+    "publish": { "kicker": "Release control", "title": "Publish", "body": "Publication is a high-impact operation: choose a version, record all three licences, pass the release review, then confirm the immutable public record.", "permanence": "Public record", "permanenceBody": "Published versions have a permanent link. Later changes are published as a new version.", "version": "Version to release", "licenses": "Licences", "license": { "text": "Text", "code": "Code", "data": "Data" }, "checking": "Running review…", "review": "Save licences and review", "action": "Publish research", "readiness": "Release readiness", "notReviewed": "Not reviewed", "reviewStatus": { "passed": "Review passed", "blocked": "Release blocked" }, "emptyTitle": "Nothing is ready to publish", "emptyBody": "Create a committed version before opening release control.", "published": "Published public version", "confirmTitle": "Publish this research?", "confirmBody": "This version and its approved images will become visible to everyone at a permanent link. Review the content and licences before publishing. Later changes require a new version.", "cancel": "Cancel", "confirm": "Publish version", "close": "Close review" },
     "settings": { "navigation": "Account settings", "skip": "Skip to settings", "kicker": "Account / preferences", "title": "Settings", "body": "Your identity, language and session controls for OpenScience.", "identity": "Research identity", "name": "Display name", "email": "Email", "level": "Access level", "preferences": "Preferences", "language": "Language", "evidenceCollapsed": "Collapse evidence by default", "evidenceCollapsedHint": "Public ROs still load the complete evidence transcript, but initially present it at summary height. Print and assistive technology always retain the full text.", "preferenceSaved": "Reading preference saved.", "preferenceConflict": "Another session changed this preference. The latest setting is now loaded.", "preferenceError": "The preference could not be saved. Please try again.", "signOut": "Sign out" }
   },
   "editorial": {
@@ -1304,12 +1806,47 @@
     "gpuTime": "GPU frame",
     "bounds": "Stable bounds"
   },
+  "ingestionClaimReview": {
+    "duplicateAssociation": "For this batch, associate each original passage set with one claim. Other split claims can be saved without the repeated association.",
+    "reviewEvidence": "Review original passages",
+    "evidenceNotice": "These separate excerpts appear in source order and may not be contiguous; omitted text is not shown. Each passage retains its own location. Check that they support the proposed statement, including its conditions and limitations. A location alone does not establish scientific correctness.",
+    "sourceReconciliationFailed": "Source reconciliation for this field was incomplete. This does not mean that the paper failed to report it.",
+    "unverifiedSummaryTitle": "Synthesis draft · sources need review",
+    "unverifiedSummaryBody": "This is a reading aid only. It is not verified evidence and cannot be confirmed or written into the research record.",
+    "title": "Review claims from your paper", "boundary": "Select and edit claims from this saved version. Source quotations are candidate evidence; confirming this batch does not verify the claims or evidence.", "runTitle": "Confirm claims and sources, then choose your visualization", "runBoundary": "Confirmation records this source review and continues with the image or video workflow selected below. Every selected Hermes conclusion must retain its displayed source quotation. Hermes still pauses for review of every plan and illustration; claims and evidence are not thereby verified.", "generationGrant": "This authorization applies only to this research object and the illustration profile, with a hard limit of seven follow-on illustration tasks.", "mediaChoice": "What would you like to generate next?", "mediaImage": "Illustrations", "mediaVideo": "Video (including storyboard and images)", "videoGenerationGrant": "Authorize up to eight follow-on tasks for this research object, including planning, images and video. Hermes plans from the paper; generated results still require review.", "runConfirm": "Confirm sources and continue selected workflow", "runComplete": "The source review is recorded. Hermes continues on the server and pauses at the next review point.",
+    "load": "Preview confirmed paper analysis", "refresh": "Reload preview", "loading": "Loading preview…", "empty": "No confirmed paper analysis matches this version. Confirm the Hermes suggestions and save a version first.",
+    "source": "Source document", "statement": "Claim statement", "changed": "Changed from the extraction — review the source association", "kind": "Claim type", "parent": "Parent claim in this batch", "chooseParent": "Select a parent claim", "conditions": "Conditions — one per line", "limitations": "Limitations — one per line",
+    "page": "Source page {page}", "sourceLocated": "Source location available", "associate": "Attach this quotation as evidence needing review. I have reviewed its relation to this statement.", "runAssociate": "This Hermes conclusion keeps its quotation as evidence for the next review.", "noQuote": "No trusted quotation is available. This claim will have no attached evidence.", "split": "Add a separate claim from this item",
+    "invalid": "Select a parent for each child claim, remove cycles, and provide a nonempty statement (up to 4,000 characters). Select at most 12 claims. Conditions and limitations each allow 100 nonempty lines, up to 500 characters per line.", "runQuoteRequired": "Each selected Hermes conclusion must have a displayed source quotation. Deselect conclusions without one before continuing.", "confirm": "Confirm selected claims and candidate evidence", "saving": "Saving…", "retry": "Retry the same batch", "complete": "Saved to this version. Claims and evidence still require scientific review; you can now select these claims for a storyboard.",
+    "loadError": "The preview could not be loaded. Try reloading.", "submitError": "The batch was not accepted. Reload and review the selection.", "stale": "The saved version or source changed. Reload the preview before confirming.", "uncertain": "The response was interrupted. Keep this selection unchanged and retry the same batch to check its result.",
+    "field_problem": "Problem", "field_insight": "Insight", "field_method": "Method", "field_results": "Results", "field_limitations": "Limitations", "field_reproducibility": "Reproducibility",
+    "kind_core": "Core claim", "kind_supporting": "Supporting claim", "kind_method": "Method", "kind_boundary": "Boundary", "kind_counter": "Counterclaim"
+  },
   "hermesPresentation": {
+    "prepareVideoPlan": "Prepare video brief",
+    "planWillBePrepared": "Hermes will first prepare the illustration brief.",
+    "eligibleSources": "{count} eligible research claims selected.",
+    "image": "Illustration",
+    "advanced": "Detailed instructions and sources",
+    "needsEligibleSources": "Confirm the extracted research content before asking Hermes to create visuals.",
+    "briefWillUpdate": "Your edits will create a revised brief. Existing images and plans are preserved.",
+    "updateBrief": "Update production brief",
+    "needsApprovedScenes": "Video needs an approved storyboard and its corresponding images. Prepare those assets first.",
+    "mediaIntent": "What to create",
+    "preparePlan": "Prepare production brief",
+    "usingApprovedPlan": "Using the current approved production brief.",
+    "video": "Video",
     "entry": "Storyboards and scene images",
     "chooseResearch": "Choose a research object",
     "noResearch": "Create or open a research object first",
     "back": "Back to conversation",
     "boundary": "Presentation material is not research evidence. Originals remain available; every result needs your review.",
+    "suggestedDraft": "Editable suggestion generated by Hermes",
+    "replaceWithSuggestion": "Replace the current instructions",
+    "suggestionApplied": "The suggestion is filled in and remains editable.",
+    "sourcesManual": "Confirm the Claims and sources to use for generation below.",
+    "deterministicDefaults": "Language and visual style are prefilled from the current settings and remain editable. Billing starts only after you confirm generation.",
+    "browserSessionDraft": "Edits are kept in this browser session and separated by account, research object, and version. Signing out clears them.",
     "version": "Research version",
     "chooseVersion": "Choose a version",
     "versionLabel": "Version {number} · {status}",

@@ -31,6 +31,15 @@ test('rejects unknown settings instead of silently accepting execution or approv
   for (const patch of [{approved:true},{script:'evil()'},{style:'unknown'},{locale:'unknown'}]) assert.throws(() => storyboardTimeline({...manifest(), ...patch}, 15));
 });
 
+test('on-chip animation profile requires exactly five scenes and preserves explicit timing', () => {
+  const input = {...manifest(5), profile: 'onchip-field-sampling-v1'};
+  input.scenes = input.scenes.map((scene, i) => ({...scene, role: ['driver_signal', 'tip_enhancement', 'emission_collection', 'delay_scan', 'field_reconstruction'][i]}));
+  assert.equal(storyboardTimeline(input, 25).scenes[3].start, 15);
+  for (const count of [3, 4, 6]) assert.throws(() => storyboardTimeline({...manifest(count), profile: input.profile}, 35));
+  assert.throws(() => storyboardTimeline({...input, profile: 'unreviewed-arbitrary-physics'}, 25));
+  assert.throws(() => storyboardTimeline({...input, scenes: input.scenes.map((scene, i) => ({...scene, role: i === 0 ? 'delay_scan' : scene.role}))}, 25));
+});
+
 test('artwork rejects remote paths, non-PNG bytes and decompression-sized dimensions', async () => {
   const root = await mkdtemp(join(tmpdir(), 'storyboard-png-'));
   await assert.rejects(readSceneArtwork(root,[{artwork:'../secret.png'}]));

@@ -9,6 +9,7 @@ import {
   inventoryPdfPages,
   ocrSelectedPages,
   PDF_PAGE_INVENTORY_METADATA,
+  PDF_PAGE_RENDER_METADATA,
   TESSERACT_METADATA,
   type LocalOcrAdapter,
 } from './parsers/ocr-parser';
@@ -27,12 +28,15 @@ import {
   type ParserJobRequestV2,
   type ParserJobResponseV2,
   type ParserStageResult,
+  type ParserRasterResult,
+  type ParserJobResult,
   type DocumentParserMetadata,
 } from './parsers/job-protocol';
 
-type ParserKind = 'pdf' | 'docx' | 'image' | 'xlsx';
-export type ParserStageProcessor = (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult>;
+type ParserKind = 'pdf' | 'docx' | 'pptx' | 'html' | 'image' | 'xlsx';
+export type ParserStageProcessor = (request: ParserJobRequestV2, content: Buffer) => Promise<ParserJobResult>;
 export const TRANSITION_PARSER_METADATA = Object.freeze({ name: 'v1-text-transition', version: '2.0.0' });
+export const DOCLING_PARSER_METADATA = Object.freeze({ name: 'docling-serve-cpu', version: '1.30.0' });
 const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 const MAX_REQUEST_BYTES = 64 * 1024;
 const JOB_SUFFIXES = ['input', 'request.json', 'processing.json', 'response.tmp', 'response.json', 'cancelled'] as const;
@@ -55,12 +59,16 @@ class SafeParserBoundaryError extends Error {
 
 export function expectedSidecarParserMetadata(
   request: Pick<ParserJobRequestV2, 'operation' | 'mediaType'>,
-): DocumentParserMetadata {
+): DocumentParserMetadata | readonly DocumentParserMetadata[] {
   if (request.operation === 'inventory_pages') return PDF_PAGE_INVENTORY_METADATA;
-  if (request.operation === 'render_page' || request.operation === 'ocr_page') return TESSERACT_METADATA;
+  if (request.operation === 'render_page') return PDF_PAGE_RENDER_METADATA;
+  if (request.operation === 'ocr_page') return TESSERACT_METADATA;
   if (request.operation === 'extract_text' && request.mediaType === 'application/pdf') {
-    return PDF_TEXT_ITEM_METADATA;
+    return [DOCLING_PARSER_METADATA, PDF_TEXT_ITEM_METADATA];
   }
+  if (request.operation === 'extract_text' && [
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/html',
+  ].includes(request.mediaType)) return DOCLING_PARSER_METADATA;
   return TRANSITION_PARSER_METADATA;
 }
 
@@ -175,12 +183,46 @@ export async function reapParserJobOrphans(
   return reaped;
 }
 
-export function createParserStageJobClient(
+/** Requeue only jobs left in the claimed state by a previous parser process. */
+export async function recoverInterruptedParserJobs(jobDir: string): Promise<number> {
+  await mkdir(jobDir, { recursive: true });
+  const entries = await readdir(jobDir);
+  let recovered = 0;
+  for (const name of entries.filter((entry) => entry.endsWith('.processing.json')).sort()) {
+    const id = name.replace(/\.processing\.json$/, '');
+    if (!/^[0-9a-f-]{36}$/.test(id)) continue;
+    const processingPath = jobPath(jobDir, id, 'processing.json');
+    const requestPath = jobPath(jobDir, id, 'request.json');
+    try {
+      await access(jobPath(jobDir, id, 'cancelled'));
+      continue;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
+      await access(jobPath(jobDir, id, 'response.json'));
+      continue;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
+      await access(jobPath(jobDir, id, 'input'));
+      await rename(processingPath, requestPath);
+      recovered += 1;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+  return recovered;
+}
+
+function createParserJobClient(
   jobDir: string,
-  expectedParser: DocumentParserMetadata | ((request: ParserJobRequestV2) => DocumentParserMetadata),
+  expectedParser: DocumentParserMetadata | readonly DocumentParserMetadata[]
+    | ((request: ParserJobRequestV2) => DocumentParserMetadata | readonly DocumentParserMetadata[]),
   timeoutMs = 75_000,
-): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult> {
-  return async (requestValue: ParserJobRequestV2, content: Buffer): Promise<ParserStageResult> => {
+): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserJobResult> {
+  return async (requestValue: ParserJobRequestV2, content: Buffer): Promise<ParserJobResult> => {
     const serializedRequest = serializeParserJobRequestV2(requestValue);
     const request = parseParserJobRequestV2(JSON.parse(serializedRequest));
     if (!Buffer.isBuffer(content) || content.byteLength > MAX_INPUT_BYTES) {
@@ -235,6 +277,36 @@ export function createParserStageJobClient(
   };
 }
 
+
+export function createParserStageJobClient(
+  jobDir: string,
+  expectedParser: DocumentParserMetadata | readonly DocumentParserMetadata[]
+    | ((request: ParserJobRequestV2) => DocumentParserMetadata | readonly DocumentParserMetadata[]),
+  timeoutMs = 75_000,
+): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult> {
+  const client = createParserJobClient(jobDir, expectedParser, timeoutMs);
+  return async (request, content) => {
+    const result = await client(request, content);
+    if ('kind' in result) throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_RESPONSE);
+    return result;
+  };
+}
+
+export function createParserRasterJobClient(
+  jobDir: string,
+  expectedParser: DocumentParserMetadata | readonly DocumentParserMetadata[]
+    | ((request: ParserJobRequestV2) => DocumentParserMetadata | readonly DocumentParserMetadata[]),
+  timeoutMs = 75_000,
+): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserRasterResult> {
+  const client = createParserJobClient(jobDir, expectedParser, timeoutMs);
+  return async (request, content) => {
+    if (request.operation !== 'render_page') throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
+    const result = await client(request, content);
+    if (!('kind' in result) || result.kind !== 'raster') throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_RESPONSE);
+    return result;
+  };
+}
+
 export function createTransitionParserStageProcessor(adapters: IngestionAdapters): ParserStageProcessor {
   return async (requestValue, content) => {
     const request = parseParserJobRequestV2(requestValue);
@@ -247,9 +319,13 @@ export function createTransitionParserStageProcessor(adapters: IngestionAdapters
         ? 'docx'
         : request.mediaType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           ? 'xlsx'
-        : request.mediaType.startsWith('image/')
-          ? 'image'
-          : undefined;
+          : request.mediaType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+            ? 'pptx'
+            : request.mediaType === 'text/html'
+              ? 'html'
+              : request.mediaType.startsWith('image/')
+                ? 'image'
+                : undefined;
     if (!kind) throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
     const adapter = adapters[kind];
     if (!adapter) throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_UNAVAILABLE);
@@ -259,13 +335,15 @@ export function createTransitionParserStageProcessor(adapters: IngestionAdapters
     } catch {
       throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_FAILED);
     }
-    if (kind === 'pdf' || kind === 'xlsx') {
+    if (kind === 'pdf' || kind === 'pptx' || kind === 'html' || kind === 'xlsx') {
       try {
         const result = parseParserStageResult(parsed);
-        const expected = kind === 'pdf' ? PDF_TEXT_ITEM_METADATA : TRANSITION_PARSER_METADATA;
-        if (result.parser.name !== expected.name
-          || result.parser.version !== expected.version
-          || result.parser.modelHash !== undefined) {
+        const expected = kind === 'xlsx' ? [TRANSITION_PARSER_METADATA]
+          : kind === 'pdf' ? [DOCLING_PARSER_METADATA, PDF_TEXT_ITEM_METADATA]
+            : [DOCLING_PARSER_METADATA];
+        if (!expected.some((candidate) => result.parser.name === candidate.name
+          && result.parser.version === candidate.version
+          && result.parser.modelHash === undefined)) {
           throw new Error('unexpected structured parser identity');
         }
         return result;
@@ -332,18 +410,21 @@ export function createSidecarParserStageProcessor(
       throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
     }
     if (request.operation === 'render_page') {
+      if (pageNumbers.length > 4) throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_REQUEST);
       const rendered = await localOcr.renderPdfPages(input, pageNumbers, localOcr.timeoutMs);
-      return parseParserStageResult({
+      return {
         schemaVersion: 2,
-        parser: { ...localOcr.metadata },
+        kind: 'raster',
+        parser: { ...PDF_PAGE_RENDER_METADATA },
         pages: rendered.map((page) => ({
-          page: page.pageNumber,
+          pageNumber: page.pageNumber,
+          mediaType: 'image/png' as const,
+          bytesBase64: Buffer.from(page.bytes).toString('base64'),
           width: page.width,
           height: page.height,
-          blocks: [],
+          contentHash: page.contentHash,
         })),
-        warnings: [],
-      });
+      };
     }
     if (request.operation === 'ocr_page') {
       const pageInventory = await inventory(input, localOcr.timeoutMs);
@@ -387,6 +468,7 @@ export async function processParserJobsOnce(
   jobDir: string,
   processorOrRemovedV1Adapters: ParserStageProcessor | IngestionAdapters,
   v2Processor?: ParserStageProcessor,
+  options: { maxJobs?: number } = {},
 ): Promise<number> {
   const stageProcessor = typeof processorOrRemovedV1Adapters === 'function'
     ? processorOrRemovedV1Adapters
@@ -394,9 +476,12 @@ export async function processParserJobsOnce(
   if (!stageProcessor) throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_UNAVAILABLE);
   await mkdir(jobDir, { recursive: true });
   const entries = await readdir(jobDir);
-  const requests = entries.filter((name) => name.endsWith('.request.json') || name.endsWith('.processing.json')).sort();
+  // A request becomes exclusively owned when its atomic rename succeeds. Other
+  // workers must never treat the claimed .processing file as fresh work.
+  const requests = entries.filter((name) => name.endsWith('.request.json')).sort();
   let processed = 0;
   for (const name of requests) {
+    if (processed >= (options.maxJobs ?? Number.POSITIVE_INFINITY)) break;
     const id = name.replace(/\.(?:request|processing)\.json$/, '');
     if (!/^[0-9a-f-]{36}$/.test(id)) continue;
     const processingPath = jobPath(jobDir, id, 'processing.json');

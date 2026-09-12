@@ -31,6 +31,7 @@ export interface ResearchObjectSummary {
 }
 
 export interface ResearchObjectDetail extends ResearchObjectSummary {
+  publicId: string | null;
   sdf: { core: Record<string, string>; nodes: Array<{ nodeType: string; content: string }> };
 }
 
@@ -45,7 +46,7 @@ export async function listResearchObjects(
   input: { userId: string; limit?: number },
 ): Promise<ResearchObjectListItem[]> {
   const rows = await deps.prisma.researchObject.findMany({
-    where: { workspace: { members: { some: { userId: input.userId } } } },
+    where: { status: { not: 'archived' }, workspace: { members: { some: { userId: input.userId } } } },
     orderBy: { updatedAt: 'desc' },
     take: Math.min(Math.max(input.limit ?? 20, 1), 100),
   });
@@ -277,6 +278,7 @@ export async function getResearchObject(
   const core = (ro.sdfDocument?.coreJson as Record<string, string>) ?? {};
   return {
     id: ro.id,
+    publicId: ro.publicId,
     workspaceId: ro.workspaceId,
     title: ro.title,
     status: ro.status,

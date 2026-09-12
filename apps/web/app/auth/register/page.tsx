@@ -6,7 +6,10 @@ import { ResearchIdentityPanel } from '@/components/auth/ResearchIdentityPanel';
 import { SignupCodeForm } from '@/components/auth/SignupCodeForm';
 import { IdentityShell } from '@/components/shell/IdentityShell';
 
-export const metadata: Metadata = { title: 'Register · OpenScience' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('auth.register');
+  return { title: t('title') + ' · OpenScience' };
+}
 
 export default async function RegisterPage({ searchParams }: { searchParams?: { returnTo?: string } }) {
   const t = await getTranslations('auth');

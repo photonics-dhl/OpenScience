@@ -134,25 +134,30 @@ export async function setVersionLicenses(
   if (!ro) throw new LicenseError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
   await requireMembership(deps, ro.workspaceId, input.userId);
 
-  const version = await deps.prisma.version.findFirst({ where: { id: input.versionId, researchObjectId: ro.id } });
-  if (!version) throw new LicenseError('VALIDATION_ERROR', '版本不存在');
-  if (version.status === 'published') {
-    throw new LicenseError('VERSION_PUBLISHED', '已公开版本的许可不可修改（§6.3），仅对新版本生效');
-  }
-
-  const rows: LicenseAssignmentView[] = [];
-  for (const type of LICENSE_TYPES) {
+  const rows = await deps.prisma.$transaction(async (tx) => {
+    const version = await tx.version.findFirst({ where: { id: input.versionId, researchObjectId: ro.id } });
+    if (!version) throw new LicenseError('VALIDATION_ERROR', '版本不存在');
+    if (version.status === 'published' || version.publicVersionId !== null) {
+      throw new LicenseError('VERSION_PUBLISHED', '已公开版本的许可不可修改（§6.3），仅对新版本生效');
+    }
+    // Contend on the same row as publish, before writing any of the three licenses.
+    const locked = await tx.version.updateMany({ where: { id: version.id, status: version.status, publicVersionId: null }, data: { status: version.status } });
+    if (locked.count !== 1) throw new LicenseError('VERSION_PUBLISHED', '版本状态已改变，请重新打开发布页');
+    const updated: LicenseAssignmentView[] = [];
+    for (const type of LICENSE_TYPES) {
     // 复合唯一键含 versionId → findFirst + update/create（Q1 幂等）
-    const existing = await deps.prisma.licenseAssignment.findFirst({
+    const existing = await tx.licenseAssignment.findFirst({
       where: { researchObjectId: ro.id, versionId: input.versionId, licenseType: type },
     });
     const row = existing
-      ? await deps.prisma.licenseAssignment.update({ where: { id: existing.id }, data: { licenseId: input.licenses[type] } })
-      : await deps.prisma.licenseAssignment.create({
+      ? await tx.licenseAssignment.update({ where: { id: existing.id }, data: { licenseId: input.licenses[type] } })
+      : await tx.licenseAssignment.create({
           data: { researchObjectId: ro.id, versionId: input.versionId, licenseType: type, licenseId: input.licenses[type] },
         });
-    rows.push(mapView(row));
-  }
+      updated.push(mapView(row));
+    }
+    return updated;
+  }, { isolationLevel: 'Serializable' });
   audit(deps, {
     actorId: input.userId, action: 'license.upsert', workspaceId: ro.workspaceId,
     targetType: 'version', targetId: input.versionId,

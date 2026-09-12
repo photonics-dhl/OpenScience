@@ -4,13 +4,17 @@
 
 set -eEuo pipefail
 
-[ "$#" -eq 3 ] || { echo "错误：生产事务 runner 参数不完整" >&2; exit 64; }
+[ "$#" -ge 3 ] && [ "$#" -le 5 ] || { echo "错误：生产事务 runner 参数不完整" >&2; exit 64; }
 RELEASE_SHA="$1"
 ROLLBACK_SHA="$2"
 SKIP_MIGRATE="$3"
+NO_TESTS="${4:-0}"
+REUSE_UNCHANGED_CAPABILITY_IMAGES="${5:-0}"
 [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]] \
   || { echo "错误：生产事务 SHA 非法" >&2; exit 64; }
 [[ "$SKIP_MIGRATE" =~ ^[01]$ ]] || { echo "错误：skip-migrate 标志非法" >&2; exit 64; }
+[[ "$NO_TESTS" =~ ^[01]$ ]] || { echo "错误：no-tests 标志非法" >&2; exit 64; }
+[[ "$REUSE_UNCHANGED_CAPABILITY_IMAGES" =~ ^[01]$ ]] || { echo "错误：能力镜像复用标志非法" >&2; exit 64; }
 
 REMOTE_ROOT="/opt/openscience"
 RELEASE_ROOT="/opt/openscience-releases/$RELEASE_SHA"
@@ -156,7 +160,8 @@ expect_http_body() {
 
 log() { printf '%s\n' "$*"; }
 
-log "=== 执行单一 SSH/flock 生产事务（release=$RELEASE_SHA rollback=$ROLLBACK_SHA）==="
+log "=== 执行单一 SSH/flock 生产事务（release=$RELEASE_SHA rollback=$ROLLBACK_SHA no-tests=$NO_TESTS reuse-capabilities=$REUSE_UNCHANGED_CAPABILITY_IMAGES）==="
+[ "$NO_TESTS" -eq 0 ] || log "UNVERIFIED_ACCEPTANCE: Parser、ScanSci 与 embedding 功能验收已由 --no-tests 显式跳过"
 acquire_production_deploy_lock
 assert_production_deploy_lock
 node "$PROJECT_ROOT/scripts/release-input-manifest.mjs" verify --root "$RELEASE_ROOT" --sha "$RELEASE_SHA"
@@ -250,6 +255,47 @@ verify_release_capability() {
   require_match capability_scansci_mcp_image_id "$scansci_mcp_image_id" '^sha256:[0-9a-f]{64}$'
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-mcp:$RELEASE_SHA")" = "$scansci_mcp_image_id" ]
 }
+
+transaction_verify_already_active_release_without_tests() {
+  local worker_image parser_image scansci_image worker_container parser_container scansci_container
+  local running_worker_image running_parser_image running_scansci_image
+  run_remote "test \"\$(cat '$RELEASE_ROOT/.release-source')\" = '$RELEASE_SHA'"
+  worker_image="$(run_remote "docker image inspect --format='{{.Id}}' openscience-agent-worker:$RELEASE_SHA")"
+  parser_image="$(run_remote "docker image inspect --format='{{.Id}}' openscience-document-parser:$RELEASE_SHA")"
+  scansci_image="$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-mcp:$RELEASE_SHA")"
+  require_match same_sha_worker_image_id "$worker_image" '^sha256:[0-9a-f]{64}$'
+  require_match same_sha_parser_image_id "$parser_image" '^sha256:[0-9a-f]{64}$'
+  require_match same_sha_scansci_image_id "$scansci_image" '^sha256:[0-9a-f]{64}$'
+  worker_container="$(compose_current 'ps -q agent-worker')"
+  parser_container="$(compose_current 'ps -q document-parser')"
+  scansci_container="$(compose_current 'ps -q scansci-mcp')"
+  [[ "$worker_container" =~ ^[0-9a-f]{12,64}$
+    && "$parser_container" =~ ^[0-9a-f]{12,64}$
+    && "$scansci_container" =~ ^[0-9a-f]{12,64}$ ]] || {
+    echo "错误：same-SHA 运行容器身份非法" >&2
+    return 66
+  }
+  running_worker_image="$(run_remote "docker inspect --format='{{.Image}}' '$worker_container'")"
+  running_parser_image="$(run_remote "docker inspect --format='{{.Image}}' '$parser_container'")"
+  running_scansci_image="$(run_remote "docker inspect --format='{{.Image}}' '$scansci_container'")"
+  [ "$running_scansci_image" = "$scansci_image" ] || {
+    echo "错误：same-SHA ScanSci 运行镜像非法" >&2
+    return 66
+  }
+  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/production-deploy-lock.mjs' verify-state --active-sha '$ACTIVE_RELEASE_SHA' --rollback-sha '$RELEASE_SHA' --accepted-worker-image-id '$worker_image' --accepted-parser-image-id '$parser_image' --current-worker-image-id '$worker_image' --current-parser-image-id '$parser_image' --running-worker-image-id '$running_worker_image' --running-parser-image-id '$running_parser_image'"
+  verify_release_capability "$REMOTE_ROOT/.release-capabilities/$RELEASE_SHA"
+  compose_current "ps --status running --services | grep -qx scansci-mcp"
+  if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
+    compose_embedding_current "ps --status running --services | grep -qx embedding-worker"
+  fi
+  expect_http_status https://OpenScience.428312321.xyz/ 200
+  expect_http_body https://OpenScience.428312321.xyz/__release "$RELEASE_SHA"
+  if [ "$EMBEDDING_DEPLOY" -eq 0 ]; then
+    log "same-SHA disabled：收敛残留 embedding-worker..."
+    compose_embedding_current "stop embedding-worker"
+    run_remote "set -euo pipefail; cd '$RELEASE_ROOT'; services=\$(XGS_RELEASE_ROOT='$RELEASE_ROOT' XGS_RELEASE_IMAGE_TAG='$RELEASE_SHA' docker compose --project-directory '$RELEASE_ROOT' --profile embedding --env-file '$PROD_ENV' -f '$COMPOSE_FILE' ps --status running --services); if printf '%s\n' \"\$services\" | grep -qx embedding-worker; then exit 1; fi"
+  fi
+}
 if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]; then
   same_sha_verification_failed() {
     local original_status=$?
@@ -259,7 +305,12 @@ if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]; then
     exit "$original_status"
   }
   trap 'same_sha_verification_failed' ERR
-  transaction_verify_already_active_release
+  if [ "$NO_TESTS" -eq 1 ]; then
+    log "UNVERIFIED_ACCEPTANCE: same-SHA 路径跳过 Parser report、ScanSci probe 与 embedding vector probe"
+    transaction_verify_already_active_release_without_tests
+  else
+    transaction_verify_already_active_release
+  fi
   trap - ERR
   log "already active: release=$RELEASE_SHA"
   exit 0
@@ -347,10 +398,45 @@ assert_production_deploy_lock
 assert_production_deploy_lock
 
 log "[2b] 构建 SHA-tagged release 镜像..."
-compose_current "build scansci-mcp"
+if [ "$REUSE_UNCHANGED_CAPABILITY_IMAGES" -eq 1 ] && [ "$PREVIOUS_HAS_SCANSCI" -eq 1 ]; then
+  if node "$SCRIPT_DIR/verify-reusable-capability-inputs.mjs" \
+    --current-root "$RELEASE_ROOT" --current-sha "$RELEASE_SHA" \
+    --previous-root "$PREVIOUS_RELEASE_ROOT" --previous-sha "$PREVIOUS_RELEASE_SHA" \
+    --capability scansci; then
+    [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-mcp:$PREVIOUS_RELEASE_SHA")" = "$PREVIOUS_SCANSCI_MCP_IMAGE_ID" ]
+    run_remote "printf '%s\n' 'FROM openscience-scansci-mcp:$PREVIOUS_RELEASE_SHA' 'LABEL org.openscience.source=$RELEASE_SHA' | docker build --network none --label org.openscience.source='$RELEASE_SHA' -t openscience-scansci-mcp:$RELEASE_SHA -"
+    log "REUSED_CAPABILITY_IMAGE: scansci-mcp old_release=$PREVIOUS_RELEASE_SHA old_image=$PREVIOUS_SCANSCI_MCP_IMAGE_ID reason=identical-input-manifest"
+  else
+    log "REBUILD_CAPABILITY_IMAGE: scansci-mcp reason=changed-input-manifest"
+    compose_current "build scansci-mcp"
+  fi
+else
+  compose_current "build scansci-mcp"
+fi
 compose_current "build agent-worker document-parser"
 if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
-  compose_embedding_current "build embedding-worker"
+  if [ "$REUSE_UNCHANGED_CAPABILITY_IMAGES" -eq 1 ] \
+    && [ "$PREVIOUS_HAS_EMBEDDING" -eq 1 ] \
+    && [ "$BGE_M3_MODEL_VERSION_ID" = "$PREVIOUS_BGE_M3_MODEL_VERSION_ID" ] \
+    && [ "$BGE_M3_MODEL_REVISION" = "$PREVIOUS_BGE_M3_MODEL_REVISION" ] \
+    && [ "$BGE_M3_SOURCE_SHA256" = "$PREVIOUS_BGE_M3_SOURCE_SHA256" ] \
+    && [ "$BGE_M3_PACKAGE_FREEZE_SHA256" = "$PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256" ] \
+    && [ "$BGE_M3_MODEL_MANIFEST_SHA256" = "$PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256" ]; then
+    if node "$SCRIPT_DIR/verify-reusable-capability-inputs.mjs" \
+      --current-root "$RELEASE_ROOT" --current-sha "$RELEASE_SHA" \
+      --previous-root "$PREVIOUS_RELEASE_ROOT" --previous-sha "$PREVIOUS_RELEASE_SHA" \
+      --capability embedding; then
+      PREVIOUS_EMBEDDING_IMAGE_ID="$(run_remote "docker image inspect --format='{{.Id}}' openscience-embedding-worker:$PREVIOUS_RELEASE_SHA")"
+      require_match previous_embedding_image_id "$PREVIOUS_EMBEDDING_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
+      run_remote "docker image tag openscience-embedding-worker:$PREVIOUS_RELEASE_SHA openscience-embedding-worker:$RELEASE_SHA"
+      log "REUSED_CAPABILITY_IMAGE: embedding-worker old_release=$PREVIOUS_RELEASE_SHA old_image=$PREVIOUS_EMBEDDING_IMAGE_ID reason=identical-input-manifest-and-model-identity"
+    else
+      log "REBUILD_CAPABILITY_IMAGE: embedding-worker reason=changed-input-manifest"
+      compose_embedding_current "build embedding-worker"
+    fi
+  else
+    compose_embedding_current "build embedding-worker"
+  fi
 fi
 
 PARSER_ACCEPTANCE_REPORT="/opt/openscience-acceptance/document-parser/$RELEASE_SHA/report.json"
@@ -389,7 +475,9 @@ verify_candidate_switch_contract() {
     return 1
   }
   run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/production-deploy-lock.mjs' verify-state --active-sha '$current_active' --rollback-sha '$ROLLBACK_SHA' --accepted-worker-image-id '$FINAL_WORKER_IMAGE_ID' --accepted-parser-image-id '$FINAL_PARSER_IMAGE_ID' --current-worker-image-id '$current_worker_image' --current-parser-image-id '$current_parser_image'"
-  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-document-parser-acceptance.mjs' --release-root '$RELEASE_ROOT' --report '$PARSER_ACCEPTANCE_REPORT' --source-sha '$RELEASE_SHA' --worker-image-id '$current_worker_image' --parser-image-id '$current_parser_image'"
+  if [ "$NO_TESTS" -eq 0 ]; then
+    run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-document-parser-acceptance.mjs' --release-root '$RELEASE_ROOT' --report '$PARSER_ACCEPTANCE_REPORT' --source-sha '$RELEASE_SHA' --worker-image-id '$current_worker_image' --parser-image-id '$current_parser_image'"
+  fi
 }
 
 verify_running_container_image() {
@@ -445,7 +533,9 @@ transaction_restore_previous_scansci() {
   compose_current "rm -f -s scansci-mcp" || return
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-mcp:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_MCP_IMAGE_ID" ] || return
   run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 scansci-mcp" || return
-  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-mcp-runtime.mjs' --release-root '$PREVIOUS_RELEASE_ROOT' --release-sha '$exact_previous_sha' --compose-file '$ROLLBACK_COMPOSE_FILE' --expected-mcp-image-id '$PREVIOUS_SCANSCI_MCP_IMAGE_ID' --require-worker 0 --require-oa 0"
+  if [ "$NO_TESTS" -eq 0 ]; then
+    run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-mcp-runtime.mjs' --release-root '$PREVIOUS_RELEASE_ROOT' --release-sha '$exact_previous_sha' --compose-file '$ROLLBACK_COMPOSE_FILE' --expected-mcp-image-id '$PREVIOUS_SCANSCI_MCP_IMAGE_ID' --require-worker 0 --require-oa 0"
+  fi
 }
 transaction_stop_candidate_scansci() {
   local exact_candidate_sha="$1"
@@ -501,7 +591,7 @@ transaction_perform_application_rollback() {
     if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then compose_embedding_current "stop embedding-worker" || true; fi
     if [ "$PREVIOUS_HAS_EMBEDDING" -eq 1 ]; then
       run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --project-directory $PREVIOUS_RELEASE_ROOT --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 900 embedding-worker" || rollback_ok=0
-      if [ "$rollback_ok" -eq 1 ]; then
+      if [ "$rollback_ok" -eq 1 ] && [ "$NO_TESTS" -eq 0 ]; then
         run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --project-directory $PREVIOUS_RELEASE_ROOT --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs" || rollback_ok=0
       fi
     fi
@@ -563,11 +653,15 @@ fi
 verify_candidate_switch_contract pre-switch
 transaction_mark_phase switching
 if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
-  log "[5] 初始化并验证 BGE-M3 模型卷..."
+  log "[5] 初始化并验证 BGE-M3 模型卷身份..."
   compose_embedding_current "up -d --force-recreate --wait --wait-timeout 900 embedding-worker"
   compose_embedding_current "run --rm --no-deps -T --entrypoint python embedding-worker /app/model-init.py --validate --seed /opt/bge-m3-seed --target /models/bge-m3"
-  compose_embedding_current "run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs"
-  log "[5a] embedding model manifest and runtime identity verified"
+  if [ "$NO_TESTS" -eq 0 ]; then
+    compose_embedding_current "run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs"
+    log "[5a] embedding model manifest、runtime identity 与真实向量 verified"
+  else
+    log "UNVERIFIED_ACCEPTANCE: 跳过 embedding health/vector runtime probe；保留模型 manifest 校验与容器 startup health"
+  fi
 else
   log "[5] BGE-M3 deploy disabled; model image/service untouched"
 fi
@@ -582,32 +676,58 @@ log "[5c] ScanSci 先行并验证 source/policy/session/runtime..."
 verify_candidate_switch_contract pre-scansci-switch
 compose_current "up -d --force-recreate --wait --wait-timeout 300 scansci-mcp"
 verify_running_container_image scansci-mcp "$FINAL_SCANSCI_MCP_IMAGE_ID"
-verify_scansci_mcp_candidate 0 1
+if [ "$NO_TESTS" -eq 0 ]; then
+  verify_scansci_mcp_candidate 0 1
+else
+  log "UNVERIFIED_ACCEPTANCE: 跳过 ScanSci OA real-PDF/network canary"
+fi
 
 log "[5d] 切换 API/Web/Worker 并等待 healthy..."
 verify_candidate_switch_contract pre-worker-switch
-compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-worker"
+compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-worker" || {
+  # Preserve the failing process log before rollback replaces its container.
+  startup_log=$(umask 077; mktemp "$REMOTE_ROOT/.worker-startup-$RELEASE_SHA.XXXXXX.log")
+  docker logs --tail 80 openscience-prod-agent-worker-1 > "$startup_log" 2>&1 || true
+  log "Worker startup log retained privately: $startup_log"
+  false
+}
 verify_running_container_image agent-worker "$FINAL_WORKER_IMAGE_ID"
 verify_running_container_image document-parser "$FINAL_PARSER_IMAGE_ID"
 wait_for_healthy api web agent-worker
-verify_scansci_mcp_candidate 1 0
+if [ "$NO_TESTS" -eq 0 ]; then
+  verify_scansci_mcp_candidate 1 0
+else
+  log "UNVERIFIED_ACCEPTANCE: 跳过 ScanSci MCP/Worker capability probe"
+fi
 if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
-  log "[5d] 切换后再次验证 embedding 健康、身份与真实向量..."
+  log "[5d] 切换后确认 embedding-worker 运行状态..."
   compose_embedding_current "ps --status running --services | grep -qx embedding-worker"
-  compose_embedding_current "run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs"
+  if [ "$NO_TESTS" -eq 0 ]; then
+    compose_embedding_current "run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs"
+  else
+    log "UNVERIFIED_ACCEPTANCE: 跳过切换后 embedding health/vector runtime probe"
+  fi
 fi
 verify_running_release_images
 
 log "[6] 切换 nginx 与 release identity..."
 run_remote "set -e; backup=${NGINX_CONF}.pre-deploy-\$(date +%Y%m%d%H%M%S); cp -p $NGINX_CONF \$backup; install -m 0644 $RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF; if ! nginx -t; then cp -p \$backup $NGINX_CONF; nginx -t; exit 1; fi; systemctl reload nginx"
 transaction_publish_candidate
-verify_scansci_current 1 0
+if [ "$NO_TESTS" -eq 0 ]; then
+  verify_scansci_current 1 0
+else
+  log "UNVERIFIED_ACCEPTANCE: 跳过发布后 ScanSci MCP/Worker capability probe"
+fi
 run_remote "test -f $HTPASSWD || echo 'WARN: $HTPASSWD 不存在——首次需手动生成（见 runbook）'"
 
 log "[7] 公网与精确 release 验收..."
 expect_http_status https://OpenScience.428312321.xyz/ 200
-expect_http_status https://OpenScience.428312321.xyz/auth/me 401
-expect_http_status https://OpenScience.428312321.xyz/admin/ 401
+if [ "$NO_TESTS" -eq 0 ]; then
+  expect_http_status https://OpenScience.428312321.xyz/auth/me 401
+  expect_http_status https://OpenScience.428312321.xyz/admin/ 401
+else
+  log "UNVERIFIED_ACCEPTANCE: 跳过公网 auth/admin 功能探针"
+fi
 expect_http_body https://OpenScience.428312321.xyz/__release "$RELEASE_SHA"
 if [ "$EMBEDDING_DEPLOY" -eq 0 ] && [ "$PREVIOUS_HAS_EMBEDDING" -eq 1 ]; then
   log "[7a] 公网验收后停止上一 release 的 embedding-worker..."

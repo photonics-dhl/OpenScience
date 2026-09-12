@@ -66,6 +66,7 @@ export interface ResearchIdentityProfile extends ResearchIdentityProfileInput {
 }
 
 export interface ResearchObjectSummary {
+  publicId?: string | null;
   id: string;
   workspaceId: string;
   title: string;
@@ -89,6 +90,25 @@ export interface ArtifactReference {
 }
 
 let csrfToken: string | null = null;
+let currentUserRequest: Promise<CurrentUser> | null = null;
+let sessionRevision = 0;
+export const SESSION_INVALIDATED_EVENT = 'openscience-session-invalidated';
+export const SESSION_CHANGED_EVENT = 'openscience-session-changed';
+
+export function invalidateSessionClientCache(): void {
+  sessionRevision += 1;
+  currentUserRequest = null;
+}
+
+function notifySessionInvalidated(): void {
+  invalidateSessionClientCache();
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(SESSION_INVALIDATED_EVENT));
+}
+
+function notifySessionChanged(): void {
+  invalidateSessionClientCache();
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
+}
 
 const PUBLIC_AUTH_WRITES = new Set([
   '/api/auth/request-signup-code',
@@ -140,6 +160,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit, csrfRetry 
   if (!headers['content-type']) headers['content-type'] = 'application/json';
   if (isProtectedWrite(path, init)) headers['x-csrf-token'] = await getCsrfToken();
 
+  const requestSessionRevision = sessionRevision;
   const res = await fetch(path, {
     ...init,
     credentials: 'include',
@@ -148,6 +169,10 @@ export async function apiRequest<T>(path: string, init?: RequestInit, csrfRetry 
   if (!res.ok) {
     let body: ApiErrorBody | undefined;
     try { body = await res.json() as ApiErrorBody; } catch { /* 非 JSON */ }
+    const route = path.split('?')[0] ?? path;
+    if (res.status === 401 && body?.error.code === 'SESSION_INVALID'
+      && requestSessionRevision === sessionRevision
+      && route !== '/api/auth/me' && !PUBLIC_AUTH_WRITES.has(route)) notifySessionInvalidated();
     if (csrfRetry && isProtectedWrite(path, init) && isCsrfFailure(res.status, body)) {
       csrfToken = null;
       return apiRequest<T>(path, init, false);
@@ -187,24 +212,44 @@ export async function requestSignupCode(input: { email: string }): Promise<{ ok:
 
 /** Confirm the code and finish account creation in one explicit step. */
 export async function confirmSignup(input: ConfirmSignupInput): Promise<AuthResult> {
-  return request('/api/auth/confirm-signup', {
+  const result = await request<AuthResult>('/api/auth/confirm-signup', {
     method: 'POST',
     body: JSON.stringify(input),
   });
+  notifySessionChanged();
+  return result;
 }
 
 export async function loginWithPassword(input: {
   email: string;
   password: string;
 }): Promise<AuthResult> {
-  return request('/api/auth/login', {
+  const result = await request<AuthResult>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify(input),
   });
+  notifySessionChanged();
+  return result;
 }
 
-export async function getCurrentUser(): Promise<CurrentUser> {
-  return request('/api/auth/me');
+export async function getCurrentUser(options: { fresh?: boolean } = {}): Promise<CurrentUser> {
+  if (options.fresh) {
+    sessionRevision += 1;
+    currentUserRequest = null;
+  }
+  if (currentUserRequest && !options.fresh) return currentUserRequest;
+  const pending = request<CurrentUser>('/api/auth/me');
+  const tracked = pending
+    .catch((cause) => {
+      if (currentUserRequest === tracked && cause instanceof ApiClientError
+        && cause.status === 401 && cause.code === 'SESSION_INVALID') notifySessionInvalidated();
+      throw cause;
+    })
+    .finally(() => {
+      if (currentUserRequest === tracked) currentUserRequest = null;
+    });
+  currentUserRequest = tracked;
+  return tracked;
 }
 
 export interface AcademicIdentityStatus {
@@ -266,6 +311,108 @@ export interface DashboardTaskApi {
   error: string | null;
 }
 
+/** A server-owned Hermes workflow. The browser only starts and observes it. */
+export type HermesResearchRunStatus =
+  | 'running'
+  | 'awaiting_source_review'
+  | 'awaiting_claim_review'
+  | 'generating_storyboard'
+  | 'awaiting_storyboard_review'
+  | 'generating_scene_images'
+  | 'awaiting_scene_images_review'
+  | 'generating_video'
+  | 'awaiting_video_review'
+  | 'succeeded'
+  | 'failed'
+  | 'stopped';
+export type HermesResearchStepStatus = 'waiting' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'stopped';
+export interface HermesResearchRun {
+  id: string;
+  researchObjectId: string;
+  actorId: string;
+  status: HermesResearchRunStatus;
+  version: number;
+  versionId: string | null;
+  profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | 'content-driven-image-v1' | null;
+  maxAgentTasks: number | null;
+  canRetryGeneration?: boolean;
+  chargeableAttempts?: number;
+  availableImageCount?: number;
+  imageUsageLimited?: boolean;
+  sourceClaimIds: string[];
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  steps: Array<{
+    id: string;
+    stage: 'source_ingestion' | 'storyboard' | 'scene_image' | 'video';
+    ordinal: number;
+    status: HermesResearchStepStatus;
+    ingestionTaskId?: string;
+    artifactId?: string;
+    agentTaskId?: string | null;
+    presentationAssetId?: string;
+    availableAssetId?: string;
+    availableAssetStatus?: string;
+    error: string | null;
+  }>;
+}
+
+export function createHermesResearchRun(researchObjectId: string, ingestionTaskIds: string[], idempotencyKey: string): Promise<{ run: HermesResearchRun }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ ingestionTaskIds }),
+  });
+}
+
+export function getHermesResearchRun(researchObjectId: string, runId: string, signal?: AbortSignal): Promise<{ run: HermesResearchRun }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
+}
+
+export interface HermesSourceReview {
+  ingestionTaskId: string;
+  snapshotToken: string;
+  selections: IngestionClaimSelection[];
+}
+
+export function submitHermesSourceReview(
+  researchObjectId: string,
+  runId: string,
+  input: {
+    expectedVersion: number;
+    versionId: string;
+    generationGrant: { profile: 'content-driven-v1'; maxAgentTasks: 8 } | { profile: 'content-driven-image-v1'; maxAgentTasks: 7 };
+    reviews: HermesSourceReview[];
+  },
+  idempotencyKey: string,
+): Promise<{ run: HermesResearchRun; claims: PresentationClaim[]; evidence: unknown[] }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}/source-review`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify(input),
+  });
+}
+
+export function authorizeHermesGenerationGrant(
+  researchObjectId: string,
+  runId: string,
+  expectedVersion: number,
+): Promise<{ run: HermesResearchRun }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}/generation-grant`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedVersion, generationGrant: { profile: 'content-driven-v1', maxAgentTasks: 8 } }),
+  });
+}
+
+export function retryHermesGeneration(
+  researchObjectId: string, runId: string, expectedVersion: number, idempotencyKey: string,
+): Promise<{ run: HermesResearchRun }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}/retry-generation`, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ expectedVersion }),
+  });
+}
 export async function listResearchIngestionTasks(researchObjectId: string): Promise<{ tasks: DashboardTaskApi[] }> {
   return request(`/api/ingestion?actionable=true&researchObjectId=${encodeURIComponent(researchObjectId)}`);
 }
@@ -282,10 +429,21 @@ export async function getDashboardOverview(): Promise<{
 }
 
 export async function logout(): Promise<void> {
-  await request('/api/auth/logout', { method: 'POST' });
-  if (typeof window !== 'undefined') {
-    const { clearAllPendingLiteratureIntents } = await import('./literature-acquisition-state');
-    clearAllPendingLiteratureIntents(window.sessionStorage);
+  try {
+    await request('/api/auth/logout', { method: 'POST' });
+    notifySessionInvalidated();
+  } finally {
+    if (typeof window !== 'undefined') {
+      const [{ clearAllPendingLiteratureIntents }, { clearAllHermesDrafts, getHermesDraftStorage }] = await Promise.all([
+        import('./literature-acquisition-state'), import('./hermes/draft-state'),
+      ]);
+      const storage = getHermesDraftStorage();
+      if (storage) {
+        try { clearAllPendingLiteratureIntents(storage); }
+        catch { /* Logout remains valid when browser storage becomes unavailable. */ }
+      }
+      clearAllHermesDrafts(storage);
+    }
   }
 }
 
@@ -300,6 +458,7 @@ export interface ResearchIndexItemApi {
   fields: string[];
   artifactTypes: string[];
   authors: string[];
+  thumbnail?: { url: string; label: string } | null;
 }
 
 export interface ResearchIndexPageApi {
@@ -596,13 +755,14 @@ export interface PresentationClaim {
   updatedAt: string;
 }
 
-import type { StoryboardRequest, StoryboardView, SceneImageRequest } from '@openscience/domain';
-export type { StoryboardRequest, StoryboardDocument, StoryboardView, SceneImageRequest } from '@openscience/domain';
+import type { StoryboardRequest, StoryboardView, SceneImageRequest, SourceLocator } from '@openscience/domain';
+export type { StoryboardRequest, StoryboardDocument, StoryboardView, SceneImageRequest, SourceLocator } from '@openscience/domain';
 
 export interface PresentationAsset {
   storyboard?: StoryboardView;
   sceneImage?: SceneImageRequest;
   canGenerateSceneImage?: boolean;
+  canGenerateVideo?: boolean;
   canTransition?: boolean;
   id: string;
   researchObjectId: string;
@@ -626,6 +786,68 @@ function presentationScopePath(roId: string, versionId: string): string {
 
 export async function listVersionClaims(roId: string, versionId: string, signal?: AbortSignal): Promise<{ claims: PresentationClaim[] }> {
   return request(`${presentationScopePath(roId, versionId)}/claims`, { signal });
+}
+
+export interface VersionEvidence {
+  id: string;
+  researchObjectId: string;
+  versionId: string;
+  claimId: string;
+  title: string;
+  exactQuote?: string;
+  locator: { page?: number; [key: string]: unknown };
+  relation: string;
+  extractionStatus: 'succeeded' | 'needs_review' | 'blocked' | 'failed';
+  verifiedByUserId?: string;
+  updatedAt: string;
+}
+
+export function listVersionEvidence(roId: string, versionId: string, signal?: AbortSignal): Promise<{ evidence: VersionEvidence[] }> {
+  return request(`${presentationScopePath(roId, versionId)}/evidence`, { signal });
+}
+
+export function verifyVersionEvidence(roId: string, versionId: string, evidenceId: string, expectedUpdatedAt: string): Promise<{ evidence: VersionEvidence }> {
+  return request(`${presentationScopePath(roId, versionId)}/evidence/${encodeURIComponent(evidenceId)}/verify`, {
+    method: 'POST', body: JSON.stringify({ expectedUpdatedAt }),
+  });
+}
+
+export function getVersionEvidenceSource(roId: string, versionId: string, evidenceId: string, signal?: AbortSignal): Promise<{ source: { text?: string } }> {
+  return request(`${presentationScopePath(roId, versionId)}/evidence/${encodeURIComponent(evidenceId)}/source`, { signal });
+}
+
+export type IngestionClaimField = 'problem' | 'insight' | 'method' | 'results' | 'limitations' | 'reproducibility';
+export type IngestionClaimSource = { quote: string; locator: { page?: number; blockId?: string; [key: string]: unknown } };
+export interface IngestionClaimSuggestion {
+  sourceField: IngestionClaimField;
+  originalStatement: string;
+  reviewedStatement: string;
+  rewritten: boolean;
+  defaultQuoteAssociation: boolean;
+  source?: IngestionClaimSource;
+  sources?: IngestionClaimSource[];
+}
+export interface IngestionClaimPreview {
+  taskId: string; researchObjectId: string; versionId: string; commitId: string;
+  artifact: { id: string; logicalPath: string; contentHash: string };
+  snapshotToken: string;
+  suggestions: IngestionClaimSuggestion[];
+}
+export interface IngestionClaimSelection {
+  clientKey: string; sourceField: IngestionClaimField; kind: PresentationClaim['kind'];
+  parentClientKey?: string; statement: string; conditions?: string[]; limitations?: string[];
+  attachSourceQuote: boolean;
+}
+export function listIngestionClaimPreviews(roId: string, versionId: string, signal?: AbortSignal): Promise<{ candidates: IngestionClaimPreview[] }> {
+  return request(`${presentationScopePath(roId, versionId)}/ingestion-claim-evidence`, { signal });
+}
+export function getHermesIngestionClaimPreview(roId: string, versionId: string, ingestionTaskId: string, signal?: AbortSignal): Promise<IngestionClaimPreview> {
+  return request(`${presentationScopePath(roId, versionId)}/ingestion-claim-evidence/${encodeURIComponent(ingestionTaskId)}`, { signal });
+}
+export function confirmIngestionClaims(roId: string, versionId: string, taskId: string, body: { snapshotToken: string; selections: IngestionClaimSelection[] }, idempotencyKey: string, signal?: AbortSignal): Promise<{ claims: PresentationClaim[]; evidence: unknown[] }> {
+  return request(`${presentationScopePath(roId, versionId)}/ingestion-claim-evidence/${encodeURIComponent(taskId)}`, {
+    method: 'POST', signal, headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(body),
+  });
 }
 
 export async function createPresentationClaim(
@@ -665,6 +887,18 @@ export async function generatePresentationSceneImage(roId: string, versionId: st
   return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
     method: 'POST', headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify({ kind: 'image', sourceClaimIds, sceneImage }), signal,
+  });
+}
+
+export interface PresentationVideoRequest {
+  profile: 'content-driven-v1';
+  storyboardAssetId: string;
+  sceneImageAssetIds: string[];
+}
+export async function generatePresentationVideo(roId: string, versionId: string, sourceClaimIds: string[], video: PresentationVideoRequest, idempotencyKey: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
+  return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, signal,
+    body: JSON.stringify({kind: 'video', sourceClaimIds, video}),
   });
 }
 
@@ -726,7 +960,8 @@ export interface PublicationReview {
 }
 
 export async function getLicenses(roId: string, versionId?: string): Promise<{ licenses: LicenseSet | null; source: 'version' | 'ro' | 'none' }> {
-  return request(`/api/research-objects/${roId}/licenses${versionId ? `/${versionId}` : ''}`);
+  const result = await request<{ licenses: { licenses: LicenseSet | null; source: 'version' | 'ro' | 'none' } }>(`/api/research-objects/${roId}/licenses${versionId ? `/${versionId}` : ''}`);
+  return result.licenses;
 }
 
 export async function setVersionLicenses(roId: string, versionId: string, licenses: LicenseSet): Promise<void> {
@@ -734,7 +969,7 @@ export async function setVersionLicenses(roId: string, versionId: string, licens
 }
 
 export async function runPublicationReview(versionId: string): Promise<{ review: PublicationReview }> {
-  return request(`/api/versions/${versionId}/review`, { method: 'POST' });
+  return request(`/api/versions/${versionId}/review`, { method: 'POST', body: JSON.stringify({}) });
 }
 
 export async function getPublicationReview(versionId: string): Promise<{ review: PublicationReview | null }> {
@@ -933,6 +1168,10 @@ export interface WorkspaceGuidePayload {
   context: {
     tasks: Array<{ id: string; researchObjectId: string; state: string }>;
     researchObjects: Array<{ id: string; title: string; status: string }>;
+    presentation?: { researchObjectId: string; versionId?: string };
+    editorDraft?: { researchObjectId: string; scope: string; version: number; core: Omit<SdfCore, 'schemaVersion'> };
+    writingDraft?: { baseDraftTaskId: string; title: string; body: string };
+    writingSource?: { ingestionTaskId: string };
   };
 }
 
@@ -940,10 +1179,27 @@ export interface WorkspaceGuideResult {
   summary: string;
   nextSteps: Array<{
     label: string;
-    intent: 'open-task' | 'open-ro' | 'start-import';
+    intent: 'open-task' | 'open-ro' | 'start-import' | 'prepare-publication' | 'review-media';
     targetId?: string;
   }>;
   needsMoreInformation: boolean;
+  draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: Partial<Omit<SdfCore, 'schemaVersion'>> };
+  presentationDraft?: {
+    action: 'storyboard.create' | 'storyboard.revise' | 'scene.image' | 'video.create';
+    style?: 'technical' | 'ink' | 'watercolor';
+    instruction: string;
+    researchObjectId: string;
+    versionId: string;
+  };
+  writingDraft?: {
+    title: string;
+    kind: 'note' | 'review' | 'manuscript';
+    body: string;
+    sourceTaskId: string;
+    baseDraftTaskId?: string;
+    citations: Array<{ id: string; marker: string; quote: string; sourceLocator: SourceLocator }>;
+    sourceStatus: 'grounded' | 'grounded_with_unresolved_review' | 'user_edited';
+  };
 }
 
 export async function createWorkspaceGuideSession(title: string, idempotencyKey: string, researchObjectId?: string): Promise<{ session: { id: string } }> {
@@ -1041,7 +1297,7 @@ export function updateReadingPreference(input: {
 }
 
 export async function retryAgentTask(taskId: string): Promise<{ task: AgentTaskView }> {
-  return request(`/api/agent/tasks/${taskId}/retry`, { method: 'POST' });
+  return request(`/api/agent/tasks/${taskId}/retry`, { method: 'POST', body: '{}' });
 }
 
 export interface LiteratureAcquisitionResult {
@@ -1078,6 +1334,16 @@ export interface TemporaryDocumentDownloadLink {
 
 export function createTemporaryDocumentDownloadLink(documentId: string): Promise<TemporaryDocumentDownloadLink> {
   return request(`/api/temporary-documents/${documentId}/download-link`, { method: 'POST' });
+}
+
+export function importTemporaryDocumentToResearchObject(
+  documentId: string,
+  researchObjectId: string,
+): Promise<StartIngestionResult> {
+  return request(`/api/temporary-documents/${documentId}/import-to-research-object`, {
+    method: 'POST',
+    body: JSON.stringify({ processingConsent: true, researchObjectId }),
+  });
 }
 
 // ===== P1D-9：公开页数据（§4.3 必显）=====
@@ -1132,6 +1398,7 @@ export interface PublicEvidenceSource {
 }
 
 export interface PublicResearchVersion {
+  recordUrl?: string;
   publicId: string;
   title: string;
   url: string;
@@ -1283,10 +1550,30 @@ export async function createSandboxJob(
 }
 
 export interface IngestionTaskDetail {
-  task: { id: string; artifactId: string; logicalPath: string; state: string; retryCount: number; error: string | null; agentTaskId: string | null; result: Record<string, unknown> | null };
+  task: IngestionTaskSummary & { result: Record<string, unknown> | null };
   batchId: string;
   researchObjectId: string;
   version: number;
+}
+
+export interface IngestionConfirmation {
+  commitId: string;
+  versionId: string;
+  versionNo: number;
+  version: number;
+  evidenceStatus: 'needs_review';
+  missingFields: string[];
+}
+
+export interface ResearchIngestion {
+  researchObjectId: string;
+  version: number;
+  tasks: Array<IngestionTaskSummary & { confirmation: IngestionConfirmation | null }>;
+  latestConfirmation: IngestionConfirmation | null;
+}
+
+export async function getResearchIngestion(researchObjectId: string): Promise<ResearchIngestion> {
+  return apiRequest(`/api/research-objects/${encodeURIComponent(researchObjectId)}/ingestion`);
 }
 
 export type IngestionTaskState = 'queued' | 'uploading' | 'stored' | 'parsing' | 'needs_review' | 'confirmed' | 'written' | 'failed_retryable' | 'failed_blocked';
@@ -1348,14 +1635,117 @@ export async function getIngestionBatch(batchId: string): Promise<IngestionBatch
 }
 
 export async function retryIngestionTask(taskId: string): Promise<IngestionTaskSummary> {
-  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/retry`, { method: 'POST' });
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/retry`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
   return result.task;
+}
+
+export async function refreshIngestionAnalysis(
+  taskId: string,
+  sourceAgentTaskId: string,
+  compositionSourceAgentTaskId?: string,
+  reviewOnly?: boolean,
+): Promise<IngestionTaskSummary> {
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/refresh`, {
+    method: 'POST',
+    body: JSON.stringify({
+      processingConsent: true,
+      sourceAgentTaskId,
+      ...(compositionSourceAgentTaskId ? { compositionSourceAgentTaskId } : {}),
+      ...(reviewOnly ? { reviewOnly: true } : {}),
+    }),
+  });
+  return result.task;
+}
+
+export async function reanalyzeConfirmedIngestion(taskId: string, sourceAgentTaskId: string, idempotencyKey: string): Promise<IngestionTaskSummary> {
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/reanalyze`, {
+    method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey },
+    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId }),
+  });
+  return result.task;
+}
+
+export function isConfirmedIngestionReanalysisSource(task: IngestionTaskDetail['task']): boolean {
+  return task.state === 'confirmed' && Boolean(task.agentTaskId) && Boolean(task.result
+    && typeof task.result === 'object' && !Array.isArray(task.result)
+    && task.result.canonicalExtractionContract === 'grounded-passages-v2'
+    && task.result.sourceMapAvailable === true);
+}
+
+const LEGACY_INGESTION_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+
+/** Public-result guard for the old character-offset extraction contract. */
+export function isRefreshableIngestionAnalysis(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount' | 'agentTaskId'>): boolean {
+  if (task.state !== 'needs_review' || !task.agentTaskId || !task.result
+    || typeof task.result !== 'object' || Array.isArray(task.result)) return false;
+  const result = task.result as Record<string, unknown>;
+  if (result.canonicalExtractionContract === 'grounded-passages-v2' && result.sourceMapAvailable === true) return true;
+  const exactQuoteRefresh = task.retryCount === 0
+    && result.canonicalExtractionContract === 'exact-quote-v1'
+    && result.sourceMapAvailable === true;
+  if (exactQuoteRefresh) return true;
+  const groundedSummaryRefresh = task.retryCount >= 0 && task.retryCount <= 2
+    && result.canonicalExtractionContract === 'grounded-summary-v1'
+    && result.reason === 'canonical_partial_validation_exhausted'
+    && result.sourceMapAvailable === true;
+  if (groundedSummaryRefresh) return true;
+  const passageDiagnostics = result.fieldDiagnostics;
+  if (task.retryCount >= 0 && task.retryCount <= 1 && result.canonicalExtractionContract === 'grounded-passages-v1'
+    && result.reason === 'canonical_partial_validation_exhausted' && result.sourceMapAvailable === true
+    && passageDiagnostics && typeof passageDiagnostics === 'object' && !Array.isArray(passageDiagnostics)
+    && Object.keys(passageDiagnostics).length > 0
+    && Object.entries(passageDiagnostics).every(([field, reason]) => LEGACY_INGESTION_FIELDS.includes(field as typeof LEGACY_INGESTION_FIELDS[number])
+      && ['passage_ids_required', 'segment_count_1_to_32', 'source_text_limit_8000'].includes(String(reason)))) return true;
+  if (task.retryCount !== 0) return false;
+  const core = result.core;
+  const evidence = result.evidence;
+  const missing = result.needsMoreInformation;
+  const diagnostics = result.fieldDiagnostics;
+  const canonicalReasons = diagnostics && typeof diagnostics === 'object' && !Array.isArray(diagnostics)
+    ? Object.values(diagnostics) : [];
+  const refreshableCanonical = result.reason === 'canonical_partial_validation_exhausted'
+    && diagnostics && typeof diagnostics === 'object' && !Array.isArray(diagnostics)
+    && Object.keys(diagnostics).length > 0
+    && Object.entries(diagnostics).every(([field, reason]) => LEGACY_INGESTION_FIELDS.includes(field as typeof LEGACY_INGESTION_FIELDS[number])
+      && ['malformed_item', 'missing_requires_empty', 'summary_required', 'segment_count_1_to_32', 'duplicate_ids', 'unknown_ids', 'ordered_ids_required', 'contiguous_ids_required', 'source_text_limit_8000', 'core_text_limit_4000'].includes(String(reason)))
+    && ((result.canonicalExtractionContract === undefined
+      && (canonicalReasons.some((reason) => reason === 'segment_count_1_to_32')
+        || canonicalReasons.every((reason) => reason === 'contiguous_ids_required')))
+      || (result.canonicalExtractionContract === 'windowed-source-v2'
+        && canonicalReasons.every((reason) => reason === 'segment_count_1_to_32')));
+  if (refreshableCanonical) return true;
+  if (Object.keys(result).sort().join(',') !== ['core', 'evidence', 'needsMoreInformation'].sort().join(',')
+    || !core || typeof core !== 'object' || Array.isArray(core)
+    || !evidence || typeof evidence !== 'object' || Array.isArray(evidence)
+    || !Array.isArray(missing)) return false;
+  const coreRecord = core as Record<string, unknown>;
+  const evidenceRecord = evidence as Record<string, unknown>;
+  return Object.keys(coreRecord).sort().join(',') === ['schemaVersion', ...LEGACY_INGESTION_FIELDS].sort().join(',')
+    && LEGACY_INGESTION_FIELDS.every((field) => typeof coreRecord[field] === 'string')
+    && LEGACY_INGESTION_FIELDS.some((field) => String(coreRecord[field]).trim())
+    && Object.keys(evidenceRecord).sort().join(',') === [...LEGACY_INGESTION_FIELDS].sort().join(',')
+    && LEGACY_INGESTION_FIELDS.every((field) => {
+      const item = evidenceRecord[field];
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+      const record = item as Record<string, unknown>;
+      return Object.keys(record).sort().join(',') === ['locator', 'quote'].join(',')
+        && typeof record.quote === 'string' && typeof record.locator === 'string'
+        && (record.locator === '' || /^chars:\d+-\d+$/.test(record.locator));
+    })
+    && missing.every((field) => LEGACY_INGESTION_FIELDS.includes(field as typeof LEGACY_INGESTION_FIELDS[number]));
 }
 
 export async function getIngestionTask(taskId: string): Promise<IngestionTaskDetail> {
   return apiRequest(`/api/ingestion/tasks/${taskId}`);
 }
 
-export async function confirmIngestionTask(taskId: string, input: { version: number; core: SdfCore }): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore } }> {
+export async function confirmIngestionTask(
+  taskId: string,
+  input: { version: number; core: SdfCore; sourceAgentTaskId: string },
+): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore }; confirmation: IngestionConfirmation }> {
   return apiRequest(`/api/ingestion/${taskId}/confirm`, { method: 'POST', body: JSON.stringify(input) });
 }

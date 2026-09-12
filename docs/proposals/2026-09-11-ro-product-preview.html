@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenScience · Research Object 产品视觉预览</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #f5f8fa;
+      --paper: #ffffff;
+      --paper-strong: #ffffff;
+      --ink: #1d2935;
+      --muted: #596875;
+      --rule: #dce4e8;
+      --teal: #126a70;
+      --teal-strong: #126a70;
+      --teal-soft: #eaf5f3;
+      --amber: #8a5717;
+      --danger: #b23b3b;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font: 15px/22px system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; }
+    button, textarea, select { font: inherit; }
+    button { cursor: pointer; transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease; }
+    button:active { transform: translateY(1px); }
+    button:focus-visible, textarea:focus-visible, select:focus-visible, [contenteditable]:focus-visible, summary:focus-visible {
+      outline: 3px solid rgba(23, 108, 98, .28); outline-offset: 2px;
+    }
+    .preview-note { min-height: 32px; display: grid; place-items: center; padding: 5px 16px; background: var(--ink); color: #f7fbfa; font-size: 14px; line-height: 20px; letter-spacing: .02em; }
+    .app { width: min(1480px, 100%); margin: auto; padding: 0 24px 48px; }
+    .topbar { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 720; letter-spacing: -.02em; }
+    .brand-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--teal); color: white; font: 700 12px/1 ui-monospace, monospace; }
+    .view-switch { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--rule); border-radius: 8px; background: var(--canvas); }
+    .view-switch button { min-height: 44px; border: 0; border-radius: 8px; padding: 0 16px; background: transparent; color: var(--muted); }
+    .view-switch button[aria-pressed="true"] { background: var(--paper-strong); color: var(--ink); }
+    .stage { position: relative; }
+    .surface { opacity: 1; transition: opacity 150ms ease; }
+    .surface[aria-hidden="true"] { position: absolute; inset: 0; opacity: 0; visibility: hidden; pointer-events: none; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 3fr) minmax(290px, 1fr); gap: 24px; align-items: start; }
+    .workspace.hermes-collapsed { grid-template-columns: minmax(0, 1fr) 44px; }
+    .document { min-width: 0; padding: clamp(32px, 4vw, 48px); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--paper); }
+    .document-head { max-width: 860px; }
+    .eyebrow { margin: 0 0 8px; color: var(--teal); font-size: 14px; line-height: 20px; font-weight: 720; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 0; max-width: 820px; font-size: 36px; line-height: 44px; letter-spacing: -.025em; }
+    .byline { margin: 14px 0 0; color: var(--muted); }
+    .save-state { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; color: var(--muted); font-size: 14px; line-height: 20px; }
+    .save-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); }
+    .contribution { max-width: 850px; margin: 32px 0; padding: 16px 24px; border-left: 3px solid var(--teal); background: var(--teal-soft); font-size: 20px; line-height: 28px; letter-spacing: -.01em; }
+    .section-label { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+    .section-label h2 { margin: 0; font-size: 20px; line-height: 28px; letter-spacing: -.01em; }
+    .section-label span { color: var(--muted); font-size: 14px; line-height: 20px; }
+    .prose { max-width: 840px; }
+    .passage { position: relative; padding: 12px 0; }
+    .passage h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; color: var(--ink); font-size: 20px; font-weight: 650; line-height: 28px; letter-spacing: -.01em; }
+    .passage h3::before { content: ''; width: 3px; height: 20px; flex: none; border-radius: 2px; background: var(--teal); }
+    .passage p { margin: 0; min-height: 31px; font-size: 18px; line-height: 31px; }
+    .passage p[contenteditable] { border-radius: 8px; }
+    .passage p[contenteditable]:hover { background: rgba(234,245,243,.55); }
+    .passage.limit p { padding-left: 16px; border-left: 2px solid var(--amber); }
+    .media-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .media-card { min-height: 230px; display: flex; flex-direction: column; justify-content: space-between; padding: 24px; overflow: hidden; border: 1px solid var(--rule); border-radius: 12px; background: var(--canvas); }
+    .media-type { width: fit-content; padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,.86); color: var(--teal-strong); font-size: 14px; line-height: 20px; font-weight: 720; letter-spacing: .04em; }
+    .media-visual { flex: 1; display: grid; place-items: center; color: #71817d; text-align: center; }
+    .media-visual svg { width: 46px; height: 46px; margin-bottom: 8px; opacity: .66; }
+    .media-card h3 { margin: 14px 0 3px; font-size: 15px; }
+    .media-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 20px; }
+    .media-card[data-state="prepared"] { border-color: rgba(18,106,112,.45); background: var(--teal-soft); }
+    details.record { margin-top: 34px; border-top: 1px solid var(--rule); }
+    details.record summary { min-height: 52px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-weight: 650; }
+    details.record summary::after { content: "+"; color: var(--teal); font-size: 20px; font-weight: 400; }
+    details.record[open] summary::after { content: "−"; }
+    .record-body { padding: 0 0 15px; color: var(--muted); }
+    .hermes { position: sticky; top: 14px; height: min(760px, calc(100dvh - 112px)); display: grid; grid-template-rows: auto minmax(0,1fr) auto; border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; background: var(--paper-strong); box-shadow: 0 4px 16px #142d3d0a; }
+    .hermes-head { min-height: 112px; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--rule); background: var(--paper-strong); }
+    .hermes-head img { width: 96px; height: 96px; flex: 0 0 96px; object-fit: contain; object-position: center bottom; transition: opacity 220ms ease, transform 220ms ease; }
+    .hermes-head div, .conversation, .composer { transition: opacity 220ms ease, transform 220ms ease; }
+    .hermes-head h2 { margin: 0; font-size: 20px; line-height: 28px; }
+    .hermes-head p { margin: 2px 0 0; color: var(--muted); font-size: 14px; line-height: 20px; }
+    .close-hermes { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; margin-left: auto; border: 0; border-radius: 8px; background: transparent; color: var(--muted); padding: 8px; }
+    .hermes.collapsed { height: 44px; grid-template-rows: 44px 0 0; }
+    .hermes.collapsed .hermes-head { min-height: 44px; padding: 0; border: 0; }
+    .hermes.collapsed .hermes-head img, .hermes.collapsed .hermes-head div { position: absolute; opacity: 0; visibility: hidden; transform: translateX(5px); }
+    .hermes.collapsed .close-hermes { width: 44px; margin: 0; color: var(--teal); font-weight: 760; }
+    .hermes.collapsed .conversation, .hermes.collapsed .composer { opacity: 0; visibility: hidden; pointer-events: none; }
+    .conversation { min-height: 0; overflow-y: auto; padding: 16px; overscroll-behavior: contain; }
+    .message { max-width: 92%; margin: 0 0 12px; padding: 4px 0; border-radius: 0; background: transparent; font-size: 15px; line-height: 22px; white-space: pre-wrap; animation: message-in 160ms ease both; }
+    .message.user { margin-left: auto; padding: 10px 12px; border-radius: 8px 8px 2px 8px; background: var(--teal-soft); color: var(--ink); }
+    .message small { display: block; margin-top: 8px; color: var(--muted); font-size: 14px; line-height: 20px; }
+    .message.user small { color: var(--muted); }
+    @keyframes message-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .undo { margin-top: 8px; border: 0; border-bottom: 1px solid currentColor; background: transparent; color: var(--teal-strong); padding: 0; font-size: 14px; line-height: 20px; }
+    .production-card { margin: 8px 0 16px; padding: 16px; border: 1px solid var(--rule); border-radius: 12px; background: var(--canvas); }
+    .production-card fieldset { margin: 0 0 12px; padding: 0; border: 0; }
+    .production-card legend { margin-bottom: 8px; font-size: 14px; line-height: 20px; font-weight: 700; }
+    .choice-row { display: flex; flex-wrap: wrap; gap: 7px; }
+    .choice-row label { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 8px; background: white; font-size: 14px; line-height: 20px; }
+    .production-card details { margin: 8px 0 16px; font-size: 14px; line-height: 20px; }
+    .production-card textarea { width: 100%; min-height: 72px; resize: vertical; margin-top: 8px; padding: 8px; border: 1px solid var(--rule); border-radius: 8px; }
+    .primary, .secondary { min-height: 44px; border-radius: 8px; padding: 0 16px; font-weight: 680; }
+    .primary { border: 1px solid var(--teal-strong); background: var(--teal-strong); color: white; }
+    .secondary { border: 1px solid var(--rule); background: white; color: var(--ink); }
+    .composer { padding: 12px; border-top: 1px solid var(--rule); background: #fafcfb; }
+    .composer textarea { width: 100%; min-height: 78px; max-height: 190px; resize: vertical; border: 1px solid var(--rule); border-radius: 11px; background: white; padding: 10px 11px; color: var(--ink); }
+    .composer-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+    .composer-foot span { color: var(--muted); font-size: 14px; line-height: 20px; }
+    .mobile-hermes { display: none; position: fixed; right: 16px; bottom: 16px; z-index: 20; min-height: 46px; border: 0; border-radius: 999px; background: var(--teal-strong); color: white; padding: 0 17px; font-weight: 700; }
+    .public-sheet { width: min(1040px, 100%); margin: 0 auto; padding: 48px 0; background: transparent; }
+    .public-sheet .document-head, .public-sheet > .contribution, .public-sheet > .prose, .public-sheet > details, .public-sheet > .public-actions { width: min(760px, 100%); margin-left: auto; margin-right: auto; }
+    .public-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 38px; padding-top: 20px; border-top: 1px solid var(--rule); }
+    .public-actions p { margin: 0; color: var(--muted); font-size: 14px; line-height: 20px; }
+    dialog { width: min(500px, calc(100% - 28px)); padding: 0; border: 1px solid var(--rule); border-radius: 12px; color: var(--ink); background: white; }
+    dialog::backdrop { background: rgba(13,29,26,.38); }
+    .dialog-body { padding: 24px; }
+    .dialog-body h2 { margin: 0 0 8px; font-size: 21px; }
+    .dialog-body p { color: var(--muted); }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    .toast { position: fixed; left: 50%; bottom: 20px; z-index: 40; max-width: min(540px, calc(100% - 32px)); translate: -50% 8px; opacity: 0; pointer-events: none; padding: 10px 14px; border-radius: 8px; background: var(--ink); color: white; font-size: 14px; line-height: 20px; transition: opacity 150ms ease, translate 150ms ease; }
+    .toast.show { opacity: 1; translate: -50% 0; }
+    @media (max-width: 860px) {
+      .app { padding-inline: 14px; }
+      .workspace { grid-template-columns: 1fr; }
+      .hermes { position: fixed; z-index: 30; inset: auto 10px 10px 10px; height: min(680px, calc(100dvh - 74px)); translate: 0 calc(100% + 24px); opacity: 0; pointer-events: none; transition: translate 180ms ease, opacity 160ms ease; }
+      .hermes.open { translate: 0; opacity: 1; pointer-events: auto; }
+      .mobile-hermes { display: inline-flex; align-items: center; justify-content: center; }
+      .workspace.hermes-collapsed { grid-template-columns: 1fr; }
+      .hermes.collapsed { height: min(680px, calc(100dvh - 74px)); grid-template-rows: auto minmax(0,1fr) auto; }
+      .hermes.collapsed .hermes-head { min-height: 112px; padding: 8px 12px; border-bottom: 1px solid var(--rule); }
+      .hermes.collapsed .hermes-head img, .hermes.collapsed .hermes-head div { position: static; opacity: 1; visibility: visible; transform: none; }
+      .hermes.collapsed .close-hermes { width: auto; margin-left: auto; color: var(--muted); font-weight: 400; }
+      .hermes.collapsed .conversation, .hermes.collapsed .composer { opacity: 1; visibility: visible; pointer-events: auto; }
+      .media-grid { grid-template-columns: 1fr; }
+      .passage { grid-template-columns: 1fr; gap: 6px; }
+      .public-actions { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 540px) {
+      .topbar { align-items: flex-start; flex-direction: column; padding: 12px 0; }
+      .view-switch { width: 100%; }
+      .view-switch button { flex: 1; }
+      .document { padding: 24px 19px; }
+      .public-sheet { padding: 32px 0; }
+      .hermes-head { min-height: 106px; }
+      .hermes-head img { width: 96px; height: 96px; flex-basis: 96px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .surface, .hermes, .hermes-head img, .toast, button { transition: none; }
+      .message { animation: none; }
+    }
+  .close-hermes { min-width:44px; flex-shrink:0; white-space:nowrap; } .hermes-head > div { min-width:0; } @media(max-width:860px) { .hermes:not(.open) { visibility:hidden; } .hermes.open { visibility:visible; } } </style>
+</head>
+<body>
+  <div class="preview-note">交互预览 · 未连接生产</div>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">OS</span><span>OpenScience</span></div>
+      <div class="view-switch" aria-label="预览模式">
+        <button type="button" data-view="work" aria-pressed="true">研究工作台</button>
+        <button type="button" data-view="public" aria-pressed="false">公开预览</button>
+      </div>
+    </header>
+
+    <div class="stage">
+      <main id="work-surface" class="surface" aria-hidden="false">
+        <div class="workspace">
+          <article class="document" aria-labelledby="work-title">
+            <header class="document-head">
+              <p class="eyebrow">Research Object · 当前草稿</p>
+              <h1 id="work-title">Deep-sub-cycle pulse</h1>
+              <p class="byline">署名与来源：待作者确认</p>
+              <span class="save-state" id="save-state">此预览中的修改只保留在当前页面</span>
+            </header>
+            <p class="contribution" data-shared="contribution" contenteditable="plaintext-only">以纳米缝近场的深亚波长空间限域和相对论接收时间压缩，形成更短的散射脉冲。</p>
+
+            <div class="prose" id="research-fields">
+              <section class="passage" data-field="question"><h3>问题</h3><p contenteditable="plaintext-only">如何产生强度半高全宽短于半个散射光周期的深亚周期脉冲，并克服单电子光子数过低的限制。</p></section>
+              <section class="passage" data-field="insight"><h3>洞见</h3><p contenteditable="plaintext-only">利用纳米缝近场的深亚波长空间限域，借相对论接收时间压缩形成更短的散射脉冲。</p></section>
+              <section class="passage" data-field="method"><h3>方法</h3><p contenteditable="plaintext-only">结合 COMSOL 近场计算、电子散射角分布与到达时间，再按高斯束团叠加得到波形和频谱。</p></section>
+              <section class="passage" data-field="result"><h3>结果</h3><p contenteditable="plaintext-only">数值算例显示可获得深亚周期散射脉冲；有限束团时宽会展宽输出。不同算例的数值不可混用。</p></section>
+              <section class="passage limit" data-field="limitation"><h3>限制</h3><p contenteditable="plaintext-only">本文为理论与数值研究，并非实验光源验证；单电子平均光子数可远小于 1，波形仍有异号旁瓣。</p></section>
+              <section class="passage" data-field="reproducibility"><h3>可复现性</h3><p contenteditable="plaintext-only">重建需要几何、驱动光、电子束团与数值求解设置；现有材料中的设置缺口与公式疑义需要保留说明。</p></section>
+            </div>
+
+            <section id="media-section" aria-labelledby="media-title">
+              <div class="section-label"><h2 id="media-title">图片与视频</h2><span id="media-status">尚未在此预览中准备媒体</span></div>
+              <div class="media-grid">
+                <article class="media-card" id="image-card" data-state="empty">
+                  <span class="media-type">IMAGE</span>
+                  <div class="media-visual"><div><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="5" y="8" width="38" height="32" rx="4" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="19" r="4" stroke="currentColor" stroke-width="2"/><path d="m9 35 10-9 7 6 6-5 7 8" stroke="currentColor" stroke-width="2"/></svg><br><span>科学图片展示位置</span></div></div>
+                  <div><h3>核心图解</h3><p class="media-copy">尚未选择制作；不展示虚构科研图。</p></div>
+                </article>
+                <article class="media-card" id="video-card" data-state="empty">
+                  <span class="media-type">VIDEO</span>
+                  <div class="media-visual"><div><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="5" y="9" width="38" height="30" rx="4" stroke="currentColor" stroke-width="2"/><path d="m21 18 10 6-10 6V18Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><br><span>研究视频展示位置</span></div></div>
+                  <div><h3>讲解视频</h3><p class="media-copy">尚未选择制作；不会自动生成或发布。</p></div>
+                </article>
+              </div>
+            </section>
+
+            <details class="record">
+              <summary>附件、证据与历史</summary>
+              <div class="record-body"><p>原文、来源定位和版本记录在真实产品中按需展开。此预览不读取文件、证据、账户或生产版本。</p></div>
+            </details>
+          </article>
+
+          <aside class="hermes" id="hermes" aria-label="Hermes 对话助手">
+            <header class="hermes-head">
+              <img src="../../apps/web/public/hermes/wanko-static-transparent.png" width="96" height="96" alt="Hermes 角色形象">
+              <div><h2>Hermes</h2><p>与你查看同一份页面草稿</p></div>
+              <button class="close-hermes" id="close-hermes" type="button" aria-controls="hermes" aria-expanded="true" aria-label="收起 Hermes">收起</button>
+            </header>
+            <div class="conversation" id="conversation" aria-live="polite">
+              <div class="message">这是未连接模型与生产接口的交互演示。可以试试：“把洞见简短一点”、“给这篇研究做一张图”、“制作讲解视频”或“准备发布”。</div>
+            </div>
+            <form class="composer" id="composer">
+              <label for="hermes-input" class="eyebrow">给 Hermes 的消息</label>
+              <textarea id="hermes-input" placeholder="描述你希望修改或准备的内容"></textarea>
+              <div class="composer-foot"><span>Enter 发送 · Shift+Enter 换行</span><button class="primary" type="submit">发送</button></div>
+            </form>
+          </aside>
+        </div>
+      </main>
+
+      <main id="public-surface" class="surface" aria-hidden="true" inert>
+        <article class="public-sheet" aria-labelledby="public-title">
+          <header class="document-head">
+            <p class="eyebrow">Public Research Object · 同版预览</p>
+            <h1 id="public-title">Deep-sub-cycle pulse</h1>
+            <p class="byline">署名、机构、来源标识：待确认 · 理论与数值研究</p>
+          </header>
+          <p class="contribution" data-public-shared="contribution"></p>
+          <div class="section-label"><h2>图片与视频</h2><span>图片与视频并列版式预览</span></div>
+          <div class="media-grid" id="public-media"></div>
+          <div class="prose" id="public-fields"></div>
+          <details class="record"><summary>引文、许可与版本元数据</summary><div class="record-body"><p>待作者、许可与持久标识确认。此预览没有虚构版本号。</p></div></details>
+          <div class="public-actions"><p>最终公开确认仅演示界面，不会产生真实发布记录。</p><button class="primary" id="open-publish" type="button">确认公开范围</button></div>
+        </article>
+      </main>
+    </div>
+  </div>
+
+  <button class="mobile-hermes" id="open-hermes" type="button" aria-controls="hermes" aria-expanded="false">打开 Hermes</button>
+  <div class="toast" id="toast" role="status"></div>
+
+  <dialog id="publish-dialog" aria-labelledby="publish-title">
+    <div class="dialog-body">
+      <h2 id="publish-title">确认公开这份预览？</h2>
+      <p>本次演示会记录一次页面内确认反馈。它不会调用发布接口，也不会创建公开版本。</p>
+      <div class="dialog-actions"><button class="secondary" id="cancel-publish" type="button">返回检查</button><button class="primary" id="confirm-publish" type="button">记录演示确认</button></div>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      const byId = (id) => document.getElementById(id);
+      const work = byId('work-surface');
+      const publicSurface = byId('public-surface');
+      const conversation = byId('conversation');
+      const input = byId('hermes-input');
+      const hermes = byId('hermes');
+      const openHermes = byId('open-hermes');
+      const publishDialog = byId('publish-dialog');
+      let activeView = 'work';
+      let composing = false;
+      let toastTimer = 0;
+      let dialogOpener = null;
+      const viewScroll = { work: 0, public: 0 };
+      const state = { image: false, video: false, style: '', detail: '', productionConfirmed: false, publicConfirmed: false };
+
+      function showToast(text) {
+        const toast = byId('toast');
+        window.clearTimeout(toastTimer);
+        toast.textContent = text;
+        toast.classList.add('show');
+        toastTimer = window.setTimeout(() => toast.classList.remove('show'), 2200);
+      }
+
+      function appendMessage(role, text) {
+        const followLatest = conversation.scrollHeight - conversation.scrollTop - conversation.clientHeight < 72;
+        const message = document.createElement('div');
+        message.className = `message${role === 'user' ? ' user' : ''}`;
+        message.textContent = text;
+        conversation.append(message);
+        if (followLatest) conversation.scrollTop = conversation.scrollHeight;
+        return message;
+      }
+
+      function syncDocument() {
+        byId('public-fields').replaceChildren(...[...document.querySelectorAll('#research-fields .passage')].map((source) => {
+          const section = document.createElement('section');
+          section.className = source.className;
+          const heading = document.createElement('h3');
+          heading.textContent = source.querySelector('h3').textContent;
+          const paragraph = document.createElement('p');
+          paragraph.textContent = source.querySelector('p').textContent;
+          section.append(heading, paragraph);
+          return section;
+        }));
+        document.querySelector('[data-public-shared="contribution"]').textContent = document.querySelector('[data-shared="contribution"]').textContent;
+      }
+
+      function syncMedia() {
+        const selected = ['image', 'video'].filter((kind) => state[kind]);
+        const visibleInPreview = selected.length ? selected : ['image', 'video'];
+        byId('media-status').textContent = selected.length ? `已确认演示制作：${selected.map((kind) => kind === 'image' ? '图片' : '视频').join('、')}` : '尚未在此预览中准备媒体';
+        for (const kind of ['image', 'video']) {
+          const card = byId(`${kind}-card`);
+          card.dataset.state = state[kind] ? 'prepared' : 'empty';
+          card.querySelector('.media-copy').textContent = state[kind] ? '已记录为本页演示中的待制作内容；未调用生成服务。' : kind === 'image' ? '尚未选择制作；不展示虚构科研图。' : '尚未选择制作；不会自动生成或发布。';
+        }
+        byId('public-media').replaceChildren(...visibleInPreview.map((kind) => {
+          const copy = byId(`${kind}-card`).cloneNode(true);
+          copy.removeAttribute('id');
+          return copy;
+        }));
+      }
+
+      function setView(view) {
+        if (view === activeView) return;
+        viewScroll[activeView] = window.scrollY;
+        activeView = view;
+        const showingWork = view === 'work';
+        work.setAttribute('aria-hidden', String(!showingWork));
+        publicSurface.setAttribute('aria-hidden', String(showingWork));
+        work.toggleAttribute('inert', !showingWork);
+        publicSurface.toggleAttribute('inert', showingWork);
+        document.querySelectorAll('[data-view]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.view === view)));
+        if (!showingWork) { syncDocument(); syncMedia(); }
+        requestAnimationFrame(() => window.scrollTo({ top: viewScroll[view], behavior: 'auto' }));
+      }
+
+      function addUndo(message, target, before, after) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'undo';
+        button.textContent = '撤销这次演示修改';
+        button.addEventListener('click', () => {
+          if (target.textContent !== after) {
+            appendMessage('assistant', '正文在这次修改之后又发生了变化，因此没有覆盖后来输入。你可以直接在正文中继续编辑。');
+            button.disabled = true;
+            return;
+          }
+          target.textContent = before;
+          button.disabled = true;
+          button.textContent = '已撤销';
+          syncDocument();
+          showToast('已撤销本次演示修改');
+        });
+        message.append(button);
+      }
+
+      function showProductionCard(preferredMedia) {
+        if (byId('production-card')) {
+          const followLatest = conversation.scrollHeight - conversation.scrollTop - conversation.clientHeight < 72;
+          const preferred = byId('production-card').querySelector(`input[name="media"][value="${preferredMedia}"]`);
+          if (preferred) { preferred.checked = true; preferred.dispatchEvent(new Event('change', { bubbles: true })); }
+          appendMessage('assistant', '制作范围仍在当前对话中，可以修改选择后再次记录本页演示状态。');
+          if (followLatest) byId('production-card').scrollIntoView({ block: 'nearest' });
+          return;
+        }
+        const card = document.createElement('form');
+        card.id = 'production-card';
+        card.className = 'production-card';
+        function choiceGroup(title, name, choices) {
+          const fieldset = document.createElement('fieldset');
+          const legend = document.createElement('legend');
+          legend.textContent = title;
+          const row = document.createElement('div');
+          row.className = 'choice-row';
+          choices.forEach(([value, labelText], index) => {
+            const label = document.createElement('label');
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = name;
+            radio.value = value;
+            radio.checked = index === 0;
+            label.append(radio, document.createTextNode(labelText));
+            row.append(label);
+          });
+          fieldset.append(legend, row);
+          return fieldset;
+        }
+        const scopeChoices = choiceGroup('制作范围', 'media', [['image', '图片'], ['video', '视频'], ['both', '两者']]);
+        const styleChoices = choiceGroup('显著风格', 'style', [['technical', '技术插图'], ['watercolor', '淡彩'], ['ink', '墨线']]);
+        const detail = document.createElement('details');
+        const detailSummary = document.createElement('summary');
+        detailSummary.textContent = '详细指令';
+        const detailInput = document.createElement('textarea');
+        detailInput.name = 'detail';
+        detailInput.maxLength = 1000;
+        detailInput.value = '保留理论与数值研究边界，突出条件、限制与物理量区别。';
+        detail.append(detailSummary, detailInput);
+        const confirm = document.createElement('button');
+        confirm.className = 'primary';
+        confirm.type = 'submit';
+        confirm.textContent = '确认内容并开始制作';
+        const cardStatus = document.createElement('p');
+        cardStatus.id = 'production-card-status';
+        cardStatus.setAttribute('aria-live', 'polite');
+        const selectionText = document.createElement('p');
+        selectionText.style.margin = '0 0 12px';
+        const options = document.createElement('details');
+        const optionsSummary = document.createElement('summary');
+        optionsSummary.textContent = '调整风格与范围';
+        options.append(optionsSummary, scopeChoices, styleChoices, detail);
+        card.append(selectionText, confirm, options, cardStatus);
+        const updateSelection = () => {
+          const values = new FormData(card);
+          const mediaLabels = { image: '图片', video: '视频', both: '图片与视频' };
+          const styleLabels = { technical: '技术插图', watercolor: '淡彩', ink: '墨线' };
+          selectionText.textContent = `${mediaLabels[String(values.get('media'))]} · ${styleLabels[String(values.get('style'))]}`;
+        };
+        card.addEventListener('change', updateSelection);
+        const preferred = card.querySelector(`input[name="media"][value="${preferredMedia}"]`);
+        if (preferred) preferred.checked = true;
+        updateSelection();
+        card.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const data = new FormData(card);
+          const media = data.get('media');
+          state.image = media === 'image' || media === 'both';
+          state.video = media === 'video' || media === 'both';
+          state.style = String(data.get('style') || 'technical');
+          state.detail = String(data.get('detail') || '').trim();
+          state.productionConfirmed = true;
+          syncMedia();
+          const styleLabel = { technical: '技术插图', watercolor: '淡彩', ink: '墨线' }[state.style] || '未指定风格';
+          cardStatus.textContent = `已记录本页演示范围：${state.image ? '图片' : ''}${state.image && state.video ? '与' : ''}${state.video ? '视频' : ''} · ${styleLabel}。详细指令保留在本页内存；未提交生产任务、未扣费。`;
+          showToast('演示制作范围已同步到媒体区');
+        });
+        conversation.append(card);
+        conversation.scrollTop = conversation.scrollHeight;
+      }
+
+      function routeMessage(raw) {
+        const command = raw.trim();
+        if (['把洞见简短一点', '把洞见写短一点', '简化洞见'].includes(command)) {
+          const target = document.querySelector('[data-field="insight"] p');
+          const before = target.textContent;
+          const after = '以纳米缝近场限域结合相对论接收时间压缩，形成更短的散射脉冲。';
+          if (before === after) { appendMessage('assistant', '洞见已经是本演示可提供的简短版本。'); return; }
+          target.textContent = after;
+          syncDocument();
+          const response = appendMessage('assistant', '已在当前页面中缩短“洞见”。这是预设交互演示，没有调用模型，也不会保存到生产。');
+          addUndo(response, target, before, after);
+          return;
+        }
+        if (['给这篇研究做一张图', '生成一张研究图', '根据研究生成图片'].includes(command)) { appendMessage('assistant', '将以技术插图解释这篇研究的核心机制。确认后继续，也可以展开调整风格。'); showProductionCard('image'); return; }
+        if (['制作讲解视频', '给这篇研究做一个视频', '根据研究生成视频'].includes(command)) { appendMessage('assistant', '将准备这篇研究的讲解视频，确认制作范围后继续。公开发布另由你确认。'); showProductionCard('video'); return; }
+        if (['根据研究生成图/视频', '根据研究生成图和视频', '图片和视频都做'].includes(command)) { appendMessage('assistant', '将为这篇研究准备核心插图和讲解视频。确认后继续，可按需调整风格。'); showProductionCard('both'); return; }
+        if (command === '准备发布') { appendMessage('assistant', '已切换到同一份内容与媒体状态的公开预览。请在那里完成最终的演示确认。'); setView('public'); return; }
+        appendMessage('assistant', '这条消息不在本页的预设演示范围内。本页可以演示缩短“洞见”、准备图片或视频，以及切换到公开预览；没有连接 Hermes 模型，因此不会假装已经理解或执行。');
+      }
+
+      byId('research-fields').addEventListener('input', () => { syncDocument(); byId('save-state').textContent = '已更新本页内存草稿 · 刷新后不会保留'; });
+      document.querySelector('[data-shared="contribution"]').addEventListener('input', syncDocument);
+      document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
+      byId('composer').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const value = input.value.trim();
+        if (!value) return;
+        appendMessage('user', value);
+        input.value = '';
+        routeMessage(value);
+      });
+      input.addEventListener('compositionstart', () => { composing = true; });
+      input.addEventListener('compositionend', () => { composing = false; });
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && !composing) { event.preventDefault(); byId('composer').requestSubmit(); }
+      });
+      function setDesktopCollapsed(collapsed) {
+        hermes.classList.toggle('collapsed', collapsed);
+        hermes.closest('.workspace').classList.toggle('hermes-collapsed', collapsed);
+        const control = byId('close-hermes');
+        control.textContent = collapsed ? 'H' : '收起';
+        control.setAttribute('aria-expanded', String(!collapsed));
+        control.setAttribute('aria-label', collapsed ? '展开 Hermes' : '收起 Hermes');
+      }
+      openHermes.addEventListener('click', () => {
+        if (activeView !== 'work') setView('work');
+        setDesktopCollapsed(false);
+        hermes.classList.add('open');
+        openHermes.setAttribute('aria-expanded', 'true');
+        input.focus();
+      });
+      byId('close-hermes').addEventListener('click', (event) => {
+        if (matchMedia('(max-width: 860px)').matches) {
+          hermes.classList.remove('open');
+          openHermes.setAttribute('aria-expanded', 'false');
+          openHermes.focus();
+          return;
+        }
+        setDesktopCollapsed(!hermes.classList.contains('collapsed'));
+        event.currentTarget.focus();
+      });
+      window.addEventListener('resize', () => {
+        if (matchMedia('(max-width: 860px)').matches && hermes.classList.contains('collapsed')) setDesktopCollapsed(false);
+      });
+      byId('open-publish').addEventListener('click', (event) => { dialogOpener = event.currentTarget; publishDialog.showModal(); });
+      byId('cancel-publish').addEventListener('click', () => publishDialog.close('cancel'));
+      byId('confirm-publish').addEventListener('click', () => { state.publicConfirmed = true; publishDialog.close('confirmed'); showToast('仅记录了本页演示确认，没有真实发布'); });
+      publishDialog.addEventListener('close', () => { dialogOpener?.focus(); dialogOpener = null; });
+      publishDialog.addEventListener('cancel', () => { dialogOpener?.focus(); });
+      syncDocument();
+      syncMedia();
+    })();
+  </script>
+</body>
+</html>
