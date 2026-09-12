@@ -71,6 +71,10 @@ export interface ExtractionResult extends Record<string, unknown> {
     model: string | null;
     kind?: 'model_self_check' | 'independent_review';
     compositionSkill?: { id: string; version: string };
+    reviewSkill?: { id: string; version: string };
+    sourceAgentTaskId?: string;
+    fieldReviews?: ScientificReviewResponse['fields'];
+    needsMoreEvidence?: ScientificReviewResponse['needsMoreEvidence'];
     usage?: { inputTokens: number; outputTokens: number };
     finishReason?: 'stop' | 'length' | 'other' | 'unknown';
     contractVersion: '4';
@@ -1866,14 +1870,18 @@ function scientificCompositionGuard(value: unknown, allowedIds: ReadonlySet<stri
   return scientificReviewGuard(normalizeScientificComposition(value as ScientificCompositionResponse), allowedIds);
 }
 
-function scientificCompositionValidation(sourceMap: DocumentSourceMap, passages: readonly CanonicalPassage[]) {
+function scientificSourceValidation<T extends ScientificCompositionResponse>(
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  responseGuard: (value: unknown, allowedIds: ReadonlySet<string>) => value is T,
+) {
   const passageById = new Map(passages.map((passage) => [passage.id, passage]));
   const allowedIds = new Set(passageById.keys());
   let evidenceIssues: string[] = [];
   return {
-    guard(value: unknown): value is ScientificCompositionResponse {
+    guard(value: unknown): value is T {
       evidenceIssues = [];
-      if (!scientificCompositionGuard(value, allowedIds)) return false;
+      if (!responseGuard(value, allowedIds)) return false;
       for (const field of SDF_CORE_FIELDS) {
         const item = value.fields[field];
         if (!item.summary.trim()) continue;
@@ -1894,6 +1902,10 @@ function scientificCompositionValidation(sourceMap: DocumentSourceMap, passages:
   };
 }
 
+function scientificCompositionValidation(sourceMap: DocumentSourceMap, passages: readonly CanonicalPassage[]) {
+  return scientificSourceValidation(sourceMap, passages, scientificCompositionGuard);
+}
+
 async function modelScientificReviewCanonicalProposal(
   gateway: AiGateway,
   sourceMap: DocumentSourceMap,
@@ -1905,29 +1917,50 @@ async function modelScientificReviewCanonicalProposal(
   const sourceMapHash = sha256Json(sourceMap);
   const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
   const reviewPassages = selectScienceReviewPassages(passages, proposal, context?.coveragePassageIds);
-  const validation = scientificCompositionValidation(sourceMap, reviewPassages);
+  let candidateIssues: string[] = [];
+  const validation = scientificSourceValidation(sourceMap, reviewPassages,
+    (value: unknown, allowedIds: ReadonlySet<string>): value is ScientificReviewResponse => {
+      candidateIssues = [];
+      if (!scientificReviewGuard(value, allowedIds)) return false;
+      const awaitingEvidence = fieldsAffectedByReviewEvidence(value);
+      for (const field of SDF_CORE_FIELDS) {
+        const item = value.fields[field];
+        const original = proposal.fields[field];
+        const unchanged = item.summary === original.summary
+          && JSON.stringify([...item.sourcePassageIds].sort()) === JSON.stringify([...(original.sourcePassageIds ?? [])].sort());
+        if (item.verdict === 'accepted' && (!unchanged || item.issues.length)) {
+          candidateIssues.push(`${field}: accepted requires unchanged summary/source IDs and no issues`);
+        } else if (item.verdict === 'revised' && (unchanged || !item.issues.length)) {
+          candidateIssues.push(`${field}: revised requires an actual change and a source-bound issue`);
+        } else if (item.verdict === 'blocked' && !item.issues.length && !awaitingEvidence.has(field)) {
+          candidateIssues.push(`${field}: blocked requires an issue or an explicit evidence request`);
+        }
+      }
+      return candidateIssues.length === 0;
+    });
   let completion: Awaited<ReturnType<AiGateway['complete']>> | undefined;
   let parsed: ScientificReviewResponse | undefined;
   let failure = 'trusted_context_unavailable';
   let prompt = '';
   if (context && reviewPassages.length) {
-    prompt = [
-      '请根据以下原文写六段研究精华。内部长稿不作为写作模板。来源和正文分开。',
-      `仅返回此结构：${JSON.stringify({ fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) =>
-        [field, { summary: '', sourcePassageIds: [] }])), needsMoreEvidence: [] })}。`,
-      'needsMoreEvidence如非空，每项只能有affectedFields（六字段英文名数组）、question、requestedContext。summary每段最多220个Unicode字符，不含P编号；编号只在sourcePassageIds。不要返回verdict/issues。',
-      `原文来源（sourceMapHash=${sourceMapHash}）：\n${canonicalPassagePrompt(reviewPassages)}`,
-    ].join('\n\n');
+    const current = Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
+      summary: proposal.fields[field].summary,
+      sourcePassageIds: proposal.fields[field].sourcePassageIds ?? [],
+      needsMoreInformation: proposal.fields[field].needsMoreInformation,
+    }]));
+    prompt = scientificReviewPrompt(candidateHash, sourceMapHash, current, reviewPassages, false);
     try {
-      const response = await gateway.completeStructuredWithMetadata<ScientificCompositionResponse>(
+      const response = await gateway.completeStructuredWithMetadata<ScientificReviewResponse>(
         validation.guard,
-        [{ role: 'system', content: SCIENTIFIC_SUMMARY_SKILL.instructions },
+        [{ role: 'system', content: SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions
+          + '\n你是当前候选的来源审校者。按候选的每项实质断言回读原文并作最小必要修订，不另选主题重新成稿。accepted必须逐字保留原summary和原来源集合，issues为空；revised必须实际修正文或来源，issues至少一项，说明原断言、来源和修订原因；blocked必须有问题或明确补证请求。每项保留断言及其限定都须有最终引用，不以引用存在代替语义支持。纠正后仍须与其他字段的对象、算例和范围一致；不能把一个算例的互证写成另一个算例或全篇互证。只返回规定JSON，不宣布科学通过。' },
           { role: 'user', content: prompt }],
-        { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
-          validationFeedback: () => '只返回fields与needsMoreEvidence；六段各只含summary和sourcePassageIds。正文每段最多220个Unicode字符，减少次要断言，保留关键条件，不写P编号或审稿字段。来源编号只能来自原文。' + validation.feedback() },
+        { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxTokens: 65_536, maxRetries: 1,
+          validationFeedback: () => '只返回fields与needsMoreEvidence。六字段各只含verdict、summary、sourcePassageIds、issues；verdict为accepted/revised/blocked，issues每项只含code、problem、sourcePassageIds，code遵循原合同。保留必要科学条件，P编号只取原文。'
+            + candidateIssues.join('；') + validation.feedback() },
       );
       completion = response.completion;
-      parsed = normalizeScientificComposition(response.value);
+      parsed = response.value;
     } catch (error) {
       failure = error instanceof AiGatewayError ? error.code : 'scientific_correction_unavailable';
     }
@@ -1968,7 +2001,8 @@ async function modelScientificReviewCanonicalProposal(
       provider: completion?.provider ?? null,
       model: completion?.model ?? null,
       kind: 'model_self_check',
-      compositionSkill: { id: SCIENTIFIC_SUMMARY_SKILL.id, version: SCIENTIFIC_SUMMARY_SKILL.version }, contractVersion: '4', status, attemptId,
+      reviewSkill: { id: SCIENTIFIC_CRITICAL_THINKING_SKILL.id, version: SCIENTIFIC_CRITICAL_THINKING_SKILL.version }, contractVersion: '4', status, attemptId,
+      ...(parsed ? { fieldReviews: parsed.fields, needsMoreEvidence: parsed.needsMoreEvidence } : {}),
       reviewedCandidateHash: candidateHash,
       ...(completion ? { promptHash: completion.promptHash } : {}),
       ...(completion ? { responseHash: createHash('sha256').update(completion.text).digest('hex'),
@@ -2542,6 +2576,7 @@ export async function extractHandler(
     previousResult?: unknown;
     scientificReview?: ScientificReviewContext;
     requireReusableSemanticStage?: boolean;
+    reviewExistingSourceTaskId?: string;
   } = {},
 ): Promise<ExtractionResult> {
   const canonicalSourceMap = trustedContext.sourceMap
@@ -2554,6 +2589,35 @@ export async function extractHandler(
     throw new Error('缺少正文（payload.manuscriptText）');
   }
   const passages = canonicalSourceMap ? canonicalPassages(canonicalSourceMap) : undefined;
+  if (trustedContext.reviewExistingSourceTaskId) {
+    if (!canonicalSourceMap || !passages || !trustedContext.requireReusableSemanticStage
+      || !trustedContext.scientificReview || trustedContext.scientificReview.mode === 'web') {
+      throw new Error('[blocked] Existing draft review requires its authorized canonical source');
+    }
+    const stage = reusableSemanticStage(canonicalSourceMap, passages, trustedContext.previousResult);
+    const previous = previousCanonicalPartial(canonicalSourceMap, passages, trustedContext.previousResult);
+    if (!stage || !previous || Object.keys(previous.fieldDiagnostics).length
+      || SDF_CORE_FIELDS.some((field) => !previous.proposal.fields[field].summary.trim())) {
+      throw new Error('[blocked] Existing draft review requires a complete source-bound candidate');
+    }
+    const coveragePassageIds = [...new Set(Object.values(expandSemanticPassages(stage)).flat())];
+    const reviewed = await reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, previous.proposal,
+      { ...trustedContext.scientificReview, coveragePassageIds });
+    const priorComposition = (trustedContext.previousResult as ExtractionResult).scientificReview?.compositionSkill;
+    const compositionSkill = priorComposition && Object.keys(priorComposition).sort().join(',') === 'id,version'
+      && priorComposition.id === 'scientific-summary' && typeof priorComposition.version === 'string'
+      && priorComposition.version.length > 0 && priorComposition.version.length <= 64
+      ? { id: priorComposition.id, version: priorComposition.version } : undefined;
+    return {
+      ...reviewed,
+      scientificReview: {
+        ...reviewed.scientificReview!,
+        sourceAgentTaskId: trustedContext.reviewExistingSourceTaskId,
+        ...(compositionSkill ? { compositionSkill } : {}),
+        semanticStage: semanticStageMetadata(canonicalSourceMap, stage),
+      },
+    };
+  }
   if (canonicalSourceMap && passages && trustedContext.scientificReview?.mode !== 'web') {
     let phase: 'section_map' | 'semantic_reduce' | 'source_bridge' = trustedContext.previousResult ? 'source_bridge' : 'section_map';
     let semanticStage: SemanticStage | undefined;

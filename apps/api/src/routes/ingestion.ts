@@ -96,6 +96,7 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
       processingConsent: z.literal(true),
       sourceAgentTaskId: z.string().uuid(),
       compositionSourceAgentTaskId: z.string().uuid().optional(),
+      reviewOnly: z.boolean().optional(),
     }).strict().parse(req.body);
     return reply.status(202).send({ task: await refreshIngestionAnalysis(deps, { userId: user.userId, taskId, ...body }, auditCtx(req)) });
   });

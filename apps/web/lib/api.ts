@@ -1645,6 +1645,7 @@ export async function refreshIngestionAnalysis(
   taskId: string,
   sourceAgentTaskId: string,
   compositionSourceAgentTaskId?: string,
+  reviewOnly?: boolean,
 ): Promise<IngestionTaskSummary> {
   const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/refresh`, {
     method: 'POST',
@@ -1652,6 +1653,7 @@ export async function refreshIngestionAnalysis(
       processingConsent: true,
       sourceAgentTaskId,
       ...(compositionSourceAgentTaskId ? { compositionSourceAgentTaskId } : {}),
+      ...(reviewOnly ? { reviewOnly: true } : {}),
     }),
   });
   return result.task;

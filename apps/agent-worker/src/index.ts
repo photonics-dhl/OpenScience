@@ -300,10 +300,14 @@ export function createHandlers(
       let reusableSourceMap: DocumentSourceMap | undefined;
       let reusableExtractionResult: Record<string, unknown> | undefined;
       let requireReusableSemanticStage = false;
+      let reviewExistingSourceTaskId: string | undefined;
       let persistedScientificReviewCandidateHash: string | undefined;
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
-      const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):scientific-summary-v3$/.exec(ownerTask.idempotencyKey ?? '');
+      const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):(scientific-summary-v3|scientific-review-v4)$/.exec(ownerTask.idempotencyKey ?? '');
       if (composition) {
+        if (composition[4] === 'scientific-review-v4' && composition[2] !== composition[3]) {
+          throw new Error('[blocked] Review-only source must be the current extraction');
+        }
         const ingestion = await deps.prisma.ingestionTask.findUnique({
           where: { id: composition[1]! }, include: { batch: true },
         });
@@ -344,6 +348,7 @@ export function createHandlers(
         reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
         reusableExtractionResult = sourceResult;
         requireReusableSemanticStage = true;
+        if (composition[4] === 'scientific-review-v4') reviewExistingSourceTaskId = source.id;
       }
       const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
       if (refresh) {
@@ -457,6 +462,7 @@ export function createHandlers(
           sourceMap: parsed.sourceMap,
           previousResult: reusableExtractionResult,
           requireReusableSemanticStage,
+          reviewExistingSourceTaskId,
           scientificReview: {
             requestId: ownerTask.id,
             authorizationContext: trustedAuthorizationContext,

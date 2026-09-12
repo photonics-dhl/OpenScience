@@ -549,6 +549,7 @@ export async function refreshIngestionAnalysis(
     taskId: string;
     sourceAgentTaskId: string;
     compositionSourceAgentTaskId?: string;
+    reviewOnly?: boolean;
     processingConsent: boolean;
   },
   ctx: AuditContext = {},
@@ -563,8 +564,12 @@ export async function refreshIngestionAnalysis(
   if (initial.batch.userId !== input.userId || initial.artifact.workspaceId !== workspace.id) {
     throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion analysis source is unavailable');
   }
+  if (input.reviewOnly && input.compositionSourceAgentTaskId !== input.sourceAgentTaskId) {
+    throw new IngestionError('VALIDATION_ERROR', 'Review-only requires the current extraction as its source');
+  }
   if (input.compositionSourceAgentTaskId) {
-    const stableKey = `ingestion-analysis-compose:${input.taskId}:${input.sourceAgentTaskId}:${input.compositionSourceAgentTaskId}:scientific-summary-v3`;
+    const operation = input.reviewOnly ? 'scientific-review-v4' : 'scientific-summary-v3';
+    const stableKey = `ingestion-analysis-compose:${input.taskId}:${input.sourceAgentTaskId}:${input.compositionSourceAgentTaskId}:${operation}`;
     const replay = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: stableKey }, include: { session: true } });
     const currentAgent = await deps.prisma.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
     const compositionSource = await deps.prisma.agentTask.findUnique({
@@ -705,7 +710,7 @@ export async function refreshIngestionAnalysis(
             targetType: 'ingestion_task',
             targetId: source.id,
             metadata: {
-              policy: 'scientific_summary_v3_composition',
+              policy: input.reviewOnly ? 'scientific_review_v4_correction' : 'scientific_summary_v3_composition',
               oldAgentTaskId: input.sourceAgentTaskId,
               compositionSourceAgentTaskId: input.compositionSourceAgentTaskId,
               newAgentTaskId: replacement.id,
