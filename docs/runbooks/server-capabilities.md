@@ -1,9 +1,12 @@
 # 服务器能力与复用清单
 
-当前应用9f889d2619290b378d735cb09304ccf640068120 / rollback0fc5b7d91de5b57b6147d0bf8b8a84865a805c1a；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成；无测试/CI/本机运行。
+当前应用479cdfa8e7d83e23f951b26c3b6d267e0fed419a / rollback9f889d2619290b378d735cb09304ccf640068120；网页生图provider d1630135 / rollback92cc416e。2026-09-13必要服务器build/start完成；无测试/CI/本机运行。
+
+- 2026-09-13：15组原文证据导航与scientific-summary v6已部署实产；4b46aada复用SourceMap/bridge，只有final两次（第一次JSON解析拒绝触发原一次重试）。原文独立复核仍不通过：强度/电场运算链、交叉验证算例、权衡范围与引文支持仍有错。停止同路线重生成，未采用/发布。
+- 本轮实际新页12个JS资源错误，单次重载后空白，未完成当前六栏/来源UI核读；PID510/1024、内存约2.13/4.29GB、最大fd257均未触及上限，根因未明。下面9f页面成功属于历史证据，不能覆盖本轮失败。无新服务/依赖/权限变更。
 
 - 历史a1c0da49原P语义整理成功42191tokens/124574ms，final空正文/备用HTTP401且旧Adapter失败usage未知。当前097已通过显式来源+stage复用成功产出六字段，但科学质量仍需审校；不能把历史失败视作当前功能状态。
-- paper-analysis v8/scientific-summary v5、M3显式adaptive、Docling CPU1.30/CodeFormulaV2、安全KaTeX、XLSX/PPTX/HTML已部署。模型返回成功不代表科学正确。
+- paper-analysis v8/scientific-summary v6、M3显式adaptive、Docling CPU1.30/CodeFormulaV2、安全KaTeX、XLSX/PPTX/HTML已部署。模型返回成功不代表科学正确。
 - 私有笔记40e23948经M3生成修订与独立原文核对、4处人工局部校正后已真实保存/重载/下载；2696字符/41引用，57式排版0错误，保留user_edited。完整原文100563字符/306段无遗漏；自动首稿科学准确性不能称已稳定。
 - 已部署空响应诊断记录安全usage/finish/block数量，缺失usage为null；明确length时不原预算fallback。不能反推旧空响应原因。
 - 9f后097显式仅续final实证0OCR/map/bridge，一call5057out/53017ms；v5仍有条件省略/结论夸大未采用。API/web统一既有64段/24000字符及same-block范围后，实际六栏新结果与引用全部显示；不是新增上限或绕过来源验证。

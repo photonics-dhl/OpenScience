@@ -1,11 +1,11 @@
 # OpenScience (XGS) 项目文件索引
 
-> **CURRENT 2026-09-12:** application 9f889d26 / rollback0fc5b7d9；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。交付branch codex/onchip-video-release，后续docs-only HEAD不是新release，未合并main。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-13:** application 479cdfa8 / rollback9f889d26；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。交付branch codex/onchip-video-release，后续docs-only HEAD不是新release，未合并main。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 私有六字段审校稿92cafb82已人工原文校正、独立复核并真实保存/重载/展开来源/下载：1118字符/17引用，user_edited。原40e23948笔记和22-v10公开图文保留，尚未采用/发布。
-> 当前自动稿097665f1仅续final实证0OCR/map/bridge，v5仍有科学错误；新建议/引用消费修复9f已部署，真实六栏引用全部显示。旧浏览器页资源错误未根治，同认证新阅读页可用。
+> 当前自动稿4b46aada/v6仅续final实证0OCR/map/bridge，原一次JSON重试后成功但科学仍三类实质错误。证据导航479已部署，当前新页资源错误/重载空白导致本轮UI未验收；9f的六栏成功是历史证据。停止同路线重生成。
 > 公式/多格式资料、单一创建对话与附件、Hermes任务接续已部署；艺术图片/视频叙事与元数据传递本批已部署，无新媒体实产，不恢复旧冗余表单。
 > 无测试/预检/CI/本机运行；必要服务器build/start按授权继续。维护索引，历史版本不覆盖CURRENT；集成保留PRD v1.1已有能力。
-> 2026-09-12复用优先要求已记入AGENTS与项目Memory；GitHub源文件/实际调用对照见docs/runbooks/hermes-capability-registry.md“来源与选择”。证据导航改动仅为下一步建议，未实现，不计入当前release。
+> 复用优先要求已记入AGENTS与项目Memory；GitHub源文件/实际调用对照见docs/runbooks/hermes-capability-registry.md“来源与选择”。证据导航已实现并实产核读；下步仍需解决最终主张的来源审校与实际阅读，不把部署等同质量完成。
 
 ## 当前产品交付
 
@@ -14,7 +14,7 @@
 | `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` / `apps/agent-worker/src/{index,extractor}.ts` / `apps/web/lib/api.ts` | refresh显式current/base复用SourceMap与semanticStage，仅续final；确认必带sourceAgentTaskId且Serializable/CAS核对 | 已部署；b6/d680/097实证0OCR/map/bridge，默认refresh/reparse不变；确认保护High静态复核，未人为触发确认 |
 | `packages/domain/package.json` / `packages/domain/src/agent/agent.ts` / `packages/domain/src/ingestion/canonical-evidence-contract.ts` / `apps/web/lib/suggestion-evidence.ts` | API/web复用既有64段/24000字符证据边界，纯常量subpath与同block范围一致 | 9f已部署；身份/定位限制保留，097六栏引用4/2/13/4/7/11均显示，旧d680无需模型重跑也恢复引用 |
 | `apps/web/app/research-objects/[id]/{edit,hermes}/page.tsx` / `apps/web/lib/ingestion-proposal-draft.ts` / `apps/web/messages/{zh,en}.json` | 原始建议sourceCore与编辑core分离、agentTaskId隔离草稿、保护实际未保存改动与跨代合并 | 0fc已部署；实际六栏逐字等新API，未自动采用，RO仍revision11 |
-| `apps/agent-worker/src/skills/scientific-summary.ts` / `apps/agent-worker/src/extractor.ts` | v5自然语言方法、完整代表算例、近似限定与实现披露，global P并集与既有预算/定位验证 | 9f已部署；实际097仍有科学缺口，最终审校稿是人工校正结果，不能称自动质量通过 |
+| `apps/agent-worker/src/skills/scientific-summary.ts` / `apps/agent-worker/src/extractor.ts` | v6复用语义分组的来源导航，不传旧语义文字，global P并集/既有预算定位不变 | 479已部署，High代码复核；4b46真实原文核对仍有三类科学错误，不能称自动质量通过 |
 | `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | 已部署；复用editorDraft两次服务器共编后人工校正保存92cafb82，1118字符/17引用；原40e23948保留，自动稿仍需审校 |
 | `apps/web/components/hermes/HermesWritingDraft.tsx` / `HermesWritingDraft.module.css` / `HermesAssistantDrawer.tsx` / `apps/web/lib/api.ts` | 常驻对话中的独立稿件阅读、编辑、Markdown下载与折叠来源 | 新审校稿真实保存/新页重载/来源/下载一致，user_edited保留；旧稿57式0错误，短稿无独立公式；旧页资源错误未根治 |
 | `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 已部署7c6b7975；真实67观察/94段，内部候选经Chat6Pro复核收尾，不自动放行科学结论 |

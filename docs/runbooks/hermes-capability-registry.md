@@ -1,8 +1,10 @@
 # Hermes Capability Registry
 
-## 当前状态（2026-09-12）
+## 当前状态（2026-09-13）
+- 479已部署证据导航/v6：15组支撑P与限定P随原文进入final，无旧模型断言输入；新4b46aada仅续final，两次调用中首个JSON解析拒绝触发既有重试。科学复核仍有运算对象/互证算例/边界和引用问题，NOT ACCEPTED；停止同路线重试。
+- 当前实际新页12个JS ERR_INSUFFICIENT_RESOURCES，一次重载后空白，尚未完成本轮UI/引用展示；API结果可读取。资源上限未触及但根因未定位。下面9f时的私稿和六栏成功仅为历史证据，不代替当前UI观察。
 - 媒体增强已部署0df87c9b：scientific-art-direction v1 / scientific-video-direction v1已接入现有分镜与图片brief；跨图风格/标签连续、来源约束叙事及旁白，不增加生成轮次。视频locale/style沿原storyboard文件传递，不新增哈希或存储；独立runner已先于新Worker部署成功，旧请求兼容。中文视频入口限制保持；尚无新图片/视频实产证据。
-- ECS应用9f889d2619290b378d735cb09304ccf640068120 / rollback0fc5b7d91de5b57b6147d0bf8b8a84865a805c1a；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- ECS应用479cdfa8e7d83e23f951b26c3b6d267e0fed419a / rollback9f889d2619290b378d735cb09304ccf640068120；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 用户已明确授权按写作指令，将当前研究私稿/必要摘录发送MiniMax。普通问答不自动触发写作；生产不依赖Chat科学定稿。
 - 历史a1c0da49的语义bridge成功42191tokens/124574ms，final空正文/备用HTTP401，用量未知不能记0；当前097显式复用4099来源+stage后已产出六字段，但仍未通过科学审校。
 - 科学写作v3/来源origin/完整100563字符输入与旧稿引用恢复已实产；M3生成修订后仍有错引/阈值夸大，最终40e23948由真实UI做4处来源约束校正，41引用/57式，保存/重载/下载成功，独立内容复核通过；保持user_edited，不代表自动初稿已可靠。
@@ -14,7 +16,7 @@
 | 顺序 | 能力 | 当前状态与剩余 |
 |---|---|---|
 | 1 | 科学文档与公式 | Docling1.30/CodeFormulaV2/TeX来源/KaTeX已生产；26页32式中28可排版、4损坏标记。两个代表式对原页，非全篇物理验收。 |
-| 2 | 全文理解与凝练 | paper-analysis v8/scientific-summary v5已部署；097仅续final与全引文展示已实证，自动科学质量仍未通过；92cafb82是来源复核后的人工审校稿，未采用。 |
+| 2 | 全文理解与凝练 | paper-analysis v8/scientific-summary v6已部署；4b46仅续final实产且原文复核仍未通过，当前UI资源故障；92cafb82是保留的人工审校稿，未采用。 |
 | 3 | 科学写作与引用 | 68a0e6b2已部署：明确写作才加载SourceMap，私有note/review/manuscript，同用户/RO校验，程序绑定引用；直接保存不调用模型，修订一次provider cycle。 |
 | 4 | 精美笔记 | 68a0e6b2已部署：运行时research-note-formatting，Hermes草稿卡、宽阅读/编辑弹层、折叠来源、安全Markdown/KaTeX、真实保存和Markdown下载。多格式文档导出按具体需求补齐。 |
 | 5 | 多格式附件 | XLSX/PPTX/HTML已生产，派生副本清洗、原件保留；真实多样样本兼容未观察。复用已有解析器，未另装MarkItDown全套。 |
@@ -33,7 +35,7 @@
 | [claude-scholar literature workflow](https://github.com/Galaxy-Dawn/claude-scholar/blob/main/skills/obsidian-literature-workflow/SKILL.md) / [claim extraction](https://github.com/Galaxy-Dawn/claude-scholar/blob/main/skills/obsidian-literature-workflow/references/CLAIM-EXTRACTION.md) | 本次新发现并读取：证据支持的措辞与禁止扩大的措辞随主张保留。现有SemanticPoint已含statement/type/conditionCase/comparison/operation/evidenceIds，无需另造同类结构 | 尚未接入；借鉴限定随主张流转的方法，不移植Obsidian目录体系，不新增一套Claim数据库 |
 
 - 代码取证：extractor.ts导入与第614/682/708行附近的实际消息注入；SemanticPoint与expandSemanticPassages；modelScientificComposeSemantic第1977行附近明确只传原P。引用/结构验证可证明定位和格式，不能证明主张与证据在科学含义上一致。
-- 独立High只读核查建议的最小后续改动（尚未实现/部署）：由现有evidenceIds/passageBindings构造仅含分组键、支撑P与限定P的导航，保留global原P并集与跨字段引用；不传旧statement或条件/算例等模型文字。按原文执行逐主张保留/缩小/纠正/丢弃，复用现有调用，不新建schema、工具或数据库；效果仍须实际产物核读，不能预称修复。
+- 独立High建议已于479落实并复核：由现有evidenceIds/passageBindings构造分组键/支撑P/限定P导航，保留global原P并集与跨字段引用，不传旧语义文字，不新建schema、工具或数据库。真实v6仍有科学错误，不能把接入导航称为质量解决；下步需复用来源审校做有证据的局部修订，而非继续提示词重生成。
 - [K-Dense scientific-writing](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-writing)、[critical-thinking](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-critical-thinking)、[citation-management](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/citation-management)：此前已核来源/MIT元数据，项目适配方法，工具映射现有Gateway/ScanSci/SourceMap，不复制额外供应商或逐条人工门禁。
 - [Docling公式增强](https://docling-project.github.io/docling/usage/enrichments/)用于TeX识别；[KaTeX](https://katex.org/docs/options.html)只负责受限排版；两者不证明公式物理正确。
 - [Microsoft MarkItDown](https://github.com/microsoft/markitdown)是转换工具，不是科学理解或公式校验器。已有Docling/结构化XLSX先复用；只为实际格式缺口增加依赖，不装all整包。
