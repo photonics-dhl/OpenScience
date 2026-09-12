@@ -6,8 +6,8 @@
 - 本机仅编辑/静态阅读/传输；无测试、预检、CI或本机构建。必要服务器build/start与实际产品生成/阅读按授权执行。
 
 ## Version and workspace
-- 交付树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；代码提交1e6271776a9ef5a542c3e0f4b50d2188ef808c67已推送并部署，独立High复核通过；后续docs-only HEAD不是新release。
-- 当前应用release 1e6271776a9ef5a542c3e0f4b50d2188ef808c67 / rollback a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a；xgs-explicit-writing-deploy-20260913.log exit0，必要服务器build/start完成，实际页面/__release200同SHA。1bf/479转历史。
+- 交付树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；代码提交0685a846cd3c32ec8cdf0c9d33d5c76670b8f304已推送部署，2组件数学原文保护经独立High复核；后续docs-only HEAD不是新release。
+- 当前应用release 0685a846cd3c32ec8cdf0c9d33d5c76670b8f304 / rollback 1e6271776a9ef5a542c3e0f4b50d2188ef808c67；xgs-writing-math-escapes-deploy-20260913.log exit0，必要服务器build/start完成，实际页面/__release200同SHA。1e/a8为历史应用版本。
 - 根目录旧dirty main不是生产基线；未合并main。unrelated dirty docs/specs/2026-09-05-integrated-research-product-design.md不得覆盖/提交。
 - 网页生图provider d1630135d569d28364d295380bb4e0333c3ee264 / rollback92cc416ee3fe921f62c75cbe6f69e48d0b55227d；video runner0df87c9bee98c2280396551ed522e66230eaf381。
 - TTS a2158409、renderer ff6042f6、模型qwen3-tts-customvoice-0c0e305复用；无新服务/依赖/媒体实产，媒体版本不能混作应用release。
@@ -49,6 +49,13 @@
 - 867真实页面打开/只读编辑/展开来源：正文逐字等保存API，19条quote全相等，0保存按钮/0KaTeX错误（正文主要为文本符号，不代表全公式排版）。实际点击Markdown下载，13420字符含完整正文和19来源；截图阅读可用。服务器/jobs/hermes-grounded-method-{revision,final}-*及本机Temp/xgs-grounded-method-{revision,final}-20260913相关文件为证据。
 - 可用路径已推进为“已有来源基稿→全文绑定→限定局部修订→独立原文核对→真实阅读/导出”，并非全自动纠错或六字段质量通过；两次有界任务的scope/目标不同，不再重试旧editorDraft路线。普通editorDraft与多PDF初次写作latest fallback仍是后续边界；未采用/发布任何新内容。
 
+## Results revision and general capability (2026-09-13)
+- 代码High复核确认已部署写作/来源/引用机制无本论文硬编码，scientific-writing v3已有同算例、条件、物理量和披露范围指令；具体问题提示与独立原文复核仍由本会话承担，不是Hermes内部自动审校闭环。跨论文质量未观察，多PDF首次写作latest来源选择仍待完善，见Hermes台账“通用能力与人工环节”。
+- 63e→74d38bc8-e168-4216-b158-a82030979ecd：441字错误类别指导，无手写数值答案，服务器生成1731字符/19引用，修正垂直几何、条件性单电子产额、扫描变量、30dB上限和披露过度断言；仍保留“仅保持”及两处参数引用不全，不能直接PASS。
+- 74→3f68d30b-5cab-44f9-9623-2f057aada7ff：266字最小指导，只删“仅”并补Fig.S7与扫描的参数来源；1745字符/19引用，原标题/其余正文/全部quote和locator均未变。独立High最终科学/引用PASS，无人工正文替换、无OCR重跑、未采用/发布；实际任务为两次，未宣称已核实供应商调用数。
+- 3f68实际打开/只读编辑/展开来源与保存API逐字一致，Markdown实下载20620字符包含完整正文与19来源。但截图暴露通用Markdown转义缺陷：26个KaTeX式0errors仍有6处TeX间距反斜杠丢失变逗号。真实DOM annotation与保存源已确认；本轮修复显示层，稿件无需重生成。证据Temp/xgs-grounded-case-{revision,final}-*，服务器/jobs/hermes-grounded-case-*及hermes-writing-math-escapes-before-20260913.json。
+- 0685已修复部署：ScientificText既有splitMath用于数学区ASCII标点保护，Hermes在非代码区域累计原文后转换；不新增解析器/依赖，60k预处理匹配既有稿件合同，渲染默认50k及全部TeX安全/数量边界不变。部署后重新打开3f68，26/26 MathML annotation逐字等保存TeX、6处间距全保留、0公式错误，截图正常；正文/19引用逐字等API，实下载20620字符与部署前完全相同。证据Temp/xgs-writing-math-escapes-{reading,export,download}-20260913.*。
+
 ## Browser recovery
 - v6新页12个JS ERR_INSUFFICIENT_RESOURCES，一次重载后空白；1bf单个替代#claim-review页仍13个CSS/JS失败，只显示壳。未循环重载。
 - 只读诊断定位Chrome压缩内容解码的Mojo data-pipe创建失败：Network.ContentDecodingInterceptor.CreateDataPipeSuccess.URLLoaderThrottle计324中14失败。PID/内存/fd/socket/shared memory/disk余量未触限，无OOM/crash；底层分配失败原因仍未知。
@@ -59,7 +66,7 @@
 - 1e627实际打开92、切编辑只读正文、完成后展开来源并截图：1118字符/17引用，正文与全部引用逐字等保存API及此前独立复核稿，user_edited保留、0保存按钮/0排版错误、无63e卡片；未修改或采用内容。证据本机Temp/xgs-explicit-writing-{reading,saved}-20260913.*、服务器/jobs/hermes-explicit-writing-*。截图阅读正常；浏览器底层分配根因及长期稳定性仍未知。
 
 ## Next and read-first
-- 867方法笔记已完成服务器来源修订、独立科学/引用核对及真实UI/下载，92六字段人工审校稿仍保留；后续局部修订优先复用已验证writingDraft来源路径，不能回到无来源editorDraft盲改或整稿重生成。
+- 867方法稿与3f68结果/边界稿已完成来源修订、独立科学/引用核对及真实阅读/导出，92六字段人工审校稿保留；下一步完善多PDF首次来源选择，再用下一篇真实论文观察迁移质量。自动科学审校仍未产品化，不得回到无来源editorDraft或整稿循环。
 - 私有方法稿入口：同RO edit?hermesTask=867ce8b9-1e48-4412-b1bf-1800a5d64dc9；92精华稿供最终采用审阅。采用到研究正文及公开发布待用户质量确认，视频/批量暂停；六字段全自动科学质量与浏览器长期稳定性仍未解决。
 - GitHub源文件/真实调用对照见hermes-capability-registry“来源与选择”；用户复用优先已入AGENTS/Memory。优先单个争议回读与最小改动，不能宣称M3全自动文献凝练已可靠。
 - 继续前读此handoff、需求基线相关章节、server-capabilities；当前版本看Git/服务器，不恢复旧MVP next action。

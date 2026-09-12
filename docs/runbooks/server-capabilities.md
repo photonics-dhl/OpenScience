@@ -1,7 +1,8 @@
 # 服务器能力与复用清单
 
-当前应用1e6271776a9ef5a542c3e0f4b50d2188ef808c67 / rollback a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a；必要服务器build/start exit0，实际页面/__release200同SHA。网页生图provider d1630135 / rollback92cc416e；无测试/CI/本机运行。
+当前应用0685a846cd3c32ec8cdf0c9d33d5c76670b8f304 / rollback 1e6271776a9ef5a542c3e0f4b50d2188ef808c67；必要服务器build/start exit0，实际页面/__release200同SHA。网页生图provider d1630135 / rollback92cc416e；无测试/CI/本机运行。
 
+- 2026-09-13最新：结果笔记63e→74→3f68d30b两次来源指导的服务器修订，1745字符/19引用，独立科学/引用PASS。实际截图定位Markdown吞掉TeX反斜杠，0685复用现有公式识别保护数学源后已部署；同一稿件26/26公式源逐字相等、6处间距正确，正文/引用等API，Markdown20620字符与部署前完全相同。无新模型供应商/依赖/OCR；代码与服务器日志见CURRENT handoff。通用机制已有，独立科学复核仍由本会话承担，多PDF初次来源选择及跨论文质量未完成。
 - 2026-09-13后续无新部署：现成writingDraft精确基稿来源修订4bed→797→867ce8b9已实际完成；867方法笔记1605字符/19引用，经独立High原文核对PASS、真实页面正文/引用逐字等API，点击导出Markdown13420字符完整。无人工正文替换/新依赖/OCR/新服务；这是来源引导局部修订成功，六字段自动凝练质量仍未解决，未采用/发布。证据/jobs/hermes-grounded-method-{revision,final}-*。
 - 2026-09-13：1bf reviewOnly复用旧SourceMap/bridge作真实字段审校，d5c6f699仍科学失败，保留未采用。停止整稿自省/重生成循环。
 - 既有workspace.guide完整来源写作可用于具体问题回读：4bedbb4b方法链独立High核心科学PASS；五问63e2acc5仍错，不能泛化成自动质量通过。8ff局部共编仍丢前提，a8修正其原推理关闭配置，复用科研synthesis选项；实际10799ba3仍被High原文复核拒绝（删起始链/漏√I与同步），不再重试，不以配置修改冒充质量修复。
