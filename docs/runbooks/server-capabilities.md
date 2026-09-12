@@ -1,6 +1,7 @@
 # 服务器能力与复用清单
 
-当前应用d8de966f40ca2922956d7fe82858eb1f5cff6fab / rollbacke4bd57904b8cdbb0eb55dc19dd4cfb3fc6c8adb1；网页生图provider d1630135 / rollback92cc416e。2026-09-12完成必要服务器build/start，无测试/CI/本机运行。
+当前应用57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e / rollbackd8de966f40ca2922956d7fe82858eb1f5cff6fab；网页生图provider d1630135 / rollback92cc416e。2026-09-12完成必要服务器build/start，无测试/CI/本机运行。
+- paper-analysis v8/scientific-summary v2已部署；真实5b615d36原文bridge两次SCHEMA_VALIDATION，无final，未采用。窗口用量79119tokens/280533ms；已定位提示契约未完整描述的问题并修复中。semantic/final成功才有分阶段元数据，失败用量来自本次调用时间窗Gateway记录；不当作任务完全归属的计费账单。未新增服务/供应商。
 
 - 已部署：MiniMax-M3显式adaptive thinking（16k/32k预算）、最终model_self_check、paper-analysis v7；Docling CPU1.30/CodeFormulaV2/安全KaTeX；XLSX/PPTX/HTML解析和派生副本清洗。
 - 真实论文62ae384d已完成，但正文过长并有物理条件泛化，未采用/发布。已部署scientific-summary v1，实际未确认refresh0e38446e复用原文只跑final；19380tokens比旧final少51.83%，但仍有科学语义缺陷，未采用。Chat6Pro有来源诊断已回，v2语义归约/原文bridge+final为本地候选，部署前不重复生成。

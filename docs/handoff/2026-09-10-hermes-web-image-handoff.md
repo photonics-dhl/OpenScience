@@ -9,7 +9,7 @@
 
 ## 版本与工作树
 - 工作树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release；branch codex/onchip-video-release；HEAD以Git为准，未合并main，根目录无关改动不碰。
-- ECS应用d8de966f40ca2922956d7fe82858eb1f5cff6fab；rollbacke4bd57904b8cdbb0eb55dc19dd4cfb3fc6c8adb1。HEAD以Git为准，当前后续改动未部署。
+- ECS应用57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e；rollbackd8de966f40ca2922956d7fe82858eb1f5cff6fab。HEAD以Git为准，当前后续改动未部署。
 - bbe已部署M3 model_self_check、paper-analysis v7中文、PPTX/XLSX/HTML上传和解析清洗；服务器必要build/start exit0，无测试/CI/本地构建。不是科学验收。
 - e4bd部署日志 C:/Users/Mac/AppData/Local/Temp/xgs-summary-hermes-entry-release-deploy-20260912.log exit0。此前必要build发现浏览器timer类型、空task判空、六字段Record推断问题均已修，未跳过类型检查。
 - 干净发布树 E:/Miscellaneous/XGS/.worktrees/deploy-m3-thinking；按精确提交部署，不带入尚未接通的写作文件。
@@ -39,9 +39,9 @@
 - 新建页实际截图/jobs/hermes-unified-entry-20260912.png；Chrome全页截图可能受现有缩放裁切，DOM无横溢出；真实anchor0×464为已确认布局问题。
 
 ## 后续执行
-1. d8de966f已部署exit0，实测anchor208×208、stage anchored、无横溢出。创建页移除误用assistantOpen导致opacity .18的一行修复待下一批。
-2. extractor/paper-analysis v8/scientific-summary v2已实现，Sol Medium负责、独立Sol High静态复核四文件无明确blocker。可变语义点替换默认reduce，条件/对照/操作整体入final；旧v1与短文一次raw-P bridge+final；无算例的理论结果可保留。domain exact v1未确认升级已纳入；尚待部署，未运行测试。semantic/final用量分开，map未计入semantic。
-3. 新语义批次部署后只提交一次840e24f9/refresh，sourceAgent=0e38446e，预备脚本store semanticProductRefresh（尚未执行）。metadata v2才表示新路径，质量不保证；若仍丢关键关系则停止受影响字段自动应用。
+1. 57f00dc9已部署exit0，日志C:/Users/Mac/AppData/Local/Temp/xgs-hermes-semantic-deploy-20260912.log。创建页移除错误assistantOpen，服务器实际anchor208×208/opacity1，未重新创建测试数据。
+2. extractor/paper-analysis v8/scientific-summary v2已部署，Sol Medium实现、独立Sol High静态复核四文件无明确blocker。可变语义点替换默认reduce，条件/对照/操作整体入final；旧v1与短文一次raw-P bridge+final；无算例的理论结果可保留。domain exact v1未确认升级已纳入。semantic/final用量分开，map未计入semantic。
+3. 840e24f9/refresh产生5b615d36，现已结束：业务succeeded但blocked_scientific_review、6字段空，source_bridge两次SCHEMA_VALIDATION，无final。窗口内M3 21145+19483和21218+17273=79119tokens/280533ms；未采用/发布。根线程发现prompt未给精确六字段骨架/部分长度限制，不能断言它是唯一拒绝原因。Worker正在补完整契约和安全精确诊断；新版本部署前不重发。预备store semanticContractRefresh（sourceAgent5b615d36，未执行）；现结果/jobs/hermes-semantic-product-result-20260912.json。
 4. 科学写作的数据调用待精确审批回答；其余已授权页面/能力继续推进。同步能力台账，不能把准备/部署/实际可用混写。
 
 ## 约束与操作入口

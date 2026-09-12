@@ -1,7 +1,8 @@
 # OpenScience 当前进度
 
 ## 2026-09-12 — 凝练成稿与统一研究入口
-- branch codex/onchip-video-release；ECS d8de966f40ca2922956d7fe82858eb1f5cff6fab / rollbacke4bd57904b8cdbb0eb55dc19dd4cfb3fc6c8adb1。唯一接续入口 docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+- 57f00dc9已完成服务器必要构建/启动，Sol Medium实现+Sol High独立静态复核；paper-analysis v8/scientific-summary v2实际接入。真实agent5b615d36的bridge两次SCHEMA_VALIDATION、6字段空、无final；79119tokens/280533ms未产出可用稿，未采用/发布。已发现prompt精确骨架/长度说明缺口，正在补齐安全具体反馈；不归因为论文内容缺失。新建页Hermes实际208×208/opacity1。
+- branch codex/onchip-video-release；ECS 57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e / rollbackd8de966f40ca2922956d7fe82858eb1f5cff6fab。唯一接续入口 docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 - 已部署M3显式thinking、最终自检、PPTX/XLSX/HTML解析，以及Hermes大小按钮移除。必要服务器构建与启动完成，未运行测试/CI/本机构建。
 - 真实论文最终任务62ae384d虽完成，但六段仍过长并有物理条件泛化；未采用/发布，旧确认稿和图文公开版保留。M3最终调用19256输入/20974输出，不能称科学通过。
 - 已获用户授权并收到Chat6Pro诊断，当前候选替换最后成稿步骤为scientific-summary v1：原文优先、每段≤220字符、引用独立、条件和归因保留、没有简单截断。只对未确认旧结果复用原文重跑final，节约重复读取。

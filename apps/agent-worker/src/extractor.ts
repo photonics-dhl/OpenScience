@@ -279,14 +279,133 @@ function semanticReductionGuard(knownObservationIds: ReadonlySet<string>): Schem
     }
     const resultPoints = fields.results as SemanticPoint[];
     if (resultPoints.length === 0 && root.chosenRepresentativeCase !== null) return false;
-    if (resultPoints.length > 0) {
-      const resultConditions = new Set(resultPoints.map((point) => point.conditionCase.trim()).filter(Boolean));
-      if (resultConditions.size > 1) return false;
-      if (typeof root.chosenRepresentativeCase === 'string'
-        && (resultConditions.size !== 1 || !resultConditions.has(root.chosenRepresentativeCase.trim()))) return false;
-    }
     return totalPoints > 0 && totalPoints <= 18;
   };
+}
+
+function semanticContractPrompt(exampleEvidenceId: string, evidenceMeaning: string, maxEvidenceIds: number): string {
+  return [
+    '严格输出一个JSON对象，根对象只能有fields、chosenRepresentativeCase两个键。',
+    'fields必须且只能有problem、insight、method、results、limitations、reproducibility六个键；每个值是0至4个点的数组，全篇1至18点。',
+    '每个点必须且只能有statement、type、conditionCase、comparison、operation、evidenceIds六个键。statement为1至1200字符；conditionCase为0至600字符。',
+    'type只能是calculation、observation、author_assumption、author_interpretation、bounded_synthesis。',
+    'comparison为null，或只能含quantity、relation、baseline三个非空字符串键，每项最多400字符。',
+    'operation为null，或只能含input、operator、variable、output四个非空字符串键，每项最多400字符。',
+    'evidenceIds是1至' + maxEvidenceIds + '个无重复字符串；' + evidenceMeaning,
+    'chosenRepresentativeCase为null或1至240字符的非空字符串；用于语义阶段选择至多一个代表性数值算例。不同results点可保留同一算例下各自完整的conditionCase，不用字符串相等表示算例身份。无具体算例时为null；results为空时必须为null。',
+    '完整合法骨架（占位文字只是结构示例，不是论文结论）：' + JSON.stringify({
+      fields: {
+        problem: [],
+        insight: [],
+        method: [{
+          statement: '有来源支持的完整关系',
+          type: 'bounded_synthesis',
+          conditionCase: '',
+          comparison: null,
+          operation: null,
+          evidenceIds: [exampleEvidenceId],
+        }],
+        results: [],
+        limitations: [],
+        reproducibility: [],
+      },
+      chosenRepresentativeCase: null,
+    }),
+  ].join('\n');
+}
+
+function semanticReductionIssue(value: unknown, knownIds: ReadonlySet<string>): { feedback: string; diagnostic: string } {
+  const fail = (diagnostic: string, feedback: string) => ({ diagnostic, feedback });
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return fail('semantic_root_type', '根值必须是JSON对象，且只能包含fields、chosenRepresentativeCase。');
+  }
+  const root = value as Record<string, unknown>;
+  if (Object.keys(root).sort().join(',') !== 'chosenRepresentativeCase,fields') {
+    return fail('semantic_root_keys', '根对象键不匹配：必须且只能是fields、chosenRepresentativeCase。');
+  }
+  if (root.chosenRepresentativeCase !== null
+    && (typeof root.chosenRepresentativeCase !== 'string' || !root.chosenRepresentativeCase.trim()
+      || root.chosenRepresentativeCase.length > 240)) {
+    const length = typeof root.chosenRepresentativeCase === 'string' ? root.chosenRepresentativeCase.length : -1;
+    return fail('semantic_chosen_type_or_length', 'chosenRepresentativeCase必须为null或1至240字符的非空字符串；当前长度=' + length + '。');
+  }
+  if (!root.fields || typeof root.fields !== 'object' || Array.isArray(root.fields)) {
+    return fail('semantic_fields_type', 'fields必须是包含六个固定字段的对象。');
+  }
+  const fields = root.fields as Record<string, unknown>;
+  if (Object.keys(fields).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(',')) {
+    return fail('semantic_fields_keys', 'fields必须且只能包含problem、insight、method、results、limitations、reproducibility。');
+  }
+  let totalPoints = 0;
+  for (const field of SDF_CORE_FIELDS) {
+    const points = fields[field];
+    if (!Array.isArray(points)) return fail('semantic_' + field + '_type', 'fields.' + field + '必须是数组。');
+    if (points.length > 4) return fail('semantic_' + field + '_count', 'fields.' + field + '最多4点；当前点数=' + points.length + '。');
+    totalPoints += points.length;
+    for (let index = 0; index < points.length; index++) {
+      const candidate = points[index];
+      const path = 'fields.' + field + '[' + index + ']';
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+        return fail('semantic_' + field + '_' + index + '_type', path + '必须是对象。');
+      }
+      const point = candidate as Record<string, unknown>;
+      if (Object.keys(point).sort().join(',') !== 'comparison,conditionCase,evidenceIds,operation,statement,type') {
+        return fail('semantic_' + field + '_' + index + '_keys', path + '必须且只能含statement、type、conditionCase、comparison、operation、evidenceIds。');
+      }
+      if (typeof point.statement !== 'string' || !point.statement.trim() || point.statement.length > 1_200) {
+        const length = typeof point.statement === 'string' ? point.statement.length : -1;
+        return fail('semantic_' + field + '_' + index + '_statement', path + '.statement必须为1至1200字符；当前长度=' + length + '。');
+      }
+      if (!SEMANTIC_POINT_TYPES.includes(point.type as SemanticPoint['type'])) {
+        return fail('semantic_' + field + '_' + index + '_point_type', path + '.type必须是calculation、observation、author_assumption、author_interpretation、bounded_synthesis之一。');
+      }
+      if (typeof point.conditionCase !== 'string' || point.conditionCase.length > 600) {
+        const length = typeof point.conditionCase === 'string' ? point.conditionCase.length : -1;
+        return fail('semantic_' + field + '_' + index + '_condition', path + '.conditionCase必须为0至600字符字符串；当前长度=' + length + '。');
+      }
+      for (const nested of ['comparison', 'operation'] as const) {
+        const expectedKeys = nested === 'comparison' ? ['baseline', 'quantity', 'relation'] : ['input', 'operator', 'output', 'variable'];
+        const nestedValue = point[nested];
+        if (nestedValue === null) continue;
+        if (!nestedValue || typeof nestedValue !== 'object' || Array.isArray(nestedValue)) {
+          return fail('semantic_' + field + '_' + index + '_' + nested + '_type', path + '.' + nested + '必须为null或固定键对象。');
+        }
+        const record = nestedValue as Record<string, unknown>;
+        if (Object.keys(record).sort().join(',') !== expectedKeys.join(',')) {
+          return fail('semantic_' + field + '_' + index + '_' + nested + '_keys', path + '.' + nested + '键不匹配；期望' + expectedKeys.join('、') + '。');
+        }
+        for (const key of expectedKeys) {
+          if (typeof record[key] !== 'string' || !(record[key] as string).trim() || (record[key] as string).length > 400) {
+            const length = typeof record[key] === 'string' ? (record[key] as string).length : -1;
+            return fail('semantic_' + field + '_' + index + '_' + nested + '_' + key, path + '.' + nested + '.' + key + '必须为1至400字符；当前长度=' + length + '。');
+          }
+        }
+      }
+      if (!Array.isArray(point.evidenceIds)) {
+        return fail('semantic_' + field + '_' + index + '_evidence_type', path + '.evidenceIds必须是字符串数组。');
+      }
+      if (point.evidenceIds.length < 1 || point.evidenceIds.length > Math.min(MAX_SOURCE_PASSAGE_IDS, knownIds.size)) {
+        return fail('semantic_' + field + '_' + index + '_evidence_count', path + '.evidenceIds数量必须为1至' + Math.min(MAX_SOURCE_PASSAGE_IDS, knownIds.size) + '；当前=' + point.evidenceIds.length + '。');
+      }
+      if (point.evidenceIds.some((id) => typeof id !== 'string')) {
+        return fail('semantic_' + field + '_' + index + '_evidence_id_type', path + '.evidenceIds含非字符串ID。');
+      }
+      if (new Set(point.evidenceIds).size !== point.evidenceIds.length) {
+        return fail('semantic_' + field + '_' + index + '_evidence_duplicate', path + '.evidenceIds含重复ID。');
+      }
+      if (point.evidenceIds.some((id) => !knownIds.has(id as string))) {
+        return fail('semantic_' + field + '_' + index + '_evidence_unknown', path + '.evidenceIds含不在本轮输入中的ID；未知ID原值未回显。');
+      }
+    }
+  }
+  if (totalPoints < 1 || totalPoints > 18) {
+    return fail('semantic_total_points', '全篇语义点总数必须为1至18；当前=' + totalPoints + '。');
+  }
+  const results = fields.results as SemanticPoint[];
+  if (results.length === 0 && root.chosenRepresentativeCase !== null) {
+    return fail('semantic_empty_results_chosen', 'results为空时chosenRepresentativeCase必须为null。');
+  }
+  return fail('semantic_schema_unknown', '输出未通过语义结构校验；请严格重建完整六字段骨架，不复用上一响应的结构。');
 }
 
 function semanticStageMetadata(stage: SemanticStage): NonNullable<ExtractionResult['scientificReview']>['semanticStage'] {
@@ -457,24 +576,36 @@ async function buildMappedSemanticStage(gateway: AiGateway, passages: readonly C
     id: 'W' + (windowIndex + 1) + 'O' + (index + 1),
   })));
   const knownIds = new Set(observations.map((observation) => observation.id));
+  const semanticContract = semanticContractPrompt(
+    knownIds.values().next().value!,
+    'evidenceIds只能引用本轮输入中的真实Observation ID。',
+    Math.min(MAX_SOURCE_PASSAGE_IDS, knownIds.size),
+  );
   const response = await gateway.completeStructuredWithMetadata(semanticReductionGuard(knownIds), [
     { role: 'system', content: PAPER_ANALYSIS_SKILL.semanticReduceInstructions + '\n' + SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions
-      + '\n只返回fields与chosenRepresentativeCase。每字段是0至4个语义点，全篇最多18点；每个点只能包含statement、type、conditionCase、comparison、operation、evidenceIds。results各点最多共享一个非空conditionCase；选择数值代表算例时chosenRepresentativeCase须与该conditionCase逐字相同。无具体代表算例的理论、概念或综述结果允许chosenRepresentativeCase=null；results为空时也必须为null。' },
+      + '\n' + semanticContract },
     { role: 'user', content: JSON.stringify(observations) },
   ], { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
-    validationFeedback: () => '每字段必须为0至4个语义点且全篇最多18点，evidenceIds只能引用真实观察：' + [...knownIds].join(',')
-      + '。results最多有一个非空conditionCase；有数值代表算例时chosenRepresentativeCase须与它逐字相同，无具体算例可为null，results为空必须为null。不适用的comparison或operation必须为null；不要输出六字段长稿。' });
+    validationFeedback: (value) => semanticReductionIssue(value, knownIds).feedback,
+    validationDiagnostic: (value) => semanticReductionIssue(value, knownIds).diagnostic });
   return { reduction: response.value, observations, completion: response.completion, kind: 'semantic_reduce' };
 }
 
 async function buildLegacySemanticBridge(gateway: AiGateway, passages: readonly CanonicalPassage[]): Promise<SemanticStage> {
-  const response = await gateway.completeStructuredWithMetadata(semanticReductionGuard(new Set(passages.map((passage) => passage.id))), [
+  const passageIds = new Set(passages.map((passage) => passage.id));
+  const semanticContract = semanticContractPrompt(
+    passages[0]!.id,
+    'evidenceIds只能引用本轮输入中的真实canonical P编号。',
+    Math.min(MAX_SOURCE_PASSAGE_IDS, passageIds.size),
+  );
+  const response = await gateway.completeStructuredWithMetadata(semanticReductionGuard(passageIds), [
     { role: 'system', content: PAPER_ANALYSIS_SKILL.semanticBridgeInstructions + '\n' + PAPER_ANALYSIS_SKILL.semanticReduceInstructions
       + '\n' + SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions
-      + '\n只返回fields与chosenRepresentativeCase。每字段0至4点且全篇最多18点；字段中每点只能包含statement、type、conditionCase、comparison、operation、evidenceIds；本桥接中evidenceIds直接引用本轮真实canonical P编号。results最多共享一个非空conditionCase；有数值代表算例时chosenRepresentativeCase与它逐字相同，无具体算例可为null，results为空必须为null。' },
+      + '\n' + semanticContract },
     { role: 'user', content: canonicalPassagePrompt(passages) },
   ], { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
-    validationFeedback: () => '从全部给定P段直接生成每字段0至4个、全篇最多18个语义点；evidenceIds只能是输入P编号。results最多共享一个非空conditionCase；有数值代表算例时chosenRepresentativeCase与它逐字相同，无具体算例可为null，无results必须为null。不要复述任何旧摘要，不要输出六字段正文。' });
+    validationFeedback: (value) => semanticReductionIssue(value, passageIds).feedback,
+    validationDiagnostic: (value) => semanticReductionIssue(value, passageIds).diagnostic });
   return { reduction: response.value, observations: [],
     completion: response.completion, kind: 'source_bridge' };
 }

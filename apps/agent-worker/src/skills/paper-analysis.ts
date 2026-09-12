@@ -24,7 +24,7 @@ export const PAPER_ANALYSIS_SKILL = {
     '每点的statement保留完整科学主张；type只能是calculation、observation、author_assumption、author_interpretation、bounded_synthesis。conditionCase写适用条件、对象和算例，不适用时为空字符串。',
     '存在定量或定性比较时，comparison分别写quantity、relation、baseline；不存在则为null。存在输入经算子或操作作用于变量得到输出的链条时，operation分别写input、operator、variable、output；不存在则为null。不得交换坐标、接收变量、场振幅/相位/强度或比较基线。',
     'evidenceIds只引用输入中的真实观察编号。选择同时覆盖主张、条件、比较和操作对象的观察；不把作者假设或解释改成已验证事实。需要跨段连接时type用bounded_synthesis，并且每个环节都须由所引观察支持。',
-    'results各点最多共享一个非空conditionCase，不得拼接不同材料、结构、单粒子或束团算例。存在条件完整的数值代表算例时，chosenRepresentativeCase必须与该conditionCase逐字相同；理论、概念或综述论文没有具体代表算例时允许chosenRepresentativeCase为null并保留主要结果。没有results点时chosenRepresentativeCase必须为null。',
+    '不得把不同材料、结构、单粒子或束团算例拼成一组结果。存在条件完整的数值算例时，chosenRepresentativeCase只选一个代表算例，results各点仍分别保留该算例下自己的完整conditionCase，不用字符串相等代替科学判断；理论、概念或综述论文没有具体代表算例时允许chosenRepresentativeCase为null并保留主要结果。没有results点时chosenRepresentativeCase必须为null。',
   ].join('\n'),
   semanticBridgeInstructions: [
     '这是旧分析结果或短文档的受控语义桥接。忽略任何旧summary，只阅读本轮给出的全部canonical P段，直接形成有P来源的语义点。',

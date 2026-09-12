@@ -1,7 +1,8 @@
 # Hermes Capability Registry
 
 ## 当前状态（2026-09-12）
-- 生产应用d8de966f40ca2922956d7fe82858eb1f5cff6fab，rollbacke4bd57904b8cdbb0eb55dc19dd4cfb3fc6c8adb1；服务器网页生图provider d1630135、rollback92cc416e，路线未改。唯一任务接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 57f00dc9语义归约/直接P bridge+final已部署，但真实5b615d36的bridge两次schema拒绝，无final/正文，未采用/发布；窗口用量79119tokens/280533ms。已发现prompt未完整提供精确字段骨架及部分长度约束，补齐契约/安全定位反馈中，不能归因为M3科学能力不足或论文缺内容。新建页淡化状态已修、实际opacity1。
+- 生产应用57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e，rollbackd8de966f40ca2922956d7fe82858eb1f5cff6fab；服务器网页生图provider d1630135、rollback92cc416e，路线未改。唯一任务接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 生产用现有MiniMax-M3，不要求新API。Anthropic兼容接口显式adaptive thinking；分段16k/180s、整合32k/300s，temperature1/top_p.95。主机skills不自动注入产品，Worker必须显式加载。
 - 真实任务62ae384d已完成，但旧最终自检仍产出长稿和过强表述，未采用/未发布。正常响应、来源编号存在、review_received均不等于科学正确。
 - Chat6Pro已按用户明确授权完成开发诊断，/jobs/hermes-m3-actual-diagnosis-20260912.txt：最终步骤改为来源约束的短成稿，避免审稿schema/长候选锚定；不增加预算或更换供应商。生产不依赖Chat科学定稿。
