@@ -52,7 +52,7 @@ import type { HermesVisualState } from './hermes-state';
 import { HermesStaticPortrait, HermesVisualAdapter } from './HermesVisualAdapter';
 import { HermesGuideBubble } from './HermesGuideBubble';
 import { HermesPerformanceBubble } from './HermesPerformanceBubble';
-import { HermesPresenceControl, type HermesPresenceMode } from './HermesPresenceControl';
+import { type HermesPresenceMode } from './HermesPresenceControl';
 
 interface HermesStagePresentation {
   anchor: HTMLElement;
@@ -420,7 +420,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
 
   useEffect(() => {
     const stored = window.localStorage.getItem(`openscience:hermes-presence:${workspaceId}`);
-    setPresenceMode(stored === 'original' || stored === 'compact' || stored === 'quiet'
+    setPresenceMode(stored === 'original' || stored === 'compact'
       ? stored
       : 'compact');
   }, [pathname, workspaceId]);
@@ -1497,17 +1497,6 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         type="button"
       >{t(motionControl.label === 'enable' ? 'enableMotion'
         : motionControl.label === 'disable' ? 'disableMotion' : 'startingMotion')}</button> : null}
-      {pathname.startsWith('/research-objects/') ? <HermesPresenceControl
-        mode={presenceMode}
-        onChange={(nextMode) => {
-          window.localStorage.setItem(`openscience:hermes-presence:${workspaceId}`, nextMode);
-          setPresenceMode(nextMode);
-          if (nextMode === 'quiet') {
-            setPerformanceState((current) => ({ ...current, speech: { ...current.speech, cue: null } }));
-            setMenuFeedback((current) => current?.source === 'intro' ? null : current);
-          }
-        }}
-      /> : null}
       {guideTarget ? (
         <HermesGuideBubble
           actions={guideActions}

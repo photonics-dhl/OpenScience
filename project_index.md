@@ -1,5 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
+> 候选：apps/agent-worker/src/scientific-generation-options.ts 统一科学任务的显式思考、预算与超时；Gateway透传并记录请求模式，截断不按同预算重试。MiniMax仍为主，生产科学路由待后续结果确认。
+
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
 > **CURRENT 2026-09-12:** applicationf2889c86 / rollback7c6b7975；browser providerd1630135 / rollback92cc416e。文档/公式与逐观察阅读已部署；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 当前执行：第2项全文理解/科学自省取得真实内部候选，复核收尾后推进科学写作/引用；图片/视频艺术风格与叙事明确保留后续。统一创建/持续对话方案保留，不恢复旧冗余表单。

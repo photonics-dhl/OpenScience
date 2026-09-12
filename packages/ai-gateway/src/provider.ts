@@ -19,6 +19,20 @@ export interface CompleteOptions {
   messages: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
+  /** Scientific tasks opt in; short calls retain provider defaults. */
+  thinking?: 'adaptive' | 'disabled';
+  topP?: number;
+  timeoutMs?: number;
+}
+
+export type TextGenerationOptions = Omit<CompleteOptions, 'model' | 'messages'>;
+
+function textTimeout(options: CompleteOptions): number {
+  const timeout = options.timeoutMs ?? 60_000;
+  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 300_000) {
+    throw new TextProviderError('provider_error', 'Invalid text timeout');
+  }
+  return timeout;
 }
 
 export interface Usage {
@@ -86,7 +100,7 @@ export class OpenAiCompatProvider implements Provider {
 
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000); // 60s 超时（§9.3 长任务异步）
+    const timer = setTimeout(() => controller.abort(), textTimeout(opts));
     try {
       const res = await this.fetcher(`${this.cfg.baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
@@ -99,6 +113,8 @@ export class OpenAiCompatProvider implements Provider {
           messages: opts.messages,
           temperature: opts.temperature,
           max_tokens: opts.maxTokens,
+          ...(opts.thinking ? { thinking: { type: opts.thinking } } : {}),
+          top_p: opts.topP,
           stream: false,
         }),
         signal: controller.signal,
@@ -155,7 +171,7 @@ export class AnthropicCompatProvider implements Provider {
 
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000);
+    const timer = setTimeout(() => controller.abort(), textTimeout(opts));
     try {
       const system = opts.messages
         .filter((message) => message.role === 'system')
@@ -177,6 +193,8 @@ export class AnthropicCompatProvider implements Provider {
           messages,
           temperature: opts.temperature,
           max_tokens: opts.maxTokens ?? 4096,
+          ...(opts.thinking ? { thinking: { type: opts.thinking } } : {}),
+          top_p: opts.topP,
         }),
         signal: controller.signal,
       });

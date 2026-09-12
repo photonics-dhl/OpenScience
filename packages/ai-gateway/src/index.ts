@@ -16,6 +16,7 @@ export {
   type ProviderResult,
   type ChatMessage,
   type CompleteOptions,
+  type TextGenerationOptions,
   type Usage,
   type TextProviderErrorCode,
   type MiniMaxVisionConfig,

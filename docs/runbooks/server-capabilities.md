@@ -1,5 +1,7 @@
 # 服务器能力与复用清单
 
+- 2026-09-12 最新纠正：生产继续使用现有 MiniMax-M3，不要求额外强模型 API。官方 Anthropic 文档明确 M3 默认 thinking 关闭；当前适配器未传 thinking，structured 固定4096、超时60s。不能将此前错误直接归因于模型能力。候选已接入科学阶段 adaptive、16k/32k预算、180/300s超时及截断不重放；尚待部署和实际结果。Chat只作开发诊断，网页生产硬依赖尚待替换，绝不把已知错误放行。
+
 - CURRENT 2026-09-12：应用releasef2889c86、rollback7c6b7975，部署脚本已确认精确release；文档公式、逐观察全文分析与科学自省runtime skill已部署。真实阅读保留67观察/94原段；这只是内部候选，科学复核与实际范围见CURRENT handoff。写作及图片/视频风格按[能力台账](hermes-capability-registry.md)继续。
 
 - 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。

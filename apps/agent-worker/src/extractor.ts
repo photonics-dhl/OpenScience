@@ -15,6 +15,7 @@ import { RESEARCH_UNDERSTANDING_SKILL } from './skills/research-understanding.js
 import { PAPER_ANALYSIS_SKILL } from './skills/paper-analysis.js';
 import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from './skills/scientific-critical-thinking.js';
 import type { ParserRasterResult } from './parsers/job-protocol';
+import { SCIENTIFIC_READING_OPTIONS, SCIENTIFIC_SYNTHESIS_OPTIONS } from './scientific-generation-options';
 
 /** 六字段 core 结构（§5.1：schemaVersion + 6 字段，全部 string）。 */
 export interface ExtractedCore {
@@ -264,7 +265,7 @@ async function buildPaperReadingSynthesis(gateway: AiGateway, passages: readonly
       maps[index] = await gateway.completeStructured(readingMapGuard(allowedIds), [
         { role: 'system', content: `${PAPER_ANALYSIS_SKILL.sectionMapInstructions}\n只输出JSON：{"observations":[{"kind":"method","summary":"简短观察","basis":"synthesis","caseLabel":"原文算例名或空字符串","sourcePassageIds":["P00001"],"qualifierPassageIds":[]}]}。这是结构示例，不是论文结论。编号只取当前窗口。` },
         { role: 'user', content: canonicalPassagePrompt(window) },
-      ], { temperature: 0.1, maxRetries: 1, validationFeedback: () => `输出必须是observations数组；每项包含kind、summary、basis、caseLabel、sourcePassageIds、qualifierPassageIds。来源不可为空、不得生成编号，只能使用当前窗口：${[...allowedIds].join(',')}。` });
+      ], { ...SCIENTIFIC_READING_OPTIONS, maxRetries: 1, validationFeedback: () => `输出必须是observations数组；每项包含kind、summary、basis、caseLabel、sourcePassageIds、qualifierPassageIds。来源不可为空、不得生成编号，只能使用当前窗口：${[...allowedIds].join(',')}。` });
     }
   };
   try {
@@ -277,7 +278,7 @@ async function buildPaperReadingSynthesis(gateway: AiGateway, passages: readonly
     const reduced = await gateway.completeStructured(paperSynthesisGuard(new Set(byId.keys())), [
       { role: 'system', content: `${PAPER_ANALYSIS_SKILL.globalReduceInstructions}\n${SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions}\n输出严格JSON：overview字符串；fields包含problem/insight/method/results/limitations/reproducibility，每项只有summary和observationIds字符串数组。空摘要允许空数组；非空摘要必须引用实际观察。` },
       { role: 'user', content: JSON.stringify(observations) },
-    ], { temperature: 0.1, maxRetries: 1, validationFeedback: () => `六字段每项必须含summary和observationIds；非空摘要必须有依据。不要使用P编号或编造观察，只能引用：${[...byId.keys()].join(',')}。` });
+    ], { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1, validationFeedback: () => `六字段每项必须含summary和observationIds；非空摘要必须有依据。不要使用P编号或编造观察，只能引用：${[...byId.keys()].join(',')}。` });
     const expand = (items: readonly ReadingObservation[]) => [...new Set(items.flatMap((item) => [...item.sourcePassageIds, ...(item.qualifierPassageIds ?? [])]))];
     const fields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
       const candidate = reduced.fields[field];
@@ -290,8 +291,9 @@ async function buildPaperReadingSynthesis(gateway: AiGateway, passages: readonly
       ['assumption', 'limitation', 'definition'].includes(item.kind) || item.basis === 'uncertain'));
     return { overview: reduced.overview, fields, contextPassageIds, observations, coveredPassageIds: passages.map((p) => p.id) };
   } catch (error) {
-    console.error('paper-analysis map/reduce unavailable; preserving canonical single-pass fallback', error instanceof Error ? error.message : String(error));
-    return undefined;
+    // A failed window is missing reading coverage, not missing paper content.
+    console.error('paper-analysis reading incomplete', error instanceof Error ? error.message : String(error));
+    throw error;
   }
 }
 
@@ -1239,7 +1241,7 @@ async function repairCanonicalPartial(
         } })}`,
         canonicalPassagePrompt(candidatePassages),
       ].join('\n\n') }], {
-        temperature: 0.1,
+        ...SCIENTIFIC_READING_OPTIONS,
         maxRetries: 1,
         validationDiagnostic: () => `${field}:${repairFailure}`,
         validationFeedback: () => [
@@ -1827,7 +1829,7 @@ export async function extractHandler(
     const validation = canonicalProposalValidation(canonicalSourceMap, passages);
     try {
       await gateway.completeStructured(validation.guard, prompt, {
-        temperature: 0.2,
+        ...SCIENTIFIC_SYNTHESIS_OPTIONS,
         validationFeedback: validation.validationFeedback,
         validationDiagnostic: validation.validationDiagnostic,
         maxRetries: 1,
@@ -1858,6 +1860,6 @@ export async function extractHandler(
     }
     return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, proposal, scientificReview);
   }
-  const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, { temperature: 0.2 });
+  const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, SCIENTIFIC_SYNTHESIS_OPTIONS);
   return materializeProposal(proposal, manuscriptText);
 }
