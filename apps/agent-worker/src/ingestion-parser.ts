@@ -1,6 +1,7 @@
 import { extname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import katex from 'katex';
 import { VIRTUAL_LINE_HEIGHT, VIRTUAL_PAGE_WIDTH } from '@openscience/domain/virtual-page';
 import {
   PARSER_JOB_RESPONSE_MAX_BYTES,
@@ -23,6 +24,41 @@ export interface IngestionAdapters {
 }
 
 type DoclingRecord = Record<string, unknown>;
+
+const loadRuntimeModule = createRequire(__filename);
+// Match ScientificText's per-expression rendering budget; compatibility is not
+// a claim that the recognised formula is scientifically correct.
+const MAX_DOCLING_FORMULA_CHARS = 4_000;
+
+function formulaBody(text: string): string {
+  if ((text.startsWith('\\[') && text.endsWith('\\]'))
+    || (text.startsWith('\\(') && text.endsWith('\\)'))
+    || (text.startsWith('$$') && text.endsWith('$$'))) {
+    return text.slice(2, -2);
+  }
+  if (text.startsWith('$') && text.endsWith('$')) return text.slice(1, -1);
+  return text;
+}
+
+function isRendererCompatibleFormula(text: string): boolean {
+  if (!text || text.includes('\uFFFD') || text.length > MAX_DOCLING_FORMULA_CHARS) return false;
+  const body = formulaBody(text);
+  if (!body.trim()) return false;
+  try {
+    katex.renderToString(body, {
+      displayMode: true,
+      throwOnError: true,
+      strict: 'error',
+      trust: false,
+      maxExpand: 200,
+      maxSize: 10,
+      output: 'html',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function record(value: unknown): DoclingRecord | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as DoclingRecord : undefined;
@@ -75,11 +111,11 @@ function doclingResult(payload: unknown, formulaEnrichment: boolean): ParserStag
     const provenance = Array.isArray(item?.prov) ? item.prov : [];
     const recognizedText = typeof item?.text === 'string' ? item.text.trim() : '';
     let text = recognizedText || (typeof item?.orig === 'string' && item.orig.trim() ? item.orig.trim() : undefined);
+    let unreliableFormula = false;
     if (item?.label === 'formula') {
-      if (formulaEnrichment && (!recognizedText || recognizedText.includes('\uFFFD'))) {
+      unreliableFormula = !formulaEnrichment || !isRendererCompatibleFormula(recognizedText);
+      if (unreliableFormula) {
         text = typeof item.orig === 'string' && item.orig.trim() ? item.orig.trim() : undefined;
-      }
-      if (!formulaEnrichment || !recognizedText || recognizedText.includes('\uFFFD')) {
         // Keep the native source fallback and its page/bbox; never guess missing symbols.
         unreadableFormula = true;
       } else if (!(recognizedText.startsWith('\\[') && recognizedText.endsWith('\\]'))
@@ -96,7 +132,12 @@ function doclingResult(payload: unknown, formulaEnrichment: boolean): ParserStag
       const pageNumber = typeof prov?.page_no === 'number' && Number.isInteger(prov.page_no) && prov.page_no > 0 ? prov.page_no : 1;
       const page = doclingPageSize(document, pageNumber);
       const kind = forcedKind ?? doclingKind(item?.label);
-      const block = { kind, ...(text ? { text } : {}), boundingBox: doclingBoundingBox(prov?.bbox, page) };
+      const block = {
+        kind,
+        ...(text ? { text } : {}),
+        boundingBox: doclingBoundingBox(prov?.bbox, page),
+        ...(unreliableFormula ? { confidence: 0 } : {}),
+      };
       byPage.set(pageNumber, [...(byPage.get(pageNumber) ?? []), block]);
     }
   };
@@ -271,7 +312,6 @@ interface YauzlModule {
 
 export class XlsxParsingLimitError extends Error {}
 
-const loadRuntimeModule = createRequire(__filename);
 const yauzl = loadRuntimeModule('yauzl') as YauzlModule;
 
 function decodeUtf8(content: Buffer): string {

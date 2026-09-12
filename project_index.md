@@ -11,6 +11,8 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
+| `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 第2项候选，待服务器部署；Chat6Pro方案已取回；不改公开或自动放行科学结论 |
+| `apps/agent-worker/parser-image/package.json` / `package-lock.json` / `apps/agent-worker/src/ingestion-parser.ts` | 隔离parser的KaTeX语法兼容、坏公式orig回退及区域低置信标记 | 真实32公式中4条缺陷的修复候选；不猜改公式，生产仍76ead135 |
 | `apps/web/components/content/ScientificText.tsx` / `ScientificText.module.css` | 有界、安全的TeX显示，编辑器/公开RO/发布/Hermes及来源引用统一复用 | 已部署76ead135；原始内容与现有保存合同不变，新公式实际显示尚待观察 |
 | `apps/agent-worker/src/ingestion-parser.ts` / `apps/agent-worker/src/skills/research-understanding.ts` | Docling公式来源保留、降级标记、Hermes数学表达与科学上下文指令 | 已部署76ead135，真实26页/32公式输出；逐式质量与后续能力见服务器清单及Hermes台账 |
 | `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 参考目录；相关结构/风格已获用户批准，未安装新能力 |

@@ -10,6 +10,7 @@
 
 ## 2026-09-12 文档与公式能力接入
 
+- 后续实际观察更正：warnings=[]未发现4条坏公式，ScientificText实际28/32可渲染，第2/3页两个代表式已对照原页。候选向既有parser-image增加KaTeX0.16.47，格式失败回退orig并标confidence0；不改变网络/Secret/512MiB边界。候选尚未部署，不能按新增包已在生产运行记录。
 - 缺失公式权重已下载到`/opt/openscience-models/docling-codeformula-v2/docling-project--CodeFormulaV2`；模型`docling-project/CodeFormulaV2`，revision`ecedbe111d15c2dc60bfd4a823cbe80127b58af4`，权重630993616字节，CDLA-Permissive-2.0，来源及revision留在父目录`SOURCE.json`和模型卡。复用已有Docling镜像与宿主代理，仅下载此模型配置/权重/tokenizer；未下载另一套OCR、浏览器或完整工具栈。
 - 部署compose只读挂入既有模型缓存的同名子目录，不遮住镜像中的布局/表格/OCR模型。`HF_HUB_OFFLINE=1`，解析服务仍仅内网、无Secret；原2worker/3threads、6CPU/8GiB不变。document-parser启用`DOCLING_FORMULA_ENRICHMENT=true`。回滚应用363257aa的compose可恢复关闭状态，保留缓存无需删除。
 - Docling识别公式写入TextItem.text；应用保留页码/bbox并补明确TeX分隔符。空识别/乱码保留原文并标low_confidence；高级解析失败的普通文本回退标partial_result/low_confidence。不会根据识别状态声称物理正确。

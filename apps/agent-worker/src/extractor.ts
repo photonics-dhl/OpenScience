@@ -13,6 +13,7 @@ import {
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
 import { RESEARCH_UNDERSTANDING_SKILL } from './skills/research-understanding.js';
 import { PAPER_ANALYSIS_SKILL } from './skills/paper-analysis.js';
+import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from './skills/scientific-critical-thinking.js';
 import type { ParserRasterResult } from './parsers/job-protocol';
 
 /** 六字段 core 结构（§5.1：schemaVersion + 6 字段，全部 string）。 */
@@ -166,41 +167,75 @@ function focusedQuantitativeResultPassages(passages: readonly CanonicalPassage[]
 }
 const CANONICAL_EXTRACTION_CONTRACT = 'grounded-passages-v2';
 
-interface ReadingMapResult {
+const OBSERVATION_KINDS = ['question', 'method', 'result', 'assumption', 'limitation', 'definition', 'context'] as const;
+interface ReadingObservation {
+  kind: (typeof OBSERVATION_KINDS)[number];
   summary: string;
+  basis: 'reported' | 'synthesis' | 'uncertain';
+  caseLabel: string;
   sourcePassageIds: string[];
+  qualifierPassageIds: string[];
+}
+
+interface ReadingMapResult {
+  observations: ReadingObservation[];
+}
+
+interface IdentifiedReadingObservation extends ReadingObservation {
+  id: string;
+}
+
+interface PaperReadingReduction {
+  overview: string;
+  fields: Record<(typeof SDF_CORE_FIELDS)[number], { summary: string; observationIds: string[] }>;
 }
 
 interface PaperReadingSynthesis {
   overview: string;
-  fields: Record<(typeof SDF_CORE_FIELDS)[number], { summary: string; sourcePassageIds: string[] }>;
+  fields: Record<(typeof SDF_CORE_FIELDS)[number], { summary: string; sourcePassageIds: string[]; observationIds: string[] }>;
+  contextPassageIds: string[];
+  coveredPassageIds: string[];
+  observations: IdentifiedReadingObservation[];
 }
 
 function readingMapGuard(allowedIds: ReadonlySet<string>): SchemaGuard<ReadingMapResult> {
   return (value: unknown): value is ReadingMapResult => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     const item = value as Record<string, unknown>;
-    return typeof item.summary === 'string' && item.summary.trim().length > 0 && item.summary.length <= 6_000
-      && Array.isArray(item.sourcePassageIds) && item.sourcePassageIds.length > 0 && item.sourcePassageIds.length <= 32
-      && item.sourcePassageIds.every((id) => typeof id === 'string' && allowedIds.has(id));
+    const idsValid = (ids: unknown) => Array.isArray(ids) && ids.length <= 32
+      && ids.every((id) => typeof id === 'string' && allowedIds.has(id));
+    return Array.isArray(item.observations) && item.observations.length > 0 && item.observations.length <= 32
+      && item.observations.every((candidate: unknown) => {
+        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
+        const observation = candidate as Record<string, unknown>;
+        return OBSERVATION_KINDS.includes(observation.kind as ReadingObservation['kind'])
+          && ['reported', 'synthesis', 'uncertain'].includes(String(observation.basis))
+          && typeof observation.summary === 'string' && observation.summary.trim().length > 0 && observation.summary.length <= 1_200
+          && typeof observation.caseLabel === 'string' && observation.caseLabel.length <= 160
+          && idsValid(observation.sourcePassageIds) && (observation.sourcePassageIds as unknown[]).length > 0
+          && idsValid(observation.qualifierPassageIds);
+      });
   };
 }
 
-const paperSynthesisGuard: SchemaGuard<PaperReadingSynthesis> = (value): value is PaperReadingSynthesis => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const item = value as Record<string, unknown>;
-  if (typeof item.overview !== 'string' || !item.overview.trim() || item.overview.length > 8_000
-    || !item.fields || typeof item.fields !== 'object' || Array.isArray(item.fields)) return false;
-  const fields = item.fields as Record<string, unknown>;
-  return SDF_CORE_FIELDS.every((field) => {
-    const candidate = fields[field];
-    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
-    const record = candidate as Record<string, unknown>;
-    return typeof record.summary === 'string' && record.summary.length <= 4_000
-      && Array.isArray(record.sourcePassageIds) && record.sourcePassageIds.length <= 32
-      && record.sourcePassageIds.every((id) => typeof id === 'string');
-  });
-};
+function paperSynthesisGuard(knownObservationIds: ReadonlySet<string>): SchemaGuard<PaperReadingReduction> {
+  return (value): value is PaperReadingReduction => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const item = value as Record<string, unknown>;
+    if (typeof item.overview !== 'string' || !item.overview.trim() || item.overview.length > 8_000
+      || !item.fields || typeof item.fields !== 'object' || Array.isArray(item.fields)) return false;
+    const fields = item.fields as Record<string, unknown>;
+    return SDF_CORE_FIELDS.every((field) => {
+      const candidate = fields[field];
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
+      const record = candidate as Record<string, unknown>;
+      return typeof record.summary === 'string' && record.summary.length <= 4_000
+        && Array.isArray(record.observationIds) && record.observationIds.length <= knownObservationIds.size
+        && (!record.summary.trim() || record.observationIds.length > 0)
+        && record.observationIds.every((id) => typeof id === 'string' && knownObservationIds.has(id));
+    });
+  };
+}
 
 async function buildPaperReadingSynthesis(gateway: AiGateway, passages: readonly CanonicalPassage[]): Promise<PaperReadingSynthesis | undefined> {
   const windows: CanonicalPassage[][] = [];
@@ -224,27 +259,44 @@ async function buildPaperReadingSynthesis(gateway: AiGateway, passages: readonly
       const index = nextWindow;
       nextWindow += 1;
       const window = windows[index]!;
-      maps[index] = await gateway.completeStructured(readingMapGuard(new Set(window.map((passage) => passage.id))), [
-        { role: 'system', content: `${PAPER_ANALYSIS_SKILL.instructions}\n你正在执行section-map。完整阅读本窗口，输出一个JSON对象：summary为中文阅读记录，sourcePassageIds为支撑这些观察的P编号。记录研究对象、条件、假设、方法、公式、结果、局限、图表关系及与其他章节的依赖；不能按六字段机械摘抄，不能猜测乱码。` },
+      const allowedIds = new Set(window.map((passage) => passage.id));
+      maps[index] = await gateway.completeStructured(readingMapGuard(allowedIds), [
+        { role: 'system', content: `${PAPER_ANALYSIS_SKILL.sectionMapInstructions}\n只输出JSON：{"observations":[{"kind":"method","summary":"简短观察","basis":"synthesis","caseLabel":"原文算例名或空字符串","sourcePassageIds":["P00001"],"qualifierPassageIds":[]}]}。这是结构示例，不是论文结论。编号只取当前窗口。` },
         { role: 'user', content: canonicalPassagePrompt(window) },
-      ], { temperature: 0.1, maxRetries: 1 });
+      ], { temperature: 0.1, maxRetries: 1, validationFeedback: () => `输出必须是observations数组；每项包含kind、summary、basis、caseLabel、sourcePassageIds、qualifierPassageIds。来源不可为空、不得生成编号，只能使用当前窗口：${[...allowedIds].join(',')}。` });
     }
   };
   try {
     await Promise.all(Array.from({ length: Math.min(2, windows.length) }, () => worker()));
-    const knownIds = new Set(passages.map((passage) => passage.id));
-    const reduced = await gateway.completeStructured(paperSynthesisGuard, [
-      { role: 'system', content: `${PAPER_ANALYSIS_SKILL.instructions}\n你正在执行global-reduce。综合全部section-map阅读记录，重建论文完整研究逻辑并按六个SDF维度给出候选综合。输出严格JSON：overview字符串；fields包含problem/insight/method/results/limitations/reproducibility，每项只有summary和sourcePassageIds。不同算例不能混合，明确理论、模拟和实验身份；ID只能来自输入。` },
-      { role: 'user', content: JSON.stringify(maps) },
-    ], { temperature: 0.1, maxRetries: 1 });
-    for (const field of SDF_CORE_FIELDS) {
-      reduced.fields[field].sourcePassageIds = reduced.fields[field].sourcePassageIds.filter((id) => knownIds.has(id));
-    }
-    return reduced;
+    // Identities and source expansion belong to the program, never the model.
+    const observations = maps.flatMap((map, windowIndex) => map.observations.map((observation, index) => ({
+      ...observation, id: `W${windowIndex + 1}O${index + 1}`,
+    })));
+    const byId = new Map(observations.map((observation) => [observation.id, observation]));
+    const reduced = await gateway.completeStructured(paperSynthesisGuard(new Set(byId.keys())), [
+      { role: 'system', content: `${PAPER_ANALYSIS_SKILL.globalReduceInstructions}\n${SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions}\n输出严格JSON：overview字符串；fields包含problem/insight/method/results/limitations/reproducibility，每项只有summary和observationIds字符串数组。空摘要允许空数组；非空摘要必须引用实际观察。` },
+      { role: 'user', content: JSON.stringify(observations) },
+    ], { temperature: 0.1, maxRetries: 1, validationFeedback: () => `六字段每项必须含summary和observationIds；非空摘要必须有依据。不要使用P编号或编造观察，只能引用：${[...byId.keys()].join(',')}。` });
+    const expand = (items: readonly ReadingObservation[]) => [...new Set(items.flatMap((item) => [...item.sourcePassageIds, ...item.qualifierPassageIds]))];
+    const fields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
+      const candidate = reduced.fields[field];
+      return [field, { ...candidate, sourcePassageIds: expand(candidate.observationIds.map((id) => byId.get(id)!)) }];
+    })) as PaperReadingSynthesis['fields'];
+    // Definitions, assumptions, contrary/uncertain observations survive selection.
+    // Keeping their actual passages prevents the last generation from seeing only
+    // sources that agree with the reducer's proposed summaries.
+    const contextPassageIds = expand(observations.filter((item) =>
+      ['assumption', 'limitation', 'definition'].includes(item.kind) || item.basis === 'uncertain'));
+    return { overview: reduced.overview, fields, contextPassageIds, observations, coveredPassageIds: passages.map((p) => p.id) };
   } catch (error) {
     console.error('paper-analysis map/reduce unavailable; preserving canonical single-pass fallback', error instanceof Error ? error.message : String(error));
     return undefined;
   }
+}
+
+/** Reusable reading phase for the same source-located document; no RO writes or publication. */
+export function readResearchDocument(gateway: AiGateway, sourceMap: DocumentSourceMap) {
+  return buildPaperReadingSynthesis(gateway, canonicalPassages(parseDocumentSourceMap(sourceMap)));
 }
 
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
@@ -413,6 +465,7 @@ interface CanonicalTextBlock {
   originalStart: number;
   page: number;
   boundingBox: SourceLocator['boundingBox'];
+  sourceQuality?: 'unreadable_formula';
 }
 
 function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[] {
@@ -435,6 +488,7 @@ function canonicalTextBlocks(sourceMap: DocumentSourceMap): CanonicalTextBlock[]
         originalStart,
         page: page.page,
         boundingBox: block.boundingBox,
+        ...(block.kind === 'equation' && block.confidence === 0 ? { sourceQuality: 'unreadable_formula' as const } : {}),
       });
       cursor += text.length;
     }
@@ -533,7 +587,8 @@ function canonicalPassages(sourceMap: DocumentSourceMap): CanonicalPassage[] {
 function canonicalPassagePrompt(passages: readonly CanonicalPassage[]): string {
   return passages.map((passage) => {
     const page = passage.pageStart === passage.pageEnd ? `${passage.pageStart}` : `${passage.pageStart}-${passage.pageEnd}`;
-    return `[${passage.id} page:${page} blocks:${passage.blockCount} chars:${passage.evidenceChars}${passage.fragmented ? ' fragment:true' : ''}]\n${passage.text}\n[/${passage.id}]`;
+    const sourceQuality = passage.slices.some((slice) => slice.block.sourceQuality) ? ' sourceQuality:unreadable_formula' : '';
+    return `[${passage.id} page:${page} blocks:${passage.blockCount} chars:${passage.evidenceChars}${passage.fragmented ? ' fragment:true' : ''}${sourceQuality}]\n${passage.text}\n[/${passage.id}]`;
   }).join('\n\n');
 }
 
@@ -1732,10 +1787,14 @@ export async function extractHandler(
   const synthesis = canonicalSourceMap && passages ? await buildPaperReadingSynthesis(gateway, passages) : undefined;
   const scientificReview = trustedContext.scientificReview && synthesis
     ? { ...trustedContext.scientificReview,
-        coveragePassageIds: [...new Set(SDF_CORE_FIELDS.flatMap((field) => synthesis.fields[field].sourcePassageIds))] }
+        coveragePassageIds: [...new Set([...synthesis.contextPassageIds, ...SDF_CORE_FIELDS.flatMap((field) => synthesis.fields[field].sourcePassageIds)])] }
     : trustedContext.scientificReview;
+  const synthesisPassageIds = synthesis ? new Set([
+    ...synthesis.contextPassageIds,
+    ...SDF_CORE_FIELDS.flatMap((field) => synthesis.fields[field].sourcePassageIds),
+  ]) : undefined;
   const reducedPassages = synthesis && passages
-    ? passages.filter((passage) => SDF_CORE_FIELDS.some((field) => synthesis.fields[field].sourcePassageIds.includes(passage.id)))
+    ? passages.filter((passage) => synthesisPassageIds!.has(passage.id))
     : undefined;
   const analysisPassages = reducedPassages?.length ? reducedPassages : passages;
   const prompt = [
@@ -1748,8 +1807,7 @@ export async function extractHandler(
       '方法或配置披露不等于独立复现完成。reproducibility应跨全文凝练可据文重建的最小研究配方：研究对象与输入、关键关系或步骤、决定性参数与验证方式，并明确作者未披露、因此不能独立复现的细节。可以综合分散但相互支持的原文关系，不得发明参数或步骤；未披露细节是摘要中的限定或缺口，不是清空整个字段的理由。只有全文无法支持任何负责的复现概括时才返回needsMoreInformation=true。',
       ...(passages ? [
         RESEARCH_UNDERSTANDING_SKILL.instructions,
-        PAPER_ANALYSIS_SKILL.instructions,
-        ...(synthesis ? [`section-map与global-reduce已完成。下面的综合记录用于保持全文逻辑，最终主张仍只能引用随附的原始P段：${JSON.stringify(synthesis)}`] : []),
+        ...(synthesis ? [`逐观察阅读与综合已完成。以下为候选而非权威结论；原始P段还包括未被候选选中的假设、定义、限制和不确定材料。联系这些原文自行修订，不能只寻找支持候选的段落。sourceQuality:unreadable_formula表示解析缺陷，必要时回读原页，不猜写公式。${JSON.stringify({ overview: synthesis.overview, fields: synthesis.fields, contextPassageIds: synthesis.contextPassageIds })}`] : [SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions]),
         '只输出JSON：schemaVersion="0.1.0"，fields下六个字段必须且只能是 {"summary":string,"sourcePassageIds":string[],"needsMoreInformation":boolean}。不得返回引文、窗口ID或来源正文。',
         `完整输出结构如下（这是空结构，不是论文结论；必须用原文支持的摘要与实际P编号填充）：${JSON.stringify({ schemaVersion: SDF_CORE_VERSION, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: '', sourcePassageIds: [], needsMoreInformation: true }])) })}`,
         'sourcePassageIds必须是字符串数组，例如["P00001"]，不能填页码、对象或区间字符串。JSON字符串中的反斜杠必须转义；摘要优先使用普通文字与Unicode数学符号，避免输出不合法的LaTeX转义。',
