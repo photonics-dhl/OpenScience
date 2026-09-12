@@ -6,7 +6,7 @@ import { Children, type ReactNode, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 
-import { ScientificText } from '@/components/content/ScientificText';
+import { escapeScientificMathForMarkdown, ScientificText } from '@/components/content/ScientificText';
 import type { SourceLocator, WorkspaceGuideResult } from '@/lib/api';
 
 import styles from './HermesWritingDraft.module.css';
@@ -15,19 +15,34 @@ export type HermesWritingDraftValue = NonNullable<WorkspaceGuideResult['writingD
 
 function normalizeMathOutsideCode(markdown: string) {
   let fence = '';
-  return markdown.split('\n').map((line) => {
+  let prose = '';
+  let output = '';
+  const flushProse = () => {
+    output += escapeScientificMathForMarkdown(prose);
+    prose = '';
+  };
+  markdown.split('\n').forEach((line, lineIndex) => {
+    if (lineIndex) {
+      if (fence) output += '\n';
+      else prose += '\n';
+    }
     const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/u);
     if (fenceMatch) {
+      flushProse();
       const marker = fenceMatch[1][0];
       if (!fence) fence = marker;
       else if (fence === marker) fence = '';
-      return line;
+      output += line;
+      return;
     }
-    if (fence) return line;
+    if (fence) {
+      output += line;
+      return;
+    }
     let inlineFence = '';
-    let output = '';
     for (let index = 0; index < line.length;) {
       if (line[index] === '`') {
+        flushProse();
         let end = index + 1;
         while (line[end] === '`') end += 1;
         const marker = line.slice(index, end);
@@ -37,17 +52,13 @@ function normalizeMathOutsideCode(markdown: string) {
         index = end;
         continue;
       }
-      const pair = line.slice(index, index + 2);
-      if (!inlineFence && ['\\(', '\\)', '\\[', '\\]'].includes(pair)) {
-        output += pair === '\\[' || pair === '\\]' ? '$$' : '$';
-        index += 2;
-        continue;
-      }
-      output += line[index];
+      if (inlineFence) output += line[index];
+      else prose += line[index];
       index += 1;
     }
-    return output;
-  }).join('\n');
+  });
+  flushProse();
+  return output;
 }
 
 function ScientificChildren({ children, budget }: { children: ReactNode; budget: { expressions: number; text: number } }) {

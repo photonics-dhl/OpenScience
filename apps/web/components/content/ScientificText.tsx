@@ -35,8 +35,8 @@ function looksLikeCurrencyPair(value: string, openingAt: number, closingAt: numb
     && /\d/.test(value[closingAt + 1] ?? '');
 }
 
-function splitMath(value: string): MathPart[] {
-  if (!value || value.length > MAX_TEXT_LENGTH) return [{ type: 'text', value }];
+function splitMath(value: string, maxTextLength = MAX_TEXT_LENGTH): MathPart[] {
+  if (!value || value.length > maxTextLength) return [{ type: 'text', value }];
 
   const parts: MathPart[] = [];
   let plainStart = 0;
@@ -89,6 +89,18 @@ function splitMath(value: string): MathPart[] {
   }
   if (plainStart < value.length) parts.push({ type: 'text', value: value.slice(plainStart) });
   return parts.length ? parts : [{ type: 'text', value }];
+}
+
+export function escapeScientificMathForMarkdown(value: string) {
+  // A writing draft permits 60,000 characters; the renderer keeps its own limit.
+  return splitMath(value, 60_000).map((part) => {
+    if (part.type === 'text') return part.value;
+    const delimiter = part.display ? '$$' : '$';
+    // CommonMark consumes backslash escapes before the text reaches KaTeX.
+    // Escape its ASCII punctuation so it restores the exact TeX source.
+    const expression = part.value.replace(/[\u0021-\u002f\u003a-\u0040\u005b-\u0060\u007b-\u007e]/gu, '\\$&');
+    return `${delimiter}${expression}${delimiter}`;
+  }).join('');
 }
 
 function renderExpression(value: string, displayMode: boolean) {
