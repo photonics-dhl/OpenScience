@@ -2,17 +2,19 @@
 
 ## 当前状态（2026-09-12）
 - 媒体增强已部署0df87c9b：scientific-art-direction v1 / scientific-video-direction v1已接入现有分镜与图片brief；跨图风格/标签连续、来源约束叙事及旁白，不增加生成轮次。视频locale/style沿原storyboard文件传递，不新增哈希或存储；独立runner已先于新Worker部署成功，旧请求兼容。中文视频入口限制保持；尚无新图片/视频实产证据。
-- ECS应用0fc5b7d91de5b57b6147d0bf8b8a84865a805c1a / rollbackc1e694e44eece4c3368ffaf45055aaab3f447f78；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- ECS应用9f889d2619290b378d735cb09304ccf640068120 / rollback0fc5b7d91de5b57b6147d0bf8b8a84865a805c1a；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 用户已明确授权按写作指令，将当前研究私稿/必要摘录发送MiniMax。普通问答不自动触发写作；生产不依赖Chat科学定稿。
-- 真实a1c0da49的语义bridge第一次成功42191tokens/124574ms，final主接口空正文、备用HTTP401，六字段未产出。旧空响应final用量未知，不是0；科学结果未采用。
+- 历史a1c0da49的语义bridge成功42191tokens/124574ms，final空正文/备用HTTP401，用量未知不能记0；当前097显式复用4099来源+stage后已产出六字段，但仍未通过科学审校。
 - 科学写作v3/来源origin/完整100563字符输入与旧稿引用恢复已实产；M3生成修订后仍有错引/阈值夸大，最终40e23948由真实UI做4处来源约束校正，41引用/57式，保存/重载/下载成功，独立内容复核通过；保持user_edited，不代表自动初稿已可靠。
-- 0fc后d680显式仅续final已实证0OCR/map/bridge，一call11564out/81061ms；四处科学错误未采用。UI6栏真实新结果展示已恢复，但引用因shared64/24000与API/web旧32/8000不一致而隐藏；候选统一shared/ordered ranges与scientific-summary v5待实产核读。
+- 9f后097/v5仅续final实证0OCR/map/bridge，一call5057out/53017ms；API/web对齐既有64段/24000字符与same-block范围，六栏新结果逐字等API且引用全部显示。科学仍有前提/条件遗漏与过度概括，未采用。
+- 复用既有workspace.guide editorDraft两次服务器共编后，人工校正并经独立High原文/引用复核，最终私有92cafb82已真实UI保存/新页重载/来源/下载一致，1118字符/17引用，user_edited；原40e23948与公开v10保留，自动质量不能称通过。
+- 旧标签页6个JS资源不足错误未定位根因；同认证context新阅读页首次成功，不重启/改登录态，不代表长期稳定。视频/批量暂停，采用/发布等待用户确认。
 - 无新增服务/供应商/OCR/浏览器。禁止测试/预检/CI/本机构建；必要服务器build/start与真实产品操作按授权推进。
 
 | 顺序 | 能力 | 当前状态与剩余 |
 |---|---|---|
 | 1 | 科学文档与公式 | Docling1.30/CodeFormulaV2/TeX来源/KaTeX已生产；26页32式中28可排版、4损坏标记。两个代表式对原页，非全篇物理验收。 |
-| 2 | 全文理解与凝练 | paper-analysis v8；stage复用实证，d680/v4科学仍未通过；v5与证据consumer一致性修复候选待部署核读，原确认稿保留。 |
+| 2 | 全文理解与凝练 | paper-analysis v8/scientific-summary v5已部署；097仅续final与全引文展示已实证，自动科学质量仍未通过；92cafb82是来源复核后的人工审校稿，未采用。 |
 | 3 | 科学写作与引用 | 68a0e6b2已部署：明确写作才加载SourceMap，私有note/review/manuscript，同用户/RO校验，程序绑定引用；直接保存不调用模型，修订一次provider cycle。 |
 | 4 | 精美笔记 | 68a0e6b2已部署：运行时research-note-formatting，Hermes草稿卡、宽阅读/编辑弹层、折叠来源、安全Markdown/KaTeX、真实保存和Markdown下载。多格式文档导出按具体需求补齐。 |
 | 5 | 多格式附件 | XLSX/PPTX/HTML已生产，派生副本清洗、原件保留；真实多样样本兼容未观察。复用已有解析器，未另装MarkItDown全套。 |
@@ -21,6 +23,17 @@
 用户流程：一句话或附件开始同一私有研究 → Hermes理解整理 → 用户少量修改/确认 → 图片或视频 → 审核发布。主屏标题/贡献→核心媒体→六字段→文末资料；长笔记独立阅读。
 
 ## 来源与选择
+- 2026-09-12用户要求复用优先，已重新读取下列GitHub源文件并对照生产9f实际调用；不凭README或sources注释声称工具已集成。本次无安装、新服务或额外论文模型调用。
+
+| 上游 | 实际复用/本次发现 | 接续边界 |
+|---|---|---|
+| [PaperQA prompts.py](https://github.com/Future-House/paper-qa/blob/main/src/paperqa/prompts.py) | 现有paper-analysis记录其证据召回/上下文摘要思路，Worker已有map/reduce；未安装或调用完整PaperQA。上游最终回答使用上下文证据摘要与有效引用键；本项目final仅收原P并集，语义文字被有意排除 | 这是待核对的设计差异，不能断言为全部科学错误根因；不可直接把有错的旧summary作为事实重新灌入 |
+| [K-Dense scientific-critical-thinking](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-critical-thinking/SKILL.md) | 已改编为项目runtime v2，extractor的reduce/bridge系统消息实际注入；研究类型/适用边界/来源区分已有代码 | 已使用方法，不等于安装整个技能库或得到科学正确性保证 |
+| [K-Dense peer-review](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/peer-review/SKILL.md) / [claim evidence template](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/peer-review/assets/claim_evidence_matrix_template.csv) | 本次重新读取v2.2及模板：逐主张关联结果/图表，核方向、量级、对象与限制，提出最小修订。此前泛称peer-review借鉴不能算其完整流程已落地 | 优先用于已知错误的局部来源修订；不引入其CLI门禁、临床清单或新的模型轮次 |
+| [claude-scholar literature workflow](https://github.com/Galaxy-Dawn/claude-scholar/blob/main/skills/obsidian-literature-workflow/SKILL.md) / [claim extraction](https://github.com/Galaxy-Dawn/claude-scholar/blob/main/skills/obsidian-literature-workflow/references/CLAIM-EXTRACTION.md) | 本次新发现并读取：证据支持的措辞与禁止扩大的措辞随主张保留。现有SemanticPoint已含statement/type/conditionCase/comparison/operation/evidenceIds，无需另造同类结构 | 尚未接入；借鉴限定随主张流转的方法，不移植Obsidian目录体系，不新增一套Claim数据库 |
+
+- 代码取证：extractor.ts导入与第614/682/708行附近的实际消息注入；SemanticPoint与expandSemanticPassages；modelScientificComposeSemantic第1977行附近明确只传原P。引用/结构验证可证明定位和格式，不能证明主张与证据在科学含义上一致。
+- 独立High只读核查建议的最小后续改动（尚未实现/部署）：由现有evidenceIds/passageBindings构造仅含分组键、支撑P与限定P的导航，保留global原P并集与跨字段引用；不传旧statement或条件/算例等模型文字。按原文执行逐主张保留/缩小/纠正/丢弃，复用现有调用，不新建schema、工具或数据库；效果仍须实际产物核读，不能预称修复。
 - [K-Dense scientific-writing](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-writing)、[critical-thinking](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-critical-thinking)、[citation-management](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/citation-management)：此前已核来源/MIT元数据，项目适配方法，工具映射现有Gateway/ScanSci/SourceMap，不复制额外供应商或逐条人工门禁。
 - [Docling公式增强](https://docling-project.github.io/docling/usage/enrichments/)用于TeX识别；[KaTeX](https://katex.org/docs/options.html)只负责受限排版；两者不证明公式物理正确。
 - [Microsoft MarkItDown](https://github.com/microsoft/markitdown)是转换工具，不是科学理解或公式校验器。已有Docling/结构化XLSX先复用；只为实际格式缺口增加依赖，不装all整包。

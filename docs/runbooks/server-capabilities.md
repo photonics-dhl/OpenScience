@@ -1,12 +1,14 @@
 # 服务器能力与复用清单
 
-当前应用0fc5b7d91de5b57b6147d0bf8b8a84865a805c1a / rollbackc1e694e44eece4c3368ffaf45055aaab3f447f78；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成；无测试/CI/本机运行。
+当前应用9f889d2619290b378d735cb09304ccf640068120 / rollback0fc5b7d91de5b57b6147d0bf8b8a84865a805c1a；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成；无测试/CI/本机运行。
 
-- 当前真实a1c0da49原P语义整理第一次成功：42191tokens/124574ms。final主接口空正文、备用HTTP401，未得到新六字段，原确认稿/公开版保留。旧Adapter丢失失败usage/stop，final用量未知，不能记0。
-- paper-analysis v8/scientific-summary v2、M3显式adaptive、Docling CPU1.30/CodeFormulaV2、安全KaTeX、XLSX/PPTX/HTML已部署。候选编号/模型返回成功不代表科学正确。
+- 历史a1c0da49原P语义整理成功42191tokens/124574ms，final空正文/备用HTTP401且旧Adapter失败usage未知。当前097已通过显式来源+stage复用成功产出六字段，但科学质量仍需审校；不能把历史失败视作当前功能状态。
+- paper-analysis v8/scientific-summary v5、M3显式adaptive、Docling CPU1.30/CodeFormulaV2、安全KaTeX、XLSX/PPTX/HTML已部署。模型返回成功不代表科学正确。
 - 私有笔记40e23948经M3生成修订与独立原文核对、4处人工局部校正后已真实保存/重载/下载；2696字符/41引用，57式排版0错误，保留user_edited。完整原文100563字符/306段无遗漏；自动首稿科学准确性不能称已稳定。
 - 已部署空响应诊断记录安全usage/finish/block数量，缺失usage为null；明确length时不原预算fallback。不能反推旧空响应原因。
-- 0fc后d680显式仅续final已实证0OCR/map/bridge，一call11564out/81061ms；四处科学错误未采用。UI6栏真实新结果展示已恢复，但引用因shared64/24000与API/web旧32/8000不一致而隐藏；候选统一shared/ordered ranges与scientific-summary v5待实产核读。
+- 9f后097显式仅续final实证0OCR/map/bridge，一call5057out/53017ms；v5仍有条件省略/结论夸大未采用。API/web统一既有64段/24000字符及same-block范围后，实际六栏新结果与引用全部显示；不是新增上限或绕过来源验证。
+- 最终私有六字段92cafb82基于既有editorDraft两次服务器共编与人工校正，独立原文复核通过，1118字符/17引用、user_edited；真实UI保存/新页重载/来源/下载完成，正文逐字等复核稿，RO仍revision11。原40e23948笔记与正式v10保留。
+- 旧阅读页真实6个JS ERR_INSUFFICIENT_RESOURCES阻断业务加载；同认证context新标签页首次成功并完成下载。旧页保留、未重启，资源根因尚未定位，不据此声称长期稳定。
 - 没有新增服务、供应商、浏览器或OCR；艺术/叙事runtime与video locale/style传递已随0df87c9b部署。现有独立video-runner active，TTS/renderer镜像和模型可复用，升级走infra/codex-image-runner/install.sh --confirm-video；未生成新视频。
 - 当前任务/状态以[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)和[Hermes台账](hermes-capability-registry.md)为准。下文历史部署只用于能力复用，不能覆盖当前事实。
 - 2026-09-12媒体部署：独立video runner bundle已更新0df87c9bee98c2280396551ed522e66230eaf381，install exit0并启动；TTS镜像a2158409、renderer镜像ff6042f6、qwen3-tts-customvoice-0c0e305原样复用，无新增生成任务。旧service备份/opt/openscience-video/service-before-0df87c9bee98c2280396551ed522e66230eaf381，先回退应用至68a0再按需恢复service，不让新Worker对接旧runner。
