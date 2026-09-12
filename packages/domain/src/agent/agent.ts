@@ -2,6 +2,7 @@ import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
 import { Prisma, type AgentSession, type AgentTask } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
+import { MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from '../ingestion/canonical-evidence-contract';
 import {
   parseDurableSourceRetrievePayload,
   SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION,
@@ -985,7 +986,7 @@ function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMap
   const missingFields = new Set(result.needsMoreInformation);
   return SDF_CORE_FIELDS.every((field) => {
     const segments = segmentBundle[field];
-    if (!Array.isArray(segments) || segments.length > 32) return false;
+    if (!Array.isArray(segments) || segments.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) return false;
     let total = 0;
     let priorPage = 0;
     let priorLocator: ReturnType<typeof validateSourceLocator> | undefined;
@@ -1014,7 +1015,7 @@ function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMap
     const evidence = evidenceByField[field] as Record<string, unknown>;
     const location = locationsByField[field] as Record<string, unknown>;
     const missing = missingFields.has(field);
-    return total <= 8_000 && evidence.quote === segments.map((segment) => (segment as Record<string, unknown>).quote).join('\n')
+    return total <= MAX_CANONICAL_EVIDENCE_CHARS && evidence.quote === segments.map((segment) => (segment as Record<string, unknown>).quote).join('\n')
       && missing === (segments.length === 0) && missing === !(typeof core[field] === 'string' && core[field].trim())
       && (segments.length !== 0 || location.status === 'missing')
       && (segments.length !== 1 || (location.status === 'located'

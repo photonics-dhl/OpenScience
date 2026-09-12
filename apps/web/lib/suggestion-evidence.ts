@@ -1,3 +1,8 @@
+import {
+  MAX_CANONICAL_EVIDENCE_CHARS,
+  MAX_CANONICAL_EVIDENCE_SEGMENTS,
+} from '@openscience/domain/canonical-evidence-contract';
+
 export type SuggestionEvidenceLocation =
   | { status: 'located'; blockId: string; page?: number }
   | { status: 'ambiguous' | 'cross_block' | 'missing' | 'unverified' };
@@ -11,12 +16,15 @@ export interface SuggestionEvidenceSegment {
 export function getSuggestionEvidenceSegments(field: string, context?: unknown): SuggestionEvidenceSegment[] {
   if (!isRecord(context) || !isRecord(context.evidenceSegments)) return [];
   const values = context.evidenceSegments[field];
-  if (!Array.isArray(values) || !values.length || values.length > 32) return [];
+  if (!Array.isArray(values) || !values.length || values.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) return [];
   const result: SuggestionEvidenceSegment[] = [];
-  const seen = new Set<string>();
+  const closedBlockIds = new Set<string>();
   let characters = 0;
   let lastPage = 0;
-  for (const value of values) {
+  let priorLocation: Extract<SuggestionEvidenceLocation, { status: 'located' }> | undefined;
+  let priorLocator: JsonRecord | undefined;
+  let priorRangeEnd = 0;
+  for (const [index, value] of values.entries()) {
     if (!isRecord(value) || !hasOnlyKeys(value, ['quote', 'sourceLocator']) || !isNonblank(value.quote) || !isRecord(value.sourceLocator)) return [];
     const range = value.sourceLocator.charRange;
     if (!isRecord(range) || !isValidCharRange(range) || Number(range.end) - Number(range.start) !== value.quote.length) return [];
@@ -25,10 +33,22 @@ export function getSuggestionEvidenceSegments(field: string, context?: unknown):
       evidence: { [field]: { quote: value.quote } },
       evidenceLocation: { [field]: { status: 'located', sourceLocator: value.sourceLocator } },
     });
-    if (location.status !== 'located' || seen.has(location.blockId) || (location.page !== undefined && location.page < lastPage)) return [];
-    characters += value.quote.length;
-    if (characters > 8000) return [];
-    seen.add(location.blockId); lastPage = location.page ?? lastPage;
+    if (location.status !== 'located') return [];
+    const sameBlock = location.blockId === priorLocation?.blockId;
+    const invalidSameBlockRange = sameBlock && priorLocation !== undefined && priorLocator !== undefined && (
+      location.page !== priorLocation.page
+      || !sameBoundingBox(value.sourceLocator.boundingBox, priorLocator.boundingBox)
+      || Number(range.start) < priorRangeEnd
+    );
+    if ((location.page ?? 0) < lastPage || invalidSameBlockRange
+      || (!sameBlock && closedBlockIds.has(location.blockId))) return [];
+    if (!sameBlock && priorLocation?.blockId) closedBlockIds.add(priorLocation.blockId);
+    characters += value.quote.length + (index > 0 ? 1 : 0);
+    if (characters > MAX_CANONICAL_EVIDENCE_CHARS) return [];
+    priorLocation = location;
+    priorLocator = value.sourceLocator;
+    priorRangeEnd = Number(range.end);
+    lastPage = location.page ?? lastPage;
     result.push({ quote: value.quote, location });
   }
   return result;
@@ -58,6 +78,13 @@ function isSafeInteger(value: unknown): value is number {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function sameBoundingBox(left: unknown, right: unknown): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  if (!isRecord(left) || !isRecord(right)) return false;
+  return left.x === right.x && left.y === right.y
+    && left.width === right.width && left.height === right.height;
 }
 
 function isValidEvidenceIdentity(value: unknown): value is JsonRecord {

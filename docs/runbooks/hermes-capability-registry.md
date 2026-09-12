@@ -2,17 +2,17 @@
 
 ## 当前状态（2026-09-12）
 - 媒体增强已部署0df87c9b：scientific-art-direction v1 / scientific-video-direction v1已接入现有分镜与图片brief；跨图风格/标签连续、来源约束叙事及旁白，不增加生成轮次。视频locale/style沿原storyboard文件传递，不新增哈希或存储；独立runner已先于新Worker部署成功，旧请求兼容。中文视频入口限制保持；尚无新图片/视频实产证据。
-- ECS应用c1e694e44eece4c3368ffaf45055aaab3f447f78 / rollbackec14fd91c95b34323f94988529a6a88baff81207；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- ECS应用0fc5b7d91de5b57b6147d0bf8b8a84865a805c1a / rollbackc1e694e44eece4c3368ffaf45055aaab3f447f78；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 用户已明确授权按写作指令，将当前研究私稿/必要摘录发送MiniMax。普通问答不自动触发写作；生产不依赖Chat科学定稿。
 - 真实a1c0da49的语义bridge第一次成功42191tokens/124574ms，final主接口空正文、备用HTTP401，六字段未产出。旧空响应final用量未知，不是0；科学结果未采用。
 - 科学写作v3/来源origin/完整100563字符输入与旧稿引用恢复已实产；M3生成修订后仍有错引/阈值夸大，最终40e23948由真实UI做4处来源约束校正，41引用/57式，保存/重载/下载成功，独立内容复核通过；保持user_edited，不代表自动初稿已可靠。
-- c1显式compose-only已实证：b6bd8a50复用4099 SourceMap+stage，0OCR/map/bridge，两call final含一次结构retry成功；科学仍有虚脉冲泛化/THz互证错误。候选v4解除上游字段分类误约束、补回32段/8000字符证据预算并修正审核页旧正文遮蔽；待部署后实际核读，未采用。
+- 0fc后d680显式仅续final已实证0OCR/map/bridge，一call11564out/81061ms；四处科学错误未采用。UI6栏真实新结果展示已恢复，但引用因shared64/24000与API/web旧32/8000不一致而隐藏；候选统一shared/ordered ranges与scientific-summary v5待实产核读。
 - 无新增服务/供应商/OCR/浏览器。禁止测试/预检/CI/本机构建；必要服务器build/start与真实产品操作按授权推进。
 
 | 顺序 | 能力 | 当前状态与剩余 |
 |---|---|---|
 | 1 | 科学文档与公式 | Docling1.30/CodeFormulaV2/TeX来源/KaTeX已生产；26页32式中28可排版、4损坏标记。两个代表式对原页，非全篇物理验收。 |
-| 2 | 全文理解与凝练 | paper-analysis v8；c1显式stage复用已实证，v3 final仍有科学错误；v4/证据预算/审核UI修复候选待部署核读，原确认稿保留。 |
+| 2 | 全文理解与凝练 | paper-analysis v8；stage复用实证，d680/v4科学仍未通过；v5与证据consumer一致性修复候选待部署核读，原确认稿保留。 |
 | 3 | 科学写作与引用 | 68a0e6b2已部署：明确写作才加载SourceMap，私有note/review/manuscript，同用户/RO校验，程序绑定引用；直接保存不调用模型，修订一次provider cycle。 |
 | 4 | 精美笔记 | 68a0e6b2已部署：运行时research-note-formatting，Hermes草稿卡、宽阅读/编辑弹层、折叠来源、安全Markdown/KaTeX、真实保存和Markdown下载。多格式文档导出按具体需求补齐。 |
 | 5 | 多格式附件 | XLSX/PPTX/HTML已生产，派生副本清洗、原件保留；真实多样样本兼容未观察。复用已有解析器，未另装MarkItDown全套。 |

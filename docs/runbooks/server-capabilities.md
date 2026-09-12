@@ -1,12 +1,12 @@
 # 服务器能力与复用清单
 
-当前应用c1e694e44eece4c3368ffaf45055aaab3f447f78 / rollbackec14fd91c95b34323f94988529a6a88baff81207；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成；无测试/CI/本机运行。
+当前应用0fc5b7d91de5b57b6147d0bf8b8a84865a805c1a / rollbackc1e694e44eece4c3368ffaf45055aaab3f447f78；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成；无测试/CI/本机运行。
 
 - 当前真实a1c0da49原P语义整理第一次成功：42191tokens/124574ms。final主接口空正文、备用HTTP401，未得到新六字段，原确认稿/公开版保留。旧Adapter丢失失败usage/stop，final用量未知，不能记0。
 - paper-analysis v8/scientific-summary v2、M3显式adaptive、Docling CPU1.30/CodeFormulaV2、安全KaTeX、XLSX/PPTX/HTML已部署。候选编号/模型返回成功不代表科学正确。
 - 私有笔记40e23948经M3生成修订与独立原文核对、4处人工局部校正后已真实保存/重载/下载；2696字符/41引用，57式排版0错误，保留user_edited。完整原文100563字符/306段无遗漏；自动首稿科学准确性不能称已稳定。
 - 已部署空响应诊断记录安全usage/finish/block数量，缺失usage为null；明确length时不原预算fallback。不能反推旧空响应原因。
-- c1显式compose-only已实证：b6bd8a50复用4099 SourceMap+stage，0OCR/map/bridge，两call final含一次结构retry成功；科学仍有虚脉冲泛化/THz互证错误。候选v4解除上游字段分类误约束、补回32段/8000字符证据预算并修正审核页旧正文遮蔽；待部署后实际核读，未采用。
+- 0fc后d680显式仅续final已实证0OCR/map/bridge，一call11564out/81061ms；四处科学错误未采用。UI6栏真实新结果展示已恢复，但引用因shared64/24000与API/web旧32/8000不一致而隐藏；候选统一shared/ordered ranges与scientific-summary v5待实产核读。
 - 没有新增服务、供应商、浏览器或OCR；艺术/叙事runtime与video locale/style传递已随0df87c9b部署。现有独立video-runner active，TTS/renderer镜像和模型可复用，升级走infra/codex-image-runner/install.sh --confirm-video；未生成新视频。
 - 当前任务/状态以[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)和[Hermes台账](hermes-capability-registry.md)为准。下文历史部署只用于能力复用，不能覆盖当前事实。
 - 2026-09-12媒体部署：独立video runner bundle已更新0df87c9bee98c2280396551ed522e66230eaf381，install exit0并启动；TTS镜像a2158409、renderer镜像ff6042f6、qwen3-tts-customvoice-0c0e305原样复用，无新增生成任务。旧service备份/opt/openscience-video/service-before-0df87c9bee98c2280396551ed522e66230eaf381，先回退应用至68a0再按需恢复service，不让新Worker对接旧runner。
