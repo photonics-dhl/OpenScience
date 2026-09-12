@@ -223,19 +223,19 @@ async function handleScientificWriting(
   // Share repeated parser metadata without changing excerpt order, IDs, or text.
   // Exact ranges and locators stay in packet for citation materialization.
   const sourceExcerpts: Array<{
-    origin: typeof packet.excerpts[number]['origin'];
-    excerpts: Array<{ id: string; text: string; range?: typeof packet.excerpts[number]['range'] }>;
+    origin: Pick<typeof packet.excerpts[number]['origin'], 'kind' | 'parser'>;
+    excerpts: Array<{ id: string; text: string; confidence?: number; range?: typeof packet.excerpts[number]['range'] }>;
   }> = [];
   for (const excerpt of packet.excerpts) {
     let group = sourceExcerpts.at(-1);
-    if (!group || group.origin.kind !== excerpt.origin.kind || group.origin.parser !== excerpt.origin.parser
-      || group.origin.confidence !== excerpt.origin.confidence) {
-      group = { origin: excerpt.origin, excerpts: [] };
+    if (!group || group.origin.kind !== excerpt.origin.kind || group.origin.parser !== excerpt.origin.parser) {
+      group = { origin: { kind: excerpt.origin.kind, parser: excerpt.origin.parser }, excerpts: [] };
       sourceExcerpts.push(group);
     }
     group.excerpts.push({
       id: excerpt.id,
       text: excerpt.text,
+      ...(excerpt.origin.confidence !== undefined ? { confidence: excerpt.origin.confidence } : {}),
       ...(excerpt.range.start !== 0 || excerpt.range.end !== excerpt.range.total ? { range: excerpt.range } : {}),
     });
   }
@@ -247,7 +247,7 @@ async function handleScientificWriting(
     '{"title":"1-240 characters","kind":"' + kind + '","body":"nonempty Markdown, at most 60000 characters, with inline [S1] markers","unresolvedSourceIssues":[]}',
     'All four root keys are required; no other keys are allowed. kind must be exactly ' + kind + '.',
     'Cite 1-64 distinct IDs supplied in sourceExcerpts directly in body as [S1] or [S1][S2]. Never invent an ID or output a separate citation list/usedSourceIds field: the application derives exact citations from body.',
-    'sourceExcerpts is an ordered array of groups. Each group has shared origin metadata and an excerpts array of individual id/text records. An optional range identifies a fragment of a larger source block; without range the record contains its whole parsed block, which may be only a word. Grouping shares metadata only: it does not imply that records are adjacent passages or jointly support a claim. Cite each supporting record by its own ID; never invent group IDs or cite nearby words as support for a whole argument.',
+    'sourceExcerpts is an ordered array of groups. Each group has shared origin kind/parser metadata and an excerpts array of individual id/text records. An optional confidence belongs only to that individual excerpt, never to its group or another excerpt; it is a parser score, not scientific verification. An optional range identifies a fragment of a larger source block; without range the record contains its whole parsed block, which may be only a word. Grouping shares metadata only: it does not imply that records are adjacent passages or jointly support a claim. Cite each supporting record by its own ID; never invent group IDs or cite nearby words as support for a whole argument.',
     'unresolvedSourceIssues must be an array of at most 12 objects with exactly code and sourceIds. code is one of source_packet_incomplete, source_support_insufficient, source_formula_unreadable, user_research_missing. sourceIds contains at most 16 supplied IDs and may be empty only when no excerpt can identify the gap.',
     'If no unresolved source issue affects this draft, return unresolvedSourceIssues:[]. For an identified unreadable formula use {"code":"source_formula_unreadable","sourceIds":["S1"]}, replacing S1 with its actual supplied source ID. Do not add description, message or severity fields, or place prose in code/sourceIds. Explain any substantive caveat naturally in body.',
     'Do not emit HTML. Never invent authors, DOI, page numbers, bibliography records, data, experiments, or results.',
