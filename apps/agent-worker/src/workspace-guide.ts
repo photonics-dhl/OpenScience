@@ -90,7 +90,10 @@ function writingIntent(goal: string, hasDraft: boolean): WritingIntent | undefin
   const explicitPaperWrite = /(?:写|撰写|起草|生成)(?:一篇|这篇|当前)?论文/iu.test(normalized);
   const manuscript = manuscriptProduct || explicitPaperWrite || (hasDraft && /(?:论文|paper)/iu.test(normalized));
   const review = /(?:文献综述|综述|literature\s+review|review\s+article)/iu.test(normalized);
-  const note = /(?:研究笔记|科研笔记|research\s+notes?|(?:写|撰写|起草|生成|整理)(?:一份|一篇|这篇|当前)?笔记)/iu.test(normalized);
+  const describedNoteRequest = normalized.split(/[。.!！?？\n]/u).some((sentence) =>
+    /^(?:(?:请)?(?:基于|根据|结合|围绕|针对|就)[^，,；;]{1,80}[，,]\s*)?(?:请(?:你|帮我)?|帮我|麻烦(?:你)?|给我)?\s*(?:写|撰写|起草|生成|整理)(?:一份|一篇|这篇|当前)?[^，,；;]{0,48}笔记\s*$/iu.test(sentence.trim()),
+  );
+  const note = describedNoteRequest || /(?:研究笔记|科研笔记|research\s+notes?|(?:写|撰写|起草|生成|整理)(?:一份|一篇|这篇|当前)?笔记)/iu.test(normalized);
   const create = /(?:写|整理|起草|生成|撰写|形成|create|write|draft|prepare|compose)/iu.test(normalized);
   const negatedRevise = /(?:不要|别|无需|不用|不需要|请勿)\s*(?:修改|改写|续写|扩写|精简|润色|翻译|调整|补充|重写|缩短|加长|审阅|校对)|(?:do\s+not|don't|no\s+need\s+to)\s+(?:revise|edit|rewrite|continue|expand|condense|polish|translate|adjust|update|shorten|proofread)/iu.test(normalized);
   const revise = /(?:修改|改写|续写|扩写|精简|润色|翻译|调整|补充|重写|缩短|加长|revise|edit|rewrite|continue|expand|condense|polish|translate|adjust|update|shorten)/iu.test(normalized);
@@ -484,7 +487,7 @@ export async function workspaceGuideHandler(
     { role: 'system', content: system },
     { role: 'user', content: user },
   ], {
-    temperature: 0.2,
+    ...(editorDraft ? SCIENTIFIC_SYNTHESIS_OPTIONS : { temperature: 0.2 }),
     validationFeedback: () => 'The previous JSON did not match the output contract. For scene.image instruction MUST be exactly "" to execute an approved image plan unchanged. For image changes use storyboard.revise with a complete nonempty instruction; for a new image plan use storyboard.create. Do not mix image execution and plan instructions. Video.create retains its existing empty-approved/nonempty-plan instruction flow. Return summary as a nonempty string (max 1200 characters), nextSteps as an array with at most one {label,intent,targetId} entry, and needsMoreInformation as a boolean. Omit unused optional fields; no nulls, patches, wrappers or extra keys. '
       + (editorDraft ? 'For editing use nextSteps:[], needsMoreInformation:false and draftChanges:{problem:"full text"} with only requested English field keys (problem,insight,method,results,limitations,reproducibility); string values only, max 4000 characters each, max 18000 in total. Omit presentationDraft unless a valid presentationContext exists.'
         : 'The only optional root key is presentationDraft; include it only for an applicable presentationContext, with action, instruction, researchObjectId, versionId and optional style. Never emit draftChanges or edits. Navigation intent must be open-task, open-ro, start-import, prepare-publication or review-media and use only authorized IDs.'),
