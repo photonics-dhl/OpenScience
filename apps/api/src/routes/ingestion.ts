@@ -92,7 +92,11 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { taskId } = z.object({ taskId: z.string().uuid() }).parse(req.params);
-    const body = z.object({ processingConsent: z.literal(true), sourceAgentTaskId: z.string().uuid() }).strict().parse(req.body);
+    const body = z.object({
+      processingConsent: z.literal(true),
+      sourceAgentTaskId: z.string().uuid(),
+      compositionSourceAgentTaskId: z.string().uuid().optional(),
+    }).strict().parse(req.body);
     return reply.status(202).send({ task: await refreshIngestionAnalysis(deps, { userId: user.userId, taskId, ...body }, auditCtx(req)) });
   });
 

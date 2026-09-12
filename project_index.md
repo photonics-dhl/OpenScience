@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
-> **CURRENT 2026-09-12:** application 236dfdb8 / rollbackf2a53383；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。真实笔记已核读编辑保存，自动六字段仍阻塞，唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
-> 最新4099a967已实际复用0a9555bc的stage，仅一call产出六字段；独立原文复核否决4项实质错误，未采用。当前候选final仅用原始P重新组织，不输入上游候选文字；原22-v10图文公开保留。
+> **CURRENT 2026-09-12:** application ec14fd91 / rollback236dfdb8；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。真实笔记已核读编辑保存，自动六字段仍阻塞，唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> 最新d5cad55d实际重解析13OCR+4map后结构失败；并未仅续final。旧4099/0a955成功stage仍保留，v3已部署未实产；正在补显式compose-only入口，见CURRENT。原22-v10图文公开保留。
 > 真实私有笔记40e23948经独立原文复核和UI局部校正后保存/重载/下载完成，保持user_edited。用户已明确继续处理当前研究私稿与语义续跑，旧“等待批准”已失效。
 > 公式/多格式资料、单一创建对话与附件、Hermes任务接续已部署；艺术图片/视频叙事与元数据传递本批已部署，无新媒体实产，不恢复旧冗余表单。
 > 无测试/预检/CI/本机运行；必要服务器build/start按授权继续。维护索引，历史版本不覆盖CURRENT；集成保留PRD v1.1已有能力。
@@ -10,6 +10,7 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
+| `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` / `apps/agent-worker/src/{index,extractor}.ts` / `apps/web/lib/api.ts` | refresh可选compositionSourceAgentTaskId，current任务CAS与历史成功SourceMap/semanticStage分开，严格仅续final | 候选High复核通过；默认refresh/reparse保留，错误stage直接阻断不触发OCR/map/bridge；待current d5 + base4099实产 |
 | `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | 已部署；真实M3修订后经局部来源核读校正，40e23948编辑稿41引用；自动首稿科学质量仍有缺口 |
 | `apps/web/components/hermes/HermesWritingDraft.tsx` / `HermesWritingDraft.module.css` / `HermesAssistantDrawer.tsx` / `apps/web/lib/api.ts` | 常驻对话中的独立稿件阅读、编辑、Markdown下载与折叠来源 | 实际保存/重载/来源/下载完成，57式渲染0错误；user_edited身份保留，首次加载偶发停留见CURRENT |
 | `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 已部署7c6b7975；真实67观察/94段，内部候选经Chat6Pro复核收尾，不自动放行科学结论 |

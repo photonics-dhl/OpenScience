@@ -2,11 +2,11 @@
 
 ## 当前状态（2026-09-12）
 - 媒体增强已部署0df87c9b：scientific-art-direction v1 / scientific-video-direction v1已接入现有分镜与图片brief；跨图风格/标签连续、来源约束叙事及旁白，不增加生成轮次。视频locale/style沿原storyboard文件传递，不新增哈希或存储；独立runner已先于新Worker部署成功，旧请求兼容。中文视频入口限制保持；尚无新图片/视频实产证据。
-- ECS应用236dfdb88c101c0a4e476e2ea597fe7026d6e8c5 / rollbackf2a533836f8ab949d6b9b07731b8cc867e13d490；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- ECS应用ec14fd91c95b34323f94988529a6a88baff81207 / rollback236dfdb88c101c0a4e476e2ea597fe7026d6e8c5；网页生图provider d1630135 / rollback92cc416e，video runner0df87c9b。唯一接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 用户已明确授权按写作指令，将当前研究私稿/必要摘录发送MiniMax。普通问答不自动触发写作；生产不依赖Chat科学定稿。
 - 真实a1c0da49的语义bridge第一次成功42191tokens/124574ms，final主接口空正文、备用HTTP401，六字段未产出。旧空响应final用量未知，不是0；科学结果未采用。
 - 科学写作v3/来源origin/完整100563字符输入与旧稿引用恢复已实产；M3生成修订后仍有错引/阈值夸大，最终40e23948由真实UI做4处来源约束校正，41引用/57式，保存/重载/下载成功，独立内容复核通过；保持user_edited，不代表自动初稿已可靠。
-- 4099a967已真实复用0a9555bc成功stage，一次final10724输出/104012ms产出六字段，但独立科学复核否决4项实质错误，未采用。当前source-only final候选High已审：字段P并集+原文，移除候选措辞/分组/chosenCase；v3同算例/条件/阈值位置/复现规则。保留final65536/adaptive/300s，无新增调用。
+- 4099a967已真实复用0a9555bc成功stage，一次final10724输出/104012ms产出六字段，但独立科学复核否决4项实质错误，未采用。ec14fd91已部署source-only final/v3，保留65536/adaptive/300s；最新d5cad55d意外全量重分析13OCR+4map后失败，未到v3。显式current/base分离的compose-only入口正在实现，旧4099 stage保留。
 - 无新增服务/供应商/OCR/浏览器。禁止测试/预检/CI/本机构建；必要服务器build/start与真实产品操作按授权推进。
 
 | 顺序 | 能力 | 当前状态与剩余 |

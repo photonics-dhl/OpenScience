@@ -1,12 +1,12 @@
 # 服务器能力与复用清单
 
-当前应用236dfdb88c101c0a4e476e2ea597fe7026d6e8c5 / rollbackf2a533836f8ab949d6b9b07731b8cc867e13d490；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成；无测试/CI/本机运行。
+当前应用ec14fd91c95b34323f94988529a6a88baff81207 / rollback236dfdb88c101c0a4e476e2ea597fe7026d6e8c5；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成；无测试/CI/本机运行。
 
 - 当前真实a1c0da49原P语义整理第一次成功：42191tokens/124574ms。final主接口空正文、备用HTTP401，未得到新六字段，原确认稿/公开版保留。旧Adapter丢失失败usage/stop，final用量未知，不能记0。
 - paper-analysis v8/scientific-summary v2、M3显式adaptive、Docling CPU1.30/CodeFormulaV2、安全KaTeX、XLSX/PPTX/HTML已部署。候选编号/模型返回成功不代表科学正确。
 - 私有笔记40e23948经M3生成修订与独立原文核对、4处人工局部校正后已真实保存/重载/下载；2696字符/41引用，57式排版0错误，保留user_edited。完整原文100563字符/306段无遗漏；自动首稿科学准确性不能称已稳定。
 - 已部署空响应诊断记录安全usage/finish/block数量，缺失usage为null；明确length时不原预算fallback。不能反推旧空响应原因。
-- 4099a967已实际复用0a9555bc成功stage，只一call final（10724输出/104012ms）；仅final65536/adaptive/300s已部署。六字段结构通过但科学复核否决4项实质错误，未采用。当前已High审候选：final只传字段P范围与原文，移除上游候选文字/公式/分组/chosenCase，skill v3保留条件/同算例/阈值位置，不新增模型轮次。
+- 4099a967已实际复用0a9555bc成功stage，只一call final（10724输出/104012ms）；仅final65536/adaptive/300s已部署。六字段结构通过但科学复核否决4项实质错误，未采用。ec14fd91已部署final仅原文与字段P范围/v3通用科学约束。但最新d5cad55d被refresh默认完整重分析带入13OCR+4map后失败，v3未运行；显式compose-only恢复当前实现中，旧4099 stage仍保留。
 - 没有新增服务、供应商、浏览器或OCR；艺术/叙事runtime与video locale/style传递已随0df87c9b部署。现有独立video-runner active，TTS/renderer镜像和模型可复用，升级走infra/codex-image-runner/install.sh --confirm-video；未生成新视频。
 - 当前任务/状态以[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)和[Hermes台账](hermes-capability-registry.md)为准。下文历史部署只用于能力复用，不能覆盖当前事实。
 - 2026-09-12媒体部署：独立video runner bundle已更新0df87c9bee98c2280396551ed522e66230eaf381，install exit0并启动；TTS镜像a2158409、renderer镜像ff6042f6、qwen3-tts-customvoice-0c0e305原样复用，无新增生成任务。旧service备份/opt/openscience-video/service-before-0df87c9bee98c2280396551ed522e66230eaf381，先回退应用至68a0再按需恢复service，不让新Worker对接旧runner。

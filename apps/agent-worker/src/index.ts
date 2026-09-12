@@ -299,8 +299,52 @@ export function createHandlers(
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
       let reusableSourceMap: DocumentSourceMap | undefined;
       let reusableExtractionResult: Record<string, unknown> | undefined;
+      let requireReusableSemanticStage = false;
       let persistedScientificReviewCandidateHash: string | undefined;
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
+      const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):scientific-summary-v3$/.exec(ownerTask.idempotencyKey ?? '');
+      if (composition) {
+        const ingestion = await deps.prisma.ingestionTask.findUnique({
+          where: { id: composition[1]! }, include: { batch: true },
+        });
+        const current = await deps.prisma.agentTask.findUnique({
+          where: { id: composition[2]! }, include: { session: true },
+        });
+        const source = await deps.prisma.agentTask.findUnique({
+          where: { id: composition[3]! }, include: { session: true },
+        });
+        const ownerPayload = ownerTask.payload as Record<string, unknown> | null;
+        const currentPayload = current?.payload as Record<string, unknown> | null;
+        const sourcePayload = source?.payload as Record<string, unknown> | null;
+        const sourceResult = source?.result as Record<string, unknown> | null;
+        const sourceReview = sourceResult?.scientificReview;
+        if (!serverDerivedEligibility || !externalProcessingEligible
+          || ingestion?.agentTaskId !== ownerTask.id || ingestion.artifactId !== artifact.id
+          || ingestion.batch.userId !== ownerTask.session.userId || ingestion.batch.researchObjectId !== ownerResearchObject.id
+          || !ownerPayload || Object.keys(ownerPayload).sort().join(',') !== 'artifactId,researchObjectId'
+          || ownerPayload.artifactId !== artifact.id || ownerPayload.researchObjectId !== ownerResearchObject.id
+          || current?.kind !== 'sdf.extract' || current.status !== 'succeeded' || current.session.status !== 'active'
+          || current.session.userId !== ownerTask.session.userId || current.session.researchObjectId !== ownerResearchObject.id
+          || !currentPayload || Object.keys(currentPayload).sort().join(',') !== 'artifactId,researchObjectId'
+          || currentPayload.artifactId !== artifact.id || currentPayload.researchObjectId !== ownerResearchObject.id
+          || source?.kind !== 'sdf.extract' || source.status !== 'succeeded' || source.session.status !== 'active'
+          || source.session.userId !== ownerTask.session.userId || source.session.researchObjectId !== ownerResearchObject.id
+          || !sourcePayload || Object.keys(sourcePayload).sort().join(',') !== 'artifactId,researchObjectId'
+          || sourcePayload.artifactId !== artifact.id || sourcePayload.researchObjectId !== ownerResearchObject.id
+          || sourceResult?.canonicalExtractionContract !== 'grounded-passages-v2'
+          || !sourceReview || typeof sourceReview !== 'object' || Array.isArray(sourceReview)
+          || !(sourceReview as Record<string, unknown>).semanticStage
+          || typeof (sourceReview as Record<string, unknown>).semanticStage !== 'object'
+          || Array.isArray((sourceReview as Record<string, unknown>).semanticStage)) {
+          throw new Error('[blocked] Semantic composition source scope is invalid');
+        }
+        const reference = parseDocumentSourceMapReference(sourceResult.sourceMapRef);
+        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Semantic composition source identity changed');
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+        reusableExtractionResult = sourceResult;
+        requireReusableSemanticStage = true;
+      }
       const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
       if (refresh) {
         const ingestion = await deps.prisma.ingestionTask.findUnique({ where: { id: refresh[1]! } });
@@ -412,6 +456,7 @@ export function createHandlers(
         ...await extractHandler(gateway, { payload: { manuscriptText } }, {
           sourceMap: parsed.sourceMap,
           previousResult: reusableExtractionResult,
+          requireReusableSemanticStage,
           scientificReview: {
             requestId: ownerTask.id,
             authorizationContext: trustedAuthorizationContext,

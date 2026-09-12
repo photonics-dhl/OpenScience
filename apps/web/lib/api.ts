@@ -1641,10 +1641,18 @@ export async function retryIngestionTask(taskId: string): Promise<IngestionTaskS
   return result.task;
 }
 
-export async function refreshIngestionAnalysis(taskId: string, sourceAgentTaskId: string): Promise<IngestionTaskSummary> {
+export async function refreshIngestionAnalysis(
+  taskId: string,
+  sourceAgentTaskId: string,
+  compositionSourceAgentTaskId?: string,
+): Promise<IngestionTaskSummary> {
   const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/refresh`, {
     method: 'POST',
-    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId }),
+    body: JSON.stringify({
+      processingConsent: true,
+      sourceAgentTaskId,
+      ...(compositionSourceAgentTaskId ? { compositionSourceAgentTaskId } : {}),
+    }),
   });
   return result.task;
 }

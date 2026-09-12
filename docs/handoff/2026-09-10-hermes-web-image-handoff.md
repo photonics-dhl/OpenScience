@@ -7,7 +7,7 @@
 
 ## 版本与工作区
 - 交付树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；HEAD以Git为准，未合并main。根目录main很旧且有其他改动，不作为生产基线。
-- 当前应用236dfdb88c101c0a4e476e2ea597fe7026d6e8c5 / rollbackf2a533836f8ab949d6b9b07731b8cc867e13d490；必要build/start exit0，日志xgs-final-reasoning-deploy-20260912.log。
+- 当前应用ec14fd91c95b34323f94988529a6a88baff81207 / rollback236dfdb88c101c0a4e476e2ea597fe7026d6e8c5；必要build/start exit0，日志xgs-source-only-deploy-20260912.log。
 - 干净发布树 E:/Miscellaneous/XGS/.worktrees/deploy-m3-thinking。提交/push使用[skip ci]，不触发测试。
 - 网页生图provider d1630135d569d28364d295380bb4e0333c3ee264 / rollback92cc416e；浏览器/会话/出网路线未改。
 - video runner仍0df87c9bee98c2280396551ed522e66230eaf381；原TTS a2158409、renderer ff6042f6、模型qwen3-tts-customvoice-0c0e305复用，中文入口保持。旧service在/opt/openscience-video/service-before-0df87c9bee98c2280396551ed522e66230eaf381。
@@ -23,7 +23,8 @@
 - 证据在服务器浏览器/jobs/hermes-writing-quality-corrected-{result,ui}-20260912.json、同前缀reading/sources PNG及Markdown；本机副本C:/Users/Mac/AppData/Local/Temp/xgs-writing-quality-corrected-result-20260912.json及reading PNG。
 
 ## 六字段仍未通过
-- 未确认ingestion840e24f9-cf9b-471f-a38c-7331705b1003，当前agent4099a967-a918-4b36-92b0-06edede4d552。实际复用0a9555bc的成功bridge（stage报告in32/out12858/93822ms），仅一次final in16282/out10724/104012ms/stop；六字段已产出，未采用。
+- 未确认ingestion840e24f9-cf9b-471f-a38c-7331705b1003，当前agentd5cad55d-fc1a-4987-8f1d-2484f0c998f0。它实际触发完整重分析：13次OCR+4次text map，分段结构校验失败，六字段空、无stage；已结束，未采用。不是仅续final，v3最终成稿尚未实际运行。
+- 上一4099a967-a918-4b36-92b0-06edede4d552实际复用0a9555bc成功bridge（stage报告in32/out12858/93822ms），仅一次final in16282/out10724/104012ms/stop；该stage与原SourceMap仍可恢复。证据xgs-source-only-call-ledger-20260912.log及各task结果JSON。
 - 4099a967结构通过但独立原文复核否决：THz光子数漏1.4mJ/5%邻接条件；Fig3边缘阈值混入THz；5pC→270/1nC→2.3e6伪单变量关系；FigS7公式25/27归属错误、补专名/过度复现声称。method抄式且漏同步假设。不得称科学通过。
 - a1c0da49此前bridge曾成功42191tokens/124574ms，但final主接口空正文、备用HTTP401；旧结果只存元数据，成功bridge正文不可恢复。旧final真实usage未知，不能记0或由耗时推断。
 - bff63acb的成功semanticStage保留与原source身份/schema复验，现已在4099a967实际确认复用；不要重跑bridge。0a9555bc旧final曾in16287/out32768/108584ms/length/text0/thinking1，236dfdb8仅final提高至65536，仍adaptive/300s，不扩共享预算。
@@ -32,7 +33,7 @@
 ## 已部署/剩余能力
 - 写作v3、来源origin（含llm_ocr_candidate）、程序派生引用、旧稿编号回映、论文refresh后旧稿来源恢复已部署。GET单task漏researchObjectId导致稿件隐藏已修，并在真实页面观察到稿件。
 - Docling CPU1.30/CodeFormulaV2、TeX来源、安全KaTeX已生产；26页32式中28可排版、4损坏。两个代表式对原页，不声称全文公式物理已验证。
-- paper-analysis v8/scientific-summary v2已部署；当前v3候选final只接收各字段P并集和原始P，移除上游候选文字/公式/主张分组/自由文本chosenCase；保留同字段guard和全部召回原文，重新选条件完整算例，无论文专用硬编码。High设计复核认可。
+- ec14fd91已部署source-only scientific-summary v3：final只接收各字段P并集和原始P，移除候选文字/公式/分组/chosenCase；同字段guard和全部召回原文保留，无论文硬编码，High复核通过。但d5被重解析流程挡住，不能称v3科学实产已通过。
 - XLSX/PPTX/HTML上传已接入，真实多样样本兼容未观察；统一创建/首条Hermes、常驻输入和阅读布局已上线。
 - 媒体艺术/构图/叙事旁白与locale/style已部署0df87c9b；无新媒体实产，视频/批量冷启动仍暂缓。代码/部署不等于质量确认。
 - ScientificText下标末端padding2px已随236dfdb8部署；实际稿件57式中原5处小滚动条均消失，dialog900/viewport1151。KaTeX负margin根因已定位，长式滚动边界保留。
@@ -41,4 +42,6 @@
 - RO c896802c-35dd-4b59-8db1-5f374f83a6d8；正式v10 f4e2dc71-1fe8-406f-8c19-e1849503d698，草稿修订11；公开OSR-2026-000022/v/10。原确认稿/公开版未写入。
 - PDF 7bb96cc1-bb6f-4d3b-b0bf-352f41971faf；已批图b19a65bd-6497-4b61-bb81-0154b264d58c、plan3a6ed136-002a-4301-8505-ca14e3dbbc53。
 - 原确认ingestion2fdb78de-b52b-40f6-832f-faa3fdd9f4e2 / agent1e324308-fd26-4cc1-8612-8a1c269909a9保护。旧19/20/21仅按既有范围可恢复归档，原文件/公开ID保留。
-- 下一步：发布source-only final候选，复用当前成功stage再生成一份实际六字段并独立核读；保持笔记真实编辑稿身份，不以已有保存/部署结束整个自动质量任务。
+- 新根因：ingestion-service中review_received默认归user_requested_reanalysis，index.ts因此故意重跑parser；先前“刷新总是仅续final”判断错误。默认重解析能力保留，不能改旧状态或把旧stage塞进新SourceMap。
+- 当前已完成候选：refresh可选compositionSourceAgentTaskId，sourceAgentTaskId仍为当前d5的CAS；显式base4099提供不可变map+stage，独立幂等键、原权限/同artifact/事务与replay复验。Worker requireReusableSemanticStage，无有效stage直接阻断，不回退parser/map/bridge。High最终静态审阅无阻断，不新增取消接口或历史UI选择器。
+- 下一步：审阅/发布明确的compose-only入口，以current d5 + base4099请求，核实际v3六字段与标准proposal UI；保持笔记user_edited，不以部署结束整个质量任务。

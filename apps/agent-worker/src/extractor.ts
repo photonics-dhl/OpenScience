@@ -2495,7 +2495,12 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
 export async function extractHandler(
   gateway: AiGateway,
   task: { payload: Record<string, unknown> },
-  trustedContext: { sourceMap?: DocumentSourceMap; previousResult?: unknown; scientificReview?: ScientificReviewContext } = {},
+  trustedContext: {
+    sourceMap?: DocumentSourceMap;
+    previousResult?: unknown;
+    scientificReview?: ScientificReviewContext;
+    requireReusableSemanticStage?: boolean;
+  } = {},
 ): Promise<ExtractionResult> {
   const canonicalSourceMap = trustedContext.sourceMap
     ? parseDocumentSourceMap(trustedContext.sourceMap)
@@ -2516,6 +2521,8 @@ export async function extractHandler(
         : undefined;
       if (semanticStage) {
         phase = semanticStage.kind;
+      } else if (trustedContext.requireReusableSemanticStage) {
+        throw new AiGatewayError('SCHEMA_VALIDATION', 'source_bridge:reusable_semantic_stage_required');
       } else if (trustedContext.previousResult) {
         semanticStage = await buildLegacySemanticBridge(gateway, passages);
       } else {

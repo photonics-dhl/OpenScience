@@ -525,10 +525,32 @@ function unconfirmedAnalysisRefreshPolicy(value: unknown, artifact: { id: string
     && needsSemanticComposition ? 'scientific_review_v4' : policy;
 }
 
+function semanticCompositionSourceReference(value: unknown, artifact: { id: string; blobSha256: string }) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const result = value as Record<string, unknown>;
+  if (result.canonicalExtractionContract !== 'grounded-passages-v2'
+    || !result.scientificReview || typeof result.scientificReview !== 'object' || Array.isArray(result.scientificReview)) return undefined;
+  const review = result.scientificReview as Record<string, unknown>;
+  if (!review.semanticStage || typeof review.semanticStage !== 'object' || Array.isArray(review.semanticStage)) return undefined;
+  try {
+    const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+    return reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
+      && reference.contentHash === artifact.blobSha256 ? reference : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Explicit paid refresh for a narrowly recognized extraction generation. */
 export async function refreshIngestionAnalysis(
   deps: IngestionDeps,
-  input: { userId: string; taskId: string; sourceAgentTaskId: string; processingConsent: boolean },
+  input: {
+    userId: string;
+    taskId: string;
+    sourceAgentTaskId: string;
+    compositionSourceAgentTaskId?: string;
+    processingConsent: boolean;
+  },
   ctx: AuditContext = {},
 ): Promise<IngestionTaskView> {
   if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
@@ -540,6 +562,169 @@ export async function refreshIngestionAnalysis(
   if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
   if (initial.batch.userId !== input.userId || initial.artifact.workspaceId !== workspace.id) {
     throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion analysis source is unavailable');
+  }
+  if (input.compositionSourceAgentTaskId) {
+    const stableKey = `ingestion-analysis-compose:${input.taskId}:${input.sourceAgentTaskId}:${input.compositionSourceAgentTaskId}:scientific-summary-v3`;
+    const replay = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: stableKey }, include: { session: true } });
+    const currentAgent = await deps.prisma.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
+    const compositionSource = await deps.prisma.agentTask.findUnique({
+      where: { id: input.compositionSourceAgentTaskId }, include: { session: true },
+    });
+    const currentPayload = currentAgent?.payload && typeof currentAgent.payload === 'object' && !Array.isArray(currentAgent.payload)
+      ? currentAgent.payload as Record<string, unknown> : null;
+    const compositionPayload = compositionSource?.payload && typeof compositionSource.payload === 'object' && !Array.isArray(compositionSource.payload)
+      ? compositionSource.payload as Record<string, unknown> : null;
+    const currentPolicy = currentAgent ? unconfirmedAnalysisRefreshPolicy(currentAgent.result, initial.artifact) : undefined;
+    const compositionReference = semanticCompositionSourceReference(compositionSource?.result, initial.artifact);
+    if (!currentAgent || currentAgent.kind !== 'sdf.extract' || currentAgent.status !== 'succeeded' || !currentPolicy
+      || !validRefreshSourceExecution(currentPolicy, initial.id, currentAgent)
+      || currentAgent.session.userId !== input.userId || currentAgent.session.researchObjectId !== initial.batch.researchObjectId
+      || currentAgent.session.status !== 'active' || !currentPayload || !exactRecordKeys(currentPayload, ['artifactId', 'researchObjectId'])
+      || currentPayload.artifactId !== initial.artifactId || currentPayload.researchObjectId !== initial.batch.researchObjectId
+      || !compositionSource || compositionSource.kind !== 'sdf.extract' || compositionSource.status !== 'succeeded'
+      || compositionSource.session.userId !== input.userId || compositionSource.session.researchObjectId !== initial.batch.researchObjectId
+      || compositionSource.session.status !== 'active' || !compositionPayload
+      || !exactRecordKeys(compositionPayload, ['artifactId', 'researchObjectId'])
+      || compositionPayload.artifactId !== initial.artifactId || compositionPayload.researchObjectId !== initial.batch.researchObjectId
+      || !compositionReference) {
+      throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only a scoped successful semantic composition source can be resumed');
+    }
+    await loadDocumentSourceMapReference(deps.storage, compositionReference);
+
+    if (replay) {
+      const payload = replay.payload && typeof replay.payload === 'object' && !Array.isArray(replay.payload)
+        ? replay.payload as Record<string, unknown> : null;
+      if (initial.agentTaskId !== replay.id || replay.kind !== 'sdf.extract' || replay.session.userId !== input.userId
+        || replay.session.researchObjectId !== initial.batch.researchObjectId || replay.session.status !== 'active'
+        || !payload || !exactRecordKeys(payload, ['artifactId', 'researchObjectId'])
+        || payload.artifactId !== initial.artifactId || payload.researchObjectId !== initial.batch.researchObjectId) {
+        throw new IngestionError('VALIDATION_ERROR', 'Semantic composition replay scope does not match');
+      }
+      await dispatchAgentTask(deps, replay.id);
+      return taskToView(initial);
+    }
+
+    const allowedRetries = currentPolicy === 'user_requested_reanalysis' ? initial.retryCount
+      : currentPolicy === 'grounded_passages_v1' ? 2 : currentPolicy === 'grounded_passages_v2' ? 1 : 0;
+    if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review'
+      || initial.retryCount < 0 || initial.retryCount > allowedRetries || currentAgent.retryCount !== initial.retryCount
+      || await savedConfirmation(deps, initial.id, initial.batch.researchObjectId)) {
+      throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the current scoped unconfirmed extraction can be composed');
+    }
+    const sourceMapProof = {
+      objectKey: compositionReference.objectKey,
+      serializedSha256: compositionReference.serializedSha256,
+    };
+    let queued: Prisma.IngestionTaskGetPayload<{ include: { artifact: true } }> | null = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        queued = await deps.prisma.$transaction(async (tx) => {
+          const source = await tx.ingestionTask.findUnique({
+            where: { id: input.taskId },
+            include: { artifact: true, batch: { include: { researchObject: true } } },
+          });
+          if (!source) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+          const { workspace, membership } = await requireActiveMembership(tx, source.batch.researchObject.workspaceId, input.userId);
+          if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+          if (source.batch.userId !== input.userId || source.artifact.workspaceId !== workspace.id) {
+            throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion composition source is unavailable');
+          }
+
+          const transactionReplay = await tx.agentTask.findUnique({ where: { idempotencyKey: stableKey }, include: { session: true } });
+          const transactionCurrent = await tx.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
+          const transactionComposition = await tx.agentTask.findUnique({
+            where: { id: input.compositionSourceAgentTaskId! }, include: { session: true },
+          });
+          const transactionCurrentPayload = transactionCurrent?.payload && typeof transactionCurrent.payload === 'object'
+            && !Array.isArray(transactionCurrent.payload) ? transactionCurrent.payload as Record<string, unknown> : null;
+          const transactionCompositionPayload = transactionComposition?.payload && typeof transactionComposition.payload === 'object'
+            && !Array.isArray(transactionComposition.payload) ? transactionComposition.payload as Record<string, unknown> : null;
+          const transactionPolicy = transactionCurrent ? unconfirmedAnalysisRefreshPolicy(transactionCurrent.result, source.artifact) : undefined;
+          const transactionReference = semanticCompositionSourceReference(transactionComposition?.result, source.artifact);
+          if (!transactionCurrent || transactionCurrent.kind !== 'sdf.extract' || transactionCurrent.status !== 'succeeded'
+            || transactionPolicy !== currentPolicy || !validRefreshSourceExecution(currentPolicy, source.id, transactionCurrent)
+            || transactionCurrent.session.userId !== input.userId
+            || transactionCurrent.session.researchObjectId !== source.batch.researchObjectId || transactionCurrent.session.status !== 'active'
+            || !transactionCurrentPayload || !exactRecordKeys(transactionCurrentPayload, ['artifactId', 'researchObjectId'])
+            || transactionCurrentPayload.artifactId !== source.artifactId
+            || transactionCurrentPayload.researchObjectId !== source.batch.researchObjectId
+            || !transactionComposition || transactionComposition.kind !== 'sdf.extract' || transactionComposition.status !== 'succeeded'
+            || transactionComposition.session.userId !== input.userId
+            || transactionComposition.session.researchObjectId !== source.batch.researchObjectId
+            || transactionComposition.session.status !== 'active' || !transactionCompositionPayload
+            || !exactRecordKeys(transactionCompositionPayload, ['artifactId', 'researchObjectId'])
+            || transactionCompositionPayload.artifactId !== source.artifactId
+            || transactionCompositionPayload.researchObjectId !== source.batch.researchObjectId
+            || !transactionReference || transactionReference.objectKey !== sourceMapProof.objectKey
+            || transactionReference.serializedSha256 !== sourceMapProof.serializedSha256) {
+            throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Semantic composition scope changed while refreshing');
+          }
+
+          if (transactionReplay) {
+            const payload = transactionReplay.payload && typeof transactionReplay.payload === 'object' && !Array.isArray(transactionReplay.payload)
+              ? transactionReplay.payload as Record<string, unknown> : null;
+            if (source.agentTaskId !== transactionReplay.id || transactionReplay.kind !== 'sdf.extract'
+              || transactionReplay.session.userId !== input.userId
+              || transactionReplay.session.researchObjectId !== source.batch.researchObjectId
+              || transactionReplay.session.status !== 'active' || !payload
+              || !exactRecordKeys(payload, ['artifactId', 'researchObjectId'])
+              || payload.artifactId !== source.artifactId || payload.researchObjectId !== source.batch.researchObjectId) {
+              throw new IngestionError('VALIDATION_ERROR', 'Semantic composition replay scope does not match');
+            }
+            return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
+          }
+
+          if (source.agentTaskId !== input.sourceAgentTaskId || source.state !== 'needs_review'
+            || source.retryCount !== initial.retryCount || transactionCurrent.retryCount !== source.retryCount
+            || await savedConfirmation({ ...deps, prisma: tx as IngestionDeps['prisma'] }, source.id, source.batch.researchObjectId)) {
+            throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the current scoped unconfirmed extraction can be composed');
+          }
+          const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
+            userId: input.userId,
+            researchObjectId: source.batch.researchObjectId,
+            kind: 'ingestion',
+            title: `Ingestion scientific composition ${source.id}`,
+            idempotencyKey: `${stableKey}:session`,
+          }, ctx);
+          const { task: replacement } = await persistAgentTaskInTransaction(deps, tx, {
+            sessionId: session.id,
+            userId: input.userId,
+            kind: 'sdf.extract',
+            payload: { artifactId: source.artifactId, researchObjectId: source.batch.researchObjectId },
+            idempotencyKey: stableKey,
+          }, ctx);
+          const changed = await tx.ingestionTask.updateMany({
+            where: { id: source.id, agentTaskId: input.sourceAgentTaskId, state: 'needs_review', retryCount: initial.retryCount },
+            data: { agentTaskId: replacement.id, state: 'queued', retryCount: 0, error: null },
+          });
+          if (changed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Ingestion composition source changed while refreshing');
+          await recordAudit(deps, tx, {
+            actorId: input.userId,
+            action: 'ingestion.task.analysis_refresh',
+            workspaceId: workspace.id,
+            targetType: 'ingestion_task',
+            targetId: source.id,
+            metadata: {
+              policy: 'scientific_summary_v3_composition',
+              oldAgentTaskId: input.sourceAgentTaskId,
+              compositionSourceAgentTaskId: input.compositionSourceAgentTaskId,
+              newAgentTaskId: replacement.id,
+              artifactId: source.artifactId,
+              sourceMapSha256: sourceMapProof.serializedSha256,
+              creditPolicy: 'charged_ingestion_analysis_refresh',
+            },
+          }, ctx);
+          return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
+        }, { isolationLevel: 'Serializable' });
+        break;
+      } catch (error) {
+        if ((error as { code?: unknown }).code === 'P2034' && attempt < 2) continue;
+        throw error;
+      }
+    }
+    if (!queued?.agentTaskId) throw new IngestionError('INGESTION_NOT_FOUND', 'Refreshed ingestion task not found');
+    await dispatchAgentTask(deps, queued.agentTaskId);
+    return taskToView(queued);
   }
   const keyPrefix = `ingestion-analysis-refresh:${input.taskId}:${input.sourceAgentTaskId}:`;
   const replay = await deps.prisma.agentTask.findFirst({
