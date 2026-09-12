@@ -13,7 +13,7 @@ export function MaterialQueue({ materials, onRoleChange, onPrimaryChange, onRemo
   onRoleChange: (localId: string, role: MaterialRole) => void;
   onPrimaryChange: (localId: string | null) => void;
   onRemove: (localId: string) => void;
-  onRetry: (material: IntakeMaterial) => void;
+  onRetry?: (material: IntakeMaterial) => void;
 }) {
   const t = useTranslations('ingestion.intake');
   return (
@@ -37,7 +37,7 @@ export function MaterialQueue({ materials, onRoleChange, onPrimaryChange, onRemo
             </div>
             <MaterialRoleSelect labelledBy={titleId} onChange={(role) => onRoleChange(material.localId, role)} value={material.role} />
             <div className="flex items-center lg:justify-end">
-              {material.status === 'failed_retryable' && material.taskId ? (
+              {material.status === 'failed_retryable' && material.taskId && onRetry ? (
                 <button className="border-x-0 border-t-0 border-b border-os-vermilion-ink bg-transparent p-0 pb-1 text-sm font-semibold text-os-vermilion-ink" type="button" onClick={() => onRetry(material)}>{t('retry')}</button>
               ) : material.role === 'manuscript' ? (
                 <label className="flex cursor-pointer items-center gap-2 text-sm text-os-muted-paper">

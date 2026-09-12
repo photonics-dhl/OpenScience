@@ -37,11 +37,14 @@ import { ScientificText } from '@/components/content/ScientificText';
 
 type LiteratureIntent = Extract<RoutedHermesIntent, { kind: 'literature.acquire' }>;
 
-export function selectRestorableGuide(tasks: AgentTaskView[], route: WorkspaceGuidePayload['route'], researchObjectId?: string): AgentTaskView | null {
-  return tasks.find((candidate) => candidate.kind === 'workspace.guide'
+export function selectRestorableGuide(tasks: AgentTaskView[], route: WorkspaceGuidePayload['route'], researchObjectId?: string, preferredTaskId?: string): AgentTaskView | null {
+  const candidates = tasks.filter((candidate) => candidate.kind === 'workspace.guide'
     && (route === 'research-object-edit'
       ? Boolean(researchObjectId) && candidate.researchObjectId === researchObjectId
-      : !candidate.researchObjectId)) ?? null;
+      : !candidate.researchObjectId));
+  return preferredTaskId
+    ? candidates.find((candidate) => candidate.id === preferredTaskId) ?? null
+    : candidates[0] ?? null;
 }
 type DrawerLiteratureIntent = LiteratureIntent & { callerIdempotencyKey: string; callerIntentFingerprint: string };
 
@@ -87,6 +90,13 @@ export interface HermesAssistantDrawerProps {
   onUndoDraftEdit?(): void;
   /** Optional caller-provided text to prefill and route through the same Hermes conversation. */
   initialGoal?: string;
+  /** Exact already-submitted task to restore after a cross-route handoff. */
+  initialTaskId?: string;
+  /** Allow one fresh, caller-authorized handoff task to apply against its matching draft base. */
+  initialTaskAutoApply?: boolean;
+  onInitialTaskConsumed?(): void;
+  /** Wait until the editor has loaded the draft base before applying a restored result. */
+  taskRestoreReady?: boolean;
   docked?: boolean;
 }
 
@@ -133,7 +143,7 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
 }
 
 function HermesAssistantDrawerContent({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, docked = false, onPrepareVersion,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, onPrepareVersion,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
   const [wide, setWide] = useState(false);
@@ -177,6 +187,7 @@ function HermesAssistantDrawerContent({
   const taskKey = useRef<string | null>(null);
   const pendingPayload = useRef<WorkspaceGuidePayload | null>(null);
   const submittingRef = useRef(false);
+  const dismissedInitialTask = useRef('');
   const goalTouched = useRef(false);
   const [goal, setGoal] = useState('');
   const injectedGoal = useRef('');
@@ -213,10 +224,20 @@ function HermesAssistantDrawerContent({
   const result = task?.status === 'succeeded' ? resultFromTask(task) : null;
   const invalidResult = task?.status === 'succeeded' && !result;
   useEffect(() => {
-    if (!task || !result?.draftEdit || !onDraftEdit || restoredTask || appliedTasks.current.has(task.id)) return;
+    if (initialTaskId && task?.id === initialTaskId && !initialTaskAutoApply) setRestoredTask(true);
+  }, [initialTaskAutoApply, initialTaskId, task?.id]);
+  useEffect(() => {
+    if (!task || !result?.draftEdit || !onDraftEdit || restoredTask || dismissedInitialTask.current === task.id
+      || (task.id === initialTaskId && !initialTaskAutoApply) || appliedTasks.current.has(task.id)) return;
     appliedTasks.current.add(task.id);
     setEditOutcome(onDraftEdit(result.draftEdit));
-  }, [task, result, restoredTask, onDraftEdit]);
+    if (task.id === initialTaskId && initialTaskAutoApply) onInitialTaskConsumed?.();
+  }, [initialTaskAutoApply, initialTaskId, onDraftEdit, onInitialTaskConsumed, result, restoredTask, task]);
+  useEffect(() => {
+    if (!initialTaskAutoApply || task?.id !== initialTaskId || !['succeeded', 'failed'].includes(task.status)
+      || result?.draftEdit) return;
+    onInitialTaskConsumed?.();
+  }, [initialTaskAutoApply, initialTaskId, onInitialTaskConsumed, result?.draftEdit, task]);
   const guideDraftScope: HermesDraftScope | null = viewerId ? {
     userId: viewerId,
     researchObjectId: routeResearchObjectId ?? route,
@@ -238,7 +259,7 @@ function HermesAssistantDrawerContent({
     preparedTasks.current.clear(); setTurns([]); setSentGoal(''); followTranscript.current = true;
     setPresentationIntent(null); setPresentationSuggestion(undefined); setLiteratureIntent(null); setTask(null); setGoal(''); setError(''); setSubmitting(false); setRestoredTask(false); setGuideStored(false);
     setPublicationVersion(''); setMediaReviewVersion(''); setLocalMessage(''); setPublicUrl(''); setPreparing(false); offeredAction.current = null; offeredDraft.current = undefined; assertPrepared.current = null;
-    sessionId.current = null; sessionKey.current = null; taskKey.current = null; pendingPayload.current = null; submittingRef.current = false; goalTouched.current = false; setActionBusy(false);
+    sessionId.current = null; sessionKey.current = null; taskKey.current = null; pendingPayload.current = null; submittingRef.current = false; dismissedInitialTask.current = ''; goalTouched.current = false; setActionBusy(false);
   }, [currentOwner]);
   useEffect(() => {
     setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion('');
@@ -321,21 +342,33 @@ function HermesAssistantDrawerContent({
   }, [onTaskStateChange, task]);
 
   useEffect(() => {
-    if (!open || task) return;
+    if (!open || task || !taskRestoreReady) return;
     let cancelled = false;
-    void listAgentTasks()
-      .then(({ tasks }) => {
-        if (cancelled || submittingRef.current || sessionId.current) return;
-        const restored = selectRestorableGuide(tasks, route, routeResearchObjectId);
-        if (restored) {
-          sessionId.current = restored.sessionId;
-          setRestoredTask(true);
-          setTask(restored);
-        }
-      })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [open, task, route, routeResearchObjectId]);
+    let attempts = 0;
+    let retryTimer: ReturnType<typeof window.setTimeout> | undefined;
+    const restore = () => {
+      attempts += 1;
+      const loadTasks = initialTaskId
+        ? getAgentTask('', initialTaskId).then(({ task: exactTask }) => ({ tasks: [exactTask] }))
+        : listAgentTasks();
+      void loadTasks.then(({ tasks }) => {
+          if (cancelled || submittingRef.current || sessionId.current || dismissedInitialTask.current === initialTaskId) return;
+          const restored = selectRestorableGuide(tasks, route, routeResearchObjectId, initialTaskId);
+          if (restored) {
+            sessionId.current = restored.sessionId;
+            setRestoredTask(!(initialTaskAutoApply && restored.id === initialTaskId));
+            setTask(restored);
+          }
+        })
+        .catch((cause) => {
+          if (cancelled || !initialTaskId) return;
+          if (attempts < 3) retryTimer = window.setTimeout(restore, 900);
+          else setError(cause instanceof Error ? cause.message : t('guide.error'));
+        });
+    };
+    restore();
+    return () => { cancelled = true; if (retryTimer) window.clearTimeout(retryTimer); };
+  }, [initialTaskAutoApply, initialTaskId, open, route, routeResearchObjectId, task, taskRestoreReady, t]);
 
   useEffect(() => {
     if (!activeTask || !task || error) return;
@@ -386,6 +419,11 @@ function HermesAssistantDrawerContent({
     }
     if (/^(?:取消(?:制作|发布|审核)?|cancel)$/iu.test(command) && (presentationIntent || publicationVersion || mediaReviewVersion)) {
       setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion(''); offeredAction.current = null; setGoal(''); setLocalMessage(tc('cancelled')); return;
+    }
+    if (initialTaskAutoApply && initialTaskId && task?.id !== initialTaskId && dismissedInitialTask.current !== initialTaskId) {
+      dismissedInitialTask.current = initialTaskId;
+      setRestoredTask(true);
+      onInitialTaskConsumed?.();
     }
     const owner = currentOwner;
     if (task && result) setTurns((previous) => previous.some((turn) => turn.id === task.id) ? previous : [...previous, { id: task.id, user: sentGoal, summary: result.summary }].slice(-12));

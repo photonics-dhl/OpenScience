@@ -15,7 +15,7 @@ export function EvidenceIntake({ literature, materials, onChange, onRetry }: {
   literature?: LiteratureAcquisitionProps;
   materials: IntakeMaterial[];
   onChange: (materials: IntakeMaterial[]) => void;
-  onRetry: (material: IntakeMaterial) => void;
+  onRetry?: (material: IntakeMaterial) => void;
 }) {
   const t = useTranslations('ingestion.intake');
   const input = useRef<HTMLInputElement>(null);

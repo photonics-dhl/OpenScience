@@ -89,7 +89,7 @@ interface VersionRow {
   status: string;
 }
 
-type EditorPageProps = { params: { id: string }; searchParams?: { ingestionTask?: string | string[] } };
+type EditorPageProps = { params: { id: string }; searchParams?: { ingestionTask?: string | string[]; hermesTask?: string | string[] } };
 
 export default function EditorPage(props: EditorPageProps) {
   return <EditorWorkspace key={`${props.params.id}:${props.searchParams?.ingestionTask ?? ''}`} {...props} />;
@@ -104,6 +104,44 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const roId = params.id;
   const router = useRouter();
   const ingestionTaskId = typeof searchParams?.ingestionTask === 'string' ? searchParams.ingestionTask : '';
+  const hermesTaskId = typeof searchParams?.hermesTask === 'string' ? searchParams.hermesTask : '';
+  const [hermesHandoffResolved, setHermesHandoffResolved] = useState(!hermesTaskId);
+  const [hermesHandoffAuthorized, setHermesHandoffAuthorized] = useState(false);
+  const hermesHandoffKey = useRef('');
+  useEffect(() => {
+    if (!hermesTaskId) { setHermesHandoffResolved(true); setHermesHandoffAuthorized(false); return; }
+    let active = true;
+    let expiryTimer: ReturnType<typeof window.setTimeout> | undefined;
+    getCurrentUser().then((viewer) => {
+      if (!active) return;
+      const key = `openscience.hermes-handoff:${viewer.userId}:${roId}:${hermesTaskId}`;
+      hermesHandoffKey.current = key;
+      const raw = window.sessionStorage.getItem(key);
+      let authorized = false;
+      if (raw) {
+        try {
+          const marker = JSON.parse(raw) as Record<string, unknown>;
+          authorized = marker.viewerId === viewer.userId && marker.researchObjectId === roId
+            && marker.taskId === hermesTaskId && typeof marker.expiresAt === 'number' && marker.expiresAt > Date.now();
+        } catch { /* Invalid transient markers are discarded below. */ }
+      }
+      if (!authorized) window.sessionStorage.removeItem(key);
+      else {
+        const marker = JSON.parse(raw!) as { expiresAt: number };
+        expiryTimer = window.setTimeout(() => {
+          window.sessionStorage.removeItem(key);
+          setHermesHandoffAuthorized(false);
+        }, Math.max(0, marker.expiresAt - Date.now()));
+      }
+      setHermesHandoffAuthorized(authorized);
+      setHermesHandoffResolved(true);
+    }).catch(() => { if (active) setHermesHandoffResolved(true); });
+    return () => { active = false; if (expiryTimer) window.clearTimeout(expiryTimer); };
+  }, [hermesTaskId, roId]);
+  const consumeHermesHandoff = useCallback(() => {
+    if (hermesHandoffKey.current) window.sessionStorage.removeItem(hermesHandoffKey.current);
+    setHermesHandoffAuthorized(false);
+  }, []);
   const editorSuggestion = useMemo<HermesGuideSuggestion>(() => ({
     bodyKey: 'guide.continue.body',
     href: `/research-objects/${encodeURIComponent(roId)}/edit`,
@@ -170,8 +208,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [serverSaveState, setServerSaveState] = useState<'dirty' | 'saving' | 'saved' | 'error'>('saved');
   const [hermesOpen, setHermesOpen] = useState(false);
-  const [hermesGoal, setHermesGoal] = useState('');
-  useEffect(() => { if (window.matchMedia('(min-width: 1024px)').matches) setHermesOpen(true); }, []);
+  useEffect(() => { if (hermesTaskId || window.matchMedia('(min-width: 1024px)').matches) setHermesOpen(true); }, [hermesTaskId]);
   // P1D-3：AI 提取状态（§5.4 + §18.3 进度可恢复）
   const [extracting, setExtracting] = useState(false);
   const [extractProgress, setExtractProgress] = useState(0);
@@ -1125,10 +1162,13 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         }
         aside={
           <>
-            {!hermesOpen && <button type="button" className={styles.hermesButton} onClick={() => { setHermesGoal(''); setHermesOpen(true); }}>Hermes · {tw('talkToHermes')}</button>}
+            {!hermesOpen && <button type="button" className={styles.hermesButton} onClick={() => setHermesOpen(true)}>Hermes · {tw('talkToHermes')}</button>}
             <HermesAssistantDrawer
               docked
-              initialGoal={hermesGoal}
+              initialTaskId={hermesTaskId}
+              initialTaskAutoApply={hermesHandoffAuthorized}
+              onInitialTaskConsumed={consumeHermesHandoff}
+              taskRestoreReady={editorLoaded && hermesHandoffResolved}
               dashboardContext={{ tasks: [], researchObjects: [{ id: roId, title: objectMeta.title, status: 'draft' }], ...(versions[0] ? { presentation: { researchObjectId: roId, versionId: versions[0].versionId } } : {}), ...(editorLoaded ? { editorDraft } : {}) }}
               onDraftEdit={applyHermesEdit}
               onPrepareVersion={prepareVersion}
