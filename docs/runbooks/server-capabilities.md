@@ -1,10 +1,10 @@
 # 服务器能力与复用清单
 
-当前应用bbe4e4a6630202ce451f57a5e86902a276fa8948 / rollback0d059852；网页生图provider d1630135 / rollback92cc416e。2026-09-12完成必要服务器build/start，无测试/CI/本机运行。
+当前应用d8de966f40ca2922956d7fe82858eb1f5cff6fab / rollbacke4bd57904b8cdbb0eb55dc19dd4cfb3fc6c8adb1；网页生图provider d1630135 / rollback92cc416e。2026-09-12完成必要服务器build/start，无测试/CI/本机运行。
 
 - 已部署：MiniMax-M3显式adaptive thinking（16k/32k预算）、最终model_self_check、paper-analysis v7；Docling CPU1.30/CodeFormulaV2/安全KaTeX；XLSX/PPTX/HTML解析和派生副本清洗。
-- 真实论文62ae384d已完成，但正文过长并有物理条件泛化，未采用/发布。Chat6Pro诊断已返回。候选scientific-summary v1只重做精炼成稿，未确认refresh复用原文，避免再次解析和map/reduce。
-- 统一Hermes创建/附件/首条指令接续正收尾未部署。写作/精美笔记模块仅准备未接通；后续艺术图片与视频能力按台账继续。
+- 真实论文62ae384d已完成，但正文过长并有物理条件泛化，未采用/发布。已部署scientific-summary v1，实际未确认refresh0e38446e复用原文只跑final；19380tokens比旧final少51.83%，但仍有科学语义缺陷，未采用。Chat6Pro有来源诊断已回，v2语义归约/原文bridge+final为本地候选，部署前不重复生成。
+- 统一Hermes创建/附件/首条指令接续已部署e4bd；实际页面可打开；anchor布局和资料区文案修复d8de966f已部署，实际208×208。写作/精美笔记模块仅准备未接通；后续艺术图片与视频能力按台账继续。
 - 现有服务器浏览器、已登录Chat6Pro及网页图片路线可复用；不因本机控制桥错误判其不可用。无需下载新的浏览器或OCR。账号登录情况按服务器实际可见会话判断，不自动跨账号轮换。
 - 当前版本和真实质量以CURRENT handoff及[Hermes能力台账](hermes-capability-registry.md)为准。服务有变化必须同步；下列技术条目保留历史来源，旧release不覆盖上文。
 

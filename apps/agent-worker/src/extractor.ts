@@ -84,6 +84,15 @@ export interface ExtractionResult extends Record<string, unknown> {
     evidencePages?: Array<{ pageNumber: number; imageSha256: string }>;
     continuationStatus?: 'provider_unavailable' | 'invalid_response';
     continuationAttemptId?: string;
+    semanticStage?: {
+      kind: 'semantic_reduce' | 'source_bridge';
+      provider: string;
+      model: string;
+      usage: { inputTokens: number; outputTokens: number };
+      finishReason: 'stop' | 'length' | 'other' | 'unknown';
+      promptHash: string;
+      responseHash: string;
+    };
   };
 }
 
@@ -205,6 +214,111 @@ interface PaperReadingSynthesis {
   observations: IdentifiedReadingObservation[];
 }
 
+const SEMANTIC_POINT_TYPES = ['calculation', 'observation', 'author_assumption', 'author_interpretation', 'bounded_synthesis'] as const;
+type SemanticPoint = {
+  statement: string;
+  type: (typeof SEMANTIC_POINT_TYPES)[number];
+  conditionCase: string;
+  comparison: null | { quantity: string; relation: string; baseline: string };
+  operation: null | { input: string; operator: string; variable: string; output: string };
+  evidenceIds: string[];
+};
+type PaperSemanticReduction = {
+  fields: Record<(typeof SDF_CORE_FIELDS)[number], SemanticPoint[]>;
+  chosenRepresentativeCase: string | null;
+};
+type SemanticStage = {
+  reduction: PaperSemanticReduction;
+  observations: IdentifiedReadingObservation[];
+  completion: Awaited<ReturnType<AiGateway['complete']>>;
+  kind: 'semantic_reduce' | 'source_bridge';
+};
+
+function semanticReductionGuard(knownObservationIds: ReadonlySet<string>): SchemaGuard<PaperSemanticReduction> {
+  return (value): value is PaperSemanticReduction => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const root = value as Record<string, unknown>;
+    if (Object.keys(root).sort().join(',') !== 'chosenRepresentativeCase,fields'
+      || (root.chosenRepresentativeCase !== null
+        && (typeof root.chosenRepresentativeCase !== 'string' || !root.chosenRepresentativeCase.trim()
+          || root.chosenRepresentativeCase.length > 240))
+      || !root.fields || typeof root.fields !== 'object' || Array.isArray(root.fields)) return false;
+    const fields = root.fields as Record<string, unknown>;
+    if (Object.keys(fields).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(',')) return false;
+    let totalPoints = 0;
+    for (const field of SDF_CORE_FIELDS) {
+      const points = fields[field];
+      if (!Array.isArray(points) || points.length > 4) return false;
+      totalPoints += points.length;
+      for (const candidate of points) {
+        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
+        const point = candidate as Record<string, unknown>;
+        if (Object.keys(point).sort().join(',') !== 'comparison,conditionCase,evidenceIds,operation,statement,type'
+          || typeof point.statement !== 'string' || !point.statement.trim() || point.statement.length > 1_200
+          || !SEMANTIC_POINT_TYPES.includes(point.type as SemanticPoint['type'])
+          || typeof point.conditionCase !== 'string' || point.conditionCase.length > 600
+          || !Array.isArray(point.evidenceIds) || point.evidenceIds.length < 1
+          || point.evidenceIds.length > Math.min(MAX_SOURCE_PASSAGE_IDS, knownObservationIds.size)
+          || new Set(point.evidenceIds).size !== point.evidenceIds.length
+          || point.evidenceIds.some((id) => typeof id !== 'string' || !knownObservationIds.has(id))) return false;
+        if (point.comparison !== null) {
+          if (!point.comparison || typeof point.comparison !== 'object' || Array.isArray(point.comparison)) return false;
+          const comparison = point.comparison as Record<string, unknown>;
+          if (Object.keys(comparison).sort().join(',') !== 'baseline,quantity,relation'
+            || ['baseline', 'quantity', 'relation'].some((key) =>
+              typeof comparison[key] !== 'string' || !(comparison[key] as string).trim() || (comparison[key] as string).length > 400)) return false;
+        }
+        if (point.operation !== null) {
+          if (!point.operation || typeof point.operation !== 'object' || Array.isArray(point.operation)) return false;
+          const operation = point.operation as Record<string, unknown>;
+          if (Object.keys(operation).sort().join(',') !== 'input,operator,output,variable'
+            || ['input', 'operator', 'output', 'variable'].some((key) =>
+              typeof operation[key] !== 'string' || !(operation[key] as string).trim() || (operation[key] as string).length > 400)) return false;
+        }
+      }
+    }
+    const resultPoints = fields.results as SemanticPoint[];
+    if (resultPoints.length === 0 && root.chosenRepresentativeCase !== null) return false;
+    if (resultPoints.length > 0) {
+      const resultConditions = new Set(resultPoints.map((point) => point.conditionCase.trim()).filter(Boolean));
+      if (resultConditions.size > 1) return false;
+      if (typeof root.chosenRepresentativeCase === 'string'
+        && (resultConditions.size !== 1 || !resultConditions.has(root.chosenRepresentativeCase.trim()))) return false;
+    }
+    return totalPoints > 0 && totalPoints <= 18;
+  };
+}
+
+function semanticStageMetadata(stage: SemanticStage): NonNullable<ExtractionResult['scientificReview']>['semanticStage'] {
+  return {
+    kind: stage.kind,
+    provider: stage.completion.provider,
+    model: stage.completion.model,
+    usage: stage.completion.usage,
+    finishReason: stage.completion.finishReason ?? 'unknown',
+    promptHash: stage.completion.promptHash,
+    responseHash: createHash('sha256').update(stage.completion.text).digest('hex'),
+  };
+}
+
+function expandSemanticPassages(stage: SemanticStage): Record<(typeof SDF_CORE_FIELDS)[number], string[]> {
+  const observations = new Map(stage.observations.map((observation) => [observation.id, observation]));
+  const forField = (field: (typeof SDF_CORE_FIELDS)[number]) => [...new Set(stage.reduction.fields[field].flatMap((point) =>
+    stage.kind === 'source_bridge' ? point.evidenceIds : point.evidenceIds.flatMap((id) => {
+      const observation = observations.get(id);
+      if (!observation) throw new Error('unknown semantic observation');
+      return [...observation.sourcePassageIds, ...observation.qualifierPassageIds];
+    })))];
+  return {
+    problem: forField('problem'),
+    insight: forField('insight'),
+    method: forField('method'),
+    results: forField('results'),
+    limitations: forField('limitations'),
+    reproducibility: forField('reproducibility'),
+  };
+}
+
 function readingMapGuard(allowedIds: ReadonlySet<string>): SchemaGuard<ReadingMapResult> {
   return (value: unknown): value is ReadingMapResult => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -300,6 +414,69 @@ async function buildPaperReadingSynthesis(gateway: AiGateway, passages: readonly
     console.error('paper-analysis reading incomplete', error instanceof Error ? error.message : String(error));
     throw error;
   }
+}
+
+async function buildMappedSemanticStage(gateway: AiGateway, passages: readonly CanonicalPassage[]): Promise<SemanticStage | undefined> {
+  const windows: CanonicalPassage[][] = [];
+  let current: CanonicalPassage[] = [];
+  let currentChars = 0;
+  for (const passage of passages) {
+    if (current.length && currentChars + passage.text.length > 18_000) {
+      windows.push(current);
+      current = [];
+      currentChars = 0;
+    }
+    current.push(passage);
+    currentChars += passage.text.length;
+  }
+  if (current.length) windows.push(current);
+  if (windows.length < 2) return undefined;
+  const maps = new Array<ReadingMapResult>(windows.length);
+  let nextWindow = 0;
+  const worker = async () => {
+    while (nextWindow < windows.length) {
+      const index = nextWindow++;
+      const window = windows[index]!;
+      const allowedIds = new Set(window.map((passage) => passage.id));
+      maps[index] = await gateway.completeStructured(readingMapGuard(allowedIds), [
+        { role: 'system', content: PAPER_ANALYSIS_SKILL.sectionMapInstructions + '\n只输出JSON observations数组；每项包含kind、summary、basis、caseLabel、sourcePassageIds、qualifierPassageIds。来源编号只取当前窗口。' },
+        { role: 'user', content: canonicalPassagePrompt(window) },
+      ], { ...SCIENTIFIC_READING_OPTIONS, maxRetries: 1,
+        validationFeedback: () => '来源不可为空、不得生成编号，只能使用当前窗口：' + [...allowedIds].join(',') });
+    }
+  };
+  try {
+    await Promise.all(Array.from({ length: Math.min(2, windows.length) }, () => worker()));
+  } catch (error) {
+    const code = error instanceof AiGatewayError ? error.code : 'unavailable';
+    throw new AiGatewayError('SCHEMA_VALIDATION', 'section_map:' + code, error);
+  }
+  const observations = maps.flatMap((map, windowIndex) => map.observations.map((observation, index) => ({
+    ...observation,
+    qualifierPassageIds: observation.qualifierPassageIds ?? [],
+    id: 'W' + (windowIndex + 1) + 'O' + (index + 1),
+  })));
+  const knownIds = new Set(observations.map((observation) => observation.id));
+  const response = await gateway.completeStructuredWithMetadata(semanticReductionGuard(knownIds), [
+    { role: 'system', content: PAPER_ANALYSIS_SKILL.semanticReduceInstructions + '\n' + SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions
+      + '\n只返回fields与chosenRepresentativeCase。每字段是0至4个语义点，全篇最多18点；每个点只能包含statement、type、conditionCase、comparison、operation、evidenceIds。results各点最多共享一个非空conditionCase；选择数值代表算例时chosenRepresentativeCase须与该conditionCase逐字相同。无具体代表算例的理论、概念或综述结果允许chosenRepresentativeCase=null；results为空时也必须为null。' },
+    { role: 'user', content: JSON.stringify(observations) },
+  ], { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
+    validationFeedback: () => '每字段必须为0至4个语义点且全篇最多18点，evidenceIds只能引用真实观察：' + [...knownIds].join(',')
+      + '。results最多有一个非空conditionCase；有数值代表算例时chosenRepresentativeCase须与它逐字相同，无具体算例可为null，results为空必须为null。不适用的comparison或operation必须为null；不要输出六字段长稿。' });
+  return { reduction: response.value, observations, completion: response.completion, kind: 'semantic_reduce' };
+}
+
+async function buildLegacySemanticBridge(gateway: AiGateway, passages: readonly CanonicalPassage[]): Promise<SemanticStage> {
+  const response = await gateway.completeStructuredWithMetadata(semanticReductionGuard(new Set(passages.map((passage) => passage.id))), [
+    { role: 'system', content: PAPER_ANALYSIS_SKILL.semanticBridgeInstructions + '\n' + PAPER_ANALYSIS_SKILL.semanticReduceInstructions
+      + '\n' + SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions
+      + '\n只返回fields与chosenRepresentativeCase。每字段0至4点且全篇最多18点；字段中每点只能包含statement、type、conditionCase、comparison、operation、evidenceIds；本桥接中evidenceIds直接引用本轮真实canonical P编号。results最多共享一个非空conditionCase；有数值代表算例时chosenRepresentativeCase与它逐字相同，无具体算例可为null，results为空必须为null。' },
+    { role: 'user', content: canonicalPassagePrompt(passages) },
+  ], { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
+    validationFeedback: () => '从全部给定P段直接生成每字段0至4个、全篇最多18个语义点；evidenceIds只能是输入P编号。results最多共享一个非空conditionCase；有数值代表算例时chosenRepresentativeCase与它逐字相同，无具体算例可为null，无results必须为null。不要复述任何旧摘要，不要输出六字段正文。' });
+  return { reduction: response.value, observations: [],
+    completion: response.completion, kind: 'source_bridge' };
 }
 
 /** Reusable reading phase for the same source-located document; no RO writes or publication. */
@@ -1514,6 +1691,207 @@ async function modelScientificReviewCanonicalProposal(
   };
 }
 
+async function modelScientificComposeSemantic(
+  gateway: AiGateway,
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  stage: SemanticStage,
+  context?: ScientificReviewContext,
+): Promise<ExtractionResult> {
+  const sourceMapHash = sha256Json(sourceMap);
+  const candidateHash = sha256Json(stage.reduction);
+  const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
+  const idsByField = expandSemanticPassages(stage);
+  const selectedIds = new Set(SDF_CORE_FIELDS.flatMap((field) => idsByField[field]));
+  const selectedPassages = passages.filter((passage) => selectedIds.has(passage.id));
+  if (!selectedPassages.length) throw new AiGatewayError('SCHEMA_VALIDATION', 'semantic_stage_selected_no_source');
+  const observationBindings = stage.observations
+    .filter((observation) => stage.reduction.fields.problem.concat(
+      stage.reduction.fields.insight,
+      stage.reduction.fields.method,
+      stage.reduction.fields.results,
+      stage.reduction.fields.limitations,
+      stage.reduction.fields.reproducibility,
+    ).some((point) => point.evidenceIds.includes(observation.id)))
+    .map((observation) => ({
+      observationId: observation.id,
+      sourcePassageIds: observation.sourcePassageIds,
+      qualifierPassageIds: observation.qualifierPassageIds,
+    }));
+  const allowedIds = new Set(selectedPassages.map((passage) => passage.id));
+  const prompt = [
+    '语义点只是待核对候选。只用语义点、程序展开的来源绑定和下列原始P段写最终六字段，不读取或沿用任何旧summary。',
+    '语义结构：' + JSON.stringify(stage.reduction),
+    '来源绑定：' + JSON.stringify(observationBindings),
+    '只返回：' + JSON.stringify({
+      fields: {
+        problem: { summary: '', sourcePassageIds: [] },
+        insight: { summary: '', sourcePassageIds: [] },
+        method: { summary: '', sourcePassageIds: [] },
+        results: { summary: '', sourcePassageIds: [] },
+        limitations: { summary: '', sourcePassageIds: [] },
+        reproducibility: { summary: '', sourcePassageIds: [] },
+      },
+      needsMoreEvidence: [],
+    }),
+    '原始P段：\n' + canonicalPassagePrompt(selectedPassages),
+  ].join('\n\n');
+  let completion: Awaited<ReturnType<AiGateway['complete']>> | undefined;
+  let parsed: ScientificReviewResponse | undefined;
+  let failure = 'scientific_composition_unavailable';
+  try {
+    const response = await gateway.completeStructuredWithMetadata<ScientificCompositionResponse>(
+      (value): value is ScientificCompositionResponse => {
+        if (!scientificCompositionGuard(value, allowedIds)) return false;
+        return SDF_CORE_FIELDS.every((field) => {
+          const fieldIds = new Set(idsByField[field]);
+          return value.fields[field].sourcePassageIds.every((id) => fieldIds.has(id));
+        });
+      },
+      [{ role: 'system', content: SCIENTIFIC_SUMMARY_SKILL.instructions }, { role: 'user', content: prompt }],
+      { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
+        validationFeedback: () => '只返回fields与needsMoreEvidence；每段最多220个Unicode字符。每项科学关系必须连同条件、比较对象及操作对象整体保留；减少次要完整主张，不得裁掉限定。P编号只能来自本轮原始段。' },
+    );
+    completion = response.completion;
+    parsed = normalizeScientificComposition(response.value);
+  } catch (error) {
+    failure = error instanceof AiGatewayError ? error.code : 'scientific_composition_unavailable';
+  }
+  const blocked = parsed ? fieldsAffectedByReviewEvidence(parsed) : new Set(SDF_CORE_FIELDS);
+  const passageById = new Map(selectedPassages.map((passage) => [passage.id, passage]));
+  const diagnostics: Record<string, string> = {};
+  const buildField = (field: (typeof SDF_CORE_FIELDS)[number]): ExtractedFieldProposal => {
+    const reviewed = parsed?.fields[field];
+    if (reviewed?.verdict === 'blocked') blocked.add(field);
+    if (reviewed && !blocked.has(field)) {
+      try {
+        const segments = segmentsForPassages(sourceMap, reviewed.sourcePassageIds, passageById);
+        return {
+          summary: reviewed.summary.trim(),
+          sourceQuote: segments.map((segment) => segment.quote).join('\n'),
+          sourcePassageIds: reviewed.sourcePassageIds,
+          verifiedSegments: segments,
+          needsMoreInformation: false,
+        };
+      } catch {
+        blocked.add(field);
+        diagnostics[field] = 'scientificReview=source_binding_failed';
+      }
+    }
+    diagnostics[field] ??= 'scientificReview=' + (parsed ? 'needs_source_evidence' : failure);
+    return { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true };
+  };
+  const proposal: ExtractedProposal = {
+    schemaVersion: SDF_CORE_VERSION,
+    fields: {
+      problem: buildField('problem'),
+      insight: buildField('insight'),
+      method: buildField('method'),
+      results: buildField('results'),
+      limitations: buildField('limitations'),
+      reproducibility: buildField('reproducibility'),
+    },
+  };
+  const result = materializeCanonicalProposal(proposal);
+  const review: NonNullable<ExtractionResult['scientificReview']> = {
+    provider: completion?.provider ?? null,
+    model: completion?.model ?? null,
+    kind: 'model_self_check',
+    compositionSkill: { id: SCIENTIFIC_SUMMARY_SKILL.id, version: SCIENTIFIC_SUMMARY_SKILL.version },
+    contractVersion: '4',
+    status: parsed?.needsMoreEvidence.length ? 'awaiting_review_evidence'
+      : blocked.size ? 'blocked_scientific_review' : 'review_received',
+    attemptId,
+    reviewedCandidateHash: candidateHash,
+    semanticStage: semanticStageMetadata(stage),
+    ...(completion ? {
+      promptHash: completion.promptHash,
+      responseHash: createHash('sha256').update(completion.text).digest('hex'),
+      usage: completion.usage,
+      finishReason: completion.finishReason,
+    } : {}),
+  };
+  if (!blocked.size) return { ...result, scientificReview: review };
+  return {
+    ...result,
+    scientificReview: review,
+    reason: 'canonical_partial_validation_exhausted',
+    fieldDiagnostics: Object.fromEntries([...blocked].map((field) => [field, 'malformed_item'])),
+    fieldDiagnosticsDetails: diagnostics,
+    unverifiedSummaries: parsed
+      ? Object.fromEntries([...blocked].filter((field) => parsed!.fields[field].summary).map((field) => [field, parsed!.fields[field].summary]))
+      : {},
+    unverifiedSourcePassageIds: Object.fromEntries([...blocked].map((field) => [field, idsByField[field]])),
+  };
+}
+
+function blockedSemanticStageResult(
+  sourceMap: DocumentSourceMap,
+  passages: readonly CanonicalPassage[],
+  phase: 'section_map' | 'semantic_reduce' | 'source_bridge',
+  failure: unknown,
+  context?: ScientificReviewContext,
+): ExtractionResult {
+  const emptyField = (): ExtractedFieldProposal => ({
+    summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true,
+  });
+  const proposal: ExtractedProposal = {
+    schemaVersion: SDF_CORE_VERSION,
+    fields: {
+      problem: emptyField(),
+      insight: emptyField(),
+      method: emptyField(),
+      results: emptyField(),
+      limitations: emptyField(),
+      reproducibility: emptyField(),
+    },
+  };
+  const passageIds = passages.map((passage) => passage.id);
+  const failureCode = failure instanceof AiGatewayError ? failure.code : 'semantic_stage_unavailable';
+  const sourceMapHash = sha256Json(sourceMap);
+  const reviewedCandidateHash = sha256Json({ phase, sourceMapHash, passageIds });
+  const detail = 'semanticStage=' + phase + ':' + failureCode + ';usage=unavailable';
+  return {
+    ...materializeCanonicalProposal(proposal),
+    reason: 'canonical_partial_validation_exhausted',
+    fieldDiagnostics: {
+      problem: 'malformed_item',
+      insight: 'malformed_item',
+      method: 'malformed_item',
+      results: 'malformed_item',
+      limitations: 'malformed_item',
+      reproducibility: 'malformed_item',
+    },
+    fieldDiagnosticsDetails: {
+      problem: detail,
+      insight: detail,
+      method: detail,
+      results: detail,
+      limitations: detail,
+      reproducibility: detail,
+    },
+    unverifiedSummaries: {},
+    unverifiedSourcePassageIds: {
+      problem: passageIds,
+      insight: passageIds,
+      method: passageIds,
+      results: passageIds,
+      limitations: passageIds,
+      reproducibility: passageIds,
+    },
+    scientificReview: {
+      provider: null,
+      model: null,
+      kind: 'model_self_check',
+      compositionSkill: { id: SCIENTIFIC_SUMMARY_SKILL.id, version: SCIENTIFIC_SUMMARY_SKILL.version },
+      contractVersion: '4',
+      status: 'blocked_scientific_review',
+      attemptId: reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, reviewedCandidateHash),
+      reviewedCandidateHash,
+    },
+  };
+}
+
 async function webScientificReviewCanonicalProposal(
   gateway: AiGateway,
   sourceMap: DocumentSourceMap,
@@ -1898,6 +2276,30 @@ export async function extractHandler(
     throw new Error('缺少正文（payload.manuscriptText）');
   }
   const passages = canonicalSourceMap ? canonicalPassages(canonicalSourceMap) : undefined;
+  if (canonicalSourceMap && passages && trustedContext.scientificReview?.mode !== 'web') {
+    let phase: 'section_map' | 'semantic_reduce' | 'source_bridge' = trustedContext.previousResult ? 'source_bridge' : 'section_map';
+    try {
+      let semanticStage: SemanticStage;
+      if (trustedContext.previousResult) {
+        semanticStage = await buildLegacySemanticBridge(gateway, passages);
+      } else {
+        const mapped = await buildMappedSemanticStage(gateway, passages);
+        phase = mapped ? 'semantic_reduce' : 'source_bridge';
+        semanticStage = mapped ?? await buildLegacySemanticBridge(gateway, passages);
+      }
+      return await modelScientificComposeSemantic(
+        gateway,
+        canonicalSourceMap,
+        passages,
+        semanticStage,
+        trustedContext.scientificReview,
+      );
+    } catch (error) {
+      const failedPhase = error instanceof AiGatewayError && error.message.startsWith('section_map:')
+        ? 'section_map' : phase;
+      return blockedSemanticStageResult(canonicalSourceMap, passages, failedPhase, error, trustedContext.scientificReview);
+    }
+  }
   if (canonicalSourceMap && passages && trustedContext.previousResult) {
     const previousPartial = previousCanonicalPartial(canonicalSourceMap, passages, trustedContext.previousResult);
     if (previousPartial) {

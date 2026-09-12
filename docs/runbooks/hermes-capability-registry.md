@@ -1,18 +1,18 @@
 # Hermes Capability Registry
 
 ## 当前状态（2026-09-12）
-- 生产应用bbe4e4a6630202ce451f57a5e86902a276fa8948，rollback0d059852；服务器网页生图provider d1630135、rollback92cc416e，路线未改。唯一任务接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 生产应用d8de966f40ca2922956d7fe82858eb1f5cff6fab，rollbacke4bd57904b8cdbb0eb55dc19dd4cfb3fc6c8adb1；服务器网页生图provider d1630135、rollback92cc416e，路线未改。唯一任务接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 生产用现有MiniMax-M3，不要求新API。Anthropic兼容接口显式adaptive thinking；分段16k/180s、整合32k/300s，temperature1/top_p.95。主机skills不自动注入产品，Worker必须显式加载。
 - 真实任务62ae384d已完成，但旧最终自检仍产出长稿和过强表述，未采用/未发布。正常响应、来源编号存在、review_received均不等于科学正确。
 - Chat6Pro已按用户明确授权完成开发诊断，/jobs/hermes-m3-actual-diagnosis-20260912.txt：最终步骤改为来源约束的短成稿，避免审稿schema/长候选锚定；不增加预算或更换供应商。生产不依赖Chat科学定稿。
-- 当前未部署候选：scientific-summary v1（220字符/独立来源编号/仅一次格式反馈，禁止截断）；统一创建入口/首条实际对话/失败恢复。
+- 已部署scientific-summary v1及统一创建/首条指令接续。真实final0e38446e使用M3 12083输入+7297输出，较旧最终步少51.83%，但多算例和科学限定仍不够，未采用。第二次Chat6Pro诊断已收到；当前v2候选让语义点连同条件/比较/操作对象进入final，旧候选与短文直接读P段bridge，正常长文map→semantic reduce→final，移除默认中间长稿调用。创建页布局/资料文案d8de966f已部署，208×208实测；淡化状态一行修复待同批发布。
 - 新增“私有草稿+摘录→MiniMax写作”曾被自动审批拒绝，精确问题仍待用户答复。写作合同/来源/引用/排版指令仅准备，未接通；不能写成已部署。Chat开发材料外发已另获明确批准。
 - 禁止测试/预检/CI/本机构建；保留必要服务器build/start及真实产品任务。变化后同步本台账、server-capabilities.md、索引。
 
 | 顺序 | 能力 | 真实状态 / 后续 |
 |---|---|---|
 | 1 | 科学文档与公式 | Docling Serve1.30.0 + CodeFormulaV2缓存 + TeX/页/bbox + 安全KaTeX已部署；26页32式中28式可排版、4式损坏标低置信保留原文。两个代表式已对原页，不声称全部物理正确。 |
-| 2 | 全文理解与凝练 | paper-analysis v7、research-understanding v6、critical-thinking v2及M3思考已接入。真实5窗口+reduce118秒、66观察/94段；最终成稿质量未过。新scientific-summary v1正在替换末步骤，其他原文/确认保护保留。 |
+| 2 | 全文理解与凝练 | paper-analysis v7、research-understanding v6、critical-thinking v2及M3思考已接入。真实5窗口+reduce118秒、66观察/94段；最终成稿质量未过。scientific-summary v1已部署并只重跑final，19380 tokens；仍有语义过强和算例堆砌，质量未达标，原确认稿保留。 |
 | 3 | 科学写作与引用 | 未接通。独立私有note/review/manuscript，真实SourceMap和程序引用；不挤六字段、不把文献实验当用户原创。scientific-writing.ts/citation-management.ts/scientific-writing-source.ts待调用授权与整合。 |
 | 4 | 精美笔记/报告 | research-note-formatting运行时指令已准备、未加载；复用已安装前端设计与KaTeX，默认精炼、真实来源按需展开。Markdown/HTML及后续文档导出尚待接入。beautiful-notes没有唯一来源，不能冒名安装。 |
 | 5 | 多格式附件 | XLSX/PPTX/HTML已接入上传/MIME/现有解析链；HTML资源和PPTX外链仅清洗派生副本，原件保留，PPTX媒体流式复制；archiver7.0.1复用，parser独立锁保留5项依赖。真实多样文件兼容尚未观察。没有另装OCR/浏览器。 |

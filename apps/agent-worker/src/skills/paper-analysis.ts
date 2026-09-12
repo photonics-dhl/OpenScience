@@ -1,13 +1,13 @@
 /** Runtime Hermes paper-analysis skill. The worker executes these phases; this is not a developer prompt. */
 export const PAPER_ANALYSIS_SKILL = {
   id: 'paper-analysis',
-  version: '7',
+  version: '8',
   sources: [
     'Future-House/paper-qa (Apache-2.0, reviewed 57e89f7): retrieval, reranking, contextual evidence and async pattern',
     'K-Dense-AI/scientific-agent-skills (MIT, reviewed 9cf7d9a): bounded paperclip map/reduce and peer-review pattern',
     'OpenDataLab MinerU skill (reviewed 5733c03): parser candidate only, never scientific understanding or approval',
   ],
-  stages: ['inventory', 'advanced-parse', 'coverage-plan', 'section-map', 'global-reduce', 'evidence-check', 'science-review-packet', 'model-scientific-correction', 'targeted-evidence', 'sdf-suggestion', 'user-review'],
+  stages: ['inventory', 'advanced-parse', 'coverage-plan', 'section-map', 'semantic-reduce', 'final-composition', 'evidence-check', 'targeted-evidence', 'sdf-suggestion', 'user-review'],
   sectionMapInstructions: [
     'summary用凝练中文，不将中间推理过程写入输出。完整阅读当前窗口，记录各自有来源的研究观察，不按六字段或同名标题机械摘抄。kind取question/method/result/assumption/limitation/definition/context；每项一条核心观察，summary凝练，条件或例外的来源放qualifierPassageIds，支撑观察的来源放sourcePassageIds。',
     'basis取reported（作者陈述）、synthesis（来源约束的概括）或uncertain（仍不确定）；caseLabel用本窗口实际出现的对象/算例简称，不能确定就留空。方法可藏在推导、图注、结果或附录中；必须记录关键假设、限制与相反材料，不仅记录正面结果。',
@@ -18,6 +18,18 @@ export const PAPER_ANALYSIS_SKILL = {
     'overview和六字段summary用凝练中文，每项摘要只保留研究精华，完整细节保存在观察及原文。综合全部观察重建全文逻辑，再生成六字段候选。每字段包含summary和observationIds，编号必须来自输入；选择支撑论述及其假设、定义、限制和相反材料的完整观察集合。相关来源由程序展开，不重新生成P编号。',
     '按照实际对象与算例综合隐含方法，保持基础关系、操作/推导、验证和结果之间的连接；不能把单电子、束团或不同材料参数混成一个算例。未选中的限制、假设和不确定观察仍会回填给最终生成，不能因其不支持主结论而隐去。',
     'overview与六字段同步修订，不能只纠正一处而保留另处旧错句。summary用简短自然语言说明关键逻辑，不复抄观察里的全部公式/参数；方法保留实际操作链与相位/归一化前提，结果选择有完整条件的代表算例。细节仍保存在observations及原文，不能通过长摘要冒充理解。只有全文观察无法形成负责概括时才留空；真正尚未解决的科学问题保留限定并引用对应观察，不虚构结果或科学放行。',
+  ].join('\n'),
+  semanticReduceInstructions: [
+    '把全部有来源观察归约为六个展示维度的语义点，不先写六段摘要。每字段按实际论文内容给0至4点，全篇最多18点；多步方法用多个点表达，不能硬塞固定槽位，也不能为凑长度删除必要关系。',
+    '每点的statement保留完整科学主张；type只能是calculation、observation、author_assumption、author_interpretation、bounded_synthesis。conditionCase写适用条件、对象和算例，不适用时为空字符串。',
+    '存在定量或定性比较时，comparison分别写quantity、relation、baseline；不存在则为null。存在输入经算子或操作作用于变量得到输出的链条时，operation分别写input、operator、variable、output；不存在则为null。不得交换坐标、接收变量、场振幅/相位/强度或比较基线。',
+    'evidenceIds只引用输入中的真实观察编号。选择同时覆盖主张、条件、比较和操作对象的观察；不把作者假设或解释改成已验证事实。需要跨段连接时type用bounded_synthesis，并且每个环节都须由所引观察支持。',
+    'results各点最多共享一个非空conditionCase，不得拼接不同材料、结构、单粒子或束团算例。存在条件完整的数值代表算例时，chosenRepresentativeCase必须与该conditionCase逐字相同；理论、概念或综述论文没有具体代表算例时允许chosenRepresentativeCase为null并保留主要结果。没有results点时chosenRepresentativeCase必须为null。',
+  ].join('\n'),
+  semanticBridgeInstructions: [
+    '这是旧分析结果或短文档的受控语义桥接。忽略任何旧summary，只阅读本轮给出的全部canonical P段，直接形成有P来源的语义点。',
+    '每个语义点保留条件、量定义、比较对象、作者假设/解释和未解冲突；evidenceIds直接引用给出的真实P编号。',
+    '语义归约遵循semantic reduce的可变0至4点结构和单一代表算例规则。不能截断全文输入、不能沿用旧稿措辞，也不能把解析缺陷改写为论文局限。',
   ].join('\n'),
   instructions: [
     '先核对附件哈希、解析器版本、页数、章节、图表、公式和补充材料清单；解析失败、材料未取得和作者未报告必须分开记录。',

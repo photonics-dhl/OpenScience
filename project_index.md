@@ -1,13 +1,13 @@
 # OpenScience (XGS) 项目文件索引
 
-> 当前未部署：`apps/agent-worker/src/skills/scientific-summary.ts`及extractor最终成稿适配，按实际长稿失败与6Pro诊断改为来源重写；`skills/scientific-writing.ts` / `skills/research-note-formatting.ts`仅离线准备，未加载。创建页与Hermes一次性task衔接由同一分支继续。
+> 已部署e4bd：`apps/agent-worker/src/skills/scientific-summary.ts`及extractor最终成稿适配，实际final少51.83%tokens但质量仍未达标。Chat诊断已收到，v2语义点归约/原文bridge+final为后续候选；`skills/scientific-writing.ts` / `skills/research-note-formatting.ts`仅离线准备，未加载。创建页与Hermes一次性task衔接已部署e4bd，d8de966f局部布局/资料文案修复已部署。
 
 > 已部署bbe4e4a6：M3最终科学自检（model_self_check）、paper-analysis v7中文凝练；XLSX/PPTX/HTML复用Docling、安全清洗与archiver7.0.1。`apps/agent-worker/src/citation-management.ts` / `scientific-writing-source.ts`与workspace-guide-contract为未接通写作准备，不纳入当前发布。
 
 > 已部署0d059852：apps/agent-worker/src/scientific-generation-options.ts 统一科学任务的显式思考、预算与超时；Gateway透传并记录请求模式，截断不按同预算重试。MiniMax仍为主，生产科学路由待后续结果确认。
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT 2026-09-12:** applicationbbe4e4a6 / rollback0d059852；browser providerd1630135 / rollback92cc416e。文档/公式与逐观察阅读已部署；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> **CURRENT 2026-09-12:** applicationd8de966f / rollbacke4bd5790；browser providerd1630135 / rollback92cc416e。文档/公式与逐观察阅读已部署；19/20/21可恢复归档，22-v10带图公开。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
 > 当前执行：第2项全文理解/科学自省取得真实内部候选，成稿修复和统一创建接续收尾后推进科学写作/引用；图片/视频艺术风格与叙事明确保留后续。统一创建/持续对话方案保留，不恢复旧冗余表单。
 > 历史阅读f2889c86的67观察/94段只作来源记录；当前真实质量失败与成稿修复见CURRENT handoff。公式语法可排版不等于物理正确，docs-only HEAD不是应用release。
 > 当前用户要求：服务器自动理解PDF、独立来源证据、内容驱动Codex生图和优化展示；暂不执行视频。禁止测试/预检/本机运行，必要服务器构建部署继续。

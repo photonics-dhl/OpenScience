@@ -512,13 +512,17 @@ export async function retryIngestionTask(
   return taskToView(queued);
 }
 
-/** Upgrade only an unconfirmed, pre-composition M3 result; confirmed reanalysis retains its existing policy. */
+/** Upgrade only an unconfirmed older self-check; confirmed reanalysis retains its existing policy. */
 function unconfirmedAnalysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
   const policy = analysisRefreshPolicy(value, artifact);
   if (policy !== 'user_requested_reanalysis') return policy;
   const review = (value as Record<string, unknown>).scientificReview as Record<string, unknown>;
+  const composition = review.compositionSkill;
+  const needsSemanticComposition = composition === undefined
+    || (exactRecordKeys(composition, ['id', 'version'])
+      && composition.id === 'scientific-summary' && composition.version === '1');
   return review.kind === 'model_self_check' && review.status === 'review_received'
-    && review.compositionSkill === undefined ? 'scientific_review_v4' : policy;
+    && needsSemanticComposition ? 'scientific_review_v4' : policy;
 }
 
 /** Explicit paid refresh for a narrowly recognized extraction generation. */

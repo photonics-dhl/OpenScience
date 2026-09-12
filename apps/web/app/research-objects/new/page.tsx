@@ -271,7 +271,7 @@ export default function NewResearchObjectPage() {
         <form className="surface-folio-sheet mx-auto mt-10 max-w-4xl px-5 py-6 sm:px-8 sm:py-8" onSubmit={submit}>
           <section className="grid gap-5 border-b border-os-rule-paper pb-7 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
             <div className="relative mx-auto h-52 w-52 shrink-0 [&_.hermes-dock-anchor]:h-52 [&_.hermes-dock-anchor]:!min-h-52 [&_.hermes-workspace-stage]:!mt-0 sm:mx-0">
-              <HermesDockAnchor assistantOpen state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} onInvoke={() => goalInput.current?.focus()} />
+              <HermesDockAnchor state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} onInvoke={() => goalInput.current?.focus()} />
             </div>
             <label data-reading-role="control" className="grid gap-3 text-sm font-medium text-os-ink">
               <span className="flex flex-wrap items-baseline justify-between gap-2"><span>{t('hermesPrompt')}</span><span className="font-normal text-os-muted-paper">{t('hermesPromptNote')}</span></span>
