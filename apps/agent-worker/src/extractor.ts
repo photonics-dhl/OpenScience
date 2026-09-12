@@ -710,7 +710,8 @@ async function buildLegacySemanticBridge(gateway: AiGateway, passages: readonly 
       + '\n' + semanticContract },
     { role: 'user', content: canonicalPassagePrompt(passages) },
   ], { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
-    validationFeedback: (value) => semanticReductionIssue(value, passageIds).feedback,
+    validationFeedback: (value) => semanticReductionIssue(value, passageIds).feedback
+      + '\n本次会重新生成完整对象；修正上述问题后，逐项保持其余结构约束，不增加算例或拆出超额点。\n' + semanticContract,
     validationDiagnostic: (value) => semanticReductionIssue(value, passageIds).diagnostic });
   return { reduction: response.value, passageBindings: [],
     completion: response.completion, kind: 'source_bridge' };

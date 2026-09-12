@@ -1,5 +1,6 @@
 import {
   createBlockSourceLocator,
+  type DocumentBlock,
   type DocumentSourceMap,
   type SourceLocator,
   type WorkspaceWritingCitation,
@@ -10,6 +11,7 @@ export interface WritingSourceExcerpt {
   text: string;
   sourceLocator: SourceLocator;
   range: { start: number; end: number; total: number };
+  origin: { kind: DocumentBlock['kind']; parser: string; confidence?: number };
 }
 
 export interface WritingSourcePacket {
@@ -73,6 +75,8 @@ export function createWritingSourcePacket(
       text,
       sourceLocator: createBlockSourceLocator(sourceMap, block.id, { charRange: { start, end } }),
       range: { start, end, total: block.text!.length },
+      origin: { kind: block.kind, parser: block.parser.name,
+        ...(block.confidence !== undefined ? { confidence: block.confidence } : {}) },
     });
     characters += text.length;
   }

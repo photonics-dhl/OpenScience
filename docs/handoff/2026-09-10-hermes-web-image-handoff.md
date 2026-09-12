@@ -8,14 +8,14 @@
 
 ## 版本
 - 工作树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；HEAD以Git为准，未合并main；根目录无关改动不碰。
-- ECS应用 0df87c9bee98c2280396551ed522e66230eaf381；rollback 68a0e6b248891b308a963f75988bf230f1b832c4。工作树HEAD另有后续docs提交，以Git为准。
+- ECS应用 bff63acbefddc2a95c78289bd7b9f58861a84a28；rollback 0df87c9bee98c2280396551ed522e66230eaf381。必要服务器build/start exit0，日志xgs-writing-quality-fix-deploy-20260912.log；不以此判定科学质量。
 - 干净发布树 E:/Miscellaneous/XGS/.worktrees/deploy-m3-thinking。aa5d2e85写作/诊断在本次修复两处编译错误后已上线：Web漏SourceLocator导入/导出、Worker回调正文类型收窄丢失。
 - 网页生图provider d1630135d569d28364d295380bb4e0333c3ee264；rollback 92cc416ee3fe921f62c75cbe6f69e48d0b55227d；浏览器/会话/出口路线未改。
 - 独立video runner已更新0df87c9bee98c2280396551ed522e66230eaf381，install exit0、active/accepting；复用既有TTS/renderer镜像与模型，旧请求兼容。旧service保存于/opt/openscience-video/service-before-0df87c9bee98c2280396551ed522e66230eaf381，应用先回退68a0后才按需恢复旧service。
 - 两批必要服务器build/start均exit0，公网/__release与.release-id一致、API/Worker healthy；日志 C:/Users/Mac/AppData/Local/Temp/xgs-hermes-writing-build-fix-deploy-20260912.log 与 xgs-media-direction-deploy-20260912.log。不等于真实写作/媒体质量通过。
 
 ## 最新真实论文结果
-- 未确认ingestion 840e24f9-cf9b-471f-a38c-7331705b1003 当前agent a1c0da49-d2ea-4407-b3e6-b68eadd72ceb；任务succeeded、scientificReview blocked，六字段空，未采用/发布。
+- 未确认ingestion 840e24f9-cf9b-471f-a38c-7331705b1003 当前agent f51c10ad-0a59-4d50-8ced-6ad07f535084；bridge两次schema拒绝，仍六字段空/未采用。第1次in32/out8276/63868ms/stop，chosen类型或长度；第2次in21417/out10943/47151ms/stop，results>4点；没有成功stage，不声称续跑已实证。
 - a1ff补齐语义JSON契约后，原文bridge第一次通过：M3 21536输入+20655输出=42191 tokens，124574ms、stop。
 - final主凭据182424ms返回provider_empty，备用凭据HTTP401。旧Adapter丢弃空正文响应usage/stop，Gateway错误记0；final真实用量未知，不能记0，也不能由耗时推断触顶/超时/纯思考。
 - 结果 /jobs/hermes-semantic-contract-product-result-20260912.json（服务器浏览器）；只保存bridge元数据，不能由hash恢复已丢失正文。
@@ -38,6 +38,8 @@
 - 首份约1000字中文笔记任务37ba18af-e460-4726-bdb2-bb7b46b1b96c实际失败：M3输入16366/输出3598/34990ms/stop，schema诊断used_source_marker_missing,unresolved_issue_fields；原始拒绝正文未存，不推断具体坏形状。
 - 实际源100563字符/290 blocks；旧写作packet48000字符/113摘录、遗漏193段。候选改120k全文范围、180k含metadata请求上限，引用清单由正文显式编号派生，issue骨架说明补齐；输出预算/maxRetries0不变。独立科学审阅已给10项原文核对要点，真实成功稿与编辑保存仍待完成。
 - 引用增量High审阅后修复：旧稿按已验证原文位置/quote转换到新编号；直接保存同样展开合并编号。refresh替换提取任务后，旧稿按服务端原task/sourceMap与同用户/RO/artifact的ingestion继续解析来源，保留原引用身份。
+- bff63acb真实笔记ee842ec4-813c-4031-b115-23e8865f7a47已产出2271字符/29引用；来源覆盖100563/100563字符、306段、无遗漏，M3 38437输入/5257输出/43852ms。独立原文核对判6项待修：垂直碰撞写正碰、理论身份未明、中心/边缘阈值误比、角分辨/整体未分、相位式缺引文与同步假设遗漏、THz光子数假设未紧邻绑定。未通过质量，不采用/公开。
+- 实际页面未展示ee842ec4：GET单任务漏researchObjectId，精确恢复替换list对象后被前端同RO过滤。候选补服务端session派生scope；写作v3保留source origin（含llm_ocr_candidate），补上述通用科学约束。bridge反馈复用现有全骨架防单项修复时其他键漂移；不放宽schema/加重试。
 - 第6项已部署0df87c9b：media-direction运行时艺术/叙事指令接入原分镜/图片规划，视频locale/style沿既有storyboard文件传递；独立High静态review无阻塞。先runner后Worker已完成；复用镜像/模型。content-driven风格影响现有纸色/强调色，不等于任意生成式镜头。中文视频入口保持，未生成新媒体；视频和批量冷启动暂缓。
 
 ## 保护内容

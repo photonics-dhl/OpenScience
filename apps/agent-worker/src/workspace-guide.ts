@@ -222,6 +222,7 @@ async function handleScientificWriting(
       id: excerpt.id,
       text: excerpt.text,
       range: excerpt.range,
+      origin: excerpt.origin,
     })),
     ...(baseDraft && source.baseDraft ? { userDraft: {
       title: baseDraft.title,

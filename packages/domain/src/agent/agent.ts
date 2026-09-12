@@ -722,14 +722,15 @@ export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<A
 export async function getAgentTask(
   deps: AgentDeps,
   input: { userId: string; taskId: string },
-): Promise<AgentTaskView> {
+): Promise<AgentTaskView & { researchObjectId: string | null }> {
   const task = await deps.prisma.agentTask.findUnique({
     where: { id: input.taskId }, include: retryAuthorityInclude(input.userId),
   });
   if (!task || task.session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   }
-  return taskToView(task, evaluateAgentTaskRetryEligibility(task, input.userId).canRetry);
+  return { ...taskToView(task, evaluateAgentTaskRetryEligibility(task, input.userId).canRetry),
+    researchObjectId: task.session.researchObjectId };
 }
 
 /** One explicit, idempotent-cost retry of a failed task. The original credit reservation is reused. */

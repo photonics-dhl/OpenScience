@@ -1,6 +1,9 @@
 # OpenScience 当前进度
 
 ## 2026-09-12 — 真实质量闭环进行中
+- bff63acb已部署/rollback0df87c9b，必要服务器build/start exit0。实产笔记ee842ec4覆盖100563字符/306段，正文2271字符/29引用，38437+5257tokens/43852ms；独立对原文发现6项实质科学修订，未判质量通过。
+- 实际页面因GET task缺researchObjectId而不显示稿件；补已授权session派生scope。写作v3保留parser origin并强化研究性质/几何/积分对象/同位置阈值/假设/候选公式；待下一次必要部署后真实修订与保存。
+- 未确认refresh当前f51c10ad，bridge两次schema拒绝（chosen type/length，results>4），无final/无可保留成功stage。原有约束已完整，候选仅使retry反馈携带现有全骨架，避免只修一处而漂移别处；不放行错误或增预算。
 - 用户明确继续落实并实际校验质量；已开始当前论文私有约1000字中文笔记与已说明的语义续跑修复，不再等待旧问题。当前应用仍0df87c9b/rollback68a0e6b2。
 - 真实写作37ba18af失败于结构化schema（used_source_marker_missing,unresolved_issue_fields），M3 16366输入+3598输出/34990ms/stop；没有成功稿，不把任务调用当质量通过。
 - 读取生产SourceMap发现写作48k packet仅113摘录、遗漏193段；完整原文100563字符/290 blocks。正在修复为已有120k全文范围，程序从正文派生引用清单，保留未知ID拒绝与原输出/重试预算。
