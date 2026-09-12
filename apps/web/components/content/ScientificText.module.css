@@ -9,6 +9,8 @@
   width: max-content;
   max-width: 100%;
   margin-inline: 0.08em;
+  /* KaTeX's subscript table extends 2px past its negative end margin. */
+  padding-inline-end: 2px;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-inline: contain;

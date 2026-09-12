@@ -1,12 +1,12 @@
 # 服务器能力与复用清单
 
-当前应用0be34695891754fd49ef2d3d1b57b2138002d883 / rollbackbff63acbefddc2a95c78289bd7b9f58861a84a28；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成；无测试/CI/本机运行。
+当前应用f2a533836f8ab949d6b9b07731b8cc867e13d490 / rollback0be34695891754fd49ef2d3d1b57b2138002d883；网页生图provider d1630135 / rollback92cc416e。必要服务器build/start完成；无测试/CI/本机运行。
 
 - 当前真实a1c0da49原P语义整理第一次成功：42191tokens/124574ms。final主接口空正文、备用HTTP401，未得到新六字段，原确认稿/公开版保留。旧Adapter丢失失败usage/stop，final用量未知，不能记0。
 - paper-analysis v8/scientific-summary v2、M3显式adaptive、Docling CPU1.30/CodeFormulaV2、安全KaTeX、XLSX/PPTX/HTML已部署。候选编号/模型返回成功不代表科学正确。
 - 私有笔记40e23948经M3生成修订与独立原文核对、4处人工局部校正后已真实保存/重载/下载；2696字符/41引用，57式排版0错误，保留user_edited。完整原文100563字符/306段无遗漏；自动首稿科学准确性不能称已稳定。
 - 已部署空响应诊断记录安全usage/finish/block数量，缺失usage为null；明确length时不原预算fallback。不能反推旧空响应原因。
-- 成功语义结果保留/同源续final已部署bff63acb；当前f919d6fd bridge仍两次schema拒绝，无成功stage/final，未采用。Gateway携带拒绝候选做现有一次结构修复的候选已审阅，待发布/实产；旧hash不能恢复丢失正文。
+- 最新0a9555bc bridge成功（报告12858输出/93822ms），semanticStage已实际保存；final耗尽32768输出、仅thinking零正文，未采用。候选仅final提高到65536，保留adaptive/300s/原guard，High已审；同源应仅续final。Gateway携带拒绝候选的既有一次结构修复已部署f2a53383，本次首call成功未走retry。
 - 没有新增服务、供应商、浏览器或OCR；艺术/叙事runtime与video locale/style传递已随0df87c9b部署。现有独立video-runner active，TTS/renderer镜像和模型可复用，升级走infra/codex-image-runner/install.sh --confirm-video；未生成新视频。
 - 当前任务/状态以[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)和[Hermes台账](hermes-capability-registry.md)为准。下文历史部署只用于能力复用，不能覆盖当前事实。
 - 2026-09-12媒体部署：独立video runner bundle已更新0df87c9bee98c2280396551ed522e66230eaf381，install exit0并启动；TTS镜像a2158409、renderer镜像ff6042f6、qwen3-tts-customvoice-0c0e305原样复用，无新增生成任务。旧service备份/opt/openscience-video/service-before-0df87c9bee98c2280396551ed522e66230eaf381，先回退应用至68a0再按需恢复service，不让新Worker对接旧runner。

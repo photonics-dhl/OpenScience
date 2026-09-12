@@ -1,8 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
-> **CURRENT 2026-09-12:** application 0be34695 / rollbackbff63acb；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。真实笔记已核读编辑保存，自动六字段仍阻塞，唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
-> 真实a1c0da49语义bridge成功，final空正文/备用401，无新六字段；原22-v10图文公开保留。失败final用量未知，不能记0或宣称质量不降节约。
-> 写作/引用与精美笔记、空响应安全诊断已部署，首份实产尚未生成；用户已允许按写作指令处理当前研究私稿。语义结果复用补丁因自动审批拒绝待明确批准。
+> **CURRENT 2026-09-12:** application f2a53383 / rollback0be34695；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。真实笔记已核读编辑保存，自动六字段仍阻塞，唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
+> 最新0a9555bc语义bridge成功且reduction已保存；final达到32768输出上限，仅thinking块、零正文。同源可续final，勿重跑成功bridge；原22-v10图文公开保留。
+> 真实私有笔记40e23948经独立原文复核和UI局部校正后保存/重载/下载完成，保持user_edited。用户已明确继续处理当前研究私稿与语义续跑，旧“等待批准”已失效。
 > 公式/多格式资料、单一创建对话与附件、Hermes任务接续已部署；艺术图片/视频叙事与元数据传递本批已部署，无新媒体实产，不恢复旧冗余表单。
 > 无测试/预检/CI/本机运行；必要服务器build/start按授权继续。维护索引，历史版本不覆盖CURRENT；集成保留PRD v1.1已有能力。
 

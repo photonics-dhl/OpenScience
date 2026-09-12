@@ -1983,7 +1983,9 @@ async function modelScientificComposeSemantic(
         });
       },
       [{ role: 'system', content: SCIENTIFIC_SUMMARY_SKILL.instructions }, { role: 'user', content: prompt }],
-      { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
+      // Final source verification exhausted 32k tokens in thinking with no text.
+      // Keep reasoning enabled; only this composition stage gets more headroom.
+      { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxTokens: 65_536, maxRetries: 1,
         validationFeedback: () => '只返回fields与needsMoreEvidence；每段最多220个Unicode字符。每项科学关系必须连同条件、比较对象及操作对象整体保留；减少次要完整主张，不得裁掉限定。P编号只能来自本轮原始段。' },
     );
     completion = response.completion;
