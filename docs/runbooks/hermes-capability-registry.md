@@ -1,52 +1,32 @@
 # Hermes Capability Registry
 
-- 2026-09-12 当前：生产0d059852/rollbackf2889c86，M3已显式thinking与16k/32k预算；真实118秒阅读66观察/94段但仍是内部候选。后续M3最终model_self_check、paper-analysis v7及XLSX/PPTX/HTML接入尚待本轮部署。Chat开发复核授权已获用户明确批准，生产科学理解不要求新API或网页定稿；完整状态以CURRENT handoff为准。
-- 2026-09-12 实测更新：0d059852已部署，回滚f2889c86；M3新参数在服务器真实读取同一PDF解析结果，118秒完成5窗口+1整合，66观察/94段，6次响应全部thinkingEmitted=true/end_turn。实际输入34276、输出24503 tokens（M3接口报告），没有截断或重试；内部结果仍过长/部分过强，未写入RO，不能视为科学定稿。结果/parser-jobs/hermes-reading-m3-thinking-20260912.json。后续候选将最终六字段校正纳入MiniMax并标明model_self_check，网页不作必经定稿；当前未部署该后续候选。
+## 当前状态（2026-09-12）
+- 生产应用bbe4e4a6630202ce451f57a5e86902a276fa8948，rollback0d059852；服务器网页生图provider d1630135、rollback92cc416e，路线未改。唯一任务接续入口[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 生产用现有MiniMax-M3，不要求新API。Anthropic兼容接口显式adaptive thinking；分段16k/180s、整合32k/300s，temperature1/top_p.95。主机skills不自动注入产品，Worker必须显式加载。
+- 真实任务62ae384d已完成，但旧最终自检仍产出长稿和过强表述，未采用/未发布。正常响应、来源编号存在、review_received均不等于科学正确。
+- Chat6Pro已按用户明确授权完成开发诊断，/jobs/hermes-m3-actual-diagnosis-20260912.txt：最终步骤改为来源约束的短成稿，避免审稿schema/长候选锚定；不增加预算或更换供应商。生产不依赖Chat科学定稿。
+- 当前未部署候选：scientific-summary v1（220字符/独立来源编号/仅一次格式反馈，禁止截断）；统一创建入口/首条实际对话/失败恢复。
+- 新增“私有草稿+摘录→MiniMax写作”曾被自动审批拒绝，精确问题仍待用户答复。写作合同/来源/引用/排版指令仅准备，未接通；不能写成已部署。Chat开发材料外发已另获明确批准。
+- 禁止测试/预检/CI/本机构建；保留必要服务器build/start及真实产品任务。变化后同步本台账、server-capabilities.md、索引。
 
-- 2026-09-12 最新纠正：生产继续使用现有 MiniMax-M3，不要求额外强模型 API。官方 Anthropic 文档明确 M3 默认 thinking 关闭；0d059852之前适配器未传 thinking、structured固定4096、超时60s。不能将此前错误直接归因于模型能力。0d059852已接入科学阶段adaptive、16k/32k预算、180/300s超时及截断不重放；实际结果见顶部。Chat只作开发诊断，网页生产硬依赖尚待替换，绝不把已知错误放行。
+| 顺序 | 能力 | 真实状态 / 后续 |
+|---|---|---|
+| 1 | 科学文档与公式 | Docling Serve1.30.0 + CodeFormulaV2缓存 + TeX/页/bbox + 安全KaTeX已部署；26页32式中28式可排版、4式损坏标低置信保留原文。两个代表式已对原页，不声称全部物理正确。 |
+| 2 | 全文理解与凝练 | paper-analysis v7、research-understanding v6、critical-thinking v2及M3思考已接入。真实5窗口+reduce118秒、66观察/94段；最终成稿质量未过。新scientific-summary v1正在替换末步骤，其他原文/确认保护保留。 |
+| 3 | 科学写作与引用 | 未接通。独立私有note/review/manuscript，真实SourceMap和程序引用；不挤六字段、不把文献实验当用户原创。scientific-writing.ts/citation-management.ts/scientific-writing-source.ts待调用授权与整合。 |
+| 4 | 精美笔记/报告 | research-note-formatting运行时指令已准备、未加载；复用已安装前端设计与KaTeX，默认精炼、真实来源按需展开。Markdown/HTML及后续文档导出尚待接入。beautiful-notes没有唯一来源，不能冒名安装。 |
+| 5 | 多格式附件 | XLSX/PPTX/HTML已接入上传/MIME/现有解析链；HTML资源和PPTX外链仅清洗派生副本，原件保留，PPTX媒体流式复制；archiver7.0.1复用，parser独立锁保留5项依赖。真实多样文件兼容尚未观察。没有另装OCR/浏览器。 |
+| 6 | 艺术图片与视频 | 明确保留后续：不同画风、构图、视觉叙事、镜头/旁白、TTS/FFmpeg。先做好科学内容与写作，再按已讨论方案补齐；网页生图现有路线不变，视频和批量冷启动暂缓。 |
 
-- CURRENT 2026-09-12：文档/公式与第2项逐观察阅读已部署f2889c86，rollback7c6b7975。真实67观察/94原段已返回；内部候选的科学复核收尾，不直接写入RO。26页/32公式中4条损坏仍需针对性处理，不能把原warnings为空视作全正确。写作/精美笔记及图片/视频风格仍按顺序待办。
+用户流程：一句话或附件开始同一私有研究 → Hermes后台理解/自动整理 → 用户少量修改/确认 → 图或视频 → 审核发布。主屏标题/贡献→核心媒体→六字段→文末资料；长笔记是独立产物。
 
-- 最新2026-09-11：服务器第二Chat账号已确认登录为Pro，远程桌面已可操作；Chat6Pro实际收到三张产品截图并回复规划，会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。当前无需用户继续密码认证。
-- 历史媒体画廊/Hermes同工作台/公开阅读及发布合同修复已部署b05aaeac，实际部署和未决科学问题见CURRENT handoff。未新增服务、模型或插件，未实施自动账号轮换。
+## 来源与选择
+- [K-Dense scientific-writing](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-writing)、[critical-thinking](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-critical-thinking)、[citation-management](https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/citation-management)：此前已核来源/MIT元数据，项目适配方法，工具映射现有Gateway/ScanSci/SourceMap，不复制额外供应商或逐条人工门禁。
+- [Docling公式增强](https://docling-project.github.io/docling/usage/enrichments/)用于TeX识别；[KaTeX](https://katex.org/docs/options.html)只负责受限排版；两者不证明公式物理正确。
+- [Microsoft MarkItDown](https://github.com/microsoft/markitdown)是转换工具，不是科学理解或公式校验器。已有Docling/结构化XLSX先复用；只为实际格式缺口增加依赖，不装all整包。
+- [Pandoc](https://pandoc.org/MANUAL.html)只在具体导出需要时补齐；未安装/未接通状态不写成可用。
 
-> 状态：**CURRENT**
-> 最后核验：2026-09-12（相关服务/包/配置与源码；不重跑论文）
-> 设计真源：`docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
-> 安全原则：只记录变量名与注入状态，禁止记录、读取或输出真实 key/token/cookie。
-
-服务器具体文件、镜像与复用入口见 [服务器能力清单](server-capabilities.md)；服务器任务先读相关条目。本台账历史验收记录不构成新一轮测试要求，遵循AGENTS产品落地优先规则。
-
-## 2026-09-12 接入顺序与第一批准备清单
-
-- 第2项已部署：产品内置scientific-critical-thinking v2，项目中文适配参考K-Dense同名v1.3/MIT元数据，实际导入global-reduce，短文直接综合时按需加载；不依赖宿主SKILL目录或新供应商。paper-analysis/research-understanding v6结合Chat6Pro真实复核补强运算对象、相位/归一化、公式冲突与范围措辞。方案原文/jobs/hermes-stage2-chat-plan-20260912.txt，实际复核同目录hermes-stage2-chat-scientific-review-20260912.txt。
-- 第1项观察更新：28/32公式可排版，两个代表式已核原图；4条格式损坏尚未修复成正确公式。识别失败回退原文/区域confidence已部署，不将语法通过声称为科学正确。
-- 真实阅读恢复：5个MiniMax分段按相同输入经新guard复用，单次reduce47秒/7753输入/3002输出token；结果67观察、94覆盖原段、32限定上下文。原guard把省略空限定数组误判已修，非法类型/来源仍拒绝。这是本次人工恢复，不是自动缓存能力；不据单次计量推算总体节省比例。
-- 先前关闭思考、4096预算的MiniMax修订仍混算例，原结果保留为失败证据；不能采纳，也不能据此断言模型能力不足。先修正实际调用，再依据新结果判断。
-用户已认可一站式AI助手，要求先准备服务器能力、逐项接入。安装目标是服务器产品Hermes；不将文件复制到本机Codex或`/opt/hermes-agent/skills`后宣称产品升级。复用现有Worker/Gateway和任务体系，由明确任务加载相应指令/工具，避免全量skill每次注入。当前第2项科学复核收尾，随后按下表继续。
-
-用户本轮再次明确：当前步骤结束后回到图片/视频的艺术风格、构图、视觉叙事、镜头/旁白与真实产物复核；不能在后续交接中遗忘。当前不生成新媒体、不启动视频验证。
-
-| 顺序 | 能力及候选 | 当前事实与处理方式 | 用户可见的完成结果 |
-|---|---|---|---|
-| 1 | 科学文档与公式：现有Docling + 项目数学格式规范 + KaTeX | 已部署7c6b7975，CodeFormulaV2增强true、TeX/来源保留、理解v6及安全渲染；32式中28式可排版，已核两个代表原式；4条损坏已可标记/保留原文，不猜写 | 科学文本能显示；针对性识别缺口仍需处理，不冒称所有公式物理正确 |
-| 2 | 全文分析：paper-analysis v6/research-understanding v6/scientific-critical-thinking v2 | 已生产实际加载，逐观察绑定来源/限定/算例；67观察和94段真实结果，32段限定上下文保留；短阶段指令替代反复全量注入 | Chat6Pro真实科学复核已收到并落实通用修订规则；本次综合修订结果见handoff，不能以有输出代替准确理解 |
-| 3 | 科学写作与引用：scientific-writing + citation-management；复用宿主research-paper-writing可用部分 | K-Dense当前skills路径、MIT元数据已核对。工具改接现有ScanSci/检索/Gateway；原版逐条人工来源认证、模板或额外供应商不是本产品默认流程，不为安装而引入新订阅。稿件与六字段分别处理 | 用户说“整理成研究笔记/综述/论文初稿”，获得对应文体；已有研究的归纳不冒充用户原创结果；引用来自真实来源 |
-| 4 | 精美输出：项目research-note-formatting能力 + 既有设计规范；Pandoc按导出需要补齐 | beautiful-notes在旧表只有PATTERN_ONLY且无来源URL，公开检索未定位唯一对应skill，不安装同名笔记应用冒充。可维护项目专用排版指令，使用同一内容生成HTML与后续DOCX/LaTeX/PDF导出，PDF编译依赖另按需要接入 | 层级、目录、公式、表格、图注与参考文献一致的可读笔记/报告；公开RO继续精炼，不变成长篇稿件 |
-| 5 | 多格式文档入口：先复用Docling格式支持，Microsoft MarkItDown补实际缺口 | 现有PDF/DOCX/XLSX等入口可复用；PPTX等先核Docling已有端点与产品接入差距，再按剩余格式选择MarkItDown依赖，避免全装[all]。其PDF默认转换器使用pdfminer/pdfplumber，不能代替高级公式识别 | 补充讲稿、幻灯片等可由同一对话读入，仍保留原文件与定位；先规范授权类型/MIME和隔离入口 |
-| 6 | 艺术生图与视频叙事：现有生图skill/Chat执行器、镜头/旁白/TTS/FFmpeg资源 | 科学写作与视觉brief分层。艺术策划、真实图片复核、下载恢复先做，视频后做；不整包引入强制OpenRouter/NanoBanana或新GPU栈 | 不同画风的核心图；后续按论文内容组织的成片，科学关系不因艺术风格改变 |
-
-各项按“相关指令实际加载 → 现有/新增工具可调用 → 结果回到同一研究 → 用户可修改与导出”的顺序交付，复用已观察到的有效结果，不建立重复测试工程。技能优先少而有明确用途；每个后续任务只接通当前一项，不等待整份清单完成后才改善入口。
-
-来源与边界（本轮读到的内容，不直接当指令执行）：
-
-- [scientific-writing](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-writing/SKILL.md)，MIT、版本2.1、平台中立，核心指导无需新API；需按项目自动草稿/来源核对方式适配，不引入逐条人工门禁。
-- [scientific-critical-thinking](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-critical-thinking/SKILL.md) 与 [citation-management](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/citation-management/SKILL.md)，MIT元数据已读；跨学科部分选用，工具依赖映射到现有服务。
-- [literature-review](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/literature-review/SKILL.md) 原版强制生成1–2张图并使用parallel-cli，不按原样接入；综述方法可按需参考，不为每篇分析默认搜全网/生图。
-- [MarkItDown](https://github.com/microsoft/markitdown) 是文件转换工具，[PDF实现](https://github.com/microsoft/markitdown/blob/main/packages/markitdown/src/markitdown/converters/_pdf_converter.py)采用pdfminer/pdfplumber；不是排版引擎、公式校验器或科学理解模型。
-- [Docling公式增强](https://docling-project.github.io/docling/usage/enrichments/)输出公式LaTeX；[KaTeX](https://katex.org/docs/options.html)负责显示，不修正错误公式，集成需保持不可信命令受限；[Pandoc](https://pandoc.org/MANUAL.html)负责格式转换与引用输出，不补造缺失科学事实。
-
-以上候选来源在2026-09-12最初只读盘点阶段核对，当时未安装；后续实际接入状态以本页顶部为准。Chat同一6Pro会话回复e2850072-025c-4903-9ac9-585d13173d9b已取回：采纳Worker显式技能接入、自动核对、笔记/综述/原创稿件区分、PPTX先复用Docling和按需导出；其建议先写作再公式，本项目将已确认的文档/公式缺口前置以免错误输入污染稿件，不等待全部新工具装齐才交付入口。笔记与稿件作为关联RO的私有可编辑产物，不覆盖精炼六字段或公开图文。
+以下为既有能力与历史部署记录；涉及当前版本/质量的判断以上文及CURRENT handoff为准。
 
 ## 1. Purpose
 - 后续实时观察：fd719902服务器网页生图成功并回传，读取时已approved；FWHMₛ图示方向/含义仍需修正，不能以运输或批准状态代替科学质量。用户已指定第二账号；正常退出旧账号、Google OAuth两个必要精确域已放行，随后已完成用户身份验证（见本页最新更新）。自动跨账号轮换尚未实现，也不承诺轮换免限额。旧3814f844限额不得扩展为当前生图能力不可用。

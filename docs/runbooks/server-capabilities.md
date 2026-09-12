@@ -1,17 +1,12 @@
 # 服务器能力与复用清单
 
-- 2026-09-12 当前：生产0d059852/rollbackf2889c86，M3已显式thinking与16k/32k预算；真实118秒阅读66观察/94段但仍是内部候选。后续M3最终model_self_check、paper-analysis v7及XLSX/PPTX/HTML接入尚待本轮部署。Chat开发复核授权已获用户明确批准，生产科学理解不要求新API或网页定稿；完整状态以CURRENT handoff为准。
-- 2026-09-12 实测更新：0d059852已部署，回滚f2889c86；M3新参数在服务器真实读取同一PDF解析结果，118秒完成5窗口+1整合，66观察/94段，6次响应全部thinkingEmitted=true/end_turn。实际输入34276、输出24503 tokens（M3接口报告），没有截断或重试；内部结果仍过长/部分过强，未写入RO，不能视为科学定稿。结果/parser-jobs/hermes-reading-m3-thinking-20260912.json。后续候选将最终六字段校正纳入MiniMax并标明model_self_check，网页不作必经定稿；当前未部署该后续候选。
+当前应用bbe4e4a6630202ce451f57a5e86902a276fa8948 / rollback0d059852；网页生图provider d1630135 / rollback92cc416e。2026-09-12完成必要服务器build/start，无测试/CI/本机运行。
 
-- 2026-09-12 最新纠正：生产继续使用现有 MiniMax-M3，不要求额外强模型 API。官方 Anthropic 文档明确 M3 默认 thinking 关闭；0d059852之前适配器未传 thinking、structured固定4096、超时60s。不能将此前错误直接归因于模型能力。0d059852已接入科学阶段adaptive、16k/32k预算、180/300s超时及截断不重放；实际结果见顶部。Chat只作开发诊断，网页生产硬依赖尚待替换，绝不把已知错误放行。
-
-- HISTORICAL 2026-09-12早前：应用releasef2889c86、rollback7c6b7975，部署脚本已确认精确release；文档公式、逐观察全文分析与科学自省runtime skill已部署。真实阅读保留67观察/94原段；这只是内部候选，科学复核与实际范围见CURRENT handoff。写作及图片/视频风格按[能力台账](hermes-capability-registry.md)继续。
-
-- 本轮更新：服务器已实际登录用户指定的第二Chat账号（Pro），账户设置匹配；noVNC已恢复显示与操作，无需再次登录。不记录个人邮箱/凭据，不实现自动账号轮换。
-- Chat6Pro已接收三张用户截图并完整回复：6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581。历史许可证400修复已经部署；当前正式工作台/公开阅读版本见本页CURRENT，不恢复旧候选结论。
-- 画面恢复日志 jobs/x11vnc-login-recovery.log：曾无RFB greeting、后有端口占用；目前真实画面与交互正常，未证明XDamage或浏览器根因。无新安装。
-
-2026-09-12 定向实时盘点。先查本页，再查相关条目的入口；能力或服务变动后同一任务内更新。文件存在、服务运行、产品调用成功是不同状态。本页记录部署位置与复用方式；Hermes语义能力/供应商政策见 [能力台账](hermes-capability-registry.md)，实时产品任务见 CURRENT handoff。
+- 已部署：MiniMax-M3显式adaptive thinking（16k/32k预算）、最终model_self_check、paper-analysis v7；Docling CPU1.30/CodeFormulaV2/安全KaTeX；XLSX/PPTX/HTML解析和派生副本清洗。
+- 真实论文62ae384d已完成，但正文过长并有物理条件泛化，未采用/发布。Chat6Pro诊断已返回。候选scientific-summary v1只重做精炼成稿，未确认refresh复用原文，避免再次解析和map/reduce。
+- 统一Hermes创建/附件/首条指令接续正收尾未部署。写作/精美笔记模块仅准备未接通；后续艺术图片与视频能力按台账继续。
+- 现有服务器浏览器、已登录Chat6Pro及网页图片路线可复用；不因本机控制桥错误判其不可用。无需下载新的浏览器或OCR。账号登录情况按服务器实际可见会话判断，不自动跨账号轮换。
+- 当前版本和真实质量以CURRENT handoff及[Hermes能力台账](hermes-capability-registry.md)为准。服务有变化必须同步；下列技术条目保留历史来源，旧release不覆盖上文。
 
 ## 2026-09-12 文档与公式能力接入
 

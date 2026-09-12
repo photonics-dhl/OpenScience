@@ -13,6 +13,7 @@ import {
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
 import { RESEARCH_UNDERSTANDING_SKILL } from './skills/research-understanding.js';
 import { PAPER_ANALYSIS_SKILL } from './skills/paper-analysis.js';
+import { SCIENTIFIC_SUMMARY_SKILL } from './skills/scientific-summary.js';
 import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from './skills/scientific-critical-thinking.js';
 import type { ParserRasterResult } from './parsers/job-protocol';
 import { SCIENTIFIC_READING_OPTIONS, SCIENTIFIC_SYNTHESIS_OPTIONS } from './scientific-generation-options';
@@ -69,6 +70,7 @@ export interface ExtractionResult extends Record<string, unknown> {
     provider: string | null;
     model: string | null;
     kind?: 'model_self_check' | 'independent_review';
+    compositionSkill?: { id: string; version: string };
     usage?: { inputTokens: number; outputTokens: number };
     finishReason?: 'stop' | 'length' | 'other' | 'unknown';
     contractVersion: '4';
@@ -1393,6 +1395,38 @@ function scientificReviewPrompt(
 }
 
 
+
+type ScientificCompositionResponse = {
+  fields: Record<(typeof SDF_CORE_FIELDS)[number], { summary: string; sourcePassageIds: string[] }>;
+  needsMoreEvidence: ScientificReviewResponse['needsMoreEvidence'];
+};
+
+function normalizeScientificComposition(value: ScientificCompositionResponse): ScientificReviewResponse {
+  return {
+    fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
+      ...value.fields[field], verdict: value.fields[field].summary.trim() ? 'revised' : 'blocked', issues: [],
+    }])) as ScientificReviewResponse['fields'],
+    needsMoreEvidence: value.needsMoreEvidence,
+  };
+}
+
+function scientificCompositionGuard(value: unknown, allowedIds: ReadonlySet<string>): value is ScientificCompositionResponse {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const root = value as Record<string, unknown>;
+  if (Object.keys(root).sort().join(',') !== 'fields,needsMoreEvidence'
+    || !root.fields || typeof root.fields !== 'object' || Array.isArray(root.fields)) return false;
+  const fields = root.fields as Record<string, unknown>;
+  if (Object.keys(fields).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(',')) return false;
+  for (const field of SDF_CORE_FIELDS) {
+    const item = fields[field] as Record<string, unknown> | null;
+    if (!item || typeof item !== 'object' || Array.isArray(item)
+      || Object.keys(item).sort().join(',') !== 'sourcePassageIds,summary'
+      || typeof item.summary !== 'string' || Array.from(item.summary).length > 220
+      || /\bP\s*\d{5}\b/iu.test(item.summary) || !Array.isArray(item.sourcePassageIds)) return false;
+  }
+  return scientificReviewGuard(normalizeScientificComposition(value as ScientificCompositionResponse), allowedIds);
+}
+
 async function modelScientificReviewCanonicalProposal(
   gateway: AiGateway,
   sourceMap: DocumentSourceMap,
@@ -1405,27 +1439,28 @@ async function modelScientificReviewCanonicalProposal(
   const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
   const reviewPassages = selectScienceReviewPassages(passages, proposal, context?.coveragePassageIds);
   const allowedIds = new Set(reviewPassages.map((passage) => passage.id));
-  const current = Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
-    summary: proposal.fields[field].summary,
-    sourcePassageIds: proposal.fields[field].sourcePassageIds ?? [],
-    needsMoreInformation: proposal.fields[field].needsMoreInformation,
-  }]));
   let completion: Awaited<ReturnType<AiGateway['complete']>> | undefined;
   let parsed: ScientificReviewResponse | undefined;
   let failure = 'trusted_context_unavailable';
   let prompt = '';
   if (context && reviewPassages.length) {
-    prompt = scientificReviewPrompt(candidateHash, sourceMapHash, current, reviewPassages, false);
+    prompt = [
+      '请根据以下原文写六段研究精华。内部长稿不作为写作模板。来源和正文分开。',
+      `仅返回此结构：${JSON.stringify({ fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) =>
+        [field, { summary: '', sourcePassageIds: [] }])), needsMoreEvidence: [] })}。`,
+      'needsMoreEvidence如非空，每项只能有affectedFields（六字段英文名数组）、question、requestedContext。summary每段最多220个Unicode字符，不含P编号；编号只在sourcePassageIds。不要返回verdict/issues。',
+      `原文来源（sourceMapHash=${sourceMapHash}）：\n${canonicalPassagePrompt(reviewPassages)}`,
+    ].join('\n\n');
     try {
-      const response = await gateway.completeStructuredWithMetadata<ScientificReviewResponse>(
-        (value): value is ScientificReviewResponse => scientificReviewGuard(value, allowedIds),
-        [{ role: 'system', content: SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions },
+      const response = await gateway.completeStructuredWithMetadata<ScientificCompositionResponse>(
+        (value): value is ScientificCompositionResponse => scientificCompositionGuard(value, allowedIds),
+        [{ role: 'system', content: SCIENTIFIC_SUMMARY_SKILL.instructions },
           { role: 'user', content: prompt }],
         { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
-          validationFeedback: () => '严格按给定六字段结构返回完整JSON；来源只能选原文P编号。不要复制长原文或新增字段。' },
+          validationFeedback: () => '只返回fields与needsMoreEvidence；六段各只含summary和sourcePassageIds。正文每段最多220个Unicode字符，减少次要断言，保留关键条件，不写P编号或审稿字段。来源编号只能来自原文。' },
       );
       completion = response.completion;
-      parsed = response.value;
+      parsed = normalizeScientificComposition(response.value);
     } catch (error) {
       failure = error instanceof AiGatewayError ? error.code : 'scientific_correction_unavailable';
     }
@@ -1465,7 +1500,8 @@ async function modelScientificReviewCanonicalProposal(
     review: {
       provider: completion?.provider ?? null,
       model: completion?.model ?? null,
-      kind: 'model_self_check', contractVersion: '4', status, attemptId,
+      kind: 'model_self_check',
+      compositionSkill: { id: SCIENTIFIC_SUMMARY_SKILL.id, version: SCIENTIFIC_SUMMARY_SKILL.version }, contractVersion: '4', status, attemptId,
       reviewedCandidateHash: candidateHash,
       ...(completion ? { promptHash: completion.promptHash } : {}),
       ...(completion ? { responseHash: createHash('sha256').update(completion.text).digest('hex'),

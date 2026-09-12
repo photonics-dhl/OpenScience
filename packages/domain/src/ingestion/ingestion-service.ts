@@ -512,6 +512,15 @@ export async function retryIngestionTask(
   return taskToView(queued);
 }
 
+/** Upgrade only an unconfirmed, pre-composition M3 result; confirmed reanalysis retains its existing policy. */
+function unconfirmedAnalysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha256: string }): AnalysisRefreshPolicy | undefined {
+  const policy = analysisRefreshPolicy(value, artifact);
+  if (policy !== 'user_requested_reanalysis') return policy;
+  const review = (value as Record<string, unknown>).scientificReview as Record<string, unknown>;
+  return review.kind === 'model_self_check' && review.status === 'review_received'
+    && review.compositionSkill === undefined ? 'scientific_review_v4' : policy;
+}
+
 /** Explicit paid refresh for a narrowly recognized extraction generation. */
 export async function refreshIngestionAnalysis(
   deps: IngestionDeps,
@@ -547,7 +556,7 @@ export async function refreshIngestionAnalysis(
   const oldAgent = await deps.prisma.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
   const oldPayload = oldAgent?.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload)
     ? oldAgent.payload as Record<string, unknown> : null;
-  const policy = oldAgent ? analysisRefreshPolicy(oldAgent.result, initial.artifact) : undefined;
+  const policy = oldAgent ? unconfirmedAnalysisRefreshPolicy(oldAgent.result, initial.artifact) : undefined;
   if (!policy) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction is not eligible for analysis refresh');
   const allowedRetries = policy === 'user_requested_reanalysis' ? initial.retryCount : policy === 'grounded_passages_v1' ? 2 : policy === 'grounded_passages_v2' ? 1 : 0;
   if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review' || initial.retryCount < 0 || initial.retryCount > allowedRetries
@@ -604,7 +613,7 @@ export async function refreshIngestionAnalysis(
           || !oldAgent || oldAgent.id !== input.sourceAgentTaskId || oldAgent.kind !== 'sdf.extract'
           || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== source.retryCount || !validRefreshSourceExecution(policy, source.id, oldAgent)
           || oldAgent.session.userId !== input.userId || oldAgent.session.researchObjectId !== source.batch.researchObjectId
-          || oldAgent.session.status !== 'active' || analysisRefreshPolicy(oldAgent.result, source.artifact) !== policy) {
+          || oldAgent.session.status !== 'active' || unconfirmedAnalysisRefreshPolicy(oldAgent.result, source.artifact) !== policy) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the scoped unconfirmed extraction can be refreshed');
         }
         const oldPayload = oldAgent.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload) ? oldAgent.payload as Record<string, unknown> : null;
