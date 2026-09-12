@@ -1,21 +1,20 @@
 # OpenScience (XGS) 项目文件索引
 
-> **CURRENT 2026-09-13:** application 479cdfa8 / rollback9f889d26；video runner 0df87c9b；browser provider d1630135 / rollback92cc416e。交付branch codex/onchip-video-release，后续docs-only HEAD不是新release，未合并main。唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。
-> 私有六字段审校稿92cafb82已人工原文校正、独立复核并真实保存/重载/展开来源/下载：1118字符/17引用，user_edited。原40e23948笔记和22-v10公开图文保留，尚未采用/发布。
-> 当前自动稿4b46aada/v6仅续final实证0OCR/map/bridge，原一次JSON重试后成功但科学仍三类实质错误。证据导航479已部署，当前新页资源错误/重载空白导致本轮UI未验收；9f的六栏成功是历史证据。停止同路线重生成。
-> 公式/多格式资料、单一创建对话与附件、Hermes任务接续已部署；艺术图片/视频叙事与元数据传递本批已部署，无新媒体实产，不恢复旧冗余表单。
-> 无测试/预检/CI/本机运行；必要服务器build/start按授权继续。维护索引，历史版本不覆盖CURRENT；集成保留PRD v1.1已有能力。
-> 复用优先要求已记入AGENTS与项目Memory；GitHub源文件/实际调用对照见docs/runbooks/hermes-capability-registry.md“来源与选择”。证据导航已实现并实产核读；下步仍需解决最终主张的来源审校与实际阅读，不把部署等同质量完成。
+> **CURRENT 2026-09-13:** application a8ce22dd / rollback1bf65518；必要服务器build/start exit0。video runner0df87c9b；browser provider d1630135 / rollback92cc416e。branch codex/onchip-video-release，docs-only HEAD不是release，未合并main。
+> 唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。当前自动agent d5c6f699真实字段审校仍失败；4bedbb4b具体方法回读核心科学PASS，但多问与局部共编仍丢条件。a8修复笔记漏路由/科学共编推理配置，10799ba3实产仍经High原文复核拒绝；停止重试，保留人工审校流程。
+> 私有92cafb82人工原文审校稿1118字符/17引用已独立复核及真实保存/重载/下载；原40e23948、公开v10与已批图保留，尚未采用新稿/发布，视频/批量暂停。
+> 浏览器定位压缩解码Mojo管道分配失败，空编码实际reload又遇压缩脚本SyntaxError；最终页面有生成中标记，未重启或回读，当前UI仍未验收。不以API成功或旧页面证据代替本轮阅读。
+> 复用来源方法与实际调用见hermes-capability-registry“来源与选择”；无第三方安装、测试/预检/CI/本机运行，必要服务器build/start按授权继续。
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` / `apps/agent-worker/src/{index,extractor}.ts` / `apps/web/lib/api.ts` | refresh显式current/base复用SourceMap与semanticStage，仅续final；确认必带sourceAgentTaskId且Serializable/CAS核对 | 已部署；b6/d680/097实证0OCR/map/bridge，默认refresh/reparse不变；确认保护High静态复核，未人为触发确认 |
+| `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` / `apps/agent-worker/src/{index,extractor}.ts` / `apps/web/lib/api.ts` | refresh显式current/base复用SourceMap/semanticStage；reviewOnly以当前原稿复用既有科学审校；确认保持sourceAgentTaskId/Serializable/CAS | 1bf已部署，d5c6真实审校不重跑前段但科学仍失败；默认refresh/reparse不变，未触发确认 |
 | `packages/domain/package.json` / `packages/domain/src/agent/agent.ts` / `packages/domain/src/ingestion/canonical-evidence-contract.ts` / `apps/web/lib/suggestion-evidence.ts` | API/web复用既有64段/24000字符证据边界，纯常量subpath与同block范围一致 | 9f已部署；身份/定位限制保留，097六栏引用4/2/13/4/7/11均显示，旧d680无需模型重跑也恢复引用 |
 | `apps/web/app/research-objects/[id]/{edit,hermes}/page.tsx` / `apps/web/lib/ingestion-proposal-draft.ts` / `apps/web/messages/{zh,en}.json` | 原始建议sourceCore与编辑core分离、agentTaskId隔离草稿、保护实际未保存改动与跨代合并 | 0fc已部署；实际六栏逐字等新API，未自动采用，RO仍revision11 |
 | `apps/agent-worker/src/skills/scientific-summary.ts` / `apps/agent-worker/src/extractor.ts` | v6复用语义分组的来源导航，不传旧语义文字，global P并集/既有预算定位不变 | 479已部署，High代码复核；4b46真实原文核对仍有三类科学错误，不能称自动质量通过 |
-| `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | 已部署；复用editorDraft两次服务器共编后人工校正保存92cafb82，1118字符/17引用；原40e23948保留，自动稿仍需审校 |
+| `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | a8已部署笔记路由/科学共编推理；4bed单问原文回读核心科学PASS，10799局部改稿仍失败；92人工审校稿与原40e保留 |
 | `apps/web/components/hermes/HermesWritingDraft.tsx` / `HermesWritingDraft.module.css` / `HermesAssistantDrawer.tsx` / `apps/web/lib/api.ts` | 常驻对话中的独立稿件阅读、编辑、Markdown下载与折叠来源 | 新审校稿真实保存/新页重载/来源/下载一致，user_edited保留；旧稿57式0错误，短稿无独立公式；旧页资源错误未根治 |
 | `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 已部署7c6b7975；真实67观察/94段，内部候选经Chat6Pro复核收尾，不自动放行科学结论 |
 | `apps/agent-worker/parser-image/package.json` / `package-lock.json` / `apps/agent-worker/src/ingestion-parser.ts` | 隔离parser的KaTeX语法兼容、坏公式orig回退及区域低置信标记 | 已部署7c6b7975；格式失败可识别和保留原文，不表示4条坏公式已科学修正 |
@@ -29,7 +28,7 @@
 | `docs/proposals/2026-09-11-ro-product-preview.html` | 保留已认可布局的视觉与Hermes对话交互稿，固定输入、精简制作确认、公开媒体与正文共享状态 | 已批准的视觉参考；原样稿仅预设短句/内存演示，生产实现与未决事项见CURRENT handoff |
 | `apps/web/lib/hermes/conversation-action.ts` / `apps/web/components/hermes/HermesMediaReview.tsx` | Hermes对话确认的前端动作接口、当前版本实际素材审核及结果回写 | DEPLOYED1cdd4602；复用原权限/版本/updatedAt；实际观察与未决项见CURRENT |
 | `apps/web/app/research-product.css` / `apps/web/app/research-objects/[id]/edit/workbench.module.css` / `apps/web/components/public/PublicReadingProduct.module.css` | 已批准高保真风格的正式工作台与公开阅读样式，六栏目标题强调、图视频直显和固定Hermes对话输入 | DEPLOYED17ebc7f7；无测试/预检，实际页面观察及限制见CURRENT handoff |
-| `apps/agent-worker/src/workspace-guide.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/components/hermes/HermesPresentationAction.tsx` | 同会话服务端上下文、模型语义路由、可撤销草稿回显、折叠制作确认与发布预览；保留权限/版本/明确制作发布确认 | DEPLOYED17ebc7f7；不以请求成功代替科学产物通过 |
+| `apps/agent-worker/src/workspace-guide.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/components/hermes/HermesPresentationAction.tsx` | 同会话服务端上下文、模型语义路由、可撤销草稿回显、折叠制作确认与发布预览；保留权限/版本/明确制作发布确认 | a8已部署：描述性笔记意图修复、科学editorDraft启用既有synthesis推理；原能力保留，不以请求成功代替科学产物通过 |
 | `apps/web/components/presentation/ResearchPresentation.tsx` / `apps/web/components/research/ResearchPublication.tsx` | 连续工作台复用制作及版本绑定发布预览，旧独立路由保留 | DEPLOYED b05aaeac；最新真实状态见CURRENT handoff |
 | `infra/scripts/verify-hermes-user-journey.mjs` | 服务器真实普通账号浏览器上传/启动/恢复取证，禁止手工生成各媒体阶段 | ACCEPTANCE TOOL；待运行，不代表产品流程通过 |
 | `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |
@@ -453,7 +452,7 @@
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
 | `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE/ScanSci 隔离、Windows Git Bash）；§5.49–5.66 为历史/发布 evidence，现行 Docker cache 维护见 §5.67 | **CURRENT运维手册**；2026-09-06缓存清理753.4MB、cache1.005GB、应用f144eb7/rollback b23102b；历史版本证据不作当前部署锚点 |
 | `infra/scripts/evaluate-scansci-upstream-mcp.{sh,test.mjs}` | 上游 `v1.13.1` 官方 MCP 有界 ECS 正向试点：wheel hash、17 tools、真实 OA PDF、exact trap cleanup | **TASK 1 ECS ACCEPTED**；24,671,920 bytes / `d57dc94c…f484a`，临时容器/卷 `0/0` |
-| `docs/runbooks/hermes-capability-registry.md` | Hermes实际技能/工具加载、科学文档/公式、写作引用、精美笔记和媒体能力顺序 | **CURRENT 2026-09-12**；公式增强开启并取得真实输出，分析/理解v6与科学自省v2已加载；科学写作/精美输出/媒体风格仍待后续，历史评测不是新测试门禁 |
+| `docs/runbooks/hermes-capability-registry.md` | Hermes实际技能/工具加载、科学文档/公式、写作引用、精美笔记和媒体能力顺序 | **CURRENT 2026-09-13**；来源写作/字段审校/媒体风格已部署，实际质量与未完成范围见CURRENT；历史评测不是新测试门禁 |
 | `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；验证后临时库按用户授权精确清理 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
@@ -539,7 +538,7 @@
 
 | `apps/web/app/research-objects/[id]/overview/overview.module.css` / `apps/web/test/e2e/research-overview.spec.ts` | 真实概览完整叙述、最新已提交版本审核资产、段落Hermes目标；桌面/移动端与历史版本过滤验证 | 当前363257aa产品布局已部署，实际浏览与限制见CURRENT handoff；080fa74为历史 |
 
-| `apps/agent-worker/src/workspace-guide.ts` / `apps/agent-worker/test/workspace-guide.test.ts` | 将现有已验证target传入Gateway模型上下文；解释sdf-evidence→reproducibility映射；段落引导回归 | RELEASE CANDIDATE；不新增API字段或权限 |
+| `apps/agent-worker/src/workspace-guide.ts` / `apps/agent-worker/test/workspace-guide.test.ts` | 既有target上下文及sdf-evidence映射；笔记写作路由与科学editorDraft推理 | a8已部署；保持现有API/权限，实际产物见CURRENT，不运行测试 |
 
 | `apps/web/components/hermes/HermesVisualAdapter.tsx` / `apps/web/test/e2e/product-release.spec.ts` | PR103宽菜单实际矩形避让、12动作布局与概览媒体fixture；原保护/间距门禁保留 | DEPLOYED080fa74；最终构建回归与服务器验收通过 |
 
@@ -594,7 +593,7 @@
 
 - DEPLOYED infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：服务器交互浏览器与生产 `chatgpt-web` provider；真实Hermes图片已回传，真实PDF完成6 Pro初审与补证；区域附件子域、图片/科学审阅独立锁、30分钟窗口、15秒science heartbeat、协议版本化幂等和逐字段保留部署于`36e6a8c4`；infra/scripts/ssh-run.sh固定browser-tunnel。
 
-- CURRENT docs/runbooks/server-capabilities.md：2026-09-12应用a1ff2db9；Docling/M3/公式已部署，写作/笔记与诊断待发布；服务器任务先读，只补真实缺口。
+- CURRENT docs/runbooks/server-capabilities.md：2026-09-13应用a8ce22dd / rollback1bf65518；Docling/M3/公式/写作已部署，科学质量与浏览器实际状态见CURRENT；服务器任务先读，只补真实缺口。
 
 - `infra/scripts/browser-tunnel.ps1`：Windows隐藏SSH隧道断线重连；固定localhost6081，复用ssh-run.sh，2026-09-09本机页面恢复HTTP200。
 

@@ -1,9 +1,13 @@
 # 服务器能力与复用清单
 
-当前应用479cdfa8e7d83e23f951b26c3b6d267e0fed419a / rollback9f889d2619290b378d735cb09304ccf640068120；网页生图provider d1630135 / rollback92cc416e。2026-09-13必要服务器build/start完成；无测试/CI/本机运行。
+当前应用a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a / rollback1bf65518390677b0104d6cb34749ad817edba42e；必要服务器build/start exit0。网页生图provider d1630135 / rollback92cc416e；无测试/CI/本机运行。
 
-- 2026-09-13：15组原文证据导航与scientific-summary v6已部署实产；4b46aada复用SourceMap/bridge，只有final两次（第一次JSON解析拒绝触发原一次重试）。原文独立复核仍不通过：强度/电场运算链、交叉验证算例、权衡范围与引文支持仍有错。停止同路线重生成，未采用/发布。
-- 本轮实际新页12个JS资源错误，单次重载后空白，未完成当前六栏/来源UI核读；PID510/1024、内存约2.13/4.29GB、最大fd257均未触及上限，根因未明。下面9f页面成功属于历史证据，不能覆盖本轮失败。无新服务/依赖/权限变更。
+- 2026-09-13：1bf reviewOnly复用旧SourceMap/bridge作真实字段审校，d5c6f699仍科学失败，保留未采用。停止整稿自省/重生成循环。
+- 既有workspace.guide完整来源写作可用于具体问题回读：4bedbb4b方法链独立High核心科学PASS；五问63e2acc5仍错，不能泛化成自动质量通过。8ff局部共编仍丢前提，a8修正其原推理关闭配置，复用科研synthesis选项；实际10799ba3仍被High原文复核拒绝（删起始链/漏√I与同步），不再重试，不以配置修改冒充质量修复。
+- 写作意图漏识别有修饰语的“写一篇…笔记”，a8修复明确命令路由；权限/否定/保存/引用合同不变，High静态复核通过。
+- 浏览器压缩解码Mojo data-pipe创建14/324失败与ERR_INSUFFICIENT_RESOURCES匹配；容器PID/内存/fd/shared memory均有余量。单target空编码reload后原错误0但7个压缩脚本SyntaxError，override已清理，仍未挂载；最终三锁取得且后台空，但页面generatingPages=1，故未重启/回读；底层分配原因仍未明。
+- 私有92cafb82六字段人工审校稿（1118字符/17引用）及40e23948长稿保留；公开v10/revision11/已批图不变。自动稿未采用/发布，视频/批量暂停。
+- 下文为能力与历史操作记录，涉及当前科学质量/浏览器状态以CURRENT handoff和Hermes台账为准。
 
 - 历史a1c0da49原P语义整理成功42191tokens/124574ms，final空正文/备用HTTP401且旧Adapter失败usage未知。当前097已通过显式来源+stage复用成功产出六字段，但科学质量仍需审校；不能把历史失败视作当前功能状态。
 - paper-analysis v8/scientific-summary v6、M3显式adaptive、Docling CPU1.30/CodeFormulaV2、安全KaTeX、XLSX/PPTX/HTML已部署。模型返回成功不代表科学正确。
