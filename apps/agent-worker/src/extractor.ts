@@ -1402,10 +1402,14 @@ type ScientificCompositionResponse = {
 };
 
 function normalizeScientificComposition(value: ScientificCompositionResponse): ScientificReviewResponse {
+  const field = (key: (typeof SDF_CORE_FIELDS)[number]): ScientificReviewField => ({
+    ...value.fields[key], verdict: value.fields[key].summary.trim() ? 'revised' : 'blocked', issues: [],
+  });
   return {
-    fields: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, {
-      ...value.fields[field], verdict: value.fields[field].summary.trim() ? 'revised' : 'blocked', issues: [],
-    }])) as ScientificReviewResponse['fields'],
+    fields: {
+      problem: field('problem'), insight: field('insight'), method: field('method'),
+      results: field('results'), limitations: field('limitations'), reproducibility: field('reproducibility'),
+    },
     needsMoreEvidence: value.needsMoreEvidence,
   };
 }
