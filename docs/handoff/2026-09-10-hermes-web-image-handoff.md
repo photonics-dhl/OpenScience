@@ -8,7 +8,7 @@
 ## 版本
 - 工作树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；HEAD以Git为准，未合并main；根目录无关改动不碰。
 - ECS应用 a1ff2db9ecc6f8f598c2a72d05aaee3c7dfd1889；rollback 57f00dc9ee7182fffe2e8e2a29d506a39ceeff4e。
-- 干净发布树 E:/Miscellaneous/XGS/.worktrees/deploy-m3-thinking。后续写作与空响应诊断尚未部署。
+- 干净发布树 E:/Miscellaneous/XGS/.worktrees/deploy-m3-thinking。aa5d2e85写作与空响应诊断尚未部署：上次服务器Web构建因lib/api.ts漏导入/导出SourceLocator失败；本次补齐domain类型后继续部署。
 - 网页生图provider d1630135d569d28364d295380bb4e0333c3ee264；rollback 92cc416ee3fe921f62c75cbe6f69e48d0b55227d；浏览器/会话/出口路线未改。
 - 必要服务器build/start成功，日志 C:/Users/Mac/AppData/Local/Temp/xgs-hermes-semantic-contract-deploy-20260912.log exit0；不等于科学质量通过。
 
@@ -44,7 +44,7 @@
 - 旧19/20/21可恢复归档，原文件/公共ID保留。一篇带图已发布；2–3篇精选、多图真实样本、视频未全部完成。
 
 ## 后续
-1. frontend定向High复核后，写作/诊断选择性提交、服务器build/start部署；保持申请续跑批准单独待定。
+1. frontend定向High复核已收尾，aa5d2e85已提交；补齐SourceLocator类型导入/导出后继续服务器build/start部署，复用此前审阅；保持申请续跑批准单独待定。
 2. 续跑授权后再实现复用机制并审阅。从当前a1c做一次未确认refresh；旧bridge正文未存，不虚称可直接恢复。
 3. 读实际final与usage/stop，核对原文科学关系；不合格不写原确认稿/公开版本。
 4. 用户指定写作产物后经服务器实产，记录真实保存与阅读；写作落地后补媒体艺术能力。

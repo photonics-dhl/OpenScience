@@ -755,8 +755,8 @@ export interface PresentationClaim {
   updatedAt: string;
 }
 
-import type { StoryboardRequest, StoryboardView, SceneImageRequest } from '@openscience/domain';
-export type { StoryboardRequest, StoryboardDocument, StoryboardView, SceneImageRequest } from '@openscience/domain';
+import type { StoryboardRequest, StoryboardView, SceneImageRequest, SourceLocator } from '@openscience/domain';
+export type { StoryboardRequest, StoryboardDocument, StoryboardView, SceneImageRequest, SourceLocator } from '@openscience/domain';
 
 export interface PresentationAsset {
   storyboard?: StoryboardView;
