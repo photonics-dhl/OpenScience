@@ -6,8 +6,8 @@
 - 本机仅编辑/静态阅读/传输；无测试、预检、CI或本机构建。必要服务器build/start与实际产品生成/阅读按授权执行。
 
 ## Version and workspace
-- 交付树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；应用代码a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a已部署，后续docs-only HEAD不是新release。
-- 当前应用release a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a / rollback1bf65518390677b0104d6cb34749ad817edba42e；xgs-focused-edit-thinking-deploy-20260913.log exit0，必要服务器build/start完成。1bf/479转历史。
+- 交付树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；代码提交1e6271776a9ef5a542c3e0f4b50d2188ef808c67已推送并部署，独立High复核通过；后续docs-only HEAD不是新release。
+- 当前应用release 1e6271776a9ef5a542c3e0f4b50d2188ef808c67 / rollback a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a；xgs-explicit-writing-deploy-20260913.log exit0，必要服务器build/start完成，实际页面/__release200同SHA。1bf/479转历史。
 - 根目录旧dirty main不是生产基线；未合并main。unrelated dirty docs/specs/2026-09-05-integrated-research-product-design.md不得覆盖/提交。
 - 网页生图provider d1630135d569d28364d295380bb4e0333c3ee264 / rollback92cc416ee3fe921f62c75cbe6f69e48d0b55227d；video runner0df87c9bee98c2280396551ed522e66230eaf381。
 - TTS a2158409、renderer ff6042f6、模型qwen3-tts-customvoice-0c0e305复用；无新服务/依赖/媒体实产，媒体版本不能混作应用release。
@@ -45,10 +45,13 @@
 - v6新页12个JS ERR_INSUFFICIENT_RESOURCES，一次重载后空白；1bf单个替代#claim-review页仍13个CSS/JS失败，只显示壳。未循环重载。
 - 只读诊断定位Chrome压缩内容解码的Mojo data-pipe创建失败：Network.ContentDecodingInterceptor.CreateDataPipeSuccess.URLLoaderThrottle计324中14失败。PID/内存/fd/socket/shared memory/disk余量未触限，无OOM/crash；底层分配失败原因仍未知。
 - 单target空编码实际reload已发生：31个200、0资源不足，但7个gzip/zstd脚本仍压缩而被当明文解析，SyntaxError阻止挂载；override已清理。两次调用中首次同URLnavigate无load，不算完整重载。证据/jobs/hermes-claim-review-{recovery,reload-recovery}-20260913.json。
-- 最终三锁成功取得、runner/service/待处理队列空、profile/jobs持久化正常，但14个页面中generatingPages=1；dirty/chat draft/检查错误均0。按活动保护停止，浏览器未重启、目标页未新增或重载。只保存/jobs/hermes-browser-pre-restart-urls-20260913.json；不能据此称当前页面可读，待生成标记消失后才可恢复。
+- 旧generatingPages=1来自整页历史文本关键词，并非实际生成控件，不能作为活动证据。复用review-runner既有Stop/停止控件判断后，14页stop/composer/dirty均0；三锁持有、队列空、profile/jobs持久化核对后，2026-09-12T18:55:50Z仅重启浏览器一次，exit0/CDP恢复且登录保留。证据/jobs/hermes-browser-{actual-state,pre-restart-actual,restart-container}-20260913b.json。
+- 实际current-ingestion阅读成功：6字段与保存API逐字相等、35条来源全部显示、RO revision11。科学失败结论不变。证据/jobs/hermes-restored-reading-20260913b.json及hermes-restored-ingestion-reading-20260913b.png。
+- 后续Playwright CDP握手仍超时，现成raw target-CDP可用。仅重载私有92页后发现摘要为92而正文为较新的失败63e；恢复逻辑忽略initialTaskId、按时间选最新writing，1e627已部署为同RO合法writing中优先指定任务，无指定writing则原latest回退。
+- 1e627实际打开92、切编辑只读正文、完成后展开来源并截图：1118字符/17引用，正文与全部引用逐字等保存API及此前独立复核稿，user_edited保留、0保存按钮/0排版错误、无63e卡片；未修改或采用内容。证据本机Temp/xgs-explicit-writing-{reading,saved}-20260913.*、服务器/jobs/hermes-explicit-writing-*。截图阅读正常；浏览器底层分配根因及长期稳定性仍未知。
 
 ## Next and read-first
 - a8部署完成且10799ba3已实产/独立原文复核失败；不要再重跑同一路径或堆提示词。单问题回读可辅助审校，最终精华稿仍需人工逐项校正，现成92稿可用。
-- 页面有生成中标记，勿重启打断；待该活动结束后完成一次浏览器恢复并回读私有92/current。现成92质量稿可先供用户审阅，采用/发布待用户确认；视频/批量暂停。
+- 指定稿件恢复已完成部署及实际回读；下一步由用户审阅92质量稿，确认后才采用到研究正文/进入图片与公开发布。可行的当前路径为来源辅助+人工逐项校正；自动全文质量仍未解决，不再重复同路线模型生成或浏览器重启，视频/批量暂停。
 - GitHub源文件/真实调用对照见hermes-capability-registry“来源与选择”；用户复用优先已入AGENTS/Memory。优先单个争议回读与最小改动，不能宣称M3全自动文献凝练已可靠。
 - 继续前读此handoff、需求基线相关章节、server-capabilities；当前版本看Git/服务器，不恢复旧MVP next action。

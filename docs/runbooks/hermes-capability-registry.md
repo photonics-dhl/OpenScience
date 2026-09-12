@@ -1,12 +1,12 @@
 # Hermes Capability Registry
 
 ## 当前状态（2026-09-13）
-- 当前应用a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a / rollback1bf65518390677b0104d6cb34749ad817edba42e；必要服务器build/start exit0。独立browser provider d1630135 / rollback92cc416e、video runner0df87c9b不变。
+- 当前应用1e6271776a9ef5a542c3e0f4b50d2188ef808c67 / rollback a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a；必要服务器build/start exit0，真实页面release200同SHA。独立browser provider d1630135 / rollback92cc416e、video runner0df87c9b不变。
 - 1bf审校current/source均为4b46，复用既有scientificReviewPrompt/Guard与critical-thinking v2，保存真实verdict/issues/lineage。新d5c6f699仍接受错method/limitations且扩写三案、漏条件；NOT ACCEPTED，不再整稿自省循环。
 - 现有完整来源写作实产4bedbb4b：具体问“变换I还是E/相位/积分”后正确找回链，独立High核心科学PASS，1246字符/15引用；建议语仍缺远场/正峰同步、超700字。五问63e2acc5再次出错，不足以支持通用自动审校。
 - 普通共编8ff290f5纠正Fourier对象但漏强度支路/明确同步。代码取证发现editorDraft沿导航默认thinking off；a8仅科学共编复用现有SCIENTIFIC_SYNTHESIS_OPTIONS，导航不变。明确写作修饰语漏路由也已修复，精确diff High静态通过；新配置实产10799ba3仍经High原文复核判NOT ACCEPTED（起始链/√I/同步丢失），停止重试。
 - 来源桥接使用已有writingDraft引用→editorDraft.goal；共编本身仍未自动加载全文。这是引导的来源修订，不能写成端到端自动纠错能力。
-- 浏览器失败路径定位为压缩内容解码Mojo data-pipe分配（14/324失败），底层原因未明；空编码实际reload后7个压缩脚本SyntaxError，override已清理，仍不挂载；最终三锁取得但页面有生成中标记，未重启或回读；当前UI仍未验收。
+- 浏览器Mojo分配底层原因未明，空编码override已清理。旧生成标记来自整页历史文本，实际Stop/composer/dirty均0；三锁/空队列/持久化条件下仅重启一次成功，登录保留。current-ingestion实际六字段/35条来源与API一致、revision11。私有92链接暴露最新63e覆盖正文的真实UI错误；1e627已部署优先指定合法writing，独立High复核通过。真实打开92/只读编辑正文/回阅读/展开来源和截图：1118字符/17引用逐字等保存API与此前原文复核稿，user_edited、无63e替代，未写入研究正文。后续Playwright握手仍超时，复用既有raw target-CDP，不重复重启。
 - 私有92cafb82经人工校正、独立原文复核与真实保存/重载/来源/下载，1118字符/17引用、user_edited；原40e23948为2696字符/41引用/57式，均保留。公开v10、revision11、已批图保护。
 - 无新增服务/供应商/OCR/浏览器或第三方安装。无测试/预检/CI/本机构建；必要服务器build/start及实际产品生成/阅读按授权推进。视频/批量暂停，采用/发布待用户确认。
 

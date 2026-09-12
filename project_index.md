@@ -1,9 +1,9 @@
 # OpenScience (XGS) 项目文件索引
 
-> **CURRENT 2026-09-13:** application a8ce22dd / rollback1bf65518；必要服务器build/start exit0。video runner0df87c9b；browser provider d1630135 / rollback92cc416e。branch codex/onchip-video-release，docs-only HEAD不是release，未合并main。
+> **CURRENT 2026-09-13:** application 1e627177 / rollback a8ce22dd；必要服务器build/start exit0，真实页面/__release200同SHA。video runner0df87c9b；browser provider d1630135 / rollback92cc416e。branch codex/onchip-video-release，docs-only HEAD不是release，未合并main。
 > 唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。当前自动agent d5c6f699真实字段审校仍失败；4bedbb4b具体方法回读核心科学PASS，但多问与局部共编仍丢条件。a8修复笔记漏路由/科学共编推理配置，10799ba3实产仍经High原文复核拒绝；停止重试，保留人工审校流程。
-> 私有92cafb82人工原文审校稿1118字符/17引用已独立复核及真实保存/重载/下载；原40e23948、公开v10与已批图保留，尚未采用新稿/发布，视频/批量暂停。
-> 浏览器定位压缩解码Mojo管道分配失败，空编码实际reload又遇压缩脚本SyntaxError；最终页面有生成中标记，未重启或回读，当前UI仍未验收。不以API成功或旧页面证据代替本轮阅读。
+> 私有92cafb82人工原文审校稿1118字符/17引用：1e627修复指定任务被较新失败63e正文覆盖，实际打开/只读编辑/回阅读/展开来源/截图均成功，正文和全部引用逐字等保存API与此前复核稿，user_edited保留；原40e23948、公开v10与已批图保留，尚未采用新稿/发布，视频/批量暂停。
+> 旧浏览器生成标记来自整页历史文本误判；实际Stop/composer/dirty均0、三锁/空队列/持久化条件下仅重启一次成功。current-ingestion六字段/35引用与API一致、revision11。Playwright握手仍超时，复用既有raw target-CDP完成92回读；Mojo底层原因及长期稳定性仍未知。
 > 复用来源方法与实际调用见hermes-capability-registry“来源与选择”；无第三方安装、测试/预检/CI/本机运行，必要服务器build/start按授权继续。
 
 ## 当前产品交付
@@ -15,7 +15,7 @@
 | `apps/web/app/research-objects/[id]/{edit,hermes}/page.tsx` / `apps/web/lib/ingestion-proposal-draft.ts` / `apps/web/messages/{zh,en}.json` | 原始建议sourceCore与编辑core分离、agentTaskId隔离草稿、保护实际未保存改动与跨代合并 | 0fc已部署；实际六栏逐字等新API，未自动采用，RO仍revision11 |
 | `apps/agent-worker/src/skills/scientific-summary.ts` / `apps/agent-worker/src/extractor.ts` | v6复用语义分组的来源导航，不传旧语义文字，global P并集/既有预算定位不变 | 479已部署，High代码复核；4b46真实原文核对仍有三类科学错误，不能称自动质量通过 |
 | `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | a8已部署笔记路由/科学共编推理；4bed单问原文回读核心科学PASS，10799局部改稿仍失败；92人工审校稿与原40e保留 |
-| `apps/web/components/hermes/HermesWritingDraft.tsx` / `HermesWritingDraft.module.css` / `HermesAssistantDrawer.tsx` / `apps/web/lib/api.ts` | 常驻对话中的独立稿件阅读、编辑、Markdown下载与折叠来源 | 新审校稿真实保存/新页重载/来源/下载一致，user_edited保留；旧稿57式0错误，短稿无独立公式；旧页资源错误未根治 |
+| `apps/web/components/hermes/HermesWritingDraft.tsx` / `HermesWritingDraft.module.css` / `HermesAssistantDrawer.tsx` / `apps/web/lib/api.ts` | 常驻对话中的独立稿件阅读、编辑、Markdown下载与折叠来源；显式任务恢复 | 1e627已部署指定合法writing优先initialTaskId；92实际正文1118字符/17引用等保存API及此前复核稿，user_edited/无63e替代；浏览器长期稳定仍未确认 |
 | `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 已部署7c6b7975；真实67观察/94段，内部候选经Chat6Pro复核收尾，不自动放行科学结论 |
 | `apps/agent-worker/parser-image/package.json` / `package-lock.json` / `apps/agent-worker/src/ingestion-parser.ts` | 隔离parser的KaTeX语法兼容、坏公式orig回退及区域低置信标记 | 已部署7c6b7975；格式失败可识别和保留原文，不表示4条坏公式已科学修正 |
 | `apps/web/components/content/ScientificText.tsx` / `ScientificText.module.css` | 有界、安全的TeX显示，编辑器/公开RO/发布/Hermes及来源引用统一复用 | 已部署；同一组件的真实阅读HTML显示28/32式，两个代表式对照原图；不是已保存的RO公式内容 |
@@ -593,7 +593,7 @@
 
 - DEPLOYED infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：服务器交互浏览器与生产 `chatgpt-web` provider；真实Hermes图片已回传，真实PDF完成6 Pro初审与补证；区域附件子域、图片/科学审阅独立锁、30分钟窗口、15秒science heartbeat、协议版本化幂等和逐字段保留部署于`36e6a8c4`；infra/scripts/ssh-run.sh固定browser-tunnel。
 
-- CURRENT docs/runbooks/server-capabilities.md：2026-09-13应用a8ce22dd / rollback1bf65518；Docling/M3/公式/写作已部署，科学质量与浏览器实际状态见CURRENT；服务器任务先读，只补真实缺口。
+- CURRENT docs/runbooks/server-capabilities.md：2026-09-13应用1e627177 / rollback a8ce22dd；指定私有稿件恢复已部署实读，Docling/M3/公式/写作已部署，科学质量与浏览器剩余问题见CURRENT；服务器任务先读，只补真实缺口。
 
 - `infra/scripts/browser-tunnel.ps1`：Windows隐藏SSH隧道断线重连；固定localhost6081，复用ssh-run.sh，2026-09-09本机页面恢复HTTP200。
 

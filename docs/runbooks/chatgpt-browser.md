@@ -1,6 +1,8 @@
 # Server ChatGPT browser — operator login research
 
-- CURRENT 2026-09-11：应用363257aa / rollbackc0fdc389，provider d1630135 / rollback92cc416e。研究桌面、单一资料入口、公开大图/真实索引与共享会话已部署；/me200并续7天Cookie，实际跨页账号保持。19/20/21可恢复归档完成，22/v10真实图文公开保留。无新软件/模型调用；长期会话与Hermes进一步能力见唯一CURRENT handoff。
+- CURRENT 2026-09-13：应用版本见唯一CURRENT handoff；provider bundle d1630135 / rollback92cc416e，浏览器容器镜像8aa21251，二者不得混写。2026-09-12T18:55:50Z仅重启浏览器一次成功，登录保留，未改变profile/bridge/配置/镜像。current-ingestion六字段和35来源实际显示；私有指定稿件选择错误另由应用1e627修复。
+- 活动判断复用review-runner.cjs既有可见Stop/停止按钮，再读取composer和未保存表单；不得以整页“生成中/generating”等历史文字阻止恢复。旧generatingPages=1即此误判。此次14页均无Stop/composer/dirty，取得三锁且队列空、确认profile/jobs持久化后才重启；证据/jobs/hermes-browser-{actual-state,pre-restart-actual,restart-container}-20260913b.json。
+- Mojo压缩内容解码data-pipe分配失败底层原因仍未知；空编码override已清理。重启后Playwright connectOverCDP仍出现握手超时，复用review-runner现成raw target-CDP可只读/操作精确产品页；不调用会批量reload Chat页的reconnectBrowser兜底，不循环重启。实际阅读证据见CURRENT handoff。
 
 - 最新2026-09-11：第二账号已正常登录，实际账户设置与用户指定账号匹配（Pro）；noVNC实际可视可操作。旧“等用户密码”状态已完成，不要再次要求登录。6Pro截图规划会话6aa3a4a4-f7a0-83ea-a0be-fc2f7eba4581已回复。
 - 新模型菜单使用Thinking effort→Power，键盘右移到第5档时实际显示6 Pro。收起后正文可能分成6换行Pro，识别需允许空白。不要因菜单变化降级模型或反复重发。

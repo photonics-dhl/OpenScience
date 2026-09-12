@@ -1,11 +1,12 @@
 # 服务器能力与复用清单
 
-当前应用a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a / rollback1bf65518390677b0104d6cb34749ad817edba42e；必要服务器build/start exit0。网页生图provider d1630135 / rollback92cc416e；无测试/CI/本机运行。
+当前应用1e6271776a9ef5a542c3e0f4b50d2188ef808c67 / rollback a8ce22dddfef85c487ff4ed4dcd44e0da4f4c03a；必要服务器build/start exit0，实际页面/__release200同SHA。网页生图provider d1630135 / rollback92cc416e；无测试/CI/本机运行。
 
 - 2026-09-13：1bf reviewOnly复用旧SourceMap/bridge作真实字段审校，d5c6f699仍科学失败，保留未采用。停止整稿自省/重生成循环。
 - 既有workspace.guide完整来源写作可用于具体问题回读：4bedbb4b方法链独立High核心科学PASS；五问63e2acc5仍错，不能泛化成自动质量通过。8ff局部共编仍丢前提，a8修正其原推理关闭配置，复用科研synthesis选项；实际10799ba3仍被High原文复核拒绝（删起始链/漏√I与同步），不再重试，不以配置修改冒充质量修复。
 - 写作意图漏识别有修饰语的“写一篇…笔记”，a8修复明确命令路由；权限/否定/保存/引用合同不变，High静态复核通过。
-- 浏览器压缩解码Mojo data-pipe创建14/324失败与ERR_INSUFFICIENT_RESOURCES匹配；容器PID/内存/fd/shared memory均有余量。单target空编码reload后原错误0但7个压缩脚本SyntaxError，override已清理，仍未挂载；最终三锁取得且后台空，但页面generatingPages=1，故未重启/回读；底层分配原因仍未明。
+- 浏览器压缩解码Mojo data-pipe创建14/324失败，底层分配原因未明；空编码override已清理。旧generatingPages=1来自整页历史关键词，不能证明活动。复用review-runner可见Stop/停止判断，14页stop/composer/dirty均0、三锁取得/队列空/profile和jobs持久化后，仅重启浏览器一次成功（2026-09-12T18:55:50Z），登录保留；镜像仍8aa21251，勿混同provider bundle d163。
+- 恢复后current-ingestion UI六字段与API一致，35条来源完整、revision11；私有92目标页实际暴露“摘要92/正文最新63e”选择错误。1e627已修复部署并独立High复核；实际打开92后1118字符/17引用逐字等保存API与此前原文复核稿，user_edited保留、无63e替代。证据/jobs/hermes-explicit-writing-reading-20260913.{json,png}。Playwright CDP握手仍偶发超时，已有raw target-CDP可用，不代表长期稳定已修复。
 - 私有92cafb82六字段人工审校稿（1118字符/17引用）及40e23948长稿保留；公开v10/revision11/已批图不变。自动稿未采用/发布，视频/批量暂停。
 - 下文为能力与历史操作记录，涉及当前科学质量/浏览器状态以CURRENT handoff和Hermes台账为准。
 
