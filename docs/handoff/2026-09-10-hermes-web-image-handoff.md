@@ -15,7 +15,7 @@
 
 | 交付 / Taskmaster ID | 实际资产、反馈与差额 |
 |---|---|
-| 学术机制图/分类图谱 · 1 | 旧cdce被否定；方案625119fa-5d8a-4e2a-a007-ceac51a83071经6Pro accepted；图c3a49716-35e9-440c-b3d9-659c2d86632c已生成并看图，清晰学术候选，仍draft，待用户认可。 |
+| 学术机制图/分类图谱 · 1 | 原图 `c3a49716-35e9-440c-b3d9-659c2d86632c` 经用户反馈需要修改；确认服务器 `chatgpt-web/6-pro-image-generation-tool`。沿原 storyboard/claim 做 art-only 修订：底稿任务 `fdcebbb9-0dbd-487d-9703-ecc2e84b3d3f` 已批准，图片任务 `536305fc-e75a-402c-addd-09842517af6a` 已 succeeded，asset 同名、仍 draft，待用户审阅。科学关系、5个标签、claim/source 未变。 |
 | 编辑封面 · 2 | 旧1a1d被否定；方案15a314a6-44e1-4829-a4e1-c30f78039896的图ac16631b-782f-4b2f-9fdf-fcc033b867e0偏教材/满铺网点，未合格，保留draft。真实Hermes页面创建76918e55-5ff2-4467-b3a8-ab7033bd4984，6Pro revised修正暗背景线条对比，已内部批准方案。图任务7cd50e44-bbee-4631-b555-18f669399cc7失败、provider uncertain，未取得新PNG，不能称封面交付。 |
 | 淡彩手绘 · 3 | aa41a018-b2ff-4ffb-9557-19ecabe104bc用户明确认可，原图保留不默认重画；额外f424只是私有候选，不能计新增风格。 |
 
