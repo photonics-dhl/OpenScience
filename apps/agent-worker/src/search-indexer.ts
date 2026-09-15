@@ -12,7 +12,10 @@ import {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
-const MAX_EMBEDDING_BATCH = 8;
+const MAX_EMBEDDING_BATCH = 2;
+// Aborting the client does not stop CPU inference. Allow a small batch to finish;
+// only an explicit worker_busy rejection permits one retry within this budget.
+const EMBEDDING_REQUEST_BUDGET = { requestTimeoutMs: 120_000, maxAttempts: 2 } as const;
 const EMBEDDING_DIMENSION = 1_024;
 const MAX_CLAIMS_PER_BLOCK = 32;
 const MAX_CLAIMS_PER_DOCUMENT = 10_000;
@@ -310,7 +313,7 @@ export function createSearchIndexer(dependencies: {
       const generationSha256 = sourceGenerationSha256(job);
       const chunks = (await chunkDocumentForEmbedding(
         { sourceMap: job.sourceMap, claimIdsByBlockId: job.claimIdsByBlockId },
-        texts => dependencies.embedder.tokenCounts({ purpose: 'chunk', texts }),
+        texts => dependencies.embedder.tokenCounts({ purpose: 'chunk', texts }, EMBEDDING_REQUEST_BUDGET),
       ))
         .map((chunk) => ({
           ...chunk,
@@ -367,7 +370,9 @@ export function createSearchIndexer(dependencies: {
         }
         const batch = chunks.slice(offset, offset + MAX_EMBEDDING_BATCH);
         try {
-          const result = await dependencies.embedder.embed({ purpose: 'chunk', texts: batch.map(({ text }) => text) });
+          const result = await dependencies.embedder.embed(
+            { purpose: 'chunk', texts: batch.map(({ text }) => text) }, EMBEDDING_REQUEST_BUDGET,
+          );
           if (result.dimension !== EMBEDDING_DIMENSION || result.vectors.length !== batch.length
             || !matchesIdentity(result, modelIdentity)) throw new Error('embedding_response_invalid');
           for (let index = 0; index < batch.length; index += 1) {

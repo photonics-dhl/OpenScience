@@ -8,6 +8,7 @@ const MAX_TEXT_CHARACTERS = 20_000;
 const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_RESPONSE_BYTES = 256 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
+const MAX_REQUEST_TIMEOUT_MS = 120_000;
 
 export type EmbeddingPurpose = 'query' | 'chunk';
 
@@ -27,6 +28,8 @@ export interface EmbeddingClientOptions {
   requestTimeoutMs?: number;
   maxAttempts?: 1 | 2;
 }
+
+type EmbeddingRequestBudget = Pick<EmbeddingClientOptions, 'requestTimeoutMs' | 'maxAttempts'>;
 
 type EmbeddingResponse = {
   schemaVersion: number;
@@ -50,6 +53,13 @@ class EmbeddingClientError extends Error {
 
 function fail(code: string): never {
   throw new EmbeddingClientError(code);
+}
+
+function validateRequestBudget(requestTimeoutMs: number, maxAttempts: number): void {
+  if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 1
+    || requestTimeoutMs > MAX_REQUEST_TIMEOUT_MS || ![1, 2].includes(maxAttempts)) {
+    fail('embedding_configuration_invalid');
+  }
 }
 
 function validateBaseUrl(rawBaseUrl: string): string {
@@ -217,21 +227,24 @@ export class EmbeddingClient {
     this.logger = options.logger;
     this.requestTimeoutMs = options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
     this.maxAttempts = options.maxAttempts ?? 2;
-    if (!Number.isInteger(this.requestTimeoutMs) || this.requestTimeoutMs < 1
-      || this.requestTimeoutMs > REQUEST_TIMEOUT_MS || ![1, 2].includes(this.maxAttempts)) {
-      fail('embedding_configuration_invalid');
-    }
+    validateRequestBudget(this.requestTimeoutMs, this.maxAttempts);
   }
 
-  async embed(input: { purpose: EmbeddingPurpose; texts: string[] }): Promise<EmbeddingResult> {
+  async embed(
+    input: { purpose: EmbeddingPurpose; texts: string[] },
+    budget: EmbeddingRequestBudget = {},
+  ): Promise<EmbeddingResult> {
     return this.request('/v1/embeddings', input, (rawBody, status) => {
       requireSuccessfulResponse(rawBody, status);
       return decodeResponse(rawBody, input.texts.length);
-    });
+    }, budget);
   }
 
   /** The existing tokenizer endpoint performs no encoding; only its exact length rejection permits splitting. */
-  async tokenCounts(input: { purpose: EmbeddingPurpose; texts: string[] }): Promise<number[] | undefined> {
+  async tokenCounts(
+    input: { purpose: EmbeddingPurpose; texts: string[] },
+    budget: EmbeddingRequestBudget = {},
+  ): Promise<number[] | undefined> {
     return this.request('/v1/tokenize', input, (rawBody, status) => {
       if (status === 422 && workerErrorCode(rawBody) === 'token_limit_exceeded') return undefined;
       requireSuccessfulResponse(rawBody, status);
@@ -245,15 +258,20 @@ export class EmbeddingClient {
         return fail('embedding_response_invalid');
       }
       return value.tokenCounts as number[];
-    });
+    }, budget);
   }
 
   private async request<T>(
     path: '/v1/embeddings' | '/v1/tokenize',
     input: { purpose: EmbeddingPurpose; texts: string[] },
     decode: (rawBody: Buffer, status: number) => T,
+    budget: EmbeddingRequestBudget,
   ): Promise<T> {
     validateInput(input.purpose, input.texts);
+    const requestTimeoutMs = budget.requestTimeoutMs ?? this.requestTimeoutMs;
+    const maxAttempts = budget.maxAttempts ?? this.maxAttempts;
+    validateRequestBudget(requestTimeoutMs, maxAttempts);
+    const deadline = Date.now() + requestTimeoutMs;
     const body = JSON.stringify({
       schemaVersion: EMBEDDING_SCHEMA_VERSION,
       purpose: input.purpose,
@@ -266,9 +284,11 @@ export class EmbeddingClient {
     let response: Response | undefined;
     let responseBody: Buffer | undefined;
     let responseTimeout: ReturnType<typeof setTimeout> | undefined;
-    for (let attempt = 0; attempt < this.maxAttempts; attempt += 1) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) fail('embedding_transport_unavailable');
       const abortController = new AbortController();
-      const timeout = setTimeout(() => abortController.abort(), this.requestTimeoutMs);
+      const timeout = setTimeout(() => abortController.abort(), remainingMs);
       try {
         response = await this.fetchImpl(`${this.baseUrl}${path}`, {
           method: 'POST',
@@ -277,14 +297,17 @@ export class EmbeddingClient {
           signal: abortController.signal,
           redirect: 'error',
         });
-        if (input.purpose === 'chunk' && response.status === 503 && attempt + 1 < this.maxAttempts) {
+        if (input.purpose === 'chunk' && response.status === 503 && attempt + 1 < maxAttempts) {
           responseBody = await readBoundedBody(response);
           if (response.headers.get('content-type')?.split(';', 1)[0]?.trim() === 'application/json'
             && workerErrorCode(responseBody) === 'worker_busy') {
             clearTimeout(timeout);
             response = undefined;
             responseBody = undefined;
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // A strict busy response confirms no inference was accepted. Its one
+            // retry shares the original deadline and lets a short query finish.
+            const delayMs = Math.min(3_000, Math.max(0, deadline - Date.now()));
+            await new Promise(resolve => setTimeout(resolve, delayMs));
             continue;
           }
         }
@@ -293,7 +316,9 @@ export class EmbeddingClient {
       } catch (error) {
         clearTimeout(timeout);
         if (error instanceof EmbeddingClientError) throw error;
-        if (attempt + 1 === this.maxAttempts) {
+        // A timeout or lost response can leave CPU inference running remotely.
+        // Never resend chunk work whose acceptance is unknown.
+        if (input.purpose === 'chunk' || attempt + 1 === maxAttempts) {
           this.logger?.('embedding_request_failed:embedding_transport_unavailable');
           fail('embedding_transport_unavailable');
         }

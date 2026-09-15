@@ -1,7 +1,7 @@
 # CURRENT Progress Window
 
 ## 2026-09-15 — 修复能力接线并追查真实空结果
-- MiniMax配图末审、私有POST检索已部署。真实Weyl查询发现索引为空，定位缺失业务producer；现补确认事务入队和两篇真实论文的既有来源补录。Backstage已读回同一任务源；Serena安装遗漏文件已修，待服务器继续安装。旧BGE评测/旧Tasks 1–12记录降为历史，不能再当业务接通证明。任务4保留本项状态，任务1/2未完成；精确版本与实际结果只见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md#capability-linkage)。
+- 用户要求保存后下个session执行。MiniMax配图末审、私有POST检索、确认事务索引producer已部署；真实Weyl已召回论文，但两篇dense仍为0。分词计数已修，实际恢复又暴露30秒客户端超时未停止服务计算；批次/总预算及原任务有界恢复代码已保存，未提交/部署/再次恢复。Backstage任务源与Serena带版本符号读取已完成。任务4仍进行中、风格1/2未完成；候选文件、审查、执行顺序、保护项和真实结果统一见[CURRENT会话暂停入口](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 ## 2026-09-15 — 历史取证：模型路由、联动边界与授权清理
 - 代码确认：MiniMax主模型及默认来源审校已消费科学Skill；显式web复核/配图末审另走固定6Pro，并非Skill切换模型。配图审核无MiniMax回退，本轮未改路由。自动任务/来源/方案/结果和Langfuse审计已接，Taskmaster/Backstage/Serena/docs-sync仍需开发者执行；原地纠正能力台账，不另造平台。

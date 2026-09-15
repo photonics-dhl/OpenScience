@@ -69,10 +69,8 @@ let redis;
     });
     console.log(JSON.stringify({ researchObjectId: plan.researchObjectId, artifactId: plan.artifactId, ...result }));
     if (retryIncomplete) {
-      const task = await core.agentTask.findUnique({ where: { id: result.taskId },
-        select: { status: true, retryCount: true, result: true } });
-      if (task?.status === 'succeeded' && task.retryCount === 0
-        && task.result?.status === 'needs_review' && task.result?.errorCode === 'embedding_unavailable') {
+      const task = await domain.getAgentTask(deps, { userId: plan.userId, taskId: result.taskId });
+      if (task.canRetry) {
         const retried = await domain.retryAgentTask(deps, { userId: plan.userId, taskId: result.taskId });
         console.log(JSON.stringify({ researchObjectId: plan.researchObjectId, taskId: result.taskId, status: retried.status, retried: true }));
       }

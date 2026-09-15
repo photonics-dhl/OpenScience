@@ -1,5 +1,13 @@
 # Hermes / Workbench CURRENT Handoff
 
+## 2026-09-15 会话暂停：下个 session 从这里续作
+- 用户已纠正验证政策：禁止过度测试、全套预检及 CI；允许针对直接风险或已知故障的最小必要定向验证，须说明范围与证据。本轮终端可用性已验证；未运行项目测试、预检、CI或本机构建。
+- 候选四文件：`packages/search/src/embedder.ts`、`apps/agent-worker/src/search-indexer.ts`、`packages/domain/src/agent/agent.ts`、`scripts/index-confirmed-research-sources.cjs`。批次8→2，tokenize/encode每次总预算120秒；仅严格503/worker_busy在预算内最多等3秒重试一次，chunk超时/网络不确定不重发；前台3秒/一次原样。原source索引最多两次显式恢复，严格暂态白名单、原producer与来源/权限重验、CAS原count/epoch/result含AnyNull、递增审计；不清零计数、不创建来源副本、不扣LLM额度。
+- 独立High：domain/script静态通过，`embedder.ts`/`search-indexer.ts`最终完整差异审查因用户暂停而中断，尚无最终GO；下session仅补审这两文件新增差异，不重做历史审查。两代理现均interrupted，无后台继续工作；未运行测试/预检/本机构建。恢复次数与SearchStorage每generation的max3独立，crash可能先耗尽；不能把skip/exhausted报成功。
+- 下一步顺序：核实际Git及本四文件差异/High结论→只提交本任务代码和同步文档（排除下述无关spec，`[skip ci]`且禁用测试hooks）→复用`art-direction-release-41ae8902`干净发布树，按现行runbook部署，`--confirm --no-tests --skip-migrate --reuse-unchanged-capability-images --rollback-ref 6684e448a6d924f7f5b1adce9e0e2e4057aa88d3`。若届时线上改变先重新定锚，不照抄rollback。
+- 新代码部署后才可在API容器执行`scripts/index-confirmed-research-sources.cjs --apply --retry-incomplete`，严格复用下面两原task；本次没有执行该恢复。用`tmp/capability-linkage-dense-status.cjs`观察真实dense数量/任务/当前generation；完整后再用`tmp/capability-linkage-observe-ui.cjs`实际读取Weyl搜索并看图。其截图已改fullPage且尚未重跑，旧截屏裁切不正确，不能当布局通过证据。所有服务器操作经项目SSH wrapper，无测试/探针/新科学模型调用。
+- 索引闭环后回到未完成风格1/2；任务4保持in-progress，新MiniMax科学效果未观察、7cd现代Library来源绑定缺口仍保留。不要重画认可淡彩或重发7cd；不重启/清理保留草稿的服务器页面。
+
 <a id="illustration-delivery"></a>
 ## 产品目标与交付差额
 - 原任务：通用、多风格科研配图。上游文献解析/科学分析 → 已审科学关系 → 按用途艺术规划 → 服务器Chat生图 → 科学及用户审美审阅。依据需求基线“2026-09-14 图片能力推进”，禁止以局部水彩返工替代多风格交付，禁止固定当前论文图形为模板。
@@ -15,7 +23,7 @@
 <a id="capability-linkage"></a>
 - 用户要求已查明即可修复，Taskmaster同tag任务4记录本次接线，不替代1/2。已部署Gateway配图末审复用MiniMax结构化池/共享科学Skill，每次尝试授权、新旧receipt兼容；新模型实际科学结果未运行。ResearchList接私有POST检索，Serena源revision及Git/currentTag/CURRENT同读入口已部署且管理实际读取成功；版本见下。
 - 首轮真实Weyl查询空结果证明缺少search.index业务producer。现已在首次确认事务入队，缺ref旧确认/重复确认兼容，来源精确绑定，dispatch沿原outbox；High通过。两篇真实论文按原confirmed来源完成补录，未重解析/LLM。Serena遗漏snapshot_identity.py的构建失败已补allowlist并安装成功；原失败日志tmp/capability-linkage-tools-install.log留存。旧BGE评测记录降为历史，不能代替业务消费实证。
-- 两篇原索引任务：deep8920bf4f-3b4d-423e-b3aa-ca378c7c94cc、Quantization2135cd87-d2f0-459d-8e24-1a94ba97a952；attempt1、active lexical18/9，真实Weyl POST200已召回Quantization，/jobs/capability-linkage-indexed-search-observed.json。两index均needs_review/embedding_unavailable；失败首批真实tokenize返回422 token_limit_exceeded，根因为lexical1024词不等于BGE1024subword。新候选已按真实tokenize细分并保留连续charRange；原chunkSchema升2、独立index UUID+owner fence排序、旧索引并存原子切换；专用原任务retry不扣额度，独立High通过，待build/start和原任务恢复。任务4尚未done；禁止把hybrid标签或AgentTask succeeded当向量完整。
+- 两篇原索引任务：deep8920bf4f-3b4d-423e-b3aa-ca378c7c94cc、Quantization2135cd87-d2f0-459d-8e24-1a94ba97a952。早期真实Weyl POST200已召回Quantization（lexical），/jobs/capability-linkage-indexed-search-observed.json。首批真实tokenize返回422 token_limit_exceeded，已部署按真实tokenize细分/连续charRange、chunkSchema2、独立generation UUID/owner fence；但2026-09-15T12:42:25Z原任务各retryCount1/attempt2仍失败：deep新代bccec0de-c284-40aa-a212-6ebf873d474d共58片current、dense0/needs_review；Quant failed embedding_worker_worker_busy、旧9片current/dense0。worker日志12:41:39.603Z/40.203Z busy；BGE从12:41:09.618Z pretokenize至44.840Z响应BrokenPipe，证明30秒客户端超时未停止服务计算。收据tmp/confirmed-source-dense-final-status.json；新候选与下步见顶部。任务4尚未done；禁止把hybrid标签或AgentTask succeeded当向量完整。
 - Git历史41ae→ea436→3fa2→28197将局部科学/执行器修复提升为“继续淡彩、暂停新风格”，progress/index又沿用。AGENTS/docs-sync现要求先对照具体需求及未完成项，局部暂停不得取消目标；根导航与已有Memory同步，无新状态平台或门禁。
 - Backstage线上需求/源码链接指向缺现行要求的旧main，已改交付分支；维护链接不冒称运行快照。Taskmaster原currentTag仍为八月已完成hermes-research-intelligence，现登记本批三项并切换；旧tag保留历史。工具projectRoot必须为本交付树，根main只作导航。
 - 原艺术修订只在显式API使用，现presentationDraft成对传revisionMode=art/baseAssetId贯穿Hermes解析、草稿、确认、不确定回放；候选限定同RO/version/locale、有效v2科学来源，明确原稿，不按最新时间猜。自由编辑制作指令清除art，原稿/版本错配不换稿继续。
@@ -41,11 +49,11 @@
 - 下一动作：继续未完成学术/封面交付，不重画认可淡彩；容量与后来草稿误回收两个已知问题已处理。7cd的download窗口已于2026-09-15T08:19:22.779Z过期，late标记已消费；不篡改期限/标记、不重新recover-late、不盲重发。新Library入口仍需原会话绑定后才能接图。清理授权持续有效，但既有retention绑定发布journal且全选非active/rollback，不能伪造事务或绕过工具挂载保护；镜像/release仅在用途及回滚引用确定后逐项处理。
 
 ## Git、应用及独立能力版本
-- 交付树E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；当前已推送代码179b47bb4395b4e69dd8f91c52201d8e7345fed8，后续状态提交以Git HEAD为准。origin/main初始fetch为1b974dd6旧交付。根dirty main只作导航。
-- 应用production 179b47bb4395b4e69dd8f91c52201d8e7345fed8，rollback e02c391defcb4aa59cc7d22d7bd922d9180eb0d0。4fddb9c0服务器构建TS2322未切换应用，179单行literal修复后build/start exit0；tmp/capability-linkage-index-{deploy,retry-deploy}.log。发布树art-direction-release-41ae8902 detached179，provider独立版本见下。
+- 交付树E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch codex/onchip-video-release；当前已推送代码6684e448a6d924f7f5b1adce9e0e2e4057aa88d3，后续状态提交以Git HEAD为准。origin/main初始fetch为1b974dd6旧交付。根dirty main只作导航。
+- 应用production 6684e448a6d924f7f5b1adce9e0e2e4057aa88d3，rollback b1226fdb96335bc8ebee9b81d35abaeca881918c；此前179/e02。4fddb9c0服务器构建TS2322未切换应用，179单行literal修复后build/start exit0；tmp/capability-linkage-index-{deploy,retry-deploy}.log。b122分片与668索引串行/busy有界重试均服务器build/start exit0，tmp/capability-linkage-{dense,serial}-deploy.log。发布树art-direction-release-41ae8902 detached668，provider独立版本见下。
 - Chat provider独立bundle6a65dc7be5a83258887d9b193630dc1a2a3698f1已安装，rollback bundle2e434fdee3d99b7798bf66a24c23b7fd869743e4保留，再前e57153f30281dce93a3cd968be63059911259b22；必要服务器Gateway构建/installer exit0，tmp/goal-recovery-provider-install.log。该次provider安装未重启Chrome；本轮仅容量重建，镜像sha256:6b36b25f9f80a2e4614aca20c38110669a19e059077c122204f2b3724fafff6c复用，未构建新镜像/应用release。7cd仍uncertain。
 - page-lifecycle单文件覆盖patch为ba0d3e680e077b0c72029b732120b80510fe5b70：/opt/openscience-chatgpt-browser/patches/<sha>保留before/after/deployment.json。三锁内确认原模块与6a bundle相同，安装到jobs/provider/page-lifecycle.cjs，字节及root:11040/0440读回一致；未运行回收/新模型/测试，未重启浏览器。后续runner新进程会读取该模块，不能仅按基础bundle推断文件内容。
-- Serena源码/工具image tag179b47bb4395b4e69dd8f91c52201d8e7345fed8，image b43e0b268b8d；installer exit0。实际find新producer成功，内外sourceRevision均179；tmp/capability-linkage-serena-{final-install.log,source-read.json}。Catalog bundle e02已实际读回Taskmaster state/tasks与CURRENT；telemetry bundle061882123d14be00b868c1971c9d56de21d83b6e（旧rollback abea68ef），Skills CLI83179c454b75688176060fabf9e611072d46813c，Langfuse4.35.0均复用。
+- Serena源码快照6684e448a6d924f7f5b1adce9e0e2e4057aa88d3，复用工具image tag179b47bb4395b4e69dd8f91c52201d8e7345fed8/b43e0b268b8d；installer exit0。实际find token-aware分片函数成功，内外sourceRevision均668；tmp/capability-linkage-serena-{source-install.log,token-source-read.json}。Catalog bundle e02已实际读回Taskmaster state/tasks与CURRENT；telemetry bundle061882123d14be00b868c1971c9d56de21d83b6e（旧rollback abea68ef），Skills CLI83179c454b75688176060fabf9e611072d46813c，Langfuse4.35.0均复用。
 - Renderer保持sha256:1c47a579ceb608f244878b41888eee50bda1135ff325cb7b49de3a275ee2013d。无新依赖/表/迁移。自有Skill v5已同步C:/Users/Mac/.codex/skills，docs-sync和根导航规则已同步。
 - 无关dirty docs/specs/2026-09-05-integrated-research-product-design.md不提交/覆盖；其余历史文件、图、任务、工作树均保留。未运行测试/CI/本机构建；审阅代理误跑一次只读git diff --check，仅行尾提示，已停止。每段生产代码均独立High静态GO，构建/工具读回/实际图片分别证明其范围。
 
