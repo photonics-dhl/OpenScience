@@ -1,3 +1,5 @@
+> 适用说明：本文是对应功能的设计依据；其中版本、验收和待办为编写时记录，不能作为当前部署状态。有效需求以最新用户确认及需求基线为准，明确 DEPRECATED 的设计不恢复；实施状态只读 [当前交接](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+
 # Hermes Wanko Live2D Companion Design
 
 Status: **CURRENT — §13.6 application `8d1409e` is deployed in immutable release `6b804f7`; automated, public and original-viewport operator gates pass; user visual acceptance remains pending**

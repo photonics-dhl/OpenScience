@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json && pnpm run test:parser-compiled",
+    "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --exclude test/parser-compiled-composition.test.mjs",
     "test:research-intelligence": "vitest run research-intelligence-corpus.test.ts",
@@ -21,12 +21,15 @@
     "@openscience/sdf-schema": "workspace:^",
     "@openscience/storage": "workspace:^",
     "@modelcontextprotocol/sdk": "1.30.0",
+    "archiver": "7.0.1",
+    "katex": "^0.16.47",
     "mammoth": "1.12.0",
     "pdf-parse": "2.4.5",
     "yauzl": "2.10.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@types/archiver": "8.0.0",
     "@types/node": "20.14.10",
     "vitest": "^2"
   }

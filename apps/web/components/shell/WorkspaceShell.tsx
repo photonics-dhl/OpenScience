@@ -35,7 +35,7 @@ function WorkspaceShell({
 }: WorkspaceShellProps) {
   const usesMobilePlaneSwitcher = Boolean(mobileNavigation);
   return (
-    <div className={cn('surface-folio min-h-dvh', styles.workspace, className)} data-os-surface="workspace" {...props}>
+    <div className={cn('surface-folio surface-product-app min-h-dvh', styles.workspace, className)} data-os-surface="workspace" {...props}>
       <SkipLink tone="paper">{skipLabel}</SkipLink>
       <ShellHeader
         actions={<ProductRouteNavigation />}
@@ -51,10 +51,10 @@ function WorkspaceShell({
       <div className="min-h-11 overflow-x-auto border-b border-os-rule-paper" data-workspace-mode-tabs="true">
         {workspaceModes}
       </div>
-      <div className="grid min-h-[calc(100dvh-10.25rem)] min-w-0 lg:grid-cols-[17fr_55fr_28fr]" data-workspace-planes="true">
-        <section className={cn('min-w-0 border-b border-os-rule-paper bg-os-paper p-4 lg:block lg:border-b-0 lg:border-r lg:p-5', !usesMobilePlaneSwitcher || activeMobilePlane === 'left' ? 'block' : 'hidden')} data-workspace-plane="19">
+      <div className={cn('grid min-h-[calc(100dvh-10.25rem)] min-w-0', leftRail ? 'lg:grid-cols-[17fr_55fr_28fr]' : 'lg:grid-cols-[minmax(0,1fr)_20rem]')} data-workspace-planes="true" data-workspace-has-outline={Boolean(leftRail)}>
+        {leftRail && <section className={cn('min-w-0 border-b border-os-rule-paper bg-os-paper p-4 lg:block lg:border-b-0 lg:border-r lg:p-5', !usesMobilePlaneSwitcher || activeMobilePlane === 'left' ? 'block' : 'hidden')} data-workspace-plane="19">
           {leftRail}
-        </section>
+        </section>}
         <main className={cn('surface-folio-sheet min-w-0 p-5 lg:block lg:p-7', !usesMobilePlaneSwitcher || activeMobilePlane === 'main' ? 'block' : 'hidden', mainClassName)} data-workspace-plane="56" id="main-content" tabIndex={-1}>
           {children}
         </main>

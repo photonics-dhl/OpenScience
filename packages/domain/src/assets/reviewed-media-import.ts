@@ -54,12 +54,12 @@ export async function importReviewedPresentationMedia(deps: Deps, input: Reviewe
   }
   const prior = await existing(deps.prisma);
   if (options.dryRun) return { dryRun: true, assetId: prior?.id ?? null, contentHash, status: prior?.status ?? 'draft' };
-  if (!prior) await deps.storage.putObject(objectKey, content, { contentType, sha256: contentHash });
   return withPresentationAssetWrite(deps.prisma, input, async (tx, version) => {
     await requireAdmin(tx);
     if (!isDeepStrictEqual(await claims(tx), snapshot)) throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Source Claims changed during import');
     const replay = await existing(tx);
     if (replay) return { dryRun: false, assetId: replay.id, contentHash, status: replay.status };
+    await deps.storage.putObject(objectKey, content, { contentType, sha256: contentHash });
     const asset = await tx.presentationAsset.create({ data: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, contentHash, objectKey, generator: input.generator, generatorVersion: input.generatorVersion, status: 'draft', label: PRESENTATION_ASSET_LABEL, provenance } });
     await tx.presentationAssetClaim.createMany({ data: payload.sourceClaimIds.map((claimId) => ({ presentationAssetId: asset.id, claimId, researchObjectId: input.researchObjectId, versionId: input.versionId })) });
     await deps.audit?.record({ actorId: input.userId, action: 'presentation_asset.reviewed_import', workspaceId: version.researchObject.workspaceId, targetType: 'presentation_asset', targetId: asset.id, metadata: { researchObjectId: input.researchObjectId, versionId: input.versionId, importRun: input.importRun, contentHash, kind: input.kind } }, tx);

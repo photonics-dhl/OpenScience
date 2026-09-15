@@ -1,0 +1,11 @@
+{
+  "name": "@openscience/serena-typescript-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": { "node": "22.x" },
+  "dependencies": {
+    "typescript": "5.9.3",
+    "typescript-language-server": "5.1.3"
+  }
+}

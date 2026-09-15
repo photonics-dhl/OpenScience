@@ -8,6 +8,8 @@ import {
   listEditorialSelections,
   transitionEditorialSelection,
   updateEditorialSelection,
+  publicVersionNumber,
+  readPublicationMetadata,
 } from '@openscience/domain';
 import { requireCurrentUser } from './session-guard';
 import { requirePlatformAdmin } from './admin';
@@ -32,12 +34,16 @@ export function registerAdminEditorialRoutes(app: FastifyInstance, deps: AuthDep
   app.get('/editorial/candidates', async (req, reply) => {
     if (!(await requirePlatformAdmin(deps, req, reply))) return;
     const rows = await deps.prisma.researchObject.findMany({
-      where: { visibility: 'public', publicId: { not: null }, versions: { some: { status: 'published' } } },
+      where: { visibility: 'public', publicId: { not: null }, versions: { some: { status: 'published', publications: { some: {} } } } },
       orderBy: { publicId: 'asc' },
       take: 200,
-      include: { versions: { where: { status: 'published' }, orderBy: { versionNo: 'desc' }, take: 1 } },
+      include: { versions: { where: { status: 'published', publications: { some: {} } }, orderBy: { publicationNo: 'desc' }, take: 1 } },
     });
-    return reply.send({ candidates: rows.flatMap((row) => row.versions[0] ? [{ publicId: row.publicId!, title: row.title, versionId: row.versions[0].id, versionNo: row.versions[0].versionNo }] : []) });
+    return reply.send({ candidates: rows.flatMap((row) => {
+      const version = row.versions[0];
+      const versionNo = version && publicVersionNumber(version);
+      return version && versionNo ? [{ publicId: row.publicId!, title: readPublicationMetadata(version.researchRecord).title ?? row.title, versionId: version.id, versionNo }] : [];
+    }) });
   });
 
   app.get('/editorial/collections/:slug/selections', async (req, reply) => {

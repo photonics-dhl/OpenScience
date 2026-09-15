@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Handoff — 2026-08-15 Cloudflare Tunnel egress incident
 
 - Current goal: 保持 OpenScience 公网入口独立于个人电脑，并观察固定 SJC IPv4/HTTP2 Edge 池在阿里云杭州出口上的稳定性。

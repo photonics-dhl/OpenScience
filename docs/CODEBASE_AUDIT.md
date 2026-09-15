@@ -1,3 +1,5 @@
+> HISTORICAL — 本文审计的是迁移前 Scholars Tea 仓库，不是当前 OpenScience 代码健康报告。当前实现与有界技术债见 [能力台账](runbooks/hermes-capability-registry.md#当前技术债与处理)。
+
 # OpenScience Phase 0 代码库审计：Scholars Tea
 
 - 审计日期：2026-07-28

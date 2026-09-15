@@ -8,6 +8,7 @@ import { registerAdminRoutes } from './routes/admin';
 import { registerAdminUsageRoutes } from './routes/admin-usage';
 import { registerUsageRoutes } from './routes/usage';
 import { registerResearchObjectRoutes } from './routes/research-objects';
+import type { ResearchObjectSearchService } from './research-object-search';
 import { registerArtifactRoutes } from './routes/artifacts';
 import { registerIngestionRoutes } from './routes/ingestion';
 import { registerCommitRoutes } from './routes/commits';
@@ -33,11 +34,21 @@ import { registerAdminEditorialRoutes } from './routes/admin-editorial';
 import { registerSandboxJobsRoutes } from './routes/sandbox-jobs';
 import { registerTemporaryDocumentRoutes } from './routes/temporary-documents';
 import { registerPresentationAssetRoutes } from './routes/presentation-assets';
+import { registerResearchRunRoutes } from './routes/research-runs';
+import { registerTrashRoutes } from './routes/trash';
+import type { TrashDeps } from '@openscience/domain';
+import type { HermesResearchRunDeps } from '@openscience/domain';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
 export interface BuildAppOptions extends AuthRouteDeps {
+  researchObjectSearch?: ResearchObjectSearchService;
+  deleteSearchContent?: TrashDeps['deleteSearchContent'];
+  setSearchContentVisibility?: TrashDeps['setSearchContentVisibility'];
   sceneImageEnabled?: boolean;
+  videoEnabled?: boolean;
+  canResumeImageBeforeSubmission?: HermesResearchRunDeps['canResumeImageBeforeSubmission'];
+  inspectImageRecoveryState?: HermesResearchRunDeps['inspectImageRecoveryState'];
   cookieSecret: string;
   /** P1A-6：注入结构化 logger（pino 实例满足 FastifyBaseLogger）；缺省关闭（测试现状）。 */
   logger?: FastifyBaseLogger;
@@ -117,8 +128,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerReadingPreferenceRoutes(instance, opts), {});
   await app.register(async (instance) => registerSandboxJobsRoutes(instance, opts), {});
   await app.register(async (instance) => registerPresentationAssetRoutes(instance, opts), {});
+  await app.register(async (instance) => registerResearchRunRoutes(instance, opts), {});
   if (opts.storage) {
     const storage = opts.storage;
+    await app.register(async (instance) => registerTrashRoutes(instance, { ...opts, storage }), {});
     await app.register(async (instance) => registerArtifactRoutes(instance, { ...opts, storage }), {});
     await app.register(async (instance) => registerIngestionRoutes(instance, { ...opts, storage }), {});
     await app.register(async (instance) => registerCommitRoutes(instance, { ...opts, storage }), {});

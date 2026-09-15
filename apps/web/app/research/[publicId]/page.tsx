@@ -1,3 +1,4 @@
+import { withoutInternalSourceMarkers } from '@/components/content/ScientificText';
 import { PublicReadingSurface } from '../../../components/public/PublicVersionPage';
 import { getLatestPublicResearchVersion, PublicServerApiError } from '../../../lib/public-server-api';
 import type { Metadata } from 'next';
@@ -15,10 +16,11 @@ export async function generateMetadata({ params }: { params: { publicId: string 
     const authors = r.authors.map((a) => a.displayName).join(', ');
     return {
       title: `${r.title} | OpenScience`,
-      description: `${r.version.core.problem?.substring(0, 160) ?? ''}`,
+      description: `${withoutInternalSourceMarkers(r.version.core.problem ?? '').substring(0, 160)}`,
+      alternates: { types: { 'application/json': `/api/research/${encodeURIComponent(r.publicId)}/v/${r.version.versionNo}` } },
       openGraph: {
         title: r.title,
-        description: r.version.core.problem?.substring(0, 160) ?? '',
+        description: withoutInternalSourceMarkers(r.version.core.problem ?? '').substring(0, 160),
         type: 'article',
         authors: authors ? [authors] : [],
       },

@@ -1,4 +1,5 @@
 import type { AuditContext } from '@openscience/observability';
+import { publicVersionNumber, readPublicationMetadata } from '../publish/publication-metadata';
 import type { EditorialSelection } from '@prisma/client';
 import type { WorkspaceDeps } from '../workspace/types';
 import { recordAudit } from '../workspace/audit';
@@ -142,15 +143,15 @@ export async function createEditorialSelection(
     include: { researchObject: true, manifest: true, publications: true },
   });
   if (!version) throw new EditorialError('NOT_FOUND', 'Version not found.');
-  if (version.status !== 'published' || version.researchObject.visibility !== 'public' || !version.researchObject.publicId || !version.manifest) {
+  if (version.status !== 'published' || !version.publications.length || publicVersionNumber(version) === null || version.researchObject.visibility !== 'public' || !version.researchObject.publicId || !version.manifest) {
     throw new EditorialError('VERSION_NOT_PUBLIC', 'Only a published public Research Object version can be selected.');
   }
   const snapshot = buildEditorialSnapshot({
     researchObjectId: version.researchObjectId,
     versionId: version.id,
-    title: version.researchObject.title,
+    title: readPublicationMetadata(version.researchRecord).title ?? 'Research object (title not recorded)',
     publicId: version.researchObject.publicId,
-    versionNo: version.versionNo,
+    versionNo: publicVersionNumber(version)!,
     sdf: version.manifest.coreJson as Record<string, unknown>,
   });
   try {
@@ -252,7 +253,7 @@ async function getCollection(deps: WorkspaceDeps, slug: string, publicOnly: bool
   const rows = await deps.prisma.editorialSelection.findMany({
     where: {
       collectionId: collection.id,
-      ...(publicOnly ? { state: 'published', researchObject: { visibility: 'public' }, version: { status: 'published' } } : {}),
+      ...(publicOnly ? { state: 'published', researchObject: { visibility: 'public', status: { not: 'archived' } }, version: { status: 'published' } } : {}),
     },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
   });

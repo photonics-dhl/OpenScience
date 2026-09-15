@@ -6,6 +6,10 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./canonical-evidence-contract": {
+      "types": "./dist/ingestion/canonical-evidence-contract.d.ts",
+      "default": "./dist/ingestion/canonical-evidence-contract.js"
+    },
     "./virtual-page": {
       "types": "./dist/research-intelligence/virtual-page.d.ts",
       "default": "./dist/research-intelligence/virtual-page.js"

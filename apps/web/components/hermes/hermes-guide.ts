@@ -1,5 +1,5 @@
 import type { HermesRailTask } from './HermesRail';
-import { hermesTaskHref } from './hermes-state';
+import { hermesTaskHref, selectPriorityHermesTask } from './hermes-state';
 
 type HermesGuideKind = 'actionable-task' | 'continue-research' | 'neutral';
 
@@ -9,6 +9,7 @@ export interface HermesGuideSuggestion {
   bodyKey: string;
   href?: string;
   taskId?: string;
+  taskLabel?: string;
   researchObjectId?: string;
 }
 
@@ -22,7 +23,7 @@ export function deriveHermesGuide(input: {
   tasks: HermesRailTask[];
   researchObjects: HermesGuideResearch[];
 }): HermesGuideSuggestion {
-  const task = input.tasks[0];
+  const task = selectPriorityHermesTask(input.tasks);
   if (task) {
     const prompt = task.state === 'needs_review'
       ? 'review'
@@ -39,6 +40,7 @@ export function deriveHermesGuide(input: {
       bodyKey: `guide.${prompt}.body`,
       href: hermesTaskHref(task),
       taskId: task.id,
+      taskLabel: task.logicalPath || task.researchTitle,
       researchObjectId: task.researchObjectId,
     };
   }

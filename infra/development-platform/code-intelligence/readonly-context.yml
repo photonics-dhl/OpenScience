@@ -1,0 +1,15 @@
+description: OpenScience source-snapshot symbol queries
+prompt: |
+  Query only the active source snapshot. Report its exact Git revision from the
+  deployment record when using results. Symbol relations describe source code;
+  they do not establish deployment, complete dependency coverage or scientific
+  quality. No editing, command execution, project switching or memory access is
+  available in this context.
+single_project: true
+structured_tool_output: true
+excluded_tools: []
+included_optional_tools: []
+fixed_tools:
+  - find_symbol
+  - get_symbols_overview
+  - find_referencing_symbols

@@ -11,11 +11,14 @@ import {
   requestVisibilityChange,
   updateResearchObject,
   updateSdfDocument,
+  WorkspaceError,
 } from '@openscience/domain';
-import type { AuditContext } from '@openscience/observability';
+import { buildErrorBody, type AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
+import { tokenizeSearchText } from '@openscience/search';
+import { searchResearchObjects, type ResearchObjectSearchService } from '../research-object-search';
 
-export type ResearchObjectRouteDeps = AuthDeps;
+export type ResearchObjectRouteDeps = AuthDeps & { researchObjectSearch?: ResearchObjectSearchService };
 
 function auditCtx(req: FastifyRequest): AuditContext {
   return { requestId: String(req.id), ip: req.ip };
@@ -52,6 +55,25 @@ export function registerResearchObjectRoutes(app: FastifyInstance, deps: Researc
     if (!user) return;
     const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(100).default(20) }).parse(req.query);
     return reply.send({ researchObjects: await listResearchObjects(deps, { userId: user.userId, limit }) });
+  });
+
+  app.post('/research-objects/search', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { limit, query, workspaceId } = z.object({
+      limit: z.number().int().min(1).max(20).default(20),
+      query: z.string().trim().min(1).max(120).refine(value => tokenizeSearchText(value).length > 0),
+      workspaceId: z.string().uuid().toLowerCase(),
+    }).strict().parse(req.body);
+    reply.header('Cache-Control', 'no-store');
+    try {
+      return reply.send(await searchResearchObjects(deps, { userId: user.userId, workspaceId, query, limit }));
+    } catch (error) {
+      if (error instanceof WorkspaceError) throw error;
+      // Core DB errors may contain query parameters; expose only a fixed availability code.
+      req.log.warn({ code: 'SEARCH_UNAVAILABLE' }, 'research search unavailable');
+      return reply.status(503).send(buildErrorBody('SEARCH_UNAVAILABLE', '检索暂不可用，请稍后重试', String(req.id)));
+    }
   });
 
   app.post('/research-objects', async (req, reply) => {

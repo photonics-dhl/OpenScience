@@ -104,16 +104,29 @@ try {
   const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
   for (const field of fields) {
     if (typeof core[field] !== 'string') throw new Error(`missing core field ${field}`);
-    if (!missing.includes(field) && (!evidence[field]?.quote || !String(evidence[field]?.locator).startsWith('chars:'))) {
+    const segments = result.evidenceSegments?.[field];
+    if (segments !== undefined) {
+      if (!Array.isArray(segments) || segments.length > 32 || segments.reduce((sum, segment) => sum + String(segment.quote ?? '').length, 0) > 8000) throw new Error(`invalid segment bound: ${field}`);
+      const blocks = new Set();
+      for (const segment of segments) {
+        const locator = segment.sourceLocator;
+        if (typeof segment.quote !== 'string' || !segment.quote.trim() || !locator
+          || locator.artifactId !== detail.task.artifactId || locator.contentHash !== paperSha256
+          || !locator.blockId || blocks.has(locator.blockId) || locator.charRange?.end - locator.charRange?.start !== segment.quote.length) throw new Error(`invalid canonical segment: ${field}`);
+        blocks.add(locator.blockId);
+      }
+      if ((!missing.includes(field) && !segments.length) || evidence[field]?.quote !== segments.map(segment => segment.quote).join('\n')) throw new Error(`incomplete segment projection: ${field}`);
+      if (segments.length > 1 && (result.evidenceLocation?.[field]?.status !== 'cross_block' || result.evidenceLocation[field].sourceLocator)) throw new Error(`fabricated multiblock locator: ${field}`);
+    } else if (!missing.includes(field) && (!evidence[field]?.quote || !String(evidence[field]?.locator).startsWith('chars:'))) {
       throw new Error(`supported field ${field} lacks exact evidence`);
     }
   }
 
   const semanticText = `${core.problem} ${core.insight} ${core.method} ${core.results}`.toLowerCase();
   const semanticChecks = {
-    opticalFieldProblem: /(optical field|electric field|visible|near-infrared|near infrared)/.test(semanticText),
-    onChipMethod: /(on-chip|on chip|nanoantenna|photoemission|attosecond)/.test(semanticText),
-    quantitativeResult: /(5\s?fj|50\s?pj|femtojoule|picojoule)/.test(semanticText),
+    opticalFieldProblem: /(optical field|electric field|visible|near-infrared|near infrared|光场|电场|近红外)/.test(semanticText),
+    onChipMethod: /(on-chip|on chip|nanoantenna|photoemission|attosecond|片上|纳米天线|光电子发射|阿秒)/.test(semanticText),
+    quantitativeResult: /(5\s?fj|50\s?pj|femtojoule|picojoule|5\s*飞焦|50\s*皮焦)/.test(semanticText),
   };
   if (!Object.values(semanticChecks).every(Boolean)) {
     throw new Error(`semantic rubric failed: ${JSON.stringify(semanticChecks)}`);
@@ -130,6 +143,11 @@ try {
   await page.goto(`${baseUrl}/research-objects/${researchObjectId}/hermes?task=${taskId}`, { waitUntil: 'networkidle' });
   const textareas = page.locator('textarea');
   await textareas.first().waitFor({ state: 'visible' });
+  if (result.evidenceSegments) {
+    const original = page.locator('[data-hermes-source-evidence="method"]');
+    await original.locator('summary').click();
+    for (const segment of result.evidenceSegments.method) await original.getByText(segment.quote, { exact: true }).waitFor({ state: 'visible' });
+  }
   for (let index = 0; index < fields.length; index += 1) {
     if (!(await textareas.nth(index).inputValue()).trim()) {
       await textareas.nth(index).fill(missingDisclosure);
@@ -162,6 +180,42 @@ try {
   });
   if (!commit.commit?.versionId || commit.commit.versionNo < 1) throw new Error('commit response is incomplete');
 
+  await writeFile(resolve(outputDir, 'confirmed-version.json'), JSON.stringify({ researchObjectId, taskId, versionId: commit.commit.versionId, core: finalCore }));
+  if (!core.insight.trim() || missing.includes('insight')) throw new Error('A substantive reviewed insight is required for the Claim bridge');
+  await page.goto(`${baseUrl}/research-objects/${researchObjectId}/hermes?version=${commit.commit.versionId}`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: /^(向 Hermes 提问|Ask Hermes)$/ }).click();
+  await page.getByRole('button', { name: /^(分镜与配图|Storyboards and scene images)$/ }).click();
+  const claimReview = page.getByRole('region', { name: /^(从论文分析整理主张|Review claims from your paper)$/ });
+  await claimReview.getByRole('button', { name: /^(预览已确认的论文分析|Preview confirmed paper analysis)$/ }).click();
+  const selectedFields = ['insight', 'method', 'results', 'limitations', 'reproducibility'].filter(field => !missing.includes(field));
+  const fieldLabels = { insight: '核心见解|Insight', method: '方法|Method', results: '结果|Results', limitations: '局限|Limitations', reproducibility: '可复现性|Reproducibility' };
+  for (const field of selectedFields) {
+    const checkbox = claimReview.getByRole('checkbox', { name: new RegExp(`^(${fieldLabels[field]}) ·`) });
+    await checkbox.check();
+    const row = checkbox.locator('..').locator('..');
+    if (field !== 'insight') {
+      const parent = row.getByRole('combobox').last();
+      const parentKey = await parent.locator('option:not([value=""])').first().getAttribute('value');
+      if (!parentKey) throw new Error(`No reviewed parent for ${field}`);
+      await parent.selectOption(parentKey);
+    }
+    if (result.evidenceSegments?.[field]?.length) {
+      const actualQuotes = await row.locator('blockquote').allTextContents();
+      if (JSON.stringify(actualQuotes) !== JSON.stringify(result.evidenceSegments[field].map(segment => segment.quote))) throw new Error(`Claim review lost segment text: ${field}`);
+    }
+  }
+  await page.screenshot({ path: resolve(outputDir, 'claim-review-before-confirm.png'), fullPage: true });
+  const claimResponse = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith(`/ingestion-claim-evidence/${taskId}`));
+  await claimReview.getByRole('button', { name: /^(确认所选主张及候选证据|Confirm selected claims and candidate evidence)$/ }).click();
+  const createdResponse = await claimResponse;
+  if (createdResponse.status() !== 201) throw new Error(`Claim bridge failed: ${createdResponse.status()}`);
+  const bridge = await createdResponse.json();
+  if (bridge.claims?.length !== selectedFields.length || bridge.claims.some(claim => claim.researchObjectId !== researchObjectId || claim.versionId !== commit.commit.versionId || claim.assessment !== 'missing')) throw new Error('Claim bridge changed scope or assessment');
+  const expectedEvidence = selectedFields.reduce((sum, field) => sum + (result.evidenceSegments?.[field]?.length ?? 1), 0);
+  if (bridge.evidence?.length !== expectedEvidence || bridge.evidence.some(item => item.researchObjectId !== researchObjectId || item.versionId !== commit.commit.versionId || item.extractionStatus !== 'needs_review' || item.verifiedByUserId)) throw new Error('Claim bridge changed source evidence or verification status');
+  if (JSON.stringify(bridge).includes('"sourceMapRef"')) throw new Error('Private SourceMap reference leaked in Claim bridge');
+  await writeFile(resolve(outputDir, 'claim-bridge.json'), JSON.stringify({ researchObjectId, versionId: commit.commit.versionId, selectedFields, ...bridge }, null, 2));
+
   await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
   await page.screenshot({ path: resolve(outputDir, 'dashboard-after-real-ro.png'), fullPage: true });
   const hermes = await page.locator('[data-hermes-state]').first().evaluate((node) => ({
@@ -190,6 +244,11 @@ try {
     finalCore,
     missingDisclosure,
     evidence,
+    evidenceSegments: result.evidenceSegments,
+    evidenceLocation: result.evidenceLocation,
+    committedVersionId: commit.commit.versionId,
+    reviewedClaimCount: bridge.claims.length,
+    candidateEvidenceCount: bridge.evidence.length,
     versionAfterConfirm: roAfterConfirm.researchObject.version,
     committedVersionNo: commit.commit.versionNo,
     hermes,

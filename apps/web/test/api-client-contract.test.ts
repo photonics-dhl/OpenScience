@@ -285,6 +285,7 @@ describe('apiRequest CSRF contract', () => {
     await expect(retryIngestionTask('task-1')).resolves.toMatchObject({ id: 'task-1', state: 'queued' });
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/ingestion/task-1/retry', expect.objectContaining({
       method: 'POST',
+      body: '{}',
       headers: expect.objectContaining({ 'x-csrf-token': 'signed-csrf-token' }),
     }));
   });

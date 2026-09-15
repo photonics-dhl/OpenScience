@@ -1,7 +1,7 @@
 import type { AuditContext } from '@openscience/observability';
 import { requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
-import { canAccessRo } from '../visibility/access';
+import { canAccessPrivateRo } from '../visibility/access';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import { assertValidLicenseId } from '../license/catalog';
 import { getEffectiveLicenses, validateLicenseInheritance } from '../license/licenses';
@@ -248,13 +248,13 @@ export async function createPullRequest(
 }
 
 /**
- * PR 列表（§4.2 可见性继承）：读 canAccessRo（public 匿名可读）；status 过滤。
+ * PR 列表（§4.2 可见性继承）：读 canAccessPrivateRo（public 匿名可读）；status 过滤。
  */
 export async function listPullRequests(
   deps: ArtifactDeps,
   input: { researchObjectId: string; userId?: string; status?: string },
 ): Promise<Omit<PullRequestDetail, 'diff'>[]> {
-  const access = await canAccessRo(deps, { researchObjectId: input.researchObjectId, userId: input.userId });
+  const access = await canAccessPrivateRo(deps, { researchObjectId: input.researchObjectId, userId: input.userId });
   if (access === 'denied') throw new PrError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
 
   const rows = await deps.prisma.pullRequest.findMany({
@@ -272,7 +272,7 @@ export async function getPullRequest(
   deps: ArtifactDeps,
   input: { researchObjectId: string; userId?: string; prId: string },
 ): Promise<PullRequestDetail> {
-  const access = await canAccessRo(deps, { researchObjectId: input.researchObjectId, userId: input.userId });
+  const access = await canAccessPrivateRo(deps, { researchObjectId: input.researchObjectId, userId: input.userId });
   if (access === 'denied') throw new PrError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
 
   const pr = await deps.prisma.pullRequest.findFirst({

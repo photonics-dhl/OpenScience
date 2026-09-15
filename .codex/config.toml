@@ -1,0 +1,7 @@
+# Server-side read-only source intelligence, reached through ssh-run.sh --development-tunnel.
+# See infra/development-platform/code-intelligence/README.md for the indexed revision.
+[mcp_servers.openscience_code]
+url = "http://127.0.0.1:3132/mcp"
+enabled_tools = ["find_symbol", "get_symbols_overview", "find_referencing_symbols"]
+startup_timeout_sec = 30
+tool_timeout_sec = 180

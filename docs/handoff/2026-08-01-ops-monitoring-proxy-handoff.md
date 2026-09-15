@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Handoff — 2026-08-01 运维底座补充：出网通道 + 监控面板（P1A-6 前）
 
 - Current goal: 不变——Phase 1A 平台底座，下一任务仍是 P1A-6 审计日志（task-master 2.6，先 design gate）。本文件只补充 2026-08-01 下午的运维层变更，主交接仍为 `2026-08-01-p1a-5-cloud-done-handoff.md`。

@@ -103,6 +103,10 @@ export function parseRetentionCli(argv) {
   const expectedFlags = command === 'preflight'
     ? ['--expected-active', '--lock-fd']
     : ['--expected-active', '--expected-rollback', '--lock-fd'];
+  if (command === 'prepare' && values.has('--prune-unused')) {
+    if (values.get('--prune-unused') !== '1') throw new Error('Explicit pruning requires --prune-unused 1');
+    expectedFlags.push('--prune-unused');
+  }
   if (values.size !== expectedFlags.length || expectedFlags.some((flag) => !values.has(flag))) {
     throw new Error('production retention arguments are incomplete');
   }
@@ -112,6 +116,7 @@ export function parseRetentionCli(argv) {
     expectedActive: requireSha('expected active release', values.get('--expected-active')),
     lockFd: 9,
   };
+  if (values.has('--prune-unused')) result.pruneUnused = true;
   if (command !== 'preflight') {
     result.expectedRollback = requireSha('expected rollback release', values.get('--expected-rollback'));
     if (result.expectedActive === result.expectedRollback) {
@@ -496,7 +501,15 @@ async function preflight({ expectedActive, lockFd }, paths = PATHS) {
   }
 }
 
-async function prepare({ expectedActive, expectedRollback, lockFd }, paths = PATHS) {
+async function validatePreservedReleases(activeSha, rollbackSha, paths) {
+  const mountPoints = parseMountInfo(await readFile('/proc/self/mountinfo', 'utf8'));
+  for (const sha of [activeSha, rollbackSha]) {
+    await validateReleaseRoot(join(paths.releases, sha), sha, { releasesRoot: paths.releases, mountPoints });
+  }
+  await protectedImageState(activeSha, rollbackSha, paths);
+}
+
+async function prepare({ expectedActive, expectedRollback, lockFd, pruneUnused = false }, paths = PATHS) {
   await verifyLock(lockFd);
   await requireAbsent(paths.pending, 'rollback pending intent');
   if (await trustedShaMarker(paths.active) !== expectedActive) throw new Error('active release changed before rollback intent');
@@ -505,7 +518,12 @@ async function prepare({ expectedActive, expectedRollback, lockFd }, paths = PAT
     throw new Error('deploy journal does not match rollback intent');
   }
   if (await pathExists(paths.rollback)) await trustedShaMarker(paths.rollback, { exactMode: 0o600 });
-  const plan = await collectRetentionPlan({ activeSha: expectedActive, rollbackSha: expectedRollback, paths });
+  // Publishing rollback identity is required; deleting historical runtime inputs is not.
+  // Explicitly approved cleanup can still use the existing strict retention transaction.
+  const plan = pruneUnused
+    ? await collectRetentionPlan({ activeSha: expectedActive, rollbackSha: expectedRollback, paths })
+    : { releaseShas: [], imageTags: [], capabilityShas: [] };
+  if (!pruneUnused) await validatePreservedReleases(expectedActive, expectedRollback, paths);
   const intent = {
     schemaVersion: 2,
     candidateSha: expectedActive,
@@ -547,13 +565,12 @@ async function publishRollbackMarker(expectedActive, expectedRollback, paths = P
 async function complete(options, paths = PATHS) {
   await verifyLock(options.lockFd);
   const pending = await publishRollbackMarker(options.expectedActive, options.expectedRollback, paths);
-  const plan = await collectRetentionPlan({
-    activeSha: options.expectedActive,
-    rollbackSha: options.expectedRollback,
-    expected: pending,
-    paths,
-  });
-  await executeRetentionPlan(plan, options.expectedActive, options.expectedRollback, paths);
+  const hasCleanup = pending.releaseShas.length + pending.imageTags.length + pending.capabilityShas.length > 0;
+  const plan = hasCleanup ? await collectRetentionPlan({
+    activeSha: options.expectedActive, rollbackSha: options.expectedRollback, expected: pending, paths,
+  }) : { releaseShas: [], imageTags: [], capabilityShas: [] };
+  if (hasCleanup) await executeRetentionPlan(plan, options.expectedActive, options.expectedRollback, paths);
+  else await validatePreservedReleases(options.expectedActive, options.expectedRollback, paths);
   await readPending(paths, options.expectedActive, options.expectedRollback);
   await rm(paths.pending);
   await syncParent(paths.pending);

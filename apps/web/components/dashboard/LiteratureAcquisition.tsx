@@ -9,6 +9,7 @@ import {
   createTemporaryDocumentDownloadLink,
   getCurrentUser,
   getAgentTask,
+  importTemporaryDocumentToResearchObject,
   listSourceRetrieveTasks,
   retryAgentTask,
   submitLiteratureAcquisition,
@@ -22,6 +23,14 @@ import {
 } from '@/lib/literature-acquisition-state';
 
 export type LiteratureTask = AgentTaskView;
+
+export interface LiteratureRecoveryState {
+  scope: string;
+  generation: number;
+  task: LiteratureTask | null;
+  origin: 'recovery' | 'task';
+  status: 'pending' | 'resolved' | 'failed';
+}
 
 type LiteratureSource = {
   id?: string;
@@ -88,6 +97,7 @@ export interface LiteratureAcquisitionProps {
   initialTask?: LiteratureTask | null;
   instanceId?: string;
   onAuthenticationRequired: () => void;
+  onRecoveryStateChange?: (state: LiteratureRecoveryState) => void;
   recoveryComplete?: boolean;
   target?: LiteratureAcquisitionTarget;
   tone?: 'paper' | 'dark';
@@ -110,6 +120,7 @@ export function LiteratureAcquisition({
   initialTask = null,
   instanceId = 'literature',
   onAuthenticationRequired,
+  onRecoveryStateChange,
   recoveryComplete,
   target = { kind: 'personal' },
   tone = 'paper',
@@ -118,22 +129,43 @@ export function LiteratureAcquisition({
 }: LiteratureAcquisitionProps) {
   const t = useTranslations('dashboard.literature');
   const explicitInitialIdentity = hasExplicitLiteratureIntentIdentity({ callerIdempotencyKey, callerIntentFingerprint, initialRequest });
-  const [query, setQuery] = React.useState(initialRequest?.query ?? '');
-  const [task, setTask] = React.useState<LiteratureTask | null>(initialTask);
+  const [resolvedUserId, setResolvedUserId] = React.useState(userId ?? '');
+  const namespace = targetNamespace(target);
+  const effectiveUserId = userId ?? resolvedUserId;
+  const scopeKey = `${effectiveUserId}:${namespace}`;
+  const initialQuery = initialRequest?.query ?? '';
+  const [queryState, setQueryState] = React.useState({ scope: scopeKey, initialQuery, value: initialQuery });
+  const query = queryState.scope === scopeKey && queryState.initialQuery === initialQuery ? queryState.value : initialQuery;
+  const [taskState, setTaskState] = React.useState({ scope: scopeKey, task: initialTask as LiteratureTask | null });
   const [error, setError] = React.useState('');
   const [reconnecting, setReconnecting] = React.useState(false);
   const [downloading, setDownloading] = React.useState<string | null>(null);
+  const [importing, setImporting] = React.useState<string | null>(null);
   const [submissionPending, setSubmissionPending] = React.useState(false);
   const [retryPending, setRetryPending] = React.useState(false);
-  const [resolvedUserId, setResolvedUserId] = React.useState(userId ?? '');
-  const [internalRecoveryComplete, setInternalRecoveryComplete] = React.useState(recoveryComplete !== undefined || explicitInitialIdentity);
+  const [internalRecovery, setInternalRecovery] = React.useState({
+    scope: scopeKey,
+    complete: recoveryComplete !== undefined || explicitInitialIdentity,
+  });
   const submitting = React.useRef(false);
   const retrying = React.useRef(false);
-  const userResolutionStarted = React.useRef(false);
-  const initialRequestSubmitted = React.useRef(false);
+  const submissionToken = React.useRef(0);
+  const retryToken = React.useRef(0);
+  const initialRequestSubmitted = React.useRef('');
   const recoveryNamespaceStarted = React.useRef('');
-  const namespace = targetNamespace(target);
-  const recoveryReady = recoveryComplete ?? internalRecoveryComplete;
+  const scope = React.useRef({ key: '', generation: 0 });
+  const mounted = React.useRef(true);
+  const authenticationRequired = React.useRef(onAuthenticationRequired);
+  authenticationRequired.current = onAuthenticationRequired;
+  if (scope.current.key !== scopeKey) scope.current = { key: scopeKey, generation: scope.current.generation + 1 };
+  const isCurrentScope = React.useCallback((key: string, generation: number) => mounted.current && scope.current.key === key && scope.current.generation === generation, []);
+  const setScopedTask = React.useCallback((next: LiteratureTask | null, key: string, generation: number) => {
+    if (!isCurrentScope(key, generation)) return;
+    setTaskState({ scope: key, task: next });
+  }, [isCurrentScope]);
+  const task = taskState.scope === scopeKey ? taskState.task : null;
+  const recoveryReady = recoveryComplete
+    ?? (explicitInitialIdentity || (internalRecovery.scope === scopeKey && internalRecovery.complete));
   const queryId = `${instanceId}-query`;
   const dark = tone === 'dark';
   const rule = dark ? 'border-os-rule-dark' : 'border-os-rule-paper';
@@ -142,82 +174,129 @@ export function LiteratureAcquisition({
   const accent = dark ? 'text-os-vermilion' : 'text-os-vermilion-ink';
   const researchObjectTarget = target.kind === 'research_object';
 
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  React.useEffect(() => {
+    const current = { ...scope.current };
+    submitting.current = false;
+    retrying.current = false;
+    submissionToken.current += 1;
+    retryToken.current += 1;
+    setSubmissionPending(false);
+    setRetryPending(false);
+    setDownloading(null);
+    setReconnecting(false);
+    setError('');
+    setTaskState((state) => state.scope === current.key ? state : { scope: current.key, task: null });
+    setInternalRecovery({
+      scope: current.key,
+      complete: recoveryComplete !== undefined || explicitInitialIdentity,
+    });
+  }, [explicitInitialIdentity, recoveryComplete, scopeKey]);
+
   const description = task ? describeLiteratureTask(task) : null;
   const active = description?.state === 'pending' || description?.state === 'running';
   const sources = resultSources(task?.result ?? null);
-  const handlePermanentTaskError = React.useCallback((status: number) => {
+  const handlePermanentTaskError = React.useCallback((status: number, key: string, generation: number) => {
+    if (!isCurrentScope(key, generation)) return;
     if (status === 401) {
-      onAuthenticationRequired();
+      authenticationRequired.current();
       return;
     }
-    setTask(null);
+    setScopedTask(null, key, generation);
     setReconnecting(false);
     setError(t('recoveryError'));
-  }, [onAuthenticationRequired, t]);
+  }, [isCurrentScope, setScopedTask, t]);
 
   React.useEffect(() => {
     if (userId) {
       setResolvedUserId(userId);
-      return;
+      return undefined;
     }
-    if (userResolutionStarted.current) return;
-    userResolutionStarted.current = true;
+    let disposed = false;
+    setResolvedUserId('');
     void getCurrentUser()
-      .then((current) => setResolvedUserId(current.userId))
-      .catch(() => onAuthenticationRequired());
-  }, [onAuthenticationRequired, userId]);
+      .then((current) => { if (!disposed && mounted.current) setResolvedUserId(current.userId); })
+      .catch(() => { if (!disposed && mounted.current) authenticationRequired.current(); });
+    return () => { disposed = true; };
+  }, [userId]);
 
   React.useEffect(() => {
-    if (recoveryComplete === undefined || !recoveryReady || !resolvedUserId) return;
-    setTask(initialTask);
+    if (recoveryComplete === undefined || !recoveryReady || !effectiveUserId) return;
+    const generation = scope.current.generation;
+    setScopedTask(initialTask, scopeKey, generation);
+    onRecoveryStateChange?.({ scope: scopeKey, generation, task: initialTask, origin: 'recovery', status: 'resolved' });
     if (initialTask && typeof window !== 'undefined') {
-      settlePendingLiteratureIntent(window.sessionStorage, { userId: resolvedUserId, target: namespace }, { kind: 'recovered' });
+      settlePendingLiteratureIntent(window.sessionStorage, { userId: effectiveUserId, target: namespace }, { kind: 'recovered' });
     }
-  }, [initialTask, namespace, recoveryComplete, recoveryReady, resolvedUserId]);
+  }, [effectiveUserId, initialTask, namespace, onRecoveryStateChange, recoveryComplete, recoveryReady, scopeKey, setScopedTask]);
 
   React.useEffect(() => {
-    if (recoveryComplete !== undefined || explicitInitialIdentity || !resolvedUserId) return;
-    const recoveryKey = `${resolvedUserId}:${namespace}`;
-    if (recoveryNamespaceStarted.current === recoveryKey) return;
-    recoveryNamespaceStarted.current = recoveryKey;
-    setInternalRecoveryComplete(false);
-    setTask(null);
+    if (recoveryComplete !== undefined || explicitInitialIdentity || !effectiveUserId) return;
+    const recoveryKey = scopeKey;
+    const generation = scope.current.generation;
+    const requestKey = `${recoveryKey}:${generation}`;
+    if (recoveryNamespaceStarted.current === requestKey) return;
+    recoveryNamespaceStarted.current = requestKey;
+    let disposed = false;
+    setInternalRecovery({ scope: recoveryKey, complete: false });
+    setScopedTask(null, recoveryKey, generation);
+    onRecoveryStateChange?.({ scope: recoveryKey, generation, task: null, origin: 'recovery', status: 'pending' });
     const recoveryTarget: LiteratureAcquisitionTarget = target.kind === 'personal'
       ? { kind: 'personal' }
       : { kind: 'research_object', researchObjectId: target.researchObjectId };
     void listSourceRetrieveTasks(recoveryTarget)
       .then(({ tasks }) => {
-        if (recoveryNamespaceStarted.current !== recoveryKey) return;
+        if (disposed || !isCurrentScope(recoveryKey, generation)) return;
         const recovered = tasks[0] ?? null;
-        setTask(recovered);
+        setScopedTask(recovered, recoveryKey, generation);
+        onRecoveryStateChange?.({ scope: recoveryKey, generation, task: recovered, origin: 'recovery', status: 'resolved' });
         if (recovered && typeof window !== 'undefined') {
-          settlePendingLiteratureIntent(window.sessionStorage, { userId: resolvedUserId, target: namespace }, { kind: 'recovered' });
+          settlePendingLiteratureIntent(window.sessionStorage, { userId: effectiveUserId, target: namespace }, { kind: 'recovered' });
         }
       })
       .catch((cause) => {
-        if (recoveryNamespaceStarted.current !== recoveryKey) return;
-        if (cause instanceof ApiClientError && cause.status === 401) onAuthenticationRequired();
-        else setError(t('recoveryError'));
+        if (disposed || !isCurrentScope(recoveryKey, generation)) return;
+        if (cause instanceof ApiClientError && cause.status === 401) authenticationRequired.current();
+        else {
+          setError(t('recoveryError'));
+          onRecoveryStateChange?.({ scope: recoveryKey, generation, task: null, origin: 'recovery', status: 'failed' });
+        }
       })
       .finally(() => {
-        if (recoveryNamespaceStarted.current === recoveryKey) setInternalRecoveryComplete(true);
+        if (!disposed && isCurrentScope(recoveryKey, generation)) setInternalRecovery({ scope: recoveryKey, complete: true });
       });
-  }, [explicitInitialIdentity, namespace, onAuthenticationRequired, recoveryComplete, resolvedUserId, t, target.kind, target.kind === 'research_object' ? target.researchObjectId : null]);
+    return () => {
+      disposed = true;
+      if (recoveryNamespaceStarted.current === requestKey) recoveryNamespaceStarted.current = '';
+    };
+  }, [effectiveUserId, explicitInitialIdentity, isCurrentScope, namespace, onRecoveryStateChange, recoveryComplete, scopeKey, setScopedTask, t, target.kind, target.kind === 'research_object' ? target.researchObjectId : null]);
 
   React.useEffect(() => {
     if (!task || !active) return undefined;
+    const operation = { ...scope.current };
     return startLiteratureTaskPolling<AgentTaskView>({
       taskId: task.id,
       getTask: async (taskId, signal) => (await getAgentTask('', taskId, signal)).task,
-      onTask: setTask,
-      onReconnecting: setReconnecting,
-      onPermanentError: handlePermanentTaskError,
+      onTask: (next) => {
+        if (!isCurrentScope(operation.key, operation.generation)) return;
+        setScopedTask(next, operation.key, operation.generation);
+        onRecoveryStateChange?.({ scope: operation.key, generation: operation.generation, task: next, origin: 'task', status: 'resolved' });
+      },
+      onReconnecting: (next) => { if (isCurrentScope(operation.key, operation.generation)) setReconnecting(next); },
+      onPermanentError: (status) => handlePermanentTaskError(status, operation.key, operation.generation),
     });
-  }, [active, handlePermanentTaskError, task?.id]);
+  }, [active, handlePermanentTaskError, isCurrentScope, onRecoveryStateChange, setScopedTask, task?.id]);
 
   const submit = React.useCallback(async (input: { query: string; identifier?: string }, useCallerIdentity = false) => {
-    if (submitting.current) return;
-    if (typeof window === 'undefined' || !resolvedUserId || !recoveryReady) return;
+    if (submitting.current || retrying.current) return;
+    if (typeof window === 'undefined' || !effectiveUserId || !recoveryReady) return;
+    const operation = { ...scope.current };
+    const token = submissionToken.current + 1;
+    submissionToken.current = token;
     submitting.current = true;
     setSubmissionPending(true);
     setError('');
@@ -225,7 +304,7 @@ export function LiteratureAcquisition({
       const pendingIntent = await acquirePendingLiteratureIntent(
         window.sessionStorage,
         {
-          userId: resolvedUserId,
+          userId: effectiveUserId,
           target: namespace,
           input,
           ...(useCallerIdentity && callerIntentFingerprint ? { intentFingerprint: callerIntentFingerprint } : {}),
@@ -233,28 +312,35 @@ export function LiteratureAcquisition({
         () => useCallerIdentity && callerIdempotencyKey ? callerIdempotencyKey : crypto.randomUUID(),
       );
       if (pendingIntent.status === 'blocked') {
-        setError(t('pendingIntent'));
+        if (isCurrentScope(operation.key, operation.generation)) setError(t('pendingIntent'));
         return;
       }
+      if (!isCurrentScope(operation.key, operation.generation)) return;
       const acquisition = await submitLiteratureAcquisition(input, pendingIntent.key, target);
-      setTask(acquisition.task);
-      settlePendingLiteratureIntent(window.sessionStorage, { userId: resolvedUserId, target: namespace }, { kind: 'accepted' });
+      settlePendingLiteratureIntent(window.sessionStorage, { userId: effectiveUserId, target: namespace }, { kind: 'accepted' });
+      if (!isCurrentScope(operation.key, operation.generation)) return;
+      setScopedTask(acquisition.task, operation.key, operation.generation);
+      onRecoveryStateChange?.({ scope: operation.key, generation: operation.generation, task: acquisition.task, origin: 'task', status: 'resolved' });
     } catch (cause) {
-      settlePendingLiteratureIntent(window.sessionStorage, { userId: resolvedUserId, target: namespace }, {
+      settlePendingLiteratureIntent(window.sessionStorage, { userId: effectiveUserId, target: namespace }, {
         kind: 'failure', ...(cause instanceof ApiClientError ? { status: cause.status } : {}),
       });
-      setError(t('error'));
+      if (isCurrentScope(operation.key, operation.generation)) setError(t('error'));
     } finally {
-      submitting.current = false;
-      setSubmissionPending(false);
+      if (submissionToken.current === token) {
+        submitting.current = false;
+        if (isCurrentScope(operation.key, operation.generation)) setSubmissionPending(false);
+      }
     }
-  }, [callerIdempotencyKey, callerIntentFingerprint, namespace, recoveryReady, resolvedUserId, t, target]);
+  }, [callerIdempotencyKey, callerIntentFingerprint, effectiveUserId, isCurrentScope, namespace, onRecoveryStateChange, recoveryReady, setScopedTask, t, target]);
 
   React.useEffect(() => {
-    if (!initialRequest || initialRequestSubmitted.current || !recoveryReady || !resolvedUserId || active) return;
-    initialRequestSubmitted.current = true;
+    if (!initialRequest || !recoveryReady || !effectiveUserId || active) return;
+    const identity = `${scopeKey}:${callerIdempotencyKey ?? ''}:${callerIntentFingerprint ?? ''}:${initialRequest.query}:${initialRequest.identifier ?? ''}`;
+    if (initialRequestSubmitted.current === identity) return;
+    initialRequestSubmitted.current = identity;
     void submit(initialRequest, true);
-  }, [active, initialRequest, recoveryReady, resolvedUserId, submit]);
+  }, [active, callerIdempotencyKey, callerIntentFingerprint, effectiveUserId, initialRequest, recoveryReady, scopeKey, submit]);
 
   function submitCurrentQuery() {
     const normalized = query.trim();
@@ -278,45 +364,73 @@ export function LiteratureAcquisition({
   }
 
   async function retry() {
-    if (!task || retrying.current || !isLiteratureTaskRetryEligible(task)) return;
+    if (!task || retrying.current || submitting.current || !isLiteratureTaskRetryEligible(task)) return;
+    const operation = { ...scope.current };
+    const token = retryToken.current + 1;
+    retryToken.current = token;
     retrying.current = true;
     setRetryPending(true);
     setError('');
     try {
       const next = await retryAgentTask(task.id);
-      setTask(next.task);
+      if (!isCurrentScope(operation.key, operation.generation)) return;
+      setScopedTask(next.task, operation.key, operation.generation);
+      onRecoveryStateChange?.({ scope: operation.key, generation: operation.generation, task: next.task, origin: 'task', status: 'resolved' });
     } catch (cause) {
       const status = cause instanceof ApiClientError ? cause.status : undefined;
       const reconcile = status === undefined || status === 408 || status === 409 || status === 429 || (status !== undefined && status >= 500);
       if (!reconcile) {
-        if (status === 401 || status === 403 || status === 404) handlePermanentTaskError(status);
-        else setError(t('error'));
+        if (status === 401 || status === 403 || status === 404) handlePermanentTaskError(status, operation.key, operation.generation);
+        else if (isCurrentScope(operation.key, operation.generation)) setError(t('error'));
         return;
       }
       try {
         const authoritative = await getAgentTask('', task.id);
-        setTask(authoritative.task);
+        if (!isCurrentScope(operation.key, operation.generation)) return;
+        setScopedTask(authoritative.task, operation.key, operation.generation);
+        onRecoveryStateChange?.({ scope: operation.key, generation: operation.generation, task: authoritative.task, origin: 'task', status: 'resolved' });
       } catch (recoveryCause) {
         const recoveryStatus = recoveryCause instanceof ApiClientError ? recoveryCause.status : undefined;
-        if (recoveryStatus === 401 || recoveryStatus === 403 || recoveryStatus === 404) handlePermanentTaskError(recoveryStatus);
-        else setError(t('error'));
+        if (recoveryStatus === 401 || recoveryStatus === 403 || recoveryStatus === 404) handlePermanentTaskError(recoveryStatus, operation.key, operation.generation);
+        else if (isCurrentScope(operation.key, operation.generation)) setError(t('error'));
       }
     } finally {
-      retrying.current = false;
-      setRetryPending(false);
+      if (retryToken.current === token) {
+        retrying.current = false;
+        if (isCurrentScope(operation.key, operation.generation)) setRetryPending(false);
+      }
     }
   }
 
   async function download(documentId: string) {
+    const operation = { ...scope.current };
     setDownloading(documentId);
     setError('');
     try {
       const link = await createTemporaryDocumentDownloadLink(documentId);
+      if (!isCurrentScope(operation.key, operation.generation)) return;
       window.location.assign(link.downloadUrl);
     } catch {
-      setError(t('error'));
+      if (isCurrentScope(operation.key, operation.generation)) setError(t('error'));
     } finally {
-      setDownloading(null);
+      if (isCurrentScope(operation.key, operation.generation)) setDownloading(null);
+    }
+  }
+
+  async function importDocument(documentId: string) {
+    if (target.kind !== 'research_object') return;
+    const operation = { ...scope.current };
+    setImporting(documentId);
+    setError('');
+    try {
+      const batch = await importTemporaryDocumentToResearchObject(documentId, target.researchObjectId);
+      if (!isCurrentScope(operation.key, operation.generation)) return;
+      const taskId = batch.tasks[0]?.id;
+      window.location.assign(`/research-objects/${encodeURIComponent(target.researchObjectId)}/edit${taskId ? `?ingestionTask=${encodeURIComponent(taskId)}` : ''}`);
+    } catch {
+      if (isCurrentScope(operation.key, operation.generation)) setError(t('importError'));
+    } finally {
+      if (isCurrentScope(operation.key, operation.generation)) setImporting(null);
     }
   }
 
@@ -325,14 +439,14 @@ export function LiteratureAcquisition({
       <label className={`block text-sm font-semibold ${ink}`} htmlFor={queryId}>{t('queryLabel')}</label>
       <input
         className={`mt-2 min-h-11 w-full border ${rule} bg-transparent px-3 text-base ${ink} outline-none transition-transform duration-150 focus:border-current focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`}
-        disabled={active || submissionPending || !recoveryReady || !resolvedUserId}
+        disabled={active || submissionPending || !recoveryReady || !effectiveUserId}
         id={queryId}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => setQueryState({ scope: scopeKey, initialQuery, value: event.target.value })}
         placeholder={t('queryPlaceholder')}
         value={query}
       />
     </div>
-    <button className={`min-h-11 border px-4 text-sm font-semibold ${dark ? 'border-os-paper text-os-paper' : 'border-os-ink text-os-ink'} transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`} disabled={active || submissionPending || !recoveryReady || !resolvedUserId || !query.trim()} onClick={withinForm ? submitCurrentQuery : undefined} type={withinForm ? 'button' : 'submit'}>
+    <button className={`min-h-11 border px-4 text-sm font-semibold ${dark ? 'border-os-paper text-os-paper' : 'border-os-ink text-os-ink'} transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`} disabled={active || submissionPending || !recoveryReady || !effectiveUserId || !query.trim()} onClick={withinForm ? submitCurrentQuery : undefined} type={withinForm ? 'button' : 'submit'}>
       {t('search')}
     </button>
   </>;
@@ -379,8 +493,9 @@ export function LiteratureAcquisition({
                     {source.expiresAt ? <p className={`mt-2 font-mono text-xs ${muted}`}>{t('expires', { expiresAt: readableExpiry(source.expiresAt) })}</p> : null}
                   </div>
                   <div className="flex flex-wrap gap-3">
-                    {identifier ? <button className={`min-h-11 min-w-11 border-b border-os-vermilion px-1 text-sm font-semibold ${ink} transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`} disabled={active || submissionPending || !recoveryReady || !resolvedUserId} onClick={() => void submit({ query: source.title ?? query, identifier })} type="button">{t('getFullText')}</button> : null}
-                    {source.temporaryDocumentId ? <button className={`min-h-11 border px-3 text-sm font-semibold ${dark ? 'border-os-paper text-os-paper' : 'border-os-ink text-os-ink'} transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`} disabled={submissionPending || downloading === source.temporaryDocumentId} onClick={() => void download(source.temporaryDocumentId!)} type="button">{t('download')}</button> : null}
+                    {identifier ? <button className={`min-h-11 min-w-11 border-b border-os-vermilion px-1 text-sm font-semibold ${ink} transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`} disabled={active || submissionPending || !recoveryReady || !effectiveUserId} onClick={() => void submit({ query: source.title ?? query, identifier })} type="button">{t('getFullText')}</button> : null}
+                    {source.temporaryDocumentId && researchObjectTarget ? <button aria-busy={importing === source.temporaryDocumentId} className="min-h-11 bg-os-vermilion px-3 text-sm font-semibold text-white transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={submissionPending || importing === source.temporaryDocumentId || downloading === source.temporaryDocumentId} onClick={() => void importDocument(source.temporaryDocumentId!)} type="button">{t(importing === source.temporaryDocumentId ? 'importingToRo' : 'importToRo')}</button> : null}
+                    {source.temporaryDocumentId ? <button className={`min-h-11 border px-3 text-sm font-semibold ${dark ? 'border-os-paper text-os-paper' : 'border-os-ink text-os-ink'} transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60`} disabled={submissionPending || importing === source.temporaryDocumentId || downloading === source.temporaryDocumentId} onClick={() => void download(source.temporaryDocumentId!)} type="button">{t('download')}</button> : null}
                   </div>
                 </li>
               );
@@ -399,13 +514,47 @@ export function shouldSubmitEmbeddedLiteratureQuery(event: { key: string; isComp
 export function LiteratureAcquisitionDisclosure(props: LiteratureAcquisitionProps) {
   const t = useTranslations('dashboard.literature');
   const dark = props.tone === 'dark';
+  const [open, setOpen] = React.useState(Boolean(props.initialTask));
+  const recovery = React.useRef<{ scope: string; generation: number; seenTaskId: string | null; manuallyClosed: boolean } | null>(null);
+  const onRecoveryStateChange = React.useCallback((next: LiteratureRecoveryState) => {
+    const current = recovery.current;
+    const scopeChanged = !current || current.scope !== next.scope || current.generation !== next.generation;
+    if (scopeChanged) {
+      recovery.current = { scope: next.scope, generation: next.generation, seenTaskId: null, manuallyClosed: false };
+    }
+    const state = recovery.current!;
+    if (next.status === 'failed') {
+      if (!state.manuallyClosed) setOpen(true);
+      return;
+    }
+    if (!next.task) {
+      if (scopeChanged) setOpen(false);
+      return;
+    }
+    if (state.seenTaskId !== next.task.id) {
+      state.seenTaskId = next.task.id;
+      if (next.origin === 'task') {
+        state.manuallyClosed = false;
+        setOpen(true);
+      } else if (!state.manuallyClosed) {
+        setOpen(true);
+      }
+    }
+  }, []);
+  const toggle = React.useCallback((event: React.MouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    setOpen((wasOpen) => {
+      if (wasOpen && recovery.current) recovery.current.manuallyClosed = true;
+      return !wasOpen;
+    });
+  }, []);
   return (
-    <details className={`border-y ${dark ? 'border-os-rule-dark' : 'border-os-rule-paper'}`} data-literature-entry="true" open={Boolean(props.initialTask)}>
-      <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 py-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-focus-ring ${dark ? 'text-os-paper' : 'text-os-ink'}`}>
+    <details className={`border-y ${dark ? 'border-os-rule-dark' : 'border-os-rule-paper'}`} data-literature-entry="true" open={open}>
+      <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 py-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-focus-ring ${dark ? 'text-os-paper' : 'text-os-ink'}`} onClick={toggle}>
         {t('disclosure')}
         <span aria-hidden="true" className={dark ? 'text-os-vermilion' : 'text-os-vermilion-ink'}>＋</span>
       </summary>
-      <LiteratureAcquisition {...props} />
+      <LiteratureAcquisition {...props} onRecoveryStateChange={onRecoveryStateChange} />
     </details>
   );
 }

@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Handoff — 2026-08-04 P1D-2 Hermes 异步任务通道完成
 
 - Current goal: Phase 1D Hermes Agent 系统。P1D-2 已闭环（迁移 15 + agent-worker，云上集成 88/88），下一任务 P1D-3 SDF Extractor（task-master 5.3）。

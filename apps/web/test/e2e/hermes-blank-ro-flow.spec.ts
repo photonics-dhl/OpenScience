@@ -92,6 +92,18 @@ async function installBlankRoApi(page: Page, options: { failAfterRetry?: boolean
         insight: { quote: 'Field-resolved sampling', locator: 'chars:18-41' },
         method: { quote: 'researcher-specified pump-probe', locator: 'chars:42-74' },
       },
+      sourceMapAvailable: true,
+      sourceMapIdentity: { artifactId: 'artifact-blank', contentHash: 'a'.repeat(64) },
+      evidenceLocation: {
+        problem: {
+          status: 'located', origin: 'model_quote', matching: 'exact', sourceLocator: {
+            artifactId: 'artifact-blank', contentHash: 'a'.repeat(64), blockId: 'block-1', page: 1,
+            charRange: { start: 0, end: 17 }, boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+          },
+        },
+        insight: { status: 'ambiguous' },
+        method: { status: 'cross_block' },
+      },
       needsMoreInformation: ['results'],
     } }),
   } });
@@ -104,7 +116,7 @@ async function installBlankRoApi(page: Page, options: { failAfterRetry?: boolean
   };
 }
 
-test('blank RO guidance writes only reviewed fields and preserves missing results through commit', async ({ page }) => {
+test('blank RO guidance writes only reviewed fields and preserves missing results through commit', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installBlankRoApi(page);
   await page.goto(`${baseUrl}/research-objects/new?mode=blank&hermes-motion=full`, { waitUntil: 'networkidle' });
@@ -126,7 +138,20 @@ test('blank RO guidance writes only reviewed fields and preserves missing result
   await expect(page.locator('[data-before-after-proposal]')).toHaveCount(3, { timeout: 5_000 });
   await expect(stage).toHaveAttribute('data-hermes-presentation-state', 'awaiting_approval');
   await expect(page.getByText('Determine whether', { exact: true })).toBeVisible();
-  await expect(page.getByText('chars:0-17', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-suggestion-evidence-location="located"]')).toContainText(/Located|已定位/);
+  await expect(page.locator('[data-suggestion-evidence-location="located"]')).toContainText(/page 1|第 1 页/);
+  await expect(page.locator('[data-suggestion-evidence-location="located"]')).toContainText(/block block-1|块 block-1/);
+  await expect(page.locator('[data-suggestion-evidence-location="ambiguous"]')).toContainText(/Multiple matches|多处匹配/);
+  await expect(page.locator('[data-suggestion-evidence-location="cross_block"]')).toContainText(/Cross-block|跨块引文/);
+  await expect(page.getByText('chars:0-17', { exact: true })).toHaveCount(0);
+  await page.screenshot({ fullPage: true, path: testInfo.outputPath('evidence-location-desktop.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('navigation', { name: /Workspace views|工作区视图/ }).getByRole('button', { name: /AI Suggestions|AI 建议/ }).click();
+  await expect(page.locator('[data-suggestion-evidence-location="located"]')).toBeVisible();
+  await expect(page.locator('[data-suggestion-evidence-location="ambiguous"]')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ fullPage: true, path: testInfo.outputPath('evidence-location-mobile.png') });
+  await page.setViewportSize({ width: 1440, height: 900 });
   expect(api.counts()).toEqual({ commitPosts: 0, retryPosts: 0, savePosts: 0, sessionPosts: 1, taskPolls: 2, taskPosts: 1 });
   const outline = page.getByRole('navigation', { name: /Outline|大纲/ });
   for (const [index, field] of ['Problem', 'Insight', 'Method', 'Results', 'Limitations', 'Reproducibility'].entries()) {

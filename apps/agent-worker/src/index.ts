@@ -1,3 +1,4 @@
+import { requireStyleReferenceImage } from '@openscience/domain';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import {
   AiGateway,
@@ -5,6 +6,8 @@ import {
   MiniMaxCodingPlanVisionProvider,
   MiniMaxImageProvider,
   CodexSpoolImageProvider,
+  ChatGptWebSpoolImageProvider,
+  ChatGptWebScienceReviewProvider,
   MutableProviderKillSwitch,
   OpenAiCompatProvider,
   type ExternalProcessingPolicy,
@@ -12,28 +15,36 @@ import {
   type ProviderCapabilityPolicy,
 } from '@openscience/ai-gateway';
 import {
-  claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
-  AGENT_TASK_QUEUE, persistDocumentSourceMapReference, type AgentDeps,
+  claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
+  AGENT_TASK_QUEUE, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference,
+  parseDocumentSourceMapReference, loadDocumentSourceMapReference, type AgentDeps,
+  purgeExpiredTrash,
+  lockTrashReferences,
+  assertSearchIndexSourceLive,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
   createSearchPrismaClient,
+  deleteSearchContent,
+  setSearchContentVisibility,
   EmbeddingClient,
   SearchStorage,
-  type DenseModelIdentity,
+  loadSearchIndexRuntimeConfig,
 } from '@openscience/search';
 import type { OcrAuthorizationContext } from '@openscience/ai-gateway';
 import type { DocumentSourceMap, ExtractionResult as ParserExtractionResult } from '@openscience/domain';
 import { createHash } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { createPrivateJobCopyCleanup } from './trash-job-copies';
 import type { Readable } from 'node:stream';
-import { extractHandler, sourceMapToManuscriptText } from './extractor';
+
+import { extractHandler, SCIENCE_REVIEW_CONTRACT_VERSION, sourceMapToManuscriptText } from './extractor';
 import { MAX_PARSER_INPUT, type IngestionAdapters } from './ingestion-parser';
 import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
-import { createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
-import { runParserCascadeSelfTest } from './parser-self-test';
+import { createParserRasterJobClient, createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
 import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
 import {
   runParserCascade,
@@ -41,58 +52,67 @@ import {
 } from './parsers/cascade-orchestrator';
 import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
 import type { ParserInput } from './parsers/types';
+import type { ParserRasterResult } from './parsers/job-protocol';
 import { canonicalParserMediaType } from './parser-media-type';
+import { HostVideoSpool } from './presentation/host-video-spool';
 import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
 import { createTavilyAdapter } from './retrieval/tavily';
 import { createScanSciAdapter } from './retrieval/scansci';
 import { createSourceRetrieveHandler } from './retrieval/handler';
 import { collectExpiredTemporaryDocuments } from './retrieval/garbage-collector';
-import { createPresentationGenerationHandler } from './presentation/handler';
+import { createPresentationGenerationHandler, requireIllustrationReviewAuthority, requireIllustrationReviewSubmission } from './presentation/handler';
 
-const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
+const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number }>();
+type SpoolSubmission = NonNullable<ConstructorParameters<typeof CodexSpoolImageProvider>[0]['withSubmission']>;
+type IllustrationSubmission = NonNullable<ConstructorParameters<typeof ChatGptWebScienceReviewProvider>[0]['withIllustrationSubmission']>;
+
+/** Fence only local producer writes; provider waiting and model execution never hold this transaction. */
+function createSpoolSubmission(prisma: AgentDeps['prisma'], kind: 'sdf.extract' | 'presentation.generate'): SpoolSubmission {
+  return async (owner, publish) => {
+    const execution = spoolTaskExecution.getStore();
+    if (!execution || execution.taskId !== owner.taskId
+      || (owner.executionAttempt !== undefined && owner.executionAttempt !== execution.executionAttempt)) {
+      throw new Error('[blocked] spool submission lacks its claimed worker execution');
+    }
+    return prisma.$transaction(async tx => {
+      await lockTrashReferences(tx);
+      const task = await tx.agentTask.findUnique({ where: { id: owner.taskId }, include: { session: { include: { researchObject: true } } } });
+      if (!task || task.kind !== kind || task.status !== 'running' || task.executionAttempt !== execution.executionAttempt
+        || task.deletedAt || task.session.deletedAt || task.session.status !== 'active' || !task.session.researchObject || task.session.researchObject.deletedAt) {
+        throw new Error('[blocked] spool owner was deleted or superseded');
+      }
+      if (kind === 'presentation.generate' && await tx.trashEntry.findFirst({ where: { kind: 'asset', resourceId: owner.taskId, state: { in: ['trashed','purge_pending','purged'] } }, select: { id: true } })) {
+        throw new Error('[blocked] generated asset was deleted');
+      }
+      const payload = task.payload as Record<string, unknown>;
+      if (owner.artifactId !== undefined) {
+        const artifact = await tx.artifact.findUnique({ where: { id: owner.artifactId }, select: { deletedAt: true, bytesPurgedAt: true, workspaceId: true } });
+        if (!artifact || artifact.deletedAt || artifact.bytesPurgedAt || payload.artifactId !== owner.artifactId
+          || artifact.workspaceId !== task.session.researchObject?.workspaceId) throw new Error('[blocked] review source was deleted or changed');
+      }
+      const scene = payload.sceneImage as Record<string, unknown> | undefined;
+      const video = payload.video as Record<string, unknown> | undefined;
+      const referenceId = scene?.styleReferenceAssetId;
+      if ((typeof referenceId === 'string') !== Boolean(owner.referenceContentHash)) throw new Error('[blocked] Style reference submission mismatch');
+      if (typeof referenceId === 'string') {
+        const reference = await requireStyleReferenceImage(tx, { researchObjectId: String(payload.researchObjectId), versionId: String(payload.versionId), styleReferenceAssetId: referenceId });
+        if (reference?.contentHash !== owner.referenceContentHash) throw new Error('[blocked] Style reference changed before external submission');
+      }
+      const parents = [scene?.storyboardAssetId, video?.storyboardAssetId,
+        ...(Array.isArray(video?.sceneImageAssetIds) ? video.sceneImageAssetIds : [])].filter((id): id is string => typeof id === 'string');
+      if (parents.length && await tx.presentationAsset.count({ where: { id: { in: parents }, deletedAt: null, researchObjectId: task.session.researchObjectId ?? undefined } }) !== new Set(parents).size) {
+        throw new Error('[blocked] media source was deleted');
+      }
+      return publish();
+    }, { timeout: 30_000 });
+  };
+}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const INGESTION_EXTERNAL_PROCESSING_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 
-export type SearchIndexRuntimeConfig =
-  | { enabled: false }
-  | { enabled: true; endpoint: string; modelIdentity: DenseModelIdentity };
-
-export function loadSearchIndexRuntimeConfig(env: NodeJS.ProcessEnv = process.env): SearchIndexRuntimeConfig {
-  const enabled = env.BGE_M3_ENABLED ?? 'false';
-  if (enabled === 'false') return { enabled: false };
-  if (enabled !== 'true') throw new Error('BGE_M3_ENABLED must be true or false');
-
-  const modelVersionId = env.BGE_M3_MODEL_VERSION_ID ?? '';
-  const modelRevision = env.BGE_M3_MODEL_REVISION ?? '';
-  const sourceSha256 = env.BGE_M3_SOURCE_SHA256 ?? '';
-  const packageFreezeSha256 = env.BGE_M3_PACKAGE_FREEZE_SHA256 ?? '';
-  const modelManifestSha256 = env.BGE_M3_MODEL_MANIFEST_SHA256 ?? '';
-  const endpoint = env.EMBEDDING_WORKER_URL ?? 'http://embedding-worker:8080';
-  if (!UUID_PATTERN.test(modelVersionId)) throw new Error('BGE_M3_MODEL_VERSION_ID is invalid');
-  if (modelRevision !== BGE_M3_REVISION) throw new Error('BGE_M3_MODEL_REVISION is invalid');
-  for (const [name, value] of [
-    ['BGE_M3_SOURCE_SHA256', sourceSha256],
-    ['BGE_M3_PACKAGE_FREEZE_SHA256', packageFreezeSha256],
-    ['BGE_M3_MODEL_MANIFEST_SHA256', modelManifestSha256],
-  ] as const) {
-    if (!SHA256_PATTERN.test(value)) throw new Error(`${name} is invalid`);
-  }
-  if (env.NODE_ENV === 'production' && endpoint !== 'http://embedding-worker:8080') {
-    throw new Error('EMBEDDING_WORKER_URL must use the internal embedding worker in production');
-  }
-  return {
-    enabled: true,
-    endpoint,
-    modelIdentity: {
-      modelVersionId,
-      modelRevision,
-      sourceSha256,
-      packageFreezeSha256,
-      modelManifestSha256,
-    },
-  };
-}
+export { loadSearchIndexRuntimeConfig, type SearchIndexRuntimeConfig } from '@openscience/search';
 
 export function buildSearchIndexerFromEnv(
   env: NodeJS.ProcessEnv = process.env,
@@ -123,18 +143,21 @@ export type ParserCascadeRunner = ((
   authorization: ParserCascadeAuthorization,
 ) => Promise<ParserExtractionResult<DocumentSourceMap>>) & {
   readonly featureFlags: Readonly<ParserCascadeFeatureFlags>;
+  renderPages(input: ParserInput, pageNumbers: readonly number[]): Promise<ParserRasterResult>;
 };
 
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
 export type TaskHandler = (
   deps: WorkerDeps,
-  task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number },
+  task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number; retryCount?: number; recoveryContract?: string },
 ) => Promise<Record<string, unknown>>;
 
 /** Production-safe cascade composition: one V2 sidecar stage plus disabled candidate routes. */
 export function createWorkerParserCascade(
   gateway: Pick<AiGateway, 'ocr'>,
   parserJobAdapter: TextStageAdapter,
+  rasterJobAdapter?: ReturnType<typeof createParserRasterJobClient>,
+  llmOcr = false,
 ): ParserCascadeRunner {
   const extractText = createTextExtractor({
     pdf: parserJobAdapter,
@@ -146,8 +169,30 @@ export function createWorkerParserCascade(
     detectLayout: false,
     grobid: false,
     localOcr: true,
-    llmOcr: false,
+    llmOcr,
   });
+  const renderPages = async (input: ParserInput, pageNumbers: readonly number[]): Promise<ParserRasterResult> => {
+    if (!rasterJobAdapter) throw new Error('isolated raster adapter unavailable');
+    let parser: ParserRasterResult['parser'] | undefined;
+    const pages: ParserRasterResult['pages'][number][] = [];
+    for (let offset = 0; offset < pageNumbers.length; offset += 4) {
+      const result = await rasterJobAdapter({
+        schemaVersion: 2,
+        operation: 'render_page',
+        artifactId: input.artifactId,
+        contentHash: input.contentHash,
+        mediaType: input.mediaType,
+        options: { pageNumbers: pageNumbers.slice(offset, offset + 4) },
+      }, Buffer.from(input.content));
+      if (parser && JSON.stringify(parser) !== JSON.stringify(result.parser)) {
+        throw new Error('isolated raster parser identity changed between batches');
+      }
+      parser ??= result.parser;
+      pages.push(...result.pages);
+    }
+    if (!parser) throw new Error('isolated raster request has no pages');
+    return { schemaVersion: 2, kind: 'raster', parser, pages };
+  };
   return Object.assign(
     (input: ParserInput, authorization: ParserCascadeAuthorization) => runParserCascade(input, {
       adapters: {
@@ -169,6 +214,9 @@ export function createWorkerParserCascade(
             mediaType: stageInput.mediaType,
             options: { pageNumbers: pages.map(({ page }) => page) },
           }, Buffer.from(stageInput.content)),
+          renderPages: (stageInput, pageNumbers) => {
+            return renderPages(stageInput, pageNumbers);
+          },
         },
       },
       aiGateway: gateway,
@@ -176,7 +224,10 @@ export function createWorkerParserCascade(
       externalProcessingEligible: authorization.externalProcessingEligible,
       featureFlags,
     }),
-    { featureFlags },
+    {
+      featureFlags,
+      renderPages,
+    },
   );
 }
 
@@ -203,8 +254,12 @@ export function createHandlers(
     parserCascade?: ParserCascadeRunner;
     externalProcessingPolicy?: ExternalProcessingPolicy;
     sourceRetrieveHandler?: TaskHandler;
+    videoSpool?: HostVideoSpool;
   } = {},
 ): Record<string, TaskHandler> {
+  // BGE serves one CPU inference at a time. Keep indexing jobs serial in this
+  // worker, including source authorization after waiting; other handlers stay concurrent.
+  let searchIndexTail: Promise<unknown> = Promise.resolve();
   return {
     'demo.echo': async () => {
       await sleep(300);
@@ -261,11 +316,150 @@ export function createHandlers(
         && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
       const externalProcessingEligible = serverDerivedEligibility
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
-      const parsed = await options.parserCascade({
+      let reusableSourceMap: DocumentSourceMap | undefined;
+      let reusableExtractionResult: Record<string, unknown> | undefined;
+      let requireReusableSemanticStage = false;
+      let reviewExistingSourceTaskId: string | undefined;
+      let persistedScientificReviewCandidateHash: string | undefined;
+      let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
+      const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):(scientific-summary-v3|scientific-review-v4)$/.exec(ownerTask.idempotencyKey ?? '');
+      if (composition) {
+        if (composition[4] === 'scientific-review-v4' && composition[2] !== composition[3]) {
+          throw new Error('[blocked] Review-only source must be the current extraction');
+        }
+        const ingestion = await deps.prisma.ingestionTask.findUnique({
+          where: { id: composition[1]! }, include: { batch: true },
+        });
+        const current = await deps.prisma.agentTask.findUnique({
+          where: { id: composition[2]! }, include: { session: true },
+        });
+        const source = await deps.prisma.agentTask.findUnique({
+          where: { id: composition[3]! }, include: { session: true },
+        });
+        const ownerPayload = ownerTask.payload as Record<string, unknown> | null;
+        const currentPayload = current?.payload as Record<string, unknown> | null;
+        const sourcePayload = source?.payload as Record<string, unknown> | null;
+        const sourceResult = source?.result as Record<string, unknown> | null;
+        const sourceReview = sourceResult?.scientificReview;
+        if (!serverDerivedEligibility || !externalProcessingEligible
+          || ingestion?.agentTaskId !== ownerTask.id || ingestion.artifactId !== artifact.id
+          || ingestion.batch.userId !== ownerTask.session.userId || ingestion.batch.researchObjectId !== ownerResearchObject.id
+          || !ownerPayload || Object.keys(ownerPayload).sort().join(',') !== 'artifactId,researchObjectId'
+          || ownerPayload.artifactId !== artifact.id || ownerPayload.researchObjectId !== ownerResearchObject.id
+          || current?.kind !== 'sdf.extract' || current.status !== 'succeeded' || current.session.status !== 'active'
+          || current.session.userId !== ownerTask.session.userId || current.session.researchObjectId !== ownerResearchObject.id
+          || !currentPayload || Object.keys(currentPayload).sort().join(',') !== 'artifactId,researchObjectId'
+          || currentPayload.artifactId !== artifact.id || currentPayload.researchObjectId !== ownerResearchObject.id
+          || source?.kind !== 'sdf.extract' || source.status !== 'succeeded' || source.session.status !== 'active'
+          || source.session.userId !== ownerTask.session.userId || source.session.researchObjectId !== ownerResearchObject.id
+          || !sourcePayload || Object.keys(sourcePayload).sort().join(',') !== 'artifactId,researchObjectId'
+          || sourcePayload.artifactId !== artifact.id || sourcePayload.researchObjectId !== ownerResearchObject.id
+          || sourceResult?.canonicalExtractionContract !== 'grounded-passages-v2'
+          || !sourceReview || typeof sourceReview !== 'object' || Array.isArray(sourceReview)
+          || !(sourceReview as Record<string, unknown>).semanticStage
+          || typeof (sourceReview as Record<string, unknown>).semanticStage !== 'object'
+          || Array.isArray((sourceReview as Record<string, unknown>).semanticStage)) {
+          throw new Error('[blocked] Semantic composition source scope is invalid');
+        }
+        const reference = parseDocumentSourceMapReference(sourceResult.sourceMapRef);
+        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Semantic composition source identity changed');
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+        reusableExtractionResult = sourceResult;
+        requireReusableSemanticStage = true;
+        if (composition[4] === 'scientific-review-v4') reviewExistingSourceTaskId = source.id;
+      }
+      const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
+      if (refresh) {
+        const ingestion = await deps.prisma.ingestionTask.findUnique({ where: { id: refresh[1]! } });
+        const previous = await deps.prisma.agentTask.findUnique({ where: { id: refresh[2]! }, include: { session: true } });
+        const previousResult = previous?.result as Record<string, unknown> | null;
+        if (!serverDerivedEligibility || !externalProcessingEligible || ingestion?.agentTaskId !== ownerTask.id
+          || ingestion.artifactId !== artifact.id || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
+          || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
+          || previousResult?.canonicalExtractionContract !== (['scientific-review-v3', 'scientific-review-v4', 'user-requested-reanalysis'].includes(refresh[3]!) ? 'grounded-passages-v2' : refresh[3] === 'grounded-passages-v2' ? 'grounded-passages-v1' : 'grounded-summary-v1')) {
+          throw new Error('[blocked] Reusable document analysis scope is invalid');
+        }
+        const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
+        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable document source identity changed');
+        // Contract-generation migrations may reuse an unchanged SourceMap. An explicit
+        // user reanalysis must run the currently deployed parser so parser upgrades
+        // (layout, formula, figure/caption ordering) actually reach Hermes.
+        if (refresh[3] !== 'user-requested-reanalysis') {
+          reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+          if (previousResult.canonicalExtractionContract === 'grounded-passages-v2') {
+            reusableExtractionResult = previousResult;
+            const review = previousResult.scientificReview;
+            if (review && typeof review === 'object' && !Array.isArray(review)) {
+              const candidate = review as Record<string, unknown>;
+              const previousRefresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$/.exec(previous.idempotencyKey ?? '');
+              if (SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))) {
+                persistedScientificReviewCandidateHash = candidate.reviewedCandidateHash as string;
+              }
+              const initialAttemptId = UUID_PATTERN.test(String(candidate.previousAttemptId ?? ''))
+                ? candidate.previousAttemptId as string
+                : UUID_PATTERN.test(String(candidate.attemptId ?? ''))
+                  && candidate.previousAttemptId === undefined
+                  && (candidate.evidenceManifestHash === undefined
+                    || ['provider_unavailable', 'invalid_response'].includes(String(candidate.continuationStatus ?? '')))
+                  ? candidate.attemptId as string
+                  : undefined;
+              if (candidate.provider === 'chatgpt-web-science-review'
+                && (candidate.kind === undefined || candidate.kind === 'independent_review')
+                && initialAttemptId && SHA256_PATTERN.test(String(candidate.reviewedCandidateHash ?? ''))
+                && (candidate.contractVersion === '4' || candidate.contractVersion === SCIENCE_REVIEW_CONTRACT_VERSION)) {
+                reusableScientificReviewAttempt = {
+                  attemptId: initialAttemptId,
+                  reviewedCandidateHash: candidate.reviewedCandidateHash as string,
+                  parentRequestId: candidate.previousAttemptId !== undefined && previousRefresh ? previousRefresh[2]! : previous.id,
+                  contractVersion: candidate.contractVersion,
+                };
+              }
+            }
+          }
+        }
+      }
+      const reanalysis = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36})$/.exec(ownerTask.idempotencyKey ?? '');
+      if (reanalysis) {
+        const ingestion = await deps.prisma.ingestionTask.findUnique({
+          where: { id: reanalysis[1]! }, include: { batch: true },
+        });
+        const previous = await deps.prisma.agentTask.findUnique({
+          where: { id: reanalysis[2]! }, include: { session: true, ingestionTask: { include: { batch: true } } },
+        });
+        const previousResult = previous?.result as Record<string, unknown> | null;
+        const previousPayload = previous?.payload as Record<string, unknown> | null;
+        const confirmation = previous?.ingestionTask
+          ? await deps.prisma.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${previous.ingestionTask.id}` } })
+          : null;
+        if (!serverDerivedEligibility || !externalProcessingEligible || refresh
+          || ingestion?.agentTaskId !== ownerTask.id || ingestion.artifactId !== artifact.id
+          || ingestion.batch.userId !== ownerTask.session.userId || ingestion.batch.researchObjectId !== ownerResearchObject.id
+          || !['queued', 'parsing'].includes(ingestion.state) || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
+          || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
+          || previous.ingestionTask?.state !== 'confirmed' || previous.ingestionTask.artifactId !== artifact.id
+          || previous.ingestionTask.batch.userId !== ownerTask.session.userId
+          || previous.ingestionTask.batch.researchObjectId !== ownerResearchObject.id
+          || confirmation?.researchObjectId !== ownerResearchObject.id
+          || !previousPayload || Object.keys(previousPayload).sort().join(',') !== 'artifactId,researchObjectId'
+          || previousPayload.artifactId !== artifact.id || previousPayload.researchObjectId !== ownerResearchObject.id
+          || previousResult?.canonicalExtractionContract !== 'grounded-passages-v2') {
+          throw new Error('[blocked] Reusable confirmed analysis scope is invalid');
+        }
+        const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
+        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable confirmed source identity changed');
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+      }
+      const parserMediaType = canonicalParserMediaType(artifact.logicalPath, artifact.mimeType);
+      const parsed: ParserExtractionResult<DocumentSourceMap> = reusableSourceMap
+        ? { status: 'succeeded', sourceMap: reusableSourceMap, warnings: [] }
+        : await options.parserCascade({
         artifactId: artifact.id,
         contentHash: artifact.blobSha256,
         content: bytes,
-        mediaType: canonicalParserMediaType(artifact.logicalPath, artifact.mimeType),
+        mediaType: parserMediaType,
       }, { trustedAuthorizationContext, externalProcessingEligible });
       const format = artifact.logicalPath.split('.').at(-1)?.toLowerCase() ?? 'unknown';
       if (parsed.status === 'blocked') throw new Error(`[blocked] ${parsed.code}`);
@@ -282,19 +476,51 @@ export function createHandlers(
       }
       const manuscriptText = sourceMapToManuscriptText(parsed.sourceMap);
       if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
-      try {
-        return { ...await extractHandler(gateway, { payload: { manuscriptText } }), sourceMapRef };
-      } catch {
-        return { status: 'needs_review', format, reason: 'sdf-proposal-unavailable', sourceMapRef };
-      }
+      return {
+        ...await extractHandler(gateway, { payload: { manuscriptText } }, {
+          sourceMap: parsed.sourceMap,
+          previousResult: reusableExtractionResult,
+          requireReusableSemanticStage,
+          reviewExistingSourceTaskId,
+          scientificReview: {
+            requestId: ownerTask.id,
+            authorizationContext: trustedAuthorizationContext,
+            ...(persistedScientificReviewCandidateHash ? { persistedCandidateHash: persistedScientificReviewCandidateHash } : {}),
+            ...(reusableScientificReviewAttempt ? { reusableAttempt: reusableScientificReviewAttempt } : {}),
+            renderPages: (pageNumbers) => options.parserCascade!.renderPages({
+              artifactId: artifact.id,
+              contentHash: artifact.blobSha256,
+              content: bytes,
+              mediaType: parserMediaType,
+            }, pageNumbers),
+            ...(parserMediaType === 'application/pdf' ? {
+              sourceDocument: { fileName: 'source.pdf' as const, mediaType: 'application/pdf' as const,
+                sha256: artifact.blobSha256, bytes: Uint8Array.from(bytes) },
+            } : {}),
+          },
+        }),
+        ...(reusableSourceMap ? { sourceMapReused: true } : {}),
+        sourceMapRef,
+      };
     },
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
-    'presentation.generate': createPresentationGenerationHandler({ gateway }),
+    'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool }),
     'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
     ...(options.searchIndexer === undefined ? {} : {
-      'search.index': async (_deps: WorkerDeps, task) =>
-        options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task)),
+      'search.index': async (_deps: WorkerDeps, task) => {
+        const run = searchIndexTail.then(async () => options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task), operation => _deps.prisma.$transaction(async tx => {
+          await lockTrashReferences(tx);
+          const live = await tx.agentTask.findUnique({ where: { id: task.id }, include: { session: { include: { researchObject: true } } } });
+          if (!live || live.deletedAt || live.session.deletedAt || live.session.researchObject?.deletedAt || live.status !== 'running' || live.executionAttempt !== task.executionAttempt) throw new Error('[blocked] search source was deleted');
+          await assertSearchIndexSourceLive(tx, live);
+          const sourceArtifactId = (live.payload as Record<string, unknown>).artifactId;
+          if (typeof sourceArtifactId !== 'string' || !await tx.artifact.findFirst({ where: { id: sourceArtifactId, deletedAt: null, bytesPurgedAt: null } })) throw new Error('[blocked] search artifact was deleted');
+          return operation();
+        }, { timeout: 30_000 })));
+        searchIndexTail = run.catch(() => undefined);
+        return run;
+      },
     }),
     ...(options.sourceRetrieveHandler === undefined ? {} : {
       'source.retrieve': options.sourceRetrieveHandler,
@@ -307,6 +533,37 @@ export async function sleep(ms: number): Promise<void> {
 }
 
 const AGENT_TASK_PROCESSING_QUEUE = `${AGENT_TASK_QUEUE}:processing`;
+
+export async function reconcileResearchRunsTick(
+  deps: WorkerDeps,
+  reconcile: typeof reconcileHermesResearchRuns = reconcileHermesResearchRuns,
+  onError: (error: unknown) => void = (error) => console.error('Hermes research run reconcile error', error),
+): Promise<boolean> {
+  try {
+    await reconcile(deps, { limit: 20 });
+    return true;
+  } catch (error) {
+    onError(error);
+    return false;
+  }
+}
+
+export function createResearchRunReconcileScheduler(options: {
+  intervalMs?: number;
+  now?: () => number;
+  reconcile?: typeof reconcileHermesResearchRuns;
+  onError?: (error: unknown) => void;
+} = {}): (deps: WorkerDeps) => Promise<boolean> {
+  const intervalMs = options.intervalMs ?? 5_000;
+  const clock = options.now ?? (() => performance.now());
+  let nextAt = Number.NEGATIVE_INFINITY;
+  return async (deps) => {
+    const current = clock();
+    if (current < nextAt) return false;
+    nextAt = current + intervalMs;
+    return reconcileResearchRunsTick(deps, options.reconcile, options.onError);
+  };
+}
 
 /** Single-consumer startup recovery for tasks stranded by a previous worker process. */
 export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> {
@@ -328,14 +585,24 @@ export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> 
  * P1D-2/3 agent-worker 消费者（§14.1 + §9.3 长任务异步 + §16 幂等）：
  * 轮询 Redis 队列 → handler 执行 → markTaskProgress（状态机前进，succeeded 后重放 skip）。
  */
-export async function createPollOnce(handlers: Record<string, TaskHandler>): Promise<(deps: WorkerDeps) => Promise<boolean>> {
+export async function createPollOnce(
+  handlers: Record<string, TaskHandler>,
+  options: { runMaintenance?: boolean } = {},
+): Promise<(deps: WorkerDeps) => Promise<boolean>> {
+  const runMaintenance = options.runMaintenance ?? true;
+  const reconcileRuns = runMaintenance ? createResearchRunReconcileScheduler() : undefined;
   return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
-    await recoverUndispatchedAgentTasks(deps);
+    if (reconcileRuns) {
+      await reconcileRuns(deps);
+      await recoverUndispatchedAgentTasks(deps);
+    }
     // BRPOPLPUSH：原子弹出 → 处理中队列（崩溃恢复用）
     const taskId = await deps.redis.brpoplpush(AGENT_TASK_QUEUE, AGENT_TASK_PROCESSING_QUEUE, 1);
     if (!taskId) return false;
 
     let claimed: Awaited<ReturnType<typeof claimAgentTask>> = null;
+    let handlerCompleted = false;
+    let processingEntryRequeued = false;
     try {
       const task = await deps.prisma.agentTask.findUnique({
         where: { id: taskId },
@@ -344,14 +611,18 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
       if (!task) return true;
       claimed = await claimAgentTask(deps, taskId);
       if (!claimed) return true;
+      const executionClaim = claimed;
       const handler = handlers[task.kind];
       if (!handler) throw new Error('unsupported agent task kind');
-      const result = await handler(deps, {
+      const result = await spoolTaskExecution.run({ taskId: task.id, executionAttempt: executionClaim.executionAttempt }, () => handler(deps, {
         id: task.id,
         payload: (task.payload ?? {}) as Record<string, unknown>,
         interestContext: task.interestContext,
-        executionAttempt: claimed.executionAttempt,
-      });
+        executionAttempt: executionClaim.executionAttempt,
+        retryCount: executionClaim.retryCount,
+        ...(executionClaim.result?.hermesRecovery === HERMES_AUTHORITY_REARM_MARKER ? { recoveryContract: HERMES_AUTHORITY_REARM_MARKER } : {}),
+      }));
+      handlerCompleted = true;
       await markTaskProgress(deps, {
         taskId,
         status: 'succeeded',
@@ -361,6 +632,16 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
       });
       return true;
     } catch (e) {
+      if (handlerCompleted && (e as { code?: unknown })?.code === 'P2034') {
+        const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
+        if (!retryable) throw e;
+        processingEntryRequeued = true;
+        await deps.redis.multi()
+          .lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId)
+          .lpush(AGENT_TASK_QUEUE, taskId)
+          .exec();
+        return true;
+      }
       await markTaskProgress(deps, {
         taskId,
         status: 'failed',
@@ -370,8 +651,38 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
       return true;
     } finally {
       // 从处理中队列移除（已完成）
-      await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId).catch(() => undefined);
+      if (!processingEntryRequeued) {
+        await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId).catch(() => undefined);
+      }
     }
+  };
+}
+
+function buildIngestionExternalProcessingPolicy(prisma: ReturnType<typeof createPrismaClient>): ExternalProcessingPolicy {
+  return async (context) => {
+    const task = await prisma.ingestionTask.findUnique({
+      where: { agentTaskId: context.taskId },
+      include: {
+        artifact: true,
+        batch: { include: { researchObject: { include: { workspace: true } } } },
+        agentTask: { include: { session: true } },
+      },
+    });
+    const payload = task?.agentTask?.payload;
+    if (!task?.agentTask || !payload || typeof payload !== 'object' || Array.isArray(payload)
+      || task.agentTask.id !== context.taskId || task.agentTask.kind !== 'sdf.extract'
+      || task.agentTask.status !== 'running' || task.agentTask.session.status !== 'active'
+      || task.agentTask.session.userId !== context.actorId || task.batch.userId !== context.actorId
+      || task.agentTask.session.researchObjectId !== task.batch.researchObjectId
+      || (payload as Record<string, unknown>).artifactId !== task.artifactId
+      || (payload as Record<string, unknown>).researchObjectId !== task.batch.researchObjectId
+      || task.batch.researchObject.workspaceId !== context.workspaceId
+      || task.artifact.workspaceId !== context.workspaceId || task.batch.researchObject.workspace.status !== 'active') return false;
+    const membership = await prisma.membership.findUnique({
+      where: { workspaceId_userId: { workspaceId: context.workspaceId, userId: context.actorId } },
+    });
+    return membership?.workspaceId === context.workspaceId && membership.userId === context.actorId
+      && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
   };
 }
 
@@ -380,39 +691,82 @@ async function main(): Promise<void> {
   const parserJobDir = process.env.PARSER_JOB_DIR;
   if (!parserJobDir) throw new Error('PARSER_JOB_DIR is required; unsafe in-worker binary parsing is disabled');
   const prisma = createPrismaClient();
+  const audit = createPrismaAuditSink(prisma);
   const redis = createRedisClient();
   const storage = createStorageAdapter(storageConfigFromEnv());
+  const trashSearchClient = process.env.SEARCH_DATABASE_URL ? createSearchPrismaClient({ env: process.env }) : undefined;
   const deps: WorkerDeps = {
     prisma, redis, storage,
-    audit: createPrismaAuditSink(prisma),
+    audit,
     malwareScanner: process.env.CLAMAV_HOST ? createClamAvScanner(process.env.CLAMAV_HOST, Number(process.env.CLAMAV_PORT ?? 3310)) : undefined,
     mailer: { send: async () => undefined },
   };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
-  const externalProcessingPolicy: ExternalProcessingPolicy = async () => false;
+  const externalProcessingPolicy = buildIngestionExternalProcessingPolicy(prisma);
+  const imageSubmission = createSpoolSubmission(prisma, 'presentation.generate');
+  const reviewSubmission = createSpoolSubmission(prisma, 'sdf.extract');
+  const illustrationReviewPolicy: ExternalProcessingPolicy = async context => {
+    const execution = spoolTaskExecution.getStore();
+    if (!execution || execution.taskId !== context.taskId) return false;
+    try {
+      const { owner } = await requireIllustrationReviewAuthority(prisma, context);
+      return owner.executionAttempt === execution.executionAttempt;
+    } catch { return false; }
+  };
+  const illustrationSubmission: IllustrationSubmission = async (input, publish) => {
+    const execution = spoolTaskExecution.getStore();
+    if (!execution || execution.taskId !== input.authorizationContext.taskId
+      || execution.executionAttempt !== input.illustrationContext?.executionAttempt) {
+      throw new Error('[blocked] Illustration review lacks its worker execution');
+    }
+    return prisma.$transaction(async tx => {
+      await lockTrashReferences(tx);
+      await requireIllustrationReviewSubmission(tx, input);
+      return publish();
+    }, { timeout: 30_000 });
+  };
   const gateway = buildGateway(
     process.env,
     globalThis.fetch,
-    createPrismaAuditSink(prisma),
+    {
+      record: (event, tx) => {
+        // Reuse the claimed task context so existing telemetry can locate this call.
+        // Read per call: concurrent tasks must not share a captured task ID.
+        const taskId = spoolTaskExecution.getStore()?.taskId;
+        return audit.record(taskId && !event.requestId ? { ...event, requestId: taskId } : event, tx);
+      },
+    },
     externalProcessingPolicy,
+    undefined,
+    { image: imageSubmission, review: reviewSubmission, illustration: illustrationSubmission },
+    illustrationReviewPolicy,
   );
-  const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata);
-  const parserCascade = createWorkerParserCascade(gateway, parserJobAdapter);
-  const parserSelfTest = await runParserCascadeSelfTest(parserCascade);
-  if (!parserSelfTest.pdf.textMatched || !parserSelfTest.docx.textMatched
-    || !parserSelfTest.scan.textMatched || !parserSelfTest.scan.locatorMatched
-    || !parserSelfTest.scan.tesseractMatched || !parserSelfTest.scan.confidenceMatched
-    || !parserSelfTest.scan.boundingBoxMatched
-    || !parserSelfTest.candidateFallbackDisabled) {
-    throw new Error('parser cascade startup self-test failed');
-  }
+  const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata, 16 * 60_000);
+  const rasterJobAdapter = createParserRasterJobClient(parserJobDir, expectedSidecarParserMetadata);
+  const parserCascade = createWorkerParserCascade(
+    gateway, parserJobAdapter, rasterJobAdapter,
+    process.env.AI_ENABLED === 'true' && process.env.MINIMAX_VISION_ENABLED === 'true',
+  );
   const handlers = createHandlers(gateway, {
     parserCascade,
     externalProcessingPolicy,
     searchIndexer: buildSearchIndexerFromEnv(process.env),
     sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
+    ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HOST_VIDEO_INBOX_DIR?.trim()
+      && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {
+        videoSpool: new HostVideoSpool({
+          inboxDir: process.env.HOST_VIDEO_INBOX_DIR.trim(),
+          resultsDir: process.env.HOST_VIDEO_RESULTS_DIR.trim(),
+          withSubmission: imageSubmission,
+        }),
+      } : {}),
   });
-  const pollOnce = await createPollOnce(handlers);
+  const configuredConcurrency = Number.parseInt(process.env.AGENT_WORKER_CONCURRENCY ?? '4', 10);
+  const workerConcurrency = Number.isFinite(configuredConcurrency)
+    ? Math.min(8, Math.max(1, configuredConcurrency)) : 4;
+  const pollers = await Promise.all(Array.from({ length: workerConcurrency }, (_, index) => (
+    createPollOnce(handlers, { runMaintenance: index === 0 })
+  )));
   await recoverProcessingQueue(deps);
   let cleanupRunning = false;
   const cleanupTimer = setInterval(() => {
@@ -422,20 +776,29 @@ async function main(): Promise<void> {
       .then((result) => {
         if (result.claimed || result.failed) console.log('temporary document cleanup', result);
       })
+      .then(async () => {
+        const result = await purgeExpiredTrash({ ...deps, storage, deletePrivateJobCopies: createPrivateJobCopyCleanup(prisma, process.env), ...(trashSearchClient ? {
+          deleteSearchContent: scope => deleteSearchContent(trashSearchClient, scope),
+          setSearchContentVisibility: (scope, _visible, tx) => setSearchContentVisibility(trashSearchClient, tx, scope),
+        } : {}) });
+        if (result.purged || result.failed) console.log('private trash cleanup', result);
+      })
       .catch((error) => console.error('temporary document cleanup error', error))
       .finally(() => { cleanupRunning = false; });
   }, 60_000);
   cleanupTimer.unref();
   await collectExpiredTemporaryDocuments({ prisma, storage }, { workerId: `agent-worker-${process.pid}` });
-  console.log('agent-worker 启动（P1D-2/3）');
-  while (true) {
-    try {
-      await pollOnce(deps);
-    } catch (e) {
-      console.error('poll error', e);
-      await sleep(2000);
+  console.log(`agent-worker 启动（P1D-2/3, concurrency=${workerConcurrency}）`);
+  await Promise.all(pollers.map(async (pollOnce, index) => {
+    while (true) {
+      try {
+        await pollOnce(deps);
+      } catch (e) {
+        console.error(`poll error lane=${index}`, e);
+        await sleep(2000);
+      }
     }
-  }
+  }));
 }
 
 /** 从 env 构造 Gateway（AI_ENABLED=false 或缺密钥 → 占位 gateway，sdf.extract 会失败；§24 待确认）。 */
@@ -445,6 +808,8 @@ export function buildGateway(
   audit?: ConstructorParameters<typeof AiGateway>[0]['audit'],
   externalProcessingPolicy: ExternalProcessingPolicy = async () => false,
   runtimeCapabilityPolicy: ProviderCapabilityPolicy = new MutableProviderKillSwitch(),
+  spoolSubmissions?: { image: SpoolSubmission; review: SpoolSubmission; illustration?: IllustrationSubmission },
+  illustrationReviewPolicy?: ExternalProcessingPolicy,
 ): AiGateway {
   const primaryModel = env.MINIMAX_MODEL ?? 'MiniMax-M3';
   const fallbackModels = (env.AI_FALLBACK_MODELS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -469,20 +834,36 @@ export function buildGateway(
   });
 
   const imageApiKey = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].map(key => key?.trim()).find(Boolean);
-  const imageProviders = env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
-    ? (env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).includes('codex-image')
-      ? [new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim() })] : [])
-    : (env.HERMES_SCENE_IMAGE_PROVIDER === undefined || env.HERMES_SCENE_IMAGE_PROVIDER === 'minimax') && env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
-    ? [new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher)] : [];
-  const ocrProviders = env.NODE_ENV !== 'production' && env.MINIMAX_VISION_ENABLED === 'true' && keys[0]
+  const disabledImageProviders = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).filter(Boolean));
+  const imageProviders = env.HERMES_SCENE_IMAGE_PROVIDER === 'chatgpt-web'
+    ? (env.AI_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim() && env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('chatgpt-web')
+      ? [new ChatGptWebSpoolImageProvider({ inboxDir: env.CHATGPT_WEB_IMAGE_INBOX_DIR.trim(), resultsDir: env.CHATGPT_WEB_IMAGE_RESULTS_DIR.trim(), withSubmission: spoolSubmissions?.image })] : [])
+    : env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
+      ? (env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('codex-image')
+        ? [new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim(), withSubmission: spoolSubmissions?.image })] : [])
+      : (env.HERMES_SCENE_IMAGE_PROVIDER === undefined || env.HERMES_SCENE_IMAGE_PROVIDER === 'minimax') && env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
+        ? [new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher)] : [];
+  const visionPrimaryKey = env.MINIMAX_API_KEY?.trim();
+  const visionBackupKey = env.MINIMAX_API_KEY_2?.trim();
+  const ocrProviders = env.AI_ENABLED === 'true' && env.MINIMAX_VISION_ENABLED === 'true' && visionPrimaryKey
     ? [new MiniMaxCodingPlanVisionProvider('minimax-vision', {
         baseUrl: visionOrigin(env),
-        apiKey: keys[0],
+        apiKey: visionPrimaryKey,
+        ...(visionBackupKey && visionBackupKey !== visionPrimaryKey ? { backupApiKey: visionBackupKey } : {}),
         model: env.MINIMAX_VISION_MODEL ?? 'coding-plan-vlm',
         pricing: visionPricing(env),
         maxPageBytes: optionalBoundedInteger(env.MINIMAX_VISION_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'MINIMAX_VISION_MAX_PAGE_BYTES'),
       }, fetcher)]
     : [];
+  const scientificReviewProvider = env.AI_ENABLED === 'true' && env.CHATGPT_WEB_SCIENCE_REVIEW_ENABLED === 'true'
+    && env.CHATGPT_WEB_REVIEW_INBOX_DIR?.trim() && env.CHATGPT_WEB_REVIEW_RESULTS_DIR?.trim()
+    ? new ChatGptWebScienceReviewProvider({
+        inboxDir: env.CHATGPT_WEB_REVIEW_INBOX_DIR.trim(),
+        resultsDir: env.CHATGPT_WEB_REVIEW_RESULTS_DIR.trim(),
+        withSubmission: spoolSubmissions?.review,
+        withIllustrationSubmission: spoolSubmissions?.illustration,
+      })
+    : undefined;
   const staticallyDisabled = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
   const killSwitch: ProviderCapabilityPolicy = {
     async isEnabled(provider, capability) {
@@ -499,11 +880,16 @@ export function buildGateway(
     providers,
     ocrProviders,
     imageProviders,
+    scientificReviewProvider,
     audit,
     logger: console,
     killSwitch,
     externalProcessingPolicy,
+    illustrationReviewPolicy,
     ocrLimits,
+    authorizeIllustrationReview: spoolSubmissions?.illustration
+      ? input => spoolSubmissions.illustration!(input, async () => undefined)
+      : undefined,
   });
 }
 
@@ -550,7 +936,11 @@ function imageOrigin(env: NodeJS.ProcessEnv): string {
 }
 
 function visionOrigin(env: NodeJS.ProcessEnv): string {
-  const region = env.MINIMAX_VISION_REGION ?? 'global';
+  // Vision uses the same Coding Plan credential as text. An unset region must not
+  // send a configured China-plan key to the global endpoint.
+  let textOrigin: string | undefined;
+  try { textOrigin = new URL(env.MINIMAX_TOKEN_PLAN_BASE_URL ?? '').origin; } catch { /* default global */ }
+  const region = env.MINIMAX_VISION_REGION ?? (textOrigin === 'https://api.minimaxi.com' ? 'cn' : 'global');
   if (region === 'global') return 'https://api.minimax.io';
   if (region === 'cn') return 'https://api.minimaxi.com';
   throw new Error('MINIMAX_VISION_REGION must be global or cn');

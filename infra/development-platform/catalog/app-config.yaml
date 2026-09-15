@@ -1,0 +1,58 @@
+app:
+  title: OpenScience Development Catalog API
+  baseUrl: http://127.0.0.1:3131
+
+organization:
+  name: OpenScience
+
+backend:
+  baseUrl: http://127.0.0.1:3131
+  listen:
+    host: 0.0.0.0
+    port: 3131
+  cors:
+    origin: http://127.0.0.1:3131
+    methods: [GET, HEAD]
+    credentials: false
+  rateLimit:
+    global: true
+  auth:
+    externalAccess:
+      - type: static
+        options:
+          token:
+            $file: /run/secrets/codex_catalog_token
+          subject: codex-catalog-reader
+        accessRestrictions:
+          - plugin: catalog
+            permission: [catalog.entity.read, catalog.location.read]
+      - type: static
+        options:
+          token:
+            $file: /run/secrets/hermes_catalog_token
+          subject: hermes-catalog-reader
+        accessRestrictions:
+          - plugin: catalog
+            permission: [catalog.entity.read, catalog.location.read]
+  database:
+    client: better-sqlite3
+    connection:
+      directory: /var/lib/backstage
+
+permission:
+  enabled: true
+
+catalog:
+  readonly: true
+  processingInterval:
+    minutes: 5
+  rules:
+    - allow: [Component, API, System, Domain, Resource, Group, User, Location]
+  processorOptions:
+    UrlReaderProcessor:
+      disabled: true
+    PlaceholderProcessor:
+      disabled: true
+  locations:
+    - type: file
+      target: /app/catalog-info.yaml

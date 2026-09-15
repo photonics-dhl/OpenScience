@@ -1,0 +1,539 @@
+# Standard Backstage entities. This file is a maintained inventory, not a live
+# release database or evidence that a capability produced correct results.
+# Production release/rollback and candidate status remain in the CURRENT handoff.
+# Repository links follow the active delivery branch, whose requirements include
+# current user decisions. They are navigation, not a deployed source snapshot.
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: openscience-maintainers
+  title: OpenScience maintainers
+  description: Repository maintenance ownership; this entry grants no application or server permissions.
+  links:
+    - url: https://github.com/photonics-dhl/OpenScience
+      title: OpenScience repository
+spec:
+  type: team
+  profile:
+    displayName: OpenScience maintainers
+  children: []
+  members: [dhl]
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: dhl
+  title: DHL
+  description: Repository owner contact; catalog identity is not a Backstage login or an authorization grant.
+  links:
+    - url: https://github.com/photonics-dhl
+      title: Repository owner
+spec:
+  profile:
+    displayName: DHL
+  memberOf: [openscience-maintainers]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: research-infrastructure
+  title: Research infrastructure
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/docs/
+spec:
+  owner: group:default/openscience-maintainers
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: openscience
+  title: OpenScience product
+  description: Research objects, source-grounded understanding, collaboration and publication. Inventory membership is not a quality claim.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/
+  links:
+    - url: https://github.com/photonics-dhl/OpenScience/blob/codex/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md
+      title: CURRENT release, rollback, candidates and observed limitations
+    - url: https://github.com/photonics-dhl/OpenScience/blob/codex/onchip-video-release/docs/OpenScience_Kimi_Development_Spec.md
+      title: Requirements baseline
+    - url: https://github.com/photonics-dhl/OpenScience/blob/codex/onchip-video-release/.taskmaster/state.json
+      title: Current Taskmaster tag selector
+    - url: https://github.com/photonics-dhl/OpenScience/blob/codex/onchip-video-release/.taskmaster/tasks/tasks.json
+      title: Stable acceptance tasks by tag
+spec:
+  owner: group:default/openscience-maintainers
+  domain: research-infrastructure
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: development-platform
+  title: OpenScience development capabilities
+  description: Code discovery, service ownership, trace inspection and reusable skills. Separate from research publication authorization and quality review.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/infra/development-platform/
+spec:
+  owner: group:default/openscience-maintainers
+  domain: research-infrastructure
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: web
+  title: OpenScience web
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/web/
+  tags: [nextjs, product]
+spec:
+  type: website
+  lifecycle: production
+  owner: group:default/openscience-maintainers
+  system: openscience
+  consumesApis: [public-research-api]
+  dependsOn: [component:default/api, resource:production/application]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: api
+  title: OpenScience API
+  description: Fastify boundary for research, workspaces, publication and durable Hermes tasks.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/api/
+  tags: [fastify, product]
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/openscience-maintainers
+  system: openscience
+  providesApis: [public-research-api]
+  dependsOn:
+    - resource:production/application
+    - resource:production/research-database
+    - resource:production/redis
+    - resource:production/object-storage
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: agent-worker
+  title: Hermes agent worker
+  description: Durable research tasks use the existing Gateway, parser and explicitly imported runtime skills. Success status does not establish scientific quality.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/agent-worker/
+  tags: [hermes, worker]
+  links:
+    - url: https://github.com/photonics-dhl/OpenScience/blob/codex/onchip-video-release/docs/runbooks/hermes-capability-registry.md
+      title: Capability purpose, real consumers and observed results
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/openscience-maintainers
+  system: openscience
+  consumesApis: [scansci-mcp-api]
+  dependsOn:
+    - component:default/ai-gateway
+    - component:default/research-skills
+    - component:default/document-parser
+    - resource:production/application
+    - resource:production/research-database
+    - resource:production/object-storage
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ai-gateway
+  title: Shared AI Gateway
+  description: The existing library owns provider routing, configured fallback and model call metadata. No new provider calls are introduced by this catalog.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/packages/ai-gateway/
+  tags: [library, gateway]
+spec:
+  type: library
+  lifecycle: production
+  owner: group:default/openscience-maintainers
+  system: openscience
+  dependsOn: [resource:production/application]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: research-skills
+  title: Hermes runtime research skills
+  description: Source-controlled TypeScript skills explicitly imported by Hermes. Presence of a host SKILL.md does not activate a runtime consumer.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/agent-worker/src/skills/
+  tags: [skills, hermes]
+spec:
+  type: library
+  lifecycle: production
+  owner: group:default/openscience-maintainers
+  system: openscience
+  dependsOn: [resource:production/application]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: development-skills
+  title: Repository development and illustration skills
+  description: Repository SKILL.md guidance and resources. Runtime adoption must be traced to an explicit consumer; file installation alone is not integration evidence.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/.agents/skills/
+  tags: [skills, development]
+spec:
+  type: library
+  lifecycle: production
+  owner: group:default/openscience-maintainers
+  system: development-platform
+  dependsOn: [resource:candidate/onchip-video-release]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: document-parser
+  title: Isolated document parser
+  description: Existing job-volume parser boundary; no network or secrets, non-root and read-only runtime. Higher-level parsing is described by the existing capability registry.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/agent-worker/parser-image/
+  tags: [parser, isolated]
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/openscience-maintainers
+  system: openscience
+  dependsOn: [resource:production/parser-jobs]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: scansci-mcp
+  title: ScanSci MCP service
+  description: Existing pinned upstream academic retrieval service and repository adaptation; availability of a provider is distinct from successful retrieval.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/scansci-mcp/
+  tags: [mcp, retrieval]
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/openscience-maintainers
+  system: openscience
+  providesApis: [scansci-mcp-api]
+  dependsOn: [resource:production/application]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: science-worker
+  title: Science worker source
+  description: Repository scientific sandbox worker implementation; not listed as a running service in the current production compose. Do not infer deployment from code presence.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/science-worker/
+  tags: [sandbox, source-only]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/openscience-maintainers
+  system: openscience
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sandbox-controller
+  title: Sandbox controller placeholder
+  description: Reserved app directory; current sandbox implementation belongs to science-worker. This entity must not be interpreted as an installed controller.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/sandbox-controller/
+  tags: [placeholder, source-only]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/openscience-maintainers
+  system: openscience
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: media-demo
+  title: Existing media demonstration app
+  description: Separate demonstration source; a rendered demonstration is not evidence that Hermes can automatically produce the same result.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/media-demo/
+  tags: [demonstration]
+spec:
+  type: website
+  lifecycle: experimental
+  owner: group:default/openscience-maintainers
+  system: openscience
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: backstage-catalog
+  title: Standard Backstage Catalog API
+  description: Private development catalog backend, with standard entity relations and ownership. This entry does not claim a complete Backstage web portal or a successful deployment.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/infra/development-platform/catalog/
+  tags: [backstage, development, api-only]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/openscience-maintainers
+  system: development-platform
+  providesApis: [backstage-catalog-api]
+  dependsOn:
+    - resource:default/catalog-database
+    - resource:candidate/onchip-video-release
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: public-research-api
+  title: OpenScience public research API
+  description: The linked OpenAPI document is authoritative. This catalog entry contains discovery metadata, not a duplicated endpoint schema.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/api/src/routes/
+  links:
+    - url: https://openscience.428312321.xyz/api/research-record/openapi
+      title: Complete current OpenAPI document
+    - url: https://openscience.428312321.xyz/developers
+      title: Developer documentation
+spec:
+  type: openapi
+  lifecycle: production
+  owner: group:default/openscience-maintainers
+  system: openscience
+  definition: |
+    openapi: 3.1.0
+    info:
+      title: OpenScience research API discovery
+      version: discovery
+      description: Fetch the externalDocs URL for the complete authoritative endpoint and response schemas.
+    externalDocs:
+      url: https://openscience.428312321.xyz/api/research-record/openapi
+    paths: {}
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: scansci-mcp-api
+  title: ScanSci MCP interface
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/apps/scansci-mcp/
+spec:
+  type: mcp
+  lifecycle: production
+  owner: group:default/openscience-maintainers
+  system: openscience
+  definition: |
+    Existing internal ScanSci MCP service. Tool definitions come from the running
+    MCP server; installation and adaptation are in apps/scansci-mcp. Credentials
+    and network reachability are not granted by catalog ownership or API links.
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: backstage-catalog-api
+  title: Backstage standard catalog read API
+  links:
+    - url: https://backstage.io/docs/features/software-catalog/software-catalog-api/
+      title: Standard catalog API
+spec:
+  type: openapi
+  lifecycle: experimental
+  owner: group:default/openscience-maintainers
+  system: development-platform
+  definition: |
+    openapi: 3.1.0
+    info:
+      title: Backstage catalog read API discovery
+      version: 1.54.7
+      description: This installation exposes only authenticated GET and HEAD under /api/catalog. See upstream for the full API schema.
+    externalDocs:
+      url: https://backstage.io/docs/features/software-catalog/software-catalog-api/
+    servers:
+      - url: http://127.0.0.1:3131/api/catalog
+    paths: {}
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: application
+  namespace: production
+  title: Production application runtime
+  description: ECS /opt/openscience and its managed release deployment. Read the actual .release-id or public /__release for current identity; repository main and candidate branches are not this runtime.
+  annotations:
+    openscience.org/server-path: /opt/openscience
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/infra/compose/
+  labels:
+    openscience.org/environment: production
+  links:
+    - url: https://openscience.428312321.xyz/__release
+      title: Actual application release marker
+    - url: https://github.com/photonics-dhl/OpenScience/blob/codex/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md
+      title: CURRENT release, rollback and limitations
+spec:
+  type: runtime-environment
+  owner: group:default/openscience-maintainers
+  system: system:default/openscience
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: onchip-video-release
+  namespace: candidate
+  title: Candidate development checkout
+  description: Candidate source checkout and branch, not the production release. Source changes require actual deployment before they become runtime capabilities.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/
+    openscience.org/local-path: E:/Miscellaneous/XGS/.worktrees/onchip-video-release
+  labels:
+    openscience.org/environment: candidate
+  links:
+    - url: https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release
+      title: Candidate branch
+spec:
+  type: source-checkout
+  owner: group:default/openscience-maintainers
+  system: system:default/development-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: research-database
+  namespace: production
+  title: Private research PostgreSQL
+  description: Existing product database in data_net. The development catalog has no credentials or network membership for this database.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/packages/database/
+  labels:
+    openscience.org/environment: production
+spec:
+  type: database
+  owner: group:default/openscience-maintainers
+  system: system:default/openscience
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: redis
+  namespace: production
+  title: Private product Redis
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/infra/compose/
+  labels:
+    openscience.org/environment: production
+spec:
+  type: cache
+  owner: group:default/openscience-maintainers
+  system: system:default/openscience
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: object-storage
+  namespace: production
+  title: Private SeaweedFS object storage
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/packages/storage/
+  labels:
+    openscience.org/environment: production
+spec:
+  type: object-store
+  owner: group:default/openscience-maintainers
+  system: system:default/openscience
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: parser-jobs
+  namespace: production
+  title: Parser job exchange volume
+  description: Existing parser/worker exchange, unavailable to the development catalog.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/infra/compose/
+  labels:
+    openscience.org/environment: production
+spec:
+  type: shared-volume
+  owner: group:default/openscience-maintainers
+  system: system:default/openscience
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: catalog-database
+  title: Isolated Backstage SQLite store
+  description: Dedicated persistent directory for catalog, permission and service authentication state. No product database connection is configured.
+  annotations:
+    openscience.org/server-path: /opt/openscience-development-platform/catalog/state
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/infra/development-platform/catalog/
+spec:
+  type: database
+  owner: group:default/openscience-maintainers
+  system: development-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: langfuse
+  title: Development Langfuse
+  description: Upstream Langfuse deployment for observing existing Hermes execution, with independent data stores. Installation and trace visibility must be recorded from actual server results.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/infra/development-platform/langfuse/
+  tags: [observability, development]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/openscience-maintainers
+  system: development-platform
+  dependsOn:
+    - resource:default/langfuse-storage
+    - resource:candidate/onchip-video-release
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: langfuse-storage
+  title: Isolated Langfuse data stores
+  description: Dedicated Langfuse PostgreSQL, ClickHouse, Redis and object storage, configured separately from the OpenScience product databases.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/infra/development-platform/langfuse/
+spec:
+  type: storage-system
+  owner: group:default/openscience-maintainers
+  system: development-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: gateway-audit-telemetry
+  title: Gateway audit telemetry connector
+  description: Candidate adapter for existing Gateway audit metadata. Actual trace delivery and its limited source permissions are recorded by the delivery task; this entity does not imply installed product SDK instrumentation.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/infra/development-platform/telemetry/
+  tags: [observability, gateway, candidate]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/openscience-maintainers
+  system: development-platform
+  dependsOn:
+    - component:default/langfuse
+    - resource:candidate/onchip-video-release
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: serena-code-intelligence
+  title: Read-only Serena symbol intelligence
+  description: MIT Serena with pinned TypeScript language-server dependencies and three read tools against a selected release snapshot. Source references are distinct from deployment or a complete knowledge graph.
+  annotations:
+    backstage.io/source-location: url:https://github.com/photonics-dhl/OpenScience/tree/codex/onchip-video-release/infra/development-platform/code-intelligence/
+  tags: [serena, mcp, source-navigation]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/openscience-maintainers
+  system: development-platform
+  dependsOn:
+    - resource:candidate/onchip-video-release

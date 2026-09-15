@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](../handoff/2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Hermes DocumentSourceMap Contract Implementation Plan
 
 > **Status: complete (2026-08-27).** Task 3 is deployed as immutable application/release `ef043ebb8e51332effe75a5639cb207aec7bfc47`; the reviewed docs closeout at `4e47197955c7d3e5c926eb18243aaa9fa7dee3c8` passed exact CI run `32996254474` before this final attestation.

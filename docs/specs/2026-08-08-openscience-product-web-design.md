@@ -1,3 +1,5 @@
+> 适用说明：本文是对应功能的设计依据；其中版本、验收和待办为编写时记录，不能作为当前部署状态。有效需求以最新用户确认及需求基线为准，明确 DEPRECATED 的设计不恢复；实施状态只读 [当前交接](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+
 # OpenScience 产品级网页设计 Spec
 
 > HISTORICAL 产品流程 → CURRENT 见 `docs/specs/2026-09-05-integrated-research-product-design.md`；本稿保留历史背景。

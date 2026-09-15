@@ -15,14 +15,19 @@ import {
   reviewSnapshotDigest,
 } from '../research-intelligence/publication-snapshot';
 import { PublishError } from './errors';
+import { finalizePublicationResearchRecord } from '../commit/research-record-snapshot';
+import { publicVersionNumber } from './publication-metadata';
+import { lockTrashReferences } from '../trash/trash';
+import { publicHistoryMedia } from '../commit/version-history';
+import { requireValidVersionHistoryCopy } from '../assets/version-history-copy';
 
 export type VersionStatus = 'draft' | 'under_review' | 'approved' | 'published' | 'revised' | 'withdrawn' | 'rejected' | 'restricted';
 
 /** §4.1 状态机合法迁移（含补充态）。终态不可前进。 */
 const TRANSITIONS: Record<VersionStatus, VersionStatus[]> = {
   draft: ['under_review', 'rejected', 'withdrawn'],
-  under_review: ['approved', 'rejected'],
-  approved: ['withdrawn'],
+  under_review: ['draft', 'approved', 'rejected'],
+  approved: ['draft', 'withdrawn'],
   published: ['revised', 'withdrawn', 'restricted'],
   revised: ['under_review', 'withdrawn'],
   withdrawn: [],
@@ -57,17 +62,37 @@ export async function transitionVersionStatus(
   ctx: AuditContext = {},
 ): Promise<{ id: string; status: string }> {
   return deps.prisma.$transaction(async (tx) => {
+    await lockTrashReferences(tx);
     const transactionDeps = { ...deps, prisma: tx as unknown as typeof deps.prisma };
     const version = await tx.version.findUnique({ where: { id: input.versionId }, include: { researchObject: true } });
-    if (!version) throw new PublishError('NOT_FOUND', '版本不存在');
+    if (!version || version.researchObject.deletedAt) throw new PublishError('NOT_FOUND', '版本不存在');
     const { workspace, membership } = await requireMembership(transactionDeps, version.researchObject.workspaceId, input.userId);
     if (workspace.status !== 'active') throw new PublishError('FORBIDDEN', 'Archived workspace is read-only');
     requireVersionAuthority(version, input.userId, membership);
 
     const from = version.status as VersionStatus;
     if (from === input.status) return { id: version.id, status: from };
+    const issued = await tx.publication.findFirst({ where: { versionId: version.id } });
+    if ((version.publicVersionId || issued) && !['revised', 'withdrawn', 'restricted'].includes(input.status)) {
+      throw new PublishError('ILLEGAL_TRANSITION', '已公开内容只能更新生命周期状态；修订必须保存为新的私有草稿');
+    }
     if (!(TRANSITIONS[from] ?? []).includes(input.status)) {
       throw new PublishError('ILLEGAL_TRANSITION', `版本状态 ${from} → ${input.status} 非法（§4.1）`);
+    }
+    // Withdrawing an unpublished review must never reopen a public version.
+    if (input.status === 'draft') {
+      const publication = await tx.publication.findFirst({ where: { versionId: version.id } });
+      if (publication || version.publicVersionId) {
+        throw new PublishError('ILLEGAL_TRANSITION', 'Published versions cannot return to draft');
+      }
+      await tx.aiReview.updateMany({
+        where: { versionId: version.id },
+        data: {
+          status: 'blocked',
+          hardBlocks: [{ code: 'review_stale', reason: '已撤回审核并恢复编辑，发布前需要重新审核。' }] as never,
+          verdict: 'Publication review withdrawn for editing',
+        },
+      });
     }
     const updated = await tx.version.update({ where: { id: version.id }, data: { status: input.status } });
     await recordAudit(deps, tx, {
@@ -88,10 +113,26 @@ export async function transitionVersionStatus(
  */
 export async function publishVersion(
   deps: ArtifactDeps,
-  input: { versionId: string; userId: string; r3Confirmed: boolean; publicIdPrefix: string },
+  input: { versionId: string; userId: string; r3Confirmed: boolean; publicIdPrefix: string; allowArtifactDownloads?: boolean },
+  ctx: AuditContext = {},
+) {
+  // Serialization/identifier conflicts roll the transaction back, including the
+  // ordinal. A concurrent replay then observes the existing publication.
+  for (let attempt = 0; ; attempt++) {
+    try { return await publishVersionOnce(deps, input, ctx); }
+    catch (error) {
+      if (attempt >= 2 || !['P2034', 'P2002'].includes((error as { code?: string }).code ?? '')) throw error;
+    }
+  }
+}
+
+async function publishVersionOnce(
+  deps: ArtifactDeps,
+  input: { versionId: string; userId: string; r3Confirmed: boolean; publicIdPrefix: string; allowArtifactDownloads?: boolean },
   ctx: AuditContext = {},
 ): Promise<{
   versionId: string;
+  publicationNo: number | null;
   publicId: string;
   publicVersionId: string;
   contentSha256: string;
@@ -103,24 +144,31 @@ export async function publishVersion(
     where: { id: input.versionId },
     include: { researchObject: true, manifest: { include: { entries: true } } },
   });
-  if (!version) throw new PublishError('NOT_FOUND', '版本不存在');
+  if (!version || version.researchObject.deletedAt) throw new PublishError('NOT_FOUND', '版本不存在');
   const { workspace, membership } = await requireMembership(deps, version.researchObject.workspaceId, input.userId);
   if (workspace.status !== 'active') throw new PublishError('FORBIDDEN', 'Archived workspace is read-only');
   requireVersionAuthority(version, input.userId, membership);
+  const issuedPublication = await deps.prisma.publication.findFirst({ where: { versionId: version.id } });
+  if (issuedPublication && version.status !== 'published') {
+    throw new PublishError('ALREADY_PUBLISHED', '此快照已发行；发布更新须使用新的私有草稿');
+  }
 
   // 幂等（§2.2-3 已公开不可原地修改）：已 published → 返回既有
   if (version.status === 'published') {
-    let pub = await deps.prisma.publication.findFirst({ where: { versionId: version.id } });
+    let pub = issuedPublication;
+    if (!pub) throw new PublishError('VALIDATION_ERROR', '公开版本缺少发布记录');
     if (version.researchObject.visibility !== 'public') {
       if (!input.r3Confirmed) {
         throw new PublishError('R3_CONFIRMATION_REQUIRED', '公开可见性扩展属 R3 高影响操作，需显式确认（§9.4）');
       }
       pub = await deps.prisma.$transaction(async (tx) => {
+        await lockTrashReferences(tx);
+        await tx.$queryRaw`SELECT id FROM research_objects WHERE id = ${version.researchObjectId}::uuid FOR UPDATE`;
         const current = await tx.version.findUnique({
           where: { id: version.id },
           include: { researchObject: true },
         });
-        if (!current || current.status !== 'published') {
+        if (!current || current.researchObject.deletedAt || current.status !== 'published') {
           throw new PublishError('ILLEGAL_TRANSITION', 'Version status changed before visibility expansion');
         }
         const existingPublication = await tx.publication.findFirst({ where: { versionId: version.id } });
@@ -144,6 +192,7 @@ export async function publishVersion(
     }
     return {
       versionId: version.id,
+      publicationNo: publicVersionNumber(version),
       publicId: version.researchObject.publicId ?? '',
       publicVersionId: pub?.publicVersionId ?? '',
       contentSha256: pub?.contentSha256 ?? '',
@@ -190,15 +239,36 @@ export async function publishVersion(
     throw new PublishError('REVIEW_NOT_PASSED', `Claim/Evidence publication review must be rerun: ${reasons.join('; ')}`);
   }
   const result = await deps.prisma.$transaction(async (tx) => {
+    await lockTrashReferences(tx);
+    // Same RO lock as trash/restore: deleting private work cannot race publication.
+    await tx.$queryRaw`SELECT id FROM research_objects WHERE id = ${version.researchObjectId}::uuid FOR UPDATE`;
     const currentVersion = await tx.version.findUnique({
       where: { id: version.id },
       include: { researchObject: true, manifest: { include: { entries: true } } },
     });
-    if (!currentVersion || currentVersion.status !== 'approved') {
+    if (!currentVersion || currentVersion.researchObject.deletedAt || currentVersion.status !== 'approved') {
       throw new PublishError('ILLEGAL_TRANSITION', 'Version status changed before publication');
     }
+    if (currentVersion.publicVersionId || await tx.publication.findFirst({ where: { versionId: version.id } })) {
+      throw new PublishError('ALREADY_PUBLISHED', '此快照已发行；发布更新须使用新的私有草稿');
+    }
+    const manifestEntries = currentVersion.manifest?.entries ?? [];
+    if (input.allowArtifactDownloads === true && new Set(manifestEntries.map(entry => entry.artifactId)).size !== manifestEntries.length) {
+      throw new PublishError('VALIDATION_ERROR', '公开下载需要每项附件在本版本清单中唯一，请先整理重复附件路径');
+    }
+    const availableArtifacts = await tx.artifact.findMany({ where: {
+      id: { in: manifestEntries.map(entry => entry.artifactId) }, workspaceId: currentVersion.researchObject.workspaceId, deletedAt: null, bytesPurgedAt: null,
+    }, select: { id: true, blobSha256: true } });
+    if (manifestEntries.some(entry => !availableArtifacts.some(artifact => artifact.id === entry.artifactId && artifact.blobSha256 === entry.blobSha256))) {
+      throw new PublishError('VALIDATION_ERROR', '发布附件已移入回收站或来源已改变，请先恢复材料并重新保存');
+    }
+    const approvedAssets = await tx.presentationAsset.findMany({ where: { researchObjectId: version.researchObjectId, versionId: version.id, deletedAt: null, status: 'approved' } });
+    for (const asset of approvedAssets) await requireValidVersionHistoryCopy(tx, asset);
     const currentReview = await tx.aiReview.findUnique({ where: { versionId: version.id } });
     const transactionDeps = { ...deps, prisma: tx as unknown as typeof deps.prisma };
+    const currentAuthority = await requireMembership(transactionDeps, currentVersion.researchObject.workspaceId, input.userId);
+    if (currentAuthority.workspace.status !== 'active') throw new PublishError('FORBIDDEN', 'Archived workspace is read-only');
+    requireVersionAuthority(currentVersion, input.userId, currentAuthority.membership);
     const currentSnapshot = await loadPublicationNarrativeSnapshot(transactionDeps, {
       researchObjectId: version.researchObjectId,
       versionId: version.id,
@@ -222,8 +292,10 @@ export async function publishVersion(
 
     // §6.1 unique ID（外层事务已开 → 内联分配）
     const year = version.researchObject.createdAt.getUTCFullYear();
+    const issued = await tx.version.findMany({ where: { researchObjectId: version.researchObjectId, publications: { some: {} } }, select: { publicationNo: true, publicVersionId: true } });
+    const publicationNo = issued.reduce((max, item) => Math.max(max, publicVersionNumber(item) ?? 0), 0) + 1;
     const { publicId, publicVersionId } = await assignPublicIdInternal(
-      { prisma: tx as unknown as typeof deps.prisma }, version.researchObjectId, year, version.versionNo, input.publicIdPrefix,
+      { prisma: tx as unknown as typeof deps.prisma }, version.researchObjectId, year, publicationNo, input.publicIdPrefix,
     );
 
     // §6.2 UTC 事务时间 + 内容哈希（coreJson + entries 共同标识版本内容，§7.1 可重建）
@@ -237,11 +309,14 @@ export async function publishVersion(
       claims: currentSnapshot.claims,
       evidence: currentSnapshot.evidence,
     });
-    const contentSha256 = createHash('sha256').update(`${corePart}\n${entryPart}\n${narrativePart}`).digest('hex');
     const publishedAt = new Date();
     const visibilityFrom = currentVersion.researchObject.visibility;
-
-    await tx.version.update({ where: { id: version.id }, data: { status: 'published', publicVersionId } });
+    const metadata = await finalizePublicationResearchRecord(tx, { researchObjectId: version.researchObjectId, versionId: version.id, publicId, publicVersionId, publicationNo, publishedAt, allowArtifactDownloads: input.allowArtifactDownloads === true });
+    const recorded = await tx.version.findUniqueOrThrow({ where: { id: version.id }, select: { researchRecord: true } });
+    const mediaPart = publicHistoryMedia(recorded.researchRecord).map(asset => ({ id: asset.id, kind: asset.kind, contentHash: asset.contentHash,
+      generator: asset.generator, generatorVersion: asset.generatorVersion, sourceClaimIds: [...asset.sourceClaimIds].sort() })).sort((a, b) => a.id.localeCompare(b.id));
+    const contentSha256 = createHash('sha256').update(`${corePart}\n${entryPart}\n${narrativePart}\n${canonicalPublicationValue(metadata)}\n${canonicalPublicationValue(mediaPart)}`).digest('hex');
+    await tx.version.update({ where: { id: version.id }, data: { status: 'published', publicVersionId, publicationNo } });
     if (visibilityFrom !== 'public') {
       await tx.researchObject.update({ where: { id: version.researchObjectId }, data: { visibility: 'public' } });
     }
@@ -261,12 +336,14 @@ export async function publishVersion(
         researchObjectId: version.researchObjectId,
         publicId,
         publicVersionId,
+        publicationNo,
         contentSha256,
+        allowArtifactDownloads: input.allowArtifactDownloads === true,
         visibilityFrom,
         visibilityTo: 'public',
       },
     }, ctx);
-    return { publicId, publicVersionId, contentSha256, publishedAt, pub };
+    return { publicId, publicVersionId, publicationNo, contentSha256, publishedAt, pub };
   }, { isolationLevel: 'Serializable' });
 
   await notify(deps, {
@@ -277,6 +354,7 @@ export async function publishVersion(
 
   return {
     versionId: version.id,
+    publicationNo: result.publicationNo,
     publicId: result.publicId,
     publicVersionId: result.publicVersionId,
     contentSha256: result.contentSha256,

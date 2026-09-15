@@ -1,48 +1,39 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import * as React from 'react';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
+import { useSession } from '@/components/auth/SessionProvider';
 import { EvidenceIntake } from '@/components/intake/EvidenceIntake';
-import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
-import { HermesAnchor } from '@/components/hermes/HermesAnchor';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import type { HermesGuideSuggestion } from '@/components/hermes/hermes-guide';
-import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import type { HermesAnchorAction } from '@/lib/hermes/anchor-registry';
-import { createIntakeMaterials, updateMaterialFromTask, type IntakeMaterial } from '@/components/intake/intake-model';
+import { updateMaterialFromTask, type IntakeMaterial } from '@/components/intake/intake-model';
 import {
-  createResearchObject,
-  getIngestionBatch,
-  listMyWorkspaces,
-  retryIngestionTask,
-  startIngestionBatch,
   ApiClientError,
-  type IngestionTaskSummary,
+  createResearchObject,
+  createWorkspaceGuideSession,
+  listMyWorkspaces,
+  startIngestionBatch,
+  submitWorkspaceGuideTask,
   type WorkspaceApi,
 } from '@/lib/api';
 import type { Locale } from '@/i18n/locale';
 
-const CHECKPOINT_KEY = 'openscience.evidence-intake';
-const ACTIVE_STATES = new Set(['queued', 'uploading', 'stored', 'parsing']);
-const EXPLAIN_ONLY: HermesAnchorAction[] = ['explain'];
 const CREATION_SUGGESTION: HermesGuideSuggestion = {
   bodyKey: 'guide.neutral.body',
   kind: 'neutral',
   titleKey: 'guide.neutral.title',
 };
+const HERMES_HANDOFF_TTL_MS = 30 * 60 * 1000;
 
-function mergeTasks(materials: IntakeMaterial[], tasks: IngestionTaskSummary[]): IntakeMaterial[] {
-  return materials.map((material, index) => {
-    const task = tasks.find((candidate) => candidate.id === material.taskId)
-      ?? tasks.find((candidate) => candidate.logicalPath === material.file.name)
-      ?? tasks[index];
-    return task ? updateMaterialFromTask(material, task) : material;
-  });
+function temporaryTitle(goal: string, materials: readonly IntakeMaterial[], fallback: string): string {
+  const idea = goal.replace(/\s+/gu, ' ').trim();
+  if (idea) return idea.slice(0, 120);
+  const filename = materials[0]?.file.name.replace(/\.[^.]+$/u, '').trim();
+  return (filename || fallback).slice(0, 200);
 }
 
 export default function NewResearchObjectPage() {
@@ -50,136 +41,219 @@ export default function NewResearchObjectPage() {
   const intakeT = useTranslations('ingestion.intake');
   const locale = useLocale() as Locale;
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const mode = searchParams.get('mode') === 'blank' ? 'blank' : 'import';
+  const session = useSession();
   const [workspaces, setWorkspaces] = useState<WorkspaceApi[]>([]);
   const [workspaceId, setWorkspaceId] = useState('');
+  const [viewerId, setViewerId] = useState('');
   const [title, setTitle] = useState('');
+  const [goal, setGoal] = useState('');
   const [materials, setMaterials] = useState<IntakeMaterial[]>([]);
   const [researchObjectId, setResearchObjectId] = useState('');
-  const [batchId, setBatchId] = useState('');
-  const [pollRevision, setPollRevision] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const [hermesOpen, setHermesOpen] = useState(false);
-  const hermesStage = useOptionalHermesWorkspaceStage();
+  const createKey = useRef('');
+  const uploadKey = useRef('');
+  const guideSessionKey = useRef('');
+  const guideTaskKey = useRef('');
+  const guideSessionId = useRef('');
+  const firstGoal = useRef('');
+  const uploadedFiles = useRef(new WeakSet<File>());
+  const uploadedTasks = useRef<Array<{ id: string; researchObjectId: string; state: string }>>([]);
+  const lastIngestionTaskId = useRef('');
+  const goalInput = useRef<HTMLTextAreaElement>(null);
+  const ownerRef = useRef('');
+  const pendingRef = useRef(false);
+
+  const clearCreationState = useCallback(() => {
+    setWorkspaces([]);
+    setWorkspaceId('');
+    setViewerId('');
+    setTitle('');
+    setGoal('');
+    setMaterials([]);
+    setResearchObjectId('');
+    setPending(false);
+    setError('');
+    createKey.current = '';
+    uploadKey.current = '';
+    guideSessionKey.current = '';
+    guideTaskKey.current = '';
+    guideSessionId.current = '';
+    firstGoal.current = '';
+    uploadedFiles.current = new WeakSet<File>();
+    uploadedTasks.current = [];
+    lastIngestionTaskId.current = '';
+    pendingRef.current = false;
+  }, []);
 
   useEffect(() => {
-    hermesStage?.requestGuide(mode === 'import' && title.trim() ? 'source-import' : 'ro-title');
-  }, [hermesStage, mode, title]);
+    if (session.status !== 'authenticated') {
+      if (ownerRef.current) {
+        ownerRef.current = '';
+        clearCreationState();
+      }
+      if (session.status === 'anonymous') router.replace('/auth/login?returnTo=%2Fresearch-objects%2Fnew');
+      return;
+    }
+    const nextOwner = session.user?.userId || '';
+    if (!nextOwner) {
+      ownerRef.current = '';
+      clearCreationState();
+      return;
+    }
+    if (ownerRef.current && ownerRef.current !== nextOwner) {
+      ownerRef.current = nextOwner;
+      clearCreationState();
+      setViewerId(nextOwner);
+      router.replace('/dashboard');
+      return;
+    }
+    ownerRef.current = nextOwner;
+    setViewerId(nextOwner);
+  }, [clearCreationState, router, session.status, session.user?.userId]);
 
   useEffect(() => {
+    const owner = session.user?.userId;
+    if (session.status !== 'authenticated' || !owner || ownerRef.current !== owner) return;
     let active = true;
     listMyWorkspaces()
       .then((rows) => {
-        if (!active) return;
+        if (!active || ownerRef.current !== owner) return;
         setWorkspaces(rows);
         setWorkspaceId((current) => current || rows[0]?.id || '');
       })
-      .catch((cause) => active && setError(cause instanceof Error ? cause.message : t('error')));
+      .catch((cause) => active && ownerRef.current === owner && setError(cause instanceof Error ? cause.message : t('error')));
     return () => { active = false; };
-  }, [t]);
+  }, [session.status, session.user?.userId, t]);
 
-  useEffect(() => {
-    if (mode !== 'import') return;
-    try {
-      const raw = window.localStorage.getItem(CHECKPOINT_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw) as { batchId: string; researchObjectId: string; title: string };
-      if (!saved.batchId || !saved.researchObjectId) return;
-      setBatchId(saved.batchId);
-      setResearchObjectId(saved.researchObjectId);
-      setTitle(saved.title);
-    } catch {
-      window.localStorage.removeItem(CHECKPOINT_KEY);
+  function changeMaterials(next: IntakeMaterial[]) {
+    setMaterials(next);
+  }
+
+  function changeGoal(next: string) {
+    if (firstGoal.current && next.trim() !== firstGoal.current) {
+      firstGoal.current = next.trim();
+      guideTaskKey.current = '';
+      if (!guideSessionId.current) guideSessionKey.current = '';
     }
-  }, [mode]);
-
-  const refreshBatch = useCallback(async () => {
-    if (!batchId) return false;
-    const batch = await getIngestionBatch(batchId);
-    setResearchObjectId(batch.researchObjectId);
-    setMaterials((current) => {
-      const source = current.length > 0
-        ? current
-        : createIntakeMaterials(batch.tasks.map((task) => new File([], task.logicalPath)));
-      return mergeTasks(source, batch.tasks);
-    });
-    const stillActive = batch.tasks.some((task) => ACTIVE_STATES.has(task.state));
-    if (!stillActive && batch.tasks.every((task) => task.state === 'written' || task.state === 'confirmed')) {
-      window.localStorage.removeItem(CHECKPOINT_KEY);
-    }
-    return stillActive;
-  }, [batchId]);
-
-  useEffect(() => {
-    if (!batchId) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const poll = async () => {
-      try {
-        const active = await refreshBatch();
-        if (active && !cancelled) timer = setTimeout(poll, 1500);
-      } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : t('error'));
-      }
-    };
-    void poll();
-    return () => { cancelled = true; if (timer) clearTimeout(timer); };
-  }, [batchId, pollRevision, refreshBatch, t]);
-
-  const reviewTasks = useMemo(() => materials.filter((material) => material.status === 'needs_review' && material.taskId), [materials]);
+    setGoal(next);
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!workspaceId || !title.trim()) return;
-    if (mode === 'import' && materials.length === 0) {
-      setError(t('materialsRequired'));
-      return;
-    }
+    const owner = ownerRef.current;
+    if (pendingRef.current || session.status !== 'authenticated' || session.user?.userId !== owner || !owner || owner !== viewerId || !workspaceId || (!goal.trim() && !title.trim() && materials.length === 0)) return;
+    pendingRef.current = true;
     setPending(true);
     setError('');
+    let uploadFailed = false;
     try {
-      const roId = researchObjectId || (await createResearchObject({ workspaceId, title: title.trim() })).researchObject.id;
+      const resolvedTitle = title.trim() || temporaryTitle(goal, materials, t('untitled'));
+      if (!createKey.current) createKey.current = crypto.randomUUID();
+      const roId = researchObjectId || (await createResearchObject({ workspaceId, title: resolvedTitle }, createKey.current)).researchObject.id;
+      if (ownerRef.current !== owner) return;
       setResearchObjectId(roId);
-      if (mode === 'blank') {
-        router.push(`/research-objects/${roId}/edit`);
-        return;
+      firstGoal.current ||= goal.trim();
+      let ingestionTaskId = lastIngestionTaskId.current;
+      let ingestionTasks = [...uploadedTasks.current];
+      const newFiles = materials.map(({ file }) => file).filter((file) => !uploadedFiles.current.has(file));
+      if (newFiles.length > 0) {
+        setMaterials((current) => current.map((material) => newFiles.includes(material.file)
+          ? { ...material, status: 'uploading', progress: 0 }
+          : material));
+        if (!uploadKey.current) uploadKey.current = `evidence:${roId}:${crypto.randomUUID()}`;
+        const result = await startIngestionBatch(
+            roId,
+            newFiles,
+            uploadKey.current,
+            (percent) => {
+              if (ownerRef.current !== owner) return;
+              setMaterials((current) => current.map((material) => material.status === 'uploading' ? { ...material, progress: Math.round(percent * 0.35) } : material));
+            },
+          ).catch((cause) => {
+          uploadFailed = true;
+          throw cause;
+        });
+        if (ownerRef.current !== owner) return;
+        ingestionTaskId = result.tasks[0]?.id ?? '';
+        const newTasks = result.tasks.map((task) => ({ id: task.id, researchObjectId: roId, state: task.state }));
+        setMaterials((current) => current.map((material) => {
+          const index = newFiles.indexOf(material.file);
+          return index >= 0 && result.tasks[index] ? updateMaterialFromTask(material, result.tasks[index]!) : material;
+        }));
+        newFiles.forEach((file) => uploadedFiles.current.add(file));
+        uploadedTasks.current = [...uploadedTasks.current, ...newTasks];
+        ingestionTasks = [...uploadedTasks.current];
+        lastIngestionTaskId.current = ingestionTaskId;
+        uploadKey.current = '';
       }
-      setMaterials((current) => current.map((material) => ({ ...material, status: 'uploading', progress: 0 })));
-      const result = await startIngestionBatch(
-        roId,
-        materials.map(({ file }) => file),
-        `evidence:${roId}:${crypto.randomUUID()}`,
-        (percent) => setMaterials((current) => current.map((material) => material.status === 'uploading' ? { ...material, progress: Math.round(percent * 0.35) } : material)),
-      );
-      setMaterials((current) => mergeTasks(current, result.tasks));
-      setBatchId(result.batchId);
-      window.localStorage.setItem(CHECKPOINT_KEY, JSON.stringify({ batchId: result.batchId, researchObjectId: roId, title: title.trim() }));
+
+      let hermesTaskId = '';
+      if (firstGoal.current) {
+        guideSessionKey.current ||= crypto.randomUUID();
+        guideTaskKey.current ||= crypto.randomUUID();
+        if (!guideSessionId.current) {
+          const createdSessionId = (await createWorkspaceGuideSession(firstGoal.current, guideSessionKey.current, roId)).session.id;
+          if (ownerRef.current !== owner) return;
+          guideSessionId.current = createdSessionId;
+        }
+        hermesTaskId = (await submitWorkspaceGuideTask({
+          sessionId: guideSessionId.current,
+          idempotencyKey: guideTaskKey.current,
+          payload: {
+            goal: firstGoal.current,
+            locale,
+            route: 'research-object-edit',
+            target: null,
+            context: {
+              tasks: ingestionTasks,
+              researchObjects: [{ id: roId, title: resolvedTitle, status: 'draft' }],
+              editorDraft: {
+                researchObjectId: roId,
+                scope: 'sdf',
+                version: 1,
+                core: { problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' },
+              },
+            },
+          },
+        })).task.id;
+        if (ownerRef.current !== owner) return;
+        window.sessionStorage.setItem(`openscience.hermes-handoff:${owner}:${roId}:${hermesTaskId}`, JSON.stringify({
+          viewerId: owner,
+          researchObjectId: roId,
+          taskId: hermesTaskId,
+          expiresAt: Date.now() + HERMES_HANDOFF_TTL_MS,
+        }));
+      }
+      const params = new URLSearchParams();
+      if (ingestionTaskId && !hermesTaskId) params.set('ingestionTask', ingestionTaskId);
+      if (hermesTaskId) params.set('hermesTask', hermesTaskId);
+      if (ownerRef.current !== owner) return;
+      router.push(`/research-objects/${encodeURIComponent(roId)}/edit${params.size ? `?${params.toString()}` : ''}`);
     } catch (cause) {
+      if (ownerRef.current !== owner) return;
       const blocked = cause instanceof ApiClientError && ['MALICIOUS_FILE', 'UNSUPPORTED_INGESTION_FORMAT', 'FILE_TOO_LARGE'].includes(cause.code);
-      setMaterials((current) => current.map((material) => material.status === 'uploading' ? {
+      if (uploadFailed) setMaterials((current) => current.map((material) => material.status === 'uploading' ? {
         ...material,
         status: blocked ? 'failed_blocked' : 'failed_retryable',
         errorCode: cause instanceof Error ? cause.message : t('error'),
       } : material));
       setError(cause instanceof Error ? cause.message : t('error'));
     } finally {
-      setPending(false);
+      if (ownerRef.current === owner) {
+        pendingRef.current = false;
+        setPending(false);
+      }
     }
   }
 
-  async function retry(material: IntakeMaterial) {
-    if (!material.taskId) return;
-    setError('');
-    try {
-      const task = await retryIngestionTask(material.taskId);
-      setMaterials((current) => current.map((row) => row.localId === material.localId ? updateMaterialFromTask(row, task) : row));
-      setPollRevision((value) => value + 1);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('error'));
-    }
-  }
+  const canCreate = Boolean(
+    session.status === 'authenticated'
+    && session.user?.userId === viewerId
+    && workspaceId
+    && viewerId
+    && (goal.trim() || title.trim() || materials.length),
+  );
 
   return (
     <DashboardShell
@@ -187,69 +261,55 @@ export default function NewResearchObjectPage() {
       navigationLabel={t('navigationLabel')}
       skipLabel={t('skipLabel')}
     >
-      <div className="mx-auto max-w-[88rem]">
-        <div className="grid gap-10 lg:grid-cols-[minmax(17rem,.62fr)_minmax(0,1.38fr)] lg:gap-16">
-          <aside className="lg:sticky lg:top-8 lg:self-start">
-            <p data-reading-role="caption" className="text-os-vermilion-ink">{t('eyebrow')}</p>
-            <h1 className="mt-3 max-w-xl text-[clamp(2rem,4vw,2.75rem)] font-normal leading-[1.08] tracking-[-0.03em] text-os-ink">{t('title')}</h1>
-            <p data-reading-role="body" className="mt-4 max-w-md text-os-muted-paper">{t('description')}</p>
-            <ol className="mt-7 list-none border-y border-os-rule-paper p-0 text-sm" aria-label={t('progressLabel')}>
-              <li className="flex gap-3 border-b border-os-rule-paper py-3 font-semibold text-os-ink"><span className="font-data text-os-vermilion-ink">01</span><span>{t('identityStep')}</span></li>
-              <li className="flex gap-3 py-3 text-os-muted-paper"><span className="font-data">02</span><span>{t('evidenceStep')}</span></li>
-            </ol>
-            <div className="mt-7 border-l-2 border-os-vermilion-ink pl-5 text-sm leading-6 text-os-muted-paper">
-              <p>{intakeT('provenance')}</p>
-              <p className="mt-3">{intakeT('consent')}</p>
-            </div>
-            <div className="mt-4">
-              <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} />
-            </div>
-          </aside>
+      <div className="mx-auto max-w-[78rem]">
+        <header className="mx-auto max-w-3xl text-center">
+          <p data-reading-role="caption" className="text-os-vermilion-ink">{t('eyebrow')}</p>
+          <h1 className="mt-3 text-[clamp(2.35rem,6vw,4.6rem)] font-normal leading-[.98] tracking-[-0.045em] text-os-ink">{t('title')}</h1>
+          <p data-reading-role="body" className="mx-auto mt-5 max-w-2xl text-base leading-7 text-os-muted-paper">{t('description')}</p>
+        </header>
 
-          <form className="surface-folio-sheet min-w-0 px-5 py-7 sm:px-8 sm:py-9" onSubmit={submit}>
-            <section className="grid gap-6 border-b border-os-rule-paper pb-8 sm:grid-cols-2">
-              <label data-hermes-protected="true" data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
+        <form className="surface-folio-sheet mx-auto mt-10 max-w-4xl px-5 py-6 sm:px-8 sm:py-8" onSubmit={submit}>
+          <section className="grid gap-5 border-b border-os-rule-paper pb-7 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
+            <div className="relative mx-auto h-52 w-52 shrink-0 [&_.hermes-dock-anchor]:h-52 [&_.hermes-dock-anchor]:!min-h-52 [&_.hermes-workspace-stage]:!mt-0 sm:mx-0">
+              <HermesDockAnchor state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} onInvoke={() => goalInput.current?.focus()} />
+            </div>
+            <label data-reading-role="control" className="grid gap-3 text-sm font-medium text-os-ink">
+              <span className="flex flex-wrap items-baseline justify-between gap-2"><span>{t('hermesPrompt')}</span><span className="font-normal text-os-muted-paper">{t('hermesPromptNote')}</span></span>
+              <textarea ref={goalInput} className="min-h-36 w-full resize-y rounded-control border border-os-rule-paper bg-os-paper px-4 py-3 text-lg leading-7 text-os-ink outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-os-muted-paper focus:border-os-vermilion-ink focus:shadow-[0_0_0_3px_rgba(18,93,102,.12)]" maxLength={2000} value={goal} onChange={(event) => changeGoal(event.target.value)} placeholder={t('hermesPlaceholder')} />
+            </label>
+          </section>
+
+          <div className="pt-7">
+            <EvidenceIntake literature={{ instanceId: 'research-start-literature', onAuthenticationRequired: () => router.replace('/auth/login?returnTo=%2Fresearch-objects%2Fnew'), target: researchObjectId ? { kind: 'research_object', researchObjectId } : { kind: 'personal' }, withinForm: true }} materials={materials} onChange={changeMaterials} variant="research-start" />
+          </div>
+
+          <details className="mt-7 border-t border-os-rule-paper pt-5">
+            <summary className="cursor-pointer text-sm font-medium text-os-muted-paper transition-colors duration-150 hover:text-os-ink">{t('details')}</summary>
+            <div className="mt-5 grid gap-6 sm:grid-cols-2">
+              <label data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
                 {t('workspace')}
-                <select data-reading-role="reading" className="min-h-12 border-0 border-b border-os-rule-paper bg-transparent text-lg text-os-ink outline-none focus:border-os-vermilion-ink" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} required>
+                <select className="min-h-12 border-0 border-b border-os-rule-paper bg-transparent text-base text-os-ink outline-none focus:border-os-vermilion-ink" value={workspaceId} onChange={(event) => { createKey.current = ''; setWorkspaceId(event.target.value); }} disabled={Boolean(researchObjectId)} required>
                   <option value="">{t('workspaceLoading')}</option>
                   {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
                 </select>
               </label>
               <label data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
-                {t('researchTitle')}
-                <HermesAnchor actions={EXPLAIN_ONLY} id="ro-title">
-                  <input data-reading-role="reading" className="min-h-12 w-full border-0 border-b border-os-rule-paper bg-transparent px-1 text-lg text-os-ink outline-none placeholder:text-os-muted-paper focus:border-os-vermilion-ink" name="title" required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={intakeT('titlePlaceholder')} />
-                </HermesAnchor>
+                {t('optionalTitle')}
+                <input className="min-h-12 border-0 border-b border-os-rule-paper bg-transparent text-base text-os-ink outline-none placeholder:text-os-muted-paper focus:border-os-vermilion-ink" maxLength={200} value={title} onChange={(event) => { createKey.current = ''; setTitle(event.target.value); }} disabled={Boolean(researchObjectId)} placeholder={t('titlePlaceholder')} />
               </label>
-            </section>
+            </div>
+          </details>
 
-            {mode === 'import' ? <div className="pt-10"><HermesAnchor actions={EXPLAIN_ONLY} id="source-import"><EvidenceIntake literature={{ instanceId: 'evidence-intake-literature', onAuthenticationRequired: () => router.replace('/auth/login?returnTo=%2Fresearch-objects%2Fnew%3Fmode%3Dimport'), target: researchObjectId ? { kind: 'research_object', researchObjectId } : { kind: 'personal' }, withinForm: true }} materials={materials} onChange={setMaterials} onRetry={retry} /></HermesAnchor></div> : (
-              <section className="border-b border-os-rule-paper py-10">
-                <h2 className="text-3xl font-normal text-os-ink">{intakeT('blankTitle')}</h2>
-                <p data-reading-role="body" className="mt-3 max-w-xl text-os-muted-paper">{intakeT('blankBody')}</p>
-              </section>
-            )}
-
-            {error ? <p className="mt-6 border-l-2 border-os-vermilion-ink pl-4 text-sm text-state-danger" role="alert">{error}</p> : null}
-            {reviewTasks.length > 0 ? (
-              <div className="mt-8 border-y border-os-vermilion-ink py-6">
-                <h2 className="text-2xl font-normal text-os-ink">{intakeT('reviewReady')}</h2>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {reviewTasks.map((material) => <Link className="border-b border-os-vermilion-ink pb-1 text-sm text-os-vermilion-ink" key={material.localId} href={`/research-objects/${researchObjectId}/hermes?task=${material.taskId}`}>{material.file.name} →</Link>)}
-                </div>
-              </div>
-            ) : null}
-            <footer className="mt-10 flex flex-wrap items-center justify-between gap-5 border-t border-os-rule-paper pt-6">
-              <p className="max-w-xl text-sm leading-6 text-os-muted-paper">{mode === 'import' ? intakeT('submitNote') : intakeT('blankNote')}</p>
-              <div className="flex gap-4">
-                {researchObjectId ? <Link className="min-h-12 px-5 py-3 text-sm text-os-muted-paper hover:text-os-ink" href={`/research-objects/${researchObjectId}/edit`}>{intakeT('openDraft')}</Link> : null}
-                {!batchId ? <button data-hermes-protected="true" data-reading-role="control" className="min-h-12 rounded-control border-0 bg-os-vermilion-ink px-7 text-sm font-semibold text-os-paper transition-colors hover:bg-[#9f301c] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none" disabled={pending || !workspaceId} type="submit">{pending ? t('creating') : researchObjectId ? intakeT('retryUpload') : t('create')}</button> : null}
-              </div>
-            </footer>
-          </form>
-        </div>
+          {error ? <p className="mt-6 border-l-2 border-os-vermilion-ink pl-4 text-sm text-state-danger" role="alert">{error}</p> : null}
+          <footer className="mt-7 flex flex-wrap items-center justify-between gap-5 border-t border-os-rule-paper pt-6">
+            <p className="max-w-xl text-sm leading-6 text-os-muted-paper">{t('privacyNote')}</p>
+            <div className="flex items-center gap-4">
+              {researchObjectId ? <Link className="min-h-12 px-4 py-3 text-sm text-os-muted-paper hover:text-os-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/edit`}>{intakeT('openDraft')}</Link> : null}
+              <button className="min-h-12 rounded-control border-0 bg-os-vermilion-ink px-7 text-sm font-semibold text-white transition-[background-color,transform] duration-150 hover:brightness-90 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50" disabled={pending || !canCreate} type="submit">{pending ? t('creating') : researchObjectId ? t('continue') : t('create')}</button>
+            </div>
+          </footer>
+        </form>
       </div>
-      <HermesAssistantDrawer dashboardContext={{ tasks: [], researchObjects: [] }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-new" suggestion={CREATION_SUGGESTION} target={mode === 'import' && title.trim() ? 'source-import' : 'ro-title'} />
     </DashboardShell>
   );
 }

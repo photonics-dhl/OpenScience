@@ -13,35 +13,40 @@ export default function EditorLayout({
   outline,
   main,
   aside,
+  workflow,
+  workspaceClassName,
 }: {
   header?: ReactNode;
   objectId: string;
   outline: ReactNode;
   main: ReactNode;
   aside: ReactNode;
+  workflow?: ReactNode;
+  workspaceClassName?: string;
 }) {
   const t = useTranslations('editor');
   const [mobileTab, setMobileTab] = useState<MobileTab>('edit');
 
   return (
     <WorkspaceShell
-      activeMobilePlane={mobileTab === 'outline' ? 'left' : mobileTab === 'panel' ? 'right' : 'main'}
+      activeMobilePlane={!outline ? 'main' : mobileTab === 'outline' ? 'left' : mobileTab === 'panel' ? 'right' : 'main'}
+      className={workspaceClassName ?? 'editor-workspace'}
       leftRail={outline}
       mainClassName="p-0 lg:p-0"
-      mobileNavigation={
+      mobileNavigation={outline ?
         <div className="fixed inset-x-0 bottom-0 z-(--z-header) border-t border-os-rule-paper bg-os-paper pb-[max(.5rem,env(safe-area-inset-bottom))] pl-2 pr-2 pt-2 lg:hidden" data-mobile-workspace-navigation="true">
           <MobileTabs active={mobileTab} onSelect={setMobileTab} />
         </div>
-      }
+      : undefined}
       navigationLabel={t('workspaceNavigation')}
       objectHeader={header}
       rightRail={aside}
       skipLabel={t('skipToWorkspace')}
       workspaceModes={
-        <ResearchWorkspaceNav active="sdf" objectId={objectId} />
+        workflow ?? <ResearchWorkspaceNav active="sdf" objectId={objectId} />
       }
     >
-      <div className="min-h-[calc(100dvh-13.25rem)] px-4 pb-24 pt-5 lg:min-h-[calc(100dvh-10.25rem)] lg:p-8">{main}</div>
+      <div className="min-h-[calc(100dvh-13.25rem)] px-4 pb-24 pt-5 lg:min-h-[calc(100dvh-10.25rem)] lg:p-6">{main}</div>
     </WorkspaceShell>
   );
 }

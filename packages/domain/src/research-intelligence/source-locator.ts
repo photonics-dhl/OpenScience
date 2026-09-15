@@ -106,8 +106,16 @@ export function createCodeSourceLocator(artifactId: string, contentHash: string,
   return validateSourceLocator({ artifactId, contentHash, codeRange: { ...codeRange } });
 }
 
-function sameBoundingBox(a: NonNullable<SourceLocator['boundingBox']>, b: DocumentBlock['boundingBox']): boolean {
-  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+function sameSerializedNumber(left: number, right: number): boolean {
+  if (left === right) return true;
+  const scale = Math.max(Math.abs(left), Math.abs(right));
+  return Math.abs(left - right) <= Number.EPSILON * scale * 16;
+}
+
+/** Accepts only IEEE-754 serialization drift; callers must keep all locator identity checks exact. */
+export function sameSourceBoundingBox(a: NonNullable<SourceLocator['boundingBox']>, b: DocumentBlock['boundingBox']): boolean {
+  return sameSerializedNumber(a.x, b.x) && sameSerializedNumber(a.y, b.y)
+    && sameSerializedNumber(a.width, b.width) && sameSerializedNumber(a.height, b.height);
 }
 
 export function resolveSourceLocator(value: DocumentSourceMap, locatorValue: SourceLocator): DocumentBlock {
@@ -119,7 +127,7 @@ export function resolveSourceLocator(value: DocumentSourceMap, locatorValue: Sou
   if (!locator.blockId) throw locatorError('blockId is required for document source map resolution');
   const { page, block } = mapBlock(sourceMap, locator.blockId);
   if (locator.page !== page) throw locatorError('page does not match the document source map');
-  if (!locator.boundingBox || !sameBoundingBox(locator.boundingBox, block.boundingBox)) {
+  if (!locator.boundingBox || !sameSourceBoundingBox(locator.boundingBox, block.boundingBox)) {
     throw locatorError('boundingBox does not match the document source map');
   }
   if (locator.charRange !== undefined) validateBlockRange(block, locator.charRange);

@@ -10,6 +10,7 @@ import { ArtifactError } from './errors';
 import { detectMimeType } from './mime';
 import { checkUploadQuota } from './quota';
 import { scanFile } from './scan';
+import { lockTrashReferences } from '../trash/trash';
 
 /** domain artifact 依赖：在 WorkspaceDeps 基础上叠加 StorageAdapter（P1A-2 对象存储）。 */
 export interface ArtifactDeps extends WorkspaceDeps {
@@ -68,6 +69,7 @@ export async function createArtifact(
     if (!input.idempotencyKey) return null;
     const existing = await deps.prisma.artifact.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
     if (!existing) return null;
+    if (existing.deletedAt) throw new ArtifactError('ARTIFACT_NOT_FOUND', '文件已移入回收站');
     if (existing.workspaceId !== input.workspaceId || existing.uploadedBy !== input.uploadedBy || existing.logicalPath !== logicalPath || existing.blobSha256 !== contentSha256) {
       throw new ArtifactError('VALIDATION_ERROR', '幂等键已用于其他文件内容');
     }
@@ -96,11 +98,14 @@ export async function createArtifact(
   }
 
   // 内容寻址去重（§7.1）+ 入库
-  const blob = await putBlob(deps.storage, content);
+  let blob: Awaited<ReturnType<typeof putBlob>>;
 
   let created;
   try {
     created = await deps.prisma.$transaction(async (tx) => {
+    await lockTrashReferences(tx);
+    await tx.trashObjectCleanup.updateMany({ where: { objectKey: getBlobStorageKey(contentSha256) }, data: { state: 'retained', lastError: null } });
+    blob = await putBlob(deps.storage, content);
     await tx.blob.upsert({
       where: { sha256: blob.sha256 },
       create: { sha256: blob.sha256, storageKey: getBlobStorageKey(blob.sha256), size: BigInt(blob.size) },
@@ -127,7 +132,7 @@ export async function createArtifact(
       ctx,
     );
     return artifact;
-    });
+    }, { timeout: 30_000 });
   } catch (error) {
     if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
       const concurrentReplay = await replayExisting();
@@ -140,9 +145,9 @@ export async function createArtifact(
     artifactId: created.id,
     logicalPath,
     mimeType,
-    size: blob.size,
-    blobSha256: blob.sha256,
-    alreadyExists: blob.alreadyExists,
+    size: blob!.size,
+    blobSha256: blob!.sha256,
+    alreadyExists: blob!.alreadyExists,
   };
 }
 
@@ -155,7 +160,7 @@ export async function getArtifact(
     where: { id: input.artifactId },
     include: { blob: true },
   });
-  if (!artifact) throw new ArtifactError('ARTIFACT_NOT_FOUND', '文件不存在');
+  if (!artifact || artifact.deletedAt) throw new ArtifactError('ARTIFACT_NOT_FOUND', '文件不存在');
   // 越权防护（§17）：校验调用者是该 workspace 成员（跨 workspace → 404）
   await requireMembership(deps, artifact.workspaceId, input.userId);
 

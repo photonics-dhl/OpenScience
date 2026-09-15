@@ -1,6 +1,6 @@
 import type { AuditContext, AuditEvent } from '@openscience/observability';
 import { requireMembership } from '../workspace/helpers';
-import { canAccessRo } from '../visibility/access';
+import { canAccessPrivateRo } from '../visibility/access';
 import type { WorkspaceDeps } from '../workspace/types';
 import { BranchError } from './errors';
 
@@ -83,7 +83,7 @@ function toTip(row: {
 /**
  * 创建分支（§8 概念表 + §2.3 决策 3 可见性继承 + §17 越权防护 + §16 幂等）：
  * - 写权限：requireMembership（仅空间成员，非成员 → 404）
- * - 可见性继承：分支无自有 visibility，访问判定完全由 RO 承担（canAccessRo）
+ * - 可见性继承：分支无自有 visibility，访问判定完全由 RO 承担（canAccessPrivateRo）
  * - 幂等：@@unique([roId, name]) —— 同名重发 → NAME_EXISTS（拒绝而非重复建）
  * - headCommitId：可选起点（必须同一 RO），供 Fork 分支（§21.2 步骤 11）锚定
  */
@@ -128,13 +128,13 @@ export async function createBranch(
 }
 
 /**
- * 分支列表（§4.2 可见性继承）：读权限 = canAccessRo（public 公众可读；private/invite_only 成员或 grant）。
+ * 分支列表（§4.2 可见性继承）：读权限 = canAccessPrivateRo（public 公众可读；private/invite_only 成员或 grant）。
  */
 export async function listBranches(
   deps: WorkspaceDeps,
   input: { researchObjectId: string; userId?: string },
 ): Promise<BranchTip[]> {
-  const access = await canAccessRo(deps, { researchObjectId: input.researchObjectId, userId: input.userId });
+  const access = await canAccessPrivateRo(deps, { researchObjectId: input.researchObjectId, userId: input.userId });
   if (access === 'denied') throw new BranchError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
 
   const rows = await deps.prisma.branch.findMany({
