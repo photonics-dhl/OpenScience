@@ -1,12 +1,12 @@
 # Hermes / Workbench CURRENT Handoff
 
 ## 2026-09-15 会话暂停：下个 session 从这里续作
-- 用户已纠正验证政策：禁止过度测试、全套预检及 CI；允许针对直接风险或已知故障的最小必要定向验证，须说明范围与证据。本轮终端可用性已验证；未运行项目测试、预检、CI或本机构建。
+- 用户已纠正验证政策：禁止过度测试、全套预检及 CI；允许针对直接风险或已知故障的最小必要定向验证，须说明范围与证据。本轮完成终端验证、必要服务器部署和真实索引/UI观察；未运行项目测试、预检、CI或本机构建。
 - 候选四文件：`packages/search/src/embedder.ts`、`apps/agent-worker/src/search-indexer.ts`、`packages/domain/src/agent/agent.ts`、`scripts/index-confirmed-research-sources.cjs`。批次8→2，tokenize/encode每次总预算120秒；仅严格503/worker_busy在预算内最多等3秒重试一次，chunk超时/网络不确定不重发；前台3秒/一次原样。原source索引最多两次显式恢复，严格暂态白名单、原producer与来源/权限重验、CAS原count/epoch/result含AnyNull、递增审计；不清零计数、不创建来源副本、不扣LLM额度。
-- 独立High：domain/script静态通过，`embedder.ts`/`search-indexer.ts`最终完整差异审查因用户暂停而中断，尚无最终GO；下session仅补审这两文件新增差异，不重做历史审查。两代理现均interrupted，无后台继续工作；未运行测试/预检/本机构建。恢复次数与SearchStorage每generation的max3独立，crash可能先耗尽；不能把skip/exhausted报成功。
+- 候选四文件已提交 `ba184541`，无关 dirty spec 未提交；独立High审查对 `embedder.ts`/`search-indexer.ts` 新增差异为 GO。按现行runbook部署成功，应用release=`ba184541`、rollback=`6684e448`；部署明确跳过全套验收。
 - 下一步顺序：核实际Git及本四文件差异/High结论→只提交本任务代码和同步文档（排除下述无关spec，`[skip ci]`且禁用测试hooks）→复用`art-direction-release-41ae8902`干净发布树，按现行runbook部署，`--confirm --no-tests --skip-migrate --reuse-unchanged-capability-images --rollback-ref 6684e448a6d924f7f5b1adce9e0e2e4057aa88d3`。若届时线上改变先重新定锚，不照抄rollback。
-- 新代码部署后才可在API容器执行`scripts/index-confirmed-research-sources.cjs --apply --retry-incomplete`，严格复用下面两原task；本次没有执行该恢复。用`tmp/capability-linkage-dense-status.cjs`观察真实dense数量/任务/当前generation；完整后再用`tmp/capability-linkage-observe-ui.cjs`实际读取Weyl搜索并看图。其截图已改fullPage且尚未重跑，旧截屏裁切不正确，不能当布局通过证据。所有服务器操作经项目SSH wrapper，无测试/探针/新科学模型调用。
-- 索引闭环后回到未完成风格1/2；任务4保持in-progress，新MiniMax科学效果未观察、7cd现代Library来源绑定缺口仍保留。不要重画认可淡彩或重发7cd；不重启/清理保留草稿的服务器页面。
+- 部署后仅按原资格恢复两篇原任务；dense观察脚本因tmp不随release进入且release挂载只读，改用同一脚本stdin只读执行。2026-09-15T15:51:58Z：`8920bf4f-3b4d-423e-b3aa-ca378c7c94cc` succeeded，58/58 dense，active generation `bccec0de-c284-40aa-a212-6ebf873d474d`；`2135cd87-d2f0-459d-8e24-1a94ba97a952` succeeded，42/42 dense，active generation `d4d84e62-9125-4794-bae7-7960be12f501`。旧needs_review generations保留，未清零计数。
+- 2026-09-15T15:54:03Z 浏览器执行器实际读取 Weyl：POST `/api/research-objects/search` 返回200、`mode=hybrid`，召回 `9067a2d5-42ad-4c06-b234-753728b71064` Quantization 与 `c896802c-35dd-4b59-8db1-5f374f83a6d8` deep-sub-cycle；页面宽1024、文档宽1012，无横向溢出。收据 `/jobs/capability-linkage-indexed-search-observed.json` 与 fullPage PNG。任务4索引闭环已实证，但不等于科学/审美质量完成。
 
 <a id="illustration-delivery"></a>
 ## 产品目标与交付差额
