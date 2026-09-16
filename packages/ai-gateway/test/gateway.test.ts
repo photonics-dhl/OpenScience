@@ -4,6 +4,7 @@ import { deflateSync } from 'node:zlib';
 import { AiGateway } from '../src/gateway';
 import { AnthropicCompatProvider, OpenAiCompatProvider, type Provider, type ProviderResult } from '../src/provider';
 import type { ImageProvider } from '../src/image';
+import { ImageUsageLimitError } from '../src/image';
 import { AiGatewayError } from '../src/errors';
 
 function fakeProvider(name: string, impl: () => Promise<ProviderResult>): Provider {
@@ -359,5 +360,29 @@ describe('图片 provider 回退（只有确定未提交才前进）', () => {
     await expect(gw.generateImage({ prompt: 'x', referenceImage: { bytes, contentHash } }))
       .rejects.toThrow(/does not support references/u);
     expect(calls).toEqual([]);
+  });
+
+  it('恢复路径遍历备用 provider，而不是只看主 provider', async () => {
+    const primary: ImageProvider = { name: 'a', model: 'a-model', generate: async () => { throw new Error('nope'); } };
+    const backup: ImageProvider = {
+      name: 'b', model: 'b-model', generate: async () => { throw new Error('nope'); },
+      canResumeFromCompletedResult: async () => true,
+      resumeFromCompletedResult: async () => ({ bytes: grayPng1280x720(), contentType: 'image/png', promptHash: 'h' }),
+    };
+    const gw = new AiGateway({ providers: [textStub()], imageProviders: [primary, backup], killSwitch: ENABLED_KILL_SWITCH });
+    await expect(gw.canResumeImageFromCompletedResult('r')).resolves.toBe(true);
+    const out = await gw.resumeImageFromCompletedResult('r');
+    expect(out.provider).toBe('b');
+    expect(out.model).toBe('b-model');
+  });
+
+  it('额度用尽信号支持结构化错误类型', async () => {
+    const calls: string[] = [];
+    const a = fakeImage('a', async () => { calls.push('a'); throw new ImageUsageLimitError(); });
+    const b = fakeImage('b', async () => { calls.push('b'); return { bytes: grayPng1280x720(), contentType: 'image/png' }; });
+    const gw = new AiGateway({ providers: [textStub()], imageProviders: [a, b], killSwitch: ENABLED_KILL_SWITCH });
+    const out = await gw.generateImage({ prompt: 'x' });
+    expect(calls).toEqual(['a', 'b']);
+    expect(out.provider).toBe('b');
   });
 });

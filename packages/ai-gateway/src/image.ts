@@ -24,6 +24,21 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64 * 1024;
 const failed = () => new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image generation failed');
 
+/**
+ * Definitive provider signal: the account's image allowance is exhausted and the
+ * request was provably never submitted. Only this outcome may move the gateway to
+ * another provider, because any other failure might already have been paid for.
+ * Providers throw this typed error instead of relying on an undocumented message.
+ */
+export class ImageUsageLimitError extends Error {
+  constructor() { super('IMAGE_USAGE_LIMIT'); this.name = 'ImageUsageLimitError'; }
+}
+
+/** Accepts the typed signal and the legacy spool message during migration. */
+export function isImageUsageLimit(error: unknown): boolean {
+  return error instanceof ImageUsageLimitError || (error instanceof Error && error.message === 'USAGE_LIMIT');
+}
+
 export function validateImageRequest(request: ImageRequest): string {
   if (!request || (request.requestId !== undefined && (typeof request.requestId !== 'string' || !CODEX_IMAGE_ID_PATTERN.test(request.requestId))) || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 1500) {
     throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'image prompt must contain 1 to 1500 characters');

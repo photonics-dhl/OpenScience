@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { lstat, open, link, unlink } from 'node:fs/promises';
 import { isAbsolute, join, dirname, parse } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { validateImageRequest, validateImageBytes, type CompletedImageProviderResult, type ImageProvider, type ImageRecoveryState, type ImageRequest, type ImageProviderResult } from './image';
+import { ImageUsageLimitError, validateImageRequest, validateImageBytes, type CompletedImageProviderResult, type ImageProvider, type ImageRecoveryState, type ImageRequest, type ImageProviderResult } from './image';
 import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, imagePromptHash, validateCodexImageRequest, validateCodexImageResult, type ImageSpoolProvider } from './codex-image-protocol';
 export interface CodexSpoolImageConfig {
   inboxDir: string; resultsDir: string; timeoutMs?: number; pollIntervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void>;
@@ -169,7 +169,10 @@ abstract class SpoolImageProvider implements ImageProvider {
       if (bytes) {
         const result = validateCodexImageResult(JSON.parse(bytes.toString('utf8')), this.spoolProvider);
         if (result.id !== id || result.promptHash !== request.promptHash) fail();
-        if (result.status !== 'succeeded') throw new Error(result.errorCode ?? (result.status === 'uncertain' ? 'UNCERTAIN' : 'EXECUTION_FAILED'));
+        if (result.status !== 'succeeded') {
+          if (result.errorCode === 'USAGE_LIMIT') throw new ImageUsageLimitError();
+          throw new Error(result.errorCode ?? (result.status === 'uncertain' ? 'UNCERTAIN' : 'EXECUTION_FAILED'));
+        }
         const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
         if (image.contentType !== 'image/png') fail(); return image;
       }

@@ -24,20 +24,25 @@ async function main(): Promise<void> {
   const logger = createLogger({ level: env.nodeEnv === 'production' ? 'info' : 'debug' });
   const codexImageInboxDir = process.env.CODEX_IMAGE_INBOX_DIR?.trim();
   const codexImageResultsDir = process.env.CODEX_IMAGE_RESULTS_DIR?.trim();
-  const codexImageProvider = env.ai.sceneImageEnabled && process.env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
-    && codexImageInboxDir && codexImageResultsDir
-    ? new CodexSpoolImageProvider({
-        inboxDir: codexImageInboxDir,
-        resultsDir: codexImageResultsDir,
-      })
-    : undefined;
   const chatGptImageInboxDir = process.env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim();
   const chatGptImageResultsDir = process.env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim();
-  const chatGptImageProvider = env.ai.sceneImageEnabled && process.env.HERMES_SCENE_IMAGE_PROVIDER === 'chatgpt-web'
-    && chatGptImageInboxDir && chatGptImageResultsDir
-    ? new ChatGptWebSpoolImageProvider({ inboxDir: chatGptImageInboxDir, resultsDir: chatGptImageResultsDir })
-    : undefined;
-  const recoveryImageProvider = chatGptImageProvider ?? codexImageProvider;
+  // Recovery must be able to inspect whichever spool the worker actually used, so
+  // both kinds are built when configured and selected with the same
+  // primary-then-fallback rule the worker uses. A minimax primary has no spool, so
+  // the configured fallback spool is what an operator can actually recover from.
+  const spoolImageProvider = (kind: string | undefined) => {
+    if (!env.ai.sceneImageEnabled || !kind) return undefined;
+    if (kind === 'codex' && codexImageInboxDir && codexImageResultsDir) {
+      return new CodexSpoolImageProvider({ inboxDir: codexImageInboxDir, resultsDir: codexImageResultsDir });
+    }
+    if (kind === 'chatgpt-web' && chatGptImageInboxDir && chatGptImageResultsDir) {
+      return new ChatGptWebSpoolImageProvider({ inboxDir: chatGptImageInboxDir, resultsDir: chatGptImageResultsDir });
+    }
+    return undefined;
+  };
+  const imagePrimaryKind = process.env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
+  const imageFallbackKind = process.env.HERMES_SCENE_IMAGE_FALLBACK_PROVIDER?.trim() || undefined;
+  const recoveryImageProvider = spoolImageProvider(imagePrimaryKind) ?? spoolImageProvider(imageFallbackKind);
   const app = await buildApp({
     prisma,
     redis,

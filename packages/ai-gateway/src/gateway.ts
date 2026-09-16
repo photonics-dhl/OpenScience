@@ -1,6 +1,6 @@
 import type { AuditSink } from '@openscience/observability';
 import { AiGatewayError } from './errors';
-import { validateImageBytes, validateImageRequest, type ImageProvider, type ImageRequest, type ImageResult } from './image';
+import { isImageUsageLimit, validateImageBytes, validateImageRequest, type ImageProvider, type ImageRequest, type ImageResult } from './image';
 import { imagePromptHash } from './codex-image-protocol';
 import {
   DEFAULT_OCR_LIMITS,
@@ -261,7 +261,7 @@ export class AiGateway {
           succeeded = true;
           return { ...result, model: provider.model, provider: provider.name, promptHash };
         } catch (error) {
-          const usageLimited = error instanceof Error && error.message === 'USAGE_LIMIT';
+          const usageLimited = isImageUsageLimit(error);
           // Only a definitive non-submission may move on; an uncertain outcome must not double-spend.
           if (!usageLimited) throw new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image generation failed');
           lastError = new AiGatewayError('IMAGE_PROVIDER_FAILED', 'IMAGE_USAGE_LIMIT');
@@ -287,31 +287,47 @@ export class AiGateway {
     }
   }
 
+  /**
+   * Recovery deliberately spans the whole image pool. A fallback provider may have
+   * completed the attempt, so consulting only the primary would report "no saved
+   * result" and force an operator into an explicitly charged new generation.
+   * Resuming reads an already-produced result and never submits, so it cannot
+   * double-spend.
+   */
   async canResumeImageBeforeSubmission(requestId: string): Promise<boolean> {
-    const provider = this.imageProviders[0];
-    if (!provider?.canResumeBeforeSubmission) return false;
-    if (!(await this.providerEnabled(provider.name, 'image')).enabled) return false;
-    try { return await provider.canResumeBeforeSubmission(requestId) === true; } catch { return false; }
+    for (const provider of this.imageProviders) {
+      if (!provider.canResumeBeforeSubmission) continue;
+      if (!(await this.providerEnabled(provider.name, 'image')).enabled) continue;
+      try { if (await provider.canResumeBeforeSubmission(requestId) === true) return true; } catch { /* try the next provider */ }
+    }
+    return false;
   }
 
   async canResumeImageFromCompletedResult(requestId: string): Promise<boolean> {
-    const provider = this.imageProviders[0];
-    if (!provider?.canResumeFromCompletedResult) return false;
-    if (!(await this.providerEnabled(provider.name, 'image')).enabled) return false;
-    try { return await provider.canResumeFromCompletedResult(requestId) === true; } catch { return false; }
+    for (const provider of this.imageProviders) {
+      if (!provider.canResumeFromCompletedResult) continue;
+      if (!(await this.providerEnabled(provider.name, 'image')).enabled) continue;
+      try { if (await provider.canResumeFromCompletedResult(requestId) === true) return true; } catch { /* try the next provider */ }
+    }
+    return false;
   }
 
   async resumeImageFromCompletedResult(requestId: string): Promise<ImageResult> {
-    const provider = this.imageProviders[0];
-    if (!provider?.resumeFromCompletedResult || !(await this.providerEnabled(provider.name, 'image')).enabled) {
-      throw new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image provider unavailable');
+    let capable = false;
+    for (const provider of this.imageProviders) {
+      if (!provider.resumeFromCompletedResult) continue;
+      if (!(await this.providerEnabled(provider.name, 'image')).enabled) continue;
+      capable = true;
+      if (provider.canResumeFromCompletedResult) {
+        // Only resume from a provider that positively reports a completed result.
+        try { if (await provider.canResumeFromCompletedResult(requestId) !== true) continue; } catch { continue; }
+      }
+      try {
+        const result = await provider.resumeFromCompletedResult(requestId);
+        return { ...result, model: provider.model, provider: provider.name };
+      } catch { /* try the next provider */ }
     }
-    try {
-      const result = await provider.resumeFromCompletedResult(requestId);
-      return { ...result, model: provider.model, provider: provider.name };
-    } catch {
-      throw new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image recovery failed');
-    }
+    throw new AiGatewayError('IMAGE_PROVIDER_FAILED', capable ? 'image recovery failed' : 'image provider unavailable');
   }
 
   /** 文本补全：primary → fallbacks 逐级回退（§9.3 回退策略配置管理）。 */
