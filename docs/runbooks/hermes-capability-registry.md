@@ -85,6 +85,8 @@
 | 付费图片尝试不可自动重试：`executionAttempt>1` 且无已存结果即 blocked | 桥故障后必须显式重新发起，本次额度已消耗 | 既有保护（防止重复付费与不确定重发）；仅 `canResumeImageFromCompletedResult`/spool 恢复路径可复用原结果。对用户是显式中断，不是透明重试 |
 | 资产审批走 CAS，`expectedUpdatedAt` 过期返回 409 | 并发或延迟下批准失败，需重读时间戳再试（本轮遇到两次） | 调用方需实现"409 → 重读 updatedAt → 重试一次"。目前由操作者手工完成，UI/agent 侧未见统一封装 |
 | 浏览器桥瞬时故障：CSRF 502、`ERR_SSL_PROTOCOL_ERROR`、`ERR_EMPTY_RESPONSE` | 取 token 或导出图片阶段偶发失败，但不影响已生成资产 | 本轮多次遇到并靠重试恢复；无自动重试封装。属可观测的已知抖动，不应据此判断生成失败或更换 provider |
+| 科学/艺术阶段字段长度上限偏紧（subject 描述 ≤100 字符、encoding ≤200） | 修订请求下模型反复压线，出现 `subjects_1_description:length_101_max_100` 这种只超 1 字符的失败，任务直接失败 | 本轮真实发生（任务 `4f95d75f`，两次尝试 129→101 字符均超限）。已把 illustration 三个阶段 `maxRetries` 提到 2（共 3 次尝试）吸收边界抖动；根治方向是让校验反馈明确"只缩短该字段、其余保持不变"，或对非语义性上限放宽少许 |
+| 设计 skill 的构图规则此前到不了 render 阶段 | 只有 `art-directions.md` 能进入真正写 prompt 的 render；`SKILL.md` 的 Planning 段被跳过，infographic 布局画廊（默认 `bento-grid`）却可达，导致多底/分栏 | 已在 v6 修复：新增 `## Visual craft` 并注入 plan/render/review；`art-directions.md` 增「Ground, frame and hierarchy laws」（单一底色、分隔线须承载真实科学边界）。已部署 `1e43f8b6` |
 
 代码去重及v2/局部末审均经独立High静态复核，并完成必要服务器构建/部署；来源/权限/并发重验保持，v1兼容。已观察真实末审、两张不合格成图及原审阅恢复，不能宣称新版科学/审美质量合格；完整所选Claim上下文仍可能触及既有输入上限。治理和这些重构不能把原有科学质量欠缺变成“已完成”。
 
