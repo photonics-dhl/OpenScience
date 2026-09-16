@@ -4,10 +4,13 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { createPersonalWorkspace } from '@openscience/domain';
 import { createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
-import { ChatGptWebSpoolImageProvider, CodexSpoolImageProvider } from '@openscience/ai-gateway';
+import { ChatGptWebSpoolImageProvider, CodexSpoolImageProvider, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 import { buildHybridSearchFromEnv } from './search-runtime';
 import { createSearchPrismaClient, deleteSearchContent, setSearchContentVisibility } from '@openscience/search';
+
+/** Spool providers are the only ones that can answer a recovery question about a paid attempt. */
+type RecoverableImageProvider = ImageProvider & { inspectRecoveryState(requestId: string): Promise<ImageRecoveryState> };
 
 async function main(): Promise<void> {
   const env = loadApiEnv();
@@ -24,22 +27,46 @@ async function main(): Promise<void> {
   const logger = createLogger({ level: env.nodeEnv === 'production' ? 'info' : 'debug' });
   const codexImageInboxDir = process.env.CODEX_IMAGE_INBOX_DIR?.trim();
   const codexImageResultsDir = process.env.CODEX_IMAGE_RESULTS_DIR?.trim();
-  // Recovery tracks the configured primary only. Widening it to a spare spool would
-  // change what the "nothing was submitted" decision reads, so it stays as-is.
-  const codexImageProvider = env.ai.sceneImageEnabled && process.env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'codex'
-    && codexImageInboxDir && codexImageResultsDir
-    ? new CodexSpoolImageProvider({
-        inboxDir: codexImageInboxDir,
-        resultsDir: codexImageResultsDir,
-      })
-    : undefined;
   const chatGptImageInboxDir = process.env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim();
   const chatGptImageResultsDir = process.env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim();
-  const chatGptImageProvider = env.ai.sceneImageEnabled && process.env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'chatgpt-web'
-    && chatGptImageInboxDir && chatGptImageResultsDir
-    ? new ChatGptWebSpoolImageProvider({ inboxDir: chatGptImageInboxDir, resultsDir: chatGptImageResultsDir })
+  const spoolImageProvider = (kind: string): RecoverableImageProvider | undefined => {
+    if (!env.ai.sceneImageEnabled) return undefined;
+    if (kind === 'codex' && codexImageInboxDir && codexImageResultsDir) {
+      return new CodexSpoolImageProvider({ inboxDir: codexImageInboxDir, resultsDir: codexImageResultsDir });
+    }
+    if (kind === 'chatgpt-web' && chatGptImageInboxDir && chatGptImageResultsDir) {
+      return new ChatGptWebSpoolImageProvider({ inboxDir: chatGptImageInboxDir, resultsDir: chatGptImageResultsDir });
+    }
+    return undefined;
+  };
+  // Recovery must see a result the worker's fallback provider produced, otherwise an
+  // operator is pushed into an explicitly charged new generation. Only the worker's
+  // primary provider is the payer, and only its spool may testify that nothing was
+  // submitted: when the primary has no spool at all (minimax) there is no payer to
+  // consult, and promoting a never-used spare into that role would let an empty inbox
+  // authorise reusing a reservation the payer may already have spent.
+  const imagePrimaryKind = process.env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
+  const imageFallbackKind = process.env.HERMES_SCENE_IMAGE_FALLBACK_PROVIDER?.trim() || undefined;
+  const payerImageProvider = spoolImageProvider(imagePrimaryKind);
+  const spareImageProvider = imageFallbackKind && imageFallbackKind !== imagePrimaryKind
+    ? spoolImageProvider(imageFallbackKind) : undefined;
+  if (imageFallbackKind && !payerImageProvider) {
+    logger.warn(`image fallback '${imageFallbackKind}' is configured but primary '${imagePrimaryKind}' has no spool; an interrupted attempt needs an explicitly charged new generation`);
+  }
+  const inspectPooledImageRecoveryState = payerImageProvider
+    ? async (requestId: string): Promise<ImageRecoveryState> => {
+        const inspect = async (provider: RecoverableImageProvider): Promise<ImageRecoveryState> => {
+          try { return await provider.inspectRecoveryState(requestId); } catch (cause) {
+            logger.warn(`image recovery inspection failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+            return 'unsafe';
+          }
+        };
+        // Only a saved result may be answered by the spare, because resuming one is a
+        // read. Every other verdict stays with the payer.
+        if (spareImageProvider && await inspect(spareImageProvider) === 'completed') return 'completed';
+        return inspect(payerImageProvider);
+      }
     : undefined;
-  const recoveryImageProvider = chatGptImageProvider ?? codexImageProvider;
   const app = await buildApp({
     prisma,
     redis,
@@ -50,9 +77,10 @@ async function main(): Promise<void> {
     ...(searchPrisma ? { setSearchContentVisibility: (scope, _visible, tx) => setSearchContentVisibility(searchPrisma, tx, scope) } : {}),
     sceneImageEnabled: env.ai.sceneImageEnabled,
     videoEnabled: env.ai.videoEnabled,
-    ...(recoveryImageProvider ? {
-      canResumeImageBeforeSubmission: (requestId: string) => recoveryImageProvider.canResumeBeforeSubmission(requestId),
-      inspectImageRecoveryState: (requestId: string) => recoveryImageProvider.inspectRecoveryState(requestId),
+    ...(inspectPooledImageRecoveryState && payerImageProvider ? {
+      canResumeImageBeforeSubmission: async (requestId: string) => payerImageProvider.canResumeBeforeSubmission
+        ? await payerImageProvider.canResumeBeforeSubmission(requestId) : false,
+      inspectImageRecoveryState: inspectPooledImageRecoveryState,
     } : {}),
     // P1A-6：审计落库（domain/auth 写操作 + authz.deny 经 deps.audit 流出）
     audit: createPrismaAuditSink(prisma),

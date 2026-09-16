@@ -874,6 +874,12 @@ export function buildGateway(
   if (fallbackImageKind && imageProviders.length > 1 && primaryImageKind !== 'chatgpt-web') {
     console.warn(`image fallback is configured but primary '${primaryImageKind}' cannot report a definitive non-submission; the fallback will not trigger`);
   }
+  // A spool fallback keeps the result on disk, so the recovery path can reuse it. The
+  // API provider keeps none, so an interrupted fallback attempt is only recoverable as
+  // an explicitly charged new generation.
+  if (fallbackImageKind === 'minimax' && imageProviders.length > 1) {
+    console.warn('image fallback provider \'minimax\' keeps no durable result; an interrupted fallback attempt cannot be reused and needs an explicitly charged new generation');
+  }
   const visionPrimaryKey = env.MINIMAX_API_KEY?.trim();
   const visionBackupKey = env.MINIMAX_API_KEY_2?.trim();
   const ocrProviders = env.AI_ENABLED === 'true' && env.MINIMAX_VISION_ENABLED === 'true' && visionPrimaryKey

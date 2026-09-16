@@ -1,5 +1,5 @@
 export { AiGatewayError, type AiGatewayErrorCode } from './errors';
-export { ImageUsageLimitError, isImageUsageLimit, validateImageBytes, MiniMaxImageProvider, type ImageRequest, type ImageProvider, type ImageProviderResult, type ImageResult, type MiniMaxImageConfig } from './image';
+export { ImageUsageLimitError, isImageUsageLimit, validateImageBytes, MiniMaxImageProvider, type ImageRecoveryState, type ImageRequest, type ImageProvider, type ImageProviderResult, type ImageResult, type MiniMaxImageConfig } from './image';
 export {
   AiGateway,
   type AiGatewayOptions,
