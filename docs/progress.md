@@ -1,5 +1,12 @@
 # CURRENT Progress Window
 
+## 2026-09-16 — 交付线对齐、v6 配图与图片链路隐患收口
+- 唯一交付入口定为 `.worktrees/onchip-video-release` 的 `release/onchip-production-line`（＝生产线 `311c980f` ＋我方修复；旧 `codex/onchip-video-release` 缺 journals/学术身份，降级历史线不得发版）。根 `main` 重定位到 `origin/main` 并只作导航；worktree 40→2；AGENTS 增「工作区与发布卫生」（每轮 `git status --porcelain` 必须为空、release 身份须为已推送可解析 SHA、证据放仓库外或已忽略目录）。
+- 部署链修复：服务器无源码 git 仓库，生产 release 目录重建为 `311c980f`；真正阻塞是我方分支带旧版 `deploy.sh`（生产线版本接受裸 40 位 `--rollback-ref`）。剔除违反发布守卫的 `packages/search/generated` 21 个误提交文件后 `4099078b` 部署成功，journals/学术身份保留；后续按正常流程迭代至 `d3a0da3f`→`fa66e89e`。
+- 配图链路三项修复并部署：结构化输出触顶（`escalateMaxTokens` 8192→16384，只在截断时升级一次、不占 schema 重试预算）、字段长度压线（illustration 三阶段 `maxRetries` 2 ＋请求内明确 ≤100 字符）、设计 skill 构图规则到不了 render（v6：`SKILL.md` 新增 `## Visual craft` 并注入 plan/render/review，`art-directions.md` 增「Ground, frame and hierarchy laws」：单一底色、分隔线须承载真实科学边界）。真实链路 `b182c1c5`（上游修订）→ 图 `a7488c14`（单一底色、无装饰分隔线、`m₀`/`p₀` 入可见标签）经用户认可「还可以」。
+- 隐患收口（详见能力台账「当前技术债与处理」）：#2 设计段按语义边界截断；#3 `generateImage` 有界回退只在"确定未提交"前进、带参考图绝不回退、付款方独占"未提交"见证（两轮独立 High，第二轮不 GO 后修回）；F2 API 侧恢复判定池化但**付款方严格等于主 provider 的 spool**，备 spool 只能回答 `completed`，主 provider 无 spool 时完全不注入（第三轮定向 High **GO（代码层）**，H1 类型契约与 M1 付款方按位置认定均已关闭）；Hermes 对话内审批 409 补"重读资产列表"。
+- 验证范围：未跑测试、预检或 CI；仅针对审查指出的编译期风险做过一次 API 依赖闭包的最小定向构建（`pnpm --filter @openscience/api build` exit 0），部署由服务器全量 build 与容器内 dist/source 读回证实。旧图、公开 v1、认可淡彩与真实论文均保留；审美差额与下一步只在[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+
 ## 2026-09-15 — 修复能力接线并追查真实空结果
 - `ba184541` 已部署（rollback `6684e448`），仅跳过全套验收；按原资格恢复两篇 confirmed 来源任务，真实完成 deep 58/58 dense、Quantization 42/42 dense，当前 generation 均 active。Weyl UI POST 200、hybrid，实际召回两篇论文，页面无横向溢出。任务4索引闭环已实证；不等同科学或审美质量完成。
 

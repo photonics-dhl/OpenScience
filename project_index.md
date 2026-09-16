@@ -1,6 +1,6 @@
 # OpenScience (XGS) 项目文件索引
 
-> CURRENT：恢复原定多风格科研配图任务；本批三类的交付差额、版本与下一步唯一见[Hermes CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。工程能力定位/调用观测已有接线，产品目标与用户审美验收尚未自动联动，不称状态治理全部完成。能力按[当前能力索引](docs/runbooks/hermes-capability-registry.md)定向查实现、调用和真实结果；下表日期/版本均为对应改动的历史记录，不作为当前release或自动next action。
+> CURRENT：唯一交付入口是 `.worktrees/onchip-video-release` 的 `release/onchip-production-line`（canonical；旧 `codex/onchip-video-release` 缺 journals/学术身份，为历史线不得发版）。学术机制图本批审美已获用户认可，编辑封面与批量交付仍未完成；工程能力定位/调用观测已有接线，产品目标与用户审美验收尚未自动联动，不称状态治理全部完成。交付差额、版本与下一步唯一见[Hermes CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。能力按[当前能力索引](docs/runbooks/hermes-capability-registry.md)定向查实现、调用和真实结果；下表日期/版本均为对应改动的历史记录，不作为当前release或自动next action。
 
 能力补接入口：`scripts/read-current-management-context.mjs`同读Git/Taskmaster/CURRENT指针；`infra/development-platform/code-intelligence/snapshot_identity.py`绑定成功MCP返回的源码版本。`packages/search/src/runtime-config.ts`共享BGE身份配置；`apps/api/src/{search-runtime,research-object-search}.ts`供私有ResearchList的POST全文检索；`packages/domain/src/agent/search-index-source.ts`及原ingestion确认事务绑定解析来源并提交索引；`scripts/index-confirmed-research-sources.cjs`仅补录本次授权的两篇真实论文，默认列计划、`--apply`复用同一producer。部署及实际效果见[CURRENT任务4](docs/handoff/2026-09-10-hermes-web-image-handoff.md#capability-linkage)，不复制任务状态。必要验证仅限直接风险或已知故障的最小定向范围；不运行过度测试、全套预检或CI。
 
@@ -20,6 +20,9 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 
 | 本轮文件 | 用途 |
 |---|---|
+| `apps/api/src/index.ts` / `packages/config/src/api-env.ts` / `packages/ai-gateway/src/index.ts` / `apps/agent-worker/src/index.ts` / `.env.example` | 图片恢复判定池化：**付款方严格等于主 provider 的 spool**（唯一可作证"未提交"），备 spool 只在 `completed` 时被采纳，主 provider 无 spool 时不注入；kind 解析与 worker 对齐；minimax 备援不可复用结果的启动告警。提交 `f2a9e5b8`/`fa66e89e`，第三轮定向 High GO（H1/M1 关闭），部署与容器读回见 CURRENT |
+| `apps/web/components/hermes/HermesMediaReview.tsx` / `docs/runbooks/hermes-capability-registry.md` | Hermes 对话内审批 409 改为重读资产列表后再报错（原先带陈旧 `updatedAt` 会反复冲突，与 `ResearchPresentation` 既有写法一致）；台账债务行同步 F2 已闭与 F3/F4/F5 残留 |
+| `AGENTS.md` / `.gitignore` / `docs/handoff/` | 「工作区与发布卫生」：唯一交付入口、每轮 `git status --porcelain` 为空、worktree 生命周期与 `prune`、release 身份必须是已推送可解析 SHA、证据不入受控路径；忽略项补 `.Codex/`、`docs/live_2D/` 等 |
 | `packages/domain/src/ingestion/claim-evidence-bridge.ts` / `packages/domain/src/{agent/research-run,research-intelligence/claim-evidence-service}.ts` / `apps/api/src/routes/ingestion-claim-selection-schema.ts` / `apps/api/src/routes/{ingestion,research-runs}.ts` / `apps/web/lib/{api,hermes/ingestion-claim-review}.ts` / `apps/web/components/hermes/IngestionClaimReview.tsx` / `apps/web/messages/{zh,en}.json` | 现有确认链路逐Claim保存原文关系，共享API定义/Domain类型与批次容量；来源折叠，旧请求兼容。配图消费父子关系，状态及局限见CURRENT |
 | `packages/domain/src/ingestion/reviewed-claim-suggestions.ts` / `apps/agent-worker/src/extractor.ts` | 现有末审v5可选逐条建议；P原文定位映射既有Evidence索引，共享契约/批次上限；旧v4精确恢复，原确认入口预填。实现/部署及科学效果见CURRENT |
 | `infra/development-platform/langfuse/README.md` | 独立账号访问、私有凭据交接与按用户要求改密记录；用户已确认登录，采集服务身份不依赖网页登录，文档不存密码 |
