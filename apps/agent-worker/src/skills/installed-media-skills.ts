@@ -51,13 +51,21 @@ function readMarkdown(relativePath: string): string {
 function readMarkdownHeadings(relativePath: string, headings: readonly string[]): string {
   const text = readMarkdown(relativePath);
   const lines = text.split('\n');
-  return headings.map(heading => {
+  // The catalogue is heterogeneous — some style files use "Design Aesthetic", some use
+  // "Color Palette", and the section headings the caller asks for may not exist. If
+  // *any* requested heading is present, return only those that exist; if *none* of the
+  // requested headings are present (or the caller passed none), return the whole file.
+  // Either way, never block on a missing section.
+  const present: string[] = [];
+  for (const heading of headings) {
     const start = lines.indexOf(`## ${heading}`);
-    if (start < 0) throw new Error(`[blocked] Installed design section is unavailable: ${relativePath}#${heading}`);
-    let end = start + 1;
-    while (end < lines.length && !/^#{1,2} /.test(lines[end]!)) end++;
-    return lines.slice(start, end).join('\n');
-  }).join('\n\n');
+    if (start >= 0) {
+      let end = start + 1;
+      while (end < lines.length && !/^#{1,2} /.test(lines[end]!)) end++;
+      present.push(lines.slice(start, end).join('\n'));
+    }
+  }
+  return present.length ? present.join('\n\n') : text;
 }
 function fileExists(relativePath: string): boolean {
   try { statSync(resolve(SKILLS_ROOT, relativePath)); return true; } catch { return false; }
