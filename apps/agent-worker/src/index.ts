@@ -876,8 +876,9 @@ export function buildGateway(
   }
   // A spool fallback keeps the result on disk, so the recovery path can reuse it. The
   // API provider keeps none, so an interrupted fallback attempt is only recoverable as
-  // an explicitly charged new generation.
-  if (fallbackImageKind === 'minimax' && imageProviders.length > 1) {
+  // an explicitly charged new generation. Only chatgpt-web can trigger the fallback, so
+  // this stays quiet for the combinations the warning above already covers.
+  if (fallbackImageKind === 'minimax' && imageProviders.length > 1 && primaryImageKind === 'chatgpt-web') {
     console.warn('image fallback provider \'minimax\' keeps no durable result; an interrupted fallback attempt cannot be reused and needs an explicitly charged new generation');
   }
   const visionPrimaryKey = env.MINIMAX_API_KEY?.trim();
