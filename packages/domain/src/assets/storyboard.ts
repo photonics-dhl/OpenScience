@@ -6,7 +6,12 @@ export const STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX = 100;
 export const STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX = 1000;
 export interface StoryboardRequest {
     locale: 'zh' | 'en';
-    style: 'watercolor' | 'technical' | 'ink';
+    /**
+     * Free-form style id. Resolved against the installed catalogue in
+     * apps/agent-worker/src/skills/installed-media-skills.ts; unknown ids fall back to
+     * `scientific` and log a warning. Legacy values `watercolor` / `ink` are aliased.
+     */
+    style: string;
     instruction: string;
     /** Omitted legacy requests are animation storyboards. */
     output: 'image' | 'video';
@@ -15,6 +20,23 @@ export interface StoryboardRequest {
     revisionMode?: 'art';
     /** Reuse an owned scientifically blocked image plan for a bounded revision. */
     revisionTaskId?: string;
+    /**
+     * Optional figure-level audit from the upstream figure auditor. Each entry steers
+     * one paper figure to a single decision: reuse the source figure, re-render in the
+     * current style, abstract to a different style, or skip it. The planner uses this
+     * to decide whether to author a brand-new scene or to anchor a revised brief on an
+     * existing illustration.
+     */
+    figurePlan?: {
+        figures: Array<{
+            id: string;
+            decision: 'reuse' | 're-render' | 'abstract' | 'skip';
+            /** When abstracting, the target style id; otherwise inferred from request.style. */
+            styleId?: string;
+            /** Optional human-readable caption the planner may surface in narration. */
+            caption?: string;
+        }>;
+    };
 }
 export interface StoryboardDocument {
     schemaVersion: 1;
@@ -52,14 +74,43 @@ function text(value: unknown, max: number, reason: string): string {
 }
 export function parseStoryboardRequest(value: unknown): StoryboardRequest {
     const v = object(value, 'request_shape');
-    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'revisionTaskId', 'revisionMode', 'output'], 'request_keys');
+    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'revisionTaskId', 'revisionMode', 'output', 'figurePlan'], 'request_keys');
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (typeof v.locale !== 'string' || !['zh', 'en'].includes(v.locale) || typeof v.style !== 'string' || !['watercolor', 'technical', 'ink'].includes(v.style) || typeof v.instruction !== 'string' || !v.instruction.trim() || v.instruction.length > 1000
+    if (typeof v.locale !== 'string' || !['zh', 'en'].includes(v.locale)
+        || typeof v.style !== 'string' || !v.style.trim() || v.style.length > 100
+        || typeof v.instruction !== 'string' || !v.instruction.trim() || v.instruction.length > 1000
         || ('baseAssetId' in v && (typeof v.baseAssetId !== 'string' || !uuid.test(v.baseAssetId)))
         || ('revisionTaskId' in v && (typeof v.revisionTaskId !== 'string' || !uuid.test(v.revisionTaskId) || v.output !== 'image' || 'baseAssetId' in v))
         || ('revisionMode' in v && (v.revisionMode !== 'art' || v.output !== 'image' || !v.baseAssetId || 'revisionTaskId' in v))
         || ('output' in v && v.output !== 'image' && v.output !== 'video')) return invalid('request_values');
-    return { locale: v.locale as StoryboardRequest['locale'], style: v.style as StoryboardRequest['style'], instruction: v.instruction.trim(), output: (v.output ?? 'video') as StoryboardRequest['output'], ...(v.baseAssetId ? { baseAssetId: v.baseAssetId as string } : {}), ...(v.revisionTaskId ? { revisionTaskId: v.revisionTaskId as string } : {}), ...(v.revisionMode ? { revisionMode: v.revisionMode as 'art' } : {}) };
+    let figurePlan: StoryboardRequest['figurePlan'] | undefined;
+    if ('figurePlan' in v && v.figurePlan !== undefined && v.figurePlan !== null) {
+        const fp = object(v.figurePlan, 'figure_plan_shape');
+        keys(fp, ['figures'], [], 'figure_plan_keys');
+        if (!Array.isArray(fp.figures) || fp.figures.length > 12) return invalid('figure_plan_count');
+        const decisions = new Set(['reuse', 're-render', 'abstract', 'skip']);
+        figurePlan = {
+            figures: fp.figures.map((raw, index) => {
+                const f = object(raw, `figure_${index}:shape`);
+                keys(f, ['id', 'decision'], ['styleId', 'caption'], `figure_${index}:keys`);
+                if (typeof f.id !== 'string' || !f.id.trim() || f.id.length > 200) return invalid(`figure_${index}:id`);
+                if (typeof f.decision !== 'string' || !decisions.has(f.decision)) return invalid(`figure_${index}:decision`);
+                if ('styleId' in f && (typeof f.styleId !== 'string' || !f.styleId.trim() || f.styleId.length > 100)) return invalid(`figure_${index}:style_id`);
+                if ('caption' in f && (typeof f.caption !== 'string' || f.caption.length > 200)) return invalid(`figure_${index}:caption`);
+                return { id: f.id, decision: f.decision as 'reuse' | 're-render' | 'abstract' | 'skip', ...(f.styleId ? { styleId: f.styleId as string } : {}), ...(f.caption ? { caption: f.caption as string } : {}) };
+            }),
+        };
+    }
+    return {
+        locale: v.locale as StoryboardRequest['locale'],
+        style: v.style,
+        instruction: v.instruction.trim(),
+        output: (v.output ?? 'video') as StoryboardRequest['output'],
+        ...(v.baseAssetId ? { baseAssetId: v.baseAssetId as string } : {}),
+        ...(v.revisionTaskId ? { revisionTaskId: v.revisionTaskId as string } : {}),
+        ...(v.revisionMode ? { revisionMode: v.revisionMode as 'art' } : {}),
+        ...(figurePlan ? { figurePlan } : {}),
+    };
 }
 export function parseStoryboardDocument(value: unknown, selected: readonly string[], output: StoryboardRequest['output'] = 'video'): StoryboardDocument {
     const v = object(value, 'document_shape');

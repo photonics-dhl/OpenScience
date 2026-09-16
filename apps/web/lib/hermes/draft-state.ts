@@ -10,12 +10,14 @@ export interface HermesDraftScope {
 export interface StoredPresentationDraft {
   action: 'storyboard.create' | 'storyboard.revise' | 'scene.image' | 'video.create';
   instruction: string;
-  style: 'watercolor' | 'technical' | 'ink';
+  /** Free-form style id; resolved against the installed catalogue server-side. */
+  style: string;
   language: 'zh' | 'en';
   selected: string[];
   parentId: string;
   revisionMode?: 'art';
   scene: number;
+  figurePlan?: { figures: Array<{ id: string; decision: 'reuse' | 're-render' | 'abstract' | 'skip'; styleId?: string; caption?: string }> };
 }
 
 function key(scope: HermesDraftScope): string {
@@ -45,6 +47,21 @@ export function saveHermesGuideGoal(storage: Storage | null, scope: HermesDraftS
   } catch { return false; }
 }
 
+function isFigurePlanValid(plan: unknown): boolean {
+  if (plan === undefined || plan === null) return true; // optional
+  if (typeof plan !== 'object') return false;
+  const figures = (plan as { figures?: unknown }).figures;
+  if (!Array.isArray(figures) || figures.length > 12) return false;
+  const decisions = new Set(['reuse', 're-render', 'abstract', 'skip']);
+  for (const raw of figures as Array<Record<string, unknown>>) {
+    if (typeof raw.id !== 'string' || !raw.id || raw.id.length > 200) return false;
+    if (typeof raw.decision !== 'string' || !decisions.has(raw.decision)) return false;
+    if (raw.styleId !== undefined && (typeof raw.styleId !== 'string' || !raw.styleId || raw.styleId.length > 100)) return false;
+    if (raw.caption !== undefined && (typeof raw.caption !== 'string' || raw.caption.length > 200)) return false;
+  }
+  return true;
+}
+
 export function loadHermesPresentationDraft(storage: Storage | null, scope: HermesDraftScope): StoredPresentationDraft | null {
   try {
     if (!storage) return null;
@@ -53,8 +70,9 @@ export function loadHermesPresentationDraft(storage: Storage | null, scope: Herm
     const value = JSON.parse(raw) as Partial<StoredPresentationDraft> & { version?: unknown };
     if (value.version !== 1 || !['storyboard.create', 'storyboard.revise', 'scene.image', 'video.create'].includes(String(value.action))
       || typeof value.instruction !== 'string' || value.instruction.length > 1_000
-      || !['watercolor', 'technical', 'ink'].includes(String(value.style)) || (value.language !== 'zh' && value.language !== 'en')
-      || !Array.isArray(value.selected) || value.selected.length > 12 || value.selected.some((id) => typeof id !== 'string' || id.length > 100)
+      || typeof value.style !== 'string' || !value.style.trim() || value.style.length > 100 || (value.language !== 'zh' && value.language !== 'en')
+      || !isFigurePlanValid(value.figurePlan)
+      || !Array.isArray(value.selected) || value.selected.length > 12 || value.selected.some((id: unknown) => typeof id !== 'string' || (id as string).length > 100)
       || (value.revisionMode !== undefined && (value.revisionMode !== 'art' || value.action !== 'storyboard.revise' || !value.parentId))
       || typeof value.parentId !== 'string' || value.parentId.length > 100 || typeof value.scene !== 'number' || !Number.isInteger(value.scene) || value.scene < 0) return null;
     return value as StoredPresentationDraft;
