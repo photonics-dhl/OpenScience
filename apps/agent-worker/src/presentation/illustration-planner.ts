@@ -82,7 +82,22 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
     }) };
   } else {
     const sourceInput = JSON.stringify({ request: settings.instruction, locale: settings.locale, upstream,
-      ...(reusableBase ? { previousIntent: reusableBase.map(scene => scene!.science) } : {}) });
+      ...(reusableBase ? { previousIntent: reusableBase.map(scene => scene!.science) } : {}),
+      // Surface the schema constraints in the user content so the model re-reads them
+      // at output time. Multi-element instructions (e.g. "3 columns: A | B | C") must
+      // become a storyboard with one scene per distinct object — each scene holds
+      // 1-2 subjects and 200/220-char layout/treatment budgets, so a 3-group brief
+      // is a 3-scene storyboard, not a 1-scene 3-subject storyboard.
+      planning: {
+        perStoryboard: { scenes: { min: 1, max: 6, defaultIfMultiObject: 'one scene per distinct object' } },
+        perScene: {
+          subjects: { min: 1, max: 2 },
+          labels: { count: { min: 0, max: 6 }, eachCharLimit: 80 },
+          constraints: { count: { min: 0, max: 2 }, eachCharLimit: 120 },
+          encodingCharLimit: 200,
+        },
+        perArt: { layoutCharLimit: 200, treatmentCharLimit: 220 },
+      } });
     if (sourceInput.length > 100000) throw new Error('[blocked] Illustration analysis exceeds input bounds; select fewer Claims');
     const scienceSkills = loadInstalledMediaSkills(settings.style, settings.instruction, 'science');
     scienceUsage = scienceSkills.usage;
