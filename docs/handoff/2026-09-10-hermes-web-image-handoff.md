@@ -4,6 +4,9 @@
 
 ## 2026-09-15 会话暂停：下个 session 从这里续作
 - **图片链路修复已实证 + 背景修订成图（2026-09-16 最新）**：`e86bd39f` 的输出窗口修复随 `4099078b` 上线后，此前因 `Provider exhausted output allowance before producing text` 失败的背景修订任务一次通过。底稿 `9a10aeda-7b53-4f88-a4ae-af2ddc3493ab`（已批准）→ 场景图 `803e590b-6fa5-4a32-877c-2c691daabd4d` succeeded/draft，导出 `tmp/research-illustration-academic-bg-rev2-803e590b.png` 并已呈现用户，**待用户审美确认**。科学关系、labels、claim/source 均未变，仅动背景与材料。
+- **设计 skill v6：构图法则（2026-09-16）**。根因有二：(a) 加载器此前只把 `SKILL.md` 的 `## Execution` 注入 render 阶段，**构图规则到不了真正写 prompt 的那一步**，而 `bento-grid`（多模块拼版）等 infographic 布局默认可达；(b) 我方"上下分栏＋分隔线＋上下不同底色"的指令本身制造了背景割裂。已改：`references/art-directions.md` 新增「Ground, frame and hierarchy laws」（**单一底色**、**分隔线必须承载真实科学边界否则删除**、单一焦点与阅读顺序、两级文字、中性色需刻意选择且不得同图混用暖底与纯白、目录默认值不等于设计、按栏宽验收）；`SKILL.md` 新增 `## Visual craft` 且被注入 plan/render/**review** 三阶段；版本 5→6（含 provenance）。已部署 `1e43f8b6`。
+- **v6 立刻暴露一个真实科学缺口（闸门工作正常）**：art-only 版面修订 `ec53daf0` 被科学审阅拒绝——编码要求在孔心标注 `m₀`/`p₀`，但 `labels` 未覆盖这两个符号，可见文字无法体现 Bethe 等效源。此前多次修订未发现该缺口。修法须走上游规划（补标签，预算仍 6 条，可合并 `k⊥` 说明）。
+- **上游修订 `4010e4b5` 再次撞上输出截断**（`Provider exhausted output allowance before producing text`），证明隐患 #1 未修完。已实现并提交 `fd5d697a`：`completeStructured` 新增 `escalateMaxTokens`，截断时**只升级一次**输出额度（不占 schema 重试预算），图片链路三处调用点设为 8192→16384；定向单测证明 `[8192,16384]` 序列生效、未开启时仍单次失败（同文件另有 2 个改动前即存在的旧断言不匹配，与本次无关）。部署后需重发上游修订。
 - **图片链路待处理隐患已登记**：见 `docs/runbooks/hermes-capability-registry.md`「当前技术债与处理」末尾新增 6 行（结构化输出触顶无自适应重试、prompt 设计段字符硬截断、单一 image provider 无自动回退、付费图片不可自动重试、审批 CAS 409 需调用方重读重试、浏览器桥瞬时故障）。均附位置、后果与下一步，未解决。
 - 经验已写入 `.memory/memory.jsonl`（`XGS-Release-Identity-Rollback`、`XGS-Release-Guard-GeneratedPaths`、`XGS-Workspace-Hygiene`）。
 - 用户已纠正验证政策：禁止过度测试、全套预检及 CI；允许针对直接风险或已知故障的最小必要定向验证，须说明范围与证据。本轮完成终端验证、必要服务器部署和真实索引/UI观察；未运行项目测试、预检、CI或本机构建。
