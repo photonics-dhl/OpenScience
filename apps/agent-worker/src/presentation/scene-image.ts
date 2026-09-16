@@ -49,7 +49,7 @@ export async function planSceneImagePrompt(gateway: Pick<AiGateway, 'completeStr
     { role: 'system', content: `${SCIENTIFIC_ART_DIRECTION_SKILL.instructions}\nThis scene is already approved. Realize its art direction; do not redesign the narrative or substitute another style. Within the existing brief budget preserve the focal relationship, concrete style treatment, readable label placement and cross-scene conventions. Omit decorative detail before essential source qualifiers. No additional model or image calls are authorized by these planning instructions.` },
     { role: 'system', content: designSkills.instructions },
     { role: 'user', content: input },
-  ], { temperature: 0.2, validationFeedback: () => feedback });
+  ], { temperature: 0.2, maxTokens: 8192, maxRetries: 1, validationFeedback: () => feedback });
   const prompt = `${wrapper}\nDRAWING_BRIEF_BEGIN\n${planned.brief.trim()}\nDRAWING_BRIEF_END\n${presentationRules}`;
   if (prompt.length > IMAGE_PROMPT_LIMIT) throw new Error('[blocked] Illustration brief exceeds image provider bounds');
   return prompt;
