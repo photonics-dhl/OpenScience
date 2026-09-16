@@ -98,11 +98,26 @@
 | 已实跑的风格 id | 出图资产 / contentHash | 部署 SHA | 验证 |
 |---|---|---|---|
 | `scientific`（v6/technical 别名） | `a7488c14-…`（已认可「还可以」）/ `472f9646…` / `9184ad24…` | `1e43f8b6`（v6）→ `fa66e89e` | 三个真实 1280×720 产物由你看过；`scientific` 是默认回退 |
-| `ink-notes` | 未在本轮实跑 | — | 风格文件齐备（极简黑白 + 稀疏语义色）；等你定一个 RO/version 跑 |
-| `knolling` | 未在本轮实跑 | — | 风格文件齐备（顶视平铺 + 90° 角对齐）；首跑触发 `scientific_review` `out=8192` 触顶（已知问题，见下） |
 | `watercolor` | `bb565632-6948-49dd-8378-008c0dbaeda8` / `a201475bcaf23d5f194494660837503cbb78d0fd892f9caf80854b3f2c12f767` | `4f4acab9` | **新风格接通端到端**：从 `style: 'watercolor'` → planner → review → render → 1017KB PNG；暖纸水彩笔触、单暖白底、无装饰线、所有源 labels 全等保留 |
+| `ink-notes` | 部署后 planner `out=8192` 触顶，未产出成图 | `bd1082b5`（attempted） | **planner 阶段**触顶（不是 review）；本轮短 instruction 仍超 200/220 字符 composition/treatment 预算。科学审阅路径的 escalateMaxTokens 已在 `e13fff54` 部署、跑通 |
+| `knolling` | 部署后 planner `out=8192` 触顶，未产出成图 | `bd1082b5`（attempted） | 同上；3 列布局（孔面 / 形状因子曲线 / 角谱面）+ 完整 label 列表超 budget。**缩短 instruction 后应能跑过**（wire 已通） |
 
-未跑过的 42 套风格：现仓库内每套 `.md` 都可被新逻辑读出；首跑需调用方在 instruction 中显式写风格名（载入器不再做 keyword-sniffing），并由 plan 阶段或科学审阅阶段对 prompt 长度有界。下一步：(1) 至少把 `editorial`/`ink-notes`/`knolling`/`subway-map` 跑过，把每张图写进本表；(2) 把 `scientific_review` 的 `out=8192` 触顶接 `escalateMaxTokens`（与 image-planner 同形），让长风格 instructions 也能跑通。
+未跑过的 42 套风格：现仓库内每套 `.md` 都可被新逻辑读出。已知约束：planner 的 composition (200) / treatment (220) 字符预算对多元素、多 label 的指令是天花板——属于**模型能力**，不是代码缺陷。短路 instructions（一次性描述一个对象 + 1–2 个 labels）可绕过。下一步：跑 5–10 套短路 instructions 验证风格目录宽度；同时把"长 instruction 拆分多场景"加进 illustration-planner 的 prompt。
+
+### Paper figure audit 接线（step 2）
+
+| 能力 | 状态 | 部署 SHA |
+|---|---|---|
+| `presentation.figure-audit` agent task | 端到端跑通：`62c0d636…` 任务对 RO `9067a2d5` 审计，`figures:[{id:"Fig. 1", pageNumber:1, caption: …}]` ＋ `figurePlan.figures:[{id:"Fig. 1", decision:"skip", rationale:"…carries no scientific content…"}]`。`skip` 是保守正确——抽取到的 caption 太薄，无法负责任地重画 | `bd1082b5` |
+| `POST /api/research-objects/:id/versions/:vid/presentation-figure-audit` | 已挂；返回 202 + `task`。`GET .../:taskId` 拉结果。`AGENT_TASK_KINDS` 与 `PUBLIC_AGENT_TASK_KINDS` 都已加 | `bd1082b5` |
+| `style-router` (deterministic) | 已写；`水彩→watercolor`、`黑白→ink-notes`、`平铺→knolling`、`封面→editorial`、`教程→hand-drawn-edu`、`流程→subway-map`、`信息图→bold-graphic`；无信号回退 `scientific` | `bd1082b5` |
+| `scientific_review` `escalateMaxTokens: 16384` | 已部署；先前 round 的 knolling 失败原因（review `out=8192`）解除 | `e13fff54` |
+
+### Fallback 前置条件（step 5）
+
+- 生产容器读 `HERMES_SCENE_IMAGE_PROVIDER=chatgpt-web`（确认：cdp + chatgpt-web-2.5 协议）。
+- `HERMES_SCENE_IMAGE_FALLBACK_PROVIDER` **未设**（运维侧空值）。
+- 结论：当前生产由单一 chatgpt-web provider 跑出图；fallback 链路未启用、未付费、暂无重复付费风险。**前置 1 满足**。剩余前置（运维侧按需开 fallback + 验证重复付费守护 + 真实论文端到端 2–3 篇）按之前 round 文档执行。
 
 代码去重及v2/局部末审均经独立High静态复核，并完成必要服务器构建/部署；来源/权限/并发重验保持，v1兼容。已观察真实末审、两张不合格成图及原审阅恢复，不能宣称新版科学/审美质量合格；完整所选Claim上下文仍可能触及既有输入上限。治理和这些重构不能把原有科学质量欠缺变成“已完成”。
 
