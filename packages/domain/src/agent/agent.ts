@@ -28,7 +28,7 @@ import { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIn
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
 export const AGENT_TASK_KINDS = [
-  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'presentation.generate', 'workspace.guide', 'search.index', 'source.retrieve',
+  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'presentation.generate', 'presentation.figure-audit', 'workspace.guide', 'search.index', 'source.retrieve',
 ] as const;
 export const PUBLIC_AGENT_TASK_KINDS = [
   'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'presentation.figure-audit',
@@ -485,7 +485,12 @@ async function persistAgentTaskCoreInTransaction(
     throw new AgentError('VALIDATION_ERROR', '不支持的 Hermes 任务类型');
   }
   if ((session.kind === 'workspace.guide') !== (input.kind === 'workspace.guide')) {
-    throw new AgentError('VALIDATION_ERROR', 'Hermes 任务与会话类型不匹配');
+    // presentation.figure-audit and review.analyze are read-only derivations and may
+    // run inside a workspace.guide session; they are not themselves workspace.guide
+    // tasks, but the XOR above is the only session-type guard the caller relies on.
+    if (input.kind !== 'presentation.figure-audit' && input.kind !== 'review.analyze') {
+      throw new AgentError('VALIDATION_ERROR', 'Hermes 任务与会话类型不匹配');
+    }
   }
   let workspaceId: string | null = null;
   if (session.researchObjectId) {
