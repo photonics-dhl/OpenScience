@@ -288,17 +288,17 @@ export class AiGateway {
   }
 
   /**
-   * Recovery deliberately spans the whole image pool. A fallback provider may have
-   * completed the attempt, so consulting only the primary would report "no saved
-   * result" and force an operator into an explicitly charged new generation.
-   * Resuming reads an already-produced result and never submits, so it cannot
-   * double-spend.
+   * Only the provider that would actually be paid is a valid witness for "nothing
+   * was submitted". A spare spool that never ran reports an empty inbox, so letting
+   * any provider answer would let an operator retry a request the payer already
+   * charged for. Disabled providers are skipped, so "primary disabled, fallback is
+   * the payer" still resolves correctly.
    */
   async canResumeImageBeforeSubmission(requestId: string): Promise<boolean> {
     for (const provider of this.imageProviders) {
-      if (!provider.canResumeBeforeSubmission) continue;
       if (!(await this.providerEnabled(provider.name, 'image')).enabled) continue;
-      try { if (await provider.canResumeBeforeSubmission(requestId) === true) return true; } catch { /* try the next provider */ }
+      if (!provider.canResumeBeforeSubmission) return false;
+      try { return await provider.canResumeBeforeSubmission(requestId) === true; } catch { return false; }
     }
     return false;
   }

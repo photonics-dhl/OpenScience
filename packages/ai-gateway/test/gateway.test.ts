@@ -385,4 +385,16 @@ describe('图片 provider 回退（只有确定未提交才前进）', () => {
     expect(calls).toEqual(['a', 'b']);
     expect(out.provider).toBe('b');
   });
+
+  it('before_submission 只认付款方，备用 spool 的空证明不能放行重试', async () => {
+    let backupAsked = false;
+    const payer: ImageProvider = { name: 'payer', model: 'p', generate: async () => { throw new Error('nope'); } };
+    const spare: ImageProvider = {
+      name: 'spare', model: 's', generate: async () => { throw new Error('nope'); },
+      canResumeBeforeSubmission: async () => { backupAsked = true; return true; },
+    };
+    const gw = new AiGateway({ providers: [textStub()], imageProviders: [payer, spare], killSwitch: ENABLED_KILL_SWITCH });
+    await expect(gw.canResumeImageBeforeSubmission('r')).resolves.toBe(false);
+    expect(backupAsked).toBe(false);
+  });
 });
