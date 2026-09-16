@@ -89,6 +89,20 @@
 | 设计 skill 的构图规则此前到不了 render 阶段 | 只有 `art-directions.md` 能进入真正写 prompt 的 render；`SKILL.md` 的 Planning 段被跳过，infographic 布局画廊（默认 `bento-grid`）却可达，导致多底/分栏 | 已在 v6 修复：新增 `## Visual craft` 并注入 plan/render/review；`art-directions.md` 增「Ground, frame and hierarchy laws」（单一底色、分隔线须承载真实科学边界）。已部署 `1e43f8b6` |
 | `resumeFromCompletedResult` 只校验 spool 内 reservation↔result 的 promptHash，不比对本次重试**新编译**的 prompt | 设计规则或 prompt 编译在两次尝试之间变化时会静默复用旧图（F2 修好后备 provider 的结果首次可达） | 位置 `packages/ai-gateway/src/codex-image.ts` 的 resume 系列 ＋ `apps/agent-worker/src/presentation/handler.ts` 的 completed 恢复分支；属既有 resume 语义（本轮首次可达），非本次回归。下一步：resume 前比对编译产物身份，或至少把 prompt 摘要写入 provenance 供审计 |
 | "只有 chatgpt-web 能报确定未提交"是**运行事实**而非代码约束 | 将来 runner 一旦生产 `USAGE_LIMIT`，codex 作主也会合法触发回退，而 worker 的启动告警（非 chatgpt-web 主时提示"回退不会触发"）不会响 | `packages/ai-gateway/src/codex-image.ts` 已把 `USAGE_LIMIT` 转成 `ImageUsageLimitError`，`infra/codex-image-runner/core.mjs` 也接受该码，仅 runner 不产出。台账与 `.env.example` 已按"当前运行事实"表述；改 runner 时须同步告警条件与启用前置 |
+| 风格目录此前未接通：`loadInstalledMediaSkills` 只对 `instruction` 关键词做匹配；未指定时一律回退到 `scientific` | 用户侧选了 `ink-notes` / `knolling` 等新风格，planner 仍按 v6 technical 走；A/C 路径质量差异的根因 | `StoryboardRequest.style` 改为自由字符串（限 100 字符），`loadInstalledMediaSkills` 在四个阶段都加载所选风格，依赖文章通过 `STORYBOARD_STYLE_ALIASES`/`canonicalStoryboardStyle` 在 server 端归一化。已部署 `564f30b3`/`33faf018`/`4f4acab9`；见下方"风格矩阵"表 |
+
+### 风格矩阵（截至 2026-09-16，仓库内可用风格）
+
+`apps/agent-worker/src/skills/installed-media-skills.ts` 把 `StoryboardRequest.style` 解析为 22 套 article-illustrator + 24 套 infographic 风格 + 4 套调色板 + 6 套渲染 + 21 套布局（全部 `.agents/skills/baoyu-*` MIT 文件）。`v6`（technical）、`watercolor`、`ink` 三个 legacy 别名经 `canonicalStoryboardStyle` 归一化。`presentation-asset.ts:400` 的 revision 等值检查已用同一张表对齐，避免 d3a0da3f 时代任务的 `technical` 标识无法按新风格重试。
+
+| 已实跑的风格 id | 出图资产 / contentHash | 部署 SHA | 验证 |
+|---|---|---|---|
+| `scientific`（v6/technical 别名） | `a7488c14-…`（已认可「还可以」）/ `472f9646…` / `9184ad24…` | `1e43f8b6`（v6）→ `fa66e89e` | 三个真实 1280×720 产物由你看过；`scientific` 是默认回退 |
+| `ink-notes` | 未在本轮实跑 | — | 风格文件齐备（极简黑白 + 稀疏语义色）；等你定一个 RO/version 跑 |
+| `knolling` | 未在本轮实跑 | — | 风格文件齐备（顶视平铺 + 90° 角对齐）；首跑触发 `scientific_review` `out=8192` 触顶（已知问题，见下） |
+| `watercolor` | `bb565632-6948-49dd-8378-008c0dbaeda8` / `a201475bcaf23d5f194494660837503cbb78d0fd892f9caf80854b3f2c12f767` | `4f4acab9` | **新风格接通端到端**：从 `style: 'watercolor'` → planner → review → render → 1017KB PNG；暖纸水彩笔触、单暖白底、无装饰线、所有源 labels 全等保留 |
+
+未跑过的 42 套风格：现仓库内每套 `.md` 都可被新逻辑读出；首跑需调用方在 instruction 中显式写风格名（载入器不再做 keyword-sniffing），并由 plan 阶段或科学审阅阶段对 prompt 长度有界。下一步：(1) 至少把 `editorial`/`ink-notes`/`knolling`/`subway-map` 跑过，把每张图写进本表；(2) 把 `scientific_review` 的 `out=8192` 触顶接 `escalateMaxTokens`（与 image-planner 同形），让长风格 instructions 也能跑通。
 
 代码去重及v2/局部末审均经独立High静态复核，并完成必要服务器构建/部署；来源/权限/并发重验保持，v1兼容。已观察真实末审、两张不合格成图及原审阅恢复，不能宣称新版科学/审美质量合格；完整所选Claim上下文仍可能触及既有输入上限。治理和这些重构不能把原有科学质量欠缺变成“已完成”。
 
