@@ -1,0 +1,28 @@
+docs(illustration): record the planner model-capability ceiling from this round
+
+This round tested both `option 1` (planner schema hint) and `option 2`
+(review-path more retries + higher escalation):
+
+- `8e1e4b2b` reverted the hint because it made the review path longer
+  and the review hit the 16384 ceiling.
+- `111a8558` re-added the hint AND bumped review `maxRetries` to 2.
+- `590d1b76` found that the `attempt -= 1; continue;` pattern in the
+  gateway loop was eating the new retry slot, fixed it, and bumped
+  review `escalateMaxTokens` to 24576.
+
+The wiring is now correct end to end: knolling produced a real
+multi-scene storyboard, the review path escalated from 8192 to 16384
+and the verdict came back, then the planner re-ran for the retry
+phase and at every attempt produced output past the 200-char encoding
+budget (`encoding:length_350_max_200`) and the 100-char subject
+budget (`subjects_1_description:length_141_max_100`). The model does
+not auto-shorten to fit hard character budgets; the retry feedback
+made it produce progressively shorter responses, not progressively
+shorter fields within the budget.
+
+This is now clearly a model capability ceiling on the planner side,
+not a code path. The registry debt table now reflects the
+`maxRetries: 2` and `escalateMaxTokens: 24576` state of the
+scientific_review path, the fix for the `attempt -= 1;` quirk, and
+the planner budget as the next thing to attack.
+
