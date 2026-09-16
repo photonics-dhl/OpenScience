@@ -123,7 +123,7 @@ Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,co
     }
     const science = await gateway.completeStructured((value): value is Record<string, unknown> => {
       try { materializeScience(value); return true; } catch (error) { diagnostic = error instanceof Error ? error.message : 'invalid_scientific_intent'; return false; }
-    }, scienceMessages, { temperature: 0.1, includeRejectedResponseOnRetry: true, maxRetries: 1, maxTokens: 8192, escalateMaxTokens: 16384,
+    }, scienceMessages, { temperature: 0.1, includeRejectedResponseOnRetry: true, maxRetries: 2, maxTokens: 8192, escalateMaxTokens: 16384,
       validationDiagnostic: () => diagnostic.toLowerCase().replace(/[^a-z0-9_,:-]+/gu, '_').slice(0, 400),
       validationFeedback: () => `Correct this scientific-intent field: ${diagnostic}. Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,constraints,encoding}]}; each subject is {description,basis:{sourceId}}. No schemaVersion or illustration wrapper. Keep one narrow supported relationship, encoding<=200 characters; select one of the provided s-prefixed sourceId values, not database IDs, quoteId or fabricated quotations. Use single-line Unicode mathematical notation, with no unescaped TeX backslashes. If the compiled prompt exceeds its limit, reduce optional labels or scope while preserving essential qualifiers; leave room for art direction.` });
     intent = materializeScience(science);
@@ -153,7 +153,7 @@ Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,co
   }
   const art = await gateway.completeStructured((value): value is Record<string, unknown> => {
     try { combineArt(value); return true; } catch (error) { diagnostic = error instanceof Error ? error.message : 'invalid_art_direction'; return false; }
-  }, artMessages, { temperature: 0.3, includeRejectedResponseOnRetry: true, maxRetries: 1, maxTokens: 8192, escalateMaxTokens: 16384,
+  }, artMessages, { temperature: 0.3, includeRejectedResponseOnRetry: true, maxRetries: 2, maxTokens: 8192, escalateMaxTokens: 16384,
     validationDiagnostic: () => diagnostic.toLowerCase().replace(/[^a-z0-9_,:-]+/gu, '_').slice(0, 400),
     validationFeedback: () => `Art direction failed: ${diagnostic}. Return exactly {"scenes":[{"layout":"a short text description of placement","treatment":"a short text description of material and typography"}]}, one entry per supplied intent. Both fields must be strings, not objects, arrays or null. Use the requested locale and per-scene layoutCharacterLimit from the input; keep treatment below 220 characters. Shorten only art prose if the complete drawing prompt exceeds 1500 characters. Science fields cannot be edited.` });
   const designSkills = mergeDesignSkillUsage(scienceUsage, artSkills.usage);
@@ -232,7 +232,7 @@ Return exactly {"changes":[{"sceneIndex":0,"labelIndex":0,"prefix":"short clarif
   }
   const patch = await gateway.completeStructured((value): value is Record<string, unknown> => {
     try { apply(value); return true; } catch (error) { diagnostic = error instanceof Error ? error.message : 'invalid_label_clarification'; return false; }
-  }, messages, { temperature: 0.1, maxRetries: 1, maxTokens: 8192, escalateMaxTokens: 16384, includeRejectedResponseOnRetry: true,
+  }, messages, { temperature: 0.1, maxRetries: 2, maxTokens: 8192, escalateMaxTokens: 16384, includeRejectedResponseOnRetry: true,
     validationDiagnostic: () => diagnostic.toLowerCase().replace(/[^a-z0-9_,:-]+/gu, '_').slice(0, 400),
     validationFeedback: () => `Repair only the changes object: ${diagnostic}. Use existing sceneIndex/labelIndex, prefix/suffix strings<=30 characters, complete label<=80. Do not return a complete scene or alter other fields. If existing labels cannot be clarified to address the review, return {"changes":[]}.` });
   const document = apply(patch);
