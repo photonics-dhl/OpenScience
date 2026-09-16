@@ -65,3 +65,11 @@ apps/web/test/visual/out/
 /.venv/
 /.cache/huggingface/
 /models/
+
+# 本机工具配置与大体量本地素材：保留在磁盘但不入库（2026-09-16 工作区清理）
+.Codex/
+docs/live_2D/
+docs/user_ideas/**/*.png
+docs/user_ideas/**/*.zip
+docs/user_ideas/**/*.xlsx
+token-smart-live-workflow/

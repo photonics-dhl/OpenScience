@@ -1,12 +1,21 @@
+> CURRENT 导航：实际交付位于 `.worktrees/onchip-video-release` / `codex/onchip-video-release`；版本、当前任务和后续动作只读 [Hermes CURRENT handoff](.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md)，能力查询读该树的 [当前能力索引](.worktrees/onchip-video-release/docs/runbooks/hermes-capability-registry.md)。根目录 dirty main 不作生产或能力事实基线；不在此重复release、旧计划或next action。
+
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-26 13:03 +08）：** working branch/application/immutable release `codex/hermes-wanko-live2d@2934476`；local main / origin main `c60ffdd` / `7eb2f5b`；ECS release / rollback 为 `2934476` / `58614c0`。后续 docs-only HEAD 不改变 application 身份；只有本锚点与主题唯一 CURRENT handoff 可决定当前状态。
+> 旧续作入口已失效；使用顶部交付工作树CURRENT链接。禁止测试/预检/CI/本机构建，必要服务器build/start按已有授权执行。
+
+| `docs/user/_ideas/token-smart-share-20260907/` / `docs/user/_ideas/token-smart-share-20260907.zip` / `docs/user/_ideas/token-smart-share-20260908-continuity.zip` / `docs/user/_ideas/token-smart-share-20260908-scientific-handoff.zip` | 用户指定全局skills跨项目分享包（含安装/AGENTS/prompt/验证） | 2026-09-07已生成，本地交付；不含账号/项目数据 |
 
 ## 根目录
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `AGENTS.md` | 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
+| `AGENTS.md` | 产品落地优先；默认不预检/测试，例外仅最小必要服务器检查； 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
+| `docs/runbooks/codex-token-smart.md` | 自动省量操作方案、全局 token-smart 与 run-check.mjs、实际模型分工及网页对照证据 | HISTORICAL配置/对照记录；最新实际路由、部署与失败验收见顶部CURRENT工作区的文献恢复计划；不得冒充完整节省率 |
+| `.agents/skills/using-superpowers/SKILL.md` / `.agents/skills/brainstorming/SKILL.md` / `.agents/skills/writing-plans/SKILL.md` / `.agents/skills/writing-skills/SKILL.md` / `.agents/skills/repo-map/SKILL.md` | 按需流程与文档规范；明确任务复用授权，只读发现不写旧阶段文档 | 2026-09-07 精简 |
+| `.agents/skills/test-gate/SKILL.md` / `.agents/skills/test-driven-development/SKILL.md` / `.agents/skills/verification-before-completion/SKILL.md` / `.agents/skills/finishing-a-development-branch/SKILL.md` | 按风险验证与相同状态证据复用；保留必要回归和阶段/合并要求 | 2026-09-07 精简 |
+| `.agents/skills/using-git-worktrees/SKILL.md` / `.agents/skills/subagent-driven-development/SKILL.md` / `.agents/skills/requesting-code-review/SKILL.md` | 项目包管理器、隔离安全、按风险独立复核；避免重复 agent 工作 | 2026-09-07 精简 |
+| `.agents/skills/subagent-driven-development/implementer-prompt.md` / `.agents/skills/subagent-driven-development/task-reviewer-prompt.md` / `.agents/skills/subagent-driven-development/re-review-prompt.md` / `.agents/skills/using-superpowers/references/codex-tools.md` / `.agents/skills/writing-skills/testing-skills-with-subagents.md` | 按入口授权/实际模型/风险范围同步历史模板，保留压力情景与审查能力 | 2026-09-07 精简 |
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | Codex global `ui-ux-pro-max` / `baseline-ui` Skills + `shadcn` MCP | 2026-08-24 为 Hermes 互动视觉纠偏启用：Skills 固定审计提交 `bc826e2` / `bdbcc56`；shadcn 固定 `4.19.0`、cwd 为当前 worktree `apps/web`，MCP 初始化握手通过；不把资料库命中替代用户审美验收 | **本机工具能力，不入库**；重启 Codex 后自动发现 Skills/MCP |
@@ -386,3 +395,7 @@
 | 路径 | 说明 |
 |---|---|
 | `方案0723.docx` | 早期脑暴稿，2026-07-24 被 Baseline v1.0 取代，用户确认放弃，不归档 |
+
+- HISTORICAL `docs/runbooks/server-capabilities.md`：服务器已有资源路径及复用规则；2026-09-09定向盘点，与交付worktree同步，禁止重复下载已有浏览器。
+
+- CANDIDATE `docs/runbooks/chatgpt-browser.md`：服务器复用浏览器交互研究，镜像已构建、容器启动待修，非生产生图Provider；实现位于交付worktree。

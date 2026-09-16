@@ -1,6 +1,28 @@
-# OpenScience 进度（CURRENT window）
+> 当前进度只读 [交付树 CURRENT handoff](../.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md) 与 [短进度](../.worktrees/onchip-video-release/docs/progress.md)。本目录 dirty main 的下文全部是历史记录，不作为版本或下一步；原文保留。
 
-> 最新同步：2026-08-26 19:59 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> HISTORICAL 2026-09-13：交付树 codex/onchip-video-release HEAD/origin a3025b8b500d44416497ad6dea44509f9e5ec97d（设计文档）；最近实测应用c0bc653d745e0dd84b8598a1e23cd80472559386 / rollback871ed7025168fdeb68cca98398590d9d3a1e2c03。用户已逐项确认草稿/公开版本分离、历史入口迁移、个人空间删除与30天回收站；spec与ADR-014已落盘、独立High设计PASS，尚未实施，本轮无服务器/测试/删除/发布。下一步按方案实施，保护第二篇正确图文与已有公开链接。唯一CURRENT：E:/Miscellaneous/XGS/.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md；方案docs/specs/2026-09-13-draft-publication-trash-design.md。根dirty main非生产基线。
+> HISTORICAL入口更新2026-09-08：production407ad49e / rollback88018512；当前产品状态以 E:/Miscellaneous/XGS/.worktrees/onchip-video-release/docs/handoff/2026-08-16-hermes-2d-pet-handoff.md 为准。用户禁止继续测试，以下旧版本与测试待办仅为历史。
+
+> 2026-09-08 用户强约束更新：AGENTS.md 已明确产品落地优先，默认不做预检/测试；仅对具体重大风险或阻塞故障做最小必要服务器检查。此条只更新执行政策，不改变下方产品版本与完成状态。
+
+> HISTORICAL 2026-09-08：production97aa06a5 / rollbackc5b0dd71。实际工作区`.worktrees/token-smart-live-workflow`；真实视频已生成，技术/画面/播放验收通过，待用户试听。唯一当前状态见该工作区HISTORICAL handoff。
+
+# OpenScience 进度（HISTORICAL window）
+
+> 最新同步：2026-09-08，当前产品请转 `.worktrees/token-smart-live-workflow/docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`。本目录是保留用户改动的旧main@b9616cb，以下早期配置/产品记录不决定当前状态。
+
+## 2026-09-08 — 当前产品交接入口
+
+- 生产/public b361f4f7781b760583b3a312829877c4d6310e8a，rollback a73f273f7079819579962aa6eff31c1dd9368b08；PR107 CI及canonical服务器build/Parser16/迁移/运行时/公网验收通过。release source为onchip-video-release工作树，开发证据仍在token-smart-live-workflow。
+- 真实论文六字段已确认/commit，同版本Claim桥接在bbox精度修复后通过。网页6Pro已给科学措辞和五场设计；生产图片/视频runner已启用，实际媒体与播放验收继续。整体净节省率未知；不得把fixture或演示视频当真实论文完整流程。
+- 工作分支codex/token-smart-live-workflow；完整证据、实际模型路由与未完成项均在上方HISTORICAL交接及其文献恢复计划。根目录其他用户改动保留，不执行reset/pull/stash。
+## 早期配置检查点 — Codex 配置与 Skills 精简
+
+- 省量最终验收：新Terra与网页原始实现均2036项通过；普通Chat不计Codex，新增按模型/缓存的credits估算器。Terra执行估算5.357 credits；后续Luna独立取回与2036项验收已通过，新增逐字保存脚本；操作侧估算低63.52%，不等于整任务净节省。包含本轮配置诊断则没有净节省，完整复杂任务净收益尚未验证；方案与证据见 codex-token-smart runbook。
+
+- 用户授权精简全局/项目工作流；安装全局 token-smart 并适配人工 Chat 交接，未安装自动桥接或更改模型/权限/代理。已有用户改动保留。
+- 收窄过度触发、重复设计审批/测试/agent 复核，保留安全/科研验证；AGENTS 常驻模块历史改为索引与 runbook 入口。详见 `docs/runbooks/codex-token-smart.md`，备份在用户 Codex 目录。
+- 本地 `main@b9616cb` 起点；本任务无产品部署，ECS release/rollback 未重验、未改变。配置验证记录存于备份目录 `validation.json`。
 
 ## 2026-08-26 — Hermes Research Intelligence Foundation 本地实现
 
@@ -16,7 +38,7 @@
 - 用户确认 LLM OCR 作为平台自动处理能力，不再逐文档询问；仍须经 AI Gateway、最小页路由、来源标记与审计，生成结果不得冒充原始证据。
 - 仅检查注入状态、不读取或输出 `.env` 值：本机 Tavily 已注入但额度耗尽，Semantic Scholar 常用变量未进入当前进程；生产 `agent-worker` 已注入 MiniMax，尚未注入 Tavily/Semantic Scholar。用户在聊天中暴露的凭据必须轮换后再配置。
 - SSH key 已用同一密钥只读复验成功。历史误报由 Windows 裸 `bash` 命中 WSL 导致；2026-08-26 又确认自动化执行器的 `shell=` 抽象层也会误入 WSL，只有 PowerShell 显式 `& 'C:\Program Files\Git\bin\bash.exe'` 才是可靠入口。`AGENTS.md` 与 deployment §1.1 已锁定根因签名，禁止再误判为密钥失败；未改产品代码、未写服务器、未部署。
-- Taskmaster `optical-editorial-v3` 历史 tag 为 15/15；CURRENT `hermes-research-intelligence` 为 1/12 done，下一唯一 ready 项为 Task 2 `Prisma Schema and Core Domain Models`，其余 10 项等待依赖。
+- Taskmaster `optical-editorial-v3` 历史 tag 为 15/15；HISTORICAL `hermes-research-intelligence` 为 1/12 done，下一唯一 ready 项为 Task 2 `Prisma Schema and Core Domain Models`，其余 10 项等待依赖。
 - 实施保持四个可回滚阶段：Foundation 已建立能力台账机器门禁、自有 corpus 与现状 parser 基准；后续再依实测依次进入文档/OCR/搜索、兴趣/外部检索、RO/富媒体/生产验收。
 
 ## Current version tuple
@@ -62,19 +84,17 @@
 
 - §13.3–13.5 的历史试错已收敛为一张暖纸 carried tool sheet、单闭合 SVG 口部气泡、可见帽顶 `24–48px` 间距和真实 `360/200px` 角色；悬空页注、宽尾、内部标签遮挡、移动 control overlap 与 research 分组漂移均已废止。
 - 12 项 action/motion/zh/en 映射、右键/Shift+F10/Menu/长按、普通点击 drawer、focus、reduced-motion 与 mouth-relative bottom anchor 均有合同；历史 `62/62` 只能证明功能，视觉接受仍以 §13.5 原尺寸人工审图为门。
-- `8ed2f3c`、`cbf5737` 等历史发布的 build、27 migrations、容器、入口和 no-write 证据由 Git 与 deployment runbook 保存；本 CURRENT window 不再重复完整部署日志。
+- `8ed2f3c`、`cbf5737` 等历史发布的 build、27 migrations、容器、入口和 no-write 证据由 Git 与 deployment runbook 保存；本 HISTORICAL window 不再重复完整部署日志。
 
-## 2026-08-25 — Hermes orbit actions deployed
+## 2026-08-25 — Hermes orbit actions deployed（历史）
 
-- `e4a19d4` 已实现同一口部气泡的 Dashboard 两拍短句、真实 `360px` Wanko 周围 8 个陪伴动作 + 4 个研究入口、移动/compact `200px` 分组菜单，以及 original/compact/quiet 小型控制；普通点击 drawer、右键、Shift+F10、Menu 键和长按保持。
-- 研究动作接入真实 RO surfaces：证据复核 `/hermes`、来源 `/files`、版本 `/versions`；选择后先给 900ms 角色/短句反馈再导航，离页清理 timer。搜索/文本输入、modal、quiet、审批均停止自动问候，显式交互仍可用。
-- 独立审查最初发现错误研究路由、反馈截断、搜索未抑制和 desktop compact 菜单问题；全部修复后复审 Ready。Fresh evidence：Web `406/406` + 5 Node、Hermes runtime/guide `19/19` + product interaction `5/5`、全仓 typecheck/lint/docs-sync/test/build、`git diff --check` GREEN；WebGL first-ready `889ms`，idle/pointer 零掉帧。
-- Immutable release `7165e9b` 已以 `3010903` 为 rollback、`--skip-migrate` 发布。pre/post checkup、backup `432K files=7/7`、服务器 19-page build、27 migrations current、目标 runtime/Parser isolation、route/assets、精确 release/failure/rollback markers 均通过；公网无写入 Hermes 五场景 `5/5`。首次调用因隔离 worktree 未指定主仓库配置根而在上传前 fail-closed，补充 `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS` 后完成；未 migration、seed 或写研究数据。
+- `e4a19d4` 实现两拍短句、orbit 研究入口、移动分组与输入/审批中断；release `7165e9b`、rollback `3010903` 的本地/服务器和公网 no-write 验收已完成，无迁移或研究数据写入。完整证据查 Git history 与 deployment runbook；该 orbit 外观已由后续 carried tool sheet 取代，不作为当前实现入口。
+- 当时隔离 worktree 上传前因未指定主仓库配置根 fail-closed，设置 `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS` 后完成；保留此操作约束。
 
 ## Read first
 
 1. `AGENTS.md`
 2. `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
-3. 当前任务唯一 CURRENT spec（Hermes 为 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`）
+3. 当前任务唯一 HISTORICAL spec（Hermes 为 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`）
 4. 本文件
 5. `docs/OpenScience_Kimi_Development_Spec.md` 相关章节

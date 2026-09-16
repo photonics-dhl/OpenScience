@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenScience — Local Text Distortion Demo</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; min-height: 100%; }
+    body { margin: 0; overflow: hidden; background: #050606; color: #f1efea; font-family: Arial, sans-serif; }
+    .stage {
+      --mx: -999px;
+      --my: -999px;
+      --radius: 155px;
+      position: relative;
+      width: 100vw;
+      height: 100svh;
+      min-height: 650px;
+      isolation: isolate;
+      overflow: hidden;
+      background: #050606;
+      cursor: crosshair;
+    }
+    .stage::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 7;
+      pointer-events: none;
+      opacity: .16;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+    }
+    canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: .58; pointer-events: none; }
+    nav { position: absolute; z-index: 8; top: 0; left: 0; width: 100%; height: 72px; padding: 0 4vw; display: flex; align-items: center; border-bottom: 1px solid rgba(241,239,234,.11); font-size: 14px; }
+    .logo { font-size: 24px; letter-spacing: -.04em; }
+    .links { margin-left: auto; display: flex; gap: 34px; color: #aaa9a3; }
+    .links i { width: 5px; height: 5px; margin: 7px 0 0 -22px; border-radius: 50%; background: #ff4e22; box-shadow: 0 0 12px rgba(255,78,34,.55); }
+    .headline-wrap { position: absolute; z-index: 3; inset: 0; display: flex; align-items: center; justify-content: center; }
+    .headline {
+      position: absolute;
+      margin: 0;
+      width: 96vw;
+      white-space: nowrap;
+      text-align: center;
+      font-size: clamp(80px, 13.4vw, 230px);
+      line-height: .9;
+      letter-spacing: -.075em;
+      font-weight: 760;
+      user-select: text;
+    }
+    .headline em { font-family: Georgia, serif; font-weight: 400; font-style: italic; letter-spacing: -.055em; }
+    .headline.base {
+      z-index: 1;
+      -webkit-mask-image: radial-gradient(circle var(--radius) at var(--mx) var(--my), transparent 0 45%, rgba(0,0,0,.2) 64%, #000 79%);
+      mask-image: radial-gradient(circle var(--radius) at var(--mx) var(--my), transparent 0 45%, rgba(0,0,0,.2) 64%, #000 79%);
+    }
+    .headline.distorted {
+      z-index: 2;
+      pointer-events: none;
+      user-select: none;
+      filter: url(#local-distortion);
+      -webkit-mask-image: radial-gradient(circle var(--radius) at var(--mx) var(--my), #000 0 42%, rgba(0,0,0,.92) 57%, transparent 82%);
+      mask-image: radial-gradient(circle var(--radius) at var(--mx) var(--my), #000 0 42%, rgba(0,0,0,.92) 57%, transparent 82%);
+    }
+    .headline.chromatic {
+      z-index: 2;
+      pointer-events: none;
+      user-select: none;
+      opacity: var(--chroma, 0);
+      color: transparent;
+      text-shadow: -2px 0 rgba(255,78,34,.75), 2px 0 rgba(87,184,204,.65);
+      mix-blend-mode: screen;
+      -webkit-mask-image: radial-gradient(circle calc(var(--radius) * .8) at var(--mx) var(--my), #000 0 25%, transparent 76%);
+      mask-image: radial-gradient(circle calc(var(--radius) * .8) at var(--mx) var(--my), #000 0 25%, transparent 76%);
+    }
+    .object-state { position: absolute; z-index: 8; left: 4vw; top: 25%; font: 12px/1.8 monospace; color: #858680; letter-spacing: .04em; }
+    .object-state::before { content: ""; display: block; width: 16px; height: 1px; margin-bottom: 18px; background: #f1efea; }
+    .actions { position: absolute; z-index: 8; left: 4vw; right: 4vw; bottom: 6vh; display: flex; justify-content: space-between; font: 15px monospace; letter-spacing: .08em; }
+    .actions span { padding-bottom: 9px; border-bottom: 1px solid rgba(241,239,234,.5); }
+    .cursor-ring { position: absolute; z-index: 6; width: calc(var(--radius) * 2); height: calc(var(--radius) * 2); left: calc(var(--mx) - var(--radius)); top: calc(var(--my) - var(--radius)); border: 1px solid rgba(241,239,234,.17); border-radius: 50%; pointer-events: none; opacity: var(--active, 0); transition: opacity .25s; }
+    .cursor-ring::before { content: ""; position: absolute; width: 6px; height: 6px; left: 50%; top: 50%; translate: -50% -50%; border-radius: 50%; background: #ff4e22; box-shadow: 0 0 14px rgba(255,78,34,.7); }
+    .hint { position: absolute; z-index: 8; right: 4vw; top: 105px; font: 10px monospace; color: #666762; letter-spacing: .1em; }
+    .filter-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+    @media (max-width: 760px) {
+      .stage { --radius: 105px; min-height: 580px; }
+      nav { height: 58px; padding: 0 18px; }
+      .logo { font-size: 19px; }
+      .links span:not(:last-of-type), .links i { display: none; }
+      .headline { width: 116vw; white-space: normal; text-align: left; left: 18px; font-size: clamp(68px, 22vw, 112px); line-height: .82; }
+      .headline em { display: block; margin-left: 12vw; }
+      .object-state { left: 18px; top: 18%; font-size: 10px; }
+      .actions { left: 18px; right: 18px; font-size: 10px; }
+      .hint { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .headline.base { -webkit-mask-image: none; mask-image: none; }
+      .headline.distorted, .headline.chromatic, canvas, .cursor-ring { display: none; }
+      .stage { cursor: default; }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" id="stage">
+    <canvas id="field" aria-hidden="true"></canvas>
+    <nav><span class="logo">OpenScience</span><div class="links"><span>Explore</span><span>Research Objects</span><i></i><span>Sign in</span></div></nav>
+    <div class="object-state">OSR-2026-000241<br>v0.4 DRAFT<br>6/6 SDF<br>PROVENANCE VERIFIED</div>
+    <div class="hint">MOVE POINTER ACROSS THE TYPE</div>
+    <div class="headline-wrap">
+      <h1 class="headline base">Science <em>evolves.</em></h1>
+      <h1 class="headline distorted" aria-hidden="true">Science <em>evolves.</em></h1>
+      <h1 class="headline chromatic" aria-hidden="true">Science <em>evolves.</em></h1>
+    </div>
+    <div class="cursor-ring" aria-hidden="true"></div>
+    <div class="actions"><span>→ CREATE RESEARCH OBJECT</span><span>EXPLORE PUBLIC RESEARCH →</span></div>
+    <svg class="filter-defs" aria-hidden="true">
+      <filter id="local-distortion" x="-25%" y="-40%" width="150%" height="180%" color-interpolation-filters="sRGB">
+        <feTurbulence id="noise" type="fractalNoise" baseFrequency="0.008 0.028" numOctaves="2" seed="12" result="noise" />
+        <feDisplacementMap id="displace" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </svg>
+  </main>
+  <script>
+    const stage = document.querySelector('#stage');
+    const displace = document.querySelector('#displace');
+    const noise = document.querySelector('#noise');
+    const canvas = document.querySelector('#field');
+    const ctx = canvas.getContext('2d');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const target = { x: -999, y: -999, active: 0, speed: 0 };
+    const current = { x: -999, y: -999, active: 0, speed: 0 };
+    let last = { x: 0, y: 0, t: performance.now() };
+    let w = 0, h = 0, dpr = 1, dots = [];
+
+    function resize() {
+      const r = stage.getBoundingClientRect();
+      w = r.width; h = r.height; dpr = Math.min(devicePixelRatio || 1, 1.5);
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      dots = [];
+      const gap = innerWidth < 760 ? 18 : 14;
+      for (let y = gap / 2; y < h; y += gap) for (let x = gap / 2; x < w; x += gap) {
+        if (x > w * .38 && x < w * .77 && y > h * .2 && y < h * .82) dots.push({ x, y, phase: Math.random() * 6.28 });
+      }
+    }
+
+    function point(e) {
+      const r = stage.getBoundingClientRect();
+      const x = e.clientX - r.left, y = e.clientY - r.top, now = performance.now();
+      const dt = Math.max(16, now - last.t);
+      const velocity = Math.hypot(x - last.x, y - last.y) / dt;
+      target.x = x; target.y = y; target.active = 1; target.speed = Math.min(1, velocity / 1.25);
+      last = { x, y, t: now };
+    }
+
+    stage.addEventListener('pointermove', point, { passive: true });
+    stage.addEventListener('pointerdown', point, { passive: true });
+    stage.addEventListener('pointerleave', () => { target.active = 0; target.speed = 0; });
+    addEventListener('resize', resize);
+
+    function render(time) {
+      current.x += (target.x - current.x) * .15;
+      current.y += (target.y - current.y) * .15;
+      current.active += (target.active - current.active) * .12;
+      current.speed += (target.speed - current.speed) * .14;
+      target.speed *= .91;
+
+      stage.style.setProperty('--mx', `${current.x}px`);
+      stage.style.setProperty('--my', `${current.y}px`);
+      stage.style.setProperty('--active', current.active.toFixed(3));
+      stage.style.setProperty('--chroma', (current.active * (.08 + current.speed * .58)).toFixed(3));
+      displace.setAttribute('scale', (current.active * (9 + current.speed * 34)).toFixed(2));
+      noise.setAttribute('baseFrequency', `${(.006 + current.speed * .007).toFixed(4)} ${(.024 + current.speed * .017).toFixed(4)}`);
+
+      ctx.clearRect(0, 0, w, h);
+      const radius = innerWidth < 760 ? 120 : 185;
+      for (const p of dots) {
+        const dx = p.x - current.x, dy = p.y - current.y, dist = Math.hypot(dx, dy) || 1;
+        const influence = Math.max(0, 1 - dist / radius) * current.active;
+        const bulge = influence * influence;
+        const ox = (dx / dist) * bulge * (18 + current.speed * 18);
+        const oy = (dy / dist) * bulge * (18 + current.speed * 18);
+        const pulse = .75 + .25 * Math.sin(time * .0007 + p.phase);
+        ctx.fillStyle = `rgba(226,224,217,${.055 + bulge * .46})`;
+        ctx.beginPath(); ctx.arc(p.x + ox, p.y + oy, .7 + bulge * 2.4 * pulse, 0, Math.PI * 2); ctx.fill();
+      }
+      requestAnimationFrame(render);
+    }
+
+    resize();
+    if (!reduce) requestAnimationFrame(render);
+  </script>
+</body>
+</html>
