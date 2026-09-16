@@ -254,4 +254,15 @@ describe('AnthropicCompatProvider（MiniMax Token Plan）', () => {
     const out = await gw.completeStructured((v): v is { method: string } => typeof v === 'object' && v !== null && typeof (v as { method?: unknown }).method === 'string', [{ role: 'user', content: 'x' }]);
     expect(out.method).toBe('m');
   });
+
+  it('completeStructured 显式 maxTokens 会透传到 provider', async () => {
+    let receivedMaxTokens: number | undefined;
+    const provider: Provider = { name: 'p', model: 'm', complete: async (req) => {
+      receivedMaxTokens = req.maxTokens;
+      return OK('{"k":1}');
+    } };
+    const gw = new AiGateway({ providers: [provider] });
+    await gw.completeStructured((v): v is { k: number } => typeof v === 'object' && v !== null && (v as { k?: unknown }).k === 1, [{ role: 'user', content: 'x' }], { maxTokens: 8192 });
+    expect(receivedMaxTokens).toBe(8192);
+  });
 });
