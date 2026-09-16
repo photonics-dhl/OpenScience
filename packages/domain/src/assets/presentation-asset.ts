@@ -7,17 +7,19 @@ import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
 import { PresentationAssetError } from './errors';
+import { ONCHIP_SOURCE_CONTENT_HASH, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './video';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KINDS = ['chart', 'interactive_html', 'image', 'video'] as const;
 export const DETERMINISTIC_PRESENTATION_GENERATOR = 'OpenScience deterministic renderer';
 export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-presentation-v2';
 export type PresentationGenerationKind = (typeof KINDS)[number];
-export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest }
+export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest }
 export interface PresentationAssetView {
   storyboard?: StoryboardView;
   sceneImage?: SceneImageRequest;
   canGenerateSceneImage: boolean;
+  canGenerateVideo: boolean;
   canTransition: boolean;
   id: string;
   researchObjectId: string;
@@ -36,7 +38,7 @@ export interface PresentationAssetView {
 export function parsePresentationGenerationPayload(value: unknown): PresentationGenerationPayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation payload is invalid');
   const payload = value as Record<string, unknown>;
-  const expected = ['kind', 'researchObjectId', 'schemaVersion', 'sourceClaimIds', ...('storyboard' in payload ? ['storyboard'] : []), ...('sceneImage' in payload ? ['sceneImage'] : []), 'versionId'].sort();
+  const expected = ['kind', 'researchObjectId', 'schemaVersion', 'sourceClaimIds', ...('storyboard' in payload ? ['storyboard'] : []), ...('sceneImage' in payload ? ['sceneImage'] : []), ...('video' in payload ? ['video'] : []), 'versionId'].sort();
   const keys = Object.keys(payload).sort();
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index]) || payload.schemaVersion !== 1
     || typeof payload.researchObjectId !== 'string' || !UUID.test(payload.researchObjectId)
@@ -52,7 +54,9 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
   if (storyboard && payload.kind !== 'interactive_html') throw new PresentationAssetError('VALIDATION_ERROR', 'Storyboard requires interactive_html');
   const sceneImage = 'sceneImage' in payload ? parseSceneImageRequest(payload.sceneImage) : undefined;
   if (sceneImage && (payload.kind !== 'image' || storyboard)) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene images require image kind and no storyboard settings');
-  return { ...(sceneImage ? { sceneImage } : {}), ...(storyboard ? { storyboard } : {}), schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
+  const video = 'video' in payload ? parseVideoGenerationRequest(payload.video) : undefined;
+  if ((payload.kind === 'video') !== Boolean(video) || (video && (storyboard || sceneImage))) throw new PresentationAssetError('VALIDATION_ERROR', 'Video kind requires exact video settings');
+  return { ...(sceneImage ? { sceneImage } : {}), ...(storyboard ? { storyboard } : {}), ...(video ? { video } : {}), schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
 }
 
 type PresentationScope = { userId: string; researchObjectId: string; versionId: string };
@@ -112,10 +116,10 @@ async function requirePlatformAdmin(deps: AgentDeps, userId: string): Promise<vo
 }
 
 export async function submitPresentationGeneration(deps: AgentDeps, input: {
-  userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; idempotencyKey: string;
+  userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
   await requirePresentationWriteScope(deps.prisma, input);
-  const payload = parsePresentationGenerationPayload({ schemaVersion: 1, researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, sourceClaimIds: input.sourceClaimIds, ...(input.sceneImage !== undefined ? { sceneImage: input.sceneImage } : {}), ...(input.storyboard !== undefined ? { storyboard: input.storyboard } : {}) });
+  const payload = parsePresentationGenerationPayload({ schemaVersion: 1, researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, sourceClaimIds: input.sourceClaimIds, ...(input.sceneImage !== undefined ? { sceneImage: input.sceneImage } : {}), ...(input.storyboard !== undefined ? { storyboard: input.storyboard } : {}), ...(input.video !== undefined ? { video: input.video } : {}) });
   const claims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: input.researchObjectId, versionId: input.versionId }, select: { id: true, extractionStatus: true } });
   const returnedClaimIds = new Set(claims.map((claim) => claim.id));
   if (claims.length !== payload.sourceClaimIds.length || payload.sourceClaimIds.some((id) => !returnedClaimIds.has(id))
@@ -125,6 +129,7 @@ export async function submitPresentationGeneration(deps: AgentDeps, input: {
   if (payload.storyboard?.baseAssetId) await requireStoryboardBase(deps.prisma, payload);
   if (input.kind === 'image' || input.kind === 'video') await requirePlatformAdmin(deps, input.userId);
   if (payload.sceneImage) await requireSceneImageParent(deps.prisma, payload);
+  if (payload.video) await requireVideoGenerationParents(deps.prisma, payload);
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
   const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey };
   return !payload.storyboard && (input.kind === 'chart' || input.kind === 'interactive_html')
@@ -146,10 +151,21 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
   });
   const liveClaims = await deps.prisma.claimNode.findMany({ where: { researchObjectId: input.researchObjectId, versionId: input.versionId, extractionStatus: 'succeeded' }, select: { id: true, extractionStatus: true } });
   const validClaimIds = new Set(liveClaims.filter(claim => claim.extractionStatus === 'succeeded').map(claim => claim.id));
+  const sourcePaperReady = Boolean(await deps.prisma.evidenceRecord.findFirst({ where: {
+    researchObjectId: input.researchObjectId, versionId: input.versionId,
+    claimId: { in: [...validClaimIds] }, extractionStatus: 'succeeded', contentHash: ONCHIP_SOURCE_CONTENT_HASH,
+  }, select: { id: true } }));
+  const sceneImagesByStoryboard = new Map<string, typeof assets>();
+  for (const candidate of assets) {
+    const scene = presentationSceneImageView(candidate);
+    if (!scene) continue;
+    sceneImagesByStoryboard.set(scene.storyboardAssetId, [...(sceneImagesByStoryboard.get(scene.storyboardAssetId) ?? []), candidate]);
+  }
   return Promise.all(assets.map(async (asset) => {
     const ids = asset.sourceClaims.map(source => source.claimId).sort();
     const claimsValid = ids.length > 0 && ids.every(id => validClaimIds.has(id));
     let sceneValid = !hasSceneImageProvenance(asset);
+    let videoValid = !hasVideoProvenance(asset);
     const sceneImage = presentationSceneImageView(asset);
     if (sceneImage && claimsValid) {
       try {
@@ -157,11 +173,35 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
         sceneValid = parent?.identity === (asset.provenance as Prisma.JsonObject).parentIdentity;
       } catch (error) { if (!(error instanceof PresentationAssetError)) throw error; }
     }
+    const video = presentationVideoView(asset);
+    if (video && claimsValid) {
+      try {
+        const parents = await requireVideoGenerationParents(deps.prisma, { ...input, sourceClaimIds: ids, video });
+        videoValid = parents?.identity === (asset.provenance as Prisma.JsonObject).parentIdentity;
+      } catch (error) { if (!(error instanceof PresentationAssetError)) throw error; }
+    }
+    const storyboardForVideo = presentationStoryboardView(asset, ids);
+    const storyboardIdentity = storyboardForVideo && JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids });
+    const eligibleSceneIndexes = new Set((sceneImagesByStoryboard.get(asset.id) ?? []).flatMap((candidate) => {
+      const scene = presentationSceneImageView(candidate);
+      const provenance = candidate.provenance as Prisma.JsonObject | null;
+      const candidateIds = candidate.sourceClaims.map((source) => source.claimId).sort();
+      return candidate.status === 'approved' && scene?.storyboardAssetId === asset.id
+        && provenance?.parentIdentity === storyboardIdentity && JSON.stringify(candidateIds) === JSON.stringify(ids)
+        ? [scene.sceneIndex] : [];
+    }));
+    const canGenerateVideo = sourcePaperReady && claimsValid && canWrite && user?.platformRole === 'platform_admin'
+      && asset.status === 'approved' && storyboardForVideo?.locale === 'zh'
+      && storyboardForVideo.document.scenes.length === 5
+      && storyboardForVideo.document.scenes.every((scene) => [...scene.narration].length <= 120)
+      && storyboardForVideo.document.scenes.reduce((total, scene) => total + [...scene.narration].length, 0) <= 450
+      && [0, 1, 2, 3, 4].every((index) => eligibleSceneIndexes.has(index));
     return ({
     sceneImage: presentationSceneImageView(asset),
     canGenerateSceneImage: claimsValid && canWrite && user?.platformRole === 'platform_admin' && asset.status === 'approved' && !!presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
+    canGenerateVideo,
     storyboard: presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
-    canTransition: sceneValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin'),
+    canTransition: sceneValid && videoValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin'),
     id: asset.id,
     researchObjectId: asset.researchObjectId,
     versionId: asset.versionId,
@@ -204,6 +244,12 @@ export async function transitionPresentationAsset(deps: AgentDeps, input: {
         const parent = await requireSceneImageParent(tx, { researchObjectId: input.researchObjectId, versionId: input.versionId, sourceClaimIds: links.map(link => link.claimId).sort(), sceneImage });
         if (parent?.identity !== (asset.provenance as Prisma.JsonObject).parentIdentity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed');
       }
+      if (hasVideoProvenance(asset)) {
+        const video = presentationVideoView(asset);
+        if (!video) throw new PresentationAssetError('VALIDATION_ERROR', 'Saved video provenance is invalid');
+        const parents = await requireVideoGenerationParents(tx, { researchObjectId: input.researchObjectId, versionId: input.versionId, sourceClaimIds: links.map(link => link.claimId).sort(), video });
+        if (parents?.identity !== (asset.provenance as Prisma.JsonObject).parentIdentity) throw new PresentationAssetError('VALIDATION_ERROR', 'Video parents changed');
+      }
       if (hasInvalidStoryboard(asset, links.map(link => link.claimId))) throw new PresentationAssetError('VALIDATION_ERROR', 'Saved storyboard is invalid');
     }
     if (asset.label !== PRESENTATION_ASSET_LABEL) throw new PresentationAssetError('VALIDATION_ERROR', 'Presentation asset label is invalid');
@@ -214,8 +260,10 @@ export async function transitionPresentationAsset(deps: AgentDeps, input: {
     if (changed.count !== 1) throw new PresentationAssetError('CONCURRENT_UPDATE', 'Presentation asset changed concurrently');
     let invalidatedSceneImageCount = 0;
     if (input.status === 'rejected') {
-      const dependents = await tx.presentationAsset.findMany({ where: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: 'image', status: { in: ['draft', 'approved'] } } });
-      const ids = dependents.filter(child => presentationSceneImageView(child)?.storyboardAssetId === asset.id).map(child => child.id);
+      const dependents = await tx.presentationAsset.findMany({ where: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: { in: ['image', 'video'] }, status: { in: ['draft', 'approved'] } } });
+      const ids = dependents.filter((child) => presentationSceneImageView(child)?.storyboardAssetId === asset.id
+        || presentationVideoView(child)?.storyboardAssetId === asset.id
+        || presentationVideoView(child)?.sceneImageAssetIds.includes(asset.id)).map(child => child.id);
       if (ids.length) invalidatedSceneImageCount = (await tx.presentationAsset.updateMany({ where: { id: { in: ids }, status: { in: ['draft', 'approved'] } }, data: { status: 'rejected' } })).count;
     }
     const current = await tx.presentationAsset.findUnique({ where: { id: asset.id } });

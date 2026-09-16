@@ -9,6 +9,7 @@ import {
   createEvidence,
   updateEvidence,
   verifyEvidence,
+  resolveEvidenceSource,
   createClaimEvidenceBatch,
   validateCanonicalEvidenceSources,
 } from '../../src/research-intelligence/claim-evidence-service';
@@ -169,6 +170,10 @@ async function seedSourceMap(ctx: ReturnType<typeof fixture>) {
       blocks: [{
         id: 'block-1', kind: 'paragraph' as const, text: 'The measured lifetime is 43 fs.',
         boundingBox: { x: 10, y: 20, width: 300, height: 30 },
+        parser: { name: 'fixture-parser', version: '1' }, transformations: [],
+      }, {
+        id: 'unrelated-middle', kind: 'paragraph' as const, text: 'Administrative running header.',
+        boundingBox: { x: 10, y: 45, width: 300, height: 10 },
         parser: { name: 'fixture-parser', version: '1' }, transformations: [],
       }, {
         id: 'block-2', kind: 'paragraph' as const, text: 'Repeated quote is 43 fs.',
@@ -357,7 +362,7 @@ describe('Claim/Evidence operations', () => {
       .rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
   });
 
-  it('loads the exact reviewed SourceMap once for a multi-Evidence batch', async () => {
+  it('creates two independent needs-review Evidence rows from ordered authenticated blocks separated by unrelated text', async () => {
     const ctx = fixture();
     const sourceMap = await seedSourceMap(ctx);
     const locator = {
@@ -372,7 +377,7 @@ describe('Claim/Evidence operations', () => {
       evidence: [EVIDENCE, '60000000-0000-4000-8000-000000000002'].map((id, index) => ({
         id, claimId: CLAIM, artifactId: ARTIFACT, kind: 'passage' as const, title: 'Quote',
         exactQuote: '43 fs', relation: 'supports' as const, locator: index === 0 ? locator : {
-          ...locator, blockId: 'block-2', boundingBox: sourceMap.pages[0]!.blocks[1]!.boundingBox,
+          ...locator, blockId: 'block-2', boundingBox: sourceMap.pages[0]!.blocks[2]!.boundingBox,
           charRange: { start: 18, end: 23 },
         },
       })),
@@ -380,6 +385,12 @@ describe('Claim/Evidence operations', () => {
     expect(ctx.storage.getObject).toHaveBeenCalledTimes(1);
     expect(ctx.prisma.evidenceRecord.createMany).toHaveBeenCalledTimes(1);
     expect(ctx.prisma.evidenceRecord.create).not.toHaveBeenCalled();
+    expect(ctx.evidenceRows).toHaveLength(2);
+    expect(ctx.evidenceRows.map((row) => ({ exactQuote: row.exactQuote, extractionStatus: row.extractionStatus, verifiedByUserId: row.verifiedByUserId })))
+      .toEqual([
+        { exactQuote: '43 fs', extractionStatus: 'needs_review', verifiedByUserId: null },
+        { exactQuote: '43 fs', extractionStatus: 'needs_review', verifiedByUserId: null },
+      ]);
   });
 
   it('uses the extractor text-block order and accepts the exact 8000-character segment limit', () => {
@@ -389,6 +400,7 @@ describe('Claim/Evidence operations', () => {
       pages: [{ page: 1, width: 100, height: 100, blocks: [
         { id: 'text-1', kind: 'paragraph' as const, text: text.slice(0, 4_000), boundingBox: { x: 0, y: 0, width: 50, height: 10 }, parser: { name: 'fixture', version: '1' }, transformations: [] },
         { id: 'figure-1', kind: 'figure' as const, boundingBox: { x: 0, y: 10, width: 50, height: 10 }, parser: { name: 'fixture', version: '1' }, transformations: [] },
+        { id: 'unrelated-text', kind: 'paragraph' as const, text: 'unrelated', boundingBox: { x: 0, y: 15, width: 50, height: 10 }, parser: { name: 'fixture', version: '1' }, transformations: [] },
         { id: 'text-2', kind: 'paragraph' as const, text: text.slice(4_000), boundingBox: { x: 0, y: 20, width: 50, height: 10 }, parser: { name: 'fixture', version: '1' }, transformations: [] },
       ] }],
     };
@@ -396,6 +408,64 @@ describe('Claim/Evidence operations', () => {
       { quote: text.slice(0, 4_000), locator: { artifactId: ARTIFACT, contentHash: HASH, blockId: 'text-1', page: 1, boundingBox: { x: 0, y: 0, width: 50, height: 10 }, charRange: { start: 0, end: 4_000 } } },
       { quote: text.slice(4_000), locator: { artifactId: ARTIFACT, contentHash: HASH, blockId: 'text-2', page: 1, boundingBox: { x: 0, y: 20, width: 50, height: 10 }, charRange: { start: 0, end: 4_000 } } },
     ])).toHaveLength(2);
+  });
+
+  it('accepts serialization-scale bbox drift, normalizes from the canonical box, and rejects real movement', () => {
+    const canonical = { x: 72.00000000000003, y: 214.50000000000003, width: 468.00039000000015, height: 10.909099999999967 };
+    const persisted = { x: 72.00000000000004, y: 214.50000000000006, width: 468.0003900000002, height: 10.90909999999997 };
+    const sourceMap = {
+      artifactId: ARTIFACT, contentHash: HASH, parser: { name: 'fixture', version: '1' },
+      pages: [{ page: 1, width: 612, height: 792, blocks: [{
+        id: 'decimal', kind: 'paragraph' as const, text: 'exact quote', boundingBox: canonical,
+        parser: { name: 'fixture', version: '1' }, transformations: [],
+      }] }],
+    };
+    const source = { quote: 'exact quote', locator: {
+      artifactId: ARTIFACT, contentHash: HASH, blockId: 'decimal', page: 1,
+      boundingBox: persisted, charRange: { start: 0, end: 11 },
+    } };
+
+    expect(validateCanonicalEvidenceSources(sourceMap, [source])).toEqual([{
+      text: 'exact quote',
+      region: {
+        x: canonical.x / 612,
+        y: canonical.y / 792,
+        width: canonical.width / 612,
+        height: canonical.height / 792,
+      },
+    }]);
+    expect(() => validateCanonicalEvidenceSources(sourceMap, [{
+      ...source, locator: { ...source.locator, boundingBox: { ...persisted, y: canonical.y + 1e-9 } },
+    }])).toThrow(/ordered exact source blocks/);
+  });
+
+  it.each([
+    ['reverse', ['text-2', 'text-1']],
+    ['duplicate', ['text-1', 'text-1']],
+    ['unknown', ['text-1', 'missing']],
+  ])('rejects %s canonical source ordering or identity', (_label, ids) => {
+    const sourceMap = {
+      artifactId: ARTIFACT, contentHash: HASH, parser: { name: 'fixture', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [
+        { id: 'text-1', kind: 'paragraph' as const, text: 'one', boundingBox: { x: 0, y: 0, width: 10, height: 10 }, parser: { name: 'fixture', version: '1' }, transformations: [] },
+        { id: 'text-2', kind: 'paragraph' as const, text: 'two', boundingBox: { x: 0, y: 20, width: 10, height: 10 }, parser: { name: 'fixture', version: '1' }, transformations: [] },
+      ] }],
+    };
+    const sources = ids.map((blockId) => ({ quote: blockId === 'text-2' ? 'two' : 'one', locator: {
+      artifactId: ARTIFACT, contentHash: HASH, blockId, page: 1,
+      boundingBox: { x: 0, y: blockId === 'text-2' ? 20 : 0, width: 10, height: 10 }, charRange: { start: 0, end: 3 },
+    } }));
+    expect(() => validateCanonicalEvidenceSources(sourceMap, sources)).toThrow(/ordered exact source blocks|Canonical Evidence/);
+  });
+
+  it('rejects canonical source text over 8000 characters and cross-context locators', () => {
+    const text = 'x'.repeat(8_001);
+    const box = { x: 0, y: 0, width: 10, height: 10 };
+    const sourceMap = { artifactId: ARTIFACT, contentHash: HASH, parser: { name: 'fixture', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{ id: 'large', kind: 'paragraph' as const, text, boundingBox: box, parser: { name: 'fixture', version: '1' }, transformations: [] }] }] };
+    const source = { quote: text, locator: { artifactId: ARTIFACT, contentHash: HASH, blockId: 'large', page: 1, boundingBox: box, charRange: { start: 0, end: text.length } } };
+    expect(() => validateCanonicalEvidenceSources(sourceMap, [source])).toThrow(/too large/);
+    expect(() => validateCanonicalEvidenceSources(sourceMap, [{ ...source, quote: 'x', locator: { ...source.locator, artifactId: 'other', charRange: { start: 0, end: 1 } } }])).toThrow(/ordered exact source blocks/);
   });
 
   it('rechecks task authority inside the write transaction and rolls back on change', async () => {
@@ -494,6 +564,37 @@ describe('Claim/Evidence operations', () => {
       where: { id: EVIDENCE, updatedAt: verified.updatedAt },
       data: expect.objectContaining({ extractionStatus: 'needs_review', verifiedByUserId: null }),
     }));
+  });
+
+  it('uses canonical SourceMap geometry after accepting persisted numeric drift on the single-source path', async () => {
+    const ctx = fixture();
+    const seeded = await seedSourceMap(ctx);
+    const sourceMap = {
+      artifactId: seeded.artifactId,
+      contentHash: seeded.contentHash,
+      parser: seeded.parser,
+      pages: seeded.pages,
+    };
+    const block = sourceMap.pages[0]!.blocks[0]!;
+    const canonical = { x: 72.00000000000003, y: 214.50000000000003, width: 468.00039000000015, height: 10.909099999999967 };
+    block.boundingBox = canonical;
+    const sourceMapRef = await persistDocumentSourceMapReference(ctx.storage, sourceMap, 'succeeded');
+    const resolved = await resolveEvidenceSource(ctx.deps, {
+      researchObjectId: RO, versionId: VERSION, artifactId: ARTIFACT, exactQuote: '43 fs',
+      locator: {
+        artifactId: ARTIFACT, contentHash: HASH, blockId: block.id, page: 1,
+        boundingBox: { x: 72.00000000000004, y: 214.50000000000006, width: 468.0003900000002, height: 10.90909999999997 },
+        charRange: { start: 25, end: 30 },
+      },
+      sourceMapRef,
+    });
+
+    expect(resolved.region).toEqual({
+      x: canonical.x / sourceMap.pages[0]!.width,
+      y: canonical.y / sourceMap.pages[0]!.height,
+      width: canonical.width / sourceMap.pages[0]!.width,
+      height: canonical.height / sourceMap.pages[0]!.height,
+    });
   });
 
   it('rejects a quote that does not match the deterministic character range', async () => {

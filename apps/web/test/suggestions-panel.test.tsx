@@ -12,6 +12,7 @@ vi.mock('next-intl', () => ({
       evidenceLocationAmbiguous: 'Multiple matches', evidenceLocationCrossBlock: 'Cross-block', evidenceLocationMissing: 'Not located',
       evidenceLocationUnverified: 'Unverified', evidenceLocationPage: `page ${values?.page}`, evidenceLocationBlock: `block ${values?.blockId}`,
       evidenceLocationNotice: 'Location indicates where a quote was found, not whether the conclusion is correct.',
+      evidenceNotice: 'Separate excerpts may not be contiguous; omitted text is not shown.',
       proposalSource: 'Source', proposalScope: 'Scope', proposalBefore: 'Before', proposalAfter: 'After', proposalEmpty: 'Empty',
       dismissSuggestion: 'Dismiss', editSuggestion: 'Edit suggestion', reviewChanges: 'Review changes',
     };
@@ -47,6 +48,7 @@ describe('SuggestionsPanel evidence locations', () => {
     expect(markup).toContain('The optical-');
     expect(markup).toContain('field is sampled only in the weak-signal regime.');
     expect(markup).not.toContain('The optical-field');
+    expect(markup).toContain('Separate excerpts may not be contiguous; omitted text is not shown.');
     expect(markup).not.toContain('<button');
   });
 

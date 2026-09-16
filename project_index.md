@@ -1,7 +1,9 @@
+> CURRENT入口更新2026-09-08：production407ad49e / rollback88018512；当前产品状态以 E:/Miscellaneous/XGS/.worktrees/onchip-video-release/docs/handoff/2026-08-16-hermes-2d-pet-handoff.md 为准。用户禁止继续测试，以下旧版本与测试待办仅为历史。
+
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-07 +08）：** branch codex/token-smart-live-workflow；HEAD/application/public17eb209d15cc427d33b426e8430fa87006e899c2，rollbackc9439ae5a6d7ddbd0ae1e6b8b1c97d5b91e260e2。原生PDF修复已部署；真实模型引用因改写断行而全被拒绝，正在修复。Claim桥接/UI未提交，机制图/动画的最小产品尚未走通。
+> **CURRENT source/deployment anchor（2026-09-08 +08）：** production/public97aa06a542febf558a47cecbf6559bd0a6c876aa；rollback c5b0dd7196f6ab2c5d254590a7c7ebc9e4f775fb。release codex/onchip-video-release HEAD/origin97aa06a；development codex/token-smart-live-workflow HEAD/origin005ffb8，未提交工作保留。真实视频已获用户批准；Hermes服务器自主编排尚未完成。
 > 当前用户要求：验证工作空间上传文献→Hermes结构化分析→同RO机制图与实质动画视频；保留先前拒绝文字卡片/重复静图幻灯片的验收标准。唯一CURRENT handoff见下方登记。
 
 ## 当前产品交付
@@ -14,13 +16,14 @@
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | DEPLOYED3d518af；runner10、安装预检、真实Task/Credit/来源/草稿/PNG/权限验收通过 |
 | `apps/media-demo/inputs.mjs` / `apps/media-demo/render.mjs` / `apps/media-demo/drawing.mjs` / `apps/media-demo/test/inputs.test.mjs` / `apps/media-demo/test/drawing.test.mjs` | 可选第三幕机制图，保留旁白/输出探测场景与时间轴 | DEPLOYED9848411；服务器渲染/公网/390px/Range206通过，实际AAC音轨未变 |
 | 本地产物（Git忽略，非仓库路径） | apps/web/test/visual/out/science-video/：D2NN科普MP4、分镜、旁白、preview.html与FFmpeg/播放记录 | CURRENT证据含淡彩41秒demo及真实RO导入/播放/审批/失效截图；历史文件保留，核对精确source/run后使用，非自动生成能力 |
-| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo9848411；第三幕Codex机制插图/原Serena配音，固定D2NN渲染，已受审产物经独立CLI接入私有RO，不执行任意用户代码 |
+| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo9848411；on-chip新机制渲染在工作分支开发，不代表已部署 |
+| `apps/media-demo/onchip-drawing.mjs` / `apps/media-demo/test/onchip-drawing.test.mjs` | On-chip field-sampling五场真实动态图元；固定profile，不执行用户代码 | WORKING after005ffb8；局部运动/输入14项通过，科学审查和真实音频/RO验收待完成 |
 | `infra/scripts/deploy-science-video-demo.sh` / `infra/scripts/deploy-science-video-demo.test.mjs` / `infra/nginx/science-video-demo.location.conf` | 一次性隔离渲染与独立演示路径发布/恢复，Nginx原生Range | DEPLOYED demo381705a淡彩41秒；应用615ca2d另行部署 |
 | `apps/media-demo/test/narration.test.mjs` | 配音来源、逐段字幕时间边界与旧素材回退验证 | 完整连续v4配音与字幕边界已在技术/淡彩demo验收；历史逐段回退保留 |
 | `infra/tts-audition/` | CPU音频公共基础镜像、Qwen隔离试听与输出校验；模型独立挂载 | ECS TRIAL VERIFIED；用户接受v4 Serena全文连续配音，淡彩视频保留原WAV；旧分段试听为历史证据 |
 | `docs/runbooks/science-video-demo.md` | CPU样片服务器部署、回退与验证操作手册；含隔离CodexCLI验证、受控runner安装/启用/回滚与第三幕视频更新步骤 | DEPLOYED demo9848411 / app3d518af；含分镜与媒体页验收、受审媒体导入、Parser报告与临时容器清理注意事项 |
 | `apps/api/src/routes/presentation-asset-content.ts` / `apps/api/src/routes/presentation-assets.ts` / `apps/api/test/presentation-assets-routes.test.ts` / `apps/api/src/routes/research.ts` | 共用安全内容交付、认证私有预览与 exact RO/version/task 恢复 | DEPLOYED83b2933；私有视频实际播放/28秒seek/Range206，匿名401，保留v1兼容 |
-| `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准 | DEPLOYED64ae872；媒体优先、桌面双列/手机单列、来源折叠、任务错误可见；公网中英文四组播放/seek/键盘/无溢出验收通过 |
+| `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准；LOCAL 空状态下一步/16测试通过，未部署 | DEPLOYED64ae872；媒体优先、桌面双列/手机单列、来源折叠、任务错误可见；公网中英文四组播放/seek/键盘/无溢出验收通过 |
 | `apps/web/app/research-objects/[id]/edit/page.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` / `apps/web/package.json` / `apps/web/playwright.release.config.ts` | 已确认论文带入版本提交并保留原 manifest 附件；图解用例加入既有 release suite | DEPLOYED390afc0；真实PDF入版本，续接9项与CI99通过 |
 | `packages/domain/src/research-intelligence/claim-evidence-service.ts` / `packages/domain/test/research-intelligence/claim-evidence-service.test.ts` / `apps/agent-worker/src/presentation/chart-generator.ts` / `apps/agent-worker/src/presentation/interactive-html.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | Claim 变更/删除的关联资产失效；真实表述与换行图解 | DEPLOYED390afc0；实际编辑使旧批准图rejected，重新生成通过；无迁移 |
 | `apps/agent-worker/src/extractor.ts` / `apps/agent-worker/test/extractor.test.ts` | 摘录选择跳过头尾及已覆盖中段关键词，保留正文证据预算 | DEPLOYED390afc0；27项通过；生产重验仍缺method/results/reproducibility，不声称完整度提升 |
@@ -39,7 +42,7 @@
 ## 根目录
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `AGENTS.md` | 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
+| `AGENTS.md` | 产品落地优先；默认不预检/测试，例外仅最小必要服务器检查； 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | Codex global `ui-ux-pro-max` / `baseline-ui` Skills + `shadcn` MCP | 2026-08-24 为 Hermes 互动视觉纠偏启用：Skills 固定审计提交 `bc826e2` / `bdbcc56`；shadcn 固定 `4.19.0`、cwd 为当前 worktree `apps/web`，MCP 初始化握手通过；不把资料库命中替代用户审美验收 | **本机工具能力，不入库**；重启 Codex 后自动发现 Skills/MCP |
@@ -174,7 +177,7 @@
 | `docs/specs/2026-08-24-research-folio-product-system-design.md` | 登录到公开验证的全部真实非 Landing 产品视觉与信息架构；暖纸阅读、graphite 证据工具、18 表面、预留 Hermes 研究页边与无覆盖合同 | **CURRENT non-Landing product UI spec / IMPLEMENTED**；Landing unchanged |
 | `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同 | **CURRENT / TASKS 1–12 DONE**；production `b32d81c`，rollback `0aaf52f`；fresh upload/public `OSR-2026-000021`；aggregate `1ca3b0e1…08f2` |
 | `docs/specs/2026-09-02-scansci-upstream-mcp-design.md` | 上游 `v1.13.1` 官方 17-tool MCP、Worker 直连、官方 cookie import、持久数据/瞬态论文卷、`source_retrieval` provenance 与旧实现清理 | **CURRENT / PRODUCTION**；OA/institution/four-entry/lifecycle ECS accepted；ScienceDirect official entitlement optional |
-| `docs/plans/2026-09-07-literature-recovery-workflow-plan.md` | 文献恢复修复、SourceMap证据定位接续、网页规划与模型路由实测记录 | Production17eb209；原生PDF修复部署通过，真实MiniMax引用全no-match待多块精确证据修复；媒体链路未走通；净节省率未知 |
+| `docs/plans/2026-09-07-literature-recovery-workflow-plan.md` | 文献恢复、SourceMap独立摘录、网页规划与实际路由记录 | Production fbb5405/rollback005ffb8；真实提取仍失败，有序非连续摘录修复通过定向审查；媒体仍未验收 |
 | `packages/domain/src/ingestion/claim-evidence-bridge.ts` / `packages/domain/test/ingestion-claim-evidence-bridge.test.ts` | 确认SDF与同版本逐段原始证据的预览、原子Claim批次、幂等、单次索引/bulk写入与来源约束；复用claim-evidence-service和ingestion API | 本地未部署；domain622/API5通过，Sol/high最终批准；待真实服务器验收 |
 | `apps/web/components/hermes/IngestionClaimReview.tsx` / `apps/web/lib/hermes/ingestion-claim-review.ts` / `apps/web/test/ingestion-claim-review.test.ts` / `apps/web/test/e2e/ingestion-claim-review.spec.ts` | 原文审阅、用户选取拆分与分类、改写撤销引用、相同请求重试；接入HermesPresentationAction、API与双语文案 | 本地未部署；helper7/browser4、Web553/type/lint通过；现有literature-disclosure harness新增审阅场景 |
 | `apps/web/components/hermes/HermesExtractionEvidence.tsx` | 真实Hermes确认页面逐段原文与页码披露；复用安全显示适配器，和编辑区SuggestionsPanel一致保留科学复核 | 本地未部署；Hermes页面/原文显示回归与Web553/type通过；production gate增加多段证据/API/UI校验 |
@@ -183,7 +186,11 @@
 | `apps/web/test/e2e/literature-disclosure-recovery.spec.ts` | RO Files/Hermes恢复、折叠和异步生命周期回归 | Application c9439ae；最终target/user隔离测试8928a9d，受影响浏览器17/17通过 |
 | `apps/web/test/literature-disclosure-harness/` | index.html、main.tsx、vite.config.ts；仅测试进程挂载真实组件，复现同组件切换与卸载 | 无生产路由或新增依赖；由上述Playwright用例启动 |
 | `apps/web/lib/suggestion-evidence.ts` / `apps/web/test/{suggestion-evidence.test.ts,suggestions-panel.test.tsx}` | 同次抽取结果的前端定位状态适配；旧结果不冒充可信出处 | DEPLOYED c9439ae；Sol修复真实API安全identity合同；旧Astra局部测试不代表端到端等质 |
-| `C:/Users/Mac/.agents/skills/token-smart/references/metering.md` | 用户指定全局skill的独立只读任务计量入口，关联metered-run脚本和测试 | GLOBAL；单次真实审查Sol相对Astra标准credits低56.06%；不代表完整开发/网页净收益 |
+| `C:/Users/Mac/.agents/skills/token-smart/` | 全局自动省量：阶段网页分析、实际Luna/Terra/Sol路由、必要high复核及真实纵向验收 | UPDATED2026-09-07；四文件11529→4246字符，非整体费用节省；离线meter13/13 |
+| `E:/Miscellaneous/XGS/docs/user/_ideas/token-smart-share-20260908-continuity.zip` | 最新分享包：保留主模型，续接状态、整段网页分析和最小真实产物验证 | LOCAL DELIVERY；旧20260907包保留历史，非质量等同或净节省实测 |
+| `E:/Miscellaneous/XGS/docs/user/_ideas/token-smart-share-20260907/` / `E:/Miscellaneous/XGS/docs/user/_ideas/token-smart-share-20260907.zip` | 用户指定分享包：两skills、安装说明、AGENTS片段、prompts、验证与场景 | LOCAL DELIVERY；不含个人账号/项目状态；新机器浏览器与路由仍需现场验证 |
+| `apps/web/components/presentation/MechanismVideoPanel.tsx` / `apps/web/test/mechanism-video-panel.test.tsx` | 同版已审分镜/五图与角色确认的视频草稿入口 | WORKING；后台因额度耗尽中断，不是已部署功能 |
+| `apps/agent-worker/src/presentation/host-video-spool.ts` / `apps/agent-worker/test/host-video-spool.test.ts` / `packages/domain/src/assets/video.ts` / `packages/domain/test/assets/video.test.ts` / `infra/codex-image-runner/video-runner.mjs` / `infra/codex-image-runner/video-runner.test.mjs` / `infra/codex-image-runner/video-tts.py` | 隔离视频任务候选实现、固定profile和连续旁白 | INCOMPLETE WORKING；需收尾编译/安全review/真实音画验收；不部署此脏树 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-foundation-plan.md` | Taskmaster Task 1 的可执行 TDD 计划：能力台账门禁、自有 corpus、现状 parser 基准、零污染输出与全仓验收；后续三计划按实测结果展开 | **COMPLETED / TASKMASTER TASK 1 DONE**；能力候选尚未安装 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-core-model-plan.md` | Taskmaster Task 2 的可执行 TDD/迁移/部署计划：Claim/Evidence/locator 合同、核心迁移 28、独立搜索数据库与 ECS-only 验收 | **COMPLETED / TASKMASTER TASK 2 DONE / ECS DEPLOYED `e0828a6`** |
 | `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md` | Taskmaster Task 3 的可执行 TDD 计划：严格 DocumentSourceMap、locator 构造/复验、Worker parser boundary、image-only false-ready 与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `ef043eb`**；final docs CI `32997554922` GREEN |
@@ -237,7 +244,7 @@
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
 | `apps/web/components/hermes/HermesPresentationAction.tsx` / `apps/web/components/hermes/HermesPresentationReview.tsx` / `apps/web/lib/hermes/presentation-action.ts` / `apps/web/lib/hermes/presentation-intent.ts` / `apps/web/test/hermes-presentation-action.test.ts` / `apps/web/test/hermes-presentation-intent.test.ts` | Global Hermes scoped storyboard/revision/image review using existing presentation API and task page; Drawer/Stage, zh/en, hermes-state and presentation-workbench tests updated | DEPLOYED f144eb7; real revision/task/audit and final contrast/Chinese/read-only acceptance passed |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Hermes真实论文到机制媒体的实施、生产与未决项 | **CURRENT active-memory**；production/rollback17eb209/c9439ae；真实解析通过、模型原文引用修复中；Claim桥接/UI本地验证中，机制视频未走通 |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT：真实论文机制媒体与服务器自主工作流 | **CURRENT active-memory**；production97aa06a/rollbackc5b0dd7；真实视频已批准，下一步整合OCR/ScanSci等既有能力为Hermes自主编排，之后优化UX |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |

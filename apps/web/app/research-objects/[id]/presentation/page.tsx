@@ -14,7 +14,8 @@ import {
   ApiClientError,
   createPresentationClaim,
   generatePresentationChart,
-  generatePresentationStoryboard, generatePresentationSceneImage,
+  generatePresentationStoryboard, generatePresentationSceneImage, generatePresentationVideo,
+  type PresentationVideoRequest,
   type StoryboardRequest, type SceneImageRequest,
   getPresentationTask,
   getResearchObject,
@@ -287,17 +288,19 @@ export default function PresentationPage({ params }: { params: { id: string } })
     }
   }
 
-  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest) {
+  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest, video?: PresentationVideoRequest) {
     if (!version || !canWrite || !scopeReady) return;
     const scope = scopeRef.current;
     if (!scopeIsCurrent(scope)) return;
-    const signature = JSON.stringify([scope.key, [...sourceClaimIds].sort(), storyboard ?? null, sceneImage ?? null]);
+    const signature = JSON.stringify([scope.key, [...sourceClaimIds].sort(), storyboard ?? null, sceneImage ?? null, video ?? null]);
     if (generationIntent.current?.signature !== signature) generationIntent.current = { signature, key: crypto.randomUUID() };
     const intent = generationIntent.current;
     setWorking(true);
     setError('');
     try {
-      const { task } = sceneImage
+      const { task } = video
+        ? await generatePresentationVideo(params.id, version.versionId, sourceClaimIds, video, intent.key, scope.controller.signal)
+        : sceneImage
         ? await generatePresentationSceneImage(params.id, version.versionId, sourceClaimIds, sceneImage, intent.key, scope.controller.signal)
         : storyboard
         ? await generatePresentationStoryboard(params.id, version.versionId, sourceClaimIds, storyboard, intent.key, scope.controller.signal)
@@ -400,6 +403,7 @@ export default function PresentationPage({ params }: { params: { id: string } })
             onGenerate={(ids) => void generate(ids)}
             onGenerateStoryboard={(ids, request) => void generate(ids, request)}
             onGenerateSceneImage={(ids, request) => void generate(ids, undefined, request)}
+            onGenerateVideo={(ids, request) => void generate(ids, undefined, undefined, request)}
             onResumeTask={() => setResumeNonce((current) => current + 1)}
             onRetryData={() => setLoadNonce((current) => current + 1)}
             onTransition={(assetItem, status) => void transition(assetItem, status)}

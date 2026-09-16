@@ -31,6 +31,17 @@ const generationBody = z.object({
   kind: z.enum(['chart', 'interactive_html', 'image', 'video']),
   storyboard: z.object({ locale: z.enum(['zh', 'en']), style: z.enum(['watercolor', 'technical', 'ink']), instruction: z.string().max(1000).trim().min(1), baseAssetId: z.string().uuid().optional() }).strict().optional(),
   sceneImage: z.object({ storyboardAssetId: z.string().uuid(), sceneIndex: z.number().int().min(0).max(5) }).strict().optional(),
+  video: z.object({
+    storyboardAssetId: z.string().uuid(),
+    sceneImageAssetIds: z.tuple([
+      z.string().uuid(), z.string().uuid(), z.string().uuid(), z.string().uuid(), z.string().uuid(),
+    ]),
+    sceneRoles: z.tuple([
+      z.literal('driver_signal'), z.literal('tip_enhancement'), z.literal('emission_collection'),
+      z.literal('delay_scan'), z.literal('field_reconstruction'),
+    ]),
+    profile: z.literal('onchip-field-sampling-v1'),
+  }).strict().optional(),
   sourceClaimIds: z.array(z.string().uuid()).min(1).max(12),
 }).strict();
 
@@ -39,7 +50,7 @@ const transitionBody = z.object({
   expectedUpdatedAt: z.string().datetime({ offset: true }).transform((value) => new Date(value)),
 }).strict();
 
-export function registerPresentationAssetRoutes(app: FastifyInstance, deps: AgentRouteDeps & { storage?: StorageAdapter; sceneImageEnabled?: boolean }): void {
+export function registerPresentationAssetRoutes(app: FastifyInstance, deps: AgentRouteDeps & { storage?: StorageAdapter; sceneImageEnabled?: boolean; videoEnabled?: boolean }): void {
   app.get('/research-objects/:researchObjectId/versions/:versionId/presentation-tasks/:taskId', async (req, reply) => {
     reply.header('Cache-Control', 'private, no-store');
     const user = await requireCurrentUser(deps, req, reply);
@@ -64,7 +75,7 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     if (!user) return;
     const params = scopeParams.parse(req.params);
     const body = generationBody.parse(req.body);
-    if (body.kind === 'video' || (body.kind === 'image' && !body.sceneImage)) throw new PresentationAssetError('VALIDATION_ERROR', 'This media generation capability is currently unavailable');
+    if ((body.kind === 'video' && !deps.videoEnabled) || (body.kind === 'image' && !body.sceneImage)) throw new PresentationAssetError('VALIDATION_ERROR', 'This media generation capability is currently unavailable');
     if (body.sceneImage && !deps.sceneImageEnabled) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image generation is currently unavailable');
     const idempotencyKey = z.string().trim().min(1).max(200).parse(req.headers['idempotency-key']);
     const task = await submitPresentationGeneration(deps, {
@@ -80,7 +91,7 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const params = scopeParams.parse(req.params);
-    return reply.send({ assets: (await listPresentationAssets(deps, { userId: user.userId, ...params })).map(asset => ({ ...asset, canGenerateSceneImage: !!deps.sceneImageEnabled && asset.canGenerateSceneImage })) });
+    return reply.send({ assets: (await listPresentationAssets(deps, { userId: user.userId, ...params })).map(asset => ({ ...asset, canGenerateSceneImage: !!deps.sceneImageEnabled && asset.canGenerateSceneImage, canGenerateVideo: !!deps.videoEnabled && asset.canGenerateVideo })) });
   });
 
   app.patch('/research-objects/:researchObjectId/versions/:versionId/presentation-assets/:assetId', async (req, reply) => {
@@ -91,6 +102,6 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     const asset = await transitionPresentationAsset(deps, { userId: user.userId, ...params, ...body }, auditCtx(req));
     const assets = await listPresentationAssets(deps, { userId: user.userId, researchObjectId: params.researchObjectId, versionId: params.versionId });
     const view = assets.find(item => item.id === asset.id);
-    return reply.send({ asset: view && { ...view, canGenerateSceneImage: !!deps.sceneImageEnabled && view.canGenerateSceneImage } });
+    return reply.send({ asset: view && { ...view, canGenerateSceneImage: !!deps.sceneImageEnabled && view.canGenerateSceneImage, canGenerateVideo: !!deps.videoEnabled && view.canGenerateVideo } });
   });
 }

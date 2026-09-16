@@ -5,3 +5,4 @@ apps/web/assets/optical-lab/fonts/*.txt text eol=lf
 apps/web/public/optical-lab/atlas/*.json text eol=lf
 apps/web/public/hermes/live2d/** -text
 apps/web/assets/hermes/live2d-source/** -text
+test/research-intelligence/manifest.json text eol=lf

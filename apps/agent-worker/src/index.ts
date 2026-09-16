@@ -42,6 +42,7 @@ import {
 import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
 import type { ParserInput } from './parsers/types';
 import { canonicalParserMediaType } from './parser-media-type';
+import { HostVideoSpool } from './presentation/host-video-spool';
 import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
 import { createTavilyAdapter } from './retrieval/tavily';
 import { createScanSciAdapter } from './retrieval/scansci';
@@ -203,6 +204,7 @@ export function createHandlers(
     parserCascade?: ParserCascadeRunner;
     externalProcessingPolicy?: ExternalProcessingPolicy;
     sourceRetrieveHandler?: TaskHandler;
+    videoSpool?: HostVideoSpool;
   } = {},
 ): Record<string, TaskHandler> {
   return {
@@ -293,7 +295,7 @@ export function createHandlers(
     },
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
-    'presentation.generate': createPresentationGenerationHandler({ gateway }),
+    'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool }),
     'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
     ...(options.searchIndexer === undefined ? {} : {
       'search.index': async (_deps: WorkerDeps, task) =>
@@ -414,6 +416,13 @@ async function main(): Promise<void> {
     externalProcessingPolicy,
     searchIndexer: buildSearchIndexerFromEnv(process.env),
     sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
+    ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HOST_VIDEO_INBOX_DIR?.trim()
+      && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {
+        videoSpool: new HostVideoSpool({
+          inboxDir: process.env.HOST_VIDEO_INBOX_DIR.trim(),
+          resultsDir: process.env.HOST_VIDEO_RESULTS_DIR.trim(),
+        }),
+      } : {}),
   });
   const pollOnce = await createPollOnce(handlers);
   await recoverProcessingQueue(deps);

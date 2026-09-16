@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { Readable } from 'node:stream';
-import type { AiGateway, Provider } from '@openscience/ai-gateway';
+import { AiGateway, type Provider } from '@openscience/ai-gateway';
 import type { DocumentSourceMap } from '@openscience/domain';
 import {
   extractHandler,
@@ -96,7 +96,10 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
         ? { summary: 'Canonical parser problem', sourceBlockIds: ['B000001'], needsMoreInformation: false }
         : { summary: '', sourceBlockIds: [], needsMoreInformation: true }])),
     };
-    const completeStructured = vi.fn().mockResolvedValue(proposal);
+    const completeStructured = vi.fn(async (guard: (value: unknown) => boolean) => {
+      expect(guard(proposal)).toBe(true);
+      return proposal;
+    });
     const gateway = { completeStructured } as unknown as AiGateway;
     const parserCascade = vi.fn().mockResolvedValue({ status: 'succeeded', sourceMap, warnings: [] });
     const handlers = createHandlers(gateway, {
@@ -442,6 +445,28 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     await expect(extractHandler(gateway, { payload: {} })).rejects.toThrow(/缺少正文/);
   });
 
+  it('向所有提取路径声明科学证据与物理量限定合同', async () => {
+    const proposal = { schemaVersion: '0.1.0', fields: Object.fromEntries(
+      ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility']
+        .map((field) => [field, { summary: '', sourceQuote: '', needsMoreInformation: true }]),
+    ) };
+    let systemPrompt = '';
+    const provider: Provider = { name: 'contract', model: 'contract', complete: async (input) => {
+      systemPrompt = input.messages.find((message) => message.role === 'system')?.content ?? '';
+      return { text: JSON.stringify(proposal), usage: { inputTokens: 1, outputTokens: 1 }, model: 'contract' };
+    } };
+    const gateway = new AiGateway({ providers: [provider] });
+
+    await extractHandler(gateway, { payload: { manuscriptText: 'A scientific manuscript with incomplete reporting.' } });
+
+    expect(systemPrompt).toContain('实验实测、理论估计、数值仿真、作者归因或解释');
+    expect(systemPrompt).toContain('讨论上限写成已验证性能');
+    expect(systemPrompt).toContain('入射量与局域量、场振幅与强度、脉冲能量与功率');
+    expect(systemPrompt).toContain('每个分句、数字、比较、因果或能力限定');
+    expect(systemPrompt).toContain('方法或配置披露不等于独立复现完成');
+    expect(systemPrompt).toContain('缺少直接证据，从 summary 删除该条款');
+  });
+
   it('保留正文后段的局限与复现证据，并返回逐字段来源和缺失信息', async () => {
     let submittedText = '';
     const proposal = {
@@ -502,6 +527,139 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.core.problem).toContain('庞大设备');
     expect(result.evidence.problem.quote).toBe('However, optical-field sampling systems\nrequire bulky apparatuses and vacuum environments');
     expect(result.evidence.problem.locator).toMatch(/^chars:\d+-\d+$/);
+  });
+
+  it.each(['missing', 'rewritten', 'partial', 'first-omitted', 'missing-upgrade', 'missing-invalid', 'two-failed-attempts'])('保留首轮合法字段并以字段原因修复其余字段：%s', async (mode) => {
+    const blocks = Array.from({ length: 6 }, (_, index) => ({
+      id: `block-${index + 1}`, kind: 'paragraph' as const, text: `Exact source block ${index + 1}`,
+      boundingBox: { x: 1, y: 90 - index * 10, width: 80, height: 8 },
+      parser: { name: 'native-pdf', version: '1' }, transformations: [],
+    }));
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-1', contentHash: 'a'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const first = {
+      schemaVersion: '0.1.0',
+      fields: {
+        problem: { summary: 'Retained problem', sourceBlockIds: ['B000001', 'B000002'], needsMoreInformation: false },
+        insight: { summary: 'Reverse order is invalid', sourceBlockIds: ['B000005', 'B000003'], needsMoreInformation: false },
+        method: { summary: '', sourceBlockIds: [], needsMoreInformation: false },
+        results: { summary: 'Duplicate invalid', sourceBlockIds: ['B000004', 'B000004'], needsMoreInformation: false },
+        limitations: { summary: 'Must be empty when missing', sourceBlockIds: [], needsMoreInformation: true },
+        reproducibility: missing,
+      },
+    };
+    const second = {
+      schemaVersion: '0.1.0',
+      fields: Object.fromEntries(['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility']
+        .map((field) => [field, field === 'method'
+          ? { summary: 'Repaired method', sourceBlockIds: ['B000003', 'B000004'], needsMoreInformation: false }
+          : missing])),
+    };
+    const requests: unknown[] = [];
+    let call = 0;
+    const provider: Provider = {
+      name: 'fixture', model: 'fixture',
+      complete: async (request) => {
+        requests.push(request);
+        call += 1;
+        const reply = structuredClone(call === 1 ? first : second);
+        if (call === 1 && mode === 'first-omitted') delete (reply.fields as Record<string, unknown>).method;
+        if (call > 1 && mode === 'missing-upgrade') reply.fields.reproducibility = { summary: 'Supported reproduction condition', sourceBlockIds: ['B000006'], needsMoreInformation: false };
+        if (call > 1 && mode === 'missing-invalid') reply.fields.reproducibility = { summary: 'Invalid must not upgrade', sourceBlockIds: ['UNKNOWN'], needsMoreInformation: false };
+        if (call > 1 && mode !== 'missing') {
+          reply.fields.problem = { summary: 'Unrequested rewrite', sourceBlockIds: ['B000005'], needsMoreInformation: false };
+        }
+        if (call === 2 && mode === 'two-failed-attempts') reply.fields.insight = first.fields.insight;
+        if (call > 1 && mode === 'partial') {
+          const partialFields = reply.fields as Record<string, unknown>;
+          delete partialFields.problem;
+          delete partialFields.reproducibility;
+        }
+        return { text: JSON.stringify(reply), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+      },
+    };
+
+    const result = await extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap });
+
+    expect(call).toBe(mode === 'two-failed-attempts' ? 3 : 2);
+    expect(result.core.problem).toBe('Retained problem');
+    expect(result.evidenceSegments?.problem.map((segment) => segment.quote)).toEqual([
+      'Exact source block 1', 'Exact source block 2',
+    ]);
+    expect(result.core.method).toBe('Repaired method');
+    expect(result.evidenceSegments?.method.map((segment) => segment.quote)).toEqual([
+      'Exact source block 3', 'Exact source block 4',
+    ]);
+    expect(result.needsMoreInformation).toEqual(mode === 'missing-upgrade'
+      ? ['insight', 'results', 'limitations'] : ['insight', 'results', 'limitations', 'reproducibility']);
+    expect(result.core.reproducibility).toBe(mode === 'missing-upgrade' ? 'Supported reproduction condition' : '');
+    const retryRequest = JSON.stringify(requests[1]);
+    expect(retryRequest).toContain('insight:ordered_ids_required');
+    expect(retryRequest).toContain(mode === 'first-omitted' ? 'method:malformed_item' : 'method:summary_required');
+    expect(retryRequest).toContain('results:duplicate_ids');
+    expect(retryRequest).toContain('limitations:missing_requires_empty');
+    expect(retryRequest).toContain('only the invalid fields');
+    expect(retryRequest).not.toContain('Reverse order is invalid');
+    expect(retryRequest).not.toContain('Must be empty when missing');
+  });
+
+  it('错误 schemaVersion 的响应不缓存其中看似合法的字段', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-1', contentHash: 'b'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'block-1', kind: 'paragraph', text: 'Exact source',
+        boundingBox: { x: 1, y: 1, width: 10, height: 10 },
+        parser: { name: 'native-pdf', version: '1' }, transformations: [],
+      }] }],
+    };
+    const fields = Object.fromEntries(['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility']
+      .map((field) => [field, field === 'problem'
+        ? { summary: 'Must not survive', sourceBlockIds: ['B000001'], needsMoreInformation: false }
+        : { summary: '', sourceBlockIds: [], needsMoreInformation: true }]));
+    let call = 0;
+    const provider: Provider = {
+      name: 'fixture', model: 'fixture',
+      complete: async () => ({ text: JSON.stringify(call++ === 0
+        ? { schemaVersion: 'wrong', fields }
+        : { schemaVersion: '0.1.0', fields: Object.fromEntries(Object.keys(fields).map((field) => [field, { summary: '', sourceBlockIds: [], needsMoreInformation: true }])) }), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } }),
+    };
+
+    const result = await extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap });
+    expect(result.core.problem).toBe('');
+    expect(result.needsMoreInformation).toContain('problem');
+  });
+
+  it('重试耗尽时拒绝整份结果而不返回已缓存的局部字段', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-1', contentHash: 'c'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: Array.from({ length: 3 }, (_, index) => ({
+        id: `block-${index + 1}`, kind: 'paragraph' as const, text: `Exact ${index + 1}`,
+        boundingBox: { x: 1, y: 20 + index, width: 10, height: 10 },
+        parser: { name: 'native-pdf', version: '1' }, transformations: [],
+      })) }],
+    };
+    const invalid = {
+      schemaVersion: '0.1.0', fields: {
+        problem: { summary: 'Valid but not independently returnable', sourceBlockIds: ['B000001'], needsMoreInformation: false },
+        insight: { summary: 'Still reversed', sourceBlockIds: ['B000003', 'B000001'], needsMoreInformation: false },
+        method: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+        results: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+        limitations: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+        reproducibility: { summary: '', sourceBlockIds: [], needsMoreInformation: true },
+      },
+    };
+    let calls = 0;
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => {
+      calls += 1;
+      return { text: JSON.stringify(invalid), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+
+    await expect(extractHandler(new AiGateway({ providers: [provider] }), { payload: {} }, { sourceMap }))
+      .rejects.toThrow(/重试上限/);
+    expect(calls).toBe(3);
   });
 
   it('canonical source map 将唯一第二页 Unicode 空白等价引文定位到原始 block，并忽略模型伪造 locator', async () => {
@@ -719,19 +877,20 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.needsMoreInformation).toEqual(['results']);
   });
 
-  it('uses an ordered contiguous canonical block span without rewriting hyphenation or fragmented formulas', async () => {
+  it('uses ordered noncontiguous canonical blocks without including unrelated text or rewriting fragmented formulas', async () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-segments', contentHash: 'e'.repeat(64), parser: { name: 'cascade', version: '1' },
       pages: [{ page: 1, width: 600, height: 800, blocks: [
         { id: 'line-a', kind: 'paragraph', text: 'The optical-', boundingBox: { x: 10, y: 10, width: 90, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
         { id: 'line-b', kind: 'paragraph', text: 'field obeys Φ_CEP ≠ 0 under calibrated condi-', boundingBox: { x: 10, y: 20, width: 300, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
+        { id: 'unrelated', kind: 'paragraph', text: 'Copyright and running header.', boundingBox: { x: 10, y: 25, width: 200, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
         { id: 'line-c', kind: 'paragraph', text: 'tions.', boundingBox: { x: 10, y: 30, width: 50, height: 10 }, parser: { name: 'native', version: '1' }, transformations: [] },
       ] }],
     };
     const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
     const proposal = {
       schemaVersion: '0.1.0', fields: {
-        problem: { summary: 'The calibrated condition produces a nonzero CEP response.', sourceBlockIds: ['B000001', 'B000002', 'B000003'], needsMoreInformation: false },
+        problem: { summary: 'The calibrated condition produces a nonzero CEP response.', sourceBlockIds: ['B000001', 'B000002', 'B000004'], needsMoreInformation: false },
         insight: missing, method: missing, results: missing, limitations: missing, reproducibility: missing,
       },
     };
@@ -798,5 +957,22 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     }) };
     const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] });
     await expect(extractHandler(gateway, { payload: {} }, { sourceMap })).rejects.toThrow();
+  });
+
+  it('rejects canonical evidence whose authentic selected text exceeds 8000 characters', async () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-oversize-evidence', contentHash: '8'.repeat(64), parser: { name: 'cascade', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'oversize', kind: 'paragraph', text: 'x'.repeat(8_001), boundingBox: { x: 0, y: 0, width: 90, height: 10 },
+        parser: { name: 'native', version: '1' }, transformations: [],
+      }] }],
+    };
+    const missing = { summary: '', sourceBlockIds: [], needsMoreInformation: true };
+    const fields = { problem: { summary: 'Too large', sourceBlockIds: ['B000001'], needsMoreInformation: false },
+      insight: missing, method: missing, results: missing, limitations: missing, reproducibility: missing };
+    const gateway = new AiGateway({ providers: [{ name: 'oversize', model: 'oversize', complete: async () => ({
+      text: JSON.stringify({ schemaVersion: '0.1.0', fields }), usage: { inputTokens: 1, outputTokens: 1 }, model: 'oversize',
+    }) }] });
+    await expect(extractHandler(gateway, { payload: {} }, { sourceMap })).rejects.toThrow(/重试上限/);
   });
 });
