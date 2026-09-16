@@ -397,4 +397,14 @@ describe('图片 provider 回退（只有确定未提交才前进）', () => {
     await expect(gw.canResumeImageBeforeSubmission('r')).resolves.toBe(false);
     expect(backupAsked).toBe(false);
   });
+
+  it('before_submission 在付款方具备能力并证实未提交时返回 true', async () => {
+    const payer: ImageProvider = {
+      name: 'payer', model: 'p', generate: async () => { throw new Error('nope'); },
+      canResumeBeforeSubmission: async () => true,
+    };
+    const spare: ImageProvider = { name: 'spare', model: 's', generate: async () => { throw new Error('nope'); } };
+    const gw = new AiGateway({ providers: [textStub()], imageProviders: [payer, spare], killSwitch: ENABLED_KILL_SWITCH });
+    await expect(gw.canResumeImageBeforeSubmission('r')).resolves.toBe(true);
+  });
 });
