@@ -265,4 +265,32 @@ describe('AnthropicCompatProvider（MiniMax Token Plan）', () => {
     await gw.completeStructured((v): v is { k: number } => typeof v === 'object' && v !== null && (v as { k?: unknown }).k === 1, [{ role: 'user', content: 'x' }], { maxTokens: 8192 });
     expect(receivedMaxTokens).toBe(8192);
   });
+
+  it('结构化输出触顶时按 escalateMaxTokens 升级一次并成功', async () => {
+    const seen: number[] = [];
+    let calls = 0;
+    const provider: Provider = { name: 'p', model: 'm', complete: async (req) => {
+      seen.push(req.maxTokens ?? 0);
+      calls += 1;
+      if (calls === 1) return { text: '{"k":', usage: { inputTokens: 1, outputTokens: 1 }, model: 'm', finishReason: 'length' };
+      return { text: '{"k":1}', usage: { inputTokens: 1, outputTokens: 1 }, model: 'm', finishReason: 'stop' };
+    } };
+    const gw = new AiGateway({ providers: [provider] });
+    const out = await gw.completeStructured((v): v is { k: number } => typeof v === 'object' && v !== null && (v as { k?: unknown }).k === 1,
+      [{ role: 'user', content: 'x' }], { maxTokens: 8192, escalateMaxTokens: 16384 });
+    expect(out).toEqual({ k: 1 });
+    expect(seen).toEqual([8192, 16384]);
+  });
+
+  it('未提供 escalateMaxTokens 时截断仍立即失败，不重复消耗额度', async () => {
+    let calls = 0;
+    const provider: Provider = { name: 'p', model: 'm', complete: async () => {
+      calls += 1;
+      return { text: '{"k":', usage: { inputTokens: 1, outputTokens: 1 }, model: 'm', finishReason: 'length' };
+    } };
+    const gw = new AiGateway({ providers: [provider] });
+    await expect(gw.completeStructured((v): v is { k: number } => typeof v === 'object' && v !== null,
+      [{ role: 'user', content: 'x' }], { maxTokens: 8192 })).rejects.toThrow(/token limit/u);
+    expect(calls).toBe(1);
+  });
 });

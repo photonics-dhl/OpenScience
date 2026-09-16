@@ -96,6 +96,13 @@ export type StructuredGenerationOptions = TextGenerationOptions & {
   maxRetries?: number;
   /** Opt in to conversational repair with the rejected candidate; other structured calls keep replacement-only retries. */
   includeRejectedResponseOnRetry?: boolean;
+  /**
+   * Output allowance for a single bounded escalation when the provider stops at
+   * `length`. Repeating the same limit cannot repair a truncated response, but a
+   * larger allowance often can; the escalation does not consume the schema-retry
+   * budget and is attempted at most once per call.
+   */
+  escalateMaxTokens?: number;
 };
 
 const MAX_STRUCTURED_RETRIES = 2; // §9.3 失败有限重试
@@ -449,6 +456,8 @@ export class AiGateway {
     }
     let lastError: unknown;
     let retryMessages = messages;
+    let currentMaxTokens = opts.maxTokens ?? 4096;
+    let escalated = false;
     const withRejectedCandidate = (
       result: GatewayCompletion,
       feedback: string,
@@ -470,10 +479,19 @@ export class AiGateway {
     for (let attempt = 0; attempt <= retryLimit; attempt++) {
       try {
         const result = await this.completeWithControls(retryMessages, {
-          temperature: opts.temperature, maxTokens: opts.maxTokens ?? 4096,
+          temperature: opts.temperature, maxTokens: currentMaxTokens,
           thinking: opts.thinking, topP: opts.topP, timeoutMs: opts.timeoutMs,
         }, controls);
         if (result.finishReason === 'length') {
+          const escalation = opts.escalateMaxTokens;
+          if (!escalated && escalation !== undefined && Number.isSafeInteger(escalation) && escalation > currentMaxTokens) {
+            escalated = true;
+            currentMaxTokens = escalation;
+            this.logger?.warn?.(`structured.output.truncated_escalating maxTokens=${escalation}`);
+            // A budget escalation is not a schema repair: keep the same retry slot.
+            attempt -= 1;
+            continue;
+          }
           // Repeating the same limit cannot repair a truncated response.
           throw new AiGatewayError('STRUCTURED_OUTPUT_TRUNCATED', 'structured output reached token limit');
         }
