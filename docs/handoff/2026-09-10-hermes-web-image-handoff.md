@@ -3,6 +3,9 @@
 > **Canonical 交付分支（2026-09-16 用户决定）**：`release/onchip-production-line`。它等于生产线 `311c980f` + 我方 `e86bd39f` 输出窗口修复 + 本文件治理叠加，已部署为生产 `4099078b`。旧 `codex/onchip-video-release` 降级为历史线（缺 journals/学术身份），**不得用于发版**。
 
 ## 2026-09-15 会话暂停：下个 session 从这里续作
+- **图片链路修复已实证 + 背景修订成图（2026-09-16 最新）**：`e86bd39f` 的输出窗口修复随 `4099078b` 上线后，此前因 `Provider exhausted output allowance before producing text` 失败的背景修订任务一次通过。底稿 `9a10aeda-7b53-4f88-a4ae-af2ddc3493ab`（已批准）→ 场景图 `803e590b-6fa5-4a32-877c-2c691daabd4d` succeeded/draft，导出 `tmp/research-illustration-academic-bg-rev2-803e590b.png` 并已呈现用户，**待用户审美确认**。科学关系、labels、claim/source 均未变，仅动背景与材料。
+- **图片链路待处理隐患已登记**：见 `docs/runbooks/hermes-capability-registry.md`「当前技术债与处理」末尾新增 6 行（结构化输出触顶无自适应重试、prompt 设计段字符硬截断、单一 image provider 无自动回退、付费图片不可自动重试、审批 CAS 409 需调用方重读重试、浏览器桥瞬时故障）。均附位置、后果与下一步，未解决。
+- 经验已写入 `.memory/memory.jsonl`（`XGS-Release-Identity-Rollback`、`XGS-Release-Guard-GeneratedPaths`、`XGS-Workspace-Hygiene`）。
 - 用户已纠正验证政策：禁止过度测试、全套预检及 CI；允许针对直接风险或已知故障的最小必要定向验证，须说明范围与证据。本轮完成终端验证、必要服务器部署和真实索引/UI观察；未运行项目测试、预检、CI或本机构建。
 - 候选四文件：`packages/search/src/embedder.ts`、`apps/agent-worker/src/search-indexer.ts`、`packages/domain/src/agent/agent.ts`、`scripts/index-confirmed-research-sources.cjs`。批次8→2，tokenize/encode每次总预算120秒；仅严格503/worker_busy在预算内最多等3秒重试一次，chunk超时/网络不确定不重发；前台3秒/一次原样。原source索引最多两次显式恢复，严格暂态白名单、原producer与来源/权限重验、CAS原count/epoch/result含AnyNull、递增审计；不清零计数、不创建来源副本、不扣LLM额度。
 - 候选四文件已提交 `ba184541`，无关 dirty spec 未提交；独立High审查对 `embedder.ts`/`search-indexer.ts` 新增差异为 GO。按现行runbook部署成功，应用release=`ba184541`、rollback=`6684e448`；部署明确跳过全套验收。

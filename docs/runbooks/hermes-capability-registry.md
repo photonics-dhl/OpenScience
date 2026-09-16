@@ -79,6 +79,12 @@
 | 拆分Claim仍按整字段挂全部supports，且字段只能挂一条Claim | 已有拆分入口不能保留独立来源/限定，配图被迫读长文本 | 已上线当前snapshot索引保存逐Claim关系；两API共用schema，web复用Domain类型及服务器批次上限；planner/review收到父关系。High主路径GO；正常用户确认效果尚未观察，见CURRENT |
 | 已审细粒度候选未进入确认入口 | 用户需手工拆长摘要，下游重新解释完整摘要 | 已上线v5同轮附加逐条建议，经SourceMap到Evidence范围映射和共享parser进入原确认UI；上游未审/blocked/改写字段不暴露建议，失效父项后代递归移除。High静态GO；已补聚合输出量提示和统一12条容量，必要部署/实际结果见CURRENT |
 | 只在交接时更新文档，意外中断可能丢状态 | 后续回合不清楚已改/未改或沿用旧待办 | 既有docs-sync补充有变化回合final前同步、关键节点先保存、下轮Git恢复；普通问答不重写，不宣称后台关闭回调或绝对防漂移 |
+| 结构化输出触顶是终局失败：`STRUCTURED_OUTPUT_TRUNCATED` 无自适应重试 | 复杂 art/science 简报触顶即任务失败、需人工重发（本轮 `01640253` 正是此因，报错 "Provider exhausted output allowance before producing text"） | 已给 `illustration-planner.ts` 两阶段与 `scene-image.ts` 的 `completeStructured` 显式 `maxTokens:8192` + `maxRetries:1`，并部署（`4099078b`）。**已实证**：同一背景修订从失败变为 succeeded（`9a10aeda`）。仍无"截断后降级/缩减简报重试"路径 |
+| 生图 prompt 的设计段按字符硬截断：`compileIllustrationImagePrompt` 用 `slice(0, remaining)` | 设计 skill 指导可能切在半句/半条规则处，产生不完整指令 | 位置 `apps/agent-worker/src/presentation/scene-image.ts`；当前只保证不超 1500 上限，未按语义边界截断。候选改进：按行/小节边界截断并加省略标记；尚未观察到实际截断案例 |
+| 单一 image provider、无自动回退：`gateway.generateImage` 只用 `imageProviders[0]` | chatgpt-web 桥或账号额度故障时无备援，任务直接失败 | provider 由 `HERMES_SCENE_IMAGE_PROVIDER` 单值选定（chatgpt-web / codex / minimax），三个分支互斥。`IMAGE_USAGE_LIMIT` 已与一般失败区分，但没有"额度用尽自动换 provider"。切换需改环境并重新部署 |
+| 付费图片尝试不可自动重试：`executionAttempt>1` 且无已存结果即 blocked | 桥故障后必须显式重新发起，本次额度已消耗 | 既有保护（防止重复付费与不确定重发）；仅 `canResumeImageFromCompletedResult`/spool 恢复路径可复用原结果。对用户是显式中断，不是透明重试 |
+| 资产审批走 CAS，`expectedUpdatedAt` 过期返回 409 | 并发或延迟下批准失败，需重读时间戳再试（本轮遇到两次） | 调用方需实现"409 → 重读 updatedAt → 重试一次"。目前由操作者手工完成，UI/agent 侧未见统一封装 |
+| 浏览器桥瞬时故障：CSRF 502、`ERR_SSL_PROTOCOL_ERROR`、`ERR_EMPTY_RESPONSE` | 取 token 或导出图片阶段偶发失败，但不影响已生成资产 | 本轮多次遇到并靠重试恢复；无自动重试封装。属可观测的已知抖动，不应据此判断生成失败或更换 provider |
 
 代码去重及v2/局部末审均经独立High静态复核，并完成必要服务器构建/部署；来源/权限/并发重验保持，v1兼容。已观察真实末审、两张不合格成图及原审阅恢复，不能宣称新版科学/审美质量合格；完整所选Claim上下文仍可能触及既有输入上限。治理和这些重构不能把原有科学质量欠缺变成“已完成”。
 
