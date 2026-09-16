@@ -264,6 +264,94 @@ test('personal literature acquisition recovers a running server task after reloa
   expect(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith('openscience:literature:')))).toEqual([]);
 });
 
+test('RO Files exposes recovered progress and opens only for a new literature task', async ({ page }) => {
+  const researchObjectId = 'ro-literature-recovery';
+  const runningTask = {
+    id: 'ro-literature-running', sessionId: 'session-ro', kind: 'source.retrieve', status: 'running', progress: 40,
+    retryCount: 0, canRetry: false, executionAttempt: 1, result: null, error: null,
+    createdAt: '2026-09-07T00:00:00.000Z', updatedAt: '2026-09-07T00:01:00.000Z',
+  };
+  let recoveryReads = 0;
+  let acquisitionPosts = 0;
+  let retryPosts = 0;
+  let newTaskReads = 0;
+  const recoveredSucceeded = {
+    ...runningTask,
+    status: 'succeeded', progress: 100,
+    result: { sources: [{ id: 'source-recovered', title: 'Recovered full text', sourceUrl: 'https://example.test/recovered', identifiers: { doi: '10.1000/recovered' }, temporaryDocumentId: 'document-recovered', expiresAt: '2026-09-10T00:00:00.000Z' }] },
+  };
+  const newPending = {
+    ...runningTask, id: 'ro-literature-new', status: 'pending', progress: 0, executionAttempt: 0,
+    createdAt: '2026-09-07T00:02:00.000Z', updatedAt: '2026-09-07T00:02:00.000Z',
+  };
+  const newFailed = { ...newPending, status: 'failed', progress: 30, canRetry: true, executionAttempt: 1, error: '[retryable] upstream timeout' };
+  const newRetried = { ...newPending, retryCount: 1, executionAttempt: 1 };
+  const newSucceeded = {
+    ...newRetried,
+    status: 'succeeded', progress: 100,
+    result: { sources: [{ id: 'source-new', title: 'New full text', sourceUrl: 'https://example.test/new', temporaryDocumentId: 'document-new', expiresAt: '2026-09-10T00:00:00.000Z' }] },
+  };
+
+  await page.route('**/api/auth/me', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ userId: 'ro-reader', email: 'reader@example.invalid', displayName: 'RO Reader', status: 'email_verified', level: 'free' }),
+  }));
+  await page.route(`**/api/research-objects/${researchObjectId}`, (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ researchObject: {
+      id: researchObjectId, workspaceId: 'workspace-ro', title: 'Recovered literature', status: 'draft', visibility: 'private', version: 1,
+      createdAt: '2026-09-07T00:00:00.000Z', sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' }, nodes: [] },
+    } }),
+  }));
+  await page.route(`**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=research_object&researchObjectId=${researchObjectId}`, async (route) => {
+    recoveryReads += 1;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [runningTask] }) });
+  });
+  await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'ro-literature-csrf' }) }));
+  await page.route('**/api/agent/tasks/ro-literature-running', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: recoveredSucceeded }) }));
+  await page.route('**/api/literature/acquisitions', async (route) => {
+    acquisitionPosts += 1;
+    expect(await route.request().postDataJSON()).toEqual({ query: 'New scoped paper', target: { kind: 'research_object', researchObjectId } });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ task: newPending, researchObject: {}, session: {} }) });
+  });
+  await page.route('**/api/agent/tasks/ro-literature-new/retry', (route) => {
+    retryPosts += 1;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: newRetried }) });
+  });
+  await page.route('**/api/agent/tasks/ro-literature-new', (route) => {
+    newTaskReads += 1;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: newTaskReads === 1 ? newFailed : newSucceeded }) });
+  });
+
+  await page.goto(`${baseUrl}/research-objects/${researchObjectId}/files`);
+  const disclosure = page.locator('[data-literature-entry]');
+  await expect(disclosure).toBeVisible();
+  await expect.poll(() => recoveryReads).toBe(1);
+  await expect(disclosure).toHaveJSProperty('open', true);
+  await expect(page.getByText(/retrieving source/i)).toBeVisible();
+  await disclosure.locator('> summary').click();
+  await expect(page.locator('[data-literature-state]')).toHaveAttribute('data-literature-state', 'succeeded', { timeout: 4_000 });
+  await expect(disclosure).toHaveJSProperty('open', false);
+
+  await disclosure.locator('> summary').click();
+  await expect(page.getByRole('button', { name: /download source/i })).toBeVisible();
+  await page.getByLabel(/title, doi, or arxiv id/i).fill('New scoped paper');
+  await page.getByRole('button', { name: /search metadata/i }).click();
+  await expect.poll(() => acquisitionPosts).toBe(1);
+  await disclosure.locator('> summary').click();
+  await expect(disclosure).toHaveJSProperty('open', false);
+  await expect(disclosure).toHaveJSProperty('open', true, { timeout: 2_000 });
+
+  await expect(page.getByRole('button', { name: /try again/i })).toBeVisible({ timeout: 4_000 });
+  await page.getByRole('button', { name: /try again/i }).click();
+  await expect(page.getByText(/new full text/i)).toBeVisible({ timeout: 4_000 });
+  await expect(page.getByRole('button', { name: /download source/i })).toBeVisible();
+  expect(acquisitionPosts).toBe(1);
+  expect(retryPosts).toBe(1);
+});
+
 test('a permanent 401 while polling routes the dashboard through established login recovery', async ({ page }) => {
   const runningTask = { id: 'literature-auth-lost', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, canRetry: false, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
   await mockAuthenticatedUser(page);

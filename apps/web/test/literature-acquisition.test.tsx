@@ -17,7 +17,7 @@ vi.mock('next-intl', () => ({
   },
 }));
 
-import { LiteratureAcquisition, LiteratureAcquisitionDisclosure, describeLiteratureTask, hasExplicitLiteratureIntentIdentity, isLiteratureIdentifier, isLiteratureTaskRetryEligible, shouldSubmitEmbeddedLiteratureQuery, type LiteratureTask } from '@/components/dashboard/LiteratureAcquisition';
+import { LiteratureAcquisition, LiteratureAcquisitionDisclosure, createLiteratureDisclosureState, describeLiteratureTask, hasExplicitLiteratureIntentIdentity, isLiteratureIdentifier, isLiteratureTaskRetryEligible, reduceLiteratureDisclosureState, shouldSubmitEmbeddedLiteratureQuery, updateScopedLiteratureTask, type LiteratureTask } from '@/components/dashboard/LiteratureAcquisition';
 
 const sourceTask: LiteratureTask = {
   id: 'task-1', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0,
@@ -113,6 +113,34 @@ describe('Personal literature acquisition', () => {
     expect(markup.match(/data-literature-acquisition="true"/g)).toHaveLength(1);
     expect(markup).toContain('data-literature-target="research-object:00000000-0000-4000-8000-000000000701"');
     expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
+  });
+
+  it('opens for a recovered task identity and preserves a manual close across polling updates', () => {
+    let state = createLiteratureDisclosureState('user-1:research-object:ro-1', null);
+    state = reduceLiteratureDisclosureState(state, { type: 'observe_task', scope: state.scope, taskId: 'task-a' });
+    expect(state.open).toBe(true);
+
+    state = reduceLiteratureDisclosureState(state, { type: 'toggle', open: false });
+    state = reduceLiteratureDisclosureState(state, { type: 'observe_task', scope: state.scope, taskId: 'task-a' });
+    expect(state.open).toBe(false);
+
+    state = reduceLiteratureDisclosureState(state, { type: 'observe_task', scope: state.scope, taskId: 'task-b' });
+    expect(state.open).toBe(true);
+  });
+
+  it('resets disclosure identity on a user or RO scope switch and ignores the old scope', () => {
+    const oldScope = 'user-1:research-object:ro-1';
+    let state = createLiteratureDisclosureState(oldScope, 'task-a');
+    state = reduceLiteratureDisclosureState(state, { type: 'sync_scope', scope: 'user-2:research-object:ro-2', taskId: null });
+    state = reduceLiteratureDisclosureState(state, { type: 'observe_task', scope: oldScope, taskId: 'task-stale' });
+
+    expect(state).toEqual({ scope: 'user-2:research-object:ro-2', taskId: null, open: false });
+  });
+
+  it('rejects a delayed task result from a previous user or RO scope', () => {
+    const current = { scope: 'user-2:research-object:ro-2', task: null };
+    expect(updateScopedLiteratureTask(current, 'user-1:research-object:ro-1', sourceTask)).toBe(current);
+    expect(updateScopedLiteratureTask(current, current.scope, sourceTask)).toEqual({ scope: current.scope, task: sourceTask });
   });
 
   it('does not submit embedded Enter while a Chinese IME composition is active', () => {
