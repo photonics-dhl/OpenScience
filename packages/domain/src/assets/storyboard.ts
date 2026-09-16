@@ -4,6 +4,23 @@ import { parseIllustrationBrief, describeIllustrationBrief, type IllustrationBri
 export const STORYBOARD_IMAGE_VISUAL_ACTION_MAX = 4000;
 export const STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX = 100;
 export const STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX = 1000;
+
+/**
+ * Legacy style id aliases. Both the agent-worker loader and the domain-side
+ * revision comparison must reduce these to a single canonical form before
+ * comparing; otherwise d3a0da3f-era tasks stored with `style: 'technical'`
+ * cannot be retried with the same conceptual style under a newer alias.
+ */
+export const STORYBOARD_STYLE_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+    'v6': 'scientific',
+    'technical': 'scientific',
+    'ink': 'ink-notes',
+    'watercolor': 'watercolor',
+});
+/** Reduce a free-form style id through the alias table; stable across legacy and new ids. */
+export function canonicalStoryboardStyle(raw: string): string {
+    return STORYBOARD_STYLE_ALIASES[raw] ?? raw;
+}
 export interface StoryboardRequest {
     locale: 'zh' | 'en';
     /**

@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { canonicalStoryboardStyle } from '@openscience/domain';
 import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from './scientific-critical-thinking';
 
 // The release mounts these original, MIT-licensed Markdown packages read-only.
@@ -79,17 +80,12 @@ export function mergeDesignSkillUsage(...groups: (readonly DesignSkillUsage[] | 
   return merged;
 }
 
-// Legacy single-string aliases for back-compat with existing callers.
-const STYLE_ALIASES: Record<string, IllustrationStyleId> = {
-  'v6': 'scientific',
-  'watercolor': 'watercolor',
-  'ink': 'ink-notes',
-  'technical': 'scientific',
-};
+// Legacy single-string aliases live in @openscience/domain so the domain-side
+// revision comparison (presentation-asset.ts) can normalise the same way.
 function resolveStyle(raw: string | undefined): IllustrationStyleId {
   if (!raw) return 'scientific';
-  const alias = STYLE_ALIASES[raw];
-  if (alias) return alias;
+  const alias = canonicalStoryboardStyle(raw);
+  if (alias !== raw) return alias as IllustrationStyleId;
   // Allow any article-illustrator or infographic style id present in the repo.
   const articlePath = `baoyu-article-illustrator/references/styles/${raw}.md`;
   const infoPath = `baoyu-infographic/references/styles/${raw}.md`;

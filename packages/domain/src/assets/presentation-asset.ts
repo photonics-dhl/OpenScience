@@ -5,7 +5,7 @@ import { lockLiveResearchObject, lockTrashReferences } from '../trash/trash';
 import { isWorkingDraftVersion } from '../commit/version-history';
 import { refreshWorkingResearchRecord } from '../commit/research-record-snapshot';
 import { isVersionHistoryCopy, requireValidVersionHistoryCopy } from './version-history-copy';
-import { parseStoryboardRequest, presentationStoryboardView, type StoryboardRequest, type StoryboardView } from './storyboard';
+import { parseStoryboardRequest, presentationStoryboardView, canonicalStoryboardStyle, type StoryboardRequest, type StoryboardView } from './storyboard';
 import type { AuditContext } from '@openscience/observability';
 import type { PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { createAgentSession, getAgentTask, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
@@ -397,7 +397,7 @@ export async function requireStoryboardRevisionTask(prisma: Pick<Prisma.Transact
         if (original.kind !== 'interactive_html' || original.storyboard?.output !== 'image'
             || original.researchObjectId !== payload.researchObjectId || original.versionId !== payload.versionId
             || JSON.stringify(original.sourceClaimIds) !== JSON.stringify(payload.sourceClaimIds)
-            || original.storyboard.locale !== settings.locale || original.storyboard.style !== settings.style)
+            || original.storyboard.locale !== settings.locale || canonicalStoryboardStyle(original.storyboard.style) !== canonicalStoryboardStyle(settings.style))
             throw new PresentationAssetError('VALIDATION_ERROR', 'Storyboard revision task is invalid for these sources and settings');
         const result = task.result && typeof task.result === 'object' && !Array.isArray(task.result) ? task.result : undefined;
         const checkpoint = result?.storyboardCheckpoint;
