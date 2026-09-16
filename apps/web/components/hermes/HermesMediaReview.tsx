@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { listPresentationAssets, transitionPresentationAsset, type PresentationAsset } from '@/lib/api';
+import { ApiClientError, listPresentationAssets, transitionPresentationAsset, type PresentationAsset } from '@/lib/api';
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 
 export function HermesMediaReview({ researchObjectId, versionId, onConfirmationChange, beforeReview, onReviewed }: {
@@ -46,7 +46,18 @@ export function HermesMediaReview({ researchObjectId, versionId, onConfirmationC
       setAssets((items) => items.map((item) => item.id === asset.id ? { ...item, status: next.status, updatedAt: next.updatedAt, canTransition: false } : item));
       setMessage(t(status === 'approved' ? 'mediaApproved' : 'mediaRejected', { title: mediaTitle(asset) })); onReviewed();
     } catch (cause) {
-      if (ownerRef.current === owner) setError(cause instanceof Error ? cause.message : String(cause));
+      if (ownerRef.current !== owner) return;
+      // A 409 means the asset moved on (someone else reviewed it, or the worker refreshed
+      // it). Retrying with the stale timestamp would only conflict again, so re-read the
+      // list and let the user act on the current version.
+      if (cause instanceof ApiClientError && cause.status === 409) {
+        try {
+          const { assets: latest } = await listPresentationAssets(researchObjectId, versionId);
+          if (ownerRef.current !== owner) return;
+          setAssets(latest.filter((item) => item.researchObjectId === researchObjectId && item.versionId === versionId && item.status === 'draft'));
+        } catch { /* the conflict message below stays authoritative */ }
+      }
+      setError(cause instanceof Error ? cause.message : String(cause));
     } finally { writing.current = false; if (ownerRef.current === owner) setBusy(false); }
   }
   const reviewRef = useRef(review); reviewRef.current = review;
