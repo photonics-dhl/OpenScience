@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Handoff — 2026-08-04 P1C-6 Pull Request 完成
 
 - Current goal: Phase 1C GitHub 式科研协作。P1C-6 已闭环（/pull-requests API + 迁移 14，云上集成 77/77），下一任务 P1C-7 作者/CRediT（task-master 4.7）。

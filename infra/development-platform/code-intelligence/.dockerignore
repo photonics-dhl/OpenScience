@@ -1,0 +1,11 @@
+*
+!Dockerfile
+!package.json
+!pnpm-lock.yaml
+!prepare-config.py
+!readonly-context.yml
+!query.py
+!serve.py
+!snapshot_identity.py
+!uv
+!serena-upstream.tar.gz

@@ -9,7 +9,7 @@ import {
 } from '@openscience/domain';
 import { runDocumentParser } from './base-parser';
 import { enrichWithGrobid, type GrobidEnrichmentResult } from './grobid-parser';
-import type { ParserStageResult, StagePage } from './job-protocol';
+import { SafeParserWarningCode, type ParserRasterResult, type ParserStageResult, type StagePage } from './job-protocol';
 import {
   PARSER_CASCADE_METADATA,
   runLlmOcrFallback,
@@ -17,6 +17,7 @@ import {
 } from './llm-ocr-fallback';
 import { ocrSelectedPages, type LocalOcrAdapter } from './ocr-parser';
 import { assessPageQuality } from './page-quality';
+import { PDF_TEXT_ITEM_METADATA } from './native-pdf-contract';
 import type { DocumentParser, ParserInput } from './types';
 
 export const CASCADE_ORCHESTRATOR_METADATA: DocumentParserMetadata = PARSER_CASCADE_METADATA;
@@ -36,6 +37,7 @@ interface ParserCascadeAdapters {
   isolatedLocalOcr?: {
     inventoryPages(input: ParserInput): Promise<ParserStageResult>;
     ocrPages(input: ParserInput, pages: readonly (StagePage & { reason: OcrSelectionReason })[]): Promise<ParserStageResult>;
+    renderPages(input: ParserInput, pageNumbers: readonly number[]): Promise<ParserRasterResult>;
   };
 }
 
@@ -82,6 +84,13 @@ function emptySourceMap(input: ParserInput): DocumentSourceMap {
     parser: metadataCopy(CASCADE_ORCHESTRATOR_METADATA),
     pages: [],
   };
+}
+
+function hasNativePdfTextBlocks(sourceMap: DocumentSourceMap): boolean {
+  return sourceMap.pages.some((page) => page.blocks.some((block) => (
+    block.parser.name === PDF_TEXT_ITEM_METADATA.name
+    && block.parser.version === PDF_TEXT_ITEM_METADATA.version
+  )));
 }
 
 function normalizedText(value: string | undefined): string | undefined {
@@ -152,13 +161,12 @@ function mergeDeterministicMaps(
   const ids = new Set(pages.flatMap((page) => page.blocks.map(({ id }) => id)));
   for (const incomingPage of incoming.pages) {
     let page = pages.find(({ page: pageNumber }) => pageNumber === incomingPage.page);
+    let incomingBlocks = incomingPage.blocks;
     if (!page) {
       page = { page: incomingPage.page, width: incomingPage.width, height: incomingPage.height, blocks: [] };
       pages.push(page);
-    } else if (page.width !== incomingPage.width || page.height !== incomingPage.height) {
-      return undefined;
-    }
-    for (const incomingBlock of incomingPage.blocks) {
+    } else if (page.width !== incomingPage.width || page.height !== incomingPage.height) return undefined;
+    for (const incomingBlock of incomingBlocks) {
       const matching = matchingBlock(page.blocks, incomingBlock);
       if (matching) {
         const index = page.blocks.indexOf(matching);
@@ -264,12 +272,19 @@ function inventorySourceMap(input: ParserInput, result: ParserStageResult): Docu
   }
 }
 
-function unresolvedPages(sourceMap: DocumentSourceMap): Array<StagePage & { reason: OcrSelectionReason }> {
+function unresolvedPages(sourceMap: DocumentSourceMap): Array<StagePage & {
+  reason: OcrSelectionReason;
+  localOcrRequired: boolean;
+}> {
   return stagePages(sourceMap).flatMap((page) => {
     const assessment = assessPageQuality(page);
     if (!assessment.localOcrRequired && !assessment.llmCandidateReason) return [];
-    return [{ ...page, reason: assessment.llmCandidateReason ?? 'low_confidence' }];
-  });
+    return [{
+      ...page,
+      reason: assessment.llmCandidateReason ?? 'low_confidence',
+      localOcrRequired: assessment.localOcrRequired,
+    }];
+  }).sort((left, right) => Number(right.reason === 'formula') - Number(left.reason === 'formula') || left.page - right.page);
 }
 
 function boundedUniqueStrings(values: readonly string[]): string[] {
@@ -293,6 +308,7 @@ export async function runParserCascade(
   const warnings: string[] = [];
   let current = emptySourceMap(canonicalInput);
   let localStageSucceeded = false;
+  let nativeTextFidelityReview = false;
 
   try {
     const extracted = await runDocumentParser(adapterInput(canonicalInput), context.adapters.extractText);
@@ -300,6 +316,10 @@ export async function runParserCascade(
     if (extracted.status === 'failed') {
       reasons.push('extract_text failed');
     } else {
+      nativeTextFidelityReview = canonicalInput.mediaType === 'application/pdf'
+        && extracted.status === 'succeeded'
+        && extracted.warnings.includes(SafeParserWarningCode.PARTIAL_RESULT)
+        && hasNativePdfTextBlocks(extracted.sourceMap);
       const stamped = withOrchestratorMetadata(extracted.sourceMap);
       if (!stamped) reasons.push('critical locator could not round-trip');
       else {
@@ -366,75 +386,108 @@ export async function runParserCascade(
   if (context.featureFlags.localOcr
     && (context.adapters.isolatedLocalOcr || context.adapters.localOcr)
     && initialUnresolved.length > 0) {
-    const selected = initialUnresolved.slice(0, 4);
-    try {
-      const result = context.adapters.isolatedLocalOcr
-        ? await context.adapters.isolatedLocalOcr.ocrPages(adapterInput(canonicalInput), selected)
-        : await ocrSelectedPages(adapterInput(canonicalInput), selected, context.adapters.localOcr!);
-      const localMap = localOcrSourceMap(canonicalInput, result);
-      const merged = localMap ? mergeDeterministicMaps(current, localMap) : undefined;
-      if (!merged) reasons.push('critical locator could not round-trip');
-      else {
-        current = merged;
-        const mergedPages = new Map(stagePages(current).map((page) => [page.page, page]));
-        for (const page of result.pages) {
-          const mergedPage = mergedPages.get(page.page);
-          const rawOcrAssessment = assessPageQuality({
-            ...page, signals: { localOcrApplied: true },
-          });
-          const mergedAssessment = mergedPage && assessPageQuality(mergedPage);
-          const mergedHasStructuralConcern = mergedAssessment?.reasons.some(
-            (reason) => reason !== 'low_confidence',
-          );
-          if (page.blocks.length > 0
-            && initialReasonByPage.get(page.page) === 'low_confidence'
-            && rawOcrAssessment.llmCandidateReason === undefined
-            && mergedHasStructuralConcern === false) {
-            locallyResolved.add(page.page);
+    // Native formula blocks need visual transcription, not a full-page Tesseract pass.
+    // Reserve local OCR for pages whose text layer is actually missing or unreliable.
+    const selected = initialUnresolved.filter(({ localOcrRequired }) => localOcrRequired).slice(0, 4);
+    if (selected.length > 0) {
+      try {
+        const result = context.adapters.isolatedLocalOcr
+          ? await context.adapters.isolatedLocalOcr.ocrPages(adapterInput(canonicalInput), selected)
+          : await ocrSelectedPages(adapterInput(canonicalInput), selected, context.adapters.localOcr!);
+        const localMap = localOcrSourceMap(canonicalInput, result);
+        const merged = localMap ? mergeDeterministicMaps(current, localMap) : undefined;
+        if (!merged) reasons.push('critical locator could not round-trip');
+        else {
+          current = merged;
+          const mergedPages = new Map(stagePages(current).map((page) => [page.page, page]));
+          for (const page of result.pages) {
+            const mergedPage = mergedPages.get(page.page);
+            const rawOcrAssessment = assessPageQuality({
+              ...page, signals: { localOcrApplied: true },
+            });
+            const mergedAssessment = mergedPage && assessPageQuality(mergedPage);
+            const mergedHasStructuralConcern = mergedAssessment?.reasons.some(
+              (reason) => reason !== 'low_confidence',
+            );
+            if (page.blocks.length > 0
+              && initialReasonByPage.get(page.page) === 'low_confidence'
+              && rawOcrAssessment.llmCandidateReason === undefined
+              && mergedHasStructuralConcern === false) {
+              locallyResolved.add(page.page);
+            }
           }
         }
+        localStageSucceeded ||= locallyResolved.size > 0;
+        warnings.push(...result.warnings);
+      } catch {
+        reasons.push('local_ocr failed');
       }
-      localStageSucceeded ||= locallyResolved.size > 0;
-      warnings.push(...result.warnings);
-    } catch {
-      reasons.push('local_ocr failed');
     }
   }
 
   let remaining = initialUnresolved.filter(({ page }) => !locallyResolved.has(page));
-  if (context.featureFlags.llmOcr && remaining.length > 0 && context.adapters.localOcr) {
-    const selected = remaining.slice(0, 4);
-    try {
-      const rasters = await context.adapters.localOcr.renderPdfPages(
-        adapterInput(canonicalInput),
-        selected.map(({ page }) => page),
-      );
-      const reasonsByPage = new Map(selected.map((page) => [page.page, page.reason]));
-      const candidates: LlmOcrCandidatePage[] = rasters.map((raster) => ({
-        ...raster,
-        selectionReason: reasonsByPage.get(raster.pageNumber) ?? 'low_confidence',
-      }));
-      const fallback = await runLlmOcrFallback(canonicalInput, current, candidates, {
-        aiGateway: context.aiGateway,
-        enabled: context.featureFlags.llmOcr,
-        externalProcessingEligible: context.externalProcessingEligible,
-        trustedAuthorizationContext: context.trustedAuthorizationContext,
-      });
-      current = fallback.sourceMap;
-      warnings.push(...fallback.warnings);
-      const unresolvedSet = new Set(fallback.unresolvedPageNumbers);
-      const rastered = new Set(candidates.map(({ pageNumber }) => pageNumber));
-      remaining = [
-        ...selected.filter(({ page }) => !rastered.has(page) || unresolvedSet.has(page)),
-        ...remaining.slice(4),
-      ];
-    } catch {
-      warnings.push('llm OCR unavailable');
+  if (context.featureFlags.llmOcr && remaining.length > 0
+    && (context.adapters.isolatedLocalOcr || context.adapters.localOcr)) {
+    const eligible = remaining.slice(0, 32);
+    const unresolvedProcessed: typeof remaining = [];
+    let stoppedAt = eligible.length;
+    for (let offset = 0; offset < eligible.length; offset += 4) {
+      const selected = eligible.slice(offset, offset + 4);
+      try {
+        const rasters = context.adapters.isolatedLocalOcr
+          ? (await context.adapters.isolatedLocalOcr.renderPages(
+              adapterInput(canonicalInput),
+              selected.map(({ page }) => page),
+            )).pages.map((page) => ({
+              pageNumber: page.pageNumber,
+              mediaType: page.mediaType,
+              bytes: Uint8Array.from(Buffer.from(page.bytesBase64, 'base64')),
+              width: page.width,
+              height: page.height,
+              contentHash: page.contentHash,
+            }))
+          : await context.adapters.localOcr!.renderPdfPages(
+              adapterInput(canonicalInput),
+              selected.map(({ page }) => page),
+            );
+        const reasonsByPage = new Map(selected.map((page) => [page.page, page.reason]));
+        const candidates: LlmOcrCandidatePage[] = rasters.map((raster) => ({
+          ...raster,
+          selectionReason: reasonsByPage.get(raster.pageNumber) ?? 'low_confidence',
+        }));
+        const fallback = await runLlmOcrFallback(canonicalInput, current, candidates, {
+          aiGateway: context.aiGateway,
+          enabled: context.featureFlags.llmOcr,
+          externalProcessingEligible: context.externalProcessingEligible,
+          trustedAuthorizationContext: context.trustedAuthorizationContext,
+        });
+        current = fallback.sourceMap;
+        warnings.push(...fallback.warnings);
+        const unresolvedSet = new Set(fallback.unresolvedPageNumbers);
+        const rastered = new Set(candidates.map(({ pageNumber }) => pageNumber));
+        const batchUnresolved = selected.filter(({ page }) => !rastered.has(page) || unresolvedSet.has(page));
+        unresolvedProcessed.push(...batchUnresolved);
+        if (batchUnresolved.length === selected.length) {
+          stoppedAt = offset + selected.length;
+          break;
+        }
+      } catch {
+        warnings.push('llm OCR unavailable');
+        unresolvedProcessed.push(...selected);
+        stoppedAt = offset + selected.length;
+        break;
+      }
     }
+    remaining = [
+      ...unresolvedProcessed,
+      ...eligible.slice(stoppedAt),
+      ...remaining.slice(32),
+    ];
   }
 
   if (!localStageSucceeded) reasons.push('all local parser stages failed');
   if (remaining.length > 0) reasons.push('unresolved pages remain');
+  if (nativeTextFidelityReview) reasons.push('native PDF text fidelity requires review');
   const sourceMap = withOrchestratorMetadata(current) ?? emptySourceMap(canonicalInput);
   const recoveredReasons = localStageSucceeded
     ? reasons.filter((reason) => reason !== 'empty-parsed-text' && reason !== 'extract_text failed')

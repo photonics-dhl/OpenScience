@@ -1,0 +1,83 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenScience Journal Discovery API",
+    "version": "1.0.0",
+    "description": "Public journal discovery and immutable editorial interpretations. Original paper DOI identifies the scientific source; OpenScience version URLs identify derivative interpretations. This document covers the public journal extension, not private editorial operations. API requests are not AI citations."
+  },
+  "servers": [{"url": "/api", "description": "Same-origin web proxy"}],
+  "paths": {
+    "/journals": {
+      "get": {
+        "operationId": "listPublicJournals",
+        "parameters": [
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"},
+          {"name": "query", "in": "query", "schema": {"type": "string", "maxLength": 200}},
+          {"name": "subject", "in": "query", "schema": {"type": "string", "maxLength": 100}}
+        ],
+        "responses": {"200": {"description": "Published homepages ordered by journal UUID ascending.", "content": {"application/json": {"schema": {"type": "object", "required": ["items", "nextCursor"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Journal"}}, "nextCursor": {"type": ["string", "null"]}}}}}}, "429": {"$ref": "#/components/responses/RateLimited"}}
+      }
+    },
+    "/journals/{slugOrId}": {
+      "get": {
+        "operationId": "getPublicJournal",
+        "parameters": [{"name": "slugOrId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "Public journal identity.", "content": {"application/json": {"schema": {"type": "object", "properties": {"journal": {"$ref": "#/components/schemas/Journal"}}}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "429": {"$ref": "#/components/responses/RateLimited"}}
+      }
+    },
+    "/journals/{journalId}/articles": {
+      "get": {
+        "operationId": "listPublicJournalArticles",
+        "parameters": [{"name": "journalId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"$ref": "#/components/parameters/Cursor"}, {"$ref": "#/components/parameters/Limit"}],
+        "responses": {"200": {"description": "Visible directory records; private drafts and unlicensed abstracts are excluded. Restricted or withdrawn items have no release links.", "content": {"application/json": {"schema": {"type": "object", "required": ["items", "nextCursor"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Article"}}, "nextCursor": {"type": ["string", "null"]}}}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "429": {"$ref": "#/components/responses/RateLimited"}}
+      }
+    },
+    "/research/{publicId}": {
+      "get": {
+        "operationId": "getResearchOverview",
+        "parameters": [{"$ref": "#/components/parameters/PublicId"}],
+        "responses": {"200": {"description": "Existing research overview. research.latestVersion is a nullable version number. Withdrawn/restricted identities do not grant access to content.", "content": {"application/json": {"schema": {"type": "object", "properties": {"research": {"type": "object", "additionalProperties": true}}}}}}, "404": {"$ref": "#/components/responses/NotFound"}}
+      }
+    },
+    "/research/{publicId}/v/{versionNo}": {
+      "get": {
+        "operationId": "getFixedResearchVersion",
+        "parameters": [{"$ref": "#/components/parameters/PublicId"}, {"name": "versionNo", "in": "path", "required": true, "schema": {"type": "integer", "minimum": 1}}],
+        "responses": {"200": {"description": "Existing fixed-version response. research.journalPackage is optional and present only for a publicly accessible journal interpretation; unavailable content must not be treated as complete research.", "content": {"application/json": {"schema": {"type": "object", "properties": {"research": {"type": "object", "additionalProperties": true, "properties": {"journalPackage": {"oneOf": [{"$ref": "#/components/schemas/JournalPackage"}, {"type": "null"}]}}}}}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "429": {"$ref": "#/components/responses/RateLimited"}}
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Cursor": {"name": "cursor", "in": "query", "description": "Use nextCursor from the preceding page.", "schema": {"type": "string", "format": "uuid"}},
+      "Limit": {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
+      "PublicId": {"name": "publicId", "in": "path", "required": true, "schema": {"type": "string"}}
+    },
+    "responses": {
+      "NotFound": {"description": "Unknown or unpublished identity. Private records are not disclosed."},
+      "RateLimited": {"description": "Platform rate limit reached. Respect the response Retry-After header when provided."}
+    },
+    "schemas": {
+      "Journal": {"type": "object", "properties": {"id": {"type": "string", "format": "uuid"}, "slug": {"type": "string"}, "nameZh": {"type": ["string", "null"]}, "nameEn": {"type": ["string", "null"]}, "websiteUrl": {"type": "string", "format": "uri"}, "pIssn": {"type": ["string", "null"]}, "eIssn": {"type": ["string", "null"]}, "subjects": {"type": "array", "items": {"type": "string"}}, "status": {"enum": ["active", "paused", "closed", "reverification"]}, "publicArticleCount": {"type": "integer", "minimum": 0}}},
+      "Metadata": {"type": "object", "properties": {"title": {"type": "string"}, "doi": {"type": "string"}, "authors": {"type": "array", "items": {"type": "string"}}, "publishedDate": {"type": "string"}, "journalTitle": {"type": "string"}, "issns": {"type": "array", "items": {"type": "string"}}, "originalUrl": {"type": "string", "format": "uri"}}},
+      "Release": {"type": "object", "properties": {"versionNo": {"type": "integer"}, "publicId": {"type": "string"}, "url": {"type": "string", "description": "Same-origin fixed web version path."}, "publishedAt": {"type": "string", "format": "date-time"}}},
+      "Article": {"type": "object", "properties": {"id": {"type": "string", "format": "uuid"}, "workId": {"type": "string", "format": "uuid", "description": "Neutral source identity, not ownership."}, "metadata": {"$ref": "#/components/schemas/Metadata"}, "contentState": {"enum": ["active", "restricted", "withdrawn"]}, "releases": {"type": "array", "items": {"$ref": "#/components/schemas/Release"}}}},
+      "Evidence": {"type": "object", "required": ["quote", "locator"], "properties": {"quote": {"type": "string"}, "locator": {"type": "string"}}},
+      "JournalPackage": {"type": "object", "required": ["metadata", "draft", "source", "license", "review", "versionNo", "url"], "properties": {
+        "metadata": {"$ref": "#/components/schemas/Metadata"},
+        "identity": {"const": "journal-authored-interpretation-of-published-work"},
+        "license": {"type": "string"}, "versionNo": {"type": "integer"}, "url": {"type": "string"},
+        "source": {"type": "object", "properties": {"kind": {"enum": ["abstract", "fulltext"]}, "url": {"type": "string", "format": "uri"}, "label": {"type": "string"}, "text": {"type": "string", "description": "Optional. Requires separate permission to publish the source."}}},
+        "review": {"type": "object", "properties": {"method": {"const": "editorial-human-review"}, "revision": {"type": "integer"}}},
+        "draft": {"type": "object", "properties": {
+          "summary": {"type": "string"}, "scope": {"enum": ["abstract", "fulltext"]}, "language": {"enum": ["zh", "en"]},
+          "core": {"type": "object", "required": ["problem", "insight", "method", "results", "limitations", "reproducibility"], "additionalProperties": {"type": "string"}},
+          "claims": {"type": "array", "items": {"type": "object", "properties": {"text": {"type": "string"}, "kind": {"enum": ["experimental", "simulation", "theoretical", "review", "other"]}, "evidence": {"$ref": "#/components/schemas/Evidence"}}}},
+          "figures": {"type": "array", "items": {"type": "object", "properties": {"label": {"type": "string"}, "purpose": {"type": "string"}, "finding": {"type": "string"}, "evidence": {"$ref": "#/components/schemas/Evidence"}}}},
+          "faq": {"type": "array", "items": {"type": "object", "properties": {"question": {"type": "string"}, "answer": {"type": "string"}, "evidence": {"$ref": "#/components/schemas/Evidence"}}}}
+        }}
+      }}
+    }
+  }
+}

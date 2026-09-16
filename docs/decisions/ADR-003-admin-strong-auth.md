@@ -5,6 +5,16 @@
 - 决策者：用户 + Claude Code
 - 关联：`docs/specs/2026-08-03-p1a-8-security-baseline-design.md`、`docs/OpenScience_Kimi_Development_Spec.md` §17（管理后台启用更强认证）、`infra/nginx/openscience.conf`
 
+## 2026-09-16：经用户明确批准的期刊审核例外
+
+用户明确同意“期刊审核使用网站管理员账号登录”，取消仅此功能的独立后台密码。此前缺少站内入口且浏览器无法完成独立 Basic Auth，不能视为已交付可用审核流程。
+
+- 仅精确页面 `/admin/journals`、API `/api/admin/journals` 与其 `/` 子路径改用网站会话。页面未登录跳转原网站登录，并携带固定返回地址；已登录但非管理员不得进入。
+- Nginx 内部子请求 `/_journal_admin_auth` 调用 `/auth/journal-admin-access`，复用会话检查与实时数据库 `platform_admin` 判断；异常失败关闭，不缓存验证结果。管理 API 自身的角色守卫、CSRF 和审计继续执行。
+- 这是明确接受取消独立凭据条件的政策例外，不能声称两次会话校验等同原双层认证。其余 `/admin/*`、`/api/admin/*` 与策展后台保留原 Basic Auth。
+- `/auth/me` 只为当前账号附带角色，管理员入口复用现有会话；前端入口可见性不作为授权依据。全站导航、研究桌面导航和期刊目录均提供“期刊审核”。
+- 下方原决策继续适用于其他管理后台；期刊审核的当前发布与实际观察结果见 [期刊 CURRENT](../handoff/2026-09-15-journal-onboarding-handoff.md)。
+
 ## Context
 
 Spec §17 MUST「管理后台启用更强认证」。`/admin` 现有应用层防护：platform_admin 角色守卫（P1A-5）+ 全写操作审计（P1A-6）。但应用层防护的前提是攻击者能到达 Fastify 拿到 401/403——不构成传输层外的独立防线。基线要求"更强"，即在应用层之外再叠一层独立认证。

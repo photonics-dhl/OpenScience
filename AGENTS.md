@@ -1,5 +1,3 @@
-> 开发导航：根 `main` 保持干净、只作导航入口（不是开发基线）；当前交付位于 [.worktrees/onchip-video-release](.worktrees/onchip-video-release)，按该树 [AGENTS](.worktrees/onchip-video-release/AGENTS.md) 与 [CURRENT handoff](.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md) 续作。本页不维护另一份版本或待办。
-
 # OpenScience (XGS) 项目
 
 OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版与协作。MVP 已完成；旧阶段清单不是当前任务。
@@ -8,7 +6,7 @@ OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版�
 
 - 开始工作先读适用说明、Git worktree/branch/HEAD/status 与 manifest；定向检索 project_index.md，进入唯一 CURRENT handoff。根目录 dirty main 与其他工作树不得当作当前交付基线。
 - 用户最新纠正优先；需求基线为 docs/OpenScience_Kimi_Development_Spec.md，具体设计按索引选相关章节。设计要求、候选实现、线上版本、产物质量分别判断。
-- CURRENT只能记录执行状态，不能改写用户目标。决定下一步前对照需求条款与仍未完成的交付项；局部返工或暂停不取消其他目标，移除交付项必须有明确用户范围变更。各项已有任务/资产和反馈只在交付树CURRENT短表汇总，progress/index引用它。
+- CURRENT只能记录执行状态，不能改写用户目标。决定下一步前对照需求条款与仍未完成的交付项；局部返工或暂停不取消其他目标，移除交付项必须有明确用户范围变更。各项已有任务/资产和反馈只在CURRENT短表汇总，progress/index引用它。
 - CURRENT handoff 保存任务、branch/HEAD/release/rollback、证据和未决项；以 Git 和必要的只读服务器元数据定锚。其他文档中的旧 release、测试结果和 next action 是历史，不能自动续跑。
 - 现有Taskmaster使用当前交付树为projectRoot；启动读取currentTag的稳定验收清单，与CURRENT的对应任务ID对齐。工具保存验收条件，CURRENT保存执行证据；要求用户认可的交付不得因模型/部署成功置done。根main不维护第二份活动任务。
 - docs/progress.md 是短状态摘要；project_index.md 是定位索引；ADR 记录长期决策。Memory 只保存 XGS- 决策/纠错，不复制操作日志或维护另一份任务库。
@@ -18,8 +16,8 @@ OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版�
 
 ## 产品落地与执行约束
 
-- 用户当前明确禁止测试、预检、演练及 CI 测试；不得因 Skill、旧计划或固定清单触发。必要服务器安装、编译、构建、启动属于交付，不扩展为测试项目。
-- 本机仅静态阅读、编辑、Git 与传输，不运行测试、构建、Docker、迁移或运行检查。复用未变实现的有效证据，未知保持未知。
+- 用户当前明确禁止过度测试、全套预检及 CI 测试；仅在存在直接风险或已知故障时，执行与改动直接相关的最小必要验证，并说明范围。必要服务器安装、编译、构建、启动属于交付，不扩展为测试项目。
+- 本机默认仅静态阅读、编辑、Git 与传输；如存在直接风险或已知故障，可执行与改动直接相关的最小定向验证，不运行全套测试、构建、Docker、迁移或运行检查。复用未变实现的有效证据，未知保持未知。
 - 非常必要的运行检查仅针对具体重大风险或已知阻塞故障，在服务器执行；先简短说明风险和最小范围。没有这一理由不自动执行 checkup、探针或全套验收。
 - 有部署目标的功能完成已授权服务器构建/启动与真实产品观察；文档治理不自动部署科研应用。不得用工具建设、检查数量或安装成功代替产品交付和科学质量。
 - 用户可操作功能交付须从站内可见入口实际点击到目标页；角色、登录跳转和数据加载均纳入这条最小真实路径。只有接口、直达 URL 或角色字段成功，不得声称前端已可使用。
@@ -49,16 +47,7 @@ OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版�
 - 公网入站复用 Cloudflare Tunnel，出网复用现有代理，具体拓扑见 runbook。勿安装 Tailscale，其路由曾破坏阿里云 VPC DNS。
 - 工具默认项目级安装/配置；第三方 Skill、MCP、插件、二进制只在明确授权范围安装。独立开发服务遵循 ADR-002，不自动给科研用户 Hermes 运维权限。
 - 不读取/打印 .env、Secret、密码，不放进上下文、日志、Git 或模型请求。Langfuse 账号独立于 OpenScience，凭据走私密交接。
-- 不删除他人未提交的改动与工作树，除非有明确适用授权；但「未提交」不等于「永久保留」：交付树以外的残留按下方「工作区与发布卫生」的时限处置，处置前必须先推送或打包备份。
-
-## 工作区与发布卫生
-
-- 唯一交付入口是 `.worktrees/onchip-video-release`，根 `main` 只作导航、不承载开发。交付树与根 main 在每轮收尾时 `git status --porcelain` 必须为空；出现未提交改动即当轮处置（提交、移入已忽略目录或按授权删除），不得留给下一个会话。
-- 部署源守卫要求「工作树完全干净且 HEAD == release ref」，所以每次部署都必须来自干净 worktree；不要为省事在脏树上直接发布。
-- worktree 生命周期：一个任务一个 worktree；任务结束后按结论处置——已发布且无需回滚引用 → 删除该 worktree 与本地分支；仍需回滚引用 → 保留到下一次成功发布后删除；未合并但有独立价值 → 先推送远端分支再删除本地 worktree。禁止长期堆积 detached-HEAD 的 `*-release-*` 目录。
-- 每轮收尾执行 `git worktree prune` 并核对 `git worktree list`；新增 worktree 必须说明用途与预期寿命，到期未清理视为债务。
-- release 身份必须是指向已推送提交的完整 SHA，服务器 `.release-id` 必须能在本仓 `git rev-parse` 解析。遇到无法解析的 release 身份，先按 docs/runbooks/deployment.md 的故障态恢复流程核对实际容器与 release 目录，不得直接改标记或盲目重跑部署。
-- 本机生成的图片、截图、日志等证据放在仓库外或已被忽略的 `tmp/`，不写入受版本控制的路径；只有正式交付资产入库。
+- 不删除文件、历史产物、分支或工作树，除非有明确适用授权。保护他人 dirty/untracked 改动，不自动 reset/clean/stash。
 
 ## 文档同步
 

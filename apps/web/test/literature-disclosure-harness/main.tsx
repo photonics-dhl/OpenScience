@@ -1,0 +1,39 @@
+import * as React from 'react';
+import { createRoot } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
+import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
+import { IngestionClaimReview } from '@/components/hermes/IngestionClaimReview';
+import english from '../../messages/en.json';
+
+const messages = { dashboard: { literature: {
+  eyebrow: 'Personal literature', title: 'Find a source', description: 'Search by title, DOI, or arXiv ID.',
+  roEyebrow: 'Research object literature', roTitle: 'Add a source', roDescription: 'Search source.', queryLabel: 'Title, DOI, or arXiv ID', queryPlaceholder: '10.1000/example', search: 'Search metadata', getFullText: 'Get full text', disclosure: 'Get full text', metadata: 'Metadata results', statusPending: 'Waiting in queue', statusRunning: 'Retrieving source', statusAuthRequired: 'Institutional access needs attention', statusFailed: 'Retrieval failed', statusSucceeded: 'Source ready', statusBlocked: 'Blocked', statusRetryExhausted: 'Retry exhausted', expires: 'Available until {expiresAt}', download: 'Download source', retry: 'Try again', noResults: 'No results', source: 'Open source record', recoveryError: 'Task could no longer be recovered.', error: 'Source request could not be completed.', pendingIntent: 'Pending request conflict.', reconnecting: 'Reconnecting to the task.', untitled: 'Untitled',
+} } };
+
+function Harness() {
+  const [researchObjectId, setResearchObjectId] = React.useState('ro-a');
+  const [userId, setUserId] = React.useState('user-a');
+  const [mounted, setMounted] = React.useState(true);
+  React.useLayoutEffect(() => {
+    document.body.dataset.literatureScopeCommit = `${userId}:${researchObjectId}:${document.querySelector<HTMLInputElement>('#harness-query')?.value ?? ''}`;
+  }, [researchObjectId, userId]);
+  return <NextIntlClientProvider locale="en" messages={messages}>
+    <button onClick={() => setResearchObjectId('ro-b')} type="button">switch-target</button>
+    <button onClick={() => setResearchObjectId('ro-a')} type="button">switch-back-target</button>
+    <button onClick={() => setUserId('user-b')} type="button">switch-user</button>
+    <button onClick={() => setMounted(false)} type="button">unmount-disclosure</button>
+    {mounted ? <LiteratureAcquisitionDisclosure instanceId="harness" onAuthenticationRequired={() => undefined} target={{ kind: 'research_object', researchObjectId }} userId={userId} /> : <p>unmounted</p>}
+  </NextIntlClientProvider>;
+}
+
+function ClaimHarness() {
+  const [ro, setRo] = React.useState('ro-a');
+  const [busy, setBusy] = React.useState(false);
+  const [saved, setSaved] = React.useState('');
+  return <NextIntlClientProvider locale="en" messages={english}>
+    <button type="button" onClick={() => setRo('ro-b')}>switch-target</button>
+    <p data-testid="bridge-busy">{String(busy)}</p><p data-testid="bridge-saved">{saved}</p>
+    <IngestionClaimReview researchObjectId={ro} versionId="version-a" onBusyChange={setBusy} onComplete={claims => setSaved(claims.map(claim => claim.id).join(','))}/>
+  </NextIntlClientProvider>;
+}
+createRoot(document.getElementById('root')!).render(new URLSearchParams(location.search).get('case') === 'claim-review' ? <ClaimHarness/> : <Harness />);

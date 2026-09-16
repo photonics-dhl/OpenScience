@@ -1,0 +1,9 @@
+<clickhouse>
+  <!-- This stack is a small development-management service, capped at 3 GiB. -->
+  <max_server_memory_usage>2415919104</max_server_memory_usage>
+  <logger>
+    <level>warning</level>
+    <size>50M</size>
+    <count>3</count>
+  </logger>
+</clickhouse>

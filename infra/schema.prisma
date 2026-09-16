@@ -73,8 +73,14 @@ model User {
   institutionChallenges    InstitutionEmailChallenge[]
   scopedRoleAssignments    ScopedRoleAssignment[]      @relation("ScopedRoleSubject")
   grantedScopedRoles       ScopedRoleAssignment[]      @relation("ScopedRoleGranter")
+  hermesResearchRuns       HermesResearchRun[]         @relation("HermesResearchRunActor")
 
   @@map("users")
+  journalApplications JournalApplication[] @relation("JournalApplicant")
+  reviewedJournalApplications JournalApplication[] @relation("JournalApplicationReviewer")
+  journalServiceRequests JournalServiceRequest[] @relation("JournalServiceRequester")
+  reviewedJournalServiceRequests JournalServiceRequest[] @relation("JournalServiceRequestReviewer")
+  journalEvents JournalEvent[] @relation("JournalEventActor")
 }
 
 model ReadingPreference {
@@ -314,6 +320,7 @@ model Workspace {
   temporaryDocuments    TemporaryDocument[]
 
   @@map("workspaces")
+  journal Journal?
 }
 
 model Membership {
@@ -483,6 +490,8 @@ enum SdfNodeType {
 }
 
 model ResearchObject {
+  deletedAt      DateTime?    @map("deleted_at")
+  trashEntryId   String?      @map("trash_entry_id") @db.Uuid
   id             String       @id @default(uuid()) @db.Uuid
   workspaceId    String       @map("workspace_id") @db.Uuid
   title          String
@@ -519,10 +528,12 @@ model ResearchObject {
   claimNodes          ClaimNode[]
   evidenceRecords     EvidenceRecord[]
   presentationAssets  PresentationAsset[]
+  hermesResearchRuns  HermesResearchRun[]
 
   @@unique([id, workspaceId], map: "research_objects_id_workspace_id_key")
   @@index([workspaceId])
   @@map("research_objects")
+  journalArticle JournalArticle?
 }
 
 // --- Hermes Research Intelligence Task 10：外部检索、权利判定与临时文档生命周期 ---
@@ -722,6 +733,9 @@ model Blob {
 }
 
 model Artifact {
+  bytesPurgedAt  DateTime?    @map("bytes_purged_at")
+  deletedAt      DateTime?    @map("deleted_at")
+  trashEntryId   String?      @map("trash_entry_id") @db.Uuid
   id             String   @id @default(uuid()) @db.Uuid
   logicalPath    String   @map("logical_path") // 用户视角路径（非唯一，P1B-4 Version Manifest 再去重）
   mimeType       String?  @map("mime_type") // MIME 检测结果（失败 = null，允许上传）
@@ -737,6 +751,7 @@ model Artifact {
   workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   ingestionTasks  IngestionTask[]
   evidenceRecords EvidenceRecord[]
+  hermesResearchSteps HermesResearchStep[]
 
   @@unique([id, workspaceId], map: "artifacts_id_workspace_id_key")
   @@index([workspaceId])
@@ -814,10 +829,12 @@ enum VersionStatus {
 }
 
 model Version {
+  researchRecord   Json?         @map("research_record")
   id               String        @id @default(uuid()) @db.Uuid
   researchObjectId String        @map("research_object_id") @db.Uuid
   commitId         String        @map("commit_id") @db.Uuid
-  versionNo        Int           @map("version_no") // RO 内递增版本号（外部可读，§2.2 原则 5）
+  versionNo        Int           @map("version_no") // Internal commit/revision order; never a public ordinal.
+  publicationNo    Int?          @map("publication_no") // Assigned only by successful publication; legacy issued numbers are retained.
   publicVersionId  String?       @unique @map("public_version_id") // OSR-YYYY-NNNNNN-vN（§6.1），发布时分配
   status           VersionStatus @default(draft) // P1B-7 发布状态机
   // P1D-8：父版本（v2→v1，§2.2-3 增量版本链）
@@ -838,11 +855,14 @@ model Version {
   claimNodes          ClaimNode[]
   evidenceRecords     EvidenceRecord[]
   presentationAssets  PresentationAsset[]
+  hermesResearchRuns  HermesResearchRun[]
 
   @@unique([researchObjectId, versionNo])
+  @@unique([researchObjectId, publicationNo])
   @@unique([id, researchObjectId], map: "versions_id_research_object_id_key")
   @@index([researchObjectId])
   @@map("versions")
+  journalRelease JournalRelease?
 }
 
 model VersionManifest {
@@ -1204,6 +1224,8 @@ model ExternalProviderState {
 // --- P1D-2：Hermes 会话与异步任务（§15 AgentSession/AgentTask/ToolApproval + §9.3 长任务异步）---
 
 model AgentSession {
+  deletedAt      DateTime?    @map("deleted_at")
+  trashEntryId   String?      @map("trash_entry_id") @db.Uuid
   id               String   @id @default(uuid()) @db.Uuid
   userId           String   @map("user_id") @db.Uuid
   researchObjectId String?  @map("research_object_id") @db.Uuid
@@ -1224,6 +1246,8 @@ model AgentSession {
 }
 
 model AgentTask {
+  deletedAt      DateTime?    @map("deleted_at")
+  trashEntryId   String?      @map("trash_entry_id") @db.Uuid
   id               String          @id @default(uuid()) @db.Uuid
   sessionId        String          @map("session_id") @db.Uuid
   kind             String
@@ -1246,6 +1270,7 @@ model AgentTask {
   ingestionTask     IngestionTask?
   retrievalRights   SourceRightsDecision[]
   temporaryDocument TemporaryDocument?
+  hermesResearchSteps HermesResearchStep[]   @relation("HermesResearchStepAgentTask")
 
   @@index([sessionId])
   @@map("agent_tasks")
@@ -1321,6 +1346,7 @@ model IngestionTask {
   batch     IngestionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   artifact  Artifact       @relation(fields: [artifactId], references: [id], onDelete: Restrict)
   agentTask AgentTask?     @relation(fields: [agentTaskId], references: [id], onDelete: SetNull)
+  hermesResearchSteps HermesResearchStep[]
 
   @@unique([batchId, artifactId])
   @@index([batchId])
@@ -1461,6 +1487,62 @@ model ResearchIdentityProfile {
   @@map("research_identity_profiles")
 }
 
+// Hermes server-owned research orchestration: durable metadata only. Source bytes remain in object storage.
+model HermesResearchRun {
+  id                             String   @id @default(uuid()) @db.Uuid
+  researchObjectId               String   @map("research_object_id") @db.Uuid
+  actorId                        String   @map("actor_id") @db.Uuid
+  versionId                      String?  @map("version_id") @db.Uuid
+  profile                        String?
+  maxAgentTasks                  Int?     @map("max_agent_tasks")
+  sourceClaimIds                 String[] @default([]) @map("source_claim_ids") @db.Uuid
+  sourceReviewDigest             String?  @map("source_review_digest")
+  status                         String   @default("running")
+  version                        Int      @default(1)
+  idempotencyKey                 String   @unique @map("idempotency_key")
+  requestDigest                  String   @map("request_digest") @db.Char(64)
+  error                          String?
+  lastReconciledAt               DateTime? @map("last_reconciled_at")
+  createdAt                      DateTime @default(now()) @map("created_at")
+  updatedAt                      DateTime @updatedAt @map("updated_at")
+
+  researchObject ResearchObject        @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  actor          User                  @relation("HermesResearchRunActor", fields: [actorId], references: [id], onDelete: Restrict)
+  versionRow     Version?              @relation(fields: [versionId, researchObjectId], references: [id, researchObjectId], onDelete: Restrict, map: "hermes_research_runs_version_scope_fkey")
+  steps          HermesResearchStep[]
+
+  @@index([status, lastReconciledAt], map: "idx_hermes_research_runs_reconcile")
+  @@index([researchObjectId, actorId], map: "idx_hermes_research_runs_scope")
+  @@map("hermes_research_runs")
+}
+
+model HermesResearchStep {
+  id              String   @id @default(uuid()) @db.Uuid
+  runId           String   @map("run_id") @db.Uuid
+  stage           String
+  ordinal         Int
+  status          String   @default("waiting")
+  ingestionTaskId String?  @map("ingestion_task_id") @db.Uuid
+  artifactId      String?  @map("artifact_id") @db.Uuid
+  agentTaskId     String?  @map("agent_task_id") @db.Uuid
+  presentationAssetId String? @map("presentation_asset_id") @db.Uuid
+  error           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  run           HermesResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  ingestionTask IngestionTask?    @relation(fields: [ingestionTaskId], references: [id], onDelete: Restrict)
+  artifact      Artifact?         @relation(fields: [artifactId], references: [id], onDelete: Restrict)
+  agentTask     AgentTask?        @relation("HermesResearchStepAgentTask", fields: [agentTaskId], references: [id], onDelete: SetNull)
+  presentationAsset PresentationAsset? @relation(fields: [presentationAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([runId, stage, ordinal], map: "hermes_research_steps_run_stage_ordinal_key")
+  @@index([ingestionTaskId])
+  @@index([agentTaskId])
+  @@index([presentationAssetId])
+  @@map("hermes_research_steps")
+}
+
 model ClaimNode {
   id               String           @id @default(uuid()) @db.Uuid
   researchObjectId String           @map("research_object_id") @db.Uuid
@@ -1524,6 +1606,8 @@ model EvidenceRecord {
 }
 
 model PresentationAsset {
+  deletedAt      DateTime?    @map("deleted_at")
+  trashEntryId   String?      @map("trash_entry_id") @db.Uuid
   id               String                  @id @default(uuid()) @db.Uuid
   researchObjectId String                  @map("research_object_id") @db.Uuid
   versionId        String                  @map("version_id") @db.Uuid
@@ -1541,7 +1625,8 @@ model PresentationAsset {
 
   researchObject ResearchObject           @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
   version        Version                  @relation(fields: [versionId, researchObjectId], references: [id, researchObjectId], onDelete: Cascade, map: "presentation_assets_version_scope_fkey")
-  sourceClaims   PresentationAssetClaim[]
+  sourceClaims        PresentationAssetClaim[]
+  hermesResearchSteps HermesResearchStep[]
 
   @@unique([id, researchObjectId, versionId], map: "presentation_assets_id_ro_version_key")
   @@index([researchObjectId, versionId, status])
@@ -1561,4 +1646,337 @@ model PresentationAssetClaim {
   @@id([presentationAssetId, claimId])
   @@index([claimId])
   @@map("presentation_asset_claims")
+}
+
+// Resource identifiers deliberately have no cascading FK: completed purge keeps only operation facts.
+model TrashEntry {
+  id               String   @id @default(uuid()) @db.Uuid
+  kind             String
+  resourceId       String   @map("resource_id") @db.Uuid
+  ownerId          String   @map("owner_id") @db.Uuid
+  workspaceId      String?  @map("workspace_id") @db.Uuid
+  researchObjectId String?  @map("research_object_id") @db.Uuid
+  parentId         String?  @map("parent_id") @db.Uuid
+  label            String
+  state            String   @default("trashed")
+  retainedReason   String?  @map("retained_reason")
+  deletedAt        DateTime @default(now()) @map("deleted_at")
+  purgeAfter       DateTime @map("purge_after")
+  purgedAt         DateTime? @map("purged_at")
+  lastError        String?  @map("last_error")
+  purgeScope       Json?    @map("purge_scope")
+  @@index([ownerId, state, deletedAt])
+  @@index([state, purgeAfter])
+  @@index([kind, resourceId, state])
+  @@index([parentId])
+  @@map("trash_entries")
+}
+
+// Durable storage cleanup outbox; the tombstone rejects references to already removed bytes.
+model TrashObjectCleanup {
+  objectKey    String    @id @map("object_key")
+  trashEntryId String    @map("trash_entry_id") @db.Uuid
+  state        String    @default("pending")
+  attempts     Int       @default(0)
+  lastError    String?   @map("last_error")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  @@index([trashEntryId, state])
+  @@map("trash_object_cleanup")
+}
+
+model JournalWork {
+  id        String @id @default(uuid()) @db.Uuid
+  doi       String? @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  articles  JournalArticle[]
+  @@map("journal_works")
+}
+
+model JournalArticle {
+  id String @id @default(uuid()) @db.Uuid
+  journalId String @map("journal_id") @db.Uuid
+  workId String @map("work_id") @db.Uuid
+  researchObjectId String @unique @map("research_object_id") @db.Uuid
+  metadata Json
+  source Json
+  rights Json
+  draft Json?
+  revision Int @default(1)
+  directoryVisible Boolean @default(false) @map("directory_visible")
+  contentState String @default("active") @map("content_state")
+  reviewState String @default("draft") @map("review_state")
+  reviewedRevision Int? @map("reviewed_revision")
+  reviewedDigest String? @map("reviewed_digest")
+  reviewedBy String? @map("reviewed_by") @db.Uuid
+  assignedReviewerId String? @map("assigned_reviewer_id") @db.Uuid
+  reviewNote String? @map("review_note")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  journal Journal @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  work JournalWork @relation(fields: [workId], references: [id], onDelete: Restrict)
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Restrict)
+  jobs JournalJob[]
+  releases JournalRelease[]
+  @@unique([journalId,workId])
+  @@index([journalId,directoryVisible,createdAt])
+  @@map("journal_articles")
+}
+
+model JournalJob {
+  id String @id @default(uuid()) @db.Uuid
+  journalId String @map("journal_id") @db.Uuid
+  articleId String @map("article_id") @db.Uuid
+  grantId String? @map("grant_id") @db.Uuid
+  kind String @default("generate")
+  requestedBy String @map("requested_by") @db.Uuid
+  requestKey String @map("request_key")
+  retryOf String? @map("retry_of") @db.Uuid
+  state String @default("pending")
+  revision Int
+  sourceDigest String @map("source_digest")
+  language String
+  result Json?
+  error String?
+  leaseToken String? @map("lease_token") @db.Uuid
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  journal Journal @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  article JournalArticle @relation(fields: [articleId], references: [id], onDelete: Restrict)
+  grant JournalGrant? @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  ledger JournalLedger[]
+  @@unique([journalId,requestKey])
+  @@index([state,createdAt])
+  @@index([journalId,state])
+  @@map("journal_jobs")
+}
+
+model JournalRelease {
+  id String @id @default(uuid()) @db.Uuid
+  articleId String @map("article_id") @db.Uuid
+  versionId String @unique @map("version_id") @db.Uuid
+  revision Int
+  requestKey String @map("request_key")
+  snapshot Json
+  digest String
+  publishedAt DateTime @default(now()) @map("published_at")
+  article JournalArticle @relation(fields: [articleId], references: [id], onDelete: Restrict)
+  version Version @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  @@unique([articleId,revision])
+  @@unique([articleId,requestKey])
+  @@map("journal_releases")
+}
+
+model JournalLedger {
+  id String @id @default(uuid()) @db.Uuid
+  journalId String @map("journal_id") @db.Uuid
+  grantId String @map("grant_id") @db.Uuid
+  jobId String? @map("job_id") @db.Uuid
+  kind String
+  amount Int
+  eventKey String @unique @map("event_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  journal Journal @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  grant JournalGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  job JournalJob? @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  @@index([journalId,createdAt])
+  @@map("journal_ledger")
+}
+
+model JournalMetric {
+  id String @id @default(uuid()) @db.Uuid
+  journalId String @map("journal_id") @db.Uuid
+  day DateTime @db.Date
+  kind String
+  count Int @default(0)
+  journal Journal @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  @@unique([journalId,day,kind])
+  @@map("journal_metrics")
+}
+
+enum JournalApplicationStatus {
+  draft
+  submitted
+  needs_information
+  approved
+  rejected
+}
+
+enum JournalIdentifierType {
+  print
+  electronic
+}
+
+enum JournalOperationalState {
+  active
+  paused
+  closed
+  reverification
+}
+
+enum JournalServiceRequestStatus {
+  submitted
+  quoted
+  approved
+  rejected
+  cancelled
+}
+
+model JournalApplication {
+  id                       String                   @id @default(uuid()) @db.Uuid
+  applicantId              String                   @map("applicant_id") @db.Uuid
+  nameZh                   String?                  @map("name_zh")
+  nameEn                   String?                  @map("name_en")
+  pIssn                    String?                  @map("p_issn")
+  eIssn                    String?                  @map("e_issn")
+  websiteUrl               String?                  @map("website_url")
+  publisherName            String?                  @map("publisher_name")
+  sponsorName              String?                  @map("sponsor_name")
+  subjects                 String[]                 @default([])
+  description              String?
+  logoUrl                  String?                  @map("logo_url")
+  applicantName            String?                  @map("applicant_name")
+  applicantTitle           String?                  @map("applicant_title")
+  applicantEmail           String?                  @map("applicant_email") @db.Citext
+  representationEvidence   String?                  @map("representation_evidence")
+  plannedArticleCount      Int?                     @map("planned_article_count")
+  requestedServices        String[]                 @default([]) @map("requested_services")
+  rightsDeclaration        String?                  @map("rights_declaration")
+  rightsDeclarationVersion String?                  @map("rights_declaration_version")
+  status                    JournalApplicationStatus @default(draft)
+  revision                  Int                      @default(1)
+  submissionKey             String?                  @unique @map("submission_key")
+  reviewReason              String?                  @map("review_reason")
+  internalNotes             String?                  @map("internal_notes")
+  reviewedBy                String?                  @map("reviewed_by") @db.Uuid
+  reviewedAt                DateTime?                @map("reviewed_at")
+  submittedAt               DateTime?                @map("submitted_at")
+  journalId                 String?                  @unique @map("journal_id") @db.Uuid
+  createdAt                 DateTime                 @default(now()) @map("created_at")
+  updatedAt                 DateTime                 @updatedAt @map("updated_at")
+  applicant                 User                     @relation("JournalApplicant", fields: [applicantId], references: [id], onDelete: Restrict)
+  reviewer                  User?                    @relation("JournalApplicationReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  journal                   Journal?                 @relation(fields: [journalId], references: [id], onDelete: SetNull)
+  identifiers              JournalIdentifier[]
+
+  @@index([applicantId, status])
+  @@index([status, submittedAt])
+  @@map("journal_applications")
+}
+
+model Journal {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  workspaceId         String                  @unique @map("workspace_id") @db.Uuid
+  slug                String                  @unique
+  nameZh              String?                 @map("name_zh")
+  nameEn              String?                 @map("name_en")
+  websiteUrl          String                  @map("website_url")
+  publisherName       String                  @map("publisher_name")
+  sponsorName         String?                 @map("sponsor_name")
+  subjects            String[]                @default([])
+  description         String?
+  logoUrl             String?                 @map("logo_url")
+  operationalState    JournalOperationalState @default(active) @map("operational_state")
+  homepagePublished   Boolean                 @default(false) @map("homepage_published")
+  revision            Int                     @default(1)
+  verifiedAt          DateTime                 @map("verified_at")
+  directoryLimit      Int                     @default(1000) @map("directory_limit")
+  storageLimitBytes   BigInt                  @default(2147483648) @map("storage_limit_bytes")
+  maxRunningJobs      Int                     @default(2) @map("max_running_jobs")
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+  workspace           Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  application         JournalApplication?
+  identifiers         JournalIdentifier[]
+  grants              JournalGrant[]
+  serviceRequests     JournalServiceRequest[]
+  events              JournalEvent[]
+  articles            JournalArticle[]
+  jobs                JournalJob[]
+  ledger              JournalLedger[]
+  metrics             JournalMetric[]
+
+  @@index([operationalState, homepagePublished])
+  @@map("journals")
+}
+
+model JournalIdentifier {
+  id            String                @id @default(uuid()) @db.Uuid
+  value         String                @unique
+  type          JournalIdentifierType
+  applicationId String?               @map("application_id") @db.Uuid
+  journalId     String?               @map("journal_id") @db.Uuid
+  createdAt     DateTime              @default(now()) @map("created_at")
+  application   JournalApplication?   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  journal       Journal?              @relation(fields: [journalId], references: [id], onDelete: Restrict)
+
+  @@index([applicationId])
+  @@index([journalId])
+  @@map("journal_identifiers")
+}
+
+model JournalGrant {
+  id         String   @id @default(uuid()) @db.Uuid
+  journalId  String   @map("journal_id") @db.Uuid
+  amount     Int
+  remaining  Int
+  reserved   Int      @default(0)
+  consumed   Int      @default(0)
+  expired    Int      @default(0)
+  expiresAt  DateTime @map("expires_at")
+  grantKey   String   @unique @map("grant_key")
+  reason     String?
+  serviceRequestId String? @map("service_request_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  journal    Journal  @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  serviceRequest JournalServiceRequest? @relation(fields: [serviceRequestId], references: [id], onDelete: Restrict)
+  jobs       JournalJob[]
+  ledger     JournalLedger[]
+
+  @@index([journalId, expiresAt])
+  @@map("journal_grants")
+}
+
+model JournalServiceRequest {
+  id             String                      @id @default(uuid()) @db.Uuid
+  journalId      String                      @map("journal_id") @db.Uuid
+  requesterId    String                      @map("requester_id") @db.Uuid
+  annualVolume   Int                         @map("annual_volume")
+  language       String
+  figureScale    String                      @map("figure_scale")
+  services       String[]                    @default([])
+  notes          String?
+  requestKey     String                      @unique @map("request_key")
+  status         JournalServiceRequestStatus @default(submitted)
+  reviewNotes    String?                     @map("review_notes")
+  reviewedBy     String?                     @map("reviewed_by") @db.Uuid
+  reviewedAt     DateTime?                   @map("reviewed_at")
+  createdAt      DateTime                    @default(now()) @map("created_at")
+  updatedAt      DateTime                    @updatedAt @map("updated_at")
+  journal        Journal                     @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  requester      User                        @relation("JournalServiceRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  reviewer       User?                       @relation("JournalServiceRequestReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  grants         JournalGrant[]
+
+  @@index([journalId, status])
+  @@map("journal_service_requests")
+}
+
+model JournalEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  journalId  String?  @map("journal_id") @db.Uuid
+  actorId    String   @map("actor_id") @db.Uuid
+  action     String
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id")
+  reason     String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  journal    Journal? @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  actor      User     @relation("JournalEventActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([journalId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("journal_events")
 }

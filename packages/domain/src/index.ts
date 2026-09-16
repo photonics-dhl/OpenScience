@@ -1,6 +1,21 @@
+export * from './journal/contracts';
+export * from './journal/content';
+export * from './journal/onboarding';
+export * from './journal/articles';
+export * from './journal/processing';
+export * from './journal/publishing';
+export * from './journal/source-upload';
+export * from './journal/feedback';
 export { WorkspaceError, type WorkspaceErrorCode } from './workspace/errors';
 export { now, type WorkspaceDeps } from './workspace/types';
 export { createPersonalWorkspace, type PersonalWorkspaceUser } from './workspace/personal';
+export { restoreVersionDraft } from './commit/restore-draft';
+export { publicHistoryMedia } from './commit/version-history';
+export { TrashError } from './trash/errors';
+export { TRASH_KINDS, moveToTrash, listTrash, restoreTrash, purgeTrash, listCleanableContent, purgeExpiredTrash, cleanTrashObjects, lockTrashReferences, lockLiveResearchObject, type TrashDeps, type TrashSearchScope } from './trash/trash';
+export { canAccessPrivateRo, requirePrivateRoAccess } from './visibility/access';
+export { readPublicationMetadata, publicVersionNumber, type PublicationMetadata } from './publish/publication-metadata';
+export { publicArtifactDownloadUrl, readPublicArtifactManifest, getPublicArtifactDownload } from './artifact/public-artifact-download';
 export {
   createTeamWorkspace,
   getWorkspace,
@@ -154,13 +169,22 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
+  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration,
+  requireHermesPresentationTaskAuthority,
+  HERMES_AUTHORITY_REARM_MARKER,
+  HermesResearchRunError,
+  type HermesResearchRunDeps, type HermesSourceReviewDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
+  type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,
+} from './agent/research-run';
+export {
   claimAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
   submitAgentTask, persistAgentTaskInTransaction, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
-  prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
+  prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, enqueueSourceMapSearchIndex,
   AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE, AGENT_TASK_KINDS, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
   type CreateAgentSessionInput, type SubmitAgentTaskInput,
 } from './agent/agent';
+export { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError } from './agent/search-index-source';
 export { ApprovalError, type ApprovalErrorCode } from './approval/errors';
 export {
   approvalLevel, buildConfirmation, createApproval, approveApproval, rejectApproval, revokeApproval, listPendingApprovals,
@@ -212,6 +236,7 @@ export { ClaimEvidenceError, type ClaimEvidenceErrorCode } from './research-inte
 export { evaluateEvidencePublicationBlocks } from './research-intelligence/publication-evidence';
 export {
   createClaim,
+  createClaimEvidenceBatch,
   createEvidence,
   deleteClaim,
   deleteEvidence,
@@ -227,9 +252,29 @@ export {
   type EvidenceRightsInput,
   type UpdateClaimInput,
   type UpdateEvidenceInput,
+  type ReviewedIngestionClaimEvidenceBatchInput,
 } from './research-intelligence/claim-evidence-service';
-export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
-export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';
+export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, reanalyzeConfirmedIngestion, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
+export { MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from './ingestion/canonical-evidence-contract';
+export { MAX_INGESTION_CLAIMS, parseReviewedClaimSuggestions, type ReviewedClaimSuggestion } from './ingestion/reviewed-claim-suggestions';
+export {
+  INGESTION_BRIDGE_FIELDS,
+  confirmIngestionClaimEvidenceBridge,
+  listIngestionClaimEvidenceCandidates,
+  previewIngestionClaimEvidenceBridge,
+  type IngestionBridgeField,
+  type IngestionClaimEvidencePreview,
+  type IngestionClaimEvidenceSuggestion,
+  type IngestionClaimSelection,
+} from './ingestion/claim-evidence-bridge';
+export {
+  parseWorkspaceGuidePayload,
+  type WorkspaceGuidePayload,
+  type WorkspaceWritingCitation,
+  type WorkspaceWritingDraft,
+  type WorkspaceWritingDraftInput,
+  type WorkspaceWritingKind,
+} from './agent/workspace-guide-contract';
 export {
   RESEARCH_IDENTITIES,
   CLAIM_KINDS,
@@ -275,6 +320,7 @@ export {
   PresentationAssetError,
   type PresentationGenerationKind,
   type PresentationGenerationPayload,
+  type HermesPresentationAuthority,
   type PresentationAssetView,
 } from './assets/presentation-asset';
 export {
@@ -383,8 +429,13 @@ export {
 
 export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from './assets/reviewed-media-import';
 
-export { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
+export { STORYBOARD_IMAGE_VISUAL_ACTION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
+export { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
+export { parseSceneAnimation, requireAnimationSourceSupport, type SceneAnimation, type AnimationObject, type AnimationAction } from './assets/animation';
 
-export { requireStoryboardBase } from './assets/presentation-asset';
+export { requireStoryboardBase, requireStoryboardRevisionTask } from './assets/presentation-asset';
 
-export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, type SceneImageRequest } from './assets/scene-image';
+export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireStyleReferenceImage, type SceneImageRequest } from './assets/scene-image';
+export { parseIllustrationBrief, describeIllustrationBrief, requireIllustrationSourceSupport, type IllustrationBrief } from './assets/illustration-brief';
+
+export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';

@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Handoff — 2026-08-10 Optical Editorial 前端重构
 
 - Current goal: Task 11 已完成 ECS 全流程验收；下一步执行 Task 12 剩余产品面一致性。Task 9 仍仅因 Live2D 许可门禁保持 in-progress。

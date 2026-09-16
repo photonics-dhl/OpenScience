@@ -1,0 +1,35 @@
+From ab5cf0c36b538627c82b3989d6c87d1668c7e081 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] Bug 5520: ERR_INVALID_URL for CONNECT host with leading digit
+
+Source: https://github.com/squid-cache/squid/commit/ab5cf0c36b538627c82b3989d6c87d1668c7e081
+Upstream restores the pre-7.2 parseHost implementation. No ACL changes.
+
+diff --git a/src/anyp/Uri.cc b/src/anyp/Uri.cc
+--- a/src/anyp/Uri.cc
++++ b/src/anyp/Uri.cc
+@@ -637,23 +637,11 @@ AnyP::Uri::parseHost(Parser::Tokenizer &tok) const
+ 
+     // no brackets implies we are looking at IPv4address or reg-name
+ 
+-    static const CharacterSet IPv4chars = CharacterSet("period", ".") + CharacterSet::DIGIT;
+-    SBuf ipv4ish; // IPv4address-ish
+-    if (tok.prefix(ipv4ish, IPv4chars)) {
+-        // This rejects non-IP addresses that our caller would have
+-        // otherwise mistaken for a domain name (e.g., '127.0.0' or '1234.5').
+-        Ip::Address ipCheck;
+-        if (!ipCheck.fromHost(ipv4ish.c_str()))
+-            throw TextException("malformed IP address in uri-host", Here());
+-
+-        return ipv4ish;
+-    }
+-
+-    // XXX: This code does not detect/reject some bad host values (e.g. "!#$%&").
++    // XXX: This code does not detect/reject some bad host values (e.g. `!#$%&`).
+     // TODO: Add more checks here, after migrating the
+     // non-CONNECT uri-host parsing code to use us.
+ 
+-    SBuf otherHost; // IPv4address-ish or reg-name-ish;
++    SBuf otherHost; // IPv4address-ish or reg-name-ish
+     // ":" is not in TCHAR so we will stop before any port specification
+     if (tok.prefix(otherHost, CharacterSet::TCHAR))
+         return otherHost;

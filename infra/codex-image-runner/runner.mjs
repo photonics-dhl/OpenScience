@@ -63,9 +63,11 @@ async function main(){
  if(!auth.isFile()||auth.uid!==1000||(auth.mode&0o777)!==0o600)throw Error('AUTH_PERMISSIONS');
  if(config.inbox===config.results||config.privateRoot===config.inbox||config.privateRoot===config.results)throw Error('SHARED_PRIVATE_PATH');
  let stopped=false;process.on('SIGTERM',()=>{stopped=true;});process.on('SIGINT',()=>{stopped=true;});
+ const fail=()=>{stopped=true;process.exitCode=1;};
  const heartbeat=()=>atomicWrite(join(config.results,'.ready'),JSON.stringify({schemaVersion:1,updatedAt:Date.now()}));
- await heartbeat();const timer=setInterval(()=>{heartbeat().catch(()=>{stopped=true;});},15000);
- try{while(!stopped){try{const result=await runOne({...config,execute:(r,d)=>executeImage(config,r,d)});if(result)console.log(JSON.stringify(result));else await sleep(1000);}catch{console.error('RUNNER_FAILED_CLOSED');stopped=true;}}}finally{clearInterval(timer);await atomicWrite(join(config.results,'.ready'),JSON.stringify({schemaVersion:1,updatedAt:0}));await utimes(join(config.results,'.ready'),0,0);}
- if(stopped)process.exitCode=1;
+ await heartbeat();const timer=setInterval(()=>{heartbeat().catch(fail);},15000);
+ try{while(!stopped){try{const result=await runOne({...config,execute:(r,d)=>executeImage(config,r,d)});if(result)console.log(JSON.stringify(result));else await sleep(1000);}catch{console.error('RUNNER_FAILED_CLOSED');fail();}}}finally{clearInterval(timer);await atomicWrite(join(config.results,'.ready'),JSON.stringify({schemaVersion:1,updatedAt:0}));await utimes(join(config.results,'.ready'),0,0);}
+ // An intentional drain finishes the current job and exits successfully, so
+ // systemd Restart=on-failure cannot race the cleanup's provider leases.
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(()=>{console.error('RUNNER_START_FAILED');process.exitCode=1;});

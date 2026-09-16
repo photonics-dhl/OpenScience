@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { useSession } from '@/components/auth/SessionProvider';
+import { JournalAdminLink } from '@/components/journals/JournalAdminLink';
 
-export type ProductRouteId = 'dashboard' | 'explore' | 'create' | 'settings' | 'profile';
+export type ProductRouteId = 'dashboard' | 'explore' | 'create' | 'settings' | 'profile' | 'journalAdmin';
 
 const productRoutes: ReadonlyArray<{ href: string; id: ProductRouteId }> = [
   { href: '/dashboard', id: 'dashboard' },
@@ -24,13 +26,15 @@ export function ProductRouteNavigation({
   variant?: 'identity' | 'product';
 }) {
   const t = useTranslations('productNavigation');
+  const { status, user } = useSession();
+  const administrator = status === 'authenticated' && user?.platformRole === 'platform_admin';
   const routes = variant === 'identity' ? identityRoutes : productRoutes;
 
   return (
     <ul
       className={cn(
         'm-0 grid w-full list-none items-stretch gap-1 p-0 sm:flex sm:min-w-max',
-        variant === 'identity' ? 'grid-cols-2' : 'grid-cols-4',
+        variant === 'identity' ? (administrator ? 'grid-cols-3' : 'grid-cols-2') : (administrator ? 'grid-cols-3' : 'grid-cols-4'),
       )}
       data-product-route-navigation="true"
     >
@@ -49,6 +53,7 @@ export function ProductRouteNavigation({
           </Link>
         </li>
       ))}
+      {administrator ? <li className="flex min-w-0"><JournalAdminLink active={active === 'journalAdmin'} className={cn('inline-flex min-h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-b-2 px-1 text-xs font-semibold no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:px-3 sm:text-sm', active === 'journalAdmin' ? 'border-os-vermilion-ink text-os-ink' : 'border-transparent text-os-muted-paper hover:text-os-ink')} /></li> : null}
     </ul>
   );
 }

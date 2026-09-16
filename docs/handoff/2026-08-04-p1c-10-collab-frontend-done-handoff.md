@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Handoff — 2026-08-04 P1C-10 协作前端完成，Phase 1C 全部闭环
 
 - Current goal: **Phase 1C GitHub 式科研协作 10/10 全部完成**（P1C-1~10）。下一阶段 Phase 1D Hermes Agent 系统（task-master 5）。

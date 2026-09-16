@@ -1,3 +1,5 @@
+> 适用说明：本文是对应功能的设计依据；其中版本、验收和待办为编写时记录，不能作为当前部署状态。有效需求以最新用户确认及需求基线为准，明确 DEPRECATED 的设计不恢复；实施状态只读 [当前交接](../../handoff/2026-09-10-hermes-web-image-handoff.md)。
+
 # Researcher Ingestion Product Slice Design
 
 **状态：** 用户已确认主流程与 Dashboard 优先级，待 spec 审阅

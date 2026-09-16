@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Handoff — 2026-08-04 P1B-10 SDF 标准导出包生成与校验完成
 
 - Current goal: Phase 1B SDF 与版本。P1B-10 已闭环（domain export 包 + /versions/:id/export zip，云上集成 58/58），下一任务 P1B-11（task-master 3.11，需读清单）。

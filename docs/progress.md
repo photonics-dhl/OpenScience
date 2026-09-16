@@ -1,100 +1,56 @@
-> 当前进度只读 [交付树 CURRENT handoff](../.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md) 与 [短进度](../.worktrees/onchip-video-release/docs/progress.md)。本目录 dirty main 的下文全部是历史记录，不作为版本或下一步；原文保留。
+# CURRENT Progress Window
 
-> HISTORICAL 2026-09-13：交付树 codex/onchip-video-release HEAD/origin a3025b8b500d44416497ad6dea44509f9e5ec97d（设计文档）；最近实测应用c0bc653d745e0dd84b8598a1e23cd80472559386 / rollback871ed7025168fdeb68cca98398590d9d3a1e2c03。用户已逐项确认草稿/公开版本分离、历史入口迁移、个人空间删除与30天回收站；spec与ADR-014已落盘、独立High设计PASS，尚未实施，本轮无服务器/测试/删除/发布。下一步按方案实施，保护第二篇正确图文与已有公开链接。唯一CURRENT：E:/Miscellaneous/XGS/.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md；方案docs/specs/2026-09-13-draft-publication-trash-design.md。根dirty main非生产基线。
-> HISTORICAL入口更新2026-09-08：production407ad49e / rollback88018512；当前产品状态以 E:/Miscellaneous/XGS/.worktrees/onchip-video-release/docs/handoff/2026-08-16-hermes-2d-pet-handoff.md 为准。用户禁止继续测试，以下旧版本与测试待办仅为历史。
+## 2026-09-16 — 退回修改与误拒更正
 
-> 2026-09-08 用户强约束更新：AGENTS.md 已明确产品落地优先，默认不做预检/测试；仅对具体重大风险或阻塞故障做最小必要服务器检查。此条只更新执行政策，不改变下方产品版本与完成状态。
+- 按用户授权实现明确审核操作、拒绝二次确认、管理员误拒更正及申请人同编号继续修改/保存/重提；候选已写入，独立复核、部署与真实操作待完成。状态统一见[期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 
-> HISTORICAL 2026-09-08：production97aa06a5 / rollbackc5b0dd71。实际工作区`.worktrees/token-smart-live-workflow`；真实视频已生成，技术/画面/播放验收通过，待用户试听。唯一当前状态见该工作区HISTORICAL handoff。
+## 2026-09-16 — 审核点击反馈修复
 
-# OpenScience 进度（HISTORICAL window）
+- 审核反馈修复已上线/推送，high GO及必要服务器构建通过。真实 Edge 点击指定旧申请“通过”后，立即显示四项英文问题，alert 获焦并滚动到按钮旁；仍待审核，无审核写请求或资料修改。成功写入/处理中等分支仅静态复核，未代为试写。原错误提示位于页尾；原请求未在有界日志中匹配，不编造返回码。状态见[期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 
-> 最新同步：2026-09-08，当前产品请转 `.worktrees/token-smart-live-workflow/docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`。本目录是保留用户改动的旧main@b9616cb，以下早期配置/产品记录不决定当前状态。
+## 2026-09-16 — 补齐站内期刊审核入口
 
-## 2026-09-08 — 当前产品交接入口
+- 首页/研究桌面/期刊目录管理员入口及管理页加载、登录、权限、重试提示已上线并推送。用户明确批准仅期刊审核改用网站管理员登录；其余后台 Basic Auth 保留，独立 high GO，必要服务器发布成功。真实管理员会话从期刊页入口点击后显示指定申请及审核按钮，匿名页302/管理API401/内部入口404已核对；未代审申请。精确版本与证据见[期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 
-- 生产/public b361f4f7781b760583b3a312829877c4d6310e8a，rollback a73f273f7079819579962aa6eff31c1dd9368b08；PR107 CI及canonical服务器build/Parser16/迁移/运行时/公网验收通过。release source为onchip-video-release工作树，开发证据仍在token-smart-live-workflow。
-- 真实论文六字段已确认/commit，同版本Claim桥接在bbox精度修复后通过。网页6Pro已给科学措辞和五场设计；生产图片/视频runner已启用，实际媒体与播放验收继续。整体净节省率未知；不得把fixture或演示视频当真实论文完整流程。
-- 工作分支codex/token-smart-live-workflow；完整证据、实际模型路由与未完成项均在上方HISTORICAL交接及其文献恢复计划。根目录其他用户改动保留，不执行reset/pull/stash。
-## 早期配置检查点 — Codex 配置与 Skills 精简
+## 2026-09-16 — 用户指定账号管理员授权
 
-- 省量最终验收：新Terra与网页原始实现均2036项通过；普通Chat不计Codex，新增按模型/缓存的credits估算器。Terra执行估算5.357 credits；后续Luna独立取回与2036项验收已通过，新增逐字保存脚本；操作侧估算低63.52%，不等于整任务净节省。包含本轮配置诊断则没有净节省，完整复杂任务净收益尚未验证；方案与证据见 codex-token-smart runbook。
+- 经用户明确授权及独立 high 复核，将其指定的已验证机构邮箱账号设为平台管理员；单行条件更新与审计同事务，提交后读回角色和审计成功。未改其他账号或申请，无代码修改、部署或测试；详情见[期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 
-- 用户授权精简全局/项目工作流；安装全局 token-smart 并适配人工 Chat 交接，未安装自动桥接或更改模型/权限/代理。已有用户改动保留。
-- 收窄过度触发、重复设计审批/测试/agent 复核，保留安全/科研验证；AGENTS 常驻模块历史改为索引与 runbook 入口。详见 `docs/runbooks/codex-token-smart.md`，备份在用户 Codex 目录。
-- 本地 `main@b9616cb` 起点；本任务无产品部署，ECS release/rollback 未重验、未改变。配置验证记录存于备份目录 `validation.json`。
+## 2026-09-16 — 申请表英语规则与提交回执修订
 
-## 2026-08-26 — Hermes Research Intelligence Foundation 本地实现
+- 英文必填/中文选填、后台一致校验、英文优先展示、服务说明及移除专业审核选项已部署并推送；本人申请状态、补件编辑、真实编号和成功跳转回执已接入。新增差异独立 high GO，服务器必要构建与精确发布成功；真实 Edge 已查看指定旧申请回执和表单，中文英文刊名拦截及学科空格保留已定向观察，匿名接口 401。
+- 旧申请保留，含中文的元数据需管理员要求补件后由申请人修改；未创建虚构申请、未实际提交新申请验证跳转，未执行全套测试或真实模型加工。
+- 当时只读核实指定账号及期刊申请的权限/状态；后续管理员授权见上条，申请仍未代审。版本和部署证据仅见 [期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 
-- Taskmaster Task 1 Foundation 已关闭：21 行能力主表与 11 行候选 owner/license/version/resource/latency/cost/data-flow/evaluation/kill-switch/rollback 矩阵受机器门禁；入口为 `audit:hermes-capabilities`。
-- 新增 13 项自著权 deterministic corpus 与 schema 1 哈希/locator 清单，不使用用户文件，覆盖 native/scanned/dual-column PDF、table、formula、references、DOCX、TeX、Markdown、CSV/XLSX、notebook 与 code；清单稳定性门禁仅规范化 Git checkout 的 CRLF/LF 差异，其他内容仍须逐字一致。
-- ignored current-parser report 只保存 ID/hash/status/reason/textMatched/elapsed/RSS delta；记录运行有 7 项 `ready`、6 项 expected-text matched、6 项显式复核，P50 `0.03 ms`、P95 `226.09 ms`、最大 RSS 增量 `28,672 B`。image-only PDF 因 `pdf-parse` 页分隔符出现 1 项 false-ready，已作为后续候选必须消除的基线缺陷；计时/RSS 仅为观测值。
-- PR #4 Ubuntu 视觉门禁已修复：Landing `.05` 硬阈值不变并连续采样真实 RAF，Hermes 仅增加 2px 字体度量容差，零重叠/上界不变；高成本光学证据用例总预算 120s。model `18/18`、build、optical `10/10`、Hermes cold-start `10/10`、release `72/72` 通过，UI 与生产 release 未改。
-- CI runs `32962638531` / `32964668644` 在产品 release `72/72` 通过后暴露两个 Hermes 测试前提缺陷：loading 用例查错 `aria-busy` owner，context-loss 用例要求 Retry 却未固定 full motion。候选 `a14f0ea` / `da15abe` 分别对齐真实 shell/API 事件与 `hermes-motion=full` + toggle runtime 合同；production Web build、Hermes compatible runtime `19/19` 与 product interaction `8/8` 本地全绿，等待刷新 CI。
-- Fresh acceptance：全仓 test/typecheck/lint/build、`audit:hermes-capabilities`、`docs:lint`（223 文件、0 问题）、`audit:docs-sync`（8/8，`DOCS_SYNC_OK`）与 `git diff --check` 全绿；agent-worker `57/57`。Docling/LiteParse/GROBID/PaddleOCR/BGE-M3 均保持 `APPROVED_PILOT`；MiniMax OCR 继续 `BLOCKED`。未安装依赖、未读取 `.env`、未写服务器、未部署或改变生产 release。
+## 2026-09-16 — 期刊入驻已部署至生产
 
-## 2026-08-26 — Hermes 能力核验与 SSH 误报收口
+- 用户授权上线后，发现原期刊代码基线落后于真实生产；已保留发布清单哈希一致的两次生产增量，整合独立公开编号、冻结身份、回收站与检索权限、上传清理锁。新增差异独立 high 静态审查通过；没有运行测试、CI或本机构建。
+- 并行发布结束后完成双数据库备份、必要服务器构建、期刊迁移及应用切换；修复 Windows 上传兼容与 Nginx 期刊管理页路由，后者独立 high GO 后第二轮发布完成。线上版本及回滚标记一致，服务健康且发布事务清除。
+- 真实浏览器已查看期刊目录/入驻表单；公网目录、申请、目录 API 和站点地图正常，管理与刊内接口保留匿名访问门禁。没有创建假期刊或生成真实 AI 产物，真实试点与科学质量未验收。精确版本及证据仅见 [期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 
-- 用户确认 LLM OCR 作为平台自动处理能力，不再逐文档询问；仍须经 AI Gateway、最小页路由、来源标记与审计，生成结果不得冒充原始证据。
-- 仅检查注入状态、不读取或输出 `.env` 值：本机 Tavily 已注入但额度耗尽，Semantic Scholar 常用变量未进入当前进程；生产 `agent-worker` 已注入 MiniMax，尚未注入 Tavily/Semantic Scholar。用户在聊天中暴露的凭据必须轮换后再配置。
-- SSH key 已用同一密钥只读复验成功。历史误报由 Windows 裸 `bash` 命中 WSL 导致；2026-08-26 又确认自动化执行器的 `shell=` 抽象层也会误入 WSL，只有 PowerShell 显式 `& 'C:\Program Files\Git\bin\bash.exe'` 才是可靠入口。`AGENTS.md` 与 deployment §1.1 已锁定根因签名，禁止再误判为密钥失败；未改产品代码、未写服务器、未部署。
-- Taskmaster `optical-editorial-v3` 历史 tag 为 15/15；HISTORICAL `hermes-research-intelligence` 为 1/12 done，下一唯一 ready 项为 Task 2 `Prisma Schema and Core Domain Models`，其余 10 项等待依赖。
-- 实施保持四个可回滚阶段：Foundation 已建立能力台账机器门禁、自有 corpus 与现状 parser 基准；后续再依实测依次进入文档/OCR/搜索、兴趣/外部检索、RO/富媒体/生产验收。
+## 2026-09-15 — 修复能力接线并追查真实空结果
+- `ba184541` 已部署（rollback `6684e448`），仅跳过全套验收；按原资格恢复两篇 confirmed 来源任务，真实完成 deep 58/58 dense、Quantization 42/42 dense，当前 generation 均 active。Weyl UI POST 200、hybrid，实际召回两篇论文，页面无横向溢出。任务4索引闭环已实证；不等同科学或审美质量完成。
 
-## Current version tuple
+## 2026-09-15 — 历史取证：模型路由、联动边界与授权清理
+- 代码确认：MiniMax主模型及默认来源审校已消费科学Skill；显式web复核/配图末审另走固定6Pro，并非Skill切换模型。配图审核无MiniMax回退，本轮未改路由。自动任务/来源/方案/结果和Langfuse审计已接，Taskmaster/Backstage/Serena/docs-sync仍需开发者执行；原地纠正能力台账，不另造平台。
+- 用户授权后清理36个无现行引用、停止且只读的实验容器，保留私有日志与元数据；27个运行/回滚容器、65处挂载及发布标记读回不变，剩33容器。镜像、卷、release、论文和产物保留。精确范围/收据及未完成主任务只见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
-- Branch / local Foundation code HEAD / deployed application / immutable release: `codex/hermes-wanko-live2d` / `da15abe` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
-- Current rollback 为前一健康 release `58614c07951374537ed146f164f8568e9957a9b5`；post-deploy docs HEAD 不与应用身份混写。
-- ECS release / rollback: `29344767b350e0a44ef74c04b9b5a55b342ef011` / `58614c07951374537ed146f164f8568e9957a9b5`。
+## 2026-09-15 — 共享内存峰值根因与技能实证
+- 实际页面加载时/dev/shm瞬时用满512MiB，同步173次错误；事后df余量曾漏掉峰值。用户“你来判断”后私有备份并完成1GiB容器切换；相同六页首次加载峰值882MiB、资源错误0。六URL/登录/草稿正文恢复，Chat段落显示格式不同，原样备份保留；旧容器停止保留。证据、原图任务过期及剩余边界仅见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 真实资产与遥测确认Hermes消费科学/设计Skill，6Pro是配图末审后端，默认论文审校仍为MiniMax。盘点发现历史发布与实验容器积累，盘点时磁盘有61G可用；后续清理见上条。既有多风格和论文端到端交付差额保持。
+- 后来输入草稿可能被终态自动清理误关的代码缺陷已收窄：仅回收有任务归属的about:blank，正常runner收尾不变。独立High GO后复用原patch机制安装单文件，保留前后副本、读回字节/权限，无新浏览器重启或模型调用。
 
-## 2026-08-26 — Landing water regression root cause and implementation plan
+## 2026-09-15 — 多风格任务与已有工具重新对齐
+- 根因：局部水彩修图被写成总任务；Backstage指向缺少现行要求的旧main；Taskmaster仍是八月已完成tag；Hermes原艺术修订入口未贯穿对话。按代码、Git历史及实际工具结果纠正，未用安装成功代替完成。
+- 复用原Taskmaster三项稳定验收；CURRENT保存每项资产、用户反馈、版本和下一动作。仅用户认可可关闭审美交付，已有认可的淡彩原图保留。
+- 新学术与编辑候选已实际生成并看图，前者可供评阅，后者尚未达到编辑封面目标。具体差额只见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md#illustration-delivery)。
+- 应用必要服务器构建/启动完成；原艺术模式已接入Hermes，自有Skill v5与既有末审加入明确艺术要求符合性，无新模型阶段。Backstage/遥测更新、Serena源码同步完成；已用目录和原任务ID读回真实资料及两条调用。
+- 真实页面先暴露结构回复拒绝，随后暴露guide重复艺术规划、擅加科学对象；错误安排没有确认。修复后页面返回和确认请求均保留原指令，绑定原稿，769艺术方案科学字段全等；同一6Pro末审修正暗背景线条对比。最终图片和剩余审美差额见CURRENT。
+- 最后封面图7cd尚未返回PNG；延迟恢复重复写一次性标记的最小修复已独立High GO并部署，Serena同步，原标记未重置。随后共享内存和误回收修复见本页最新条目；先前“静态硬资源未碰限/等待用户保存”已过时。原任务已过下载恢复期限，新Library精确结果绑定仍未收口，不能称生图链路全面稳定。
 
-- 用户确认 Task 24 只恢复既有 OGL 水流并封死回归；Hermes、导航、字体、accepted plates 与非 Landing 表面冻结。Git 证明最近 navigation release 未删除 OGL：`8edf6fa` 隐藏 OS cursor，`8fe2094` 又把 descendants `!important` 和错误发布门禁固化。
-- 根因已闭合：线性速度使慢速 traverse `follow≈.007`，而 10s/2.2px presentation 与 aggregate-pixel gate 仍可 GREEN。Candidate `47c8aa9` 移除 `cursor:none!important`，以 `sqrt(magnitude)` 恢复慢速 wake，并把原 ambient clock 收紧为 7s；未重建 renderer、恢复 Canvas2D、改构图或 shader。
-- 用户实际浏览器仍为静止图的后续根因是 WebGL/WebGL2 初始化失败时只剩 exact static plate；既有公网门禁只覆盖可用的 SwiftShader/WebGL 路径。Application/release `2934476` 保持 OGL 为唯一正常 owner，仅在 normal-motion + `contextStatus=unavailable` 时挂载已有 Canvas field，以 accepted typography plate 做单层标题水纹；系统 cursor、构图、Hermes 与导航不变，reduced-motion 仍无 canvas。RED→GREEN 覆盖 WebGL 禁用、亮字形运动、静态字版不叠加、滚出/滚回生命周期和 cursor；原尺寸桌面/390px/reduced 本地与公网截图复核，fresh shots、Web `421+5`、typecheck、全仓 lint/docs-sync/build 与 diff check GREEN。两次 `--skip-migrate` 切换用于先恢复再消除人工审图发现的双影；最终 rollback `58614c0`。Backup `436K files=7/7`、server build、27 migrations、容器/Parser isolation、release/failure/rollback evidence、公网 normal/no-WebGL/mobile/reduced 全绿；无 migration/seed/data write。
-- 用户最终确认桌面静止的剩余原因是 Chrome 单独报告 `prefers-reduced-motion: reduce`，而非 Cloudflare 或新发布回归：桌面/移动响应均为 `CF-Cache-Status: DYNAMIC`、`no-store`、相同 HTML/hashed chunks；公网桌面 `no-preference` 连续帧变化而 `reduce` 精确静止。Windows 动画已开启但 DevTools/Chrome override 仍生效；恢复 Rendering `No emulation` 并重启 Chrome 后用户确认正常。未清 CF、未改代码、未重新部署；唯一操作记录见 deployment runbook §5.28。
-- 新合同已进入 canonical product release：系统 cursor 与所有 descendants 可见；24×10 网格要求 650ms 内存在至少 6 格、横纵各跨 2 格的连通水流；慢/快轨迹分别验证位置、强度和 900ms 恢复，reduced-motion 仍静态无 canvas。Fresh Landing `6/6`、focused `23/23`、Web `421+5`、全仓 test/build、Web typecheck、targeted ESLint 与 diff check GREEN，桌面/移动原尺寸截图已复核。
-- Broader Optical Lab capture 的既有 `evolves` 边界 `.899336 < .9` 在 10s/7s 下相同，未放宽阈值。Application/release/rollback `47c8aa9` / `73677d5` / `263c783` 已部署：pre/post checkup、backup `436K files=7/7`、服务器全量 build、27 migrations、目标容器、Parser isolation、release markers 与公网 Landing `6/6` GREEN；未 migration/seed/data write。
-- 新增全站一级研究入口：Research desk / Explore / New research / Settings；公开阅读与 collection 同时保留 Home wordmark、Desk、Explore、Create、Login；RO 内继续使用 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox 二级导航。Dashboard loading/error、注册/登录、Hermes evidence review 与 curator 均不再是死路。
-- 390px 原尺寸复核发现首项虽存在却裁切 `6px`，已用品牌/utility 第一行 + 四入口第二行及明确短标签修复；浏览器门禁现逐链接验证 visible 与 `scrollWidth <= clientWidth`。Application `c80f739` 的 fresh evidence：Web `420+5`、全仓 typecheck/lint/docs-sync/docs-lint/test/build、19-page build、product release `72/72` 与 `git diff --check` GREEN；新增 320px Dashboard/Auth/Public/Workspace/Review 五壳层实测。
-- Immutable release `263c783` 已以 `8395b4d` 为 rollback、`--skip-migrate` 发布。pre/post checkup、backup `432K files=7/7`、服务器 19-page build、27/27 migrations、目标容器/Parser isolation、Cloudflare/loopback、精确 release/failure/rollback markers 与公开路由均通过。公网 no-write 产品矩阵可匿名部分 `69/69`，其中 Landing normal/reduced 与 320px 五壳层全绿；Admin 三视口按生产 Basic Auth 正确返回 401，本地 release gate 为 `3/3`。未 migration、seed 或写研究数据。
-
-## 2026-08-26 — Detached Hermes menu correction deployed
-
-- 用户截图对应的不是整页缩放，而是已持久化拖动位置的 `detached` Hermes；旧稳定器只处理 `anchored`，因此右侧裁剪中菜单可越过顶部并与角色形成大段断裂空白。Application `9aef5c4` 让 portalled sheet、真实帽顶与 travel hull 在 detached 状态进入同一几何计算，关闭后恢复原位置、滚动和焦点。
-- 正常空间保持完整 12 项纸页位于帽顶上方 `24–48px`；临时下移同时受 visual viewport 和 protected surfaces 限制。若上下空间物理冲突，只在该状态使用不碰内容的侧向纸页；侧向也不可用时改用较矮的上方宽幅 folio，不缩放角色、不压研究控件。
-- 旧生产构建在精确 custom-dock 回归中以 `menu.top=-31.7px` RED；protected 紧邻场景也先 RED。最终关键路径 repeat `10/10`、constrained repeat `5/5`、product release `67/67`、Web `411+5`、全仓 test/typecheck/lint、19-page build 与 `git diff --check` GREEN；独立复审 Ready，只有“侧向 fallback 未被单独强制命中”的非阻断覆盖缺口。
-- Immutable release `8395b4d` 已以 `bf54eaa` 为 rollback、`--skip-migrate` 发布。backup `432K files=7/7`、服务器 full build、27/27 migrations、目标容器与 Parser `network=none/read-only/non-root/512MiB/64PID`、Cloudflare/loopback、Dashboard/model/moc/motion、精确 release/failure/rollback markers 全部通过；公网 no-write Hermes `10/10`。未 migration、seed 或写研究数据；用户视觉接受仍 pending。
-
-## 2026-08-25 — Hermes short-viewport collision correction deployed
-
-- 用户生产截图再次证明 1612×729 CSS viewport（约 DPR 1.875）下工具页顶部会被裁切。根因是角色页边位移、Radix portal 校正和上游页面重排分属不同的一次性测量，能短暂或持续失配。
-- Application `5323ba8` 将菜单、可见帽顶、角色底部、visual viewport 与 protected regions 合并为同一稳定器；同步校正首帧并以双 rAF 吸收 portal settling，监听菜单/页边尺寸、上游 geometry version、visualViewport 与 compact 分组变化，关闭/卸载恢复原 translate、scroll 和 focus。
-- 新回归精确覆盖 `1612×729 / DPR 1.875`、菜单打开后的上游受保护 header 重排、上下边界、横向页边、无 protected overlap、`24–48px` crown gap、角色底部、Shift+F10/Menu 首项 focus 与 Escape 回归。旧实现 RED；修复后关键路径连续 `10/10`、Hermes `9/9`、Web `411+5`、product release `66/66`、work-assistant 三视口和 19-page build GREEN；独立复审 Ready，无 Important/Minor。
-- Immutable release `bf54eaa` 已以 `6b804f7` 为 rollback、`--skip-migrate` 发布。backup `432K files=7/7`、server full 19-workspace/19-page build、27/27 migrations current、目标容器与 Parser isolation、Cloudflare/loopback、真实 Hermes assets、精确 release/failure/rollback markers 均通过；公网 no-write Hermes `9/9`，包含用户问题尺寸。无 API/schema/migration/seed/研究数据写入。
-
-## 2026-08-25 — Hermes viewport-safe lively interaction deployed
-
-- 用户生产截图证明右键工具页越过浏览器顶边，动作反馈又退化为固定气泡；根因是 Radix collision 后仍叠加固定 CSS 位移，以及每动作只有一句且语言先于角色 performance。
-- Application `8d1409e` 改为测量真实 portal 后约束 viewport/protected regions；desktop 只移动页边，mobile counter-scroll，关闭/卸载恢复原始 scroll。12 动作均有真实 Wanko performance，每动作每语言三句且不连续重复，动作先行 `320/520ms` 后再说话。
-- 输入、搜索、drawer/modal 和 approval 会取消待显示短句；已处于中断状态的动作不创建 timer。quiet editor 无中断时仍允许用户显式反馈，reduced-motion 保留文案与目的地。
-- Fresh evidence：Web `411/411` + 5 Node、product release `65/65`、focused Live2D/work-assistant gates、全仓 typecheck/lint/test/build、`git diff --check` 与独立复审 GREEN。release `6b804f7` 已以 `cbf5737` 为 rollback、`--skip-migrate` 发布；backup `432K files=7/7`、server 19-page build、27/27 migrations current、容器/入口/资源/markers 全绿，公网 no-write `6/6`。当前视口/actor 截图确认角色与口部 speech 同屏；full-page WebGL 空帧只属 stitched capture 限制。
-
-## 2026-08-25 — Hermes carried tool sheet deployed
-
-- §13.3–13.5 的历史试错已收敛为一张暖纸 carried tool sheet、单闭合 SVG 口部气泡、可见帽顶 `24–48px` 间距和真实 `360/200px` 角色；悬空页注、宽尾、内部标签遮挡、移动 control overlap 与 research 分组漂移均已废止。
-- 12 项 action/motion/zh/en 映射、右键/Shift+F10/Menu/长按、普通点击 drawer、focus、reduced-motion 与 mouth-relative bottom anchor 均有合同；历史 `62/62` 只能证明功能，视觉接受仍以 §13.5 原尺寸人工审图为门。
-- `8ed2f3c`、`cbf5737` 等历史发布的 build、27 migrations、容器、入口和 no-write 证据由 Git 与 deployment runbook 保存；本 HISTORICAL window 不再重复完整部署日志。
-
-## 2026-08-25 — Hermes orbit actions deployed（历史）
-
-- `e4a19d4` 实现两拍短句、orbit 研究入口、移动分组与输入/审批中断；release `7165e9b`、rollback `3010903` 的本地/服务器和公网 no-write 验收已完成，无迁移或研究数据写入。完整证据查 Git history 与 deployment runbook；该 orbit 外观已由后续 carried tool sheet 取代，不作为当前实现入口。
-- 当时隔离 worktree 上传前因未指定主仓库配置根 fail-closed，设置 `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS` 后完成；保留此操作约束。
-
-## Read first
-
-1. `AGENTS.md`
-2. `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
-3. 当前任务唯一 HISTORICAL spec（Hermes 为 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`）
-4. 本文件
-5. `docs/OpenScience_Kimi_Development_Spec.md` 相关章节
+## 边界与后续
+- Git HEAD、应用release、独立Chat provider、工具bundle与rollback仅在CURRENT定锚。用户认可淡彩图、两篇公开v1及论文/证据/笔记保持；无关dirty设计spec不提交。
+- 未跑测试、CI或本机构建；审阅代理误跑一次只读git diff --check，已停止。服务器构建/启动与真实产品操作分别证明各自范围，不证明审美获认可。
+- 新正常论文上游claimSuggestions确认、BGE hybrid query正常应用效果等既有未观察项保留在CURRENT/能力台账；不在这里复制新待办。
+- Langfuse登录已完成；未知tokens/cost保持未知。SMTP/SSO/定时备份/保留期仍未配置；不为采集造模型调用。
+- docs-sync按关键节点同步，不是后台结束回调。工具与规则用于暴露、追踪和纠正漂移，不能宣称绝对零技术债。

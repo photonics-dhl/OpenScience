@@ -14,9 +14,11 @@ import { installDrawing } from './drawing.mjs';
 import { hasFastStart } from './media.mjs';
 import { storyboardTimeline, readSceneArtwork } from './storyboard-input.mjs';
 import { installStoryboardDrawing } from './storyboard-drawing.mjs';
+import { installOnchipDrawing } from './onchip-drawing.mjs';
 
 const execute = promisify(execFile);
 const fps = 24;
+const ffmpegThreadLimits = ['-filter_threads', '1', '-filter_complex_threads', '1'];
 
 function startEncoder(command, args) {
   const child = spawn(command, args, { stdio: ['pipe', 'ignore', 'inherit'] });
@@ -81,17 +83,17 @@ async function main() {
   }
   await mkdir(output, { recursive: true });
   // Exclusive writes and FFmpeg -n preserve existing evidence, including partial prior runs.
-  await writeFile(resolve(output, 'storyboard.json'), JSON.stringify({ fps, total, audioMode, frameCount, visualStyle, source: storyboard ? 'Supplied storyboard and artwork; upstream review required' : 'https://arxiv.org/abs/1804.08711v2', notice: 'Conceptual visualization, not original evidence.', narration, scenes }, null, 2), { flag: 'wx' });
+  await writeFile(resolve(output, 'storyboard.json'), JSON.stringify({ fps, total, audioMode, frameCount, visualStyle, profile: storyboard?.profile, source: storyboard?.profile === 'onchip-field-sampling-v1' ? 'https://arxiv.org/abs/2009.06045v1' : storyboard ? 'Supplied storyboard and artwork; upstream review required' : 'https://arxiv.org/abs/1804.08711v2', notice: 'Conceptual visualization, not original evidence.', narration, scenes }, null, 2), { flag: 'wx' });
     const { chromium } = await import('playwright-core');
     browser = await chromium.launch({ headless: true, executablePath: process.env.SCIENCE_CHROMIUM || '/usr/bin/chromium' });
     if (interrupted) throw new Error('Render interrupted');
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
     await page.route('**/*', route => route.abort());
     await page.setContent('<!doctype html><html><body style="margin:0"><canvas width="1280" height="720"></canvas></body></html>');
-    if (storyboard) await page.evaluate(installStoryboardDrawing, {scenes, total, visualStyle, locale: storyboard.locale, artwork: await readSceneArtwork(input, scenes)});
+    if (storyboard) await page.evaluate(storyboard.profile === 'onchip-field-sampling-v1' ? installOnchipDrawing : installStoryboardDrawing, {scenes, total, visualStyle, locale: storyboard.locale, artwork: await readSceneArtwork(input, scenes)});
     else await page.evaluate(installDrawing, { scenes, total, visualStyle, artworkData: `data:image/png;base64,${(await readFile(resolve(input, 'source-artwork.png'))).toString('base64')}`, scene3ArtworkData: scene3Artwork ? `data:image/png;base64,${(await readFile(scene3Artwork)).toString('base64')}` : undefined });
     await page.evaluate(() => document.fonts.ready);
-    encoder = startEncoder(ffmpeg, ['-n', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(fps), '-i', 'pipe:0', '-an', '-c:v', 'libx264', '-preset', 'fast', '-crf', '19', '-pix_fmt', 'yuv420p', resolve(output, 'silent-v2.mp4')]);
+    encoder = startEncoder(ffmpeg, ['-n', '-hide_banner', '-loglevel', 'error', ...ffmpegThreadLimits, '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(fps), '-i', 'pipe:0', '-an', '-c:v', 'libx264', '-threads:v', '2', '-preset', 'fast', '-crf', '19', '-pix_fmt', 'yuv420p', resolve(output, 'silent-v2.mp4')]);
     const middle = i => scenes[i].start + scenes[i].duration / 2;
     const samples = [['poster-v2', middle(0)], ...(storyboard ? scenes.map((_, i) => [`scene-${i}`, middle(i)]) : [['frame-interference-v2', middle(2)], ['frame-detector-v2', middle(3)]]), ...scenes.slice(1).map((scene, i) => [`transition-${i + 1}-v2`, scene.start + 0.3])];
     for (let frame = 0; frame < frameCount; frame++) {
@@ -119,7 +121,7 @@ async function main() {
       const filters = scenes.map((scene, i) => `[${i + 1}:a]apad,atrim=duration=${scene.duration},asetpts=PTS-STARTPTS[a${i}]`).join(';') + ';' + scenes.map((_, i) => `[a${i}]`).join('') + `concat=n=${scenes.length}:v=0:a=1[a]`;
       audioArgs = [...audioInputs, '-filter_complex', filters, '-map', '0:v', '-map', '[a]'];
     }
-    encoder = startEncoder(ffmpeg, ['-n', '-hide_banner', '-loglevel', 'error', '-protocol_whitelist', 'file,pipe', '-i', resolve(output, 'silent-v2.mp4'), ...audioArgs, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', ...(audioMode === 'legacy' ? ['-shortest'] : []), resolve(output, videoFile)]);
+    encoder = startEncoder(ffmpeg, ['-n', '-hide_banner', '-loglevel', 'error', ...ffmpegThreadLimits, '-protocol_whitelist', 'file,pipe', '-i', resolve(output, 'silent-v2.mp4'), ...audioArgs, '-c:v', 'copy', '-threads:v', '2', '-c:a', 'aac', '-threads:a', '2', '-b:a', '128k', '-movflags', '+faststart', ...(audioMode === 'legacy' ? ['-shortest'] : []), resolve(output, videoFile)]);
     encoder.child.stdin.end();
     await encoder.done;
     if (interrupted) throw new Error('Render interrupted');
@@ -129,9 +131,9 @@ async function main() {
     if (video?.codec_name !== 'h264' || video.width !== 1280 || video.height !== 720 || video.pix_fmt !== 'yuv420p' || !probe.streams.some(stream => stream.codec_name === 'aac') || Math.abs(Number(probe.format.duration) - total) > (audioMode === 'continuous' ? 1 / fps : 0.1)) throw new Error('Rendered media failed format validation');
     const fastStart = await hasFastStart(resolve(output, videoFile));
     if (!fastStart) throw new Error('Rendered MP4 is missing fast-start atom ordering');
-    await execute(ffmpeg, ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-i', resolve(output, videoFile), '-f', 'null', '-'], { timeout: 120000, signal: cancellation.signal });
+    await execute(ffmpeg, ['-v', 'error', ...ffmpegThreadLimits, '-threads', '2', '-protocol_whitelist', 'file,pipe', '-i', resolve(output, videoFile), '-f', 'null', '-'], { timeout: 120000, signal: cancellation.signal });
     if (interrupted) throw new Error('Render interrupted');
-    const metrics = { schemaVersion: 1, renderMode, audioMode, frameCount, visualStyle, width: video.width, height: video.height, durationSeconds: Number(probe.format.duration), videoCodec: video.codec_name, audioCodec: 'aac', pixelFormat: video.pix_fmt, fastStart, completeDecode: true, renderSeconds: (performance.now() - started) / 1000, total, fps, freshPaidApiCalls: 0, narration, probe };
+    const metrics = { schemaVersion: 1, renderMode, profile: storyboard?.profile, audioMode, frameCount, visualStyle, width: video.width, height: video.height, durationSeconds: Number(probe.format.duration), videoCodec: video.codec_name, audioCodec: 'aac', pixelFormat: video.pix_fmt, fastStart, completeDecode: true, renderSeconds: (performance.now() - started) / 1000, total, fps, freshPaidApiCalls: 0, narration, probe };
     await writeFile(resolve(output, 'metrics.json'), JSON.stringify(metrics, null, 2), { flag: 'wx' });
     process.stdout.write(`${JSON.stringify(metrics)}\n`);
   } finally {

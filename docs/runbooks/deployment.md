@@ -1,8 +1,57 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`，rollback tree 为 `0aaf52fed29e79bb19b15517ba9ef50545510f72`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。OA、ZJU subscription-only PDF、四入口、72h/600s、presentation replay、真实 publish/public journey 与 exact aggregate gate 均已通过；现行完成态见 §5.66。
+当前版本、部署结果和暂停范围统一见[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。review request v2只用于配图，旧v1保持；兼容新版receiver可服务旧应用；若需回退receiver，先回退producer，禁止旧receiver接新v2。交付沿用既有no-tests/skip-migrate和receiver先行顺序；本段不是重跑部署指令。
+
+2026-09-14发布收尾修正：正常部署仍在FD9锁内登记并发布精确rollback身份，但prepare默认写空v2清理意图，保留全部历史release、capability与镜像。原因是独立开发工具可能仍挂载旧release；9c30构建/启动通过后曾因此拒绝并回滚。历史清理是另行明确授权的操作，只有prepare显式传`--prune-unused 1`才规划原严格清理，complete/resume仍按已记录意图执行；不得为清理已被容器引用的目录而绕过保护。普通部署不传该参数。保留历史会继续占用磁盘，沿用现有磁盘监控，由独立清理任务决定范围。
+
+2026-09-14历史科研配图能力：应用 release `e2cccb4d75ee8980167d23d4b5c1867263caf2e8` / rollback `ea43696dd6b115415712fe87fd8ff4d2a4cbdc37`。独立 High 静态审阅修正科学关系来源覆盖后，干净发布树执行 `deploy.sh --confirm --no-tests --skip-migrate --reuse-unchanged-capability-images --rollback-ref ea43696dd6b115415712fe87fd8ff4d2a4cbdc37 e2cccb4d75ee8980167d23d4b5c1867263caf2e8`，必要服务器 build/start exit0。随后用该 immutable release 的 `infra/chatgpt-browser/install.sh --confirm-provider --source /opt/openscience-releases/e2cccb4d75ee8980167d23d4b5c1867263caf2e8 --renderer-image sha256:1c47a579ceb608f244878b41888eee50bda1135ff325cb7b49de3a275ee2013d` 安装 broker/runner/协议；既有清理器 installer 同源更新精确 reference.png 后缀，均 exit0，不提交清理请求。没有测试/预检/CI/迁移/新依赖，浏览器会话、代理和 Codex reserve 保持。收据 `tmp/illustration-brief-deploy.log`、`tmp/illustration-provider-install.log`。回退时应用与 Chat bundle 同步：应用回 ea43696d，image broker 恢复 b78fb94d bundle（config-d1630135），runner11494323、science501da7a3、helperd369ccc2；不以旧纯文本 runner 处理新参考图请求。实际功能结果见 CURRENT handoff。
+
+2026-09-14历史设计技能安装：release `ea43696dd6b115415712fe87fd8ff4d2a4cbdc37` / rollback `dd4c935aca25c37b95a3295e05cce1ce1ecebffb`。固定源三包Markdown随release根只读挂载，无新镜像能力或迁移；独立High收紧引用数量后GO。干净树`.worktrees/art-direction-release-41ae8902`切至ea43696d，执行 `deploy.sh --confirm --no-tests --skip-migrate --reuse-unchanged-capability-images --rollback-ref dd4c935aca25c37b95a3295e05cce1ce1ecebffb ea43696dd6b115415712fe87fd8ff4d2a4cbdc37`，必要build/start exit0，实际页面/__release一致。收据tmp/design-skills-deploy.log。实际私有文字方案消费了三包原章节，但科学布局不合格已标rejected，不生成/公开图片；未运行测试/预检/CI，无数据库迁移，独立runner/认证保持。
+
+2026-09-14历史图片批次：a1a5f30d/rollback41ae8902，v3必要build/start exit0及release实读；收据tmp/art-direction-v3-deploy.log与style-batch-release-read.log。首批三图先于v3完成，其科学候选评估不能覆盖用户后来仅认可淡彩的反馈，最新状态见上方和CURRENT。
+
+## 2026-09-14 个人空间布局补修6504c004
+
+前提：线上实读f8e44815且服务健康，候选仅dashboard CSS与同步文档。执行：既有deploy.sh使用精确6504c004、--no-tests --skip-migrate及未变能力镜像复用，必要服务器build/start完成exit0。回滚：精确f8e44815，保留原数据与独立Codex runner。观察：真实账号桌面/窄屏截图已看，首行双卡稳定同高、后续工具整行，无横溢出；公网release一致，收据tmp/dashboard-layout-*，无测试/预检/科研写入或新清除请求。
+
+
+## 2026-09-14 回收站已确认清除卡住：已修复
+
+实际原因：宿主 `/usr/bin/node` 为 `node-22` 符号链接，精确进程识别原以未解析路径比较而拒绝正确进程；Codex runner 正常 SIGTERM 还返回 1，导致系统自动重启争抢清理锁。修复保留原 argv/config/cgroup 约束，比较可信 Node 的真实路径；只有真实运行/心跳故障才返回失败。
+
+执行：应用正常必要 build/start 后，独立宿主 runner 沿用现有 1ad54c72 运行包，仅复制新版 runner.mjs 到新补丁目录，保留原 source-id 并登记 runner-source-id；配置只按原权限复制，不读取输出。备份原 unit，短时 `/run` drop-in 设置 Restart=no，精确发信号并等原进程自然退出，再换 ExecStart 与恢复原 Restart 规则；不杀整个进程组。受限清理器按现有 install.sh 从该 release 安装，继续原4项已确认请求，不新建删除请求。具体操作候选 `tmp/install-trash-runner-fix.sh`，运行收据见 CURRENT。
+
+回滚：恢复保存的旧 unit 前，候选亦须精确信号自然排空；不能退出则保留现场，不强杀。临时 override 移至备份并 daemon-reload，恢复之前启用的清理 timer。应用可退9a36c1e0，但旧清理器/旧 runner 恢复会重新引入阻塞；已完成的永久清除不能用应用回滚恢复。
+
+实际执行：独立Codex runner补丁09058847/base1ad54c72已自然排空切换，保留配置及其他runtime；tmp/trash-runner-install-09058847.log exit0。应用首次090必要build完成，但清理安装的非阻塞lock在切换前exit75；f8e44815仅补flock有界等待75秒，随后部署完成，rollback9a36c1e0。受限清理bundle为f8。原4项均purged，旧RO/两会话不存在、笔记内容清空，共享对象按既有引用保留；tmp/trash-final-state.log。回收站空页、Dashboard和两公开/工作台折叠、窄屏均实读；公开正文/证据/原图与修改前同值。打开回收站时已清空，未实际观察自动刷新状态过渡；不新建删除样本。临时脚本已经执行，禁止重复应用相同bundle；未运行测试、演练或新生图。
+
+> 状态：**CURRENT 操作手册**。实际 production/application source、rollback 与未完成验收以 `docs/handoff/2026-09-10-hermes-web-image-handoff.md` 和服务器精确 release 核验为准；下方阶段记录保留历史版本，不能据此恢复旧 release 或跳过当前验收。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
-> 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
+> 当前用户已授权实现及部署，且禁止测试/预检/CI。走 `infra/scripts/deploy.sh --confirm --no-tests` 的必要构建、迁移、启动；下方历史 CI/验收清单不触发额外执行或重复确认。
+
+## 2026-09-13 草稿/发布/回收站迁移（ef9e6e97 已部署）
+
+### 2026-09-14 首发误号与遗漏署名行政勘误
+
+前提：用户明确指定 deep-sub-cycle 首发 v1、DHL 昵称署名，并要求既有 RO 使用新增公开能力；此前允许原附件下载的授权继续适用。唯一目标22/Version f4e2dc71，不能把其他历史公开版本统一重排。脚本自带范围/身份/既有来源核对，只在现有API容器执行，不读取Secret；完整科学DTO和原始发行收据保留。
+
+执行：先部署包含临时别名和行政元数据来源枚举的应用，再运行 `node infra/scripts/correct-deep-sub-cycle-publication.mjs --confirm`（API容器/opt/openscience）。脚本使用已有引用锁及RO行锁、Serializable事务，改公开号和作者/引用，仅向精确原PDF补公开下载授权，审计保留全部改前字段。此操作是一次性行政勘误，不调用发布或重新冻结科研内容。
+
+补偿：事务失败全部回滚；成功后应用可回退至兼容生命周期release，v1数据保持。若行政数据自身确有误，先按返回auditId读取 `publication.correct_legacy_identity` 的 before/after，再以同锁事务恢复其中身份/manifest/selection字段；作者移除等后续修改须按用户当时授权处理，不照搬删除。禁止重跑旧publish脚本或重算原始contentSha/发布时间。重复执行仅核对已有更正，不另建作者/发行记录。
+
+实际观察：读取首页/工作台/公开v1和旧v10跳转，展开两篇主张/来源，确认作者、版本、公式、原始正文与PDF。OpenAPI描述307只属临时误号兼容：未来真实v10优先；canonical始终使用返回的v1链接。命令收据与精确release见CURRENT，不触发测试/预检。
+
+已执行：2026-09-14在1f7032a3上一次成功，audit `6c93436f-3c2e-40fe-82ad-d0c751c32f73`，`tmp/first-publication-correction.log` exit0。`tmp/ro-feedback-reading.json`记录两篇科研字段/证据/原图及收据不变，作者DHL/首发v1、两端来源200、原PDF200/3770010字节/hash与原件相同。旧API/v10实际307、Location=1、no-store；旧网页进入/v1，见`tmp/first-publication-alias-headers.log`。禁止把这份一次性操作当发布命令重跑。
+
+前提：两项新迁移随同一应用候选交付；旧公开URL和受保护论文保持原样。服务器复用既有Node、systemd、存储、Parser及浏览器执行器。`infra/private-cleanup/install.sh`只安装受限副本清理服务，不更改供应商凭据或结果挂载的只读权限。
+
+执行：精确候选先完成服务器构建；部署事务在迁移前停止旧api/web/agent-worker，迁移后统一切到新代码。新版Publication INSERT须先写入公开序号，DB约束拒绝旧写入器。清理服务从ID范围队列处理授权清除，未处理完成返回pending；无队列时不打扰生成服务。核心库与搜索库独立，搜索读取以核心存续状态过滤，异步同步失败由已有TrashEntry重试。
+
+回滚：首次启用后，c0bc653d及之前应用不能作为兼容回退（会暴露私有草稿并误解新公开号）；部署事务拒绝此类回退，保留故障日志与迁移现场后向前修复。后续可回退到同样支持此生命周期的release。迁移rollback保持公开序号/快照，回收站有未决内容时拒绝拆表；不删除公开记录。宿主清理服务可停止timer并恢复安装时保留的旧unit，待清除项目保持pending。
+
+观察：部署后实际读取旧公开v10、第二篇私有图文、Hermes分析入口、更多/编辑历史、内容管理与回收站。不得为验收发布或清除两篇受保护论文；30天到期行为尚不能声称已观察。备份脚本默认保留7轮完整集合，实际覆盖可配置；产品清除不等于当场抹除备份，继续按既有备份轮转处理。
+
+本次结果：服务器完整构建、两个核心迁移及服务启动完成，首次release ef9e6e97，显示收尾release02d67ddf/兼容rollback ef9e6e97；两次deploy exit0，精确公网release和最终页面已读。未运行测试/预检/CI。旧API/Worker收到停止请求后未退出；两次均只读确认 running AgentTask 为空后，仅对当次旧容器执行 `docker stop --time 10`，部署事务继续完成，未触发删除或新科研任务。只证明本次停止阻塞已解除，不宣称信号处理根因已修复；后续遇到停止等待须重新确认当时任务状态，不可直接照抄旧PID或空闲结论。
 
 ## 1. 前置检查
 
@@ -35,11 +84,31 @@ Git Bash 会沿用 Windows 用户目录中的 SSH 配置和项目专用密钥。
 
 ## 2. 执行步骤
 
+### 2.0 显式无测试部署
+
+默认发布合同保持 Parser acceptance、ScanSci capability canary、embedding runtime probe 与公网 auth 探针。标准命令仍为：
+
+```bash
+infra/scripts/deploy.sh --confirm --require-parser-acceptance \
+  --rollback-ref <current-active-ref> <release-ref>
+```
+
+只有在操作者已明确授权部署但同时明确禁止本次测试/预检时，才使用互斥的 `--no-tests`：
+
+```bash
+infra/scripts/deploy.sh --confirm --no-tests \
+  --rollback-ref <current-active-ref> <release-ref>
+```
+
+`--no-tests` 会跳过所有 `verify-document-parser-acceptance.mjs` report gate、ScanSci MCP/Worker 与 OA real-PDF/network capability probes、embedding health/vector runtime probes（包括失败回滚中的功能 probe），以及公网 `/auth/me`、`/admin/` 功能探针；同 SHA no-op 路径应用相同边界。该模式不生成、伪造或接受 Parser report，日志会持续标记 `UNVERIFIED_ACCEPTANCE`。因此发布只能记为“服务已启动且 release identity 已切换，产品验收未验证”，不得宣称 Parser、ScanSci、embedding 或鉴权验收通过。
+
+该选项不跳过 immutable source manifest、运行闭包权限归一化、生产 FD9 lock、active/rollback 精确匹配、durable journal、镜像构建与身份检查、模型 manifest 校验、数据库物理隔离和迁移（除非另有 `--skip-migrate`）、Parser/ScanSci/API/Web/Worker 与 embedding（启用时）的 Compose startup health、Nginx 配置检查、主页与 `/__release` 公网状态、capability publish、active CAS、失败回滚或 retention 安全检查。回滚仍恢复精确旧镜像并等待服务 healthy，只省略功能性 probe。
+
 ### 2.1 同步代码（`scripts/cloud-sync.mjs`）
 
 ```bash
 infra/scripts/deploy.sh --rollback-ref <known-good-ref> <release-ref> # dry-run
-infra/scripts/deploy.sh --confirm --rollback-ref <known-good-ref> <release-ref>
+infra/scripts/deploy.sh --confirm --require-parser-acceptance --rollback-ref <known-good-ref> <release-ref>
 # deploy 只接受 clean HEAD；完整 git archive 落到 /opt/openscience-releases/<40-char-sha>。
 # 不使用文件白名单；.dockerignore 等所有 tracked build input 必须进入归档。
 # /opt/openscience/.env.prod 与 .release-id 是稳定运行状态，不进入 release 目录。
@@ -1308,7 +1377,7 @@ core/search were `29/29` and `2/2`, parser/BGE runtime contracts passed, public
 and loopback release identities matched, seven backups remained, and build cache
 was zero.
 
-Future confirmed deployments use `production-release-retention.mjs` under the
+Historical behavior before the 2026-09-14 change above: confirmed deployments used `production-release-retention.mjs` under the
 same inherited FD 9 lock. The ordering is acceptance and backup refresh → write
 `.rollback-id.pending` → commit deployment journal → publish `.rollback-id` →
 execute the frozen exact retention plan → remove pending intent. Exit `78` means
@@ -1317,7 +1386,7 @@ the application or delete the intent. Re-enter the lock and run the exact
 `resume` command with the recorded candidate/rollback identities after inspecting
 the pending file metadata without printing secrets.
 
-Automatic retention is release-only. It may remove inactive one-level SHA
+Explicitly authorized retention remains release-only. It may remove inactive one-level SHA
 release directories, their matching capability files, and exact release-tagged
 Worker/Parser/Embedding tags. It fails closed for unexpected ownership,
 symlinks, nested mounts, stopped or running container references, source-marker
@@ -2510,3 +2579,9 @@ Use the existing exact-source rollback procedure targeting8e4ecb2b5f9e291385b0df
 ### 验证命令
 
 Canonical build/parser16/core36/search2/BGE/ScanSci/container health passed; public/loopback200 and egress204. Journal cleared and retention completed. Public auth8 and product8 read-only checks passed with0business writes and controlled session closed. Evidence: ignored entry-deploy.log, entry-final-checkup.log, entry-shots.json and entry-product-evidence.json under apps/web/test/visual/out/research-journey/. No full research-pipeline or CI completion claim.
+
+### Hermes 同流程图片恢复（2026-09-09）
+
+API 使用组 11000 只读挂载 `/opt/openscience-codex/inbox` 与 `results`，仅核对候选任务的提交记录是否存在；不挂载运行器 private/state/auth，也不获得写入或执行图片权限。恢复接口必须先确认所有候选均无提交记录，才在事务内创建付费替代任务；Worker 执行前再次核对并消费一次性恢复标记。其他 Provider 缺少该能力时拒绝这类恢复。
+
+部署仍走既有 `deploy.sh --confirm --no-tests --rollback-ref <当前版本> <候选版本>`，应用构建和服务启动完成后使用正常用户界面的“继续未完成生成”。来源、资产、余额或版本发生变化时由接口拒绝；不得直接改任务状态。若回滚应用，使用记录的前一 release 及其 compose；本次不新增迁移，不清理已有图片和提交记录。

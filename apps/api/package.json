@@ -21,6 +21,7 @@
     "@openscience/database": "workspace:^",
     "@openscience/domain": "workspace:^",
     "@openscience/observability": "workspace:^",
+    "@openscience/search": "workspace:^",
     "@openscience/storage": "workspace:^",
     "archiver": "^7",
     "diff": "^9.0.0",

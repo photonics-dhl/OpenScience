@@ -6,6 +6,7 @@ import type { StorageAdapter } from '@openscience/storage';
 import { getBlob } from '@openscience/storage';
 import { createArtifact, getArtifact } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
+import { enforceJournalWorkspaceBoundary } from '../journal-boundary';
 import { requireCurrentUser } from './session-guard';
 
 /** artifacts 路由依赖：AuthDeps + StorageAdapter（P1B-3 对象存储）。 */
@@ -50,6 +51,15 @@ export function registerArtifactRoutes(app: FastifyInstance, deps: ArtifactRoute
     const workspaceId = fieldValue(data.fields.workspaceId) ?? req.headers['x-workspace-id'];
     if (typeof workspaceId !== 'string' || !workspaceId) {
       return reply.status(400).send({ error: { code: 'INVALID_REQUEST', message: '缺少 workspaceId' } });
+    }
+    try {
+      if (!(await enforceJournalWorkspaceBoundary(deps, req, reply, workspaceId))) {
+        void data.file.resume();
+        return;
+      }
+    } catch (error) {
+      void data.file.resume();
+      throw error;
     }
     const logicalPath = fieldValue(data.fields.logicalPath) ?? data.filename;
     if (typeof logicalPath !== 'string' || !logicalPath) {

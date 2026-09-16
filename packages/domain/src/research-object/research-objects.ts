@@ -3,7 +3,7 @@ import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { recordAudit } from '../workspace/audit';
 import type { Prisma, ResearchObject } from '@prisma/client';
 import { requireActiveMembership, requireMembership } from '../workspace/helpers';
-import { requireRoAccess } from '../visibility/access';
+import { requirePrivateRoAccess } from '../visibility/access';
 import type { WorkspaceDeps } from '../workspace/types';
 import { ResearchObjectError } from './errors';
 import { SDF_NODE_TYPES, type RoStatus, type RoVisibility } from './types';
@@ -31,6 +31,7 @@ export interface ResearchObjectSummary {
 }
 
 export interface ResearchObjectDetail extends ResearchObjectSummary {
+  publicId: string | null;
   sdf: { core: Record<string, string>; nodes: Array<{ nodeType: string; content: string }> };
 }
 
@@ -45,7 +46,7 @@ export async function listResearchObjects(
   input: { userId: string; limit?: number },
 ): Promise<ResearchObjectListItem[]> {
   const rows = await deps.prisma.researchObject.findMany({
-    where: { workspace: { members: { some: { userId: input.userId } } } },
+    where: { deletedAt: null, status: { not: 'archived' }, workspace: { members: { some: { userId: input.userId } } } },
     orderBy: { updatedAt: 'desc' },
     take: Math.min(Math.max(input.limit ?? 20, 1), 100),
   });
@@ -147,6 +148,7 @@ export async function createSystemResearchObjectInTransaction(
     if (existing.workspaceId !== input.workspaceId || existing.createdBy !== input.userId) {
       throw new ResearchObjectError('FORBIDDEN', '系统研究对象归属不一致');
     }
+    if (existing.deletedAt) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象已移入回收站');
     return existing;
   }
   return createResearchObjectRecord(deps, tx, {
@@ -182,6 +184,7 @@ export async function createResearchObject(
       if (existing.workspaceId !== input.workspaceId || existing.createdBy !== input.userId || existing.title !== title) {
         throw new ResearchObjectError('VALIDATION_ERROR', '幂等键已用于其他请求');
       }
+      if (existing.deletedAt) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象已移入回收站');
       return { id: existing.id, workspaceId: existing.workspaceId, title: existing.title, status: existing.status, visibility: existing.visibility, version: existing.version, createdAt: existing.createdAt };
     }
     return null;
@@ -228,8 +231,11 @@ export async function updateResearchObject(
   ctx: AuditContext = {},
 ): Promise<ResearchObjectSummary> {
   const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.roId } });
-  if (!ro) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  if (!ro || ro.deletedAt) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+  const { workspace, membership } = await requireMembership(deps, ro.workspaceId, input.userId);
+  if (workspace.status !== 'active' || (ro.createdBy !== input.userId && !['owner', 'maintainer', 'author'].includes(membership.role))) {
+    throw new ResearchObjectError('FORBIDDEN', '无权修改或归档此研究工作');
+  }
 
   const patch: { title?: string; status?: RoStatus; visibility?: RoVisibility } = {};
   if (input.patch.title !== undefined) {
@@ -242,7 +248,7 @@ export async function updateResearchObject(
 
   const result = await deps.prisma.$transaction(async (tx) => {
     const updated = await tx.researchObject.updateMany({
-      where: { id: input.roId, version: input.version },
+      where: { id: input.roId, version: input.version, deletedAt: null },
       data: { ...patch, version: input.version + 1 },
     });
     if (updated.count === 0) throw new ResearchObjectError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');
@@ -272,11 +278,12 @@ export async function getResearchObject(
   });
   if (!ro) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
   // 权限（P1B-7）：可见性判定（§4.2），invite_only grant 非成员可读；跨 Workspace 越权 → 404
-  await requireRoAccess(deps, { researchObjectId: input.roId, userId: input.userId });
+  await requirePrivateRoAccess(deps, { researchObjectId: input.roId, userId: input.userId });
 
   const core = (ro.sdfDocument?.coreJson as Record<string, string>) ?? {};
   return {
     id: ro.id,
+    publicId: ro.publicId,
     workspaceId: ro.workspaceId,
     title: ro.title,
     status: ro.status,

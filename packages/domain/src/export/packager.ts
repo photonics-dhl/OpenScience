@@ -1,8 +1,11 @@
+import { recordValue } from '../commit/research-record-snapshot';
+import { getResearchRecord } from '../commit/research-record';
 import { getBlobStorageKey, streamToBuffer } from '@openscience/storage';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import { requireRoAccess } from '../visibility/access';
 import { CommitError } from '../commit/errors';
 import { buildManifest } from './manifest';
+import { publicVersionNumber, readPublicationMetadata } from '../publish/publication-metadata';
 
 /** 导出文件条目（§5.2 目录树，纯文件不依赖平台 DB，§5.3 MUST）。 */
 export interface ExportFile {
@@ -49,16 +52,23 @@ export async function buildExportPackage(
   const core = (version.manifest?.coreJson as Record<string, string>) ?? {};
   const entries = version.manifest?.entries ?? [];
   const publication = version.publications[0] ?? null;
+  const metadata = readPublicationMetadata(version.researchRecord);
+  const publicationNo = publicVersionNumber(version);
 
-  const files: ExportFile[] = [];
+  const frozen = await getResearchRecord(deps, { researchObjectId: ro.id, versionId: version.id, userId: input.userId });
+  const citation = recordValue(recordValue(frozen.record).citation);
+  const frozenTitle = typeof citation.title === 'string' ? citation.title : 'Research object (title not recorded)';
+  const files: ExportFile[] = [{ path: 'research-record.json', content: Buffer.from(JSON.stringify(frozen.record, null, 2), 'utf8') }];
   const buf = (s: string) => Buffer.from(s, 'utf8');
 
   // manifest.json（§5.3）
   const manifest = buildManifest({
     objectId: ro.publicId ?? 'DRAFT',
     versionId: version.publicVersionId ?? `${ro.publicId ?? 'DRAFT'}-v${version.versionNo}`,
-    version: version.versionNo,
-    title: ro.title,
+    version: publicationNo ?? version.versionNo,
+    title: frozenTitle,
+    authors: metadata.authors.map(a => a.displayName),
+    licenses: { text: metadata.licenses.text ?? '', code: metadata.licenses.code ?? '', data: metadata.licenses.data ?? '' },
     visibility: ro.visibility,
     ...(publication ? { publishedAt: publication.publishedAt.toISOString() } : {}),
     artifacts: entries.map((e) => ({ logicalPath: e.logicalPath, artifactId: e.artifactId, blobSha256: e.blobSha256 })),
@@ -67,7 +77,7 @@ export async function buildExportPackage(
 
   // manuscript/paper.md（六字段 Markdown 汇编）
   const paper = [
-    `# ${ro.title}`,
+    `# ${frozenTitle}`,
     '',
     ...CORE_FIELDS.flatMap((f) => [`## ${f}`, (core[f] as string) ?? '', '']),
   ].join('\n');
@@ -88,18 +98,14 @@ export async function buildExportPackage(
   }
 
   // provenance/
-  files.push({ path: 'provenance/contributors.json', content: buf('[]') });
-  files.push({ path: 'provenance/licenses.json', content: buf('{}') });
-  files.push({ path: 'provenance/audit.json', content: buf(JSON.stringify({ versionId: version.id, versionNo: version.versionNo }, null, 2)) });
+  files.push({ path: 'provenance/contributors.json', content: buf(JSON.stringify(metadata.contributions, null, 2)) });
+  files.push({ path: 'provenance/licenses.json', content: buf(JSON.stringify(metadata.licenses, null, 2)) });
+  files.push({ path: 'provenance/audit.json', content: buf(JSON.stringify({ versionId: version.id, versionNo: version.versionNo, publicationNo }, null, 2)) });
 
   // versions/index.json（P1B-4）
-  const versions = await deps.prisma.version.findMany({
-    where: { researchObjectId: ro.id },
-    orderBy: { versionNo: 'desc' },
-  });
   files.push({
     path: 'versions/index.json',
-    content: buf(JSON.stringify(versions.map((v) => ({ versionNo: v.versionNo, status: v.status, publicVersionId: v.publicVersionId })), null, 2)),
+    content: buf(JSON.stringify([{ versionNo: publicationNo ?? version.versionNo, publicationNo, status: version.status, publicVersionId: version.publicVersionId }], null, 2)),
   });
 
   return files;

@@ -6,6 +6,7 @@ import type { ArtifactDeps } from '../artifact/artifacts';
 import { computeContentSha256 } from '../identity/identifiers';
 import { generatePublicId } from '@openscience/identity';
 import { getEffectiveLicenses, validateLicenseInheritance, type Licenses } from '../license/licenses';
+import { readPublicationMetadata } from '../publish/publication-metadata';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { ForkError } from './errors';
 
@@ -68,8 +69,8 @@ export async function forkResearchObject(
 
   // 源最新版本 + manifest（§7.2.3 快照）
   const sourceVersion = await deps.prisma.version.findFirst({
-    where: { researchObjectId: source.id },
-    orderBy: { versionNo: 'desc' },
+    where: { researchObjectId: source.id, status: { in: ['published', 'revised'] }, publications: { some: {} } },
+    orderBy: { publicationNo: 'desc' },
     include: { manifest: { include: { entries: true } } },
   });
   if (!sourceVersion || !sourceVersion.manifest || sourceVersion.manifest.entries.length === 0) {
@@ -79,7 +80,7 @@ export async function forkResearchObject(
   const sourceEntries = sourceManifest.entries;
 
   // 许可继承（§6.3 + Q3）：默认复制源有效许可
-  const sourceLicenses = await getEffectiveLicenses(deps, { researchObjectId: source.id, userId: input.userId });
+  const sourceLicenses = await getEffectiveLicenses(deps, { researchObjectId: source.id, userId: input.userId, versionId: sourceVersion.id });
   if (!sourceLicenses.licenses) {
     throw new ForkError('VALIDATION_ERROR', '源 RO 未选择三类许可，无法 Fork');
   }
@@ -92,7 +93,7 @@ export async function forkResearchObject(
     );
   }
 
-  const title = (input.title ?? source.title).trim();
+  const title = (input.title ?? readPublicationMetadata(sourceVersion.researchRecord).title ?? 'Research object').trim();
   if (!title || title.length > 200) throw new ForkError('VALIDATION_ERROR', '标题长度需为 1-200 字符');
   const core = (sourceManifest.coreJson as Record<string, string>) ?? emptyCore();
 

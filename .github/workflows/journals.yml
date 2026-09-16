@@ -1,0 +1,60 @@
+name: Journal onboarding
+
+on:
+  pull_request:
+  push:
+    branches: [codex/journal-onboarding]
+
+permissions:
+  contents: read
+
+jobs:
+  journals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: journal_test
+          POSTGRES_PASSWORD: journal_test_ci
+          POSTGRES_DB: journal_test
+        ports: ['55439:5432']
+        options: >-
+          --health-cmd "pg_isready -U journal_test -d journal_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://journal_test:journal_test_ci@127.0.0.1:55439/journal_test
+      JOURNAL_TEST_DATABASE_URL: postgresql://journal_test:journal_test_ci@127.0.0.1:55439/journal_test
+      SEARCH_DATABASE_URL: postgresql://journal_test:journal_test_ci@127.0.0.1:55439/journal_search_test
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply all core migrations to the isolated database
+        run: pnpm exec prisma migrate deploy --schema infra/schema.prisma
+      - name: Generate database clients before parallel consumers compile
+        run: |
+          pnpm exec prisma generate --schema infra/schema.prisma
+          pnpm --filter @openscience/search generate
+      - name: Build backend dependencies and applications
+        run: pnpm --filter @openscience/api... build
+      - name: Verify source, tenancy, concurrency and immutable publication
+        run: pnpm --filter @openscience/domain exec vitest run test/journal-content.test.ts test/journal-onboarding.test.ts test/journal-database.test.ts --testTimeout=20000
+      - name: Verify HTTP boundary and public data contracts
+        run: pnpm --filter @openscience/api exec vitest run test/journal-boundary.test.ts test/journals-database.test.ts test/journal-feedback-database.test.ts --testTimeout=20000
+      - name: Verify worker validation and retries
+        run: pnpm --filter @openscience/agent-worker exec vitest run test/journal-worker.test.ts
+      - name: Build web
+        run: pnpm --filter @openscience/web build
+      - name: Verify web contracts and controls
+        run: pnpm --filter @openscience/web exec vitest run test/journal-api-contract.test.ts test/journal-ui-integration.test.tsx
+      - name: Documentation consistency
+        run: pnpm audit:docs-sync && pnpm docs:lint

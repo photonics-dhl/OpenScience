@@ -14,7 +14,7 @@ description: "Use before modifying code that touches module boundaries, AI/Provi
 
 ## 先查已有能力，再改边界
 
-从 project_index.md 指向的实际交付树运行 `node scripts/read-current-management-context.mjs`，同读 Git、Taskmaster 当前目标及 CURRENT 指针；需要完整验收条件时加 `--task <id>`。不要在根目录 dirty main 创建第二份任务状态。
+从交付树运行 `node scripts/read-current-management-context.mjs`，一次取得 branch/HEAD、Taskmaster currentTag、任务状态和其 CURRENT handoff 指针；需要完整验收说明时加 `--task <id>`。输出只读现有 Git/Taskmaster，不代表任务完成或内容质量。
 
 复用本项目 `docs/runbooks/hermes-capability-registry.md` 的当前能力索引；服务器资源查 `docs/runbooks/server-capabilities.md`。它们是定位入口，代码和指定 release 的实际任务记录才是证据。不要全文读取历史表或再建一个能力库。
 

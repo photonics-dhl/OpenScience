@@ -1,0 +1,27 @@
+.action,.primary{min-height:44px;padding:.5rem .9rem;border-radius:.5rem;border:1px solid var(--os-rule-paper,#dce3e8);background:transparent;color:inherit;font:inherit;font-size:.875rem;cursor:pointer;transition:transform 140ms ease,background-color 140ms ease}
+.action:hover{background:var(--os-paper,#f5f8f8)}
+.action:active,.primary:active{transform:scale(.97)}
+.action:focus-visible,.primary:focus-visible,.link:focus-visible{outline:2px solid var(--os-vermilion-ink,#126e75);outline-offset:3px}
+.action:disabled,.primary:disabled{opacity:.55;cursor:wait}
+.primary{background:var(--os-vermilion-ink,#126e75);color:#fff;border-color:transparent}
+.dialog{position:fixed;inset:0;margin:auto;width:min(32rem,calc(100vw - 2rem));max-height:calc(100dvh - 3rem);overflow:auto;padding:1.5rem;border:1px solid var(--os-rule-paper,#dce3e8);border-radius:.85rem;background:#fff;color:var(--os-ink,#20313d);box-shadow:0 18px 70px #18303924;line-height:1.65}
+.dialog::backdrop{background:#20313d55}
+.dialog h2{margin:0;font-size:1.4rem}
+.dialog p{margin:1rem 0}
+.wide{width:min(52rem,calc(100vw - 2rem))}
+.heading,.actions{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.heading>.action{flex-shrink:0;white-space:nowrap}
+.actions{justify-content:flex-end;margin-top:1.5rem}
+.checkbox{display:flex;align-items:flex-start;gap:.65rem;margin:1rem 0;font-size:.95rem}
+.checkbox input{margin-top:.45rem;accent-color:var(--os-vermilion-ink,#126e75)}
+.list{list-style:none;padding:0;margin:1.25rem 0 0;border-top:1px solid var(--os-rule-paper,#dce3e8)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--os-rule-paper,#dce3e8)}
+.row>div:first-child{min-width:0;flex:1}
+.row small{display:block;margin-top:.25rem;color:var(--os-muted-paper,#60717c)}
+.itemTitle{display:block;overflow-wrap:anywhere;font-weight:500}
+.row>div:first-child>.itemTitle{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.row>.action{flex-shrink:0;white-space:nowrap}
+.link{display:inline-block;padding:.5rem 0;color:var(--os-vermilion-ink,#126e75);text-decoration:underline;text-underline-offset:3px}
+.error{color:#a52c36}
+@media(max-width:540px){.row{align-items:flex-start;flex-wrap:wrap}.row>div:first-child{flex-basis:100%}.dialog{padding:1.15rem}}
+@media(prefers-reduced-motion:reduce){.action,.primary{transition:none}.action:active,.primary:active{transform:none}}

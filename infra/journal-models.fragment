@@ -1,0 +1,18 @@
+-- Database constraints that cannot be expressed in Prisma 5.
+-- Append this SQL to the journal migration after generating the structural diff.
+ALTER TABLE journal_grants ADD CONSTRAINT journal_grants_balance_check
+  CHECK (remaining >= 0 AND reserved >= 0 AND reserved <= remaining AND consumed >= 0 AND expired >= 0);
+ALTER TABLE journals ADD CONSTRAINT journals_capacity_check
+  CHECK (directory_limit > 0 AND storage_limit_bytes > 0 AND max_running_jobs BETWEEN 1 AND 20);
+ALTER TABLE journal_articles ADD CONSTRAINT journal_articles_state_check
+  CHECK (content_state IN ('active', 'restricted', 'withdrawn') AND review_state IN ('draft', 'submitted', 'approved', 'changes_requested'));
+ALTER TABLE journal_articles ADD CONSTRAINT journal_articles_review_check
+  CHECK (review_state <> 'approved' OR (reviewed_revision = revision AND reviewed_by IS NOT NULL AND reviewed_digest IS NOT NULL));
+ALTER TABLE journal_jobs ADD CONSTRAINT journal_jobs_kind_check
+  CHECK ((kind = 'generate' AND grant_id IS NOT NULL) OR (kind = 'source_parse' AND grant_id IS NULL));
+ALTER TABLE journal_jobs ADD CONSTRAINT journal_jobs_state_check
+  CHECK (state IN ('staging', 'pending', 'running', 'succeeded', 'failed', 'cancelled'));
+ALTER TABLE journal_jobs ADD CONSTRAINT journal_jobs_lease_check
+  CHECK ((state = 'running' AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL) OR (state <> 'running' AND lease_token IS NULL AND lease_expires_at IS NULL));
+ALTER TABLE journal_ledger ADD CONSTRAINT journal_ledger_entry_check
+  CHECK ((kind IN ('grant', 'reserve', 'consume', 'release', 'expire') AND amount > 0) OR (kind = 'adjustment' AND amount <> 0));

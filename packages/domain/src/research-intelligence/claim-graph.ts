@@ -7,9 +7,11 @@ export type ClaimGraphNode = Pick<
 >;
 
 export function validateClaimGraph<TClaim extends ClaimGraphNode>(claims: readonly TClaim[]): readonly TClaim[] {
-  const coreCount = claims.filter((claim) => claim.kind === 'core').length;
-  if (coreCount < 3 || coreCount > 7) {
-    throw new ResearchIntelligenceValidationError('INVALID_CLAIM_GRAPH', 'A publishable Claim graph requires 3-7 core Claims');
+  // A research contribution may have one main conclusion. The 3–7 suggestion
+  // is editorial guidance, not a publication quota (publication PRD §3.2).
+  // The existing publication review separately bounds the total graph size.
+  if (!claims.some((claim) => claim.kind === 'core')) {
+    throw new ResearchIntelligenceValidationError('INVALID_CLAIM_GRAPH', 'A publishable Claim graph requires at least one core Claim');
   }
 
   const first = claims[0];

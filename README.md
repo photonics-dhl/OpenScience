@@ -2,6 +2,12 @@
 
 开放科学研究成果发布平台
 
+## 开发入口
+
+先读 [项目规则](AGENTS.md) 与 [CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)，再按 [文件索引](project_index.md) 定向查代码。需求查 [基线](docs/OpenScience_Kimi_Development_Spec.md)，已有实现/真实效果查 [能力台账](docs/runbooks/hermes-capability-registry.md)，服务器操作查 [能力清单](docs/runbooks/server-capabilities.md)。旧计划、交接和验收记录保留为历史，不作为当前待办。
+
+内部 Langfuse 是模型调用观测台，账号与 OpenScience 独立；通过项目 SSH 隧道访问。登录和私密凭据交接见 [Langfuse 说明](infra/development-platform/langfuse/README.md#login-handoff)。它不负责证明论文或图片正确。
+
 ---
 
 ## 🔒 安全文档

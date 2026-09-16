@@ -1,12 +1,24 @@
 import { CODEX_IMAGE_ID_PATTERN } from './codex-image-protocol';
+import { createHash } from 'node:crypto';
 import { inflateSync } from 'node:zlib';
 import { AiGatewayError } from './errors';
 import { encodedImageDimensions, type OcrMediaType } from './ocr';
 
-export interface ImageRequest { prompt: string; requestId?: string }
+export interface ImageRequest { prompt: string; requestId?: string; referenceImage?: { bytes: Buffer; contentHash: string } }
 export interface ImageProviderResult { bytes: Buffer; contentType: OcrMediaType }
+export interface CompletedImageProviderResult extends ImageProviderResult { promptHash: string }
 export interface ImageResult extends ImageProviderResult { model: string; provider: string; promptHash: string }
-export interface ImageProvider { readonly name: string; readonly model: string; generate(request: ImageRequest): Promise<ImageProviderResult> }
+export type ImageRecoveryState = 'before_submission' | 'completed' | 'failed' | 'usage_limited' | 'uncertain' | 'submitted_without_result' | 'unsafe';
+export interface ImageProvider {
+  readonly name: string;
+  readonly model: string;
+  readonly supportsReferenceImage?: boolean;
+  generate(request: ImageRequest): Promise<ImageProviderResult>;
+  canResumeBeforeSubmission?(requestId: string): Promise<boolean>;
+  canResumeFromCompletedResult?(requestId: string): Promise<boolean>;
+  resumeFromCompletedResult?(requestId: string): Promise<CompletedImageProviderResult>;
+  inspectRecoveryState?(requestId: string): Promise<ImageRecoveryState>;
+}
 export interface MiniMaxImageConfig { baseUrl: string; apiKey: string; model: string }
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64 * 1024;
@@ -15,6 +27,14 @@ const failed = () => new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image generati
 export function validateImageRequest(request: ImageRequest): string {
   if (!request || (request.requestId !== undefined && (typeof request.requestId !== 'string' || !CODEX_IMAGE_ID_PATTERN.test(request.requestId))) || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 1500) {
     throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'image prompt must contain 1 to 1500 characters');
+  }
+  if (request.referenceImage !== undefined) {
+    const reference = request.referenceImage;
+    try {
+      if (!reference || typeof reference !== 'object' || Array.isArray(reference) || Object.keys(reference).some(key => !['bytes', 'contentHash'].includes(key)) || !Buffer.isBuffer(reference.bytes) || typeof reference.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(reference.contentHash)
+        || createHash('sha256').update(reference.bytes).digest('hex') !== reference.contentHash
+        || validateImageBytes(reference.bytes).contentType !== 'image/png') throw failed();
+    } catch { throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'invalid image reference'); }
   }
   return request.prompt;
 }
@@ -126,6 +146,7 @@ export class MiniMaxImageProvider implements ImageProvider {
 
   async generate(request: ImageRequest): Promise<ImageProviderResult> {
     const prompt = validateImageRequest(request);
+    if (request.referenceImage !== undefined) throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'image provider does not support references');
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(failed()); }, 120_000); });
