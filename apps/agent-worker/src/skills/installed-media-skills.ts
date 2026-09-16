@@ -59,7 +59,7 @@ export function loadInstalledMediaSkills(style: string, instruction: string, sta
     }).join('\n\n') : text;
     excerpts.push(`SOURCE: ${resource}${headings ? ` — sections: ${headings.join('; ')}` : ''}\n${selected}`);
     let entry = usage.find((item) => item.id === id);
-    if (!entry) { entry = { id, ...(id === 'openscience-research-illustration' ? { version: '5' } : { upstreamCommit: UPSTREAM_COMMIT }), resources: [] }; usage.push(entry); }
+    if (!entry) { entry = { id, ...(id === 'openscience-research-illustration' ? { version: '6' } : { upstreamCommit: UPSTREAM_COMMIT }), resources: [] }; usage.push(entry); }
     entry.resources.push(...(headings ? headings.map((heading) => `${relativePath}#${heading}`) : [relativePath]));
   }
 
@@ -69,10 +69,12 @@ export function loadInstalledMediaSkills(style: string, instruction: string, sta
     usage.push({ id: SCIENTIFIC_CRITICAL_THINKING_SKILL.id, version: SCIENTIFIC_CRITICAL_THINKING_SKILL.version,
       resources: ['apps/agent-worker/src/skills/scientific-critical-thinking.ts'] });
     excerpts.push('Apply this shared skill as scientific reasoning only. Use the caller\'s illustration JSON schema and supplied sourceIds instead of its literature-note six-field/observation output conventions. Keep review notes out of visible picture text.', SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions);
-    include('openscience-research-illustration', 'SKILL.md', [stage === 'science' ? 'Scientific intent' : 'Scientific review']);
+    include('openscience-research-illustration', 'SKILL.md', stage === 'science' ? ['Scientific intent'] : ['Scientific review', 'Visual craft']);
     return { usage, instructions: excerpts.join('\n\n') };
   }
-  include('openscience-research-illustration', 'SKILL.md', [stage === 'plan' ? 'Planning' : 'Execution']);
+  // The render stage compiles the final drawing prompt, so it needs the same
+  // composition laws as planning; previously only art-directions.md reached it.
+  include('openscience-research-illustration', 'SKILL.md', [stage === 'plan' ? 'Planning' : 'Execution', 'Visual craft']);
   include('openscience-research-illustration', 'references/art-directions.md');
   include('baoyu-article-illustrator', 'SKILL.md', ['Three Dimensions', 'Types']);
   include('baoyu-article-illustrator', 'references/prompt-construction.md', ['Default Composition Requirements', 'Text in Illustrations', 'Principles']);

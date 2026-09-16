@@ -2,7 +2,7 @@
 name: openscience-research-illustration
 description: Plan and refine evidence-grounded research illustrations for OpenScience through Hermes and Chat image generation, using structured briefs, source-scoped visual references and reusable art directions. Use for paper illustrations, scientific concept images and research covers; quantitative plots require a data renderer.
 metadata:
-  version: "5"
+  version: "6"
 ---
 
 # OpenScience research illustration
@@ -61,6 +61,24 @@ Assign palette and emphasis to the already established visual roles. Categories 
 If scientific review only found missing explanations in existing labels, reuse the saved candidate through the scoped label-clarification path. Preserve label indices, symbols, axes, domains and artwork; do not regenerate the whole scientific intent to add a category name. This path cannot repair a missing axis, incorrect equation or changed source. Such problems require a new scientific plan. Every clarified candidate still needs the existing scientific review before rendering.
 
 Before submitting a brief, read its subjects, labels and constraints together: they must use consistent variables, domains and assumptions. Remove a formula if the image does not need it; never invent or approximate one. The brief should fit the actual image transport's prompt budget without a second model having to reinterpret it.
+
+## Visual craft
+
+Composition and treatment are design decisions, but they are not free-form. Use the concrete laws in [art-directions.md](references/art-directions.md); the following are the ones that most often fail on real submissions.
+
+**One ground.** The whole canvas is a single flat surface of one chosen colour. Two grounds, a recoloured panel, a band, a vignette or a wash falloff read to the viewer as a broken image, not as design. If the explanation genuinely needs panels, they share the identical ground and are separated by spacing and line work alone.
+
+**Dividers must assert something true.** A rule, frame, box or band is justified only when it corresponds to a real source-supported boundary. A decorative rule between two halves of a picture, or a "top half / bottom half" split introduced purely to organise the page, is removed. If the sourced meaning of a mark cannot be named, the mark does not ship.
+
+**One focal point and an explicit reading path.** State which element is seen first and in what order the rest is read. All remaining marks are subordinate in scale, weight and contrast. Concentrate the visual daring in the focal relation and keep the surrounding field quiet.
+
+**A catalogue default is not a design.** Swapped-in infographic galleries offer multi-module layouts (bento grids, dense modules, dashboards). These are options, never the requested structure: one scientific relationship normally wants one continuous composition, not a panelised poster. Do not adopt a gallery's default layout, palette or framing merely because it was offered.
+
+**Neutrals are chosen, colour is semantic.** Decide the ground deliberately and tint neutrals toward the subject's own hue family. Never mix a warm ground with a pure-white area inside one picture; that reads as two images. Keep one meaning per colour, and keep axes, leaders and grids quieter than the subject.
+
+**Two label levels, fixed.** Primary labels carry variables, categories and boundary values; a smaller secondary level carries essential qualifiers. Do not introduce a third decorative level, and do not use text as ornament.
+
+**Check at reading size.** Verify the composition at single-column width. If the ground reads as two pieces or the hierarchy collapses, simplify rather than add.
 
 ## Scientific review
 
