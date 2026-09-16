@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
 import { AiGateway } from '../src/gateway';
 import { AnthropicCompatProvider, OpenAiCompatProvider, type Provider, type ProviderResult } from '../src/provider';
@@ -346,5 +347,17 @@ describe('图片 provider 回退（只有确定未提交才前进）', () => {
     const a = fakeImage('a', async () => { throw new Error('USAGE_LIMIT'); });
     const gw = new AiGateway({ providers: [textStub()], imageProviders: [a], killSwitch: ENABLED_KILL_SWITCH });
     await expect(gw.generateImage({ prompt: 'x' })).rejects.toThrow(/IMAGE_USAGE_LIMIT/u);
+  });
+
+  it('带参考图时绝不回退，避免静默丢掉参考风格', async () => {
+    const calls: string[] = [];
+    const a = fakeImage('a', async () => { calls.push('a'); return { bytes: grayPng1280x720(), contentType: 'image/png' }; });
+    const b = fakeImage('b', async () => { calls.push('b'); return { bytes: grayPng1280x720(), contentType: 'image/png' }; });
+    const gw = new AiGateway({ providers: [textStub()], imageProviders: [a, b], killSwitch: ENABLED_KILL_SWITCH });
+    const bytes = grayPng1280x720();
+    const contentHash = createHash('sha256').update(bytes).digest('hex');
+    await expect(gw.generateImage({ prompt: 'x', referenceImage: { bytes, contentHash } }))
+      .rejects.toThrow(/does not support references/u);
+    expect(calls).toEqual([]);
   });
 });

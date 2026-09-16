@@ -859,12 +859,21 @@ export function buildGateway(
   // selected automatically, and the gateway only advances to it for a definitive
   // non-submission (allowance exhausted or unavailable), never after an uncertain
   // attempt that may already have been submitted.
-  const primaryImageKind = env.HERMES_SCENE_IMAGE_PROVIDER ?? 'minimax';
+  const primaryImageKind = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
   const fallbackImageKind = env.HERMES_SCENE_IMAGE_FALLBACK_PROVIDER?.trim() || undefined;
   const imageProviders = [
-    buildImageProvider(env.HERMES_SCENE_IMAGE_PROVIDER),
+    buildImageProvider(primaryImageKind),
     fallbackImageKind && fallbackImageKind !== primaryImageKind ? buildImageProvider(fallbackImageKind) : undefined,
   ].filter((provider): provider is ImageProvider => provider !== undefined);
+  if (fallbackImageKind && imageProviders.length < 2) {
+    console.warn(`image fallback provider '${fallbackImageKind}' is configured but unavailable or disabled; running with ${imageProviders.length} provider(s)`);
+  }
+  // Today only the chatgpt-web spool protocol reports a definitive non-submission
+  // ("USAGE_LIMIT" with the request provably not submitted). With any other primary
+  // the fallback can never trigger, so state that instead of implying a spare account.
+  if (fallbackImageKind && imageProviders.length > 1 && primaryImageKind !== 'chatgpt-web') {
+    console.warn(`image fallback is configured but primary '${primaryImageKind}' cannot report a definitive non-submission; the fallback will not trigger`);
+  }
   const visionPrimaryKey = env.MINIMAX_API_KEY?.trim();
   const visionBackupKey = env.MINIMAX_API_KEY_2?.trim();
   const ocrProviders = env.AI_ENABLED === 'true' && env.MINIMAX_VISION_ENABLED === 'true' && visionPrimaryKey

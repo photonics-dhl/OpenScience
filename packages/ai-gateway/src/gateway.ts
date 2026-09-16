@@ -221,14 +221,17 @@ export class AiGateway {
     }
   }
 
-  /** One paid image attempt. Never retry or fall back, including after audit failure. */
   /**
    * At most one paid attempt per configured provider. The same provider is never
    * retried, and the gateway advances to the next provider only when the failure
-   * is a definitive non-submission — the provider is unavailable, cannot accept
-   * the request, or reports the account's allowance is exhausted. An uncertain or
-   * failed execution stops immediately, because a second account must not pay for
-   * a request that may already have been submitted.
+   * is a definitive non-submission — the provider is unavailable, or it reports
+   * the account's allowance is exhausted. An uncertain or failed execution stops
+   * immediately, because a second account must not pay for a request that may
+   * already have been submitted.
+   *
+   * A request that carries a style reference never falls through to a provider
+   * that cannot accept references: dropping the reference would silently deliver a
+   * different picture than the one requested.
    */
   async generateImage(request: ImageRequest): Promise<ImageResult> {
     const prompt = validateImageRequest(request);
@@ -249,9 +252,8 @@ export class AiGateway {
           continue;
         }
         if (input.referenceImage && provider.supportsReferenceImage !== true) {
-          lastError = new AiGatewayError('IMAGE_REQUEST_INVALID', 'image provider does not support references');
-          fallbackReason = fallbackReason ?? `${provider.name}:references_unsupported`;
-          continue;
+          // Never silently drop the requested reference by falling through.
+          throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'image provider does not support references');
         }
         try {
           const generated = await provider.generate(input);
