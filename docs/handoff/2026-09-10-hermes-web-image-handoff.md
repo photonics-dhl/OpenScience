@@ -4,7 +4,7 @@
 - 用户已纠正验证政策：禁止过度测试、全套预检及 CI；允许针对直接风险或已知故障的最小必要定向验证，须说明范围与证据。本轮完成终端验证、必要服务器部署和真实索引/UI观察；未运行项目测试、预检、CI或本机构建。
 - 候选四文件：`packages/search/src/embedder.ts`、`apps/agent-worker/src/search-indexer.ts`、`packages/domain/src/agent/agent.ts`、`scripts/index-confirmed-research-sources.cjs`。批次8→2，tokenize/encode每次总预算120秒；仅严格503/worker_busy在预算内最多等3秒重试一次，chunk超时/网络不确定不重发；前台3秒/一次原样。原source索引最多两次显式恢复，严格暂态白名单、原producer与来源/权限重验、CAS原count/epoch/result含AnyNull、递增审计；不清零计数、不创建来源副本、不扣LLM额度。
 - 候选四文件已提交 `ba184541`，无关 dirty spec 未提交；独立High审查对 `embedder.ts`/`search-indexer.ts` 新增差异为 GO。按现行runbook部署成功，应用release=`ba184541`、rollback=`6684e448`；部署明确跳过全套验收。
-- `bdf0d3fa` 已修复 structured illustration 绕过 render 设计 skill 的断点并部署；新增 bounded `DESIGN_SKILL_RENDERING_RULES`。定向 typecheck 被既有跨包导出漂移阻断，未扩大测试。新图片任务 `75da43d9-274b-4c3d-b39a-643dd9dff79a` succeeded/draft，provenance 实证 `openscience-research-illustration` v5、Baoyu article/cover/infographic 与 scientific-critical-thinking v2 已消费；图片已导出 `tmp/research-illustration-academic-v5-75da43d9.png`，待用户审美确认。
+- `bdf0d3fa` 已修复 structured illustration 绕过 render 设计 skill 的断点并部署；定向 typecheck 被既有跨包导出漂移阻断，未扩大测试。随后按期刊配图审美重做 art-only 底稿任务 `11309bab-4fca-4d9f-87ac-16e5619d0f29` 并批准，图片任务 `6d69159a-169e-4ebd-be15-80be97462fcc` succeeded/draft，已导出 `tmp/research-illustration-academic-journal-6d69159a.png`，待用户审美确认。
 - 部署后仅按原资格恢复两篇原任务；dense观察脚本因tmp不随release进入且release挂载只读，改用同一脚本stdin只读执行。2026-09-15T15:51:58Z：`8920bf4f-3b4d-423e-b3aa-ca378c7c94cc` succeeded，58/58 dense，active generation `bccec0de-c284-40aa-a212-6ebf873d474d`；`2135cd87-d2f0-459d-8e24-1a94ba97a952` succeeded，42/42 dense，active generation `d4d84e62-9125-4794-bae7-7960be12f501`。旧needs_review generations保留，未清零计数。
 - 2026-09-15T15:54:03Z 浏览器执行器实际读取 Weyl：POST `/api/research-objects/search` 返回200、`mode=hybrid`，召回 `9067a2d5-42ad-4c06-b234-753728b71064` Quantization 与 `c896802c-35dd-4b59-8db1-5f374f83a6d8` deep-sub-cycle；页面宽1024、文档宽1012，无横向溢出。收据 `/jobs/capability-linkage-indexed-search-observed.json` 与 fullPage PNG。任务4索引闭环已实证，但不等于科学/审美质量完成。
 
@@ -15,7 +15,7 @@
 
 | 交付 / Taskmaster ID | 实际资产、反馈与差额 |
 |---|---|
-| 学术机制图/分类图谱 · 1 | 原图 `c3a49716-35e9-440c-b3d9-659c2d86632c` 经用户反馈需要修改；确认服务器 `chatgpt-web/6-pro-image-generation-tool`。沿原 storyboard/claim 做 art-only 修订：底稿任务 `fdcebbb9-0dbd-487d-9703-ecc2e84b3d3f` 已批准，图片任务 `536305fc-e75a-402c-addd-09842517af6a` 已 succeeded，asset 同名、仍 draft，待用户审阅。科学关系、5个标签、claim/source 未变。 |
+| 学术机制图/分类图谱 · 1 | 原图与 `536305fc-e75a-402c-addd-09842517af6a` 均因用户审美反馈需要修改；已定位并修复 render 设计 skill 绕过断点。最新期刊式底稿 `11309bab-4fca-4d9f-87ac-16e5619d0f29` 已批准，图片 `6d69159a-169e-4ebd-be15-80be97462fcc` 已由服务器 GPT 生成并导出 `tmp/research-illustration-academic-journal-6d69159a.png`，仍 draft，待用户审阅。科学关系与原 claim/source 不变。 |
 | 编辑封面 · 2 | 旧1a1d被否定；方案15a314a6-44e1-4829-a4e1-c30f78039896的图ac16631b-782f-4b2f-9fdf-fcc033b867e0偏教材/满铺网点，未合格，保留draft。真实Hermes页面创建76918e55-5ff2-4467-b3a8-ab7033bd4984，6Pro revised修正暗背景线条对比，已内部批准方案。图任务7cd50e44-bbee-4631-b555-18f669399cc7失败、provider uncertain，未取得新PNG，不能称封面交付。 |
 | 淡彩手绘 · 3 | aa41a018-b2ff-4ffb-9557-19ecabe104bc用户明确认可，原图保留不默认重画；额外f424只是私有候选，不能计新增风格。 |
 
