@@ -1,5 +1,5 @@
 export interface HermesPresentationIntent {
-  action: 'storyboard.create' | 'storyboard.revise' | 'scene.image';
+  action: 'storyboard.create' | 'storyboard.revise' | 'scene.image' | 'video.create';
   instruction: string;
   sceneIndex?: number;
 }
@@ -19,6 +19,7 @@ export function routeHermesPresentationIntent(goal: string): HermesPresentationI
     const index = '一二三四五六'.indexOf(number);
     return { action: 'scene.image', instruction, sceneIndex: index >= 0 ? index : Number(number) - 1 };
   }
+  if (/(?:生成视频|制作视频|视频讲解|\b(?:generate|create|make)\s+(?:a\s+)?video\b)/iu.test(instruction)) return { action: 'video.create', instruction };
   if (/^(?:(?:请)?(?:帮我)?(?:生成图片|生成配图|生图)|(?:please\s+)?(?:generate|create|draw)\s+(?:an?\s+)?(?:image|illustration))[。！!.]?$/iu.test(instruction)) return { action: 'scene.image', instruction };
   if (/^(?:请)?(?:帮我)?(?:生成|写|制作|创建).*(?:分镜|讲解稿)/u.test(instruction)
     || /^(?:please\s+)?(?:create|generate|write|make)\s+(?:an?\s+)?(?:new\s+)?storyboard\b/iu.test(instruction)) return { action: 'storyboard.create', instruction };

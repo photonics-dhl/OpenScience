@@ -36,6 +36,7 @@ async function requireStoredObject(
   deps: ArtifactDeps,
   key: string,
   expectedSize: number,
+  expectedHash?: string,
 ): Promise<void> {
   let head;
   try {
@@ -45,6 +46,7 @@ async function requireStoredObject(
   }
   if (!head) throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'published source is temporarily unavailable');
   if (head.size !== expectedSize) throw new PublicEvidenceSourceError('NOT_FOUND', 'published source integrity check failed');
+  if (expectedHash && head.sha256 && head.sha256.toLowerCase() !== expectedHash.toLowerCase()) throw new PublicEvidenceSourceError('NOT_FOUND', 'published source integrity check failed');
 }
 
 export async function getPublicEvidenceSource(
@@ -62,33 +64,43 @@ export async function getPublicEvidenceSource(
   const version = await deps.prisma.version.findFirst({
     where: {
       researchObjectId: ro.id,
-      versionNo: input.versionNo,
-      status: 'published',
+      publicationNo: input.versionNo,
+      status: { in: ['published', 'revised'] },
       publications: { some: {} },
     },
-    select: { id: true },
+    select: { id: true, researchRecord: true },
   });
   if (!version) throw new PublicEvidenceSourceError('NOT_FOUND', 'published Evidence source not found');
-  const evidence = await deps.prisma.evidenceRecord.findFirst({
-    where: {
-      id: input.evidenceId,
-      researchObjectId: ro.id,
-      versionId: version.id,
-      extractionStatus: 'succeeded',
-      verifiedByUserId: { not: null },
-    },
-    include: { artifact: true },
-  });
-  if (!evidence) throw new PublicEvidenceSourceError('NOT_FOUND', 'published Evidence source not found');
-
-  const provenance = record(evidence.provenance);
+  const frozen = record(version.researchRecord);
+  const dto = record(frozen.dto);
+  const evidence = (Array.isArray(dto.evidence) ? dto.evidence.map(record) : []).find(item => item.id === input.evidenceId);
+  const source = record(record(frozen.sources)[input.evidenceId]);
+  if (!evidence || evidence.extractionStatus !== 'succeeded' || evidence.verified !== true
+    || typeof evidence.artifactId !== 'string' || typeof evidence.contentHash !== 'string'
+    || source.artifactId !== evidence.artifactId || source.publicReuse !== true) {
+    throw new PublicEvidenceSourceError('NOT_FOUND', 'published Evidence source not found');
+  }
+  const manifest = (Array.isArray(dto.manifest) ? dto.manifest.map(record) : []).find(entry => entry.artifactId === evidence.artifactId && entry.blobSha256 === evidence.contentHash);
+  if (!manifest) throw new PublicEvidenceSourceError('NOT_FOUND', 'published Evidence source not found');
+  const frozenArtifact = record(evidence.artifact ?? source.artifact);
+  // This live row only locates the retained content-addressed file. It supplies no public scientific/display metadata.
+  const artifact = await deps.prisma.artifact.findUnique({ where: { id: evidence.artifactId }, select: { workspaceId: true, blobSha256: true, size: true, bytesPurgedAt: true } });
+  if (!artifact || artifact.workspaceId !== ro.workspaceId || artifact.blobSha256 !== evidence.contentHash || artifact.bytesPurgedAt) {
+    throw new PublicEvidenceSourceError('NOT_FOUND', 'published Evidence source not found');
+  }
   let sourceMapRef;
+  let locator;
   try {
-    sourceMapRef = parseDocumentSourceMapReference(provenance.sourceMapRef);
+    sourceMapRef = parseDocumentSourceMapReference(source.sourceMapRef);
+    locator = validateSourceLocator(source.locator);
+    if (sourceMapRef.artifactId !== evidence.artifactId || sourceMapRef.contentHash !== evidence.contentHash
+      || locator.artifactId !== evidence.artifactId || locator.contentHash !== evidence.contentHash) {
+      throw new Error('Frozen source identity mismatch');
+    }
   } catch (error) {
     throw new PublicEvidenceSourceError('NOT_FOUND', 'published Evidence source not found', { cause: error });
   }
-  await requireStoredObject(deps, getBlobStorageKey(evidence.artifact.blobSha256), Number(evidence.artifact.size));
+  await requireStoredObject(deps, getBlobStorageKey(evidence.contentHash), Number(artifact.size), evidence.contentHash);
   await requireStoredObject(deps, sourceMapRef.objectKey, sourceMapRef.size);
 
   try {
@@ -96,18 +108,18 @@ export async function getPublicEvidenceSource(
       researchObjectId: ro.id,
       versionId: version.id,
       artifactId: evidence.artifactId,
-      locator: evidence.locator as never,
-      exactQuote: evidence.exactQuote ?? undefined,
+      locator,
+      exactQuote: typeof source.exactQuote === 'string' ? source.exactQuote : undefined,
       sourceMapRef,
     });
     return {
       text: (resolved.text ?? '').slice(0, MAX_PUBLIC_SOURCE_TEXT),
-      page: validateSourceLocator(evidence.locator).page ?? null,
+      page: locator.page ?? null,
       region: resolved.region ?? null,
-      locator: publicLocator(evidence.locator),
+      locator: publicLocator(locator),
       artifact: {
-        logicalPath: evidence.artifact.logicalPath,
-        mediaType: evidence.artifact.mimeType ?? 'application/octet-stream',
+        logicalPath: typeof frozenArtifact.logicalPath === 'string' ? frozenArtifact.logicalPath : typeof manifest.logicalPath === 'string' ? manifest.logicalPath : '',
+        mediaType: typeof frozenArtifact.mediaType === 'string' ? frozenArtifact.mediaType : typeof frozenArtifact.mimeType === 'string' ? frozenArtifact.mimeType : 'application/octet-stream',
       },
     };
   } catch (error) {

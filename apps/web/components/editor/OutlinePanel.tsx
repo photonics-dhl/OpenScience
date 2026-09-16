@@ -12,6 +12,7 @@ const FIELD_ORDER: Array<keyof Omit<SdfCore, 'schemaVersion'>> = [
 export interface VersionLite {
   versionId: string;
   versionNo: number;
+  publicationNo?: number | null;
   status: string;
 }
 

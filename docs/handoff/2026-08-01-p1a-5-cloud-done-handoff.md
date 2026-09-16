@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Handoff — 2026-08-01 P1A-5 RBAC 云上收口完成，平台底座剩 2.6–2.9
 
 - Current goal: Phase 1A 平台底座。P1A-5 RBAC 已全链路闭环（本地门禁 + 云上集成测试 11/11），下一任务 P1A-6 审计日志（task-master 2.6，先 design gate）。

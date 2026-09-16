@@ -2,18 +2,21 @@ import { extname } from 'node:path';
 import { IngestionError } from './errors';
 
 export const INGESTION_EXTENSIONS = new Set([
-  '.pdf', '.doc', '.docx', '.tex', '.zip', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp', '.svg',
-  '.csv', '.tsv', '.json', '.yaml', '.yml', '.ipynb', '.py', '.r',
+  '.pdf', '.doc', '.docx', '.pptx', '.tex', '.zip', '.md', '.markdown', '.html', '.htm', '.png', '.jpg', '.jpeg', '.webp', '.svg',
+  '.csv', '.tsv', '.xlsx', '.json', '.yaml', '.yml', '.ipynb', '.py', '.r',
 ]);
 
 const MIME_BY_EXTENSION: Record<string, Set<string>> = {
   '.pdf': new Set(['application/pdf']),
   '.doc': new Set(['application/msword']),
   '.docx': new Set(['application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
+  '.pptx': new Set(['application/vnd.openxmlformats-officedocument.presentationml.presentation']),
   '.tex': new Set(['application/x-tex', 'text/plain']),
   '.zip': new Set(['application/zip', 'application/x-zip-compressed']),
   '.md': new Set(['text/markdown', 'text/plain']),
   '.markdown': new Set(['text/markdown', 'text/plain']),
+  '.html': new Set(['text/html', 'text/plain']),
+  '.htm': new Set(['text/html', 'text/plain']),
   '.png': new Set(['image/png']),
   '.jpg': new Set(['image/jpeg']),
   '.jpeg': new Set(['image/jpeg']),
@@ -21,6 +24,7 @@ const MIME_BY_EXTENSION: Record<string, Set<string>> = {
   '.svg': new Set(['image/svg+xml', 'text/xml', 'application/xml']),
   '.csv': new Set(['text/csv', 'application/csv', 'text/plain']),
   '.tsv': new Set(['text/tab-separated-values', 'text/plain']),
+  '.xlsx': new Set(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']),
   '.json': new Set(['application/json', 'text/json', 'text/plain']),
   '.yaml': new Set(['application/yaml', 'application/x-yaml', 'text/yaml', 'text/x-yaml', 'text/plain']),
   '.yml': new Set(['application/yaml', 'application/x-yaml', 'text/yaml', 'text/x-yaml', 'text/plain']),
@@ -30,7 +34,7 @@ const MIME_BY_EXTENSION: Record<string, Set<string>> = {
 };
 
 const UTF8_TEXT_EXTENSIONS = new Set([
-  '.md', '.markdown', '.tex', '.svg', '.csv', '.tsv', '.json', '.yaml', '.yml', '.ipynb', '.py', '.r',
+  '.md', '.markdown', '.tex', '.html', '.htm', '.svg', '.csv', '.tsv', '.json', '.yaml', '.yml', '.ipynb', '.py', '.r',
 ]);
 
 export function assertSupportedIngestionFile(filename: string, mimeType?: string): void {
@@ -55,7 +59,7 @@ export function assertIngestionContent(filename: string, content: Buffer): void 
   if (['.png', '.jpg', '.jpeg', '.webp'].includes(extension) && !matchesImageSignature(extension, content)) {
     throw new IngestionError('UNSUPPORTED_INGESTION_FORMAT', 'Image signature does not match filename');
   }
-  if (['.doc', '.docx', '.zip'].includes(extension) && !isZipOrCompoundDocument(content, extension)) {
+  if (['.doc', '.docx', '.pptx', '.xlsx', '.zip'].includes(extension) && !isZipOrCompoundDocument(content, extension)) {
     throw new IngestionError('UNSUPPORTED_INGESTION_FORMAT', 'Document container signature does not match filename');
   }
   if (UTF8_TEXT_EXTENSIONS.has(extension)) {
@@ -68,7 +72,25 @@ export function assertIngestionContent(filename: string, content: Buffer): void 
     if (['.md', '.markdown', '.tex', '.svg'].includes(extension) && /<script\b|on[a-z]+\s*=|<!DOCTYPE|\b(?:href|src)\s*=\s*["'](?:https?:|data:)/i.test(text)) {
       throw new IngestionError('UNSUPPORTED_INGESTION_FORMAT', 'Active or unsafe text content is not accepted');
     }
+    if (['.html', '.htm'].includes(extension) && !isSafeStaticHtml(text)) {
+      throw new IngestionError('UNSUPPORTED_INGESTION_FORMAT', 'Active or externally linked HTML is not accepted');
+    }
   }
+}
+
+function isSafeStaticHtml(text: string): boolean {
+  const withoutHtml5Doctype = text.replace(/<!doctype\s+html\s*>/giu, '');
+  if (/<!DOCTYPE|<!ENTITY|<script\b|on[a-z]+\s*=|<(?:iframe|object|embed)\b/iu.test(withoutHtml5Doctype)) return false;
+  let unmatched = withoutHtml5Doctype;
+  for (const match of withoutHtml5Doctype.matchAll(/\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/giu)) {
+    const raw = match[1]!;
+    const target = (raw.startsWith('"') || raw.startsWith("'")) ? raw.slice(1, -1).trim() : raw.trim();
+    if (target.startsWith('\\\\') || target.startsWith('//')) return false;
+    const scheme = /^([a-z][a-z\d+.-]*):/iu.exec(target)?.[1]?.toLowerCase();
+    if (scheme && !['http', 'https', 'mailto'].includes(scheme)) return false;
+    unmatched = unmatched.replace(match[0], '');
+  }
+  return !/\bhref\s*=/iu.test(unmatched);
 }
 
 function matchesImageSignature(extension: string, content: Buffer): boolean {

@@ -22,7 +22,9 @@
 .workspace [data-workspace-plane='19'], .workspace [data-workspace-plane='25'] { background: #f7f8fa; border: 0; }
 .workspace [data-workspace-plane='56'] { background: #fff; }
 .workspace :is(a,button,summary):focus-visible { outline: 2px solid #125d66; outline-offset: 3px; }
-.workspace :is(button,input,select,textarea) { border-radius: 8px; }
+.workspace :is(button,input,select,textarea) { border: 1px solid var(--os-rule-paper); border-radius: 8px; }
+.workspace :global(.bg-os-paper-strong) { background: #fff; }
+.workspace :global(.bg-accent-primary-strong) { color: #fff; background: #125d66; border-color: transparent; }
 .workspace button:not(:disabled):active { transform: scale(.98); }
 .workspace:global(.research-reading-surface) [data-workspace-plane='19'] { display: none; }
 .workspace:global(.research-reading-surface) [data-workspace-planes] { max-width: 1240px; margin: 28px auto; padding: 0 24px; gap: 28px; grid-template-columns: minmax(0,1fr); }
@@ -37,15 +39,21 @@
 }
 
 .workspace :global(.bg-os-vermilion) { color:#fff; background:#125d66; }
+.workspace :global(.bg-os-vermilion-ink) { color:#fff; background:#125d66; }
 .workspace :global(.hermes-visual-state-label) { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
 .workspace :global(.hermes-visual) { border:0; }
 .workspace [data-workspace-plane='25']>:global(.mt-8) { border:0; margin-top:12px; }
 @media(min-width:1280px) {
  .workspace:not(:global(.research-reading-surface)) [data-workspace-planes] { grid-template-columns:200px minmax(0,1fr) 390px; }
+ .workspace:global(.editor-workspace) [data-workspace-planes] { grid-template-columns:168px minmax(0,1fr) 320px; }
 }
 @media(min-width:1024px) and (max-width:1279px) {
  .workspace:not(:global(.research-reading-surface)) [data-workspace-planes] { grid-template-columns:160px minmax(0,1fr) 370px; }
+ .workspace:global(.editor-workspace) [data-workspace-planes] { grid-template-columns:160px minmax(0,1fr) 320px; }
 }
 
 .workspace :global(.bg-os-paper) { background:#f7f8fa; }
 .workspace :global(.bg-accent-primary-strong):hover { background:#0d4d55; }
+@media(min-width:1024px) {
+ .workspace:global(.editor-workspace) [data-workspace-planes][data-workspace-has-outline='false'] { grid-template-columns:minmax(0,1fr) 320px; }
+}

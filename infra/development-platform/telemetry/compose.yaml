@@ -1,0 +1,39 @@
+name: openscience-development-telemetry
+
+services:
+  gateway-audit:
+    image: openscience-gateway-audit-telemetry:${TELEMETRY_RELEASE:?Set the infrastructure bundle release}
+    container_name: openscience-development-gateway-audit
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 0.25
+    pids_limit: 32
+    stop_grace_period: 35s
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=128
+      LANGFUSE_ORIGIN: http://development-langfuse-web:3000
+      TELEMETRY_STATE_PATH: /var/lib/gateway-telemetry/checkpoint.json
+    env_file:
+      - /etc/openscience-development/telemetry/runtime.env
+    volumes:
+      - /opt/openscience-development/telemetry/state:/var/lib/gateway-telemetry
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=8m,uid=1000,gid=1000,mode=1770
+    networks: [audit-db, ingestion]
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+
+networks:
+  audit-db:
+    external: true
+    name: openscience-development-telemetry-db
+  ingestion:
+    external: true
+    name: openscience-development-telemetry-ingest

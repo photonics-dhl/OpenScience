@@ -1,7 +1,7 @@
 import type { AuditContext } from '@openscience/observability';
 import { requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
-import { canAccessRo } from '../visibility/access';
+import { canAccessPrivateRo } from '../visibility/access';
 import type { WorkspaceDeps } from '../workspace/types';
 import { CREDIT_ROLES, type CreditRole } from '../pr/prs';
 import { AuthorError } from './errors';
@@ -93,13 +93,13 @@ export async function setAuthors(
 }
 
 /**
- * 作者列表（§4.2 可见性继承）：读 canAccessRo；按 sortOrder 排序（作者组决定，无自动排序）。
+ * 作者列表（§4.2 可见性继承）：读 canAccessPrivateRo；按 sortOrder 排序（作者组决定，无自动排序）。
  */
 export async function listAuthors(
   deps: WorkspaceDeps,
   input: { researchObjectId: string; userId?: string },
 ): Promise<AuthorView[]> {
-  const access = await canAccessRo(deps, { researchObjectId: input.researchObjectId, userId: input.userId });
+  const access = await canAccessPrivateRo(deps, { researchObjectId: input.researchObjectId, userId: input.userId });
   if (access === 'denied') throw new AuthorError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
 
   const rows = await deps.prisma.author.findMany({
@@ -151,13 +151,13 @@ export async function addContribution(
 }
 
 /**
- * 贡献列表（§4.2 可见性继承）：读 canAccessRo；按时间追加序。
+ * 贡献列表（§4.2 可见性继承）：读 canAccessPrivateRo；按时间追加序。
  */
 export async function listContributions(
   deps: WorkspaceDeps,
   input: { researchObjectId: string; userId?: string },
 ): Promise<Array<{ id: string; userId: string; creditRole: CreditRole; createdAt: Date }>> {
-  const access = await canAccessRo(deps, { researchObjectId: input.researchObjectId, userId: input.userId });
+  const access = await canAccessPrivateRo(deps, { researchObjectId: input.researchObjectId, userId: input.userId });
   if (access === 'denied') throw new AuthorError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
 
   const rows = await deps.prisma.contribution.findMany({

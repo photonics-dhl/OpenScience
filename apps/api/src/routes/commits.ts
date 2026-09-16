@@ -1,9 +1,10 @@
+import { registerResearchRecordRoutes } from './research-record';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { createRequire } from 'node:module';
 import type { AuthDeps } from '@openscience/auth';
 import type { StorageAdapter } from '@openscience/storage';
-import { buildExportPackage, compareVersions, createCommit, getVersion, listVersions, rebuildVersion } from '@openscience/domain';
+import { buildExportPackage, compareVersions, createCommit, getVersion, listVersions, rebuildVersion, restoreVersionDraft } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -34,6 +35,14 @@ const commitBody = z.object({
  * GET /versions/:id/rebuild：完整重建 + blob sha256 校验（§7.1）。
  */
 export function registerCommitRoutes(app: FastifyInstance, deps: CommitRouteDeps): void {
+  registerResearchRecordRoutes(app, deps);
+  app.post('/research-objects/:id/versions/:versionId/restore', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id, versionId } = z.object({ id: z.string().uuid(), versionId: z.string().uuid() }).parse(req.params);
+    const { version } = z.object({ version: z.number().int().positive() }).strict().parse(req.body);
+    return reply.send(await restoreVersionDraft(deps, { researchObjectId: id, versionId, userId: user.userId, version }, auditCtx(req)));
+  });
   app.get('/research-objects/:id/versions', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;

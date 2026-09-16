@@ -1,0 +1,38 @@
+name: openscience-development-serena
+
+services:
+  serena:
+    image: openscience-serena:${SERENA_IMAGE_TAG:?Set the installed image tag}
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 3g
+    cpus: 2
+    pids_limit: 160
+    stop_grace_period: 45s
+    volumes:
+      - type: bind
+        source: ${SERENA_SNAPSHOT_DIR:?Set the exact immutable source snapshot directory}
+        target: /workspace
+        read_only: true
+      - type: bind
+        source: ${SERENA_STATE_DIR:?Set the revision-specific state directory}/cache
+        target: /opt/serena-project/cache
+      - type: bind
+        source: ${SERENA_STATE_DIR:?Set the revision-specific state directory}/logs
+        target: /opt/serena-home/logs
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=1770
+    networks: [code-intelligence]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  code-intelligence:
+    internal: true

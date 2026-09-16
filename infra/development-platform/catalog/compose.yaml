@@ -1,0 +1,47 @@
+name: openscience-development-catalog
+
+services:
+  catalog:
+    image: openscience-backstage-catalog:${CATALOG_IMAGE_TAG:?Set the full infrastructure Git revision}
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    cpus: 1.5
+    pids_limit: 128
+    stop_grace_period: 45s
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --no-node-snapshot --max-old-space-size=1024
+    volumes:
+      - type: bind
+        source: ${CATALOG_SOURCE_DIR:?Set the repository catalog directory}/catalog-info.yaml
+        target: /app/catalog-info.yaml
+        read_only: true
+      - type: bind
+        source: ${CATALOG_STATE_DIR:-/opt/openscience-development/catalog/state}
+        target: /var/lib/backstage
+    secrets:
+      - codex_catalog_token
+      - hermes_catalog_token
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=1770
+    networks: [catalog]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+secrets:
+  codex_catalog_token:
+    file: ${CATALOG_SECRETS_DIR:-/etc/openscience-development/catalog}/codex-catalog-token
+  hermes_catalog_token:
+    file: ${CATALOG_SECRETS_DIR:-/etc/openscience-development/catalog}/hermes-catalog-token
+
+networks:
+  catalog:
+    internal: true

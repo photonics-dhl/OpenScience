@@ -11,7 +11,9 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import type { Locale } from "../i18n/locale";
 import { HermesWorkspaceStageProvider } from "../components/hermes/HermesWorkspaceStage";
+import { SessionProvider } from "../components/auth/SessionProvider";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 
 // next/font downloads at image-build time and serves the files from our own origin.
 // The four roles deliberately separate display, editorial, CJK and data voices.
@@ -77,6 +79,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       lang={locale === "zh" ? "zh-CN" : "en"}
       className={`${displayGrotesk.variable} ${editorialSerif.variable} ${readingSerif.variable} ${dataMono.variable} ${cjkSerif.variable}`}
     >
+      <head><link rel="service-desc" type="application/vnd.oai.openapi+json" href="/api/research-record/openapi" title="OpenScience Research API" /></head>
       <body>
         {/* Task 9：JS 可用性标记，CSS 滚动进入动效以 html.js 门控（无 JS 时内容始终可见） */}
         <script
@@ -85,7 +88,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           }}
         />
         <NextIntlClientProvider messages={messages}>
-          <HermesWorkspaceStageProvider>{children}</HermesWorkspaceStageProvider>
+          <SessionProvider>
+            <HermesWorkspaceStageProvider>{children}</HermesWorkspaceStageProvider>
+          </SessionProvider>
         </NextIntlClientProvider>
       </body>
     </html>

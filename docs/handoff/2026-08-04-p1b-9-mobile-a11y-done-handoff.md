@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Handoff — 2026-08-04 P1B-9 移动端分步/抽屉编辑器与可访问性完成
 
 - Current goal: Phase 1B SDF 与版本。P1B-9 已闭环（apps/web 移动端抽屉 + WCAG AA + 虚拟化，next build 通过），下一任务 P1B-10（task-master 3.10，需读清单）。

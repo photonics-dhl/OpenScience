@@ -24,21 +24,23 @@ export default function VersionList({
   const t = useTranslations('editor');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const published = versions.filter((version) => version.publicationNo != null);
 
   // 滚动到底加载更多（IntersectionObserver）
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
     const io = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && limit < versions.length) {
-        setLimit((n) => Math.min(n + PAGE_SIZE, versions.length));
+      if (entries[0].isIntersecting && limit < published.length) {
+        setLimit((n) => Math.min(n + PAGE_SIZE, published.length));
       }
     });
     io.observe(el);
     return () => io.disconnect();
-  }, [limit, versions.length]);
+  }, [limit, published.length]);
 
-  const shown = versions.slice(0, limit);
+  const shown = published.slice(0, limit);
+  if (!published.length) return null;
 
   return (
     <div>
@@ -52,10 +54,10 @@ export default function VersionList({
           onClick={() => onSelect(v.versionId)}
           type="button"
         >
-          <span>v{v.versionNo}</span><span className="uppercase">{t(`versionStatus.${v.status}`)}</span>
+          <span>v{v.publicationNo}</span><span className="uppercase">{t(`versionStatus.${v.status}`)}</span>
         </button>
       ))}
-      {limit < versions.length && <div ref={sentinelRef} className="py-3 text-center text-os-muted-dark" aria-hidden>…</div>}
+      {limit < published.length && <div ref={sentinelRef} className="py-3 text-center text-os-muted-dark" aria-hidden>…</div>}
     </div>
   );
 }

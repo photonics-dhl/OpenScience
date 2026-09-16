@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](../handoff/2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Hermes Presentation Assets Implementation Plan
 
 > **COMPLETED / PRODUCTION.** Taskmaster Task 11 was accepted on immutable application release `b32d81c3474a0ba3c7cead5d4cacbc4a0e8fc4f7`; rollback is `0aaf52fed29e79bb19b15517ba9ef50545510f72`.

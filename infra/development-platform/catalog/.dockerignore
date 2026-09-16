@@ -1,0 +1,9 @@
+*
+!Dockerfile
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!backend.mjs
+!query.mjs
+!app-config.yaml
+!catalog-info.yaml

@@ -4,7 +4,13 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
-import { hermesTaskHref } from './hermes-state';
+import { hermesTaskHref, isProcessingHermesTask } from './hermes-state';
+
+const localizedTaskStates: Record<string, 'queued' | 'uploading' | 'parsing'> = {
+  queued: 'queued',
+  uploading: 'uploading',
+  parsing: 'parsing',
+};
 
 export interface HermesRailTask {
   id: string;
@@ -16,8 +22,34 @@ export interface HermesRailTask {
   error: string | null;
 }
 
-export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
+export function HermesRail({ tasks, loadState = 'ready' }: { tasks: HermesRailTask[]; loadState?: 'loading' | 'ready' | 'unavailable' }) {
   const t = useTranslations('dashboard');
+  const [expanded, setExpanded] = React.useState(false);
+  const processingTasks = tasks.filter(isProcessingHermesTask);
+  const visibleTasks = expanded ? processingTasks : processingTasks.slice(0, 3);
+  const hiddenCount = processingTasks.length - visibleTasks.length;
+
+  if (processingTasks.length === 0 && loadState === 'ready') return null;
+
+  const taskRow = (task: HermesRailTask) => {
+    const stateKey = localizedTaskStates[task.state];
+    return (
+      <li key={task.id}>
+        <Link
+          className="group grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 py-3 outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"
+          href={hermesTaskHref(task)}
+        >
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-os-ink group-hover:text-os-vermilion-ink">{task.researchTitle}</span>
+            <span data-reading-role="caption" className="mt-1 block truncate text-os-muted-paper">{task.logicalPath}</span>
+          </span>
+          <span data-reading-role="caption" className="whitespace-nowrap text-os-muted-paper">
+            {stateKey ? t(`hermes.taskStates.${stateKey}`) : t('hermes.taskStates.working')}
+          </span>
+        </Link>
+      </li>
+    );
+  };
 
   return (
     <aside
@@ -25,36 +57,16 @@ export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
       className="border-t border-os-rule-paper pt-5"
       data-hermes-protected="true"
     >
-      <div className="flex items-end justify-between gap-4 border-b border-os-rule-paper pb-3">
-        <div>
-          <p data-reading-role="caption" className="text-os-vermilion-ink">{t('hermes.liveQueue')}</p>
-          <h2 id="hermes-task-title" className="mt-2 text-xl font-medium text-os-ink">{t('hermes.title')}</h2>
-        </div>
-        <span className="font-data text-xs tabular-nums text-os-muted-paper" aria-label={`${tasks.length}`}>{String(tasks.length).padStart(2, '0')}</span>
-      </div>
+      <h2 id="hermes-task-title" className="border-b border-os-rule-paper pb-3 text-lg font-medium text-os-ink">{t('hermes.activity.title')}</h2>
 
-      {tasks.length === 0 ? (
-        <p className="py-6 text-sm leading-6 text-os-muted-paper">{t('hermes.empty')}</p>
-      ) : (
-        <ol className="list-none divide-y divide-os-rule-paper p-0">
-          {tasks.map((task, index) => (
-            <li key={task.id}>
-              <Link
-                className="group grid grid-cols-[2.2rem_minmax(0,1fr)_auto] items-start gap-3 py-4 outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"
-                href={hermesTaskHref(task)}
-              >
-                <span data-reading-role="caption" className="font-data text-os-muted-paper">{String(index + 1).padStart(2, '0')}</span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-os-ink group-hover:text-os-vermilion-ink">{task.researchTitle}</span>
-                  <span data-reading-role="caption" className="mt-1 block truncate font-data text-os-muted-paper">{task.logicalPath}</span>
-                  {task.error ? <span className="mt-1 block text-sm text-os-vermilion-ink">{task.error}</span> : null}
-                </span>
-                <span data-reading-role="caption" className="font-data text-os-muted-paper">{task.state.replaceAll('_', ' ')}</span>
-              </Link>
-            </li>
-          ))}
-        </ol>
-      )}
+      {loadState !== 'ready' ? <p role="status" className="py-3 text-sm leading-6 text-os-muted-paper">{t(loadState === 'loading' ? 'hermes.activity.loading' : 'hermes.activity.unavailable')}</p> : null}
+      {visibleTasks.length > 0 ? <ol className="mt-1 list-none divide-y divide-os-rule-paper p-0">{visibleTasks.map(taskRow)}</ol> : null}
+      {hiddenCount > 0 || expanded ? <button
+        aria-expanded={expanded}
+        className="mt-3 min-h-11 border-b border-os-rule-paper text-sm text-os-ink hover:border-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"
+        onClick={() => setExpanded((current) => !current)}
+        type="button"
+      >{expanded ? t('hermes.showLess') : t('hermes.showMore', { count: hiddenCount })}</button> : null}
     </aside>
   );
 }

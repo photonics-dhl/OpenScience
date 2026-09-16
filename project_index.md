@@ -1,36 +1,135 @@
 # OpenScience (XGS) 项目文件索引
 
-> 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-07 +08）：** branch codex/overview-responsive-companion；application/public 5e4b4d47cba918db5a9b7f7092de32aa244c258e，rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6。登录/注册减负与共享产品样式已部署；公网auth8/product8通过，未代替用户视觉验收；demo9848411/controller3d518af unchanged.
-> 当前用户要求：结合 frontend-design、ui-ux-pro-max、baseline-ui 统一完整入口体验，减少阅读与操作压力；不得把局部页面或共享配色等同整体联调完成。
+> CURRENT：恢复原定多风格科研配图任务；本批三类的交付差额、版本与下一步唯一见[Hermes CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。工程能力定位/调用观测已有接线，产品目标与用户审美验收尚未自动联动，不称状态治理全部完成。能力按[当前能力索引](docs/runbooks/hermes-capability-registry.md)定向查实现、调用和真实结果；下表日期/版本均为对应改动的历史记录，不作为当前release或自动next action。
+
+能力补接入口：`scripts/read-current-management-context.mjs`同读Git/Taskmaster/CURRENT指针；`infra/development-platform/code-intelligence/snapshot_identity.py`绑定成功MCP返回的源码版本。`packages/search/src/runtime-config.ts`共享BGE身份配置；`apps/api/src/{search-runtime,research-object-search}.ts`供私有ResearchList的POST全文检索；`packages/domain/src/agent/search-index-source.ts`及原ingestion确认事务绑定解析来源并提交索引；`scripts/index-confirmed-research-sources.cjs`仅补录本次授权的两篇真实论文，默认列计划、`--apply`复用同一producer。部署及实际效果见[CURRENT任务4](docs/handoff/2026-09-10-hermes-web-image-handoff.md#capability-linkage)，不复制任务状态。必要验证仅限直接风险或已知故障的最小定向范围；不运行过度测试、全套预检或CI。
+
+后台索引恢复：`packages/search/src/embedder.ts`负责有界请求，`apps/agent-worker/src/search-indexer.ts`负责分片/批次，`packages/domain/src/agent/agent.ts`复用原任务鉴权恢复；显式补录脚本`--retry-incomplete`消费原Domain资格。未部署候选与下个session执行顺序只见CURRENT顶部暂停记录。
+
+任务纠偏入口：`AGENTS.md`与`.agents/skills/docs-sync/SKILL.md`对齐既有Taskmaster当前tag与未完成交付项；`infra/development-platform/catalog/catalog-info.yaml`导航交付源码与需求，`telemetry/query.mjs --task`按原任务关联定位调用。`workspace-guide.ts`艺术路由保留原要求，Hermes结果/草稿/操作组件传递明确art/baseAssetId；自有配图Skill v5与原末审同轮检查明确艺术要求。部署、实际效果和未观察范围仅见CURRENT。
+
+Chat审阅接收：`infra/chatgpt-browser/review-runner.cjs`沿用既有broker，补就绪等待、原文锚定和空DOM时严格绑定的已完成final读取；同一a803请求实际恢复，无重发。精确bundle与应用release分开登记在CURRENT。
+
+Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原生图像模式，再在pill前插入简报；保留原文本、模式、参考及提交记录约束。针对1cb8菜单崩溃的独立交付和实际结果见CURRENT。
+
+浏览器容量：`infra/chatgpt-browser/install.sh`定义共享内存与容器边界；512MiB瞬时耗尽的真实取证、安全重建及草稿保护状态见CURRENT，不以事后静态余量判断峰值。
+
+发布与传输入口：`infra/scripts/production-release-retention.mjs`绑定发布事务并保护开发工具挂载，不作独立清理入口；用户已授权清除经确认无用途的服务器内容，实际范围与收据见CURRENT。`scripts/ssh-identity-path.mjs`供`cloud-sync.mjs`及`evaluation-source-sync.mjs`共用Windows原生OpenSSH路径转换。模型路由与自动/人工联动边界见现有能力台账。
+
+> 2026-09-14 文档治理：旧handoff/实施计划保留历史证据，设计区分有效需求与编写时状态；未提交的集成设计稿保留原改动。当前债务及处理只维护在[能力台账](docs/runbooks/hermes-capability-registry.md#当前技术债与处理)，不另建任务库。AGENTS/流程Skill变更须进入交付分支，旧main只留导航。
+
+| 本轮文件 | 用途 |
+|---|---|
+| `packages/domain/src/ingestion/claim-evidence-bridge.ts` / `packages/domain/src/{agent/research-run,research-intelligence/claim-evidence-service}.ts` / `apps/api/src/routes/ingestion-claim-selection-schema.ts` / `apps/api/src/routes/{ingestion,research-runs}.ts` / `apps/web/lib/{api,hermes/ingestion-claim-review}.ts` / `apps/web/components/hermes/IngestionClaimReview.tsx` / `apps/web/messages/{zh,en}.json` | 现有确认链路逐Claim保存原文关系，共享API定义/Domain类型与批次容量；来源折叠，旧请求兼容。配图消费父子关系，状态及局限见CURRENT |
+| `packages/domain/src/ingestion/reviewed-claim-suggestions.ts` / `apps/agent-worker/src/extractor.ts` | 现有末审v5可选逐条建议；P原文定位映射既有Evidence索引，共享契约/批次上限；旧v4精确恢复，原确认入口预填。实现/部署及科学效果见CURRENT |
+| `infra/development-platform/langfuse/README.md` | 独立账号访问、私有凭据交接与按用户要求改密记录；用户已确认登录，采集服务身份不依赖网页登录，文档不存密码 |
+| `apps/agent-worker/src/index.ts` / `infra/development-platform/telemetry/README.md` | Gateway audit复用已有任务执行上下文与requestId；已上线，真实规划/审阅/生图调用已按task关联；SQL/view及消费者只放行固定Chat模型标签，不回填未知历史。精确状态见CURRENT |
+| `infra/development-platform/catalog/` / `infra/development-platform/langfuse/` / `infra/development-platform/telemetry/` / `infra/development-platform/code-intelligence/` / `infra/development-platform/skills/` | 用户授权的底层能力交付：私有Backstage目录、Langfuse Gateway元数据、Serena只读符号与引用、标准技能CLI；独立于科研应用release，具体安装/使用证据见CURRENT |
+| `infra/scripts/ssh-run.sh` | 既有SSH入口增加development私有3130/3131/3132端口转发，不公开管理服务 |
+| `.codex/config.toml` | Codex 项目 Serena HTTP MCP，仅允许 overview/find/references；须建立私有转发，索引源版本见 CURRENT |
+| `infra/development-platform/squid-compat/` | ALinux 原版 Squid SRPM 加上游 Bug5520 修复；隔离编译、原生包替换及保留原 RPM/配置回退，修复数字开头镜像域名 CONNECT |
+| `AGENTS.md` / `.agents/skills/architecture-guard/SKILL.md` / `.agents/skills/docs-sync/SKILL.md` / `docs/decisions/ADR-002-agent-tooling-portability.md` | 复用前定位产品意图、实际调用与已有结果；能力索引按需读取、唯一版本锚点，禁止安装/格式检查冒充运行效果 |
+| `README.md` / `.agents/skills/{brainstorming,finishing-a-development-branch,repo-map,requesting-code-review,subagent-driven-development,test-driven-development,test-gate,using-git-worktrees,using-superpowers,verification-before-completion,writing-plans,writing-skills}/` | 从根目录带入已有精简流程与对应引用，保留独有能力；统一当前入口和已授权范围，避免旧工作树恢复重复流程 |
+| `apps/agent-worker/src/skills/installed-media-skills.ts` / `apps/agent-worker/src/presentation/{illustration-planner,handler}.ts` | 去重已上线：共用mergeDesignSkillUsage、保留单一来源入口及提交时重验；High静态GO和服务器构建/启动证据见CURRENT |
+| `packages/domain/src/assets/illustration-brief.ts` / `apps/agent-worker/src/presentation/{illustration-planner,illustration-review,handler}.ts` / `apps/agent-worker/src/skills/installed-media-skills.ts` / `.agents/skills/openscience-research-illustration/SKILL.md` | v2科学编码/艺术分离及私有storyboardCheckpoint已部署；已有真实审阅/参考图生成，质量反馈固化同一skill，结构字段与长度修复反馈及精确交付见CURRENT。revisionTaskId标签澄清已部署并真实保留非label字段；已补结构化反馈/有界最新稿继承，4f审阅accepted，28b真实图已看、艺术区分待改善，见CURRENT。不另造科学规划/重试入口。新增显式revisionMode=art通过原base复用科学字段、仅改艺术；自有Skill v4；真实69ec/f424已观察，科学字段一致、冷暖与文字层级改善，纸纹及自然语言入口局限见CURRENT。Domain原retry保留checkpoint、task投影隐藏内部记录 |
+| `apps/agent-worker/src/skills/media-direction.ts` / `apps/agent-worker/src/presentation/scene-image.ts` | dd4c935a/v4已部署；区分科学批准与审美认可、定向修改保持/否定构图重排。新学术cdce/封面1a1d均被用户否定，仍只认可淡彩aa41；实际结果/局限见CURRENT |
+| `apps/web/app/dashboard/dashboard.module.css` | 6504c004已部署实看：收回Hermes遗留跨三行布局，首行等高、后续整行及紧凑导入；桌面/手机无横溢出 |
+| `infra/private-cleanup/{runner.mjs,install.sh}` / `infra/codex-image-runner/runner.mjs` / `apps/web/app/trash/page.tsx` | 已交付f8：Node符号链接精确身份、正常排空退出、安装等锁、回收站自动刷新；原4项已实际清除。独立Codex仅090文件补丁、base1ad运行环境保留 |
+| `apps/web/components/public/ClaimNarrative.tsx` / `apps/web/components/hermes/{HermesRail.tsx,hermes-state.ts}` / `apps/web/app/dashboard/page.tsx` | 已部署f8实读：整块证据默认关闭约59px，个人空间只展示处理中任务，建议/失败和历史集中Hermes对话；后台状态未改 |
+| `infra/scripts/correct-deep-sub-cycle-publication.mjs` | 用户指定的首次发布行政勘误已执行：唯一22/v10→v1、DHL署名和原PDF下载，既有Serializable锁/审计保留原值；audit6c93436f，勿重跑发布；状态见CURRENT |
+| `apps/web/components/research/WorkbenchClaimReader.tsx` / `apps/web/components/public/evidence-display.ts` / `apps/web/components/public/ClaimNarrative.tsx` | DEPLOYED9a36c1e0；保存版本的原字段/章节/引用关系共享折叠阅读，六字段默认关闭、来源按需读取，科学数据不重生成 |
+| `apps/web/components/explore/ResearchCard.tsx` / `apps/web/components/content/ScientificText.tsx` | DEPLOYED1f7032a3并含于9a36；首页/Explore共用科学公式和完整数学token截取，阅读隐藏内部来源编号 |
+| `apps/api/src/routes/research.ts` / `apps/api/src/routes/research-record.ts` / `apps/api/src/routes/research-record-schema.ts` | latest/exact统一公开读取、版本固定及机器发现头，描述全部8个真实GET的OpenAPI3.1 |
+| `apps/web/app/developers/page.tsx` / `apps/web/app/developers/developers.module.css` / `apps/web/messages/zh.json` / `apps/web/messages/en.json` | 统一中英API文档与公开产品视觉；Python真实应用User-Agent/403说明，线上curl/Python执行成功、六字段与链接一致，DEPLOYED6af9c984 |
+| `apps/web/components/landing/SiteHeader.tsx` / `apps/web/app/layout.tsx` / `apps/web/app/research/[publicId]/page.tsx` / `apps/web/app/research/[publicId]/v/[versionNo]/page.tsx` | 导航与OpenAPI发现、真实公开版本的HTML JSON alternate |
+| `apps/web/components/public/PublicVersionPage.tsx` / `apps/web/lib/public-server-api.ts` / `apps/web/lib/api.ts` | 阅读区移除技术链接，latest完整响应一次读取及类型同步 |
+| `docs/specs/2026-09-07-open-research-publication-prd.md` §3.4 / `docs/OpenScience_Kimi_Development_Spec.md` §16 | 用户确认的标准接口寻址、集中入口、Crossref/OpenAlex/OpenAPI方法参考 |
+
+> 以下为历史交付索引，不作当前release或next action。唯一续作入口为上方CURRENT handoff。
+
+| 本轮路径 | 用途与状态 |
+| --- | --- |
+| `docs/specs/2026-09-13-draft-publication-trash-design.md` | 用户逐项确认的草稿、公开版本、历史入口、个人空间删除与30天回收站方案；ef9已部署，实际观察边界见CURRENT |
+| `packages/domain/src/commit/{version-history,restore-draft,carry-media}.ts` / `packages/domain/src/publish/publication-metadata.ts` / `infra/migrations/20260913010000_publication_identity/` | 私有历史恢复、完整图文快照、独立公开序号与旧公开元数据兼容；候选未部署 |
+| `packages/domain/src/trash/` / `apps/api/src/routes/trash.ts` / `infra/migrations/20260913020000_private_trash/` | 回收站、公开依赖保留、可重试清除与共同写锁；本轮领域/API无改动，宿主修复后原4项已清除、共享对象保留 |
+| `apps/web/components/research/{EditHistory,ResearchContentManager,TrashActionButton}.tsx` / `apps/web/app/trash/` | 编辑历史、内容管理与回收站；分析操作并入Hermes；02d最终桌面/窄屏、冻结正文与80项管理列表已实读 |
+| `apps/web/components/research/{useVersionLabels,useContentLabels}.ts` | 历史摘要及内容/删除确认/回收站的已知机器标签本地化；保留原数据与未知用户标题 |
+| `packages/domain/src/commit/carry-media.ts` | 2026-09-14真实草稿保存500：复合关联改同事务createMany，High静态PASS，093已部署；同一真实整理201，正文/来源/已批图继承已实读 |
+| `packages/search/src/{purge,lifecycle}.ts` / `apps/agent-worker/src/trash-job-copies.ts` / `infra/private-cleanup/` | 独立搜索库删除/存续过滤、解析副本及宿主受限清理执行器；ef9已部署，清理timer已安装，无实际清除收据 |
+| `docs/decisions/ADR-014-draft-publication-and-private-deletion.md` | 公开版本与内部修订分离、私有删除/公开引用保留的决策及取舍；规则唯一维护于上述spec |
+| `docs/OpenScience_Kimi_Development_Spec.md` §2.2 | 同步上述已确认需求，实施与部署状态由CURRENT跟踪 |
+| `packages/domain/src/artifact/public-artifact-download.ts` / `packages/domain/src/commit/research-record-snapshot.ts` / `apps/api/src/routes/research.ts` / `apps/web/components/research/ResearchPublication.tsx` | e7f95180已部署：显式授权全部附件，权限冻结到公开版本；23/v1原PDF匿名200/568765字节/hash与原件一致，旧版默认不开放；High PASS，证据见CURRENT |
+| `packages/domain/src/research-intelligence/claim-graph.ts` / `docs/specs/2026-09-07-open-research-publication-prd.md` §3.2 | e7f95180已部署：允许一条主要结论，3–7仅为建议；结构/证据/资源数量限制保留。High PASS，真实第二篇1Claim/40来源review通过并首发v1 |
+
+> **历史部署实读 2026-09-14:** e7f95180 build/start exit0，第二篇23/v1发布201、匿名页面/API/PDF均200，DHL与许可一致；40来源/原配图保留、1280×720/0公式错误/0内部S标记，PDF原始568765字节与hash保持。历史/管理/回收站有效证据复用；恢复写入、真实清除、30天到期仍未操作，不冒称完整运行验收。
+> 最新质量推进：867方法笔记与3f68d30b结果/边界笔记均经服务器来源绑定修订及独立High科学/引用PASS，后者1745字符/19引用、实际Markdown20620字符完整。0685已修复Markdown改变TeX间距，实读26/26公式源逐字相等、6处间距保留，正文/引用/导出不变。通用来源机制已固化，具体指导与独立科学复核仍由本会话承担；六字段全自动仍失败，跨论文质量尚未确认，未采用/发布。
+> 唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。当前自动agent d5c6f699真实字段审校仍失败；4bedbb4b具体方法回读核心科学PASS，但多问与局部共编仍丢条件。a8修复笔记漏路由/科学共编推理配置，10799ba3实产仍经High原文复核拒绝；停止重试，保留人工审校流程。
+> 私有92cafb82人工原文审校稿1118字符/17引用：1e627修复指定任务被较新失败63e正文覆盖，实际打开/只读编辑/回阅读/展开来源/截图均成功，正文和全部引用逐字等保存API与此前复核稿，user_edited保留；原40e23948、公开v10与已批图保留，尚未采用新稿/发布，视频/批量暂停。
+> 浏览器镜像8aa21251、登录/代理有效；07:55:11Z自行重启后旧target ID失效。新执行器在连接前依据instance/target私有记录回收自己完成/未提交失败的旧页；5260实际完成页已回收。未知旧页保留，不循环重启；既有失败/恢复账本不抹除。
+> 复用来源方法与实际调用见hermes-capability-registry“来源与选择”；无第三方安装、测试/预检/CI/本机运行，必要服务器build/start按授权继续。
 
 ## 当前产品交付
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；新增科普机制解释验收要求 | CURRENT；已确认RO工作区/概览/Hermes侧栏/研究桌面职责；官方参考实查完成；A配色三态本地样稿，待用户视觉验收 |
+| `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` / `apps/agent-worker/src/{index,extractor}.ts` / `apps/web/lib/api.ts` | refresh显式current/base复用SourceMap/semanticStage；reviewOnly以当前原稿复用既有科学审校；确认保持sourceAgentTaskId/Serializable/CAS | 1bf已部署，d5c6真实审校不重跑前段但科学仍失败；默认refresh/reparse不变，未触发确认 |
+| `packages/domain/package.json` / `packages/domain/src/agent/agent.ts` / `packages/domain/src/ingestion/canonical-evidence-contract.ts` / `apps/web/lib/suggestion-evidence.ts` | API/web复用既有64段/24000字符证据边界，纯常量subpath与同block范围一致 | 9f已部署；身份/定位限制保留，097六栏引用4/2/13/4/7/11均显示，旧d680无需模型重跑也恢复引用 |
+| `apps/web/app/research-objects/[id]/{edit,hermes}/page.tsx` / `apps/web/lib/ingestion-proposal-draft.ts` / `apps/web/messages/{zh,en}.json` | 原始建议sourceCore与编辑core分离、agentTaskId隔离草稿、保护实际未保存改动与跨代合并 | 0fc已部署；实际六栏逐字等新API，未自动采用，RO仍revision11 |
+| `apps/agent-worker/src/skills/scientific-summary.ts` / `apps/agent-worker/src/extractor.ts` | v6复用语义分组的来源导航，不传旧语义文字，global P并集/既有预算定位不变 | 479已部署，High代码复核；4b46真实原文核对仍有三类科学错误，不能称自动质量通过 |
+| `apps/agent-worker/src/{workspace-guide,scientific-writing-source,citation-management}.ts` / `skills/{scientific-writing,research-note-formatting}.ts` / `packages/domain/src/agent/workspace-guide-contract.ts` | 当前研究按指令生成私有笔记/评述/论文稿，来源关联与无模型直接编辑保存 | 08ed已部署初次writingSource显式选择和来源metadata压缩；Quantization真实UI来源准确，来源JSON143941字符，首稿e758未通过；来源指导修订71ed6fae科学/引用PASS，3643字符40引用、57式实读/27609字符导出完整。867/3f68原文核对成功保留；六字段自动质量未通过 |
+| `apps/web/components/hermes/HermesWritingDraft.tsx` / `HermesWritingDraft.module.css` / `HermesAssistantDrawer.tsx` / `apps/web/lib/api.ts` | 独立稿件阅读、编辑、Markdown下载、来源及显式任务恢复；非代码数学原文保护 | 0685已部署，3f68正文/19引用与API一致，26式源逐字相等、导出20620字符不变；1e指定task恢复修复保留，浏览器长期稳定未确认 |
+| `apps/agent-worker/src/skills/scientific-critical-thinking.ts` / `apps/agent-worker/src/extractor.ts` | 按研究类型的来源自省、逐观察阅读、限定/算例关联与程序回填原文 | 已部署7c6b7975；真实67观察/94段，内部候选经Chat6Pro复核收尾，不自动放行科学结论 |
+| `apps/agent-worker/parser-image/package.json` / `package-lock.json` / `apps/agent-worker/src/ingestion-parser.ts` | 隔离parser的KaTeX语法兼容、坏公式orig回退及区域低置信标记 | 已部署7c6b7975；格式失败可识别和保留原文，不表示4条坏公式已科学修正 |
+| `apps/web/components/content/ScientificText.tsx` / `ScientificText.module.css` | 有界、安全的TeX显示；复用splitMath保护数学源通过Markdown转换 | 0685已部署，真实3f68稿26/26式源等保存TeX，6处转义修复；仅预处理允许既有稿件60k，原渲染50k及TeX安全/数量边界不变 |
+| `apps/agent-worker/src/ingestion-parser.ts` / `apps/agent-worker/src/skills/research-understanding.ts` | Docling公式来源保留、降级标记、Hermes数学表达与科学上下文指令 | 已部署76ead135，真实26页/32公式输出；逐式质量与后续能力见服务器清单及Hermes台账 |
+| `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 参考目录；相关结构/风格已获用户批准，未安装新能力 |
+| `docs/proposals/2026-09-11-ro-workbench-wireframe.html` | 成稿/Hermes/图视频/公开预览可点击灰度线框，两个主要确认节点 | 已在服务器浏览器打开供用户讨论；无生产接口/真实媒体/发布，非生产UI部署 |
+| `apps/web/components/auth/SessionProvider.tsx` / `apps/web/components/landing/SiteHeader.tsx` / `apps/api/src/routes/session-guard.ts` | 跨导航账户状态、有效会话Cookie续期、跨标签会话同步 | 363257aa已部署；状态与部署见唯一CURRENT handoff |
+| `apps/web/components/explore/ResearchCard.tsx` / `apps/web/components/explore/research-discovery.module.css` / `packages/domain/src/explore/explore.ts` | 首页与探索复用真实公开版卡片/图片；稳定倒序游标 | 363257aa已部署；不把最新公开冒称精选 |
+| `apps/web/components/dashboard/HermesConversationCard.tsx` / `apps/web/components/hermes/HermesRail.tsx` | Hermes唯一对话入口、需处理/后台任务、历史去重与可见页更新 | 363257aa已部署；保持真实并发和恢复入口 |
+| `docs/proposals/2026-09-11-ro-product-preview.html` | 保留已认可布局的视觉与Hermes对话交互稿，固定输入、精简制作确认、公开媒体与正文共享状态 | 已批准的视觉参考；原样稿仅预设短句/内存演示，生产实现与未决事项见CURRENT handoff |
+| `apps/web/lib/hermes/conversation-action.ts` / `apps/web/components/hermes/HermesMediaReview.tsx` | Hermes对话确认的前端动作接口、当前版本实际素材审核及结果回写 | DEPLOYED1cdd4602；复用原权限/版本/updatedAt；实际观察与未决项见CURRENT |
+| `apps/web/app/research-product.css` / `apps/web/app/research-objects/[id]/edit/workbench.module.css` / `apps/web/components/public/PublicReadingProduct.module.css` | 已批准高保真风格的正式工作台与公开阅读样式，六栏目标题强调、图视频直显和固定Hermes对话输入 | DEPLOYED17ebc7f7；无测试/预检，实际页面观察及限制见CURRENT handoff |
+| `apps/agent-worker/src/workspace-guide.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/components/hermes/HermesPresentationAction.tsx` | 同会话服务端上下文、模型语义路由、可撤销草稿回显、折叠制作确认与发布预览；保留权限/版本/明确制作发布确认 | a8已部署：描述性笔记意图修复、科学editorDraft启用既有synthesis推理；原能力保留，不以请求成功代替科学产物通过 |
+| `apps/web/components/presentation/ResearchPresentation.tsx` / `apps/web/components/research/ResearchPublication.tsx` | 连续工作台复用制作及版本绑定发布预览，旧独立路由保留 | DEPLOYED b05aaeac；最新真实状态见CURRENT handoff |
+| `infra/scripts/verify-hermes-user-journey.mjs` | 服务器真实普通账号浏览器上传/启动/恢复取证，禁止手工生成各媒体阶段 | ACCEPTANCE TOOL；待运行，不代表产品流程通过 |
+| `infra/scripts/verify-hermes-run-candidate.mjs` | 隔离服务器 PostgreSQL 跨进程流程验收；禁止生产数据库 | CANDIDATE；尚未运行通过 |
+| `packages/domain/src/agent/research-run.ts` / `apps/api/src/routes/research-runs.ts` / `infra/migrations/20260908010000_hermes_research_runs/` / `infra/migrations/20260908020000_hermes_research_workflow/` | 持久流程、来源审核、限定生成授权与保留成功资产的失败生成续跑 | DEPLOYED3446f309；恢复API已实际202，原论文方法讲解流程SUCCEEDED/视频approved，真实状态见CURRENT handoff |
+| `apps/web/components/hermes/{HermesResearchRunPanel,HermesSourceReview,HermesClaimEvidenceReview}.tsx` / `apps/web/test/hermes-research-run-panel.test.tsx` / `apps/web/test/hermes-claim-evidence-review.test.ts` | 用户启动、审核进度与未完成生成恢复入口 | DEPLOYED3446f309：计费数量提示和恢复按钮已上线；未运行测试 |
+| `packages/domain/src/agent/research-source-readiness.ts` / `packages/domain/test/agent/research-source-readiness.test.ts` | Hermes原生文本/OCR/外部来源准备决策；区分上传、外部文件和文献线索 | LOCAL CANDIDATE；Terra/medium，8项测试通过；尚未接入运行流程，不代表OCR/ScanSci调用验收 |
+| `docs/specs/2026-09-07-open-research-publication-prd.md` | 开放研究出版物 PRD v1.1：四阶段建设，每 RO AI 友好 API、固定版本/权限合同及独立客户端验收 | 用户授权实施；本轮 M1/M2 优先，不代表已部署 |
+| `infra/migrations/20260907010000_frozen_research_record/` / `packages/domain/src/commit/{research-record-snapshot,research-record}.ts` / `apps/api/src/routes/{research-record,research-record-schema}.ts` | 提交时冻结记录、固定版本读取/来源/JSON 导出、机器 Schema/OpenAPI；nullable 迁移 37 与回滚 SQL | CANDIDATE；开发与专项验证中，尚未部署 |
+| `apps/web/components/research/VersionRecord.tsx` / `apps/web/lib/research-materials.ts` | 固定版本预览、材料恢复与并发附件保护 | UI 候选 99793fd 已复审；固定 API 接入中 |
+| `docs/specs/2026-09-07-research-record-api.md` | 每 RO 固定研究记录 API：权限、引用、来源、JSON 导出与机器合同 | CANDIDATE；开发验证中，尚未部署 |
+| `apps/agent-worker/src/parsers/native-pdf-text-items.ts` / `apps/agent-worker/src/parsers/cascade-orchestrator.ts` / `apps/agent-worker/src/parsers/text-extractor.ts` | 保留科学文本的 PDF 几何与 CMSY 否定符恢复；保守同行run归并减少词级碎片，原始间距决定空格 | line-runs.1已部署9741ec53；真实处理仍有输入跨度缺口，CURRENT handoff记录下一步 |
+| `apps/agent-worker/test/extraction-confirmation.test.ts` | 真实 extractHandler → 确认 → 冻结 API 的组合回归；位置歧义与错误身份不能升级为确定证据 | 最终修复 f199b4fd；14组合回归通过，复审中 |
+| `docs/plans/2026-09-07-open-research-publication-plan.md` | 原子导入确认、材料一致性、来源核查和每 RO 只读 API；独立审查与精确 SHA 发布 | IN PROGRESS；codex/open-research-publication，生产基线 5e4b4d4 / rollback 8e4ecb2 |
+| `packages/domain/src/ingestion/{ingestion-service,ingestion-evidence}.ts` / `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/ingestion.ts` / corresponding ingestion tests | 确认原子创建真实 Version、幂等重放、材料恢复与保守来源匹配；保留既有草稿图谱编辑 | CANDIDATE 0822515；76 domain / 8 API，独立复审通过；未部署 |
+| `docs/specs/2026-09-05-integrated-research-product-design.md` | 工作区—Hermes—RO、论文图像/视频与语音编辑；科学解释和连续工作台 | CURRENT；2026-09-12统一创建/持续对话/再分析/艺术媒体方案已获用户批准，按能力顺序实施；已认可阅读布局保持；方案不等于已部署 |
 | `docs/plans/2026-09-05-integrated-research-product-plan.md` | 真实旅程审计、能力复用与五段交付计划；Task4含CPU视频样片与独立接入审查 | CURRENT；收尾/22路由审计和选择性同事UX整合；PR102应用4d39808已部署、动画demo9848411；主线确认，PR103/104正式桌面/概览/段落助手已部署验收 |
 | `docs/decisions/ADR-013-admin-codex-image-evaluation.md` | 管理员 Hermes → Gateway → 隔离 Codex 文件任务执行器；来源/审批与账号边界 | DEPLOYED3d518af；受控管理员真实任务与审计通过 |
 | `infra/codex-image-runner/` / `packages/ai-gateway/src/codex-image.ts` / `packages/ai-gateway/src/codex-image-protocol.ts` / `packages/ai-gateway/test/codex-image.test.ts` | 受限任务协议、持久化防重执行、Unix socket代理、固定容器及1280×720规范化 | DEPLOYED3d518af；runner10、安装预检、真实Task/Credit/来源/草稿/PNG/权限验收通过 |
 | `apps/media-demo/inputs.mjs` / `apps/media-demo/render.mjs` / `apps/media-demo/drawing.mjs` / `apps/media-demo/test/inputs.test.mjs` / `apps/media-demo/test/drawing.test.mjs` | 可选第三幕机制图，保留旁白/输出探测场景与时间轴 | DEPLOYED9848411；服务器渲染/公网/390px/Range206通过，实际AAC音轨未变 |
 | 本地产物（Git忽略，非仓库路径） | apps/web/test/visual/out/science-video/：D2NN科普MP4、分镜、旁白、preview.html与FFmpeg/播放记录 | CURRENT证据含淡彩41秒demo及真实RO导入/播放/审批/失效截图；历史文件保留，核对精确source/run后使用，非自动生成能力 |
-| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo9848411；第三幕Codex机制插图/原Serena配音，固定D2NN渲染，已受审产物经独立CLI接入私有RO，不执行任意用户代码 |
+| `apps/media-demo/` | 固定D2NN分镜的Linux CPU渲染CLI、输入校验/测试、独立Dockerfile与演示网页；playwright-core由package/lock管理 | DEPLOYED demo9848411；on-chip新机制渲染在工作分支开发，不代表已部署 |
+| `apps/media-demo/onchip-drawing.mjs` / `apps/media-demo/test/onchip-drawing.test.mjs` | On-chip field-sampling五场真实动态图元；固定profile，不执行用户代码 | WORKING after005ffb8；局部运动/输入14项通过，科学审查和真实音频/RO验收待完成 |
 | `infra/scripts/deploy-science-video-demo.sh` / `infra/scripts/deploy-science-video-demo.test.mjs` / `infra/nginx/science-video-demo.location.conf` | 一次性隔离渲染与独立演示路径发布/恢复，Nginx原生Range | DEPLOYED demo381705a淡彩41秒；应用615ca2d另行部署 |
 | `apps/media-demo/test/narration.test.mjs` | 配音来源、逐段字幕时间边界与旧素材回退验证 | 完整连续v4配音与字幕边界已在技术/淡彩demo验收；历史逐段回退保留 |
 | `infra/tts-audition/` | CPU音频公共基础镜像、Qwen隔离试听与输出校验；模型独立挂载 | ECS TRIAL VERIFIED；用户接受v4 Serena全文连续配音，淡彩视频保留原WAV；旧分段试听为历史证据 |
 | `docs/runbooks/science-video-demo.md` | CPU样片服务器部署、回退与验证操作手册；含隔离CodexCLI验证、受控runner安装/启用/回滚与第三幕视频更新步骤 | DEPLOYED demo9848411 / app3d518af；含分镜与媒体页验收、受审媒体导入、Parser报告与临时容器清理注意事项 |
 | `apps/api/src/routes/presentation-asset-content.ts` / `apps/api/src/routes/presentation-assets.ts` / `apps/api/test/presentation-assets-routes.test.ts` / `apps/api/src/routes/research.ts` | 共用安全内容交付、认证私有预览与 exact RO/version/task 恢复 | DEPLOYED83b2933；私有视频实际播放/28秒seek/Range206，匿名401，保留v1兼容 |
-| `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准 | DEPLOYED64ae872；媒体优先、桌面双列/手机单列、来源折叠、任务错误可见；公网中英文四组播放/seek/键盘/无溢出验收通过 |
+| `apps/web/app/research-objects/[id]/presentation/page.tsx` / `apps/web/components/presentation/PresentationWorkbench.tsx` / `apps/web/test/presentation-workbench.test.tsx` / `apps/web/test/e2e/presentation-workbench.spec.ts` | 图解版本/主张创建选择、任务进度、预览与批准；LOCAL 空状态下一步/16测试通过，未部署 | DEPLOYED64ae872；媒体优先、桌面双列/手机单列、来源折叠、任务错误可见；公网中英文四组播放/seek/键盘/无溢出验收通过 |
 | `apps/web/app/research-objects/[id]/edit/page.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` / `apps/web/package.json` / `apps/web/playwright.release.config.ts` | 已确认论文带入版本提交并保留原 manifest 附件；图解用例加入既有 release suite | DEPLOYED390afc0；真实PDF入版本，续接9项与CI99通过 |
 | `packages/domain/src/research-intelligence/claim-evidence-service.ts` / `packages/domain/test/research-intelligence/claim-evidence-service.test.ts` / `apps/agent-worker/src/presentation/chart-generator.ts` / `apps/agent-worker/src/presentation/interactive-html.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | Claim 变更/删除的关联资产失效；真实表述与换行图解 | DEPLOYED390afc0；实际编辑使旧批准图rejected，重新生成通过；无迁移 |
-| `apps/agent-worker/src/extractor.ts` / `apps/agent-worker/test/extractor.test.ts` | 摘录选择跳过头尾及已覆盖中段关键词，保留正文证据预算 | DEPLOYED390afc0；27项通过；生产重验仍缺method/results/reproducibility，不声称完整度提升 |
+| `apps/agent-worker/src/extractor.ts` / `apps/agent-worker/test/extractor.test.ts` | 科学原文提取、连续来源窗口与精确来源绑定 | 1267e298 exact-quote已部署；真实problem/results回查失败，完整提取未完成，未运行测试，见CURRENT handoff |
 | `packages/domain/src/assets/presentation-asset.ts` / `packages/domain/src/index.ts` / `packages/domain/test/assets/presentation-asset.test.ts` / `apps/agent-worker/src/presentation/handler.ts` / `apps/agent-worker/test/presentation/presentation-generation.test.ts` | 展示资产内容写角色、draft Version 与 Worker 提交时权限/Claim 重验；沿用 Serializable draft fence | DEPLOYED83b2933；含媒体canTransition与管理员审批约束；复用既有版本锁/Claim失效，当前证据见CURRENT handoff |
 
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/ContinueResearch.tsx` / `apps/web/components/research/ResearchWorkspaceNav.tsx` / `apps/web/app/research-objects/[id]/hermes/page.tsx` / `apps/web/components/hermes/HermesTaskEntry.tsx` / `apps/web/messages/{zh,en}.json` | 同 RO 待确认优先、Hermes 常驻导航、真实任务入口与错误恢复、现有助手连接 | DEPLOYED 6478aa8；用户效果待验收 |
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/login-recovery.test.tsx` / `apps/web/test/hermes-task-entry.test.tsx` / `apps/web/test/e2e/research-continuation.spec.ts` | 工作区—Hermes—RO及登录恢复/错误语义回归 | DEPLOYED4d39808；login单元10、账号浏览器14及公网登录/资料验收通过 |
 
 | `apps/web/app/me/{page,layout}.tsx` / `apps/web/app/settings/page.tsx` / `apps/web/components/navigation/{AccountLink,ProductRouteNavigation}.tsx` / `apps/web/components/profile/MyResearchProjects.tsx` / `apps/web/components/settings/{AcademicIdentityControl,MotionPreferenceControl}.tsx` / `apps/web/components/hermes/HermesWorkspaceStage.tsx` / `apps/web/components/shell/DashboardShell.tsx` | frontend/nanqing 个人主页/设置分离、身份恢复与移动导航整合 | DEPLOYED 6478aa8 |
-| `apps/web/lib/api.ts` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` / `apps/web/test/{api-agent,hermes-guide-recovery}.test.ts` | 绑定 RO 的 guide 会话与范围恢复、scoped ingestion client | DEPLOYED 6478aa8；复审修正 |
+| `apps/web/app/research-objects/[id]/edit/page.tsx` / `apps/web/components/editor/` / `apps/web/components/shell/research-workspace.module.css` / `packages/domain/src/agent/agent.ts` | 编辑来源区分、空文本新建/重试保护、缺口摘要与编辑专属密度 | DEPLOYED1cdb18e0；服务器构建启动完成，未运行测试；真实截图验收待续 |
+| `apps/web/lib/api.ts` / `apps/web/lib/hermes/draft-state.ts` / `apps/web/components/hermes/{HermesAssistantDrawer,HermesPresentationReview,HermesPresentationAction}.tsx` | guide会话与范围恢复、真实建议入可编辑草稿、账号/RO/版本草稿隔离 | DEPLOYED45dabd7a；服务器构建/启动完成，未运行测试；登录后UI未观察 |
 | `apps/web/playwright.release.config.ts` / `apps/web/package.json` / `apps/web/test/e2e/{academic-identity-recovery,product-release,auth-dashboard,hermes-blank-ro-flow,hermes-dashboard,hermes-workspace-stage,hermes-field-guide}.spec.ts` | 合并同事浏览器用例，既有 release suite 纳入 continuation，scoped task fixtures | DEPLOYED 6478aa8 |
 | `packages/domain/src/ingestion/ingestion-service.ts` / `packages/domain/test/{ingestion-service.test.ts,helpers/fakes.ts}` / `apps/api/src/routes/ingestion.ts` | RO membership 范围内任务查询，过滤先于 limit，个人 feed 兼容 | DEPLOYED 6478aa8；无迁移 |
 
@@ -39,7 +138,7 @@
 ## 根目录
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `AGENTS.md` | 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
+| `AGENTS.md` | 产品落地优先；默认不预检/测试，例外仅最小必要服务器检查； 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | Codex global `ui-ux-pro-max` / `baseline-ui` Skills + `shadcn` MCP | 2026-08-24 为 Hermes 互动视觉纠偏启用：Skills 固定审计提交 `bc826e2` / `bdbcc56`；shadcn 固定 `4.19.0`、cwd 为当前 worktree `apps/web`，MCP 初始化握手通过；不把资料库命中替代用户审美验收 | **本机工具能力，不入库**；重启 Codex 后自动发现 Skills/MCP |
@@ -76,11 +175,11 @@
 | `apps/web/app/tokens.css` / `apps/web/app/layout.tsx` / `apps/web/test/{tokens-contrast,optical-foundations}.test.ts` | Optical Editorial v3 视觉地基：黑/纸白/朱红 token、0/4/8px 半径、四字体角色、语义 motion、AA/禁蓝紫/降级门禁 | 活文档 |
 | `apps/web/components/brand/OpenScienceWordmark.tsx` / `apps/web/components/shell/*.tsx` / `apps/web/test/surface-shells.test.tsx` | Optical Editorial 品牌与 Public/Identity/Dashboard/Workspace 四类无 Card shell；单一 main、skip link、19/56/25 工作区平面与动作反馈门禁 | 活文档 |
 | `apps/web/app/{layout.tsx,tokens.css,globals.css}` | Research Folio 非 Landing 产品地基：全局 Source Serif 4/Noto Serif SC 阅读、暖纸层级、graphite 工具例外与旧暗色类兼容桥；未接线的原语文件已清理 | **CURRENT DEPLOYED**；Landing selectors unchanged |
-| `apps/web/components/hermes/{HermesVisualAdapter,HermesSpeechBalloon,HermesPresenceControl,HermesRiggedPortrait,HermesWorkspaceStage,HermesPerformanceBubble,HermesGuideBubble,HermesDockAnchor,HermesAnchor,HermesDraftDiff,hermes-state}.ts(x)` / `apps/web/lib/hermes/{context-menu-actions,action-catalog,behavior-director,performance-beat,performance-director,companion-placement,stage-sizing,anchor-registry,travel-path,dock-preferences,motion-preference,hermes-runtime-status}.ts` | Workspace-wide Hermes（2026-09-05 新增 unsafe patrol 相邻动作不重复修复候选）：精确 `360/200px`；单路径 speech；真实 viewport/protected-region 工具页测量与 scroll 恢复；12 个 action-first performance、每动作中英各三句不连重复；input/search/modal/drawer/approval 中断；guide/menu/drawer 与 reduced-motion 保留 | **§13.6 CURRENT DEPLOYED `8d1409e` / USER REVIEW PENDING**；release/rollback `6b804f7` / `cbf5737` |
-| `apps/web/public/hermes/live2d/{NOTICE.md,live2dcubismcore.min.js,wanko/**}` / `apps/web/test/hermes-live2d-asset-contract.test.ts` / external `C:/Users/Mac/AppData/Local/OpenScience/Live2D/wanko-genie-v1/runtime-v09-export-20260823/` | v09 SDK 4.0 runtime：两张 texture zero-alpha RGB clean、12 motion 参数兼容、manifest 闭合；active renderer 只有单一 Cubism model/canvas，旧 pet/carrier 公开 URL 为 404 | **CURRENT ECS development deployment** `5f4e73c`；母版 SHA `BA111D4E...1121ADD` 未改，operator exception 与版权 notice 已部署，rollback `c97926a` |
-| `apps/web/lib/hermes/{live2d-core-loader,wanko-action-director,wanko-renderer-controller,wanko-live2d-renderer,wanko-model-presentation,wanko-runtime-ownership}.ts` / `apps/web/test/{hermes-wanko-action-director,hermes-wanko-renderer-contract,hermes-wanko-runtime-ownership}.test.ts` | 浏览器单 Wanko canvas/model/RAF owner；32-action profile 复用 byte-identical v09 12 motions，旧 OGL pet renderer、三张 pet PNG、carrier decoder/asset/exporter/CSS 已按授权永久移出当前 tree | **CURRENT v09 ECS runtime** `5f4e73c`；五个关键 runtime 文件公网 SHA 与 release tree 一致 |
-| `apps/web/app/_visual/hermes-live2d/page.tsx` / `apps/web/app/%5Fvisual/hermes-live2d/page.tsx` / `apps/web/test/visual/hermes-live2d-motion-gate.mjs` / `apps/web/test/visual/hermes-work-assistant-experience-gate.mjs` / `apps/web/test/visual/hermes-companion-motion-gate.mjs` / `apps/web/test/visual/hermes-performance-gate.mjs` / `apps/web/test/visual/hermes-release-gate.mjs` / `apps/web/test/e2e/hermes-dashboard.spec.ts` / `apps/web/test/e2e/hermes-field-guide.spec.ts` | 明示 flag 才开放的真实 RO-create fixture + 诊断 tray；覆盖 runtime、12 action profiles/phrase pools/no-repeat、action-before-speech pixels、viewport/protected geometry、loading/error shell contract、scroll restore、interruption、renderer-ready desktop/mobile/editor；production harness 仍 404 | **CURRENT GATE GREEN / DEPLOYED `e0828a6`**：context-loss recovery control 的 accessible name 回归已闭合，构图未改 |
-| `apps/web/app/%5Fvisual/research-workbench/` / `apps/web/app/_visual/research-workbench/` / `apps/web/components/visual/{ResearchWorkbenchReview,ResearchWorkbenchHermes,research-workbench-review.module.css}` / `apps/web/public/hermes/wanko-static.png` / `apps/web/lib/research-workbench-state.ts` / `apps/web/test/{research-workbench-state.test.ts,e2e/research-workbench-review.spec.ts}` | 匿名 noindex 暖纸产品视觉评审入口；六场景 deep-link、真实 v09 `360/200px`、WebGL 失败时同尺寸真实 Wanko 静态帧、Hermes 右键/键盘/长按菜单、普通点击无写入 assistant fixture、19px/1.72 阅读与 evidence-only graphite rail | **CURRENT ECS VISUAL REVIEW `b73a9dd`**：public full E2E `5/5` + keyboard repeat `3/3`；Web `395/395` + 5 Node、19-page server build、route 200；rollback `02d3dd9` |
+| `apps/web/components/hermes/{HermesVisualAdapter,HermesSpeechBalloon,HermesPresenceControl,HermesRiggedPortrait,HermesWorkspaceStage,HermesPerformanceBubble,HermesGuideBubble,HermesDockAnchor,HermesAnchor,HermesDraftDiff,hermes-state}.ts(x)` / `apps/web/lib/hermes/{context-menu-actions,action-catalog,behavior-director,performance-beat,performance-director,companion-placement,stage-sizing,anchor-registry,travel-path,dock-preferences,motion-preference,hermes-runtime-status}.ts` | Workspace-wide Hermes（2026-09-05 新增 unsafe patrol 相邻动作不重复修复候选）：精确 `360/200px`；单路径 speech；真实 viewport/protected-region 工具页测量与 scroll 恢复；12 个 action-first performance、每动作中英各三句不连重复；input/search/modal/drawer/approval 中断；guide/menu/drawer 与 reduced-motion 保留 | 历史交付 `8d1409e`（当时release/rollback `6b804f7` / `cbf5737`）；当前版本及用户认可情况见顶部交接 |
+| `apps/web/public/hermes/live2d/{NOTICE.md,live2dcubismcore.min.js,wanko/**}` / `apps/web/test/hermes-live2d-asset-contract.test.ts` / external `C:/Users/Mac/AppData/Local/OpenScience/Live2D/wanko-genie-v1/runtime-v09-export-20260823/` | v09 SDK 4.0 runtime：两张 texture zero-alpha RGB clean、12 motion 参数兼容、manifest 闭合；active renderer 只有单一 Cubism model/canvas，旧 pet/carrier 公开 URL 为 404 | 历史 ECS 交付 `5f4e73c`；母版 SHA `BA111D4E...1121ADD` 未改，operator exception 与版权 notice 已部署，rollback `c97926a` |
+| `apps/web/lib/hermes/{live2d-core-loader,wanko-action-director,wanko-renderer-controller,wanko-live2d-renderer,wanko-model-presentation,wanko-runtime-ownership}.ts` / `apps/web/test/{hermes-wanko-action-director,hermes-wanko-renderer-contract,hermes-wanko-runtime-ownership}.test.ts` | 浏览器单 Wanko canvas/model/RAF owner；32-action profile 复用 byte-identical v09 12 motions，旧 OGL pet renderer、三张 pet PNG、carrier decoder/asset/exporter/CSS 已按授权永久移出当前 tree | 历史 v09 运行记录 `5f4e73c`；五个关键 runtime 文件公网 SHA 与 release tree 一致 |
+| `apps/web/app/_visual/hermes-live2d/page.tsx` / `apps/web/app/%5Fvisual/hermes-live2d/page.tsx` / `apps/web/test/visual/hermes-live2d-motion-gate.mjs` / `apps/web/test/visual/hermes-work-assistant-experience-gate.mjs` / `apps/web/test/visual/hermes-companion-motion-gate.mjs` / `apps/web/test/visual/hermes-performance-gate.mjs` / `apps/web/test/visual/hermes-release-gate.mjs` / `apps/web/test/e2e/hermes-dashboard.spec.ts` / `apps/web/test/e2e/hermes-field-guide.spec.ts` | 明示 flag 才开放的真实 RO-create fixture + 诊断 tray；覆盖 runtime、12 action profiles/phrase pools/no-repeat、action-before-speech pixels、viewport/protected geometry、loading/error shell contract、scroll restore、interruption、renderer-ready desktop/mobile/editor；production harness 仍 404 | 历史验收与交付 `e0828a6`：context-loss recovery control 的 accessible name 回归已闭合，构图未改 |
+| `apps/web/app/%5Fvisual/research-workbench/` / `apps/web/app/_visual/research-workbench/` / `apps/web/components/visual/{ResearchWorkbenchReview,ResearchWorkbenchHermes,research-workbench-review.module.css}` / `apps/web/public/hermes/wanko-static.png` / `apps/web/lib/research-workbench-state.ts` / `apps/web/test/{research-workbench-state.test.ts,e2e/research-workbench-review.spec.ts}` | 匿名 noindex 暖纸产品视觉评审入口；六场景 deep-link、真实 v09 `360/200px`、WebGL 失败时同尺寸真实 Wanko 静态帧、Hermes 右键/键盘/长按菜单、普通点击无写入 assistant fixture、19px/1.72 阅读与 evidence-only graphite rail | 历史视觉交付 `b73a9dd`：public full E2E `5/5` + keyboard repeat `3/3`；Web `395/395` + 5 Node、19-page server build、route 200；rollback `02d3dd9` |
 | `apps/web/components/research/*.tsx` / `apps/web/components/editor/*.tsx` / `apps/web/app/research-objects/[id]/edit/page.tsx` | Optical Editorial RO Workspace：56/64/44px 产品层级、19/56/25 单实例工作面、六节点 SDF、Evidence/Before-After proposal、Artifact rule row、Radix 高影响审查与移动功能等价 | 活文档 |
 | `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/commits.ts` | Commit、版本详情/重建/比较及成员受控的 `GET /research-objects/:id/versions` 降序摘要；供 Editor、Overview、Versions、Publish 共用 | 活接口；Task 12 补齐版本列表合同 |
 | `apps/web/lib/product-surfaces.ts` / `apps/web/test/product-surface-matrix.test.ts` | Task 12 产品表面真源：Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings 的真实路由、权限、五态、移动等价与风险声明 | ECS 390/1440 验收通过（2026-08-10） |
@@ -88,7 +187,7 @@
 | `apps/web/app/research-objects/[id]/{overview,files,versions,publish,sandbox}/page.tsx` / `apps/web/app/settings/page.tsx` | Task 12 真实产品表面：对象概览、证据文件提交、版本比较、许可/审核/R3 发布、服务器沙箱、账户设置/退出登录 | ECS 已部署并通过真实账号验收 |
 | `apps/web/test/workspace-shell.test.tsx` / `apps/web/test/visual/workspace-shots.mjs` | RO Workspace 结构/证据/风险合同与 1440/390/320 production browser 门禁；校验三面状态保持、无溢出、console、focus trap/Escape/焦点恢复 | 测试工具 |
 | `apps/web/test/workspace-readability.test.ts` / `apps/web/test/e2e/workspace-readability.spec.ts` / `apps/web/test/visual/workspace-readability-gate.mjs` | 三视觉系统阅读与控件合同：14–17 px 语义角色、浏览器无关控件、真实颜色对比、水平/垂直裁切、可访问名与 focus 可见性；覆盖桌面/移动代表路由 | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；首次真实验收 `06072c1`，现行 release `5f4e73c` |
-| `apps/web/test/visual/product-release-manifest.mjs` / `apps/web/test/e2e/product-release.spec.ts` / `apps/web/playwright.release.config.ts` | 18 个真实产品表面 × 三视口、Landing normal/reduced、320px 五壳层与 Hermes 入口/菜单/反馈的 72 案 production browser 门禁；慢速光学输入同步 RAF，Hermes 保留零重叠硬门禁并容纳 2px 跨系统字体度量差 | **CURRENT local `72/72` GREEN**；public anonymous `69/69`，Admin 三视口由预期 Basic Auth 401 阻断 |
+| `apps/web/test/visual/product-release-manifest.mjs` / `apps/web/test/e2e/product-release.spec.ts` / `apps/web/playwright.release.config.ts` | 18 个真实产品表面 × 三视口、Landing normal/reduced、320px 五壳层与 Hermes 入口/菜单/反馈的 72 案 production browser 门禁；慢速光学输入同步 RAF，Hermes 保留零重叠硬门禁并容纳 2px 跨系统字体度量差 | 历史本地检查 `72/72`（不代表当前允许运行）；public anonymous `69/69`，Admin 三视口由预期 Basic Auth 401 阻断 |
 | `apps/web/test/e2e/start-release-api.mjs` | 发布门禁专用的无用户数据 mock API，只为 canonical Public RO/Collection SSR 提供稳定数据；生产旅程不得使用 | 测试工具 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页极简 i18n 导航；提供真实 `/explore`、`/research-objects/new`、`/auth/login` 入口与 dark/paper 双表面样式 | 活文档 |
 | `apps/web/components/landing/Hero.tsx` / `apps/web/components/optical-lab/AcceptedOpticalSurface.tsx` | Landing Hero 保留 PublicShell 上下文、Create/Explore CTA 与 Open RO 过渡；视觉体与 asset Lab 共用 accepted energy→typography plates、唯一语义 h1、隐藏诊断和 amplified AssetInteractionMount，IDs 按 surface 唯一 | Task 23 已部署；release `48809d6` / rollback `744c631` |
@@ -129,19 +228,19 @@
 | `packages/config/src/search-env.ts` / `packages/search/src/{chunker,lexical,storage,index}.ts` / `packages/search/test/{chunker,lexical,storage.integration}.test.ts` | 独立 `SEARCH_DATABASE_URL`/Prisma client；locator-safe chunk、tenant-safe exact BM25、两阶段有界 hydration、typed degradation；core domain/API 不导入 search client | **TASK 2 BOUNDARY DEPLOYED / TASK 6 TASKS 3–4 ECS ACCEPTED CANDIDATE `7d489c5`**；生产 route disabled、search 1/1 |
 | `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` / `apps/web/app/research-objects/[id]/hermes/page.tsx` | Hermes ingestion 建议读取、SDF 六字段人工确认、乐观锁写入与 `needs_review → confirmed` 状态流 | 本地实现，待服务器验收（2026-08-10） |
 | `infra/scripts/backup.sh` / `docs/runbooks/backup-restore.md` | core/search PostgreSQL 私有单飞原子备份集合、独立 SHA-256/manifest + SeaweedFS 原子快照；校验 active release、数据库隔离与双库恢复顺序 | **CURRENT PRODUCTION**；`db-set-20260827T155422Z-1676593` 双库 ECS restore drill GREEN，6 个临时库已按授权清理 |
-| `infra/scripts/deploy.sh` / `infra/scripts/production-deploy-lock.mjs` / `infra/scripts/production-deploy-transaction.sh` / `infra/scripts/production-deploy-transaction-state.sh` / `infra/scripts/verify-document-parser-acceptance.mjs` / `infra/scripts/deploy.test.mjs` / `scripts/verify-embedding-runtime.mjs` | ECS immutable release：锁外只物化 exact archive；锁内单一远端 runner 持 FD9 完成 active/source/report/runtime/image、双账本、switch/health、expected-only CAS、公网验收与 durable-journal rollback；Compose entry 固定 exact release；schema 6 绑定 official MCP exact image | **CURRENT PRODUCTION `80db41e` / rollback `761b93d`**；两者 official-only |
+| `infra/scripts/deploy.sh` / `infra/scripts/production-deploy-lock.mjs` / `infra/scripts/production-deploy-transaction.sh` / `infra/scripts/production-deploy-transaction-state.sh` / `infra/scripts/verify-document-parser-acceptance.mjs` / `infra/scripts/deploy.test.mjs` / `scripts/verify-embedding-runtime.mjs` | ECS immutable release：锁外只物化 exact archive；锁内单一远端 runner 持 FD9 完成 active/source/report/runtime/image、双账本、switch/health、expected-only CAS、公网验收与 durable-journal rollback；Compose entry 固定 exact release；schema 6 绑定 official MCP exact image | 现行部署入口；历史运行记录 `80db41e` / rollback `761b93d`；两者 official-only |
 | `infra/scripts/import-scansci-cookies.{sh,test.mjs}` | 管理员 Netscape Cookie 经私有 host staging 流入官方 `scansci_pdf_login(kind=cookie_import)`；root/mode/link/size/single-flight 门禁，成功/失败均清除 host 与容器副本且不输出响应内容 | **OFFICIAL-ONLY CANDIDATE**；ECS 真实 cookie import pending |
 | `infra/scripts/rotate-database-credentials.sh` / `infra/scripts/rotate-database-credentials.test.mjs` | ECS-only PostgreSQL 应用凭据原子轮换：Secret 不入 argv/log、active release Compose、`flock` 单飞、mutation-intent、旧/旧或新/新补偿、角色/env 双认证与消费者健康核验 | **CURRENT SECURITY OPERATION**；只可显式 `--confirm`，执行后须复验 release/公网/容器健康 |
 | `apps/agent-worker/Dockerfile` / `apps/agent-worker/Dockerfile.parser` / `apps/agent-worker/parser-image/{package.json,package-lock.json}` / `apps/agent-worker/src/{clamav,ingestion-parser,parser-job-isolation,parser-service}.ts` / `apps/agent-worker/src/parsers/{page-quality,ocr-parser}.ts` / `apps/agent-worker/test/parser-compiled-composition.test.mjs` / `packages/domain/src/research-intelligence/virtual-page.ts` | Worker 与 lockfile 固定的自包含 document-parser；构建期经 ECS Squid，运行时无网络/Secret、非 root、只读、2 CPU/512MiB/64 PID、128MiB bounded IPC；Tesseract `eng+chi_sim` 选页 OCR 具 stage-wide 资源预算、串行执行与 kill-and-close；Domain 保持 virtual-page 唯一 owner，Parser 镜像仅封装零依赖子路径叶子，compiled closure 在脱离 monorepo `node_modules` 的临时根验证；ClamAV fail-closed | **TASK 4 PRODUCTION `6cabe422`**；CI/ECS 14/2、26 locator/3 table-cell 与 runtime closure GREEN，rollback `28a3d5c` |
 | `apps/agent-worker/src/parser-evaluation.ts` / `apps/agent-worker/test/{parser-evaluation,parser-evaluation-corpus-export}.test.ts` / `infra/scripts/evaluate-document-parsers.sh` / `infra/parser-candidates/current-parser/` / `infra/parser-candidates/liteparse/` / `infra/parser-candidates/docling/` / `infra/parser-candidates/paddleocr/` | Task 4 ECS-only 候选 bake-off：content-free/false-ready-safe 报告、schema-v2 16-case/7-PDF gate、无网络/只读/非 root/CPU-RSS-PID-time-64KiB-output 硬限制、failure cgroup/保守资源记账与原子 evidence；OCR bbox 在 locator 前执行有限/正面积/页内规范化；Docling/Paddle build/preflight 锁 CPU package/model | **CURRENT**；current/LiteParse/Tesseract evidence 完成；Docling model acquisition、Paddle dependency acquisition 均在 corpus 前 fail-closed；候选保持 `APPROVED_PILOT`，不修改 production Compose |
 | `apps/agent-worker/src/parser-acceptance-runner.ts` / `infra/scripts/accept-document-parser-release.{sh,test.mjs}` | Task 8 独立生产验收：exact-SHA worker/parser 镜像、artifact-backed `sdf.extract` 真实 cascade、schema-v3 16-case + stable review reasons、stage/confidence/formal locator/false-ready/P50/P95/CPU/RSS/image ID 证据；无网无 capability、只读非 root、bounded tmpfs/volume、原子报告与 exact-run cleanup | **ECS/PRODUCTION GREEN `6cabe422`**；`hermes-parser-14-2-v1` 14/2/0/0，gateway 14/0/0，26 locators/3 table-cell |
 | `apps/agent-worker/src/parsers/{layout-parser,grobid-parser}.ts` / `apps/agent-worker/test/{layout-parser,grobid-parser}.test.ts` | Task 4 provider-neutral V2 layout 规范化与 bounded TEI heading/reference enrichment；统一双栏顺序、确定性 ID、Domain aggregate reparse、native identity/text/provenance 保留 | **COMPLETE `85ba051` / 20/20 GREEN**；无 concrete layout route；GROBID pull cutoff 前 digest unresolved，保持 `APPROVED_PILOT`，Compose 不变 |
-| `test/research-intelligence/search-evaluation.json` / `apps/agent-worker/test/search-evaluation-corpus.test.ts` / `infra/embedding-candidates/bge-m3/` / `infra/scripts/evaluate-embedding-models.sh` | Task 6 ECS-only BGE-M3 dense gate：评测镜像继承生产 runtime、完整 package/model hash lock、16 chunk/24 query 自著双语 corpus、content-free nDCG/Recall/latency/RSS 与 network-none/read-only/CPU 限制 | **CURRENT ECS ACCEPTED**；revision `5617a9f…`，nDCG@10 `0.996655`、Recall `1`、P95 `240 ms`、RSS `2.09 GiB`、GPU package 0 |
-| `apps/agent-worker/src/index.ts` / `apps/agent-worker/test/search-runtime.test.ts` / `infra/compose/docker-compose.{dev,prod}.yml` | `BGE_M3_ENABLED` fail-closed runtime 接线；精确 model identity 注入 SearchStorage/EmbeddingClient；显式 profile/deploy gate、internal-only worker、非 root/只读/2 CPU/6 GiB/128 PID | **TASK 6 PRODUCTION `8163f8b`**；140/140 worker、停服 lexical-only 与恢复 strict canary GREEN |
+| `test/research-intelligence/search-evaluation.json` / `apps/agent-worker/test/search-evaluation-corpus.test.ts` / `infra/embedding-candidates/bge-m3/` / `infra/scripts/evaluate-embedding-models.sh` | Task 6 ECS-only BGE-M3 dense gate：评测镜像继承生产 runtime、完整 package/model hash lock、16 chunk/24 query 自著双语 corpus、content-free nDCG/Recall/latency/RSS 与 network-none/read-only/CPU 限制 | **HISTORICAL评测记录，不代表业务索引接通**；revision `5617a9f…`，nDCG@10 `0.996655`、Recall `1`、P95 `240 ms`、RSS `2.09 GiB`、GPU package 0 |
+| `apps/agent-worker/src/index.ts` / `apps/agent-worker/test/search-runtime.test.ts` / `infra/compose/docker-compose.{dev,prod}.yml` | `BGE_M3_ENABLED` fail-closed runtime 接线；精确 model identity 注入 SearchStorage/EmbeddingClient；显式 profile/deploy gate、internal-only worker、非 root/只读/2 CPU/6 GiB/128 PID | **HISTORICAL Task 6部署记录 `8163f8b`**；140/140 worker、停服 lexical-only 与恢复 strict canary GREEN |
 | Rejected local Hermes Blender prototype (not repository content) | 少年星图龙只保留 `hermes-constellation-dragon/apps/web/assets/hermes/HermesConstellationDragon.blend`（SHA-256 `9CF4694D…DDFA5`）；`.blend1`、渲染/contact sheet、manifest、旧脚本/合同已清理 | **用户视觉 NO-GO / HISTORICAL SOURCE ONLY**；二进制进回收站，禁止误读为候选资产 |
 | `.github/workflows/ci.yml` | PR/main 全仓 build/typecheck/lint/test 与生产视觉门禁；在任何会启动 Chromium 的 unit/visual gate 前安装固定 lockfile 对应浏览器，失败前无 evidence 目录时 artifact 上传只告警 | CURRENT CI gate；禁止用本地浏览器缓存替代 clean Ubuntu runner |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
-| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 12/12 done | 工具自管；ECS acceptance complete on `b32d81c` |
+| `.taskmaster/` | 当前稳定验收清单 `multistyle-research-illustration`（3项）；执行证据与下一动作仅见 CURRENT 配图交付表。`hermes-research-intelligence` 12/12 与 `optical-editorial-v3` 15/15 为历史完成 | 现有工具状态；只凭用户认可关闭审美交付，不用历史完成替代当前目标 |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
 | `src/` | 未来代码 | 空 |
 
@@ -172,8 +271,22 @@
 | `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion 已实施 guide/anchor/travel/dock/diff foundation 与历史 OGL visual contract | **IMPLEMENTED FOUNDATION / VISUAL SUPERSEDED**；CURRENT renderer 见 2026-08-19 Wanko spec |
 | `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko renderer、`360/200px`、Research Folio；§13.3–13.7 carried sheet、speech、skill reject、action-first 与联合稳定器；§13.8 detached/protected physical fallback | **CURRENT Hermes visual/guide design / §13.8 deployed**；application/release/rollback `9aef5c4` / `8395b4d` / `bf54eaa`，public no-write `10/10`，user review pending |
 | `docs/specs/2026-08-24-research-folio-product-system-design.md` | 登录到公开验证的全部真实非 Landing 产品视觉与信息架构；暖纸阅读、graphite 证据工具、18 表面、预留 Hermes 研究页边与无覆盖合同 | **CURRENT non-Landing product UI spec / IMPLEMENTED**；Landing unchanged |
-| `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同 | **CURRENT / TASKS 1–12 DONE**；production `b32d81c`，rollback `0aaf52f`；fresh upload/public `OSR-2026-000021`；aggregate `1ca3b0e1…08f2` |
+| `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同 | **适用设计 / 历史Tasks 1–12交付记录**；当时production `b32d81c`，rollback `0aaf52f`；fresh upload/public `OSR-2026-000021`；aggregate `1ca3b0e1…08f2` |
 | `docs/specs/2026-09-02-scansci-upstream-mcp-design.md` | 上游 `v1.13.1` 官方 17-tool MCP、Worker 直连、官方 cookie import、持久数据/瞬态论文卷、`source_retrieval` provenance 与旧实现清理 | **CURRENT / PRODUCTION**；OA/institution/four-entry/lifecycle ECS accepted；ScienceDirect official entitlement optional |
+| `docs/plans/2026-09-07-literature-recovery-workflow-plan.md` | 文献恢复、SourceMap独立摘录、网页规划与实际路由记录 | Production fbb5405/rollback005ffb8；真实提取仍失败，有序非连续摘录修复通过定向审查；媒体仍未验收 |
+| `packages/domain/src/ingestion/claim-evidence-bridge.ts` / `packages/domain/test/ingestion-claim-evidence-bridge.test.ts` | 确认SDF与同版本逐段原始证据的预览、原子Claim批次、幂等、单次索引/bulk写入与来源约束；复用claim-evidence-service和ingestion API | 本地未部署；domain622/API5通过，Sol/high最终批准；待真实服务器验收 |
+| `apps/web/components/hermes/IngestionClaimReview.tsx` / `apps/web/lib/hermes/ingestion-claim-review.ts` / `apps/web/test/ingestion-claim-review.test.ts` / `apps/web/test/e2e/ingestion-claim-review.spec.ts` | 原文审阅、用户选取拆分与分类、改写撤销引用、相同请求重试；接入HermesPresentationAction、API与双语文案 | 本地未部署；helper7/browser4、Web553/type/lint通过；现有literature-disclosure harness新增审阅场景 |
+| `apps/web/components/hermes/HermesExtractionEvidence.tsx` | 真实Hermes确认页面逐段原文与页码披露；复用安全显示适配器，和编辑区SuggestionsPanel一致保留科学复核 | 本地未部署；Hermes页面/原文显示回归与Web553/type通过；production gate增加多段证据/API/UI校验 |
+| `apps/agent-worker/test/native-pdf-text-items.test.ts` | 原生CMSY10否定符组合、字体/位置反例、页级保真回退与运算限额回归 | 新增；配合cascade回归37项通过，Sol/high已复核 |
+| 本地发布证据（Git忽略） | apps/web/test/visual/out/token-smart-release/：真实论文测试、任务脱敏检查与无网络Parser复现脚本/JSON | c9439ae已部署；实际PDF invalid PDF text geometry，未完成LLM/确认/图片视频；失败证据保留 |
+| `apps/web/test/e2e/literature-disclosure-recovery.spec.ts` | RO Files/Hermes恢复、折叠和异步生命周期回归 | Application c9439ae；最终target/user隔离测试8928a9d，受影响浏览器17/17通过 |
+| `apps/web/test/literature-disclosure-harness/` | index.html、main.tsx、vite.config.ts；仅测试进程挂载真实组件，复现同组件切换与卸载 | 无生产路由或新增依赖；由上述Playwright用例启动 |
+| `apps/web/lib/suggestion-evidence.ts` / `apps/web/test/{suggestion-evidence.test.ts,suggestions-panel.test.tsx}` | 同次抽取结果的前端定位状态适配；旧结果不冒充可信出处 | DEPLOYED c9439ae；Sol修复真实API安全identity合同；旧Astra局部测试不代表端到端等质 |
+| `C:/Users/Mac/.agents/skills/token-smart/` | 全局自动省量：阶段网页分析、实际Luna/Terra/Sol路由、必要high复核及真实纵向验收 | UPDATED2026-09-07；四文件11529→4246字符，非整体费用节省；离线meter13/13 |
+| `E:/Miscellaneous/XGS/docs/user/_ideas/token-smart-share-20260908-continuity.zip` | 最新分享包：保留主模型，续接状态、整段网页分析和最小真实产物验证 | LOCAL DELIVERY；旧20260907包保留历史，非质量等同或净节省实测 |
+| `E:/Miscellaneous/XGS/docs/user/_ideas/token-smart-share-20260907/` / `E:/Miscellaneous/XGS/docs/user/_ideas/token-smart-share-20260907.zip` | 用户指定分享包：两skills、安装说明、AGENTS片段、prompts、验证与场景 | LOCAL DELIVERY；不含个人账号/项目状态；新机器浏览器与路由仍需现场验证 |
+| `apps/web/components/presentation/MechanismVideoPanel.tsx` / `apps/web/test/mechanism-video-panel.test.tsx` | 同版已审分镜/五图与角色确认的视频草稿入口 | WORKING；后台因额度耗尽中断，不是已部署功能 |
+| `apps/agent-worker/src/presentation/host-video-spool.ts` / `apps/agent-worker/test/host-video-spool.test.ts` / `packages/domain/src/assets/video.ts` / `packages/domain/test/assets/video.test.ts` / `infra/codex-image-runner/video-runner.mjs` / `infra/codex-image-runner/video-runner.test.mjs` / `infra/codex-image-runner/video-tts.py` | 隔离视频任务候选实现、固定profile和连续旁白 | INCOMPLETE WORKING；需收尾编译/安全review/真实音画验收；不部署此脏树 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-foundation-plan.md` | Taskmaster Task 1 的可执行 TDD 计划：能力台账门禁、自有 corpus、现状 parser 基准、零污染输出与全仓验收；后续三计划按实测结果展开 | **COMPLETED / TASKMASTER TASK 1 DONE**；能力候选尚未安装 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-core-model-plan.md` | Taskmaster Task 2 的可执行 TDD/迁移/部署计划：Claim/Evidence/locator 合同、核心迁移 28、独立搜索数据库与 ECS-only 验收 | **COMPLETED / TASKMASTER TASK 2 DONE / ECS DEPLOYED `e0828a6`** |
 | `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md` | Taskmaster Task 3 的可执行 TDD 计划：严格 DocumentSourceMap、locator 构造/复验、Worker parser boundary、image-only false-ready 与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `ef043eb`**；final docs CI `32997554922` GREEN |
@@ -217,7 +330,7 @@
 | `docs/plans/2026-08-16-hermes-contextual-guide-plan.md` | Hermes Dashboard 情境引导员历史实施：真实提示模型、`workspace.guide` Worker、助手抽屉与纵向验收 | 已完成的基础能力；新范围转入 2026-08-17 计划 |
 | `docs/plans/2026-08-16-hermes-articulated-mesh-pet-plan.md` | Hermes mesh-rig 历史实施：继承纠偏、motion model、真实像素 OGL rig 与感知门禁 | 已完成的基础能力；新范围转入 2026-08-17 计划 |
 | `apps/web/app/_visual/hermes-articulation/` / `apps/web/app/%5Fvisual/hermes-articulation/` / `apps/web/test/visual/hermes-articulation-gate.mjs` / `apps/web/test/visual/hermes-performance-gate.mjs` / `apps/web/test/visual/hermes-release-gate.mjs` | Hermes 隔离视觉夹具与 CI 聚合门禁：固定自主时钟、语义 head/forepaws/tail/crown/evidence region 像素、非重叠关节光学配准、裂缝/连通性、整图 affine mutation、冷加载/first-ready 与真实 WebGL draw cadence；production 默认 404 | Task 5 `757de5b` standalone gates GREEN；SwiftShader 证据不替代物理设备或用户审美验收 |
-| `packages/domain/src/agent/workspace-guide-contract.ts` / `apps/api/src/routes/agent.ts` / `apps/agent-worker/src/workspace-guide.ts` | `workspace.guide` 跨进程唯一 payload 边界、API 写前校验、Worker trusted-context 重建；模型只读取 membership-scoped RO/SDF 摘要并返回严格只读导航 | CURRENT；真实 ECS MiniMax/Dashboard 任务 GREEN，共享 parser 与 target allowlist 保持严格 |
+| `packages/domain/src/agent/workspace-guide-contract.ts` / `apps/api/src/routes/agent.ts` / `apps/agent-worker/src/workspace-guide.ts` | `workspace.guide` 跨进程唯一 payload 边界、API 写前校验、Worker trusted-context 重建；模型读取membership-scoped RO/SDF摘要，返回导航及有界可编辑建议 | DEPLOYED45dabd7a：同RO/version建议；保持共享parser与target allowlist，未运行测试 |
 | `packages/domain/src/agent/agent.ts` / `apps/agent-worker/src/index.ts` / `apps/agent-worker/test/queue-recovery.test.ts` | Hermes task 的 Serializable credit 预留、三次 `P2034` 上界、workspace.guide/sdf.extract 未派发 DB outbox 协调与单消费者 processing 恢复；文本 `sdf.extract` 仅一次安全 retry，blocked/artifact/其他 kind 不可重试 | CURRENT；原 payload/credit 保持不变，Redis 失败恢复合同 GREEN |
 | `scripts/docs/hermes-renderer-index.mjs` / `scripts/docs/hermes-renderer-index.test.mjs` | Hermes 事实源门禁：唯一 CURRENT renderer 是 2026-08-19 Wanko，2026-08-17 仅保留 implemented foundation，旧 articulated/2.5D/3D/sprite 不得恢复 | **CURRENT contract**；Wanko 路由与 active-memory 状态已锁定 |
 | `scripts/research-intelligence/verify-capability-registry.mjs` / `scripts/research-intelligence/verify-capability-registry.test.mjs` / `apps/agent-worker/test/research-intelligence-corpus.test.ts` / `apps/agent-worker/test/support/research-intelligence-corpus.ts` / `test/research-intelligence/manifest.json` | Hermes Foundation 机器门禁、13 项自著权全格式 parser corpus、跨 Windows CRLF/Linux LF 的稳定 SHA-256/locator manifest 与 ignored 现状基准报告 | **COMPLETED Task 1 acceptance evidence**；21-row 主表 + 11-row 候选评测矩阵 GREEN，7 ready / 6 text-matched / 6 explicit review，含 image-only PDF false-ready 基线；候选仍为 baseline-only |
@@ -227,7 +340,7 @@
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
 | `apps/web/components/hermes/HermesPresentationAction.tsx` / `apps/web/components/hermes/HermesPresentationReview.tsx` / `apps/web/lib/hermes/presentation-action.ts` / `apps/web/lib/hermes/presentation-intent.ts` / `apps/web/test/hermes-presentation-action.test.ts` / `apps/web/test/hermes-presentation-intent.test.ts` | Global Hermes scoped storyboard/revision/image review using existing presentation API and task page; Drawer/Stage, zh/en, hermes-state and presentation-workbench tests updated | DEPLOYED f144eb7; real revision/task/audit and final contrast/Chinese/read-only acceptance passed |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Hermes Research Intelligence 完成态、生产基线、外部限制、约束与新任务入口 | **CURRENT active-memory**；production/rollback `f144eb7` / `b23102b`；Hermes→Codex真实任务/审计通过，图像draft待审，全局分镜动作已接入；确认按钮与中文入口验收通过，通用视频待接入 |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 历史Hermes任务与版本记录；当前入口为2026-09-10 handoff | **HISTORICAL → docs/handoff/2026-09-10-hermes-web-image-handoff.md**；历史固定样片不算通用能力 |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
@@ -401,7 +514,7 @@
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
 | `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE/ScanSci 隔离、Windows Git Bash）；§5.49–5.66 为历史/发布 evidence，现行 Docker cache 维护见 §5.67 | **CURRENT运维手册**；2026-09-06缓存清理753.4MB、cache1.005GB、应用f144eb7/rollback b23102b；历史版本证据不作当前部署锚点 |
 | `infra/scripts/evaluate-scansci-upstream-mcp.{sh,test.mjs}` | 上游 `v1.13.1` 官方 MCP 有界 ECS 正向试点：wheel hash、17 tools、真实 OA PDF、exact trap cleanup | **TASK 1 ECS ACCEPTED**；24,671,920 bytes / `d57dc94c…f484a`，临时容器/卷 `0/0` |
-| `docs/runbooks/hermes-capability-registry.md` | Hermes Skill/MCP/model/parser/provider 能力台账：注入状态、成本、项目级安装目录、72h PDF TTL、10min signed URL、评测/回滚/退役规则 | **CURRENT / MACHINE-GATED**；CPU parser/Tesseract、BGE-M3、lexical search、Semantic Scholar、temporary lifecycle 与 official ScanSci MCP 为 production |
+| `docs/runbooks/hermes-capability-registry.md` | 当前产品目的→代码调用→实际产物→已知缺口；工具选型与定向High审查 | **CURRENT能力定位入口**；版本见handoff，旧PRODUCTION/评测表为历史，不证明当前调用或质量 |
 | `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；验证后临时库按用户授权精确清理 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
@@ -427,13 +540,13 @@
 | `infra/scripts/deploy.sh` / `infra/scripts/production-deploy-lock.mjs` / `infra/scripts/production-deploy-transaction.sh` / `infra/scripts/production-deploy-transaction-state.sh` / `infra/scripts/verify-document-parser-acceptance.mjs` / `infra/scripts/deploy.test.mjs` / `scripts/verify-embedding-runtime.mjs` | ECS-only immutable release 部署；single-runner FD9 transaction、durable journal、source/report/runtime/image identity、双账本、按需 BGE、strict canary 与 expected-only rollback | **PRODUCTION `6cabe422` GREEN**；rollback `28a3d5c`，first-failure automatic rollback/retry proven |
 | `infra/systemd/cloudflared.service` / `infra/systemd/cloudflared-watchdog.service` / `infra/systemd/cloudflared-watchdog.timer` | 固定 SJC IPv4/HTTP2 Edge 池、loopback metrics 与每分钟恢复 timer | 已部署（2026-08-15） |
 | `infra/compose/` | dev/monitor/prod compose；生产栈 data/app 分段，API/Web/worker + SeaweedFS 4.41 S3；Web SSR 以 `API_ORIGIN=http://api:3001` 走 app_net 并依赖 API healthy；合同测试固化私有端口/凭据/健康依赖 | ECS 已重部署并通过 SSR live gate（2026-08-10） |
-| `infra/nginx/` | 反代配置：Portainer/监控入口；OpenScience Web/API、`/__release`、Curator 与 `/api/admin/` Basic Auth；验证后清除上游 `Authorization`，Fastify 只接收 session/角色边界 | CURRENT config；release `06072c1` Nginx syntax/public routing GREEN |
+| `infra/nginx/` | 反代配置：Portainer/监控入口；OpenScience Web/API、`/__release`、Curator 与 `/api/admin/` Basic Auth；验证后清除上游 `Authorization`，Fastify 只接收 session/角色边界 | 现行反代配置入口；历史 release `06072c1` 的语法/路由记录，当前版本见顶部交接 |
 | `infra/nginx/openscience.test.mjs` | 生产 Nginx 合同：`/api` rewrite、Auth 页面/API 分流、Curator/Admin API 保护、Basic credential 不转发、Tunnel 真实 IP 与部署同步 | 8/8 GREEN |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–36（36 = ROR 全球机构目录；35 = 学术身份凭证/机构邮箱挑战/多作用域角色；34 = ScanSci `source_retrieval` provenance），各附 rollback.sql | **PRODUCTION 36/36**；search 2/2 |
-| `infra/schema.prisma` | core Prisma schema：既有平台模型 + Research Intelligence/Identity/Reading/External Retrieval/ScanSci provider state scoped relations + `source_retrieval` rights basis + academic credentials/scoped roles/ROR directory | **PRODUCTION migration 36** |
-| `infra/search/schema.prisma` / `infra/search/migrations/` / `packages/search/test/migration.test.ts` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta` 不与 core ledger 混用；Task 6 migration 2 增加 tenant-scoped chunk/embedding/index/model/telemetry、GIN 与机械 rollback | **CURRENT PRODUCTION 2/2 `c581712`**；forward/rollback/redeploy、tenant-safe PostgreSQL integration 与双库恢复 GREEN |
+| `infra/migrations/` | Prisma migrations（含 additive Hermes schema），各附 rollback.sql | **PRODUCTION 39/39**；search 2/2；应用回滚时保留 additive schema |
+| `infra/schema.prisma` | core Prisma schema：既有平台模型 + Research Intelligence/Identity/Reading/External Retrieval/ScanSci provider state scoped relations + Hermes durable run | **PRODUCTION migration 39** |
+| `infra/search/schema.prisma` / `infra/search/migrations/` / `packages/search/test/migration.test.ts` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta` 不与 core ledger 混用；Task 6 migration 2 增加 tenant-scoped chunk/embedding/index/model/telemetry、GIN 与机械 rollback | 现行独立搜索库入口；历史迁移/运行记录 2/2 `c581712`；forward/rollback/redeploy、tenant-safe PostgreSQL integration 与双库恢复 GREEN |
 | `scripts/verify-database-isolation.mjs` / `scripts/verify-database-isolation.test.mjs` | 拒绝 core/search 指向同一物理数据库，并以脱敏元数据给出部署门禁 | **CURRENT**；focused contract 与 ECS `DATABASE_ISOLATION_OK` GREEN |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）
@@ -447,7 +560,7 @@
 | `.agents/skills/infra-runbook/SKILL.md` | 基础设施与运维 runbook 规范（单 ECS 拓扑、备份、部署） | 活文档 |
 | `.agents/skills/security-review/SKILL.md` | 安全审查清单（密钥、越权、上传、沙箱、日志脱敏） | 活文档 |
 | `.agents/skills/test-gate/SKILL.md` | 测试门禁（最小相关测试→阶段验收、禁隐藏失败） | 活文档 |
-| `.agents/skills/docs-sync/SKILL.md` / `scripts/docs/docs-sync-skill.test.mjs` | 文档同步与记忆卫生纪律：Git 定锚、每主题唯一 CURRENT、search-only index、120 行 progress、80 行 handoff、16 KiB active-doc 上限、历史转 Git/archive 且不进入默认读取 | CURRENT；TDD `8/8`，防旧记忆回流与重复证据膨胀 |
+| `.agents/skills/docs-sync/SKILL.md` / `scripts/docs/docs-sync-skill.test.mjs` | 有变化回合回复前/关键节点同步，启动Git恢复；唯一CURRENT、定向索引、短progress；Skill不充当后台回调 | 当前规则；本轮仅静态更新，历史TDD不代表新规则已运行验证 |
 
 ## 已废弃
 | 路径 | 说明 |
@@ -463,7 +576,8 @@
 
 | `scripts/import-presentation-media.test.mjs` | 维护CLI实际启动回归，防止根目录workspace别名解析失败 | 本地实际入口测试与CI通过；ECS预检成功 |
 
-| `packages/domain/src/assets/storyboard.ts` / `packages/domain/test/assets/storyboard.test.ts` / `apps/agent-worker/src/presentation/storyboard.ts` / `apps/web/components/presentation/StoryboardPanel.tsx` / `apps/web/test/storyboard-panel.test.tsx` | Sourced storyboard contract, Gateway planner and Hermes revision UI | DEPLOYED d6507ea; 3 tasks/4 MiniMax-M3 calls/3 credits, reviewed 45s plan approved; create/revise/compare/replay/browser accepted |
+| `packages/domain/src/assets/storyboard.ts` / `packages/domain/test/assets/storyboard.test.ts` / `apps/agent-worker/src/presentation/storyboard.ts` / `apps/web/components/presentation/StoryboardPanel.tsx` / `apps/web/test/storyboard-panel.test.tsx` | Sourced storyboard contract, Gateway planner and Hermes revision UI | 既有生产能力；2026-09-12艺术指导/叙事增强候选，实际release见CURRENT handoff |
+| `apps/agent-worker/src/skills/media-direction.ts` | 图片艺术指导、跨图一致性、科学叙事及旁白；由storyboard/scene-image现有Gateway调用按阶段加载 | 0df87c9b已部署；不增加模型轮次，不据提示词宣称成片质量通过 |
 
 | `packages/ai-gateway/src/image.ts` / `packages/ai-gateway/test/image.test.ts` | Bounded MiniMax single-image provider and Gateway contract tests | DEPLOYED615ca2d; explicit CN region, real image and ECS decode verified; no automatic paid retry |
 | `packages/domain/src/assets/scene-image.ts` / `apps/agent-worker/src/presentation/scene-image.ts` | Approved storyboard scene binding and source-aware image prompt planning | DEPLOYED615ca2d; exact parent/Claims, separate image draft, parent invalidation; first image quality pending |
@@ -480,13 +594,13 @@
 | `apps/web/public/research-journey/d2nn-artwork.png` | 复用已验收science-video/source-artwork.png原文件；后续生成的D2NN机制解释图，非论文原始证据 | LOCAL PROTOTYPE；保留原图字节，非新生图 |
 | `apps/web/test/e2e/research-journey-review.spec.ts` | 三态连接、修改/撤销、移动端焦点、中英文及截图 | LOCAL PROTOTYPE validation |
 
-| `apps/web/app/dashboard/dashboard.module.css` | 正式研究桌面首片局部浅灰白/深青展示层；page保留真实组件/权限/恢复与全局Wanko | LOCAL CANDIDATE；DEPLOYED080fa74；完整CI/server/public验收通过 |
+| `apps/web/app/dashboard/dashboard.module.css` | 正式研究桌面首片局部浅灰白/深青展示层；page保留真实组件/权限/恢复与全局Wanko | 当前363257aa产品布局已部署，实际浏览与限制见CURRENT handoff；080fa74为历史 |
 
 | `apps/web/components/visual/ResearchWorkbenchHermes.tsx` | 复用原Wanko Live2D与静态fallback；增加样稿紧凑尺寸，未修改renderer | LOCAL CANDIDATE；单实例/减少动效/头像身份复用 |
 
-| `apps/web/app/research-objects/[id]/overview/overview.module.css` / `apps/web/test/e2e/research-overview.spec.ts` | 真实概览完整叙述、最新已提交版本审核资产、段落Hermes目标；桌面/移动端与历史版本过滤验证 | LOCAL CANDIDATE；DEPLOYED080fa74；完整CI/server/public验收通过 |
+| `apps/web/app/research-objects/[id]/overview/overview.module.css` / `apps/web/test/e2e/research-overview.spec.ts` | 真实概览完整叙述、最新已提交版本审核资产、段落Hermes目标；桌面/移动端与历史版本过滤验证 | 当前363257aa产品布局已部署，实际浏览与限制见CURRENT handoff；080fa74为历史 |
 
-| `apps/agent-worker/src/workspace-guide.ts` / `apps/agent-worker/test/workspace-guide.test.ts` | 将现有已验证target传入Gateway模型上下文；解释sdf-evidence→reproducibility映射；段落引导回归 | RELEASE CANDIDATE；不新增API字段或权限 |
+| `apps/agent-worker/src/workspace-guide.ts` / `apps/agent-worker/test/workspace-guide.test.ts` | 既有target上下文及sdf-evidence映射；笔记写作路由与科学editorDraft推理 | a8已部署；保持现有API/权限，实际产物见CURRENT，不运行测试 |
 
 | `apps/web/components/hermes/HermesVisualAdapter.tsx` / `apps/web/test/e2e/product-release.spec.ts` | PR103宽菜单实际矩形避让、12动作布局与概览媒体fixture；原保护/间距门禁保留 | DEPLOYED080fa74；最终构建回归与服务器验收通过 |
 
@@ -510,3 +624,58 @@
 - `apps/web/components/presentation/PresentationWorkbench.tsx`：分镜按标题折叠、按需展开，避免多个长分镜默认连续占满页面。
 
 - `apps/web/app/research-objects/[id]/presentation/page.tsx`：原HermesDockAnchor/Drawer接入真实RO上下文，独立陪伴栏避免覆盖素材；版本/任务权限逻辑保留。
+
+| Path | Purpose | Status |
+| --- | --- | --- |
+| `packages/domain/src/assets/video.ts` / `packages/domain/test/assets/video.test.ts` | Fixed source-paper five-scene video parent contract | Candidate codex/onchip-video-release; media not enabled |
+| `apps/agent-worker/src/presentation/host-video-spool.ts` / `apps/agent-worker/test/host-video-spool.test.ts` | Bounded isolated host video exchange | Runtime tested; business acceptance pending |
+| `infra/codex-image-runner/video-runner.mjs` / `infra/codex-image-runner/video-runner.test.mjs` / `infra/codex-image-runner/video-tts.py` | Offline isolated TTS/render runner | Candidate; existing immutable-source installer |
+| `apps/media-demo/onchip-drawing.mjs` / `apps/media-demo/test/onchip-drawing.test.mjs` | On-chip optical-field mechanism animation | Illustrative profile, not experimental reproduction |
+| `apps/web/components/presentation/MechanismVideoPanel.tsx` / `apps/web/test/mechanism-video-panel.test.tsx` | Approved-parent video generation UI | Candidate; capability defaults off |
+
+- `packages/domain/src/assets/animation.ts`：内容驱动动画声明式合同，已部署9236dbf7；对象/动作/原文依据，禁止模型代码。
+- `infra/migrations/20260908030000_hermes_content_driven_video/`：扩展明确的内容驱动生成授权，已部署9236dbf7；旧授权不自动扩大。
+
+| `apps/web/public/hermes/wanko-static-transparent.png` | 登录与Hermes加载态透明背景衍生图（imagegen，原图保留） | 已随b03263de部署，登录实际无褐底；见CURRENT handoff |
+
+| `apps/web/lib/ingestion-proposal-draft.ts` | 用户/RO/版本/task隔离的提取建议草稿与已触碰字段保存 | 已部署18b69b3c；CURRENT handoff与集成计划记录证据 |
+| `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` | POST ingestion/:taskId/refresh：复用artifact、新AgentTask事务扣费/CAS、旧结果保留；限定旧字符证据或旧native分段超限修复 | 旧字符升级已部署a0b47065；分段修复候选，CURRENT handoff记录真实结果 |
+
+| `apps/agent-worker/src/skills/research-understanding.ts` / `apps/web/components/presentation/PresentationResultGallery.tsx` | Hermes运行时理解skill与图片结果画廊 | 2026-09-09已部署c00c6233；实际结果见CURRENT handoff |
+
+| `infra/migrations/20260909010000_hermes_image_generation_grant/` | 增加图片7任务授权组合；应用回滚保留扩展约束与图片记录 | CANDIDATE |
+
+- CANDIDATE: infra/codex-image-runner/imagegen-skill.md / imagegen-prompting.md：官方预设imagegen指导的服务器只读副本，由container-client固定注入；install同步。PresentationResultGallery单图宽幅、多图2xl双列。
+
+- CANDIDATE apps/agent-worker/src/presentation/storyboard.ts：明确图片修订指令优先于旧draft、保留科学约束，定性表达替代无依据的量化图形。
+
+- RESEARCH 2026-09-09：docs/decisions/ADR-013-admin-codex-image-evaluation.md 已补网页生图额度与服务器登录可行性；无生产代码变化，未建立无人值守网页后端。
+
+- RESEARCH ADR-013补充自定义GPT/Image Generation + Action文件回传候选，未实施或验收。
+
+- DEPLOYED infra/chatgpt-browser/{Dockerfile,start.sh,relay.mjs,host.mjs,install.sh,seccomp.json} / docs/runbooks/chatgpt-browser.md：服务器交互浏览器与生产 `chatgpt-web` provider；真实Hermes图片已回传，真实PDF完成6 Pro初审与补证；区域附件子域、图片/科学审阅独立锁、30分钟窗口、15秒science heartbeat、协议版本化幂等和逐字段保留部署于`36e6a8c4`；infra/scripts/ssh-run.sh固定browser-tunnel。
+
+- 历史安装记录（当前能力查 docs/runbooks/server-capabilities.md）：当时应用ea43696d/rollback dd4c935a；原版三包技能已部署/实际消费，图片质量仍未通过；独立Codex runner090/base1ad及image runner114/science501/helperd369/brokerb78保持，见CURRENT。
+
+- `infra/scripts/browser-tunnel.ps1`：Windows隐藏SSH隧道断线重连；固定localhost6081，复用ssh-run.sh，2026-09-09本机页面恢复HTTP200。
+
+- `infra/chatgpt-browser/runner.cjs` / `review-runner.cjs` / `page-lifecycle.cjs`：精确任务输入/原图回收/只下载恢复/自有target清理；2026-09-15修复6 Pro控件hydration等待及Markdown原文锚定，真实25215仅发送一次并回收审阅。旧runner114/science501/helperd369及5260收据为历史，当前独立bundle与应用分别见CURRENT handoff。
+
+| `apps/web/components/research/ArtifactViewer.tsx` / `scripts/archive-legacy-showcase.mjs` | 附件预览与可恢复旧演示归档；关联完整旅程计划 | 2026-09-09已部署c2d11326，34条归档；真实流程状态见CURRENT handoff |
+
+| infra/chatgpt-browser/broker.mjs | 服务器网页生图队列、Gateway与原结果回收 | DEPLOYED b78fb94d派生bundle；已有job result可越过旧late marker进入既有normalize，marker不覆写；实际5260已回收 |
+
+| `.agents/skills/apple-design/` / `.agents/skills/emil-design-eng/` / `.agents/skills/design-artifact/` / `.agents/skills/html-prototype/` | 用户授权的项目设计Skills，固定上游提交/原始引用/MIT许可证；由frontend-design按需应用 | 2026-09-11安装；来源见各SOURCE.md，最新实现/部署见CURRENT handoff |
+| `apps/web/components/presentation/ResearchMediaDeck.tsx` / `apps/web/components/presentation/ResearchMediaDeck.module.css` | 工作台/公开页共用单图与多图HTML幻灯片、图片视频占位和真实图注 | 已部署；公开只用发布版本已审资产，多图真实样本尚未完成，见CURRENT handoff |
+
+| apps/web/app/research-objects/[id]/edit/page.tsx / overview/page.tsx / apps/web/components/editor/CoreEditor.tsx / apps/web/components/research/VersionRecord.tsx | 阅读入口共用安全公式渲染、移除内部核查面板和导航 | DEPLOYED80809452；真实桌面/窄屏及数据未变见CURRENT handoff |
+| packages/domain/src/assets/scene-image.ts / apps/web/components/research/ResearchPublication.tsx | 区分已审导入与本版分镜生图，发布预览使用用户可读图注 | DEPLOYED871ed702；同图审批200和实际图文预览见CURRENT handoff |
+| apps/web/components/content/ScientificText.tsx / editor/CoreEditor.tsx / presentation/{ResearchMediaDeck,PresentationWorkbench,PresentationResultGallery}.tsx / public/{PublicVersionPage,PresentationAssetGallery}.tsx / research/{VersionRecord,ResearchPublication}.tsx；apps/web/app/research* 阅读路由 | 隐藏Hermes内部来源编号与媒体制作详情，保留原文和公式 | DEPLOYEDc0bc653d；截图修复与真实阅读见CURRENT handoff |
+
+| .agents/skills/frontend-design/SKILL.md | 科研阅读入口统一公式渲染、内部核查留后台、Hermes反馈规则 | 2026-09-13用户纠偏已固化；无新增工具或测试门禁 |
+
+| apps/web/components/content/ScientificMarkdown.tsx / public/evidence-display.ts / public/{ClaimNarrative,EvidenceDisclosure,EvidenceRail}.tsx / public/PublicReadingProduct.module.css | 共用Hermes已有Markdown与公式保护；长主张分层、证据按文件页码组织、阅读隐藏机器信息 | DEPLOYED6af9c984；主张57式原文保持、40证据/10页组，最终来源按钮200与桌面/窄屏截图已看；CURRENT |
+
+| .agents/skills/baoyu-article-illustrator/、baoyu-cover-image/、baoyu-infographic/；apps/agent-worker/src/skills/installed-media-skills.ts | 三个原版MIT设计技能及Hermes只读原文章节加载；消费写入既有资产provenance | 2026-09-14已部署ea43696d；上游commit1567581c；真实方案141f42d3消费三包，但方案质量不合格已rejected，见CURRENT |
+
+| .agents/skills/openscience-research-illustration/；packages/domain/src/assets/illustration-brief.ts；apps/agent-worker/src/presentation/{illustration-planner,illustration-review,storyboard,scene-image,handler}.ts；packages/ai-gateway/src/{image,codex-image-protocol,codex-image,gateway}.ts；infra/chatgpt-browser/{broker.mjs,runner.cjs} | 自有科学分析驱动配图skill、带原文basis的brief与Chat真实参考图传递 | 已部署；旧构建阻断已解决，真实科学审阅阻断错误方案，私有修订正在推进。精确版本/产物质量见CURRENT handoff，不以安装代替效果 |

@@ -89,6 +89,24 @@ describe('SourceLocator construction and resolution', () => {
     expect(() => resolveSourceLocator(map, { artifactId: 'artifact-1', contentHash: 'a'.repeat(64), codeRange: { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 } })).toThrow(/codeRange/);
   });
 
+  it('accepts only serialization-scale bounding-box drift and still rejects a real displacement', async () => {
+    const map = sourceMap();
+    const canonical = { x: 72.00000000000003, y: 214.50000000000003, width: 468.00039000000015, height: 10.909099999999967 };
+    map.pages[0]!.blocks[0]!.boundingBox = canonical;
+    const { createBlockSourceLocator, resolveSourceLocator } = await sourceLocatorContract();
+    const locator = createBlockSourceLocator(map, 'paragraph-1', { charRange: { start: 0, end: 8 } }) as Record<string, unknown>;
+    const persisted = {
+      ...locator,
+      boundingBox: { x: 72.00000000000004, y: 214.50000000000006, width: 468.0003900000002, height: 10.90909999999997 },
+    };
+
+    expect(resolveSourceLocator(map, persisted)).toMatchObject({ id: 'paragraph-1', boundingBox: canonical });
+    expect(() => resolveSourceLocator(map, {
+      ...persisted,
+      boundingBox: { ...persisted.boundingBox as object, x: canonical.x + 1e-9 },
+    })).toThrow(/boundingBox/);
+  });
+
   it('canonicalizes uppercase map and locator hashes before resolution', async () => {
     const map = sourceMap();
     map.contentHash = 'A'.repeat(64);

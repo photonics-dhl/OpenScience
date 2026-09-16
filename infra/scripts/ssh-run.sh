@@ -19,7 +19,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="${XGS_CONFIG_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 ENV_FILE="$PROJECT_ROOT/.env"
 
 usage() {
@@ -29,6 +29,16 @@ usage() {
 
 # --- 参数解析 ---
 CONFIRM=0
+if [ "${1:-}" = '--browser-tunnel' ]; then
+  [ $# -eq 1 ] || usage
+  BROWSER_TUNNEL=1
+  set -- ':'
+fi
+if [ "${1:-}" = '--development-tunnel' ]; then
+  [ $# -eq 1 ] || usage
+  DEVELOPMENT_TUNNEL=1
+  set -- ':'
+fi
 if [ "${1:-}" = "--confirm" ]; then
   CONFIRM=1
   shift
@@ -82,13 +92,54 @@ SSH_HOST="$(pick SERVER_HOST SSH_HOST 公网ip)" || { echo "错误：.env 缺少
 SSH_USER="$(pick SERVER_USER SSH_USER 用户名)" || { echo "错误：.env 缺少用户名键（SERVER_USER/SSH_USER/用户名）" >&2; exit 66; }
 SSH_PORT="$(pick SERVER_PORT SSH_PORT SSH端口 || true)"
 SSH_PORT="${SSH_PORT:-22}"
+SSH_KEY="$HOME/.ssh/id_ed25519_xgs"
+[ -f "$SSH_KEY" ] || { echo "SSH 认证失败：未找到项目密钥 $SSH_KEY" >&2; exit 66; }
+
+if [ "${BROWSER_TUNNEL:-0}" -eq 1 ]; then
+  exec ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+    -i "$HOME/.ssh/id_ed25519_xgs" -p "$SSH_PORT" \
+    -L 127.0.0.1:6081:127.0.0.1:6081 "${SSH_USER}@${SSH_HOST}"
+fi
+
+if [ "${DEVELOPMENT_TUNNEL:-0}" -eq 1 ]; then
+  # Docker does not publish ports for containers attached only to internal
+  # networks. Resolve the three fixed endpoints through SSH, retaining their
+  # network isolation instead of adding an Internet-facing bridge.
+  DEVELOPMENT_DESTINATIONS=$(ssh -T -o BatchMode=yes -o ConnectTimeout=10 \
+    -i "$SSH_KEY" -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" 'python3 -' <<'PY'
+import ipaddress, json, subprocess
+targets = [
+    ('openscience-development-langfuse-web-1', 'openscience-development-langfuse-private'),
+    ('openscience-development-catalog-catalog-1', 'openscience-development-catalog_catalog'),
+    ('openscience-development-serena-serena-1', 'openscience-development-serena_code-intelligence'),
+]
+private = [ipaddress.ip_network(value) for value in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']]
+for container, network in targets:
+    internal = subprocess.check_output(['docker', 'network', 'inspect', '--format', '{{.Internal}}', network], text=True).strip()
+    networks = json.loads(subprocess.check_output(['docker', 'inspect', '--format', '{{json .NetworkSettings.Networks}}', container], text=True))
+    address = ipaddress.IPv4Address(networks[network]['IPAddress'])
+    if internal != 'true' or not any(address in block for block in private):
+        raise SystemExit('Unexpected development network; no tunnel created')
+    print(address)
+PY
+  )
+  mapfile -t DEVELOPMENT_IPS <<< "$DEVELOPMENT_DESTINATIONS"
+  [ "${#DEVELOPMENT_IPS[@]}" -eq 3 ] || { echo 'Development endpoints unavailable.' >&2; exit 1; }
+  exec ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+    -i "$SSH_KEY" -p "$SSH_PORT" \
+    -L "127.0.0.1:3130:${DEVELOPMENT_IPS[0]}:3000" \
+    -L "127.0.0.1:3131:${DEVELOPMENT_IPS[1]}:3131" \
+    -L "127.0.0.1:3132:${DEVELOPMENT_IPS[2]}:3132" "${SSH_USER}@${SSH_HOST}"
+fi
 
 # --- 执行（BatchMode：无密钥即失败，绝不提示密码）---
 SSH_ERR="$(mktemp)"
 trap 'rm -f "$SSH_ERR"' EXIT
 
 set +e
-ssh -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "$REMOTE_CMD" 2>"$SSH_ERR"
+ssh -o BatchMode=yes -o ConnectTimeout=10 -i "$SSH_KEY" -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "$REMOTE_CMD" 2>"$SSH_ERR"
 rc=$?
 set -e
 

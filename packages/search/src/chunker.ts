@@ -11,12 +11,13 @@ import {
   MAX_SEARCH_CHUNKS_PER_DOCUMENT,
   SEARCH_CHUNK_SCHEMA_VERSION,
   type ChunkDocumentInput,
+  type SearchChunkTokenCounter,
   type SearchChunkDraft,
 } from './types';
 
-const MIN_CHUNK_TOKENS = 512;
 const MAX_CHUNK_TOKENS = 1_024;
 const MAX_CHUNK_CHARACTERS = 65_536;
+const MAX_EMBEDDING_CHARACTERS = 20_000;
 const MAX_CLAIMS_PER_BLOCK = 32;
 const MAX_CLAIMS_PER_DOCUMENT = 10_000;
 const MAX_CLAIM_CHARACTERS = 1_000_000;
@@ -81,8 +82,9 @@ function createUnit(
   claimIds: string[],
 ): ChunkUnit {
   const fullBlock = startToken === 0 && endToken === tokens.length;
-  const start = fullBlock ? 0 : tokens[startToken]!.start;
-  const end = fullBlock ? block.text.length : tokens[endToken - 1]!.end;
+  // Adjacent units cover the whole block, including punctuation and whitespace.
+  const start = startToken === 0 ? 0 : tokens[startToken]!.start;
+  const end = endToken === tokens.length ? block.text.length : tokens[endToken]!.start;
   return {
     blockId: block.id,
     text: block.text.slice(start, end),
@@ -103,9 +105,8 @@ function maximumFittingEnd(
   let high = maximumEnd;
   while (low < high) {
     const middle = Math.ceil((low + high) / 2);
-    const fullBlock = startToken === 0 && middle === tokens.length;
-    const start = fullBlock ? 0 : tokens[startToken]!.start;
-    const end = fullBlock ? block.text.length : tokens[middle - 1]!.end;
+    const start = startToken === 0 ? 0 : tokens[startToken]!.start;
+    const end = middle === tokens.length ? block.text.length : tokens[middle]!.start;
     if (end - start <= availableCharacters) low = middle;
     else high = middle - 1;
   }
@@ -160,7 +161,9 @@ function materializeChunk(
   };
 }
 
-export function chunkDocument(input: ChunkDocumentInput): SearchChunkDraft[] {
+function documentChunkUnits(input: ChunkDocumentInput): {
+  sourceMap: DocumentSourceMap; sourceMapSha256: string; groups: ChunkUnit[][];
+} {
   const parsedSourceMap = parseDocumentSourceMap(input.sourceMap);
   const sourceMap: DocumentSourceMap = {
     ...parsedSourceMap,
@@ -238,15 +241,63 @@ export function chunkDocument(input: ChunkDocumentInput): SearchChunkDraft[] {
     }
   }
   if (current.length > 0) flush();
-  if (groups.length === 0) return [];
+  return { sourceMap, sourceMapSha256, groups };
+}
 
+export function chunkDocument(input: ChunkDocumentInput): SearchChunkDraft[] {
+  const { sourceMap, sourceMapSha256, groups } = documentChunkUnits(input);
   const chunks = groups.map((group, ordinal) => materializeChunk(sourceMap, sourceMapSha256, ordinal, group));
-  const invalid = chunks.slice(0, -1).find((chunk) => chunk.tokenCount < MIN_CHUNK_TOKENS);
-  if (invalid) {
-    throw new Error(`cannot satisfy ${MIN_CHUNK_TOKENS}-${MAX_CHUNK_TOKENS} token bounds without splitting an indivisible block`);
-  }
   if (chunks.some((chunk) => chunk.tokenCount > MAX_CHUNK_TOKENS || chunk.text.length > MAX_CHUNK_CHARACTERS)) {
     throw new Error('chunk exceeds persistence bounds');
   }
   return chunks;
+}
+
+/** Refine the same source units using the actual embedding tokenizer, without changing the source text. */
+export async function chunkDocumentForEmbedding(
+  input: ChunkDocumentInput,
+  tokenCounter: SearchChunkTokenCounter,
+): Promise<SearchChunkDraft[]> {
+  const { sourceMap, sourceMapSha256, groups } = documentChunkUnits(input);
+  const blockKinds = new Map(sourceMap.pages.flatMap(page => page.blocks.map(block => [block.id, block.kind] as const)));
+  const accepted: ChunkUnit[][] = [];
+  let requests = 0;
+  const refine = async (units: ChunkUnit[]): Promise<void> => {
+    if (accepted.length >= MAX_SEARCH_CHUNKS_PER_DOCUMENT) throw new Error('search chunk limit exceeded');
+    const text = units.map(unit => unit.text).join('\n\n');
+    if (text.length <= MAX_EMBEDDING_CHARACTERS) {
+      if (++requests > 2 * MAX_SEARCH_CHUNKS_PER_DOCUMENT) throw new Error('search tokenizer request limit exceeded');
+      const counts = await tokenCounter([text]);
+      if (counts !== undefined && (counts.length !== 1 || !Number.isSafeInteger(counts[0]) || counts[0]! < 1)) {
+        throw new Error('search tokenizer response is invalid');
+      }
+      if (counts !== undefined && counts[0]! <= MAX_CHUNK_TOKENS) {
+        accepted.push(units);
+        return;
+      }
+    }
+    if (units.length > 1) {
+      const middle = Math.ceil(units.length / 2);
+      await refine(units.slice(0, middle));
+      await refine(units.slice(middle));
+      return;
+    }
+    const unit = units[0]!;
+    const kind = blockKinds.get(unit.blockId);
+    if (kind === undefined || INDIVISIBLE_KINDS.has(kind)) throw new Error('indivisible block exceeds embedding token limit');
+    const tokens = tokenizeSearchTextWithOffsets(unit.text);
+    if (tokens.length < 2) throw new Error('search token exceeds embedding token limit');
+    const middle = tokens[Math.floor(tokens.length / 2)]!.start;
+    const base = unit.locator.charRange?.start ?? 0;
+    const slice = (start: number, end: number): ChunkUnit => ({
+      ...unit,
+      text: unit.text.slice(start, end),
+      tokenCount: tokenizeSearchText(unit.text.slice(start, end)).length,
+      locator: validateSourceLocator({ ...unit.locator, charRange: { start: base + start, end: base + end } }),
+    });
+    await refine([slice(0, middle)]);
+    await refine([slice(middle, unit.text.length)]);
+  };
+  for (const group of groups) await refine(group);
+  return accepted.map((group, ordinal) => materializeChunk(sourceMap, sourceMapSha256, ordinal, group));
 }

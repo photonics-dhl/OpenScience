@@ -33,10 +33,10 @@ export function registerPublicationRoutes(app: FastifyInstance, deps: Publicatio
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { versionId } = versionParams.parse(req.params);
-    const body = z.object({ r3Confirmed: z.boolean() }).parse(req.body);
+    const body = z.object({ r3Confirmed: z.boolean(), allowArtifactDownloads: z.boolean().default(false) }).parse(req.body);
     const published = await publishVersion(
       deps,
-      { versionId, userId: user.userId, r3Confirmed: body.r3Confirmed, publicIdPrefix: deps.publicIdPrefix ?? 'OSR' },
+      { versionId, userId: user.userId, r3Confirmed: body.r3Confirmed, allowArtifactDownloads: body.allowArtifactDownloads, publicIdPrefix: deps.publicIdPrefix ?? 'OSR' },
       auditCtx(req),
     );
     return reply.status(201).send({ published });

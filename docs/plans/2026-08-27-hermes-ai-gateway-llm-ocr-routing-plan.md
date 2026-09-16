@@ -1,3 +1,5 @@
+> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](../handoff/2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+
 # Hermes AI Gateway and LLM OCR Routing Implementation Plan
 
 > **Status: completed and deployed (2026-08-27).** Taskmaster tag `hermes-research-intelligence`, Task 5. Application/immutable release `f9659668b237b70b4c018b866e20498689d327c2`; rollback `ef043ebb8e51332effe75a5639cb207aec7bfc47`.

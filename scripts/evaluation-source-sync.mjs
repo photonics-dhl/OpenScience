@@ -2,10 +2,10 @@
 // Connection values come from .cloud-sync-env and are never printed.
 import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { buildEvaluationSourceMaterializeCommand } from './evaluation-source-sync-command.mjs';
+import { resolveSshIdentityPath } from './ssh-identity-path.mjs';
 
 const sourceRoot = process.env.XGS_SOURCE_ROOT ? path.resolve(process.env.XGS_SOURCE_ROOT) : process.cwd();
 const configRoot = process.env.XGS_CONFIG_ROOT ? path.resolve(process.env.XGS_CONFIG_ROOT) : process.cwd();
@@ -20,7 +20,7 @@ const commitCheck = spawnSync('git', ['cat-file', '-e', `${sourceSha}^{commit}`]
 if (commitCheck.status !== 0) throw new Error('evaluation source commit is unavailable locally');
 
 const cfg = JSON.parse(readFileSync(path.join(configRoot, '.cloud-sync-env'), 'utf8'));
-const key = cfg.key.replace(/^~/u, os.homedir());
+const key = resolveSshIdentityPath(cfg.key);
 const archive = spawn(
   'git',
   ['-c', 'core.autocrlf=false', 'archive', '--format=tar.gz', sourceSha],
@@ -28,6 +28,7 @@ const archive = spawn(
 );
 const ssh = spawn('ssh', [
   '-o', 'BatchMode=yes',
+  '-o', 'IdentitiesOnly=yes',
   '-o', 'ConnectTimeout=20',
   '-i', key,
   '-p', String(cfg.port),

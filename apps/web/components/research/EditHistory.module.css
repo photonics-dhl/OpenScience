@@ -1,0 +1,26 @@
+/* Override shared DialogContent width/padding utilities regardless of stylesheet order. */
+.dialog[role='dialog'] { display: flex; width: min(960px, calc(100vw - 24px)); max-width: 960px; max-height: calc(100dvh - 32px); flex-direction: column; padding: 0; border-radius: 12px; background: #fff; color: #1d2935; overflow: hidden; }
+.header { display: flex; flex-shrink: 0; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px; background: #f5f8fa; }
+.header > div { min-width: 0; flex: 1; }
+.header > button { flex-shrink: 0; white-space: nowrap; }
+.description { margin-top: 10px; max-width: 600px; line-height: 1.6; color: #596875; }
+.body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px 24px; }
+.list { list-style: none; margin: 0; padding: 0; }
+.entry { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; width: 100%; gap: 24px; align-items: baseline; padding: 16px 12px; text-align: left; border: 0; border-bottom: 1px solid #dce4e8; background: transparent; color: inherit; font: inherit; font-size: 14px; line-height: 1.6; cursor: pointer; }
+.entry time { color: #596875; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.entry[aria-pressed='true'] { background: #eaf5f3; }
+.entry > span { min-width: 0; overflow-wrap: anywhere; }
+.inspect { color: #126a70; white-space: nowrap; }
+.footer { padding: 16px 24px; background: #f5f8fa; font-size: 14px; line-height: 1.6; }
+.footer:empty { display: none; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+.button, .primary { min-height: 42px; border: 1px solid #dce4e8; border-radius: 8px; padding: 9px 15px; background: #fff; color: #126a70; font: inherit; font-size: 14px; cursor: pointer; transition: background-color 120ms ease, transform 120ms ease; }
+.primary { border-color: #126a70; background: #126a70; color: #fff; }
+.button:active, .primary:active { transform: scale(.97); }
+.button:focus-visible, .primary:focus-visible, .entry:focus-visible, .check input:focus-visible { outline: 3px solid #126a7070; outline-offset: 2px; }
+.button:disabled, .primary:disabled, .entry:disabled { opacity: .5; cursor: not-allowed; }
+.check { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0; }
+.check input { margin-top: 5px; accent-color: #126a70; }
+.error { color: #a33d3d; }
+@media (max-width: 640px) { .header, .footer { padding: 16px; } .body { padding: 0 16px 16px; } .entry { grid-template-columns: minmax(0, 1fr); gap: 6px; padding-inline: 8px; } .inspect { justify-self: start; } .actions > button { flex: 1 1 auto; } }
+@media (prefers-reduced-motion: reduce) { .button, .primary { transition: none; } .button:active, .primary:active { transform: none; } }

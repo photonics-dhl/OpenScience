@@ -1,5 +1,6 @@
 *.jsonl text eol=lf
 *.sh text eol=lf
+test/research-intelligence/manifest.json text eol=lf
 apps/web/app/layout.tsx text eol=lf
 apps/web/assets/optical-lab/fonts/*.txt text eol=lf
 apps/web/public/optical-lab/atlas/*.json text eol=lf

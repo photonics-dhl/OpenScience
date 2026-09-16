@@ -13,11 +13,32 @@ import {
 } from '../src/parser-acceptance-contract';
 import { createSidecarParserStageProcessor } from '../src/parser-job-isolation';
 import {
+  buildAcceptanceProposal,
   canonicalAcceptanceReviewReasons,
 } from '../src/parser-acceptance-runner';
 import { RESEARCH_INTELLIGENCE_CORPUS } from './support/research-intelligence-corpus';
 
 describe('Task 8 acceptance runner production composition', () => {
+  it('builds the bounded fake from exact canonical block ids and explicit labels', () => {
+    const value = buildAcceptanceProposal([undefined, [
+      { role: 'system', content: 'ignored' },
+      { role: 'user', content: [
+        '--- SOURCE_BLOCK id:B000001 ---\nProblem: Exact fixture problem.',
+        '--- SOURCE_BLOCK id:B000002 ---\nUnlabelled context.',
+        '--- SOURCE_BLOCK id:B000003 ---\nMethod: Exact fixture method.',
+      ].join('\n\n') },
+    ]]);
+
+    expect(value.fields.problem).toEqual({
+      summary: 'Exact fixture problem.', sourceBlockIds: ['B000001'], needsMoreInformation: false,
+    });
+    expect(value.fields.method).toEqual({
+      summary: 'Exact fixture method.', sourceBlockIds: ['B000003'], needsMoreInformation: false,
+    });
+    expect(value.fields.results).toEqual({ summary: '', sourceBlockIds: [], needsMoreInformation: true });
+    expect(JSON.stringify(value)).not.toContain('sourceQuote');
+  });
+
   it.each([
     ['corrupt-pdf-en', ['parser-failed', 'page_inventory failed', 'all local parser stages failed'], 'unreadable-or-corrupt-document'],
     ['scan-png-empty', ['parser-failed', 'all local parser stages failed'], 'no-meaningful-content'],
@@ -51,13 +72,7 @@ describe('Task 8 acceptance runner production composition', () => {
     const digest = createHash('sha256').update(fixture.content).digest('hex');
     const artifactId = `artifact-${id}`;
     const stageAdapter = createSidecarParserStageProcessor(createDefaultIngestionAdapters());
-    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
-    const gatewaySeam = createAcceptanceGatewaySeam({
-      schemaVersion: '0.1.0',
-      fields: Object.fromEntries(fields.map((field) => [field, {
-        summary: '', sourceQuote: '', needsMoreInformation: true,
-      }])),
-    });
+    const gatewaySeam = createAcceptanceGatewaySeam(buildAcceptanceProposal);
     for (let index = 0; index < 13; index += 1) {
       await gatewaySeam.gateway.completeStructured();
     }
@@ -125,6 +140,17 @@ describe('Task 8 acceptance runner production composition', () => {
     expect(classifyAcceptanceHandlerResult(handlerResult)).toBe('completed');
     expect(cascadeResult?.status).toBe('succeeded');
     if (cascadeResult?.status !== 'succeeded') return;
+    const extraction = handlerResult as unknown as {
+      evidenceSegments: { problem: Array<{ quote: string; sourceLocator: Parameters<typeof reproduceAcceptanceLocator>[1] }> };
+    };
+    expect(extraction.evidenceSegments.problem).toHaveLength(1);
+    const exactSegment = extraction.evidenceSegments.problem[0]!;
+    const sourceBlock = cascadeResult.sourceMap.pages.flatMap((page) => page.blocks)
+      .find((block) => block.id === exactSegment.sourceLocator.blockId)!;
+    expect(sourceBlock.text?.slice(
+      exactSegment.sourceLocator.charRange!.start,
+      exactSegment.sourceLocator.charRange!.end,
+    )).toBe(exactSegment.quote);
     const locatorMatches = fixture.expectedLocators.filter((locator) => reproduceAcceptanceLocator(
       cascadeResult!.sourceMap,
       locator,

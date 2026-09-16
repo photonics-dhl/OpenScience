@@ -1,7 +1,8 @@
+import { withoutInternalSourceMarkers } from '@/components/content/ScientificText';
 import { PublicReadingSurface } from '../../../../../components/public/PublicVersionPage';
 import { getServerPublicResearchVersion, PublicServerApiError } from '../../../../../lib/public-server-api';
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import SiteHeader from '@/components/landing/SiteHeader';
 import { PublicShell } from '@/components/shell/PublicShell';
@@ -18,11 +19,12 @@ export async function generateMetadata({ params }: { params: { publicId: string;
     const r = res.research;
     const authors = r.authors.map((a) => a.displayName).join(', ');
     return {
-      title: `${r.title} v${versionNo} | OpenScience`,
-      description: r.version.core.problem?.substring(0, 160) ?? '',
+      title: `${r.title} v${r.version.versionNo} | OpenScience`,
+      description: withoutInternalSourceMarkers(r.version.core.problem ?? '').substring(0, 160),
+      alternates: { canonical: r.url, types: { 'application/json': `/api/research/${encodeURIComponent(r.publicId)}/v/${r.version.versionNo}` } },
       openGraph: {
-        title: `${r.title} v${versionNo}`,
-        description: r.version.core.problem?.substring(0, 160) ?? '',
+        title: `${r.title} v${r.version.versionNo}`,
+        description: withoutInternalSourceMarkers(r.version.core.problem ?? '').substring(0, 160),
         type: 'article',
         authors: authors ? [authors] : [],
         publishedTime: r.version.publishedAt ?? undefined,
@@ -53,12 +55,15 @@ export default async function Page({ params }: { params: { publicId: string; ver
   if (!Number.isInteger(versionNo) || versionNo < 1) {
     return publicShell(<h1>{t('invalidVersion')}</h1>, 'pub-page');
   }
+  let result;
   try {
-    const { research } = await getServerPublicResearchVersion(params.publicId, versionNo);
-    return publicShell(<div className="pub-page-tabbed"><PublicReadingSurface research={research} /></div>);
+    result = await getServerPublicResearchVersion(params.publicId, versionNo);
   } catch (err) {
     if (err instanceof PublicServerApiError && err.status === 404) notFound();
     const limited = err instanceof PublicServerApiError && err.status === 429;
     return publicShell(<><h1>{t(limited ? 'rateLimited.title' : 'unavailable.title')}</h1><p>{t(limited ? 'rateLimited.body' : 'unavailable.body')}</p></>, 'pub-page');
   }
+  // Keep corrected legacy URLs temporary: a later real v10 must remain usable.
+  if (result.research.version.versionNo !== versionNo) redirect(result.research.url);
+  return publicShell(<div className="pub-page-tabbed"><PublicReadingSurface research={result.research} /></div>);
 }

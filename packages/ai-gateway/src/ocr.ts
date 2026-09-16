@@ -124,6 +124,7 @@ export interface OcrResult {
 export type OcrProviderErrorCode =
   | 'provider_http'
   | 'provider_status'
+  | 'provider_quota'
   | 'provider_timeout'
   | 'provider_response_invalid'
   | 'provider_error';

@@ -188,7 +188,7 @@ export async function listPendingApprovals(
   input: { userId: string },
 ): Promise<ApprovalView[]> {
   const tasks = await deps.prisma.agentTask.findMany({
-    where: { session: { userId: input.userId }, approvals: { some: { status: 'pending' } } },
+    where: { deletedAt: null, session: { userId: input.userId, deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] }, approvals: { some: { status: 'pending' } } },
     include: { approvals: { where: { status: 'pending' } } },
   });
   const views: ApprovalView[] = [];

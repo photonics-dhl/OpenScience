@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { PrismaClient as CorePrismaClient } from '@prisma/client';
+import { withLiveSearchSources, type SearchSourceIdentity } from './lifecycle';
 
 import { validateSourceLocator, type SourceLocator } from '@openscience/domain';
 
@@ -49,6 +51,9 @@ interface HydrationRow {
   id: string;
   tenant_id: string;
   artifact_id: string;
+  research_object_id: string;
+  source_version_id: string | null;
+  owner_task_id: string | null;
   content_hash: string;
   text: string;
   locators: unknown;
@@ -332,14 +337,28 @@ function compareExecutionFence(
   return incoming.attempt - current.attempt;
 }
 
-function isNewerGeneration(
-  incoming: { sourceVersionNo: number; sourceCreatedAt: Date; id: string },
-  current: { sourceVersionNo: number; sourceCreatedAt: Date; id: string },
-): boolean {
+interface IndexGenerationOrder {
+  sourceVersionNo: number;
+  sourceCreatedAt: Date;
+  id: string;
+  fenceOwnerTaskId: string | null;
+  fenceOwnerCreatedAt: Date | null;
+  fenceOwnerAttempt: number | null;
+}
+
+function isNewerGeneration(incoming: IndexGenerationOrder, current: IndexGenerationOrder): boolean {
   const versionDifference = incoming.sourceVersionNo - current.sourceVersionNo;
   if (versionDifference !== 0) return versionDifference > 0;
   const timeDifference = incoming.sourceCreatedAt.getTime() - current.sourceCreatedAt.getTime();
-  return timeDifference > 0 || (timeDifference === 0 && incoming.id > current.id);
+  if (timeDifference !== 0) return timeDifference > 0;
+  // Storage generation IDs are independent UUIDs. Order retries by their existing
+  // owner execution fence, never by a newly generated storage ID.
+  if (incoming.fenceOwnerTaskId && incoming.fenceOwnerCreatedAt && incoming.fenceOwnerAttempt !== null
+    && current.fenceOwnerTaskId && current.fenceOwnerCreatedAt && current.fenceOwnerAttempt !== null) {
+    return compareExecutionFence({ taskId: incoming.fenceOwnerTaskId, createdAt: incoming.fenceOwnerCreatedAt, attempt: incoming.fenceOwnerAttempt },
+      { taskId: current.fenceOwnerTaskId, createdAt: current.fenceOwnerCreatedAt, attempt: current.fenceOwnerAttempt }) > 0;
+  }
+  return incoming.id > current.id;
 }
 
 function decodeStoredVector(row: DenseRow): Float32Array | undefined {
@@ -441,7 +460,8 @@ function buildLexicalMatchCountQuery(input: {
 }
 
 export class SearchStorage {
-  constructor(private readonly client: PrismaClient) {}
+  private coreClient?: CorePrismaClient;
+  constructor(private readonly client: PrismaClient, core?: CorePrismaClient) { this.coreClient = core; }
 
   async upsertChunks(input: UpsertSearchChunksInput): Promise<void> {
     assertUuid(input.tenantId, 'tenantId');
@@ -490,7 +510,6 @@ export class SearchStorage {
           sourceGenerationSha256: input.sourceGenerationSha256,
         } },
         create: {
-          id: input.taskId,
           workspaceId: input.tenantId,
           researchObjectId: input.researchObjectId,
           artifactId: input.artifactId,
@@ -517,7 +536,7 @@ export class SearchStorage {
         || task.modelVersionId !== input.modelIdentity.modelVersionId
         || task.sourceGenerationSha256 !== input.sourceGenerationSha256) throw new Error('index task identity mismatch');
       if (task.status === 'succeeded') return { action: 'skip', taskId: task.id, status: 'succeeded' };
-      const initialLease = task.id === input.taskId && task.attemptCount === 1
+      const initialLease = task.attemptCount === 1
         && task.leaseToken === input.leaseToken && task.fenceOwnerTaskId === input.taskId
         && task.fenceOwnerCreatedAt?.getTime() === input.sourceCreatedAt.getTime()
         && task.fenceOwnerAttempt === input.executionAttempt;
@@ -862,7 +881,8 @@ export class SearchStorage {
     if (input.ids.length === 0) return { status: 'ok', candidates: [], needsReviewCount: 0 };
     const idArray = Prisma.sql`ARRAY[${Prisma.join(input.ids)}]::text[]`;
     try {
-      return await this.client.$transaction(async (transaction) => {
+      const identities: SearchSourceIdentity[] = [];
+      const result = await this.client.$transaction(async (transaction) => {
         await transaction.$executeRaw(Prisma.sql`
           SELECT set_config('statement_timeout', ${String(STATEMENT_TIMEOUT_MILLISECONDS)}, true)
         `);
@@ -879,13 +899,15 @@ export class SearchStorage {
           return { status: 'unavailable', code: 'lexical_capacity_exceeded' } as const;
         }
         const rows = await transaction.$queryRaw<HydrationRow[]>(Prisma.sql`
-          SELECT "id", "workspace_id"::text AS tenant_id, "artifact_id"::text AS artifact_id,
-                 "content_hash", "text", "locators", "claim_ids"
-          FROM "search_chunks"
-          WHERE "workspace_id" = ${input.tenantId}::uuid
-            AND "active" = true
-            AND "id"::text = ANY(${idArray})
-          ORDER BY "id" ASC
+          SELECT chunk."id", chunk."workspace_id"::text AS tenant_id, chunk."artifact_id"::text AS artifact_id,
+                 chunk."research_object_id"::text AS research_object_id, chunk."source_version_id"::text AS source_version_id,
+                 task."fence_owner_task_id"::text AS owner_task_id,
+                 chunk."content_hash", chunk."text", chunk."locators", chunk."claim_ids"
+          FROM "search_chunks" chunk LEFT JOIN "search_index_tasks" task ON task.id = chunk.index_task_id
+          WHERE chunk."workspace_id" = ${input.tenantId}::uuid
+            AND chunk."active" = true
+            AND chunk."id"::text = ANY(${idArray})
+          ORDER BY chunk."id" ASC
         `);
         const candidates: LexicalCandidatePayload[] = [];
         let needsReviewCount = input.ids.length - rows.length;
@@ -894,6 +916,7 @@ export class SearchStorage {
           const claimIds = stringArray(row.claim_ids, 1_024);
           if (row.tenant_id !== input.tenantId || !HASH_PATTERN.test(row.id)
             || !HASH_PATTERN.test(row.content_hash) || !UUID_PATTERN.test(row.artifact_id)
+            || !UUID_PATTERN.test(row.research_object_id)
             || locators === undefined || claimIds === undefined) {
             needsReviewCount += 1;
             continue;
@@ -901,10 +924,13 @@ export class SearchStorage {
           candidates.push({
             id: row.id,
             tenantId: row.tenant_id,
+            researchObjectId: row.research_object_id,
             text: row.text,
             locators,
             claimIds,
           });
+          identities.push({ id: row.id, workspaceId: row.tenant_id, researchObjectId: row.research_object_id,
+            artifactId: row.artifact_id, sourceVersionId: row.source_version_id, ownerTaskId: row.owner_task_id });
         }
         return { status: 'ok', candidates, needsReviewCount } as const;
       }, {
@@ -912,6 +938,12 @@ export class SearchStorage {
         maxWait: 2_000,
         timeout: 5_000,
       });
+      if (result.status !== 'ok') return result;
+      // Release the search transaction before taking the core lock: writers take core then search.
+      // If core is unavailable, no indexed text is returned.
+      this.coreClient ??= new CorePrismaClient();
+      const live = await withLiveSearchSources(this.coreClient, identities);
+      return { ...result, candidates: result.candidates.filter(row => live.has(row.id)) };
     } catch {
       return { status: 'unavailable', code: 'search_storage_unavailable' };
     }

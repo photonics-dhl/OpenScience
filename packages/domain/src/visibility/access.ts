@@ -3,6 +3,25 @@ import { VisibilityError } from './errors';
 
 export type RoAccess = 'granted' | 'denied';
 
+/** Live drafts/history require membership or an explicit private sharing grant. */
+export async function canAccessPrivateRo(
+  deps: WorkspaceDeps,
+  input: { researchObjectId: string; userId?: string },
+): Promise<RoAccess> {
+  if (!input.userId) return 'denied';
+  const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
+  if (!ro || ro.deletedAt) return 'denied';
+  const member = await deps.prisma.membership.findUnique({ where: { workspaceId_userId: { workspaceId: ro.workspaceId, userId: input.userId } } });
+  if (member) return 'granted';
+  if (ro.visibility !== 'invite_only') return 'denied';
+  const grant = await deps.prisma.visibilityGrant.findUnique({ where: { researchObjectId_granteeId: { researchObjectId: ro.id, granteeId: input.userId } } });
+  return grant ? 'granted' : 'denied';
+}
+
+export async function requirePrivateRoAccess(deps: WorkspaceDeps, input: { researchObjectId: string; userId?: string }): Promise<void> {
+  if (await canAccessPrivateRo(deps, input) === 'denied') throw new VisibilityError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+}
+
 /**
  * RO 访问判定（§4.2 三态矩阵 + §17 越权防护）：
  * | visibility  | 成员 | 非成员 | 匿名 |

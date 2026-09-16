@@ -17,6 +17,7 @@
     "audit:deps": "syncpack lint",
     "audit:docs-sync": "node --test scripts/docs/docs-sync-skill.test.mjs && node scripts/docs/check-docs-sync.mjs",
     "audit:hermes-capabilities": "node --test scripts/research-intelligence/verify-capability-registry.test.mjs && node scripts/research-intelligence/verify-capability-registry.mjs",
+    "management:context": "node scripts/read-current-management-context.mjs",
     "docs:lint": "markdownlint-cli2 \"docs/**/*.md\" \"AGENTS.md\" \"project_index.md\"",
     "stack:up": "docker compose -f infra/compose/docker-compose.dev.yml up -d || docker-compose -f infra/compose/docker-compose.dev.yml up -d",
     "stack:down": "docker compose -f infra/compose/docker-compose.dev.yml down || docker-compose -f infra/compose/docker-compose.dev.yml down",

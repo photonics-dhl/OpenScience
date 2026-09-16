@@ -37,6 +37,8 @@ export interface LexicalScoringDocument {
 export interface LexicalCandidatePayload {
   id: string;
   tenantId: string;
+  /** Server-side entity binding; legacy custom stores may omit it. */
+  researchObjectId?: string;
   text: string;
   locators: SourceLocator[];
   claimIds: string[];
