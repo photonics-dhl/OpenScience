@@ -1,4 +1,4 @@
-> CURRENT 导航：实际交付位于 `.worktrees/onchip-video-release` / `codex/onchip-video-release`；版本、当前任务和后续动作只读 [Hermes CURRENT handoff](.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md)，能力查询读该树的 [当前能力索引](.worktrees/onchip-video-release/docs/runbooks/hermes-capability-registry.md)。根目录 dirty main 不作生产或能力事实基线；不在此重复release、旧计划或next action。
+> CURRENT 导航：实际交付位于 `.worktrees/onchip-video-release` / `release/onchip-production-line`（canonical，2026-09-16 用户决定；旧的 `codex/onchip-video-release` 为历史线，缺 journals/学术身份，不得发版）；版本、当前任务和后续动作只读 [Hermes CURRENT handoff](.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md)，能力查询读该树的 [当前能力索引](.worktrees/onchip-video-release/docs/runbooks/hermes-capability-registry.md)。根 `main` 保持干净、只作导航，不作生产或能力事实基线；不在此重复release、旧计划或next action。
 
 # OpenScience (XGS) 项目文件索引
 

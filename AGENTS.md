@@ -1,4 +1,4 @@
-> 开发导航：根 `main` 保持干净、只作导航入口（不是开发基线）；当前交付位于 [.worktrees/onchip-video-release](.worktrees/onchip-video-release)，按该树 [AGENTS](.worktrees/onchip-video-release/AGENTS.md) 与 [CURRENT handoff](.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md) 续作。本页不维护另一份版本或待办。
+> 开发导航：根 `main` 保持干净、只作导航入口（不是开发基线）；当前交付位于 [.worktrees/onchip-video-release](.worktrees/onchip-video-release) 的 **`release/onchip-production-line`** 分支（canonical，2026-09-16 用户决定；旧 `codex/onchip-video-release` 为历史线，缺 journals/学术身份，不得发版），按该树 [AGENTS](.worktrees/onchip-video-release/AGENTS.md) 与 [CURRENT handoff](.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md) 续作。本页不维护另一份版本或待办。
 
 # OpenScience (XGS) 项目
 
