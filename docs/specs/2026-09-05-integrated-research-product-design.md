@@ -279,9 +279,9 @@ Chat 6 Pro 本轮实际回复已取回（OpenScience落地方案，6aa3a4a4）�
 
 2026-09-12第2项已实现：分段阅读按每条观察保存原始来源、限定来源、算例及reported/synthesis/uncertain身份，由程序分配观察编号。全文整合只引用已存在观察，程序回填支持与限定原段，同时保留未被候选选中的假设、定义、限制和不确定材料；不通过静默删ID掩盖错引。科学自省只按理论/实验/仿真实际适用项工作，不再每阶段重复注入整份流程指令；沿用已有独立网页复核与发布权限，不新增整篇人工公式审批要求。真实5段map复用后reduce返回，仍是待科学复核的内部结果；本次保存/复用由执行者辅助，不冒称生产自动断点缓存。
 
-第3项接入准备（尚未实现）：现有workspace-guide只支持短回复、六字段改写、媒体和导航；summary最多1200字符，不能把长篇稿件塞入该字段。写作任务须返回独立私有、可修改、关联当前研究的文档，保留原有精炼SDF和发布快照。用户在同一Hermes对话提出笔记/综述/论文初稿，按文体加载scientific-writing与citation-management适配；复用原始来源、观察及限定，不能将内部候选直接升级为事实。原文引文与本次对原文的定位分别记录，不虚构DOI/页号或把现成论文写成用户原创结果；识别故障单独报告，不混入论文的科学限制。接通内容、保存/继续编辑与来源后再扩展精美排版和导出，最后回到已经明确的图片/视频风格与叙事。
+第3项接入方案（2026-09-12写作与独立笔记界面已实现，部署状态见CURRENT handoff；下述为接入前判断）：现有workspace-guide只支持短回复、六字段改写、媒体和导航；summary最多1200字符，不能把长篇稿件塞入该字段。写作任务须返回独立私有、可修改、关联当前研究的文档，保留原有精炼SDF和发布快照。用户在同一Hermes对话提出笔记/综述/论文初稿，按文体加载scientific-writing与citation-management适配；复用原始来源、观察及限定，不能将内部候选直接升级为事实。原文引文与本次对原文的定位分别记录，不虚构DOI/页号或把现成论文写成用户原创结果；识别故障单独报告，不混入论文的科学限制。接通内容、保存/继续编辑与来源后再扩展精美排版和导出，最后回到已经明确的图片/视频风格与叙事。
 
-第3项源码接入定位：沿用workspace.guide/AgentTask持久化，独立writingDraft与baseDraftTaskId串联私有稿；源码入口为domain的workspace-guide-contract.ts、Worker workspace-guide.ts/index.ts与Web HermesAssistantDrawer.tsx/lib/api.ts。当前研究的来源任务自动定位并验证同用户/同RO/同工作区，不增加用户手填ID或常规选择。引用通过已保存sourceMapRef和真实P段由程序生成quote/SourceLocator；阅读候选、科学修订与未解项分开保存，不把原reported观察升级为已核事实。用户可编辑自己草稿，客户端正文只是用户内容，不当成已验证来源。初步保存在按用户隔离的AgentTask，支持同一对话编辑/预览/Markdown导出；现有Artifact是工作区成员可见，不能默认为个人私密存储。此为Sol High只读接入审查结果，尚无写作接口或新UI部署。
+第3项源码接入定位：沿用workspace.guide/AgentTask持久化，独立writingDraft与baseDraftTaskId串联私有稿；源码入口为domain的workspace-guide-contract.ts、Worker workspace-guide.ts/index.ts与Web HermesAssistantDrawer.tsx/lib/api.ts。当前研究的来源任务自动定位并验证同用户/同RO/同工作区，不增加用户手填ID或常规选择。引用通过已保存sourceMapRef和真实P段由程序生成quote/SourceLocator；阅读候选、科学修订与未解项分开保存，不把原reported观察升级为已核事实。用户可编辑自己草稿，客户端正文只是用户内容，不当成已验证来源。初步保存在按用户隔离的AgentTask，支持同一对话编辑/预览/Markdown导出；现有Artifact是工作区成员可见，不能默认为个人私密存储。该接入设计已经实现，独立Sol High静态复核后的具体发布及实际使用状态见CURRENT handoff；不据方案本身宣称真实写作质量已通过。
 
 | 能力 | Hermes负责 | 用户主要看到 |
 |---|---|---|
@@ -295,7 +295,7 @@ AI内部详细制作材料与用户正文分别保存：视觉brief保留来源�
 
 ### 当前缺口与实施顺序
 
-静态事实：`new/page.tsx` 仍按 blank/import 分流、强制标题、只在 import 显示附件面板，Drawer传空研究/任务上下文；现有对话结果只接受 technical/ink/watercolor 风格；视频分镜受当前对象/动作渲染范围约束。已有解析、BGE、Gateway、持久任务、网页生图和媒体回填应复用，技能文件本身不等于运行能力。
+接入前静态事实（2026-09-12单一对话/附件入口已部署，以下不再代表当前创建页）：`new/page.tsx` 当时按 blank/import 分流、强制标题、只在 import 显示附件面板，Drawer传空研究/任务上下文；现有对话结果只接受 technical/ink/watercolor 风格；视频分镜受当前对象/动作渲染范围约束。已有解析、BGE、Gateway、持久任务、网页生图和媒体回填应复用，技能文件本身不等于运行能力。
 
 1. 先交付统一创建入口、移除大小切换、持续对话和追加/再次分析，接通真实服务器工具；先让用户少填写、能持续推进。
 2. 接着补全文综合、来源关联、冲突合并和科学自审，消除首篇样例仍依赖人工整理的环节；保持已公开正确成果。
