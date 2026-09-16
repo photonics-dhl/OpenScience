@@ -1,13 +1,13 @@
 ## Subagent dispatch requires multi-agent support
 
-Add to your Codex config (`~/.codex/config.toml`):
+Use agent tools only when available in the active tool schema and delegation is authorized. If setup is explicitly requested, verify the current local Codex configuration and documentation; this historical example is not a command to edit configuration:
 
 ```toml
 [features]
 multi_agent = true
 ```
 
-This enables `spawn_agent`, `wait_agent`, and `close_agent` for skills like `dispatching-parallel-agents` and `subagent-driven-development`. When using subagent-driven-development, close reviewer subagents when their review returns. Keep each implementer subagent open until its task's review passes — the fix loop resumes the implementer — then close it. If your harness cannot send another message to a spawned agent, dispatch each fix round as a fresh implementer carrying the brief, the report file, and the findings.
+Tool names and lifecycle controls vary by runtime. Reuse an implementer with relevant context for fixes; use the active follow-up or messaging capability when present. Release agents only through available lifecycle controls when their work is finished. If delegation or follow-up is unavailable, continue locally or pass a bounded brief and findings to an available worker; do not invent tools or enable features implicitly.
 
 ## Environment Detection
 
@@ -20,20 +20,22 @@ GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
 BRANCH=$(git branch --show-current)
 ```
 
-- `GIT_DIR != GIT_COMMON` → already in a linked worktree (skip creation)
-- `BRANCH` empty → detached HEAD (cannot branch/push/PR from sandbox)
+- `GIT_DIR != GIT_COMMON` → inspect `git worktree list --porcelain` and
+  `git rev-parse --show-superproject-working-tree` before concluding linked worktree.
+- `BRANCH` empty → detached HEAD; this alone does not establish a sandbox restriction.
 
-See `using-git-worktrees` Step 0 and `finishing-a-development-branch`
-Step 1 for how each skill uses these signals.
+Use the current `using-git-worktrees` and `finishing-a-development-branch`
+entrypoints for isolation and ownership checks. Adapt shell syntax to the active runtime.
 
 ## Codex App Finishing
 
-When the sandbox blocks branch/push operations (detached HEAD in an
-externally managed worktree), the agent commits all work and informs
-the user to use the App's native controls:
+When a branch/push operation is actually blocked, preserve the work and
+report the observed restriction. Commit only when already authorized.
+Check available App controls before suggesting a UI path; historical labels include:
 
 - **"Create branch"** — names the branch, then commit/push/PR via App UI
 - **"Hand off to local"** — transfers work to the user's local checkout
 
-The agent can still run tests, stage files, and output suggested branch
-names, commit messages, and PR descriptions for the user to copy.
+Continue authorized verification and prepare a reviewable diff, branch name
+or PR description. Do not stage unrelated work or infer commit/push permission
+from a detached HEAD or from the existence of App controls.

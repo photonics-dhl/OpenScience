@@ -12,6 +12,30 @@ description: "Use before modifying code that touches module boundaries, AI/Provi
 - **使用**：新增/移动模块；新增对外部服务（AI 模型、存储、队列）的调用；改变 apps/ 与 packages/ 之间依赖方向；写任何调用模型 Provider 的代码。
 - **不使用**：纯文档、文案、样式微调等不触碰模块边界的修改。
 
+## 先查已有能力，再改边界
+
+从 project_index.md 指向的实际交付树运行 `node scripts/read-current-management-context.mjs`，同读 Git、Taskmaster 当前目标及 CURRENT 指针；需要完整验收条件时加 `--task <id>`。不要在根目录 dirty main 创建第二份任务状态。
+
+复用本项目 `docs/runbooks/hermes-capability-registry.md` 的当前能力索引；服务器资源查 `docs/runbooks/server-capabilities.md`。它们是定位入口，代码和指定 release 的实际任务记录才是证据。不要全文读取历史表或再建一个能力库。
+
+针对当前产品目标，用已有任务说明记录四点即可：
+
+1. **意图**：用户要得到什么结果，需求基线哪一节约束它；近期用户纠正优先。
+2. **已有实现**：定向读取入口符号、实际调用方和输入/输出；模型、skill、工具分开。安装位置不证明调用，调用不证明结果正确。
+3. **实际效果**：复用同版本或未变实现的任务 ID、产物/审阅记录；列出失败与未观察范围。不能从容器健康、Schema通过或台账状态推导质量，也不为填表重跑模型。
+4. **本次差异**：选择直接复用、补接断点或替换，并说明现有能力不能满足的具体输入/权限/行为。先核上游结果是否已经完成该工作，再加模型阶段、提示词、协议或依赖。
+
+共享科学规则引用现有 runtime skill；不同下游仅补自身输出含义和边界。阅读了本机 skill 不代表 Hermes 消费了它，需定位服务端加载/注入点。发现重复失败先修本条调用链；管理能力复用已授权的 `infra/development-platform/`，不另建重复管理服务或门禁。记录随功能修改原地更新，不复制到多份进度日志。
+
+按问题选已有工具，不每次全跑：
+- “已有哪个组件/归谁/依赖什么”：Backstage 的标准实体查询，服务器 `docker exec openscience-development-catalog-catalog-1 node /app/query.mjs codex entity component:default/agent-worker`；换目标实体即可。目录是维护记录，继续核对源码。
+- “具体符号/真实调用方”：项目 `.codex/config.toml` 的 `openscience_code`，或 Serena 容器 `/opt/serena/query.py overview|find|references`。先看 CURRENT 中其索引的 source commit；生产快照不能代表未提交候选。少量新差异仍定向 `rg`。
+- “跨模块影响”：`code-intelligence/module-graph.sh --revision <完整源提交> --scope <apps或packages目录/src> --output <新报告路径>`，复用已有 dependency-cruiser；不调用 audit/test 脚本。
+- “运行/用量/失败”：Portainer/Netdata 看资源；Langfuse 看已有 Gateway 调用元数据；科学效果仍查原任务/资产审阅，不能拿调用成功率替代。
+- “已有或可用技能包”：`skills/run.sh list` / `find "具体需求"`；实际 Hermes 消费仍查导入/注入点与产物 provenance。搜索结果不能自动安装或自动成为 Hermes 能力。
+
+服务器命令经项目 SSH 入口；读哪个工具只为当前具体问题，工具不可用则如实回到对应源码/记录，不搭第二套索引。
+
 ## 检查清单
 
 ### Monorepo 边界（Spec §14.1）

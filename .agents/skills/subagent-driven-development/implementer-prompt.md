@@ -1,12 +1,12 @@
 # Implementer Subagent Prompt Template
 
-Use this template when dispatching an implementer subagent.
+Use this template when dispatching an authorized implementer subagent. Adapt fields to the available tool schema.
 
 ```
-Subagent (general-purpose):
+Subagent ([available worker or reviewer role]):
   description: "Implement Task N: [task name]"
-  model: [MODEL — REQUIRED: choose per SKILL.md Model Selection; an omitted
-         model silently inherits the session's most expensive one]
+  model: [Optional override per configured policy; preserve actual client settings;
+         use available High review for material high-risk decisions]
   prompt: |
     You are implementing Task N: [task name]
 
@@ -35,17 +35,21 @@ Subagent (general-purpose):
     1. Implement exactly what the task specifies
     2. Write tests (following TDD if task says to)
     3. Verify implementation works
-    4. Commit your work
+    4. Commit only if the assignment authorizes it; otherwise preserve the diff
     5. Self-review (see below)
     6. Report back
 
     Work from: [directory]
+    Own only: [files/responsibility]. You are not alone in the codebase;
+    preserve others' edits and accommodate concurrent changes.
 
-    **While you work:** If you encounter something unexpected or unclear, **ask questions**.
-    It's always OK to pause and clarify. Don't guess or make assumptions.
+    **While you work:** Resolve routine choices from the brief and code.
+    Escalate material uncertainty that remains after targeted inspection;
+    continue independent authorized work while waiting.
 
-    While iterating, run the focused test for what you're changing; run the
-    full suite once before committing, not after every edit.
+    Run meaningful focused tests for changes and required milestone gates.
+    Reuse valid evidence for unchanged code and environment; run a full
+    suite only when project gates or unresolved risk require it.
 
     ## Code Organization
 
@@ -109,8 +113,8 @@ Subagent (general-purpose):
     If the task review finds issues, you will be resumed with the findings.
     Fix them, re-run the tests that cover the amended code, and append a fix
     report to your report file: what you changed, the covering tests you
-    ran, the command, and the output. Reviewers will not re-run tests for
-    you — your report is the test evidence. Then reply with the same short
+    ran, the command, and the output. Reviewers reuse current evidence but
+    may investigate gaps or unresolved risk. Then reply with the same short
     status contract as your first report.
 
     ## Report Format

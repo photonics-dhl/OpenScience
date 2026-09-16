@@ -1,82 +1,71 @@
+> 开发导航：根 `main` 保持干净、只作导航入口（不是开发基线）；当前交付位于 [.worktrees/onchip-video-release](.worktrees/onchip-video-release)，按该树 [AGENTS](.worktrees/onchip-video-release/AGENTS.md) 与 [CURRENT handoff](.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md) 续作。本页不维护另一份版本或待办。
+
 # OpenScience (XGS) 项目
 
-## Overview
-OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印本 + 社区评价）。工作目录 `E:/Miscellaneous/XGS`。
-平台基线：**MVP（Phase 0/1A/1B/1C/1D/1E）已完成（2026-08-06）**。当前产品任务、候选版本与生产 release 不写死在本段；必须从 Git 版本元数据和 `project_index.md` 标记的 CURRENT handoff 取得，禁止恢复旧 MVP next action。
+OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版与协作。MVP 已完成；旧阶段清单不是当前任务。
 
-## Monorepo Layout & Commands（P1A-1 起）
-- 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
-- `apps/`：`api` 已含 50+ Fastify 端点——平台底座（`/auth` P1A-3、`/workspaces` P1A-4、RBAC 守卫 P1A-5、`/admin/audit-logs` P1A-6、配额/账务 P1A-7、安全基线 `src/security/` P1A-8）+ RO/SDF/版本（`/research-objects`、`/sdf`、`/artifacts`、`/commits`、`/versions`、comparison、导出 zip，P1B）+ 协作（branches/issues/licenses/forks/pull-requests/authors/reviews/notifications，P1C）+ Hermes 与发布（agent-approvals、审核、申诉、publications、公开页，P1D）+ `/sandbox-jobs`（P1E-5）；`web` 已实现三栏 SDF 编辑器（P1B-8）+ 移动端抽屉/WCAG AA（P1B-9）+ 协作单页（P1C-10）+ 公开 RO 页（P1D-9）+ 沙箱可视化组件（P1E-6/7）+ **next-intl 已接通**（无 locale 路由：`i18n/request.ts` cookie NEXT_LOCALE→Accept-Language→zh，`NextIntlClientProvider` 在 layout，语言切换 `components/LocaleSwitcher.tsx`；公开页文案走 `messages/* public` 命名空间；`public/` 含 favicon/logo/og-image SVG 占位 + `hermes/` Live2D 待迁移说明）；`agent-worker` 队列消费者 + sdf.extract + review.analyze（P1D）；`science-worker` 沙箱执行完整实现（dockerode 编排 + AST 策略检查 + 16 项安全基线测试 + **pending 轮询执行链** `src/index.ts` pollOnce/main + `/output` 产物收集落库 `artifact-collector.ts`，P1E）；`sandbox-controller` 仍为空壳（功能落在 science-worker）。
-- `packages/`：13 个包。已实现：`database`/`storage`（P1A-2，含 rate-limit P1A-8、迁移 CLI）、`auth`（P1A-3 + P1A-9 QQ SMTP）、`domain`（workspace P1A-4、权限矩阵 P1A-5、usage P1A-7、research-object P1B-2、协作/审批/发布域 P1C/P1D、sandbox P1E、Research Intelligence Claim/Evidence 合同）、`config`/`observability`（P1A-6/8）、`sdf-schema`（P1B-1，additionalProperties 宽容债务 0.2.0 收紧）、`diff`（P1B-5 九类确定性 diff）、`versioning`（P1B-4 manifest/patch）、`identity`（P1B-6 public-id/uuid7）、`ai-gateway`（P1D-1 统一路由 + 调用日志）、`search`（独立 Prisma client/config/migration boundary，使用 `SEARCH_DATABASE_URL`）；仍占位：`ui`。
-- `infra/`：`compose` 已含 dev/monitor/prod 三套栈；生产栈按 data_net/app_net 分段，2026-08-09 增加仅 data_net 可达的 SeaweedFS 4.41 S3 对象存储（ADR-007），2026-08-17 增加无网络/无 Secret/非 root/只读且 512 MiB 封顶的 `document-parser` sidecar（ADR-006；仅经 `parser-jobs` 卷与 agent-worker 交换 PDF/DOCX/OCR 任务）；`migrations` 已含迁移 1–36（Prisma 格式，均含 rollback.sql；28 = Research Intelligence 核心元数据，29 = AgentTask worker 执行代际，30 = Research Identity signals / AgentTask InterestContext，31 = 账号 Evidence 阅读偏好，32 = 外部来源、权利判定与临时文档生命周期，33 = ScanSci provider 状态与通知幂等键，34 = ScanSci `source_retrieval` provenance，35 = 学术身份凭证、机构邮箱挑战与多作用域角色，36 = ROR 全球机构目录与凭证关联）；`infra/search/` 另有独立 Prisma schema 与迁移账本，使用 `SEARCH_DATABASE_URL`；沙箱表原始 SQL 留存于 `packages/database/migrations/`（13/14，已标 DEPRECATED，勿再手工执行）；`nginx` 已含 `portainer.conf` + `openscience.conf`（均部署云上，/admin basic_auth）；`scripts/deploy.sh` + `backup.sh`（P1A-9）；`sandbox/` 已含沙箱基础镜像 Dockerfile + 构建/测试脚本 + README（P1E-3，Python 3.11-slim + 科学计算库 + 非 root）。
-- 常用命令：`npx pnpm@9.15.0 install`、`npx pnpm@9.15.0 build`、`npx pnpm@9.15.0 typecheck`、`npx pnpm@9.15.0 lint`（ESLint 9 全仓检查 + `scripts/verify-workspace.mjs` 结构校验）。
-- API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）；配额 seed CLI：`node scripts/seed-quota.mjs --dry-run|--confirm`（P1A-7 占位值幂等 upsert，数值集中 `packages/domain/src/usage/seed-data.ts`）。
-- 卫生审计：`npx pnpm@9.15.0 audit:knip`（未用文件/导出/依赖）、`audit:dep`（dependency-cruiser：循环依赖/跨包深引用/orphan 告警）、`audit:dup`（jscpd 重复代码）、`audit:deps`（syncpack 版本一致性）、`docs:lint`（markdownlint 文档门禁）、`audit:docs-sync`（`scripts/docs/check-docs-sync.mjs`：索引路径存在性 + 文档反向登记 + AGENTS 迁移数一致性，已挂入 lint 与 CI）。
-- 开发栈：`npx pnpm@9.15.0 stack:up|stack:down|stack:ps|stack:logs`（postgres/redis/minio，仅 127.0.0.1）；测试：`npx pnpm@9.15.0 test`（单测）、`npx pnpm@9.15.0 test:integration`（起栈+集成测试）。
-- Optical Lab 隔离浏览器门禁：`npx pnpm@9.15.0 --filter @openscience/web shots:optical-lab`（精确路由 `/_visual/optical-lab`；截图与 metrics 输出到已忽略的 `apps/web/test/visual/out/optical-lab/`；不替换生产 Landing）。
-- 数据库迁移：`node packages/database/dist/migrate-cli.js deploy|status|reset-dev`（reset-dev 生产禁用；迁移归 `infra/migrations/`，每个迁移附 rollback.sql）。
-- 构建产物忽略：`dist/`、`.next/`、`*.tsbuildinfo`。
+## 开发入口与事实归属
 
-## 云服务器（2026-07-31 上线）
-- 阿里云 ECS（Alibaba Cloud Linux 4），代码在 `/opt/openscience`；Node 22 + docker compose 插件 + nginx + acme.sh（cronie 续期）。
-- 远程操作只走 `infra/scripts/ssh-run.sh` / `checkup.sh`（项目专用密钥 `~/.ssh/id_ed25519_xgs`，服务器仅 publickey）。Windows 必须由 PowerShell 显式调用 `C:\Program Files\Git\bin\bash.exe`；禁止裸 `bash`、系统 `bash.exe` 或 WSL。日志出现 `wsl: Failed to translate` 说明选错 shell，不得误报 SSH key 失效。
-- DNS/公网入口：`OpenScience.428312321.xyz` 已切到 ECS 常驻 Cloudflare Tunnel（proxied CNAME，回源 ECS Nginx）；`portainer.428312321.xyz` 仍为 DNS-only → ECS 公网 IP。面板 `https://portainer.428312321.xyz`。
-- 安全组放行 22/80/443；dev 栈端口仅 127.0.0.1；云上写操作前需用户确认。
-- 监控面板（2026-08-01）：统一入口导航 `https://portainer.428312321.xyz/nav/` → `/traffic/`（vnStat 流量账单）与 `/monitor/`（Netdata 实时）；basic_auth 账号 admin，凭据云上 `/etc/nginx/.htpasswd-monitor`（不入库）；runbook 见 `docs/runbooks/monitoring.md`。
-- **入站与出网分离**：公网访客经 Cloudflare Edge → ECS 常驻 `cloudflared` → loopback Nginx，cloudflared 不依赖个人电脑；dockerd 与 `with-proxy <cmd>` 指向服务器 Squid `127.0.0.1:7891`。ScanSci 仅可由 `internal: true` 的固定 retrieval 子网 `172.24.0.0/24` 经其固定宿主 gateway `172.24.0.1:7891` 使用同一 Squid，且只允许 CONNECT 443 与非私网目标；不得开放 wildcard listener。ScanSci 仅让经验证的最小域名清单使用 parent `127.0.0.1:7890`（首批仅 `.arxiv.org`），其他目标由 Squid 同一次解析后 DIRECT，避免 parent 二次解析；宿主机出网仍优先 parent、失败时回落阿里云直连。SSH 隧道由 Windows 计划任务 `OpenScience-ProxyTunnel` 常驻；入站运行手册见 `docs/runbooks/cloudflare-tunnel.md`，出网探测用云上 `/usr/local/bin/check-egress-path`。
-- **服务器已卸载 Tailscale 且勿再装**（2026-08-01 实测）：tailscaled 劫持 `100.64.0.0/10` 路由，撞阿里云 VPC 内部 DNS（100.100.2.x）致全机 DNS 瘫痪。
-- 集成测试在云上执行：`cd /opt/openscience && npx pnpm@9.15.0 test:integration`（每次跑前必须**全量** `npx pnpm@9.15.0 build`——跨包 import 解析到目标包 dist，只 build database 会因 dist 过期致 500；2026-08-01 实证）。**集成测试限流桶隔离**：Redis server 端 key 空间全局共享，须 trustProxy:true + 用例唯一 X-Forwarded-For 独立桶（P1A-8 实证）。
-- API 反代 `infra/nginx/openscience.conf`（已部署云上 2026-08-03）：OpenScience.428312321.xyz → 127.0.0.1:3001，/admin 前缀 nginx basic_auth（凭据 `/etc/nginx/.htpasswd-admin` 云上生成不入库）；证书 DNS-01 签发（HTTP-01 被阿里云 403 拦，用 Cloudflare API）；部署见 docs/runbooks/deployment.md。
-- 生产栈 `docker-compose.prod.yml`（P1A-9 + ADR-007）：postgres/redis/object-storage 无端口映射（仅 data_net），SeaweedFS S3 数据落 `seaweed-data` 命名卷，api 暴露 127.0.0.1:3001；env 走 `/opt/openscience/.env.prod`（云上生成不入库）。**invite/migrate/seed 需在 ECS 容器内通过 canonical deploy/runbook 执行**，继承受控 env，禁止把 `DATABASE_URL` 或 `SEARCH_DATABASE_URL` 展开到 CLI 参数或日志；core 与 search 分别迁移和核验。
-- CI：`.github/workflows/ci.yml`（GitHub Actions，build/typecheck/lint/test，push+PR main）。每日备份 cron `0 3 * * * /usr/local/bin/backup.sh --confirm --db`（pg_dump 保留 7 轮）。
+- 开始工作先读适用说明、Git worktree/branch/HEAD/status 与 manifest；定向检索 project_index.md，进入唯一 CURRENT handoff。根目录 dirty main 与其他工作树不得当作当前交付基线。
+- 用户最新纠正优先；需求基线为 docs/OpenScience_Kimi_Development_Spec.md，具体设计按索引选相关章节。设计要求、候选实现、线上版本、产物质量分别判断。
+- CURRENT只能记录执行状态，不能改写用户目标。决定下一步前对照需求条款与仍未完成的交付项；局部返工或暂停不取消其他目标，移除交付项必须有明确用户范围变更。各项已有任务/资产和反馈只在交付树CURRENT短表汇总，progress/index引用它。
+- CURRENT handoff 保存任务、branch/HEAD/release/rollback、证据和未决项；以 Git 和必要的只读服务器元数据定锚。其他文档中的旧 release、测试结果和 next action 是历史，不能自动续跑。
+- 现有Taskmaster使用当前交付树为projectRoot；启动读取currentTag的稳定验收清单，与CURRENT的对应任务ID对齐。工具保存验收条件，CURRENT保存执行证据；要求用户认可的交付不得因模型/部署成功置done。根main不维护第二份活动任务。
+- docs/progress.md 是短状态摘要；project_index.md 是定位索引；ADR 记录长期决策。Memory 只保存 XGS- 决策/纠错，不复制操作日志或维护另一份任务库。
+- 修改能力前定向读 docs/runbooks/hermes-capability-registry.md，核对入口、调用方、上游产物和真实效果，再决定复用、补接或替换。安装、本机读取、Hermes 注入、结果合格是不同事实。
+- Backstage 定位职责/依赖；Serena 定位指定源版本的符号/引用；dependency-cruiser 定位跨包影响；Langfuse 查既有模型调用；Portainer/Netdata 查资源。按问题选工具，不每轮全跑；生产快照不能证明候选代码。
+- 发现重复规则、未消费能力或状态冲突，先修当前改动依赖的断点；不再叠模板、模型步骤、任务库或门禁。未解决债务写回现有能力台账，附位置、后果、下一步。
 
-## 第一优先级：需求基线
-- **`docs/OpenScience_Kimi_Development_Spec.md` 是当前单一需求基线（Baseline v1.0, source of truth）**。任何实现工作必须先读它，不得根据零散聊天、旧方案（如已废弃的方案0723）或文件名猜测需求。
-- 该文件路径是分类规范的**登记例外**（见下），不得移动或改名，其他 session 在引用它。
+## 产品落地与执行约束
 
-## 文档分类规范
-| 类型 | 目录 | 命名 |
-|---|---|---|
-| 方案/脑暴稿 | `docs/proposals/` | `YYYY-MM-DD-<主题>.md` |
-| 产品设计 spec | `docs/specs/` | `YYYY-MM-DD-<主题>-design.md` |
-| 实施计划 | `docs/plans/` | `YYYY-MM-DD-<主题>-plan.md` |
-| 决策记录 | `docs/decisions/` | `ADR-NNN-<主题>.md`（NNN 递增） |
-| 进度日志 | `docs/progress.md` | 单文件，新条目置顶 |
-| 交接 handoff | `docs/handoff/` | `YYYY-MM-DD-<主题>-handoff.md`（阶段边界/换 agent/换电脑时写） |
-| 安全文档 | `docs/security/` | `<主题>.md`（威胁模型/检查清单/声明，P1E-8 起） |
+- 用户当前明确禁止测试、预检、演练及 CI 测试；不得因 Skill、旧计划或固定清单触发。必要服务器安装、编译、构建、启动属于交付，不扩展为测试项目。
+- 本机仅静态阅读、编辑、Git 与传输，不运行测试、构建、Docker、迁移或运行检查。复用未变实现的有效证据，未知保持未知。
+- 非常必要的运行检查仅针对具体重大风险或已知阻塞故障，在服务器执行；先简短说明风险和最小范围。没有这一理由不自动执行 checkup、探针或全套验收。
+- 有部署目标的功能完成已授权服务器构建/启动与真实产品观察；文档治理不自动部署科研应用。不得用工具建设、检查数量或安装成功代替产品交付和科学质量。
+- 用户可操作功能交付须从站内可见入口实际点击到目标页；角色、登录跳转和数据加载均纳入这条最小真实路径。只有接口、直达 URL 或角色字段成功，不得声称前端已可使用。
+- 关键写操作在按钮附近显示处理中、成功或失败反馈并防止重复提交；校验阻断须明确指出字段及下一步。实际观察已获授权的最小路径，不为验证擅自审批或修改真实业务资料。
+- 先完成 2–3 篇真实论文的上传、Hermes 全文凝练、用户确认、配图审核与公开展示；用户确认质量前暂停批量冷启动。保护真实论文、已认可图片和公开标识；旧演示优先可恢复归档。
+- Hermes 先理解全文再按六维凝练；方法可能在推导、图注或附录，不按固定章节判断缺失。解析/预算失败是系统问题，不冒称论文未报告；未审草稿与正式内容分开。
+- 复用服务器 PDF/OCR、BGE、MiniMax、科学 Skill 和媒体能力；科学认识来自上游解析/审核，下游艺术表达不能重新发明科学关系。不得以 Codex 手工内容冒充 Hermes 自动能力。
+- Chat 生图优先，Codex CLI 备用，不自动切换消耗额度。直接 Chat 会话与本机浏览器桥分别判断；桥故障不等于 Chat 不可用，服务器网页生图由服务器执行器负责。
+- UI 按 .agents/skills/frontend-design/SKILL.md 与现有设计：贡献、核心媒体、正文优先，证据/内部资料折叠；Hermes 是主要操作入口。复用已有授权，不重复询问。
+- 连续失败先定位根因，保留产物/任务；不盲重生成、不放行已知错误。日常保存是私有草稿，公开内容修改通过新公开版本或明确勘误。
 
-登记例外：`docs/OpenScience_Kimi_Development_Spec.md`（需求基线，原地保留）。
+## 仓库与边界
 
-## 文档操作规则
-- **创建前**：先查 `project_index.md`，确认无同功能文件
-- **创建后**：按类型入目录、按规范命名、登记 `project_index.md`
-- **查找**：先索引 → Glob 按文件名 → Grep 按内容
-- **防重复**：同一主题一份活文档，迭代原地更新；冻结存档才带版本后缀；被取代文档头部标 `DEPRECATED → 见 <新路径>` 并在索引注明，不删除
-- **外部原件**（docx/zip 等）原地保留只读，工作副本用 Markdown
-- **多 session 协作**：其他工具（如 Cursor）在本目录产出的文件，先登记索引再使用；移动/改名需用户批准
-- **服务器文档**：规范预留，服务器上线后补入（见 docs/specs/2026-07-24-doc-architecture-design.md 第 3 节）
-- **文档同步纪律**：见 `.agents/skills/docs-sync/SKILL.md`；创建/修改文件、任务状态变化、换 agent/session 前必须按它同步索引/进度/AGENTS/handoff
+- pnpm workspace：apps/ 服务、packages/ 共享包、infra/ 部署；实际包和脚本查根 package.json / pnpm-workspace.yaml，不维护易过期的服务、端点、迁移数量。
+- 使用 npx pnpm@9.15.0，不全局安装 pnpm、不另建锁文件。dist/、.next/、*.tsbuildinfo 不入库；服务器必要构建按依赖范围避免旧 dist。
+- Provider 调用收口 packages/ai-gateway；主模型 MiniMax-M3，回退由 Gateway 配置管理。业务代码不持有 Provider Key，不绕过权限、配额或任务状态。
+- 迁移使用 infra/migrations/ 与既有 CLI node packages/database/dist/migrate-cli.js deploy|status；不手工重跑旧 packages/database/migrations/，生产禁用 reset-dev。core/search 凭据和迁移账本独立。
+- Parser 保持无网络/Secret、非 root、只读、512 MiB，经任务卷交换文件；science-worker 沙箱与数据库隔离，不为省量放宽权限。
+- 架构、安全、并发、迁移、不可逆操作和重大未决歧义使用独立 high 审查；供给精确范围/证据，仅复核新增差异，不重做已完成审查。
 
-## Memory Rules
-- 任务开始先运行 worktree/branch/status 检查；用 `rg -n "CURRENT|<topic>" project_index.md docs/handoff docs/specs docs/plans` 定位唯一 CURRENT handoff，先读 handoff，再读需求基线相关章节和短版 `docs/progress.md`。`project_index.md` 只定向检索，禁止默认加载全文或 archive。
-- 判断状态时记录 `branch / HEAD / release / rollback`；本地候选、远端分支、本地 `main` 与 ECS 版本不得混写。
-- 涉及已部署表面或以生产为基线的新任务，启动时先 `git fetch origin`，再走 `infra/scripts/checkup.sh` 与只读 `.release-id`/`/__release`/容器健康核验；以实测结果刷新 CURRENT handoff，文档日期或旧 release 段落不得覆盖服务器事实。
-- 重大决策写 Memory MCP（实体前缀 `XGS-`）
+## 服务器与工具
 
-## Tooling Portability Rules
-- 工具能力默认项目内安装/项目级配置；能 `npx`/`pnpm exec`/`uvx` 一次性运行就不全局安装
-- Node 工具放 root `devDependencies` 并提交 lockfile；Python 工具优先 `uvx` 或项目 `.venv`
-- 密钥只来自本机 `.env` 或服务器 Secret；仓库只提交 `.env.example`/模板，不提交真实 key
-- 新增/移除工具能力必须登记 `project_index.md`；影响流程时更新 AGENTS 或 ADR（见 `docs/decisions/ADR-002-agent-tooling-portability.md`）
+- 服务器工作先定向查 docs/runbooks/server-capabilities.md，复用已有服务、镜像和缓存；安装/下载只补真实缺口并说明原因。
+- SSH 仅走 infra/scripts/ssh-run.sh；Windows 显式用 C:/Program Files/Git/bin/bash.exe，禁止裸 bash/WSL。项目密钥 ~/.ssh/id_ed25519_xgs；shell 错误不得误报认证失败。
+- 部署查 docs/runbooks/deployment.md，备份查 backup-restore.md，监控查 monitoring.md。先核当前执行约束，旧命令清单不自动授权测试或重部署。
+- 生产入口 /opt/openscience；DB/Redis/对象存储仅内部网络。invite/migrate/seed 在容器内继承受控环境，不展开连接串到 CLI/日志。
+- 公网入站复用 Cloudflare Tunnel，出网复用现有代理，具体拓扑见 runbook。勿安装 Tailscale，其路由曾破坏阿里云 VPC DNS。
+- 工具默认项目级安装/配置；第三方 Skill、MCP、插件、二进制只在明确授权范围安装。独立开发服务遵循 ADR-002，不自动给科研用户 Hermes 运维权限。
+- 不读取/打印 .env、Secret、密码，不放进上下文、日志、Git 或模型请求。Langfuse 账号独立于 OpenScience，凭据走私密交接。
+- 不删除他人未提交的改动与工作树，除非有明确适用授权；但「未提交」不等于「永久保留」：交付树以外的残留按下方「工作区与发布卫生」的时限处置，处置前必须先推送或打包备份。
 
-## Deployment Acceptance Rule
+## 工作区与发布卫生
 
-- 有部署目标的功能优先在服务器完成最终部署与验收；本地用于代码编写、单元/构建门禁和安全预检，不能以本地通过替代服务器运行证据。
-- 服务器是生产功能的最终应用场景；交付证据至少包含服务器 build、迁移状态、目标容器状态、运行时依赖加载和公网/内网健康检查。
+- 唯一交付入口是 `.worktrees/onchip-video-release`，根 `main` 只作导航、不承载开发。交付树与根 main 在每轮收尾时 `git status --porcelain` 必须为空；出现未提交改动即当轮处置（提交、移入已忽略目录或按授权删除），不得留给下一个会话。
+- 部署源守卫要求「工作树完全干净且 HEAD == release ref」，所以每次部署都必须来自干净 worktree；不要为省事在脏树上直接发布。
+- worktree 生命周期：一个任务一个 worktree；任务结束后按结论处置——已发布且无需回滚引用 → 删除该 worktree 与本地分支；仍需回滚引用 → 保留到下一次成功发布后删除；未合并但有独立价值 → 先推送远端分支再删除本地 worktree。禁止长期堆积 detached-HEAD 的 `*-release-*` 目录。
+- 每轮收尾执行 `git worktree prune` 并核对 `git worktree list`；新增 worktree 必须说明用途与预期寿命，到期未清理视为债务。
+- release 身份必须是指向已推送提交的完整 SHA，服务器 `.release-id` 必须能在本仓 `git rev-parse` 解析。遇到无法解析的 release 身份，先按 docs/runbooks/deployment.md 的故障态恢复流程核对实际容器与 release 目录，不得直接改标记或盲目重跑部署。
+- 本机生成的图片、截图、日志等证据放在仓库外或已被忽略的 `tmp/`，不写入受版本控制的路径；只有正式交付资产入库。
 
-## Index Maintenance Rules
-- 创建/修改/移动文件后更新 `project_index.md`
+## 文档同步
 
-## Safety Red Line
-- 不删除任何文件，除非用户明确批准
-- 不读取/打印 `.env` 内容
+- 创建前查 project_index.md，同主题原地迭代。方案 docs/proposals/，设计 docs/specs/，计划 docs/plans/，决策 docs/decisions/ADR-NNN-*.md，交接 docs/handoff/，安全 docs/security/。
+- docs/OpenScience_Kimi_Development_Spec.md 是路径例外，原地保留；外部 docx/zip 等原件只读，移动或改名需授权。
+- 按 .agents/skills/docs-sync/SKILL.md 同步实际改动；历史状态明确降级，需求有效性与完成情况分开，不按日期抹掉未完成需求。
+- 有项目状态变化的回合在最终回复前主动执行 docs-sync；长任务在决策、修改或阻塞节点先保存。无变化问答不重写；意外中断后从实际 Git/运行事实恢复，Skill 不冒充后台自动回调。
+- 提交/交接前核对差异和 Git 状态，分别报告候选、部署、已观察、未确认；只在规则允许时执行检查，不恢复默认预检。AGENTS/Skill 修改要进入交付分支，不能只留在旧 main。
+- 其他工作树只保留交付入口导航，不复制 release/next action；未提交独立工作保留并说明归属，不混入当前提交。
+- AGENTS ≤100 行、CURRENT handoff ≤80 行、progress ≤120 行。长证据留原记录/Git，启动只读相关短段；不新增重复治理平台。

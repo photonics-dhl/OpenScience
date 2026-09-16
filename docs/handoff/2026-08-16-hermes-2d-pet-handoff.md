@@ -1,39 +1,44 @@
-# Hermes Research Intelligence CURRENT Handoff
+> HISTORICAL — 本文与其版本/下一步仅为历史。续作：[交付树当前交接](../../.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md)。
 
-> CURRENT active-memory, 2026-09-07 +08. User requested skills-guided coherent product UI with lower reading/interaction load, after rejecting partial RO-only changes. Preserve original Aladdin dog/Wanko and lamp. Never infer aesthetic approval from passing checks.
+> HISTORICAL 2026-09-12：实际交付工作树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release（codex/onchip-video-release）；代码/应用/video runner 0df87c9b，应用rollback68a0e6b2，后续文档HEAD40e29535。写作/诊断与媒体艺术/叙事增强已部署；两批build/start exit0，公网release一致，API/Worker healthy，video runner active。首稿未生成，论文final失败及语义续跑批准仍待处理。唯一接续：[HISTORICAL handoff](E:/Miscellaneous/XGS/.worktrees/onchip-video-release/docs/handoff/2026-09-10-hermes-web-image-handoff.md)。本目录dirty main与下方历史版本不能代表生产。
+# Hermes Research Intelligence HISTORICAL Handoff
+
+## Goal and authorization
+- Server-owned paper extraction → content-selected storyboard/images → animated video. Hermes chooses each paper narrative; no fixed paper/five-scene template or manually authored Claims.
+- NO tests/preflights/benchmarks/local runtime/build/CI tests. Necessary server build/deploy and actual authorized product generation only. No direct DB resets, duplicate uploads or deletion.
+- Preserve scientific sources, workspace permissions, user approval, billing and sandbox boundaries.
 
 ## Version tuple
+- Worktree E:/Miscellaneous/XGS/.worktrees/onchip-video-release; branch codex/onchip-video-release.
+- Production3446f309480fe0a9a38a25c8669e0ccedf7aa0bd; rollback583d201e81ae99c27ab8edaa036170e212aab010. Subsequent HEAD is docs-only handoff, not a new deployed release.
+- Recovery commits1df4e047 +3446f309 deployed through canonical --confirm --no-tests. First candidate failed server compile due to type-only Prisma import; fixed before switch.
+- Root dirty main and token-smart-live-workflow worktree are separate; preserve them and concurrent R1 hardening.
 
-- Worktree E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance; branch codex/overview-responsive-companion. Application/public/loopback 5e4b4d47cba918db5a9b7f7092de32aa244c258e; rollback 8e4ecb2b5f9e291385b0df8495082e923af328a6. Later docs-only Git HEAD is not another app release.
-- Application source pushed non-force to main and branch. Canonical server release completed, journal cleared and retention complete. Root checkout contains unrelated user changes; leave untouched.
-- Independent Codex controller3d518af1433e4e1e91de0ebbb0d9a12d4bedfa52 and animated D2NN demo9848411d1419a0dd690f74cca9042369b651f7b2/run9848411-20260906T074017Z unchanged.
+## Actual completed product run
+- Run13e3fcd5-a6f0-48d6-82d7-33263e06fe33: SUCCEEDED, version13; all seven steps succeeded. Actual state log1788890593924-64b87a32-e61f-44d5-877a-0b2d1e10ab1e.
+- Actor a15edcab-7ec8-4e75-86d7-aa9c0498a829 (ordinary user); workspace6b83001a-75c1-4337-ab76-629908615a39.
+- RO714a0c2d-8c00-4471-a4f9-4a1270eafcdb; version1011dcdb-66fa-4221-beab-5880e38f3939; content-driven-v1, generation grant8.
+- Paper arXiv2009.06045v1,25pages; source artifact6864cc65-f944-474a-af40-bab7ca8c65d7; SHA d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a.
+- Ingestion19149438-6f2a-4a95-aba0-b0db31d4f62e; extractor11675dd1-684f-4df8-af8d-6fe52edc0bb4 is PARTIAL. Only original method Claim1b75d4c6-ab34-4810-b34d-88f4bc4a1289 selected;23 Evidence reviewed. Success does NOT mean complete-paper understanding/results verification.
+- Approved storyboard0cdebc04-8bfa-42fd-b303-8f2293c8165e: server MiniMax-M3 selected four functional-diagram scenes; Main+High scientific review, normal user API approval.
+- Image assets in scene order:2958e4a6-49d1-4f21-8da6-9ad9dc454fdb,ba919962-34a3-4e95-b9a8-136eae5c2807,085fb3ad-39f3-4510-a489-6762f71b6304,6db79e78-bc81-48b1-9454-62472afe999b. Actual images viewed, all ordinary API200 approved (log1788890283240-336c0706-c08c-4ab9-af2b-b90aaac44016).
+- Server automatically created video task/asset c033b30c-eb1c-4fff-ad72-154ed7d8c6b7 after image approvals; succeeded and ordinary API200 approved (log1788890553412-5e4aea9b-33e9-452f-9ffd-2f989eb29eda).
+- Video SHA ba9295e8e4ebd535dc90bd856753b6672d5ed37b878679bafc8b13d067df837b;23.459s,1280x720,24fps,H264/AAC; content-driven-animation, continuous Qwen3-TTS/Serena. Rendering reports0freshPaidApiCalls (not a whole-workflow cost metric).
+- Actual video frames viewed: four scenes, source-based functional relations, readable narration captions, drawn arrows/objects, conceptual/not-measured notice. Antenna/chip artwork is conceptual, NOT verified device geometry. Audio track present; pronunciation was not individually listened to/reviewed.
 
-## Shipped entry continuity
+## Deployed recovery and cost behavior
+- POST /research-objects/:id/hermes-runs/:runId/retry-generation, expectedVersion+Idempotency-Key; optional canRetryGeneration/chargeableAttempts on GET; UI Continue unfinished generation + new-task count.
+- Prior image task3712f315 failed external image server error. Recovery preserved image0; charged one new scene1 task; rearmed original scene2/3 only after proof all durable submission/inbox/result paths were absent. Old failed tasks remain.
+- API requires every rearm proof before transaction debit; worker rechecks before one-use marker consumption. Unsupported/disabled providers fail closed. API mounts only inbox/results read-only, no credentials/private/state. Existing worker writable inbox preserved; parser unchanged.
+- All historical generation tasks including replacements plus future video count against grant8. No generic paid retry bypass, permission weakening, or DB reset.
+- Recovery helper ALREADY submitted HTTP202 using keyhermes-recover-image-service-v1, log1788889410160-5a331eff-da10-4492-b4d3-31d8da774eae. Never blindly resubmit any prior generation helper.
+- Early image0 approval during generating state returned403; normal user review is allowed once whole batch reaches awaiting_scene_images_review. No permission code change was needed.
+- Main retains selected model; Sol/medium implementation, Sol/high credit/authority review; prior WebChat6Pro architecture advice reused. No reliable overall Codex savings percentage established.
 
-- Applied frontend-design, ui-ux-pro-max and baseline-ui using approved pale/ink/teal direction. The local skill search recommends flat/minimal interfaces but its marketing-video layout was rejected as unsuitable for authentication. No new dependencies or skills installed.
-- IdentityShell and new auth/Identity.module.css center a compact form with original Wanko welcome, explicit input/primary/secondary styles, readable headings and mobile form-first order. Short bilingual identity copy replaces the old slogans. Original image uses next/image with a circular CSS frame.
-- SignupCodeForm keeps required name/email/password prominent; optional ResearchProfileFields stays mounted inside native details, same reader default and parent state. Verification, validation, cooldown, session, safeReturnTo and all auth handlers unchanged.
-- Shared surface-product-app palette now applies to DashboardShell routes, including dashboard/new/settings/me. Clear active navigation, consistent control/focus treatment, aligned account values. This is shared styling, not a claim that every page layout has been redesigned.
-- Dashboard removes visible internal identifiers/redundant index caption. Reuses LiteratureAcquisitionDisclosure; recovered dashboard task opens it. Two existing browser tests now expand the disclosure and scope the full-text action.
-
-## Preserved RO corrections
-
--69aac51 fixed black Wanko: destroying a model also destroyed Pixi URL-cached atlases used by its successor. Keep fixed atlas cache; dispose instance model/renderer/GL. Original Wanko/lamp image is loading/failure fallback.
-- RO overview/editor/presentation use shared A palette and four main tabs plus More. Empty overview has Add paper/Hermes; editor initializes missing SDF keys without losing extensions. Original evidence remains distinct from approved generated explanatory assets.
--8e4ecb2 reserves380px companion area on wide presentation pages and stacks below content on smaller screens; real RO context and drawer retained. Storyboards collapse by title. These earlier fixes remain in current release.
-
-## Fresh acceptance
-
-- Current exact server full build, parser16 acceptance, core36/search2 migration status (none pending), BGE real-vector/runtime, ScanSci image/tools/storage/worker and healthy containers passed. Public/loopback200, egress204 via parent proxy. No new model, migration or paid generation.
-- Auth/dashboard37 unit checks, modified-file lint, final local Web build, docs checks passed. Existing browser fixtures:2 literature recovery/full-text plus3 keyboard signup/failure retry/login-return cases passed with API fixtures.
-- Final public login/register:8 zh/en ×1440/390 visual checks, image decoded/no horizontal overflow/password toggle; no registration submission. Final public dashboard/new/settings/me:8 read-only checks at1440/390 using controlled user;0business writes/session closed. Actual screenshots inspected. Full business-pipeline and CI completion not claimed.
-- Evidence ignored under apps/web/test/visual/out/research-journey/: entry-{sync,prebuild,deploy,final-checkup}.log, entry-public-{auth,product}.log, entry-shots.json, entry-product-evidence.json and entry-*.png. Early next-dev screenshot rerenders made interaction smoke unstable; final production-mode and public checks passed. A next/image assertion was corrected to decode URL escaping.
-- Local8318 production-mode preview built from current app source remains available; older8317 preview is stale. Never print cookies/session headers, env values or raw private logs.
-
-## Remaining / next action
-
-- Continue route-specific layout/interaction refinement and actual paper-to-RO/media/evidence workflow; whole site and automatic multimodal pipeline remain incomplete. User has not yet accepted this visual iteration. Do not repeat the login omission or equate shared color changes with complete page redesign.
-- Known PDF method/results/reproducibility extraction and Evidence/SourceMap gaps remain. Existing RO Files/Hermes literature disclosures can keep internally recovered tasks collapsed when no initialTask is supplied; this pre-existing issue was not introduced or fixed here.
-- Preserve Serena continuous v4, restored animated D2NN, Chromium/FFmpeg/PyTorch/Qwen/Codex. CPU image installation remains USER-PAUSED. Codex still depends on PC/v2ray/account access and quotas (ADR-013).
-- Controlled private user11b6cf52-fcd4-4f7d-a3ff-8ea3ae9592fd (Hermes Production E2E), workspacef09ab567-4dcd-4d53-97b3-9a96920fd1ed, RObcbf1586-b6bd-44b6-ab66-c675fcddce78. Do not advertise as a user-accessible demo.
-- Read-first: Git/fetch/checkup, this handoff, relevant baseline and latest integrated plan section. Use explicit Git Bash SSH wrappers and canonical deployment; no env/Secret reads.
+## Next action and evidence
+- This selected-method vertical flow is complete. Next authorized phase: improve user experience/page layout/visual polish; retain server-owned generation. Full-paper extraction completeness and pronunciation quality remain distinct limitations.
+- Production deploy log1788889080559-d6d3bd46-c388-467d-bc24-bd2fc6ef0c07 exit0; logs C:/Users/Mac/AppData/Local/Temp/token-smart-checks.
+- Video runtime source583d201e; renderer sha256:ff6042f6247c0365f89ff545953400920ee15cc8fd3134e83d41f2fe873c509e; TTS sha256:a215840921a40a9e066ed970d2bf49dcf25bc20af0f7e569d55c0867343ba0ab; modelqwen3-tts-customvoice-0c0e305. Recovery did not rebuild runtime.
+- Helper/media directory E:/Miscellaneous/XGS/.worktrees/token-smart-live-workflow/apps/web/test/visual/out/token-smart-release: hermes-content-driven-method.mp4,hermes-video-frames.png,current-scene-0/1/2/3.png. Copies for viewing; generation occurred entirely on server.
+- Server media /opt/openscience-video/results/c033b30c-eb1c-4fff-ad72-154ed7d8c6b7/result.mp4; normal API source remains product asset. Do not substitute historical manually assisted ca0908bb video.
+- SSH only root infra/scripts/ssh-run.sh via C:/Program Files/Git/bin/bash.exe; no .env/credentials output. Read-first requirement baseline docs/OpenScience_Kimi_Development_Spec.md + this handoff.
