@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import { deflateSync } from 'node:zlib';
 import { AiGateway } from '../src/gateway';
 import { AnthropicCompatProvider, OpenAiCompatProvider, type Provider, type ProviderResult } from '../src/provider';
+import type { ImageProvider } from '../src/image';
 import { AiGatewayError } from '../src/errors';
 
 function fakeProvider(name: string, impl: () => Promise<ProviderResult>): Provider {
@@ -292,5 +294,57 @@ describe('AnthropicCompatProvider（MiniMax Token Plan）', () => {
     await expect(gw.completeStructured((v): v is { k: number } => typeof v === 'object' && v !== null,
       [{ role: 'user', content: 'x' }], { maxTokens: 8192 })).rejects.toThrow(/token limit/u);
     expect(calls).toBe(1);
+  });
+});
+
+/** Minimal grayscale 8-bit 1280x720 PNG accepted by validateImageBytes. */
+function grayPng1280x720(): Buffer {
+  const width = 1280, height = 720;
+  const raw = Buffer.alloc(height * (1 + width));
+  const chunk = (type: string, data: Buffer) => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length, 0);
+    return Buffer.concat([length, Buffer.from(type, 'ascii'), data, Buffer.alloc(4)]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; ihdr[9] = 0; ihdr[12] = 0;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const ENABLED_KILL_SWITCH = { isEnabled: async () => ({ enabled: true }) } as never;
+function fakeImage(name: string, impl: () => Promise<{ bytes: Buffer; contentType: 'image/png' }>): ImageProvider {
+  return { name, model: `${name}-model`, supportsReferenceImage: false, generate: impl };
+}
+const textStub = () => fakeProvider('text', async () => OK('{}'));
+
+describe('图片 provider 回退（只有确定未提交才前进）', () => {
+  it('额度用尽属于确定未提交，回退到下一个 provider 并成功', async () => {
+    const calls: string[] = [];
+    const a = fakeImage('a', async () => { calls.push('a'); throw new Error('USAGE_LIMIT'); });
+    const b = fakeImage('b', async () => { calls.push('b'); return { bytes: grayPng1280x720(), contentType: 'image/png' }; });
+    const gw = new AiGateway({ providers: [textStub()], imageProviders: [a, b], killSwitch: ENABLED_KILL_SWITCH });
+    const out = await gw.generateImage({ prompt: 'x' });
+    expect(calls).toEqual(['a', 'b']);
+    expect(out.provider).toBe('b');
+  });
+
+  it('结果不确定的失败绝不自动换 provider，避免双份消耗', async () => {
+    const calls: string[] = [];
+    const a = fakeImage('a', async () => { calls.push('a'); throw new Error('EXECUTION_FAILED'); });
+    const b = fakeImage('b', async () => { calls.push('b'); return { bytes: grayPng1280x720(), contentType: 'image/png' }; });
+    const gw = new AiGateway({ providers: [textStub()], imageProviders: [a, b], killSwitch: ENABLED_KILL_SWITCH });
+    await expect(gw.generateImage({ prompt: 'x' })).rejects.toThrow(/image generation failed/u);
+    expect(calls).toEqual(['a']);
+  });
+
+  it('单一 provider 额度用尽仍保持 IMAGE_USAGE_LIMIT 语义', async () => {
+    const a = fakeImage('a', async () => { throw new Error('USAGE_LIMIT'); });
+    const gw = new AiGateway({ providers: [textStub()], imageProviders: [a], killSwitch: ENABLED_KILL_SWITCH });
+    await expect(gw.generateImage({ prompt: 'x' })).rejects.toThrow(/IMAGE_USAGE_LIMIT/u);
   });
 });

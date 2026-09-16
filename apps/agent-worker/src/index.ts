@@ -11,6 +11,7 @@ import {
   MutableProviderKillSwitch,
   OpenAiCompatProvider,
   type ExternalProcessingPolicy,
+  type ImageProvider,
   type MiniMaxVisionPricing,
   type ProviderCapabilityPolicy,
 } from '@openscience/ai-gateway';
@@ -839,14 +840,31 @@ export function buildGateway(
 
   const imageApiKey = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].map(key => key?.trim()).find(Boolean);
   const disabledImageProviders = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).filter(Boolean));
-  const imageProviders = env.HERMES_SCENE_IMAGE_PROVIDER === 'chatgpt-web'
-    ? (env.AI_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim() && env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('chatgpt-web')
-      ? [new ChatGptWebSpoolImageProvider({ inboxDir: env.CHATGPT_WEB_IMAGE_INBOX_DIR.trim(), resultsDir: env.CHATGPT_WEB_IMAGE_RESULTS_DIR.trim(), withSubmission: spoolSubmissions?.image })] : [])
-    : env.HERMES_SCENE_IMAGE_PROVIDER === 'codex'
-      ? (env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('codex-image')
-        ? [new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim(), withSubmission: spoolSubmissions?.image })] : [])
-      : (env.HERMES_SCENE_IMAGE_PROVIDER === undefined || env.HERMES_SCENE_IMAGE_PROVIDER === 'minimax') && env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
-        ? [new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher)] : [];
+  const buildImageProvider = (kind: string | undefined): ImageProvider | undefined => {
+    if (kind === 'chatgpt-web') {
+      return env.AI_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim() && env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('chatgpt-web')
+        ? new ChatGptWebSpoolImageProvider({ inboxDir: env.CHATGPT_WEB_IMAGE_INBOX_DIR.trim(), resultsDir: env.CHATGPT_WEB_IMAGE_RESULTS_DIR.trim(), withSubmission: spoolSubmissions?.image }) : undefined;
+    }
+    if (kind === 'codex') {
+      return env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('codex-image')
+        ? new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim(), withSubmission: spoolSubmissions?.image }) : undefined;
+    }
+    if (kind === undefined || kind === 'minimax') {
+      return env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
+        ? new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher) : undefined;
+    }
+    return undefined;
+  };
+  // The fallback provider is an explicit operator decision: no provider is ever
+  // selected automatically, and the gateway only advances to it for a definitive
+  // non-submission (allowance exhausted or unavailable), never after an uncertain
+  // attempt that may already have been submitted.
+  const primaryImageKind = env.HERMES_SCENE_IMAGE_PROVIDER ?? 'minimax';
+  const fallbackImageKind = env.HERMES_SCENE_IMAGE_FALLBACK_PROVIDER?.trim() || undefined;
+  const imageProviders = [
+    buildImageProvider(env.HERMES_SCENE_IMAGE_PROVIDER),
+    fallbackImageKind && fallbackImageKind !== primaryImageKind ? buildImageProvider(fallbackImageKind) : undefined,
+  ].filter((provider): provider is ImageProvider => provider !== undefined);
   const visionPrimaryKey = env.MINIMAX_API_KEY?.trim();
   const visionBackupKey = env.MINIMAX_API_KEY_2?.trim();
   const ocrProviders = env.AI_ENABLED === 'true' && env.MINIMAX_VISION_ENABLED === 'true' && visionPrimaryKey

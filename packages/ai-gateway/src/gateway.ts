@@ -222,36 +222,64 @@ export class AiGateway {
   }
 
   /** One paid image attempt. Never retry or fall back, including after audit failure. */
+  /**
+   * At most one paid attempt per configured provider. The same provider is never
+   * retried, and the gateway advances to the next provider only when the failure
+   * is a definitive non-submission — the provider is unavailable, cannot accept
+   * the request, or reports the account's allowance is exhausted. An uncertain or
+   * failed execution stops immediately, because a second account must not pay for
+   * a request that may already have been submitted.
+   */
   async generateImage(request: ImageRequest): Promise<ImageResult> {
     const prompt = validateImageRequest(request);
     const input: ImageRequest = { prompt, ...(request.requestId !== undefined ? { requestId: request.requestId } : {}),
       ...(request.referenceImage ? { referenceImage: { bytes: Buffer.from(request.referenceImage.bytes), contentHash: request.referenceImage.contentHash } } : {}) };
-    const provider = this.imageProviders[0];
-    if (input.referenceImage && provider?.supportsReferenceImage !== true) throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'image provider does not support references');
-    if (!provider || !(await this.providerEnabled(provider.name, 'image')).enabled) throw new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image provider unavailable');
     const start = Date.now();
     const promptHash = imagePromptHash(prompt, input.referenceImage ? { contentHash: input.referenceImage.contentHash, role: 'style' } : undefined);
+    let servedBy = this.imageProviders[0];
     let succeeded = false;
+    let fallbackReason: string | null = null;
     try {
-      const generated = await provider.generate(input);
-      const result = validateImageBytes(generated.bytes);
-      succeeded = true;
-      return { ...result, model: provider.model, provider: provider.name, promptHash };
-    } catch (error) {
-      throw new AiGatewayError('IMAGE_PROVIDER_FAILED', error instanceof Error && error.message === 'USAGE_LIMIT'
-        ? 'IMAGE_USAGE_LIMIT' : 'image generation failed');
+      let lastError: AiGatewayError | undefined;
+      for (const [index, provider] of this.imageProviders.entries()) {
+        servedBy = provider;
+        if (!(await this.providerEnabled(provider.name, 'image')).enabled) {
+          lastError = new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image provider unavailable');
+          fallbackReason = fallbackReason ?? `${provider.name}:disabled`;
+          continue;
+        }
+        if (input.referenceImage && provider.supportsReferenceImage !== true) {
+          lastError = new AiGatewayError('IMAGE_REQUEST_INVALID', 'image provider does not support references');
+          fallbackReason = fallbackReason ?? `${provider.name}:references_unsupported`;
+          continue;
+        }
+        try {
+          const generated = await provider.generate(input);
+          const result = validateImageBytes(generated.bytes);
+          succeeded = true;
+          return { ...result, model: provider.model, provider: provider.name, promptHash };
+        } catch (error) {
+          const usageLimited = error instanceof Error && error.message === 'USAGE_LIMIT';
+          // Only a definitive non-submission may move on; an uncertain outcome must not double-spend.
+          if (!usageLimited) throw new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image generation failed');
+          lastError = new AiGatewayError('IMAGE_PROVIDER_FAILED', 'IMAGE_USAGE_LIMIT');
+          fallbackReason = fallbackReason ?? `${provider.name}:usage_limit`;
+          if (index === this.imageProviders.length - 1) throw lastError;
+        }
+      }
+      throw lastError ?? new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image provider unavailable');
     }
     finally {
       // Separate metadata-only audit: an audit sink exception may contain credentials.
       try {
         await this.audit?.record({ actorId: null, action: 'ai.gateway.call', targetType: 'ai_gateway', metadata: {
-          operation: 'image', provider: provider.name, model: provider.model, promptHash,
+          operation: 'image', provider: servedBy?.name ?? null, model: servedBy?.model ?? null, promptHash,
           inputTokens: null, outputTokens: null, estimatedInputTokens: null, estimatedOutputTokens: null,
           estimatedCostUsdMicros: null, actualCostUsdMicros: null, currency: 'USD', pricingVersion: null,
           pricingEffectiveDate: null, serviceTier: null, latencyMs: Date.now() - start, totalLatencyMs: Date.now() - start,
           inputContentHash: input.referenceImage?.contentHash ?? null, pageNumbers: [], pageCount: 0, selectionReason: null,
           outcome: succeeded ? 'succeeded' : 'failed', error: succeeded ? null : 'image_provider_failed',
-          fallbackReason: null, retryCount: 0, ts: new Date().toISOString(),
+          fallbackReason, retryCount: 0, ts: new Date().toISOString(),
         } });
       } catch { this.logger?.error?.('ai.gateway.image audit failed'); }
     }
