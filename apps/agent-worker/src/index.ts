@@ -63,6 +63,7 @@ import { createSourceRetrieveHandler } from './retrieval/handler';
 import { collectExpiredTemporaryDocuments } from './retrieval/garbage-collector';
 import { startJournalWorker } from './journal-worker';
 import { createPresentationGenerationHandler, requireIllustrationReviewAuthority, requireIllustrationReviewSubmission } from './presentation/handler';
+import { createPresentationFigureAuditHandler } from './presentation/figure-audit';
 
 const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number }>();
 type SpoolSubmission = NonNullable<ConstructorParameters<typeof CodexSpoolImageProvider>[0]['withSubmission']>;
@@ -508,6 +509,7 @@ export function createHandlers(
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
     'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool }),
+    'presentation.figure-audit': createPresentationFigureAuditHandler(gateway),
     'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
     ...(options.searchIndexer === undefined ? {} : {
       'search.index': async (_deps: WorkerDeps, task) => {

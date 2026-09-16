@@ -31,7 +31,7 @@ export const AGENT_TASK_KINDS = [
   'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'presentation.generate', 'workspace.guide', 'search.index', 'source.retrieve',
 ] as const;
 export const PUBLIC_AGENT_TASK_KINDS = [
-  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan',
+  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'presentation.figure-audit',
 ] as const;
 export const PUBLIC_AGENT_SESSION_KINDS = [
   'extract', 'review', 'visualization', 'publish', 'ingestion', 'workspace.guide',

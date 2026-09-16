@@ -36,6 +36,7 @@ import { registerAdminEditorialRoutes } from './routes/admin-editorial';
 import { registerSandboxJobsRoutes } from './routes/sandbox-jobs';
 import { registerTemporaryDocumentRoutes } from './routes/temporary-documents';
 import { registerPresentationAssetRoutes } from './routes/presentation-assets';
+import { registerFigureAuditRoutes } from './routes/figure-audit';
 import { registerResearchRunRoutes } from './routes/research-runs';
 import { registerTrashRoutes } from './routes/trash';
 import type { TrashDeps } from '@openscience/domain';
@@ -134,6 +135,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerReadingPreferenceRoutes(instance, opts), {});
   await app.register(async (instance) => registerSandboxJobsRoutes(instance, opts), {});
   await app.register(async (instance) => registerPresentationAssetRoutes(instance, opts), {});
+  await app.register(async (instance) => registerFigureAuditRoutes(instance, opts), {});
   await app.register(async (instance) => registerResearchRunRoutes(instance, opts), {});
   if (opts.storage) {
     const storage = opts.storage;
