@@ -1,26 +1,5 @@
 # OpenScience (XGS) 项目文件索引
 
-## 期刊入驻与 AI 解读
-
-当前部署状态和续作约束统一见 [期刊 CURRENT handoff](docs/handoff/2026-09-15-journal-onboarding-handoff.md)。用户已授权等待并行发布完成后自动部署；原旧基线开发分支不得直接覆盖线上。下方 Hermes 入口属于并行任务，保留其目标与资产。
-
-| 路径 | 用途 |
-|---|---|
-| `docs/handoff/2026-09-15-journal-onboarding-handoff.md` | 唯一期刊 CURRENT：代码、生产整合、部署与实际观察证据 |
-| `docs/specs/2026-09-15-journal-onboarding-design.md` | 期刊入驻、权限、来源许可、额度与审核发布需求 |
-| `docs/proposals/2026-09-15-ai-citation-enablement.md` | ACE 商业服务方案与来源 |
-| `docs/proposals/2026-09-15-openscience-scholar-value.md` | 作者、读者及科研生态价值说明 |
-| `docs/runbooks/journal-onboarding.md` | 启用、公开入口、运营与回退 |
-| `packages/domain/src/journal/` / `apps/api/src/routes/journals.ts` / `apps/api/src/journal-boundary.ts` | 期刊事务、API 与通用入口隔离，兼容生产回收站及独立公开编号 |
-| `apps/agent-worker/src/journal-worker.ts` / `apps/web/components/journals/` / `apps/web/app/journals/` | 持久化加工与期刊界面，复用现有 Gateway/Parser |
-| `packages/domain/src/journal/form-contract.ts` / `apps/web/components/journals/JournalApplicationReceipt.tsx` / `apps/web/app/journals/apply/[applicationId]/page.tsx` | 前后台共享英文元数据与服务规则；本人可见申请编号、提交回执和审核状态 |
-| `apps/web/components/journals/JournalAdminLink.tsx` / `apps/web/components/journals/JournalAdminConsole.tsx` / `docs/decisions/ADR-003-admin-strong-auth.md` | 站内管理员入口与审核工作台；期刊审核登录例外及其独立批准范围 |
-| `apps/web/components/journals/JournalApplicationReviewCard.tsx` | 申请审核的本行反馈、英文资料预检查、处理中/防重及仅填入补件说明；后台规则仍为最终约束 |
-| `infra/journal-models.fragment` / `infra/migrations/20260915000000_journals/` | 期刊模型与增量迁移；不回退既有生产迁移 |
-| `scripts/journals/verify-migration.mjs` / `.github/workflows/journals.yml` | 原分支隔离数据库演练/CI；按当前 no-tests 部署约束不执行 |
-
-## Hermes 并行任务入口
-
 > CURRENT：恢复原定多风格科研配图任务；本批三类的交付差额、版本与下一步唯一见[Hermes CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。工程能力定位/调用观测已有接线，产品目标与用户审美验收尚未自动联动，不称状态治理全部完成。能力按[当前能力索引](docs/runbooks/hermes-capability-registry.md)定向查实现、调用和真实结果；下表日期/版本均为对应改动的历史记录，不作为当前release或自动next action。
 
 能力补接入口：`scripts/read-current-management-context.mjs`同读Git/Taskmaster/CURRENT指针；`infra/development-platform/code-intelligence/snapshot_identity.py`绑定成功MCP返回的源码版本。`packages/search/src/runtime-config.ts`共享BGE身份配置；`apps/api/src/{search-runtime,research-object-search}.ts`供私有ResearchList的POST全文检索；`packages/domain/src/agent/search-index-source.ts`及原ingestion确认事务绑定解析来源并提交索引；`scripts/index-confirmed-research-sources.cjs`仅补录本次授权的两篇真实论文，默认列计划、`--apply`复用同一producer。部署及实际效果见[CURRENT任务4](docs/handoff/2026-09-10-hermes-web-image-handoff.md#capability-linkage)，不复制任务状态。必要验证仅限直接风险或已知故障的最小定向范围；不运行过度测试、全套预检或CI。

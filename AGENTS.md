@@ -47,7 +47,16 @@ OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版�
 - 公网入站复用 Cloudflare Tunnel，出网复用现有代理，具体拓扑见 runbook。勿安装 Tailscale，其路由曾破坏阿里云 VPC DNS。
 - 工具默认项目级安装/配置；第三方 Skill、MCP、插件、二进制只在明确授权范围安装。独立开发服务遵循 ADR-002，不自动给科研用户 Hermes 运维权限。
 - 不读取/打印 .env、Secret、密码，不放进上下文、日志、Git 或模型请求。Langfuse 账号独立于 OpenScience，凭据走私密交接。
-- 不删除文件、历史产物、分支或工作树，除非有明确适用授权。保护他人 dirty/untracked 改动，不自动 reset/clean/stash。
+- 不删除他人未提交的改动与工作树，除非有明确适用授权；但「未提交」不等于「永久保留」：交付树以外的残留按下方「工作区与发布卫生」的时限处置，处置前必须先推送或打包备份。
+
+## 工作区与发布卫生
+
+- 唯一交付入口是 `.worktrees/onchip-video-release`，根 `main` 只作导航、不承载开发。交付树与根 main 在每轮收尾时 `git status --porcelain` 必须为空；出现未提交改动即当轮处置（提交、移入已忽略目录或按授权删除），不得留给下一个会话。
+- 部署源守卫要求「工作树完全干净且 HEAD == release ref」，所以每次部署都必须来自干净 worktree；不要为省事在脏树上直接发布。
+- worktree 生命周期：一个任务一个 worktree；任务结束后按结论处置——已发布且无需回滚引用 → 删除该 worktree 与本地分支；仍需回滚引用 → 保留到下一次成功发布后删除；未合并但有独立价值 → 先推送远端分支再删除本地 worktree。禁止长期堆积 detached-HEAD 的 `*-release-*` 目录。
+- 每轮收尾执行 `git worktree prune` 并核对 `git worktree list`；新增 worktree 必须说明用途与预期寿命，到期未清理视为债务。
+- release 身份必须是指向已推送提交的完整 SHA，服务器 `.release-id` 必须能在本仓 `git rev-parse` 解析。遇到无法解析的 release 身份，先按 docs/runbooks/deployment.md 的故障态恢复流程核对实际容器与 release 目录，不得直接改标记或盲目重跑部署。
+- 本机生成的图片、截图、日志等证据放在仓库外或已被忽略的 `tmp/`，不写入受版本控制的路径；只有正式交付资产入库。
 
 ## 文档同步
 
