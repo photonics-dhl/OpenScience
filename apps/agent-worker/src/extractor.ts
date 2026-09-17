@@ -17,6 +17,7 @@ import {
   type SourceLocator,
 } from '@openscience/domain';
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
+import { extractFigureReferences, type ExtractedFigureReference } from './skills/figure-list';
 import { RESEARCH_UNDERSTANDING_SKILL } from './skills/research-understanding.js';
 import { PAPER_ANALYSIS_SKILL } from './skills/paper-analysis.js';
 import { SCIENTIFIC_SUMMARY_SKILL } from './skills/scientific-summary.js';
@@ -2756,6 +2757,13 @@ export async function extractHandler(
     throw new Error('缺少正文（payload.manuscriptText）');
   }
   const passages = canonicalSourceMap ? canonicalPassages(canonicalSourceMap) : undefined;
+  // Pre-extract the paper's "Fig. N" references so every code path below
+  // (canonical bridge, paper-reading synthesis, persisted-candidate reuse)
+  // can surface the figure list on the ExtractionResult. The figure-audit
+  // task and the workspace-guide both read this field.
+  const extractedFigures: ExtractedFigureReference[] = passages
+    ? extractFigureReferences(passages.map((p) => ({ id: p.id, pageStart: p.pageStart, text: p.text })))
+    : [];
   if (trustedContext.reviewExistingSourceTaskId) {
     if (!canonicalSourceMap || !passages || !trustedContext.requireReusableSemanticStage
       || !trustedContext.scientificReview || trustedContext.scientificReview.mode === 'web') {
@@ -2813,14 +2821,17 @@ export async function extractHandler(
     } catch (error) {
       const failedPhase = error instanceof AiGatewayError && error.message.startsWith('section_map:')
         ? 'section_map' : phase;
-      return blockedSemanticStageResult(
-        canonicalSourceMap,
-        passages,
-        failedPhase,
-        error,
-        trustedContext.scientificReview,
-        semanticStage,
-      );
+      return {
+        ...blockedSemanticStageResult(
+          canonicalSourceMap,
+          passages,
+          failedPhase,
+          error,
+          trustedContext.scientificReview,
+          semanticStage,
+        ),
+        figures: extractedFigures,
+      };
     }
   }
   if (canonicalSourceMap && passages && trustedContext.previousResult) {
@@ -2838,14 +2849,14 @@ export async function extractHandler(
       // revisions changed the old candidate hash. webScientificReviewCanonicalProposal
       // still reuses a paid response only for an exact candidate hash + contract.
       if (persistedProposal) {
-        return reviewAndMaterializeCanonicalProposal(
+        return { ...reviewAndMaterializeCanonicalProposal(
           gateway, canonicalSourceMap, passages, persistedProposal, trustedContext.scientificReview,
-        );
+        ), figures: extractedFigures };
       }
       const partial = await repairCanonicalPartial(gateway, canonicalSourceMap, passages, previousPartial);
       return Object.keys(partial.fieldDiagnostics).length === 0
-        ? reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal, trustedContext.scientificReview)
-        : reviewAndMaterializeCanonicalPartial(gateway, canonicalSourceMap, passages, partial, trustedContext.scientificReview);
+        ? { ...reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, partial.proposal, trustedContext.scientificReview), figures: extractedFigures }
+        : { ...reviewAndMaterializeCanonicalPartial(gateway, canonicalSourceMap, passages, partial, trustedContext.scientificReview), figures: extractedFigures };
     }
   }
   const synthesis = canonicalSourceMap && passages ? await buildPaperReadingSynthesis(gateway, passages) : undefined;
@@ -2919,8 +2930,8 @@ export async function extractHandler(
     if (SDF_CORE_FIELDS.every((field) => proposal.fields[field].needsMoreInformation)) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'canonical_all_fields_missing');
     }
-    return reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, proposal, scientificReview);
+    return { ...reviewAndMaterializeCanonicalProposal(gateway, canonicalSourceMap, passages, proposal, scientificReview), figures: extractedFigures };
   }
   const proposal = await gateway.completeStructured(sdfProposalGuard, prompt, SCIENTIFIC_SYNTHESIS_OPTIONS);
-  return materializeProposal(proposal, manuscriptText);
+  return { ...materializeProposal(proposal, manuscriptText), figures: extractedFigures };
 }
