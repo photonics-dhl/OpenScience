@@ -15,6 +15,7 @@
  */
 import type { Prisma } from '@prisma/client';
 import type { AiGateway } from '@openscience/ai-gateway';
+import { createAgentSession, submitAgentTask } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { auditPaperFigures, type ExtractedFigureReference } from '../skills/figure-list';
 
@@ -104,4 +105,91 @@ function extractFromPassages(passages: Array<{ id: string; pageStart: number; te
     }
   }
   return [...seen.values()].slice(0, 12);
+}
+
+/**
+ * Auto-trigger a figure-audit task after an `sdf.extract` task completes.
+ *
+ * The extract handler now produces a `figures: ExtractedFigureReference[]`
+ * field on its result. We mirror that to a real `presentation.figure-audit`
+ * task so the Hermes conversation has a ready-made plan when the user
+ * asks "为这篇论文做插图规划" or similar. Fire-and-forget: failures here
+ * never roll back the extract task.
+ *
+ * Returns the new task's id, or null if there was no session / no figures
+ * to audit.
+ */
+export async function enqueueFigureAuditFromResult(
+  deps: { prisma: unknown },
+  task: { id: string },
+  result: Record<string, unknown>,
+): Promise<string | null> {
+  try {
+    const prisma = (deps as { prisma: any }).prisma;
+    const owner = await prisma.agentTask.findUnique({ where: { id: task.id }, include: { session: true } });
+    if (!owner || owner.session?.userId == null) return null;
+    const payload = owner.payload as Record<string, unknown> | null;
+    const researchObjectId = typeof payload?.researchObjectId === 'string' ? payload.researchObjectId : owner.session.researchObjectId;
+    const versionId = typeof payload?.versionId === 'string' ? payload.versionId : undefined;
+    const figures = Array.isArray(result.figures) ? result.figures : [];
+    if (!researchObjectId || !versionId || figures.length === 0) return null;
+    const session = await createAgentSession(prisma, { userId: owner.session.userId, kind: 'workspace.guide', researchObjectId });
+    const auditTask = await submitAgentTask(prisma, {
+      sessionId: session.id,
+      userId: owner.session.userId,
+      kind: 'presentation.figure-audit',
+      payload: { researchObjectId, versionId },
+      idempotencyKey: `figure-audit-auto:${researchObjectId}:${versionId}`,
+    });
+    return auditTask.id;
+  } catch (error) {
+    console.warn(`[enqueueFigureAuditFromResult] failed for ${task.id}: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
+export async function enqueueFigureAuditAfterExtract(
+  deps: { prisma: unknown } | unknown | undefined,
+  extractTaskId: string,
+): Promise<string | null> {
+  if (!deps || !extractTaskId) return null;
+  try {
+    const prisma = (deps as { prisma: any }).prisma;
+    if (!prisma?.agentTask?.findUnique) return null;
+    const parent = await prisma.agentTask.findUnique({
+      where: { id: extractTaskId },
+      include: { session: true },
+    });
+    if (!parent || parent.session?.userId == null) return null;
+    const userId = parent.session.userId;
+    const researchObjectId = (parent.payload as Record<string, unknown> | null)?.researchObjectId as string | undefined;
+    const versionId = (parent.payload as Record<string, unknown> | null)?.versionId as string | undefined;
+    const result = parent.result as Record<string, unknown> | null;
+    const figures = (result?.figures as unknown[]) ?? [];
+    if (!researchObjectId || !versionId) return null;
+    // Skip the audit if extraction did not find any figure references — saves
+    // an unnecessary LLM call on short documents that do not have a "Fig. N".
+    if (!Array.isArray(figures) || figures.length === 0) return null;
+    const session = await createAgentSession(deps as any, {
+      userId,
+      kind: 'workspace.guide',
+      researchObjectId,
+    });
+    if (!session?.id) return null;
+    const idempotencyKey = `figure-audit-auto:${researchObjectId}:${versionId}`;
+    const task = await submitAgentTask(deps as any, {
+      sessionId: session.id,
+      userId,
+      kind: 'presentation.figure-audit',
+      payload: { researchObjectId, versionId },
+      idempotencyKey,
+    });
+    return task.id;
+  } catch (error) {
+    // The extract task must not fail because we cannot enqueue an audit.
+    // Log and let the caller move on.
+    // eslint-disable-next-line no-console
+    console.warn(`[enqueueFigureAuditAfterExtract] failed for ${extractTaskId}: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
 }

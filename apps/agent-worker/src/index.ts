@@ -63,7 +63,7 @@ import { createSourceRetrieveHandler } from './retrieval/handler';
 import { collectExpiredTemporaryDocuments } from './retrieval/garbage-collector';
 import { startJournalWorker } from './journal-worker';
 import { createPresentationGenerationHandler, requireIllustrationReviewAuthority, requireIllustrationReviewSubmission } from './presentation/handler';
-import { createPresentationFigureAuditHandler } from './presentation/figure-audit';
+import { createPresentationFigureAuditHandler, enqueueFigureAuditFromResult } from './presentation/figure-audit';
 
 const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number }>();
 type SpoolSubmission = NonNullable<ConstructorParameters<typeof CodexSpoolImageProvider>[0]['withSubmission']>;
@@ -270,7 +270,11 @@ export function createHandlers(
     },
     'sdf.extract': async (deps, task) => {
       const artifactId = typeof task.payload.artifactId === 'string' ? task.payload.artifactId : null;
-      if (!artifactId) return extractHandler(gateway, task);
+      if (!artifactId) {
+        const result = await extractHandler(gateway, task);
+        await enqueueFigureAuditFromResult(deps, task, result);
+        return result;
+      }
       if (!deps.storage) throw new Error('缺少对象存储适配器，无法读取 Artifact');
       const ownerTask = await deps.prisma.agentTask.findUnique({
         where: { id: task.id },
@@ -479,8 +483,7 @@ export function createHandlers(
       }
       const manuscriptText = sourceMapToManuscriptText(parsed.sourceMap);
       if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
-      return {
-        ...await extractHandler(gateway, { payload: { manuscriptText } }, {
+      const extracted = await extractHandler(gateway, { payload: { manuscriptText } }, {
           sourceMap: parsed.sourceMap,
           previousResult: reusableExtractionResult,
           requireReusableSemanticStage,
@@ -501,10 +504,14 @@ export function createHandlers(
                 sha256: artifact.blobSha256, bytes: Uint8Array.from(bytes) },
             } : {}),
           },
-        }),
+        });
+      const result = {
+        ...extracted,
         ...(reusableSourceMap ? { sourceMapReused: true } : {}),
         sourceMapRef,
       };
+      await enqueueFigureAuditFromResult(deps, task, result);
+      return result;
     },
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
