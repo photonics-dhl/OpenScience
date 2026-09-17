@@ -137,7 +137,22 @@ printf 'monitor:%s\n' "$(openssl passwd -apr1 '<新密码>')" > /etc/nginx/.htpa
 `openscience-disk-cache-maintenance.timer` 每日运行 `disk-cache-maintenance.sh`：回收 docker build cache、
 dangling 镜像与超限 journal，并**只读报告**历史 release 的数量与体积。它**不**回收历史 release
 （`production-release-retention.mjs` 按要求绑定发布事务、不作独立清理入口；历史清理仍需用户授权并留收据，
-流程见 [deployment runbook](deployment.md)）。排查：`systemctl list-timers openscience-disk-cache-maintenance.timer`、
+流程见 [deployment runbook](deployment.md)）。
+
+受控安装／漂移检查（版本源头是仓库，服务器是安装副本）：
+
+```bash
+# 只读：报告本地版本化文件的 sha256 与服务端已安装文件的 sha256，并列出 timer 状态
+XGS_CONFIG_ROOT=/e/Miscellaneous/XGS \
+  bash .worktrees/onchip-video-release/infra/scripts/install-disk-cache-maintenance.sh
+
+# 部署：备份到 /var/lib/openscience/*.pre-deploy，bash -n + systemd-analyze verify 后才 enable，
+#       随后 SHA-256 读回比对，不一致即 DRIFT_DETECTED 并 exit 70
+XGS_CONFIG_ROOT=/e/Miscellaneous/XGS \
+  bash .worktrees/onchip-video-release/infra/scripts/install-disk-cache-maintenance.sh --confirm
+```
+
+排查运行：`systemctl list-timers openscience-disk-cache-maintenance.timer`、
 `journalctl -u openscience-disk-cache-maintenance.service -n 30`。
 
 ## 安全说明
