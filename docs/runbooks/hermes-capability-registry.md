@@ -118,6 +118,14 @@
 | **`figurePlan` 消费端** | **未接线（只写字段，无消费者）**。`figurePlan` 的链路止于持久化：产出 `presentation/figure-audit.ts:55`、LLM 写入 `workspace-guide.ts:536/549/568`、guard `:400/:415`、HTTP `apps/api/src/routes/presentation-assets.ts:33`、domain `packages/domain/src/assets/storyboard.ts:94-129`；而 **`apps/agent-worker/src/presentation/illustration-planner.ts` 与 `storyboard.ts` 对 `figurePlan` 零引用**。`storyboard.ts:8` 虽把 `settings` 整体传给 `generateIllustrationStoryboard`，但后者只用 `upstream`/`settings.instruction`/`settings.locale`/`settings.style` 构建消息——**image 路径下模型连 `figurePlan` 都看不到**（video 路径 `storyboard.ts:36` 会随 `settings` 序列化进 JSON，但 prompt 无任何对应指令）。另 `skills/figure-auditor.ts:110` 的 `toStoryboardFigurePlan` **全仓仅定义、零调用**（死代码）。**后果**：审计判 `skip` 的图照样会出图，`decision` 与逐图 `styleId` 路由完全不生效；当前生效的只有整请求级 `settings.style`。因此「出图成功」**不能**证明 figure 路由链路已通。**下一步**：将 `figurePlan` 作为逐图指令注入 illustration planner（`skip`→不生成场景、`reuse`→不重绘、`re-render`/`abstract` + `styleId`→决定该场景风格），需先确定科学语义；在此之前不得用一次真实出图宣称该能力已打通。 | 待定（未接线） |
 | `scientific_review` `escalateMaxTokens: 16384` | 已部署；先前 round 的 knolling 失败原因（review `out=8192`）解除 | `e13fff54` |
 
+### Scene image 出图链路：实测结论（2026-09-18）
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| `sceneImage` 出图链路（submit → Redis → worker → chatgpt-web → 对象存储 → 资产行） | **已验证可用**（由既有产物证明，非本次新跑） | `ac455b2f-1e38-4b70-850c-72bade94e9a6`：`kind=image`、`status=approved`、`generator=OpenScience Hermes scene image / chatgpt-web`、`contentHash=939238de41adf75397acfb7b2fc4dc042dc88d49374fc4eb9c5b0a9f1cbc7d5e`，spool 内 `result.png` 590,049 字节（`result.json` `status=succeeded`），provenance `subtype=storyboard_scene_image`、`sceneImage={sceneIndex:0, storyboardAssetId:979bd088…}`、`source=approved_storyboard_scene`。其 payload 与本次提交逐字相同。 |
+| 桥的失败率 | **约 39%（35 succeeded / 27 failed / 7 uncertain，累计 69 个 result.json）**，失败码恒为 `EXECUTION_FAILED` | 本次重复提交 `0ee21663…` 以 `EXECUTION_FAILED` 失败（spool `result.json` 与任务 error 均为 `image generation failed`），**与 payload 构造无关**——同一 `promptHash=e3380dac38834cd14a9c99faa01ca6d2276591ba1bf91a90be1dd4e15190cd3f` 的任务此前成功过。故「偶发失败」不代表链路断。 |
+| **重复付费守护（服务端缺失）** | **缺口**。`packages/domain/src/assets/presentation-asset.ts:162 submitPresentationGeneration` 只校验 `sceneImage` 的父计划（`:177 requireSceneImageParent`），**不检查该 `(storyboardAssetId, sceneIndex)` 是否已有 approved 图像**；`listPresentationAssets:261` 的 `canGenerateSceneImage` 同样不看既有图像，只有 `:244 eligibleSceneIndexes` 在**UI 层**把已出图场景隐藏。**后果**：绕过 UI 直接提交（API/任务）会对同一张已认可图再次付费出图——本次即如此（我在不知 `ac455b2f` 已存在时重复生成）。这是能力台账「fallback 前置条件」里悬而未决的「验证重复付费守护」的**直接反例**。**下一步**：在 `submitPresentationGeneration` 对 `sceneImage` 增加「同父同场景已有 approved 图像则拒绝（或要求显式 `regenerate` 标志 + 明确用户确认）」，并让 `canGenerateSceneImage` 与 UI 口径一致。 | 本次实测 |
+
 ### Fallback 前置条件（step 5）
 
 - 生产容器读 `HERMES_SCENE_IMAGE_PROVIDER=chatgpt-web`（确认：cdp + chatgpt-web-2.5 协议）。

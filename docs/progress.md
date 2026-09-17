@@ -1,5 +1,12 @@
 # CURRENT Progress Window
 
+## 2026-09-18 — scene image 出图链路实测：链路本身可用，但发现「重复付费守护缺失」
+- **用户要求跑一次真实出图**。真链路提交（`submitPresentationGeneration` → Redis `agent:queue` → 真实 worker `claimAgentTask` → `createPresentationGenerationHandler` → `planSceneImagePrompt` → `gateway.generateImage`(chatgpt-web) → 对象存储 → `presentation_assets`），任务 `0ee21663…` **失败**：`error=image generation failed`，spool `result.json` = `{"status":"failed","errorCode":"EXECUTION_FAILED"}`，无 PNG、无资产行。合成任务/会话与 spool 残留已清理（各 0 残留）。
+- **根因（不是我的 payload 构造错）**：失败任务与 9/17 10:28 成功那次的 **`promptHash` 完全相同**（`e3380dac…`）。桥累计 69 个 result.json：**35 成功 / 27 失败 / 7 不确定**，失败码恒为 `EXECUTION_FAILED`——**桥的偶发失败率约 39%**，不代表链路断裂。
+- **链路可用性由既有产物证明**：`ac455b2f-…` 为 `kind=image`、**`status=approved`**、`generator=OpenScience Hermes scene image / chatgpt-web`、`contentHash=939238de41ad…`，spool 内 `result.png` **590,049 字节**；provenance `subtype=storyboard_scene_image`、`sceneImage={sceneIndex:0,storyboardAssetId:979bd088…}`。其 payload 与我提交的**逐字相同**——即**同一张图早已成功并被认可**。
+- **新发现：服务端缺「重复付费守护」**。`submitPresentationGeneration`（`presentation-asset.ts:162`）只校验父计划（`:177`），**不检查该 (父计划, sceneIndex) 是否已有 approved 图像**；`canGenerateSceneImage`（`:261`）也不看既有图像，只有 UI 侧 `eligibleSceneIndexes`（`:244`）把已出图场景隐藏。所以我能在不知情下对同一张已认可图**再次付费**。这正是能力台账「fallback 前置条件」里悬置的「验证重复付费守护」的反例，已记入 [能力台账](runbooks/hermes-capability-registry.md)。
+- `figurePlan` 仍是无消费者字段（见下节与能力台账）。**未重试**：已有 approved 产物即证明链路，盲目重跑只会再烧一次额度。
+
 ## 2026-09-17 — figure-audit → 出图链路端到端打通（`01381bdf`）
 - **实测通过**：真实 MiniMax-M3 一次调用成功（`in=4934 out=354`、无重试），`presentationDraft.figurePlan` 返回**对象** `{"figures":[{"id":"Fig. 1","decision":"re-render","styleId":"editorial"}]}`，条目逐字复制自审计结果。验证用**自然用户口吻**的 goal（刻意不描述 JSON 形状），只由修好的 system prompt 引导。
 - **根因（此前查了多轮没找到）**：prompt 原文写 "copy `figureAuditPlan.figures` into `presentationDraft.figurePlan`"，而 `figureAuditPlan.figures` 本身是数组 → 模型把**裸数组**赋给 `figurePlan`。但 guard 与下游 `packages/domain/src/assets/storyboard.ts`（`keys(fp,['figures'])` + `Array.isArray(fp.figures)`）都要求对象，故被拒。**放宽 guard 只会把失败推后**，正确修法是修 prompt。已改四处（中/英 system prompt、figureAuditPlan 段、重试校验反馈）。
