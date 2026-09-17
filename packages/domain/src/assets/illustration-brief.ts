@@ -49,7 +49,7 @@ export function parseIllustrationBrief(value: unknown, claimIds?: readonly strin
     if (typeof b.claimId !== 'string' || !uuid.test(b.claimId) || (claimIds && !claimIds.includes(b.claimId))
       || typeof b.evidenceId !== 'string' || !uuid.test(b.evidenceId)
       || typeof b.quote !== 'string' || b.quote.trim().length < 12 || b.quote.length > 12000) return fail(`${field}_basis`, 'invalid_bound_source');
-    return { description: line(raw.description, 100, `${field}_description`), basis: { claimId: b.claimId, evidenceId: b.evidenceId, quote: b.quote } };
+    return { description: line(raw.description, 140, `${field}_description`), basis: { claimId: b.claimId, evidenceId: b.evidenceId, quote: b.quote } };
   });
   const fields: IllustrationBriefFields = { message: line(v.message, 120, 'message'), domain: v.domain as IllustrationBrief['domain'],
     subjects, composition: line(v.composition, v.schemaVersion === 2 ? 200 : 400, 'composition'), treatment: line(v.treatment, 240, 'treatment'),
