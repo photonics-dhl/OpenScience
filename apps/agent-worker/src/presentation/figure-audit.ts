@@ -120,23 +120,25 @@ function extractFromPassages(passages: Array<{ id: string; pageStart: number; te
  * to audit.
  */
 export async function enqueueFigureAuditFromResult(
-  deps: { prisma: unknown },
+  deps: unknown,
   task: { id: string },
   result: Record<string, unknown>,
 ): Promise<string | null> {
   try {
-    const prisma = (deps as { prisma: any }).prisma;
+    const prisma = (deps as { prisma?: { $transaction?: unknown; agentTask?: { findUnique: (a: unknown) => Promise<unknown> } } } | undefined)?.prisma;
+    if (!prisma?.$transaction || !prisma.agentTask) return null;
     const owner = await prisma.agentTask.findUnique({ where: { id: task.id }, include: { session: true } });
-    if (!owner || owner.session?.userId == null) return null;
-    const payload = owner.payload as Record<string, unknown> | null;
-    const researchObjectId = typeof payload?.researchObjectId === 'string' ? payload.researchObjectId : owner.session.researchObjectId;
+    const ownerPayload = owner as { session: { userId: string | null; researchObjectId: string | null } | null; payload: unknown } | null;
+    if (!ownerPayload || ownerPayload.session?.userId == null) return null;
+    const payload = ownerPayload.payload as Record<string, unknown> | null;
+    const researchObjectId = typeof payload?.researchObjectId === 'string' ? payload.researchObjectId : ownerPayload.session.researchObjectId;
     const versionId = typeof payload?.versionId === 'string' ? payload.versionId : undefined;
     const figures = Array.isArray(result.figures) ? result.figures : [];
     if (!researchObjectId || !versionId || figures.length === 0) return null;
-    const session = await createAgentSession(prisma, { userId: owner.session.userId, kind: 'workspace.guide', researchObjectId });
-    const auditTask = await submitAgentTask(prisma, {
+    const session = await createAgentSession(deps as Parameters<typeof createAgentSession>[0], { userId: ownerPayload.session.userId, kind: 'workspace.guide', researchObjectId });
+    const auditTask = await submitAgentTask(deps as Parameters<typeof submitAgentTask>[0], {
       sessionId: session.id,
-      userId: owner.session.userId,
+      userId: ownerPayload.session.userId,
       kind: 'presentation.figure-audit',
       payload: { researchObjectId, versionId },
       idempotencyKey: `figure-audit-auto:${researchObjectId}:${versionId}`,
