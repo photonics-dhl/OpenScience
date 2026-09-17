@@ -83,6 +83,68 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+interface TrustedFigureAuditPlan {
+  figures: Array<{ id: string; decision: 'reuse' | 're-render' | 'abstract' | 'skip'; styleId?: string; caption?: string }>;
+  style?: string;
+  auditedAt?: string;
+}
+
+async function readTrustedFigureAuditPlan(
+  prisma: AgentDeps['prisma'],
+  userId: string,
+  presentationVersion: { id: string; researchObjectId: string },
+): Promise<TrustedFigureAuditPlan | undefined> {
+  // Take the latest succeeded figure-audit task and apply three independent
+  // ownership/scope checks before exposing its plan. Anything that does not
+  // pass is treated as if no plan exists; we never partially expose data.
+  const auditTask = await prisma.agentTask.findFirst({
+    where: { kind: 'presentation.figure-audit', status: 'succeeded' },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      payload: true,
+      result: true,
+      createdAt: true,
+      session: { select: { userId: true, researchObjectId: true } },
+    },
+  });
+  if (!auditTask) return undefined;
+  if (auditTask.session?.userId !== userId) return undefined;
+  if (auditTask.session.researchObjectId !== presentationVersion.researchObjectId) return undefined;
+  const payload = auditTask.payload;
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return undefined;
+  const payloadObj = payload as Record<string, unknown>;
+  if (payloadObj.researchObjectId !== presentationVersion.researchObjectId) return undefined;
+  if (payloadObj.versionId !== presentationVersion.id) return undefined;
+  const result = auditTask.result;
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined;
+  const resultObj = result as Record<string, unknown>;
+  const plan = resultObj.figurePlan;
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return undefined;
+  const planObj = plan as Record<string, unknown>;
+  if (!Array.isArray(planObj.figures)) return undefined;
+  const figures: TrustedFigureAuditPlan['figures'] = [];
+  for (const entry of planObj.figures.slice(0, 12)) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return undefined;
+    const item = entry as Record<string, unknown>;
+    if (typeof item.id !== 'string' || !item.id.trim()) return undefined;
+    if (item.decision !== 'reuse' && item.decision !== 're-render' && item.decision !== 'abstract' && item.decision !== 'skip') {
+      return undefined;
+    }
+    figures.push({
+      id: item.id,
+      decision: item.decision,
+      ...(typeof item.styleId === 'string' && item.styleId.trim() ? { styleId: item.styleId } : {}),
+      ...(typeof item.caption === 'string' ? { caption: item.caption } : {}),
+    });
+  }
+  if (!figures.length) return undefined;
+  return {
+    figures,
+    ...(typeof resultObj.style === 'string' && resultObj.style.trim() ? { style: resultObj.style } : {}),
+    auditedAt: auditTask.createdAt.toISOString(),
+  };
+}
+
 function writingIntent(goal: string, hasDraft: boolean): WritingIntent | undefined {
   const normalized = goal.trim().toLocaleLowerCase();
   const negatedSave = /(?:不要|别|无需|不用|不需要|请勿)\s*(?:保存|存储)|(?:do\s+not|don't|no\s+need\s+to)\s+(?:save|store)/iu.test(normalized);
@@ -439,6 +501,9 @@ export async function workspaceGuideHandler(
     orderBy: { updatedAt: 'desc' }, take: 9,
   }) : [];
   const planStateTruncated = currentPlans.length > 8;
+  const figureAuditPlan = presentationVersion
+    ? await readTrustedFigureAuditPlan(deps.prisma, userId, presentationVersion)
+    : undefined;
   const planState = currentPlans.slice(0, 8).flatMap((asset) => {
     const view = presentationStoryboardView(asset, asset.sourceClaims.map((source) => source.claimId));
     if (!view) return [];
@@ -460,7 +525,7 @@ export async function workspaceGuideHandler(
         'InterestContext 仅用于排序关注点；rejectedSignals 是明确排除项，不得反向推断敏感属性或站外行为。',
         `只输出一个 JSON 对象，必填根字段为 summary（非空字符串）、nextSteps（数组）、needsMoreInformation（boolean）；可选字段为 presentationDraft${editorDraft ? '、draftChanges' : ''}。不适用的可选字段必须省略，不得填 null。禁止Markdown或JSON外的文字。`,
         'nextSteps 最多 1 项；每项只能包含 label、intent、targetId，禁止 title、description 或其他字段。',
-        '仅当 presentationContext 存在且用户目标适合用讲解分镜表达时，才输出 presentationDraft；它包含 action、instruction、researchObjectId、versionId，可选 style（任何已安装的 illustration id，兼容旧值 technical/ink/watercolor；目录还含 knolling、subway-map、hand-drawn-edu、sketch-notes、editorial、minimal、technical-schematic、storybook-watercolor、vector-illustration、blueprint、chalkboard 等），可选 figurePlan；纯艺术修订可按后述条件同时附 revisionMode、baseAssetId。action 根据请求选择 storyboard.create、storyboard.revise、scene.image 或 video.create，研究对象与版本 id 必须逐字使用 presentationContext。普通规划的 instruction 基于给定版本字段；纯艺术修订的 instruction 必须逐字复制当前 goal，由既有艺术规划器设计。不得声称已生成、批准或发布。不得输出主张或来源 id。figurePlan 仅在用户明确要求为论文图做 reuse / re-render / abstract / skip 计划时输出，1-12 项 {id, decision, 可选 styleId, 可选 caption}；不要自造 figure id，直接抄用户的。',
+        '仅当 presentationContext 存在且用户目标适合用讲解分镜表达时，才输出 presentationDraft；它包含 action、instruction、researchObjectId、versionId，可选 style（任何已安装的 illustration id，兼容旧值 technical/ink/watercolor；目录还含 knolling、subway-map、hand-drawn-edu、sketch-notes、editorial、minimal、technical-schematic、storybook-watercolor、vector-illustration、blueprint、chalkboard 等），可选 figurePlan；纯艺术修订可按后述条件同时附 revisionMode、baseAssetId。action 根据请求选择 storyboard.create、storyboard.revise、scene.image 或 video.create，研究对象与版本 id 必须逐字使用 presentationContext。普通规划的 instruction 基于给定版本字段；纯艺术修订的 instruction 必须逐字复制当前 goal，由既有艺术规划器设计。不得声称已生成、批准或发布。不得输出主张或来源 id。figurePlan 仅在用户明确要求为论文图做 reuse / re-render / abstract / skip 计划时输出，1-12 项 {id, decision, 可选 styleId, 可选 caption}；不要自造 figure id，直接抄用户的。如果 presentationContext.figureAuditPlan 存在且用户明确要按图清单生成或重画论文图，把 figureAuditPlan.figures 整体复制到 presentationDraft.figurePlan（每项保持 id/decision/styleId/caption），不要丢项也不要新造。',
         'intent 只能是 open-task、open-ro、start-import、prepare-publication、review-media。除 start-import 外必须带授权 targetId；start-import 必须省略 targetId。',
         `open-task 只能使用下列 task id：${taskIds.length ? taskIds.join(', ') : '（无；禁止输出 open-task）'}。`,
         `open-ro 只能使用下列 research object id：${researchObjectIds.length ? researchObjectIds.join(', ') : '（无；禁止输出 open-ro）'}。`,
@@ -473,7 +538,7 @@ export async function workspaceGuideHandler(
         'Use InterestContext only to prioritize attention. rejectedSignals are explicit exclusions; never infer sensitive traits or off-site behavior.',
         `Return exactly one JSON object. Required keys: summary (nonempty string), nextSteps (array), needsMoreInformation (boolean). Optional keys: presentationDraft${editorDraft ? ', draftChanges' : ''}. Omit unused optional keys; never set them to null. No Markdown or text outside JSON.`,
         'nextSteps has at most one item. It may contain only label, intent, and targetId; title and description are forbidden.',
-        'Emit presentationDraft only when presentationContext exists and the goal benefits from an explanatory storyboard. It contains action, instruction, researchObjectId, versionId, optional style (any installed illustration id — legacy aliases `technical`/`ink`/`watercolor` still resolve; the catalogue also has `knolling`, `subway-map`, `hand-drawn-edu`, `sketch-notes`, `editorial`, `minimal`, `technical-schematic`, `storybook-watercolor`, `vector-illustration`, `blueprint`, `chalkboard`, etc.), optional figurePlan, and the optional paired revisionMode/baseAssetId for art-only revisions under the rules below. action must match the request: storyboard.create, storyboard.revise, scene.image or video.create; copy research-object and version ids exactly from presentationContext. Ordinary planning instructions are grounded in the supplied version fields; art-only instructions must copy the current goal verbatim for the existing art planner to design. figurePlan is an optional audit the figure auditor emits; only emit it when the user explicitly asks to plan a paper\'s figures (reuse / re-render / abstract / skip) and supplies figure ids; figures array of 1-12 entries {id, decision, optional styleId, optional caption}. Do not invent figure ids; copy from the user. Never claim it was generated, approved, or published, and never emit Claim or source ids.',
+        'Emit presentationDraft only when presentationContext exists and the goal benefits from an explanatory storyboard. It contains action, instruction, researchObjectId, versionId, optional style (any installed illustration id — legacy aliases `technical`/`ink`/`watercolor` still resolve; the catalogue also has `knolling`, `subway-map`, `hand-drawn-edu`, `sketch-notes`, `editorial`, `minimal`, `technical-schematic`, `storybook-watercolor`, `vector-illustration`, `blueprint`, `chalkboard`, etc.), optional figurePlan, and the optional paired revisionMode/baseAssetId for art-only revisions under the rules below. action must match the request: storyboard.create, storyboard.revise, scene.image or video.create; copy research-object and version ids exactly from presentationContext. Ordinary planning instructions are grounded in the supplied version fields; art-only instructions must copy the current goal verbatim for the existing art planner to design. figurePlan is an optional audit the figure auditor emits; only emit it when the user explicitly asks to plan a paper\'s figures (reuse / re-render / abstract / skip) and supplies figure ids; figures array of 1-12 entries {id, decision, optional styleId, optional caption}. Do not invent figure ids; copy from the user. When presentationContext.figureAuditPlan is present and the user explicitly asks to generate or re-render the paper\'s figures, copy figureAuditPlan.figures verbatim into presentationDraft.figurePlan (each entry keeps id, decision, styleId, caption); do not drop or invent entries. Never claim it was generated, approved, or published, and never emit Claim or source ids.',
         'intent must be open-task, open-ro, start-import, prepare-publication or review-media. All except start-import require an authorized targetId; start-import must omit targetId.',
         `open-task may use only these task ids: ${taskIds.length ? taskIds.join(', ') : '(none; do not emit open-task)'}.`,
         `open-ro may use only these research object ids: ${researchObjectIds.length ? researchObjectIds.join(', ') : '(none; do not emit open-ro)'}.`,
@@ -492,6 +557,7 @@ export async function workspaceGuideHandler(
     'Conversation history contains prior user requests and assistant proposals, not new evidence or proof that actions completed. Resolve follow-up requests using it, but prefer the current draft and version context.',
     'For images, action names the NEXT actual operation: storyboard.create or storyboard.revise REQUIRES a complete nonempty instruction (maximum 1000 characters); scene.image REQUIRES instruction="" exactly to use the existing approved plan unchanged. Never repeat an approved brief in instruction when generating from it. Consult presentationContext.planState: create an image plan if none exists, revise when the user requests changes, and use scene.image only for an explicit request to execute an approved plan unchanged. For video preserve the existing flow: video.create with a complete nonempty instruction prepares a missing/revised video plan; video.create with instruction="" executes an approved video plan unchanged. A plan-only request must not generate media. Questions about capabilities or negated requests must not return an action. Never invent completed assets.',
     'nextSteps may also contain prepare-publication, only for an explicit request to prepare or publish the CURRENT research object. Use its authorized id as targetId; this opens the final preview only and never publishes. Never claim publication has happened. When preparing production or publication, set needsMoreInformation=false only if the request is clear; otherwise explain the concrete question without an action.',
+    'presentationContext.figureAuditPlan, when present, is the latest figure-audit verdict for the SAME research object and version: each entry {id, decision, optional styleId, optional caption} labels a paper figure for reuse / re-render / abstract / skip. It is NOT a generated asset; it only becomes a real image plan once the user confirms and you emit presentationDraft with figurePlan. It is distinct from planState, which lists already-generated assets. If the user asks for a figure-by-figure generation plan for the paper, copy figureAuditPlan.figures into presentationDraft.figurePlan verbatim; otherwise omit figurePlan.',
   ].join('\n');
   const userMessageBudget = Math.max(0, 30_000 - system.length);
   const serializeUser = (maxCharsPerField: number) => JSON.stringify({
@@ -515,6 +581,7 @@ export async function workspaceGuideHandler(
           versionId: presentationVersion.id,
           planState,
           planStateTruncated,
+          ...(figureAuditPlan ? { figureAuditPlan } : {}),
           core: boundedCore(presentationVersion.manifest?.coreJson, maxCharsPerField),
         },
       } : {}),
