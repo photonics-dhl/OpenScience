@@ -117,8 +117,16 @@ async function readTrustedFigureAuditPlan(
   if (payloadObj.versionId !== presentationVersion.id) return undefined;
   const result = auditTask.result;
   if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined;
+  // Worker dispatcher stores the handler's return value verbatim into
+  // task.result. The presentation.figure-audit handler returns
+  // `{ result: FigureAuditResult }`, so task.result.result.figurePlan is
+  // where the plan actually lives. Fall back to the unwrapped shape too,
+  // because future task kinds may return FigureAuditResult directly.
   const resultObj = result as Record<string, unknown>;
-  const plan = resultObj.figurePlan;
+  const inner = (typeof resultObj.result === 'object' && resultObj.result !== null && !Array.isArray(resultObj.result))
+    ? resultObj.result as Record<string, unknown>
+    : resultObj;
+  const plan = inner.figurePlan;
   if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return undefined;
   const planObj = plan as Record<string, unknown>;
   if (!Array.isArray(planObj.figures)) return undefined;
@@ -140,7 +148,7 @@ async function readTrustedFigureAuditPlan(
   if (!figures.length) return undefined;
   return {
     figures,
-    ...(typeof resultObj.style === 'string' && resultObj.style.trim() ? { style: resultObj.style } : {}),
+    ...(typeof inner.style === 'string' && inner.style.trim() ? { style: inner.style } : {}),
     auditedAt: auditTask.createdAt.toISOString(),
   };
 }
