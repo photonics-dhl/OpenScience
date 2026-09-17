@@ -1,5 +1,11 @@
 # CURRENT Progress Window
 
+## 2026-09-17 — figure-audit → 出图链路端到端打通（`01381bdf`）
+- **实测通过**：真实 MiniMax-M3 一次调用成功（`in=4934 out=354`、无重试），`presentationDraft.figurePlan` 返回**对象** `{"figures":[{"id":"Fig. 1","decision":"re-render","styleId":"editorial"}]}`，条目逐字复制自审计结果。验证用**自然用户口吻**的 goal（刻意不描述 JSON 形状），只由修好的 system prompt 引导。
+- **根因（此前查了多轮没找到）**：prompt 原文写 "copy `figureAuditPlan.figures` into `presentationDraft.figurePlan`"，而 `figureAuditPlan.figures` 本身是数组 → 模型把**裸数组**赋给 `figurePlan`。但 guard 与下游 `packages/domain/src/assets/storyboard.ts`（`keys(fp,['figures'])` + `Array.isArray(fp.figures)`）都要求对象，故被拒。**放宽 guard 只会把失败推后**，正确修法是修 prompt。已改四处（中/英 system prompt、figureAuditPlan 段、重试校验反馈）。
+- **附带修掉一个诊断盲区**：`validationDiagnostic` 原先**完全没有 figurePlan 形状检查**，导致失败只显示空泛的 `guide:guard_rejected`（我据此绕了很多弯路）。现已补上，会精确报 `presentation_figureplan_is_array_expected_object_with_figures`，且该文本会作为重试反馈给模型。
+- 前序两处修复仍有效：`07574e4e`（`task.result` 套层）、`e0e0aafa`（instruction ≤1000 字符）。生产 active=`01381bdf`、rollback=`c1b895ca`，11 容器 healthy、`/__release` 200、无残留事务标记，验证用合成会话/任务已清理。
+
 ## 2026-09-17 — 服务器磁盘治理（用户授权：80% 占用判为不健康）
 - **测量口径**：必须用 `du -shx`。netdata 容器把宿主 `/` bind 到 `/host/root`，未加 `-x` 的 `du` 会递归进整个宿主文件系统，把 `/var/lib/docker` 从真实 38G 虚报为 67G、overlay2 从 31G 虚报为 60G（我据此曾误判"35G 孤儿层"，实为测量假象）。`docker system df` 的 Images/BuildCache 字段同样不可信（`builder prune -af` 实际回收 9.4G 而该字段只报 1.35G）。
 - 主因与修复：历史 release 累积的直接原因是**开发工具把不可变 release 目录当配置源挂载**，release 转为 inactive 后被钉住，永不回收。已把 catalog 挂载源解耦到稳定路径 `/opt/openscience-development/catalog/source/`，重建后 `query.mjs` 读回正常、restart=0。
