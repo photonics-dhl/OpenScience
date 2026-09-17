@@ -614,8 +614,24 @@ export async function workspaceGuideHandler(
       upper = candidateLimit - 1;
     }
   }
-  const resultGuard: SchemaGuard<WorkspaceGuideResult> = (value): value is WorkspaceGuideResult => workspaceGuideResultGuard(value)
-    && (value.presentationDraft?.revisionMode !== 'art' || artBaseIds.has(value.presentationDraft.baseAssetId!));
+  const resultGuard: SchemaGuard<WorkspaceGuideResult> = (value): value is WorkspaceGuideResult => {
+    const inner = workspaceGuideResultGuard(value);
+    const v = value as Record<string, unknown>;
+    const pd = v.presentationDraft as Record<string, unknown> | undefined;
+    const artOk = pd?.revisionMode !== 'art' || (typeof pd?.baseAssetId === 'string' && artBaseIds.has(pd.baseAssetId));
+    if (!(inner && artOk)) {
+      console.error('[guide.guard.rejected]', JSON.stringify({
+        inner,
+        artOk,
+        value: v,
+        workspaceGuideKeys: Object.keys(v),
+        presentationKeys: pd && typeof pd === 'object' && !Array.isArray(pd) ? Object.keys(pd) : null,
+        styleValue: pd?.style,
+        styleType: typeof pd?.style,
+      }));
+    }
+    return inner && artOk;
+  };
   // (debug change marker 2026-09-17)
   // Diagnose fixed field names only: rejected user/model text and identifiers must not enter logs.
   const validationDiagnostic = (value: unknown): string => {
