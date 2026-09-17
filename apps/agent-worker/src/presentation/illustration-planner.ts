@@ -154,21 +154,49 @@ Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,co
       subjects: scene.illustration.subjects.map((subject, index) => ({ index, description: subject.description })),
       encoding: scene.illustration.encoding, labels: scene.illustration.labels, constraints: scene.illustration.constraints })),
       ...(reusableBase ? { previousArt: reusableBase.map(scene => scene!.art) } : {}) }) }];
+  function defaultArtLayout(scene: ScientificScene): string {
+    const short = scene.title.length > 60 ? `${scene.title.slice(0, 57)}…` : scene.title;
+    return `主对象居中（${short}）；二级对象用细线箭头或虚线引出在主对象四周；labels 紧贴主体，间距 0.5em。`;
+  }
+  function defaultArtTreatment(scene: ScientificScene): string {
+    const isMech = scene.illustration.domain === 'real-space' || scene.illustration.domain === 'wavevector-space';
+    return isMech
+      ? 'technical 线稿：暖白 #ECECEC 平涂底，极细深海军蓝实线，单一底色无装饰线，无渐变无光晕；labels 印刷体同色。'
+      : 'technical 简笔：暖白 #ECECEC 平涂底，极细深海军蓝线条 + 稀疏语义色块，单一底色无装饰线；labels 印刷体同色。';
+  }
   function combineArt(value: unknown): StoryboardDocument {
     const root = object(value); keys(root, ['scenes'], 'art_root');
-    if (!Array.isArray(root.scenes) || root.scenes.length !== intent.scenes.length) throw new Error('art_scene_count');
-    const scenes = root.scenes.map((raw, index) => {
-      const art = object(raw); keys(art, ['layout', 'treatment'], 'art_scene');
+    if (!Array.isArray(root.scenes) || root.scenes.length < 1) throw new Error('art_scene_count');
+    // The art stage is a separate LLM call and may return a different number of
+    // scenes than the planner produced (a known 1-2-off model-consistency drift).
+    // Use the first `intent.scenes.length` entries; if the art stage produced
+    // fewer, pad with a default derived from the scene's own science. A strict
+    // `length ===` check rejected too many plausible multi-scene briefs.
+    const scenes: ReturnType<typeof intent.scenes.map> = [];
+    for (let index = 0; index < intent.scenes.length; index += 1) {
       const scene = intent.scenes[index]!;
+      const rawArt = (root.scenes as unknown[])[index];
+      const art = rawArt !== undefined
+        ? (keys(object(rawArt), ['layout', 'treatment'], `art_scene_${index}`),
+            { layout: String((rawArt as { layout: unknown }).layout ?? ''), treatment: String((rawArt as { treatment: unknown }).treatment ?? '') })
+        : { layout: defaultArtLayout(scene), treatment: defaultArtTreatment(scene) };
       const illustration = parseIllustrationBrief({ ...scene.illustration,
         composition: text(art.layout, layoutLimit, 'layout', true),
         treatment: text(art.treatment, 220, 'treatment', true) }, scene.sourceClaimIds);
       compileIllustrationImagePrompt(illustration);
-      return { ...scene, illustration, visualAction: describeIllustrationBrief(illustration) };
-    });
+      scenes.push({ ...scene, illustration, visualAction: describeIllustrationBrief(illustration) } as typeof intent.scenes[number]);
+    }
     return parseStoryboardDocument({ schemaVersion: 1, title: intent.title, scenes }, claimIds, 'image');
   }
+  const expectedSceneCount = intent.scenes.length;
   const art = await gateway.completeStructured((value): value is Record<string, unknown> => {
+    if (value && typeof value === 'object' && Array.isArray((value as { scenes?: unknown[] }).scenes)
+      && (value as { scenes: unknown[] }).scenes.length !== expectedSceneCount) {
+      // The LLM sometimes returns N±1 art scenes for an N-scene plan. We now
+      // accept that and pad/truncate in combineArt, but log it for operators.
+      // eslint-disable-next-line no-console
+      console.warn(`[illustration-planner] art stage returned ${(value as { scenes: unknown[] }).scenes.length} scenes for a ${expectedSceneCount}-scene plan; padding/truncating.`);
+    }
     try { combineArt(value); return true; } catch (error) { diagnostic = error instanceof Error ? error.message : 'invalid_art_direction'; return false; }
   }, artMessages, { temperature: 0.3, includeRejectedResponseOnRetry: true, maxRetries: 2, maxTokens: 16384, escalateMaxTokens: 32768,
     validationDiagnostic: () => diagnostic.toLowerCase().replace(/[^a-z0-9_,:-]+/gu, '_').slice(0, 400),

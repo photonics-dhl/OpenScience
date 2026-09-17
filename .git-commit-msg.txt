@@ -1,0 +1,26 @@
+fix(illustration): tolerate art-stage scene count drift between planner and art
+
+The previous round's `out=8192` budget fix pushed knolling past the
+review ceiling. What surfaced instead was `art_scene_count`: the
+planner produces N science scenes, but the art stage's separate LLM
+call returns N±1 art entries (1-2 off is a known model-consistency
+drift for a separate call that has to count scenes in JSON output).
+The strict `length ===` rejection then aborted the whole storyboard
+even though the model had valid art entries for most scenes.
+
+`combineArt` now:
+- accepts `root.scenes.length >= 1` (down from `=== intent.scenes.length`),
+- iterates `intent.scenes.length` slots and uses the first art entry for
+  each (or `min(N, M)` if art has fewer),
+- pads the missing slots with a default `layout`/`treatment` derived
+  from the scene's own science (`defaultArtLayout` / `defaultArtTreatment`
+  helpers: short zh text describing a clean knolling-style placement and
+  a v6-compatible technical line treatment),
+- surfaces a one-time `console.warn` to operators when the model
+  drifts so future deploys can tell whether the fix is masking a deeper
+  problem.
+
+No schema change, no contract change. The art stage's prompt still
+says "one entry per supplied intent"; we just no longer reject the
+case when the model returns a close-but-not-exact match.
+
