@@ -110,8 +110,9 @@
 
 | 能力 | 状态 | 部署 SHA |
 |---|---|---|
-| `presentation.figure-audit` agent task | 端到端跑通：`62c0d636…` 任务对 RO `9067a2d5` 审计，`figures:[{id:"Fig. 1", pageNumber:1, caption: …}]` ＋ `figurePlan.figures:[{id:"Fig. 1", decision:"skip", rationale:"…carries no scientific content…"}]`。`skip` 是保守正确——抽取到的 caption 太薄，无法负责任地重画 | `bd1082b5` |
+| `presentation.figure-audit` agent task | 端到端跑通：`62c0d636…`（手动）+ `4cd4a5f9…`（auto）。自动触发链路：每次 `sdf.extract` 成功后 worker 在 orchestrator 层 fire-and-forget 入队一个 figure-audit 任务，结果落 `task.result` 供前端/Hermes 读。`4cd4a5f9…` 是真实证据流：图清单来自 `evidenceRecord.exactQuote`，审计模型正确判 `skip`（caption 太薄）。 | `bd1082b5` + `c866c646` |
 | `POST /api/research-objects/:id/versions/:vid/presentation-figure-audit` | 已挂；返回 202 + `task`。`GET .../:taskId` 拉结果。`AGENT_TASK_KINDS` 与 `PUBLIC_AGENT_TASK_KINDS` 都已加 | `bd1082b5` |
+| `sdf.extract → presentation.figure-audit` 自动编排 | **端到端验证**：`sdf.extract c996fc81/6d79233e/12e59fa0/960e2b1f/...` 等多次都自动入队 figure-audit 任务于 10s 后启动；Hook 在 worker `apps/agent-worker/src/index.ts` 两个 extract 分支里都调 `enqueueFigureAuditFromResult(deps, task, result)`，legacy `manuscriptText` 路径在 `c866c646` 修了 Prisma 双重 deref bug 后也走通。Hook 在 result.figures=[] / 缺 researchObjectId 时静默 no-op，不影响主任务。 | `c866c646` |
 | `style-router` (deterministic) | 已写；`水彩→watercolor`、`黑白→ink-notes`、`平铺→knolling`、`封面→editorial`、`教程→hand-drawn-edu`、`流程→subway-map`、`信息图→bold-graphic`；无信号回退 `scientific` | `bd1082b5` |
 | `scientific_review` `escalateMaxTokens: 16384` | 已部署；先前 round 的 knolling 失败原因（review `out=8192`）解除 | `e13fff54` |
 
