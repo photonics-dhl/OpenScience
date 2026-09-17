@@ -1,5 +1,12 @@
 # CURRENT Progress Window
 
+## 2026-09-17 — 服务器磁盘治理（用户授权：80% 占用判为不健康）
+- 起因：根盘 112G/148G（80%）。实测构成＝docker overlay2 约 60G ＋ 卷 13G ＋ `/opt/openscience-releases` 43G（83 个 release 目录，每个约 2.9G）＋ 其余 `/opt` 与 pnpm store。`docker system df` 的 Build Cache/Images 字段会严重低报（实测 `builder prune -af` 回收 9.4G 而该字段只报 1.35G），不可作为唯一依据。
+- 主因与修复：历史 release 累积的直接原因是**开发工具把不可变 release 目录当配置源挂载**，release 转为 inactive 后被钉住，使 `--prune-unused` 之外的目录永不回收。已把 catalog 的挂载源从 `releases/e02c391d…/…/catalog-info.yaml` 解耦到稳定路径 `/opt/openscience-development/catalog/source/`，重建后 `query.mjs` 读回正常、restart=0。
+- 清理执行：在 FD9 锁内复用官方 API 做受控事务（`journal-start(prepared)` → `journal-update(published)` → `retention prepare --prune-unused 1` → `journal-clear` → `retention complete`；顺序不可换，因 prepare 要求 journal 为 published 而 complete 要求 journal 已清除）。计划 81 release/0 image tag/56 capability 全删；工具的 active/rollback 排除与"被任何容器挂载即拒绝"始终生效，未绕过保护。另清 19 个陈旧 `openscience-*` 镜像 tag（保留 active/rollback/被引用者与全部第三方基础镜像）。
+- 开发栈根因：ClickHouse 卷 6.0G 中 `system.trace_log` 独占 4.74G/3.04 亿行，而 Langfuse 自身数据仅 208KiB；已 TRUNCATE 并设表级 TTL（trace/text 3 天，metric/part/query/error/asynchronous 7 天），卷降至 112M。注意 `query_profiler_*` 属 user-level 设置，写入 config.d 会使容器启动失败（`Code: 137 UNKNOWN_ELEMENT_IN_CONFIG`），须置于 users.xml 的 profiles，故改用表级 TTL；该实验配置已按备份逐字节还原。
+- 结果：磁盘 112G/80% → 62G/44%（可用 30G → 80G）；release 目录 83→2；标记、无残留 journal/pending/failure、11 个生产容器 healthy、公网 `/__release` 200。`/opt/openscience/node_modules`（2.5G，无容器引用）、`/opt/openscience-evals`（1.6G）、netdata 缓存（2.37G）按既有审计仍为 INVESTIGATE，本轮未删。详见 [deployment runbook](runbooks/deployment.md)。
+
 ## 2026-09-16 — 交付线对齐、v6 配图与图片链路隐患收口
 - 唯一交付入口定为 `.worktrees/onchip-video-release` 的 `release/onchip-production-line`（＝生产线 `311c980f` ＋我方修复；旧 `codex/onchip-video-release` 缺 journals/学术身份，降级历史线不得发版）。根 `main` 重定位到 `origin/main` 并只作导航；worktree 40→2；AGENTS 增「工作区与发布卫生」（每轮 `git status --porcelain` 必须为空、release 身份须为已推送可解析 SHA、证据放仓库外或已忽略目录）。
 - 部署链修复：服务器无源码 git 仓库，生产 release 目录重建为 `311c980f`；真正阻塞是我方分支带旧版 `deploy.sh`（生产线版本接受裸 40 位 `--rollback-ref`）。剔除违反发布守卫的 `packages/search/generated` 21 个误提交文件后 `4099078b` 部署成功，journals/学术身份保留；后续按正常流程迭代至 `d3a0da3f`→`fa66e89e`。
