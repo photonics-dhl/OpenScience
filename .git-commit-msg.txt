@@ -1,0 +1,21 @@
+fix(illustration): let MiniMax-M3 actually use its 32K output, stop ceiling at 16K/32K
+
+The previous round's planner ceiling at 8K/16K was an artificial hard
+cap I set on the gateway, not a MiniMax-M3 limit. The configured
+provider is MiniMax-M3-1M (1M context, 32K output). Bumping the four
+call sites to (16K, 32K) and the default in `completeStructured` to
+16K:
+
+  - planner science stage:        8192/16384 → 16384/32768
+  - planner art stage:            8192/16384 → 16384/32768
+  - planner label-clarify:         8192/16384 → 16384/32768
+  - scientific_review path:        8192/24576 → 16384/32768
+  - scene-image planner:           8192/16384 → 16384/32768
+  - default currentMaxTokens:      4096    → 16384
+
+Expected effect: the previously-failing `knolling` multi-scene brief
+should now plan + review end-to-end on the first attempt at the
+16384-32K band. If the model still produces `encoding:length_350_max_200`
+the ceiling is the **schema** (200 chars), not the budget — that
+stays as a separate prompt-tuning problem.
+
