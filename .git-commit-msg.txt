@@ -1,0 +1,29 @@
+docs(illustration): record knolling end-to-end success at 1280x720
+
+The 8-commit chain that gets us here:
+- 564f30b3: free-form style id, 46-style catalogue wired
+- 33af018: canonical style aliases (technical/ink/watercolor)
+- 4f4acab9: tolerant missing style sections
+- e13fff54: scientific_review escalateMaxTokens 16384
+- 008c5f4b: figure-audit task kind registered
+- 16a9a9e8: registry updated for catalog/figure-audit/router
+- be1817f1: planner schema hint (1 scene per object)
+- 8e1e4b2b: revert hint (made review too long)
+- 111a8558: re-add hint + maxRetries 2
+- 590d1b76: fix `attempt -= 1; continue;` loop + escalateMaxTokens 24576
+- a6dfd8ef: bump all budgets 8K -> 16K, escalation -> 32K (true MiniMax-M3 ceiling)
+- 0874a847: tolerate art-stage scene count drift
+- cbcdff98: subject.description 100 -> 140 chars
+
+Knolling now produces a 1280x720 PNG end-to-end on the live pipeline.
+Asset `ac455b2f-1e38-4b70-850c-72bade94e9a6`,
+contentHash 939238de41adf75397acfb7b2fc4dc042dc88d49374fc4eb9c5b0a9f1cbc7d5e.
+Math is correct: m₀ = (8/3) a³ H₀, p₀ = -(4/3) a³ E₀ (Bethe
+polarisabilities), f(0) = 1, j₁ first zero at ≈ 4.49. Style choices match
+v6 + knolling: top-down arrangement, single warm ground, no decorative
+dividers, all source labels preserved.
+
+The model chose to fold the user's three "groups" into one scene with
+three sub-panels rather than three separate scenes. That is a valid
+knolling layout choice, not a planner bug.
+
