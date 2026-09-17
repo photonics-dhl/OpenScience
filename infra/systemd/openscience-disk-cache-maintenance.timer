@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the OpenScience disk cache maintenance daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+AccuracySec=1h
+RandomizedDelaySec=30min
+Unit=openscience-disk-cache-maintenance.service
+
+[Install]
+WantedBy=timers.target

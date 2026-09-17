@@ -117,6 +117,29 @@ printf 'monitor:%s\n' "$(openssl passwd -apr1 '<新密码>')" > /etc/nginx/.htpa
   `dbengine tier 0 retention size = 512MiB`、`dbengine tier 0 retention time = 7d`。
   **dbengine 不会立即缩容**，按上限逐步回收。
 
+### 已知限制：本镜像不读取用户 `health.d`（2026-09-17 实测）
+
+想加一条"剩余空间绝对值"告警时发现：在 `/etc/netdata/health.d/`（即 netdataconfig 卷）放自定义告警
+**不会生效**。四次实测：写入后 restart 未注册；把告警简化到最小形式（去掉 `chart labels` 与 `calc`）仍未注册；
+用 `netdata -W reload-health` 重载失败（该选项不存在，重载 health 的信号是 **USR2**）；在 `netdata.conf`
+显式写 `[health] enabled = yes` 与 `[directories] health config = /etc/netdata/health.d` 后仍为 0 条注册。
+确证：netdata 日志加载 stock 配置时路径固定为 `file=/usr/lib/netdata/conf.d/health.d/...`（stock 侧 131 个配置
+正常生效），`/var/log/netdata/error.log` 为空、无解析报错——即**用户 health.d 根本未被读取**。
+该实验文件已删除，`netdata.conf` 恢复为仅保留期配置。
+
+后果：只能使用 stock 阈值（`disks.conf` 的 `disk_space_usage`：warn >80%；crit >90% **且** 可用 <5G）。
+在 148G 盘上 crit 实际不可达，**80% warn 是可行动的那一档，而它现在会真正发信**。
+若要绝对空间告警或更早阈值，需换用非 user-health.d 的机制（例如让 `disk-cache-maintenance` 自身带阈值检查），
+不要在 `health.d` 上重复投入。
+
+### 定期缓存维护（2026-09-17 起）
+
+`openscience-disk-cache-maintenance.timer` 每日运行 `disk-cache-maintenance.sh`：回收 docker build cache、
+dangling 镜像与超限 journal，并**只读报告**历史 release 的数量与体积。它**不**回收历史 release
+（`production-release-retention.mjs` 按要求绑定发布事务、不作独立清理入口；历史清理仍需用户授权并留收据，
+流程见 [deployment runbook](deployment.md)）。排查：`systemctl list-timers openscience-disk-cache-maintenance.timer`、
+`journalctl -u openscience-disk-cache-maintenance.service -n 30`。
+
 ## 安全说明
 
 - Netdata 只绑 127.0.0.1，公网唯一入口是带 basic_auth 的 nginx 路径。

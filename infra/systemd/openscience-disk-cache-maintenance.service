@@ -1,0 +1,11 @@
+[Unit]
+Description=Reclaim regenerable OpenScience host caches
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openscience-disk-cache-maintenance
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
