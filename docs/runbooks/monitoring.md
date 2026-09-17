@@ -91,8 +91,39 @@ printf 'monitor:%s\n' "$(openssl passwd -apr1 '<新密码>')" > /etc/nginx/.htpa
   而阿里云 VPC 内部 DNS（100.100.2.136/138）恰在该段 → 全机 DNS 瘫痪、yum/apk 不可用。
   当日已完全卸载（包/服务/repo/状态目录），不要再在这台服务器上安装 Tailscale。
 
+## 告警投递（2026-09-17 补接，此前为静默）
+
+**背景**：根盘曾达 112G/148G=80% 而无任何通知送达。实测三套已装工具均覆盖不到：Netdata 有内置
+`disk_space_usage` 告警（warn >80%、crit >90% 且可用<5G）却**没有通知渠道**——`health_alarm_notify.conf`
+不存在，镜像默认 `SEND_EMAIL="AUTO"` 需要容器内有 MTA，其余渠道默认 `YES` 但无 token；`/var/lib/netdata/health/`
+为空即"求值后丢弃"的证据。Portainer 是手动面板；`openscience-private-cleanup.timer` 只管经授权的私有作业副本，
+对 release/镜像/日志/卷无管辖范围。另 journald 原先无 size 上限（已设 `SystemMaxUse=500M`）。
+
+**已建成链路**：
+
+- 传输：`/opt/monitor/msmtprc`（0600，由服务器端脚本从 `/opt/openscience/.env.prod` 的
+  `SMTP_HOST/PORT/USER/PASS` 生成；**含凭据，不得入 git、不得拷进任何 release 目录**）。端口 465 用
+  `tls_starttls off`，其余 `on`。经 `/opt/monitor/docker-compose.monitor.yml` 以
+  `- /opt/monitor/msmtprc:/etc/msmtprc:ro` 挂入 netdata 容器，重建容器后仍生效。
+  容器内 `/usr/sbin/sendmail` 是 msmtp 的软链，故 netdata 邮件路径可用。
+- 路由：`/var/lib/docker/volumes/openscience-monitor_netdataconfig/_data/health_alarm_notify.conf`
+  （即容器内 `/etc/netdata/health_alarm_notify.conf`）设 `SEND_EMAIL="YES"`、`EMAIL_SENDER`（SMTP 账号）、
+  `DEFAULT_RECIPIENT_EMAIL`，并把内置磁盘告警的 role `sysadmin` 显式路由到同一地址
+  （`role_recipients_email[sysadmin]`）。**收件人配置在服务器端该文件内，不写入本仓库**（仓库公开，避免记录个人邮箱）。
+- 验证：`docker exec netdata /usr/libexec/netdata/plugins.d/alarm-notify.sh test` 已实发三封
+  （WARNING/CRITICAL/CLEAR）并回 `sent email to ...`、exit 0；`msmtp --serverinfo` 亦通过（仅连接与认证，不发信）。
+- 保留期：netdata 原为镜像默认 3 层×1024MiB（约 3GB，tier0 存 14 天）。已在
+  `openscience-monitor_netdataconfig` 卷的 `netdata.conf` 写 `[db] storage tiers = 1`、
+  `dbengine tier 0 retention size = 512MiB`、`dbengine tier 0 retention time = 7d`。
+  **dbengine 不会立即缩容**，按上限逐步回收。
+
 ## 安全说明
 
 - Netdata 只绑 127.0.0.1，公网唯一入口是带 basic_auth 的 nginx 路径。
 - 容器通过 `/host/proc`、`/host/sys` 只读挂载采集宿主机指标，挂载 docker.sock 只读用于容器清单。
 - vnStat 容器用 host 网络仅为读网卡计数器，不监听任何端口。
+- 统计口径：宿主 `du` 必须加 `-x`。netdata 把宿主 `/` 只读挂到 `/host/root`，未加 `-x` 会递归进整个宿主
+  文件系统，把 `/var/lib/docker` 从真实 38G 虚报为 67G（2026-09-17 实测）。
+- `query_profiler_*` 属 *user-level* 设置，写进 ClickHouse config.d 会让容器启动失败
+  （`Code: 137 UNKNOWN_ELEMENT_IN_CONFIG`），须置于 users.xml 的 `<profiles>`；开发栈改用表级 TTL。
+
