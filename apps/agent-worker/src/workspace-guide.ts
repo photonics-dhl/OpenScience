@@ -614,8 +614,26 @@ export async function workspaceGuideHandler(
       upper = candidateLimit - 1;
     }
   }
-  const resultGuard: SchemaGuard<WorkspaceGuideResult> = (value): value is WorkspaceGuideResult => workspaceGuideResultGuard(value)
-    && (value.presentationDraft?.revisionMode !== 'art' || artBaseIds.has(value.presentationDraft.baseAssetId!));
+  const resultGuard: SchemaGuard<WorkspaceGuideResult> = (value): value is WorkspaceGuideResult => {
+    const v = value as Record<string, unknown>;
+    const pd = v.presentationDraft as Record<string, unknown> | undefined;
+    const inner = workspaceGuideResultGuard(value);
+    const artOk = pd?.revisionMode !== 'art' || (typeof pd?.baseAssetId === 'string' && artBaseIds.has(pd.baseAssetId));
+    if (!(inner && artOk)) {
+      // Temporary debug: surface the exact guard rejection so we can fix it.
+      console.error('[guide.guard.rejected]', JSON.stringify({
+        workspaceGuideResultGuard: inner,
+        artOk,
+        value: v,
+        workspaceGuideKeys: Object.keys(v),
+        presentationKeys: pd && typeof pd === 'object' && !Array.isArray(pd) ? Object.keys(pd) : null,
+        revisionMode: pd?.revisionMode,
+        baseAssetId: pd?.baseAssetId,
+        artBaseIds: [...artBaseIds],
+      }));
+    }
+    return inner && artOk;
+  };
   // Diagnose fixed field names only: rejected user/model text and identifiers must not enter logs.
   const validationDiagnostic = (value: unknown): string => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return 'guide:root_shape';
