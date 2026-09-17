@@ -2763,7 +2763,9 @@ export async function extractHandler(
   // task and the workspace-guide both read this field.
   const extractedFigures: ExtractedFigureReference[] = passages
     ? extractFigureReferences(passages.map((p) => ({ id: p.id, pageStart: p.pageStart, text: p.text })))
-    : [];
+    : extractFigureReferences([
+        { id: 'manuscriptText', pageStart: 1, text: manuscriptText },
+      ]);
   if (trustedContext.reviewExistingSourceTaskId) {
     if (!canonicalSourceMap || !passages || !trustedContext.requireReusableSemanticStage
       || !trustedContext.scientificReview || trustedContext.scientificReview.mode === 'web') {
