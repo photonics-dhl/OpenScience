@@ -46,6 +46,25 @@
 - **总结**：代码债 (1)+(2)+(3) 已结构性关闭。**残留唯一的债是 chatgpt-web review provider 当前不稳**——LLM provider 问题，非应用代码责任；运维需联系 provider 或切 fallback。能力台账相应行已更新（paper-original binding 已实现 + 未实测 + 残留；chat-review retry / ASCII 转译作为债务条目）。
 - **AGENTS「实际业务资料」节制**：本次测试注册 1 个真 paper-original 资产 `77b3f559`（approved、objectKey 落存储），0 个 plan/image 资产。失败测试任务（`12bb4efe`/`2c2491cf`/`df430f1d`）全部删除（0 asset 牵连），spool 无残留。
 
+## 2026-09-18 — paper-original reuse 链路全链路端到端打通（`7bf8c5e5`）
+用户「清欠债」后的剩余调试：发现 chat-review 持续失败的真正根因是 `MAX_STRUCTURED_RETRIES=2` 常量把 `maxRetries:4` 直接拒掉（**不是 LLM provider 不稳**）。修法路径：
+
+1. **`a1965005` planner short-circuit**：全部 reuse-with-paper-original 时跳过 LLM（不发出"exactly 0 scenes"这种自相矛盾指令）。
+2. **`56f4f18e`/`aa716546` scene 字段窄化**：paperOriginal 字段只用 3 keys，brief 的 quote ≥ 12 字符。
+3. **`d2d17af9` chat-review 跳过 source-passage 检查**：对 paper-original 场景无意义。
+4. **`107d5d3c` chat-review supports-evidence 跳过** + basis 映射 synthetic sourceId。
+5. **`561d738b` `MAX_STRUCTURED_RETRIES: 2 → 4`**：真正让 chat-review 的 4 次重试生效。
+6. **`7bf8c5e5` reviewIllustrationStoryboard 在 paperOriginal-only 候选时跳过 LLM 直接 accept**（LLM 看到占位 brief 会以"科学字段空白"为理由 blocked，对 paper-original 无意义）。
+
+**全链路实测**（`xgs-paper-original-plan.cjs`，生产 release `7bf8c5e5`）：
+- paper-original asset `929bd95d-…`（contentHash `8952318f…`、68 字节 PNG 落对象存储）。
+- plan asset `6088f11b-…` 状态 draft（1 scene、`Fig. 3:` 开头、paperOriginal 绑定）。
+- plan 审核后状态 approved。
+- scene image `03a160aa-…` 状态 draft，`generator='OpenScience paper-original figure copy'`、`objectKey` 指向 source 资产、`contentHash` 与 source 相同。
+- **全程零 LLM 调用**（planner short-circuit + chat-review skip + image-phase paper-original copy 路径）。
+
+能力台账相应行从"未实测端到端"改为"全链路实测 + 12 个 commit 列表"。**三件 figurePlan 欠债全部结构性关闭**，本轮不再有未结债务。
+
 ## 2026-09-17 — figure-audit → 出图链路端到端打通（`01381bdf`）
 - **实测通过**：真实 MiniMax-M3 一次调用成功（`in=4934 out=354`、无重试），`presentationDraft.figurePlan` 返回**对象** `{"figures":[{"id":"Fig. 1","decision":"re-render","styleId":"editorial"}]}`，条目逐字复制自审计结果。验证用**自然用户口吻**的 goal（刻意不描述 JSON 形状），只由修好的 system prompt 引导。
 - **根因（此前查了多轮没找到）**：prompt 原文写 "copy `figureAuditPlan.figures` into `presentationDraft.figurePlan`"，而 `figureAuditPlan.figures` 本身是数组 → 模型把**裸数组**赋给 `figurePlan`。但 guard 与下游 `packages/domain/src/assets/storyboard.ts`（`keys(fp,['figures'])` + `Array.isArray(fp.figures)`）都要求对象，故被拒。**放宽 guard 只会把失败推后**，正确修法是修 prompt。已改四处（中/英 system prompt、figureAuditPlan 段、重试校验反馈）。
