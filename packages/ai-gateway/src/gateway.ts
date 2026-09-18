@@ -105,7 +105,7 @@ export type StructuredGenerationOptions = TextGenerationOptions & {
   escalateMaxTokens?: number;
 };
 
-const MAX_STRUCTURED_RETRIES = 2; // §9.3 失败有限重试
+const MAX_STRUCTURED_RETRIES = 4; // §9.3 失败有限重试 — bumped from 2 to 4 so the chat-review retry in reviewScientific (line ~180) actually runs more than 2 attempts. Single-shot retries were burning the user's submission on transient model hiccups.
 
 function parseStructuredJson(text: string): unknown {
   const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
