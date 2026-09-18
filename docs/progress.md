@@ -7,6 +7,14 @@
 - **新发现：服务端缺「重复付费守护」**。`submitPresentationGeneration`（`presentation-asset.ts:162`）只校验父计划（`:177`），**不检查该 (父计划, sceneIndex) 是否已有 approved 图像**；`canGenerateSceneImage`（`:261`）也不看既有图像，只有 UI 侧 `eligibleSceneIndexes`（`:244`）把已出图场景隐藏。所以我能在不知情下对同一张已认可图**再次付费**。这正是能力台账「fallback 前置条件」里悬置的「验证重复付费守护」的反例，已记入 [能力台账](runbooks/hermes-capability-registry.md)。
 - `figurePlan` 仍是无消费者字段（见下节与能力台账）。**未重试**：已有 approved 产物即证明链路，盲目重跑只会再烧一次额度。
 
+## 2026-09-18 — 修复：服务端重复付费守护（`d9bc5dd0`）
+- **用户选择补服务端守护**。在 `packages/domain/src/assets/scene-image.ts` 加 `requireSceneImageSpendIsNew(prisma, parent, payload)`：当存在同 `(storyboardAssetId, sceneIndex)` 且 `parentIdentity` 匹配的 approved 图像时，抛 `PresentationAssetError(VALIDATION_ERROR, 'An approved image already covers this scene; reject it before generating a replacement')`。挂在 `submitPresentationGeneration` (`packages/domain/src/assets/presentation-asset.ts:178`) 的 `requireSceneImageParent` 之后。合法重绘仍要先驳回 approved 图像、或让父计划变更（identity 失配自动放行）——都是已有流程，零新 schema。
+- **部署** `d9bc5dd0`（rollback 仍是 `01381bdf`，按 FD9 锁内事务走完：cloud-sync → build → scansci/embedding 能力复用 → api/web/worker 切换并 healthy → nginx reload → 公网 `/__release` 200 → retention prepare/complete → journal cleared；保留一个 `--no-tests` 显式跳过验收的提示）。
+- **真实验证**（`tmp/verify-scripts/xgs-scene-guard-probe.cjs`，生产 release `d9bc5dd0`）：
+  - **negative**：直接调 `submitPresentationGeneration` 提交 `(979bd088, sceneIndex=0)`（已被 `ac455b2f` approved 覆盖）→ 抛出目标消息、**`DELTA_TASKS=0 / DELTA_SESSIONS=0 / DELTA_QUEUE=0`**——无 Redis 推送、无 agent task/session 行，**零付费路径被打开**。
+  - **positive**：直接调助手 + `(sceneIndex=5)`（无覆盖）→ **不抛**，确认无误伤。
+- 能力台账 [scene image 重复付费守护](runbooks/hermes-capability-registry.md) 从「缺口」改为「已修复（`d9bc5dd0`）」并附证据。`figurePlan` 仍是独立未消费债务。
+
 ## 2026-09-17 — figure-audit → 出图链路端到端打通（`01381bdf`）
 - **实测通过**：真实 MiniMax-M3 一次调用成功（`in=4934 out=354`、无重试），`presentationDraft.figurePlan` 返回**对象** `{"figures":[{"id":"Fig. 1","decision":"re-render","styleId":"editorial"}]}`，条目逐字复制自审计结果。验证用**自然用户口吻**的 goal（刻意不描述 JSON 形状），只由修好的 system prompt 引导。
 - **根因（此前查了多轮没找到）**：prompt 原文写 "copy `figureAuditPlan.figures` into `presentationDraft.figurePlan`"，而 `figureAuditPlan.figures` 本身是数组 → 模型把**裸数组**赋给 `figurePlan`。但 guard 与下游 `packages/domain/src/assets/storyboard.ts`（`keys(fp,['figures'])` + `Array.isArray(fp.figures)`）都要求对象，故被拒。**放宽 guard 只会把失败推后**，正确修法是修 prompt。已改四处（中/英 system prompt、figureAuditPlan 段、重试校验反馈）。
