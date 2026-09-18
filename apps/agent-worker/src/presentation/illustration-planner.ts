@@ -62,25 +62,30 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
   const captionPrefix = figure.caption ? figure.caption.split(/[。；;]/u)[0]?.trim() : '';
   const title = `${figure.id}: ${captionPrefix || figure.id}`.slice(0, 120);
   const narration = captionPrefix || `re-render of ${figure.id}`;
+  // Single structured brief reused for both `illustration` (required by the plan
+  // schema) and `visualAction` (required by parseStoryboardDocument for image
+  // mode). describeIllustrationBrief renders the brief deterministically so the
+  // two strings are byte-identical and the visualAction/illustration mismatch
+  // check in combineArt/parseStoryboardDocument passes.
+  const brief = {
+    schemaVersion: 2 as const,
+    message: `Render the source figure (${figure.id}) verbatim.`,
+    domain: 'real-space' as const,
+    subjects: [{
+      description: `Source figure ${figure.id}: ${captionPrefix || 'as published'}.`,
+      basis: { claimId: ref.sourceClaimId ?? '', evidenceId: ref.assetId, quote: ref.figureId },
+    }],
+    encoding: `subject 0 is the source figure; render at the same aspect, geometry and labels as ${figure.id} (${ref.assetId}).`,
+    labels: [figure.id],
+    constraints: ['render the source figure verbatim', 'do not invent new measurements or mechanisms'],
+    composition: '主对象居中（源图）；留白主导；labels 紧贴主体。',
+    treatment: '保留原稿颜色与线宽；不加新图例。',
+  };
   return {
     title,
     narration,
-    // illustration is REQUIRED by the plan schema (combination below), so we
-    // emit a structured brief that describes "render the source figure verbatim".
-    illustration: {
-      schemaVersion: 2,
-      message: `Render the source figure (${figure.id}) verbatim.`,
-      domain: 'real-space',
-      subjects: [{
-        description: `Source figure ${figure.id}: ${captionPrefix || 'as published'}.`,
-        basis: { claimId: ref.sourceClaimId ?? '', evidenceId: ref.assetId, quote: ref.figureId },
-      }],
-      encoding: `subject 0 is the source figure; render at the same aspect, geometry and labels as ${figure.id} (${ref.assetId}).`,
-      labels: [figure.id],
-      constraints: ['render the source figure verbatim', 'do not invent new measurements or mechanisms'],
-      composition: '主对象居中（源图）；留白主导；labels 紧贴主体。',
-      treatment: '保留原稿颜色与线宽；不加新图例。',
-    },
+    illustration: brief,
+    visualAction: describeIllustrationBrief(brief),
     sourceClaimIds: ref.sourceClaimId ? [ref.sourceClaimId] : [],
     paperOriginal: ref,
   };
@@ -268,14 +273,12 @@ Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,co
     // fewer, pad with a default derived from the scene's own science. A strict
     // `length ===` check rejected too many plausible multi-scene briefs.
     const scenes: ReturnType<typeof intent.scenes.map> = [];
-    // Paper-original scenes go first: their visualAction is fixed ("render source
-    // verbatim") and they carry the bound paperOriginal so the image-phase handler
-    // copies bytes instead of calling the image provider.
+    // Paper-original scenes go first: visualAction and illustration are both
+    // already set by buildPaperOriginalScene and are byte-identical
+    // (visualAction === describeIllustrationBrief(illustration)), so the
+    // illustration_description_mismatch check passes without re-rendering art.
     for (const paperScene of paperOriginalScenes) {
-      scenes.push({
-        ...paperScene,
-        visualAction: `Render the source figure ${paperScene.paperOriginal?.figureId} verbatim (asset ${paperScene.paperOriginal?.assetId}); do not regenerate.`,
-      });
+      scenes.push({ ...paperScene });
     }
     for (let index = 0; index < intent.scenes.length; index += 1) {
       const scene = intent.scenes[index]!;
