@@ -19,7 +19,6 @@
  * guide, and the workspace guide can all call it to populate `figurePlan`.
  */
 import type { AiGateway } from '@openscience/ai-gateway';
-import type { StoryboardRequest } from '@openscience/domain';
 import { loadInstalledMediaSkills } from './installed-media-skills';
 
 export type FigureDecision = 'reuse' | 're-render' | 'abstract' | 'skip';
@@ -106,7 +105,3 @@ Return exactly {figures: [{id, decision, optional styleId, optional rationale}]}
   return parsed;
 }
 
-/** Convert a FigurePlan into the StoryboardRequest.figurePlan shape. */
-export function toStoryboardFigurePlan(plan: FigurePlan): NonNullable<StoryboardRequest['figurePlan']> {
-  return { figures: plan.figures.map((entry) => ({ id: entry.id, decision: entry.decision, ...(entry.styleId ? { styleId: entry.styleId } : {}), ...(entry.rationale ? { caption: entry.rationale } : {}) })) };
-}
