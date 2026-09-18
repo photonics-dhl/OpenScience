@@ -66,9 +66,14 @@ export function describeIllustrationBrief(brief: IllustrationBrief): string {
 
 export function requireIllustrationSourceSupport(brief: IllustrationBrief, claims: readonly {
   id: string; sourcePassages?: readonly { evidenceId: string; text: string }[];
-}[]): void {
+}[], paperOriginals?: ReadonlyMap<string, { assetId: string; objectKey: string; contentHash: string }>): void {
   for (const subject of brief.subjects) {
     const b = subject.basis;
+    // Paper-original bound sources anchor to a registered paper_original_figure
+    // asset, not a reviewed passage. The asset was registered as user evidence
+    // and the figurePlan's caption identifies it; downstream source support
+    // for paper-original scenes is the asset's provenance itself.
+    if (paperOriginals && Array.from(paperOriginals.values()).some((ref) => ref.assetId === b.evidenceId)) continue;
     if (!claims.find(claim => claim.id === b.claimId)?.sourcePassages?.some(passage => passage.evidenceId === b.evidenceId && passage.text.includes(b.quote))) {
       throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'illustration_brief:original_passage_changed');
     }

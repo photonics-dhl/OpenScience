@@ -122,7 +122,7 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
   const previous = base?.output === 'image' ? base.document.scenes.map(scene => {
     const brief = scene.illustration;
     if (brief?.schemaVersion !== 2) return undefined;
-    requireIllustrationSourceSupport(brief, claims);
+    requireIllustrationSourceSupport(brief, claims, paperOriginals);
     if (brief.subjects.some(subject => sourceLookup.get(sourceIds.get(`${subject.basis.claimId}:${subject.basis.evidenceId}`) ?? '')?.relation !== 'supports')) return undefined;
     return { science: { title: scene.title, narration: scene.narration, message: brief.message, domain: brief.domain,
       subjects: brief.subjects.map(subject => ({ description: subject.description, basis: { sourceId: sourceIds.get(`${subject.basis.claimId}:${subject.basis.evidenceId}`) ?? 'source_unavailable' } })),
@@ -352,7 +352,7 @@ export async function clarifyIllustrationLabels(
   const scenes = original.scenes.map((scene, sceneIndex) => {
     const brief = scene.illustration;
     if (brief?.schemaVersion !== 2) throw new Error('[blocked] Label clarification requires separate science and layout');
-    requireIllustrationSourceSupport(brief, claims);
+    requireIllustrationSourceSupport(brief, claims, paperOriginals);
     return { sceneIndex, title: scene.title, narration: scene.narration,
       ...brief, subjects: brief.subjects.map(subject => ({ description: subject.description,
         basis: { sourceId: sourceIds.get(`${subject.basis.claimId}:${subject.basis.evidenceId}`) } })) };
@@ -397,7 +397,7 @@ Return exactly {"changes":[{"sceneIndex":0,"labelIndex":0,"prefix":"short clarif
     }
     for (const scene of document.scenes) {
       const brief = parseIllustrationBrief(scene.illustration, claimIds);
-      requireIllustrationSourceSupport(brief, claims);
+      requireIllustrationSourceSupport(brief, claims, paperOriginals);
       compileIllustrationImagePrompt(brief);
       scene.illustration = brief;
       scene.visualAction = describeIllustrationBrief(brief);
