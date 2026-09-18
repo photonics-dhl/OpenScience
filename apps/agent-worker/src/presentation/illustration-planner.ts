@@ -6,7 +6,7 @@ import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage 
 import { compileIllustrationImagePrompt } from './scene-image';
 import type { IllustrationReviewIssue } from './illustration-review';
 
-type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: PaperOriginalRef };
+type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string } };
 const SCIENCE_SCENE_KEYS = ['title', 'narration', 'message', 'domain', 'subjects', 'labels', 'constraints', 'encoding'];
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('object_required');
