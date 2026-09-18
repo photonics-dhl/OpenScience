@@ -99,17 +99,28 @@ export async function reviewIllustrationStoryboard(
   const candidateView = { title: candidate.title, scenes: candidate.scenes.map(scene => {
     if (scene.illustration?.schemaVersion !== 2) throw new Error('[blocked] Illustration review requires separate science and layout');
     // Paper-original scenes anchor their source to a registered asset, not a
-    // reviewed passage; the chat-review's source-support check does not apply.
-    if (!scene.paperOriginal) requireIllustrationSourceSupport(scene.illustration, claims);
-    if (scene.illustration.subjects.some(subject => !sources.some(source => source.claimId === subject.basis.claimId
-      && source.evidenceId === subject.basis.evidenceId && source.relation === 'supports'))) {
-      throw new Error('[blocked] Illustration subject lacks supporting evidence');
+    // reviewed passage; the chat-review's source-support and supports-evidence
+    // checks do not apply (the asset registration itself is the evidence).
+    if (!scene.paperOriginal) {
+      requireIllustrationSourceSupport(scene.illustration, claims);
+      if (scene.illustration.subjects.some(subject => !sources.some(source => source.claimId === subject.basis.claimId
+        && source.evidenceId === subject.basis.evidenceId && source.relation === 'supports'))) {
+        throw new Error('[blocked] Illustration subject lacks supporting evidence');
+      }
     }
     const { schemaVersion: _schemaVersion, ...brief } = scene.illustration;
     return { title: scene.title, narration: scene.narration, ...brief,
-      subjects: brief.subjects.map(subject => ({ description: subject.description, basis: {
-        sourceId: sourceIds.get(`${subject.basis.claimId}:${subject.basis.evidenceId}`),
-      } })) };
+      // For paper-original scenes, basis.evidenceId is the registered asset id
+      // (not a source passage), so sourceId is undefined — that's fine: the
+      // LLM only sees the paper-original binding and skips review of support.
+      subjects: brief.subjects.map(subject => ({
+        description: subject.description,
+        basis: {
+          sourceId: scene.paperOriginal
+            ? `paper_original:${scene.paperOriginal.assetId}`
+            : sourceIds.get(`${subject.basis.claimId}:${subject.basis.evidenceId}`),
+        },
+      })) };
   }) };
   const candidateHash = createHash('sha256').update(JSON.stringify(candidate)).digest('hex');
   const reviewSkills = loadInstalledMediaSkills(settings.style, settings.instruction, 'review');
