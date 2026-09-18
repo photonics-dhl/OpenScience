@@ -352,7 +352,7 @@ export async function clarifyIllustrationLabels(
   const scenes = original.scenes.map((scene, sceneIndex) => {
     const brief = scene.illustration;
     if (brief?.schemaVersion !== 2) throw new Error('[blocked] Label clarification requires separate science and layout');
-    requireIllustrationSourceSupport(brief, claims, paperOriginals);
+    requireIllustrationSourceSupport(brief, claims);
     return { sceneIndex, title: scene.title, narration: scene.narration,
       ...brief, subjects: brief.subjects.map(subject => ({ description: subject.description,
         basis: { sourceId: sourceIds.get(`${subject.basis.claimId}:${subject.basis.evidenceId}`) } })) };
@@ -397,7 +397,7 @@ Return exactly {"changes":[{"sceneIndex":0,"labelIndex":0,"prefix":"short clarif
     }
     for (const scene of document.scenes) {
       const brief = parseIllustrationBrief(scene.illustration, claimIds);
-      requireIllustrationSourceSupport(brief, claims, paperOriginals);
+      requireIllustrationSourceSupport(brief, claims);
       compileIllustrationImagePrompt(brief);
       scene.illustration = brief;
       scene.visualAction = describeIllustrationBrief(brief);
