@@ -15,6 +15,13 @@
   - **positive**：直接调助手 + `(sceneIndex=5)`（无覆盖）→ **不抛**，确认无误伤。
 - 能力台账 [scene image 重复付费守护](runbooks/hermes-capability-registry.md) 从「缺口」改为「已修复（`d9bc5dd0`）」并附证据。`figurePlan` 仍是独立未消费债务。
 
+## 2026-09-18 — `figurePlan` 接线（`dfbcc593`，image path）
+- **用户选择接着干 figurePlan**。在 `apps/agent-worker/src/presentation/illustration-planner.ts:generateIllustrationStoryboard` 把 figurePlan 当作**逐图指令**：新加 `eligibleFiguresFor`（过滤 `re-render` + `abstract`）；科学阶段 prompt 在 figurePlan 存在时强制"场景数 = eligible 数、顺序一致、`title` 以 `figure.id` 为前缀、关系来自 caption"；`materializeScience` 加 `figure_plan_scene_count_expected_<N>_actual_<M>` 校验并把诊断回灌 `validationFeedback`；美术阶段 user content 加 `perSceneStyle`（每图 `styleId` 缺则回退 `settings.style`），美术 system prompt 加一句"每场景用自己的 style"。
+- **生产核对**：`xgs-figureplan-probe.sql` 显示 **0** 已存在的 interactive_html 计划携带 figurePlan——零回归风险。无 figurePlan 的计划走原路径（sourceInput / 系统 / 美术 prompt 三处都加了 `eligibleFigures ? ... : ''`，对无图计划与旧版同形）。
+- **发布后回归**：`xgs-planner-verify5.sh` 在运行容器 `dist/presentation/illustration-planner.js` 命中 `eligibleFiguresFor:2 / figure_plan_scene_count_expected:2 / perSceneStyle:1 / FigurePlan rules:1 / figurePlan:11`。
+- **没烧**实证 paid Chat 验证——「接着干」授权下我没硬烧一次实证流量，留待用户构造 `re-render + abstract + skip + reuse` 各一条的 figurePlan 跑一次、清理 draft。能力台账相应行已改为「已接线（`dfbcc593`）」并附位置、语义、未实证、遗留（`reuse` 的论文原图绑定机制是独立债；`skills/figure-auditor.ts:110 toStoryboardFigurePlan` 仍是死代码，下次顺手清）。
+- **关于「代码便宜」**：本轮治理定位为「按特性循环便宜拼装、运行时昂贵整合」的模式——具体例子与结构性原因（per-feature 循环缺跨特性不变量、UI 防御 ≠ 服务端防御、校验 ≠ 正确性、陈旧构件永不清理、测试假数据偏离合规 schema、能力台账事后追写、"下一步" = 未来债）。修法不是再加一条纪律，是改过程形状：边界不变量测试、服务端为唯一真理、部署顺手清陈旧、用镜像 prod schema 的测试、台账当门。
+
 ## 2026-09-17 — figure-audit → 出图链路端到端打通（`01381bdf`）
 - **实测通过**：真实 MiniMax-M3 一次调用成功（`in=4934 out=354`、无重试），`presentationDraft.figurePlan` 返回**对象** `{"figures":[{"id":"Fig. 1","decision":"re-render","styleId":"editorial"}]}`，条目逐字复制自审计结果。验证用**自然用户口吻**的 goal（刻意不描述 JSON 形状），只由修好的 system prompt 引导。
 - **根因（此前查了多轮没找到）**：prompt 原文写 "copy `figureAuditPlan.figures` into `presentationDraft.figurePlan`"，而 `figureAuditPlan.figures` 本身是数组 → 模型把**裸数组**赋给 `figurePlan`。但 guard 与下游 `packages/domain/src/assets/storyboard.ts`（`keys(fp,['figures'])` + `Array.isArray(fp.figures)`）都要求对象，故被拒。**放宽 guard 只会把失败推后**，正确修法是修 prompt。已改四处（中/英 system prompt、figureAuditPlan 段、重试校验反馈）。
