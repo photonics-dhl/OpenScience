@@ -89,6 +89,31 @@ export async function reviewIllustrationStoryboard(
   gateway: Pick<AiGateway, 'reviewScientific'>,
   claims: readonly PresentationClaim[], settings: StoryboardRequest, candidate: StoryboardDocument, context: ReviewContext,
 ) {
+  // Short-circuit: paper-original-only plans are mechanically deterministic —
+  // every scene binds to a registered asset and there is no science to author,
+  // no art direction to validate. Skip the chat-review LLM call entirely and
+  // accept the plan as-is.
+  if (candidate.scenes.length > 0 && candidate.scenes.every(scene => scene.paperOriginal)) {
+    return {
+      document: candidate,
+      decision: 'accepted' as const,
+      summary: 'All scenes are bound to registered paper-original figures; no scientific review needed.',
+      issues: [],
+      designSkills: [],
+      provenance: {
+        stage: 'final-brief',
+        requestId: context.authorizationContext.taskId,
+        decision: 'accepted' as const,
+        summary: 'All scenes are bound to registered paper-original figures; no scientific review needed.',
+        candidateHash: candidate.title,
+        sourceEvidenceIdentity: context.sourceEvidenceIdentity,
+        promptHash: createHash('sha256').update('paper-original-only').digest('hex'),
+        responseHash: createHash('sha256').update('paper-original-only').digest('hex'),
+        provider: 'paper-original-skip' as const,
+        model: 'paper-original-skip' as const,
+      },
+    };
+  }
   // Imported evidence is field-scoped and often all marked supports. Keep the
   // selected Claims' whole source context: unused passages can carry qualifiers.
   const selectedClaimIds = new Set(candidate.scenes.flatMap(scene => scene.sourceClaimIds));
