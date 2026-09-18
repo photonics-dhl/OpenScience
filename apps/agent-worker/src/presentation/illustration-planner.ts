@@ -114,6 +114,21 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
   }
   const reusableBase = previous?.every(scene => scene !== undefined) ? previous : undefined;
   const claimIds = claims.map(claim => claim.id);
+  // Short-circuit: when every figure decision is reuse-with-paper-original, the LLM
+  // has nothing to do. Returning here avoids sending it a contradictory
+  // "exactly 0 scenes" instruction under a 1-scene schema (the model would emit
+  // 1 scene anyway, fail validation, and exhaust retries). All scenes in the
+  // returned document come from the locally-constructed paperOriginalScenes.
+  if ((settings.figurePlan?.figures ?? []).length > 0 && paperOriginalScenes.length > 0
+      && (eligibleFigures?.length ?? 0) === 0) {
+    const title = settings.instruction.split('\n')[0]?.slice(0, 120) || 'Paper-original reuse plan';
+    return { document: parseStoryboardDocument({
+      schemaVersion: 1, title, scenes: paperOriginalScenes,
+    }, claimIds, 'image'), promptHash: createHash('sha256').update(JSON.stringify({
+      paperOriginal: paperOriginalScenes.map((scene) => scene.paperOriginal),
+      reuseOnly: true,
+    })).digest('hex'), designSkills: [] };
+  }
   let intent: { title: string; scenes: ScientificScene[] };
   let scienceMessages: Array<{ role: 'system' | 'user'; content: string }> | undefined;
   let scienceUsage: DesignSkillUsage[] = [];
