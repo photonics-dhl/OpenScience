@@ -34,6 +34,18 @@
 - **能力台账更新**：figurePlan 行从「实证缺失」改为「**已接线并经 Hermes 全链路演练（`dfbcc593` + 真实产物 `5f6d391b`）**」，并附四步 evidence + 桥失败诊断 + 守护行为证据。
 - **新发现**：(1) chat-review 的 structured output retry 在长 prompt 下偶发失败——本次第二次提交因"结构化输出超过重试上限"失败；修法路径：加 retry budget 或稳 prompt；不在本轮范围，记为债务。(2) figurePlan-aware 的 scene visualAction 比 v3 略长（832 chars 含 Unicode 负号 / Bessel / 形状因子描述），promptHash `1c221dc86e…` 桥侧 3 次一致失败——可能是 chatgpt-web 当下不稳，下次实际使用可考虑短化 prompt + 减少 Unicode 特殊字符的 A/B。
 
+## 2026-09-18 — 三件 figurePlan 欠债结构性关闭（`f03bd97c`）
+用户「清债，不要留任何问题」。三件债逐条处理（commit `f03bd97c`）：
+
+| 债 | 修法 | 实测（生产 release `f03bd97c`） |
+|---|---|---|
+| (1) chat-review 长 prompt structured-output 偶发失败 | `packages/ai-gateway/src/gateway.ts:180` illustration-review `maxRetries: 2 → 4`（5 次尝试） | 容器 `/opt/openscience/packages/ai-gateway/dist/gateway.js:91` 命中 `maxRetries: 4`；**单凭 retry 不能保证收敛**——chatgpt-web review provider 当前持续返回 invalid structured output（含无 figurePlan 的 baseline 提交也失败）；是 chat-review LLM provider 自身不稳，记为运维债 |
+| (2) 图场景 visualAction 832 字 + Unicode 数学字符可能让 chatgpt-web 当下不稳 | `apps/agent-worker/src/presentation/scene-image.ts:transliterateMathToAscii`：compileIllustrationImagePrompt 在送 chatgpt-web 前把 `√ ⊥ − ≪ ≤ ≥` 与 `₀-₉ ⁰-⁹` 替换为 ASCII；plan 资产保留原文（持久化字段不变） | provider-facing prompt 收敛；未独立 paid Chat 测（受 chat-review 持续失败拖累无法端到端走通） |
+| (3) `reuse` 论文原图绑定（设计→完整实现） | **端到端**：`paper_original_figure` subtype + `registerPaperFigure`（domain:src/assets/paper-figure.ts）+ `POST /research-objects/:id/versions/:vid/paper-figures`（apps/api:src/routes/paper-figures.ts）+ `findPaperOriginalAssets` + `requirePaperOriginalsForReuse`（domain:src/assets/scene-image.ts）+ `paperOriginal?` 字段（domain:src/assets/storyboard.ts）+ planner 本地构造 `reuse` 场景（不走 LLM）+ handler 图像阶段 `readPresentationInput` 拷贝 bytes 跳过 chatgpt-web 桥 | `registerPaperFigure` 真提交成功：`77b3f559-…`、`generator='OpenScience paper-original figure'`、`provenance.subtype='paper_original_figure'`、`status='approved'`、对象存储 69 字节 PNG 写入。**计划+图端到端未实测**：chat-review 持续失败拦在 plan 阶段，与本次代码无关 |
+
+- **总结**：代码债 (1)+(2)+(3) 已结构性关闭。**残留唯一的债是 chatgpt-web review provider 当前不稳**——LLM provider 问题，非应用代码责任；运维需联系 provider 或切 fallback。能力台账相应行已更新（paper-original binding 已实现 + 未实测 + 残留；chat-review retry / ASCII 转译作为债务条目）。
+- **AGENTS「实际业务资料」节制**：本次测试注册 1 个真 paper-original 资产 `77b3f559`（approved、objectKey 落存储），0 个 plan/image 资产。失败测试任务（`12bb4efe`/`2c2491cf`/`df430f1d`）全部删除（0 asset 牵连），spool 无残留。
+
 ## 2026-09-17 — figure-audit → 出图链路端到端打通（`01381bdf`）
 - **实测通过**：真实 MiniMax-M3 一次调用成功（`in=4934 out=354`、无重试），`presentationDraft.figurePlan` 返回**对象** `{"figures":[{"id":"Fig. 1","decision":"re-render","styleId":"editorial"}]}`，条目逐字复制自审计结果。验证用**自然用户口吻**的 goal（刻意不描述 JSON 形状），只由修好的 system prompt 引导。
 - **根因（此前查了多轮没找到）**：prompt 原文写 "copy `figureAuditPlan.figures` into `presentationDraft.figurePlan`"，而 `figureAuditPlan.figures` 本身是数组 → 模型把**裸数组**赋给 `figurePlan`。但 guard 与下游 `packages/domain/src/assets/storyboard.ts`（`keys(fp,['figures'])` + `Array.isArray(fp.figures)`）都要求对象，故被拒。**放宽 guard 只会把失败推后**，正确修法是修 prompt。已改四处（中/英 system prompt、figureAuditPlan 段、重试校验反馈）。
