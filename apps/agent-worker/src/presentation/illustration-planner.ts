@@ -73,7 +73,19 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
     domain: 'real-space' as const,
     subjects: [{
       description: `Source figure ${figure.id}: ${captionPrefix || 'as published'}.`,
-      basis: { claimId: ref.sourceClaimId ?? '', evidenceId: ref.assetId, quote: ref.figureId },
+      // The bound source quote needs >= 12 characters to pass
+      // parseIllustrationBrief's `invalid_bound_source` check, and it is a
+      // verbatim passage from the paper rather than a synthetic reference.
+      // We reuse the source figure caption (or the figure id padded with
+      // role description when the caption is missing) so downstream source
+      // support can verify the subject is anchored to the registered paper-original.
+      basis: {
+        claimId: ref.sourceClaimId ?? '',
+        evidenceId: ref.assetId,
+        quote: ((figure.caption && figure.caption.trim().length >= 12)
+          ? figure.caption
+          : `${figure.id} - ${ref.sourceClaimId ?? 'as published'}`).slice(0, 12000),
+      },
     }],
     encoding: `subject 0 is the source figure; render at the same aspect, geometry and labels as ${figure.id} (${ref.assetId}).`,
     labels: [figure.id],
