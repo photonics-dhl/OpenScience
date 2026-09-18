@@ -99,7 +99,10 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
     illustration: brief,
     visualAction: describeIllustrationBrief(brief),
     sourceClaimIds: ref.sourceClaimId ? [ref.sourceClaimId] : [],
-    paperOriginal: ref,
+    // parseStoryboardDocument enforces the EXACT 3-key shape for paperOriginal
+    // ({assetId,objectKey,contentHash}); strip the lookup-only metadata so the
+    // scene validates.
+    paperOriginal: { assetId: ref.assetId, objectKey: ref.objectKey, contentHash: ref.contentHash },
   };
 }
 
