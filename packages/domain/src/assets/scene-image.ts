@@ -56,3 +56,41 @@ export async function requireSceneImageParent(prisma: Pick<Prisma.TransactionCli
     sourceEvidenceIdentity: typeof provenance.sourceEvidenceIdentity === 'string' ? provenance.sourceEvidenceIdentity : undefined,
     identity: JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids }) };
 }
+
+/**
+ * Pay-once per scene: an approved image for the same (parent, sceneIndex) under the same parent
+ * identity must not be paid for again. To regenerate, the caller must first reject the existing
+ * approved image, or change the parent plan so its identity no longer matches. This guard sits
+ * next to requireSceneImageParent because the UI hides already-imaged scenes but the API does
+ * not (and clients can submit directly).
+ */
+export async function requireSceneImageSpendIsNew(
+  prisma: Pick<Prisma.TransactionClient, 'presentationAsset'>,
+  parent: { identity: string },
+  payload: { researchObjectId: string; versionId: string; sceneImage?: SceneImageRequest },
+): Promise<void> {
+  if (!payload.sceneImage) return;
+  const covering = await prisma.presentationAsset.findFirst({
+    where: {
+      researchObjectId: payload.researchObjectId,
+      versionId: payload.versionId,
+      kind: 'image',
+      status: 'approved',
+      deletedAt: null,
+      provenance: { path: ['sceneImage', 'storyboardAssetId'], equals: payload.sceneImage.storyboardAssetId },
+    },
+    select: { provenance: true },
+  });
+  if (!covering) return;
+  const provenance = (covering.provenance as Record<string, unknown> | null) ?? {};
+  if (provenance.subtype !== 'storyboard_scene_image') return;
+  const scene = provenance.sceneImage as Record<string, unknown> | undefined;
+  if (!scene
+    || scene.storyboardAssetId !== payload.sceneImage.storyboardAssetId
+    || scene.sceneIndex !== payload.sceneImage.sceneIndex
+    || provenance.parentIdentity !== parent.identity) return;
+  throw new PresentationAssetError(
+    'VALIDATION_ERROR',
+    'An approved image already covers this scene; reject it before generating a replacement',
+  );
+}

@@ -1,5 +1,5 @@
 import { requireStyleReferenceImage } from './scene-image';
-import { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, hasSceneImageProvenance, type SceneImageRequest } from './scene-image';
+import { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, hasSceneImageProvenance, type SceneImageRequest } from './scene-image';
 import { isDeepStrictEqual } from 'node:util';
 import { lockLiveResearchObject, lockTrashReferences } from '../trash/trash';
 import { isWorkingDraftVersion } from '../commit/version-history';
@@ -174,7 +174,8 @@ export async function submitPresentationGeneration(deps: AgentDeps, input: {
   if (payload.storyboard?.baseAssetId) await requireStoryboardBase(deps.prisma, payload);
   if (input.kind === 'image' || input.kind === 'video') await requirePlatformAdmin(deps, input.userId);
   if (payload.sceneImage) {
-    await requireSceneImageParent(deps.prisma, payload);
+    const sceneParent = await requireSceneImageParent(deps.prisma, payload);
+    if (sceneParent) await requireSceneImageSpendIsNew(deps.prisma, sceneParent, payload);
     await requireStyleReferenceImage(deps.prisma, { ...payload, styleReferenceAssetId: payload.sceneImage.styleReferenceAssetId });
   }
   if (payload.video) await requireVideoGenerationParents(deps.prisma, payload);
