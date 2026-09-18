@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { AiGatewayError, type AiGateway } from '@openscience/ai-gateway';
-import { STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX, parseStoryboardDocument, requireAnimationSourceSupport, type StoryboardDocument, type StoryboardRequest, type StoryboardView } from '@openscience/domain';
+import { STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX, parseStoryboardDocument, requireAnimationSourceSupport, type PaperOriginalRef, type StoryboardDocument, type StoryboardRequest, type StoryboardView } from '@openscience/domain';
 import type { PresentationClaim } from './chart-generator';
 import { SCIENTIFIC_ART_DIRECTION_SKILL, SCIENTIFIC_VIDEO_DIRECTION_SKILL } from '../skills/media-direction';
 import { generateIllustrationStoryboard } from './illustration-planner';
-export async function generateStoryboard(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], settings: StoryboardRequest, base?: StoryboardView) {
-    if (settings.output === 'image') return generateIllustrationStoryboard(gateway, claims, settings, base);
+export async function generateStoryboard(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], settings: StoryboardRequest, base?: StoryboardView, paperOriginals: Map<string, PaperOriginalRef> = new Map()) {
+    if (settings.output === 'image') return generateIllustrationStoryboard(gateway, claims, settings, base, paperOriginals);
     const quoteLookup = new Map<string, string>();
     const groundedClaims = claims.map(({ id, kind, statement, assessment, conditions, limitations, sourcePassages: reviewedPassages }) => {
         if (!reviewedPassages?.length) throw new Error('[blocked] Storyboard requires reviewed original evidence passages');

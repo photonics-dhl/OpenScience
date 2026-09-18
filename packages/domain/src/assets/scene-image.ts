@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { PresentationAssetError } from './errors';
-import { presentationStoryboardView } from './storyboard';
+import { presentationStoryboardView, type StoryboardRequest } from './storyboard';
 
 export interface SceneImageRequest { storyboardAssetId: string; sceneIndex: number; styleReferenceAssetId?: string }
 export function parseSceneImageRequest(value: unknown): SceneImageRequest {
@@ -93,4 +93,72 @@ export async function requireSceneImageSpendIsNew(
     'VALIDATION_ERROR',
     'An approved image already covers this scene; reject it before generating a replacement',
   );
+}
+
+/**
+ * Look up registered paper-original figures for a figurePlan's reuse entries.
+ * Returns a map keyed by the figurePlan entry id (`Fig. N` etc.). A paper-original
+ * is an `image` asset with `provenance.subtype = 'paper_original_figure'` whose
+ * `provenance.figureId` matches a reuse decision and whose
+ * `provenance.researchObjectId/versionId` scope the current draft.
+ *
+ * The map is empty when no figurePlan entries have decision 'reuse', or when
+ * the lookup finds no registered originals. The caller (handler / planner) is
+ * responsible for raising `paper_original_missing_<figureId>` when a reuse
+ * decision has no matching asset.
+ */
+export interface PaperOriginalRef { assetId: string; objectKey: string; contentHash: string; figureId: string; sourceClaimId?: string }
+export async function findPaperOriginalAssets(
+  prisma: Pick<Prisma.TransactionClient, 'presentationAsset'>,
+  scope: { researchObjectId: string; versionId: string; figurePlan?: StoryboardRequest['figurePlan'] },
+): Promise<Map<string, PaperOriginalRef>> {
+  const out = new Map<string, PaperOriginalRef>();
+  const ids = (scope.figurePlan?.figures ?? []).map((figure) => figure.id);
+  if (!ids.length) return out;
+  const rows = await prisma.presentationAsset.findMany({
+    where: {
+      researchObjectId: scope.researchObjectId,
+      versionId: scope.versionId,
+      kind: 'image',
+      deletedAt: null,
+      provenance: { path: ['subtype'], equals: 'paper_original_figure' },
+    },
+    select: { id: true, contentHash: true, objectKey: true, provenance: true },
+  });
+  for (const row of rows) {
+    const p = row.provenance as Record<string, unknown> | null;
+    const figureId = typeof p?.figureId === 'string' ? p.figureId : undefined;
+    if (!figureId || !ids.includes(figureId)) continue;
+    out.set(figureId, {
+      assetId: row.id,
+      objectKey: row.objectKey,
+      contentHash: row.contentHash,
+      figureId,
+      ...(typeof p?.sourceClaimId === 'string' ? { sourceClaimId: p.sourceClaimId } : {}),
+    });
+  }
+  return out;
+}
+
+/**
+ * Validate a figurePlan against registered paper-originals. For every `reuse`
+ * decision in `figurePlan`, a matching `paper_original_figure` asset must
+ * exist for this RO/version. Missing entries raise `paper_original_missing_<id>`
+ * — the planner fails the plan task with that string so the user can either
+ * upload the original or change the decision to `re-render` / `abstract`.
+ */
+export function requirePaperOriginalsForReuse(
+  paperOriginals: Map<string, PaperOriginalRef>,
+  figurePlan: StoryboardRequest['figurePlan'],
+): void {
+  if (!figurePlan) return;
+  for (const figure of figurePlan.figures) {
+    if (figure.decision !== 'reuse') continue;
+    if (!paperOriginals.has(figure.id)) {
+      throw new PresentationAssetError(
+        'VALIDATION_ERROR',
+        `paper_original_missing_${figure.id}`,
+      );
+    }
+  }
 }

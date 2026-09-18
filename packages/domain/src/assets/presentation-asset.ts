@@ -95,7 +95,7 @@ export async function getPresentationTask(deps: AgentDeps, input: PresentationSc
   return getAgentTask(deps, input);
 }
 type ScopeDb = Pick<Prisma.TransactionClient, 'version' | 'workspace' | 'membership'>;
-const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
+export const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 
 async function requireScope(prisma: ScopeDb, input: PresentationScope, write = false) {
   const version = await prisma.version.findUnique({ where: { id: input.versionId }, include: { researchObject: true } });

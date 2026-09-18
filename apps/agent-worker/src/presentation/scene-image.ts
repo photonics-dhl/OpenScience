@@ -9,6 +9,64 @@ const wrapper = '基于研究内容的解释性图像，不是证据；按已批
 const presentationRules = '内部制作约束用于指导绘制，不得作为图中文字。图中只使用“可见标签”所列的简短科学文字；不绘制禁止事项、操作指令、校对符号或未绑定含义的数字。公式、数值和单位须有明确来源且确有必要；不猜测乱码。';
 
 /**
+ * Replace Unicode math symbols with ASCII equivalents. The chatgpt-web image bridge
+ * can reject or garble prompts that contain characters outside BMP or unusual math
+ * operators (observed: Bessel subscript U+2080..U+2089, perpendicular U+22A5, square-root
+ * U+221A, minus sign U+2212, much-less U+226A, equals U+003D when paired with subscripts).
+ * Transliterating at the prompt-assembly boundary keeps the planner's own state and the
+ * persisted plan asset unaffected; only the prompt sent to the image provider changes.
+ *
+ * ASCII transliteration is one-way and loss-prone for math. Apply only at the provider
+ * boundary; never persist the transliterated form.
+ */
+const SUB_SUPER_DIGITS: Record<number, string> = {
+  0x2070: '0', 0x2071: 'i',
+  0x2074: '4', 0x2075: '5', 0x2076: '6', 0x2077: '7', 0x2078: '8', 0x2079: '9',
+  0x2080: '0', 0x2081: '1', 0x2082: '2', 0x2083: '3', 0x2084: '4', 0x2085: '5', 0x2086: '6', 0x2087: '7', 0x2088: '8', 0x2089: '9',
+};
+const SUB_SUPER_OPS: Record<number, string> = {
+  0x207A: '+', 0x207B: '-', 0x207C: '=', 0x207D: '(', 0x207E: ')',
+  0x208A: '+', 0x208B: '-', 0x208C: '=',
+};
+function subSuperReplacer(match: string): string {
+  const code = match.codePointAt(0) ?? 0;
+  return SUB_SUPER_DIGITS[code] ?? SUB_SUPER_OPS[code] ?? match;
+}
+const MATH_TRANSLITERATIONS: ReadonlyArray<readonly [RegExp, string | ((match: string) => string)]> = [
+  [/[⁰ⁱ⁴-⁹₀-₉]/gu, subSuperReplacer],
+  [/[−]/gu, '-'],
+  [/[±]/gu, '+/-'],
+  [/[×]/gu, 'x'],
+  [/[÷]/gu, '/'],
+  [/[√]/gu, 'sqrt'],
+  [/[∞]/gu, 'inf'],
+  [/[≤]/gu, '<='],
+  [/[≥]/gu, '>='],
+  [/[≠]/gu, '!='], // ≠
+  [/[≈]/gu, '~='],
+  [/[≪]/gu, '<<'],
+  [/[≫]/gu, '>>'],
+  [/[⊥]/gu, '_perp'],
+  [/[∧]/gu, '^'],
+  [/[∩]/gu, ' and '],
+  [/[∫]/gu, 'integral'],
+  [/[∈]/gu, ' in '],
+  [/[∏]/gu, 'product'],
+  [/[∑]/gu, 'sum'],
+  [/[°]/gu, ' deg'],
+  [/[′]/gu, "'"],
+  [/[″]/gu, "''"],
+  [/ /g, ' '],
+];
+export function transliterateMathToAscii(input: string): string {
+  let out = input;
+  for (const [pattern, replacement] of MATH_TRANSLITERATIONS) {
+    out = out.replace(pattern, replacement as Parameters<typeof String.prototype.replace>[1]);
+  }
+  return out;
+}
+
+/**
  * Cut design guidance at a semantic boundary instead of mid-token, so a truncated
  * block never leaves a half-written rule. Prefers a paragraph break, then a line
  * break, then a sentence end, then whitespace; only falls back to a hard cut when
@@ -28,7 +86,12 @@ function boundDesignInstructions(design: string, limit: number): string {
 }
 
 export function compileIllustrationImagePrompt(brief: IllustrationBrief, designInstructions = ''): string {
-  const base = `${wrapper}\nDRAWING_BRIEF_BEGIN\n${describeIllustrationBrief(brief)}\nDRAWING_BRIEF_END\n${presentationRules}`;
+  // ASCII-fy Unicode math before sending to chatgpt-web. The brief as persisted on the
+  // plan asset keeps the original Unicode for human-readable review; only the provider-facing
+  // prompt is transliterated. composition/treatment are already ASCII (the planner prompt
+  // warns against unescaped TeX).
+  const described = transliterateMathToAscii(describeIllustrationBrief(brief));
+  const base = `${wrapper}\nDRAWING_BRIEF_BEGIN\n${described}\nDRAWING_BRIEF_END\n${presentationRules}`;
   const designMarker = '\nDESIGN_SKILL_RENDERING_RULES_BEGIN\n';
   const designEndMarker = '\nDESIGN_SKILL_RENDERING_RULES_END';
   const remaining = IMAGE_PROMPT_LIMIT - base.length - designMarker.length - designEndMarker.length;

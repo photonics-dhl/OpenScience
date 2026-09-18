@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { AiGateway } from '@openscience/ai-gateway';
-import { describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocument, requireIllustrationSourceSupport, type IllustrationBrief, type StoryboardDocument, type StoryboardRequest, type StoryboardView } from '@openscience/domain';
+import { describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocument, requireIllustrationSourceSupport, type IllustrationBrief, type StoryboardDocument, type StoryboardRequest, type StoryboardView, type PaperOriginalRef } from '@openscience/domain';
 import type { PresentationClaim } from './chart-generator';
 import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
 import { compileIllustrationImagePrompt } from './scene-image';
 import type { IllustrationReviewIssue } from './illustration-review';
 
-type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; sourceClaimIds: string[] };
+type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; sourceClaimIds: string[]; paperOriginal?: PaperOriginalRef };
 const SCIENCE_SCENE_KEYS = ['title', 'narration', 'message', 'domain', 'subjects', 'labels', 'constraints', 'encoding'];
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('object_required');
@@ -54,10 +54,51 @@ function eligibleFiguresFor(plan: StoryboardRequest['figurePlan']): EligibleFigu
   return plan.figures.filter((figure): figure is EligibleFigure => figure.decision === 're-render' || figure.decision === 'abstract');
 }
 
+/** Build a paper-original scene without going through the LLM. The bound
+ *  asset's bytes will be copied verbatim by the image-phase handler; the
+ *  scene just records the binding plus a short scientific anchor (figure id +
+ *  caption) for human readers. */
+function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePlan']>['figures'][number], ref: PaperOriginalRef): ScientificScene {
+  const captionPrefix = figure.caption ? figure.caption.split(/[。；;]/u)[0]?.trim() : '';
+  const title = `${figure.id}: ${captionPrefix || figure.id}`.slice(0, 120);
+  const narration = captionPrefix || `re-render of ${figure.id}`;
+  return {
+    title,
+    narration,
+    // illustration is REQUIRED by the plan schema (combination below), so we
+    // emit a structured brief that describes "render the source figure verbatim".
+    illustration: {
+      schemaVersion: 2,
+      message: `Render the source figure (${figure.id}) verbatim.`,
+      domain: 'real-space',
+      subjects: [{
+        description: `Source figure ${figure.id}: ${captionPrefix || 'as published'}.`,
+        basis: { claimId: ref.sourceClaimId ?? '', evidenceId: ref.assetId, quote: ref.figureId },
+      }],
+      encoding: `subject 0 is the source figure; render at the same aspect, geometry and labels as ${figure.id} (${ref.assetId}).`,
+      labels: [figure.id],
+      constraints: ['render the source figure verbatim', 'do not invent new measurements or mechanisms'],
+      composition: '主对象居中（源图）；留白主导；labels 紧贴主体。',
+      treatment: '保留原稿颜色与线宽；不加新图例。',
+    },
+    sourceClaimIds: ref.sourceClaimId ? [ref.sourceClaimId] : [],
+    paperOriginal: ref,
+  };
+}
+
 /** Select scientific meaning before exposing it to composition/style guidance. */
-export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], settings: StoryboardRequest, base?: StoryboardView) {
+export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], settings: StoryboardRequest, base?: StoryboardView, paperOriginals: Map<string, PaperOriginalRef> = new Map()) {
   const { sourceLookup, sourceIds, upstream } = illustrationSources(claims);
   const eligibleFigures = eligibleFiguresFor(settings.figurePlan);
+  // Paper-original figures are emitted locally without an LLM call; they
+  // ship ahead of the LLM-produced scenes so scene index 0..n-1 keep a
+  // stable mapping: paper-original first (in figurePlan order), then LLM scenes.
+  const reuseBoundFigures = (settings.figurePlan?.figures ?? []).filter((figure) =>
+    figure.decision === 'reuse' && paperOriginals.has(figure.id));
+  const paperOriginalScenes = reuseBoundFigures.flatMap((figure) => {
+    const ref = paperOriginals.get(figure.id);
+    return ref ? [buildPaperOriginalScene(figure, ref)] : [];
+  });
   const previous = base?.output === 'image' ? base.document.scenes.map(scene => {
     const brief = scene.illustration;
     if (brief?.schemaVersion !== 2) return undefined;
@@ -132,7 +173,11 @@ Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,co
       const root = inputKeys.length === SCIENCE_SCENE_KEYS.length && SCIENCE_SCENE_KEYS.every(key => inputKeys.includes(key))
         ? { title: input.title, scenes: [input] } : input;
       keys(root, ['title', 'scenes'], 'science_root');
-      if (!Array.isArray(root.scenes) || root.scenes.length < 1 || root.scenes.length > 6) throw new Error('scene_count');
+      // Output image plans require at least one scene in total. When every figure in
+      // the figurePlan is a paper-original reuse (paperOriginalScenes.length > 0) we
+      // accept an empty LLM output and will fill in the paper-original scenes locally.
+      const minScenes = paperOriginalScenes.length > 0 ? 0 : 1;
+      if (!Array.isArray(root.scenes) || root.scenes.length < minScenes || root.scenes.length > 6) throw new Error('scene_count');
       if (eligibleFigures && root.scenes.length !== eligibleFigures.length) {
         // One scene per eligible figure; trust the order supplied by the model after
         // the validation feedback loop retries. Diagnostic names the expected vs actual
@@ -208,6 +253,15 @@ Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,co
     // fewer, pad with a default derived from the scene's own science. A strict
     // `length ===` check rejected too many plausible multi-scene briefs.
     const scenes: ReturnType<typeof intent.scenes.map> = [];
+    // Paper-original scenes go first: their visualAction is fixed ("render source
+    // verbatim") and they carry the bound paperOriginal so the image-phase handler
+    // copies bytes instead of calling the image provider.
+    for (const paperScene of paperOriginalScenes) {
+      scenes.push({
+        ...paperScene,
+        visualAction: `Render the source figure ${paperScene.paperOriginal?.figureId} verbatim (asset ${paperScene.paperOriginal?.assetId}); do not regenerate.`,
+      });
+    }
     for (let index = 0; index < intent.scenes.length; index += 1) {
       const scene = intent.scenes[index]!;
       const rawArt = (root.scenes as unknown[])[index];
@@ -221,7 +275,14 @@ Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,co
       compileIllustrationImagePrompt(illustration);
       scenes.push({ ...scene, illustration, visualAction: describeIllustrationBrief(illustration) } as typeof intent.scenes[number]);
     }
-    return parseStoryboardDocument({ schemaVersion: 1, title: intent.title, scenes }, claimIds, 'image');
+    // Paper-original scenes may carry a bound sourceClaimId outside the current
+    // submission's claim list. Extend the validator's claim scope so parseStoryboardDocument
+    // accepts them (it otherwise requires each scene.sourceClaimId ⊆ selected).
+    const extendedClaimIds = Array.from(new Set([
+      ...claimIds,
+      ...paperOriginalScenes.flatMap((s) => s.sourceClaimIds),
+    ]));
+    return parseStoryboardDocument({ schemaVersion: 1, title: intent.title, scenes }, extendedClaimIds, 'image');
   }
   const expectedSceneCount = intent.scenes.length;
   const art = await gateway.completeStructured((value): value is Record<string, unknown> => {

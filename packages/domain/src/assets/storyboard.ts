@@ -66,6 +66,13 @@ export interface StoryboardDocument {
         durationSeconds?: number;
         sourceClaimIds: string[];
         animation?: SceneAnimation;
+        /**
+         * Paper-original binding for figurePlan.reuse decisions: when the planner
+         * finds a registered paper_original_figure asset for this scene's figureId,
+         * it stamps the bound asset here. The image renderer copies these bytes
+         * verbatim instead of calling the image provider.
+         */
+        paperOriginal?: { assetId: string; objectKey: string; contentHash: string };
     }>;
 }
 export interface StoryboardView {
@@ -139,7 +146,7 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
     const scenes = v.scenes.map((raw, index) => {
         const prefix = `scene_${index}`;
         const s = object(raw, `${prefix}:shape`);
-        keys(s, output === 'video' ? ['title', 'narration', 'visualAction', 'durationSeconds', 'sourceClaimIds'] : ['title', 'narration', 'visualAction', 'sourceClaimIds'], output === 'video' ? ['animation'] : ['illustration'], `${prefix}:keys`);
+        keys(s, output === 'video' ? ['title', 'narration', 'visualAction', 'durationSeconds', 'sourceClaimIds'] : ['title', 'narration', 'visualAction', 'sourceClaimIds'], output === 'video' ? ['animation'] : ['illustration', 'paperOriginal'], `${prefix}:keys`);
         if (output === 'video' && (!Number.isInteger(s.durationSeconds) || Number(s.durationSeconds) < 4 || Number(s.durationSeconds) > 20))
             return invalid(`${prefix}:duration`);
         if (!Array.isArray(s.sourceClaimIds) || s.sourceClaimIds.length < 1 || s.sourceClaimIds.length > 12 || new Set(s.sourceClaimIds).size !== s.sourceClaimIds.length || s.sourceClaimIds.some(id => typeof id !== 'string' || !selected.includes(id)))
@@ -156,7 +163,17 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
         }
         const illustration = output === 'image' && s.illustration !== undefined ? parseIllustrationBrief(s.illustration, ids) : undefined;
         if (illustration && s.visualAction !== describeIllustrationBrief(illustration)) invalid(`${prefix}:illustration_description_mismatch`);
-        return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(illustration ? describeIllustrationBrief(illustration) : s.visualAction, output === 'image' ? STORYBOARD_IMAGE_VISUAL_ACTION_MAX : STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, `${prefix}:visual_action`), ...(illustration ? { illustration } : {}), ...(output === 'video' ? { durationSeconds: s.durationSeconds as number } : {}), sourceClaimIds: [...ids], ...(animation ? { animation } : {}) };
+        let paperOriginal: { assetId: string; objectKey: string; contentHash: string } | undefined;
+        if (output === 'image' && s.paperOriginal !== undefined) {
+            const po = object(s.paperOriginal, `${prefix}:paper_original_shape`);
+            keys(po, ['assetId', 'objectKey', 'contentHash'], [], `${prefix}:paper_original_keys`);
+            const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            if (typeof po.assetId !== 'string' || !uuid.test(po.assetId)
+                || typeof po.objectKey !== 'string' || !po.objectKey.startsWith('presentation/')
+                || typeof po.contentHash !== 'string' || !/^[0-9a-f]{64}$/u.test(po.contentHash)) invalid(`${prefix}:paper_original_values`);
+            paperOriginal = { assetId: po.assetId, objectKey: po.objectKey, contentHash: po.contentHash };
+        }
+        return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(illustration ? describeIllustrationBrief(illustration) : s.visualAction, output === 'image' ? STORYBOARD_IMAGE_VISUAL_ACTION_MAX : STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, `${prefix}:visual_action`), ...(illustration ? { illustration } : {}), ...(output === 'video' ? { durationSeconds: s.durationSeconds as number } : {}), sourceClaimIds: [...ids], ...(animation ? { animation } : {}), ...(paperOriginal ? { paperOriginal } : {}) };
     });
     const duration = scenes.reduce((n, s) => n + (s.durationSeconds ?? 0), 0);
     if (output === 'video' && (duration < 24 || duration > 90)) return invalid('total_duration');

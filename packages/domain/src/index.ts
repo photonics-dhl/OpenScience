@@ -433,9 +433,11 @@ export { STORYBOARD_IMAGE_VISUAL_ACTION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_GENE
 export { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
 export { parseSceneAnimation, requireAnimationSourceSupport, type SceneAnimation, type AnimationObject, type AnimationAction } from './assets/animation';
 
-export { requireStoryboardBase, requireStoryboardRevisionTask } from './assets/presentation-asset';
+export { requireStoryboardBase, requireStoryboardRevisionTask, WRITE_ROLES } from './assets/presentation-asset';
 
-export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, requireStyleReferenceImage, type SceneImageRequest } from './assets/scene-image';
+export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, requireStyleReferenceImage, findPaperOriginalAssets, requirePaperOriginalsForReuse, type PaperOriginalRef, type SceneImageRequest } from './assets/scene-image';
+export { registerPaperFigure, type RegisterPaperFigureInput, type RegisterPaperFigureResult } from './assets/paper-figure';
+export { requireMembership } from './workspace/helpers';
 export { parseIllustrationBrief, describeIllustrationBrief, requireIllustrationSourceSupport, type IllustrationBrief } from './assets/illustration-brief';
 
 export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';

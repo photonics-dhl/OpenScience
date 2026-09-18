@@ -2,6 +2,7 @@ import { planSceneImagePrompt } from './scene-image';
 import type { AiGateway, OcrAuthorizationContext, ScienceReviewInput } from '@openscience/ai-gateway';
 import { parseStoryboardDocument, requireSceneImageParent, requireStoryboardBase, requireStoryboardRevisionTask, requireVideoGenerationParents, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
 import { generateStoryboard, renderStoryboard } from './storyboard';
+import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@openscience/domain';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
@@ -322,6 +323,26 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     } else if (payload.sceneImage && sceneParent) {
       const user = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
       if (user?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media generation requires a platform administrator');
+      // Shared media-generation invariants: workspace write scope, authority re-check,
+      // parent plan / claims / evidence unchanged. Style reference is LLM-flow only.
+      await requirePresentationWriteScope(deps.prisma, scope);
+      const currentUser = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
+      if (currentUser?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media authority changed');
+      if ((await requireSceneImageParent(deps.prisma, payload))?.identity !== sceneParent.identity) throw new Error('[blocked] approved storyboard changed before image generation');
+      const currentClaims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
+      if (presentationClaimContent(currentClaims as PresentationClaim[]) !== presentationClaimContent(claims)) throw new Error('[blocked] source Claims changed before image generation');
+      await requireUnchangedEvidence(deps.prisma);
+      // Paper-original scenes copy the bound asset's bytes verbatim — no image provider
+      // call, no quota, no chatgpt-web bridge. This is the only path that bypasses
+      // gateway.generateImage for figurePlan.reuse.
+      const paperScene = sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]?.paperOriginal;
+      if (paperScene) {
+        const paperBytes = await readPresentationInput(deps.storage, paperScene.objectKey, paperScene.contentHash);
+        bytes = paperBytes; contentType = 'image/png'; extension = 'png';
+        imageProvider = 'paper_original_copy';
+        generator = 'OpenScience paper-original figure copy'; generatorVersion = paperScene.assetId;
+        promptHash = null;
+      } else {
       if (!options.gateway?.generateImage) throw new Error('[blocked] scene image gateway unavailable');
       const installedSkills = completedProviderRecovery || sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.illustration ? undefined
         : loadInstalledMediaSkills(sceneParent.view.style, sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.visualAction, 'render');
@@ -331,13 +352,6 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       const referenceImage = !completedProviderRecovery && styleReference
         ? { bytes: await readPresentationInput(deps.storage, styleReference.objectKey, styleReference.contentHash), contentHash: styleReference.contentHash }
         : undefined;
-      await requirePresentationWriteScope(deps.prisma, scope);
-      const currentUser = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
-      if (currentUser?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media authority changed');
-      if ((await requireSceneImageParent(deps.prisma, payload))?.identity !== sceneParent.identity) throw new Error('[blocked] approved storyboard changed before image generation');
-      const currentClaims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
-      if (presentationClaimContent(currentClaims as PresentationClaim[]) !== presentationClaimContent(claims)) throw new Error('[blocked] source Claims changed before image generation');
-      await requireUnchangedEvidence(deps.prisma);
       await requireUnchangedStyleReference(deps.prisma);
       const result = completedProviderRecovery
         ? await options.gateway.resumeImageFromCompletedResult!(task.id)
@@ -345,6 +359,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       bytes = result.bytes; contentType = result.contentType; extension = imageExtension(contentType);
       imageProvider = result.provider;
       generator = `OpenScience Hermes scene image / ${result.provider}`; generatorVersion = result.model; promptHash = result.promptHash;
+      }
     } else if (payload.storyboard) {
       if (!options.gateway) throw new Error('[blocked] storyboard planner unavailable');
       let planned: StoryboardPlan;
@@ -355,6 +370,15 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           || owner.executionAttempt !== task.executionAttempt || !isDeepStrictEqual(owner.payload, task.payload)) {
           throw new Error('[blocked] Storyboard task was superseded or changed');
         }
+        // Resolve paper-originals BEFORE the planner runs. A reuse decision
+        // without a registered paper_original_figure asset raises a clear,
+        // user-actionable error rather than silently dropping the scene.
+        const paperOriginals = await findPaperOriginalAssets(deps.prisma, {
+          researchObjectId: payload.researchObjectId,
+          versionId: payload.versionId,
+          figurePlan: payload.storyboard.figurePlan,
+        });
+        requirePaperOriginalsForReuse(paperOriginals, payload.storyboard.figurePlan);
         const identity: StoryboardCheckpointIdentity = {
           payload, sourceEvidenceIdentity, claimContent: presentationClaimContent(claims), baseIdentity: planningContext.identity,
         };
@@ -418,7 +442,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             const feedback = issues ? (result.storyboardReview as { summary: string }).summary : planningContext.revision.feedback;
             planned = await clarifyIllustrationLabels(options.gateway, claims, payload.storyboard, previous, feedback, issues);
           } else {
-            planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view);
+            planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view, paperOriginals);
           }
           planned.reviewFormat = 2;
           await persistPlan(planned);
@@ -500,11 +524,11 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       const created = await tx.presentationAsset.create({ data: {
         id: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind,
         objectKey, contentHash, generator, generatorVersion, promptHash, label: PRESENTATION_ASSET_LABEL,
-        provenance: { ...(scientificMedia ? { sourceEvidenceIdentity, sourceEvidenceIds: sourceEvidence.map((row) => row.id) } : {}), source: payload.sceneImage ? 'approved_storyboard_scene' : payload.video ? 'approved_storyboard_video' : 'verified_claims', ...(payload.sceneImage && sceneParent ? { subtype: 'storyboard_scene_image', sceneImage: { ...payload.sceneImage }, parentIdentity: sceneParent.identity, storyboardContentHash: sceneParent.contentHash } : {}), ...(videoProvenance ?? {}), ...(illustrationReview ? { illustrationReview } : {}), ...(designSkills ? { designSkills } : {}), ...(styleReference ? { styleReference: { assetId: styleReference.id, contentHash: styleReference.contentHash, role: 'style' } } : {}), ...(sceneParent?.view.document.scenes[payload.sceneImage!.sceneIndex]?.illustration ? { illustrationCompilation: { skill: 'openscience-research-illustration', version: '6', mode: 'structured_brief' } } : {}), taskId: task.id, sourceClaimIds: payload.sourceClaimIds, contentType, ...(storyboardDocument && payload.storyboard ? { subtype: 'sourced_storyboard', storyboardDocument: JSON.parse(JSON.stringify(storyboardDocument)), storyboardSettings: JSON.parse(JSON.stringify(payload.storyboard)) } : {}) },
+        provenance: { ...(scientificMedia ? { sourceEvidenceIdentity, sourceEvidenceIds: sourceEvidence.map((row) => row.id) } : {}), source: payload.sceneImage ? 'approved_storyboard_scene' : payload.video ? 'approved_storyboard_video' : 'verified_claims', ...(payload.sceneImage && sceneParent ? { subtype: 'storyboard_scene_image', sceneImage: { ...payload.sceneImage }, parentIdentity: sceneParent.identity, storyboardContentHash: sceneParent.contentHash, ...(sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]?.paperOriginal ? { paperOriginal: { sourceAssetId: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.assetId, sourceContentHash: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.contentHash, sourceObjectKey: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.objectKey } } : {}) } : {}), ...(videoProvenance ?? {}), ...(illustrationReview ? { illustrationReview } : {}), ...(designSkills ? { designSkills } : {}), ...(styleReference ? { styleReference: { assetId: styleReference.id, contentHash: styleReference.contentHash, role: 'style' } } : {}), ...(sceneParent?.view.document.scenes[payload.sceneImage!.sceneIndex]?.illustration ? { illustrationCompilation: { skill: 'openscience-research-illustration', version: '6', mode: 'structured_brief' } } : {}), taskId: task.id, sourceClaimIds: payload.sourceClaimIds, contentType, ...(storyboardDocument && payload.storyboard ? { subtype: 'sourced_storyboard', storyboardDocument: JSON.parse(JSON.stringify(storyboardDocument)), storyboardSettings: JSON.parse(JSON.stringify(payload.storyboard)) } : {}) },
       } });
       await tx.presentationAssetClaim.createMany({ data: payload.sourceClaimIds.map((claimId) => ({ presentationAssetId: created.id, claimId, researchObjectId: payload.researchObjectId, versionId: payload.versionId })) });
       if (storyboardDocument) await deps.audit?.record({ actorId: scope.userId, action: 'presentation_asset.generated', workspaceId: researchObject.workspaceId, targetType: 'presentation_asset', targetId: created.id, metadata: { taskId: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, subtype: 'sourced_storyboard', baseAssetId: payload.storyboard?.baseAssetId ?? null } }, tx);
-      if (payload.sceneImage) await deps.audit?.record({ actorId: scope.userId, action: 'presentation_asset.generated', workspaceId: researchObject.workspaceId, targetType: 'presentation_asset', targetId: created.id, metadata: { taskId: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, subtype: 'storyboard_scene_image', storyboardAssetId: payload.sceneImage.storyboardAssetId, sceneIndex: payload.sceneImage.sceneIndex, provider: imageProvider, model: generatorVersion, contentHash } }, tx);
+      if (payload.sceneImage) await deps.audit?.record({ actorId: scope.userId, action: 'presentation_asset.generated', workspaceId: researchObject.workspaceId, targetType: 'presentation_asset', targetId: created.id, metadata: { taskId: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, subtype: 'storyboard_scene_image', storyboardAssetId: payload.sceneImage.storyboardAssetId, sceneIndex: payload.sceneImage.sceneIndex, provider: imageProvider, model: generatorVersion, contentHash, ...(sceneParent?.view.document.scenes[payload.sceneImage.sceneIndex]?.paperOriginal ? { paperOriginal: { sourceAssetId: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.assetId, sourceContentHash: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.contentHash } } : {}) } }, tx);
       if (payload.video) await deps.audit?.record({ actorId: scope.userId, action: 'presentation_asset.generated', workspaceId: researchObject.workspaceId, targetType: 'presentation_asset', targetId: created.id, metadata: { taskId: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, subtype: 'approved_storyboard_video', storyboardAssetId: payload.video.storyboardAssetId, contentHash, timingStatus: 'estimated_requires_review' } }, tx);
       return created;
     });
