@@ -98,7 +98,9 @@ export async function reviewIllustrationStoryboard(
   const sourceIds = new Map(sources.map((source, index) => [`${source.claimId}:${source.evidenceId}`, `s${index}`]));
   const candidateView = { title: candidate.title, scenes: candidate.scenes.map(scene => {
     if (scene.illustration?.schemaVersion !== 2) throw new Error('[blocked] Illustration review requires separate science and layout');
-    requireIllustrationSourceSupport(scene.illustration, claims);
+    // Paper-original scenes anchor their source to a registered asset, not a
+    // reviewed passage; the chat-review's source-support check does not apply.
+    if (!scene.paperOriginal) requireIllustrationSourceSupport(scene.illustration, claims);
     if (scene.illustration.subjects.some(subject => !sources.some(source => source.claimId === subject.basis.claimId
       && source.evidenceId === subject.basis.evidenceId && source.relation === 'supports'))) {
       throw new Error('[blocked] Illustration subject lacks supporting evidence');
@@ -183,7 +185,7 @@ function parseIllustrationReview(value: unknown, candidate: StoryboardDocument, 
     document = parseStoryboardDocument({ ...candidate, scenes }, claims.map(claim => claim.id), 'image');
   }
   for (const scene of document.scenes) {
-    requireIllustrationSourceSupport(scene.illustration!, claims);
+    if (!scene.paperOriginal) requireIllustrationSourceSupport(scene.illustration!, claims);
     compileIllustrationImagePrompt(scene.illustration!);
   }
   return { document, decision, summary: review.summary, issues };
