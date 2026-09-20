@@ -2,6 +2,17 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
+## 2026-09-20 防止临时产物再次撑爆沙箱，桌面续接静态定位
+
+- 用户要求继续解决、避免复发并及时清理不用的东西。本轮从 `570744cc` 继续，静态元数据仍为 home 顶层 353 项、原 `ultron-*.log` 0；沿用下节唯一成功的 elevated/read-only 运行证据，未重复沙箱探针、模型请求、测试、预检、CI、构建或部署。最新用户指令已重新明确本机只允许静态阅读/编辑/Git/传输，canonical AGENTS 同步该边界。
+- 已把临时产物归位与收尾清理加入 `C:/Users/Mac/.codex/AGENTS.md`，并更新交付树 AGENTS：显式项目工作目录；生成物进入所属项目 ignored tmp 或私有应用数据目录；按归属、生产任务已结束和无活动使用判断，不能凭年龄删除；归档须保留原路径、权限、恢复说明并同步生产者及原有证据存在保护。全局规则修改前副本留在 ignored `tmp/bridge-continuation-20260920/global-AGENTS-before-hygiene.md`。
+- 找到两个历史一次性生产者 `C:/Users/Mac/ultron-v3-continuation-acceptance-run.ps1`、`ultron-v3-test-only-acceptance-run.ps1`：原日志已归档，旧路径的“存在即停止”保护会失效。仅将各自 `$logPath` 指向私有归档中的同名原结果日志并加注释，原执行与保护逻辑保持；静态确认两目标都存在，没有执行脚本。原脚本保留于 `C:/Users/Mac/AppData/Local/Ultron/Archives/sandbox-recovery-20260920/producer-scripts-before-fix/`。这是修复历史重跑保护，不代表所有生产者已改写。
+- 已创建当前任务的每日 09:00（本机时区 Asia/Shanghai）heartbeat **本机临时产物维护**，id=`automation`，ACTIVE。只处理确认不用的生成物；仍需证据的完整私有归档，保留权限/原路径/恢复信息并修正生产者；保护活动日志、浏览器/会话/秘密、用户资料、独有资产和回滚副本。不运行测试/模型请求/服务探针，不重启桥，不重跑 268 日志归档；无可操作变化时保持安静。已有此任务，后续更新它，不重复创建。独立 High 对规则、脚本相对备份的差异及两目标存在性完成静态复核，未发现新增风险；heartbeat 尚无实际运行观察。
+- 其余 home 顶层 `ultron-*` 仍有 186 文件（约 812 MB）和 24 目录，包含脚本与压缩包；尚未证明不用，全部保留。另一个 Ultron 用户任务仍 active；未更改其工作树、未重启共享桥、未清代理活动日志。此次没有新增删除，上一轮归档原件及完整备份仍在。
+- 桌面续接新增证据仅取自目标 native rollout 的消息形状/身份字段：11:24:58.538Z 的 `replacement_history` 恰三项——同轮 developer、多段 user（插件/AGENTS/独立 environment_context）、加密 compaction；没有独立原人类指令。各 turn_context 的 cwd/roots 仍正确。未解密或输出加密正文/隐含推理，未捕获 raw outbound，所以这仍是与故障一致的静态假设，不能声称线路字段已确证。
+- 对照安装版 5.0.8 的 `environment.ts`、`thread-environment.ts`、`compaction-continuation.ts`：多段环境前导可能被当成人类修订；同轮 ID 随后不满足旧轮续接分支，导致在 native rollout 环境恢复前拒绝 cwd。当前 checkpoint 只存摘要/源哈希，若原人类指令被替换则不足以恢复原修订。独立 High 静态复核认为修复必须限定同 daemon 已完成的精确 thread/turn/model/effort/摘要 checkpoint、无更晚真实指令，并以 native rollout 验证环境权限，不能全局放松 turn 冲突或接受任意摘要。
+- 本轮公开版本仍为 5.0.8；未发布 `cea5e1c` 的 steering 修补不能作为剩余 compaction 已修的证据。没有热改第三方 bundle、改可信缓存或安装未发布版本。下一步须在允许的维护窗口取得精确续接请求的脱敏结构，再据此采用可审查的上游修复；当前本机运行限制与共享桥活动期间不执行该请求。短 CLI Pro 文本审查已有真实证据，完整 Full 工具/桌面压缩续接仍未交付；不以环境清理代替三类风格和真实论文图交付。
+
 ## 2026-09-20 已授权归档，Windows 沙箱 206 已恢复
 
 - 用户对上一节精确 268 个 Ultron 历史日志清单明确回复“确认”。本轮在 `10461a02` 上执行环境恢复；应用/provider/配置/模型路由均未变，未新发 Pro/科研模型或生图请求，未运行项目测试、预检、CI、构建或部署。

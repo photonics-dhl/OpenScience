@@ -2,7 +2,7 @@
 
 ## 当前能力索引：目的、调用、效果
 
-2026-09-20 续作：三类风格链路已补逐图 style、场景对应、科学符号与下载后恢复，以及 Hermes art-only 明确换风格、Web 新 style、figurePlan 确认/草稿/提交贯通。论文原图 art-only 在提交前明确阻断；真实原图 reuse、固定暖底标准化的深色视觉边界仍未交付。**已按 CURRENT 部署；最小 UI 只观察现有图和 Hermes 入口，新风格确认/重放及异常恢复未实跑，不称零技术债**。本机 codex-chatgpt-web 5.0.8 的短 CLI + 精确源码文本已完成 Pro 审查，原图 art 提示 P2 已修。**Windows 206 已环境恢复**：用户授权完整归档 268 个历史日志并保持原权限，helper 42060→22584 字符，原生 elevated/read-only 真实源码读取 exit0；未改配置/降低隔离。底层 argv 长度依赖仍在，不能永久根治；桌面 native cwd 正确而压缩续接仍失败，未发布 steering 修补不证明已解决。完整 Pro 工具回合本轮未实跑，沿用已有文本协作，不重发旧任务；本机开发协作不能替代服务器生图 provider。归档/回滚/证据见 [本次交接最新节](../handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。
+2026-09-20 续作：三类风格链路已补逐图 style、场景对应、科学符号与下载后恢复，以及 Hermes art-only 明确换风格、Web 新 style、figurePlan 确认/草稿/提交贯通。论文原图 art-only 在提交前明确阻断；真实原图 reuse、固定暖底标准化的深色视觉边界仍未交付。**已按 CURRENT 部署；最小 UI 只观察现有图和 Hermes 入口，新风格确认/重放及异常恢复未实跑，不称零技术债**。本机 codex-chatgpt-web 5.0.8 的短 CLI + 精确源码文本已完成 Pro 审查，原图 art 提示 P2 已修。**Windows 206 已环境恢复**：268 日志经授权完整归档且保持原权限，helper 42060→22584，原生 elevated/read-only 读取源码 exit0；本轮仅静态确认 home 仍353，补产物归位规则、两历史脚本归档路径/重跑保护及每日安静维护。未改配置/降低隔离，上游 argv 缺陷仍在。桌面 compaction 的多段环境前导可能被误判为人类修订；native cwd 正确，但缺 raw outbound，尚未修复，不放松信任/turn 校验。完整 Pro 工具回合未实跑，不重发旧任务；本机开发协作不能替代服务器生图 provider。证据、下一步与清理边界见 [本次交接最新节](../handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。
 
 本页是定位入口，不是自动能力注册器。仅阅读与任务匹配的行，再读取调用代码与已有任务记录。**当前版本/暂停状态唯一锚点：[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)**；资源/缓存/安装入口见[服务器清单](server-capabilities.md)。需求来源是最新用户纠正及[需求基线](../OpenScience_Kimi_Development_Spec.md)。没有任何工具保证对整个产品的绝对掌控；未知状态要可见、可定位。
 
