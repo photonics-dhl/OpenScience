@@ -1,5 +1,8 @@
 # CURRENT Progress Window
 
+## 2026-09-20 — 用户选择 A，已恢复 Fig. 3 私有待审图
+- 已恢复 renderer，并沿原任务完成标准化/导入；实际站内入口与图片加载已观察，零新增模型请求、未审批/公开。证据、配置与回退边界见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md) 链接的最新恢复节；Fig. 2 未改，用户审图与其他交付差额保留。
+
 ## 2026-09-20 — 只读取证纠正
 - 末次 Fig. 3 任务已有真实下载 PNG，失败在后续标准化，尚无产品资产；当前 renderer 镜像缺失，历史确切底层错误未知。Fig. 2 残留仅发现私有列表/快照影响。证据、边界与待选处置见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md) 及其链接交接最新节；以下 9/18“没有真实 PNG”与“纯偶发”结论已被纠正。未重发/切 provider/改资产/部署。
 
