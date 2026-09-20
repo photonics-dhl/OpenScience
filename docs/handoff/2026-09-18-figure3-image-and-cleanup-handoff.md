@@ -2,7 +2,17 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
-## 2026-09-20 仓库完整调用链审读：桌面委派遗漏与压缩环境恢复是两处缺口
+## 2026-09-20 已授权本机修复与定向测试：源码候选通过，尚未安装
+
+- 用户明确要求“运行修复与测试”，本轮只覆盖独立本机 `codex-chatgpt-web` 的已知故障；不恢复 OpenScience 全套测试、预检、CI 或生图授权。随后用户说明另一会话正在修正 Pro CLI 沙箱的网络/共享盘权限，本轮不竞争修改该层。
+- 定向读取原 native 策略：CLI 任务 `01a0be9a-a7c0-7003-9b08-ee12e130ef19` 是 managed/read-only、network restricted、approval never，cwd 在本地 E:；桌面失败任务 `01a0be85-8abc-72c0-b073-44ace940c050` 则为 disabled/danger-full-access，cwd 在本地 C:。前者的访问边界支持用户判断，但不能解释后者的 delegation/压缩元数据失败。未从主任务可访问推导 Pro 同权限，也未据原记录声称另一会话的修正已经生效。
+- 在已审读 v5.0.8 基线 `00aab23` 上完成四文件最小修复及 38 项新回归，候选提交 `84e6997` 位于 ignored 外部源码快照。可重建补丁与上游许可已保存为 `infra/development-platform/codex-chatgpt-web/{desktop-continuation.patch,README.md,LICENSE.upstream}`。统一真实 create/follow-up 指令识别、类型化上下文过滤、跨摘要环境核验、同 scope 的已完成 checkpoint 恢复原指令/item ID，以及 v1/v2 producer 来源保留；不取消原生 thread/turn/权限一致性验证，不持久化信任凭证。
+- 新鲜证据：Bun 1.4.0 frozen-lockfile/ignore-scripts 安装源码依赖，lock 未变；原版 29 个初版新用例 23 fail → 最终五文件 117 pass/0 fail，相关 harness 筛选 6 pass/0 fail（77 filtered），TypeScript exit0。按上游原参数生成候选 CLI 成功（552,264 bytes），未生成/安装完整 launcher 包。命令见上述 README；日志 `tmp/bridge-continuation-20260920/repair-{baseline,red,regression,harness,typecheck,build}.log`。未发新模型请求，测试替身不能替代真实 Pro 工具回合。
+- 独立 High 指出并已修正两项过宽限制：摘要之前的旧轮 delegation 不应阻断精确 checkpoint 恢复；只有本次选中环境实际跨越摘要时才要求额外 rollout，远处历史摘要不应阻断当前直接环境。新增反例已通过，复核未见新增实质缺陷。
+- **不热覆盖 cli.js**：High 与源码核实 `runtime-install.cjs` 逐文件/manifest/bundleId 校验，`ensurePackagedRuntime` 会按启动器资源中的原包恢复不匹配安装；单改 cli 或只改安装目录 manifest 都不能稳定跨 launcher 重启。共享桥最近读回 PID27600、Full、accepting=true、active_http=3/browser=0，未 drain、重启或修改 live 文件；不能中断另一会话。后续需原构建/打包流程的完整一致产物，待原子 drain 确认空闲后切换，保留整包回退，再做带新原生指令的实际 Pro 工具续轮。
+- 进程重启会丢失内存 checkpoint；不能承诺旧失败任务无新指令自动恢复。账号/网络修正与本源码候选分别交付；完整 Full 尚未实证。原风格部署、206 缓解及维护、真实原图 reuse/深色边界差额、Fig. 2 未授权状态保持。测试 fixture 已逐项清理；源码/候选/日志仍是后续打包与复核所需证据，保留在 ignored tmp，不在 home 顶层制造文件。
+
+## 2026-09-20 仓库完整调用链审读：桌面委派遗漏与压缩环境恢复是两处缺口（修复前记录）
 
 - 用户要求仔细阅读 `miuuyy/codex-chatgpt-web` 仓库检查原因。只读获取 tag `v5.0.8`（commit `00aab23eb78a0d35ab575ff14044e29c0f80e711`）、main `eaf4f09ae92d4dc4429fa597b0861663138f08f8` 与两个未合并 PR；最新发布仍 5.0.8。源码快照在 ignored `tmp/bridge-source-audit-20260920/`，仅供静态复核/后续修复；未安装依赖、执行仓库代码/测试、重启桥或新增模型请求。沿 README/TROUBLESHOOTING、安全模型、parser → server → revision/environment → native rollout → compaction checkpoint 及相关测试源码核对，独立 High 复核新增结论。
 - **11:29 的 turn_id 冲突已取得对应生产者形状证据**：原目标任务的 native rollout 在 `11:29:11.228Z` 保存当前 turn `01a0be93…` 的 `function_call_output`，name=`send_message_to_thread`、有 ID、output 为完整 `<codex_delegation><source_thread_id>…</source_thread_id><input>…</input></codex_delegation>`。仅读取类型/身份/标签布尔，不输出指令正文；收据 `tmp/bridge-continuation-20260920/desktop-delegation-shapes.json`。v5.0.8 `environment.ts:171–185,246–255` 只接受普通 user 或直接父 agent_message，忽略该工具结果；随后选旧指令，`:219–234` 与新 turn 比较失败，`server.ts:584–591` 返回终止型400。因此不是没有发送新指令，而是桥接器漏认桌面实际传递形式；未捕获原 HTTP body，仍区分 native 生产记录与 wire 实跑。
