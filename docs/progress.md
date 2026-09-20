@@ -1,7 +1,7 @@
 # CURRENT Progress Window
 
-## 2026-09-20 — 本机 Pro 桥真实响应与风格候选续作
-- 用户已授权桥接协作；短 CLI 经 codex-chatgpt-web 的 Pro 已实际完成源码文本审查，所报原图 art 阻断提示 P2 已修。桌面续接与 Windows 文件工具故障仍保留；风格候选未部署/新生图，独立审查、实际结果及交付差额只见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+## 2026-09-20 — 本机 Pro 协作与风格链路部署
+- 用户已授权桥接协作；短 CLI 经 codex-chatgpt-web 的 Pro 已实际完成源码文本审查，所报原图 art 阻断提示 P2 已修。桌面续接与 Windows 文件工具故障仍保留；风格链路已完成应用/provider部署和最小站内观察，未新生图/未实跑新风格确认，独立审查、实际结果及交付差额只见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 ## 2026-09-20 — 用户选择 A，已恢复 Fig. 3 私有待审图
 - 已恢复 renderer，并沿原任务完成标准化/导入；实际站内入口与图片加载已观察，零新增模型请求、未审批/公开。证据、配置与回退边界见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md) 链接的最新恢复节；Fig. 2 未改，用户审图与其他交付差额保留。

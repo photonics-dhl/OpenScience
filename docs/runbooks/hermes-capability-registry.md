@@ -2,7 +2,7 @@
 
 ## 当前能力索引：目的、调用、效果
 
-2026-09-20 续作：三类风格候选已补逐图 style、场景对应、科学符号与下载后恢复；本轮再补 Hermes art-only 明确换风格、Web 接收新 style、figurePlan 从确认到草稿/提交的丢失。论文原图 art-only 仍不支持，现于任务提交前明确阻断；真实原图 reuse、固定暖底标准化的深色视觉边界仍未交付。**候选未部署/未运行，不称零技术债**。本机 codex-chatgpt-web 5.0.8 已在短 CLI 上返回 Pro 回答；桌面压缩续接 cwd/turn_id 与 Windows 只读沙箱 error 206 仍未解决，同一 CLI 任务已通过精确源码文本完成 Pro 审查，唯一 P2 原图 art 阻断提示已修，不改安全边界。它不能替代服务器生图 provider。详见 [本次交接最新节](../handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。
+2026-09-20 续作：三类风格链路已补逐图 style、场景对应、科学符号与下载后恢复；本轮再补 Hermes art-only 明确换风格、Web 接收新 style、figurePlan 从确认到草稿/提交的丢失。论文原图 art-only 仍不支持，现于任务提交前明确阻断；真实原图 reuse、固定暖底标准化的深色视觉边界仍未交付。**已按 CURRENT 部署，必要构建/启动完成；最小 UI 只观察现有图和 Hermes 入口，新风格确认/重放及异常恢复分支未实跑，不称零技术债**。本机 codex-chatgpt-web 5.0.8 已在短 CLI 上返回 Pro 回答；桌面压缩续接 cwd/turn_id 与 Windows 只读沙箱 error 206 仍未解决，同一 CLI 任务已通过精确源码文本完成 Pro 审查，唯一 P2 原图 art 阻断提示已修，不改安全边界。它不能替代服务器生图 provider。详见 [本次交接最新节](../handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。
 
 本页是定位入口，不是自动能力注册器。仅阅读与任务匹配的行，再读取调用代码与已有任务记录。**当前版本/暂停状态唯一锚点：[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)**；资源/缓存/安装入口见[服务器清单](server-capabilities.md)。需求来源是最新用户纠正及[需求基线](../OpenScience_Kimi_Development_Spec.md)。没有任何工具保证对整个产品的绝对掌控；未知状态要可见、可定位。
 
