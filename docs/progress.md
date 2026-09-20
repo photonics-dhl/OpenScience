@@ -1,5 +1,12 @@
 # CURRENT Progress Window
 
+## 2026-09-18 — Fig. 3 出图：plan 通过、桥三连失败；占位调试产物清理（承接方从顶部读）
+- 用户「再试一下」后第三次提交 Fig. 3 scene image：task `9f7ff671` **failed**（`image generation failed`，桥 `EXECUTION_FAILED`）。上游 plan `8141b5fd` **approved**、figurePlan `{"figures":[{"id":"Fig. 3","styleId":"editorial","decision":"re-render"}]}`、scene0 `Fig. 3: 圆孔横截面上的 Bethe 等效偶极源与角谱形状因子`、hash `9395f576`——**plan 段是真证据，图段至今 0 交付**；最后一次真实桥出图成功仍是 2026-09-17 的 `ac455b2f`（spool `result.png` 590,049 字节）。
+- 这是**第二次** figurePlan-aware prompt 三连败（前一次 promptHash `1c221dc86e…`）；能力台账记的桥失败率约 39%（69 个 `result.json`：35/27/7）**本轮未重测**。取证方向（只读、先于任何重试）：拉 `openscience-chatgpt-browser` 12:2x 日志与对应 spool，判断失败发生在「提交 prompt 前」还是「导出图片阶段」、是否与日志中的 `WebGL1 blocklist`/dbus 报错时间相关。**不要盲重发付费请求。**
+- 占位调试产物清理（用户授权：只清我自己造的废物）：删除资产 `929bd95d`（68 字节源占位）/`6088f11b`（占位 plan）/`03a160aa`（占位 copy 图）与失败任务 `6088f11b`/`627e7b48`/`7c654505` 及其 claims、spool 残留；读回验证这三行现存 0 行。**后果已记账**：`docs/progress.md` 与能力台账第 128 行原文引用这三行，均就地加更正注——**paper-original 链路只验证过管道、从未流过真实论文图**，真实证据需用真实 Fig. 图片经 `POST /research-objects/:id/versions/:vid/paper-figures` 重建。
+- 残留未处置（需用户拍板，勿单方面删）：`d5087b03`（copy 图 draft，provenance 的 `sourceAssetId=929bd95d` 已删 → 悬空）+ Fig. 2 reuse 周期的重复 plan `6439150a`/`ee9bcfb6`(draft)、`6043bebb`/`75b34c88`(**approved**，删除会改产品可见状态）；另有 08:14–08:17 四条 `结构化输出超过重试上限` 失败 task，是 `561d738b` 修 `MAX_STRUCTURED_RETRIES` 的复现证据。
+- 交接与本轮新会话 prompt：[docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md](handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)；CURRENT 已把生产锚点更正为 release `7bf8c5e5`/rollback `561d738b`（canonical HEAD `2a174fc6` 为纯文档提交、未部署）。
+
 ## 2026-09-18 — scene image 出图链路实测：链路本身可用，但发现「重复付费守护缺失」
 - **用户要求跑一次真实出图**。真链路提交（`submitPresentationGeneration` → Redis `agent:queue` → 真实 worker `claimAgentTask` → `createPresentationGenerationHandler` → `planSceneImagePrompt` → `gateway.generateImage`(chatgpt-web) → 对象存储 → `presentation_assets`），任务 `0ee21663…` **失败**：`error=image generation failed`，spool `result.json` = `{"status":"failed","errorCode":"EXECUTION_FAILED"}`，无 PNG、无资产行。合成任务/会话与 spool 残留已清理（各 0 残留）。
 - **根因（不是我的 payload 构造错）**：失败任务与 9/17 10:28 成功那次的 **`promptHash` 完全相同**（`e3380dac…`）。桥累计 69 个 result.json：**35 成功 / 27 失败 / 7 不确定**，失败码恒为 `EXECUTION_FAILED`——**桥的偶发失败率约 39%**，不代表链路断裂。
@@ -46,24 +53,12 @@
 - **总结**：代码债 (1)+(2)+(3) 已结构性关闭。**残留唯一的债是 chatgpt-web review provider 当前不稳**——LLM provider 问题，非应用代码责任；运维需联系 provider 或切 fallback。能力台账相应行已更新（paper-original binding 已实现 + 未实测 + 残留；chat-review retry / ASCII 转译作为债务条目）。
 - **AGENTS「实际业务资料」节制**：本次测试注册 1 个真 paper-original 资产 `77b3f559`（approved、objectKey 落存储），0 个 plan/image 资产。失败测试任务（`12bb4efe`/`2c2491cf`/`df430f1d`）全部删除（0 asset 牵连），spool 无残留。
 
-## 2026-09-18 — paper-original reuse 链路全链路端到端打通（`7bf8c5e5`）
-用户「清欠债」后的剩余调试：发现 chat-review 持续失败的真正根因是 `MAX_STRUCTURED_RETRIES=2` 常量把 `maxRetries:4` 直接拒掉（**不是 LLM provider 不稳**）。修法路径：
+## 2026-09-18 — paper-original reuse 链路端到端打通（`7bf8c5e5`）⚠️ 证据已降级
+用户「清欠债」后的剩余调试：chat-review 持续失败的真正根因是 `MAX_STRUCTURED_RETRIES=2` 常量把 `maxRetries:4` 直接拒掉（**不是 LLM provider 不稳**）。修法路径：`a1965005` planner 在全 reuse-with-paper-original 时 short-circuit（不发"exactly 0 scenes"这类自相矛盾指令）→ `56f4f18e`/`aa716546` paperOriginal 字段只用 3 keys、brief quote ≥12 字符 → `d2d17af9` 跳过 paper-original 场景的 source-passage 检查 → `107d5d3c` 跳过 supports-evidence 并把 basis 映射到 synthetic sourceId → `561d738b` `MAX_STRUCTURED_RETRIES: 2 → 4`（真正让 4 次重试生效）→ `7bf8c5e5` paperOriginal-only 候选跳过 chat-review LLM 直接 accept。
 
-1. **`a1965005` planner short-circuit**：全部 reuse-with-paper-original 时跳过 LLM（不发出"exactly 0 scenes"这种自相矛盾指令）。
-2. **`56f4f18e`/`aa716546` scene 字段窄化**：paperOriginal 字段只用 3 keys，brief 的 quote ≥ 12 字符。
-3. **`d2d17af9` chat-review 跳过 source-passage 检查**：对 paper-original 场景无意义。
-4. **`107d5d3c` chat-review supports-evidence 跳过** + basis 映射 synthetic sourceId。
-5. **`561d738b` `MAX_STRUCTURED_RETRIES: 2 → 4`**：真正让 chat-review 的 4 次重试生效。
-6. **`7bf8c5e5` reviewIllustrationStoryboard 在 paperOriginal-only 候选时跳过 LLM 直接 accept**（LLM 看到占位 brief 会以"科学字段空白"为理由 blocked，对 paper-original 无意义）。
+**当时的端到端实测**（`xgs-paper-original-plan.cjs`，生产 release `7bf8c5e5`）：占位 paper-original `929bd95d`（contentHash `8952318f`、68 字节 PNG）→ plan `6088f11b`（1 scene、`Fig. 3:` 开头、paperOriginal 绑定、draft→approved）→ copy 图 `03a160aa`（`generator='OpenScience paper-original figure copy'`、objectKey 指向 source、contentHash 同源），**全程零 LLM 调用**（planner short-circuit + chat-review skip + image-phase copy 路径）。
 
-**全链路实测**（`xgs-paper-original-plan.cjs`，生产 release `7bf8c5e5`）：
-- paper-original asset `929bd95d-…`（contentHash `8952318f…`、68 字节 PNG 落对象存储）。
-- plan asset `6088f11b-…` 状态 draft（1 scene、`Fig. 3:` 开头、paperOriginal 绑定）。
-- plan 审核后状态 approved。
-- scene image `03a160aa-…` 状态 draft，`generator='OpenScience paper-original figure copy'`、`objectKey` 指向 source 资产、`contentHash` 与 source 相同。
-- **全程零 LLM 调用**（planner short-circuit + chat-review skip + image-phase paper-original copy 路径）。
-
-能力台账相应行从"未实测端到端"改为"全链路实测 + 12 个 commit 列表"。**三件 figurePlan 欠债全部结构性关闭**，本轮不再有未结债务。
+**⚠️ 2026-09-18 同日更正**：上述三行已被作为「我自己的占位调试产物」清除（用户授权范围，只清我方产物），故本节**不再有可读回的实测证据**；能力台账第 128 行同一引用已同步加注。**paper-original 链路只验证过管道，从未流过真实论文图**——真实证据需用真实论文图片经 `POST /research-objects/:id/versions/:vid/paper-figures` 重建。同周期残留在库：plan `6043bebb`/`75b34c88`(approved)、`6439150a`/`ee9bcfb6`(draft) 与悬空 copy `d5087b03`（源 `929bd95d` 已删）；处置建议见 [2026-09-18 交接](handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。
 
 ## 2026-09-17 — figure-audit → 出图链路端到端打通（`01381bdf`）
 - **实测通过**：真实 MiniMax-M3 一次调用成功（`in=4934 out=354`、无重试），`presentationDraft.figurePlan` 返回**对象** `{"figures":[{"id":"Fig. 1","decision":"re-render","styleId":"editorial"}]}`，条目逐字复制自审计结果。验证用**自然用户口吻**的 goal（刻意不描述 JSON 形状），只由修好的 system prompt 引导。
