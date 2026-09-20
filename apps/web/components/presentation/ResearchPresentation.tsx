@@ -10,6 +10,7 @@ import { useVersionLabels } from '@/components/research/useVersionLabels';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { PresentationWorkbench, type PresentationTaskState } from '@/components/presentation/PresentationWorkbench';
+import type { PaperFigureSelection, PaperFigureUploadOutcome, PaperFigureReviewOutcome } from '@/components/presentation/PaperFigureUpload';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import {
@@ -25,7 +26,10 @@ import {
   listPresentationAssets,
   listVersionClaims,
   listVersions,
+  materialFingerprint,
   transitionPresentationAsset,
+  uploadArtifactFile,
+  uploadPaperFigure,
   type PresentationAsset,
   type PresentationClaim,
   type VersionSummary,
@@ -129,6 +133,9 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   const bootstrapEpoch = useRef(0);
   const generationIntent = useRef<{ signature: string; key: string } | null>(null);
   const claimIntent = useRef<{ signature: string; id: string } | null>(null);
+  const paperFigureUploadScope = useRef<ActiveScope | null>(null);
+  const paperFigureArtifacts = useRef(new Map<string, { key: string; artifactId?: string }>());
+  const transitionScope = useRef<ActiveScope | null>(null);
 
   const version = useMemo(
     () => loadedResearchObjectId === params.id
@@ -202,6 +209,8 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     scopeRef.current.controller.abort();
     generationIntent.current = null;
     claimIntent.current = null;
+    paperFigureUploadScope.current = null;
+    transitionScope.current = null;
     setTaskState(null);
     setWorking(false);
     setError('');
@@ -304,6 +313,67 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     }
   }
 
+  async function uploadOriginal(input: PaperFigureSelection): Promise<PaperFigureUploadOutcome | null> {
+    const scope = scopeRef.current;
+    if (!version || !workspace || !canWrite || !scopeReady || working || paperFigureUploadScope.current || transitionScope.current) {
+      return { status: 'failed', message: t('paperFigure.unavailable') };
+    }
+    if (scope.key !== scopeKey || !scopeIsCurrent(scope)) return null;
+    if (!claims.some((claim) => claim.id === input.sourceClaimId && claim.researchObjectId === params.id && claim.versionId === version.versionId && claim.extractionStatus === 'succeeded')) {
+      return { status: 'failed', message: t('paperFigure.sourceChanged') };
+    }
+    paperFigureUploadScope.current = scope;
+    setWorking(true);
+    let phase: 'read' | 'upload' | 'register' = 'read';
+    try {
+      const fingerprint = await materialFingerprint(input.file);
+      if (!scopeIsCurrent(scope)) return null;
+      const signature = JSON.stringify([workspace.id, scope.key, input.file.name, fingerprint]);
+      let uploaded = paperFigureArtifacts.current.get(signature);
+      if (!uploaded) {
+        uploaded = { key: `paper-figure:${crypto.randomUUID()}` };
+        paperFigureArtifacts.current.set(signature, uploaded);
+      }
+      phase = 'upload';
+      if (!uploaded.artifactId) {
+        const artifact = await uploadArtifactFile(workspace.id, input.file, input.file.name, uploaded.key, undefined, scope.controller.signal);
+        // Retain the file receipt even if the user changed scope before it arrived.
+        // Its map key keeps it isolated from the newly selected RO/version.
+        uploaded.artifactId = artifact.artifactId;
+      }
+      if (!scopeIsCurrent(scope)) return null;
+      phase = 'register';
+      const { asset } = await uploadPaperFigure(params.id, version.versionId, {
+        artifactId: uploaded.artifactId, figureId: input.figureId, sourceClaimId: input.sourceClaimId,
+        ...(input.caption ? { caption: input.caption } : {}),
+      }, scope.controller.signal);
+      if (!scopeIsCurrent(scope)) return null;
+      try {
+        const refreshed = await listPresentationAssets(params.id, version.versionId, scope.controller.signal);
+        if (!scopeIsCurrent(scope)) return null;
+        setAssets(refreshed.assets);
+        return { status: 'uploaded', assetId: asset.assetId, figureId: input.figureId, assetsRefreshed: true };
+      } catch (cause) {
+        if (!scopeIsCurrent(scope) || isAbort(cause)) return null;
+        return { status: 'uploaded', assetId: asset.assetId, figureId: input.figureId, assetsRefreshed: false };
+      }
+    } catch (cause) {
+      if (!scopeIsCurrent(scope) || isAbort(cause)) return null;
+      if (phase === 'read') return { status: 'failed', message: t('paperFigure.readFailed') };
+      if (hasAmbiguousWriteOutcome(cause)) return { status: 'failed', message: t(phase === 'register' ? 'paperFigure.registrationUncertain' : 'paperFigure.uncertain') };
+      if (cause instanceof ApiClientError && cause.code === 'SOURCE_CLAIM_INVALID') {
+        return { status: 'failed', message: t('paperFigure.sourceChanged') };
+      }
+      if (phase === 'register' && cause instanceof ApiClientError && cause.code === 'CONCURRENT_UPDATE') {
+        return { status: 'failed', message: t('paperFigure.bindingConflict') };
+      }
+      return { status: 'failed', message: t('paperFigure.failed', { reason: cause instanceof Error ? cause.message : t('paperFigure.unavailable') }) };
+    } finally {
+      if (paperFigureUploadScope.current === scope) paperFigureUploadScope.current = null;
+      if (scopeIsCurrent(scope)) setWorking(false);
+    }
+  }
+
   async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest, video?: PresentationVideoRequest) {
     if (!version || !canWrite || !scopeReady) return;
     const scope = scopeRef.current;
@@ -333,31 +403,41 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     }
   }
 
-  async function transition(asset: PresentationAsset, status: 'approved' | 'rejected') {
-    if (!version || !canWrite || !scopeReady) return;
+  async function transition(asset: PresentationAsset, status: 'approved' | 'rejected'): Promise<PaperFigureReviewOutcome | null> {
+    if (!version || !canWrite || !scopeReady || working || transitionScope.current) return null;
     const scope = scopeRef.current;
-    if (!scopeIsCurrent(scope)) return;
+    if (!scopeIsCurrent(scope) || scope.key !== scopeKey || asset.researchObjectId !== params.id || asset.versionId !== version.versionId) return null;
+    transitionScope.current = scope;
     setWorking(true);
     setError('');
     try {
       const result = await transitionPresentationAsset(params.id, version.versionId, asset.id, status, asset.updatedAt, scope.controller.signal);
-      if (!scopeIsCurrent(scope)) return;
+      if (!scopeIsCurrent(scope)) return null;
       setAssets((current) => current.map((item) => item.id === asset.id ? { ...item, ...result.asset, sourceClaimIds: item.sourceClaimIds } : item));
+      return { status };
     } catch (cause) {
-      if (!scopeIsCurrent(scope) || isAbort(cause)) return;
+      if (!scopeIsCurrent(scope) || isAbort(cause)) return null;
       if (cause instanceof ApiClientError && cause.status === 409) {
         try {
           const refreshed = await listPresentationAssets(params.id, version.versionId, scope.controller.signal);
-          if (!scopeIsCurrent(scope)) return;
+          if (!scopeIsCurrent(scope)) return null;
           setAssets(refreshed.assets);
         } catch (refreshCause) {
-          if (!scopeIsCurrent(scope) || isAbort(refreshCause)) return;
-          setError(refreshCause instanceof Error ? refreshCause.message : t('transitionFailed'));
-          return;
+          if (!scopeIsCurrent(scope) || isAbort(refreshCause)) return null;
+          const message = refreshCause instanceof Error ? refreshCause.message : t('transitionFailed');
+          setError(message);
+          return { status: 'failed', message };
         }
       }
-      setError(cause instanceof ApiClientError ? cause.message : cause instanceof Error ? cause.message : t('transitionFailed'));
+      const message = asset.generator === 'OpenScience paper-original figure' && hasAmbiguousWriteOutcome(cause)
+        ? t('paperFigure.reviewUncertain')
+        : asset.generator === 'OpenScience paper-original figure' && cause instanceof ApiClientError && cause.status === 409
+          ? t('paperFigure.reviewConflict')
+          : cause instanceof Error ? cause.message : t('transitionFailed');
+      setError(message);
+      return { status: 'failed', message };
     } finally {
+      if (transitionScope.current === scope) transitionScope.current = null;
       if (scopeIsCurrent(scope)) setWorking(false);
     }
   }
@@ -416,13 +496,14 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             loadFailed={scopeLoadFailed}
             task={taskState}
             onCreateClaim={createClaim}
+            onUploadPaperFigure={uploadOriginal}
             onGenerate={(ids) => void generate(ids)}
             onGenerateStoryboard={(ids, request) => void generate(ids, request)}
             onGenerateSceneImage={(ids, request) => void generate(ids, undefined, request)}
             onGenerateVideo={(ids, request) => void generate(ids, undefined, undefined, request)}
             onResumeTask={() => setResumeNonce((current) => current + 1)}
             onRetryData={() => setLoadNonce((current) => current + 1)}
-            onTransition={(assetItem, status) => void transition(assetItem, status)}
+            onTransition={transition}
             working={working}
             error={error}
             resultsOnly={embedded}
@@ -446,7 +527,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
         <p className={styles.eyebrow}>HERMES</p><h2>{companion('companionTitle')}</h2><p>{companion('companionBody')}</p>
         <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state="idle" suggestion={suggestion} workspaceId={params.id} />
       </aside> : null}</div>
-      {!embedded && assistantObject?.id === params.id ? <HermesAssistantDrawer key={params.id} initialGoal={hermesGoal} dashboardContext={{ tasks: [], researchObjects: [{ id: params.id, status: assistantObject.status, title: researchTitle }] }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={params.id} suggestion={suggestion} target={null} /> : null}
+      {!embedded && assistantObject?.id === params.id && versionId ? <HermesAssistantDrawer key={scopeKey} initialGoal={hermesGoal} dashboardContext={{ tasks: [], researchObjects: [{ id: params.id, status: assistantObject.status, title: researchTitle }], presentation: { researchObjectId: params.id, versionId } }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={params.id} suggestion={suggestion} target={null} /> : null}
     </>);
   return embedded ? content : <DashboardShell className={workspaceStyles.workspace} mainClassName="p-0" navigationLabel={t('navigation')} skipLabel={t('skip')}>{content}</DashboardShell>;
 }

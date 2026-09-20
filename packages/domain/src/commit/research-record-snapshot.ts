@@ -116,6 +116,10 @@ async function writeResearchRecord(tx: Prisma.TransactionClient, input: {
     objectKey: asset.objectKey, contentHash: asset.contentHash, generator: asset.generator, generatorVersion: asset.generatorVersion,
     promptHash: asset.promptHash, status: asset.status, label: asset.label, provenance: asset.provenance,
     sourceClaimIds: asset.sourceClaims.map(link => link.claimId).sort(),
+    // Source approval permits reuse; it does not select the original as a publication image.
+    // Mark only new public snapshots so existing public media identities remain unchanged.
+    ...(publication && (asset.generator === 'OpenScience paper-original figure'
+      || recordValue(asset.provenance).subtype === 'paper_original_figure') ? { publicationIncluded: false } : {}),
   })) };
   await tx.version.update({ where: { id: version.id }, data: { researchRecord: JSON.parse(JSON.stringify({ dto, sources, historyMedia,
     historyCapture: { state: publication ? 'sealed' : 'working', graphSource: 'working_draft', capturedAt },

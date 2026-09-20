@@ -1,120 +1,40 @@
-# `figurePlan.reuse` — paper-original binding design
+# figurePlan.reuse — paper-original binding
 
-Status: proposal (not implemented). Captures the design intent for the third
-remaining debt after `figurePlan` is wired into the planner (`dfbcc593`).
-Implemented semantics today: `reuse` means "no scene produced"; a scene whose
-only justification is the figure id may still appear if the planner decides so.
-This spec describes the intended end-state where `reuse` actually points at
-the source paper's original figure.
+Status: implementation contract. Candidate, deployed version and real evidence are tracked only in [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md). Earlier placeholder runs do not establish real-paper reuse.
 
-## Why
+## Purpose
 
-`reuse` currently collapses to "skip" in the planner (no scene). For the
-audience-facing product this is wrong: a publication-grade author figure
-should land in the presentation as the source image, not be replaced by a
-generated scene or omitted entirely. The fix is a binding from `figurePlan`
-entries to the registered paper-original image assets.
+Preserve an original paper figure when figurePlan selects reuse. The original bytes and scientific meaning are retained; no image-provider request is made for this scene. A successfully extracted Claim provides context, not proof that the uploaded pixels came from the paper.
 
-## Shape
+## Upload and registration
 
-A `reuse` figure references a paper-original image asset that already exists
-in `presentation_assets` (subtype `paper_original_figure`) keyed by
-`(researchObjectId, versionId, figureId)` where `figureId` matches the
-figurePlan entry's `id`. The asset carries the original image bytes, the
-caption verbatim, and a source provenance row pointing to the evidence
-record that justified the figure.
+1. Upload a PNG through the existing Artifact multipart endpoint, using its workspace authorization, CSRF, quota, idempotency and Blob storage. The presentation page retains the upload key and returned artifactId for retries in the current page instance.
+2. POST /research-objects/:researchObjectId/versions/:versionId/paper-figures with { artifactId, figureId, sourceClaimId, caption? }. The previous imageBase64 body is removed; no application caller used that legacy body before this UI was added. Historical one-off scripts are not supported production clients.
+3. The server requires a current writable draft, an available Artifact in the same workspace, PNG MIME, size at most 32 MiB, dimensions at most 16,384 per edge and 64 MP total, matching Blob identity and its server-derived storage key. Before taking the write transaction, a bounded stream read verifies byte size/hash and PNG header/end marker; the transaction rechecks the complete Artifact/Blob identity. It does not decode pixels in the API or prove origin.
+4. In the existing presentation/reference transaction, register a draft image with generator OpenScience paper-original figure, subtype paper_original_figure, artifactId, figureId, RO/version, sourceClaimId and optional caption. Storage is already owned by the Artifact; registration does not write or delete objects.
+5. Repeating the same figure, bytes, Claim and normalized caption returns its existing asset. Conflicting active content or caption produces CONCURRENT_UPDATE. Reposting an unchanged rejected image with the same Claim and caption also conflicts. Correcting the image or its source explanation may create a new draft under the same real figure number when there is no active binding; the rejection record is retained and explicit review is required again.
 
-```jsonc
-// figurePlan entry (current shape, no new fields)
-{ "id": "Fig. 2", "decision": "reuse" }
+The response remains { asset: { assetId, contentHash, objectKey } }. The private presentation list additionally exposes paperOriginal: { figureId, caption? }, including originals whose provenance is nested by version-history copy. No credentials or original private provenance is exposed by this view.
 
-// resolved by the planner at plan time
-// -> presentation_assets row with subtype = 'paper_original_figure'
-//    where provenance.figureId = 'Fig. 2'
-//    and provenance.researchObjectId = version.researchObjectId
-//    and versionId = version.id
-```
+## Source review and reuse
 
-The illustration plan then emits ONE scene per `reuse` figure whose
-`visualAction` says "render the source figure verbatim (do not redraw)"
-and whose payload carries the bound asset's `objectKey` so the renderer
-can ship it as-is. No Chat call is needed for `reuse` figures — the asset
-is already on disk.
+- The source section shows the PNG, figure number, caption, Claim and review status. A successful browser image load with nonzero dimensions is required for the approval button; decode failure has explicit feedback and still permits rejection. This is a human-review UI condition, not a server-side proof of origin or complete PNG decoding. The reviewer compares it with the actual source PDF before selecting “核对为论文原图”. Existing review authority, status transitions and updatedAt concurrency checks apply. Approval rechecks the current Claim scope/status and the source Artifact/Blob identity and availability on the server. Referenced source Artifacts are protected from permanent cleanup.
+- Only approved, undeleted originals in the requested RO/version can satisfy reuse. A rejected or pending original cannot pass. Lookup failure remains paper_original_missing_<figureId>.
+- The planner emits one original scene for each bound reuse entry. Execution rechecks the approved source asset and stored key/hash before reading up to 32 MiB and copying its original bytes. Existing generated-image/video inputs keep their smaller bound.
+- Storyboard payloads accept only the server-derived Blob key for the recorded hash or a strictly shaped legacy presentation/RO/version/hash.png key; the executor still resolves the actual server-owned asset. Client-supplied arbitrary paths are never accepted.
+- Original figure dimensions are retained. Header/hash validation and human source review are distinct from full image decoding or automated scientific verification.
 
-## Subtype contract
+## Publication and history
 
-A new `presentation_assets` subtype `paper_original_figure` joins the
-existing set (`sourced_storyboard`, `storyboard_scene_image`,
-`approved_storyboard_video`). The asset row:
+Source approval makes an original available to reuse; it does not select the source asset as an audience-facing generated image. For new publication snapshots, originals receive publicationIncluded:false in historyMedia, identified by subtype or the preserved generator. Their original status, provenance and Claim links remain frozen for traceability and cross-version carry.
 
-- `kind` is `image`.
-- `status` is `approved` (paper originals are user-provided evidence, not
-  generated artefacts; they never need review).
-- `generator` is a fixed string `OpenScience paper-original figure`, with
-  the artefact-import task id in `generatorVersion`.
-- `provenance.subtype` is `paper_original_figure`.
-- `provenance.figureId` matches the figurePlan entry id.
-- `provenance.researchObjectId` and `provenance.versionId` scope the
-  binding (a paper-original only valid for the version it was registered
-  on).
-- `provenance.sourceClaimId` references the claim whose `evidenceRecord`
-  rows identify this figure.
-- `sourceClaims` join rows resolve to the same claim.
+publicHistoryMedia excludes only an explicit false. Old published snapshots lacking this field keep their existing media, URL and hash behavior. New publication previews and their final media reconciliation use the same source exclusion. The public content hash is computed from that selected media. Published but private source records remain roots of reference protection and cannot be deleted through ordinary trash cleanup.
 
-## Registration
+The copied reuse result remains a separate draft output, requiring its own review before it can enter a new public version. Existing public versions and accepted images are not rewritten.
 
-Paper-original images arrive with the source paper's artefact, not from a
-generation pipeline. Registration should be a side-effect of `sdf.extract`
-when the parser identifies a figure (image-bearing page region + caption
-text): emit a `presentation_assets` row of subtype `paper_original_figure`
-per detected figure, scoped to the current draft version, with the
-claim's evidence record as the source. The figure-audit pass is the
-authoritative consumer of this row set.
+## Limits and remaining work
 
-If the parser cannot detect figures, registration is a manual
-`POST /research-objects/:id/versions/:vid/figures` call that creates the
-asset row, scoped to a claim, with the image uploaded as the asset body.
-
-## Lookup and renderer behaviour
-
-The illustration planner, given a `reuse` figure, looks up the matching
-`paper_original_figure` asset by `(researchObjectId, versionId, figureId)`.
-- Found: the scene's `visualAction` is fixed to "render the source figure
-  as-is"; the renderer reads the bound `objectKey` and emits it verbatim.
-  `subjects`/`labels`/`encoding` reflect the source figure's caption.
-- Not found: the planner fails the planning step with
-  `paper_original_missing_<figureId>` and the user must either upload the
-  original or change the decision to `re-render` or `abstract`.
-
-This is the only failure mode the planner surfaces for `reuse`; the user
-cannot submit a `reuse` decision without a registered paper-original.
-
-## Failure modes and constraints
-
-- Paper-originals are version-scoped. Editing the paper creates a new
-  version; the new version has no registered originals until the parser
-  (or manual upload) registers them. Re-running figure-audit on the new
-  version must mark `reuse` figures as `paper_original_missing_<id>` if
-  the originals are not yet registered. The audit UI must surface this
-  to the user.
-- Status lifecycle: paper-originals do not transition (they are
-  user-provided evidence, not generation artefacts). They can be
-  `deletedAt`-set if the user removes the source paper version.
-- Workspace: paper-originals follow the existing `presentation_assets`
-  workspace rules (`requirePresentationWriteScope` still applies; uploads
-  require a write role).
-
-## Out of scope here
-
-- The parser-side detection logic (heuristics for "this page region is a
-  figure with caption text"). The sdf.extract pass already produces
-  page-quality + figure-candidate metadata; turning that into
-  `paper_original_figure` rows is its own task.
-- Cross-version reuse (a paper-original registered on v1 used in v2's
-  presentation). Version-history-copy may already handle this via
-  `version_history_copy` subtype; this spec keeps paper-originals
-  version-scoped until that flow is reconciled.
-- UI affordances for figure-by-figure approval. The Hermes guide already
-  emits `presentationDraft.figurePlan`; the user clicks confirm and the
-  audit result is what they sign off. Approval/rejection for individual
-  figures is a follow-up.
+- Parser-side automatic figure extraction/registration is not implemented here. Manual upload uses the same existing Artifact path as other source materials.
+- Original lookup remains version-scoped; history copies preserve provenance, but rebinding them for a new figure plan requires an explicitly valid current-version binding.
+- Existing Artifact upload owns its prior object-write/DB failure behavior. This change removes the second write path; it does not claim a global crash-proof upload lifecycle.
+- Broad tests, preflight and CI remain prohibited by current user instructions. Deployment and targeted real product observations must distinguish completed functionality, actual source evidence and user acceptance.

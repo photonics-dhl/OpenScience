@@ -3,11 +3,12 @@ import { parseSceneImageRequest, presentationSceneImageView, requireSceneImagePa
 import { isDeepStrictEqual } from 'node:util';
 import { lockLiveResearchObject, lockTrashReferences } from '../trash/trash';
 import { isWorkingDraftVersion } from '../commit/version-history';
-import { refreshWorkingResearchRecord } from '../commit/research-record-snapshot';
+import { recordValue, refreshWorkingResearchRecord } from '../commit/research-record-snapshot';
 import { isVersionHistoryCopy, requireValidVersionHistoryCopy } from './version-history-copy';
 import { parseStoryboardRequest, presentationStoryboardView, canonicalStoryboardStyle, type StoryboardRequest, type StoryboardView } from './storyboard';
 import type { AuditContext } from '@openscience/observability';
 import type { PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
+import { getBlobStorageKey } from '@openscience/storage';
 import { createAgentSession, getAgentTask, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
 import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
@@ -27,6 +28,7 @@ export interface PresentationGenerationPayload { schemaVersion: 1; researchObjec
 export interface PresentationAssetView {
   storyboard?: StoryboardView;
   sceneImage?: SceneImageRequest;
+  paperOriginal?: { figureId: string; caption?: string };
   canGenerateSceneImage: boolean;
   canGenerateVideo: boolean;
   canTransition: boolean;
@@ -42,6 +44,17 @@ export interface PresentationAssetView {
   sourceClaimIds: string[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+function paperOriginalProvenance(asset: { provenance: unknown }): Record<string, unknown> {
+  let provenance = recordValue(asset.provenance);
+  while (provenance.source === 'version_history_copy') provenance = recordValue(provenance.lineage);
+  return provenance;
+}
+function paperOriginalView(asset: { provenance: unknown }): PresentationAssetView['paperOriginal'] {
+  const provenance = paperOriginalProvenance(asset);
+  if (provenance.subtype !== 'paper_original_figure' || typeof provenance.figureId !== 'string' || !provenance.figureId.trim()) return undefined;
+  return { figureId: provenance.figureId, ...(typeof provenance.caption === 'string' ? { caption: provenance.caption } : {}) };
 }
 
 export function parsePresentationGenerationPayload(value: unknown): PresentationGenerationPayload {
@@ -220,6 +233,7 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
   return Promise.all(assets.map(async (asset) => {
     const ids = asset.sourceClaims.map(source => source.claimId).sort();
     const claimsValid = ids.length > 0 && ids.every(id => validClaimIds.has(id));
+    const paperOriginal = paperOriginalView(asset);
     let sceneValid = !hasSceneImageProvenance(asset);
     let videoValid = !hasVideoProvenance(asset);
     if (isVersionHistoryCopy(asset)) {
@@ -259,6 +273,7 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
       && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index));
     return ({
     sceneImage: presentationSceneImageView(asset),
+    ...(paperOriginal ? { paperOriginal } : {}),
     canGenerateSceneImage: claimsValid && canWrite && user?.platformRole === 'platform_admin' && asset.status === 'approved' && !!presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
     canGenerateVideo,
     storyboard: presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
@@ -298,6 +313,22 @@ export async function transitionPresentationAsset(deps: AgentDeps, input: {
     if (input.status === 'approved') {
       await requireValidVersionHistoryCopy(tx, asset);
       const links = await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } });
+      const original = paperOriginalView(asset);
+      if (asset.generator === 'OpenScience paper-original figure' || original) {
+        if (!original || links.length === 0) throw new PresentationAssetError('VALIDATION_ERROR', 'Paper figure identity is missing; review its source binding first');
+        const validClaims = await tx.claimNode.count({ where: { id: { in: links.map(link => link.claimId) }, researchObjectId: input.researchObjectId, versionId: input.versionId, extractionStatus: 'succeeded' } });
+        if (validClaims !== links.length) throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Paper figure source Claims changed; review the source before approval');
+        const origin = paperOriginalProvenance(asset);
+        if (origin.source === 'user_upload' || origin.artifactId !== undefined) {
+          if (typeof origin.artifactId !== 'string' || !UUID.test(origin.artifactId)) throw new PresentationAssetError('VALIDATION_ERROR', 'Paper figure source Artifact identity is missing');
+          const artifact = await tx.artifact.findUnique({ where: { id: origin.artifactId }, include: { blob: true } });
+          if (!artifact || artifact.deletedAt || artifact.bytesPurgedAt || artifact.workspaceId !== version.researchObject.workspaceId
+            || artifact.mimeType !== 'image/png' || artifact.blobSha256 !== asset.contentHash || artifact.size <= 0n || artifact.size > 32n * 1024n * 1024n
+            || artifact.blob.size !== artifact.size || artifact.blob.storageKey !== asset.objectKey || artifact.blob.storageKey !== getBlobStorageKey(asset.contentHash)) {
+            throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Paper figure source Artifact is unavailable or changed; restore and review it before approval');
+          }
+        }
+      }
       const storyboard = presentationStoryboardView(asset, links.map(link => link.claimId));
       if (storyboard) {
         const boundRun = await tx.hermesResearchRun.findFirst({ where: {

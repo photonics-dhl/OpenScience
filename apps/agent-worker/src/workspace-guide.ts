@@ -633,6 +633,9 @@ export async function workspaceGuideHandler(
         && base.decision === figure.decision && base.caption === figure.caption)));
   };
   const resultGuard: SchemaGuard<WorkspaceGuideResult> = (value): value is WorkspaceGuideResult => workspaceGuideResultGuard(value)
+    && (!value.presentationDraft || Boolean(presentationVersion
+      && value.presentationDraft.researchObjectId === presentationVersion.researchObjectId
+      && value.presentationDraft.versionId === presentationVersion.id))
     && (value.presentationDraft?.revisionMode !== 'art' || artBaseIds.has(value.presentationDraft.baseAssetId!))
     && artFigurePlanMatchesBase(value.presentationDraft);
   // (force rebuild 2026-09-17)

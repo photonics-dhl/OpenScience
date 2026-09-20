@@ -114,7 +114,11 @@ async function assetIsReferenced(tx: Tx, id: string): Promise<boolean> {
   if (!asset) return false;
   const publicVersions = await tx.version.findMany({ where: { publications: { some: {} } }, select: { researchRecord: true } });
   const recorded = new Map(publicVersions.flatMap(version => historyMediaItems(version.researchRecord)).map(row => [row.id, row]));
-  const pending = publicVersions.flatMap(version => publicHistoryMedia(version.researchRecord)).map(row => row.id);
+  // Unlisted source media still belongs to the sealed publication's scientific history.
+  const pending = publicVersions.flatMap(version => [
+    ...publicHistoryMedia(version.researchRecord),
+    ...historyMediaItems(version.researchRecord).filter(row => row.publicationIncluded === false),
+  ]).map(row => row.id);
   const seen = new Set<string>();
   while (pending.length) {
     const current = pending.pop()!;
@@ -365,12 +369,20 @@ async function eraseArtifact(tx: Tx, artifactId: string, entryId: string): Promi
 }
 
 async function artifactRetentionReason(tx: Tx, artifactId: string): Promise<string | null> {
-  const [manifests, evidence, ingestion, steps] = await Promise.all([
+  const [manifests, evidence, ingestion, steps, originalMedia] = await Promise.all([
     tx.manifestEntry.findMany({ where: { artifactId }, include: { manifest: { include: { version: { select: { researchObjectId: true, publications: { select: { id: true } } } } } } } }),
     tx.evidenceRecord.findMany({ where: { artifactId }, include: { version: { select: { publications: { select: { id: true } } } } } }),
     tx.ingestionTask.findMany({ where: { artifactId }, select: { batch: { select: { researchObjectId: true } } } }),
     tx.hermesResearchStep.findMany({ where: { artifactId }, select: { run: { select: { researchObjectId: true } } } }),
+    tx.presentationAsset.findMany({ where: { deletedAt: null, status: { in: ['draft', 'approved'] }, OR: [
+      { generator: 'OpenScience paper-original figure' }, { provenance: { path: ['subtype'], equals: 'paper_original_figure' } },
+    ] }, select: { provenance: true } }),
   ]);
+  if (originalMedia.some(asset => {
+    let origin = jsonObject(asset.provenance);
+    while (origin.source === 'version_history_copy') origin = jsonObject(origin.lineage);
+    return origin.artifactId === artifactId;
+  })) return '论文原图仍引用此来源文件，请先处理配图引用';
   if (manifests.some(row => row.manifest.version.publications.length) || evidence.some(row => row.version.publications.length)) return '公开版本仍引用原始来源文件，保留公开引用所需字节';
   const scopes = new Set([...manifests.map(row => row.manifest.version.researchObjectId), ...evidence.map(row => row.researchObjectId), ...ingestion.map(row => row.batch.researchObjectId), ...steps.map(row => row.run.researchObjectId)]);
   if (scopes.size > 1) return '其他工作仍引用此来源文件，保留共享字节';

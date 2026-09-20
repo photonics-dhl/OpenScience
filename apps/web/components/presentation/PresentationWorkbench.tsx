@@ -11,6 +11,7 @@ import { StoryboardPanel } from './StoryboardPanel';
 import { MechanismVideoPanel } from './MechanismVideoPanel';
 import { PresentationResultGallery } from './PresentationResultGallery';
 import { ResearchMediaDeck, type ResearchMediaSlide } from './ResearchMediaDeck';
+import { PaperFigureUpload, type PaperFigureSelection, type PaperFigureUploadOutcome, type PaperFigureReviewOutcome } from './PaperFigureUpload';
 import type { PresentationVideoRequest } from '@/lib/api';
 
 type PresentationVersion = Pick<VersionSummary, 'versionId' | 'publicationNo' | 'createdAt' | 'commitMessage' | 'status'>;
@@ -33,6 +34,7 @@ export interface PresentationWorkbenchProps {
   loadFailed?: boolean;
   task?: PresentationTaskState | null;
   onCreateClaim: (statement: string) => Promise<boolean>;
+  onUploadPaperFigure?: (input: PaperFigureSelection) => Promise<PaperFigureUploadOutcome | null>;
   onGenerate: (claimIds: string[]) => void;
   onAskHermes?: (kind: 'image' | 'video') => void;
   onGenerateSceneImage?: (claimIds: string[], request: SceneImageRequest) => void;
@@ -40,7 +42,7 @@ export interface PresentationWorkbenchProps {
   onGenerateStoryboard?: (claimIds: string[], request: StoryboardRequest) => void;
   onResumeTask?: () => void;
   onRetryData?: () => void;
-  onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => void;
+  onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => Promise<PaperFigureReviewOutcome | null> | void;
   working?: boolean;
   error?: string;
   resultsOnly?: boolean;
@@ -50,7 +52,7 @@ const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryData, onTransition, working = false, error = '', resultsOnly = false,
+  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryData, onTransition, working = false, error = '', resultsOnly = false,
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const versionLabels = useVersionLabels();
@@ -59,7 +61,9 @@ export function PresentationWorkbench({
   const [selected, setSelected] = useState<string[]>([]);
   const [statement, setStatement] = useState('');
   const eligibleIds = useMemo(() => new Set(claims.filter((claim) => claim.extractionStatus === 'succeeded').map((claim) => claim.id)), [claims]);
+  const paperOriginals = useMemo(() => assets.filter((asset) => asset.generator === 'OpenScience paper-original figure'), [assets]);
   const mediaAssets = useMemo(() => assets.filter((asset) => asset.status !== 'rejected'
+    && asset.generator !== 'OpenScience paper-original figure'
     && !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg' || asset.kind === 'video')), [assets]);
   const storyboardAssets = useMemo(() => assets.filter((asset) => Boolean(asset.storyboard)), [assets]);
 
@@ -81,6 +85,11 @@ export function PresentationWorkbench({
     if (!value) return;
     if (await onCreateClaim(value)) setStatement('');
   }
+
+  const paperFigureTools = ((canWrite && onUploadPaperFigure) || paperOriginals.length > 0) ? (
+    <PaperFigureUpload researchObjectId={researchObjectId} versionId={version.versionId} claims={claims} originals={paperOriginals} canWrite={canWrite}
+      disabled={working || loading || loadFailed} onUpload={onUploadPaperFigure} onTransition={onTransition} onRetryData={onRetryData} />
+  ) : null;
 
   if (resultsOnly) {
     const toSlide = (asset: PresentationAsset, kind: ResearchMediaSlide['kind'], fallbackLabel: string): ResearchMediaSlide => {
@@ -125,6 +134,10 @@ export function PresentationWorkbench({
         ) : null}
         {error ? <div className="mt-5 border-l-2 border-state-danger pl-4" role="alert">{error.includes('Storyboard output rejected:') ? <><p className="m-0 text-sm leading-6 text-state-danger">{t('briefNeedsRevision')}</p><details className="mt-2 text-xs leading-5"><summary className="cursor-pointer py-2">{t('failureDetails')}</summary><p className="break-words">{error}</p></details></> : <p className="m-0 text-sm leading-6 text-state-danger">{error}</p>}</div> : null}
         {loadFailed && onRetryData ? <button type="button" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onRetryData}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('retryScopeLoad')}</button> : null}
+        {paperFigureTools ? <details className="mt-5 border-t border-os-rule-paper pt-2" data-source-tools="true">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"><span className="text-sm font-semibold">{t('manualToolsTitle')}</span><ChevronDown className="size-4 shrink-0" aria-hidden="true" /></summary>
+          {paperFigureTools}
+        </details> : null}
       </div>
     );
   }
@@ -174,6 +187,7 @@ export function PresentationWorkbench({
               <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
             </summary>
             <p className="m-0 mt-1 max-w-3xl text-sm leading-6 text-os-muted-paper">{t('manualToolsBody')}</p>
+            {paperFigureTools}
 
             {canWrite ? (
               <form className="mt-6 border-y border-os-rule-paper py-5" onSubmit={(event) => void submitClaim(event)}>

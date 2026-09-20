@@ -1,5 +1,8 @@
 # CURRENT Progress Window
 
+## 2026-09-21 — 复用 CLI 合作，推进真实 PDF→Hermes→多风格→审图发布
+- 已复用其他项目的原生CLI自动审批方式完成真实源码读取，长回合后续工具缺失及写回未完成如实保留。真实站内配图目标因独立页漏传版本上下文失败，已定位并补候选；原图上传/存储/幂等候选正独立审查。未部署、未新生图、未审批公开。资产当前状态、原始收据和下一动作只见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+
 ## 2026-09-20 — 本机桥候选修复通过定向回归，待安全启用
 - 用户已授权桥修复与测试：委派/压缩续接候选补丁完成，117+6 项回归、类型检查、CLI 构建通过，High 复核完成。共享桥仍繁忙，单文件覆盖会被原包校验回退，故未安装、无新模型调用；完整 Full 待完整一致产物与空闲切换后实跑。CLI 原策略 network restricted，另会话修正账户/网络，桌面元数据缺口独立处理。补丁、证据与剩余交付见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，未部署科研应用。
 
@@ -13,12 +16,7 @@
 - 残留未处置（需用户拍板，勿单方面删）：`d5087b03`（copy 图 draft，provenance 的 `sourceAssetId=929bd95d` 已删 → 悬空）+ Fig. 2 reuse 周期的重复 plan `6439150a`/`ee9bcfb6`(draft)、`6043bebb`/`75b34c88`(**approved**，删除会改产品可见状态）；另有 08:14–08:17 四条 `结构化输出超过重试上限` 失败 task，是 `561d738b` 修 `MAX_STRUCTURED_RETRIES` 的复现证据。
 - 交接与本轮新会话 prompt：[docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md](handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)；CURRENT 已把生产锚点更正为 release `7bf8c5e5`/rollback `561d738b`（canonical HEAD `2a174fc6` 为纯文档提交、未部署）。
 
-## 2026-09-18 — scene image 出图链路实测：链路本身可用，但发现「重复付费守护缺失」
-- **用户要求跑一次真实出图**。真链路提交（`submitPresentationGeneration` → Redis `agent:queue` → 真实 worker `claimAgentTask` → `createPresentationGenerationHandler` → `planSceneImagePrompt` → `gateway.generateImage`(chatgpt-web) → 对象存储 → `presentation_assets`），任务 `0ee21663…` **失败**：`error=image generation failed`，spool `result.json` = `{"status":"failed","errorCode":"EXECUTION_FAILED"}`，无 PNG、无资产行。合成任务/会话与 spool 残留已清理（各 0 残留）。
-- **根因（不是我的 payload 构造错）**：失败任务与 9/17 10:28 成功那次的 **`promptHash` 完全相同**（`e3380dac…`）。桥累计 69 个 result.json：**35 成功 / 27 失败 / 7 不确定**，失败码恒为 `EXECUTION_FAILED`——**桥的偶发失败率约 39%**，不代表链路断裂。
-- **链路可用性由既有产物证明**：`ac455b2f-…` 为 `kind=image`、**`status=approved`**、`generator=OpenScience Hermes scene image / chatgpt-web`、`contentHash=939238de41ad…`，spool 内 `result.png` **590,049 字节**；provenance `subtype=storyboard_scene_image`、`sceneImage={sceneIndex:0,storyboardAssetId:979bd088…}`。其 payload 与我提交的**逐字相同**——即**同一张图早已成功并被认可**。
-- **新发现：服务端缺「重复付费守护」**。`submitPresentationGeneration`（`presentation-asset.ts:162`）只校验父计划（`:177`），**不检查该 (父计划, sceneIndex) 是否已有 approved 图像**；`canGenerateSceneImage`（`:261`）也不看既有图像，只有 UI 侧 `eligibleSceneIndexes`（`:244`）把已出图场景隐藏。所以我能在不知情下对同一张已认可图**再次付费**。这正是能力台账「fallback 前置条件」里悬置的「验证重复付费守护」的反例，已记入 [能力台账](runbooks/hermes-capability-registry.md)。
-- `figurePlan` 仍是无消费者字段（见下节与能力台账）。**未重试**：已有 approved 产物即证明链路，盲目重跑只会再烧一次额度。
+- 早期同prompt重复付费的复现记录见Git历史；服务端守护及真实结果见下节。
 
 ## 2026-09-18 — 修复：服务端重复付费守护（`d9bc5dd0`）
 - **用户选择补服务端守护**。在 `packages/domain/src/assets/scene-image.ts` 加 `requireSceneImageSpendIsNew(prisma, parent, payload)`：当存在同 `(storyboardAssetId, sceneIndex)` 且 `parentIdentity` 匹配的 approved 图像时，抛 `PresentationAssetError(VALIDATION_ERROR, 'An approved image already covers this scene; reject it before generating a replacement')`。挂在 `submitPresentationGeneration` (`packages/domain/src/assets/presentation-asset.ts:178`) 的 `requireSceneImageParent` 之后。合法重绘仍要先驳回 approved 图像、或让父计划变更（identity 失配自动放行）——都是已有流程，零新 schema。

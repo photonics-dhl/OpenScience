@@ -2,6 +2,20 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
+## 2026-09-21 CLI合作与产品链路检查点（部署前记录，当前状态只见CURRENT）
+
+- 本轮发生一次日志失误：Playwright request context下载失败的原始异常带会话字段进入工具输出，已告知用户并异步询问退出/重登；等待期间暂停私有站内操作。修复一次性下载脚本为固定错误码和匿名公开PDF fetch，不记录/转述会话内容。已有公開PDF已获取并与原Artifact hash匹配；没有新的论文解析/图片请求。
+
+- 后续收口：短CLI续轮确实写入并读回18行tmp/pro-short-review-20260921.md，16-39-13-111Z分离日志、exit0；首轮长任务失败不抹除。
+- High否决独立对象写入/伪TrashEntry预留，原图最终复用Artifact multipart/幂等→artifactId登记，只有DB引用新增，draft人工来源审核后reuse；删除新写CRC/Adam7/解压器。原Blob上传跨系统崩溃窗口是既有边界，不声称全局无孤儿。原接口Base64路径不保留，应用内此前无调用方，本轮UI同步新契约，历史一次性占位脚本不可再跑。
+- High确认新增publicationIncluded:false仅写新发布来源快照，旧公开媒体/hash不变；来源冻结引用受回收保护。原图DTO/Claim审批复查/32MiB消费者上限对齐。
+- 服务器已执行候选边缘采样与单色合成filtergraph，使用既有9f真实下载原图，输出1280×720/484210bytes，填边fefefe且原字节不变。收据路径见CURRENT。首次验证脚本因Windows引号传递失败、未执行图像处理，改ASCII heredoc后成功；不是renderer故障、无模型/业务写入。
+
+- 用户要求复用已成功方式直接推进PDF→Hermes→三类风格→审查/发布。Ultron真实成功为原生CLI自动审批而非Desktop委派；本项目wrapper使用同模式续接既有XGS任务01a0be9a，不修改共享桥/全局权限/账户。CLI实际读取Git与源码，后半段工具调用不可用，报告未写出；exit0仅代表进程完成。原日志tmp/pro-collaboration/2026-09-20T16-15-06-004Z.jsonl，后续stdout/stderr分开；目录和子文件Windows ACL已实际限定Mac/SYSTEM/Administrators，原SDDL保存在目录内。中断/非零保留锁，先核进程和结果再恢复，禁止盲重发。
+- 真实站内dashboard→编辑→研究详情→图解与视频已操作；服务器owned页window.name=xgs-pipeline-20260921。POST workspace.guide创建64aa264e-e1a2-4224-8509-7061b6babdce后失败，原请求context漏presentation，尚未进生图。原始请求/响应/任务结果在/jobs/hermes-editorial-ui-20260921.json；本机tmp/hermes-editorial-start-20260921.ps1只执行过一次，不可重跑，read脚本仅更新读取结果。
+- 候选：ResearchPresentation补当前版本上下文且版本切换重建Drawer；workspace-guide把既有scope诊断接入结构化guard。另domain/API修原图格式/存储失败/幂等，UI提供真实原图上传入口和作用域隔离/反馈。均尚未部署，独立High审查中；无应用测试/预检/CI/本机构建。
+- 最新实际资产状态纠正及受保护表只见CURRENT。来源original资产默认approved可能误入发布，深色非16:9固定暖色pad亦未闭环；旧Fig.2清理未授权。未新生图/审批/发布，不能称全流程完成。
+
 ## 2026-09-20 已授权本机修复与定向测试：源码候选通过，尚未安装
 
 - 用户明确要求“运行修复与测试”，本轮只覆盖独立本机 `codex-chatgpt-web` 的已知故障；不恢复 OpenScience 全套测试、预检、CI 或生图授权。随后用户说明另一会话正在修正 Pro CLI 沙箱的网络/共享盘权限，本轮不竞争修改该层。

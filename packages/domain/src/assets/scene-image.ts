@@ -51,6 +51,17 @@ export async function requireSceneImageParent(prisma: Pick<Prisma.TransactionCli
   const view = asset && presentationStoryboardView(asset, ids);
   if (!asset || asset.deletedAt || asset.researchObjectId !== payload.researchObjectId || asset.versionId !== payload.versionId || asset.status !== 'approved'
     || !view || !view.document.scenes[settings.sceneIndex] || JSON.stringify(ids) !== JSON.stringify(payload.sourceClaimIds)) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image requires an approved storyboard with the exact version and Claims');
+  const paperOriginal = view.document.scenes[settings.sceneIndex].paperOriginal;
+  if (paperOriginal) {
+    const original = await prisma.presentationAsset.findUnique({ where: { id: paperOriginal.assetId } });
+    const metadata = original?.provenance as Record<string, unknown> | null;
+    if (!original || original.deletedAt || original.status !== 'approved' || original.kind !== 'image'
+      || original.researchObjectId !== payload.researchObjectId || original.versionId !== payload.versionId
+      || original.objectKey !== paperOriginal.objectKey || original.contentHash !== paperOriginal.contentHash
+      || metadata?.subtype !== 'paper_original_figure') {
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Paper-original reuse requires the exact approved original in this version');
+    }
+  }
   const provenance = asset.provenance as Record<string, unknown>;
   return { view, contentHash: asset.contentHash,
     sourceEvidenceIdentity: typeof provenance.sourceEvidenceIdentity === 'string' ? provenance.sourceEvidenceIdentity : undefined,
@@ -98,7 +109,7 @@ export async function requireSceneImageSpendIsNew(
 /**
  * Look up registered paper-original figures for a figurePlan's reuse entries.
  * Returns a map keyed by the figurePlan entry id (`Fig. N` etc.). A paper-original
- * is an `image` asset with `provenance.subtype = 'paper_original_figure'` whose
+ * is an approved `image` asset with `provenance.subtype = 'paper_original_figure'` whose
  * `provenance.figureId` matches a reuse decision and whose
  * `provenance.researchObjectId/versionId` scope the current draft.
  *
@@ -113,13 +124,14 @@ export async function findPaperOriginalAssets(
   scope: { researchObjectId: string; versionId: string; figurePlan?: StoryboardRequest['figurePlan'] },
 ): Promise<Map<string, PaperOriginalRef>> {
   const out = new Map<string, PaperOriginalRef>();
-  const ids = (scope.figurePlan?.figures ?? []).map((figure) => figure.id);
+  const ids = (scope.figurePlan?.figures ?? []).filter((figure) => figure.decision === 'reuse').map((figure) => figure.id);
   if (!ids.length) return out;
   const rows = await prisma.presentationAsset.findMany({
     where: {
       researchObjectId: scope.researchObjectId,
       versionId: scope.versionId,
       kind: 'image',
+      status: 'approved',
       deletedAt: null,
       provenance: { path: ['subtype'], equals: 'paper_original_figure' },
     },
@@ -129,6 +141,10 @@ export async function findPaperOriginalAssets(
     const p = row.provenance as Record<string, unknown> | null;
     const figureId = typeof p?.figureId === 'string' ? p.figureId : undefined;
     if (!figureId || !ids.includes(figureId)) continue;
+    const existing = out.get(figureId);
+    if (existing && existing.assetId !== row.id) {
+      throw new PresentationAssetError('CONCURRENT_UPDATE', `Paper-original binding is ambiguous for ${figureId}: multiple approved assets require an explicit source selection`);
+    }
     out.set(figureId, {
       assetId: row.id,
       objectKey: row.objectKey,

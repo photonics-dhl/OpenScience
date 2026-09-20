@@ -14,6 +14,11 @@ import { useVersionLabels } from './useVersionLabels';
 const defaults: LicenseSet = { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' };
 const control = 'min-h-11 rounded-panel border border-os-rule-paper bg-white px-3 text-sm text-os-ink disabled:opacity-50';
 
+function publicationMedia(assets: PresentationAsset[]): PresentationAsset[] {
+  return assets.filter((asset) => asset.status === 'approved' && !asset.storyboard
+    && !asset.paperOriginal && asset.generator !== 'OpenScience paper-original figure');
+}
+
 export function ResearchPublication({ researchObjectId, selectedVersionId, embedded = false, conversation = false, onConfirmationChange, beforePublish, onPublished }: { researchObjectId: string; selectedVersionId?: string; embedded?: boolean; conversation?: boolean; onConfirmationChange?(action: HermesConversationAction | null): void; beforePublish?(): void; onPublished?(url: string): void }) {
   const t = useTranslations('productSurfaces');
   const tc = useTranslations('hermesConversation');
@@ -66,7 +71,7 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
       const manifest = recordResult.record.manifest ?? [];
       setMaterialNames(manifest.map(item => item.logicalPath));
       setAllowArtifactDownloads(manifest.length > 0 && manifest.every(item => item.downloadAccess === 'public'));
-      setAssets(media.assets.filter((asset) => asset.status === 'approved' && !asset.storyboard)); setReadyScope(scope);
+      setAssets(publicationMedia(media.assets)); setReadyScope(scope);
     }).catch((cause: Error) => { if (active) setError(cause.message); });
     return () => { active = false; };
   }, [researchObjectId, selectedId, scope, tw]);
@@ -102,7 +107,7 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
       if (conversation) {
         const latest = await listPresentationAssets(researchObjectId, target.versionId);
         if (!current()) return;
-        const reviewed = latest.assets.filter((asset) => asset.status === 'approved' && !asset.storyboard);
+        const reviewed = publicationMedia(latest.assets);
         if (reviewed.length !== assets.length || reviewed.some((asset) => !assets.some((shown) => shown.id === asset.id && shown.updatedAt === asset.updatedAt))) {
           setAssets(reviewed); throw new Error(tc('publicMediaChanged'));
         }

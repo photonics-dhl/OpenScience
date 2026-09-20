@@ -172,19 +172,21 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
   }
 }
 
-async function readPresentationInput(storage: NonNullable<Parameters<TaskHandler>[0]['storage']>, objectKey: string, expectedHash: string): Promise<Buffer> {
+async function readPresentationInput(storage: NonNullable<Parameters<TaskHandler>[0]['storage']>, objectKey: string, expectedHash: string, maxBytes = 10 * 1024 * 1024): Promise<Buffer> {
   const object = await storage.getObject(objectKey);
-  if (object.size <= 0 || object.size > 10 * 1024 * 1024) throw new Error('[blocked] video input size is invalid');
   const chunks: Buffer[] = []; let size = 0;
-  for await (const chunk of object.body) {
-    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += bytes.length;
-    if (size > object.size || size > 10 * 1024 * 1024) throw new Error('[blocked] video input stream exceeded its bound');
-    chunks.push(bytes);
-  }
+  try {
+    if (object.size <= 0 || object.size > maxBytes) throw new Error('[blocked] presentation input size is invalid');
+    for await (const chunk of object.body) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += bytes.length;
+      if (size > object.size || size > maxBytes) throw new Error('[blocked] presentation input stream exceeded its bound');
+      chunks.push(bytes);
+    }
+  } finally { object.body.destroy(); }
   const result = Buffer.concat(chunks);
   if (result.length !== object.size || createHash('sha256').update(result).digest('hex') !== expectedHash) {
-    throw new Error('[blocked] video input content identity changed');
+    throw new Error('[blocked] presentation input content identity changed');
   }
   return result;
 }
@@ -337,7 +339,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       // gateway.generateImage for figurePlan.reuse.
       const paperScene = sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]?.paperOriginal;
       if (paperScene) {
-        const paperBytes = await readPresentationInput(deps.storage, paperScene.objectKey, paperScene.contentHash);
+        const paperBytes = await readPresentationInput(deps.storage, paperScene.objectKey, paperScene.contentHash, 32 * 1024 * 1024);
         bytes = paperBytes; contentType = 'image/png'; extension = 'png';
         imageProvider = 'paper_original_copy';
         generator = 'OpenScience paper-original figure copy'; generatorVersion = paperScene.assetId;

@@ -1,5 +1,19 @@
 # 本机 Codex Web GPT 桌面续接补丁
 
+## 当前可复用的 CLI 合作入口
+
+`collaborate.mjs` 沿用已经实际成功的原生 CLI 自动审批方式，固定续接本项目 Pro 任务；任务正文从 UTF-8 文件经 STDIN 传入，不修改共享桥或全局权限。以项目根为工作目录运行：
+
+```powershell
+node infra/development-platform/codex-chatgpt-web/collaborate.mjs tmp/<任务文件>.txt <已安装codex.exe的绝对路径>
+```
+
+分配有明确文件边界的短任务，并核对真实工具输出和文件读回。CLI exit0 仅表示进程结束：2026-09-21 长任务前半段实际完成源码读取，后半段工具入口不可用，报告没有写出，不能记成完成。
+
+日志位于 ignored `tmp/pro-collaboration/`，stdout JSONL 与 stderr 分开保存。Windows 的文件 mode 0600 不构成 ACL 保证：当前主机该目录已设置受保护 ACL，仅当前用户、SYSTEM、Administrators 可访问，原目录 SDDL 留存。其他 checkout 使用前须按其实际日志访问需求设置并核对目录 ACL，不复制账号或凭据。
+
+同一任务用排他文件锁避免同时续接；只有 CLI exit0 且日志写完才自动移除锁。异常或中断保留锁和收据，先查锁中 PID、对应 CLI 是否结束以及原任务结果，再由操作者决定是否解除；不要仅凭文件时间删除锁或重发任务。当前入口不依赖下方尚未安装的 Desktop 续接补丁。
+
 这是独立本机工具的候选修复，不属于 OpenScience 服务器 image provider。当前启用状态只见 [CURRENT](../../../docs/handoff/2026-09-10-hermes-web-image-handoff.md)；不能由补丁存在推断已安装或 Full 实跑成功。
 
 `desktop-continuation.patch` 基于 [codex-chatgpt-web v5.0.8](https://github.com/miuuyy/codex-chatgpt-web/tree/00aab23eb78a0d35ab575ff14044e29c0f80e711)，base `00aab23eb78a0d35ab575ff14044e29c0f80e711`，包含四个源码文件与一个定向测试文件。保留上游 MIT 许可 `LICENSE.upstream`。本地候选提交为 `84e6997`，不是上游发布。

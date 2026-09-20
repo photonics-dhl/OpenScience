@@ -1,4 +1,5 @@
 import { PresentationAssetError } from './errors';
+import { getBlobStorageKey } from '@openscience/storage';
 import { parseSceneAnimation, type SceneAnimation } from './animation';
 import { parseIllustrationBrief, describeIllustrationBrief, type IllustrationBrief } from './illustration-brief';
 export const STORYBOARD_IMAGE_VISUAL_ACTION_MAX = 4000;
@@ -190,8 +191,11 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
             keys(po, ['assetId', 'objectKey', 'contentHash'], [], `${prefix}:paper_original_keys`);
             const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
             if (typeof po.assetId !== 'string' || !uuid.test(po.assetId)
-                || typeof po.objectKey !== 'string' || !po.objectKey.startsWith('presentation/')
+                || typeof po.objectKey !== 'string'
                 || typeof po.contentHash !== 'string' || !/^[0-9a-f]{64}$/u.test(po.contentHash)) invalid(`${prefix}:paper_original_values`);
+            const parts = po.objectKey.split('/');
+            const legacyKey = parts.length === 4 && parts[0] === 'presentation' && uuid.test(parts[1]) && uuid.test(parts[2]) && parts[3] === `${po.contentHash}.png`;
+            if (po.objectKey !== getBlobStorageKey(po.contentHash) && !legacyKey) invalid(`${prefix}:paper_original_values`);
             paperOriginal = { assetId: po.assetId, objectKey: po.objectKey, contentHash: po.contentHash };
         }
         return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(illustration ? describeIllustrationBrief(illustration) : s.visualAction, output === 'image' ? STORYBOARD_IMAGE_VISUAL_ACTION_MAX : STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, `${prefix}:visual_action`), ...(illustration ? { illustration } : {}), ...(output === 'video' ? { durationSeconds: s.durationSeconds as number } : {}), sourceClaimIds: [...ids], ...(animation ? { animation } : {}), ...(paperOriginal ? { paperOriginal } : {}) };

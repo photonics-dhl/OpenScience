@@ -616,9 +616,12 @@ export async function uploadArtifactFile(
   logicalPath = file.name,
   idempotencyKey?: string,
   onProgress?: (percent: number) => void,
+  signal?: AbortSignal,
 ): Promise<ArtifactReference> {
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const xhr = new XMLHttpRequest();
   await prepareProtectedXhr(xhr, 'POST', '/api/artifacts/upload');
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   if (idempotencyKey) xhr.setRequestHeader('idempotency-key', idempotencyKey);
   const body = new FormData();
   body.append('workspaceId', workspaceId);
@@ -626,11 +629,19 @@ export async function uploadArtifactFile(
   body.append('file', file, file.name);
 
   return new Promise((resolve, reject) => {
+    const cleanup = () => signal?.removeEventListener('abort', abort);
+    const abort = () => {
+      xhr.abort();
+      cleanup();
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
     };
-    xhr.onerror = () => reject(new ApiClientError('UPLOAD_FAILED', `上传失败：${file.name}`, 0));
+    xhr.onerror = () => { cleanup(); reject(new ApiClientError('UPLOAD_FAILED', `上传失败：${file.name}`, 0)); };
+    xhr.onabort = () => { cleanup(); reject(new DOMException('Aborted', 'AbortError')); };
     xhr.onload = () => {
+      cleanup();
       let parsed: { artifact?: { artifactId: string; logicalPath: string }; error?: { code?: string; message?: string } } = {};
       try { parsed = JSON.parse(xhr.responseText) as typeof parsed; } catch { /* handled below */ }
       if (xhr.status >= 200 && xhr.status < 300 && parsed.artifact) {
@@ -639,7 +650,9 @@ export async function uploadArtifactFile(
       }
       reject(new ApiClientError(parsed.error?.code ?? 'UPLOAD_FAILED', parsed.error?.message ?? `上传失败：${file.name}`, xhr.status));
     };
-    xhr.send(body);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) { abort(); return; }
+    try { xhr.send(body); } catch (cause) { cleanup(); reject(cause); }
   });
 }
 
@@ -694,7 +707,7 @@ async function sha256Hex(data: BufferSource): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function materialFingerprint(file: File): Promise<string> {
+export async function materialFingerprint(file: File): Promise<string> {
   return sha256Hex(await file.arrayBuffer());
 }
 
@@ -783,6 +796,7 @@ import type { StoryboardRequest, StoryboardView, SceneImageRequest, SourceLocato
 export type { StoryboardRequest, StoryboardDocument, StoryboardView, SceneImageRequest, SourceLocator } from '@openscience/domain';
 
 export interface PresentationAsset {
+  paperOriginal?: { figureId: string; caption?: string };
   storyboard?: StoryboardView;
   sceneImage?: SceneImageRequest;
   canGenerateSceneImage?: boolean;
@@ -895,6 +909,19 @@ export async function createPresentationClaim(
 
 export async function listPresentationAssets(roId: string, versionId: string, signal?: AbortSignal): Promise<{ assets: PresentationAsset[] }> {
   return request(`${presentationScopePath(roId, versionId)}/presentation-assets`, { signal });
+}
+
+export interface PaperFigureUploadRequest {
+  artifactId: string;
+  figureId: string;
+  sourceClaimId: string;
+  caption?: string;
+}
+
+export async function uploadPaperFigure(roId: string, versionId: string, input: PaperFigureUploadRequest, signal?: AbortSignal): Promise<{ asset: { assetId: string; contentHash: string; objectKey: string } }> {
+  return request(`${presentationScopePath(roId, versionId)}/paper-figures`, {
+    method: 'POST', signal, body: JSON.stringify(input),
+  });
 }
 
 export async function generatePresentationChart(roId: string, versionId: string, sourceClaimIds: string[], idempotencyKey = crypto.randomUUID(), signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
