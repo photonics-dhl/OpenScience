@@ -1,5 +1,8 @@
 # CURRENT Progress Window
 
+## 2026-09-20 — 只读取证纠正
+- 末次 Fig. 3 任务已有真实下载 PNG，失败在后续标准化，尚无产品资产；当前 renderer 镜像缺失，历史确切底层错误未知。Fig. 2 残留仅发现私有列表/快照影响。证据、边界与待选处置见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md) 及其链接交接最新节；以下 9/18“没有真实 PNG”与“纯偶发”结论已被纠正。未重发/切 provider/改资产/部署。
+
 ## 2026-09-18 — Fig. 3 出图：plan 通过、桥三连失败；占位调试产物清理（承接方从顶部读）
 - 用户「再试一下」后第三次提交 Fig. 3 scene image：task `9f7ff671` **failed**（`image generation failed`，桥 `EXECUTION_FAILED`）。上游 plan `8141b5fd` **approved**、figurePlan `{"figures":[{"id":"Fig. 3","styleId":"editorial","decision":"re-render"}]}`、scene0 `Fig. 3: 圆孔横截面上的 Bethe 等效偶极源与角谱形状因子`、hash `9395f576`——**plan 段是真证据，图段至今 0 交付**；最后一次真实桥出图成功仍是 2026-09-17 的 `ac455b2f`（spool `result.png` 590,049 字节）。
 - 这是**第二次** figurePlan-aware prompt 三连败（前一次 promptHash `1c221dc86e…`）；能力台账记的桥失败率约 39%（69 个 `result.json`：35/27/7）**本轮未重测**。取证方向（只读、先于任何重试）：拉 `openscience-chatgpt-browser` 12:2x 日志与对应 spool，判断失败发生在「提交 prompt 前」还是「导出图片阶段」、是否与日志中的 `WebGL1 blocklist`/dbus 报错时间相关。**不要盲重发付费请求。**
