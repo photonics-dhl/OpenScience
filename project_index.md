@@ -461,7 +461,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `docs/project-index-p1e-supplement.md` | P1E 索引补充草稿（内容已合并入本索引 2026-08-06；注意其 P1E-1/2 设计文档条目为登记错误，实际不存在） | 已合并，留存快照 |
 | `docs/progress.md` | 不超过 120 行 / 16 KiB 的 CURRENT progress window；完整历史只查 Git history，不进入默认 session 输入 | **CURRENT active-memory** |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
-| `docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md` | 2026-09-18 会话交接：Fig. 3 plan `8141b5fd` 已 approved 但桥三连 `EXECUTION_FAILED`、占位调试资产清理及其在两处文档的更正注、未结事项清单与下个 session 启动 prompt | **CURRENT session handoff**（滚动入口仍是 2026-09-10 handoff） |
+| `docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md` | Fig. 3 原结果恢复、三类风格链路部署、本机 Pro 文本协作与桌面续接/Windows helper 参数超限取证；保留占位资产更正、Fig. 2 未结事项与禁止重试边界 | **CURRENT session handoff**（滚动入口仍是 2026-09-10 handoff） |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
 | `docs/handoff/2026-07-28-p1a-2-local-done-cloud-pending-handoff.md` | P1A-2 本地完成交接：代码+本地门禁 done，集成测试待阿里云，下一任务 P1A-3 design gate | 活文档 |
 | `docs/handoff/2026-07-28-p1a-3-local-done-handoff.md` | P1A-3 本地完成交接：auth/api/CLI done 待提交，集成测试待阿里云，下一任务 P1A-4 design gate | 活文档 |

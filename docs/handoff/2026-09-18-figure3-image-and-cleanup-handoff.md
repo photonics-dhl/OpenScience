@@ -2,6 +2,16 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
+## 2026-09-20 本机桥续接与 Windows 工具故障定向取证
+
+- 接手 `9bc03dc4`，应用/provider 未改动；本轮不重发旧 Chat 任务、不生图、不切 provider、不改 Fig. 2。只读取非秘密配置/故障日志/目标任务元数据与公开源码，未运行项目测试、预检、CI 或构建。沿用前节已经成功的短 CLI Pro + 精确源码文本协作；完整 Full 工具联动仍未交付。
+- Windows 已安装 `codex-cli 0.155.0-alpha.9.2`、既有 `windows.sandbox=elevated`。既有 helper 日志明确记录 `payload_len=42060` 后 `orchestrator_helper_launch_failed / os error 206`；单个参数已超过 Windows CreateProcessW 32,767 字符上限，目标读取命令未开始。公开 `setup.rs` 把完整 Base64 setup payload 放在一个 argv；全盘读取分支枚举 USERPROFILE 顶层项。本机按该排除规则的 615 项路径数组 Base64 长度约 40,592，强烈支持路径枚举膨胀，但没有读取真实 payload，不能声称字段组成完全确定。相关上游 [#32315](https://github.com/openai/codex/issues/32315) 在本轮读取时仍 open；缩短任务提示/cwd 不能消除这份 payload。
+- 已说明范围并经独立 High 静态审阅，仅执行一次零模型的单文件只读配置候选：`codex sandbox -P xgs_bridge_read --include-managed-config`，每次命令 `-c` 指定 `:minimal` 与目标 TSX 为 read、network=false、保留 elevated；子命令只准备读取 `HermesPresentationAction.tsx` 首行。结果 exit1：`elevated Windows sandbox requires effective :root read access`，新增 helper payload 记录 0，源码未读。**配置解析受支持，但本机后端拒绝限定读取范围，不是修复成功**；未持久化配置、改 ACL/缓存、降级沙箱或扩大权限。收据 ignored `tmp/bridge-continuation-20260920/scoped-sandbox-read.json`。
+- CLI 语法纠正：本机是 `codex sandbox [OPTIONS] [COMMAND]...`，没有 `windows` 子命令。先前按公共 main 的旧布局调用 `sandbox windows --help` 实际触发初始化并重现 206；没有执行目标命令/模型。后以 `codex help sandbox` 正常取得本机帮助，后续不得再用旧语法取帮助。
+- 桌面目标 `01a0be85…` 的 native rollout 中，各 `turn_context` 均有正确 cwd（包括 11:24:58Z 压缩返回后）；因此不是用户未提供工作目录。原始 outbound metadata 未捕获，cwd/turn_id 冲突根因仍不能精确归于某个字段。桥上游 [cea5e1c](https://github.com/miuuyy/codex-chatgpt-web/commit/cea5e1cc472c9acf6f56b0c498bc70e0b4a5eb0c) 新增以当前 native rollout 认证同轮 steering 的环境恢复，保留 compaction 原错误；该提交明确未打包/发版，也未声称解决剩余续接问题。安装版本仍 5.0.8，未套未发布源码、重启桥或篡改可信环境。
+- 独立 `review_style_chain` 请求曾从 loopback 17841 返回 502/Unable to connect；随后只读确认原 bun PID27600 仍监听，不能用进程存活证明请求可用。另一个独立 High 完成上述候选静态审阅；未以反复 Chat 请求探测连接。当前可靠范围只沿用已取得回答的源码文本审查，不把一次成功写成长期稳定。
+- 接续：保留这两个客户端缺口及失败收据，避免重复验证已被后端明确拒绝的 profile；工具恢复需要保留完整权限语义的受支持实现。原三类风格、真实论文图 reuse 与深色图标准化仍按 CURRENT 推进，生产版本不因本轮文档取证重部署。
+
 ## 2026-09-20 Pro 协作已回收，风格链路已部署
 
 - 用户明确允许创建兼容协作任务，并授权自行判断桥接操作。风格候选 `ba460f1e` 经下述 Pro 反馈修正为 `7a3a6a85bdbe19f9bd63009c841087ba3e06e824`，已推送并部署应用/独立 provider，精确版本以 CURRENT 为准；未新生图、审批/发布资产或改动 Fig. 2。没有运行项目测试/预检/CI。
