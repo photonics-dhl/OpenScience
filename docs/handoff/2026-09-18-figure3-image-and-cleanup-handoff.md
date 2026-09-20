@@ -2,6 +2,15 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
+## 2026-09-20 已授权归档，Windows 沙箱 206 已恢复
+
+- 用户对上一节精确 268 个 Ultron 历史日志清单明确回复“确认”。本轮在 `10461a02` 上执行环境恢复；应用/provider/配置/模型路由均未变，未新发 Pro/科研模型或生图请求，未运行项目测试、预检、CI、构建或部署。
+- 仅清单内 `C:/Users/Mac/ultron-*.log`（268 个、1,583,990 bytes）完整归档至 `C:/Users/Mac/AppData/Local/Ultron/Archives/sandbox-recovery-20260920`。全部源元数据匹配并独占读取；原 ACL 的 Allow/owner 逐项确认只含当前用户、SYSTEM、Administrators。新归档目录关闭权限继承，仅允许这三者；完整 ZIP 备份逐项 SHA-256/长度吻合后才用同一 PowerShell 的 `Move-Item -LiteralPath` 移动原件，再核对每件内容、创建/修改时间、属性与原 SDDL 完全相等。代理日志、脚本、配置、浏览器资料和秘密未动。
+- 首次执行在目录 ACL 文本比较安全停下（归档空、268 源全在），原因是 Windows 读回 `D:PAI`、内存描述符为 `D:P`；实际 owner/group、protected 和三项规则完全正确。独立 High 复核后改为逐项核对身份、Allow/FullControl、继承/传播标志；再次核对精确空目录非 reparse 后仅非递归移除此空目录，再执行修正版成功。没有放宽实际权限或删除日志内容。
+- 最终收据 `archive-record.json` 为 completed/moved=268，原路径剩余 0，home 顶层 621→353；目录 protected=true、恰三项 ACL、CodexSandboxUsers 规则 0。同目录保留 `approved-inventory.json`、`original-content-backup.zip`、含原路径/SDDL 的收据及 `ROLLBACK.md`；原件与备份均保留。只读核对/回滚不得输出日志正文，恢复原路径须逐项检查冲突、禁止覆盖；恢复全部日志可能重新触发 206。
+- **唯一修复后运行验证**：2026-09-20T14:36:22Z，已安装 CLI 正常执行 `sandbox -P :read-only --include-managed-config -c windows.sandbox="elevated" -C <canonical>`，子命令仅读取 `HermesPresentationAction.tsx` 首行。实际输出 `'use client';`、exit0；helper `payload_len=22584`（修复前 42060），本次新增 error206=0。收据在归档目录 `sandbox-read.json`，本机副本 ignored `tmp/bridge-continuation-20260920/archived-sandbox-read.json`。这是原生 elevated 只读文件执行成功，不只是 CLI 返回文本。
+- 本机 206 阻塞已解除，未改变 Codex 配置、USERPROFILE、沙箱后端或可信缓存；底层 argv 长度依赖仍是上游缺陷，不能称永久根治。桌面 cwd/turn_id 压缩续接仍未解决，本轮未重试旧 Chat 任务或实跑 Pro 工具回合，因此完整 Full 联动仍未验收。后续可沿已成功的短 CLI 协作继续原定配图任务；不得重复归档脚本或把这次成功扩展成全部链路通过。
+
 ## 2026-09-20 本机桥续接与 Windows 工具故障定向取证
 
 - 接手 `9bc03dc4`，应用/provider 未改动；本轮不重发旧 Chat 任务、不生图、不切 provider、不改 Fig. 2。只读取非秘密配置/故障日志/目标任务元数据与公开源码，未运行项目测试、预检、CI 或构建。沿用前节已经成功的短 CLI Pro + 精确源码文本协作；完整 Full 工具联动仍未交付。
@@ -11,7 +20,7 @@
 - 桌面目标 `01a0be85…` 的 native rollout 中，各 `turn_context` 均有正确 cwd（包括 11:24:58Z 压缩返回后）；因此不是用户未提供工作目录。原始 outbound metadata 未捕获，cwd/turn_id 冲突根因仍不能精确归于某个字段。桥上游 [cea5e1c](https://github.com/miuuyy/codex-chatgpt-web/commit/cea5e1cc472c9acf6f56b0c498bc70e0b4a5eb0c) 新增以当前 native rollout 认证同轮 steering 的环境恢复，保留 compaction 原错误；该提交明确未打包/发版，也未声称解决剩余续接问题。安装版本仍 5.0.8，未套未发布源码、重启桥或篡改可信环境。
 - 独立 `review_style_chain` 请求曾从 loopback 17841 返回 502/Unable to connect；随后只读确认原 bun PID27600 仍监听，不能用进程存活证明请求可用。另一个独立 High 完成上述候选静态审阅；未以反复 Chat 请求探测连接。当前可靠范围只沿用已取得回答的源码文本审查，不把一次成功写成长期稳定。
 - 用户追问沙箱可否修复后，仅盘点 home 顶层元数据：621 项（492 文件/129 目录），其中 268 个 `ultron-*.log` 共 1,583,990 bytes，最后写入均在 9/5–9/7；唯一其他 `.log` 为仍在更新的 proxy 日志，明确排除。精确清单位于 ignored `tmp/bridge-continuation-20260920/ultron-log-archive-candidates.json`，未读取日志正文/移动文件。将这批历史日志移入一个已有顶层目录下的归档，按路径数组估算可减少 19,476 Base64 字符，helper 从 42,060 降到约 22,584、顶层剩 353 项；这是待验证的环境缓解，不是底层传参修复。独立 High 认可可回滚候选，但要求跨项目授权。已向用户提出归档到 `C:/Users/Mac/AppData/Local/Ultron/Archives/sandbox-recovery-20260920`、保留精确原路径/完整性校验/回滚后只做一次无模型只读验证，答复待收；未执行。该既有 Ultron 父目录继承 CodexSandboxUsers RX，而抽样原日志仅三项 ACL，批准后应保留原文件访问边界，不能让归档额外开放读取。
-- 接续：先接收上述具体跨项目归档选择；获准后只处理清单内身份/元数据未变、无活动写入的精确文件，核对归档路径与内容/权限完整性，禁止动代理日志、脚本、配置或秘密。归档后的唯一只读沙箱验证若仍失败则停止，不扩大权限/改后端；没获准不移动。保留桌面续接缺口，不重复已被拒绝的 profile。原三类风格、真实论文图 reuse 与深色图标准化差额保持；文档取证不重部署。
+- 本节归档提议及“待答复”是前一回合历史状态，用户随后已确认并成功执行，结果见顶部最新节；不得按本节再次移动或验证。桌面续接及三类风格/真实论文图 reuse/深色标准化差额仍保留，文档取证不重部署。
 
 ## 2026-09-20 Pro 协作已回收，风格链路已部署
 
