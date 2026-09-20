@@ -1979,6 +1979,8 @@
     "image": "Illustration",
     "advanced": "Detailed instructions and sources",
     "needsEligibleSources": "Confirm the extracted research content before asking Hermes to create visuals.",
+    "artOriginalNeedsRerender": "This plan reuses original paper figures, so its style cannot be changed directly. Go back and ask Hermes to plan new renderings of those figures.",
+    "artRequiresCompatiblePlan": "This plan does not support a style-only revision. Go back and select a completed illustration plan in the same language, or ask Hermes to create a new plan.",
     "briefWillUpdate": "Your edits will create a revised brief. Existing images and plans are preserved.",
     "updateBrief": "Update production brief",
     "needsApprovedScenes": "Video needs an approved storyboard and its corresponding images. Prepare those assets first.",

@@ -2,6 +2,19 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
+## 2026-09-20 Pro 审查已回收；候选待部署
+
+- 用户明确允许创建兼容协作任务，并授权自行判断桥接操作。代码候选 `ba460f1e4ba8e4c5ea4056f1b6868eeee78b3744` 已推送；尚未部署、新生图或改动 Fig. 2。没有运行测试/预检/CI。
+- 已用 Codex app 创建 **Chat Pro 审查配图风格链路**，requested model=`chatgpt-web/pro`、effort=`ultra`；正式 task=`01a0be85-8abc-72c0-b073-44ace940c050`。首次创建约 8 秒即报 `missing cwd in trusted Codex environment context`，应用自动归档；经正式工具恢复同一任务，以正常后续消息继续。该任务的临时 worktree `C:/Users/Mac/.codex/worktrees/a7d5/XGS` 后已不在实际 Git worktree 列表；未在其中编辑，实际审查源始终为 canonical 精确候选。
+- 路由实证：本机 loopback `17841` 监听 PID=27600，执行本地 **codex-chatgpt-web 5.0.8** 的 bun/cli.js；config 为 full/compatibility-v1/automatic、proAvailable=true，Codex 路由指向该端口。只读非秘密字段，未修改配置、profile、缓存或安全校验；不能从路由配置推定已获得 Pro 结论。
+- 后续 turn=`01a0be8a-ee0e-7e22-9c8d-1512cd08f2aa` 于 11:19Z 开始；bridge trace=`ebdfd504f144` 在 11:23:36Z 记录 `submission accepted evidence=user_turn`，11:24:58Z 记录 `accepted structured compaction handoff`，随后缺可信 cwd，11:25Z failed。缓存中的 cwd 已正确，未手工改写。再以正常新消息续接，turn=`01a0be93-c806-70d0-aa58-7889c49367bb` 立即报 `current user message conflicts with native Codex turn_id metadata`；已停止桌面任务重试。**Chat 接收过压缩请求，但未返回该任务的代码审查答案**。与上游 [#561](https://github.com/miuuyy/codex-chatgpt-web/issues/561) 现象相近，未证明同根因。
+- 独立 High 同意一次隔离 CLI 尝试：已安装 Codex 正常 `exec --cd <canonical> --sandbox read-only --model chatgpt-web/pro`，未改全局模型/路由/审批。新任务 `01a0be9a-a7c0-7003-9b08-ee12e130ef19` exit0 并实际返回 Pro 文本；但读取源码时 Windows sandbox helper 报 `orchestrator_helper_launch_failed / os error 206`，Pro 明确未完成代码审查。桥返回模型答案已实证，完整工具联动尚未打通。该请求使用了 Chat 额度，不是免费恢复。
+- 主任务静态读取精确 11 文件 diff 和 3 个邻接定义，以文本交给同一 CLI 任务正常 resume，保持 read-only，要求零工具。turn=`01a0be9f-0450-7cc3-9acb-538317877bf1` 于 11:47:21Z completed、CLI exit0，实际返回 Pro 静态审查且没有命令执行：唯一 P2 是 paperOriginal art 草稿被前端禁止确认时误显示“先确认来源”，遮蔽真正限制。其余所给差异未见确定新增阻断；不等于运行/审美通过。证据 `tmp/bridge-pro-review-20260920/review-packet-result.md` 和 `packet-events.jsonl` 仅在 ignored tmp，未提交私密日志。
+- 已按该 P2 修正聊天确认卡及独立表单：保留原提交资格条件，区分来源无效、论文原图不可直接换风格及其他不兼容艺术方案，双语提示返回重新规划绘制。原任务/幂等/不确定重放不变。Pro 未获得的 Domain 调用顺序由主任务定向补读：`submitPresentationGeneration` 第 174 行 `requireStoryboardBase` 在第 182 行 `createAgentSession` 和第 186 行 `submitAgentTask` 前；仅为源码证据。未运行测试/预检/CI。
+- 必要发布准备只读实证：服务器 release=`7bf8c5e5d2df33df21e77716aa5e7173deaffa75`、rollback=`561d738bb10a4926ac0e5c46356d90749557c5d1`；renderer=`sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f` 仍存在。image/review 两队列 deadline+1h 内无终态请求均 0，未知 metadata=0；两个 timer 原已 active/waiting。live runner/review-runner/page-lifecycle 的 Git blob 与候选完全一致（8d0906fb/c4767efd/98be025f），不会覆盖未入库的不同修补。
+- 独立 High 操作审查：既有 deploy `--no-tests --skip-migrate --reuse-unchanged-capability-images` 不运行功能探针，必要 build/start/身份确认仍保留；retention 不带 prune，不删除 renderer。provider installer 会启用 timer 且部分失败不能直接重跑：正式安装前须私有备份三份 live provider 和有关 unit/config 指向，原三锁下安装，失败从备份恢复；应用和 provider 为独立事务。尚未执行构建/安装/切换；原队列不清空、旧收据和图不删。
+- 临时备份脚本及恢复步骤已准备并经 High 指出两点后收紧：取锁前沿 installer 校验 jobs 身份及锁普通文件/非链接；备份只有 exit0 才有效。部分安装失败先停两 timer 派发、等待原任务释放三锁，再恢复三文件/四 unit、daemon-reload 并恢复原 timer 状态；旧 config/bundle 原位保留。未执行这些操作。
+
 ## 2026-09-20 继续：Hermes 风格与逐图计划入口补接
 
 - 用户确认本机桥接启动器已可正常工作，要求与 Chat 6 Pro 合作继续原定三类风格/稳定性任务。接手 canonical HEAD=`a16a0546467d0d0be7dc538e2f2f87900653beca`，根 main=`acd13a71`；两树干净。生产/rollback 沿用 A 恢复记录，本轮尚未部署。
