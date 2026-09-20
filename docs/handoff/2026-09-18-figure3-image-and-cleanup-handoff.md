@@ -2,6 +2,17 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
+## 2026-09-20 仓库完整调用链审读：桌面委派遗漏与压缩环境恢复是两处缺口
+
+- 用户要求仔细阅读 `miuuyy/codex-chatgpt-web` 仓库检查原因。只读获取 tag `v5.0.8`（commit `00aab23eb78a0d35ab575ff14044e29c0f80e711`）、main `eaf4f09ae92d4dc4429fa597b0861663138f08f8` 与两个未合并 PR；最新发布仍 5.0.8。源码快照在 ignored `tmp/bridge-source-audit-20260920/`，仅供静态复核/后续修复；未安装依赖、执行仓库代码/测试、重启桥或新增模型请求。沿 README/TROUBLESHOOTING、安全模型、parser → server → revision/environment → native rollout → compaction checkpoint 及相关测试源码核对，独立 High 复核新增结论。
+- **11:29 的 turn_id 冲突已取得对应生产者形状证据**：原目标任务的 native rollout 在 `11:29:11.228Z` 保存当前 turn `01a0be93…` 的 `function_call_output`，name=`send_message_to_thread`、有 ID、output 为完整 `<codex_delegation><source_thread_id>…</source_thread_id><input>…</input></codex_delegation>`。仅读取类型/身份/标签布尔，不输出指令正文；收据 `tmp/bridge-continuation-20260920/desktop-delegation-shapes.json`。v5.0.8 `environment.ts:171–185,246–255` 只接受普通 user 或直接父 agent_message，忽略该工具结果；随后选旧指令，`:219–234` 与新 turn 比较失败，`server.ts:584–591` 返回终止型400。因此不是没有发送新指令，而是桥接器漏认桌面实际传递形式；未捕获原 HTTP body，仍区分 native 生产记录与 wire 实跑。
+- 上游 [PR #593](https://github.com/miuuyy/codex-chatgpt-web/pull/593)，head `507b84fdb2420252a88e993727dfe34aa2d406d7`，本轮 open/unmerged，正修上述 follow-up 形态。它严格限定当前 turn、工具名、item ID 与完整 delegation，修订历史/执行键可随之读到真实指令；**没有改环境配对判定**。其新增 server 用例为 browser-only，不能证明 Full 环境关卡通过；作者报告的 Linux 实跑不是本机验证。不能把单独安装该补丁当作全部恢复。
+- **初次 create_thread 也有独立遗漏**：`11:13:40.404Z` 原 rollout 为同一完整 delegation 形态但 name=`create_thread`；此前唯一 user 是 plugins/AGENTS/environment 三段前言。`:162–168` 的整段文本过滤没有将此组合前言识别为上下文，`:519–590` 环境配对又只识别 user/parent instruction；真实委派被忽略，前言被误当任务。PR #593 仅接受 `send_message_to_thread`，不覆盖 `create_thread`。这与首次 missing-cwd 一致，但保留没有完整 outbound 的证据边界。
+- **11:24:58 压缩后的首次失败不能归给后来的 follow-up**。前节已记录的三项 replacement_history（developer、多段 user 前言、原始 compaction，无独立人类指令）若直接进入现解析器，前言被选为当前修订；`:280–288` 只认可旧 turn 来源，`thread-environment.ts:157–164` 因当前环境但非已接受续接而在 native rollout 读取前拒绝。`server.ts:549` 仍假设 v2 保留原来源；`compaction-continuation.ts:6–25` checkpoint 仅存摘要/来源哈希，不能凭空重建被替换的真实指令。现有 grouped-preamble 测试保留旧 turn 指令，未覆盖同轮仅前言+compaction 的形态。
+- 新上游 [PR #601](https://github.com/miuuyy/codex-chatgpt-web/pull/601)，head `a50081839e9457dd106796a55a495b8f72f08f65`，本轮 open/unmerged。作者报告 Codex 0.155 的七项 outbound：环境前言 → user 文本摘要 → developer → 真实 user 指令；旧 `canonicalMetadataEnvironmentBeforeUser` 只越过 developer，被摘要挡住。补丁让有来源约束的文本摘要可跳过，保留环境元数据核对；**不处理原始 type=compaction，也不补缺失的真实指令**。本机只保存 replacement_history，不能把它直接等同作者的 outbound；该补丁是明确相关缺口，不是本机全面修复证据。
+- main 的 `cea5e1c` 仅补可信同轮 steering 恢复，提交说明明确不声称解决全部续接；上述两 PR 尚未入 main/发布。推荐修复范围是统一识别经过原生身份认证的 create/follow-up 委派，令修订选择与环境恢复使用同一指令判定，再针对真实 compaction wire 形态补接；保留当前 thread/turn/roots/沙箱核对，不能删冲突检查或手写 cwd 绕过。需要运行证据的阶段仍受当前本机静态操作限制；本轮未修改 live bundle，完整 Full 链路未交付。
+- 能力边界补核：[`TROUBLESHOOTING.md:192–203`](https://github.com/miuuyy/codex-chatgpt-web/blob/00aab23eb78a0d35ab575ff14044e29c0f80e711/TROUBLESHOOTING.md#L192-L203) 明确网页聊天内生图不是当前受支持 turn 类型，原生 image API 是透传 Codex 后端、不会获得 Chat 网页额外图像额度。本机桥用于 Pro 代码协作，项目服务器 image provider 的稳定性/产物交付仍独立。206 已恢复且与这些消息格式缺口分开；三类风格、真实原图 reuse 和 Fig. 2 状态不变。
+
 ## 2026-09-20 防止临时产物再次撑爆沙箱，桌面续接静态定位
 
 - 用户要求继续解决、避免复发并及时清理不用的东西。本轮从 `570744cc` 继续，静态元数据仍为 home 顶层 353 项、原 `ultron-*.log` 0；沿用下节唯一成功的 elevated/read-only 运行证据，未重复沙箱探针、模型请求、测试、预检、CI、构建或部署。最新用户指令已重新明确本机只允许静态阅读/编辑/Git/传输，canonical AGENTS 同步该边界。
