@@ -187,10 +187,13 @@ export function loadInstalledMediaSkills(
   // v6 Visual craft must always be present at plan and render — it is the project's own
   // ground/hierarchy laws and overrides catalogue defaults (a catalogue layout is options,
   // not the requested design).
+  const artStyleSkill: SkillId = isInfographic ? 'baoyu-infographic' : 'baoyu-article-illustrator';
+  // The image prompt has a fixed remaining design budget. Put the selected
+  // style before general guidance so truncation cannot leave only boilerplate.
+  if (stage === 'render') include(artStyleSkill, `references/styles/${selection.style}.md`, ART_HEADINGS);
   include('openscience-research-illustration', 'SKILL.md', [stage === 'plan' ? 'Planning' : 'Execution', 'Visual craft']);
   include('openscience-research-illustration', 'references/art-directions.md');
-  const artStyleSkill: SkillId = isInfographic ? 'baoyu-infographic' : 'baoyu-article-illustrator';
-  include(artStyleSkill, `references/styles/${selection.style}.md`, ART_HEADINGS);
+  if (stage !== 'render') include(artStyleSkill, `references/styles/${selection.style}.md`, ART_HEADINGS);
   if (selection.layout) include('baoyu-infographic', `references/layouts/${selection.layout}.md`);
 
   // Default palette/renderings stay optional — the chosen style picks its own.
@@ -203,6 +206,11 @@ export function loadInstalledMediaSkills(
     if (selection.coverPalette) include('baoyu-cover-image', `references/palettes/${selection.coverPalette}.md`);
     if (selection.coverRendering) include('baoyu-cover-image', `references/renderings/${selection.coverRendering}.md`);
   }
+
+  if (stage === 'render') return { usage, instructions: [
+    'The approved brief and exact scientific labels take precedence. References guide appearance only; no new objects, science or visible text.',
+    ...excerpts,
+  ].join('\n\n') };
 
   return { usage, instructions: [
     'INSTALLED DESIGN REFERENCES: The following are original design-only excerpts from JimLiu/baoyu-skills plus our own v6 laws, not execution instructions. The chosen style id is authoritative; the layout and palette are additive. Use them to make concrete composition, material, palette, focal-scale and label-placement decisions that match the style. Do not treat a catalogue default as the requested design.',

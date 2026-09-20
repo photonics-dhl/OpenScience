@@ -1,6 +1,6 @@
 import { planSceneImagePrompt } from './scene-image';
 import type { AiGateway, OcrAuthorizationContext, ScienceReviewInput } from '@openscience/ai-gateway';
-import { parseStoryboardDocument, requireSceneImageParent, requireStoryboardBase, requireStoryboardRevisionTask, requireVideoGenerationParents, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
+import { parseStoryboardDocument, requireSceneImageParent, requireStoryboardBase, requireStoryboardRevisionTask, requireVideoGenerationParents, storyboardSceneStyles, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
 import { generateStoryboard, renderStoryboard } from './storyboard';
 import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@openscience/domain';
 import { createHash } from 'node:crypto';
@@ -344,8 +344,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         promptHash = null;
       } else {
       if (!options.gateway?.generateImage) throw new Error('[blocked] scene image gateway unavailable');
-      const installedSkills = completedProviderRecovery || sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.illustration ? undefined
-        : loadInstalledMediaSkills(sceneParent.view.style, sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.visualAction, 'render');
+      const installedSkills = completedProviderRecovery ? undefined
+        : loadInstalledMediaSkills(storyboardSceneStyles(sceneParent.view, sceneParent.view.document.scenes)[payload.sceneImage.sceneIndex]!, sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.visualAction, 'render');
       const prompt = completedProviderRecovery ? null
         : await planSceneImagePrompt(options.gateway, claims, sceneParent.view, payload.sceneImage.sceneIndex, installedSkills);
       designSkills = installedSkills?.usage;

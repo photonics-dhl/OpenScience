@@ -82,6 +82,25 @@ export interface StoryboardView {
     /** Older API fixtures omit this; persisted plans are normalized to video. */
     output?: StoryboardRequest['output'];
     baseAssetId?: string;
+    figurePlan?: StoryboardRequest['figurePlan'];
+}
+/** The planner emits reuse scenes first, then generated figures, preserving each group's order. */
+export function storyboardSceneStyles(settings: Pick<StoryboardRequest, 'style' | 'figurePlan'> & { output?: StoryboardRequest['output'] },
+    scenes: ReadonlyArray<Pick<StoryboardDocument['scenes'][number], 'title' | 'paperOriginal'>>): string[] {
+    if (settings.output === 'video' || !settings.figurePlan) return scenes.map(() => settings.style);
+    const figures = [
+        ...settings.figurePlan.figures.filter(figure => figure.decision === 'reuse'),
+        ...settings.figurePlan.figures.filter(figure => figure.decision === 're-render' || figure.decision === 'abstract'),
+    ];
+    if (figures.length !== scenes.length) return invalid('figure_plan_scene_mapping');
+    return scenes.map((scene, index) => {
+        const figure = figures[index]!;
+        const suffix = scene.title.slice(figure.id.length);
+        if (Boolean(scene.paperOriginal) !== (figure.decision === 'reuse')
+            || !scene.title.startsWith(figure.id) || (suffix && !/^[\s:：–—-]/u.test(suffix)))
+            return invalid(`figure_plan_scene_${index}_mapping`);
+        return figure.styleId ?? settings.style;
+    });
 }
 function invalid(reason: string): never { throw new PresentationAssetError('VALIDATION_ERROR', `storyboard:${reason}`); }
 function object(value: unknown, reason: string): Record<string, unknown> { if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -124,6 +143,8 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
                 return { id: f.id, decision: f.decision as 'reuse' | 're-render' | 'abstract' | 'skip', ...(f.styleId ? { styleId: f.styleId as string } : {}), ...(f.caption ? { caption: f.caption as string } : {}) };
             }),
         };
+        const sceneCount = figurePlan.figures.filter(figure => figure.decision !== 'skip').length;
+        if (v.output === 'image' && (sceneCount < 1 || sceneCount > 6)) return invalid('figure_plan_scene_count_1_to_6');
     }
     return {
         locale: v.locale as StoryboardRequest['locale'],
@@ -196,7 +217,7 @@ export function presentationStoryboardView(asset: {
         if (asset.kind !== 'interactive_html' || p.subtype !== 'sourced_storyboard')
             return undefined;
         const settings = parseStoryboardRequest({ ...object(p.storyboardSettings, 'saved_settings') });
-        return { document: parseStoryboardDocument(p.storyboardDocument, claimIds, settings.output), locale: settings.locale, style: settings.style, output: settings.output, ...(settings.baseAssetId ? { baseAssetId: settings.baseAssetId } : {}) };
+        return { document: parseStoryboardDocument(p.storyboardDocument, claimIds, settings.output), locale: settings.locale, style: settings.style, output: settings.output, ...(settings.baseAssetId ? { baseAssetId: settings.baseAssetId } : {}), ...(settings.figurePlan ? { figurePlan: settings.figurePlan } : {}) };
     }
     catch {
         return undefined;

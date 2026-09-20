@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { chmod, chown, lstat, mkdir, readdir, realpath, rename } from 'node:fs/promises';
+import { chmod, chown, lstat, mkdir, readdir, realpath, rename, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -23,6 +23,19 @@ async function prepareDirectory(path, uid) {
   await mkdir(path, { mode: 0o700 });
   await chown(path, uid, uid);
   await chmod(path, 0o700);
+}
+function reportFailure(id, phase, error) {
+  // Process output may contain private input or infrastructure details. Keep
+  // diagnostics to the task identity, stage and a fixed reason vocabulary.
+  const code = ['ENOENT', 'EACCES', 'ENOSPC', 'EEXIST'].includes(error?.code) ? error.code
+    : error?.killed ? 'TIMEOUT'
+    : Number.isInteger(error?.code) ? 'PROCESS_EXIT' : 'INVALID_RESULT';
+  console.error(JSON.stringify({ ...(id ? { id } : {}), phase, reason: code }));
+}
+async function normalizedResult(privateDir) {
+  const path = join(privateDir, 'normalized', 'result.png');
+  if (!await exists(path)) return null;
+  return validateImageBytes(await safeRead(path, 10 * 1024 * 1024)).bytes;
 }
 function exactInnerRequest(request) {
   return {
@@ -101,9 +114,13 @@ export async function executeWebImage(config, request, privateDir) {
     }
     else throw error;
   }
-  return finalizeWebImage(config, request, privateDir, jobDir);
+  const bytes = await finalizeWebImage(config, request, privateDir, jobDir);
+  // The durable PNG remains recoverable even if the original request deadline
+  // expires during local normalization. Never classify it as safe to resend.
+  if (Date.now() >= request.deadlineAt) throw uncertain();
+  return bytes;
 }
-async function finalizeWebImage(config, request, privateDir, jobDir, operationDeadlineAt = request.deadlineAt) {
+async function finalizeWebImage(config, request, privateDir, jobDir, operationDeadlineAt = request.deadlineAt, recovering = false) {
   const innerRequest = exactInnerRequest(request);
   const innerRequestPath = join(jobDir, 'request.json');
   const persistedRequest = JSON.parse((await safeRead(innerRequestPath, 32768)).toString('utf8'));
@@ -116,23 +133,41 @@ async function finalizeWebImage(config, request, privateDir, jobDir, operationDe
   const raw = await safeRead(join(jobDir, 'output/image.png'), 30 * 1024 * 1024);
   validateRawPng(raw);
   if (innerResult.bytes !== raw.length || innerResult.width !== raw.readUInt32BE(16) || innerResult.height !== raw.readUInt32BE(20)) throw uncertain();
-  const rawPath = join(privateDir, 'browser-result.png');
-  await atomicWrite(rawPath, raw, 0o444);
-  // The systemd UMask intentionally tightens new files. The isolated
-  // normalizer runs as uid 1000 and needs read-only access to this exact PNG.
-  await chmod(rawPath, 0o444);
-  const normalized = join(privateDir, 'normalized');
-  await prepareDirectory(normalized, 1000);
   const container = 'xgs-chatgpt-web-normalize-' + request.id;
   try {
+    const rawPath = join(privateDir, 'browser-result.png');
+    if (await exists(rawPath)) {
+      if (!(await safeRead(rawPath, 30 * 1024 * 1024)).equals(raw)) throw Error('RAW_IMAGE_MISMATCH');
+    } else {
+      await atomicWrite(rawPath, raw, 0o444);
+    }
+    // UMask tightens new files; the isolated uid 1000 needs this exact PNG.
+    await chmod(rawPath, 0o444);
+    const normalized = join(privateDir, 'normalized');
+    if (await exists(normalized)) await safeDirectory(normalized, 1000, 0o700);
+    else await prepareDirectory(normalized, 1000);
+    const completed = await normalizedResult(privateDir);
+    if (completed) return completed;
+    if (recovering) {
+      // One extra local attempt within the existing grace period, never a new
+      // browser submission. The caller holds the original image-runner flock.
+      const marker = join(privateDir, 'normalization-recovery.started');
+      if (await exists(marker)) throw Error('NORMALIZATION_RECOVERY_EXHAUSTED');
+      await atomicWrite(marker, String(Date.now()), 0o600);
+    }
     await docker(['run', '--rm', '--name', container, '--network', 'none', '--read-only', '--cap-drop', 'ALL',
       '--security-opt', 'no-new-privileges', '--user', '1000:1000', '--memory', '512m', '--memory-swap', '512m',
       '--pids-limit', '64', '-v', rawPath + ':/input.png:ro', '-v', normalized + ':/output:rw',
-      '--entrypoint', '/usr/bin/ffmpeg', config.rendererImage, '-v', 'error', '-nostdin', '-threads', '1', '-i', '/input.png',
+      '--entrypoint', '/usr/bin/ffmpeg', config.rendererImage, '-v', 'error', '-nostdin', '-y', '-threads', '1', '-i', '/input.png',
       '-map_metadata', '-1', '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=0xf7f2e8',
-      '-frames:v', '1', '-threads', '1', '-pix_fmt', 'rgb24', '/output/result.png'],
+      '-frames:v', '1', '-threads', '1', '-pix_fmt', 'rgb24', '/output/result.pending.png'],
     Math.min(45000, Math.max(1, operationDeadlineAt - Date.now())));
-    return validateImageBytes(await safeRead(join(normalized, 'result.png'), 10 * 1024 * 1024)).bytes;
+    const bytes = validateImageBytes(await safeRead(join(normalized, 'result.pending.png'), 10 * 1024 * 1024)).bytes;
+    await rename(join(normalized, 'result.pending.png'), join(normalized, 'result.png'));
+    return bytes;
+  } catch (error) {
+    reportFailure(request.id, 'normalization', error);
+    throw uncertain();
   } finally {
     await docker(['rm', '-f', container]).catch(() => {});
   }
@@ -144,7 +179,8 @@ async function recoverUncertainWebImage(config) {
       const request = validateCodexImageRequest(JSON.parse((await safeRead(join(privateDir, 'request.json'), 16384)).toString('utf8')), undefined, 'chatgpt-web');
       if (request.id !== id || request.deadlineAt + RECOVERY_GRACE_MS <= Date.now()) continue;
       const resultDir = join(config.results, id);
-      const result = validateCodexImageResult(JSON.parse((await safeRead(join(resultDir, 'result.json'), 16384)).toString('utf8')), 'chatgpt-web');
+      const resultBytes = await safeRead(join(resultDir, 'result.json'), 16384);
+      const result = validateCodexImageResult(JSON.parse(resultBytes.toString('utf8')), 'chatgpt-web');
       if (result.id !== id || result.promptHash !== request.promptHash || result.status !== 'uncertain') continue;
       const jobDir = join(config.jobs, id);
       if (!await exists(join(jobDir, 'submitted.json')) || !await exists(join(jobDir, 'conversation.json'))
@@ -172,9 +208,11 @@ async function recoverUncertainWebImage(config) {
         }
       }
       if (!await exists(join(jobDir, 'result.json'))) continue;
-      const bytes = await finalizeWebImage(config, request, privateDir, jobDir, Date.now() + 45_000);
-      await rename(join(resultDir, 'result.json'), join(resultDir, 'result.uncertain.json'));
+      if (await exists(join(privateDir, 'normalization-recovery.started')) && !await normalizedResult(privateDir)) continue;
+      const bytes = await finalizeWebImage(config, request, privateDir, jobDir, Date.now() + 45_000, true);
       await atomicWrite(join(resultDir, 'result.png'), bytes);
+      // Preserve the old receipt only after the complete image is durable.
+      await atomicWrite(join(resultDir, 'result.uncertain.json'), resultBytes);
       await atomicWrite(join(resultDir, 'result.json'), JSON.stringify({ schemaVersion: 1, provider: 'chatgpt-web',
         id, promptHash: request.promptHash, status: 'succeeded' }));
       const circuit = join(config.privateRoot, 'web-image-circuit.json');
@@ -211,6 +249,15 @@ async function main() {
     await safeDirectory(config.jobs, 11040, 0o700),
   ];
   if (new Set(directoryStats.map(stat => `${stat.dev}:${stat.ino}`)).size !== directoryStats.length) throw Error('SHARED_PATH');
+  try {
+    // This dependency disappeared in the observed download/normalize failure.
+    // Refuse new work before advertising readiness or spending on a browser job.
+    await docker(['image', 'inspect', '--format', '{{.Id}}', config.rendererImage]);
+  } catch (error) {
+    await unlink(join(config.results, '.ready')).catch(error => { if (error.code !== 'ENOENT') throw error; });
+    reportFailure(null, 'renderer_dependency', error);
+    throw Error('RENDERER_UNAVAILABLE');
+  }
   const heartbeat = () => atomicWrite(join(config.results, '.ready'), JSON.stringify({ schemaVersion: 1, provider: 'chatgpt-web', updatedAt: Date.now() }));
   await heartbeat();
   const timer = setInterval(() => { heartbeat().catch(() => {}); }, 15000);

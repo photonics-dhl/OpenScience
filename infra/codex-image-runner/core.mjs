@@ -55,7 +55,13 @@ export async function runOne({inbox,results,privateRoot,provider,execute,now=Dat
   await syncDirectory(privateDir);
   try{
    const bytes=await execute(request,privateDir);
-   if(request.deadlineAt<=now())throw Error('EXPIRED');
+   if(request.deadlineAt<=now()){
+    const error=Error('EXPIRED');
+    // Web execution has already downloaded and normalized the original image.
+    // Let its existing grace-period recovery publish that result, never resend.
+    if(provider==='chatgpt-web')error.code='UNCERTAIN';
+    throw error;
+   }
    await publish(results,request,'succeeded',undefined,bytes);
    return {id,status:'succeeded'};
   }catch(error){

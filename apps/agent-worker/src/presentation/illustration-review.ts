@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type ScienceReviewInput } from '@openscience/ai-gateway';
-import { describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocument, requireIllustrationSourceSupport, type StoryboardDocument, type StoryboardRequest } from '@openscience/domain';
+import { describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocument, requireIllustrationSourceSupport, storyboardSceneStyles, type StoryboardDocument, type StoryboardRequest } from '@openscience/domain';
 import type { PresentationClaim } from './chart-generator';
 import { compileIllustrationImagePrompt } from './scene-image';
-import { loadInstalledMediaSkills } from '../skills/installed-media-skills';
+import { loadIllustrationStyleSkills } from './illustration-styles';
 
 type ReviewContext = Pick<ScienceReviewInput, 'authorizationContext' | 'illustrationContext'> & {
   researchObjectId: string; versionId: string; sourceEvidenceIdentity: string;
@@ -148,14 +148,15 @@ export async function reviewIllustrationStoryboard(
       })) };
   }) };
   const candidateHash = createHash('sha256').update(JSON.stringify(candidate)).digest('hex');
-  const reviewSkills = loadInstalledMediaSkills(settings.style, settings.instruction, 'review');
+  const perSceneStyle = storyboardSceneStyles(settings, candidate.scenes);
+  const reviewSkills = loadIllustrationStyleSkills(perSceneStyle.filter((_, index) => !candidate.scenes[index]!.paperOriginal), settings.instruction, 'review');
   const prompt = `Apply the shared scientific-critical-thinking skill below to the FINAL proposed research illustration. Use only the supplied analysis and original evidence; do not browse or operate tools. The image-specific task is to check what every axis, distance, color, region, arrow and curve communicates, including meaning introduced by composition and treatment. Decorative placement must not invent quantitative behavior or physical relationships.
 Choose accepted only if the complete picture faithfully explains the supplied selected relationship. Science is carried in message/domain/subjects/encoding/labels/constraints plus title/narration; it is not yours to rewrite or replace. If any of those fields needs correction, or a different focus or source is necessary, return blocked and identify the exact scene, field, source and problem for upstream correction. Do not invent missing evidence or use a style reference as scientific authority.
 If only artistic placement or treatment introduced a misleading meaning, return revised with a minimal correction to that scene's composition or treatment. Preserve scene order/count, all scientific fields and unaffected artwork. Composition chooses placement, focal scale, reading path and spacing; treatment chooses material, palette, edges and typography. Neither may add a new scientific mark, label, relationship or condition. Refer to existing subjects, encoding and labels. Do not reselect a topic, rewrite a complete storyboard or add another review stage.
-In this same review, also compare the candidate composition/treatment with userRequest. A material mismatch with an explicit art direction, background, layout, texture or typography request warrants revised using those same correction fields. Preserve every scientific field and only art aspects explicitly accepted by the user; scientific approval is not aesthetic acceptance. Resolve objective instruction mismatches, not subjective taste. Conformance does not certify visual quality or user approval; never add another review stage or change science for decoration.
+In this same review, also compare the candidate composition/treatment with userRequest and its perSceneStyle. Each scene's selected style overrides the global style fallback; do not impose another scene's style. A material mismatch with an explicit art direction, background, layout, texture or typography request warrants revised using those same correction fields. Preserve every scientific field and only art aspects explicitly accepted by the user; scientific approval is not aesthetic acceptance. Resolve objective instruction mismatches, not subjective taste. Conformance does not certify visual quality or user approval; never add another review stage or change science for decoration.
 Return ONLY JSON with EXACT keys {decision,summary,corrections}. decision is accepted|revised|blocked; summary is a concise explanation in the requested locale. For accepted or blocked, corrections MUST be []. For revised, corrections is a nonempty list of {sceneIndex,composition?,treatment?}; each existing zero-based sceneIndex appears once, with at least one changed field and no other keys. composition:nonempty single-line string<=200; treatment:nonempty single-line string<=220. No HTML or code. Keep corrections concise and in the requested locale. The final drawing instructions including unchanged scientific fields must fit 1500 characters; never shorten science to fit art. SourceIds and review notes are internal and are not drawn. Perform this focused audit yourself.
 ${reviewSkills.instructions}
-${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, style: settings.style,
+${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, style: settings.style, perSceneStyle,
     upstream: selectedClaims.map(claim => ({ claimId: claim.id, parentClaimId: claim.parentClaimId ?? null, kind: claim.kind, assessment: claim.assessment, analysis: claim.statement,
       conditions: claim.conditions, limitations: claim.limitations,
       sourceIds: (claim.sourcePassages ?? []).map(passage => sourceIds.get(`${claim.id}:${passage.evidenceId}`)) })),

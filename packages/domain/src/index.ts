@@ -429,7 +429,7 @@ export {
 
 export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from './assets/reviewed-media-import';
 
-export { STORYBOARD_IMAGE_VISUAL_ACTION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, STORYBOARD_STYLE_ALIASES, canonicalStoryboardStyle, parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
+export { STORYBOARD_IMAGE_VISUAL_ACTION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, STORYBOARD_STYLE_ALIASES, canonicalStoryboardStyle, storyboardSceneStyles, parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView } from './assets/storyboard';
 export { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
 export { parseSceneAnimation, requireAnimationSourceSupport, type SceneAnimation, type AnimationObject, type AnimationAction } from './assets/animation';
 

@@ -1,10 +1,10 @@
 # CURRENT Progress Window
 
+## 2026-09-20 — 三类风格链路候选与本机联动核查
+- 用户认可 Fig. 3 并选择先完善学术、编辑封面、淡彩。代码候选未部署/未运行；随后按用户要求只读核查本机 Codex Web GPT：启动器已登录，模型路由/Full harness 尚未接通。边界、未决项与证据见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；没有新模型请求或账号切换。
+
 ## 2026-09-20 — 用户选择 A，已恢复 Fig. 3 私有待审图
 - 已恢复 renderer，并沿原任务完成标准化/导入；实际站内入口与图片加载已观察，零新增模型请求、未审批/公开。证据、配置与回退边界见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md) 链接的最新恢复节；Fig. 2 未改，用户审图与其他交付差额保留。
-
-## 2026-09-20 — 只读取证纠正
-- 末次 Fig. 3 任务已有真实下载 PNG，失败在后续标准化，尚无产品资产；当前 renderer 镜像缺失，历史确切底层错误未知。Fig. 2 残留仅发现私有列表/快照影响。证据、边界与待选处置见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md) 及其链接交接最新节；以下 9/18“没有真实 PNG”与“纯偶发”结论已被纠正。未重发/切 provider/改资产/部署。
 
 ## 2026-09-18 — Fig. 3 出图：plan 通过、桥三连失败；占位调试产物清理（承接方从顶部读）
 - 用户「再试一下」后第三次提交 Fig. 3 scene image：task `9f7ff671` **failed**（`image generation failed`，桥 `EXECUTION_FAILED`）。上游 plan `8141b5fd` **approved**、figurePlan `{"figures":[{"id":"Fig. 3","styleId":"editorial","decision":"re-render"}]}`、scene0 `Fig. 3: 圆孔横截面上的 Bethe 等效偶极源与角谱形状因子`、hash `9395f576`——**plan 段是真证据，图段至今 0 交付**；最后一次真实桥出图成功仍是 2026-09-17 的 `ac455b2f`（spool `result.png` 590,049 字节）。

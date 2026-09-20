@@ -2,6 +2,8 @@
 
 ## 当前能力索引：目的、调用、效果
 
+2026-09-20 续作：用户认可恢复的 Fig. 3，先完善学术/编辑封面/淡彩。逐图风格传递、严格场景匹配、原样科学符号及桥标准化恢复已有本地候选，**未部署/未运行**；自然语言 art-only 的 base.style 覆盖、旧 Web style 类型及 paperOriginal 修订限制仍待收口，不称零技术债。本机 Codex Web GPT 5.0.8 已登录但尚无模型路由/Full harness 接通证据；上游不支持网页生图回收，不能作为 XGS 生图 provider。实现位置、候选审查和 Full 模式建议统一见 [本次交接最新节](../handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。
+
 本页是定位入口，不是自动能力注册器。仅阅读与任务匹配的行，再读取调用代码与已有任务记录。**当前版本/暂停状态唯一锚点：[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)**；资源/缓存/安装入口见[服务器清单](server-capabilities.md)。需求来源是最新用户纠正及[需求基线](../OpenScience_Kimi_Development_Spec.md)。没有任何工具保证对整个产品的绝对掌控；未知状态要可见、可定位。
 
 这些文件/符号按2026-09-15本轮交付代码与已有记录核对；必要服务器构建/启动及真实配图任务见CURRENT；未运行测试。产品域行不把上线当作当前全面验收。AI效果行标明已有实际任务与局限。表内 `skills/`、`presentation/` 和worker文件名相对于 `apps/agent-worker/src/`，其余完整目录从仓库根定位。

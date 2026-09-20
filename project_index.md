@@ -1,12 +1,14 @@
 # OpenScience (XGS) 项目文件索引
 
-> CURRENT：唯一交付入口是 `.worktrees/onchip-video-release` 的 `release/onchip-production-line`（canonical；旧 `codex/onchip-video-release` 缺 journals/学术身份，为历史线不得发版）。学术机制图本批审美已获用户认可，编辑封面与批量交付仍未完成；工程能力定位/调用观测已有接线，产品目标与用户审美验收尚未自动联动，不称状态治理全部完成。交付差额、版本与下一步唯一见[Hermes CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)；9/18 接手细节及 9/20 取证/用户 A 恢复结果（原图已恢复入库待审、Fig. 2 未改） 见[2026-09-18 交接](docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)（生产 release `7bf8c5e5`／回滚 `561d738b`）。能力按[当前能力索引](docs/runbooks/hermes-capability-registry.md)定向查实现、调用和真实结果；下表日期/版本均为对应改动的历史记录，不作为当前release或自动next action。
+> CURRENT：唯一交付入口是 `.worktrees/onchip-video-release` 的 `release/onchip-production-line`（canonical；旧 `codex/onchip-video-release` 缺 journals/学术身份，为历史线不得发版）。学术机制图本批审美已获用户认可，编辑封面与批量交付仍未完成；工程能力定位/调用观测已有接线，产品目标与用户审美验收尚未自动联动，不称状态治理全部完成。交付差额、版本与下一步唯一见[Hermes CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)；9/18 接手细节及 9/20 取证/用户 A 恢复结果（原图已恢复且用户认可；三类风格修复为未部署候选、本机 Codex Web GPT Full 接入只读核查，Fig. 2 未改） 见[2026-09-18 交接](docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)（生产 release `7bf8c5e5`／回滚 `561d738b`）。能力按[当前能力索引](docs/runbooks/hermes-capability-registry.md)定向查实现、调用和真实结果；下表日期/版本均为对应改动的历史记录，不作为当前release或自动next action。
 
 能力补接入口：`scripts/read-current-management-context.mjs`同读Git/Taskmaster/CURRENT指针；`infra/development-platform/code-intelligence/snapshot_identity.py`绑定成功MCP返回的源码版本。`packages/search/src/runtime-config.ts`共享BGE身份配置；`apps/api/src/{search-runtime,research-object-search}.ts`供私有ResearchList的POST全文检索；`packages/domain/src/agent/search-index-source.ts`及原ingestion确认事务绑定解析来源并提交索引；`scripts/index-confirmed-research-sources.cjs`仅补录本次授权的两篇真实论文，默认列计划、`--apply`复用同一producer。部署及实际效果见[CURRENT任务4](docs/handoff/2026-09-10-hermes-web-image-handoff.md#capability-linkage)，不复制任务状态。必要验证仅限直接风险或已知故障的最小定向范围；不运行过度测试、全套预检或CI。
 
 后台索引恢复：`packages/search/src/embedder.ts`负责有界请求，`apps/agent-worker/src/search-indexer.ts`负责分片/批次，`packages/domain/src/agent/agent.ts`复用原任务鉴权恢复；显式补录脚本`--retry-incomplete`消费原Domain资格。未部署候选与下个session执行顺序只见CURRENT顶部暂停记录。
 
 任务纠偏入口：`AGENTS.md`与`.agents/skills/docs-sync/SKILL.md`对齐既有Taskmaster当前tag与未完成交付项；`infra/development-platform/catalog/catalog-info.yaml`导航交付源码与需求，`telemetry/query.mjs --task`按原任务关联定位调用。`workspace-guide.ts`艺术路由保留原要求，Hermes结果/草稿/操作组件传递明确art/baseAssetId；自有配图Skill v5与原末审同轮检查明确艺术要求。部署、实际效果和未观察范围仅见CURRENT。
+
+风格续作定位：`apps/agent-worker/src/presentation/illustration-styles.ts` 合并逐图风格参考；`packages/domain/src/assets/storyboard.ts` 从既有 figurePlan 解析 scene 风格；原 planner/review/render 调用接线，`infra/chatgpt-browser/broker.mjs` 与原 core 保存下载后恢复。候选状态及本机 Codex Web GPT 联动建议只见 CURRENT，不据源码宣称线上完成。
 
 Chat审阅接收：`infra/chatgpt-browser/review-runner.cjs`沿用既有broker，补就绪等待、原文锚定和空DOM时严格绑定的已完成final读取；同一a803请求实际恢复，无重发。精确bundle与应用release分开登记在CURRENT。
 
