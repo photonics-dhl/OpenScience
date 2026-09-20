@@ -51,11 +51,11 @@ export function isEligibleArtStoryboard(asset: PresentationAsset | undefined, lo
   return Boolean(asset && (asset.status === 'approved' || asset.status === 'draft') && asset.kind === 'interactive_html'
     && asset.storyboard?.output === 'image' && asset.storyboard.locale === locale
     && asset.storyboard.document.scenes.length > 0
-    && asset.storyboard.document.scenes.every((scene) => scene.illustration?.schemaVersion === 2));
+    && asset.storyboard.document.scenes.every((scene) => scene.illustration?.schemaVersion === 2 && !scene.paperOriginal));
 }
 export class SubmissionIntent {
   private signature = ''; private key = ''; private busy = false; private uncertain = false;
-  draft?: { action: PresentationAction; instruction: string; style: string; language?: 'zh' | 'en'; selected: string[]; parentId: string; scene: number; updateBrief?: boolean; revisionMode?: 'art'; figurePlan?: { figures: Array<{ id: string; decision: 'reuse' | 're-render' | 'abstract' | 'skip'; styleId?: string; caption?: string }> } };
+  draft?: { action: PresentationAction; instruction: string; style: string; language?: 'zh' | 'en'; selected: string[]; parentId: string; scene: number; updateBrief?: boolean; revisionMode?: 'art'; figurePlan?: StoryboardRequest['figurePlan'] };
   request?: { action: PresentationAction; sourceIds: string[]; payload: StoryboardRequest | { storyboardAssetId: string; sceneIndex: number } | { profile: 'content-driven-v1'; storyboardAssetId: string; sceneImageAssetIds: string[] } };
   get isUncertain() { return this.uncertain; }
   get isBusy() { return this.busy; }

@@ -27,7 +27,7 @@ import type { HermesPresentationIntent } from '@/lib/hermes/presentation-intent'
 import { useRouter, useSearchParams } from 'next/navigation';
 import { HermesPresentationReview } from './HermesPresentationReview';
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
-import { getHermesDraftStorage, loadHermesGuideGoal, saveHermesGuideGoal, type HermesDraftScope } from '@/lib/hermes/draft-state';
+import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, saveHermesGuideGoal, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import { SDF_FIELDS } from '@/lib/suggestions';
 import { ResearchPublication } from '@/components/research/ResearchPublication';
@@ -120,7 +120,8 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
     const candidate = value.presentationDraft as Record<string, unknown>;
     if (!candidate || typeof candidate !== 'object' || !['storyboard.create', 'storyboard.revise', 'scene.image', 'video.create'].includes(String(candidate.action))
       || typeof candidate.instruction !== 'string' || (candidate.action === 'scene.image' ? candidate.instruction !== '' : !candidate.instruction.trim() && candidate.action !== 'video.create') || candidate.instruction.length > 1_000
-      || (candidate.style !== undefined && !['technical', 'ink', 'watercolor'].includes(String(candidate.style)))
+      || (candidate.style !== undefined && (typeof candidate.style !== 'string' || !candidate.style.trim() || candidate.style.length > 100))
+      || !isFigurePlanValid(candidate.figurePlan)
       || !((candidate.revisionMode === undefined && candidate.baseAssetId === undefined)
         || (candidate.revisionMode === 'art' && candidate.action === 'storyboard.revise'
           && typeof candidate.baseAssetId === 'string' && candidate.baseAssetId.length > 0 && candidate.baseAssetId.length <= 100))
@@ -130,7 +131,8 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
       instruction: candidate.instruction as string,
       researchObjectId: candidate.researchObjectId as string,
       versionId: candidate.versionId as string,
-      ...(candidate.style ? { style: candidate.style as 'technical' | 'ink' | 'watercolor' } : {}),
+      ...(candidate.style ? { style: candidate.style as string } : {}),
+      ...(candidate.figurePlan ? { figurePlan: candidate.figurePlan } : {}),
       ...(candidate.revisionMode === 'art' ? { revisionMode: 'art' as const, baseAssetId: candidate.baseAssetId as string } : {}),
     };
   }

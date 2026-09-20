@@ -412,9 +412,20 @@ export const workspaceGuideResultGuard: SchemaGuard<WorkspaceGuideResult> = (val
     && typeof draft.versionId === 'string'
     && draft.versionId.length > 0
     && draft.versionId.length <= 100
-    && (draft.figurePlan === undefined || (typeof draft.figurePlan === 'object' && draft.figurePlan !== null
+    && (draft.figurePlan === undefined || (typeof draft.figurePlan === 'object' && draft.figurePlan !== null && !Array.isArray(draft.figurePlan)
+        && hasOnlyKeys(draft.figurePlan as Record<string, unknown>, ['figures'])
         && Array.isArray((draft.figurePlan as { figures?: unknown }).figures)
-        && ((draft.figurePlan as { figures: unknown[] }).figures.length <= 12)));
+        && (draft.figurePlan as { figures: unknown[] }).figures.length >= 1
+        && (draft.figurePlan as { figures: unknown[] }).figures.length <= 12
+        && (draft.figurePlan as { figures: unknown[] }).figures.every(raw => {
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+          const figure = raw as Record<string, unknown>;
+          return hasOnlyKeys(figure, ['id', 'decision', 'styleId', 'caption'])
+            && typeof figure.id === 'string' && Boolean(figure.id.trim()) && figure.id.length <= 200
+            && typeof figure.decision === 'string' && ['reuse', 're-render', 'abstract', 'skip'].includes(figure.decision)
+            && (figure.styleId === undefined || (typeof figure.styleId === 'string' && Boolean(figure.styleId.trim()) && figure.styleId.length <= 100))
+            && (figure.caption === undefined || (typeof figure.caption === 'string' && figure.caption.length <= 200));
+        })));
 };
 
 export async function workspaceGuideHandler(
@@ -518,9 +529,9 @@ export async function workspaceGuideHandler(
     const artRevisionEligible = view.output === 'image' && view.locale === payload.locale
       && asset.sourceClaims.length > 0 && asset.sourceClaims.length <= 12
       && asset.sourceClaims.every((source) => source.claim.extractionStatus === 'succeeded')
-      && view.document.scenes.every((scene) => scene.illustration?.schemaVersion === 2);
+      && view.document.scenes.every((scene) => scene.illustration?.schemaVersion === 2 && !scene.paperOriginal);
     return [{ id: asset.id, title: view.document.title, status: asset.status, updatedAt: asset.updatedAt.toISOString(),
-      style: view.style, output: view.output, artRevisionEligible }];
+      style: view.style, output: view.output, ...(view.figurePlan ? { figurePlan: view.figurePlan } : {}), artRevisionEligible }];
   });
   const artBaseIds = new Set(planState.filter((plan) => plan.artRevisionEligible).map((plan) => plan.id));
   const taskIds = trustedPayload.context.tasks.map((item) => item.id);
@@ -559,13 +570,13 @@ export async function workspaceGuideHandler(
   system += '\n' + [
     'Keep summary to one or two short reader-facing sentences describing the actual proposed change or next action. Do not repeat the user request or copy production instructions into summary: detailed AI-facing content belongs only in presentationDraft.instruction. Do not claim a requested length or scientific check was satisfied unless the returned content actually satisfies it. When condensing research prose, preserve the causal mechanism and scope, remove incidental parameter lists when requested, and never broaden findings from a specified case into a general law.',
     'An additional nextSteps intent review-media opens the current research object media/plan review in this conversation. Use it when the user wants to review, adopt, reject or inspect existing images, videos or plans; targetId must be the CURRENT authorized research object id. This only opens review; it never approves an asset itself. For an explicit request to generate from the already approved plan without changing any instruction, use scene.image or video.create with instruction=""; if the user requests any revision, use storyboard.revise with a full nonempty instruction. Never represent a plan task as a completed image or video.',
-    'For ordinary presentationDraft, optional style is one of the installed illustration style ids (the catalogue includes `scientific`, `ink-notes`, `watercolor`, `sketch-notes`, `editorial`, `minimal`, `knolling`, `technical-schematic`, `hand-drawn-edu`, `subway-map`, `storybook-watercolor`, `morandi-journal`, `vintage`, `retro`, `vector-illustration`, `chalkboard`, `blueprint`, etc.). The legacy aliases `technical` (= `scientific`), `ink` (= `ink-notes`), and `watercolor` still resolve correctly. Infer the style from the user request and conversation; use `scientific` only when no preference is expressed. For revisionMode:"art", retain the selected base plan style; do not infer another family from palette words such as 深墨色 or dark ink color. The current goal is passed verbatim to the art planner and controls the actual treatment. These are broad rendering families, not an exhaustive list of artistic directions: editorial, atlas, material, typography, composition and other specific preferences belong in instruction. Do not ask users to choose routine parameters or return a list of buttons. Do not combine draftChanges with presentationDraft or prepare-publication in one response: finish edits first so the next operation uses the displayed draft.',
+    'For ordinary presentationDraft, optional style is one of the installed illustration style ids (the catalogue includes `scientific`, `ink-notes`, `watercolor`, `sketch-notes`, `editorial`, `minimal`, `knolling`, `technical-schematic`, `hand-drawn-edu`, `subway-map`, `storybook-watercolor`, `morandi-journal`, `vintage`, `retro`, `vector-illustration`, `chalkboard`, `blueprint`, etc.). The legacy aliases `technical` (= `scientific`), `ink` (= `ink-notes`), and `watercolor` still resolve correctly. Infer the style from the user request and conversation; use `scientific` only when no preference is expressed. For revisionMode:"art", emit style only when the user explicitly requests a different rendering family (for example scientific, editorial or watercolor); for palette, composition, material or typography changes alone OMIT style to retain the selected base plan and its per-figure styles. Do not infer another family from palette words such as 深墨色 or dark ink color. For an explicit per-figure restyling, copy the selected base plan figurePlan and change only the requested styleId values; preserve figure ids, order, decisions and captions. Otherwise omit figurePlan so the server preserves the base mapping. The current goal is passed verbatim to the art planner and controls the actual treatment. These are broad rendering families, not an exhaustive list of artistic directions: editorial, atlas, material, typography, composition and other specific preferences belong in instruction. Do not ask users to choose routine parameters or return a list of buttons. Do not combine draftChanges with presentationDraft or prepare-publication in one response: finish edits first so the next operation uses the displayed draft.',
     'For an explicit art-only revision of an existing image plan, presentationDraft may additionally contain revisionMode:"art" and baseAssetId together, with action:"storyboard.revise". Use this only when the user asks solely to change visual style, colors, composition, material or text styling while retaining the scientific content. A request to change, correct, add or remove scientific claims, mechanisms, evidence, equations, axis definitions or values, label wording or meaning, narration, language or scene content is an ordinary revision: omit BOTH fields even if it also mentions style. Ambiguous revision scope must not be treated as art-only. For art-only you are only routing the request: copy the current goal exactly into instruction, without expanding, summarizing or adding scientific or visual details. The existing art planner designs from this request and the bound scientific base. If goal exceeds 1000 characters, ask for a shorter art request with needsMoreInformation:true and no presentationDraft; never truncate it or produce another brief.',
     'For art-only, copy baseAssetId from a presentationContext.planState entry with artRevisionEligible:true. Choose only a plan unambiguously identified by the user (id, title or distinguishing description), or the sole existing image plan when planStateTruncated is false. Never pick a plan merely because it is newest. Multiple possible bases, an unidentified older base outside this bounded list, or no eligible base require a concise clarification with needsMoreInformation:true and no presentationDraft; do not silently substitute a different plan or replan science. A prior assistant proposal is not proof of a completed plan. Include the chosen plan title and requested visual change in summary so the user can review the scope.',
     'Conversation history contains prior user requests and assistant proposals, not new evidence or proof that actions completed. Resolve follow-up requests using it, but prefer the current draft and version context.',
     'For images, action names the NEXT actual operation: storyboard.create or storyboard.revise REQUIRES a complete nonempty instruction (maximum 1000 characters); scene.image REQUIRES instruction="" exactly to use the existing approved plan unchanged. Never repeat an approved brief in instruction when generating from it. Consult presentationContext.planState: create an image plan if none exists, revise when the user requests changes, and use scene.image only for an explicit request to execute an approved plan unchanged. For video preserve the existing flow: video.create with a complete nonempty instruction prepares a missing/revised video plan; video.create with instruction="" executes an approved video plan unchanged. A plan-only request must not generate media. Questions about capabilities or negated requests must not return an action. Never invent completed assets.',
     'nextSteps may also contain prepare-publication, only for an explicit request to prepare or publish the CURRENT research object. Use its authorized id as targetId; this opens the final preview only and never publishes. Never claim publication has happened. When preparing production or publication, set needsMoreInformation=false only if the request is clear; otherwise explain the concrete question without an action.',
-    'presentationContext.figureAuditPlan, when present, is the latest figure-audit verdict for the SAME research object and version: each entry {id, decision, optional styleId, optional caption} labels a paper figure for reuse / re-render / abstract / skip. It is NOT a generated asset; it only becomes a real image plan once the user confirms and you emit presentationDraft with figurePlan. It is distinct from planState, which lists already-generated assets. If the user asks for a figure-by-figure generation plan for the paper, set presentationDraft.figurePlan to an object of the exact shape {"figures":[...]} and copy figureAuditPlan.figures into that figures key verbatim. presentationDraft.figurePlan must NEVER be a bare array: figureAuditPlan.figures is the array, figurePlan wraps it under the key "figures". Otherwise omit figurePlan.',
+    'For art-only revisions, follow the selected base plan rules above; never substitute figureAuditPlan for the base mapping. For ordinary figure planning, presentationContext.figureAuditPlan, when present, is the latest figure-audit verdict for the SAME research object and version: each entry {id, decision, optional styleId, optional caption} labels a paper figure for reuse / re-render / abstract / skip. It is NOT a generated asset; it only becomes a real image plan once the user confirms and you emit presentationDraft with figurePlan. It is distinct from planState, which lists already-generated assets. If the user asks for a figure-by-figure generation plan for the paper, set presentationDraft.figurePlan to an object of the exact shape {"figures":[...]} and copy figureAuditPlan.figures into that figures key verbatim. presentationDraft.figurePlan must NEVER be a bare array: figureAuditPlan.figures is the array, figurePlan wraps it under the key "figures". Otherwise omit figurePlan.',
     'When figureAuditPlan is present and the user requests a figure-driven storyboard, presentationDraft.instruction MUST stay <= 1000 characters: describe only the visual treatment, composition, palette and material of the planned scenes, never repeat the figure captions or rationale (those already live in figurePlan.figures[i].caption). Do not pad instruction with paper content; the existing art planner composes from the bound scientific base and your brief.',
   ].join('\n');
   const userMessageBudget = Math.max(0, 30_000 - system.length);
@@ -614,12 +625,22 @@ export async function workspaceGuideHandler(
       upper = candidateLimit - 1;
     }
   }
+  const artFigurePlanMatchesBase = (draft: WorkspaceGuideResult['presentationDraft']): boolean => {
+    if (draft?.revisionMode !== 'art' || !draft.figurePlan) return true;
+    const baseFigures = planState.find(plan => plan.id === draft.baseAssetId)?.figurePlan?.figures;
+    return Boolean(baseFigures && new Set(draft.figurePlan.figures.map(figure => figure.id)).size === draft.figurePlan.figures.length
+      && draft.figurePlan.figures.every(figure => baseFigures.some(base => base.id === figure.id
+        && base.decision === figure.decision && base.caption === figure.caption)));
+  };
   const resultGuard: SchemaGuard<WorkspaceGuideResult> = (value): value is WorkspaceGuideResult => workspaceGuideResultGuard(value)
-    && (value.presentationDraft?.revisionMode !== 'art' || artBaseIds.has(value.presentationDraft.baseAssetId!));
+    && (value.presentationDraft?.revisionMode !== 'art' || artBaseIds.has(value.presentationDraft.baseAssetId!))
+    && artFigurePlanMatchesBase(value.presentationDraft);
   // (force rebuild 2026-09-17)
   // Diagnose fixed field names only: rejected user/model text and identifiers must not enter logs.
   const validationDiagnostic = (value: unknown): string => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return 'guide:root_shape';
+    if (workspaceGuideResultGuard(value) && !artFigurePlanMatchesBase(value.presentationDraft))
+      return 'guide:art_figureplan_must_match_base_only_style_id_may_change';
     const shape = value as Record<string, unknown>;
     const issues: string[] = [];
     const textIssue = (field: string, text: unknown, max: number, allowEmpty = false) => {
@@ -662,9 +683,10 @@ export async function workspaceGuideHandler(
           if (Array.isArray(plan)) issues.push('presentation_figureplan_is_array_expected_object_with_figures');
           else if (!plan || typeof plan !== 'object') issues.push('presentation_figureplan_shape');
           else {
+            if (!hasOnlyKeys(plan as Record<string, unknown>, ['figures'])) issues.push('presentation_figureplan_keys');
             const entries = (plan as { figures?: unknown }).figures;
             if (!Array.isArray(entries)) issues.push('presentation_figureplan_figures_missing');
-            else if (entries.length > 12) issues.push(`presentation_figureplan_length_${entries.length}_max_12`);
+            else if (entries.length < 1 || entries.length > 12) issues.push(`presentation_figureplan_length_${entries.length}_expected_1_to_12`);
             else entries.forEach((raw, index) => {
               const prefix = `presentation_figureplan_${index}`;
               if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { issues.push(`${prefix}_shape`); return; }
@@ -751,13 +773,23 @@ export async function workspaceGuideHandler(
       needsMoreInformation: true,
     };
     // The guide selects a route and base; the existing art planner owns the actual design.
-    const artDraft = result.presentationDraft;
+    const { figurePlan: requestedFigurePlan, ...artDraft } = result.presentationDraft;
     const basePlan = planState.find((plan) => plan.id === artDraft.baseAssetId)!;
+    const figurePlan = basePlan.figurePlan ? {
+      figures: basePlan.figurePlan.figures.map(figure => {
+        if (figure.decision !== 're-render' && figure.decision !== 'abstract') return figure;
+        const styleId = requestedFigurePlan
+          ? requestedFigurePlan.figures.find(requested => requested.id === figure.id)?.styleId ?? figure.styleId ?? basePlan.style
+          : artDraft.style ?? figure.styleId;
+        return styleId ? { ...figure, styleId } : figure;
+      }),
+    } : undefined;
     return {
       summary: payload.locale === 'zh' ? `建议按你的原话调整《${basePlan.title}》的视觉表现。确认后会准备新方案，保留原有科学内容。` : `I propose updating the visual treatment of “${basePlan.title}” using your wording. Confirmation will prepare a new plan with its scientific content preserved.`,
       nextSteps: [],
       needsMoreInformation: false,
-      presentationDraft: { ...artDraft, instruction: payload.goal, style: basePlan.style },
+      presentationDraft: { ...artDraft, instruction: payload.goal, style: artDraft.style ?? basePlan.style,
+        ...(figurePlan ? { figurePlan } : {}) },
     };
   }
   if (result.draftChanges) {

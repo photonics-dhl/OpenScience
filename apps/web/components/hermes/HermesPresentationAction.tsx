@@ -8,7 +8,7 @@ import { getHermesDraftStorage, loadHermesPresentationDraft, saveHermesPresentat
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 import { useVersionLabels } from '@/components/research/useVersionLabels';
 
-interface Props { researchObjectId: string; requestedVersionId?: string; intent: { action: PresentationAction; instruction: string; sceneIndex?: number; style?: StoryboardRequest['style']; revisionMode?: 'art'; baseAssetId?: string }; userId?: string; onBack(): void; onSubmitted(url: string): void; submissionRecords?: Map<string, SubmissionIntent>; onBusyChange?(locked: boolean): void; onConfirmationChange?(action: HermesConversationAction | null): void }
+interface Props { researchObjectId: string; requestedVersionId?: string; intent: { action: PresentationAction; instruction: string; sceneIndex?: number; style?: StoryboardRequest['style']; revisionMode?: 'art'; baseAssetId?: string; figurePlan?: StoryboardRequest['figurePlan'] }; userId?: string; onBack(): void; onSubmitted(url: string): void; submissionRecords?: Map<string, SubmissionIntent>; onBusyChange?(locked: boolean): void; onConfirmationChange?(action: HermesConversationAction | null): void }
 const control = 'min-h-11 w-full rounded border border-os-rule-paper bg-os-paper px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink';
 
 export function HermesPresentationAction({ researchObjectId: ro, requestedVersionId, intent, userId, onBack, onSubmitted, submissionRecords, onBusyChange, onConfirmationChange }: Props) {
@@ -22,6 +22,8 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   const [parentId, setParentId] = useState(''); const [scene, setScene] = useState(intent.sceneIndex ?? 0);
   const [updateBrief, setUpdateBrief] = useState(false);
   const [revisionMode, setRevisionMode] = useState<StoryboardRequest['revisionMode']>(intent.revisionMode);
+  const [figurePlan, setFigurePlan] = useState(intent.figurePlan);
+  const intentFigurePlanJson = JSON.stringify(intent.figurePlan);
   const [ready, setReady] = useState(false); const [busy, setBusy] = useState(false); const [uncertain, setUncertain] = useState(false); const [error, setError] = useState('');
   const localRecords = useRef(new Map<string, SubmissionIntent>()); const records = submissionRecords ?? localRecords.current;
   const submissionController = useRef<AbortController | null>(null);
@@ -48,9 +50,9 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   }, [ro, versionId]);
   useEffect(() => {
     const stored = draftScope ? loadHermesPresentationDraft(getHermesDraftStorage(), draftScope) : null;
-    if (stored && !intent.instruction.trim() && !onConfirmationChange) { setAction(stored.action); setInstruction(stored.instruction); setStyle(stored.style); setParentId(stored.parentId); setScene(stored.scene); setUpdateBrief(stored.action === 'storyboard.revise'); setRevisionMode(stored.revisionMode); return; }
-    setAction(intent.action); setInstruction(intent.instruction); setStyle(intent.style ?? 'technical'); setParentId(intent.baseAssetId ?? ''); setScene(intent.sceneIndex ?? 0); setUpdateBrief(false); setRevisionMode(intent.revisionMode);
-  }, [draftScope?.researchObjectId, draftScope?.userId, draftScope?.versionId, intent.action, intent.instruction, intent.sceneIndex, intent.style, intent.revisionMode, intent.baseAssetId, onConfirmationChange]);
+    if (stored && !intent.instruction.trim() && !onConfirmationChange) { setAction(stored.action); setInstruction(stored.instruction); setStyle(stored.style); setParentId(stored.parentId); setScene(stored.scene); setUpdateBrief(stored.action === 'storyboard.revise'); setRevisionMode(stored.revisionMode); setFigurePlan(stored.figurePlan); return; }
+    setAction(intent.action); setInstruction(intent.instruction); setStyle(intent.style ?? 'technical'); setParentId(intent.baseAssetId ?? ''); setScene(intent.sceneIndex ?? 0); setUpdateBrief(false); setRevisionMode(intent.revisionMode); setFigurePlan(intentFigurePlanJson ? JSON.parse(intentFigurePlanJson) as StoryboardRequest['figurePlan'] : undefined);
+  }, [draftScope?.researchObjectId, draftScope?.userId, draftScope?.versionId, intent.action, intent.instruction, intent.sceneIndex, intent.style, intent.revisionMode, intent.baseAssetId, intentFigurePlanJson, onConfirmationChange]);
 
   const version = data?.versions.find((candidate) => candidate.versionId === versionId);
   const canWrite = version?.status === 'draft' && data?.workspace?.status === 'active' && ['owner', 'maintainer', 'author', 'contributor'].includes(data.workspace.role ?? '');
@@ -83,7 +85,7 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   useEffect(() => {
     const record = records.get(requestScope);
     if (!record?.isUncertain || !record.draft) return;
-    setAction(record.draft.action); setInstruction(record.draft.instruction); setStyle(record.draft.style); setParentId(record.draft.parentId); setScene(record.draft.scene); setUpdateBrief(record.draft.updateBrief ?? record.draft.action === 'storyboard.revise'); setRevisionMode(record.draft.revisionMode); setUncertain(true);
+    setAction(record.draft.action); setInstruction(record.draft.instruction); setStyle(record.draft.style); setParentId(record.draft.parentId); setScene(record.draft.scene); setUpdateBrief(record.draft.updateBrief ?? record.draft.action === 'storyboard.revise'); setRevisionMode(record.draft.revisionMode); setFigurePlan(record.draft.figurePlan); setUncertain(true);
   }, [records, requestScope]);
   useEffect(() => () => {
     const record = records.get(requestScope);
@@ -91,17 +93,17 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
     submissionController.current?.abort();
     record.fail(true);
   }, [records, requestScope]);
-  useEffect(() => { if (!uncertainDraft && draftScope) saveHermesPresentationDraft(getHermesDraftStorage(), draftScope, { action, instruction, style, language: locale === 'zh' ? 'zh' : 'en', selected: eligibleClaimIds, parentId, scene, ...(revisionMode ? { revisionMode } : {}) }); }, [action, draftScope, eligibleClaimIds, instruction, locale, parentId, scene, style, revisionMode, uncertainDraft]);
+  useEffect(() => { if (!uncertainDraft && draftScope) saveHermesPresentationDraft(getHermesDraftStorage(), draftScope, { action, instruction, style, language: locale === 'zh' ? 'zh' : 'en', selected: eligibleClaimIds, parentId, scene, ...(revisionMode ? { revisionMode } : {}), ...(figurePlan ? { figurePlan } : {}) }); }, [action, draftScope, eligibleClaimIds, instruction, locale, parentId, scene, style, revisionMode, figurePlan, uncertainDraft]);
 
   async function submit(event?: React.FormEvent) {
     event?.preventDefault();
     if (busy || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)) return;
     const request = replayRequest?.payload ?? (effectiveAction === 'scene.image' ? { storyboardAssetId: parent!.id, sceneIndex: scene }
       : effectiveAction === 'video.create' ? { profile: 'content-driven-v1' as const, storyboardAssetId: parent!.id, sceneImageAssetIds: videoImageIds }
-      : { locale: locale === 'zh' ? 'zh' as const : 'en' as const, style, output: effectiveAction === 'storyboard.revise' ? parent?.storyboard?.output ?? 'image' : action === 'video.create' ? 'video' as const : 'image' as const, instruction: instruction.trim(), ...(effectiveAction === 'storyboard.revise' && parent ? { baseAssetId: parent.id, ...(effectiveRevisionMode ? { revisionMode: effectiveRevisionMode } : {}) } : {}) });
+      : { locale: locale === 'zh' ? 'zh' as const : 'en' as const, style, output: effectiveAction === 'storyboard.revise' ? parent?.storyboard?.output ?? 'image' : action === 'video.create' ? 'video' as const : 'image' as const, instruction: instruction.trim(), ...(figurePlan ? { figurePlan } : {}), ...(effectiveAction === 'storyboard.revise' && parent ? { baseAssetId: parent.id, ...(effectiveRevisionMode ? { revisionMode: effectiveRevisionMode } : {}) } : {}) });
     const record = records.get(requestScope) ?? new SubmissionIntent(); records.set(requestScope, record); const key = record.begin(JSON.stringify([ro, versionId, effectiveAction, sourceIds, request])); if (!key) return;
     if (!record.isUncertain) {
-      record.draft = { action, instruction, style, language: locale === 'zh' ? 'zh' : 'en', selected: [...sourceIds], parentId: parent?.id ?? '', scene, updateBrief, ...(effectiveRevisionMode ? { revisionMode: effectiveRevisionMode } : {}) };
+      record.draft = { action, instruction, style, language: locale === 'zh' ? 'zh' : 'en', selected: [...sourceIds], parentId: parent?.id ?? '', scene, updateBrief, ...(effectiveRevisionMode ? { revisionMode: effectiveRevisionMode } : {}), ...(figurePlan ? { figurePlan } : {}) };
       record.request = { action: effectiveAction, sourceIds: [...sourceIds], payload: request };
     }
     const activeController = new AbortController(); submissionController.current = activeController;
@@ -119,13 +121,32 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
     }
   }
   const confirmationReady = !busy && Boolean(canWrite) && ready && sourcesValid && videoReady && (!needsInstruction || Boolean(instruction.trim())) && (!uncertain || canReplay);
+  const styleLabel = (value: string) => t.has(value) ? t(value) : value;
+  const submittedStyle = replayRequest && 'style' in replayRequest.payload ? replayRequest.payload.style : style;
+  const submittedFigurePlan = replayRequest
+    ? ('figurePlan' in replayRequest.payload ? replayRequest.payload.figurePlan : undefined)
+    : needsInstruction ? figurePlan : undefined;
+  const submittedSceneIndex = replayRequest && 'sceneIndex' in replayRequest.payload ? replayRequest.payload.sceneIndex : scene;
+  const parentFigures = parent?.storyboard?.figurePlan?.figures ?? [];
+  // Match the stored planner order: reused originals precede generated figures.
+  const parentSceneFigure = [...parentFigures.filter(figure => figure.decision === 'reuse'),
+    ...parentFigures.filter(figure => figure.decision === 're-render' || figure.decision === 'abstract')][submittedSceneIndex];
+  const summaryStyle = effectiveAction === 'scene.image' && parent?.storyboard
+    ? parent.storyboard.document.scenes[submittedSceneIndex]?.paperOriginal ? t('reuseOriginal') : styleLabel(parentSceneFigure?.styleId ?? parent.storyboard.style)
+    : styleLabel(!needsInstruction && parent?.storyboard ? parent.storyboard.style : submittedStyle);
+  const figureSummary = submittedFigurePlan ? <ul className="mt-2 space-y-1 text-sm">
+    {submittedFigurePlan.figures.map((figure, index) => <li key={`${index}:${figure.id}`}>
+      {figure.id} · {figure.decision === 'reuse' ? t('reuseOriginal') : figure.decision === 'skip' ? t('skipFigure') : styleLabel(figure.styleId ?? submittedStyle)}
+    </li>)}
+  </ul> : null;
   const latestSubmit = useRef(submit); latestSubmit.current = submit;
   useEffect(() => {
     onConfirmationChange?.({ kind: 'production', ready: confirmationReady, canDismiss: !locked, confirm: () => latestSubmit.current() });
     return () => onConfirmationChange?.(null);
   }, [onConfirmationChange, confirmationReady, requestScope, locked]);
   if (onConfirmationChange) return <div className="hermes-message hermes-message-assistant" data-hermes-presentation-action="true">
-    <p>{tc('productionScope', { kind: t(action === 'video.create' ? 'video' : 'image'), style: t(!needsInstruction && parent?.storyboard ? parent.storyboard.style : style) })}</p>
+    <p>{tc('productionScope', { kind: t(action === 'video.create' ? 'video' : 'image'), style: summaryStyle })}</p>
+    {figureSummary}
     {effectiveAction === 'scene.image' && parent?.storyboard && <p className="mt-2 text-sm">{parent.storyboard.document.title} · {t('scene')} {scene + 1}: {parent.storyboard.document.scenes[scene]?.title}</p>}
     <p className="mt-2 text-sm">{t('charge')}</p>
     <p className="mt-2 text-sm" role="status">{busy ? t('submitting') : !ready ? t('loading') : !canWrite ? t('readOnly') : !sourcesValid ? t('needsEligibleSources') : !videoReady ? t('needsApprovedScenes') : needsInstruction && !instruction.trim() ? tc('needsProductionInstruction') : tc(uncertain ? 'retryProductionInChat' : 'confirmProductionInChat')}</p>
@@ -136,12 +157,13 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   </div>;
   return <section className="min-w-0 rounded-xl bg-os-paper p-4 text-os-ink" data-hermes-presentation-action="true">
     <p className="m-0 text-sm font-semibold">{data?.title ?? t('loading')}</p><p className="mt-1 text-xs text-os-muted-paper">{version ? versionLabels.label(version) : t('chooseVersion')}</p>
-    <p className="hermes-production-summary">{t(action === 'video.create' ? 'video' : 'image')} · {t(style)}</p>
+    <p className="hermes-production-summary">{t(action === 'video.create' ? 'video' : 'image')} · {summaryStyle}</p>
+    {figureSummary}
     {effectiveAction === 'scene.image' && parent?.storyboard && <p className="mt-2 text-sm leading-6">{t('scene')}: {scene + 1}. {parent.storyboard.document.scenes[scene]?.title}</p>}
     <form className="mt-5 space-y-4" onSubmit={submit}><fieldset className="m-0 min-w-0 space-y-4 border-0 p-0" disabled={locked}>
       <details className="hermes-production-settings"><summary>{tc('adjustProduction')}</summary>
       <div className="grid grid-cols-2 gap-2" aria-label={t('mediaIntent')}>{(['image', 'video'] as const).map((kind) => <button key={kind} className={`min-h-11 rounded border px-3 text-sm ${action === 'video.create' === (kind === 'video') ? 'border-os-ink font-semibold' : 'border-os-rule-paper'}`} type="button" onClick={() => { setRevisionMode(undefined); setAction(kind === 'video' ? 'video.create' : parent ? 'scene.image' : 'storyboard.create'); }}>{t(kind)}</button>)}</div>
-      <label className="grid gap-2 text-sm">{t('style')}<select className={control} value={style} onChange={(event) => { setStyle(event.target.value as StoryboardRequest['style']); if ((action === 'scene.image' || action === 'video.create') && parent) setUpdateBrief(true); }}>{(['technical', 'ink', 'watercolor'] as const).map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></label>
+      <label className="grid gap-2 text-sm">{t('style')}<select className={control} value={style} onChange={(event) => { const nextStyle = event.target.value; setStyle(nextStyle); setFigurePlan(plan => plan ? { figures: plan.figures.map(figure => figure.decision === 're-render' || figure.decision === 'abstract' ? { ...figure, styleId: nextStyle } : figure) } : undefined); if ((action === 'scene.image' || action === 'video.create') && parent) setUpdateBrief(true); }}>{[...new Set(['technical', 'editorial', 'watercolor', 'ink', style])].map((value) => <option key={value} value={value}>{styleLabel(value)}</option>)}</select></label>
       <label className="grid gap-2 text-sm">{t('instruction')}<textarea className={`${control} min-h-28`} maxLength={1000} value={instruction} onChange={(event) => { setInstruction(event.target.value); setRevisionMode(undefined); if ((action === 'scene.image' || action === 'video.create') && parent) setUpdateBrief(true); }} /></label>
       {effectiveAction === 'scene.image' && parent?.storyboard ? <label className="grid gap-2 text-sm">{t('scene')}<select className={control} value={scene} onChange={(event) => setScene(Number(event.target.value))}>{parent.storyboard.document.scenes.map((item, index) => <option key={index} value={index}>{index + 1}. {item.title}</option>)}</select></label> : null}
       <details><summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">{t('advanced')}</summary>{parent ? <p className="mt-3 text-xs leading-5 text-os-muted-paper">{t('usingApprovedPlan')}</p> : null}<p className="mt-3 text-xs leading-5 text-os-muted-paper">{t('eligibleSources', { count: selectedClaimIds.length })}</p></details>

@@ -3,7 +3,7 @@
 > **Canonical 交付分支（2026-09-16 用户决定）**：`release/onchip-production-line`。它等于生产线 `311c980f` + 我方 `e86bd39f` 输出窗口修复 + 本文件治理叠加，已部署为生产 `7bf8c5e5`（回滚 `561d738b`；`fa66e89e`/`d3a0da3f` 为历史锚点）。旧 `codex/onchip-video-release` 降级为历史线（缺 journals/学术身份），**不得用于发版**。
 
 ## 会话续作记录（最新在上）
-- **2026-09-20 三类风格修复候选 / 本机联动核查**：用户认可恢复的 Fig. 3，选择先完善学术、编辑封面、淡彩；风格传递与桥标准化恢复候选已保存但未部署/未运行。用户随后转向本机 Codex Web GPT 5.0.8：已登录、尚无模型路由/Full harness 完成证据；它不支持网页生图回收，不能替代服务器桥。精确候选、剩余风险与只读证据见 [本次交接最新节](2026-09-18-figure3-image-and-cleanup-handoff.md)。无新模型请求，Fig. 2 未改。
+- **2026-09-20 Hermes 风格入口续作**：用户确认本机桥可用并要求 Chat 6 Pro 协作；实际 Pro 委派被跨后端加密上下文拒绝，待选择兼容任务，未取得 Pro 答案。候选已补自然语言 art-only 换风格、Web 新风格接收、figurePlan 确认/草稿/提交贯通及论文原图 art 前置阻断，独立 High 定向静态复核未见新阻断，未部署/未生图。详情见 [本次交接最新节](2026-09-18-figure3-image-and-cleanup-handoff.md)；其他交付差额及 Fig. 2 授权状态不变。
 - **2026-09-20 A 恢复完成 → [Figure 3 交接最新节](2026-09-18-figure3-image-and-cleanup-handoff.md)**：原 task `9f7ff671` 的已下载图经恢复 renderer 标准化，原 API retry 后 succeeded，同 ID image 入库 draft；实际站内「概览 → 图解与视频」显示目标待审图，1280×720/486,042 bytes。零新增模型请求，未审批/公开；原失败/原图保留。renderer 更新为 `4a30b091`，应用 release/rollback 不变。用户现已认可此图，产品仍 draft；Fig. 2 五项清理仍未授权。
 - **图片链路修复已实证 + 背景修订成图（2026-09-16 最新）**：`e86bd39f` 的输出窗口修复随 `4099078b` 上线后，此前因 `Provider exhausted output allowance before producing text` 失败的背景修订任务一次通过。底稿 `9a10aeda-7b53-4f88-a4ae-af2ddc3493ab`（已批准）→ 场景图 `803e590b-6fa5-4a32-877c-2c691daabd4d` succeeded/draft，导出 `tmp/research-illustration-academic-bg-rev2-803e590b.png` 并已呈现用户，当时待审（后续 v6 图 `a7488c14` 已获认可，见下）。科学关系、labels、claim/source 均未变，仅动背景与材料。
 - **设计 skill v6：构图法则（2026-09-16）**。根因有二：(a) 加载器此前只把 `SKILL.md` 的 `## Execution` 注入 render 阶段，**构图规则到不了真正写 prompt 的那一步**，而 `bento-grid`（多模块拼版）等 infographic 布局默认可达；(b) 我方"上下分栏＋分隔线＋上下不同底色"的指令本身制造了背景割裂。已改：`references/art-directions.md` 新增「Ground, frame and hierarchy laws」（**单一底色**、**分隔线必须承载真实科学边界否则删除**、单一焦点与阅读顺序、两级文字、中性色需刻意选择且不得同图混用暖底与纯白、目录默认值不等于设计、按栏宽验收）；`SKILL.md` 新增 `## Visual craft` 且被注入 plan/render/**review** 三阶段；版本 5→6（含 provenance）。已部署 `1e43f8b6`。
@@ -42,7 +42,7 @@
 - ac166暴露艺术规划忽略明确封面要求；已装自有Skill v5和同一次末审检查明确艺术要求符合性，保留科学字段，仅修composition/treatment，不新增模型阶段，不把accepted当审美合格。
 - 页面guide99e4f974-985b-4f12-808a-7fa39531ce32三次结构回复均拒绝，旧日志只有nested_fields，具体错误字段未知；原task/版本/原稿资格实读有效。已补原字段诊断、同provider失败JSON修复，日志只固定代码/长度，不加重试/正文存储。此类guide不支持原任务retry，未强改状态。
 - 后续页面guide059f85ae-0f76-43e8-a70b-ebcd3d2d6019结构成功，却扩写出Bessel曲线/零点交点/偶极子/英语标签，并把深墨色当水墨；没有确认，页面已取消待确认安排。真正重复建设断点是guide抢做已有艺术planner的工作。
-- 已收紧art guide为路由：最终instruction直接使用原payload.goal，总结只提议，无附加正文修改/导航，family保持原稿；超过既有1000字符则无动作澄清、不截断。普通修改路径不变。中文水彩词出现不再肯定式覆盖结构化family；英文否定命名风格仍可能加载额外参考，不声称通用否定理解。
+- 已收紧art guide为路由：最终instruction直接使用原payload.goal，总结只提议，无附加正文修改/导航，family原先保持原稿（本轮候选支持明确切换，见顶部）；超过既有1000字符则无动作澄清、不截断。普通修改路径不变。中文水彩词出现不再肯定式覆盖结构化family；英文否定命名风格仍可能加载额外参考，不声称通用否定理解。
 - 7cd又暴露原runner恢复状态复用缺陷：8aa21251的write-once recovery标记被3ee10d6e的recover-late复用时再次写入，造成EEXIST；实存07:17:41Z recovery及07:18:37Z late标记，旧诊断仅page_selection/Error。6a65dc7b已部署严格同canonical/shape/time标记读取，跳过重复reload/write，继续原观察/gallery，保留固定EEXIST/ENOENT及image_result阶段诊断。独立High GO，未重置旧标记；不能据此声称原图已生成。
 
 ## 当前真实执行

@@ -2,6 +2,15 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
+## 2026-09-20 继续：Hermes 风格与逐图计划入口补接
+
+- 用户确认本机桥接启动器已可正常工作，要求与 Chat 6 Pro 合作继续原定三类风格/稳定性任务。接手 canonical HEAD=`a16a0546467d0d0be7dc538e2f2f87900653beca`，根 main=`acd13a71`；两树干净。生产/rollback 沿用 A 恢复记录，本轮尚未部署。
+- 本机现有 `openai_base_url` 已指向 loopback `127.0.0.1:17841/v1`；只读此非秘密配置，没有修改配置或重启。实际以 `chatgpt-web/pro` / `ultra` 请求独立子审查 `chat_pro_style_review`，在跨后端任务交付时收到 `ChatGPT Web cannot read this encrypted cross-backend subagent payload`，桥要求新 Compatibility V1 任务或来自 Web 的受支持明文委派。没有取得 Chat 审查答案，未盲重发，不能写为已与 Pro 完成协作。已询问是否创建独立兼容任务，等待答复；不创建用户未明确要求的新任务。
+- 新增源码断点：`HermesAssistantDrawer.resultFromTask` 不仅 DTO 旧，还运行时拒绝 scientific/editorial；接收结果及 `HermesPresentationReview` / `HermesPresentationAction` 丢失 figurePlan，原草稿类型虽有字段但没有保存/恢复/提交。因此已有 API 实跑不能证明自然语言站内链路可用。
+- 本轮候选沿现有链修复：Web style 类型引用 StoryboardRequest、接收自由 style 并复用既有 figurePlan 校验；逐图计划贯穿确认/草稿恢复/不确定请求回放/最终提交；新增编辑封面选项及中英文名称，未知目录名安全显示，沿用确认及幂等。figurePlan 依赖按内容而非对象引用触发，避免父组件重渲染重置正在编辑的草稿。
+- art-only 仅明确切换风格时采用新 style，调色/排版不指定 style 时保留 base.style 和原逐图风格；明确整组换风格同步覆盖生成图的 styleId。原始科学字段仍由既有 planner 保持。含 paperOriginal 的计划在 guide/Web 资格与 Domain 提交前拒绝 art-only，worker 也保留明确阻断；这是前置报告原有不支持范围，不是交付了论文原图改绘。需要另建 re-render 计划，不能把复用图悄悄变成生成图。
+- 独立 High 首轮发现两处新增差异：模型可改写 art.figurePlan 的非风格字段、确认卡只显示全局风格。已按 base 映射只采纳 styleId 并保持未指定图的旧风格；沿原结构化纠错拒绝错误图 ID/decision/caption，确认卡显示每图实际风格/reuse/skip，不确定重放显示原请求。第二轮发现原 resultGuard 未验证数组元素、scene.image 的原 payload 不带 figurePlan；已补完整结构校验/对应纠错提示、从父方案与原请求 sceneIndex 解析风格。最终独立 High 定向静态复核未见新阻断；此前 a16a0546 的桥恢复/逐图 style 候选审查复用，不重审整个分支。未运行测试、预检、CI、构建、服务探针或新的科研模型/生图请求；没有服务器操作、审批/发布或 Fig. 2 清理。没有新 PNG/审美证据，不能声称三类风格全部验收或零技术债。
+- 待继续：取得兼容任务选择后完成真正的 Chat Pro 协作；再按已授权范围交付代码和桥候选，必要运行观察事前说明且不自动付费生图。真实论文图 reuse、深色图标准化固定暖底的视觉边界、Fig. 2 清理及原 Taskmaster 1/2/4 的差额仍保留。
 ## 2026-09-20 续作：三类风格链路候选与本机 Codex Web GPT 核查
 
 - 用户对恢复的 Fig. 3 回复「没有问题」，随后将目标明确为多风格兼容和稳定运行；选择先完善学术、编辑封面、淡彩三类。本次认可不自动审批/发布资产，不把全部风格或长期稳定性标完成。Fig. 2 五项清理仍未授权。

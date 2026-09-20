@@ -1209,12 +1209,13 @@ export interface WorkspaceGuideResult {
   draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: Partial<Omit<SdfCore, 'schemaVersion'>> };
   presentationDraft?: {
     action: 'storyboard.create' | 'storyboard.revise' | 'scene.image' | 'video.create';
-    style?: 'technical' | 'ink' | 'watercolor';
+    style?: StoryboardRequest['style'];
     instruction: string;
     researchObjectId: string;
     versionId: string;
     revisionMode?: 'art';
     baseAssetId?: string;
+    figurePlan?: StoryboardRequest['figurePlan'];
   };
   writingDraft?: {
     title: string;

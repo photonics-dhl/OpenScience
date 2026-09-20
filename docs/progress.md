@@ -1,7 +1,7 @@
 # CURRENT Progress Window
 
-## 2026-09-20 — 三类风格链路候选与本机联动核查
-- 用户认可 Fig. 3 并选择先完善学术、编辑封面、淡彩。代码候选未部署/未运行；随后按用户要求只读核查本机 Codex Web GPT：启动器已登录，模型路由/Full harness 尚未接通。边界、未决项与证据见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；没有新模型请求或账号切换。
+## 2026-09-20 — Hermes 风格入口补接与 Pro 协作阻塞
+- 用户确认启动器可用并要求 Chat 6 Pro 协作；实际跨后端委派被加密上下文拒绝，待兼容任务选择。候选继续补齐 art-only 换风格、Web 新风格/figurePlan 传递和论文原图 art 前置阻断，尚未部署/运行或新生图。独立审查、精确证据和剩余交付差额只见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 ## 2026-09-20 — 用户选择 A，已恢复 Fig. 3 私有待审图
 - 已恢复 renderer，并沿原任务完成标准化/导入；实际站内入口与图片加载已观察，零新增模型请求、未审批/公开。证据、配置与回退边界见 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md) 链接的最新恢复节；Fig. 2 未改，用户审图与其他交付差额保留。

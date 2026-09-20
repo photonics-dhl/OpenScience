@@ -1,3 +1,5 @@
+import type { StoryboardRequest } from '@/lib/api';
+
 const STORAGE_PREFIX = 'openscience:hermes-draft:';
 
 export interface HermesDraftScope {
@@ -17,7 +19,7 @@ export interface StoredPresentationDraft {
   parentId: string;
   revisionMode?: 'art';
   scene: number;
-  figurePlan?: { figures: Array<{ id: string; decision: 'reuse' | 're-render' | 'abstract' | 'skip'; styleId?: string; caption?: string }> };
+  figurePlan?: StoryboardRequest['figurePlan'];
 }
 
 function key(scope: HermesDraftScope): string {
@@ -47,16 +49,19 @@ export function saveHermesGuideGoal(storage: Storage | null, scope: HermesDraftS
   } catch { return false; }
 }
 
-function isFigurePlanValid(plan: unknown): boolean {
-  if (plan === undefined || plan === null) return true; // optional
-  if (typeof plan !== 'object') return false;
+export function isFigurePlanValid(plan: unknown): plan is StoryboardRequest['figurePlan'] {
+  if (plan === undefined) return true;
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)
+    || Object.keys(plan).some(key => key !== 'figures')) return false;
   const figures = (plan as { figures?: unknown }).figures;
-  if (!Array.isArray(figures) || figures.length > 12) return false;
+  if (!Array.isArray(figures) || figures.length < 1 || figures.length > 12) return false;
   const decisions = new Set(['reuse', 're-render', 'abstract', 'skip']);
-  for (const raw of figures as Array<Record<string, unknown>>) {
-    if (typeof raw.id !== 'string' || !raw.id || raw.id.length > 200) return false;
+  for (const raw of figures) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)
+      || Object.keys(raw).some(key => !['id', 'decision', 'styleId', 'caption'].includes(key))) return false;
+    if (typeof raw.id !== 'string' || !raw.id.trim() || raw.id.length > 200) return false;
     if (typeof raw.decision !== 'string' || !decisions.has(raw.decision)) return false;
-    if (raw.styleId !== undefined && (typeof raw.styleId !== 'string' || !raw.styleId || raw.styleId.length > 100)) return false;
+    if (raw.styleId !== undefined && (typeof raw.styleId !== 'string' || !raw.styleId.trim() || raw.styleId.length > 100)) return false;
     if (raw.caption !== undefined && (typeof raw.caption !== 'string' || raw.caption.length > 200)) return false;
   }
   return true;

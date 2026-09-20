@@ -114,6 +114,8 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
   if (settings.revisionMode === 'art') {
     if (!base || base.output !== 'image' || base.locale !== settings.locale)
       throw new Error('[blocked] Art revision requires a current structured image base in the same language');
+    if (base.document.scenes.some(scene => scene.paperOriginal))
+      throw new Error('[blocked] Reused paper originals cannot be restyled in place; request a re-render plan instead');
     // A supplied plan may change style, never add, remove or replace the base scenes.
     storyboardSceneStyles(settings, base.document.scenes);
   }

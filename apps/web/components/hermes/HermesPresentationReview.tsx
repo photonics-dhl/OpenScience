@@ -24,7 +24,7 @@ export function HermesPresentationReview({ intent, routeResearchObjectId, resear
   const scopedSuggestion = suggestion?.researchObjectId === roId ? suggestion : undefined;
   const version = scopedSuggestion?.versionId ?? (pathRo === roId ? search.get('version') ?? undefined : undefined);
   const actionableIntent = scopedSuggestion ? { action: scopedSuggestion.action, instruction: scopedSuggestion.instruction, style: scopedSuggestion.style,
-    revisionMode: scopedSuggestion.revisionMode, baseAssetId: scopedSuggestion.baseAssetId } : intent;
+    revisionMode: scopedSuggestion.revisionMode, baseAssetId: scopedSuggestion.baseAssetId, figurePlan: scopedSuggestion.figurePlan } : intent;
   const owner = `${roId}:${version ?? ''}`;
   const previousOwner = useRef(owner);
   useEffect(() => {
