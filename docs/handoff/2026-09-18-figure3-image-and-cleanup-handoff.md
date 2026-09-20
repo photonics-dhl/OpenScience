@@ -2,6 +2,13 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
+## 2026-09-21 部署与暂停点
+
+- 本轮应用及独立provider均已成功部署，所有包服务器编译通过，精确release与rollback仅见CURRENT。提交使用[skip ci]，deploy --no-tests/skip-migrate/reuse-unchanged-capability-images，未运行应用测试/预检/CI或本机构建。provider首轮忙锁拒绝无切换；原备份已存，随后只停timer等待当前服务结束再运行既有installer，恢复此前两个timer active，未关闭浏览器或取消任务。
+- 实际公开PDF只有Fig.1，第5页原图及图注已视觉核对并提取，原PDF/页图/裁图/坐标记录在服务器observations/paper-source-20260921与本机tmp/pipeline-*.png；sourceArtifact保持4b94c626，文件hash与原登记一致。后续真实reuse使用Fig.1，不能把生成计划Fig.3当原论文原图。当前未上传产品。
+- 最终重投边界采用图片+Claim+图注身份：说明纠错可合法建立新draft，保留原rejected且需再次人工审核；不采用仅hash永远阻断，因为原拒绝可能是来源说明错配。新增原图审批前图片必须在浏览器解码成功，服务端仍不声称自动像素/来源认证。
+- 一次原始下载错误带会话字段的事件及用户待答选择见CURRENT，未转述秘密。修复后的匿名公开下载已成功；私有产品操作仍暂停，不能称PDF→生成→审图→发布全流程完成。
+
 ## 2026-09-21 CLI合作与产品链路检查点（部署前记录，当前状态只见CURRENT）
 
 - 本轮发生一次日志失误：Playwright request context下载失败的原始异常带会话字段进入工具输出，已告知用户并异步询问退出/重登；等待期间暂停私有站内操作。修复一次性下载脚本为固定错误码和匿名公开PDF fetch，不记录/转述会话内容。已有公開PDF已获取并与原Artifact hash匹配；没有新的论文解析/图片请求。
