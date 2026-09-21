@@ -7,7 +7,7 @@ import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@opensci
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, readInitialSciencePlanningRetryChain, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, readInitialSciencePlanningRetryChain, requirePixelPlanningPreProviderRearm, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
@@ -490,6 +490,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       ? await readNarrativePixelReplanAuthority(deps.prisma, { runId: payload.hermesRunAuthority.runId, actorId: scope.userId }) : null;
     const pixelRecovery = pixelAuthority ? { receiptId: pixelAuthority.receipt.id,
       claimContent: pixelAuthority.metadata.claimContent, narrativeSourceIdentity: pixelAuthority.metadata.narrativeSourceIdentity } : undefined;
+    let pixelPlanningRearm: Awaited<ReturnType<typeof requirePixelPlanningPreProviderRearm>> | undefined;
     if (pixelAuthority && (pixelAuthority.task.id !== task.id || !isDeepStrictEqual(pixelAuthority.payload, payload)
       || pixelAuthority.baseIdentity !== planningContext.identity)) throw new Error('[blocked] Narrative scientific revision task changed');
     if (pixelRecovery && (pixelRecovery.claimContent !== presentationClaimContent(claims)
@@ -510,6 +511,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         || presentationClaimContent(currentClaims as PresentationClaim[]) !== pixelRecovery.claimContent
         || (await readStoryboardPlanningContext(tx, payload, scope.userId)).identity !== planningContext.identity)
         throw new Error('[blocked] Narrative pixel-feedback recovery changed before planning or review');
+      if (pixelPlanningRearm && !isDeepStrictEqual(await requirePixelPlanningPreProviderRearm(tx, authority!), pixelPlanningRearm))
+        throw new Error('[blocked] Narrative pre-provider planning receipt changed');
       await requireUnchangedEvidence(tx);
       await requireIllustrationOriginalArtifacts(tx, sourceEvidence, researchObject.workspaceId);
     };
@@ -844,7 +847,12 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 3 }) : [];
             const receipt = receipts.at(-1)?.metadata as Record<string, unknown> | undefined;
             const initialRecovery = ['initial_science_thinking_exhausted', 'initial_science_schema_exhausted'].includes(String(receipt?.planningFailureClass));
-            if (initialRecovery) {
+            if (receipt?.planningFailureClass === 'pixel_storyboard_pre_provider_rearm') {
+              if (!pixelAuthority || task.executionAttempt !== 2 || owner.retryCount !== 1 || owner.result !== null
+                || await deps.prisma.auditLog.count({ where: { requestId: task.id, action: 'ai.gateway.call' } }) !== 0)
+                throw new Error('[blocked] Narrative pre-provider planning recovery was already submitted');
+              pixelPlanningRearm = await requirePixelPlanningPreProviderRearm(deps.prisma, pixelAuthority);
+            } else if (initialRecovery) {
               if (![2, 3].includes(task.executionAttempt) || owner.retryCount !== task.executionAttempt - 1 || owner.result !== null
                 || !narrativeSource || identity.baseIdentity !== null || base || planningContext.revision || planningContext.imageRevision
                 || payload.storyboard.revisionMode || payload.storyboard.revisionTaskId || payload.storyboard.revisionImageAssetId
@@ -873,7 +881,6 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
                   || (beforePlanning ? current.owner.result !== null : !isDeepStrictEqual(current.owner.result, expectedResult))
                   || !isDeepStrictEqual(current.owner.payload, owner.payload) || !isDeepStrictEqual(current.payload, payload)
                   || !isDeepStrictEqual(chain, recovery) || run?.maxAgentTasks !== 9 || run.status !== 'generating_storyboard'
-                  || current.owner.session.researchObject?.visibility === 'public'
                   || currentClaims.length !== payload.sourceClaimIds.length || currentClaims.some(claim => claim.extractionStatus !== 'succeeded')
                   || presentationClaimContent(currentClaims as PresentationClaim[]) !== identity.claimContent
                   || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) {

@@ -187,7 +187,8 @@ function evaluateAgentTaskRetryEligibility(
     return { authorityValid: true, canRetry: typeof payload.manuscriptText === 'string' && Boolean(payload.manuscriptText.trim()) && !('artifactId' in payload) };
   }
   if (task.kind === 'presentation.generate') {
-    return { authorityValid: true, canRetry: true };
+    // Managed runs must restore their task, step and run together through retry-generation.
+    return { authorityValid: true, canRetry: !('hermesRunAuthority' in payload) };
   }
   if (task.kind !== 'source.retrieve' || payload.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
     return { authorityValid: true, canRetry: false };

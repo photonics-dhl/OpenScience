@@ -134,7 +134,7 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
         || ('baseAssetId' in v && (typeof v.baseAssetId !== 'string' || !uuid.test(v.baseAssetId)))
         || ('revisionTaskId' in v && (typeof v.revisionTaskId !== 'string' || !uuid.test(v.revisionTaskId) || v.output !== 'image' || 'baseAssetId' in v))
         || ('revisionImageAssetId' in v && (typeof v.revisionImageAssetId !== 'string' || !uuid.test(v.revisionImageAssetId)
-            || v.output !== 'image' || v.narrative !== true || v.narrativeSceneLimit !== 1
+            || v.output !== 'image' || v.narrative !== true || !('narrativeSceneLimit' in v)
             || ['baseAssetId', 'revisionTaskId', 'revisionMode', 'figurePlan'].some(key => key in v)))
         || ('revisionMode' in v && (v.revisionMode !== 'art' || v.output !== 'image' || !v.baseAssetId || 'revisionTaskId' in v))
         || ('output' in v && v.output !== 'image' && v.output !== 'video')
