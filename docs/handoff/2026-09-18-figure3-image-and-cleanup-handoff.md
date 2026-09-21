@@ -22,6 +22,8 @@
 - 第三篇增量High PASS：按actorId+metadata.taskId限定连续planning回执，已消费audit IDs/时间分组、原provider、source/payload身份及最多exec3均保留；remainingImageTasks由原payload取值，真实receipt为5，不固定6。真实唯一477aa866回执和最新3次65K/stop/primary调用已定向读回，tmp/third-paper-planning-receipts-read-20260922.json保留。planner来源反馈也High PASS。Generic旧approved sibling退役修复High PASS；blocked-plan显式续接仍在实现/审查。
 - Generic P2实现冻结tmp/pixel-plan-revision-review-20260922，增量p2-and-receipt-scope.patch；历史回执与当前authority分开、原revisionTaskId还原上下文，正式blocked后stopped，显式+1计划/原N图预留不变、最多两级、每阶段及末审primary-only，独立High只审本增量。定向读取原两run仍stoppedv13/failedv11，无pending/running步骤；未发模型。
 - P2最终增量独立High PASS：历史/当前authority、两级revision、仅追加1plan/继承N图、每阶段primary-only、幂等/CAS/outbox以及少于N场景处理均闭合；P1再确认保留。所有候选已完成静态审查，准备正常服务器build/start；无测试/预检/CI。
+- 86a8正常服务器build/start exit0，release/rollback读回86a8/5b44、journal及真实.release-failed均absent；无测试/迁移/receiver更新。初次额外只读误用.rollback-release-id得到不存在，第二次读对.rollback-id但STDIN尾CR导致最后空行exit127；所需marker已读，独立正确failed路径再读exit0，不误报部署失败。日志/opt/openscience/observations/deploy-86a8f871-20260922.log。
+- 第三篇22:05:22Z原按钮恢复HTTP202/runv12，同a4c exec3/retry2在途，新/jobs/third-paper-science-schema-resume-20260922.json已消费。第二篇原恢复writer在提交前RECOVERY_CHANGED保护停止，未生成收据/未POST；GET无canRetry。定向readNarrativePixelReplanSource返回valid/full4，RO draft但visibility public（已有v1），当前Version draft且publicVersionId/publicationNo均null；新root/P2 eligibility误把父RO可见性当当前Version发布状态，两行修复High PASS：当前draft/无公开编号、会员写权限/来源/CAS及原public researchRecord冻结仍保护。
 - 第一篇已公开v3不变；后两篇仍私有。上述结果覆盖下节较早“尚未完成”的记录；一次性writer均不可重放。
 
 ## 2026-09-22 第二篇设计与第三篇分窗的定向取证（历史过程）

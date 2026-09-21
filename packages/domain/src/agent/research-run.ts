@@ -381,7 +381,7 @@ async function inspectNarrativePixelReplan(tx: Prisma.TransactionClient, run: Ru
   const version = await tx.version.findUnique({ where: { id: run.versionId } });
   const storyboards = run.steps.filter(step => step.stage === 'storyboard'); const step = storyboards[0];
   const images = run.steps.filter(item => item.stage === 'scene_image').sort((a, b) => a.ordinal - b.ordinal);
-  if (!ro || ro.deletedAt || ro.status !== 'draft' || ro.visibility === 'public'
+  if (!ro || ro.deletedAt || ro.status !== 'draft'
     || !version || version.status !== 'draft' || version.publicVersionId || version.publicationNo
     || storyboards.length !== 1 || !step?.agentTaskId || step.presentationAssetId !== step.agentTaskId
     || step.status !== 'succeeded' || images.length < 1 || images.length > 6
@@ -423,7 +423,7 @@ async function inspectNarrativePixelPlanRevision(tx: Prisma.TransactionClient, r
   const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
   const version = await tx.version.findUnique({ where: { id: run.versionId } });
   const images = run.steps.filter(step => step.stage === 'scene_image').sort((a, b) => a.ordinal - b.ordinal);
-  if (!ro || ro.deletedAt || ro.status !== 'draft' || ro.visibility === 'public' || !version || version.status !== 'draft'
+  if (!ro || ro.deletedAt || ro.status !== 'draft' || !version || version.status !== 'draft'
     || version.publicVersionId || version.publicationNo || images.length !== pixel.sceneLimit
     || images.some((step, index) => step.ordinal !== index || step.status !== 'stopped'
       || step.agentTaskId !== pixel.sceneReviews[index]!.taskId || step.presentationAssetId !== pixel.sceneReviews[index]!.imageId)

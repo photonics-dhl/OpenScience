@@ -13,7 +13,7 @@
 
 2026-09-20 历史续作：三类风格逐图选择、场景/科学符号、下载后恢复及 Hermes figurePlan 确认/草稿/提交已接线部署；真实原图 reuse、深色标准化边界、新风格页面确认/异常恢复仍未实证。既有 Pro 文本审查与 Windows 206 缓解/防复发规则保持。用户现已授权独立本机桥修复与测试，`infra/development-platform/codex-chatgpt-web/` 保存委派/压缩续接候选：117+6 项回归、类型检查与 CLI 构建通过，High 复核完成；共享桥繁忙且单文件替换会被 launcher 原包校验恢复，尚未安装，完整 Full 未交付。CLI 网络受限与桌面委派识别是不同故障层，另一会话负责账户/网络修正；不改变沙箱边界。真实生图仍由服务器 image provider 执行，本机桥不支持聊天内生图。证据、安装约束与未结项见 [本次交接最新节](../handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)，版本唯一见 CURRENT。
 
-2026-09-22候选补接：全叙事science默认65K与worker独立maintenance已High PASS；原多图像素反馈返工、旧approved图退役和规划source绑定诊断/同task恢复已修，后续blocked-plan显式续接也获High PASS。全部尚未部署。第二篇真实四图均被6Pro科学拒收，第三篇全文已成功但设计source binding失败；不能把模型正文返回或候选提交视为成品通过。精确状态仍只见CURRENT。
+2026-09-22补接：全叙事65K、独立maintenance、多图像素反馈返工、blocked-plan续接及初始来源绑定/同task恢复均High PASS并部署。第三篇原按钮实际202恢复exec3；第二篇出现父RO公开历史误挡当前draft的visibility条件，正做两行修复，未提交新模型。完整科学结果与发布仍未完成，状态只见CURRENT。
 
 本页是定位入口，不是自动能力注册器。仅阅读与任务匹配的行，再读取调用代码与已有任务记录。**当前版本/暂停状态唯一锚点：[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)**；资源/缓存/安装入口见[服务器清单](server-capabilities.md)。需求来源是最新用户纠正及[需求基线](../OpenScience_Kimi_Development_Spec.md)。没有任何工具保证对整个产品的绝对掌控；未知状态要可见、可定位。
 
