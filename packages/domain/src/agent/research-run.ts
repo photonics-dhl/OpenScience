@@ -11,7 +11,7 @@ import { ensureHermesIngestionReview, materializeHermesIngestion, recoverHermesS
 import { inspectHermesSourceReviewRecovery } from '../ingestion/source-review-recovery';
 import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE } from '../assets/video';
-import { HERMES_IMAGE_RENDER_RECOVERY_ACTION, parsePresentationGenerationPayload, readNarrativeImageRenderSource, readNarrativeImageReplanSource, readStoppedStoryboardImageRevision, requireHermesImageRenderRecoveryAuthority, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
+import { HERMES_IMAGE_RENDER_RECOVERY_ACTION, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION, parsePresentationGenerationPayload, readNarrativeImageRenderSource, readNarrativeImageReplanSource, readNarrativePixelReplanSource, readNarrativePixelReplanAuthority, readNarrativePixelBlockedPlan, readStoppedStoryboardImageRevision, requireHermesImageRenderRecoveryAuthority, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
 import { parseStoryboardDocument, presentationStoryboardView } from '../assets/storyboard';
 import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew } from '../assets/scene-image';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
@@ -93,7 +93,7 @@ export interface HermesResearchRunView {
   canRetryGeneration?: boolean;
   canAuthorizeNarrativeCorrection?: boolean;
   chargeableAttempts?: number;
-  generationRecovery?: 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render';
+  generationRecovery?: 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render' | 'narrative-scientific-replan';
   availableImageCount?: number;
   imageUsageLimited?: boolean;
   steps: Array<{
@@ -328,6 +328,19 @@ export async function getHermesResearchRun(
     view.generationRecovery = 'image-render';
     view.chargeableAttempts = 1;
   }
+  const pixelReplan = WRITE_ROLES.has(authority.membership.role)
+    ? await inspectNarrativePixelReplan(deps.prisma, run).catch(() => null) : null;
+  if (pixelReplan) {
+    view.canRetryGeneration = true; view.canAuthorizeNarrativeCorrection = false;
+    view.generationRecovery = 'narrative-scientific-replan';
+    view.chargeableAttempts = 1 + pixelReplan.source.images.length;
+  }
+  const pixelPlanRevision = WRITE_ROLES.has(authority.membership.role)
+    ? await inspectNarrativePixelPlanRevision(deps.prisma, run).catch(() => null) : null;
+  if (pixelPlanRevision) {
+    view.canRetryGeneration = true; view.canAuthorizeNarrativeCorrection = false;
+    view.generationRecovery = 'narrative-scientific-replan'; view.chargeableAttempts = 1;
+  }
   const imageSteps = run.steps.filter(step => step.stage === 'scene_image' && step.agentTaskId);
   if (run.versionId && imageSteps.length) {
     const assets = await deps.prisma.presentationAsset.findMany({ where: {
@@ -359,6 +372,92 @@ const NARRATIVE_BLOCKED_REVISION = 'narrative_storyboard_scientific_revision';
 const NARRATIVE_ACCEPTED_IMAGE_REPLAN = 'narrative_accepted_image_scientific_replan';
 const STORYBOARD_PLANNING_RETRY = 'storyboard_planning_retry';
 const IMAGE_RENDER_ELIGIBILITY = Symbol('image-render-eligibility');
+const PIXEL_REPLAN_ELIGIBILITY = Symbol('pixel-replan-eligibility');
+
+async function inspectNarrativePixelReplan(tx: Prisma.TransactionClient, run: RunRow) {
+  if (run.profile !== VISUAL_NARRATIVE_PROFILE || run.status !== 'stopped' || run.error !== NARRATIVE_CORRECTION_STOP
+    || !run.versionId || await validateReviewedSources(tx, run) !== 'ready') return null;
+  const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+  const version = await tx.version.findUnique({ where: { id: run.versionId } });
+  const storyboards = run.steps.filter(step => step.stage === 'storyboard'); const step = storyboards[0];
+  const images = run.steps.filter(item => item.stage === 'scene_image').sort((a, b) => a.ordinal - b.ordinal);
+  if (!ro || ro.deletedAt || ro.status !== 'draft' || ro.visibility === 'public'
+    || !version || version.status !== 'draft' || version.publicVersionId || version.publicationNo
+    || storyboards.length !== 1 || !step?.agentTaskId || step.presentationAssetId !== step.agentTaskId
+    || step.status !== 'succeeded' || images.length < 1 || images.length > 6
+    || images.some((image, index) => image.ordinal !== index || image.status !== 'stopped'
+      || !image.agentTaskId || image.presentationAssetId !== image.agentTaskId)
+    || run.steps.some(item => !['source_ingestion', 'source_composition', 'source_review', 'storyboard', 'scene_image'].includes(item.stage))
+    || await tx.agentTask.count({ where: { OR: [{ id: { in: run.steps.flatMap(item => item.agentTaskId ? [item.agentTaskId] : []) } },
+      { payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } }], status: { in: ['pending', 'running'] } } }) !== 0
+    || await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run', targetId: run.id,
+      AND: [{ metadata: { path: ['correction'], equals: NARRATIVE_PIXEL_REPLAN } },
+        { metadata: { path: ['parentStoryboardAssetId'], equals: step.agentTaskId } }] } })) return null;
+  const source = await readNarrativePixelReplanSource(tx, { actorId: run.actorId, runId: run.id,
+    researchObjectId: run.researchObjectId, versionId: run.versionId, sourceClaimIds: run.sourceClaimIds,
+    parentAssetId: step.agentTaskId, imageAssetIds: images.map(image => image.agentTaskId!) });
+  const checkpoint = jsonRecord(jsonRecord(source.task.result).storyboardCheckpoint);
+  if (!isDeepStrictEqual(checkpoint.payload, source.task.payload)
+    || checkpoint.sourceEvidenceIdentity !== source.sourceEvidenceIdentity
+    || !await readUnchangedNarrativeCheckpointEvidence(tx, run, checkpoint)) return null;
+  const existingTaskCount = await tx.agentTask.count({ where: { kind: 'presentation.generate',
+    payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } })
+    + run.steps.filter(item => ['source_composition', 'source_review'].includes(item.stage)).length;
+  if (!Number.isSafeInteger(run.maxAgentTasks) || existingTaskCount > run.maxAgentTasks!) return null;
+  const { revisionTaskId: _task, revisionImageAssetId: _image, baseAssetId: _base, revisionMode: _mode, ...settings } = source.payload.storyboard!;
+  return { [PIXEL_REPLAN_ELIGIBILITY]: true as const, runId: run.id, source, checkpoint,
+    replacesTaskId: source.task.id,
+    previousMaxAgentTasks: run.maxAgentTasks!, existingTaskCount,
+    maxAgentTasks: run.maxAgentTasks! + 1 + source.images.length,
+    payload: { ...source.payload, storyboard: { ...settings, revisionImageAssetId: source.image.id,
+      narrativeSceneLimit: source.images.length } } };
+}
+
+/** A user may revise one saved scientific rejection without renewing the root's image allowance. */
+async function inspectNarrativePixelPlanRevision(tx: Prisma.TransactionClient, run: RunRow) {
+  if (run.profile !== VISUAL_NARRATIVE_PROFILE || run.status !== 'stopped' || !run.versionId
+    || !run.error?.startsWith('[blocked] Illustration needs upstream scientific revision: ')
+    || await validateReviewedSources(tx, run) !== 'ready') return null;
+  const pixel = await readNarrativePixelReplanAuthority(tx, { runId: run.id, actorId: run.actorId });
+  if (!pixel || pixel.depth >= 2 || pixel.task.error !== run.error || pixel.step.status !== 'stopped' || pixel.step.presentationAssetId) return null;
+  const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+  const version = await tx.version.findUnique({ where: { id: run.versionId } });
+  const images = run.steps.filter(step => step.stage === 'scene_image').sort((a, b) => a.ordinal - b.ordinal);
+  if (!ro || ro.deletedAt || ro.status !== 'draft' || ro.visibility === 'public' || !version || version.status !== 'draft'
+    || version.publicVersionId || version.publicationNo || images.length !== pixel.sceneLimit
+    || images.some((step, index) => step.ordinal !== index || step.status !== 'stopped'
+      || step.agentTaskId !== pixel.sceneReviews[index]!.taskId || step.presentationAssetId !== pixel.sceneReviews[index]!.imageId)
+    || await tx.presentationAsset.findUnique({ where: { id: pixel.task.id }, select: { id: true } })
+    || await tx.agentTask.count({ where: { OR: [{ id: { in: run.steps.flatMap(step => step.agentTaskId ? [step.agentTaskId] : []) } },
+      { payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } }], status: { in: ['pending', 'running'] } } }) !== 0
+    || await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run',
+      targetId: run.id, metadata: { path: ['previousReceiptId'], equals: pixel.receipt.id } } })) return null;
+  const source = await readNarrativePixelReplanSource(tx, { actorId: run.actorId, runId: run.id,
+    researchObjectId: run.researchObjectId, versionId: run.versionId, sourceClaimIds: run.sourceClaimIds,
+    parentAssetId: String(pixel.metadata.parentStoryboardAssetId), imageAssetIds: pixel.sceneReviews.map(scene => String(scene.imageId)) });
+  if (source.identity !== pixel.metadata.sourceIdentity) return null;
+  const failed = readNarrativePixelBlockedPlan(pixel);
+  const evidence = await readUnchangedNarrativeCheckpointEvidence(tx, run, failed.checkpoint);
+  if (!evidence) return null;
+  for (const [index, raw] of (failed.review.issues as unknown[]).entries()) {
+    const issue = jsonRecord(raw); const scene = typeof issue.sceneIndex === 'number' ? failed.document.scenes[issue.sceneIndex] : undefined;
+    if (issue.id !== `issue-${index + 1}` || !Number.isInteger(issue.sceneIndex) || !scene
+      || !['requires_replan', 'label_clarification'].includes(String(issue.kind))
+      || typeof issue.requiredMeaning !== 'string' || !issue.requiredMeaning.trim() || issue.requiredMeaning.length > 500
+      || !Array.isArray(issue.sources) || issue.sources.length > 8
+      || issue.sources.some(rawSource => { const item = jsonRecord(rawSource); return !evidence.some(row => row.id === item.evidenceId && row.claimId === item.claimId); })
+      || (issue.kind === 'requires_replan' ? issue.labelIndex !== null : !Number.isInteger(issue.labelIndex)
+        || typeof scene.illustration?.labels[Number(issue.labelIndex)] !== 'string' || !issue.sources.length)) return null;
+  }
+  const existingTaskCount = await tx.agentTask.count({ where: { kind: 'presentation.generate',
+    payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } })
+    + run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
+  if (existingTaskCount !== Number(pixel.metadata.existingTaskCount) + pixel.depth + 1) return null;
+  const { revisionTaskId: _task, revisionImageAssetId: _image, baseAssetId: _base, revisionMode: _mode, ...settings } = pixel.payload.storyboard!;
+  return { [PIXEL_REPLAN_ELIGIBILITY]: true as const, runId: run.id, pixel, failed, existingTaskCount,
+    replacesTaskId: pixel.task.id, previousMaxAgentTasks: run.maxAgentTasks!, maxAgentTasks: run.maxAgentTasks! + 1,
+    payload: { ...pixel.payload, storyboard: { ...settings, revisionTaskId: pixel.task.id } } };
+}
 
 /** One explicit extra render of a rejected original; revisions never receive another generation. */
 async function inspectNarrativeImageRenderRecovery(tx: Prisma.TransactionClient, run: RunRow) {
@@ -386,12 +485,81 @@ async function inspectNarrativeImageRenderRecovery(tx: Prisma.TransactionClient,
     existingTaskCount: taskCount, step, source };
 }
 
+type InitialScienceFailureClass = 'initial_science_thinking_exhausted' | 'initial_science_schema_exhausted';
+const INITIAL_SCIENCE_ERRORS: Record<InitialScienceFailureClass, string> = {
+  initial_science_thinking_exhausted: 'Provider exhausted output allowance before producing text',
+  initial_science_schema_exhausted: '结构化输出超过重试上限',
+};
+
+function initialScienceCallsMatch(calls: Array<{ actorId: string | null; targetType: string | null; metadata: Prisma.JsonValue }>, failureClass: InitialScienceFailureClass) {
+  const thinking = failureClass === 'initial_science_thinking_exhausted';
+  const first = jsonRecord(calls[0]?.metadata);
+  return calls.length === (thinking ? 2 : 3) && calls.every((call, index) => {
+    const meta = jsonRecord(call.metadata); const blocks = jsonRecord(meta.responseBlockCounts);
+    const tokens = thinking ? (index === 0 ? 16384 : 32768) : 65536;
+    return call.actorId === null && call.targetType === 'ai_gateway' && meta.operation === 'text'
+      && meta.fallbackReason === null && meta.retryCount === 0 && meta.requestedThinking === 'adaptive'
+      && meta.maxOutputTokens === tokens && typeof meta.provider === 'string' && Boolean(meta.provider)
+      && typeof meta.model === 'string' && Boolean(meta.model) && meta.provider === first.provider && meta.model === first.model
+      && typeof meta.promptHash === 'string' && /^[a-f0-9]{64}$/.test(meta.promptHash)
+      && (thinking ? meta.outcome === 'failed' && meta.error === 'provider_empty' && meta.finishReason === 'length'
+        && meta.outputTokens === tokens && meta.promptHash === first.promptHash && blocks.text === 0 && blocks.other === 0
+        && typeof blocks.thinking === 'number' && Number.isSafeInteger(blocks.thinking) && blocks.thinking > 0
+        : meta.outcome === 'succeeded' && meta.error === null && meta.finishReason === 'stop');
+  });
+}
+
+/** Shared by the retry transaction and worker: only a continuous same-source initial-planning chain is authority. */
+export async function readInitialSciencePlanningRetryChain(prisma: Pick<Prisma.TransactionClient, 'auditLog'>, input: {
+  runId: string; actorId: string; taskId: string; retryCount: number; taskPayload: unknown;
+  sourceEvidenceIdentity: string; claimContent: string; narrativeSourceIdentity: string; remainingImageTasks: number;
+}) {
+  const receipts = await prisma.auditLog.findMany({ where: { action: 'hermes.research_run.generation_retry',
+    targetType: 'hermes_research_run', targetId: input.runId, actorId: input.actorId,
+    metadata: { path: ['taskId'], equals: input.taskId } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 3 });
+  if (!Number.isSafeInteger(input.retryCount) || input.retryCount < 0 || input.retryCount > 2 || receipts.length !== input.retryCount)
+    throw new Error('[blocked] Initial science recovery receipt count changed');
+  const calls = await prisma.auditLog.findMany({ where: { requestId: input.taskId, action: 'ai.gateway.call' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+  const consumedAuditIds = new Set<string>();
+  const chain = [];
+  for (const [index, receipt] of receipts.entries()) {
+    const meta = jsonRecord(receipt.metadata);
+    const failureClass = meta.planningFailureClass as InitialScienceFailureClass;
+    const auditIds = meta.planningAuditIds;
+    if (receipt.actorId !== input.actorId || meta.correction !== STORYBOARD_PLANNING_RETRY || meta.taskId !== input.taskId
+      || !['initial_science_thinking_exhausted', 'initial_science_schema_exhausted'].includes(failureClass)
+      || (index > 0 && failureClass !== 'initial_science_schema_exhausted')
+      || meta.previousExecutionAttempt !== index + 1 || meta.previousRetryCount !== index
+      || (index === 0 ? meta.previousReceiptId != null : meta.previousReceiptId !== receipts[index - 1]!.id)
+      || meta.previousError !== INITIAL_SCIENCE_ERRORS[failureClass] || meta.baseIdentity !== null
+      || !isDeepStrictEqual(meta.taskPayload, input.taskPayload) || meta.sourceEvidenceIdentity !== input.sourceEvidenceIdentity
+      || meta.claimContent !== input.claimContent || meta.narrativeSourceIdentity !== input.narrativeSourceIdentity
+      || meta.remainingImageTasks !== input.remainingImageTasks || meta.chargeableAttempts !== 1 || meta.newTaskCount !== 0
+      || meta.noProviderSwitch !== true || !Array.isArray(auditIds)
+      || auditIds.some(id => typeof id !== 'string' || consumedAuditIds.has(id)) || new Set(auditIds).size !== auditIds.length)
+      throw new Error('[blocked] Initial science recovery receipt identity changed');
+    const bound = calls.filter(call => auditIds.includes(call.id));
+    if (bound.length !== auditIds.length || !initialScienceCallsMatch(bound, failureClass)
+      || bound.some(call => call.createdAt > receipt.createdAt || (index > 0 && call.createdAt <= receipts[index - 1]!.createdAt))
+      || (calls[0] && bound.some(call => jsonRecord(call.metadata).provider !== jsonRecord(calls[0]!.metadata).provider
+        || jsonRecord(call.metadata).model !== jsonRecord(calls[0]!.metadata).model)))
+      throw new Error('[blocked] Initial science recovery provider evidence changed');
+    auditIds.forEach(id => consumedAuditIds.add(id as string));
+    chain.push({ id: receipt.id, createdAt: receipt.createdAt, metadata: meta, failureClass });
+  }
+  return { receipts: chain, consumedAuditIds: [...consumedAuditIds] };
+}
+
 /** Explicitly repeat one failed planning execution; logical task and image allowance stay intact. */
 async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run: RunRow) {
   const initialThinkingFailure = run.status === 'failed' && run.maxAgentTasks === 9
     && run.error === 'Provider exhausted output allowance before producing text';
+  const initialSchemaFailure = run.status === 'failed' && run.maxAgentTasks === 9
+    && run.error === INITIAL_SCIENCE_ERRORS.initial_science_schema_exhausted;
+  const initialFailure = initialThinkingFailure || initialSchemaFailure;
   if (run.profile !== VISUAL_NARRATIVE_PROFILE || !validGrant(run) || !run.versionId
-    || (!initialThinkingFailure && (run.status !== 'stopped' || run.error !== '结构化输出超过重试上限'))
+    || (!initialFailure && (run.status !== 'stopped' || run.error !== '结构化输出超过重试上限'))
     || await validateReviewedSources(tx, run) !== 'ready') return null;
   const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
   const storyboards = run.steps.filter(step => step.stage === 'storyboard');
@@ -400,14 +568,15 @@ async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run
     || step.ordinal !== 0 || !['stopped', 'failed'].includes(step.status) || step.presentationAssetId) return null;
   const task = await tx.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } });
   if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'failed'
-    || task.executionAttempt !== 1 || task.retryCount !== 0 || task.result !== null || task.error !== run.error
+    || (initialSchemaFailure ? ![1, 2].includes(task.executionAttempt) || task.retryCount !== task.executionAttempt - 1
+      : task.executionAttempt !== 1 || task.retryCount !== 0) || task.result !== null || task.error !== run.error
     || task.session.deletedAt || task.session.status !== 'active' || task.session.userId !== run.actorId
     || task.session.researchObjectId !== run.researchObjectId) return null;
   let payload: PresentationGenerationPayload;
   try { payload = parsePresentationGenerationPayload(task.payload); } catch { return null; }
   if (payload.researchObjectId !== run.researchObjectId || payload.versionId !== run.versionId
     || payload.kind !== 'interactive_html' || !payload.storyboard?.narrative || payload.storyboard.output !== 'image'
-    || (!initialThinkingFailure && (!payload.storyboard.revisionImageAssetId || payload.storyboard.narrativeSceneLimit !== 1))
+    || (!initialFailure && (!payload.storyboard.revisionImageAssetId || payload.storyboard.narrativeSceneLimit !== 1))
     || payload.storyboard.revisionTaskId || payload.storyboard.baseAssetId
     || !isDeepStrictEqual(payload.sourceClaimIds, run.sourceClaimIds)
     || !isDeepStrictEqual(payload.hermesRunAuthority, { runId: run.id, stage: 'storyboard', ordinal: 0, profile: run.profile })) return null;
@@ -415,16 +584,16 @@ async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run
     payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } }, select: { id: true, status: true } });
   const sourceCount = run.steps.filter(item => ['source_composition', 'source_review'].includes(item.stage)).length;
   if (presentations.some(item => ['pending', 'running'].includes(item.status))
-    || (!initialThinkingFailure && sourceCount + presentations.length + 1 !== run.maxAgentTasks)
+    || (!initialFailure && sourceCount + presentations.length + 1 !== run.maxAgentTasks)
     || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) return null;
   const calls = await tx.auditLog.findMany({ where: { requestId: task.id, action: 'ai.gateway.call' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
   if (!calls.length || calls.some(call => { const meta = jsonRecord(call.metadata);
     return meta.operation !== 'text' || !['succeeded', 'failed'].includes(String(meta.outcome))
       || meta.fallbackReason !== null || (meta.outcome === 'failed' && meta.error !== 'provider_empty');
   }) || new Set(calls.map(call => jsonRecord(call.metadata).provider)).size !== 1
-    || await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry',
-      targetType: 'hermes_research_run', targetId: run.id, metadata: { path: ['taskId'], equals: task.id } } })) return null;
-  if (initialThinkingFailure) {
+    || (!initialFailure && await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry',
+      targetType: 'hermes_research_run', targetId: run.id, metadata: { path: ['taskId'], equals: task.id } } }))) return null;
+  if (initialFailure) {
     if (step.status !== 'failed' || step.error !== run.error || task.idempotencyKey !== `hermes-run:${run.id}:storyboard:0`
       || presentations.length !== 1 || presentations[0]!.id !== task.id
       || run.steps.filter(item => item.stage === 'source_ingestion').length !== 1
@@ -435,24 +604,11 @@ async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run
         output: 'image', narrative: true, narrativeSceneLimit: Math.min(6, run.maxAgentTasks! - sourceCount - 2) })
       || await tx.agentTask.count({ where: { id: { in: run.steps.flatMap(item => item.agentTaskId ? [item.agentTaskId] : []) },
         status: { in: ['pending', 'running'] } } }) !== 0
-      || await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry',
-        targetType: 'hermes_research_run', targetId: run.id } })
-      || calls.length !== 2 || calls.some((call, index) => {
-        const meta = jsonRecord(call.metadata); const blocks = jsonRecord(meta.responseBlockCounts);
-        const tokens = index === 0 ? 16384 : 32768;
-        return call.actorId !== null || call.targetType !== 'ai_gateway' || meta.outcome !== 'failed' || meta.error !== 'provider_empty'
-          || meta.finishReason !== 'length' || meta.maxOutputTokens !== tokens || meta.outputTokens !== tokens
-          || meta.retryCount !== 0 || meta.requestedThinking !== 'adaptive'
-          || blocks.text !== 0 || blocks.other !== 0 || typeof blocks.thinking !== 'number'
-          || !Number.isSafeInteger(blocks.thinking) || blocks.thinking < 1
-          || typeof meta.provider !== 'string' || !meta.provider || typeof meta.model !== 'string' || !meta.model
-          || meta.promptHash !== jsonRecord(calls[0]!.metadata).promptHash
-          || meta.model !== jsonRecord(calls[0]!.metadata).model
-          || typeof meta.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(meta.promptHash);
-      })) return null;
+      || ro.visibility === 'public') return null;
     const source = await readNarrativeCheckpointEvidence(tx, run);
     const review = jsonRecord(source?.sourceResult.scientificReview);
-    if (!source || review.status !== 'review_received' || review.contractVersion !== '5'
+    if (!source || source.version.publicVersionId || source.version.publicationNo
+      || review.status !== 'review_received' || review.contractVersion !== '5'
       || typeof review.responseHash !== 'string' || !/^[a-f0-9]{64}$/.test(review.responseHash)
       || source.sourceResult.reason || Object.keys(jsonRecord(source.sourceResult.fieldDiagnostics)).length
       || source.ingestion.artifact.workspaceId !== ro.workspaceId
@@ -466,11 +622,23 @@ async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run
       || source.reference.contentHash !== source.ingestion.artifact.blobSha256
       || source.ingestion.agentTask!.updatedAt > task.createdAt || source.version.manifest!.createdAt > task.createdAt
       || source.claims.some(claim => claim.updatedAt > task.createdAt) || source.evidence.some(row => row.updatedAt > task.createdAt)) return null;
-    return { step, task, planningAuditIds: calls.map(call => call.id), baseIdentity: null,
+    const chain = await readInitialSciencePlanningRetryChain(tx, { runId: run.id, actorId: run.actorId, taskId: task.id,
+      retryCount: task.retryCount, taskPayload: task.payload, sourceEvidenceIdentity: source.sourceEvidenceIdentity,
+      claimContent: source.claimContent, narrativeSourceIdentity: source.narrativeSourceIdentity,
+      remainingImageTasks: payload.storyboard.narrativeSceneLimit! }).catch(() => null);
+    if (!chain) return null;
+    const previousReceipt = chain.receipts.at(-1);
+    const currentCalls = calls.filter(call => !chain.consumedAuditIds.includes(call.id));
+    const planningFailureClass = initialThinkingFailure ? 'initial_science_thinking_exhausted' as const : 'initial_science_schema_exhausted' as const;
+    if (!initialScienceCallsMatch(currentCalls, planningFailureClass)
+      || currentCalls.some(call => call.createdAt < task.createdAt || call.createdAt > task.updatedAt
+        || (previousReceipt && call.createdAt <= previousReceipt.createdAt)
+        || jsonRecord(call.metadata).model !== jsonRecord(calls[0]!.metadata).model)) return null;
+    return { step, task, planningAuditIds: currentCalls.map(call => call.id), baseIdentity: null,
       sourceEvidenceIdentity: source.sourceEvidenceIdentity, claimContent: source.claimContent,
       narrativeSourceIdentity: source.narrativeSourceIdentity, revisionImageAssetId: undefined,
       remainingImageTasks: payload.storyboard.narrativeSceneLimit!,
-      planningFailureClass: 'initial_science_thinking_exhausted' as const };
+      planningFailureClass, previousReceiptId: previousReceipt?.id };
   }
   const source = await readStoppedStoryboardImageRevision(tx, payload, run.actorId);
   const images = run.steps.filter(item => item.stage === 'scene_image');
@@ -479,7 +647,7 @@ async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run
   return { step, task, planningAuditIds: calls.map(call => call.id), baseIdentity: source.identity,
     sourceEvidenceIdentity: source.sourceEvidenceIdentity, revisionImageAssetId: source.image.id,
     remainingImageTasks: 1,
-    planningFailureClass: undefined, claimContent: undefined, narrativeSourceIdentity: undefined };
+    planningFailureClass: undefined, previousReceiptId: undefined, claimContent: undefined, narrativeSourceIdentity: undefined };
 }
 export const HERMES_AUTHORITY_REARM_MARKER = 'hermes-authority-pre-provider-v1';
 
@@ -1281,10 +1449,51 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
           const planningReceipt = await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry',
             targetType: 'hermes_research_run', targetId: run.id, actorId: input.actorId,
             metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } } });
-          if (planningReceipt && jsonRecord(planningReceipt.metadata).correction === STORYBOARD_PLANNING_RETRY) {
+          if (planningReceipt && [STORYBOARD_PLANNING_RETRY, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION].includes(String(jsonRecord(planningReceipt.metadata).correction))) {
             if (jsonRecord(planningReceipt.metadata).requestDigest !== requestDigest)
               throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Planning retry key belongs to another request');
             return { run, dispatchIds: [] as string[] };
+          }
+          const pixel = await inspectNarrativePixelReplan(tx, run);
+          const pixelRevision = pixel ? null : await inspectNarrativePixelPlanRevision(tx, run);
+          const pixelRecovery = pixel ?? pixelRevision;
+          if (pixelRecovery) {
+            if (run.version !== input.expectedVersion) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Narrative pixel reviews changed; reload before replanning');
+            if (planningReceipt) throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Narrative retry key was already used');
+            if (!deps.audit?.record) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Narrative replanning audit is unavailable');
+            const changed = await tx.hermesResearchRun.updateMany({ where: { id: run.id, actorId: input.actorId,
+              status: 'stopped', error: run.error, version: input.expectedVersion, versionId: run.versionId,
+              maxAgentTasks: pixelRecovery.previousMaxAgentTasks },
+            data: { status: 'generating_storyboard', error: null, lastReconciledAt: null,
+              maxAgentTasks: pixelRecovery.maxAgentTasks, version: { increment: 1 } } });
+            if (changed.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Narrative pixel-feedback recovery changed');
+            const next = { ...run, status: 'generating_storyboard', maxAgentTasks: pixelRecovery.maxAgentTasks };
+            await createPresentationSteps(deps, tx, next, 'storyboard', [{ ordinal: 0, replacesTaskId: pixelRecovery.replacesTaskId,
+              payload: pixelRecovery.payload }], undefined, pixelRecovery);
+            const replacement = await tx.hermesResearchStep.findUniqueOrThrow({ where: { runId_stage_ordinal: { runId: run.id, stage: 'storyboard', ordinal: 0 } },
+              include: { agentTask: true } });
+            await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId,
+              action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run', targetId: run.id,
+              metadata: { correction: pixel ? NARRATIVE_PIXEL_REPLAN : NARRATIVE_PIXEL_PLAN_REVISION, requestDigest, clientIdempotencyKey: input.idempotencyKey,
+                expectedVersion: input.expectedVersion, previousMaxAgentTasks: pixelRecovery.previousMaxAgentTasks,
+                maxAgentTasks: pixelRecovery.maxAgentTasks, existingTaskCount: pixelRecovery.existingTaskCount,
+                ...(pixel ? { parentStoryboardAssetId: pixel.source.parent.id, parentIdentity: pixel.source.parentIdentity,
+                sourceIdentity: pixel.source.identity, sourceEvidenceIdentity: pixel.source.sourceEvidenceIdentity,
+                claimContent: pixel.checkpoint.claimContent, narrativeSourceIdentity: pixel.checkpoint.narrativeSourceIdentity,
+                sceneReviews: pixel.source.sceneReviews, anchorImageId: pixel.source.image.id,
+                maxNewImages: pixel.source.images.length, chargeableAttempts: 1 + pixel.source.images.length }
+                  : { previousReceiptId: pixelRevision!.pixel.receipt.id, rootReceiptId: pixelRevision!.pixel.rootReceipt.id,
+                    failedStoryboardTaskId: pixelRevision!.pixel.task.id, failedTaskIdentity: pixelRevision!.failed.identity,
+                    previousError: pixelRevision!.pixel.task.error, candidateHash: pixelRevision!.failed.review.candidateHash,
+                    reviewResponseHash: pixelRevision!.failed.review.responseHash,
+                    sourceEvidenceIdentity: pixelRevision!.pixel.metadata.sourceEvidenceIdentity,
+                    claimContent: pixelRevision!.pixel.metadata.claimContent, narrativeSourceIdentity: pixelRevision!.pixel.metadata.narrativeSourceIdentity,
+                    maxNewImages: 0, inheritedRemainingImages: pixelRevision!.pixel.sceneLimit, chargeableAttempts: 1 }),
+                newTaskId: replacement.agentTaskId, taskPayload: replacement.agentTask!.payload,
+                maxNewStoryboards: 1, newRunCount: 0,
+                noProviderSwitch: true, publicationAuthorized: false } }, ctx);
+            return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }),
+              dispatchIds: [replacement.agentTaskId!] };
           }
           const savedReceipt = await tx.auditLog.findFirst({ where: {
             action: { in: ['hermes.research_run.storyboard_checkpoint_resume', 'hermes.research_run.storyboard_output_resume',
@@ -1368,9 +1577,9 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             if (planning.planningFailureClass && !deps.audit?.record)
               throw new HermesResearchRunError('SOURCE_NOT_READY', 'Planning recovery audit is unavailable');
             const taskChanged = await tx.agentTask.updateMany({ where: { id: planning.task.id, status: 'failed',
-              executionAttempt: 1, retryCount: 0, deletedAt: null, error: planning.task.error,
+              executionAttempt: planning.task.executionAttempt, retryCount: planning.task.retryCount, deletedAt: null, error: planning.task.error,
               payload: { equals: planning.task.payload as Prisma.InputJsonValue }, result: { equals: Prisma.AnyNull } },
-            data: { status: 'pending', progress: 0, retryCount: 1, error: null, dispatchedAt: null } });
+            data: { status: 'pending', progress: 0, retryCount: { increment: 1 }, error: null, dispatchedAt: null } });
             const stepChanged = await tx.hermesResearchStep.updateMany({ where: { id: planning.step.id, runId: run.id,
               agentTaskId: planning.task.id, status: planning.step.status, presentationAssetId: null },
             data: { status: 'running', error: null } });
@@ -1386,7 +1595,8 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
                 previousExecutionAttempt: planning.task.executionAttempt, previousRetryCount: planning.task.retryCount,
                 planningAuditIds: planning.planningAuditIds,
                 ...(planning.planningFailureClass ? { planningFailureClass: planning.planningFailureClass,
-                  claimContent: planning.claimContent, narrativeSourceIdentity: planning.narrativeSourceIdentity }
+                  claimContent: planning.claimContent, narrativeSourceIdentity: planning.narrativeSourceIdentity,
+                  ...(planning.previousReceiptId ? { previousReceiptId: planning.previousReceiptId } : {}) }
                   : { revisionImageAssetId: planning.revisionImageAssetId }),
                 previousError: planning.task.error, taskPayload: planning.task.payload,
                 baseIdentity: planning.baseIdentity, sourceEvidenceIdentity: planning.sourceEvidenceIdentity,
@@ -1644,16 +1854,23 @@ export async function requireHermesPresentationTaskAuthority(
     include: { researchObject: true, steps: { where: { stage: input.authority.stage, ordinal: input.authority.ordinal } } },
   });
   const step = run?.steps[0];
+  const pixelAuthority = run ? await readNarrativePixelReplanAuthority(prisma, { runId: run.id, actorId: input.actorId }) : null;
   const renderAuthority = run && !validGrant(run) && input.authority.stage === 'scene_image'
     ? await requireHermesImageRenderRecoveryAuthority(prisma, { runId: run.id, actorId: input.actorId,
       taskId: input.taskId, phase: 'generation' }).catch(() => null) : null;
   if (!run || !step || run.steps.length !== 1 || run.actorId !== input.actorId
     || run.researchObjectId !== input.payload.researchObjectId || run.versionId !== input.payload.versionId
-    || (!validGrant(run) && !renderAuthority) || run.profile !== input.authority.profile || run.status !== expectedStatus
+    || (!validGrant(run) && !renderAuthority && !pixelAuthority) || run.profile !== input.authority.profile || run.status !== expectedStatus
     || step.agentTaskId !== input.taskId || step.status !== 'running'
     || (renderAuthority && !isDeepStrictEqual(renderAuthority.payload, input.payload))
     || !isDeepStrictEqual([...run.sourceClaimIds].sort(), input.payload.sourceClaimIds)
     || run.researchObject.status !== 'draft') throw new Error('[blocked] Hermes run authority is invalid');
+  if (pixelAuthority && (input.authority.stage === 'storyboard'
+    ? input.taskId !== pixelAuthority.task.id || !isDeepStrictEqual(input.payload, pixelAuthority.payload)
+    : input.authority.stage !== 'scene_image' || input.authority.ordinal >= pixelAuthority.sceneLimit
+      || input.payload.sceneImage?.storyboardAssetId !== pixelAuthority.task.id || input.payload.sceneImage?.revisionAssetId)) {
+    throw new Error('[blocked] Narrative replacement is outside its receipt');
+  }
   const authority = await requireActiveMembership(prisma, run.researchObject.workspaceId, run.actorId).catch(() => null);
   if (!authority || !WRITE_ROLES.has(authority.membership.role)) throw new Error('[blocked] Hermes run authority changed');
   const version = await prisma.version.findUnique({ where: { id: run.versionId! } });
@@ -1688,13 +1905,26 @@ async function createPresentationSteps(
   stage: 'storyboard' | 'scene_image' | 'video',
   inputs: Array<{ ordinal: number; payload: Record<string, unknown>; replacesTaskId?: string }>,
   renderRecovery?: NonNullable<Awaited<ReturnType<typeof inspectNarrativeImageRenderRecovery>>>,
+  pixelRecovery?: { [PIXEL_REPLAN_ELIGIBILITY]: true; runId: string; maxAgentTasks: number;
+    replacesTaskId: string; payload: Record<string, unknown> },
 ): Promise<void> {
   const renderAuthorized = renderRecovery?.[IMAGE_RENDER_ELIGIBILITY] === true && run.id === renderRecovery.runId
     && run.status === 'generating_scene_images' && run.maxAgentTasks === renderRecovery.previousMaxAgentTasks + 1
     && stage === 'scene_image' && inputs.length === 1 && inputs[0]!.ordinal === renderRecovery.step.ordinal
     && inputs[0]!.replacesTaskId === renderRecovery.source.task.id && isDeepStrictEqual(inputs[0]!.payload, renderRecovery.source.payload);
-  if (!run.versionId || (!validGrant(run) && !renderAuthorized)) {
+  const pixelAuthorized = pixelRecovery?.[PIXEL_REPLAN_ELIGIBILITY] === true && pixelRecovery.runId === run.id
+    && run.maxAgentTasks === pixelRecovery.maxAgentTasks && run.status === 'generating_storyboard'
+    && stage === 'storyboard' && inputs.length === 1 && inputs[0]!.replacesTaskId === pixelRecovery.replacesTaskId
+    && inputs[0]!.ordinal === 0 && isDeepStrictEqual(inputs[0]!.payload, pixelRecovery.payload);
+  const pixelAuthority = pixelAuthorized ? null : await readNarrativePixelReplanAuthority(tx, { runId: run.id, actorId: run.actorId });
+  if (!run.versionId || (!validGrant(run) && !renderAuthorized && !pixelAuthorized && !pixelAuthority)) {
     throw new Error('Hermes generation grant is invalid');
+  }
+  if (pixelAuthority && (stage !== 'scene_image' || inputs.length < 1 || inputs.length > pixelAuthority.sceneLimit
+    || inputs.some((item, index) => item.ordinal !== index || item.replacesTaskId !== pixelAuthority.sceneReviews[index]?.taskId
+      || !isDeepStrictEqual(item.payload, { schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
+        kind: 'image', sourceClaimIds: run.sourceClaimIds, sceneImage: { storyboardAssetId: pixelAuthority.task.id, sceneIndex: index } })))) {
+    throw new Error('Narrative replacement tasks exceed their explicit receipt');
   }
   const existingCount = await tx.agentTask.count({
     where: { kind: 'presentation.generate', payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } },
@@ -1702,6 +1932,9 @@ async function createPresentationSteps(
   const sourceTaskCount = run.profile === VISUAL_NARRATIVE_PROFILE
     ? run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length : 0;
   if (existingCount + sourceTaskCount + inputs.length > run.maxAgentTasks!) throw new Error('Hermes generation grant exhausted');
+  if (pixelAuthority && existingCount + sourceTaskCount + inputs.length
+    > Number(pixelAuthority.metadata.existingTaskCount) + pixelAuthority.depth + 1 + pixelAuthority.sceneLimit)
+    throw new Error('Narrative scientific revision image allowance exhausted');
   const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
     userId: run.actorId, researchObjectId: run.researchObjectId, kind: 'visualization',
     title: imageRun(run.profile) ? 'Hermes research illustration' : 'Hermes research video', idempotencyKey: `hermes-run-session:${run.id}`,
@@ -1727,11 +1960,12 @@ async function createPresentationSteps(
 }
 
 async function validateReviewedSources(tx: Prisma.TransactionClient, run: RunRow): Promise<'pending' | 'ready' | 'invalid'> {
+  const pixelAuthority = await readNarrativePixelReplanAuthority(tx, { runId: run.id, actorId: run.actorId });
   const imageTaskId = run.steps.find(step => step.stage === 'scene_image')?.agentTaskId;
   const renderAuthority = !validGrant(run) && imageTaskId
     ? await requireHermesImageRenderRecoveryAuthority(tx, { runId: run.id, actorId: run.actorId,
       taskId: imageTaskId, phase: 'current' }).catch(() => null) : null;
-  if (!run.versionId || (!validGrant(run) && !renderAuthority) || run.sourceClaimIds.length === 0) return 'invalid';
+  if (!run.versionId || (!validGrant(run) && !renderAuthority && !pixelAuthority) || run.sourceClaimIds.length === 0) return 'invalid';
   const version = await tx.version.findUnique({ where: { id: run.versionId } });
   if (!version || version.researchObjectId !== run.researchObjectId || version.status !== 'draft') return 'invalid';
   const claims = await tx.claimNode.findMany({ where: { id: { in: run.sourceClaimIds }, researchObjectId: run.researchObjectId, versionId: run.versionId } });
@@ -1801,6 +2035,8 @@ async function repairBlockedNarrative(deps: HermesResearchRunDeps, tx: Prisma.Tr
 
 async function repairRejectedNarrativeImages(deps: HermesResearchRunDeps, tx: Prisma.TransactionClient, run: RunRow): Promise<boolean> {
   if (run.profile !== VISUAL_NARRATIVE_PROFILE) return false;
+  // This explicit receipt covers one new image per new scene; another failure needs its own user action.
+  if (await readNarrativePixelReplanAuthority(tx, { runId: run.id, actorId: run.actorId })) return false;
   const replacements: Array<{ ordinal: number; replacesTaskId: string; payload: Record<string, unknown> }> = [];
   for (const step of run.steps.filter(item => item.stage === 'scene_image')) {
     const asset = step.presentationAssetId ? await tx.presentationAsset.findUnique({ where: { id: step.presentationAssetId } }) : null;
@@ -1979,6 +2215,7 @@ export async function reconcileHermesResearchRuns(
             await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
             return null;
           }
+          const pixelAuthority = await readNarrativePixelReplanAuthority(tx, { runId: run.id, actorId: run.actorId });
           const sourceState = await validateReviewedSources(tx, run);
           if (sourceState === 'invalid') return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'reviewed Claim or Evidence binding changed');
           if (sourceState === 'pending') {
@@ -2016,11 +2253,11 @@ export async function reconcileHermesResearchRuns(
                 data: { status: 'awaiting_approval', presentationAssetId: asset.id } });
             }
             if (failed && !inFlight) {
-              if (stage === 'storyboard' && failed.agentTaskId && await repairBlockedNarrative(deps, tx, run, failed.agentTaskId)) {
+              if (!pixelAuthority && stage === 'storyboard' && failed.agentTaskId && await repairBlockedNarrative(deps, tx, run, failed.agentTaskId)) {
                 return moveRun(deps, tx, run, 'generating_storyboard', ro.workspaceId);
               }
               await tx.hermesResearchStep.updateMany({ where: { id: failed.id }, data: { status: 'failed', error: failed.agentTask?.error ?? 'Generation failed' } });
-              if ((run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && stage === 'storyboard')
+              if ((pixelAuthority || run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && stage === 'storyboard')
                 return moveRun(deps, tx, run, 'stopped', ro.workspaceId, failed.agentTask?.error ?? 'Scientific correction could not complete');
               return moveRun(deps, tx, run, 'failed', ro.workspaceId, failed.agentTask?.error ?? 'Generation failed');
             }
@@ -2103,15 +2340,19 @@ export async function reconcileHermesResearchRuns(
             const sourceTaskCount = run.profile === VISUAL_NARRATIVE_PROFILE
               ? run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length : 0;
             if (sourceTaskCount + sceneCount + (imageRun(run.profile) ? 1 : 2) > run.maxAgentTasks!) return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Hermes generation grant cannot cover this storyboard');
-            if ((run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && sceneCount !== 1) return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Scientific correction requires exactly one scene');
-            const replacedImageTaskId = run.maxAgentTasks === 11 || run.maxAgentTasks === 13
+            if (pixelAuthority && (storyboardAssetId !== pixelAuthority.task.id || sceneCount < 1 || sceneCount > pixelAuthority.sceneLimit))
+              return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Narrative replacement exceeds its reviewed scene allowance');
+            if (!pixelAuthority && (run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && sceneCount !== 1) return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Scientific correction requires exactly one scene');
+            const replacedImageTaskId = !pixelAuthority && (run.maxAgentTasks === 11 || run.maxAgentTasks === 13)
               ? run.steps.find(step => step.stage === 'scene_image' && step.ordinal === 0)?.agentTaskId : undefined;
-            if ((run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && !replacedImageTaskId) return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Scientific correction image task binding is missing');
+            if (!pixelAuthority && (run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && !replacedImageTaskId) return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Scientific correction image task binding is missing');
             await createPresentationSteps(deps, tx, run, 'scene_image', Array.from({ length: sceneCount }, (_, ordinal) => ({ ordinal,
-              ...(replacedImageTaskId ? { replacesTaskId: replacedImageTaskId } : {}), payload: {
+              ...(pixelAuthority ? { replacesTaskId: String(pixelAuthority.sceneReviews[ordinal]!.taskId) }
+                : replacedImageTaskId ? { replacesTaskId: replacedImageTaskId } : {}), payload: {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
               kind: 'image', sourceClaimIds: run.sourceClaimIds, sceneImage: { storyboardAssetId, sceneIndex: ordinal },
             } })));
+            if (pixelAuthority) await tx.hermesResearchStep.deleteMany({ where: { runId: run.id, stage: 'scene_image', ordinal: { gte: sceneCount } } });
             return moveRun(deps, tx, run, 'generating_scene_images', ro.workspaceId);
           }
           if (run.status === 'awaiting_scene_images_review') {

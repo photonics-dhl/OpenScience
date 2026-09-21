@@ -24,7 +24,7 @@
 ## 产品目标与交付差额
 | 交付 / Taskmaster ID | 当前实际结果与剩余工作 |
 |---|---|
-| 论文视觉叙事 · 5 | 首篇v3已走完整真实链路，最终用户质量认可pending；第二篇四张Chat图已保存，真实6Pro首图阻断并要求科学返工；第三篇分窗/六维/v5核源已成功，设计thinking-only失败待原任务恢复。不得以task succeeded冒称科学通过。 |
+| 论文视觉叙事 · 5 | 首篇v3已走完整真实链路，最终用户质量认可pending；第二篇四张Chat图已保存，真实6Pro四图均阻断并要求科学返工；第三篇全文/六维/v5核源成功，设计原task恢复后来源绑定失败，修复已获High PASS待部署。不得以task succeeded冒称科学通过。 |
 | 学术机制图 · 1 | 首篇新8bbc通过6Pro并公开v3，原图/失败候选保留；等待最终用户反馈。历史145af7bf/父d0b36138 approved未纳入v2，旧a7488c14认可版面但资产rejected，不改回状态。 |
 | 编辑封面 · 2 | 当前以第二篇完整叙事run7e9e为交付；历史51eb/e253未放行、aaf7 blocked无新Chat图，不能重跑旧任务代替当前方向。 |
 | 淡彩手绘 · 3 | aa41a018-b2ff-4ffb-9557-19ecabe104bc已获用户明确认可/approved并在公开v2；保护。第三篇后续按内容采用淡彩叙事，不把旧单图认可当整套完成。 |
@@ -40,11 +40,13 @@
 
 ## 后两篇：当前阻塞与续作
 - 第二篇ROc896802c-35dd-4b59-8db1-5f374f83a6d8（deep-sub-cycle pulse），原PDF7bb96cc1/3770010bytes、公开v1保护。guide ab76b22e明确editorial；独立High选needs_review840e24f9而非confirmed2fdb，避免旧v4确认来源无法composition。原UI启动run7e9e1f3e-eafe-440a-be0f-7ff1ed349a8b，/jobs/second-paper-editorial-run-start-20260922.json已消费。
-- 第二篇来源f1bb85c8 v5已成功，私有Versiond07cfeee-c81d-4162-a469-0b431f964801。原7bd6恢复后65K science成功，末审因脉宽排序阻断，系统自动修订c65a0488-2c0b-4096-8619-bb45af25a4f5并获M3 accepted。原恢复收据/jobs/second-paper-science-resume-20260922.json已消费。run当前generating_scene_images/version11/max9；四图1dcb1f66/b4744b85/34eb749e/4a4e115c字节已保存，未发布。
-- 独立High确认c65仍有强度与电场混同、跨工况共用高斯基线、额外hν、固定又扫描同一波长等错误；不能因M3 accepted公开。1dcb真实Chat6Pro已blocked/repairInstruction null，指出穿缝几何、77nm含义、虚拟脉冲限定、收尖光束误导、相遇角表述等；其余三图实审在途。证据tmp/second-paper-revised-narrative-read-20260922.json、second-paper-image-reviews-read-20260922.json；继续沿既有科学修订路径处理，保留全部图片与历史。
+- 第二篇来源f1bb85c8 v5已成功，私有Versiond07cfeee-c81d-4162-a469-0b431f964801。原7bd6恢复后65K science成功，末审因脉宽排序阻断，系统自动修订c65a0488-2c0b-4096-8619-bb45af25a4f5并获M3 accepted。原恢复收据/jobs/second-paper-science-resume-20260922.json已消费。run当前stopped/version13/max9；四图1dcb1f66/b4744b85/34eb749e/4a4e115c字节已保存，未发布。
+- 独立High确认c65仍有强度与电场混同、跨工况共用高斯基线、额外hν、固定又扫描同一波长等错误；不能因M3 accepted公开。1dcb真实Chat6Pro已blocked/repairInstruction null，指出穿缝几何、77nm含义、虚拟脉冲限定、收尖光束误导、相遇角表述等；四图已全部正式blocked/repairInstruction null并rejected，0活动；后两张正式审计覆盖强度/电场混同、hν重复、条件矛盾等。证据tmp/second-paper-revised-narrative-read-20260922.json、second-paper-image-reviews-read-20260922.json；继续沿既有科学修订路径处理，保留全部图片与历史。
 - 第三篇ROaa450f1e-fafc-46d8-a072-d935e01b0544，原PDFd04add46/4609066bytes/hash4a51048431f20950a01916b50cd87a08642881b20b0a9eac767144031ebc0b1a；原retry收据、watercolor guide及run-start收据均已消费。run b3eee57a-8a08-4867-9281-cb5b950affbf复用原SourceMap e490409c…（24页/1554blocks/818144bytes），composition1834e21d已13次text完成map/reduce/六维，sourceMapReused true，无新解析。8c87b54d v5核源成功（65K ceiling、294816ms、stop），六维约657中文字符/5Claims，Version9373f1e6-9477-4e4a-9b45-b8efca244e70。
-- 第三篇初始分镜a4c5990b-495c-4439-8b04-fd335192175b于20:58:52Z failed/exec1/retry0/resultNULL，16K/32K两次thinking-only length/no fallback。run自然收敛failed后，21:12:02Z原UI HTTP202恢复同task、version10/attempt2/retry1；/jobs/third-paper-science-resume-20260922.json已消费，禁止重放。常规narrative science直接65K/600s/primary-only及worker singleton maintenance候选均独立High PASS，未部署；前者art/非narrative不变，后者解耦lane0长任务对reconcile/outbox的阻塞，原scheduler/启动恢复/优雅收尾不变。第二篇完整场景集科学返工正在补接原retry-generation，不造新分析器或绕过正式6Pro审计。
+- 第三篇a4c5990b初始thinking-only失败，经21:12:02Z原按钮HTTP202恢复同task（/jobs/third-paper-science-resume-20260922.json已消费）；exec2三次65K stop正文分别因mainMessage266>240/unknown_original_source/subject_requires_supporting_evidence失败，resultNULL/run failedv11。没有保存被拒正文，不猜具体sourceId。原SourceMap/六维/Claims保持。
+- 第三篇来源绑定反馈与同task最多exec3恢复均High PASS：原supports/字段限制不变，原receipt按actor/task连续绑定、保存已消费audit IDs/当前payload/source，science/art及末审primary-only，不新增分析器/逻辑任务/图片额度。真实remainingImageTasks5。证据tmp/third-paper-{science-validation-diagnostics,planning-receipts-read}-20260922；新schema恢复writer尚未执行。
+- 通用全组像素反馈科学返工已实现，原retry-generation按1计划+N图/完整正式反馈/current parent/CAS/审计；旧approved sibling在新parent批准同事务退役并留审计的P1已High PASS，本次4图皆rejected无额外退役。后续科学blocked方案显式只追加1plan并继承N图的P2冻结tmp/pixel-plan-revision-review-20260922，独立High PASS；Web复用原按钮。全叙事science65K/600s/primary-only与worker singleton maintenance已High PASS/提交61c440b2，均未部署。当前没有新增付费请求。
 ## 其他受保护资产与入口
 - ac455b2f真实Chat产物approved；77b3f559历史Fig.2占位、557c3db6来源待核均approved，不能直接公开全部approved。d5087b03悬空draft copy；重复计划6439150a/ee9bcfb6 draft、6043bebb/75b34c88 approved，清理未获明确同意。旧占位929bd95d/6088f11b/03a160aa早先已授权删除，不能重处理。
 - 能力位置/最新实际效果查docs/runbooks/hermes-capability-registry.md；完整故障/调用/部署/恢复收据查docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md。此前中断、300秒传输、Claims缺失、长度、渲染拒收等历史已在该文件/Git保留，不按历史next action重跑。
-- 下一步：等待在途实审落存并处理第二篇科学返工；第三篇沿原task恢复设计，修正常规narrative预算与已知状态推进阻塞，继续reader与新版发布。代码/部署/科学结果/最终用户认可分别记录；不因单篇完成结束任务。
+- 下一步：当前无在途模型；多图返工及blocked-plan续接已High PASS，与已通过的第三篇原task恢复/来源反馈、65K及maintenance统一部署；随后从原页面继续两篇设计、实图审阅、reader与新版发布。代码/部署/科学结果/最终用户认可分别记录；不因单篇完成结束任务。

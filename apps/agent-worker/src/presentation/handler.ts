@@ -1,13 +1,13 @@
 import { planSceneImagePrompt } from './scene-image';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, type AiGateway, type OcrAuthorizationContext, type ScienceReviewInput } from '@openscience/ai-gateway';
-import { parseStoryboardDocument, parseStoryboardRequest, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, requireVideoGenerationParents, storyboardSceneStyles, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
+import { parseStoryboardDocument, parseStoryboardRequest, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativePixelReplanAuthority, requireVideoGenerationParents, storyboardSceneStyles, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
 import { generateStoryboard, renderStoryboard } from './storyboard';
 import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@openscience/domain';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, readInitialSciencePlanningRetryChain, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
@@ -213,12 +213,13 @@ async function readStoryboardPlanningContext(
   payload: PresentationGenerationPayload,
   actorId: string,
   depth = 0,
+  historicalTaskId?: string,
 ): Promise<StoryboardPlanningContext> {
   if (depth > 2) throw new Error('[blocked] Storyboard revision depth exceeded');
   const base = await requireStoryboardBase(prisma, payload);
   const revision = await requireStoryboardRevisionTask(prisma, payload, actorId);
-  const imageRevision = await requireStoryboardImageRevision(prisma, payload, actorId);
-  const revisionContext = revision ? await readStoryboardPlanningContext(prisma, revision.payload, actorId, depth + 1) : undefined;
+  const imageRevision = await requireStoryboardImageRevision(prisma, payload, actorId, historicalTaskId);
+  const revisionContext = revision ? await readStoryboardPlanningContext(prisma, revision.payload, actorId, depth + 1, revision.task.id) : undefined;
   return { base, revision, imageRevision, revisionContext,
     identity: imageRevision ? imageRevision.identity
       : revision ? JSON.stringify({ revision: revision.identity, base: revisionContext?.identity ?? null }) : base?.identity ?? null };
@@ -335,6 +336,11 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
     await requireSceneImageRevision(prisma, payload);
   } else {
     const planning = await readStoryboardPlanningContext(prisma, payload, input.authorizationContext.actorId);
+    const pixel = payload.hermesRunAuthority ? await readNarrativePixelReplanAuthority(prisma, {
+      runId: payload.hermesRunAuthority.runId, actorId: input.authorizationContext.actorId,
+    }) : null;
+    if (pixel && (snapshot.primaryProviderOnly !== true || pixel.task.id !== owner.id || pixel.baseIdentity !== planning.identity))
+      throw new Error('[blocked] Narrative scientific revision review authority changed');
     if (planning.identity !== snapshot.baseIdentity
       || (planning.imageRevision && planning.imageRevision.sourceEvidenceIdentity !== source.sourceEvidenceIdentity))
       throw new Error('[blocked] Illustration base or reviewed image evidence changed');
@@ -480,8 +486,39 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if (storyboardDocument) await requireNarrativeOriginals(prisma, payload, storyboardDocument);
     };
     const planningContext = await readStoryboardPlanningContext(deps.prisma, payload, scope.userId);
+    const pixelAuthority = payload.hermesRunAuthority?.stage === 'storyboard'
+      ? await readNarrativePixelReplanAuthority(deps.prisma, { runId: payload.hermesRunAuthority.runId, actorId: scope.userId }) : null;
+    const pixelRecovery = pixelAuthority ? { receiptId: pixelAuthority.receipt.id,
+      claimContent: pixelAuthority.metadata.claimContent, narrativeSourceIdentity: pixelAuthority.metadata.narrativeSourceIdentity } : undefined;
+    if (pixelAuthority && (pixelAuthority.task.id !== task.id || !isDeepStrictEqual(pixelAuthority.payload, payload)
+      || pixelAuthority.baseIdentity !== planningContext.identity)) throw new Error('[blocked] Narrative scientific revision task changed');
+    if (pixelRecovery && (pixelRecovery.claimContent !== presentationClaimContent(claims)
+      || pixelRecovery.narrativeSourceIdentity !== narrativeSource?.identity)) {
+      throw new Error('[blocked] Narrative pixel-feedback recovery source changed');
+    }
     if (planningContext.imageRevision && planningContext.imageRevision.sourceEvidenceIdentity !== sourceEvidenceIdentity)
       throw new Error('[blocked] Reviewed image evidence changed before scientific replanning');
+    const requirePixelRecoveryUnchanged = async (tx: Prisma.TransactionClient) => {
+      if (!pixelRecovery || !pixelAuthority) return;
+      const current = await requireIllustrationReviewAuthority(tx, { taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId });
+      const authority = await readNarrativePixelReplanAuthority(tx, { runId: pixelAuthority.run.id, actorId: scope.userId });
+      const currentClaims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
+        researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
+      if (current.owner.executionAttempt !== task.executionAttempt || !isDeepStrictEqual(current.owner.payload, owner.payload)
+        || authority?.receipt.id !== pixelRecovery.receiptId || !isDeepStrictEqual(authority.currentMetadata, pixelAuthority.currentMetadata)
+        || currentClaims.length !== payload.sourceClaimIds.length || currentClaims.some(claim => claim.extractionStatus !== 'succeeded')
+        || presentationClaimContent(currentClaims as PresentationClaim[]) !== pixelRecovery.claimContent
+        || (await readStoryboardPlanningContext(tx, payload, scope.userId)).identity !== planningContext.identity)
+        throw new Error('[blocked] Narrative pixel-feedback recovery changed before planning or review');
+      await requireUnchangedEvidence(tx);
+      await requireIllustrationOriginalArtifacts(tx, sourceEvidence, researchObject.workspaceId);
+    };
+    const planningGateway: Pick<AiGateway, 'completeStructured'> | undefined = options.gateway && pixelRecovery ? {
+      completeStructured: async (guard, messages, opts) => {
+        await deps.prisma.$transaction(requirePixelRecoveryUnchanged, { isolationLevel: 'Serializable' });
+        return options.gateway!.completeStructured(guard, messages, { ...opts, primaryProviderOnly: true });
+      },
+    } : options.gateway;
     const base = planningContext.base;
     const sceneParent = await requireSceneImageParent(deps.prisma, payload);
     const sceneRevision = await requireSceneImageRevision(deps.prisma, payload);
@@ -660,6 +697,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       let acceptance: StoryboardAcceptance | undefined;
       let persistPlan: ((planned: StoryboardPlan, review?: StoryboardReview, acceptance?: StoryboardAcceptance, art?: StoryboardArtCorrection) => Promise<void>) | undefined;
       let persistArtCorrection: ((art: StoryboardArtCorrection) => Promise<void>) | undefined;
+      let initialScienceRecovery: Awaited<ReturnType<typeof readInitialSciencePlanningRetryChain>> | undefined;
+      let revalidateInitialScienceRecovery: ((tx: Prisma.TransactionClient, beforePlanning: boolean) => Promise<void>) | undefined;
       if (payload.storyboard.output === 'image') {
         if (!options.gateway.reviewScientific) throw new Error('[blocked] Illustration scientific review unavailable');
         if (owner.deletedAt || owner.session.deletedAt || owner.session.status !== 'active'
@@ -782,7 +821,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
               artCorrection = { ...artCorrection, artSubmittedExecutionAttempt: task.executionAttempt };
               await persistArtCorrection(artCorrection);
               const artGateway: Pick<AiGateway, 'completeStructured'> = {
-                completeStructured: (guard, messages, opts) => options.gateway!.completeStructured(guard, messages,
+                completeStructured: (guard, messages, opts) => planningGateway!.completeStructured(guard, messages,
                   { ...opts, primaryProviderOnly: true }),
               };
               const corrected = await generateStoryboard(artGateway, claims, { ...payload.storyboard, revisionMode: 'art' }, {
@@ -797,34 +836,63 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             throw new Error('[blocked] Storyboard continuation has no current art correction authorization');
           }
         } else {
-          let initialScienceRecovery: { id: string; metadata: Record<string, unknown> } | undefined;
           if (task.executionAttempt > 1) {
             const receipts = payload.hermesRunAuthority ? await deps.prisma.auditLog.findMany({ where: {
               action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run',
               targetId: payload.hermesRunAuthority.runId, actorId: scope.userId,
               metadata: { path: ['taskId'], equals: task.id },
-            }, take: 2 }) : [];
-            const receipt = receipts[0]?.metadata as Record<string, unknown> | undefined;
-            if (task.executionAttempt !== 2 || owner.retryCount !== 1 || owner.result !== null || receipts.length !== 1
+            }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 3 }) : [];
+            const receipt = receipts.at(-1)?.metadata as Record<string, unknown> | undefined;
+            const initialRecovery = ['initial_science_thinking_exhausted', 'initial_science_schema_exhausted'].includes(String(receipt?.planningFailureClass));
+            if (initialRecovery) {
+              if (![2, 3].includes(task.executionAttempt) || owner.retryCount !== task.executionAttempt - 1 || owner.result !== null
+                || !narrativeSource || identity.baseIdentity !== null || base || planningContext.revision || planningContext.imageRevision
+                || payload.storyboard.revisionMode || payload.storyboard.revisionTaskId || payload.storyboard.revisionImageAssetId
+                || !payload.storyboard.narrativeSceneLimit || !payload.hermesRunAuthority) {
+                throw new Error('[blocked] Initial science recovery source changed');
+              }
+              const recoveryIdentity = { runId: payload.hermesRunAuthority.runId, actorId: scope.userId, taskId: task.id,
+                retryCount: owner.retryCount, taskPayload: owner.payload, sourceEvidenceIdentity,
+                claimContent: identity.claimContent, narrativeSourceIdentity: narrativeSource.identity,
+                remainingImageTasks: payload.storyboard.narrativeSceneLimit };
+              initialScienceRecovery = await readInitialSciencePlanningRetryChain(deps.prisma, recoveryIdentity);
+              const recovery = initialScienceRecovery;
+              if (await deps.prisma.auditLog.count({ where: { requestId: task.id, action: 'ai.gateway.call',
+                id: { notIn: recovery.consumedAuditIds } } })) {
+                throw new Error('[blocked] Initial science recovery has an existing uncheckpointed provider attempt');
+              }
+              revalidateInitialScienceRecovery = async (tx, beforePlanning) => {
+                const current = await requireIllustrationReviewAuthority(tx, {
+                  taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId,
+                });
+                const chain = await readInitialSciencePlanningRetryChain(tx, recoveryIdentity);
+                const run = await tx.hermesResearchRun.findUnique({ where: { id: recoveryIdentity.runId } });
+                const currentClaims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
+                  researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
+                if (current.owner.executionAttempt !== task.executionAttempt || current.owner.retryCount !== owner.retryCount
+                  || (beforePlanning ? current.owner.result !== null : !isDeepStrictEqual(current.owner.result, expectedResult))
+                  || !isDeepStrictEqual(current.owner.payload, owner.payload) || !isDeepStrictEqual(current.payload, payload)
+                  || !isDeepStrictEqual(chain, recovery) || run?.maxAgentTasks !== 9 || run.status !== 'generating_storyboard'
+                  || current.owner.session.researchObject?.visibility === 'public'
+                  || currentClaims.length !== payload.sourceClaimIds.length || currentClaims.some(claim => claim.extractionStatus !== 'succeeded')
+                  || presentationClaimContent(currentClaims as PresentationClaim[]) !== identity.claimContent
+                  || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) {
+                  throw new Error('[blocked] Initial science recovery authorization changed');
+                }
+                await requireUnchangedEvidence(tx);
+                await requireIllustrationOriginalArtifacts(tx, sourceEvidence, researchObject.workspaceId);
+              };
+            } else if (task.executionAttempt !== 2 || owner.retryCount !== 1 || owner.result !== null || receipts.length !== 1
               || receipt?.correction !== 'storyboard_planning_retry' || receipt.previousExecutionAttempt !== 1
               || receipt.chargeableAttempts !== 1 || receipt.newTaskCount !== 0
               || !isDeepStrictEqual(receipt.taskPayload, owner.payload)
               || receipt.baseIdentity !== identity.baseIdentity || receipt.sourceEvidenceIdentity !== identity.sourceEvidenceIdentity) {
               throw new Error('[blocked] Previous paid storyboard attempt has no saved plan; explicit new planning is required');
             }
-            if (receipt.planningFailureClass === 'initial_science_thinking_exhausted') {
-              if (receipt.previousRetryCount !== 0 || receipt.noProviderSwitch !== true
-                || receipt.claimContent !== identity.claimContent || receipt.narrativeSourceIdentity !== identity.narrativeSourceIdentity
-                || !narrativeSource || identity.baseIdentity !== null || base || planningContext.revision || planningContext.imageRevision
-                || payload.storyboard.revisionMode || payload.storyboard.revisionTaskId || payload.storyboard.revisionImageAssetId) {
-                throw new Error('[blocked] Initial science recovery source changed');
-              }
-              initialScienceRecovery = { id: receipts[0]!.id, metadata: receipt };
-            }
           }
           if (planningContext.imageRevision) {
             const rejected = planningContext.imageRevision;
-            planned = await generateStoryboard(options.gateway, claims, payload.storyboard,
+            planned = await generateStoryboard(planningGateway!, claims, payload.storyboard,
               rejected.view, paperOriginals, narrativeSource?.context, { summary: rejected.feedback, issues: [] });
           } else if (planningContext.revision) {
             const previous = readStoryboardCheckpoint(planningContext.revision.task.result, {
@@ -840,41 +908,21 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             const feedback = issues ? (result.storyboardReview as { summary: string }).summary : planningContext.revision.feedback;
             planned = payload.storyboard.narrative && (issues?.some(issue => issue.kind === 'requires_replan')
               || previous.document.scenes.length > (payload.storyboard.narrativeSceneLimit ?? 6))
-              ? await generateStoryboard(options.gateway, claims, payload.storyboard, {
+              ? await generateStoryboard(planningGateway!, claims, payload.storyboard, {
                 document: previous.document, locale: payload.storyboard.locale, style: payload.storyboard.style, output: 'image',
               }, paperOriginals, narrativeSource?.context, { summary: feedback, issues: issues ?? [] })
-              : await clarifyIllustrationLabels(options.gateway, claims, payload.storyboard, previous, feedback, issues);
+              : await clarifyIllustrationLabels(planningGateway!, claims, payload.storyboard, previous, feedback, issues);
           } else {
             if (initialScienceRecovery) {
               const recovery = initialScienceRecovery;
               const recoveryGateway: Pick<AiGateway, 'completeStructured'> = {
                 completeStructured: async (guard, messages, opts) => {
-                  // Rebind the original receipt and sources before each science/art stage.
-                  await deps.prisma.$transaction(async tx => {
-                    const current = await requireIllustrationReviewAuthority(tx, {
-                      taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId,
-                    });
-                    const receipt = await tx.auditLog.findUnique({ where: { id: recovery.id } });
-                    const run = await tx.hermesResearchRun.findUnique({ where: { id: payload.hermesRunAuthority!.runId } });
-                    const currentClaims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
-                      researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
-                    if (current.owner.executionAttempt !== 2 || current.owner.retryCount !== 1 || current.owner.result !== null
-                      || !isDeepStrictEqual(current.owner.payload, owner.payload) || !isDeepStrictEqual(current.payload, payload)
-                      || receipt?.actorId !== scope.userId || !isDeepStrictEqual(receipt.metadata, recovery.metadata)
-                      || run?.maxAgentTasks !== 9 || run.status !== 'generating_storyboard'
-                      || currentClaims.length !== payload.sourceClaimIds.length || currentClaims.some(claim => claim.extractionStatus !== 'succeeded')
-                      || presentationClaimContent(currentClaims as PresentationClaim[]) !== identity.claimContent
-                      || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) {
-                      throw new Error('[blocked] Initial science recovery authorization changed');
-                    }
-                    await requireUnchangedEvidence(tx);
-                    await requireIllustrationOriginalArtifacts(tx, sourceEvidence, researchObject.workspaceId);
-                  }, { isolationLevel: 'Serializable' });
+                  await deps.prisma.$transaction(tx => revalidateInitialScienceRecovery!(tx, true), { isolationLevel: 'Serializable' });
                   return options.gateway!.completeStructured(guard, messages, { ...opts, primaryProviderOnly: true });
                 },
               };
               planned = await generateIllustrationStoryboard(recoveryGateway, claims, payload.storyboard,
-                undefined, paperOriginals, narrativeSource?.context, undefined, 'initial_science_thinking_exhausted');
+                undefined, paperOriginals, narrativeSource?.context, undefined, recovery.receipts.at(-1)!.failureClass);
             } else {
               planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view, paperOriginals, narrativeSource?.context);
             }
@@ -904,12 +952,16 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         const reviewContext = {
           authorizationContext: Object.freeze({ taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId }),
           illustrationContext: { executionAttempt: task.executionAttempt, claimContent: presentationClaimContent(claims), baseIdentity: planningContext.identity,
-            ...(artCorrection ? { primaryProviderOnly: true as const } : {}) },
+            ...(artCorrection || pixelRecovery || initialScienceRecovery ? { primaryProviderOnly: true as const } : {}) },
           researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceEvidenceIdentity,
           structuredIssues: planned.reviewFormat === 2,
           narrativeSource: narrativeSource?.context,
         };
-        const gateway = { reviewScientific: options.gateway.reviewScientific.bind(options.gateway) };
+        const gateway: Pick<AiGateway, 'reviewScientific'> = { reviewScientific: async (input, guard) => {
+          if (revalidateInitialScienceRecovery) await deps.prisma.$transaction(tx => revalidateInitialScienceRecovery!(tx, false), { isolationLevel: 'Serializable' });
+          if (pixelRecovery) await deps.prisma.$transaction(requirePixelRecoveryUnchanged, { isolationLevel: 'Serializable' });
+          return options.gateway!.reviewScientific!(input, guard);
+        } };
         let reviewed: { document: StoryboardDocument; provenance: StoryboardReview; designSkills: DesignSkillUsage[] } | undefined;
         if (artCorrection) {
           if (!persistArtCorrection) throw new Error('[blocked] Art correction persistence is unavailable');

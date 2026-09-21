@@ -1,4 +1,6 @@
 # Runbook: 部署（Deployment）
+- 全叙事65K、独立顺序maintenance与通用像素反馈返工（2026-09-22）：沿原cloud-sync/干净已推SHA/正常服务器build-start，no-tests、skip-migrate、复用未变能力镜像；不改独立Chat receiver或共享浏览器。当前动态DB约束已允许>=9，无新迁移。先等实际在途请求落存再发布。`narrative_pixel_scientific_replan`按整组正式审阅追加1计划+N图；正式blocked计划沿`narrative_pixel_plan_scientific_revision`显式只增1计划、继承N图预留，最多两级revision。两者均依赖新Domain连续收据，不能交给只认历史11/13/单图render回执的旧worker；新恢复请求提交前可回退原版本，提交后优先向前修复并保留全部任务/资产/审计，不缩额度、不删收据、不手工改run状态。实际候选/审查/release/rollback唯一见CURRENT。
+- 初始设计schema恢复仍沿原task：仅无checkpoint且符合已保存3次65K/stop/主provider审计的失败可续接，按actor/task限定连续授权回执，最多executionAttempt3；不重新分析论文，不增加逻辑任务或图片额度。每个模型阶段与末审重验原来源及同任务收据；旧worker不能消费新增schema恢复，提交后同样优先前向修复并保留失败证据。
 - 前台事务需服务器私有日志时，先以077/noclobber打开日志FD，再恢复构建默认022后执行原runner；不能把077泄漏给构建（已实见Next BUILD_ID0600导致非root Web启动EACCES/首页502）。连接中断或发布失败仍先读journal和运行身份，日志落盘不等于事务成功；不手改release marker或绕过公网确认。
 - 无checkpoint的方案技术失败续接：对已停止的叙事修订，或首次science两次thinking-only耗尽且尚无方案的failed叙事任务，沿既有明确授权复用原task再执行一次；两类均要求来源不变、仅终态text调用。初次science恢复只有science使用65536/600s，science/art均primary-only；art容量不变；Domain同事务保存原失败/调用证据、CAS run/step/task，worker仅凭唯一审计及既有来源身份允许executionAttempt2。UI明确新增模型用量；不新增迁移/receiver协议/逻辑任务额度。沿正常no-tests/skip-migrate部署；收据生成前可回退，恢复任务在途时先自然完成再回退，保留失败与恢复审计/所有资产，不归零执行次数或重新派发。其后保存了完整checkpoint但末审尚未调用时，原checkpoint续接可进入第三次执行，只审阅已保存方案；原来源/候选/调用谱系复验。方案审阅实际走文本池，沿既有100000字符输入边界；Chat协议与像素审阅仍60KiB，本次不需receiver更新。
 
