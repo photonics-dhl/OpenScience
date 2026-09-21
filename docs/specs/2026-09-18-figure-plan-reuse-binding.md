@@ -32,6 +32,8 @@ publicHistoryMedia excludes only an explicit false. Old published snapshots lack
 
 The copied reuse result remains a separate draft output, requiring its own review before it can enter a new public version. Existing public versions and accepted images are not rewritten.
 
+The existing publication POST also accepts optional `presentationAssetIds: string[]`. Omission retains the prior approved-output behavior for existing callers; an empty array publishes no media. The publication UI starts with no media selected and shows the chosen set and count before confirmation. The existing publication transaction checks that IDs are unique, approved, undeleted, in this RO/version, and are publishable outputs rather than storyboard plans or paper-original sources. Unselected entries receive `publicationIncluded:false` in the new snapshot while all history entries and source references remain preserved. Asset status does not change. Media list, download authorization and public content hash continue to consume the same frozen public set; existing publications remain immutable.
+
 ## Limits and remaining work
 
 - Parser-side automatic figure extraction/registration is not implemented here. Manual upload uses the same existing Artifact path as other source materials.

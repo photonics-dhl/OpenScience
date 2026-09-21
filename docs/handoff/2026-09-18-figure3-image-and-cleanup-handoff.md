@@ -4,6 +4,9 @@
 
 ## 2026-09-21 用户授权继续：真实原图复用与剩余断点
 
+- 后续实际收口：真实Fig.1 copy与原hash相同/900×696，copy和用户认可的恢复9f均经页面批准；发布选择/长度反馈已服务器构建部署，读回身份一致，站内发布页6成品默认0选/0图预览。新plan51eb结构成功但科学审查发现下标/来源覆盖问题，未审批或生图，e253经原方案反馈入口科学修订；不用局部成功冒称全链路稳定。
+- guide b6遗漏style落到technical，3ab显式editorial纠正同时意外改写内容；51eb提交前通过原指令框恢复b6 Hermes指令。候选新建style必填，历史/艺术修订省略语义保留；High发现过长validationFeedback被Gateway忽略，已原地精简，待复核/部署。只保留代码约束与科学/审美审核各自的真实能力边界。
+
 - 用户明确保留当前登录继续，未退出或改动会话；原错误并非认证失败。已从dashboard真实入口进入新版配图页，原图上传/来源审核成功，Hermes版本上下文实际修复。具体资产和下一动作只见CURRENT；下节“暂停/未上传”是此前历史状态。
 - 原Fig.1三子图与完整图注已视觉核对，上传后hash相等、浏览器解码900×696；来源批准只允许reuse。Hermes仅Fig.1/reuse方案已成功并批准，原样复制已通过原按钮提交，未新调用Chat图像provider。收据/jobs/paper-source-*、hermes-source-reuse-*、paper-reuse-*20260921.json。
 - 新封面guide成功而science plan失败；worker固定诊断是JSONparse、encoding220>200、subject描述151>140；按task关联Langfuse三条MiniMax调用。Pro同原CLI短任务实读两段代码、写/读回12行建议；tmp/pro-collaboration/2026-09-21T00-50-19-619Z.jsonl及tmp/pro-planner-bounds-review-20260921.md。候选聚合已被拒对象的超长字段反馈，修planning缺失上限/constraints.min，保留原证据/科学guard及两次重试；不截断科学文字、不扩大额度预算。

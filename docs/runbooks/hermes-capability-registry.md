@@ -46,7 +46,9 @@
 
 ### 当前技术债与处理
 
-当前定向补接：真实Fig.1已进入Artifact→来源审核→Hermes reuse方案，复制/成品/公开状态见CURRENT；此前“仅占位管道”是历史证据。新封面science任务出现JSON和字段超长，`illustration-planner.ts`候选补拒绝对象多字段长度反馈，不增加重试/放宽科学约束。发布端原来自动全选approved成品，候选复用publish事务和historyMedia.publicationIncluded提供明确选图，旧资产/公开v1保留；未部署候选不可当已运行能力。
+当前定向补接：真实Fig.1已完成Artifact→来源审核→Hermes reuse→原字节copy→成品批准，此前“仅占位管道”为历史。多字段长度反馈和明确发布选图已上线，原科学guard/重试预算/旧资产/v1保留；发布页默认0选6成品已观察，尚未新公开。新51eb方案仍出现k⊥丢失与主张超出所绑定原文，人工拦住并科学修订，不能以Schema/模型审阅通过证明科学正确。guide漏style会落到UI默认technical，新create必填style及精简旧超2000字符反馈为候选，状态只见CURRENT。
+
+第三篇全文阻塞：`extractor.ts:canonicalPassages`在semantic map/reduce前硬限120000字符；实际f653386b为failed_blocked，既有retry/refresh要求不满足。下一步需保留原Artifact/来源标识的有界分节产品路径；不能重复上传、盲重解析或直接扩大上限，当前先交付已凝练的两篇。
 
 范围：交付树的规则治理、去重、配图表示/审阅边界和工具联动断点；精确版本见CURRENT。以下是定向诊断，不是全仓无债证明或量化健康评分；执行了必要应用构建/启动和工具实际查询，未运行扫描、测试；已执行用户授权的真实私有配图任务。
 

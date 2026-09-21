@@ -15,9 +15,10 @@
 - 一次真实 Hermes 编辑封面目标提交创建 workspace.guide 64aa264e-e1a2-4224-8509-7061b6babdce，失败“presentation draft 不在允许的版本上下文中”。原 POST context 仅 tasks/researchObjects，漏 presentation；没有提交图片。ResearchPresentation 独立 Drawer 已补当前RO/version并随版本重建，worker既有作用域诊断已接入结构化guard；修复已部署但站内新请求尚未提交；保留原失败，不盲重试。
 - 所有候选已完成：原图UI/API/domain、Hermes上下文、深浅色边缘填色、新发布来源排除。独立High完成源码边界审查；最终保留图片+Claim+图注的完整重投身份，允许合法修正说明后新建draft，始终需再次人工审核。存储核验移到事务外、锁内重核；源Artifact清理引用保护与批准时可用性检查补齐。服务器必要编译/部署完成、独立provider安装完成；没有OpenScience测试/预检/CI/本机构建，尚未新生图/审批/公开，新增UI路径未在登录下观察。
 - 登录事故后用户明确“没事，继续执行后续任务”，保留当前会话、未退出/重登；站内私有操作已恢复。新版真实dashboard→编辑→研究详情→图解与视频成功，登录有效；辅助脚本错误只输出固定阶段代码，不记录原始网络错误或登录字段。
-- 新实际结果：带正确presentation上下文的guide fec6e2f0成功；编辑封面plan d571922d失败在科学结构化阶段，三次为JSON解析、encoding220>200、description151>140，未进入Chat生图。现有重试反馈只呈首错；候选补同一拒绝对象的长度诊断、提示中description上限与constraints最小数，原科学校验/证据约束/重试预算不变。Pro短CLI已实读源码并写/读回tmp/pro-planner-bounds-review-20260921.md；High增量静态审查通过，尚待本轮候选部署和真实观察。
-- 发布选择候选已完成：现有publish接口可选presentationAssetIds，省略兼容全选、[]正文；新UI默认空选、逐项预览，原事务内校验当前版本approved成品，使用既有publicationIncluded保存选择，保留所有历史/来源引用和旧v1。原因是557c3db6旧approved成品会随全选混入；77b3f559已确认是来源原图、默认排除。独立High完成边界审查；未部署/公开。
-- 真实PDF证据：原PDF568765 bytes/hash一致，15页只有Fig.1；第5页三子图和完整图注提取为tmp/pipeline-paper-figure-1.png（900×696/299886 bytes）。已从产品入口上传c1e2c18d-38c0-44a8-ab5c-73cc87d308b2，原字节hash相等、浏览器解码900×696、核对原PDF和Claim后来源approved。Hermes guide7a619dc8正确给出仅Fig.1/reuse，plan39f26074-b3a4-43ff-9e57-f96ab10e7130成功并经界面批准；原样复制task6871a6d1-493a-4e3f-9427-b99c4d5d20b7已提交待读回。此PDF没有Fig.3，已有9f仍是生成图。新证据/jobs/paper-source-*、hermes-source-reuse-*、paper-reuse-*20260921.json；一次性写脚本保留收据避免重发。
+- 新实际结果：带presentation上下文的fec6e2f0成功；plan d571922d因JSON/encoding220>200/description151>140失败。多字段长度反馈及提示修复已部署，科学guard/重试预算不变；Pro短CLI实际读源码、写/读回tmp/pro-planner-bounds-review-20260921.md。新plan51eb912b-2923-422a-bf89-a5190c990ef9已成功，但人工审查发现k⊥下标丢失、形状因子/标势超出所绑原文；未批准/生图，经现有方案修订入口提交e253c2fb-b2f0-4af9-8bf1-ff09da6f9349，限定有源支持的偶极与传播/倏逝定性关系，待读回。
+- 新guide b6be69ec漏style导致UI默认technical；3ab77096明确纠正editorial，但同时改写指令。提交51eb前在原可编辑指令框恢复b6 Hermes原文（未手编科学内容），保持editorial。新候选仅要求新storyboard.create模型输出非空style；历史类型及art-only revise省略风格保留。High发现原冗长修复反馈超过Gateway2000字符被忽略，已精简同一反馈，不增加重试；待增量复核/部署。
+- 发布选择已部署：publish可选presentationAssetIds，省略兼容全选、[]正文；新UI默认空选、逐项预览，原事务校验当前version的approved成品，复用publicationIncluded保留完整历史/来源/旧v1。实际经研究详情→更多工具→发布进入，6项成品均未选、公开预览0图；原图c1/77与draft不在选项。旧557不自动混入。未执行发布。
+- 真实PDF证据：原PDF568765 bytes/hash一致，15页只有Fig.1；第5页三子图和完整图注提取为tmp/pipeline-paper-figure-1.png（900×696/299886 bytes）。产品上传c1e2c18d-38c0-44a8-ab5c-73cc87d308b2，hash/浏览器解码/原PDF/Claim核对后来源approved。guide7a619dc8仅Fig.1/reuse，plan39f26074成功/approved；copy6871a6d1-493a-4e3f-9427-b99c4d5d20b7 succeeded，hash与原图9bd7ff7a…相同、900×696、已在图册批准。已认可9f恢复图亦完成页面批准。收据/jobs/pipeline-confirm-known-images-20260921.json及paper-source-*/hermes-source-reuse-*/paper-reuse-*20260921.json；一次性写脚本保留收据不重发。
 - 证据：本机 tmp/pro-collaboration/2026-09-20T16-15-06-004Z.jsonl；服务器 /jobs/pipeline-observe-20260921.json、pipeline-ui-20260921.json、hermes-editorial-ui-20260921.json。owned浏览器页 window.name=xgs-pipeline-20260921，失败目标仍保留。一次性 start 脚本不可重跑，read 脚本仅读取。
 
 <a id="illustration-delivery"></a>
@@ -25,9 +26,9 @@
 | 交付 / Taskmaster ID | 当前实际资产、认可与剩余工作 |
 |---|---|
 | 学术机制图 · 1 | 2026-09-21 API读回145af7bf-f9a5-46ca-a346-4914fdcbf17f approved，父d0b36138-e66e-4f4d-9f49-ff60095f7eeb approved。用户此前认可a7488c14版面，但该资产现为rejected；6d69159a/803e590b也已rejected，旧draft表已纠正，不恢复旧状态。仍需核当前认可作品与发布选择。 |
-| 编辑封面 · 2 | 旧ac16631b现rejected；76918e55方案/7cd50e44出图uncertain原恢复窗口已过。UI上下文故障已由fec6e2f0实际成功关闭；新plan d571922d科学结构化失败，修复候选待部署后推进。无新Chat图片。 |
+| 编辑封面 · 2 | 旧ac16631b rejected；76918e55/7cd50e44 uncertain窗口已过。上下文/字段反馈已上线并有51eb方案成功；其科学审查不合格，e253修订待回。style遗漏候选待部署，暂无新Chat图片。 |
 | 淡彩手绘 · 3 | aa41a018-b2ff-4ffb-9557-19ecabe104bc 用户明确认可且当前approved；保护原图，不默认重画。f424现rejected，不能计新增风格。 |
-| Fig.3恢复 / 原图复用 · 4 | 8141b5fd approved；9f7ff671真实1280×720图draft且用户已认可，待页面审批。真实Fig.1来源c1e2c18d与reuse方案39f26074已批准，复制6871a6d1待读回/成品审核；发布选择候选保护原图来源/旧产物，未公开。 |
+| Fig.3恢复 / 原图复用 · 4 | 8141b5fd approved；用户认可9f7ff671恢复图现approved。真实Fig.1来源c1e2c18d/方案39f26074/copy6871a6d1均approved，原字节完整。发布选择已观察默认空选，尚未新公开。 |
 
 ## 真实论文与受保护状态
 - Quantization RO9067a2d5-42ad-4c06-b234-753728b71064 / draft e77dc3c7-95cb-4269-ac3c-24276fea74e7 / 已有公开OSR-2026-000023/v/1；已成功Claim93416292-0dbb-42b1-8810-6bdf77804c1f。deep-sub-cycle ROc896802c-35dd-4b59-8db1-5f374f83a6d8亦有真实论文及公开v1；第三篇aa450f1e-fafc-46d8-a072-d935e01b0544私有研究对象已上传但versions为空；原f653386b任务failed_blocked（full-document limit），不重复上传或盲重解析。
@@ -44,11 +45,11 @@
 - CUA本机policy初始化恢复已耗尽，不重试；沿用服务器Playwright/CDP。Langfuse已登录，额度/cost未知不算免费；SMTP/SSO/定时备份等原缺口保留，但不扩成本轮治理工程。
 
 ## Git、生产与独立能力版本
-- 应用production=6bbf266cfc4758237db79179c4f31e794fa945a9，rollback=7a3a6a85bdbe19f9bd63009c841087ba3e06e824；本轮服务器所有包编译、镜像构建/启动完成，deploy exit0，.release-id与匿名/__release HTTP200读回相同SHA。命令带--no-tests --skip-migrate --reuse-unchanged-capability-images；完整日志tmp/pipeline-deploy-20260921.log。收尾HEAD为本记录所属文档提交，按Git定锚。根main acd13a712549e62f8d4b0f3c2f8f064549e226b0，worktree仅根+交付树。
+- 应用production=ad486b86b095c72f9e85dadc39caca8c9003a5a5，rollback=6bbf266cfc4758237db79179c4f31e794fa945a9；服务器编译/构建/启动完成，deploy exit0，.release-id与匿名/__release HTTP200一致。命令带--no-tests --skip-migrate --reuse-unchanged-capability-images，日志tmp/pipeline-selection-deploy-20260921.log。HEAD按Git定锚；新的style必填候选尚未部署。根main acd13a712549e62f8d4b0f3c2f8f064549e226b0，worktree仅根+交付树。
 - Chat provider独立bundle=6bbf266cfc4758237db79179c4f31e794fa945a9，image/science-review两个service源读回一致，两个timer均active。第一次安装被已有锁拒绝、未切换；暂停售时轮询并等待在途退出后原installer成功，按原状态恢复timer，未停浏览器/取消任务。备份/opt/openscience-chatgpt-browser/provider-backup-20260921-6bbf266c保存此前7a3配置引用/units/live文件；旧bundle与配置保留。renderer保持sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f，应用/provider分别回退。
 - Serena源6684e448a6d924f7f5b1adce9e0e2e4057aa88d3；Catalog e02、telemetry061882123d14be00b868c1971c9d56de21d83b6e、SkillsCLI83179c454b75688176060fabf9e611072d46813c、Langfuse4.35.0复用。无新依赖/迁移/治理服务。
 
 ## 下一动作与交接入口
-- 用户已授权保持会话续作：先读回真实Fig.1复制并审查，部署科学反馈/发布选择候选，再推进既有Hermes封面指令的实际方案/成图。复用已认可学术/淡彩/恢复Fig.3，按明确选择发布新版本，保留v1及旧资产；新封面仍需用户审美认可，失败不盲重发。
+- 先读e253科学修订并核原文/符号，再处理style必填候选部署；通过方案后才提交一次新封面生图。复用已认可学术/淡彩/恢复Fig.3/真实原图copy，按明确选择发布新版本，保留v1及旧资产；新封面仍需用户审美认可。第三篇实际超canonicalPassages的120000字符前置上限，failed_blocked无合法retry/refresh；需要保留原来源的分节产品路径，不能盲重上传或放宽上限，本轮先推进已有两篇。
 - 先读本页，再按故障读 docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md 最新节；能力缺口在 docs/runbooks/hermes-capability-registry.md 原行更新，历史长证据不重复执行。
 - 收尾两树status必须为空，提交/推送自己的改动，prune/list；临时证据只放ignored tmp/私有应用目录。确认归属、生产者结束且不用后才清理；现有每日09:00维护automation=automation，不再创建。日志/登录/他人任务/独有资产/回滚均保护。
