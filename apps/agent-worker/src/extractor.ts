@@ -1010,8 +1010,6 @@ function passageText(slices: readonly CanonicalPassageSlice[]): string {
 
 function canonicalPassages(sourceMap: DocumentSourceMap): CanonicalPassage[] {
   const blocks = canonicalTextBlocks(sourceMap);
-  const total = blocks.reduce((sum, block) => sum + block.text.length, 0) + Math.max(0, blocks.length - 1);
-  if (total > 120_000) throw new Error('[blocked] Paper exceeds the full-document understanding limit; split the document into research sections before analysis');
   const passages: CanonicalPassage[] = [];
   let pending: CanonicalPassageSlice[] = [];
   const flush = () => {
@@ -2932,7 +2930,7 @@ export async function extractHandler(
     };
   }
   if (canonicalSourceMap && passages && trustedContext.scientificReview?.mode !== 'web') {
-    let phase: 'section_map' | 'semantic_reduce' | 'source_bridge' = trustedContext.previousResult ? 'source_bridge' : 'section_map';
+    let phase: 'section_map' | 'semantic_reduce' | 'source_bridge' = 'section_map';
     let semanticStage: SemanticStage | undefined;
     try {
       semanticStage = trustedContext.previousResult
@@ -2942,8 +2940,6 @@ export async function extractHandler(
         phase = semanticStage.kind;
       } else if (trustedContext.requireReusableSemanticStage) {
         throw new AiGatewayError('SCHEMA_VALIDATION', 'source_bridge:reusable_semantic_stage_required');
-      } else if (trustedContext.previousResult) {
-        semanticStage = await buildLegacySemanticBridge(gateway, passages);
       } else {
         const mapped = await buildMappedSemanticStage(gateway, passages);
         phase = mapped ? 'semantic_reduce' : 'source_bridge';

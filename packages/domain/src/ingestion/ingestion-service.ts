@@ -29,6 +29,7 @@ import { inspectHermesSourceReviewRecovery } from './source-review-recovery';
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
 
 const INGESTION_WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
+const LEGACY_FULL_DOCUMENT_LIMIT_ERROR = '[blocked] Paper exceeds the full-document understanding limit; split the document into research sections before analysis';
 
 function exactRecordKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value)
@@ -412,6 +413,32 @@ export async function retryIngestionTask(
           }
         }
         const agentTask = task.agentTask;
+        let parserCheckpoint: Prisma.InputJsonValue | undefined;
+        let legacyFullDocumentLimitRecovery = false;
+        if (agentTask?.kind === 'sdf.extract' && !task.artifact.bytesPurgedAt
+          && task.artifact.workspaceId === workspace.id && task.batch.userId === input.userId
+          && exactRecordKeys(agentTask.payload, ['artifactId', 'researchObjectId'])
+          && agentTask.payload.artifactId === task.artifactId
+          && agentTask.payload.researchObjectId === task.batch.researchObjectId) {
+          const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
+          if (session?.userId === input.userId && session.status === 'active' && !session.deletedAt
+            && session.researchObjectId === task.batch.researchObjectId) {
+            if (exactRecordKeys(result, ['sourceMapRef'])) {
+              try {
+                const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+                if (reference.parserStatus === 'succeeded' && reference.artifactId === task.artifactId
+                  && reference.contentHash === task.artifact.blobSha256) {
+                  parserCheckpoint = result as Prisma.InputJsonValue;
+                }
+              } catch { /* Invalid or incomplete results follow the existing reset policy. */ }
+            }
+            legacyFullDocumentLimitRecovery = task.state === 'failed_blocked' && task.retryCount === 0
+              && task.error === LEGACY_FULL_DOCUMENT_LIMIT_ERROR
+              && agentTask.status === 'failed' && agentTask.error === LEGACY_FULL_DOCUMENT_LIMIT_ERROR
+              && agentTask.retryCount === 0 && agentTask.executionAttempt === 1
+              && (result === null || parserCheckpoint !== undefined);
+          }
+        }
         const failedRetry = task.state === 'failed_retryable' && task.retryCount >= 0 && task.retryCount < 3
           && agentTask?.kind === 'sdf.extract' && agentTask.status === 'failed'
           && agentTask.retryCount === task.retryCount && agentTask.executionAttempt === task.retryCount + 1;
@@ -453,10 +480,13 @@ export async function retryIngestionTask(
         }
         const authorizedFailedRetry = failedRetry && activeFailedRetryOwner
           && (task.retryCount === 0 || paidFailedRetry || compensatedSchemaRetry);
-        if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery && !parserRecovery && !passageBudgetRecovery) {
+        if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery && !parserRecovery
+          && !passageBudgetRecovery && !legacyFullDocumentLimitRecovery) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
         }
-        const recovery = passageBudgetRecovery ? 'canonical_passage_budget' : parserRecovery ? 'unresolved_parser_pages'
+        if (!deps.audit?.record) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry audit is unavailable');
+        const recovery = legacyFullDocumentLimitRecovery ? 'legacy_full_document_limit'
+          : passageBudgetRecovery ? 'canonical_passage_budget' : parserRecovery ? 'unresolved_parser_pages'
           : canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
           : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable'
             : compensatedSchemaRetry ? 'canonical_schema_exhaustion_compensation'
@@ -479,18 +509,23 @@ export async function retryIngestionTask(
         const resetAgent = await tx.agentTask.updateMany({
           where: {
             id: task.agentTaskId!, kind: 'sdf.extract', retryCount: retryAttempt - 1,
+            sessionId: agentTask!.sessionId, deletedAt: null, error: agentTask!.error,
+            payload: { equals: agentTask!.payload as Prisma.InputJsonValue },
+            result: { equals: result === null ? Prisma.AnyNull : result as Prisma.InputJsonValue },
             status: legacyProposalFailure || canonicalAllMissingRecovery || parserRecovery || passageBudgetRecovery ? 'succeeded' : 'failed',
             ...(canonicalAllMissingRecovery ? { executionAttempt: 2 }
-              : authorizedFailedRetry || parserRecovery || passageBudgetRecovery ? { executionAttempt: retryAttempt } : {}),
+              : authorizedFailedRetry || parserRecovery || passageBudgetRecovery || legacyFullDocumentLimitRecovery
+                ? { executionAttempt: retryAttempt } : {}),
           },
           data: {
-            status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
+            status: 'pending', progress: 0, result: parserCheckpoint ?? Prisma.JsonNull, error: null, dispatchedAt: null,
             retryCount: { increment: 1 },
           },
         });
         if (resetAgent.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry is no longer available');
         const claimed = await tx.ingestionTask.updateMany({
-          where: { id: task.id, agentTaskId: task.agentTaskId, state: task.state, retryCount: retryAttempt - 1 },
+          where: { id: task.id, agentTaskId: task.agentTaskId, state: task.state, retryCount: retryAttempt - 1,
+            artifactId: task.artifactId, error: task.error },
           data: { state: 'queued', retryCount: { increment: 1 }, error: null },
         });
         if (claimed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry is no longer available');
@@ -498,6 +533,10 @@ export async function retryIngestionTask(
           actorId: input.userId, action: 'ingestion.task.retry', workspaceId: workspace.id,
           targetType: 'ingestion_task', targetId: task.id,
           metadata: { recovery, agentTaskId: task.agentTaskId, retryAttempt,
+            previousState: task.state, previousError: task.error,
+            previousAgentStatus: agentTask!.status, previousAgentError: agentTask!.error,
+            previousExecutionAttempt: agentTask!.executionAttempt, previousRetryCount: task.retryCount,
+            previousAgentRetryCount: agentTask!.retryCount, checkpointReused: parserCheckpoint !== undefined,
             ...(parserRecovery ? { previousParserResult: result } : {}),
             ...(passageBudgetRecovery ? { previousExtractionResult: result } : {}),
             creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation'

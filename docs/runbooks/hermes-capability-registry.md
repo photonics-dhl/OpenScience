@@ -19,7 +19,7 @@
 
 | 产品目的 / 能力 | 实现与实际调用入口（仓库相对路径） | 结果依据与边界 |
 |---|---|---|
-| 上传、全文取得、解析 | `apps/api/src/routes/ingestion.ts` → `apps/agent-worker/src/ingestion-parser.ts`；全文发现走 `apps/agent-worker/src/retrieval/handler.ts`，解析选择走 `apps/agent-worker/src/parsers/cascade-orchestrator.ts` | 既有SourceMap/页码与原始文件是下游来源；解析可读不代表公式正确。复用ScanSci、Docling、Tesseract，资源见服务器清单 |
+| 上传、全文取得、解析 | `apps/api/src/routes/ingestion.ts` → Domain `ingestion-service.ts` → worker `index.ts`/`extractor.ts`；全文发现与parser复用 `retrieval/handler.ts`、`parsers/cascade-orchestrator.ts` | 第三篇旧120k前置阻断候选已接回原18k分窗，精确历史错误可沿原retry一次恢复；模型前保存私有解析checkpoint，重试不把它当科学结果。High PASS，实际长文规模/输出待原任务恢复；不新增parser/分析器/迁移，部署与效果见CURRENT |
 | 文献语义理解 | `apps/agent-worker/src/extractor.ts` 的 `semanticReductionGuard`/综合链；引用 `skills/paper-analysis.ts`、`scientific-critical-thinking.ts`；经Gateway | 已有semanticStage、条件/算例/操作/来源关系；后续应沿用经审核结果，不能将先前有错候选当成权威。历史d5c6整稿未通过，当前不重跑 |
 | 共享科学推理规则 | `skills/scientific-critical-thinking.ts` → `extractor.ts` 的reduce/bridge及科学审校；`installed-media-skills.ts` science/review复用综合指令并记录id/version | 项目runtime v2有真实41c及配图1da6/a38消费。v3已部署复用同一证据规则，原综合指令保持，另提供来源审校指令给既有终审；方法适配不等于安装整个K-Dense包。当前部署与效果见CURRENT |
 | 原文科学审阅 | `extractor.ts` 的 `modelScientificReviewCanonicalProposal` 显式注入科学Skill，经 `gateway.completeStructuredWithMetadata` 沿MiniMax主路由；仅显式 `context.mode=web` 改走 `webScientificReviewCanonicalProposal` → `gateway.reviewScientific` | 41c使用v2且服务失败，不能推断科学理解耗时。v3已部署用原文逐主张核对、只因科学/来源问题修订，保留跨字段及相反证据；Worker从绑定的visual-narrative来源步骤派生主张要求，普通人工v5仍可选，原守卫/建议解析/自动消费校验保持。无新分析器或额外模型阶段；新指令的科学质量/耗时未观察，见CURRENT |
@@ -30,7 +30,7 @@
 | Chat图像生成 / 参考图 | `presentation/scene-image.ts` → `gateway.generateImage` → `infra/chatgpt-browser/` | 服务器Chat直接执行已审方案；原参考图bytes和本批无参考图新风格均有真实成图。学术图c3a497已看图、仍待用户认可，初次封面ac166未合格，修订结果只见CURRENT。保留喜欢的aa41、旧图和公开v1；Codex CLI仅备用且不自动切换 |
 | Hermes对话与执行授权 | `apps/api/src/routes/agent.ts`、`research-runs.ts` → `packages/domain/src/agent/research-run.ts`、worker `index.ts` | 对话承接修改、核对、执行；当前能力参数/权限以这些入口为准。开发用MCP与skill目录不自动成为Hermes工具 |
 | 私有编辑 / 回收站 | `apps/api/src/routes/research-objects.ts`、`trash.ts` → Domain；`infra/private-cleanup/` | 草稿编辑与公开发行分开；公开资料保留。最近清除证据见历史f8e44815，本轮未删除任何数据 |
-| 公开发布 / 标准API | `apps/api/src/routes/publications.ts`、`research.ts`、`research-record.ts`；Domain `publication-evidence.ts`、`evidence-publication-verification.ts`、`commit/research-record-snapshot.ts` | 原发布消费者只认人工核验，真实58项Hermes系统核验被阻断。候选共享helper校核已有系统审计/完整v5及来源身份，并复用冻结科学记录处理未变新草稿；人工字段不回填。最终事务重核，公开仅冻结verified结果，私有身份不暴露；候选/部署/真实发布分别见CURRENT |
+| 公开发布 / 标准API | `apps/api/src/routes/publications.ts`、`research.ts`、`research-record.ts`；Domain `publication-evidence.ts`、`evidence-publication-verification.ts`、`commit/research-record-snapshot.ts` | 已部署共享helper校核系统审计/完整v5及来源身份，复用冻结科学记录处理未变新草稿；人工字段不回填，最终事务重核、历史读取有界。真实58项系统核验通过，首篇v3发布201，公开6Claims/58Evidence及新图可读，旧v1/v2保留。最终用户质量认可仍pending；未变继承仅静态High依据，尚未实际另存稿观察 |
 | 服务器与调用观察 | `infra/scripts/deploy.sh`、`infra/compose/`；`packages/ai-gateway/src/gateway.ts` 的record；AgentTask/资产provenance | 本次只读确认Portainer、Netdata和应用运行；日志、任务结果、审阅/拒绝记录已存在。服务健康不能作为内容质量证据 |
 
 ### 复用与效果查询

@@ -52,7 +52,13 @@
 
 - 第二篇只读元数据：RO c896802c仍draft，只有旧content-driven-image failed run436ff；新叙事可复用confirmed来源2fdb78de/agent1e324308及原PDF7bb96cc1（3,770,010bytes），v4无semanticStage，可沿原composition+v5审阅补齐；不复用旧d5c6失败科学结论，不重新上传。收据tmp/second-paper-narrative-source-read-20260922.json。
 
-## 第三篇长文断点：后续最小方向（只读设计，未实施）
+- 正常无迁移/无测试部署0c6115dd完成exit0，release/rollback独立marker一致，journal/failed无。原UI新收据/jobs/visual-narrative-system-verified-publish-20260922.json：license/review/两次status均200，review passed/无hardBlocks，publish201，3051为公开v3，contentSha256 d34d5d70344cc7f7f6ee0ed7906836d74492cc9a815a5ceb188b7dbdcbe88c66，2026-09-21T19:48:46.366Z。没有填人工核验字段。
+- 实际点击“查看公开RO”打开v3，新8bbc1280×720解码。匿名GET v1/v2/v3均200，旧两版contentHash/正文保持、3版许可一致，v3有6Claims/58Evidence和唯一8bbc，附件workspace_member。收据/jobs/visual-narrative-public-v3-observe-20260922.json及本机同名tmp；真实viewport图已看tmp/visual-narrative-public-v3-viewport-20260922.png，caption16px/28px/pre-wrap，无横溢出。初次fullPage图受现有Chrome125%/CDP截图裁切，DOM scrollWidth=clientWidth1140，改viewport截图确认完整画面，不把截屏裁切误判产品溢出。
+- 第二篇真实入口已完成公开v3→研究桌面→deep-sub-cycle私有草稿→研究详情→Hermes。首次助手误用按钮可访问名导致未发送，DB同用户新guide0；输入保留，改用唯一可见发送按钮键盘Enter，HTTP201 task ab76b22e-386a-48ab-bf7b-bb188b7c053e。一次性/jobs/second-paper-editorial-guide-keyboard-submit-20260922.json已消费；原prepared收据保留，不重复发送。guide明确editorial及未读论文者叙事，尚未启动制作run。
+
+## 第三篇长文断点：候选已实现并High通过，尚未部署恢复
+
+- 新只读现场tmp/third-paper-recovery-scope-read-20260922.json确认f653 failed_blocked、双表精确旧全文错误、retry0/attempt1/resultNULL、sessionactive/用户ROpayload关系匹配、原Artifact可用。候选沿原retry一次legacy_full_document_limit恢复，严格CAS/审计保存旧错误与计数，复用原预留；不手改DB/新task/run。Worker解析成功后模型前写exact {sourceMapRef}私有检查点，重试严格加载为reusableSourceMap而非previousResult；现有18k映射取代120k前置门槛，无新reducer/内容裁剪/API/迁移。六文件增量High PASS，生产audit sink已注入。实际长文规模和reducer容量仍未知，待正常无测试/无迁移部署及原UI恢复。下列只读设计为之前的发现过程，不按旧“未实施”重复工作。
 
 - RO aa450f1e-fafc-46d8-a072-d935e01b0544/f653386b既有120000字符失败发生在extractor.ts canonicalPassages全文总量检查，先于semantic map/reduce；原Artifact d04add46-9d96-443b-aae1-c1dfc1ecbadb（PDF 4,609,066 bytes）保留，无研究Version，不重新上传。最新服务器只读确认AgentTask 2e83eaf7-66a3-4436-a045-ffa56d2a4895 result=NULL、无sourceMapRef，parser-jobs未留该任务产物；尚不能声称SourceMap可恢复，需查原生产者持久化时机。
 - 独立High定向读到现有buildMappedSemanticStage已将全部P段按约18000字符窗口顺序处理、并发2，再通过semantic-reduce归并；每段原1200字符/来源slice保留。小修方向为把120000限制留在单次buildLegacySemanticBridge，有previousResult但无可复用semantic stage的长文强制复用现有mapped路径，避免新分析模块和任意裁剪。

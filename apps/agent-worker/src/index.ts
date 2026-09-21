@@ -1,5 +1,6 @@
 import { requireStyleReferenceImage } from '@openscience/domain';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
+import { Prisma } from '@prisma/client';
 import {
   AiGateway,
   AnthropicCompatProvider,
@@ -334,6 +335,22 @@ export function createHandlers(
       let requireReviewedClaims = false;
       let persistedScientificReviewCandidateHash: string | undefined;
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
+      const parserCheckpoint = ownerTask.result;
+      if (parserCheckpoint && typeof parserCheckpoint === 'object' && !Array.isArray(parserCheckpoint)
+        && Object.keys(parserCheckpoint).join(',') === 'sourceMapRef') {
+        const reference = parseDocumentSourceMapReference(parserCheckpoint.sourceMapRef);
+        if (ownerTask.kind !== 'sdf.extract' || ownerTask.status !== 'running'
+          || ownerTask.executionAttempt !== task.executionAttempt || ownerTask.deletedAt
+          || ownerTask.session.status !== 'active' || ownerTask.session.deletedAt || ownerResearchObject.deletedAt
+          || artifact.deletedAt || artifact.bytesPurgedAt
+          || reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.contentHash !== artifact.blobSha256
+          || Object.keys(task.payload).sort().join(',') !== 'artifactId,researchObjectId') {
+          throw new Error('[blocked] Reusable parser checkpoint scope is invalid');
+        }
+        // A parsed source is not a prior scientific result. Keep previousResult unset.
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+      }
       const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):(scientific-summary-v3|scientific-review-v4)$/.exec(ownerTask.idempotencyKey ?? '');
       if (composition) {
         if (composition[4] === 'scientific-review-v4' && composition[2] !== composition[3]) {
@@ -494,6 +511,35 @@ export function createHandlers(
       const sourceMapRef = (parsed.status === 'succeeded' || parsed.status === 'needs_review') && parsed.sourceMap
         ? await persistDocumentSourceMapReference(deps.storage, parsed.sourceMap, parsed.status)
         : undefined;
+      if (parsed.status === 'succeeded' && sourceMapRef) {
+        if (sourceMapRef.parserStatus !== 'succeeded' || sourceMapRef.artifactId !== artifact.id
+          || sourceMapRef.contentHash !== artifact.blobSha256) {
+          throw new Error('[blocked] Parser checkpoint source identity changed');
+        }
+        const checkpoint = { sourceMapRef: { ...sourceMapRef } };
+        await deps.prisma.$transaction(async (tx) => {
+          await lockTrashReferences(tx);
+          const currentArtifact = await tx.artifact.findFirst({
+            where: { id: artifact.id, workspaceId: ownerResearchObject.workspaceId,
+              blobSha256: artifact.blobSha256, size: artifact.size, deletedAt: null, bytesPurgedAt: null },
+            select: { id: true },
+          });
+          if (!currentArtifact) throw new Error('[blocked] Parser checkpoint source is unavailable');
+          const stored = await tx.agentTask.updateMany({
+            where: {
+              id: task.id, kind: 'sdf.extract', status: 'running', executionAttempt: task.executionAttempt,
+              sessionId: ownerTask.sessionId, deletedAt: null,
+              session: { status: 'active', deletedAt: null, userId: ownerTask.session.userId,
+                researchObjectId: ownerResearchObject.id,
+                researchObject: { deletedAt: null, workspaceId: ownerResearchObject.workspaceId } },
+              payload: { equals: { artifactId: artifact.id, researchObjectId: ownerResearchObject.id } },
+              OR: [{ result: { equals: Prisma.AnyNull } }, { result: { equals: checkpoint } }],
+            },
+            data: { result: checkpoint },
+          });
+          if (stored.count !== 1) throw new Error('[blocked] Parser checkpoint task changed before analysis');
+        }, { isolationLevel: 'Serializable' });
+      }
       if (parsed.status !== 'succeeded') {
         return {
           status: 'needs_review',

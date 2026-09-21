@@ -1343,6 +1343,7 @@
     "confirmError": "Confirmation failed. Refresh and try again.",
     "proposalUnavailableTitle": "The structured suggestion was not generated",
     "proposalUnavailableBody": "The source is safely stored and parsed, but Hermes did not produce a result that passed validation. Retry the same material without uploading it again.",
+    "proposalLongDocumentRecoveryBody": "The previous full-document limit has been removed. Continue with the same uploaded material; the original failure record will be preserved.",
     "proposalRetry": "Retry structured extraction",
     "proposalReanalysisTitle": "The structured result has no reviewable evidence",
     "proposalReanalysisBody": "Hermes kept the source, but the previous analysis extracted no source-supported SDF fields. Reanalyzing the same material uses 1 AI credit; no upload is needed.",

@@ -18,6 +18,9 @@ import { ApiClientError, confirmIngestionTask, apiRequest, getExistingHermesRese
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
+const isLegacyFullDocumentLimit = (task: { state: string; retryCount: number; error?: string | null }): boolean =>
+  task.state === 'failed_blocked' && task.retryCount === 0
+  && task.error === '[blocked] Paper exceeds the full-document understanding limit; split the document into research sections before analysis';
 const hasExactKeys = (value: unknown, keys: string[]): value is Record<string, unknown> => Boolean(value && typeof value === 'object'
   && !Array.isArray(value) && Object.keys(value).sort().join(',') === [...keys].sort().join(','));
 export function isCanonicalAllMissingExtraction(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount'>): boolean {
@@ -37,6 +40,7 @@ export function isCanonicalAllMissingExtraction(task: Pick<IngestionTaskDetail['
     && result.sourceMapAvailable === true);
 }
 export function isRetryableSdfExtraction(task: Pick<IngestionTaskDetail['task'], 'state' | 'result' | 'retryCount'> & { error?: string | null }): boolean {
+  if (isLegacyFullDocumentLimit(task)) return true;
   const result = task.result;
   if (task.state === 'needs_review' && task.retryCount >= 0 && task.retryCount < 2 && result
     && result.status === 'needs_review' && result.reason === 'unresolved pages remain'
@@ -129,6 +133,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
   const paidReanalysis = canonicalAllMissing || (detail?.task.state === 'failed_retryable' && detail.task.retryCount === 1);
   const compensatedReanalysis = detail?.task.state === 'failed_retryable' && detail.task.retryCount === 2;
   const proposalUnavailable = detail ? isRetryableSdfExtraction(detail.task) : false;
+  const legacyFullDocumentLimit = detail ? isLegacyFullDocumentLimit(detail.task) : false;
   const legacyRefreshAvailable = detail ? isRefreshableIngestionAnalysis(detail.task) : false;
   const approvalOpen = detail?.task.state === 'needs_review' && Boolean(detail.task.agentTaskId) && !proposalUnavailable;
   const reviewSuggestion = useMemo(() => detail ? ({
@@ -246,7 +251,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
           </div>
           {proposalUnavailable ? <section className="surface-folio-sheet border-y border-os-rule-paper px-4 py-6 sm:px-6" aria-label={t(paidReanalysis ? 'proposalReanalysisTitle' : 'proposalUnavailableTitle')}>
             <h2 className="font-reading text-2xl text-os-ink">{t(paidReanalysis ? 'proposalReanalysisTitle' : 'proposalUnavailableTitle')}</h2>
-            <p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t(compensatedReanalysis ? 'proposalCompensationBody' : paidReanalysis ? 'proposalReanalysisBody' : 'proposalUnavailableBody')}</p>
+            <p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t(legacyFullDocumentLimit ? 'proposalLongDocumentRecoveryBody' : compensatedReanalysis ? 'proposalCompensationBody' : paidReanalysis ? 'proposalReanalysisBody' : 'proposalUnavailableBody')}</p>
             <button type="button" disabled={saving} onClick={() => void retryExtraction()} className="mt-5 min-h-11 touch-manipulation rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('proposalRetrying') : t(compensatedReanalysis ? 'proposalCompensation' : paidReanalysis ? 'proposalReanalysis' : 'proposalRetry')}</button>
           </section> : <><p className="mb-4 text-sm text-os-muted-paper">{t('reviewPending')}</p>
           {legacyRefreshAvailable ? <section className="mb-5 border-l-2 border-os-vermilion-ink pl-4"><h2 className="text-lg font-semibold text-os-ink">{t('legacyRefreshTitle')}</h2><p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t('legacyRefreshBody')}</p><button type="button" disabled={saving} onClick={() => void refreshLegacyExtraction()} className="mt-3 min-h-11 rounded-panel border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink disabled:opacity-40">{saving ? t('legacyRefreshing') : t('legacyRefreshAction')}</button></section> : null}

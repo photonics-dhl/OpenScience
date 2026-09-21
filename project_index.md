@@ -20,7 +20,8 @@
 
 本机桥合作入口：`infra/development-platform/codex-chatgpt-web/collaborate.mjs` 使用已安装原生 CLI 自动审批续接固定 XGS Pro 任务，STDIN 传任务、并发锁及独立日志；实际工具结果与未完成范围见 CURRENT。
 
-系统证据核验的发布消费沿 `packages/domain/src/research-intelligence/{evidence-publication-verification,publication-evidence}.ts` 与 `packages/domain/src/commit/research-record-snapshot.ts`：复用既有 `evidence.system_verify` 审计及已审来源身份，人工字段不回填；完整状态与候选共享helper见CURRENT，不把模型审阅冒称人工核验。阅读长图注与折叠来源沿 `apps/web/app/research-objects/[id]/overview/{page.tsx,overview.module.css}`，系统导入版本的显示标签沿 `apps/web/components/research/useVersionLabels.ts`，不改科研正文或提交元数据。公开叙事图注复用 `apps/web/components/presentation/ResearchMediaDeck.module.css` 与 `apps/web/components/public/PublicReadingProduct.module.css`。
+系统证据核验的发布消费沿 `packages/domain/src/research-intelligence/{evidence-publication-verification,publication-evidence}.ts` 与 `packages/domain/src/commit/research-record-snapshot.ts`：复用既有 `evidence.system_verify` 审计及已审来源身份，人工字段不回填；完整状态与共享helper见CURRENT，不把模型审阅冒称人工核验。阅读长图注与折叠来源沿 `apps/web/app/research-objects/[id]/overview/{page.tsx,overview.module.css}`，系统导入版本的显示标签沿 `apps/web/components/research/useVersionLabels.ts`，不改科研正文或提交元数据。公开叙事图注复用 `apps/web/components/presentation/ResearchMediaDeck.module.css` 与 `apps/web/components/public/PublicReadingProduct.module.css`。
+长文恢复沿 `packages/domain/src/ingestion/ingestion-service.ts` 的原retry、`apps/agent-worker/src/index.ts` 私有sourceMap checkpoint与 `extractor.ts` 既有分窗归并，UI复用原Hermes来源页；精确旧全文错误仅一次恢复、审计保存失败历史，不另建任务/分析器/API或SourceMap协议。实现/部署/真实第三篇规模分开记录于CURRENT与详细交接。
 
 发布选图：`ResearchPublication.tsx` 与 `lib/api.ts` 传递可选 `presentationAssetIds`；`routes/publications.ts` / Domain `publish.ts` 在原事务校验已批准成品，`research-record-snapshot.ts` 使用既有 `publicationIncluded` 冻结选择，保留完整来源/历史。`illustration-planner.ts` 对被拒科学候选补多字段长度反馈；`workspace-guide.ts` 新建方案显式style并将修复反馈收敛到Gateway既有2000字符范围。科学校验、重试预算及历史修订语义保持；部署及实际效果仅见 CURRENT。
 

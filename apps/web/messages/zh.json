@@ -1343,6 +1343,7 @@
     "confirmError": "确认失败，请刷新后重试",
     "proposalUnavailableTitle": "结构化建议未生成",
     "proposalUnavailableBody": "原文已安全保存并完成解析，但 Hermes 的结构化结果未通过校验。你可以重试同一份材料，无需重新上传。",
+    "proposalLongDocumentRecoveryBody": "旧全文限制已解除。将继续处理同一份已上传材料，并保留原失败记录，无需重新上传。",
     "proposalRetry": "重试结构化提取",
     "proposalReanalysisTitle": "结构化结果缺少可审阅证据",
     "proposalReanalysisBody": "Hermes 已保留原文，但上次分析没有提取出任何有来源支持的 SDF 字段。重新分析同一份材料将使用 1 AI credit，无需重新上传。",
