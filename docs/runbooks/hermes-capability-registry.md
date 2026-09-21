@@ -19,7 +19,7 @@
 
 | 产品目的 / 能力 | 实现与实际调用入口（仓库相对路径） | 结果依据与边界 |
 |---|---|---|
-| 上传、全文取得、解析 | `apps/api/src/routes/ingestion.ts` → Domain `ingestion-service.ts` → worker `index.ts`/`extractor.ts`；全文发现与parser复用 `retrieval/handler.ts`、`parsers/cascade-orchestrator.ts` | 第三篇旧120k前置阻断已接回原18k分窗并部署；原task恢复解析成功，24页/1554blocks、SourceMap完整可复用。后续section_map结构校验失败、六维为空，不是论文缺失；正在收口原map提示/反馈和并发收尾。解析检查点不作科学结果，既有refresh复用来源，不新增分析器。实际状态见CURRENT |
+| 上传、全文取得、解析 | `apps/api/src/routes/ingestion.ts` → Domain `ingestion-service.ts` → worker `index.ts`/`extractor.ts`；全文发现与parser复用 `retrieval/handler.ts`、`parsers/cascade-orchestrator.ts` | 第三篇旧120k前置阻断已接回原18k分窗并部署；原task恢复解析成功，24页/1554blocks、SourceMap完整可复用。后续section_map结构校验失败、六维为空，不是论文缺失；原map明确根对象/共享guard诊断/有界反馈和并发收尾已High PASS并部署，内部source-composition复用SourceMap实际运行中；终稿尚待。解析检查点不作科学结果，既有refresh复用来源，不新增分析器。实际状态见CURRENT |
 | 文献语义理解 | `apps/agent-worker/src/extractor.ts` 的 `semanticReductionGuard`/综合链；引用 `skills/paper-analysis.ts`、`scientific-critical-thinking.ts`；经Gateway | 已有semanticStage、条件/算例/操作/来源关系；后续应沿用经审核结果，不能将先前有错候选当成权威。历史d5c6整稿未通过，当前不重跑 |
 | 共享科学推理规则 | `skills/scientific-critical-thinking.ts` → `extractor.ts` 的reduce/bridge及科学审校；`installed-media-skills.ts` science/review复用综合指令并记录id/version | 项目runtime v2有真实41c及配图1da6/a38消费。v3已部署复用同一证据规则，原综合指令保持，另提供来源审校指令给既有终审；方法适配不等于安装整个K-Dense包。当前部署与效果见CURRENT |
 | 原文科学审阅 | `extractor.ts` 的 `modelScientificReviewCanonicalProposal` 显式注入科学Skill，经 `gateway.completeStructuredWithMetadata` 沿MiniMax主路由；仅显式 `context.mode=web` 改走 `webScientificReviewCanonicalProposal` → `gateway.reviewScientific` | 41c使用v2且服务失败，不能推断科学理解耗时。v3已部署用原文逐主张核对、只因科学/来源问题修订，保留跨字段及相反证据；Worker从绑定的visual-narrative来源步骤派生主张要求，普通人工v5仍可选，原守卫/建议解析/自动消费校验保持。无新分析器或额外模型阶段；第一篇f2f与第二篇f1bb已实际产出v5核源及完整六维，第一篇已公开、第二篇进入设计。模型内审不冒称独立全文验证或用户质量认可，见CURRENT |
@@ -76,7 +76,7 @@ Worker关闭（2026-09-21）：旧信号仅停journal计时器而主poller继续
 
 科学语义边界：51eb丢k⊥且subject描述超出所绑原文；e253恢复下标但未删标势。最终aaf7已修主体/标签，现有科学审阅因constraints仍带未绑定的理想薄屏/a≪λ条件而blocked，停止追加请求。`illustration-planner.ts`要求完整描述由basis支持，`illustration-review.ts`携带整个Claim来源池；精确引用校验不等于逐句蕴含，模型accepted会遗漏、blocked也不能保证一次修复。保留任务/草稿，下一步先查科学修订中旧约束的保留，不另叠模型或确定性科学门禁。已公开版本不可写，封面后续须新私有版本，分镜不会自动结转。
 
-第三篇全文恢复：旧120000字符前置阻断已移除，原f653重试成功取得完整24页SourceMap；当前阻塞在既有section_map的结构校验，六维未产出。长文prompt仅写“observations数组”而guard要求外层对象，缺具体诊断；Promise.all在一支失败后尚有另一支在途。修复沿原map和refresh，复用解析原文；不能把task succeeded视为科学通过或再次重传PDF。
+第三篇全文恢复：旧120000字符前置阻断已移除，原f653重试成功取得完整24页SourceMap；当前阻塞在既有section_map的结构校验，六维未产出。长文prompt仅写“observations数组”而guard要求外层对象，缺具体诊断；Promise.all在一支失败后尚有另一支在途。修复已沿原map和refresh部署，复用解析原文；新真实composition已越过旧首批失败窗口，仍须等完整六维/审阅。不能把task succeeded视为科学通过或再次重传PDF。
 
 范围：交付树的规则治理、去重、配图表示/审阅边界和工具联动断点；精确版本见CURRENT。以下是定向诊断，不是全仓无债证明或量化健康评分；执行了必要应用构建/启动和工具实际查询，未运行扫描、测试；已执行用户授权的真实私有配图任务。
 

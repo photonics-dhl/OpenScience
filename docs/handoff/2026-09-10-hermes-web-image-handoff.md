@@ -13,12 +13,12 @@
 - 主owned tab window.name=xgs-pipeline-20260921（第二篇）；第三篇独立owned tab xgs-longpaper-20260922。脚本只操作这两页；浏览器close仅断开CDP。键盘focus/Enter可避125%缩放点击偏差；截图用viewport，fullPage可能被CDP缩放裁边。
 - SSH只用infra/scripts/ssh-run.sh及C:/Program Files/Git/bin/bash.exe；不读/打印.env、secret、cookies。证据放ignored tmp/或服务器私有目录，脚本STDIN传输，禁止用户目录顶层堆文件。
 - 一次性写脚本/收据不可重放；未知响应先读结果。保护原PDF、已认可图、拒收与失败历史、旧公开版本/标识。Fig.2五项清理尚未明确授权。
-- 交付树与根main收尾status必须空，自己的改动提交并推送；prune/list。仅根+交付树，无新worktree。清理仅明确自有、生产者完成且不用的生成物；268日志归档不重复，也不声称根治上游argv缺陷。
+- 交付树与根main收尾status必须空，自己的改动提交并推送；prune/list。仅根+交付树，无新worktree。清理仅明确自有、生产者完成且不用的生成物；268日志归档不重复，也不声称根治上游argv缺陷。已结束的12份本轮长文源码staging副本删除被自动审核拦截，已安全移入tmp/archived/long-paper-staging-20260922，restore.json保留路径/内容/ACL，移动后ACL一致；base-head与实现交接原位保留，无活动生产者。
 
 ## 版本与独立能力
-- application production=4d97a62e8e8cbd1ce028625d19ca3c14b45d6c25；rollback=0c6115dd8983419e1803c465f394b02d2a4d5d13。正常无迁移/无测试服务器build/start exit0，独立marker一致，journal/failed无；日志/opt/openscience/observations/deploy-4d97a62e-20260922.log。HEAD按Git定锚，989b1192为其后文档提交；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
+- application production=5b44d893d2b024abcc31fffce3fcf2f64623443f；rollback=4d97a62e8e8cbd1ce028625d19ca3c14b45d6c25。正常无迁移/无测试服务器build/start exit0，独立marker一致，journal/failed无；日志/opt/openscience/observations/deploy-5b44d893-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
 - 独立Chat provider=faa20ab05674cebc5955d6ba7de7f3fb67ca53c2，未随应用改动；自然timer enabled/active，共享浏览器未重启。sceneImage fallback配置false；原renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f保留。receiver备份/容量协议见详细交接，不退到不支持长请求的旧bundle。
-- 应用已含动态图修正grant>=9迁移；Domain仍要求精确恢复收据，不能以DB允许任意数字绕授权。现rollback0c兼容；不能直接回滚到旧固定额度版本。
+- 应用已含动态图修正grant>=9迁移；Domain仍要求精确恢复收据，不能以DB允许任意数字绕授权。现rollback4d兼容；不能直接回滚到旧固定额度版本。
 - Pro代码合作已实测原生CLI exec resume/chatgpt-web/pro/ultra/STDIN短任务读取→写报告→读回；长任务工具续接与Desktop完整补丁仍未安装，不能称全局稳定。本机桥用于代码合作，服务器image/review provider负责产品图片。
 
 ## 产品目标与交付差额
@@ -40,11 +40,11 @@
 
 ## 后两篇：当前阻塞与续作
 - 第二篇ROc896802c-35dd-4b59-8db1-5f374f83a6d8（deep-sub-cycle pulse），原PDF7bb96cc1/3770010bytes、公开v1保护。guide ab76b22e明确editorial；独立High选needs_review840e24f9而非confirmed2fdb，避免旧v4确认来源无法composition。原UI启动run7e9e1f3e-eafe-440a-be0f-7ff1ed349a8b，/jobs/second-paper-editorial-run-start-20260922.json已消费。
-- 来源f1bb85c8-a8a0-4c5c-8e40-23c8b4f28b50已v5核源成功，私有Versiond07cfeee-c81d-4162-a469-0b431f964801。storyboard7bd6b0b8-edef-4edf-b52f-f6bad6f9db23 exec1/retry0/resultNULL，science两次16K/32K均thinking-only length/no fallback，无art/末审/图片；run failed/version7/max9，活动任务0。证据tmp/two-paper-scope-details-20260922.json。原planning retry同task恢复候选已独立High PASS：仅science65536/600s，science/art均primary-only；原science/art容量其他路径不改。待必要部署与原UI一次恢复，不重做来源。
+- 来源f1bb85c8-a8a0-4c5c-8e40-23c8b4f28b50已v5核源成功，私有Versiond07cfeee-c81d-4162-a469-0b431f964801。storyboard7bd6b0b8-edef-4edf-b52f-f6bad6f9db23 exec1/retry0/resultNULL，science两次16K/32K均thinking-only length/no fallback，无art/末审/图片；run failed/version7/max9，活动任务0。证据tmp/two-paper-scope-details-20260922.json。原planning retry同task恢复候选已独立High PASS：仅science65536/600s，science/art均primary-only；原science/art容量其他路径不改。已正常部署，原页20:45:24Z恢复HTTP202/version8、同7bd6 attempt2/retry1，不重做来源。65K调用已有两次stop正文（36119/8640ms），尚须观察完整方案/末审/图片。/jobs/second-paper-science-resume-20260922.json已消费。
 - 第三篇ROaa450f1e-fafc-46d8-a072-d935e01b0544，原PDFd04add46/4609066bytes/hash4a51048431f20950a01916b50cd87a08642881b20b0a9eac767144031ebc0b1a。原f653386b重试HTTP200，仍Agent2e83eaf7/attempt2/retry1；审计a3f55ac1保存旧120k错误与reuse-original-reservation。/jobs/third-paper-original-retry-20260922.json已消费。
-- 第三篇当前needs_review但六维为空，reason canonical_partial_validation_exhausted，v4 blocked_scientific_review；具体section_map:SCHEMA_VALIDATION，不能称科学通过或论文缺失。解析SourceMap已验证24页/1554blocks，正文200722字符；ref e490409c…/818144bytes完整保留。6次OCR成功、4次map文本调用有正文stop但结构校验失败，未到reduce。证据tmp/third-paper-analysis-failure-read-20260922.json；原map共享结构提示/guard诊断/既有反馈与并发收尾、内部source-composition允许retry<=1候选已独立High PASS，待部署；后续沿原refresh复用SourceMap。新guide aad65431-6595-4d19-91f5-c8aa80cedf12已成功，watercolor/原f653绑定，站内“打开图文制作”已进入初始页面，未点启动。
+- 第三篇当前needs_review但六维为空，reason canonical_partial_validation_exhausted，v4 blocked_scientific_review；具体section_map:SCHEMA_VALIDATION，不能称科学通过或论文缺失。解析SourceMap已验证24页/1554blocks，正文200722字符；ref e490409c…/818144bytes完整保留。6次OCR成功、4次map文本调用有正文stop但结构校验失败，未到reduce。证据tmp/third-paper-analysis-failure-read-20260922.json；原map共享结构提示/guard诊断/既有反馈与并发收尾、内部source-composition允许retry<=1已独立High PASS及部署；guide aad65431成功watercolor/原f653绑定，站内初始按钮20:45:39Z HTTP202→run b3eee57a-8a08-4867-9281-cb5b950affbf。原source_composition task1834e21d-ebb2-496d-8637-8af22e3f0636运行中并已保存相同SourceMap checkpoint，未重传，尚须观察分窗/六维结果。/jobs/third-paper-watercolor-run-start-20260922.json已消费。
 
 ## 其他受保护资产与入口
 - ac455b2f真实Chat产物approved；77b3f559历史Fig.2占位、557c3db6来源待核均approved，不能直接公开全部approved。d5087b03悬空draft copy；重复计划6439150a/ee9bcfb6 draft、6043bebb/75b34c88 approved，清理未获明确同意。旧占位929bd95d/6088f11b/03a160aa早先已授权删除，不能重处理。
 - 能力位置/最新实际效果查docs/runbooks/hermes-capability-registry.md；完整故障/调用/部署/恢复收据查docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md。此前中断、300秒传输、Claims缺失、长度、渲染拒收等历史已在该文件/Git保留，不按历史next action重跑。
-- 下一步：完成第二篇原task恢复与第三篇map修复的独立High审查→必要服务器发布→原站内入口继续editorial/淡彩设计、Chat出图、6Pro实审、reader、新版发布。代码/部署/科学结果/最终用户认可分别记录；不因单篇完成结束任务。
+- 下一步：读取已恢复第二篇与第三篇source-composition的真实结果，继续editorial/淡彩设计、Chat出图、6Pro实审、reader、新版发布。代码/部署/科学结果/最终用户认可分别记录；不因单篇完成结束任务。
