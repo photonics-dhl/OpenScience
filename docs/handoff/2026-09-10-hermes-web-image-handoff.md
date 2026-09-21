@@ -1,4 +1,5 @@
 # Hermes / Workbench CURRENT Handoff
+- 本机工具配置（2026-09-21）：用户授权独立提交 `.codex/config.toml` 浏览器代理，保留源码检索；依赖/范围/回滚见[能力台账](../runbooks/hermes-capability-registry.md#local-browser-proxy)。无科研业务部署，不替代未完成产品交付。
 
 > 唯一交付树：E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch release/onchip-production-line。根 main 仅导航；旧 codex/onchip-video-release 缺 journals/学术身份，不得发版。历史详细证据保留 Git 与下方交接，不能按旧 next action 重跑。
 

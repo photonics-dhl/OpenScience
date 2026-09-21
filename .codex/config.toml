@@ -5,3 +5,21 @@ url = "http://127.0.0.1:3132/mcp"
 enabled_tools = ["find_symbol", "get_symbols_overview", "find_referencing_symbols"]
 startup_timeout_sec = 30
 tool_timeout_sec = 180
+
+# Local Windows transport: see docs/runbooks/hermes-capability-registry.md#local-browser-proxy
+[mcp_servers.cua_repl]
+command = 'C:/Program Files/PowerShell/7/pwsh.exe'
+args = ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', 'C:/Users/Mac/.codex/diagnostics/browser-tools-20260921/cua-proxy-launcher.ps1']
+env_vars = ['CODEX_WINDOWS_REGISTERED_CORE']
+enabled = true
+enabled_tools = ["js", "js_reset", "turn_ended"]
+omit_tools_from = ["code_mode", "deferred"]
+startup_timeout_sec = 120
+
+[mcp_servers.cua_repl.tools.js]
+output_token_limit = 25000
+
+[mcp_servers.node_repl.env]
+HTTP_PROXY = 'http://127.0.0.1:7890'
+HTTPS_PROXY = 'http://127.0.0.1:7890'
+NO_PROXY = '127.0.0.1,localhost,::1'

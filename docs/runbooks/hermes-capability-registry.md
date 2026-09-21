@@ -1,5 +1,12 @@
 # Hermes Capability Registry
 
+<a id="local-browser-proxy"></a>
+## 本机浏览器代理配置
+
+2026-09-21：用户授权将 `.codex/config.toml` 的浏览器代理作为独立配置提交；仅用于本机 Codex 工具，不部署科研业务。依赖 Windows、PowerShell 7、现有 `127.0.0.1:7890` 代理，以及 `C:/Users/Mac/.codex/diagnostics/browser-tools-20260921/cua-proxy-launcher.ps1`。该现有启动器从桌面生成的清单读取官方运行时和 IPC，保留同名 `cua_repl`、`turn_ended` 生命周期及工具限制；`node_repl` 配置代理环境。源码检索 MCP 保留。其他主机须适配本地路径/代理，不能直接声称可用。
+
+范围：此开发工作树及从包含此配置的提交创建的新工作树；既有其他分支/工作树、远端主机、云任务不会自动继承。新 MCP 进程加载配置，已启动进程须重载。既有同配置的桌面浏览器已实际打开 Example Domain，Pro 曾完成两次工具读写；这些证据不代表 XGS 科研业务验收，也不解决平台命令拦截或 Windows 原生截图兼容故障。回滚：移除本次新增的 `cua_repl`、`cua_repl.tools.js`、`node_repl.env` 三节，保留 `openscience_code`；不要删除其他项目仍引用的共享启动器。
+
 ## 当前能力索引：目的、调用、效果
 
 2026-09-21已部署：独立配图页版本上下文、原图Artifact登记/人工核源/reuse、发布逐图选择、多字段长度反馈与新建方案显式style。真实PDF Fig.1完成来源核对→Hermes reuse→原字节copy→成品批准，并与已认可恢复Fig.3/淡彩图发布v2；实际公开三图轮播及匿名读取成功，v1与冻结来源保留。Pro短CLI完成真实读写回合；用户授权保留会话，登录有效。新封面仍被现有科学审阅阻断，无新Chat图/深色标准化观察；精确状态和证据只见CURRENT。

@@ -1,5 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
+本机浏览器配置：`.codex/config.toml` 保留源码检索并接入现有代理；依赖、继承范围与回滚见[能力台账](docs/runbooks/hermes-capability-registry.md#local-browser-proxy)，不随业务部署启用远端浏览器。
+
 > CURRENT：唯一交付入口是 `.worktrees/onchip-video-release` 的 `release/onchip-production-line`（canonical；旧 `codex/onchip-video-release` 缺 journals/学术身份，为历史线不得发版）。视觉交付按[需求基线§18.2](docs/OpenScience_Kimi_Development_Spec.md#182-视觉系统)：未读论文者能理解核心思想和关键点，叙事与美感共同设计；原图/生图/单多图按需采用，视频尚未进入执行。交付差额、用户反馈、版本与下一步唯一见[Hermes CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)，不以原图复用/发布成功或单图认可代替论文叙事验收。桥、恢复、发布及最新纠偏证据见[2026-09-18 交接](docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。能力按[当前能力索引](docs/runbooks/hermes-capability-registry.md)定向查实现、调用和真实结果；下表日期/版本均为对应改动的历史记录，不作为当前release或自动next action。
 
 能力补接入口：`scripts/read-current-management-context.mjs`同读Git/Taskmaster/CURRENT指针；`infra/development-platform/code-intelligence/snapshot_identity.py`绑定成功MCP返回的源码版本。`packages/search/src/runtime-config.ts`共享BGE身份配置；`apps/api/src/{search-runtime,research-object-search}.ts`供私有ResearchList的POST全文检索；`packages/domain/src/agent/search-index-source.ts`及原ingestion确认事务绑定解析来源并提交索引；`scripts/index-confirmed-research-sources.cjs`仅补录本次授权的两篇真实论文，默认列计划、`--apply`复用同一producer。部署及实际效果见[CURRENT任务4](docs/handoff/2026-09-10-hermes-web-image-handoff.md#capability-linkage)，不复制任务状态。OpenScience 当前禁止测试、预检、演练和CI；本机桥单独修复/定向测试的最新授权与边界见 CURRENT，不能扩展为科研应用测试。
