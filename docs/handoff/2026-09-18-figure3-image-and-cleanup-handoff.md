@@ -27,6 +27,8 @@
 - API沿用原端点/请求，响应增加`generationRecovery=storyboard-art`；页面说明修正范围及新增用量。未新增表、迁移、供应商或科学分析器。独立High已静态PASS并正常服务器构建/部署；未测试/预检/CI/本机构建。
 - 真实续作收据`/jobs/visual-narrative-art-correction-20260922.json`已消费：HTTP202/version44，同task5226进入exec4/retry3；随后首个persistPlan的`agentTask.updateMany`因Serializable写冲突/deadlock失败，run stopped/version45。定向DB仅授权correction字段，artSubmitted/planned/reviewSubmitted均不存在，Gateway最新仍82b旧审阅，新模型调用0。原收据不可重发，未改收费审计/执行次数或手工放行；候选已补仅P2034的有限DB事务退避（10/25/50/100/200ms，模型在循环外）；原授权唯一pre-submission续接审计引用原receipt并推进实际执行次数，不回退计数、不改原收费记录。仅correction初始字段/无任何提交标记或候选、授权后Gateway调用0、来源/剩图片/权限不变时可沿原UI恢复，chargeableAttempts0表示不追加授权，原两阶段实际用量仍计费。High增量静态PASS；待正常服务器构建/部署与原页真实续接。证据tmp/art-pre-submit-failure-20260922.json。
 
+- 事务修复及唯一预提交恢复已High PASS、服务器正常构建部署；原页收据`/jobs/visual-narrative-art-pre-submit-resume-20260922.json`已消费，HTTP202/version46，同task5226 exec5/retry4。18:11:35Z只读确认artSubmitted=5已持久保存、planned尚未返回；随后18:13:26Z已保存新planned并进入reviewSubmitted=5；修正plan证据tmp/art-corrected-plan-20260922.json，完整末审在途，不能重跑两个写脚本或回退worker。原收费授权和失败证据保留。
+
 ## 第三篇长文断点：后续最小方向（只读设计，未实施）
 
 - RO aa450f1e-fafc-46d8-a072-d935e01b0544/f653386b既有120000字符失败发生在extractor.ts canonicalPassages全文总量检查，先于semantic map/reduce；原Artifact/SourceMap保留，无版本，不重新上传。
