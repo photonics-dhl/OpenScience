@@ -29,11 +29,21 @@
 
 - 事务修复及唯一预提交恢复已High PASS、服务器正常构建部署；原页收据`/jobs/visual-narrative-art-pre-submit-resume-20260922.json`已消费，HTTP202/version46，同task5226 exec5/retry4。18:11:35Z只读确认artSubmitted=5已持久保存、planned尚未返回；随后18:13:26Z已保存新planned并进入reviewSubmitted=5；修正plan证据tmp/art-corrected-plan-20260922.json，完整末审在途，不能重跑两个写脚本或回退worker。原收费授权和失败证据保留。
 
+- art修正及完整方案末审均成功：54da500f/99023ms、b658d657/14561ms均primary minimax-key-1-model-1/无fallback，嵌套review accepted；task5226最终succeeded并保留原checkpoint/review及完整correction证据，方案资产approved，science字段保持不变。自动新image763b88c3-6d9e-44de-88e9-e2616c70f876在Chat80083ms成功，1280×720/531607字节，hash eb06ba382e2b5e5067d5f4157a5e155d6af77d45254beaff050d8f7477748ced，本机tmp/visual-narrative-763b88c3-20260922.png已实看。
+- 6Pro真实像素审阅d02c4aca/174156ms成功返回blocked，科学/公式与原方案一致，但首零参考线应短细实线却画成与分界近等高虚线，背景有纹理/浅灰起伏而非均匀#FAFAFA；repairInstruction非空且只修渲染。素材rejected/任务succeeded，run stopped/version50/max13全部使用。review证据tmp/visual-narrative-763b88c3-review-20260922.json（只需asset.review.summary/repairInstruction，parentIdentity长）；服务器/jobs/review/763b88c3-6d9e-44de-88e9-e2616c70f876保存1张真实图片附件、submitted/anchor/conversation/response/result。未发布该图。
+- 当前断点已从科学错误转为纯render修正：原repairRejectedNarrativeImages有sceneImage.revisionAssetId能力，但既有固定13预算无余量；用户不限额度授权仍有效。已由High设计并完成沿原run/已批方案明确追加单个渲染任务的通用授权候选（详见下一节），不又加15/17魔法分支、不绕run手工出图、不重分析论文。现有修正输入是原完整brief+repairInstruction，不传被拒图字节（styleReference另有用途），不能称为保真像素编辑。尚未新增模型/更改预算/迁移。
+## 2026-09-22 原run单张渲染修正（候选，未部署）
+
+- 原图763b88c3被6Pro拒绝的两项缺陷都有明确repairInstruction。沿原retry-generation新增image-render恢复识别，不重复science/art规划；同事务只增加1项额度、创建同计划/scene的一阶修正task并写审计，提交后派发。新request不接收客户端自选额度/资产；旧13/11科学返工分支保持，不自动连续授权或放宽多代revision。
+- High纠正了仅看Prisma Int遗漏SQL CHECK的问题：当前约束只认9/11/13，必须新增20260922030000前向迁移。新约束仅允许存储>=9的格式，Domain拒绝无收据的非基线数字；基线9/11/13均按相同资格追加1，动态任务执行与资产审阅必须验证精确授权收据。完整Domain/迁移/UI独立High增量PASS，无阻断；基线9/11/13同样追加1已收口，10/12/14无精确收据仍拒绝。生产worker只读sceneImageFallbackConfigured=false，不会自动切provider；未运行测试/预检/本机构建，实际效果待部署。
+- 必要迁移前已运行原`backup.sh --confirm --db`，exit0、BACKUP_OK core_size=47M/search_size=4.6M/sets=7/7；未读备份正文、未运行测试/演练。部署使用正常事务并运行迁移，receiver不变。动态授权写入后不交给旧worker，数据库回滚拒绝收窄；保留历史任务、拒收、公开版本及原论文。
+- 原页一次性操作已准备`tmp/visual-narrative-image-render-resume-20260922.cjs`，严格stopped/version50/max13、approved parent5226及当前image763、image-render/chargeable1。服务器收据`/jobs/visual-narrative-image-render-resume-20260922.json`尚未消费；收到未知响应先读收据/run，禁止盲重发。
+
 ## 第三篇长文断点：后续最小方向（只读设计，未实施）
 
-- RO aa450f1e-fafc-46d8-a072-d935e01b0544/f653386b既有120000字符失败发生在extractor.ts canonicalPassages全文总量检查，先于semantic map/reduce；原Artifact/SourceMap保留，无版本，不重新上传。
+- RO aa450f1e-fafc-46d8-a072-d935e01b0544/f653386b既有120000字符失败发生在extractor.ts canonicalPassages全文总量检查，先于semantic map/reduce；原Artifact d04add46-9d96-443b-aae1-c1dfc1ecbadb（PDF 4,609,066 bytes）保留，无研究Version，不重新上传。最新服务器只读确认AgentTask 2e83eaf7-66a3-4436-a045-ffa56d2a4895 result=NULL、无sourceMapRef，parser-jobs未留该任务产物；尚不能声称SourceMap可恢复，需查原生产者持久化时机。
 - 独立High定向读到现有buildMappedSemanticStage已将全部P段按约18000字符窗口顺序处理、并发2，再通过semantic-reduce归并；每段原1200字符/来源slice保留。小修方向为把120000限制留在单次buildLegacySemanticBridge，有previousResult但无可复用semantic stage的长文强制复用现有mapped路径，避免新分析模块和任意裁剪。
-- 尚未修改/执行：实际第三篇全文字符、窗口数量和reducer请求容量仍须针对已有SourceMap定量取证；不能仅依据模型名称或假设上下文上限宣称全篇可处理。先完成当前论文的图文实际结果，再实施本项；不批量跑模型。
+- 尚未修改/执行：实际第三篇全文字符、窗口数量和reducer请求容量未知，须在原Artifact解析恢复后定量核对；不能仅依据模型名称或假设上下文上限宣称全篇可处理。canonical树extractor.ts第616/674行确有18_000窗口，最初explorer读错位置的“未找到”已纠正，不作为事实。先完成当前论文的图文实际结果，再实施本项；不批量跑模型。
 ## 2026-09-21 用户纠正：原图截取不是论文视觉叙事交付
 
 - 用户用公开v2的Fig.1截图指出：原样裁出展示丑，未读论文者无法清楚理解所传信息。目标是图片（单/多张）与后续视频让读者理解核心思想和关键点；原图/生图/视频按需采用，须同时设计叙事与美感。要求已入需求§18.2、Taskmaster任务5和CURRENT；本轮只静态定位/同步，尚未改生产链路或公开资产。

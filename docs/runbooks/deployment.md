@@ -4,6 +4,8 @@
 
 同任务art-only修正仅修改应用Domain/worker及恢复提示；不改receiver/迁移/产品总额度。沿正常no-tests/skip-migrate从干净已推送HEAD部署，部署本身不派发模型。显式续作提交后须等原任务自然终态再回退；旧worker不能消费新的storyboardArtCorrection，保留授权审计、原拒收与修正记录，不归零attempt/清除marker重发。若原授权仅初始字段且授权后无模型审计，可沿原retry-generation做一次pre-submission恢复，原收费收据不变、追加零授权运行收据、计数正常增长；存在任何submitted marker不可走该路径。checkpoint只对P2034有限重试数据库事务，模型调用不在循环内。
 
+图片渲染修正的动态授权：迁移 `20260922030000_visual_narrative_dynamic_render_repair` 只把数据库的 visual grant 格式约束扩展为 `>=9`，默认创建仍9，基线9/11/13均可按相同资格追加1；新10/12/14只有精确收据才获得授权。原retry-generation在同一事务将已耗尽额度增加1、创建唯一图片修正task并保存精确授权审计；Domain/worker/资产审阅共同核验该审计，不能只凭较大的数字执行。部署前沿既有脚本双库备份，正常no-tests部署必须运行迁移；独立receiver和浏览器不变。提交动态授权前可回退旧应用，提交后旧应用不能处理该run，需保留兼容读写路径或前向修复；数据库rollback发现非9/11/13行即拒绝收窄。禁止削减额度、删除历史/收据、重放模型请求来满足旧版本。实际应用/授权/成图状态只见CURRENT。
+
 当前版本、部署结果和暂停范围统一见[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。review request v2用于配图文字审阅、v3用于实际图片审阅，旧v1保持；兼容新版receiver可服务旧应用；若需回退receiver，先回退producer，禁止旧receiver接新请求。本段不是重跑部署指令。
 
 ## 2026-09-21 自动视觉叙事的交付顺序
