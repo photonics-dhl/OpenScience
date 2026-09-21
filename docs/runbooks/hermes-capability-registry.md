@@ -2,7 +2,7 @@
 
 ## 当前能力索引：目的、调用、效果
 
-2026-09-21已部署：独立配图页64aa264e漏版本上下文已补；原图复用现有Artifact上传→artifactId登记draft→人工来源审核→approved reuse，不另写对象/解码框架。新发布只排显式来源标记，旧公开不变，冻结来源保留回收保护。边缘取色标准化已在服务器对真实下载原图定向执行成功，深色新图待实际观察；Pro短CLI已完成真实读写回合。应用/provider均已部署，尚未新生图/审批发布；会话事故后私有产品操作暂停，待用户处置选择。真实PDF Fig.1已提取而未入产品，具体证据见CURRENT。
+2026-09-21已部署：独立配图页版本上下文、原图Artifact登记/人工核源/reuse、发布逐图选择、多字段长度反馈与新建方案显式style。真实PDF Fig.1完成来源核对→Hermes reuse→原字节copy→成品批准，并与已认可恢复Fig.3/淡彩图发布v2；实际公开三图轮播及匿名读取成功，v1与冻结来源保留。Pro短CLI完成真实读写回合；用户授权保留会话，登录有效。新封面仍被现有科学审阅阻断，无新Chat图/深色标准化观察；精确状态和证据只见CURRENT。
 
 2026-09-20 历史续作：三类风格逐图选择、场景/科学符号、下载后恢复及 Hermes figurePlan 确认/草稿/提交已接线部署；真实原图 reuse、深色标准化边界、新风格页面确认/异常恢复仍未实证。既有 Pro 文本审查与 Windows 206 缓解/防复发规则保持。用户现已授权独立本机桥修复与测试，`infra/development-platform/codex-chatgpt-web/` 保存委派/压缩续接候选：117+6 项回归、类型检查与 CLI 构建通过，High 复核完成；共享桥繁忙且单文件替换会被 launcher 原包校验恢复，尚未安装，完整 Full 未交付。CLI 网络受限与桌面委派识别是不同故障层，另一会话负责账户/网络修正；不改变沙箱边界。真实生图仍由服务器 image provider 执行，本机桥不支持聊天内生图。证据、安装约束与未结项见 [本次交接最新节](../handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)，版本唯一见 CURRENT。
 
@@ -46,7 +46,9 @@
 
 ### 当前技术债与处理
 
-当前定向补接：真实Fig.1已完成Artifact→来源审核→Hermes reuse→原字节copy→成品批准，此前“仅占位管道”为历史。多字段长度反馈和明确发布选图已上线，原科学guard/重试预算/旧资产/v1保留；发布页默认0选6成品已观察，尚未新公开。新51eb方案仍出现k⊥丢失与主张超出所绑定原文，人工拦住并科学修订，不能以Schema/模型审阅通过证明科学正确。guide漏style会落到UI默认technical，新create必填style及精简旧超2000字符反馈为候选，状态只见CURRENT。
+当前定向补接：真实原图reuse、多字段长度反馈、明确发布选图均有真实产品结果。guide漏style导致UI回落technical的修复已部署；新create必须显式style，同一修复反馈最多1786字符，避免Gateway忽略超2000字符反馈，预算/历史兼容语义不变。新缺风格拒绝行为尚无实际模型结果；状态只见CURRENT。
+
+科学语义边界：51eb丢k⊥且subject描述超出所绑原文；e253恢复下标但未删标势。最终aaf7已修主体/标签，现有科学审阅因constraints仍带未绑定的理想薄屏/a≪λ条件而blocked，停止追加请求。`illustration-planner.ts`要求完整描述由basis支持，`illustration-review.ts`携带整个Claim来源池；精确引用校验不等于逐句蕴含，模型accepted会遗漏、blocked也不能保证一次修复。保留任务/草稿，下一步先查科学修订中旧约束的保留，不另叠模型或确定性科学门禁。已公开版本不可写，封面后续须新私有版本，分镜不会自动结转。
 
 第三篇全文阻塞：`extractor.ts:canonicalPassages`在semantic map/reduce前硬限120000字符；实际f653386b为failed_blocked，既有retry/refresh要求不满足。下一步需保留原Artifact/来源标识的有界分节产品路径；不能重复上传、盲重解析或直接扩大上限，当前先交付已凝练的两篇。
 
