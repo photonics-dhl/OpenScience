@@ -55,7 +55,7 @@
 
 显式来源补审（2026-09-21已部署，用户再次继续后）：将固定一次恢复改为原9项预算内的连续review链，每次仍须原retry-generation明确动作；全部失败记录、同原v4候选/SourceMap、无有效科学响应及主尝试审计必须一致，所有尝试计入原额度并预留后续制作。历史provider_error不反推瞬态根因，只允许接受重复供应商费用后的显式补审；自动科学消费仍拒绝无有效审阅。原始幂等键入已有audit，精确历史请求重放不再派发；旧ordinal1缺原key元数据，不能追溯识别改version的旧raw-key复用。无新分析器/供应商/迁移，实际部署与运行只见CURRENT。
 
-来源终审必需Claims（2026-09-21真实断点）：d35c31fb实际消费科学Skill v3，v5六字段accepted且完整，主M3两次成功96.139/110.490秒，原一次结构纠正已用；没有已审Claims，因此自动流程未物化。旧guard仅校验六字段，后置materializer能无诊断丢弃建议，原响应未保存，不能确定本次漏给或无效、不能零模型重建。候选原地将同一materializer接入自动来源终审的现有guard，保留maxRetries1；缺失/结构/来源不可物化/无core安全分类进入已有诊断和明确错误文案，手动可选路径不变；不逐项放行无效Claims、不保存无身份的侧录结果、不增加收费恢复。科学blocked/补证仍直接保留，不强求编造core。完整生产效果与下一动作见CURRENT。
+来源终审必需Claims（2026-09-21真实断点）：d35c31fb实际消费科学Skill v3，v5六字段accepted且完整，主M3两次成功96.139/110.490秒，原一次结构纠正已用；没有已审Claims，因此自动流程未物化。旧guard仅校验六字段，后置materializer能无诊断丢弃建议，原响应未保存，不能确定本次漏给或无效、不能零模型重建。已原地将同一materializer接入自动来源终审的现有guard，保留maxRetries1；缺失/结构/来源不可物化/无core安全分类进入已有诊断和明确错误文案，手动可选路径不变；不逐项放行无效Claims、不保存无身份的侧录结果、不增加收费恢复。科学blocked/补证仍直接保留，不强求编造core。经独立High静态复核与服务器构建/启动；未追加模型实测。历史d35不满足服务无响应恢复资格，必须另行收口同原稿/已审字段/原预算的合同修复，不直接重发；完整生产效果与下一动作见CURRENT。
 
 同一论文流程入口（2026-09-21真实路径发现，已修复部署并观察）：普通站内Hermes链接不含run，旧UI只读URL而提供新建；公共refresh能换掉失败自动run的source指针。原Domain/API补actor/RO/source范围只读找回，原Serializable创建拒绝新key重复自动run，公共refresh在replacement及replay路径拒绝所有visual-narrative绑定；UI先找回、材料页隐藏该refresh并链接进度。无新增审批/恢复槽/额度重置。独立High及上线观察状态见CURRENT；旧固定一次恢复当时已用尽；现已由上段显式有界恢复替代。41c旧provider_error仍无可追溯分类，不纳入自动重试；新真实结果见CURRENT。
 
