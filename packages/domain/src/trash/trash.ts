@@ -129,7 +129,7 @@ async function assetIsReferenced(tx: Tx, id: string): Promise<boolean> {
     const walk = (value: unknown): void => {
       if (!value || typeof value !== 'object') return;
       for (const [key, child] of Object.entries(value)) {
-        if (['assetId','baseAssetId','storyboardAssetId'].includes(key) && typeof child === 'string') pending.push(child);
+        if (['assetId','baseAssetId','storyboardAssetId','revisionAssetId','styleReferenceAssetId'].includes(key) && typeof child === 'string') pending.push(child);
         else if (key === 'sceneImageAssetIds' && Array.isArray(child)) pending.push(...child.filter((item): item is string => typeof item === 'string'));
         else if (child && typeof child === 'object') walk(child);
       }

@@ -2,7 +2,11 @@ import { isDeepStrictEqual } from 'node:util';
 import type { Prisma, PresentationAsset } from '@prisma/client';
 import { recordValue, refreshWorkingResearchRecord } from './research-record-snapshot';
 
-export type FrozenHistoryMedia = Pick<PresentationAsset, 'id' | 'researchObjectId' | 'versionId' | 'kind' | 'objectKey' | 'contentHash' | 'generator' | 'generatorVersion' | 'promptHash' | 'status' | 'label' | 'provenance'> & { sourceClaimIds: string[]; publicationIncluded?: false };
+export type FrozenHistoryMedia = Pick<PresentationAsset, 'id' | 'researchObjectId' | 'versionId' | 'kind' | 'objectKey' | 'contentHash' | 'generator' | 'generatorVersion' | 'promptHash' | 'status' | 'label' | 'provenance'> & {
+  sourceClaimIds: string[];
+  publicationIncluded?: false;
+  reader?: { order: number; title?: string; narration?: string };
+};
 export function historyMediaItems(researchRecord: unknown): FrozenHistoryMedia[] {
   const items = recordValue(recordValue(researchRecord).historyMedia).items;
   return Array.isArray(items) ? items as FrozenHistoryMedia[] : [];
@@ -11,7 +15,8 @@ export function publicHistoryMedia(researchRecord: unknown): FrozenHistoryMedia[
   return historyMediaItems(researchRecord).filter(asset => asset.status === 'approved'
     && asset.publicationIncluded !== false
     && !['storyboard', 'sourced_storyboard'].includes(String(recordValue(asset.provenance).subtype))
-    && asset.generator !== 'OpenScience Hermes storyboard planner');
+    && asset.generator !== 'OpenScience Hermes storyboard planner')
+    .sort((left, right) => (left.reader?.order ?? Number.MAX_SAFE_INTEGER) - (right.reader?.order ?? Number.MAX_SAFE_INTEGER));
 }
 export function frozenClaims(researchRecord: unknown): Array<Record<string, unknown>> {
   const claims = recordValue(recordValue(researchRecord).dto).claims;

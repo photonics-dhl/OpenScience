@@ -4,6 +4,7 @@ import { recordValue } from './research-record-snapshot';
 import { resolveEvidenceSource } from '../research-intelligence/claim-evidence-service';
 import { getBlobStorageKey } from '@openscience/storage';
 import { publicVersionNumber, readPublicationMetadata } from '../publish/publication-metadata';
+import { historyMediaItems } from './version-history';
 
 export class ResearchRecordSourceError extends Error {
   readonly code = 'SOURCE_UNAVAILABLE';
@@ -53,6 +54,16 @@ export async function getResearchRecord(deps: ArtifactDeps, input: { researchObj
       licenses: Object.entries(metadata.licenses).map(([type, identifier]) => ({ type, identifier })),
     },
     metadataCapture: { source: metadata.captureSource, capturedAt: metadata.capturedAt, fieldSources: metadata.fieldSources ?? null },
+  } : authorized && frozen.historyMedia ? {
+    ...recordValue(dto),
+    // Private reading uses the same captured narrative as publication. Never read a live parent here.
+    media: historyMediaItems(version.researchRecord)
+      .filter(asset => asset.researchObjectId === ro.id && asset.versionId === version.id
+        && asset.status === 'approved' && (asset.kind === 'image' || asset.kind === 'video')
+        && asset.generator !== 'OpenScience paper-original figure'
+        && recordValue(asset.provenance).subtype !== 'paper_original_figure')
+      .sort((left, right) => (left.reader?.order ?? Number.MAX_SAFE_INTEGER) - (right.reader?.order ?? Number.MAX_SAFE_INTEGER))
+      .map(asset => ({ id: asset.id, kind: asset.kind, ...(asset.reader ? { reader: asset.reader } : {}) })),
   } : dto;
   return { record, sources: recordValue(frozen.sources), publicAccess: Boolean(publication), versionId: version.id };
 }

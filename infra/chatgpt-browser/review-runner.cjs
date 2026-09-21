@@ -9,6 +9,7 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const crypto = require('node:crypto');
 const RECOVERY_GRACE_MS = 60 * 60 * 1000;
 const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+const IMAGE_REVIEW_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 24 * 1024 * 1024;
 if (!['execute', 'recover'].includes(mode) || !UUID.test(id || '')) process.exit(64);
 const dir = path.join('/jobs/review', id);
@@ -29,22 +30,30 @@ function validateRequest(request, recover = false) {
     ? Object.keys(source).sort().join(',') === 'artifactId,candidateHash,documentSha256,sourceMapHash'
       && typeof source.artifactId === 'string' && source.artifactId.length > 0 && source.artifactId.length <= 256
       && SHA256.test(source.documentSha256 || '') && SHA256.test(source.candidateHash || '') && SHA256.test(source.sourceMapHash || '')
-    : request?.schemaVersion === 2 && Object.keys(source).sort().join(',') === 'candidateHash,kind,researchObjectId,sourceEvidenceIdentity,versionId'
-      && source.kind === 'illustration-plan' && UUID.test(source.researchObjectId || '') && UUID.test(source.versionId || '')
+    : [2, 3].includes(request?.schemaVersion) && Object.keys(source).sort().join(',') === 'candidateHash,kind,researchObjectId,sourceEvidenceIdentity,versionId'
+      && source.kind === (request.schemaVersion === 3 ? 'illustration-image' : 'illustration-plan')
+      && UUID.test(source.researchObjectId || '') && UUID.test(source.versionId || '')
       && SHA256.test(source.sourceEvidenceIdentity || '') && SHA256.test(source.candidateHash || '')
-      && !Object.hasOwn(request, 'attachments'));
+      && (request.schemaVersion === 2 ? !Object.hasOwn(request, 'attachments')
+        : Array.isArray(attachments) && attachments.length === 1
+          && attachments[0]?.pageNumber === 1 && attachments[0]?.sha256 === source.candidateHash));
   const validAttachments = attachments === undefined || (Array.isArray(attachments) && attachments.length >= 1 && attachments.length <= 8
     && new Set(attachments.map(value => value?.fileName)).size === attachments.length
     && attachments.every(value => value && SHA256.test(value.sha256 || '') && (
-      (value.fileName === 'source.pdf' && value.mediaType === 'application/pdf'
+      (request.schemaVersion === 1 && value.fileName === 'source.pdf' && value.mediaType === 'application/pdf'
         && Object.keys(value).sort().join(',') === 'fileName,mediaType,sha256')
-      || (/^page-[1-9][0-9]{0,4}\.png$/u.test(value.fileName) && value.mediaType === 'image/png'
+      || ((request.schemaVersion === 3
+        ? (value.fileName === 'page-1.png' && value.mediaType === 'image/png')
+          || (value.fileName === 'page-1.jpg' && value.mediaType === 'image/jpeg')
+          || (value.fileName === 'page-1.webp' && value.mediaType === 'image/webp')
+        : /^page-[1-9][0-9]{0,4}\.png$/u.test(value.fileName) && value.mediaType === 'image/png')
+        && Object.keys(value).sort().join(',') === 'fileName,height,mediaType,pageNumber,sha256,width'
         && Number.isSafeInteger(value.pageNumber) && value.pageNumber > 0
         && Number.isSafeInteger(value.width) && value.width > 0 && value.width <= 8192
         && Number.isSafeInteger(value.height) && value.height > 0 && value.height <= 8192
         && value.width * value.height <= 40000000)
     )));
-  if (![1, 2].includes(request?.schemaVersion) || request?.provider !== 'chatgpt-web-science-review' || request?.id !== id
+  if (![1, 2, 3].includes(request?.schemaVersion) || request?.provider !== 'chatgpt-web-science-review' || request?.id !== id
     || !['deadlineAt,id,prompt,promptHash,provider,schemaVersion,source', 'attachments,deadlineAt,id,prompt,promptHash,provider,schemaVersion,source']
       .includes(Object.keys(request).sort().join(','))
     || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 64 * 1024
@@ -58,11 +67,18 @@ function reviewAttachments(request) {
   let total = 0;
   return (request.attachments ?? []).map(attachment => {
     const file = path.join(dir, 'attachments', attachment.fileName), stat = fs.lstatSync(file);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 1 || stat.size > MAX_ATTACHMENT_BYTES) throw Error('INVALID_ATTACHMENT');
+    const limit = request.schemaVersion === 3 ? IMAGE_REVIEW_MAX_ATTACHMENT_BYTES : MAX_ATTACHMENT_BYTES;
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 1 || stat.size > limit) throw Error('INVALID_ATTACHMENT');
     const bytes = fs.readFileSync(file); total += bytes.byteLength;
     if (total > MAX_TOTAL_ATTACHMENT_BYTES || crypto.createHash('sha256').update(bytes).digest('hex') !== attachment.sha256) throw Error('INVALID_ATTACHMENT');
     if (attachment.mediaType === 'image/png' && (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a'
       || bytes.readUInt32BE(16) !== attachment.width || bytes.readUInt32BE(20) !== attachment.height)) throw Error('INVALID_ATTACHMENT');
+    // The private broker uses the Gateway's encodedImageDimensions for all codecs
+    // before copying these bytes. The digest above binds that checked metadata;
+    // do not introduce a second JPEG/WebP dimension parser in the browser operator.
+    if (attachment.mediaType === 'image/jpeg' && (bytes.length < 3 || bytes.subarray(0, 3).toString('hex') !== 'ffd8ff')) throw Error('INVALID_ATTACHMENT');
+    if (attachment.mediaType === 'image/webp' && (bytes.length < 25 || bytes.subarray(0, 4).toString('ascii') !== 'RIFF'
+      || bytes.subarray(8, 12).toString('ascii') !== 'WEBP' || bytes.readUInt32LE(4) !== bytes.length - 8)) throw Error('INVALID_ATTACHMENT');
     if (attachment.mediaType === 'application/pdf' && (bytes.length < 16 || bytes.subarray(0, 5).toString('ascii') !== '%PDF-'
       || !bytes.subarray(Math.max(0, bytes.length - 2048)).includes(Buffer.from('%%EOF')))) throw Error('INVALID_ATTACHMENT');
     return { attachment, file };

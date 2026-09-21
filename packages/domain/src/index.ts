@@ -256,6 +256,8 @@ export {
 } from './research-intelligence/claim-evidence-service';
 export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, reanalyzeConfirmedIngestion, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
 export { MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from './ingestion/canonical-evidence-contract';
+export { findSavedIngestionCommit, type SavedIngestionOrigin } from './ingestion/saved-source-commit';
+export { ensureHermesIngestionReview } from './ingestion/ingestion-service';
 export { MAX_INGESTION_CLAIMS, parseReviewedClaimSuggestions, type ReviewedClaimSuggestion } from './ingestion/reviewed-claim-suggestions';
 export {
   INGESTION_BRIDGE_FIELDS,
@@ -435,7 +437,7 @@ export { parseSceneAnimation, requireAnimationSourceSupport, type SceneAnimation
 
 export { requireStoryboardBase, requireStoryboardRevisionTask, WRITE_ROLES } from './assets/presentation-asset';
 
-export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, requireStyleReferenceImage, findPaperOriginalAssets, requirePaperOriginalsForReuse, type PaperOriginalRef, type SceneImageRequest } from './assets/scene-image';
+export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, requireSceneImageRevision, requireStyleReferenceImage, findPaperOriginalAssets, requirePaperOriginalsForReuse, type PaperOriginalRef, type SceneImageRequest } from './assets/scene-image';
 export { registerPaperFigure, type RegisterPaperFigureInput, type RegisterPaperFigureResult } from './assets/paper-figure';
 export { requireMembership } from './workspace/helpers';
 export { parseIllustrationBrief, describeIllustrationBrief, requireIllustrationSourceSupport, type IllustrationBrief } from './assets/illustration-brief';

@@ -10,7 +10,10 @@ import { requireCurrentUser } from './session-guard';
 
 const paramsSchema = z.object({ id: z.string().uuid() }).strict();
 const readParamsSchema = z.object({ id: z.string().uuid(), runId: z.string().uuid() }).strict();
-const createSchema = z.object({ ingestionTaskIds: z.array(z.string().uuid()).min(1).max(20) }).strict();
+const createSchema = z.object({ ingestionTaskIds: z.array(z.string().uuid()).min(1).max(20),
+  generation: z.object({ profile: z.literal('visual-narrative-v1'), maxAgentTasks: z.literal(9),
+    locale: z.enum(['zh', 'en']), style: z.string().trim().min(1).max(100), instruction: z.string().trim().min(1).max(1000) }).strict().optional(),
+}).strict();
 const selectionSchema = ingestionClaimSelectionSchema.extend({
   attachSourceQuote: z.literal(true),
 }).strict();
@@ -45,7 +48,7 @@ export function registerResearchRunRoutes(app: FastifyInstance, deps: Omit<Herme
     const body = createSchema.parse(req.body);
     const idempotencyKey = z.string().trim().min(1).max(200).parse(req.headers['idempotency-key']);
     const run = await createHermesResearchRun(deps, {
-      actorId: user.userId, researchObjectId: id, ingestionTaskIds: body.ingestionTaskIds, idempotencyKey,
+      actorId: user.userId, researchObjectId: id, ingestionTaskIds: body.ingestionTaskIds, idempotencyKey, generation: body.generation,
     }, auditCtx(req));
     return reply.status(202).send({ run });
   });

@@ -89,10 +89,11 @@ export async function createCommit(
   input: CreateCommitInput,
   ctx: AuditContext = {},
   transaction?: Prisma.TransactionClient,
+  systemExecution?: { executor: 'hermes'; runId: string },
 ): Promise<CreateCommitResult> {
   // Internal composition: all reads and writes use the caller's transaction.
   if (transaction) deps = { ...deps, prisma: transaction as WorkspaceDeps['prisma'] };
-  if (!transaction && input.idempotencyKey?.startsWith('ingestion-confirm:')) {
+  if (!transaction && (systemExecution || input.idempotencyKey?.startsWith('ingestion-confirm:') || input.idempotencyKey?.startsWith('hermes-ingestion:'))) {
     throw new CommitError('VALIDATION_ERROR', 'Reserved ingestion idempotency key');
   }
   const message = input.message.trim();
@@ -278,9 +279,10 @@ export async function createCommit(
     await recordAudit(
       deps, tx,
       {
-        actorId: input.userId, action: 'commit.create', workspaceId: ro.workspaceId,
+        actorId: systemExecution ? null : input.userId, action: 'commit.create', workspaceId: ro.workspaceId,
         targetType: 'commit', targetId: commit.id,
-        metadata: { researchObjectId: ro.id, versionNo: ro.version, changeCount: changesets.length },
+        metadata: { researchObjectId: ro.id, versionNo: ro.version, changeCount: changesets.length,
+          ...(systemExecution ? { ...systemExecution, authorizedByUserId: input.userId } : {}) },
       },
       ctx,
     );

@@ -1,7 +1,8 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import {
   loadDocumentSourceMapReference,
+  INGESTION_BRIDGE_FIELDS,
   parseDocumentSourceMapReference,
   resolveSourceLocator,
   validateSourceLocator,
@@ -9,6 +10,89 @@ import {
   type WorkspaceWritingDraft,
   type WorkspaceWritingDraftInput,
 } from '@openscience/domain';
+import { createWritingSourcePacket, type WritingSourcePacket } from './citation-management';
+
+export interface VisualNarrativeSource {
+  versionSdf: Record<string, unknown>;
+  reviewedAnalysis: Record<string, unknown>;
+  scientificReview: { status: string; fieldReviews: unknown; needsMoreEvidence: unknown };
+  sourceContext: WritingSourcePacket;
+}
+
+type NarrativeScope = { userId: string; workspaceId: string; researchObjectId: string; versionId: string; sourceClaimIds: string[] };
+type NarrativeReader = Pick<Prisma.TransactionClient, 'version' | 'claimNode' | 'ingestionTask'>;
+
+/** Resolve the paper through this version's reviewed Claims, never the newest document in the workspace. */
+export async function readVisualNarrativeSource(prisma: NarrativeReader, scope: NarrativeScope) {
+  const [version, claims] = await Promise.all([
+    prisma.version.findFirst({ where: { id: scope.versionId, researchObjectId: scope.researchObjectId },
+      include: { manifest: { include: { entries: true } } } }),
+    prisma.claimNode.findMany({ where: { id: { in: scope.sourceClaimIds }, versionId: scope.versionId, researchObjectId: scope.researchObjectId } }),
+  ]);
+  const lineages = claims.map(claim => {
+    const provenance = record(claim.provenance);
+    return typeof provenance.sourceTaskLineage === 'string' ? provenance.sourceTaskLineage
+      : provenance.source === 'reviewed_ingestion' ? provenance.sourceTaskId : undefined;
+  });
+  if (!version?.manifest || claims.length !== scope.sourceClaimIds.length
+    || claims.some(claim => claim.extractionStatus !== 'succeeded')
+    || lineages.some(id => typeof id !== 'string') || new Set(lineages).size !== 1) {
+    throw new Error('[blocked] Whole-paper narrative requires reviewed Claims from one paper in this exact version');
+  }
+  const ingestion = await prisma.ingestionTask.findUnique({ where: { id: lineages[0] as string },
+    include: { batch: true, artifact: true, agentTask: { include: { session: true } } } });
+  const task = ingestion?.agentTask;
+  if (!ingestion || ingestion.batch.userId !== scope.userId || ingestion.batch.researchObjectId !== scope.researchObjectId
+    || ingestion.state !== 'confirmed' || ingestion.artifact.workspaceId !== scope.workspaceId
+    || ingestion.artifact.deletedAt || ingestion.artifact.bytesPurgedAt
+    || !task || task.deletedAt || task.session.deletedAt || task.session.userId !== scope.userId
+    || task.session.researchObjectId !== scope.researchObjectId || task.kind !== 'sdf.extract' || task.status !== 'succeeded'
+    || !version.manifest.entries.some(entry => entry.artifactId === ingestion.artifactId && entry.blobSha256 === ingestion.artifact.blobSha256)) {
+    throw new Error('[blocked] Whole-paper narrative source is unavailable in this version');
+  }
+  const result = record(task.result);
+  const review = record(result.scientificReview);
+  const core = record(result.core);
+  if (review.status !== 'review_received' || !['4', '5'].includes(String(review.contractVersion))
+    || typeof review.responseHash !== 'string' || !/^[a-f0-9]{64}$/u.test(review.responseHash)
+    || result.reason || Object.keys(record(result.fieldDiagnostics)).length
+    || INGESTION_BRIDGE_FIELDS.some(field => typeof core[field] !== 'string')) {
+    throw new Error('[blocked] Whole-paper narrative requires a completed internal scientific review; partial analysis is not a whole-paper source');
+  }
+  const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+  if (reference.parserStatus !== 'succeeded' || reference.artifactId !== ingestion.artifactId
+    || reference.contentHash !== ingestion.artifact.blobSha256) throw new Error('[blocked] Whole-paper narrative SourceMap changed');
+  return {
+    // Reuse stored source identities and version content; no additional source hash or analysis stage.
+    identity: JSON.stringify({ versionId: version.id, manifestId: version.manifest.id, core: version.manifest.coreJson,
+      ingestionTaskId: ingestion.id, sourceTaskId: task.id, sourceUpdatedAt: task.updatedAt,
+      reviewResponseHash: review.responseHash, sourceMapRef: reference }),
+    reference, result, versionSdf: record(version.manifest.coreJson), reviewedAnalysis: core,
+    scientificReview: { status: String(review.status), fieldReviews: review.fieldReviews ?? null, needsMoreEvidence: review.needsMoreEvidence ?? [] },
+  };
+}
+
+/** Reuse parser output and the completed review. Excerpts are context, while scene facts still require exact Claim/Evidence bindings. */
+export async function resolveVisualNarrativeSource(deps: { prisma: NarrativeReader; storage: StorageAdapter }, scope: NarrativeScope) {
+  const source = await readVisualNarrativeSource(deps.prisma, scope);
+  const sourceMap = await loadDocumentSourceMapReference(deps.storage, source.reference);
+  const packet = createWritingSourcePacket(sourceMap, source.result);
+  // The existing packet orders reviewed evidence and headings first. Keep complete excerpts,
+  // explicitly reporting partial context instead of pretending to send the entire PDF again.
+  let selectedCharacters = 0;
+  const excerpts = packet.excerpts.filter(excerpt => {
+    if (selectedCharacters + excerpt.text.length > 18_000) return false;
+    selectedCharacters += excerpt.text.length;
+    return true;
+  });
+  const context: VisualNarrativeSource = {
+    versionSdf: source.versionSdf, reviewedAnalysis: source.reviewedAnalysis, scientificReview: source.scientificReview,
+    sourceContext: { excerpts, coverage: { ...packet.coverage, selectedCharacters,
+      complete: packet.coverage.complete && excerpts.length === packet.excerpts.length,
+      omittedSegments: packet.coverage.omittedSegments + packet.excerpts.length - excerpts.length } },
+  };
+  return { identity: source.identity, context };
+}
 
 interface ResolveWritingSourceInput {
   ownerTaskId: string;

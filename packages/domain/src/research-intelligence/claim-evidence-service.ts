@@ -113,6 +113,8 @@ export interface ReviewedIngestionClaimEvidenceBatchInput {
   sourceTaskId: string;
   snapshotToken: string;
   batchDigest: string;
+  /** Domain-only grant and existing scientific-review receipt; never supplied by API JSON. */
+  systemReview?: { runId: string; agentTaskId: string; responseHash: string };
   authority: {
     taskUpdatedAt: string;
     agentTaskId: string;
@@ -326,9 +328,10 @@ async function createClaimInTransaction(
   await touchMutableVersion(deps, input.versionId);
   await invalidatePublicationReview(deps, input.versionId);
   await recordAudit(deps, deps.prisma, {
-    actorId: input.userId, action: 'claim.create', workspaceId: version.researchObject.workspaceId,
+    actorId: provenanceMetadata?.reviewOrigin === 'hermes' ? null : input.userId, action: 'claim.create', workspaceId: version.researchObject.workspaceId,
     targetType: 'claim', targetId: created.id,
-    metadata: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, assessment: input.assessment },
+    metadata: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, assessment: input.assessment,
+      ...(provenanceMetadata?.reviewOrigin === 'hermes' ? { executor: 'hermes', authorizedByUserId: input.userId, runId: provenanceMetadata.runId } : {}) },
   }, ctx);
   return created;
 }
@@ -886,6 +889,7 @@ export async function createClaimEvidenceBatch(
     source: 'reviewed_ingestion', sourceTaskId: input.sourceTaskId,
     sourceTaskLineage: input.sourceTaskId,
     snapshotToken: input.snapshotToken, batchDigest: input.batchDigest,
+    ...(input.systemReview ? { reviewOrigin: 'hermes', authorizedByUserId: input.userId, ...input.systemReview } : {}),
   };
   await versionContext(deps, base, true);
   const sourceMap = input.evidence.length > 0
@@ -952,6 +956,18 @@ export async function createClaimEvidenceBatch(
     if (!taskMatches || !versionMatches) {
       throw new ClaimEvidenceError('CONCURRENT_UPDATE', 'Ingestion or version authority changed; preview again');
     }
+    if (input.systemReview) {
+      const run = await transaction.prisma.hermesResearchRun.findUnique({ where: { id: input.systemReview.runId }, include: { steps: true } });
+      const review = recordValue(taskResult.scientificReview);
+      if (!run || run.profile !== 'visual-narrative-v1' || run.maxAgentTasks !== 9 || run.status !== 'awaiting_source_review'
+        || run.actorId !== input.userId || run.researchObjectId !== input.researchObjectId
+        || !run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === input.sourceTaskId
+          && step.agentTaskId === input.systemReview!.agentTaskId && step.artifactId === authority.artifactId)
+        || input.systemReview.agentTaskId !== authority.agentTaskId || review.status !== 'review_received'
+        || review.responseHash !== input.systemReview.responseHash) {
+        throw new ClaimEvidenceError('FORBIDDEN', 'Hermes system verification authority changed');
+      }
+    }
     const existingClaims = await transaction.prisma.claimNode.findMany({
       where: { researchObjectId: input.researchObjectId, versionId: input.versionId },
     });
@@ -1011,7 +1027,7 @@ export async function createClaimEvidenceBatch(
           title, exactQuote: exactQuote ?? null, relation: evidenceInput.relation,
           locator: locator as never, contentHash: locator.contentHash,
           extractionConfidence: evidenceInput.extractionConfidence ?? null,
-          extractionStatus: 'needs_review' as const, verifiedByUserId: null,
+          extractionStatus: input.systemReview ? 'succeeded' as const : 'needs_review' as const, verifiedByUserId: null,
           provenance: humanProvenance(provenanceInput, rights, resolved.sourceMapRef, provenanceMetadata) as never,
         };
       });
@@ -1022,12 +1038,13 @@ export async function createClaimEvidenceBatch(
       await touchMutableVersion(transaction, input.versionId);
       await invalidatePublicationReview(transaction, input.versionId);
       await recordAudit(transaction, transaction.prisma, {
-        actorId: input.userId, action: 'evidence.batch_create',
+        actorId: input.systemReview ? null : input.userId, action: input.systemReview ? 'evidence.system_verify' : 'evidence.batch_create',
         workspaceId: authoritativeVersion.researchObject.workspaceId,
         targetType: 'version', targetId: input.versionId,
         metadata: {
           researchObjectId: input.researchObjectId, versionId: input.versionId,
           sourceTaskId: input.sourceTaskId, evidenceIds: evidenceData.map((item) => item.id),
+          ...(input.systemReview ? { executor: 'hermes', authorizedByUserId: input.userId, ...input.systemReview } : {}),
         },
       }, ctx);
     }

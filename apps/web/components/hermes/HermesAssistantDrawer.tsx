@@ -24,10 +24,10 @@ import { routeHermesLiteratureIntent, type RoutedHermesIntent } from '@/lib/herm
 import { createLiteratureIntentFingerprint } from '@/lib/literature-acquisition-state';
 
 import type { HermesPresentationIntent } from '@/lib/hermes/presentation-intent';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { HermesPresentationReview } from './HermesPresentationReview';
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
-import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, saveHermesGuideGoal, type HermesDraftScope } from '@/lib/hermes/draft-state';
+import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, readHermesResearchRunDraft, saveHermesGuideGoal, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import { SDF_FIELDS } from '@/lib/suggestions';
 import { ResearchPublication } from '@/components/research/ResearchPublication';
@@ -115,6 +115,9 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
       && (candidate.targetId === undefined || typeof candidate.targetId === 'string');
   }).slice(0, 1);
   if (nextSteps.length !== value.nextSteps.length) return null;
+  const researchRunDraft = value.researchRunDraft === undefined ? undefined : readHermesResearchRunDraft(value.researchRunDraft);
+  if (value.researchRunDraft !== undefined && (!researchRunDraft || value.needsMoreInformation || nextSteps.length
+    || value.presentationDraft || value.draftEdit || value.writingDraft)) return null;
   let presentationDraft: WorkspaceGuideResult['presentationDraft'];
   if (value.presentationDraft !== undefined) {
     const candidate = value.presentationDraft as Record<string, unknown>;
@@ -182,7 +185,7 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
       || Boolean(draftEdit || presentationDraft)) return null;
     writingDraft = candidate as unknown as NonNullable<WorkspaceGuideResult['writingDraft']>;
   }
-  return { summary: value.summary, nextSteps, needsMoreInformation: value.needsMoreInformation, ...(presentationDraft ? { presentationDraft } : {}), ...(draftEdit ? { draftEdit } : {}), ...(writingDraft ? { writingDraft } : {}) };
+  return { summary: value.summary, nextSteps, needsMoreInformation: value.needsMoreInformation, ...(researchRunDraft ? { researchRunDraft } : {}), ...(presentationDraft ? { presentationDraft } : {}), ...(draftEdit ? { draftEdit } : {}), ...(writingDraft ? { writingDraft } : {}) };
 }
 
 function isWritingInstruction(value: string) {
@@ -246,7 +249,6 @@ function HermesAssistantDrawerContent({
   const [restoredTask, setRestoredTask] = useState(false);
   const [guideStored, setGuideStored] = useState(false);
   const requestedVersion = useSearchParams()?.get('version') ?? '';
-  const router = useRouter();
   const currentOwner = `${viewerId || 'pending'}:${route}:${routeResearchObjectId ?? ''}`;
   const [resolvedGuide, setResolvedGuide] = useState({ owner: currentOwner, versionId: requestedVersion });
   const resolvedGuideVersion = resolvedGuide.owner === currentOwner ? resolvedGuide.versionId : '';
@@ -300,6 +302,9 @@ function HermesAssistantDrawerContent({
   const activeTask = task?.status === 'pending' || task?.status === 'running';
   const busy = submitting || activeTask || preparing;
   const result = useMemo(() => task?.status === 'succeeded' ? resultFromTask(task) : null, [task]);
+  const runDraftHref = result?.researchRunDraft && task?.researchObjectId === routeResearchObjectId
+    && result.researchRunDraft.researchObjectId === routeResearchObjectId && route === 'research-object-edit'
+    ? `/research-objects/${encodeURIComponent(routeResearchObjectId!)}/hermes?guideTask=${encodeURIComponent(task.id)}` : null;
   const invalidResult = task?.status === 'succeeded' && !result;
   useEffect(() => {
     if (!task || !result?.writingDraft) return;
@@ -598,6 +603,9 @@ function HermesAssistantDrawerContent({
           ...(dashboardContext.presentation ? { presentation: dashboardContext.presentation } : {}),
           ...(dashboardContext.editorDraft ? { editorDraft: dashboardContext.editorDraft } : {}),
           ...(dashboardContext.writingSource ? { writingSource: dashboardContext.writingSource } : {}),
+          ...(route === 'research-object-edit' && (dashboardContext.researchRunSource ?? dashboardContext.writingSource) ? {
+            researchRunSource: dashboardContext.researchRunSource ?? dashboardContext.writingSource,
+          } : {}),
           ...(writingDraft && isWritingInstruction(normalized) ? { writingDraft: {
             baseDraftTaskId: writingDraft.taskId,
             title: writingDraft.value.title,
@@ -684,6 +692,7 @@ function HermesAssistantDrawerContent({
           </div>}
           {!submitting && result && <div className="hermes-message hermes-message-assistant">
             <ScientificText as="p">{result.summary}</ScientificText>
+            {runDraftHref ? <Link className="hermes-conversation-link" href={runDraftHref}>{tc('openResearchRun')} →</Link> : null}
             {result.draftEdit && <div className="hermes-conversation-change">
               <p role="status">{editOutcome ? tw(editOutcome.conflicts ? 'editConflict' : 'editApplied', { count: editOutcome.applied }) : tw('editProposal')}</p>
               {Boolean(editOutcome?.applied) && onUndoDraftEdit && <button type="button" onClick={() => { onUndoDraftEdit(); setEditOutcome(null); }}>{tw('undo')}</button>}

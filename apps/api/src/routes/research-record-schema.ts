@@ -16,6 +16,7 @@ const metadataCapture = object({ source: { enum: ['publication', 'legacy_capture
     description: 'Provenance of displayed metadata, including explicitly authorized administrative corrections. These do not create another scientific publication.' } });
 const state = { enum: ['recorded', 'not_recorded'] };
 const fields = ['problem','insight','method','results','limitations','reproducibility'];
+const mediaReader = object({ order: { type: 'integer', minimum: 0 }, title: string, narration: string }, ['order']);
 export const researchRecordSchema = {
   $id: 'https://openscience.428312321.xyz/api/research-record/schema',
   ...object({
@@ -30,6 +31,8 @@ export const researchRecordSchema = {
     }, ['originalAuthors', 'originalDoi', 'platformAuthors', 'licenses']),
     publicationNo: nullableInteger, metadataCapture,
     sdf: { type: 'object', properties: Object.fromEntries([...fields, 'schemaVersion'].map(field => [field,string])), additionalProperties: true },
+    media: { ...array(object({ id: string, kind: string, reader: mediaReader }, ['id', 'kind'])),
+      description: 'Optional approved output projection for authorized private reading. Reader text and ordering come from this version’s captured history; older records may omit them.' },
     claims: array(object({ id: string, parentClaimId: nullableString, kind: string, statement: string, assessment: string,
       conditions: array(string), limitations: array(string), extractionStatus: string })),
     evidence: array(object({ id: string, claimId: string, artifactId: string, kind: string, title: string, relation: string, contentHash: string,
@@ -79,7 +82,8 @@ const publicArticleProperties = {
   }, ['logicalPath', 'artifactId', 'blobSha256', 'downloadAccess'])),
   claims: array(publicClaim), evidence: array(publicEvidence),
   presentationAssets: array(object({ id: string, kind: string, label: string, contentHash: string,
-    generator: object({ name: string, version: string }), sourceClaimIds: array(string), url: uriReference })),
+    generator: object({ name: string, version: string }), sourceClaimIds: array(string), url: uriReference, reader: mediaReader },
+  ['id', 'kind', 'label', 'contentHash', 'generator', 'sourceClaimIds', 'url'])),
   history: { ...array(object({ versionNo: nullableInteger, publicationNo: nullableInteger, status: string, title: nullableString,
     publicVersionId: string, publishedAt: dateTime, contentSha256: string, url: uriReference })),
     maxItems: 100, description: 'Up to 100 issued versions, newest publication number first. Private editing versions are omitted.' },

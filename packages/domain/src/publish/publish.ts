@@ -329,7 +329,8 @@ async function publishVersionOnce(
     const metadata = await finalizePublicationResearchRecord(tx, { researchObjectId: version.researchObjectId, versionId: version.id, publicId, publicVersionId, publicationNo, publishedAt, allowArtifactDownloads: input.allowArtifactDownloads === true, presentationAssetIds: selectedAssetIds ? [...selectedAssetIds] : undefined });
     const recorded = await tx.version.findUniqueOrThrow({ where: { id: version.id }, select: { researchRecord: true } });
     const mediaPart = publicHistoryMedia(recorded.researchRecord).map(asset => ({ id: asset.id, kind: asset.kind, contentHash: asset.contentHash,
-      generator: asset.generator, generatorVersion: asset.generatorVersion, sourceClaimIds: [...asset.sourceClaimIds].sort() })).sort((a, b) => a.id.localeCompare(b.id));
+      generator: asset.generator, generatorVersion: asset.generatorVersion, sourceClaimIds: [...asset.sourceClaimIds].sort(),
+      ...(asset.reader ? { reader: asset.reader } : {}) })).sort((a, b) => a.id.localeCompare(b.id));
     const contentSha256 = createHash('sha256').update(`${corePart}\n${entryPart}\n${narrativePart}\n${canonicalPublicationValue(metadata)}\n${canonicalPublicationValue(mediaPart)}`).digest('hex');
     await tx.version.update({ where: { id: version.id }, data: { status: 'published', publicVersionId, publicationNo } });
     if (visibilityFrom !== 'public') {

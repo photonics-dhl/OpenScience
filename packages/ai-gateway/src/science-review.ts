@@ -2,10 +2,11 @@ import { constants } from 'node:fs';
 import { lstat, open, link, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { sha256Text } from './ocr';
+import { encodedImageDimensions, sha256Text } from './ocr';
 import {
   SCIENCE_REVIEW_MAX_DEADLINE_MS,
   SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES,
+  ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES,
   SCIENCE_REVIEW_MAX_JSON_BYTES,
   SCIENCE_REVIEW_MAX_RESPONSE_BYTES,
   SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES,
@@ -71,13 +72,6 @@ async function publish(path: string, data: string | Uint8Array): Promise<boolean
   } finally { await unlink(temporary); }
 }
 
-function attachmentDimensions(bytes: Uint8Array): { width: number; height: number } {
-  const value = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (value.length < 24 || value.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a'
-    || value.readUInt32BE(8) !== 13 || value.subarray(12, 16).toString('ascii') !== 'IHDR') fail();
-  return { width: value.readUInt32BE(16), height: value.readUInt32BE(20) };
-}
-
 function validPdf(bytes: Uint8Array): boolean {
   const value = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   return value.length >= 16 && value.subarray(0, 5).toString('ascii') === '%PDF-'
@@ -85,11 +79,13 @@ function validPdf(bytes: Uint8Array): boolean {
 }
 
 function sameIllustrationRequest(left: ScienceReviewRequest, right: ScienceReviewRequest): boolean {
-  return left.schemaVersion === 2 && right.schemaVersion === 2
+  return (left.schemaVersion === 2 || left.schemaVersion === 3) && (right.schemaVersion === 2 || right.schemaVersion === 3)
+    && left.schemaVersion === right.schemaVersion
     && left.id === right.id && left.prompt === right.prompt && left.promptHash === right.promptHash
     && left.source.kind === right.source.kind && left.source.researchObjectId === right.source.researchObjectId
     && left.source.versionId === right.source.versionId && left.source.sourceEvidenceIdentity === right.source.sourceEvidenceIdentity
-    && left.source.candidateHash === right.source.candidateHash;
+    && left.source.candidateHash === right.source.candidateHash
+    && JSON.stringify(left.attachments ?? []) === JSON.stringify(right.attachments ?? []);
 }
 
 async function successfulOutput(resultsDir: string, request: ScienceReviewRequest): Promise<ScienceReviewProviderResult | null> {
@@ -132,9 +128,11 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
   }
 
   async review(input: ScienceReviewInput): Promise<ScienceReviewProviderResult> {
-    const illustration = 'kind' in input.source && input.source.kind === 'illustration-plan';
+    const illustration = 'kind' in input.source;
+    const image = 'kind' in input.source && input.source.kind === 'illustration-image';
     if (illustration) {
-      if (!this.config.withIllustrationSubmission || input.attachments !== undefined
+      if (!this.config.withIllustrationSubmission || (!image && input.attachments !== undefined)
+        || (image && input.attachments?.length !== 1)
         || input.requestId !== input.authorizationContext.taskId || !input.illustrationContext
         || !Number.isSafeInteger(input.illustrationContext.executionAttempt) || input.illustrationContext.executionAttempt < 1
         || typeof input.illustrationContext.claimContent !== 'string' || !input.illustrationContext.claimContent.trim()
@@ -145,22 +143,26 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
     }
     await directory(this.config.inboxDir);
     await directory(this.config.resultsDir);
-    await boundedRead(join(this.config.resultsDir, '.ready'), SCIENCE_REVIEW_MAX_JSON_BYTES);
-    const ready = await lstat(join(this.config.resultsDir, '.ready'));
-    if (this.now() - ready.mtimeMs > SCIENCE_REVIEW_READY_MAX_AGE_MS || ready.mtimeMs > this.now() + 5000) fail();
+    const requireReady = async () => {
+      await boundedRead(join(this.config.resultsDir, '.ready'), SCIENCE_REVIEW_MAX_JSON_BYTES);
+      const ready = await lstat(join(this.config.resultsDir, '.ready'));
+      if (this.now() - ready.mtimeMs > SCIENCE_REVIEW_READY_MAX_AGE_MS || ready.mtimeMs > this.now() + 5000) fail();
+    };
+    if (!image) await requireReady();
     const createdAt = this.now();
+    const attachmentByteLimit = image ? ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES : SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES;
     const attachments = input.attachments?.map(({ bytes, ...attachment }) => {
-      if (!(bytes instanceof Uint8Array) || bytes.byteLength < 1 || bytes.byteLength > SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES
+      if (!(bytes instanceof Uint8Array) || bytes.byteLength < 1 || bytes.byteLength > attachmentByteLimit
         || createHash('sha256').update(bytes).digest('hex') !== attachment.sha256) fail();
-      if (attachment.mediaType === 'image/png') {
-        const dimensions = attachmentDimensions(bytes);
+      if (attachment.mediaType !== 'application/pdf') {
+        const dimensions = encodedImageDimensions(attachment.mediaType, bytes);
         if (dimensions.width !== attachment.width || dimensions.height !== attachment.height) fail();
       } else if (!validPdf(bytes)) fail();
       return { record: attachment, bytes: Uint8Array.from(bytes) };
     });
     if ((attachments?.reduce((total, attachment) => total + attachment.bytes.byteLength, 0) ?? 0) > SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES) fail();
     let request = validateScienceReviewRequest({
-      schemaVersion: illustration ? 2 : 1,
+      schemaVersion: image ? 3 : illustration ? 2 : 1,
       provider: this.name,
       id: input.requestId,
       prompt: input.prompt,
@@ -170,18 +172,39 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
       source: input.source,
       ...(attachments?.length ? { attachments: attachments.map(({ record }) => record) } : {}),
     });
+    if (Buffer.byteLength(JSON.stringify(request), 'utf8') > SCIENCE_REVIEW_MAX_JSON_BYTES) fail();
     const intendedRequest = request;
     const submit = async (): Promise<ScienceReviewProviderResult | null> => {
+      const reservation = join(this.config.inboxDir, `${input.requestId}.submitted.json`);
+      const reuseImageReservation = async (reserved: Buffer): Promise<ScienceReviewProviderResult | null> => {
+        request = validateScienceReviewRequest(JSON.parse(reserved.toString('utf8')));
+        if (!sameIllustrationRequest(request, intendedRequest)) fail();
+        const result = await successfulOutput(this.config.resultsDir, request);
+        if (result) return result;
+        validateScienceReviewRequest(request, this.now());
+        // The reservation may already have been consumed by the broker. Do not recreate
+        // its queue entry or reset its deadline after an uncertain publication/submission.
+        return null;
+      };
+      if (image) {
+        let reserved: Buffer | undefined;
+        try { reserved = await boundedRead(reservation, SCIENCE_REVIEW_MAX_JSON_BYTES); }
+        catch (error) { if (!missing(error)) throw error; }
+        if (reserved) return reuseImageReservation(reserved);
+        // Readiness must precede every new durable reservation. A browser outage before
+        // queuing must not spend this task's review deadline or leave a submitted marker.
+        await requireReady();
+      }
       for (const attachment of attachments ?? []) {
         const path = join(this.config.inboxDir, `${request.id}.${attachment.record.fileName}`);
         if (!await publish(path, attachment.bytes)) {
-          const existing = await boundedRead(path, SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES);
+          const existing = await boundedRead(path, attachmentByteLimit);
           if (existing.byteLength !== attachment.bytes.byteLength
             || createHash('sha256').update(existing).digest('hex') !== attachment.record.sha256) fail();
         }
       }
-      const reservation = join(this.config.inboxDir, `${input.requestId}.submitted.json`);
       if (!await publish(reservation, JSON.stringify(request))) {
+        if (image) return reuseImageReservation(await boundedRead(reservation, SCIENCE_REVIEW_MAX_JSON_BYTES));
         request = validateScienceReviewRequest(JSON.parse((await boundedRead(reservation, SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
         if (illustration ? !sameIllustrationRequest(request, intendedRequest)
           : request.schemaVersion !== 1 || request.promptHash !== sha256Text(input.prompt) || request.source.candidateHash !== input.source.candidateHash

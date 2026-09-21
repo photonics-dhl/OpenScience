@@ -14,7 +14,7 @@ import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
 import { PresentationAssetError } from './errors';
-import { ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './video';
+import { ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './video';
 import { requireAnimationSourceSupport } from './animation';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -23,7 +23,7 @@ const SERIALIZABLE_RETRY_DELAYS_MS = [10, 25, 50, 100, 200] as const;
 export const DETERMINISTIC_PRESENTATION_GENERATOR = 'OpenScience deterministic renderer';
 export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-presentation-v2';
 export type PresentationGenerationKind = (typeof KINDS)[number];
-export interface HermesPresentationAuthority { runId: string; stage: 'storyboard' | 'scene_image' | 'video'; ordinal: number; profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | 'content-driven-image-v1' }
+export interface HermesPresentationAuthority { runId: string; stage: 'storyboard' | 'scene_image' | 'video'; ordinal: number; profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | 'content-driven-image-v1' | 'visual-narrative-v1' }
 export interface PresentationGenerationPayload { schemaVersion: 1; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest; hermesRunAuthority?: HermesPresentationAuthority }
 export interface PresentationAssetView {
   storyboard?: StoryboardView;
@@ -87,7 +87,7 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
       || !['storyboard', 'scene_image', 'video'].includes(String(authority.stage))
       || !Number.isInteger(authority.ordinal) || Number(authority.ordinal) < 0
       || Number(authority.ordinal) > (authority.profile === ONCHIP_FIELD_SAMPLING_PROFILE ? 4 : 5)
-      || ![ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE].includes(authority.profile as HermesPresentationAuthority['profile'])) throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes run authority is invalid');
+      || ![ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE].includes(authority.profile as HermesPresentationAuthority['profile'])) throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes run authority is invalid');
     hermesRunAuthority = authority as unknown as HermesPresentationAuthority;
   }
   return { ...(sceneImage ? { sceneImage } : {}), ...(storyboard ? { storyboard } : {}), ...(video ? { video } : {}), ...(hermesRunAuthority ? { hermesRunAuthority } : {}), schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
@@ -165,7 +165,7 @@ async function hasHermesAssetReviewAuthority(
   const step = await prisma.hermesResearchStep.findFirst({
     where: { presentationAssetId: input.assetId, status: 'awaiting_approval', run: {
       actorId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId,
-      OR: [{ profile: ONCHIP_FIELD_SAMPLING_PROFILE, maxAgentTasks: 7 }, { profile: CONTENT_DRIVEN_PROFILE, maxAgentTasks: 8 }, { profile: CONTENT_DRIVEN_IMAGE_PROFILE, maxAgentTasks: 7 }],
+      OR: [{ profile: ONCHIP_FIELD_SAMPLING_PROFILE, maxAgentTasks: 7 }, { profile: CONTENT_DRIVEN_PROFILE, maxAgentTasks: 8 }, { profile: CONTENT_DRIVEN_IMAGE_PROFILE, maxAgentTasks: 7 }, { profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9 }],
       status: { in: ['awaiting_scene_images_review', 'awaiting_video_review'] },
     } }, include: { run: true },
   });
@@ -306,10 +306,58 @@ export async function getPresentationAssetForRead(deps: AgentDeps, input: Presen
 export async function transitionPresentationAsset(deps: AgentDeps, input: {
   userId: string; researchObjectId: string; versionId: string; assetId: string; status: Extract<PresentationAssetStatus, 'approved' | 'rejected'>; expectedUpdatedAt: Date;
 }, ctx: AuditContext = {}): Promise<PresentationAsset> {
+  return transitionPresentationAssetUnderReview(deps, input, ctx);
+}
+
+/** Approve or retain a rejected candidate from a real internal review, not a user's aesthetic decision. */
+export async function transitionHermesPresentationAsset(deps: AgentDeps, input: { runId: string; assetId: string }): Promise<void> {
+  const run = await deps.prisma.hermesResearchRun.findUnique({ where: { id: input.runId } });
+  const asset = await deps.prisma.presentationAsset.findUnique({ where: { id: input.assetId } });
+  if (!run?.versionId || !asset || asset.status !== 'draft') return;
+  const provenance = asset.provenance as Prisma.JsonObject;
+  const review = (asset.kind === 'image' ? provenance.imageReview : provenance.illustrationReview) as Prisma.JsonObject | undefined;
+  if (!review || !['accepted', 'revised', 'blocked'].includes(String(review.decision))) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes candidate has no completed internal review');
+  }
+  await transitionPresentationAssetUnderReview(deps, { userId: run.actorId, researchObjectId: run.researchObjectId,
+    versionId: run.versionId, assetId: asset.id, expectedUpdatedAt: asset.updatedAt,
+    status: review.decision === 'blocked' ? 'rejected' : 'approved' }, {}, run.id);
+}
+
+async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
+  userId: string; researchObjectId: string; versionId: string; assetId: string; status: Extract<PresentationAssetStatus, 'approved' | 'rejected'>; expectedUpdatedAt: Date;
+}, ctx: AuditContext, internalRunId?: string): Promise<PresentationAsset> {
   return withPresentationAssetWrite(deps.prisma, input, async (tx, version) => {
     const transaction = { ...deps, prisma: tx as AgentDeps['prisma'] };
     const asset = await tx.presentationAsset.findUnique({ where: { id: input.assetId } });
     if (!asset || asset.deletedAt || asset.researchObjectId !== input.researchObjectId || asset.versionId !== input.versionId) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
+    if (internalRunId) {
+      const run = await tx.hermesResearchRun.findUnique({ where: { id: internalRunId }, include: { steps: true } });
+      const stage = asset.kind === 'image' ? 'scene_image' : 'storyboard';
+      const step = run?.steps.find(item => item.stage === stage && item.presentationAssetId === asset.id);
+      const task = step?.agentTaskId ? await tx.agentTask.findUnique({ where: { id: step.agentTaskId } }) : null;
+      const p = asset.provenance as Prisma.JsonObject;
+      const review = (stage === 'scene_image' ? p.imageReview : p.illustrationReview) as Prisma.JsonObject | undefined;
+      const expectedStatus = stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_storyboard_review';
+      const ids = (await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } })).map(link => link.claimId).sort();
+      const taskPayload = task ? parsePresentationGenerationPayload(task.payload) : undefined;
+      if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || run.status !== expectedStatus
+        || run.actorId !== input.userId || run.researchObjectId !== input.researchObjectId || run.versionId !== input.versionId
+        || !step || step.status !== 'awaiting_approval' || task?.status !== 'succeeded' || task.deletedAt
+        || taskPayload?.hermesRunAuthority?.runId !== run.id || taskPayload.hermesRunAuthority.stage !== stage
+        || task.id !== asset.id || p.taskId !== asset.id || !isDeepStrictEqual(ids, [...run.sourceClaimIds].sort())
+        || !review || review.sourceEvidenceIdentity !== p.sourceEvidenceIdentity
+        || typeof review.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(review.promptHash)
+        || typeof review.responseHash !== 'string' || !/^[a-f0-9]{64}$/.test(review.responseHash)
+        || review.requestId !== asset.id || typeof review.provider !== 'string' || !review.provider
+        || (stage === 'scene_image' ? (review.stage !== 'generated-image' || review.contentHash !== asset.contentHash || review.parentIdentity !== p.parentIdentity
+          || review.provider !== 'chatgpt-web-science-review' || typeof review.model !== 'string' || !review.model
+          || !['accepted', 'blocked'].includes(String(review.decision))) : (review.stage !== 'final-brief'
+          || !['accepted', 'revised', 'blocked'].includes(String(review.decision))))
+        || (input.status === 'approved') !== (review.decision !== 'blocked')) {
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes internal review does not match the current candidate and grant');
+      }
+    }
     if (input.status === 'approved') {
       await requireValidVersionHistoryCopy(tx, asset);
       const links = await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } });
@@ -380,7 +428,7 @@ export async function transitionPresentationAsset(deps: AgentDeps, input: {
     }
     const current = await tx.presentationAsset.findUnique({ where: { id: asset.id } });
     if (!current) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
-    await recordAudit(transaction, tx, { actorId: input.userId, action: `presentation_asset.${input.status}`, workspaceId: version.researchObject.workspaceId, targetType: 'presentation_asset', targetId: asset.id, metadata: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: asset.kind, ...(input.status === 'rejected' ? { invalidatedSceneImageCount } : {}) } }, ctx);
+    await recordAudit(transaction, tx, { actorId: internalRunId ? null : input.userId, action: `presentation_asset.${internalRunId ? 'system_' : ''}${input.status}`, workspaceId: version.researchObject.workspaceId, targetType: 'presentation_asset', targetId: asset.id, metadata: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: asset.kind, ...(input.status === 'rejected' ? { invalidatedSceneImageCount } : {}), ...(internalRunId ? { executor: 'hermes', authorizedByUserId: input.userId, runId: internalRunId, userAccepted: false } : {}) } }, ctx);
     return current;
   });
 }
@@ -407,8 +455,9 @@ export async function requireStoryboardBase(prisma: Pick<Prisma.TransactionClien
     if (!asset || asset.deletedAt || asset.researchObjectId !== payload.researchObjectId || asset.versionId !== payload.versionId || !['draft', 'approved'].includes(asset.status) || !view || JSON.stringify(ids) !== JSON.stringify(payload.sourceClaimIds))
         throw new PresentationAssetError('VALIDATION_ERROR', 'Base storyboard is invalid for these sources');
     if (payload.storyboard?.revisionMode === 'art' && (view.output !== 'image' || view.locale !== payload.storyboard.locale
-        || view.document.scenes.some(scene => scene.illustration?.schemaVersion !== 2 || scene.paperOriginal)))
-        throw new PresentationAssetError('VALIDATION_ERROR', 'Art revision requires a structured image plan in the same language without reused paper originals; create a re-render plan to change an original figure');
+        || Boolean(view.document.narrative) !== Boolean(payload.storyboard.narrative)
+        || view.document.scenes.some(scene => scene.illustration?.schemaVersion !== 2 || (!view.document.narrative && scene.paperOriginal))))
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Art revision requires a structured image plan in the same language and narrative scope; legacy paper originals require a re-render plan');
     return { view, identity: JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids }) };
 }
 

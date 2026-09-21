@@ -11,6 +11,8 @@ import { createClaimEvidenceBatch, MAX_INGESTION_BATCH_EVIDENCE } from '../resea
 import { authorizeIngestionWrite, type IngestionDeps } from './ingestion-service';
 import { MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from './canonical-evidence-contract';
 import { MAX_INGESTION_CLAIMS, parseReviewedClaimSuggestions, type ReviewedClaimSuggestion } from './reviewed-claim-suggestions';
+import { automaticIngestionReview, requireUnchangedAutomaticCore } from './automatic-review';
+import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
 
 export const INGESTION_BRIDGE_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
 export type IngestionBridgeField = typeof INGESTION_BRIDGE_FIELDS[number];
@@ -300,6 +302,7 @@ export async function confirmIngestionClaimEvidenceBridge(
   },
   ctx: AuditContext = {},
   existingTransaction?: Prisma.TransactionClient,
+  internalRunId?: string,
 ) {
   const scoped = existingTransaction ? { ...deps, prisma: existingTransaction as IngestionDeps['prisma'] } : deps;
   const { preview, task, version } = await loadSnapshot(scoped, input);
@@ -385,6 +388,24 @@ export async function confirmIngestionClaimEvidenceBridge(
   if (evidence.length > MAX_INGESTION_BATCH_EVIDENCE) {
     throw new ClaimEvidenceError('VALIDATION_ERROR', 'Too many source bindings; confirm fewer claims or passages in this batch');
   }
+  let systemReview: { runId: string; agentTaskId: string; responseHash: string } | undefined;
+  if (internalRunId) {
+    const run = await scoped.prisma.hermesResearchRun.findUnique({ where: { id: internalRunId }, include: { steps: true } });
+    if (!run || run.actorId !== input.userId || run.researchObjectId !== input.researchObjectId
+      || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || run.status !== 'awaiting_source_review'
+      || !run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === task.id
+        && step.agentTaskId === task.agentTask?.id && step.artifactId === task.artifactId)) {
+      throw new ClaimEvidenceError('FORBIDDEN', 'Hermes source review authority changed');
+    }
+    const reviewed = automaticIngestionReview(task);
+    requireUnchangedAutomaticCore(reviewed, version.manifest!.coreJson);
+    const selections = preview.suggestions.flatMap(suggestion => suggestion.atomicSuggestions ?? [])
+      .map(claim => ({ ...claim, attachSourceQuote: true }));
+    if (!selections.length || !isDeepStrictEqual(input.selections, selections)) {
+      throw new ClaimEvidenceError('VALIDATION_ERROR', 'Automatic Claims must match the existing scientific review');
+    }
+    systemReview = { runId: internalRunId, agentTaskId: reviewed.agentTaskId, responseHash: reviewed.responseHash };
+  }
   const batchDigest = digest({ versionId: input.versionId, taskId: input.taskId, idempotencyKey, claims, evidence });
   const batch = {
     userId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId,
@@ -396,7 +417,7 @@ export async function confirmIngestionClaimEvidenceBridge(
       manifestCoreDigest: digest(version.manifest!.coreJson),
       sourceMapRef: parseDocumentSourceMapReference(record(task.agentTask!.result).sourceMapRef),
     },
-    claims, evidence,
+    claims, evidence, ...(systemReview ? { systemReview } : {}),
   };
   return existingTransaction
     ? createClaimEvidenceBatch(scoped, batch, ctx, scoped)

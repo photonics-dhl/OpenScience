@@ -4,10 +4,12 @@ import { describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocum
 import type { PresentationClaim } from './chart-generator';
 import { compileIllustrationImagePrompt } from './scene-image';
 import { loadIllustrationStyleSkills } from './illustration-styles';
+import type { VisualNarrativeSource } from '../scientific-writing-source';
 
 type ReviewContext = Pick<ScienceReviewInput, 'authorizationContext' | 'illustrationContext'> & {
   researchObjectId: string; versionId: string; sourceEvidenceIdentity: string;
   structuredIssues?: boolean;
+  narrativeSource?: VisualNarrativeSource;
 };
 export type IllustrationReviewIssue = {
   id: string; sceneIndex: number; labelIndex: number | null;
@@ -37,6 +39,7 @@ function readIssues(value: unknown, candidate: StoryboardDocument,
       throw new Error('[blocked] Invalid scientific review issue');
     }
     if (kind === 'label_clarification') {
+      if (candidate.scenes[sceneIndex]!.paperOriginal) throw new Error('[blocked] A verbatim original requires replanning, not generated-label correction');
       const target = `${sceneIndex}:${labelIndex}`;
       if (typeof labelIndex !== 'number' || !Number.isInteger(labelIndex)
         || typeof candidate.scenes[sceneIndex]!.illustration?.labels[labelIndex] !== 'string'
@@ -89,11 +92,13 @@ export async function reviewIllustrationStoryboard(
   gateway: Pick<AiGateway, 'reviewScientific'>,
   claims: readonly PresentationClaim[], settings: StoryboardRequest, candidate: StoryboardDocument, context: ReviewContext,
 ) {
+  if (Boolean(settings.narrative) !== Boolean(candidate.narrative) || (candidate.narrative && !context.narrativeSource))
+    throw new Error('[blocked] Whole-paper narrative review requires the current paper context and its main message');
   // Short-circuit: paper-original-only plans are mechanically deterministic —
   // every scene binds to a registered asset and there is no science to author,
   // no art direction to validate. Skip the chat-review LLM call entirely and
   // accept the plan as-is.
-  if (candidate.scenes.length > 0 && candidate.scenes.every(scene => scene.paperOriginal)) {
+  if (!candidate.narrative && candidate.scenes.length > 0 && candidate.scenes.every(scene => scene.paperOriginal)) {
     return {
       document: candidate,
       decision: 'accepted' as const,
@@ -117,16 +122,15 @@ export async function reviewIllustrationStoryboard(
   // Imported evidence is field-scoped and often all marked supports. Keep the
   // selected Claims' whole source context: unused passages can carry qualifiers.
   const selectedClaimIds = new Set(candidate.scenes.flatMap(scene => scene.sourceClaimIds));
-  const selectedClaims = claims.filter(claim => selectedClaimIds.has(claim.id));
+  const selectedClaims = candidate.narrative ? claims : claims.filter(claim => selectedClaimIds.has(claim.id));
   const sources = selectedClaims.flatMap(claim => (claim.sourcePassages ?? [])
     .map(passage => ({ ...passage, claimId: claim.id })));
   const sourceIds = new Map(sources.map((source, index) => [`${source.claimId}:${source.evidenceId}`, `s${index}`]));
-  const candidateView = { title: candidate.title, scenes: candidate.scenes.map(scene => {
+  const candidateView = { title: candidate.title, ...(candidate.narrative ? { narrative: candidate.narrative } : {}), scenes: candidate.scenes.map(scene => {
     if (scene.illustration?.schemaVersion !== 2) throw new Error('[blocked] Illustration review requires separate science and layout');
-    // Paper-original scenes anchor their source to a registered asset, not a
-    // reviewed passage; the chat-review's source-support and supports-evidence
-    // checks do not apply (the asset registration itself is the evidence).
-    if (!scene.paperOriginal) {
+    // Legacy mechanical reuse has no authored scientific explanation. New narrative
+    // captions always require real passages; an uploaded image is not proof of its meaning.
+    if (!scene.paperOriginal || candidate.narrative) {
       requireIllustrationSourceSupport(scene.illustration, claims);
       if (scene.illustration.subjects.some(subject => !sources.some(source => source.claimId === subject.basis.claimId
         && source.evidenceId === subject.basis.evidenceId && source.relation === 'supports'))) {
@@ -135,13 +139,14 @@ export async function reviewIllustrationStoryboard(
     }
     const { schemaVersion: _schemaVersion, ...brief } = scene.illustration;
     return { title: scene.title, narration: scene.narration, ...brief,
+      ...(scene.paperOriginal ? { mediaSource: { kind: 'unchanged_paper_original', assetId: scene.paperOriginal.assetId } } : {}),
       // For paper-original scenes, basis.evidenceId is the registered asset id
       // (not a source passage), so sourceId is undefined — that's fine: the
       // LLM only sees the paper-original binding and skips review of support.
       subjects: brief.subjects.map(subject => ({
         description: subject.description,
         basis: {
-          sourceId: scene.paperOriginal
+          sourceId: scene.paperOriginal && !candidate.narrative
             ? `paper_original:${scene.paperOriginal.assetId}`
             : sourceIds.get(`${subject.basis.claimId}:${subject.basis.evidenceId}`),
         },
@@ -149,14 +154,17 @@ export async function reviewIllustrationStoryboard(
   }) };
   const candidateHash = createHash('sha256').update(JSON.stringify(candidate)).digest('hex');
   const perSceneStyle = storyboardSceneStyles(settings, candidate.scenes);
-  const reviewSkills = loadIllustrationStyleSkills(perSceneStyle.filter((_, index) => !candidate.scenes[index]!.paperOriginal), settings.instruction, 'review');
+  const generatedStyles = perSceneStyle.filter((_, index) => !candidate.scenes[index]!.paperOriginal);
+  const reviewSkills = loadIllustrationStyleSkills(generatedStyles.length ? generatedStyles : [settings.style], settings.instruction, 'review');
   const prompt = `Apply the shared scientific-critical-thinking skill below to the FINAL proposed research illustration. Use only the supplied analysis and original evidence; do not browse or operate tools. The image-specific task is to check what every axis, distance, color, region, arrow and curve communicates, including meaning introduced by composition and treatment. Decorative placement must not invent quantitative behavior or physical relationships.
+${candidate.narrative ? 'This is a whole-paper visual narrative. In this same review, assess mainMessage, audience, titles, explanatory narrations and scene order against the supplied same-version SDF, completed scientific review and original sources. The main contribution must be distinguished from background, key steps must connect without unexplained jargon or unsupported leaps, and conditions and limits must remain visible to the intended reader. Do not redo full-paper analysis: consume the existing reviewed analysis; excerpt coverage is explicitly partial. One narrow correct scene does not establish a whole-paper explanation. Missing essential steps, a wrong main contribution, or an unsupported reader caption require blocked with requires_replan. A source image is unchanged reference material, never proof of its surrounding caption or a newly designed reader illustration. Review those captions even when every scene is an original. Do not modify source-image composition or treatment; request replanning when reuse cannot serve the narrative.' : ''}
 Choose accepted only if the complete picture faithfully explains the supplied selected relationship. Science is carried in message/domain/subjects/encoding/labels/constraints plus title/narration; it is not yours to rewrite or replace. If any of those fields needs correction, or a different focus or source is necessary, return blocked and identify the exact scene, field, source and problem for upstream correction. Do not invent missing evidence or use a style reference as scientific authority.
 If only artistic placement or treatment introduced a misleading meaning, return revised with a minimal correction to that scene's composition or treatment. Preserve scene order/count, all scientific fields and unaffected artwork. Composition chooses placement, focal scale, reading path and spacing; treatment chooses material, palette, edges and typography. Neither may add a new scientific mark, label, relationship or condition. Refer to existing subjects, encoding and labels. Do not reselect a topic, rewrite a complete storyboard or add another review stage.
 In this same review, also compare the candidate composition/treatment with userRequest and its perSceneStyle. Each scene's selected style overrides the global style fallback; do not impose another scene's style. A material mismatch with an explicit art direction, background, layout, texture or typography request warrants revised using those same correction fields. Preserve every scientific field and only art aspects explicitly accepted by the user; scientific approval is not aesthetic acceptance. Resolve objective instruction mismatches, not subjective taste. Conformance does not certify visual quality or user approval; never add another review stage or change science for decoration.
 Return ONLY JSON with EXACT keys {decision,summary,corrections}. decision is accepted|revised|blocked; summary is a concise explanation in the requested locale. For accepted or blocked, corrections MUST be []. For revised, corrections is a nonempty list of {sceneIndex,composition?,treatment?}; each existing zero-based sceneIndex appears once, with at least one changed field and no other keys. composition:nonempty single-line string<=200; treatment:nonempty single-line string<=220. No HTML or code. Keep corrections concise and in the requested locale. The final drawing instructions including unchanged scientific fields must fit 1500 characters; never shorten science to fit art. SourceIds and review notes are internal and are not drawn. Perform this focused audit yourself.
 ${reviewSkills.instructions}
 ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, style: settings.style, perSceneStyle,
+    ...(candidate.narrative ? { paper: context.narrativeSource } : {}),
     upstream: selectedClaims.map(claim => ({ claimId: claim.id, parentClaimId: claim.parentClaimId ?? null, kind: claim.kind, assessment: claim.assessment, analysis: claim.statement,
       conditions: claim.conditions, limitations: claim.limitations,
       sourceIds: (claim.sourcePassages ?? []).map(passage => sourceIds.get(`${claim.id}:${passage.evidenceId}`)) })),
@@ -211,6 +219,7 @@ function parseIllustrationReview(value: unknown, candidate: StoryboardDocument, 
         || Object.keys(correction).some(key => !['sceneIndex', 'composition', 'treatment'].includes(key))
         || (!('composition' in correction) && !('treatment' in correction))) throw new Error('[blocked] Invalid scene correction');
       const scene = scenes[index]!;
+      if (scene.paperOriginal) throw new Error('[blocked] Review cannot redesign a verbatim paper-original scene');
       const illustration = parseIllustrationBrief({ ...scene.illustration!,
         ...('composition' in correction ? { composition: correction.composition } : {}),
         ...('treatment' in correction ? { treatment: correction.treatment } : {}) }, scene.sourceClaimIds);
@@ -222,7 +231,7 @@ function parseIllustrationReview(value: unknown, candidate: StoryboardDocument, 
     document = parseStoryboardDocument({ ...candidate, scenes }, claims.map(claim => claim.id), 'image');
   }
   for (const scene of document.scenes) {
-    if (!scene.paperOriginal) requireIllustrationSourceSupport(scene.illustration!, claims);
+    if (!scene.paperOriginal || document.narrative) requireIllustrationSourceSupport(scene.illustration!, claims);
     compileIllustrationImagePrompt(scene.illustration!);
   }
   return { document, decision, summary: review.summary, issues };

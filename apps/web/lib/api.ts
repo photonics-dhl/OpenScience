@@ -350,6 +350,13 @@ export type HermesResearchRunStatus =
   | 'failed'
   | 'stopped';
 export type HermesResearchStepStatus = 'waiting' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'stopped';
+export interface HermesNarrativeGeneration {
+  profile: 'visual-narrative-v1';
+  maxAgentTasks: 9;
+  locale: 'zh' | 'en';
+  style: string;
+  instruction: string;
+}
 export interface HermesResearchRun {
   id: string;
   researchObjectId: string;
@@ -357,7 +364,8 @@ export interface HermesResearchRun {
   status: HermesResearchRunStatus;
   version: number;
   versionId: string | null;
-  profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | 'content-driven-image-v1' | null;
+  profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | 'content-driven-image-v1' | 'visual-narrative-v1' | null;
+  generationSettings?: Pick<HermesNarrativeGeneration, 'locale' | 'style' | 'instruction'> | null;
   maxAgentTasks: number | null;
   canRetryGeneration?: boolean;
   chargeableAttempts?: number;
@@ -369,7 +377,7 @@ export interface HermesResearchRun {
   updatedAt: string;
   steps: Array<{
     id: string;
-    stage: 'source_ingestion' | 'storyboard' | 'scene_image' | 'video';
+    stage: 'source_ingestion' | 'source_composition' | 'source_review' | 'storyboard' | 'scene_image' | 'video';
     ordinal: number;
     status: HermesResearchStepStatus;
     ingestionTaskId?: string;
@@ -382,11 +390,11 @@ export interface HermesResearchRun {
   }>;
 }
 
-export function createHermesResearchRun(researchObjectId: string, ingestionTaskIds: string[], idempotencyKey: string): Promise<{ run: HermesResearchRun }> {
+export function createHermesResearchRun(researchObjectId: string, ingestionTaskIds: string[], idempotencyKey: string, generation?: HermesNarrativeGeneration): Promise<{ run: HermesResearchRun }> {
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs`, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({ ingestionTaskIds }),
+    body: JSON.stringify({ ingestionTaskIds, ...(generation ? { generation } : {}) }),
   });
 }
 
@@ -1222,6 +1230,7 @@ export interface WorkspaceGuidePayload {
     editorDraft?: { researchObjectId: string; scope: string; version: number; core: Omit<SdfCore, 'schemaVersion'> };
     writingDraft?: { baseDraftTaskId: string; title: string; body: string };
     writingSource?: { ingestionTaskId: string };
+    researchRunSource?: { ingestionTaskId: string };
   };
 }
 
@@ -1233,6 +1242,14 @@ export interface WorkspaceGuideResult {
     targetId?: string;
   }>;
   needsMoreInformation: boolean;
+  researchRunDraft?: {
+    researchObjectId: string;
+    /** Set by the server only for a unique PDF or the existing explicit source selection. */
+    ingestionTaskId?: string;
+    locale: 'zh' | 'en';
+    style: string;
+    instruction: string;
+  };
   draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: Partial<Omit<SdfCore, 'schemaVersion'>> };
   presentationDraft?: {
     action: 'storyboard.create' | 'storyboard.revise' | 'scene.image' | 'video.create';
@@ -1431,6 +1448,7 @@ export interface PublicPresentationAsset {
   contentHash: string;
   generator: { name: string; version: string };
   sourceClaimIds: string[];
+  reader?: { order: number; title?: string; narration?: string };
   url: string;
 }
 
@@ -1617,6 +1635,7 @@ export interface IngestionConfirmation {
   version: number;
   evidenceStatus: 'needs_review';
   missingFields: string[];
+  origin?: { executor: 'hermes'; runId: string };
 }
 
 export interface ResearchIngestion {

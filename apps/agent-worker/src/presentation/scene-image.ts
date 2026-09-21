@@ -27,10 +27,16 @@ function boundDesignInstructions(design: string, limit: number): string {
   return slice.trimEnd();
 }
 
-export function compileIllustrationImagePrompt(brief: IllustrationBrief, designInstructions = ''): string {
+function renderingCorrection(instruction?: string): string {
+  if (instruction === undefined) return '';
+  if (!instruction.trim() || instruction.length > 400) throw new Error('[blocked] Invalid rendering correction');
+  return `\nINTERNAL_RENDERING_CORRECTION_BEGIN\nCorrect only the stated rendering defects; preserve all approved scientific content and labels. These production instructions must not appear in the image.\n${instruction}\nINTERNAL_RENDERING_CORRECTION_END`;
+}
+
+export function compileIllustrationImagePrompt(brief: IllustrationBrief, designInstructions = '', repairInstruction?: string): string {
   // Preserve the reviewed mathematical labels exactly, including powers and subscripts.
   const described = describeIllustrationBrief(brief);
-  const base = `${wrapper}\nDRAWING_BRIEF_BEGIN\n${described}\nDRAWING_BRIEF_END\n${presentationRules}`;
+  const base = `${wrapper}\nDRAWING_BRIEF_BEGIN\n${described}\nDRAWING_BRIEF_END\n${presentationRules}${renderingCorrection(repairInstruction)}`;
   const designMarker = '\nDESIGN_SKILL_RENDERING_RULES_BEGIN\n';
   const designEndMarker = '\nDESIGN_SKILL_RENDERING_RULES_END';
   const remaining = IMAGE_PROMPT_LIMIT - base.length - designMarker.length - designEndMarker.length;
@@ -40,7 +46,7 @@ export function compileIllustrationImagePrompt(brief: IllustrationBrief, designI
   return prompt;
 }
 
-export async function planSceneImagePrompt(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], parent: StoryboardView, sceneIndex: number, installedSkills?: InstalledMediaSkills): Promise<string> {
+export async function planSceneImagePrompt(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], parent: StoryboardView, sceneIndex: number, installedSkills?: InstalledMediaSkills, repairInstruction?: string): Promise<string> {
   const scene = parent.document.scenes[sceneIndex];
   if (!scene) throw new Error('[blocked] Scene is missing');
   const style = storyboardSceneStyles(parent, parent.document.scenes)[sceneIndex]!;
@@ -48,11 +54,13 @@ export async function planSceneImagePrompt(gateway: Pick<AiGateway, 'completeStr
   if (scene.illustration) {
     const brief = parseIllustrationBrief(scene.illustration, scene.sourceClaimIds);
     requireIllustrationSourceSupport(brief, claims);
-    return compileIllustrationImagePrompt(brief, designSkills.instructions);
+    return compileIllustrationImagePrompt(brief, designSkills.instructions, repairInstruction);
   }
   const input = JSON.stringify({ locale: parent.locale, style, scene, claims: claims.map(({id,kind,statement,assessment,conditions,limitations,sourcePassages}) => ({id,kind,statement,assessment,conditions,limitations,sourcePassages: scene.sourceClaimIds.includes(id) ? sourcePassages : undefined})) });
   if (input.length > 100000) throw new Error('[blocked] Scene context exceeds image planner bounds');
-  const briefBudget = IMAGE_PROMPT_LIMIT - wrapper.length - presentationRules.length - 80;
+  const correction = renderingCorrection(repairInstruction);
+  const briefBudget = IMAGE_PROMPT_LIMIT - wrapper.length - presentationRules.length - correction.length - 80;
+  if (briefBudget < 1) throw new Error('[blocked] Rendering correction exceeds image provider bounds');
   let feedback = '';
   const planned = await gateway.completeStructured<{ brief: string }>((value): value is { brief: string } => {
     if (!value || typeof value !== 'object' || Array.isArray(value)
@@ -72,7 +80,7 @@ export async function planSceneImagePrompt(gateway: Pick<AiGateway, 'completeStr
     { role: 'system', content: designSkills.instructions },
     { role: 'user', content: input },
   ], { temperature: 0.2, maxTokens: 16384, maxRetries: 1, escalateMaxTokens: 32768, validationFeedback: () => feedback });
-  const prompt = `${wrapper}\nDRAWING_BRIEF_BEGIN\n${planned.brief.trim()}\nDRAWING_BRIEF_END\n${presentationRules}`;
+  const prompt = `${wrapper}\nDRAWING_BRIEF_BEGIN\n${planned.brief.trim()}\nDRAWING_BRIEF_END\n${presentationRules}${correction}`;
   if (prompt.length > IMAGE_PROMPT_LIMIT) throw new Error('[blocked] Illustration brief exceeds image provider bounds');
   return prompt;
 }

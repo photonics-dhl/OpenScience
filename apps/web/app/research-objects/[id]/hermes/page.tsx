@@ -14,7 +14,7 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, confirmIngestionTask, apiRequest, getHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, isRefreshableIngestionAnalysis, refreshIngestionAnalysis, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
+import { ApiClientError, confirmIngestionTask, apiRequest, getResearchObject, getIngestionTask, getResearchIngestion, isRefreshableIngestionAnalysis, refreshIngestionAnalysis, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
@@ -49,16 +49,18 @@ export function isRetryableSdfExtraction(task: Pick<IngestionTaskDetail['task'],
 }
 export default function HermesReviewPage({ params: routeParams }: { params: { id: string } }) {
   const searchParams = useSearchParams();
-  const taskId = searchParams.get('task') ?? '';
+  const guideTaskId = searchParams.get('guideTask') ?? '';
+  const taskId = guideTaskId ? '' : searchParams.get('task') ?? '';
   const runId = searchParams.get('run') ?? '';
   const claimReview = searchParams.get('claimReview') === '1';
-  return <HermesResearchPage key={`${routeParams.id}:${taskId}:${runId}:${claimReview}`} routeParams={routeParams} taskId={taskId} runId={runId} claimReview={claimReview} />;
+  return <HermesResearchPage key={`${routeParams.id}:${taskId}:${runId}:${claimReview}:${guideTaskId}`} routeParams={routeParams} taskId={taskId} runId={runId} claimReview={claimReview} guideTaskId={guideTaskId} />;
 }
 
-function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { routeParams: { id: string }; taskId: string; runId: string; claimReview: boolean }) {
+function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTaskId }: { routeParams: { id: string }; taskId: string; runId: string; claimReview: boolean; guideTaskId: string }) {
   const router = useRouter();
   const locale = useLocale() as 'zh' | 'en';
   const t = useTranslations('hermesReview');
+  const runT = useTranslations('hermesRun');
   const shell = useTranslations('shell');
   const fieldT = useTranslations('editor');
   const statusT = useTranslations('ingestion.status');
@@ -79,12 +81,6 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
   const loaded = useRef(false);
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  useEffect(() => {
-    if (!runId) { setRun(null); return; }
-    const controller = new AbortController();
-    void getHermesResearchRun(routeParams.id, runId, controller.signal).then((result) => { if (!controller.signal.aborted) setRun(result.run); });
-    return () => controller.abort();
-  }, [routeParams.id, runId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,11 +195,24 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
   );
 
   const onRunCreated = (run: { id: string }) => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`);
+  // Resolve the profile before rendering legacy approval controls, including direct task/claim-review URLs.
+  if (runId && (!run || run.profile === 'visual-narrative-v1')) return (
+    <DashboardShell mainClassName="p-0" navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
+      {workspaceNavigation}
+      <div className="min-h-[calc(100dvh-7rem)] px-4 py-7 text-os-ink sm:px-8 lg:px-12">
+        {researchTitle ? <h1 className="max-w-3xl font-reading text-3xl">{researchTitle}</h1> : null}
+        <HermesResearchRunPanel key={runId} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} onRunUpdated={setRun} />
+      </div>
+    </DashboardShell>
+  );
   if (!taskId) return (
     <DashboardShell mainClassName="p-0" navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
       {workspaceNavigation}
-      <div className="min-h-[calc(100dvh-7rem)] px-4 py-7 text-os-ink sm:px-8 lg:px-12"><HermesTaskEntry researchObjectId={routeParams.id} researchTitle={researchTitle} tasks={tasks} loading={loading} error={error} onRetry={() => setReload((value) => value + 1)} />
-        {!loading && !error ? <HermesResearchRunPanel key={runId} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
+      <div className="min-h-[calc(100dvh-7rem)] px-4 py-7 text-os-ink sm:px-8 lg:px-12">
+        {researchTitle ? <h1 className="max-w-3xl font-reading text-3xl">{researchTitle}</h1> : null}
+        {loading ? <p className="mt-5 text-os-muted-paper" role="status">{runT('loading')}</p> : null}
+        {!loading && !error ? <HermesResearchRunPanel key={runId} researchObjectId={routeParams.id} tasks={tasks} runId={runId} guideTaskId={guideTaskId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} onRunUpdated={setRun} /> : null}
+        <details className="mt-6 max-w-3xl text-sm text-os-muted-paper" open={Boolean(error)}><summary className="min-h-11 cursor-pointer py-3">{runT('narrative.previousAnalyses')}</summary><HermesTaskEntry researchObjectId={routeParams.id} researchTitle={researchTitle} tasks={tasks} loading={loading} error={error} onRetry={() => setReload((value) => value + 1)} /></details>
         {!loading && !error && claimReview && run?.status === 'awaiting_claim_review' ? <HermesClaimEvidenceReview researchObjectId={routeParams.id} run={run} onDone={() => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`)} /> : null}
         {!loading && !error && <button type="button" className="mt-5 min-h-11 rounded-panel border border-os-vermilion-ink px-4 py-2 font-semibold text-os-vermilion-ink" onClick={() => setHermesOpen(true)}>{t('askHermes')}</button>}
         {literatureEntry}
@@ -224,7 +233,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview }: { route
       {literatureEntry}
       {error && <p className="mt-6 max-w-3xl border-l-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{error}</p>}
       {!detail && error && <div className="mt-4 flex flex-wrap items-center gap-5"><button type="button" onClick={() => setReload((value) => value + 1)} className="min-h-11 font-semibold text-os-vermilion-ink underline">{t('retry')}</button><Link className="min-h-11 py-3 text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/hermes`}>{t('allTasks')}</Link></div>}
-      {runId ? <HermesResearchRunPanel key={runId} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} /> : null}
+      {runId ? <HermesResearchRunPanel key={runId} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} onRunUpdated={setRun} /> : null}
       {loading ? <p className="mt-10 text-base text-os-muted-paper" role="status">{t('loading')}</p> : !detail ? null : <div className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_288px]">
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-os-rule-paper py-3 text-sm text-os-muted-paper">

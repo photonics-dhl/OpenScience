@@ -1,4 +1,4 @@
-import type { StoryboardRequest } from '@/lib/api';
+import type { HermesNarrativeGeneration, StoryboardRequest, WorkspaceGuideResult } from '@/lib/api';
 
 const STORAGE_PREFIX = 'openscience:hermes-draft:';
 
@@ -29,6 +29,68 @@ function key(scope: HermesDraftScope): string {
 export function getHermesDraftStorage(): Storage | null {
   try { return typeof window === 'undefined' ? null : window.sessionStorage; }
   catch { return null; }
+}
+
+export interface HermesRunStartScope {
+  userId: string;
+  researchObjectId: string;
+  ingestionTaskId: string;
+}
+
+export interface PendingHermesRunStart {
+  key: string;
+  generation: HermesNarrativeGeneration;
+  savedAt: number;
+  runId?: string;
+}
+
+export function readHermesResearchRunDraft(value: unknown): WorkspaceGuideResult['researchRunDraft'] | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const draft = value as Record<string, unknown>;
+  const uuid = (id: unknown) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id);
+  if (Object.keys(draft).some(key => !['researchObjectId', 'ingestionTaskId', 'locale', 'style', 'instruction'].includes(key))
+    || !uuid(draft.researchObjectId) || (draft.ingestionTaskId !== undefined && !uuid(draft.ingestionTaskId))
+    || (draft.locale !== 'zh' && draft.locale !== 'en')
+    || typeof draft.style !== 'string' || !draft.style.trim() || draft.style.length > 100
+    || typeof draft.instruction !== 'string' || !draft.instruction.trim() || draft.instruction.length > 1000) return null;
+  return draft as unknown as NonNullable<WorkspaceGuideResult['researchRunDraft']>;
+}
+
+function runStartKey(scope: HermesRunStartScope): string {
+  return `${STORAGE_PREFIX}${encodeURIComponent(scope.userId)}:${encodeURIComponent(scope.researchObjectId)}:${encodeURIComponent(scope.ingestionTaskId)}:run-start:v1`;
+}
+
+export function loadPendingHermesRunStart(storage: Storage | null, scope: HermesRunStartScope): PendingHermesRunStart | null {
+  try {
+    const raw = storage?.getItem(runStartKey(scope));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PendingHermesRunStart> & { version?: unknown };
+    const generation = value.generation;
+    if (value.version !== 1 || typeof value.key !== 'string' || !value.key || value.key.length > 200
+      || typeof value.savedAt !== 'number' || !Number.isFinite(value.savedAt)
+      || (value.runId !== undefined && (typeof value.runId !== 'string' || !value.runId || value.runId.length > 100))
+      || !generation || generation.profile !== 'visual-narrative-v1' || generation.maxAgentTasks !== 9
+      || (generation.locale !== 'zh' && generation.locale !== 'en')
+      || typeof generation.style !== 'string' || !generation.style.trim() || generation.style.length > 100
+      || typeof generation.instruction !== 'string' || generation.instruction.length > 1_000) return null;
+    return { key: value.key, savedAt: value.savedAt, ...(value.runId ? { runId: value.runId } : {}),
+      generation: { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: generation.locale, style: generation.style, instruction: generation.instruction } };
+  } catch { return null; }
+}
+
+export function savePendingHermesRunStart(storage: Storage | null, scope: HermesRunStartScope, pending: PendingHermesRunStart): boolean {
+  try {
+    if (!storage) return false;
+    storage.setItem(runStartKey(scope), JSON.stringify({ version: 1, ...pending }));
+    return true;
+  } catch { return false; }
+}
+
+/** Clear only after the matching run has been read from its durable URL. */
+export function clearPendingHermesRunStart(storage: Storage | null, scope: HermesRunStartScope, runId: string): void {
+  try {
+    if (loadPendingHermesRunStart(storage, scope)?.runId === runId) storage?.removeItem(runStartKey(scope));
+  } catch { /* Keeping the known run is safe: reopening it performs only a read. */ }
 }
 
 export function loadHermesGuideGoal(storage: Storage | null, scope: HermesDraftScope): string | null {

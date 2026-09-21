@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
@@ -30,6 +31,7 @@ export function ResearchSurfaceShell({
 }) {
   const t = useTranslations('productSurfaces');
   const locale = useLocale() as 'zh' | 'en';
+  const versionId = useSearchParams().get('version') ?? '';
   const [hermesOpen, setHermesOpen] = useState(false);
   const [assistantTarget, setAssistantTarget] = useState<WorkspaceGuidePayload['target']>(null);
   const openAssistant = (target: WorkspaceGuidePayload['target']) => { setAssistantTarget(target); setHermesOpen(true); };
@@ -63,7 +65,8 @@ export function ResearchSurfaceShell({
         </div>
         <HermesAssistantDrawer
           key={object.id}
-          dashboardContext={{ tasks: [], researchObjects: [{ id: object.id, status: object.status, title: object.title }] }}
+          dashboardContext={{ tasks: [], researchObjects: [{ id: object.id, status: object.status, title: object.title }],
+            ...(versionId ? { presentation: { researchObjectId: object.id, versionId } } : {}) }}
           locale={locale}
           onOpenChange={setHermesOpen}
           open={hermesOpen}

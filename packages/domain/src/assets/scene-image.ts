@@ -2,14 +2,42 @@ import type { Prisma } from '@prisma/client';
 import { PresentationAssetError } from './errors';
 import { presentationStoryboardView, type StoryboardRequest } from './storyboard';
 
-export interface SceneImageRequest { storyboardAssetId: string; sceneIndex: number; styleReferenceAssetId?: string }
+export interface SceneImageRequest { storyboardAssetId: string; sceneIndex: number; styleReferenceAssetId?: string; revisionAssetId?: string }
 export function parseSceneImageRequest(value: unknown): SceneImageRequest {
   const v = value as Record<string, unknown> | null;
-  if (!v || typeof v !== 'object' || Array.isArray(v) || !('sceneIndex' in v) || !('storyboardAssetId' in v) || Object.keys(v).some(key => !['sceneIndex', 'storyboardAssetId', 'styleReferenceAssetId'].includes(key))
+  if (!v || typeof v !== 'object' || Array.isArray(v) || !('sceneIndex' in v) || !('storyboardAssetId' in v) || Object.keys(v).some(key => !['sceneIndex', 'storyboardAssetId', 'styleReferenceAssetId', 'revisionAssetId'].includes(key))
     || typeof v.storyboardAssetId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.storyboardAssetId)
     || !Number.isInteger(v.sceneIndex) || Number(v.sceneIndex) < 0 || Number(v.sceneIndex) > 5
-    || ('styleReferenceAssetId' in v && (typeof v.styleReferenceAssetId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.styleReferenceAssetId)))) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image request is invalid');
-  return { storyboardAssetId: v.storyboardAssetId, sceneIndex: v.sceneIndex as number, ...(v.styleReferenceAssetId ? { styleReferenceAssetId: v.styleReferenceAssetId as string } : {}) };
+    || ['styleReferenceAssetId', 'revisionAssetId'].some(key => key in v && (typeof v[key] !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v[key] as string)))) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image request is invalid');
+  return { storyboardAssetId: v.storyboardAssetId, sceneIndex: v.sceneIndex as number, ...(v.styleReferenceAssetId ? { styleReferenceAssetId: v.styleReferenceAssetId as string } : {}), ...(v.revisionAssetId ? { revisionAssetId: v.revisionAssetId as string } : {}) };
+}
+
+/** Only a rejected output from this run can supply a correction to the same approved scene. */
+export async function requireSceneImageRevision(prisma: Pick<Prisma.TransactionClient, 'presentationAsset' | 'agentTask'>, input: {
+  researchObjectId: string; versionId: string; sourceClaimIds: string[]; sceneImage?: SceneImageRequest;
+  hermesRunAuthority?: { runId: string; profile: string };
+}) {
+  if (!input.sceneImage?.revisionAssetId) return undefined;
+  const parent = await requireSceneImageParent(prisma, input);
+  const asset = await prisma.presentationAsset.findUnique({ where: { id: input.sceneImage.revisionAssetId }, include: { sourceClaims: true } });
+  const task = asset ? await prisma.agentTask.findUnique({ where: { id: asset.id } }) : null;
+  const prior = task?.payload as Prisma.JsonObject | undefined;
+  const authority = prior?.hermesRunAuthority as Prisma.JsonObject | undefined;
+  const p = asset?.provenance as Prisma.JsonObject | undefined;
+  const review = p?.imageReview as Prisma.JsonObject | undefined;
+  const scene = asset && presentationSceneImageView(asset);
+  if (!asset || asset.deletedAt || asset.status !== 'rejected' || asset.researchObjectId !== input.researchObjectId || asset.versionId !== input.versionId
+    || !scene || scene.revisionAssetId || scene.storyboardAssetId !== input.sceneImage.storyboardAssetId || scene.sceneIndex !== input.sceneImage.sceneIndex
+    || !task || task.deletedAt || task.status !== 'succeeded' || input.hermesRunAuthority?.profile !== 'visual-narrative-v1'
+    || authority?.runId !== input.hermesRunAuthority.runId || authority.profile !== input.hermesRunAuthority.profile
+    || JSON.stringify(asset.sourceClaims.map(link => link.claimId).sort()) !== JSON.stringify([...input.sourceClaimIds].sort())
+    || !parent || p?.parentIdentity !== parent.identity || review?.parentIdentity !== parent.identity
+    || review?.stage !== 'generated-image' || review.decision !== 'blocked' || review.contentHash !== asset.contentHash
+    || review.sourceEvidenceIdentity !== parent.sourceEvidenceIdentity
+    || typeof review.repairInstruction !== 'string' || !review.repairInstruction.trim() || review.repairInstruction.length > 400) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Image correction requires a matching completed internal review');
+  }
+  return { assetId: asset.id, repairInstruction: review.repairInstruction };
 }
 
 /** A style reference is an optional private input, never a source Claim. */

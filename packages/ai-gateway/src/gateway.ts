@@ -158,7 +158,7 @@ export class AiGateway {
     this.ocrLimits = { ...(opts.ocrLimits ?? {}) };
   }
 
-  /** Illustration review reuses the text pool; an explicit manuscript web review retains its dedicated provider. */
+  /** Plans use the text pool; actual images and explicit manuscript reviews use the existing visual reviewer. */
   async reviewScientific(input: ScienceReviewInput, guard?: SchemaGuard<unknown>): Promise<ScienceReviewProviderResult> {
     if ('kind' in input.source && input.source.kind === 'illustration-plan') {
       if (!guard || input.attachments !== undefined || !input.prompt.trim()
@@ -192,15 +192,24 @@ export class AiGateway {
       throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'scientific review provider unavailable');
     }
     let allowed: unknown = false;
-    const illustration = 'kind' in input.source && input.source.kind === 'illustration-plan';
+    const illustration = 'kind' in input.source;
     const policy = illustration ? this.illustrationReviewPolicy : this.externalProcessingPolicy;
-    try { allowed = await policy?.(Object.freeze({ ...input.authorizationContext })) ?? false; }
+    try {
+      allowed = await policy?.(Object.freeze({ ...input.authorizationContext })) ?? false;
+      if (illustration) {
+        if (!guard || !this.authorizeIllustrationReview) allowed = false;
+        else if (allowed === true) await this.authorizeIllustrationReview(input);
+      }
+    }
     catch { allowed = false; }
     if (allowed !== true) throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'external processing denied');
     const start = Date.now();
     let outcome: 'succeeded' | 'failed' = 'failed';
     try {
       const result = await provider.review(input);
+      if (illustration && (!guard || !guard(JSON.parse(result.text.trim().replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, ''))))) {
+        throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid generated image review response');
+      }
       outcome = 'succeeded';
       return { ...result, provider: provider.name, model: provider.model };
     } catch (error) {
@@ -215,7 +224,7 @@ export class AiGateway {
           pricingVersion: 'chatgpt-subscription', pricingEffectiveDate: null, serviceTier: 'subscription',
           latencyMs: elapsed, totalLatencyMs: elapsed, promptHash: sha256Text(input.prompt),
           inputContentHash: 'kind' in input.source ? input.source.sourceEvidenceIdentity : input.source.documentSha256,
-          pageNumbers: input.attachments?.filter((attachment) => attachment.mediaType === 'image/png')
+          pageNumbers: input.attachments?.filter((attachment) => attachment.mediaType !== 'application/pdf')
             .map(({ pageNumber }) => pageNumber) ?? [], pageCount: input.attachments?.length ?? 0,
           selectionReason: 'high_risk_scientific_review', outcome,
           error: outcome === 'failed' ? 'scientific_review_failed' : null, fallbackReason: null, retryCount: 0,

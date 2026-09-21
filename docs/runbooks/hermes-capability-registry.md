@@ -46,12 +46,11 @@
 
 ### 当前技术债与处理
 
-论文视觉叙事缺口（2026-09-21用户纠正）：`illustration-planner.ts`的reuse-only分支本地组装原图方案，`illustration-review.ts`直接接受原图方案，`handler.ts`原字节复制；这些行为保证复用，未设计读者解释。通用planner的“ONE atomic relationship by default”与项目配图Skill的“otherwise prefer one”适合局部科学图，却不能代替从全文组织核心思想、关键点和连续读图路径。v2原样Fig.1已被用户否定美感和独立理解效果。需在已有Hermes/分镜路径先组织论文叙事，再按需选原图/重绘/生图与单/多图；保留逐图科学来源及定量渲染边界，不增加独立模型或审核门禁。需求已入§18.2，任务5/当前状态见CURRENT；运行代码和Skill未改，不能称已解决。
+论文视觉叙事（2026-09-21候选，运行事实见CURRENT）：用户已批准HTML方案，要求未读论文者也能理解核心思想，六维内容与整组图片一起交付。`illustration-planner.ts`原地增强既有science/art，同次组织mainMessage、受众与1–6个有序场景，再按需混排可用原图和生图；原图复用也经科学叙事审阅。`scientific-writing-source.ts`绑定同版本SDF、科学审校、Claim和受控SourceMap，不新造全文分析器。v2原样Fig.1的审美/独立解释仍未获接受，保留原件与公开历史。
 
-实现方案只读核查：`scientific-writing-source.ts`按成功解析任务sourceMapRef受控读取，只证明权限/文件身份；叙事入口须绑定同版本内部科学审校结果和Claim，不再以终端用户确认分析为正常前置。planner主要收到已选Claim/exactQuote；`storyboardSceneStyles`与planner把reuse放前面；`ResearchMediaDeck`支持label/description，但公开Gallery用通用标题/固定提示，快照未保存叙事顺序/caption；chart仅文字图。结论已纳入[HTML方案](../proposals/2026-09-21-visual-narrative-review.html)，原地增强science/art、不新增全文分析器，无生产实现。
+自动编排候选：`research-run.ts`新增显式visual-narrative-v1初始授权；最多9项后续分析/审阅/媒体任务，旧profile行为保持。内部保存/证据核验/素材批准均走原Domain权限、CAS和来源约束，系统审计与用户确认分开。现有extract默认v4自检没有最终atomic Claims，旧canonical稿还可能缺六维字段；复用既有SourceMap composition与reviewOnly最终审阅，各最多一次，不手填科学内容。`automatic-review.ts`消费严格已审结果，`saved-source-commit.ts`统一人工与系统版本历史读取；确切key重放不回退其他run。源编排已完成High静态增量审查；最终v5仍为既有Gateway model self-check，不能称Chat独立科学审查。实际运行与模型输出质量待观察。
 
-自动编排缺口（用户明确只看最终成果，独立High增量核查）：`ingestion-service.ts:confirmIngestionTask`明确为人工确认，`research-run.ts`会进入awaiting_source_review/素材审阅等待；素材approve还有父稿/来源/版本/角色与并发校验，生成授权绑定run/step/actor/Claim和额度。必须在同一Domain/运行状态机补齐受授权的系统审校推进及真实执行审计，不能冒用用户身份或直接改approved；approved内部准入不代表用户审美认可。既有failed/stopped与限定retry需衔接预算内有界修订，成图审阅须实际消费图片。用户收到完整六维内容/整组图片再反馈，中间不要求逐步审批；均尚未实现。
-
+实际图片审阅与阅读候选：`generated-image-review.ts`经既有Chat review spool发送保存图片的原字节；schema3支持PNG/JPEG/WebP≤10MiB、≤8192边、≤40MP，原图超规格只排除自动reuse，资产保留；schema1不扩限。先存draft再审、同身份重放、只有客观渲染缺陷可作有界修订，科学问题保留并停止。`historyMedia.reader`复用既有快照保存title/narration/order并入发布hash；私有Overview按精确run.versionId展示整组，旧快照不回写。用户收到完整结果后反馈，中间没有审批关卡；自动approved不等于审美认可或公开许可。High已完成协议/投影等静态审阅；浏览器图片上传和全链路效果尚未观察。
 当前定向补接：真实原图reuse、多字段长度反馈、明确发布选图均有真实产品结果。guide漏style导致UI回落technical的修复已部署；新create必须显式style，同一修复反馈最多1786字符，避免Gateway忽略超2000字符反馈，预算/历史兼容语义不变。新缺风格拒绝行为尚无实际模型结果；状态只见CURRENT。
 
 科学语义边界：51eb丢k⊥且subject描述超出所绑原文；e253恢复下标但未删标势。最终aaf7已修主体/标签，现有科学审阅因constraints仍带未绑定的理想薄屏/a≪λ条件而blocked，停止追加请求。`illustration-planner.ts`要求完整描述由basis支持，`illustration-review.ts`携带整个Claim来源池；精确引用校验不等于逐句蕴含，模型accepted会遗漏、blocked也不能保证一次修复。保留任务/草稿，下一步先查科学修订中旧约束的保留，不另叠模型或确定性科学门禁。已公开版本不可写，封面后续须新私有版本，分镜不会自动结转。

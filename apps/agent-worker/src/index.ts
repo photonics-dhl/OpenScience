@@ -22,6 +22,7 @@ import {
   purgeExpiredTrash,
   lockTrashReferences,
   assertSearchIndexSourceLive,
+  findSavedIngestionCommit,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -438,7 +439,7 @@ export function createHandlers(
         const previousResult = previous?.result as Record<string, unknown> | null;
         const previousPayload = previous?.payload as Record<string, unknown> | null;
         const confirmation = previous?.ingestionTask
-          ? await deps.prisma.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${previous.ingestionTask.id}` } })
+          ? await findSavedIngestionCommit(deps.prisma, { taskId: previous.ingestionTask.id, researchObjectId: ownerResearchObject.id })
           : null;
         if (!serverDerivedEligibility || !externalProcessingEligible || refresh
           || ingestion?.agentTaskId !== ownerTask.id || ingestion.artifactId !== artifact.id
@@ -448,7 +449,7 @@ export function createHandlers(
           || previous.ingestionTask?.state !== 'confirmed' || previous.ingestionTask.artifactId !== artifact.id
           || previous.ingestionTask.batch.userId !== ownerTask.session.userId
           || previous.ingestionTask.batch.researchObjectId !== ownerResearchObject.id
-          || confirmation?.researchObjectId !== ownerResearchObject.id
+          || confirmation?.commit.researchObjectId !== ownerResearchObject.id
           || !previousPayload || Object.keys(previousPayload).sort().join(',') !== 'artifactId,researchObjectId'
           || previousPayload.artifactId !== artifact.id || previousPayload.researchObjectId !== ownerResearchObject.id
           || previousResult?.canonicalExtractionContract !== 'grounded-passages-v2') {

@@ -21,6 +21,9 @@ import { recordEntry } from '../usage/ledger';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
 import { isOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
+import { automaticIngestionReview, automaticIngestionReviewStage, requireUnchangedAutomaticCore, type HermesIngestionReviewStage } from './automatic-review';
+import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
+import { findSavedIngestionCommit, type SavedIngestionOrigin } from './saved-source-commit';
 
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
 
@@ -544,7 +547,125 @@ function semanticCompositionSourceReference(value: unknown, artifact: { id: stri
   }
 }
 
-/** Explicit paid refresh for a narrowly recognized extraction generation. */
+type HermesRefreshSource = Prisma.IngestionTaskGetPayload<{ include: {
+  artifact: true; agentTask: true; batch: { include: { researchObject: true } };
+} }>;
+
+async function readHermesRefreshRun(tx: Prisma.TransactionClient, source: HermesRefreshSource, actorId: string, runId: string) {
+  const run = await tx.hermesResearchRun.findUnique({ where: { id: runId }, include: { steps: true } });
+  const sourceSteps = run?.steps.filter(step => step.stage === 'source_ingestion') ?? [];
+  const sourcePayload = source.agentTask?.payload;
+  if (!run || run.actorId !== actorId || source.batch.userId !== actorId || run.researchObjectId !== source.batch.researchObjectId
+    || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || run.versionId !== null
+    || !['running', 'awaiting_source_review'].includes(run.status) || source.batch.researchObject.status !== 'draft'
+    || source.batch.researchObject.deletedAt || source.artifact.deletedAt || source.artifact.bytesPurgedAt
+    || source.artifact.workspaceId !== source.batch.researchObject.workspaceId || !source.agentTask || source.agentTask.deletedAt
+    || source.agentTask.kind !== 'sdf.extract' || !exactRecordKeys(sourcePayload, ['artifactId', 'researchObjectId'])
+    || sourcePayload.artifactId !== source.artifactId || sourcePayload.researchObjectId !== source.batch.researchObjectId
+    || sourceSteps.length !== 1 || sourceSteps[0]!.ingestionTaskId !== source.id
+    || sourceSteps[0]!.artifactId !== source.artifactId || sourceSteps[0]!.agentTaskId !== source.agentTaskId) {
+    throw new IngestionError('VALIDATION_ERROR', 'Hermes source review authorization or binding changed');
+  }
+  return run;
+}
+
+async function prepareHermesRefresh(tx: Prisma.TransactionClient, source: HermesRefreshSource, input: {
+  userId: string; sourceAgentTaskId: string; reviewOnly?: boolean;
+}, runId: string, replayId?: string) {
+  const run = await readHermesRefreshRun(tx, source, input.userId, runId);
+  const stage: HermesIngestionReviewStage = input.reviewOnly ? 'source_review' : 'source_composition';
+  const previous = run.steps.find(step => step.stage === stage);
+  if (replayId) {
+    if (!previous || previous.ordinal !== 0 || previous.ingestionTaskId !== source.id || previous.artifactId !== source.artifactId
+      || previous.agentTaskId !== replayId || source.agentTaskId !== replayId || source.agentTask?.status === 'failed')
+      throw new IngestionError('VALIDATION_ERROR', 'Hermes source review replay does not match its recorded phase');
+    return run;
+  }
+  if (run.status !== 'awaiting_source_review' || source.state !== 'needs_review' || source.agentTaskId !== input.sourceAgentTaskId
+    || previous || automaticIngestionReviewStage(source) !== stage) {
+    throw new IngestionError('VALIDATION_ERROR', 'Hermes permits each scientific composition and review upgrade only once');
+  }
+  // Both this operation and run creation use Serializable transactions. Reading
+  // active references before the source CAS prevents a concurrent run from losing
+  // the generation it bound; do not silently transfer another run's source.
+  const other = await tx.hermesResearchStep.findFirst({ where: {
+    stage: 'source_ingestion', ingestionTaskId: source.id, runId: { not: run.id },
+    run: { status: { notIn: ['succeeded', 'failed', 'stopped'] } },
+  }, select: { id: true } });
+  if (other) throw new IngestionError('VALIDATION_ERROR', 'Another active Hermes run uses this source; automatic replacement is unavailable');
+  const presentationCount = await tx.agentTask.count({ where: {
+    kind: 'presentation.generate', payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id },
+  } });
+  const sourceCount = run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
+  if (presentationCount + sourceCount >= 9) throw new IngestionError('VALIDATION_ERROR', 'Hermes generation grant exhausted');
+  return run;
+}
+
+async function recordHermesRefresh(tx: Prisma.TransactionClient, run: Awaited<ReturnType<typeof prepareHermesRefresh>>,
+  source: HermesRefreshSource, replacementId: string, stage: HermesIngestionReviewStage) {
+  const changed = await tx.hermesResearchStep.updateMany({ where: {
+    runId: run.id, stage: 'source_ingestion', ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: source.agentTaskId,
+  }, data: { agentTaskId: replacementId, status: 'waiting', error: null } });
+  if (changed.count !== 1) throw new IngestionError('VALIDATION_ERROR', 'Hermes canonical source changed during replacement');
+  await tx.hermesResearchStep.create({ data: { runId: run.id, stage, ordinal: 0, status: 'waiting',
+    ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: replacementId } });
+  const moved = await tx.hermesResearchRun.updateMany({ where: {
+    id: run.id, version: run.version, status: 'awaiting_source_review', actorId: run.actorId,
+    researchObjectId: run.researchObjectId, versionId: null,
+  }, data: { status: 'running', version: { increment: 1 }, error: null } });
+  if (moved.count !== 1) throw new IngestionError('VALIDATION_ERROR', 'Hermes run changed during source review upgrade');
+}
+
+/** Upgrade to the existing v5 reviewed output under the run's durable grant. */
+export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
+  actorId: string; runId: string; taskId: string;
+}): Promise<'ready' | 'queued'> {
+  let selected: { stage: 'ready' | 'queued' | HermesIngestionReviewStage; sourceAgentTaskId: string } | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      selected = await deps.prisma.$transaction(async tx => {
+        const source = await tx.ingestionTask.findUnique({ where: { id: input.taskId },
+          include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } } });
+        if (!source) throw new IngestionError('VALIDATION_ERROR', 'Hermes source is unavailable');
+        const { membership } = await requireActiveMembership(tx, source.batch.researchObject.workspaceId, input.actorId);
+        if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+        const run = await readHermesRefreshRun(tx, source, input.actorId, input.runId);
+        if (!source.agentTaskId || !source.agentTask) throw new IngestionError('VALIDATION_ERROR', 'Hermes source analysis is unavailable');
+        if (['pending', 'running'].includes(source.agentTask.status) && ['queued', 'parsing'].includes(source.state))
+          return { stage: 'queued' as const, sourceAgentTaskId: source.agentTaskId };
+        if (!['needs_review', 'confirmed'].includes(source.state)) throw new IngestionError('VALIDATION_ERROR', 'Hermes source analysis failed or is incomplete');
+        const stage = automaticIngestionReviewStage(source);
+        if (stage === 'ready') {
+          const phases = run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage));
+          const completed = await tx.hermesResearchStep.updateMany({ where: { runId: run.id,
+            stage: { in: ['source_composition', 'source_review'] }, agentTask: { status: 'succeeded', deletedAt: null } },
+          data: { status: 'succeeded', error: null } });
+          if (completed.count !== phases.length) throw new IngestionError('VALIDATION_ERROR', 'A Hermes source review phase failed or disappeared');
+        } else {
+          await prepareHermesRefresh(tx, source, { userId: input.actorId, sourceAgentTaskId: source.agentTaskId,
+            ...(stage === 'source_review' ? { reviewOnly: true } : {}) }, input.runId);
+        }
+        return { stage, sourceAgentTaskId: source.agentTaskId };
+      }, { isolationLevel: 'Serializable' });
+      break;
+    } catch (error) { if ((error as { code?: string }).code === 'P2034' && attempt < 2) continue; throw error; }
+  }
+  if (!selected) throw new IngestionError('VALIDATION_ERROR', 'Hermes source review state changed');
+  if (selected.stage === 'ready' || selected.stage === 'queued') return selected.stage;
+  try {
+    await refreshIngestionAnalysis(deps, { userId: input.actorId, taskId: input.taskId,
+      sourceAgentTaskId: selected.sourceAgentTaskId, processingConsent: true,
+      ...(selected.stage === 'source_review' ? { reviewOnly: true, compositionSourceAgentTaskId: selected.sourceAgentTaskId } : {}),
+    }, {}, input.runId);
+  } catch (error) {
+    if (error instanceof IngestionError && error.code !== 'VALIDATION_ERROR')
+      throw new IngestionError('VALIDATION_ERROR', error.message, error);
+    throw error;
+  }
+  return 'queued';
+}
+
+/** Explicit paid refresh for a narrowly recognized extraction generation. The fourth argument is server-only, never API input. */
 export async function refreshIngestionAnalysis(
   deps: IngestionDeps,
   input: {
@@ -556,8 +677,28 @@ export async function refreshIngestionAnalysis(
     processingConsent: boolean;
   },
   ctx: AuditContext = {},
+  internalRunId?: string,
 ): Promise<IngestionTaskView> {
   if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
+  if (internalRunId && Boolean(input.compositionSourceAgentTaskId) !== Boolean(input.reviewOnly))
+    throw new IngestionError('VALIDATION_ERROR', 'Hermes source upgrades use general composition or current-source review only');
+  const refreshPolicy = (value: unknown, artifact: { id: string; blobSha256: string }) => {
+    const policy = unconfirmedAnalysisRefreshPolicy(value, artifact);
+    // Reuse the canonical SourceMap through the existing scientific refresh,
+    // never the user-requested path that intentionally runs the parser again.
+    return internalRunId && !input.reviewOnly ? 'scientific_review_v4' as const : policy;
+  };
+  const checkInternalReplay = async (replacementId: string) => {
+    if (!internalRunId) return;
+    await deps.prisma.$transaction(async tx => {
+      const source = await tx.ingestionTask.findUnique({ where: { id: input.taskId },
+        include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } } });
+      if (!source) throw new IngestionError('VALIDATION_ERROR', 'Hermes source replay is unavailable');
+      const { membership } = await requireActiveMembership(tx, source.batch.researchObject.workspaceId, input.userId);
+      if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+      await prepareHermesRefresh(tx, source, input, internalRunId, replacementId);
+    }, { isolationLevel: 'Serializable' });
+  };
   const initial = await deps.prisma.ingestionTask.findUnique({
     where: { id: input.taskId }, include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } },
   });
@@ -582,7 +723,7 @@ export async function refreshIngestionAnalysis(
       ? currentAgent.payload as Record<string, unknown> : null;
     const compositionPayload = compositionSource?.payload && typeof compositionSource.payload === 'object' && !Array.isArray(compositionSource.payload)
       ? compositionSource.payload as Record<string, unknown> : null;
-    const currentPolicy = currentAgent ? unconfirmedAnalysisRefreshPolicy(currentAgent.result, initial.artifact) : undefined;
+    const currentPolicy = currentAgent ? refreshPolicy(currentAgent.result, initial.artifact) : undefined;
     const compositionReference = semanticCompositionSourceReference(compositionSource?.result, initial.artifact);
     if (!currentAgent || currentAgent.kind !== 'sdf.extract' || currentAgent.status !== 'succeeded' || !currentPolicy
       || !validRefreshSourceExecution(currentPolicy, initial.id, currentAgent)
@@ -608,6 +749,7 @@ export async function refreshIngestionAnalysis(
         || payload.artifactId !== initial.artifactId || payload.researchObjectId !== initial.batch.researchObjectId) {
         throw new IngestionError('VALIDATION_ERROR', 'Semantic composition replay scope does not match');
       }
+      await checkInternalReplay(replay.id);
       await dispatchAgentTask(deps, replay.id);
       return taskToView(initial);
     }
@@ -647,7 +789,7 @@ export async function refreshIngestionAnalysis(
             && !Array.isArray(transactionCurrent.payload) ? transactionCurrent.payload as Record<string, unknown> : null;
           const transactionCompositionPayload = transactionComposition?.payload && typeof transactionComposition.payload === 'object'
             && !Array.isArray(transactionComposition.payload) ? transactionComposition.payload as Record<string, unknown> : null;
-          const transactionPolicy = transactionCurrent ? unconfirmedAnalysisRefreshPolicy(transactionCurrent.result, source.artifact) : undefined;
+          const transactionPolicy = transactionCurrent ? refreshPolicy(transactionCurrent.result, source.artifact) : undefined;
           const transactionReference = semanticCompositionSourceReference(transactionComposition?.result, source.artifact);
           if (!transactionCurrent || transactionCurrent.kind !== 'sdf.extract' || transactionCurrent.status !== 'succeeded'
             || transactionPolicy !== currentPolicy || !validRefreshSourceExecution(currentPolicy, source.id, transactionCurrent)
@@ -679,6 +821,7 @@ export async function refreshIngestionAnalysis(
               || payload.artifactId !== source.artifactId || payload.researchObjectId !== source.batch.researchObjectId) {
               throw new IngestionError('VALIDATION_ERROR', 'Semantic composition replay scope does not match');
             }
+            if (internalRunId) await prepareHermesRefresh(tx, source, input, internalRunId, transactionReplay.id);
             return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
           }
 
@@ -687,6 +830,7 @@ export async function refreshIngestionAnalysis(
             || await savedConfirmation({ ...deps, prisma: tx as IngestionDeps['prisma'] }, source.id, source.batch.researchObjectId)) {
             throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the current scoped unconfirmed extraction can be composed');
           }
+          const hermesRun = internalRunId ? await prepareHermesRefresh(tx, source, input, internalRunId) : undefined;
           const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
             userId: input.userId,
             researchObjectId: source.batch.researchObjectId,
@@ -694,21 +838,23 @@ export async function refreshIngestionAnalysis(
             title: `Ingestion scientific composition ${source.id}`,
             idempotencyKey: `${stableKey}:session`,
           }, ctx);
-          const { task: replacement } = await persistAgentTaskInTransaction(deps, tx, {
+          const { task: replacement, replayed } = await persistAgentTaskInTransaction(deps, tx, {
             sessionId: session.id,
             userId: input.userId,
             kind: 'sdf.extract',
             payload: { artifactId: source.artifactId, researchObjectId: source.batch.researchObjectId },
             idempotencyKey: stableKey,
           }, ctx);
+          if (hermesRun && replayed) throw new IngestionError('VALIDATION_ERROR', 'Hermes phase cannot adopt an unrecorded refresh replay');
           const changed = await tx.ingestionTask.updateMany({
             where: { id: source.id, agentTaskId: input.sourceAgentTaskId, state: 'needs_review', retryCount: initial.retryCount },
             data: { agentTaskId: replacement.id, state: 'queued', retryCount: 0, error: null },
           });
           if (changed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Ingestion composition source changed while refreshing');
+          if (hermesRun) await recordHermesRefresh(tx, hermesRun, source, replacement.id, 'source_review');
           await recordAudit(deps, tx, {
-            actorId: input.userId,
-            action: 'ingestion.task.analysis_refresh',
+            actorId: internalRunId ? null : input.userId,
+            action: internalRunId ? 'ingestion.task.system_analysis_refresh' : 'ingestion.task.analysis_refresh',
             workspaceId: workspace.id,
             targetType: 'ingestion_task',
             targetId: source.id,
@@ -720,6 +866,7 @@ export async function refreshIngestionAnalysis(
               artifactId: source.artifactId,
               sourceMapSha256: sourceMapProof.serializedSha256,
               creditPolicy: 'charged_ingestion_analysis_refresh',
+              ...(internalRunId ? { executor: 'hermes', authorizedByUserId: input.userId, runId: internalRunId, stage: 'source_review' } : {}),
             },
           }, ctx);
           return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
@@ -747,13 +894,14 @@ export async function refreshIngestionAnalysis(
       || payload.artifactId !== initial.artifactId || payload.researchObjectId !== initial.batch.researchObjectId) {
       throw new IngestionError('VALIDATION_ERROR', 'Analysis refresh replay scope does not match');
     }
+    await checkInternalReplay(replay.id);
     await dispatchAgentTask(deps, replay.id);
     return taskToView(initial);
   }
   const oldAgent = await deps.prisma.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
   const oldPayload = oldAgent?.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload)
     ? oldAgent.payload as Record<string, unknown> : null;
-  const policy = oldAgent ? unconfirmedAnalysisRefreshPolicy(oldAgent.result, initial.artifact) : undefined;
+  const policy = oldAgent ? refreshPolicy(oldAgent.result, initial.artifact) : undefined;
   if (!policy) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction is not eligible for analysis refresh');
   const allowedRetries = policy === 'user_requested_reanalysis' ? initial.retryCount : policy === 'grounded_passages_v1' ? 2 : policy === 'grounded_passages_v2' ? 1 : 0;
   if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review' || initial.retryCount < 0 || initial.retryCount > allowedRetries
@@ -802,6 +950,7 @@ export async function refreshIngestionAnalysis(
             || payload.artifactId !== source.artifactId || payload.researchObjectId !== source.batch.researchObjectId) {
             throw new IngestionError('VALIDATION_ERROR', 'Legacy refresh replay scope does not match');
           }
+          if (internalRunId) await prepareHermesRefresh(tx, source, input, internalRunId, transactionReplay.id);
           return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
         }
 
@@ -810,7 +959,7 @@ export async function refreshIngestionAnalysis(
           || !oldAgent || oldAgent.id !== input.sourceAgentTaskId || oldAgent.kind !== 'sdf.extract'
           || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== source.retryCount || !validRefreshSourceExecution(policy, source.id, oldAgent)
           || oldAgent.session.userId !== input.userId || oldAgent.session.researchObjectId !== source.batch.researchObjectId
-          || oldAgent.session.status !== 'active' || unconfirmedAnalysisRefreshPolicy(oldAgent.result, source.artifact) !== policy) {
+          || oldAgent.session.status !== 'active' || refreshPolicy(oldAgent.result, source.artifact) !== policy) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the scoped unconfirmed extraction can be refreshed');
         }
         const oldPayload = oldAgent.payload && typeof oldAgent.payload === 'object' && !Array.isArray(oldAgent.payload) ? oldAgent.payload as Record<string, unknown> : null;
@@ -827,7 +976,7 @@ export async function refreshIngestionAnalysis(
         if (await savedConfirmation({ ...deps, prisma: tx as IngestionDeps['prisma'] }, source.id, source.batch.researchObjectId)) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Confirmed ingestion cannot be refreshed');
         }
-
+        const hermesRun = internalRunId ? await prepareHermesRefresh(tx, source, input, internalRunId) : undefined;
         const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
           userId: input.userId,
           researchObjectId: source.batch.researchObjectId,
@@ -835,25 +984,28 @@ export async function refreshIngestionAnalysis(
           title: `Ingestion analysis refresh ${source.id}`,
           idempotencyKey: `${stableKey}:session`,
         }, ctx);
-        const { task: replacement } = await persistAgentTaskInTransaction(deps, tx, {
+        const { task: replacement, replayed } = await persistAgentTaskInTransaction(deps, tx, {
           sessionId: session.id,
           userId: input.userId,
           kind: 'sdf.extract',
           payload: { artifactId: source.artifactId, researchObjectId: source.batch.researchObjectId },
           idempotencyKey: stableKey,
         }, ctx);
+        if (hermesRun && replayed) throw new IngestionError('VALIDATION_ERROR', 'Hermes phase cannot adopt an unrecorded refresh replay');
         const changed = await tx.ingestionTask.updateMany({
           where: { id: source.id, agentTaskId: input.sourceAgentTaskId, state: 'needs_review', retryCount: initial.retryCount },
           data: { agentTaskId: replacement.id, state: 'queued', retryCount: 0, error: null },
         });
         if (changed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Legacy extraction changed while refreshing');
+        if (hermesRun) await recordHermesRefresh(tx, hermesRun, source, replacement.id, 'source_composition');
         await recordAudit(deps, tx, {
-          actorId: input.userId,
-          action: 'ingestion.task.analysis_refresh',
+          actorId: internalRunId ? null : input.userId,
+          action: internalRunId ? 'ingestion.task.system_analysis_refresh' : 'ingestion.task.analysis_refresh',
           workspaceId: workspace.id,
           targetType: 'ingestion_task',
           targetId: source.id,
           metadata: { policy, oldAgentTaskId: input.sourceAgentTaskId, newAgentTaskId: replacement.id, artifactId: source.artifactId,
+            ...(internalRunId ? { executor: 'hermes', authorizedByUserId: input.userId, runId: internalRunId, stage: 'source_composition' } : {}),
             sourceMapSha256: sourceMapProof?.serializedSha256 ?? null, creditPolicy: 'charged_ingestion_analysis_refresh' },
         }, ctx);
         return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
@@ -1002,13 +1154,16 @@ export interface IngestionConfirmation {
   version: number;
   evidenceStatus: 'needs_review';
   missingFields: string[];
+  /** Present for system materialization; absence preserves the legacy manual response. */
+  origin?: Extract<SavedIngestionOrigin, { executor: 'hermes' }>;
 }
 
-function confirmationView(commit: CreateCommitResult): IngestionConfirmation {
+function confirmationView(commit: CreateCommitResult & { origin?: SavedIngestionOrigin }, origin = commit.origin): IngestionConfirmation {
   return {
     commitId: commit.commitId, versionId: commit.versionId, versionNo: commit.versionNo,
     version: commit.versionNo + 1, evidenceStatus: 'needs_review',
     missingFields: SDF_NODE_TYPES.filter(field => !String(commit.snapshot.core[field] ?? '').trim()),
+    ...(origin?.executor === 'hermes' ? { origin } : {}),
   };
 }
 
@@ -1039,15 +1194,12 @@ function assertReviewableIngestionProposal(task: { artifactId: string; artifact:
   }
 }
 
-async function savedConfirmation(deps: IngestionDeps, taskId: string, researchObjectId: string): Promise<CreateCommitResult | null> {
-  const commit = await deps.prisma.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${taskId}` } });
-  if (!commit || commit.researchObjectId !== researchObjectId) return null;
-  const version = await deps.prisma.version.findFirst({ where: { commitId: commit.id } });
-  if (!version) return null;
-  const manifest = await deps.prisma.versionManifest.findUnique({ where: { versionId: version.id }, include: { entries: true } });
-  if (!manifest) return null;
+async function savedConfirmation(deps: IngestionDeps, taskId: string, researchObjectId: string, key?: string): Promise<(CreateCommitResult & { origin?: SavedIngestionOrigin }) | null> {
+  const saved = await findSavedIngestionCommit(deps.prisma, { taskId, researchObjectId, ...(key !== undefined ? { idempotencyKey: key } : {}) });
+  if (!saved) return null;
+  const { commit, version, manifest, origin } = saved;
   return { commitId: commit.id, versionId: version.id, versionNo: version.versionNo,
-    snapshot: { core: manifest.coreJson as Record<string, unknown>, artifacts: manifest.entries } };
+    snapshot: { core: manifest.coreJson as Record<string, unknown>, artifacts: manifest.entries }, origin };
 }
 
 /** Durable RO-scoped material history, including completed imports and their fixed versions. */
@@ -1072,6 +1224,25 @@ export async function confirmIngestionTask(
   input: { userId: string; taskId: string; version: number; sourceAgentTaskId: string; core: Record<string, string> },
   ctx: AuditContext = {},
 ): Promise<{ task: IngestionTaskView; sdf: SdfDocumentView; confirmation: IngestionConfirmation }> {
+  return saveIngestionTask(deps, input, ctx);
+}
+
+/** Internal execution under a durable user grant; never records a human confirmation. */
+export async function materializeHermesIngestion(deps: IngestionDeps, input: { actorId: string; runId: string; taskId: string }) {
+  const task = await deps.prisma.ingestionTask.findUnique({ where: { id: input.taskId },
+    include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } } });
+  if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+  const review = automaticIngestionReview(task);
+  return saveIngestionTask(deps, { userId: input.actorId, taskId: input.taskId,
+    version: task.batch.researchObject.version, sourceAgentTaskId: review.agentTaskId, core: review.core }, {}, input.runId);
+}
+
+async function saveIngestionTask(
+  deps: IngestionDeps,
+  input: { userId: string; taskId: string; version: number; sourceAgentTaskId: string; core: Record<string, string> },
+  ctx: AuditContext,
+  internalRunId?: string,
+): Promise<{ task: IngestionTaskView; sdf: SdfDocumentView; confirmation: IngestionConfirmation }> {
   for (let attempt = 0; ; attempt += 1) {
     try {
       const saved = await deps.prisma.$transaction(async tx => {
@@ -1080,13 +1251,26 @@ export async function confirmIngestionTask(
           include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } } });
         if (!task || task.artifact.deletedAt || task.agentTask?.deletedAt || task.batch.researchObject.deletedAt) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
         const { researchObject: ro } = await authorizeIngestionWrite(scoped, { userId: input.userId, researchObjectId: task.batch.researchObjectId });
-        let commit = await savedConfirmation(scoped, task.id, ro.id);
+        const internalReview = internalRunId ? automaticIngestionReview(task) : undefined;
+        if (internalRunId) {
+          const run = await tx.hermesResearchRun.findUnique({ where: { id: internalRunId }, include: { steps: true } });
+          if (!run || run.actorId !== input.userId || run.researchObjectId !== ro.id || ro.status !== 'draft'
+            || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || run.status !== 'awaiting_source_review'
+            || run.steps.filter(step => step.stage === 'source_ingestion').length !== 1
+            || !run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === task.id
+              && step.agentTaskId === input.sourceAgentTaskId && step.artifactId === task.artifactId)) {
+            throw new IngestionError('VALIDATION_ERROR', 'Hermes source authorization changed');
+          }
+          requireUnchangedAutomaticCore(internalReview!, input.core);
+        }
+        const commitKey = internalRunId ? `hermes-ingestion:${internalRunId}:${task.id}` : `ingestion-confirm:${task.id}`;
+        let commit = await savedConfirmation(scoped, task.id, ro.id, commitKey);
         let indexTaskId: string | null = null;
         if (!commit) {
           if (!input.sourceAgentTaskId || task.agentTaskId !== input.sourceAgentTaskId) {
             throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Analysis changed; review the current proposal before confirming');
           }
-          if (task.state !== 'needs_review') throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only tasks awaiting review can be confirmed');
+          if (task.state !== 'needs_review' && !(internalRunId && task.state === 'confirmed')) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only reviewed extraction results can be saved');
           const check = ro.status === 'draft' ? validateSdfDraftCore(input.core) : validateSdfCore(input.core);
           if (!check.ok) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
           assertReviewableIngestionProposal(task, input.core);
@@ -1101,20 +1285,26 @@ export async function confirmIngestionTask(
             artifacts.push({ logicalPath, artifactId: task.artifactId });
           }
           commit = await createCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: input.version,
-            sdfCore: input.core, artifacts, message: `Confirm import: ${task.artifact.logicalPath}`, idempotencyKey: `ingestion-confirm:${task.id}` }, ctx, tx);
+            sdfCore: input.core, artifacts, message: `${internalRunId ? 'Hermes reviewed import' : 'Confirm import'}: ${task.artifact.logicalPath}`, idempotencyKey: commitKey }, ctx, tx,
+            internalRunId ? { executor: 'hermes', runId: internalRunId } : undefined);
           await tx.sdfDocument.update({ where: { researchObjectId: ro.id }, data: { coreJson: input.core } });
           for (const nodeType of SDF_NODE_TYPES) await tx.sdfNode.update({
             where: { sdfDocumentId_nodeType: { sdfDocumentId: document.id, nodeType } }, data: { content: input.core[nodeType] ?? '' },
           });
-          const replacementClaimIds = await writeIngestionEvidence(scoped, { task, versionId: commit.versionId, core: input.core });
-          if (latest) await carryVersionEvidence(tx, {
-            researchObjectId: ro.id, previousVersionId: latest.id, versionId: commit.versionId, replacementClaimIds,
-          });
+          // Automatic runs materialize the existing review's atomic Claims through
+          // the Claim/Evidence bridge. Do not also create duplicate field Claims.
+          if (!internalRunId) {
+            const replacementClaimIds = await writeIngestionEvidence(scoped, { task, versionId: commit.versionId, core: input.core });
+            if (latest) await carryVersionEvidence(tx, {
+              researchObjectId: ro.id, previousVersionId: latest.id, versionId: commit.versionId, replacementClaimIds,
+            });
+          }
           await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: commit.versionId });
-          const updated = await tx.ingestionTask.updateMany({ where: { id: task.id, agentTaskId: input.sourceAgentTaskId, state: 'needs_review' }, data: { state: 'confirmed', error: null } });
+          const updated = await tx.ingestionTask.updateMany({ where: { id: task.id, agentTaskId: input.sourceAgentTaskId, state: task.state }, data: { state: 'confirmed', error: null } });
           if (updated.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Task changed while confirming');
-          await recordAudit(deps, tx, { actorId: input.userId, action: 'ingestion.confirm', workspaceId: ro.workspaceId,
-            targetType: 'ingestion_task', targetId: task.id, metadata: { versionId: commit.versionId, sourceAgentTaskId: input.sourceAgentTaskId, evidenceStatus: 'needs_review' } }, ctx);
+          await recordAudit(deps, tx, { actorId: internalRunId ? null : input.userId, action: internalRunId ? 'ingestion.system_materialize' : 'ingestion.confirm', workspaceId: ro.workspaceId,
+            targetType: 'ingestion_task', targetId: task.id, metadata: { versionId: commit.versionId, sourceAgentTaskId: input.sourceAgentTaskId, evidenceStatus: 'needs_review',
+              ...(internalReview ? { executor: 'hermes', authorizedByUserId: input.userId, runId: internalRunId, reviewResponseHash: internalReview.responseHash } : {}) } }, ctx);
           let sourceReference;
           try { sourceReference = parseDocumentSourceMapReference((task.agentTask?.result as Record<string, unknown> | null)?.sourceMapRef); }
           catch { /* Legacy confirmations without a durable parser map remain valid. */ }
@@ -1127,7 +1317,8 @@ export async function confirmIngestionTask(
         }
         const core = commit.snapshot.core as Record<string, string>;
         return { task: { ...taskToView(task), state: 'confirmed' as const, error: null },
-          sdf: { core, nodes: SDF_NODE_TYPES.map(nodeType => ({ nodeType, content: core[nodeType] ?? '' })) }, confirmation: confirmationView(commit),
+          sdf: { core, nodes: SDF_NODE_TYPES.map(nodeType => ({ nodeType, content: core[nodeType] ?? '' })) },
+          confirmation: confirmationView(commit, internalRunId ? { executor: 'hermes', runId: internalRunId } : undefined),
           indexTaskId };
       }, { isolationLevel: 'Serializable', timeout: 30_000 });
       const { indexTaskId, ...response } = saved;

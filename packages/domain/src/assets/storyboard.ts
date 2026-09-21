@@ -33,6 +33,8 @@ export interface StoryboardRequest {
     instruction: string;
     /** Omitted legacy requests are animation storyboards. */
     output: 'image' | 'video';
+    /** Explain the whole paper using its existing reviewed analysis and an ordered visual narrative. */
+    narrative?: true;
     baseAssetId?: string;
     /** Restyle a sourced image plan without regenerating its scientific fields. */
     revisionMode?: 'art';
@@ -59,6 +61,7 @@ export interface StoryboardRequest {
 export interface StoryboardDocument {
     schemaVersion: 1;
     title: string;
+    narrative?: { mainMessage: string; audience: string };
     scenes: Array<{
         title: string;
         narration: string;
@@ -82,6 +85,7 @@ export interface StoryboardView {
     style: StoryboardRequest['style'];
     /** Older API fixtures omit this; persisted plans are normalized to video. */
     output?: StoryboardRequest['output'];
+    narrative?: true;
     baseAssetId?: string;
     figurePlan?: StoryboardRequest['figurePlan'];
 }
@@ -118,7 +122,7 @@ function text(value: unknown, max: number, reason: string): string {
 }
 export function parseStoryboardRequest(value: unknown): StoryboardRequest {
     const v = object(value, 'request_shape');
-    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'revisionTaskId', 'revisionMode', 'output', 'figurePlan'], 'request_keys');
+    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'revisionTaskId', 'revisionMode', 'output', 'figurePlan', 'narrative'], 'request_keys');
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (typeof v.locale !== 'string' || !['zh', 'en'].includes(v.locale)
         || typeof v.style !== 'string' || !v.style.trim() || v.style.length > 100
@@ -126,7 +130,8 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
         || ('baseAssetId' in v && (typeof v.baseAssetId !== 'string' || !uuid.test(v.baseAssetId)))
         || ('revisionTaskId' in v && (typeof v.revisionTaskId !== 'string' || !uuid.test(v.revisionTaskId) || v.output !== 'image' || 'baseAssetId' in v))
         || ('revisionMode' in v && (v.revisionMode !== 'art' || v.output !== 'image' || !v.baseAssetId || 'revisionTaskId' in v))
-        || ('output' in v && v.output !== 'image' && v.output !== 'video')) return invalid('request_values');
+        || ('output' in v && v.output !== 'image' && v.output !== 'video')
+        || ('narrative' in v && (v.narrative !== true || v.output !== 'image' || v.figurePlan != null))) return invalid('request_values');
     let figurePlan: StoryboardRequest['figurePlan'] | undefined;
     if ('figurePlan' in v && v.figurePlan !== undefined && v.figurePlan !== null) {
         const fp = object(v.figurePlan, 'figure_plan_shape');
@@ -152,6 +157,7 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
         style: v.style,
         instruction: v.instruction.trim(),
         output: (v.output ?? 'video') as StoryboardRequest['output'],
+        ...(v.narrative === true ? { narrative: true as const } : {}),
         ...(v.baseAssetId ? { baseAssetId: v.baseAssetId as string } : {}),
         ...(v.revisionTaskId ? { revisionTaskId: v.revisionTaskId as string } : {}),
         ...(v.revisionMode ? { revisionMode: v.revisionMode as 'art' } : {}),
@@ -160,7 +166,7 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
 }
 export function parseStoryboardDocument(value: unknown, selected: readonly string[], output: StoryboardRequest['output'] = 'video'): StoryboardDocument {
     const v = object(value, 'document_shape');
-    keys(v, ['schemaVersion', 'title', 'scenes'], [], 'document_keys');
+    keys(v, ['schemaVersion', 'title', 'scenes'], output === 'image' ? ['narrative'] : [], 'document_keys');
     if (v.schemaVersion !== 1) return invalid('schema_version');
     if (!Array.isArray(v.scenes) || v.scenes.length < (output === 'image' ? 1 : 3) || v.scenes.length > 6)
         return invalid('scene_count');
@@ -209,7 +215,13 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
         return scene.animation.actions.some(action => ['translate', 'pulse', 'draw'].includes(action.kind) && objects.get(action.target)?.kind !== 'label');
     });
     if (output === 'video' && scenes.some(scene => scene.animation) && !hasDynamicAction) return invalid('dynamic_action_required');
-    return { schemaVersion: 1, title: text(v.title, 120, 'title'), scenes };
+    let narrative: StoryboardDocument['narrative'];
+    if ('narrative' in v) {
+        const n = object(v.narrative, 'narrative_shape');
+        keys(n, ['mainMessage', 'audience'], [], 'narrative_keys');
+        narrative = { mainMessage: text(n.mainMessage, 240, 'narrative_main_message'), audience: text(n.audience, 160, 'narrative_audience') };
+    }
+    return { schemaVersion: 1, title: text(v.title, 120, 'title'), scenes, ...(narrative ? { narrative } : {}) };
 }
 /** Never expose arbitrary provenance or a malformed saved plan. */
 export function presentationStoryboardView(asset: {
@@ -221,7 +233,10 @@ export function presentationStoryboardView(asset: {
         if (asset.kind !== 'interactive_html' || p.subtype !== 'sourced_storyboard')
             return undefined;
         const settings = parseStoryboardRequest({ ...object(p.storyboardSettings, 'saved_settings') });
-        return { document: parseStoryboardDocument(p.storyboardDocument, claimIds, settings.output), locale: settings.locale, style: settings.style, output: settings.output, ...(settings.baseAssetId ? { baseAssetId: settings.baseAssetId } : {}), ...(settings.figurePlan ? { figurePlan: settings.figurePlan } : {}) };
+        const document = parseStoryboardDocument(p.storyboardDocument, claimIds, settings.output);
+        if (Boolean(settings.narrative) !== Boolean(document.narrative)) return undefined;
+        return { document, locale: settings.locale, style: settings.style, output: settings.output,
+            ...(settings.narrative ? { narrative: true as const } : {}), ...(settings.baseAssetId ? { baseAssetId: settings.baseAssetId } : {}), ...(settings.figurePlan ? { figurePlan: settings.figurePlan } : {}) };
     }
     catch {
         return undefined;

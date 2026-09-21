@@ -1,34 +1,44 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '@/components/research/ResearchSurfaceShell';
 import { ScientificText } from '@/components/content/ScientificText';
 import { useVersionLabels } from '@/components/research/useVersionLabels';
-import { ApiClientError, getResearchIngestion, getResearchObject, listVersions, listPresentationAssets, presentationAssetContentUrl, type PresentationAsset, type ResearchIngestion, type ResearchObjectSummary, type SdfCore, type VersionSummary, type WorkspaceGuidePayload } from '@/lib/api';
+import { apiRequest, ApiClientError, getResearchIngestion, getResearchObject, listVersions, listPresentationAssets, presentationAssetContentUrl, type PresentationAsset, type ResearchIngestion, type ResearchObjectSummary, type SdfCore, type VersionSummary, type WorkspaceGuidePayload } from '@/lib/api';
 import styles from './overview.module.css';
 
-type Loaded = { object: ResearchObjectSummary & { sdf: { core: SdfCore } }; versions: VersionSummary[]; assets: PresentationAsset[]; mediaFailed: boolean; mediaLoading: boolean };
+type ReaderMedia = { id: string; kind: string; reader?: { order: number; title?: string; narration?: string } };
+type OverviewMedia = PresentationAsset & Pick<ReaderMedia, 'reader'>;
+type Loaded = { object: ResearchObjectSummary & { sdf: { core: SdfCore } }; mediaVersion?: VersionSummary; assets: OverviewMedia[]; mediaFailed: boolean; mediaLoading: boolean };
 const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
 const targets: Record<typeof fields[number], WorkspaceGuidePayload['target']> = { problem: 'sdf-problem', insight: 'sdf-insight', method: 'sdf-method', results: 'sdf-results', limitations: 'sdf-limitations', reproducibility: 'sdf-evidence' };
 
-function OverviewAsset({ asset, objectId }: { asset: PresentationAsset; objectId: string }) {
+function OverviewAsset({ asset, objectId }: { asset: OverviewMedia; objectId: string }) {
   const t = useTranslations('productSurfaces.overview');
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const title = t(asset.kind === 'video' ? 'videoTitle' : 'imageTitle');
+  const title = asset.reader?.title || t(asset.kind === 'video' ? 'videoTitle' : 'imageTitle');
   const src = `${presentationAssetContentUrl(objectId, asset.versionId, asset.id)}${attempt ? `?attempt=${attempt}` : ''}`;
   return <figure data-overview-asset={asset.id}>
     {failed ? <div role="status"><p>{t('mediaFailed')}</p><button type="button" onClick={() => { setAttempt(value => value + 1); setFailed(false); }}>{t('retry')}</button></div>
       : asset.kind === 'video' ? <video controls playsInline preload="metadata" aria-label={title} src={src} onError={() => setFailed(true)} />
       : <img src={src} alt={title} loading="lazy" onError={() => setFailed(true)} />}
-    <figcaption>{title}</figcaption>
+    <figcaption><ScientificText as="strong" hideSourceMarkers>{title}</ScientificText>{asset.reader?.narration ? <ScientificText as="p" hideSourceMarkers>{asset.reader.narration}</ScientificText> : null}</figcaption>
   </figure>;
 }
 
 export default function ResearchOverviewPage({ params }: { params: { id: string } }) {
+  const query = useSearchParams();
+  const versionId = query.get('version') || '';
+  return <ResearchOverview key={`${params.id}:${versionId}`} params={params} requestedVersionId={versionId} />;
+}
+
+function ResearchOverview({ params, requestedVersionId }: { params: { id: string }; requestedVersionId: string }) {
   const t = useTranslations('productSurfaces');
+  const recordText = useTranslations('versionRecord');
   const versionLabels = useVersionLabels();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<{ id: string; cause: Error } | null>(null);
@@ -45,27 +55,41 @@ export default function ResearchOverviewPage({ params }: { params: { id: string 
       try {
         const [{ researchObject: object }, { versions }] = await Promise.all([getResearchObject(params.id), listVersions(params.id)]);
         if (!active) return;
-        const version = [...versions].sort((a, b) => b.versionNo - a.versionNo)[0];
-        setLoaded({ object, versions, assets: [], mediaFailed: false, mediaLoading: Boolean(version) });
-        let assets: PresentationAsset[] = [];
+        const version = requestedVersionId ? versions.find(item => item.versionId === requestedVersionId)
+          : [...versions].sort((a, b) => b.versionNo - a.versionNo)[0];
+        if (requestedVersionId && !version) throw new Error(recordText('mismatch'));
+        const record = version ? (await apiRequest<{ record: { objectId: string; versionId: string; citation?: { title?: string | null }; sdf: SdfCore; media?: ReaderMedia[] } }>(
+          `/api/research-objects/${encodeURIComponent(params.id)}/versions/${encodeURIComponent(version.versionId)}/record`, { signal: controller.signal },
+        )).record : null;
+        if (record && (record.objectId !== params.id || record.versionId !== version?.versionId)) throw new Error(recordText('mismatch'));
+        if (!active) return;
+        const recordedTitle = record?.citation?.title;
+        const scopedObject = record ? { ...object, title: typeof recordedTitle === 'string' && recordedTitle.trim() ? recordedTitle : object.title, sdf: { core: record.sdf } } : object;
+        setLoaded({ object: scopedObject, mediaVersion: version, assets: [], mediaFailed: false, mediaLoading: Boolean(version) });
+        let assets: OverviewMedia[] = [];
         let mediaFailed = false;
         if (version) {
           try {
             const response = await listPresentationAssets(object.id, version.versionId, controller.signal);
-            assets = response.assets.filter(asset => asset.researchObjectId === object.id && asset.versionId === version.versionId && asset.status === 'approved' && (asset.kind === 'image' || asset.kind === 'video'));
+            const frozenMedia = record?.media ? new Map(record.media.map(asset => [asset.id, asset])) : null;
+            assets = response.assets.filter(asset => asset.researchObjectId === object.id && asset.versionId === version.versionId
+              && asset.status === 'approved' && (asset.kind === 'image' || asset.kind === 'video')
+              && (!frozenMedia || frozenMedia.has(asset.id)))
+              .map(asset => ({ ...asset, ...(frozenMedia?.get(asset.id)?.reader ? { reader: frozenMedia.get(asset.id)!.reader } : {}) }))
+              .sort((left, right) => (left.reader?.order ?? Number.MAX_SAFE_INTEGER) - (right.reader?.order ?? Number.MAX_SAFE_INTEGER));
           } catch { mediaFailed = true; }
         }
-        if (active) setLoaded({ object, versions, assets, mediaFailed, mediaLoading: false });
+        if (active) setLoaded({ object: scopedObject, mediaVersion: version, assets, mediaFailed, mediaLoading: false });
       } catch (cause) { if (active) setError({ id: params.id, cause: cause instanceof Error ? cause : new Error(t('state.errorTitle')) }); }
     })();
     return () => { active = false; controller.abort(); };
-  }, [params.id, retry, t]);
+  }, [params.id, requestedVersionId, retry, t, recordText]);
   if (error?.id === params.id) return <ResearchSurfaceStateShell active="overview" detail={error.cause.message} kind={error.cause instanceof ApiClientError && error.cause.status === 403 ? 'forbidden' : 'error'} objectId={params.id} title={t(error.cause instanceof ApiClientError && error.cause.status === 403 ? 'state.forbiddenTitle' : 'state.errorTitle')} />;
   if (!loaded || loaded.object.id !== params.id) return <ResearchSurfaceStateShell active="overview" detail={t('state.loadingBody')} kind="loading" objectId={params.id} title={t('overview.title')} />;
-  const { object, assets, versions, mediaFailed, mediaLoading } = loaded;
-  const mediaVersion = [...versions].sort((a, b) => b.versionNo - a.versionNo)[0];
+  const { object, assets, mediaVersion, mediaFailed, mediaLoading } = loaded;
   const entries = fields.filter(field => object.sdf.core[field]?.trim());
   const root = `/research-objects/${encodeURIComponent(object.id)}`;
+  const versionQuery = mediaVersion ? `?version=${encodeURIComponent(mediaVersion.versionId)}` : '';
   const scopedIngestion = ingestion.id === object.id ? ingestion : { id: object.id, status: 'loading' as const, value: null };
   const ingestionTasks = scopedIngestion.value?.tasks ?? [];
   const hasIngestionTask = scopedIngestion.status === 'ready' && ingestionTasks.length > 0;
@@ -78,7 +102,7 @@ export default function ResearchOverviewPage({ params }: { params: { id: string 
           {assets.length === 0 && !mediaFailed && !mediaLoading ? <p>{t('overview.noMedia')}</p> : null}
           {mediaLoading ? <p role="status">{t('state.loadingBody')}</p> : null}
           {mediaFailed ? <div role="status"><p>{t('overview.mediaFailed')}</p><button type="button" onClick={() => setRetry(value => value + 1)}>{t('overview.retry')}</button></div> : null}
-          <Link href={`${root}/presentation`}>{t('overview.manageMedia')} →</Link>
+          <Link href={`${root}/presentation${versionQuery}`}>{t('overview.manageMedia')} →</Link>
         </section>;
   return <ResearchSurfaceShell key={object.id} active="overview" object={object} className={styles.surface} rail={<div className={styles.rail}><span className={styles.companionLabel}>HERMES</span><h2>{t('overview.companionTitle')}</h2><p>{t('overview.companionBody')}</p></div>}>
     {openAssistant => <article className={styles.article} data-research-overview={object.id}>

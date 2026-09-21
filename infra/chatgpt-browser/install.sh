@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ ${1:-} == --confirm-provider ]]; then
-  [[ $# == 5 && $2 == --source && $4 == --renderer-image ]] || { echo 'Usage: install.sh --confirm-provider --source <immutable release> --renderer-image <sha256:id>'; exit 64; }
+  [[ ( $# == 5 || ( $# == 6 && $6 == --defer-timers ) ) && $2 == --source && $4 == --renderer-image ]] || { echo 'Usage: install.sh --confirm-provider --source <immutable release> --renderer-image <sha256:id> [--defer-timers]'; exit 64; }
   [[ $(id -u) == 0 ]] || exit 65
   source_release=$(readlink -f -- "$3"); release_sha=$(basename -- "$source_release"); renderer_image=$5
   [[ $release_sha =~ ^[a-f0-9]{40}$ && $source_release == "/opt/openscience-releases/$release_sha" && $renderer_image =~ ^([a-z0-9._/-]+@)?sha256:[a-f0-9]{64}$ ]] || exit 66
@@ -115,8 +115,12 @@ WantedBy=timers.target
 EOF
   chmod 0644 "$service" "$timer" "$review_service" "$review_timer"
   systemctl daemon-reload
-  systemctl enable --now openscience-chatgpt-web-image.timer
-  systemctl enable --now openscience-chatgpt-web-science-review.timer
+  # A coordinated live upgrade restores the caller's prior timer states only
+  # after installation/rollback is complete; never start a mixed bundle midway.
+  if [[ ${6:-} != --defer-timers ]]; then
+    systemctl enable --now openscience-chatgpt-web-image.timer
+    systemctl enable --now openscience-chatgpt-web-science-review.timer
+  fi
   echo "CHATGPT_WEB_IMAGE_PROVIDER_INSTALLED source=$release_sha"
   exit 0
 fi

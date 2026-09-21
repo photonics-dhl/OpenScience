@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import { Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
+import { ScientificText } from '../content/ScientificText';
 import styles from './ResearchMediaDeck.module.css';
 
 export interface ResearchMediaSlide {
@@ -56,7 +57,7 @@ export function ResearchMediaDeck({ title, slides, emptyTitle, emptyBody, previo
             ? <video controls playsInline preload="metadata" aria-label={active.label} src={active.url} />
             : <a href={active.url} target="_blank" rel="noreferrer" aria-label={`${active.label} — ${openImageLabel}`}><img src={active.url} alt={active.label} loading={eager ? 'eager' : 'lazy'} /></a>}
         </div>
-        <figcaption className={styles.caption}><strong>{active.label}</strong>{active.description ? <span>{active.description}</span> : null}</figcaption>
+        <figcaption className={styles.caption}><ScientificText as="strong" hideSourceMarkers>{active.label}</ScientificText>{active.description ? <ScientificText as="span" hideSourceMarkers>{active.description}</ScientificText> : null}</figcaption>
       </figure>
       {multiple ? <div className={styles.controls} aria-label={title}>
         <button type="button" onClick={previous} aria-label={previousLabel}>←</button>

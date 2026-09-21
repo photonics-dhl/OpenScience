@@ -265,6 +265,7 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
           contentHash: asset.contentHash,
           generator: { name: asset.generator, version: asset.generatorVersion },
           sourceClaimIds: asset.sourceClaimIds,
+          ...(asset.reader ? { reader: { order: asset.reader.order, title: asset.reader.title, narration: asset.reader.narration } } : {}),
           url: `/api/research/${publicId}/v/${versionNo}/presentation-assets/${asset.id}`,
         })),
         history: history.flatMap((item) => {

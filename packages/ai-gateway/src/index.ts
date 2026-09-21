@@ -29,6 +29,9 @@ export {
   SCIENCE_REVIEW_MAX_DEADLINE_MS,
   SCIENCE_REVIEW_MAX_ATTACHMENTS,
   SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES,
+  ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES,
+  ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
+  ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS,
   SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES,
   SCIENCE_REVIEW_MAX_JSON_BYTES,
   SCIENCE_REVIEW_MAX_PROMPT_CHARS,
@@ -45,6 +48,7 @@ export {
   type ScienceReviewResultRecord,
   type ScienceReviewSource,
   type IllustrationReviewSource,
+  type IllustrationImageReviewSource,
 } from './science-review-protocol';
 export {
   DEFAULT_OCR_LIMITS,
@@ -52,6 +56,7 @@ export {
   OCR_PROMPT_VERSION,
   OcrProviderError,
   ocrPromptFor,
+  encodedImageDimensions,
   type ExternalProcessingPolicy,
   type OcrAuthorizationContext,
   type OcrCandidate,

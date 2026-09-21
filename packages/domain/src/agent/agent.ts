@@ -743,9 +743,18 @@ export async function persistSourceMapSearchIndexInTransaction(
     agentTaskId: source.id, artifactId: reference.artifactId, state: 'confirmed', batch: { researchObjectId: ro.id },
   } });
   const version = await tx.version.findFirst({ where: { id: input.versionId, researchObjectId: ro.id,
-    commit: { idempotencyKey: `ingestion-confirm:${confirmed?.id ?? ''}` },
-    manifest: { entries: { some: { artifactId: reference.artifactId, blobSha256: reference.contentHash } } } } });
+    manifest: { entries: { some: { artifactId: reference.artifactId, blobSha256: reference.contentHash } } } }, include: { commit: true } });
   if (!artifact || !confirmed || !version) throw new SearchIndexSourceError();
+  const commitKey = version.commit.idempotencyKey;
+  if (commitKey !== `ingestion-confirm:${confirmed.id}`) {
+    const match = /^hermes-ingestion:([0-9a-f-]{36}):([0-9a-f-]{36})$/i.exec(commitKey ?? '');
+    const run = match ? await tx.hermesResearchRun.findUnique({ where: { id: match[1] }, include: { steps: true } }) : null;
+    if (!run || match?.[2] !== confirmed.id || run.profile !== 'visual-narrative-v1' || run.maxAgentTasks !== 9
+      || run.researchObjectId !== ro.id || run.actorId !== input.userId
+      || (run.versionId !== version.id && !(run.versionId === null && run.status === 'awaiting_source_review'))
+      || !run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === confirmed.id
+        && step.agentTaskId === source.id && step.artifactId === artifact.id)) throw new SearchIndexSourceError();
+  }
   const { task } = await persistAgentTaskCoreInTransaction(deps, tx, {
     sessionId: source.sessionId, userId: source.session.userId, kind: 'search.index',
     payload: { ...payload },

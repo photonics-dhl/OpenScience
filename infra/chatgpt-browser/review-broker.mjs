@@ -7,10 +7,12 @@ import { fileURLToPath } from 'node:url';
 import {
   SCIENCE_REVIEW_MAX_JSON_BYTES,
   SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES,
+  ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES,
   SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES,
   SCIENCE_REVIEW_MAX_RESPONSE_BYTES,
   validateScienceReviewRequest,
   validateScienceReviewResult,
+  encodedImageDimensions,
 } from '../../packages/ai-gateway/dist/index.js';
 
 const exec = promisify(execFile);
@@ -72,10 +74,15 @@ async function copyAttachments(config, job, request) {
   await prepare(target, 11040);
   let total = 0;
   for (const attachment of request.attachments) {
-    const bytes = await safeRead(join(config.inbox, `${request.id}.${attachment.fileName}`), SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES);
+    const limit = request.schemaVersion === 3 ? ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES : SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES;
+    const bytes = await safeRead(join(config.inbox, `${request.id}.${attachment.fileName}`), limit);
     total += bytes.byteLength;
     if (total > SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES
       || createHash('sha256').update(bytes).digest('hex') !== attachment.sha256) throw Error('INVALID_ATTACHMENT');
+    if (attachment.mediaType !== 'application/pdf') {
+      const dimensions = encodedImageDimensions(attachment.mediaType, bytes);
+      if (dimensions.width !== attachment.width || dimensions.height !== attachment.height) throw Error('INVALID_ATTACHMENT');
+    }
     const path = join(target, attachment.fileName);
     await atomicWrite(path, bytes); await chown(path, 11040, 11040);
   }

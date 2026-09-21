@@ -1,8 +1,11 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, PresentationAsset } from '@prisma/client';
 import { SDF_NODE_TYPES } from '../research-object/types';
 import type { PublicationMetadata } from '../publish/publication-metadata';
 import { publicArtifactDownloadUrl } from '../artifact/public-artifact-download';
 import { PublishError } from '../publish/errors';
+import { PresentationAssetError } from '../assets/errors';
+import { presentationSceneImageView, requireSceneImageParent } from '../assets/scene-image';
+import type { FrozenHistoryMedia } from './version-history';
 
 export function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -29,6 +32,52 @@ export async function finalizePublicationResearchRecord(tx: Prisma.TransactionCl
   publicId: string; publicVersionId: string; publicationNo: number; publishedAt: Date; allowArtifactDownloads?: boolean; presentationAssetIds?: string[];
 }) {
   return writeResearchRecord(tx, input, input);
+}
+
+/** Freeze reader text only from the exact approved scene that produced the selected image. */
+async function mediaReaders(tx: Prisma.TransactionClient,
+  media: Array<PresentationAsset & { sourceClaims: Array<{ claimId: string }> }>, selectedIds?: string[],
+): Promise<Map<string, NonNullable<FrozenHistoryMedia['reader']>>> {
+  const byId = new Map(media.map(asset => [asset.id, asset]));
+  const selected = (selectedIds === undefined ? media
+    : selectedIds.flatMap(id => { const asset = byId.get(id); return asset ? [asset] : []; }))
+    .filter(asset => asset.status === 'approved'
+      && asset.generator !== 'OpenScience paper-original figure'
+      && asset.generator !== 'OpenScience Hermes storyboard planner'
+      && !['paper_original_figure', 'storyboard', 'sourced_storyboard'].includes(String(recordValue(asset.provenance).subtype)));
+  const scenes = new Map<string, { storyboardAssetId: string; sceneIndex: number; title: string; narration: string }>();
+  for (const asset of selected) {
+    const sceneImage = presentationSceneImageView(asset);
+    if (!sceneImage) continue;
+    let parent;
+    try {
+      parent = await requireSceneImageParent(tx, {
+        researchObjectId: asset.researchObjectId, versionId: asset.versionId,
+        sourceClaimIds: asset.sourceClaims.map(link => link.claimId).sort(), sceneImage,
+      });
+    } catch (error) {
+      // Legacy or unresolved provenance keeps the generic caption; never invent reader text.
+      if (error instanceof PresentationAssetError) continue;
+      throw error;
+    }
+    if (!parent || parent.identity !== recordValue(asset.provenance).parentIdentity) continue;
+    const scene = parent.view.document.scenes[sceneImage.sceneIndex]!;
+    scenes.set(asset.id, { storyboardAssetId: sceneImage.storyboardAssetId, sceneIndex: sceneImage.sceneIndex,
+      title: scene.title, narration: scene.narration });
+  }
+  // Preserve submitted group order, and the approved scenes' narrative order within each group.
+  // Reused originals and generated scenes use the same ordering rule.
+  const groupOrder = new Map<string, number>();
+  const ordered = selected.map((asset, index) => {
+    const scene = scenes.get(asset.id);
+    const group = scene ? `storyboard:${scene.storyboardAssetId}` : `asset:${asset.id}`;
+    if (!groupOrder.has(group)) groupOrder.set(group, index);
+    return { id: asset.id, index, group, scene };
+  }).sort((left, right) => groupOrder.get(left.group)! - groupOrder.get(right.group)!
+    || (left.scene?.sceneIndex ?? 0) - (right.scene?.sceneIndex ?? 0) || left.index - right.index);
+  return new Map(ordered.map((asset, order) => [asset.id, {
+    order, ...(asset.scene ? { title: asset.scene.title, narration: asset.scene.narration } : {}),
+  }]));
 }
 
 async function writeResearchRecord(tx: Prisma.TransactionClient, input: {
@@ -112,11 +161,13 @@ async function writeResearchRecord(tx: Prisma.TransactionClient, input: {
   } : undefined;
   const capturedAt = new Date().toISOString();
   const selectedAssetIds = publication && publication.presentationAssetIds !== undefined ? new Set(publication.presentationAssetIds) : undefined;
+  const readers = await mediaReaders(tx, media, publication ? publication.presentationAssetIds : undefined);
   const historyMedia = { captureSource: 'working_draft', capturedAt, items: media.map(asset => ({
     id: asset.id, researchObjectId: asset.researchObjectId, versionId: asset.versionId, kind: asset.kind,
     objectKey: asset.objectKey, contentHash: asset.contentHash, generator: asset.generator, generatorVersion: asset.generatorVersion,
     promptHash: asset.promptHash, status: asset.status, label: asset.label, provenance: asset.provenance,
     sourceClaimIds: asset.sourceClaims.map(link => link.claimId).sort(),
+    ...(readers?.has(asset.id) ? { reader: readers.get(asset.id) } : {}),
     // Keep every history entry and its source references, while freezing the
     // publication choice. Existing public snapshots keep their original identities.
     ...(publication && (asset.generator === 'OpenScience paper-original figure'

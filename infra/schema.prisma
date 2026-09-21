@@ -1495,6 +1495,7 @@ model HermesResearchRun {
   versionId                      String?  @map("version_id") @db.Uuid
   profile                        String?
   maxAgentTasks                  Int?     @map("max_agent_tasks")
+  generationSettings             Json?    @map("generation_settings")
   sourceClaimIds                 String[] @default([]) @map("source_claim_ids") @db.Uuid
   sourceReviewDigest             String?  @map("source_review_digest")
   status                         String   @default("running")
