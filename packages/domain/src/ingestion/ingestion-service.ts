@@ -623,7 +623,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
 }, ctx: AuditContext = {}): Promise<string> {
   const proof = await inspectHermesSourceReviewRecovery(tx, input.runId);
   if (!proof || proof.run.actorId !== input.actorId || proof.run.researchObjectId !== input.researchObjectId
-    || proof.run.version !== input.expectedVersion) throw new IngestionError('VALIDATION_ERROR', 'This source review has no safe service recovery');
+    || proof.run.version !== input.expectedVersion) throw new IngestionError('VALIDATION_ERROR', 'This source review has no safe source recovery');
   const { run, source, failed, composition, sourceStep, originalStep, recoveryKey } = proof;
   const { membership } = await requireActiveMembership(tx, run.researchObject.workspaceId, input.actorId);
   if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
@@ -648,7 +648,9 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
   }, data: { agentTaskId: task.id, status: 'waiting', error: null } });
   const preserved = await tx.hermesResearchStep.updateMany({ where: {
     id: originalStep.id, runId: run.id, stage: 'source_review', ordinal: originalStep.ordinal, agentTaskId: failed.id,
-  }, data: { status: 'failed', error: originalStep.error ?? 'Source review service unavailable; original candidate preserved' } });
+  }, data: { status: 'failed', error: originalStep.error ?? (proof.recoveryClass === 'accepted_review_claim_contract_missing'
+    ? 'Accepted source review is missing its required Claims contract; original candidate preserved'
+    : 'Source review service unavailable; original candidate preserved') } });
   await tx.hermesResearchStep.create({ data: { runId: run.id, stage: 'source_review', ordinal: proof.nextOrdinal,
     status: 'waiting', ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: task.id } });
   const moved = await tx.hermesResearchRun.updateMany({ where: {
@@ -656,7 +658,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
     status: 'failed', version: input.expectedVersion, versionId: null, profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9,
   }, data: { status: 'running', error: null, lastReconciledAt: null, version: { increment: 1 } } });
   if (changed.count !== 1 || canonical.count !== 1 || preserved.count !== 1 || moved.count !== 1)
-    throw new IngestionError('VALIDATION_ERROR', 'Hermes source changed during service recovery');
+    throw new IngestionError('VALIDATION_ERROR', 'Hermes source changed during source recovery');
   await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: run.researchObject.workspaceId,
     action: 'hermes.research_run.source_review_recovery', targetType: 'hermes_research_run', targetId: run.id,
     metadata: { requestDigest: input.requestDigest, clientIdempotencyKey: input.idempotencyKey,
@@ -664,6 +666,8 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
       previousVersion: input.expectedVersion, previousRunError: run.error, oldAgentTaskId: failed.id,
       compositionSourceAgentTaskId: composition.id, newAgentTaskId: task.id, serviceFailureAuditIds: proof.auditIds,
       serviceFailureClassifications: proof.failureClassifications,
+      recoveryClass: proof.recoveryClass, contractRepairAuditIds: proof.contractRepairAuditIds,
+      ...(proof.contractEvidence ? { contractEvidence: proof.contractEvidence } : {}),
       stage: 'source_review', ordinal: proof.nextOrdinal, chargeableAttempts: 1, creditPolicy: 'new-review-task-charged;original-failure-preserved' } }, ctx);
   return task.id;
 }

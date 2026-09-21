@@ -1,7 +1,7 @@
 # CURRENT Progress Window
 > 本机配置补记（2026-09-21）：用户授权独立提交开发树浏览器代理；保留源码检索，无业务部署。范围/依赖/回滚见[能力台账](runbooks/hermes-capability-registry.md#local-browser-proxy)。
-## 2026-09-21 — 用户续作显式有界补审，原稿/失败记录及原9项预算保留
-- 显式有界来源恢复已High复核、服务器正常构建部署；原页只提交一次HTTP202，ordinal2 d35c31fb真实使用科学Skill v3，主M3两次成功共206629ms（既有一次结构纠正，无fallback），六字段accepted且完整。最终缺少已审Claims，原run被正确阻断为failed/version13/无新版本，无新图。已修复必需Claims未纳入同轮guard、后置转换无诊断丢弃问题，独立High静态复审PASS与服务器构建/部署exit0；原任务仍失败，审校后新调用0。新guard未再次付费实测，不手写主张，完整图组未交付。未测试/预检/CI/本机构建；版本、任务及证据见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+## 2026-09-21 — 持续推进同一真实论文图文链路
+- 用户明确要求完整链路有效走通前持续推进。已有科学Skill v3真实六维审校成功，但d35缺已审Claims；输出校验修复已部署，最新只读证明原稿/证据/SourceMap完全一致且无补证/科学否定。正按High认可的accepted-only条件补接原retry-generation的合同恢复，原run/9项预算和失败历史保留；不重解析PDF、不手写Claims、不切provider，不把成功调用归类服务故障。仍需真实主张物化、成组图解、审图和阅读效果；版本/证据唯一见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。未测试/预检/CI/本机构建。
 
 ## 2026-09-21 — 复用 CLI 合作，推进真实 PDF→Hermes→多风格→审图发布
 - 真实Fig.1完成上传→人工核源→Hermes reuse→原字节copy；与已认可Fig.3、淡彩图共3张经真实发布入口组成v2，公开轮播均加载、匿名读回200，正文/许可保持，v1保留。发布选图/长度反馈/style必填与短反馈已部署；封面最终科学修订仍被现有审阅阻断，停止追加，无新Chat生图。第三篇120000字符前置阻塞保留，不重复上传。未跑测试/预检/CI。版本、证据、私有续作与质量差额仅见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
