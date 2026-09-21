@@ -16,6 +16,8 @@
 - task5226 exec3/retry2没有重跑science/art；Gateway审计82b076ad-2b5f-4198-ae18-8f503b5c1331于17:04:03Z完成，MiniMax-M3科学审阅succeeded、287081ms、19974 output tokens、finish stop、fallback null。输入容量技术阻塞已实际越过，不代表内容通过。
 - 末审blocked仅列一个requires_replan问题：composition加入场景标题、积分标注、公共乘子标签、量级小字4处不在labels的可见文字；run stopped/version43，未新生图。候选与完整review保留在原task，定向读取证据本机ignored `tmp/plan-label-review-20260922.json`；不能删除拒收、手工删文字冒充Hermes改稿或直接生成。
 - 独立High确认art输入title与风格标题参考缺少明确可见文本边界，style文件本身已有优先级说明。最小修复只改原art prompt及prompt内readerTitle命名，原科学文档/标签/审核规则不变；不新增模型环节、regex清洗、状态分支、额度或恢复槽。后续可优先评估既有art-only规划能力；旧blocked checkpoint不会因提示修正自动放行。额外方案执行已消费，新模型用量已询问，尚未追加。
+- 74a12050正式部署exit0，release/rollback独立读回、journal/failed无；原页面刷新显示“完整成果尚未完成”、0/1图、HTTP200、POST0。新prompt的模型效果尚未新增收费请求验证，不据此标全链路完成。已结束的4个自有恢复/诊断/旧发布助手移至本机ignored `tmp/archived/deploy-recovery-20260922`，同卷移动后ACL逐项一致；restore.json保留原路径/权限与恢复说明，既有输出日志、服务器收据和防重发路径均保持。
+- 新增用量待用户回复。独立High只读路径：`generateIllustrationStoryboard`的art分支可完整保留科学字段；`requireStoryboardRevisionTask`可读取失败checkpoint+review，但handler的requires_replan分支仍整份规划，blocked任务又无baseAssetId。现有恢复不接受blocked review且exec上限3，另建task会占唯一图片槽。获授权后最小接线方向为原retry-generation CAS重启同逻辑task，审计绑定拒收/来源，worker以checkpoint document构造art-only base；另存修正checkpoint并耐久记录提交，保留原拒收，完整末审通过后才能图片。当前未实现该接线，不声称已有继续按钮，不增max15/新表/科学分析器。
 
 ## 2026-09-21 用户纠正：原图截取不是论文视觉叙事交付
 
