@@ -56,7 +56,14 @@
 - 实际点击“查看公开RO”打开v3，新8bbc1280×720解码。匿名GET v1/v2/v3均200，旧两版contentHash/正文保持、3版许可一致，v3有6Claims/58Evidence和唯一8bbc，附件workspace_member。收据/jobs/visual-narrative-public-v3-observe-20260922.json及本机同名tmp；真实viewport图已看tmp/visual-narrative-public-v3-viewport-20260922.png，caption16px/28px/pre-wrap，无横溢出。初次fullPage图受现有Chrome125%/CDP截图裁切，DOM scrollWidth=clientWidth1140，改viewport截图确认完整画面，不把截屏裁切误判产品溢出。
 - 第二篇真实入口已完成公开v3→研究桌面→deep-sub-cycle私有草稿→研究详情→Hermes。首次助手误用按钮可访问名导致未发送，DB同用户新guide0；输入保留，改用唯一可见发送按钮键盘Enter，HTTP201 task ab76b22e-386a-48ab-bf7b-bb188b7c053e。一次性/jobs/second-paper-editorial-guide-keyboard-submit-20260922.json已消费；原prepared收据保留，不重复发送。guide明确editorial及未读论文者叙事，尚未启动制作run。
 
-## 第三篇长文断点：候选已实现并High通过，尚未部署恢复
+## 2026-09-22 后两篇真实制作继续（最新运行记录）
+
+- 4d97a62e正常无迁移/无测试构建启动exit0，独立release/rollback为4d97a62e/0c6115dd，journal/failed均无；日志/opt/openscience/observations/deploy-4d97a62e-20260922.log。独立High对六文件重试/检查点/分窗差异PASS；不新增服务/分析器/供应商。
+- 第二篇不选confirmed2fdb：其v4无semanticStage，原prepareHermesRefresh不允许直接升级confirmed；已有needs_review840/d5c6为具来源的待审候选，High确认用原reviewOnly→v5完整核源、允许科学纠错，新稿不污染旧公开版。guide ab76 style=editorial/zh，沿真实“打开图文制作”选840并按原按钮启动HTTP202，收据/jobs/second-paper-editorial-run-start-20260922.json已消费。run7e9e1f3e-eafe-440a-be0f-7ff1ed349a8b，原9项；f1bb85c8-a8a0-4c5c-8e40-23c8b4f28b50在20:11:27Z v5 review_received成功，新私有d07cfeee-c81d-4162-a469-0b431f964801，storyboard7bd6b0b8-edef-4edf-b52f-f6bad6f9db23生成中。未取得成图/末审/新公开版。
+- 第三篇实际路径为dashboard→原论文草稿→研究详情→继续文献整理与核对→原f653任务页；页面显示旧全文限制解除及“重试结构化提取”。原恢复按钮仅一次，20:13:11Z HTTP200，原Agent2e83eaf7-66a3-4436-a045-ffa56d2a4895/rertry1/attempt2，状态parsing。一次性/jobs/third-paper-original-retry-20260922.json已消费，审计a3f55ac1-68c3-4c07-a4ad-bd9ce708cf50 recovery=legacy_full_document_limit、previousState failed_blocked/attempt1/retry0/旧错误全等、creditPolicy reuse-original-reservation。当前尚未得到SourceMap checkpoint，不能推断实际长文规模或声称处理成功；tmp/two-paper-progress-read-20260922.json保存最近只读进度。
+- 浏览器两张自有页：window.name=xgs-pipeline-20260921为第二篇run，xgs-longpaper-20260922为第三篇原task。不动Chat页/登录/共享桥。阅读截图只用viewport避免125% fullPage裁切；Hermes发送按钮可访问名不能按可见箭头拼接，使用唯一可见发送控件键盘Enter，无注入事件/直调私有执行API。
+
+## 第三篇长文断点：设计与候选记录（已被上方部署/恢复事实推进）
 
 - 新只读现场tmp/third-paper-recovery-scope-read-20260922.json确认f653 failed_blocked、双表精确旧全文错误、retry0/attempt1/resultNULL、sessionactive/用户ROpayload关系匹配、原Artifact可用。候选沿原retry一次legacy_full_document_limit恢复，严格CAS/审计保存旧错误与计数，复用原预留；不手改DB/新task/run。Worker解析成功后模型前写exact {sourceMapRef}私有检查点，重试严格加载为reusableSourceMap而非previousResult；现有18k映射取代120k前置门槛，无新reducer/内容裁剪/API/迁移。六文件增量High PASS，生产audit sink已注入。实际长文规模和reducer容量仍未知，待正常无测试/无迁移部署及原UI恢复。下列只读设计为之前的发现过程，不按旧“未实施”重复工作。
 
