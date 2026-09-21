@@ -302,7 +302,7 @@ function HermesAssistantDrawerContent({
   const activeTask = task?.status === 'pending' || task?.status === 'running';
   const busy = submitting || activeTask || preparing;
   const result = useMemo(() => task?.status === 'succeeded' ? resultFromTask(task) : null, [task]);
-  const runDraftHref = result?.researchRunDraft && task?.researchObjectId === routeResearchObjectId
+  const runDraftHref = task && result?.researchRunDraft && task.researchObjectId === routeResearchObjectId
     && result.researchRunDraft.researchObjectId === routeResearchObjectId && route === 'research-object-edit'
     ? `/research-objects/${encodeURIComponent(routeResearchObjectId!)}/hermes?guideTask=${encodeURIComponent(task.id)}` : null;
   const invalidResult = task?.status === 'succeeded' && !result;
