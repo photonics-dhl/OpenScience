@@ -24,7 +24,7 @@
 ## 产品目标与交付差额
 | 交付 / Taskmaster ID | 当前实际结果与剩余工作 |
 |---|---|
-| 论文视觉叙事 · 5 | 首篇v3已走完整真实链路，最终用户质量认可pending；第二篇四张Chat图已保存，真实6Pro四图均阻断并要求科学返工；第三篇全文/六维/v5核源成功，设计原task恢复后来源绑定失败，修复已获High PASS待部署。不得以task succeeded冒称科学通过。 |
+| 论文视觉叙事 · 5 | 首篇v3已走完整真实链路，最终用户质量认可pending；第二篇四张Chat图已保存，真实6Pro四图均阻断并要求科学返工；第三篇全文/六维/v5及原设计恢复成功，5图经6Pro审阅2通过/3拒收，待整组返工。不得以task succeeded冒称科学通过。 |
 | 学术机制图 · 1 | 首篇新8bbc通过6Pro并公开v3，原图/失败候选保留；等待最终用户反馈。历史145af7bf/父d0b36138 approved未纳入v2，旧a7488c14认可版面但资产rejected，不改回状态。 |
 | 编辑封面 · 2 | 当前以第二篇完整叙事run7e9e为交付；历史51eb/e253未放行、aaf7 blocked无新Chat图，不能重跑旧任务代替当前方向。 |
 | 淡彩手绘 · 3 | aa41a018-b2ff-4ffb-9557-19ecabe104bc已获用户明确认可/approved并在公开v2；保护。第三篇后续按内容采用淡彩叙事，不把旧单图认可当整套完成。 |
@@ -44,9 +44,9 @@
 - 独立High确认c65仍有强度与电场混同、跨工况共用高斯基线、额外hν、固定又扫描同一波长等错误；不能因M3 accepted公开。1dcb真实Chat6Pro已blocked/repairInstruction null，指出穿缝几何、77nm含义、虚拟脉冲限定、收尖光束误导、相遇角表述等；四图已全部正式blocked/repairInstruction null并rejected，0活动；后两张正式审计覆盖强度/电场混同、hν重复、条件矛盾等。证据tmp/second-paper-revised-narrative-read-20260922.json、second-paper-image-reviews-read-20260922.json；继续沿既有科学修订路径处理，保留全部图片与历史。
 - 第三篇ROaa450f1e-fafc-46d8-a072-d935e01b0544，原PDFd04add46/4609066bytes/hash4a51048431f20950a01916b50cd87a08642881b20b0a9eac767144031ebc0b1a；原retry收据、watercolor guide及run-start收据均已消费。run b3eee57a-8a08-4867-9281-cb5b950affbf复用原SourceMap e490409c…（24页/1554blocks/818144bytes），composition1834e21d已13次text完成map/reduce/六维，sourceMapReused true，无新解析。8c87b54d v5核源成功（65K ceiling、294816ms、stop），六维约657中文字符/5Claims，Version9373f1e6-9477-4e4a-9b45-b8efca244e70。
 - 第三篇a4c5990b初始thinking-only失败，经21:12:02Z原按钮HTTP202恢复同task（/jobs/third-paper-science-resume-20260922.json已消费）；exec2三次65K stop正文分别因mainMessage266>240/unknown_original_source/subject_requires_supporting_evidence失败，resultNULL/run failedv11。没有保存被拒正文，不猜具体sourceId。原SourceMap/六维/Claims保持。
-- 第三篇来源绑定反馈与同task最多exec3恢复均High PASS：原supports/字段限制不变，原receipt按actor/task连续绑定、保存已消费audit IDs/当前payload/source，science/art及末审primary-only，不新增分析器/逻辑任务/图片额度。真实remainingImageTasks5。证据tmp/third-paper-{science-validation-diagnostics,planning-receipts-read}-20260922；原页面22:05:22Z新schema恢复HTTP202，runv12/same task exec3/retry2正在运行，/jobs/third-paper-science-schema-resume-20260922.json已消费。
-- 通用全组像素反馈科学返工已实现，原retry-generation按1计划+N图/完整正式反馈/current parent/CAS/审计；旧approved sibling在新parent批准同事务退役并留审计的P1已High PASS，本次4图皆rejected无额外退役。后续科学blocked方案显式只追加1plan并继承N图的P2冻结tmp/pixel-plan-revision-review-20260922，独立High PASS；Web复用原按钮。全叙事science65K/600s/primary-only与worker singleton maintenance已High PASS/提交61c440b2，已随86a8部署。第二篇原页面仍不可恢复：RO有公开历史visibility=public而当前Version是未发布draft，被新eligibility多余visibility条件误挡；source完整4图校验有效，未POST且pixel-set-replan收据不存在。两处最小条件修复High PASS，待第三篇在途自然结束后部署。
+- 第三篇原task exec3已完成science/art/M3末审accepted，plan a4c hashca448fd8…/5场景。五张Chat实图全部落存并完成6Pro：scene1 d6e75a46、scene3 666f1aef accepted/approved；scene0 bbef0877因补边接缝blocked（有render repair），scene2 9a86fac1、scene4 ce332e5d因科学关系/适用范围blocked（repair null）并rejected。run stopped/v16/max9，原入口canRetry/narrative-scientific-replan/6项；尚未续接。第三篇独立静态审查还发现MQED叙述中k/方向、解析解承诺问题，正式scene1像素审查未覆盖，下一稿仍须核对，不能因该图accepted放过。
+- 通用全组像素反馈科学返工已实现，原retry-generation按1计划+N图/完整正式反馈/current parent/CAS/审计；旧approved sibling在新parent批准同事务退役并留审计的P1已High PASS，本次4图皆rejected无额外退役。后续科学blocked方案显式只追加1plan并继承N图的P2冻结tmp/pixel-plan-revision-review-20260922，独立High PASS；Web复用原按钮。全叙事science65K/600s/primary-only与worker singleton maintenance已High PASS/提交61c440b2，已随86a8部署。第二篇原页面仍不可恢复：RO有公开历史visibility=public而当前Version是未发布draft，被新eligibility多余visibility条件误挡；source完整4图校验有效，未POST且pixel-set-replan收据不存在。两处最小条件修复High PASS，待与画幅提示一并部署。
 ## 其他受保护资产与入口
 - ac455b2f真实Chat产物approved；77b3f559历史Fig.2占位、557c3db6来源待核均approved，不能直接公开全部approved。d5087b03悬空draft copy；重复计划6439150a/ee9bcfb6 draft、6043bebb/75b34c88 approved，清理未获明确同意。旧占位929bd95d/6088f11b/03a160aa早先已授权删除，不能重处理。
 - 能力位置/最新实际效果查docs/runbooks/hermes-capability-registry.md；完整故障/调用/部署/恢复收据查docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md。此前中断、300秒传输、Claims缺失、长度、渲染拒收等历史已在该文件/Git保留，不按历史next action重跑。
-- 下一步：第三篇原task在途，等自然落存；第二篇只修当前草稿被父RO公开历史误挡的visibility条件，经High后部署，再原页面提交整组返工；继续两篇实图审阅、reader与新版发布。代码/部署/科学结果/最终用户认可分别记录；不因单篇完成结束任务。
+- 下一步：两篇均停止、无在途模型。部署已High PASS的两处visibility条件与共享16:9画幅提示；原页面继续第二篇1+4、第三篇1+5整组科学返工，观察新设计/实际6Pro/reader/新公开版本。精确旧源、全部图和公开历史保留，最终用户认可pending；不因局部通过结束任务。
