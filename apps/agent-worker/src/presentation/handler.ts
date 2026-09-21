@@ -622,10 +622,11 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             const issues = readStoredIllustrationIssues(result.storyboardReview, previous.document, claims,
               planningContext.revision.task.id, sourceEvidenceIdentity);
             const feedback = issues ? (result.storyboardReview as { summary: string }).summary : planningContext.revision.feedback;
-            planned = payload.storyboard.narrative && issues?.some(issue => issue.kind === 'requires_replan')
+            planned = payload.storyboard.narrative && (issues?.some(issue => issue.kind === 'requires_replan')
+              || previous.document.scenes.length > (payload.storyboard.narrativeSceneLimit ?? 6))
               ? await generateStoryboard(options.gateway, claims, payload.storyboard, {
                 document: previous.document, locale: payload.storyboard.locale, style: payload.storyboard.style, output: 'image',
-              }, paperOriginals, narrativeSource?.context, { summary: feedback, issues })
+              }, paperOriginals, narrativeSource?.context, { summary: feedback, issues: issues ?? [] })
               : await clarifyIllustrationLabels(options.gateway, claims, payload.storyboard, previous, feedback, issues);
           } else {
             planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view, paperOriginals, narrativeSource?.context);
@@ -637,6 +638,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view);
       }
       storyboardDocument = planned.document; promptHash = planned.promptHash;
+      if (payload.storyboard.narrative && storyboardDocument.scenes.length > (payload.storyboard.narrativeSceneLimit ?? 6))
+        throw new Error('[blocked] Saved narrative exceeds its remaining scene allowance');
       await requireUnchangedEvidence(deps.prisma);
       designSkills = planned.designSkills;
       if (payload.storyboard.output === 'image') {

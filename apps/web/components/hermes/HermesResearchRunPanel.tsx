@@ -63,7 +63,10 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [granting, setGranting] = React.useState(false);
   const [retrying, setRetrying] = React.useState(false);
-  const retryRequest = React.useRef<{ runId: string; version: number; key: string } | null>(null);
+  const retryRequest = React.useRef<{ actorId: string; runId: string; version: number; key: string } | null>(null);
+  const retryInFlight = React.useRef(false);
+  const visibleRun = React.useRef(run);
+  visibleRun.current = run;
   const [loading, setLoading] = React.useState(Boolean(runId));
   const [error, setError] = React.useState('');
   const [guideDraft, setGuideDraft] = React.useState<{ actorId: string; value: NonNullable<WorkspaceGuideResult['researchRunDraft']> } | null>(null);
@@ -258,20 +261,30 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   }
 
   async function retryGeneration() {
-    if (!run?.canRetryGeneration || retrying) return;
+    if (!run?.canRetryGeneration || retryInFlight.current || !actorId || run.actorId !== actorId) return;
+    const requestedActor = actorId;
+    const requestedRun = run;
     const previous = retryRequest.current;
-    const current = previous?.runId === run.id && previous.version === run.version
-      ? previous : { runId: run.id, version: run.version, key: crypto.randomUUID() };
+    const current = previous?.actorId === actorId && previous.runId === run.id && previous.version === run.version
+      ? previous : { actorId, runId: run.id, version: run.version, key: crypto.randomUUID() };
     retryRequest.current = current;
+    retryInFlight.current = true;
     setRetrying(true); setError('');
     try {
-      const result = await retryHermesGeneration(researchObjectId, run.id, run.version, current.key);
+      const viewer = await getCurrentUser({ fresh: true });
+      if (!mounted.current || viewer.userId !== requestedActor || actorRef.current !== requestedActor
+        || visibleRun.current?.id !== requestedRun.id || visibleRun.current.version !== requestedRun.version)
+        throw new Error(t('narrative.identityChanged'));
+      const result = await retryHermesGeneration(researchObjectId, requestedRun.id, requestedRun.version, current.key);
+      if (!mounted.current || actorRef.current !== requestedActor || visibleRun.current?.id !== requestedRun.id) return;
       setRun(result.run);
       onRunUpdated?.(result.run);
     } catch (cause) {
-      setError(cause instanceof ApiClientError ? cause.message : t('retryError'));
+      if (mounted.current && actorRef.current === requestedActor && visibleRun.current?.id === requestedRun.id)
+        setError(cause instanceof ApiClientError ? cause.message : t('retryError'));
     } finally {
-      setRetrying(false);
+      retryInFlight.current = false;
+      if (mounted.current) setRetrying(false);
     }
   }
 
@@ -315,6 +328,10 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       <p className="font-semibold text-os-ink" role="status">{t(`narrative.status.${narrativeStage}`)}</p>
       <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(terminal ? 'narrative.incompleteDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
       {imageSteps.length ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('narrative.imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
+      {run.canRetryGeneration ? <div className="mt-4">
+        <p className="text-sm leading-6 text-os-muted-paper">{t('narrative.resumeDescription')}</p>
+        <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : 'narrative.resume')}</button>
+      </div> : null}
       <details className="mt-4 text-sm text-os-muted-paper"><summary className="min-h-11 cursor-pointer py-3">{t('narrative.details')}</summary>{steps}</details>
       {run.status === 'succeeded' && run.versionId ? <Link className="mt-5 inline-flex min-h-11 items-center rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white" href={`/research-objects/${encodeURIComponent(researchObjectId)}/overview?version=${encodeURIComponent(run.versionId)}`}>{t('narrative.viewResult')}</Link> : null}
     </div> : run ? <div className="mt-4 border-t border-os-rule-paper pt-4">

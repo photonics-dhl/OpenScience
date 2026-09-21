@@ -23,6 +23,7 @@ import {
   lockTrashReferences,
   assertSearchIndexSourceLive,
   findSavedIngestionCommit,
+  requireHermesSourceReviewRecoveryBinding,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -333,7 +334,10 @@ export function createHandlers(
       const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):(scientific-summary-v3|scientific-review-v4)$/.exec(ownerTask.idempotencyKey ?? '');
       if (composition) {
         if (composition[4] === 'scientific-review-v4' && composition[2] !== composition[3]) {
-          throw new Error('[blocked] Review-only source must be the current extraction');
+          await deps.prisma.$transaction(tx => requireHermesSourceReviewRecoveryBinding(tx, {
+            ownerTaskId: ownerTask.id, ingestionTaskId: composition[1]!,
+            failedTaskId: composition[2]!, compositionTaskId: composition[3]!,
+          }), { isolationLevel: 'Serializable' });
         }
         const ingestion = await deps.prisma.ingestionTask.findUnique({
           where: { id: composition[1]! }, include: { batch: true },

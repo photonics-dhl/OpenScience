@@ -68,6 +68,6 @@
 - 最小修复已部署：仅最终来源审校65k/600s，provider硬上限600s、普通调用不变；primaryProviderOnly禁止超时/HTTP/transport后切key/model，已完成文本的有界结构修正仍留在同primary；review_unavailable/独立reason不再冒称malformed_item，未审core仍为空。High增量复核及必要服务器构建/启动完成；600秒有效响应能力尚未新请求观察。04:52Z站内刷新同run/POST0，仍明确完整成果未完成。历史请求是否计费未知，原9项按逻辑任务而非provider调用计数；旧run不自动重开，不用新run绕额度，不伪造approved。无有效v5可零模型恢复；补审需新增收费与严格同run恢复设计，目前未新增API或调用。
 
 ## 下一动作与交接入口
-- 优先任务5：当前超时/错误分类修正已部署；仅在用户接受本次可能重复计费后补来源审校；既有API不能恢复此未物化failed run，需在原Domain恢复入口做CAS/来源身份/真实attempt计数及剩余scene预算约束，不能直接DB改状态或新建run重置额度。最终仍交付六维/整组而非中间审批；不向e77写入或盲重发aaf7。全文上限、停机、旧约束继承/深色标准化债务保留。
+- 优先任务5：当前超时/错误分类修正已部署；用户已明确允许保留初稿再进行一次可能计费的来源审校；原Domain恢复入口已补CAS/来源身份/真实attempt计数及剩余scene预算约束，独立High静态审查通过，待服务器部署后恢复同一run，不能直接DB改状态或新建run重置额度。最终仍交付六维/整组而非中间审批；不向e77写入或盲重发aaf7。全文上限、停机、旧约束继承/深色标准化债务保留。
 - 先读本页，再按故障读 docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md 最新节；能力缺口在 docs/runbooks/hermes-capability-registry.md 原行更新，历史长证据不重复执行。
 - 收尾两树status必须为空，提交/推送自己的改动，prune/list。此前4个、此次另6个已结束且无用的自有UI读取/导航助手已精确清除；收据tmp/{pipeline,visual-narrative}-owned-helper-cleanup-20260921.json；保留一次性写请求及收据、原图/日志/会话/他人任务/回滚。现有每日09:00维护automation=automation，不再创建；临时证据仅ignored tmp/私有目录。

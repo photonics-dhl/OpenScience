@@ -35,6 +35,8 @@ export interface StoryboardRequest {
     output: 'image' | 'video';
     /** Explain the whole paper using its existing reviewed analysis and an ordered visual narrative. */
     narrative?: true;
+    /** Remaining scene allowance supplied by the run orchestrator; never expands its generation grant. */
+    narrativeSceneLimit?: number;
     baseAssetId?: string;
     /** Restyle a sourced image plan without regenerating its scientific fields. */
     revisionMode?: 'art';
@@ -122,7 +124,7 @@ function text(value: unknown, max: number, reason: string): string {
 }
 export function parseStoryboardRequest(value: unknown): StoryboardRequest {
     const v = object(value, 'request_shape');
-    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'revisionTaskId', 'revisionMode', 'output', 'figurePlan', 'narrative'], 'request_keys');
+    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'revisionTaskId', 'revisionMode', 'output', 'figurePlan', 'narrative', 'narrativeSceneLimit'], 'request_keys');
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (typeof v.locale !== 'string' || !['zh', 'en'].includes(v.locale)
         || typeof v.style !== 'string' || !v.style.trim() || v.style.length > 100
@@ -131,7 +133,9 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
         || ('revisionTaskId' in v && (typeof v.revisionTaskId !== 'string' || !uuid.test(v.revisionTaskId) || v.output !== 'image' || 'baseAssetId' in v))
         || ('revisionMode' in v && (v.revisionMode !== 'art' || v.output !== 'image' || !v.baseAssetId || 'revisionTaskId' in v))
         || ('output' in v && v.output !== 'image' && v.output !== 'video')
-        || ('narrative' in v && (v.narrative !== true || v.output !== 'image' || v.figurePlan != null))) return invalid('request_values');
+        || ('narrative' in v && (v.narrative !== true || v.output !== 'image' || v.figurePlan != null))
+        || ('narrativeSceneLimit' in v && (v.narrative !== true || !Number.isInteger(v.narrativeSceneLimit)
+            || Number(v.narrativeSceneLimit) < 1 || Number(v.narrativeSceneLimit) > 6))) return invalid('request_values');
     let figurePlan: StoryboardRequest['figurePlan'] | undefined;
     if ('figurePlan' in v && v.figurePlan !== undefined && v.figurePlan !== null) {
         const fp = object(v.figurePlan, 'figure_plan_shape');
@@ -158,6 +162,7 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
         instruction: v.instruction.trim(),
         output: (v.output ?? 'video') as StoryboardRequest['output'],
         ...(v.narrative === true ? { narrative: true as const } : {}),
+        ...(v.narrativeSceneLimit !== undefined ? { narrativeSceneLimit: v.narrativeSceneLimit as number } : {}),
         ...(v.baseAssetId ? { baseAssetId: v.baseAssetId as string } : {}),
         ...(v.revisionTaskId ? { revisionTaskId: v.revisionTaskId as string } : {}),
         ...(v.revisionMode ? { revisionMode: v.revisionMode as 'art' } : {}),
