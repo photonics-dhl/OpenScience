@@ -171,15 +171,17 @@ export function loadInstalledMediaSkills(
   const isCoverRequest = /cover|封面|杂志|编辑/.test(requested);
 
   if (stage === 'science' || stage === 'review') {
-    // Shared scientific reasoning + OpenScience v6 layout laws + style brief.
-    // Styles are surfaced only by their high-level "what it is / when to use it" sections.
+    // Scientific intent is selected before art direction. Only the final reviewer
+    // needs the style brief in addition to the shared scientific rules.
     usage.push({ id: SCIENTIFIC_CRITICAL_THINKING_SKILL.id, version: SCIENTIFIC_CRITICAL_THINKING_SKILL.version,
       resources: ['apps/agent-worker/src/skills/scientific-critical-thinking.ts'] });
     excerpts.push('Apply this shared skill as scientific reasoning only. Use the caller\'s illustration JSON schema and supplied sourceIds instead of its literature-note six-field/observation output conventions. Keep review notes out of visible picture text.', SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions);
     include('openscience-research-illustration', 'SKILL.md', stage === 'science' ? ['Scientific intent'] : ['Scientific review', 'Visual craft']);
-    const reviewStyleSkill: SkillId = isInfographic ? 'baoyu-infographic' : 'baoyu-article-illustrator';
-    include(reviewStyleSkill, `references/styles/${selection.style}.md`, SCIENCE_HEADINGS);
-    if (selection.reason) excerpts.push(`USER STYLE REASON: ${selection.reason}`);
+    if (stage === 'review') {
+      const reviewStyleSkill: SkillId = isInfographic ? 'baoyu-infographic' : 'baoyu-article-illustrator';
+      include(reviewStyleSkill, `references/styles/${selection.style}.md`, SCIENCE_HEADINGS);
+      if (selection.reason) excerpts.push(`USER STYLE REASON: ${selection.reason}`);
+    }
     return { usage, instructions: excerpts.join('\n\n') };
   }
 

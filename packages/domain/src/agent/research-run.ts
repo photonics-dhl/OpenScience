@@ -11,7 +11,7 @@ import { ensureHermesIngestionReview, materializeHermesIngestion, recoverHermesS
 import { inspectHermesSourceReviewRecovery } from '../ingestion/source-review-recovery';
 import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE } from '../assets/video';
-import { parsePresentationGenerationPayload, transitionHermesPresentationAsset, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
+import { parsePresentationGenerationPayload, readNarrativeImageReplanSource, transitionHermesPresentationAsset, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
 import { parseStoryboardDocument, presentationStoryboardView } from '../assets/storyboard';
 import { presentationSceneImageView, requireSceneImageParent } from '../assets/scene-image';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
@@ -42,7 +42,7 @@ function validGrant(value: { profile: string | null; maxAgentTasks: number | nul
   return (value.profile === ONCHIP_FIELD_SAMPLING_PROFILE && value.maxAgentTasks === 7)
     || (value.profile === CONTENT_DRIVEN_PROFILE && value.maxAgentTasks === 8)
     || (value.profile === CONTENT_DRIVEN_IMAGE_PROFILE && value.maxAgentTasks === 7)
-    || (value.profile === VISUAL_NARRATIVE_PROFILE && value.maxAgentTasks === 9);
+    || (value.profile === VISUAL_NARRATIVE_PROFILE && (value.maxAgentTasks === 9 || value.maxAgentTasks === 11));
 }
 
 export type HermesResearchRunStatus = 'running' | 'awaiting_source_review' | 'awaiting_claim_review'
@@ -90,6 +90,7 @@ export interface HermesResearchRunView {
   createdAt: Date;
   updatedAt: Date;
   canRetryGeneration?: boolean;
+  canAuthorizeNarrativeCorrection?: boolean;
   chargeableAttempts?: number;
   availableImageCount?: number;
   imageUsageLimited?: boolean;
@@ -291,6 +292,13 @@ export async function getHermesResearchRun(
         : await inspectHermesSourceReviewRecovery(deps.prisma, run.id).then(proof => proof ? { chargeableAttempts: 1 } : null).catch(() => null)
       : await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
   const view = toView(run, recovery ?? undefined);
+  if (WRITE_ROLES.has(authority.membership.role) && run.profile === VISUAL_NARRATIVE_PROFILE && run.status === 'stopped') {
+    const correction = await inspectNarrativeScientificReplan(deps.prisma, run).catch(() => null);
+    if (correction) {
+      if (run.maxAgentTasks === 9) view.canAuthorizeNarrativeCorrection = true;
+      else { view.canRetryGeneration = true; view.chargeableAttempts = 3; }
+    }
+  }
   const imageSteps = run.steps.filter(step => step.stage === 'scene_image' && step.agentTaskId);
   if (run.versionId && imageSteps.length) {
     const assets = await deps.prisma.presentationAsset.findMany({ where: {
@@ -316,7 +324,46 @@ export async function getHermesResearchRun(
 }
 
 const HERMES_AUTHORITY_ERROR = '[blocked] Hermes run authority is invalid';
+const NARRATIVE_CORRECTION_STOP = 'Internal review could not complete the narrative within the authorized correction budget';
+const NARRATIVE_CORRECTION = 'narrative_image_scientific_replan';
 export const HERMES_AUTHORITY_REARM_MARKER = 'hermes-authority-pre-provider-v1';
+
+/** One explicit 9 -> 11 extension for a rejected image whose original revised plan was never accepted again. */
+async function inspectNarrativeScientificReplan(tx: Prisma.TransactionClient, run: RunRow) {
+  if (run.profile !== VISUAL_NARRATIVE_PROFILE || ![9, 11].includes(run.maxAgentTasks ?? 0)
+    || run.status !== 'stopped' || run.error !== NARRATIVE_CORRECTION_STOP || !run.versionId
+    || await validateReviewedSources(tx, run) !== 'ready') return null;
+  const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+  const version = await tx.version.findUnique({ where: { id: run.versionId } });
+  const storyboards = run.steps.filter(step => step.stage === 'storyboard');
+  const images = run.steps.filter(step => step.stage === 'scene_image');
+  const sources = run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage));
+  if (!ro || ro.deletedAt || ro.status !== 'draft' || !version || version.status !== 'draft' || version.researchObjectId !== ro.id
+    || sources.length !== 6 || storyboards.length !== 1 || images.length !== 1
+    || run.steps.length !== 9 || run.steps.filter(step => step.stage === 'source_ingestion').length !== 1) return null;
+  const storyboardStep = storyboards[0]!;
+  const imageStep = images[0]!;
+  if (storyboardStep.ordinal !== 0 || imageStep.ordinal !== 0 || !storyboardStep.agentTaskId || !imageStep.agentTaskId
+    || storyboardStep.presentationAssetId !== storyboardStep.agentTaskId || imageStep.presentationAssetId !== imageStep.agentTaskId
+    || storyboardStep.status !== 'succeeded' || imageStep.status !== 'stopped') return null;
+  const presentations = await tx.agentTask.findMany({ where: { kind: 'presentation.generate',
+    payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } }, select: { id: true } });
+  if (presentations.length !== 2 || !presentations.every(task => [storyboardStep.agentTaskId, imageStep.agentTaskId].includes(task.id))) return null;
+  const source = await readNarrativeImageReplanSource(tx, { actorId: run.actorId, runId: run.id,
+    researchObjectId: run.researchObjectId, versionId: run.versionId, sourceClaimIds: run.sourceClaimIds, imageAssetId: imageStep.agentTaskId });
+  if (source.parent.id !== storyboardStep.agentTaskId) return null;
+  const grants = await tx.auditLog.findMany({ where: { action: 'hermes.research_run.generation_grant',
+    targetType: 'hermes_research_run', targetId: run.id }, take: 2 });
+  if (run.maxAgentTasks === 9 ? grants.length !== 0 : grants.length !== 1) return null;
+  if (run.maxAgentTasks === 11) {
+    const grant = grants[0]!;
+    const meta = jsonRecord(grant.metadata);
+    if (grant.actorId !== run.actorId || meta.correction !== NARRATIVE_CORRECTION || meta.previousMaxAgentTasks !== 9 || meta.maxAgentTasks !== 11
+      || meta.parentStoryboardAssetId !== source.parent.id || meta.rejectedImageAssetId !== source.image.id
+      || meta.sourceIdentity !== source.identity || meta.reviewHash !== source.reviewHash || meta.newRunCount !== 0) return null;
+  }
+  return { ...source, storyboardStep, imageStep };
+}
 
 /** Resume a saved plan whose first scientific-review request was blocked locally by input size. */
 async function inspectStoryboardCheckpointRecovery(tx: Prisma.TransactionClient, run: RunRow) {
@@ -615,9 +662,12 @@ async function advanceAutomaticAssetReviews(deps: HermesResearchRunDeps, run: Ru
 /** Explicitly renew a legacy grant before any image/video work is submitted. */
 export async function authorizeHermesGenerationGrant(deps: HermesResearchRunDeps, input: {
   actorId: string; researchObjectId: string; runId: string; expectedVersion: number;
-  generationGrant: { profile: typeof CONTENT_DRIVEN_PROFILE; maxAgentTasks: 8 };
+  generationGrant: { profile: typeof CONTENT_DRIVEN_PROFILE; maxAgentTasks: 8 } | { profile: typeof VISUAL_NARRATIVE_PROFILE; maxAgentTasks: 11 };
+  idempotencyKey?: string;
 }, ctx: AuditContext = {}): Promise<HermesResearchRunView> {
-  if (input.generationGrant.profile !== CONTENT_DRIVEN_PROFILE || input.generationGrant.maxAgentTasks !== 8
+  const narrativeCorrection = input.generationGrant.profile === VISUAL_NARRATIVE_PROFILE && input.generationGrant.maxAgentTasks === 11;
+  if ((!narrativeCorrection && (input.generationGrant.profile !== CONTENT_DRIVEN_PROFILE || input.generationGrant.maxAgentTasks !== 8))
+    || (narrativeCorrection && (!input.idempotencyKey?.trim() || input.idempotencyKey.length > 200))
     || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 1) {
     throw new HermesResearchRunError('VALIDATION_ERROR', 'Content-driven generation requires an explicit bounded grant');
   }
@@ -629,9 +679,36 @@ export async function authorizeHermesGenerationGrant(deps: HermesResearchRunDeps
     const ro = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
     const membership = ro ? await requireActiveMembership(tx, ro.workspaceId, input.actorId).catch(() => null) : null;
     const version = run.versionId ? await tx.version.findUnique({ where: { id: run.versionId } }) : null;
-    if (!ro || ro.status !== 'draft' || !version || version.status !== 'draft' || version.researchObjectId !== ro.id
+    if (!ro || ro.deletedAt || ro.status !== 'draft' || !version || version.status !== 'draft' || version.researchObjectId !== ro.id
       || !membership || !WRITE_ROLES.has(membership.membership.role)) {
       throw new HermesResearchRunError('FORBIDDEN', 'Generation grant permission is unavailable');
+    }
+    if (narrativeCorrection) {
+      const digest = createHash('sha256').update(JSON.stringify({ actorId: input.actorId, researchObjectId: input.researchObjectId,
+        runId: input.runId, expectedVersion: input.expectedVersion, generationGrant: input.generationGrant, idempotencyKey: input.idempotencyKey })).digest('hex');
+      const prior = await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_grant', targetType: 'hermes_research_run',
+        targetId: run.id, actorId: input.actorId, metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey! } } });
+      if (prior) {
+        if (jsonRecord(prior.metadata).requestDigest !== digest) throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Correction grant key belongs to another request');
+        const available = await inspectNarrativeScientificReplan(tx, run);
+        return toView(run, available ? { chargeableAttempts: 3 } : undefined);
+      }
+      if (run.version !== input.expectedVersion) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before authorizing');
+      const proof = run.maxAgentTasks === 9 ? await inspectNarrativeScientificReplan(tx, run) : null;
+      if (!proof) throw new HermesResearchRunError('SOURCE_NOT_READY', 'This narrative has no bounded scientific correction available');
+      const changed = await tx.hermesResearchRun.updateMany({ where: { id: run.id, actorId: input.actorId, status: 'stopped',
+        version: input.expectedVersion, maxAgentTasks: 9, profile: VISUAL_NARRATIVE_PROFILE, versionId: run.versionId },
+      data: { maxAgentTasks: 11, version: { increment: 1 } } });
+      if (changed.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes correction grant changed');
+      await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId,
+        action: 'hermes.research_run.generation_grant', targetType: 'hermes_research_run', targetId: run.id,
+        metadata: { requestDigest: digest, clientIdempotencyKey: input.idempotencyKey!, expectedVersion: input.expectedVersion,
+          correction: NARRATIVE_CORRECTION, previousProfile: run.profile, previousMaxAgentTasks: 9, ...input.generationGrant,
+          parentStoryboardAssetId: proof.parent.id, rejectedImageAssetId: proof.image.id, reviewHash: proof.reviewHash,
+          sourceIdentity: proof.identity, newRunCount: 0, existingTaskCount: 8,
+          maxNewStoryboards: 1, maxNewImages: 1, maxRenderCorrections: 1, publicationAuthorized: false } }, ctx);
+      const view = toView(await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), { chargeableAttempts: 3 });
+      return view;
     }
     if (!['awaiting_claim_review', 'awaiting_storyboard_review'].includes(run.status)
       || run.steps.some(step => step.stage === 'scene_image' || step.stage === 'video')) {
@@ -683,6 +760,33 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         if (run.profile === VISUAL_NARRATIVE_PROFILE) {
           if (!ro || ro.deletedAt || ro.status !== 'draft' || !membership || !WRITE_ROLES.has(membership.membership.role))
             throw new HermesResearchRunError('FORBIDDEN', 'Source review recovery permission is unavailable');
+          if (run.maxAgentTasks === 11) {
+            const receipt = await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run',
+              targetId: run.id, actorId: input.actorId, metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } } });
+            if (receipt) {
+              if (jsonRecord(receipt.metadata).requestDigest !== requestDigest) throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Scientific correction key belongs to another request');
+              return { run, dispatchIds: [] as string[] };
+            }
+            if (run.version !== input.expectedVersion) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before scientific correction');
+            const proof = await inspectNarrativeScientificReplan(tx, run);
+            if (!proof) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Scientific correction is unavailable or already consumed');
+            const fenced = await tx.hermesResearchRun.updateMany({ where: { id: run.id, actorId: input.actorId, version: input.expectedVersion,
+              status: 'stopped', profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 11, versionId: run.versionId },
+            data: { status: 'generating_storyboard', error: null, lastReconciledAt: null, version: { increment: 1 } } });
+            if (fenced.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes scientific correction changed');
+            await createPresentationSteps(deps, tx, run, 'storyboard', [{ ordinal: 0, replacesTaskId: proof.task.id,
+              payload: { ...proof.payload, storyboard: { ...proof.payload.storyboard!, revisionImageAssetId: proof.image.id, narrativeSceneLimit: 1 } } }]);
+            const step = await tx.hermesResearchStep.findUniqueOrThrow({ where: { runId_stage_ordinal: { runId: run.id, stage: 'storyboard', ordinal: 0 } } });
+            const held = await tx.hermesResearchStep.updateMany({ where: { id: proof.imageStep.id, runId: run.id,
+              agentTaskId: proof.imageTask.id, presentationAssetId: proof.image.id, status: 'stopped' }, data: { status: 'stopped' } });
+            if (held.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Rejected image changed during scientific correction');
+            await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId, action: 'hermes.research_run.generation_retry',
+              targetType: 'hermes_research_run', targetId: run.id, metadata: { requestDigest, clientIdempotencyKey: input.idempotencyKey,
+                correction: NARRATIVE_CORRECTION, expectedVersion: input.expectedVersion, parentStoryboardAssetId: proof.parent.id,
+                rejectedImageAssetId: proof.image.id, reviewHash: proof.reviewHash, sourceIdentity: proof.identity,
+                newTaskId: step.agentTaskId, newRunCount: 0, chargeableAttempts: 1, maxRemainingTasks: 2 } }, ctx);
+            return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [step.agentTaskId!] };
+          }
           // A raw client key cannot be reused with a different version tuple.
           // Historical receipts lack it, but their exact session digest remains replayable.
           const priorRequest = await tx.auditLog.findFirst({ where: {
@@ -1039,7 +1143,7 @@ async function repairBlockedNarrative(deps: HermesResearchRunDeps, tx: Prisma.Tr
   const result = jsonRecord(task.result);
   const review = jsonRecord(result.storyboardReview);
   const payload = parsePresentationGenerationPayload(task.payload);
-  if (payload.storyboard?.revisionTaskId || !payload.storyboard?.narrative || review.decision !== 'blocked'
+  if (payload.storyboard?.revisionTaskId || payload.storyboard?.revisionImageAssetId || !payload.storyboard?.narrative || review.decision !== 'blocked'
     || !result.storyboardCheckpoint || !task.error?.startsWith('[blocked] Illustration needs upstream scientific revision: ')) return false;
   // This replacement consumes the correction already reserved by the original plan.
   const sceneLimit = await narrativeSceneLimit(tx, run, false);
@@ -1265,6 +1369,8 @@ export async function reconcileHermesResearchRuns(
                 return moveRun(deps, tx, run, 'generating_storyboard', ro.workspaceId);
               }
               await tx.hermesResearchStep.updateMany({ where: { id: failed.id }, data: { status: 'failed', error: failed.agentTask?.error ?? 'Generation failed' } });
+              if (run.maxAgentTasks === 11 && stage === 'storyboard')
+                return moveRun(deps, tx, run, 'stopped', ro.workspaceId, failed.agentTask?.error ?? 'Scientific correction could not complete');
               return moveRun(deps, tx, run, 'failed', ro.workspaceId, failed.agentTask?.error ?? 'Generation failed');
             }
             if (!steps.length || steps.some((step) => step.agentTask?.status !== 'succeeded')) {
@@ -1325,7 +1431,7 @@ export async function reconcileHermesResearchRuns(
             if (stage === 'scene_image' && await repairRejectedNarrativeImages(deps, tx, run)) {
               return moveRun(deps, tx, run, 'generating_scene_images', ro.workspaceId);
             }
-            return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Internal review could not complete the narrative within the authorized correction budget');
+            return moveRun(deps, tx, run, 'stopped', ro.workspaceId, NARRATIVE_CORRECTION_STOP);
           }
           if (assets.some((asset) => asset!.status !== 'approved')) {
             await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
@@ -1346,7 +1452,12 @@ export async function reconcileHermesResearchRuns(
             const sourceTaskCount = run.profile === VISUAL_NARRATIVE_PROFILE
               ? run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length : 0;
             if (sourceTaskCount + sceneCount + (imageRun(run.profile) ? 1 : 2) > run.maxAgentTasks!) return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Hermes generation grant cannot cover this storyboard');
-            await createPresentationSteps(deps, tx, run, 'scene_image', Array.from({ length: sceneCount }, (_, ordinal) => ({ ordinal, payload: {
+            if (run.maxAgentTasks === 11 && sceneCount !== 1) return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Scientific correction requires exactly one scene');
+            const replacedImageTaskId = run.maxAgentTasks === 11
+              ? run.steps.find(step => step.stage === 'scene_image' && step.ordinal === 0)?.agentTaskId : undefined;
+            if (run.maxAgentTasks === 11 && !replacedImageTaskId) return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Scientific correction image task binding is missing');
+            await createPresentationSteps(deps, tx, run, 'scene_image', Array.from({ length: sceneCount }, (_, ordinal) => ({ ordinal,
+              ...(replacedImageTaskId ? { replacesTaskId: replacedImageTaskId } : {}), payload: {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
               kind: 'image', sourceClaimIds: run.sourceClaimIds, sceneImage: { storyboardAssetId, sceneIndex: ordinal },
             } })));

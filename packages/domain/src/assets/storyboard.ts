@@ -42,6 +42,8 @@ export interface StoryboardRequest {
     revisionMode?: 'art';
     /** Reuse an owned scientifically blocked image plan for a bounded revision. */
     revisionTaskId?: string;
+    /** Replan after a bound narrative image requires scientific changes, never a render-only correction. */
+    revisionImageAssetId?: string;
     /**
      * Optional figure-level audit from the upstream figure auditor. Each entry steers
      * one paper figure to a single decision: reuse the source figure, re-render in the
@@ -124,13 +126,16 @@ function text(value: unknown, max: number, reason: string): string {
 }
 export function parseStoryboardRequest(value: unknown): StoryboardRequest {
     const v = object(value, 'request_shape');
-    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'revisionTaskId', 'revisionMode', 'output', 'figurePlan', 'narrative', 'narrativeSceneLimit'], 'request_keys');
+    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'revisionTaskId', 'revisionImageAssetId', 'revisionMode', 'output', 'figurePlan', 'narrative', 'narrativeSceneLimit'], 'request_keys');
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (typeof v.locale !== 'string' || !['zh', 'en'].includes(v.locale)
         || typeof v.style !== 'string' || !v.style.trim() || v.style.length > 100
         || typeof v.instruction !== 'string' || !v.instruction.trim() || v.instruction.length > 1000
         || ('baseAssetId' in v && (typeof v.baseAssetId !== 'string' || !uuid.test(v.baseAssetId)))
         || ('revisionTaskId' in v && (typeof v.revisionTaskId !== 'string' || !uuid.test(v.revisionTaskId) || v.output !== 'image' || 'baseAssetId' in v))
+        || ('revisionImageAssetId' in v && (typeof v.revisionImageAssetId !== 'string' || !uuid.test(v.revisionImageAssetId)
+            || v.output !== 'image' || v.narrative !== true || v.narrativeSceneLimit !== 1
+            || ['baseAssetId', 'revisionTaskId', 'revisionMode', 'figurePlan'].some(key => key in v)))
         || ('revisionMode' in v && (v.revisionMode !== 'art' || v.output !== 'image' || !v.baseAssetId || 'revisionTaskId' in v))
         || ('output' in v && v.output !== 'image' && v.output !== 'video')
         || ('narrative' in v && (v.narrative !== true || v.output !== 'image' || v.figurePlan != null))
@@ -165,6 +170,7 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
         ...(v.narrativeSceneLimit !== undefined ? { narrativeSceneLimit: v.narrativeSceneLimit as number } : {}),
         ...(v.baseAssetId ? { baseAssetId: v.baseAssetId as string } : {}),
         ...(v.revisionTaskId ? { revisionTaskId: v.revisionTaskId as string } : {}),
+        ...(v.revisionImageAssetId ? { revisionImageAssetId: v.revisionImageAssetId as string } : {}),
         ...(v.revisionMode ? { revisionMode: v.revisionMode as 'art' } : {}),
         ...(figurePlan ? { figurePlan } : {}),
     };

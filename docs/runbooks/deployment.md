@@ -3,6 +3,7 @@
 当前版本、部署结果和暂停范围统一见[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。review request v2用于配图文字审阅、v3用于实际图片审阅，旧v1保持；兼容新版receiver可服务旧应用；若需回退receiver，先回退producer，禁止旧receiver接新请求。本段不是重跑部署指令。
 
 ## 2026-09-21 自动视觉叙事的交付顺序
+- 科学返工候选（当前状态见CURRENT）：分镜 `revised` 先保存修订候选与首次审阅，在同一任务内最多一次完整候选验收；提交前落私有标记，已提交无收据按未知停止，恢复不重发；资产保留首次修订与最终accepted收据。真实6Pro像素拒绝且不能纯渲染修复的旧单图，原grant入口只对精确资格提供一次9→11授权，原retry入口最多一个新分镜、一个新图及一次纯渲染纠正，不新run或修改旧批准/拒绝记录。默认仍9，额外模型需明确授权。新增grant约束迁移保留旧组合；部署前原backup脚本双库备份，正常deploy不用skip-migrate，不运行测试/演练。回退须先等新任务终态，保留11额度、收据、任务及素材；不能把11额度在途任务交旧worker，也不把数据库额度缩回9冒充未消费。provider/浏览器不变。
 
 - 保存分镜的预算故障恢复：仅已保存完整checkpoint、未发出科学终审、旧精确预算错误且尚未重试的原visual-narrative任务，沿既有retry-generation/CAS恢复同task；保留result、原规划审计及失败收据，不新建任务/重规划/扩额度。模型prompt使用紧凑excerpt导航和origins表，全部科学文字、来源与服务端原始身份不变，61,440上限保持。部署无需迁移/receiver变更；恢复前先对该真实输入只读核对实际长度，随后只点一次原页面继续，未知响应先读状态。回退须等在途任务结束，保留checkpoint/审计；正常源码回退不改已审版本。
 - 无正文输出截断：Gateway的同一结构循环统一处理有正文length与thinking-only length，升级须有剩余retry且只使用调用方原配置一次上限，不增加重试次数或切provider。若旧代码在上述同checkpoint恢复后exec2/retry1被精确16K纯推理截断，唯一失败审计与首次恢复收据绑定当前来源时，可沿原端点显式续接同task；exec3/retry2经每次调用前授权后直接使用原32K上限，独立收据保留失败，无第三次恢复。API/Gateway/worker必须同一应用release；无迁移/receiver变更，回退先等在途任务结束。

@@ -1384,6 +1384,9 @@
   },
   "hermesRun": {
     "narrative": {
+      "correctionGrantDescription": "这张图需要修改科学表达。原流程已使用 8 项任务；将总额度从 9 项一次性增加到 11 项，可继续最多 1 项方案返工、1 项新图和 1 项纯绘制修正，按实际使用计费。已有论文、图片和公开版本保留，不会自动发布。",
+      "authorizeCorrection": "授权本流程最多 3 项返工任务",
+      "resumeCorrectionDescription": "额度已更新。继续后 Hermes 将按原论文与审核意见重新设计并制作，最多执行刚授权的 3 项任务；你查看最终结果，无需确认中间方案。",
       "startDescription": "Hermes 会理解全文、组织叙事并完成图片与内部审校。你回来时可以一起阅读六维内容和整组图片，再决定是否发布。",
       "unavailableDescription": "请先上传一份 PDF 论文，材料可用后即可开始。",
       "goalLabel": "希望读者理解什么？（可选）",
@@ -1404,7 +1407,7 @@
       "resumeDescription": "已有内容和处理记录已保留。继续会新增一次来源审校，补齐制作所需内容，并计入本流程剩余额度；此前请求可能已计费，本次也会产生供应商费用。通过后系统会继续制作完整图文。",
       "resumeMediaDescription": "已审内容和保存的设计会保留，继续完成后续审阅与制作。本次复用原任务额度，后续模型处理仍会产生供应商用量。",
       "resume": "保留初稿，继续制作",
-      "imageProgress": "已生成 {current} / {total} 张图片",
+      "imageProgress": "可用图解 {current} / {total}",
       "internalReview": "内部审校中",
       "details": "查看处理详情",
       "previousAnalyses": "已有分析记录与手动流程",

@@ -368,6 +368,7 @@ export interface HermesResearchRun {
   generationSettings?: Pick<HermesNarrativeGeneration, 'locale' | 'style' | 'instruction'> | null;
   maxAgentTasks: number | null;
   canRetryGeneration?: boolean;
+  canAuthorizeNarrativeCorrection?: boolean;
   chargeableAttempts?: number;
   availableImageCount?: number;
   imageUsageLimited?: boolean;
@@ -434,10 +435,14 @@ export function authorizeHermesGenerationGrant(
   researchObjectId: string,
   runId: string,
   expectedVersion: number,
+  correction?: { profile: 'visual-narrative-v1'; maxAgentTasks: 11; idempotencyKey: string },
 ): Promise<{ run: HermesResearchRun }> {
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}/generation-grant`, {
     method: 'POST',
-    body: JSON.stringify({ expectedVersion, generationGrant: { profile: 'content-driven-v1', maxAgentTasks: 8 } }),
+    ...(correction ? { headers: { 'Idempotency-Key': correction.idempotencyKey } } : {}),
+    body: JSON.stringify({ expectedVersion, generationGrant: correction
+      ? { profile: correction.profile, maxAgentTasks: correction.maxAgentTasks }
+      : { profile: 'content-driven-v1', maxAgentTasks: 8 } }),
   });
 }
 

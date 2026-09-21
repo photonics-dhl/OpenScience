@@ -1,7 +1,7 @@
 import { planSceneImagePrompt } from './scene-image';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, type AiGateway, type OcrAuthorizationContext, type ScienceReviewInput } from '@openscience/ai-gateway';
-import { parseStoryboardDocument, parseStoryboardRequest, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireVideoGenerationParents, storyboardSceneStyles, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
+import { parseStoryboardDocument, parseStoryboardRequest, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, requireVideoGenerationParents, storyboardSceneStyles, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
 import { generateStoryboard, renderStoryboard } from './storyboard';
 import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@openscience/domain';
 import { createHash } from 'node:crypto';
@@ -28,6 +28,14 @@ function presentationClaimContent(claims: readonly PresentationClaim[]): string 
 }
 
 type StoryboardPlan = Awaited<ReturnType<typeof generateStoryboard>> & { reviewFormat?: 2 };
+type StoryboardReview = Awaited<ReturnType<typeof reviewIllustrationStoryboard>>['provenance'];
+type StoryboardAcceptance = {
+  document: StoryboardDocument;
+  firstReview: StoryboardReview;
+  submittedExecutionAttempt?: number;
+  review?: StoryboardReview;
+  designSkills?: DesignSkillUsage[];
+};
 type StoryboardCheckpointIdentity = {
   payload: PresentationGenerationPayload;
   sourceEvidenceIdentity: string;
@@ -49,6 +57,18 @@ async function requireNarrativeOriginals(prisma: Pick<Prisma.TransactionClient, 
       || p?.subtype !== 'paper_original_figure' || typeof p.sourceClaimId !== 'string' || !scene.sourceClaimIds.includes(p.sourceClaimId))
       throw new Error('[blocked] Narrative source image changed; preserve the candidate and select the current approved source');
   }
+}
+
+function readDesignSkillUsage(value: unknown): DesignSkillUsage[] | undefined {
+  if (value !== undefined && (!Array.isArray(value)
+    || value.some(usage => !usage || typeof usage !== 'object' || Array.isArray(usage)
+      || Object.keys(usage).some(key => !['id', 'resources', 'upstreamCommit', 'version'].includes(key))
+      || typeof usage.id !== 'string' || !usage.id.trim()
+      || !Array.isArray(usage.resources) || usage.resources.some((resource: unknown) => typeof resource !== 'string')
+      || (usage.upstreamCommit !== undefined && typeof usage.upstreamCommit !== 'string')
+      || (usage.version !== undefined && typeof usage.version !== 'string'))))
+    throw new Error('[blocked] Saved storyboard skill provenance is invalid');
+  return value as DesignSkillUsage[] | undefined;
 }
 
 /** This worker-only task.result field is omitted by the public task projection. */
@@ -76,31 +96,60 @@ function readStoryboardCheckpoint(result: unknown, expected: StoryboardCheckpoin
     || typeof planned.promptHash !== 'string' || !/^[a-f0-9]{64}$/u.test(planned.promptHash)) {
     throw new Error('[blocked] Saved storyboard provenance is invalid');
   }
-  if (planned.designSkills !== undefined && (!Array.isArray(planned.designSkills)
-    || planned.designSkills.some(usage => !usage || typeof usage !== 'object' || Array.isArray(usage)
-      || Object.keys(usage).some(key => !['id', 'resources', 'upstreamCommit', 'version'].includes(key))
-      || typeof usage.id !== 'string' || !usage.id.trim()
-      || !Array.isArray(usage.resources) || usage.resources.some((resource: unknown) => typeof resource !== 'string')
-      || (usage.upstreamCommit !== undefined && typeof usage.upstreamCommit !== 'string')
-      || (usage.version !== undefined && typeof usage.version !== 'string')))) {
-    throw new Error('[blocked] Saved storyboard skill provenance is invalid');
-  }
   return {
     document: parseStoryboardDocument(planned.document, expected.payload.sourceClaimIds, 'image'),
     promptHash: planned.promptHash,
-    designSkills: planned.designSkills as DesignSkillUsage[] | undefined,
+    designSkills: readDesignSkillUsage(planned.designSkills),
     ...(planned.reviewFormat === 2 ? { reviewFormat: 2 as const } : {}),
   };
+}
+
+/** An art correction is a candidate, never an approval of the resulting scientific meaning. */
+function readStoryboardAcceptance(result: unknown, original: StoryboardDocument,
+  expected: StoryboardCheckpointIdentity, taskId: string): StoryboardAcceptance | undefined {
+  const raw = result && typeof result === 'object' && !Array.isArray(result)
+    ? (result as Record<string, unknown>).storyboardAcceptanceCheckpoint : undefined;
+  if (raw === undefined) return undefined;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)
+    || Object.keys(raw).some(key => !['document', 'firstReview', 'submittedExecutionAttempt', 'review', 'designSkills'].includes(key)))
+    throw new Error('[blocked] Invalid storyboard acceptance checkpoint');
+  const saved = raw as StoryboardAcceptance;
+  const document = parseStoryboardDocument(saved.document, expected.payload.sourceClaimIds, 'image');
+  const withoutArt = (value: StoryboardDocument) => ({ ...value, scenes: value.scenes.map(scene => {
+    const { visualAction: _visualAction, illustration, ...rest } = scene;
+    if (!illustration) return rest;
+    const { composition: _composition, treatment: _treatment, ...science } = illustration;
+    return { ...rest, illustration: science };
+  }) });
+  const validateReview = (review: StoryboardReview, candidate: StoryboardDocument) => {
+    if (!review || review.stage !== 'final-brief' || review.requestId !== taskId
+      || review.sourceEvidenceIdentity !== expected.sourceEvidenceIdentity
+      || review.candidateHash !== createHash('sha256').update(JSON.stringify(candidate)).digest('hex')
+      || !/^[a-f0-9]{64}$/u.test(review.promptHash) || !/^[a-f0-9]{64}$/u.test(review.responseHash)
+      || !['accepted', 'blocked', 'revised'].includes(review.decision) || !review.summary?.trim())
+      throw new Error('[blocked] Storyboard acceptance receipt changed');
+  };
+  validateReview(saved.firstReview, original);
+  if (saved.firstReview.decision !== 'revised' || !isDeepStrictEqual(withoutArt(original), withoutArt(document))
+    || isDeepStrictEqual(original, document)
+    || (saved.submittedExecutionAttempt !== undefined && (!Number.isSafeInteger(saved.submittedExecutionAttempt) || saved.submittedExecutionAttempt < 1)))
+    throw new Error('[blocked] Storyboard acceptance inputs changed');
+  if (saved.review) {
+    if (saved.submittedExecutionAttempt === undefined) throw new Error('[blocked] Storyboard acceptance submission is missing');
+    validateReview(saved.review, document);
+  }
+  return { ...saved, document, designSkills: readDesignSkillUsage(saved.designSkills) };
 }
 
 type StoryboardPlanningContext = {
   base: Awaited<ReturnType<typeof requireStoryboardBase>>;
   revision: Awaited<ReturnType<typeof requireStoryboardRevisionTask>>;
+  imageRevision: Awaited<ReturnType<typeof requireStoryboardImageRevision>>;
   revisionContext?: StoryboardPlanningContext;
   identity: string | null;
 };
 async function readStoryboardPlanningContext(
-  prisma: Pick<Prisma.TransactionClient, 'presentationAsset' | 'agentTask'>,
+  prisma: Pick<Prisma.TransactionClient, 'presentationAsset' | 'agentTask' | 'hermesResearchRun' | 'auditLog'>,
   payload: PresentationGenerationPayload,
   actorId: string,
   depth = 0,
@@ -108,9 +157,11 @@ async function readStoryboardPlanningContext(
   if (depth > 2) throw new Error('[blocked] Storyboard revision depth exceeded');
   const base = await requireStoryboardBase(prisma, payload);
   const revision = await requireStoryboardRevisionTask(prisma, payload, actorId);
+  const imageRevision = await requireStoryboardImageRevision(prisma, payload, actorId);
   const revisionContext = revision ? await readStoryboardPlanningContext(prisma, revision.payload, actorId, depth + 1) : undefined;
-  return { base, revision, revisionContext,
-    identity: revision ? JSON.stringify({ revision: revision.identity, base: revisionContext?.identity ?? null }) : base?.identity ?? null };
+  return { base, revision, imageRevision, revisionContext,
+    identity: imageRevision ? imageRevision.identity
+      : revision ? JSON.stringify({ revision: revision.identity, base: revisionContext?.identity ?? null }) : base?.identity ?? null };
 }
 
 async function readReviewedPresentationEvidence(
@@ -218,24 +269,34 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
     const saved = await requireSavedImageForReview(prisma, payload, input.requestId, source.candidateHash, source.sourceEvidenceIdentity, parent.identity);
     if ((saved.provenance as Record<string, unknown>).contentType !== attachment.mediaType) throw new Error('[blocked] Image review content type changed');
     await requireSceneImageRevision(prisma, payload);
-  } else if ((await readStoryboardPlanningContext(prisma, payload, input.authorizationContext.actorId)).identity !== snapshot.baseIdentity) {
-    throw new Error('[blocked] Illustration base changed');
+  } else {
+    const planning = await readStoryboardPlanningContext(prisma, payload, input.authorizationContext.actorId);
+    if (planning.identity !== snapshot.baseIdentity
+      || (planning.imageRevision && planning.imageRevision.sourceEvidenceIdentity !== source.sourceEvidenceIdentity))
+      throw new Error('[blocked] Illustration base or reviewed image evidence changed');
   }
-  if (source.kind === 'illustration-plan' && payload.storyboard?.narrative) {
+  if (source.kind === 'illustration-plan') {
     // Metadata only under the existing submission transaction. SourceMap bytes were
     // loaded outside it; re-use the exact source identity saved with this candidate.
-    const currentSource = await readVisualNarrativeSource(prisma, {
+    const currentSource = payload.storyboard?.narrative ? await readVisualNarrativeSource(prisma, {
       userId: input.authorizationContext.actorId, workspaceId: input.authorizationContext.workspaceId,
       researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds,
-    });
-    const saved = readStoryboardCheckpoint(owner.result, {
+    }) : undefined;
+    const identity = {
       payload, sourceEvidenceIdentity: source.sourceEvidenceIdentity,
       claimContent: snapshot.claimContent, baseIdentity: snapshot.baseIdentity,
-      narrativeSourceIdentity: currentSource.identity,
-    });
-    if (!saved?.document.narrative || createHash('sha256').update(JSON.stringify(saved.document)).digest('hex') !== source.candidateHash)
-      throw new Error('[blocked] Narrative review candidate does not match its saved current paper context');
-    await requireNarrativeOriginals(prisma, payload, saved.document);
+      ...(currentSource ? { narrativeSourceIdentity: currentSource.identity } : {}),
+    };
+    const saved = readStoryboardCheckpoint(owner.result, identity);
+    if (!saved) throw new Error('[blocked] Illustration review candidate checkpoint is missing');
+    const acceptance = readStoryboardAcceptance(owner.result, saved.document, identity, owner.id);
+    if (acceptance && (acceptance.review || acceptance.submittedExecutionAttempt !== owner.executionAttempt))
+      throw new Error('[blocked] Illustration acceptance submission is not current');
+    const candidate = acceptance?.document ?? saved.document;
+    if (Boolean(candidate.narrative) !== Boolean(payload.storyboard?.narrative)
+      || createHash('sha256').update(JSON.stringify(candidate)).digest('hex') !== source.candidateHash)
+      throw new Error('[blocked] Illustration review candidate does not match its saved context');
+    await requireNarrativeOriginals(prisma, payload, candidate);
   }
 }
 
@@ -350,6 +411,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if (storyboardDocument) await requireNarrativeOriginals(prisma, payload, storyboardDocument);
     };
     const planningContext = await readStoryboardPlanningContext(deps.prisma, payload, scope.userId);
+    if (planningContext.imageRevision && planningContext.imageRevision.sourceEvidenceIdentity !== sourceEvidenceIdentity)
+      throw new Error('[blocked] Reviewed image evidence changed before scientific replanning');
     const base = planningContext.base;
     const sceneParent = await requireSceneImageParent(deps.prisma, payload);
     const sceneRevision = await requireSceneImageRevision(deps.prisma, payload);
@@ -438,6 +501,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     let videoProvenance: Record<string, unknown> | undefined;
     let designSkills: DesignSkillUsage[] | undefined;
     let illustrationReview: Awaited<ReturnType<typeof reviewIllustrationStoryboard>>['provenance'] | undefined;
+    let illustrationRevisionReview: StoryboardReview | undefined;
     if (payload.video && videoParents) {
       const user = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
       if (user?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] isolated video generation is unavailable');
@@ -521,7 +585,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     } else if (payload.storyboard) {
       if (!options.gateway) throw new Error('[blocked] storyboard planner unavailable');
       let planned: StoryboardPlan;
-      let persistPlan: ((planned: StoryboardPlan, review?: Awaited<ReturnType<typeof reviewIllustrationStoryboard>>['provenance']) => Promise<void>) | undefined;
+      let acceptance: StoryboardAcceptance | undefined;
+      let persistPlan: ((planned: StoryboardPlan, review?: StoryboardReview, acceptance?: StoryboardAcceptance) => Promise<void>) | undefined;
       if (payload.storyboard.output === 'image') {
         if (!options.gateway.reviewScientific) throw new Error('[blocked] Illustration scientific review unavailable');
         if (owner.deletedAt || owner.session.deletedAt || owner.session.status !== 'active'
@@ -567,7 +632,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           ...(narrativeSource ? { narrativeSourceIdentity: narrativeSource.identity } : {}),
         };
         let expectedResult = owner.result;
-        persistPlan = async (planned, review) => {
+        persistPlan = async (planned, review, acceptance) => {
           const checkpoint = { ...identity, planned };
           // Persist the paid plan before Chat review. A failed review must not restart planning.
           await deps.prisma.$transaction(async tx => {
@@ -601,11 +666,13 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
               payload: { equals: owner.payload as Prisma.InputJsonValue },
               result: { equals: expectedResult === null ? Prisma.AnyNull : expectedResult as Prisma.InputJsonValue },
             }, data: { result: JSON.parse(JSON.stringify({ ...(expectedResult as Record<string, unknown> | null),
-              storyboardCheckpoint: checkpoint, ...(review ? { storyboardReview: review } : {}) })) as Prisma.InputJsonValue } });
+              storyboardCheckpoint: checkpoint, ...(review ? { storyboardReview: review } : {}),
+              ...(acceptance ? { storyboardAcceptanceCheckpoint: acceptance } : {}) })) as Prisma.InputJsonValue } });
             if (savedCheckpoint.count !== 1) throw new Error('[blocked] Storyboard checkpoint owner changed');
           }, { isolationLevel: 'Serializable' });
           expectedResult = JSON.parse(JSON.stringify({ ...(expectedResult as Record<string, unknown> | null),
-            storyboardCheckpoint: checkpoint, ...(review ? { storyboardReview: review } : {}) }));
+            storyboardCheckpoint: checkpoint, ...(review ? { storyboardReview: review } : {}),
+            ...(acceptance ? { storyboardAcceptanceCheckpoint: acceptance } : {}) }));
         };
         const saved = readStoryboardCheckpoint(owner.result, identity);
         if (saved) {
@@ -614,7 +681,11 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           if (task.executionAttempt > 1) {
             throw new Error('[blocked] Previous paid storyboard attempt has no saved plan; explicit new planning is required');
           }
-          if (planningContext.revision) {
+          if (planningContext.imageRevision) {
+            const rejected = planningContext.imageRevision;
+            planned = await generateStoryboard(options.gateway, claims, payload.storyboard,
+              rejected.view, paperOriginals, narrativeSource?.context, { summary: rejected.feedback, issues: [] });
+          } else if (planningContext.revision) {
             const previous = readStoryboardCheckpoint(planningContext.revision.task.result, {
               payload: planningContext.revision.payload, sourceEvidenceIdentity,
               claimContent: presentationClaimContent(claims), baseIdentity: planningContext.revisionContext?.identity ?? null,
@@ -638,6 +709,9 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           planned.reviewFormat = 2;
           await persistPlan(planned);
         }
+        const priorBlocked = expectedResult && typeof expectedResult === 'object' && !Array.isArray(expectedResult)
+          ? (expectedResult as Record<string, unknown>).storyboardReview : undefined;
+        if (priorBlocked === undefined) acceptance = readStoryboardAcceptance(expectedResult, planned.document, identity, task.id);
       } else {
         planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view);
       }
@@ -654,13 +728,47 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           readStoredIllustrationIssues(priorReview, planned.document, claims, task.id, sourceEvidenceIdentity);
           throw new Error('[blocked] Illustration needs upstream scientific revision: ' + (priorReview as { summary: string }).summary.slice(0, 300));
         }
-        const reviewed = await reviewIllustrationStoryboard({ reviewScientific: options.gateway.reviewScientific.bind(options.gateway) }, claims, payload.storyboard, planned.document, {
+        const reviewContext = {
           authorizationContext: Object.freeze({ taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId }),
           illustrationContext: { executionAttempt: task.executionAttempt, claimContent: presentationClaimContent(claims), baseIdentity: planningContext.identity },
           researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceEvidenceIdentity,
           structuredIssues: planned.reviewFormat === 2,
           narrativeSource: narrativeSource?.context,
-        });
+        };
+        const gateway = { reviewScientific: options.gateway.reviewScientific.bind(options.gateway) };
+        let reviewed: { document: StoryboardDocument; provenance: StoryboardReview; designSkills: DesignSkillUsage[] } | undefined = acceptance ? undefined
+          : await reviewIllustrationStoryboard(gateway, claims, payload.storyboard, planned.document, reviewContext);
+        if (reviewed?.provenance.decision === 'revised') {
+          acceptance = { document: reviewed.document, firstReview: reviewed.provenance, designSkills: reviewed.designSkills };
+          await persistPlan!(planned, undefined, acceptance);
+          designSkills = mergeDesignSkillUsage(designSkills, reviewed.designSkills);
+        }
+        if (acceptance) {
+          illustrationRevisionReview = acceptance.firstReview;
+          designSkills = mergeDesignSkillUsage(designSkills, acceptance.designSkills ?? []);
+          if (acceptance.review) {
+            reviewed = { document: acceptance.document, provenance: acceptance.review, designSkills: [] };
+          } else {
+            // Record before invoking the provider: a crash in this window is uncertain,
+            // never permission to repeat a paid acceptance call on worker restart.
+            if (acceptance.submittedExecutionAttempt !== undefined)
+              throw new Error('[blocked] Illustration acceptance outcome is uncertain; preserve the submitted candidate');
+            acceptance = { ...acceptance, submittedExecutionAttempt: task.executionAttempt };
+            await persistPlan!(planned, undefined, acceptance);
+            reviewed = await reviewIllustrationStoryboard(gateway, claims, payload.storyboard, acceptance.document,
+              { ...reviewContext, acceptanceOnly: true });
+            acceptance = { ...acceptance, review: reviewed.provenance,
+              designSkills: mergeDesignSkillUsage(acceptance.designSkills, reviewed.designSkills) };
+            await persistPlan!(planned, undefined, acceptance);
+          }
+          if (reviewed.provenance.decision === 'revised')
+            throw new Error('[blocked] Final illustration acceptance requested another revision');
+          if (reviewed.provenance.decision === 'blocked') {
+            await persistPlan!({ ...planned, document: acceptance.document }, reviewed.provenance);
+            throw new Error('[blocked] Illustration needs upstream scientific revision: ' + reviewed.provenance.summary.slice(0, 300));
+          }
+        }
+        if (!reviewed) throw new Error('[blocked] Illustration review is missing');
         if (reviewed.provenance.decision === 'blocked') {
           await persistPlan!(planned, reviewed.provenance);
           throw new Error('[blocked] Illustration needs upstream scientific revision: ' + reviewed.provenance.summary.slice(0, 300));
@@ -713,6 +821,17 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if (illustrationReview) {
         await requireHermesAuthority(tx);
         await requireIllustrationOriginalArtifacts(tx, sourceEvidence, researchObject.workspaceId);
+        if (illustrationRevisionReview) {
+          const identity = { payload, sourceEvidenceIdentity, claimContent: presentationClaimContent(claims),
+            baseIdentity: planningContext.identity, ...(narrativeSource ? { narrativeSourceIdentity: narrativeSource.identity } : {}) };
+          const saved = readStoryboardCheckpoint(currentTask.result, identity);
+          const accepted = saved && readStoryboardAcceptance(currentTask.result, saved.document, identity, task.id);
+          if (!accepted || accepted.review?.decision !== 'accepted'
+            || !isDeepStrictEqual(accepted.review, illustrationReview)
+            || !isDeepStrictEqual(accepted.firstReview, illustrationRevisionReview)
+            || !isDeepStrictEqual(accepted.document, storyboardDocument))
+            throw new Error('[blocked] Final storyboard acceptance changed before completion');
+        }
       }
       // withPresentationAssetWrite holds the shared storage-reference lock through upload and row creation.
       await tx.trashObjectCleanup.updateMany({ where: { objectKey }, data: { state: 'retained', lastError: null } });
@@ -720,7 +839,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       const created = await tx.presentationAsset.create({ data: {
         id: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind,
         objectKey, contentHash, generator, generatorVersion, promptHash, label: PRESENTATION_ASSET_LABEL,
-        provenance: { ...(scientificMedia ? { sourceEvidenceIdentity, sourceEvidenceIds: sourceEvidence.map((row) => row.id) } : {}), source: payload.sceneImage ? 'approved_storyboard_scene' : payload.video ? 'approved_storyboard_video' : 'verified_claims', ...(payload.sceneImage && sceneParent ? { subtype: 'storyboard_scene_image', sceneImage: { ...payload.sceneImage }, parentIdentity: sceneParent.identity, storyboardContentHash: sceneParent.contentHash, ...(sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]?.paperOriginal ? { paperOriginal: { sourceAssetId: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.assetId, sourceContentHash: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.contentHash, sourceObjectKey: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.objectKey } } : {}) } : {}), ...(videoProvenance ?? {}), ...(illustrationReview ? { illustrationReview } : {}), ...(designSkills ? { designSkills } : {}), ...(styleReference ? { styleReference: { assetId: styleReference.id, contentHash: styleReference.contentHash, role: 'style' } } : {}), ...(sceneParent?.view.document.scenes[payload.sceneImage!.sceneIndex]?.illustration ? { illustrationCompilation: { skill: 'openscience-research-illustration', version: '6', mode: 'structured_brief' } } : {}), taskId: task.id, sourceClaimIds: payload.sourceClaimIds, contentType, ...(storyboardDocument && payload.storyboard ? { subtype: 'sourced_storyboard', storyboardDocument: JSON.parse(JSON.stringify(storyboardDocument)), storyboardSettings: JSON.parse(JSON.stringify(payload.storyboard)) } : {}) },
+        provenance: { ...(scientificMedia ? { sourceEvidenceIdentity, sourceEvidenceIds: sourceEvidence.map((row) => row.id) } : {}), source: payload.sceneImage ? 'approved_storyboard_scene' : payload.video ? 'approved_storyboard_video' : 'verified_claims', ...(payload.sceneImage && sceneParent ? { subtype: 'storyboard_scene_image', sceneImage: { ...payload.sceneImage }, parentIdentity: sceneParent.identity, storyboardContentHash: sceneParent.contentHash, ...(sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]?.paperOriginal ? { paperOriginal: { sourceAssetId: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.assetId, sourceContentHash: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.contentHash, sourceObjectKey: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.objectKey } } : {}) } : {}), ...(videoProvenance ?? {}), ...(illustrationReview ? { illustrationReview } : {}), ...(illustrationRevisionReview ? { illustrationRevisionReview } : {}), ...(designSkills ? { designSkills } : {}), ...(styleReference ? { styleReference: { assetId: styleReference.id, contentHash: styleReference.contentHash, role: 'style' } } : {}), ...(sceneParent?.view.document.scenes[payload.sceneImage!.sceneIndex]?.illustration ? { illustrationCompilation: { skill: 'openscience-research-illustration', version: '6', mode: 'structured_brief' } } : {}), taskId: task.id, sourceClaimIds: payload.sourceClaimIds, contentType, ...(storyboardDocument && payload.storyboard ? { subtype: 'sourced_storyboard', storyboardDocument: JSON.parse(JSON.stringify(storyboardDocument)), storyboardSettings: JSON.parse(JSON.stringify(payload.storyboard)) } : {}) },
       } });
       await tx.presentationAssetClaim.createMany({ data: payload.sourceClaimIds.map((claimId) => ({ presentationAssetId: created.id, claimId, researchObjectId: payload.researchObjectId, versionId: payload.versionId })) });
       if (storyboardDocument) await deps.audit?.record({ actorId: scope.userId, action: 'presentation_asset.generated', workspaceId: researchObject.workspaceId, targetType: 'presentation_asset', targetId: created.id, metadata: { taskId: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, subtype: 'sourced_storyboard', baseAssetId: payload.storyboard?.baseAssetId ?? null } }, tx);

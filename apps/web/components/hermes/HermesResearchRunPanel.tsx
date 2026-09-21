@@ -66,6 +66,8 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const mounted = React.useRef(false);
   React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [granting, setGranting] = React.useState(false);
+  const grantInFlight = React.useRef(false);
+  const grantRequest = React.useRef<{ actorId: string; runId: string; version: number; key: string } | null>(null);
   const [retrying, setRetrying] = React.useState(false);
   const retryRequest = React.useRef<{ actorId: string; runId: string; version: number; key: string } | null>(null);
   const retryInFlight = React.useRef(false);
@@ -275,16 +277,31 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   }, [selectedTask, actorId, restoredOwner, owner, resolvedSource, sourceScope, guideTaskId, guided, guideLoading, generationLocale, style, instruction, researchObjectId, onRunCreated, t]);
 
   async function upgradeGenerationGrant() {
-    if (!run || granting) return;
+    if (!run || grantInFlight.current || !actorId || run.actorId !== actorId) return;
+    const requestedActor = actorId;
+    const requestedRun = run;
+    const previous = grantRequest.current;
+    const current = previous?.actorId === actorId && previous.runId === run.id && previous.version === run.version
+      ? previous : { actorId, runId: run.id, version: run.version, key: crypto.randomUUID() };
+    grantRequest.current = current;
+    grantInFlight.current = true;
     setGranting(true); setError('');
     try {
-      const result = await authorizeHermesGenerationGrant(researchObjectId, run.id, run.version);
+      const viewer = await getCurrentUser({ fresh: true });
+      if (!mounted.current || viewer.userId !== requestedActor || actorRef.current !== requestedActor
+        || visibleRun.current?.id !== requestedRun.id || visibleRun.current.version !== requestedRun.version)
+        throw new Error(t('narrative.identityChanged'));
+      const result = await authorizeHermesGenerationGrant(researchObjectId, requestedRun.id, requestedRun.version,
+        requestedRun.canAuthorizeNarrativeCorrection ? { profile: 'visual-narrative-v1', maxAgentTasks: 11, idempotencyKey: current.key } : undefined);
+      if (!mounted.current || actorRef.current !== requestedActor || visibleRun.current?.id !== requestedRun.id) return;
       setRun(result.run);
       onRunUpdated?.(result.run);
     } catch (cause) {
-      setError(cause instanceof ApiClientError ? cause.message : t('grantError'));
+      if (mounted.current && actorRef.current === requestedActor && visibleRun.current?.id === requestedRun.id)
+        setError(cause instanceof Error ? cause.message : t('grantError'));
     } finally {
-      setGranting(false);
+      grantInFlight.current = false;
+      if (mounted.current) setGranting(false);
     }
   }
 
@@ -357,8 +374,12 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       <p className="font-semibold text-os-ink" role="status">{t(`narrative.status.${narrativeStage}`)}</p>
       <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(terminal ? 'narrative.incompleteDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
       {imageSteps.length ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('narrative.imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
+      {run.canAuthorizeNarrativeCorrection ? <div className="mt-4">
+        <p className="text-sm leading-6 text-os-muted-paper">{t('narrative.correctionGrantDescription')}</p>
+        <button type="button" disabled={granting || retrying} onClick={() => void upgradeGenerationGrant()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(granting ? 'granting' : 'narrative.authorizeCorrection')}</button>
+      </div> : null}
       {run.canRetryGeneration ? <div className="mt-4">
-        <p className="text-sm leading-6 text-os-muted-paper">{t(run.versionId ? 'narrative.resumeMediaDescription' : 'narrative.resumeDescription')}</p>
+        <p className="text-sm leading-6 text-os-muted-paper">{t(run.maxAgentTasks === 11 ? 'narrative.resumeCorrectionDescription' : run.versionId ? 'narrative.resumeMediaDescription' : 'narrative.resumeDescription')}</p>
         <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : 'narrative.resume')}</button>
       </div> : null}
       <details className="mt-4 text-sm text-os-muted-paper"><summary className="min-h-11 cursor-pointer py-3">{t('narrative.details')}</summary>{steps}</details>

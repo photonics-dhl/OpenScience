@@ -90,6 +90,10 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
       || ![ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE].includes(authority.profile as HermesPresentationAuthority['profile'])) throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes run authority is invalid');
     hermesRunAuthority = authority as unknown as HermesPresentationAuthority;
   }
+  if (storyboard?.revisionImageAssetId && (!hermesRunAuthority || hermesRunAuthority.profile !== VISUAL_NARRATIVE_PROFILE
+    || hermesRunAuthority.stage !== 'storyboard' || hermesRunAuthority.ordinal !== 0)) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Image-driven scientific revision requires its bounded Hermes run');
+  }
   return { ...(sceneImage ? { sceneImage } : {}), ...(storyboard ? { storyboard } : {}), ...(video ? { video } : {}), ...(hermesRunAuthority ? { hermesRunAuthority } : {}), schemaVersion: 1, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind as PresentationGenerationKind, sourceClaimIds };
 }
 
@@ -165,7 +169,7 @@ async function hasHermesAssetReviewAuthority(
   const step = await prisma.hermesResearchStep.findFirst({
     where: { presentationAssetId: input.assetId, status: 'awaiting_approval', run: {
       actorId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId,
-      OR: [{ profile: ONCHIP_FIELD_SAMPLING_PROFILE, maxAgentTasks: 7 }, { profile: CONTENT_DRIVEN_PROFILE, maxAgentTasks: 8 }, { profile: CONTENT_DRIVEN_IMAGE_PROFILE, maxAgentTasks: 7 }, { profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9 }],
+      OR: [{ profile: ONCHIP_FIELD_SAMPLING_PROFILE, maxAgentTasks: 7 }, { profile: CONTENT_DRIVEN_PROFILE, maxAgentTasks: 8 }, { profile: CONTENT_DRIVEN_IMAGE_PROFILE, maxAgentTasks: 7 }, { profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: { in: [9, 11] } }],
       status: { in: ['awaiting_scene_images_review', 'awaiting_video_review'] },
     } }, include: { run: true },
   });
@@ -321,7 +325,7 @@ export async function transitionHermesPresentationAsset(deps: AgentDeps, input: 
   }
   await transitionPresentationAssetUnderReview(deps, { userId: run.actorId, researchObjectId: run.researchObjectId,
     versionId: run.versionId, assetId: asset.id, expectedUpdatedAt: asset.updatedAt,
-    status: review.decision === 'blocked' ? 'rejected' : 'approved' }, {}, run.id);
+    status: review.decision === 'blocked' || (run.maxAgentTasks === 11 && asset.kind !== 'image' && review.decision !== 'accepted') ? 'rejected' : 'approved' }, {}, run.id);
 }
 
 async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
@@ -341,7 +345,7 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
       const expectedStatus = stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_storyboard_review';
       const ids = (await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } })).map(link => link.claimId).sort();
       const taskPayload = task ? parsePresentationGenerationPayload(task.payload) : undefined;
-      if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || run.status !== expectedStatus
+      if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || ![9, 11].includes(run.maxAgentTasks ?? 0) || run.status !== expectedStatus
         || run.actorId !== input.userId || run.researchObjectId !== input.researchObjectId || run.versionId !== input.versionId
         || !step || step.status !== 'awaiting_approval' || task?.status !== 'succeeded' || task.deletedAt
         || taskPayload?.hermesRunAuthority?.runId !== run.id || taskPayload.hermesRunAuthority.stage !== stage
@@ -354,7 +358,7 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
           || review.provider !== 'chatgpt-web-science-review' || typeof review.model !== 'string' || !review.model
           || !['accepted', 'blocked'].includes(String(review.decision))) : (review.stage !== 'final-brief'
           || !['accepted', 'revised', 'blocked'].includes(String(review.decision))))
-        || (input.status === 'approved') !== (review.decision !== 'blocked')) {
+        || (input.status === 'approved') !== (stage === 'storyboard' && run.maxAgentTasks === 11 ? review.decision === 'accepted' : review.decision !== 'blocked')) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes internal review does not match the current candidate and grant');
       }
     }
@@ -459,6 +463,88 @@ export async function requireStoryboardBase(prisma: Pick<Prisma.TransactionClien
         || view.document.scenes.some(scene => scene.illustration?.schemaVersion !== 2 || (!view.document.narrative && scene.paperOriginal))))
         throw new PresentationAssetError('VALIDATION_ERROR', 'Art revision requires a structured image plan in the same language and narrative scope; legacy paper originals require a re-render plan');
     return { view, identity: JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids }) };
+}
+
+/** Read the exact historical image rejection and its original narrative; this grants no execution authority. */
+export async function readNarrativeImageReplanSource(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset'>, input: {
+    actorId: string; runId: string; researchObjectId: string; versionId: string; sourceClaimIds: string[]; imageAssetId: string;
+}) {
+    const image = await prisma.presentationAsset.findUnique({ where: { id: input.imageAssetId }, include: { sourceClaims: { select: { claimId: true } } } });
+    const imageTask = await prisma.agentTask.findUnique({ where: { id: input.imageAssetId }, include: { session: true } });
+    const sceneImage = image && presentationSceneImageView(image);
+    const p = recordValue(image?.provenance);
+    const review = recordValue(p.imageReview);
+    const expectedIds = [...input.sourceClaimIds].sort();
+    if (!image || image.deletedAt || image.kind !== 'image' || image.status !== 'rejected'
+        || image.researchObjectId !== input.researchObjectId || image.versionId !== input.versionId
+        || !sceneImage || sceneImage.sceneIndex !== 0 || sceneImage.revisionAssetId
+        || p.taskId !== image.id || p.source !== 'approved_storyboard_scene'
+        || !isDeepStrictEqual(image.sourceClaims.map(link => link.claimId).sort(), expectedIds)
+        || review.stage !== 'generated-image' || review.decision !== 'blocked' || review.repairInstruction !== null
+        || review.requestId !== image.id || review.contentHash !== image.contentHash || review.parentIdentity !== p.parentIdentity
+        || review.sourceEvidenceIdentity !== p.sourceEvidenceIdentity || review.provider !== 'chatgpt-web-science-review'
+        || typeof review.model !== 'string' || !review.model.trim()
+        || typeof review.summary !== 'string' || !review.summary.trim() || review.summary.length > 2000
+        || ![review.promptHash, review.responseHash, p.sourceEvidenceIdentity].every(value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value))) {
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative image rejection is not eligible for scientific replanning');
+    }
+    const parent = await prisma.presentationAsset.findUnique({ where: { id: sceneImage.storyboardAssetId }, include: { sourceClaims: { select: { claimId: true } } } });
+    const task = await prisma.agentTask.findUnique({ where: { id: sceneImage.storyboardAssetId }, include: { session: true } });
+    for (const candidate of [task, imageTask]) {
+        if (!candidate || candidate.deletedAt || candidate.kind !== 'presentation.generate' || candidate.status !== 'succeeded'
+            || candidate.session.deletedAt || candidate.session.status !== 'active' || candidate.session.userId !== input.actorId
+            || candidate.session.researchObjectId !== input.researchObjectId) throw new PresentationAssetError('NOT_FOUND', 'Narrative revision source task unavailable');
+    }
+    const payload = parsePresentationGenerationPayload(task!.payload);
+    const imagePayload = parsePresentationGenerationPayload(imageTask!.payload);
+    const parentProof = await requireSceneImageParent(prisma, { ...input, sceneImage });
+    const parentProvenance = recordValue(parent?.provenance);
+    const parentReview = recordValue(parentProvenance.illustrationReview);
+    if (!parent || !parentProof || parentProvenance.taskId !== parent.id || parentProvenance.source !== 'verified_claims'
+        || parentReview.stage !== 'final-brief' || parentReview.decision !== 'revised' || parentReview.acceptance != null
+        || parentProvenance.illustrationRevisionReview != null
+        || parentReview.requestId !== parent.id || parentReview.sourceEvidenceIdentity !== p.sourceEvidenceIdentity
+        || ![parentReview.promptHash, parentReview.responseHash].every(value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value))
+        || parentProof.identity !== p.parentIdentity || parent.contentHash !== p.storyboardContentHash
+        || parentProof.sourceEvidenceIdentity !== p.sourceEvidenceIdentity || !parentProof.view.document.narrative
+        || parentProof.view.document.scenes.length !== 1 || parentProof.view.document.scenes[0]!.paperOriginal
+        || payload.researchObjectId !== input.researchObjectId || payload.versionId !== input.versionId
+        || !isDeepStrictEqual(payload.sourceClaimIds, expectedIds) || !payload.storyboard?.narrative || payload.storyboard.output !== 'image'
+        || payload.storyboard.revisionTaskId || payload.storyboard.revisionImageAssetId || payload.storyboard.baseAssetId
+        || !isDeepStrictEqual(payload.hermesRunAuthority, { runId: input.runId, stage: 'storyboard', ordinal: 0, profile: VISUAL_NARRATIVE_PROFILE })
+        || imagePayload.researchObjectId !== input.researchObjectId || imagePayload.versionId !== input.versionId
+        || !isDeepStrictEqual(imagePayload.sourceClaimIds, expectedIds) || !isDeepStrictEqual(imagePayload.sceneImage, sceneImage)
+        || !isDeepStrictEqual(imagePayload.hermesRunAuthority, { runId: input.runId, stage: 'scene_image', ordinal: 0, profile: VISUAL_NARRATIVE_PROFILE })) {
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative image and original revised storyboard no longer match');
+    }
+    return { task: task!, payload, view: parentProof.view, parent, image, imageTask: imageTask!, feedback: review.summary,
+        reviewHash: review.responseHash as string, sourceEvidenceIdentity: p.sourceEvidenceIdentity as string,
+        identity: JSON.stringify({ parentIdentity: parentProof.identity, imageId: image.id, contentHash: image.contentHash,
+            imageProvenance: image.provenance, taskPayload: task!.payload, imageTaskPayload: imageTask!.payload }) };
+}
+
+/** The worker consumes image feedback only under the explicit same-run correction grant. */
+export async function requireStoryboardImageRevision(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'hermesResearchRun' | 'auditLog'>,
+    payload: PresentationGenerationPayload, actorId: string) {
+    const imageAssetId = payload.storyboard?.revisionImageAssetId;
+    if (!imageAssetId) return undefined;
+    const runId = payload.hermesRunAuthority?.runId;
+    const run = runId ? await prisma.hermesResearchRun.findUnique({ where: { id: runId }, include: { steps: true } }) : null;
+    if (!run || run.actorId !== actorId || run.researchObjectId !== payload.researchObjectId || run.versionId !== payload.versionId
+        || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 11 || run.status !== 'generating_storyboard'
+        || !isDeepStrictEqual([...run.sourceClaimIds].sort(), payload.sourceClaimIds)) throw new PresentationAssetError('VALIDATION_ERROR', 'Scientific replanning grant unavailable');
+    const source = await readNarrativeImageReplanSource(prisma, { actorId, runId: run.id, researchObjectId: payload.researchObjectId,
+        versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds, imageAssetId });
+    const receipts = await prisma.auditLog.findMany({ where: { action: 'hermes.research_run.generation_grant', targetType: 'hermes_research_run',
+        targetId: run.id, actorId, metadata: { path: ['correction'], equals: 'narrative_image_scientific_replan' } }, take: 2 });
+    const receipt = recordValue(receipts[0]?.metadata);
+    if (receipts.length !== 1 || receipt.previousMaxAgentTasks !== 9 || receipt.maxAgentTasks !== 11
+        || receipt.parentStoryboardAssetId !== source.parent.id || receipt.rejectedImageAssetId !== imageAssetId
+        || receipt.sourceIdentity !== source.identity || receipt.reviewHash !== source.reviewHash
+        || payload.storyboard?.narrativeSceneLimit !== 1 || payload.storyboard.locale !== source.payload.storyboard!.locale
+        || canonicalStoryboardStyle(payload.storyboard.style) !== canonicalStoryboardStyle(source.payload.storyboard!.style)
+        || payload.storyboard.instruction !== source.payload.storyboard!.instruction) throw new PresentationAssetError('VALIDATION_ERROR', 'Scientific replanning receipt changed');
+    return source;
 }
 
 /** Server-owned review feedback and a private checkpoint; the worker validates its contents and current sources. */
