@@ -321,15 +321,18 @@ export const HERMES_AUTHORITY_REARM_MARKER = 'hermes-authority-pre-provider-v1';
 /** Resume a saved plan whose first scientific-review request was blocked locally by input size. */
 async function inspectStoryboardCheckpointRecovery(tx: Prisma.TransactionClient, run: RunRow) {
   const budgetError = '[blocked] Illustration review sources exceed the input budget; select fewer Claims';
+  const outputError = 'Provider exhausted output allowance before producing text';
+  const outputContinuation = run.error === outputError;
   if (run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || run.status !== 'failed'
-    || !run.versionId || run.error !== budgetError || await validateReviewedSources(tx, run) !== 'ready') return null;
+    || !run.versionId || (!outputContinuation && run.error !== budgetError) || await validateReviewedSources(tx, run) !== 'ready') return null;
   const storyboards = run.steps.filter(step => step.stage === 'storyboard');
   if (storyboards.length !== 1 || run.steps.some(step => ['scene_image', 'video'].includes(step.stage))) return null;
   const step = storyboards[0]!;
   if (step.ordinal !== 0 || step.status !== 'failed' || !step.agentTaskId || step.presentationAssetId) return null;
   const task = await tx.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } });
   if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'failed'
-    || task.executionAttempt !== 1 || task.retryCount !== 0 || task.error !== budgetError
+    || task.executionAttempt !== (outputContinuation ? 2 : 1) || task.retryCount !== (outputContinuation ? 1 : 0)
+    || task.error !== run.error
     || task.session.deletedAt || task.session.status !== 'active' || task.session.userId !== run.actorId
     || task.session.researchObjectId !== run.researchObjectId
     || task.idempotencyKey !== `hermes-run:${run.id}:storyboard:0`) return null;
@@ -355,10 +358,36 @@ async function inspectStoryboardCheckpointRecovery(tx: Prisma.TransactionClient,
   if (presentations !== 1 || sourceCount + presentations + document.scenes.length + 1 > run.maxAgentTasks
     || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) return null;
   const calls = await tx.auditLog.findMany({ where: { requestId: task.id, action: 'ai.gateway.call' } });
-  if (!calls.length || calls.some(call => jsonRecord(call.metadata).operation !== 'text'
-    || jsonRecord(call.metadata).outcome !== 'succeeded')) return null;
+  const planningCalls = calls.filter(call => jsonRecord(call.metadata).operation === 'text');
+  const reviewCalls = calls.filter(call => jsonRecord(call.metadata).operation === 'scientific_review');
+  if (!planningCalls.length || planningCalls.some(call => jsonRecord(call.metadata).outcome !== 'succeeded')
+    || calls.length !== planningCalls.length + reviewCalls.length || reviewCalls.length !== (outputContinuation ? 1 : 0)) return null;
+  if (outputContinuation) {
+    const call = reviewCalls[0]!;
+    const meta = jsonRecord(call.metadata);
+    const blocks = jsonRecord(meta.responseBlockCounts);
+    if (call.actorId !== null || call.targetType !== 'ai_gateway' || meta.outcome !== 'failed' || meta.error !== 'provider_empty'
+      || meta.finishReason !== 'length' || meta.maxOutputTokens !== 16384 || meta.outputTokens !== 16384
+      || meta.requestedThinking !== 'adaptive' || blocks.text !== 0 || blocks.other !== 0
+      || typeof blocks.thinking !== 'number' || !Number.isSafeInteger(blocks.thinking) || blocks.thinking < 1
+      || meta.retryCount !== 0 || meta.fallbackReason !== null || meta.inputContentHash !== checkpoint.sourceEvidenceIdentity
+      || meta.selectionReason !== 'source_grounded_illustration_review'
+      || typeof meta.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(meta.promptHash)) return null;
+    const receipts = await tx.auditLog.findMany({ where: {
+      action: 'hermes.research_run.storyboard_checkpoint_resume', targetType: 'hermes_research_run', targetId: run.id,
+      actorId: run.actorId, metadata: { path: ['taskId'], equals: task.id },
+    }, take: 2 });
+    if (receipts.length !== 1 || receipts[0]!.createdAt >= call.createdAt) return null;
+    const prior = jsonRecord(receipts[0]!.metadata);
+    if (prior.stepId !== step.id || prior.previousExecutionAttempt !== 1 || prior.previousError !== budgetError
+      || prior.noReplanning !== true || prior.newTaskCount !== 0 || prior.noProviderSwitch !== true
+      || prior.planningPromptHash !== planned.promptHash || prior.sourceEvidenceIdentity !== checkpoint.sourceEvidenceIdentity
+      || prior.narrativeSourceIdentity !== checkpoint.narrativeSourceIdentity) return null;
+  }
   // The worker revalidates the full checkpoint, current sources and paper identity before any provider call.
-  return { task, step, checkpoint, planningAuditIds: calls.map(call => call.id) };
+  return { task, step, checkpoint, planningAuditIds: planningCalls.map(call => call.id),
+    recoveryAction: outputContinuation ? 'hermes.research_run.storyboard_output_resume' : 'hermes.research_run.storyboard_checkpoint_resume',
+    ...(outputContinuation ? { truncationAuditId: reviewCalls[0]!.id } : {}) };
 }
 
 type GenerationRecoveryPlan = {
@@ -708,7 +737,8 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
 
         if (run.profile === VISUAL_NARRATIVE_PROFILE) {
           const receipt = await tx.auditLog.findFirst({ where: {
-            action: 'hermes.research_run.storyboard_checkpoint_resume', targetType: 'hermes_research_run', targetId: run.id,
+            action: { in: ['hermes.research_run.storyboard_checkpoint_resume', 'hermes.research_run.storyboard_output_resume'] },
+            targetType: 'hermes_research_run', targetId: run.id,
             actorId: input.actorId, metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey },
           } });
           if (receipt) {
@@ -721,10 +751,11 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
           const saved = await inspectStoryboardCheckpointRecovery(tx, run);
           if (!saved) throw new HermesResearchRunError('SOURCE_NOT_READY', 'The saved storyboard cannot be resumed safely');
           const taskChanged = await tx.agentTask.updateMany({ where: {
-            id: saved.task.id, sessionId: saved.task.sessionId, status: 'failed', retryCount: 0, executionAttempt: 1,
+            id: saved.task.id, sessionId: saved.task.sessionId, status: 'failed', retryCount: saved.task.retryCount,
+            executionAttempt: saved.task.executionAttempt,
             error: saved.task.error, payload: { equals: saved.task.payload as Prisma.InputJsonValue },
             result: { equals: saved.task.result as Prisma.InputJsonValue },
-          }, data: { status: 'pending', progress: 0, retryCount: 1, error: null, dispatchedAt: null } });
+          }, data: { status: 'pending', progress: 0, retryCount: saved.task.retryCount + 1, error: null, dispatchedAt: null } });
           const stepChanged = await tx.hermesResearchStep.updateMany({ where: {
             id: saved.step.id, runId: run.id, stage: 'storyboard', ordinal: 0, status: 'failed',
             agentTaskId: saved.task.id, presentationAssetId: null,
@@ -735,10 +766,11 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
           if (taskChanged.count !== 1 || stepChanged.count !== 1 || runChanged.count !== 1)
             throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Saved storyboard changed while continuing');
           await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId,
-            action: 'hermes.research_run.storyboard_checkpoint_resume', targetType: 'hermes_research_run', targetId: run.id,
+            action: saved.recoveryAction, targetType: 'hermes_research_run', targetId: run.id,
             metadata: { requestDigest, clientIdempotencyKey: input.idempotencyKey, expectedVersion: input.expectedVersion,
               taskId: saved.task.id, stepId: saved.step.id, previousExecutionAttempt: saved.task.executionAttempt,
               previousError: saved.task.error, planningAuditIds: saved.planningAuditIds,
+              ...(saved.truncationAuditId ? { truncationAuditId: saved.truncationAuditId, continuedOutputAllowance: 32768 } : {}),
               planningPromptHash: jsonRecord(saved.checkpoint.planned).promptHash,
               sourceEvidenceIdentity: saved.checkpoint.sourceEvidenceIdentity,
               narrativeSourceIdentity: saved.checkpoint.narrativeSourceIdentity,

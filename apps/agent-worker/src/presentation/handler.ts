@@ -182,6 +182,10 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
   if (!('kind' in source) || !snapshot || (source.kind === 'illustration-plan' && input.attachments !== undefined)
     || input.requestId !== input.authorizationContext.taskId) throw new Error('[blocked] Invalid illustration review submission');
   const { owner, payload } = await requireIllustrationReviewAuthority(prisma, input.authorizationContext);
+  if (source.kind === 'illustration-plan' && (owner.executionAttempt > 3
+    || (owner.executionAttempt === 3 && owner.retryCount !== 2))) {
+    throw new Error('[blocked] Illustration review continuation is unavailable');
+  }
   if (source.kind === 'illustration-image' ? !needsGeneratedImageReview(payload)
     : payload.kind !== 'interactive_html' || payload.storyboard?.output !== 'image') {
     throw new Error('[blocked] Illustration review source does not match its task');
