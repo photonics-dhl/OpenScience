@@ -97,13 +97,14 @@ export function PresentationWorkbench({
         ? assets.find((candidate) => candidate.id === asset.sceneImage?.storyboardAssetId)?.storyboard
         : undefined;
       const scene = parentStoryboard?.document.scenes[asset.sceneImage?.sceneIndex ?? -1];
+      const narrativeScene = parentStoryboard?.document.narrative ? scene : undefined;
       const recordedLabel = asset.label.trim() && asset.label !== 'presentation_not_evidence' ? asset.label.trim() : '';
       return {
         id: asset.id,
         kind,
-        label: recordedLabel || scene?.title?.trim() || scene?.narration?.trim() || fallbackLabel,
+        label: narrativeScene?.title?.trim() || recordedLabel || scene?.title?.trim() || scene?.narration?.trim() || fallbackLabel,
         url: presentationAssetContentUrl(researchObjectId, version.versionId, asset.id),
-        description: `${t(`assetStatus.${asset.status}`)} · ${t('notEvidence')}`,
+        description: narrativeScene?.narration?.trim() || `${t(`assetStatus.${asset.status}`)} · ${t('notEvidence')}`,
       };
     };
     const imageSlides = mediaAssets.filter((asset) => asset.kind !== 'video' && asset.kind !== 'svg').sort((left, right) => {
