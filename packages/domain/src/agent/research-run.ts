@@ -15,6 +15,7 @@ import { parsePresentationGenerationPayload, readNarrativeImageReplanSource, tra
 import { parseStoryboardDocument, presentationStoryboardView } from '../assets/storyboard';
 import { presentationSceneImageView, requireSceneImageParent } from '../assets/scene-image';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
+import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 
 const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 const READY_INGESTION_STATES = new Set(['needs_review', 'confirmed', 'written']);
@@ -297,6 +298,8 @@ export async function getHermesResearchRun(
     if (correction) {
       if (run.maxAgentTasks === 9) view.canAuthorizeNarrativeCorrection = true;
       else { view.canRetryGeneration = true; view.chargeableAttempts = 3; }
+    } else if (await inspectNarrativeBlockedRevision(deps.prisma, run).catch(() => null)) {
+      view.canRetryGeneration = true; view.chargeableAttempts = 2;
     }
   }
   const imageSteps = run.steps.filter(step => step.stage === 'scene_image' && step.agentTaskId);
@@ -326,6 +329,7 @@ export async function getHermesResearchRun(
 const HERMES_AUTHORITY_ERROR = '[blocked] Hermes run authority is invalid';
 const NARRATIVE_CORRECTION_STOP = 'Internal review could not complete the narrative within the authorized correction budget';
 const NARRATIVE_CORRECTION = 'narrative_image_scientific_replan';
+const NARRATIVE_BLOCKED_REVISION = 'narrative_storyboard_scientific_revision';
 export const HERMES_AUTHORITY_REARM_MARKER = 'hermes-authority-pre-provider-v1';
 
 /** One explicit 9 -> 11 extension for a rejected image whose original revised plan was never accepted again. */
@@ -363,6 +367,116 @@ async function inspectNarrativeScientificReplan(tx: Prisma.TransactionClient, ru
       || meta.sourceIdentity !== source.identity || meta.reviewHash !== source.reviewHash || meta.newRunCount !== 0) return null;
   }
   return { ...source, storyboardStep, imageStep };
+}
+
+/** Spend the two remaining slots once, after the explicitly authorized replan was scientifically blocked. */
+async function inspectNarrativeBlockedRevision(tx: Prisma.TransactionClient, run: RunRow) {
+  const prefix = '[blocked] Illustration needs upstream scientific revision: ';
+  if (run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 11 || run.status !== 'stopped'
+    || !run.versionId || !run.error?.startsWith(prefix) || await validateReviewedSources(tx, run) !== 'ready') return null;
+  const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+  const storyboards = run.steps.filter(step => step.stage === 'storyboard');
+  const images = run.steps.filter(step => step.stage === 'scene_image');
+  const sourceCount = run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
+  if (!ro || ro.deletedAt || ro.status !== 'draft' || sourceCount !== 6 || run.steps.length !== 9
+    || run.steps.filter(step => step.stage === 'source_ingestion').length !== 1 || storyboards.length !== 1 || images.length !== 1) return null;
+  const step = storyboards[0]!;
+  const imageStep = images[0]!;
+  if (step.ordinal !== 0 || step.status !== 'stopped' || !step.agentTaskId || step.presentationAssetId
+    || imageStep.ordinal !== 0 || imageStep.status !== 'stopped' || !imageStep.agentTaskId
+    || imageStep.presentationAssetId !== imageStep.agentTaskId) return null;
+  const task = await tx.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } });
+  if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'failed' || task.error !== run.error
+    || task.executionAttempt !== 1 || task.retryCount !== 0 || task.session.deletedAt || task.session.status !== 'active'
+    || task.session.userId !== run.actorId || task.session.researchObjectId !== run.researchObjectId
+    || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) return null;
+  const payload = parsePresentationGenerationPayload(task.payload);
+  const source = await readNarrativeImageReplanSource(tx, { actorId: run.actorId, runId: run.id,
+    researchObjectId: run.researchObjectId, versionId: run.versionId, sourceClaimIds: run.sourceClaimIds, imageAssetId: imageStep.agentTaskId });
+  if (!isDeepStrictEqual(payload, { ...source.payload, storyboard: { ...source.payload.storyboard!,
+    revisionImageAssetId: source.image.id, narrativeSceneLimit: 1 } })
+    || task.idempotencyKey !== `hermes-run:${run.id}:storyboard:0:correction:${source.parent.id}`) return null;
+  const presentations = await tx.agentTask.findMany({ where: { kind: 'presentation.generate',
+    payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } }, select: { id: true } });
+  if (presentations.length !== 3 || sourceCount + presentations.length !== 9
+    || !presentations.every(item => [source.parent.id, source.image.id, task.id].includes(item.id))) return null;
+  const grants = await tx.auditLog.findMany({ where: { action: 'hermes.research_run.generation_grant',
+    targetType: 'hermes_research_run', targetId: run.id }, take: 2 });
+  const resumes = await tx.auditLog.findMany({ where: { action: 'hermes.research_run.generation_retry',
+    targetType: 'hermes_research_run', targetId: run.id }, take: 2 });
+  if (grants.length !== 1 || resumes.length !== 1) return null;
+  const grant = jsonRecord(grants[0]!.metadata);
+  const resume = jsonRecord(resumes[0]!.metadata);
+  if (grants[0]!.actorId !== run.actorId || resumes[0]!.actorId !== run.actorId
+    || [grant, resume].some(receipt => receipt.correction !== NARRATIVE_CORRECTION
+      || receipt.parentStoryboardAssetId !== source.parent.id || receipt.rejectedImageAssetId !== source.image.id
+      || receipt.reviewHash !== source.reviewHash || receipt.sourceIdentity !== source.identity || receipt.newRunCount !== 0)
+    || grant.previousMaxAgentTasks !== 9 || grant.maxAgentTasks !== 11
+    || resume.newTaskId !== task.id || resume.maxRemainingTasks !== 2) return null;
+  const result = jsonRecord(task.result);
+  const checkpoint = jsonRecord(result.storyboardCheckpoint);
+  const planned = jsonRecord(checkpoint.planned);
+  const acceptance = jsonRecord(result.storyboardAcceptanceCheckpoint);
+  const first = jsonRecord(acceptance.firstReview);
+  const review = jsonRecord(result.storyboardReview);
+  const hash = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+  if (Object.keys(result).sort().join(',') !== 'storyboardAcceptanceCheckpoint,storyboardCheckpoint,storyboardReview'
+    || Object.keys(checkpoint).sort().join(',') !== 'baseIdentity,claimContent,narrativeSourceIdentity,payload,planned,sourceEvidenceIdentity'
+    || !isDeepStrictEqual(checkpoint.payload, task.payload) || checkpoint.baseIdentity !== source.identity
+    || checkpoint.sourceEvidenceIdentity !== source.sourceEvidenceIdentity || typeof checkpoint.claimContent !== 'string'
+    || typeof checkpoint.narrativeSourceIdentity !== 'string' || !checkpoint.narrativeSourceIdentity
+    || planned.reviewFormat !== 2 || !hash(planned.promptHash) || acceptance.submittedExecutionAttempt !== task.executionAttempt
+    || !isDeepStrictEqual(acceptance.review, result.storyboardReview) || first.decision !== 'revised' || review.decision !== 'blocked'
+    || [first, review].some(item => item.stage !== 'final-brief' || item.requestId !== task.id
+      || item.sourceEvidenceIdentity !== source.sourceEvidenceIdentity || !hash(item.candidateHash)
+      || !hash(item.promptHash) || !hash(item.responseHash) || typeof item.summary !== 'string' || !item.summary.trim()
+      || item.summary.length > 6000 || (item.provider !== 'chatgpt-web-science-review'
+        && !(typeof item.provider === 'string' && /^minimax-key-[1-9]\d*-model-[1-9]\d*$/u.test(item.provider)))
+      || typeof item.model !== 'string' || !item.model.trim() || item.model.length > 200)
+    || task.error !== prefix + (review.summary as string).slice(0, 300)
+    || !Array.isArray(review.issues) || !review.issues.length || review.issues.length > 36) return null;
+  const document = parseStoryboardDocument(planned.document, payload.sourceClaimIds, 'image');
+  if (!document.narrative || document.scenes.length !== 1 || document.scenes[0]!.paperOriginal
+    || !isDeepStrictEqual(document, parseStoryboardDocument(acceptance.document, payload.sourceClaimIds, 'image'))
+    || review.candidateHash !== createHash('sha256').update(JSON.stringify(document)).digest('hex')) return null;
+  // Compare the existing checkpoint identities before reserving another task; the worker revalidates before every provider call.
+  const claims = await tx.claimNode.findMany({ where: { id: { in: run.sourceClaimIds }, researchObjectId: run.researchObjectId, versionId: run.versionId }, orderBy: { id: 'asc' } });
+  if (checkpoint.claimContent !== JSON.stringify(claims.map(({ id, parentClaimId, kind, statement, assessment, conditions, limitations, extractionStatus }) => ({
+    id, parentClaimId, kind, statement, assessment, conditions: [...conditions].sort(), limitations: [...limitations].sort(), extractionStatus,
+  })))) return null;
+  const sourceIngestionId = run.steps.find(item => item.stage === 'source_ingestion')!.ingestionTaskId;
+  const ingestion = sourceIngestionId ? await tx.ingestionTask.findUnique({ where: { id: sourceIngestionId },
+    include: { agentTask: true, artifact: true, batch: true } }) : null;
+  const version = await tx.version.findUnique({ where: { id: run.versionId }, include: { manifest: true } });
+  if (!ingestion?.agentTask || !version?.manifest || ingestion.state !== 'confirmed'
+    || ingestion.batch.userId !== run.actorId || ingestion.batch.researchObjectId !== run.researchObjectId
+    || ingestion.artifact.deletedAt || ingestion.artifact.bytesPurgedAt || ingestion.agentTask.deletedAt
+    || ingestion.agentTask.status !== 'succeeded') return null;
+  const sourceResult = jsonRecord(ingestion.agentTask.result);
+  if (checkpoint.narrativeSourceIdentity !== JSON.stringify({ versionId: version.id, manifestId: version.manifest.id,
+    core: version.manifest.coreJson, ingestionTaskId: ingestion.id, sourceTaskId: ingestion.agentTask.id,
+    sourceUpdatedAt: ingestion.agentTask.updatedAt, reviewResponseHash: jsonRecord(sourceResult.scientificReview).responseHash,
+    sourceMapRef: parseDocumentSourceMapReference(sourceResult.sourceMapRef) })) return null;
+  const evidence = (await tx.evidenceRecord.findMany({ where: { researchObjectId: run.researchObjectId, versionId: run.versionId,
+    claimId: { in: run.sourceClaimIds }, extractionStatus: 'succeeded', exactQuote: { not: null } }, orderBy: [{ claimId: 'asc' }, { id: 'asc' }] }))
+    .filter(row => { const origin = jsonRecord(claims.find(claim => claim.id === row.claimId)?.provenance); const provenance = jsonRecord(row.provenance);
+      return provenance.source === 'reviewed_ingestion' && provenance.sourceTaskId === (origin.sourceTaskLineage ?? origin.sourceTaskId); });
+  if (checkpoint.sourceEvidenceIdentity !== createHash('sha256').update(JSON.stringify(evidence.map(({ id, claimId, artifactId, contentHash,
+    exactQuote, relation, locator, extractionStatus, updatedAt, provenance }) => ({
+    id, claimId, artifactId, contentHash, exactQuote, relation, locator, extractionStatus, updatedAt, provenance,
+  })))).digest('hex')) return null;
+  for (const [index, raw] of review.issues.entries()) {
+    const issue = jsonRecord(raw);
+    if (issue.id !== `issue-${index + 1}` || issue.sceneIndex !== 0 || !['requires_replan', 'label_clarification'].includes(String(issue.kind))
+      || typeof issue.requiredMeaning !== 'string' || !issue.requiredMeaning.trim() || issue.requiredMeaning.length > 500
+      || !Array.isArray(issue.sources) || issue.sources.length > 8
+      || issue.sources.some(rawSource => { const value = jsonRecord(rawSource); return !evidence.some(row => row.id === value.evidenceId && row.claimId === value.claimId); })
+      || (issue.kind === 'requires_replan' ? issue.labelIndex !== null : (typeof issue.labelIndex !== 'number' || !Number.isInteger(issue.labelIndex)
+        || typeof document.scenes[0]!.illustration?.labels[issue.labelIndex] !== 'string' || !issue.sources.length))) return null;
+  }
+  const { revisionImageAssetId: _image, ...settings } = payload.storyboard!;
+  return { ...source, task, payload: { ...payload, storyboard: { ...settings, revisionTaskId: task.id, narrativeSceneLimit: 1 } },
+    imageStep, review, checkpoint, grantAuditId: grants[0]!.id, resumeAuditId: resumes[0]!.id };
 }
 
 /** Resume a saved plan whose first scientific-review request was blocked locally by input size. */
@@ -768,23 +882,29 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
               return { run, dispatchIds: [] as string[] };
             }
             if (run.version !== input.expectedVersion) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before scientific correction');
-            const proof = await inspectNarrativeScientificReplan(tx, run);
+            const revision = await inspectNarrativeBlockedRevision(tx, run);
+            const proof = revision ?? await inspectNarrativeScientificReplan(tx, run);
             if (!proof) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Scientific correction is unavailable or already consumed');
             const fenced = await tx.hermesResearchRun.updateMany({ where: { id: run.id, actorId: input.actorId, version: input.expectedVersion,
               status: 'stopped', profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 11, versionId: run.versionId },
             data: { status: 'generating_storyboard', error: null, lastReconciledAt: null, version: { increment: 1 } } });
             if (fenced.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes scientific correction changed');
             await createPresentationSteps(deps, tx, run, 'storyboard', [{ ordinal: 0, replacesTaskId: proof.task.id,
-              payload: { ...proof.payload, storyboard: { ...proof.payload.storyboard!, revisionImageAssetId: proof.image.id, narrativeSceneLimit: 1 } } }]);
+              payload: revision ? revision.payload
+                : { ...proof.payload, storyboard: { ...proof.payload.storyboard!, revisionImageAssetId: proof.image.id, narrativeSceneLimit: 1 } } }]);
             const step = await tx.hermesResearchStep.findUniqueOrThrow({ where: { runId_stage_ordinal: { runId: run.id, stage: 'storyboard', ordinal: 0 } } });
             const held = await tx.hermesResearchStep.updateMany({ where: { id: proof.imageStep.id, runId: run.id,
               agentTaskId: proof.imageTask.id, presentationAssetId: proof.image.id, status: 'stopped' }, data: { status: 'stopped' } });
             if (held.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Rejected image changed during scientific correction');
             await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId, action: 'hermes.research_run.generation_retry',
               targetType: 'hermes_research_run', targetId: run.id, metadata: { requestDigest, clientIdempotencyKey: input.idempotencyKey,
-                correction: NARRATIVE_CORRECTION, expectedVersion: input.expectedVersion, parentStoryboardAssetId: proof.parent.id,
+                correction: revision ? NARRATIVE_BLOCKED_REVISION : NARRATIVE_CORRECTION, expectedVersion: input.expectedVersion, parentStoryboardAssetId: proof.parent.id,
                 rejectedImageAssetId: proof.image.id, reviewHash: proof.reviewHash, sourceIdentity: proof.identity,
-                newTaskId: step.agentTaskId, newRunCount: 0, chargeableAttempts: 1, maxRemainingTasks: 2 } }, ctx);
+                ...(revision ? { failedStoryboardTaskId: revision.task.id, finalReviewHash: revision.review.responseHash,
+                  candidateHash: revision.review.candidateHash, sourceEvidenceIdentity: revision.checkpoint.sourceEvidenceIdentity,
+                  grantAuditId: revision.grantAuditId, priorResumeAuditId: revision.resumeAuditId, existingTaskCount: 9,
+                  maxNewStoryboards: 1, maxNewImages: 1, maxRenderCorrections: 0 } : {}),
+                newTaskId: step.agentTaskId, newRunCount: 0, chargeableAttempts: 1, maxRemainingTasks: revision ? 1 : 2 } }, ctx);
             return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [step.agentTaskId!] };
           }
           // A raw client key cannot be reused with a different version tuple.
@@ -1169,6 +1289,10 @@ async function repairRejectedNarrativeImages(deps: HermesResearchRunDeps, tx: Pr
       payload: { ...payload, sceneImage: { ...payload.sceneImage, revisionAssetId: asset.id } } });
   }
   if (!replacements.length) return false;
+  const presentations = await tx.agentTask.count({ where: { kind: 'presentation.generate',
+    payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } });
+  const sources = run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
+  if (sources + presentations + replacements.length > run.maxAgentTasks!) return false;
   await createPresentationSteps(deps, tx, run, 'scene_image', replacements);
   return true;
 }

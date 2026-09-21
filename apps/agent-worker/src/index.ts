@@ -123,10 +123,11 @@ export { loadSearchIndexRuntimeConfig, type SearchIndexRuntimeConfig } from '@op
 export function buildSearchIndexerFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   fetcher: typeof fetch = globalThis.fetch,
+  searchClient?: ReturnType<typeof createSearchPrismaClient>,
 ): SearchIndexer | undefined {
   const config = loadSearchIndexRuntimeConfig(env);
   if (!config.enabled) return undefined;
-  const client = createSearchPrismaClient({ env });
+  const client = searchClient ?? createSearchPrismaClient({ env });
   return createSearchIndexer({
     storage: new SearchStorage(client),
     embedder: new EmbeddingClient({
@@ -598,9 +599,9 @@ export function createResearchRunReconcileScheduler(options: {
 }
 
 /** Single-consumer startup recovery for tasks stranded by a previous worker process. */
-export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> {
+export async function recoverProcessingQueue(deps: WorkerDeps, stopping: () => boolean = () => false): Promise<number> {
   let recovered = 0;
-  while (true) {
+  while (!stopping()) {
     const taskId = await deps.redis.lindex(AGENT_TASK_PROCESSING_QUEUE, -1);
     if (!taskId) return recovered;
     const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
@@ -611,6 +612,7 @@ export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> 
       await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
     }
   }
+  return recovered;
 }
 
 /**
@@ -619,28 +621,38 @@ export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> 
  */
 export async function createPollOnce(
   handlers: Record<string, TaskHandler>,
-  options: { runMaintenance?: boolean } = {},
+  options: { runMaintenance?: boolean; stopping?: () => boolean } = {},
 ): Promise<(deps: WorkerDeps) => Promise<boolean>> {
   const runMaintenance = options.runMaintenance ?? true;
+  const stopping = options.stopping ?? (() => false);
   const reconcileRuns = runMaintenance ? createResearchRunReconcileScheduler() : undefined;
   return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
+    if (stopping()) return false;
     if (reconcileRuns) {
       await reconcileRuns(deps);
+      if (stopping()) return false;
       await recoverUndispatchedAgentTasks(deps);
     }
+    if (stopping()) return false;
     // BRPOPLPUSH：原子弹出 → 处理中队列（崩溃恢复用）
     const taskId = await deps.redis.brpoplpush(AGENT_TASK_QUEUE, AGENT_TASK_PROCESSING_QUEUE, 1);
     if (!taskId) return false;
+    // Leave unclaimed work in processing for the existing startup recovery.
+    if (stopping()) return false;
 
     let claimed: Awaited<ReturnType<typeof claimAgentTask>> = null;
     let handlerCompleted = false;
     let processingEntryRequeued = false;
+    let processingEntryDeferred = false;
     try {
       const task = await deps.prisma.agentTask.findUnique({
         where: { id: taskId },
         include: { session: { select: { userId: true } } },
       });
       if (!task) return true;
+      if (stopping()) { processingEntryDeferred = true; return false; }
+      // Once claim starts, drain this attempt even if a signal arrives while its
+      // transaction awaits: deferring after claim would consume an unused attempt.
       claimed = await claimAgentTask(deps, taskId);
       if (!claimed) return true;
       const executionClaim = claimed;
@@ -683,7 +695,7 @@ export async function createPollOnce(
       return true;
     } finally {
       // 从处理中队列移除（已完成）
-      if (!processingEntryRequeued) {
+      if (!processingEntryRequeued && !processingEntryDeferred) {
         await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId).catch(() => undefined);
       }
     }
@@ -720,120 +732,149 @@ function buildIngestionExternalProcessingPolicy(prisma: ReturnType<typeof create
 
 /** 主循环（独立进程入口，云上 systemd/nohup 常驻）。 */
 async function main(): Promise<void> {
-  const parserJobDir = process.env.PARSER_JOB_DIR;
-  if (!parserJobDir) throw new Error('PARSER_JOB_DIR is required; unsafe in-worker binary parsing is disabled');
-  const prisma = createPrismaClient();
-  const audit = createPrismaAuditSink(prisma);
-  const redis = createRedisClient();
-  const storage = createStorageAdapter(storageConfigFromEnv());
-  const trashSearchClient = process.env.SEARCH_DATABASE_URL ? createSearchPrismaClient({ env: process.env }) : undefined;
-  const deps: WorkerDeps = {
-    prisma, redis, storage,
-    audit,
-    malwareScanner: process.env.CLAMAV_HOST ? createClamAvScanner(process.env.CLAMAV_HOST, Number(process.env.CLAMAV_PORT ?? 3310)) : undefined,
-    mailer: { send: async () => undefined },
+  let ownedPrisma: ReturnType<typeof createPrismaClient> | undefined;
+  let ownedRedis: ReturnType<typeof createRedisClient> | undefined;
+  let ownedSearch: ReturnType<typeof createSearchPrismaClient> | undefined;
+  let journalWorker: ReturnType<typeof startJournalWorker> | undefined;
+  let cleanup: Promise<void> | undefined;
+  let cleanupTimer: ReturnType<typeof setInterval> | undefined;
+  let stopping = false;
+  const stopAccepting = () => {
+    if (stopping) return;
+    stopping = true;
+    journalWorker?.stopAccepting();
+    if (cleanupTimer) clearInterval(cleanupTimer);
   };
-  // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
-  const externalProcessingPolicy = buildIngestionExternalProcessingPolicy(prisma);
-  const imageSubmission = createSpoolSubmission(prisma, 'presentation.generate');
-  const reviewSubmission = createSpoolSubmission(prisma, 'sdf.extract');
-  const illustrationReviewPolicy: ExternalProcessingPolicy = async context => {
-    const execution = spoolTaskExecution.getStore();
-    if (!execution || execution.taskId !== context.taskId) return false;
-    try {
-      const { owner } = await requireIllustrationReviewAuthority(prisma, context);
-      return owner.executionAttempt === execution.executionAttempt;
-    } catch { return false; }
-  };
-  const illustrationSubmission: IllustrationSubmission = async (input, publish) => {
-    const execution = spoolTaskExecution.getStore();
-    if (!execution || execution.taskId !== input.authorizationContext.taskId
-      || execution.executionAttempt !== input.illustrationContext?.executionAttempt) {
-      throw new Error('[blocked] Illustration review lacks its worker execution');
-    }
-    return prisma.$transaction(async tx => {
-      await lockTrashReferences(tx);
-      await requireIllustrationReviewSubmission(tx, input);
-      return publish();
-    }, { timeout: 30_000 });
-  };
-  const gateway = buildGateway(
-    process.env,
-    globalThis.fetch,
-    {
-      record: (event, tx) => {
-        // Reuse the claimed task context so existing telemetry can locate this call.
-        // Read per call: concurrent tasks must not share a captured task ID.
-        const taskId = spoolTaskExecution.getStore()?.taskId;
-        return audit.record(taskId && !event.requestId ? { ...event, requestId: taskId } : event, tx);
-      },
-    },
-    externalProcessingPolicy,
-    undefined,
-    { image: imageSubmission, review: reviewSubmission, illustration: illustrationSubmission },
-    illustrationReviewPolicy,
-  );
-  const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata, 16 * 60_000);
-  const rasterJobAdapter = createParserRasterJobClient(parserJobDir, expectedSidecarParserMetadata);
-  const parserCascade = createWorkerParserCascade(
-    gateway, parserJobAdapter, rasterJobAdapter,
-    process.env.AI_ENABLED === 'true' && process.env.MINIMAX_VISION_ENABLED === 'true',
-  );
-  const handlers = createHandlers(gateway, {
-    parserCascade,
-    externalProcessingPolicy,
-    searchIndexer: buildSearchIndexerFromEnv(process.env),
-    sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
-    ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HOST_VIDEO_INBOX_DIR?.trim()
-      && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {
-        videoSpool: new HostVideoSpool({
-          inboxDir: process.env.HOST_VIDEO_INBOX_DIR.trim(),
-          resultsDir: process.env.HOST_VIDEO_RESULTS_DIR.trim(),
-          withSubmission: imageSubmission,
-        }),
-      } : {}),
-  });
-  const configuredConcurrency = Number.parseInt(process.env.AGENT_WORKER_CONCURRENCY ?? '4', 10);
-  const workerConcurrency = Number.isFinite(configuredConcurrency)
-    ? Math.min(8, Math.max(1, configuredConcurrency)) : 4;
-  const pollers = await Promise.all(Array.from({ length: workerConcurrency }, (_, index) => (
-    createPollOnce(handlers, { runMaintenance: index === 0 })
-  )));
-  const stopJournalWorker = startJournalWorker(deps, gateway, parserCascade);
-  process.once('SIGTERM', stopJournalWorker);
-  process.once('SIGINT', stopJournalWorker);
-  await recoverProcessingQueue(deps);
-  let cleanupRunning = false;
-  const cleanupTimer = setInterval(() => {
-    if (cleanupRunning) return;
-    cleanupRunning = true;
-    void collectExpiredTemporaryDocuments({ prisma, storage }, { workerId: `agent-worker-${process.pid}` })
-      .then((result) => {
-        if (result.claimed || result.failed) console.log('temporary document cleanup', result);
-      })
-      .then(async () => {
-        const result = await purgeExpiredTrash({ ...deps, storage, deletePrivateJobCopies: createPrivateJobCopyCleanup(prisma, process.env), ...(trashSearchClient ? {
-          deleteSearchContent: scope => deleteSearchContent(trashSearchClient, scope),
-          setSearchContentVisibility: (scope, _visible, tx) => setSearchContentVisibility(trashSearchClient, tx, scope),
-        } : {}) });
-        if (result.purged || result.failed) console.log('private trash cleanup', result);
-      })
-      .catch((error) => console.error('temporary document cleanup error', error))
-      .finally(() => { cleanupRunning = false; });
-  }, 60_000);
-  cleanupTimer.unref();
-  await collectExpiredTemporaryDocuments({ prisma, storage }, { workerId: `agent-worker-${process.pid}` });
-  console.log(`agent-worker 启动（P1D-2/3, concurrency=${workerConcurrency}）`);
-  await Promise.all(pollers.map(async (pollOnce, index) => {
-    while (true) {
+  process.on('SIGTERM', stopAccepting);
+  process.on('SIGINT', stopAccepting);
+  try {
+    const parserJobDir = process.env.PARSER_JOB_DIR;
+    if (!parserJobDir) throw new Error('PARSER_JOB_DIR is required; unsafe in-worker binary parsing is disabled');
+    const prisma = ownedPrisma = createPrismaClient();
+    const audit = createPrismaAuditSink(prisma);
+    const redis = ownedRedis = createRedisClient();
+    const storage = createStorageAdapter(storageConfigFromEnv());
+    const trashSearchClient = ownedSearch = process.env.SEARCH_DATABASE_URL || loadSearchIndexRuntimeConfig(process.env).enabled
+      ? createSearchPrismaClient({ env: process.env }) : undefined;
+    const deps: WorkerDeps = {
+      prisma, redis, storage,
+      audit,
+      malwareScanner: process.env.CLAMAV_HOST ? createClamAvScanner(process.env.CLAMAV_HOST, Number(process.env.CLAMAV_PORT ?? 3310)) : undefined,
+      mailer: { send: async () => undefined },
+    };
+    // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
+    const externalProcessingPolicy = buildIngestionExternalProcessingPolicy(prisma);
+    const imageSubmission = createSpoolSubmission(prisma, 'presentation.generate');
+    const reviewSubmission = createSpoolSubmission(prisma, 'sdf.extract');
+    const illustrationReviewPolicy: ExternalProcessingPolicy = async context => {
+      const execution = spoolTaskExecution.getStore();
+      if (!execution || execution.taskId !== context.taskId) return false;
       try {
-        await pollOnce(deps);
-      } catch (e) {
-        console.error(`poll error lane=${index}`, e);
-        await sleep(2000);
+        const { owner } = await requireIllustrationReviewAuthority(prisma, context);
+        return owner.executionAttempt === execution.executionAttempt;
+      } catch { return false; }
+    };
+    const illustrationSubmission: IllustrationSubmission = async (input, publish) => {
+      const execution = spoolTaskExecution.getStore();
+      if (!execution || execution.taskId !== input.authorizationContext.taskId
+        || execution.executionAttempt !== input.illustrationContext?.executionAttempt) {
+        throw new Error('[blocked] Illustration review lacks its worker execution');
       }
+      return prisma.$transaction(async tx => {
+        await lockTrashReferences(tx);
+        await requireIllustrationReviewSubmission(tx, input);
+        return publish();
+      }, { timeout: 30_000 });
+    };
+    const gateway = buildGateway(
+      process.env,
+      globalThis.fetch,
+      {
+        record: (event, tx) => {
+          // Reuse the claimed task context so existing telemetry can locate this call.
+          // Read per call: concurrent tasks must not share a captured task ID.
+          const taskId = spoolTaskExecution.getStore()?.taskId;
+          return audit.record(taskId && !event.requestId ? { ...event, requestId: taskId } : event, tx);
+        },
+      },
+      externalProcessingPolicy,
+      undefined,
+      { image: imageSubmission, review: reviewSubmission, illustration: illustrationSubmission },
+      illustrationReviewPolicy,
+    );
+    const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata, 16 * 60_000);
+    const rasterJobAdapter = createParserRasterJobClient(parserJobDir, expectedSidecarParserMetadata);
+    const parserCascade = createWorkerParserCascade(
+      gateway, parserJobAdapter, rasterJobAdapter,
+      process.env.AI_ENABLED === 'true' && process.env.MINIMAX_VISION_ENABLED === 'true',
+    );
+    const handlers = createHandlers(gateway, {
+      parserCascade,
+      externalProcessingPolicy,
+      searchIndexer: buildSearchIndexerFromEnv(process.env, globalThis.fetch, trashSearchClient),
+      sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
+      ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HOST_VIDEO_INBOX_DIR?.trim()
+        && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {
+          videoSpool: new HostVideoSpool({
+            inboxDir: process.env.HOST_VIDEO_INBOX_DIR.trim(),
+            resultsDir: process.env.HOST_VIDEO_RESULTS_DIR.trim(),
+            withSubmission: imageSubmission,
+          }),
+        } : {}),
+    });
+    const configuredConcurrency = Number.parseInt(process.env.AGENT_WORKER_CONCURRENCY ?? '4', 10);
+    const workerConcurrency = Number.isFinite(configuredConcurrency)
+      ? Math.min(8, Math.max(1, configuredConcurrency)) : 4;
+    journalWorker = startJournalWorker(deps, gateway, parserCascade);
+    cleanupTimer = setInterval(() => {
+      if (stopping || cleanup) return;
+      cleanup = collectExpiredTemporaryDocuments({ prisma, storage }, { workerId: `agent-worker-${process.pid}` })
+        .then((result) => {
+          if (result.claimed || result.failed) console.log('temporary document cleanup', result);
+        })
+        .then(async () => {
+          if (stopping) return;
+          const result = await purgeExpiredTrash({ ...deps, storage, deletePrivateJobCopies: createPrivateJobCopyCleanup(prisma, process.env), ...(trashSearchClient ? {
+            deleteSearchContent: scope => deleteSearchContent(trashSearchClient, scope),
+            setSearchContentVisibility: (scope, _visible, tx) => setSearchContentVisibility(trashSearchClient, tx, scope),
+          } : {}) });
+          if (result.purged || result.failed) console.log('private trash cleanup', result);
+        })
+        .catch((error) => console.error('temporary document cleanup error', error))
+        .finally(() => { cleanup = undefined; });
+    }, 60_000);
+    cleanupTimer.unref();
+    const pollers = await Promise.all(Array.from({ length: workerConcurrency }, (_, index) => (
+      createPollOnce(handlers, { runMaintenance: index === 0, stopping: () => stopping })
+    )));
+    await recoverProcessingQueue(deps, () => stopping);
+    if (!stopping) await collectExpiredTemporaryDocuments({ prisma, storage }, { workerId: `agent-worker-${process.pid}` });
+    console.log(`agent-worker 启动（P1D-2/3, concurrency=${workerConcurrency}）`);
+    await Promise.all(pollers.map(async (pollOnce, index) => {
+      while (!stopping) {
+        try {
+          await pollOnce(deps);
+        } catch (e) {
+          console.error(`poll error lane=${index}`, e);
+          if (!stopping) await sleep(2000);
+        }
+      }
+    }));
+  } finally {
+    stopAccepting();
+    // Keep task persistence, processing-list removal, and journal leases alive until work finishes.
+    await Promise.all([journalWorker?.drained, cleanup]);
+    const redis = ownedRedis;
+    const closed = await Promise.allSettled([
+      ...(redis ? [redis.quit().catch(error => { redis.disconnect(); throw error; })] : []),
+      ...(ownedSearch ? [ownedSearch.$disconnect()] : []),
+      ...(ownedPrisma ? [ownedPrisma.$disconnect()] : []),
+    ]);
+    for (const result of closed) if (result.status === 'rejected') {
+      console.error('agent-worker shutdown failed', result.reason);
+      process.exitCode = 1;
     }
-  }));
+  }
 }
 
 /** 从 env 构造 Gateway（AI_ENABLED=false 或缺密钥 → 占位 gateway，sdf.extract 会失败；§24 待确认）。 */
@@ -1040,5 +1081,5 @@ function optionalBoundedInteger(raw: string | undefined, maximum: number, name: 
 
 // 主进程入口；被测试 import 时不启动
 if (require.main === module) {
-  void main();
+  void main().catch(error => { console.error('agent-worker failed', error); process.exitCode = 1; });
 }

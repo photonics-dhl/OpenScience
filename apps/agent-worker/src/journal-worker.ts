@@ -11,7 +11,12 @@ export async function processOneJournalJob(deps: WorkspaceDeps, gateway: Pick<Ai
   const job = await claimJournalJob(deps);
   if (!job?.leaseToken) return false;
   const token = job.leaseToken;
-  const heartbeat = setInterval(() => { void renewJournalJobLease(deps, job.id, token).catch(() => undefined); }, 30_000);
+  const heartbeats = new Set<Promise<unknown>>();
+  const heartbeat = setInterval(() => {
+    const pending = renewJournalJobLease(deps, job.id, token).catch(() => undefined);
+    heartbeats.add(pending);
+    void pending.finally(() => { heartbeats.delete(pending); });
+  }, 30_000);
   heartbeat.unref();
   try {
     if (job.kind === 'source_parse') {
@@ -41,10 +46,16 @@ export async function processOneJournalJob(deps: WorkspaceDeps, gateway: Pick<Ai
     // Provider exceptions can include response bodies. Persist only a safe operational explanation.
     await finishJournalJob(deps, job.id, token, null, 'AI 服务不可用、来源许可变更或作业已中止；请检查后重试');
     return true;
-  } finally { clearInterval(heartbeat); }
+  } finally {
+    clearInterval(heartbeat);
+    await Promise.all(heartbeats);
+  }
 }
 export function startJournalWorker(deps: WorkerDeps, gateway: Pick<AiGateway, 'complete'>, parserCascade?: ParserCascadeRunner, enabled: () => boolean = () => process.env.JOURNALS_ENABLED !== 'false') {
   let stopped = false; let active = 0; let recovering = false;
+  let resolveDrained!: () => void;
+  const drained = new Promise<void>(resolve => { resolveDrained = resolve; });
+  const finishDraining = () => { if (stopped && active === 0 && !recovering) resolveDrained(); };
   const timer = setInterval(() => {
     if (!stopped && enabled() && active < 2) {
       active++;
@@ -61,14 +72,17 @@ export function startJournalWorker(deps: WorkerDeps, gateway: Pick<AiGateway, 'c
         const parsed = await parserCascade({ artifactId: artifact.id, contentHash: artifact.blobSha256, content: bytes, mediaType: canonicalParserMediaType(artifact.logicalPath, artifact.mimeType) }, { trustedAuthorizationContext: { taskId: jobId, actorId: input.actorId, workspaceId: input.workspaceId }, externalProcessingEligible: false });
         if (parsed.status !== 'succeeded') throw new Error('Source parsing requires editorial correction');
         return sourceMapToManuscriptText(parsed.sourceMap);
-      }).catch(() => { console.error('journal worker database operation failed; lease recovery will reconcile'); }).finally(() => { active--; });
+      }).catch(() => { console.error('journal worker database operation failed; lease recovery will reconcile'); }).finally(() => { active--; finishDraining(); });
     }
   }, 1000);
   const recovery = setInterval(() => {
     if (stopped || recovering) return;
     recovering = true;
-    void recoverJournalJobs(deps).catch(() => { console.error('journal lease reconciliation failed'); }).finally(() => { recovering = false; });
+    void recoverJournalJobs(deps).catch(() => { console.error('journal lease reconciliation failed'); }).finally(() => { recovering = false; finishDraining(); });
   }, 60_000);
   timer.unref(); recovery.unref();
-  return () => { stopped = true; clearInterval(timer); clearInterval(recovery); };
+  return {
+    stopAccepting() { stopped = true; clearInterval(timer); clearInterval(recovery); finishDraining(); },
+    drained,
+  };
 }

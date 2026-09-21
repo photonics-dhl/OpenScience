@@ -1384,9 +1384,9 @@
   },
   "hermesRun": {
     "narrative": {
-      "correctionGrantDescription": "This image needs a scientific correction. The existing workflow has used 8 tasks. A one-time increase from 9 to 11 total tasks permits at most one revised plan, one new image and one rendering-only correction, charged by actual use. Existing papers, images and published versions remain; nothing is published automatically.",
+      "correctionGrantDescription": "This image needs a scientific correction. The existing workflow has used 8 tasks. A one-time increase from 9 to 11 total tasks permits at most one revised plan, one new image and one internal correction of either the plan or its rendering, charged by actual use. Existing papers, images and published versions remain; nothing is published automatically.",
       "authorizeCorrection": "Authorize up to 3 correction tasks",
-      "resumeCorrectionDescription": "The allowance is updated. Continue to redesign and produce from the original paper and review feedback, within the 3 authorized tasks. You review the final result without intermediate plan approvals.",
+      "resumeCorrectionDescription": "Continue to redesign and produce from the original paper and review feedback, using at most {count} tasks within the existing workflow authorization. You review the final result without intermediate plan approvals.",
       "startDescription": "Hermes will read the paper, shape its narrative, and produce and internally review the illustrations. Return to read all six sections and the complete image set, then decide whether to publish.",
       "unavailableDescription": "Upload a PDF paper first. You can begin when the source is available.",
       "goalLabel": "What should readers understand? (optional)",

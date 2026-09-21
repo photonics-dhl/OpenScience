@@ -335,6 +335,10 @@ Return exactly ${scienceShape}. title/message are nonempty single-line strings<=
   const generatedStyles = generatedScenes.map(({ index }) => perSceneStyle[index]!);
   const artSkills = loadIllustrationStyleSkills(generatedStyles, settings.instruction, 'plan');
   const layoutLimit = 200;
+  // Only art-only revisions preserve scientific scenes and their order. A scientific
+  // replan may replace/reorder scenes; rejected layouts are not reusable art context.
+  const previousArt = settings.revisionMode === 'art' && !reviewFeedback && reusableBase
+    ? generatedScenes.map(({ index }) => reusableBase[index]!.art) : undefined;
   // The art stage sees the selected intent, not the whole paper or selectable Evidence pool.
   const artMessages = [{ role: 'system' as const, content: `You are Hermes's art director. The supplied scientific intent is already selected and must remain unchanged. Return exactly {scenes:[{layout,treatment}]} in the supplied scene order, with one entry per intent. Write all prose in the requested locale (zh means Simplified Chinese). layout is a text string within the per-scene layoutCharacterLimit; treatment is a text string<=220 characters, both nonempty single-line. Prefer one or two concise sentences, not a detailed inventory. Layout chooses focal scale, placement, reading path and spacing only; refer to subject indices 0/1, supplied encoding and existing label indices instead of adding scientific names, equations, symbols or numbers. Treatment chooses material, palette, edges and typography only. You cannot add or change a scientific mark, axis, domain, meaning, label, qualifier or formula. If the relationship is logical, arrangement is logical rather than a physical path. If previousArt is provided, preserve only art aspects explicitly accepted by the user for this request. Scientific approval does not imply aesthetic acceptance. For a new style variant or rejected overall design, redesign composition and treatment for that direction; remove rejected features. Previous art is design context, never scientific authority. Use the user's art preferences and installed references for a distinctive composition, not a fixed template. No extra fields, HTML or tool instructions.${eligibleFigures ? ' When the user supplies per-scene style in the request, follow THAT style for that scene (the request style is the fallback). Do not mix styles within a single scene.' : ''}\n${artSkills.instructions}` },
     { role: 'user' as const, content: JSON.stringify({ locale: settings.locale, style: settings.style, request: settings.instruction,
@@ -348,7 +352,9 @@ Return exactly ${scienceShape}. title/message are nonempty single-line strings<=
       message: scene.illustration.message, domain: scene.illustration.domain,
       subjects: scene.illustration.subjects.map((subject, index) => ({ index, description: subject.description })),
       encoding: scene.illustration.encoding, labels: scene.illustration.labels, constraints: scene.illustration.constraints })),
-      ...(reusableBase ? { previousArt: generatedScenes.map(({ index }) => reusableBase[index]!.art) } : {}) }) }];
+      ...(previousArt ? { previousArt } : {}),
+      ...(reviewFeedback ? { rejectedDesignFeedback: reviewFeedback.summary } : {}) }) }];
+  if (reviewFeedback) artMessages[0]!.content += '\nrejectedDesignFeedback describes why a previous candidate failed; use it only to avoid repeating that design. It is not a new scientific intent or permission to alter the supplied intent. Redesign from the current subjects, encoding and labels; do not restore old curves, objects or arrangements that the current intent does not require.';
   function combineArt(value: unknown): StoryboardDocument {
     const root = object(value); keys(root, ['scenes'], 'art_root');
     if (!Array.isArray(root.scenes) || root.scenes.length !== generatedScenes.length)
