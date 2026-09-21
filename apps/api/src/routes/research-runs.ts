@@ -34,7 +34,7 @@ const generationGrantSchema = z.object({
   expectedVersion: z.number().int().positive(),
   generationGrant: z.union([
     z.object({ profile: z.literal('content-driven-v1'), maxAgentTasks: z.literal(8) }).strict(),
-    z.object({ profile: z.literal('visual-narrative-v1'), maxAgentTasks: z.literal(11) }).strict(),
+    z.object({ profile: z.literal('visual-narrative-v1'), maxAgentTasks: z.union([z.literal(11), z.literal(13)]) }).strict(),
   ]),
 }).strict();
 const generationRetrySchema = z.object({ expectedVersion: z.number().int().positive() }).strict();

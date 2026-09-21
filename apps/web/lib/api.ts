@@ -435,7 +435,7 @@ export function authorizeHermesGenerationGrant(
   researchObjectId: string,
   runId: string,
   expectedVersion: number,
-  correction?: { profile: 'visual-narrative-v1'; maxAgentTasks: 11; idempotencyKey: string },
+  correction?: { profile: 'visual-narrative-v1'; maxAgentTasks: 11 | 13; idempotencyKey: string },
 ): Promise<{ run: HermesResearchRun }> {
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}/generation-grant`, {
     method: 'POST',

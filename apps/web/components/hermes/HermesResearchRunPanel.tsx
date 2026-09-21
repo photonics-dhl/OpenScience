@@ -292,7 +292,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
         || visibleRun.current?.id !== requestedRun.id || visibleRun.current.version !== requestedRun.version)
         throw new Error(t('narrative.identityChanged'));
       const result = await authorizeHermesGenerationGrant(researchObjectId, requestedRun.id, requestedRun.version,
-        requestedRun.canAuthorizeNarrativeCorrection ? { profile: 'visual-narrative-v1', maxAgentTasks: 11, idempotencyKey: current.key } : undefined);
+        requestedRun.canAuthorizeNarrativeCorrection ? { profile: 'visual-narrative-v1', maxAgentTasks: requestedRun.maxAgentTasks === 11 ? 13 : 11, idempotencyKey: current.key } : undefined);
       if (!mounted.current || actorRef.current !== requestedActor || visibleRun.current?.id !== requestedRun.id) return;
       setRun(result.run);
       onRunUpdated?.(result.run);
@@ -375,11 +375,11 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(terminal ? 'narrative.incompleteDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
       {imageSteps.length ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('narrative.imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
       {run.canAuthorizeNarrativeCorrection ? <div className="mt-4">
-        <p className="text-sm leading-6 text-os-muted-paper">{t('narrative.correctionGrantDescription')}</p>
-        <button type="button" disabled={granting || retrying} onClick={() => void upgradeGenerationGrant()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(granting ? 'granting' : 'narrative.authorizeCorrection')}</button>
+        <p className="text-sm leading-6 text-os-muted-paper">{t(run.maxAgentTasks === 11 ? 'narrative.finalCorrectionGrantDescription' : 'narrative.correctionGrantDescription')}</p>
+        <button type="button" disabled={granting || retrying} onClick={() => void upgradeGenerationGrant()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(granting ? 'granting' : 'narrative.authorizeCorrection', { count: run.maxAgentTasks === 11 ? 2 : 3 })}</button>
       </div> : null}
       {run.canRetryGeneration ? <div className="mt-4">
-        <p className="text-sm leading-6 text-os-muted-paper">{t(run.maxAgentTasks === 11 ? 'narrative.resumeCorrectionDescription' : run.versionId ? 'narrative.resumeMediaDescription' : 'narrative.resumeDescription', { count: run.chargeableAttempts ?? 0 })}</p>
+        <p className="text-sm leading-6 text-os-muted-paper">{t((run.maxAgentTasks ?? 0) >= 11 ? 'narrative.resumeCorrectionDescription' : run.versionId ? 'narrative.resumeMediaDescription' : 'narrative.resumeDescription', { count: run.chargeableAttempts ?? 0 })}</p>
         <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : 'narrative.resume')}</button>
       </div> : null}
       <details className="mt-4 text-sm text-os-muted-paper"><summary className="min-h-11 cursor-pointer py-3">{t('narrative.details')}</summary>{steps}</details>

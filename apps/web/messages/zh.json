@@ -1385,7 +1385,8 @@
   "hermesRun": {
     "narrative": {
       "correctionGrantDescription": "这张图需要修改科学表达。原流程已使用 8 项任务；将总额度从 9 项一次性增加到 11 项，可继续最多 1 项方案返工、1 项新图和 1 项内部返工；内部返工可用于再次修正方案或修正绘制，按实际使用计费。已有论文、图片和公开版本保留，不会自动发布。",
-      "authorizeCorrection": "授权本流程最多 3 项返工任务",
+      "authorizeCorrection": "授权本流程最多 {count} 项返工任务",
+      "finalCorrectionGrantDescription": "本流程已有的 11 项任务已用完，图片仍未通过科学审查。只追加 2 项，可重新设计 1 个方案并生成 1 张图片、完成原有图片审查。不会重复论文分析、自动追加下一轮或自动发布；新增调用按实际用量计费。",
       "resumeCorrectionDescription": "继续后 Hermes 将按原论文与审核意见重新设计并制作，在本流程已有授权内最多执行 {count} 项任务；你查看最终结果，无需确认中间方案。",
       "startDescription": "Hermes 会理解全文、组织叙事并完成图片与内部审校。你回来时可以一起阅读六维内容和整组图片，再决定是否发布。",
       "unavailableDescription": "请先上传一份 PDF 论文，材料可用后即可开始。",
