@@ -3,8 +3,9 @@
 > 唯一交付树：E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch release/onchip-production-line。根 main 仅导航；旧 codex/onchip-video-release 缺 journals/学术身份，不得发版。历史详细证据保留 Git 与下方交接，不能按旧 next action 重跑。
 
 ## 目标与执行边界
+- 用户2026-09-21最新纠正：目标是未读论文者也能通过视觉叙事理解论文核心思想和关键点，兼顾美感；先全文理解与叙事设计，再按需选择单/多图、原图或生图。视频同目标但尚未进入执行阶段。原图裁剪/生成/发布跑通均不等于交付；稳定要求见需求基线§18.2。截图中Fig.1原样展示被明确否定，需返工。
 - 用户 2026-09-21 要求复用其他项目成功的 Pro CLI 合作方式，继续 PDF 上传 → Hermes 全文分析/科学确认 → 多风格生图指令 → 图片 → 审查 → 发布；本批先完善学术、编辑封面、淡彩三类，保护认可作品，先完成真实论文再批量。不得以本机桥修复替代产品交付。
-- 需求依据为 docs/OpenScience_Kimi_Development_Spec.md 的图片能力推进条款；Taskmaster currentTag=multistyle-research-illustration，任务1/2/4进行中、3依据用户已有认可 done。Taskmaster保存验收条件，本页独占动态资产与差额。
+- 需求依据为 docs/OpenScience_Kimi_Development_Spec.md §18.2；Taskmaster currentTag=multistyle-research-illustration，任务1/2/4/5进行中、3仅指已认可淡彩单图 done，不代表论文叙事完成。Taskmaster保存验收条件，本页独占动态资产与差额。
 - OpenScience 禁止测试/预检/演练/CI；本机仅静态阅读、编辑、Git、传输。必要服务器构建/启动和针对已知阻塞的最小真实操作先说明范围。用户单独授权的本机桥修复/定向测试不扩展成应用测试。
 - 用户已授权桥操作和本轮产品推进；不自动切 provider、不盲重发付费请求，不把模型成功当用户审美认可；Fig.2 五项清理仍未获明确同意。公开更新使用新版本，保护原论文、已认可图片和已有公开 v1。
 
@@ -25,11 +26,12 @@
 ## 产品目标与交付差额
 | 交付 / Taskmaster ID | 当前实际资产、认可与剩余工作 |
 |---|---|
+| 论文视觉叙事 · 5 | 用户否定v2中原样截取Fig.1的美感与独立解释能力；论文级叙事尚未交付，旧“已认可三图”说法撤回，只有9f/aa41有用户认可依据。下一步由既有Hermes全文结果组织核心思想/关键点与读图顺序，再按需选择素材/画面数量和设计；不得先延续旧封面局部修订或只换皮。 |
 | 学术机制图 · 1 | 145af7bf-f9a5-46ca-a346-4914fdcbf17f与父d0b36138均approved，但本轮未纳入v2；用户此前认可a7488c14版面，该资产现rejected，6d69159a/803e590b也rejected，不恢复旧状态。仍需核当前认可作品与后续发布选择。 |
-| 编辑封面 · 2 | 上下文/字段反馈/style补丁已上线；51eb/e253人工未放行，aaf7被现有科学审阅blocked，无新Chat图片。旧ac166 rejected，76918e55/7cd50e44 uncertain窗口已过。下一轮先修科学范围继承问题，再决定新规划，不重发历史任务。 |
+| 编辑封面 · 2 | 上下文/字段反馈/style补丁已上线；51eb/e253人工未放行，aaf7被现有科学审阅blocked，无新Chat图片。旧ac166 rejected，76918e55/7cd50e44 uncertain窗口已过。科学范围继承缺口保留；后续规划服从任务5的论文叙事，不重发历史任务。 |
 | 淡彩手绘 · 3 | aa41a018-b2ff-4ffb-9557-19ecabe104bc 用户明确认可、approved，现已进入公开v2；保护原图。f424 rejected，不能计新增风格。 |
 | 检索 / 管理补接 · 4 | 两篇确认来源dense58/58、42/42与真实hybrid召回已观察；Pro CLI短合作有效。保留科学审阅效果边界及未安装Desktop续接补丁，不以此次发布标整个管理任务done。 |
-| Fig.3恢复 / 原图复用 · 本轮 | 用户认可9f7ff671恢复图、真实Fig.1 copy6871a6d1已纳入v2；来源c1e2c18d/方案39f26074保留且approved，copy原字节完整。8141b5fd原Fig.3方案不改。 |
+| Fig.3恢复 / 原图复用 · 本轮 | 用户认可9f7ff671恢复图；Fig.1 copy6871a6d1虽已approved并公开v2，但用户明确否定直接展示，不能算叙事/审美通过。来源c1e2c18d/方案39f26074及原字节保留，未改数据库批准状态或公开历史。8141b5fd原Fig.3方案不改。 |
 
 ## 真实论文与受保护状态
 - Quantization RO9067a2d5-42ad-4c06-b234-753728b71064 / e77dc3c7-95cb-4269-ac3c-24276fea74e7现为published v2，不能再写入；公开v1保留。Claim93416292-0dbb-42b1-8810-6bdf77804c1f。deep-sub-cycle ROc896802c-35dd-4b59-8db1-5f374f83a6d8亦有真实论文及公开v1；第三篇aa450f1e-fafc-46d8-a072-d935e01b0544已上传但versions为空，原f653386b failed_blocked（full-document limit），不重复上传或盲重解析。
@@ -38,6 +40,7 @@
 
 <a id="capability-linkage"></a>
 ## 已有能力与当前断点
+- 本轮静态定位：reuse-only在illustration-planner.ts本地组装、illustration-review.ts直接接受，handler.ts复制原字节；这只能证明来源复用。通用planner/项目Skill以单个关系/默认单图为起点，缺少面向整篇论文的读者叙事组织。需求、Taskmaster和能力台账已纠正，运行代码/Skill及公开版本尚未变更；不声称问题已修复。
 - 既有三风格逐图选择、figurePlan确认/提交、科学符号保留、图像下载后恢复均已部署。自有科研插画Skill/科学Skill进入规划/美术/审阅；配图末审经Gateway MiniMax结构化池。Skill安装、注入和科学质量分别判断。
 - 新标准化候选从四边RGB采样取主色、单色背景合成且保留完整画面/alpha，复用原512MiB无网renderer。服务器以9f原始1448×1086 PNG实际执行两段filtergraph，输出1280×720/484210字节、色fefefe、原图字节相等；/opt/openscience-chatgpt-browser/observations/normalization-20260921/receipt.json。新深色图/纹理边界仍待真实成图观察，不批量重算旧结果。
 - 本机codex-chatgpt-web仅用于Pro代码合作，不支持网页聊天内生图；服务器image provider独立。Desktop委派/压缩续接补丁117+6项定向回归/类型/CLI构建通过但未安装：共享桥忙且单覆盖cli会被launcher校验回退，必须完整一致包、空闲切换及真实工具回合；不让此项阻塞已可工作的CLI方式。
@@ -51,6 +54,6 @@
 - Serena源6684e448a6d924f7f5b1adce9e0e2e4057aa88d3；Catalog e02、telemetry061882123d14be00b868c1971c9d56de21d83b6e、SkillsCLI83179c454b75688176060fabf9e611072d46813c、Langfuse4.35.0复用。无新依赖/迁移/治理服务。
 
 ## 下一动作与交接入口
-- 本轮已把已认可三图发布v2；下轮从既有编辑/历史恢复入口创建新私有版本再续封面（分镜不结转，保留旧任务证据），先处理科学修订继承旧约束的具体缺口，不能直接重发aaf7或向e77写入。新封面与当前学术图仍有质量差额，深色标准化尚无新图观察；新封面需用户审美认可。第三篇超120000字符前置上限，failed_blocked无合法retry/refresh；需保留来源的分节产品路径，不盲重上传或放宽上限。不得称全链路稳定/零技术债。
+- 优先推进任务5：沿既有Hermes入口和经审核全文结果补齐论文级叙事→逐图解释→媒体选择→视觉设计，核清已有输出/消费者后在原链路补接，不另叠模型/任务库/门禁。先以Quantization论文形成可审阅的整体叙事，再做所需图片；公开修改沿既有入口新建私有版本，分镜不结转，不能向e77写入。旧封面约束继承、学术图质量与深色标准化缺口保留，不能盲重发aaf7。第三篇120000字符前置阻塞仍需保留来源的分节路径，不盲重上传/放宽上限。不得称全链路稳定/零技术债。
 - 先读本页，再按故障读 docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md 最新节；能力缺口在 docs/runbooks/hermes-capability-registry.md 原行更新，历史长证据不重复执行。
 - 收尾两树status必须为空，提交/推送自己的改动，prune/list。本轮已精确删除4个已结束且无用的只读UI临时助手，收据tmp/pipeline-owned-helper-cleanup-20260921.json；保留一次性写请求及收据、原图/日志/会话/他人任务/回滚。现有每日09:00维护automation=automation，不再创建；临时证据仅ignored tmp/私有目录。
