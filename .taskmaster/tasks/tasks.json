@@ -52,7 +52,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "details": "需求：docs/OpenScience_Kimi_Development_Spec.md §18.2的2026-09-21视觉叙事纠正。复用Hermes经审核的全文结果，组织核心信息、背景与本文贡献、读图顺序及各画面任务，再选择媒体和风格；不能用原图复制或互不相干的成品轮播替代叙事。执行资产、用户反馈与下一步仅见docs/handoff/2026-09-10-hermes-web-image-handoff.md#illustration-delivery。",
+        "details": "需求：docs/OpenScience_Kimi_Development_Spec.md §18.2的2026-09-21视觉叙事与交互责任纠正。Hermes复用经内部审校的全文结果，自动完成叙事、分镜、媒体选择、设计、成图内审和有界修订；用户查看最终六维内容与图片，不承担中间审批。沿原Domain权限/来源/审校机制补齐自动状态推进，不伪造用户确认、不另建论文分析器。不能用原图复制或无关成品轮播代替叙事。资产、反馈和下一步仅见docs/handoff/2026-09-10-hermes-web-image-handoff.md#illustration-delivery。",
         "testStrategy": "不触发测试/预检/演练/CI；沿授权真实产品流程检查科学依据、未读论文者可复述的思想和关键点、实际展示可读性及用户设计认可，不能以模型成功、发布成功或既有单图认可标done。",
         "subtasks": []
       }

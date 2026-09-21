@@ -48,7 +48,9 @@
 
 论文视觉叙事缺口（2026-09-21用户纠正）：`illustration-planner.ts`的reuse-only分支本地组装原图方案，`illustration-review.ts`直接接受原图方案，`handler.ts`原字节复制；这些行为保证复用，未设计读者解释。通用planner的“ONE atomic relationship by default”与项目配图Skill的“otherwise prefer one”适合局部科学图，却不能代替从全文组织核心思想、关键点和连续读图路径。v2原样Fig.1已被用户否定美感和独立理解效果。需在已有Hermes/分镜路径先组织论文叙事，再按需选原图/重绘/生图与单/多图；保留逐图科学来源及定量渲染边界，不增加独立模型或审核门禁。需求已入§18.2，任务5/当前状态见CURRENT；运行代码和Skill未改，不能称已解决。
 
-实现方案只读核查：`scientific-writing-source.ts`按成功解析任务sourceMapRef受控读取，验证访问权限与文件身份，不证明分析已被用户确认；叙事入口仍须绑定当前版本已确认的分析/Claim。图像planner目前主要收到已选Claim/exactQuote，需核已审综合结果的版本身份再补接。`storyboard.ts:storyboardSceneStyles`与planner均把reuse放前面；`ResearchMediaDeck`已有label/description，但公开`PresentationAssetGallery`使用通用标题/固定提示，发布快照未保存叙事顺序与caption。`generateClaimChartSvg`仅文字图，不是定量重绘。结论已纳入[HTML方案](../proposals/2026-09-21-visual-narrative-review.html)；现有science/art调用原地增强，不新增论文分析器/全文总结调用/分析结果库，无生产实现或运行观察。
+实现方案只读核查：`scientific-writing-source.ts`按成功解析任务sourceMapRef受控读取，只证明权限/文件身份；叙事入口须绑定同版本内部科学审校结果和Claim，不再以终端用户确认分析为正常前置。planner主要收到已选Claim/exactQuote；`storyboardSceneStyles`与planner把reuse放前面；`ResearchMediaDeck`支持label/description，但公开Gallery用通用标题/固定提示，快照未保存叙事顺序/caption；chart仅文字图。结论已纳入[HTML方案](../proposals/2026-09-21-visual-narrative-review.html)，原地增强science/art、不新增全文分析器，无生产实现。
+
+自动编排缺口（用户明确只看最终成果，独立High增量核查）：`ingestion-service.ts:confirmIngestionTask`明确为人工确认，`research-run.ts`会进入awaiting_source_review/素材审阅等待；素材approve还有父稿/来源/版本/角色与并发校验，生成授权绑定run/step/actor/Claim和额度。必须在同一Domain/运行状态机补齐受授权的系统审校推进及真实执行审计，不能冒用用户身份或直接改approved；approved内部准入不代表用户审美认可。既有failed/stopped与限定retry需衔接预算内有界修订，成图审阅须实际消费图片。用户收到完整六维内容/整组图片再反馈，中间不要求逐步审批；均尚未实现。
 
 当前定向补接：真实原图reuse、多字段长度反馈、明确发布选图均有真实产品结果。guide漏style导致UI回落technical的修复已部署；新create必须显式style，同一修复反馈最多1786字符，避免Gateway忽略超2000字符反馈，预算/历史兼容语义不变。新缺风格拒绝行为尚无实际模型结果；状态只见CURRENT。
 

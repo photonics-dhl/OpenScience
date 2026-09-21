@@ -1,7 +1,7 @@
 # CURRENT Progress Window
 
 ## 2026-09-21 — 论文视觉叙事纠偏与完整链路审查稿
-- 原样Fig.1的美感/独立理解被否定，已同步需求§18.2和任务5。[HTML方案](proposals/2026-09-21-visual-narrative-review.html)覆盖完整链路并纳入独立High意见；用户基本认可、要求避免重复分析，已明确原地增强现有science/art并纠正来源读取成功≠分析确认。浏览器视口/交互未实测；未改生产代码/公开版本，未生图/测试/部署。状态及下一步见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 原样Fig.1被否定；用户进一步明确只看最终六维内容/图片，中间过程由系统决定。[HTML方案](proposals/2026-09-21-visual-narrative-review.html)、需求§18.2和任务5已同步：复用现有分析/science/art，自动内审与制作，不逐步让用户批准；权限/来源/审校边界保留，自动编排尚未实现。未改生产代码/公开版本，未生图/测试/部署，浏览器视口/交互未实测。状态见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 ## 2026-09-21 — 复用 CLI 合作，推进真实 PDF→Hermes→多风格→审图发布
 - 真实Fig.1完成上传→人工核源→Hermes reuse→原字节copy；与已认可Fig.3、淡彩图共3张经真实发布入口组成v2，公开轮播均加载、匿名读回200，正文/许可保持，v1保留。发布选图/长度反馈/style必填与短反馈已部署；封面最终科学修订仍被现有审阅阻断，停止追加，无新Chat生图。第三篇120000字符前置阻塞保留，不重复上传。未跑测试/预检/CI。版本、证据、私有续作与质量差额仅见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
