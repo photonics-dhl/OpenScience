@@ -11,7 +11,8 @@
     "selftest:ocr-contract": "node dist/ocr-contract-self-test.js"
   },
   "dependencies": {
-    "@openscience/observability": "workspace:^"
+    "@openscience/observability": "workspace:^",
+    "undici": "7.29.0"
   },
   "devDependencies": {
     "@types/node": "20.14.10",

@@ -22,7 +22,7 @@ import {
   type ProviderCapabilityDecision,
   type ProviderCapabilityPolicy,
 } from './ocr';
-import { TextProviderError, type ChatMessage, type Provider, type ProviderResult, type TextGenerationOptions } from './provider';
+import { TextProviderError, type ChatMessage, type Provider, type ProviderResult, type TextGenerationOptions, type TextTransportErrorCode } from './provider';
 import { SCIENCE_REVIEW_MAX_PROMPT_CHARS, type ScienceReviewInput, type ScienceReviewProvider, type ScienceReviewProviderResult } from './science-review-protocol';
 
 /** 调用日志（§9.3 + §17 脱敏：只记元数据，绝不记 prompt/附件/密钥）。 */
@@ -49,6 +49,7 @@ export interface GatewayCallLog {
   selectionReason: string | null;
   outcome: 'succeeded' | 'failed';
   error: string | null;
+  transportCode?: TextTransportErrorCode;
   fallbackReason: string | null;
   retryCount: number;
   finishReason?: ProviderResult['finishReason'];
@@ -434,6 +435,7 @@ export class AiGateway {
           selectionReason: controls.reviewSourceIdentity ? 'source_grounded_illustration_review' : null,
           outcome: 'failed',
           error: failure,
+          ...(e instanceof TextProviderError && e.transportCode ? { transportCode: e.transportCode } : {}),
           ...(responseDetails?.finishReason ? { finishReason: responseDetails.finishReason } : {}),
           ...(responseDetails?.blockCounts ? { responseBlockCounts: responseDetails.blockCounts } : {}),
           ...(opts.thinking ? { requestedThinking: opts.thinking } : {}),

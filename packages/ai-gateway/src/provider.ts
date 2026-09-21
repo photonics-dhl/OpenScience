@@ -1,3 +1,4 @@
+import { Agent } from 'undici';
 import {
   OcrProviderError,
   type OcrCostEstimate,
@@ -50,6 +51,7 @@ export interface ProviderResult {
 
 export type TextProviderErrorCode =
   | 'provider_timeout'
+  | 'provider_transport'
   | 'provider_http'
   | 'provider_response_json'
   | 'provider_response_shape'
@@ -64,8 +66,40 @@ export interface TextProviderFailureDetails {
   blockCounts?: { text: number; thinking: number; other: number };
 }
 
+const TEXT_TRANSPORT_FAILURES = {
+  UND_ERR_HEADERS_TIMEOUT: 'provider_timeout',
+  UND_ERR_BODY_TIMEOUT: 'provider_timeout',
+  UND_ERR_CONNECT_TIMEOUT: 'provider_timeout',
+  ETIMEDOUT: 'provider_timeout',
+  UND_ERR_SOCKET: 'provider_transport',
+  UND_ERR_DESTROYED: 'provider_transport',
+  UND_ERR_CLOSED: 'provider_transport',
+  ECONNRESET: 'provider_transport',
+  ECONNREFUSED: 'provider_transport',
+  EPIPE: 'provider_transport',
+  EAI_AGAIN: 'provider_transport',
+  ENOTFOUND: 'provider_transport',
+  ENETUNREACH: 'provider_transport',
+  EHOSTUNREACH: 'provider_transport',
+} as const;
+export type TextTransportErrorCode = keyof typeof TEXT_TRANSPORT_FAILURES;
+
+/** Retain only known codes from the error or its immediate cause, never raw diagnostics. */
+function textTransportFailure(error: unknown) {
+  const outer = error && typeof error === 'object' ? error as { code?: unknown; cause?: unknown } : undefined;
+  for (const value of [outer, outer?.cause]) {
+    const code = value && typeof value === 'object' ? (value as { code?: unknown }).code : undefined;
+    if (typeof code === 'string' && Object.hasOwn(TEXT_TRANSPORT_FAILURES, code)) {
+      const transportCode = code as TextTransportErrorCode;
+      return { code: TEXT_TRANSPORT_FAILURES[transportCode], transportCode };
+    }
+  }
+  return undefined;
+}
+
 export class TextProviderError extends Error {
-  constructor(readonly code: TextProviderErrorCode, message: string, readonly httpStatus?: number, readonly details?: TextProviderFailureDetails) {
+  constructor(readonly code: TextProviderErrorCode, message: string, readonly httpStatus?: number, readonly details?: TextProviderFailureDetails,
+    readonly transportCode?: TextTransportErrorCode) {
     super(message);
     this.name = new.target.name;
   }
@@ -110,8 +144,12 @@ export class OpenAiCompatProvider implements Provider {
   }
 
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
+    const timeout = textTimeout(opts);
+    // Native fetch otherwise inherits Undici's 300s headers/body defaults.
+    // This request owns its dispatcher; it cannot change another caller's policy.
+    const dispatcher = timeout > 300_000 ? new Agent({ headersTimeout: timeout, bodyTimeout: timeout }) : undefined;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), textTimeout(opts));
+    const timer = setTimeout(() => controller.abort(), timeout);
     try {
       const res = await this.fetcher(`${this.cfg.baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
@@ -129,6 +167,7 @@ export class OpenAiCompatProvider implements Provider {
           stream: false,
         }),
         signal: controller.signal,
+        ...(dispatcher ? { dispatcher } : {}),
       });
       if (!res.ok) throw new TextProviderError('provider_http', `Provider ${this.name} HTTP ${res.status}`, res.status);
       let data: {
@@ -138,7 +177,7 @@ export class OpenAiCompatProvider implements Provider {
       };
       try { data = await res.json() as typeof data; }
       catch (error) {
-        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+        if (controller.signal.aborted || textTransportFailure(error) || !(error instanceof SyntaxError)) throw error;
         throw new TextProviderError('provider_response_json', `Provider ${this.name} response JSON invalid`);
       }
       const choice = data && typeof data === 'object' && Array.isArray(data.choices) ? data.choices[0] : undefined;
@@ -161,13 +200,16 @@ export class OpenAiCompatProvider implements Provider {
         finishReason: finishReason(choice.finish_reason),
       };
     } catch (error) {
+      const transport = textTransportFailure(error);
       if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
-        throw new TextProviderError('provider_timeout', `Provider ${this.name} timed out`);
+        throw new TextProviderError('provider_timeout', `Provider ${this.name} timed out`, undefined, undefined, transport?.transportCode);
       }
       if (error instanceof TextProviderError) throw error;
+      if (transport) throw new TextProviderError(transport.code, `Provider ${this.name} transport failed`, undefined, undefined, transport.transportCode);
       throw new TextProviderError('provider_error', `Provider ${this.name} request failed`);
     } finally {
       clearTimeout(timer);
+      await dispatcher?.destroy().catch(() => undefined);
     }
   }
 }
@@ -185,8 +227,10 @@ export class AnthropicCompatProvider implements Provider {
   }
 
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
+    const timeout = textTimeout(opts);
+    const dispatcher = timeout > 300_000 ? new Agent({ headersTimeout: timeout, bodyTimeout: timeout }) : undefined;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), textTimeout(opts));
+    const timer = setTimeout(() => controller.abort(), timeout);
     try {
       const system = opts.messages
         .filter((message) => message.role === 'system')
@@ -212,6 +256,7 @@ export class AnthropicCompatProvider implements Provider {
           top_p: opts.topP,
         }),
         signal: controller.signal,
+        ...(dispatcher ? { dispatcher } : {}),
       });
       if (!res.ok) throw new TextProviderError('provider_http', `Provider ${this.name} HTTP ${res.status}`, res.status);
       let data: {
@@ -222,7 +267,7 @@ export class AnthropicCompatProvider implements Provider {
       };
       try { data = await res.json() as typeof data; }
       catch (error) {
-        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+        if (controller.signal.aborted || textTransportFailure(error) || !(error instanceof SyntaxError)) throw error;
         throw new TextProviderError('provider_response_json', `Provider ${this.name} response JSON invalid`);
       }
       if (!data || typeof data !== 'object' || !Array.isArray(data.content)) {
@@ -252,13 +297,16 @@ export class AnthropicCompatProvider implements Provider {
         finishReason: finishReason(data.stop_reason),
       };
     } catch (error) {
+      const transport = textTransportFailure(error);
       if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
-        throw new TextProviderError('provider_timeout', `Provider ${this.name} timed out`);
+        throw new TextProviderError('provider_timeout', `Provider ${this.name} timed out`, undefined, undefined, transport?.transportCode);
       }
       if (error instanceof TextProviderError) throw error;
+      if (transport) throw new TextProviderError(transport.code, `Provider ${this.name} transport failed`, undefined, undefined, transport.transportCode);
       throw new TextProviderError('provider_error', `Provider ${this.name} request failed`);
     } finally {
       clearTimeout(timer);
+      await dispatcher?.destroy().catch(() => undefined);
     }
   }
 }

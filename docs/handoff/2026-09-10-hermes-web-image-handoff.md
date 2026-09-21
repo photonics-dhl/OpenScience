@@ -29,7 +29,7 @@
 ## 产品目标与交付差额
 | 交付 / Taskmaster ID | 当前实际资产、认可与剩余工作 |
 |---|---|
-| 论文视觉叙事 · 5 | 用户否定v2原样Fig.1的美感/独立解释能力，只有9f/aa41有用户认可依据。自动制作/内审/reader已部署，grant补迁移后原请求恢复为e3ef004f；六维初稿完整，原来源审校服务超时；用户授权的一次补审已在同run启动，尚未生成/发布新图。完整图组与质量接受未完成；保留初稿，不能伪造科学通过。 |
+| 论文视觉叙事 · 5 | 用户否定v2原样Fig.1的美感/独立解释能力，只有9f/aa41有用户认可依据。自动制作/内审/reader已部署，grant补迁移后原请求恢复为e3ef004f；六维初稿完整，原来源审校服务超时；用户授权的一次补审也以服务故障结束，初稿保留，尚未生成/发布新图。完整图组与质量接受未完成；保留初稿，不能伪造科学通过。 |
 | 学术机制图 · 1 | 145af7bf-f9a5-46ca-a346-4914fdcbf17f与父d0b36138均approved，但本轮未纳入v2；用户此前认可a7488c14版面，该资产现rejected，6d69159a/803e590b也rejected，不恢复旧状态。仍需核当前认可作品与后续发布选择。 |
 | 编辑封面 · 2 | 上下文/字段反馈/style补丁已上线；51eb/e253人工未放行，aaf7被现有科学审阅blocked，无新Chat图片。旧ac166 rejected，76918e55/7cd50e44 uncertain窗口已过。科学范围继承缺口保留；后续规划服从任务5的论文叙事，不重发历史任务。 |
 | 淡彩手绘 · 3 | aa41a018-b2ff-4ffb-9557-19ecabe104bc 用户明确认可、approved，现已进入公开v2；保护原图。f424 rejected，不能计新增风格。 |
@@ -62,14 +62,16 @@
 - 叙事worker已完成：narrative:true复用同版本SDF/科学审阅/受控SourceMap，上游完整分析不重造；现有science/art组织1–6有序场景，可混排可用原图，mainMessage/audience及reader narration保留；原图不跳过末审。实际图审阅新增schema3，经原Chat review spool传真实图片，先保存draft再审，回放不重生图；成图审阅真实性尚未运行观察。
 - 发布/私有阅读已部署：同一historyMedia保存reader顺序/标题/解说并进入原content hash，旧快照兼容；UI隐藏中间审批。固定run.versionId阅读、刷新后pending幂等和私有reader投影已收口；Drawer预填原文/风格，服务端重读授权来源。High提出的模型误分类扣费、同名PDF及版本标题问题已修复：只有初始按钮启动整条流程（中间全自动），来源可区分、标题冻结；增量复核通过，不新增意图模型。
 - High提出的问题已修正并部署：schema3原字节PNG/JPEG/WebP≤10MiB、超规格原图只排除自动reuse；ready前预约、跨key共享run、系统审计、保存历史与源衔接均已收口。provider先行后应用编译/迁移/部署与真实入口已完成，实际成图尚未运行。安装器--defer-timers与异常回退保持，未测试/预检/CI/本机构建。
-- 来源证据：Quantization cee71443/960ffcc1、d98862b0/51a87b65仅canonical旧稿、缺六维/最终Claims。已部署复用既有SourceMap composition与reviewOnly，各最多一次并计入9项、事务同步run/source绑定；v5仍为Gateway model self-check，实际成图才经Chat看图审查，不混称独立科学验证。双库备份db-set-20260921T032005Z-2320106成功，core45M/search3.4M，保留7/7。
+- 来源证据：Quantization cee71443/960ffcc1、d98862b0/51a87b65仅canonical旧稿、缺六维/最终Claims。已部署复用既有SourceMap composition与reviewOnly，自动各最多一次并计入9项；来源服务故障的显式授权补审保留为ordinal1、事务同步run/source绑定；v5仍为Gateway model self-check，实际成图才经Chat看图审查，不混称独立科学验证。双库备份db-set-20260921T032005Z-2320106成功，core45M/search3.4M，保留7/7。
 - 实际入口：公开v2→研究桌面→继续编辑→研究详情→Hermes→guide d9ad62fc-294c-4140-903b-f4d4fec046e4→图文制作→cee71443→初始按钮。04:15:43Z POST500/23514因grant约束遗漏，210200向前迁移后原幂等请求恢复HTTP202，run e3ef004f-38bb-4fa2-88e4-e6df4f07a0b2；页面刷新sameRun=true/POST0。一次性收据/jobs/visual-narrative-{guide-submit,run-start,run-reopen}-20260921.json保留。旧overview失败图是Fig.2占位77b3，不是新素材接口故障。
 - 来源实际：composition e7e3620a-a7e9-419f-8ca3-0cc694533650成功，六字段完整；reviewOnly a00c5a7b-b554-4ee5-b42c-4be4545f4037虽task succeeded，内容v5 blocked/ALL_PROVIDERS_FAILED，e3此前failed/version7/versionId=null。审计f635736b主MiniMax-M3请求300002ms provider_timeout、382f3787备用key94ms HTTP401，无有效review responseHash，非论文科学拒绝。收据/jobs/visual-narrative-source-review-failure-20260921.json，原e7/SourceMap/PDF保留，未物化新版本或生图。
 - 最小修复已部署：仅最终来源审校65k/600s，provider硬上限600s、普通调用不变；primaryProviderOnly禁止超时/HTTP/transport后切key/model，已完成文本的有界结构修正仍留在同primary；review_unavailable/独立reason不再冒称malformed_item，未审core仍为空。High增量复核及必要服务器构建/启动完成；600秒有效响应能力尚未新请求观察。04:52Z站内刷新同run/POST0，仍明确完整成果未完成。历史请求是否计费未知，原9项按逻辑任务而非provider调用计数；旧run不自动重开，不用新run绕额度，不伪造approved。无有效v5可零模型恢复；补审需新增收费与严格同run恢复设计，当时未新增恢复分支或调用。
 
-- 05:35:53Z本次获用户明确收费授权后恢复：9216bd36正常构建/启动exit0且release独立读回一致，无新迁移/receiver切换。原run页「保留初稿，继续制作」只点一次→HTTP202，e3同run version8/running，新source_review ordinal1=41c4c57c-ef61-4a01-ba8d-c303973453ec；原e7/a00/失败ordinal0保留。收据/jobs/visual-narrative-source-resume-20260921.json及recovery-observe日志；不得重跑写脚本。严格原稿/SourceMap/主失败审计/CAS/额度及saved重启恢复经High收口，尚待本次真实审校结果。
+- 05:35:53Z本次获用户明确收费授权后恢复：9216bd36正常构建/启动exit0且release独立读回一致，无新迁移/receiver切换。原run页「保留初稿，继续制作」只点一次→HTTP202，e3同run version8/running，新source_review ordinal1=41c4c57c-ef61-4a01-ba8d-c303973453ec；原e7/a00/失败ordinal0保留。收据/jobs/visual-narrative-source-resume-20260921.json及recovery-observe日志；不得重跑写脚本。严格原稿/SourceMap/主失败审计/CAS/额度及saved重启恢复经High收口，补审结果见下一行。
+
+- 本次补审41c已结束：仅一条主idx0调用，审计65a7bf60-97ef-4676-9c01-8bf67d7f978c，05:40:56Z/300638ms/provider_error，无fallback或有效response；v5 review_unavailable，run failed/version10/versionId=null，禁止再次补审/新run绕额度。只读Node22.23.2/Undici6.28.0源码确认headers/body默认300000，而provider只配上层Abort600000；catch丢失cause，故底层300秒配置缺口已确认，但本次具体错误码无法追溯。请求级传输时限与白名单错误码候选已完成独立High静态审查：只为>300s文本请求使用局部Agent、finally销毁，普通请求和恢复槽不变；待服务器构建部署，不再模型请求。失败结果收据/jobs/visual-narrative-source-recovery-failure-20260921.json保留，不声称已审校成功。
 
 ## 下一动作与交接入口
-- 优先任务5：当前超时/错误分类修正已部署；用户已明确允许保留初稿再进行一次可能计费的来源审校；原Domain恢复入口已补CAS/来源身份/真实attempt计数及剩余scene预算约束，独立High静态审查及服务器部署完成，同一run已恢复、正在等待本次审校结果，不能直接DB改状态或新建run重置额度。最终仍交付六维/整组而非中间审批；不向e77写入或盲重发aaf7。全文上限、停机、旧约束继承/深色标准化债务保留。
+- 优先任务5：当前超时/错误分类修正已部署；用户已明确允许保留初稿再进行一次可能计费的来源审校；原Domain恢复入口已补CAS/来源身份/真实attempt计数及剩余scene预算约束，独立High静态审查及服务器部署完成，同一run补审再次服务失败；现在只修传输时限断接/错误码丢失，不再发模型，不能直接DB改状态或新建run重置额度。最终仍交付六维/整组而非中间审批；不向e77写入或盲重发aaf7。全文上限、停机、旧约束继承/深色标准化债务保留。
 - 先读本页，再按故障读 docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md 最新节；能力缺口在 docs/runbooks/hermes-capability-registry.md 原行更新，历史长证据不重复执行。
 - 收尾两树status必须为空，提交/推送自己的改动，prune/list。此前4个、此次另6个已结束且无用的自有UI读取/导航助手已精确清除；收据tmp/{pipeline,visual-narrative}-owned-helper-cleanup-20260921.json；保留一次性写请求及收据、原图/日志/会话/他人任务/回滚。现有每日09:00维护automation=automation，不再创建；临时证据仅ignored tmp/私有目录。

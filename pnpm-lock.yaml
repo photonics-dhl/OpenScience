@@ -307,6 +307,9 @@ importers:
       '@openscience/observability':
         specifier: workspace:^
         version: link:../observability
+      undici:
+        specifier: 7.29.0
+        version: 7.29.0
     devDependencies:
       '@types/node':
         specifier: 20.14.10
