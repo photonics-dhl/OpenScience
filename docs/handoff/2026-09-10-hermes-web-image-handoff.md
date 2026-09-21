@@ -16,9 +16,9 @@
 - 交付树与根main收尾status必须空，自己的改动提交并推送；prune/list。仅根+交付树，无新worktree。清理仅明确自有、生产者完成且不用的生成物；268日志归档不重复，也不声称根治上游argv缺陷。已结束的12份本轮长文源码staging副本删除被自动审核拦截，已安全移入tmp/archived/long-paper-staging-20260922，restore.json保留路径/内容/ACL，移动后ACL一致；base-head与实现交接原位保留，无活动生产者。
 
 ## 版本与独立能力
-- application production=b7f834a2da63f9a8a1dc1338308a2d012dec7f38；rollback=86a8f871063d8372f6cecf942f18fba662bfd3e1。正常无迁移/无测试服务器build/start exit0，独立marker一致，journal/failed无；日志/opt/openscience/observations/deploy-b7f834a2-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
+- application production=37048da2353577b5aa330658d370f63540ac0d19；rollback=b7f834a2da63f9a8a1dc1338308a2d012dec7f38。正常无迁移/无测试服务器build/start exit0，独立marker一致，journal/failed无；日志/opt/openscience/observations/deploy-37048da2-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
 - 独立Chat provider=faa20ab05674cebc5955d6ba7de7f3fb67ca53c2，未随应用改动；自然timer enabled/active，共享浏览器未重启。sceneImage fallback配置false；原renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f保留。receiver备份/容量协议见详细交接，不退到不支持长请求的旧bundle。
-- 应用已含动态图修正grant>=9迁移；Domain仍要求精确恢复收据，不能以DB允许任意数字绕授权。现rollback86兼容新generic/schema回执，但保留父RO公开历史误挡草稿问题；不能直接回滚到旧固定额度版本。
+- 应用已含动态图修正grant>=9迁移；Domain仍要求精确恢复收据，不能以DB允许任意数字绕授权。现rollback b7兼容generic/schema回执，但不能消费新pre-provider恢复回执，提交后优先前向修复；不能直接回滚到旧固定额度版本。
 - Pro代码合作已实测原生CLI exec resume/chatgpt-web/pro/ultra/STDIN短任务读取→写报告→读回；长任务工具续接与Desktop完整补丁仍未安装，不能称全局稳定。本机桥用于代码合作，服务器image/review provider负责产品图片。
 
 ## 产品目标与交付差额
@@ -49,5 +49,5 @@
 ## 其他受保护资产与入口
 - ac455b2f真实Chat产物approved；77b3f559历史Fig.2占位、557c3db6来源待核均approved，不能直接公开全部approved。d5087b03悬空draft copy；重复计划6439150a/ee9bcfb6 draft、6043bebb/75b34c88 approved，清理未获明确同意。旧占位929bd95d/6088f11b/03a160aa早先已授权删除，不能重处理。
 - 能力位置/最新实际效果查docs/runbooks/hermes-capability-registry.md；完整故障/调用/部署/恢复收据查docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md。此前中断、300秒传输、Claims缺失、长度、渲染拒收等历史已在该文件/Git保留，不按历史next action重跑。
-- 候选已High PASS：共享parser允许原1–6图范围，生产端持久化前复用同一parser；managed task禁止脱离run单独retry。原retry-generation新增精确模型前失败的一次同task恢复：零Gateway audit/result/asset、完整root receipt/来源/全组审阅复核，task/step/run三重CAS，不增加max或任务数，worker exec2各阶段验receipt且保持primary-only。初始science恢复也移除父RO公开历史误挡私有draft。未部署、未新增调用。
-- 下一步：正常服务器build/start后执行两份尚未消费的tmp/{second,third}-paper-pixel-planning-resume-20260922.cjs；b887/04f原任务/授权复用。核对第三篇MQED已知叙述问题，继续Chat实图/6Pro/reader与新公开版本；当前两篇尚未交付最终图文，不因局部通过结束任务。
+- 37048da2已High PASS并部署：共享parser允许原1–6图范围，生产端持久化前复用同一parser；managed task禁止脱离run单独retry。原retry-generation新增精确模型前失败的一次同task恢复：零Gateway audit/result/asset、完整root receipt/来源/全组审阅复核，task/step/run三重CAS，不增加max或任务数，worker exec2各阶段验receipt且保持primary-only。初始science恢复也移除父RO公开历史误挡私有draft。原页面23:04:33Z/23:04:49Z均HTTP202恢复b887/04f，runv16/v19，原任务exec2/max不变，已进入规划。
+- 下一步：两份/jobs/{second,third}-paper-pixel-planning-resume-20260922.json已消费，禁止重放。等待b887/04f科学/艺术/末审，按正式结果继续。核对第三篇MQED已知叙述问题，继续Chat实图/6Pro/reader与新公开版本；当前两篇尚未交付最终图文，不因局部通过结束任务。
