@@ -57,7 +57,7 @@
 
 来源终审与输入（2026-09-21）：v5科学Skill、必需Claims guard/原有结构修正、P边界证据分段及连续失败谱系恢复已部署；原f2f真实产出六维和6条已审Claims，自动保存同一私有版本。模型定位元数据紧凑化保留全部原文与服务端身份，真实终审输入由超61440降至60406；thinking-only截断已接回既有16K→32K升级。历史300秒、缺Claims、P合并、超长prompt及截断证据见Git/CURRENT原收据，不重跑来源分析。
 
-叙事科学与美术边界（2026-09-21）：真实ab456/de847图片均经Chat 6Pro像素blocked/null；后者M3修订+再验收accepted仍引入无校准曲线/坐标关系，不能以同模型自证代替质量。旧previousArt科学重规划按索引继承已修并部署；现候选原地收紧两段规划/终审：science/art原调用adaptive+300秒，既有provider/retry/token上限不变；review反馈投影为reportedProblem，有结构issue时不传自由摘要作目标，原文才是事实；叙事终审prompt/guard/parser只accepted或blocked，不再改写composition后接受自己的修改，非叙事旧能力/历史checkpoint保持。compiler只渲染labels，故现有标签预算须保留简短可见主旨，详细解释留reader；无新科学分析/模型步骤/字段黑名单。候选High静态PASS，尚未部署/实际产出。原11项用完后用户明确授权只追加2项，复用原grant/同run续作，不能自动无限返工。实际版本、任务与后续科学/视觉差额只见CURRENT。
+叙事科学与美术边界（2026-09-21）：真实ab456/de847图片均经Chat 6Pro像素blocked/null；后者M3修订+再验收accepted仍引入无校准曲线/坐标关系，不能以同模型自证代替质量。旧previousArt科学重规划按索引继承已修并部署；已原地收紧两段规划/终审：science/art原调用adaptive+300秒，既有provider/retry/token上限不变；review反馈投影为reportedProblem，有结构issue时不传自由摘要作目标，原文才是事实；叙事终审prompt/guard/parser只accepted或blocked，不再改写composition后接受自己的修改，非叙事旧能力/历史checkpoint保持。compiler只渲染labels，故现有标签预算须保留简短可见主旨，详细解释留reader；无新科学分析/模型步骤/字段黑名单。High静态PASS并已部署，修复后的实际产出待观察。原11项用完后用户明确授权只追加2项，原grant/同run续作已真实201/202接受，不能自动无限返工。实际版本、任务与后续科学/视觉差额只见CURRENT。
 
 Worker关闭（2026-09-21）：旧信号仅停journal计时器而主poller继续，使正式发布等待600秒。已把停止新claim、已开始claim/handler/journal租约/cleanup排空和Redis/Prisma关闭收口到原入口，部分初始化失败也清理资源；API先close再关依赖。High静态PASS并正式构建部署，新关闭行为尚未实际观察，不为补证重启或演练。
 
