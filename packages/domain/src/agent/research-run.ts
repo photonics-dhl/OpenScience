@@ -303,12 +303,14 @@ export async function getHermesResearchRun(
   }
   const artCorrection = WRITE_ROLES.has(authority.membership.role)
     ? await inspectStoryboardArtCorrection(deps.prisma, run).catch(() => null) : null;
-  if (artCorrection) {
+  const artResume = !artCorrection && WRITE_ROLES.has(authority.membership.role)
+    ? await inspectStoryboardArtCorrection(deps.prisma, run, true).catch(() => null) : null;
+  if (artCorrection || artResume) {
     view.canRetryGeneration = true;
-    view.chargeableAttempts = 2;
+    view.chargeableAttempts = artResume ? 0 : 2;
     view.generationRecovery = 'storyboard-art';
   }
-  if (!artCorrection && WRITE_ROLES.has(authority.membership.role) && run.profile === VISUAL_NARRATIVE_PROFILE && run.status === 'stopped') {
+  if (!artCorrection && !artResume && WRITE_ROLES.has(authority.membership.role) && run.profile === VISUAL_NARRATIVE_PROFILE && run.status === 'stopped') {
     const correction = await inspectNarrativeScientificReplan(deps.prisma, run).catch(() => null);
     if (correction) {
       if (run.maxAgentTasks === 9) view.canAuthorizeNarrativeCorrection = true;
@@ -620,13 +622,16 @@ async function readUnchangedNarrativeCheckpointEvidence(tx: Prisma.TransactionCl
 
 const STORYBOARD_ART_CORRECTION = 'storyboard_art_only_correction';
 const STORYBOARD_ART_CORRECTION_ACTION = 'hermes.research_run.storyboard_art_correction';
+const STORYBOARD_ART_RESUME_ACTION = 'hermes.research_run.storyboard_art_presubmission_resume';
 
-/** One explicit request reserves only art and final review on the existing task. */
-async function inspectStoryboardArtCorrection(tx: Prisma.TransactionClient, run: RunRow) {
+/** Authorize art and review once, or resume that authorization once before either was submitted. */
+async function inspectStoryboardArtCorrection(tx: Prisma.TransactionClient, run: RunRow, resumeBeforeSubmission = false) {
   if (run.profile !== VISUAL_NARRATIVE_PROFILE || run.status !== 'stopped' || !run.versionId
     || !validGrant(run) || await validateReviewedSources(tx, run) !== 'ready') return null;
   const version = await tx.version.findUnique({ where: { id: run.versionId } });
-  if (!version || version.status !== 'draft' || version.researchObjectId !== run.researchObjectId) return null;
+  const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+  if (!ro || ro.deletedAt || ro.status !== 'draft'
+    || !version || version.status !== 'draft' || version.researchObjectId !== run.researchObjectId) return null;
   const steps = run.steps.filter(step => step.stage === 'storyboard');
   const images = run.steps.filter(step => step.stage === 'scene_image');
   const step = steps[0];
@@ -644,7 +649,8 @@ async function inspectStoryboardArtCorrection(tx: Prisma.TransactionClient, run:
     || !isDeepStrictEqual(payload.sourceClaimIds, run.sourceClaimIds)
     || !isDeepStrictEqual(payload.hermesRunAuthority, { runId: run.id, stage: 'storyboard', ordinal: 0, profile: run.profile })) return null;
   const result = jsonRecord(task.result);
-  if (Object.keys(result).sort().join(',') !== 'storyboardCheckpoint,storyboardReview') return null;
+  if (Object.keys(result).sort().join(',') !== (resumeBeforeSubmission
+    ? 'storyboardArtCorrection,storyboardCheckpoint,storyboardReview' : 'storyboardCheckpoint,storyboardReview')) return null;
   const checkpoint = jsonRecord(result.storyboardCheckpoint);
   const planned = jsonRecord(checkpoint.planned);
   const review = jsonRecord(result.storyboardReview);
@@ -667,10 +673,23 @@ async function inspectStoryboardArtCorrection(tx: Prisma.TransactionClient, run:
   const sourceCount = run.steps.filter(item => ['source_composition', 'source_review'].includes(item.stage)).length;
   if (presentations.some(item => ['pending', 'running'].includes(item.status))
     || sourceCount + presentations.length + 1 !== run.maxAgentTasks
-    || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })
-    || await tx.auditLog.findFirst({ where: { action: STORYBOARD_ART_CORRECTION_ACTION,
-      targetType: 'hermes_research_run', targetId: run.id, metadata: { path: ['taskId'], equals: task.id } } })) return null;
-  return { task, step, checkpoint, review };
+    || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) return null;
+  let authorization: Awaited<ReturnType<typeof readStoryboardArtCorrectionAuthorization>> | undefined;
+  if (resumeBeforeSubmission) {
+    // No submitted marker is stronger than an absent gateway audit: code always saves it before invoking the provider.
+    if (Object.keys(jsonRecord(result.storyboardArtCorrection)).sort().join(',')
+      !== 'authorizationRequestDigest,executionAttempt,originalCandidateHash,originalReviewResponseHash,schemaVersion') return null;
+    authorization = await readStoryboardArtCorrectionAuthorization(tx, { taskId: task.id, actorId: run.actorId,
+      workspaceId: ro.workspaceId, payload, executionAttempt: task.executionAttempt, retryCount: task.retryCount,
+      result: task.result }, 'stopped');
+    if (await tx.auditLog.findFirst({ where: { requestId: task.id, action: 'ai.gateway.call',
+      createdAt: { gte: authorization.createdAt } }, select: { id: true } })
+      || await tx.auditLog.findFirst({ where: { action: STORYBOARD_ART_RESUME_ACTION,
+        targetType: 'hermes_research_run', targetId: run.id,
+        metadata: { path: ['taskId'], equals: task.id } }, select: { id: true } })) return null;
+  } else if (await tx.auditLog.findFirst({ where: { action: STORYBOARD_ART_CORRECTION_ACTION,
+    targetType: 'hermes_research_run', targetId: run.id, metadata: { path: ['taskId'], equals: task.id } } })) return null;
+  return { task, step, checkpoint, review, authorization };
 }
 
 /** Match a dynamic attempt to its unique authorization; a large attempt number is never authority. */
@@ -678,6 +697,12 @@ export async function requireStoryboardArtCorrectionAuthorization(tx: Pick<Prism
   taskId: string; actorId: string; workspaceId: string; payload: PresentationGenerationPayload;
   executionAttempt: number; retryCount: number; result: unknown;
 }) {
+  return readStoryboardArtCorrectionAuthorization(tx, input, 'generating_storyboard');
+}
+
+async function readStoryboardArtCorrectionAuthorization(tx: Pick<Prisma.TransactionClient, 'auditLog' | 'hermesResearchRun'>,
+  input: { taskId: string; actorId: string; workspaceId: string; payload: PresentationGenerationPayload;
+    executionAttempt: number; retryCount: number; result: unknown }, expectedStatus: 'generating_storyboard' | 'stopped') {
   const result = jsonRecord(input.result);
   const correction = jsonRecord(result.storyboardArtCorrection);
   const checkpoint = jsonRecord(result.storyboardCheckpoint);
@@ -689,15 +714,35 @@ export async function requireStoryboardArtCorrectionAuthorization(tx: Pick<Prism
     metadata: { path: ['taskId'], equals: input.taskId } }, take: 2 }) : [];
   const receipt = receipts[0];
   const meta = jsonRecord(receipt?.metadata);
+  const resumes = runId ? await tx.auditLog.findMany({ where: { action: STORYBOARD_ART_RESUME_ACTION,
+    targetType: 'hermes_research_run', targetId: runId,
+    metadata: { path: ['taskId'], equals: input.taskId } }, take: 2 }) : [];
+  const resume = resumes[0];
+  const resumed = jsonRecord(resume?.metadata);
+  const originalAttempt = meta.authorizedExecutionAttempt === input.executionAttempt && meta.authorizedRetryCount === input.retryCount;
+  const resumedAttempt = resumes.length === 1 && resume?.actorId === input.actorId && resume.workspaceId === input.workspaceId
+    && resumed.authorizationAuditId === receipt?.id && resumed.authorizationRequestDigest === meta.requestDigest
+    && resumed.stepId === meta.stepId && resumed.resumedExecutionAttempt === input.executionAttempt
+    && resumed.previousExecutionAttempt === meta.authorizedExecutionAttempt && resumed.previousExecutionAttempt === input.executionAttempt - 1
+    && resumed.previousRetryCount === input.retryCount - 1 && resumed.resumedRetryCount === input.retryCount
+    && typeof meta.authorizedExecutionAttempt === 'number' && input.executionAttempt > meta.authorizedExecutionAttempt
+    && typeof meta.authorizedRetryCount === 'number'
+    && input.retryCount - meta.authorizedRetryCount === input.executionAttempt - meta.authorizedExecutionAttempt
+    && resumed.additionalAuthorizedOperations === 0 && resumed.newTaskCount === 0 && resumed.chargeableAttempts === 0
+    && resumed.priorSubmission === 'none' && resumed.noScientificReplanning === true && resumed.noProviderSwitch === true
+    && resumed.originalCandidateHash === meta.originalCandidateHash && resumed.originalReviewResponseHash === meta.originalReviewResponseHash
+    && resumed.sourceEvidenceIdentity === meta.sourceEvidenceIdentity && resumed.narrativeSourceIdentity === meta.narrativeSourceIdentity
+    && resumed.baseIdentity === meta.baseIdentity && isDeepStrictEqual(resumed.taskPayload, meta.taskPayload);
   const document = parseStoryboardDocument(jsonRecord(checkpoint.planned).document, input.payload.sourceClaimIds, 'image');
   if (!run || run.actorId !== input.actorId || run.researchObjectId !== input.payload.researchObjectId
-    || run.versionId !== input.payload.versionId || run.profile !== VISUAL_NARRATIVE_PROFILE || run.status !== 'generating_storyboard'
+    || run.versionId !== input.payload.versionId || run.profile !== VISUAL_NARRATIVE_PROFILE || run.status !== expectedStatus
     || !run.steps.some(step => step.id === meta.stepId && step.stage === 'storyboard' && step.ordinal === 0
-      && step.status === 'running' && step.agentTaskId === input.taskId && step.presentationAssetId === null)
+      && step.status === (expectedStatus === 'stopped' ? 'stopped' : 'running') && step.agentTaskId === input.taskId && step.presentationAssetId === null)
     || receipts.length !== 1 || !receipt || receipt.actorId !== input.actorId || receipt.workspaceId !== input.workspaceId
     || meta.correction !== STORYBOARD_ART_CORRECTION || typeof meta.requestDigest !== 'string' || !/^[a-f0-9]{64}$/u.test(meta.requestDigest)
-    || meta.authorizedExecutionAttempt !== input.executionAttempt || meta.authorizedRetryCount !== input.retryCount
-    || meta.previousExecutionAttempt !== input.executionAttempt - 1 || meta.previousRetryCount !== input.retryCount - 1
+    || (originalAttempt ? resumes.length !== 0 : !resumedAttempt)
+    || typeof meta.authorizedExecutionAttempt !== 'number' || meta.previousExecutionAttempt !== meta.authorizedExecutionAttempt - 1
+    || typeof meta.authorizedRetryCount !== 'number' || meta.previousRetryCount !== meta.authorizedRetryCount - 1
     || !isDeepStrictEqual(meta.taskPayload, input.payload) || !isDeepStrictEqual(checkpoint.payload, input.payload)
     || meta.originalCandidateHash !== createHash('sha256').update(JSON.stringify(document)).digest('hex')
     || review.stage !== 'final-brief' || review.requestId !== input.taskId || review.decision !== 'blocked'
@@ -711,7 +756,7 @@ export async function requireStoryboardArtCorrectionAuthorization(tx: Pick<Prism
     || correction.originalReviewResponseHash !== review.responseHash) {
     throw new HermesResearchRunError('SOURCE_NOT_READY', 'Storyboard art correction authorization changed');
   }
-  return { requestDigest: meta.requestDigest, originalCandidateHash: review.candidateHash as string,
+  return { id: receipt.id, createdAt: receipt.createdAt, requestDigest: meta.requestDigest, originalCandidateHash: review.candidateHash as string,
     originalReviewResponseHash: review.responseHash as string };
 }
 
@@ -1146,7 +1191,8 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             return { run, dispatchIds: [] as string[] };
           }
           const savedReceipt = await tx.auditLog.findFirst({ where: {
-            action: { in: ['hermes.research_run.storyboard_checkpoint_resume', 'hermes.research_run.storyboard_output_resume', STORYBOARD_ART_CORRECTION_ACTION] },
+            action: { in: ['hermes.research_run.storyboard_checkpoint_resume', 'hermes.research_run.storyboard_output_resume',
+              STORYBOARD_ART_CORRECTION_ACTION, STORYBOARD_ART_RESUME_ACTION] },
             targetType: 'hermes_research_run', targetId: run.id, actorId: input.actorId,
             metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey },
           } });
@@ -1155,11 +1201,11 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
               throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Storyboard recovery key belongs to another request');
             return { run, dispatchIds: [] as string[] };
           }
-          const art = await inspectStoryboardArtCorrection(tx, run);
+          const art = await inspectStoryboardArtCorrection(tx, run) ?? await inspectStoryboardArtCorrection(tx, run, true);
           if (art) {
             if (run.version !== input.expectedVersion) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before art correction');
             if (planningReceipt) throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Art correction key was already used');
-            const correction = { schemaVersion: 1, authorizationRequestDigest: requestDigest,
+            const correction = { schemaVersion: 1, authorizationRequestDigest: art.authorization?.requestDigest ?? requestDigest,
               executionAttempt: art.task.executionAttempt + 1, originalCandidateHash: art.review.candidateHash,
               originalReviewResponseHash: art.review.responseHash };
             const taskChanged = await tx.agentTask.updateMany({ where: { id: art.task.id, status: 'failed', deletedAt: null,
@@ -1175,16 +1221,22 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             if (taskChanged.count !== 1 || stepChanged.count !== 1 || runChanged.count !== 1)
               throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Storyboard art correction changed');
             await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId,
-              action: STORYBOARD_ART_CORRECTION_ACTION, targetType: 'hermes_research_run', targetId: run.id,
-              metadata: { correction: STORYBOARD_ART_CORRECTION, requestDigest, clientIdempotencyKey: input.idempotencyKey,
+              action: art.authorization ? STORYBOARD_ART_RESUME_ACTION : STORYBOARD_ART_CORRECTION_ACTION,
+              targetType: 'hermes_research_run', targetId: run.id,
+              metadata: { requestDigest, clientIdempotencyKey: input.idempotencyKey,
                 expectedVersion: input.expectedVersion, taskId: art.task.id, stepId: art.step.id,
                 previousExecutionAttempt: art.task.executionAttempt, previousRetryCount: art.task.retryCount,
-                authorizedExecutionAttempt: art.task.executionAttempt + 1, authorizedRetryCount: art.task.retryCount + 1,
                 taskPayload: art.task.payload, originalCandidateHash: art.review.candidateHash,
                 originalReviewResponseHash: art.review.responseHash, sourceEvidenceIdentity: art.checkpoint.sourceEvidenceIdentity,
                 narrativeSourceIdentity: art.checkpoint.narrativeSourceIdentity, baseIdentity: art.checkpoint.baseIdentity,
-                allowedOperations: ['illustration-art', 'illustration-plan-review'], chargeableAttempts: 2, newTaskCount: 0,
-                remainingImageTasks: 1, noScientificReplanning: true, noProviderSwitch: true } }, ctx);
+                newTaskCount: 0, remainingImageTasks: 1, noScientificReplanning: true, noProviderSwitch: true,
+                ...(art.authorization ? { authorizationAuditId: art.authorization.id,
+                  authorizationRequestDigest: art.authorization.requestDigest,
+                  resumedExecutionAttempt: art.task.executionAttempt + 1, resumedRetryCount: art.task.retryCount + 1,
+                  additionalAuthorizedOperations: 0, chargeableAttempts: 0, priorSubmission: 'none' }
+                  : { correction: STORYBOARD_ART_CORRECTION,
+                    authorizedExecutionAttempt: art.task.executionAttempt + 1, authorizedRetryCount: art.task.retryCount + 1,
+                    allowedOperations: ['illustration-art', 'illustration-plan-review'], chargeableAttempts: 2 }) } }, ctx);
             return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [art.task.id] };
           }
           const planning = await inspectFailedStoryboardPlanning(tx, run);

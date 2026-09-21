@@ -28,6 +28,8 @@ function presentationClaimContent(claims: readonly PresentationClaim[]): string 
 }
 
 type StoryboardPlan = Awaited<ReturnType<typeof generateStoryboard>> & { reviewFormat?: 2 };
+// Match task claim/completion and asset persistence: retry only rolled-back database conflicts.
+const STORYBOARD_CHECKPOINT_RETRY_DELAYS_MS = [10, 25, 50, 100, 200] as const;
 type StoryboardReview = Awaited<ReturnType<typeof reviewIllustrationStoryboard>>['provenance'];
 type StoryboardAcceptance = {
   document: StoryboardDocument;
@@ -710,7 +712,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             : { ...(expectedResult as Record<string, unknown> | null), storyboardCheckpoint: checkpoint,
               ...(review ? { storyboardReview: review } : {}), ...(acceptance ? { storyboardAcceptanceCheckpoint: acceptance } : {}) };
           // Persist the paid plan before Chat review. A failed review must not restart planning.
-          await deps.prisma.$transaction(async tx => {
+          const saveCheckpoint = () => deps.prisma.$transaction(async tx => {
             const { owner: currentOwner, payload: currentPayload } = await requireIllustrationReviewAuthority(tx, {
               taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId,
             });
@@ -752,6 +754,13 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             }, data: { result: JSON.parse(JSON.stringify(nextResult)) as Prisma.InputJsonValue } });
             if (savedCheckpoint.count !== 1) throw new Error('[blocked] Storyboard checkpoint owner changed');
           }, { isolationLevel: 'Serializable' });
+          for (let attempt = 0; ; attempt += 1) {
+            try { await saveCheckpoint(); break; }
+            catch (error) {
+              if ((error as { code?: unknown })?.code !== 'P2034' || attempt >= STORYBOARD_CHECKPOINT_RETRY_DELAYS_MS.length) throw error;
+              await new Promise<void>(resolve => setTimeout(resolve, STORYBOARD_CHECKPOINT_RETRY_DELAYS_MS[attempt]));
+            }
+          }
           expectedResult = JSON.parse(JSON.stringify(nextResult));
         };
         const saved = readStoryboardCheckpoint(owner.result, identity);
