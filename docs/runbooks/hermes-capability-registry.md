@@ -46,9 +46,11 @@
 
 ### 当前技术债与处理
 
+生产退出路径（2026-09-21已复现，未修复）：正常部署两次等待旧API/Worker退出，确认无running AgentTask后按精确旧ID/StartedAt停止才完成。静态High定位 `apps/agent-worker/src/index.ts` 的SIGTERM只调用journal停timer函数，主消费器仍 `while(true)`，没有停止claim/排空/连接释放；API入口亦无显式关闭流程，但PID1信号行为仍属推断。下一步应在现有生命周期中统一停止新claim、排空在途任务后关资源，保持队列恢复语义；缩短Docker超时不能当根治。本轮未在活跃模型任务期间重启服务。
+
 论文视觉叙事（2026-09-21已部署，运行事实见CURRENT）：用户已批准HTML方案，要求未读论文者也能理解核心思想，六维内容与整组图片一起交付。`illustration-planner.ts`原地增强既有science/art，同次组织mainMessage、受众与1–6个有序场景，再按需混排可用原图和生图；原图复用也经科学叙事审阅。`scientific-writing-source.ts`绑定同版本SDF、科学审校、Claim和受控SourceMap，不新造全文分析器。v2原样Fig.1的审美/独立解释仍未获接受，保留原件与公开历史。
 
-自动编排已部署：`research-run.ts`新增显式visual-narrative-v1初始授权；最多9项后续分析/审阅/媒体任务，旧profile行为保持。内部保存/证据核验/素材批准均走原Domain权限、CAS和来源约束，系统审计与用户确认分开。现有extract默认v4自检没有最终atomic Claims，旧canonical稿还可能缺六维字段；复用既有SourceMap composition与reviewOnly最终审阅，各最多一次，不手填科学内容。`automatic-review.ts`消费严格已审结果，`saved-source-commit.ts`统一人工与系统版本历史读取；确切key重放不回退其他run。源编排已完成High静态增量审查；最终v5仍为既有Gateway model self-check，不能称Chat独立科学审查。站内guide已成功；首次run创建因旧DB grant check拒绝新profile/9组合而500，补210200向前迁移（已High静态复核）后复用原幂等请求恢复。实际六维/图片与质量待观察。
+自动编排已部署：`research-run.ts`新增显式visual-narrative-v1初始授权；最多9项后续分析/审阅/媒体任务，旧profile行为保持。内部保存/证据核验/素材批准均走原Domain权限、CAS和来源约束，系统审计与用户确认分开。现有extract默认v4自检没有最终atomic Claims，旧canonical稿还可能缺六维字段；复用既有SourceMap composition与reviewOnly最终审阅，各最多一次，不手填科学内容。`automatic-review.ts`消费严格已审结果，`saved-source-commit.ts`统一人工与系统版本历史读取；确切key重放不回退其他run。源编排已完成High静态增量审查；最终v5仍为既有Gateway model self-check，不能称Chat独立科学审查。站内guide已成功；首次run创建因旧DB grant check拒绝新profile/9组合而500，210200向前迁移经High复核并已部署，原幂等请求恢复HTTP202、自动进入既有全文composition。实际composition六字段完整，但v5来源审查主请求300002ms超时、备用key401，无有效审校、无新图。候选只补最终来源审查65k/600s和primary-only（不在不确定提交后换key），并用review_unavailable区分服务失败，科学内容不放行；High增量复核通过。旧run可能已计费且按逻辑task计数，不能据ALL_PROVIDERS_FAILED自动重试或另建run绕额度。恢复需明确收费授权及原Domain的CAS/候选身份/attempt与剩余scene预算收口，目前无恢复API或追加调用。
 
 实际图片审阅与阅读已部署：`generated-image-review.ts`经既有Chat review spool发送保存图片的原字节；schema3支持PNG/JPEG/WebP≤10MiB、≤8192边、≤40MP，原图超规格只排除自动reuse，资产保留；schema1不扩限。先存draft再审、同身份重放、只有客观渲染缺陷可作有界修订，科学问题保留并停止。`historyMedia.reader`复用既有快照保存title/narration/order并入发布hash；私有Overview按精确run.versionId展示整组，旧快照不回写。用户收到完整结果后反馈，中间没有审批关卡；自动approved不等于审美认可或公开许可。High已完成协议/投影等静态审阅；浏览器图片上传和全链路效果尚未观察。
 当前定向补接：真实原图reuse、多字段长度反馈、明确发布选图均有真实产品结果。guide漏style导致UI回落technical的修复已部署；新create必须显式style，同一修复反馈最多1786字符，避免Gateway忽略超2000字符反馈，预算/历史兼容语义不变。新缺风格拒绝行为尚无实际模型结果；状态只见CURRENT。

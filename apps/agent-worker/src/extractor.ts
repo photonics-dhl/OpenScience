@@ -23,7 +23,7 @@ import { PAPER_ANALYSIS_SKILL } from './skills/paper-analysis.js';
 import { SCIENTIFIC_SUMMARY_SKILL } from './skills/scientific-summary.js';
 import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from './skills/scientific-critical-thinking.js';
 import type { ParserRasterResult } from './parsers/job-protocol';
-import { SCIENTIFIC_READING_OPTIONS, SCIENTIFIC_SYNTHESIS_OPTIONS } from './scientific-generation-options';
+import { SCIENTIFIC_READING_OPTIONS, SCIENTIFIC_REVIEW_OPTIONS, SCIENTIFIC_SYNTHESIS_OPTIONS } from './scientific-generation-options';
 
 /** 六字段 core 结构（§5.1：schemaVersion + 6 字段，全部 string）。 */
 export interface ExtractedCore {
@@ -63,8 +63,8 @@ export interface ExtractionResult extends Record<string, unknown> {
   evidenceSegments?: Record<(typeof SDF_CORE_FIELDS)[number], Array<{ quote: string; sourceLocator: SourceLocator }>>;
   /** Optional atomic suggestions from the final scientific review, bound to these exact field segments. */
   reviewedClaimSuggestions?: ReviewedClaimSuggestion[];
-  /** Present only when structured retries exhausted after retaining at least one supported canonical field. */
-  reason?: 'canonical_partial_validation_exhausted';
+  /** Service failures are distinct from invalid or unsupported scientific output. */
+  reason?: 'canonical_partial_validation_exhausted' | 'scientific_review_unavailable';
   /** Exact final guard reasons for unresolved fields; explicitly missing fields are omitted. */
   fieldDiagnostics?: Record<string, string>;
   /** Numeric validation context for unresolved fields; never contains source text. */
@@ -87,7 +87,7 @@ export interface ExtractionResult extends Record<string, unknown> {
     usage?: { inputTokens: number; outputTokens: number };
     finishReason?: 'stop' | 'length' | 'other' | 'unknown';
     contractVersion: '4' | '5';
-    status: 'review_received' | 'awaiting_review_evidence' | 'blocked_scientific_review';
+    status: 'review_received' | 'awaiting_review_evidence' | 'blocked_scientific_review' | 'review_unavailable';
     attemptId: string;
     promptHash?: string;
     responseHash?: string;
@@ -1132,7 +1132,8 @@ type CanonicalFieldValidationReason =
   | 'core_text_limit_4000'
   | 'language_violation'
   | 'math_integrity_error'
-  | 'results_not_outcome';
+  | 'results_not_outcome'
+  | 'scientific_review_unavailable';
 
 interface CanonicalRepairResponse {
   schemaVersion: string;
@@ -2103,7 +2104,7 @@ async function modelScientificReviewCanonicalProposal(
         [{ role: 'system', content: SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions
           + '\n你是当前候选的来源审校者。按候选的每项实质断言回读原文并作最小必要修订，不另选主题重新成稿。accepted必须逐字保留原summary和原来源集合，issues为空；revised必须实际修正文或来源，issues至少一项，说明原断言、来源和修订原因；blocked必须有问题或明确补证请求。每项保留断言及其限定都须有最终引用，不以引用存在代替语义支持。纠正后仍须与其他字段的对象、算例和范围一致；不能把一个算例的互证写成另一个算例或全篇互证。只返回规定JSON，不宣布科学通过。' },
           { role: 'user', content: prompt }],
-        { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxTokens: 65_536, maxRetries: 1,
+        { ...SCIENTIFIC_REVIEW_OPTIONS, maxRetries: 1, primaryProviderOnly: true,
           validationFeedback: () => '只返回fields、needsMoreEvidence及可选claimSuggestions。六字段各只含verdict、summary、sourcePassageIds、issues；verdict为accepted/revised/blocked，issues每项只含code、problem、sourcePassageIds，code遵循原合同。保留必要科学条件，P编号只取原文。'
             + candidateIssues.join('；') + validation.feedback() },
       );
@@ -2134,13 +2135,16 @@ async function modelScientificReviewCanonicalProposal(
       : `scientificReview=${failure}`;
     return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }];
   })) as ExtractedProposal['fields'];
-  const status = parsed?.needsMoreEvidence.length ? 'awaiting_review_evidence'
+  const serviceUnavailable = !parsed && ['ALL_PROVIDERS_FAILED', 'NO_PROVIDER_CONFIG'].includes(failure);
+  const status = serviceUnavailable ? 'review_unavailable'
+    : parsed?.needsMoreEvidence.length ? 'awaiting_review_evidence'
     : blocked.size ? 'blocked_scientific_review' : 'review_received';
   return {
     ...(parsed ? { suggestions: { response: parsed, passages: reviewPassages } } : {}),
     partial: {
       proposal: { schemaVersion: SDF_CORE_VERSION, fields },
-      fieldDiagnostics: Object.fromEntries([...blocked].map((field) => [field, 'malformed_item' as const])),
+      fieldDiagnostics: Object.fromEntries([...blocked].map((field) => [field,
+        serviceUnavailable ? 'scientific_review_unavailable' as const : 'malformed_item' as const])),
       fieldDiagnosticsDetails,
       unverifiedSummaries: Object.fromEntries([...blocked].map((field) => [field, parsed?.fields[field].summary || proposal.fields[field].summary])),
       unverifiedSourcePassageIds: Object.fromEntries([...blocked].map((field) =>
@@ -2572,7 +2576,7 @@ async function reviewAndMaterializeCanonicalProposal(
   if (Object.keys(reviewed.partial.fieldDiagnostics).length === 0) return result;
   return {
     ...result,
-    reason: 'canonical_partial_validation_exhausted',
+    reason: reviewed.review?.status === 'review_unavailable' ? 'scientific_review_unavailable' : 'canonical_partial_validation_exhausted',
     fieldDiagnostics: reviewed.partial.fieldDiagnostics,
     fieldDiagnosticsDetails: reviewed.partial.fieldDiagnosticsDetails,
     unverifiedSummaries: reviewed.partial.unverifiedSummaries,

@@ -29,7 +29,7 @@
 ## 产品目标与交付差额
 | 交付 / Taskmaster ID | 当前实际资产、认可与剩余工作 |
 |---|---|
-| 论文视觉叙事 · 5 | 用户否定v2原样Fig.1的美感/独立解释能力，只有9f/aa41有用户认可依据。自动制作/内部审校/读者标题说明顺序已部署；真实Hermes guide成功，首次启动因旧DB grant约束500，尚无新run/图片。正在补向前迁移并恢复原请求；完整六维/整组与用户质量接受仍未完成。 |
+| 论文视觉叙事 · 5 | 用户否定v2原样Fig.1的美感/独立解释能力，只有9f/aa41有用户认可依据。自动制作/内审/reader已部署，grant补迁移后原请求恢复为e3ef004f；六维初稿完整，但最终来源审校服务超时而failed，未生成/发布新图。完整图组与质量接受未完成；保留初稿，不能伪造科学通过。 |
 | 学术机制图 · 1 | 145af7bf-f9a5-46ca-a346-4914fdcbf17f与父d0b36138均approved，但本轮未纳入v2；用户此前认可a7488c14版面，该资产现rejected，6d69159a/803e590b也rejected，不恢复旧状态。仍需核当前认可作品与后续发布选择。 |
 | 编辑封面 · 2 | 上下文/字段反馈/style补丁已上线；51eb/e253人工未放行，aaf7被现有科学审阅blocked，无新Chat图片。旧ac166 rejected，76918e55/7cd50e44 uncertain窗口已过。科学范围继承缺口保留；后续规划服从任务5的论文叙事，不重发历史任务。 |
 | 淡彩手绘 · 3 | aa41a018-b2ff-4ffb-9557-19ecabe104bc 用户明确认可、approved，现已进入公开v2；保护原图。f424 rejected，不能计新增风格。 |
@@ -52,7 +52,7 @@
 - CUA本机policy初始化恢复已耗尽，不重试；沿用服务器Playwright/CDP。Langfuse已登录，额度/cost未知不算免费；SMTP/SSO/定时备份等原缺口保留，但不扩成本轮治理工程。
 
 ## Git、生产与独立能力版本
-- 应用production=caee4789d74e6605461621a3ffa1aecf31517024，rollback=ea6b655f666c248a2b3495beb947bbda190561ae；服务器编译/构建/迁移/启动exit0，日志tmp/visual-narrative-deploy-caee4789.log。命令--no-tests --reuse-unchanged-capability-images（未跳过迁移）；未测试/预检/CI/本机构建。6cd/effa构建类型错误已由effa/caee精确修正。旧API/Worker停机卡住且无running AgentTask后，按精确旧ID/StartedAt停止，部署完成；未称根治停机故障。HEAD按Git定锚；根main acd13a712549e62f8d4b0f3c2f8f064549e226b0，worktree仅根+交付树。
+- 应用production=89238049dbf18f8a52fecba6a9ef65ec886fe2ca，rollback=caee4789d74e6605461621a3ffa1aecf31517024；服务器编译/构建/迁移/启动exit0，日志tmp/visual-narrative-grant-deploy-20260921.log（前一部署日志visual-narrative-deploy-caee4789.log保留）。命令--no-tests --reuse-unchanged-capability-images（未跳过迁移）；未测试/预检/CI/本机构建。6cd/effa构建类型错误已由effa/caee精确修正。旧API/Worker停机卡住且无running AgentTask后，按精确旧ID/StartedAt停止，部署完成；未称根治停机故障。HEAD按Git定锚；根main acd13a712549e62f8d4b0f3c2f8f064549e226b0，worktree仅根+交付树。
 - Chat provider独立bundle=6cd6d89d78e1fdd8335b298d34b05cf46493df1a，兼容schema1/2/3；既有锁内安装后两个timer恢复enabled/active，未重启共享浏览器。备份/opt/openscience-chatgpt-browser/provider-backup-20260921-narrative-6cd6d89d，日志tmp/visual-narrative-provider-install-20260921.log；renderer仍sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f。应用/provider分别回退，原units/live/bundle保留。
 - Serena源6684e448a6d924f7f5b1adce9e0e2e4057aa88d3；Catalog e02、telemetry061882123d14be00b868c1971c9d56de21d83b6e、SkillsCLI83179c454b75688176060fabf9e611072d46813c、Langfuse4.35.0复用。无新依赖/治理服务；新增迁移事实见检查点。
 
@@ -61,11 +61,13 @@
 - 已部署：visual-narrative-v1显式初始授权、最多9项后续分析/审阅/媒体任务（既有上传提取不重复计入）、generationSettings可空JSON；已审core/atomic Claims自动物化新私有版本，证据经原桥精确原文校验后系统核验，不填人工verifiedByUserId；分镜/成图内部批准与有界修订，旧profile不自动耗费。新增commit前缀保护、索引生产者识别严格绑定的系统物化版本。
 - 叙事worker已完成：narrative:true复用同版本SDF/科学审阅/受控SourceMap，上游完整分析不重造；现有science/art组织1–6有序场景，可混排可用原图，mainMessage/audience及reader narration保留；原图不跳过末审。实际图审阅新增schema3，经原Chat review spool传真实图片，先保存draft再审，回放不重生图；成图审阅真实性尚未运行观察。
 - 发布/私有阅读已部署：同一historyMedia保存reader顺序/标题/解说并进入原content hash，旧快照兼容；UI隐藏中间审批。固定run.versionId阅读、刷新后pending幂等和私有reader投影已收口；Drawer预填原文/风格，服务端重读授权来源。High提出的模型误分类扣费、同名PDF及版本标题问题已修复：只有初始按钮启动整条流程（中间全自动），来源可区分、标题冻结；增量复核通过，不新增意图模型。
-- High提出的问题已修正：图审阅4MiB PNG与已有输出不兼容，已改为schema3原字节PNG/JPEG/WebP≤10MiB、超规格论文原图在规划前排除自动reuse（原资产保留），schema1不扩限；ready前提前占预约已修；跨幂等key共享run优化已移除；commit/Claim系统执行审计已补；无key历史读取已改为最新有效人工/系统版本。协议3、planner、来源投影和迁移静态复核未见阻断，源衔接及自然语言最终差异均通过High静态增量复核。仍须服务器必要编译/迁移/provider receiver先行/应用部署与真实产品路径。provider安装器另补可选--defer-timers，避免半安装提前启动；本次wrapper可恢复units/live与原timer状态，异常保持停止，独立High复核通过。未运行任何测试/预检/CI/本机构建。
+- High提出的问题已修正并部署：schema3原字节PNG/JPEG/WebP≤10MiB、超规格原图只排除自动reuse；ready前预约、跨key共享run、系统审计、保存历史与源衔接均已收口。provider先行后应用编译/迁移/部署与真实入口已完成，实际成图尚未运行。安装器--defer-timers与异常回退保持，未测试/预检/CI/本机构建。
 - 来源证据：Quantization cee71443/960ffcc1、d98862b0/51a87b65仅canonical旧稿、缺六维/最终Claims。已部署复用既有SourceMap composition与reviewOnly，各最多一次并计入9项、事务同步run/source绑定；v5仍为Gateway model self-check，实际成图才经Chat看图审查，不混称独立科学验证。双库备份db-set-20260921T032005Z-2320106成功，core45M/search3.4M，保留7/7。
-- 实际入口：公开v2→研究桌面→继续编辑→研究详情→Hermes→guide d9ad62fc-294c-4140-903b-f4d4fec046e4成功→打开图文制作→选择cee71443→初始制作按钮。04:15:43Z POST500，数据库23514拒绝visual-narrative-v1/9，210100迁移遗漏旧generation_grant_check扩展；新增210200向前迁移待审/部署，不改已应用迁移。一次性收据/jobs/visual-narrative-{guide-submit,run-start}-20260921.json保留；原guide key/页面pending保持，未盲重发。旧overview重试图是已知Fig.2占位77b3，不是新素材接口故障。
+- 实际入口：公开v2→研究桌面→继续编辑→研究详情→Hermes→guide d9ad62fc-294c-4140-903b-f4d4fec046e4→图文制作→cee71443→初始按钮。04:15:43Z POST500/23514因grant约束遗漏，210200向前迁移后原幂等请求恢复HTTP202，run e3ef004f-38bb-4fa2-88e4-e6df4f07a0b2；页面刷新sameRun=true/POST0。一次性收据/jobs/visual-narrative-{guide-submit,run-start,run-reopen}-20260921.json保留。旧overview失败图是Fig.2占位77b3，不是新素材接口故障。
+- 来源实际：composition e7e3620a-a7e9-419f-8ca3-0cc694533650成功，六字段完整；reviewOnly a00c5a7b-b554-4ee5-b42c-4be4545f4037虽task succeeded，内容v5 blocked/ALL_PROVIDERS_FAILED，e3现failed/version7/versionId=null。审计f635736b主MiniMax-M3请求300002ms provider_timeout、382f3787备用key94ms HTTP401，无有效review responseHash，非论文科学拒绝。收据/jobs/visual-narrative-source-review-failure-20260921.json，原e7/SourceMap/PDF保留，未物化新版本或生图。
+- 最小修复候选：仅最终来源审校65k/600s，provider硬上限600s、普通调用不变；primaryProviderOnly禁止超时/HTTP/transport后切key/model，已完成文本的有界结构修正仍留在同primary；review_unavailable/独立reason不再冒称malformed_item，未审core仍为空。High增量复核通过。历史请求是否计费未知，原9项按逻辑任务而非provider调用计数；旧run不自动重开，不用新run绕额度，不伪造approved。无有效v5可零模型恢复；补审需新增收费与严格同run恢复设计，目前未新增API或调用。
 
 ## 下一动作与交接入口
-- 优先任务5：补齐数据库旧grant约束后用原幂等请求恢复，完成六维/整组图片真实运行与私有阅读；A叙事/B代表成图/C整组不是用户审批关卡。原图/生图按叙事选择，公开前仍由用户接受最终质量。Quantization使用新私有版本，不向e77写入或盲重发aaf7；全文上限、旧约束继承/深色标准化债务保留。
+- 优先任务5：完成当前超时/错误分类修正部署，然后仅在用户接受本次可能重复计费后补来源审校；既有API不能恢复此未物化failed run，需在原Domain恢复入口做CAS/来源身份/真实attempt计数及剩余scene预算约束，不能直接DB改状态或新建run重置额度。最终仍交付六维/整组而非中间审批；不向e77写入或盲重发aaf7。全文上限、停机、旧约束继承/深色标准化债务保留。
 - 先读本页，再按故障读 docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md 最新节；能力缺口在 docs/runbooks/hermes-capability-registry.md 原行更新，历史长证据不重复执行。
 - 收尾两树status必须为空，提交/推送自己的改动，prune/list。本轮已精确删除4个已结束且无用的只读UI临时助手，收据tmp/pipeline-owned-helper-cleanup-20260921.json；保留一次性写请求及收据、原图/日志/会话/他人任务/回滚。现有每日09:00维护automation=automation，不再创建；临时证据仅ignored tmp/私有目录。

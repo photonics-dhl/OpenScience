@@ -88,9 +88,12 @@ export type GatewayCompletion = ProviderResult & { provider: string; promptHash:
 type TextExecutionControls = {
   beforeProviderAttempt?: () => Promise<void>;
   reviewSourceIdentity?: string;
+  primaryProviderOnly?: boolean;
 };
 
 export type StructuredGenerationOptions = TextGenerationOptions & {
+  /** Do not submit a second key/model after an uncertain paid source-review call. */
+  primaryProviderOnly?: boolean;
   validationFeedback?: (value: unknown) => string | undefined;
   validationDiagnostic?: (value: unknown) => string | undefined;
   maxRetries?: number;
@@ -355,6 +358,7 @@ export class AiGateway {
     for (let i = 0; i < this.providers.length; i++) {
       const provider = this.providers[i];
       const isPrimary = i === this.primaryIndex;
+      if (controls.primaryProviderOnly && !isPrimary) continue;
       const capability = await this.providerEnabled(provider.name, 'text');
       if (!capability.enabled) {
         fallbackNotes.push(`${provider.name}:${capability.reason ?? 'disabled'}`);
@@ -441,6 +445,9 @@ export class AiGateway {
         // at the same allowance is not a transport recovery and spends it again.
         if (responseDetails?.finishReason === 'length') {
           throw new AiGatewayError('STRUCTURED_OUTPUT_TRUNCATED', 'Provider exhausted output allowance before producing text', e);
+        }
+        if (controls.primaryProviderOnly) {
+          throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'Primary provider failed; automatic fallback is disabled for this request', e);
         }
         fallbackNotes.push(`${provider.name}:${failure}`);
         this.logger?.warn?.(`AI provider ${provider.name} failed category=${failure}; trying configured fallback`);
@@ -543,7 +550,7 @@ export class AiGateway {
         const result = await this.completeWithControls(retryMessages, {
           temperature: opts.temperature, maxTokens: currentMaxTokens,
           thinking: opts.thinking, topP: opts.topP, timeoutMs: opts.timeoutMs,
-        }, controls);
+        }, { ...controls, primaryProviderOnly: controls.primaryProviderOnly || opts.primaryProviderOnly });
         if (result.finishReason === 'length') {
           const escalation = opts.escalateMaxTokens;
           if (!escalated && escalation !== undefined && Number.isSafeInteger(escalation) && escalation > currentMaxTokens) {

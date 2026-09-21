@@ -29,7 +29,7 @@ export type TextGenerationOptions = Omit<CompleteOptions, 'model' | 'messages'>;
 
 function textTimeout(options: CompleteOptions): number {
   const timeout = options.timeoutMs ?? 60_000;
-  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 300_000) {
+  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 600_000) {
     throw new TextProviderError('provider_error', 'Invalid text timeout');
   }
   return timeout;

@@ -27,6 +27,9 @@ function automaticSourceReference(task: AutomaticIngestionSource, value: unknown
 export function automaticIngestionReview(task: AutomaticIngestionSource) {
   const result = record(task.agentTask?.result);
   const review = record(result.scientificReview);
+  if (review.status === 'review_unavailable' || result.reason === 'scientific_review_unavailable') {
+    throw new IngestionError('VALIDATION_ERROR', 'The scientific review service is unavailable; the prior draft is preserved and has not been scientifically rejected');
+  }
   const core = record(result.core);
   const segments = record(result.evidenceSegments);
   const claims = parseReviewedClaimSuggestions(result.reviewedClaimSuggestions,
