@@ -2,6 +2,13 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
+## 2026-09-22 容量修复发布中断与恢复
+
+- 候选7dfed6fd首次部署SSH reset，主应用仍f12，Parser/BGE部分切换，journal停在switching；未发新模型。独立High审查后，在同一FD9下恢复两个服务到f12，核主应用四容器ID未变，原journal保留内容/权限归档至服务器`/opt/openscience/observations/deploy-recovery-20260922-7dfed6fd`，官方journal-clear成功。本机长脚本argv截断只到Python解析错误、未执行；后改STDIN。初次STDIN因证据父目录缺失而在容器写操作前停止，补建私有目录后恢复exit0。临时传输助手已改STDIN，不能据此声称修复上游argv缺陷。
+- 第二次沿同一已物化候选的官方前台事务，no-tests/skip-migrate/复用未变能力镜像，远端私有日志`/opt/openscience/observations/deploy-7dfed6fd-retry-20260922.log`。构建、服务启动、active CAS成功，最后公网确认失败并自动回滚；现f12/rollback faa、journal与failed均无。既有Nginx日志00:44:36及00:44:44显示首页502、连接127.0.0.1:3000被拒绝；原Web未定义healthcheck，running不足以证明监听。失败容器已由回滚删除、旧日志未保留，不能猜测启动根因；下一步只定向诊断此启动故障，禁止重复模型或盲重部署。
+- 原e3ef004f仍stopped/version41、5226 checkpoint保留；本轮尚未点击新的checkpoint审阅续接。全文/Claims、原图片及公开版本均未改变。当前运行状态与交付差额仍只见CURRENT。
+- 一次不发布端口的原命令Web诊断实际exit1：`EACCES open apps/web/.next/BUILD_ID`，candidate文件0600、server/static目录0700；旧f12分别0644/0755。根因是本次私有日志wrapper把全局umask077传入build，非模型/鉴权/论文故障。原runtime-normalize只管worker闭包，不包含Web；不能以容器running冒称Web已就绪。诊断容器已精确移除、生产Web ID保持，日志`/opt/openscience/observations/web-startup-7dfed6fd-20260922.log`保留。修正只让077覆盖日志FD创建，build恢复022；从新干净HEAD物化新候选正常构建，避免就地修改旧产物权限。未加测试、重试序列或绕过公网确认。
+
 ## 2026-09-21 用户纠正：原图截取不是论文视觉叙事交付
 
 - 用户用公开v2的Fig.1截图指出：原样裁出展示丑，未读论文者无法清楚理解所传信息。目标是图片（单/多张）与后续视频让读者理解核心思想和关键点；原图/生图/视频按需采用，须同时设计叙事与美感。要求已入需求§18.2、Taskmaster任务5和CURRENT；本轮只静态定位/同步，尚未改生产链路或公开资产。
