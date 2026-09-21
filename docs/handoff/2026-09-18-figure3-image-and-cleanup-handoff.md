@@ -2,6 +2,13 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
+## 2026-09-22 第二篇设计与第三篇分窗的定向取证（最新）
+
+- 第二篇run7e9e已收敛failed/version7/max9、活动0；storyboard7bd6 exec1/retry0/resultNULL，无图片。science审计3a3323e5/78ae3cbc均primary MiniMax-M3、adaptive、16K/32K输出全耗尽、finish length、text0/thinking1/other0、fallback NULL，promptHash相同。没有进入art/末审/Chat。两次latency50689/106467ms；第二次inputTokens1仅provider记账，不能推断缺prompt。只读取证tmp/two-paper-scope-details-20260922.json；High建议沿原planning retry一次恢复同task，65K/600s只作用science，旧图片修订分支不改。候选实现中，未部署/重发。
+- 第三篇同任务2e83在20:17:35Z落needs_review/succeeded但core六项均空，v4 blocked_scientific_review，reason canonical_partial_validation_exhausted；diagnostics全部semanticStage=section_map:SCHEMA_VALIDATION;usage=unavailable。6次OCR实际成功，随后4次text均provider succeeded/stop但结构未过；最后调用20:17:51晚于task落状态。读取既有exact SourceMapRef核摘要/大小/内部身份成功：24页/1554blocks，paragraph200722、caption9368、equation2273字符，source-map e490409c…共818144bytes。证据tmp/third-paper-analysis-failure-read-20260922.json；不扫描对象前缀或读秘密。
+- 当前源码显示长文map提示未给明确外层对象，另一既有阅读路径有完整结构示例；guard/反馈不提供字段诊断。现有元数据没有保留被拒正文，因此不能追认是哪一个字段导致四次校验失败。并发Promise.all提前reject也需收口，避免终态之后仍有调用。下一步修原提示/反馈/收尾，沿既有Hermes composition刷新复用已保存SourceMap，不再解析或另造分析器。
+- 两处候选完成独立High PASS。第二篇3文件：原planning retry增加初始thinking-only失败分类，同task/CAS/原审计/既有源身份，worker每阶段重验；science65536/600s、art旧容量，整个恢复primary-only。High发现unknown类型与art遗漏primary-only均已修并复审。第三篇2文件：两条map共用明确根对象/原guard约束/固定诊断及带被拒候选的原有界反馈；失败停领取并await allSettled，不加预算/模型阶段；内部原source_composition在初始读取及Serializable事务允许历史retryCount1，公共refresh不变。未测试/预检/本机构建，待必要发布及真实请求。
+- 第三篇原overview→Hermes→guide aad65431-6595-4d19-91f5-c8aa80cedf12成功，researchRunDraft保留原完整指令、watercolor、f653；实际“打开图文制作”进入原页面，只有一条来源故没有select，start按钮可见，尚未点。/jobs/third-paper-watercolor-guide-submit-20260922.json已消费；该页选择器等待select超时只是助手假设错误，导航实际成功，无重复发送。第二篇恢复与第三篇run启动的一次性脚本已准备，未执行。
 ## 2026-09-22 容量修复发布中断与恢复
 
 - 候选7dfed6fd首次部署SSH reset，主应用仍f12，Parser/BGE部分切换，journal停在switching；未发新模型。独立High审查后，在同一FD9下恢复两个服务到f12，核主应用四容器ID未变，原journal保留内容/权限归档至服务器`/opt/openscience/observations/deploy-recovery-20260922-7dfed6fd`，官方journal-clear成功。本机长脚本argv截断只到Python解析错误、未执行；后改STDIN。初次STDIN因证据父目录缺失而在容器写操作前停止，补建私有目录后恢复exit0。临时传输助手已改STDIN，不能据此声称修复上游argv缺陷。

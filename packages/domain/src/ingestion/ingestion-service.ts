@@ -1021,7 +1021,10 @@ export async function refreshIngestionAnalysis(
     ? oldAgent.payload as Record<string, unknown> : null;
   const policy = oldAgent ? refreshPolicy(oldAgent.result, initial.artifact) : undefined;
   if (!policy) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This extraction is not eligible for analysis refresh');
-  const allowedRetries = policy === 'user_requested_reanalysis' ? initial.retryCount : policy === 'grounded_passages_v1' ? 2 : policy === 'grounded_passages_v2' ? 1 : 0;
+  const sourceCompositionRetry = policy === 'scientific_review_v4' && !!internalRunId && !input.reviewOnly
+    && automaticIngestionReviewStage(initial) === 'source_composition';
+  const allowedRetries = policy === 'user_requested_reanalysis' ? initial.retryCount : policy === 'grounded_passages_v1' ? 2
+    : policy === 'grounded_passages_v2' || sourceCompositionRetry ? 1 : 0;
   if (initial.agentTaskId !== input.sourceAgentTaskId || initial.state !== 'needs_review' || initial.retryCount < 0 || initial.retryCount > allowedRetries
     || !oldAgent || oldAgent.kind !== 'sdf.extract' || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== initial.retryCount
     || !validRefreshSourceExecution(policy, initial.id, oldAgent) || oldAgent.session.userId !== input.userId
@@ -1074,7 +1077,12 @@ export async function refreshIngestionAnalysis(
         }
 
         const oldAgent = await tx.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
+        const sourceCompositionRetry = policy === 'scientific_review_v4' && !!internalRunId && !input.reviewOnly
+          && automaticIngestionReviewStage(source) === 'source_composition';
+        const allowedRetries = policy === 'user_requested_reanalysis' ? source.retryCount : policy === 'grounded_passages_v1' ? 2
+          : policy === 'grounded_passages_v2' || sourceCompositionRetry ? 1 : 0;
         if (source.agentTaskId !== input.sourceAgentTaskId || source.state !== 'needs_review' || source.retryCount !== initial.retryCount
+          || source.retryCount < 0 || source.retryCount > allowedRetries
           || !oldAgent || oldAgent.id !== input.sourceAgentTaskId || oldAgent.kind !== 'sdf.extract'
           || oldAgent.status !== 'succeeded' || oldAgent.retryCount !== source.retryCount || !validRefreshSourceExecution(policy, source.id, oldAgent)
           || oldAgent.session.userId !== input.userId || oldAgent.session.researchObjectId !== source.batch.researchObjectId

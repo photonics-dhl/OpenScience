@@ -17,7 +17,7 @@ import { Prisma } from '@prisma/client';
 import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
 import { requireStyleReferenceImage } from '@openscience/domain';
 import { readStoredIllustrationIssues, reviewIllustrationStoryboard } from './illustration-review';
-import { clarifyIllustrationLabels } from './illustration-planner';
+import { clarifyIllustrationLabels, generateIllustrationStoryboard } from './illustration-planner';
 import { readVisualNarrativeSource, resolveVisualNarrativeSource } from '../scientific-writing-source';
 import { generatedImageReviewAttachment, readStoredGeneratedImageReview, reviewGeneratedImage } from './generated-image-review';
 
@@ -797,6 +797,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             throw new Error('[blocked] Storyboard continuation has no current art correction authorization');
           }
         } else {
+          let initialScienceRecovery: { id: string; metadata: Record<string, unknown> } | undefined;
           if (task.executionAttempt > 1) {
             const receipts = payload.hermesRunAuthority ? await deps.prisma.auditLog.findMany({ where: {
               action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run',
@@ -810,6 +811,15 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
               || !isDeepStrictEqual(receipt.taskPayload, owner.payload)
               || receipt.baseIdentity !== identity.baseIdentity || receipt.sourceEvidenceIdentity !== identity.sourceEvidenceIdentity) {
               throw new Error('[blocked] Previous paid storyboard attempt has no saved plan; explicit new planning is required');
+            }
+            if (receipt.planningFailureClass === 'initial_science_thinking_exhausted') {
+              if (receipt.previousRetryCount !== 0 || receipt.noProviderSwitch !== true
+                || receipt.claimContent !== identity.claimContent || receipt.narrativeSourceIdentity !== identity.narrativeSourceIdentity
+                || !narrativeSource || identity.baseIdentity !== null || base || planningContext.revision || planningContext.imageRevision
+                || payload.storyboard.revisionMode || payload.storyboard.revisionTaskId || payload.storyboard.revisionImageAssetId) {
+                throw new Error('[blocked] Initial science recovery source changed');
+              }
+              initialScienceRecovery = { id: receipts[0]!.id, metadata: receipt };
             }
           }
           if (planningContext.imageRevision) {
@@ -835,7 +845,39 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
               }, paperOriginals, narrativeSource?.context, { summary: feedback, issues: issues ?? [] })
               : await clarifyIllustrationLabels(options.gateway, claims, payload.storyboard, previous, feedback, issues);
           } else {
-            planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view, paperOriginals, narrativeSource?.context);
+            if (initialScienceRecovery) {
+              const recovery = initialScienceRecovery;
+              const recoveryGateway: Pick<AiGateway, 'completeStructured'> = {
+                completeStructured: async (guard, messages, opts) => {
+                  // Rebind the original receipt and sources before each science/art stage.
+                  await deps.prisma.$transaction(async tx => {
+                    const current = await requireIllustrationReviewAuthority(tx, {
+                      taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId,
+                    });
+                    const receipt = await tx.auditLog.findUnique({ where: { id: recovery.id } });
+                    const run = await tx.hermesResearchRun.findUnique({ where: { id: payload.hermesRunAuthority!.runId } });
+                    const currentClaims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
+                      researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
+                    if (current.owner.executionAttempt !== 2 || current.owner.retryCount !== 1 || current.owner.result !== null
+                      || !isDeepStrictEqual(current.owner.payload, owner.payload) || !isDeepStrictEqual(current.payload, payload)
+                      || receipt?.actorId !== scope.userId || !isDeepStrictEqual(receipt.metadata, recovery.metadata)
+                      || run?.maxAgentTasks !== 9 || run.status !== 'generating_storyboard'
+                      || currentClaims.length !== payload.sourceClaimIds.length || currentClaims.some(claim => claim.extractionStatus !== 'succeeded')
+                      || presentationClaimContent(currentClaims as PresentationClaim[]) !== identity.claimContent
+                      || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) {
+                      throw new Error('[blocked] Initial science recovery authorization changed');
+                    }
+                    await requireUnchangedEvidence(tx);
+                    await requireIllustrationOriginalArtifacts(tx, sourceEvidence, researchObject.workspaceId);
+                  }, { isolationLevel: 'Serializable' });
+                  return options.gateway!.completeStructured(guard, messages, { ...opts, primaryProviderOnly: true });
+                },
+              };
+              planned = await generateIllustrationStoryboard(recoveryGateway, claims, payload.storyboard,
+                undefined, paperOriginals, narrativeSource?.context, undefined, 'initial_science_thinking_exhausted');
+            } else {
+              planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view, paperOriginals, narrativeSource?.context);
+            }
           }
           planned.reviewFormat = 2;
           await persistPlan(planned);

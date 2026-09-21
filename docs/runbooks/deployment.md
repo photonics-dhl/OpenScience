@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 - 前台事务需服务器私有日志时，先以077/noclobber打开日志FD，再恢复构建默认022后执行原runner；不能把077泄漏给构建（已实见Next BUILD_ID0600导致非root Web启动EACCES/首页502）。连接中断或发布失败仍先读journal和运行身份，日志落盘不等于事务成功；不手改release marker或绕过公网确认。
-- 无checkpoint的方案技术失败续接：仅对已停止、源不变、仅终态text调用且首次执行失败的叙事修订，用户动作复用原task再执行一次；Domain同事务保存原失败/调用证据、CAS run/step/task，worker仅凭唯一审计及既有来源身份允许executionAttempt2。UI明确新增模型用量；不新增迁移/receiver协议/逻辑任务额度。沿正常no-tests/skip-migrate部署；收据生成前可回退，恢复任务在途时先自然完成再回退，保留失败与恢复审计/所有资产，不归零执行次数或重新派发。其后保存了完整checkpoint但末审尚未调用时，原checkpoint续接可进入第三次执行，只审阅已保存方案；原来源/候选/调用谱系复验。方案审阅实际走文本池，沿既有100000字符输入边界；Chat协议与像素审阅仍60KiB，本次不需receiver更新。
+- 无checkpoint的方案技术失败续接：对已停止的叙事修订，或首次science两次thinking-only耗尽且尚无方案的failed叙事任务，沿既有明确授权复用原task再执行一次；两类均要求来源不变、仅终态text调用。初次science恢复只有science使用65536/600s，science/art均primary-only；art容量不变；Domain同事务保存原失败/调用证据、CAS run/step/task，worker仅凭唯一审计及既有来源身份允许executionAttempt2。UI明确新增模型用量；不新增迁移/receiver协议/逻辑任务额度。沿正常no-tests/skip-migrate部署；收据生成前可回退，恢复任务在途时先自然完成再回退，保留失败与恢复审计/所有资产，不归零执行次数或重新派发。其后保存了完整checkpoint但末审尚未调用时，原checkpoint续接可进入第三次执行，只审阅已保存方案；原来源/候选/调用谱系复验。方案审阅实际走文本池，沿既有100000字符输入边界；Chat协议与像素审阅仍60KiB，本次不需receiver更新。
 
 同任务art-only修正仅修改应用Domain/worker及恢复提示；不改receiver/迁移/产品总额度。沿正常no-tests/skip-migrate从干净已推送HEAD部署，部署本身不派发模型。显式续作提交后须等原任务自然终态再回退；旧worker不能消费新的storyboardArtCorrection，保留授权审计、原拒收与修正记录，不归零attempt/清除marker重发。若原授权仅初始字段且授权后无模型审计，可沿原retry-generation做一次pre-submission恢复，原收费收据不变、追加零授权运行收据、计数正常增长；存在任何submitted marker不可走该路径。checkpoint只对P2034有限重试数据库事务，模型调用不在循环内。
 

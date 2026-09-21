@@ -497,24 +497,75 @@ function semanticEvidenceNavigation(stage: SemanticStage) {
   });
 }
 
-function readingMapGuard(allowedIds: ReadonlySet<string>): SchemaGuard<ReadingMapResult> {
-  return (value: unknown): value is ReadingMapResult => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const item = value as Record<string, unknown>;
-    const idsValid = (ids: unknown) => Array.isArray(ids) && ids.length <= 32
-      && ids.every((id) => typeof id === 'string' && allowedIds.has(id));
-    return Array.isArray(item.observations) && item.observations.length > 0 && item.observations.length <= 32
-      && item.observations.every((candidate: unknown) => {
-        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
-        const observation = candidate as Record<string, unknown>;
-        return OBSERVATION_KINDS.includes(observation.kind as ReadingObservation['kind'])
-          && ['reported', 'synthesis', 'uncertain'].includes(String(observation.basis))
-          && typeof observation.summary === 'string' && observation.summary.trim().length > 0 && observation.summary.length <= 1_200
-          && typeof observation.caseLabel === 'string' && observation.caseLabel.length <= 160
-          && idsValid(observation.sourcePassageIds) && (observation.sourcePassageIds as unknown[]).length > 0
-          && (observation.qualifierPassageIds === undefined || idsValid(observation.qualifierPassageIds));
-      });
+const READING_MAP_OUTPUT_CONTRACT = [
+  '只输出一个JSON根对象，形状为{"observations":[{"kind":"method","summary":"简短观察","basis":"synthesis","caseLabel":"","sourcePassageIds":["P00001"],"qualifierPassageIds":[]}]}；根对象不可是数组，不加Markdown或解释。此示例仅表示结构，不是论文结论或可引用来源。',
+  `observations必须是1到32项的数组，每项必须是对象。kind是字符串，只能是${OBSERVATION_KINDS.join('/')}；basis是字符串，只能是reported/synthesis/uncertain。`,
+  'summary是去空白后非空且总长不超过1200字符的字符串；caseLabel是长度不超过160字符的字符串，无算例名时用空字符串。',
+  'sourcePassageIds是1到32项的字符串数组；qualifierPassageIds可省略，若提供必须是0到32项的字符串数组。两者只能引用原始输入当前窗口中的真实来源编号，不能编造编号。',
+].join('\n');
+
+// Report only the first structural failure, never candidate text or source content.
+function readingMapDiagnostic(value: unknown, allowedIds: ReadonlySet<string>): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 'root_object_required';
+  const item = value as Record<string, unknown>;
+  if (!Array.isArray(item.observations)) return 'observations_array_required';
+  if (item.observations.length < 1 || item.observations.length > 32) return 'observations_count_1_to_32';
+  const idsIssue = (ids: unknown, required: boolean): string | undefined => {
+    if (!Array.isArray(ids)) return 'array_required';
+    if (ids.length > 32 || (required && ids.length === 0)) return required ? 'count_1_to_32' : 'count_0_to_32';
+    if (ids.some((id) => typeof id !== 'string')) return 'string_items_required';
+    if (ids.some((id) => !allowedIds.has(id))) return 'unknown_window_ids';
+    return undefined;
   };
+  for (const [index, candidate] of item.observations.entries()) {
+    const prefix = `observation_${index + 1}`;
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return `${prefix}:object_required`;
+    const observation = candidate as Record<string, unknown>;
+    if (!OBSERVATION_KINDS.includes(observation.kind as ReadingObservation['kind'])) return `${prefix}:kind_enum`;
+    if (!['reported', 'synthesis', 'uncertain'].includes(String(observation.basis))) return `${prefix}:basis_enum`;
+    if (typeof observation.summary !== 'string') return `${prefix}:summary_string_required`;
+    if (!observation.summary.trim() || observation.summary.length > 1_200) return `${prefix}:summary_nonempty_max_1200`;
+    if (typeof observation.caseLabel !== 'string') return `${prefix}:case_label_string_required`;
+    if (observation.caseLabel.length > 160) return `${prefix}:case_label_max_160`;
+    const sourceIssue = idsIssue(observation.sourcePassageIds, true);
+    if (sourceIssue) return `${prefix}:source_passage_ids_${sourceIssue}`;
+    const qualifierIssue = observation.qualifierPassageIds === undefined ? undefined : idsIssue(observation.qualifierPassageIds, false);
+    if (qualifierIssue) return `${prefix}:qualifier_passage_ids_${qualifierIssue}`;
+  }
+  return undefined;
+}
+
+function readingMapGuard(allowedIds: ReadonlySet<string>): SchemaGuard<ReadingMapResult> {
+  return (value: unknown): value is ReadingMapResult => readingMapDiagnostic(value, allowedIds) === undefined;
+}
+
+async function mapReadingWindows(gateway: AiGateway, windows: readonly CanonicalPassage[][]): Promise<ReadingMapResult[]> {
+  const maps = new Array<ReadingMapResult>(windows.length);
+  let nextWindow = 0;
+  let firstFailure: { error: unknown } | undefined;
+  const worker = async () => {
+    try {
+      while (!firstFailure && nextWindow < windows.length) {
+        const index = nextWindow++;
+        const window = windows[index]!;
+        const allowedIds = new Set(window.map((passage) => passage.id));
+        maps[index] = await gateway.completeStructured(readingMapGuard(allowedIds), [
+          { role: 'system', content: `${PAPER_ANALYSIS_SKILL.sectionMapInstructions}\n${READING_MAP_OUTPUT_CONTRACT}` },
+          { role: 'user', content: canonicalPassagePrompt(window) },
+        ], { ...SCIENTIFIC_READING_OPTIONS, maxRetries: 1, includeRejectedResponseOnRetry: true,
+          validationFeedback: (value) => `结构校验失败：${readingMapDiagnostic(value, allowedIds) ?? 'invalid_structure'}。\n${READING_MAP_OUTPUT_CONTRACT}`,
+          validationDiagnostic: (value) => readingMapDiagnostic(value, allowedIds) });
+      }
+    } catch (error) {
+      firstFailure ??= { error };
+      throw error;
+    }
+  };
+  // Stop claiming windows on failure and drain both already-issued calls before
+  // returning a terminal failure; the gateway has no cancellation contract.
+  await Promise.allSettled(Array.from({ length: Math.min(2, windows.length) }, () => worker()));
+  if (firstFailure) throw firstFailure.error;
+  return maps;
 }
 
 function reusableSemanticStage(
@@ -623,22 +674,8 @@ async function buildPaperReadingSynthesis(gateway: AiGateway, passages: readonly
   }
   if (current.length) windows.push(current);
   if (windows.length < 2) return undefined;
-  const maps = new Array<ReadingMapResult>(windows.length);
-  let nextWindow = 0;
-  const worker = async () => {
-    while (nextWindow < windows.length) {
-      const index = nextWindow;
-      nextWindow += 1;
-      const window = windows[index]!;
-      const allowedIds = new Set(window.map((passage) => passage.id));
-      maps[index] = await gateway.completeStructured(readingMapGuard(allowedIds), [
-        { role: 'system', content: `${PAPER_ANALYSIS_SKILL.sectionMapInstructions}\n只输出JSON：{"observations":[{"kind":"method","summary":"简短观察","basis":"synthesis","caseLabel":"原文算例名或空字符串","sourcePassageIds":["P00001"],"qualifierPassageIds":[]}]}。这是结构示例，不是论文结论。编号只取当前窗口。` },
-        { role: 'user', content: canonicalPassagePrompt(window) },
-      ], { ...SCIENTIFIC_READING_OPTIONS, maxRetries: 1, validationFeedback: () => `输出必须是observations数组；每项包含kind、summary、basis、caseLabel、sourcePassageIds、qualifierPassageIds。来源不可为空、不得生成编号，只能使用当前窗口：${[...allowedIds].join(',')}。` });
-    }
-  };
   try {
-    await Promise.all(Array.from({ length: Math.min(2, windows.length) }, () => worker()));
+    const maps = await mapReadingWindows(gateway, windows);
     // Identities and source expansion belong to the program, never the model.
     const observations = maps.flatMap((map, windowIndex) => map.observations.map((observation, index) => ({
       ...observation, qualifierPassageIds: observation.qualifierPassageIds ?? [], id: `W${windowIndex + 1}O${index + 1}`,
@@ -681,22 +718,9 @@ async function buildMappedSemanticStage(gateway: AiGateway, passages: readonly C
   }
   if (current.length) windows.push(current);
   if (windows.length < 2) return undefined;
-  const maps = new Array<ReadingMapResult>(windows.length);
-  let nextWindow = 0;
-  const worker = async () => {
-    while (nextWindow < windows.length) {
-      const index = nextWindow++;
-      const window = windows[index]!;
-      const allowedIds = new Set(window.map((passage) => passage.id));
-      maps[index] = await gateway.completeStructured(readingMapGuard(allowedIds), [
-        { role: 'system', content: PAPER_ANALYSIS_SKILL.sectionMapInstructions + '\n只输出JSON observations数组；每项包含kind、summary、basis、caseLabel、sourcePassageIds、qualifierPassageIds。来源编号只取当前窗口。' },
-        { role: 'user', content: canonicalPassagePrompt(window) },
-      ], { ...SCIENTIFIC_READING_OPTIONS, maxRetries: 1,
-        validationFeedback: () => '来源不可为空、不得生成编号，只能使用当前窗口：' + [...allowedIds].join(',') });
-    }
-  };
+  let maps: ReadingMapResult[];
   try {
-    await Promise.all(Array.from({ length: Math.min(2, windows.length) }, () => worker()));
+    maps = await mapReadingWindows(gateway, windows);
   } catch (error) {
     const code = error instanceof AiGatewayError ? error.code : 'unavailable';
     throw new AiGatewayError('SCHEMA_VALIDATION', 'section_map:' + code, error);
