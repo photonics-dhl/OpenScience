@@ -679,7 +679,19 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           planned = saved;
         } else {
           if (task.executionAttempt > 1) {
-            throw new Error('[blocked] Previous paid storyboard attempt has no saved plan; explicit new planning is required');
+            const receipts = payload.hermesRunAuthority ? await deps.prisma.auditLog.findMany({ where: {
+              action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run',
+              targetId: payload.hermesRunAuthority.runId, actorId: scope.userId,
+              metadata: { path: ['taskId'], equals: task.id },
+            }, take: 2 }) : [];
+            const receipt = receipts[0]?.metadata as Record<string, unknown> | undefined;
+            if (task.executionAttempt !== 2 || owner.retryCount !== 1 || owner.result !== null || receipts.length !== 1
+              || receipt?.correction !== 'storyboard_planning_retry' || receipt.previousExecutionAttempt !== 1
+              || receipt.chargeableAttempts !== 1 || receipt.newTaskCount !== 0
+              || !isDeepStrictEqual(receipt.taskPayload, owner.payload)
+              || receipt.baseIdentity !== identity.baseIdentity || receipt.sourceEvidenceIdentity !== identity.sourceEvidenceIdentity) {
+              throw new Error('[blocked] Previous paid storyboard attempt has no saved plan; explicit new planning is required');
+            }
           }
           if (planningContext.imageRevision) {
             const rejected = planningContext.imageRevision;

@@ -1388,6 +1388,7 @@
       "authorizeCorrection": "Authorize up to {count} correction tasks",
       "finalCorrectionGrantDescription": "The 11 authorized tasks are used and the image has not passed scientific review. Add only 2 tasks for one new plan and one image with the existing image review. Paper analysis is retained. No further round or publication starts automatically; new calls are charged by actual use.",
       "resumeCorrectionDescription": "Continue to redesign and produce from the original paper and review feedback, using at most {count} tasks within the existing workflow authorization. You review the final result without intermediate plan approvals.",
+      "resumePlanningDescription": "Keep the reviewed paper content. Continue authorizes one additional planning and review attempt, which incurs new model usage, followed by one image and its review using the remaining image allowance. No further round starts automatically; you review the final result.",
       "startDescription": "Hermes will read the paper, shape its narrative, and produce and internally review the illustrations. Return to read all six sections and the complete image set, then decide whether to publish.",
       "unavailableDescription": "Upload a PDF paper first. You can begin when the source is available.",
       "goalLabel": "What should readers understand? (optional)",

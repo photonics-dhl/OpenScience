@@ -1,4 +1,5 @@
 # Runbook: 部署（Deployment）
+- 无checkpoint的方案技术失败续接：仅对已停止、源不变、仅终态text调用且首次执行失败的叙事修订，用户动作复用原task再执行一次；Domain同事务保存原失败/调用证据、CAS run/step/task，worker仅凭唯一审计及既有来源身份允许executionAttempt2。UI明确新增模型用量；不新增迁移/receiver协议/逻辑任务额度。沿正常no-tests/skip-migrate部署；收据生成前可回退，恢复任务在途时先自然完成再回退，保留失败与恢复审计/所有资产，不归零执行次数或重新派发。
 
 当前版本、部署结果和暂停范围统一见[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。review request v2用于配图文字审阅、v3用于实际图片审阅，旧v1保持；兼容新版receiver可服务旧应用；若需回退receiver，先回退producer，禁止旧receiver接新请求。本段不是重跑部署指令。
 

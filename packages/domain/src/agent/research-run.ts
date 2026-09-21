@@ -11,7 +11,7 @@ import { ensureHermesIngestionReview, materializeHermesIngestion, recoverHermesS
 import { inspectHermesSourceReviewRecovery } from '../ingestion/source-review-recovery';
 import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE } from '../assets/video';
-import { parsePresentationGenerationPayload, readNarrativeImageReplanSource, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
+import { parsePresentationGenerationPayload, readNarrativeImageReplanSource, readStoppedStoryboardImageRevision, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
 import { parseStoryboardDocument, presentationStoryboardView } from '../assets/storyboard';
 import { presentationSceneImageView, requireSceneImageParent } from '../assets/scene-image';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
@@ -93,6 +93,7 @@ export interface HermesResearchRunView {
   canRetryGeneration?: boolean;
   canAuthorizeNarrativeCorrection?: boolean;
   chargeableAttempts?: number;
+  generationRecovery?: 'storyboard-planning';
   availableImageCount?: number;
   imageUsageLimited?: boolean;
   steps: Array<{
@@ -293,6 +294,11 @@ export async function getHermesResearchRun(
         : await inspectHermesSourceReviewRecovery(deps.prisma, run.id).then(proof => proof ? { chargeableAttempts: 1 } : null).catch(() => null)
       : await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
   const view = toView(run, recovery ?? undefined);
+  if (WRITE_ROLES.has(authority.membership.role) && await inspectFailedStoryboardPlanning(deps.prisma, run).catch(() => null)) {
+    view.canRetryGeneration = true;
+    view.chargeableAttempts = 1;
+    view.generationRecovery = 'storyboard-planning';
+  }
   if (WRITE_ROLES.has(authority.membership.role) && run.profile === VISUAL_NARRATIVE_PROFILE && run.status === 'stopped') {
     const correction = await inspectNarrativeScientificReplan(deps.prisma, run).catch(() => null);
     if (correction) {
@@ -334,6 +340,49 @@ const NARRATIVE_CORRECTION_STOP = 'Internal review could not complete the narrat
 const NARRATIVE_CORRECTION = 'narrative_image_scientific_replan';
 const NARRATIVE_BLOCKED_REVISION = 'narrative_storyboard_scientific_revision';
 const NARRATIVE_ACCEPTED_IMAGE_REPLAN = 'narrative_accepted_image_scientific_replan';
+const STORYBOARD_PLANNING_RETRY = 'storyboard_planning_retry';
+
+/** Explicitly repeat one failed planning execution; logical task and image allowance stay intact. */
+async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run: RunRow) {
+  if (run.profile !== VISUAL_NARRATIVE_PROFILE || !validGrant(run) || !run.versionId
+    || run.status !== 'stopped' || run.error !== '结构化输出超过重试上限'
+    || await validateReviewedSources(tx, run) !== 'ready') return null;
+  const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+  const storyboards = run.steps.filter(step => step.stage === 'storyboard');
+  const step = storyboards[0];
+  if (!ro || ro.deletedAt || ro.status !== 'draft' || storyboards.length !== 1 || !step?.agentTaskId
+    || step.ordinal !== 0 || !['stopped', 'failed'].includes(step.status) || step.presentationAssetId) return null;
+  const task = await tx.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } });
+  if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'failed'
+    || task.executionAttempt !== 1 || task.retryCount !== 0 || task.result !== null || task.error !== run.error
+    || task.session.deletedAt || task.session.status !== 'active' || task.session.userId !== run.actorId
+    || task.session.researchObjectId !== run.researchObjectId) return null;
+  let payload: PresentationGenerationPayload;
+  try { payload = parsePresentationGenerationPayload(task.payload); } catch { return null; }
+  if (payload.researchObjectId !== run.researchObjectId || payload.versionId !== run.versionId
+    || payload.kind !== 'interactive_html' || !payload.storyboard?.narrative || payload.storyboard.output !== 'image'
+    || !payload.storyboard.revisionImageAssetId || payload.storyboard.revisionTaskId || payload.storyboard.baseAssetId
+    || payload.storyboard.narrativeSceneLimit !== 1 || !isDeepStrictEqual(payload.sourceClaimIds, run.sourceClaimIds)
+    || !isDeepStrictEqual(payload.hermesRunAuthority, { runId: run.id, stage: 'storyboard', ordinal: 0, profile: run.profile })) return null;
+  const presentations = await tx.agentTask.findMany({ where: { kind: 'presentation.generate',
+    payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } }, select: { id: true, status: true } });
+  const sourceCount = run.steps.filter(item => ['source_composition', 'source_review'].includes(item.stage)).length;
+  if (presentations.some(item => ['pending', 'running'].includes(item.status))
+    || sourceCount + presentations.length + 1 !== run.maxAgentTasks
+    || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) return null;
+  const calls = await tx.auditLog.findMany({ where: { requestId: task.id, action: 'ai.gateway.call' } });
+  if (!calls.length || calls.some(call => { const meta = jsonRecord(call.metadata);
+    return meta.operation !== 'text' || !['succeeded', 'failed'].includes(String(meta.outcome))
+      || meta.fallbackReason !== null || (meta.outcome === 'failed' && meta.error !== 'provider_empty');
+  }) || new Set(calls.map(call => jsonRecord(call.metadata).provider)).size !== 1
+    || await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry',
+      targetType: 'hermes_research_run', targetId: run.id, metadata: { path: ['taskId'], equals: task.id } } })) return null;
+  const source = await readStoppedStoryboardImageRevision(tx, payload, run.actorId);
+  const images = run.steps.filter(item => item.stage === 'scene_image');
+  if (!source || images.length !== 1 || images[0]!.status !== 'stopped'
+    || images[0]!.agentTaskId !== source.imageTask.id || images[0]!.presentationAssetId !== source.image.id) return null;
+  return { step, task, source, planningAuditIds: calls.map(call => call.id) };
+}
 export const HERMES_AUTHORITY_REARM_MARKER = 'hermes-authority-pre-provider-v1';
 
 /** One explicit 9 -> 11 extension for a rejected image whose original revised plan was never accepted again. */
@@ -959,6 +1008,43 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         if (run.profile === VISUAL_NARRATIVE_PROFILE) {
           if (!ro || ro.deletedAt || ro.status !== 'draft' || !membership || !WRITE_ROLES.has(membership.membership.role))
             throw new HermesResearchRunError('FORBIDDEN', 'Source review recovery permission is unavailable');
+          const planningReceipt = await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry',
+            targetType: 'hermes_research_run', targetId: run.id, actorId: input.actorId,
+            metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } } });
+          if (planningReceipt && jsonRecord(planningReceipt.metadata).correction === STORYBOARD_PLANNING_RETRY) {
+            if (jsonRecord(planningReceipt.metadata).requestDigest !== requestDigest)
+              throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Planning retry key belongs to another request');
+            return { run, dispatchIds: [] as string[] };
+          }
+          const planning = await inspectFailedStoryboardPlanning(tx, run);
+          if (planning) {
+            if (run.version !== input.expectedVersion) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before retrying planning');
+            if (planningReceipt) throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Planning retry key was already used');
+            const taskChanged = await tx.agentTask.updateMany({ where: { id: planning.task.id, status: 'failed',
+              executionAttempt: 1, retryCount: 0, deletedAt: null, error: planning.task.error,
+              payload: { equals: planning.task.payload as Prisma.InputJsonValue }, result: { equals: Prisma.AnyNull } },
+            data: { status: 'pending', progress: 0, retryCount: 1, error: null, dispatchedAt: null } });
+            const stepChanged = await tx.hermesResearchStep.updateMany({ where: { id: planning.step.id, runId: run.id,
+              agentTaskId: planning.task.id, status: planning.step.status, presentationAssetId: null },
+            data: { status: 'running', error: null } });
+            const runChanged = await tx.hermesResearchRun.updateMany({ where: { id: run.id, actorId: input.actorId,
+              status: run.status, version: input.expectedVersion, versionId: run.versionId, maxAgentTasks: run.maxAgentTasks },
+            data: { status: 'generating_storyboard', error: null, lastReconciledAt: null, version: { increment: 1 } } });
+            if (taskChanged.count !== 1 || stepChanged.count !== 1 || runChanged.count !== 1)
+              throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Failed planning execution changed');
+            await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId,
+              action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run', targetId: run.id,
+              metadata: { correction: STORYBOARD_PLANNING_RETRY, requestDigest, clientIdempotencyKey: input.idempotencyKey,
+                expectedVersion: input.expectedVersion, taskId: planning.task.id, stepId: planning.step.id,
+                previousExecutionAttempt: planning.task.executionAttempt, previousRetryCount: planning.task.retryCount,
+                planningAuditIds: planning.planningAuditIds, revisionImageAssetId: planning.source.image.id,
+                previousError: planning.task.error, taskPayload: planning.task.payload,
+                baseIdentity: planning.source.identity, sourceEvidenceIdentity: planning.source.sourceEvidenceIdentity,
+                chargeableAttempts: 1, newTaskCount: 0, remainingImageTasks: 1, noProviderSwitch: true,
+                creditPolicy: 'reuse-original-reservation;explicit-planning-retry-incurs-provider-usage' } }, ctx);
+            return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }),
+              dispatchIds: [planning.task.id] };
+          }
           if (run.maxAgentTasks === 11 || run.maxAgentTasks === 13) {
             const receipt = await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run',
               targetId: run.id, actorId: input.actorId, metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } } });

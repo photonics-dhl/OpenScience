@@ -533,12 +533,24 @@ export async function readNarrativeImageReplanSource(prisma: Pick<Prisma.Transac
 /** The worker consumes image feedback only under the explicit same-run correction grant. */
 export async function requireStoryboardImageRevision(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'hermesResearchRun' | 'auditLog'>,
     payload: PresentationGenerationPayload, actorId: string) {
+    return readStoryboardImageRevision(prisma, payload, actorId, 'generating_storyboard');
+}
+
+/** Read the same source proof for a stopped run; the caller must validate its failed planning task. */
+export async function readStoppedStoryboardImageRevision(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'hermesResearchRun' | 'auditLog'>,
+    payload: PresentationGenerationPayload, actorId: string) {
+    return readStoryboardImageRevision(prisma, payload, actorId, 'stopped');
+}
+
+async function readStoryboardImageRevision(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'hermesResearchRun' | 'auditLog'>,
+    payload: PresentationGenerationPayload, actorId: string, expectedStatus: 'generating_storyboard' | 'stopped') {
     const imageAssetId = payload.storyboard?.revisionImageAssetId;
     if (!imageAssetId) return undefined;
     const runId = payload.hermesRunAuthority?.runId;
     const run = runId ? await prisma.hermesResearchRun.findUnique({ where: { id: runId }, include: { steps: true } }) : null;
     if (!run || run.actorId !== actorId || run.researchObjectId !== payload.researchObjectId || run.versionId !== payload.versionId
-        || run.profile !== VISUAL_NARRATIVE_PROFILE || ![11, 13].includes(run.maxAgentTasks ?? 0) || run.status !== 'generating_storyboard'
+        || run.profile !== VISUAL_NARRATIVE_PROFILE || ![11, 13].includes(run.maxAgentTasks ?? 0)
+        || run.status !== expectedStatus
         || !isDeepStrictEqual([...run.sourceClaimIds].sort(), payload.sourceClaimIds)) throw new PresentationAssetError('VALIDATION_ERROR', 'Scientific replanning grant unavailable');
     const receipts = await prisma.auditLog.findMany({ where: { action: 'hermes.research_run.generation_grant', targetType: 'hermes_research_run',
         targetId: run.id, actorId, metadata: { path: ['rejectedImageAssetId'], equals: imageAssetId } }, take: 2 });
