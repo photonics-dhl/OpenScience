@@ -1,7 +1,7 @@
 # CURRENT Progress Window
 
-## 2026-09-21 — 视觉叙事方案已批准，自动链路候选实施中
-- 用户批准HTML并明确只看完整六维/图片，中间由Hermes决定。候选已复用既有全文分析、科学审阅、science/art、Chat真实图片审查及发布快照；补内部执行审计、额度内修订和持久恢复。静态审查发现默认v4自检尚缺最终v5逐条Claims，正用既有reviewOnly补接，不能伪造科学通过。未构建/部署/生图，未测试/预检/CI；候选范围、证据及余项见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+## 2026-09-21 — 自动叙事链路已部署，真实启动暴露旧数据库约束遗漏
+- 用户只看完整六维/图片，中间由Hermes决定。既有全文composition/reviewOnly、science/art、实际图片审阅和发布快照已接通并部署；High静态复核完成。站内自然语言guide成功，但启动run被旧generation_grant_check拒绝，尚无新图；正补向前兼容迁移，保留原请求幂等身份。必要服务器构建/迁移/启动完成，未测试/预检/CI/本机构建；版本、备份、实际证据和质量差额见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 ## 2026-09-21 — 复用 CLI 合作，推进真实 PDF→Hermes→多风格→审图发布
 - 真实Fig.1完成上传→人工核源→Hermes reuse→原字节copy；与已认可Fig.3、淡彩图共3张经真实发布入口组成v2，公开轮播均加载、匿名读回200，正文/许可保持，v1保留。发布选图/长度反馈/style必填与短反馈已部署；封面最终科学修订仍被现有审阅阻断，停止追加，无新Chat生图。第三篇120000字符前置阻塞保留，不重复上传。未跑测试/预检/CI。版本、证据、私有续作与质量差额仅见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。

@@ -10,7 +10,7 @@
 
 视觉叙事方案：[`docs/proposals/2026-09-21-visual-narrative-review.html`](docs/proposals/2026-09-21-visual-narrative-review.html) 是用户要求的离线可审查实现稿：PDF→经审全文→叙事→逐图设计→制作→成品审阅→发布→阅读，含既有/拟改边界、数据传递、媒体选择、实施顺序和意见导出；不是生产界面或最终科学稿。执行状态只见CURRENT。
 
-视觉叙事实现沿用 `packages/domain/src/agent/research-run.ts`；内部已审来源消费见 `ingestion/automatic-review.ts`、人工/系统保存历史见 `ingestion/saved-source-commit.ts`（均在domain/src），实际图片审阅见 `apps/agent-worker/src/presentation/generated-image-review.ts`。运行设置迁移在 `infra/migrations/20260921010000_visual_narrative_settings/`，交付/回退顺序见部署runbook相应节；候选与实际效果只见CURRENT及能力台账。
+视觉叙事实现沿用 `packages/domain/src/agent/research-run.ts`；内部已审来源消费见 `ingestion/automatic-review.ts`、人工/系统保存历史见 `ingestion/saved-source-commit.ts`（均在domain/src），实际图片审阅见 `apps/agent-worker/src/presentation/generated-image-review.ts`。运行设置及grant约束迁移分别在 `infra/migrations/20260921010000_visual_narrative_settings/`、`infra/migrations/20260921020000_visual_narrative_grant/`；交付/回退顺序见部署runbook相应节，实际效果只见CURRENT及能力台账。
 
 风格续作定位：`apps/agent-worker/src/presentation/illustration-styles.ts` 合并逐图风格参考；`packages/domain/src/assets/storyboard.ts` 从既有 figurePlan 解析 scene 风格；原 planner/review/render 调用接线，`infra/chatgpt-browser/broker.mjs` 与原 core 保存下载后恢复。Hermes 入口补接定位：`workspace-guide.ts` 路由风格，`apps/web/lib/api.ts` 与 `lib/hermes/{draft-state,presentation-action}.ts` 复用 StoryboardRequest 类型及原请求恢复，`HermesAssistantDrawer` → `HermesPresentationReview` → `HermesPresentationAction` 传递 style/figurePlan；中英文名称沿用消息文件。论文原图 art 限制在 Domain `requireStoryboardBase` 提交前阻断。候选状态及本机 Pro 协作阻塞只见 CURRENT，不据源码宣称线上完成。
 

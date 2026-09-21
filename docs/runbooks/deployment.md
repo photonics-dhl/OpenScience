@@ -2,11 +2,12 @@
 
 当前版本、部署结果和暂停范围统一见[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。review request v2用于配图文字审阅、v3用于实际图片审阅，旧v1保持；兼容新版receiver可服务旧应用；若需回退receiver，先回退producer，禁止旧receiver接新请求。本段不是重跑部署指令。
 
-## 2026-09-21 自动视觉叙事候选的交付顺序
+## 2026-09-21 自动视觉叙事的交付顺序
 
 - 前提：用户已批准自动制作方案；候选经过独立High静态审查，干净提交已推送。只做必要服务器构建/迁移/启动和已授权产品路径；不用测试、预检或演练补证。保存当前生产与provider回退身份；迁移前用既有 `backup.sh --confirm --db` 保留双库私有备份，不读取正文。
 - 执行：既有cloud-sync物化精确提交，服务器安装锁定依赖并构建AI Gateway及依赖，用现有provider installer加 `--defer-timers` 先交付兼容schema1/2/3的receiver，防止安装到一半提前派发。仅暂停分发timer并等活动请求自然结束，备份原units/live文件和权限后安装，再恢复原timer enabled/active状态；安装失败逐项回退，回退异常保留停止并明确报告，不派发混合版本；不重启共享浏览器。随后 `deploy.sh --confirm --no-tests --reuse-unchanged-capability-images --rollback-ref <当前生产完整SHA> <候选完整SHA>`。本次有可空generation_settings迁移，不能传 `--skip-migrate`。
-- 回滚：应用可回到本次记录的旧应用；保留generation_settings列和自动run历史，数据库rollback脚本有记录时拒绝删列。若需回退provider，先停用新producer，再恢复本次安装前保存的units/live文件与原timer状态；保留新旧bundle、任务、图片与spool，不重发已有模型请求。
+- 数据库补接：真实启动暴露旧 `hermes_research_runs_generation_grant_check` 未接受新profile/9组合（23514）；独立 `20260921020000_visual_narrative_grant` 迁移在同一事务中扩展既有约束，保留原四种合法组合，不改已应用的210100迁移。仍用正常部署及原migrate-cli，不手工改任务状态；恢复时复用页面保存的初始幂等请求，不新建付费重试。
+- 回滚：应用可回到本次记录的旧应用；保留generation_settings列、扩展grant约束和自动run历史，设置列rollback脚本有记录时拒绝删列，grant回退明确不收窄。若需回退provider，先停用新producer，再恢复本次安装前保存的units/live文件与原timer状态；保留新旧bundle、任务、图片与spool，不重发已有模型请求。
 - 观察：从真实站内入口启动已授权单论文叙事，读取run与实际完整六维/图片页面；只观察该最小路径和精确release身份，模型通过不记为用户审美接受。不修改旧公开版本、不自动公开新私有成果；详细执行收据与未观测项进入CURRENT。
 
 2026-09-17服务器磁盘治理（用户授权，原因：根盘112G/148G=80%，判为不健康）：**测量口径须先用 `du -shx`**，因为 netdata 容器把宿主 `/` bind 到 `/host/root`，未加 `-x` 的 `du` 会递归进整个宿主文件系统，把 `/var/lib/docker` 从真实的38G虚报为67G、overlay2 从31G虚报为60G（据此曾误判存在"35G孤儿层"，实为测量假象；`docker system df` 的 Images/BuildCache 字段同样不可信，实测 `builder prune -af` 回收9.4G而该字段只报1.35G）。正确口径：根盘56G，其中 docker 38G（overlay2 31G＋卷7.3G）、`/opt` 12G、`/usr` 4.2G。
