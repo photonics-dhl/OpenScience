@@ -53,6 +53,8 @@
 
 ### 当前技术债与处理
 
+显式来源补审（候选，用户再次继续后）：将固定一次恢复改为原9项预算内的连续review链，每次仍须原retry-generation明确动作；全部失败记录、同原v4候选/SourceMap、无有效科学响应及主尝试审计必须一致，所有尝试计入原额度并预留后续制作。历史provider_error不反推瞬态根因，只允许接受重复供应商费用后的显式补审；自动科学消费仍拒绝无有效审阅。原始幂等键入已有audit，精确历史请求重放不再派发；旧ordinal1缺原key元数据，不能追溯识别改version的旧raw-key复用。无新分析器/供应商/迁移，实际部署与运行只见CURRENT。
+
 同一论文流程入口（2026-09-21真实路径发现，已修复部署并观察）：普通站内Hermes链接不含run，旧UI只读URL而提供新建；公共refresh能换掉失败自动run的source指针。原Domain/API补actor/RO/source范围只读找回，原Serializable创建拒绝新key重复自动run，公共refresh在replacement及replay路径拒绝所有visual-narrative绑定；UI先找回、材料页隐藏该refresh并链接进度。无新增审批/恢复槽/额度重置。独立High及上线观察状态见CURRENT；现有一次恢复已用尽且41c旧provider_error无可追溯分类，仍不能端到端续跑或把未知错误纳入自动重试。
 
 生产退出路径（2026-09-21已复现，未修复）：正常部署两次等待旧API/Worker退出，确认无running AgentTask后按精确旧ID/StartedAt停止才完成。静态High定位 `apps/agent-worker/src/index.ts` 的SIGTERM只调用journal停timer函数，主消费器仍 `while(true)`，没有停止claim/排空/连接释放；API入口亦无显式关闭流程，但PID1信号行为仍属推断。下一步应在现有生命周期中统一停止新claim、排空在途任务后关资源，保持队列恢复语义；缩短Docker超时不能当根治。本轮未在活跃模型任务期间重启服务。

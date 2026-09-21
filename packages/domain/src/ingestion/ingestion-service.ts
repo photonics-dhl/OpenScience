@@ -619,7 +619,7 @@ async function recordHermesRefresh(tx: Prisma.TransactionClient, run: Awaited<Re
 
 /** Called only inside the existing run recovery transaction, under its version fence. */
 export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx: Prisma.TransactionClient, input: {
-  actorId: string; researchObjectId: string; runId: string; expectedVersion: number; requestDigest: string;
+  actorId: string; researchObjectId: string; runId: string; expectedVersion: number; requestDigest: string; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<string> {
   const proof = await inspectHermesSourceReviewRecovery(tx, input.runId);
   if (!proof || proof.run.actorId !== input.actorId || proof.run.researchObjectId !== input.researchObjectId
@@ -647,9 +647,9 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
     ingestionTaskId: source.id, artifactId: source.artifactId,
   }, data: { agentTaskId: task.id, status: 'waiting', error: null } });
   const preserved = await tx.hermesResearchStep.updateMany({ where: {
-    id: originalStep.id, runId: run.id, stage: 'source_review', ordinal: 0, agentTaskId: failed.id,
+    id: originalStep.id, runId: run.id, stage: 'source_review', ordinal: originalStep.ordinal, agentTaskId: failed.id,
   }, data: { status: 'failed', error: originalStep.error ?? 'Source review service unavailable; original candidate preserved' } });
-  await tx.hermesResearchStep.create({ data: { runId: run.id, stage: 'source_review', ordinal: 1,
+  await tx.hermesResearchStep.create({ data: { runId: run.id, stage: 'source_review', ordinal: proof.nextOrdinal,
     status: 'waiting', ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: task.id } });
   const moved = await tx.hermesResearchRun.updateMany({ where: {
     id: run.id, actorId: input.actorId, researchObjectId: input.researchObjectId,
@@ -659,9 +659,12 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
     throw new IngestionError('VALIDATION_ERROR', 'Hermes source changed during service recovery');
   await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: run.researchObject.workspaceId,
     action: 'hermes.research_run.source_review_recovery', targetType: 'hermes_research_run', targetId: run.id,
-    metadata: { requestDigest: input.requestDigest, previousVersion: input.expectedVersion, previousRunError: run.error, oldAgentTaskId: failed.id,
+    metadata: { requestDigest: input.requestDigest, clientIdempotencyKey: input.idempotencyKey,
+      explicitUserAction: true, possibleDuplicateProviderCharge: true, noProviderSwitch: true,
+      previousVersion: input.expectedVersion, previousRunError: run.error, oldAgentTaskId: failed.id,
       compositionSourceAgentTaskId: composition.id, newAgentTaskId: task.id, serviceFailureAuditIds: proof.auditIds,
-      stage: 'source_review', ordinal: 1, chargeableAttempts: 1, creditPolicy: 'new-review-task-charged;original-failure-preserved' } }, ctx);
+      serviceFailureClassifications: proof.failureClassifications,
+      stage: 'source_review', ordinal: proof.nextOrdinal, chargeableAttempts: 1, creditPolicy: 'new-review-task-charged;original-failure-preserved' } }, ctx);
   return task.id;
 }
 
@@ -686,12 +689,13 @@ export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
         const stage = automaticIngestionReviewStage(source);
         if (stage === 'ready') {
           const phases = run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage));
-          const recovery = phases.find(step => step.stage === 'source_review' && step.ordinal === 1);
+          const recovery = phases.filter(step => step.stage === 'source_review' && step.ordinal > 0)
+            .sort((a, b) => b.ordinal - a.ordinal)[0];
           const proof = recovery ? await inspectHermesSourceReviewRecovery(tx, run.id, source.agentTaskId) : null;
           if (recovery && (!proof || recovery.agentTaskId !== source.agentTaskId
             || source.agentTask.status !== 'succeeded'))
             throw new IngestionError('VALIDATION_ERROR', 'Recovered scientific review is not the bound final source');
-          const completedPhases = proof ? phases.filter(step => step.id !== proof.originalStep.id) : phases;
+          const completedPhases = proof ? phases.filter(step => !proof.failedSteps.some(failed => failed.id === step.id)) : phases;
           const completed = await tx.hermesResearchStep.updateMany({ where: { runId: run.id,
             id: { in: completedPhases.map(step => step.id) }, agentTask: { status: 'succeeded', deletedAt: null } },
           data: { status: 'succeeded', error: null } });

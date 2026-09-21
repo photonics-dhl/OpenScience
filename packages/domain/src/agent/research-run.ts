@@ -606,33 +606,54 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         }
         const ro = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
         const membership = ro ? await requireActiveMembership(tx, ro.workspaceId, input.actorId).catch(() => null) : null;
-        if (run.profile === VISUAL_NARRATIVE_PROFILE && (run.versionId === null || run.steps.some(step => step.stage === 'source_review' && step.ordinal === 1))) {
+        if (run.profile === VISUAL_NARRATIVE_PROFILE) {
           if (!ro || ro.deletedAt || ro.status !== 'draft' || !membership || !WRITE_ROLES.has(membership.membership.role))
             throw new HermesResearchRunError('FORBIDDEN', 'Source review recovery permission is unavailable');
-          const recoveryStep = run.steps.find(step => step.stage === 'source_review' && step.ordinal === 1);
-          if (recoveryStep?.agentTaskId) {
-            const replacement = await tx.agentTask.findUnique({ where: { id: recoveryStep.agentTaskId }, include: { session: true } });
-            const failed = run.steps.find(step => step.stage === 'source_review' && step.ordinal === 0);
+          // A raw client key cannot be reused with a different version tuple.
+          // Historical receipts lack it, but their exact session digest remains replayable.
+          const priorRequest = await tx.auditLog.findFirst({ where: {
+            action: 'hermes.research_run.source_review_recovery', targetType: 'hermes_research_run', targetId: run.id,
+            actorId: input.actorId, metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey },
+          } });
+          if (priorRequest && jsonRecord(priorRequest.metadata).requestDigest !== requestDigest)
+            throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Source review recovery key belongs to another request');
+          const recoverySteps = run.steps.filter(step => step.stage === 'source_review' && step.ordinal > 0 && step.agentTaskId);
+          const replays = await tx.agentTask.findMany({ where: {
+            id: { in: recoverySteps.map(step => step.agentTaskId!) },
+            session: { idempotencyKey: { endsWith: `:hermes-recovery:${requestDigest}` } },
+          }, include: { session: true } });
+          if (replays.length > 1)
+            throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Source recovery request has multiple task bindings');
+          const replacement = replays[0];
+          if (replacement) {
+            const recoveryStep = recoverySteps.find(step => step.agentTaskId === replacement.id)!;
+            const failed = run.steps.find(step => step.stage === 'source_review' && step.ordinal === recoveryStep.ordinal - 1);
             const composition = run.steps.find(step => step.stage === 'source_composition' && step.ordinal === 0);
             const canonical = run.steps.filter(step => step.stage === 'source_ingestion');
             const key = `ingestion-analysis-compose:${recoveryStep.ingestionTaskId}:${failed?.agentTaskId}:${composition?.agentTaskId}:scientific-review-v4`;
-            const payload = jsonRecord(replacement?.payload);
-            if (!replacement || replacement.deletedAt || replacement.kind !== 'sdf.extract'
+            const payload = jsonRecord(replacement.payload);
+            if (replacement.deletedAt || replacement.kind !== 'sdf.extract' || !failed?.agentTaskId || !composition?.agentTaskId
               || replacement.idempotencyKey !== key || replacement.session.idempotencyKey !== `${key}:hermes-recovery:${requestDigest}`
               || replacement.session.deletedAt || replacement.session.userId !== input.actorId
               || replacement.session.researchObjectId !== input.researchObjectId
               || Object.keys(payload).sort().join(',') !== 'artifactId,researchObjectId'
               || payload.researchObjectId !== input.researchObjectId || payload.artifactId !== recoveryStep.artifactId
-              || canonical.length !== 1 || canonical[0]!.agentTaskId !== replacement.id
+              || canonical.length !== 1
               || canonical[0]!.ingestionTaskId !== recoveryStep.ingestionTaskId || canonical[0]!.artifactId !== recoveryStep.artifactId) {
               throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Source review recovery already has another request binding');
             }
-            return { run, dispatchIds: replacement.status === 'pending' ? [replacement.id] : [] };
+            // Replay is a receipt, including after a later recovery supersedes it.
+            // Pending dispatch is handled by the existing outbox, never by replay.
+            return { run, dispatchIds: [] as string[] };
           }
-          if (run.version !== input.expectedVersion)
-            throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before retrying source review');
-          const taskId = await recoverHermesSourceReviewInTransaction(deps, tx, { ...input, requestDigest }, ctx);
-          return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [taskId] };
+          if (priorRequest)
+            throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Source recovery receipt has no committed task binding');
+          if (run.versionId === null) {
+            if (run.version !== input.expectedVersion)
+              throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before retrying source review');
+            const taskId = await recoverHermesSourceReviewInTransaction(deps, tx, { ...input, requestDigest }, ctx);
+            return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [taskId] };
+          }
         }
         const version = run.versionId ? await tx.version.findUnique({ where: { id: run.versionId } }) : null;
         if (!ro || ro.status !== 'draft' || !version || version.status !== 'draft' || version.researchObjectId !== ro.id
