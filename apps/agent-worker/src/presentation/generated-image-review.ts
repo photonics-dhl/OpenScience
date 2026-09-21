@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
-  ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type ScienceReviewInput } from '@openscience/ai-gateway';
+  ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type ScienceReviewInput, type ScienceReviewAttachment } from '@openscience/ai-gateway';
 import { storyboardSceneStyles, type StoryboardDocument, type StoryboardRequest } from '@openscience/domain';
 import type { PresentationClaim } from './chart-generator';
 import { loadIllustrationStyleSkills } from './illustration-styles';
@@ -21,7 +21,7 @@ export interface GeneratedImageReview {
 }
 type ImageReviewIdentity = Pick<GeneratedImageReview, 'requestId' | 'contentHash' | 'sourceEvidenceIdentity' | 'parentIdentity'>;
 const sha256 = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
-export function generatedImageReviewAttachment(bytes: Uint8Array, contentHash: string, contentType: unknown) {
+export function generatedImageReviewAttachment(bytes: Uint8Array, contentHash: string, contentType: unknown): ScienceReviewAttachment {
   if ((contentType !== 'image/png' && contentType !== 'image/jpeg' && contentType !== 'image/webp')
     || bytes.byteLength < 1 || bytes.byteLength > ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES || sha256(bytes) !== contentHash) {
     throw new Error('[blocked] Saved image is not a bounded review input');

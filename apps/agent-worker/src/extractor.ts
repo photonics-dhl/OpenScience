@@ -2452,7 +2452,7 @@ async function webScientificReviewCanonicalProposal(
         });
       }
       evidenceManifestHash = evidence.manifestHash;
-      const imageAttachments = evidence.attachments.filter((attachment) => attachment.mediaType === 'image/png');
+      const imageAttachments = evidence.attachments.filter((attachment): attachment is Extract<ScienceReviewAttachment, { pageNumber: number }> => attachment.mediaType === 'image/png');
       evidencePages = imageAttachments.length
         ? imageAttachments.map(({ pageNumber, sha256 }) => ({ pageNumber, imageSha256: sha256 }))
         : undefined;
