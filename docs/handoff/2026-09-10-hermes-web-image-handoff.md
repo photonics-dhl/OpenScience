@@ -71,6 +71,7 @@
 
 - 本次补审41c已结束：仅一条主idx0调用，审计65a7bf60-97ef-4676-9c01-8bf67d7f978c，05:40:56Z/300638ms/provider_error，无fallback或有效response；v5 review_unavailable，run failed/version10/versionId=null，禁止再次补审/新run绕额度。只读Node22.23.2/Undici6.28.0源码确认headers/body默认300000，而provider只配上层Abort600000；catch丢失cause，故底层300秒配置缺口已确认，但本次具体错误码无法追溯。请求级传输时限与白名单错误码已完成独立High静态审查及服务器构建/启动exit0：只为>300s文本请求使用局部Agent、finally销毁，普通请求和恢复槽不变；06:00Z精确release读回，原页面刷新同run/POST0，仍failed/version10；收据/jobs/visual-narrative-recovery-reopen-20260921.json。修复后未再付费实测长请求。失败结果收据/jobs/visual-narrative-source-recovery-failure-20260921.json保留，不声称已审校成功。
 
+- 用户质疑审稿Skill与耗时后只读取证：41c原结果明确reviewSkill=scientific-critical-thinking v2（项目适配版），extractor系统消息实际注入；没有加载完整K-Dense peer-review。e7初稿任务的3条成功模型审计耗时29181/30516/74454ms（d96981e2/73a24f10/8d023c10），合计134151ms，最后一次产出完整六维；41c是后续六维来源校核+可选原子Claims请求，adaptive/65536上限/非流式，300638ms服务失败且usage为空。不能说“论文理解需要超过300秒”，不能从上限推断实际推理量，也不能把Skill有调用等同完整审稿流程落地；本轮无新模型、无代码/部署/测试。下一定位对象是现有终审的输入/职责和provider返回阶段，不盲增超时/预算或另造分析器。
 ## 下一动作与交接入口
 - 优先任务5：当前超时/错误分类修正已部署；用户已明确允许保留初稿再进行一次可能计费的来源审校；原Domain恢复入口已补CAS/来源身份/真实attempt计数及剩余scene预算约束，独立High静态审查及服务器部署完成，同一run补审再次服务失败；传输时限断接/错误码丢失已修复并部署，本次一次补审授权已执行，不再发模型，不能直接DB改状态或新建run重置额度。后续真实补审或切provider需新的明确收费授权，不能直接加恢复槽或重置额度；最终仍交付六维/整组而非中间审批；不向e77写入或盲重发aaf7。全文上限、停机、旧约束继承/深色标准化债务保留。
 - 先读本页，再按故障读 docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md 最新节；能力缺口在 docs/runbooks/hermes-capability-registry.md 原行更新，历史长证据不重复执行。
