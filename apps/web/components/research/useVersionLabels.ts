@@ -17,6 +17,7 @@ export function useVersionLabels() {
     if (!text || /^(?:Draft revision|草稿修订)\s*\d+$/u.test(text) || text === 'Draft saved' || text === '草稿已保存') return t('savedDraft');
     // ingestion-service emits this prefix; the original source stays accessible in the record.
     if (/^Confirm import: [^\r\n]+$/u.test(text)) return t('importConfirmed');
+    if (/^Hermes reviewed import: [^\r\n]+$/u.test(text)) return t('paperSummary');
     // Current and previous files.defaultCommit defaults; never strip IDs from arbitrary user summaries.
     if (['Attach evidence', '绑定证据', 'Add research materials', '添加研究材料'].includes(text)) return t('materialsAdded');
     // Older assistant-created summaries appended a source-note ID for internal traceability.

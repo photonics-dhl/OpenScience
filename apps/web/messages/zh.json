@@ -240,6 +240,7 @@
     "restored": "历史已恢复为私有草稿，已公开内容未变。",
     "savedDraft": "草稿已保存",
     "importConfirmed": "已确认导入资料",
+    "paperSummary": "已整理文献",
     "materialsAdded": "已添加研究材料",
     "privateDraft": "私有草稿",
     "dateUnavailable": "时间未记录",
@@ -1726,7 +1727,7 @@
       "hermes": "Hermes", "presentation": "图解与视频", "overview": "概览", "sdf": "编辑", "files": "文件", "versions": "版本", "collaboration": "协作", "publish": "发布", "sandbox": "沙箱",
       "more": "更多工具"
     },
-    "overview": { "imageTitle": "机制解释图", "videoTitle": "研究讲解视频", "mediaVersion": "来自公开版本 v{number}；当前正文可能包含后续编辑。", "mediaVersionLabel": "媒体对应 {label}；当前正文可能包含后续编辑。", "sources": "来源与原始证据", "desk": "研究桌面", "manageMedia": "查看与管理展示资产", "discuss": "与 Hermes 讨论这一段", "media": "可视化解释", "notEvidence": "审核通过的解释性资产，不替代原始论文、图表或代码证据。", "noMedia": "当前版本还没有审核通过的图片或视频。", "mediaFailed": "暂时无法加载展示资产；研究正文仍可阅读。", "retry": "重试加载", "sourceBody": "在来源文件中核对原始论文、图表和代码；在版本记录中追踪研究改动。", "openSources": "打开来源文件", "kicker": "对象概览", "title": "概览", "body": "安静地呈现这个 Research Object 的主张、证据和当前版本状态。", "status": "对象状态", "visibility": "可见性", "history": "已记录版本", "emptyTitle": "从一篇论文开始", "emptyBody": "添加原文，让 Hermes 帮你提炼问题、方法与发现。你可以随时核对证据、修改内容。", "ingestionTitle": "继续整理已有文献", "ingestionBody": "文献已经进入 Hermes 流程。继续查看提取结果并核对需要确认的内容。", "ingestionLoadingTitle": "正在查看研究进度", "ingestionLoadingBody": "研究对象已经建立；Hermes 正在读取已有文献与任务状态。", "ingestionUnknownTitle": "继续这个研究对象", "ingestionUnknownBody": "暂时无法读取文献处理状态。你仍可打开 Hermes 查看任务与来源。", "continueIngestion": "继续文献整理与核对", "openHermes": "打开 Hermes", "continue": "打开 SDF 编辑器", "inspect": "查看版本",
+    "overview": { "imageTitle": "机制解释图", "videoTitle": "研究讲解视频", "mediaVersion": "本页正文与图片对应同一版本（版本 {number}）。", "sources": "来源与原始证据", "desk": "研究桌面", "manageMedia": "查看与管理展示资产", "discuss": "与 Hermes 讨论这一段", "media": "可视化解释", "notEvidence": "审核通过的解释性资产，不替代原始论文、图表或代码证据。", "noMedia": "当前版本还没有审核通过的图片或视频。", "mediaFailed": "暂时无法加载展示资产；研究正文仍可阅读。", "retry": "重试加载", "sourceBody": "在来源文件中核对原始论文、图表和代码；在版本记录中追踪研究改动。", "openSources": "打开来源文件", "kicker": "对象概览", "title": "概览", "body": "安静地呈现这个 Research Object 的主张、证据和当前版本状态。", "status": "对象状态", "visibility": "可见性", "history": "已记录版本", "emptyTitle": "从一篇论文开始", "emptyBody": "添加原文，让 Hermes 帮你提炼问题、方法与发现。你可以随时核对证据、修改内容。", "ingestionTitle": "继续整理已有文献", "ingestionBody": "文献已经进入 Hermes 流程。继续查看提取结果并核对需要确认的内容。", "ingestionLoadingTitle": "正在查看研究进度", "ingestionLoadingBody": "研究对象已经建立；Hermes 正在读取已有文献与任务状态。", "ingestionUnknownTitle": "继续这个研究对象", "ingestionUnknownBody": "暂时无法读取文献处理状态。你仍可打开 Hermes 查看任务与来源。", "continueIngestion": "继续文献整理与核对", "openHermes": "打开 Hermes", "continue": "打开 SDF 编辑器", "inspect": "查看版本",
       "upload": "添加论文",
       "ask": "让 Hermes 帮我整理",
       "companionTitle": "一起读懂这项研究",

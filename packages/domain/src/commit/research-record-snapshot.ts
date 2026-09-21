@@ -6,6 +6,7 @@ import { PublishError } from '../publish/errors';
 import { PresentationAssetError } from '../assets/errors';
 import { presentationSceneImageView, requireSceneImageParent } from '../assets/scene-image';
 import type { FrozenHistoryMedia } from './version-history';
+import { loadEvidencePublicationVerification } from '../research-intelligence/evidence-publication-verification';
 
 export function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -112,6 +113,12 @@ async function writeResearchRecord(tx: Prisma.TransactionClient, input: {
   const entries = new Map(manifest.map(e => [e.artifactId, e]));
   const core = recordValue(version.manifest?.coreJson);
   const sdf = core;
+  const verification = await loadEvidencePublicationVerification(tx, {
+    ...input, workspaceId: version.researchObject.workspaceId,
+  }, evidence);
+  if (publication && evidence.some(item => (verification.get(item.id) ?? 'none') === 'none')) {
+    throw new PublishError('REVIEW_NOT_PASSED', 'Evidence verification changed before publication');
+  }
   const base = `/api/research-objects/${version.researchObjectId}/versions/${version.id}/record`;
   const sources: Record<string, unknown> = { claims: Object.fromEntries(claims.map(c => [c.id, { provenance: c.provenance }])) };
   const frozenEvidence = evidence.sort((a,b) => compare(a.id,b.id)).map(e => {
@@ -123,7 +130,8 @@ async function writeResearchRecord(tx: Prisma.TransactionClient, input: {
       provenance: e.provenance, verifiedByUserId: e.verifiedByUserId,
       publicReuse: e.kind !== 'external_source' || (rights.decision === 'reuse' && rights.authority === 'trusted_provider' && typeof rights.verifiedBy === 'string' && rights.verifiedBy.length > 0) };
     return { id: e.id, claimId: e.claimId, artifactId: e.artifactId, kind: e.kind, title: e.title, relation: e.relation, contentHash: e.contentHash,
-      extractionConfidence: e.extractionConfidence ?? null, extractionStatus: e.extractionStatus, verified: Boolean(e.verifiedByUserId),
+      // Verified includes exact system scientific review, without claiming human confirmation.
+      extractionConfidence: e.extractionConfidence ?? null, extractionStatus: e.extractionStatus, verified: (verification.get(e.id) ?? 'none') !== 'none',
       locator: Object.fromEntries(['page','blockId','boundingBox','charRange','tableCell','codeRange'].filter(key => locator[key] !== undefined).map(key => [key,locator[key]])),
       source: { state: available && provenance.sourceMapRef ? 'recorded' : 'not_recorded', url: `${base}/evidence/${e.id}/source` } };
   });

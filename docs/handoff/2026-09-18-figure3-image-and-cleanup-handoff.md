@@ -32,18 +32,33 @@
 - art修正及完整方案末审均成功：54da500f/99023ms、b658d657/14561ms均primary minimax-key-1-model-1/无fallback，嵌套review accepted；task5226最终succeeded并保留原checkpoint/review及完整correction证据，方案资产approved，science字段保持不变。自动新image763b88c3-6d9e-44de-88e9-e2616c70f876在Chat80083ms成功，1280×720/531607字节，hash eb06ba382e2b5e5067d5f4157a5e155d6af77d45254beaff050d8f7477748ced，本机tmp/visual-narrative-763b88c3-20260922.png已实看。
 - 6Pro真实像素审阅d02c4aca/174156ms成功返回blocked，科学/公式与原方案一致，但首零参考线应短细实线却画成与分界近等高虚线，背景有纹理/浅灰起伏而非均匀#FAFAFA；repairInstruction非空且只修渲染。素材rejected/任务succeeded，run stopped/version50/max13全部使用。review证据tmp/visual-narrative-763b88c3-review-20260922.json（只需asset.review.summary/repairInstruction，parentIdentity长）；服务器/jobs/review/763b88c3-6d9e-44de-88e9-e2616c70f876保存1张真实图片附件、submitted/anchor/conversation/response/result。未发布该图。
 - 当前断点已从科学错误转为纯render修正：原repairRejectedNarrativeImages有sceneImage.revisionAssetId能力，但既有固定13预算无余量；用户不限额度授权仍有效。已由High设计并完成沿原run/已批方案明确追加单个渲染任务的通用授权候选（详见下一节），不又加15/17魔法分支、不绕run手工出图、不重分析论文。现有修正输入是原完整brief+repairInstruction，不传被拒图字节（styleReference另有用途），不能称为保真像素编辑。尚未新增模型/更改预算/迁移。
-## 2026-09-22 原run单张渲染修正（候选，未部署）
+## 2026-09-22 原run单张渲染修正（已部署，实际图文完成）
 
 - 原图763b88c3被6Pro拒绝的两项缺陷都有明确repairInstruction。沿原retry-generation新增image-render恢复识别，不重复science/art规划；同事务只增加1项额度、创建同计划/scene的一阶修正task并写审计，提交后派发。新request不接收客户端自选额度/资产；旧13/11科学返工分支保持，不自动连续授权或放宽多代revision。
-- High纠正了仅看Prisma Int遗漏SQL CHECK的问题：当前约束只认9/11/13，必须新增20260922030000前向迁移。新约束仅允许存储>=9的格式，Domain拒绝无收据的非基线数字；基线9/11/13均按相同资格追加1，动态任务执行与资产审阅必须验证精确授权收据。完整Domain/迁移/UI独立High增量PASS，无阻断；基线9/11/13同样追加1已收口，10/12/14无精确收据仍拒绝。生产worker只读sceneImageFallbackConfigured=false，不会自动切provider；未运行测试/预检/本机构建，实际效果待部署。
+- High纠正了仅看Prisma Int遗漏SQL CHECK的问题：当前约束只认9/11/13，必须新增20260922030000前向迁移。新约束仅允许存储>=9的格式，Domain拒绝无收据的非基线数字；基线9/11/13均按相同资格追加1，动态任务执行与资产审阅必须验证精确授权收据。完整Domain/迁移/UI独立High增量PASS，无阻断；基线9/11/13同样追加1已收口，10/12/14无精确收据仍拒绝。生产worker只读sceneImageFallbackConfigured=false，不会自动切provider；未运行测试/预检/本机构建，后续实际部署与成图见下条。
 - 必要迁移前已运行原`backup.sh --confirm --db`，exit0、BACKUP_OK core_size=47M/search_size=4.6M/sets=7/7；未读备份正文、未运行测试/演练。部署使用正常事务并运行迁移，receiver不变。动态授权写入后不交给旧worker，数据库回滚拒绝收窄；保留历史任务、拒收、公开版本及原论文。
-- 原页一次性操作已准备`tmp/visual-narrative-image-render-resume-20260922.cjs`，严格stopped/version50/max13、approved parent5226及当前image763、image-render/chargeable1。服务器收据`/jobs/visual-narrative-image-render-resume-20260922.json`尚未消费；收到未知响应先读收据/run，禁止盲重发。
+- 原页一次性操作已准备`tmp/visual-narrative-image-render-resume-20260922.cjs`，严格stopped/version50/max13、approved parent5226及当前image763、image-render/chargeable1。服务器收据`/jobs/visual-narrative-image-render-resume-20260922.json`已消费，原页实际HTTP202/version51/max14，新task8bbcfd9b-95a9-4bdd-a202-3ebfb61594e3；收到未知响应先读收据/run，禁止盲重发。
+
+- 11941d9df24cc5346656a573826261862da91b20正常迁移/构建/启动exit0，rollback5ed8e4c7，marker独立读回一致、journal/failed无；DB grant CHECK >=9及新worker fallback=false已读回。新Chat image审计59d97576-a965-4040-9491-f30d5db634c3，18:58:02.338Z/81089ms/succeeded/no fallback；PNG hash778815c8fd54996e99abbad2e6d39a17edcf294f109e615cb56015e1d2fff8a8，526396bytes，local tmp/visual-narrative-8bbcfd9b-20260922.png，主线程已看图：首零线已变短实线。6Pro像素审阅仍进行中，尚未批准/reader/发布；原图不删。
+
+## 2026-09-22 真实图文完成与发布消费断点
+
+- 8bbc图片6Pro审计90ada2a8-60c2-4ff0-9bab-dd9823a491d8，19:00:57.124Z/174195ms/accepted；明确公式、共享因子、传播/倏逝分区、首零位置及单轴叙事无阻断缺陷。原素材自动approved，run succeeded/version53/max14；无再次生成/人工审核冒充。完整review证据在tmp/visual-narrative-8bbcfd9b-review-20260922.json。
+- 原Hermes页真实点击“阅读完整内容与图片”→private3051 overview，1280×720新图解码、六字段821字符、6Claims/58Evidence。收据与截图服务器/jobs/visual-narrative-final-reader-20260921.{json,png}，本机tmp/visual-narrative-final-reader-20260922.{json,png}；writes0。此项证明私有图文链路完成，最终用户科学/审美认可仍未冒认。
+- 阅读实见图解13px且版本内部说明前置。UI候选仅把来源/媒体声明移到原evidence details，长叙事图注改1rem/1.75行距，正文/图来自同record版本故去“可能后续编辑”错误断言；共享version label只识别系统生产者Hermes reviewed import前缀，显示“已整理文献”，存储不改。候选静态读差异完成，未部署/测试。
+- 原overview“更多工具→发布”实际进入并只勾8bbc。GET旧publicv2许可证为text CC-BY-4.0/code MIT/data CC-BY-4.0，原表单已选回相同许可、下载false，PDF workspace_member。发布范围独立High PASS。一次性/jobs/visual-narrative-publish-20260922.json已消费：license PUT200，review200但blocked/evidence_unverified；无transition/publish/新公开版本。原v1/v2不变，不能重放此脚本。
+- 根因位于publication-evidence.ts105/128：仅verifiedByUserId可用。既有producer真实58Evidence均succeeded/人工字段NULL；provenance reviewed_ingestion+reviewOrigin hermes绑定run e3、source f2f/responseHash、cee71443、sourceMap7904、inputHash等。唯一系统审计49a9ad2e-3b2f-4c6c-ba84-98682cf8e0fa actorNULL/action evidence.system_verify/target3051，包含58个evidenceIds及相同上游身份。私有元数据tmp/narrative-publication-system-review-read-20260922.json。候选共享helper同时供原发布guard与最终事务冻结消费，完整v5/source/run/唯一audit/全批ID核对；High原始58项路径PASS，不填人工字段/清门禁/再跑科学模型。
+- High另发现普通保存/历史恢复会复制Evidence到新ID/版本，原审计仍绑定旧版本；仅认当前审计会使未变科学内容失去系统核验。候选在同helper沿已有单值lineage，复用冻结Claim/Evidence比较，只有逐跳科学全等并最终有原系统证明或已发行verified冻结记录才继承；合并、多义、变化、循环继续拒绝。全路径共享256次Prisma读取预算，当前/冻结图和live root沿既有200 Evidence/500 Claims边界拒绝超限，缓存复用，预算不足不放行；防复杂历史图放大普通draft freeze查询。无新分析器、迁移、hash或审计；独立High最终PASS，待正常无测试/无迁移部署与真实发布。公开阅读两处原有caption同步16px/1.75与保留段落，避免只改善私有页面。
+
+- 第二篇只读元数据：RO c896802c仍draft，只有旧content-driven-image failed run436ff；新叙事可复用confirmed来源2fdb78de/agent1e324308及原PDF7bb96cc1（3,770,010bytes），v4无semanticStage，可沿原composition+v5审阅补齐；不复用旧d5c6失败科学结论，不重新上传。收据tmp/second-paper-narrative-source-read-20260922.json。
 
 ## 第三篇长文断点：后续最小方向（只读设计，未实施）
 
 - RO aa450f1e-fafc-46d8-a072-d935e01b0544/f653386b既有120000字符失败发生在extractor.ts canonicalPassages全文总量检查，先于semantic map/reduce；原Artifact d04add46-9d96-443b-aae1-c1dfc1ecbadb（PDF 4,609,066 bytes）保留，无研究Version，不重新上传。最新服务器只读确认AgentTask 2e83eaf7-66a3-4436-a045-ffa56d2a4895 result=NULL、无sourceMapRef，parser-jobs未留该任务产物；尚不能声称SourceMap可恢复，需查原生产者持久化时机。
 - 独立High定向读到现有buildMappedSemanticStage已将全部P段按约18000字符窗口顺序处理、并发2，再通过semantic-reduce归并；每段原1200字符/来源slice保留。小修方向为把120000限制留在单次buildLegacySemanticBridge，有previousResult但无可复用semantic stage的长文强制复用现有mapped路径，避免新分析模块和任意裁剪。
 - 尚未修改/执行：实际第三篇全文字符、窗口数量和reducer请求容量未知，须在原Artifact解析恢复后定量核对；不能仅依据模型名称或假设上下文上限宣称全篇可处理。canonical树extractor.ts第616/674行确有18_000窗口，最初explorer读错位置的“未找到”已纠正，不作为事实。先完成当前论文的图文实际结果，再实施本项；不批量跑模型。
+- 只读lookup更正：explorer最初脚本错把key长度定为84（正确目录+64hash+.json共89）且直接JSON.parse截断512字节，所报prefix0无效。主线程已保存并执行tmp/third-paper-source-reference-read-20260922.cjs，严格key regex、稳定开头双字段解析、上限50；真实返回capped/listed51，立即停止，未读取未匹配全文/扩范围/发模型。当前仅缺serializedSha/objectKey定位，不证明对象不存在。原Artifact的blobSha256=4a51048431f20950a01916b50cd87a08642881b20b0a9eac767144031ebc0b1a；后续可按High方案一次重解析原Artifact并保存私有sourceMap checkpoint，实际规模未知前不先加分层reducer。
+
 ## 2026-09-21 用户纠正：原图截取不是论文视觉叙事交付
 
 - 用户用公开v2的Fig.1截图指出：原样裁出展示丑，未读论文者无法清楚理解所传信息。目标是图片（单/多张）与后续视频让读者理解核心思想和关键点；原图/生图/视频按需采用，须同时设计叙事与美感。要求已入需求§18.2、Taskmaster任务5和CURRENT；本轮只静态定位/同步，尚未改生产链路或公开资产。

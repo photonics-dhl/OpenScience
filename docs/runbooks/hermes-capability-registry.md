@@ -30,7 +30,7 @@
 | Chat图像生成 / 参考图 | `presentation/scene-image.ts` → `gateway.generateImage` → `infra/chatgpt-browser/` | 服务器Chat直接执行已审方案；原参考图bytes和本批无参考图新风格均有真实成图。学术图c3a497已看图、仍待用户认可，初次封面ac166未合格，修订结果只见CURRENT。保留喜欢的aa41、旧图和公开v1；Codex CLI仅备用且不自动切换 |
 | Hermes对话与执行授权 | `apps/api/src/routes/agent.ts`、`research-runs.ts` → `packages/domain/src/agent/research-run.ts`、worker `index.ts` | 对话承接修改、核对、执行；当前能力参数/权限以这些入口为准。开发用MCP与skill目录不自动成为Hermes工具 |
 | 私有编辑 / 回收站 | `apps/api/src/routes/research-objects.ts`、`trash.ts` → Domain；`infra/private-cleanup/` | 草稿编辑与公开发行分开；公开资料保留。最近清除证据见历史f8e44815，本轮未删除任何数据 |
-| 公开发布 / 标准API | `apps/api/src/routes/publications.ts`、`research.ts`、`research-record.ts`；`packages/domain/src/research-intelligence/publication-snapshot.ts` | 发布快照和署名/许可进入公开成果；公开API不应曝光内部生产信息。本轮未改两篇公开v1；页面与API入口以代码为准 |
+| 公开发布 / 标准API | `apps/api/src/routes/publications.ts`、`research.ts`、`research-record.ts`；Domain `publication-evidence.ts`、`evidence-publication-verification.ts`、`commit/research-record-snapshot.ts` | 原发布消费者只认人工核验，真实58项Hermes系统核验被阻断。候选共享helper校核已有系统审计/完整v5及来源身份，并复用冻结科学记录处理未变新草稿；人工字段不回填。最终事务重核，公开仅冻结verified结果，私有身份不暴露；候选/部署/真实发布分别见CURRENT |
 | 服务器与调用观察 | `infra/scripts/deploy.sh`、`infra/compose/`；`packages/ai-gateway/src/gateway.ts` 的record；AgentTask/资产provenance | 本次只读确认Portainer、Netdata和应用运行；日志、任务结果、审阅/拒绝记录已存在。服务健康不能作为内容质量证据 |
 
 ### 复用与效果查询

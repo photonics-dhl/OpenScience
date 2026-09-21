@@ -155,14 +155,21 @@
 .presentationAsset > video { background: var(--public-product-canvas); }
 
 .presentationAsset figcaption {
-  padding: 12px 14px;
+  padding: 1rem 1.125rem 1.25rem;
+  gap: 10px;
+  color: var(--public-product-ink);
   font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .presentationAsset figcaption strong {
   font-family: var(--font-ui), system-ui, sans-serif;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.5;
 }
 
 .leadingGallery { margin-top: 0; }

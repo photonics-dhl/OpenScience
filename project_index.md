@@ -20,6 +20,8 @@
 
 本机桥合作入口：`infra/development-platform/codex-chatgpt-web/collaborate.mjs` 使用已安装原生 CLI 自动审批续接固定 XGS Pro 任务，STDIN 传任务、并发锁及独立日志；实际工具结果与未完成范围见 CURRENT。
 
+系统证据核验的发布消费沿 `packages/domain/src/research-intelligence/{evidence-publication-verification,publication-evidence}.ts` 与 `packages/domain/src/commit/research-record-snapshot.ts`：复用既有 `evidence.system_verify` 审计及已审来源身份，人工字段不回填；完整状态与候选共享helper见CURRENT，不把模型审阅冒称人工核验。阅读长图注与折叠来源沿 `apps/web/app/research-objects/[id]/overview/{page.tsx,overview.module.css}`，系统导入版本的显示标签沿 `apps/web/components/research/useVersionLabels.ts`，不改科研正文或提交元数据。公开叙事图注复用 `apps/web/components/presentation/ResearchMediaDeck.module.css` 与 `apps/web/components/public/PublicReadingProduct.module.css`。
+
 发布选图：`ResearchPublication.tsx` 与 `lib/api.ts` 传递可选 `presentationAssetIds`；`routes/publications.ts` / Domain `publish.ts` 在原事务校验已批准成品，`research-record-snapshot.ts` 使用既有 `publicationIncluded` 冻结选择，保留完整来源/历史。`illustration-planner.ts` 对被拒科学候选补多字段长度反馈；`workspace-guide.ts` 新建方案显式style并将修复反馈收敛到Gateway既有2000字符范围。科学校验、重试预算及历史修订语义保持；部署及实际效果仅见 CURRENT。
 
 本机桥候选：`infra/development-platform/codex-chatgpt-web/{desktop-continuation.patch,README.md,LICENSE.upstream}` 保存基于上游 5.0.8 的桌面委派/压缩续接修复、38 项定向新用例、重建命令及整包安装/回退边界；不随 OpenScience 应用部署，实际启用状态只见 CURRENT。

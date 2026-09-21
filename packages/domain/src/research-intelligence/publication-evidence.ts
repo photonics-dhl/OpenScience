@@ -4,6 +4,7 @@ import type { ArtifactDeps } from '../artifact/artifacts';
 import type { HardBlock } from '../review/blocking';
 import type { SourceLocator } from './types';
 import { resolveEvidenceSource } from './claim-evidence-service';
+import { loadEvidencePublicationVerification } from './evidence-publication-verification';
 
 type Resolver = typeof resolveEvidenceSource;
 
@@ -100,9 +101,12 @@ export async function evaluateEvidencePublicationBlocks(
   if (claims.length > 500) pushOnce(blocks, 'claim_review_limit_exceeded', 'Claim count exceeds the bounded publication review limit');
   if (evidence.length > 200) pushOnce(blocks, 'evidence_review_limit_exceeded', 'Evidence count exceeds the bounded publication review limit');
 
+  const verification = await loadEvidencePublicationVerification(deps.prisma, {
+    ...input, workspaceId: version.researchObject.workspaceId,
+  }, evidence);
   const verifiedSupport = new Set(evidence
     .filter((item) => (item.relation === 'supports' || item.relation === 'qualifies')
-      && item.extractionStatus === 'succeeded' && Boolean(item.verifiedByUserId))
+      && (verification.get(item.id) ?? 'none') !== 'none')
     .map((item) => item.claimId));
 
   for (const claim of claims.slice(0, 500)) {
@@ -125,7 +129,7 @@ export async function evaluateEvidencePublicationBlocks(
     if (item.kind === 'external_source' && !allowsExternalReuse(item.provenance)) {
       pushOnce(blocks, 'external_distribution_unauthorized', 'Stored external-source content lacks an affirmative reuse rights decision');
     }
-    if (item.extractionStatus !== 'succeeded' || !item.verifiedByUserId) {
+    if ((verification.get(item.id) ?? 'none') === 'none') {
       pushOnce(blocks, 'evidence_unverified', 'Evidence must be locator-resolved and explicitly verified before publication');
     }
     if (overwroteWithoutDiff(item.provenance)) {

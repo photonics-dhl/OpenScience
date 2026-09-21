@@ -72,12 +72,12 @@
 
 .caption {
   display: grid;
-  gap: 6px;
-  padding: 14px 16px 12px;
+  gap: 10px;
+  padding: 1rem 1.125rem 1.25rem;
 }
 
-.caption strong { font-size: 15px; line-height: 1.45; }
-.caption > span { color: var(--rp-muted, #596875); font-size: 13px; line-height: 1.55; }
+.caption strong { color: var(--rp-ink, #1d2935); font-size: 1rem; font-weight: 650; line-height: 1.5; }
+.caption > span { color: var(--rp-ink, #1d2935); font-size: 1rem; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .details {
   border-top: 1px solid var(--rp-rule, #dce4e8);

@@ -6,7 +6,6 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '@/components/research/ResearchSurfaceShell';
 import { ScientificText } from '@/components/content/ScientificText';
-import { useVersionLabels } from '@/components/research/useVersionLabels';
 import { apiRequest, ApiClientError, getResearchIngestion, getResearchObject, listVersions, listPresentationAssets, presentationAssetContentUrl, type PresentationAsset, type ResearchIngestion, type ResearchObjectSummary, type SdfCore, type VersionSummary, type WorkspaceGuidePayload } from '@/lib/api';
 import styles from './overview.module.css';
 
@@ -26,7 +25,7 @@ function OverviewAsset({ asset, objectId }: { asset: OverviewMedia; objectId: st
     {failed ? <div role="status"><p>{t('mediaFailed')}</p><button type="button" onClick={() => { setAttempt(value => value + 1); setFailed(false); }}>{t('retry')}</button></div>
       : asset.kind === 'video' ? <video controls playsInline preload="metadata" aria-label={title} src={src} onError={() => setFailed(true)} />
       : <img src={src} alt={title} loading="lazy" onError={() => setFailed(true)} />}
-    <figcaption><ScientificText as="strong" hideSourceMarkers>{title}</ScientificText>{asset.reader?.narration ? <ScientificText as="p" hideSourceMarkers>{asset.reader.narration}</ScientificText> : null}</figcaption>
+    <figcaption><ScientificText as="strong" hideSourceMarkers>{title}</ScientificText>{asset.reader?.narration ? <ScientificText as="p" className={styles.mediaNarration} hideSourceMarkers>{asset.reader.narration}</ScientificText> : null}</figcaption>
   </figure>;
 }
 
@@ -39,7 +38,6 @@ export default function ResearchOverviewPage({ params }: { params: { id: string 
 function ResearchOverview({ params, requestedVersionId }: { params: { id: string }; requestedVersionId: string }) {
   const t = useTranslations('productSurfaces');
   const recordText = useTranslations('versionRecord');
-  const versionLabels = useVersionLabels();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<{ id: string; cause: Error } | null>(null);
   const [ingestion, setIngestion] = useState<{ id: string; status: 'loading' | 'ready' | 'failed'; value: ResearchIngestion | null }>({ id: params.id, status: 'loading', value: null });
@@ -97,12 +95,11 @@ function ResearchOverview({ params, requestedVersionId }: { params: { id: string
     ? `${root}/hermes?task=${encodeURIComponent(ingestionTasks[0].id)}`
     : `${root}/hermes`;
   const media = <section className={styles.media} aria-label={t('overview.media')}>
-          <h2>{t('overview.media')}</h2>{mediaVersion ? <p>{t('overview.mediaVersionLabel', { label: versionLabels.label(mediaVersion) })}</p> : null}<p className={styles.caption}>{t('overview.notEvidence')}</p>
+          <h2>{t('overview.media')}</h2>
           {assets.map(asset => <OverviewAsset key={`${asset.versionId}:${asset.id}`} asset={asset} objectId={object.id} />)}
           {assets.length === 0 && !mediaFailed && !mediaLoading ? <p>{t('overview.noMedia')}</p> : null}
           {mediaLoading ? <p role="status">{t('state.loadingBody')}</p> : null}
           {mediaFailed ? <div role="status"><p>{t('overview.mediaFailed')}</p><button type="button" onClick={() => setRetry(value => value + 1)}>{t('overview.retry')}</button></div> : null}
-          <Link href={`${root}/presentation${versionQuery}`}>{t('overview.manageMedia')} →</Link>
         </section>;
   return <ResearchSurfaceShell key={object.id} active="overview" object={object} className={styles.surface} rail={<div className={styles.rail}><span className={styles.companionLabel}>HERMES</span><h2>{t('overview.companionTitle')}</h2><p>{t('overview.companionBody')}</p></div>}>
     {openAssistant => <article className={styles.article} data-research-overview={object.id}>
@@ -114,7 +111,15 @@ function ResearchOverview({ params, requestedVersionId }: { params: { id: string
         <button type="button" className={styles.discuss} data-testid={`overview-discuss-${field}`} onClick={() => openAssistant(targets[field])}><img src="/hermes/wanko-static.png" alt="" />{t('overview.discuss')}</button>
         {index === Math.min(1, entries.length - 1) ? media : null}
       </section>)}
-      <details className={styles.evidence}><summary>{t('overview.sources')}</summary><p>{t('overview.sourceBody')}</p><Link href={`${root}/files`}>{t('overview.openSources')}</Link><Link href={`${root}/versions`}>{t('overview.inspect')}</Link></details>
+      <details className={styles.evidence}>
+        <summary>{t('overview.sources')}</summary>
+        {mediaVersion ? <p>{t('overview.mediaVersion', { number: mediaVersion.versionNo })}</p> : null}
+        <p>{t('overview.notEvidence')}</p>
+        <p>{t('overview.sourceBody')}</p>
+        <Link href={`${root}/files`}>{t('overview.openSources')}</Link>
+        <Link href={`${root}/versions`}>{t('overview.inspect')}</Link>
+        <Link href={`${root}/presentation${versionQuery}`}>{t('overview.manageMedia')} →</Link>
+      </details>
     </article>}
   </ResearchSurfaceShell>;
 }

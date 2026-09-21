@@ -22,8 +22,10 @@
 .media figure { margin:16px 0; background:#f7f8fa; border-radius:8px; overflow:hidden; }
 .media figure img,.media video { display:block; width:100%; max-height:600px; object-fit:contain; }
 .media video { background:#171d22; }
-.media figcaption { padding:10px 14px; font-size:13px; color:#626c76; }
-.caption,.media>p,.evidence p,.rail p { font-size:14px; line-height:1.7; color:#626c76; }
+.media figcaption { padding:1rem 1.125rem 1.25rem; font-size:1rem; line-height:1.75; color:#303d45; }
+.media figcaption strong { display:block; font-weight:600; color:var(--os-ink); }
+.mediaNarration { margin:.625rem 0 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.media>p,.evidence p,.rail p { font-size:14px; line-height:1.7; color:#626c76; }
 .evidence { margin-top:32px; border:1px solid #e1e6e9; border-radius:7px; padding:14px 18px; }
 .evidence summary { cursor:pointer; font-weight:600; display:list-item; padding-block:10px; }
 .evidence a,.rail a { display:block; padding-block:10px; }
