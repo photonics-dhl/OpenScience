@@ -9,6 +9,35 @@ import { loadIllustrationStyleSkills } from './illustration-styles';
 
 type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string } };
 const SCIENCE_SCENE_KEYS = ['title', 'narration', 'message', 'domain', 'subjects', 'labels', 'constraints', 'encoding'];
+// Repair feedback only: the existing materializer remains the authoritative guard.
+// A first failing field must not hide other overlong fields in the same candidate.
+function scientificLengthDiagnostics(value: unknown): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const root = value as Record<string, unknown>;
+  const failures: string[] = [];
+  const inspect = (input: unknown, max: number, path: string, trim = false) => {
+    if (typeof input !== 'string') return;
+    const length = trim ? input.trim().length : input.length;
+    if (length > max) failures.push(`${path}:length_${length}_max_${max}`);
+  };
+  inspect(root.title, 120, 'title', true);
+  const scenes = Array.isArray(root.scenes) ? root.scenes : SCIENCE_SCENE_KEYS.every(key => key in root) ? [root] : [];
+  scenes.slice(0, 6).forEach((raw, index) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
+    const scene = raw as Record<string, unknown>;
+    const path = `scene_${index}`;
+    inspect(scene.title, 120, `${path}_title`, true);
+    inspect(scene.narration, 120, `${path}_narration`, true);
+    inspect(scene.message, 120, `${path}_message`);
+    inspect(scene.encoding, 200, `${path}_encoding`, true);
+    if (Array.isArray(scene.subjects)) scene.subjects.slice(0, 2).forEach((subject, subjectIndex) => {
+      if (subject && typeof subject === 'object' && !Array.isArray(subject)) inspect(subject.description, 140, `${path}_subject_${subjectIndex}_description`);
+    });
+    if (Array.isArray(scene.labels)) scene.labels.slice(0, 6).forEach((label, labelIndex) => inspect(label, 80, `${path}_label_${labelIndex}`));
+    if (Array.isArray(scene.constraints)) scene.constraints.slice(0, 2).forEach((constraint, constraintIndex) => inspect(constraint, 120, `${path}_constraint_${constraintIndex}`));
+  });
+  return failures;
+}
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('object_required');
   return value as Record<string, unknown>;
@@ -196,9 +225,9 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
           ? { min: eligibleFigures.length, max: eligibleFigures.length, mustEqualEligibleFigures: true }
           : { min: 1, max: 6, defaultIfMultiObject: 'one scene per distinct object' } },
         perScene: {
-          subjects: { min: 1, max: 2 },
+          subjects: { min: 1, max: 2, descriptionCharLimit: 140 },
           labels: { count: { min: 0, max: 6 }, eachCharLimit: 80 },
-          constraints: { count: { min: 0, max: 2 }, eachCharLimit: 120 },
+          constraints: { count: { min: 1, max: 2 }, eachCharLimit: 120 },
           encodingCharLimit: 200,
         },
         perArt: { layoutCharLimit: 200, treatmentCharLimit: 220 },
@@ -257,11 +286,14 @@ Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,co
       try { materializeScience(value); return true; } catch (error) { diagnostic = error instanceof Error ? error.message : 'invalid_scientific_intent'; return false; }
     }, scienceMessages, { temperature: 0.1, includeRejectedResponseOnRetry: true, maxRetries: 2, maxTokens: 16384, escalateMaxTokens: 32768,
       validationDiagnostic: () => diagnostic.toLowerCase().replace(/[^a-z0-9_,:-]+/gu, '_').slice(0, 400),
-      validationFeedback: () => {
+      validationFeedback: (value) => {
         const figurePlanHint = eligibleFigures && diagnostic.includes('figure_plan_scene_')
           ? ` figurePlan requires EXACTLY ${eligibleFigures.length} scenes, in eligibleFigures order; each title starts with the figure id.`
           : '';
-        return `Correct this scientific-intent field: ${diagnostic}.${figurePlanHint} Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,constraints,encoding}]}; each subject is {description,basis:{sourceId}}. No schemaVersion or illustration wrapper. Keep one narrow supported relationship, encoding<=200 characters; select one of the provided s-prefixed sourceId values, not database IDs, quoteId or fabricated quotations. Use single-line Unicode mathematical notation, with no unescaped TeX backslashes. If the compiled prompt exceeds its limit, reduce optional labels or scope while preserving essential qualifiers; leave room for art direction.`;
+        const lengthFailures = scientificLengthDiagnostics(value);
+        // Keep feedback within the Gateway's existing 2,000-character allowance.
+        const lengthFeedback = lengthFailures.length ? ` Check all text fields; overlong fields include: ${lengthFailures.join('; ').slice(0, 800)}.` : '';
+        return `Correct this scientific-intent field: ${diagnostic}.${figurePlanHint}${lengthFeedback} Return exactly {title,scenes:[{title,narration,message,domain,subjects,labels,constraints,encoding}]}; each subject is {description,basis:{sourceId}}. No schemaVersion or illustration wrapper. title/narration/message<=120, each of 1-2 subject descriptions<=140, encoding<=200, 0-6 labels<=80 each, 1-2 constraints<=120 each. Use concise wording comfortably below every limit and one narrow supported relationship. Preserve valid sourceId bindings, essential qualifiers, formulas, axis meanings and figure order; shorten redundant prose, never truncate scientific text or invent sources. Use single-line Unicode notation with valid JSON escaping. Leave room for art direction within the compiled prompt limit.`;
       } });
     intent = materializeScience(science);
   }

@@ -15,7 +15,7 @@ import {
   reviewSnapshotDigest,
 } from '../research-intelligence/publication-snapshot';
 import { PublishError } from './errors';
-import { finalizePublicationResearchRecord } from '../commit/research-record-snapshot';
+import { finalizePublicationResearchRecord, recordValue } from '../commit/research-record-snapshot';
 import { publicVersionNumber } from './publication-metadata';
 import { lockTrashReferences } from '../trash/trash';
 import { publicHistoryMedia } from '../commit/version-history';
@@ -113,7 +113,7 @@ export async function transitionVersionStatus(
  */
 export async function publishVersion(
   deps: ArtifactDeps,
-  input: { versionId: string; userId: string; r3Confirmed: boolean; publicIdPrefix: string; allowArtifactDownloads?: boolean },
+  input: { versionId: string; userId: string; r3Confirmed: boolean; publicIdPrefix: string; allowArtifactDownloads?: boolean; presentationAssetIds?: string[] },
   ctx: AuditContext = {},
 ) {
   // Serialization/identifier conflicts roll the transaction back, including the
@@ -128,7 +128,7 @@ export async function publishVersion(
 
 async function publishVersionOnce(
   deps: ArtifactDeps,
-  input: { versionId: string; userId: string; r3Confirmed: boolean; publicIdPrefix: string; allowArtifactDownloads?: boolean },
+  input: { versionId: string; userId: string; r3Confirmed: boolean; publicIdPrefix: string; allowArtifactDownloads?: boolean; presentationAssetIds?: string[] },
   ctx: AuditContext = {},
 ): Promise<{
   versionId: string;
@@ -263,7 +263,22 @@ async function publishVersionOnce(
       throw new PublishError('VALIDATION_ERROR', '发布附件已移入回收站或来源已改变，请先恢复材料并重新保存');
     }
     const approvedAssets = await tx.presentationAsset.findMany({ where: { researchObjectId: version.researchObjectId, versionId: version.id, deletedAt: null, status: 'approved' } });
-    for (const asset of approvedAssets) await requireValidVersionHistoryCopy(tx, asset);
+    const selectedAssetIds = input.presentationAssetIds === undefined ? undefined : new Set(input.presentationAssetIds);
+    if (selectedAssetIds) {
+      // Match the frozen public reader, then exclude source-only originals as in
+      // new publication snapshots. Scope/status/deletion were checked by the query.
+      const publishableIds = new Set(publicHistoryMedia({ historyMedia: { items: approvedAssets } })
+        .filter(asset => asset.generator !== 'OpenScience paper-original figure'
+          && recordValue(asset.provenance).subtype !== 'paper_original_figure')
+        .map(asset => asset.id));
+      if (selectedAssetIds.size !== input.presentationAssetIds!.length
+        || [...selectedAssetIds].some(id => !publishableIds.has(id))) {
+        throw new PublishError('VALIDATION_ERROR', '发布媒体选择无效：请选择本版本已批准的成品，移除重复、失效、分镜方案或论文原图来源后重试');
+      }
+    }
+    for (const asset of approvedAssets) {
+      if (!selectedAssetIds || selectedAssetIds.has(asset.id)) await requireValidVersionHistoryCopy(tx, asset);
+    }
     const currentReview = await tx.aiReview.findUnique({ where: { versionId: version.id } });
     const transactionDeps = { ...deps, prisma: tx as unknown as typeof deps.prisma };
     const currentAuthority = await requireMembership(transactionDeps, currentVersion.researchObject.workspaceId, input.userId);
@@ -311,7 +326,7 @@ async function publishVersionOnce(
     });
     const publishedAt = new Date();
     const visibilityFrom = currentVersion.researchObject.visibility;
-    const metadata = await finalizePublicationResearchRecord(tx, { researchObjectId: version.researchObjectId, versionId: version.id, publicId, publicVersionId, publicationNo, publishedAt, allowArtifactDownloads: input.allowArtifactDownloads === true });
+    const metadata = await finalizePublicationResearchRecord(tx, { researchObjectId: version.researchObjectId, versionId: version.id, publicId, publicVersionId, publicationNo, publishedAt, allowArtifactDownloads: input.allowArtifactDownloads === true, presentationAssetIds: selectedAssetIds ? [...selectedAssetIds] : undefined });
     const recorded = await tx.version.findUniqueOrThrow({ where: { id: version.id }, select: { researchRecord: true } });
     const mediaPart = publicHistoryMedia(recorded.researchRecord).map(asset => ({ id: asset.id, kind: asset.kind, contentHash: asset.contentHash,
       generator: asset.generator, generatorVersion: asset.generatorVersion, sourceClaimIds: [...asset.sourceClaimIds].sort() })).sort((a, b) => a.id.localeCompare(b.id));
@@ -339,6 +354,7 @@ async function publishVersionOnce(
         publicationNo,
         contentSha256,
         allowArtifactDownloads: input.allowArtifactDownloads === true,
+        presentationAssetIds: mediaPart.map(asset => asset.id),
         visibilityFrom,
         visibilityTo: 'public',
       },

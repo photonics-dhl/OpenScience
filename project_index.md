@@ -12,6 +12,8 @@
 
 本机桥合作入口：`infra/development-platform/codex-chatgpt-web/collaborate.mjs` 使用已安装原生 CLI 自动审批续接固定 XGS Pro 任务，STDIN 传任务、并发锁及独立日志；实际工具结果与未完成范围见 CURRENT。
 
+发布选图：`ResearchPublication.tsx` 与 `lib/api.ts` 传递可选 `presentationAssetIds`；`routes/publications.ts` / Domain `publish.ts` 在原事务校验已批准成品，`research-record-snapshot.ts` 使用既有 `publicationIncluded` 冻结选择，保留完整来源/历史。`illustration-planner.ts` 对被拒科学候选补多字段长度反馈，不改变科学校验或重试预算。部署及实际效果仅见 CURRENT。
+
 本机桥候选：`infra/development-platform/codex-chatgpt-web/{desktop-continuation.patch,README.md,LICENSE.upstream}` 保存基于上游 5.0.8 的桌面委派/压缩续接修复、38 项定向新用例、重建命令及整包安装/回退边界；不随 OpenScience 应用部署，实际启用状态只见 CURRENT。
 
 Chat审阅接收：`infra/chatgpt-browser/review-runner.cjs`沿用既有broker，补就绪等待、原文锚定和空DOM时严格绑定的已完成final读取；同一a803请求实际恢复，无重发。精确bundle与应用release分开登记在CURRENT。

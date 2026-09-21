@@ -2,7 +2,14 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
-## 2026-09-21 部署与暂停点
+## 2026-09-21 用户授权继续：真实原图复用与剩余断点
+
+- 用户明确保留当前登录继续，未退出或改动会话；原错误并非认证失败。已从dashboard真实入口进入新版配图页，原图上传/来源审核成功，Hermes版本上下文实际修复。具体资产和下一动作只见CURRENT；下节“暂停/未上传”是此前历史状态。
+- 原Fig.1三子图与完整图注已视觉核对，上传后hash相等、浏览器解码900×696；来源批准只允许reuse。Hermes仅Fig.1/reuse方案已成功并批准，原样复制已通过原按钮提交，未新调用Chat图像provider。收据/jobs/paper-source-*、hermes-source-reuse-*、paper-reuse-*20260921.json。
+- 新封面guide成功而science plan失败；worker固定诊断是JSONparse、encoding220>200、subject描述151>140；按task关联Langfuse三条MiniMax调用。Pro同原CLI短任务实读两段代码、写/读回12行建议；tmp/pro-collaboration/2026-09-21T00-50-19-619Z.jsonl及tmp/pro-planner-bounds-review-20260921.md。候选聚合已被拒对象的超长字段反馈，修planning缺失上限/constraints.min，保留原证据/科学guard及两次重试；不截断科学文字、不扩大额度预算。
+- 发布全选不能排除旧approved成品；候选新增现有publish可选IDs，新UI默认空选并预览计数，锁内校验approved且同version且非来源/分镜，所有historyMedia仍冻结保留，公开hash/下载使用原publicHistoryMedia。High复核未见新增实质问题。未部署前不声称选图已可用；Fig.2清理仍未授权。
+
+## 2026-09-21 部署与暂停点（历史，已由上节续作）
 
 - 本轮应用及独立provider均已成功部署，所有包服务器编译通过，精确release与rollback仅见CURRENT。提交使用[skip ci]，deploy --no-tests/skip-migrate/reuse-unchanged-capability-images，未运行应用测试/预检/CI或本机构建。provider首轮忙锁拒绝无切换；原备份已存，随后只停timer等待当前服务结束再运行既有installer，恢复此前两个timer active，未关闭浏览器或取消任务。
 - 实际公开PDF只有Fig.1，第5页原图及图注已视觉核对并提取，原PDF/页图/裁图/坐标记录在服务器observations/paper-source-20260921与本机tmp/pipeline-*.png；sourceArtifact保持4b94c626，文件hash与原登记一致。后续真实reuse使用Fig.1，不能把生成计划Fig.3当原论文原图。当前未上传产品。

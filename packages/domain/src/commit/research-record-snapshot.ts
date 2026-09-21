@@ -26,14 +26,14 @@ export async function refreshWorkingResearchRecord(tx: Prisma.TransactionClient,
 /** Final public snapshot, called only inside the publication transaction. */
 export async function finalizePublicationResearchRecord(tx: Prisma.TransactionClient, input: {
   researchObjectId: string; versionId: string;
-  publicId: string; publicVersionId: string; publicationNo: number; publishedAt: Date; allowArtifactDownloads?: boolean;
+  publicId: string; publicVersionId: string; publicationNo: number; publishedAt: Date; allowArtifactDownloads?: boolean; presentationAssetIds?: string[];
 }) {
   return writeResearchRecord(tx, input, input);
 }
 
 async function writeResearchRecord(tx: Prisma.TransactionClient, input: {
   researchObjectId: string; versionId: string;
-}, publication: false | { publicId: string; publicVersionId: string; publicationNo: number; publishedAt: Date; allowArtifactDownloads?: boolean }, refresh = false) {
+}, publication: false | { publicId: string; publicVersionId: string; publicationNo: number; publishedAt: Date; allowArtifactDownloads?: boolean; presentationAssetIds?: string[] }, refresh = false) {
   const version = await tx.version.findUnique({ where: { id: input.versionId }, include: { researchObject: true, manifest: { include: { entries: true } } } });
   if (!version || version.researchObjectId !== input.researchObjectId
     || (publication ? version.status !== 'approved' : refresh ? version.status !== 'draft' || version.publicVersionId !== null : version.researchRecord != null)) throw new Error('Research record cannot be frozen');
@@ -111,15 +111,17 @@ async function writeResearchRecord(tx: Prisma.TransactionClient, input: {
     },
   } : undefined;
   const capturedAt = new Date().toISOString();
+  const selectedAssetIds = publication && publication.presentationAssetIds !== undefined ? new Set(publication.presentationAssetIds) : undefined;
   const historyMedia = { captureSource: 'working_draft', capturedAt, items: media.map(asset => ({
     id: asset.id, researchObjectId: asset.researchObjectId, versionId: asset.versionId, kind: asset.kind,
     objectKey: asset.objectKey, contentHash: asset.contentHash, generator: asset.generator, generatorVersion: asset.generatorVersion,
     promptHash: asset.promptHash, status: asset.status, label: asset.label, provenance: asset.provenance,
     sourceClaimIds: asset.sourceClaims.map(link => link.claimId).sort(),
-    // Source approval permits reuse; it does not select the original as a publication image.
-    // Mark only new public snapshots so existing public media identities remain unchanged.
+    // Keep every history entry and its source references, while freezing the
+    // publication choice. Existing public snapshots keep their original identities.
     ...(publication && (asset.generator === 'OpenScience paper-original figure'
-      || recordValue(asset.provenance).subtype === 'paper_original_figure') ? { publicationIncluded: false } : {}),
+      || recordValue(asset.provenance).subtype === 'paper_original_figure'
+      || (selectedAssetIds && !selectedAssetIds.has(asset.id))) ? { publicationIncluded: false } : {}),
   })) };
   await tx.version.update({ where: { id: version.id }, data: { researchRecord: JSON.parse(JSON.stringify({ dto, sources, historyMedia,
     historyCapture: { state: publication ? 'sealed' : 'working', graphSource: 'working_draft', capturedAt },

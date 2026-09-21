@@ -25,7 +25,7 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
   const tw = useTranslations('workbench');
   const th = useTranslations('editHistory');
   const versionLabels = useVersionLabels();
-  const mediaLabel = (asset: PresentationAsset) => asset.kind === 'video' ? tw('researchVideo') : tw('coreImage');
+  const mediaLabel = (asset: PresentationAsset) => asset.kind === 'video' ? tw('researchVideo') : asset.kind === 'interactive_html' ? tc('publicationInteractive') : tw('coreImage');
   const [object, setObject] = useState<ResearchObjectSummary | null>(null);
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [selectedId, setSelectedId] = useState(selectedVersionId ?? '');
@@ -34,6 +34,8 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
   const [review, setReview] = useState<PublicationReview | null>(null);
   const [core, setCore] = useState<SdfCore | null>(null);
   const [assets, setAssets] = useState<PresentationAsset[]>([]);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const selectedAssets = assets.filter((asset) => selectedAssetIds.includes(asset.id));
   const [materialNames, setMaterialNames] = useState<string[]>([]);
   const [allowArtifactDownloads, setAllowArtifactDownloads] = useState(false);
   const downloadConflict = allowArtifactDownloads && licenses.data === 'NO-DOWNLOAD';
@@ -58,7 +60,7 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
 
   useEffect(() => {
     let active = true;
-    setReadyScope(''); setReview(null); setCore(null); setAssets([]); setMaterialNames([]); setAllowArtifactDownloads(false); setConfirmOpen(false); setPublicUrl(''); setError('');
+    setReadyScope(''); setReview(null); setCore(null); setAssets([]); setSelectedAssetIds([]); setMaterialNames([]); setAllowArtifactDownloads(false); setConfirmOpen(false); setPublicUrl(''); setError('');
     if (!selectedId) return;
     void Promise.all([
       getLicenses(researchObjectId, selectedId), getPublicationReview(selectedId),
@@ -71,7 +73,8 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
       const manifest = recordResult.record.manifest ?? [];
       setMaterialNames(manifest.map(item => item.logicalPath));
       setAllowArtifactDownloads(manifest.length > 0 && manifest.every(item => item.downloadAccess === 'public'));
-      setAssets(publicationMedia(media.assets)); setReadyScope(scope);
+      const approvedAssets = publicationMedia(media.assets);
+      setAssets(approvedAssets); setSelectedAssetIds([]); setReadyScope(scope);
     }).catch((cause: Error) => { if (active) setError(cause.message); });
     return () => { active = false; };
   }, [researchObjectId, selectedId, scope, tw]);
@@ -101,18 +104,18 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
         if (!current()) return;
         setVersions((items) => items.map((item) => item.versionId === target.versionId ? { ...item, status: 'approved' } : item));
       }
-      beforePublish?.();
       // Approval is closed for this version after the status transitions above.
       // Reconcile the displayed media scope before the final irreversible write.
-      if (conversation) {
-        const latest = await listPresentationAssets(researchObjectId, target.versionId);
-        if (!current()) return;
-        const reviewed = publicationMedia(latest.assets);
-        if (reviewed.length !== assets.length || reviewed.some((asset) => !assets.some((shown) => shown.id === asset.id && shown.updatedAt === asset.updatedAt))) {
-          setAssets(reviewed); throw new Error(tc('publicMediaChanged'));
-        }
+      const latest = await listPresentationAssets(researchObjectId, target.versionId);
+      if (!current()) return;
+      const reviewed = publicationMedia(latest.assets);
+      if (reviewed.length !== assets.length || reviewed.some((asset) => !assets.some((shown) => shown.id === asset.id && shown.updatedAt === asset.updatedAt && shown.contentHash === asset.contentHash))) {
+        setAssets(reviewed);
+        setSelectedAssetIds((ids) => ids.filter((id) => reviewed.some((asset) => asset.id === id)));
+        throw new Error(tc('publicMediaChanged'));
       }
-      const publication = await publishVersion(target.versionId, { allowArtifactDownloads });
+      beforePublish?.();
+      const publication = await publishVersion(target.versionId, { allowArtifactDownloads, presentationAssetIds: selectedAssets.map((asset) => asset.id) });
       if (!current()) return;
       const publicationNo = publication.published.publicationNo ?? Number(publication.published.publicVersionId.match(/-v([1-9]\d*)$/u)?.[1]);
       if (!Number.isSafeInteger(publicationNo) || publicationNo < 1) throw new Error(tw('versionMismatch'));
@@ -153,6 +156,26 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
     });
     return () => onConfirmationChange(null);
   }, [conversation, onConfirmationChange, ready, working, downloadConflict, scope, selected?.status, selected?.publicationNo]);
+  const mediaChoice = selected?.publicationNo == null && assets.length > 0 && <fieldset className="mt-4" disabled={working}>
+    <legend className="text-sm font-semibold">{tc('publicationMediaChoice')}</legend>
+    <p className="mt-2 text-sm leading-6 text-os-muted-paper">{tc('publicationMediaChoiceBody')}</p>
+    <div className="mt-3 grid gap-4 sm:grid-cols-2">{assets.map((asset, index) => {
+      const name = tc('publicationMediaItem', { kind: mediaLabel(asset), number: index + 1 });
+      const url = presentationAssetContentUrl(researchObjectId, selectedId, asset.id);
+      return <div className="min-w-0 rounded-panel border border-os-rule-paper bg-white p-3" key={asset.id}>
+        {asset.kind === 'video' ? <video className="h-32 w-full object-contain" controls preload="metadata" aria-label={name} src={url} /> : asset.kind === 'interactive_html' || asset.kind === 'svg' ? <a className="inline-flex min-h-11 items-center text-sm text-os-vermilion-ink underline" href={url} download>{tc('downloadPublicationMedia', { name })}</a> : <a className="block rounded-panel text-sm text-os-vermilion-ink underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href={url} target="_blank" rel="noreferrer" aria-label={tc('viewPublicationMedia', { name })}><img className="h-32 w-full object-contain" src={url} alt={name} loading="lazy" /></a>}
+        <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+          <input type="checkbox" className="h-4 w-4 shrink-0 accent-os-vermilion-ink" checked={selectedAssetIds.includes(asset.id)} onChange={(event) => {
+            const checked = event.target.checked;
+            setSelectedAssetIds((ids) => checked ? [...ids, asset.id] : ids.filter((id) => id !== asset.id));
+            setConfirmOpen(false);
+          }} />
+          <span>{tc('includePublicationMedia', { name })}</span>
+        </label>
+      </div>;
+    })}</div>
+    <p className="mt-3 text-sm leading-6" aria-live="polite">{tc('publicationMediaSelected', { count: selectedAssets.length })}</p>
+  </fieldset>;
   const materialChoice = materialNames.length > 0 && <div className="mt-4 text-sm">
     <details><summary className="cursor-pointer">{tc('publicationMaterials', { count: materialNames.length })}</summary><ul className="mt-2 list-inside list-disc">{materialNames.map((name) => <li className="break-all" key={name}>{name}</li>)}</ul></details>
     {selected?.publicationNo == null && <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-3">
@@ -166,10 +189,11 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
     {error && <p role="alert" className="text-sm text-state-danger">{error}</p>}
     {!ready && !error && <p role="status">{t('state.loadingBody')}</p>}
     {ready && <>
-      <p>{selected?.publicationNo != null ? th('alreadyPublic') : tc('publicationScope', { title: object?.title ?? '', count: assets.filter((asset) => ['image', 'chart', 'video'].includes(asset.kind)).length })}</p>
+      <p>{selected?.publicationNo != null ? th('alreadyPublic') : tc('publicationScope', { title: object?.title ?? '', count: selectedAssets.length })}</p>
       {selected?.publicationNo == null && <p className="mt-2 text-sm">{th('publicationNumberOnPublish')}</p>}
       <p className="mt-2 text-sm">{t('publish.permanenceBody')}</p>
       <p className="mt-2 text-sm">{tc('publicationLicense', { text: licenses.text, code: licenses.code, data: licenses.data })}</p>
+      {mediaChoice}
       {materialChoice}
       {review?.hardBlocks.map((block, index) => <p className="mt-2 text-sm text-state-danger" key={index}>{block.reason}</p>)}
       {['under_review', 'approved'].includes(selected?.status ?? '') && <p className="mt-2 text-sm">{tc('resumePublicationEditing')}</p>}
@@ -185,12 +209,14 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
     {selectedId && !ready && !error && <p role="status">{t('state.loadingBody')}</p>}
     {ready && selected?.publicationNo != null && <section className="my-6"><p className="text-sm leading-6">{th('alreadyPublic')}</p>{publicUrl || object?.publicId ? <Link className="mt-3 inline-flex min-h-11 items-center text-os-vermilion-ink underline" href={publicUrl || `/research/${encodeURIComponent(object!.publicId!)}/v/${selected.publicationNo}`}>{tw('openPublic')}</Link> : null}</section>}
     {ready && core && selected?.publicationNo == null && <>
-      <article className="rounded-panel bg-white px-5 py-8 shadow-sm sm:px-8" data-publication-preview="true">
+      {mediaChoice}
+      <article className="mt-6 rounded-panel bg-white px-5 py-8 shadow-sm sm:px-8" data-publication-preview="true">
         <p className="text-xs text-os-muted-paper">{tw('previewLabel')} · {selected ? versionLabels.label(selected) : th('privateDraft')}</p>
         {selected?.publicationNo == null && <p className="mt-2 text-xs text-os-muted-paper">{th('publicationNumberOnPublish')}</p>}
         <h2 className="mt-3 font-editorial text-3xl leading-tight">{object?.title}</h2>
         <ScientificText hideSourceMarkers as="p" className="mt-5 border-l-2 border-os-vermilion-ink pl-4 text-lg leading-8">{core.insight}</ScientificText>
-        <div className="research-publication-media">{assets.filter((asset) => ['image', 'chart', 'video'].includes(asset.kind)).map((asset) => <figure className="my-7" key={asset.id}>{asset.kind === 'video' ? <video className="h-auto w-full" controls preload="metadata" aria-label={mediaLabel(asset)} src={presentationAssetContentUrl(researchObjectId, selectedId, asset.id)} /> : <img className="h-auto w-full object-contain" src={presentationAssetContentUrl(researchObjectId, selectedId, asset.id)} alt={mediaLabel(asset)} />}<figcaption className="mt-2 text-sm text-os-muted-paper">{mediaLabel(asset)}</figcaption></figure>)}</div>
+        <div className="research-publication-media">{selectedAssets.filter((asset) => ['image', 'chart', 'video'].includes(asset.kind)).map((asset) => <figure className="my-7" key={asset.id}>{asset.kind === 'video' ? <video className="h-auto w-full" controls preload="metadata" aria-label={mediaLabel(asset)} src={presentationAssetContentUrl(researchObjectId, selectedId, asset.id)} /> : <img className="h-auto w-full object-contain" src={presentationAssetContentUrl(researchObjectId, selectedId, asset.id)} alt={mediaLabel(asset)} />}<figcaption className="mt-2 text-sm text-os-muted-paper">{mediaLabel(asset)}</figcaption></figure>)}</div>
+        {selectedAssets.filter((asset) => ['interactive_html', 'svg'].includes(asset.kind)).map((asset) => <p className="my-4 text-sm" key={asset.id}><a className="text-os-vermilion-ink underline" href={presentationAssetContentUrl(researchObjectId, selectedId, asset.id)} download>{tc('downloadPublicationMedia', { name: tc('publicationMediaItem', { kind: mediaLabel(asset), number: assets.indexOf(asset) + 1 }) })}</a></p>)}
         {SDF_FIELDS.filter((field) => field !== 'insight').map((field) => <section className="mt-7" key={field}><h3 className="research-section-title">{t(`fields.${field}`)}</h3><ScientificText hideSourceMarkers as="p" className="mt-2 leading-8">{core[field]}</ScientificText></section>)}
       </article>
       {materialChoice}
@@ -201,7 +227,7 @@ export function ResearchPublication({ researchObjectId, selectedVersionId, embed
         <button className="min-h-11 w-full rounded-panel bg-os-vermilion-ink px-5 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto" disabled={working || !ready || downloadConflict} onClick={() => setConfirmOpen(true)}>{working ? t('publish.checking') : t('publish.action')}</button>
       </div>
     </>}
-    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}><DialogContent className="max-w-xl rounded-panel bg-os-paper-strong p-6 text-os-ink"><DialogTitle className="text-2xl font-semibold">{t('publish.confirmTitle')}</DialogTitle><DialogDescription className="mt-4 text-base leading-7">{t('publish.confirmBody')}</DialogDescription><p className="mt-3 text-sm leading-6">{tw('rightsNotice')}</p>{materialNames.length > 0 && <p className="mt-3 text-sm leading-6">{tc(allowArtifactDownloads ? 'artifactDownloadsEnabled' : 'artifactDownloadsDisabled')}</p>}<div className="mt-6 flex justify-end gap-3"><DialogClose className={control}>{t('publish.cancel')}</DialogClose><button disabled={working || downloadConflict} className="min-h-11 rounded-panel bg-os-vermilion-ink px-4 text-sm font-semibold text-white disabled:opacity-50" onClick={() => void publish()}>{t('publish.confirm')}</button></div></DialogContent></Dialog>
+    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}><DialogContent className="max-w-xl rounded-panel bg-os-paper-strong p-6 text-os-ink"><DialogTitle className="text-2xl font-semibold">{t('publish.confirmTitle')}</DialogTitle><DialogDescription className="mt-4 text-base leading-7">{t('publish.confirmBody')}</DialogDescription><p className="mt-3 text-sm leading-6">{tc('publicationMediaSelected', { count: selectedAssets.length })}</p><p className="mt-3 text-sm leading-6">{tw('rightsNotice')}</p>{materialNames.length > 0 && <p className="mt-3 text-sm leading-6">{tc(allowArtifactDownloads ? 'artifactDownloadsEnabled' : 'artifactDownloadsDisabled')}</p>}<div className="mt-6 flex justify-end gap-3"><DialogClose className={control} disabled={working}>{t('publish.cancel')}</DialogClose><button disabled={working || downloadConflict} className="min-h-11 rounded-panel bg-os-vermilion-ink px-4 text-sm font-semibold text-white disabled:opacity-50" onClick={() => void publish()}>{working ? t('publish.checking') : t('publish.confirm')}</button></div></DialogContent></Dialog>
   </div>;
   return embedded || !object ? content : <ResearchSurfaceShell active="publish" object={object}>{content}</ResearchSurfaceShell>;
 }

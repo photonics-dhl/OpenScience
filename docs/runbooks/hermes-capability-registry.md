@@ -46,6 +46,8 @@
 
 ### 当前技术债与处理
 
+当前定向补接：真实Fig.1已进入Artifact→来源审核→Hermes reuse方案，复制/成品/公开状态见CURRENT；此前“仅占位管道”是历史证据。新封面science任务出现JSON和字段超长，`illustration-planner.ts`候选补拒绝对象多字段长度反馈，不增加重试/放宽科学约束。发布端原来自动全选approved成品，候选复用publish事务和historyMedia.publicationIncluded提供明确选图，旧资产/公开v1保留；未部署候选不可当已运行能力。
+
 范围：交付树的规则治理、去重、配图表示/审阅边界和工具联动断点；精确版本见CURRENT。以下是定向诊断，不是全仓无债证明或量化健康评分；执行了必要应用构建/启动和工具实际查询，未运行扫描、测试；已执行用户授权的真实私有配图任务。
 
 本轮实际联动：Backstage 返回 agent-worker 的 Gateway/parser/skills 依赖；Serena 在生产源码快照定位确认 bridge 的 Hermes/API 两条调用，再用候选源码核对；Langfuse最初读到两条历史生图失败、requestCorrelation为unknown；后续真实25215/1da6/2196已具任务关联。沿审计生产者定位到 Worker 已有任务上下文未传给 Gateway sink，补接到既有 requestId/view/connector，不新建观察系统。静态调用/传递断点与运行失败是不同证据，不能据两条失败断言科学内容出错原因。
