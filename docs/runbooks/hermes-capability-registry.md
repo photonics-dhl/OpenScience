@@ -48,6 +48,8 @@
 
 论文视觉叙事缺口（2026-09-21用户纠正）：`illustration-planner.ts`的reuse-only分支本地组装原图方案，`illustration-review.ts`直接接受原图方案，`handler.ts`原字节复制；这些行为保证复用，未设计读者解释。通用planner的“ONE atomic relationship by default”与项目配图Skill的“otherwise prefer one”适合局部科学图，却不能代替从全文组织核心思想、关键点和连续读图路径。v2原样Fig.1已被用户否定美感和独立理解效果。需在已有Hermes/分镜路径先组织论文叙事，再按需选原图/重绘/生图与单/多图；保留逐图科学来源及定量渲染边界，不增加独立模型或审核门禁。需求已入§18.2，任务5/当前状态见CURRENT；运行代码和Skill未改，不能称已解决。
 
+实现方案只读核查：`scientific-writing-source.ts`已按确认任务sourceMapRef受控读取；图像planner目前主要收到已选Claim/exactQuote，需核已审综合结果的版本身份再补接。`storyboard.ts:storyboardSceneStyles`与planner均把reuse放前面；`ResearchMediaDeck`已有label/description，但公开`PresentationAssetGallery`使用通用标题/固定提示，发布快照未保存叙事顺序与caption。`generateClaimChartSvg`仅文字图，不是定量重绘。独立High复核已纳入[HTML方案](../proposals/2026-09-21-visual-narrative-review.html)，本轮无生产实现或运行观察。
+
 当前定向补接：真实原图reuse、多字段长度反馈、明确发布选图均有真实产品结果。guide漏style导致UI回落technical的修复已部署；新create必须显式style，同一修复反馈最多1786字符，避免Gateway忽略超2000字符反馈，预算/历史兼容语义不变。新缺风格拒绝行为尚无实际模型结果；状态只见CURRENT。
 
 科学语义边界：51eb丢k⊥且subject描述超出所绑原文；e253恢复下标但未删标势。最终aaf7已修主体/标签，现有科学审阅因constraints仍带未绑定的理想薄屏/a≪λ条件而blocked，停止追加请求。`illustration-planner.ts`要求完整描述由basis支持，`illustration-review.ts`携带整个Claim来源池；精确引用校验不等于逐句蕴含，模型accepted会遗漏、blocked也不能保证一次修复。保留任务/草稿，下一步先查科学修订中旧约束的保留，不另叠模型或确定性科学门禁。已公开版本不可写，封面后续须新私有版本，分镜不会自动结转。

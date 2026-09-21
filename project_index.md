@@ -8,6 +8,8 @@
 
 任务纠偏入口：`AGENTS.md`与`.agents/skills/docs-sync/SKILL.md`对齐既有Taskmaster当前tag与未完成交付项；`infra/development-platform/catalog/catalog-info.yaml`导航交付源码与需求，`telemetry/query.mjs --task`按原任务关联定位调用。`workspace-guide.ts`艺术路由保留原要求，Hermes结果/草稿/操作组件传递明确art/baseAssetId；自有配图Skill v5与原末审同轮检查明确艺术要求。部署、实际效果和未观察范围仅见CURRENT。
 
+视觉叙事方案：[`docs/proposals/2026-09-21-visual-narrative-review.html`](docs/proposals/2026-09-21-visual-narrative-review.html) 是用户要求的离线可审查实现稿：PDF→经审全文→叙事→逐图设计→制作→成品审阅→发布→阅读，含既有/拟改边界、数据传递、媒体选择、实施顺序和意见导出；不是生产界面或最终科学稿。执行状态只见CURRENT。
+
 风格续作定位：`apps/agent-worker/src/presentation/illustration-styles.ts` 合并逐图风格参考；`packages/domain/src/assets/storyboard.ts` 从既有 figurePlan 解析 scene 风格；原 planner/review/render 调用接线，`infra/chatgpt-browser/broker.mjs` 与原 core 保存下载后恢复。Hermes 入口补接定位：`workspace-guide.ts` 路由风格，`apps/web/lib/api.ts` 与 `lib/hermes/{draft-state,presentation-action}.ts` 复用 StoryboardRequest 类型及原请求恢复，`HermesAssistantDrawer` → `HermesPresentationReview` → `HermesPresentationAction` 传递 style/figurePlan；中英文名称沿用消息文件。论文原图 art 限制在 Domain `requireStoryboardBase` 提交前阻断。候选状态及本机 Pro 协作阻塞只见 CURRENT，不据源码宣称线上完成。
 
 本机桥合作入口：`infra/development-platform/codex-chatgpt-web/collaborate.mjs` 使用已安装原生 CLI 自动审批续接固定 XGS Pro 任务，STDIN 传任务、并发锁及独立日志；实际工具结果与未完成范围见 CURRENT。
