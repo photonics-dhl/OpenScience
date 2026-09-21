@@ -1169,7 +1169,7 @@ type ScientificReviewField = {
 };
 type ScientificReviewResponse = {
   fields: Record<(typeof SDF_CORE_FIELDS)[number], ScientificReviewField>;
-  /** Validated separately after materialization; malformed suggestions never invalidate the field review. */
+  /** Optional for manual reviews; automatic narratives validate materialization in the same repair budget. */
   claimSuggestions?: unknown;
   needsMoreEvidence: Array<{
     affectedFields: Array<(typeof SDF_CORE_FIELDS)[number]>;
@@ -1379,13 +1379,18 @@ function reviewedPassageBindings(
     .map(([sourceIndex, assignment]) => ({ sourceIndex, relation: assignment.relation }));
 }
 
+type ReviewedClaimsDiagnostic = 'required_missing' | 'invalid_structure' | 'source_unmaterializable' | 'core_missing';
+
 function materializeReviewedClaimSuggestions(
   sourceMap: DocumentSourceMap,
   result: ExtractionResult,
   review: ScientificReviewResponse,
   passages: readonly CanonicalPassage[],
+  onInvalid?: (reason: ReviewedClaimsDiagnostic) => void,
 ): ReviewedClaimSuggestion[] | undefined {
-  if (!Array.isArray(review.claimSuggestions) || review.claimSuggestions.length > MAX_INGESTION_CLAIMS) return undefined;
+  const reject = (reason: ReviewedClaimsDiagnostic): undefined => { onInvalid?.(reason); return undefined; };
+  if (review.claimSuggestions === undefined) return reject('required_missing');
+  if (!Array.isArray(review.claimSuggestions) || review.claimSuggestions.length > MAX_INGESTION_CLAIMS) return reject('invalid_structure');
   const allowed = new Map(passages.map((passage) => [passage.id, passage]));
   const awaitingEvidence = fieldsAffectedByReviewEvidence(review);
   const keys = new Set<string>();
@@ -1395,7 +1400,7 @@ function materializeReviewedClaimSuggestions(
   const textList = (value: unknown): value is string[] =>
     Array.isArray(value) && value.length <= 100 && value.every((item) => text(item, 500));
   for (const candidate of review.claimSuggestions) {
-    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return undefined;
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return reject('invalid_structure');
     const item = candidate as Record<string, unknown>;
     const expected = ['clientKey', 'sourceField', 'kind', 'statement', 'conditions', 'limitations', 'sourceBindings'];
     if (item.parentClientKey !== undefined) expected.push('parentClientKey');
@@ -1406,7 +1411,7 @@ function materializeReviewedClaimSuggestions(
       || !textList(item.conditions) || !textList(item.limitations)
       || (item.kind === 'core' ? item.parentClientKey !== undefined : !text(item.parentClientKey, 100))
       || !Array.isArray(item.sourceBindings) || !item.sourceBindings.length
-      || item.sourceBindings.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) return undefined;
+      || item.sourceBindings.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) return reject('invalid_structure');
     keys.add(item.clientKey);
     const field = item.sourceField as ReviewedClaimSuggestion['sourceField'];
     const fieldReview = review.fields[field];
@@ -1419,15 +1424,16 @@ function materializeReviewedClaimSuggestions(
       if (!binding || typeof binding !== 'object' || Array.isArray(binding)
         || Object.keys(binding).sort().join(',') !== 'relation,sourcePassageId'
         || typeof binding.sourcePassageId !== 'string' || seen.has(binding.sourcePassageId)
-        || !allowed.has(binding.sourcePassageId) || !CLAIM_RELATIONS.includes(binding.relation)
-        || (usableField && !fieldReview.sourcePassageIds.includes(binding.sourcePassageId))) return undefined;
+        || !CLAIM_RELATIONS.includes(binding.relation)) return reject('invalid_structure');
+      if (!allowed.has(binding.sourcePassageId)
+        || (usableField && !fieldReview.sourcePassageIds.includes(binding.sourcePassageId))) return reject('source_unmaterializable');
       seen.add(binding.sourcePassageId);
       passageBindings.push({ sourcePassageId: binding.sourcePassageId, relation: binding.relation });
     }
-    if (!passageBindings.some((binding) => binding.relation === 'supports')) return undefined;
-    if (!usableField) continue;
+    if (!passageBindings.some((binding) => binding.relation === 'supports')) return reject('invalid_structure');
+    if (!usableField) { onInvalid?.('source_unmaterializable'); continue; }
     const sourceBindings = reviewedPassageBindings(sourceMap, passageBindings, allowed, fieldSegments);
-    if (!sourceBindings?.length) continue;
+    if (!sourceBindings?.length) { onInvalid?.('source_unmaterializable'); continue; }
     candidates.push({ ...item, sourceBindings } as unknown as ReviewedClaimSuggestion);
   }
   // Removing an unrepresentable parent also removes every descendant, without reparenting.
@@ -1436,10 +1442,12 @@ function materializeReviewedClaimSuggestions(
     const retainedKeys = new Set(retained.map((claim) => claim.clientKey));
     const next = retained.filter((claim) => !claim.parentClientKey || retainedKeys.has(claim.parentClientKey));
     if (next.length === retained.length) break;
+    onInvalid?.('invalid_structure');
     retained = next;
   }
-  return parseReviewedClaimSuggestions(retained, Object.fromEntries(SDF_CORE_FIELDS
+  const parsed = parseReviewedClaimSuggestions(retained, Object.fromEntries(SDF_CORE_FIELDS
     .map((field) => [field, result.evidenceSegments?.[field]?.length ?? 0])));
+  return parsed ?? reject('invalid_structure');
 }
 
 function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: readonly CanonicalPassage[]): {
@@ -2074,6 +2082,13 @@ async function modelScientificReviewCanonicalProposal(
   const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
   const reviewPassages = selectScienceReviewPassages(passages, proposal, context?.coveragePassageIds);
   let candidateIssues: string[] = [];
+  let claimsDiagnostic: ReviewedClaimsDiagnostic | undefined;
+  const byId = new Map(reviewPassages.map((passage) => [passage.id, passage]));
+  const reviewedField = (reviewed: ScientificReviewField): ExtractedFieldProposal => {
+    const segments = segmentsForPassages(sourceMap, reviewed.sourcePassageIds, byId);
+    return { summary: reviewed.summary.trim(), sourceQuote: segments.map(segment => segment.quote).join('\n'),
+      sourcePassageIds: reviewed.sourcePassageIds, verifiedSegments: segments, needsMoreInformation: false };
+  };
   const validation = scientificSourceValidation(sourceMap, reviewPassages,
     (value: unknown, allowedIds: ReadonlySet<string>): value is ScientificReviewResponse => {
       candidateIssues = [];
@@ -2094,6 +2109,19 @@ async function modelScientificReviewCanonicalProposal(
       }
       return candidateIssues.length === 0;
     });
+  const completeReviewGuard = (value: unknown): value is ScientificReviewResponse => {
+    claimsDiagnostic = undefined;
+    if (!validation.guard(value)) return false;
+    // Scientific rejection/evidence requests remain valid responses. Never demand invented claims.
+    if (!context?.requireReviewedClaims || value.needsMoreEvidence.length
+      || SDF_CORE_FIELDS.some(field => value.fields[field].verdict === 'blocked')) return true;
+    const fields = Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, reviewedField(value.fields[field])])) as ExtractedProposal['fields'];
+    const materialized = materializeCanonicalProposal({ schemaVersion: SDF_CORE_VERSION, fields });
+    const claims = materializeReviewedClaimSuggestions(sourceMap, materialized, value, reviewPassages,
+      reason => { claimsDiagnostic ??= reason; });
+    if (!claimsDiagnostic && !claims?.some(claim => claim.kind === 'core')) claimsDiagnostic = 'core_missing';
+    return claimsDiagnostic === undefined;
+  };
   let completion: Awaited<ReturnType<AiGateway['complete']>> | undefined;
   let parsed: ScientificReviewResponse | undefined;
   let failure = 'trusted_context_unavailable';
@@ -2108,7 +2136,7 @@ async function modelScientificReviewCanonicalProposal(
       SCIENCE_REVIEW_CONTRACT_VERSION, context.requireReviewedClaims);
     try {
       const response = await gateway.completeStructuredWithMetadata<ScientificReviewResponse>(
-        validation.guard,
+        completeReviewGuard,
         [{ role: 'system', content: SCIENTIFIC_CRITICAL_THINKING_SKILL.sourceReviewInstructions
           + '\n你是当前候选的来源审校者。按候选的每项实质断言回读原文并作最小必要修订，不另选主题重新成稿。accepted必须逐字保留原summary和原来源集合，issues为空；revised必须实际修正文或来源，issues至少一项，说明原断言、来源和修订原因；blocked必须有问题或明确补证请求。每项保留断言及其限定都须有最终引用，不以引用存在代替语义支持。纠正后仍须与其他字段的对象、算例和范围一致；不能把一个算例的互证写成另一个算例或全篇互证。只返回规定JSON，不宣布科学通过。' },
           { role: 'user', content: prompt }],
@@ -2117,25 +2145,26 @@ async function modelScientificReviewCanonicalProposal(
             ? '只返回fields、needsMoreEvidence和claimSuggestions；原文支持核心贡献时至少保留一条有依据的core主张，不编造。'
             : '只返回fields、needsMoreEvidence及可选claimSuggestions。')
             + '六字段各只含verdict、summary、sourcePassageIds、issues；verdict为accepted/revised/blocked，issues每项只含code、problem、sourcePassageIds，code遵循原合同。保留必要科学条件，P编号只取原文。'
-            + candidateIssues.join('；') + validation.feedback() },
+            + candidateIssues.join('；') + validation.feedback()
+            + (claimsDiagnostic ? `主张输出未满足现有来源绑定合同：claimSuggestions=${claimsDiagnostic}。按原合同返回可物化的core主张；sourceBindings仅引用所属字段的P编号，完整保留必要限定，不编造依据。` : ''),
+          validationDiagnostic: () => claimsDiagnostic ? `claims_${claimsDiagnostic}` : undefined },
       );
       completion = response.completion;
       parsed = response.value;
     } catch (error) {
       failure = error instanceof AiGatewayError ? error.code : 'scientific_correction_unavailable';
+      // A later transport/JSON failure must not inherit an earlier candidate's claims diagnosis.
+      if (failure !== 'SCHEMA_VALIDATION') claimsDiagnostic = undefined;
     }
   }
   const blocked = parsed ? fieldsAffectedByReviewEvidence(parsed) : new Set(SDF_CORE_FIELDS);
   const fieldDiagnosticsDetails: Record<string, string> = {};
-  const byId = new Map(reviewPassages.map((passage) => [passage.id, passage]));
   const fields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
     const reviewed = parsed?.fields[field];
     if (reviewed?.verdict === 'blocked') blocked.add(field);
     if (reviewed && !blocked.has(field)) {
       try {
-        const segments = segmentsForPassages(sourceMap, reviewed.sourcePassageIds, byId);
-        return [field, { summary: reviewed.summary.trim(), sourceQuote: segments.map((segment) => segment.quote).join('\n'),
-          sourcePassageIds: reviewed.sourcePassageIds, verifiedSegments: segments, needsMoreInformation: false }];
+        return [field, reviewedField(reviewed)];
       } catch {
         blocked.add(field);
         fieldDiagnosticsDetails[field] = 'scientificReview=source_binding_failed';
@@ -2143,7 +2172,8 @@ async function modelScientificReviewCanonicalProposal(
     }
     fieldDiagnosticsDetails[field] ??= parsed
       ? `scientificReview=${reviewed?.issues.map((issue) => issue.code + ':' + issue.problem).join('|') || 'needs_source_evidence'}`
-      : `scientificReview=${failure}`;
+      : claimsDiagnostic ? `scientificReview=review_contract_incomplete;reviewedClaims=${claimsDiagnostic}`
+        : `scientificReview=${failure}`;
     return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }];
   })) as ExtractedProposal['fields'];
   const serviceUnavailable = !parsed && ['ALL_PROVIDERS_FAILED', 'NO_PROVIDER_CONFIG'].includes(failure);

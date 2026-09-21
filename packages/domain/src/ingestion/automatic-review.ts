@@ -30,6 +30,10 @@ export function automaticIngestionReview(task: AutomaticIngestionSource) {
   if (review.status === 'review_unavailable' || result.reason === 'scientific_review_unavailable') {
     throw new IngestionError('VALIDATION_ERROR', 'The scientific review service is unavailable; the prior draft is preserved and has not been scientifically rejected');
   }
+  if (Object.values(record(result.fieldDiagnosticsDetails)).some(detail => typeof detail === 'string'
+    && /^scientificReview=review_contract_incomplete;reviewedClaims=(required_missing|invalid_structure|source_unmaterializable|core_missing)$/.test(detail))) {
+    throw new IngestionError('VALIDATION_ERROR', 'The six-field draft is preserved, but the reviewed Claims required for automatic production are incomplete; this is not a scientific rejection of the paper');
+  }
   const core = record(result.core);
   const segments = record(result.evidenceSegments);
   const claims = parseReviewedClaimSuggestions(result.reviewedClaimSuggestions,
