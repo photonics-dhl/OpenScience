@@ -9,6 +9,14 @@
 - 原e3ef004f仍stopped/version41、5226 checkpoint保留；本轮尚未点击新的checkpoint审阅续接。全文/Claims、原图片及公开版本均未改变。当前运行状态与交付差额仍只见CURRENT。
 - 一次不发布端口的原命令Web诊断实际exit1：`EACCES open apps/web/.next/BUILD_ID`，candidate文件0600、server/static目录0700；旧f12分别0644/0755。根因是本次私有日志wrapper把全局umask077传入build，非模型/鉴权/论文故障。原runtime-normalize只管worker闭包，不包含Web；不能以容器running冒称Web已就绪。诊断容器已精确移除、生产Web ID保持，日志`/opt/openscience/observations/web-startup-7dfed6fd-20260922.log`保留。修正只让077覆盖日志FD创建，build恢复022；从新干净HEAD物化新候选正常构建，避免就地修改旧产物权限。未加测试、重试序列或绕过公网确认。
 
+- 修正后新候选5b516e62正式发布exit0，active/rollback独立读回一致，journal/failed无；Web BUILD_ID0644/server0755，私有日志0600。服务器私有日志`/opt/openscience/observations/deploy-5b516e62-20260922.log`。原页面续接已返回202/version42，task5226 exec3/retry2，未新增science/art；一次性收据`/jobs/visual-narrative-checkpoint-review-resume-20260922.json`已消费，不重发。
+
+## 2026-09-22 保存方案末审与文字边界
+
+- task5226 exec3/retry2没有重跑science/art；Gateway审计82b076ad-2b5f-4198-ae18-8f503b5c1331于17:04:03Z完成，MiniMax-M3科学审阅succeeded、287081ms、19974 output tokens、finish stop、fallback null。输入容量技术阻塞已实际越过，不代表内容通过。
+- 末审blocked仅列一个requires_replan问题：composition加入场景标题、积分标注、公共乘子标签、量级小字4处不在labels的可见文字；run stopped/version43，未新生图。候选与完整review保留在原task，定向读取证据本机ignored `tmp/plan-label-review-20260922.json`；不能删除拒收、手工删文字冒充Hermes改稿或直接生成。
+- 独立High确认art输入title与风格标题参考缺少明确可见文本边界，style文件本身已有优先级说明。最小修复只改原art prompt及prompt内readerTitle命名，原科学文档/标签/审核规则不变；不新增模型环节、regex清洗、状态分支、额度或恢复槽。后续可优先评估既有art-only规划能力；旧blocked checkpoint不会因提示修正自动放行。额外方案执行已消费，新模型用量已询问，尚未追加。
+
 ## 2026-09-21 用户纠正：原图截取不是论文视觉叙事交付
 
 - 用户用公开v2的Fig.1截图指出：原样裁出展示丑，未读论文者无法清楚理解所传信息。目标是图片（单/多张）与后续视频让读者理解核心思想和关键点；原图/生图/视频按需采用，须同时设计叙事与美感。要求已入需求§18.2、Taskmaster任务5和CURRENT；本轮只静态定位/同步，尚未改生产链路或公开资产。
