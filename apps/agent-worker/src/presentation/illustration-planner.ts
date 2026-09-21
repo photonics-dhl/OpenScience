@@ -320,7 +320,7 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
     const science = await gateway.completeStructured((value): value is Record<string, unknown> => {
       try { materializeScience(value); return true; } catch (error) { diagnostic = error instanceof Error ? error.message : 'invalid_scientific_intent'; return false; }
     }, scienceMessages, { temperature: 0.1, thinking: 'adaptive', includeRejectedResponseOnRetry: true, maxRetries: 2,
-      ...(scienceRecovery ? { maxTokens: 65536, timeoutMs: 600_000, primaryProviderOnly: true }
+      ...(settings.narrative ? { maxTokens: 65536, timeoutMs: 600_000, primaryProviderOnly: true }
         : { maxTokens: 16384, escalateMaxTokens: 32768, timeoutMs: 300_000 }),
       validationDiagnostic: () => diagnostic.toLowerCase().replace(/[^a-z0-9_,:-]+/gu, '_').slice(0, 400),
       validationFeedback: (value) => {

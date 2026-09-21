@@ -890,13 +890,25 @@ async function main(): Promise<void> {
         .finally(() => { cleanup = undefined; });
     }, 60_000);
     cleanupTimer.unref();
-    const pollers = await Promise.all(Array.from({ length: workerConcurrency }, (_, index) => (
-      createPollOnce(handlers, { runMaintenance: index === 0, stopping: () => stopping })
+    const pollers = await Promise.all(Array.from({ length: workerConcurrency }, () => (
+      createPollOnce(handlers, { runMaintenance: false, stopping: () => stopping })
     )));
     await recoverProcessingQueue(deps, () => stopping);
     if (!stopping) await collectExpiredTemporaryDocuments({ prisma, storage }, { workerId: `agent-worker-${process.pid}` });
     console.log(`agent-worker 启动（P1D-2/3, concurrency=${workerConcurrency}）`);
-    await Promise.all(pollers.map(async (pollOnce, index) => {
+    const maintenance = (async () => {
+      const reconcileRuns = createResearchRunReconcileScheduler();
+      while (!stopping) {
+        try {
+          await reconcileRuns(deps);
+          if (!stopping) await recoverUndispatchedAgentTasks(deps);
+        } catch (error) {
+          console.error('agent-worker maintenance error', error);
+        }
+        if (!stopping) await sleep(1000);
+      }
+    })();
+    await Promise.all([maintenance, ...pollers.map(async (pollOnce, index) => {
       while (!stopping) {
         try {
           await pollOnce(deps);
@@ -905,7 +917,7 @@ async function main(): Promise<void> {
           if (!stopping) await sleep(2000);
         }
       }
-    }));
+    })]);
   } finally {
     stopAccepting();
     // Keep task persistence, processing-list removal, and journal leases alive until work finishes.

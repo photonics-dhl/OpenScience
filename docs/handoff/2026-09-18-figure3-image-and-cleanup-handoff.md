@@ -2,7 +2,19 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
-## 2026-09-22 第二篇设计与第三篇分窗的定向取证（最新）
+## 2026-09-22 第二篇实图审阅与第三篇全文成功（最新）
+
+- 第二篇7bd6原task恢复的science65536请求36秒返回正文，既有schema修复8.6秒完成、art15.5秒完成。末审先16K thinking-only后32K返回blocked（脉宽排序）；自动修订c65a0488 science16K耗尽后32K成功，art及M3末审stop，20:58:23Z方案approved，run7e9e生成四图。全程主provider，未切换。
+- c65独立High复核发现：I(t)强度不能证明单极电场/非零电面积；不同波长不能共用单条高斯绝对参考基线；时间映射须注明迟滞时间起点，不能承诺角积分后同形；旁白积分重复乘hν；固定4.4μm同时扫描1–5μm自相矛盾。19as<99as<3.6fs排序已修。计划accepted不等于科学正确。
+- 四张真实Chat图1dcb1f66/b4744b85/34eb749e/4a4e115c均已保存；首图hash720a0bc8…于21:05:09Z结束真实6Pro审阅，decision blocked、repairInstruction null，指出电子路径穿实体、77nm与20nm未区分、30dB意义、单电子虚拟脉冲性质、收尖误示空间聚焦、φ=π/2正碰表述等。其余三图仍审阅中；没有发布。tmp/second-paper-image-reviews-read-20260922.json保留完整审计身份，查看摘要不要打印巨长parentIdentity。
+- 第三篇composition1834e21d在20:51:11Z成功，13次text完成分窗/归并/六维；SourceMap仍e490409c…且sourceMapReused true，无新parser/OCR。后续8c87b54d v5在20:56:13Z成功：原主路由、65K ceiling、28,043输出tokens、294,816ms、stop；六维约657中文字符、5Claims，Version9373f1e6-9477-4e4a-9b45-b8efca244e70。tmp/third-paper-reviewed-core-read-20260922.json保留原结果。
+- 第三篇初始分镜a4c5990b在20:58:52Z failed/exec1/retry0/resultNULL；570a4e5b/1dcb2639分别16K/32K、length/无正文/无fallback。run仍generating_storyboard/version8，尚不能点原failed恢复入口；正在核worker0长任务与reconcile的串行关系，不手工改DB。常规narrative science65K/600s/primary-only单行候选已实现，非narrative与art不变，独立High复核中；待在途自然结束后发布。
+- 第三篇run自然收敛failed后，沿原可见“保留初稿，继续制作”按钮21:12:02Z恢复HTTP202/version10，同a4c5990b attempt2/retry1；/jobs/third-paper-science-resume-20260922.json已消费，不重放。原科学来源未重跑。
+- 两处稳定性候选独立High PASS：illustration-planner仅将scienceRecovery条件改为settings.narrative，全叙事science使用65K/600s/primary-only，无升级；art/non-narrative原设置不变。index主入口poller皆runMaintenance false，startup恢复后单例顺序maintenance复用原5秒scheduler及outbox，按轮catch/约1秒间隔，与poller一同drain后断DB/Redis。代码确定旧lane0 handler阻塞maintenance；无lane日志不能断言具体哪张图占lane0。候选未部署，不跑测试。
+- 正式6Pro scene2也blocked/repairInstruction null，确认跨工况共用Gaussian参照及未解释ζ/N_SP。旧科学返工只支持固定单图形态，High建议原retry-generation按1–6完整场景集合泛化、服务器计算1个计划+至多原scene数图片、同run/来源/CAS/审计，消费全部正式反馈；同一组只恢复一次，不重挂旧兄弟图到新parent。候选实施中，尚不可用。
+- 第一篇已公开v3不变；后两篇仍私有。上述结果覆盖下节较早“尚未完成”的记录；一次性writer均不可重放。
+
+## 2026-09-22 第二篇设计与第三篇分窗的定向取证（历史过程）
 
 - 第二篇run7e9e已收敛failed/version7/max9、活动0；storyboard7bd6 exec1/retry0/resultNULL，无图片。science审计3a3323e5/78ae3cbc均primary MiniMax-M3、adaptive、16K/32K输出全耗尽、finish length、text0/thinking1/other0、fallback NULL，promptHash相同。没有进入art/末审/Chat。两次latency50689/106467ms；第二次inputTokens1仅provider记账，不能推断缺prompt。只读取证tmp/two-paper-scope-details-20260922.json；High建议沿原planning retry一次恢复同task，65K/600s只作用science，旧图片修订分支不改。候选实现中，未部署/重发。
 - 第三篇同任务2e83在20:17:35Z落needs_review/succeeded但core六项均空，v4 blocked_scientific_review，reason canonical_partial_validation_exhausted；diagnostics全部semanticStage=section_map:SCHEMA_VALIDATION;usage=unavailable。6次OCR实际成功，随后4次text均provider succeeded/stop但结构未过；最后调用20:17:51晚于task落状态。读取既有exact SourceMapRef核摘要/大小/内部身份成功：24页/1554blocks，paragraph200722、caption9368、equation2273字符，source-map e490409c…共818144bytes。证据tmp/third-paper-analysis-failure-read-20260922.json；不扫描对象前缀或读秘密。
