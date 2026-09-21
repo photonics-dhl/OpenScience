@@ -3,6 +3,8 @@
 当前版本、部署结果和暂停范围统一见[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。review request v2用于配图文字审阅、v3用于实际图片审阅，旧v1保持；兼容新版receiver可服务旧应用；若需回退receiver，先回退producer，禁止旧receiver接新请求。本段不是重跑部署指令。
 
 ## 2026-09-21 自动视觉叙事的交付顺序
+- 科学表达容量修正（执行状态见CURRENT）：1500只保留在MiniMax image-01供应商接口，Chat/Codex共用请求不再套用它；内文各短限归一到既有4000整份brief预算，标签/标题/reader说明仍有可读性约束。compiler保留完整科学/已审美术/修复指令，只裁可选风格指导；按序列化JSON UTF-8字节核原16KiB传输上限，producer/receiver同用完整请求校验，浏览器inner job保留原32KiB。schema、promptHash、旧收据和幂等身份不变。
+- 上述改动涉及独立receiver：先从干净已推送SHA用原cloud-sync物化，服务器锁定依赖并构建ai-gateway及依赖；按既有provider安装助手停分发timer、等活动请求自然完成、锁内备份units/live/权限，以--defer-timers安装后恢复原timer状态，不重启共享浏览器。receiver只引入纯协议/图片校验模块，避免Gateway总入口把Undici运行依赖带进仅含dist的独立bundle；不另装依赖。receiver兼容旧producer，随后正常no-tests/skip-migrate部署应用；无需数据库迁移/模型请求。只读精确release/provider unit身份及原run状态，不发收费探针。回退先停新producer并等在途/已排队长请求完成，保留新receiver兼容处理及全部资产/收据；应用失败可留兼容receiver，不能把已提交长请求交旧1500 receiver。
 - 停机修复：Worker收到信号后停止新claim，已开始claim及handler完整排空；未claim的processing项交既有启动恢复，不回退executionAttempt或取消在途provider。journal等待作业/恢复/租约续期、cleanup等待在途工作，随后关闭Redis/搜索与主Prisma；API先close再关闭依赖。部分初始化失败也清理已拥有资源。保留部署600秒grace，未排空不声称任务完成；候选已High静态PASS，部署/实际效果看CURRENT。不要为验证停机而打断模型，随必要正式发布观察，不运行退出演练。
 - 历史科学返工兼容（执行状态见CURRENT）：旧分镜 `revised` 先保存修订候选与首次审阅，在同一任务内最多一次完整候选验收；提交前落私有标记，已提交无收据按未知停止，恢复不重发；资产保留首次修订与最终accepted收据。真实6Pro像素拒绝且不能纯渲染修复的旧单图，原grant入口只对精确资格提供一次9→11授权，原retry入口最多一个新分镜、一个新图及一次内部返工，不新run或修改旧批准/拒绝记录。若新分镜的修订完整候选验收被科学拒绝且尚余2项，原页面可显式使用最后返工槽生成替代分镜再出1图；严格绑定唯一原授权/继续收据、当前全部来源和保存的完整拒收候选，之后无绘制修正名额，部署不自动续作。科学返工art不继承旧场景索引构图，并消费拒收摘要；纯art修订保留冻结科学对应关系。默认仍9，额外模型需明确授权。新增grant约束迁移保留旧组合；部署前原backup脚本双库备份，正常deploy不用skip-migrate，不运行测试/演练。回退须先等新任务终态，保留11额度、收据、任务及素材；不能把11额度在途任务交旧worker，也不把数据库额度缩回9冒充未消费。provider/浏览器不变。
 

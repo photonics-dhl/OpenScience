@@ -5,7 +5,8 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { runOne, safeRead, atomicWrite, exists } from '../codex-image-runner/core.mjs';
-import { validateCodexImageRequest, validateCodexImageResult, validateImageBytes } from '../../packages/ai-gateway/dist/index.js';
+import { validateCodexImageRequest, validateCodexImageResult } from '../../packages/ai-gateway/dist/codex-image-protocol.js';
+import { validateImageBytes } from '../../packages/ai-gateway/dist/image.js';
 
 const exec = promisify(execFile);
 const CONVERSATION = /^https:\/\/chatgpt\.com\/c\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

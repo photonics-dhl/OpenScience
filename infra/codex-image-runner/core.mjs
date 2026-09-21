@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { open, lstat, mkdir, readdir, rename, access } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { validateCodexImageRequest } from '../../packages/ai-gateway/dist/index.js';
+import { validateCodexImageRequest } from '../../packages/ai-gateway/dist/codex-image-protocol.js';
 
 export const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 async function syncDirectory(path){if(process.platform==='win32')return;const f=await open(path,'r');try{await f.sync();}finally{await f.close();}}

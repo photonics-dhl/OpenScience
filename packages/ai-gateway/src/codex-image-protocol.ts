@@ -5,6 +5,12 @@ export const CODEX_IMAGE_MAX_DEADLINE_MS = 600_000;
 export const CODEX_IMAGE_READY_MAX_AGE_MS = 60_000;
 export const CODEX_IMAGE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export type ImageSpoolProvider = 'codex' | 'chatgpt-web';
+/** Planning allowance derived from the existing JSON transport bound, not an editorial character limit. */
+export function imageSpoolRequestByteUpperBound(prompt: string): number {
+  return Buffer.byteLength(JSON.stringify({ schemaVersion: 1, provider: 'chatgpt-web', id: '0'.repeat(36), prompt,
+    promptHash: '0'.repeat(64), reference: { contentHash: '0'.repeat(64), role: 'style' },
+    createdAt: Number.MAX_SAFE_INTEGER, deadlineAt: Number.MAX_SAFE_INTEGER }), 'utf8');
+}
 export interface ImageReferenceMetadata { contentHash: string; role: 'style' }
 export interface CodexImageRequest { schemaVersion: 1; provider?: ImageSpoolProvider; id: string; prompt: string; promptHash: string; reference?: ImageReferenceMetadata; createdAt: number; deadlineAt: number }
 export type CodexImageErrorCode = 'EXECUTION_FAILED' | 'UNCERTAIN' | 'EXPIRED' | 'INVALID_OUTPUT' | 'USAGE_LIMIT';
@@ -28,9 +34,10 @@ function record(value: unknown): Record<string, unknown> {
 }
 export function validateCodexImageRequest(value: unknown, now?: number, expectedProvider?: ImageSpoolProvider): CodexImageRequest {
   const v = record(value);
+  if (Buffer.byteLength(JSON.stringify(v), 'utf8') > CODEX_IMAGE_MAX_JSON_BYTES) return invalid();
   const provider = v.provider === undefined ? 'codex' : v.provider;
   const reference = v.reference === undefined ? undefined : referenceMetadata(v.reference);
-  if (Object.keys(v).some(k => !['schemaVersion', 'provider', 'id', 'prompt', 'promptHash', 'reference', 'createdAt', 'deadlineAt'].includes(k)) || !['codex', 'chatgpt-web'].includes(provider as string) || (expectedProvider !== undefined && provider !== expectedProvider) || (expectedProvider === 'chatgpt-web' && v.provider === undefined) || (reference !== undefined && provider !== 'chatgpt-web') || typeof v.prompt !== 'string' || !v.prompt.trim() || v.prompt.length > 1500 || imagePromptHash(v.prompt, reference) !== v.promptHash || typeof v.createdAt !== 'number' || !Number.isSafeInteger(v.createdAt) || v.createdAt < 0 || typeof v.deadlineAt !== 'number' || !Number.isSafeInteger(v.deadlineAt) || v.deadlineAt <= v.createdAt || v.deadlineAt - v.createdAt > CODEX_IMAGE_MAX_DEADLINE_MS) return invalid();
+  if (Object.keys(v).some(k => !['schemaVersion', 'provider', 'id', 'prompt', 'promptHash', 'reference', 'createdAt', 'deadlineAt'].includes(k)) || !['codex', 'chatgpt-web'].includes(provider as string) || (expectedProvider !== undefined && provider !== expectedProvider) || (expectedProvider === 'chatgpt-web' && v.provider === undefined) || (reference !== undefined && provider !== 'chatgpt-web') || typeof v.prompt !== 'string' || !v.prompt.trim() || imagePromptHash(v.prompt, reference) !== v.promptHash || typeof v.createdAt !== 'number' || !Number.isSafeInteger(v.createdAt) || v.createdAt < 0 || typeof v.deadlineAt !== 'number' || !Number.isSafeInteger(v.deadlineAt) || v.deadlineAt <= v.createdAt || v.deadlineAt - v.createdAt > CODEX_IMAGE_MAX_DEADLINE_MS) return invalid();
   if (now !== undefined && (v.deadlineAt <= now || v.createdAt > now)) throw new Error('EXPIRED');
   return { schemaVersion: 1, ...(v.provider !== undefined ? { provider: provider as ImageSpoolProvider } : {}), id: v.id as string, prompt: v.prompt, promptHash: v.promptHash as string, ...(reference ? { reference } : {}), createdAt: v.createdAt, deadlineAt: v.deadlineAt };
 }

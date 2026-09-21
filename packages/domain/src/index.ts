@@ -441,6 +441,6 @@ export { requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboard
 export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, requireSceneImageRevision, requireStyleReferenceImage, findPaperOriginalAssets, requirePaperOriginalsForReuse, type PaperOriginalRef, type SceneImageRequest } from './assets/scene-image';
 export { registerPaperFigure, type RegisterPaperFigureInput, type RegisterPaperFigureResult } from './assets/paper-figure';
 export { requireMembership } from './workspace/helpers';
-export { parseIllustrationBrief, describeIllustrationBrief, requireIllustrationSourceSupport, type IllustrationBrief } from './assets/illustration-brief';
+export { ILLUSTRATION_BRIEF_MAX_CHARACTERS, parseIllustrationBrief, describeIllustrationBrief, requireIllustrationSourceSupport, type IllustrationBrief } from './assets/illustration-brief';
 
 export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';

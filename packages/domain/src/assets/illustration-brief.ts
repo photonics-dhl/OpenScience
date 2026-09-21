@@ -1,5 +1,8 @@
 import { PresentationAssetError } from './errors';
 
+/** Science and art share the existing image visual-action budget, including headings and separators. */
+export const ILLUSTRATION_BRIEF_MAX_CHARACTERS = 4000;
+
 interface IllustrationBriefFields {
   message: string;
   domain: 'real-space' | 'wavevector-space' | 'time' | 'frequency' | 'parameter-space' | 'conceptual';
@@ -49,19 +52,24 @@ export function parseIllustrationBrief(value: unknown, claimIds?: readonly strin
     if (typeof b.claimId !== 'string' || !uuid.test(b.claimId) || (claimIds && !claimIds.includes(b.claimId))
       || typeof b.evidenceId !== 'string' || !uuid.test(b.evidenceId)
       || typeof b.quote !== 'string' || b.quote.trim().length < 12 || b.quote.length > 12000) return fail(`${field}_basis`, 'invalid_bound_source');
-    return { description: line(raw.description, 140, `${field}_description`), basis: { claimId: b.claimId, evidenceId: b.evidenceId, quote: b.quote } };
+    return { description: line(raw.description, ILLUSTRATION_BRIEF_MAX_CHARACTERS, `${field}_description`), basis: { claimId: b.claimId, evidenceId: b.evidenceId, quote: b.quote } };
   });
-  const fields: IllustrationBriefFields = { message: line(v.message, 120, 'message'), domain: v.domain as IllustrationBrief['domain'],
-    subjects, composition: line(v.composition, v.schemaVersion === 2 ? 200 : 400, 'composition'), treatment: line(v.treatment, 240, 'treatment'),
-    labels: list(v.labels, 0, 8, 80, 'labels'), constraints: list(v.constraints, 1, 5, 120, 'constraints') };
-  return v.schemaVersion === 2
-    ? { schemaVersion: 2, ...fields, encoding: line(v.encoding, 200, 'encoding') }
+  const fields: IllustrationBriefFields = { message: line(v.message, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'message'), domain: v.domain as IllustrationBrief['domain'],
+    subjects, composition: line(v.composition, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'composition'), treatment: line(v.treatment, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'treatment'),
+    labels: list(v.labels, 0, 8, 80, 'labels'), constraints: list(v.constraints, 1, 5, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'constraints') };
+  const brief: IllustrationBrief = v.schemaVersion === 2
+    ? { schemaVersion: 2, ...fields, encoding: line(v.encoding, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'encoding') }
     : { schemaVersion: 1, ...fields };
+  describeIllustrationBrief(brief);
+  return brief;
 }
 
 /** One representation shared by plan review and image compilation. */
 export function describeIllustrationBrief(brief: IllustrationBrief): string {
-  return `核心关系：${brief.message}。科学域：${brief.domain}。对象：${brief.subjects.map(subject => subject.description).join('；')}。${brief.schemaVersion === 2 ? `科学编码：${brief.encoding}。` : ''}构图：${brief.composition}。视觉处理：${brief.treatment}。可见标签：${brief.labels.length ? brief.labels.join('；') : '无'}。科学限定：${brief.constraints.join('；')}。`;
+  const description = `核心关系：${brief.message}。科学域：${brief.domain}。对象：${brief.subjects.map(subject => subject.description).join('；')}。${brief.schemaVersion === 2 ? `科学编码：${brief.encoding}。` : ''}构图：${brief.composition}。视觉处理：${brief.treatment}。可见标签：${brief.labels.length ? brief.labels.join('；') : '无'}。科学限定：${brief.constraints.join('；')}。`;
+  if (description.length > ILLUSTRATION_BRIEF_MAX_CHARACTERS) throw new PresentationAssetError('VALIDATION_ERROR',
+    `illustration_brief:description:length_${description.length}_max_${ILLUSTRATION_BRIEF_MAX_CHARACTERS}`);
+  return description;
 }
 
 export function requireIllustrationSourceSupport(brief: IllustrationBrief, claims: readonly {

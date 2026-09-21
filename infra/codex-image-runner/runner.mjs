@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { runOne, safeRead, atomicWrite, exists } from './core.mjs';
 import { containerArgs } from './sandbox.mjs';
-import { validateImageBytes } from '../../packages/ai-gateway/dist/index.js';
+import { validateImageBytes } from '../../packages/ai-gateway/dist/image.js';
 
 const exec=promisify(execFile);
 async function docker(args,timeout=30000){return exec('docker',args,{timeout,maxBuffer:128*1024,encoding:'utf8'});}

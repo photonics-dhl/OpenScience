@@ -40,7 +40,8 @@ function validateRequest(request, allowExpired = false) {
     && typeof reference.contentHash === 'string' && SHA256.test(reference.contentHash) && reference.role === 'style'
     && Object.keys(reference).every(key => ['contentHash', 'role'].includes(key)));
   if (request?.id !== id || request.provider !== 'chatgpt-web' || !SHA256.test(request.promptHash || '')
-    || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 1500
+    || typeof request.prompt !== 'string' || !request.prompt.trim()
+    || Buffer.byteLength(JSON.stringify(request), 'utf8') > 32768
     || !Number.isSafeInteger(request.deadlineAt) || (!allowExpired && request.deadlineAt <= Date.now()) || request.deadlineAt - Date.now() > 600000
     || !source || source.kind !== 'hermes-scene-image' || source.requestId !== id || source.promptHash !== request.promptHash
     || Object.keys(source).some(key => !['kind', 'requestId', 'promptHash'].includes(key))

@@ -12,8 +12,8 @@ import {
   SCIENCE_REVIEW_MAX_RESPONSE_BYTES,
   validateScienceReviewRequest,
   validateScienceReviewResult,
-  encodedImageDimensions,
-} from '../../packages/ai-gateway/dist/index.js';
+} from '../../packages/ai-gateway/dist/science-review-protocol.js';
+import { encodedImageDimensions } from '../../packages/ai-gateway/dist/ocr.js';
 
 const exec = promisify(execFile);
 const ROOT = '/opt/openscience-chatgpt-browser/';

@@ -1,8 +1,8 @@
 import { PresentationAssetError } from './errors';
 import { getBlobStorageKey } from '@openscience/storage';
 import { parseSceneAnimation, type SceneAnimation } from './animation';
-import { parseIllustrationBrief, describeIllustrationBrief, type IllustrationBrief } from './illustration-brief';
-export const STORYBOARD_IMAGE_VISUAL_ACTION_MAX = 4000;
+import { ILLUSTRATION_BRIEF_MAX_CHARACTERS, parseIllustrationBrief, describeIllustrationBrief, type IllustrationBrief } from './illustration-brief';
+export const STORYBOARD_IMAGE_VISUAL_ACTION_MAX = ILLUSTRATION_BRIEF_MAX_CHARACTERS;
 export const STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX = 100;
 export const STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX = 1000;
 

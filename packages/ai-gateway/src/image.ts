@@ -1,4 +1,4 @@
-import { CODEX_IMAGE_ID_PATTERN } from './codex-image-protocol';
+import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_JSON_BYTES } from './codex-image-protocol';
 import { createHash } from 'node:crypto';
 import { inflateSync } from 'node:zlib';
 import { AiGatewayError } from './errors';
@@ -40,8 +40,9 @@ export function isImageUsageLimit(error: unknown): boolean {
 }
 
 export function validateImageRequest(request: ImageRequest): string {
-  if (!request || (request.requestId !== undefined && (typeof request.requestId !== 'string' || !CODEX_IMAGE_ID_PATTERN.test(request.requestId))) || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 1500) {
-    throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'image prompt must contain 1 to 1500 characters');
+  if (!request || (request.requestId !== undefined && (typeof request.requestId !== 'string' || !CODEX_IMAGE_ID_PATTERN.test(request.requestId))) || typeof request.prompt !== 'string' || !request.prompt.trim()
+    || Buffer.byteLength(JSON.stringify({ prompt: request.prompt }), 'utf8') > CODEX_IMAGE_MAX_JSON_BYTES) {
+    throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'image prompt must be nonempty and fit the request transport byte limit');
   }
   if (request.referenceImage !== undefined) {
     const reference = request.referenceImage;
@@ -161,6 +162,8 @@ export class MiniMaxImageProvider implements ImageProvider {
 
   async generate(request: ImageRequest): Promise<ImageProviderResult> {
     const prompt = validateImageRequest(request);
+    // This is image-01's provider contract, not a limit on Chat/Codex drawing instructions.
+    if (prompt.length > 1500) throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'MiniMax image-01 prompt exceeds its 1500-character limit');
     if (request.referenceImage !== undefined) throw new AiGatewayError('IMAGE_REQUEST_INVALID', 'image provider does not support references');
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
