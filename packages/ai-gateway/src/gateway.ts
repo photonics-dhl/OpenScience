@@ -190,6 +190,7 @@ export class AiGateway {
         // so a single transient model hiccup with a long prompt shouldn't burn the user's
         // submitted task. 4 retries = 5 total attempts.
         maxRetries: 4, includeRejectedResponseOnRetry: true }, { beforeProviderAttempt: authorize,
+        primaryProviderOnly: input.illustrationContext?.primaryProviderOnly === true,
         reviewSourceIdentity: input.source.sourceEvidenceIdentity });
       const text = JSON.stringify(result.value);
       if (typeof text !== 'string') throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid illustration review response');

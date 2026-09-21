@@ -370,7 +370,7 @@ export interface HermesResearchRun {
   canRetryGeneration?: boolean;
   canAuthorizeNarrativeCorrection?: boolean;
   chargeableAttempts?: number;
-  generationRecovery?: 'storyboard-planning' | 'storyboard-review';
+  generationRecovery?: 'storyboard-planning' | 'storyboard-review' | 'storyboard-art';
   availableImageCount?: number;
   imageUsageLimited?: boolean;
   sourceClaimIds: string[];

@@ -69,6 +69,8 @@ export interface ScienceReviewInput {
     executionAttempt: number;
     claimContent: string;
     baseIdentity: string | null;
+    /** An explicitly authorized same-task correction must not switch key/model on failure. */
+    primaryProviderOnly?: true;
   };
 }
 

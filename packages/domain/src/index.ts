@@ -171,6 +171,7 @@ export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
   authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getExistingHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration,
   requireHermesPresentationTaskAuthority,
+  requireStoryboardArtCorrectionAuthorization,
   HERMES_AUTHORITY_REARM_MARKER,
   HermesResearchRunError,
   type HermesResearchRunDeps, type HermesSourceReviewDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,

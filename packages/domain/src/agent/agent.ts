@@ -1166,6 +1166,8 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   delete publicResult.sourceMapIdentity;
   delete publicResult.storyboardCheckpoint;
   delete publicResult.storyboardReview;
+  delete publicResult.storyboardAcceptanceCheckpoint;
+  delete publicResult.storyboardArtCorrection;
   if (sourceMapRef === undefined) return publicResult;
   try {
     const reference = parseDocumentSourceMapReference(sourceMapRef);

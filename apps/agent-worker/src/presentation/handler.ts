@@ -7,7 +7,7 @@ import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@opensci
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
@@ -43,6 +43,70 @@ type StoryboardCheckpointIdentity = {
   baseIdentity: string | null;
   narrativeSourceIdentity?: string;
 };
+type StoryboardArtCorrection = {
+  schemaVersion: 1;
+  authorizationRequestDigest: string;
+  executionAttempt: number;
+  originalCandidateHash: string;
+  originalReviewResponseHash: string;
+  artSubmittedExecutionAttempt?: number;
+  planned?: StoryboardPlan;
+  reviewSubmittedExecutionAttempt?: number;
+  review?: StoryboardReview;
+  reviewDesignSkills?: DesignSkillUsage[];
+};
+
+function privateStoryboardResult(result: unknown): Record<string, unknown> {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return {};
+  return Object.fromEntries(['storyboardCheckpoint', 'storyboardReview', 'storyboardAcceptanceCheckpoint', 'storyboardArtCorrection']
+    .filter(key => Object.hasOwn(result, key)).map(key => [key, (result as Record<string, unknown>)[key]]));
+}
+
+function storyboardScience(document: StoryboardDocument) {
+  return { ...document, scenes: document.scenes.map(scene => {
+    const { visualAction: _visualAction, illustration, ...rest } = scene;
+    if (!illustration) return rest;
+    const { composition: _composition, treatment: _treatment, ...science } = illustration;
+    return { ...rest, illustration: science };
+  }) };
+}
+
+/** The original blocked plan stays immutable; this separately saved candidate has no approval until reviewed. */
+function readStoryboardArtCorrection(result: unknown, original: StoryboardDocument,
+  identity: StoryboardCheckpointIdentity, taskId: string, executionAttempt: number): StoryboardArtCorrection | undefined {
+  const raw = result && typeof result === 'object' && !Array.isArray(result)
+    ? (result as Record<string, unknown>).storyboardArtCorrection : undefined;
+  if (raw === undefined) return undefined;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)
+    || Object.keys(raw).some(key => !['schemaVersion', 'authorizationRequestDigest', 'executionAttempt', 'originalCandidateHash',
+      'originalReviewResponseHash', 'artSubmittedExecutionAttempt', 'planned', 'reviewSubmittedExecutionAttempt', 'review', 'reviewDesignSkills'].includes(key)))
+    throw new Error('[blocked] Storyboard art correction checkpoint is invalid');
+  const saved = raw as StoryboardArtCorrection;
+  if (saved.schemaVersion !== 1 || saved.executionAttempt !== executionAttempt
+    || ![saved.authorizationRequestDigest, saved.originalCandidateHash, saved.originalReviewResponseHash]
+      .every(hash => typeof hash === 'string' && /^[a-f0-9]{64}$/u.test(hash))
+    || saved.originalCandidateHash !== createHash('sha256').update(JSON.stringify(original)).digest('hex')
+    || (saved.artSubmittedExecutionAttempt !== undefined && saved.artSubmittedExecutionAttempt !== executionAttempt)
+    || (saved.reviewSubmittedExecutionAttempt !== undefined && saved.reviewSubmittedExecutionAttempt !== executionAttempt))
+    throw new Error('[blocked] Storyboard art correction identity changed');
+  const planned = saved.planned === undefined ? undefined
+    : readStoryboardCheckpoint({ storyboardCheckpoint: { ...identity, planned: saved.planned } }, identity);
+  if ((planned && (saved.artSubmittedExecutionAttempt !== executionAttempt || planned.reviewFormat !== 2
+      || !isDeepStrictEqual(storyboardScience(planned.document), storyboardScience(original))))
+    || (saved.reviewSubmittedExecutionAttempt !== undefined && !planned))
+    throw new Error('[blocked] Art correction changed scientific content or lacks a submission');
+  if (saved.review) {
+    const review = saved.review;
+    if (!planned || saved.reviewSubmittedExecutionAttempt !== executionAttempt
+      || review.stage !== 'final-brief' || review.requestId !== taskId || !['accepted', 'blocked'].includes(review.decision)
+      || review.sourceEvidenceIdentity !== identity.sourceEvidenceIdentity
+      || review.candidateHash !== createHash('sha256').update(JSON.stringify(planned.document)).digest('hex')
+      || ![review.promptHash, review.responseHash].every(hash => typeof hash === 'string' && /^[a-f0-9]{64}$/u.test(hash))
+      || !review.summary?.trim()) throw new Error('[blocked] Art correction final review changed');
+  }
+  return { ...saved, ...(planned ? { planned } : {}),
+    ...(saved.reviewDesignSkills ? { reviewDesignSkills: readDesignSkillUsage(saved.reviewDesignSkills) } : {}) };
+}
 
 async function requireNarrativeOriginals(prisma: Pick<Prisma.TransactionClient, 'presentationAsset'>,
   payload: PresentationGenerationPayload, document: StoryboardDocument) {
@@ -115,12 +179,6 @@ function readStoryboardAcceptance(result: unknown, original: StoryboardDocument,
     throw new Error('[blocked] Invalid storyboard acceptance checkpoint');
   const saved = raw as StoryboardAcceptance;
   const document = parseStoryboardDocument(saved.document, expected.payload.sourceClaimIds, 'image');
-  const withoutArt = (value: StoryboardDocument) => ({ ...value, scenes: value.scenes.map(scene => {
-    const { visualAction: _visualAction, illustration, ...rest } = scene;
-    if (!illustration) return rest;
-    const { composition: _composition, treatment: _treatment, ...science } = illustration;
-    return { ...rest, illustration: science };
-  }) });
   const validateReview = (review: StoryboardReview, candidate: StoryboardDocument) => {
     if (!review || review.stage !== 'final-brief' || review.requestId !== taskId
       || review.sourceEvidenceIdentity !== expected.sourceEvidenceIdentity
@@ -130,7 +188,7 @@ function readStoryboardAcceptance(result: unknown, original: StoryboardDocument,
       throw new Error('[blocked] Storyboard acceptance receipt changed');
   };
   validateReview(saved.firstReview, original);
-  if (saved.firstReview.decision !== 'revised' || !isDeepStrictEqual(withoutArt(original), withoutArt(document))
+  if (saved.firstReview.decision !== 'revised' || !isDeepStrictEqual(storyboardScience(original), storyboardScience(document))
     || isDeepStrictEqual(original, document)
     || (saved.submittedExecutionAttempt !== undefined && (!Number.isSafeInteger(saved.submittedExecutionAttempt) || saved.submittedExecutionAttempt < 1)))
     throw new Error('[blocked] Storyboard acceptance inputs changed');
@@ -233,10 +291,14 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
   if (!('kind' in source) || !snapshot || (source.kind === 'illustration-plan' && input.attachments !== undefined)
     || input.requestId !== input.authorizationContext.taskId) throw new Error('[blocked] Invalid illustration review submission');
   const { owner, payload } = await requireIllustrationReviewAuthority(prisma, input.authorizationContext);
-  if (source.kind === 'illustration-plan' && (owner.executionAttempt > 3
-    || (owner.executionAttempt === 3 && owner.retryCount !== 2))) {
-    throw new Error('[blocked] Illustration review continuation is unavailable');
-  }
+  const artAuthorized = source.kind === 'illustration-plan' && owner.result && typeof owner.result === 'object'
+    && !Array.isArray(owner.result) && Object.hasOwn(owner.result, 'storyboardArtCorrection');
+  if (artAuthorized) await requireStoryboardArtCorrectionAuthorization(prisma, {
+    taskId: owner.id, actorId: input.authorizationContext.actorId, workspaceId: input.authorizationContext.workspaceId,
+    payload, executionAttempt: owner.executionAttempt, retryCount: owner.retryCount, result: owner.result,
+  });
+  else if (source.kind === 'illustration-plan' && (owner.executionAttempt > 3
+    || (owner.executionAttempt === 3 && owner.retryCount !== 2))) throw new Error('[blocked] Illustration review continuation is unavailable');
   if (source.kind === 'illustration-image' ? !needsGeneratedImageReview(payload)
     : payload.kind !== 'interactive_html' || payload.storyboard?.output !== 'image') {
     throw new Error('[blocked] Illustration review source does not match its task');
@@ -290,9 +352,13 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
     const saved = readStoryboardCheckpoint(owner.result, identity);
     if (!saved) throw new Error('[blocked] Illustration review candidate checkpoint is missing');
     const acceptance = readStoryboardAcceptance(owner.result, saved.document, identity, owner.id);
+    const art = readStoryboardArtCorrection(owner.result, saved.document, identity, owner.id, owner.executionAttempt);
+    if (art && (!artAuthorized || snapshot.primaryProviderOnly !== true || acceptance || !art.planned || art.review
+      || art.reviewSubmittedExecutionAttempt !== owner.executionAttempt))
+      throw new Error('[blocked] Art correction review submission is not current');
     if (acceptance && (acceptance.review || acceptance.submittedExecutionAttempt !== owner.executionAttempt))
       throw new Error('[blocked] Illustration acceptance submission is not current');
-    const candidate = acceptance?.document ?? saved.document;
+    const candidate = art?.planned?.document ?? acceptance?.document ?? saved.document;
     if (Boolean(candidate.narrative) !== Boolean(payload.storyboard?.narrative)
       || createHash('sha256').update(JSON.stringify(candidate)).digest('hex') !== source.candidateHash)
       throw new Error('[blocked] Illustration review candidate does not match its saved context');
@@ -359,7 +425,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     await requireHermesAuthority(deps.prisma);
     const existing = await deps.prisma.presentationAsset.findUnique({ where: { id: task.id }, include: { sourceClaims: true } });
     const actualImageReview = needsGeneratedImageReview(payload);
-    if (existing && !actualImageReview) return { assetId: existing.id, kind: existing.kind, status: existing.status, contentHash: existing.contentHash, sourceClaimIds: payload.sourceClaimIds };
+    if (existing && !actualImageReview) return { ...privateStoryboardResult(owner.result), assetId: existing.id, kind: existing.kind,
+      status: existing.status, contentHash: existing.contentHash, sourceClaimIds: payload.sourceClaimIds };
     const preProviderAuthorityRearm = !existing && payload.sceneImage && payload.hermesRunAuthority
       && [1, 2].includes(task.executionAttempt) && task.retryCount === 1 && task.recoveryContract === HERMES_AUTHORITY_REARM_MARKER;
     const completedProviderRecovery = !existing && payload.sceneImage && task.executionAttempt > 1
@@ -502,6 +569,9 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     let designSkills: DesignSkillUsage[] | undefined;
     let illustrationReview: Awaited<ReturnType<typeof reviewIllustrationStoryboard>>['provenance'] | undefined;
     let illustrationRevisionReview: StoryboardReview | undefined;
+    let artCorrection: StoryboardArtCorrection | undefined;
+    let artCorrectionIdentity: StoryboardCheckpointIdentity | undefined;
+    let successfulPrivateResult: Record<string, unknown> | undefined;
     if (payload.video && videoParents) {
       const user = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
       if (user?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] isolated video generation is unavailable');
@@ -586,7 +656,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if (!options.gateway) throw new Error('[blocked] storyboard planner unavailable');
       let planned: StoryboardPlan;
       let acceptance: StoryboardAcceptance | undefined;
-      let persistPlan: ((planned: StoryboardPlan, review?: StoryboardReview, acceptance?: StoryboardAcceptance) => Promise<void>) | undefined;
+      let persistPlan: ((planned: StoryboardPlan, review?: StoryboardReview, acceptance?: StoryboardAcceptance, art?: StoryboardArtCorrection) => Promise<void>) | undefined;
+      let persistArtCorrection: ((art: StoryboardArtCorrection) => Promise<void>) | undefined;
       if (payload.storyboard.output === 'image') {
         if (!options.gateway.reviewScientific) throw new Error('[blocked] Illustration scientific review unavailable');
         if (owner.deletedAt || owner.session.deletedAt || owner.session.status !== 'active'
@@ -632,8 +703,12 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           ...(narrativeSource ? { narrativeSourceIdentity: narrativeSource.identity } : {}),
         };
         let expectedResult = owner.result;
-        persistPlan = async (planned, review, acceptance) => {
+        persistPlan = async (planned, review, acceptance, art) => {
           const checkpoint = { ...identity, planned };
+          const nextResult = art
+            ? { ...(expectedResult as Record<string, unknown>), storyboardArtCorrection: art }
+            : { ...(expectedResult as Record<string, unknown> | null), storyboardCheckpoint: checkpoint,
+              ...(review ? { storyboardReview: review } : {}), ...(acceptance ? { storyboardAcceptanceCheckpoint: acceptance } : {}) };
           // Persist the paid plan before Chat review. A failed review must not restart planning.
           await deps.prisma.$transaction(async tx => {
             const { owner: currentOwner, payload: currentPayload } = await requireIllustrationReviewAuthority(tx, {
@@ -652,6 +727,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
               throw new Error('[blocked] Storyboard Claims changed before checkpoint save');
             }
             await requireUnchangedEvidence(tx);
+            await requireUnchangedStyleReference(tx);
             await requireNarrativeOriginals(tx, payload, planned.document);
             await requireIllustrationOriginalArtifacts(tx, sourceEvidence, researchObject.workspaceId);
             if ((await readStoryboardPlanningContext(tx, payload, scope.userId)).identity !== identity.baseIdentity) {
@@ -660,23 +736,57 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             if (expectedResult !== null && (typeof expectedResult !== 'object' || Array.isArray(expectedResult))) {
               throw new Error('[blocked] Storyboard task result is invalid');
             }
+            if (art) {
+              await requireStoryboardArtCorrectionAuthorization(tx, { taskId: task.id, actorId: scope.userId,
+                workspaceId: researchObject.workspaceId, payload, executionAttempt: task.executionAttempt,
+                retryCount: currentOwner.retryCount, result: currentOwner.result });
+              const original = readStoryboardCheckpoint(currentOwner.result, identity);
+              if (!original || !isDeepStrictEqual(original, planned)) throw new Error('[blocked] Original art correction plan changed');
+              readStoryboardArtCorrection(nextResult, original.document, identity, task.id, task.executionAttempt);
+            }
             const savedCheckpoint = await tx.agentTask.updateMany({ where: {
               id: task.id, kind: 'presentation.generate', status: 'running', deletedAt: null,
               executionAttempt: task.executionAttempt,
               payload: { equals: owner.payload as Prisma.InputJsonValue },
               result: { equals: expectedResult === null ? Prisma.AnyNull : expectedResult as Prisma.InputJsonValue },
-            }, data: { result: JSON.parse(JSON.stringify({ ...(expectedResult as Record<string, unknown> | null),
-              storyboardCheckpoint: checkpoint, ...(review ? { storyboardReview: review } : {}),
-              ...(acceptance ? { storyboardAcceptanceCheckpoint: acceptance } : {}) })) as Prisma.InputJsonValue } });
+            }, data: { result: JSON.parse(JSON.stringify(nextResult)) as Prisma.InputJsonValue } });
             if (savedCheckpoint.count !== 1) throw new Error('[blocked] Storyboard checkpoint owner changed');
           }, { isolationLevel: 'Serializable' });
-          expectedResult = JSON.parse(JSON.stringify({ ...(expectedResult as Record<string, unknown> | null),
-            storyboardCheckpoint: checkpoint, ...(review ? { storyboardReview: review } : {}),
-            ...(acceptance ? { storyboardAcceptanceCheckpoint: acceptance } : {}) }));
+          expectedResult = JSON.parse(JSON.stringify(nextResult));
         };
         const saved = readStoryboardCheckpoint(owner.result, identity);
         if (saved) {
           planned = saved;
+          artCorrection = readStoryboardArtCorrection(owner.result, saved.document, identity, task.id, task.executionAttempt);
+          if (artCorrection) {
+            artCorrectionIdentity = identity;
+            await requireStoryboardArtCorrectionAuthorization(deps.prisma, { taskId: task.id, actorId: scope.userId,
+              workspaceId: researchObject.workspaceId, payload, executionAttempt: task.executionAttempt,
+              retryCount: owner.retryCount, result: owner.result });
+            const blocked = (owner.result as Record<string, unknown>).storyboardReview;
+            const issues = readStoredIllustrationIssues(blocked, saved.document, claims, task.id, sourceEvidenceIdentity);
+            if (!issues?.length) throw new Error('[blocked] Art correction needs the original review issues');
+            persistArtCorrection = (candidate) => persistPlan!(saved, undefined, undefined, candidate);
+            if (!artCorrection.planned) {
+              if (artCorrection.artSubmittedExecutionAttempt !== undefined)
+                throw new Error('[blocked] Art correction outcome is uncertain; preserve the submitted request');
+              artCorrection = { ...artCorrection, artSubmittedExecutionAttempt: task.executionAttempt };
+              await persistArtCorrection(artCorrection);
+              const artGateway: Pick<AiGateway, 'completeStructured'> = {
+                completeStructured: (guard, messages, opts) => options.gateway!.completeStructured(guard, messages,
+                  { ...opts, primaryProviderOnly: true }),
+              };
+              const corrected = await generateStoryboard(artGateway, claims, { ...payload.storyboard, revisionMode: 'art' }, {
+                document: saved.document, locale: payload.storyboard.locale, style: payload.storyboard.style, output: 'image',
+              }, paperOriginals, narrativeSource?.context, { summary: (blocked as StoryboardReview).summary, issues });
+              artCorrection = { ...artCorrection, planned: { ...corrected, reviewFormat: 2,
+                designSkills: mergeDesignSkillUsage(saved.designSkills, corrected.designSkills ?? []) } };
+              await persistArtCorrection(artCorrection);
+            }
+            planned = artCorrection.planned!;
+          } else if (task.executionAttempt > 3) {
+            throw new Error('[blocked] Storyboard continuation has no current art correction authorization');
+          }
         } else {
           if (task.executionAttempt > 1) {
             const receipts = payload.hermesRunAuthority ? await deps.prisma.auditLog.findMany({ where: {
@@ -736,20 +846,41 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         if (!options.gateway.reviewScientific) throw new Error('[blocked] Illustration scientific review unavailable');
         const priorReview = owner.result && typeof owner.result === 'object' && !Array.isArray(owner.result)
           ? owner.result.storyboardReview : undefined;
-        if (priorReview !== undefined) {
+        if (priorReview !== undefined && !artCorrection) {
           readStoredIllustrationIssues(priorReview, planned.document, claims, task.id, sourceEvidenceIdentity);
           throw new Error('[blocked] Illustration needs upstream scientific revision: ' + (priorReview as { summary: string }).summary.slice(0, 300));
         }
         const reviewContext = {
           authorizationContext: Object.freeze({ taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId }),
-          illustrationContext: { executionAttempt: task.executionAttempt, claimContent: presentationClaimContent(claims), baseIdentity: planningContext.identity },
+          illustrationContext: { executionAttempt: task.executionAttempt, claimContent: presentationClaimContent(claims), baseIdentity: planningContext.identity,
+            ...(artCorrection ? { primaryProviderOnly: true as const } : {}) },
           researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceEvidenceIdentity,
           structuredIssues: planned.reviewFormat === 2,
           narrativeSource: narrativeSource?.context,
         };
         const gateway = { reviewScientific: options.gateway.reviewScientific.bind(options.gateway) };
-        let reviewed: { document: StoryboardDocument; provenance: StoryboardReview; designSkills: DesignSkillUsage[] } | undefined = acceptance ? undefined
-          : await reviewIllustrationStoryboard(gateway, claims, payload.storyboard, planned.document, reviewContext);
+        let reviewed: { document: StoryboardDocument; provenance: StoryboardReview; designSkills: DesignSkillUsage[] } | undefined;
+        if (artCorrection) {
+          if (!persistArtCorrection) throw new Error('[blocked] Art correction persistence is unavailable');
+          if (artCorrection.review) {
+            reviewed = { document: planned.document, provenance: artCorrection.review, designSkills: artCorrection.reviewDesignSkills ?? [] };
+          } else {
+            if (artCorrection.reviewSubmittedExecutionAttempt !== undefined)
+              throw new Error('[blocked] Art correction review outcome is uncertain; preserve the submitted candidate');
+            artCorrection = { ...artCorrection, reviewSubmittedExecutionAttempt: task.executionAttempt };
+            await persistArtCorrection(artCorrection);
+            reviewed = await reviewIllustrationStoryboard(gateway, claims, payload.storyboard, planned.document,
+              { ...reviewContext, acceptanceOnly: true });
+            if (!isDeepStrictEqual(reviewed.document, planned.document) || reviewed.provenance.decision === 'revised')
+              throw new Error('[blocked] Art correction final review cannot revise the candidate');
+            artCorrection = { ...artCorrection, review: reviewed.provenance, reviewDesignSkills: reviewed.designSkills };
+            await persistArtCorrection(artCorrection);
+          }
+          if (reviewed.provenance.decision !== 'accepted')
+            throw new Error('[blocked] Illustration needs upstream scientific revision: ' + reviewed.provenance.summary.slice(0, 300));
+        } else if (!acceptance) {
+          reviewed = await reviewIllustrationStoryboard(gateway, claims, payload.storyboard, planned.document, reviewContext);
+        }
         if (reviewed?.provenance.decision === 'revised') {
           acceptance = { document: reviewed.document, firstReview: reviewed.provenance, designSkills: reviewed.designSkills };
           await persistPlan!(planned, undefined, acceptance);
@@ -833,6 +964,20 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if (illustrationReview) {
         await requireHermesAuthority(tx);
         await requireIllustrationOriginalArtifacts(tx, sourceEvidence, researchObject.workspaceId);
+        if (artCorrection) {
+          if (!artCorrectionIdentity || !isDeepStrictEqual(currentTask.payload, owner.payload))
+            throw new Error('[blocked] Art correction completion identity changed');
+          await requireStoryboardArtCorrectionAuthorization(tx, { taskId: task.id, actorId: scope.userId,
+            workspaceId: researchObject.workspaceId, payload, executionAttempt: task.executionAttempt,
+            retryCount: currentTask.retryCount, result: currentTask.result });
+          const original = readStoryboardCheckpoint(currentTask.result, artCorrectionIdentity);
+          const corrected = original && readStoryboardArtCorrection(currentTask.result, original.document,
+            artCorrectionIdentity, task.id, task.executionAttempt);
+          if (!corrected || corrected.review?.decision !== 'accepted'
+            || !isDeepStrictEqual(corrected.review, illustrationReview)
+            || !isDeepStrictEqual(corrected.planned?.document, storyboardDocument))
+            throw new Error('[blocked] Art correction acceptance changed before completion');
+        }
         if (illustrationRevisionReview) {
           const identity = { payload, sourceEvidenceIdentity, claimContent: presentationClaimContent(claims),
             baseIdentity: planningContext.identity, ...(narrativeSource ? { narrativeSourceIdentity: narrativeSource.identity } : {}) };
@@ -845,6 +990,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             throw new Error('[blocked] Final storyboard acceptance changed before completion');
         }
       }
+      successfulPrivateResult = privateStoryboardResult(currentTask.result);
       // withPresentationAssetWrite holds the shared storage-reference lock through upload and row creation.
       await tx.trashObjectCleanup.updateMany({ where: { objectKey }, data: { state: 'retained', lastError: null } });
       await deps.storage!.putObject(objectKey, videoOutput ? createReadStream(videoOutput.filePath) : bytes, { contentType, sha256: contentHash });
@@ -860,7 +1006,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       return created;
     });
     if (actualImageReview) return finishGeneratedImageReview(asset);
-    return { assetId: asset.id, kind: asset.kind, status: asset.status, contentHash, sourceClaimIds: payload.sourceClaimIds };
+    return { ...successfulPrivateResult, assetId: asset.id, kind: asset.kind, status: asset.status, contentHash, sourceClaimIds: payload.sourceClaimIds };
   };
 }
 
