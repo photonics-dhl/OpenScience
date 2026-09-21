@@ -1,6 +1,5 @@
 # Hermes / Workbench CURRENT Handoff
 - 本机工具配置（2026-09-21）：用户授权独立提交 `.codex/config.toml` 浏览器代理，保留源码检索；依赖/范围/回滚见[能力台账](../runbooks/hermes-capability-registry.md#local-browser-proxy)。无科研业务部署，不替代未完成产品交付。
-
 > 唯一交付树：E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch release/onchip-production-line。根 main 仅导航；旧 codex/onchip-video-release 缺 journals/学术身份，不得发版。历史详细证据保留 Git 与下方交接，不能按旧 next action 重跑。
 
 ## 目标与执行边界
@@ -74,6 +73,7 @@
 
 - 用户质疑审稿Skill与耗时后只读取证：41c原结果明确reviewSkill=scientific-critical-thinking v2（项目适配版），extractor系统消息实际注入；没有加载完整K-Dense peer-review。e7初稿任务的3条成功模型审计耗时29181/30516/74454ms（d96981e2/73a24f10/8d023c10），合计134151ms，最后一次产出完整六维；41c是后续六维来源校核+可选原子Claims请求，adaptive/65536上限/非流式，300638ms服务失败且usage为空。不能说“论文理解需要超过300秒”，不能从上限推断实际推理量，也不能把Skill有调用等同完整审稿流程落地；本轮无新模型、无代码/部署/测试。下一定位对象是现有终审的输入/职责和provider返回阶段，不盲增超时/预算或另造分析器。
 - 用户继续后原地修正终审职责（已部署）：High定位自动配图消费必需Claims却提示可省略，以及“重新构建全文/仅压缩也可revised”与最小科学修订校验冲突。现有科学Skill v3拆分综合/核源指令，共享证据规则不删，核源用P编号；原稿821字/15语义点，原文15页原始文本53954字符，保留52个覆盖P及30个候选引用P，不裁证据。Worker只从同task/ingestion/artifact/actor/RO的visual-narrative运行步骤推导主张输出要求，手动v5保持可选，守卫/后置解析仍严格拒绝无效建议，无新分析器/模型轮次/恢复槽/超时预算。High增量静态审查已通过（source_review步骤按实际waiting绑定），正常服务器构建/启动exit0；07:11:56Z精确release读回，原run仍failed/version10/versionId=null、活动AgentTask0、上次失败后相关Gateway新调用0。模型不遵循主张指令时原后置校验仍会停止流程；新审校质量/延迟未实测。不追加付费请求，不把提示冲突称为历史300秒故障根因。
+- 09:34–09:40Z用户要求验证系统：production仍d647a605；原run failed/version10/versionId=null、活动task0/失败后新调用0。站内dashboard→编辑→公开v2三张均解码（900×696、1280×720×2），文件页原PDF/历史可读。发现普通Hermes导航丢run并展示新建，旧task通用refresh可能收费换source指针且脱离原run。候选在原Domain/API增加actor/RO/source只读找回、Serializable重复创建/公共refresh保护，UI找回旧run并引回进度；不增恢复槽/额度、不发模型。当前canRetryGeneration=false：ordinal1已用，41c历史provider_error也不满足可识别临时故障。收据/jobs/system-verification-{public,assets,files,hermes}-20260921.json及entry/hermes截图；完整新图组仍未验证。
 ## 下一动作与交接入口
 - 优先任务5：当前超时/错误分类修正已部署；用户已明确允许保留初稿再进行一次可能计费的来源审校；原Domain恢复入口已补CAS/来源身份/真实attempt计数及剩余scene预算约束，独立High静态审查及服务器部署完成，同一run补审再次服务失败；传输时限断接/错误码丢失与v3终审职责修正均已部署，本次一次补审授权已执行，不再发模型，不能直接DB改状态或新建run重置额度。后续真实补审或切provider需新的明确收费授权，不能直接加恢复槽或重置额度；最终仍交付六维/整组而非中间审批；不向e77写入或盲重发aaf7。全文上限、停机、旧约束继承/深色标准化债务保留。
 - 先读本页，再按故障读 docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md 最新节；能力缺口在 docs/runbooks/hermes-capability-registry.md 原行更新，历史长证据不重复执行。

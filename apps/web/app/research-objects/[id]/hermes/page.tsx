@@ -14,7 +14,7 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, confirmIngestionTask, apiRequest, getResearchObject, getIngestionTask, getResearchIngestion, isRefreshableIngestionAnalysis, refreshIngestionAnalysis, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
+import { ApiClientError, confirmIngestionTask, apiRequest, getExistingHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, isRefreshableIngestionAnalysis, refreshIngestionAnalysis, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
@@ -86,8 +86,12 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
     let cancelled = false;
     if (!loaded.current) setLoading(true);
     setError('');
-    const load = taskId ? Promise.all([loadScopedHermesReview(routeParams.id, taskId, getIngestionTask), getResearchIngestion(routeParams.id)]).then(async ([value, recovery]) => {
+    const load = taskId ? Promise.all([loadScopedHermesReview(routeParams.id, taskId, getIngestionTask), getResearchIngestion(routeParams.id), getExistingHermesResearchRun(routeParams.id, taskId)]).then(async ([value, recovery, existing]) => {
       if (cancelled) return;
+      if (existing.run) {
+        router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(existing.run.id)}`);
+        return;
+      }
       const confirmed = recovery.tasks.find((task) => task.id === taskId)?.confirmation ?? null;
       const proposed = (value.task.result as { core?: SdfCore } | null)?.core;
       if (confirmed) {

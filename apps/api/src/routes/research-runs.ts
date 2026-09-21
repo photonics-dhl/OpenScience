@@ -3,13 +3,14 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ingestionClaimSelectionSchema } from './ingestion-claim-selection-schema';
 import { MAX_INGESTION_CLAIMS } from '@openscience/domain';
-import { authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getHermesResearchRun, retryHermesGeneration, type HermesSourceReviewDeps } from '@openscience/domain';
+import { authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, getExistingHermesResearchRun, getHermesResearchRun, retryHermesGeneration, type HermesSourceReviewDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import type { StorageAdapter } from '@openscience/storage';
 import { requireCurrentUser } from './session-guard';
 
 const paramsSchema = z.object({ id: z.string().uuid() }).strict();
 const readParamsSchema = z.object({ id: z.string().uuid(), runId: z.string().uuid() }).strict();
+const existingRunQuerySchema = z.object({ ingestionTaskId: z.string().uuid() }).strict();
 const createSchema = z.object({ ingestionTaskIds: z.array(z.string().uuid()).min(1).max(20),
   generation: z.object({ profile: z.literal('visual-narrative-v1'), maxAgentTasks: z.literal(9),
     locale: z.enum(['zh', 'en']), style: z.string().trim().min(1).max(100), instruction: z.string().trim().min(1).max(1000) }).strict().optional(),
@@ -40,6 +41,15 @@ function auditCtx(req: FastifyRequest): AuditContext {
 }
 
 export function registerResearchRunRoutes(app: FastifyInstance, deps: Omit<HermesSourceReviewDeps, 'storage'> & AuthDeps & { storage?: StorageAdapter }): void {
+  app.get('/research-objects/:id/hermes-runs', async (req, reply) => {
+    void reply.header('Cache-Control', 'private, no-store');
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = paramsSchema.parse(req.params);
+    const { ingestionTaskId } = existingRunQuerySchema.parse(req.query);
+    return reply.send({ run: await getExistingHermesResearchRun(deps, { actorId: user.userId, researchObjectId: id, ingestionTaskId }) });
+  });
+
   app.post('/research-objects/:id/hermes-runs', async (req, reply) => {
     void reply.header('Cache-Control', 'private, no-store');
     const user = await requireCurrentUser(deps, req, reply);

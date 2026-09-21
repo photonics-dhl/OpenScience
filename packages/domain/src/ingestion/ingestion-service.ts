@@ -720,6 +720,15 @@ export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
   return 'queued';
 }
 
+async function requirePublicRefreshSource(tx: Prisma.TransactionClient, taskId: string): Promise<void> {
+  const bound = await tx.hermesResearchStep.findFirst({ where: {
+    stage: 'source_ingestion', ingestionTaskId: taskId,
+    run: { profile: VISUAL_NARRATIVE_PROFILE },
+  }, select: { id: true } });
+  if (bound) throw new IngestionError('INGESTION_NOT_RETRYABLE',
+    'This analysis belongs to a Hermes narrative run. Open the existing run to view its progress or failure; public reanalysis cannot replace its source.');
+}
+
 /** Explicit paid refresh for a narrowly recognized extraction generation. The fourth argument is server-only, never API input. */
 export async function refreshIngestionAnalysis(
   deps: IngestionDeps,
@@ -743,15 +752,15 @@ export async function refreshIngestionAnalysis(
     // never the user-requested path that intentionally runs the parser again.
     return internalRunId && !input.reviewOnly ? 'scientific_review_v4' as const : policy;
   };
-  const checkInternalReplay = async (replacementId: string) => {
-    if (!internalRunId) return;
+  const checkRefreshReplay = async (replacementId: string) => {
     await deps.prisma.$transaction(async tx => {
       const source = await tx.ingestionTask.findUnique({ where: { id: input.taskId },
         include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } } });
       if (!source) throw new IngestionError('VALIDATION_ERROR', 'Hermes source replay is unavailable');
       const { membership } = await requireActiveMembership(tx, source.batch.researchObject.workspaceId, input.userId);
       if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
-      await prepareHermesRefresh(tx, source, input, internalRunId, replacementId);
+      if (internalRunId) await prepareHermesRefresh(tx, source, input, internalRunId, replacementId);
+      else await requirePublicRefreshSource(tx, source.id);
     }, { isolationLevel: 'Serializable' });
   };
   const initial = await deps.prisma.ingestionTask.findUnique({
@@ -763,6 +772,7 @@ export async function refreshIngestionAnalysis(
   if (initial.batch.userId !== input.userId || initial.artifact.workspaceId !== workspace.id) {
     throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion analysis source is unavailable');
   }
+  if (!internalRunId) await requirePublicRefreshSource(deps.prisma, initial.id);
   if (input.reviewOnly && input.compositionSourceAgentTaskId !== input.sourceAgentTaskId) {
     throw new IngestionError('VALIDATION_ERROR', 'Review-only requires the current extraction as its source');
   }
@@ -804,7 +814,7 @@ export async function refreshIngestionAnalysis(
         || payload.artifactId !== initial.artifactId || payload.researchObjectId !== initial.batch.researchObjectId) {
         throw new IngestionError('VALIDATION_ERROR', 'Semantic composition replay scope does not match');
       }
-      await checkInternalReplay(replay.id);
+      await checkRefreshReplay(replay.id);
       await dispatchAgentTask(deps, replay.id);
       return taskToView(initial);
     }
@@ -834,6 +844,9 @@ export async function refreshIngestionAnalysis(
           if (source.batch.userId !== input.userId || source.artifact.workspaceId !== workspace.id) {
             throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion composition source is unavailable');
           }
+          // Keep the binding read and source replacement in the same Serializable
+          // transaction as run creation, including failed runs and replay paths.
+          if (!internalRunId) await requirePublicRefreshSource(tx, source.id);
 
           const transactionReplay = await tx.agentTask.findUnique({ where: { idempotencyKey: stableKey }, include: { session: true } });
           const transactionCurrent = await tx.agentTask.findUnique({ where: { id: input.sourceAgentTaskId }, include: { session: true } });
@@ -949,7 +962,7 @@ export async function refreshIngestionAnalysis(
       || payload.artifactId !== initial.artifactId || payload.researchObjectId !== initial.batch.researchObjectId) {
       throw new IngestionError('VALIDATION_ERROR', 'Analysis refresh replay scope does not match');
     }
-    await checkInternalReplay(replay.id);
+    await checkRefreshReplay(replay.id);
     await dispatchAgentTask(deps, replay.id);
     return taskToView(initial);
   }
@@ -995,6 +1008,7 @@ export async function refreshIngestionAnalysis(
         if (source.batch.userId !== input.userId || source.artifact.workspaceId !== workspace.id) {
           throw new IngestionError('INGESTION_NOT_FOUND', 'Legacy ingestion source is unavailable');
         }
+        if (!internalRunId) await requirePublicRefreshSource(tx, source.id);
 
         const transactionReplay = await tx.agentTask.findUnique({ where: { idempotencyKey: stableKey }, include: { session: true } });
         if (transactionReplay) {

@@ -379,6 +379,7 @@
     "ingestionConfirmed": "分析已采用并保存为私有草稿。",
     "continueHermesResearch": "继续 Hermes 主张与来源核查",
     "legacyRefreshBody": "当前分析记录会保留。重新分析同一份已上传材料会使用更新后的解析与来源定位能力并消耗 1 个 AI 额度，不会重新上传文件或自动确认结果。",
+    "viewNarrative": "查看这篇论文的图文制作进度",
     "legacyRefreshAction": "重新分析已上传材料 · 1 额度",
     "legacyRefreshing": "正在创建重新分析任务…",
     "legacyRefreshStarted": "重新分析已在服务器开始；完成后会在当前提案中更新未编辑字段，原分析记录仍可追溯。",

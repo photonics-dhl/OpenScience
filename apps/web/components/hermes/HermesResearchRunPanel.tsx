@@ -10,6 +10,7 @@ import {
   createHermesResearchRun,
   getAgentTask,
   getCurrentUser,
+  getExistingHermesResearchRun,
   getHermesResearchRun,
   retryHermesGeneration,
   SESSION_CHANGED_EVENT,
@@ -57,6 +58,9 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const [restoredOwner, setRestoredOwner] = React.useState('');
   const [pendingRestored, setPendingRestored] = React.useState(false);
   const [starting, setStarting] = React.useState(false);
+  const [resolvedSource, setResolvedSource] = React.useState('');
+  const [resolveRetry, setResolveRetry] = React.useState(0);
+  const [resolving, setResolving] = React.useState(false);
   React.useEffect(() => { if (!pendingRestored && !starting) setGenerationLocale(locale); }, [locale, pendingRestored, starting]);
   const startInFlight = React.useRef(false);
   const mounted = React.useRef(false);
@@ -154,6 +158,27 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const selectedTask = eligibleTasks.find((task) => task.id === selectedTaskId)
     ?? (!guideTaskId ? eligibleTasks.find((task) => task.id === activeTaskId) ?? eligibleTasks[0] : null)
     ?? null;
+  const sourceScope = `${owner}:${selectedTask?.id ?? ''}`;
+  React.useEffect(() => {
+    if (runId || !actorId || restoredOwner !== owner || !selectedTask) return;
+    const controller = new AbortController();
+    setResolving(true); setResolvedSource(''); setError('');
+    void getExistingHermesResearchRun(researchObjectId, selectedTask.id, controller.signal).then(({ run: existing }) => {
+      if (controller.signal.aborted || actorRef.current !== actorId) return;
+      if (existing) {
+        if (existing.actorId !== actorId || existing.researchObjectId !== researchObjectId
+          || !existing.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === selectedTask.id)) {
+          throw new Error(t('narrative.identityChanged'));
+        }
+        onRunCreated(existing);
+      } else setResolvedSource(sourceScope);
+    }).catch(cause => {
+      if (!controller.signal.aborted && actorRef.current === actorId) setError(cause instanceof Error ? cause.message : t('loadError'));
+    }).finally(() => {
+      if (!controller.signal.aborted && actorRef.current === actorId) setResolving(false);
+    });
+    return () => controller.abort();
+  }, [actorId, owner, restoredOwner, selectedTask?.id, researchObjectId, runId, sourceScope, resolveRetry, onRunCreated, t]);
   const sourceLabel = (task: DashboardTaskApi) => {
     const shortId = task.id.slice(0, 8);
     const id = eligibleTasks.some(other => other.id !== task.id && other.logicalPath === task.logicalPath && other.id.startsWith(shortId)) ? task.id : shortId;
@@ -207,7 +232,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   }, [loadRun, run?.status, runId]);
 
   const start = React.useCallback(async () => {
-    if (!selectedTask || !actorId || restoredOwner !== owner || startInFlight.current || (guideTaskId && (!guided || guideLoading))) return;
+    if (!selectedTask || !actorId || restoredOwner !== owner || resolvedSource !== sourceScope || startInFlight.current || (guideTaskId && (!guided || guideLoading))) return;
     startInFlight.current = true;
     setStarting(true); setError('');
     try {
@@ -217,6 +242,9 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
         actorRef.current = viewer.userId; setActorId(viewer.userId); setRestoredOwner(''); setInstruction('');
         setError(t('narrative.identityChanged')); return;
       }
+      const existing = await getExistingHermesResearchRun(researchObjectId, selectedTask.id);
+      if (!mounted.current || actorRef.current !== actorId) return;
+      if (existing.run) { onRunCreated(existing.run); return; }
       const generation: HermesNarrativeGeneration = { profile: 'visual-narrative-v1', maxAgentTasks: 9,
         locale: guided?.locale ?? generationLocale, style: guided?.style ?? style, instruction: guided?.instruction ?? (instruction.trim() || t('narrative.defaultGoal')) };
       const scope = { userId: actorId, researchObjectId, ingestionTaskId: selectedTask.id };
@@ -244,7 +272,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       startInFlight.current = false;
       if (mounted.current) setStarting(false);
     }
-  }, [selectedTask, actorId, restoredOwner, owner, guideTaskId, guided, guideLoading, generationLocale, style, instruction, researchObjectId, onRunCreated, t]);
+  }, [selectedTask, actorId, restoredOwner, owner, resolvedSource, sourceScope, guideTaskId, guided, guideLoading, generationLocale, style, instruction, researchObjectId, onRunCreated, t]);
 
   async function upgradeGenerationGrant() {
     if (!run || granting) return;
@@ -310,7 +338,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   return <section className="surface-folio-sheet mt-7 max-w-3xl border-y border-os-rule-paper px-5 py-6 sm:px-7" aria-labelledby="hermes-run-title" data-hermes-research-run={run?.status ?? 'new'}>
     <p data-reading-role="caption" className="text-os-vermilion-ink">Hermes</p>
     <h2 id="hermes-run-title" className="mt-2 text-2xl font-medium text-os-ink">{t('title')}</h2>
-    {!runId && !run && !loading && (!guideTaskId || (guided && !guideLoading)) ? <>
+    {!runId && !run && !loading && !resolving && (!selectedTask || resolvedSource === sourceScope) && (!guideTaskId || (guided && !guideLoading)) ? <>
       <p className="mt-3 max-w-[66ch] leading-7 text-os-muted-paper">{t(eligibleTasks.length ? 'narrative.startDescription' : 'narrative.unavailableDescription')}</p>
       {guided ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-os-ink">{guided.instruction}</p> : null}
       {(!guided && eligibleTasks.length > 1) || (guided && !guided.ingestionTaskId && eligibleTasks.length > 0) ? <label className="mt-4 grid max-w-lg gap-2 text-sm font-semibold text-os-ink">{t('sourceLabel')}<select disabled={starting || !actorId || restoredOwner !== owner} value={selectedTask?.id ?? ''} onChange={(event) => restoreTask(event.target.value)} className="min-h-11 rounded-panel border border-os-rule-paper bg-os-paper px-3 font-normal disabled:opacity-50">{guided ? <option value="" disabled>{t('narrative.chooseSource')}</option> : null}{eligibleTasks.map((task) => <option key={task.id} value={task.id}>{sourceLabel(task)}</option>)}</select></label> : null}
@@ -320,8 +348,9 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
         <button type="button" onClick={() => void start()} disabled={starting || !actorId || restoredOwner !== owner} className="mt-5 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(starting ? 'starting' : pendingRestored ? 'narrative.resumePending' : 'narrative.startFor', { source: sourceLabel(selectedTask) })}</button>
       </> : null}
     </> : null}
-    {loading || (guideTaskId && guideLoading) ? <p role="status" className="mt-4 text-os-muted-paper">{t('loading')}</p> : null}
+    {loading || resolving || (guideTaskId && guideLoading) ? <p role="status" className="mt-4 text-os-muted-paper">{t('loading')}</p> : null}
     {error ? <div className="mt-4 border-l-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{error}</div> : null}
+    {!runId && !resolving && error ? <button type="button" onClick={() => setResolveRetry(value => value + 1)} className="mt-3 min-h-11 font-semibold text-os-vermilion-ink underline">{t('narrative.refreshStatus')}</button> : null}
     {runId && !run && !loading && error ? <button type="button" onClick={() => void loadRun()} className="mt-3 min-h-11 font-semibold text-os-vermilion-ink underline">{t('narrative.refreshStatus')}</button> : null}
     {guideTaskId && !guided && !guideLoading && error ? <button type="button" onClick={() => setGuideRetry(value => value + 1)} className="mt-3 min-h-11 font-semibold text-os-vermilion-ink underline">{t('narrative.refreshStatus')}</button> : null}
     {run && narrative ? <div className="mt-4 border-t border-os-rule-paper pt-4">

@@ -402,6 +402,10 @@ export function getHermesResearchRun(researchObjectId: string, runId: string, si
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
 }
 
+export function getExistingHermesResearchRun(researchObjectId: string, ingestionTaskId: string, signal?: AbortSignal): Promise<{ run: HermesResearchRun | null }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs?ingestionTaskId=${encodeURIComponent(ingestionTaskId)}`, { signal });
+}
+
 export interface HermesSourceReview {
   ingestionTaskId: string;
   snapshotToken: string;

@@ -379,6 +379,7 @@
     "ingestionConfirmed": "The analysis was adopted into your private draft.",
     "continueHermesResearch": "Continue Hermes claim and source review",
     "legacyRefreshBody": "The current analysis record remains in history. Reanalyzing the same uploaded material uses the updated parser and source location and costs 1 AI credit; it does not re-upload or confirm the result.",
+    "viewNarrative": "View this paper’s illustration progress",
     "legacyRefreshAction": "Reanalyze uploaded material · 1 credit",
     "legacyRefreshing": "Creating reanalysis task…",
     "legacyRefreshStarted": "Reanalysis started on the server. Untouched proposal fields will refresh when it completes, and the earlier analysis remains traceable.",

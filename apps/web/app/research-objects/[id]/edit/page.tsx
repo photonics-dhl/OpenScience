@@ -29,6 +29,7 @@ import {
   confirmIngestionTask,
   getAgentTask,
   getCurrentUser,
+  getExistingHermesResearchRun,
   getAuthors,
   getIngestionTask,
   getResearchObject,
@@ -88,6 +89,7 @@ type ActiveExtraction = Pick<ExtractReviewCheckpoint, 'idempotencyKey' | 'taskId
 };
 type IngestionProposal = {
   scope: IngestionProposalScope;
+  hermesRunId?: string;
   detail: IngestionTaskDetail;
   core: SdfCore;
   sourceCore: SdfCore;
@@ -358,7 +360,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     setIngestionMessage(null);
     const load = async () => {
       try {
-        const [viewer, detail] = await Promise.all([getCurrentUser(), getIngestionTask(selectedIngestionTaskId)]);
+        const [viewer, detail, existing] = await Promise.all([getCurrentUser(), getIngestionTask(selectedIngestionTaskId), getExistingHermesResearchRun(roId, selectedIngestionTaskId)]);
         if (!active) return;
         if (detail.researchObjectId !== roId || detail.task.id !== summary.id || detail.task.artifactId !== summary.artifactId) {
           setIngestionMessage(t('ingestionScopeMismatch'));
@@ -408,6 +410,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         }, { ...seededCore }) : seededCore;
         setIngestionProposal({
           scope,
+          ...(existing.run ? { hermesRunId: existing.run.id } : {}),
           detail,
           core,
           sourceCore,
@@ -566,7 +569,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   async function refreshLegacyProposal() {
-    if (!ingestionProposal?.detail.task.agentTaskId || refreshingLegacyIngestion || !isRefreshableIngestionAnalysis(ingestionProposal.detail.task)) return;
+    if (!ingestionProposal?.detail.task.agentTaskId || ingestionProposal.hermesRunId || refreshingLegacyIngestion || !isRefreshableIngestionAnalysis(ingestionProposal.detail.task)) return;
     setRefreshingLegacyIngestion(true);
     setIngestionMessage(null);
     try {
@@ -1166,7 +1169,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                   </label>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-os-muted-paper">{ingestionReviewActive ? t('ingestionProposalBody') : tw('confirmedSources')}</p>
-                {ingestionProposal && isRefreshableIngestionAnalysis(ingestionProposal.detail.task) ? (
+                {ingestionProposal?.hermesRunId ? <Link className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(roId)}/hermes?run=${encodeURIComponent(ingestionProposal.hermesRunId)}`}>{t('viewNarrative')}</Link> : null}
+                {ingestionProposal && !ingestionProposal.hermesRunId && isRefreshableIngestionAnalysis(ingestionProposal.detail.task) ? (
                   <div className="mt-4 border-l-2 border-os-vermilion-ink pl-4">
                     <p className="text-sm leading-6 text-os-muted-paper">{t('legacyRefreshBody')}</p>
                     <button type="button" className="mt-3 min-h-11 rounded-panel border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink disabled:opacity-50" disabled={refreshingLegacyIngestion || confirmingIngestion} onClick={() => void refreshLegacyProposal()}>{refreshingLegacyIngestion ? t('legacyRefreshing') : t('legacyRefreshAction')}</button>

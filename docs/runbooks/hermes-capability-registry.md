@@ -53,6 +53,8 @@
 
 ### 当前技术债与处理
 
+同一论文流程入口（2026-09-21真实路径发现，修复候选）：普通站内Hermes链接不含run，旧UI只读URL而提供新建；公共refresh能换掉失败自动run的source指针。原Domain/API补actor/RO/source范围只读找回，原Serializable创建拒绝新key重复自动run，公共refresh在replacement及replay路径拒绝所有visual-narrative绑定；UI先找回、材料页隐藏该refresh并链接进度。无新增审批/恢复槽/额度重置。独立High及上线观察状态见CURRENT；现有一次恢复已用尽且41c旧provider_error无可追溯分类，仍不能端到端续跑或把未知错误纳入自动重试。
+
 生产退出路径（2026-09-21已复现，未修复）：正常部署两次等待旧API/Worker退出，确认无running AgentTask后按精确旧ID/StartedAt停止才完成。静态High定位 `apps/agent-worker/src/index.ts` 的SIGTERM只调用journal停timer函数，主消费器仍 `while(true)`，没有停止claim/排空/连接释放；API入口亦无显式关闭流程，但PID1信号行为仍属推断。下一步应在现有生命周期中统一停止新claim、排空在途任务后关资源，保持队列恢复语义；缩短Docker超时不能当根治。本轮未在活跃模型任务期间重启服务。
 
 论文视觉叙事（2026-09-21已部署，运行事实见CURRENT）：用户已批准HTML方案，要求未读论文者也能理解核心思想，六维内容与整组图片一起交付。`illustration-planner.ts`原地增强既有science/art，同次组织mainMessage、受众与1–6个有序场景，再按需混排可用原图和生图；原图复用也经科学叙事审阅。`scientific-writing-source.ts`绑定同版本SDF、科学审校、Claim和受控SourceMap，不新造全文分析器。v2原样Fig.1的审美/独立解释仍未获接受，保留原件与公开历史。

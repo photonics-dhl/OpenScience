@@ -178,6 +178,15 @@ export async function createHermesResearchRun(
       return replay;
     }
 
+    if (settings) {
+      const existing = await tx.hermesResearchRun.findFirst({ where: {
+        actorId: input.actorId, researchObjectId: input.researchObjectId, profile: VISUAL_NARRATIVE_PROFILE,
+        steps: { some: { stage: 'source_ingestion', ingestionTaskId: taskIds[0]! } },
+      }, select: { id: true } });
+      if (existing) throw new HermesResearchRunError('SOURCE_NOT_READY',
+        'This paper already has a Hermes narrative run. Open the existing run to view its progress or failure; starting again cannot replace it.');
+    }
+
     const tasks = await tx.ingestionTask.findMany({
       where: { id: { in: taskIds } },
       include: { batch: true, agentTask: true, artifact: true },
@@ -246,6 +255,21 @@ export async function createHermesResearchRun(
     }
   }
   throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes research run transaction could not be serialized');
+}
+
+export async function getExistingHermesResearchRun(
+  deps: HermesResearchRunDeps,
+  input: { actorId: string; researchObjectId: string; ingestionTaskId: string },
+): Promise<HermesResearchRunView | null> {
+  const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
+  if (!ro) throw new HermesResearchRunError('NOT_FOUND', 'Research object not found');
+  await requireActiveMembership(deps.prisma, ro.workspaceId, input.actorId)
+    .catch((cause) => { throw new HermesResearchRunError('NOT_FOUND', 'Research object not found', { cause }); });
+  const run = await deps.prisma.hermesResearchRun.findFirst({ where: {
+    actorId: input.actorId, researchObjectId: input.researchObjectId, profile: VISUAL_NARRATIVE_PROFILE,
+    steps: { some: { stage: 'source_ingestion', ingestionTaskId: input.ingestionTaskId } },
+  }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true } });
+  return run ? getHermesResearchRun(deps, { ...input, runId: run.id }) : null;
 }
 
 export async function getHermesResearchRun(
