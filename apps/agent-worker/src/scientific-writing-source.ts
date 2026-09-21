@@ -19,6 +19,26 @@ export interface VisualNarrativeSource {
   sourceContext: WritingSourcePacket;
 }
 
+/** Model-only view: retain every excerpt and its reliability metadata; full locators stay in the server context. */
+export function projectVisualNarrativeSource(source: VisualNarrativeSource) {
+  const origins: WritingSourcePacket['excerpts'][number]['origin'][] = [];
+  const originIndices = new Map<string, number>();
+  const excerpts = source.sourceContext.excerpts.map(excerpt => {
+    const key = JSON.stringify([excerpt.origin.kind, excerpt.origin.parser, excerpt.origin.confidence]);
+    let originIndex = originIndices.get(key);
+    if (originIndex === undefined) {
+      originIndex = origins.length;
+      origins.push({ ...excerpt.origin });
+      originIndices.set(key, originIndex);
+    }
+    return { id: excerpt.id, text: excerpt.text, page: excerpt.sourceLocator.page, originIndex };
+  });
+  return {
+    versionSdf: source.versionSdf, reviewedAnalysis: source.reviewedAnalysis, scientificReview: source.scientificReview,
+    sourceContext: { excerpts, origins, coverage: source.sourceContext.coverage },
+  };
+}
+
 type NarrativeScope = { userId: string; workspaceId: string; researchObjectId: string; versionId: string; sourceClaimIds: string[] };
 type NarrativeReader = Pick<Prisma.TransactionClient, 'version' | 'claimNode' | 'ingestionTask'>;
 

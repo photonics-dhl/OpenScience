@@ -1402,6 +1402,7 @@
       "completeDescription": "The six research sections and complete image set are saved with this research. Read the final result; publication remains your decision.",
       "incompleteDescription": "The system has not completed the full result. Original sources and completed work are preserved; refreshing this page will not resubmit generation.",
       "resumeDescription": "Your existing content and processing history are preserved. Continuing adds one source review to complete the required content within this workflow’s remaining task allowance. Previous requests may already have been charged, and this review incurs provider usage. Once it passes, the system will continue the complete illustrated result.",
+      "resumeMediaDescription": "Reviewed content and the saved design are preserved while review and production continue. This reuses the original task allowance; subsequent model processing still incurs provider usage.",
       "resume": "Keep draft and continue",
       "imageProgress": "{current} / {total} images generated",
       "internalReview": "Internal review",

@@ -358,7 +358,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(terminal ? 'narrative.incompleteDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
       {imageSteps.length ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('narrative.imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
       {run.canRetryGeneration ? <div className="mt-4">
-        <p className="text-sm leading-6 text-os-muted-paper">{t('narrative.resumeDescription')}</p>
+        <p className="text-sm leading-6 text-os-muted-paper">{t(run.versionId ? 'narrative.resumeMediaDescription' : 'narrative.resumeDescription')}</p>
         <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : 'narrative.resume')}</button>
       </div> : null}
       <details className="mt-4 text-sm text-os-muted-paper"><summary className="min-h-11 cursor-pointer py-3">{t('narrative.details')}</summary>{steps}</details>

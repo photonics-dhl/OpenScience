@@ -6,7 +6,7 @@ import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage 
 import { compileIllustrationImagePrompt } from './scene-image';
 import type { IllustrationReviewIssue } from './illustration-review';
 import { loadIllustrationStyleSkills } from './illustration-styles';
-import type { VisualNarrativeSource } from '../scientific-writing-source';
+import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
 
 type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string } };
 const SCIENCE_SCENE_KEYS = ['title', 'narration', 'message', 'domain', 'subjects', 'labels', 'constraints', 'encoding'];
@@ -213,7 +213,7 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
     }) };
   } else {
     const sourceInput = JSON.stringify({ request: settings.instruction, locale: settings.locale, upstream,
-      ...(settings.narrative ? { paper: narrativeSource, availablePaperOriginals: [...paperOriginals.values()]
+      ...(settings.narrative ? { paper: projectVisualNarrativeSource(narrativeSource!), availablePaperOriginals: [...paperOriginals.values()]
         .map(ref => ({ assetId: ref.assetId, figureId: ref.figureId, sourceClaimId: ref.sourceClaimId })) } : {}),
       ...(reusableBase ? { previousIntent: reusableBase.map(scene => scene!.science) } : {}),
       ...(base?.document.narrative ? { previousNarrative: base.document.narrative } : {}),

@@ -4,6 +4,7 @@
 
 ## 2026-09-21 自动视觉叙事的交付顺序
 
+- 保存分镜的预算故障恢复：仅已保存完整checkpoint、未发出科学终审、旧精确预算错误且尚未重试的原visual-narrative任务，沿既有retry-generation/CAS恢复同task；保留result、原规划审计及失败收据，不新建任务/重规划/扩额度。模型prompt使用紧凑excerpt导航和origins表，全部科学文字、来源与服务端原始身份不变，61,440上限保持。部署无需迁移/receiver变更；恢复前先对该真实输入只读核对实际长度，随后只点一次原页面继续，未知响应先读状态。回退须等在途任务结束，保留checkpoint/审计；正常源码回退不改已审版本。
 - 前提：用户已批准自动制作方案；候选经过独立High静态审查，干净提交已推送。只做必要服务器构建/迁移/启动和已授权产品路径；不用测试、预检或演练补证。保存当前生产与provider回退身份；迁移前用既有 `backup.sh --confirm --db` 保留双库私有备份，不读取正文。
 - 执行：既有cloud-sync物化精确提交，服务器安装锁定依赖并构建AI Gateway及依赖，用现有provider installer加 `--defer-timers` 先交付兼容schema1/2/3的receiver，防止安装到一半提前派发。仅暂停分发timer并等活动请求自然结束，备份原units/live文件和权限后安装，再恢复原timer enabled/active状态；安装失败逐项回退，回退异常保留停止并明确报告，不派发混合版本；不重启共享浏览器。随后 `deploy.sh --confirm --no-tests --reuse-unchanged-capability-images --rollback-ref <当前生产完整SHA> <候选完整SHA>`。本次有可空generation_settings迁移，不能传 `--skip-migrate`。
 - 数据库补接：真实启动暴露旧 `hermes_research_runs_generation_grant_check` 未接受新profile/9组合（23514）；独立 `20260921020000_visual_narrative_grant` 迁移在同一事务中扩展既有约束，保留原四种合法组合，不改已应用的210100迁移。仍用正常部署及原migrate-cli，不手工改任务状态；恢复时复用页面保存的初始幂等请求，不新建付费重试。

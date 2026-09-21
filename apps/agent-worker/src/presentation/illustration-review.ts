@@ -4,7 +4,7 @@ import { describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocum
 import type { PresentationClaim } from './chart-generator';
 import { compileIllustrationImagePrompt } from './scene-image';
 import { loadIllustrationStyleSkills } from './illustration-styles';
-import type { VisualNarrativeSource } from '../scientific-writing-source';
+import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
 
 type ReviewContext = Pick<ScienceReviewInput, 'authorizationContext' | 'illustrationContext'> & {
   researchObjectId: string; versionId: string; sourceEvidenceIdentity: string;
@@ -164,7 +164,7 @@ In this same review, also compare the candidate composition/treatment with userR
 Return ONLY JSON with EXACT keys {decision,summary,corrections}. decision is accepted|revised|blocked; summary is a concise explanation in the requested locale. For accepted or blocked, corrections MUST be []. For revised, corrections is a nonempty list of {sceneIndex,composition?,treatment?}; each existing zero-based sceneIndex appears once, with at least one changed field and no other keys. composition:nonempty single-line string<=200; treatment:nonempty single-line string<=220. No HTML or code. Keep corrections concise and in the requested locale. The final drawing instructions including unchanged scientific fields must fit 1500 characters; never shorten science to fit art. SourceIds and review notes are internal and are not drawn. Perform this focused audit yourself.
 ${reviewSkills.instructions}
 ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, style: settings.style, perSceneStyle,
-    ...(candidate.narrative ? { paper: context.narrativeSource } : {}),
+    ...(candidate.narrative ? { paper: projectVisualNarrativeSource(context.narrativeSource!) } : {}),
     upstream: selectedClaims.map(claim => ({ claimId: claim.id, parentClaimId: claim.parentClaimId ?? null, kind: claim.kind, assessment: claim.assessment, analysis: claim.statement,
       conditions: claim.conditions, limitations: claim.limitations,
       sourceIds: (claim.sourcePassages ?? []).map(passage => sourceIds.get(`${claim.id}:${passage.evidenceId}`)) })),
