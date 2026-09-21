@@ -42,7 +42,7 @@ export function compileIllustrationImagePrompt(brief: IllustrationBrief, designI
   const remaining = IMAGE_PROMPT_LIMIT - base.length - designMarker.length - designEndMarker.length;
   const boundedDesign = boundDesignInstructions(designInstructions, remaining);
   const prompt = boundedDesign ? `${base}${designMarker}${boundedDesign}${designEndMarker}` : base;
-  if (prompt.length > IMAGE_PROMPT_LIMIT) throw new Error('[blocked] illustration_brief:compiled_prompt_over_1500_reduce_composition_or_labels_without_losing_science');
+  if (prompt.length > IMAGE_PROMPT_LIMIT) throw new Error(`[blocked] illustration_brief:compiled_prompt_over_1500_reduce_composition_or_labels_without_losing_science:actual_${prompt.length}_max_${IMAGE_PROMPT_LIMIT}_excess_${prompt.length - IMAGE_PROMPT_LIMIT}`);
   return prompt;
 }
 
