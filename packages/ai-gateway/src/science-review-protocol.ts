@@ -172,7 +172,7 @@ export function validateScienceReviewRequest(value: unknown, now?: number): Scie
     || (attachments !== undefined && (!Array.isArray(attachments) || attachments.length < 1
       || attachments.length > SCIENCE_REVIEW_MAX_ATTACHMENTS || !attachments.every(attachment => validAttachment(attachment, v.schemaVersion === 3))
       || new Set(attachments.map((attachment) => attachment.fileName)).size !== attachments.length
-      || new Set(attachments.filter((attachment) => attachment.mediaType === 'image/png').map((attachment) => attachment.pageNumber)).size
+      || new Set(attachments.filter((attachment): attachment is ScienceReviewImageAttachmentRecord => attachment.mediaType === 'image/png').map((attachment) => attachment.pageNumber)).size
         !== attachments.filter((attachment) => attachment.mediaType === 'image/png').length))) return invalid();
   if (now !== undefined && ((v.deadlineAt as number) <= now || (v.createdAt as number) > now)) throw new Error('EXPIRED');
   return v as unknown as ScienceReviewRequest;
