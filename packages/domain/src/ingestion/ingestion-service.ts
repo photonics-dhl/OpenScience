@@ -650,7 +650,9 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
     id: originalStep.id, runId: run.id, stage: 'source_review', ordinal: originalStep.ordinal, agentTaskId: failed.id,
   }, data: { status: 'failed', error: originalStep.error ?? (proof.recoveryClass === 'accepted_review_claim_contract_missing'
     ? 'Accepted source review is missing its required Claims contract; original candidate preserved'
-    : 'Source review service unavailable; original candidate preserved') } });
+    : proof.recoveryClass === 'schema_contract_retry_after_accepted_anchor'
+      ? 'Source review output contract is incomplete; prior accepted draft and failed review preserved'
+      : 'Source review service unavailable; original candidate preserved') } });
   await tx.hermesResearchStep.create({ data: { runId: run.id, stage: 'source_review', ordinal: proof.nextOrdinal,
     status: 'waiting', ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: task.id } });
   const moved = await tx.hermesResearchRun.updateMany({ where: {
@@ -668,6 +670,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
       serviceFailureClassifications: proof.failureClassifications,
       recoveryClass: proof.recoveryClass, contractRepairAuditIds: proof.contractRepairAuditIds,
       ...(proof.contractEvidence ? { contractEvidence: proof.contractEvidence } : {}),
+      ...(proof.schemaContractEvidence ?? {}),
       stage: 'source_review', ordinal: proof.nextOrdinal, chargeableAttempts: 1, creditPolicy: 'new-review-task-charged;original-failure-preserved' } }, ctx);
   return task.id;
 }

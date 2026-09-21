@@ -81,6 +81,8 @@ export interface ExtractionResult extends Record<string, unknown> {
     kind?: 'model_self_check' | 'independent_review';
     compositionSkill?: { id: string; version: string };
     reviewSkill?: { id: string; version: string };
+    /** Private rejected candidates, never reviewed fields or publishable Claims. */
+    rejectedCandidates?: RejectedScientificCandidate[];
     sourceAgentTaskId?: string;
     fieldReviews?: ScientificReviewResponse['fields'];
     needsMoreEvidence?: ScientificReviewResponse['needsMoreEvidence'];
@@ -1057,26 +1059,50 @@ interface SelectedPassageRange {
 function selectedPassageRanges(
   passageIds: readonly string[],
   allowed: ReadonlyMap<string, CanonicalPassage>,
+  preservePassageBoundaries = false,
 ): SelectedPassageRange[] {
-  const byBlock = new Map<string, SelectedPassageRange[]>();
+  const byBlock = new Map<string, Array<SelectedPassageRange & { passageId: string }>>();
   for (const id of passageIds) {
     const passage = allowed.get(id);
     if (!passage) throw new Error('unknown canonical passage');
     for (const slice of passage.slices) {
+      if (preservePassageBoundaries && (!Number.isSafeInteger(slice.start) || !Number.isSafeInteger(slice.end)
+        || slice.start < 0 || slice.end <= slice.start || slice.end > slice.block.text.length)) {
+        throw new Error('invalid canonical passage boundary');
+      }
       const ranges = byBlock.get(slice.block.id) ?? [];
-      ranges.push({ block: slice.block, start: slice.start, end: slice.end });
+      ranges.push({ block: slice.block, start: slice.start, end: slice.end, passageId: id });
       byBlock.set(slice.block.id, ranges);
     }
   }
   const union: SelectedPassageRange[] = [];
   for (const ranges of byBlock.values()) {
+    if (preservePassageBoundaries) {
+      // Partition exactly the selected union: adjacent intervals merge only when
+      // they belong to the same P set, so each P keeps its own relation boundary.
+      const boundaries = [...new Set(ranges.flatMap(range => [range.start, range.end]))].sort((left, right) => left - right);
+      let previousOwners: string | undefined;
+      for (let index = 1; index < boundaries.length; index += 1) {
+        const start = boundaries[index - 1]!;
+        const end = boundaries[index]!;
+        const covering = ranges.filter(range => range.start <= start && range.end >= end);
+        if (!covering.length) continue;
+        const owners = [...new Set(covering.map(range => range.passageId))].sort().join(',');
+        const block = covering[0]!.block;
+        const previous = union.at(-1);
+        if (previous?.block.id === block.id && previous.end === start && owners === previousOwners) previous.end = end;
+        else union.push({ block, start, end });
+        previousOwners = owners;
+      }
+      continue;
+    }
     ranges.sort((left, right) => left.start - right.start || left.end - right.end);
     for (const range of ranges) {
       const previous = union.at(-1);
       if (previous?.block.id === range.block.id && range.start <= previous.end) {
         previous.end = Math.max(previous.end, range.end);
       } else {
-        union.push({ ...range });
+        union.push({ block: range.block, start: range.start, end: range.end });
       }
     }
   }
@@ -1086,8 +1112,9 @@ function selectedPassageRanges(
 function selectedPassageBudget(
   passageIds: readonly string[],
   allowed: ReadonlyMap<string, CanonicalPassage>,
+  preservePassageBoundaries = false,
 ): { segmentCount: number; evidenceChars: number } {
-  const ranges = selectedPassageRanges(passageIds, allowed);
+  const ranges = selectedPassageRanges(passageIds, allowed, preservePassageBoundaries);
   return {
     segmentCount: ranges.length,
     evidenceChars: ranges.reduce((sum, range) => sum + range.end - range.start, 0)
@@ -1099,9 +1126,12 @@ function segmentsForPassages(
   sourceMap: DocumentSourceMap,
   passageIds: readonly string[],
   allowed: ReadonlyMap<string, CanonicalPassage>,
+  preservePassageBoundaries = false,
 ): Array<{ quote: string; sourceLocator: SourceLocator }> {
-  const ordered = selectedPassageRanges(passageIds, allowed);
-  if (!ordered.length || ordered.length > MAX_EVIDENCE_SEGMENTS) throw new Error('segment_count_1_to_32');
+  const ordered = selectedPassageRanges(passageIds, allowed, preservePassageBoundaries);
+  if (!ordered.length || ordered.length > MAX_EVIDENCE_SEGMENTS) throw new Error(`segment_count_1_to_${MAX_EVIDENCE_SEGMENTS}`);
+  if (preservePassageBoundaries && ordered.reduce((sum, range) => sum + range.end - range.start, 0)
+    + Math.max(0, ordered.length - 1) > MAX_FIELD_EVIDENCE_CHARS) throw new Error(`source_text_limit_${MAX_FIELD_EVIDENCE_CHARS}`);
   return ordered.map(({ block, start, end }) => {
     const quote = block.text.slice(start, end);
     const sourceLocator = validateSourceLocator({
@@ -1342,24 +1372,28 @@ function reviewedPassageBindings(
   try {
     for (const binding of bindings) {
       // Materialize each P through the same locator round-trip as the final field.
-      // P ordinals and quote searches cannot identify its merged evidence segment.
+      // P ordinals and quote searches cannot identify its final evidence segments.
       for (const segment of segmentsForPassages(sourceMap, [binding.sourcePassageId], allowed)) {
         const locator = segment.sourceLocator;
         const range = locator.charRange;
         if (!range) return undefined;
-        const sourceIndex = fieldSegments.findIndex(({ sourceLocator: candidate }) =>
-          candidate.artifactId === locator.artifactId && candidate.contentHash === locator.contentHash
-          && candidate.blockId === locator.blockId && candidate.page === locator.page
-          && candidate.charRange !== undefined
-          && candidate.charRange.start <= range.start && candidate.charRange.end >= range.end);
-        if (sourceIndex < 0) return undefined;
-        const existing = assignments.get(sourceIndex);
-        // A merged segment cannot faithfully carry different P-level relations.
-        if (existing && existing.relation !== binding.relation) return undefined;
-        const assignment: { relation: ClaimRelation; ranges: Array<{ start: number; end: number }> } =
-          existing ?? { relation: binding.relation, ranges: [] };
-        assignment.ranges.push(range);
-        assignments.set(sourceIndex, assignment);
+        let coveredUntil = range.start;
+        for (const [sourceIndex, { sourceLocator: candidate }] of fieldSegments.entries()) {
+          if (candidate.artifactId !== locator.artifactId || candidate.contentHash !== locator.contentHash
+            || candidate.blockId !== locator.blockId || candidate.page !== locator.page || !candidate.charRange
+            || candidate.charRange.start >= range.end || candidate.charRange.end <= range.start) continue;
+          const overlap = { start: Math.max(candidate.charRange.start, range.start), end: Math.min(candidate.charRange.end, range.end) };
+          if (overlap.start !== coveredUntil) return undefined;
+          coveredUntil = overlap.end;
+          const existing = assignments.get(sourceIndex);
+          // Even with finer segments, conflicting P-level relations cannot share one index.
+          if (existing && existing.relation !== binding.relation) return undefined;
+          const assignment: { relation: ClaimRelation; ranges: Array<{ start: number; end: number }> } =
+            existing ?? { relation: binding.relation, ranges: [] };
+          assignment.ranges.push(overlap);
+          assignments.set(sourceIndex, assignment);
+        }
+        if (coveredUntil !== range.end) return undefined;
       }
     }
   } catch {
@@ -1380,6 +1414,37 @@ function reviewedPassageBindings(
 }
 
 type ReviewedClaimsDiagnostic = 'required_missing' | 'invalid_structure' | 'source_unmaterializable' | 'core_missing';
+
+type RejectedScientificCandidate = {
+  requestId: string; attemptId: string; structuredAttempt: number;
+  artifactId: string; contentHash: string; sourceMapHash: string; reviewedCandidateHash: string;
+  contractVersion: '5'; reviewSkill: { id: string; version: string };
+  provider: string; model: string; promptHash: string; responseHash: string; candidateJsonHash: string;
+  usage: { inputTokens: number; outputTokens: number }; finishReason: 'stop';
+  diagnostic: ReviewedClaimsDiagnostic; candidateJson: string;
+};
+
+/** Reuse the public claim schema with P IDs projected to indices, without accepting any scientific assertion. */
+function boundedRejectedClaims(review: ScientificReviewResponse): boolean {
+  if (!Array.isArray(review.claimSuggestions) || JSON.stringify(review.claimSuggestions).length > 8_000) return false;
+  const projected: unknown[] = [];
+  for (const raw of review.claimSuggestions) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+    const item = raw as Record<string, unknown>;
+    if (!SDF_CORE_FIELDS.includes(item.sourceField as (typeof SDF_CORE_FIELDS)[number]) || !Array.isArray(item.sourceBindings)) return false;
+    const ids = review.fields[item.sourceField as (typeof SDF_CORE_FIELDS)[number]].sourcePassageIds;
+    const bindings = [];
+    for (const value of item.sourceBindings) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+      const binding = value as Record<string, unknown>;
+      if (Object.keys(binding).sort().join(',') !== 'relation,sourcePassageId' || typeof binding.sourcePassageId !== 'string') return false;
+      bindings.push({ sourceIndex: ids.indexOf(binding.sourcePassageId), relation: binding.relation });
+    }
+    projected.push({ ...item, sourceBindings: bindings });
+  }
+  return parseReviewedClaimSuggestions(projected, Object.fromEntries(SDF_CORE_FIELDS.map(field =>
+    [field, review.fields[field].sourcePassageIds.length]))) !== undefined;
+}
 
 function materializeReviewedClaimSuggestions(
   sourceMap: DocumentSourceMap,
@@ -1497,7 +1562,7 @@ function canonicalProposalValidation(sourceMap: DocumentSourceMap, passages: rea
     let segments: Array<{ quote: string; sourceLocator: SourceLocator }>;
     try { segments = segmentsForPassages(sourceMap, ids, allowed); }
     catch (error) {
-      return { reason: error instanceof Error && error.message === 'segment_count_1_to_32'
+      return { reason: error instanceof Error && error.message === `segment_count_1_to_${MAX_EVIDENCE_SEGMENTS}`
         ? 'segment_count_1_to_32' : 'locator_roundtrip_failed' };
     }
     const sourceQuote = segments.map((segment) => segment.quote).join('\n');
@@ -2038,6 +2103,7 @@ function scientificSourceValidation<T extends ScientificCompositionResponse>(
   sourceMap: DocumentSourceMap,
   passages: readonly CanonicalPassage[],
   responseGuard: (value: unknown, allowedIds: ReadonlySet<string>) => value is T,
+  preservePassageBoundaries = false,
 ) {
   const passageById = new Map(passages.map((passage) => [passage.id, passage]));
   const allowedIds = new Set(passageById.keys());
@@ -2049,13 +2115,13 @@ function scientificSourceValidation<T extends ScientificCompositionResponse>(
       for (const field of SDF_CORE_FIELDS) {
         const item = value.fields[field];
         if (!item.summary.trim()) continue;
-        const budget = selectedPassageBudget(item.sourcePassageIds, passageById);
+        const budget = selectedPassageBudget(item.sourcePassageIds, passageById, preservePassageBoundaries);
         if (budget.segmentCount < 1 || budget.segmentCount > MAX_EVIDENCE_SEGMENTS
           || budget.evidenceChars > MAX_FIELD_EVIDENCE_CHARS) {
           evidenceIssues.push(`${field}: expandedSegments=${budget.segmentCount}/${MAX_EVIDENCE_SEGMENTS}, expandedChars=${budget.evidenceChars}/${MAX_FIELD_EVIDENCE_CHARS}`);
           continue;
         }
-        try { segmentsForPassages(sourceMap, item.sourcePassageIds, passageById); }
+        try { segmentsForPassages(sourceMap, item.sourcePassageIds, passageById, preservePassageBoundaries); }
         catch { evidenceIssues.push(`${field}: locator_roundtrip_failed`); }
       }
       return evidenceIssues.length === 0;
@@ -2081,11 +2147,12 @@ async function modelScientificReviewCanonicalProposal(
   const sourceMapHash = sha256Json(sourceMap);
   const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
   const reviewPassages = selectScienceReviewPassages(passages, proposal, context?.coveragePassageIds);
+  const rejectedCandidates: RejectedScientificCandidate[] = [];
   let candidateIssues: string[] = [];
   let claimsDiagnostic: ReviewedClaimsDiagnostic | undefined;
   const byId = new Map(reviewPassages.map((passage) => [passage.id, passage]));
   const reviewedField = (reviewed: ScientificReviewField): ExtractedFieldProposal => {
-    const segments = segmentsForPassages(sourceMap, reviewed.sourcePassageIds, byId);
+    const segments = segmentsForPassages(sourceMap, reviewed.sourcePassageIds, byId, true);
     return { summary: reviewed.summary.trim(), sourceQuote: segments.map(segment => segment.quote).join('\n'),
       sourcePassageIds: reviewed.sourcePassageIds, verifiedSegments: segments, needsMoreInformation: false };
   };
@@ -2108,7 +2175,7 @@ async function modelScientificReviewCanonicalProposal(
         }
       }
       return candidateIssues.length === 0;
-    });
+    }, true);
   const completeReviewGuard = (value: unknown): value is ScientificReviewResponse => {
     claimsDiagnostic = undefined;
     if (!validation.guard(value)) return false;
@@ -2141,6 +2208,24 @@ async function modelScientificReviewCanonicalProposal(
           + '\n你是当前候选的来源审校者。按候选的每项实质断言回读原文并作最小必要修订，不另选主题重新成稿。accepted必须逐字保留原summary和原来源集合，issues为空；revised必须实际修正文或来源，issues至少一项，说明原断言、来源和修订原因；blocked必须有问题或明确补证请求。每项保留断言及其限定都须有最终引用，不以引用存在代替语义支持。纠正后仍须与其他字段的对象、算例和范围一致；不能把一个算例的互证写成另一个算例或全篇互证。只返回规定JSON，不宣布科学通过。' },
           { role: 'user', content: prompt }],
         { ...SCIENTIFIC_REVIEW_OPTIONS, maxRetries: 1, primaryProviderOnly: true,
+          onRejectedCandidate: (value, rejected, structuredAttempt) => {
+            const diagnostic = claimsDiagnostic;
+            if (!context.requireReviewedClaims || !context.requestId || !diagnostic || rejectedCandidates.length >= 2
+              || rejected.finishReason !== 'stop' || !validation.guard(value) || !boundedRejectedClaims(value)) return;
+            // Store only validated structured JSON. A string survives JSONB key reordering unchanged.
+            const candidateJson = JSON.stringify(value);
+            const receipt: RejectedScientificCandidate = {
+              requestId: context.requestId, attemptId, structuredAttempt,
+              artifactId: sourceMap.artifactId, contentHash: sourceMap.contentHash,
+              sourceMapHash, reviewedCandidateHash: candidateHash, contractVersion: SCIENCE_REVIEW_CONTRACT_VERSION,
+              reviewSkill: { id: SCIENTIFIC_CRITICAL_THINKING_SKILL.id, version: SCIENTIFIC_CRITICAL_THINKING_SKILL.version },
+              provider: rejected.provider, model: rejected.model, promptHash: rejected.promptHash,
+              responseHash: createHash('sha256').update(rejected.text).digest('hex'),
+              candidateJsonHash: createHash('sha256').update(candidateJson).digest('hex'),
+              usage: rejected.usage, finishReason: 'stop', diagnostic, candidateJson,
+            };
+            if (Buffer.byteLength(JSON.stringify(receipt), 'utf8') <= 128 * 1024) rejectedCandidates.push(receipt);
+          },
           validationFeedback: () => (context.requireReviewedClaims
             ? '只返回fields、needsMoreEvidence和claimSuggestions；原文支持核心贡献时至少保留一条有依据的core主张，不编造。'
             : '只返回fields、needsMoreEvidence及可选claimSuggestions。')
@@ -2197,6 +2282,7 @@ async function modelScientificReviewCanonicalProposal(
       kind: 'model_self_check',
       reviewSkill: { id: SCIENTIFIC_CRITICAL_THINKING_SKILL.id, version: SCIENTIFIC_CRITICAL_THINKING_SKILL.version },
       contractVersion: SCIENCE_REVIEW_CONTRACT_VERSION, status, attemptId,
+      ...(!parsed && rejectedCandidates.length ? { rejectedCandidates } : {}),
       ...(parsed ? { fieldReviews: parsed.fields, needsMoreEvidence: parsed.needsMoreEvidence } : {}),
       reviewedCandidateHash: candidateHash,
       ...(completion ? { promptHash: completion.promptHash } : {}),
@@ -2466,9 +2552,12 @@ async function webScientificReviewCanonicalProposal(
       }] } : {}),
     });
     const parsedResponse = parseJsonObject(response.text);
-    if (!scientificReviewGuard(parsedResponse, allowedIds, contractVersion)) return blockAll('blocked_scientific_review', 'scientificReview=invalid_response', {
-      promptHash: response.promptHash, responseHash: response.responseHash,
-    });
+    if (!scientificReviewGuard(parsedResponse, allowedIds, contractVersion)
+      || (contractVersion === '5' && !scientificSourceValidation(sourceMap, reviewPassages, scientificReviewGuard, true).guard(parsedResponse))) {
+      return blockAll('blocked_scientific_review', 'scientificReview=invalid_response', {
+        promptHash: response.promptHash, responseHash: response.responseHash,
+      });
+    }
     const initialResponse = response;
     const initialReview = parsedResponse;
     let parsed: ScientificReviewResponse = parsedResponse;
@@ -2544,7 +2633,8 @@ async function webScientificReviewCanonicalProposal(
           attachments: evidence.attachments,
         });
         const supplementalParsed = parseJsonObject(response.text);
-        if (scientificReviewGuard(supplementalParsed, allowedIds, contractVersion)) parsed = supplementalParsed;
+        if (scientificReviewGuard(supplementalParsed, allowedIds, contractVersion)
+          && (contractVersion !== '5' || scientificSourceValidation(sourceMap, reviewPassages, scientificReviewGuard, true).guard(supplementalParsed))) parsed = supplementalParsed;
         else {
           continuationStatus = 'invalid_response';
           continuationAttemptId = finalAttemptId;
@@ -2567,7 +2657,8 @@ async function webScientificReviewCanonicalProposal(
     const reviewedFields = Object.fromEntries(SDF_CORE_FIELDS.map((field) => {
       const reviewed = parsed.fields[field];
       if (reviewed.verdict === 'blocked' || supplementalBlockedFields.has(field)) return [field, { summary: '', sourceQuote: '', sourcePassageIds: [], needsMoreInformation: true }];
-      const segments = segmentsForPassages(sourceMap, reviewed.sourcePassageIds, new Map(reviewPassages.map((passage) => [passage.id, passage])));
+      const segments = segmentsForPassages(sourceMap, reviewed.sourcePassageIds,
+        new Map(reviewPassages.map((passage) => [passage.id, passage])), contractVersion === '5');
       return [field, { summary: reviewed.summary.trim(), sourceQuote: segments.map((segment) => segment.quote).join('\n'),
         sourcePassageIds: reviewed.sourcePassageIds, verifiedSegments: segments, needsMoreInformation: false }];
     })) as ExtractedProposal['fields'];

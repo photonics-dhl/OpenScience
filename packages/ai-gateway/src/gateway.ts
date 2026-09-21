@@ -97,6 +97,8 @@ export type StructuredGenerationOptions = TextGenerationOptions & {
   primaryProviderOnly?: boolean;
   validationFeedback?: (value: unknown) => string | undefined;
   validationDiagnostic?: (value: unknown) => string | undefined;
+  /** Opt-in private evidence capture only; callback failure never authorizes another attempt. */
+  onRejectedCandidate?: (value: unknown, completion: GatewayCompletion, attempt: number) => void;
   maxRetries?: number;
   /** Opt in to conversational repair with the rejected candidate; other structured calls keep replacement-only retries. */
   includeRejectedResponseOnRetry?: boolean;
@@ -582,6 +584,8 @@ export class AiGateway {
           throw new AiGatewayError('STRUCTURED_JSON_INVALID', 'structured JSON invalid', error);
         }
         if (!guard(parsed)) {
+          try { opts.onRejectedCandidate?.(parsed, result, attempt + 1); }
+          catch { this.logger?.warn?.('structured.output.receipt_unavailable'); }
           const feedback = opts.validationFeedback?.(parsed)?.trim();
           if (feedback && feedback.length <= 2_000 && ![...feedback].some((character) => { const code = character.charCodeAt(0); return code < 32 && code !== 9 && code !== 10 && code !== 13; })) {
             retryMessages = withRejectedCandidate(result, feedback, [...messages, { role: 'system', content: feedback }]);

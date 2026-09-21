@@ -13,9 +13,14 @@ const absentOrEmptyRecord = (value: unknown) => value === undefined
 const sha256 = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const tokenCount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const CONTRACT_REPAIR_CLASS = 'accepted_review_claim_contract_missing' as const;
+const SCHEMA_REPAIR_CLASS = 'schema_contract_retry_after_accepted_anchor' as const;
 type ContractRepairEvidence = {
   reviewedCandidateHash: string; promptHash: string; responseHash: string;
   reviewSkill: { id: 'scientific-critical-thinking'; version: '3' };
+};
+type SchemaContractRepairEvidence = {
+  scientificAnchorTaskId: string; failedContractTaskId: string; reviewedCandidateHash: string;
+  scientificAnchorEvidence: ContractRepairEvidence; schemaContractAuditIds: string[];
 };
 
 /** Read-only eligibility for an explicit paid recovery, never spend authorization or scientific approval. */
@@ -94,6 +99,7 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   const genericFailureTaskIds = new Set<string>();
   const contractRepairAuditIds: string[] = [];
   const contractRepairs = new Map<string, ContractRepairEvidence>();
+  const schemaRepairs = new Map<string, SchemaContractRepairEvidence>();
   try {
     if (automaticIngestionReviewStage({ artifactId: source.artifactId, artifact: source.artifact, agentTask: composition }) !== 'source_review'
       || originalReview.contractVersion !== '4') return null;
@@ -158,6 +164,43 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
       contractRepairAuditIds.push(...audit.map(row => row.id));
       continue;
     }
+    const schemaDetail = details[SDF_CORE_FIELDS[0]!];
+    if (typeof schemaDetail === 'string'
+      && /^scientificReview=(SCHEMA_VALIDATION|review_contract_incomplete;reviewedClaims=(required_missing|invalid_structure|source_unmaterializable|core_missing))$/.test(schemaDetail)) {
+      // Exactly one structural exhaustion may follow the independently verified
+      // accepted draft. Successful provider calls alone are never scientific approval.
+      const anchorTaskId = step.ordinal > 0 ? reviews[step.ordinal - 1]!.agentTaskId! : '';
+      const anchorEvidence = contractRepairs.get(anchorTaskId);
+      if (!anchorEvidence || contractRepairs.size !== 1 || schemaRepairs.size !== 0
+        || review.status !== 'blocked_scientific_review'
+        || !isDeepStrictEqual(review.reviewSkill, { id: 'scientific-critical-thinking', version: '3' })
+        || review.fieldReviews != null || review.needsMoreEvidence != null || review.provider != null || review.model != null
+        || review.promptHash != null || review.responseHash != null || review.usage != null || review.finishReason != null
+        || 'reviewedClaimSuggestions' in result || 'rejectedCandidates' in review || 'rejectedCandidates' in result
+        || result.reason !== 'canonical_partial_validation_exhausted'
+        || !isDeepStrictEqual(result.needsMoreInformation, [...SDF_CORE_FIELDS])
+        || [diagnostics, details, summaries, ids].some(value => Object.keys(value).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(','))
+        || SDF_CORE_FIELDS.some(field => diagnostics[field] !== 'malformed_item' || details[field] !== schemaDetail
+          || record(result.core)[field] !== '' || summaries[field] !== originalCore[field]
+          || !Array.isArray(ids[field]) || !(ids[field] as unknown[]).length
+          || (ids[field] as unknown[]).some(id => typeof id !== 'string' || !/^P\d{5}$/.test(id))
+          || !isDeepStrictEqual(record(result.evidence)[field], { quote: '', locator: '' })
+          || !isDeepStrictEqual(record(result.evidenceSegments)[field], [])
+          || record(evidence[field]).locator !== `passages:${Array.isArray(ids[field]) ? (ids[field] as unknown[]).join(',') : ''}`)
+        || audit.length > 2) return null;
+      const anchorReview = record(record(byId.get(anchorTaskId)!.result).scientificReview);
+      for (const row of audit) {
+        const call = record(row.metadata);
+        if (row.actorId !== null || row.targetType !== 'ai_gateway' || call.operation !== 'text' || call.outcome !== 'succeeded'
+          || call.provider !== anchorReview.provider || call.model !== anchorReview.model || !sha256(call.promptHash)
+          || call.fallbackReason !== null || call.retryCount !== 0 || call.error !== null || call.finishReason !== 'stop'
+          || !tokenCount(call.inputTokens) || !tokenCount(call.outputTokens)) return null;
+      }
+      schemaRepairs.set(task.id, { scientificAnchorTaskId: anchorTaskId, failedContractTaskId: task.id,
+        reviewedCandidateHash: review.reviewedCandidateHash, scientificAnchorEvidence: anchorEvidence,
+        schemaContractAuditIds: audit.map(row => row.id) });
+      continue;
+    }
     if (!['blocked_scientific_review', 'review_unavailable'].includes(String(review.status))
       || review.provider != null || review.model != null || review.responseHash != null || review.fieldReviews != null
       || review.needsMoreEvidence != null || result.reviewedClaimSuggestions != null
@@ -205,12 +248,14 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
     if (promptHashes.size !== 1 || !primaryServiceFailure) return null;
     auditIds.push(...audit.map(row => row.id));
   }
+  if (schemaRepairs.size && contractRepairs.size !== 1) return null;
   // A replacement after an unclassified failure or accepted-contract gap must carry the explicit
   // user action receipt; the read-only availability query never creates it.
   for (const step of reviews.filter(step => step.ordinal > 0)) {
     const predecessorId = reviews[step.ordinal - 1]!.agentTaskId!;
     const contractEvidence = contractRepairs.get(predecessorId);
-    if (!genericFailureTaskIds.has(predecessorId) && !contractEvidence) continue;
+    const schemaEvidence = schemaRepairs.get(predecessorId);
+    if (!genericFailureTaskIds.has(predecessorId) && !contractEvidence && !schemaEvidence) continue;
     const receipt = await tx.auditLog.findFirst({ where: {
       action: 'hermes.research_run.source_review_recovery', targetType: 'hermes_research_run', targetId: run.id,
       actorId: run.actorId, metadata: { path: ['newAgentTaskId'], equals: step.agentTaskId! },
@@ -222,6 +267,12 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
       || task.session.idempotencyKey !== `${task.idempotencyKey}:hermes-recovery:${metadata.requestDigest}`) return null;
     if (contractEvidence && (metadata.recoveryClass !== CONTRACT_REPAIR_CLASS
       || !isDeepStrictEqual(metadata.contractEvidence, contractEvidence)
+      || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true)) return null;
+    if (schemaEvidence && (metadata.recoveryClass !== SCHEMA_REPAIR_CLASS
+      || metadata.scientificAnchorTaskId !== schemaEvidence.scientificAnchorTaskId
+      || metadata.failedContractTaskId !== predecessorId || metadata.reviewedCandidateHash !== schemaEvidence.reviewedCandidateHash
+      || !isDeepStrictEqual(metadata.scientificAnchorEvidence, schemaEvidence.scientificAnchorEvidence)
+      || !isDeepStrictEqual(metadata.schemaContractAuditIds, schemaEvidence.schemaContractAuditIds)
       || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true)) return null;
   }
   if (replacement?.status === 'succeeded') {
@@ -251,8 +302,9 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   if (presentationCount !== 0 || sourceCount + presentationCount + 3 > run.maxAgentTasks) return null;
   return { run, source, failed, composition, replacement, sourceStep, originalStep, failedSteps, compositionStep,
     recoveryKey, nextOrdinal: reviews.length, auditIds, failureClassifications, contractRepairAuditIds,
-    recoveryClass: contractRepairs.has(failed.id) ? CONTRACT_REPAIR_CLASS : 'service_failure' as const,
-    contractEvidence: contractRepairs.get(failed.id) };
+    recoveryClass: schemaRepairs.has(failed.id) ? SCHEMA_REPAIR_CLASS
+      : contractRepairs.has(failed.id) ? CONTRACT_REPAIR_CLASS : 'service_failure' as const,
+    contractEvidence: contractRepairs.get(failed.id), schemaContractEvidence: schemaRepairs.get(failed.id) };
 }
 
 /** Worker exception to current-source equality: only the committed current recovery may use its unchanged v4 parent. */
