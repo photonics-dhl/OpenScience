@@ -24,6 +24,7 @@ import {
   assertSearchIndexSourceLive,
   findSavedIngestionCommit,
   requireHermesSourceReviewRecoveryBinding,
+  VISUAL_NARRATIVE_PROFILE,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -329,6 +330,7 @@ export function createHandlers(
       let reusableExtractionResult: Record<string, unknown> | undefined;
       let requireReusableSemanticStage = false;
       let reviewExistingSourceTaskId: string | undefined;
+      let requireReviewedClaims = false;
       let persistedScientificReviewCandidateHash: string | undefined;
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
       const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):(scientific-summary-v3|scientific-review-v4)$/.exec(ownerTask.idempotencyKey ?? '');
@@ -379,7 +381,20 @@ export function createHandlers(
         reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
         reusableExtractionResult = sourceResult;
         requireReusableSemanticStage = true;
-        if (composition[4] === 'scientific-review-v4') reviewExistingSourceTaskId = source.id;
+        if (composition[4] === 'scientific-review-v4') {
+          reviewExistingSourceTaskId = source.id;
+          // Match the existing consumer's needs without changing manual review or authorization.
+          const narrativeStep = await deps.prisma.hermesResearchStep.findFirst({
+            where: {
+              agentTaskId: ownerTask.id, ingestionTaskId: ingestion.id, artifactId: artifact.id,
+              stage: 'source_review', status: 'waiting',
+              run: { profile: VISUAL_NARRATIVE_PROFILE, actorId: ownerTask.session.userId,
+                researchObjectId: ownerResearchObject.id, status: { in: ['running', 'awaiting_source_review'] } },
+            },
+            select: { id: true },
+          });
+          requireReviewedClaims = narrativeStep !== null;
+        }
       }
       const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
       if (refresh) {
@@ -495,6 +510,7 @@ export function createHandlers(
           reviewExistingSourceTaskId,
           scientificReview: {
             requestId: ownerTask.id,
+            requireReviewedClaims,
             authorizationContext: trustedAuthorizationContext,
             ...(persistedScientificReviewCandidateHash ? { persistedCandidateHash: persistedScientificReviewCandidateHash } : {}),
             ...(reusableScientificReviewAttempt ? { reusableAttempt: reusableScientificReviewAttempt } : {}),

@@ -9,6 +9,7 @@
 - 数据库补接：真实启动暴露旧 `hermes_research_runs_generation_grant_check` 未接受新profile/9组合（23514）；独立 `20260921020000_visual_narrative_grant` 迁移在同一事务中扩展既有约束，保留原四种合法组合，不改已应用的210100迁移。仍用正常部署及原migrate-cli，不手工改任务状态；恢复时复用页面保存的初始幂等请求，不新建付费重试。
 - 来源服务故障恢复补接：用户已接受一次可能重复计费；候选在原run/原retry-generation内恢复审校，不重复全文凝练。无新迁移或provider协议变化，已应用上述两迁移的环境可用`--skip-migrate`并复用现有receiver。部署后从原run页面点击一次恢复，保留请求收据与失败历史；未知响应先读状态，不再点击。回退前应等待在途审校结束，旧worker不理解新恢复身份，不能把正在运行的恢复任务交给旧代码；应用回退不删除新task/step或原稿。
 - 600秒文本传输补接：生产Node22.23.2内置Undici6.28.0仍默认headers/body各300秒；仅延长Abort不能覆盖。`ai-gateway`直接声明锁文件已有的Undici7.29.0，超过300秒的文本请求使用本请求Agent并在finally销毁，保留总Abort上限；只记录白名单transportCode。无迁移、无新模型/receiver请求，正常服务器构建部署后仅读原失败run确认未自动重开。应用回退保留所有任务/审计；修复后的长付费响应尚未实测，历史provider_error不能反推原始底层错误码。
+- 来源审校职责修正：既有scientific-critical-thinking v3区分综合与核源指令，终审只因有证据的科学/来源差异修订；仅DB绑定visual-narrative来源审校要求输出有依据的核心Claim，普通人工v5仍可无建议。无外部协议、授权、额度、迁移或receiver变化；仍用正常部署的`--no-tests --skip-migrate --reuse-unchanged-capability-images`，部署完成仅读原失败run/任务身份，不自动补审。回退应用不改任务/审计/六维初稿，候选科学质量及延迟改善均需后续真实响应证明。
 - 回滚：应用可回到本次记录的旧应用；保留generation_settings列、扩展grant约束和自动run历史，设置列rollback脚本有记录时拒绝删列，grant回退明确不收窄。若需回退provider，先停用新producer，再恢复本次安装前保存的units/live文件与原timer状态；保留新旧bundle、任务、图片与spool，不重发已有模型请求。
 - 观察：从真实站内入口启动已授权单论文叙事，读取run与实际完整六维/图片页面；只观察该最小路径和精确release身份，模型通过不记为用户审美接受。不修改旧公开版本、不自动公开新私有成果；详细执行收据与未观测项进入CURRENT。
 
