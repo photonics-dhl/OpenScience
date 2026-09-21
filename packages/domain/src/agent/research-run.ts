@@ -93,7 +93,7 @@ export interface HermesResearchRunView {
   canRetryGeneration?: boolean;
   canAuthorizeNarrativeCorrection?: boolean;
   chargeableAttempts?: number;
-  generationRecovery?: 'storyboard-planning';
+  generationRecovery?: 'storyboard-planning' | 'storyboard-review';
   availableImageCount?: number;
   imageUsageLimited?: boolean;
   steps: Array<{
@@ -294,6 +294,8 @@ export async function getHermesResearchRun(
         : await inspectHermesSourceReviewRecovery(deps.prisma, run.id).then(proof => proof ? { chargeableAttempts: 1 } : null).catch(() => null)
       : await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
   const view = toView(run, recovery ?? undefined);
+  if (recovery?.chargeableAttempts === 0 && run.profile === VISUAL_NARRATIVE_PROFILE && run.versionId)
+    view.generationRecovery = 'storyboard-review';
   if (WRITE_ROLES.has(authority.membership.role) && await inspectFailedStoryboardPlanning(deps.prisma, run).catch(() => null)) {
     view.canRetryGeneration = true;
     view.chargeableAttempts = 1;
@@ -614,19 +616,20 @@ async function inspectStoryboardCheckpointRecovery(tx: Prisma.TransactionClient,
   const budgetError = '[blocked] Illustration review sources exceed the input budget; select fewer Claims';
   const outputError = 'Provider exhausted output allowance before producing text';
   const outputContinuation = run.error === outputError;
-  if (run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || run.status !== 'failed'
+  const planningContinuation = run.status === 'stopped' && run.error === budgetError && [11, 13].includes(run.maxAgentTasks ?? 0);
+  if (run.profile !== VISUAL_NARRATIVE_PROFILE || (!planningContinuation && (run.maxAgentTasks !== 9 || run.status !== 'failed'))
     || !run.versionId || (!outputContinuation && run.error !== budgetError) || await validateReviewedSources(tx, run) !== 'ready') return null;
   const storyboards = run.steps.filter(step => step.stage === 'storyboard');
-  if (storyboards.length !== 1 || run.steps.some(step => ['scene_image', 'video'].includes(step.stage))) return null;
+  if (storyboards.length !== 1 || (!planningContinuation && run.steps.some(step => ['scene_image', 'video'].includes(step.stage)))) return null;
   const step = storyboards[0]!;
-  if (step.ordinal !== 0 || step.status !== 'failed' || !step.agentTaskId || step.presentationAssetId) return null;
+  if (step.ordinal !== 0 || step.status !== (planningContinuation ? 'stopped' : 'failed') || !step.agentTaskId || step.presentationAssetId) return null;
   const task = await tx.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } });
   if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'failed'
-    || task.executionAttempt !== (outputContinuation ? 2 : 1) || task.retryCount !== (outputContinuation ? 1 : 0)
+    || task.executionAttempt !== (outputContinuation || planningContinuation ? 2 : 1) || task.retryCount !== (outputContinuation || planningContinuation ? 1 : 0)
     || task.error !== run.error
     || task.session.deletedAt || task.session.status !== 'active' || task.session.userId !== run.actorId
     || task.session.researchObjectId !== run.researchObjectId
-    || task.idempotencyKey !== `hermes-run:${run.id}:storyboard:0`) return null;
+    || (!planningContinuation && task.idempotencyKey !== `hermes-run:${run.id}:storyboard:0`)) return null;
   let payload: PresentationGenerationPayload;
   try { payload = parsePresentationGenerationPayload(task.payload); } catch { return null; }
   if (payload.researchObjectId !== run.researchObjectId || payload.versionId !== run.versionId
@@ -643,16 +646,38 @@ async function inspectStoryboardCheckpointRecovery(tx: Prisma.TransactionClient,
   let document;
   try { document = parseStoryboardDocument(planned.document, payload.sourceClaimIds, 'image'); } catch { return null; }
   if (!document.narrative || document.scenes.length > (payload.storyboard.narrativeSceneLimit ?? 6)) return null;
+  const planningReceipts = planningContinuation ? await tx.auditLog.findMany({ where: {
+    action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run', targetId: run.id,
+    actorId: run.actorId, metadata: { path: ['taskId'], equals: task.id },
+  }, take: 2 }) : [];
+  const planningReceipt = planningReceipts[0];
+  if (planningContinuation) {
+    const prior = jsonRecord(planningReceipt?.metadata);
+    const source = await readStoppedStoryboardImageRevision(tx, payload, run.actorId);
+    const images = run.steps.filter(item => item.stage === 'scene_image');
+    if (planningReceipts.length !== 1 || prior.correction !== STORYBOARD_PLANNING_RETRY || prior.previousExecutionAttempt !== 1
+      || prior.previousRetryCount !== 0 || prior.stepId !== step.id || !isDeepStrictEqual(prior.taskPayload, task.payload)
+      || !source || prior.baseIdentity !== source.identity || checkpoint.baseIdentity !== source.identity
+      || prior.sourceEvidenceIdentity !== checkpoint.sourceEvidenceIdentity || source.sourceEvidenceIdentity !== checkpoint.sourceEvidenceIdentity
+      || images.length !== 1 || images[0]!.status !== 'stopped' || images[0]!.agentTaskId !== source.imageTask.id
+      || images[0]!.presentationAssetId !== source.image.id || document.scenes.length !== 1
+      || !await readUnchangedNarrativeCheckpointEvidence(tx, run, checkpoint)) return null;
+  }
   const presentations = await tx.agentTask.count({ where: { kind: 'presentation.generate',
     payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } });
   const sourceCount = run.steps.filter(item => ['source_composition', 'source_review'].includes(item.stage)).length;
-  if (presentations !== 1 || sourceCount + presentations + document.scenes.length + 1 > run.maxAgentTasks
+  if ((!planningContinuation && presentations !== 1) || sourceCount + presentations + document.scenes.length + (planningContinuation ? 0 : 1) > run.maxAgentTasks!
     || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) return null;
-  const calls = await tx.auditLog.findMany({ where: { requestId: task.id, action: 'ai.gateway.call' } });
+  const calls = await tx.auditLog.findMany({ where: { requestId: task.id, action: 'ai.gateway.call',
+    ...(planningReceipt ? { createdAt: { gt: planningReceipt.createdAt } } : {}) } });
   const planningCalls = calls.filter(call => jsonRecord(call.metadata).operation === 'text');
   const reviewCalls = calls.filter(call => jsonRecord(call.metadata).operation === 'scientific_review');
   if (!planningCalls.length || planningCalls.some(call => jsonRecord(call.metadata).outcome !== 'succeeded')
     || calls.length !== planningCalls.length + reviewCalls.length || reviewCalls.length !== (outputContinuation ? 1 : 0)) return null;
+  if (planningContinuation && (planningCalls.some(call => { const meta = jsonRecord(call.metadata);
+    return call.actorId !== null || call.targetType !== 'ai_gateway' || meta.fallbackReason !== null
+      || typeof meta.provider !== 'string' || !meta.provider.trim();
+  }) || new Set(planningCalls.map(call => jsonRecord(call.metadata).provider)).size !== 1)) return null;
   if (outputContinuation) {
     const call = reviewCalls[0]!;
     const meta = jsonRecord(call.metadata);
@@ -1016,6 +1041,16 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
               throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Planning retry key belongs to another request');
             return { run, dispatchIds: [] as string[] };
           }
+          const savedReceipt = await tx.auditLog.findFirst({ where: {
+            action: { in: ['hermes.research_run.storyboard_checkpoint_resume', 'hermes.research_run.storyboard_output_resume'] },
+            targetType: 'hermes_research_run', targetId: run.id, actorId: input.actorId,
+            metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey },
+          } });
+          if (savedReceipt) {
+            if (jsonRecord(savedReceipt.metadata).requestDigest !== requestDigest)
+              throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Storyboard recovery key belongs to another request');
+            return { run, dispatchIds: [] as string[] };
+          }
           const planning = await inspectFailedStoryboardPlanning(tx, run);
           if (planning) {
             if (run.version !== input.expectedVersion) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before retrying planning');
@@ -1045,7 +1080,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }),
               dispatchIds: [planning.task.id] };
           }
-          if (run.maxAgentTasks === 11 || run.maxAgentTasks === 13) {
+          if ((run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && !await inspectStoryboardCheckpointRecovery(tx, run)) {
             const receipt = await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run',
               targetId: run.id, actorId: input.actorId, metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } } });
             if (receipt) {
@@ -1134,16 +1169,6 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         }
 
         if (run.profile === VISUAL_NARRATIVE_PROFILE) {
-          const receipt = await tx.auditLog.findFirst({ where: {
-            action: { in: ['hermes.research_run.storyboard_checkpoint_resume', 'hermes.research_run.storyboard_output_resume'] },
-            targetType: 'hermes_research_run', targetId: run.id,
-            actorId: input.actorId, metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey },
-          } });
-          if (receipt) {
-            if (jsonRecord(receipt.metadata).requestDigest !== requestDigest)
-              throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Storyboard recovery key belongs to another request');
-            return { run, dispatchIds: [] as string[] };
-          }
           if (run.version !== input.expectedVersion)
             throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before continuing the saved storyboard');
           const saved = await inspectStoryboardCheckpointRecovery(tx, run);
@@ -1155,11 +1180,11 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             result: { equals: saved.task.result as Prisma.InputJsonValue },
           }, data: { status: 'pending', progress: 0, retryCount: saved.task.retryCount + 1, error: null, dispatchedAt: null } });
           const stepChanged = await tx.hermesResearchStep.updateMany({ where: {
-            id: saved.step.id, runId: run.id, stage: 'storyboard', ordinal: 0, status: 'failed',
+            id: saved.step.id, runId: run.id, stage: 'storyboard', ordinal: 0, status: saved.step.status,
             agentTaskId: saved.task.id, presentationAssetId: null,
           }, data: { status: 'running', error: null } });
           const runChanged = await tx.hermesResearchRun.updateMany({ where: {
-            id: run.id, actorId: input.actorId, status: 'failed', version: input.expectedVersion, versionId: run.versionId,
+            id: run.id, actorId: input.actorId, status: run.status, version: input.expectedVersion, versionId: run.versionId,
           }, data: { status: 'generating_storyboard', error: null, lastReconciledAt: null, version: { increment: 1 } } });
           if (taskChanged.count !== 1 || stepChanged.count !== 1 || runChanged.count !== 1)
             throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Saved storyboard changed while continuing');

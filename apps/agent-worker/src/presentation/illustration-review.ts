@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type ScienceReviewInput } from '@openscience/ai-gateway';
+import { ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type ScienceReviewInput } from '@openscience/ai-gateway';
 import { ILLUSTRATION_BRIEF_MAX_CHARACTERS, describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocument, requireIllustrationSourceSupport, storyboardSceneStyles, type StoryboardDocument, type StoryboardRequest } from '@openscience/domain';
 import type { PresentationClaim } from './chart-generator';
 import { compileIllustrationImagePrompt } from './scene-image';
@@ -175,7 +175,7 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
   const requestPrompt = context.structuredIssues ? prompt
     .replace('EXACT keys {decision,summary,corrections}', 'EXACT keys {decision,summary,corrections,issues}')
     .replace('Perform this focused audit yourself.', `Perform this focused audit yourself. issues MUST be [] for ${verdictOnly ? 'accepted' : 'accepted/revised'}. For blocked, list ALL independent scientific issues together (1-36), each exactly {sceneIndex,labelIndex,kind,requiredMeaning,sourceIds}. sceneIndex refers to an existing zero-based scene. kind is label_clarification only when prepending/appending a short explanation to an existing label can fully resolve it without changing its existing symbols, equations, meaning or any other science/art field. Use that existing zero-based labelIndex and 1-8 exact supplied sourceIds. Combine all missing meanings for the same label into one issue; do not repeat label targets. If a definition repeated in multiple labels only needs one visible explanation, select one target. requiredMeaning is a precise complete description <=500 characters in the requested locale. For changes requiring any other field, new label/axis, different source or formula, use kind requires_replan and labelIndex:null; sourceIds may be [] only when the problem is missing evidence. Do not mistake successful JSON or mere presence of a symbol for completion of its required meaning.`) : prompt;
-  if (requestPrompt.length > SCIENCE_REVIEW_MAX_PROMPT_CHARS) throw new Error('[blocked] Illustration review sources exceed the input budget; select fewer Claims');
+  if (requestPrompt.length > ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS) throw new Error(`[blocked] Illustration plan review input is ${requestPrompt.length} characters; text transport limit is ${ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS}. Saved plan retained.`);
   const validReview = (value: unknown): value is Record<string, unknown> => {
     try { parseIllustrationReview(value, candidate, claims, sources, context.structuredIssues, verdictOnly); return true; }
     catch { return false; }

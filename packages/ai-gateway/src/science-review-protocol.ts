@@ -3,6 +3,9 @@ import { sha256Text, type OcrAuthorizationContext, type OcrSourceIdentity, type 
 // Leave room for the browser runner's fixed safety preface inside ChatGPT's
 // 64 KiB submission boundary.
 export const SCIENCE_REVIEW_MAX_PROMPT_CHARS = 60 * 1024;
+// Plan reviews use the text pool, with the existing illustration planning input bound.
+// They do not pass through the browser submission protocol above.
+export const ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS = 100_000;
 export const SCIENCE_REVIEW_MAX_RESPONSE_BYTES = 64 * 1024;
 export const SCIENCE_REVIEW_MAX_JSON_BYTES = 96 * 1024;
 export const SCIENCE_REVIEW_MAX_DEADLINE_MS = 1_800_000;
