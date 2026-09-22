@@ -11,6 +11,7 @@ import {
   SCIENCE_REVIEW_MAX_RESPONSE_BYTES,
   SCIENCE_REVIEW_MAX_TOTAL_ATTACHMENT_BYTES,
   SCIENCE_REVIEW_READY_MAX_AGE_MS,
+  SCIENCE_REVIEW_ID_PATTERN,
   validateScienceReviewRequest,
   validateScienceReviewResult,
   type ScienceReviewInput,
@@ -127,7 +128,29 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
     this.sleep = config.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
+  /** Read only an existing image-review reservation and its verified completed response. */
+  async canResumeFromCompletedResult(requestId: string): Promise<boolean> {
+    if (!SCIENCE_REVIEW_ID_PATTERN.test(requestId)) return false;
+    try {
+      await directory(this.config.inboxDir);
+      await directory(this.config.resultsDir);
+      const request = validateScienceReviewRequest(JSON.parse((await boundedRead(
+        join(this.config.inboxDir, `${requestId}.submitted.json`), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+      if (request.id !== requestId || request.schemaVersion !== 3) return false;
+      return await successfulOutput(this.config.resultsDir, request) !== null;
+    } catch { return false; }
+  }
+
   async review(input: ScienceReviewInput): Promise<ScienceReviewProviderResult> {
+    return this.reviewControlled(input, false);
+  }
+
+  async resumeFromCompletedResult(input: ScienceReviewInput): Promise<ScienceReviewProviderResult> {
+    if (!('kind' in input.source) || input.source.kind !== 'illustration-image') fail();
+    return this.reviewControlled(input, true);
+  }
+
+  private async reviewControlled(input: ScienceReviewInput, completedOnly: boolean): Promise<ScienceReviewProviderResult> {
     const illustration = 'kind' in input.source;
     const image = 'kind' in input.source && input.source.kind === 'illustration-image';
     if (illustration) {
@@ -181,6 +204,7 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
         if (!sameIllustrationRequest(request, intendedRequest)) fail();
         const result = await successfulOutput(this.config.resultsDir, request);
         if (result) return result;
+        if (completedOnly) fail();
         validateScienceReviewRequest(request, this.now());
         // The reservation may already have been consumed by the broker. Do not recreate
         // its queue entry or reset its deadline after an uncertain publication/submission.
@@ -191,6 +215,7 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
         try { reserved = await boundedRead(reservation, SCIENCE_REVIEW_MAX_JSON_BYTES); }
         catch (error) { if (!missing(error)) throw error; }
         if (reserved) return reuseImageReservation(reserved);
+        if (completedOnly) fail();
         // Readiness must precede every new durable reservation. A browser outage before
         // queuing must not spend this task's review deadline or leave a submitted marker.
         await requireReady();

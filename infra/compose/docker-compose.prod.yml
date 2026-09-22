@@ -87,6 +87,8 @@ services:
       - /opt/openscience-codex/results:/codex-jobs/results:ro
       - /opt/openscience-chatgpt-browser/spool/inbox:/chatgpt-web-image-jobs/inbox:ro
       - /opt/openscience-chatgpt-browser/spool/results:/chatgpt-web-image-jobs/results:ro
+      - /opt/openscience-chatgpt-browser/review-spool/inbox:/chatgpt-web-review-jobs/inbox:ro
+      - /opt/openscience-chatgpt-browser/review-spool/results:/chatgpt-web-review-jobs/results:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
@@ -101,6 +103,8 @@ services:
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
       CHATGPT_WEB_IMAGE_INBOX_DIR: /chatgpt-web-image-jobs/inbox
       CHATGPT_WEB_IMAGE_RESULTS_DIR: /chatgpt-web-image-jobs/results
+      CHATGPT_WEB_REVIEW_INBOX_DIR: /chatgpt-web-review-jobs/inbox
+      CHATGPT_WEB_REVIEW_RESULTS_DIR: /chatgpt-web-review-jobs/results
       BGE_M3_ENABLED: ${BGE_M3_ENABLED:-false}
       BGE_M3_MODEL_VERSION_ID: ${BGE_M3_MODEL_VERSION_ID:-}
       BGE_M3_MODEL_REVISION: ${BGE_M3_MODEL_REVISION:-}

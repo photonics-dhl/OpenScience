@@ -7,7 +7,7 @@ import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@opensci
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, readInitialSciencePlanningRetryChain, requirePixelPlanningPreProviderRearm, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, VISUAL_NARRATIVE_PROFILE, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, readInitialSciencePlanningRetryChain, requirePixelPlanningPreProviderRearm, requireHermesCompletedImageReviewRecovery, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
@@ -409,7 +409,7 @@ async function readPresentationInput(storage: NonNullable<Parameters<TaskHandler
   return result;
 }
 
-export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'reviewScientific' | 'generateImage' | 'canResumeImageBeforeSubmission' | 'canResumeImageFromCompletedResult' | 'resumeImageFromCompletedResult'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool } = {}): TaskHandler {
+export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'reviewScientific' | 'resumeScientificReviewFromCompletedResult' | 'generateImage' | 'canResumeImageBeforeSubmission' | 'canResumeImageFromCompletedResult' | 'resumeImageFromCompletedResult'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool } = {}): TaskHandler {
   return async (deps, task) => {
     if (!deps.storage) throw new Error('[blocked] presentation object storage unavailable');
     const payload = parsePresentationGenerationPayload(task.payload);
@@ -544,6 +544,17 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if (!actualImageReview || !sceneParent || !payload.sceneImage || !options.gateway?.reviewScientific) {
         throw new Error('[blocked] Generated image review unavailable');
       }
+      const recoveryParent = existing && task.executionAttempt > 1 && payload.hermesRunAuthority?.profile === VISUAL_NARRATIVE_PROFILE
+        ? await readNarrativePixelReplanAuthority(deps.prisma, { runId: payload.hermesRunAuthority.runId, actorId: scope.userId }) : null;
+      const completedOnly = Boolean(recoveryParent);
+      const requireCompletedRecovery = async (tx: Prisma.TransactionClient) => {
+        if (!completedOnly) return;
+        if (!options.gateway?.resumeScientificReviewFromCompletedResult || !payload.hermesRunAuthority)
+          throw new Error('[blocked] Read-only completed image review recovery is unavailable');
+        await requireHermesCompletedImageReviewRecovery(tx, { taskId: task.id, actorId: scope.userId, runId: payload.hermesRunAuthority.runId });
+      };
+      // Revalidate the receipt before reading the saved PNG, not only before persisting its review.
+      if (completedOnly) await withPresentationAssetWrite(deps.prisma, scope, requireCompletedRecovery);
       const identity = { requestId: task.id, contentHash: saved.contentHash, sourceEvidenceIdentity, parentIdentity: sceneParent.identity };
       const savedImage = await requireSavedImageForReview(deps.prisma, payload, task.id, saved.contentHash, sourceEvidenceIdentity, sceneParent.identity);
       const contentType = (savedImage.provenance as Record<string, unknown>).contentType;
@@ -558,6 +569,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         attachments: [attachment],
       };
       const readCurrent = async (tx: Prisma.TransactionClient) => {
+        await requireCompletedRecovery(tx);
         await requireIllustrationReviewSubmission(tx, authorityInput);
         await requireUnchangedSceneRevision(tx);
         const current = await requireSavedImageForReview(tx, payload, task.id, saved.contentHash, sourceEvidenceIdentity, sceneParent.identity);
@@ -571,7 +583,11 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         const parentRow = await deps.prisma.presentationAsset.findUniqueOrThrow({ where: { id: payload.sceneImage.storyboardAssetId } });
         const settings = parseStoryboardRequest((parentRow.provenance as Record<string, unknown>).storyboardSettings);
         // The object and draft row already exist. No model call is made while holding the write lock.
-        const reviewed = await reviewGeneratedImage({ reviewScientific: options.gateway.reviewScientific.bind(options.gateway) }, {
+        const reviewGateway: Pick<AiGateway, 'reviewScientific'> = completedOnly ? { reviewScientific: async (request, guard) => {
+          await withPresentationAssetWrite(deps.prisma, scope, readCurrent);
+          return options.gateway!.resumeScientificReviewFromCompletedResult!(request, guard);
+        } } : { reviewScientific: options.gateway.reviewScientific.bind(options.gateway) };
+        const reviewed = await reviewGeneratedImage(reviewGateway, {
           bytes: imageBytes, contentType, claims, settings, document: sceneParent.view.document,
           sceneIndex: payload.sceneImage.sceneIndex, authorizationContext, illustrationContext,
           researchObjectId: payload.researchObjectId, versionId: payload.versionId, identity,

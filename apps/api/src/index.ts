@@ -4,7 +4,7 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { createPersonalWorkspace } from '@openscience/domain';
 import { createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
-import { ChatGptWebSpoolImageProvider, CodexSpoolImageProvider, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
+import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 import { buildHybridSearchFromEnv } from './search-runtime';
 import { createSearchPrismaClient, deleteSearchContent, setSearchContentVisibility } from '@openscience/search';
@@ -58,6 +58,10 @@ async function main(): Promise<void> {
     const codexImageResultsDir = process.env.CODEX_IMAGE_RESULTS_DIR?.trim();
     const chatGptImageInboxDir = process.env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim();
     const chatGptImageResultsDir = process.env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim();
+    const reviewInboxDir = process.env.CHATGPT_WEB_REVIEW_INBOX_DIR?.trim();
+    const reviewResultsDir = process.env.CHATGPT_WEB_REVIEW_RESULTS_DIR?.trim();
+    const imageReviewReader = env.ai.sceneImageEnabled && reviewInboxDir && reviewResultsDir
+      ? new ChatGptWebScienceReviewProvider({ inboxDir: reviewInboxDir, resultsDir: reviewResultsDir }) : undefined;
     const spoolImageProvider = (kind: string): RecoverableImageProvider | undefined => {
       if (!env.ai.sceneImageEnabled) return undefined;
       if (kind === 'codex' && codexImageInboxDir && codexImageResultsDir) {
@@ -110,6 +114,9 @@ async function main(): Promise<void> {
         canResumeImageBeforeSubmission: async (requestId: string) => payerImageProvider.canResumeBeforeSubmission
           ? await payerImageProvider.canResumeBeforeSubmission(requestId) : false,
         inspectImageRecoveryState: inspectPooledImageRecoveryState,
+      } : {}),
+      ...(imageReviewReader ? {
+        canResumeImageReviewFromCompletedResult: (requestId: string) => imageReviewReader.canResumeFromCompletedResult(requestId),
       } : {}),
       // P1A-6：审计落库（domain/auth 写操作 + authz.deny 经 deps.audit 流出）
       audit: createPrismaAuditSink(prisma),

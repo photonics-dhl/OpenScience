@@ -94,10 +94,7 @@ async function uploadAttachments(input, request) {
     const groups = form.locator('[role="group"][aria-label]');
     const before = await groups.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
     await fileInput.setInputFiles(file);
-    const dot = attachment.fileName.lastIndexOf('.');
-    const stem = attachment.fileName.slice(0, dot).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const extension = attachment.fileName.slice(dot).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const acceptedName = new RegExp(`^${stem}(?:\\(\\d+\\))?${extension}$`);
+    const acceptedName = attachmentLabelPattern(attachment.fileName);
     const deadline = Date.now() + 30000;
     let confirmed = false;
     while (Date.now() < deadline) {
@@ -107,6 +104,27 @@ async function uploadAttachments(input, request) {
     }
     if (!confirmed) throw Error('ATTACHMENT_UPLOAD_NOT_CONFIRMED');
   }
+}
+function attachmentLabelPattern(fileName) {
+  const dot = fileName.lastIndexOf('.');
+  const stem = fileName.slice(0, dot).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const extension = fileName.slice(dot).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${stem}(?:\\(\\d+\\))?${extension}$`);
+}
+async function attachmentsReady(input, request) {
+  const form = input.locator('xpath=ancestor::form[1]');
+  if (await form.count() !== 1) return false;
+  const expected = request.attachments ?? [];
+  const groups = form.locator('[role="group"][aria-label]:visible');
+  if (await groups.count() !== expected.length
+    || await form.locator('[aria-busy="true"]:visible, [role="progressbar"]:visible, progress:visible').count() !== 0) return false;
+  const remaining = await groups.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
+  return expected.every(({ fileName }) => {
+    const index = remaining.findIndex(label => attachmentLabelPattern(fileName).test(label));
+    if (index < 0) return false;
+    remaining.splice(index, 1);
+    return true;
+  });
 }
 function normalizeUserText(value) { return String(value ?? '').replace(/\u00a0/g, ' ').trim(); }
 function reviewPrompt(request) {
@@ -358,18 +376,31 @@ let activePage;
   activePage = page;
   await rememberPage(page, dir, request.provider, id, instance);
   await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-  const input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000));
+  let input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000));
   if (!input) throw Error('CHAT_COMPOSER_NOT_FOUND');
   if (!await model6ProActive(input)) throw Error('MODEL_6_PRO_NOT_READY');
   if (!await normalChatMode(input)) throw Error('NORMAL_CHAT_MODE_NOT_READY');
   const prompt = reviewPrompt(request);
   if (prompt.length > 64 * 1024) throw Error('PROMPT_TOO_LARGE');
   const baseline = await page.locator('[data-message-author-role="assistant"]').count();
-  await input.fill(prompt);
   await uploadAttachments(input, request);
+  input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000));
+  await input.fill(prompt);
+  const send = page.getByRole('button', { name: 'Send prompt', exact: true });
+  const readyDeadline = Math.min(request.deadlineAt, Date.now() + 10000);
+  while (Date.now() < readyDeadline) {
+    const promptReady = await bounded(composerText(input), 2000).catch(() => '') === prompt;
+    const attachmentReady = await bounded(attachmentsReady(input, request), 2000).catch(() => false);
+    const modelReady = await bounded(model6ProActive(input), 2000).catch(() => false);
+    const modeReady = await bounded(normalChatMode(input), 2000).catch(() => false);
+    const sendReady = await bounded(send.isEnabled(), 2000).catch(() => false);
+    if (promptReady && attachmentReady && modelReady && modeReady && sendReady) break;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  if (await bounded(composerText(input), 2000).catch(() => '') !== prompt) throw Error('PROMPT_CHANGED');
+  if (!await bounded(attachmentsReady(input, request), 2000).catch(() => false)) throw Error('ATTACHMENT_UPLOAD_NOT_CONFIRMED');
   if (!await bounded(model6ProActive(input))) throw Error('MODEL_6_PRO_NOT_READY');
   if (!await bounded(normalChatMode(input))) throw Error('NORMAL_CHAT_MODE_NOT_READY');
-  const send = page.getByRole('button', { name: 'Send prompt', exact: true });
   if (!await send.isEnabled().catch(() => false)) throw Error('SEND_NOT_READY');
   once('submitted.json', { phase: 'submitted', id, promptHash: request.promptHash, assistantCount: baseline,
     attachments: (request.attachments ?? []).map(({ fileName, sha256 }) => ({ fileName, sha256 })), submittedAt: new Date().toISOString() });

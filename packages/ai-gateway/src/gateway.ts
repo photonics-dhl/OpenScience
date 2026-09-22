@@ -166,6 +166,18 @@ export class AiGateway {
 
   /** Plans use the text pool; actual images and explicit manuscript reviews use the existing visual reviewer. */
   async reviewScientific(input: ScienceReviewInput, guard?: SchemaGuard<unknown>): Promise<ScienceReviewProviderResult> {
+    return this.reviewScientificControlled(input, guard, false);
+  }
+
+  /** Retain review authorization and audit while forbidding another provider submission. */
+  async resumeScientificReviewFromCompletedResult(input: ScienceReviewInput, guard?: SchemaGuard<unknown>): Promise<ScienceReviewProviderResult> {
+    if (!('kind' in input.source) || input.source.kind !== 'illustration-image') {
+      throw new AiGatewayError('SCHEMA_VALIDATION', 'completed image review required');
+    }
+    return this.reviewScientificControlled(input, guard, true);
+  }
+
+  private async reviewScientificControlled(input: ScienceReviewInput, guard: SchemaGuard<unknown> | undefined, completedOnly: boolean): Promise<ScienceReviewProviderResult> {
     if ('kind' in input.source && input.source.kind === 'illustration-plan') {
       if (!guard || input.attachments !== undefined || !input.prompt.trim()
         || input.prompt.length > ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS || !this.authorizeIllustrationReview) {
@@ -216,7 +228,10 @@ export class AiGateway {
     const start = Date.now();
     let outcome: 'succeeded' | 'failed' = 'failed';
     try {
-      const result = await provider.review(input);
+      if (completedOnly && !provider.resumeFromCompletedResult) {
+        throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'completed review reader unavailable');
+      }
+      const result = completedOnly ? await provider.resumeFromCompletedResult!(input) : await provider.review(input);
       if (illustration && (!guard || !guard(JSON.parse(result.text.trim().replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, ''))))) {
         throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid generated image review response');
       }
@@ -236,7 +251,7 @@ export class AiGateway {
           inputContentHash: 'kind' in input.source ? input.source.sourceEvidenceIdentity : input.source.documentSha256,
           pageNumbers: input.attachments?.filter((attachment) => attachment.mediaType !== 'application/pdf')
             .map(({ pageNumber }) => pageNumber) ?? [], pageCount: input.attachments?.length ?? 0,
-          selectionReason: 'high_risk_scientific_review', outcome,
+          selectionReason: completedOnly ? 'saved_scientific_review_recovery' : 'high_risk_scientific_review', outcome,
           error: outcome === 'failed' ? 'scientific_review_failed' : null, fallbackReason: null, retryCount: 0,
         });
       } catch { this.logger?.error?.('ai.gateway.scientific_review audit failed'); }

@@ -2,7 +2,17 @@
 
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
-## 2026-09-22 第二篇实图审阅与第三篇全文成功（最新）
+## 2026-09-22 原图审阅恢复与混合终态修订（最新）
+
+- 第二篇新组run7e9e已failed/v19，两个PNG存在、两条生图未提交失败。08046c8b原6Pro请求23:18:49Z提交，23:19:39Z内核记录浏览器4GiB cgroup触顶并OOM-kill Chrome；随后36384cfa/ce336e79分别模式/attach超时。主机约30GiB、可用约15GiB，High批准在线提高到8GiB，原container ID与网络/安全/PID/shm不变，没有重启。完整资源收据`/opt/openscience/observations/browser-memory-20260922.json`，本机内核时间证据`tmp/browser-oom-time-read-20260922.json`。
+- 080原target经`Inspector.targetCrashed`直接确证，原会话在新专用页可读完整blocked/null科学JSON；只关闭唯一已崩溃自有页，Playwright全局连接恢复。原broker于23:54:30Z自然保存`recovered-result.json`/948bytes response，零新请求。任务已failed，须沿原产品入口只消费已完成审阅，不能手工写formal review。477原图存在，审阅not_submitted/failed；原记录全部保留。
+- 第三篇9eab55dc原唯一user turn只有图片，DOM/native-copy正文为0，原期望reviewPrompt41123字符；唯一assistant终态315bytes为询问要复核还是修改，不是正式JSON，原anchor不存在。已证“完整正文未提交”，上传hydration清空是机制推断。正常review-runner候选先上传再填完整正文，发送前精确核对正文/附件/6Pro/普通模式/Send，High PASS。原response不伪造成科学审阅，不新建continuation协议。
+- 新04f已有11f正式accepted、95f/df0正式blocked/null；根本需要改科学方案。High批准复用原whole-set replan接受完整终态集合：正式审阅、failed+未审draft、可证not_submitted无图；至少一条真实科学blocked/null为依据，只传真实科学反馈。保存旧任务/图片/审计，原endpoint/CAS/精确1+N授权，新图仍完整审阅。混合终态Domain及完成审阅只读恢复候选审查中，未部署。旧“先补齐每张废弃图”的技术恢复候选仅留ignored冻结patch，不安装。
+- Broker/Gateway候选在既有results追加not-submitted事实凭据，交叉核验原private/reservation/job/failed result及没有submitted/conversation/PNG；独占创建、不覆盖原结果，不允许同task重发。High PASS。第二组080的部分completed恢复仅消费原PNG/response，其余失败原位保留；API只读review-spool reader与consumer身份核对保留，不追加模型提交。待统一服务器交付后走原两产品页继续。
+- 旧独立静态审查的MQED方向索引与自由/束缚过程类比疑点已由同一SourceMap全文撤销；正式6Pro的FDT/电流至矢势编码与相位匹配方向等问题仍有效。不得把旧误判复写进下一稿。
+- 混合终态、not-submitted事实凭据、完成审阅只读consumer及正常composer修复已分别High PASS。为防M3末审再次放过字段自相矛盾，仅在现有narrative final-brief提示中要求逐场景核对密度/方向、固定与扫描参数、必要映射及生成文字labels一致性，paper-original保留原字；该单行也High PASS，无新分析器/模型阶段/schema。旧generated-image-review提示保持不变以消费080原收据。部分completed任务恢复的Domain/handler最终增量已High PASS，非visual旧replacement兼容保持；只读consumer和API callback/mount必须同批交付。
+
+## 2026-09-22 第二篇实图审阅与第三篇全文成功（历史过程）
 
 - 第二篇7bd6原task恢复的science65536请求36秒返回正文，既有schema修复8.6秒完成、art15.5秒完成。末审先16K thinking-only后32K返回blocked（脉宽排序）；自动修订c65a0488 science16K耗尽后32K成功，art及M3末审stop，20:58:23Z方案approved，run7e9e生成四图。全程主provider，未切换。
 - c65独立High复核发现：I(t)强度不能证明单极电场/非零电面积；不同波长不能共用单条高斯绝对参考基线；时间映射须注明迟滞时间起点，不能承诺角积分后同形；旁白积分重复乘hν；固定4.4μm同时扫描1–5μm自相矛盾。19as<99as<3.6fs排序已修。计划accepted不等于科学正确。
@@ -31,6 +41,8 @@
 - 两新generic根任务即刻failed exec1/retry0/resultNULL，error storyboard:request_values；run第二篇v15/max14、第三篇v18/max15，新task无Gateway调用。根因packages/domain/src/assets/storyboard.ts:137遗留revisionImageAssetId要求narrativeSceneLimit===1，generic生产者实际4/5，先前静态审查漏了共享parser。候选只改为字段必须存在，原全局Integer1..6范围保持；High定向复审入口/consumer剩余单图假设。worker只读研究原retry-generation的无模型提交同task恢复，尚未再次提交。原两pixel-set-replan收据已消费，绝不能重放或直接改DB。
 - 模型前恢复候选已独立High PASS：精确parser错误/exec1/retry0/progress10/resultNULL/无资产/零Gateway audit与原root receipt、全部旧图正式反馈/来源/Claims保持；同一Serializable事务恢复task/step/run，max与任务数不增加。worker只允许exec2，各科学/艺术/末审阶段重验回执，后续自身audit不自阻断，primary-only不变。producer复用共享parser提前校验最终payload但不替换内容；managed任务关闭独立retry，初始science两处visibility误挡也移除。冻结证据tmp/pixel-pre-provider-rearm-review-20260922，尚未部署或模型请求。
 - 37048da2正常服务器build/start exit0，无测试/预检/CI/迁移/receiver更新；release/rollback独立读回37048/b7、journal/failed false，日志/opt/openscience/observations/deploy-37048da2-20260922.log。原页面23:04:33Z第二篇HTTP202→b887同task/runv16；23:04:49Z第三篇HTTP202→04f同task/runv19。原max14/15不变，两份/jobs/{second,third}-paper-pixel-planning-resume-20260922.json已消费，不重放。
+- 纠正独立科学复核：tmp/third-paper-scientific-terms-read-20260922.json从同一SourceMap定向回读Box1/类比段，明确(r,ω,k)中k=1/2/3方向索引且导言原文支持PINEM–Rabi、HHG–Compton/Thomson。先前按局部subjects引用判无支持过重，两份独立报告已原地更正；新04f静态科学PASS，符号解释/局部证据投影为非阻断。不能把摘录缺失当论文无报告。
+- 04f正式M3 accepted后，真实6Pro scene0 accepted（全幅连续淡彩、主线程实看），scene1 blocked/null指出真正图示问题：FDT不是G→f串联桥，j与G卷积到A不能平行输出，量子化对象应明确介质中的场。第三篇另外b902 image失败、9eab已有PNG但review失败，runv22/max15/failed，原GET无恢复入口；正在定向spool只读取证与动态authority恢复设计。第二篇b887正式accepted后四图在途。generated-image-review.ts单行替换复用原6Pro调用明确reader叙事独立核源，High PASS，尚未部署。
 - 第一篇已公开v3不变；后两篇仍私有。上述结果覆盖下节较早“尚未完成”的记录；一次性writer均不可重放。
 
 ## 2026-09-22 第二篇设计与第三篇分窗的定向取证（历史过程）

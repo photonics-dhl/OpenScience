@@ -1,10 +1,10 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { chmod, chown, lstat, mkdir, readdir, realpath, rename, unlink } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { chmod, chown, lstat, link, mkdir, open, readdir, realpath, rename, unlink } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
-import { runOne, safeRead, atomicWrite, exists } from '../codex-image-runner/core.mjs';
+import { createHash, randomUUID } from 'node:crypto';
+import { runOne, safeRead, atomicWrite, exists, UUID } from '../codex-image-runner/core.mjs';
 import { validateCodexImageRequest, validateCodexImageResult } from '../../packages/ai-gateway/dist/codex-image-protocol.js';
 import { validateImageBytes } from '../../packages/ai-gateway/dist/image.js';
 
@@ -24,6 +24,22 @@ async function prepareDirectory(path, uid) {
   await mkdir(path, { mode: 0o700 });
   await chown(path, uid, uid);
   await chmod(path, 0o700);
+}
+async function publishExclusive(path, bytes, mode = 0o644) {
+  const temporary = path + '.' + randomUUID() + '.tmp';
+  const file = await open(temporary, 'wx', mode);
+  try { await file.writeFile(bytes); await file.sync(); } finally { await file.close(); }
+  try {
+    await link(temporary, path);
+    const parent = await open(dirname(path), 'r');
+    try { await parent.sync(); } finally { await parent.close(); }
+    return true;
+  } catch (error) {
+    if (error?.code === 'EEXIST') return false;
+    throw error;
+  } finally {
+    await unlink(temporary);
+  }
 }
 function reportFailure(id, phase, error) {
   // Process output may contain private input or infrastructure details. Keep
@@ -210,7 +226,7 @@ async function finalizeWebImage(config, request, privateDir, jobDir, operationDe
   }
 }
 async function recoverUncertainWebImage(config) {
-  for (const id of (await readdir(config.privateRoot)).filter(name => /^[0-9a-f-]{36}$/i.test(name))) {
+  for (const id of (await readdir(config.privateRoot)).filter(name => UUID.test(name))) {
     const privateDir = join(config.privateRoot, id);
     try {
       const request = validateCodexImageRequest(JSON.parse((await safeRead(join(privateDir, 'request.json'), 16384)).toString('utf8')), undefined, 'chatgpt-web');
@@ -264,6 +280,43 @@ async function recoverUncertainWebImage(config) {
   }
   return null;
 }
+async function publishNotSubmittedEvidence(config, preferredId) {
+  const listed = (await readdir(config.privateRoot)).filter(name => UUID.test(name));
+  const ids = [...new Set([...(preferredId && UUID.test(preferredId) ? [preferredId] : []), ...listed])];
+  for (const id of ids) {
+    const privateDir = join(config.privateRoot, id);
+    const resultDir = join(config.results, id);
+    const evidencePath = join(resultDir, 'not-submitted.json');
+    if (await exists(evidencePath)) continue;
+    try {
+      await safeDirectory(privateDir, 0, 0o700);
+      await safeDirectory(resultDir, 0, 0o750);
+      const request = validateCodexImageRequest(JSON.parse((await safeRead(join(privateDir, 'request.json'), 16384)).toString('utf8')), undefined, 'chatgpt-web');
+      const reservation = validateCodexImageRequest(JSON.parse((await safeRead(join(config.inbox, id + '.submitted.json'), 16384)).toString('utf8')), undefined, 'chatgpt-web');
+      const primaryResult = validateCodexImageResult(JSON.parse((await safeRead(join(resultDir, 'result.json'), 16384)).toString('utf8')), 'chatgpt-web');
+      const jobDir = join(config.jobs, id);
+      await safeDirectory(jobDir, 11040, 0o700);
+      const persistedInnerRequest = JSON.parse((await safeRead(join(jobDir, 'request.json'), 32768)).toString('utf8'));
+      const operatorError = JSON.parse((await safeRead(join(jobDir, 'operator-error.json'), 32768)).toString('utf8'));
+      if (request.id !== id || request.provider !== 'chatgpt-web'
+        || !sameJson(reservation, request) || !sameJson(persistedInnerRequest, exactInnerRequest(request))
+        || primaryResult.status !== 'failed' || primaryResult.id !== id || primaryResult.provider !== 'chatgpt-web'
+        || primaryResult.promptHash !== request.promptHash || operatorError?.state !== 'not_submitted'
+        || await exists(join(jobDir, 'submitted.json')) || await exists(join(jobDir, 'conversation.json'))
+        || await exists(join(jobDir, 'result.json')) || await exists(join(jobDir, 'output', 'image.png'))
+        || await exists(join(privateDir, 'browser-result.png')) || await exists(join(privateDir, 'normalized'))
+        || await exists(join(resultDir, 'result.png'))) continue;
+      const evidence = { id, provider: 'chatgpt-web', promptHash: request.promptHash, state: 'not_submitted' };
+      const serialized = JSON.stringify(evidence);
+      if (!await publishExclusive(evidencePath, serialized)) {
+        const existing = JSON.parse((await safeRead(evidencePath, 1024)).toString('utf8'));
+        if (!sameJson(existing, evidence)) continue;
+      }
+      return id;
+    } catch {}
+  }
+  return null;
+}
 async function main() {
   if (process.getuid?.() !== 0) throw Error('ROOT_BROKER_REQUIRED');
   if (process.argv.length !== 4 || process.argv[2] !== '--config') throw Error('CONFIG_REQUIRED');
@@ -302,7 +355,9 @@ async function main() {
     const recovered = await recoverUncertainWebImage(config);
     if (recovered) { console.log(JSON.stringify({ id: recovered, status: 'reconciled' })); return; }
     const result = await runOne({ ...config, provider: 'chatgpt-web', execute: (request, dir) => executeWebImage(config, request, dir) });
+    const notSubmitted = await publishNotSubmittedEvidence(config, result?.status === 'failed' ? result.id : undefined);
     if (result) console.log(JSON.stringify(result));
+    else if (notSubmitted) console.log(JSON.stringify({ id: notSubmitted, status: 'not_submitted_reconciled' }));
   } finally {
     clearInterval(timer);
   }

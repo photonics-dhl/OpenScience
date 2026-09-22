@@ -518,7 +518,8 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
       if (pixel && stage === 'storyboard' && input.status === 'approved') {
         const source = await readNarrativePixelReplanSource(tx, { actorId: input.userId, runId: run.id,
           researchObjectId: run.researchObjectId, versionId: run.versionId!, sourceClaimIds: run.sourceClaimIds,
-          parentAssetId: String(pixel.metadata.parentStoryboardAssetId), imageAssetIds: pixel.sceneReviews.map(scene => String(scene.imageId)) });
+          parentAssetId: String(pixel.metadata.parentStoryboardAssetId), imageAssetIds: pixel.sceneReviews.map(scene => String(scene.taskId)),
+          ...(pixel.metadata.sceneSet === 'terminal' ? { terminalSceneSet: { receiptId: pixel.rootReceipt.id } } : {}) });
         if (source.identity !== pixel.metadata.sourceIdentity)
           throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative feedback source changed');
         // Keep historical pixels and their reviews, but do not offer an old
@@ -709,10 +710,11 @@ export async function readNarrativeImageReplanSource(prisma: Pick<Prisma.Transac
             imageProvenance: image.provenance, taskPayload: task!.payload, imageTaskPayload: imageTask!.payload }) };
 }
 
-/** A complete saved pixel-review set, independent of any particular paper or scene count. */
-export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset'>, input: {
+/** A complete scene set. Technical failures are receipts, never scientific feedback. */
+export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'auditLog'>, input: {
     actorId: string; runId: string; researchObjectId: string; versionId: string; sourceClaimIds: string[];
     parentAssetId: string; imageAssetIds: string[];
+    terminalSceneSet?: { receiptId?: string; inspectImageRecoveryState?: (requestId: string) => Promise<string> };
 }) {
     const ids = [...input.sourceClaimIds].sort();
     const parent = await prisma.presentationAsset.findUnique({ where: { id: input.parentAssetId }, include: { sourceClaims: { select: { claimId: true } } } });
@@ -741,11 +743,80 @@ export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.Transac
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative parent task scope changed');
     }
     const parentIdentity = JSON.stringify({ contentHash: parent.contentHash, provenance: parent.provenance, ids });
+    const receipt = input.terminalSceneSet?.receiptId ? await prisma.auditLog.findUnique({ where: { id: input.terminalSceneSet.receiptId } }) : null;
+    const receiptMeta = recordValue(receipt?.metadata);
+    if (input.terminalSceneSet?.receiptId && (!receipt || receipt.actorId !== input.actorId
+        || receipt.action !== 'hermes.research_run.generation_retry' || receipt.targetType !== 'hermes_research_run' || receipt.targetId !== input.runId
+        || receiptMeta.correction !== NARRATIVE_PIXEL_REPLAN || receiptMeta.sceneSet !== 'terminal'
+        || receiptMeta.parentStoryboardAssetId !== parent.id || receiptMeta.parentIdentity !== parentIdentity
+        || receiptMeta.sourceEvidenceIdentity !== p.sourceEvidenceIdentity || !Array.isArray(receiptMeta.sceneReviews))) {
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Terminal scene authorization changed');
+    }
     const images = [];
+    const failures: Array<Record<string, unknown>> = [];
     for (const imageId of input.imageAssetIds) {
         const image = await prisma.presentationAsset.findUnique({ where: { id: imageId }, include: { sourceClaims: { select: { claimId: true } } } });
         const imageTask = await prisma.agentTask.findUnique({ where: { id: imageId }, include: { session: true } });
-        const scene = image && presentationSceneImageView(image); const provenance = recordValue(image?.provenance);
+        if (!imageTask || imageTask.deletedAt || imageTask.kind !== 'presentation.generate' || imageTask.session.deletedAt
+            || imageTask.session.status !== 'active' || imageTask.session.userId !== input.actorId
+            || imageTask.session.researchObjectId !== input.researchObjectId
+            || !['succeeded', ...(input.terminalSceneSet ? ['failed'] : [])].includes(imageTask.status)) {
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative scene task is not terminal');
+        }
+        const imagePayload = parsePresentationGenerationPayload(imageTask.payload); const scene = imagePayload.sceneImage;
+        if (imagePayload.kind !== 'image' || imagePayload.researchObjectId !== input.researchObjectId || imagePayload.versionId !== input.versionId
+            || !isDeepStrictEqual(imagePayload.sourceClaimIds, ids) || !scene || scene.storyboardAssetId !== parent.id
+            || !view.document.scenes[scene.sceneIndex]
+            || !isDeepStrictEqual(imagePayload.hermesRunAuthority, { runId: input.runId, stage: 'scene_image', ordinal: scene.sceneIndex, profile: VISUAL_NARRATIVE_PROFILE })) {
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative image task scope changed');
+        }
+        await requireSceneImageParent(prisma, imagePayload);
+        const provenance = recordValue(image?.provenance);
+        if (image && (image.deletedAt || image.kind !== 'image' || image.researchObjectId !== input.researchObjectId || image.versionId !== input.versionId
+            || !isDeepStrictEqual(presentationSceneImageView(image), scene) || provenance.taskId !== image.id
+            || provenance.source !== 'approved_storyboard_scene' || provenance.storyboardContentHash !== parent.contentHash
+            || provenance.parentIdentity !== parentIdentity || provenance.sourceEvidenceIdentity !== p.sourceEvidenceIdentity
+            || !isDeepStrictEqual(image.sourceClaims.map(link => link.claimId).sort(), ids))) {
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative scene asset identity changed');
+        }
+        if (imageTask.status === 'failed') {
+            if (imageTask.result !== null || !imageTask.error || scene.revisionAssetId || scene.styleReferenceAssetId
+                || (image && (image.status !== 'draft' || provenance.imageReview != null))) {
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Failed scene is not an unreviewed terminal result');
+            }
+            const taskIdentity = JSON.stringify({ id: imageTask.id, status: imageTask.status, executionAttempt: imageTask.executionAttempt,
+                retryCount: imageTask.retryCount, error: imageTask.error, result: imageTask.result, payload: imageTask.payload, updatedAt: imageTask.updatedAt });
+            let reviewAuditIdentity: string | null = null;
+            if (image) {
+                const calls = await prisma.auditLog.findMany({ where: { requestId: imageTask.id, action: 'ai.gateway.call' }, take: 4 });
+                const reviews = calls.filter(call => recordValue(call.metadata).operation !== 'image');
+                const call = reviews[0]; const meta = recordValue(call?.metadata);
+                if (calls.length >= 4 || reviews.length !== 1 || calls.some(row => recordValue(row.metadata).fallbackReason !== null)
+                    || !call || call.actorId !== null || call.targetType !== 'ai_gateway'
+                    || call.createdAt < image.createdAt || call.createdAt > imageTask.updatedAt
+                    || meta.operation !== 'scientific_review' || meta.provider !== 'chatgpt-web-science-review' || meta.model !== 'chatgpt-web/6-pro'
+                    || meta.outcome !== 'failed' || meta.error !== 'scientific_review_failed' || meta.retryCount !== 0 || meta.fallbackReason !== null
+                    || meta.selectionReason !== 'high_risk_scientific_review'
+                    || meta.inputContentHash !== p.sourceEvidenceIdentity || meta.pageCount !== 1 || !isDeepStrictEqual(meta.pageNumbers, [1])
+                    || typeof meta.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(meta.promptHash)) {
+                    throw new PresentationAssetError('VALIDATION_ERROR', 'Unreviewed scene needs its unique failed scientific review');
+                }
+                reviewAuditIdentity = JSON.stringify({ id: call.id, createdAt: call.createdAt, metadata: call.metadata });
+            }
+            const failure = { sceneIndex: scene.sceneIndex, taskId: imageTask.id, imageId: image?.id ?? null,
+                contentHash: image?.contentHash ?? null, reviewHash: null, decision: null,
+                failureKind: image ? 'review_failed' : 'not_submitted', taskIdentity, reviewAuditIdentity,
+                imageIdentity: image ? JSON.stringify({ id: image.id, contentHash: image.contentHash, objectKey: image.objectKey,
+                    provenance: image.provenance, sourceClaimIds: ids }) : null };
+            const recorded = Array.isArray(receiptMeta.sceneReviews)
+                ? receiptMeta.sceneReviews.find(item => recordValue(item).taskId === imageTask.id) : undefined;
+            if (receipt ? !isDeepStrictEqual(recorded, failure)
+                : !image && await input.terminalSceneSet?.inspectImageRecoveryState?.(imageTask.id).catch(() => 'unsafe') !== 'not_submitted') {
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Unsubmitted scene proof is unavailable or changed');
+            }
+            failures.push(failure);
+            continue;
+        }
         const pixelReview = recordValue(provenance.imageReview);
         if (!image || image.deletedAt || image.kind !== 'image' || !scene || !liveTask(imageTask)
             || image.researchObjectId !== input.researchObjectId || image.versionId !== input.versionId
@@ -755,7 +826,8 @@ export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.Transac
             || provenance.sourceEvidenceIdentity !== p.sourceEvidenceIdentity
             || !isDeepStrictEqual(image.sourceClaims.map(link => link.claimId).sort(), ids)
             || pixelReview.stage !== 'generated-image' || !['accepted', 'blocked'].includes(String(pixelReview.decision))
-            || image.status !== (pixelReview.decision === 'accepted' ? 'approved' : 'rejected')
+            || !(input.terminalSceneSet ? ['draft', pixelReview.decision === 'accepted' ? 'approved' : 'rejected']
+                : [pixelReview.decision === 'accepted' ? 'approved' : 'rejected']).includes(image.status)
             || pixelReview.requestId !== image.id || pixelReview.contentHash !== image.contentHash
             || pixelReview.parentIdentity !== parentIdentity || pixelReview.sourceEvidenceIdentity !== p.sourceEvidenceIdentity
             || pixelReview.provider !== 'chatgpt-web-science-review' || typeof pixelReview.model !== 'string' || !pixelReview.model.trim()
@@ -765,32 +837,28 @@ export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.Transac
             || ![pixelReview.promptHash, pixelReview.responseHash].every(value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value))) {
             throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative pixel review set is incomplete or changed');
         }
-        const imagePayload = parsePresentationGenerationPayload(imageTask!.payload);
-        if (imagePayload.kind !== 'image' || imagePayload.researchObjectId !== input.researchObjectId || imagePayload.versionId !== input.versionId
-            || !isDeepStrictEqual(imagePayload.sourceClaimIds, ids) || !isDeepStrictEqual(imagePayload.sceneImage, scene)
-            || !isDeepStrictEqual(imagePayload.hermesRunAuthority, { runId: input.runId, stage: 'scene_image', ordinal: scene.sceneIndex, profile: VISUAL_NARRATIVE_PROFILE })) {
-            throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative image task scope changed');
-        }
-        await requireSceneImageParent(prisma, imagePayload);
         images.push({ image, task: imageTask!, sceneIndex: scene.sceneIndex, review: pixelReview });
     }
     images.sort((a, b) => a.sceneIndex - b.sceneIndex);
-    if (images.some((image, index) => image.sceneIndex !== index)
-        || !images.some(image => image.review.decision === 'blocked' && image.review.repairInstruction === null)) {
+    if (!images.some(image => image.review.decision === 'blocked' && image.review.repairInstruction === null)) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative pixel feedback does not require scientific replanning');
     }
-    const sceneReviews = images.map(({ image, task: imageTask, sceneIndex, review: pixelReview }) => ({
+    const sceneReviews = [...images.map(({ image, task: imageTask, sceneIndex, review: pixelReview }) => ({
         sceneIndex, imageId: image.id, taskId: imageTask.id, contentHash: image.contentHash,
         reviewHash: pixelReview.responseHash, decision: pixelReview.decision,
-    }));
+    })), ...failures].sort((a, b) => Number(a.sceneIndex) - Number(b.sceneIndex));
+    if (sceneReviews.some((scene, index) => scene.sceneIndex !== index))
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative terminal scenes are incomplete');
     const anchor = images.find(image => image.review.decision === 'blocked' && image.review.repairInstruction === null)!;
     return { parent, task: task!, payload, view, images, sceneReviews, parentIdentity,
         image: anchor.image, imageTask: anchor.task, reviewHash: anchor.review.responseHash as string,
         sourceEvidenceIdentity: p.sourceEvidenceIdentity as string,
-        feedback: images.map(image => `Scene ${image.sceneIndex + 1} — ${image.review.decision}: ${image.review.summary}`).join('\n\n'),
+        feedback: images.filter(image => !input.terminalSceneSet || image.review.decision === 'blocked')
+            .map(image => `Scene ${image.sceneIndex + 1} — ${image.review.decision}: ${image.review.summary}`).join('\n\n'),
         identity: JSON.stringify({ parentIdentity, taskPayload: task!.payload,
             images: images.map(image => ({ imageId: image.image.id, contentHash: image.image.contentHash,
-                imageProvenance: image.image.provenance, taskPayload: image.task.payload })) }) };
+                imageProvenance: image.image.provenance, taskPayload: image.task.payload })),
+            ...(failures.length ? { failures: [...failures].sort((a, b) => Number(a.sceneIndex) - Number(b.sceneIndex)) } : {}) }) };
 }
 
 /** Resolve a historical plan independently of the run's current step; revision contexts retain their original identity. */
@@ -833,7 +901,9 @@ export async function readNarrativePixelReplanHistory(prisma: Pick<Prisma.Transa
     const payload = root.payload; const task = root.task;
     if (!Number.isSafeInteger(meta.previousMaxAgentTasks) || Number(meta.previousMaxAgentTasks) < 9
         || !Number.isSafeInteger(meta.maxNewImages) || Number(meta.maxNewImages) < 1 || Number(meta.maxNewImages) > 6
-        || meta.maxNewStoryboards !== 1 || meta.maxAgentTasks !== Number(meta.previousMaxAgentTasks) + 1 + Number(meta.maxNewImages)
+        || meta.maxNewStoryboards !== 1 || meta.maxAgentTasks !== (meta.sceneSet === 'terminal'
+            ? Math.max(Number(meta.previousMaxAgentTasks), Number(meta.existingTaskCount) + 1 + Number(meta.maxNewImages))
+            : Number(meta.previousMaxAgentTasks) + 1 + Number(meta.maxNewImages))
         || meta.chargeableAttempts !== 1 + Number(meta.maxNewImages) || meta.newRunCount !== 0
         || meta.noProviderSwitch !== true || meta.publicationAuthorized !== false
         || !Number.isSafeInteger(meta.existingTaskCount) || Number(meta.existingTaskCount) < 1 || Number(meta.existingTaskCount) > Number(meta.previousMaxAgentTasks)
@@ -844,10 +914,24 @@ export async function readNarrativePixelReplanHistory(prisma: Pick<Prisma.Transa
         || payload.storyboard!.revisionImageAssetId !== meta.anchorImageId || payload.storyboard!.revisionTaskId
         || payload.storyboard!.narrativeSceneLimit !== meta.maxNewImages
         || !Array.isArray(meta.sceneReviews) || meta.sceneReviews.length !== meta.maxNewImages
-        || meta.sceneReviews.some((item, index) => { const scene = recordValue(item); return scene.sceneIndex !== index
-          || typeof scene.imageId !== 'string' || scene.taskId !== scene.imageId
-          || ![scene.contentHash, scene.reviewHash].every(value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value))
-          || !['accepted', 'blocked'].includes(String(scene.decision)); }))
+        || meta.sceneReviews.some((item, index) => { const scene = recordValue(item);
+          if (scene.sceneIndex !== index || typeof scene.taskId !== 'string') return true;
+          if (scene.failureKind !== undefined) return meta.sceneSet !== 'terminal'
+            || !['not_submitted', 'review_failed'].includes(String(scene.failureKind))
+            || scene.decision !== null || scene.reviewHash !== null || typeof scene.taskIdentity !== 'string' || !scene.taskIdentity
+            || (scene.failureKind === 'not_submitted'
+              ? scene.imageId !== null || scene.contentHash !== null || scene.imageIdentity !== null || scene.reviewAuditIdentity !== null
+              : scene.imageId !== scene.taskId || typeof scene.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(scene.contentHash)
+                || typeof scene.imageIdentity !== 'string' || !scene.imageIdentity || typeof scene.reviewAuditIdentity !== 'string' || !scene.reviewAuditIdentity);
+          return typeof scene.imageId !== 'string' || scene.taskId !== scene.imageId
+            || ![scene.contentHash, scene.reviewHash].every(value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value))
+            || !['accepted', 'blocked'].includes(String(scene.decision)); })
+        || (meta.sceneSet !== undefined && meta.sceneSet !== 'terminal')
+        || (meta.sceneSet === 'terminal' && (!Array.isArray(meta.sceneSteps) || meta.sceneSteps.length !== meta.maxNewImages
+          || meta.sceneSteps.some((raw, index) => { const step = recordValue(raw); const scene = recordValue((meta.sceneReviews as unknown[])[index]);
+            return step.ordinal !== index || typeof step.id !== 'string' || step.agentTaskId !== scene.taskId
+              || (step.presentationAssetId !== null && step.presentationAssetId !== scene.imageId)
+              || !['failed', 'stopped', 'awaiting_approval', 'succeeded'].includes(String(step.status)); }))))
       throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative pixel-feedback root receipt is invalid');
     let baseIdentity = meta.sourceIdentity;
     for (let index = 1; index < chain.length; index++) {
@@ -951,7 +1035,8 @@ async function readStoryboardImageRevision(prisma: Pick<Prisma.TransactionClient
             throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative pixel-feedback recovery is not current');
         const source = await readNarrativePixelReplanSource(prisma, { actorId, runId: run!.id,
             researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds,
-            parentAssetId: String(pixel.metadata.parentStoryboardAssetId), imageAssetIds: pixel.sceneReviews.map(scene => String(scene.imageId)) });
+            parentAssetId: String(pixel.metadata.parentStoryboardAssetId), imageAssetIds: pixel.sceneReviews.map(scene => String(scene.taskId)),
+            ...(pixel.metadata.sceneSet === 'terminal' ? { terminalSceneSet: { receiptId: pixel.rootReceipt.id } } : {}) });
         if (source.image.id !== imageAssetId || pixel.metadata.sourceIdentity !== source.identity
             || pixel.metadata.parentIdentity !== source.parentIdentity || pixel.metadata.sourceEvidenceIdentity !== source.sourceEvidenceIdentity
             || !isDeepStrictEqual(pixel.metadata.sceneReviews, source.sceneReviews)

@@ -67,6 +67,8 @@ abstract class SpoolImageProvider implements ImageProvider {
       const queuedPath = join(this.config.inboxDir, id + '.json');
       const hasReservation = !await absent(reservationPath);
       const output = join(this.config.resultsDir, id);
+      const notSubmittedPath = join(output, 'not-submitted.json');
+      const hasNotSubmitted = !await absent(notSubmittedPath);
       let resultBytes: Buffer | undefined;
       try {
         await directory(output);
@@ -75,6 +77,7 @@ abstract class SpoolImageProvider implements ImageProvider {
         if (!missing(error)) throw error;
       }
       if (!resultBytes) {
+        if (hasNotSubmitted) return 'unsafe';
         if (!hasReservation) return await absent(queuedPath) ? 'before_submission' : 'unsafe';
         return 'submitted_without_result';
       }
@@ -84,6 +87,14 @@ abstract class SpoolImageProvider implements ImageProvider {
       )).toString('utf8')), undefined, this.spoolProvider);
       const result = validateCodexImageResult(JSON.parse(resultBytes.toString('utf8')), this.spoolProvider);
       if (request.id !== id || result.id !== id || result.promptHash !== request.promptHash) return 'unsafe';
+      if (hasNotSubmitted) {
+        const evidence = JSON.parse((await boundedRead(notSubmittedPath, CODEX_IMAGE_MAX_JSON_BYTES)).toString('utf8')) as Record<string, unknown>;
+        if (this.spoolProvider !== 'chatgpt-web' || result.status !== 'failed' || !evidence || typeof evidence !== 'object' || Array.isArray(evidence)
+          || Object.keys(evidence).sort().join(',') !== 'id,promptHash,provider,state'
+          || evidence.id !== id || evidence.provider !== this.spoolProvider
+          || evidence.promptHash !== request.promptHash || evidence.state !== 'not_submitted') return 'unsafe';
+        return 'not_submitted';
+      }
       if (result.status === 'uncertain') return 'uncertain';
       if (result.status === 'failed') return result.errorCode === 'USAGE_LIMIT' ? 'usage_limited' : 'failed';
       const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));

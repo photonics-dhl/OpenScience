@@ -55,6 +55,7 @@ export interface BuildAppOptions extends AuthRouteDeps {
   videoEnabled?: boolean;
   canResumeImageBeforeSubmission?: HermesResearchRunDeps['canResumeImageBeforeSubmission'];
   inspectImageRecoveryState?: HermesResearchRunDeps['inspectImageRecoveryState'];
+  canResumeImageReviewFromCompletedResult?: HermesResearchRunDeps['canResumeImageReviewFromCompletedResult'];
   cookieSecret: string;
   /** P1A-6：注入结构化 logger（pino 实例满足 FastifyBaseLogger）；缺省关闭（测试现状）。 */
   logger?: FastifyBaseLogger;

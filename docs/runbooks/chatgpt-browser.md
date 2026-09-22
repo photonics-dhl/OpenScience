@@ -1,6 +1,10 @@
 # Server ChatGPT browser — operator login research
 
-- 当前版本、原任务期限与用户决定仅见[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。2026-09-15峰值取证：/dev/shm用满512MiB，与Mojo管道失败及173次ERR同步；事后余量不能排除峰值。1GiB现已运行，同六页首次加载峰值882MiB、资源错误0，4GiB总内存/沙箱保持。用户“你来判断”后私有备份、三锁下复用现有镜像/挂载/provider切换；六URL/登录/草稿正文已恢复，Chat段落格式不同，原文备份保留。旧容器停止供回退；回退容器不等于原DOM还在，备份才是恢复依据。不热remount、不杀NetworkService、不重置过期标记或重发。Library仍须精确绑定原结果。
+- 2026-09-22容量修复：23:19:39Z内核确认浏览器4GiB cgroup触顶并OOM-kill Chrome，与两个图片任务提交前超时相邻；共享内存/PID未触顶。主机约30GiB内存、约15GiB可用，High审查后在线将memory/memory-swap同步提高至8GiB；原container ID/running/network/PID/shm/security配置均未变化，没有重启。唯一安装默认值同步8GiB，防止未来重建退回旧容量。收据`/opt/openscience/observations/browser-memory-20260922.json`；旧页恢复仍需独立证据，扩容不等于已恢复。
+- 该容量操作已执行，不重放一次性脚本。必要回退仅在无在途恢复且实际用量低于4GiB时执行`docker update --memory 4g --memory-swap 4g openscience-chatgpt-browser`；随后核对同一container、memory/swap及安全字段。当前8GiB须保留，除非新的容量评估支持调整。
+- 原审阅08046c8b的唯一自有页经CDP `Inspector.targetCrashed`确证崩溃；原canonical会话在新专用页可读完整6Pro JSON，原图/anchor/提交收据保留。只关闭已确证崩溃的target，未重启共享浏览器、未重发。其他未知/可能有草稿的页面仍按原生命周期保护。
+
+- 当前版本、原任务期限与用户决定仅见[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。2026-09-15峰值取证：/dev/shm用满512MiB，与Mojo管道失败及173次ERR同步；事后余量不能排除峰值。1GiB现已运行，同六页首次加载峰值882MiB、资源错误0，当时4GiB总内存/沙箱保持（2026-09-22容量现已8GiB，见顶部）。用户“你来判断”后私有备份、三锁下复用现有镜像/挂载/provider切换；六URL/登录/草稿正文已恢复，Chat段落格式不同，原文备份保留。旧容器停止供回退；回退容器不等于原DOM还在，备份才是恢复依据。不热remount、不杀NetworkService、不重置过期标记或重发。Library仍须精确绑定原结果。
 - HISTORICAL 2026-09-13：base bundle d1630135 / rollback92cc416e；当时image broker运行patches/b78fb94d568840f4ef686eee76645ec86ed62acf/bundle，image/review runner501da7a3，page-lifecycle d369ccc2。各patch/before与deployment.json保留回滚；浏览器镜像8aa21251，07:55:11Z自行重启保留登录，应用08ed不变。真实5260只提交一次、原图回收/规范化/产品succeeded100%/draft；这些是历史证据，不得作为现行版本。
 - 历史人工恢复的活动判断复用review-runner.cjs既有可见Stop/停止按钮，再读取composer和未保存表单；不得以整页“生成中/generating”等历史文字阻止恢复。旧generatingPages=1即此误判。此次14页均无Stop/composer/dirty，取得三锁且队列空、确认profile/jobs持久化后才重启；证据/jobs/hermes-browser-{actual-state,pre-restart-actual,restart-container}-20260913b.json。
 - 已固化：正常键盘输入→Control+End→picture_v2工具，严格正文/模式校验；原Save弹窗不可用时，仅从唯一主图实际同源/estuary/content取PNG，禁止redirect、限30MiB后走原隔离normalize。download只在原deadline+1h内取已有结果；late marker不重复触发浏览器，但已保存结果可reconcile，保留错误/uncertain与原始marker。

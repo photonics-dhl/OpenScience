@@ -113,6 +113,8 @@ export interface ScienceReviewProvider {
   readonly name: string;
   readonly model: string;
   review(input: ScienceReviewInput): Promise<ScienceReviewProviderResult>;
+  /** Consume an exact saved image-review response without publishing another request. */
+  resumeFromCompletedResult?(input: ScienceReviewInput): Promise<ScienceReviewProviderResult>;
 }
 
 const invalid = (): never => { throw new Error('INVALID_OUTPUT'); };
