@@ -30,7 +30,22 @@ export async function runOne({inbox,results,privateRoot,provider,execute,now=Dat
  for(const p of [inbox,results,privateRoot])await directory(p);
  const queued=(await readdir(inbox)).filter(n=>n.endsWith('.json')&&UUID.test(n.slice(0,-5))).map(n=>n.slice(0,-5));
  const claimed=(await readdir(privateRoot)).filter(n=>UUID.test(n));
- for(const id of [...new Set([...claimed,...queued])]){
+ const claimedIds=new Set(claimed), candidates=[];
+ for(const id of new Set([...claimed,...queued])){
+  if(await exists(join(results,id,'result.json')))continue;
+  const privateDir=join(privateRoot,id),requestPath=join(privateDir,'request.json');
+  const priority=claimedIds.has(id)?await exists(join(privateDir,'started'))?0:1:2;
+  let deadlineAt=Number.NEGATIVE_INFINITY,createdAt=Number.NEGATIVE_INFINITY;
+  try{
+   const source=await exists(requestPath)?requestPath:join(inbox,id+'.json');
+   const request=validateCodexImageRequest(JSON.parse((await safeRead(source,16384)).toString()),undefined,provider);
+   if(request.id!==id)throw Error('REQUEST_ID_MISMATCH');
+   deadlineAt=request.deadlineAt;createdAt=request.createdAt;
+  }catch{ /* Invalid inputs still enter the existing claim/quarantine path. */ }
+  candidates.push({id,priority,deadlineAt,createdAt});
+ }
+ candidates.sort((a,b)=>a.priority-b.priority||a.deadlineAt-b.deadlineAt||a.createdAt-b.createdAt||a.id.localeCompare(b.id));
+ for(const {id} of candidates){
   const privateDir=join(privateRoot,id),requestPath=join(privateDir,'request.json');
   if(await exists(join(results,id,'result.json')))continue;
   if(!(await exists(privateDir))){await mkdir(privateDir,{mode:0o700});await syncDirectory(privateRoot);}

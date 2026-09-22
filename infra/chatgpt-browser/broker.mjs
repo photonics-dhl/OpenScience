@@ -280,6 +280,10 @@ async function recoverUncertainWebImage(config) {
   }
   return null;
 }
+async function pathEntryExists(path) {
+  try { await lstat(path); return true; }
+  catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+}
 async function publishNotSubmittedEvidence(config, preferredId) {
   const listed = (await readdir(config.privateRoot)).filter(name => UUID.test(name));
   const ids = [...new Set([...(preferredId && UUID.test(preferredId) ? [preferredId] : []), ...listed])];
@@ -295,17 +299,23 @@ async function publishNotSubmittedEvidence(config, preferredId) {
       const reservation = validateCodexImageRequest(JSON.parse((await safeRead(join(config.inbox, id + '.submitted.json'), 16384)).toString('utf8')), undefined, 'chatgpt-web');
       const primaryResult = validateCodexImageResult(JSON.parse((await safeRead(join(resultDir, 'result.json'), 16384)).toString('utf8')), 'chatgpt-web');
       const jobDir = join(config.jobs, id);
-      await safeDirectory(jobDir, 11040, 0o700);
-      const persistedInnerRequest = JSON.parse((await safeRead(join(jobDir, 'request.json'), 32768)).toString('utf8'));
-      const operatorError = JSON.parse((await safeRead(join(jobDir, 'operator-error.json'), 32768)).toString('utf8'));
       if (request.id !== id || request.provider !== 'chatgpt-web'
-        || !sameJson(reservation, request) || !sameJson(persistedInnerRequest, exactInnerRequest(request))
+        || !sameJson(reservation, request)
         || primaryResult.status !== 'failed' || primaryResult.id !== id || primaryResult.provider !== 'chatgpt-web'
-        || primaryResult.promptHash !== request.promptHash || operatorError?.state !== 'not_submitted'
-        || await exists(join(jobDir, 'submitted.json')) || await exists(join(jobDir, 'conversation.json'))
-        || await exists(join(jobDir, 'result.json')) || await exists(join(jobDir, 'output', 'image.png'))
-        || await exists(join(privateDir, 'browser-result.png')) || await exists(join(privateDir, 'normalized'))
-        || await exists(join(resultDir, 'result.png'))) continue;
+        || primaryResult.promptHash !== request.promptHash
+        || await pathEntryExists(join(privateDir, 'browser-result.png')) || await pathEntryExists(join(privateDir, 'normalized'))
+        || await pathEntryExists(join(resultDir, 'result.png'))) continue;
+      if (primaryResult.errorCode === 'EXPIRED') {
+        // runOne can exhaust its queue budget before creating the execution marker.
+        if (await pathEntryExists(join(privateDir, 'started')) || await pathEntryExists(jobDir)) continue;
+      } else {
+        await safeDirectory(jobDir, 11040, 0o700);
+        const persistedInnerRequest = JSON.parse((await safeRead(join(jobDir, 'request.json'), 32768)).toString('utf8'));
+        const operatorError = JSON.parse((await safeRead(join(jobDir, 'operator-error.json'), 32768)).toString('utf8'));
+        if (!sameJson(persistedInnerRequest, exactInnerRequest(request)) || operatorError?.state !== 'not_submitted'
+          || await exists(join(jobDir, 'submitted.json')) || await exists(join(jobDir, 'conversation.json'))
+          || await exists(join(jobDir, 'result.json')) || await exists(join(jobDir, 'output', 'image.png'))) continue;
+      }
       const evidence = { id, provider: 'chatgpt-web', promptHash: request.promptHash, state: 'not_submitted' };
       const serialized = JSON.stringify(evidence);
       if (!await publishExclusive(evidencePath, serialized)) {
