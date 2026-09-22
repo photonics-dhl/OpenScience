@@ -1,5 +1,11 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 — 通用已存方案末审恢复候选 High GO
+- 原STORYBOARD_OUTPUT_RESUME/retry-generation支持完整方案末次primary review provider_timeout，同task/相邻execution/charge1，不重新science/art或增加逻辑任务。旧未知调用保留；16K/600秒开始，真实length才升级32K，旧pixel 32K/charge0优先兼容。精确运行/发布锚点仍见CURRENT。
+- 首轮High的三项有效问题已修：预存完整checkpoint裸exec2无收据不得继续；原prompt入口绑定、内部JSON/schema拒收保留失败输出与反馈；fresh计费与原unknown语义一致。私有checkpoint可选executionAttempt只记录首次生成执行，旧marker/收据兼容；每次实际provider调用仍重验权限、原候选、source、provider/model、调用序号与审计前缀。候选没有新增表、分析器、模型阶段或公共协议。revised进入acceptance的批评因narrative verdictOnly两次解析而不可达，经复核撤回，未增加冗余分支。
+- 独立High增量GO；四文件完整及增量补丁留tmp/saved-final-review-recovery-20260922。仅静态阅读，未测试/预检/CI/本机构建；正常服务器构建启动及实际恢复尚未执行。复读原页面仍第二篇stopped55/max42/无按钮、第三篇stopped46/max43/planning1；无新模型调用。
+- 用户要求优先用好Hermes。已核对官方Skill/MCP文档与本产品调用方：独立Agent的按需技能、工具发现和记忆能力并未自动进入项目Worker。沿既有能力台账保留接线缺口，当前不新装运行时或另建全文分析器；不以v9消费、模型accepted或6Pro意见宣称科学质量通过。
+
 ## 2026-09-22 08:30Z — v9真实消费与阶段保存已观察，新的终审恢复缺口
 - 第二篇342f87eb真实science经65K/319291ms stop及一次结构修正37656ms stop后保存storyboardPlanningCheckpoint；designSkills明确critical-thinking v3、自有illustration v9含Scientific encoding，随后art16K length/162191ms、32K stop/90391ms，08:24:49完整storyboardCheckpoint替换partial。阶段保存及v9消费已有事实，不能据此认定科学正确。当前草稿仍有固定4.4μm与波长扫描混同、出入纸面符号/条件冲突，未生成新图。
 - 08:29:50最后一条scientific_review 726f54ad在主M3/16K/300003ms provider_timeout，run stopped55/max42/task failed exec1；完整方案保留，原UI GET200但无恢复按钮。旧output-resume只覆盖更早exec2+先16K截断再32K超时的特定历史，不能覆盖这次普通已存方案末审timeout。独立High正在设计沿原STORYBOARD_OUTPUT_RESUME、原授权/来源/CAS的通用阶段恢复，不新增任务平台，不冒称旧调用未提交。

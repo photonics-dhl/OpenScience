@@ -73,6 +73,11 @@ export interface ScienceReviewInput {
     primaryProviderOnly?: true;
     /** Existing output-resume receipt, checked by the worker before each plan-review provider attempt. */
     outputResumeReceiptId?: string;
+    /** Explicit saved-plan continuation; the worker replays its immutable receipt before each paid call. */
+    outputResumeMode?: 'saved-final-review';
+    outputResumeTarget?: { provider: string; model: string; promptHash: string };
+    /** Gateway-supplied attempt within this review invocation, for exact audit-history replay. */
+    outputResumeSubmissionAttempt?: number;
   };
 }
 

@@ -293,7 +293,8 @@ export async function getHermesResearchRun(
   const recovery = WRITE_ROLES.has(authority.membership.role)
     ? run.profile === VISUAL_NARRATIVE_PROFILE
       ? run.versionId
-        ? await inspectStoryboardCheckpointRecovery(deps.prisma, run).then(proof => proof ? { chargeableAttempts: 0 } : null).catch(() => null)
+        ? await inspectStoryboardCheckpointRecovery(deps.prisma, run).then(proof => proof ? {
+          chargeableAttempts: 'savedOutputResumeMetadata' in proof ? 1 : 0 } : null).catch(() => null)
         : await inspectHermesSourceReviewRecovery(deps.prisma, run.id).then(proof => proof ? { chargeableAttempts: 1 } : null).catch(() => null)
       : await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
   const view = toView(run, recovery ?? undefined);
@@ -304,7 +305,7 @@ export async function getHermesResearchRun(
     view.chargeableAttempts = 1 + sourceSupportReplan.sceneSteps.length;
     return view;
   }
-  if (recovery?.chargeableAttempts === 0 && run.profile === VISUAL_NARRATIVE_PROFILE && run.versionId)
+  if (recovery && run.profile === VISUAL_NARRATIVE_PROFILE && run.versionId)
     view.generationRecovery = 'storyboard-review';
   const planningRecovery = WRITE_ROLES.has(authority.membership.role)
     ? await inspectFailedStoryboardPlanning(deps.prisma, run).catch(() => null) : null;
@@ -1490,6 +1491,100 @@ async function readStoryboardArtCorrectionAuthorization(tx: Pick<Prisma.Transact
 
 const PIXEL_STORYBOARD_OUTPUT_TIMEOUT = 'pixel_storyboard_review_output_timeout';
 const STORYBOARD_OUTPUT_RESUME_ACTION = 'hermes.research_run.storyboard_output_resume';
+const SAVED_STORYBOARD_REVIEW_TIMEOUT = 'saved_storyboard_review_timeout';
+
+async function readSavedStoryboardOutputContext(tx: Prisma.TransactionClient, run: RunRow) {
+  if (run.profile !== VISUAL_NARRATIVE_PROFILE || !run.versionId || await validateReviewedSources(tx, run) !== 'ready') return null;
+  const pixel = await readNarrativePixelReplanAuthority(tx, { runId: run.id, actorId: run.actorId });
+  if ((!pixel && !validGrant(run)) || pixel?.technicalRecovery) return null;
+  const steps = run.steps.filter(item => item.stage === 'storyboard'); const step = steps[0];
+  if (steps.length !== 1 || !step?.agentTaskId || step.ordinal !== 0 || step.presentationAssetId) return null;
+  const task = await tx.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } });
+  const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+  const version = await tx.version.findUnique({ where: { id: run.versionId } });
+  if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.executionAttempt < 1 || task.retryCount !== task.executionAttempt - 1
+    || task.session.deletedAt || task.session.status !== 'active' || task.session.userId !== run.actorId || task.session.researchObjectId !== run.researchObjectId
+    || !ro || ro.deletedAt || ro.status !== 'draft' || !version || version.researchObjectId !== run.researchObjectId
+    || version.status !== 'draft' || version.publicVersionId || version.publicationNo
+    || await tx.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } })) return null;
+  const payload = parsePresentationGenerationPayload(task.payload);
+  const result = jsonRecord(task.result); const checkpoint = jsonRecord(result.storyboardCheckpoint); const planned = jsonRecord(checkpoint.planned);
+  if (payload.researchObjectId !== run.researchObjectId || payload.versionId !== run.versionId || payload.kind !== 'interactive_html'
+    || !payload.storyboard?.narrative || payload.storyboard.output !== 'image' || payload.storyboard.revisionMode
+    || !isDeepStrictEqual(payload.sourceClaimIds, [...run.sourceClaimIds].sort())
+    || !isDeepStrictEqual(payload.hermesRunAuthority, { runId: run.id, stage: 'storyboard', ordinal: 0, profile: run.profile })
+    || (!pixel && (payload.storyboard.baseAssetId || payload.storyboard.revisionTaskId || payload.storyboard.revisionImageAssetId))
+    || (pixel && (pixel.task.id !== task.id || !isDeepStrictEqual(pixel.payload, payload)
+      || checkpoint.sourceEvidenceIdentity !== pixel.metadata.sourceEvidenceIdentity || checkpoint.claimContent !== pixel.metadata.claimContent
+      || checkpoint.narrativeSourceIdentity !== pixel.metadata.narrativeSourceIdentity))
+    || Object.keys(result).join(',') !== 'storyboardCheckpoint' || !isDeepStrictEqual(checkpoint.payload, task.payload)
+    || checkpoint.baseIdentity !== (pixel?.baseIdentity ?? null) || planned.reviewFormat !== 2
+    || typeof planned.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(planned.promptHash)
+    || !await readUnchangedNarrativeCheckpointEvidence(tx, run, checkpoint)) return null;
+  const document = parseStoryboardDocument(planned.document, payload.sourceClaimIds, 'image');
+  if (!document.narrative || document.scenes.length < 1 || document.scenes.length > (payload.storyboard.narrativeSceneLimit ?? 6)) return null;
+  const tasks = await tx.agentTask.findMany({ where: { kind: 'presentation.generate',
+    payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } }, select: { id: true, status: true } });
+  const existingTaskCount = tasks.length + run.steps.filter(item => ['source_composition', 'source_review'].includes(item.stage)).length;
+  if (!Number.isSafeInteger(run.maxAgentTasks) || existingTaskCount > run.maxAgentTasks!
+    || tasks.some(item => item.id !== task.id && ['pending', 'running'].includes(item.status))
+    || await tx.agentTask.count({ where: { id: { in: run.steps.flatMap(item => item.agentTaskId && item.agentTaskId !== task.id ? [item.agentTaskId] : []) },
+      status: { in: ['pending', 'running'] } } })) return null;
+  return { task, step, checkpoint, existingTaskCount, workspaceId: ro.workspaceId,
+    authority: pixel ? { receiptId: pixel.receipt.id, rootReceiptId: pixel.rootReceipt.id, metadata: pixel.currentMetadata } : null };
+}
+
+function knownStoryboardOutput(meta: Record<string, unknown>) {
+  return (meta.outcome === 'succeeded' && meta.error === null && ['stop', 'length'].includes(String(meta.finishReason)))
+    || (meta.outcome === 'failed' && meta.error === 'provider_empty' && meta.finishReason === 'length' && meta.outputTokens === meta.maxOutputTokens);
+}
+
+function savedStoryboardTimeoutCalls(calls: Prisma.AuditLogGetPayload<{}>[], checkpoint: Record<string, unknown>, after: Date, failedAt: Date) {
+  const current = calls.filter(call => call.createdAt > after); const last = current.at(-1); const timeout = jsonRecord(last?.metadata);
+  const reviewIndex = current.findIndex(call => jsonRecord(call.metadata).operation === 'scientific_review');
+  const review = current.slice(reviewIndex);
+  if (!last || reviewIndex < 0 || timeout.operation !== 'scientific_review' || timeout.outcome !== 'failed' || timeout.error !== 'provider_timeout'
+    || timeout.finishReason !== undefined || timeout.inputTokens !== null || timeout.outputTokens !== null
+    || current.some((call, index) => { const meta = jsonRecord(call.metadata);
+      return call.actorId !== null || call.targetType !== 'ai_gateway' || call.createdAt > failedAt
+        || typeof meta.provider !== 'string' || !meta.provider || typeof meta.model !== 'string' || !meta.model
+        || meta.provider !== timeout.provider || meta.model !== timeout.model || meta.fallbackReason !== null || meta.retryCount !== 0
+        || meta.requestedThinking !== 'adaptive' || typeof meta.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(meta.promptHash)
+        || typeof meta.maxOutputTokens !== 'number'
+        || (index < reviewIndex ? meta.operation !== 'text' || ![16384, 32768, 65536].includes(meta.maxOutputTokens)
+          : meta.operation !== 'scientific_review' || ![16384, 32768].includes(meta.maxOutputTokens)
+            || meta.inputContentHash !== checkpoint.sourceEvidenceIdentity || meta.selectionReason !== 'source_grounded_illustration_review')
+        || (call.id !== last.id && !knownStoryboardOutput(meta));
+    })) return null;
+  return { timeoutAuditId: last.id, timeoutPromptHash: timeout.promptHash, timeoutOutputAllowance: timeout.maxOutputTokens,
+    reviewProvider: timeout.provider, reviewModel: timeout.model, reviewPromptHash: jsonRecord(review[0]!.metadata).promptHash };
+}
+
+async function inspectSavedStoryboardOutputRecovery(tx: Prisma.TransactionClient, run: RunRow) {
+  if (!['failed', 'stopped'].includes(run.status) || run.error !== PIXEL_PLANNING_PROVIDER_ERROR) return null;
+  const context = await readSavedStoryboardOutputContext(tx, run);
+  if (!context || context.task.status !== 'failed' || context.task.error !== run.error || context.step.error !== run.error
+    || !['failed', 'stopped'].includes(context.step.status)) return null;
+  const { task, step, checkpoint } = context;
+  const previous = await tx.auditLog.findFirst({ where: { actorId: run.actorId, targetType: 'hermes_research_run', targetId: run.id,
+    action: { in: ['hermes.research_run.generation_retry', 'hermes.research_run.storyboard_checkpoint_resume', STORYBOARD_OUTPUT_RESUME_ACTION] },
+    AND: [{ metadata: { path: ['taskId'], equals: task.id } }, { metadata: { path: ['previousExecutionAttempt'], equals: task.executionAttempt - 1 } }] },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+  if (task.executionAttempt > 1 && !previous) return null;
+  const calls = await tx.auditLog.findMany({ where: { requestId: task.id, action: 'ai.gateway.call' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+  const attempts = savedStoryboardTimeoutCalls(calls, checkpoint, previous?.createdAt ?? task.createdAt, task.updatedAt);
+  if (!attempts) return null;
+  return { task, step, checkpoint, planningAuditIds: calls.filter(call => jsonRecord(call.metadata).operation === 'text').map(call => call.id),
+    truncationAuditId: undefined, recoveryAction: STORYBOARD_OUTPUT_RESUME_ACTION,
+    savedOutputResumeMetadata: { recoveryClass: SAVED_STORYBOARD_REVIEW_TIMEOUT, ...attempts,
+      previousRetryCount: task.retryCount, previousTaskUpdatedAt: task.updatedAt.toISOString(), previousRunStatus: run.status,
+      previousRunError: run.error, previousMaxAgentTasks: run.maxAgentTasks, maxAgentTasks: run.maxAgentTasks,
+      authorizedExecutionAttempt: task.executionAttempt + 1, authorizedRetryCount: task.retryCount + 1,
+      taskPayload: task.payload, storyboardCheckpoint: checkpoint, authority: context.authority, existingTaskCount: context.existingTaskCount,
+      previousAuthorization: previous ? pixelPlanningAuditSnapshot([previous])[0]! : null,
+      gatewayAudits: pixelPlanningAuditSnapshot(calls), continuedOutputAllowance: 16384, continuedReviewTimeoutMs: 600_000,
+      chargeableAttempts: 1, priorSubmission: 'outcome_unknown_after_provider_timeout' } };
+}
 
 async function readPixelStoryboardOutputContext(tx: Prisma.TransactionClient,
   pixel: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanAuthority>>>) {
@@ -1579,10 +1674,67 @@ async function inspectPixelStoryboardOutputRecovery(tx: Prisma.TransactionClient
       continuedReviewTimeoutMs: 600_000, chargeableAttempts: 0, priorSubmission: 'outcome_unknown_after_provider_timeout' } };
 }
 
-/** Same saved candidate, one explicit third execution; called again by the existing provider authorization callback. */
+/** Revalidate the saved candidate receipt before each review call; the legacy pixel branch retains its third-execution contract. */
 export async function requirePixelStoryboardOutputResume(tx: Prisma.TransactionClient, input: {
-  runId: string; actorId: string; taskId: string; receiptId?: string; beforeFirstSubmission?: boolean;
+  runId: string; actorId: string; taskId: string; receiptId?: string; beforeFirstSubmission?: boolean; mode?: 'saved-final-review'; submissionAttempt?: number;
 }) {
+  if (input.mode === 'saved-final-review') {
+    const run = await tx.hermesResearchRun.findUnique({ where: { id: input.runId }, include: RUN_INCLUDE });
+    const context = run && run.actorId === input.actorId ? await readSavedStoryboardOutputContext(tx, run) : null;
+    if (!run || !context || run.status !== 'generating_storyboard' || context.task.id !== input.taskId
+      || context.task.status !== 'running' || context.step.status !== 'running') throw new Error('[blocked] Saved review continuation owner changed');
+    const { task, step, checkpoint } = context;
+    const receipts = await tx.auditLog.findMany({ where: { action: STORYBOARD_OUTPUT_RESUME_ACTION, targetType: 'hermes_research_run',
+      targetId: run.id, actorId: run.actorId, AND: [{ metadata: { path: ['taskId'], equals: task.id } },
+        { metadata: { path: ['authorizedExecutionAttempt'], equals: task.executionAttempt } }] }, take: 2 });
+    const receipt = receipts[0]; const meta = jsonRecord(receipt?.metadata);
+    if (!receipt || receipts.length !== 1 || (input.receiptId !== undefined && receipt.id !== input.receiptId)
+      || receipt.workspaceId !== context.workspaceId || meta.recoveryClass !== SAVED_STORYBOARD_REVIEW_TIMEOUT
+      || meta.taskId !== task.id || meta.stepId !== step.id || meta.previousExecutionAttempt !== task.executionAttempt - 1
+      || meta.previousRetryCount !== task.retryCount - 1 || meta.authorizedRetryCount !== task.retryCount
+      || !['failed', 'stopped'].includes(String(meta.previousRunStatus)) || meta.previousError !== PIXEL_PLANNING_PROVIDER_ERROR
+      || meta.previousRunError !== PIXEL_PLANNING_PROVIDER_ERROR || meta.maxAgentTasks !== run.maxAgentTasks || meta.previousMaxAgentTasks !== run.maxAgentTasks
+      || meta.existingTaskCount !== context.existingTaskCount || !isDeepStrictEqual(meta.authority, context.authority)
+      || !isDeepStrictEqual(meta.taskPayload, task.payload) || !isDeepStrictEqual(meta.storyboardCheckpoint, checkpoint)
+      || meta.planningPromptHash !== jsonRecord(checkpoint.planned).promptHash || meta.sourceEvidenceIdentity !== checkpoint.sourceEvidenceIdentity
+      || meta.narrativeSourceIdentity !== checkpoint.narrativeSourceIdentity || meta.noReplanning !== true || meta.newTaskCount !== 0
+      || meta.chargeableAttempts !== 1 || meta.noProviderSwitch !== true || meta.priorSubmission !== 'outcome_unknown_after_provider_timeout'
+      || meta.continuedOutputAllowance !== 16384 || meta.continuedReviewTimeoutMs !== 600_000 || !Array.isArray(meta.gatewayAudits))
+      throw new Error('[blocked] Saved review continuation receipt changed');
+    const previous = jsonRecord(meta.previousAuthorization);
+    const previousReceipt = typeof previous.id === 'string' ? await tx.auditLog.findUnique({ where: { id: previous.id } }) : null;
+    if (meta.previousAuthorization !== null && (!previousReceipt
+      || !isDeepStrictEqual(pixelPlanningAuditSnapshot([previousReceipt])[0], previous))) throw new Error('[blocked] Saved review prior authorization changed');
+    const failedAt = typeof meta.previousTaskUpdatedAt === 'string' ? new Date(meta.previousTaskUpdatedAt) : null;
+    const ids = meta.gatewayAudits.map(raw => jsonRecord(raw).id);
+    const allCalls = await tx.auditLog.findMany({ where: { requestId: task.id, action: 'ai.gateway.call' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+    const calls = allCalls.filter(call => ids.includes(call.id)); const additional = allCalls.filter(call => !ids.includes(call.id));
+    const attempts = failedAt && Number.isFinite(failedAt.getTime()) && failedAt <= receipt.createdAt
+      ? savedStoryboardTimeoutCalls(calls, checkpoint, previousReceipt?.createdAt ?? task.createdAt, failedAt) : null;
+    if (!attempts || Object.entries(attempts).some(([key, value]) => meta[key] !== value)
+      || !isDeepStrictEqual(meta.gatewayAudits, pixelPlanningAuditSnapshot(calls))
+      || !isDeepStrictEqual(meta.planningAuditIds, calls.filter(call => jsonRecord(call.metadata).operation === 'text').map(call => call.id))
+      || (input.beforeFirstSubmission && additional.length !== 0) || additional.length >= 5
+      || (input.submissionAttempt !== undefined && (!Number.isSafeInteger(input.submissionAttempt) || input.submissionAttempt !== additional.length + 1)))
+      throw new Error('[blocked] Saved review continuation audit history changed');
+    let allowance = 16384;
+    for (const [index, call] of additional.entries()) {
+      const value = jsonRecord(call.metadata);
+      if (call.actorId !== null || call.targetType !== 'ai_gateway' || call.createdAt <= receipt.createdAt
+        || value.operation !== 'scientific_review' || value.provider !== meta.reviewProvider || value.model !== meta.reviewModel
+        || typeof value.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(value.promptHash)
+        || ((index === 0 || jsonRecord(additional[index - 1]!.metadata).finishReason === 'length') && value.promptHash !== meta.reviewPromptHash)
+        || value.fallbackReason !== null || value.retryCount !== 0
+        || value.requestedThinking !== 'adaptive' || value.maxOutputTokens !== allowance
+        || value.inputContentHash !== checkpoint.sourceEvidenceIdentity || value.selectionReason !== 'source_grounded_illustration_review'
+        || !knownStoryboardOutput(value)) throw new Error('[blocked] Saved review continuation has an unknown or changed submission');
+      if (value.finishReason === 'length') {
+        if (allowance === 32768) throw new Error('[blocked] Saved review output allowance exhausted');
+        allowance = 32768;
+      }
+    }
+    return { id: receipt.id, metadata: meta };
+  }
   const pixel = await readNarrativePixelReplanAuthority(tx, input);
   if (!pixel || pixel.task.id !== input.taskId || pixel.run.status !== 'generating_storyboard' || pixel.step.status !== 'running'
     || pixel.task.status !== 'running' || pixel.task.executionAttempt !== 3 || pixel.task.retryCount !== 2)
@@ -1631,7 +1783,8 @@ export async function requirePixelStoryboardOutputResume(tx: Prisma.TransactionC
 
 /** Resume a saved plan after a proven local rejection or the bounded review output failure. */
 async function inspectStoryboardCheckpointRecovery(tx: Prisma.TransactionClient, run: RunRow) {
-  if (run.error === PIXEL_PLANNING_PROVIDER_ERROR) return inspectPixelStoryboardOutputRecovery(tx, run);
+  if (run.error === PIXEL_PLANNING_PROVIDER_ERROR) return await inspectPixelStoryboardOutputRecovery(tx, run).catch(() => null)
+    ?? inspectSavedStoryboardOutputRecovery(tx, run);
   const budgetError = '[blocked] Illustration review sources exceed the input budget; select fewer Claims';
   const outputError = 'Provider exhausted output allowance before producing text';
   const outputContinuation = run.error === outputError;
@@ -2052,6 +2205,14 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         if (run.profile === VISUAL_NARRATIVE_PROFILE) {
           if (!ro || ro.deletedAt || ro.status !== 'draft' || !membership || !WRITE_ROLES.has(membership.membership.role))
             throw new HermesResearchRunError('FORBIDDEN', 'Source review recovery permission is unavailable');
+          const outputReceipt = await tx.auditLog.findFirst({ where: { action: STORYBOARD_OUTPUT_RESUME_ACTION,
+            targetType: 'hermes_research_run', targetId: run.id, actorId: input.actorId,
+            metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } } });
+          if (outputReceipt) {
+            if (jsonRecord(outputReceipt.metadata).requestDigest !== requestDigest)
+              throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Storyboard output recovery key belongs to another request');
+            return { run, dispatchIds: [] as string[] };
+          }
           const planningReceipt = await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry',
             targetType: 'hermes_research_run', targetId: run.id, actorId: input.actorId,
             metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } } });
@@ -2422,21 +2583,21 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before continuing the saved storyboard');
           const saved = await inspectStoryboardCheckpointRecovery(tx, run);
           if (!saved) throw new HermesResearchRunError('SOURCE_NOT_READY', 'The saved storyboard cannot be resumed safely');
-          if ('pixelOutputResumeMetadata' in saved && !deps.audit?.record)
+          if (('pixelOutputResumeMetadata' in saved || 'savedOutputResumeMetadata' in saved) && !deps.audit?.record)
             throw new HermesResearchRunError('SOURCE_NOT_READY', 'Storyboard output recovery audit is unavailable');
           const taskChanged = await tx.agentTask.updateMany({ where: {
             id: saved.task.id, sessionId: saved.task.sessionId, status: 'failed', retryCount: saved.task.retryCount,
             executionAttempt: saved.task.executionAttempt, progress: saved.task.progress,
-            error: saved.task.error, payload: { equals: saved.task.payload as Prisma.InputJsonValue },
+            error: saved.task.error, deletedAt: null, updatedAt: saved.task.updatedAt, payload: { equals: saved.task.payload as Prisma.InputJsonValue },
             result: { equals: saved.task.result as Prisma.InputJsonValue },
           }, data: { status: 'pending', progress: 0, retryCount: saved.task.retryCount + 1, error: null, dispatchedAt: null } });
           const stepChanged = await tx.hermesResearchStep.updateMany({ where: {
             id: saved.step.id, runId: run.id, stage: 'storyboard', ordinal: 0, status: saved.step.status,
-            agentTaskId: saved.task.id, presentationAssetId: null,
+            agentTaskId: saved.task.id, presentationAssetId: null, error: saved.step.error, updatedAt: saved.step.updatedAt,
           }, data: { status: 'running', error: null } });
           const runChanged = await tx.hermesResearchRun.updateMany({ where: {
             id: run.id, actorId: input.actorId, status: run.status, version: input.expectedVersion, versionId: run.versionId,
-            maxAgentTasks: run.maxAgentTasks,
+            maxAgentTasks: run.maxAgentTasks, error: run.error, updatedAt: run.updatedAt,
           }, data: { status: 'generating_storyboard', error: null, lastReconciledAt: null, version: { increment: 1 } } });
           if (taskChanged.count !== 1 || stepChanged.count !== 1 || runChanged.count !== 1)
             throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Saved storyboard changed while continuing');
@@ -2447,11 +2608,13 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
               previousError: saved.task.error, planningAuditIds: saved.planningAuditIds,
               ...(saved.truncationAuditId ? { truncationAuditId: saved.truncationAuditId, continuedOutputAllowance: 32768 } : {}),
               ...('pixelOutputResumeMetadata' in saved ? saved.pixelOutputResumeMetadata : {}),
+              ...('savedOutputResumeMetadata' in saved ? saved.savedOutputResumeMetadata : {}),
               planningPromptHash: jsonRecord(saved.checkpoint.planned).promptHash,
               sourceEvidenceIdentity: saved.checkpoint.sourceEvidenceIdentity,
               narrativeSourceIdentity: saved.checkpoint.narrativeSourceIdentity,
               noReplanning: true, newTaskCount: 0, noProviderSwitch: true,
-              creditPolicy: 'reuse-original-reservation;remaining-review-incurs-provider-usage' } }, ctx);
+              creditPolicy: 'savedOutputResumeMetadata' in saved ? 'fresh-charged-submission;prior-provider-timeout-outcome-unknown'
+                : 'reuse-original-reservation;remaining-review-incurs-provider-usage' } }, ctx);
           return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }),
             dispatchIds: [saved.task.id] };
         }

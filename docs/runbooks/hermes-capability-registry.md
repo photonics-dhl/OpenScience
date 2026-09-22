@@ -48,6 +48,10 @@ Hermes技能与学习消费审计（2026-09-22）：82/606实际checkpoint记录
 
 原图视觉理解缺口：`provider.ts`普通ChatMessage仅文本；`figure-list.ts`是文字引用提取，`figure-audit.ts`只向`figure-auditor.ts`提供id/caption/role，且Evidence读取把pageStart固定为1，不能当作原图页定位。SourceMap的figure/caption块有bbox/文本但没有图像语义。现有MiniMax VLM经`ocr.ts`固定转录提示、`llm-ocr-fallback.ts`低质量页路径调用，外部处理权限仅允许sdf.extract；既不是普遍看过原图，也不提供坐标/拓扑解释。拟沿既有figure-audit按需绑定当前原文页、复用隔离renderPages与VLM传输，另设窄的视觉观察语义和presentation权限，观察只作上下文不自动成为Evidence；尚未实现。若页定位不唯一，不猜页或绕过权限。比例尺、条件分组等现有文字足够发现的问题不归因于缺视觉输入。
 
+上游能力与本产品接线分开：2026-09-22定向核对[MiniMax官方Anthropic接口文档](https://platform.minimax.io/docs/api-reference/text-anthropic-api)，M3已支持图像输入和tools/tool results，而mcp_servers参数被忽略；本项目普通Provider消息仍是纯文本，未接这些能力。原图语义补接应先比较沿已有M3调用加入有权限的选定页与既有VLM复用路径，不能以新安装MCP替代真实工具执行/结果回传，也不能绕过原图外发权限或把OCR转录冒作视觉理解。该核对没有发起模型请求、安装或改变路由。
+
+独立Hermes Agent的[Skill机制](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills/)和[MCP机制](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp/)支持按需加载方法、工具发现和经验保存；这是上游运行时能力，不代表本产品的Worker已接入。后续补接优先复用现有全文/证据/选定页/审阅记录，通过当前权限边界传递工具结果；核实后的科学纠错与用户审美偏好分别限定适用范围。当前不新装运行时、不另建全文分析器，不以存有日志冒称跨任务学习，也不假定6Pro意见必然正确。
+
 针对15b真实失败的Skill v9：同一个Scientific encoding章节同时供science/review消费，明确坐标投影/拓扑、固定与扫描条件、可见核心结果、定量共同尺度与非比例概念图的选择、点密度和点径的独立含义；原泛化段原地替换，不叠一轮模型或新输出字段。不自动安装技能、改M3路由或宣称自学习；已部署，真实消费与效果见CURRENT。跨部署恢复的designSkills按id/version/upstreamCommit归并，保留科学旧版本与艺术新版本的实际来源。
 
 v9真实结果进一步限定能力：342f87eb已记录science v9及完整science/art保存，科学草稿仍有固定/扫描条件与坐标矛盾，不能声称正确率提升。原Domain `IllustrationBrief`支持1–4subjects，planner却只许2个单basis；已发现把多段支持命题塞进两个subject的具体压力。候选仅将narrative上限与既有4项对齐、各原子命题独立绑定，美术引用实际索引，非narrative仍2；无新字段/表/模型阶段，不能保证解决所有推理错误。部署与实际消费见CURRENT。完整方案后的普通末审timeout也缺原UI恢复入口，正在沿既有output-resume补通用阶段恢复，旧不确定调用不可当未提交。
