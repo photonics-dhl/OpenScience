@@ -673,6 +673,9 @@ export function classifyAcceptanceHandlerResult(value: unknown, requireSemantic 
   const needsMoreInformation = value.needsMoreInformation;
   const scientificStatus = isRecord(value.scientificReview) ? value.scientificReview.status : undefined;
   const partialFields = needsMoreInformation.filter((field): field is string => typeof field === 'string');
+  const fieldDiagnostics = value.fieldDiagnostics;
+  const fieldDiagnosticsDetails = value.fieldDiagnosticsDetails;
+  const unverifiedSourcePassageIds = value.unverifiedSourcePassageIds;
   if (!hasExactKeys(core, ['schemaVersion', ...SDF_FIELDS])
     || core.schemaVersion !== SDF_CORE_VERSION
     || SDF_FIELDS.some((field) => typeof core[field] !== 'string')
@@ -698,14 +701,14 @@ export function classifyAcceptanceHandlerResult(value: unknown, requireSemantic 
     || (hasSemanticResult && (hasPartialResult !== (scientificStatus === 'blocked_scientific_review')))
     || (hasPartialResult && (value.reason !== 'canonical_partial_validation_exhausted'
       || JSON.stringify(partialFields) !== JSON.stringify(ACCEPTANCE_MISSING_FIELDS)
-      || !isRecord(value.fieldDiagnostics) || !hasExactKeys(value.fieldDiagnostics, partialFields)
-      || partialFields.some((field) => value.fieldDiagnostics[field] !== 'malformed_item')
-      || !isRecord(value.fieldDiagnosticsDetails) || !hasExactKeys(value.fieldDiagnosticsDetails, partialFields)
-      || partialFields.some((field) => value.fieldDiagnosticsDetails[field] !== 'scientificReview=needs_source_evidence')
+      || !isRecord(fieldDiagnostics) || !hasExactKeys(fieldDiagnostics, partialFields)
+      || partialFields.some((field) => fieldDiagnostics[field] !== 'malformed_item')
+      || !isRecord(fieldDiagnosticsDetails) || !hasExactKeys(fieldDiagnosticsDetails, partialFields)
+      || partialFields.some((field) => fieldDiagnosticsDetails[field] !== 'scientificReview=needs_source_evidence')
       || !isRecord(value.unverifiedSummaries) || !hasExactKeys(value.unverifiedSummaries, [])
-      || !isRecord(value.unverifiedSourcePassageIds) || !hasExactKeys(value.unverifiedSourcePassageIds, partialFields)
-      || partialFields.some((field) => !Array.isArray(value.unverifiedSourcePassageIds[field])
-        || (value.unverifiedSourcePassageIds[field] as unknown[]).length !== 0)))) {
+      || !isRecord(unverifiedSourcePassageIds) || !hasExactKeys(unverifiedSourcePassageIds, partialFields)
+      || partialFields.some((field) => !Array.isArray(unverifiedSourcePassageIds[field])
+        || (unverifiedSourcePassageIds[field] as unknown[]).length !== 0)))) {
     throw new Error('invalid sdf.extract handler result');
   }
   if (hasEvidenceSegments) {
