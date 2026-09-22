@@ -1,5 +1,10 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 02:33Z — 科学编码隔离上线、桥接操作修正与第二篇续作
+- app b285正常服务器build/start exit0，独立marker release/rollback正确、journal/failed无。两prompt差异High静态PASS。第二篇02:33:28Z原按钮202→cb342f7d-554a-4f0e-89eb-daac26b9305d/runv35；receipt second-paper-current-encoding-replan-20260922已消费，不重放。
+- 精确取证：77/a248按钮已唯一可见，随后plus.click actionability超时，仍余254/491秒；1ff page_selection失败与Mojo/seccomp同窗但无法绑定具体renderer；cf6正文42930字符/52409bytes且仍余1770秒，PROMPT_CHANGED真实字符原因未知，旧首错误遮住第二attempt且owned页已关闭。不能冒认缩放、OOM、排队或字符差异已确证。
+- runner候选High静态PASS并从c855独立安装：plus改focus/Enter且仍核image mode；review最终读取失败不转成空正文，真正不一致仅记录长度/差异码点/连接和附件布尔值；各次失败独立安全诊断保留原错误。原三锁备份provider-backup-20260922-actionability-c8557f92/timer原状态恢复，无共享浏览器重启。Gateway及依赖源码/lock未改，复用b285服务器构建dist，未跑测试/预检/CI。
+- 第三篇技术子集恢复设计沿原retry-generation：保留719和cb2，cf6复制原PNG到新审阅任务，三无PNG失败创建替代任务；旧reservation/deadline/资产不改，仅可信not_submitted旁证允许，新任务/收费/receipt链和CAS一致。候选实施中，尚未恢复或发布。最新所有状态见CURRENT。
 ## 2026-09-22 02:21Z — 当前9图终态与科学/艺术反馈隔离候选
 - 第二篇f522当前四图：e8bdcff7 accepted，b3202126/3316f61a/2b4ec10a科学blocked且repair null。旧审查要求比例条，science已经改为等面积概念编码，但art再次生成1:36.4比例几何，现有M3末审漏掉冲突，真实6Pro阻断。最小候选仅illustration-planner/review：科学返工的旧原始反馈只供science，art-only反馈保留；当前encoding决定映射/尺度，原末审比较补比例与非比例冲突。冻结tmp/encoding-art-consistency-review-20260922，独立High进行中，无测试/新模型。
 - 第三篇405a末审在出图前阻断无来源固定角度及速率/荧光增强混同；原按钮只追加1计划cb2（01:48:45Z/202），同一来源与六维保留，cb2 accepted。当前719a真实图/6Pro accepted；cf6已有PNG但review PROMPT_CHANGED且not_submitted；77/1ff/a248图像请求均not_submitted，故障阶段分别image_mode_plus、page_selection、image_mode_plus。run failed/v36/max27，尚无适用恢复入口；查原回执与现有恢复实现，不造科学拒收、不能盲重生整套。
