@@ -1,5 +1,13 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 — 续审P2028定向修复待交付
+- 已确认原Serializable事务5000ms不足，5574ms时完整回滚。只将`retryHermesGeneration`的interactive transaction设为既有`saveHermesSourceReview`采用的30000ms；授权、来源/收据复验、CAS、P2034-only重试及commit后派发不变，不新增P2028自动重试或削弱检查。独立High一行增量GO；正常服务器构建发布后使用第三篇新attempt2收据，第二篇原未消费writer随后继续。没有新模型请求，未测试/预检/CI/本机构建。
+
+## 2026-09-22 11:04Z — 页面隔离与子集恢复已部署；首次续审事务超过默认5秒
+- 574c3db2ceeec70f4f1f7b32b8ee43002d63ec17正常服务器build/start exit0；独立marker release574/rollbackf19e99d4、journal/failed=false。独立provider也安装574，两unit指向新bundle、三份runner与release逐字节相等、两个timer均active/enabled；原浏览器未重启，备份provider-backup-20260922-page-ownership-574c3db2。安装助手本身exit1是CRLF heredoc尾PY被Python当名字执行，发生在installed=true且finally恢复timer之后；已独立读回安装完成，不重放安装。助手改成STDIN前归一LF，旧日志完整保留tmp/page-ownership-provider-install-20260922.log。
+- 原页面GET两篇均真实image-render/charge3/canRetry=true。11:03:54.338Z第三篇原按钮HTTP500 INTERNAL；原run仍failed52/max44、latest receipt仍09:54的6e681c65、所有原task/step不变，未创建新审阅任务。API req-16精确P2028：事务默认5000ms，实际5574ms已过期。只读复核tmp/saved-png-review-resume-state-20260922.json。没有继续第二篇提交，也没有重发图片。
+- /jobs/third-paper-saved-png-review-resume-20260922.json及同名writer已消费500，不能重放；second-paper-saved-png-review-resume-20260922仍未运行。事务期限修复见顶部增量，保留全部资格读取，不自动P2028重试、不改授权/原审计/unknown语义。无测试、预检、CI、模型请求或本机构建。
+
 ## 2026-09-22 — 新稿六图已保存；跨 broker 共用页面已确证，恢复候选待交付
 - be793/3d7两稿正式M3末审accepted；第二篇run failed/v61/max43、第三篇failed/v52/max44。各三张真实PNG保存draft，六次6Pro review均not_submitted/MODEL_6_PRO_NOT_READY，没有发送审阅；每篇第四张34d8abc0/34ce6503有submitted、无conversation，public uncertain，不得重发或改成未提交。tmp/source-root-plan-completion-20260922.json、current-scene-failure-metadata-20260922.json、current-eight-scene-spool-20260922.json留证，六图tmp/current-<taskId>-20260922.png已逐张实看。
 - 同一browser instance06782bc8的target登记直接碰撞：image38c6/review9616共DD8F5099；image34d8/review38c6共785D80FA；image34ce/review77c3共1209E3F0。image认领任意空白home/name，而review新页未命名、两broker分锁，存在跨任务误占；后两submitted图的target与失败关闭的review target相同。不把全部六次MODEL错误都归因于同一原因。根因候选删除image全局claim，只创建自有页；image/review标记并在填充/提交前核对原name，既有target登记、prepare/send/旧恢复/deadline/provider保持。独立High GO，未安装。

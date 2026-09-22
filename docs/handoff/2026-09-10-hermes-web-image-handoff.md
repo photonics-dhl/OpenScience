@@ -15,8 +15,8 @@
 - 收尾根main及交付树status必须空，自有改动提交推送，prune/list。只剩这两树。268日志归档、12份长文staging归档均已完成，勿重复处理；不声称根治上游argv缺陷。
 
 ## Git与部署
-- application production=f19e99d49862f026d884cdf1e2edf0ae75019973；rollback=dac602ec3fc1deba2c017cc80ea1fa60625648ab。正常服务器build/start exit0，独立marker一致、journal/failed=false；日志/opt/openscience/observations/deploy-f19e99d4-attempt2-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
-- 独立Chat provider=d8305c93c0d87b7923c617800056c29246ac892b；两unit/timer曾独立读回，原三锁/空闲/备份安装，无浏览器重启。备份provider-backup-20260922-existing-image-recovery-d8305c93；renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f，sceneImage fallback=false。
+- application production=574c3db2ceeec70f4f1f7b32b8ee43002d63ec17；rollback=f19e99d49862f026d884cdf1e2edf0ae75019973。正常服务器build/start exit0，独立marker一致、journal/failed=false；日志/opt/openscience/observations/deploy-574c3db2-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
+- 独立Chat provider=574c3db2ceeec70f4f1f7b32b8ee43002d63ec17；两unit/timer曾独立读回，原三锁/空闲/备份安装，无浏览器重启。备份provider-backup-20260922-page-ownership-574c3db2；renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f，sceneImage fallback=false。
 - 图队列当前4worker总65分钟、最多8为125分钟，private/started固定领取后最多10分钟，旧request/deadline不改；一次oneshot不叠慢恢复与新生成。不保证任意旧积压/多生产者。部署排空600秒不覆盖长排队，先等相关本地任务自然终态；超时上游结果仍未知。
 - 0bee5b9b已推送的单文件候选将narrative subjects对齐Domain既有1–4，非narrative保持1–2；各要点独立绑定支持段，art引用实际索引。High修复一项后PASS，已随本次正常发布部署。原场景数/共享预算/来源守卫不变，不保证消除所有推理错误。
 - 通用已存方案末审timeout恢复候选沿原STORYBOARD_OUTPUT_RESUME/retry-generation，同task/charge1、保留science/art、原provider。已补裸exec2授权、内部JSON/schema修复反馈与计费语义，原/后续提示身份分开核验并保留旧收据兼容；新增checkpoint私有执行标记区分当轮新生成与预存方案。增量High静态GO，revised不可达批评已撤回。tmp/saved-final-review-recovery-20260922保留补丁/增量；已正常部署，第二篇原页面202已创建真实续接收据并完成正式blocked末审，无新science/art调用。
@@ -47,10 +47,11 @@
 - 旧400科学末审blocked公式及额外标题，09:54原按钮创建3d7ee9e7-b5ae-4578-8963-10478d2f7f30；本次M3正式accepted、plan approved。33fdd3f4/77c367a8/96167c38真实PNG draft、三次6Pro review均not_submitted/MODEL_6_PRO_NOT_READY。34ce6503有submitted、无conversation、uncertain，不重发。实际图与方案仍含labels外标题/符号及所选basis不足；A(r)混入N已修正，不重复旧批评。
 - 原606五图/全部历史保护；8d4f为blocked但repair非空，c482像素accepted但上游来源无效；34d30e5c/96710033旧提交unknown及6cf未提交保持。旧34一小时grace已过，不延期限或按旧writer取图。1e07仅heading，原SourceMap导言确有类比也不能手补旧Evidence；Box1 k方向索引旧相反批评已撤回。
 ## 下一步与不可误跑项
-- 两篇最新任务自然终态；六图仅审阅续接候选沿原技术恢复入口保留unknown，Domain两文件已独立High GO、待部署。跨broker三个target碰撞已确证，两个runner自有页面隔离与planner正式issues到art候选均High GO、未部署。组合复核后正常服务器构建启动及原三锁备份安装provider，不重启浏览器；原页面仅续六张PNG审阅，再据真实科学反馈继续reader/新公开版本。
+- 两篇最新任务自然终态。页面隔离、正式issues到art和六图仅审阅恢复均High GO并正常部署；原GET两篇image-render/charge3已实见。第三篇11:03:54原按钮500，P2028默认5000ms/实际5574ms，事务回滚无新task/receipt，run仍52。仅原retryHermesGeneration期限改30000ms，保留Serializable/全部资格读取/P2034-only重试，High增量GO，待正常发布后用新attempt2收据续原页。第二篇writer未运行，不重发unknown，不把GET/编译当完成。
 - 08:13/08:14两writer已消费：/jobs/third-paper-durable-planning-resume-20260922.json、second-paper-skill-v9-replan-20260922.json。此前source-support/defect-aware/saved-final/technical-subset/art-timeout/geometric等历史writer及首篇publish也已消费；完整清单见09-18交接。third-paper-evidence-scoped-replan资格不符，始终禁运行。
 - 读取入口：tmp/third-paper-durable-planning-read-20260922.cjs固定400；second-paper-v9-planning-read-20260922.cjs固定342；two-paper-v9-recovery-surface-read-20260922.cjs读当前原页面GET；current-two-paper-scene-reviews-read-20260922.cjs按run现有scene读。历史固定82/606/cb342的reader不能当新任务集合。新读入口tmp/saved-review-two-paper-progress-20260922.cjs定向读两task/当前恢复receipt及后续调用。旧saved-review/source-capacity与最新second-paper-scale-plan-revision-20260922、third-paper-source-root-plan-revision-20260922 writer及/jobs同名json均已消费，不重放。最新reader为tmp/source-root-plan-revision-two-paper-progress-20260922.cjs（be793/3d7），intents-read同前缀；旧342/400 reader仅历史。
 - 账号：用户允许切换备用账号但位置未知；已知元数据未找到第二份可直接使用的登录，当前菜单无账号切换入口，未退出/换号/读凭据。当前6Pro可见不证明额度或旧失败原因。
+- third-paper-saved-png-review-resume-20260922 writer及/jobs同名json已消费500，不重放；second-paper-saved-png-review-resume-20260922未运行。provider安装助手尾heredoc错误已独立确认不影响实际安装，禁止重放；详情见最新交接。
 - 最新证据：tmp/source-root-plan-completion-20260922.json、current-scene-failure-metadata-20260922.json、current-eight-scene-spool-20260922.json；六图tmp/current-<taskId>-20260922.png已实看。
 - stage保存已实见；fresh_art_after_unknown尚未实际触发。原图语义视觉读取、按问题回读全文、跨任务经验检索仍未实现，见能力台账。当前产品Hermes是worker/Gateway调用，不自动消费/opt/hermes-agent的技能发现/记忆循环。
 - 本机固定Pro任务exec resume确有成功读写/06:10只读诊断；服务器新scene/revision task仍新Chat会话，revisionAssetId只传repair文本，referenceImage仅风格；同task恢复只取原结果。同图跨任务连续编辑尚未实现，本机Codex任务续接不能冒称GPT网页会话续接。
