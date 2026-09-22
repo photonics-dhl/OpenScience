@@ -1,5 +1,6 @@
 # CURRENT Progress Window
-> 本机配置补记（2026-09-21）：用户授权独立提交开发树浏览器代理；保留源码检索，无业务部署。范围/依赖/回滚见[能力台账](runbooks/hermes-capability-registry.md#local-browser-proxy)。
+
+> 2026-09-22 期刊增强部署：独立候选 codex/journal-server-20260922 正在适配最新生产线；已确认49个核心迁移全部应用、journal/AI开关启用、双库备份成功。准确状态见 [期刊CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)，不改变下方Hermes任务。 本机配置补记（2026-09-21）：用户授权独立提交开发树浏览器代理；保留源码检索，无业务部署。范围/依赖/回滚见[能力台账](runbooks/hermes-capability-registry.md#local-browser-proxy)。
 ## 2026-09-22 — 多图审阅与技术恢复
 - 首篇v3已公开。第二篇四张新图已实看并审阅结束：一通过、一局部绘图修正、两张科学拒收；第三篇science成功后art连续JSON解析失败，旧实现未保存science，不能假称可跳过重跑。通用science/art私有检查点、无效返回收据和Skill v8已正常构建部署，原M3路由保持，尚未新模型恢复；已知art超时显式新尝试与Skill v9科学编码方法已High静态PASS，待部署。后两篇reader/新公开版本未完成；精确状态和证据见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。未测试/预检/CI/本机构建。
 ## 2026-09-21 — 复用 CLI 合作，推进真实 PDF→Hermes→多风格→审图发布
@@ -17,7 +18,6 @@
 - 占位调试产物清理（用户授权：只清我自己造的废物）：删除资产 `929bd95d`（68 字节源占位）/`6088f11b`（占位 plan）/`03a160aa`（占位 copy 图）与失败任务 `6088f11b`/`627e7b48`/`7c654505` 及其 claims、spool 残留；读回验证这三行现存 0 行。**后果已记账**：`docs/progress.md` 与能力台账第 128 行原文引用这三行，均就地加更正注——**paper-original 链路只验证过管道、从未流过真实论文图**，真实证据需用真实 Fig. 图片经 `POST /research-objects/:id/versions/:vid/paper-figures` 重建。
 - 残留未处置（需用户拍板，勿单方面删）：`d5087b03`（copy 图 draft，provenance 的 `sourceAssetId=929bd95d` 已删 → 悬空）+ Fig. 2 reuse 周期的重复 plan `6439150a`/`ee9bcfb6`(draft)、`6043bebb`/`75b34c88`(**approved**，删除会改产品可见状态）；另有 08:14–08:17 四条 `结构化输出超过重试上限` 失败 task，是 `561d738b` 修 `MAX_STRUCTURED_RETRIES` 的复现证据。
 - 交接与本轮新会话 prompt：[docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md](handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)；CURRENT 已把生产锚点更正为 release `7bf8c5e5`/rollback `561d738b`（canonical HEAD `2a174fc6` 为纯文档提交、未部署）。
-
 - 早期同prompt重复付费的复现记录见Git历史；服务端守护及真实结果见下节。
 
 ## 2026-09-18 — 修复：服务端重复付费守护（`d9bc5dd0`）

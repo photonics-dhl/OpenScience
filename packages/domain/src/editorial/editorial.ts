@@ -2,6 +2,7 @@ import type { AuditContext } from '@openscience/observability';
 import { publicVersionNumber, readPublicationMetadata } from '../publish/publication-metadata';
 import type { EditorialSelection } from '@prisma/client';
 import type { WorkspaceDeps } from '../workspace/types';
+import { canReadCurrentPublicResearch } from '../visibility/current-public-access';
 import { recordAudit } from '../workspace/audit';
 import { EditorialError } from './errors';
 
@@ -257,5 +258,11 @@ async function getCollection(deps: WorkspaceDeps, slug: string, publicOnly: bool
     },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
   });
-  return { id: collection.id, slug: collection.slug, title: collection.title, description: collection.description, selections: rows.map(toView) };
+  const visible = publicOnly
+    ? (await Promise.all(rows.map(async (row) => ({
+      row,
+      allowed: await canReadCurrentPublicResearch(deps, { researchObjectId: row.researchObjectId, versionId: row.versionId }),
+    })))).filter((item) => item.allowed).map((item) => item.row)
+    : rows;
+  return { id: collection.id, slug: collection.slug, title: collection.title, description: collection.description, selections: visible.map(toView) };
 }

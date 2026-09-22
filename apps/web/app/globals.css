@@ -1267,19 +1267,24 @@ textarea::placeholder {
 
 /* Optical Editorial public reading surface — warm paper, long-form first. */
 .pub-page-tabbed {
-  max-width: none;
+  min-width: 0;
+  max-width: 100%;
   padding: 0;
   background: var(--os-paper);
   color: var(--os-ink);
 }
 
 .pub-reading-surface {
+  min-width: 0;
+  max-width: 100%;
   min-height: 100dvh;
   padding: 3rem clamp(1rem, 4vw, 4rem) 5rem;
   background: var(--os-paper);
 }
 
 .pub-reading-layout {
+  min-width: 0;
+  max-width: 100%;
   display: grid;
   grid-template-columns: minmax(0, 760px);
   gap: clamp(2rem, 5vw, 5rem);
@@ -1307,6 +1312,19 @@ textarea::placeholder {
   font-size: 2.25rem;
   font-weight: 600;
   line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.pub-version-id,
+.pub-author-line,
+.pub-license-line > *,
+.pub-reading-citation p,
+.pub-reading-history a,
+.pub-reading-history span,
+.pub-reading-artifacts,
+.pub-presentation-gallery {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .pub-kicker,
@@ -1337,7 +1355,7 @@ textarea::placeholder {
   line-height: 1.6;
   color: var(--os-muted-paper);
 }
-.pub-license-line p { display: grid; grid-template-columns: 7rem 1fr; gap: 1rem; margin: 0; }
+.pub-license-line p { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: 1rem; margin: 0; }
 .pub-license-line p span { color: var(--os-ink); }
 
 .pub-reading-summary {
@@ -1393,6 +1411,8 @@ textarea::placeholder {
 .pub-reading-citation { padding-bottom: 1rem; }
 
 .pub-reading-rail {
+  min-width: 0;
+  max-width: 100%;
   position: static;
   border-top: 1px solid var(--os-ink);
   font-family: var(--font-data);
@@ -1641,7 +1661,7 @@ textarea::placeholder {
 .pub-sheet-close { min-height: 2.75rem; margin-top: 1rem; padding: .5rem 1rem; border: 1px solid var(--os-rule-paper); background: transparent; }
 
 .pub-reading-history ol { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--os-rule-paper); }
-.pub-reading-history li { display: flex; justify-content: space-between; gap: 1rem; padding: .8rem 0; border-bottom: 1px solid var(--os-rule-paper); font-family: var(--font-data); font-size: .85rem; }
+.pub-reading-history li { display: flex; min-width: 0; justify-content: space-between; gap: 1rem; padding: .8rem 0; border-bottom: 1px solid var(--os-rule-paper); font-family: var(--font-data); font-size: .85rem; }
 .pub-reading-history a { color: var(--os-ink); }
 .pub-reading-history span { color: var(--os-muted-paper); }
 

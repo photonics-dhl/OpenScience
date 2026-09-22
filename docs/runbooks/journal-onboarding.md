@@ -11,7 +11,10 @@
 | 申请人 | `/journals/apply/{applicationId}` | 私有提交回执、真实编号、当前审核状态及说明 |
 | 编辑部 | `/journals/manage` | 已加入期刊和申请状态 |
 | 刊内成员 | `/journals/manage/{journalId}` | 论文、成员、额度、服务申请 |
+| 编辑部 | `/journals/manage/{journalId}/processing` | 全刊加工优先级、重点标记、延后与显式入队 |
+| 编辑部 | `/journals/manage/{journalId}/services` | 实际可用额度、预占、到期和人工服务申请 |
 | 编辑与获指派审核员 | `/journals/manage/{journalId}/articles/{articleId}` | 来源、授权、解读草稿、人工审核 |
+| 编辑与获指派审核员 | `/journals/manage/{journalId}/articles/{articleId}/sources` | 逐项来源与版权矩阵、可生成/公开范围及变更记录 |
 | 平台管理员 | `/admin/journals` | 期刊核验、运行状态、服务处理和额度开通 |
 | 读者与工具 | `/research/{publicId}/v/{versionNo}` | 固定版本解读，优先引用原文 DOI |
 
@@ -42,11 +45,27 @@
 - 仅书目不能生成解读。摘要来源只能产生明确标为“基于摘要”的解读，不能产生图卡。
 - 内部加工、外部 AI 处理、衍生说明生成、原文公开、衍生说明公开分别授权，未勾选即未授权。
 - PDF、DOCX、UTF-8 TXT/Markdown 单文件不超过 50 MB；默认期刊来源容量 2 GB。上传原件保留在私有材料库，扫描和解析成功后才用于生成。
-- 上传先登记私有材料并计入容量，再写入存储；成功后才更新论文来源并排入解析队列。存储失败的材料仍计入容量，过期的 staging 作业由恢复流程结算，避免重复上传绕过容量或覆盖共享原件。
+- 上传先登记私有材料并计入容量，再写入存储；成功后更新论文来源，停留在等待授权的 `staging` 状态。编辑须在来源矩阵确认新文件的许可、依据和内部加工权限，才会进入免费解析队列；新文件不继承旧文件的授权。存储失败的材料仍计入容量，过期的 staging 作业由恢复流程结算，避免重复上传绕过容量或覆盖共享原件。失败或取消后可使用新请求键重新上传。
 - AI 输出包含一句话摘要、六字段、带证据的主张、图卡和 FAQ。引文必须出现在来源中；数值预测不能仅改标签作为实验结果。
 - 规则校验辅助人工审核，不能证明所有科学内容正确。稿件中的指令只作为待分析文本，不产生平台操作权限。
 
 ## 作业、额度与冲突
+
+### 增强版来源与加工入口
+
+来源矩阵在现有逐篇来源文本和许可之上登记材料；登记链接不触发远程下载，也不表示已解析该材料。先通过原有编辑/上传流程提供实际摘要或全文，再核对作为加工依据的来源记录。辅助材料不能代替主要来源获得权限；公开可访问、许可名称和“编辑声明”均不自动授予处理或公开权。
+
+主要来源的处理权限、衍生公开权限和原文件/图像公开权限分别核对。修改授权继续使用论文修订号，审核须针对修改后的版本。发生冲突时重新加载后比较，不覆盖其他编辑的修订。优先级分数不改变这些权限，点击入队仍须通过服务端和后台执行阶段的复核。
+
+加工页按来源、授权、近期性、展示价值、学术中心性、解析、编辑权重和主题匹配展示分数。没有依据的维度列为待补充；分数不是科学质量评价。编辑可标记重点或延后，也可确认预计额度后逐篇入队；浏览页面及修改优先级不自动调用 AI。
+
+### 额度口径与服务方案
+
+服务页中的“可用”是尚未到期批次的 `remaining - reserved` 总和。账本中的 `remaining` 包含未结算预占，不能直接作为新增作业余额。到期批次的预占仍可完成结算；失败或取消后不恢复为可用额度。到期判定在读取时生效，不依赖后台对账恰好已运行。
+
+Free、Starter、Pro、Premium、Custom 是人工服务方案。申请或报价不自动开通权限或额度；实际发放仍由平台按订单依据处理。价格与周期配额未经确认时不展示数值承诺。第一批继续保持一次成功交付草稿消耗 1 篇的现有规则；小数计费、多计量账本、在线支付与自动续费不在本轮范围。
+
+### 既有队列与结算
 
 作业持久化于 PostgreSQL，使用租约领取，单刊默认最多 2 个运行作业、100 个排队/运行作业。服务重启后继续处理已入队作业。
 
@@ -88,6 +107,14 @@ API 服务原生路径无 `/api`；浏览器同源代理添加 `/api`。公开�
 | `POST /api/journals/{id}/articles/preview` | 登录后 DOI 预览，逐项 `ready/duplicate/failed`，不写入 |
 | `POST /api/journals/{id}/articles/import` | 确认导入，逐项 `imported/duplicate/failed` |
 | `POST /api/journals/{id}/articles/{articleId}/source-file` | multipart：`revision`、`requestKey`、`file` |
+| `GET /api/journals/{id}/articles/{articleId}/sources` | 材料矩阵、加工能力、论文修订与授权变更记录 |
+| `POST /api/journals/{id}/articles/{articleId}/sources` | `revision`、`source`，登记来源与明确权限 |
+| `PATCH /api/journals/{id}/articles/{articleId}/sources/{sourceId}/rights` | 修订校验后的逐项权限、依据与可信状态更新 |
+| `POST /api/journals/{id}/articles/{articleId}/processing-capability/recalculate` | 重新评估当前来源与授权范围 |
+| `GET /api/journals/{id}/processing-priorities` | 加工评分、原因、待补维度与分页 |
+| `POST /api/journals/{id}/articles/{articleId}/priority-override` | 编辑重点权重、延后时间与操作原因 |
+| `POST /api/journals/{id}/articles/{articleId}/processing-jobs` | 显式确认后复用原有 AI 队列、修订与幂等检查 |
+| `GET /api/journals/{id}/service-plan` | 人工服务状态、有效额度、预占、过期和存储使用 |
 | `POST /api/admin/journals/service-requests/{id}/review` | `status`、`expectedStatus`、`note`，记录人工服务处理 |
 | `POST /api/journals/{id}/articles/{articleId}/feedback` | `versionNo`、`content`、`requestKey`，提交私密纠错 |
 | `GET /api/journals/{id}/feedback?limit=20&cursor=…` | 编辑查看本刊，其他已验证用户仅查看自己提交的工单 |
@@ -122,11 +149,12 @@ API 服务原生路径无 `/api`；浏览器同源代理添加 `/api`。公开�
 pnpm exec prisma generate --schema infra/schema.prisma
 pnpm --filter @openscience/search generate
 pnpm --filter @openscience/api... build
-pnpm --filter @openscience/domain exec vitest run test/journal-content.test.ts test/journal-onboarding.test.ts test/journal-database.test.ts
-pnpm --filter @openscience/api exec vitest run test/journal-boundary.test.ts test/journals-database.test.ts test/journal-feedback-database.test.ts
+pnpm --filter @openscience/domain exec vitest run journal --testTimeout=20000
+pnpm --filter @openscience/api exec vitest run journal test/research-routes.test.ts --testTimeout=20000 --no-file-parallelism
 pnpm --filter @openscience/agent-worker exec vitest run test/journal-worker.test.ts
 pnpm --filter @openscience/web build
-pnpm --filter @openscience/web exec vitest run test/journal-api-contract.test.ts test/journal-ui-integration.test.tsx
+pnpm --filter @openscience/web exec vitest run journal
+pnpm --filter @openscience/web exec playwright install chromium
 node scripts/journals/verify-migration.mjs
 pnpm docs:lint
 pnpm audit:docs-sync
@@ -135,5 +163,7 @@ pnpm audit:docs-sync
 浏览器验收另需设置 `JOURNAL_BROWSER_TEST=1` 和上述测试库变量，再运行 API 包的 `test/journal-browser.test.ts`。先以 `API_ORIGIN=http://127.0.0.1:3001` 构建 Web；验收默认占用本机 3001 端口启动隔离 API，Web 使用随机端口。若系统保留了该端口，可设置 `JOURNAL_BROWSER_API_PORT`（例如 43141），并先用相同端口的 `API_ORIGIN` 重新构建 Web。截图输出到已忽略的 `apps/web/test/visual/out/journals/`；实际浏览器请求启用真实会话/CSRF，后台作业通过正式入队和取消流程预占、释放额度。
 
 生产回退优先关闭功能并回退应用版本，保留新增表。期刊迁移的 `rollback.sql` 会删除期刊表，包含期刊业务数据；仅用于空环境/隔离演练或已备份并明确批准的数据回退。不能在已运营期刊上直接执行。上方历史本地验证命令不覆盖现行生产 AGENTS 的最小定向验证与禁用 CI 政策；恢复部署按当前部署手册执行。
+
+来源矩阵复用既有 JSON 和事件表，本轮不新增迁移。开始使用矩阵后，不能直接回退到不识别矩阵及动态授权到期的旧应用；旧版本可能忽略逐项限制。回退候选必须保留同等权限检查，或先在当前版本限制受影响解读并确认页面/API 已不可访问。`JOURNALS_ENABLED=false` 只暂停新写入，不替代公开读取的授权检查。
 
 本地测试不替代生产扫描/解析 sidecar、真实模型、对外访问和性能验收。当前证据与尚需部署验证的项目见 [CURRENT handoff](../handoff/2026-09-15-journal-onboarding-handoff.md)。

@@ -18,6 +18,7 @@ function publicResearchObject() {
 
 function routePrisma() {
   return {
+    journalArticle: { findUnique: vi.fn().mockResolvedValue(null) },
     researchObject: { findUnique: vi.fn().mockResolvedValue(publicResearchObject()) },
     version: { findFirst: vi.fn().mockResolvedValue(null) },
     author: { findMany: vi.fn().mockResolvedValue([]) },
@@ -30,6 +31,50 @@ function routePrisma() {
 }
 
 describe('anonymous public research contract', () => {
+  it('hides expired journal content through overview, fixed-version and presentation-asset routes', async () => {
+    const prisma = routePrisma();
+    const text = 'Synthetic authorized journal source with enough text to support a bounded full-text interpretation.';
+    const url = 'https://journal.example.invalid/expired-source';
+    const permissions = { internalProcessing: true, derivativeGeneration: true, publicSource: true, publicDerivative: true, externalProcessing: true, figureReuse: false, derivativeIllustration: false };
+    prisma.version.findFirst.mockResolvedValue({
+      id: 'version-1', researchObjectId: publicResearchObject().id,
+      versionNo: 1, publicationNo: 1, publicVersionId: 'OSR-2026-000001-v1',
+      status: 'published', researchRecord: {}, manifest: null,
+      publications: [{ id: 'publication-1', publicVersionId: 'OSR-2026-000001-v1' }],
+    });
+    prisma.journalArticle.findUnique.mockResolvedValue({
+      id: 'journal-article-1', contentState: 'active',
+      rights: { ...permissions, license: 'CC-BY-4.0', evidence: 'Synthetic authorization.' },
+      source: { kind: 'fulltext', text, url, materials: [{
+        id: 'source-1', sourceType: 'publisher_full_text', url, activeForGeneration: true,
+        contentSha256: createHash('sha256').update(text).digest('hex'),
+        rightsStatus: 'full_public_processing_allowed', sourceConfidence: 'verified', permissions,
+        evidence: { statement: 'Synthetic authorization.', license: 'CC-BY-4.0', expiresAt: '2000-01-01T00:00:00.000Z' },
+      }] },
+      releases: [{ versionId: 'version-1', snapshot: { draft: { scope: 'fulltext' } } }],
+    });
+    const storage = { headObject: vi.fn(), getObject: vi.fn() };
+    const app = Fastify();
+    app.setErrorHandler((error, req, reply) => {
+      const mapped = httpStatusForError(error, String(req.id));
+      void reply.status(mapped.status).send(mapped.body);
+    });
+    registerResearchRoutes(app, { prisma, storage } as never);
+    try {
+      for (const suffix of [
+        '', '/v/1',
+        '/v/1/artifacts/44444444-4444-4444-8444-444444444444/download',
+        '/v/1/evidence/55555555-5555-4555-8555-555555555555/source',
+        '/v/1/presentation-assets/66666666-6666-4666-8666-666666666666',
+      ]) {
+        const response = await app.inject({ url: `/research/OSR-2026-000001${suffix}` });
+        expect(response.statusCode, response.body).toBe(404);
+      }
+      expect(storage.headObject).not.toHaveBeenCalled();
+      expect(storage.getObject).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+
   it('does not expose a public RO overview until a published Version has a Publication row', async () => {
     const prisma = routePrisma();
     const app = Fastify();

@@ -3,6 +3,7 @@ import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import type { WorkspaceDeps } from '../workspace/types';
 import { publicVersionNumber, readPublicationMetadata } from '../publish/publication-metadata';
 import { publicHistoryMedia } from '../commit/version-history';
+import { canReadCurrentPublicResearch } from '../visibility/current-public-access';
 
 export const EXPLORE_ARTIFACT_TYPES = ['document', 'image', 'data', 'code', 'video', 'other'] as const;
 export type ExploreArtifactType = (typeof EXPLORE_ARTIFACT_TYPES)[number];
@@ -78,6 +79,7 @@ export async function listPublicResearchIndex(
       if (query && ![readPublicationMetadata(row.versions[0].researchRecord).title, ...SDF_CORE_FIELDS.map(field => core[field])].some(value => typeof value === 'string' && value.toLocaleLowerCase().includes(query))) continue;
       if (input.field && (typeof core[input.field] !== 'string' || !(core[input.field] as string).trim())) continue;
       if (input.artifactType && !manifest?.entries.some(entry => classifyExploreArtifact(entry.logicalPath) === input.artifactType)) continue;
+      if (!await canReadCurrentPublicResearch(deps, { researchObjectId: row.id, versionId: row.versions[0].id })) continue;
       rows.push(row);
       if (rows.length > input.limit) break;
     }

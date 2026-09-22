@@ -1,5 +1,16 @@
 # OpenScience (XGS) 项目文件索引
 
+> 期刊增强发布候选：codex/journal-server-20260922；原分支 96e5e0c 的矩阵、优先级与服务页已适配当前生产，状态/版本/边界唯一见 [期刊 CURRENT](docs/handoff/2026-09-15-journal-onboarding-handoff.md)。其他产品 CURRENT 保留。
+
+| 期刊增强文件 | 用途 | 状态 |
+|---|---|---|
+| `packages/domain/src/journal/enhancements.ts` | 来源实际绑定、逐项授权、评分和服务账本视图 | 生产集成候选 |
+| `packages/domain/src/visibility/current-public-access.ts` | 通用入口的期刊当前授权检查 | 生产集成候选 |
+| `apps/web/components/journals/JournalSourceRightsMatrix.tsx` / `apps/web/app/journals/manage/[id]/articles/[articleId]/sources/page.tsx` | 来源与版权矩阵 | 生产集成候选 |
+| `apps/web/components/journals/JournalProcessingQueue.tsx` / `apps/web/app/journals/manage/[id]/processing/page.tsx` | 加工优先级与显式入队 | 生产集成候选 |
+| `apps/web/components/journals/JournalServices.tsx` / `apps/web/app/journals/manage/[id]/services/page.tsx` | 服务申请、额度/账本/存储 | 生产集成候选 |
+| `packages/domain/test/journal-enhancements.test.ts` / `packages/domain/test/journal-enhancement-review.test.ts` / `apps/api/test/journal-enhancements-database.test.ts` / `apps/web/test/journal-source-matrix.test.tsx` | 原分支增强回归；本轮保留代码，不混同生产候选验收 | 历史证据与回归代码 |
+
 本机浏览器配置：`.codex/config.toml` 保留源码检索并接入现有代理；依赖、继承范围与回滚见[能力台账](docs/runbooks/hermes-capability-registry.md#local-browser-proxy)，不随业务部署启用远端浏览器。
 
 > CURRENT：唯一交付入口是 `.worktrees/onchip-video-release` 的 `release/onchip-production-line`（canonical；旧 `codex/onchip-video-release` 缺 journals/学术身份，为历史线不得发版）。视觉交付按[需求基线§18.2](docs/OpenScience_Kimi_Development_Spec.md#182-视觉系统)：未读论文者能理解核心思想和关键点，叙事与美感共同设计；原图/生图/单多图按需采用，视频尚未进入执行。交付差额、用户反馈、版本与下一步唯一见[Hermes CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)，不以原图复用/发布成功或单图认可代替论文叙事验收。桥、恢复、发布及最新纠偏证据见[2026-09-18 交接](docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。能力按[当前能力索引](docs/runbooks/hermes-capability-registry.md)定向查实现、调用和真实结果；下表日期/版本均为对应改动的历史记录，不作为当前release或自动next action。

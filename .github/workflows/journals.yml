@@ -28,6 +28,8 @@ jobs:
       JOURNAL_TEST_DATABASE_URL: postgresql://journal_test:journal_test_ci@127.0.0.1:55439/journal_test
       SEARCH_DATABASE_URL: postgresql://journal_test:journal_test_ci@127.0.0.1:55439/journal_search_test
       NEXT_TELEMETRY_DISABLED: '1'
+      API_ORIGIN: http://127.0.0.1:43141
+      JOURNAL_BROWSER_API_PORT: '43141'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -47,14 +49,28 @@ jobs:
       - name: Build backend dependencies and applications
         run: pnpm --filter @openscience/api... build
       - name: Verify source, tenancy, concurrency and immutable publication
-        run: pnpm --filter @openscience/domain exec vitest run test/journal-content.test.ts test/journal-onboarding.test.ts test/journal-database.test.ts --testTimeout=20000
+        run: pnpm --filter @openscience/domain exec vitest run journal --testTimeout=20000
       - name: Verify HTTP boundary and public data contracts
-        run: pnpm --filter @openscience/api exec vitest run test/journal-boundary.test.ts test/journals-database.test.ts test/journal-feedback-database.test.ts --testTimeout=20000
+        run: pnpm --filter @openscience/api exec vitest run journal test/research-routes.test.ts --testTimeout=20000 --no-file-parallelism
       - name: Verify worker validation and retries
         run: pnpm --filter @openscience/agent-worker exec vitest run test/journal-worker.test.ts
       - name: Build web
         run: pnpm --filter @openscience/web build
       - name: Verify web contracts and controls
-        run: pnpm --filter @openscience/web exec vitest run test/journal-api-contract.test.ts test/journal-ui-integration.test.tsx
+        run: pnpm --filter @openscience/web exec vitest run journal
+      - name: Install Chromium for real API and web acceptance
+        run: pnpm --filter @openscience/web exec playwright install --with-deps chromium
+      - name: Verify journal desktop and mobile flows with real sessions and PostgreSQL
+        run: pnpm --filter @openscience/api exec vitest run test/journal-browser.test.ts
+        env:
+          JOURNAL_BROWSER_TEST: '1'
       - name: Documentation consistency
         run: pnpm audit:docs-sync && pnpm docs:lint
+      - name: Preserve synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-browser-evidence
+          path: apps/web/test/visual/out/journals/
+          if-no-files-found: ignore
+          retention-days: 7

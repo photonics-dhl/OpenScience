@@ -70,5 +70,5 @@ export default async function Page({ params }: { params: { publicId: string; ver
   // Keep corrected legacy URLs temporary: a later real v10 must remain usable.
   if (result.research.version.versionNo !== versionNo) redirect(result.research.url);
   const journalPackage = (result.research as typeof result.research & { journalPackage?: PublicJournalPackageData }).journalPackage;
-  return publicShell(<div className="pub-page-tabbed">{journalPackage ? <PublicJournalRelease value={journalPackage} /> : <PublicReadingSurface research={result.research} />}</div>);
+  return publicShell(<div className="pub-page-tabbed min-w-0 max-w-full">{journalPackage ? <PublicJournalRelease value={journalPackage} /> : <PublicReadingSurface research={result.research} />}</div>, 'min-w-0 max-w-full');
 }

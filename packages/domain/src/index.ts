@@ -6,6 +6,7 @@ export * from './journal/processing';
 export * from './journal/publishing';
 export * from './journal/source-upload';
 export * from './journal/feedback';
+export * from './journal/enhancements';
 export { WorkspaceError, type WorkspaceErrorCode } from './workspace/errors';
 export { now, type WorkspaceDeps } from './workspace/types';
 export { createPersonalWorkspace, type PersonalWorkspaceUser } from './workspace/personal';
@@ -107,6 +108,7 @@ export type { DiffResult } from '@openscience/diff';
 export { assignPublicId, computeContentSha256, type AssignPublicIdResult } from './identity/identifiers';
 export { VisibilityError, type VisibilityErrorCode } from './visibility/errors';
 export { canAccessRo, requireRoAccess, type RoAccess } from './visibility/access';
+export { canReadCurrentPublicResearch } from './visibility/current-public-access';
 export {
   requestVisibilityChange, grantVisibility, isVisibilityExpansion,
   type VisibilityChangeResult,

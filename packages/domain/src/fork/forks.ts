@@ -9,6 +9,7 @@ import { getEffectiveLicenses, validateLicenseInheritance, type Licenses } from 
 import { readPublicationMetadata } from '../publish/publication-metadata';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { ForkError } from './errors';
+import { canReadCurrentPublicResearch } from '../visibility/current-public-access';
 
 export interface ForkSourceDetail {
   forkedRoId: string;
@@ -75,6 +76,9 @@ export async function forkResearchObject(
   });
   if (!sourceVersion || !sourceVersion.manifest || sourceVersion.manifest.entries.length === 0) {
     throw new ForkError('VERSION_NO_MANIFEST', '源 RO 无可复刻版本（需至少一次 Commit 生成 Manifest）');
+  }
+  if (!await canReadCurrentPublicResearch(deps, { researchObjectId: source.id, versionId: sourceVersion.id })) {
+    throw new ForkError('SOURCE_NOT_PUBLIC', '仅公开的 RO 可被 Fork（§4.2）');
   }
   const sourceManifest = sourceVersion.manifest;
   const sourceEntries = sourceManifest.entries;

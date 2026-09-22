@@ -4,6 +4,7 @@ import { createSystemResearchObjectInTransaction } from '../research-object/rese
 import { publicVersionNumber } from '../publish/publication-metadata';
 import { JournalError } from './contracts';
 import { EMPTY_RIGHTS, JOURNAL_CORE_FIELDS, journalDigest, normalizeJournalDoi, safeJournalUrl, validateJournalDraft, validateJournalSource, type JournalMetadata, type JournalSource, type JournalRights, type JournalDraft } from './content';
+import { assertJournalReviewCapability, journalSourceMaterials } from './enhancements';
 
 export type JournalTx = Prisma.TransactionClient;
 export const JOURNAL_EDIT_ROLES = ['owner', 'maintainer', 'author'];
@@ -110,12 +111,16 @@ export async function updateJournalArticle(deps: WorkspaceDeps, userId: string, 
     const article = await journalArticleInScope(tx, journalId, articleId);
     assertArticleRevision(article, input.revision);
     if (article.contentState !== 'active') throw new JournalError('INVALID_STATE', '受限或撤回论文不可编辑');
+    const existingMaterials = journalSourceMaterials(article.source);
+    if (existingMaterials.length && input.rights !== undefined) throw new JournalError('REVISION_CONFLICT', '此论文已启用来源矩阵，请在来源与版权接口更新逐项授权');
     const metadata = input.metadata ? validatedMetadata(input.metadata) : article.metadata as unknown as JournalMetadata;
     assertJournalMetadata(metadata, journal);
     if (metadata.doi !== (article.metadata as unknown as JournalMetadata).doi) throw new JournalError('VALIDATION_ERROR', '更改 DOI 需要重新导入，以保留论文身份');
-    const source = input.source ?? article.source as unknown as JournalSource;
+    const currentSource = article.source as unknown as JournalSource;
+    const source = input.source ? { ...input.source, ...(currentSource.artifactId ? { artifactId: currentSource.artifactId } : {}), ...(existingMaterials.length ? { materials: existingMaterials } : {}) } as JournalSource : currentSource;
     if (input.source) validateJournalSource(source);
-    const rights = input.rights ?? article.rights as unknown as JournalRights;
+    const provenanceChanged = input.source !== undefined && journalDigest({ kind: source.kind, text: source.text, url: source.url, artifactId: source.artifactId }) !== journalDigest({ kind: currentSource.kind, text: currentSource.text, url: currentSource.url, artifactId: currentSource.artifactId });
+    const rights = input.rights ?? (existingMaterials.length && provenanceChanged ? EMPTY_RIGHTS : article.rights as unknown as JournalRights);
     if (input.draft && (!rights.internalProcessing || !rights.derivativeGeneration)) throw new JournalError('FORBIDDEN', '保存衍生解读需要内部加工及衍生生成许可');
     if (Object.values(rights).some((v) => typeof v !== 'string' && typeof v !== 'boolean') || ((rights.derivativeGeneration || rights.publicDerivative || rights.publicSource) && (!rights.license.trim() || !rights.evidence.trim()))) throw new JournalError('VALIDATION_ERROR', '请填写明确的许可及核验依据');
     const sourceChanged = journalDigest(source) !== journalDigest(article.source);
@@ -146,6 +151,7 @@ export async function reviewJournalArticle(deps: WorkspaceDeps, userId: string, 
     if (access.membership.role === 'reviewer' && article.assignedReviewerId !== userId) throw new JournalError('FORBIDDEN', '只能审核分配给自己的论文');
     assertArticleRevision(article, input.revision);
     if (article.contentState !== 'active' || !article.draft) throw new JournalError('INVALID_STATE', '需要可审核的解读草稿');
+    assertJournalReviewCapability(article, deps.now?.() ?? new Date());
     validateJournalDraft(article.draft, article.source as unknown as JournalSource);
     if (input.decision !== 'submit' && article.reviewState !== 'submitted') throw new JournalError('INVALID_STATE', '请先提交当前版本审核');
     const approved = input.decision === 'approve';
