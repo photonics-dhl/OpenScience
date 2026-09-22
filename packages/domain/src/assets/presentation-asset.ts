@@ -1029,7 +1029,9 @@ export async function readNarrativePixelReplanHistory(prisma: Pick<Prisma.Transa
         parentAssetId: String(meta.parentStoryboardAssetId) });
       const proof = recordValue(meta.sourceProof);
       const { revisionTaskId: _task, revisionImageAssetId: _image, baseAssetId: _base, revisionMode: _mode, ...settings } = parent.payload.storyboard!;
-      if (chain.length !== 1 || meta.sceneSet !== 'terminal' || meta.sceneReviews !== undefined || meta.anchorImageId !== undefined
+      // The bounded history may append scientific plan revisions to this root.
+      // Root proof and every revision link are still validated below.
+      if (meta.sceneSet !== 'terminal' || meta.sceneReviews !== undefined || meta.anchorImageId !== undefined
         || !isDeepStrictEqual(payload.storyboard, { ...settings, narrativeSceneLimit: parent.view.document.scenes.length })
         || meta.parentIdentity !== parent.parentIdentity || proof.parentTaskIdentity !== parent.taskIdentity
         || !isDeepStrictEqual(JSON.parse(String(meta.sourceIdentity)), { parentIdentity: parent.parentIdentity, sourceProof: proof })

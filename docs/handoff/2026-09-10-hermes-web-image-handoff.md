@@ -19,7 +19,7 @@
 - 独立Chat provider=d8305c93c0d87b7923c617800056c29246ac892b；两unit/timer曾独立读回，原三锁/空闲/备份安装，无浏览器重启。备份provider-backup-20260922-existing-image-recovery-d8305c93；renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f，sceneImage fallback=false。
 - 图队列当前4worker总65分钟、最多8为125分钟，private/started固定领取后最多10分钟，旧request/deadline不改；一次oneshot不叠慢恢复与新生成。不保证任意旧积压/多生产者。部署排空600秒不覆盖长排队，先等相关本地任务自然终态；超时上游结果仍未知。
 - 0bee5b9b已推送的单文件候选将narrative subjects对齐Domain既有1–4，非narrative保持1–2；各要点独立绑定支持段，art引用实际索引。High修复一项后PASS，已随本次正常发布部署。原场景数/共享预算/来源守卫不变，不保证消除所有推理错误。
-- 通用已存方案末审timeout恢复候选沿原STORYBOARD_OUTPUT_RESUME/retry-generation，同task/charge1、保留science/art、原provider。已补裸exec2授权、内部JSON/schema修复反馈与计费语义，原/后续提示身份分开核验并保留旧收据兼容；新增checkpoint私有执行标记区分当轮新生成与预存方案。增量High静态GO，revised不可达批评已撤回。tmp/saved-final-review-recovery-20260922保留补丁/增量；已正常部署，第二篇原页面202已创建真实续接收据；审阅结果仍在途。
+- 通用已存方案末审timeout恢复候选沿原STORYBOARD_OUTPUT_RESUME/retry-generation，同task/charge1、保留science/art、原provider。已补裸exec2授权、内部JSON/schema修复反馈与计费语义，原/后续提示身份分开核验并保留旧收据兼容；新增checkpoint私有执行标记区分当轮新生成与预存方案。增量High静态GO，revised不可达批评已撤回。tmp/saved-final-review-recovery-20260922保留补丁/增量；已正常部署，第二篇原页面202已创建真实续接收据并完成正式blocked末审，无新science/art调用。
 - 正常发布仍用干净已推SHA、server Gateway及依赖构建、no-tests/skip-migrate/复用未变能力镜像；这次不需迁移或独立Chat receiver更新。新恢复收据消费后必须保留兼容worker，优先前向修复，不删审计/缩额度/回退到不识别收据的代码。
 
 ## 交付差额（Taskmaster currentTag=multistyle-research-illustration）
@@ -37,21 +37,21 @@
 - plan5226fcf5，图8bbcfd9b-95a9-4bdd-a202-3ebfb61594e3，1280×720/526396bytes/hash778815c8fd54996e99abbad2e6d39a17edcf294f109e615cb56015e1d2fff8a8；6Pro90ada2a8 accepted，tmp/visual-narrative-8bbcfd9b-20260922.png已实看。
 - 原overview→更多工具→发布→只选8bbc→201→公开链接已实际走通：https://openscience.428312321.xyz/research/OSR-2026-000023/v/3。版本hashd34d5d70344cc7f7f6ee0ed7906836d74492cc9a815a5ceb188b7dbdcbe88c66；匿名v1/v2/v3均200、旧快照不变。系统核源不伪造人工字段；PDF workspace_member，text/data CC-BY-4.0/code MIT；最终用户质量认可仍pending。
 
-## 第二篇：已存方案原入口续末审，结果在途
-- ROc896802c-35dd-4b59-8db1-5f374f83a6d8（deep-sub-cycle pulse）；Versiond07cfeee-c81d-4162-a469-0b431f964801；run7e9e1f3e-eafe-440a-be0f-7ff1ed349a8b generating_storyboard/v56/max42。PDF7bb96cc1-bb6f-4d3b-b0bf-352f41971faf/3770010bytes；source f1bb85c8 v5，7Claims27Evidence、六维已保存，不重做。
-- 08:14:35原按钮202→plan342f87eb-8b14-460a-9f79-03fd29394b84；science65K stop/319291ms及一次结构修正37656ms后保存partial，明确消费critical v3/illustration v9；art16K length→32K stop，08:24:49保存完整storyboardCheckpoint。旧task failed/exec1/retry0；最后726f54ad scientific_review在16K/300003ms provider_timeout，未产新图，当时GET200无恢复按钮。09:29:13.706Z新原按钮202→同task exec2/retry1，receipt74f74304，saved_storyboard_review_timeout/charge1/noReplanning/newTask0，完整方案保留，旧unknown未改；待正式结果。
+## 第二篇：末审恢复成功，比例尺冲突正式拒收
+- ROc896802c-35dd-4b59-8db1-5f374f83a6d8（deep-sub-cycle pulse）；Versiond07cfeee-c81d-4162-a469-0b431f964801；run7e9e1f3e-eafe-440a-be0f-7ff1ed349a8b stopped/v57/max42。PDF7bb96cc1-bb6f-4d3b-b0bf-352f41971faf/3770010bytes；source f1bb85c8 v5，7Claims27Evidence、六维已保存，不重做。
+- 08:14:35原按钮202→plan342f87eb-8b14-460a-9f79-03fd29394b84；science65K stop/319291ms及一次结构修正37656ms后保存partial，明确消费critical v3/illustration v9；art16K length→32K stop，08:24:49保存完整storyboardCheckpoint。旧task failed/exec1/retry0；最后726f54ad scientific_review在16K/300003ms provider_timeout，未产新图，当时GET200无恢复按钮。09:29:13.706Z新原按钮202→同task exec2/retry1，receipt74f74304，saved_storyboard_review_timeout/charge1/noReplanning/newTask0，完整方案保留，旧unknown未改；9543b18e 16K length→d518f88d 32K stop/258693ms，09:37:38正式blocked封面等长量条与11.7×比例矛盾。原GET有scientific-replan/charge1，尚未续，待第三篇断点修复一并部署。
 - 新草稿仍有固定4.4μm与λ扫描混同、出入纸面符号/条件矛盾，不能据v9消费称质量提升。证据tmp/v9-science-intents-{first,after-art}-20260922.json、second-paper-v9-planning-read-20260922-observation.json、v9-timeout-metadata-20260922.json。低inputTokens不证明丢上下文；结构修正保留原messages。
 - 上轮15b四图均真实生成/实看：d6fc87fe与dd07aa6a科学blocked/null；1ea36453仅圆点等径repair；38b488fd accepted。全部保留，未发布；原OSR-2026-000022/v/1及hashe0a8bd972fe2baca099ae198af4b8c02fc7fb503e0902ea476ebc6309a5db4c8保护。
 
-## 第三篇：四subject容量修正后原入口新规划在途
-- ROaa450f1e-fafc-46d8-a072-d935e01b0544（Light–matter interactions with photonic quasiparticles）；Version9373f1e6-9477-4e4a-9b45-b8efca244e70，尚无publicID；runb3eee57a-8a08-4867-9281-cb5b950affbf generating_storyboard/v47/max43。
+## 第三篇：science/art成功，科学拒收后的来源根修订入口缺失
+- ROaa450f1e-fafc-46d8-a072-d935e01b0544（Light–matter interactions with photonic quasiparticles）；Version9373f1e6-9477-4e4a-9b45-b8efca244e70，尚无publicID；runb3eee57a-8a08-4867-9281-cb5b950affbf stopped/v48/max43。
 - PDFd04add46-9d96-443b-aae1-c1dfc1ecbadb/4609066bytes/hash4a51048431f20950a01916b50cd87a08642881b20b0a9eac767144031ebc0b1a；原SourceMap e490409c…24页1554blocks；composition1834e21d及8c87b54d v5核源已完成，六维657字/5Claims30Evidence，guideaad65431 watercolor；不重做全文/六维。
-- plan40026425-6df0-4c16-8c32-56e5b365808b旧exec1 science成功/art三次JSON失败，旧resultNULL无科学中间产物。08:13:58原按钮202明确full_planning_restart同task exec2；08:24 science65K/600005ms provider_timeout→resultNULL，无新图。原GET200仍有storyboard-planning/charge1；容量修正部署后09:29:29.158Z原按钮202→同task exec3/retry2，receiptf5d82746，full_planning_restart/charge1/newTask0，结果在途。旧超时上游结果未知，不能冒称未提交或art-only。
+- plan40026425-6df0-4c16-8c32-56e5b365808b旧exec1 science成功/art三次JSON失败，旧resultNULL无科学中间产物。08:13:58原按钮202明确full_planning_restart同task exec2；08:24 science65K/600005ms provider_timeout→resultNULL，无新图。原GET200仍有storyboard-planning/charge1；容量修正部署后09:29:29.158Z原按钮202→同task exec3/retry2，receiptf5d82746，full_planning_restart/charge1/newTask0；science114秒stop，四scene/subjects2,4,3,3，v9实际消费，art经一次结构修复完整保存。09:37:07 M3末审blocked：四场景构图额外标题与A(r)混入电流N常数，5个requires_replan，未生图。旧超时上游结果未知，不能冒称未提交或art-only。
 - 旧606五图/全部历史保护：8d4f350f实图6Pro blocked但repair非空（只删G→j），不是科学blocked/null；c482487f像素accepted但上游来源无效，不发布。34d30e5c/96710033提交unknown、6cf47f56 not_submitted。34原1672×941图可见但一小时grace已过；不延deadline、不重发或按旧writer取图。
 - 30条Evidence中1e07仅Photonic quasiparticles标题，不能支撑Rabi/Compton/Thomson整段类比；原SourceMap导言确有类比，不等于旧冻结lineage可手补。新规划要用合法supports或缩窄。Box1 k是方向索引，旧相反批评已撤回；MQED线性条件不等于全部准粒子定义。科学事实以原文为准，不照抄审阅建议。
 
 ## 下一步与不可误跑项
-- 通用末审恢复和四subject容量已High GO并正常部署、marker一致；两篇原按钮各续一次。当前等待第二篇末审与第三篇新科学规划，不再调用已消费writer；观察四subject来源表达/v9/science保存与实际审阅。之后继续Chat实图、6Pro、reader、新公开版本，不把局部修复当完整交付。
+- 两篇最新正式末审均科学blocked，均无新图/在途调用。第三篇source-support root被inspector误读为pixel拒收且history禁止revision链，已按High设计作两Domain文件12+/6-修复并增量GO，待提交/正常部署。保留root proof及既有两层修订、原图片预留；部署后原按钮各修订一次，不重放旧writer。之后继续Chat实图、6Pro、reader、新公开版本，不把局部修复当完整交付。
 - 08:13/08:14两writer已消费：/jobs/third-paper-durable-planning-resume-20260922.json、second-paper-skill-v9-replan-20260922.json。此前source-support/defect-aware/saved-final/technical-subset/art-timeout/geometric等历史writer及首篇publish也已消费；完整清单见09-18交接。third-paper-evidence-scoped-replan资格不符，始终禁运行。
 - 读取入口：tmp/third-paper-durable-planning-read-20260922.cjs固定400；second-paper-v9-planning-read-20260922.cjs固定342；two-paper-v9-recovery-surface-read-20260922.cjs读当前原页面GET；current-two-paper-scene-reviews-read-20260922.cjs按run现有scene读。历史固定82/606/cb342的reader不能当新任务集合。新读入口tmp/saved-review-two-paper-progress-20260922.cjs定向读两task/当前恢复receipt及后续调用。second-paper-saved-review-timeout-resume-20260922和third-paper-source-capacity-retry-20260922两writer及/jobs同名json均已消费，不重放。
 - stage保存已实见；fresh_art_after_unknown尚未实际触发。原图语义视觉读取、按问题回读全文、跨任务经验检索仍未实现，见能力台账。当前产品Hermes是worker/Gateway调用，不自动消费/opt/hermes-agent的技能发现/记忆循环。
