@@ -1,7 +1,7 @@
 import { planSceneImagePrompt } from './scene-image';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, type AiGateway, type OcrAuthorizationContext, type ScienceReviewInput } from '@openscience/ai-gateway';
-import { loadDocumentSourceMapReference, parseDocumentSourceMapReference, parseStoryboardDocument, parseStoryboardRequest, requireIllustrationSourceSupport, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativePixelReplanAuthority, requireVideoGenerationParents, resolveSourceLocator, storyboardSceneStyles, validateSourceLocator, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
+import { projectIllustrationEvidence, parseStoryboardDocument, parseStoryboardRequest, requireIllustrationSourceSupport, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativePixelReplanAuthority, requireVideoGenerationParents, storyboardSceneStyles, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
 import { generateStoryboard, renderStoryboard } from './storyboard';
 import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@openscience/domain';
 import { createHash } from 'node:crypto';
@@ -250,46 +250,6 @@ function presentationEvidenceIdentity(rows: Awaited<ReturnType<typeof readReview
     exactQuote, relation, locator, extractionStatus, updatedAt, provenance }) => ({
     id, claimId, artifactId, contentHash, exactQuote, relation, locator, extractionStatus, updatedAt, provenance,
   })))).digest('hex');
-}
-
-/** Keep immutable Evidence identity intact while preventing headings from establishing illustration subjects. */
-async function projectIllustrationEvidence(
-  storage: Parameters<typeof loadDocumentSourceMapReference>[0],
-  rows: Awaited<ReturnType<typeof readReviewedPresentationEvidence>>,
-) {
-  const sourceMaps = new Map<string, Promise<Awaited<ReturnType<typeof loadDocumentSourceMapReference>>>>();
-  return Promise.all(rows.map(async row => {
-    if (row.relation !== 'supports') return row;
-    const provenance = row.provenance as Record<string, unknown> | null;
-    // This presentation-only policy applies to canonical reviewed-ingestion
-    // evidence. Legacy/user evidence keeps its existing contract.
-    if (provenance?.source !== 'reviewed_ingestion') return row;
-    let reference: ReturnType<typeof parseDocumentSourceMapReference>;
-    try {
-      reference = parseDocumentSourceMapReference(provenance.sourceMapRef);
-    } catch {
-      throw new Error('[blocked] Reviewed illustration evidence has no valid SourceMap reference');
-    }
-    if (reference.parserStatus !== 'succeeded' || reference.artifactId !== row.artifactId
-      || reference.contentHash !== row.contentHash) {
-      throw new Error('[blocked] Reviewed illustration evidence SourceMap identity changed');
-    }
-    // The complete reference is the cache key: a colliding object key must not
-    // bypass the reference's artifact/content identity checks.
-    const key = JSON.stringify(reference);
-    let sourceMap = sourceMaps.get(key);
-    if (!sourceMap) {
-      sourceMap = loadDocumentSourceMapReference(storage, reference);
-      sourceMaps.set(key, sourceMap);
-    }
-    let block: ReturnType<typeof resolveSourceLocator>;
-    try {
-      block = resolveSourceLocator(await sourceMap, validateSourceLocator(row.locator));
-    } catch {
-      throw new Error('[blocked] Reviewed illustration evidence locator no longer resolves');
-    }
-    return block.kind === 'heading' ? { ...row, relation: 'context' } : row;
-  }));
 }
 
 function requireStoryboardSourceSupport(document: StoryboardDocument, claims: readonly PresentationClaim[],
@@ -579,13 +539,21 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     let pixelPlanningFailureClass: 'pixel_storyboard_pre_provider_rearm' | 'pixel_storyboard_art_provider_timeout' | undefined;
     let pixelPlanningStarted = false;
     if (pixelAuthority && (pixelAuthority.task.id !== task.id || !isDeepStrictEqual(pixelAuthority.payload, payload)
-      || pixelAuthority.baseIdentity !== planningContext.identity)) throw new Error('[blocked] Narrative scientific revision task changed');
+      || pixelAuthority.baseIdentity !== planningContext.identity || pixelAuthority.metadata.sourceEvidenceIdentity !== sourceEvidenceIdentity))
+      throw new Error('[blocked] Narrative scientific revision task changed');
     if (pixelRecovery && (pixelRecovery.claimContent !== presentationClaimContent(claims)
       || pixelRecovery.narrativeSourceIdentity !== narrativeSource?.identity)) {
       throw new Error('[blocked] Narrative pixel-feedback recovery source changed');
     }
     if (planningContext.imageRevision && planningContext.imageRevision.sourceEvidenceIdentity !== sourceEvidenceIdentity)
       throw new Error('[blocked] Reviewed image evidence changed before scientific replanning');
+    const sourceSupportProof = pixelAuthority?.metadata.cause === 'storyboard_source_support_invalid'
+      ? pixelAuthority.metadata.sourceProof as { invalidBases: Array<{ sceneIndex: number; subjectIndex: number; basis: { evidenceId: string } }> } : undefined;
+    const sourceSupportFeedback = sourceSupportProof?.invalidBases.map(item =>
+      `Scene ${item.sceneIndex + 1}, subject ${item.subjectIndex + 1}: Evidence ${item.basis.evidenceId} resolves to a SourceMap heading, not a supporting original passage for this subject.`).join('\n');
+    const revisionReview = planningContext.revision?.task.result as { storyboardReview?: { summary?: string } } | null | undefined;
+    const previousDefectReport = sourceSupportFeedback ?? planningContext.imageRevision?.feedback
+      ?? revisionReview?.storyboardReview?.summary ?? planningContext.revision?.feedback;
     const requirePixelRecoveryUnchanged = async (tx: Prisma.TransactionClient) => {
       if (!pixelRecovery || !pixelAuthority) return;
       const current = await requireIllustrationReviewAuthority(tx, { taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId });
@@ -1071,6 +1039,9 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
               };
               planned = await generateIllustrationStoryboard(recoveryGateway, claims, payload.storyboard,
                 undefined, paperOriginals, narrativeSource?.context, undefined, recovery.receipts.at(-1)!.failureClass);
+            } else if (sourceSupportFeedback) {
+              planned = await generateStoryboard(planningGateway!, claims, payload.storyboard, undefined, paperOriginals,
+                narrativeSource?.context, { summary: sourceSupportFeedback, issues: [] });
             } else {
               planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view, paperOriginals, narrativeSource?.context);
             }
@@ -1108,6 +1079,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceEvidenceIdentity,
           structuredIssues: planned.reviewFormat === 2,
           narrativeSource: narrativeSource?.context,
+          ...(!artCorrection && previousDefectReport ? { previousDefectReport } : {}),
         };
         const gateway: Pick<AiGateway, 'reviewScientific'> = { reviewScientific: async (input, guard) => {
           if (revalidateInitialScienceRecovery) await deps.prisma.$transaction(tx => revalidateInitialScienceRecovery!(tx, false), { isolationLevel: 'Serializable' });

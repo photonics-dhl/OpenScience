@@ -23,7 +23,7 @@
 ## 交付差额（Taskmaster currentTag=multistyle-research-illustration）
 | 交付 / ID | 实际结果与剩余工作 |
 |---|---|
-| 完整叙事 · 5 | 首篇v3已公开；第二篇已存设计等待续末审、第三篇混合失败且科学来源待修复。后两篇reader/新公开版本未完成，全部最终用户质量认可pending。 |
+| 完整叙事 · 5 | 首篇v3已公开；第二篇本轮四图全部科学拒收、第三篇混合失败且科学来源待修复。后两篇reader/新公开版本未完成，全部最终用户质量认可pending。 |
 | 学术机制 · 1 | 首篇8bbc通过6Pro且公开v3；旧原图/失败候选保留，待用户反馈。旧145af7bf/父d0b36138不冒认v2公开，旧a7488c14资产rejected保持。 |
 | 编辑封面 · 2 | 当前第二篇run7e9e完整叙事；旧51eb/e253/aaf7不放行、不重跑代替本目标。 |
 | 淡彩手绘 · 3 | 旧aa41a018-b2ff-4ffb-9557-19ecabe104bc用户认可/approved/公开v2，保护。第三篇整套淡彩仍待完成，不把旧认可扩大。 |
@@ -60,7 +60,8 @@
 - download-only修复已交付但未实际恢复34，原operationDeadline=1790050663088的一小时grace已过。output-resume/32K600秒已High PASS并f44部署，第二篇真实续末审成功。mixed unknown科学返工单文件High PASS并部署，但第三篇没有blocked/null锚点，未消费新收据；不把修复上线当作入口有效或篡改审查记录。技术恢复仍拒绝unknown。
 - 05:33原34页readyState complete/profile可见/原图complete且无dialog，正常访问已观察；无新登录/模型请求，原自动grace仍过期。原SourceMap精确block:…:2:16已只读确认为heading/text Photonic quasiparticles。handler复用原SourceMap向配图投影context、源支持守卫消费relation，两文件候选经High兼容性修正后PASS；旧未传relation调用保持、Evidence身份不改。第二篇8个basis实读7正文/1图注，不受标题限制。现有reanalysis仍会完整重做六维并新lineage/newrun，本轮未执行。
 - 单文件review-runner候选High PASS（tmp/review-composer-repair-20260922.patch）：新安全诊断确证两个任务fill后只剩65字保护前缀，正文缺失，具体Playwright/网页状态责任未分清；707第二次另为SEND_NOT_READY，cb450原第二次成功提交。仅未提交/同draft/严格非空前缀或精确正文但Send disabled，原附件/模型/模式/form仍有效时按现有keyboard.insertText一次完整重填；同deadline内再确认所有守卫，不增页面/任务/发送次数，仍不匹配即失败。已随a78交付。第二篇timeout恢复Domain/research-run.ts与worker/handler.ts已冻结并独立High静态PASS，原storyboard_planning_retry同task一次exec2/charge1/max不变，原两条audit与超时结果未知明确保留；该轮现已终态，后续只见上文当前记录。
-- Pro静态诊断未证实旧art继承/上下文丢失；错误已在文字设计中，现有终审未收到前次具体缺陷报告。illustration-review.ts候选已加可选previousDefectReport（reportedPreviousDefects），只作不可信问题逐项核原文、不增调用，pixel worker负责handler接线。第三篇source-support-invalid同run恢复仍在实现；另一High在评估既有Chat终审路线的兼容边界，未切provider。旧third-paper-evidence-scoped-replan资格不满足勿运行。候选独立High后再部署/续作，最终reader→新公开版本；完整链路有效走通前不当作完成。
+- 用户新纠正：优先补齐Hermes产品skills/MCP与学习反馈，不能默认靠6Pro增加延迟。Chat plan末审路由/容量候选已撤下活动树、完整补丁存tmp/chat-plan-final-review-20260922，未部署/调用；M3末审保持。实际82/606 checkpoint证明critical-thinking v3、自有illustration v7及对应Baoyu参考已消费；问题不是未安装。固定source packet/无工具回读、同chain反馈未到末审、跨任务经验未消费是当前断点，详见能力台账。
+- source-support同run恢复及previousDefectReport补接已完成；High发现approval误走旧pixel分支后已修正并定向PASS，保留旧approved图片。仅标题SourceMap失效事实可触发，旧未知提交不重发，原来源/动态1+N/CAS不变。待撤净handler路由增量后提交、正常服务器构建启动，再沿原UI消费两篇正确恢复入口；second-paper-defect-aware-replan和third-paper-source-support-replan已准备未执行，旧third-paper-evidence-scoped-replan资格不满足勿运行。reader→新公开版本目标保持。
 - tmp/remaining-paper-progress-read-20260922.cjs读当前steps/tasks；tmp/two-paper-current-product-read-20260922.cjs读原UI GET；tmp/current-two-paper-scene-reviews-read-20260922.cjs按两run当前scene IDs读取，tmp/two-paper-current-plans-read-20260922.cjs固定本次82c6/606；tmp/current-encoding-image-review-read-20260922.cjs仍指前序第二cb342+第三cb2旧任务，不误作新任务集合。新ID见上；更新读取另存文件，原证据不覆盖。
 - 历史writer全部已消费：current-encoding/geometric/symbol-source replan、art-timeout-resume、technical-subset-resume、quantitative/complete-label/mixed-terminal/pixel-set/science/planning恢复、terminal-review/persistence恢复、review-not-submitted-resume、1354死页关闭、首篇publish。详细收据/时间与已修故障见docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md，不按历史next action续跑。
 - Fig.2 d5087b03悬空copy、重复6439150a/ee9bcfb6 draft及6043bebb/75b34c88 approved未获清理许可；ac455、77b3、557c等历史approved不等于全部可公开。旧929/6088/03a占位已授权清理完成，不重处理。

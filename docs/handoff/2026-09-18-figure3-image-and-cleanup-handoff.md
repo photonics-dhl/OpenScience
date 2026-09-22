@@ -1,6 +1,11 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
 ## 2026-09-22 05:58Z — 末审真实恢复成功；第三篇拒收分类更正
+- 后续用户纠正应充分发挥Hermes的产品skills/MCP、自学习，不能默认用6Pro末审换取额外延迟。已撤下未发布Chat路由五文件候选，handler路由亦单独归档，完整材料tmp/chat-plan-final-review-20260922；仍用原M3末审。82/606原checkpoint实际designSkills均有critical-thinking v3、自有illustration v7、对应editorial/watercolor与cover参考；并非漏安装。源码确认固定输入/末审禁工具、同chain反馈断点、没有已证实的跨任务经验消费，不把审计存储称自学习；先保留来源恢复及同次末审反馈修复。
+- source-support approval P1已修复并独立High PASS：原authority重放检查保留，source-invalid cause跳过旧blocked/null读取和旧图supersede；普通pixel返工不变。反馈仍是不可信问题报告，当前原文才是科学依据。未部署/未模型请求。
+- source-support候选独立High发现P1：新方案approval无条件进入旧pixel blocked/null读取与supersede，第三篇会回滚且可能改旧approved图。已交原Domain/handler worker修正按source-invalid cause分流，跳过旧pixel读与旧图退役，保留原来源/收据重放验证。修后须定向High复审；当前尚未部署或发新生成请求。
+- 后续独立High静态评估确认，新候选既有final-review应使用已配置的Chat6Pro schema v2，M3继续science/art，不增阶段且无失败后fallback；root已向用户说明，尚未部署/调用。v2完整来源容量需同步protocol/provider请求读取/host broker/runner input/composer；旧v1/v3和result上限不变，旧M3 checkpoint及noProviderSwitch恢复不能悄悄改模型。当前分工：pixel worker独占Domain/source支持恢复/handler/Web，accepted agent独占Gateway/协议/broker/runner；待组合High。
+- Pro收尾stderr另见legacy_notify after_agent hook error206（06:14:18Z），实际4次读取与CLI均exit0；不是本次科学请求失败，也不能据此归因用户目录顶层再次堆积。保留原日志，不改共享桥/沙箱或执行清理脚本，不声称上游argv已根治。
 - 后续第二篇4图全真实生成/实看，7ab原请求取图恢复成功未重发；6Pro四份均blocked/null，run stopped/v48/max32、原GET科学返工5项可用但未发起。M3 accepted正式回执与任务exec3成功已另读tmp/f44-two-current-plans-20260922.json；不能用更早只有checkpoint的旧文件推断没有末审。最新4审阅含几何/尺度/主张归属、I(t)/等光程、99as对比50as、调参范围等上游错误，完整见tmp/f44-current-scene-reviews-20260922.json。
 - 本机原CLI固定Pro任务06:10只读诊断exit0，4次静态命令exit0，tmp/pro-collaboration/2026-09-22T06-10-23-811Z.jsonl。未发现当前科学返工继承旧art或直接丢失反馈的代码证据；旧反馈到planner、却未显式到现有终审。提出同一次末审补接不可信缺陷报告，不增模型阶段；候选illustration-review.ts字段previousDefectReport已实现，handler接线/High及真实效果未完成。第三篇另补同run的真实heading依据不足恢复，不冒用8d4f渲染拒收。
 - f44dc25c正常服务器build/start exit0，rollback a78fd5a9；独立release/rollback读回一致，journal/failed=false，provider仍d830，无测试/预检/CI/迁移/共享浏览器重启。日志deploy-f44dc25c-20260922.log。

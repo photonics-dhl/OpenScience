@@ -40,6 +40,8 @@
 
 连续改稿与质量断点：新scene/修订task通过`runner.claimAuthenticatedImagePage`只取空白首页或新页；已有conversation仅在同task恢复时读取已提交结果。`revisionAssetId`当前只消费repair文本，未把原图作为编辑输入，风格referenceImage也不能替代科学编辑。跨task同图续改需准确parent/conversation/新assistant图身份和原授权幂等，不冒称已实现。文字方案经M3 accepted仍出现6Pro像素科学拒收，先区分旧设计继承、模型审阅不足与来源失效；不能用反复重画掩盖，具体当前证据和诊断见CURRENT。
 
+Hermes技能与学习消费审计（2026-09-22）：82/606实际checkpoint记录critical-thinking v3、自有illustration v7及editorial/watercolor/cover参考，`installed-media-skills.ts`按stage/style注入，安装不是缺口。`resolveVisualNarrativeSource`复用经审六维与18,000字符完整摘录窗口；`illustration-planner/review`当前只消费固定输入，末审明确禁止工具，没有按问题取相邻原文的循环。既有SourceMap定位、私有hybrid检索和ScanSci下载可复用，但索引/开发MCP在线不能证明这条路径已使用。修订反馈/审阅/风格消费持久化在原task/asset/audit，既有同RO figure-audit消费不等于跨任务学习；未发现此路径检索历史经验或经批准偏好的实现，journal.feedback也未接入。先补同chain具体缺陷到末审，再设计有来源/权限边界的原文回读及原记录经验检索；科学批评需核源、偏好限定用户和用途，不自动改skill或把历史批评当科学知识。默认6Pro plan末审候选已撤下未部署，版本/后续只见CURRENT。
+
 ### 复用与效果查询
 
 - **已经自动联动**：Worker任务执行、SourceMap/Claim/Evidence及RO/version绑定、方案保存/艺术修订复用、Gateway/provider队列、结果回收和资产记录；Gateway审计经既有view/connector自动进入Langfuse并携带taskId。已保存任务/真实产物见CURRENT，链路接线与每一步效果分别判断。

@@ -1,4 +1,34 @@
 import { PresentationAssetError } from './errors';
+import { loadDocumentSourceMapReference, parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
+import { resolveSourceLocator } from '../research-intelligence/source-locator';
+import { validateSourceLocator } from '../research-intelligence/validation';
+
+/** Presentation projection only: immutable Evidence and its identity remain unchanged. */
+export async function projectIllustrationEvidence(storage: Parameters<typeof loadDocumentSourceMapReference>[0], rows: readonly {
+  id: string; claimId: string; artifactId: string; contentHash: string; exactQuote: string | null;
+  relation: string; provenance: unknown; locator: unknown;
+}[]) {
+  const sourceMaps = new Map<string, Promise<Awaited<ReturnType<typeof loadDocumentSourceMapReference>>>>();
+  return Promise.all(rows.map(async row => {
+    const provenance = row.provenance as Record<string, unknown> | null;
+    if (row.relation !== 'supports' || provenance?.source !== 'reviewed_ingestion') return { ...row, headingProof: undefined };
+    let reference: ReturnType<typeof parseDocumentSourceMapReference>;
+    try { reference = parseDocumentSourceMapReference(provenance.sourceMapRef); }
+    catch { throw new Error('[blocked] Reviewed illustration evidence has no valid SourceMap reference'); }
+    if (reference.parserStatus !== 'succeeded' || reference.artifactId !== row.artifactId || reference.contentHash !== row.contentHash)
+      throw new Error('[blocked] Reviewed illustration evidence SourceMap identity changed');
+    const key = JSON.stringify(reference);
+    let sourceMap = sourceMaps.get(key);
+    if (!sourceMap) { sourceMap = loadDocumentSourceMapReference(storage, reference); sourceMaps.set(key, sourceMap); }
+    const locator = validateSourceLocator(row.locator);
+    let block: ReturnType<typeof resolveSourceLocator>;
+    try { block = resolveSourceLocator(await sourceMap, locator); }
+    catch { throw new Error('[blocked] Reviewed illustration evidence locator no longer resolves'); }
+    return block.kind === 'heading' ? { ...row, relation: 'context', headingProof: {
+      evidenceId: row.id, claimId: row.claimId, sourceMapRef: reference, locator, blockId: block.id, kind: block.kind, text: block.text ?? '',
+    } } : { ...row, headingProof: undefined };
+  }));
+}
 
 /** Science and art share the existing image visual-action budget, including headings and separators. */
 export const ILLUSTRATION_BRIEF_MAX_CHARACTERS = 4000;
