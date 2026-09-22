@@ -42,6 +42,8 @@
 
 Hermes技能与学习消费审计（2026-09-22）：82/606实际checkpoint记录critical-thinking v3、自有illustration v7及editorial/watercolor/cover参考，`installed-media-skills.ts`按stage/style注入，安装不是缺口。`resolveVisualNarrativeSource`复用经审六维与18,000字符完整摘录窗口；`illustration-planner/review`当前只消费固定输入，末审明确禁止工具，没有按问题取相邻原文的循环。既有SourceMap定位、私有hybrid检索和ScanSci下载可复用，但索引/开发MCP在线不能证明这条路径已使用。修订反馈/审阅/风格消费持久化在原task/asset/audit，既有同RO figure-audit消费不等于跨任务学习；未发现此路径检索历史经验或经批准偏好的实现，journal.feedback也未接入。先补同chain具体缺陷到末审，再设计有来源/权限边界的原文回读及原记录经验检索；科学批评需核源、偏好限定用户和用途，不自动改skill或把历史批评当科学知识。默认6Pro plan末审候选已撤下未部署，版本/后续只见CURRENT。
 
+自有Skill与调用方一致性：v7末审/执行仍有固定Chat措辞，并同时要求art correction，实际narrative仅accepted/blocked；v8改为既有配置路由与caller允许的反馈/修订范围，loader同步provenance版本。未增加模型、通用禁令或分析步骤，独立静态核对通过；生产实际消费状态见CURRENT，不能把文本修正冒称正确率提升。loader缓存要求正常worker重启，不热替换在途指导。
+
 ### 复用与效果查询
 
 - **已经自动联动**：Worker任务执行、SourceMap/Claim/Evidence及RO/version绑定、方案保存/艺术修订复用、Gateway/provider队列、结果回收和资产记录；Gateway审计经既有view/connector自动进入Langfuse并携带taskId。已保存任务/真实产物见CURRENT，链路接线与每一步效果分别判断。

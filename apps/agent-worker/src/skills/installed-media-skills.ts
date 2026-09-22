@@ -161,7 +161,7 @@ export function loadInstalledMediaSkills(
     let entry = usage.find((item) => item.id === skill);
     if (!entry) {
       const isOurs = skill === 'openscience-research-illustration';
-      entry = { id: skill, ...(isOurs ? { version: '7' } : { upstreamCommit: UPSTREAM_COMMIT }), resources: [] };
+      entry = { id: skill, ...(isOurs ? { version: '8' } : { upstreamCommit: UPSTREAM_COMMIT }), resources: [] };
       usage.push(entry);
     }
     entry.resources.push(...(headings ? headings.map((heading) => `${relativePath}#${heading}`) : [relativePath]));

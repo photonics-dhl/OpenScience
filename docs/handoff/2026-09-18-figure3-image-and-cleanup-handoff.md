@@ -1,6 +1,7 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
 ## 2026-09-22 06:54Z — Hermes原路由反馈与来源恢复已发布并真实续作
+- 后续Skill静态审计发现自有v7的Scientific review仍写固定Chat且无条件允许艺术修订，与实际M3和narrative verdictOnly不一致。v8三段文字修正为configured provider/caller schema与其允许的correction范围，loader版本同步；独立High PASS，无测试/模型实验，未部署。此清晰冲突不证明全部历史误判根因。进程内Markdown缓存随正常worker启动更新，等在途模型自然终态后才交付，不热替换已发送prompt。
 - 8c0edd6c正常服务器build/start exit0，release/rollback独立读回8c0/f44、journal/failed=false；日志/opt/openscience/observations/deploy-8c0edd6c-20260922.log。无测试/预检/CI/迁移/receiver更新，M3仍science/art/final-review，Chat仍生图及已有6Pro像素审阅；默认Chat plan末审候选已撤下，不在生产。
 - 原UI GET真实返回第二篇stopped48/max32/scientific-replan5、第三篇failed42/max37/source-support-replan6；随后06:54:17Z、06:54:35Z各一次按钮提交HTTP202，分别新plan15b302e7-247e-4e63-b861-6da1f2688901/runv49与40026425-6df0-4c16-8c32-56e5b365808b/runv43，正在处理。/jobs/second-paper-defect-aware-replan-20260922.json和third-paper-source-support-replan-20260922.json已消费；旧错误资格writer未执行。原PDF/六维/旧图/公开历史不重做或改写。
 - Hermes能力审计结论：真实task已消费critical v3、自有illustration v7和风格参考；本次只补原来源恢复和同chain缺陷到同一次末审。独立High建议下一独立小补丁在已发生来源问题时复用私有hybrid检索、当前SourceMap定位，补context但不将chunk变成Evidence，不额外造MCP/分析器。完整sourcePassages另有传入，不能把18K上下文窗口直接认定为全部误判根因。跨任务学习偏好需明确用户认可/作用域/撤销，approved资产仅系统审阅不等于偏好；暂未实现该能力。
