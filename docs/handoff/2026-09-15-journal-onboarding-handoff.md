@@ -5,9 +5,10 @@
 - 用户要求在已有期刊模块上实现来源版权矩阵、加工优先级、服务包额度；现已明确授权部署供本人试用。
 - 功能分支 codex/journal-onboarding 已在 Nanqing96/openscience 与 photonics-dhl/OpenScience 推送至 96e5e0c626ac44427e2e92684e104e4e5d4b0dfd。
 - 该分支基线较旧，禁止直接覆盖生产。独立发布候选为 codex/journal-server-20260922，基于线上 3f9adcdb，随后合入最新生产线；精确 HEAD 见 Git 元数据。
-- 2026-09-22 只读观测生产由 3f9adcdb 更新至 dac602ec3fc1deba2c017cc80ea1fa60625648ab；部署前必须重新读取 active，并将其作为 rollback 参数。
+- 2026-09-22 生产先后更新至 dac602ec，再至 f19e99d49862f026d884cdf1e2edf0ae75019973；候选保留这些代码及 4f2ac32e 文档更新。部署前必须重新读取 active 作为 rollback。
 - 用户无法暂停其他部署；必须保留共享部署锁、精确 active 比较和失败回退，不覆盖并发发布。
 - 本节记录部署准备；尚未将候选声明为已上线。后续执行后同步真实 release/rollback。
+- 独立候选已推送至 photonics-dhl/OpenScience；[PR #109](https://github.com/photonics-dhl/OpenScience/pull/109) 为共享发布线审阅入口。自动审批拒绝未经具体确认直接更新共享 release 分支，未合并或强推。
 
 ## Done
 
@@ -23,7 +24,10 @@
 ## Evidence / scope
 
 - 原 96e5e0c 分支：Domain 574、API 117、Web 471 + Node 5、Worker 4、真实 Chromium 2 场景及 GitHub CI 通过；这些不能冒称生产集成候选已通过相同回归。
-- 生产集成采用独立 high 静态权限复核、必要服务器构建/启动及站内实际入口观察；不恢复生产当前执行约束禁止的本机测试/构建、CI 和全套功能探针。
+- 生产集成采用独立 high 静态权限复核和服务器必要构建；未运行本机测试/构建。自动审批拒绝跳过验收后，本轮按严格 Parser/ScanSci/BGE 发布门禁继续，结果须逐项记录。
+- 097beeab 服务器全量构建通过，切换前因缺少精确 Parser 报告停止；2688deed 后端构建通过，正式 Parser 验收因旧 fake 缺少新增 SourceMap checkpoint 事务而失败，未切换生产。
+- 单文件修复 parser-acceptance-runner.ts 内存事务与任务/来源条件，保留生产 checkpoint、14 成功/2 复核、定位复现、gateway 和隔离限额标准；须以修复后的新 SHA 重建并验收。
+- PR 自动 CI 在 2688deed 暴露 8 个旧 journal fixture/冻结 hash 断言不兼容；已按现行英文申请、服务目录和固定出版记录修正测试，保留权限/幂等/不可变断言。服务页同时改为提交后台有效服务值，避免真实申请被拒。
 - 已通过既有 SSH 包装脚本使用项目专用密钥连接，未读取/打印 .env 或私钥。
 - 服务器本地双库备份成功：core 79M、search 5.5M，保留 7/7 轮；未下载业务数据。
 - 部署前观测 API/Worker/Parser/ScanSci/BGE 及数据服务正常，磁盘可用约 28G；精确状态须执行时再次定锚。

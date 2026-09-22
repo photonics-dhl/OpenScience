@@ -42,7 +42,7 @@ export function JournalServices({ journalId }: { journalId: string }) {
     if (inFlight.current) return;
     inFlight.current = true; setBusy(true);
     try {
-      await requestJournalService(journalId, { annualVolume: volume, language: 'zh', figureScale: 'standard', services: ['期刊服务方案'], notes, requestKey: requestKey.current, planChoice: choice });
+      await requestJournalService(journalId, { annualVolume: volume, language: 'zh', figureScale: 'standard', services: ['AI 标准解读包'], notes, requestKey: requestKey.current, planChoice: choice });
       requestKey.current = crypto.randomUUID();
       setMessage('服务申请已提交，平台会提供人工报价与开通说明。');
       await load();

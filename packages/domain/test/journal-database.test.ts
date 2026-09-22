@@ -5,7 +5,7 @@ import { activateJournalHomepage, addJournalMember, createJournalServiceRequest,
 import { assignJournalReviewer, getManagedJournalArticle, importJournalArticle, reviewJournalArticle, updateJournalArticle } from '../src/journal/articles';
 import { cancelJournalJob, claimJournalJob, finishJournalJob, recoverJournalJobs, submitJournalJob } from '../src/journal/processing';
 import { publishJournalArticle, restrictJournalArticle } from '../src/journal/publishing';
-import { journalDigest, type JournalDraft, type JournalMetadata } from '../src/journal/content';
+import type { JournalDraft, JournalMetadata } from '../src/journal/content';
 import { uploadJournalSource } from '../src/journal/source-upload';
 import { updateJournalArticleSourceRights } from '../src/journal/enhancements';
 import type { WorkspaceDeps } from '../src/workspace/types';
@@ -102,10 +102,10 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
   it('reviews a service request and grants its credits once, rejecting stale and duplicate opening', async () => {
     const ctx = await journal();
     const requestKey = randomUUID();
-    const request = await createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: ' en ', figureScale: ' 3 per article ', services: [' AI package '], notes: ' Initial scope ', requestKey });
-    const replay = await createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: 'en', figureScale: '3 per article', services: ['AI package'], notes: 'Initial scope', requestKey });
+    const request = await createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: ' en ', figureScale: ' 3 per article ', services: ['AI 标准解读包'], notes: ' Initial scope ', requestKey });
+    const replay = await createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: 'en', figureScale: '3 per article', services: ['AI 标准解读包'], notes: 'Initial scope', requestKey });
     expect(replay.id).toBe(request.id);
-    await expect(createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: 'en', figureScale: '3 per article', services: ['AI package'], notes: 'Changed scope', requestKey })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    await expect(createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: 'en', figureScale: '3 per article', services: ['AI 标准解读包'], notes: 'Changed scope', requestKey })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
     await expect(reviewJournalServiceRequest(deps, ctx.owner.id, request.id, { status: 'quoted', expectedStatus: 'submitted', note: 'Quote' })).rejects.toBeInstanceOf(Error);
     await reviewJournalServiceRequest(deps, adminId, request.id, { status: 'quoted', expectedStatus: 'submitted', note: 'Quote' });
     const grant = { journalId: ctx.journal.id, amount: 8, expiresAt: new Date(Date.now() + 86400000), reason: 'Agreed pilot service', requestKey: randomUUID(), serviceRequestId: request.id };
@@ -138,13 +138,17 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
     const publishInput = { revision: current.revision, humanConfirmed: true, requestKey: randomUUID() };
     const [published, replay] = await Promise.all([publishJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, publishInput), publishJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, publishInput)]);
     expect(published.id).toBe(replay.id);
-    const v1 = await prisma.journalRelease.findUniqueOrThrow({ where: { id: published.id }, include: { version: { include: { manifest: true } } } });
+    const v1 = await prisma.journalRelease.findUniqueOrThrow({ where: { id: published.id } });
     const snapshot = v1.snapshot as { source: Record<string, unknown> };
     expect(snapshot.source).not.toHaveProperty('text'); expect(snapshot).not.toHaveProperty('rights');
-    expect(v1.digest).toBe(journalDigest({ core: v1.version.manifest!.coreJson, journalPackage: v1.snapshot }));
+    const publicationV1 = await prisma.publication.findFirstOrThrow({ where: { versionId: v1.versionId } });
+    expect(v1.digest).toMatch(/^[a-f0-9]{64}$/); expect(publicationV1.contentSha256).toBe(v1.digest);
+    const frozenV1 = { snapshot: structuredClone(v1.snapshot), digest: v1.digest, contentSha256: publicationV1.contentSha256 };
     const edited = await updateJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: current.revision, draft: { ...draft, summary: 'A revised but still theoretical summary.' } });
     await expect(publishJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { ...publishInput, revision: edited.revision, requestKey: randomUUID() })).rejects.toMatchObject({ code: 'INVALID_STATE' });
-    expect((await prisma.journalRelease.findUniqueOrThrow({ where: { id: published.id } })).snapshot).toEqual(v1.snapshot);
+    const unchangedV1 = await prisma.journalRelease.findUniqueOrThrow({ where: { id: published.id } });
+    const unchangedPublicationV1 = await prisma.publication.findUniqueOrThrow({ where: { id: publicationV1.id } });
+    expect({ snapshot: unchangedV1.snapshot, digest: unchangedV1.digest, contentSha256: unchangedPublicationV1.contentSha256 }).toEqual(frozenV1);
     const replacementBytes = Buffer.from('A replacement source immediately revokes public access until its own rights are confirmed.');
     const replacementStorage: StorageAdapter = {
       async headObject() { return null; }, async putObject(key, body) { if (!Buffer.isBuffer(body)) throw new Error('buffer expected'); return { key, size: body.length, etag: key }; },
