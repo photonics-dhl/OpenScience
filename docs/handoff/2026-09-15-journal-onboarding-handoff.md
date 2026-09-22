@@ -33,6 +33,7 @@
 - 55707759 服务器 worker 构建通过，但正式 Parser 报告因实际 structuredFake=26/预期28 未生成；无 handler throw、外部/禁止调用均0。正定位少进入处理阶段的固定样例，未下调14/2或调用门槛、未切换生产；新增逐例状态诊断以保留实际原因。
 - 同557镜像隔离诊断确认scan.pdf的PULSE/42/FS及OCR置信度符合规范；formula.pdf真实原生equation由equation-markers.1产生。1e12正式逐例证实：仅corrupt PDF、formula PDF、空PNG复核；公式原始原因精确unresolved pages remain、定位2/2，scan成功定位2/2，其余12全部成功/完整定位，外部和禁止调用0。
 - High已GO并完成hermes-parser-13-3-v3：唯一三例精确复核、26次结构化调用，增加真实equation及native版本/来源证明；其余案例逐项成功且隔离门禁保留。旧runner单测fake同步严格checkpoint持久化，最终同SHA服务器测试与报告待执行，不取消公式复核以伪造14份直接成功。
+- a05d5cfd服务器worker build、Parser契约72项、发布脚本23项通过；runner旧段数断言3项失败。已按真实canonical passage精确断言xlsx/csv各5段、Python2段、notebook1段并逐段回溯原文定位；需新SHA复验，尚未切换生产。
 - 已通过既有 SSH 包装脚本使用项目专用密钥连接，未读取/打印 .env 或私钥。
 - 服务器本地双库备份成功：core 79M、search 5.5M，保留 7/7 轮；未下载业务数据。
 - 部署前观测 API/Worker/Parser/ScanSci/BGE 及数据服务正常，磁盘可用约 28G；精确状态须执行时再次定锚。

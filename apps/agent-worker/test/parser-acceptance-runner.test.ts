@@ -92,14 +92,19 @@ describe('Task 8 acceptance runner production composition', () => {
   it.each([
     {
       id: 'table-xlsx-en', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      expectedQuotes: ['Evidence', 'Claim', 'Value', 'pulse_width_fs', '42'],
     },
     {
       id: 'table-csv-mixed', mimeType: 'text/csv',
+      expectedQuotes: ['metric', 'value', 'unit', 'pulse_width', '42'],
     },
-    { id: 'notebook-en', mimeType: 'application/x-ipynb+json' },
-    { id: 'python-code-en', mimeType: 'text/x-python' },
+    { id: 'notebook-en', mimeType: 'application/x-ipynb+json', expectedQuotes: ['pulse_width_fs = 42'] },
+    {
+      id: 'python-code-en', mimeType: 'text/x-python',
+      expectedQuotes: ['# Self-authored corpus fixture', 'pulse_width_fs = 42'],
+    },
   ])('accepts actionable $id with its full locator and two structured semantic fakes', async ({
-    id, mimeType,
+    id, mimeType, expectedQuotes,
   }) => {
     const fixture = RESEARCH_INTELLIGENCE_CORPUS.find((candidate) => candidate.id === id);
     expect(fixture).toBeDefined();
@@ -244,14 +249,15 @@ describe('Task 8 acceptance runner production composition', () => {
     const extraction = handlerResult as unknown as {
       evidenceSegments: { problem: Array<{ quote: string; sourceLocator: Parameters<typeof reproduceAcceptanceLocator>[1] }> };
     };
-    expect(extraction.evidenceSegments.problem).toHaveLength(1);
-    const exactSegment = extraction.evidenceSegments.problem[0]!;
-    const sourceBlock = cascadeResult.sourceMap.pages.flatMap((page) => page.blocks)
-      .find((block) => block.id === exactSegment.sourceLocator.blockId)!;
-    expect(sourceBlock.text?.slice(
-      exactSegment.sourceLocator.charRange!.start,
-      exactSegment.sourceLocator.charRange!.end,
-    )).toBe(exactSegment.quote);
+    expect(extraction.evidenceSegments.problem.map(({ quote }) => quote)).toEqual(expectedQuotes);
+    for (const exactSegment of extraction.evidenceSegments.problem) {
+      const sourceBlock = cascadeResult.sourceMap.pages.flatMap((page) => page.blocks)
+        .find((block) => block.id === exactSegment.sourceLocator.blockId)!;
+      expect(sourceBlock.text?.slice(
+        exactSegment.sourceLocator.charRange!.start,
+        exactSegment.sourceLocator.charRange!.end,
+      )).toBe(exactSegment.quote);
+    }
     const locatorMatches = fixture.expectedLocators.filter((locator) => reproduceAcceptanceLocator(
       cascadeResult!.sourceMap,
       locator,
