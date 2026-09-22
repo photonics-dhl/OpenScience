@@ -1,20 +1,15 @@
 > HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
-
 # Hermes Research Intelligence Handoff
-
 > DEPRECATED → CURRENT: `docs/handoff/2026-09-10-hermes-web-image-handoff.md`
-
 ## Goal / constraints
 - PDF→服务器OCR/全文理解→六维凝练与原文→Hermes规划→服务器网页生图→画廊（Codex原失败记录保留）。视频暂停。
 - 用户已批准实际生图、预设imagegen skill和页面优化。禁止测试/预检/CI测试/本地构建；允许必要服务器部署与真实任务。保留权限、计费、来源、回滚；不删除文件、不读取打印密钥。
 - 六维不是章节模板；方法可隐含在推导/结果/附录。来源整理失败不等于论文未报告。不能放行科学错误。
-
 ## Full-flow optimization — current batch
 - 用户明确先完成附件预览→自动全文凝练→用户确认→选图/视频→生成审核→发布→公开RO；2–3篇高质量精选完成并获认可前暂停冷启动。
 - 普通Chat6aa162f9已实际发送/读回完整产品建议；旧Chat6a9e7dac本轮接口无匹配，不推断Chat整体不可用。此次没有截图评审。
 - 本批已部署c2d11326：ArtifactViewer、媒体类型选择、公开页顺序/去重、索引从草稿改读发布manifest、归档过滤、理解skill v3精确来源恢复。尚未重新提取；问题台账在integrated-research-product-plan最新节。
 - 服务器部署exit0，production c2d113263ee48f276e9dedc4e4dc8a3229b4ceed / rollback7f8e47d931b751cc28c1000325128c2ca86566cb。已正常domain可恢复归档18旧demo-source记录与16个人测试草稿（共34），脚本archive-legacy-showcase；3条实际研究记录保护（其中2条同一PDF，不能计作3篇精选），不删文件/账号/公开版本。
-
 - 下一批候选：已确认论文重新分析为独立待确认草稿（复用SourceMap，事务内权限/408与429幂等修复）、归档Hermes任务过滤、MaterialQueue预览、Hermes默认紧凑静态回退。网页spool接入另批已完成静态修复/High复核，尚未启用或实际回传。
 - 用户已登录服务器产品页；实际Overview可截图，工作台旧9任务/Hermes常驻重试问题已记录。Chat截图在页面reload后上传成功并实际发送6 Pro，已收到视觉建议并实现紧凑工作台/队列3条折叠/长任务名换行；此前文字讨论已返回。
 

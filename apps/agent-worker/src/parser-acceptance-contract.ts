@@ -15,9 +15,9 @@ import { SDF_CORE_VERSION } from '@openscience/sdf-schema';
 
 import { PDF_TEXT_ITEM_METADATA } from './parsers/native-pdf-contract';
 
-export const CANONICAL_CORPUS_MANIFEST_SHA256 = 'db62ae00bb3fb7ecb0b2daba5815d75b1960d4ff1e5ef9549dd1e7617925ac03';
-export const ACCEPTANCE_PROFILE = 'hermes-parser-14-2-v2';
-const ACCEPTANCE_STRUCTURED_FAKE_CALLS = 28;
+export const CANONICAL_CORPUS_MANIFEST_SHA256 = '105af3de93dde9242456c9c861992dfa97db4a8c03a10eb83c95bc1597dcc315';
+export const ACCEPTANCE_PROFILE = 'hermes-parser-13-3-v3';
+const ACCEPTANCE_STRUCTURED_FAKE_CALLS = 26;
 
 export interface AcceptanceLocator extends Record<string, unknown> { kind: string }
 export interface AcceptanceManifestCase {
@@ -252,7 +252,7 @@ export function reproduceAcceptanceLocator(
 export const CANONICAL_CASE_IDENTITIES = Object.freeze([
   ['corrupt-pdf-en', 'corrupt.pdf', 'needs_review', 1],
   ['dual-column-pdf-en', 'dual-column.pdf', 'ready', 5],
-  ['formula-pdf-en', 'formula.pdf', 'ready', 2],
+  ['formula-pdf-en', 'formula.pdf', 'needs_review', 2],
   ['markdown-mixed', 'claim.md', 'ready', 2],
   ['native-docx-en', 'fixture.docx', 'ready', 1],
   ['native-pdf-en', 'fixture.pdf', 'ready', 1],
@@ -290,7 +290,7 @@ const CANONICAL_CASE_CONTENT_HASHES: Readonly<Record<string, string>> = Object.f
 const HARD_CASE_EXPECTATIONS = Object.freeze([
   ['corrupt-pdf-en', 'needs_review', 0, 'unreadable-or-corrupt-document'],
   ['dual-column-pdf-en', 'succeeded', 5],
-  ['formula-pdf-en', 'succeeded', 2],
+  ['formula-pdf-en', 'needs_review', 2, 'formula-visual-transcription-required'],
   ['markdown-mixed', 'succeeded', 2],
   ['native-docx-en', 'succeeded', 1],
   ['native-pdf-en', 'succeeded', 1],
@@ -312,6 +312,7 @@ interface AcceptanceTransformation {
   version: string;
 }
 interface AcceptanceStage {
+  kind: string;
   parser: string;
   version: string;
   confidence: number | null;
@@ -742,7 +743,9 @@ function validBox(value: unknown): value is AcceptanceStage['boundingBox'] {
 
 function validateStage(stage: unknown): asserts stage is AcceptanceStage {
   if (!isRecord(stage)
-    || !hasExactKeys(stage, ['parser', 'version', 'confidence', 'boundingBox', 'transformations'])
+    || !hasExactKeys(stage, ['kind', 'parser', 'version', 'confidence', 'boundingBox', 'transformations'])
+    || typeof stage.kind !== 'string'
+    || !['heading', 'paragraph', 'figure', 'table', 'equation', 'caption', 'reference'].includes(stage.kind)
     || typeof stage.parser !== 'string' || !stage.parser
     || typeof stage.version !== 'string' || !stage.version
     || (stage.confidence !== null && (!Number.isFinite(stage.confidence)
@@ -836,6 +839,15 @@ export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
           && entry.parser === 'tesseract' && entry.version === '5.3.0'));
       if (!tesseract) throw new Error('mandatory scanned-PDF Tesseract provenance missing');
     }
+    if (item.id === 'formula-pdf-en') {
+      const nativeEquation = item.stages.find((stage) => stage.kind === 'equation'
+        && stage.parser === PDF_TEXT_ITEM_METADATA.name
+        && stage.version === PDF_TEXT_ITEM_METADATA.version
+        && stage.transformations.some((entry) => entry.stage === 'extract_text'
+          && entry.parser === PDF_TEXT_ITEM_METADATA.name
+          && entry.version === PDF_TEXT_ITEM_METADATA.version));
+      if (!nativeEquation) throw new Error('mandatory native formula review provenance missing');
+    }
     if (item.status === 'succeeded') succeeded += 1;
     else needsReview += 1;
   });
@@ -843,7 +855,7 @@ export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
   if (!isRecord(summary) || !hasExactKeys(summary, [
     'falseReadyCount', 'failed', 'succeeded', 'needsReview', 'p50ElapsedMs', 'p95ElapsedMs',
   ]) || summary.falseReadyCount !== 0 || summary.failed !== 0
-    || summary.succeeded !== 14 || summary.needsReview !== 2
+    || summary.succeeded !== 13 || summary.needsReview !== 3
     || summary.succeeded !== succeeded || summary.needsReview !== needsReview
     || summary.p50ElapsedMs !== percentile(elapsed, 0.5)
     || summary.p95ElapsedMs !== percentile(elapsed, 0.95)) {

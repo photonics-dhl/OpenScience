@@ -12,6 +12,7 @@ import {
   reproduceAcceptanceLocator,
 } from '../src/parser-acceptance-contract';
 import { createSidecarParserStageProcessor } from '../src/parser-job-isolation';
+import { PDF_TEXT_ITEM_METADATA } from '../src/parsers/native-pdf-contract';
 import {
   buildAcceptanceProposal,
   canonicalAcceptanceReviewReasons,
@@ -58,6 +59,33 @@ describe('Task 8 acceptance runner production composition', () => {
     expect(() => canonicalAcceptanceReviewReasons(fixture, {
       status: 'needs_review', reasons: [...reasons, 'provider exception'],
     } as never)).toThrow(/review reason evidence/i);
+  });
+
+  it('canonicalizes formula review only with the exact unresolved reason and native equation evidence', () => {
+    const fixture = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'formula-pdf-en')!;
+    const equation = {
+      id: 'formula-equation', kind: 'equation', text: 'I(t) = I0 exp(-t/tau)',
+      boundingBox: { x: 54, y: 100, width: 96.372, height: 12 },
+      parser: PDF_TEXT_ITEM_METADATA,
+      transformations: [{ stage: 'extract_text', processor: PDF_TEXT_ITEM_METADATA }],
+    };
+    const result = {
+      status: 'needs_review', reasons: ['unresolved pages remain'],
+      sourceMap: {
+        artifactId: 'formula', contentHash: createHash('sha256').update(fixture.content).digest('hex'),
+        parser: PDF_TEXT_ITEM_METADATA,
+        pages: [{ page: 1, width: 612, height: 792, blocks: [equation] }],
+      },
+    };
+    expect(canonicalAcceptanceReviewReasons(fixture, result as never))
+      .toEqual(['formula-visual-transcription-required']);
+    expect(() => canonicalAcceptanceReviewReasons(fixture, {
+      ...result, reasons: ['unresolved pages remain', 'provider exception'],
+    } as never)).toThrow(/review reason evidence/i);
+    expect(() => canonicalAcceptanceReviewReasons(fixture, {
+      ...result,
+      sourceMap: { ...result.sourceMap, pages: [{ ...result.sourceMap.pages[0]!, blocks: [] }] },
+    } as never)).toThrow(/native equation evidence/i);
   });
 
   it.each([

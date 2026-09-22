@@ -111,7 +111,7 @@
           "quote": "I(t) = I0 exp(-t/tau)"
         }
       ],
-      "expectedCurrentStatus": "ready",
+      "expectedCurrentStatus": "needs_review",
       "sha256": "e2048391202205cffe5132331b85148d23109add51130ac280a817ef0f583a48"
     },
     {

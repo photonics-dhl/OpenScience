@@ -23,6 +23,7 @@ import {
   expectedSidecarParserMetadata,
 } from './parser-job-isolation';
 import { canonicalParserMediaType } from './parser-media-type';
+import { PDF_TEXT_ITEM_METADATA } from './parsers/native-pdf-contract';
 
 function percentile(values: readonly number[], fraction: number): number {
   const sorted = [...values].sort((left, right) => left - right);
@@ -111,6 +112,10 @@ const INTENTIONAL_REVIEW_EVIDENCE = Object.freeze({
     canonical: 'unreadable-or-corrupt-document',
     cascadeReasons: ['parser-failed', 'page_inventory failed', 'all local parser stages failed'],
   },
+  'formula-pdf-en': {
+    canonical: 'formula-visual-transcription-required',
+    cascadeReasons: ['unresolved pages remain'],
+  },
   'scan-png-empty': {
     canonical: 'no-meaningful-content',
     cascadeReasons: ['parser-failed', 'all local parser stages failed'],
@@ -126,6 +131,17 @@ export function canonicalAcceptanceReviewReasons(
   if (evidence === undefined) return [];
   if (JSON.stringify(result.reasons) !== JSON.stringify(evidence.cascadeReasons)) {
     throw new Error(`unexpected intentional review reason evidence: ${item.id}`);
+  }
+  if (item.id === 'formula-pdf-en' && !result.sourceMap.pages.some(({ blocks }) => blocks.some((block) => (
+    block.kind === 'equation'
+    && block.text === 'I(t) = I0 exp(-t/tau)'
+    && block.parser.name === PDF_TEXT_ITEM_METADATA.name
+    && block.parser.version === PDF_TEXT_ITEM_METADATA.version
+    && block.transformations.some(({ stage, processor }) => stage === 'extract_text'
+      && processor.name === PDF_TEXT_ITEM_METADATA.name
+      && processor.version === PDF_TEXT_ITEM_METADATA.version)
+  )))) {
+    throw new Error('formula review is missing native equation evidence');
   }
   return [evidence.canonical];
 }
@@ -302,6 +318,7 @@ async function main(): Promise<void> {
       falseReady,
       elapsedMs,
       stages: blocks.map((block) => ({
+        kind: block.kind,
         parser: block.parser.name, version: block.parser.version,
         confidence: block.confidence ?? null,
         boundingBox: { ...block.boundingBox },
