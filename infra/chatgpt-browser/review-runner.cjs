@@ -109,7 +109,7 @@ function attachmentLabelPattern(fileName) {
   const dot = fileName.lastIndexOf('.');
   const stem = fileName.slice(0, dot).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const extension = fileName.slice(dot).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`^${stem}(?:\\(\\d+\\))?${extension}$`);
+  return new RegExp(`^${stem}(?:\\((?:\\d+|\\d{8}-\\d{6})\\))?${extension}$`);
 }
 async function attachmentsReady(input, request) {
   const form = input.locator('xpath=ancestor::form[1]');
@@ -185,6 +185,9 @@ async function composer(page) {
   return result;
 }
 async function composerText(input) { return input.evaluate(element => element instanceof HTMLTextAreaElement ? element.value : element.innerText); }
+// The rich-text editor inserts paragraph line breaks into innerText. Compare all
+// text, allowing only the same whitespace normalization used by the image runner.
+function normalizeComposerText(value) { return value.replace(/\s+/g, ' ').trim(); }
 async function model6ProActive(input) {
   const form = input.locator('xpath=ancestor::form[1]');
   return await form.count() === 1 && /(?:^|\s)6\s+Pro(?:\s|$)/.test(await form.innerText().catch(() => ''));
@@ -389,7 +392,7 @@ let activePage;
   const send = page.getByRole('button', { name: 'Send prompt', exact: true });
   const readyDeadline = Math.min(request.deadlineAt, Date.now() + 10000);
   while (Date.now() < readyDeadline) {
-    const promptReady = await bounded(composerText(input), 2000).catch(() => '') === prompt;
+    const promptReady = normalizeComposerText(await bounded(composerText(input), 2000).catch(() => '')) === normalizeComposerText(prompt);
     const attachmentReady = await bounded(attachmentsReady(input, request), 2000).catch(() => false);
     const modelReady = await bounded(model6ProActive(input), 2000).catch(() => false);
     const modeReady = await bounded(normalChatMode(input), 2000).catch(() => false);
@@ -397,7 +400,7 @@ let activePage;
     if (promptReady && attachmentReady && modelReady && modeReady && sendReady) break;
     await new Promise(resolve => setTimeout(resolve, 250));
   }
-  if (await bounded(composerText(input), 2000).catch(() => '') !== prompt) throw Error('PROMPT_CHANGED');
+  if (normalizeComposerText(await bounded(composerText(input), 2000).catch(() => '')) !== normalizeComposerText(prompt)) throw Error('PROMPT_CHANGED');
   if (!await bounded(attachmentsReady(input, request), 2000).catch(() => false)) throw Error('ATTACHMENT_UPLOAD_NOT_CONFIRMED');
   if (!await bounded(model6ProActive(input))) throw Error('MODEL_6_PRO_NOT_READY');
   if (!await bounded(normalChatMode(input))) throw Error('NORMAL_CHAT_MODE_NOT_READY');
