@@ -327,7 +327,9 @@ async function activateImageMode(page, composer, deadlineAt) {
   if (Date.now() >= deadlineAt) return false;
   if (await plus.count() !== 1 || !await plus.isVisible().catch(() => false)) return false;
   stage = 'image_mode_plus';
-  await plus.click({ timeout: Math.max(1, deadlineAt - Date.now()) });
+  if (!await plus.isEnabled()) return false;
+  await plus.focus({ timeout: Math.max(1, deadlineAt - Date.now()) });
+  await plus.press('Enter', { timeout: Math.max(1, deadlineAt - Date.now()) });
   stage = 'image_mode_choice';
   const choice = page.getByText('Create image', { exact: true });
   const choiceDeadline = deadlineAt;
@@ -527,15 +529,18 @@ let stage = 'request';
 })().catch(async error => {
   const failure = { stage, state: fs.existsSync(path.join(dir, 'submitted.json')) ? 'ambiguous_no_resend' : 'not_submitted', error: /^[A-Z0-9_]+$/.test(error.message) ? error.message : error.name };
   if (failure.error === 'Error' && ['EEXIST', 'ENOENT'].includes(error.code)) failure.error = error.code;
-  if (stage.startsWith('image_mode')) {
+  if (stage.startsWith('image_mode') || stage === 'page_selection' || stage === 'browser_attach') {
     // Keep only a fixed category: locator errors may embed the authored prompt or page URL.
     failure.errorKind = /Target crashed/i.test(error.message) ? 'page_crashed'
       : /strict mode violation/.test(error.message) ? 'strict_locator'
       : /closed|destroyed|detached/i.test(error.message) ? 'page_or_node_unavailable'
-      : /timeout/i.test(error.message) ? 'timeout' : 'other';
+      : /timeout|PAGE_UNRESPONSIVE/i.test(error.message) ? 'timeout'
+      : /net::|navigation/i.test(error.message) ? 'navigation_failed' : 'other';
   }
   // Preserve the first safe failure code; the broker otherwise returns only EXECUTION_FAILED.
   try { once('operator-error.json', failure); } catch {}
+  // The first error is immutable evidence; retain later attempts without replacing it.
+  try { once(`operator-attempt-error-${crypto.randomUUID()}.json`, { ...failure, at: new Date().toISOString() }); } catch {}
   // Retain this job's own page when reference upload is unconfirmed so an operator
   // can inspect the same visible state. Never downgrade or resend the request.
   if (activePage && !fs.existsSync(path.join(dir, 'submitted.json')) && !stage.startsWith('reference_')) {

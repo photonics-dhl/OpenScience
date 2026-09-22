@@ -188,6 +188,14 @@ async function composerText(input) { return input.evaluate(element => element in
 // The rich-text editor inserts paragraph line breaks into innerText. Compare all
 // text, allowing only the same whitespace normalization used by the image runner.
 function normalizeComposerText(value) { return value.replace(/\s+/g, ' ').trim(); }
+function promptComparison(expected, actual) {
+  const left = normalizeComposerText(expected), right = normalizeComposerText(actual);
+  let firstDifference = 0;
+  while (firstDifference < Math.min(left.length, right.length) && left[firstDifference] === right[firstDifference]) firstDifference += 1;
+  return { expectedLength: left.length, actualLength: right.length,
+    expectedNonWhitespace: left.replace(/\s/g, '').length, actualNonWhitespace: right.replace(/\s/g, '').length,
+    firstDifference, expectedCodePoint: left.codePointAt(firstDifference) ?? null, actualCodePoint: right.codePointAt(firstDifference) ?? null };
+}
 async function model6ProActive(input) {
   const form = input.locator('xpath=ancestor::form[1]');
   return await form.count() === 1 && /(?:^|\s)6\s+Pro(?:\s|$)/.test(await form.innerText().catch(() => ''));
@@ -350,9 +358,12 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
   throw Error('RESULT_TIMEOUT_NO_RESEND');
 }
 let activePage;
+let stage = 'request';
+let comparisonDiagnostic;
 (async () => {
   const stat = fs.lstatSync(dir); if (!stat.isDirectory() || stat.isSymbolicLink()) throw Error('INVALID_JOB_DIRECTORY');
   const request = validateRequest(read('request.json'), mode === 'recover');
+  stage = 'browser_attach';
   const instance = await beforeAttach('/jobs/review', 'chatgpt-web-science-review', id);
   const browser = await reconnectBrowser(), context = browser.contexts()[0]; if (!context) throw Error('BROWSER_CONTEXT_NOT_FOUND');
   let page;
@@ -375,6 +386,7 @@ let activePage;
     process.exit(0);
   }
   if (fs.existsSync(path.join(dir, 'submitted.json'))) throw Error('SUBMITTED_DO_NOT_RESEND');
+  stage = 'page_selection';
   page = await context.newPage();
   activePage = page;
   await rememberPage(page, dir, request.provider, id, instance);
@@ -386,8 +398,10 @@ let activePage;
   const prompt = reviewPrompt(request);
   if (prompt.length > 64 * 1024) throw Error('PROMPT_TOO_LARGE');
   const baseline = await page.locator('[data-message-author-role="assistant"]').count();
+  stage = 'attachments';
   await uploadAttachments(input, request);
   input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000));
+  stage = 'composer_fill';
   await input.fill(prompt);
   const send = page.getByRole('button', { name: 'Send prompt', exact: true });
   const readyDeadline = Math.min(request.deadlineAt, Date.now() + 10000);
@@ -400,15 +414,25 @@ let activePage;
     if (promptReady && attachmentReady && modelReady && modeReady && sendReady) break;
     await new Promise(resolve => setTimeout(resolve, 250));
   }
-  if (normalizeComposerText(await bounded(composerText(input), 2000).catch(() => '')) !== normalizeComposerText(prompt)) throw Error('PROMPT_CHANGED');
+  stage = 'composer_confirmation';
+  // A failed browser read is not evidence that the prompt changed.
+  const actualPrompt = await bounded(composerText(input), 2000);
+  if (normalizeComposerText(actualPrompt) !== normalizeComposerText(prompt)) {
+    comparisonDiagnostic = { ...promptComparison(prompt, actualPrompt),
+      composerConnected: await bounded(input.evaluate(element => element.isConnected && Boolean(element.closest('form'))), 1000).catch(() => null),
+      attachmentsReady: await bounded(attachmentsReady(input, request), 1000).catch(() => null) };
+    throw Error('PROMPT_CHANGED');
+  }
   if (!await bounded(attachmentsReady(input, request), 2000).catch(() => false)) throw Error('ATTACHMENT_UPLOAD_NOT_CONFIRMED');
   if (!await bounded(model6ProActive(input))) throw Error('MODEL_6_PRO_NOT_READY');
   if (!await bounded(normalChatMode(input))) throw Error('NORMAL_CHAT_MODE_NOT_READY');
   if (!await send.isEnabled().catch(() => false)) throw Error('SEND_NOT_READY');
+  stage = 'submission';
   once('submitted.json', { phase: 'submitted', id, promptHash: request.promptHash, assistantCount: baseline,
     attachments: (request.attachments ?? []).map(({ fileName, sha256 }) => ({ fileName, sha256 })), submittedAt: new Date().toISOString() });
   await send.focus();
   await send.press('Enter');
+  stage = 'response';
   const url = await resolveCanonicalConversation(page, Math.min(request.deadlineAt - 30000, Date.now() + 30000));
   once('conversation.json', { url });
   await recoverUserAnchor(page, request, Math.min(request.deadlineAt, Date.now() + 30000));
@@ -420,6 +444,15 @@ let activePage;
   }
   const failure = { state: fs.existsSync(path.join(dir, 'submitted.json')) ? 'ambiguous_no_resend' : 'not_submitted', error: /^[A-Z0-9_]+$/.test(error.message) ? error.message : error.name };
   try { once('operator-error.json', failure); } catch {}
+  // Keep the original failure shape for existing recovery consumers; later attempts
+  // get their own safe diagnostics, never prompt text, URLs or raw browser errors.
+  const errorKind = /Target crashed/i.test(error.message) ? 'page_crashed'
+    : /strict mode violation/.test(error.message) ? 'strict_locator'
+    : /closed|destroyed|detached/i.test(error.message) ? 'page_or_node_unavailable'
+    : /timeout|PAGE_UNRESPONSIVE/i.test(error.message) ? 'timeout'
+    : /net::|navigation/i.test(error.message) ? 'navigation_failed' : 'other';
+  try { once(`operator-attempt-error-${crypto.randomUUID()}.json`, { ...failure, stage, errorKind,
+    at: new Date().toISOString(), ...(comparisonDiagnostic ? { comparison: comparisonDiagnostic } : {}) }); } catch {}
   console.log(JSON.stringify(failure));
   process.exit(1);
 });

@@ -15,8 +15,10 @@
 - 一次性写脚本/收据不可重放；未知响应先读结果。保护原PDF、已认可图、拒收与失败历史、旧公开版本/标识。Fig.2五项清理尚未明确授权。
 - 交付树与根main收尾status必须空，自己的改动提交并推送；prune/list。仅根+交付树，无新worktree。清理仅明确自有、生产者完成且不用的生成物；268日志归档不重复，也不声称根治上游argv缺陷。已结束的12份本轮长文源码staging副本删除被自动审核拦截，已安全移入tmp/archived/long-paper-staging-20260922，restore.json保留路径/内容/ACL，移动后ACL一致；base-head与实现交接原位保留，无活动生产者。
 
+- 两runner最小候选已High静态PASS：plus唯一可见启用按钮改focus/Enter，保留选图模式确认；review最终读取失败不再冒称正文变化，真正不一致只记录长度/差异码点等安全诊断。每次尝试保留独立错误，原首错误不覆盖；待独立provider安装，无新提交或deadline改动。
+
 ## 版本与独立能力
-- application production=afedff5c0c3dbe41e1138c7aa47c842c27d84d64；rollback=1a2efd317e2fffbd561245b7c65bec41abcff671。正常无迁移/无测试服务器build/start exit0，独立marker一致，journal/failed无；日志/opt/openscience/observations/deploy-afedff5c-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
+- application production=b28573f8ff040829be9e060588d78116e5ee8be1；rollback=afedff5c0c3dbe41e1138c7aa47c842c27d84d64。正常无迁移/无测试服务器build/start exit0，独立marker一致，journal/failed无；日志/opt/openscience/observations/deploy-b28573f8-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
 - 独立Chat provider=afedff5c0c3dbe41e1138c7aa47c842c27d84d64，已按原三锁备份/空闲切换安装，timer恢复原enabled/active，共享浏览器未重启。sceneImage fallback配置false；原renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f保留。最近备份provider-backup-20260922-persistence-afedff5c；不能退到不支持长请求的旧bundle。
 - 应用已含动态图修正grant>=9迁移；Domain仍要求精确恢复收据，不能以DB允许任意数字绕授权。当前rollback兼容已用generic/schema/pre-provider回执；新增exec3持久化恢复开始后不交给仅支持exec2的旧worker，优先前向修复；不能直接回滚到旧固定额度版本。
 - Pro代码合作已实测原生CLI exec resume/chatgpt-web/pro/ultra/STDIN短任务读取→写报告→读回；长任务工具续接与Desktop完整补丁仍未安装，不能称全局稳定。本机桥用于代码合作，服务器image/review provider负责产品图片。
@@ -39,7 +41,7 @@
 - 已消费/jobs/visual-narrative-system-verified-publish-20260922.json，匿名观察visual-narrative-public-v3-observe-20260922.json；viewport截图已实看，新图完整、图注16px/28px且无DOM横溢出。最终用户科学/审美认可尚未取得。
 
 ## 后两篇：当前阻塞与续作
-- 02:21Z最新：第二篇f522四图b320/e8bd/3316/2b4e全部已审，e8bd accepted/approved，另三图科学blocked/null；run stopped/v34/max22，原GET提供科学修订5项。具体为穿缝/入射角关系、等面积编码被art改成1:36.4比例条、固定4.4μm权衡缺驱动条件。两文件最小候选隔离旧科学反馈进入art并强化原跨字段检查，已独立High静态PASS；先交付修正再从原按钮继续，旧图保留。
+- 02:21Z最新：第二篇f522四图b320/e8bd/3316/2b4e全部已审，e8bd accepted/approved，另三图科学blocked/null；run stopped/v34/max22，原GET提供科学修订5项。具体为穿缝/入射角关系、等面积编码被art改成1:36.4比例条、固定4.4μm权衡缺驱动条件。两文件最小候选隔离旧科学反馈进入art并强化原跨字段检查，已独立High静态PASS并交付b285；先修桥后从原按钮继续，旧图保留。
 - 第三篇405a文字末审因无来源固定角度及两类增强量混同blocked，01:48:45Z原按钮HTTP202生成cb2a7a69-8adc-461e-aa9c-6a2352b60ab1（/jobs/third-paper-quantitative-plan-revision-20260922.json已消费），新方案accepted，run现failed/v36/max27。719a330d真实PNG+6Pro accepted，asset draft/awaiting_approval；cf6da3e9 PNG存在但审阅not_submitted/PROMPT_CHANGED；77d527ce、1ff93430、a2480121均无PNG且not_submitted，分别image_mode_plus/TimeoutError、page_selection/Error、image_mode_plus/TimeoutError。无新EXPIRED证据，不把这些故障归因排队。原GET尚无恢复入口，需复用原technical恢复保留已审图/已有PNG，不重做science。
 - 当前精确9图/审阅见tmp/current-nine-image-review-read-20260922.json；提交元数据脚本third-current-spool-failures-20260922.py。719a图本机tmp/third-paper-719a330d-20260922.png已看，1280×720/1155387bytes/hash8a3a8d310a1c67ffcf5a4e8b75a62aab662d7c970a6e94a77c2dd60f1ce7b0d6，用户审美认可pending。以下为前序恢复证据，不重放历史writer。
 - 第二篇ROc896802c-35dd-4b59-8db1-5f374f83a6d8（deep-sub-cycle pulse），原PDF7bb96cc1/3770010bytes、公开v1保护。guide ab76b22e明确editorial；独立High选needs_review840e24f9而非confirmed2fdb，避免旧v4确认来源无法composition。原UI启动run7e9e1f3e-eafe-440a-be0f-7ff1ed349a8b，/jobs/second-paper-editorial-run-start-20260922.json已消费。
