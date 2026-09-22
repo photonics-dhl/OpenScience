@@ -1,5 +1,10 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 04:03Z — 同draft正文修复与原task规划恢复已交付
+- a78fd5a910de0a30c72efbfc2bba0a0a8b689fe7正常服务器build/start exit0，rollback193fc645，独立marker正确/journal与failed均false，无迁移/测试/预检/CI。Gateway及依赖源码与193一致，复用其服务器dist；独立provider原空闲/三锁/备份安装a78、timers恢复active/enabled，无浏览器重启。备份provider-backup-20260922-composer-repair-a78fd5a9，部署日志/opt/openscience/observations/deploy-a78fd5a9-20260922.log。
+- 原第二篇GET真实出现storyboard-planning/1，04:03:32Z按钮HTTP202，原task82c627a4-f253-4a10-94b3-716fa9708666/runv42开始再次规划，max32不变。/jobs/second-paper-art-timeout-resume-20260922.json已消费；不得重放。第三篇原6项science入口04:03:49Z按钮HTTP202→新plan606261f7-d539-465f-bc96-c79db549cfb2/runv39，/jobs/third-paper-symbol-source-replan-20260922.json已消费，两次真实模型规划在途。
+- 第三篇来源独立只读复核：PINEM/Rabi和HHG/Compton类比在原SourceMap导言确实存在；cb2 candidate实际绑定1e07标题不能支持它。现有本地快照不足以重建当时允许supports池，不能断言intro当时已可绑定。原planner已要求完整原文支持描述，下一次可选有效supports或缩窄表达，无需新分析器或手补事实；只看新候选真实绑定是否匹配，不把审图建议当事实。
+
 ## 2026-09-22 — 新恢复真实结果与两个后续故障
 - 第三篇technical subset四项真实完成：cc6e原cf6 PNG复用并正式6Pro blocked/null（方向索引k及卷积符号定义缺失）；cb450新PNG后6Pro blocked/null（节点语义、v/k方向、条件与具体类比的证据绑定）；092f新PNG/6Pro accepted；707新PNG已存但review not_submitted/EXECUTION_FAILED。原719仍accepted。run failed/v38/max31，原GET真实提供narrative-scientific-replan/6；该后续路径另由High静态复核PASS，未新增恢复模块。完整回执tmp/third-technical-subset-review-read-20260922.json，cc6e和092f实图已看。
 - 队列新预算已有实际证据：65分钟总预算，cb450/092f等待8.50/9.71分钟后领取，各仍有10分钟执行；三张新PNG均已存，原请求不延长。tmp/third-subset-queue-budget-read-20260922.json是领取时快照，结果后由正式资产/任务确认。
