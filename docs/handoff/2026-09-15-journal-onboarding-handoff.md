@@ -21,13 +21,13 @@
 
 - 原96e分支历史回归：Domain574、API117、Web471+Node5、Worker4、真实Chromium2场景；不能替代当前集成版本的结果。
 - 已部署e05自动CI：后端/Web构建、Domain39、API23（2条browser在独立阶段执行）、Worker4、Web7、真实Chromium桌面/375px手机2场景全部通过；使用隔离PostgreSQL与合成材料。
-- e05自动CI最后仅文档一致性失败：5处文档登记及迁移区间声明；收尾文档提交已修复，最终CI结果按实际GitHub运行记录，不把业务阶段通过冒称整项CI通过。
+- e05自动CI仅文档登记失败；db19已通过docs-sync8项和索引审计。后续Markdown格式检查的历史告示/占位符/表格/空行问题已按实际约定收口，最终CI结果按GitHub运行记录，不把业务阶段通过冒称整项CI通过。
 - e05服务器：两轮全应用构建运行闭包指纹一致；Parser契约/runner81项、发布脚本23项、语料导出1项通过。
 - 同SHA正式hermes-parser-13-3-v3报告通过：16例中13完成、损坏PDF/公式PDF/空PNG精确复核；26次结构化fake，外部/禁止调用0，falseReady0。公式保持真实equation与native版本证明；这不代表真实模型科学质量验收。
 - 严格canonical部署全部完成：报告/源/镜像一致，BGE真实向量、ScanSci工具/存储/OA/Worker、Parser及API/Web/Worker健康、nginx、公网精确版本和发布事务清理通过。未使用no-tests。
 - 服务器双库备份成功：core83M、search5.5M，保留7/7轮；未下载业务数据或打印凭据。
 - 旧211e报告仍保留：其部署因只先构建Worker、重复安装和全构建改变运行闭包而在切换前停止。新e05先完成相同安装/全构建、证明指纹稳定后生成新报告；未覆盖旧报告或放宽守卫。
-- 生产页面已观察：公开期刊目录→申请入驻正常；当前浏览器匿名，管理页显示“尚未加入期刊”。三项私有页面的生产实际操作尚未观察，需用户登录已加入的真实期刊；没有创建假刊或代为批准入驻。
+- 生产页面已观察：公开期刊目录→申请入驻正常；当前浏览器匿名，管理页加载后正确跳转登录并携带returnTo=/journals/manage。三项私有页面的生产实际操作尚未观察，需用户登录已加入的真实期刊；没有创建假刊或代为批准入驻。
 - 发布及验收原始日志：本任务work/journal-deploy-e05ca61c.log、journal-parser-acceptance-e05ca61c.log、journal-deployment-verified-e05ca61c.log；用户交付报告位于outputs/journal-deployment-report.md。
 
 ## Constraints / open risks

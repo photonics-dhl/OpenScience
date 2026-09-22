@@ -64,7 +64,6 @@
 
 前提：线上实读f8e44815且服务健康，候选仅dashboard CSS与同步文档。执行：既有deploy.sh使用精确6504c004、--no-tests --skip-migrate及未变能力镜像复用，必要服务器build/start完成exit0。回滚：精确f8e44815，保留原数据与独立Codex runner。观察：真实账号桌面/窄屏截图已看，首行双卡稳定同高、后续工具整行，无横溢出；公网release一致，收据tmp/dashboard-layout-*，无测试/预检/科研写入或新清除请求。
 
-
 ## 2026-09-14 回收站已确认清除卡住：已修复
 
 实际原因：宿主 `/usr/bin/node` 为 `node-22` 符号链接，精确进程识别原以未解析路径比较而拒绝正确进程；Codex runner 正常 SIGTERM 还返回 1，导致系统自动重启争抢清理锁。修复保留原 argv/config/cgroup 约束，比较可信 Node 的真实路径；只有真实运行/心跳故障才返回失败。

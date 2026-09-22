@@ -164,4 +164,3 @@ XGS_CONFIG_ROOT=/e/Miscellaneous/XGS \
   文件系统，把 `/var/lib/docker` 从真实 38G 虚报为 67G（2026-09-17 实测）。
 - `query_profiler_*` 属 *user-level* 设置，写进 ClickHouse config.d 会让容器启动失败
   （`Code: 137 UNKNOWN_ELEMENT_IN_CONFIG`），须置于 users.xml 的 `<profiles>`；开发栈改用表级 TTL。
-
