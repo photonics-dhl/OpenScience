@@ -4,7 +4,7 @@ OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版�
 
 ## 开发入口与事实归属
 
-- 开始工作先读适用说明、Git worktree/branch/HEAD/status 与 manifest；定向检索 project_index.md，进入唯一 CURRENT handoff。根目录 dirty main 与其他工作树不得当作当前交付基线。
+- 开始工作先读适用说明、Git worktree/branch/HEAD/status 与 manifest；先用 `rg` 定向查 CURRENT，再由 project_index.md 进入唯一 CURRENT handoff。根目录 dirty main 与其他工作树不得当作当前交付基线。
 - 用户最新纠正优先；需求基线为 docs/OpenScience_Kimi_Development_Spec.md，具体设计按索引选相关章节。设计要求、候选实现、线上版本、产物质量分别判断。
 - CURRENT只能记录执行状态，不能改写用户目标。决定下一步前对照需求条款与仍未完成的交付项；局部返工或暂停不取消其他目标，移除交付项必须有明确用户范围变更。各项已有任务/资产和反馈只在CURRENT短表汇总，progress/index引用它。
 - CURRENT handoff 保存任务、branch/HEAD/release/rollback、证据和未决项；以 Git 和必要的只读服务器元数据定锚。其他文档中的旧 release、测试结果和 next action 是历史，不能自动续跑。

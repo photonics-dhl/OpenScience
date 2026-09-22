@@ -285,6 +285,9 @@ async function main(): Promise<void> {
         artifactId, contentHash: digest,
       })).length : 0;
     const ready = cascadeResult?.status === 'succeeded';
+    if (cascadeResult?.status === 'needs_review') {
+      console.error(`PARSER_ACCEPTANCE_REVIEW_REASONS ${item.id}: ${JSON.stringify(cascadeResult.reasons)}`);
+    }
     const falseReady = ready && reproduced !== item.expectedLocators.length;
     if (falseReady) falseReadyCount += 1;
     const blocks = sourceMap?.pages.flatMap(({ blocks: pageBlocks }) => pageBlocks) ?? [];
@@ -309,6 +312,9 @@ async function main(): Promise<void> {
       ...(failureStatus ? { failureStatus } : {}),
     });
   }
+  console.error(`PARSER_ACCEPTANCE_CASES ${JSON.stringify(results.map(({ id, status, handlerStatus, reviewReasons, locatorMatches, locatorTotal }) => ({
+    id, status, handlerStatus, reviewReasons, locatorMatches, locatorTotal,
+  })))}`);
   console.error(`PARSER_ACCEPTANCE_GATEWAY_COUNTS ${JSON.stringify(gatewaySeam.snapshot())}`);
   const report = validateAcceptanceDraft({
     schemaVersion: 3,
