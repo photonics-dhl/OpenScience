@@ -407,7 +407,8 @@ let activePage;
   if (!await send.isEnabled().catch(() => false)) throw Error('SEND_NOT_READY');
   once('submitted.json', { phase: 'submitted', id, promptHash: request.promptHash, assistantCount: baseline,
     attachments: (request.attachments ?? []).map(({ fileName, sha256 }) => ({ fileName, sha256 })), submittedAt: new Date().toISOString() });
-  await send.click();
+  await send.focus();
+  await send.press('Enter');
   const url = await resolveCanonicalConversation(page, Math.min(request.deadlineAt - 30000, Date.now() + 30000));
   once('conversation.json', { url });
   await recoverUserAnchor(page, request, Math.min(request.deadlineAt, Date.now() + 30000));

@@ -4,6 +4,7 @@
 
 ## 2026-09-22 原图审阅恢复与混合终态修订（最新）
 
+- 01:02Z键盘提交候选High PASS：1354/b65/eb5原review恢复已真实完成。1bbc执行写submitted后没有canonical，原target1E5D0534C7ABDB9C21854A7DBE156460只读为Chat首页/users0/assistants0/composer41506/stop0；原因仍有不确定性，不重发或删除marker。未来正常review把Send.click换为同一已校验按钮focus+Enter，复用本浏览器125%下已成功的产品操作方式；prompt/附件/模型/模式/期限/提交收据不变。此修改不能用于重新execute已有submitted的1bbc。
 - 01:00Z标签候选High PASS：真实1354与b65审图均blocked/null，排他六项遗漏z/t/θ或FWHM_T/工况信息；b65另把99as:3.6fs条带画成约1:10而非指定比例。两文件移除planner6/shared parser8的重复计数上限，仍每项80/单行非空/共享brief4000/原传输预算；science/art/反馈统一完整可见文字清单。clarification仅能改唯一既有label并重新核源/编译，正式issues36协议不变；比例长度/面积/距离一并纳入既有不得虚构定量图形的规则，需原图/数据渲染依据，否则用数字标签和明确不按比例的概念比较。冻结tmp/visible-label-count-review-20260922，未修改旧generated-image-review提示；待应用交付。
 - 原文定向核验修正独立意见的措辞：第三篇f2856b30支持“任意介质、受边界条件约束”的模式定义，0ac3d115及SourceMap terms[5]限定MQED为线性介质；应区分两层，不把所有“任意介质”机械改成线性。第二篇p6 block4/017caf02仅固定same2-MeV electron bunch并扫描λ1–5，p7 block2/8c9bd9b0才为λ4.4的N_SP–ζ–FWHM_S条件；221d scene3 narration混同，encoding/composition已分开。
 - 00:48Z：5544071b provider-only已安装，应用仍2b17。服务器依赖已按锁安装；首次构建因缺Prisma生成类型失败，补原database generate后ai-gateway及依赖build exit0，无测试/应用重启。安装原三锁备份至provider-backup-20260922-composer-5544071b，原timer恢复。High审查的一次性8项review恢复已开始（tmp/review-not-submitted-resume-20260922.py/log）；补无anchor证明后，1354于00:48:26Z真实提交、00:48:32Z取得canonical会话。每项private/operator-resume.started.json独占，仍原deadline，原失败/附件保留，不能重放已消费项。另f0fd1907无job/started，在队列中EXPIRED；候选修原排序与既有not-submitted旁证，不延长过期请求。
