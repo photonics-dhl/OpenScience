@@ -969,8 +969,8 @@ async function inspectDurableStoryboardPlanning(tx: Prisma.TransactionClient, ru
   const art = jsonRecord(partial.art); const science = jsonRecord(partial.science); const intent = jsonRecord(science.intent);
   const identity = { payload, sourceEvidenceIdentity: source.sourceEvidenceIdentity, claimContent: source.claimContent,
     baseIdentity: pixel?.baseIdentity ?? null, narrativeSourceIdentity: source.narrativeSourceIdentity };
-  let planningFailureClass: 'art_only_structured_retry' | 'full_planning_restart';
-  let priorSubmission: 'none' | 'known_rejected_output' | 'uncheckpointed_provider_activity';
+  let planningFailureClass: 'art_only_structured_retry' | 'fresh_art_after_unknown' | 'full_planning_restart';
+  let priorSubmission: 'none' | 'known_rejected_output' | 'outcome_unknown_after_provider_timeout' | 'uncheckpointed_provider_activity';
   if (task.result === null) {
     if (!['结构化输出超过重试上限', 'structured JSON invalid after retry limit', 'Provider exhausted output allowance before producing text',
       'Primary provider failed; automatic fallback is disabled for this request', 'structured output reached token limit'].includes(task.error ?? '')
@@ -983,8 +983,8 @@ async function inspectDurableStoryboardPlanning(tx: Prisma.TransactionClient, ru
       || Object.keys(science).sort().join(',') !== 'designSkills,intent' || !Array.isArray(science.designSkills)
       || !Array.isArray(intent.scenes) || intent.scenes.length < 1 || intent.scenes.length > payload.storyboard.narrativeSceneLimit
       || Object.keys(art).sort().join(',') !== 'executionAttempt,rejectedCandidates,state' || art.executionAttempt !== task.executionAttempt
-      || !['not_started', 'rejected'].includes(String(art.state)) || !Array.isArray(art.rejectedCandidates) || art.rejectedCandidates.length > 3
-      || (art.state === 'not_started' ? art.rejectedCandidates.length !== 0 : art.rejectedCandidates.length === 0)
+      || !['not_started', 'rejected', 'submitting'].includes(String(art.state)) || !Array.isArray(art.rejectedCandidates) || art.rejectedCandidates.length > 3
+      || (art.state === 'not_started' && art.rejectedCandidates.length !== 0) || (art.state === 'rejected' && art.rejectedCandidates.length === 0)
       || art.rejectedCandidates.some((raw, index, values) => { const item = jsonRecord(raw); return Object.keys(item).some(key => !['structuredAttempt', 'kind', 'text', 'diagnostic'].includes(key))
         || !Number.isInteger(item.structuredAttempt) || Number(item.structuredAttempt) < 1 || Number(item.structuredAttempt) > 3
         || (index > 0 && Number(item.structuredAttempt) <= Number(jsonRecord(values[index - 1]).structuredAttempt))
@@ -993,7 +993,19 @@ async function inspectDurableStoryboardPlanning(tx: Prisma.TransactionClient, ru
     const claims = source.claims.map(claim => ({ id: claim.id, sourcePassages: source.evidence.filter(row => row.claimId === claim.id)
       .map(row => ({ evidenceId: row.id, text: row.exactQuote!, relation: row.relation })) }));
     for (const raw of intent.scenes) requireIllustrationSourceSupport(parseIllustrationBrief(jsonRecord(raw).illustration, payload.sourceClaimIds), claims);
-    planningFailureClass = 'art_only_structured_retry'; priorSubmission = art.state === 'not_started' ? 'none' : 'known_rejected_output';
+    if (art.state === 'submitting') {
+      const last = calls.at(-1); const meta = jsonRecord(last?.metadata);
+      // A new art call is explicit authorization after a known timeout, never a replay of the uncertain call.
+      if (task.error !== PIXEL_PLANNING_PROVIDER_ERROR || !last || (previous && last.createdAt <= previous.createdAt)
+        || last.actorId !== null || last.targetType !== 'ai_gateway' || meta.outcome !== 'failed' || meta.error !== 'provider_timeout'
+        || meta.retryCount !== 0 || meta.requestedThinking !== 'adaptive' || (meta.maxOutputTokens !== 16384 && meta.maxOutputTokens !== 32768)
+        || typeof meta.provider !== 'string' || !meta.provider || typeof meta.model !== 'string' || !meta.model
+        || typeof meta.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(meta.promptHash)
+        || meta.finishReason !== undefined || meta.inputTokens !== null || meta.outputTokens !== null) return null;
+      planningFailureClass = 'fresh_art_after_unknown'; priorSubmission = 'outcome_unknown_after_provider_timeout';
+    } else {
+      planningFailureClass = 'art_only_structured_retry'; priorSubmission = art.state === 'not_started' ? 'none' : 'known_rejected_output';
+    }
   }
   return { step, task, planningFailureClass, priorSubmission, ...identity, planningAuditIds: calls.map(call => call.id),
     planningAudits: pixelPlanningAuditSnapshot(calls), previousReceiptId: previous?.id, authorityReceiptId: pixel?.receipt.id ?? null,
@@ -2293,7 +2305,8 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
                   : { revisionImageAssetId: planning.revisionImageAssetId }),
                 previousError: planning.task.error, taskPayload: planning.task.payload,
                 baseIdentity: planning.baseIdentity, sourceEvidenceIdentity: planning.sourceEvidenceIdentity,
-                ...(planning.planningFailureClass === 'art_only_structured_retry' || planning.planningFailureClass === 'full_planning_restart' ? {
+                ...(planning.planningFailureClass === 'art_only_structured_retry' || planning.planningFailureClass === 'fresh_art_after_unknown'
+                  || planning.planningFailureClass === 'full_planning_restart' ? {
                   authorizedExecutionAttempt: planning.task.executionAttempt + 1, authorizedRetryCount: planning.task.retryCount + 1,
                   previousMaxAgentTasks: run.maxAgentTasks, maxAgentTasks: run.maxAgentTasks,
                   priorSubmission: planning.priorSubmission, existingTaskCount: planning.existingTaskCount,

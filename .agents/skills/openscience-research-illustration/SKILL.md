@@ -2,7 +2,7 @@
 name: openscience-research-illustration
 description: Plan and refine evidence-grounded research illustrations for OpenScience through Hermes and Chat image generation, using structured briefs, source-scoped visual references and reusable art directions. Use for paper illustrations, scientific concept images and research covers; quantitative plots require a data renderer.
 metadata:
-  version: "8"
+  version: "9"
 ---
 
 # OpenScience research illustration
@@ -27,7 +27,13 @@ The renderer uses `labels` as the complete visible-text list. A variable mention
 
 When the takeaway is a classification, each region needs its source-supported category name as well as any defining criterion. An inequality alone may identify a boundary without telling the reader what the category means. Combine the name and criterion in the same short label when appropriate.
 
-In the encoding, distinguish physical position, parameter coordinates and logical groupings. Decide what each axis, boundary, distance, arrow or region would mean before designing its appearance. A meaningful color has one consistent role. Quantitative curves and data-derived shapes require a data renderer; do not ask an image model to invent their values or extrema. Choose a different supported explanatory role when a faithful illustration is not available from the supplied sources.
+## Scientific encoding
+
+Establish the source-supported coordinate domain and viewing plane before arranging a physical scene. Describe object extents, openings, trajectories and incoming/outgoing directions in that frame, then project them into the chosen view. Distinguish directions within the plane from directions into or out of it. Trace each physical path through the proposed arrangement and compare the depicted directions with the source relationship; a logical arrow is a different kind of mark. Put the necessary frame or projection indicators in the visible labels. When the sources do not establish a consistent spatial construction, choose a narrower supported conceptual relationship.
+
+Assign each visible group its fixed conditions, varied quantities and reported outcomes. Combine results only when those conditions agree. A parameter sweep and a fixed-parameter example need distinct condition ownership even when they concern the same material. Match each promised takeaway to a visible label or supported visual relation; a result present only in a caption, subject or constraint does not make it visible in the image. Narrow the takeaway if its essential outcome and conditions cannot be shown clearly.
+
+Decide whether lengths, areas, spacing and point sizes encode values or merely arrange an explanation. Quantitative comparisons conveyed by geometry require a common scale within each stated coordinate system. Use an available data renderer or approved original when exact ratios or data-derived shapes carry the takeaway. A generated conceptual schematic can use sourced dimension annotations with explicit non-scaled meaning, but cannot simultaneously claim proportional comparison through rulers or geometry. A non-scaled label does not excuse impossible topology, intersecting trajectories or wrong directions. For qualitative density encoding, vary only the quantity the encoding names; do not also vary point size unless it has its own supported meaning. A meaningful color has one consistent role.
 
 The science fields and encodings are carried into art direction unchanged. Later stages can arrange and style them but cannot introduce another scientific idea, equation, numerical example or relationship. An invalid scientific intent must return for correction before image generation.
 

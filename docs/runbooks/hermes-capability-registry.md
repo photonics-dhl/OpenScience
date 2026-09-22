@@ -48,6 +48,8 @@ Hermes技能与学习消费审计（2026-09-22）：82/606实际checkpoint记录
 
 原图视觉理解缺口：`provider.ts`普通ChatMessage仅文本；`figure-list.ts`是文字引用提取，`figure-audit.ts`只向`figure-auditor.ts`提供id/caption/role，且Evidence读取把pageStart固定为1，不能当作原图页定位。SourceMap的figure/caption块有bbox/文本但没有图像语义。现有MiniMax VLM经`ocr.ts`固定转录提示、`llm-ocr-fallback.ts`低质量页路径调用，外部处理权限仅允许sdf.extract；既不是普遍看过原图，也不提供坐标/拓扑解释。拟沿既有figure-audit按需绑定当前原文页、复用隔离renderPages与VLM传输，另设窄的视觉观察语义和presentation权限，观察只作上下文不自动成为Evidence；尚未实现。若页定位不唯一，不猜页或绕过权限。比例尺、条件分组等现有文字足够发现的问题不归因于缺视觉输入。
 
+针对15b真实失败的Skill v9候选：同一个Scientific encoding章节同时供science/review消费，明确坐标投影/拓扑、固定与扫描条件、可见核心结果、定量共同尺度与非比例概念图的选择、点密度和点径的独立含义；原泛化段原地替换，不叠一轮模型或新输出字段。不自动安装技能、改M3路由或宣称自学习；真实消费与效果见CURRENT。跨部署恢复的designSkills按id/version/upstreamCommit归并，保留科学旧版本与艺术新版本的实际来源。
+
 ### 复用与效果查询
 
 - **已经自动联动**：Worker任务执行、SourceMap/Claim/Evidence及RO/version绑定、方案保存/艺术修订复用、Gateway/provider队列、结果回收和资产记录；Gateway审计经既有view/connector自动进入Langfuse并携带taskId。已保存任务/真实产物见CURRENT，链路接线与每一步效果分别判断。

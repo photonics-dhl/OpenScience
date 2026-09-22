@@ -209,10 +209,11 @@ async function readCurrentPlanningContinuation(prisma: Pick<Prisma.TransactionCl
       { metadata: { path: ['taskId'], equals: owner.id } },
       { metadata: { path: ['authorizedExecutionAttempt'], equals: owner.executionAttempt } },
       { OR: [{ metadata: { path: ['planningFailureClass'], equals: 'art_only_structured_retry' } },
+        { metadata: { path: ['planningFailureClass'], equals: 'fresh_art_after_unknown' } },
         { metadata: { path: ['planningFailureClass'], equals: 'full_planning_restart' } }] },
     ] }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 2 });
   const receipt = receipts[0]; const meta = receipt?.metadata as Record<string, unknown> | undefined;
-  if (!meta || !['art_only_structured_retry', 'full_planning_restart'].includes(String(meta.planningFailureClass))) return null;
+  if (!meta || !['art_only_structured_retry', 'fresh_art_after_unknown', 'full_planning_restart'].includes(String(meta.planningFailureClass))) return null;
   const run = await prisma.hermesResearchRun.findUnique({ where: { id: payload.hermesRunAuthority.runId } });
   if (receipts.length !== 1 || !run || run.actorId !== actorId || run.status !== 'generating_storyboard'
     || run.maxAgentTasks !== meta.maxAgentTasks || meta.previousMaxAgentTasks !== meta.maxAgentTasks
@@ -227,6 +228,14 @@ async function readCurrentPlanningContinuation(prisma: Pick<Prisma.TransactionCl
   if (!isDeepStrictEqual(meta.planningAuditIds, calls.map(call => call.id))
     || !isDeepStrictEqual(meta.planningAudits, calls.map(call => ({ id: call.id, actorId: call.actorId, targetType: call.targetType,
       createdAt: call.createdAt.toISOString(), metadata: call.metadata })))) throw new Error('[blocked] Planning continuation audit history changed');
+  if (meta.planningFailureClass === 'fresh_art_after_unknown') {
+    const last = calls.at(-1); const failure = last?.metadata as Record<string, unknown> | undefined;
+    if (meta.priorSubmission !== 'outcome_unknown_after_provider_timeout'
+      || meta.previousError !== 'Primary provider failed; automatic fallback is disabled for this request'
+      || !last || last.createdAt >= receipt!.createdAt || failure?.operation !== 'text'
+      || failure.outcome !== 'failed' || failure.error !== 'provider_timeout' || failure.fallbackReason !== null)
+      throw new Error('[blocked] Fresh art continuation lost its prior timeout receipt');
+  }
   return { receipt, metadata: meta };
 }
 
@@ -982,9 +991,10 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           if (Object.entries(identity).some(([key, value]) => key !== 'payload' && !isDeepStrictEqual(meta[key], value))
             || meta.authorityReceiptId !== (pixelAuthority?.receipt.id ?? null)
             || !isDeepStrictEqual(meta.storyboardPlanningCheckpoint, partial ?? null)
-            || (meta.planningFailureClass === 'art_only_structured_retry'
-              ? !partial || partial.art.state === 'submitting' || partial.art.executionAttempt !== task.executionAttempt - 1
-              : owner.result !== null)) throw new Error('[blocked] Planning continuation source or checkpoint changed');
+            || (meta.planningFailureClass === 'full_planning_restart' ? owner.result !== null
+              : !partial || partial.art.executionAttempt !== task.executionAttempt - 1
+                || (meta.planningFailureClass === 'fresh_art_after_unknown' ? partial.art.state !== 'submitting' : partial.art.state === 'submitting')))
+            throw new Error('[blocked] Planning continuation source or checkpoint changed');
           requirePlanningContinuationUnchanged = async tx => {
             const current = await requireIllustrationReviewAuthority(tx, { taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId });
             const receipt = await readCurrentPlanningContinuation(tx, current.owner, payload, scope.userId);
@@ -1010,7 +1020,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           && !payload.storyboard.revisionMode && !pixelAuthority?.technicalRecovery
           && (pixelAuthority || !(payload.storyboard.revisionTaskId || payload.storyboard.revisionImageAssetId || payload.storyboard.baseAssetId));
         const persistence: StoryboardPlanningPersistence | undefined = durablePlanning ? {
-          ...(partial ? { science: partial.science, rejectedCandidates: partial.art.rejectedCandidates } : {}),
+          ...(partial ? { science: partial.science, rejectedCandidates: planningContinuation?.metadata.planningFailureClass === 'fresh_art_after_unknown'
+            ? [] : partial.art.rejectedCandidates } : {}),
           saveScience: async science => {
             const next: StoryboardPlanningCheckpoint = { ...identity, schemaVersion: 1, science,
               art: { state: 'not_started', executionAttempt: task.executionAttempt, rejectedCandidates: [] } };

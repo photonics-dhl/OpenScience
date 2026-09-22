@@ -161,7 +161,7 @@ export function loadInstalledMediaSkills(
     let entry = usage.find((item) => item.id === skill);
     if (!entry) {
       const isOurs = skill === 'openscience-research-illustration';
-      entry = { id: skill, ...(isOurs ? { version: '8' } : { upstreamCommit: UPSTREAM_COMMIT }), resources: [] };
+      entry = { id: skill, ...(isOurs ? { version: '9' } : { upstreamCommit: UPSTREAM_COMMIT }), resources: [] };
       usage.push(entry);
     }
     entry.resources.push(...(headings ? headings.map((heading) => `${relativePath}#${heading}`) : [relativePath]));
@@ -176,7 +176,7 @@ export function loadInstalledMediaSkills(
     usage.push({ id: SCIENTIFIC_CRITICAL_THINKING_SKILL.id, version: SCIENTIFIC_CRITICAL_THINKING_SKILL.version,
       resources: ['apps/agent-worker/src/skills/scientific-critical-thinking.ts'] });
     excerpts.push('Apply this shared skill as scientific reasoning only. Use the caller\'s illustration JSON schema and supplied sourceIds instead of its literature-note six-field/observation output conventions. Keep review notes out of visible picture text.', SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions);
-    include('openscience-research-illustration', 'SKILL.md', stage === 'science' ? ['Scientific intent'] : ['Scientific review', 'Visual craft']);
+    include('openscience-research-illustration', 'SKILL.md', stage === 'science' ? ['Scientific intent', 'Scientific encoding'] : ['Scientific encoding', 'Scientific review', 'Visual craft']);
     if (stage === 'review') {
       const reviewStyleSkill: SkillId = isInfographic ? 'baoyu-infographic' : 'baoyu-article-illustrator';
       include(reviewStyleSkill, `references/styles/${selection.style}.md`, SCIENCE_HEADINGS);
