@@ -1,5 +1,29 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 09:29Z — 已存方案续审与四subject容量正常部署、真实续作
+- dac602ec3fc1deba2c017cc80ea1fa60625648ab服务器正常构建/启动exit0，独立marker release=dac602ec/rollback=3f9adcdb、journal/failed=false；日志/opt/openscience/observations/deploy-dac602ec-20260922.log。无测试/预检/CI/迁移/receiver更新/共享浏览器重启。两项变更由各自High静态GO；编译与资格通过不证明科学质量。
+- 第二篇刷新原页面、唯一“保留初稿，继续制作”按钮09:29:13.706Z HTTP202，同task342f87eb exec2/retry1/runv56/max42，真实receipt74f74304-9816-4c38-82c6-c0b279247959。saved_storyboard_review_timeout/charge1/noReplanning/newTask0/noProviderSwitch，完整checkpoint仍在；旧provider超时outcome_unknown保留，末审结果在途。
+- 第三篇同原按钮09:29:29.158Z HTTP202，同task40026425 exec3/retry2/runv47/max43；receiptf5d82746-81e8-4667-ad6e-41adeac4527a，明确full_planning_restart/charge1/newTask0/noProviderSwitch。原全文/六维保持，旧NULL未冒称有science，等待新科学结果。
+- /jobs/second-paper-saved-review-timeout-resume-20260922.json和third-paper-source-capacity-retry-20260922.json已消费；同名本机writer不能重放。tmp/saved-review-two-paper-progress-20260922.cjs是定向只读入口，开始状态私有收据tmp/saved-review-two-paper-started-20260922.json。当前在途，不发布新代码、不重新提交模型；随后依据正式审阅/真实PNG推进reader与新公开版本。
+
+## 2026-09-22 — 通用已存方案末审恢复候选 High GO
+- 原STORYBOARD_OUTPUT_RESUME/retry-generation支持完整方案末次primary review provider_timeout，同task/相邻execution/charge1，不重新science/art或增加逻辑任务。旧未知调用保留；16K/600秒开始，真实length才升级32K，旧pixel 32K/charge0优先兼容。精确运行/发布锚点仍见CURRENT。
+- 首轮High的三项有效问题已修：预存完整checkpoint裸exec2无收据不得继续；原prompt入口绑定、内部JSON/schema拒收保留失败输出与反馈；fresh计费与原unknown语义一致。私有checkpoint可选executionAttempt只记录首次生成执行，旧marker/收据兼容；每次实际provider调用仍重验权限、原候选、source、provider/model、调用序号与审计前缀。候选没有新增表、分析器、模型阶段或公共协议。revised进入acceptance的批评因narrative verdictOnly两次解析而不可达，经复核撤回，未增加冗余分支。
+- 独立High增量GO；四文件完整及增量补丁留tmp/saved-final-review-recovery-20260922。仅静态阅读，未测试/预检/CI/本机构建；正常服务器构建启动及实际恢复尚未执行。复读原页面仍第二篇stopped55/max42/无按钮、第三篇stopped46/max43/planning1；无新模型调用。
+- 用户要求优先用好Hermes。已核对官方Skill/MCP文档与本产品调用方：独立Agent的按需技能、工具发现和记忆能力并未自动进入项目Worker。沿既有能力台账保留接线缺口，当前不新装运行时或另建全文分析器；不以v9消费、模型accepted或6Pro意见宣称科学质量通过。
+
+## 2026-09-22 08:30Z — v9真实消费与阶段保存已观察，新的终审恢复缺口
+- 第二篇342f87eb真实science经65K/319291ms stop及一次结构修正37656ms stop后保存storyboardPlanningCheckpoint；designSkills明确critical-thinking v3、自有illustration v9含Scientific encoding，随后art16K length/162191ms、32K stop/90391ms，08:24:49完整storyboardCheckpoint替换partial。阶段保存及v9消费已有事实，不能据此认定科学正确。当前草稿仍有固定4.4μm与波长扫描混同、出入纸面符号/条件冲突，未生成新图。
+- 08:29:50最后一条scientific_review 726f54ad在主M3/16K/300003ms provider_timeout，run stopped55/max42/task failed exec1；完整方案保留，原UI GET200但无恢复按钮。旧output-resume只覆盖更早exec2+先16K截断再32K超时的特定历史，不能覆盖这次普通已存方案末审timeout。独立High正在设计沿原STORYBOARD_OUTPUT_RESUME、原授权/来源/CAS的通用阶段恢复，不新增任务平台，不冒称旧调用未提交。
+- 第三篇400 exec2于08:24:00 science65K/600005ms provider_timeout，resultNULL/run stopped46/max43；尚无新科学结果，原GET200有storyboard-planning/1。未立即再发，待已知合同容量修正；前次art JSON与本次science timeout分开记录，未声称timeout由技能缺失/网络/额度造成。两篇当前请求均自然终态。
+- 静态High确认previousReview到science、reportedPreviousDefects到末审均已传，结构修正仍保留原messages；低inputTokens不能证明丢来源。Domain原支持1–4subjects，planner却限定2单basis，实际scene0/3合并多个不同支持段。这是合同容量缺口而非全部误判的已证根因；单文件候选将narrative对齐4、非narrative保留2，复用原预算/来源守卫，High指出art索引仍写0/1，改成实际索引后增量PASS。没有新增Skill禁令/模型阶段/分析器。
+- 证据tmp/second-paper-v9-planning-read-20260922-observation.json、third-paper-durable-planning-read-20260922-observation.json、v9-science-intents-{first,after-art}-20260922.json、two-paper-v9-recovery-surface-20260922.json。生产Hermes走项目worker/Gateway，未调用独立Hermes Agent技能发现/记忆循环；/opt/hermes-agent源码和skills存在不代表已消费，跨任务学习仍未实现。
+
+## 2026-09-22 08:14Z — Skill v9与阶段保存正式部署，原页面续作
+- 3f9adcdb正常服务器build/start exit0；独立marker release=3f9/rollback=b1fb、journal/failed=false。日志/opt/openscience/observations/deploy-3f9adcdb-20260922.log，无迁移/测试/CI/共享浏览器重启。Scientific encoding方法与已知art timeout显式新执行均已部署，质量和恢复效果尚待真实结果。
+- 第三篇原GET stopped44/max43/planning1，08:13:58.031Z原按钮HTTP202，同task40026425/runv45；旧NULL只允许完整配图planning restart，不称art-only。第二篇原GET stopped53/max37/scientific5，08:14:35.298Z原按钮HTTP202，新plan342f87eb-8b14-460a-9f79-03fd29394b84/runv54。/jobs/third-paper-durable-planning-resume-20260922.json及second-paper-skill-v9-replan-20260922.json已消费，禁止重放；保留原PDF/六维/Claims/旧图与公开版本。
+- 后续只定向观察当前科学检查点/v9消费、实际设计/PNG和正式审阅。跨任务自学习、原图语义视觉读取及同图跨Chat任务连续改稿仍未实现；已有审计/方法更新不能冒称具备这些能力。第一篇公开保护，后两篇完整reader/发布继续。
+
 ## 2026-09-22 — science成果保存断点与最新成图
 - b1fb77460a596b5f17708c0265f83197fe24cfe1正常服务器构建/启动exit0，独立marker release=b1/rollback8c0、journal/failed=false。日志/opt/openscience/observations/deploy-b1fb7746-20260922.log，sync本机tmp/sync-b1fb7746-20260922.log。无迁移/测试/CI/receiver或共享浏览器重启；第三篇尚未新付费恢复。后续小增量补仅已知末次art provider_timeout的显式fresh_art_after_unknown（保留science、priorSubmission=outcome_unknown_after_provider_timeout、charge1/同task新exec/primary-only），修复保守版partial永久无入口的缺口，独立High静态PASS，未部署/实际触发。
 - 用户希望Hermes用好适用技能：自有v9候选将原泛化encoding段替换成共享Scientific encoding方法，按来源建立视图/坐标/路径、分清条件/扫描/结果、把核心输出落实到可见标签、选择定量比例或明确非比例概念图，并避免密度额外编码点径。science与review均加载，同一loader版本同步；无新模型阶段/第三方安装/科学事实或输出schema。基于15b真实失败，不把方法变更称为已提高正确率，独立High静态PASS；metadata/loader均v9，仅science/review消费新增章节。审查曾误判plan/render会收到新段，按实际stage guard复核后已撤回，未添加无效分支。
