@@ -1,5 +1,11 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 02:21Z — 当前9图终态与科学/艺术反馈隔离候选
+- 第二篇f522当前四图：e8bdcff7 accepted，b3202126/3316f61a/2b4ec10a科学blocked且repair null。旧审查要求比例条，science已经改为等面积概念编码，但art再次生成1:36.4比例几何，现有M3末审漏掉冲突，真实6Pro阻断。最小候选仅illustration-planner/review：科学返工的旧原始反馈只供science，art-only反馈保留；当前encoding决定映射/尺度，原末审比较补比例与非比例冲突。冻结tmp/encoding-art-consistency-review-20260922，独立High进行中，无测试/新模型。
+- 第三篇405a末审在出图前阻断无来源固定角度及速率/荧光增强混同；原按钮只追加1计划cb2（01:48:45Z/202），同一来源与六维保留，cb2 accepted。当前719a真实图/6Pro accepted；cf6已有PNG但review PROMPT_CHANGED且not_submitted；77/1ff/a248图像请求均not_submitted，故障阶段分别image_mode_plus、page_selection、image_mode_plus。run failed/v36/max27，尚无适用恢复入口；查原回执与现有恢复实现，不造科学拒收、不能盲重生整套。
+- 719a单图领取至保存约8分16秒，串行provider与4个worker共享10分钟队列/执行预算存在排队风险；独立High提出分离整体排队与领取后10分钟执行预算的候选，但本批三图不是EXPIRED，尚未实施此方案。浏览器故障另行定位。
+- 用户询问为何新建Chat对话：已解释当前新任务新会话、同任务恢复原会话；跨任务同图改稿需关联已校验父任务并绑定本轮assistant图片。当前尚未实现，不把问题当成重发或清除旧对话授权。
+
 > 上游上下文：[CURRENT handoff](2026-09-10-hermes-web-image-handoff.md)（滚动状态与交付差额）、[docs/progress.md](../progress.md)（2026-09-18 各条目）、[能力台账](../runbooks/hermes-capability-registry.md)。本文件只记录本次会话实际发生的事、留存的证据、未结债务和下一步，不复制它们的表格。
 
 ## 2026-09-22 原图审阅恢复与混合终态修订（最新）
