@@ -1,5 +1,11 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 — science成果保存断点与最新成图
+- 第二篇15b302e7于07:07完成原science/art/final三轮M3，分别480463/170204/115302ms、全部stop；run generating_scene_images/v51/max37。新图d6fc87fe/1ea36453/38b488fd/dd07aa6a已读取原字节并本机实看，570745/583194/559606/527446bytes，图审在途。99as输出对比已纠正，但封面900/77nm标尺比例错误，末图λ变化与4.4μm限定仍混同，不能据M3 accepted放行。完整原文方案tmp/hermes-feedback-plans-read-20260922.json、图读脚本second-paper-15b-images-read-20260922.cjs、PNG均在ignored tmp。
+- 第三篇40026425于07:00:19.916Z failed/exec1/retry0/resultNULL，run stopped/v44/max43。science f7bf0191已成功（65K/stop/221453ms），art c6bee75b/d7425f02/08d01bc4分别58162/30875/32005ms、16K/stop，但三次json_parse失败。只定向读匹配元数据与白名单结构诊断，未读取或打印Secret；证据tmp/third-source-support-plan-validation-20260922.txt与hermes-feedback-progress-20260922.json。现无科学中间产物或无效返回正文，不臆断语法、不伪造恢复、不盲重发。
+- 独立High设计定位：planner只有science/art都完成才由handler保存完整checkpoint，Gateway onRejectedCandidate不覆盖json_parse。现沿原AgentTask.result/Serializable CAS设计通用私有两阶段checkpoint、异步有界无效返回收据及原retry-generation续接，不新增分析器、表、模型轮次或按task特判。已有完整checkpoint仍走旧路径；合法science+明确art拒收才可art-only，submitting无终态保持unknown；当前NULL需诚实完整planning restart，不能称跳过science。候选正在实现，未部署/实际恢复。
+- 原文补充检索设计收窄为同SourceMap已知locator附近的正文/定义/图注回读；不新增hybrid存储范围协议，不将context当supports，不新增context-only检查点。目前仍未实现；完整sourcePassages一直另传，18K不视为已证根因。跨任务学习仍未实现，默认6Pro plan末审候选保持撤下。
+
 ## 2026-09-22 06:54Z — Hermes原路由反馈与来源恢复已发布并真实续作
 - 后续Skill静态审计发现自有v7的Scientific review仍写固定Chat且无条件允许艺术修订，与实际M3和narrative verdictOnly不一致。v8三段文字修正为configured provider/caller schema与其允许的correction范围，loader版本同步；独立High PASS，无测试/模型实验，未部署。此清晰冲突不证明全部历史误判根因。进程内Markdown缓存随正常worker启动更新，等在途模型自然终态后才交付，不热替换已发送prompt。
 - 8c0edd6c正常服务器build/start exit0，release/rollback独立读回8c0/f44、journal/failed=false；日志/opt/openscience/observations/deploy-8c0edd6c-20260922.log。无测试/预检/CI/迁移/receiver更新，M3仍science/art/final-review，Chat仍生图及已有6Pro像素审阅；默认Chat plan末审候选已撤下，不在生产。

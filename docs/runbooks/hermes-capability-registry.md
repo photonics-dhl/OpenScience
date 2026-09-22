@@ -44,6 +44,8 @@ Hermes技能与学习消费审计（2026-09-22）：82/606实际checkpoint记录
 
 自有Skill与调用方一致性：v7末审/执行仍有固定Chat措辞，并同时要求art correction，实际narrative仅accepted/blocked；v8改为既有配置路由与caller允许的反馈/修订范围，loader同步provenance版本。未增加模型、通用禁令或分析步骤，独立静态核对通过；生产实际消费状态见CURRENT，不能把文本修正冒称正确率提升。loader缓存要求正常worker重启，不热替换在途指导。
 
+分阶段保存断点：第三篇40026425实际science成功后art三次json_parse失败，result仍NULL。`illustration-planner.ts`当前只在science/art均完成时返回，handler才保存完整方案；`gateway.ts`既有拒收回调仅覆盖已解析但schema失败。正在沿原任务私有result/CAS与retry-generation补science中间产物、异步有界无效返回收据和通用art-only续接；没有保存的历史science不能恢复。unknown提交不能称未提交，旧完整checkpoint仍走原末审。新增候选不证明已部署或能力稳定，状态见CURRENT。原文补接优先同SourceMap确定性邻近回读，暂不扩建检索协议或新MCP。
+
 ### 复用与效果查询
 
 - **已经自动联动**：Worker任务执行、SourceMap/Claim/Evidence及RO/version绑定、方案保存/艺术修订复用、Gateway/provider队列、结果回收和资产记录；Gateway审计经既有view/connector自动进入Langfuse并携带taskId。已保存任务/真实产物见CURRENT，链路接线与每一步效果分别判断。
