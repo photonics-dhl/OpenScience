@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AiGateway } from '@openscience/ai-gateway';
+import { Prisma } from '@prisma/client';
 
 import { createHandlers, createWorkerParserCascade } from '../src/index';
 import { createDefaultIngestionAdapters } from '../src/ingestion-parser';
@@ -121,6 +122,87 @@ describe('Task 8 acceptance runner production composition', () => {
       externalProcessingPolicy: async () => false,
     });
     const derivedObjects = new Map<string, Buffer>();
+    const taskId = `accept-${id}`;
+    const sessionId = `accept-session-${id}`;
+    const researchObject = {
+      id: 'accept-ro', workspaceId: 'accept-workspace', deletedAt: null,
+      workspace: { id: 'accept-workspace', status: 'active' },
+    };
+    const session = {
+      id: sessionId, userId: 'accept-user', researchObjectId: researchObject.id,
+      status: 'active', deletedAt: null, researchObject,
+    };
+    const taskPayload = { artifactId, researchObjectId: researchObject.id };
+    const ownerTask = {
+      id: taskId, kind: 'sdf.extract', status: 'running', executionAttempt: 1,
+      sessionId, payload: taskPayload, result: null as unknown, deletedAt: null,
+      idempotencyKey: null, session,
+    };
+    const artifact = {
+      id: artifactId, workspaceId: researchObject.workspaceId, size: fixture.content.length,
+      blobSha256: digest, logicalPath: fixture.filename, mimeType,
+      deletedAt: null, bytesPurgedAt: null,
+    };
+    const sameJson = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+    const artifactMatches = (where: Record<string, unknown>) => where.id === artifact.id
+      && where.workspaceId === artifact.workspaceId && where.blobSha256 === artifact.blobSha256
+      && where.size === artifact.size && where.deletedAt === artifact.deletedAt
+      && where.bytesPurgedAt === artifact.bytesPurgedAt;
+    const taskMatches = (where: Record<string, unknown>) => {
+      const expectedSession = where.session as {
+        status?: unknown; deletedAt?: unknown; userId?: unknown; researchObjectId?: unknown;
+        researchObject?: Record<string, unknown>;
+      } | undefined;
+      const expectedPayload = where.payload as { equals?: unknown } | undefined;
+      const alternatives = Array.isArray(where.OR)
+        ? where.OR as Array<{ result?: { equals?: unknown } }>
+        : [];
+      const resultMatches = alternatives.some((alternative) => ownerTask.result === null
+        ? alternative.result?.equals === Prisma.AnyNull
+        : sameJson(alternative.result?.equals, ownerTask.result));
+      return where.id === ownerTask.id && where.kind === ownerTask.kind && where.status === ownerTask.status
+        && where.executionAttempt === ownerTask.executionAttempt && where.sessionId === ownerTask.sessionId
+        && where.deletedAt === ownerTask.deletedAt && expectedSession?.status === session.status
+        && expectedSession.deletedAt === session.deletedAt && expectedSession.userId === session.userId
+        && expectedSession.researchObjectId === session.researchObjectId
+        && expectedSession.researchObject?.deletedAt === researchObject.deletedAt
+        && expectedSession.researchObject.workspaceId === researchObject.workspaceId
+        && sameJson(expectedPayload?.equals, ownerTask.payload) && resultMatches;
+    };
+    type AcceptancePrisma = {
+      $executeRaw: (...args: unknown[]) => Promise<number>;
+      agentTask: {
+        findUnique: () => Promise<typeof ownerTask>;
+        updateMany: (args: {
+          where: Record<string, unknown>; data: { result?: unknown };
+        }) => Promise<{ count: number }>;
+      };
+      membership: { findUnique: () => Promise<{ userId: string; workspaceId: string; role: string }> };
+      artifact: {
+        findUnique: () => Promise<typeof artifact>;
+        findFirst: (args: { where: Record<string, unknown> }) => Promise<{ id: string } | null>;
+      };
+      $transaction: <T>(callback: (tx: AcceptancePrisma) => Promise<T>, options?: unknown) => Promise<T>;
+    };
+    const prisma: AcceptancePrisma = {
+      $executeRaw: async () => 1,
+      agentTask: {
+        findUnique: async () => ownerTask,
+        updateMany: async ({ where, data }) => {
+          if (!Object.hasOwn(data, 'result') || !taskMatches(where)) return { count: 0 };
+          ownerTask.result = data.result;
+          return { count: 1 };
+        },
+      },
+      membership: { findUnique: async () => ({
+        userId: session.userId, workspaceId: researchObject.workspaceId, role: 'author',
+      }) },
+      artifact: {
+        findUnique: async () => artifact,
+        findFirst: async ({ where }) => artifactMatches(where) ? { id: artifact.id } : null,
+      },
+      $transaction: async <T>(callback: (tx: AcceptancePrisma) => Promise<T>) => callback(prisma),
+    };
     const dependencies = {
       storage: {
         getObject: async (key: string) => {
@@ -144,31 +226,19 @@ describe('Task 8 acceptance runner production composition', () => {
         deleteObject: async (key: string) => void derivedObjects.delete(key),
       },
       malwareScanner: vi.fn(async () => undefined),
-      prisma: {
-        agentTask: { findUnique: async () => ({
-          id: `accept-${id}`, kind: 'sdf.extract', status: 'running',
-          session: { userId: 'accept-user', researchObject: {
-            id: 'accept-ro', workspaceId: 'accept-workspace', workspace: { id: 'accept-workspace', status: 'active' },
-          } },
-        }) },
-        membership: { findUnique: async () => ({
-          userId: 'accept-user', workspaceId: 'accept-workspace', role: 'author',
-        }) },
-        artifact: { findUnique: async () => ({
-          id: artifactId, workspaceId: 'accept-workspace', size: fixture.content.length,
-          blobSha256: digest, logicalPath: fixture.filename,
-          mimeType,
-        }) },
-      },
+      prisma,
     };
 
     const handlerResult = await handlers['sdf.extract']!(dependencies as never, {
-      id: `accept-${id}`,
-      payload: { artifactId, researchObjectId: 'accept-ro' },
+      id: taskId,
+      payload: taskPayload,
       executionAttempt: 1,
     });
 
     expect(classifyAcceptanceHandlerResult(handlerResult, true)).toBe('completed');
+    expect(ownerTask.result).toEqual({
+      sourceMapRef: (handlerResult as { sourceMapRef: unknown }).sourceMapRef,
+    });
     expect(cascadeResult?.status).toBe('succeeded');
     if (cascadeResult?.status !== 'succeeded') return;
     const extraction = handlerResult as unknown as {
