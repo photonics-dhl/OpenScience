@@ -1,5 +1,11 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 03:20Z — 子集恢复与队列修复已部署，原页面两次续作
+- 193fc645af51a7d5b2acd295ada8fbcb3a480aa3正常服务器构建/启动exit0，rollback b285，独立marker正确/journal与failed均false，无迁移/测试/预检/CI。Gateway及依赖先服务器实际构建；原provider三锁/空闲/备份安装同SHA，provider-backup-20260922-subset-queue-193fc645，timers恢复原enabled/active，无共享浏览器重启。部署日志/opt/openscience/observations/deploy-193fc645-20260922.log。
+- 独立High对技术候选两项修复增量PASS：technical exec2不误用completed-only收据；text/image/scientific_review分开，可信动态text最多两次，planningAuditIdentity纳入原快照深比较。队列两P1与science/final两句既有High PASS。所有候选现已交付，不将静态审查/编译当真实链路完成。
+- 第三篇原GET真实显示image-render/4项，03:20:29Z原“保留初稿，继续制作”HTTP202/runv37。保留719和cb2；cf6 PNG复用到review-only cc6e78fa-5bde-42ad-bfda-81eef9fd9fe7，三个新图任务cb450919-527f-4c8c-bb53-5586ba05d553/092fdf4b-5156-402a-b703-9a0d7f4e12ee/707f7a11-8ee7-44c5-9e5e-fc13a959a386。/jobs/third-paper-technical-subset-resume-20260922.json已消费。
+- 第二篇原v39/max27的科学返工入口03:20:52Z HTTP202，plan82c627a4-f253-4a10-94b3-716fa9708666/runv40；/jobs/second-paper-geometric-replan-20260922.json已消费。新生成/审阅在途，不重发；保留原来源/六维/Claims及所有旧图与公开版本，后续真实reader/发布尚待完成。
+
 ## 2026-09-22 — 当前四图终态、队列时限与技术子集恢复候选
 - 第二篇cb342四图全部真实完成：459 accepted/approved；4c61因不可实现穿缝几何、无数据定量轮廓、来源限定丢失等科学blocked/null；7b73因构图要求N_SP说明却不在排他标签清单内blocked/null；a1因下标、箭头标签归属和渐变渲染blocked/有repair。run stopped/v39/max27，原GET为narrative-scientific-replan/5项。官方回执保存在tmp/current-encoding-image-review-read-20260922.json；4c61/7b73真实PNG已看，不发布拒收图。
 - root两句science/final prompt只补几何可实现性和固定/扫描条件的视觉组归属，自检仍沿原模型阶段，High静态PASS。没有新增分析器、正则门禁或人工改写科学事实。
