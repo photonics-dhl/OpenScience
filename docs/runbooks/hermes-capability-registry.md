@@ -46,6 +46,8 @@ Hermes技能与学习消费审计（2026-09-22）：82/606实际checkpoint记录
 
 分阶段保存断点：第三篇40026425实际science成功后art三次json_parse失败，result仍NULL。`illustration-planner.ts`当前只在science/art均完成时返回，handler才保存完整方案；`gateway.ts`既有拒收回调仅覆盖已解析但schema失败。正在沿原任务私有result/CAS与retry-generation补science中间产物、异步有界无效返回收据和通用art-only续接；没有保存的历史science不能恢复。unknown提交不能称未提交，旧完整checkpoint仍走原末审。新增候选不证明已部署或能力稳定，状态见CURRENT。原文补接优先同SourceMap确定性邻近回读，暂不扩建检索协议或新MCP。
 
+原图视觉理解缺口：`provider.ts`普通ChatMessage仅文本；`figure-list.ts`是文字引用提取，`figure-audit.ts`只向`figure-auditor.ts`提供id/caption/role，且Evidence读取把pageStart固定为1，不能当作原图页定位。SourceMap的figure/caption块有bbox/文本但没有图像语义。现有MiniMax VLM经`ocr.ts`固定转录提示、`llm-ocr-fallback.ts`低质量页路径调用，外部处理权限仅允许sdf.extract；既不是普遍看过原图，也不提供坐标/拓扑解释。拟沿既有figure-audit按需绑定当前原文页、复用隔离renderPages与VLM传输，另设窄的视觉观察语义和presentation权限，观察只作上下文不自动成为Evidence；尚未实现。若页定位不唯一，不猜页或绕过权限。比例尺、条件分组等现有文字足够发现的问题不归因于缺视觉输入。
+
 ### 复用与效果查询
 
 - **已经自动联动**：Worker任务执行、SourceMap/Claim/Evidence及RO/version绑定、方案保存/艺术修订复用、Gateway/provider队列、结果回收和资产记录；Gateway审计经既有view/connector自动进入Langfuse并携带taskId。已保存任务/真实产物见CURRENT，链路接线与每一步效果分别判断。

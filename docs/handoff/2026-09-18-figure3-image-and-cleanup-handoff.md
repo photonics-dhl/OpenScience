@@ -1,9 +1,10 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
 ## 2026-09-22 — science成果保存断点与最新成图
+- 后续07:27读取第二篇真实终态stopped/v53/max37：4任务均succeeded，d6fc87fe及dd07aa6a科学blocked/null，1ea36453渲染blocked/等径圆点repair，38b488fd accepted。原PNG与审阅保留，未发布。新审阅还指出封面散射方向与频率上移矛盾、截面轴误解及N_SP单电子数字缺原文支持；末图漏掉高产额结果标签。完整tmp/hermes-stage-recovery-scenes-terminal-20260922.json。M3方案通过不证明质量；暂停原样重规划，先核对已存在的原图视觉读取能力是否可补接。全部当前付费请求已自然终态。
 - 第二篇15b302e7于07:07完成原science/art/final三轮M3，分别480463/170204/115302ms、全部stop；run generating_scene_images/v51/max37。新图d6fc87fe/1ea36453/38b488fd/dd07aa6a已读取原字节并本机实看，570745/583194/559606/527446bytes，图审在途。99as输出对比已纠正，但封面900/77nm标尺比例错误，末图λ变化与4.4μm限定仍混同，不能据M3 accepted放行。完整原文方案tmp/hermes-feedback-plans-read-20260922.json、图读脚本second-paper-15b-images-read-20260922.cjs、PNG均在ignored tmp。
 - 第三篇40026425于07:00:19.916Z failed/exec1/retry0/resultNULL，run stopped/v44/max43。science f7bf0191已成功（65K/stop/221453ms），art c6bee75b/d7425f02/08d01bc4分别58162/30875/32005ms、16K/stop，但三次json_parse失败。只定向读匹配元数据与白名单结构诊断，未读取或打印Secret；证据tmp/third-source-support-plan-validation-20260922.txt与hermes-feedback-progress-20260922.json。现无科学中间产物或无效返回正文，不臆断语法、不伪造恢复、不盲重发。
-- 独立High设计定位：planner只有science/art都完成才由handler保存完整checkpoint，Gateway onRejectedCandidate不覆盖json_parse。现沿原AgentTask.result/Serializable CAS设计通用私有两阶段checkpoint、异步有界无效返回收据及原retry-generation续接，不新增分析器、表、模型轮次或按task特判。已有完整checkpoint仍走旧路径；合法science+明确art拒收才可art-only，submitting无终态保持unknown；当前NULL需诚实完整planning restart，不能称跳过science。候选正在实现，未部署/实际恢复。
+- 独立High设计定位：planner只有science/art都完成才由handler保存完整checkpoint，Gateway onRejectedCandidate不覆盖json_parse。现沿原AgentTask.result/Serializable CAS设计通用私有两阶段checkpoint、异步有界无效返回收据及原retry-generation续接，不新增分析器、表、模型轮次或按task特判。已有完整checkpoint仍走旧路径；合法science+明确art拒收才可art-only，submitting无终态保持unknown；当前NULL需诚实完整planning restart，不能称跳过science。候选已完成、组合High静态PASS，未部署/实际恢复。root另补Gateway beforeEachProviderCall接入原内部授权后逐次提交前钩子，失败终止全部结构化重试；只在已有可恢复的托管叙事写partial，独立单图保持旧行为。恢复不重新加载科学Skill/构造未调用的science提示，实际art promptHash与saved science版本分别保留；mergeDesignSkillUsage按id+version+upstreamCommit归并，避免跨部署版本误记。
 - 原文补充检索设计收窄为同SourceMap已知locator附近的正文/定义/图注回读；不新增hybrid存储范围协议，不将context当supports，不新增context-only检查点。目前仍未实现；完整sourcePassages一直另传，18K不视为已证根因。跨任务学习仍未实现，默认6Pro plan末审候选保持撤下。
 
 ## 2026-09-22 06:54Z — Hermes原路由反馈与来源恢复已发布并真实续作

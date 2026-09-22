@@ -880,8 +880,9 @@ export async function retryAgentTask(
             status: 'pending', progress: 0,
             result: task.kind === 'presentation.generate' && isJsonRecord(task.payload)
               && isJsonRecord(task.payload.storyboard) && task.payload.storyboard.output === 'image'
-              && isJsonRecord(task.result) && isJsonRecord(task.result.storyboardCheckpoint)
-              ? { storyboardCheckpoint: task.result.storyboardCheckpoint,
+              && isJsonRecord(task.result) && (isJsonRecord(task.result.storyboardCheckpoint) || isJsonRecord(task.result.storyboardPlanningCheckpoint))
+              ? { ...(isJsonRecord(task.result.storyboardCheckpoint) ? { storyboardCheckpoint: task.result.storyboardCheckpoint }
+                  : { storyboardPlanningCheckpoint: task.result.storyboardPlanningCheckpoint }),
                 ...('storyboardReview' in task.result ? { storyboardReview: task.result.storyboardReview } : {}) } as Prisma.InputJsonValue
               : Prisma.JsonNull,
             error: null, dispatchedAt: null,
@@ -1166,6 +1167,7 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   delete publicResult.sourceMapAvailable;
   delete publicResult.sourceMapIdentity;
   delete publicResult.storyboardCheckpoint;
+  delete publicResult.storyboardPlanningCheckpoint;
   delete publicResult.storyboardReview;
   delete publicResult.storyboardAcceptanceCheckpoint;
   delete publicResult.storyboardArtCorrection;

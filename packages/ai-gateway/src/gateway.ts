@@ -95,10 +95,17 @@ type TextExecutionControls = {
 export type StructuredGenerationOptions = TextGenerationOptions & {
   /** Do not submit a second key/model after an uncertain paid source-review call. */
   primaryProviderOnly?: boolean;
+  /** Trusted caller checkpoint, after internal authorization and before each actual provider submission. */
+  beforeEachProviderCall?: () => Promise<void>;
   validationFeedback?: (value: unknown) => string | undefined;
   validationDiagnostic?: (value: unknown) => string | undefined;
   /** Opt-in private evidence capture only; callback failure never authorizes another attempt. */
-  onRejectedCandidate?: (value: unknown, completion: GatewayCompletion, attempt: number) => void;
+  onRejectedCandidate?: (value: unknown, completion: GatewayCompletion, attempt: number, rejection?: {
+    kind?: 'json_parse' | 'schema_validation';
+    diagnostic?: string;
+  }) => void | Promise<void>;
+  /** Include invalid-JSON completions in the private rejected-candidate callback. */
+  includeJsonParseInRejectedCandidates?: boolean;
   maxRetries?: number;
   /** Opt in to conversational repair with the rejected candidate; other structured calls keep replacement-only retries. */
   includeRejectedResponseOnRetry?: boolean;
@@ -557,6 +564,17 @@ export class AiGateway {
     // may raise that allowance, once and within the existing retry limit.
     let currentMaxTokens = opts.maxTokens ?? 16384;
     let escalated = false;
+    const beforeProviderAttempt = controls.beforeProviderAttempt || opts.beforeEachProviderCall
+      ? async () => {
+          try {
+            await controls.beforeProviderAttempt?.();
+            await opts.beforeEachProviderCall?.();
+          } catch (cause) {
+            // The existing denied-processing path stops both fallback and structured retries.
+            throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'structured generation authorization changed', cause);
+          }
+        }
+      : undefined;
     const withRejectedCandidate = (
       result: GatewayCompletion,
       feedback: string,
@@ -580,7 +598,8 @@ export class AiGateway {
         const result = await this.completeWithControls(retryMessages, {
           temperature: opts.temperature, maxTokens: currentMaxTokens,
           thinking: opts.thinking, topP: opts.topP, timeoutMs: opts.timeoutMs,
-        }, { ...controls, primaryProviderOnly: controls.primaryProviderOnly || opts.primaryProviderOnly });
+        }, { ...controls, ...(beforeProviderAttempt ? { beforeProviderAttempt } : {}),
+          primaryProviderOnly: controls.primaryProviderOnly || opts.primaryProviderOnly });
         if (result.finishReason === 'length') {
           throw new AiGatewayError('STRUCTURED_OUTPUT_TRUNCATED', 'structured output reached token limit');
         }
@@ -590,6 +609,10 @@ export class AiGateway {
         } catch (error) {
           const finishReason = result.finishReason ?? 'unknown';
           this.logger?.warn?.(`structured.output.rejected stage=json_parse attempt=${attempt + 1}/${retryLimit + 1} finish=${finishReason}`);
+          if (opts.includeJsonParseInRejectedCandidates) {
+            try { await opts.onRejectedCandidate?.(undefined, result, attempt + 1, { kind: 'json_parse', diagnostic: 'invalid_json' }); }
+            catch { this.logger?.warn?.('structured.output.receipt_unavailable'); }
+          }
           const feedback = 'The previous response was not valid JSON. Return exactly one complete JSON object following the requested schema. Use double-quoted keys and strings, escape backslashes, and include no Markdown or commentary.';
           retryMessages = withRejectedCandidate(result, feedback, [...retryMessages.filter((message) => message.content !== feedback), {
             role: 'system',
@@ -598,13 +621,15 @@ export class AiGateway {
           throw new AiGatewayError('STRUCTURED_JSON_INVALID', 'structured JSON invalid', error);
         }
         if (!guard(parsed)) {
-          try { opts.onRejectedCandidate?.(parsed, result, attempt + 1); }
+          const diagnostic = opts.validationDiagnostic?.(parsed)?.trim();
+          try { await opts.onRejectedCandidate?.(parsed, result, attempt + 1, {
+            kind: 'schema_validation', ...(diagnostic ? { diagnostic } : {}),
+          }); }
           catch { this.logger?.warn?.('structured.output.receipt_unavailable'); }
           const feedback = opts.validationFeedback?.(parsed)?.trim();
           if (feedback && feedback.length <= 2_000 && ![...feedback].some((character) => { const code = character.charCodeAt(0); return code < 32 && code !== 9 && code !== 10 && code !== 13; })) {
             retryMessages = withRejectedCandidate(result, feedback, [...messages, { role: 'system', content: feedback }]);
           }
-          const diagnostic = opts.validationDiagnostic?.(parsed)?.trim();
           const safeDiagnostic = diagnostic && /^[a-z0-9_,:-]{1,512}$/i.test(diagnostic) ? ` diagnostic=${diagnostic}` : '';
           this.logger?.warn?.(`structured.output.rejected stage=schema_validation attempt=${attempt + 1}/${retryLimit + 1}${safeDiagnostic}`);
           throw new AiGatewayError('SCHEMA_VALIDATION', `结构化输出未通过 Schema 校验（第 ${attempt + 1} 次）`);

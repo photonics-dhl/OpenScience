@@ -22,6 +22,8 @@ Pixel science成功/art主调用超时的精确同task一次恢复复用`researc
 
 审图保存恢复定位：infra/chatgpt-browser/review-broker.mjs复用已有完整job结果，原jobResponse保留身份及responseHash核对；并发结果保存与终态收尾沿现有presentation handler/research-run，实际进展只见CURRENT。
 
+托管叙事的science/art阶段保存沿`illustration-planner.ts`、`handler.ts`的原私有checkpoint/CAS，`research-run.ts`原retry-generation按实际保存阶段恢复，`agent.ts`隐藏私有中间结果；`gateway.ts`提供异步拒收回调和逐次提交前回调。无新表/分析器/MCP；候选、部署、真实恢复见CURRENT。原图视觉理解/OCR边界和figure-audit假定页码的缺口见原能力台账，不从文字审计推断已看原图。
+
 本机桥合作入口：`infra/development-platform/codex-chatgpt-web/collaborate.mjs` 使用已安装原生 CLI 自动审批续接固定 XGS Pro 任务，STDIN 传任务、并发锁及独立日志；实际工具结果与未完成范围见 CURRENT。
 
 系统证据核验的发布消费沿 `packages/domain/src/research-intelligence/{evidence-publication-verification,publication-evidence}.ts` 与 `packages/domain/src/commit/research-record-snapshot.ts`：复用既有 `evidence.system_verify` 审计及已审来源身份，人工字段不回填；完整状态与共享helper见CURRENT，不把模型审阅冒称人工核验。阅读长图注与折叠来源沿 `apps/web/app/research-objects/[id]/overview/{page.tsx,overview.module.css}`，系统导入版本的显示标签沿 `apps/web/components/research/useVersionLabels.ts`，不改科研正文或提交元数据。公开叙事图注复用 `apps/web/components/presentation/ResearchMediaDeck.module.css` 与 `apps/web/components/public/PublicReadingProduct.module.css`。

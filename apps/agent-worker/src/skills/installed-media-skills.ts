@@ -75,12 +75,12 @@ function listDir(relativeDir: string): string[] {
   catch { return []; }
 }
 
-// Keep first-use metadata and stable resource order without mutating stage results.
+// Preserve each consumed revision when a saved stage resumes after a skill update.
 export function mergeDesignSkillUsage(...groups: (readonly DesignSkillUsage[] | undefined)[]): DesignSkillUsage[] {
   const merged: DesignSkillUsage[] = [];
   for (const group of groups) {
     for (const item of group ?? []) {
-      const current = merged.find(entry => entry.id === item.id);
+      const current = merged.find(entry => entry.id === item.id && entry.version === item.version && entry.upstreamCommit === item.upstreamCommit);
       if (current) current.resources = [...new Set([...current.resources, ...item.resources])];
       else merged.push({ ...item, resources: [...item.resources] });
     }
