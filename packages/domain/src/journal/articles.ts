@@ -4,7 +4,7 @@ import { createSystemResearchObjectInTransaction } from '../research-object/rese
 import { publicVersionNumber } from '../publish/publication-metadata';
 import { JournalError } from './contracts';
 import { EMPTY_RIGHTS, JOURNAL_CORE_FIELDS, journalDigest, normalizeJournalDoi, safeJournalUrl, validateJournalDraft, validateJournalSource, type JournalMetadata, type JournalSource, type JournalRights, type JournalDraft } from './content';
-import { assertJournalReviewCapability, journalSourceMaterials } from './enhancements';
+import { assertJournalReviewCapability, evaluateArticleProcessingCapability, journalSourceMaterials } from './enhancements';
 
 export type JournalTx = Prisma.TransactionClient;
 export const JOURNAL_EDIT_ROLES = ['owner', 'maintainer', 'author'];
@@ -95,14 +95,19 @@ export async function getManagedJournalArticle(deps: WorkspaceDeps, userId: stri
     ...(job.kind === 'generate' && job.state === 'failed' && job.result && (article.rights as unknown as JournalRights).internalProcessing ? { comparisonDraft: job.result } : {}),
   })) };
 }
-export async function txReleases(tx: JournalTx, articleId: string, publishedOnly = false) {
-  const rows = await tx.journalRelease.findMany({ where: { articleId, ...(publishedOnly ? { version: { status: 'published', researchObject: { visibility: 'public' } } } : {}) }, orderBy: { publishedAt: 'desc' }, include: { version: { include: { researchObject: true } } } });
-  return rows.map((r) => {
+export async function txReleases(tx: JournalTx, articleId: string, publishedOnly = false, now = new Date()) {
+  const [rows, article] = await Promise.all([
+    tx.journalRelease.findMany({ where: { articleId, ...(publishedOnly ? { version: { status: 'published', researchObject: { visibility: 'public' } } } : {}) }, orderBy: { publishedAt: 'desc' }, include: { version: { include: { researchObject: true } } } }),
+    publishedOnly ? tx.journalArticle.findUnique({ where: { id: articleId }, select: { id: true, source: true, rights: true, contentState: true } }) : null,
+  ]);
+  const capability = article ? evaluateArticleProcessingCapability(article, now) : null;
+  return rows.flatMap((r) => {
     const draft = (r.snapshot as unknown as { draft?: { scope?: unknown } }).draft;
     const scope = draft?.scope === 'abstract' || draft?.scope === 'fulltext' ? draft.scope : null;
+    if (publishedOnly && (!capability || (scope === 'abstract' ? !capability.canPublishPublicSummary : scope === 'fulltext' ? !capability.canPublishFullInterpretation : true))) return [];
     const versionNo = publicVersionNumber(r.version);
     if (versionNo === null) throw new JournalError('INVALID_STATE', '期刊公开版本编号缺失');
-    return { id: r.id, revision: r.revision, versionNo, publicId: r.version.researchObject.publicId, publishedAt: r.publishedAt, scope, url: `/research/${r.version.researchObject.publicId}/v/${versionNo}` };
+    return [{ id: r.id, revision: r.revision, versionNo, publicId: r.version.researchObject.publicId, publishedAt: r.publishedAt, scope, url: `/research/${r.version.researchObject.publicId}/v/${versionNo}` }];
   });
 }
 export async function updateJournalArticle(deps: WorkspaceDeps, userId: string, journalId: string, articleId: string, input: { revision: number; metadata?: JournalMetadata; directoryVisible?: boolean; source?: JournalSource; rights?: JournalRights; draft?: JournalDraft }) {

@@ -225,7 +225,7 @@ export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
       // Keep the public bibliography entry visible even when the current source
       // rights do not permit exposing an interpretation. txReleases applies the
       // current rights gate to each published release.
-      const releases = a.contentState === 'active' ? await txReleases(deps.prisma, a.id, true) : [];
+      const releases = a.contentState === 'active' ? await txReleases(deps.prisma, a.id, true, deps.now?.() ?? new Date()) : [];
       return { id: a.id, journalId: id, workId: a.workId, metadata: publicArticleMetadata(a.metadata), directoryState: 'listed', contentState: a.contentState,
         interpretationKind: releases[0]?.scope ?? null, latestUrl: releases[0] ? `/research/${releases[0].publicId}` : null, releases };
     })), nextCursor: rows.length > q.limit ? rows[q.limit - 1]!.id : null };
