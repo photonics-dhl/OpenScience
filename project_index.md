@@ -18,6 +18,8 @@
 
 风格续作定位：`apps/agent-worker/src/presentation/illustration-styles.ts` 合并逐图风格参考；`packages/domain/src/assets/storyboard.ts` 从既有 figurePlan 解析 scene 风格；原 planner/review/render 调用接线，`infra/chatgpt-browser/broker.mjs` 与原 core 保存下载后恢复。Hermes 入口补接定位：`workspace-guide.ts` 路由风格，`apps/web/lib/api.ts` 与 `lib/hermes/{draft-state,presentation-action}.ts` 复用 StoryboardRequest 类型及原请求恢复，`HermesAssistantDrawer` → `HermesPresentationReview` → `HermesPresentationAction` 传递 style/figurePlan；中英文名称沿用消息文件。论文原图 art 限制在 Domain `requireStoryboardBase` 提交前阻断。候选状态及本机 Pro 协作阻塞只见 CURRENT，不据源码宣称线上完成。
 
+审图保存恢复定位：infra/chatgpt-browser/review-broker.mjs复用已有完整job结果，原jobResponse保留身份及responseHash核对；并发结果保存与终态收尾沿现有presentation handler/research-run，实际进展只见CURRENT。
+
 本机桥合作入口：`infra/development-platform/codex-chatgpt-web/collaborate.mjs` 使用已安装原生 CLI 自动审批续接固定 XGS Pro 任务，STDIN 传任务、并发锁及独立日志；实际工具结果与未完成范围见 CURRENT。
 
 系统证据核验的发布消费沿 `packages/domain/src/research-intelligence/{evidence-publication-verification,publication-evidence}.ts` 与 `packages/domain/src/commit/research-record-snapshot.ts`：复用既有 `evidence.system_verify` 审计及已审来源身份，人工字段不回填；完整状态与共享helper见CURRENT，不把模型审阅冒称人工核验。阅读长图注与折叠来源沿 `apps/web/app/research-objects/[id]/overview/{page.tsx,overview.module.css}`，系统导入版本的显示标签沿 `apps/web/components/research/useVersionLabels.ts`，不改科研正文或提交元数据。公开叙事图注复用 `apps/web/components/presentation/ResearchMediaDeck.module.css` 与 `apps/web/components/public/PublicReadingProduct.module.css`。

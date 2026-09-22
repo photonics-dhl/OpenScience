@@ -381,6 +381,8 @@ const NARRATIVE_BLOCKED_REVISION = 'narrative_storyboard_scientific_revision';
 const NARRATIVE_ACCEPTED_IMAGE_REPLAN = 'narrative_accepted_image_scientific_replan';
 const STORYBOARD_PLANNING_RETRY = 'storyboard_planning_retry';
 const COMPLETED_IMAGE_REVIEW_RECOVERY = 'completed_image_review_resume';
+const PRESENTATION_WRITE_CONFLICT_ERROR = 'Invalid `prisma.version.updateMany()` invocation:\n\n\nTransaction failed due to a write conflict or a deadlock. Please retry your transaction';
+const isPresentationWriteConflict = (error: string | null) => error?.replace(/\r\n/gu, '\n').trim() === PRESENTATION_WRITE_CONFLICT_ERROR;
 const IMAGE_RENDER_ELIGIBILITY = Symbol('image-render-eligibility');
 const PIXEL_REPLAN_ELIGIBILITY = Symbol('pixel-replan-eligibility');
 
@@ -481,13 +483,42 @@ async function inspectCompletedImageReviewRecovery(tx: Prisma.TransactionClient,
   const recoverable = [];
   for (const step of run.steps.filter(item => item.stage === 'scene_image' && item.agentTaskId)) {
     const source = await readCompletedImageReviewSource(tx, run, step.agentTaskId!).catch(() => null);
-    if (!source || source.task.status !== 'failed' || source.task.executionAttempt !== 1 || source.task.retryCount !== 0
+    if (!source || source.task.status !== 'failed' || ![1, 2].includes(source.task.executionAttempt)
+      || source.task.retryCount !== source.task.executionAttempt - 1
+      || (source.task.executionAttempt === 2 && !isPresentationWriteConflict(source.task.error))
       || source.task.result !== null || jsonRecord(source.asset.provenance).imageReview != null
-      || !['failed', 'stopped', 'running'].includes(step.status)
-      || await canResume(source.task.id).catch(() => false) !== true) continue;
-    recoverable.push(source);
+      || !['failed', 'stopped', 'running'].includes(step.status)) continue;
+    const receipts = await readCompletedImageReviewRecoveryChain(tx, run, source).catch(() => null);
+    if (!receipts || (source.task.executionAttempt === 2 && await tx.auditLog.findFirst({ where: {
+      action: 'presentation_asset.image_reviewed', targetType: 'presentation_asset', targetId: source.asset.id,
+    } })) || await canResume(source.task.id).catch(() => false) !== true) continue;
+    recoverable.push({ ...source, previousReceiptId: receipts.at(-1)?.id });
   }
   return recoverable.length ? recoverable : null;
+}
+
+async function readCompletedImageReviewRecoveryChain(tx: Prisma.TransactionClient, run: RunRow,
+  source: NonNullable<Awaited<ReturnType<typeof readCompletedImageReviewSource>>>) {
+  const receipts = await tx.auditLog.findMany({ where: { action: 'hermes.research_run.generation_retry', actorId: run.actorId,
+    targetType: 'hermes_research_run', targetId: run.id, AND: [
+      { metadata: { path: ['correction'], equals: COMPLETED_IMAGE_REVIEW_RECOVERY } },
+      { metadata: { path: ['taskIds'], array_contains: [source.task.id] } },
+    ] }, orderBy: { createdAt: 'asc' }, take: 3 });
+  if (source.task.retryCount < 0 || source.task.retryCount > 2 || receipts.length !== source.task.retryCount)
+    throw new Error('[blocked] Completed image review recovery receipt changed');
+  for (const [index, receipt] of receipts.entries()) {
+    const meta = jsonRecord(receipt.metadata);
+    const record = Array.isArray(meta.images) ? meta.images.filter(item => jsonRecord(item).taskId === source.task.id) : [];
+    const saved = jsonRecord(record[0]);
+    if (record.length !== 1 || meta.maxAgentTasks !== run.maxAgentTasks || meta.newTaskCount !== 0
+      || meta.chargeableAttempts !== 0 || meta.noNewSubmission !== true || meta.noProviderSwitch !== true
+      || saved.identity !== source.identity || saved.previousExecutionAttempt !== index + 1 || saved.previousRetryCount !== index
+      || saved.previousResult !== null || (index === 0 ? saved.previousReceiptId != null
+        : saved.previousReceiptId !== receipts[index - 1]!.id || saved.recoveryFailureClass !== 'presentation_write_conflict'
+          || typeof saved.previousError !== 'string' || !isPresentationWriteConflict(saved.previousError)))
+      throw new Error('[blocked] Completed image review recovery receipt changed');
+  }
+  return receipts;
 }
 
 /** A continuation may only consume an existing response; it never authorizes a new review request. */
@@ -496,23 +527,13 @@ export async function requireHermesCompletedImageReviewRecovery(tx: Prisma.Trans
   if (!run || run.actorId !== input.actorId || run.status !== 'generating_scene_images')
     throw new Error('[blocked] Completed image review recovery is not current');
   const source = await readCompletedImageReviewSource(tx, run, input.taskId);
-  if (!source || source.step.status !== 'running' || source.task.status !== 'running' || source.task.executionAttempt !== 2
-    || source.task.retryCount !== 1 || source.task.result !== null) throw new Error('[blocked] Completed image review task changed');
+  if (!source || source.step.status !== 'running' || source.task.status !== 'running' || ![2, 3].includes(source.task.executionAttempt)
+    || source.task.retryCount !== source.task.executionAttempt - 1 || source.task.result !== null)
+    throw new Error('[blocked] Completed image review task changed');
   await requireHermesPresentationTaskAuthority(tx, { taskId: input.taskId, actorId: input.actorId, payload: source.payload,
     authority: source.payload.hermesRunAuthority! });
-  const receipts = await tx.auditLog.findMany({ where: { action: 'hermes.research_run.generation_retry', actorId: input.actorId,
-    targetType: 'hermes_research_run', targetId: run.id, AND: [
-      { metadata: { path: ['correction'], equals: COMPLETED_IMAGE_REVIEW_RECOVERY } },
-      { metadata: { path: ['taskIds'], array_contains: [input.taskId] } },
-    ] }, take: 2 });
-  const meta = jsonRecord(receipts[0]?.metadata);
-  const record = Array.isArray(meta.images) ? meta.images.filter(item => jsonRecord(item).taskId === input.taskId) : [];
-  const saved = jsonRecord(record[0]);
-  if (receipts.length !== 1 || record.length !== 1 || meta.maxAgentTasks !== run.maxAgentTasks || meta.newTaskCount !== 0
-    || meta.chargeableAttempts !== 0 || meta.noNewSubmission !== true || meta.noProviderSwitch !== true
-    || saved.identity !== source.identity || saved.previousExecutionAttempt !== 1 || saved.previousRetryCount !== 0 || saved.previousResult !== null)
-    throw new Error('[blocked] Completed image review recovery receipt changed');
-  return { receiptId: receipts[0]!.id, identity: source.identity };
+  const receipts = await readCompletedImageReviewRecoveryChain(tx, run, source);
+  return { receiptId: receipts.at(-1)!.id, identity: source.identity };
 }
 
 /** A user may revise one saved scientific rejection without renewing the root's image allowance. */
@@ -1686,9 +1707,9 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             if (changed.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Image review recovery changed');
             for (const { task, step, asset } of completedReviews) {
               const taskChanged = await tx.agentTask.updateMany({ where: { id: task.id, sessionId: task.sessionId, deletedAt: null,
-                status: 'failed', executionAttempt: 1, retryCount: 0, error: task.error, updatedAt: task.updatedAt,
+                status: 'failed', executionAttempt: task.executionAttempt, retryCount: task.retryCount, error: task.error, updatedAt: task.updatedAt,
                 payload: { equals: task.payload as Prisma.InputJsonValue }, result: { equals: Prisma.DbNull } },
-              data: { status: 'pending', progress: 0, retryCount: 1, error: null, dispatchedAt: null } });
+              data: { status: 'pending', progress: 0, retryCount: { increment: 1 }, error: null, dispatchedAt: null } });
               const stepChanged = await tx.hermesResearchStep.updateMany({ where: { id: step.id, runId: run.id, stage: 'scene_image',
                 ordinal: step.ordinal, status: step.status, error: step.error, agentTaskId: task.id, presentationAssetId: step.presentationAssetId },
               data: { status: 'running', presentationAssetId: asset.id, error: null } });
@@ -1701,7 +1722,8 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
                 expectedVersion: input.expectedVersion, previousStatus: run.status, previousError: run.error,
                 maxAgentTasks: run.maxAgentTasks, newTaskCount: 0, chargeableAttempts: 0, noNewSubmission: true, noProviderSwitch: true,
                 taskIds: completedReviews.map(item => item.task.id),
-                images: completedReviews.map(({ task, step, identity }) => ({ taskId: task.id, identity,
+                images: completedReviews.map(({ task, step, identity, previousReceiptId }) => ({ taskId: task.id, identity,
+                  ...(previousReceiptId ? { previousReceiptId, recoveryFailureClass: 'presentation_write_conflict' } : {}),
                   previousExecutionAttempt: task.executionAttempt, previousRetryCount: task.retryCount, previousError: task.error,
                   previousResult: task.result, previousStepStatus: step.status, previousStepError: step.error, previousAssetId: step.presentationAssetId })) } }, ctx);
             return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }),
@@ -2476,7 +2498,12 @@ export async function reconcileHermesResearchRuns(
               if (!pixelAuthority && stage === 'storyboard' && failed.agentTaskId && await repairBlockedNarrative(deps, tx, run, failed.agentTaskId)) {
                 return moveRun(deps, tx, run, 'generating_storyboard', ro.workspaceId);
               }
-              await tx.hermesResearchStep.updateMany({ where: { id: failed.id }, data: { status: 'failed', error: failed.agentTask?.error ?? 'Generation failed' } });
+              for (const failedStep of steps.filter(step => step.agentTask?.status === 'failed')) {
+                const changed = await tx.hermesResearchStep.updateMany({ where: { id: failedStep.id, runId: run.id,
+                  agentTaskId: failedStep.agentTaskId, status: failedStep.status, presentationAssetId: failedStep.presentationAssetId },
+                data: { status: 'failed', error: failedStep.agentTask?.error ?? 'Generation failed' } });
+                if (changed.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Generation task step changed');
+              }
               if ((pixelAuthority || run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && stage === 'storyboard')
                 return moveRun(deps, tx, run, 'stopped', ro.workspaceId, failed.agentTask?.error ?? 'Scientific correction could not complete');
               return moveRun(deps, tx, run, 'failed', ro.workspaceId, failed.agentTask?.error ?? 'Generation failed');

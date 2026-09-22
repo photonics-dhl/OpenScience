@@ -20,7 +20,7 @@ import { requireAnimationSourceSupport } from './animation';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KINDS = ['chart', 'interactive_html', 'image', 'video'] as const;
-const SERIALIZABLE_RETRY_DELAYS_MS = [10, 25, 50, 100, 200] as const;
+const SERIALIZABLE_RETRY_DELAYS_MS = [50, 100, 250, 500, 1000] as const;
 export const HERMES_IMAGE_RENDER_RECOVERY_ACTION = 'hermes.research_run.image_render_recovery';
 export const NARRATIVE_PIXEL_REPLAN = 'narrative_pixel_scientific_replan';
 export const NARRATIVE_PIXEL_PLAN_REVISION = 'narrative_pixel_plan_scientific_revision';
@@ -132,7 +132,7 @@ export function requirePresentationWriteScope(prisma: ScopeDb, input: Presentati
   return requireScope(prisma, input, true);
 }
 
-/** Same draft row fence and Serializable retry policy as Claim/Evidence writes. */
+/** Draft row fence with bounded Serializable retries for presentation writes. */
 export async function withPresentationAssetWrite<T>(
   prisma: Pick<AgentDeps['prisma'], '$transaction'>,
   input: PresentationScope,
@@ -152,7 +152,9 @@ export async function withPresentationAssetWrite<T>(
       }, { isolationLevel: 'Serializable', timeout: 30_000 });
     } catch (error) {
       if ((error as { code?: unknown })?.code === 'P2034' && attempt < SERIALIZABLE_RETRY_DELAYS_MS.length) {
-        const delayMs = SERIALIZABLE_RETRY_DELAYS_MS[attempt] ?? 200;
+        // Concurrent scene results must not reopen their transactions on the same schedule.
+        const baseDelayMs = SERIALIZABLE_RETRY_DELAYS_MS[attempt]!;
+        const delayMs = baseDelayMs + Math.floor(Math.random() * baseDelayMs);
         await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
         continue;
       }

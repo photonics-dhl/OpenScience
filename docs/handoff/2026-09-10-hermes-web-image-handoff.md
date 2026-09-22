@@ -16,9 +16,9 @@
 - 交付树与根main收尾status必须空，自己的改动提交并推送；prune/list。仅根+交付树，无新worktree。清理仅明确自有、生产者完成且不用的生成物；268日志归档不重复，也不声称根治上游argv缺陷。已结束的12份本轮长文源码staging副本删除被自动审核拦截，已安全移入tmp/archived/long-paper-staging-20260922，restore.json保留路径/内容/ACL，移动后ACL一致；base-head与实现交接原位保留，无活动生产者。
 
 ## 版本与独立能力
-- application production=2b17a3552b386587bab68c1c1f2fbd2e97177c3f；rollback=37048da2353577b5aa330658d370f63540ac0d19。正常无迁移/无测试服务器build/start exit0，独立marker一致，journal/failed无；日志/opt/openscience/observations/deploy-2b17a355-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
-- 独立Chat provider=5544071b596056f1ba5d26e0af3cf9e3a1de95a5，已按原三锁备份/空闲切换安装，timer恢复原enabled/active，共享浏览器未重启。sceneImage fallback配置false；原renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f保留。最近备份provider-backup-20260922-composer-5544071b；不能退到不支持长请求的旧bundle。
-- 应用已含动态图修正grant>=9迁移；Domain仍要求精确恢复收据，不能以DB允许任意数字绕授权。现rollback b7兼容generic/schema回执，但不能消费新pre-provider恢复回执，提交后优先前向修复；不能直接回滚到旧固定额度版本。
+- application production=1a2efd317e2fffbd561245b7c65bec41abcff671；rollback=2b17a3552b386587bab68c1c1f2fbd2e97177c3f。正常无迁移/无测试服务器build/start exit0，独立marker一致，journal/failed无；日志/opt/openscience/observations/deploy-1a2efd31-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
+- 独立Chat provider=dd6b53999b12324673a82084a01f9e7cd865137b，已按原三锁备份/空闲切换安装，timer恢复原enabled/active，共享浏览器未重启。sceneImage fallback配置false；原renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f保留。最近备份provider-backup-20260922-keyboard-dd6b5399；不能退到不支持长请求的旧bundle。
+- 应用已含动态图修正grant>=9迁移；Domain仍要求精确恢复收据，不能以DB允许任意数字绕授权。当前rollback兼容已用generic/schema/pre-provider回执；新增exec3持久化恢复开始后不交给仅支持exec2的旧worker，优先前向修复；不能直接回滚到旧固定额度版本。
 - Pro代码合作已实测原生CLI exec resume/chatgpt-web/pro/ultra/STDIN短任务读取→写报告→读回；长任务工具续接与Desktop完整补丁仍未安装，不能称全局稳定。本机桥用于代码合作，服务器image/review provider负责产品图片。
 
 ## 产品目标与交付差额
@@ -56,4 +56,5 @@
 - ac455b2f真实Chat产物approved；77b3f559历史Fig.2占位、557c3db6来源待核均approved，不能直接公开全部approved。d5087b03悬空draft copy；重复计划6439150a/ee9bcfb6 draft、6043bebb/75b34c88 approved，清理未获明确同意。旧占位929bd95d/6088f11b/03a160aa早先已授权删除，不能重处理。
 - 能力位置/最新实际效果查docs/runbooks/hermes-capability-registry.md；完整故障/调用/部署/恢复收据查docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md。此前中断、300秒传输、Claims缺失、长度、渲染拒收等历史已在该文件/Git保留，不按历史next action重跑。
 - 37048da2已High PASS并部署：共享parser允许原1–6图范围，生产端持久化前复用同一parser；managed task禁止脱离run单独retry。原retry-generation新增精确模型前失败的一次同task恢复：零Gateway audit/result/asset、完整root receipt/来源/全组审阅复核，task/step/run三重CAS，不增加max或任务数，worker exec2各阶段验receipt且保持primary-only。初始science恢复也移除父RO公开历史误挡私有draft。原页面23:04:33Z/23:04:49Z均HTTP202恢复b887/04f，runv16/v19，原任务exec2/max不变，已进入规划。
-- 下一步：已消费的恢复writer禁止重放。优先在原deadline内按既有锁/原request/保留失败证据进行一次未提交review恢复，自然broker收回后走已部署completed-only入口；修队列EXPIRED事实与先后顺序，再按真实科学反馈修订，最终reader/新公开版本。两篇尚未交付，不因局部通过结束任务。
+- 最新：应用已移除独立6/8标签数量限制（仍保留单条与总传输预算），provider已交付队列deadline顺序/EXPIRED未提交证明和键盘Send。8项一次性review恢复得到6份真实6Pro结果；1bbc已留Send但无会话，a90未Send失败，均不盲重发。1354恢复死页以Inspector.targetCrashed确证后精确关闭，CDP恢复、无新OOM或浏览器重启。结果已全部由broker收回；其避免重开已完整结果页的小修复High PASS、候选待部署。
+- 原产品01:21:03Z/01:21:47Z两次HTTP202零新模型消费保存结果，收据/jobs/{third,second}-paper-terminal-review-resume-20260922.json已消费。4项exec2成功；a82与eb5在并发version.updateMany写入P2034失败，run现failed/v28及v27、max20/17，step仍running令恢复入口关闭。下一步修持久化事务并恢复保存结果，再用真实反馈修科学计划，完成reader/新公开版本。完整源/图片/审阅和历史保留。

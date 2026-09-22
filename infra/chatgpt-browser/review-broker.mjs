@@ -151,11 +151,11 @@ async function recoverPublishedFailure(config, request) {
     || !await exists(join(job, 'conversation.json'))) return false;
   const primary = validateScienceReviewResult(JSON.parse((await safeRead(join(output, 'result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
   if (primary.id !== request.id || primary.promptHash !== request.promptHash || primary.status === 'succeeded') return false;
-  if (!await exists(join(job, 'recovered-result.json'))) {
+  if (!await exists(join(job, 'result.json')) && !await exists(join(job, 'recovered-result.json'))) {
     await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', '40',
       'node', '/jobs/provider/review-runner.cjs', 'recover', request.id], 50000).catch(() => {});
   }
-  if (!await exists(join(job, 'recovered-result.json'))) return false;
+  if (!await exists(join(job, 'result.json')) && !await exists(join(job, 'recovered-result.json'))) return false;
   await publishRecovery(config.results, request, await jobResponse(job, request));
   return true;
 }

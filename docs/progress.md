@@ -1,8 +1,7 @@
 # CURRENT Progress Window
 > 本机配置补记（2026-09-21）：用户授权独立提交开发树浏览器代理；保留源码检索，无业务部署。范围/依赖/回滚见[能力台账](runbooks/hermes-capability-registry.md#local-browser-proxy)。
-## 2026-09-21 — 持续推进同一真实论文图文链路
-- 首篇v3已公开，最终用户质量认可pending。正常composer完整正文核对、混合终态修订和已完成审阅只读恢复均已交付；原页面成功收回第二篇080正式6Pro反馈，零新审图请求。broker自然补齐未提交证据后，两原页面HTTP202进入新科学修订；保留PDF/六维/Claims与旧图，不重复论文分析。旧MQED方向索引和类比疑点已由同一SourceMap全文核实撤销。后两篇阅读与发布尚未完成，精确状态见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。无测试/预检/CI/本机构建。
-
+## 2026-09-22 — 多图审阅结果保存与科学修订
+- 首篇v3已公开。后两篇已生成实图并取回6份真实6Pro审阅；原页面零新模型恢复时，两项并发结果保存触发P2034，正在修已有事务及终态收尾。标签数量限制、队列顺序、composer正文和键盘发送已交付；保存结果直接复用的broker修正已独立High通过、待部署。保留PDF/六维/Claims、全部图片、拒收和旧公开历史，后两篇reader/发布仍未完成；精确版本与续作见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。未测试/预检/CI/本机构建。
 ## 2026-09-21 — 复用 CLI 合作，推进真实 PDF→Hermes→多风格→审图发布
 - 真实Fig.1完成上传→人工核源→Hermes reuse→原字节copy；与已认可Fig.3、淡彩图共3张经真实发布入口组成v2，公开轮播均加载、匿名读回200，正文/许可保持，v1保留。发布选图/长度反馈/style必填与短反馈已部署；封面最终科学修订仍被现有审阅阻断，停止追加，无新Chat生图。第三篇120000字符前置阻塞保留，不重复上传。未跑测试/预检/CI。版本、证据、私有续作与质量差额仅见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
