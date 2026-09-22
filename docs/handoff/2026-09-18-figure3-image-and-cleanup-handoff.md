@@ -1,5 +1,11 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 — 新恢复真实结果与两个后续故障
+- 第三篇technical subset四项真实完成：cc6e原cf6 PNG复用并正式6Pro blocked/null（方向索引k及卷积符号定义缺失）；cb450新PNG后6Pro blocked/null（节点语义、v/k方向、条件与具体类比的证据绑定）；092f新PNG/6Pro accepted；707新PNG已存但review not_submitted/EXECUTION_FAILED。原719仍accepted。run failed/v38/max31，原GET真实提供narrative-scientific-replan/6；该后续路径另由High静态复核PASS，未新增恢复模块。完整回执tmp/third-technical-subset-review-read-20260922.json，cc6e和092f实图已看。
+- 队列新预算已有实际证据：65分钟总预算，cb450/092f等待8.50/9.71分钟后领取，各仍有10分钟执行；三张新PNG均已存，原请求不延长。tmp/third-subset-queue-budget-read-20260922.json是领取时快照，结果后由正式资产/任务确认。
+- review安全诊断：707首attempt expected41721实际65，cb450首attempt expected41841实际65；实际均恰为保护前缀，composerConnected及attachmentsReady均true。707第二次SEND_NOT_READY，cb450原第二次成功提交。不是模型/token额度故障；无法据此区分fill、网页重渲染或交互责任。单文件review-runner候选在同一未提交draft对严格前缀丢失或全文相同但Send disabled一次keyboard完整重填，重验全文/附件/模型/模式/send/deadline；未知差异不覆盖、不新页面/任务、不延deadline。High静态PASS，tmp/review-composer-repair-20260922.patch，尚未安装。
+- 第二篇82c6原science已主MiniMax-M3成功，65K/stop/303594ms；随后art16K/300004ms provider_timeout，task failed/exec1/retry0/resultNULL，无asset，run stopped/v41/max32，原GET无恢复。没有science中途checkpoint，不能伪造或重建；仅需再次配图规划，不重跑PDF/六维。High设计沿原storyboard_planning_retry新增精确pixel art-timeout分类：保留原两条terminal主审计、pixel/root/source/scene身份，priorSubmission必须标超时后结果未知，同task一次exec2/charge1/newTask0/max不变/primary-only；worker负责原Domain/handler两文件实施。全部本轮任务现自然终态，待候选冻结复核后正常交付。
+
 ## 2026-09-22 03:20Z — 子集恢复与队列修复已部署，原页面两次续作
 - 193fc645af51a7d5b2acd295ada8fbcb3a480aa3正常服务器构建/启动exit0，rollback b285，独立marker正确/journal与failed均false，无迁移/测试/预检/CI。Gateway及依赖先服务器实际构建；原provider三锁/空闲/备份安装同SHA，provider-backup-20260922-subset-queue-193fc645，timers恢复原enabled/active，无共享浏览器重启。部署日志/opt/openscience/observations/deploy-193fc645-20260922.log。
 - 独立High对技术候选两项修复增量PASS：technical exec2不误用completed-only收据；text/image/scientific_review分开，可信动态text最多两次，planningAuditIdentity纳入原快照深比较。队列两P1与science/final两句既有High PASS。所有候选现已交付，不将静态审查/编译当真实链路完成。
@@ -397,3 +403,5 @@
 约束：禁止测试/预检/CI/全套验收（用户已明确纠正）；只允许针对上述已知故障的最小必要定向验证，做前说明范围；不删除他人资产与已认可图片；不打印任何 secret；文档提交不需要部署；每轮收尾交付树与根 main 的 git status --porcelain 必须为空，有改动就提交并推送。
 先只读汇报第 1 步结论和你的建议，再问我选哪条路。
 ```
+
+2026-09-22后续冻结：tmp/pixel-planning-timeout-review-20260922两文件实现已独立High静态PASS；root精确读回两条既有Gateway审计，actor/target/retry/thinking/promptHash/usage等资格字段均与候选一致（tmp/second-art-timeout-audit-read-20260922.json）。无测试/运行候选；等待正常交付及原页面实际续作。

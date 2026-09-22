@@ -507,6 +507,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     const pixelRecovery = pixelAuthority ? { receiptId: pixelAuthority.receipt.id,
       claimContent: pixelAuthority.metadata.claimContent, narrativeSourceIdentity: pixelAuthority.metadata.narrativeSourceIdentity } : undefined;
     let pixelPlanningRearm: Awaited<ReturnType<typeof requirePixelPlanningPreProviderRearm>> | undefined;
+    let pixelPlanningFailureClass: 'pixel_storyboard_pre_provider_rearm' | 'pixel_storyboard_art_provider_timeout' | undefined;
+    let pixelPlanningStarted = false;
     if (pixelAuthority && (pixelAuthority.task.id !== task.id || !isDeepStrictEqual(pixelAuthority.payload, payload)
       || pixelAuthority.baseIdentity !== planningContext.identity)) throw new Error('[blocked] Narrative scientific revision task changed');
     if (pixelRecovery && (pixelRecovery.claimContent !== presentationClaimContent(claims)
@@ -527,14 +529,18 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         || presentationClaimContent(currentClaims as PresentationClaim[]) !== pixelRecovery.claimContent
         || (await readStoryboardPlanningContext(tx, payload, scope.userId)).identity !== planningContext.identity)
         throw new Error('[blocked] Narrative pixel-feedback recovery changed before planning or review');
-      if (pixelPlanningRearm && !isDeepStrictEqual(await requirePixelPlanningPreProviderRearm(tx, authority!), pixelPlanningRearm))
-        throw new Error('[blocked] Narrative pre-provider planning receipt changed');
+      if (pixelPlanningRearm && !isDeepStrictEqual(await requirePixelPlanningPreProviderRearm(tx, authority!, pixelPlanningFailureClass), pixelPlanningRearm))
+        throw new Error('[blocked] Narrative planning recovery receipt changed');
+      if (pixelPlanningRearm && !pixelPlanningStarted && await tx.auditLog.count({ where: { requestId: task.id, action: 'ai.gateway.call',
+        id: { notIn: pixelPlanningRearm.metadata.planningAuditIds as string[] } } }) !== 0)
+        throw new Error('[blocked] Narrative planning recovery has an existing uncheckpointed provider attempt');
       await requireUnchangedEvidence(tx);
       await requireIllustrationOriginalArtifacts(tx, sourceEvidence, researchObject.workspaceId);
     };
     const planningGateway: Pick<AiGateway, 'completeStructured'> | undefined = options.gateway && pixelRecovery ? {
       completeStructured: async (guard, messages, opts) => {
         await deps.prisma.$transaction(requirePixelRecoveryUnchanged, { isolationLevel: 'Serializable' });
+        pixelPlanningStarted = true;
         return options.gateway!.completeStructured(guard, messages, { ...opts, primaryProviderOnly: true });
       },
     } : options.gateway;
@@ -897,11 +903,16 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 3 }) : [];
             const receipt = receipts.at(-1)?.metadata as Record<string, unknown> | undefined;
             const initialRecovery = ['initial_science_thinking_exhausted', 'initial_science_schema_exhausted'].includes(String(receipt?.planningFailureClass));
-            if (receipt?.planningFailureClass === 'pixel_storyboard_pre_provider_rearm') {
-              if (!pixelAuthority || task.executionAttempt !== 2 || owner.retryCount !== 1 || owner.result !== null
-                || await deps.prisma.auditLog.count({ where: { requestId: task.id, action: 'ai.gateway.call' } }) !== 0)
-                throw new Error('[blocked] Narrative pre-provider planning recovery was already submitted');
-              pixelPlanningRearm = await requirePixelPlanningPreProviderRearm(deps.prisma, pixelAuthority);
+            if (receipt?.planningFailureClass === 'pixel_storyboard_pre_provider_rearm'
+              || receipt?.planningFailureClass === 'pixel_storyboard_art_provider_timeout') {
+              if (!pixelAuthority || task.executionAttempt !== 2 || owner.retryCount !== 1 || owner.result !== null)
+                throw new Error('[blocked] Narrative planning recovery owner changed');
+              pixelPlanningFailureClass = receipt.planningFailureClass;
+              pixelPlanningRearm = await requirePixelPlanningPreProviderRearm(deps.prisma, pixelAuthority, pixelPlanningFailureClass);
+              // The timeout receipt retains the paid attempt; any other call before this execution is uncertain.
+              if (await deps.prisma.auditLog.count({ where: { requestId: task.id, action: 'ai.gateway.call',
+                id: { notIn: pixelPlanningRearm.metadata.planningAuditIds as string[] } } }) !== 0)
+                throw new Error('[blocked] Narrative planning recovery has an existing uncheckpointed provider attempt');
             } else if (initialRecovery) {
               if (![2, 3].includes(task.executionAttempt) || owner.retryCount !== task.executionAttempt - 1 || owner.result !== null
                 || !narrativeSource || identity.baseIdentity !== null || base || planningContext.revision || planningContext.imageRevision

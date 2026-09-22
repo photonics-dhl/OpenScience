@@ -360,6 +360,7 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
 let activePage;
 let stage = 'request';
 let comparisonDiagnostic;
+let composerRepairAttempted = false;
 (async () => {
   const stat = fs.lstatSync(dir); if (!stat.isDirectory() || stat.isSymbolicLink()) throw Error('INVALID_JOB_DIRECTORY');
   const request = validateRequest(read('request.json'), mode === 'recover');
@@ -404,19 +405,49 @@ let comparisonDiagnostic;
   stage = 'composer_fill';
   await input.fill(prompt);
   const send = page.getByRole('button', { name: 'Send prompt', exact: true });
-  const readyDeadline = Math.min(request.deadlineAt, Date.now() + 10000);
-  while (Date.now() < readyDeadline) {
-    const promptReady = normalizeComposerText(await bounded(composerText(input), 2000).catch(() => '')) === normalizeComposerText(prompt);
-    const attachmentReady = await bounded(attachmentsReady(input, request), 2000).catch(() => false);
-    const modelReady = await bounded(model6ProActive(input), 2000).catch(() => false);
-    const modeReady = await bounded(normalChatMode(input), 2000).catch(() => false);
-    const sendReady = await bounded(send.isEnabled(), 2000).catch(() => false);
-    if (promptReady && attachmentReady && modelReady && modeReady && sendReady) break;
-    await new Promise(resolve => setTimeout(resolve, 250));
-  }
+  const awaitReadiness = async () => {
+    const readyDeadline = Math.min(request.deadlineAt, Date.now() + 10000);
+    while (Date.now() < readyDeadline) {
+      const promptReady = normalizeComposerText(await bounded(composerText(input), 2000).catch(() => '')) === normalizeComposerText(prompt);
+      const attachmentReady = await bounded(attachmentsReady(input, request), 2000).catch(() => false);
+      const modelReady = await bounded(model6ProActive(input), 2000).catch(() => false);
+      const modeReady = await bounded(normalChatMode(input), 2000).catch(() => false);
+      const sendReady = await bounded(send.isEnabled(), 2000).catch(() => false);
+      if (promptReady && attachmentReady && modelReady && modeReady && sendReady) break;
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+  };
+  await awaitReadiness();
   stage = 'composer_confirmation';
   // A failed browser read is not evidence that the prompt changed.
-  const actualPrompt = await bounded(composerText(input), 2000);
+  let actualPrompt = await bounded(composerText(input), 2000);
+  const expectedText = normalizeComposerText(prompt);
+  const lostSuffix = value => value.length > 0 && value.length < expectedText.length && expectedText.startsWith(value);
+  const initialText = normalizeComposerText(actualPrompt);
+  if ((lostSuffix(initialText) || (initialText === expectedText && !await bounded(send.isEnabled(), 2000)))
+    && !fs.existsSync(path.join(dir, 'submitted.json')) && Date.now() < request.deadlineAt) {
+    // The owned editor can retain only the first paragraph after fill. Repair
+    // this draft once; never overwrite unrelated text or relax exact matching.
+    input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 10000));
+    actualPrompt = await bounded(composerText(input), 2000);
+    const currentText = normalizeComposerText(actualPrompt);
+    if ((lostSuffix(currentText) || currentText === expectedText)
+      && await bounded(input.evaluate(element => element.isConnected && Boolean(element.closest('form'))), 1000)
+      && await bounded(attachmentsReady(input, request), 2000)
+      && await bounded(model6ProActive(input), 2000)
+      && await bounded(normalChatMode(input), 2000)
+      && !fs.existsSync(path.join(dir, 'submitted.json')) && Date.now() < request.deadlineAt) {
+      composerRepairAttempted = true;
+      stage = 'composer_repair';
+      await input.focus();
+      await input.press('Control+A');
+      await input.press('Backspace');
+      await page.keyboard.insertText(prompt);
+      await awaitReadiness();
+      stage = 'composer_confirmation';
+      actualPrompt = await bounded(composerText(input), 2000);
+    }
+  }
   if (normalizeComposerText(actualPrompt) !== normalizeComposerText(prompt)) {
     comparisonDiagnostic = { ...promptComparison(prompt, actualPrompt),
       composerConnected: await bounded(input.evaluate(element => element.isConnected && Boolean(element.closest('form'))), 1000).catch(() => null),
@@ -427,6 +458,7 @@ let comparisonDiagnostic;
   if (!await bounded(model6ProActive(input))) throw Error('MODEL_6_PRO_NOT_READY');
   if (!await bounded(normalChatMode(input))) throw Error('NORMAL_CHAT_MODE_NOT_READY');
   if (!await send.isEnabled().catch(() => false)) throw Error('SEND_NOT_READY');
+  if (Date.now() >= request.deadlineAt) throw Error('REQUEST_DEADLINE_EXCEEDED');
   stage = 'submission';
   once('submitted.json', { phase: 'submitted', id, promptHash: request.promptHash, assistantCount: baseline,
     attachments: (request.attachments ?? []).map(({ fileName, sha256 }) => ({ fileName, sha256 })), submittedAt: new Date().toISOString() });
@@ -452,7 +484,8 @@ let comparisonDiagnostic;
     : /timeout|PAGE_UNRESPONSIVE/i.test(error.message) ? 'timeout'
     : /net::|navigation/i.test(error.message) ? 'navigation_failed' : 'other';
   try { once(`operator-attempt-error-${crypto.randomUUID()}.json`, { ...failure, stage, errorKind,
-    at: new Date().toISOString(), ...(comparisonDiagnostic ? { comparison: comparisonDiagnostic } : {}) }); } catch {}
+    at: new Date().toISOString(), composerRepairAttempted,
+    ...(comparisonDiagnostic ? { comparison: comparisonDiagnostic } : {}) }); } catch {}
   console.log(JSON.stringify(failure));
   process.exit(1);
 });

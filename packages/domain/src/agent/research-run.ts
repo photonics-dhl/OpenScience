@@ -715,15 +715,44 @@ export async function readInitialSciencePlanningRetryChain(prisma: Pick<Prisma.T
 
 const PIXEL_PLANNING_PRE_PROVIDER_REARM = 'pixel_storyboard_pre_provider_rearm';
 const PIXEL_PLANNING_REQUEST_ERROR = 'storyboard:request_values';
+const PIXEL_PLANNING_ART_TIMEOUT_RETRY = 'pixel_storyboard_art_provider_timeout';
+const PIXEL_PLANNING_PROVIDER_ERROR = 'Primary provider failed; automatic fallback is disabled for this request';
+type PixelPlanningFailureClass = typeof PIXEL_PLANNING_PRE_PROVIDER_REARM | typeof PIXEL_PLANNING_ART_TIMEOUT_RETRY;
 
-/** The exact former request-parser rejection precedes all provider calls; reuse its existing root authorization once. */
-async function inspectPixelPlanningPreProviderRearm(tx: Prisma.TransactionClient, run: RunRow) {
+function pixelPlanningArtTimeoutCallsMatch(calls: Array<{
+  actorId: string | null; targetType: string | null; metadata: Prisma.JsonValue;
+}>) {
+  const first = jsonRecord(calls[0]?.metadata);
+  return calls.length === 2 && calls.every((call, index) => {
+    const meta = jsonRecord(call.metadata);
+    return call.actorId === null && call.targetType === 'ai_gateway' && meta.operation === 'text'
+      && meta.fallbackReason === null && meta.retryCount === 0 && meta.requestedThinking === 'adaptive'
+      && typeof meta.provider === 'string' && Boolean(meta.provider) && meta.provider === first.provider
+      && typeof meta.model === 'string' && Boolean(meta.model) && meta.model === first.model
+      && typeof meta.promptHash === 'string' && /^[a-f0-9]{64}$/.test(meta.promptHash)
+      && (index === 0 ? meta.outcome === 'succeeded' && meta.error === null && meta.finishReason === 'stop' && meta.maxOutputTokens === 65536
+        : meta.outcome === 'failed' && meta.error === 'provider_timeout' && meta.maxOutputTokens === 16384
+          && meta.finishReason === undefined && meta.inputTokens === null && meta.outputTokens === null);
+  });
+}
+
+function pixelPlanningAuditSnapshot(calls: Array<{
+  id: string; actorId: string | null; targetType: string | null; createdAt: Date; metadata: Prisma.JsonValue;
+}>) {
+  return calls.map(call => ({ id: call.id, actorId: call.actorId, targetType: call.targetType,
+    createdAt: call.createdAt.toISOString(), metadata: call.metadata }));
+}
+
+/** Separate zero-submission and paid art-timeout proofs share the same original pixel authority. */
+async function inspectPixelPlanningRetry(tx: Prisma.TransactionClient, run: RunRow, failureClass: PixelPlanningFailureClass) {
+  const preProvider = failureClass === PIXEL_PLANNING_PRE_PROVIDER_REARM;
+  const expectedError = preProvider ? PIXEL_PLANNING_REQUEST_ERROR : PIXEL_PLANNING_PROVIDER_ERROR;
   if (run.profile !== VISUAL_NARRATIVE_PROFILE || !['failed', 'stopped'].includes(run.status)
-    || run.error !== PIXEL_PLANNING_REQUEST_ERROR || !run.versionId || await validateReviewedSources(tx, run) !== 'ready') return null;
+    || run.error !== expectedError || !run.versionId || await validateReviewedSources(tx, run) !== 'ready') return null;
   const pixel = await readNarrativePixelReplanAuthority(tx, { runId: run.id, actorId: run.actorId });
   if (!pixel || pixel.depth !== 0 || pixel.task.status !== 'failed' || pixel.task.executionAttempt !== 1
     || pixel.task.retryCount !== 0 || pixel.task.result !== null || pixel.task.progress !== 10
-    || pixel.task.error !== PIXEL_PLANNING_REQUEST_ERROR || !['failed', 'stopped'].includes(pixel.step.status)
+    || pixel.task.error !== expectedError || !['failed', 'stopped'].includes(pixel.step.status)
     || pixel.step.error !== run.error || pixel.step.presentationAssetId) return null;
   const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
   const version = await tx.version.findUnique({ where: { id: run.versionId } });
@@ -732,11 +761,14 @@ async function inspectPixelPlanningPreProviderRearm(tx: Prisma.TransactionClient
     || version.publicVersionId || version.publicationNo || images.length !== pixel.sceneLimit
     || images.some((step, index) => !pixelSceneBindingMatches(step, index, pixel))
     || await tx.presentationAsset.findUnique({ where: { id: pixel.task.id }, select: { id: true } })
-    || await tx.auditLog.count({ where: { requestId: pixel.task.id, action: 'ai.gateway.call' } }) !== 0
     || await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run',
       targetId: run.id, metadata: { path: ['taskId'], equals: pixel.task.id } } })
     || await tx.agentTask.count({ where: { OR: [{ id: { in: run.steps.flatMap(step => step.agentTaskId ? [step.agentTaskId] : []) } },
       { payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } }], status: { in: ['pending', 'running'] } } }) !== 0) return null;
+  const calls = await tx.auditLog.findMany({ where: { requestId: pixel.task.id, action: 'ai.gateway.call' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+  if (preProvider ? calls.length !== 0 : !pixelPlanningArtTimeoutCallsMatch(calls)
+    || calls.some(call => call.createdAt < pixel.task.createdAt || call.createdAt > pixel.task.updatedAt)) return null;
   const source = await readNarrativePixelReplanSource(tx, { actorId: run.actorId, runId: run.id,
     researchObjectId: run.researchObjectId, versionId: run.versionId, sourceClaimIds: run.sourceClaimIds,
     parentAssetId: String(pixel.metadata.parentStoryboardAssetId), imageAssetIds: pixel.sceneReviews.map(scene => String(scene.taskId)),
@@ -751,16 +783,20 @@ async function inspectPixelPlanningPreProviderRearm(tx: Prisma.TransactionClient
     payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } })
     + run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
   if (taskCount !== Number(pixel.metadata.existingTaskCount) + 1) return null;
-  return { step: pixel.step, task: pixel.task, planningAuditIds: [] as string[], baseIdentity: pixel.baseIdentity,
+  return { step: pixel.step, task: pixel.task, planningAuditIds: calls.map(call => call.id),
+    planningAudits: pixelPlanningAuditSnapshot(calls), baseIdentity: pixel.baseIdentity,
     sourceEvidenceIdentity: source.sourceEvidenceIdentity, claimContent: checkpoint.claimContent,
     narrativeSourceIdentity: checkpoint.narrativeSourceIdentity, revisionImageAssetId: pixel.payload.storyboard!.revisionImageAssetId,
-    remainingImageTasks: pixel.sceneLimit, planningFailureClass: 'pixel_storyboard_pre_provider_rearm' as const,
-    previousReceiptId: undefined, rootReceiptId: pixel.rootReceipt.id, chargeableAttempts: 0 as const };
+    remainingImageTasks: pixel.sceneLimit, planningFailureClass: failureClass,
+    previousReceiptId: undefined, rootReceiptId: pixel.rootReceipt.id, chargeableAttempts: preProvider ? 0 as const : 1 as const };
 }
 
-/** Read-only worker validation of the once-only, same-task pre-provider recovery receipt. */
-export async function requirePixelPlanningPreProviderRearm(prisma: Pick<Prisma.TransactionClient, 'auditLog' | 'presentationAsset'>,
-  pixel: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanAuthority>>>) {
+/** Keep the legacy zero-submission default; paid timeout recovery must explicitly select its distinct proof. */
+export async function requirePixelPlanningPreProviderRearm(prisma: Pick<Prisma.TransactionClient, 'auditLog' | 'presentationAsset' | 'agentTask'>,
+  pixel: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanAuthority>>>,
+  failureClass: PixelPlanningFailureClass = PIXEL_PLANNING_PRE_PROVIDER_REARM) {
+  const preProvider = failureClass === PIXEL_PLANNING_PRE_PROVIDER_REARM;
+  const expectedError = preProvider ? PIXEL_PLANNING_REQUEST_ERROR : PIXEL_PLANNING_PROVIDER_ERROR;
   const { task, run } = pixel;
   const receipts = await prisma.auditLog.findMany({ where: { action: 'hermes.research_run.generation_retry',
     targetType: 'hermes_research_run', targetId: run.id, actorId: run.actorId,
@@ -768,25 +804,44 @@ export async function requirePixelPlanningPreProviderRearm(prisma: Pick<Prisma.T
   const receipt = receipts[0]; const meta = jsonRecord(receipt?.metadata);
   if (pixel.depth !== 0 || run.status !== 'generating_storyboard' || pixel.step.status !== 'running'
     || task.status !== 'running' || task.executionAttempt !== 2 || task.retryCount !== 1 || !receipt || receipts.length !== 1
-    || meta.correction !== STORYBOARD_PLANNING_RETRY || meta.planningFailureClass !== PIXEL_PLANNING_PRE_PROVIDER_REARM
+    || meta.correction !== STORYBOARD_PLANNING_RETRY || meta.planningFailureClass !== failureClass
     || meta.rootReceiptId !== pixel.rootReceipt.id || meta.stepId !== pixel.step.id || meta.previousExecutionAttempt !== 1
     || meta.previousRetryCount !== 0 || meta.previousTaskStatus !== 'failed' || meta.previousProgress !== 10
-    || !['failed', 'stopped'].includes(String(meta.previousRunStatus)) || meta.previousRunError !== PIXEL_PLANNING_REQUEST_ERROR
-    || meta.previousError !== PIXEL_PLANNING_REQUEST_ERROR || meta.previousMaxAgentTasks !== run.maxAgentTasks
-    || meta.maxAgentTasks !== run.maxAgentTasks || meta.chargeableAttempts !== 0 || meta.newTaskCount !== 0
-    || meta.priorSubmission !== 'none' || meta.noProviderSwitch !== true || meta.remainingImageTasks !== pixel.sceneLimit
-    || !Array.isArray(meta.planningAuditIds) || meta.planningAuditIds.length !== 0 || 'newTaskId' in meta
+    || !['failed', 'stopped'].includes(String(meta.previousRunStatus)) || meta.previousRunError !== expectedError
+    || meta.previousError !== expectedError || meta.previousMaxAgentTasks !== run.maxAgentTasks
+    || meta.maxAgentTasks !== run.maxAgentTasks || meta.chargeableAttempts !== (preProvider ? 0 : 1) || meta.newTaskCount !== 0
+    || meta.priorSubmission !== (preProvider ? 'none' : 'outcome_unknown_after_provider_timeout')
+    || meta.noProviderSwitch !== true || meta.remainingImageTasks !== pixel.sceneLimit
+    || !Array.isArray(meta.planningAuditIds) || meta.planningAuditIds.length !== (preProvider ? 0 : 2)
+    || meta.planningAuditIds.some(id => typeof id !== 'string') || 'newTaskId' in meta
     || !isDeepStrictEqual(meta.taskPayload, task.payload) || meta.baseIdentity !== pixel.baseIdentity
     || meta.sourceEvidenceIdentity !== pixel.metadata.sourceEvidenceIdentity || meta.claimContent !== pixel.metadata.claimContent
     || meta.narrativeSourceIdentity !== pixel.metadata.narrativeSourceIdentity
     || await prisma.presentationAsset.findUnique({ where: { id: task.id }, select: { id: true } }))
-    throw new Error('[blocked] Narrative pre-provider planning recovery changed');
+    throw new Error('[blocked] Narrative planning recovery changed');
+  if (!preProvider) {
+    const calls = await prisma.auditLog.findMany({ where: { requestId: task.id, action: 'ai.gateway.call',
+      id: { in: meta.planningAuditIds as string[] } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+    const failedAt = typeof meta.previousTaskUpdatedAt === 'string' ? new Date(meta.previousTaskUpdatedAt) : null;
+    const images = run.steps.filter(step => step.stage === 'scene_image').sort((a, b) => a.ordinal - b.ordinal);
+    const taskCount = await prisma.agentTask.count({ where: { kind: 'presentation.generate',
+      payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } })
+      + run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
+    if (!pixelPlanningArtTimeoutCallsMatch(calls) || !isDeepStrictEqual(meta.planningAudits, pixelPlanningAuditSnapshot(calls))
+      || !isDeepStrictEqual(meta.planningAuditIds, calls.map(call => call.id))
+      || !failedAt || !Number.isFinite(failedAt.getTime()) || failedAt > receipt.createdAt
+      || calls.some(call => call.createdAt < task.createdAt || call.createdAt > failedAt)
+      || images.length !== pixel.sceneLimit || images.some((step, index) => !pixelSceneBindingMatches(step, index, pixel))
+      || taskCount !== Number(pixel.metadata.existingTaskCount) + 1)
+      throw new Error('[blocked] Narrative art-timeout planning evidence changed');
+  }
   return { id: receipt.id, metadata: meta };
 }
 
 /** Explicitly repeat one failed planning execution; logical task and image allowance stay intact. */
 async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run: RunRow) {
-  if (run.error === PIXEL_PLANNING_REQUEST_ERROR) return inspectPixelPlanningPreProviderRearm(tx, run);
+  if (run.error === PIXEL_PLANNING_REQUEST_ERROR) return inspectPixelPlanningRetry(tx, run, PIXEL_PLANNING_PRE_PROVIDER_REARM);
+  if (run.error === PIXEL_PLANNING_PROVIDER_ERROR) return inspectPixelPlanningRetry(tx, run, PIXEL_PLANNING_ART_TIMEOUT_RETRY);
   const initialThinkingFailure = run.status === 'failed' && run.maxAgentTasks === 9
     && run.error === 'Provider exhausted output allowance before producing text';
   const initialSchemaFailure = run.status === 'failed' && run.maxAgentTasks === 9
@@ -1900,7 +1955,8 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
               throw new HermesResearchRunError('SOURCE_NOT_READY', 'Planning recovery audit is unavailable');
             const taskChanged = await tx.agentTask.updateMany({ where: { id: planning.task.id, status: 'failed',
               executionAttempt: planning.task.executionAttempt, retryCount: planning.task.retryCount, deletedAt: null, error: planning.task.error,
-              ...(planning.planningFailureClass === PIXEL_PLANNING_PRE_PROVIDER_REARM ? { progress: 10 } : {}),
+              ...(planning.planningFailureClass === PIXEL_PLANNING_PRE_PROVIDER_REARM
+                || planning.planningFailureClass === PIXEL_PLANNING_ART_TIMEOUT_RETRY ? { progress: 10 } : {}),
               payload: { equals: planning.task.payload as Prisma.InputJsonValue }, result: { equals: Prisma.AnyNull } },
             data: { status: 'pending', progress: 0, retryCount: { increment: 1 }, error: null, dispatchedAt: null } });
             const stepChanged = await tx.hermesResearchStep.updateMany({ where: { id: planning.step.id, runId: run.id,
@@ -1923,10 +1979,15 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
                   : { revisionImageAssetId: planning.revisionImageAssetId }),
                 previousError: planning.task.error, taskPayload: planning.task.payload,
                 baseIdentity: planning.baseIdentity, sourceEvidenceIdentity: planning.sourceEvidenceIdentity,
-                ...(planning.planningFailureClass === PIXEL_PLANNING_PRE_PROVIDER_REARM ? {
+                ...(planning.planningFailureClass === PIXEL_PLANNING_PRE_PROVIDER_REARM
+                  || planning.planningFailureClass === PIXEL_PLANNING_ART_TIMEOUT_RETRY ? {
                   rootReceiptId: planning.rootReceiptId, previousRunStatus: run.status, previousRunError: run.error,
                   previousTaskStatus: planning.task.status, previousProgress: planning.task.progress,
-                  previousMaxAgentTasks: run.maxAgentTasks, maxAgentTasks: run.maxAgentTasks, priorSubmission: 'none',
+                  previousMaxAgentTasks: run.maxAgentTasks, maxAgentTasks: run.maxAgentTasks,
+                  priorSubmission: planning.planningFailureClass === PIXEL_PLANNING_PRE_PROVIDER_REARM ? 'none' : 'outcome_unknown_after_provider_timeout',
+                  ...(planning.planningFailureClass === PIXEL_PLANNING_ART_TIMEOUT_RETRY ? {
+                    previousTaskUpdatedAt: planning.task.updatedAt.toISOString(), planningAudits: planning.planningAudits,
+                  } : {}),
                 } : {}),
                 chargeableAttempts: planning.chargeableAttempts, newTaskCount: 0, remainingImageTasks: planning.remainingImageTasks, noProviderSwitch: true,
                 creditPolicy: planning.chargeableAttempts === 0 ? 'reuse-original-reservation-and-authorization;provider-usage-still-applies'
