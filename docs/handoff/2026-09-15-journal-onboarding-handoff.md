@@ -5,7 +5,7 @@
 - 用户要求在已有期刊模块上实现来源版权矩阵、加工优先级、服务包额度；现已明确授权部署供本人试用。
 - 功能分支 codex/journal-onboarding 已在 Nanqing96/openscience 与 photonics-dhl/OpenScience 推送至 96e5e0c626ac44427e2e92684e104e4e5d4b0dfd。
 - 该分支基线较旧，禁止直接覆盖生产。独立发布候选为 codex/journal-server-20260922，基于线上 3f9adcdb，随后合入最新生产线；精确 HEAD 见 Git 元数据。
-- 2026-09-22 生产先后更新至 dac602ec、f19e99d4，再至 574c3db2ceeec70f4f1f7b32b8ee43002d63ec17；候选 1e12c91e 已完整合入574c3db2，新增媒体隔离/恢复差异独立 High GO。旧active比较曾正确阻止一次准备，部署前继续读取实际active作为rollback。
+- 2026-09-22 最新观测生产 c085b157964c9798205de1364352bfbe51021cef；已合入候选。相对此前574c3db2仅恢复事务timeout延长至30秒，独立High确认权限/幂等/扣费/提交后派发不变。旧active比较两次正确阻止准备，部署前继续核实际active作为rollback。
 - 用户无法暂停其他部署；必须保留共享部署锁、精确 active 比较和失败回退，不覆盖并发发布。
 - 本节记录部署准备；尚未将候选声明为已上线。后续执行后同步真实 release/rollback。
 - 独立候选已推送至 photonics-dhl/OpenScience；[PR #109](https://github.com/photonics-dhl/OpenScience/pull/109) 为共享发布线审阅入口。自动审批拒绝未经具体确认直接更新共享 release 分支，未合并或强推。
@@ -32,7 +32,7 @@
 - 55707759及1e12c91e自动 CI：后端/Web build、Domain 39、API 23（另2条browser用例按独立阶段跳过）、Worker 4、Web 7、真实Chromium 2场景均通过；匿名auth/me六次401单独精确断言。AGENTS/progress已收口；最后文档失败实际为脚本读取的08-16历史handoff超过80行，已仅移除5个空行降为79行，09-10当前handoff不改；待最终候选CI。
 - 55707759 服务器 worker 构建通过，但正式 Parser 报告因实际 structuredFake=26/预期28 未生成；无 handler throw、外部/禁止调用均0。正定位少进入处理阶段的固定样例，未下调14/2或调用门槛、未切换生产；新增逐例状态诊断以保留实际原因。
 - 同557镜像隔离诊断确认scan.pdf的PULSE/42/FS及OCR置信度符合规范；formula.pdf真实原生equation由equation-markers.1产生。1e12正式逐例证实：仅corrupt PDF、formula PDF、空PNG复核；公式原始原因精确unresolved pages remain、定位2/2，scan成功定位2/2，其余12全部成功/完整定位，外部和禁止调用0。
-- High确认契约需适配现行公式科学守卫：新hermes-parser-13-3-v3按唯一三例精确复核、26次结构化调用，并增加真实equation及native版本/来源证明；其余案例仍逐项成功且原隔离门禁保留。实现与最终同SHA服务器报告待完成，不取消公式复核以伪造14份直接成功。
+- High已GO并完成hermes-parser-13-3-v3：唯一三例精确复核、26次结构化调用，增加真实equation及native版本/来源证明；其余案例逐项成功且隔离门禁保留。旧runner单测fake同步严格checkpoint持久化，最终同SHA服务器测试与报告待执行，不取消公式复核以伪造14份直接成功。
 - 已通过既有 SSH 包装脚本使用项目专用密钥连接，未读取/打印 .env 或私钥。
 - 服务器本地双库备份成功：core 79M、search 5.5M，保留 7/7 轮；未下载业务数据。
 - 部署前观测 API/Worker/Parser/ScanSci/BGE 及数据服务正常，磁盘可用约 28G；精确状态须执行时再次定锚。

@@ -2725,7 +2725,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
           run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }),
           dispatchIds: pendingIds,
         };
-      }, { isolationLevel: 'Serializable' });
+      }, { isolationLevel: 'Serializable', timeout: 30_000 });
       updated = outcome.run;
       dispatchIds = outcome.dispatchIds;
       break;
