@@ -8,7 +8,7 @@
 范围：此开发工作树及从包含此配置的提交创建的新工作树；既有其他分支/工作树、远端主机、云任务不会自动继承。新 MCP 进程加载配置，已启动进程须重载。既有同配置的桌面浏览器已实际打开 Example Domain，Pro 曾完成两次工具读写；这些证据不代表 XGS 科研业务验收，也不解决平台命令拦截或 Windows 原生截图兼容故障。回滚：移除本次新增的 `cua_repl`、`cua_repl.tools.js`、`node_repl.env` 三节，保留 `openscience_code`；不要删除其他项目仍引用的共享启动器。
 
 ## 当前能力索引：目的、调用、效果
-2026-09-22叙事链路：Hermes全文/六维/Claims及science/art沿原能力，首篇已真实公开。P2034、失败step收尾及完整job结果复用已交付；第二篇最新四图1通过3科学拒收，旧科学反馈覆盖当前encoding的art断点已High静态PASS并部署，已沿原页面继续科学修订。第三篇当前方案accepted，1图通过、1图审阅发送前正文校验失败、3图发送前操作失败；技术失败子集恢复尚未接通，保留已审图/已有PNG，定位后沿原入口补接，不能整套盲重发。后两篇reader/新发布未完成。同图连续改稿未传原task至spool，新turn图片锚点也未接，不能冒称原对话改图；后续沿现有revisionAssetId/protocol/runner补接，不另建会话平台。精确状态及证据见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+2026-09-22叙事链路：Hermes全文/六维/Claims及science/art沿原能力，首篇已真实公开。P2034、失败step收尾及完整job结果复用已交付；第二篇最新四图1通过、2科学拒收、1渲染拒收，旧科学反馈覆盖当前encoding的art断点已High静态PASS并部署，已沿原页面继续科学修订。第三篇当前方案accepted，1图通过、1图审阅发送前正文校验失败、3图发送前操作失败；技术失败子集恢复尚未接通，保留已审图/已有PNG，定位后沿原入口补接，不能整套盲重发。后两篇reader/新发布未完成。同图连续改稿未传原task至spool，新turn图片锚点也未接，不能冒称原对话改图；后续沿现有revisionAssetId/protocol/runner补接，不另建会话平台。精确状态及证据见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 2026-09-21已部署：独立配图页版本上下文、原图Artifact登记/人工核源/reuse、发布逐图选择、多字段长度反馈与新建方案显式style。真实PDF Fig.1完成来源核对→Hermes reuse→原字节copy→成品批准，并与已认可恢复Fig.3/淡彩图发布v2；实际公开三图轮播及匿名读取成功，v1与冻结来源保留。Pro短CLI完成真实读写回合；用户授权保留会话，登录有效。新封面仍被现有科学审阅阻断，无新Chat图/深色标准化观察；精确状态和证据只见CURRENT。
 

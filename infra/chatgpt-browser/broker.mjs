@@ -109,8 +109,16 @@ function isUsageLimit(error) {
     return report.error === 'USAGE_LIMIT' && ['ambiguous_no_resend', 'not_submitted'].includes(report.state);
   } catch { return false; }
 }
-export async function executeWebImage(config, request, privateDir) {
+async function imageOperationDeadline(request, privateDir) {
+  const text = (await safeRead(join(privateDir, 'started'), 32)).toString('utf8');
+  const startedAt = Number(text);
+  if (!/^\d{1,16}$/.test(text) || !Number.isSafeInteger(startedAt)
+    || startedAt < request.createdAt || startedAt > Date.now()) throw uncertain();
+  return Math.min(request.deadlineAt, startedAt + 600000);
+}
+export async function executeWebImage(config, request, privateDir, operationDeadlineAt) {
   validateCodexImageRequest(request, Date.now(), 'chatgpt-web');
+  if (operationDeadlineAt !== await imageOperationDeadline(request, privateDir)) throw uncertain();
   let referenceBytes;
   if (request.reference) {
     // The validated UUID selects one fixed inbox sidecar; requests never supply paths or URLs.
@@ -132,23 +140,23 @@ export async function executeWebImage(config, request, privateDir) {
   const innerRequestPath = join(jobDir, 'request.json');
   await atomicWrite(innerRequestPath, JSON.stringify(innerRequest), 0o600);
   await chown(innerRequestPath, 11040, 11040);
-  const seconds = Math.floor((request.deadlineAt - Date.now() - 45000) / 1000);
+  const seconds = Math.floor((operationDeadlineAt - Date.now() - 45000) / 1000);
   if (seconds < 45) throw Error('EXPIRED');
   try {
     await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', String(seconds),
-      'node', '/jobs/provider/runner.cjs', 'execute', request.id], (seconds + 10) * 1000);
+      'node', '/jobs/provider/runner.cjs', 'execute', request.id, String(operationDeadlineAt)], (seconds + 10) * 1000);
   } catch (error) {
     if (await exists(join(jobDir, 'result.json'))) {
       // Continue into exact result verification; stdout and exit status are never success evidence.
     } else if (isUsageLimit(error)) {
       throw Error('USAGE_LIMIT');
     } else if (await exists(join(jobDir, 'submitted.json'))) {
-      const remainingSeconds = Math.floor((request.deadlineAt - Date.now() - 45000) / 1000);
+      const remainingSeconds = Math.floor((operationDeadlineAt - Date.now() - 45000) / 1000);
       if (await exists(join(jobDir, 'conversation.json')) && remainingSeconds >= 45) {
         // Preserve the submitted page and its connection to the generator.
         // Transport/observer errors are not evidence that Chrome needs restarting.
         await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', String(remainingSeconds),
-          'node', '/jobs/provider/runner.cjs', 'recover', request.id], (remainingSeconds + 10) * 1000).catch(() => {});
+          'node', '/jobs/provider/runner.cjs', 'recover', request.id, String(operationDeadlineAt)], (remainingSeconds + 10) * 1000).catch(() => {});
       }
       if (!await exists(join(jobDir, 'result.json'))) {
         throw uncertain();
@@ -156,13 +164,13 @@ export async function executeWebImage(config, request, privateDir) {
     }
     else throw error;
   }
-  const bytes = await finalizeWebImage(config, request, privateDir, jobDir);
+  const bytes = await finalizeWebImage(config, request, privateDir, jobDir, operationDeadlineAt);
   // The durable PNG remains recoverable even if the original request deadline
   // expires during local normalization. Never classify it as safe to resend.
-  if (Date.now() >= request.deadlineAt) throw uncertain();
+  if (Date.now() >= operationDeadlineAt) throw uncertain();
   return bytes;
 }
-async function finalizeWebImage(config, request, privateDir, jobDir, operationDeadlineAt = request.deadlineAt, recovering = false) {
+async function finalizeWebImage(config, request, privateDir, jobDir, operationDeadlineAt, recovering = false) {
   const innerRequest = exactInnerRequest(request);
   const innerRequestPath = join(jobDir, 'request.json');
   const persistedRequest = JSON.parse((await safeRead(innerRequestPath, 32768)).toString('utf8'));
@@ -228,9 +236,12 @@ async function finalizeWebImage(config, request, privateDir, jobDir, operationDe
 async function recoverUncertainWebImage(config) {
   for (const id of (await readdir(config.privateRoot)).filter(name => UUID.test(name))) {
     const privateDir = join(config.privateRoot, id);
+    let attempted = false;
     try {
       const request = validateCodexImageRequest(JSON.parse((await safeRead(join(privateDir, 'request.json'), 16384)).toString('utf8')), undefined, 'chatgpt-web');
-      if (request.id !== id || request.deadlineAt + RECOVERY_GRACE_MS <= Date.now()) continue;
+      if (request.id !== id) continue;
+      const operationDeadlineAt = await imageOperationDeadline(request, privateDir);
+      if (operationDeadlineAt + RECOVERY_GRACE_MS <= Date.now()) continue;
       const resultDir = join(config.results, id);
       const resultBytes = await safeRead(join(resultDir, 'result.json'), 16384);
       const result = validateCodexImageResult(JSON.parse(resultBytes.toString('utf8')), 'chatgpt-web');
@@ -240,9 +251,10 @@ async function recoverUncertainWebImage(config) {
         || (await exists(join(privateDir, 'late-recovery.started')) && !await exists(join(jobDir, 'result.json')))) continue;
       if (!await exists(join(jobDir, 'result.json'))) {
         await atomicWrite(join(privateDir, 'late-recovery.started'), String(Date.now()), 0o600);
+        attempted = true;
         try {
           await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', '330',
-            'node', '/jobs/provider/runner.cjs', 'recover-late', id], 340000);
+            'node', '/jobs/provider/runner.cjs', 'recover-late', id, String(operationDeadlineAt)], 340000);
         } catch (error) {
           if (isUsageLimit(error)) {
             await rename(join(resultDir, 'result.json'), join(resultDir, 'result.uncertain.json'));
@@ -256,12 +268,19 @@ async function recoverUncertainWebImage(config) {
                 await rename(circuit, join(config.privateRoot, `web-image-circuit.resolved-${id}.json`));
               }
             }
-            return id;
+            return { id, status: 'reconciled' };
           }
         }
       }
-      if (!await exists(join(jobDir, 'result.json'))) continue;
-      if (await exists(join(privateDir, 'normalization-recovery.started')) && !await normalizedResult(privateDir)) continue;
+      if (!await exists(join(jobDir, 'result.json'))) {
+        if (attempted) return { id, status: 'recovery_attempted' };
+        continue;
+      }
+      if (await exists(join(privateDir, 'normalization-recovery.started')) && !await normalizedResult(privateDir)) {
+        if (attempted) return { id, status: 'recovery_attempted' };
+        continue;
+      }
+      attempted = true;
       const bytes = await finalizeWebImage(config, request, privateDir, jobDir, Date.now() + 45_000, true);
       await atomicWrite(join(resultDir, 'result.png'), bytes);
       // Preserve the old receipt only after the complete image is durable.
@@ -275,8 +294,8 @@ async function recoverUncertainWebImage(config) {
           await rename(circuit, join(config.privateRoot, `web-image-circuit.resolved-${id}.json`));
         }
       }
-      return id;
-    } catch {}
+      return { id, status: 'reconciled' };
+    } catch { if (attempted) return { id, status: 'recovery_attempted' }; }
   }
   return null;
 }
@@ -363,8 +382,9 @@ async function main() {
   const timer = setInterval(() => { heartbeat().catch(() => {}); }, 15000);
   try {
     const recovered = await recoverUncertainWebImage(config);
-    if (recovered) { console.log(JSON.stringify({ id: recovered, status: 'reconciled' })); return; }
-    const result = await runOne({ ...config, provider: 'chatgpt-web', execute: (request, dir) => executeWebImage(config, request, dir) });
+    // A slow failed recovery also consumes this oneshot's bounded time window.
+    if (recovered) { console.log(JSON.stringify(recovered)); return; }
+    const result = await runOne({ ...config, provider: 'chatgpt-web', execute: (request, dir, deadline) => executeWebImage(config, request, dir, deadline) });
     const notSubmitted = await publishNotSubmittedEvidence(config, result?.status === 'failed' ? result.id : undefined);
     if (result) console.log(JSON.stringify(result));
     else if (notSubmitted) console.log(JSON.stringify({ id: notSubmitted, status: 'not_submitted_reconciled' }));

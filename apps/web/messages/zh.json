@@ -1396,7 +1396,7 @@
       "resumeArtInterruptedDescription": "上次执行在保存进度时中断，尚未提交模型。继续将沿用已经授权的画面修正与审阅，不追加任务额度；实际模型处理仍会产生用量。已有论文分析、科学内容和图片保留。",
       "resumeScientificReplanDescription": "图片审查发现需要修正科学表达。继续会依据已有审查意见重新设计并制作整组图文，最多追加 {count} 项制作任务及相应审查，产生新的模型用量。已有论文分析与原图保留，你查看最终结果。",
       "resumeCompletedImageReviewDescription": "已有审查结果完成。继续将收回并应用这些原结果，不重新生成图片或发送审图请求。已有论文分析、图片和记录保留。",
-      "resumeImageRenderDescription": "继续将按图片审查意见追加制作一张修正版，并重新审图。已有论文分析和科学方案保留，修正图片与审图会产生新的模型用量；你查看最终图文。",
+      "resumeImageRenderDescription": "继续未完成的图片制作或审阅。本次新增 {count} 个任务，按现有额度规则计费，后续处理会产生模型用量。已有图片、论文分析和科学方案会保留；你查看最终图文。",
       "startDescription": "Hermes 会理解全文、组织叙事并完成图片与内部审校。你回来时可以一起阅读六维内容和整组图片，再决定是否发布。",
       "unavailableDescription": "请先上传一份 PDF 论文，材料可用后即可开始。",
       "goalLabel": "希望读者理解什么？（可选）",

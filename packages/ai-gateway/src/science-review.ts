@@ -141,6 +141,33 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
     } catch { return false; }
   }
 
+  /** A completed-result miss is never evidence that the original request was not sent. */
+  async canRetryBeforeSubmission(input: { requestId: string; promptHash: string; researchObjectId: string;
+    versionId: string; candidateHash: string; sourceEvidenceIdentity: string }): Promise<boolean> {
+    if (!SCIENCE_REVIEW_ID_PATTERN.test(input.requestId)) return false;
+    try {
+      await directory(this.config.inboxDir); await directory(this.config.resultsDir);
+      const output = join(this.config.resultsDir, input.requestId); await directory(output);
+      const request = validateScienceReviewRequest(JSON.parse((await boundedRead(join(this.config.inboxDir,
+        `${input.requestId}.submitted.json`), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+      const result = validateScienceReviewResult(JSON.parse((await boundedRead(join(output, 'result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+      const proof = JSON.parse((await boundedRead(join(output, 'not-submitted.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')) as Record<string, unknown>;
+      if (request.id !== input.requestId || request.schemaVersion !== 3 || request.promptHash !== input.promptHash
+        || request.source.kind !== 'illustration-image' || request.source.researchObjectId !== input.researchObjectId
+        || request.source.versionId !== input.versionId || request.source.candidateHash !== input.candidateHash
+        || request.source.sourceEvidenceIdentity !== input.sourceEvidenceIdentity
+        || request.attachments?.length !== 1 || request.attachments[0]!.sha256 !== input.candidateHash
+        || result.status !== 'failed' || result.id !== request.id || result.promptHash !== request.promptHash
+        || !proof || typeof proof !== 'object' || Array.isArray(proof)
+        || Object.keys(proof).sort().join(',') !== 'id,promptHash,provider,state'
+        || proof.id !== request.id || proof.promptHash !== request.promptHash || proof.provider !== this.name || proof.state !== 'not_submitted') return false;
+      for (const name of ['response.txt', 'recovered-result.json', 'recovered-response.txt']) {
+        try { await lstat(join(output, name)); return false; } catch (error) { if (!missing(error)) throw error; }
+      }
+      return true;
+    } catch { return false; }
+  }
+
   async review(input: ScienceReviewInput): Promise<ScienceReviewProviderResult> {
     return this.reviewControlled(input, false);
   }

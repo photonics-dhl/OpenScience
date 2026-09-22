@@ -1,5 +1,12 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 — 当前四图终态、队列时限与技术子集恢复候选
+- 第二篇cb342四图全部真实完成：459 accepted/approved；4c61因不可实现穿缝几何、无数据定量轮廓、来源限定丢失等科学blocked/null；7b73因构图要求N_SP说明却不在排他标签清单内blocked/null；a1因下标、箭头标签归属和渐变渲染blocked/有repair。run stopped/v39/max27，原GET为narrative-scientific-replan/5项。官方回执保存在tmp/current-encoding-image-review-read-20260922.json；4c61/7b73真实PNG已看，不发布拒收图。
+- root两句science/final prompt只补几何可实现性和固定/扫描条件的视觉组归属，自检仍沿原模型阶段，High静态PASS。没有新增分析器、正则门禁或人工改写科学事实。
+- root六文件队列候选High两项P1修复后PASS：沿private/started固定领取后10分钟；当前4worker总65分钟、最大8为125分钟，包含本波次原迟到恢复余量；Codex原10分钟不变。broker一次oneshot只执行慢恢复或新任务，避免5+10分钟超过原660秒service时限。旧request/hash/reservation/deadline不改，无新侧账；不保证任意旧积压或多生产者。冻结tmp/image-queue-deadline-review-20260922/candidate.patch。
+- worker技术恢复沿原GET/retry-generation，cf6沿同objectKey/hash创建review-only替代任务，三个无PNG且可信not_submitted任务分别替代，719已审图/cb2方案/原任务历史保留。receipt/CAS/来源与实际任务数约束、noProviderSwitch由Gateway primary-only落实。High指出exec2错误进入completed-only和text规划审计误分类，worker已定向修复，原reviewer增量复核PASS；冻结tmp/narrative-technical-recovery-review-20260922及high-fixes.patch。
+- 两篇当前真实任务都已自然终态；候选尚未部署。全部静态复核通过后从干净已推送SHA服务器构建Gateway，空闲/三锁/备份安装provider，再正常应用构建启动，无迁移/测试/预检/CI，浏览器不重启。先第三篇技术子集恢复，再第二篇科学返工，继续真实reader/新公开版本。用户不限额度授权持续有效，不重复询问；同图跨任务Chat对话延续尚未实现。
+
 ## 2026-09-22 02:33Z — 科学编码隔离上线、桥接操作修正与第二篇续作
 - app b285正常服务器build/start exit0，独立marker release/rollback正确、journal/failed无。两prompt差异High静态PASS。第二篇02:33:28Z原按钮202→cb342f7d-554a-4f0e-89eb-daac26b9305d/runv35；receipt second-paper-current-encoding-replan-20260922已消费，不重放。
 - 精确取证：77/a248按钮已唯一可见，随后plus.click actionability超时，仍余254/491秒；1ff page_selection失败与Mojo/seccomp同窗但无法绑定具体renderer；cf6正文42930字符/52409bytes且仍余1770秒，PROMPT_CHANGED真实字符原因未知，旧首错误遮住第二attempt且owned页已关闭。不能冒认缩放、OOM、排队或字符差异已确证。

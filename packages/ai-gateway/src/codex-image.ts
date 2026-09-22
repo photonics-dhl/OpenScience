@@ -3,7 +3,7 @@ import { lstat, open, link, unlink } from 'node:fs/promises';
 import { isAbsolute, join, dirname, parse } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ImageUsageLimitError, validateImageRequest, validateImageBytes, type CompletedImageProviderResult, type ImageProvider, type ImageRecoveryState, type ImageRequest, type ImageProviderResult } from './image';
-import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, imagePromptHash, validateCodexImageRequest, validateCodexImageResult, type ImageSpoolProvider } from './codex-image-protocol';
+import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CHATGPT_WEB_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, imagePromptHash, validateCodexImageRequest, validateCodexImageResult, type ImageSpoolProvider } from './codex-image-protocol';
 export interface CodexSpoolImageConfig {
   inboxDir: string; resultsDir: string; timeoutMs?: number; pollIntervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void>;
   withSubmission?: <T>(owner: { taskId: string; executionAttempt?: number; artifactId?: string; referenceContentHash?: string }, publish: () => Promise<T>) => Promise<T>;
@@ -42,10 +42,10 @@ abstract class SpoolImageProvider implements ImageProvider {
   private readonly now: () => number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly timeout: number;
-  constructor(private readonly config: CodexSpoolImageConfig) {
+  protected constructor(private readonly config: CodexSpoolImageConfig, maximumDeadline = CODEX_IMAGE_MAX_DEADLINE_MS) {
     if (!isAbsolute(config.inboxDir) || !isAbsolute(config.resultsDir) || config.inboxDir === config.resultsDir) fail();
     this.timeout = config.timeoutMs ?? CODEX_IMAGE_MAX_DEADLINE_MS;
-    if (!Number.isSafeInteger(this.timeout) || this.timeout < 1 || this.timeout > CODEX_IMAGE_MAX_DEADLINE_MS || (config.pollIntervalMs !== undefined && (!Number.isSafeInteger(config.pollIntervalMs) || config.pollIntervalMs < 1 || config.pollIntervalMs > 60000))) fail();
+    if (!Number.isSafeInteger(this.timeout) || this.timeout < 1 || this.timeout > maximumDeadline || (config.pollIntervalMs !== undefined && (!Number.isSafeInteger(config.pollIntervalMs) || config.pollIntervalMs < 1 || config.pollIntervalMs > 60000))) fail();
     this.now = config.now ?? Date.now; this.sleep = config.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
   }
   async canResumeBeforeSubmission(id: string): Promise<boolean> {
@@ -194,6 +194,7 @@ abstract class SpoolImageProvider implements ImageProvider {
 }
 
 export class CodexSpoolImageProvider extends SpoolImageProvider {
+  constructor(config: CodexSpoolImageConfig) { super(config); }
   readonly name = 'codex-image';
   readonly model = 'codex-cli-0.153.0/imagegen';
   protected readonly spoolProvider = 'codex' as const;
@@ -201,6 +202,7 @@ export class CodexSpoolImageProvider extends SpoolImageProvider {
 
 /** ChatGPT subscription UI transport; this identity does not claim a webpage model label. */
 export class ChatGptWebSpoolImageProvider extends SpoolImageProvider {
+  constructor(config: CodexSpoolImageConfig) { super(config, CHATGPT_WEB_IMAGE_MAX_DEADLINE_MS); }
   readonly name = 'chatgpt-web';
   readonly model = 'chatgpt-web/6-pro-image-generation-tool';
   readonly supportsReferenceImage = true;

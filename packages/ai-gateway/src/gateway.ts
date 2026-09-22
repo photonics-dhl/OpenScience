@@ -270,7 +270,7 @@ export class AiGateway {
    * that cannot accept references: dropping the reference would silently deliver a
    * different picture than the one requested.
    */
-  async generateImage(request: ImageRequest): Promise<ImageResult> {
+  async generateImage(request: ImageRequest, controls: { primaryProviderOnly?: boolean } = {}): Promise<ImageResult> {
     const prompt = validateImageRequest(request);
     const input: ImageRequest = { prompt, ...(request.requestId !== undefined ? { requestId: request.requestId } : {}),
       ...(request.referenceImage ? { referenceImage: { bytes: Buffer.from(request.referenceImage.bytes), contentHash: request.referenceImage.contentHash } } : {}) };
@@ -282,6 +282,7 @@ export class AiGateway {
     try {
       let lastError: AiGatewayError | undefined;
       for (const [index, provider] of this.imageProviders.entries()) {
+        if (controls.primaryProviderOnly && index > 0) break;
         servedBy = provider;
         if (!(await this.providerEnabled(provider.name, 'image')).enabled) {
           lastError = new AiGatewayError('IMAGE_PROVIDER_FAILED', 'image provider unavailable');

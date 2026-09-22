@@ -24,6 +24,11 @@ const SERIALIZABLE_RETRY_DELAYS_MS = [50, 100, 250, 500, 1000] as const;
 export const HERMES_IMAGE_RENDER_RECOVERY_ACTION = 'hermes.research_run.image_render_recovery';
 export const NARRATIVE_PIXEL_REPLAN = 'narrative_pixel_scientific_replan';
 export const NARRATIVE_PIXEL_PLAN_REVISION = 'narrative_pixel_plan_scientific_revision';
+export const NARRATIVE_TECHNICAL_RECOVERY = 'narrative_scene_not_submitted_recovery';
+export interface ImageReviewNotSubmittedInput {
+    requestId: string; promptHash: string; researchObjectId: string; versionId: string;
+    candidateHash: string; sourceEvidenceIdentity: string;
+}
 export const DETERMINISTIC_PRESENTATION_GENERATOR = 'OpenScience deterministic renderer';
 export const DETERMINISTIC_PRESENTATION_GENERATOR_VERSION = 'openscience-presentation-v2';
 export type PresentationGenerationKind = (typeof KINDS)[number];
@@ -713,11 +718,12 @@ export async function readNarrativeImageReplanSource(prisma: Pick<Prisma.Transac
 }
 
 /** A complete scene set. Technical failures are receipts, never scientific feedback. */
-export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'auditLog'>, input: {
+async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'auditLog'>, input: {
     actorId: string; runId: string; researchObjectId: string; versionId: string; sourceClaimIds: string[];
     parentAssetId: string; imageAssetIds: string[];
-    terminalSceneSet?: { receiptId?: string; inspectImageRecoveryState?: (requestId: string) => Promise<string> };
-}) {
+    terminalSceneSet?: { receiptId?: string; inspectImageRecoveryState?: (requestId: string) => Promise<string>;
+        canRetryImageReviewBeforeSubmission?: (input: ImageReviewNotSubmittedInput) => Promise<boolean> };
+}, technicalRecovery = false) {
     const ids = [...input.sourceClaimIds].sort();
     const parent = await prisma.presentationAsset.findUnique({ where: { id: input.parentAssetId }, include: { sourceClaims: { select: { claimId: true } } } });
     const task = await prisma.agentTask.findUnique({ where: { id: input.parentAssetId }, include: { session: true } });
@@ -749,7 +755,7 @@ export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.Transac
     const receiptMeta = recordValue(receipt?.metadata);
     if (input.terminalSceneSet?.receiptId && (!receipt || receipt.actorId !== input.actorId
         || receipt.action !== 'hermes.research_run.generation_retry' || receipt.targetType !== 'hermes_research_run' || receipt.targetId !== input.runId
-        || receiptMeta.correction !== NARRATIVE_PIXEL_REPLAN || receiptMeta.sceneSet !== 'terminal'
+        || receiptMeta.correction !== (technicalRecovery ? NARRATIVE_TECHNICAL_RECOVERY : NARRATIVE_PIXEL_REPLAN) || receiptMeta.sceneSet !== 'terminal'
         || receiptMeta.parentStoryboardAssetId !== parent.id || receiptMeta.parentIdentity !== parentIdentity
         || receiptMeta.sourceEvidenceIdentity !== p.sourceEvidenceIdentity || !Array.isArray(receiptMeta.sceneReviews))) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Terminal scene authorization changed');
@@ -783,17 +789,53 @@ export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.Transac
         }
         if (imageTask.status === 'failed') {
             if (imageTask.result !== null || !imageTask.error || scene.revisionAssetId || scene.styleReferenceAssetId
+                || (technicalRecovery && (imageTask.executionAttempt !== 1 || imageTask.retryCount !== 0))
                 || (image && (image.status !== 'draft' || provenance.imageReview != null))) {
                 throw new PresentationAssetError('VALIDATION_ERROR', 'Failed scene is not an unreviewed terminal result');
             }
             const taskIdentity = JSON.stringify({ id: imageTask.id, status: imageTask.status, executionAttempt: imageTask.executionAttempt,
                 retryCount: imageTask.retryCount, error: imageTask.error, result: imageTask.result, payload: imageTask.payload, updatedAt: imageTask.updatedAt });
             let reviewAuditIdentity: string | null = null;
+            // Dynamic scene briefs may use two structured text attempts before image/review.
+            // The fifth row is a sentinel, not an additional authorized model attempt.
+            const calls = technicalRecovery || image ? await prisma.auditLog.findMany({ where: {
+                requestId: imageTask.id, action: 'ai.gateway.call',
+            }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 5 }) : [];
+            const planningCalls = calls.filter(call => recordValue(call.metadata).operation === 'text');
+            const imageCalls = calls.filter(call => recordValue(call.metadata).operation === 'image');
+            const reviews = calls.filter(call => recordValue(call.metadata).operation === 'scientific_review');
+            if (calls.length >= 5 || imageCalls.length > 1 || planningCalls.length > 2
+                || (planningCalls.length > 0 && (view.document.scenes[scene.sceneIndex]!.illustration
+                    || view.document.scenes[scene.sceneIndex]!.paperOriginal))
+                || calls.some(call => { const meta = recordValue(call.metadata);
+                    return !['text', 'image', 'scientific_review'].includes(String(meta.operation))
+                        || call.actorId !== null || call.targetType !== 'ai_gateway' || call.createdAt < imageTask.createdAt
+                        || call.createdAt > imageTask.updatedAt || meta.fallbackReason !== null;
+                }) || planningCalls.some(call => { const meta = recordValue(call.metadata);
+                    return typeof meta.provider !== 'string' || !/^minimax-key-[1-9]\d*-model-[1-9]\d*$/u.test(meta.provider)
+                        || typeof meta.model !== 'string' || !meta.model.trim() || meta.retryCount !== 0
+                        || !['succeeded', 'failed'].includes(String(meta.outcome))
+                        || (meta.outcome === 'succeeded' ? meta.error !== null : meta.finishReason !== 'length' || typeof meta.error !== 'string')
+                        || typeof meta.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(meta.promptHash)
+                        || meta.inputContentHash !== null || meta.selectionReason !== null || meta.pageCount !== 0 || !isDeepStrictEqual(meta.pageNumbers, [])
+                        || (image && call.createdAt > image.createdAt) || (imageCalls[0] && call.createdAt > imageCalls[0].createdAt);
+                }) || new Set(planningCalls.map(call => recordValue(call.metadata).provider)).size > 1
+                || (planningCalls.length > 0 && (recordValue(planningCalls.at(-1)!.metadata).outcome !== 'succeeded'
+                    || recordValue(planningCalls.at(-1)!.metadata).finishReason === 'length'))
+                || imageCalls.some(call => { const meta = recordValue(call.metadata);
+                    return typeof meta.provider !== 'string' || !meta.provider.trim() || typeof meta.model !== 'string' || !meta.model.trim()
+                        || meta.retryCount !== 0 || !['succeeded', 'failed'].includes(String(meta.outcome))
+                        || meta.error !== (meta.outcome === 'succeeded' ? null : 'image_provider_failed')
+                        || typeof meta.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(meta.promptHash)
+                        || (image && (image.generator !== `OpenScience Hermes scene image / ${meta.provider}` || image.promptHash !== meta.promptHash));
+                })
+                || (technicalRecovery && !image && (reviews.length !== 0
+                    || imageCalls.some(call => recordValue(call.metadata).outcome !== 'failed')))) {
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Scene has contradictory or untrusted provider history');
+            }
             if (image) {
-                const calls = await prisma.auditLog.findMany({ where: { requestId: imageTask.id, action: 'ai.gateway.call' }, take: 4 });
-                const reviews = calls.filter(call => recordValue(call.metadata).operation !== 'image');
                 const call = reviews[0]; const meta = recordValue(call?.metadata);
-                if (calls.length >= 4 || reviews.length !== 1 || calls.some(row => recordValue(row.metadata).fallbackReason !== null)
+                if (reviews.length !== 1
                     || !call || call.actorId !== null || call.targetType !== 'ai_gateway'
                     || call.createdAt < image.createdAt || call.createdAt > imageTask.updatedAt
                     || meta.operation !== 'scientific_review' || meta.provider !== 'chatgpt-web-science-review' || meta.model !== 'chatgpt-web/6-pro'
@@ -804,10 +846,22 @@ export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.Transac
                     throw new PresentationAssetError('VALIDATION_ERROR', 'Unreviewed scene needs its unique failed scientific review');
                 }
                 reviewAuditIdentity = JSON.stringify({ id: call.id, createdAt: call.createdAt, metadata: call.metadata });
+                if (technicalRecovery && (provenance.contentType !== 'image/png' || !image.objectKey
+                    || !/^[a-f0-9]{64}$/.test(image.contentHash)
+                    || (!receipt && await input.terminalSceneSet?.canRetryImageReviewBeforeSubmission?.({
+                        requestId: imageTask.id, promptHash: meta.promptHash as string,
+                        researchObjectId: input.researchObjectId, versionId: input.versionId,
+                        candidateHash: image.contentHash, sourceEvidenceIdentity: p.sourceEvidenceIdentity as string,
+                    }).catch(() => false) !== true))) {
+                    throw new PresentationAssetError('VALIDATION_ERROR', 'Image review has no exact pre-submission proof');
+                }
             }
             const failure = { sceneIndex: scene.sceneIndex, taskId: imageTask.id, imageId: image?.id ?? null,
                 contentHash: image?.contentHash ?? null, reviewHash: null, decision: null,
                 failureKind: image ? 'review_failed' : 'not_submitted', taskIdentity, reviewAuditIdentity,
+                ...(planningCalls.length ? { planningAuditIdentity: JSON.stringify(planningCalls.map(call => ({
+                    id: call.id, createdAt: call.createdAt, metadata: call.metadata,
+                }))) } : {}),
                 imageIdentity: image ? JSON.stringify({ id: image.id, contentHash: image.contentHash, objectKey: image.objectKey,
                     provenance: image.provenance, sourceClaimIds: ids }) : null };
             const recorded = Array.isArray(receiptMeta.sceneReviews)
@@ -842,7 +896,8 @@ export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.Transac
         images.push({ image, task: imageTask!, sceneIndex: scene.sceneIndex, review: pixelReview });
     }
     images.sort((a, b) => a.sceneIndex - b.sceneIndex);
-    if (!images.some(image => image.review.decision === 'blocked' && image.review.repairInstruction === null)) {
+    if (technicalRecovery ? !images.length || images.some(image => image.review.decision !== 'accepted') || !failures.length
+        : !images.some(image => image.review.decision === 'blocked' && image.review.repairInstruction === null)) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative pixel feedback does not require scientific replanning');
     }
     const sceneReviews = [...images.map(({ image, task: imageTask, sceneIndex, review: pixelReview }) => ({
@@ -851,7 +906,7 @@ export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.Transac
     })), ...failures].sort((a, b) => Number(a.sceneIndex) - Number(b.sceneIndex));
     if (sceneReviews.some((scene, index) => scene.sceneIndex !== index))
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative terminal scenes are incomplete');
-    const anchor = images.find(image => image.review.decision === 'blocked' && image.review.repairInstruction === null)!;
+    const anchor = technicalRecovery ? images[0]! : images.find(image => image.review.decision === 'blocked' && image.review.repairInstruction === null)!;
     return { parent, task: task!, payload, view, images, sceneReviews, parentIdentity,
         image: anchor.image, imageTask: anchor.task, reviewHash: anchor.review.responseHash as string,
         sourceEvidenceIdentity: p.sourceEvidenceIdentity as string,
@@ -861,6 +916,19 @@ export async function readNarrativePixelReplanSource(prisma: Pick<Prisma.Transac
             images: images.map(image => ({ imageId: image.image.id, contentHash: image.image.contentHash,
                 imageProvenance: image.image.provenance, taskPayload: image.task.payload })),
             ...(failures.length ? { failures: [...failures].sort((a, b) => Number(a.sceneIndex) - Number(b.sceneIndex)) } : {}) }) };
+}
+
+/** Scientific replanning still requires an actual blocked scientific review. */
+export function readNarrativePixelReplanSource(prisma: Parameters<typeof readNarrativeTerminalSceneSource>[0],
+    input: Parameters<typeof readNarrativeTerminalSceneSource>[1]) {
+    return readNarrativeTerminalSceneSource(prisma, input);
+}
+
+/** Technical replacement preserves accepted siblings and requires proof for every failed submission. */
+export function readNarrativeTechnicalRecoverySource(prisma: Parameters<typeof readNarrativeTerminalSceneSource>[0],
+    input: Parameters<typeof readNarrativeTerminalSceneSource>[1]) {
+    if (!input.terminalSceneSet) throw new PresentationAssetError('VALIDATION_ERROR', 'Terminal scene proof is required');
+    return readNarrativeTerminalSceneSource(prisma, input, true);
 }
 
 /** Resolve a historical plan independently of the run's current step; revision contexts retain their original identity. */
@@ -991,7 +1059,7 @@ export function readNarrativePixelBlockedPlan(authority: NonNullable<Awaited<Ret
 }
 
 /** Current authority follows the bounded receipt chain, retaining the root's original image allowance. */
-export async function readNarrativePixelReplanAuthority(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'hermesResearchRun' | 'auditLog'>,
+export async function readNarrativePixelReplanAuthority(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'hermesResearchRun' | 'auditLog'>,
     input: { runId: string; actorId: string }) {
     const currentRun = await prisma.hermesResearchRun.findUnique({ where: { id: input.runId }, include: { steps: true } });
     const step = currentRun?.steps.find(item => item.stage === 'storyboard');
@@ -999,16 +1067,120 @@ export async function readNarrativePixelReplanAuthority(prisma: Pick<Prisma.Tran
     const history = await readNarrativePixelReplanHistory(prisma, { ...input, taskId: step.agentTaskId });
     if (!history) return null;
     const { run, metadata: meta } = history;
+    const technicalRecovery = await readNarrativeTechnicalReceipt(prisma, history);
     if (step.ordinal !== 0 || run.steps.filter(item => item.stage === 'storyboard').length !== 1
-      || history.currentMetadata.maxAgentTasks !== run.maxAgentTasks)
+      || (technicalRecovery?.metadata.maxAgentTasks ?? history.currentMetadata.maxAgentTasks) !== run.maxAgentTasks)
       throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative scientific replanning receipt is not current');
     const presentations = await prisma.agentTask.count({ where: { kind: 'presentation.generate',
         payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } });
     const sources = run.steps.filter(item => ['source_composition', 'source_review'].includes(item.stage)).length;
-    if (sources + presentations < Number(meta.existingTaskCount) + history.depth + 1
-        || sources + presentations > Number(meta.existingTaskCount) + history.depth + 1 + history.sceneLimit)
+    const taskLimit = technicalRecovery ? Number(technicalRecovery.metadata.existingTaskCount) + Number(technicalRecovery.metadata.newTaskCount)
+        : Number(meta.existingTaskCount) + history.depth + 1 + history.sceneLimit;
+    if (sources + presentations < (technicalRecovery ? taskLimit : Number(meta.existingTaskCount) + history.depth + 1)
+        || sources + presentations > taskLimit)
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative scientific replanning allowance changed');
-    return { ...history, step };
+    return { ...history, step, technicalRecovery };
+}
+
+/** One explicit technical replacement per current plan; old failures and their provider reservations are immutable. */
+async function readNarrativeTechnicalReceipt(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'auditLog'>,
+    history: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanHistory>>>) {
+    const { run } = history;
+    const receipts = await prisma.auditLog.findMany({ where: { actorId: run.actorId, action: 'hermes.research_run.generation_retry',
+        targetType: 'hermes_research_run', targetId: run.id, AND: [
+            { metadata: { path: ['correction'], equals: NARRATIVE_TECHNICAL_RECOVERY } },
+            { metadata: { path: ['parentStoryboardAssetId'], equals: history.task.id } },
+        ] }, take: 2 });
+    if (!receipts.length) return null;
+    const receipt = receipts[0]!; const metadata = recordValue(receipt.metadata);
+    if (receipts.length !== 1 || metadata.previousReceiptId !== history.receipt.id || metadata.rootReceiptId !== history.rootReceipt.id
+        || metadata.previousMaxAgentTasks !== history.currentMetadata.maxAgentTasks
+        || metadata.sceneSet !== 'terminal' || !Array.isArray(metadata.sceneReviews) || !Array.isArray(metadata.replacements)
+        || !Array.isArray(metadata.sceneSteps) || metadata.sceneSteps.length !== metadata.sceneReviews.length
+        || metadata.newTaskCount !== metadata.replacements.length || Number(metadata.newTaskCount) < 1 || Number(metadata.newTaskCount) > history.sceneLimit
+        || metadata.chargeableAttempts !== metadata.newTaskCount || metadata.newRunCount !== 0 || metadata.maxNewStoryboards !== 0
+        || metadata.noProviderSwitch !== true || metadata.publicationAuthorized !== false || metadata.priorSubmission !== 'none'
+        || !Number.isSafeInteger(metadata.existingTaskCount)
+        || Number(metadata.existingTaskCount) > Number(history.metadata.existingTaskCount) + history.depth + 1 + history.sceneLimit
+        || Number(metadata.existingTaskCount) < Number(history.metadata.existingTaskCount) + history.depth + 1
+        || metadata.maxAgentTasks !== Math.max(Number(metadata.previousMaxAgentTasks), Number(metadata.existingTaskCount) + Number(metadata.newTaskCount)))
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement receipt is invalid');
+    const sceneReviews = metadata.sceneReviews.map(recordValue);
+    if (sceneReviews.some(scene => typeof scene.taskId !== 'string'))
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement scene identity is invalid');
+    const source = await readNarrativeTechnicalRecoverySource(prisma, { actorId: run.actorId, runId: run.id,
+        researchObjectId: run.researchObjectId, versionId: run.versionId!, sourceClaimIds: run.sourceClaimIds,
+        parentAssetId: history.task.id, imageAssetIds: sceneReviews.map(scene => scene.taskId as string), terminalSceneSet: { receiptId: receipt.id } });
+    if (source.identity !== metadata.sourceIdentity || !isDeepStrictEqual(source.sceneReviews, metadata.sceneReviews)
+        || metadata.sourceEvidenceIdentity !== history.metadata.sourceEvidenceIdentity)
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement source changed');
+    const replacements = metadata.replacements.map(recordValue);
+    const failures = sceneReviews.filter(scene => scene.failureKind !== undefined);
+    if (replacements.length !== failures.length || new Set(replacements.map(item => item.newTaskId)).size !== replacements.length
+        || new Set(replacements.map(item => item.sceneIndex)).size !== replacements.length
+        || metadata.maxNewImages !== failures.filter(scene => scene.failureKind === 'not_submitted').length
+        || metadata.reviewOnlyTaskCount !== failures.filter(scene => scene.failureKind === 'review_failed').length)
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement allowance changed');
+    for (const [index, scene] of sceneReviews.entries()) {
+        const oldStep = recordValue(metadata.sceneSteps[index]);
+        const step = run.steps.find(item => item.stage === 'scene_image' && item.ordinal === index);
+        const replacement = replacements.find(item => item.sceneIndex === index);
+        if (scene.sceneIndex !== index || oldStep.ordinal !== index || oldStep.agentTaskId !== scene.taskId
+            || !step || oldStep.id !== step.id || (oldStep.presentationAssetId !== null && oldStep.presentationAssetId !== scene.imageId)
+            || !['failed', 'stopped', 'running', 'awaiting_approval', 'succeeded'].includes(String(oldStep.status)))
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement step changed');
+        if (scene.failureKind === undefined) {
+            if (replacement || step.agentTaskId !== scene.taskId || (step.presentationAssetId !== null && step.presentationAssetId !== scene.imageId))
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Accepted narrative image was replaced');
+            continue;
+        }
+        if (!replacement || typeof replacement.newTaskId !== 'string' || replacement.previousTaskId !== scene.taskId
+            || step.agentTaskId !== replacement.newTaskId || (step.presentationAssetId !== null && step.presentationAssetId !== replacement.newTaskId)
+            || replacement.mode !== (scene.failureKind === 'review_failed' ? 'review_only' : 'render'))
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical task binding changed');
+        const previous = await prisma.agentTask.findUniqueOrThrow({ where: { id: scene.taskId as string } });
+        const next = await prisma.agentTask.findUnique({ where: { id: replacement.newTaskId }, include: { session: true } });
+        if (!next || next.deletedAt || next.kind !== 'presentation.generate' || next.sessionId !== previous.sessionId
+            || next.session.deletedAt || next.session.status !== 'active' || next.session.userId !== run.actorId
+            || next.session.researchObjectId !== run.researchObjectId || !isDeepStrictEqual(next.payload, previous.payload)
+            || next.idempotencyKey !== `hermes-run:${run.id}:generation-recovery:${metadata.requestDigest}:${index}`)
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement task changed');
+        if (replacement.mode === 'review_only') {
+            const original = await prisma.presentationAsset.findUniqueOrThrow({ where: { id: previous.id } });
+            const { imageReview: _originalReview, ...originalProvenance } = recordValue(original.provenance);
+            const saved = await prisma.presentationAsset.findUnique({ where: { id: next.id }, include: { sourceClaims: true } });
+            const { imageReview: _review, ...provenance } = recordValue(saved?.provenance);
+            if (!saved || saved.deletedAt || saved.kind !== 'image' || !['draft', 'approved', 'rejected'].includes(saved.status)
+                || saved.researchObjectId !== run.researchObjectId || saved.versionId !== run.versionId
+                || saved.objectKey !== original.objectKey || saved.contentHash !== original.contentHash
+                || !isDeepStrictEqual(saved.sourceClaims.map(link => link.claimId).sort(), run.sourceClaimIds)
+                || !isDeepStrictEqual(provenance, { ...originalProvenance, taskId: next.id, reviewSourceAssetId: original.id }))
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Saved narrative PNG replacement changed');
+        }
+    }
+    return { receipt, metadata, replacements };
+}
+
+/** Add a draft reference to the exact PNG inside the caller's existing Serializable retry transaction. */
+export async function copyNarrativeImageForReview(tx: Prisma.TransactionClient, input: PresentationScope & { previousTaskId: string; taskId: string }) {
+    await lockTrashReferences(tx);
+    await lockLiveResearchObject(tx, input.researchObjectId);
+    await requirePresentationWriteScope(tx, input);
+    const touched = await tx.version.updateMany({ where: { id: input.versionId, status: 'draft' }, data: { status: 'draft' } });
+    if (touched.count !== 1) throw new PresentationAssetError('ILLEGAL_TRANSITION', 'Saved image draft changed');
+    const original = await tx.presentationAsset.findUniqueOrThrow({ where: { id: input.previousTaskId }, include: { sourceClaims: true } });
+    const provenance = recordValue(original.provenance);
+    if (original.deletedAt || original.status !== 'draft' || original.kind !== 'image' || provenance.imageReview != null
+        || original.researchObjectId !== input.researchObjectId || original.versionId !== input.versionId || provenance.contentType !== 'image/png')
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Original review PNG changed');
+    await tx.trashObjectCleanup.updateMany({ where: { objectKey: original.objectKey }, data: { state: 'retained', lastError: null } });
+    await tx.presentationAsset.create({ data: { id: input.taskId, researchObjectId: original.researchObjectId, versionId: original.versionId,
+        kind: original.kind, status: 'draft', objectKey: original.objectKey, contentHash: original.contentHash,
+        generator: original.generator, generatorVersion: original.generatorVersion, promptHash: original.promptHash, label: original.label,
+        provenance: { ...provenance, taskId: input.taskId, reviewSourceAssetId: original.id } as Prisma.InputJsonObject } });
+    await tx.presentationAssetClaim.createMany({ data: original.sourceClaims.map(link => ({ presentationAssetId: input.taskId,
+        claimId: link.claimId, researchObjectId: original.researchObjectId, versionId: original.versionId })) });
+    await refreshWorkingResearchRecord(tx, input);
 }
 
 /** The worker consumes image feedback only under the explicit same-run correction grant. */

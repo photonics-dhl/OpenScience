@@ -868,9 +868,7 @@ async function main(): Promise<void> {
           }),
         } : {}),
     });
-    const configuredConcurrency = Number.parseInt(process.env.AGENT_WORKER_CONCURRENCY ?? '4', 10);
-    const workerConcurrency = Number.isFinite(configuredConcurrency)
-      ? Math.min(8, Math.max(1, configuredConcurrency)) : 4;
+    const workerConcurrency = configuredWorkerConcurrency(process.env);
     journalWorker = startJournalWorker(deps, gateway, parserCascade);
     cleanupTimer = setInterval(() => {
       if (stopping || cleanup) return;
@@ -936,6 +934,11 @@ async function main(): Promise<void> {
 }
 
 /** 从 env 构造 Gateway（AI_ENABLED=false 或缺密钥 → 占位 gateway，sdf.extract 会失败；§24 待确认）。 */
+function configuredWorkerConcurrency(env: NodeJS.ProcessEnv): number {
+  const configured = Number.parseInt(env.AGENT_WORKER_CONCURRENCY ?? '4', 10);
+  return Number.isFinite(configured) ? Math.min(8, Math.max(1, configured)) : 4;
+}
+
 export function buildGateway(
   env: NodeJS.ProcessEnv = process.env,
   fetcher: typeof fetch = globalThis.fetch,
@@ -972,7 +975,8 @@ export function buildGateway(
   const buildImageProvider = (kind: string | undefined): ImageProvider | undefined => {
     if (kind === 'chatgpt-web') {
       return env.AI_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim() && env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('chatgpt-web')
-        ? new ChatGptWebSpoolImageProvider({ inboxDir: env.CHATGPT_WEB_IMAGE_INBOX_DIR.trim(), resultsDir: env.CHATGPT_WEB_IMAGE_RESULTS_DIR.trim(), withSubmission: spoolSubmissions?.image }) : undefined;
+        ? new ChatGptWebSpoolImageProvider({ inboxDir: env.CHATGPT_WEB_IMAGE_INBOX_DIR.trim(), resultsDir: env.CHATGPT_WEB_IMAGE_RESULTS_DIR.trim(),
+          timeoutMs: configuredWorkerConcurrency(env) * 900_000 + 300_000, withSubmission: spoolSubmissions?.image }) : undefined;
     }
     if (kind === 'codex') {
       return env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('codex-image')

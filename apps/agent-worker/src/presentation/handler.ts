@@ -432,6 +432,22 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     };
     await requireHermesAuthority(deps.prisma);
     const existing = await deps.prisma.presentationAsset.findUnique({ where: { id: task.id }, include: { sourceClaims: true } });
+    const technicalParent = payload.hermesRunAuthority?.stage === 'scene_image' && payload.hermesRunAuthority.profile === VISUAL_NARRATIVE_PROFILE
+      ? await readNarrativePixelReplanAuthority(deps.prisma, { runId: payload.hermesRunAuthority.runId, actorId: scope.userId }) : null;
+    const technicalRecovery = technicalParent?.technicalRecovery;
+    const technicalReplacement = technicalRecovery?.replacements.find(item => item.newTaskId === task.id);
+    if ((technicalReplacement?.mode === 'review_only' && !existing)
+      || ((existing?.provenance as Record<string, unknown> | null)?.reviewSourceAssetId && technicalReplacement?.mode !== 'review_only'))
+      throw new Error('[blocked] Saved PNG review replacement has no current receipt');
+    const requireTechnicalRecovery = async (tx: Prisma.TransactionClient) => {
+      if (!technicalRecovery || !payload.hermesRunAuthority) return;
+      await requireHermesAuthority(tx);
+      const current = await readNarrativePixelReplanAuthority(tx, { runId: payload.hermesRunAuthority.runId, actorId: scope.userId });
+      const currentTask = await tx.agentTask.findUnique({ where: { id: task.id } });
+      if (current?.technicalRecovery?.receipt.id !== technicalRecovery.receipt.id || !currentTask || currentTask.status !== 'running'
+        || currentTask.executionAttempt !== task.executionAttempt || !isDeepStrictEqual(currentTask.payload, owner.payload))
+        throw new Error('[blocked] Narrative technical recovery changed');
+    };
     const actualImageReview = needsGeneratedImageReview(payload);
     if (existing && !actualImageReview) return { ...privateStoryboardResult(owner.result), assetId: existing.id, kind: existing.kind,
       status: existing.status, contentHash: existing.contentHash, sourceClaimIds: payload.sourceClaimIds };
@@ -546,7 +562,9 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       }
       const recoveryParent = existing && task.executionAttempt > 1 && payload.hermesRunAuthority?.profile === VISUAL_NARRATIVE_PROFILE
         ? await readNarrativePixelReplanAuthority(deps.prisma, { runId: payload.hermesRunAuthority.runId, actorId: scope.userId }) : null;
-      const completedOnly = Boolean(recoveryParent);
+      // A technical replacement owns a fresh request identity. Crash re-entry reuses that
+      // request's reservation, rather than requiring an unrelated completed-only receipt.
+      const completedOnly = Boolean(recoveryParent) && !technicalReplacement;
       const requireCompletedRecovery = async (tx: Prisma.TransactionClient) => {
         if (!completedOnly) return;
         if (!options.gateway?.resumeScientificReviewFromCompletedResult || !payload.hermesRunAuthority)
@@ -554,14 +572,17 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         await requireHermesCompletedImageReviewRecovery(tx, { taskId: task.id, actorId: scope.userId, runId: payload.hermesRunAuthority.runId });
       };
       // Revalidate the receipt before reading the saved PNG, not only before persisting its review.
-      if (completedOnly) await withPresentationAssetWrite(deps.prisma, scope, requireCompletedRecovery);
+      if (completedOnly || technicalRecovery) await withPresentationAssetWrite(deps.prisma, scope, async tx => {
+        await requireCompletedRecovery(tx); await requireTechnicalRecovery(tx);
+      });
       const identity = { requestId: task.id, contentHash: saved.contentHash, sourceEvidenceIdentity, parentIdentity: sceneParent.identity };
       const savedImage = await requireSavedImageForReview(deps.prisma, payload, task.id, saved.contentHash, sourceEvidenceIdentity, sceneParent.identity);
       const contentType = (savedImage.provenance as Record<string, unknown>).contentType;
       const imageBytes = await readPresentationInput(deps.storage!, saved.objectKey, saved.contentHash, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES);
       const attachment = generatedImageReviewAttachment(imageBytes, saved.contentHash, contentType);
       const authorizationContext = Object.freeze({ taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId });
-      const illustrationContext = { executionAttempt: task.executionAttempt, claimContent: presentationClaimContent(claims), baseIdentity: sceneParent.identity };
+      const illustrationContext = { executionAttempt: task.executionAttempt, claimContent: presentationClaimContent(claims), baseIdentity: sceneParent.identity,
+        ...(technicalRecovery ? { primaryProviderOnly: true as const } : {}) };
       const authorityInput: ScienceReviewInput = {
         requestId: task.id, authorizationContext, illustrationContext,
         source: { kind: 'illustration-image', researchObjectId: payload.researchObjectId, versionId: payload.versionId,
@@ -570,6 +591,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       };
       const readCurrent = async (tx: Prisma.TransactionClient) => {
         await requireCompletedRecovery(tx);
+        await requireTechnicalRecovery(tx);
         await requireIllustrationReviewSubmission(tx, authorityInput);
         await requireUnchangedSceneRevision(tx);
         const current = await requireSavedImageForReview(tx, payload, task.id, saved.contentHash, sourceEvidenceIdentity, sceneParent.identity);
@@ -586,7 +608,10 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         const reviewGateway: Pick<AiGateway, 'reviewScientific'> = completedOnly ? { reviewScientific: async (request, guard) => {
           await withPresentationAssetWrite(deps.prisma, scope, readCurrent);
           return options.gateway!.resumeScientificReviewFromCompletedResult!(request, guard);
-        } } : { reviewScientific: options.gateway.reviewScientific.bind(options.gateway) };
+        } } : { reviewScientific: async (request, guard) => {
+          if (technicalRecovery) await withPresentationAssetWrite(deps.prisma, scope, readCurrent);
+          return options.gateway!.reviewScientific!(request, guard);
+        } };
         const reviewed = await reviewGeneratedImage(reviewGateway, {
           bytes: imageBytes, contentType, claims, settings, document: sceneParent.view.document,
           sceneIndex: payload.sceneImage.sceneIndex, authorizationContext, illustrationContext,
@@ -613,6 +638,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     };
     // A retry resumes the review of its durable draft before any paid-generation retry guard.
     if (existing && actualImageReview) return finishGeneratedImageReview(existing);
+    if (technicalReplacement?.mode === 'review_only') throw new Error('[blocked] Review-only recovery cannot generate an image');
     const videoParents = await requireVideoGenerationParents(deps.prisma, payload);
     let storyboardDocument: StoryboardDocument | undefined;
     let bytes: Buffer;
@@ -695,17 +721,25 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if (!options.gateway?.generateImage) throw new Error('[blocked] scene image gateway unavailable');
       const installedSkills = completedProviderRecovery ? undefined
         : loadInstalledMediaSkills(storyboardSceneStyles(sceneParent.view, sceneParent.view.document.scenes)[payload.sceneImage.sceneIndex]!, sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.visualAction, 'render');
+      const imagePlanningGateway: Pick<AiGateway, 'completeStructured'> = technicalRecovery ? {
+        completeStructured: async (guard, messages, opts) => {
+          await deps.prisma.$transaction(requireTechnicalRecovery, { isolationLevel: 'Serializable' });
+          return options.gateway!.completeStructured(guard, messages, { ...opts, primaryProviderOnly: true });
+        },
+      } : options.gateway;
       const prompt = completedProviderRecovery ? null
-        : await planSceneImagePrompt(options.gateway, claims, sceneParent.view, payload.sceneImage.sceneIndex, installedSkills, sceneRevision?.repairInstruction);
+        : await planSceneImagePrompt(imagePlanningGateway, claims, sceneParent.view, payload.sceneImage.sceneIndex, installedSkills, sceneRevision?.repairInstruction);
       designSkills = installedSkills?.usage;
       const referenceImage = !completedProviderRecovery && styleReference
         ? { bytes: await readPresentationInput(deps.storage, styleReference.objectKey, styleReference.contentHash), contentHash: styleReference.contentHash }
         : undefined;
       await requireUnchangedStyleReference(deps.prisma);
       await requireUnchangedSceneRevision(deps.prisma);
+      if (technicalRecovery) await deps.prisma.$transaction(requireTechnicalRecovery, { isolationLevel: 'Serializable' });
       const result = completedProviderRecovery
         ? await options.gateway.resumeImageFromCompletedResult!(task.id)
-        : await options.gateway.generateImage({ prompt: prompt!, requestId: task.id, ...(referenceImage ? { referenceImage } : {}) });
+        : await options.gateway.generateImage({ prompt: prompt!, requestId: task.id, ...(referenceImage ? { referenceImage } : {}) },
+          technicalReplacement ? { primaryProviderOnly: true } : undefined);
       bytes = result.bytes; contentType = result.contentType; extension = imageExtension(contentType);
       imageProvider = result.provider;
       generator = `OpenScience Hermes scene image / ${result.provider}`; generatorVersion = result.model; promptHash = result.promptHash;
@@ -1062,6 +1096,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     const contentHash = videoOutput?.contentHash ?? createHash('sha256').update(bytes).digest('hex');
     const objectKey = `presentation/${payload.researchObjectId}/${payload.versionId}/${contentHash}.${extension}`;
     const asset = await withPresentationAssetWrite(deps.prisma, scope, async (tx) => {
+      await requireTechnicalRecovery(tx);
       const currentTask = await tx.agentTask.findUnique({ where: { id: task.id }, include: { session: true } });
       if (!currentTask || currentTask.deletedAt || currentTask.session.deletedAt || currentTask.kind !== 'presentation.generate' || currentTask.status !== 'running'
         || currentTask.executionAttempt !== task.executionAttempt

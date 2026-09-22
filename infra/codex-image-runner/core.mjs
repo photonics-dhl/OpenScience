@@ -65,12 +65,14 @@ export async function runOne({inbox,results,privateRoot,provider,execute,now=Dat
   }
   const started=join(privateDir,'started');
   if(await exists(started)){await publish(results,request,'uncertain','UNCERTAIN');return {id,status:'uncertain'};}
-  if(request.deadlineAt-now()<90000||request.createdAt>now()||request.deadlineAt-now()>600000){await publish(results,request,'failed','EXPIRED');return {id,status:'failed'};}
-  const marker=await open(started,'wx',0o600);try{await marker.writeFile(String(now()));await marker.sync();}finally{await marker.close();}
+  if(request.deadlineAt-now()<90000||request.createdAt>now()){await publish(results,request,'failed','EXPIRED');return {id,status:'failed'};}
+  const startedAt=now();
+  const marker=await open(started,'wx',0o600);try{await marker.writeFile(String(startedAt));await marker.sync();}finally{await marker.close();}
   await syncDirectory(privateDir);
+  const operationDeadlineAt=Math.min(request.deadlineAt,startedAt+600000);
   try{
-   const bytes=await execute(request,privateDir);
-   if(request.deadlineAt<=now()){
+   const bytes=await execute(request,privateDir,operationDeadlineAt);
+   if(operationDeadlineAt<=now()){
     const error=Error('EXPIRED');
     // Web execution has already downloaded and normalized the original image.
     // Let its existing grace-period recovery publish that result, never resend.

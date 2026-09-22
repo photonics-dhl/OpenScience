@@ -159,6 +159,41 @@ async function recoverPublishedFailure(config, request) {
   await publishRecovery(config.results, request, await jobResponse(job, request));
   return true;
 }
+async function pathEntryExists(path) {
+  try { await lstat(path); return true; }
+  catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+}
+// Publish evidence only: never clear a reservation, retry a browser operation, or extend its deadline.
+async function publishNotSubmittedEvidence(config, id) {
+  const claimed = join(config.privateRoot, id), job = join(config.jobs, 'review', id), output = join(config.results, id);
+  const proofPath = join(output, 'not-submitted.json');
+  if (await pathEntryExists(proofPath)) return;
+  try {
+    await directory(claimed, 0, 0o700); await directory(job, 11040, 0o700); await directory(output, 0, 0o750);
+    const request = validateScienceReviewRequest(JSON.parse((await safeRead(join(claimed, 'request.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+    const reservation = validateScienceReviewRequest(JSON.parse((await safeRead(join(config.inbox, `${id}.submitted.json`), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+    const result = validateScienceReviewResult(JSON.parse((await safeRead(join(output, 'result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+    const persisted = JSON.parse((await safeRead(join(job, 'request.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8'));
+    const operatorError = JSON.parse((await safeRead(join(job, 'operator-error.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8'));
+    const expected = { schemaVersion: request.schemaVersion, provider: request.provider, id: request.id, prompt: request.prompt,
+      promptHash: request.promptHash, deadlineAt: request.deadlineAt, source: request.source,
+      ...(request.attachments?.length ? { attachments: request.attachments } : {}) };
+    if (request.id !== id || request.schemaVersion !== 3 || !same(request, reservation) || !same(persisted, expected)
+      || result.id !== id || result.provider !== request.provider || result.promptHash !== request.promptHash || result.status !== 'failed'
+      || operatorError?.state !== 'not_submitted') return;
+    for (const name of ['submitted.json', 'conversation.json', 'result.json', 'response.txt', 'recovered-result.json', 'recovered-response.txt'])
+      if (await pathEntryExists(join(job, name))) return;
+    for (const name of ['response.txt', 'recovered-result.json', 'recovered-response.txt'])
+      if (await pathEntryExists(join(output, name))) return;
+    for (const attachment of request.attachments) {
+      for (const path of [join(config.inbox, `${id}.${attachment.fileName}`), join(job, 'attachments', attachment.fileName)]) {
+        const bytes = await safeRead(path, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES);
+        if (createHash('sha256').update(bytes).digest('hex') !== attachment.sha256) return;
+      }
+    }
+    await atomicWrite(proofPath, JSON.stringify({ id, provider: request.provider, promptHash: request.promptHash, state: 'not_submitted' }), 0o640);
+  } catch { /* Missing or contradictory evidence never authorizes replacement. */ }
+}
 async function main() {
   if (process.getuid?.() !== 0 || process.argv.length !== 4 || process.argv[2] !== '--config') throw Error('CONFIG_REQUIRED');
   const configPath = resolve(process.argv[3]);
@@ -178,6 +213,7 @@ async function main() {
     const existing = (await readdir(config.privateRoot)).filter(name => UUID.test(name));
     const recoverable = [];
     for (const id of existing) {
+      await publishNotSubmittedEvidence(config, id);
       try {
         const request = validateScienceReviewRequest(JSON.parse((await safeRead(join(config.privateRoot, id, 'request.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
         if (request.deadlineAt + RECOVERY_GRACE_MS > Date.now()) recoverable.push(request);
@@ -199,6 +235,7 @@ async function main() {
       await atomicWrite(started, String(Date.now()));
       try { await publish(config.results, request, 'succeeded', undefined, await execute(config, request)); }
       catch (error) { const isUncertain = error?.code === 'UNCERTAIN'; await publish(config.results, request, isUncertain ? 'uncertain' : 'failed', isUncertain ? 'UNCERTAIN' : 'EXECUTION_FAILED'); }
+      await publishNotSubmittedEvidence(config, id);
       return;
     }
   } finally { clearInterval(heartbeatTimer); }

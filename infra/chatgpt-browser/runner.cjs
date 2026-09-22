@@ -4,7 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium } = require('/app/node_modules/playwright-core');
 const { beforeAttach, rememberPage } = require('./page-lifecycle.cjs');
-const [mode, id] = process.argv.slice(2);
+const [mode, id, operationDeadlineArgument] = process.argv.slice(2);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA256 = /^[a-f0-9]{64}$/;
 if (!['prepare', 'send', 'status', 'download', 'execute', 'resume', 'recover', 'recover-late'].includes(mode) || !UUID.test(id || '')) process.exit(64);
@@ -42,7 +42,7 @@ function validateRequest(request, allowExpired = false) {
   if (request?.id !== id || request.provider !== 'chatgpt-web' || !SHA256.test(request.promptHash || '')
     || typeof request.prompt !== 'string' || !request.prompt.trim()
     || Buffer.byteLength(JSON.stringify(request), 'utf8') > 32768
-    || !Number.isSafeInteger(request.deadlineAt) || (!allowExpired && request.deadlineAt <= Date.now()) || request.deadlineAt - Date.now() > 600000
+    || !Number.isSafeInteger(request.deadlineAt) || (!allowExpired && request.deadlineAt <= Date.now()) || request.deadlineAt - Date.now() > 8 * 900000 + 300000
     || !source || source.kind !== 'hermes-scene-image' || source.requestId !== id || source.promptHash !== request.promptHash
     || Object.keys(source).some(key => !['kind', 'requestId', 'promptHash'].includes(key))
     || !validReference || Object.keys(request).some(key => !['id', 'provider', 'prompt', 'promptHash', 'reference', 'deadlineAt', 'source'].includes(key))) throw Error('INVALID_REQUEST');
@@ -376,6 +376,13 @@ let stage = 'request';
   const stat = fs.lstatSync(dir);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw Error('INVALID_JOB_DIRECTORY');
   let request = validateRequest(read('request.json'), mode === 'recover-late' || mode === 'download');
+  // The broker derives this fixed deadline from its durable claim marker. The
+  // immutable request keeps its queue deadline; no recovery resets send time.
+  const operationDeadlineAt = operationDeadlineArgument === undefined ? request.deadlineAt : Number(operationDeadlineArgument);
+  if (!Number.isSafeInteger(operationDeadlineAt) || operationDeadlineAt <= 0 || operationDeadlineAt > request.deadlineAt
+    || operationDeadlineAt - Date.now() > 600000) throw Error('INVALID_OPERATION_DEADLINE');
+  if (!['recover-late', 'download'].includes(mode) && operationDeadlineAt <= Date.now()) throw Error('EXPIRED');
+  request = { ...request, deadlineAt: operationDeadlineAt };
   if (mode === 'download') {
     // A repaired downloader may collect an existing result within the same recovery grace.
     // This mode never submits and does not reset either recovery marker or the original deadline.
