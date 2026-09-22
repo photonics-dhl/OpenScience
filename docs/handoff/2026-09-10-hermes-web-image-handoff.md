@@ -16,8 +16,8 @@
 - 交付树与根main收尾status必须空，自己的改动提交并推送；prune/list。仅根+交付树，无新worktree。清理仅明确自有、生产者完成且不用的生成物；268日志归档不重复，也不声称根治上游argv缺陷。已结束的12份本轮长文源码staging副本删除被自动审核拦截，已安全移入tmp/archived/long-paper-staging-20260922，restore.json保留路径/内容/ACL，移动后ACL一致；base-head与实现交接原位保留，无活动生产者。
 
 ## 版本与独立能力
-- application production=37048da2353577b5aa330658d370f63540ac0d19；rollback=b7f834a2da63f9a8a1dc1338308a2d012dec7f38。正常无迁移/无测试服务器build/start exit0，独立marker一致，journal/failed无；日志/opt/openscience/observations/deploy-37048da2-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
-- 独立Chat provider=faa20ab05674cebc5955d6ba7de7f3fb67ca53c2，未随应用改动；自然timer enabled/active，共享浏览器未重启。sceneImage fallback配置false；原renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f保留。receiver备份/容量协议见详细交接，不退到不支持长请求的旧bundle。
+- application production=2b17a3552b386587bab68c1c1f2fbd2e97177c3f；rollback=37048da2353577b5aa330658d370f63540ac0d19。正常无迁移/无测试服务器build/start exit0，独立marker一致，journal/failed无；日志/opt/openscience/observations/deploy-2b17a355-20260922.log。HEAD按Git定锚；root main=acd13a712549e62f8d4b0f3c2f8f064549e226b0。
+- 独立Chat provider=2b17a3552b386587bab68c1c1f2fbd2e97177c3f，已按原三锁备份/空闲切换安装，timer恢复原enabled/active，共享浏览器未重启。sceneImage fallback配置false；原renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f保留。备份provider-backup-20260922-narrative-2b17a355；不能退到不支持长请求的旧bundle。
 - 应用已含动态图修正grant>=9迁移；Domain仍要求精确恢复收据，不能以DB允许任意数字绕授权。现rollback b7兼容generic/schema回执，但不能消费新pre-provider恢复回执，提交后优先前向修复；不能直接回滚到旧固定额度版本。
 - Pro代码合作已实测原生CLI exec resume/chatgpt-web/pro/ultra/STDIN短任务读取→写报告→读回；长任务工具续接与Desktop完整补丁仍未安装，不能称全局稳定。本机桥用于代码合作，服务器image/review provider负责产品图片。
 
@@ -49,9 +49,10 @@
 - 37048恢复真实结果：第二篇b887 science356s/65K、art及末审accepted，run生成4图/version18；第三篇04f science101s/art100s/末审accepted，planapproved并生成5任务。第三篇新scene0 11f0c514正式6Pro accepted，1280×720实图已看（tmp/third-paper-new-scene0-11f0c514-20260922.png）；scene1 95f087f2正式blocked/null，真实问题为FDT桥、j/G→A关系及“介质量子化”歧义。另b9020f19图生成失败无资产、9eab55dc图已存但review provider failed；run failed/version22/max15，GET无canRetry，正在查spool与原动态恢复入口，勿重发。df0be6a2已审，其正式结果待读取。
 - 单行审图提示强化已High PASS但暂不部署，冻结tmp/generated-reader-review-prompt-20260922.patch；旧任务必须按原promptHash消费已完成审阅，不能先改prompt。正常review-runner先上传后填正文/发送前逐字核对候选High PASS，原9eab只收到图片与询问答复，不伪造正式审阅。
 - 23:19:39Z浏览器4GiB触顶OOM已由内核确证。High批准后在线升8GiB，原container与安全/network/PID/shm不变、无重启；只关闭Inspector.targetCrashed确证的080自有死页，全局attach恢复。原broker23:54:30Z收回080的948bytes正式blocked/null JSON；第二篇run现failed/v19，其余477未审与363/ce336未提交失败保留。资源/关页/结果证据见详细交接。
-- 候选：原whole-set replan支持混合终态，必须真实blocked/null科学anchor，未审draft与not_submitted不作为科学反馈；原1+N新任务，旧图/失败收据保留。not-submitted broker旁证及Gateway独立状态High PASS，仅用于整组修订，不开放旧task重发。080另沿原retry入口只消费已完成review/原PNG，零新provider提交；API ro reader+Domain/handler恢复收据增量已High PASS，所有候选待统一服务器交付。
+- 2b17已交付上述混合终态、not-submitted旁证、完成审阅只读consumer、正常composer及原M3末审一致性提示。三条未提交旁证由broker自然补齐；080于00:22:13Z原页面HTTP202恢复，exec2成功/73ms消费原6Pro正式blocked/null，零新provider提交，audit fc09766b。随后第二篇runfailed/v21，第三篇failed/v22，原GET均开放narrative-scientific-replan（5/6项）。
+- 00:24:44Z第三篇原按钮HTTP202→新plan53f08786-01b4-4ef4-adba-9b44ecd41aad/runv23；00:24:58Z第二篇HTTP202→新plan221d52ce-eaab-4bc1-afdf-fba445524114/runv22。/jobs/{second,third}-paper-mixed-terminal-replan-20260922.json及second-paper-completed-review-resume-20260922.json已消费。新科学规划在途，不重发；原来源/六维/Claims与旧图保护。
 ## 其他受保护资产与入口
 - ac455b2f真实Chat产物approved；77b3f559历史Fig.2占位、557c3db6来源待核均approved，不能直接公开全部approved。d5087b03悬空draft copy；重复计划6439150a/ee9bcfb6 draft、6043bebb/75b34c88 approved，清理未获明确同意。旧占位929bd95d/6088f11b/03a160aa早先已授权删除，不能重处理。
 - 能力位置/最新实际效果查docs/runbooks/hermes-capability-registry.md；完整故障/调用/部署/恢复收据查docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md。此前中断、300秒传输、Claims缺失、长度、渲染拒收等历史已在该文件/Git保留，不按历史next action重跑。
 - 37048da2已High PASS并部署：共享parser允许原1–6图范围，生产端持久化前复用同一parser；managed task禁止脱离run单独retry。原retry-generation新增精确模型前失败的一次同task恢复：零Gateway audit/result/asset、完整root receipt/来源/全组审阅复核，task/step/run三重CAS，不增加max或任务数，worker exec2各阶段验receipt且保持primary-only。初始science恢复也移除父RO公开历史误挡私有draft。原页面23:04:33Z/23:04:49Z均HTTP202恢复b887/04f，runv16/v19，原任务exec2/max不变，已进入规划。
-- 下一步：已消费的恢复writer禁止重放。完成当前候选High审查、干净提交/服务器build/start和独立provider安装；第二篇先收回080正规审阅，随后两原页面沿混合终态科学修订、Chat实图/6Pro/reader与新公开版本继续。两篇尚未交付最终图文，不因局部通过结束任务。
+- 下一步：已消费的恢复writer禁止重放。等待221d/53f科学与艺术修订、Chat实图和6Pro，处理实际阻断后沿reader与新公开版本继续。两篇尚未交付最终图文，不因局部通过结束任务。

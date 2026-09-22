@@ -4,6 +4,8 @@
 
 ## 2026-09-22 原图审阅恢复与混合终态修订（最新）
 
+- 00:25Z交付检查点：2b17正常服务器build/start exit0，独立release/rollback=2b17/37048且journal/failed false；随后原三锁备份及timer空闲切换安装同SHA provider，原renderer与浏览器不变，原timer状态恢复，日志tmp/visual-narrative-provider-install-20260922.log。下述“候选/待部署”为此前过程，现均已交付。
+- 第二篇原页面00:22:13Z HTTP202仅恢复080，task exec2/retry1成功，原6Pro正式blocked/null入库；新audit fc09766b-f338-4e9f-9788-91d55954178d仅73ms，selection为saved_scientific_review_recovery，零新provider发送。三条not-submitted旁证随后由自然broker补齐，GET第二/第三恢复资格5/6项。第三原页面00:24:44Z HTTP202→53f08786-01b4-4ef4-adba-9b44ecd41aad，第二00:24:58Z→221d52ce-eaab-4bc1-afdf-fba445524114；两run进入generating_storyboard。新收据/jobs/{second,third}-paper-mixed-terminal-replan-20260922.json与second-paper-completed-review-resume-20260922.json已消费，不能重放。第三第一次资格未齐前停在发送前且未留写收据；没有重复POST。后续仍须实图/审阅/reader/新发布。
 - 第二篇新组run7e9e已failed/v19，两个PNG存在、两条生图未提交失败。08046c8b原6Pro请求23:18:49Z提交，23:19:39Z内核记录浏览器4GiB cgroup触顶并OOM-kill Chrome；随后36384cfa/ce336e79分别模式/attach超时。主机约30GiB、可用约15GiB，High批准在线提高到8GiB，原container ID与网络/安全/PID/shm不变，没有重启。完整资源收据`/opt/openscience/observations/browser-memory-20260922.json`，本机内核时间证据`tmp/browser-oom-time-read-20260922.json`。
 - 080原target经`Inspector.targetCrashed`直接确证，原会话在新专用页可读完整blocked/null科学JSON；只关闭唯一已崩溃自有页，Playwright全局连接恢复。原broker于23:54:30Z自然保存`recovered-result.json`/948bytes response，零新请求。任务已failed，须沿原产品入口只消费已完成审阅，不能手工写formal review。477原图存在，审阅not_submitted/failed；原记录全部保留。
 - 第三篇9eab55dc原唯一user turn只有图片，DOM/native-copy正文为0，原期望reviewPrompt41123字符；唯一assistant终态315bytes为询问要复核还是修改，不是正式JSON，原anchor不存在。已证“完整正文未提交”，上传hydration清空是机制推断。正常review-runner候选先上传再填完整正文，发送前精确核对正文/附件/6Pro/普通模式/Send，High PASS。原response不伪造成科学审阅，不新建continuation协议。
