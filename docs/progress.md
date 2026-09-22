@@ -11,8 +11,9 @@
 ## 2026-09-22 — Hermes 当前状态
 
 - 第一篇已完成公开 v3，旧 v1/v2 保留；最终用户质量认可仍待确认。
-- 第二篇已完成保存方案恢复与正式末审，因比例尺冲突被科学阻断；已从原站内入口创建来源支持的新修订，当前结果与下一动作见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
-- 第三篇全文、六维与来源根修订入口已完成；末审因公式和额外标题阻断，已创建来源支持的新修订。后两篇仍需完成正式 science/art/final、真实图、reader、新公开版本及用户确认。
+- 后两篇新稿 M3 accepted、六张 PNG 已保存；六次 6Pro 审阅在提交前技术失败，另两张出图结果 unknown。原 PDF、六维及旧图保留，不重发 unknown；已存图仍有科学和叙事问题，accepted 不等于质量认可。
+- 跨 broker 共用页面的问题已定位；自有页面隔离、正式 issues 到 art 接线及仅恢复已有 PNG 审阅的候选已 High GO，准确部署范围与下一动作见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。独立浏览器执行器的部署不能由应用源码合入推定完成。
+- 用户允许更换账号，但尚未找到第二份可直接切换的登录，当前登录保留。后两篇 reader、新公开版本及最终用户认可仍未完成。
 - 既有淡彩图和真实 Fig.3 认可结果继续保护；被否定的 Fig.1 展示、旧失败候选和未知提交不得冒充交付成功或擅自重放。
 
 ## 2026-09-22 — 期刊增强当前状态
@@ -25,5 +26,6 @@
 
 - 当前执行约束见 `AGENTS.md`；测试、构建、服务器操作和部署只按用户最新授权执行。
 - 能力接线、已知断点和实际消费方见 [Hermes 能力台账](runbooks/hermes-capability-registry.md)。
+- 本机浏览器代理的独立配置、依赖与回滚见 [本机能力记录](runbooks/hermes-capability-registry.md#local-browser-proxy)，不等同业务部署。
 - 服务器部署、备份和监控分别见 [deployment](runbooks/deployment.md)、[backup-restore](runbooks/backup-restore.md) 与 [monitoring](runbooks/monitoring.md)。
 - 历史进展不在默认读取路径继续累积；需要取证时使用 Git 历史及 CURRENT 中已登记的原始记录。

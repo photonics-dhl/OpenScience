@@ -1,5 +1,12 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 — 新稿六图已保存；跨 broker 共用页面已确证，恢复候选待交付
+- be793/3d7两稿正式M3末审accepted；第二篇run failed/v61/max43、第三篇failed/v52/max44。各三张真实PNG保存draft，六次6Pro review均not_submitted/MODEL_6_PRO_NOT_READY，没有发送审阅；每篇第四张34d8abc0/34ce6503有submitted、无conversation，public uncertain，不得重发或改成未提交。tmp/source-root-plan-completion-20260922.json、current-scene-failure-metadata-20260922.json、current-eight-scene-spool-20260922.json留证，六图tmp/current-<taskId>-20260922.png已逐张实看。
+- 同一browser instance06782bc8的target登记直接碰撞：image38c6/review9616共DD8F5099；image34d8/review38c6共785D80FA；image34ce/review77c3共1209E3F0。image认领任意空白home/name，而review新页未命名、两broker分锁，存在跨任务误占；后两submitted图的target与失败关闭的review target相同。不把全部六次MODEL错误都归因于同一原因。根因候选删除image全局claim，只创建自有页；image/review标记并在填充/提交前核对原name，既有target登记、prepare/send/旧恢复/deadline/provider保持。独立High GO，未安装。
+- 原技术恢复被unknown sibling及无accepted anchor阻断；Domain两文件候选只替换review_failed/not_submitted，保留unknown原task/step/recoveryState，六PNG仅续审、maxNewImages0，不伪造accepted anchor。旧receipt兼容、source-support根保持；冻结tmp/narrative-review-only-unknown-recovery-20260922，独立High GO，待交付。原GET仍无按钮，未新模型请求。
+- 科学质量仍未通过：第三篇accepted稿重加labels外完整标题/j(r)/底注，并有描述与所选basis不一致；第二篇实图仍出现电子轨迹穿过纳米线截面、点大小变化等问题。planner已将正式structured issues补接给新art，纯source-support summary不注入art；现有不可信反馈约束保持、无新阶段，High PASS。该补丁不保证科学正确，旧accepted不能作为发布依据。
+- 用户授权切换服务器另一账号，但不记得位置。只读元数据发现当前一个Default浏览器profile，已知secrets目录空，历史Codex auth路径不存在；历史记录是09-11退出第一账号后登录第二账号，不是已配置双账号自动切换。已打开当前账户菜单，无第二账号切换入口，未退出/换号/读取凭据。观察脚本曾把strict locator双账户按钮误分类为page_or_node_unavailable，后续确认page closed=false、browser connected=true，改按实际两控件打开菜单；不是浏览器崩溃证据。当前空白页6 Pro可见，不证明旧六次失败时状态，也不证明额度耗尽。
+
 ## 2026-09-22 09:54Z — 来源根科学修订链已部署，两篇原按钮各创建一份新稿
 - f19e99d49862f026d884cdf1e2edf0ae75019973正常服务器build/start exit0；独立marker release=f19/rollback=dac602ec、journal/failed=false。第一次事务exit73（锁当时占用），marker无变化；定向/proc/locks与同inode fd9读取时已无持有者，未删锁或改互斥，用新的attempt2记录正常完成。保留两份日志/opt/openscience/observations/deploy-f19e99d4{,-attempt2}-20260922.log。无测试/预检/CI/迁移/独立receiver更新/共享浏览器重启。
 - 新GET第三篇恢复narrative-scientific-replan/charge1，刷新原页点击后09:54:38.391Z HTTP202，新task3d7ee9e7-b5ae-4578-8963-10478d2f7f30 exec1、runv49/max44；receipt6e681c65-e84e-4ce4-ada9-68cf54b6434e，previous/root=2356f78f-2253-4d44-831a-893c8a385282，failedTask40026425，继承5图预留、maxNewImages0、charge1。当前running，无结果；原source proof与正式5项反馈保留。

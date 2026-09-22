@@ -868,7 +868,7 @@ async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionC
             const recoveryState = image ? undefined : receipt
                 ? recordedFailure.failureKind === 'submission_unknown' ? recordedFailure.recoveryState : 'not_submitted'
                 : await input.terminalSceneSet?.inspectImageRecoveryState?.(imageTask.id).catch(() => 'unsafe');
-            const submissionUnknown = !image && !technicalRecovery
+            const submissionUnknown = !image
                 && (recoveryState === 'uncertain' || recoveryState === 'submitted_without_result');
             if (!image && recoveryState !== 'not_submitted' && !submissionUnknown) {
                 throw new PresentationAssetError('VALIDATION_ERROR', 'Scene submission proof is unavailable or unsafe');
@@ -911,7 +911,8 @@ async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionC
         images.push({ image, task: imageTask!, sceneIndex: scene.sceneIndex, review: pixelReview });
     }
     images.sort((a, b) => a.sceneIndex - b.sceneIndex);
-    if (technicalRecovery ? !images.length || images.some(image => image.review.decision !== 'accepted') || !failures.length
+    const recoverableFailures = failures.filter(scene => scene.failureKind === 'review_failed' || scene.failureKind === 'not_submitted');
+    if (technicalRecovery ? images.some(image => image.review.decision !== 'accepted') || !recoverableFailures.length
         : !images.some(image => image.review.decision === 'blocked' && image.review.repairInstruction === null)) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative pixel feedback does not require scientific replanning');
     }
@@ -921,9 +922,7 @@ async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionC
     })), ...failures].sort((a, b) => Number(a.sceneIndex) - Number(b.sceneIndex));
     if (sceneReviews.some((scene, index) => scene.sceneIndex !== index))
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative terminal scenes are incomplete');
-    const anchor = technicalRecovery ? images[0]! : images.find(image => image.review.decision === 'blocked' && image.review.repairInstruction === null)!;
-    return { parent, task: task!, payload, view, images, sceneReviews, parentIdentity,
-        image: anchor.image, imageTask: anchor.task, reviewHash: anchor.review.responseHash as string,
+    return { parent, task: task!, payload, view, images, sceneReviews, recoverableFailures, parentIdentity,
         sourceEvidenceIdentity: p.sourceEvidenceIdentity as string,
         feedback: images.filter(image => !input.terminalSceneSet || image.review.decision === 'blocked')
             .map(image => `Scene ${image.sceneIndex + 1} — ${image.review.decision}: ${image.review.summary}`).join('\n\n'),
@@ -934,12 +933,15 @@ async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionC
 }
 
 /** Scientific replanning still requires an actual blocked scientific review. */
-export function readNarrativePixelReplanSource(prisma: Parameters<typeof readNarrativeTerminalSceneSource>[0],
+export async function readNarrativePixelReplanSource(prisma: Parameters<typeof readNarrativeTerminalSceneSource>[0],
     input: Parameters<typeof readNarrativeTerminalSceneSource>[1]) {
-    return readNarrativeTerminalSceneSource(prisma, input);
+    const source = await readNarrativeTerminalSceneSource(prisma, input);
+    const anchor = source.images.find(image => image.review.decision === 'blocked' && image.review.repairInstruction === null);
+    if (!anchor) throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative scientific replanning has no blocked scientific anchor');
+    return { ...source, image: anchor.image, imageTask: anchor.task, reviewHash: anchor.review.responseHash as string };
 }
 
-/** Technical replacement preserves accepted siblings and requires proof for every failed submission. */
+/** Replace only proven recoverable failures; preserve accepted and submission-unknown siblings. */
 export function readNarrativeTechnicalRecoverySource(prisma: Parameters<typeof readNarrativeTerminalSceneSource>[0],
     input: Parameters<typeof readNarrativeTerminalSceneSource>[1]) {
     if (!input.terminalSceneSet) throw new PresentationAssetError('VALIDATION_ERROR', 'Terminal scene proof is required');
@@ -1186,14 +1188,19 @@ async function readNarrativeTechnicalReceipt(prisma: Pick<Prisma.TransactionClie
         || !Array.isArray(metadata.sceneSteps) || metadata.sceneSteps.length !== metadata.sceneReviews.length
         || metadata.newTaskCount !== metadata.replacements.length || Number(metadata.newTaskCount) < 1 || Number(metadata.newTaskCount) > history.sceneLimit
         || metadata.chargeableAttempts !== metadata.newTaskCount || metadata.newRunCount !== 0 || metadata.maxNewStoryboards !== 0
-        || metadata.noProviderSwitch !== true || metadata.publicationAuthorized !== false || metadata.priorSubmission !== 'none'
+        || metadata.noProviderSwitch !== true || metadata.publicationAuthorized !== false
         || !Number.isSafeInteger(metadata.existingTaskCount)
         || Number(metadata.existingTaskCount) > Number(history.metadata.existingTaskCount) + history.depth + 1 + history.sceneLimit
         || Number(metadata.existingTaskCount) < Number(history.metadata.existingTaskCount) + history.depth + 1
         || metadata.maxAgentTasks !== Math.max(Number(metadata.previousMaxAgentTasks), Number(metadata.existingTaskCount) + Number(metadata.newTaskCount)))
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement receipt is invalid');
     const sceneReviews = metadata.sceneReviews.map(recordValue);
-    if (sceneReviews.some(scene => typeof scene.taskId !== 'string'))
+    const preservedUnknown = sceneReviews.filter(scene => scene.failureKind === 'submission_unknown');
+    if (sceneReviews.some(scene => typeof scene.taskId !== 'string')
+        || metadata.priorSubmission !== (preservedUnknown.length ? 'preserved_unknown' : 'none')
+        || preservedUnknown.some(scene => !['uncertain', 'submitted_without_result'].includes(String(scene.recoveryState))
+            || scene.imageId !== null || scene.contentHash !== null || scene.reviewHash !== null || scene.decision !== null
+            || scene.reviewAuditIdentity !== null || scene.imageIdentity !== null || typeof scene.taskIdentity !== 'string'))
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement scene identity is invalid');
     const source = await readNarrativeTechnicalRecoverySource(prisma, { actorId: run.actorId, runId: run.id,
         researchObjectId: run.researchObjectId, versionId: run.versionId!, sourceClaimIds: run.sourceClaimIds,
@@ -1202,11 +1209,11 @@ async function readNarrativeTechnicalReceipt(prisma: Pick<Prisma.TransactionClie
         || metadata.sourceEvidenceIdentity !== history.metadata.sourceEvidenceIdentity)
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement source changed');
     const replacements = metadata.replacements.map(recordValue);
-    const failures = sceneReviews.filter(scene => scene.failureKind !== undefined);
-    if (replacements.length !== failures.length || new Set(replacements.map(item => item.newTaskId)).size !== replacements.length
+    const recoverableFailures = source.recoverableFailures;
+    if (replacements.length !== recoverableFailures.length || new Set(replacements.map(item => item.newTaskId)).size !== replacements.length
         || new Set(replacements.map(item => item.sceneIndex)).size !== replacements.length
-        || metadata.maxNewImages !== failures.filter(scene => scene.failureKind === 'not_submitted').length
-        || metadata.reviewOnlyTaskCount !== failures.filter(scene => scene.failureKind === 'review_failed').length)
+        || metadata.maxNewImages !== recoverableFailures.filter(scene => scene.failureKind === 'not_submitted').length
+        || metadata.reviewOnlyTaskCount !== recoverableFailures.filter(scene => scene.failureKind === 'review_failed').length)
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement allowance changed');
     for (const [index, scene] of sceneReviews.entries()) {
         const oldStep = recordValue(metadata.sceneSteps[index]);
@@ -1219,6 +1226,12 @@ async function readNarrativeTechnicalReceipt(prisma: Pick<Prisma.TransactionClie
         if (scene.failureKind === undefined) {
             if (replacement || step.agentTaskId !== scene.taskId || (step.presentationAssetId !== null && step.presentationAssetId !== scene.imageId))
                 throw new PresentationAssetError('VALIDATION_ERROR', 'Accepted narrative image was replaced');
+            continue;
+        }
+        if (scene.failureKind === 'submission_unknown') {
+            if (replacement || step.agentTaskId !== scene.taskId || step.presentationAssetId !== oldStep.presentationAssetId
+                || step.status !== oldStep.status || step.error !== oldStep.error)
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Unknown narrative submission was changed or replaced');
             continue;
         }
         if (!replacement || typeof replacement.newTaskId !== 'string' || replacement.previousTaskId !== scene.taskId

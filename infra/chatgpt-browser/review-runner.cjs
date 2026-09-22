@@ -392,6 +392,7 @@ let composerRepairAttempted = false;
   activePage = page;
   await rememberPage(page, dir, request.provider, id, instance);
   await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.evaluate(name => { window.name = name; }, `xgs-review-${id}`);
   let input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000));
   if (!input) throw Error('CHAT_COMPOSER_NOT_FOUND');
   if (!await model6ProActive(input)) throw Error('MODEL_6_PRO_NOT_READY');
@@ -403,6 +404,7 @@ let composerRepairAttempted = false;
   await uploadAttachments(input, request);
   input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000));
   stage = 'composer_fill';
+  if (await page.evaluate(() => window.name) !== `xgs-review-${id}`) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   await input.fill(prompt);
   const send = page.getByRole('button', { name: 'Send prompt', exact: true });
   const awaitReadiness = async () => {
@@ -460,6 +462,7 @@ let composerRepairAttempted = false;
   if (!await send.isEnabled().catch(() => false)) throw Error('SEND_NOT_READY');
   if (Date.now() >= request.deadlineAt) throw Error('REQUEST_DEADLINE_EXCEEDED');
   stage = 'submission';
+  if (await page.evaluate(() => window.name) !== `xgs-review-${id}`) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   once('submitted.json', { phase: 'submitted', id, promptHash: request.promptHash, assistantCount: baseline,
     attachments: (request.attachments ?? []).map(({ fileName, sha256 }) => ({ fileName, sha256 })), submittedAt: new Date().toISOString() });
   await send.focus();
