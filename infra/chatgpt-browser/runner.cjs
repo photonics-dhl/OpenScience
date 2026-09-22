@@ -370,18 +370,6 @@ async function waitForImageComposer(page, deadlineAt) {
   }
   return null;
 }
-async function claimAuthenticatedImagePage(context) {
-  for (const url of ['https://chatgpt.com/']) {
-    for (const page of context.pages()) {
-      if (page.url() !== url || await bounded(page.evaluate(() => window.name), 2000).catch(() => 'unresponsive')) continue;
-      const composer = await bounded(imageComposer(page), 2000).catch(() => null);
-      if (!composer || (await composerText(composer).catch(() => '')).trim()) continue;
-      if (await composer.locator('xpath=ancestor::form[1]').locator('[role="group"][aria-label]').count() !== 0) continue;
-      await page.evaluate(name => { window.name = name; }, `xgs-image-${id}`);
-      return page;
-    }
-  }
-}
 let activePage;
 let stage = 'request';
 (async () => {
@@ -459,22 +447,20 @@ let stage = 'request';
     page = await findPreparedPage(context);
     activePage = page;
   } else {
-    page = await claimAuthenticatedImagePage(context);
+    // Image and review brokers have separate locks. An empty authenticated page
+    // may already belong to a review or a person; only create this task's page.
+    page = await context.newPage();
     activePage = page;
-    if (!page) {
-      page = await context.newPage();
-      activePage = page;
-      await rememberPage(page, dir, 'chatgpt-web', id, instance);
-      await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
-      let ready = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 5000));
-      for (let attempt = 0; !ready && attempt < 3; attempt += 1) {
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        await page.reload({ waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
-        ready = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 15000));
-      }
-      if (!ready) throw Error('IMAGE_COMPOSER_NOT_FOUND');
-      await page.evaluate(name => { window.name = name; }, `xgs-image-${id}`);
+    await rememberPage(page, dir, 'chatgpt-web', id, instance);
+    await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
+    await page.evaluate(name => { window.name = name; }, `xgs-image-${id}`);
+    let ready = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 5000));
+    for (let attempt = 0; !ready && attempt < 3; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: Math.min(30000, Math.max(1, request.deadlineAt - Date.now())) });
+      ready = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 15000));
     }
+    if (!ready) throw Error('IMAGE_COMPOSER_NOT_FOUND');
   }
   await rememberPage(page, dir, 'chatgpt-web', id, instance);
   const prompt = [
@@ -485,6 +471,7 @@ let stage = 'request';
   ].join('\n');
   const composer = await waitForImageComposer(page, Math.min(request.deadlineAt, Date.now() + 15000));
   if (!composer) throw Error('IMAGE_COMPOSER_NOT_FOUND');
+  if (await page.evaluate(() => window.name) !== `xgs-image-${id}`) throw Error('IMAGE_PAGE_OWNERSHIP_LOST');
   stage = 'prompt_fill';
   // Image mode has its own controls (for example "Extra High"). The 6 Pro
   // requirement belongs to scientific review, not the native image composer.
@@ -532,6 +519,7 @@ let stage = 'request';
   if (mode === 'prepare' || mode === 'execute') console.log('PREPARED');
   if (mode === 'prepare') process.exit(0);
   stage = 'submit';
+  if (await page.evaluate(() => window.name) !== `xgs-image-${id}`) throw Error('IMAGE_PAGE_OWNERSHIP_LOST');
   once('submitted.json', { phase: 'submitted', provider: 'chatgpt-web', id, promptHash: request.promptHash, source: request.source, submittedAt: new Date().toISOString() });
   await send.click();
   console.log('SUBMITTED');

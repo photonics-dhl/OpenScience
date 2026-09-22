@@ -364,7 +364,7 @@ export async function getHermesResearchRun(
     ? await inspectNarrativeTechnicalRecovery(deps.prisma, run, deps).catch(() => null) : null;
   if (technical) {
     view.canRetryGeneration = true; view.canAuthorizeNarrativeCorrection = false;
-    view.generationRecovery = 'image-render'; view.chargeableAttempts = technical.failures.length;
+    view.generationRecovery = 'image-render'; view.chargeableAttempts = technical.recoverableFailures.length;
   }
   const imageSteps = run.steps.filter(step => step.stage === 'scene_image' && step.agentTaskId);
   if (run.versionId && imageSteps.length) {
@@ -544,12 +544,12 @@ async function inspectNarrativeTechnicalRecovery(tx: Prisma.TransactionClient, r
   const checkpoint = jsonRecord(jsonRecord(pixel.task.result).storyboardCheckpoint);
   if (!isDeepStrictEqual(checkpoint.payload, pixel.task.payload) || checkpoint.sourceEvidenceIdentity !== source.sourceEvidenceIdentity
     || !await readUnchangedNarrativeCheckpointEvidence(tx, run, checkpoint)) return null;
-  const failures = source.sceneReviews.map(jsonRecord).filter(scene => scene.failureKind !== undefined);
+  const recoverableFailures = source.recoverableFailures;
   const existingTaskCount = await tx.agentTask.count({ where: { kind: 'presentation.generate',
     payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } })
     + run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
-  return { pixel, source, scenes, failures, existingTaskCount,
-    maxAgentTasks: Math.max(run.maxAgentTasks!, existingTaskCount + failures.length) };
+  return { pixel, source, scenes, recoverableFailures, existingTaskCount,
+    maxAgentTasks: Math.max(run.maxAgentTasks!, existingTaskCount + recoverableFailures.length) };
 }
 
 async function readCompletedImageReviewSource(tx: Prisma.TransactionClient, run: RunRow, taskId: string) {
@@ -2324,7 +2324,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
               error: null, lastReconciledAt: null, version: { increment: 1 } } });
             if (changed.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Technical recovery changed');
             const replacements = [];
-            for (const scene of technical.failures) {
+            for (const scene of technical.recoverableFailures) {
               const step = technical.scenes.find(item => item.ordinal === scene.sceneIndex)!;
               const previous = await tx.agentTask.findUniqueOrThrow({ where: { id: step.agentTaskId! } });
               const payload = parsePresentationGenerationPayload(previous.payload);
@@ -2351,7 +2351,8 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
                 newTaskCount: replacements.length, chargeableAttempts: replacements.length, creditPolicy: 'charged-on-submit',
                 maxNewStoryboards: 0, maxNewImages: replacements.filter(item => item.mode === 'render').length,
                 reviewOnlyTaskCount: replacements.filter(item => item.mode === 'review_only').length,
-                newRunCount: 0, priorSubmission: 'none', noProviderSwitch: true, publicationAuthorized: false,
+                newRunCount: 0, priorSubmission: technical.source.sceneReviews.some(scene => jsonRecord(scene).failureKind === 'submission_unknown')
+                  ? 'preserved_unknown' : 'none', noProviderSwitch: true, publicationAuthorized: false,
                 parentStoryboardAssetId: technical.source.parent.id, parentIdentity: technical.source.parentIdentity,
                 sourceEvidenceIdentity: technical.source.sourceEvidenceIdentity, sourceIdentity: technical.source.identity,
                 sceneSet: 'terminal', sceneReviews: technical.source.sceneReviews, replacements,
@@ -3162,6 +3163,10 @@ export async function reconcileHermesResearchRuns(
                 return moveRun(deps, tx, run, 'generating_storyboard', ro.workspaceId);
               }
               for (const failedStep of steps.filter(step => step.agentTask?.status === 'failed')) {
+                if (stage === 'scene_image' && pixelAuthority?.technicalRecovery
+                  && (pixelAuthority.technicalRecovery.metadata.sceneReviews as unknown[]).some(raw => {
+                    const scene = jsonRecord(raw); return scene.failureKind === 'submission_unknown' && scene.taskId === failedStep.agentTaskId;
+                  })) continue;
                 const changed = await tx.hermesResearchStep.updateMany({ where: { id: failedStep.id, runId: run.id,
                   agentTaskId: failedStep.agentTaskId, status: failedStep.status, presentationAssetId: failedStep.presentationAssetId },
                 data: { status: 'failed', error: failedStep.agentTask?.error ?? 'Generation failed' } });
