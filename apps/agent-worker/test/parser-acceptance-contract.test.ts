@@ -129,13 +129,13 @@ function validDraft() {
   }));
   return {
     schemaVersion: 3,
-    acceptanceProfile: 'hermes-parser-14-2-v1',
+    acceptanceProfile: 'hermes-parser-14-2-v2',
     sourceSha: 'a'.repeat(40),
     manifestSha256: CANONICAL_CORPUS_MANIFEST_SHA256,
     images: { worker: `sha256:${'b'.repeat(64)}`, parser: `sha256:${'c'.repeat(64)}` },
     runtimeProcess: { uid: 1000, gid: 1000, effectiveEnvCount: 0 },
     gatewayCalls: {
-      structuredFake: 14, externalProvider: 0,
+      structuredFake: 28, externalProvider: 0,
       forbidden: { complete: 0, ocr: 0, stream: 0, unknown: 0 },
     },
     summary: { falseReadyCount: 0, failed: 0, succeeded: 14, needsReview: 2, p50ElapsedMs: 8, p95ElapsedMs: 16 },
@@ -255,9 +255,9 @@ describe('Task 8 acceptance contract', () => {
   it('accepts only a complete hard-gate draft with exact calls, statuses, locators and provenance', () => {
     expect(validateAcceptanceDraft(validDraft())).toMatchObject({
       schemaVersion: 3,
-      acceptanceProfile: 'hermes-parser-14-2-v1',
+      acceptanceProfile: 'hermes-parser-14-2-v2',
       summary: { failed: 0, falseReadyCount: 0, succeeded: 14, needsReview: 2 },
-      gatewayCalls: { structuredFake: 14, externalProvider: 0 },
+      gatewayCalls: { structuredFake: 28, externalProvider: 0 },
     });
   });
 
@@ -517,7 +517,7 @@ describe('Task 8 acceptance contract', () => {
     ['false ready', (draft: ReturnType<typeof validDraft>) => { draft.cases[1]!.falseReady = true; }, /false-ready/i],
     ['missing stage', (draft: ReturnType<typeof validDraft>) => { draft.cases[1]!.stages = []; }, /stage provenance/i],
     ['missing Tesseract provenance', (draft: ReturnType<typeof validDraft>) => { draft.cases[10]!.stages[0]!.parser = 'v1-text-transition'; }, /Tesseract provenance/i],
-    ['hidden structured call', (draft: ReturnType<typeof validDraft>) => { draft.gatewayCalls.structuredFake = 15; }, /structured fake/i],
+    ['hidden structured call', (draft: ReturnType<typeof validDraft>) => { draft.gatewayCalls.structuredFake = 29; }, /structured fake/i],
     ['forbidden OCR call', (draft: ReturnType<typeof validDraft>) => { draft.gatewayCalls.forbidden.ocr = 1; }, /forbidden gateway/i],
     ['missing runtime identity', (draft: ReturnType<typeof validDraft>) => { delete (draft as Partial<typeof draft>).runtimeProcess; }, /identity|runtime process/i],
   ])('rejects $0', (_name, mutate, expected) => {
@@ -536,7 +536,7 @@ describe('Task 8 acceptance contract', () => {
     });
     expect(buildFinalAcceptanceReport(draft, resources)).toMatchObject({
       schemaVersion: 3,
-      acceptanceProfile: 'hermes-parser-14-2-v1',
+      acceptanceProfile: 'hermes-parser-14-2-v2',
       resources: { worker: { user: '1000:1000' }, parser: { effectiveEnvCount: 0 } },
     });
   });
@@ -564,10 +564,18 @@ describe('Task 8 acceptance contract', () => {
   it('labels deterministic structured fakes separately and counts every forbidden gateway seam', async () => {
     const seam = createAcceptanceGatewaySeam({ schemaVersion: '0.1.0', fields: {} });
     await expect(seam.gateway.completeStructured()).resolves.toMatchObject({ schemaVersion: '0.1.0' });
+    await expect(seam.gateway.completeStructuredWithMetadata(undefined, [{ role: 'user', content: 'fixture' }]))
+      .resolves.toMatchObject({
+        value: { schemaVersion: '0.1.0' },
+        completion: {
+          provider: 'deterministic-acceptance', model: 'deterministic-acceptance-v2',
+          usage: { inputTokens: 0, outputTokens: 0 }, finishReason: 'stop',
+        },
+      });
     await expect(seam.gateway.ocr()).rejects.toThrow(/forbidden gateway seam/i);
     await expect((seam.gateway as Record<string, () => Promise<unknown>>).hiddenProvider()).rejects.toThrow(/forbidden gateway seam/i);
     expect(seam.snapshot()).toEqual({
-      structuredFake: 1, externalProvider: 0,
+      structuredFake: 2, externalProvider: 0,
       forbidden: { complete: 0, ocr: 1, stream: 0, unknown: 1 },
     });
   });
@@ -614,6 +622,7 @@ describe('Task 8 acceptance contract', () => {
     expect(() => classifyAcceptanceHandlerResult(withLocations)).toThrow(/handler result/i);
     const canonicalCompleted = { ...withLocations, sourceMapRef };
     expect(classifyAcceptanceHandlerResult(canonicalCompleted)).toBe('completed');
+    expect(() => classifyAcceptanceHandlerResult(canonicalCompleted, true)).toThrow(/handler result/i);
     const withSegments = {
       ...canonicalCompleted,
       core: { ...canonicalCompleted.core, problem: 'Supported problem' },
@@ -805,7 +814,7 @@ describe('Task 8 acceptance contract', () => {
     await publishCandidate(candidate, final, testUid);
     await expect(access(candidate)).rejects.toThrow();
     expect(JSON.parse(await readFile(final, 'utf8'))).toMatchObject({
-      schemaVersion: 3, acceptanceProfile: 'hermes-parser-14-2-v1',
+      schemaVersion: 3, acceptanceProfile: 'hermes-parser-14-2-v2',
     });
   });
 

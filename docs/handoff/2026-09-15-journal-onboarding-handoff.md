@@ -26,8 +26,10 @@
 - 原 96e5e0c 分支：Domain 574、API 117、Web 471 + Node 5、Worker 4、真实 Chromium 2 场景及 GitHub CI 通过；这些不能冒称生产集成候选已通过相同回归。
 - 生产集成采用独立 high 静态权限复核和服务器必要构建；未运行本机测试/构建。自动审批拒绝跳过验收后，本轮按严格 Parser/ScanSci/BGE 发布门禁继续，结果须逐项记录。
 - 097beeab 服务器全量构建通过，切换前因缺少精确 Parser 报告停止；2688deed 后端构建通过，正式 Parser 验收因旧 fake 缺少新增 SourceMap checkpoint 事务而失败，未切换生产。
-- 单文件修复 parser-acceptance-runner.ts 内存事务与任务/来源条件，保留生产 checkpoint、14 成功/2 复核、定位复现、gateway 和隔离限额标准；须以修复后的新 SHA 重建并验收。
+- Parser runner 已补齐内存 checkpoint 事务；fdc11f9f 服务器复验仍失败，定位为旧单阶段 gateway seam 不支持现行 source_bridge/compose。候选适配 v2 严格 profile：固定语料 14 次 bridge + 14 次 compose，保留 14 解析完成/2 需复核、定位、零外部调用及隔离限额；仅源段支持的 problem 可物化，其他五字段保留证据不足，完成解析不代表科学内容完整。独立 high 收口后须重新取得最终 SHA 报告。
 - PR 自动 CI 在 2688deed 暴露 8 个旧 journal fixture/冻结 hash 断言不兼容；已按现行英文申请、服务目录和固定出版记录修正测试，保留权限/幂等/不可变断言。服务页同时改为提交后台有效服务值，避免真实申请被拒。
+- fdc11f9f 的 Domain journal CI 已通过；API 暴露授权到期目录仍枚举解读链接，以及 7 项旧公开记录 fake。708560b3 修复真实目录过滤并更新冻结 DTO/媒体 fixture，独立权限复核 GO。
+- 708560b3 自动 CI：后端/Web build、Domain 39、API 23（另 2 条 browser 用例按独立阶段跳过）、Worker 4、Web 7 均通过。真实 Chromium 两场景 1 通过/1 在末尾失败；唯一差异为三种公开页面各桌面/手机预期匿名 auth/me 401，被旧全空 console 断言误报。已精确收集并显式断言六条匿名响应，认证上下文和其他错误仍拒绝，下一候选待 CI。
 - 已通过既有 SSH 包装脚本使用项目专用密钥连接，未读取/打印 .env 或私钥。
 - 服务器本地双库备份成功：core 79M、search 5.5M，保留 7/7 轮；未下载业务数据。
 - 部署前观测 API/Worker/Parser/ScanSci/BGE 及数据服务正常，磁盘可用约 28G；精确状态须执行时再次定锚。

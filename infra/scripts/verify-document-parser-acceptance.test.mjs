@@ -53,12 +53,12 @@ exports.verifyAcceptanceRuntimeGraphManifest = async (_root, value) => {
   const runtimeInputs = await createReleaseRuntimeSnapshot({ root: releaseRoot, sourceSha: sha });
   const report = {
     schemaVersion: 3,
-    acceptanceProfile: 'hermes-parser-14-2-v1',
+    acceptanceProfile: 'hermes-parser-14-2-v2',
     sourceSha: sha,
     manifestSha256: 'fixture',
     images: { worker: workerImageId, parser: parserImageId },
     runtimeProcess: { uid: 1000, gid: 1000, effectiveEnvCount: 0 },
-    gatewayCalls: { structuredFake: 14, externalProvider: 0, forbidden: {} },
+    gatewayCalls: { structuredFake: 28, externalProvider: 0, forbidden: {} },
     summary: {},
     cases: [],
     resources: {

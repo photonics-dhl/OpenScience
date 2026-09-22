@@ -8,7 +8,7 @@ print_contract() {
   local source_sha="$1"
   printf '%s\n' "{
   \"schemaVersion\": 3,
-  \"acceptanceProfile\": \"hermes-parser-14-2-v1\",
+  \"acceptanceProfile\": \"hermes-parser-14-2-v2\",
   \"sourceSha\": \"$source_sha\",
   \"corpusCases\": 16,
   \"manifestSha256\": \"$MANIFEST_SHA256\",
@@ -27,7 +27,7 @@ print_contract() {
   },
   \"parser\": { \"user\": \"1000:1000\", \"effectiveEnvCount\": 0, \"hostBindMounts\": 0, \"releaseMounts\": 0 },
   \"network\": \"none\",
-  \"calls\": { \"structuredFake\": 14, \"externalProvider\": 0, \"forbiddenGateway\": 0 },
+  \"calls\": { \"structuredFake\": 28, \"externalProvider\": 0, \"forbiddenGateway\": 0 },
   \"freshBuildIdentity\": {
     \"required\": true, \"runnerSha256\": true, \"contractSha256\": true,
     \"runtimeGraphManifest\": true,

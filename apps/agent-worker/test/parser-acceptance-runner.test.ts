@@ -19,24 +19,30 @@ import {
 import { RESEARCH_INTELLIGENCE_CORPUS } from './support/research-intelligence-corpus';
 
 describe('Task 8 acceptance runner production composition', () => {
-  it('builds the bounded fake from exact canonical block ids and explicit labels', () => {
+  it('builds the bounded semantic bridge fake from exact canonical passage ids', () => {
     const value = buildAcceptanceProposal([undefined, [
-      { role: 'system', content: 'ignored' },
-      { role: 'user', content: [
-        '--- SOURCE_BLOCK id:B000001 ---\nProblem: Exact fixture problem.',
-        '--- SOURCE_BLOCK id:B000002 ---\nUnlabelled context.',
-        '--- SOURCE_BLOCK id:B000003 ---\nMethod: Exact fixture method.',
-      ].join('\n\n') },
-    ]]);
+      { role: 'system', content: 'fields chosenRepresentativeCase' },
+      { role: 'user', content: '[P00001 page:1 blocks:1 chars:22]\nExact fixture passage.\n[/P00001]' },
+    ]]) as { fields: Record<string, unknown>; chosenRepresentativeCase: string | null };
 
+    expect(value.fields.problem).toEqual([{
+      statement: 'Exact fixture passage.', type: 'observation', conditionCase: '', comparison: null,
+      operation: null, evidenceIds: ['P00001'],
+    }]);
+    expect(value.fields.method).toEqual([]);
+    expect(value.chosenRepresentativeCase).toBeNull();
+  });
+
+  it('builds the final composition fake from the selected canonical passage only', () => {
+    const value = buildAcceptanceProposal([undefined, [
+      { role: 'system', content: 'scientific summary' },
+      { role: 'user', content: '从下列原始P段重新组织六段研究精华\n\n[P00007 page:2 blocks:1 chars:17]\nMeasured fixture.\n[/P00007]' },
+    ]]) as { fields: Record<string, { summary: string; sourcePassageIds: string[] }>; needsMoreEvidence: unknown[] };
     expect(value.fields.problem).toEqual({
-      summary: 'Exact fixture problem.', sourceBlockIds: ['B000001'], needsMoreInformation: false,
+      summary: '验收来源记录：Measured fixture.', sourcePassageIds: ['P00007'],
     });
-    expect(value.fields.method).toEqual({
-      summary: 'Exact fixture method.', sourceBlockIds: ['B000003'], needsMoreInformation: false,
-    });
-    expect(value.fields.results).toEqual({ summary: '', sourceBlockIds: [], needsMoreInformation: true });
-    expect(JSON.stringify(value)).not.toContain('sourceQuote');
+    expect(value.fields.results).toEqual({ summary: '', sourcePassageIds: [] });
+    expect(value.needsMoreEvidence).toEqual([]);
   });
 
   it.each([
@@ -63,7 +69,7 @@ describe('Task 8 acceptance runner production composition', () => {
     },
     { id: 'notebook-en', mimeType: 'application/x-ipynb+json' },
     { id: 'python-code-en', mimeType: 'text/x-python' },
-  ])('accepts actionable $id with its full locator and exactly one structured fake', async ({
+  ])('accepts actionable $id with its full locator and two structured semantic fakes', async ({
     id, mimeType,
   }) => {
     const fixture = RESEARCH_INTELLIGENCE_CORPUS.find((candidate) => candidate.id === id);
@@ -73,9 +79,6 @@ describe('Task 8 acceptance runner production composition', () => {
     const artifactId = `artifact-${id}`;
     const stageAdapter = createSidecarParserStageProcessor(createDefaultIngestionAdapters());
     const gatewaySeam = createAcceptanceGatewaySeam(buildAcceptanceProposal);
-    for (let index = 0; index < 13; index += 1) {
-      await gatewaySeam.gateway.completeStructured();
-    }
     const canonicalCascade = createWorkerParserCascade(
       gatewaySeam.gateway as unknown as AiGateway,
       stageAdapter,
@@ -137,7 +140,7 @@ describe('Task 8 acceptance runner production composition', () => {
       executionAttempt: 1,
     });
 
-    expect(classifyAcceptanceHandlerResult(handlerResult)).toBe('completed');
+    expect(classifyAcceptanceHandlerResult(handlerResult, true)).toBe('completed');
     expect(cascadeResult?.status).toBe('succeeded');
     if (cascadeResult?.status !== 'succeeded') return;
     const extraction = handlerResult as unknown as {
@@ -160,7 +163,7 @@ describe('Task 8 acceptance runner production composition', () => {
       locatorMatches: 1, locatorTotal: 1,
     });
     expect(gatewaySeam.snapshot()).toEqual({
-      structuredFake: 14,
+      structuredFake: 2,
       externalProvider: 0,
       forbidden: { complete: 0, ocr: 0, stream: 0, unknown: 0 },
     });

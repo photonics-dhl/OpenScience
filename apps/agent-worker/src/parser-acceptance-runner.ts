@@ -31,42 +31,77 @@ function percentile(values: readonly number[], fraction: number): number {
 
 const ACCEPTANCE_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
 
-/**
- * The acceptance gateway is deterministic, but it still exercises the canonical
- * block-ID contract. Explicit fixture labels become reviewed extraction fields;
- * no text or locator is invented by the runner.
- */
+type AcceptancePassage = { id: string; text: string };
+
+function acceptancePassages(source: string): AcceptancePassage[] {
+  return [...source.matchAll(/\[(P\d{5}) [^\]]+\]\n([\s\S]*?)\n\[\/\1\]/gu)]
+    .map((match) => ({ id: match[1]!, text: match[2]!.trim() }))
+    .filter((passage) => passage.text.length > 0);
+}
+
+function emptyAcceptanceFields<T>(factory: () => T): Record<(typeof ACCEPTANCE_FIELDS)[number], T> {
+  return Object.fromEntries(ACCEPTANCE_FIELDS.map((field) => [field, factory()])) as Record<(typeof ACCEPTANCE_FIELDS)[number], T>;
+}
+
+/** Deterministic fake for the real canonical semantic bridge and composition stages. */
 export function buildAcceptanceProposal(gatewayArgs: unknown[]) {
   const prompt = Array.isArray(gatewayArgs[1]) ? gatewayArgs[1] : [];
+  const system = prompt.filter((message) => message && typeof message === 'object'
+    && (message as { role?: unknown }).role === 'system')
+    .map((message) => (message as { content?: unknown }).content)
+    .filter((content): content is string => typeof content === 'string').join('\n');
   const userMessage = prompt.find((message) => message && typeof message === 'object'
     && (message as { role?: unknown }).role === 'user') as { content?: unknown } | undefined;
   const source = typeof userMessage?.content === 'string' ? userMessage.content : '';
-  const blocks = [...source.matchAll(/--- SOURCE_BLOCK id:(B\d{6}) ---\n([\s\S]*?)(?=\n\n--- SOURCE_BLOCK id:B\d{6} ---|$)/gu)]
-    .map((match) => ({ id: match[1]!, text: match[2]!.trim() }));
-  const selected = new Map<string, { id: string; summary: string }>();
-  for (const block of blocks) {
-    const label = /^(problem|insight|method|results|limitations|reproducibility)\s*:\s*([\s\S]+)$/iu.exec(block.text);
-    if (!label) continue;
-    const field = label[1]!.toLowerCase();
-    if (!selected.has(field) && label[2]!.trim()) {
-      selected.set(field, { id: block.id, summary: label[2]!.trim() });
+  const passages = acceptancePassages(source);
+
+  if (system.includes('"observations"')) {
+    const first = passages[0];
+    if (!first) throw new Error('deterministic acceptance section map has no canonical passage');
+    return {
+      observations: [{
+        kind: 'observation', summary: first.text.slice(0, 1_200), basis: 'reported', caseLabel: '',
+        sourcePassageIds: [first.id], qualifierPassageIds: [],
+      }],
+    };
+  }
+
+  if (system.includes('chosenRepresentativeCase')) {
+    let evidenceId: string;
+    let statement: string;
+    if (passages[0]) {
+      evidenceId = passages[0].id;
+      statement = passages[0].text;
+    } else {
+      let observations: unknown;
+      try { observations = JSON.parse(source); }
+      catch { throw new Error('deterministic acceptance semantic reduction has invalid observations'); }
+      const first = Array.isArray(observations) ? observations[0] : undefined;
+      if (!first || typeof first !== 'object' || Array.isArray(first)
+        || typeof (first as { id?: unknown }).id !== 'string' || !/^W\d+O\d+$/u.test((first as { id: string }).id)
+        || typeof (first as { summary?: unknown }).summary !== 'string' || !(first as { summary: string }).summary.trim()) {
+        throw new Error('deterministic acceptance semantic reduction has no canonical observation');
+      }
+      evidenceId = (first as { id: string }).id;
+      statement = (first as { summary: string }).summary;
     }
+    const fields = emptyAcceptanceFields<unknown[]>(() => []);
+    fields.problem = [{
+      statement: statement.slice(0, 1_200), type: 'observation', conditionCase: '',
+      comparison: null, operation: null, evidenceIds: [evidenceId],
+    }];
+    return { fields, chosenRepresentativeCase: null };
   }
-  // Canonical corpus files are parser fixtures rather than semantic SDF fixtures.
-  // Select one exact bounded block so successful cases exercise materialization
-  // and locator round-trip instead of passing with an all-missing response.
-  if (selected.size === 0 && blocks[0] && blocks[0].text.length <= 8_000) {
-    selected.set('problem', { id: blocks[0].id, summary: blocks[0].text });
+
+  if (source.includes('从下列原始P段重新组织六段研究精华')) {
+    const first = passages[0];
+    if (!first) throw new Error('deterministic acceptance composition has no canonical passage');
+    const fields = emptyAcceptanceFields(() => ({ summary: '', sourcePassageIds: [] as string[] }));
+    fields.problem = { summary: `验收来源记录：${first.text.slice(0, 180)}`, sourcePassageIds: [first.id] };
+    return { fields, needsMoreEvidence: [] };
   }
-  return {
-    schemaVersion: '0.1.0',
-    fields: Object.fromEntries(ACCEPTANCE_FIELDS.map((field) => {
-      const evidence = selected.get(field);
-      return [field, evidence
-        ? { summary: evidence.summary, sourceBlockIds: [evidence.id], needsMoreInformation: false }
-        : { summary: '', sourceBlockIds: [], needsMoreInformation: true }];
-    })),
-  };
+
+  throw new Error('unrecognized deterministic acceptance structured stage');
 }
 
 type AcceptanceCascadeResult = Awaited<ReturnType<ReturnType<typeof createWorkerParserCascade>>>;
@@ -235,9 +270,12 @@ async function main(): Promise<void> {
         payload: taskPayload,
         executionAttempt: 1,
       });
-      handlerStatus = classifyAcceptanceHandlerResult(handlerResult);
+      handlerStatus = classifyAcceptanceHandlerResult(handlerResult, true);
     } catch (error) {
       failureStatus = error instanceof Error ? 'handler-execution-failed' : 'unknown-failure';
+      // This runner only consumes the canonical self-authored corpus in an
+      // environment with no secrets; preserve the failing stage for operators.
+      console.error(`PARSER_ACCEPTANCE_CASE_FAILED ${item.id}: ${error instanceof Error ? error.message.slice(0, 300) : 'unknown failure'}`);
     }
     const elapsedMs = Math.round((performance.now() - started) * 100) / 100;
     const sourceMap = cascadeResult && cascadeResult.status !== 'blocked' && cascadeResult.status !== 'failed'
@@ -271,6 +309,7 @@ async function main(): Promise<void> {
       ...(failureStatus ? { failureStatus } : {}),
     });
   }
+  console.error(`PARSER_ACCEPTANCE_GATEWAY_COUNTS ${JSON.stringify(gatewaySeam.snapshot())}`);
   const report = validateAcceptanceDraft({
     schemaVersion: 3,
     acceptanceProfile: ACCEPTANCE_PROFILE,

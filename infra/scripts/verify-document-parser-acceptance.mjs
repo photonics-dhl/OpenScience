@@ -14,7 +14,7 @@ import {
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const IMAGE_PATTERN = /^sha256:[a-f0-9]{64}$/u;
 const MAX_REPORT_BYTES = 16 * 1024 * 1024;
-const ACCEPTANCE_PROFILE = 'hermes-parser-14-2-v1';
+const ACCEPTANCE_PROFILE = 'hermes-parser-14-2-v2';
 const FINAL_REPORT_KEYS = [
   'schemaVersion', 'acceptanceProfile', 'sourceSha', 'manifestSha256', 'images', 'runtimeProcess',
   'gatewayCalls', 'summary', 'cases', 'resources',

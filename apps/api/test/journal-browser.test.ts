@@ -135,6 +135,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
   it('renders public, editor, article, release, and admin surfaces at desktop and 375px', async () => {
     const browser = await chromium.launch({ headless: true });
     const browserErrors: string[] = [];
+    const anonymousAuthResponses: string[] = [];
     try {
       const publicContext = await browser.newContext();
       const ownerContext = await browser.newContext();
@@ -157,13 +158,26 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       for (const viewport of [{ name: 'desktop', width: 1440, height: 900 }, { name: 'mobile-375', width: 375, height: 812 }]) {
         for (const surface of surfaces) {
           const page = await surface.context.newPage();
+          const publicSurface = surface.context === publicContext;
           page.on('pageerror', (error) => browserErrors.push(`${surface.name}: ${error.message}`));
+          page.on('response', (networkResponse) => {
+            if (networkResponse.url() !== `${baseUrl}/api/auth/me`) return;
+            if (publicSurface && networkResponse.status() === 401) {
+              anonymousAuthResponses.push(`${surface.name}:${viewport.name}:401:${networkResponse.url()}`);
+            } else if (networkResponse.status() >= 400) {
+              browserErrors.push(`${surface.name}: unexpected auth response ${networkResponse.status()} ${networkResponse.url()}`);
+            }
+          });
           page.on('console', (message) => {
             if (message.type() !== 'error') return;
+            // Public navigation probes the optional session. The exact 401 response is
+            // collected above and asserted below, so this console diagnostic is expected.
+            const expectedAnonymousAuth = publicSurface && message.text().includes('401')
+              && message.location().url === `${baseUrl}/api/auth/me`;
             // Existing public reader probes account-only preferences and intentionally falls back for guests.
             const expectedGuestPreference = surface.name === 'release' && message.text().includes('401')
               && message.location().url === `${baseUrl}/api/reading-preferences`;
-            if (!expectedGuestPreference) browserErrors.push(`${surface.name}: ${message.text()} @ ${message.location().url}`);
+            if (!expectedAnonymousAuth && !expectedGuestPreference) browserErrors.push(`${surface.name}: ${message.text()} @ ${message.location().url}`);
           });
           await page.setViewportSize({ width: viewport.width, height: viewport.height });
           const response = await page.goto(`${baseUrl}${surface.path}`, { waitUntil: 'networkidle' });
@@ -288,6 +302,14 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       } finally {
         await cancelJournalJob(pollDeps, ownerId, journalId, pollJob.id);
       }
+      expect(anonymousAuthResponses.sort()).toEqual([
+        `directory:desktop:401:${baseUrl}/api/auth/me`,
+        `directory:mobile-375:401:${baseUrl}/api/auth/me`,
+        `homepage:desktop:401:${baseUrl}/api/auth/me`,
+        `homepage:mobile-375:401:${baseUrl}/api/auth/me`,
+        `release:desktop:401:${baseUrl}/api/auth/me`,
+        `release:mobile-375:401:${baseUrl}/api/auth/me`,
+      ].sort());
       expect(browserErrors).toEqual([]);
       await Promise.all([publicContext.close(), ownerContext.close(), adminContext.close()]);
     } finally { await browser.close(); }
