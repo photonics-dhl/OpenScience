@@ -1,5 +1,11 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 09:54Z — 来源根科学修订链已部署，两篇原按钮各创建一份新稿
+- f19e99d49862f026d884cdf1e2edf0ae75019973正常服务器build/start exit0；独立marker release=f19/rollback=dac602ec、journal/failed=false。第一次事务exit73（锁当时占用），marker无变化；定向/proc/locks与同inode fd9读取时已无持有者，未删锁或改互斥，用新的attempt2记录正常完成。保留两份日志/opt/openscience/observations/deploy-f19e99d4{,-attempt2}-20260922.log。无测试/预检/CI/迁移/独立receiver更新/共享浏览器重启。
+- 新GET第三篇恢复narrative-scientific-replan/charge1，刷新原页点击后09:54:38.391Z HTTP202，新task3d7ee9e7-b5ae-4578-8963-10478d2f7f30 exec1、runv49/max44；receipt6e681c65-e84e-4ce4-ada9-68cf54b6434e，previous/root=2356f78f-2253-4d44-831a-893c8a385282，failedTask40026425，继承5图预留、maxNewImages0、charge1。当前running，无结果；原source proof与正式5项反馈保留。
+- 第二篇原页09:54:53.688Z HTTP202，新taskbe793c82-2118-474e-8e8c-a772d2f084c5 exec1、runv58/max43；receiptba8655fe-1409-4cca-9a70-f6ec840d4a3d，previous/root=9a2dddac-cf01-4121-be55-36b5fc76c99a，failedTask342f87eb，继承4图预留/maxNewImages0/charge1。当前running，无结果，旧比例尺反馈沿原链传递，不修改原稿或旧unknown调用。
+- /jobs/third-paper-source-root-plan-revision-20260922.json与second-paper-scale-plan-revision-20260922.json已消费，对应writer禁止重放。新reader tmp/source-root-plan-revision-two-paper-progress-20260922.cjs、source-root-plan-revision-intents-read-20260922.cjs，开始收据source-root-plan-revision-started-20260922.json；旧saved-review reader固定342/400只作历史。当前有在途模型，不继续发布新代码，不把202/编译当科学或图片质量通过。
+
 ## 2026-09-22 09:37Z — 两次末审均得到正式科学反馈；补 source-support 修订链
 - 第二篇342 exec2只续科学末审，9543b18e 16K/243083ms明确length→d518f88d 32K/258693ms stop，原prompt身份相同，无新science/art。09:37:38.583Z正式blocked：封面两等长量条与11.7×尺度编码冲突；run stopped57/max42，原GET scientific-replan/charge1可用，尚未续。审阅称其余历史缺陷已修不代表独立科学认可，草稿与未来成图继续核对原文。
 - 第三篇400 exec3 science e3846da1 stop/113979ms，实际v9与四scene、subjects2/4/3/3；art两次stop/119852+15471ms后保存完整checkpoint。f17b12a8科学末审32K/202278ms stop，09:37:07.227Z任务failed、run stopped48/max43，五个requires_replan：四场景构图指示未列入labels的标题，A(r)混入j(r)归一化常数N。原GET无修订资格；未生图。
