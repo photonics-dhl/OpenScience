@@ -54,7 +54,7 @@ Hermes技能与学习消费审计（2026-09-22）：82/606实际checkpoint记录
 
 针对15b真实失败的Skill v9：同一个Scientific encoding章节同时供science/review消费，明确坐标投影/拓扑、固定与扫描条件、可见核心结果、定量共同尺度与非比例概念图的选择、点密度和点径的独立含义；原泛化段原地替换，不叠一轮模型或新输出字段。不自动安装技能、改M3路由或宣称自学习；已部署，真实消费与效果见CURRENT。跨部署恢复的designSkills按id/version/upstreamCommit归并，保留科学旧版本与艺术新版本的实际来源。
 
-v9真实结果进一步限定能力：342f87eb已记录science v9及完整science/art保存，科学草稿仍有固定/扫描条件与坐标矛盾，不能声称正确率提升。原Domain `IllustrationBrief`支持1–4subjects，planner却只许2个单basis；已发现把多段支持命题塞进两个subject的具体压力。候选仅将narrative上限与既有4项对齐、各原子命题独立绑定，美术引用实际索引，非narrative仍2；无新字段/表/模型阶段，不能保证解决所有推理错误。部署与实际消费见CURRENT。完整方案后的普通末审timeout也缺原UI恢复入口，正在沿既有output-resume补通用阶段恢复，旧不确定调用不可当未提交。
+v9真实结果进一步限定能力：342f87eb已记录science v9及完整science/art保存，科学草稿仍有固定/扫描条件与坐标矛盾，不能声称正确率提升。原Domain `IllustrationBrief`支持1–4subjects，planner却只许2个单basis；已发现把多段支持命题塞进两个subject的具体压力。候选仅将narrative上限与既有4项对齐、各原子命题独立绑定，美术引用实际索引，非narrative仍2；无新字段/表/模型阶段，不能保证解决所有推理错误。部署与实际消费见CURRENT。完整方案后的普通末审timeout恢复已沿既有output-resume部署，342真实只续末审并返回blocked；第三篇400真实science以2/4/3/3要点成功，末审核出公式问题，不能据容量或v9消费称科学已通过。旧不确定调用保留。source-support root科学拒收后的inspector错误要求pixel证据、history又限单root，已作原两处最小修正并High GO；既有root proof/两层revision/原图片预留保持，部署与实际后续见CURRENT。
 
 ### 复用与效果查询
 

@@ -1,5 +1,11 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 09:37Z — 两次末审均得到正式科学反馈；补 source-support 修订链
+- 第二篇342 exec2只续科学末审，9543b18e 16K/243083ms明确length→d518f88d 32K/258693ms stop，原prompt身份相同，无新science/art。09:37:38.583Z正式blocked：封面两等长量条与11.7×尺度编码冲突；run stopped57/max42，原GET scientific-replan/charge1可用，尚未续。审阅称其余历史缺陷已修不代表独立科学认可，草稿与未来成图继续核对原文。
+- 第三篇400 exec3 science e3846da1 stop/113979ms，实际v9与四scene、subjects2/4/3/3；art两次stop/119852+15471ms后保存完整checkpoint。f17b12a8科学末审32K/202278ms stop，09:37:07.227Z任务failed、run stopped48/max43，五个requires_replan：四场景构图指示未列入labels的标题，A(r)混入j(r)归一化常数N。原GET无修订资格；未生图。
+- High只读根因：inspectNarrativePixelPlanRevision无条件readNarrativePixelReplanSource，错误要求source-support root提供pixel拒收；readNarrativePixelReplanHistory又因chain.length!==1拒绝后续合法revision。两Domain文件12+/6-修正：按原cause复用authority已完整重验的source/parent/heading proof，保留普通pixel分支；移除单root限制，原仅两类correction/遇root停止/最多两revision/每跳previous-root-source-额度校验保持。High增量GO，未测试/运行；候选tmp/source-support-plan-revision-20260922/candidate.patch，尚未部署。
+- 两任务现均终态，root暂缓新的付费修订，以便先正常发布这一断点修复。模型审阅意见不能自动成为科学知识；第三篇公式拒收可与保存原文直接核对，不把Skill版本或审阅accepted当学习/质量证明。状态和完整审阅保存tmp/saved-review-two-paper-latest-20260922.json，新science原文tmp/third-paper-four-subject-intent-20260922.json。
+
 ## 2026-09-22 09:29Z — 已存方案续审与四subject容量正常部署、真实续作
 - dac602ec3fc1deba2c017cc80ea1fa60625648ab服务器正常构建/启动exit0，独立marker release=dac602ec/rollback=3f9adcdb、journal/failed=false；日志/opt/openscience/observations/deploy-dac602ec-20260922.log。无测试/预检/CI/迁移/receiver更新/共享浏览器重启。两项变更由各自High静态GO；编译与资格通过不证明科学质量。
 - 第二篇刷新原页面、唯一“保留初稿，继续制作”按钮09:29:13.706Z HTTP202，同task342f87eb exec2/retry1/runv56/max42，真实receipt74f74304-9816-4c38-82c6-c0b279247959。saved_storyboard_review_timeout/charge1/noReplanning/newTask0/noProviderSwitch，完整checkpoint仍在；旧provider超时outcome_unknown保留，末审结果在途。

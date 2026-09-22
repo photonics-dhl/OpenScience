@@ -670,11 +670,15 @@ async function inspectNarrativePixelPlanRevision(tx: Prisma.TransactionClient, r
       { payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } }], status: { in: ['pending', 'running'] } } }) !== 0
     || await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run',
       targetId: run.id, metadata: { path: ['previousReceiptId'], equals: pixel.receipt.id } } })) return null;
-  const source = await readNarrativePixelReplanSource(tx, { actorId: run.actorId, runId: run.id,
-    researchObjectId: run.researchObjectId, versionId: run.versionId, sourceClaimIds: run.sourceClaimIds,
-    parentAssetId: String(pixel.metadata.parentStoryboardAssetId), imageAssetIds: pixel.sceneReviews.map(scene => String(scene.taskId)),
-    ...(pixel.metadata.sceneSet === 'terminal' ? { terminalSceneSet: { receiptId: pixel.rootReceipt.id } } : {}) });
-  if (source.identity !== pixel.metadata.sourceIdentity) return null;
+  // Source-support roots already have their parent/heading proof replayed by the
+  // authority reader; they do not represent a generated-image pixel rejection.
+  if (pixel.metadata.cause !== STORYBOARD_SOURCE_SUPPORT_INVALID) {
+    const source = await readNarrativePixelReplanSource(tx, { actorId: run.actorId, runId: run.id,
+      researchObjectId: run.researchObjectId, versionId: run.versionId, sourceClaimIds: run.sourceClaimIds,
+      parentAssetId: String(pixel.metadata.parentStoryboardAssetId), imageAssetIds: pixel.sceneReviews.map(scene => String(scene.taskId)),
+      ...(pixel.metadata.sceneSet === 'terminal' ? { terminalSceneSet: { receiptId: pixel.rootReceipt.id } } : {}) });
+    if (source.identity !== pixel.metadata.sourceIdentity) return null;
+  }
   const failed = readNarrativePixelBlockedPlan(pixel);
   const evidence = await readUnchangedNarrativeCheckpointEvidence(tx, run, failed.checkpoint);
   if (!evidence) return null;
