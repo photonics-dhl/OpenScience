@@ -1,5 +1,12 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 08:30Z — v9真实消费与阶段保存已观察，新的终审恢复缺口
+- 第二篇342f87eb真实science经65K/319291ms stop及一次结构修正37656ms stop后保存storyboardPlanningCheckpoint；designSkills明确critical-thinking v3、自有illustration v9含Scientific encoding，随后art16K length/162191ms、32K stop/90391ms，08:24:49完整storyboardCheckpoint替换partial。阶段保存及v9消费已有事实，不能据此认定科学正确。当前草稿仍有固定4.4μm与波长扫描混同、出入纸面符号/条件冲突，未生成新图。
+- 08:29:50最后一条scientific_review 726f54ad在主M3/16K/300003ms provider_timeout，run stopped55/max42/task failed exec1；完整方案保留，原UI GET200但无恢复按钮。旧output-resume只覆盖更早exec2+先16K截断再32K超时的特定历史，不能覆盖这次普通已存方案末审timeout。独立High正在设计沿原STORYBOARD_OUTPUT_RESUME、原授权/来源/CAS的通用阶段恢复，不新增任务平台，不冒称旧调用未提交。
+- 第三篇400 exec2于08:24:00 science65K/600005ms provider_timeout，resultNULL/run stopped46/max43；尚无新科学结果，原GET200有storyboard-planning/1。未立即再发，待已知合同容量修正；前次art JSON与本次science timeout分开记录，未声称timeout由技能缺失/网络/额度造成。两篇当前请求均自然终态。
+- 静态High确认previousReview到science、reportedPreviousDefects到末审均已传，结构修正仍保留原messages；低inputTokens不能证明丢来源。Domain原支持1–4subjects，planner却限定2单basis，实际scene0/3合并多个不同支持段。这是合同容量缺口而非全部误判的已证根因；单文件候选将narrative对齐4、非narrative保留2，复用原预算/来源守卫，High指出art索引仍写0/1，改成实际索引后增量PASS。没有新增Skill禁令/模型阶段/分析器。
+- 证据tmp/second-paper-v9-planning-read-20260922-observation.json、third-paper-durable-planning-read-20260922-observation.json、v9-science-intents-{first,after-art}-20260922.json、two-paper-v9-recovery-surface-20260922.json。生产Hermes走项目worker/Gateway，未调用独立Hermes Agent技能发现/记忆循环；/opt/hermes-agent源码和skills存在不代表已消费，跨任务学习仍未实现。
+
 ## 2026-09-22 08:14Z — Skill v9与阶段保存正式部署，原页面续作
 - 3f9adcdb正常服务器build/start exit0；独立marker release=3f9/rollback=b1fb、journal/failed=false。日志/opt/openscience/observations/deploy-3f9adcdb-20260922.log，无迁移/测试/CI/共享浏览器重启。Scientific encoding方法与已知art timeout显式新执行均已部署，质量和恢复效果尚待真实结果。
 - 第三篇原GET stopped44/max43/planning1，08:13:58.031Z原按钮HTTP202，同task40026425/runv45；旧NULL只允许完整配图planning restart，不称art-only。第二篇原GET stopped53/max37/scientific5，08:14:35.298Z原按钮HTTP202，新plan342f87eb-8b14-460a-9f79-03fd29394b84/runv54。/jobs/third-paper-durable-planning-resume-20260922.json及second-paper-skill-v9-replan-20260922.json已消费，禁止重放；保留原PDF/六维/Claims/旧图与公开版本。

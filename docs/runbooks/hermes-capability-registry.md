@@ -50,6 +50,8 @@ Hermes技能与学习消费审计（2026-09-22）：82/606实际checkpoint记录
 
 针对15b真实失败的Skill v9：同一个Scientific encoding章节同时供science/review消费，明确坐标投影/拓扑、固定与扫描条件、可见核心结果、定量共同尺度与非比例概念图的选择、点密度和点径的独立含义；原泛化段原地替换，不叠一轮模型或新输出字段。不自动安装技能、改M3路由或宣称自学习；已部署，真实消费与效果见CURRENT。跨部署恢复的designSkills按id/version/upstreamCommit归并，保留科学旧版本与艺术新版本的实际来源。
 
+v9真实结果进一步限定能力：342f87eb已记录science v9及完整science/art保存，科学草稿仍有固定/扫描条件与坐标矛盾，不能声称正确率提升。原Domain `IllustrationBrief`支持1–4subjects，planner却只许2个单basis；已发现把多段支持命题塞进两个subject的具体压力。候选仅将narrative上限与既有4项对齐、各原子命题独立绑定，美术引用实际索引，非narrative仍2；无新字段/表/模型阶段，不能保证解决所有推理错误。部署与实际消费见CURRENT。完整方案后的普通末审timeout也缺原UI恢复入口，正在沿既有output-resume补通用阶段恢复，旧不确定调用不可当未提交。
+
 ### 复用与效果查询
 
 - **已经自动联动**：Worker任务执行、SourceMap/Claim/Evidence及RO/version绑定、方案保存/艺术修订复用、Gateway/provider队列、结果回收和资产记录；Gateway审计经既有view/connector自动进入Langfuse并携带taskId。已保存任务/真实产物见CURRENT，链路接线与每一步效果分别判断。

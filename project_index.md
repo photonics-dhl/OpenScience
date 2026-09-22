@@ -22,7 +22,7 @@ Pixel science成功/art主调用超时的精确同task一次恢复复用`researc
 
 审图保存恢复定位：infra/chatgpt-browser/review-broker.mjs复用已有完整job结果，原jobResponse保留身份及responseHash核对；并发结果保存与终态收尾沿现有presentation handler/research-run，实际进展只见CURRENT。
 
-托管叙事的science/art阶段保存沿`illustration-planner.ts`、`handler.ts`的原私有checkpoint/CAS，`research-run.ts`原retry-generation按实际保存阶段恢复，`agent.ts`隐藏私有中间结果；`gateway.ts`提供异步拒收回调和逐次提交前回调。无新表/分析器/MCP；候选、部署、真实恢复见CURRENT。原图视觉理解/OCR边界和figure-audit假定页码的缺口见原能力台账，不从文字审计推断已看原图。
+托管叙事的science/art阶段保存沿`illustration-planner.ts`、`handler.ts`的原私有checkpoint/CAS，`research-run.ts`原retry-generation按实际保存阶段恢复，`agent.ts`隐藏私有中间结果；`gateway.ts`提供异步拒收回调和逐次提交前回调。planner叙事原子要点数量与Domain既有1–4能力对齐，各自绑定完整来源，美术只引用实际索引；非叙事科学规划仍1–2。无新表/分析器/MCP；候选、部署、真实恢复见CURRENT。原图视觉理解/OCR边界和figure-audit假定页码的缺口见原能力台账，不从文字审计推断已看原图。
 
 本机桥合作入口：`infra/development-platform/codex-chatgpt-web/collaborate.mjs` 使用已安装原生 CLI 自动审批续接固定 XGS Pro 任务，STDIN 传任务、并发锁及独立日志；实际工具结果与未完成范围见 CURRENT。
 
