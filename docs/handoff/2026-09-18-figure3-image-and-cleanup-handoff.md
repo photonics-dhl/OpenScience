@@ -1,5 +1,11 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 09:29Z — 已存方案续审与四subject容量正常部署、真实续作
+- dac602ec3fc1deba2c017cc80ea1fa60625648ab服务器正常构建/启动exit0，独立marker release=dac602ec/rollback=3f9adcdb、journal/failed=false；日志/opt/openscience/observations/deploy-dac602ec-20260922.log。无测试/预检/CI/迁移/receiver更新/共享浏览器重启。两项变更由各自High静态GO；编译与资格通过不证明科学质量。
+- 第二篇刷新原页面、唯一“保留初稿，继续制作”按钮09:29:13.706Z HTTP202，同task342f87eb exec2/retry1/runv56/max42，真实receipt74f74304-9816-4c38-82c6-c0b279247959。saved_storyboard_review_timeout/charge1/noReplanning/newTask0/noProviderSwitch，完整checkpoint仍在；旧provider超时outcome_unknown保留，末审结果在途。
+- 第三篇同原按钮09:29:29.158Z HTTP202，同task40026425 exec3/retry2/runv47/max43；receiptf5d82746-81e8-4667-ad6e-41adeac4527a，明确full_planning_restart/charge1/newTask0/noProviderSwitch。原全文/六维保持，旧NULL未冒称有science，等待新科学结果。
+- /jobs/second-paper-saved-review-timeout-resume-20260922.json和third-paper-source-capacity-retry-20260922.json已消费；同名本机writer不能重放。tmp/saved-review-two-paper-progress-20260922.cjs是定向只读入口，开始状态私有收据tmp/saved-review-two-paper-started-20260922.json。当前在途，不发布新代码、不重新提交模型；随后依据正式审阅/真实PNG推进reader与新公开版本。
+
 ## 2026-09-22 — 通用已存方案末审恢复候选 High GO
 - 原STORYBOARD_OUTPUT_RESUME/retry-generation支持完整方案末次primary review provider_timeout，同task/相邻execution/charge1，不重新science/art或增加逻辑任务。旧未知调用保留；16K/600秒开始，真实length才升级32K，旧pixel 32K/charge0优先兼容。精确运行/发布锚点仍见CURRENT。
 - 首轮High的三项有效问题已修：预存完整checkpoint裸exec2无收据不得继续；原prompt入口绑定、内部JSON/schema拒收保留失败输出与反馈；fresh计费与原unknown语义一致。私有checkpoint可选executionAttempt只记录首次生成执行，旧marker/收据兼容；每次实际provider调用仍重验权限、原候选、source、provider/model、调用序号与审计前缀。候选没有新增表、分析器、模型阶段或公共协议。revised进入acceptance的批评因narrative verdictOnly两次解析而不可达，经复核撤回，未增加冗余分支。
