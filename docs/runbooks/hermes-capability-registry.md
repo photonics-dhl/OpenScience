@@ -36,7 +36,7 @@
 | 公开发布 / 标准API | `apps/api/src/routes/publications.ts`、`research.ts`、`research-record.ts`；Domain `publication-evidence.ts`、`evidence-publication-verification.ts`、`commit/research-record-snapshot.ts` | 已部署共享helper校核系统审计/完整v5及来源身份，复用冻结科学记录处理未变新草稿；人工字段不回填，最终事务重核、历史读取有界。真实58项系统核验通过，首篇v3发布201，公开6Claims/58Evidence及新图可读，旧v1/v2保留。最终用户质量认可仍pending；未变继承仅静态High依据，尚未实际另存稿观察 |
 | 服务器与调用观察 | `infra/scripts/deploy.sh`、`infra/compose/`；`packages/ai-gateway/src/gateway.ts` 的record；AgentTask/资产provenance | 本次只读确认Portainer、Netdata和应用运行；日志、任务结果、审阅/拒绝记录已存在。服务健康不能作为内容质量证据 |
 
-原图下载的当前断点：native Save超时但原会话有完整图，`runner.cjs`的显式download模式补复用既有可见PNG读取；访问对话限流独立识别、异常不继续，不延长原恢复窗口。第二篇保存设计后的末审超时仍需补原output-resume；第三篇标题被当作复杂关系supports，冻结Evidence池缺少导言，不能靠重复同提示或手改绑定解决。候选、部署及真实结果见CURRENT。
+原图下载的当前断点：native Save超时但原会话有完整图，`runner.cjs`的显式download模式复用既有可见PNG读取；访问对话限流独立识别、异常不继续，不延长原恢复窗口。保存设计后末审16K耗尽/32K超时，沿原output-resume同task续末审，原来源/检查点/调用收据逐次复验，不重做planning。`handler.ts`复用原SourceMap block kind，将标题supports仅在配图消费时投影为context，原数据库证据与身份不改；已有第二篇检查点8个basis均为正文/图注。整组科学返工允许保留旧图片提交未知状态，只有真实科学拒收才提供返工依据，技术恢复仍拒绝unknown。冻结Evidence池缺导言仍不能手补；新科学方案须使用有效来源或缩窄表达。候选、部署及真实结果见CURRENT。
 
 ### 复用与效果查询
 

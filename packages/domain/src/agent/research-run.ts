@@ -795,6 +795,14 @@ async function inspectPixelPlanningRetry(tx: Prisma.TransactionClient, run: RunR
 export async function requirePixelPlanningPreProviderRearm(prisma: Pick<Prisma.TransactionClient, 'auditLog' | 'presentationAsset' | 'agentTask'>,
   pixel: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanAuthority>>>,
   failureClass: PixelPlanningFailureClass = PIXEL_PLANNING_PRE_PROVIDER_REARM) {
+  if (pixel.run.status !== 'generating_storyboard' || pixel.step.status !== 'running'
+    || pixel.task.status !== 'running' || pixel.task.executionAttempt !== 2 || pixel.task.retryCount !== 1)
+    throw new Error('[blocked] Narrative planning recovery execution changed');
+  return readPixelPlanningRecoveryReceipt(prisma, pixel, failureClass);
+}
+
+async function readPixelPlanningRecoveryReceipt(prisma: Pick<Prisma.TransactionClient, 'auditLog' | 'presentationAsset' | 'agentTask'>,
+  pixel: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanAuthority>>>, failureClass: PixelPlanningFailureClass) {
   const preProvider = failureClass === PIXEL_PLANNING_PRE_PROVIDER_REARM;
   const expectedError = preProvider ? PIXEL_PLANNING_REQUEST_ERROR : PIXEL_PLANNING_PROVIDER_ERROR;
   const { task, run } = pixel;
@@ -802,8 +810,7 @@ export async function requirePixelPlanningPreProviderRearm(prisma: Pick<Prisma.T
     targetType: 'hermes_research_run', targetId: run.id, actorId: run.actorId,
     metadata: { path: ['taskId'], equals: task.id } }, take: 2 });
   const receipt = receipts[0]; const meta = jsonRecord(receipt?.metadata);
-  if (pixel.depth !== 0 || run.status !== 'generating_storyboard' || pixel.step.status !== 'running'
-    || task.status !== 'running' || task.executionAttempt !== 2 || task.retryCount !== 1 || !receipt || receipts.length !== 1
+  if (pixel.depth !== 0 || !receipt || receipts.length !== 1
     || meta.correction !== STORYBOARD_PLANNING_RETRY || meta.planningFailureClass !== failureClass
     || meta.rootReceiptId !== pixel.rootReceipt.id || meta.stepId !== pixel.step.id || meta.previousExecutionAttempt !== 1
     || meta.previousRetryCount !== 0 || meta.previousTaskStatus !== 'failed' || meta.previousProgress !== 10
@@ -835,7 +842,7 @@ export async function requirePixelPlanningPreProviderRearm(prisma: Pick<Prisma.T
       || taskCount !== Number(pixel.metadata.existingTaskCount) + 1)
       throw new Error('[blocked] Narrative art-timeout planning evidence changed');
   }
-  return { id: receipt.id, metadata: meta };
+  return { id: receipt.id, createdAt: receipt.createdAt, metadata: meta };
 }
 
 /** Explicitly repeat one failed planning execution; logical task and image allowance stay intact. */
@@ -1312,8 +1319,150 @@ async function readStoryboardArtCorrectionAuthorization(tx: Pick<Prisma.Transact
     originalReviewResponseHash: review.responseHash as string };
 }
 
-/** Resume a saved plan whose first scientific-review request was blocked locally by input size. */
+const PIXEL_STORYBOARD_OUTPUT_TIMEOUT = 'pixel_storyboard_review_output_timeout';
+const STORYBOARD_OUTPUT_RESUME_ACTION = 'hermes.research_run.storyboard_output_resume';
+
+async function readPixelStoryboardOutputContext(tx: Prisma.TransactionClient,
+  pixel: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanAuthority>>>) {
+  const { run, task, step } = pixel;
+  if (!run.versionId || run.profile !== VISUAL_NARRATIVE_PROFILE || step.presentationAssetId
+    || await validateReviewedSources(tx, run) !== 'ready') throw new Error('[blocked] Pixel storyboard review source is unavailable');
+  const planningReceipt = await readPixelPlanningRecoveryReceipt(tx, pixel, PIXEL_PLANNING_ART_TIMEOUT_RETRY);
+  const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+  const version = await tx.version.findUnique({ where: { id: run.versionId } });
+  const result = jsonRecord(task.result); const checkpoint = jsonRecord(result.storyboardCheckpoint);
+  const planned = jsonRecord(checkpoint.planned);
+  if (!ro || ro.deletedAt || ro.status !== 'draft' || !version || version.status !== 'draft'
+    || version.publicVersionId || version.publicationNo || Object.keys(result).join(',') !== 'storyboardCheckpoint'
+    || !isDeepStrictEqual(checkpoint.payload, task.payload) || checkpoint.baseIdentity !== pixel.baseIdentity
+    || checkpoint.claimContent !== pixel.metadata.claimContent || checkpoint.narrativeSourceIdentity !== pixel.metadata.narrativeSourceIdentity
+    || checkpoint.sourceEvidenceIdentity !== pixel.metadata.sourceEvidenceIdentity || planned.reviewFormat !== 2
+    || typeof planned.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(planned.promptHash)
+    || !await readUnchangedNarrativeCheckpointEvidence(tx, run, checkpoint)
+    || await tx.agentTask.count({ where: { id: { not: task.id }, status: { in: ['pending', 'running'] },
+      OR: [{ id: { in: run.steps.flatMap(item => item.agentTaskId ? [item.agentTaskId] : []) } },
+        { payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } }] } }) !== 0)
+    throw new Error('[blocked] Pixel storyboard review checkpoint changed');
+  const document = parseStoryboardDocument(planned.document, pixel.payload.sourceClaimIds, 'image');
+  if (!document.narrative || document.scenes.length < 1 || document.scenes.length > pixel.sceneLimit)
+    throw new Error('[blocked] Pixel storyboard review scene allowance changed');
+  const source = await readNarrativePixelReplanSource(tx, { actorId: run.actorId, runId: run.id,
+    researchObjectId: run.researchObjectId, versionId: run.versionId, sourceClaimIds: run.sourceClaimIds,
+    parentAssetId: String(pixel.metadata.parentStoryboardAssetId), imageAssetIds: pixel.sceneReviews.map(scene => String(scene.taskId)),
+    ...(pixel.metadata.sceneSet === 'terminal' ? { terminalSceneSet: { receiptId: pixel.rootReceipt.id } } : {}) });
+  if (source.identity !== pixel.metadata.sourceIdentity || source.parentIdentity !== pixel.metadata.parentIdentity
+    || !isDeepStrictEqual(source.sceneReviews, pixel.sceneReviews)) throw new Error('[blocked] Pixel storyboard review lineage changed');
+  return { checkpoint, planningReceipt, workspaceId: ro.workspaceId };
+}
+
+function pixelStoryboardOutputTimeoutCallsMatch(calls: Prisma.AuditLogGetPayload<{}>[],
+  context: Awaited<ReturnType<typeof readPixelStoryboardOutputContext>>, failedAt: Date) {
+  const priorIds = context.planningReceipt.metadata.planningAuditIds as string[];
+  const current = calls.filter(call => !priorIds.includes(call.id));
+  const planning = current.slice(0, -2); const review = current.slice(-2);
+  const first = jsonRecord(calls[0]?.metadata); const truncated = jsonRecord(review[0]?.metadata);
+  const blocks = jsonRecord(truncated.responseBlockCounts);
+  if (calls.length !== priorIds.length + current.length || !priorIds.every(id => calls.some(call => call.id === id))
+    || planning.length < 2 || planning.length > 6 || review.length !== 2
+    || current.some(call => { const meta = jsonRecord(call.metadata);
+      return call.actorId !== null || call.targetType !== 'ai_gateway' || meta.provider !== first.provider || meta.model !== first.model
+        || meta.fallbackReason !== null || meta.retryCount !== 0 || meta.requestedThinking !== 'adaptive'
+        || typeof meta.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(meta.promptHash)
+        || call.createdAt <= context.planningReceipt.createdAt || call.createdAt > failedAt;
+    }) || planning.some(call => { const meta = jsonRecord(call.metadata);
+      return meta.operation !== 'text' || meta.outcome !== 'succeeded' || meta.error !== null || meta.finishReason !== 'stop'
+        || ![16384, 32768, 65536].includes(Number(meta.maxOutputTokens));
+    }) || jsonRecord(planning[0]?.metadata).maxOutputTokens !== 65536
+    || ![16384, 32768].includes(Number(jsonRecord(planning.at(-1)?.metadata).maxOutputTokens))
+    || review.some((call, index) => { const meta = jsonRecord(call.metadata);
+      return meta.operation !== 'scientific_review' || meta.outcome !== 'failed'
+        || meta.inputContentHash !== context.checkpoint.sourceEvidenceIdentity || meta.selectionReason !== 'source_grounded_illustration_review'
+        || meta.promptHash !== truncated.promptHash || (index === 0
+          ? meta.error !== 'provider_empty' || meta.finishReason !== 'length' || meta.maxOutputTokens !== 16384 || meta.outputTokens !== 16384
+          : meta.error !== 'provider_timeout' || meta.maxOutputTokens !== 32768 || meta.finishReason !== undefined
+            || meta.inputTokens !== null || meta.outputTokens !== null);
+    }) || blocks.text !== 0 || blocks.other !== 0 || typeof blocks.thinking !== 'number'
+    || !Number.isSafeInteger(blocks.thinking) || blocks.thinking < 1) return null;
+  return { planning, review };
+}
+
+async function inspectPixelStoryboardOutputRecovery(tx: Prisma.TransactionClient, run: RunRow) {
+  if (run.profile !== VISUAL_NARRATIVE_PROFILE || run.status !== 'stopped' || run.error !== PIXEL_PLANNING_PROVIDER_ERROR) return null;
+  const pixel = await readNarrativePixelReplanAuthority(tx, { runId: run.id, actorId: run.actorId });
+  if (!pixel || pixel.task.status !== 'failed' || pixel.task.executionAttempt !== 2 || pixel.task.retryCount !== 1
+    || pixel.task.progress !== 10 || pixel.task.error !== run.error || pixel.step.status !== 'stopped' || pixel.step.error !== run.error
+    || await tx.auditLog.findFirst({ where: { action: STORYBOARD_OUTPUT_RESUME_ACTION, targetType: 'hermes_research_run', targetId: run.id,
+      metadata: { path: ['taskId'], equals: pixel.task.id } }, select: { id: true } })) return null;
+  const context = await readPixelStoryboardOutputContext(tx, pixel);
+  const calls = await tx.auditLog.findMany({ where: { requestId: pixel.task.id, action: 'ai.gateway.call' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+  const attempts = pixelStoryboardOutputTimeoutCallsMatch(calls, context, pixel.task.updatedAt);
+  if (!attempts) return null;
+  return { task: pixel.task, step: pixel.step, checkpoint: context.checkpoint,
+    planningAuditIds: attempts.planning.map(call => call.id), truncationAuditId: attempts.review[0]!.id,
+    recoveryAction: STORYBOARD_OUTPUT_RESUME_ACTION,
+    pixelOutputResumeMetadata: { recoveryClass: PIXEL_STORYBOARD_OUTPUT_TIMEOUT, previousRetryCount: pixel.task.retryCount,
+      previousTaskUpdatedAt: pixel.task.updatedAt.toISOString(), previousRunStatus: run.status, previousRunError: run.error,
+      previousMaxAgentTasks: run.maxAgentTasks, maxAgentTasks: run.maxAgentTasks,
+      planningReceiptId: context.planningReceipt.id, rootReceiptId: pixel.rootReceipt.id,
+      taskPayload: pixel.task.payload, storyboardCheckpoint: context.checkpoint,
+      gatewayAudits: pixelPlanningAuditSnapshot(calls), timeoutAuditId: attempts.review[1]!.id,
+      continuedReviewTimeoutMs: 600_000, chargeableAttempts: 0, priorSubmission: 'outcome_unknown_after_provider_timeout' } };
+}
+
+/** Same saved candidate, one explicit third execution; called again by the existing provider authorization callback. */
+export async function requirePixelStoryboardOutputResume(tx: Prisma.TransactionClient, input: {
+  runId: string; actorId: string; taskId: string; receiptId?: string; beforeFirstSubmission?: boolean;
+}) {
+  const pixel = await readNarrativePixelReplanAuthority(tx, input);
+  if (!pixel || pixel.task.id !== input.taskId || pixel.run.status !== 'generating_storyboard' || pixel.step.status !== 'running'
+    || pixel.task.status !== 'running' || pixel.task.executionAttempt !== 3 || pixel.task.retryCount !== 2)
+    throw new Error('[blocked] Pixel storyboard output continuation execution changed');
+  const context = await readPixelStoryboardOutputContext(tx, pixel);
+  const { run, task, step } = pixel;
+  const receipts = await tx.auditLog.findMany({ where: { action: STORYBOARD_OUTPUT_RESUME_ACTION,
+    targetType: 'hermes_research_run', targetId: run.id, metadata: { path: ['taskId'], equals: task.id } }, take: 2 });
+  const receipt = receipts[0]; const meta = jsonRecord(receipt?.metadata);
+  if (!receipt || receipts.length !== 1 || (input.receiptId !== undefined && receipt.id !== input.receiptId)
+    || receipt.actorId !== run.actorId || receipt.workspaceId !== context.workspaceId
+    || meta.recoveryClass !== PIXEL_STORYBOARD_OUTPUT_TIMEOUT || meta.taskId !== task.id || meta.stepId !== step.id
+    || meta.previousExecutionAttempt !== 2 || meta.previousRetryCount !== 1 || meta.previousRunStatus !== 'stopped'
+    || meta.previousError !== PIXEL_PLANNING_PROVIDER_ERROR || meta.previousRunError !== PIXEL_PLANNING_PROVIDER_ERROR
+    || meta.previousMaxAgentTasks !== run.maxAgentTasks || meta.maxAgentTasks !== run.maxAgentTasks
+    || meta.planningReceiptId !== context.planningReceipt.id || meta.rootReceiptId !== pixel.rootReceipt.id
+    || !isDeepStrictEqual(meta.taskPayload, task.payload) || !isDeepStrictEqual(meta.storyboardCheckpoint, context.checkpoint)
+    || meta.planningPromptHash !== jsonRecord(context.checkpoint.planned).promptHash
+    || meta.sourceEvidenceIdentity !== context.checkpoint.sourceEvidenceIdentity || meta.narrativeSourceIdentity !== context.checkpoint.narrativeSourceIdentity
+    || meta.noReplanning !== true || meta.newTaskCount !== 0 || meta.chargeableAttempts !== 0 || meta.noProviderSwitch !== true
+    || meta.priorSubmission !== 'outcome_unknown_after_provider_timeout' || meta.continuedOutputAllowance !== 32768
+    || meta.continuedReviewTimeoutMs !== 600_000 || !Array.isArray(meta.gatewayAudits) || !Array.isArray(meta.planningAuditIds))
+    throw new Error('[blocked] Pixel storyboard output continuation receipt changed');
+  const ids = meta.gatewayAudits.map(raw => jsonRecord(raw).id);
+  const failedAt = typeof meta.previousTaskUpdatedAt === 'string' ? new Date(meta.previousTaskUpdatedAt) : null;
+  const allCalls = await tx.auditLog.findMany({ where: { requestId: task.id, action: 'ai.gateway.call' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+  const calls = allCalls.filter(call => ids.includes(call.id));
+  const additional = allCalls.filter(call => !ids.includes(call.id));
+  const attempts = failedAt && Number.isFinite(failedAt.getTime()) && failedAt <= receipt.createdAt
+    ? pixelStoryboardOutputTimeoutCallsMatch(calls, context, failedAt) : null;
+  const primary = jsonRecord(calls[0]?.metadata);
+  if (!attempts || !isDeepStrictEqual(meta.gatewayAudits, pixelPlanningAuditSnapshot(calls))
+    || !isDeepStrictEqual(meta.planningAuditIds, attempts.planning.map(call => call.id))
+    || meta.truncationAuditId !== attempts.review[0]!.id || meta.timeoutAuditId !== attempts.review[1]!.id
+    || (input.beforeFirstSubmission && additional.length !== 0)
+    || additional.some(call => { const value = jsonRecord(call.metadata);
+      return call.actorId !== null || call.targetType !== 'ai_gateway' || call.createdAt <= receipt.createdAt
+        || value.operation !== 'scientific_review' || value.provider !== primary.provider || value.model !== primary.model
+        || value.fallbackReason !== null || value.retryCount !== 0 || value.maxOutputTokens !== 32768
+        || value.inputContentHash !== context.checkpoint.sourceEvidenceIdentity || value.selectionReason !== 'source_grounded_illustration_review'
+        || value.outcome !== 'succeeded' || value.error !== null || value.finishReason !== 'stop';
+    })) throw new Error('[blocked] Pixel storyboard output continuation audit history changed');
+  return { id: receipt.id, metadata: meta };
+}
+
+/** Resume a saved plan after a proven local rejection or the bounded review output failure. */
 async function inspectStoryboardCheckpointRecovery(tx: Prisma.TransactionClient, run: RunRow) {
+  if (run.error === PIXEL_PLANNING_PROVIDER_ERROR) return inspectPixelStoryboardOutputRecovery(tx, run);
   const budgetError = '[blocked] Illustration review sources exceed the input budget; select fewer Claims';
   const outputError = 'Provider exhausted output allowance before producing text';
   const outputContinuation = run.error === outputError;
@@ -2088,9 +2237,11 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before continuing the saved storyboard');
           const saved = await inspectStoryboardCheckpointRecovery(tx, run);
           if (!saved) throw new HermesResearchRunError('SOURCE_NOT_READY', 'The saved storyboard cannot be resumed safely');
+          if ('pixelOutputResumeMetadata' in saved && !deps.audit?.record)
+            throw new HermesResearchRunError('SOURCE_NOT_READY', 'Storyboard output recovery audit is unavailable');
           const taskChanged = await tx.agentTask.updateMany({ where: {
             id: saved.task.id, sessionId: saved.task.sessionId, status: 'failed', retryCount: saved.task.retryCount,
-            executionAttempt: saved.task.executionAttempt,
+            executionAttempt: saved.task.executionAttempt, progress: saved.task.progress,
             error: saved.task.error, payload: { equals: saved.task.payload as Prisma.InputJsonValue },
             result: { equals: saved.task.result as Prisma.InputJsonValue },
           }, data: { status: 'pending', progress: 0, retryCount: saved.task.retryCount + 1, error: null, dispatchedAt: null } });
@@ -2100,6 +2251,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
           }, data: { status: 'running', error: null } });
           const runChanged = await tx.hermesResearchRun.updateMany({ where: {
             id: run.id, actorId: input.actorId, status: run.status, version: input.expectedVersion, versionId: run.versionId,
+            maxAgentTasks: run.maxAgentTasks,
           }, data: { status: 'generating_storyboard', error: null, lastReconciledAt: null, version: { increment: 1 } } });
           if (taskChanged.count !== 1 || stepChanged.count !== 1 || runChanged.count !== 1)
             throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Saved storyboard changed while continuing');
@@ -2109,6 +2261,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
               taskId: saved.task.id, stepId: saved.step.id, previousExecutionAttempt: saved.task.executionAttempt,
               previousError: saved.task.error, planningAuditIds: saved.planningAuditIds,
               ...(saved.truncationAuditId ? { truncationAuditId: saved.truncationAuditId, continuedOutputAllowance: 32768 } : {}),
+              ...('pixelOutputResumeMetadata' in saved ? saved.pixelOutputResumeMetadata : {}),
               planningPromptHash: jsonRecord(saved.checkpoint.planned).promptHash,
               sourceEvidenceIdentity: saved.checkpoint.sourceEvidenceIdentity,
               narrativeSourceIdentity: saved.checkpoint.narrativeSourceIdentity,

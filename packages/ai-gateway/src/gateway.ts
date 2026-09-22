@@ -183,9 +183,16 @@ export class AiGateway {
         || input.prompt.length > ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS || !this.authorizeIllustrationReview) {
         throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid illustration review request');
       }
+      const outputResumeReceiptId = input.illustrationContext?.outputResumeReceiptId;
+      if (outputResumeReceiptId !== undefined && (typeof outputResumeReceiptId !== 'string' || !outputResumeReceiptId.trim()
+        || input.illustrationContext?.executionAttempt !== 3 || input.illustrationContext?.primaryProviderOnly !== true))
+        throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid illustration output continuation');
       const authorize = async () => {
         let allowed = false;
         try {
+          if (outputResumeReceiptId !== undefined && (input.illustrationContext?.outputResumeReceiptId !== outputResumeReceiptId
+            || input.illustrationContext?.executionAttempt !== 3 || input.illustrationContext?.primaryProviderOnly !== true))
+            throw new Error('illustration output continuation changed');
           allowed = await this.illustrationReviewPolicy?.(Object.freeze({ ...input.authorizationContext })) === true;
           if (allowed) await this.authorizeIllustrationReview!(input);
         } catch { allowed = false; }
@@ -197,7 +204,8 @@ export class AiGateway {
       ], { thinking: 'adaptive', temperature: 0.1,
         // An authorized third execution continues a saved plan at the existing 32K ceiling.
         maxTokens: input.illustrationContext?.executionAttempt === 3 ? 32768 : 16384,
-        escalateMaxTokens: 32768, timeoutMs: 300_000,
+        // The existing callback validates the receipt before every provider submission at this longer deadline.
+        escalateMaxTokens: 32768, timeoutMs: outputResumeReceiptId !== undefined ? 600_000 : 300_000,
         // Larger retry budget: illustration-review failures cascade into an aborted plan task,
         // so a single transient model hiccup with a long prompt shouldn't burn the user's
         // submitted task. 4 retries = 5 total attempts.

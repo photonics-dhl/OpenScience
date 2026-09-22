@@ -856,19 +856,30 @@ async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionC
                     throw new PresentationAssetError('VALIDATION_ERROR', 'Image review has no exact pre-submission proof');
                 }
             }
+            const recorded = Array.isArray(receiptMeta.sceneReviews)
+                ? receiptMeta.sceneReviews.find(item => recordValue(item).taskId === imageTask.id) : undefined;
+            const recordedFailure = recordValue(recorded);
+            // Inspect once at authorization. Later source reads retain the immutable receipt,
+            // not the evolving spool state of an old request that may still produce a result.
+            const recoveryState = image ? undefined : receipt
+                ? recordedFailure.failureKind === 'submission_unknown' ? recordedFailure.recoveryState : 'not_submitted'
+                : await input.terminalSceneSet?.inspectImageRecoveryState?.(imageTask.id).catch(() => 'unsafe');
+            const submissionUnknown = !image && !technicalRecovery
+                && (recoveryState === 'uncertain' || recoveryState === 'submitted_without_result');
+            if (!image && recoveryState !== 'not_submitted' && !submissionUnknown) {
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Scene submission proof is unavailable or unsafe');
+            }
             const failure = { sceneIndex: scene.sceneIndex, taskId: imageTask.id, imageId: image?.id ?? null,
                 contentHash: image?.contentHash ?? null, reviewHash: null, decision: null,
-                failureKind: image ? 'review_failed' : 'not_submitted', taskIdentity, reviewAuditIdentity,
+                failureKind: image ? 'review_failed' : submissionUnknown ? 'submission_unknown' : 'not_submitted', taskIdentity, reviewAuditIdentity,
+                ...(submissionUnknown ? { recoveryState } : {}),
                 ...(planningCalls.length ? { planningAuditIdentity: JSON.stringify(planningCalls.map(call => ({
                     id: call.id, createdAt: call.createdAt, metadata: call.metadata,
                 }))) } : {}),
                 imageIdentity: image ? JSON.stringify({ id: image.id, contentHash: image.contentHash, objectKey: image.objectKey,
                     provenance: image.provenance, sourceClaimIds: ids }) : null };
-            const recorded = Array.isArray(receiptMeta.sceneReviews)
-                ? receiptMeta.sceneReviews.find(item => recordValue(item).taskId === imageTask.id) : undefined;
-            if (receipt ? !isDeepStrictEqual(recorded, failure)
-                : !image && await input.terminalSceneSet?.inspectImageRecoveryState?.(imageTask.id).catch(() => 'unsafe') !== 'not_submitted') {
-                throw new PresentationAssetError('VALIDATION_ERROR', 'Unsubmitted scene proof is unavailable or changed');
+            if (receipt && !isDeepStrictEqual(recorded, failure)) {
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Terminal scene submission proof changed');
             }
             failures.push(failure);
             continue;
@@ -987,9 +998,12 @@ export async function readNarrativePixelReplanHistory(prisma: Pick<Prisma.Transa
         || meta.sceneReviews.some((item, index) => { const scene = recordValue(item);
           if (scene.sceneIndex !== index || typeof scene.taskId !== 'string') return true;
           if (scene.failureKind !== undefined) return meta.sceneSet !== 'terminal'
-            || !['not_submitted', 'review_failed'].includes(String(scene.failureKind))
+            || !['not_submitted', 'review_failed', 'submission_unknown'].includes(String(scene.failureKind))
             || scene.decision !== null || scene.reviewHash !== null || typeof scene.taskIdentity !== 'string' || !scene.taskIdentity
-            || (scene.failureKind === 'not_submitted'
+            || (scene.failureKind === 'submission_unknown'
+              ? !['uncertain', 'submitted_without_result'].includes(String(scene.recoveryState)) || scene.planningAuditIdentity !== undefined
+              : scene.recoveryState !== undefined)
+            || (scene.failureKind === 'not_submitted' || scene.failureKind === 'submission_unknown'
               ? scene.imageId !== null || scene.contentHash !== null || scene.imageIdentity !== null || scene.reviewAuditIdentity !== null
               : scene.imageId !== scene.taskId || typeof scene.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(scene.contentHash)
                 || typeof scene.imageIdentity !== 'string' || !scene.imageIdentity || typeof scene.reviewAuditIdentity !== 'string' || !scene.reviewAuditIdentity);

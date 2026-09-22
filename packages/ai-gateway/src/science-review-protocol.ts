@@ -71,6 +71,8 @@ export interface ScienceReviewInput {
     baseIdentity: string | null;
     /** An explicitly authorized same-task correction must not switch key/model on failure. */
     primaryProviderOnly?: true;
+    /** Existing output-resume receipt, checked by the worker before each plan-review provider attempt. */
+    outputResumeReceiptId?: string;
   };
 }
 

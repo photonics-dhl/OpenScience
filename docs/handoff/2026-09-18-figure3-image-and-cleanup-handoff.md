@@ -1,10 +1,19 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 — 保存方案续末审、标题证据与混合终态科学返工候选
+- 第二篇沿原storyboard_output_resume续同task exec3，只审已存设计，32K/600秒/原provider，零新增逻辑任务但正常模型用量；不重做PDF/六维/science/art。原精确失败审计、checkpoint、source、root receipt及每次付费调用授权均复验，High静态PASS。当前仍stopped/v43/max32，候选未部署。
+- 第三篇原GET被34/967的unknown提交阻断；presentation-asset.ts只在新科学返工保留submission_unknown及精确状态，至少一个真实blocked/null图仍为必要依据，unknown不提供科学反馈。收据回读不再追问会变化的旧spool，原task/source/null身份仍逐一比较；技术恢复仍只接受not_submitted。单文件High静态PASS，旧请求/deadline/PNG/状态未改。
+- 配图入口handler复用经审Evidence的原SourceMap/locator，将heading的supports仅向当前规划/成图消费投影为context；原数据库/来源identity/公开资料不变。已有坏科学稿不再作为可复用基础传入新规划。illustration-brief兼容旧无relation调用，明确context不能支撑subject；High指出兼容性问题，按建议修复后PASS。第二篇现存checkpoint八个basis实读7paragraph/1caption；第三篇1e07确为heading，现有合法池无导言类比，不能手补。
+- 05:33Z原34页正常完成加载、profile可见、原图complete且无dialog；无重新登录/模型请求，原一小时恢复grace仍已过。tmp/third-34-current-surface-read-20260922.json留证。没有认定新对话数导致限流；本机exec resume只证明Codex任务续接，上游保留GPT对话另受conversation key/launcher lease条件约束，不能混为一谈。
+- 审查材料tmp/pixel-storyboard-output-review-20260922、heading-evidence-consumption-review-20260922、scientific-replan-unknown-submission-review-20260922；新writer second-paper-saved-final-resume、third-paper-evidence-scoped-replan尚未执行。无测试/预检/CI/本机构建；后续正常服务器构建及原页面续作见CURRENT，不把候选作为真实通过结果。
+
 ## 2026-09-22 05:07Z — 原图下载与对话访问限制；末审检查点保留
+- 后续d8305c93独立provider已按原三锁/空闲备份安装exit0，Gateway与a78依赖相同所以复用其服务器dist；无共享浏览器重启。05:19两unit均指d830，timers active，应用仍a78/rollback193；备份provider-backup-20260922-existing-image-recovery-d8305c93。读取tmp/d830-provider-markers-read-20260922.json exit0确认原34恢复grace已过，未运行下载、未改deadline/marker。
 - 第二篇82c6 exec2完成science/结构修复/art，完整storyboardCheckpoint保留；final 16K thinking-only length后32K调用300秒超时，run stopped/v43/max32。原GET无恢复，正在复用原output-resume续末审，不重做全文/设计；前次timeout为结果未知。
 - 第三篇606已approved并发起5图，8d4f实图6Pro拒收G→j错误，c482实图像素accepted，但独立原文复核仍发现标题绑定、线性条件和固定箭头问题；不能发布。当前30条合法Evidence无导言具体类比，原SourceMap有该内容，两者不能混淆；旧冻结lineage不手补。
 - 34d30e5c三次DOWNLOAD_TIMEOUT，原会话已显示唯一1672×941原图、output空；967已提交后失败/恢复超时但无Inspector crash事件，6cf未提交/BROWSER_ATTACH_TIMEOUT。05:07原34页出现明确Too many requests/temporarily limited access to your conversations，停止Chat追加请求，不用fetch绕过限制。未证明登录失败、OOM或新建对话是限制根因。
-- runner.cjs候选只补原download no-send模式直接读取已显示原图，避免再点击Save；原同源/唯一图/PNG校验及一小时grace保持。访问限制独立为CONVERSATION_ACCESS_LIMIT，在任何Save或读取前终止，保留unknown而非误报生成额度耗尽。独立High指出限制DOM读取异常不能吞成未命中，已修并静态PASS；未部署，不测试/预检/CI。
+- runner.cjs只补原download no-send模式直接读取已显示原图，避免再点击Save；原同源/唯一图/PNG校验及一小时grace保持。访问限制独立为CONVERSATION_ACCESS_LIMIT，在任何Save或读取前终止，保留unknown而非误报生成额度耗尽。独立High指出限制DOM读取异常不能吞成未命中，已修并静态PASS；已交付但未实际恢复，不测试/预检/CI。
+- 精确原SourceMap block:…:2:16确为heading，单标题supports并非OCR归类未知。现有reanalyze入口只复用解析Map、仍完整重做六维/核源并创建新lineage/newrun；不具备给旧run定向补Evidence能力。没有执行该较大重分析，先研究既有配图消费入口保留block kind，旧数据库证据和身份不改。
 - 用户询问会话续接：本机collaborate.mjs已固定exec resume；服务器同任务恢复用原会话，跨任务同图改稿仍缺parent task和新assistant图锚点。独立初稿/独立审阅与同图改稿分开说明，不冒称已支持后者。
 
 ## 2026-09-22 04:03Z — 同draft正文修复与原task规划恢复已交付

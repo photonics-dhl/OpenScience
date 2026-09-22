@@ -74,7 +74,7 @@ export function describeIllustrationBrief(brief: IllustrationBrief): string {
 }
 
 export function requireIllustrationSourceSupport(brief: IllustrationBrief, claims: readonly {
-  id: string; sourcePassages?: readonly { evidenceId: string; text: string }[];
+  id: string; sourcePassages?: readonly { evidenceId: string; text: string; relation?: string }[];
 }[], paperOriginals?: ReadonlyMap<string, { assetId: string; objectKey: string; contentHash: string }>): void {
   for (const subject of brief.subjects) {
     const b = subject.basis;
@@ -83,7 +83,8 @@ export function requireIllustrationSourceSupport(brief: IllustrationBrief, claim
     // and the figurePlan's caption identifies it; downstream source support
     // for paper-original scenes is the asset's provenance itself.
     if (paperOriginals && Array.from(paperOriginals.values()).some((ref) => ref.assetId === b.evidenceId)) continue;
-    if (!claims.find(claim => claim.id === b.claimId)?.sourcePassages?.some(passage => passage.evidenceId === b.evidenceId && passage.text.includes(b.quote))) {
+    if (!claims.find(claim => claim.id === b.claimId)?.sourcePassages?.some(passage => (passage.relation === undefined || passage.relation === 'supports')
+      && passage.evidenceId === b.evidenceId && passage.text.includes(b.quote))) {
       throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'illustration_brief:original_passage_changed');
     }
   }

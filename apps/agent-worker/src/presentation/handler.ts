@@ -1,13 +1,13 @@
 import { planSceneImagePrompt } from './scene-image';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, type AiGateway, type OcrAuthorizationContext, type ScienceReviewInput } from '@openscience/ai-gateway';
-import { parseStoryboardDocument, parseStoryboardRequest, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativePixelReplanAuthority, requireVideoGenerationParents, storyboardSceneStyles, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
+import { loadDocumentSourceMapReference, parseDocumentSourceMapReference, parseStoryboardDocument, parseStoryboardRequest, requireIllustrationSourceSupport, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativePixelReplanAuthority, requireVideoGenerationParents, resolveSourceLocator, storyboardSceneStyles, validateSourceLocator, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
 import { generateStoryboard, renderStoryboard } from './storyboard';
 import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@openscience/domain';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, VISUAL_NARRATIVE_PROFILE, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, readInitialSciencePlanningRetryChain, requirePixelPlanningPreProviderRearm, requireHermesCompletedImageReviewRecovery, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, VISUAL_NARRATIVE_PROFILE, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, readInitialSciencePlanningRetryChain, requirePixelPlanningPreProviderRearm, requirePixelStoryboardOutputResume, requireHermesCompletedImageReviewRecovery, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
@@ -252,6 +252,64 @@ function presentationEvidenceIdentity(rows: Awaited<ReturnType<typeof readReview
   })))).digest('hex');
 }
 
+/** Keep immutable Evidence identity intact while preventing headings from establishing illustration subjects. */
+async function projectIllustrationEvidence(
+  storage: Parameters<typeof loadDocumentSourceMapReference>[0],
+  rows: Awaited<ReturnType<typeof readReviewedPresentationEvidence>>,
+) {
+  const sourceMaps = new Map<string, Promise<Awaited<ReturnType<typeof loadDocumentSourceMapReference>>>>();
+  return Promise.all(rows.map(async row => {
+    if (row.relation !== 'supports') return row;
+    const provenance = row.provenance as Record<string, unknown> | null;
+    // This presentation-only policy applies to canonical reviewed-ingestion
+    // evidence. Legacy/user evidence keeps its existing contract.
+    if (provenance?.source !== 'reviewed_ingestion') return row;
+    let reference: ReturnType<typeof parseDocumentSourceMapReference>;
+    try {
+      reference = parseDocumentSourceMapReference(provenance.sourceMapRef);
+    } catch {
+      throw new Error('[blocked] Reviewed illustration evidence has no valid SourceMap reference');
+    }
+    if (reference.parserStatus !== 'succeeded' || reference.artifactId !== row.artifactId
+      || reference.contentHash !== row.contentHash) {
+      throw new Error('[blocked] Reviewed illustration evidence SourceMap identity changed');
+    }
+    // The complete reference is the cache key: a colliding object key must not
+    // bypass the reference's artifact/content identity checks.
+    const key = JSON.stringify(reference);
+    let sourceMap = sourceMaps.get(key);
+    if (!sourceMap) {
+      sourceMap = loadDocumentSourceMapReference(storage, reference);
+      sourceMaps.set(key, sourceMap);
+    }
+    let block: ReturnType<typeof resolveSourceLocator>;
+    try {
+      block = resolveSourceLocator(await sourceMap, validateSourceLocator(row.locator));
+    } catch {
+      throw new Error('[blocked] Reviewed illustration evidence locator no longer resolves');
+    }
+    return block.kind === 'heading' ? { ...row, relation: 'context' } : row;
+  }));
+}
+
+function requireStoryboardSourceSupport(document: StoryboardDocument, claims: readonly PresentationClaim[],
+  paperOriginals?: ReadonlyMap<string, { assetId: string; objectKey: string; contentHash: string }>): void {
+  for (const scene of document.scenes) {
+    if (scene.illustration) requireIllustrationSourceSupport(scene.illustration, claims, paperOriginals);
+  }
+}
+
+function hasStoryboardSourceSupport(document: StoryboardDocument, claims: readonly PresentationClaim[],
+  paperOriginals?: ReadonlyMap<string, { assetId: string; objectKey: string; contentHash: string }>): boolean {
+  try {
+    requireStoryboardSourceSupport(document, claims, paperOriginals);
+    return true;
+  } catch (error) {
+    if ((error as { code?: unknown })?.code === 'SOURCE_CLAIM_INVALID') return false;
+    throw error;
+  }
+}
+
 async function requireIllustrationOriginalArtifacts(prisma: Pick<Prisma.TransactionClient, 'artifact'>,
   evidence: Awaited<ReturnType<typeof readReviewedPresentationEvidence>>, workspaceId: string) {
   const artifactIds = [...new Set(evidence.map(row => row.artifactId))];
@@ -292,6 +350,7 @@ export async function requireIllustrationReviewAuthority(prisma: Prisma.Transact
 export async function requireIllustrationReviewSubmission(prisma: Prisma.TransactionClient, input: ScienceReviewInput) {
   const { source, illustrationContext: snapshot } = input;
   if (!('kind' in source) || !snapshot || (source.kind === 'illustration-plan' && input.attachments !== undefined)
+    || (source.kind !== 'illustration-plan' && snapshot.outputResumeReceiptId !== undefined)
     || input.requestId !== input.authorizationContext.taskId) throw new Error('[blocked] Invalid illustration review submission');
   const { owner, payload } = await requireIllustrationReviewAuthority(prisma, input.authorizationContext);
   const artAuthorized = source.kind === 'illustration-plan' && owner.result && typeof owner.result === 'object'
@@ -341,6 +400,13 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
     }) : null;
     if (pixel && (snapshot.primaryProviderOnly !== true || pixel.task.id !== owner.id || pixel.baseIdentity !== planning.identity))
       throw new Error('[blocked] Narrative scientific revision review authority changed');
+    if (snapshot.outputResumeReceiptId !== undefined || (pixel && owner.executionAttempt === 3 && !artAuthorized)) {
+      if (!pixel || owner.executionAttempt !== 3 || snapshot.primaryProviderOnly !== true
+        || typeof snapshot.outputResumeReceiptId !== 'string' || !snapshot.outputResumeReceiptId)
+        throw new Error('[blocked] Pixel storyboard output continuation receipt is required');
+      await requirePixelStoryboardOutputResume(prisma, { runId: pixel.run.id, actorId: input.authorizationContext.actorId,
+        taskId: owner.id, receiptId: snapshot.outputResumeReceiptId });
+    }
     if (planning.identity !== snapshot.baseIdentity
       || (planning.imageRevision && planning.imageRevision.sourceEvidenceIdentity !== source.sourceEvidenceIdentity))
       throw new Error('[blocked] Illustration base or reviewed image evidence changed');
@@ -485,8 +551,10 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     })) : undefined;
     const sourceEvidence = scientificMedia ? await readReviewedPresentationEvidence(deps.prisma, payload, lineageByClaim) : [];
     const sourceEvidenceIdentity = presentationEvidenceIdentity(sourceEvidence);
+    const illustrationEvidence = payload.storyboard || payload.sceneImage
+      ? await projectIllustrationEvidence(deps.storage, sourceEvidence) : sourceEvidence;
     const claims = canonicalPresentationClaims(claimRows.map((claim) => ({ ...claim,
-      sourcePassages: sourceEvidence.filter((row) => row.claimId === claim.id)
+      sourcePassages: illustrationEvidence.filter((row) => row.claimId === claim.id)
         .map((row) => ({ evidenceId: row.id, text: row.exactQuote!, relation: row.relation })),
     })) as PresentationClaim[]);
     const narrativeScope = { userId: scope.userId, workspaceId: researchObject.workspaceId,
@@ -507,6 +575,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     const pixelRecovery = pixelAuthority ? { receiptId: pixelAuthority.receipt.id,
       claimContent: pixelAuthority.metadata.claimContent, narrativeSourceIdentity: pixelAuthority.metadata.narrativeSourceIdentity } : undefined;
     let pixelPlanningRearm: Awaited<ReturnType<typeof requirePixelPlanningPreProviderRearm>> | undefined;
+    let pixelOutputResume: Awaited<ReturnType<typeof requirePixelStoryboardOutputResume>> | undefined;
     let pixelPlanningFailureClass: 'pixel_storyboard_pre_provider_rearm' | 'pixel_storyboard_art_provider_timeout' | undefined;
     let pixelPlanningStarted = false;
     if (pixelAuthority && (pixelAuthority.task.id !== task.id || !isDeepStrictEqual(pixelAuthority.payload, payload)
@@ -531,6 +600,9 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         throw new Error('[blocked] Narrative pixel-feedback recovery changed before planning or review');
       if (pixelPlanningRearm && !isDeepStrictEqual(await requirePixelPlanningPreProviderRearm(tx, authority!, pixelPlanningFailureClass), pixelPlanningRearm))
         throw new Error('[blocked] Narrative planning recovery receipt changed');
+      if (pixelOutputResume && !isDeepStrictEqual(await requirePixelStoryboardOutputResume(tx, { runId: pixelAuthority.run.id,
+        actorId: scope.userId, taskId: task.id, receiptId: pixelOutputResume.id }), pixelOutputResume))
+        throw new Error('[blocked] Pixel storyboard output continuation receipt changed');
       if (pixelPlanningRearm && !pixelPlanningStarted && await tx.auditLog.count({ where: { requestId: task.id, action: 'ai.gateway.call',
         id: { notIn: pixelPlanningRearm.metadata.planningAuditIds as string[] } } }) !== 0)
         throw new Error('[blocked] Narrative planning recovery has an existing uncheckpointed provider attempt');
@@ -863,6 +935,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         };
         const saved = readStoryboardCheckpoint(owner.result, identity);
         if (saved) {
+          requireStoryboardSourceSupport(saved.document, claims, paperOriginals);
           planned = saved;
           artCorrection = readStoryboardArtCorrection(owner.result, saved.document, identity, task.id, task.executionAttempt);
           if (artCorrection) {
@@ -891,6 +964,10 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
               await persistArtCorrection(artCorrection);
             }
             planned = artCorrection.planned!;
+            requireStoryboardSourceSupport(planned.document, claims, paperOriginals);
+          } else if (pixelAuthority && task.executionAttempt === 3) {
+            pixelOutputResume = await requirePixelStoryboardOutputResume(deps.prisma, { runId: pixelAuthority.run.id,
+              actorId: scope.userId, taskId: task.id, beforeFirstSubmission: true });
           } else if (task.executionAttempt > 3) {
             throw new Error('[blocked] Storyboard continuation has no current art correction authorization');
           }
@@ -960,8 +1037,10 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           }
           if (planningContext.imageRevision) {
             const rejected = planningContext.imageRevision;
+            const reusableRejectedView = hasStoryboardSourceSupport(rejected.view.document, claims, paperOriginals)
+              ? rejected.view : undefined;
             planned = await generateStoryboard(planningGateway!, claims, payload.storyboard,
-              rejected.view, paperOriginals, narrativeSource?.context, { summary: rejected.feedback, issues: [] });
+              reusableRejectedView, paperOriginals, narrativeSource?.context, { summary: rejected.feedback, issues: [] });
           } else if (planningContext.revision) {
             const previous = readStoryboardCheckpoint(planningContext.revision.task.result, {
               payload: planningContext.revision.payload, sourceEvidenceIdentity,
@@ -974,11 +1053,12 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             const issues = readStoredIllustrationIssues(result.storyboardReview, previous.document, claims,
               planningContext.revision.task.id, sourceEvidenceIdentity);
             const feedback = issues ? (result.storyboardReview as { summary: string }).summary : planningContext.revision.feedback;
-            planned = payload.storyboard.narrative && (issues?.some(issue => issue.kind === 'requires_replan')
-              || previous.document.scenes.length > (payload.storyboard.narrativeSceneLimit ?? 6))
-              ? await generateStoryboard(planningGateway!, claims, payload.storyboard, {
+            const previousHasCurrentSupport = hasStoryboardSourceSupport(previous.document, claims, paperOriginals);
+            planned = !previousHasCurrentSupport || (payload.storyboard.narrative && (issues?.some(issue => issue.kind === 'requires_replan')
+              || previous.document.scenes.length > (payload.storyboard.narrativeSceneLimit ?? 6)))
+              ? await generateStoryboard(planningGateway!, claims, payload.storyboard, previousHasCurrentSupport ? {
                 document: previous.document, locale: payload.storyboard.locale, style: payload.storyboard.style, output: 'image',
-              }, paperOriginals, narrativeSource?.context, { summary: feedback, issues: issues ?? [] })
+              } : undefined, paperOriginals, narrativeSource?.context, { summary: feedback, issues: issues ?? [] })
               : await clarifyIllustrationLabels(planningGateway!, claims, payload.storyboard, previous, feedback, issues);
           } else {
             if (initialScienceRecovery) {
@@ -1000,7 +1080,10 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         }
         const priorBlocked = expectedResult && typeof expectedResult === 'object' && !Array.isArray(expectedResult)
           ? (expectedResult as Record<string, unknown>).storyboardReview : undefined;
-        if (priorBlocked === undefined) acceptance = readStoryboardAcceptance(expectedResult, planned.document, identity, task.id);
+        if (priorBlocked === undefined) {
+          acceptance = readStoryboardAcceptance(expectedResult, planned.document, identity, task.id);
+          if (acceptance) requireStoryboardSourceSupport(acceptance.document, claims, paperOriginals);
+        }
       } else {
         planned = await generateStoryboard(options.gateway, claims, payload.storyboard, base?.view);
       }
@@ -1020,6 +1103,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         const reviewContext = {
           authorizationContext: Object.freeze({ taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId }),
           illustrationContext: { executionAttempt: task.executionAttempt, claimContent: presentationClaimContent(claims), baseIdentity: planningContext.identity,
+            ...(pixelOutputResume ? { outputResumeReceiptId: pixelOutputResume.id } : {}),
             ...(artCorrection || pixelRecovery || initialScienceRecovery ? { primaryProviderOnly: true as const } : {}) },
           researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceEvidenceIdentity,
           structuredIssues: planned.reviewFormat === 2,

@@ -174,6 +174,7 @@ export {
   requireStoryboardArtCorrectionAuthorization,
   readInitialSciencePlanningRetryChain,
   requirePixelPlanningPreProviderRearm,
+  requirePixelStoryboardOutputResume,
   requireHermesCompletedImageReviewRecovery,
   HERMES_AUTHORITY_REARM_MARKER,
   HermesResearchRunError,
