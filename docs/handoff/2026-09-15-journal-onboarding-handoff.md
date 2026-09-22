@@ -1,56 +1,44 @@
-# CURRENT：期刊增强的生产集成与部署
+# CURRENT：期刊增强已部署，等待真实期刊试用
 
 ## Goal / version tuple
 
-- 用户要求在已有期刊模块上实现来源版权矩阵、加工优先级、服务包额度；现已明确授权部署供本人试用。
-- 功能分支 codex/journal-onboarding 已在 Nanqing96/openscience 与 photonics-dhl/OpenScience 推送至 96e5e0c626ac44427e2e92684e104e4e5d4b0dfd。
-- 该分支基线较旧，禁止直接覆盖生产。独立发布候选为 codex/journal-server-20260922，基于线上 3f9adcdb，随后合入最新生产线；精确 HEAD 见 Git 元数据。
-- 2026-09-22 最新观测生产 c085b157964c9798205de1364352bfbe51021cef；已合入候选。相对此前574c3db2仅恢复事务timeout延长至30秒，独立High确认权限/幂等/扣费/提交后派发不变。旧active比较两次正确阻止准备，部署前继续核实际active作为rollback。
-- 用户无法暂停其他部署；必须保留共享部署锁、精确 active 比较和失败回退，不覆盖并发发布。
-- 本节记录部署准备；尚未将候选声明为已上线。后续执行后同步真实 release/rollback。
-- 独立候选已推送至 photonics-dhl/OpenScience；[PR #109](https://github.com/photonics-dhl/OpenScience/pull/109) 为共享发布线审阅入口。自动审批拒绝未经具体确认直接更新共享 release 分支，未合并或强推。
+- 用户要求实现来源版权矩阵、AI 加工优先级、服务包额度三个功能，并已明确授权推送 hongliang 仓库及部署服务器供本人试用。
+- 原功能分支 codex/journal-onboarding 已推送至 Nanqing96/openscience 与 photonics-dhl/OpenScience：96e5e0c626ac44427e2e92684e104e4e5d4b0dfd。
+- 生产集成分支 codex/journal-server-20260922；本次已部署 release=e05ca61c461a9dbe7d50f8406b0218d3350b65b2，rollback=c085b157964c9798205de1364352bfbe51021cef。收尾文档提交不触发重部署，分支 HEAD 以 Git 为准。
+- 2026-09-22 20:10左右（Asia/Shanghai）canonical deployment exit0；独立读回服务器与公网 /__release 均等于上述release，transaction/failure标记均不存在。
+- [PR #109](https://github.com/photonics-dhl/OpenScience/pull/109) 尚未合并。独立分支已推送；自动审批拒绝未经具体确认直接更新共享release分支，等待用户确认或合作开发者审阅合并。
+- 用户无法暂停其他发布；已保留生产更新至c085的所有代码，使用共享部署锁、精确active比较和回退事务完成发布，没有强推或覆盖并发版本。
 
 ## Done
 
-- 原分支实现多来源逐项授权、证据/许可/到期历史、主来源实际内容绑定和来源修改后重新确认。
-- 保留生产英文申请契约、申请回执、补件/误拒重开、网站管理员审核入口和发布标识。
-- 在现有工作台接入来源矩阵、可解释加工顺序、重点/延期及服务意向与真实账本页面。
-- 辅助材料不能借权放行主来源；新上传先私有暂存，核验对应文件权限后免费解析。
-- 授权到期/撤销同步限制期刊解读及通用公开读取；书目目录仍保留原论文身份。
-- 第一批沿用成功草稿 1 篇额度、失败/取消释放预占；套餐仅人工申请，不自动收费或开通。
-- 将公开版本页长文本的手机换行修复适配到生产新阅读结构，保留固定出版记录与页面重定向。
-- 本次增强不新增迁移或依赖；生产已有期刊迁移及后续科研迁移必须全部保留。
+- 来源与版权矩阵：逐项操作权限、核验依据、许可/到期历史、主来源真实内容绑定、来源修改后的重新确认；辅助材料不能借权放行主来源。
+- 新上传先私有暂存，确认对应文件授权后解析；授权到期/撤销限制期刊与通用公开读取，原论文书目身份保留。
+- AI加工队列：可解释评分、重点/延期、阻断原因、预计额度及用户明确入队。
+- 服务包额度页：Free/Starter/Pro/Premium/Custom人工服务申请、有效额度/预占/到期/账本；成功草稿1篇扣1额度，失败/取消释放预占，不自动收费或开通。
+- 保留生产英文申请、回执、补件/误拒重开、管理员审核入口、固定出版记录、反馈、媒体及科研任务恢复；本次无新增迁移/依赖，保留生产core49迁移。
 
 ## Evidence / scope
 
-- 原 96e5e0c 分支：Domain 574、API 117、Web 471 + Node 5、Worker 4、真实 Chromium 2 场景及 GitHub CI 通过；这些不能冒称生产集成候选已通过相同回归。
-- 生产集成采用独立 high 静态权限复核和服务器必要构建；未运行本机测试/构建。自动审批拒绝跳过验收后，本轮按严格 Parser/ScanSci/BGE 发布门禁继续，结果须逐项记录。
-- 097beeab 服务器全量构建通过，切换前因缺少精确 Parser 报告停止；2688deed 后端构建通过，正式 Parser 验收因旧 fake 缺少新增 SourceMap checkpoint 事务而失败，未切换生产。
-- Parser runner 已补齐内存 checkpoint 事务；fdc11f9f 服务器复验仍失败，定位为旧单阶段 gateway seam 不支持现行 source_bridge/compose。候选适配 v2 严格 profile：固定语料 14 次 bridge + 14 次 compose，保留 14 解析完成/2 需复核、定位、零外部调用及隔离限额；仅源段支持的 problem 可物化，其他五字段保留证据不足，完成解析不代表科学内容完整。独立 high 收口后须重新取得最终 SHA 报告。
-- PR 自动 CI 在 2688deed 暴露 8 个旧 journal fixture/冻结 hash 断言不兼容；已按现行英文申请、服务目录和固定出版记录修正测试，保留权限/幂等/不可变断言。服务页同时改为提交后台有效服务值，避免真实申请被拒。
-- fdc11f9f 的 Domain journal CI 已通过；API 暴露授权到期目录仍枚举解读链接，以及 7 项旧公开记录 fake。708560b3 修复真实目录过滤并更新冻结 DTO/媒体 fixture，独立权限复核 GO。
-- 55707759及1e12c91e自动 CI：后端/Web build、Domain 39、API 23（另2条browser用例按独立阶段跳过）、Worker 4、Web 7、真实Chromium 2场景均通过；匿名auth/me六次401单独精确断言。AGENTS/progress已收口；最后文档失败实际为脚本读取的08-16历史handoff超过80行，已仅移除5个空行降为79行，09-10当前handoff不改；待最终候选CI。
-- 55707759 服务器 worker 构建通过，但正式 Parser 报告因实际 structuredFake=26/预期28 未生成；无 handler throw、外部/禁止调用均0。正定位少进入处理阶段的固定样例，未下调14/2或调用门槛、未切换生产；新增逐例状态诊断以保留实际原因。
-- 同557镜像隔离诊断确认scan.pdf的PULSE/42/FS及OCR置信度符合规范；formula.pdf真实原生equation由equation-markers.1产生。1e12正式逐例证实：仅corrupt PDF、formula PDF、空PNG复核；公式原始原因精确unresolved pages remain、定位2/2，scan成功定位2/2，其余12全部成功/完整定位，外部和禁止调用0。
-- High已GO并完成hermes-parser-13-3-v3：唯一三例精确复核、26次结构化调用，增加真实equation及native版本/来源证明；其余案例逐项成功且隔离门禁保留。旧runner单测fake同步严格checkpoint持久化，最终同SHA服务器测试与报告待执行，不取消公式复核以伪造14份直接成功。
-- a05d5cfd服务器worker build、Parser契约72项、发布脚本23项通过；runner旧段数断言3项失败。已按真实canonical passage精确断言xlsx/csv各5段、Python2段、notebook1段并逐段回溯原文定位；需新SHA复验，尚未切换生产。
-- 211e0220服务器81项Parser检查、23项脚本检查、语料导出1项及正式13/3/26零外部报告通过；GitHub业务/构建/真实浏览器全部通过，文档审计两处索引问题已修复。正式部署全量构建成功但切换前因运行文件snapshot变化拒绝，生产未切换；正定位全量构建与验收准备的范围差异，保留旧报告，不绕过身份守卫。
-- 已通过既有 SSH 包装脚本使用项目专用密钥连接，未读取/打印 .env 或私钥。
-- 服务器本地双库备份成功：core 79M、search 5.5M，保留 7/7 轮；未下载业务数据。
-- 部署前观测 API/Worker/Parser/ScanSci/BGE 及数据服务正常，磁盘可用约 28G；精确状态须执行时再次定锚。
-- 部署使用当前生产的 canonical immutable transaction，复用构建输入未变的能力镜像；不得手工修改 release 源码或绕过版本保护。
+- 原96e分支历史回归：Domain574、API117、Web471+Node5、Worker4、真实Chromium2场景；不能替代当前集成版本的结果。
+- 已部署e05自动CI：后端/Web构建、Domain39、API23（2条browser在独立阶段执行）、Worker4、Web7、真实Chromium桌面/375px手机2场景全部通过；使用隔离PostgreSQL与合成材料。
+- e05自动CI最后仅文档一致性失败：5处文档登记及迁移区间声明；收尾文档提交已修复，最终CI结果按实际GitHub运行记录，不把业务阶段通过冒称整项CI通过。
+- e05服务器：两轮全应用构建运行闭包指纹一致；Parser契约/runner81项、发布脚本23项、语料导出1项通过。
+- 同SHA正式hermes-parser-13-3-v3报告通过：16例中13完成、损坏PDF/公式PDF/空PNG精确复核；26次结构化fake，外部/禁止调用0，falseReady0。公式保持真实equation与native版本证明；这不代表真实模型科学质量验收。
+- 严格canonical部署全部完成：报告/源/镜像一致，BGE真实向量、ScanSci工具/存储/OA/Worker、Parser及API/Web/Worker健康、nginx、公网精确版本和发布事务清理通过。未使用no-tests。
+- 服务器双库备份成功：core83M、search5.5M，保留7/7轮；未下载业务数据或打印凭据。
+- 旧211e报告仍保留：其部署因只先构建Worker、重复安装和全构建改变运行闭包而在切换前停止。新e05先完成相同安装/全构建、证明指纹稳定后生成新报告；未覆盖旧报告或放宽守卫。
+- 生产页面已观察：公开期刊目录→申请入驻正常；当前浏览器匿名，管理页显示“尚未加入期刊”。三项私有页面的生产实际操作尚未观察，需用户登录已加入的真实期刊；没有创建假刊或代为批准入驻。
+- 发布及验收原始日志：本任务work/journal-deploy-e05ca61c.log、journal-parser-acceptance-e05ca61c.log、journal-deployment-verified-e05ca61c.log；用户交付报告位于outputs/journal-deployment-report.md。
 
 ## Constraints / open risks
 
-- 真实模型、解析器和收费流程质量仍需用户以有代表授权的期刊及合法来源试用；不创建假期刊、不代为批准申请或公开论文。
-- Topic Hub、机器访问分析、在线支付、多刊共享额度和小数计费不属于第一批。
-- 登记链接不会自动下载；排序不代表科学质量、潜在引用或付费排名。
-- 采用矩阵后不能直接回退到忽略矩阵和动态到期检查的旧应用；必要时先限制相关公开内容并保留授权守卫。
-- 其他生产功能、真实内容和历史认可产物保持原责任链；不把本轮期刊交付改写成其他任务完成。
+- Topic Hub、机器访问分析、在线支付、多刊共享额度和小数计费未实现，属于后续范围。
+- 链接登记不自动下载；排序不代表科学质量、潜在引用或付费排名；真实解析/模型与商业方案需要用户用合法来源试点。
+- 当前共享生产分支尚未合入期刊PR；合作开发者后续发布应先整合本PR，避免将已上线功能回退掉。
+- 使用矩阵后不可直接回退到忽略动态授权的旧应用；已被其他科研恢复任务消费的收据/来源/媒体也必须保留，必要时优先前向修复。
 
 ## Next action
 
-1. 集成执行时最新的 release/onchip-production-line；保持可审查增量并推送候选。
-2. 使用实际 active 作为 rollback，经共享锁完成服务器必要 build/start 与精确公网版本切换。
-3. 从站内可见入口观察期刊工作台和新增页面；登录/角色/未核验期刊的阻断保持明确。
-4. 同步真实部署结果，再由用户试用有授权的论文与刊物；第二批另行推进。
+1. 用户登录 /journals/manage，进入已核验期刊，试用来源矩阵、加工队列和服务额度；没有期刊时先完成真实入驻流程。
+2. 收取实际使用问题，保留来源、权限、额度和科学复核守卫修正；登录/成员身份与真实内容效果保持未确认，不伪造验收。
+3. 经用户授权或合作开发者审阅将PR109合入共享生产分支；第二批另行推进。
