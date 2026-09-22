@@ -38,6 +38,8 @@
 
 原图下载的当前断点：native Save超时但原会话有完整图，`runner.cjs`的显式download模式复用既有可见PNG读取；访问对话限流独立识别、异常不继续，不延长原恢复窗口。保存设计后末审16K耗尽/32K超时，沿原output-resume同task续末审，原来源/检查点/调用收据逐次复验，不重做planning。`handler.ts`复用原SourceMap block kind，将标题supports仅在配图消费时投影为context，原数据库证据与身份不改；已有第二篇检查点8个basis均为正文/图注。整组科学返工允许保留旧图片提交未知状态，只有真实科学拒收才提供返工依据，技术恢复仍拒绝unknown。冻结Evidence池缺导言仍不能手补；新科学方案须使用有效来源或缩窄表达。候选、部署及真实结果见CURRENT。
 
+连续改稿与质量断点：新scene/修订task通过`runner.claimAuthenticatedImagePage`只取空白首页或新页；已有conversation仅在同task恢复时读取已提交结果。`revisionAssetId`当前只消费repair文本，未把原图作为编辑输入，风格referenceImage也不能替代科学编辑。跨task同图续改需准确parent/conversation/新assistant图身份和原授权幂等，不冒称已实现。文字方案经M3 accepted仍出现6Pro像素科学拒收，先区分旧设计继承、模型审阅不足与来源失效；不能用反复重画掩盖，具体当前证据和诊断见CURRENT。
+
 ### 复用与效果查询
 
 - **已经自动联动**：Worker任务执行、SourceMap/Claim/Evidence及RO/version绑定、方案保存/艺术修订复用、Gateway/provider队列、结果回收和资产记录；Gateway审计经既有view/connector自动进入Langfuse并携带taskId。已保存任务/真实产物见CURRENT，链路接线与每一步效果分别判断。

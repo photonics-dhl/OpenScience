@@ -1,5 +1,13 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 05:58Z — 末审真实恢复成功；第三篇拒收分类更正
+- 后续第二篇4图全真实生成/实看，7ab原请求取图恢复成功未重发；6Pro四份均blocked/null，run stopped/v48/max32、原GET科学返工5项可用但未发起。M3 accepted正式回执与任务exec3成功已另读tmp/f44-two-current-plans-20260922.json；不能用更早只有checkpoint的旧文件推断没有末审。最新4审阅含几何/尺度/主张归属、I(t)/等光程、99as对比50as、调参范围等上游错误，完整见tmp/f44-current-scene-reviews-20260922.json。
+- 本机原CLI固定Pro任务06:10只读诊断exit0，4次静态命令exit0，tmp/pro-collaboration/2026-09-22T06-10-23-811Z.jsonl。未发现当前科学返工继承旧art或直接丢失反馈的代码证据；旧反馈到planner、却未显式到现有终审。提出同一次末审补接不可信缺陷报告，不增模型阶段；候选illustration-review.ts字段previousDefectReport已实现，handler接线/High及真实效果未完成。第三篇另补同run的真实heading依据不足恢复，不冒用8d4f渲染拒收。
+- f44dc25c正常服务器build/start exit0，rollback a78fd5a9；独立release/rollback读回一致，journal/failed=false，provider仍d830，无测试/预检/CI/迁移/共享浏览器重启。日志deploy-f44dc25c-20260922.log。
+- 第二篇GET真实storyboard-review/0，05:57:22原按钮202后82c6 exec3仅续末审并成功，run generating_scene_images/v46/max32；4新图357d6ac1/8d2257fc/2dff8d1a/7ab89e78，前两张真实生成，审阅未完成。second-paper-saved-final-resume收据已消费，不能重放。
+- 第三篇GET仍无科学返工入口。读取原正式imageReview后更正前序摘要：8d4f是blocked但repairInstruction非空，只删除G→j；c482是accepted。新Domain只读helper正确拒绝“Narrative pixel feedback does not require scientific replanning”，spool实际34/967 uncertain、6cf not_submitted。unknown补丁未消费新收据，不能再放宽科学拒收要求。原plan标题支撑复杂类比仍是单独真实问题，继续查既有科学修订路径；不伪造模型审计或改旧结果。
+- tmp/third-current-replan-block-read-20260922.json、second-saved-final-progress-20260922.json及已下载实看third-paper-8d4f350f-20260922.png留证。新增third-paper-evidence-scoped-replan writer未消费且资格不满足，禁止据旧next action运行。
+
 ## 2026-09-22 — 保存方案续末审、标题证据与混合终态科学返工候选
 - 第二篇沿原storyboard_output_resume续同task exec3，只审已存设计，32K/600秒/原provider，零新增逻辑任务但正常模型用量；不重做PDF/六维/science/art。原精确失败审计、checkpoint、source、root receipt及每次付费调用授权均复验，High静态PASS。当前仍stopped/v43/max32，候选未部署。
 - 第三篇原GET被34/967的unknown提交阻断；presentation-asset.ts只在新科学返工保留submission_unknown及精确状态，至少一个真实blocked/null图仍为必要依据，unknown不提供科学反馈。收据回读不再追问会变化的旧spool，原task/source/null身份仍逐一比较；技术恢复仍只接受not_submitted。单文件High静态PASS，旧请求/deadline/PNG/状态未改。
