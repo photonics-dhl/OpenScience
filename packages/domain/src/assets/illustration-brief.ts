@@ -54,9 +54,10 @@ export function parseIllustrationBrief(value: unknown, claimIds?: readonly strin
       || typeof b.quote !== 'string' || b.quote.trim().length < 12 || b.quote.length > 12000) return fail(`${field}_basis`, 'invalid_bound_source');
     return { description: line(raw.description, ILLUSTRATION_BRIEF_MAX_CHARACTERS, `${field}_description`), basis: { claimId: b.claimId, evidenceId: b.evidenceId, quote: b.quote } };
   });
+  if (!Array.isArray(v.labels)) return fail('labels', 'array_required');
   const fields: IllustrationBriefFields = { message: line(v.message, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'message'), domain: v.domain as IllustrationBrief['domain'],
     subjects, composition: line(v.composition, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'composition'), treatment: line(v.treatment, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'treatment'),
-    labels: list(v.labels, 0, 8, 80, 'labels'), constraints: list(v.constraints, 1, 5, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'constraints') };
+    labels: v.labels.map((label, index) => line(label, 80, `labels_${index}`)), constraints: list(v.constraints, 1, 5, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'constraints') };
   const brief: IllustrationBrief = v.schemaVersion === 2
     ? { schemaVersion: 2, ...fields, encoding: line(v.encoding, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'encoding') }
     : { schemaVersion: 1, ...fields };
