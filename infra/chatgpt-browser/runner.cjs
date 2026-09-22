@@ -21,6 +21,10 @@ function once(name, data) {
   finally { fs.closeSync(fd); }
 }
 async function visibleFailureCode(page) {
+  const accessLimited = page.getByRole('dialog').filter({ hasText: /temporarily limited access to your conversations/ });
+  if (await accessLimited.getByText('Too many requests', { exact: true }).first().isVisible()) {
+    return 'CONVERSATION_ACCESS_LIMIT';
+  }
   // Chat renders this terminal response inside the assistant turn, not an alert.
   const limited = page.locator('main .agent-turn').getByText(/^(?:You[’']ve hit your rate limit\.|You[’']ve reached your image creation limit\.)$/);
   if (await limited.first().isVisible().catch(() => false)) return 'USAGE_LIMIT';
@@ -189,14 +193,20 @@ async function readVisibleImage(generated, conversation, deadlineAt) {
 async function downloadImage(browser, page, request, conversation) {
   if (fs.existsSync(path.join(dir, 'result.json'))) throw Error('OUTPUT_EXISTS');
   if (canonicalUrl(page.url()) !== canonicalUrl(conversation)) throw Error('CONVERSATION_CHANGED');
+  const failure = await visibleFailureCode(page);
+  if (failure) throw Error(failure);
   const generated = await primaryGeneratedImage(page);
   if (!generated) throw Error('EXPECTED_ONE_GENERATED_IMAGE');
   const dialog = page.getByRole('dialog');
-  if (await dialog.count() === 0) await generated.click();
-  const save = dialog.getByRole('button', { name: 'Save', exact: true });
-  let nativeSave = true;
-  try { await save.waitFor({ timeout: Math.min(3000, Math.max(1, request.deadlineAt - Date.now() - 45000)) }); }
-  catch (error) { if (error.name !== 'TimeoutError') throw error; nativeSave = false; }
+  // Explicit recovery reads the already displayed image. It never races a fresh
+  // native download after Save has timed out, or submits another prompt.
+  let nativeSave = mode !== 'download';
+  if (nativeSave) {
+    if (await dialog.count() === 0) await generated.click();
+    const save = dialog.getByRole('button', { name: 'Save', exact: true });
+    try { await save.waitFor({ timeout: Math.min(3000, Math.max(1, request.deadlineAt - Date.now() - 45000)) }); }
+    catch (error) { if (error.name !== 'TimeoutError') throw error; nativeSave = false; }
+  }
   const output = path.join(dir, 'output');
   if (fs.existsSync(output)) {
     const outputStat = fs.lstatSync(output);
@@ -204,6 +214,8 @@ async function downloadImage(browser, page, request, conversation) {
   } else fs.mkdirSync(output, { mode: 0o700 });
   let guid;
   if (!nativeSave) {
+    const readFailure = await visibleFailureCode(page);
+    if (readFailure) throw Error(readFailure);
     const data = await readVisibleImage(generated, conversation, request.deadlineAt);
     guid = 'visible-image';
     fs.writeFileSync(path.join(output, guid), data, { flag: 'wx', mode: 0o600 });

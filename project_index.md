@@ -33,6 +33,8 @@ Pixel science成功/art主调用超时的精确同task一次恢复复用`researc
 
 Chat审阅接收：`infra/chatgpt-browser/review-runner.cjs`沿用既有broker，补就绪等待、原文锚定和空DOM时严格绑定的已完成final读取；同一a803请求实际恢复，无重发。当前发送顺序候选先上传附件再填写并精确核对正文，原结果只读消费仍经Gateway授权/同prompt与source校验；精确bundle与应用release分开登记在CURRENT。
 
+原图下载恢复：`infra/chatgpt-browser/runner.cjs`沿既有download no-send模式读取原会话已显示PNG，并识别对话访问限制；不复发prompt、延长原grace或绕过可见限制。候选/实际交付见CURRENT。
+
 Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原生图像模式，再在pill前插入简报；保留原文本、模式、参考及提交记录约束。针对1cb8菜单崩溃的独立交付和实际结果见CURRENT。
 
 浏览器容量：`infra/chatgpt-browser/install.sh`定义共享内存与容器边界；512MiB共享内存峰值与后来4GiB内存OOM为不同故障；最新8GiB在线调整/原崩溃页恢复证据见CURRENT及浏览器runbook，不以事后静态余量判断峰值。

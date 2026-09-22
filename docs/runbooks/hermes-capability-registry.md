@@ -36,6 +36,8 @@
 | 公开发布 / 标准API | `apps/api/src/routes/publications.ts`、`research.ts`、`research-record.ts`；Domain `publication-evidence.ts`、`evidence-publication-verification.ts`、`commit/research-record-snapshot.ts` | 已部署共享helper校核系统审计/完整v5及来源身份，复用冻结科学记录处理未变新草稿；人工字段不回填，最终事务重核、历史读取有界。真实58项系统核验通过，首篇v3发布201，公开6Claims/58Evidence及新图可读，旧v1/v2保留。最终用户质量认可仍pending；未变继承仅静态High依据，尚未实际另存稿观察 |
 | 服务器与调用观察 | `infra/scripts/deploy.sh`、`infra/compose/`；`packages/ai-gateway/src/gateway.ts` 的record；AgentTask/资产provenance | 本次只读确认Portainer、Netdata和应用运行；日志、任务结果、审阅/拒绝记录已存在。服务健康不能作为内容质量证据 |
 
+原图下载的当前断点：native Save超时但原会话有完整图，`runner.cjs`的显式download模式补复用既有可见PNG读取；访问对话限流独立识别、异常不继续，不延长原恢复窗口。第二篇保存设计后的末审超时仍需补原output-resume；第三篇标题被当作复杂关系supports，冻结Evidence池缺少导言，不能靠重复同提示或手改绑定解决。候选、部署及真实结果见CURRENT。
+
 ### 复用与效果查询
 
 - **已经自动联动**：Worker任务执行、SourceMap/Claim/Evidence及RO/version绑定、方案保存/艺术修订复用、Gateway/provider队列、结果回收和资产记录；Gateway审计经既有view/connector自动进入Langfuse并携带taskId。已保存任务/真实产物见CURRENT，链路接线与每一步效果分别判断。

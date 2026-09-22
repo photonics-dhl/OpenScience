@@ -1,5 +1,12 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 05:07Z — 原图下载与对话访问限制；末审检查点保留
+- 第二篇82c6 exec2完成science/结构修复/art，完整storyboardCheckpoint保留；final 16K thinking-only length后32K调用300秒超时，run stopped/v43/max32。原GET无恢复，正在复用原output-resume续末审，不重做全文/设计；前次timeout为结果未知。
+- 第三篇606已approved并发起5图，8d4f实图6Pro拒收G→j错误，c482实图像素accepted，但独立原文复核仍发现标题绑定、线性条件和固定箭头问题；不能发布。当前30条合法Evidence无导言具体类比，原SourceMap有该内容，两者不能混淆；旧冻结lineage不手补。
+- 34d30e5c三次DOWNLOAD_TIMEOUT，原会话已显示唯一1672×941原图、output空；967已提交后失败/恢复超时但无Inspector crash事件，6cf未提交/BROWSER_ATTACH_TIMEOUT。05:07原34页出现明确Too many requests/temporarily limited access to your conversations，停止Chat追加请求，不用fetch绕过限制。未证明登录失败、OOM或新建对话是限制根因。
+- runner.cjs候选只补原download no-send模式直接读取已显示原图，避免再点击Save；原同源/唯一图/PNG校验及一小时grace保持。访问限制独立为CONVERSATION_ACCESS_LIMIT，在任何Save或读取前终止，保留unknown而非误报生成额度耗尽。独立High指出限制DOM读取异常不能吞成未命中，已修并静态PASS；未部署，不测试/预检/CI。
+- 用户询问会话续接：本机collaborate.mjs已固定exec resume；服务器同任务恢复用原会话，跨任务同图改稿仍缺parent task和新assistant图锚点。独立初稿/独立审阅与同图改稿分开说明，不冒称已支持后者。
+
 ## 2026-09-22 04:03Z — 同draft正文修复与原task规划恢复已交付
 - a78fd5a910de0a30c72efbfc2bba0a0a8b689fe7正常服务器build/start exit0，rollback193fc645，独立marker正确/journal与failed均false，无迁移/测试/预检/CI。Gateway及依赖源码与193一致，复用其服务器dist；独立provider原空闲/三锁/备份安装a78、timers恢复active/enabled，无浏览器重启。备份provider-backup-20260922-composer-repair-a78fd5a9，部署日志/opt/openscience/observations/deploy-a78fd5a9-20260922.log。
 - 原第二篇GET真实出现storyboard-planning/1，04:03:32Z按钮HTTP202，原task82c627a4-f253-4a10-94b3-716fa9708666/runv42开始再次规划，max32不变。/jobs/second-paper-art-timeout-resume-20260922.json已消费；不得重放。第三篇原6项science入口04:03:49Z按钮HTTP202→新plan606261f7-d539-465f-bc96-c79db549cfb2/runv39，/jobs/third-paper-symbol-source-replan-20260922.json已消费，两次真实模型规划在途。

@@ -36,18 +36,20 @@
 - 原overview→更多工具→发布→仅8bbc→review passed→publish201→公开链接真实完成。https://openscience.428312321.xyz/research/OSR-2026-000023/v/3；2026-09-21T19:48:46.366Z，hashd34d5d70344cc7f7f6ee0ed7906836d74492cc9a815a5ceb188b7dbdcbe88c66。匿名v1/v2/v3均200，旧SDF/hash不变；PDF workspace_member，text/data CC-BY-4.0/code MIT。
 - 发布消费真实evidence.system_verify/同源v5完整审计，未伪造人工字段；继承分支仅静态审查。/jobs/visual-narrative-system-verified-publish-20260922.json已消费；viewport已看，无横溢出，图注16px/28px。最终用户科学/审美认可pending。
 
-## 第二篇：原任务规划已恢复
+## 第二篇：设计已保存，末审恢复待补接
 - ROc896802c-35dd-4b59-8db1-5f374f83a6d8（deep-sub-cycle pulse），私有Versiond07cfeee-c81d-4162-a469-0b431f964801，run7e9e1f3e-eafe-440a-be0f-7ff1ed349a8b。原PDF7bb96cc1-bb6f-4d3b-b0bf-352f41971faf/3770010bytes；source f1bb85c8 v5 succeeded；六维131/87/69/290/91/289字符、7Claims27Evidence；guideab76b22e editorial。原公开OSR-2026-000022/v/1/hash e0a8bd972fe2baca099ae198af4b8c02fc7fb503e0902ea476ebc6309a5db4c8保护。
-- 04:03:32Z原按钮HTTP202，同task82c627a4-f253-4a10-94b3-716fa9708666再次generating_storyboard/runv42，max32不变；/jobs/second-paper-art-timeout-resume-20260922.json已消费。原GET真实storyboard-planning/1项，worker已实见exec2/retry1/running，后续模型结果待观察。
+- 04:03:32Z原按钮HTTP202，同task82c627a4-f253-4a10-94b3-716fa9708666 exec2/retry1完成science、结构修复及art，完整storyboardCheckpoint已保存；随后final 16K thinking-only length/provider_empty、32K provider_timeout/300003ms，run stopped/v43/max32，原GET没有恢复入口。沿原storyboard_output_resume补接只续末审，禁止重做planning；/jobs/second-paper-art-timeout-resume-20260922.json已消费。
 - 前序plan82c6 failed/exec1/retry0/resultNULL，run stopped/v41/max32，原GET无恢复入口。science主MiniMax-M3 65K/stop/303594ms完成；随后art 16K/300004ms provider_timeout，无fallback，错误Primary provider failed。未保存science中间结果，不能伪造checkpoint；既有同task规划恢复两文件已完成并High静态PASS，已交付，全文/六维不重做。
 - 03:20:52Z原页面HTTP202→新plan82c627a4-f253-4a10-94b3-716fa9708666，run generating_storyboard/v40；/jobs/second-paper-geometric-replan-20260922.json已消费，原v39/max27的5项科学返工入口提交。新来源分析未重跑；后续由Hermes修叙事、Chat出图、6Pro审图。
 - 直接前序cb342计划approved，4图均完成：459f6bba accepted/approved；4c61b962科学blocked/null（不可能的穿缝几何、无数据定量轮廓、up to30dB限定丢失等）；7b73b96b科学blocked/null（构图要求文字不在排他标签清单）；a1e22cc8渲染blocked/有repair（下标、箭头归属、渐变）。完整官方回执tmp/current-encoding-image-review-read-20260922.json，4c61/7b73 PNG已看。全部旧图/审计保留，不发布拒收图。
 - 更早f522/e8bd等通过和拒收资产、各次请求/故障均保留；b285已隔离旧科学反馈覆盖art/currentencoding的问题。真实原始全文是事实依据，审查建议不是科学来源；不能照抄公式或手改科学内容冒充Hermes。
 
-## 第三篇：混合终态后新科学返工在途
+## 第三篇：本轮终态，原图下载与科学来源仍待修复
 - ROaa450f1e-fafc-46d8-a072-d935e01b0544（Light–matter interactions with photonic quasiparticles），私有Version9373f1e6-9477-4e4a-9b45-b8efca244e70，尚无publicID；runb3eee57a-8a08-4867-9281-cb5b950affbf。原PDFd04add46-9d96-443b-aae1-c1dfc1ecbadb/4609066bytes/hash4a51048431f20950a01916b50cd87a08642881b20b0a9eac767144031ebc0b1a。
 - 原SourceMap e490409c…（24页1554blocks818144bytes）复用，composition1834e21d13次原map/reduce；8c87b54d v5核源65K/294816ms/stop，六维657字符/5Claims30Evidence。guideaad65431 watercolor；approved父plan cb2a7a69-8adc-461e-aa9c-6a2352b60ab1保留，不重做科学分析或方案。
-- 04:03:49Z原按钮HTTP202→新plan606261f7-d539-465f-bc96-c79db549cfb2/runv39/max37，/jobs/third-paper-symbol-source-replan-20260922.json已消费；原6项返工完整反馈由Hermes消费，原来源和旧图保护。
+- 04:03:49Z原按钮HTTP202→新plan606261f7-d539-465f-bc96-c79db549cfb2，已approved/5图任务；04:29 run failed/v42/max37。8d4f新PNG被6Pro拒收（新增G→j依赖），c482新PNG像素accepted，但原方案仍有标题支撑整段类比、线性条件缺失及固定同向箭头等已知科学问题，不发布。/jobs/third-paper-symbol-source-replan-20260922.json已消费。
+- 34d30e5c原图已在原会话生成1672×941，3次Save DOWNLOAD_TIMEOUT，output空/UNCERTAIN；96710033已提交后image_result失败、恢复page_selection超时，Inspector未发现crash；6cf47f56未提交/BROWSER_ATTACH_TIMEOUT。05:07原34页出现Too many requests对话访问限制，停止Chat追加请求，不绕过fetch。精确证据tmp/third-606-failed-spool-read-20260922.json及third-34-download-ui-read-20260922-latest.json。原grace不延长，限制消失且未到期才能下载恢复。
+- 新30条Evidence池已实读：1e07仍只有Photonic quasiparticles标题，合法pool不含Rabi/Compton/Thomson导言。原SourceMap确有类比，但旧冻结lineage不能手补；当前返工须缩窄，若保留则沿既有来源审阅新lineage。scene1卷积现有bf271f76可用且应保留线性前提。M3末审及部分6Pro像素accepted不能消除此已知缺口；独立只读结论及tmp/third-paper-source-pool-read-20260922.json保留。
 - 前序run failed/v38/max31，原GET已真实提供narrative-scientific-replan/6项。719/092faccepted；cc6e/cb450科学blocked/null（符号定义缺失、节点语义/方向/具体类比来源绑定等）；707已有PNG但review not_submitted/EXECUTION_FAILED。完整tmp/third-technical-subset-review-read-20260922.json；cc6e及092f本机PNG已实看。后续科学返工路径已独立High静态PASS并由真实GET证实。
 - 03:20:29Z原按钮HTTP202，run generating_scene_images/v37；/jobs/third-paper-technical-subset-resume-20260922.json已消费。原v36/max27失败状态显示image-render/4任务入口，真实提交仅新增4项：scene1 cc6e78fa-5bde-42ad-bfda-81eef9fd9fe7为原cf6 PNG的review-only引用；scene2 cb450919-527f-4c8c-bb53-5586ba05d553、scene3 092fdf4b-5156-402a-b703-9a0d7f4e12ee、scene4 707f7a11-8ee7-44c5-9e5e-fc13a959a386为无PNG失败的替代任务。不能重放writer。
 - scene0仍原719a330d-1672-42e0-8602-1aa41477880c，PNG+6Pro accepted；1280×720/1155387bytes/hash8a3a8d310a1c67ffcf5a4e8b75a62aab662d7c970a6e94a77c2dd60f1ce7b0d6，本机tmp/third-paper-719a330d-20260922.png已看。旧run失败时asset draft/awaiting_approval，后续正常reconcile处理，非用户审美认可。
@@ -55,6 +57,7 @@
 - 源边界：Box1 k是方向索引，intro明确PINEM/Rabi及自由电子类比，旧相反批评已撤回。MQED建模适用线性介质不等于全部准粒子定义只能线性；相位匹配无来源固定角度与速率/荧光增强混同已由原审阅修正。只以原SourceMap支持，不凭审查建议造事实。
 
 ## 新故障修复候选与下一动作
+- download-only原图读取候选仅runner.cjs，访问对话限流优先独立分类并在读取异常时终止；High一项修正后静态PASS，未交付/未恢复。等待限制自然解除且原grace仍有效才按原image lock执行一次no-send下载，原请求/marker不改。第二篇output-resume新增资格和原末审600秒候选由worker负责，当前未完成；不宣称全链路恢复。
 - 单文件review-runner候选High PASS（tmp/review-composer-repair-20260922.patch）：新安全诊断确证两个任务fill后只剩65字保护前缀，正文缺失，具体Playwright/网页状态责任未分清；707第二次另为SEND_NOT_READY，cb450原第二次成功提交。仅未提交/同draft/严格非空前缀或精确正文但Send disabled，原附件/模型/模式/form仍有效时按现有keyboard.insertText一次完整重填；同deadline内再确认所有守卫，不增页面/任务/发送次数，仍不匹配即失败。已随a78交付。第二篇timeout恢复Domain/research-run.ts与worker/handler.ts已冻结并独立High静态PASS，原storyboard_planning_retry同task一次exec2/charge1/max不变，原两条audit与超时结果未知明确保留，均不得打断在途；现在两项规划均在途，不进行新的切换。
 - 先只读跟踪上述新任务/原spool，消费正常审阅并实际查看PNG；有明确科学/渲染阻断沿原恢复入口修正。保留accepted和现存字节，未知提交先查证，不盲发。完成后原“查看结果”→reader→发布，仅选当前通过整套；匿名新旧版本/来源保护实际观察。完整链路有效走通前不当作完成。
 - tmp/remaining-paper-progress-read-20260922.cjs读当前steps/tasks；tmp/two-paper-current-product-read-20260922.cjs读原UI GET；tmp/current-two-paper-scene-reviews-read-20260922.cjs按两run当前scene IDs读取，tmp/two-paper-current-plans-read-20260922.cjs固定本次82c6/606；tmp/current-encoding-image-review-read-20260922.cjs仍指前序第二cb342+第三cb2旧任务，不误作新任务集合。新ID见上；更新读取另存文件，原证据不覆盖。
