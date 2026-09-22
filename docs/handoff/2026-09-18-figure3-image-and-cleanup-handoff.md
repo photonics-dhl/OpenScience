@@ -1,5 +1,10 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-22 08:14Z — Skill v9与阶段保存正式部署，原页面续作
+- 3f9adcdb正常服务器build/start exit0；独立marker release=3f9/rollback=b1fb、journal/failed=false。日志/opt/openscience/observations/deploy-3f9adcdb-20260922.log，无迁移/测试/CI/共享浏览器重启。Scientific encoding方法与已知art timeout显式新执行均已部署，质量和恢复效果尚待真实结果。
+- 第三篇原GET stopped44/max43/planning1，08:13:58.031Z原按钮HTTP202，同task40026425/runv45；旧NULL只允许完整配图planning restart，不称art-only。第二篇原GET stopped53/max37/scientific5，08:14:35.298Z原按钮HTTP202，新plan342f87eb-8b14-460a-9f79-03fd29394b84/runv54。/jobs/third-paper-durable-planning-resume-20260922.json及second-paper-skill-v9-replan-20260922.json已消费，禁止重放；保留原PDF/六维/Claims/旧图与公开版本。
+- 后续只定向观察当前科学检查点/v9消费、实际设计/PNG和正式审阅。跨任务自学习、原图语义视觉读取及同图跨Chat任务连续改稿仍未实现；已有审计/方法更新不能冒称具备这些能力。第一篇公开保护，后两篇完整reader/发布继续。
+
 ## 2026-09-22 — science成果保存断点与最新成图
 - b1fb77460a596b5f17708c0265f83197fe24cfe1正常服务器构建/启动exit0，独立marker release=b1/rollback8c0、journal/failed=false。日志/opt/openscience/observations/deploy-b1fb7746-20260922.log，sync本机tmp/sync-b1fb7746-20260922.log。无迁移/测试/CI/receiver或共享浏览器重启；第三篇尚未新付费恢复。后续小增量补仅已知末次art provider_timeout的显式fresh_art_after_unknown（保留science、priorSubmission=outcome_unknown_after_provider_timeout、charge1/同task新exec/primary-only），修复保守版partial永久无入口的缺口，独立High静态PASS，未部署/实际触发。
 - 用户希望Hermes用好适用技能：自有v9候选将原泛化encoding段替换成共享Scientific encoding方法，按来源建立视图/坐标/路径、分清条件/扫描/结果、把核心输出落实到可见标签、选择定量比例或明确非比例概念图，并避免密度额外编码点径。science与review均加载，同一loader版本同步；无新模型阶段/第三方安装/科学事实或输出schema。基于15b真实失败，不把方法变更称为已提高正确率，独立High静态PASS；metadata/loader均v9，仅science/review消费新增章节。审查曾误判plan/render会收到新段，按实际stage guard复核后已撤回，未添加无效分支。
