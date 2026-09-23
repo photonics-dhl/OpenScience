@@ -1,5 +1,8 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-23 — unknown场景恢复入口修复
+- 生产f5dff6f46044ed9cd1e46b83facc9350622c6596 / 回退158ee13fbb4a54c9eb9f6bc96facc573075eef1f：第三篇原恢复入口消失的根因是run终态moveRun把P2034错误复制到所有非成功step，覆盖第一段unknown场景旧step.error，收据严格等值校验拒绝。f5d只在run与step同为failed、step.error精确等于当前run.error时容许这一差异，任务/图片/身份等仍严格；独立High静态GO。干净已推SHA服务器正式构建/启动exit0，无测试/预检/CI。产品自有页面GET第二/三篇均image-render、canRetry=true、charge3；刷新后第二篇实见「保留初稿，继续制作」。未点旧6Pro续审、未重发unknown。用户决定Chat继续生图、5.6Sol看图；六张现图均不宜公开，产品正式Sol审阅与新图尚未完成。
+
 ## 2026-09-23 — 158应用发布与5.6Sol咨询
 - 用户明确允许合入共享release并部署。c91首次服务器正式构建在Domain TS2345失败，未切生产且无残留journal/failed；`FirstTechnicalReceipt`改为两条已验证收据公共类型投影，独立High静态GO。158ee13fbb4a54c9eb9f6bc96facc573075eef1f完整SHA已推送并正式构建/启动exit0，production=158/rollback=e05，marker读回、journal/failed均空。PR #110为MERGED。按约束未运行测试/预检/CI，实际产品恢复尚待观察。
 - 用户改选gpt-5.6-sol审图、不等待第二Pro登录。5.6Sol High对六张已存PNG与当前绑定引文作本机只读咨询，均不适合直接公开：第二篇8d5电子轨迹穿纳米线，f92点径变化且积分链缺失，38c把不同工况19/99 as误作对照；第三篇33f只作装饰分类，77c把非局域/磁性指向局域公式，961将独立机制画成因果链。对应完整咨询结果仍在本任务，不写成正式产品审阅。当前产品只有Chat 6Pro图片审阅provider；新增5.6Sol仅图片审阅接线未完成，旧Chat收据/unknown保护不变。
