@@ -54,8 +54,10 @@ function validateRequest(request, recover = false) {
         && value.width * value.height <= 40000000)
     )));
   if (![1, 2, 3].includes(request?.schemaVersion) || request?.provider !== 'chatgpt-web-science-review' || request?.id !== id
-    || !['deadlineAt,id,prompt,promptHash,provider,schemaVersion,source', 'attachments,deadlineAt,id,prompt,promptHash,provider,schemaVersion,source']
+    || !['deadlineAt,id,prompt,promptHash,provider,schemaVersion,source', 'attachments,deadlineAt,id,prompt,promptHash,provider,schemaVersion,source',
+      'attachments,deadlineAt,id,model,prompt,promptHash,provider,schemaVersion,source']
       .includes(Object.keys(request).sort().join(','))
+    || (request.model !== undefined && (request.schemaVersion !== 3 || request.model !== 'chatgpt-web/5.6-sol'))
     || typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 64 * 1024
     || !SHA256.test(request.promptHash || '') || crypto.createHash('sha256').update(request.prompt).digest('hex') !== request.promptHash
     || !Number.isSafeInteger(request.deadlineAt)
@@ -189,6 +191,11 @@ async function composerText(input) { return input.evaluate(element => element in
 // text, allowing only the same whitespace normalization used by the image runner.
 function normalizeComposerText(value) { return value.replace(/\s+/g, ' ').trim(); }
 const PRO_MODEL_LABEL = /^(?:(?:GPT[- ]?)?6\s*)?Pro$/i;
+const SOL_MODEL_OPTION = /^(?:GPT[- ]?)?5\.6\s*Sol$/i;
+const SOL_MODEL_ACTIVE = /^(?:GPT[- ]?)?5\.6\s*(?:High|Sol)$/i;
+function reviewModelLabel(request) { return request.model === 'chatgpt-web/5.6-sol' ? SOL_MODEL_ACTIVE : PRO_MODEL_LABEL; }
+function reviewModelOption(request) { return request.model === 'chatgpt-web/5.6-sol' ? SOL_MODEL_OPTION : PRO_MODEL_LABEL; }
+function reviewModelError(request) { return request.model === 'chatgpt-web/5.6-sol' ? 'MODEL_5_6_SOL_NOT_READY' : 'MODEL_6_PRO_NOT_READY'; }
 function promptComparison(expected, actual) {
   const left = normalizeComposerText(expected), right = normalizeComposerText(actual);
   let firstDifference = 0;
@@ -197,40 +204,48 @@ function promptComparison(expected, actual) {
     expectedNonWhitespace: left.replace(/\s/g, '').length, actualNonWhitespace: right.replace(/\s/g, '').length,
     firstDifference, expectedCodePoint: left.codePointAt(firstDifference) ?? null, actualCodePoint: right.codePointAt(firstDifference) ?? null };
 }
-async function model6ProActive(input) {
+async function reviewModelActive(input, request) {
   const form = input.locator('xpath=ancestor::form[1]');
   if (await form.count() !== 1) return false;
   const control = form.locator('button[aria-haspopup="menu"]:not([data-testid="composer-plus-btn"])');
   if (await control.count() !== 1) return false;
-  return PRO_MODEL_LABEL.test(normalizeComposerText(await control.innerText().catch(() => '')));
+  return reviewModelLabel(request).test(normalizeComposerText(await control.innerText().catch(() => '')));
 }
 function quotaRefusal(text) {
   return /^You've hit your limit\. Please try again later\.(?:\s+Retry)?$/i.test(text.trim());
 }
-async function select6ProOnFreshPage(page, input, name, deadlineAt) {
+async function selectReviewModelOnFreshPage(page, input, name, deadlineAt, request) {
   if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
-  if (await model6ProActive(input)) return;
+  if (await reviewModelActive(input, request)) return;
   const form = input.locator('xpath=ancestor::form[1]');
   const control = form.locator('button[aria-haspopup="menu"]:not([data-testid="composer-plus-btn"])');
   if (await control.count() !== 1 || !await control.isVisible()) throw Error('MODEL_SELECTOR_NOT_READY');
   await control.click();
-  const pro = page.getByRole('menuitemradio', { name: PRO_MODEL_LABEL });
-  await pro.waitFor({ state: 'visible', timeout: Math.max(1, Math.min(5000, deadlineAt - Date.now())) }).catch(() => { throw Error('MODEL_6_PRO_NOT_READY'); });
-  if (await pro.count() !== 1) throw Error('MODEL_6_PRO_NOT_READY');
-  if (await pro.getAttribute('aria-disabled') === 'true') throw Error('MODEL_6_PRO_DISABLED');
-  await pro.click();
+  const choice = page.getByRole('menuitemradio', { name: reviewModelOption(request) });
+  await choice.waitFor({ state: 'visible', timeout: Math.max(1, Math.min(5000, deadlineAt - Date.now())) }).catch(() => { throw Error(reviewModelError(request)); });
+  if (await choice.count() !== 1) throw Error(reviewModelError(request));
+  if (await choice.getAttribute('aria-disabled') === 'true') throw Error(request.model === 'chatgpt-web/5.6-sol' ? 'MODEL_5_6_SOL_DISABLED' : 'MODEL_6_PRO_DISABLED');
+  if (request.model === 'chatgpt-web/5.6-sol') {
+    // At the configured 125% zoom a transient picker panel intercepts pointer
+    // clicks on a fresh page. Activate only this verified menu item, then check
+    // both the checked radio and the closed composer's model label.
+    await choice.dispatchEvent('click');
+    if (await choice.getAttribute('aria-checked').catch(() => null) !== 'true') throw Error(reviewModelError(request));
+    await page.keyboard.press('Escape');
+  } else await choice.click();
   if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
+  if (!await reviewModelActive(input, request)) throw Error(reviewModelError(request));
 }
 async function normalChatMode(input) {
   const form = input.locator('xpath=ancestor::form[1]');
   return await form.count() === 1 && !await form.getByText('Create image', { exact: true }).isVisible().catch(() => false);
 }
-async function waitForComposer(page, deadlineAt) {
+async function waitForComposer(page, deadlineAt, request) {
   let reason = 'CHAT_COMPOSER_NOT_FOUND';
   while (Date.now() < deadlineAt) {
     const found = await bounded(composer(page), 2000).catch(() => null);
     if (!found) reason = 'CHAT_COMPOSER_NOT_FOUND';
-    else if (!await bounded(model6ProActive(found), 2000).catch(() => false)) reason = 'MODEL_6_PRO_NOT_READY';
+    else if (!await bounded(reviewModelActive(found, request), 2000).catch(() => false)) reason = reviewModelError(request);
     else if (!await bounded(normalChatMode(found), 2000).catch(() => false)) reason = 'NORMAL_CHAT_MODE_NOT_READY';
     else return found;
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -441,10 +456,10 @@ let composerRepairAttempted = false;
   }
   if (!input) throw Error('CHAT_COMPOSER_NOT_FOUND');
   if (!selectorReady) throw Error('MODEL_SELECTOR_NOT_READY');
-  await select6ProOnFreshPage(page, input, ownedName, composerDeadline);
-  input = await waitForComposer(page, composerDeadline);
+  await selectReviewModelOnFreshPage(page, input, ownedName, composerDeadline, request);
+  input = await waitForComposer(page, composerDeadline, request);
   if (!input) throw Error('CHAT_COMPOSER_NOT_FOUND');
-  if (!await model6ProActive(input)) throw Error('MODEL_6_PRO_NOT_READY');
+  if (!await reviewModelActive(input, request)) throw Error(reviewModelError(request));
   if (!await normalChatMode(input)) throw Error('NORMAL_CHAT_MODE_NOT_READY');
   const prompt = reviewPrompt(request);
   if (prompt.length > 64 * 1024) throw Error('PROMPT_TOO_LARGE');
@@ -452,7 +467,7 @@ let composerRepairAttempted = false;
   stage = 'attachments';
   if (await page.evaluate(() => window.name) !== ownedName) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   await uploadAttachments(input, request);
-  input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000));
+  input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000), request);
   stage = 'composer_fill';
   if (await page.evaluate(() => window.name) !== `xgs-review-${id}`) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   await input.fill(prompt);
@@ -462,7 +477,7 @@ let composerRepairAttempted = false;
     while (Date.now() < readyDeadline) {
       const promptReady = normalizeComposerText(await bounded(composerText(input), 2000).catch(() => '')) === normalizeComposerText(prompt);
       const attachmentReady = await bounded(attachmentsReady(input, request), 2000).catch(() => false);
-      const modelReady = await bounded(model6ProActive(input), 2000).catch(() => false);
+      const modelReady = await bounded(reviewModelActive(input, request), 2000).catch(() => false);
       const modeReady = await bounded(normalChatMode(input), 2000).catch(() => false);
       const sendReady = await bounded(send.isEnabled(), 2000).catch(() => false);
       if (promptReady && attachmentReady && modelReady && modeReady && sendReady) break;
@@ -480,13 +495,13 @@ let composerRepairAttempted = false;
     && !fs.existsSync(path.join(dir, 'submitted.json')) && Date.now() < request.deadlineAt) {
     // The owned editor can retain only the first paragraph after fill. Repair
     // this draft once; never overwrite unrelated text or relax exact matching.
-    input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 10000));
+    input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 10000), request);
     actualPrompt = await bounded(composerText(input), 2000);
     const currentText = normalizeComposerText(actualPrompt);
     if ((lostSuffix(currentText) || currentText === expectedText)
       && await bounded(input.evaluate(element => element.isConnected && Boolean(element.closest('form'))), 1000)
       && await bounded(attachmentsReady(input, request), 2000)
-      && await bounded(model6ProActive(input), 2000)
+      && await bounded(reviewModelActive(input, request), 2000)
       && await bounded(normalChatMode(input), 2000)
       && !fs.existsSync(path.join(dir, 'submitted.json')) && Date.now() < request.deadlineAt) {
       composerRepairAttempted = true;
@@ -507,7 +522,7 @@ let composerRepairAttempted = false;
     throw Error('PROMPT_CHANGED');
   }
   if (!await bounded(attachmentsReady(input, request), 2000).catch(() => false)) throw Error('ATTACHMENT_UPLOAD_NOT_CONFIRMED');
-  if (!await bounded(model6ProActive(input))) throw Error('MODEL_6_PRO_NOT_READY');
+  if (!await bounded(reviewModelActive(input, request))) throw Error(reviewModelError(request));
   if (!await bounded(normalChatMode(input))) throw Error('NORMAL_CHAT_MODE_NOT_READY');
   if (!await send.isEnabled().catch(() => false)) throw Error('SEND_NOT_READY');
   if (Date.now() >= request.deadlineAt) throw Error('REQUEST_DEADLINE_EXCEEDED');

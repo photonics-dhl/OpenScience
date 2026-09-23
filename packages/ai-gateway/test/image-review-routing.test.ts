@@ -46,3 +46,22 @@ it('routes only actual image review to the explicitly configured Sol provider wi
   expect((await gateway.reviewScientific(review, guard)).provider).toBe('codex-sol-image-review');
   expect(sol).toHaveBeenCalledTimes(3);
 });
+
+it('audits a failed web image review with the model pinned in its existing reservation', async () => {
+  for (const savedModel of ['chatgpt-web/6-pro', 'chatgpt-web/5.6-sol']) {
+    const logs: Array<{ metadata?: { model?: string } }> = [];
+    const chatProvider: ScienceReviewProvider = {
+      name: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
+      review: async () => { throw Error('EXECUTION_FAILED'); },
+      modelForImageReviewReservation: async () => savedModel,
+    };
+    const gateway = new AiGateway({ providers: [{ name: 'text', model: 'text',
+      complete: async () => { throw Error('unexpected text call'); } }], scientificReviewProvider: chatProvider,
+      illustrationReviewPolicy: async () => true, authorizeIllustrationReview: async () => {},
+      audit: { record: async (event) => { logs.push(event as never); } },
+    });
+    await expect(gateway.reviewScientific(review, (value): value is object => !!value)).rejects.toThrow();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.metadata?.model).toBe(savedModel);
+  }
+});

@@ -275,6 +275,9 @@ export class AiGateway {
     if (allowed !== true) throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'external processing denied');
     const start = Date.now();
     let outcome: 'succeeded' | 'failed' = 'failed';
+    let actualModel = provider.name === 'chatgpt-web-science-review'
+      && 'kind' in input.source && input.source.kind === 'illustration-image'
+      ? 'chatgpt-web/5.6-sol' : provider.model;
     try {
       if (completedOnly && !provider.resumeFromCompletedResult) {
         throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'completed review reader unavailable');
@@ -284,14 +287,19 @@ export class AiGateway {
         throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid generated image review response');
       }
       outcome = 'succeeded';
-      return { ...result, provider: provider.name, model: provider.model };
+      actualModel = result.model ?? provider.model;
+      return { ...result, provider: provider.name, model: actualModel };
     } catch (error) {
       throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'scientific review provider failed', error);
     } finally {
       const elapsed = Date.now() - start;
       try {
+        if (provider.name === 'chatgpt-web-science-review' && 'kind' in input.source
+          && input.source.kind === 'illustration-image' && provider.modelForImageReviewReservation) {
+          actualModel = await provider.modelForImageReviewReservation(input.requestId).catch(() => undefined) ?? actualModel;
+        }
         await this.record({
-          operation: 'scientific_review', provider: provider.name, model: provider.model,
+          operation: 'scientific_review', provider: provider.name, model: actualModel,
           inputTokens: null, outputTokens: null, estimatedInputTokens: Math.ceil([...input.prompt].length / 3),
           estimatedOutputTokens: null, estimatedCostUsdMicros: 0, actualCostUsdMicros: 0, currency: 'USD',
           pricingVersion: 'chatgpt-subscription', pricingEffectiveDate: null, serviceTier: 'subscription',

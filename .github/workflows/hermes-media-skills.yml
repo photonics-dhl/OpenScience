@@ -16,6 +16,8 @@ on:
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'infra/codex-sol-review/**'
+      - 'infra/chatgpt-browser/review-broker.mjs'
+      - 'infra/chatgpt-browser/review-runner.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
       - 'packages/ai-gateway/src/codex-sol-review*.ts'
@@ -23,6 +25,7 @@ on:
       - 'packages/ai-gateway/src/science-review*.ts'
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
+      - 'packages/ai-gateway/test/web-image-review-model.test.ts'
       - 'apps/agent-worker/src/presentation/handler.ts'
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
       - 'apps/web/components/hermes/HermesMediaReview.tsx'
@@ -46,6 +49,8 @@ on:
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'infra/codex-sol-review/**'
+      - 'infra/chatgpt-browser/review-broker.mjs'
+      - 'infra/chatgpt-browser/review-runner.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
       - 'packages/ai-gateway/src/codex-sol-review*.ts'
@@ -53,6 +58,7 @@ on:
       - 'packages/ai-gateway/src/science-review*.ts'
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
+      - 'packages/ai-gateway/test/web-image-review-model.test.ts'
       - 'apps/agent-worker/src/presentation/handler.ts'
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
       - 'apps/web/components/hermes/HermesMediaReview.tsx'
@@ -81,7 +87,7 @@ jobs:
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
-      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off"
@@ -90,6 +96,8 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "blocks unreviewed narrative image approval while preserving rejection and legacy profiles"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "starts one charged review-only task"
       - run: node --check infra/codex-sol-review/runner.mjs
+      - run: node --check infra/chatgpt-browser/review-broker.mjs
+      - run: node --check infra/chatgpt-browser/review-runner.cjs
       - run: node --check infra/codex-sol-review/review-client.mjs
       - run: bash -n infra/codex-sol-review/install.sh
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck

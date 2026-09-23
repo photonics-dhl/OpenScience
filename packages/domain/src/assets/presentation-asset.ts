@@ -857,7 +857,8 @@ async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionC
                 if (reviews.length !== 1
                     || !call || call.actorId !== null || call.targetType !== 'ai_gateway'
                     || call.createdAt < image.createdAt || call.createdAt > imageTask.updatedAt
-                    || meta.operation !== 'scientific_review' || meta.provider !== 'chatgpt-web-science-review' || meta.model !== 'chatgpt-web/6-pro'
+                    || meta.operation !== 'scientific_review' || meta.provider !== 'chatgpt-web-science-review'
+                    || !['chatgpt-web/6-pro', 'chatgpt-web/5.6-sol'].includes(String(meta.model))
                     || meta.outcome !== 'failed' || meta.error !== 'scientific_review_failed' || meta.retryCount !== 0 || meta.fallbackReason !== null
                     || meta.selectionReason !== 'high_risk_scientific_review'
                     || meta.inputContentHash !== p.sourceEvidenceIdentity || meta.pageCount !== 1 || !isDeepStrictEqual(meta.pageNumbers, [1])
@@ -1359,7 +1360,7 @@ export async function readNarrativeTechnicalReviewFollowupSource(
             && review?.actorId === null && review.targetType === 'ai_gateway'
             && review.createdAt >= task.createdAt && review.createdAt <= task.updatedAt
             && meta.operation === 'scientific_review' && meta.provider === 'chatgpt-web-science-review'
-            && meta.model === 'chatgpt-web/6-pro' && meta.outcome === 'failed'
+            && ['chatgpt-web/6-pro', 'chatgpt-web/5.6-sol'].includes(String(meta.model)) && meta.outcome === 'failed'
             && meta.error === 'scientific_review_failed' && meta.retryCount === 0 && meta.fallbackReason === null
             && meta.selectionReason === 'high_risk_scientific_review'
             && meta.inputContentHash === first.metadata.sourceEvidenceIdentity

@@ -83,6 +83,8 @@ export interface ScienceReviewInput {
 
 interface ScienceReviewRequestBase {
   provider: 'chatgpt-web-science-review';
+  /** Omitted legacy requests were sent to 6 Pro; new image-only requests use web Sol. */
+  model?: 'chatgpt-web/5.6-sol';
   id: string;
   prompt: string;
   promptHash: string;
@@ -122,6 +124,8 @@ export interface ScienceReviewProvider {
   review(input: ScienceReviewInput): Promise<ScienceReviewProviderResult>;
   /** Detect a durable previous image-review attempt before selecting another provider. */
   hasImageReviewReservation?(requestId: string): Promise<boolean>;
+  /** Attribute a failed image-review audit to the model pinned in a durable reservation. */
+  modelForImageReviewReservation?(requestId: string): Promise<string | undefined>;
   ownsLegacyImageReviewReservation?(requestId: string): Promise<boolean>;
   /** Consume an exact saved image-review response without publishing another request. */
   resumeFromCompletedResult?(input: ScienceReviewInput): Promise<ScienceReviewProviderResult>;
@@ -173,8 +177,10 @@ export function validateScienceReviewRequest(value: unknown, now?: number): Scie
   const v = record(value);
   const keys = Object.keys(v).sort().join(',');
   const attachments = v.attachments === undefined ? undefined : v.attachments;
-  if (!['createdAt,deadlineAt,id,prompt,promptHash,provider,schemaVersion,source', 'attachments,createdAt,deadlineAt,id,prompt,promptHash,provider,schemaVersion,source'].includes(keys)
+  if (!['createdAt,deadlineAt,id,prompt,promptHash,provider,schemaVersion,source', 'attachments,createdAt,deadlineAt,id,prompt,promptHash,provider,schemaVersion,source',
+    'attachments,createdAt,deadlineAt,id,model,prompt,promptHash,provider,schemaVersion,source'].includes(keys)
     || ![1, 2, 3].includes(v.schemaVersion as number) || v.provider !== 'chatgpt-web-science-review'
+    || (v.model !== undefined && (v.schemaVersion !== 3 || v.model !== 'chatgpt-web/5.6-sol'))
     || typeof v.id !== 'string' || !SCIENCE_REVIEW_ID_PATTERN.test(v.id)
     || typeof v.prompt !== 'string' || !v.prompt.trim() || v.prompt.length > SCIENCE_REVIEW_MAX_PROMPT_CHARS
     || !hash(v.promptHash) || sha256Text(v.prompt) !== v.promptHash

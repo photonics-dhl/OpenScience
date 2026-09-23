@@ -459,6 +459,9 @@ it('blocks unreviewed narrative image approval while preserving rejection and le
   await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
     status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toThrow('Scene image reached status update');
   ctx.db.presentationAssets.at(-1)!.provenance.imageReview = { ...review, decision: 'accepted',
+    summary: 'Web Sol checked the saved pixels', model: 'chatgpt-web/5.6-sol' };
+  expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)?.canApprove).toBe(true);
+  ctx.db.presentationAssets.at(-1)!.provenance.imageReview = { ...review, decision: 'accepted',
     summary: 'Source-bound labels and scale verified', provider: 'codex-sol-image-review', model: 'gpt-5.6-sol' };
   expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)?.canApprove).toBe(true);
   await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,

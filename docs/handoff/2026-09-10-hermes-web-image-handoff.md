@@ -5,7 +5,7 @@
 - 需求基线§18.2及已批准docs/proposals/2026-09-21-visual-narrative-review.html：未读论文者通过六维内容和单/多图理解核心思想与关键点，兼顾科学准确、叙事和美感。用户否定原样裁出Fig.1；原图/生图按需，视频尚不执行。
 - 目标链路：PDF → Hermes已审全文/六维/Claims/Evidence → science/art叙事 → Chat图 → 5.6 Sol正式像素审阅 → reader → 新公开版本。用户只看最终成果，中间由系统推进；不重造全文分析器，不伪造人工核验或用户审美认可。旧6Pro审阅收据仍保留。
 - “允许，不限额度，你把整个任务做完”持续有效，不再问费用。先完成三篇/学术、编辑、淡彩；最终用户质量认可前不批量冷启动。不盲重发未知请求、不自动切provider。
-- 最新纠正优先用好Hermes的skills、工具及反馈；默认6Pro plan末审候选已撤下并归档tmp/chat-plan-final-review-20260922，未部署。science/art/final仍M3、Chat仍负责生图；用户改用5.6Sol看图，当前只作本任务独立咨询，产品正式Sol像素审阅尚未接线，旧6Pro历史收据保留。跨任务自学习尚未实现。
+- 最新纠正优先用好Hermes的skills、工具及反馈；默认6Pro plan末审候选已撤下并归档tmp/chat-plan-final-review-20260922，未部署。science/art/final仍M3、Chat仍负责生图。用户明确Hermes按现有skill组织正式看图，复用已登录Chat网页5.6Sol作像素视觉判断；不以独立Codex CLI登录作为新增前置条件。旧6Pro历史收据保留，跨任务自学习尚未实现。
 
 ## 执行边界
 - 2026-09-23 用户澄清：避免无关、重复或过度测试，但新 Skill 与链路改动须做针对性测试、必要 CI 和真实效果核验；本机可做相关构建/测试。范围按 AGENTS.md，模型 accepted 或容器 healthy 不能替代科学与画面质量。
@@ -16,7 +16,7 @@
 
 ## Git与部署
 - application production=e7e677180a791c19e30d05a5297319183f8e6976，rollback=09ad55d3049ec33177e1a19ab87f8c77af1cd7d9；canonical release/onchip-production-line已推送该完整SHA，根main=62b83372e51285b31a65f89bc0fabeb88d7c09bf。审图代码定向CI [35862865660](https://github.com/photonics-dhl/OpenScience/actions/runs/35862865660) success、部署exit0、release/rollback/Worker新镜像核对通过；生产 `CODEX_SOL_IMAGE_REVIEW_ENABLED=false`，故无新正式审图。此前第二/三篇私有图实见仍为draft且canApprove=false，未公开。Chat provider bundle仍a6a27ef5，未重装或重启共享桥。
-- 5.6 Sol正式产品审图代码已上线但关闭：仅图像审阅走独立CLI/持久收据，保留Chat生图及Hermes科学分析/方案审阅；现有私有PNG可按原字节新增review-only任务。独立High发现4项后已修、增量复核无新增问题，定向测试/CI通过。服务器CLI 0.156.1已装在隔离目录，设备码两次15分钟过期而未完成独立账号授权；审图服务尚未安装，不能启动付费正式审图或据本机内部咨询放行图片。下次用户在线时重开一次设备登录、安装服务、启用Worker开关，再对现有私有PNG作真实审图。旧6Pro收据和unknown提交绝不重放。
+- e7e中的独立CLI审图实现仍在应用镜像内但Worker开关false；第三次设备登录已成功，隔离服务曾启动，用户质疑重复能力后已停止并disable，未执行任何CLI正式审图或读取凭据。当前候选改回既有 `gateway.reviewScientific`→Chat网页review broker：仅schema3图片请求显式5.6Sol，旧6Pro收据按原模型恢复；Hermes原skill/来源/PNG附件照常注入。新页无发送选择实证：单选Sol=true、输入框`5.6 High`、编辑器为空；定向Gateway/Domain测试与typecheck已过，候选尚未部署/正式审图。旧6Pro收据和unknown提交绝不重放。
 - 独立Chat provider bundle=a6a27ef543f3217a94b02ed4ee281e01e8e1e4a4（集成候选）；两unit指向该bundle、三份live runner与该源码一致、两timer active/enabled，浏览器未重启。三锁/空闲安装；备份provider-backup-20260923-visual-journal-retry-a6a27ef5，首次失败备份同前缀去掉-retry。首次因构建日志留在immutable source被manifest阻断，日志已完整归档至首次备份并记录原路径/权限；第二次安装成功但助手尾heredoc缺LF报exit1，已精确读回安装完成，均不得重放。renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f，sceneImage fallback=false。
 - 图队列当前4worker总65分钟、最多8为125分钟，private/started固定领取后最多10分钟，旧request/deadline不改；一次oneshot不叠慢恢复与新生成。不保证任意旧积压/多生产者。部署排空600秒不覆盖长排队，先等相关本地任务自然终态；超时上游结果仍未知。
 - 0bee5b9b已推送的单文件候选将narrative subjects对齐Domain既有1–4，非narrative保持1–2；各要点独立绑定支持段，art引用实际索引。High修复一项后PASS，已随本次正常发布部署。原场景数/共享预算/来源守卫不变，不保证消除所有推理错误。

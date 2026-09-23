@@ -105,7 +105,8 @@ async function successfulOutput(resultsDir: string, request: ScienceReviewReques
     const response = await boundedRead(join(output, 'response.txt'), SCIENCE_REVIEW_MAX_RESPONSE_BYTES);
     if (sha256Text(response.toString('utf8')) !== primary.responseHash) fail();
     if (quotaRefusal(response.toString('utf8'))) throw new Error('MODEL_QUOTA_EXHAUSTED');
-    return { text: response.toString('utf8'), promptHash: request.promptHash, responseHash: primary.responseHash! };
+    return { text: response.toString('utf8'), promptHash: request.promptHash, responseHash: primary.responseHash!,
+      model: request.model ?? 'chatgpt-web/6-pro' };
   }
   try {
     const recovered = validateScienceReviewResult(JSON.parse((await boundedRead(join(output, 'recovered-result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
@@ -113,7 +114,8 @@ async function successfulOutput(resultsDir: string, request: ScienceReviewReques
     const response = await boundedRead(join(output, 'recovered-response.txt'), SCIENCE_REVIEW_MAX_RESPONSE_BYTES);
     if (sha256Text(response.toString('utf8')) !== recovered.responseHash) fail();
     if (quotaRefusal(response.toString('utf8'))) throw new Error('MODEL_QUOTA_EXHAUSTED');
-    return { text: response.toString('utf8'), promptHash: request.promptHash, responseHash: recovered.responseHash! };
+    return { text: response.toString('utf8'), promptHash: request.promptHash, responseHash: recovered.responseHash!,
+      model: request.model ?? 'chatgpt-web/6-pro' };
   } catch (error) {
     if (missing(error)) throw new Error(primary.errorCode ?? (primary.status === 'uncertain' ? 'UNCERTAIN' : 'EXECUTION_FAILED'));
     throw error;
@@ -182,6 +184,16 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
       try { await lstat(path); return true; } catch (error) { if (!missing(error)) throw error; }
     }
     return false;
+  }
+
+  async modelForImageReviewReservation(requestId: string): Promise<string | undefined> {
+    if (!SCIENCE_REVIEW_ID_PATTERN.test(requestId)) return undefined;
+    try {
+      const request = validateScienceReviewRequest(JSON.parse((await boundedRead(
+        join(this.config.inboxDir, `${requestId}.submitted.json`), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+      return request.schemaVersion === 3 && request.id === requestId
+        ? request.model ?? 'chatgpt-web/6-pro' : undefined;
+    } catch { return undefined; }
   }
 
   /** The old request was submitted, but its verified answer was a quota notice, not a review. */
@@ -257,6 +269,7 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
     let request = validateScienceReviewRequest({
       schemaVersion: image ? 3 : illustration ? 2 : 1,
       provider: this.name,
+      ...(image ? { model: 'chatgpt-web/5.6-sol' } : {}),
       id: input.requestId,
       prompt: input.prompt,
       promptHash: sha256Text(input.prompt),
