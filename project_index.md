@@ -35,7 +35,7 @@ Pixel science成功/art主调用超时的精确同task一次恢复复用`researc
 
 风格续作定位：`apps/agent-worker/src/presentation/illustration-styles.ts` 合并逐图风格参考；`packages/domain/src/assets/storyboard.ts` 从既有 figurePlan 解析 scene 风格；原 planner/review/render 调用接线，`infra/chatgpt-browser/broker.mjs` 与原 core 保存下载后恢复。Hermes 入口补接定位：`workspace-guide.ts` 路由风格，`apps/web/lib/api.ts` 与 `lib/hermes/{draft-state,presentation-action}.ts` 复用 StoryboardRequest 类型及原请求恢复，`HermesAssistantDrawer` → `HermesPresentationReview` → `HermesPresentationAction` 传递 style/figurePlan；中英文名称沿用消息文件。论文原图 art 限制在 Domain `requireStoryboardBase` 提交前阻断。候选状态及本机 Pro 协作阻塞只见 CURRENT，不据源码宣称线上完成。
 
-科学视觉清晰度候选：`.agents/skills/openscience-scientific-visual-clarity/SKILL.md` 及 `apps/agent-worker/src/skills/installed-media-skills.ts` 将经筛选的 K-Dense scientific-visualization 方法放入原 science/plan 阶段，不增加正式末审输入；安装、部署、实际消费与质量效果分开，以 [Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md) 和[能力台账](docs/runbooks/hermes-capability-registry.md)为准。
+科学视觉清晰度：`.agents/skills/openscience-scientific-visual-clarity/SKILL.md` 及 `apps/agent-worker/src/skills/installed-media-skills.ts` 将经筛选的 K-Dense scientific-visualization 方法放入原 science/plan 阶段，不增加正式末审输入；已部署与真实消费、质量效果分开，以 [Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md) 和[能力台账](docs/runbooks/hermes-capability-registry.md)为准。
 
 审图保存恢复定位：infra/chatgpt-browser/review-broker.mjs复用已有完整job结果，原jobResponse保留身份及responseHash核对；并发结果保存与终态收尾沿现有presentation handler/research-run，实际进展只见CURRENT。
 

@@ -10,7 +10,7 @@
 
 ## 2026-09-23 — 三篇论文配图
 
-- 用户要求按当前任务细看目标、执行链、角色、能力、产物和效果；原只读 [Hermes 研发观察台](proposals/2026-09-23-hermes-development-live.html) 已原地新增当前任务模块。`find-skills` 本机和项目官方搜索 CLI 已存在，不重复安装。检索后将 K-Dense scientific-visualization 中适用的编码/可读性方法适配为 [科学视觉清晰度 skill](../.agents/skills/openscience-scientific-visual-clarity/SKILL.md)，候选代码只接入原 Hermes science/plan，未增加审阅来源预算、新模型阶段或生图 provider；是否部署、真实消费及质量效果以 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md) 为准。
+- 用户要求按当前任务细看目标、执行链、角色、能力、产物和效果；原只读 [Hermes 研发观察台](proposals/2026-09-23-hermes-development-live.html) 已原地新增当前任务模块。`find-skills` 本机和项目官方搜索 CLI 已存在，不重复安装。检索后将 K-Dense scientific-visualization 中适用的编码/可读性方法适配为 [科学视觉清晰度 skill](../.agents/skills/openscience-scientific-visual-clarity/SKILL.md)，只接原 Hermes science/plan，不增加正式末审来源预算、新模型阶段或生图 provider。独立High修复两项P2后PASS；326f已按既有流程部署，正常构建/启动，功能探针按用户要求跳过，真实消费与质量效果未观察；版本与后续以 [CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md) 为准。
 - 新增 [Hermes 研发观察台](proposals/2026-09-23-hermes-development-live.html) 离线只读页面，区分各论文阶段进展、真实图片、内部咨询与正式审核；读取本机派生 feed 并提示过期，CURRENT 保持唯一状态来源。代理浏览器安全策略拒绝打开本机 file URL，页面尚无视觉运行观察，不冒称已部署。当前 skill 消费与固定摘录、原文回读、跨任务经验缺口见 [能力台账](runbooks/hermes-capability-registry.md)。
 - 第一篇认可图继续保持公开 v3，旧版本保留。第二篇新 editorial 单幕分镜 9a1b 已批准、Chat 图 cebcef87 真实 PNG 私有 draft；第三篇 watercolor 分镜 c54 已批准、scene1 图 68215708 真实 PNG 私有 draft，scene0 复用旧父分镜 97f 的 d1ff4d86 图作内部观察。三图均经 5.6Sol High 内部像素咨询 GO；精确身份/哈希及未完成范围见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 这轮走既有 PDF/六维/Claims/Evidence → Hermes 科学分镜 → Chat 生图路径，未重做全文分析，也未运行测试、预检或 CI。Guide 的 art-only 路由曾遗漏结构化标签修改，已用普通修订取得新图，代码断点仍待修复。正式 5.6Sol 产品审图未接线，后两篇 reader、新公开版本和用户最终质量认可均未完成；用户最新要求先完成可读配图草稿。
