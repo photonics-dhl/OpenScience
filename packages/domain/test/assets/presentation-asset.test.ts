@@ -296,7 +296,7 @@ function sceneFixture() {
   const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'image' as const, sourceClaimIds: [CLAIM], sceneImage: { storyboardAssetId: ASSET, sceneIndex: 1 }, idempotencyKey: 'scene' };
   return { ...ctx, input };
 }
-it('starts one charged review-only task from an existing manual PNG without another render', async () => {
+async function savedManualSceneFixture() {
   const ctx = sceneFixture();
   (ctx as any).audit = { record: async (event: any, tx: any) => tx.auditLog.create({ data: event }) };
   const branchId = '80000000-0000-4000-8000-000000000001';
@@ -333,6 +333,11 @@ it('starts one charged review-only task from an existing manual PNG without anot
   };
   ctx.prisma.trashObjectCleanup = { updateMany: async () => ({ count: 0 }) };
   ctx.prisma.artifact.findMany = async () => [];
+  return { ctx, source, parent };
+}
+
+it('starts one charged review-only task from an existing manual PNG without another render', async () => {
+  const { ctx, source } = await savedManualSceneFixture();
   const input = { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: source.id, idempotencyKey: 'review-original-png' };
   const reviewed = await submitExistingSceneImageReview(ctx as never, input);
   expect(reviewed.id).not.toBe(source.id);
@@ -368,6 +373,51 @@ it('starts one charged review-only task from an existing manual PNG without anot
   await expect(submitExistingSceneImageReview(ctx as never, { ...input, idempotencyKey: 'duplicate-review' }))
     .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
+});
+it('recovers a saved manual PNG only with matching failed-review audit and not-submitted proof', async () => {
+  const { ctx, source, parent } = await savedManualSceneFixture();
+  const originalTask = ctx.db.agentTasks.find(task => task.id === source.id)!;
+  originalTask.status = 'failed';
+  originalTask.error = 'scientific review provider failed';
+  const promptHash = 'f'.repeat(64);
+  ctx.db.auditLogs.push({ id: 'failed-review-audit', requestId: source.id, action: 'ai.gateway.call', createdAt: new Date(),
+    metadata: { operation: 'scientific_review', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/5.6-sol',
+      outcome: 'failed', error: 'scientific_review_failed', promptHash,
+      inputContentHash: parent!.sourceEvidenceIdentity, pageCount: 1, pageNumbers: [1] } });
+  ctx.prisma.auditLog.findMany = async ({ where }: any) => ctx.db.auditLogs.filter(row =>
+    row.requestId === where.requestId && row.action === where.action);
+  ctx.prisma.auditLog.findFirst = async ({ where }: any) => ctx.db.auditLogs.find(row =>
+    row.action === where.action && row.targetType === where.targetType &&
+    row.targetId === where.targetId && row.actorId === where.actorId) ?? null;
+  const input = { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: source.id,
+    idempotencyKey: 'recover-unsubmitted-manual-review' };
+  const proof = vi.fn(async () => false);
+  (ctx as any).canRetryImageReviewBeforeSubmission = proof;
+  await expect(submitExistingSceneImageReview(ctx as never, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  expect(ctx.db.presentationAssets.filter(asset => asset.provenance?.reviewSourceAssetId === source.id)).toHaveLength(0);
+  proof.mockResolvedValue(true);
+  const transact = ctx.prisma.$transaction;
+  ctx.prisma.$transaction = async (fn: any, options: any) => {
+    ctx.db.users.find(user => user.id === USER)!.platformRole = 'user';
+    return transact(fn, options);
+  };
+  await expect(submitExistingSceneImageReview(ctx as never, input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  expect(ctx.db.presentationAssets.filter(asset => asset.provenance?.reviewSourceAssetId === source.id)).toHaveLength(0);
+  ctx.prisma.$transaction = transact;
+  ctx.db.users.find(user => user.id === USER)!.platformRole = 'platform_admin';
+  const reviewed = await submitExistingSceneImageReview(ctx as never, input);
+  expect(proof).toHaveBeenLastCalledWith({ requestId: source.id, promptHash, researchObjectId: RO,
+    versionId: VERSION, candidateHash: 'b'.repeat(64), sourceEvidenceIdentity: parent!.sourceEvidenceIdentity });
+  expect(ctx.db.presentationAssets.find(asset => asset.id === reviewed.id)?.provenance?.reviewSourceAssetId).toBe(source.id);
+  const receipt = ctx.db.auditLogs.find(row => row.action === 'presentation_asset.image_review_submitted')!;
+  expect(receipt.metadata).toMatchObject({ sourceReviewRecovery: 'not_submitted', sourceReviewPromptHash: promptHash });
+  ctx.db.agentTasks.find(task => task.id === reviewed.id)!.status = 'running';
+  const receiptInput = { taskId: reviewed.id, actorId: USER,
+    payload: parsePresentationGenerationPayload(ctx.db.agentTasks.find(task => task.id === reviewed.id)!.payload) };
+  await expect(requireManualSceneImageReviewReceipt(ctx.prisma as never, receiptInput)).resolves.toBeUndefined();
+  receipt.metadata.sourceReviewRecovery = 'uncertain';
+  await expect(requireManualSceneImageReviewReceipt(ctx.prisma as never, receiptInput))
+    .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
 });
 it('submits one charged scene image with exact replay and narrow capability', async () => {
   const ctx = sceneFixture();

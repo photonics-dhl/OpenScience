@@ -48,7 +48,8 @@ const transitionBody = z.object({
   expectedUpdatedAt: z.string().datetime({ offset: true }).transform((value) => new Date(value)),
 }).strict();
 
-export function registerPresentationAssetRoutes(app: FastifyInstance, deps: AgentRouteDeps & { storage?: StorageAdapter; sceneImageEnabled?: boolean; videoEnabled?: boolean }): void {
+export function registerPresentationAssetRoutes(app: FastifyInstance, deps: AgentRouteDeps & { storage?: StorageAdapter; sceneImageEnabled?: boolean; videoEnabled?: boolean;
+  canRetryImageReviewBeforeSubmission?: import('@openscience/domain').HermesResearchRunDeps['canRetryImageReviewBeforeSubmission'] }): void {
   app.get('/research-objects/:researchObjectId/versions/:versionId/presentation-tasks/:taskId', async (req, reply) => {
     reply.header('Cache-Control', 'private, no-store');
     const user = await requireCurrentUser(deps, req, reply);

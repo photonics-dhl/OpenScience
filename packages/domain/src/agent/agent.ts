@@ -861,6 +861,16 @@ export async function retryAgentTask(
           if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
           throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
         }
+        if (task.kind === 'presentation.generate') {
+          // A saved PNG may already be under a separate, audited review-only task.
+          // This predicate read shares the Serializable transaction with the task
+          // update, so a concurrent recovery-copy insert and source retry cannot
+          // both commit successfully.
+          const reviewCopy = await tx.presentationAsset.findFirst({ where: {
+            provenance: { path: ['reviewSourceAssetId'], equals: task.id },
+          }, select: { id: true } });
+          if (reviewCopy) throw new AgentError('ILLEGAL_TRANSITION', 'Saved image already has a separate review task');
+        }
         if (task.kind === 'presentation.generate'
           && task.error === '[blocked] Saved PNG review replacement has no current receipt') {
           const actor = await tx.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } });

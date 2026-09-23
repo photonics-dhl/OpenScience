@@ -1525,7 +1525,8 @@ export async function requireManualSceneImageReviewReceipt(
     const prior = recordValue(original?.provenance);
     const { imageReview: _imageReview, ...copyWithoutReview } = copied;
     const metadata = recordValue(receipt.metadata);
-    if (!sourceTask || !original || sourceTask.deletedAt || sourceTask.status !== 'succeeded' ||
+    const failedSourceReview = sourceTask?.status === 'failed' && sourceTask.error === 'scientific review provider failed';
+    if (!sourceTask || !original || sourceTask.deletedAt || (sourceTask.status !== 'succeeded' && !failedSourceReview) ||
         sourceTask.kind !== 'presentation.generate' || sourceTask.sessionId !== task.sessionId ||
         !isDeepStrictEqual(parsePresentationGenerationPayload(sourceTask.payload), input.payload) || original.deletedAt ||
         original.kind !== 'image' || original.status !== 'draft' || prior.imageReview !== undefined ||
@@ -1541,15 +1542,25 @@ export async function requireManualSceneImageReviewReceipt(
         !isDeepStrictEqual(copy.sourceClaims.map(link => link.claimId).sort(), [...input.payload.sourceClaimIds].sort()) ||
         metadata.sourceAssetId !== original.id || metadata.contentHash !== original.contentHash ||
         metadata.parentIdentity !== prior.parentIdentity ||
-        metadata.sourceEvidenceIdentity !== prior.sourceEvidenceIdentity || metadata.renderAttempt !== false) throw invalid();
+        metadata.sourceEvidenceIdentity !== prior.sourceEvidenceIdentity || metadata.renderAttempt !== false ||
+        (failedSourceReview
+          ? metadata.sourceReviewRecovery !== 'not_submitted' || typeof metadata.sourceReviewPromptHash !== 'string'
+            || !/^[a-f0-9]{64}$/u.test(metadata.sourceReviewPromptHash)
+          : metadata.sourceReviewRecovery !== undefined || metadata.sourceReviewPromptHash !== undefined)) throw invalid();
 }
 
 /** Review existing private PNG pixels through the normal worker without paying for another render. */
-export async function submitExistingSceneImageReview(deps: AgentDeps, input: PresentationScope & {
+export async function submitExistingSceneImageReview(deps: AgentDeps & {
+  canRetryImageReviewBeforeSubmission?: (input: ImageReviewNotSubmittedInput) => Promise<boolean>;
+}, input: PresentationScope & {
   assetId: string; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
   await requirePlatformAdmin(deps, input.userId);
   const taskId = await withPresentationAssetWrite(deps.prisma, input, async (tx, version) => {
+    const currentActor = await tx.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } });
+    if (currentActor?.platformRole !== 'platform_admin') {
+      throw new PresentationAssetError('FORBIDDEN', 'Image review requires current platform admin authority');
+    }
     const original = await tx.presentationAsset.findUnique({ where: { id: input.assetId }, include: { sourceClaims: true } });
     if (!original || original.deletedAt || original.kind !== 'image' || original.status !== 'draft'
       || original.researchObjectId !== input.researchObjectId || original.versionId !== input.versionId) {
@@ -1557,7 +1568,8 @@ export async function submitExistingSceneImageReview(deps: AgentDeps, input: Pre
     }
     const provenance = recordValue(original.provenance);
     const previous = await tx.agentTask.findUnique({ where: { id: original.id }, include: { session: true } });
-    if (!previous || previous.deletedAt || previous.status !== 'succeeded' || previous.kind !== 'presentation.generate'
+    const failedSourceReview = previous?.status === 'failed' && previous.error === 'scientific review provider failed';
+    if (!previous || previous.deletedAt || (previous.status !== 'succeeded' && !failedSourceReview) || previous.kind !== 'presentation.generate'
       || previous.session.deletedAt || previous.session.userId !== input.userId
       || previous.session.researchObjectId !== input.researchObjectId || provenance.imageReview !== undefined
       || provenance.source !== 'approved_storyboard_scene' || provenance.taskId !== original.id
@@ -1576,6 +1588,30 @@ export async function submitExistingSceneImageReview(deps: AgentDeps, input: Pre
       || parent.sourceEvidenceIdentity !== provenance.sourceEvidenceIdentity
       || !generatedSceneImageRequiresPixelReview(payload)) {
       throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Image source or parent changed before review');
+    }
+    let sourceReviewPromptHash: string | undefined;
+    if (failedSourceReview) {
+      const calls = await tx.auditLog.findMany({ where: { requestId: previous.id, action: 'ai.gateway.call' },
+        orderBy: { createdAt: 'asc' } });
+      const reviews = calls.filter(call => recordValue(call.metadata).operation === 'scientific_review');
+      const promptHashes = new Set(reviews.map(call => recordValue(call.metadata).promptHash));
+      if (!reviews.length || promptHashes.size !== 1 || typeof [...promptHashes][0] !== 'string'
+        || !/^[a-f0-9]{64}$/u.test([...promptHashes][0] as string)
+        || reviews.some(call => {
+          const metadata = recordValue(call.metadata);
+          return metadata.provider !== 'chatgpt-web-science-review'
+            || !['chatgpt-web/6-pro', 'chatgpt-web/5.6-sol'].includes(String(metadata.model))
+            || metadata.outcome !== 'failed' || metadata.error !== 'scientific_review_failed'
+            || metadata.inputContentHash !== parent.sourceEvidenceIdentity
+            || metadata.pageCount !== 1 || !isDeepStrictEqual(metadata.pageNumbers, [1]);
+        })) throw new PresentationAssetError('VALIDATION_ERROR', 'Failed review has untrusted provider history');
+      sourceReviewPromptHash = [...promptHashes][0] as string;
+      const proved = deps.canRetryImageReviewBeforeSubmission && await deps.canRetryImageReviewBeforeSubmission({
+        requestId: previous.id, promptHash: sourceReviewPromptHash,
+        researchObjectId: input.researchObjectId, versionId: input.versionId,
+        candidateHash: original.contentHash, sourceEvidenceIdentity: parent.sourceEvidenceIdentity!,
+      }).catch(() => false);
+      if (!proved) throw new PresentationAssetError('VALIDATION_ERROR', 'Original image review submission is not proven absent');
     }
     const copies = await tx.presentationAsset.findMany({ where: { researchObjectId: input.researchObjectId,
       versionId: input.versionId, deletedAt: null, provenance: { path: ['reviewSourceAssetId'], equals: original.id } },
@@ -1604,7 +1640,8 @@ export async function submitExistingSceneImageReview(deps: AgentDeps, input: Pre
       await recordAudit(deps, tx, { actorId: input.userId, workspaceId: version.researchObject.workspaceId,
         action: 'presentation_asset.image_review_submitted', targetType: 'presentation_asset', targetId: task.id,
         metadata: { sourceAssetId: original.id, contentHash: original.contentHash, parentIdentity: parent.identity,
-          sourceEvidenceIdentity: parent.sourceEvidenceIdentity, renderAttempt: false } }, ctx);
+          sourceEvidenceIdentity: parent.sourceEvidenceIdentity, renderAttempt: false,
+          ...(sourceReviewPromptHash ? { sourceReviewRecovery: 'not_submitted', sourceReviewPromptHash } : {}) } }, ctx);
     }
     return task.id;
   }, { refreshWorkingRecord: false });

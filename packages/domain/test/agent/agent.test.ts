@@ -658,6 +658,24 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(db.usageLedger.filter(entry => entry.resource === 'ai_credit' && entry.delta < 0)).toHaveLength(1);
   });
 
+  it('prevents retrying a failed image source after a separate saved-PNG review is created', async () => {
+    const { deps, user, ro, db, redis } = await makeDeps(1);
+    (deps as { prisma: any }).prisma.$executeRaw = async () => 1;
+    (deps as { prisma: any }).prisma.$queryRaw = async () => [{ deleted_at: null }];
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id,
+      kind: 'presentation.generate', payload: { schemaVersion: 1, kind: 'image' } });
+    const row = db.agentTasks.find(candidate => candidate.id === task.id)!;
+    row.status = 'failed';
+    row.error = 'scientific review provider failed';
+    db.presentationAssets.push({ id: 'saved-review-copy', status: 'draft', deletedAt: null,
+      provenance: { reviewSourceAssetId: task.id } });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toThrow(/separate review task/i);
+    expect(row).toMatchObject({ status: 'failed', retryCount: 0 });
+    expect(redis.lists.get('agent:queue')?.filter(id => id === task.id)).toHaveLength(1);
+  });
+
   it('幂等键不能重放不同的 server interest context', async () => {
     const { deps, user, ro } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });

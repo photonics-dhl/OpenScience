@@ -737,6 +737,10 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     presentationAsset: {
+      findFirst: async ({ where }: any) => db.presentationAssets.find((asset) =>
+        (where?.id === undefined || asset.id === where.id) &&
+        (where?.provenance?.path?.[0] !== 'reviewSourceAssetId'
+          || asset.provenance?.reviewSourceAssetId === where.provenance.equals)) ?? null,
       findMany: async ({ where, include, orderBy }: any) => {
         const rows = db.presentationAssets.filter((asset) =>
           (where.researchObjectId === undefined || asset.researchObjectId === where.researchObjectId) &&
