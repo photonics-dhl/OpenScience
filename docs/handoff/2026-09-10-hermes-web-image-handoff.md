@@ -42,6 +42,7 @@
 - 第三篇两幕 watercolor 分镜 c54dc291（父 97f3bc46，已批准）；旧父分镜 scene0 图 d1ff4d86-fc86-4fba-a72e-103d46a88a5a 已获5.6Sol内部像素 GO，结构化绘图内容在新父分镜保持；新父分镜 scene1 图 68215708-3fd4-40d5-b7e1-8b48e3ed6b9b succeeded/draft，PNG 1198197 bytes、SHA256 d693c00eaddda9ed6819c8b8c56c45ee24ee32fac4826a4621359995832a3269，本机 `tmp/third-c54-scene1-20260923.png`；5.6Sol内部像素 GO，自由电子辐射的相位匹配公式与平移对称条件只挂自由电子分支。scene0 仍属于旧父分镜，未为 c54 重生成，也未组成产品内同父双幕发布包。
 - 三张新图均为私有草稿，未经产品正式审图、读者页与新公开版本；5.6Sol 在本轮是 Codex 独立咨询，正式产品 provider 尚未接线，不能把内部 GO 冒充产品审核。用户最新收窄为先能生图；无测试/预检/CI，未部署应用。管理员曾按现有 Domain `topupCredit` + 审计给本次生图补3 credits，旧官方 HTTP 超时但未入账，Domain 入账一次；后续提交经产品正常扣额。
 - Guide 曾把可见标签修改错分到 art-only：b9443fa1 只更新 visualAction，`scene-image.ts` 对结构化 illustration 优先，故旧标签仍进入生图 prompt；该草稿未批准/生图。改走产品普通分镜修订已得到上述新图。根因与后续最小修复登记于能力台账，禁止把 art-only 结果当成结构化标签已改。
+- 用户要求说明 Hermes 的 skill 消费与理解力差额，并查看开发各阶段状态/效果。已建立只读 [研发观察台 HTML](../proposals/2026-09-23-hermes-development-live.html)：按三篇论文展示来源、六维、方案、真实图、内部/正式审阅与公开边界；页面可读取 ignored `tmp/hermes-development-live-feed.js` 每15秒显示本轮检查点，超过15分钟明确标为过期，CURRENT仍唯一权威。当前仅是本机展示候选，不是产品后台或自动遥测；Codex 浏览器的 file URL 策略拒绝代理预览，未作视觉运行观察。科学 skill v3、自有插图 skill 当前 loader v9、Baoyu 白名单风格均已接线，旧任务曾记录实际消费；按疑点回读原文和跨任务经验检索仍未实现。
 
 ## 第二篇：旧资产与失败审阅（保留）
 - ROc896802c-35dd-4b59-8db1-5f374f83a6d8（deep-sub-cycle pulse）；Versiond07cfeee-c81d-4162-a469-0b431f964801；run7e9e1f3e-eafe-440a-be0f-7ff1ed349a8b failed/v61/max43。原PDF7bb96cc1/3770010bytes、source f1bb85c8 v5、7Claims27Evidence及六维保持。
