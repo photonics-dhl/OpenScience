@@ -5,7 +5,7 @@
 - 需求基线§18.2及已批准docs/proposals/2026-09-21-visual-narrative-review.html：未读论文者通过六维内容和单/多图理解核心思想与关键点，兼顾科学准确、叙事和美感。用户否定原样裁出Fig.1；原图/生图按需，视频尚不执行。
 - 原链路：PDF → Hermes已审全文/六维/Claims/Evidence → science/art叙事 → Chat图 → 6Pro像素审阅 → reader → 新公开版本。用户只看最终成果，中间由系统推进；不重造全文分析器，不伪造人工核验或用户审美认可。
 - “允许，不限额度，你把整个任务做完”持续有效，不再问费用。先完成三篇/学术、编辑、淡彩；最终用户质量认可前不批量冷启动。不盲重发未知请求、不自动切provider。
-- 最新纠正优先用好Hermes的skills、工具及反馈；默认6Pro plan末审候选已撤下并归档tmp/chat-plan-final-review-20260922，未部署。science/art/final仍M3；Chat生图与已有6Pro像素审阅保持。跨任务自学习尚未实现。
+- 最新纠正优先用好Hermes的skills、工具及反馈；默认6Pro plan末审候选已撤下并归档tmp/chat-plan-final-review-20260922，未部署。science/art/final仍M3、Chat仍负责生图；用户改用5.6Sol看图，当前只作本任务独立咨询，产品正式Sol像素审阅尚未接线，旧6Pro历史收据保留。跨任务自学习尚未实现。
 
 ## 执行边界
 - 禁止测试/预检/演练/CI；本机只静态阅读、编辑、Git、传输。必要服务器构建启动、已知故障最小读取和真实产品路径已授权；先说明范围，不把编译/模型accepted当质量通过。
@@ -47,7 +47,7 @@
 - 旧400科学末审blocked公式及额外标题，09:54原按钮创建3d7ee9e7-b5ae-4578-8963-10478d2f7f30；本次M3正式accepted、plan approved。33fdd3f4/77c367a8/96167c38真实PNG draft；11:22新review-only b219e8e4在供应商前P2034、17b7b1fb明确not_submitted/MODEL_6_PRO_NOT_READY，6dee9fd3有submitted/conversation/result但正文为额度拒绝，不是科学审阅；产品任务failed，不得重发。run failed/v54/max46。34ce6503出图有submitted、无conversation、uncertain，不重发。实际图与方案仍含labels外标题/符号及所选basis不足；A(r)混入N已修正，不重复旧批评。
 - 原606五图/全部历史保护；8d4f为blocked但repair非空，c482像素accepted但上游来源无效；34d30e5c/96710033旧提交unknown及6cf未提交保持。旧34一小时grace已过，不延期限或按旧writer取图。1e07仅heading，原SourceMap导言确有类比也不能手补旧Evidence；Box1 k方向索引旧相反批评已撤回。
 ## 下一步与不可误跑项
-- c085事务30秒修复正常部署且第三篇attempt2、第二篇原按钮各HTTP202；收据9db94168/2cd08fa6均已消费，六项结果见上。四项未提交、一项P2034无broker、一项已提交但只收到额度拒绝。桥显式选Pro、额度拒绝证明/停止重复recover及Domain/Worker纯复验减载/P2034有界重试已上线。f5d修正终态error覆盖后两篇原页恢复入口均实见，但旧6Pro续审未点，未知旧提交不重发。用户改选gpt-5.6-sol看图、不再等待第二Pro登录；六张本机PNG/绑定引文咨询均不宜公开（详见新交接），不能冒称产品正式审阅。为先交付新草稿，原站内Hermes已提交第二篇普通科学修订a843eb8b（父be793）与第三篇a96c61be（父3d7，显式从art-only改为普通科学修订），两任务仍running；不重复全文分析，不在方案完成前出图。产品正式Sol审图需独立spool，当前未接线；新图尚无。
+- c085事务30秒修复正常部署且第三篇attempt2、第二篇原按钮各HTTP202；收据9db94168/2cd08fa6均已消费，六项结果见上。四项未提交、一项P2034无broker、一项已提交但只收到额度拒绝。桥显式选Pro、额度拒绝证明/停止重复recover及Domain/Worker纯复验减载/P2034有界重试已上线。f5d修正终态error覆盖后两篇原页恢复入口均实见，但旧6Pro续审未点，未知旧提交不重发。用户改选gpt-5.6-sol看图、不再等待第二Pro登录；六张本机PNG均不宜公开，不能冒称产品正式审阅。第二篇站内修订a843、两幕133、单幕bc1均成功，但Sol先后指出引文不足/公式不全及bc1缺乏依据的钟形场曲线；均未批准/生图，已向Hermes提交最小场带修订意图。第三篇四幕a96因M3触顶/300秒超时/备用401失败且无结果；两幕307成功但Sol指出相位匹配误挂吸收路径，未批准/生图；修正分类、标签及watercolor风格的新两幕73e84251（父307、5 Claims）运行中。一次guide误入私有科学写作稿，未保存/发布。两篇没有新PNG；不重复全文分析、不盲重发旧提交。产品正式Sol审图需独立spool，当前未接线。
 - 08:13/08:14两writer已消费：/jobs/third-paper-durable-planning-resume-20260922.json、second-paper-skill-v9-replan-20260922.json。此前source-support/defect-aware/saved-final/technical-subset/art-timeout/geometric等历史writer及首篇publish也已消费；完整清单见09-18交接。third-paper-evidence-scoped-replan资格不符，始终禁运行。
 - 读取入口：tmp/third-paper-durable-planning-read-20260922.cjs固定400；second-paper-v9-planning-read-20260922.cjs固定342；two-paper-v9-recovery-surface-read-20260922.cjs读当前原页面GET；current-two-paper-scene-reviews-read-20260922.cjs按run现有scene读。历史固定82/606/cb342的reader不能当新任务集合。新读入口tmp/saved-review-two-paper-progress-20260922.cjs定向读两task/当前恢复receipt及后续调用。旧saved-review/source-capacity与最新second-paper-scale-plan-revision-20260922、third-paper-source-root-plan-revision-20260922 writer及/jobs同名json均已消费，不重放。最新reader为tmp/source-root-plan-revision-two-paper-progress-20260922.cjs（be793/3d7），intents-read同前缀；旧342/400 reader仅历史。
 - 账号：已知元数据未找到第二份可直接使用的登录，当前菜单无账号切换入口，未退出/换号/读凭据。2026-09-23新空白页Pro选项disabled且界面未给原因；6dee9fd3实际回复明确当前账号额度受限，不把界面禁用单独当成原因证明。用户随后改选5.6Sol审图，不再等待备用账号登录。

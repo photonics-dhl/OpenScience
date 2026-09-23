@@ -1,5 +1,8 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-23 — 两篇新分镜科学收敛（当前）
+- 第二篇a843两幕计划虽M3 accepted，5.6Sol按实际绑定引文判NO-GO；二次两幕13326211仍把19 as/1.9 PHz/垂直关系绑定到不支持的quote、Eq.8–12可见标签不全。单幕bc1a7e5e沿父133成功，CdS/电子/场宽及ICS定性因果均有绑定，但仍指令Chat凭空画钟形场包络、半高点，Sol判NO-GO；站内已提出改成非数据化局域场带+“形状与比例不代表计算曲线”的最小修订。第三篇四幕a96c61be规划失败：MiniMax首次输出触顶，随后主请求300秒超时、备用401；无计划/结果，不重发原task。两幕307a3fbf沿父3d7成功但Sol判幕2把仅支持自由电子辐射/发射的相位匹配误挂吸收；新watercolor普通科学修订73e84251沿父307运行，guide一度误选technical及泛化“声子”，提交前通过原界面改回watercolor、精确“声学声子”及普通科学修订。一次Hermes guide误入私有科学写作稿，未保存/发布。以上均未批准/生图；正式Sol产品审图未接线，现阶段Sol仅独立咨询，新PNG尚无。
+
 ## 2026-09-23 — unknown场景恢复入口修复
 - 生产f5dff6f46044ed9cd1e46b83facc9350622c6596 / 回退158ee13fbb4a54c9eb9f6bc96facc573075eef1f：第三篇原恢复入口消失的根因是run终态moveRun把P2034错误复制到所有非成功step，覆盖第一段unknown场景旧step.error，收据严格等值校验拒绝。f5d只在run与step同为failed、step.error精确等于当前run.error时容许这一差异，任务/图片/身份等仍严格；独立High静态GO。干净已推SHA服务器正式构建/启动exit0，无测试/预检/CI。产品自有页面GET第二/三篇均image-render、canRetry=true、charge3；刷新后第二篇实见「保留初稿，继续制作」。未点旧6Pro续审、未重发unknown。用户决定Chat继续生图、5.6Sol看图；六张现图均不宜公开，产品正式Sol审阅与新图尚未完成。
 - 5.6Sol High只读实际PNG/绑定引文指出六图均不宜公开；独立High架构审查认为正式产品Sol审图需独立Codex image-review spool、与旧Chat reservation精确路由，现有image runner只产PNG，不能冒充审阅。用户本轮优先“可以生图”，故从站内Hermes提交已有计划的普通科学修订：第二篇a843eb8b-cdc3-4bc7-85f7-ba783d1cee83/父be793，第三篇a96c61be-d71d-4087-840d-ea0d91e22246/父3d7。第三篇guide最初误选art-only，提交前通过原界面修改指令解除，DB实际payload两项revisionMode均空、父资产精确；各用既有Claims而非重跑PDF/六维。两task目前running，未有新图/审核/发布，若任务终态需先读原收据和科学方案，不重发未知。已关闭本轮临时6081隧道，未退出浏览器登录。
