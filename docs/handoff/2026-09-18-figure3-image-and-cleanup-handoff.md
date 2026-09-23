@@ -1,5 +1,12 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-23 — 续审六项终态、Pro菜单与生产来源
+- 6dee9fd3既有review-spool结果虽标`succeeded`，对应response.txt精确为`You've hit your limit. Please try again later.\n\nRetry`，不是科学审阅；不得送入质量验收或重发原请求。新桥候选在同会话锚定响应出现该精确拒绝时写入独立、不可覆盖的`quota-exhausted.json`，不落假result；broker核任务目录/提交标记/请求身份后停止对此任务重复recover；Gateway对已错标的原/恢复result在身份+哈希核对后拒绝额度正文。增量High静态GO，尚未安装/部署，实际效果待观察。用户被异步请求在浏览器登录可用第二Pro账号，当前账号未退出。
+- c085b157正常服务器构建启动exit0，独立marker release c085/rollback574、journal/failed=false；第三篇新attempt2原按钮11:22:22 HTTP202、第二篇原writer11:22:50 HTTP202。收据9db94168/2cd08fa6各生成三项review-only，保留两项历史生图unknown，旧500 writer不重放。原PNG复用不再生图。
+- 六项自然终态：第二篇667ba9c1/e1559769/55e9bb24和第三篇17b7b1fb桥spool均not_submitted/MODEL_6_PRO_NOT_READY；第三篇b219e8e4在供应商前version.updateMany P2034且无broker job；6dee9fd3有submitted/conversation/result.json及public succeeded但实际额度拒绝、产品task failed，不能重发。run第二篇failed/v63/max46、第三篇failed/v54/max46。P2034只读High定位原withPresentationAssetWrite的6次有限事务在同版本并发写中耗尽、纯复验仍重建working record；候选仅增P2034重试延迟并让四处纯复验跳过重建，真正审阅写仍刷新，High增量GO。证据tmp/saved-png-review-resume-current-20260923.json和saved-png-review-spool-current-20260923.json。
+- 自有新review页实际form="High"、零输入/零user turn；2026-09-23自有空白页模型菜单Pro单选项aria-disabled=true、无tooltip/原因。先前跨broker页面误占已修，但默认模型错误独立存在。review-runner.cjs候选仅对新审阅页显式选Pro，校验ownedName、等待菜单唯一可见项、禁用即在上传前失败、活动模型查模型按钮而非整份含prompt的form文本；High增量GO，尚未安装。未发现第二份可直接切换登录，不能把disabled推断成配额原因。
+- 当前应用marker=e05ca61c461a9dbe7d50f8406b0218d3350b65b2/rollback=c085，journal/failed=false、agent-worker镜像e05。已从origin按SHA取回e05，确认为c085后代的期刊发布；期刊分支1ede仅后续文档，canonical release/onchip-production-line仍c085。后续应用发布须先审查对齐这条已上线基线，不能以c085覆盖。未测试/预检/CI/本机构建。
+
 ## 2026-09-22 — 续审P2028定向修复待交付
 - 已确认原Serializable事务5000ms不足，5574ms时完整回滚。只将`retryHermesGeneration`的interactive transaction设为既有`saveHermesSourceReview`采用的30000ms；授权、来源/收据复验、CAS、P2034-only重试及commit后派发不变，不新增P2028自动重试或削弱检查。独立High一行增量GO；正常服务器构建发布后使用第三篇新attempt2收据，第二篇原未消费writer随后继续。没有新模型请求，未测试/预检/CI/本机构建。
 

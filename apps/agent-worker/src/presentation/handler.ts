@@ -752,7 +752,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       // Revalidate the receipt before reading the saved PNG, not only before persisting its review.
       if (completedOnly || technicalRecovery) await withPresentationAssetWrite(deps.prisma, scope, async tx => {
         await requireCompletedRecovery(tx); await requireTechnicalRecovery(tx);
-      });
+      }, { refreshWorkingRecord: false });
       const identity = { requestId: task.id, contentHash: saved.contentHash, sourceEvidenceIdentity, parentIdentity: sceneParent.identity };
       const savedImage = await requireSavedImageForReview(deps.prisma, payload, task.id, saved.contentHash, sourceEvidenceIdentity, sceneParent.identity);
       const contentType = (savedImage.provenance as Record<string, unknown>).contentType;
@@ -777,17 +777,17 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         const provenance = current.provenance as Record<string, unknown>;
         return { current, provenance, review: readStoredGeneratedImageReview(provenance.imageReview, identity) };
       };
-      const stored = await withPresentationAssetWrite(deps.prisma, scope, readCurrent);
+      const stored = await withPresentationAssetWrite(deps.prisma, scope, readCurrent, { refreshWorkingRecord: false });
       let imageReview = stored.review;
       if (!imageReview) {
         const parentRow = await deps.prisma.presentationAsset.findUniqueOrThrow({ where: { id: payload.sceneImage.storyboardAssetId } });
         const settings = parseStoryboardRequest((parentRow.provenance as Record<string, unknown>).storyboardSettings);
         // The object and draft row already exist. No model call is made while holding the write lock.
         const reviewGateway: Pick<AiGateway, 'reviewScientific'> = completedOnly ? { reviewScientific: async (request, guard) => {
-          await withPresentationAssetWrite(deps.prisma, scope, readCurrent);
+          await withPresentationAssetWrite(deps.prisma, scope, readCurrent, { refreshWorkingRecord: false });
           return options.gateway!.resumeScientificReviewFromCompletedResult!(request, guard);
         } } : { reviewScientific: async (request, guard) => {
-          if (technicalRecovery) await withPresentationAssetWrite(deps.prisma, scope, readCurrent);
+          if (technicalRecovery) await withPresentationAssetWrite(deps.prisma, scope, readCurrent, { refreshWorkingRecord: false });
           return options.gateway!.reviewScientific!(request, guard);
         } };
         const reviewed = await reviewGeneratedImage(reviewGateway, {

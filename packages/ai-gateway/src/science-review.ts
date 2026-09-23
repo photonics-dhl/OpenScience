@@ -89,6 +89,10 @@ function sameIllustrationRequest(left: ScienceReviewRequest, right: ScienceRevie
     && JSON.stringify(left.attachments ?? []) === JSON.stringify(right.attachments ?? []);
 }
 
+function quotaRefusal(text: string): boolean {
+  return /^You've hit your limit\. Please try again later\.(?:\s+Retry)?$/i.test(text.trim());
+}
+
 async function successfulOutput(resultsDir: string, request: ScienceReviewRequest): Promise<ScienceReviewProviderResult | null> {
   const output = join(resultsDir, request.id);
   try { await directory(output); } catch (error) { if (missing(error)) return null; throw error; }
@@ -100,6 +104,7 @@ async function successfulOutput(resultsDir: string, request: ScienceReviewReques
   if (primary.status === 'succeeded') {
     const response = await boundedRead(join(output, 'response.txt'), SCIENCE_REVIEW_MAX_RESPONSE_BYTES);
     if (sha256Text(response.toString('utf8')) !== primary.responseHash) fail();
+    if (quotaRefusal(response.toString('utf8'))) throw new Error('MODEL_QUOTA_EXHAUSTED');
     return { text: response.toString('utf8'), promptHash: request.promptHash, responseHash: primary.responseHash! };
   }
   try {
@@ -107,6 +112,7 @@ async function successfulOutput(resultsDir: string, request: ScienceReviewReques
     if (recovered.id !== request.id || recovered.promptHash !== request.promptHash || recovered.status !== 'succeeded') fail();
     const response = await boundedRead(join(output, 'recovered-response.txt'), SCIENCE_REVIEW_MAX_RESPONSE_BYTES);
     if (sha256Text(response.toString('utf8')) !== recovered.responseHash) fail();
+    if (quotaRefusal(response.toString('utf8'))) throw new Error('MODEL_QUOTA_EXHAUSTED');
     return { text: response.toString('utf8'), promptHash: request.promptHash, responseHash: recovered.responseHash! };
   } catch (error) {
     if (missing(error)) throw new Error(primary.errorCode ?? (primary.status === 'uncertain' ? 'UNCERTAIN' : 'EXECUTION_FAILED'));

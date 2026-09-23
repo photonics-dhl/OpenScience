@@ -67,6 +67,19 @@ async function publishRecovery(results, request, response) {
 }
 function same(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
 function uncertain() { const error = Error('UNCERTAIN'); error.code = 'UNCERTAIN'; return error; }
+async function quotaRejected(job, request) {
+  try {
+    const owner = await lstat(job);
+    if (!owner.isDirectory() || owner.isSymbolicLink() || owner.uid !== 11040 || (owner.mode & 0o777) !== 0o700) return false;
+    const value = JSON.parse((await safeRead(join(job, 'quota-exhausted.json'), 1024)).toString('utf8'));
+    const submitted = JSON.parse((await safeRead(join(job, 'submitted.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8'));
+    return value && typeof value === 'object' && !Array.isArray(value)
+      && Object.keys(value).sort().join(',') === 'error,id,promptHash,schemaVersion,state'
+      && value.schemaVersion === 1 && value.id === request.id && value.promptHash === request.promptHash
+      && value.state === 'ambiguous_no_resend' && value.error === 'MODEL_QUOTA_EXHAUSTED'
+      && submitted?.phase === 'submitted' && submitted.id === request.id && submitted.promptHash === request.promptHash;
+  } catch { return false; }
+}
 async function docker(args, timeout) { return exec('docker', args, { timeout, maxBuffer: 32 * 1024, encoding: 'utf8' }); }
 async function copyAttachments(config, job, request) {
   if (!request.attachments?.length) return;
@@ -131,7 +144,8 @@ async function execute(config, request) {
       break;
     }
   }
-  if (!await exists(join(job, 'result.json')) && !await exists(join(job, 'recovered-result.json')) && await exists(join(job, 'submitted.json'))) {
+  if (!await exists(join(job, 'result.json')) && !await exists(join(job, 'recovered-result.json'))
+    && await exists(join(job, 'submitted.json')) && !await quotaRejected(job, request)) {
     try {
       if (!await exists(join(job, 'result.json')) && await exists(join(job, 'submitted.json'))) {
         const remaining = Math.floor((request.deadlineAt - Date.now() - 30000) / 1000);
@@ -151,6 +165,7 @@ async function recoverPublishedFailure(config, request) {
     || !await exists(join(job, 'conversation.json'))) return false;
   const primary = validateScienceReviewResult(JSON.parse((await safeRead(join(output, 'result.json'), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
   if (primary.id !== request.id || primary.promptHash !== request.promptHash || primary.status === 'succeeded') return false;
+  if (await quotaRejected(job, request)) return false;
   if (!await exists(join(job, 'result.json')) && !await exists(join(job, 'recovered-result.json'))) {
     await docker(['exec', config.browserContainer, 'timeout', '--signal=TERM', '--kill-after=5', '40',
       'node', '/jobs/provider/review-runner.cjs', 'recover', request.id], 50000).catch(() => {});

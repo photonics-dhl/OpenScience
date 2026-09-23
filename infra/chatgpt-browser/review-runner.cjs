@@ -188,6 +188,7 @@ async function composerText(input) { return input.evaluate(element => element in
 // The rich-text editor inserts paragraph line breaks into innerText. Compare all
 // text, allowing only the same whitespace normalization used by the image runner.
 function normalizeComposerText(value) { return value.replace(/\s+/g, ' ').trim(); }
+const PRO_MODEL_LABEL = /^(?:(?:GPT[- ]?)?6\s*)?Pro$/i;
 function promptComparison(expected, actual) {
   const left = normalizeComposerText(expected), right = normalizeComposerText(actual);
   let firstDifference = 0;
@@ -198,7 +199,27 @@ function promptComparison(expected, actual) {
 }
 async function model6ProActive(input) {
   const form = input.locator('xpath=ancestor::form[1]');
-  return await form.count() === 1 && /(?:^|\s)6\s+Pro(?:\s|$)/.test(await form.innerText().catch(() => ''));
+  if (await form.count() !== 1) return false;
+  const control = form.locator('button[aria-haspopup="menu"]:not([data-testid="composer-plus-btn"])');
+  if (await control.count() !== 1) return false;
+  return PRO_MODEL_LABEL.test(normalizeComposerText(await control.innerText().catch(() => '')));
+}
+function quotaRefusal(text) {
+  return /^You've hit your limit\. Please try again later\.(?:\s+Retry)?$/i.test(text.trim());
+}
+async function select6ProOnFreshPage(page, input, name, deadlineAt) {
+  if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
+  if (await model6ProActive(input)) return;
+  const form = input.locator('xpath=ancestor::form[1]');
+  const control = form.locator('button[aria-haspopup="menu"]:not([data-testid="composer-plus-btn"])');
+  if (await control.count() !== 1 || !await control.isVisible()) throw Error('MODEL_SELECTOR_NOT_READY');
+  await control.click();
+  const pro = page.getByRole('menuitemradio', { name: PRO_MODEL_LABEL });
+  await pro.waitFor({ state: 'visible', timeout: Math.max(1, Math.min(5000, deadlineAt - Date.now())) }).catch(() => { throw Error('MODEL_6_PRO_NOT_READY'); });
+  if (await pro.count() !== 1) throw Error('MODEL_6_PRO_NOT_READY');
+  if (await pro.getAttribute('aria-disabled') === 'true') throw Error('MODEL_6_PRO_DISABLED');
+  await pro.click();
+  if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
 }
 async function normalChatMode(input) {
   const form = input.locator('xpath=ancestor::form[1]');
@@ -342,6 +363,16 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
           const currentAnchor = await findUserAnchor(page, reviewPrompt(request));
           if (!currentAnchor || currentAnchor.userMessageId !== anchor.userMessageId
             || currentAnchor.userMessageHash !== anchor.userMessageHash) throw Error('USER_MESSAGE_ANCHOR_CHANGED');
+          if (quotaRefusal(text)) {
+            const submitted = read('submitted.json');
+            if (submitted.id !== id || submitted.promptHash !== request.promptHash) throw Error('SUBMISSION_IDENTITY_CHANGED');
+            const proof = { schemaVersion: 1, id, promptHash: request.promptHash,
+              state: 'ambiguous_no_resend', error: 'MODEL_QUOTA_EXHAUSTED' };
+            if (fs.existsSync(path.join(dir, 'quota-exhausted.json'))) {
+              if (JSON.stringify(read('quota-exhausted.json')) !== JSON.stringify(proof)) throw Error('QUOTA_EVIDENCE_CHANGED');
+            } else once('quota-exhausted.json', proof);
+            throw Error('MODEL_QUOTA_EXHAUSTED');
+          }
           if (Buffer.byteLength(text, 'utf8') > 64 * 1024) throw Error('RESPONSE_TOO_LARGE');
           const responseFile = recovered ? 'recovered-response.txt' : 'response.txt';
           const resultFile = recovered ? 'recovered-result.json' : 'result.json';
@@ -392,8 +423,26 @@ let composerRepairAttempted = false;
   activePage = page;
   await rememberPage(page, dir, request.provider, id, instance);
   await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.evaluate(name => { window.name = name; }, `xgs-review-${id}`);
-  let input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000));
+  const ownedName = `xgs-review-${id}`;
+  await page.evaluate(name => { window.name = name; }, ownedName);
+  stage = 'model_selection';
+  let input = null;
+  const composerDeadline = Math.min(request.deadlineAt, Date.now() + 30000);
+  let selectorReady = false;
+  while (Date.now() < composerDeadline && !selectorReady) {
+    input = await bounded(composer(page), 2000).catch(() => null);
+    if (input) {
+      const form = input.locator('xpath=ancestor::form[1]');
+      const control = form.locator('button[aria-haspopup="menu"]:not([data-testid="composer-plus-btn"])');
+      selectorReady = await bounded(control.count(), 2000).catch(() => 0) === 1
+        && Boolean(normalizeComposerText(await bounded(control.innerText(), 2000).catch(() => '')));
+    }
+    if (!selectorReady) await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  if (!input) throw Error('CHAT_COMPOSER_NOT_FOUND');
+  if (!selectorReady) throw Error('MODEL_SELECTOR_NOT_READY');
+  await select6ProOnFreshPage(page, input, ownedName, composerDeadline);
+  input = await waitForComposer(page, composerDeadline);
   if (!input) throw Error('CHAT_COMPOSER_NOT_FOUND');
   if (!await model6ProActive(input)) throw Error('MODEL_6_PRO_NOT_READY');
   if (!await normalChatMode(input)) throw Error('NORMAL_CHAT_MODE_NOT_READY');
@@ -401,6 +450,7 @@ let composerRepairAttempted = false;
   if (prompt.length > 64 * 1024) throw Error('PROMPT_TOO_LARGE');
   const baseline = await page.locator('[data-message-author-role="assistant"]').count();
   stage = 'attachments';
+  if (await page.evaluate(() => window.name) !== ownedName) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   await uploadAttachments(input, request);
   input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000));
   stage = 'composer_fill';

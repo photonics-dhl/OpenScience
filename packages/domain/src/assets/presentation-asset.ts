@@ -22,7 +22,7 @@ import { validateSourceLocator } from '../research-intelligence/validation';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KINDS = ['chart', 'interactive_html', 'image', 'video'] as const;
-const SERIALIZABLE_RETRY_DELAYS_MS = [50, 100, 250, 500, 1000] as const;
+const SERIALIZABLE_RETRY_DELAYS_MS = [50, 100, 250, 500, 1000, 2000, 4000, 8000] as const;
 export const HERMES_IMAGE_RENDER_RECOVERY_ACTION = 'hermes.research_run.image_render_recovery';
 export const NARRATIVE_PIXEL_REPLAN = 'narrative_pixel_scientific_replan';
 export const NARRATIVE_PIXEL_PLAN_REVISION = 'narrative_pixel_plan_scientific_revision';
@@ -145,6 +145,7 @@ export async function withPresentationAssetWrite<T>(
   prisma: Pick<AgentDeps['prisma'], '$transaction'>,
   input: PresentationScope,
   operation: (tx: Prisma.TransactionClient, version: Awaited<ReturnType<typeof requirePresentationWriteScope>>) => Promise<T>,
+  options: { refreshWorkingRecord?: boolean } = {},
 ): Promise<T> {
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -155,7 +156,7 @@ export async function withPresentationAssetWrite<T>(
         const touched = await tx.version.updateMany({ where: { id: input.versionId, status: 'draft' }, data: { status: 'draft' } });
         if (touched.count !== 1) throw new PresentationAssetError('ILLEGAL_TRANSITION', 'Presentation assets can only change on a draft version');
         const result = await operation(tx, version);
-        await refreshWorkingResearchRecord(tx, input);
+        if (options.refreshWorkingRecord !== false) await refreshWorkingResearchRecord(tx, input);
         return result;
       }, { isolationLevel: 'Serializable', timeout: 30_000 });
     } catch (error) {
