@@ -37,17 +37,23 @@
 - plan5226fcf5，图8bbcfd9b-95a9-4bdd-a202-3ebfb61594e3，1280×720/526396bytes/hash778815c8fd54996e99abbad2e6d39a17edcf294f109e615cb56015e1d2fff8a8；6Pro90ada2a8 accepted，tmp/visual-narrative-8bbcfd9b-20260922.png已实看。
 - 原overview→更多工具→发布→只选8bbc→201→公开链接已实际走通：https://openscience.428312321.xyz/research/OSR-2026-000023/v/3。版本hashd34d5d70344cc7f7f6ee0ed7906836d74492cc9a815a5ceb188b7dbdcbe88c66；匿名v1/v2/v3均200、旧快照不变。系统核源不伪造人工字段；PDF workspace_member，text/data CC-BY-4.0/code MIT；最终用户质量认可仍pending。
 
-## 第二篇：三张PNG已存，审阅未提交，第四张unknown
+## 2026-09-23 新图与当前边界
+- 第二篇在原7 Claims/证据上完成单幕 editorial 分镜 9a1b1a31（父 9c37cbe9，已批准）；Chat 生图 cebcef87-f71e-43cf-97ff-d0747a82bce7 succeeded/draft，PNG 715699 bytes、SHA256 bbfaf594c6ef14ff33b2e51fe73e074a11a22a16ba40086bcccadc71262f85b0，私有本机副本 `tmp/second-9a1b-scene0-20260923.png`。5.6Sol High 内部来源/像素咨询 GO：20 nm 双箭头端点落在两 CdS 相对表面，1 MeV 电子沿缝、λ₀=1.8 μm 光带及沿 z 的 FWHM_S≈77 nm 可读。旧 e397 PNG 的标尺只量蓝光带，继续保留但不采用。
+- 第三篇两幕 watercolor 分镜 c54dc291（父 97f3bc46，已批准）；旧父分镜 scene0 图 d1ff4d86-fc86-4fba-a72e-103d46a88a5a 已获5.6Sol内部像素 GO，结构化绘图内容在新父分镜保持；新父分镜 scene1 图 68215708-3fd4-40d5-b7e1-8b48e3ed6b9b succeeded/draft，PNG 1198197 bytes、SHA256 d693c00eaddda9ed6819c8b8c56c45ee24ee32fac4826a4621359995832a3269，本机 `tmp/third-c54-scene1-20260923.png`；5.6Sol内部像素 GO，自由电子辐射的相位匹配公式与平移对称条件只挂自由电子分支。scene0 仍属于旧父分镜，未为 c54 重生成，也未组成产品内同父双幕发布包。
+- 三张新图均为私有草稿，未经产品正式审图、读者页与新公开版本；5.6Sol 在本轮是 Codex 独立咨询，正式产品 provider 尚未接线，不能把内部 GO 冒充产品审核。用户最新收窄为先能生图；无测试/预检/CI，未部署应用。管理员曾按现有 Domain `topupCredit` + 审计给本次生图补3 credits，旧官方 HTTP 超时但未入账，Domain 入账一次；后续提交经产品正常扣额。
+- Guide 曾把可见标签修改错分到 art-only：b9443fa1 只更新 visualAction，`scene-image.ts` 对结构化 illustration 优先，故旧标签仍进入生图 prompt；该草稿未批准/生图。改走产品普通分镜修订已得到上述新图。根因与后续最小修复登记于能力台账，禁止把 art-only 结果当成结构化标签已改。
+
+## 第二篇：旧资产与失败审阅（保留）
 - ROc896802c-35dd-4b59-8db1-5f374f83a6d8（deep-sub-cycle pulse）；Versiond07cfeee-c81d-4162-a469-0b431f964801；run7e9e1f3e-eafe-440a-be0f-7ff1ed349a8b failed/v61/max43。原PDF7bb96cc1/3770010bytes、source f1bb85c8 v5、7Claims27Evidence及六维保持。
 - 旧342保存末审恢复后科学blocked，09:54原按钮创建be793c82-2118-474e-8e8c-a772d2f084c5；本次science/art及M3末审正式accepted、plan approved。8d5f65e9/f92a9723/38c6c8bb真实PNG draft；11:22新review-only三项667ba9c1/e1559769/55e9bb24均failed、桥spool明确not_submitted/MODEL_6_PRO_NOT_READY，run failed/v63/max46，无正式像素审阅。34d8abc0出图有submitted、无conversation、uncertain，不重发。前三张实看仍见轨迹穿固体、点大小变化等问题，不能发布。
 - 旧15b的d6fc/dd07科学blocked/null、1ea仅等径repair、38b4 accepted及所有原图保留。旧公开OSR-2026-000022/v/1及hashe0a8bd972fe2baca099ae198af4b8c02fc7fb503e0902ea476ebc6309a5db4c8保护。
-## 第三篇：三张PNG已存，方案科学问题仍在
+## 第三篇：旧资产与失败审阅（保留）
 - ROaa450f1e-fafc-46d8-a072-d935e01b0544（Light–matter interactions with photonic quasiparticles）；Version9373f1e6-9477-4e4a-9b45-b8efca244e70，尚无publicID；runb3eee57a-8a08-4867-9281-cb5b950affbf failed/v52/max44。
 - PDFd04add46/4609066bytes/hash4a51048431f20950a01916b50cd87a08642881b20b0a9eac767144031ebc0b1a；原SourceMap e490409c…24页1554blocks；composition1834e21d及8c87b54d v5核源完成、六维657字/5Claims30Evidence，guideaad65431 watercolor；不重做。
 - 旧400科学末审blocked公式及额外标题，09:54原按钮创建3d7ee9e7-b5ae-4578-8963-10478d2f7f30；本次M3正式accepted、plan approved。33fdd3f4/77c367a8/96167c38真实PNG draft；11:22新review-only b219e8e4在供应商前P2034、17b7b1fb明确not_submitted/MODEL_6_PRO_NOT_READY，6dee9fd3有submitted/conversation/result但正文为额度拒绝，不是科学审阅；产品任务failed，不得重发。run failed/v54/max46。34ce6503出图有submitted、无conversation、uncertain，不重发。实际图与方案仍含labels外标题/符号及所选basis不足；A(r)混入N已修正，不重复旧批评。
 - 原606五图/全部历史保护；8d4f为blocked但repair非空，c482像素accepted但上游来源无效；34d30e5c/96710033旧提交unknown及6cf未提交保持。旧34一小时grace已过，不延期限或按旧writer取图。1e07仅heading，原SourceMap导言确有类比也不能手补旧Evidence；Box1 k方向索引旧相反批评已撤回。
 ## 下一步与不可误跑项
-- c085事务30秒修复正常部署且第三篇attempt2、第二篇原按钮各HTTP202；收据9db94168/2cd08fa6均已消费，六项结果见上。四项未提交、一项P2034无broker、一项已提交但只收到额度拒绝。桥显式选Pro、额度拒绝证明/停止重复recover及Domain/Worker纯复验减载/P2034有界重试已上线。f5d修正终态error覆盖后两篇原页恢复入口均实见，但旧6Pro续审未点，未知旧提交不重发。用户改选gpt-5.6-sol看图、不再等待第二Pro登录；六张本机PNG均不宜公开，不能冒称产品正式审阅。第二篇站内修订a843、两幕133、单幕bc1均成功，但Sol先后指出引文不足/公式不全及bc1缺乏依据的钟形场曲线；均未批准/生图，已向Hermes提交最小场带修订意图。第三篇四幕a96因M3触顶/300秒超时/备用401失败且无结果；两幕307成功但Sol指出相位匹配误挂吸收路径，未批准/生图；修正分类、标签及watercolor风格的新两幕73e84251（父307、5 Claims）运行中。一次guide误入私有科学写作稿，未保存/发布。两篇没有新PNG；不重复全文分析、不盲重发旧提交。产品正式Sol审图需独立spool，当前未接线。
+- 2026-09-22历史恢复：c085事务修复和f5d终态error修复已部署；旧6Pro续审仍未点击，旧unknown提交不得重发。第二篇旧a843/133/bc1及第三篇旧a96/307/73e科学返工的完整记录留Git和09-18交接；本轮新计划/PNG以本页2026-09-23段为准，不再按旧next action续跑。
 - 08:13/08:14两writer已消费：/jobs/third-paper-durable-planning-resume-20260922.json、second-paper-skill-v9-replan-20260922.json。此前source-support/defect-aware/saved-final/technical-subset/art-timeout/geometric等历史writer及首篇publish也已消费；完整清单见09-18交接。third-paper-evidence-scoped-replan资格不符，始终禁运行。
 - 读取入口：tmp/third-paper-durable-planning-read-20260922.cjs固定400；second-paper-v9-planning-read-20260922.cjs固定342；two-paper-v9-recovery-surface-read-20260922.cjs读当前原页面GET；current-two-paper-scene-reviews-read-20260922.cjs按run现有scene读。历史固定82/606/cb342的reader不能当新任务集合。新读入口tmp/saved-review-two-paper-progress-20260922.cjs定向读两task/当前恢复receipt及后续调用。旧saved-review/source-capacity与最新second-paper-scale-plan-revision-20260922、third-paper-source-root-plan-revision-20260922 writer及/jobs同名json均已消费，不重放。最新reader为tmp/source-root-plan-revision-two-paper-progress-20260922.cjs（be793/3d7），intents-read同前缀；旧342/400 reader仅历史。
 - 账号：已知元数据未找到第二份可直接使用的登录，当前菜单无账号切换入口，未退出/换号/读凭据。2026-09-23新空白页Pro选项disabled且界面未给原因；6dee9fd3实际回复明确当前账号额度受限，不把界面禁用单独当成原因证明。用户随后改选5.6Sol审图，不再等待备用账号登录。

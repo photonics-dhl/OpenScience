@@ -8,6 +8,8 @@
 范围：此开发工作树及从包含此配置的提交创建的新工作树；既有其他分支/工作树、远端主机、云任务不会自动继承。新 MCP 进程加载配置，已启动进程须重载。既有同配置的桌面浏览器已实际打开 Example Domain，Pro 曾完成两次工具读写；这些证据不代表 XGS 科研业务验收，也不解决平台命令拦截或 Windows 原生截图兼容故障。回滚：移除本次新增的 `cua_repl`、`cua_repl.tools.js`、`node_repl.env` 三节，保留 `openscience_code`；不要删除其他项目仍引用的共享启动器。
 
 ## 当前能力索引：目的、调用、效果
+2026-09-23定向断点：`workspace-guide.ts` 允许把某些“可见标签改字”请求路由为 `storyboard.revise` 的 art-only；真实 b9443fa1 只把新文字放入 `visualAction`，而 `presentation/scene-image.ts:68` 在结构化 `scene.illustration` 存在时直接编译该对象，不消费 `visualAction`，因此图片实际 prompt 仍有旧标签。该草稿未批准/生图；产品普通修订 9c37→9a1b 已将标签和几何约束写回 `illustration.encoding/labels/constraints` 并得到真实图 cebcef87。后续最小修复应在 Guide 路由/草稿校验处禁止把标签、尺寸、对象或关系变化认定为 art-only，且 art-only 完成后须核对结构化 brief 是否按请求更新；不要新增论文分析器或另一个任务库。本轮因用户收窄为生图，未改此代码、未部署。
+
 2026-09-23当前续审断点：两篇各3张真实PNG已保存；原产品入口各建立3个review-only任务，四项明确未提交，一项在供应商前因P2034失败，一项已提交却只收到Pro额度拒绝。候选沿现有review runner/broker/Gateway补显式选Pro、拒绝文本身份核验及停止同一拒绝任务重复恢复；Domain/Worker缩短纯复验事务并有界重试P2034。原技术收据已用，新增同一retry-generation入口最多第二段review-only收据：按精确未提交、供应商前写冲突、已提交但只收到额度提示三种凭据复制同objectKey/hash的原PNG到新审阅任务，unknown仍原样保留。各改动获独立High静态GO，尚待交付和真实观察。不新建论文分析器、技能或供应商，见CURRENT。
 
 2026-09-22后续真实断点：同一target被image/review不同任务登记三次，`runner.cjs`认领任意空白home造成跨broker误占；已部署新请求只创建自有页，旧会话恢复保持。六PNG在review提交前技术失败，原技术子集因unknown sibling及没有accepted anchor被整体阻断，已部署仅恢复可证明未提交的审阅/生成并保留unknown。`illustration-planner.ts`科学返工只向science传正式issues、art丢失具体旧缺陷，实际新稿再次加入禁用标题；已部署复用原不可信反馈投影补接art。真实GET给出续审，POST曾在Serializable默认5000ms/实际5574ms触发P2028；c085沿既有30000ms事务期限部署后，两篇原按钮各HTTP202创建复用PNG审阅，结果与后续断点见上方及CURRENT。没有新分析器/模型阶段/技能安装，不把M3 accepted当来源与叙事质量通过。
