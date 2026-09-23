@@ -6,6 +6,7 @@ import {
   getPresentationTask,
   submitPresentationGeneration,
   submitExistingSceneImageReview,
+  requireManualSceneImageReviewReceipt,
   transitionPresentationAsset,
 } from '../../src/assets/presentation-asset';
 
@@ -297,6 +298,7 @@ function sceneFixture() {
 }
 it('starts one charged review-only task from an existing manual PNG without another render', async () => {
   const ctx = sceneFixture();
+  (ctx as any).audit = { record: async (event: any, tx: any) => tx.auditLog.create({ data: event }) };
   const branchId = '80000000-0000-4000-8000-000000000001';
   const commitId = '90000000-0000-4000-8000-000000000001';
   ctx.db.commits.push({ id: commitId, branchId });
@@ -339,6 +341,28 @@ it('starts one charged review-only task from an existing manual PNG without anot
     provenance: { reviewSourceAssetId: source.id, taskId: reviewed.id },
   });
   expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
+  ctx.prisma.auditLog.findFirst = async ({ where }: any) => ctx.db.auditLogs.find(row =>
+    row.action === where.action && row.targetType === where.targetType &&
+    row.targetId === where.targetId && row.actorId === where.actorId) ?? null;
+  ctx.db.agentTasks.find(task => task.id === reviewed.id)!.status = 'running';
+  const receiptInput = { taskId: reviewed.id, actorId: USER,
+    payload: parsePresentationGenerationPayload(ctx.db.agentTasks.find(task => task.id === reviewed.id)!.payload) };
+  expect(ctx.db.auditLogs.find(row => row.action === 'presentation_asset.image_review_submitted')).toBeDefined();
+  await expect(requireManualSceneImageReviewReceipt(ctx.prisma as never, receiptInput)).resolves.toBeUndefined();
+  ctx.db.users.find(user => user.id === USER)!.platformRole = 'user';
+  await expect(requireManualSceneImageReviewReceipt(ctx.prisma as never, receiptInput))
+    .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  ctx.db.users.find(user => user.id === USER)!.platformRole = 'platform_admin';
+  const copy = ctx.db.presentationAssets.find(asset => asset.id === reviewed.id)!;
+  copy.contentHash = 'c'.repeat(64);
+  await expect(requireManualSceneImageReviewReceipt(ctx.prisma as never, receiptInput))
+    .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  copy.contentHash = 'b'.repeat(64);
+  const receipt = ctx.db.auditLogs.find(row => row.action === 'presentation_asset.image_review_submitted')!;
+  receipt.metadata.renderAttempt = true;
+  await expect(requireManualSceneImageReviewReceipt(ctx.prisma as never, receiptInput))
+    .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  receipt.metadata.renderAttempt = false;
   expect((await submitExistingSceneImageReview(ctx as never, input)).id).toBe(reviewed.id);
   expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
   await expect(submitExistingSceneImageReview(ctx as never, { ...input, idempotencyKey: 'duplicate-review' }))

@@ -177,7 +177,10 @@ function evaluateAgentTaskRetryEligibility(
   if (task.retryCount < 2 && isRetryableSourceSearchIndex(task)) {
     return { authorityValid: true, canRetry: Boolean(researchObject) };
   }
-  if (task.status !== 'failed' || task.retryCount !== 0 || task.error?.startsWith('[blocked]')) {
+  const manualReviewPreflight = task.kind === 'presentation.generate'
+    && task.error === '[blocked] Saved PNG review replacement has no current receipt'
+    && isJsonRecord(task.payload) && !('hermesRunAuthority' in task.payload);
+  if (task.status !== 'failed' || task.retryCount !== 0 || (task.error?.startsWith('[blocked]') && !manualReviewPreflight)) {
     return { authorityValid: true, canRetry: false };
   }
   const payload = task.payload && typeof task.payload === 'object' && !Array.isArray(task.payload)
@@ -857,6 +860,19 @@ export async function retryAgentTask(
           if (task.status !== 'failed') throw new AgentError('ILLEGAL_TRANSITION', 'Only failed tasks can be retried');
           if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
           throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
+        }
+        if (task.kind === 'presentation.generate'
+          && task.error === '[blocked] Saved PNG review replacement has no current receipt') {
+          const actor = await tx.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } });
+          const copy = await tx.presentationAsset.findUnique({ where: { id: task.id } });
+          const provenance = isJsonRecord(copy?.provenance) ? copy.provenance : {};
+          const receipt = await tx.auditLog.findFirst({ where: { action: 'presentation_asset.image_review_submitted',
+            targetType: 'presentation_asset', targetId: task.id, actorId: input.userId } });
+          const providerCalls = await tx.auditLog.count({ where: { action: 'ai.gateway.call', requestId: task.id } });
+          if (actor?.platformRole !== 'platform_admin' || !copy || copy.deletedAt || copy.status !== 'draft' || provenance.imageReview !== undefined
+            || typeof provenance.reviewSourceAssetId !== 'string' || !receipt || providerCalls !== 0) {
+            throw new AgentError('ILLEGAL_TRANSITION', 'Manual image review is not safe to resume');
+          }
         }
         const sourceSearch = isRetryableSourceSearchIndex(task);
         if (sourceSearch) {

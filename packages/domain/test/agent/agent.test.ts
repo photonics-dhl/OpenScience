@@ -625,6 +625,39 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(await claimAgentTask(deps, task.id)).toBeNull();
   });
 
+  it('rearms only a receipted manual PNG review blocked before any provider call', async () => {
+    const { deps, user, ro, db } = await makeDeps(1);
+    db.users.find(candidate => candidate.id === user.id)!.platformRole = 'platform_admin';
+    const prisma = (deps as { prisma: any }).prisma;
+    prisma.$executeRaw = async () => 1;
+    prisma.$queryRaw = async () => [{ deleted_at: null }];
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id,
+      kind: 'presentation.generate', payload: { schemaVersion: 1, kind: 'image' }, dispatch: false });
+    const row = db.agentTasks.find(candidate => candidate.id === task.id)!;
+    row.status = 'failed';
+    row.error = '[blocked] Saved PNG review replacement has no current receipt';
+    db.presentationAssets.push({ id: task.id, status: 'draft', deletedAt: null,
+      provenance: { reviewSourceAssetId: 'original-png' } });
+    db.auditLogs.push({ action: 'presentation_asset.image_review_submitted',
+      targetType: 'presentation_asset', targetId: task.id, actorId: user.id });
+    prisma.auditLog.findFirst = async ({ where }: any) => db.auditLogs.find(audit =>
+      audit.action === where.action && audit.targetId === where.targetId && audit.actorId === where.actorId) ?? null;
+    prisma.auditLog.count = async ({ where }: any) => db.auditLogs.filter(audit =>
+      audit.action === where.action && audit.requestId === where.requestId).length;
+    db.auditLogs.push({ action: 'ai.gateway.call', requestId: task.id });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toThrow(/not safe to resume/i);
+    db.auditLogs.pop();
+    db.users.find(candidate => candidate.id === user.id)!.platformRole = 'user';
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id }))
+      .rejects.toThrow(/not safe to resume/i);
+    db.users.find(candidate => candidate.id === user.id)!.platformRole = 'platform_admin';
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id }))
+      .resolves.toMatchObject({ id: task.id, status: 'pending', retryCount: 1 });
+    expect(db.usageLedger.filter(entry => entry.resource === 'ai_credit' && entry.delta < 0)).toHaveLength(1);
+  });
+
   it('幂等键不能重放不同的 server interest context', async () => {
     const { deps, user, ro } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });

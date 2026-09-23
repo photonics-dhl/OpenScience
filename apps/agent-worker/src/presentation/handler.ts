@@ -7,7 +7,7 @@ import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@opensci
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, VISUAL_NARRATIVE_PROFILE, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, readInitialSciencePlanningRetryChain, requirePixelPlanningPreProviderRearm, requirePixelStoryboardOutputResume, requireHermesCompletedImageReviewRecovery, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, VISUAL_NARRATIVE_PROFILE, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, readInitialSciencePlanningRetryChain, requirePixelPlanningPreProviderRearm, requirePixelStoryboardOutputResume, requireHermesCompletedImageReviewRecovery, requireManualSceneImageReviewReceipt, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
@@ -583,9 +583,12 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       ? await readNarrativePixelReplanAuthority(deps.prisma, { runId: payload.hermesRunAuthority.runId, actorId: scope.userId }) : null;
     const technicalRecovery = technicalParent?.technicalRecovery;
     const technicalReplacement = technicalRecovery?.replacements.find(item => item.newTaskId === task.id);
-    if ((technicalReplacement?.mode === 'review_only' && !existing)
-      || ((existing?.provenance as Record<string, unknown> | null)?.reviewSourceAssetId && technicalReplacement?.mode !== 'review_only'))
+    const manualReviewCopy = Boolean((existing?.provenance as Record<string, unknown> | null)?.reviewSourceAssetId)
+      && technicalReplacement?.mode !== 'review_only';
+    if (technicalReplacement?.mode === 'review_only' && !existing)
       throw new Error('[blocked] Saved PNG review replacement has no current receipt');
+    if (manualReviewCopy) await requireManualSceneImageReviewReceipt(deps.prisma,
+      { taskId: task.id, actorId: scope.userId, payload });
     const requireTechnicalRecovery = async (tx: Prisma.TransactionClient) => {
       if (!technicalRecovery || !payload.hermesRunAuthority) return;
       await requireHermesAuthority(tx);
@@ -771,6 +774,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       const readCurrent = async (tx: Prisma.TransactionClient) => {
         await requireCompletedRecovery(tx);
         await requireTechnicalRecovery(tx);
+        if (manualReviewCopy) await requireManualSceneImageReviewReceipt(tx,
+          { taskId: task.id, actorId: scope.userId, payload });
         await requireIllustrationReviewSubmission(tx, authorityInput);
         await requireUnchangedSceneRevision(tx);
         const current = await requireSavedImageForReview(tx, payload, task.id, saved.contentHash, sourceEvidenceIdentity, sceneParent.identity);
@@ -788,7 +793,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           await withPresentationAssetWrite(deps.prisma, scope, readCurrent, { refreshWorkingRecord: false });
           return options.gateway!.resumeScientificReviewFromCompletedResult!(request, guard);
         } } : { reviewScientific: async (request, guard) => {
-          if (technicalRecovery) await withPresentationAssetWrite(deps.prisma, scope, readCurrent, { refreshWorkingRecord: false });
+          if (technicalRecovery || manualReviewCopy)
+            await withPresentationAssetWrite(deps.prisma, scope, readCurrent, { refreshWorkingRecord: false });
           return options.gateway!.reviewScientific!(request, guard);
         } };
         const reviewed = await reviewGeneratedImage(reviewGateway, {

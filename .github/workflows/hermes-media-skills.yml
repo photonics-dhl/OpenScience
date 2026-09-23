@@ -34,8 +34,10 @@ on:
       - 'apps/web/test/presentation-result-gallery.test.tsx'
       - 'packages/domain/src/assets/scene-image.ts'
       - 'packages/domain/src/assets/presentation-asset.ts'
+      - 'packages/domain/src/agent/agent.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
+      - 'packages/domain/test/agent/agent.test.ts'
       - '.github/workflows/hermes-media-skills.yml'
   pull_request:
     branches: [release/onchip-production-line]
@@ -67,8 +69,10 @@ on:
       - 'apps/web/test/presentation-result-gallery.test.tsx'
       - 'packages/domain/src/assets/scene-image.ts'
       - 'packages/domain/src/assets/presentation-asset.ts'
+      - 'packages/domain/src/agent/agent.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
+      - 'packages/domain/test/agent/agent.test.ts'
       - '.github/workflows/hermes-media-skills.yml'
 
 jobs:
@@ -95,6 +99,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/presentation/generated-image-review.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "blocks unreviewed narrative image approval while preserving rejection and legacy profiles"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "starts one charged review-only task"
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "rearms only a receipted manual PNG review"
       - run: node --check infra/codex-sol-review/runner.mjs
       - run: node --check infra/chatgpt-browser/review-broker.mjs
       - run: node --check infra/chatgpt-browser/review-runner.cjs

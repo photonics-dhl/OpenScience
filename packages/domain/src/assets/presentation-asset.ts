@@ -1496,6 +1496,54 @@ export async function copyNarrativeImageForReview(tx: Prisma.TransactionClient, 
     await refreshWorkingResearchRecord(tx, input);
 }
 
+/** Verify the admin review-only copy independently of managed-run recovery receipts. */
+export async function requireManualSceneImageReviewReceipt(
+    prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'auditLog' | 'user'>,
+    input: { taskId: string; actorId: string; payload: PresentationGenerationPayload },
+): Promise<void> {
+    const invalid = () => new PresentationAssetError('VALIDATION_ERROR', 'Saved manual PNG review receipt changed');
+    if (!input.payload.sceneImage || input.payload.hermesRunAuthority) throw invalid();
+    const [task, copy, receipt, actor] = await Promise.all([
+        prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } }),
+        prisma.presentationAsset.findUnique({ where: { id: input.taskId }, include: { sourceClaims: true } }),
+        prisma.auditLog.findFirst({ where: { action: 'presentation_asset.image_review_submitted',
+            targetType: 'presentation_asset', targetId: input.taskId, actorId: input.actorId } }),
+        prisma.user.findUnique({ where: { id: input.actorId }, select: { platformRole: true } }),
+    ]);
+    const copied = recordValue(copy?.provenance);
+    const sourceAssetId = copied.reviewSourceAssetId;
+    if (!task || !copy || !receipt || actor?.platformRole !== 'platform_admin' ||
+        typeof sourceAssetId !== 'string' || !sourceAssetId ||
+        task.deletedAt || task.status !== 'running' || task.kind !== 'presentation.generate' ||
+        task.session.deletedAt || task.session.userId !== input.actorId ||
+        task.session.researchObjectId !== input.payload.researchObjectId ||
+        !isDeepStrictEqual(parsePresentationGenerationPayload(task.payload), input.payload)) throw invalid();
+    const [sourceTask, original] = await Promise.all([
+        prisma.agentTask.findUnique({ where: { id: sourceAssetId } }),
+        prisma.presentationAsset.findUnique({ where: { id: sourceAssetId }, include: { sourceClaims: true } }),
+    ]);
+    const prior = recordValue(original?.provenance);
+    const { imageReview: _imageReview, ...copyWithoutReview } = copied;
+    const metadata = recordValue(receipt.metadata);
+    if (!sourceTask || !original || sourceTask.deletedAt || sourceTask.status !== 'succeeded' ||
+        sourceTask.kind !== 'presentation.generate' || sourceTask.sessionId !== task.sessionId ||
+        !isDeepStrictEqual(parsePresentationGenerationPayload(sourceTask.payload), input.payload) || original.deletedAt ||
+        original.kind !== 'image' || original.status !== 'draft' || prior.imageReview !== undefined ||
+        prior.source !== 'approved_storyboard_scene' || prior.taskId !== original.id ||
+        prior.contentType !== 'image/png' || prior.reviewSourceAssetId !== undefined ||
+        copy.deletedAt || copy.kind !== 'image' || copy.status !== 'draft' ||
+        copy.researchObjectId !== input.payload.researchObjectId || copy.versionId !== input.payload.versionId ||
+        original.researchObjectId !== copy.researchObjectId || original.versionId !== copy.versionId ||
+        !original.objectKey || copy.objectKey !== original.objectKey || copy.contentHash !== original.contentHash ||
+        !isDeepStrictEqual(copyWithoutReview, { ...prior, taskId: task.id, reviewSourceAssetId: original.id }) ||
+        !isDeepStrictEqual(copy.sourceClaims.map(link => link.claimId).sort(),
+            original.sourceClaims.map(link => link.claimId).sort()) ||
+        !isDeepStrictEqual(copy.sourceClaims.map(link => link.claimId).sort(), [...input.payload.sourceClaimIds].sort()) ||
+        metadata.sourceAssetId !== original.id || metadata.contentHash !== original.contentHash ||
+        metadata.parentIdentity !== prior.parentIdentity ||
+        metadata.sourceEvidenceIdentity !== prior.sourceEvidenceIdentity || metadata.renderAttempt !== false) throw invalid();
+}
+
 /** Review existing private PNG pixels through the normal worker without paying for another render. */
 export async function submitExistingSceneImageReview(deps: AgentDeps, input: PresentationScope & {
   assetId: string; idempotencyKey: string;
