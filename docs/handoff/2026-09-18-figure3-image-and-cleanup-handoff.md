@@ -2,6 +2,7 @@
 
 ## 2026-09-23 — unknown场景恢复入口修复
 - 生产f5dff6f46044ed9cd1e46b83facc9350622c6596 / 回退158ee13fbb4a54c9eb9f6bc96facc573075eef1f：第三篇原恢复入口消失的根因是run终态moveRun把P2034错误复制到所有非成功step，覆盖第一段unknown场景旧step.error，收据严格等值校验拒绝。f5d只在run与step同为failed、step.error精确等于当前run.error时容许这一差异，任务/图片/身份等仍严格；独立High静态GO。干净已推SHA服务器正式构建/启动exit0，无测试/预检/CI。产品自有页面GET第二/三篇均image-render、canRetry=true、charge3；刷新后第二篇实见「保留初稿，继续制作」。未点旧6Pro续审、未重发unknown。用户决定Chat继续生图、5.6Sol看图；六张现图均不宜公开，产品正式Sol审阅与新图尚未完成。
+- 5.6Sol High只读实际PNG/绑定引文指出六图均不宜公开；独立High架构审查认为正式产品Sol审图需独立Codex image-review spool、与旧Chat reservation精确路由，现有image runner只产PNG，不能冒充审阅。用户本轮优先“可以生图”，故从站内Hermes提交已有计划的普通科学修订：第二篇a843eb8b-cdc3-4bc7-85f7-ba783d1cee83/父be793，第三篇a96c61be-d71d-4087-840d-ea0d91e22246/父3d7。第三篇guide最初误选art-only，提交前通过原界面修改指令解除，DB实际payload两项revisionMode均空、父资产精确；各用既有Claims而非重跑PDF/六维。两task目前running，未有新图/审核/发布，若任务终态需先读原收据和科学方案，不重发未知。已关闭本轮临时6081隧道，未退出浏览器登录。
 
 ## 2026-09-23 — 158应用发布与5.6Sol咨询
 - 用户明确允许合入共享release并部署。c91首次服务器正式构建在Domain TS2345失败，未切生产且无残留journal/failed；`FirstTechnicalReceipt`改为两条已验证收据公共类型投影，独立High静态GO。158ee13fbb4a54c9eb9f6bc96facc573075eef1f完整SHA已推送并正式构建/启动exit0，production=158/rollback=e05，marker读回、journal/failed均空。PR #110为MERGED。按约束未运行测试/预检/CI，实际产品恢复尚待观察。
