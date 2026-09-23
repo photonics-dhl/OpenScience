@@ -1,5 +1,9 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
+## 2026-09-23 — 158应用发布与5.6Sol咨询
+- 用户明确允许合入共享release并部署。c91首次服务器正式构建在Domain TS2345失败，未切生产且无残留journal/failed；`FirstTechnicalReceipt`改为两条已验证收据公共类型投影，独立High静态GO。158ee13fbb4a54c9eb9f6bc96facc573075eef1f完整SHA已推送并正式构建/启动exit0，production=158/rollback=e05，marker读回、journal/failed均空。PR #110为MERGED。按约束未运行测试/预检/CI，实际产品恢复尚待观察。
+- 用户改选gpt-5.6-sol审图、不等待第二Pro登录。5.6Sol High对六张已存PNG与当前绑定引文作本机只读咨询，均不适合直接公开：第二篇8d5电子轨迹穿纳米线，f92点径变化且积分链缺失，38c把不同工况19/99 as误作对照；第三篇33f只作装饰分类，77c把非局域/磁性指向局域公式，961将独立机制画成因果链。对应完整咨询结果仍在本任务，不写成正式产品审阅。当前产品只有Chat 6Pro图片审阅provider；新增5.6Sol仅图片审阅接线未完成，旧Chat收据/unknown保护不变。
+
 ## 2026-09-23 — 集成候选与独立provider安装
 - 交付候选a6a27ef543f3217a94b02ed4ee281e01e8e1e4a4将媒体c1c5ef07与期刊1ede35f6安全合并，独立High静态PASS、已推送draft PR #110；production仍e05/rollback c085。精确SHA源码由项目SSH wrapper传入服务器独立release目录，Gateway服务器构建完成；未运行测试/预检/CI、未发布应用或发模型请求。
 - 第一次provider安装在manifest校验发现自己生成的`.gateway-build-20260923.log`，未切换bundle；日志按原路径/权限完整移到私有备份`provider-backup-20260923-visual-journal-a6a27ef5`并记录恢复说明，manifest随后通过。第二次三锁/空闲/备份安装实际输出`INSTALLED source=a6a27ef5`；客户端助手因尾`PY`无LF而exit1，独立读回两unit指向该bundle、三live runner逐字节等于源码、timer均active/enabled，不能重放。第二备份`provider-backup-20260923-visual-journal-retry-a6a27ef5`保留，浏览器未重启。详细边界见CURRENT。
