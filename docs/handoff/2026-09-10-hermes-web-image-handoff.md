@@ -15,8 +15,8 @@
 - 收尾根main及交付树status必须空，自有改动提交推送，prune/list。只剩这两树。268日志归档、12份长文staging归档均已完成，勿重复处理；不声称根治上游argv缺陷。
 
 ## Git与部署
-- application production=09ad55d3049ec33177e1a19ab87f8c77af1cd7d9，rollback=e0cf094531bcc7dd887fb07cd64210d62ddfe206；canonical release/onchip-production-line已推送该完整SHA，根main=62b83372e51285b31a65f89bc0fabeb88d7c09bf。新像素审批门禁CI 35853693143 success、部署exit0；第二/三篇私有图实见仍为draft且canApprove=false，未作正式审图或公开。Chat provider bundle仍a6a27ef5，未重装或重启共享桥。
-- 5.6 Sol正式产品审图候选正在本树开发：仅图像审阅走独立CLI/持久收据，保留Chat生图及Hermes科学分析/方案审阅；现有私有PNG可按原字节新增review-only任务，避免重画。定向类型检查/测试已通过，独立High审查中；服务器专用CLI 0.156.1已安装，独立账号设备登录等待完成。候选尚未提交/部署/运行真实正式审图，不能据本机内部咨询放行图片。
+- application production=e7e677180a791c19e30d05a5297319183f8e6976，rollback=09ad55d3049ec33177e1a19ab87f8c77af1cd7d9；canonical release/onchip-production-line已推送该完整SHA，根main=62b83372e51285b31a65f89bc0fabeb88d7c09bf。审图代码定向CI [35862865660](https://github.com/photonics-dhl/OpenScience/actions/runs/35862865660) success、部署exit0、release/rollback/Worker新镜像核对通过；生产 `CODEX_SOL_IMAGE_REVIEW_ENABLED=false`，故无新正式审图。此前第二/三篇私有图实见仍为draft且canApprove=false，未公开。Chat provider bundle仍a6a27ef5，未重装或重启共享桥。
+- 5.6 Sol正式产品审图代码已上线但关闭：仅图像审阅走独立CLI/持久收据，保留Chat生图及Hermes科学分析/方案审阅；现有私有PNG可按原字节新增review-only任务。独立High发现4项后已修、增量复核无新增问题，定向测试/CI通过。服务器CLI 0.156.1已装在隔离目录，设备码两次15分钟过期而未完成独立账号授权；审图服务尚未安装，不能启动付费正式审图或据本机内部咨询放行图片。下次用户在线时重开一次设备登录、安装服务、启用Worker开关，再对现有私有PNG作真实审图。旧6Pro收据和unknown提交绝不重放。
 - 独立Chat provider bundle=a6a27ef543f3217a94b02ed4ee281e01e8e1e4a4（集成候选）；两unit指向该bundle、三份live runner与该源码一致、两timer active/enabled，浏览器未重启。三锁/空闲安装；备份provider-backup-20260923-visual-journal-retry-a6a27ef5，首次失败备份同前缀去掉-retry。首次因构建日志留在immutable source被manifest阻断，日志已完整归档至首次备份并记录原路径/权限；第二次安装成功但助手尾heredoc缺LF报exit1，已精确读回安装完成，均不得重放。renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f，sceneImage fallback=false。
 - 图队列当前4worker总65分钟、最多8为125分钟，private/started固定领取后最多10分钟，旧request/deadline不改；一次oneshot不叠慢恢复与新生成。不保证任意旧积压/多生产者。部署排空600秒不覆盖长排队，先等相关本地任务自然终态；超时上游结果仍未知。
 - 0bee5b9b已推送的单文件候选将narrative subjects对齐Domain既有1–4，非narrative保持1–2；各要点独立绑定支持段，art引用实际索引。High修复一项后PASS，已随本次正常发布部署。原场景数/共享预算/来源守卫不变，不保证消除所有推理错误。
