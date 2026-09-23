@@ -35,6 +35,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: npx pnpm@9.15.0 install --frozen-lockfile
+      - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts

@@ -76,7 +76,7 @@
 
 > 状态：**CURRENT 操作手册**。实际 production/application source、rollback 与未完成验收以 `docs/handoff/2026-09-10-hermes-web-image-handoff.md` 和服务器精确 release 核验为准；下方阶段记录保留历史版本，不能据此恢复旧 release 或跳过当前验收。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
-> 当前用户已授权实现及部署，且禁止测试/预检/CI。走 `infra/scripts/deploy.sh --confirm --no-tests` 的必要构建、迁移、启动；下方历史 CI/验收清单不触发额外执行或重复确认。
+> 2026-09-23 用户澄清：必要的定向测试与 CI 必须运行，避免与改动无关的重复预检/全套演练。先按 AGENTS.md 证明变更范围并处理失败；部署时按本次风险选择验收开关，启动成功不等于产品效果合格。
 
 ## 2026-09-13 草稿/发布/回收站迁移（ef9e6e97 已部署）
 
@@ -142,7 +142,7 @@ infra/scripts/deploy.sh --confirm --require-parser-acceptance \
   --rollback-ref <current-active-ref> <release-ref>
 ```
 
-只有在操作者已明确授权部署但同时明确禁止本次测试/预检时，才使用互斥的 `--no-tests`：
+若本次相关测试/CI已执行，而部署脚本的跨能力探针与本次改动无关，可使用互斥的 `--no-tests`，随后仍须走受影响的真实产品路径并如实记录未覆盖范围；不能靠该选项规避失败的相关检查：
 
 ```bash
 infra/scripts/deploy.sh --confirm --no-tests \
