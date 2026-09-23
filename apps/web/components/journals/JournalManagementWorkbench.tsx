@@ -113,7 +113,7 @@ export function JournalManagementWorkbench({ journalId }: { journalId: string })
   }
 
   return <div className="grid gap-8">
-    <header className="border-b border-os-rule-paper pb-6"><p className="text-sm text-os-muted-paper">我的期刊 · {data.membership.role}</p><h1 className="mt-2 text-4xl font-normal">{data.journal.nameEn || data.journal.nameZh}</h1><p className="text-os-muted-paper">管理目录、来源、解读审核与固定版本。</p></header>
+    <header className="border-b border-os-rule-paper pb-6"><p className="text-sm text-os-muted-paper">我的期刊 · {data.membership.role}</p><h1 className="mt-2 text-4xl font-normal">{data.journal.nameEn || data.journal.nameZh}</h1><p className="text-os-muted-paper">管理目录、来源、解读审核与固定版本。</p><nav className="mt-4 flex flex-wrap gap-4 text-sm" aria-label="期刊管理功能"><Link className="underline" href={`/journals/manage/${journalId}/processing`}>AI 加工队列</Link><Link className="underline" href={`/journals/manage/${journalId}/services`}>服务包与额度</Link></nav></header>
     <div className="grid gap-px bg-os-rule-paper sm:grid-cols-3"><Metric label="公开解读" value={data.stats.published} /><Metric label="论文目录" value={data.stats.articles} /><Metric label="已完成处理" value={data.stats.jobsSucceeded} /></div>
 
     {canEdit ? <section className="border-y border-os-rule-paper py-6"><h2 className="text-xl font-normal">导入论文 DOI</h2><p className="text-sm text-os-muted-paper">每行一个 DOI，最多 50 条。先查询 Crossref 并核对本刊 ISSN，确认后才写入目录。</p><textarea value={dois} onChange={(event) => { setDois(event.target.value); setPreview([]); }} rows={3} className="mt-3 w-full border border-os-rule-paper bg-transparent p-3" placeholder="10.xxxx/example" /><button className="mt-3 min-h-10 border border-os-rule-paper px-4 text-sm" onClick={() => void previewDois()}>预览核对结果</button>

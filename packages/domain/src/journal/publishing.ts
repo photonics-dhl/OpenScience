@@ -7,6 +7,7 @@ import { freezeResearchRecord, recordValue } from '../commit/research-record-sna
 import { JournalError } from './contracts';
 import { journalDigest, validateJournalDraft, type JournalMetadata, type JournalRights, type JournalSource } from './content';
 import { articleReviewDigest, assertArticleRevision, journalArticleEvent, journalArticleInScope, journalJson, journalScope, journalTransaction, txReleases } from './articles';
+import { assertJournalPublishCapability } from './enhancements';
 
 export async function publishJournalArticle(deps: WorkspaceDeps, userId: string, journalId: string, articleId: string, input: { revision: number; requestKey: string; humanConfirmed: boolean; publicIdPrefix?: string }) {
   return journalTransaction(deps, journalId, async (tx) => {
@@ -22,6 +23,7 @@ export async function publishJournalArticle(deps: WorkspaceDeps, userId: string,
     if (sameRevision) return (await txReleases(tx, articleId)).find((r) => r.id === sameRevision.id)!;
     assertArticleRevision(article, input.revision);
     const rights = article.rights as unknown as JournalRights;
+    assertJournalPublishCapability(article, deps.now?.() ?? new Date());
     if (!journal.homepagePublished || article.contentState !== 'active' || !rights.internalProcessing || !rights.derivativeGeneration || !rights.publicDerivative || !rights.license || !rights.evidence) throw new JournalError('FORBIDDEN', '请先公开已核验的期刊主页，并确认此解读的加工和公开许可');
     if (article.reviewState !== 'approved' || article.reviewedRevision !== article.revision || !article.reviewedBy || article.reviewedDigest !== articleReviewDigest(article)) throw new JournalError('INVALID_STATE', '当前草稿与来源必须经人工审核通过后发布');
     const reviewer = await journalScope(tx, journalId, article.reviewedBy, ['owner', 'maintainer', 'reviewer'], true);

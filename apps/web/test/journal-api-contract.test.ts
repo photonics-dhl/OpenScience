@@ -20,3 +20,21 @@ describe('journal reviewed actions', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/journals/journal-1/articles/article-1/publish', expect.objectContaining({ method: 'POST', body: JSON.stringify({ revision: 5, requestKey: 'publish-5', humanConfirmed: true }) }));
   });
 });
+
+describe('journal enhancement API contracts', () => {
+  it('sends revision-bound source rights, priority and deliberate processing requests', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/csrf-token') return Promise.resolve(new Response(JSON.stringify({ csrfToken: 'csrf' }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ sources: [], capability: {}, articleRevision: 3, job: { id: 'job-1', status: 'pending' } }), { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { addJournalArticleSource, createJournalProcessingJob, updateJournalPriorityOverride } = await import('../lib/journal-api');
+    const source = { sourceType: 'supplementary' as const, rightsStatus: 'internal_processing_only' as const, sourceConfidence: 'verified' as const, permissions: { internalProcessing: true, derivativeGeneration: false, publicSource: false, publicDerivative: false, externalProcessing: false, figureReuse: false, derivativeIllustration: false }, evidence: { statement: 'editor permission', license: 'CC BY' }, activeForGeneration: false };
+    await addJournalArticleSource('journal-1', 'article-1', { revision: 2, source });
+    await updateJournalPriorityOverride('journal-1', 'article-1', { editorPriorityScore: 10, deferredUntil: null, reason: '编辑重点' });
+    await createJournalProcessingJob('journal-1', 'article-1', { revision: 3, language: 'zh', requestKey: 'job-key', manualConfirmation: true });
+    expect(fetchMock).toHaveBeenCalledWith('/api/journals/journal-1/articles/article-1/sources', expect.objectContaining({ method: 'POST', body: JSON.stringify({ revision: 2, source }) }));
+    expect(fetchMock).toHaveBeenCalledWith('/api/journals/journal-1/articles/article-1/priority-override', expect.objectContaining({ method: 'POST', body: JSON.stringify({ editorPriorityScore: 10, deferredUntil: null, reason: '编辑重点' }) }));
+    expect(fetchMock).toHaveBeenCalledWith('/api/journals/journal-1/articles/article-1/processing-jobs', expect.objectContaining({ method: 'POST', body: JSON.stringify({ revision: 3, language: 'zh', requestKey: 'job-key', manualConfirmation: true }) }));
+  });
+});

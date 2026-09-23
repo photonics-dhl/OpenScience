@@ -445,7 +445,7 @@ export async function setJournalOperationalState(deps: WorkspaceDeps, adminId: s
   });
 }
 
-export async function createJournalServiceRequest(deps: WorkspaceDeps, userId: string, journalId: string, input: { annualVolume: number; language: string; figureScale: string; services: string[]; notes?: string; requestKey: string }): Promise<ServiceRow> {
+export async function createJournalServiceRequest(deps: WorkspaceDeps, userId: string, journalId: string, input: { annualVolume: number; language: string; figureScale: string; services: string[]; notes?: string; requestKey: string; planChoice?: 'free' | 'starter' | 'pro' | 'premium' | 'custom' }): Promise<ServiceRow> {
   if (!Number.isInteger(input.annualVolume) || input.annualVolume <= 0) throw new JournalError('VALIDATION_ERROR', '预计年发文量必须是正整数');
   const normalized = {
     annualVolume: input.annualVolume,
@@ -460,10 +460,13 @@ export async function createJournalServiceRequest(deps: WorkspaceDeps, userId: s
     const existing = await tx.journalServiceRequest.findUnique({ where: { requestKey: normalized.requestKey } });
     if (existing) {
       if (existing.journalId !== journalId || existing.requesterId !== userId || existing.annualVolume !== normalized.annualVolume || existing.language !== normalized.language || existing.figureScale !== normalized.figureScale || existing.notes !== (normalized.notes ?? null) || JSON.stringify(existing.services) !== JSON.stringify(normalized.services)) throw new JournalError('IDEMPOTENCY_CONFLICT', '请求键已用于不同服务申请');
+      const eventDelegate = tx.journalEvent as unknown as { findFirst?: (args: unknown) => Promise<{ after: unknown } | null> };
+      const event = eventDelegate.findFirst ? await eventDelegate.findFirst({ where: { journalId, action: 'journal.service_request.create', targetId: existing.id }, orderBy: { createdAt: 'desc' } }) : null;
+      if (event && ((event.after as { planChoice?: string } | null)?.planChoice ?? 'custom') !== (input.planChoice ?? 'custom')) throw new JournalError('IDEMPOTENCY_CONFLICT', '请求键已用于不同服务方案');
       return existing;
     }
     const created = await tx.journalServiceRequest.create({ data: { journalId, requesterId: userId, ...normalized } });
-    await recordJournalEvent(tx, { journalId, actorId: userId, action: 'journal.service_request.create', targetType: 'journal_service_request', targetId: created.id });
+    await recordJournalEvent(tx, { journalId, actorId: userId, action: 'journal.service_request.create', targetType: 'journal_service_request', targetId: created.id, after: { planChoice: input.planChoice ?? 'custom', commercialModel: 'manual_quote' } });
     return created;
   }, true);
 }

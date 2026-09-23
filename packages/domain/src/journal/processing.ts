@@ -1,27 +1,26 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { JournalJob } from '@prisma/client';
 import type { WorkspaceDeps } from '../workspace/types';
 import { JournalError } from './contracts';
 import { journalDigest, validateJournalDraft, validateJournalSource, type JournalRights, type JournalSource } from './content';
 import { assertArticleRevision, JOURNAL_EDIT_ROLES, journalArticleEvent, journalArticleInScope, journalJson, journalScope, journalTransaction, type JournalTx } from './articles';
+import { assertJournalGenerationCapability, journalSourceMaterials } from './enhancements';
 
 export const JOURNAL_JOB_LEASE_MS = 10 * 60_000;
 const terminal = (state: string) => ['succeeded', 'failed', 'cancelled'].includes(state);
 const moment = (deps: Pick<WorkspaceDeps, 'now'>) => deps.now?.() ?? new Date();
 export function journalSourceDigest(article: { source: unknown; rights: unknown }) { return journalDigest({ source: article.source, rights: article.rights }); }
-function assertGenerationAllowed(article: { source: unknown; rights: unknown; contentState: string }) {
+function assertGenerationAllowed(article: { source: unknown; rights: unknown; contentState: string }, now = new Date()) {
   const source = article.source as JournalSource;
-  const rights = article.rights as JournalRights;
   validateJournalSource(source);
-  if (source.kind === 'metadata') throw new JournalError('INVALID_STATE', '书目元数据不能用于生成科学解读，请补充摘要或全文');
-  if (article.contentState !== 'active' || !rights.internalProcessing || !rights.derivativeGeneration || !rights.externalProcessing || !rights.license || !rights.evidence) throw new JournalError('FORBIDDEN', '需要有效的内部加工、衍生生成及外部 AI 处理授权');
+  assertJournalGenerationCapability({ id: '', ...article }, now);
 }
-function assertJobAllowed(job: { kind: string }, article: { source: unknown; rights: unknown; contentState: string }) {
-  if (job.kind === 'generate') return assertGenerationAllowed(article);
+function assertJobAllowed(job: { kind: string }, article: { source: unknown; rights: unknown; contentState: string }, now = new Date()) {
+  if (job.kind === 'generate') return assertGenerationAllowed(article, now);
   const rights = article.rights as JournalRights; const source = article.source as JournalSource;
   if (job.kind !== 'source_parse' || article.contentState !== 'active' || !rights.internalProcessing || !rights.evidence || !source.artifactId) throw new JournalError('FORBIDDEN', '需要有效的内部来源处理授权');
 }
-export async function submitJournalJob(deps: WorkspaceDeps, userId: string, journalId: string, articleId: string, input: { revision: number; language: 'zh' | 'en'; requestKey: string; retryOf?: string }) {
+export async function submitJournalJob(deps: WorkspaceDeps, userId: string, journalId: string, articleId: string, input: { revision: number; language: 'zh' | 'en'; requestKey: string; retryOf?: string; manualConfirmation?: boolean }) {
   return journalTransaction(deps, journalId, async (tx) => {
     await journalScope(tx, journalId, userId, JOURNAL_EDIT_ROLES, true);
     const previous = await tx.journalJob.findUnique({ where: { journalId_requestKey: { journalId, requestKey: input.requestKey } } });
@@ -31,7 +30,7 @@ export async function submitJournalJob(deps: WorkspaceDeps, userId: string, jour
     }
     const article = await journalArticleInScope(tx, journalId, articleId);
     assertArticleRevision(article, input.revision);
-    assertGenerationAllowed(article);
+    assertGenerationAllowed(article, moment(deps));
     if (input.retryOf) {
       const failed = await tx.journalJob.findFirst({ where: { id: input.retryOf, journalId, articleId, state: { in: ['failed', 'cancelled'] } } });
       if (!failed) throw new JournalError('VALIDATION_ERROR', '只能显式重试本刊此论文的失败或取消作业');
@@ -44,7 +43,7 @@ export async function submitJournalJob(deps: WorkspaceDeps, userId: string, jour
     await tx.journalGrant.update({ where: { id: grant.id }, data: { reserved: { increment: 1 } } });
     const job = await tx.journalJob.create({ data: { journalId, articleId, grantId: grant.id, requestedBy: userId, requestKey: input.requestKey, revision: article.revision, sourceDigest: journalSourceDigest(article), language: input.language, retryOf: input.retryOf } });
     await tx.journalLedger.create({ data: { journalId, grantId: grant.id, jobId: job.id, kind: 'reserve', amount: 1, eventKey: `reserve:${job.id}` } });
-    await journalArticleEvent(tx, journalId, userId, 'journal.job.submit', articleId, { jobId: job.id });
+    await journalArticleEvent(tx, journalId, userId, 'journal.job.submit', articleId, { jobId: job.id, queueChoice: 'user_requested', manualConfirmation: input.manualConfirmation === true, estimatedCreditCost: 1 });
     return job;
   });
 }
@@ -83,7 +82,7 @@ export async function claimJournalJob(deps: WorkspaceDeps) {
       try {
         const { journal } = await journalScope(tx, job.journalId, job.requestedBy, JOURNAL_EDIT_ROLES, true);
         const article = await journalArticleInScope(tx, job.journalId, job.articleId);
-        assertJobAllowed(job, article);
+        assertJobAllowed(job, article, moment(deps));
         assertArticleRevision(article, job.revision);
         if (journalSourceDigest(article) !== job.sourceDigest) throw new JournalError('REVISION_CONFLICT', '来源或授权已改变');
         if (await tx.journalJob.count({ where: { journalId: job.journalId, state: 'running' } }) >= journal.maxRunningJobs) return null;
@@ -103,7 +102,7 @@ export async function journalJobInput(deps: WorkspaceDeps, jobId: string, leaseT
   if (!job || job.state !== 'running' || job.leaseToken !== leaseToken || !job.leaseExpiresAt || job.leaseExpiresAt <= moment(deps)) throw new JournalError('INVALID_STATE', '作业租约失效');
   await journalScope(deps.prisma, job.journalId, job.requestedBy, JOURNAL_EDIT_ROLES, true);
   const article = await journalArticleInScope(deps.prisma, job.journalId, job.articleId);
-  assertJobAllowed(job, article);
+  assertJobAllowed(job, article, moment(deps));
   assertArticleRevision(article, job.revision);
   if (journalSourceDigest(article) !== job.sourceDigest) throw new JournalError('REVISION_CONFLICT', '来源或授权已改变');
   const journal = await deps.prisma.journal.findUniqueOrThrow({ where: { id: job.journalId } });
@@ -119,12 +118,14 @@ export async function finishJournalJob(deps: WorkspaceDeps, jobId: string, lease
     try {
       await journalScope(tx, job.journalId, job.requestedBy, JOURNAL_EDIT_ROLES, true);
       const article = await journalArticleInScope(tx, job.journalId, job.articleId);
-      assertJobAllowed(job, article);
+      assertJobAllowed(job, article, moment(deps));
       assertArticleRevision(article, job.revision);
       if (journalSourceDigest(article) !== job.sourceDigest || !job.leaseExpiresAt || job.leaseExpiresAt <= moment(deps)) throw new JournalError('REVISION_CONFLICT', '来源、权限或作业期限已改变');
       if (job.kind === 'source_parse') {
         const value = result as { text?: unknown };
-        const source = { ...(article.source as unknown as JournalSource), text: typeof value?.text === 'string' ? value.text : '' };
+        const parsedText = typeof value?.text === 'string' ? value.text : '';
+        const materials = journalSourceMaterials(article.source).map((item) => item.activeForGeneration ? { ...item, contentSha256: createHash('sha256').update(parsedText, 'utf8').digest('hex') } : item);
+        const source = { ...(article.source as unknown as JournalSource), text: parsedText, ...(materials.length ? { materials } : {}) };
         validateJournalSource(source);
         await tx.journalArticle.update({ where: { id: article.id }, data: { source: journalJson(source), revision: { increment: 1 }, reviewState: 'draft', reviewedRevision: null, reviewedDigest: null, reviewedBy: null } });
         return settle(tx, moment(deps), job, 'succeeded', undefined, { characters: source.text.length, kind: 'source_parse' });

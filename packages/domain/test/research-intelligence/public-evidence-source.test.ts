@@ -69,6 +69,7 @@ async function fixture() {
     provenance: { sourceMapRef, private: true }, artifact,
   };
   const prisma = {
+    journalArticle: { findUnique: vi.fn().mockResolvedValue(null) },
     researchObject: { findUnique: vi.fn().mockResolvedValue(ro) },
     version: {
       findFirst: vi.fn().mockResolvedValue(version),

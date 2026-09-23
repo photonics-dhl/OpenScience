@@ -93,9 +93,12 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
   }, [articleId, journalId, processing]);
   if (!article || !role) return <p aria-live="polite">{message || '正在加载论文…'}</p>;
   const permissions = journalArticlePermissions(role);
+  const hasSourceMatrix = Boolean(article.source.materials?.length);
+  const sourceBindingDirty = hasSourceMatrix && JSON.stringify(article.source) !== JSON.stringify(savedArticle.current?.source);
+  const awaitingSourceRights = article.jobs.some((job) => job.kind === 'source_parse' && stateOf(job) === 'staging');
   const comparison = article.jobs.find((job) => job.comparisonDraft)?.comparisonDraft;
   const parsedComparison = comparisonSchema.safeParse(comparison);
-  const canGenerate = permissions.edit && article.source.kind !== 'metadata' && Boolean(article.source.text.trim()) && article.rights.internalProcessing && article.rights.derivativeGeneration && article.rights.externalProcessing && Boolean(article.rights.license.trim() && article.rights.evidence.trim()) && !processing;
+  const canGenerate = permissions.edit && !sourceBindingDirty && article.source.kind !== 'metadata' && Boolean(article.source.text.trim()) && article.rights.internalProcessing && article.rights.derivativeGeneration && article.rights.externalProcessing && Boolean(article.rights.license.trim() && article.rights.evidence.trim()) && !processing;
 
   async function save() {
     if (!article) return null;
@@ -104,7 +107,7 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
       const result = await updateJournalArticle(journalId, articleId, {
         revision: article.revision, directoryVisible: article.directoryVisible,
         ...(JSON.stringify(article.metadata) !== JSON.stringify(savedArticle.current?.metadata) ? { metadata: article.metadata } : {}),
-        ...(JSON.stringify(article.source) !== JSON.stringify(savedArticle.current?.source) ? { source: article.source } : {}),
+        ...(JSON.stringify(article.source) !== JSON.stringify(savedArticle.current?.source) ? { source: { kind: article.source.kind, text: article.source.text, url: article.source.url, label: article.source.label } } : {}),
         ...(JSON.stringify(article.rights) !== JSON.stringify(savedArticle.current?.rights) ? { rights: article.rights } : {}),
         ...(article.draft && JSON.stringify(article.draft) !== JSON.stringify(savedArticle.current?.draft) ? { draft: article.draft } : {}),
       });
@@ -119,13 +122,14 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
     if (!article || !file) { setMessage('请先选择 PDF、DOCX、TXT 或 Markdown 文件。'); return; }
     const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
     if (!FILE_TYPES.includes(extension) || file.size > FILE_LIMIT) { setMessage('支持 PDF、DOCX、TXT 和 Markdown，单文件上限 50 MB。'); return; }
-    if (!article.rights.internalProcessing || !article.rights.evidence.trim()) { setMessage('上传前请勾选内部加工许可，并填写授权或核验依据。'); return; }
     setBusy(true);
     try {
-      const saved = await updateJournalArticle(journalId, articleId, { revision: article.revision, rights: article.rights, directoryVisible: article.directoryVisible });
-      await uploadJournalSourceFile(journalId, articleId, { revision: saved.article.revision, requestKey: crypto.randomUUID(), file });
+      const saved = dirty ? await save() : article;
+      if (!saved) return;
+      setBusy(true);
+      await uploadJournalSourceFile(journalId, articleId, { revision: saved.revision, requestKey: crypto.randomUUID(), file });
       setFile(null);
-      setMessage('来源文件已上传，正在免费解析。解析完成并出现来源文本后即可生成 AI 解读。');
+      setMessage('来源文件已暂存。请进入来源与版权矩阵，核验此文件的许可、依据和内部加工权限后启动免费解析。');
       await load();
     } catch (error) { setMessage(error instanceof Error ? error.message : '来源文件上传失败'); }
     finally { setBusy(false); }
@@ -199,20 +203,21 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
     </header>
 
     <section className="mt-7">
-      <h2 className="text-xl font-normal">来源与授权</h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-3"><h2 className="text-xl font-normal">来源与授权</h2><Link className="text-sm underline" href={`/journals/manage/${journalId}/articles/${articleId}/sources`}>打开来源与授权矩阵</Link></div>
       {permissions.edit ? <>
         <label className="mt-3 grid gap-2 text-sm">处理范围<select value={article.source.kind} onChange={(event) => editArticle({ ...article, source: { ...article.source, kind: event.target.value as JournalArticle['source']['kind'] } })} className="min-h-10 border border-os-rule-paper bg-transparent px-3"><option value="metadata">仅元数据</option><option value="abstract">摘要</option><option value="fulltext">完整正文</option></select></label>
         <label className="mt-3 grid gap-2 text-sm">来源文本<textarea rows={5} value={article.source.text} onChange={(event) => editArticle({ ...article, source: { ...article.source, text: event.target.value } })} className="border border-os-rule-paper bg-transparent p-3" /></label>
-        <div className="mt-4 border border-os-rule-paper p-4"><label className="grid gap-2 text-sm">上传来源文件（PDF、DOCX、TXT、MD；不超过 50 MB）<input type="file" accept=".pdf,.docx,.txt,.md" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label><button disabled={busy || !file} className="mt-3 border border-os-rule-paper px-3 py-2 text-sm disabled:opacity-50" onClick={() => void upload()}>保存授权并上传解析</button>{parsing ? <p className="mt-2 text-sm" role="status">来源解析中；解析免费，不消耗 AI 生成额度。</p> : null}</div>
+        <div className="mt-4 border border-os-rule-paper p-4"><label className="grid gap-2 text-sm">上传来源文件（PDF、DOCX、TXT、MD；不超过 50 MB）<input type="file" accept=".pdf,.docx,.txt,.md" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label><button disabled={busy || processing || !file} className="mt-3 border border-os-rule-paper px-3 py-2 text-sm disabled:opacity-50" onClick={() => void upload()}>暂存来源文件</button>{awaitingSourceRights ? <p className="mt-2 text-sm" role="status">来源等待授权核验。<Link className="underline" href={`/journals/manage/${journalId}/articles/${articleId}/sources`}>前往来源矩阵确认此文件权限</Link></p> : parsing ? <p className="mt-2 text-sm" role="status">来源解析中；解析免费，不消耗 AI 生成额度。</p> : null}</div>
         <label className="mt-3 flex gap-2 text-sm"><input type="checkbox" checked={article.directoryVisible} onChange={(event) => editArticle({ ...article, directoryVisible: event.target.checked })} />在期刊目录中显示</label>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">{(['internalProcessing', 'derivativeGeneration', 'publicSource', 'publicDerivative', 'externalProcessing'] as const).map((key) => <label className="flex gap-2 text-sm" key={key}><input type="checkbox" checked={article.rights[key]} onChange={(event) => editArticle({ ...article, rights: { ...article.rights, [key]: event.target.checked } })} />{({ internalProcessing: '允许内部加工', derivativeGeneration: '允许生成衍生解读', publicSource: '允许公开来源文本', publicDerivative: '允许公开衍生解读', externalProcessing: '允许发送至外部 AI 服务' })[key]}</label>)}</div>
+        <fieldset disabled={hasSourceMatrix}>{hasSourceMatrix ? <p className="mt-3 text-sm">已启用逐项来源矩阵。请在上方“来源与版权矩阵”入口修改授权；本页显示当前主要来源的有效权限。</p> : null}<div className="mt-3 grid gap-2 sm:grid-cols-2">{(['internalProcessing', 'derivativeGeneration', 'publicSource', 'publicDerivative', 'externalProcessing'] as const).map((key) => <label className="flex gap-2 text-sm" key={key}><input type="checkbox" checked={article.rights[key]} onChange={(event) => editArticle({ ...article, rights: { ...article.rights, [key]: event.target.checked } })} />{({ internalProcessing: '允许内部加工', derivativeGeneration: '允许生成衍生解读', publicSource: '允许公开来源文本', publicDerivative: '允许公开衍生解读', externalProcessing: '允许发送至外部 AI 服务' })[key]}</label>)}</div>
         <label className="mt-3 grid gap-2 text-sm">许可<input value={article.rights.license} onChange={(event) => editArticle({ ...article, rights: { ...article.rights, license: event.target.value } })} className="min-h-10 border border-os-rule-paper bg-transparent px-3" /></label>
-        <label className="mt-3 grid gap-2 text-sm">授权或核验依据<textarea rows={3} value={article.rights.evidence} onChange={(event) => editArticle({ ...article, rights: { ...article.rights, evidence: event.target.value } })} className="border border-os-rule-paper bg-transparent p-3" /></label>
+        <label className="mt-3 grid gap-2 text-sm">授权或核验依据<textarea rows={3} value={article.rights.evidence} onChange={(event) => editArticle({ ...article, rights: { ...article.rights, evidence: event.target.value } })} className="border border-os-rule-paper bg-transparent p-3" /></label></fieldset>
       </> : <div className="mt-3 border border-os-rule-paper p-4 text-sm"><p>只读来源：{article.source.label}</p><p className="whitespace-pre-wrap">{article.source.text}</p></div>}
     </section>
 
     <section className="mt-8 border-t border-os-rule-paper pt-6">
       <h2 className="text-xl font-normal">AI 解读与编辑审核</h2><p className="text-sm text-os-muted-paper">当前范围：{article.source.kind}。仅在解析得到来源文本后才能生成。</p>
+      {sourceBindingDirty ? <p className="mt-3 text-sm">来源内容已修改。请先保存，再到来源与版权矩阵确认当前材料的授权，重新建立加工依据。</p> : hasSourceMatrix && !article.rights.internalProcessing ? <p className="mt-3 text-sm">请先在来源与版权矩阵核验当前材料的加工权限。</p> : null}
       {article.draft ? <DraftDetails draft={article.draft} readOnly={!permissions.edit} onChange={(draft) => editArticle({ ...article, draft })} /> : permissions.edit ? <button disabled={!canGenerate || busy} className="mt-4 min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void createDraft()}>生成 AI 解读草稿</button> : <p className="mt-3 text-sm">尚无可审核草稿。</p>}
       {permissions.edit && article.draft ? <button disabled={!canGenerate || busy} className="mt-4 min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void createDraft()}>重新生成草稿（1 篇额度）</button> : null}
       {permissions.assign ? <div className="mt-6 flex flex-wrap items-end gap-2 border-t border-os-rule-paper pt-4"><label className="grid gap-1 text-sm">指派审稿人<select aria-label="指派审稿人" value={reviewerId} onChange={(event) => setReviewerId(event.target.value)} className="min-h-10 border border-os-rule-paper bg-transparent px-3"><option value="">请选择</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || member.email}（{member.role}）</option>)}</select></label><button disabled={busy || dirty || !reviewerId} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void assign()}>确认指派</button></div> : null}

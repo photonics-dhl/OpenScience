@@ -5,8 +5,9 @@ import { activateJournalHomepage, addJournalMember, createJournalServiceRequest,
 import { assignJournalReviewer, getManagedJournalArticle, importJournalArticle, reviewJournalArticle, updateJournalArticle } from '../src/journal/articles';
 import { cancelJournalJob, claimJournalJob, finishJournalJob, recoverJournalJobs, submitJournalJob } from '../src/journal/processing';
 import { publishJournalArticle, restrictJournalArticle } from '../src/journal/publishing';
-import { journalDigest, type JournalDraft, type JournalMetadata } from '../src/journal/content';
+import type { JournalDraft, JournalMetadata } from '../src/journal/content';
 import { uploadJournalSource } from '../src/journal/source-upload';
+import { updateJournalArticleSourceRights } from '../src/journal/enhancements';
 import type { WorkspaceDeps } from '../src/workspace/types';
 import type { StorageAdapter } from '@openscience/storage';
 
@@ -101,10 +102,10 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
   it('reviews a service request and grants its credits once, rejecting stale and duplicate opening', async () => {
     const ctx = await journal();
     const requestKey = randomUUID();
-    const request = await createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: ' en ', figureScale: ' 3 per article ', services: [' AI package '], notes: ' Initial scope ', requestKey });
-    const replay = await createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: 'en', figureScale: '3 per article', services: ['AI package'], notes: 'Initial scope', requestKey });
+    const request = await createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: ' en ', figureScale: ' 3 per article ', services: ['AI 标准解读包'], notes: ' Initial scope ', requestKey });
+    const replay = await createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: 'en', figureScale: '3 per article', services: ['AI 标准解读包'], notes: 'Initial scope', requestKey });
     expect(replay.id).toBe(request.id);
-    await expect(createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: 'en', figureScale: '3 per article', services: ['AI package'], notes: 'Changed scope', requestKey })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    await expect(createJournalServiceRequest(deps, ctx.owner.id, ctx.journal.id, { annualVolume: 100, language: 'en', figureScale: '3 per article', services: ['AI 标准解读包'], notes: 'Changed scope', requestKey })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
     await expect(reviewJournalServiceRequest(deps, ctx.owner.id, request.id, { status: 'quoted', expectedStatus: 'submitted', note: 'Quote' })).rejects.toBeInstanceOf(Error);
     await reviewJournalServiceRequest(deps, adminId, request.id, { status: 'quoted', expectedStatus: 'submitted', note: 'Quote' });
     const grant = { journalId: ctx.journal.id, amount: 8, expiresAt: new Date(Date.now() + 86400000), reason: 'Agreed pilot service', requestKey: randomUUID(), serviceRequestId: request.id };
@@ -137,13 +138,26 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
     const publishInput = { revision: current.revision, humanConfirmed: true, requestKey: randomUUID() };
     const [published, replay] = await Promise.all([publishJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, publishInput), publishJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, publishInput)]);
     expect(published.id).toBe(replay.id);
-    const v1 = await prisma.journalRelease.findUniqueOrThrow({ where: { id: published.id }, include: { version: { include: { manifest: true } } } });
+    const v1 = await prisma.journalRelease.findUniqueOrThrow({ where: { id: published.id } });
     const snapshot = v1.snapshot as { source: Record<string, unknown> };
     expect(snapshot.source).not.toHaveProperty('text'); expect(snapshot).not.toHaveProperty('rights');
-    expect(v1.digest).toBe(journalDigest({ core: v1.version.manifest!.coreJson, journalPackage: v1.snapshot }));
+    const publicationV1 = await prisma.publication.findFirstOrThrow({ where: { versionId: v1.versionId } });
+    expect(v1.digest).toMatch(/^[a-f0-9]{64}$/); expect(publicationV1.contentSha256).toBe(v1.digest);
+    const frozenV1 = { snapshot: structuredClone(v1.snapshot), digest: v1.digest, contentSha256: publicationV1.contentSha256 };
     const edited = await updateJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: current.revision, draft: { ...draft, summary: 'A revised but still theoretical summary.' } });
     await expect(publishJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { ...publishInput, revision: edited.revision, requestKey: randomUUID() })).rejects.toMatchObject({ code: 'INVALID_STATE' });
-    expect((await prisma.journalRelease.findUniqueOrThrow({ where: { id: published.id } })).snapshot).toEqual(v1.snapshot);
+    const unchangedV1 = await prisma.journalRelease.findUniqueOrThrow({ where: { id: published.id } });
+    const unchangedPublicationV1 = await prisma.publication.findUniqueOrThrow({ where: { id: publicationV1.id } });
+    expect({ snapshot: unchangedV1.snapshot, digest: unchangedV1.digest, contentSha256: unchangedPublicationV1.contentSha256 }).toEqual(frozenV1);
+    const replacementBytes = Buffer.from('A replacement source immediately revokes public access until its own rights are confirmed.');
+    const replacementStorage: StorageAdapter = {
+      async headObject() { return null; }, async putObject(key, body) { if (!Buffer.isBuffer(body)) throw new Error('buffer expected'); return { key, size: body.length, etag: key }; },
+      async getObject() { throw new Error('not used'); }, async deleteObject() { throw new Error('not used'); },
+    };
+    const replacement = await uploadJournalSource({ ...deps, storage: replacementStorage }, ctx.owner.id, ctx.journal.id, item.id, { revision: edited.revision, requestKey: randomUUID(), filename: 'replacement.txt', content: replacementBytes });
+    expect((await prisma.researchObject.findUniqueOrThrow({ where: { id: item.researchObjectId } })).visibility).toBe('private');
+    expect((await prisma.version.findUniqueOrThrow({ where: { id: v1.versionId } })).status).toBe('restricted');
+    await cancelJournalJob(deps, ctx.owner.id, ctx.journal.id, replacement.job.id);
     await restrictJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { state: 'withdrawn', reason: 'Synthetic test withdrawal' });
     expect((await prisma.researchObject.findUniqueOrThrow({ where: { id: item.researchObjectId } })).visibility).toBe('private');
     expect((await prisma.version.findUniqueOrThrow({ where: { id: v1.versionId } })).status).toBe('withdrawn');
@@ -208,21 +222,51 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
     const concurrent = await Promise.all([uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, item.id, input), uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, item.id, input)]);
     expect(concurrent[0].job.id).toBe(concurrent[1].job.id); expect(putAttempts).toBe(1);
     const durableJob = await prisma.journalJob.findUniqueOrThrow({ where: { id: concurrent[0].job.id } });
-    expect(durableJob.state).toBe('pending');
+    expect(durableJob.state).toBe('staging');
     expect(await prisma.artifact.count({ where: { workspaceId: ctx.journal.workspaceId } })).toBe(1);
     expect((await uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, item.id, input)).job.id).toBe(durableJob.id);
     expect(putAttempts).toBe(1);
+    const waitingArticle = await prisma.journalArticle.findUniqueOrThrow({ where: { id: item.id } });
+    const waitingSource = ((waitingArticle.source as { materials: Array<{ id: string }> }).materials)[0]!;
+    await expect(submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: waitingArticle.revision, language: 'en', requestKey: randomUUID() })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await updateJournalArticleSourceRights(deps, ctx.owner.id, ctx.journal.id, item.id, waitingSource.id, {
+      revision: waitingArticle.revision, rightsStatus: 'internal_processing_only', sourceConfidence: 'verified', activeForGeneration: true,
+      permissions: { internalProcessing: true, derivativeGeneration: false, publicSource: false, publicDerivative: false, externalProcessing: false, figureReuse: false, derivativeIllustration: false }, evidence: { statement: 'File-specific permission to parse privately.' },
+    });
+    const claimedParse = await claimJournalJob(deps); expect(claimedParse?.id).toBe(durableJob.id);
+    expect((await finishJournalJob(deps, durableJob.id, claimedParse!.leaseToken!, { text: content.toString('utf8') })).state).toBe('succeeded');
+    const parsedArticle = await prisma.journalArticle.findUniqueOrThrow({ where: { id: item.id } });
+    await expect(submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: parsedArticle.revision, language: 'en', requestKey: randomUUID() })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await updateJournalArticleSourceRights(deps, ctx.owner.id, ctx.journal.id, item.id, waitingSource.id, {
+      revision: parsedArticle.revision, rightsStatus: 'full_public_processing_allowed', sourceConfidence: 'verified', activeForGeneration: true,
+      permissions: { internalProcessing: true, derivativeGeneration: true, publicSource: false, publicDerivative: true, externalProcessing: true, figureReuse: false, derivativeIllustration: false }, evidence: { statement: 'File-specific derivative permission.', license: 'CC-BY-4.0' },
+    });
     await expect(uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, item.id, { ...input, content: Buffer.from('Different unique bytes must conflict before reaching shared storage.') })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
-    await expect(uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, item.id, { ...input, revision: durableJob.revision, requestKey: randomUUID(), content: Buffer.from('Another unique source is blocked while parsing remains active.') })).rejects.toMatchObject({ code: 'INVALID_STATE' });
-    expect(putAttempts).toBe(1);
-
-    await cancelJournalJob(deps, ctx.owner.id, ctx.journal.id, durableJob.id);
-    const current = await prisma.journalArticle.findUniqueOrThrow({ where: { id: item.id } });
+    const replacementArticle = await prisma.journalArticle.findUniqueOrThrow({ where: { id: item.id } });
+    const replacementInput = { ...input, revision: replacementArticle.revision, requestKey: randomUUID(), content: Buffer.from('A replacement source can recover after the previous parse reaches a terminal state.') };
+    const replacement = await uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, item.id, replacementInput);
+    expect(replacement.job.state).toBe('staging');
+    expect((await uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, item.id, replacementInput)).job.id).toBe(replacement.job.id);
+    const replacementState = await prisma.journalArticle.findUniqueOrThrow({ where: { id: item.id } });
+    const replacementMaterials = (replacementState.source as { materials: Array<{ activeForGeneration: boolean }> }).materials;
+    expect(replacementMaterials.filter((entry) => entry.activeForGeneration)).toHaveLength(1);
+    expect(replacementMaterials).toHaveLength(2);
+    expect(putAttempts).toBe(2);
+    await prisma.journalJob.update({ where: { id: replacement.job.id }, data: { createdAt: new Date(Date.now() - 25 * 60 * 60_000) } });
+    await recoverJournalJobs(deps);
+    expect((await prisma.journalJob.findUniqueOrThrow({ where: { id: replacement.job.id } })).state).toBe('failed');
+    const timedOutArticle = await prisma.journalArticle.findUniqueOrThrow({ where: { id: item.id } });
+    const recovery = await uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, item.id, { ...input, revision: timedOutArticle.revision, requestKey: randomUUID(), content: Buffer.from('A fresh replacement remains possible after an awaiting-rights upload times out.') });
+    expect(recovery.job.state).toBe('staging');
+    await cancelJournalJob(deps, ctx.owner.id, ctx.journal.id, recovery.job.id);
+    expect(putAttempts).toBe(3);
+    const failureItem = await article(ctx, `10.1234/${randomUUID()}`);
+    const current = await prisma.journalArticle.findUniqueOrThrow({ where: { id: failureItem.id } });
     failPut = true; const failedKey = randomUUID();
-    await expect(uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, item.id, { revision: current.revision, requestKey: failedKey, filename: 'failed.txt', content: Buffer.from('This measured artifact remains private when its storage write fails.') })).rejects.toMatchObject({ code: 'INVALID_STATE' });
+    await expect(uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, failureItem.id, { revision: current.revision, requestKey: failedKey, filename: 'failed.txt', content: Buffer.from('This measured artifact remains private when its storage write fails.') })).rejects.toMatchObject({ code: 'INVALID_STATE' });
     expect((await prisma.journalJob.findUniqueOrThrow({ where: { journalId_requestKey: { journalId: ctx.journal.id, requestKey: failedKey } } })).state).toBe('failed');
-    expect(await prisma.artifact.count({ where: { workspaceId: ctx.journal.workspaceId } })).toBe(2);
-    expect((await prisma.journalArticle.findUniqueOrThrow({ where: { id: item.id } })).revision).toBe(current.revision);
+    expect(await prisma.artifact.count({ where: { workspaceId: ctx.journal.workspaceId } })).toBe(4);
+    expect((await prisma.journalArticle.findUniqueOrThrow({ where: { id: failureItem.id } })).revision).toBe(current.revision);
     const failedUpload = await prisma.journalJob.findUniqueOrThrow({ where: { journalId_requestKey: { journalId: ctx.journal.id, requestKey: failedKey } } });
     await prisma.journalJob.update({ where: { id: failedUpload.id }, data: { state: 'staging', error: null, createdAt: new Date(Date.now() - 25 * 60 * 60_000) } });
     await recoverJournalJobs(deps);
@@ -231,8 +275,8 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
     failPut = false;
     const measured = await prisma.artifact.aggregate({ where: { workspaceId: ctx.journal.workspaceId }, _sum: { size: true } });
     await prisma.journal.update({ where: { id: ctx.journal.id }, data: { storageLimitBytes: measured._sum.size! } });
-    await expect(uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, item.id, { revision: current.revision, requestKey: randomUUID(), filename: 'over-quota.txt', content: Buffer.from('Quota rejection happens before another object-store write attempt.') })).rejects.toMatchObject({ code: 'INVALID_STATE' });
-    expect(putAttempts).toBe(2); expect(await prisma.artifact.count({ where: { workspaceId: ctx.journal.workspaceId } })).toBe(2);
+    await expect(uploadJournalSource(uploadDeps, ctx.owner.id, ctx.journal.id, failureItem.id, { revision: current.revision, requestKey: randomUUID(), filename: 'over-quota.txt', content: Buffer.from('Quota rejection happens before another object-store write attempt.') })).rejects.toMatchObject({ code: 'INVALID_STATE' });
+    expect(putAttempts).toBe(4); expect(await prisma.artifact.count({ where: { workspaceId: ctx.journal.workspaceId } })).toBe(4);
   });
   it('limits reviewers to assigned papers and cannot publish edited source without new approval', async () => {
     const ctx = await journal(); const reviewer = await user(); await addJournalMember(deps, ctx.owner.id, ctx.journal.id, { targetUserId: reviewer.id, role: 'reviewer' });

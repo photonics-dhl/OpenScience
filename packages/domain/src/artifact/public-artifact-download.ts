@@ -1,4 +1,5 @@
 import type { WorkspaceDeps } from '../workspace/types';
+import { canReadCurrentPublicResearch } from '../visibility/current-public-access';
 import { ArtifactError } from './errors';
 
 type PublicationScope = { publicId: string; versionNo: number; researchObjectId: string; versionId: string };
@@ -38,6 +39,7 @@ export async function getPublicArtifactDownload(deps: Pick<WorkspaceDeps, 'prism
     status: { in: ['published', 'revised'] }, publications: { some: { publicVersionId } },
   }, select: { id: true, researchRecord: true } });
   if (!version) throw notFound();
+  if (!await canReadCurrentPublicResearch(deps, { researchObjectId: ro.id, versionId: version.id })) throw notFound();
   const entry = readPublicArtifactManifest(version.researchRecord, { ...input, researchObjectId: ro.id, versionId: version.id })
     .find(item => item.artifactId === input.artifactId && item.downloadAccess === 'public');
   if (!entry) throw notFound();

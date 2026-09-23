@@ -4,7 +4,7 @@ OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版�
 
 ## 开发入口与事实归属
 
-- 开始工作先读适用说明、Git worktree/branch/HEAD/status 与 manifest；定向检索 project_index.md，进入唯一 CURRENT handoff。根目录 dirty main 与其他工作树不得当作当前交付基线。
+- 开始工作先读适用说明、Git worktree/branch/HEAD/status 与 manifest；先用 `rg` 定向查 CURRENT，再由 project_index.md 进入唯一 CURRENT handoff。根目录 dirty main 与其他工作树不得当作当前交付基线。
 - 用户最新纠正优先；需求基线为 docs/OpenScience_Kimi_Development_Spec.md，具体设计按索引选相关章节。设计要求、候选实现、线上版本、产物质量分别判断。
 - CURRENT只能记录执行状态，不能改写用户目标。决定下一步前对照需求条款与仍未完成的交付项；局部返工或暂停不取消其他目标，移除交付项必须有明确用户范围变更。各项已有任务/资产和反馈只在CURRENT短表汇总，progress/index引用它。
 - CURRENT handoff 保存任务、branch/HEAD/release/rollback、证据和未决项；以 Git 和必要的只读服务器元数据定锚。其他文档中的旧 release、测试结果和 next action 是历史，不能自动续跑。
@@ -31,10 +31,10 @@ OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版�
 
 ## 仓库与边界
 
-- pnpm workspace：apps/ 服务、packages/ 共享包、infra/ 部署；实际包和脚本查根 package.json / pnpm-workspace.yaml，不维护易过期的服务、端点、迁移数量。
+- pnpm workspace：apps/ 服务、packages/ 共享包、infra/ 部署；实际包和脚本查根 package.json / pnpm-workspace.yaml，不维护易过期的服务、端点清单；迁移数量仅以下述带日期账本事实记录。
 - 使用 npx pnpm@9.15.0，不全局安装 pnpm、不另建锁文件。dist/、.next/、*.tsbuildinfo 不入库；服务器必要构建按依赖范围避免旧 dist。
 - Provider 调用收口 packages/ai-gateway；主模型 MiniMax-M3，回退由 Gateway 配置管理。业务代码不持有 Provider Key，不绕过权限、配额或任务状态。
-- 迁移使用 infra/migrations/ 与既有 CLI node packages/database/dist/migrate-cli.js deploy|status；不手工重跑旧 packages/database/migrations/，生产禁用 reset-dev。core/search 凭据和迁移账本独立。
+- 迁移使用 infra/migrations/ 与既有 CLI node packages/database/dist/migrate-cli.js deploy|status；不手工重跑旧 packages/database/migrations/，生产禁用 reset-dev。截至 2026-09-22，core 生产迁移账本与 `infra/migrations/` 均为迁移 1–49；新增迁移须按实际账本同轮更新此日期和区间。core/search 凭据和迁移账本独立。
 - Parser 保持无网络/Secret、非 root、只读、512 MiB，经任务卷交换文件；science-worker 沙箱与数据库隔离，不为省量放宽权限。
 - 架构、安全、并发、迁移、不可逆操作和重大未决歧义使用独立 high 审查；供给精确范围/证据，仅复核新增差异，不重做已完成审查。
 

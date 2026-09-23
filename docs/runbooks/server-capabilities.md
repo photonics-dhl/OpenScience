@@ -1,11 +1,11 @@
 # 服务器能力与复用清单
 
 > 2026-09-20 按需 renderer 恢复：Chat image broker 配置原镜像已缺失，已按用户 A 恢复标准化依赖，原图真实处理并入库待审；新镜像/配置备份/恢复边界见 [Figure 3 交接最新节](../handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。无常驻容器不代表可删除，应用 release 与 provider 不变。
-
+>
 > 最新2026-09-15：/dev/shm真实页面加载瞬间用满512MiB，已定位Mojo管道失败；1GiB已运行，同六页首次加载峰值882MiB、资源错误0。原页面、登录、草稿正文恢复，Chat段落格式不同，私有原文备份保留；精确运行/回滚容器仅见CURRENT。清理前盘点38个发布目录合计15G、镜像可回收标记11.4GB，磁盘可用61G；这些是操作前容量，不能解释为本轮释放空间。
-
+>
 > 后续用户已授权清理确认不再需要的服务器内容：36个过期一次性容器已按精确ID删除，保留其私有metadata/log.gz与全部挂载；27个运行/回滚容器和发布标记读回不变，现存33容器。镜像/release/卷没有删除。特别注意：当前按需renderer没有常驻容器，仍必须保留；Docker“无容器引用/可回收”不足以证明无用途。详细范围与授权延续只见CURRENT。
-
+>
 > Chat执行器已有先选模式再插字、同请求恢复及一次性刷新标记修复；首批atlas/editorial实际成功入库，但修订封面7cd仍uncertain且下载恢复已过期。共享内存与终态误关后来草稿本轮已修复，新Library结果绑定仍未收口；不得盲重发或宣称全面稳定。精确应用、独立provider/单文件patch与Serena版本见CURRENT handoff。
 
 当前版本与暂停状态统一见[CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)；产品目的、调用关系、真实效果查[能力索引](hermes-capability-registry.md#当前能力索引目的调用效果)。本轮新工具实际交付见紧接的表；更早日期段是历史操作收据，不作为当前release或下一步指令。健康不代表内容质量。

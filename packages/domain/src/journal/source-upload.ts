@@ -5,9 +5,10 @@ import type { WorkspaceDeps } from '../workspace/types';
 import { scanFile } from '../artifact/scan';
 import { lockTrashReferences } from '../trash/trash';
 import { JournalError } from './contracts';
-import { type JournalRights, type JournalSource } from './content';
+import { EMPTY_RIGHTS, type JournalSource } from './content';
 import { assertArticleRevision, journalArticleEvent, journalArticleInScope, journalJson, journalScope, journalTransaction, JOURNAL_EDIT_ROLES } from './articles';
 import { journalSourceDigest } from './processing';
+import { journalSourceMaterials, type JournalArticleSourceRecord } from './enhancements';
 
 const MIME: Record<string, string> = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', txt: 'text/plain', md: 'text/markdown' };
 export const JOURNAL_FILE_LIMIT = 50 * 1024 * 1024;
@@ -47,7 +48,7 @@ export async function uploadJournalSource(deps: WorkspaceDeps & { storage: Stora
     if (existing) {
       const artifact = await tx.artifact.findUnique({ where: { idempotencyKey: `system:journal-source:${existing.id}` } });
       const descriptor = existing.result as { filename?: unknown; artifactId?: unknown; blobSha256?: unknown } | null;
-      if (existing.kind !== 'source_parse' || existing.articleId !== articleId || existing.requestedBy !== userId || existing.revision !== input.revision + 1
+      if (existing.kind !== 'source_parse' || existing.articleId !== articleId || existing.requestedBy !== userId
         || artifact?.blobSha256 !== contentSha256 || artifact.size !== BigInt(input.content.length) || artifact.mimeType !== MIME[ext]
         || (existing.state === 'staging' && (descriptor?.filename !== label || descriptor.artifactId !== artifact.id || descriptor.blobSha256 !== contentSha256))) {
         throw new JournalError('IDEMPOTENCY_CONFLICT', '此请求标识已用于其他来源上传');
@@ -57,8 +58,9 @@ export async function uploadJournalSource(deps: WorkspaceDeps & { storage: Stora
       return { job: existing, source: null, needsStorage: false };
     }
     assertArticleRevision(article, input.revision);
-    const rights = article.rights as unknown as JournalRights;
-    if (article.contentState !== 'active' || !rights.internalProcessing || !rights.evidence) throw new JournalError('FORBIDDEN', '请先保存来源的内部加工许可及依据');
+    const priorMaterials = journalSourceMaterials(article.source);
+    if (priorMaterials.length >= 50) throw new JournalError('INVALID_STATE', '每篇论文最多记录 50 项来源材料');
+    if (article.contentState !== 'active') throw new JournalError('FORBIDDEN', '受限或撤回论文不能替换来源文件');
     if (await tx.journalJob.count({ where: { articleId, state: { in: ['staging', 'pending', 'running'] } } })) throw new JournalError('INVALID_STATE', '请先完成或取消此论文的已有作业');
     if (await tx.journalJob.count({ where: { journalId, state: { in: ['staging', 'pending', 'running'] } } }) >= 100) throw new JournalError('INVALID_STATE', '期刊作业队列已满');
     const usage = await tx.artifact.aggregate({ where: { workspaceId: journal.workspaceId }, _sum: { size: true } });
@@ -68,9 +70,11 @@ export async function uploadJournalSource(deps: WorkspaceDeps & { storage: Stora
     await tx.blob.upsert({ where: { sha256: contentSha256 }, update: {}, create: { sha256: contentSha256, size: BigInt(input.content.length), storageKey: getBlobStorageKey(contentSha256) } });
     const jobId = randomUUID();
     const artifact = await tx.artifact.create({ data: { workspaceId: journal.workspaceId, uploadedBy: userId, logicalPath: `journal-sources/${articleId}/${jobId}.${ext}`, blobSha256: contentSha256, size: BigInt(input.content.length), mimeType: MIME[ext], idempotencyKey: `system:journal-source:${jobId}` } });
-    const source: JournalSource = { kind: 'fulltext', text: '', url: (article.source as unknown as JournalSource).url, label, artifactId: artifact.id };
-    const sourceDigest = journalSourceDigest({ source, rights });
-    const job = await tx.journalJob.create({ data: { id: jobId, kind: 'source_parse', state: 'staging', journalId, articleId, requestedBy: userId, requestKey: input.requestKey, revision: input.revision + 1, sourceDigest, language: 'zh', result: journalJson({ filename: label, artifactId: artifact.id, blobSha256: contentSha256 }) } });
+    const material: JournalArticleSourceRecord = { id: randomUUID(), sourceType: 'editor_uploaded_pdf', title: label, url: (article.source as unknown as JournalSource).url || undefined, fileId: artifact.id, uploadedBy: userId, uploadedAt: (deps.now?.() ?? new Date()).toISOString(), rightsStatus: 'unknown', sourceConfidence: 'editor_claimed', permissions: { internalProcessing: false, derivativeGeneration: false, publicSource: false, publicDerivative: false, externalProcessing: false, figureReuse: false, derivativeIllustration: false }, evidence: { statement: '' }, activeForGeneration: true, contentSha256: createHash('sha256').update('', 'utf8').digest('hex') };
+    const materials = priorMaterials.map((item) => ({ ...item, activeForGeneration: false })).concat(material);
+    const source = { kind: 'fulltext', text: '', url: (article.source as unknown as JournalSource).url, label, artifactId: artifact.id, materials } as JournalSource;
+    const sourceDigest = journalSourceDigest({ source, rights: EMPTY_RIGHTS });
+    const job = await tx.journalJob.create({ data: { id: jobId, kind: 'source_parse', state: 'staging', journalId, articleId, requestedBy: userId, requestKey: input.requestKey, revision: input.revision + 1, sourceDigest, language: 'zh', result: journalJson({ filename: label, artifactId: artifact.id, blobSha256: contentSha256, uploadRevision: input.revision }) } });
     await journalArticleEvent(tx, journalId, userId, 'journal.source.stage', articleId, { jobId, bytes: input.content.length, sourceDigest });
     return { job, source, needsStorage: true };
   });
@@ -95,12 +99,16 @@ export async function uploadJournalSource(deps: WorkspaceDeps & { storage: Stora
         throw new JournalError('INVALID_STATE', '来源上传已失败或取消，请使用新的请求标识重试');
       }
       assertArticleRevision(article, input.revision);
-      const rights = article.rights as unknown as JournalRights;
-      if (article.contentState !== 'active' || !rights.internalProcessing || !rights.evidence) throw new JournalError('FORBIDDEN', '请先保存来源的内部加工许可及依据');
-      if (journalSourceDigest({ source: staged.source, rights }) !== current.sourceDigest) throw new JournalError('REVISION_CONFLICT', '来源或授权已改变，请使用新的请求标识重试');
+      if (article.contentState !== 'active') throw new JournalError('FORBIDDEN', '受限或撤回论文不能替换来源文件');
+      if (journalSourceDigest({ source: staged.source, rights: EMPTY_RIGHTS }) !== current.sourceDigest) throw new JournalError('REVISION_CONFLICT', '来源或授权已改变，请使用新的请求标识重试');
       if (await tx.journalJob.count({ where: { articleId, id: { not: current.id }, state: { in: ['staging', 'pending', 'running'] } } })) throw new JournalError('INVALID_STATE', '请先完成或取消此论文的已有作业');
-      await tx.journalArticle.update({ where: { id: articleId }, data: { source: journalJson(staged.source), draft: Prisma.DbNull, revision: { increment: 1 }, reviewState: 'draft', reviewedRevision: null, reviewedDigest: null, reviewedBy: null } });
-      const pending = await tx.journalJob.update({ where: { id: current.id }, data: { state: 'pending', result: Prisma.DbNull } });
+      await tx.journalArticle.update({ where: { id: articleId }, data: { source: journalJson(staged.source), rights: journalJson(EMPTY_RIGHTS), draft: Prisma.DbNull, revision: { increment: 1 }, reviewState: 'draft', reviewedRevision: null, reviewedDigest: null, reviewedBy: null } });
+      if (await tx.journalRelease.count({ where: { articleId } })) {
+        await tx.researchObject.update({ where: { id: article.researchObjectId }, data: { visibility: 'private', status: 'restricted' } });
+        await tx.version.updateMany({ where: { researchObjectId: article.researchObjectId, status: 'published' }, data: { status: 'restricted' } });
+      }
+      const descriptor = current.result as Record<string, unknown> | null;
+      const pending = await tx.journalJob.update({ where: { id: current.id }, data: { result: journalJson({ ...descriptor, awaitingRights: true }) } });
       await journalArticleEvent(tx, journalId, userId, 'journal.source.upload', articleId, { jobId: current.id, bytes: input.content.length, sourceDigest: current.sourceDigest });
       return pending;
     });

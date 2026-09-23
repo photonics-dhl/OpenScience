@@ -340,6 +340,7 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
       { kind: 'page-region-text', page: 1, bbox: [0, 0, 612, 792], quote: 'I(t) = I0 exp(-t/tau)' },
     ],
     expectedCurrentStatus: 'ready',
+    canonicalManifestStatus: 'needs_review',
     expectedText: 'I(t) = I0 exp(-t/tau)',
   },
   {

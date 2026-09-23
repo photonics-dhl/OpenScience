@@ -94,9 +94,10 @@ function createFake() {
 }
 
 const completeDraft = {
-  nameZh: '开放科学学报', pIssn: '2049-3630', websiteUrl: 'https://journal.example.org/', publisherName: '开放出版社',
-  subjects: ['开放科学'], applicantName: '编辑甲', applicantTitle: '主编', applicantEmail: 'owner@example.com',
-  representationEvidence: '官网编辑部页面及授权文件', rightsDeclaration: '允许目录展示；文件逐篇授权', rightsDeclarationVersion: '2026-09',
+  nameZh: '开放科学学报', nameEn: 'Open Science Journal', pIssn: '2049-3630', websiteUrl: 'https://journal.example.org/',
+  publisherName: 'Open Science Press', subjects: ['Open Science'], description: 'A synthetic journal onboarding fixture.',
+  applicantName: 'Editor One', applicantTitle: 'Editor in Chief', applicantEmail: 'owner@example.com',
+  representationEvidence: 'Official editorial board listing and authorization letter.', rightsDeclaration: '允许目录展示；文件逐篇授权', rightsDeclarationVersion: '2026-09',
 };
 
 async function submittedFixture() {
@@ -163,7 +164,7 @@ describe('journal onboarding', () => {
     const { journal } = await verifyJournalApplication(fixture.deps, 'admin', { applicationId: fixture.application.id, decision: 'approved', slug: 'public-journal' });
     fixture.db.journals[0].homepagePublished = true;
     await setJournalOperationalState(fixture.deps, 'admin', { journalId: journal!.id, action: 'pause', reason: '身份争议复核' });
-    await expect(createJournalServiceRequest(fixture.deps, 'owner', journal!.id, { annualVolume: 20, language: 'zh', figureScale: 'medium', services: ['review'], requestKey: 'service-1' })).rejects.toMatchObject({ code: 'INVALID_STATE' });
+    await expect(createJournalServiceRequest(fixture.deps, 'owner', journal!.id, { annualVolume: 20, language: 'zh', figureScale: 'medium', services: ['AI 标准解读包'], requestKey: 'service-1' })).rejects.toMatchObject({ code: 'INVALID_STATE' });
     const publicDetail = await getPublicJournal(fixture.deps, 'public-journal');
     expect(publicDetail).toMatchObject({ pIssn: '20493630', operationalState: 'paused' });
     expect(publicDetail).not.toHaveProperty('applicantEmail'); expect(publicDetail).not.toHaveProperty('representationEvidence'); expect(publicDetail).not.toHaveProperty('internalNotes');

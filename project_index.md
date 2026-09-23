@@ -1,5 +1,18 @@
 # OpenScience (XGS) 项目文件索引
 
+> 期刊增强已部署：codex/journal-server-20260922；原分支 96e5e0c 的矩阵、优先级与服务页已适配当前生产，状态/版本/边界唯一见 [期刊 CURRENT](docs/handoff/2026-09-15-journal-onboarding-handoff.md)。其他产品 CURRENT 保留。
+
+| 期刊增强文件 | 用途 | 状态 |
+|---|---|---|
+| `packages/domain/src/journal/enhancements.ts` | 来源实际绑定、逐项授权、评分和服务账本视图 | 已部署；版本与观察边界见期刊 CURRENT |
+| `packages/domain/src/visibility/current-public-access.ts` | 通用入口的期刊当前授权检查 | 已部署；版本与观察边界见期刊 CURRENT |
+| `apps/web/components/journals/JournalSourceRightsMatrix.tsx` / `apps/web/app/journals/manage/[id]/articles/[articleId]/sources/page.tsx` | 来源与版权矩阵 | 已部署；版本与观察边界见期刊 CURRENT |
+| `apps/web/components/journals/JournalProcessingQueue.tsx` / `apps/web/app/journals/manage/[id]/processing/page.tsx` | 加工优先级与显式入队 | 已部署；版本与观察边界见期刊 CURRENT |
+| `apps/web/components/journals/JournalServices.tsx` / `apps/web/app/journals/manage/[id]/services/page.tsx` | 服务申请、额度/账本/存储 | 已部署；版本与观察边界见期刊 CURRENT |
+| `docs/specs/2026-09-15-journal-onboarding-design.md` | 期刊入驻、来源授权、加工优先级、服务方案与额度的需求设计基线 | 需求基线；实现状态见期刊 CURRENT |
+| `docs/handoff/2026-09-15-journal-onboarding-handoff.md` / `docs/runbooks/journal-onboarding.md` | 期刊增强的当前版本、部署边界、入口与操作手册 | CURRENT 状态与运行入口 |
+| `packages/domain/test/journal-enhancements.test.ts` / `packages/domain/test/journal-enhancement-review.test.ts` / `apps/api/test/journal-enhancements-database.test.ts` / `apps/web/test/journal-source-matrix.test.tsx` | 原分支增强回归；本轮保留代码，不混同生产候选验收 | 历史证据与回归代码 |
+
 本机浏览器配置：`.codex/config.toml` 保留源码检索并接入现有代理；依赖、继承范围与回滚见[能力台账](docs/runbooks/hermes-capability-registry.md#local-browser-proxy)，不随业务部署启用远端浏览器。
 
 > CURRENT：唯一交付入口是 `.worktrees/onchip-video-release` 的 `release/onchip-production-line`（canonical；旧 `codex/onchip-video-release` 缺 journals/学术身份，为历史线不得发版）。视觉交付按[需求基线§18.2](docs/OpenScience_Kimi_Development_Spec.md#182-视觉系统)：未读论文者能理解核心思想和关键点，叙事与美感共同设计；原图/生图/单多图按需采用，视频尚未进入执行。交付差额、用户反馈、版本与下一步唯一见[Hermes CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)，不以原图复用/发布成功或单图认可代替论文叙事验收。桥、恢复、发布及最新纠偏证据见[2026-09-18 交接](docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。能力按[当前能力索引](docs/runbooks/hermes-capability-registry.md)定向查实现、调用和真实结果；下表日期/版本均为对应改动的历史记录，不作为当前release或自动next action。
@@ -49,7 +62,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 |---|---|
 | `apps/api/src/index.ts` / `packages/config/src/api-env.ts` / `packages/ai-gateway/src/index.ts` / `apps/agent-worker/src/index.ts` / `.env.example` | 图片恢复判定池化：**付款方严格等于主 provider 的 spool**（唯一可作证"未提交"），备 spool 只在 `completed` 时被采纳，主 provider 无 spool 时不注入；kind 解析与 worker 对齐；minimax 备援不可复用结果的启动告警。提交 `f2a9e5b8`/`fa66e89e`，第三轮定向 High GO（H1/M1 关闭），部署与容器读回见 CURRENT |
 | `apps/web/components/hermes/HermesMediaReview.tsx` / `docs/runbooks/hermes-capability-registry.md` | Hermes 对话内审批 409 改为重读资产列表后再报错（原先带陈旧 `updatedAt` 会反复冲突，与 `ResearchPresentation` 既有写法一致）；台账债务行同步 F2 已闭与 F3/F4/F5 残留 |
-| `AGENTS.md` / `.gitignore` / `docs/handoff/` | 「工作区与发布卫生」：唯一交付入口、每轮 `git status --porcelain` 为空、worktree 生命周期与 `prune`、release 身份必须是已推送可解析 SHA、证据不入受控路径；忽略项补 `.Codex/`、`docs/live_2D/` 等 |
+| `AGENTS.md` / `.gitignore` / `docs/handoff/` | 「工作区与发布卫生」：唯一交付入口、每轮 `git status --porcelain` 为空、worktree 生命周期与 `prune`、release 身份必须是已推送可解析 SHA、证据不入受控路径；忽略规则包含 `.Codex/` 和 docs/live_2D/ 等本机目录 |
 | `packages/domain/src/ingestion/claim-evidence-bridge.ts` / `packages/domain/src/{agent/research-run,research-intelligence/claim-evidence-service}.ts` / `apps/api/src/routes/ingestion-claim-selection-schema.ts` / `apps/api/src/routes/{ingestion,research-runs}.ts` / `apps/web/lib/{api,hermes/ingestion-claim-review}.ts` / `apps/web/components/hermes/IngestionClaimReview.tsx` / `apps/web/messages/{zh,en}.json` | 现有确认链路逐Claim保存原文关系，共享API定义/Domain类型与批次容量；来源折叠，旧请求兼容。配图消费父子关系，状态及局限见CURRENT |
 | `packages/domain/src/ingestion/reviewed-claim-suggestions.ts` / `apps/agent-worker/src/extractor.ts` | 现有末审v5的原子主张与Evidence映射；自动叙事要求核心主张，手动保持可选；P边界分段、私有拒收诊断与显式恢复沿原契约/预算。实现/部署及科学效果见CURRENT |
 | `infra/development-platform/langfuse/README.md` | 独立账号访问、私有凭据交接与按用户要求改密记录；用户已确认登录，采集服务身份不依赖网页登录，文档不存密码 |
@@ -487,6 +500,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `docs/project-index-p1e-supplement.md` | P1E 索引补充草稿（内容已合并入本索引 2026-08-06；注意其 P1E-1/2 设计文档条目为登记错误，实际不存在） | 已合并，留存快照 |
 | `docs/progress.md` | 不超过 120 行 / 16 KiB 的 CURRENT progress window；完整历史只查 Git history，不进入默认 session 输入 | **CURRENT active-memory** |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
+| `docs/handoff/2026-09-10-hermes-web-image-handoff.md` | Hermes / Workbench 当前目标、授权、版本和未完成边界 | **CURRENT rolling handoff** |
 | `docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md` | 视觉叙事/风格部署、中断与仅审阅恢复、跨broker页面误占证据、Hermes反馈接线、账号切换核查、Pro协作及Windows206维护；保留Fig.2与未知提交边界 | **CURRENT session handoff**（滚动入口仍是2026-09-10 handoff） |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
 | `docs/handoff/2026-07-28-p1a-2-local-done-cloud-pending-handoff.md` | P1A-2 本地完成交接：代码+本地门禁 done，集成测试待阿里云，下一任务 P1A-3 design gate | 活文档 |
@@ -548,6 +562,8 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE/ScanSci 隔离、Windows Git Bash）；§5.49–5.66 为历史/发布 evidence，现行 Docker cache 维护见 §5.67 | **CURRENT运维手册**；2026-09-06缓存清理753.4MB、cache1.005GB、应用f144eb7/rollback b23102b；历史版本证据不作当前部署锚点 |
 | `infra/scripts/evaluate-scansci-upstream-mcp.{sh,test.mjs}` | 上游 `v1.13.1` 官方 MCP 有界 ECS 正向试点：wheel hash、17 tools、真实 OA PDF、exact trap cleanup | **TASK 1 ECS ACCEPTED**；24,671,920 bytes / `d57dc94c…f484a`，临时容器/卷 `0/0` |
 | `docs/runbooks/hermes-capability-registry.md` | 当前产品目的→代码调用→实际产物→已知缺口；工具选型与定向High审查 | **CURRENT能力定位入口**；版本见handoff，旧PRODUCTION/评测表为历史，不证明当前调用或质量 |
+| `docs/runbooks/server-capabilities.md` | 服务器现有服务、镜像、缓存和复用边界 | **CURRENT服务器能力入口** |
+| `docs/runbooks/chatgpt-browser.md` | 服务器 ChatGPT 浏览器的登录、任务恢复、容量、安全与回滚操作 | **CURRENT浏览器运行手册** |
 | `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；验证后临时库按用户授权精确清理 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
@@ -578,8 +594,8 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `infra/nginx/openscience.test.mjs` | 生产 Nginx 合同：`/api` rewrite、Auth 页面/API 分流、Curator/Admin API 保护、Basic credential 不转发、Tunnel 真实 IP 与部署同步 | 8/8 GREEN |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma migrations（含 additive Hermes schema），各附 rollback.sql | **PRODUCTION 39/39**；search 2/2；应用回滚时保留 additive schema |
-| `infra/schema.prisma` | core Prisma schema：既有平台模型 + Research Intelligence/Identity/Reading/External Retrieval/ScanSci provider state scoped relations + Hermes durable run | **PRODUCTION migration 39** |
+| `infra/migrations/` | Prisma migrations（含 additive Hermes schema），各附 rollback.sql | **2026-09-22 PRODUCTION 49/49**；search 2/2；应用回滚时保留 additive schema |
+| `infra/schema.prisma` | core Prisma schema：既有平台模型 + Research Intelligence/Identity/Reading/External Retrieval/ScanSci provider state scoped relations + Hermes durable run | **2026-09-22 PRODUCTION migration 49** |
 | `infra/search/schema.prisma` / `infra/search/migrations/` / `packages/search/test/migration.test.ts` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta` 不与 core ledger 混用；Task 6 migration 2 增加 tenant-scoped chunk/embedding/index/model/telemetry、GIN 与机械 rollback | 现行独立搜索库入口；历史迁移/运行记录 2/2 `c581712`；forward/rollback/redeploy、tenant-safe PostgreSQL integration 与双库恢复 GREEN |
 | `scripts/verify-database-isolation.mjs` / `scripts/verify-database-isolation.test.mjs` | 拒绝 core/search 指向同一物理数据库，并以脱敏元数据给出部署门禁 | **CURRENT**；focused contract 与 ECS `DATABASE_ISOLATION_OK` GREEN |
 

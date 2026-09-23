@@ -140,6 +140,9 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
   };
 
   const prisma: any = {
+    journalArticle: {
+      findUnique: async () => null,
+    },
     $queryRaw: async (query: { strings?: readonly string[]; values?: unknown[] }) => {
       const userId = String(query.values?.[0] ?? '');
       const queryText = query.strings?.join('?') ?? '';

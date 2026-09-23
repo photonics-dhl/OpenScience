@@ -5,6 +5,7 @@ import { resolveEvidenceSource } from '../research-intelligence/claim-evidence-s
 import { getBlobStorageKey } from '@openscience/storage';
 import { publicVersionNumber, readPublicationMetadata } from '../publish/publication-metadata';
 import { historyMediaItems } from './version-history';
+import { canReadCurrentPublicResearch } from '../visibility/current-public-access';
 
 export class ResearchRecordSourceError extends Error {
   readonly code = 'SOURCE_UNAVAILABLE';
@@ -31,7 +32,10 @@ export async function getResearchRecord(deps: ArtifactDeps, input: { researchObj
   if (!version || version.researchObjectId !== ro.id) throw notFound();
   const publication = ro.visibility === 'public' && ['published', 'revised'].includes(version.status)
     ? await deps.prisma.publication.findFirst({ where: { versionId: version.id } }) : null;
-  if (!authorized && !publication) throw notFound();
+  const publicAccess = !!publication && await canReadCurrentPublicResearch(deps, {
+    researchObjectId: ro.id, versionId: version.id,
+  });
+  if (!authorized && !publicAccess) throw notFound();
   const frozen = recordValue(version.researchRecord);
   const base = `/api/research-objects/${ro.id}/versions/${version.id}/record`;
   const dto = frozen.dto ?? {
@@ -65,7 +69,7 @@ export async function getResearchRecord(deps: ArtifactDeps, input: { researchObj
       .sort((left, right) => (left.reader?.order ?? Number.MAX_SAFE_INTEGER) - (right.reader?.order ?? Number.MAX_SAFE_INTEGER))
       .map(asset => ({ id: asset.id, kind: asset.kind, ...(asset.reader ? { reader: asset.reader } : {}) })),
   } : dto;
-  return { record, sources: recordValue(frozen.sources), publicAccess: Boolean(publication), versionId: version.id };
+  return { record, sources: recordValue(frozen.sources), publicAccess, versionId: version.id };
 }
 
 export async function getResearchRecordSource(deps: ArtifactDeps, input: { researchObjectId: string; versionId: string; evidenceId: string; userId?: string }) {
@@ -73,6 +77,9 @@ export async function getResearchRecordSource(deps: ArtifactDeps, input: { resea
   const source = recordValue(access.sources[input.evidenceId]);
   if (!source.artifactId) throw notFound();
   if (!source.sourceMapRef || (access.publicAccess && source.publicReuse !== true)) throw new ResearchRecordSourceError('Frozen source is unavailable');
+  if (access.publicAccess && !await canReadCurrentPublicResearch(deps, {
+    researchObjectId: input.researchObjectId, versionId: access.versionId, exposure: 'source',
+  })) throw new ResearchRecordSourceError('Frozen source is unavailable');
   try {
     const artifact = await deps.prisma.artifact.findUnique({ where: { id: source.artifactId as string } });
     if (!artifact) throw new Error('Original missing');

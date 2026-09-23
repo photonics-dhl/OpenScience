@@ -135,6 +135,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
   it('renders public, editor, article, release, and admin surfaces at desktop and 375px', async () => {
     const browser = await chromium.launch({ headless: true });
     const browserErrors: string[] = [];
+    const anonymousAuthResponses: string[] = [];
     try {
       const publicContext = await browser.newContext();
       const ownerContext = await browser.newContext();
@@ -147,20 +148,36 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
         { name: 'homepage', context: publicContext, path: `/journals/${slug}`, expected: ['编辑部身份已核验', 'Synthetic evidence comparison paper', '阅读固定解读版本'] },
         { name: 'release', context: publicContext, path: releaseUrl, expected: ['期刊解读', '14.7 TW'] },
         { name: 'workbench', context: ownerContext, path: `/journals/manage/${journalId}`, expected: ['我的期刊', '论文与审核队列', '试用与专业服务'] },
+        { name: 'processing', context: ownerContext, path: `/journals/manage/${journalId}/processing`, expected: ['加工优先级', 'Synthetic evidence comparison paper'] },
+        { name: 'services', context: ownerContext, path: `/journals/manage/${journalId}/services`, expected: ['服务包与额度', '可用 AI 草稿额度'] },
         { name: 'article', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}`, expected: ['来源与授权', '上传来源文件', '查看原文'] },
+        { name: 'sources', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}/sources`, expected: ['材料矩阵', '加工与公开范围'] },
         { name: 'admin', context: adminContext, path: '/admin/journals', expected: ['期刊核验与运营', '期刊运营状态'] },
       ];
 
       for (const viewport of [{ name: 'desktop', width: 1440, height: 900 }, { name: 'mobile-375', width: 375, height: 812 }]) {
         for (const surface of surfaces) {
           const page = await surface.context.newPage();
+          const publicSurface = surface.context === publicContext;
           page.on('pageerror', (error) => browserErrors.push(`${surface.name}: ${error.message}`));
+          page.on('response', (networkResponse) => {
+            if (networkResponse.url() !== `${baseUrl}/api/auth/me`) return;
+            if (publicSurface && networkResponse.status() === 401) {
+              anonymousAuthResponses.push(`${surface.name}:${viewport.name}:401:${networkResponse.url()}`);
+            } else if (networkResponse.status() >= 400) {
+              browserErrors.push(`${surface.name}: unexpected auth response ${networkResponse.status()} ${networkResponse.url()}`);
+            }
+          });
           page.on('console', (message) => {
             if (message.type() !== 'error') return;
+            // Public navigation probes the optional session. The exact 401 response is
+            // collected above and asserted below, so this console diagnostic is expected.
+            const expectedAnonymousAuth = publicSurface && message.text().includes('401')
+              && message.location().url === `${baseUrl}/api/auth/me`;
             // Existing public reader probes account-only preferences and intentionally falls back for guests.
             const expectedGuestPreference = surface.name === 'release' && message.text().includes('401')
               && message.location().url === `${baseUrl}/api/reading-preferences`;
-            if (!expectedGuestPreference) browserErrors.push(`${surface.name}: ${message.text()} @ ${message.location().url}`);
+            if (!expectedAnonymousAuth && !expectedGuestPreference) browserErrors.push(`${surface.name}: ${message.text()} @ ${message.location().url}`);
           });
           await page.setViewportSize({ width: viewport.width, height: viewport.height });
           const response = await page.goto(`${baseUrl}${surface.path}`, { waitUntil: 'networkidle' });
@@ -176,8 +193,18 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
             await sourceLink.waitFor({ state: 'visible' });
             expect(await sourceLink.getAttribute('href')).toBe(source.url);
           }
-          expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${surface.name} overflows at ${viewport.width}px`).toBe(true);
           await page.screenshot({ path: resolve(outputDir, `${surface.name}-${viewport.name}.png`), fullPage: true });
+          const layout = await page.evaluate(() => ({
+            width: window.innerWidth,
+            scrollWidth: document.documentElement.scrollWidth,
+            offenders: [...document.querySelectorAll('body *')].flatMap((element) => {
+              const rect = element.getBoundingClientRect();
+              return rect.width && (rect.right > window.innerWidth + 1 || rect.left < -1)
+                ? [{ tag: element.tagName, className: element.className, width: Math.round(rect.width), text: element.textContent?.slice(0, 100) }]
+                : [];
+            }).slice(-12),
+          }));
+          expect(layout.scrollWidth <= layout.width + 1, `${surface.name} overflows at ${viewport.width}px: ${JSON.stringify(layout)}`).toBe(true);
           await page.close();
         }
       }
@@ -254,10 +281,10 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
         expect(await editPage.getByRole('textbox', { name: '摘要', exact: true }).inputValue()).toBe(changedSummary);
         await editPage.getByRole('button', { name: '保存修订' }).click();
         await editPage.getByText('已保存。来源或解读内容变更后，需要重新审核。').waitFor({ state: 'visible' });
-        expect(await editPage.getByRole('button', { name: '提交审核' }).isEnabled()).toBe(true);
+        await expect.poll(() => editPage.getByRole('button', { name: '提交审核' }).isEnabled()).toBe(true);
         await editPage.getByRole('button', { name: '提交审核' }).click();
         await editPage.getByText(/fulltext · submitted · 修订/).waitFor({ state: 'visible' });
-        expect(await editPage.getByRole('button', { name: '批准当前修订' }).isEnabled()).toBe(true);
+        await expect.poll(() => editPage.getByRole('button', { name: '批准当前修订' }).isEnabled()).toBe(true);
         await editPage.screenshot({ path: resolve(outputDir, 'article-edit-saved-submitted.png'), fullPage: true });
         const restricted = editPage.waitForResponse((response) => response.url().includes(`/journals/${journalId}/articles/${articleId}/restrict`) && response.ok());
         editPage.once('dialog', (dialog) => { void dialog.accept('Synthetic browser restriction verification'); });
@@ -275,8 +302,111 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       } finally {
         await cancelJournalJob(pollDeps, ownerId, journalId, pollJob.id);
       }
+      expect(anonymousAuthResponses.sort()).toEqual([
+        `directory:desktop:401:${baseUrl}/api/auth/me`,
+        `directory:mobile-375:401:${baseUrl}/api/auth/me`,
+        `homepage:desktop:401:${baseUrl}/api/auth/me`,
+        `homepage:mobile-375:401:${baseUrl}/api/auth/me`,
+        `release:desktop:401:${baseUrl}/api/auth/me`,
+        `release:mobile-375:401:${baseUrl}/api/auth/me`,
+      ].sort());
       expect(browserErrors).toEqual([]);
       await Promise.all([publicContext.close(), ownerContext.close(), adminContext.close()]);
     } finally { await browser.close(); }
   }, 180_000);
+
+  it('persists processing choices and reconciles queue credits through the new pages', async () => {
+    const csrf = await app.inject({ url: '/csrf-token' });
+    expect(csrf.statusCode).toBe(200);
+    const fixtureCookies = { ...Object.fromEntries(csrf.cookies.map((cookie) => [cookie.name, cookie.value])), openscience_session: ownerToken };
+    const fixtureHeaders = { 'x-csrf-token': csrf.json().csrfToken as string };
+    const created = await app.inject({ method: 'POST', url: `/journals/${journalId}/articles`, cookies: fixtureCookies, headers: fixtureHeaders, payload: { metadata: { title: 'Synthetic priority and credits paper', authors: ['Synthetic Author'], publishedDate: '2026-09-22', journalTitle: journalName, issns: [], originalUrl: 'https://journal.example.invalid/priority-source' } } });
+    expect(created.statusCode, created.body).toBe(200);
+    const fresh = created.json().article as { id: string; revision: number };
+    const prepared = await app.inject({ method: 'PATCH', url: `/journals/${journalId}/articles/${fresh.id}`, cookies: fixtureCookies, headers: fixtureHeaders, payload: { revision: fresh.revision, source, rights } });
+    expect(prepared.statusCode, prepared.body).toBe(200);
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    await context.addCookies([{ name: 'openscience_session', value: ownerToken, url: baseUrl, sameSite: 'Lax' }]);
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    let submittedJobId: string | undefined;
+    try {
+      await page.goto(`${baseUrl}/journals/manage/${journalId}/articles/${fresh.id}/sources`, { waitUntil: 'networkidle' });
+      const sourceForm = page.getByRole('region', { name: '添加来源材料' });
+      await sourceForm.getByLabel('材料类型', { exact: true }).selectOption('supplementary');
+      await sourceForm.getByLabel('材料标题', { exact: true }).fill('Synthetic supplementary registration');
+      await sourceForm.getByLabel('来源链接', { exact: true }).fill('https://journal.example.invalid/supplementary');
+      await sourceForm.getByLabel('授权或核验依据', { exact: true }).fill('Synthetic material registration; this record does not authorize the main source.');
+      const addedResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/articles/${fresh.id}/sources`));
+      await sourceForm.getByRole('button', { name: '添加材料并评估', exact: true }).click();
+      const added = await addedResponse;
+      expect(added.status(), await added.text()).toBe(200);
+      const matrix = await added.json() as { sources: Array<{ sourceType: string }>; capability: { canGenerateFullSixFields: boolean } };
+      expect(matrix.sources.some((item) => item.sourceType === 'supplementary')).toBe(true);
+      expect(matrix.capability.canGenerateFullSixFields).toBe(true);
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.getByRole('heading', { name: 'Synthetic supplementary registration', exact: true }).waitFor({ state: 'visible' });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+      await page.screenshot({ path: resolve(outputDir, 'sources-supplementary-mobile-375.png'), fullPage: true });
+      await page.goto(`${baseUrl}/journals/manage/${journalId}/articles/${fresh.id}`, { waitUntil: 'networkidle' });
+      await page.getByRole('textbox', { name: '来源文本', exact: true }).fill(`${sourceSentence} This source text was amended by the synthetic editor.`);
+      expect(await page.getByRole('button', { name: '生成 AI 解读草稿', exact: true }).isDisabled()).toBe(true);
+      await page.getByRole('button', { name: '保存修订', exact: true }).click();
+      await page.getByText('已保存。来源或解读内容变更后，需要重新审核。', { exact: true }).waitFor();
+      expect(await page.getByRole('button', { name: '生成 AI 解读草稿', exact: true }).isDisabled()).toBe(true);
+      await page.goto(`${baseUrl}/journals/manage/${journalId}/articles/${fresh.id}/sources`, { waitUntil: 'networkidle' });
+      const primary = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Synthetic source paragraph', exact: true }) });
+      const reboundResponse = page.waitForResponse((response) => response.request().method() === 'PATCH' && response.url().includes(`/articles/${fresh.id}/sources/`) && response.url().endsWith('/rights'));
+      await primary.getByRole('button', { name: '保存此项授权', exact: true }).click();
+      const rebound = await reboundResponse;
+      expect(rebound.status(), await rebound.text()).toBe(200);
+      expect((await rebound.json() as { capability: { canGenerateFullSixFields: boolean } }).capability.canGenerateFullSixFields).toBe(true);
+      await page.goto(`${baseUrl}/journals/manage/${journalId}/processing`, { waitUntil: 'networkidle' });
+      const row = page.getByRole('article').filter({ hasText: 'Synthetic priority and credits paper' });
+      await row.getByRole('button', { name: '标记重点', exact: true }).click();
+      await row.getByRole('button', { name: '取消重点', exact: true }).waitFor({ state: 'visible' });
+      await page.reload({ waitUntil: 'networkidle' });
+      await row.getByRole('button', { name: '取消重点', exact: true }).waitFor({ state: 'visible' });
+      await row.getByRole('button', { name: '延后 7 天', exact: true }).click();
+      await row.getByRole('button', { name: '恢复处理', exact: true }).waitFor({ state: 'visible' });
+      await row.getByRole('button', { name: '恢复处理', exact: true }).click();
+      await row.getByRole('button', { name: '延后 7 天', exact: true }).waitFor({ state: 'visible' });
+      const before = (await app.inject({ url: `/journals/${journalId}/service-plan`, cookies: { openscience_session: ownerToken } })).json().credits as { available: number; reserved: number; consumed: number };
+      page.once('dialog', (dialog) => { void dialog.accept(); });
+      const queuedResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/articles/${fresh.id}/processing-jobs`));
+      await row.getByRole('button', { name: '确认并入队', exact: true }).click();
+      const queued = await queuedResponse;
+      expect(queued.status(), await queued.text()).toBe(200);
+      submittedJobId = (await queued.json() as { job: { id: string } }).job.id;
+      const during = (await app.inject({ url: `/journals/${journalId}/service-plan`, cookies: { openscience_session: ownerToken } })).json().credits as typeof before;
+      expect(during.available).toBe(before.available - 1);
+      expect(during.reserved).toBe(before.reserved + 1);
+      expect(during.consumed).toBe(before.consumed);
+      const cancelled = await cancelJournalJob({ prisma, mailer: createFakeMailer() }, ownerId, journalId, submittedJobId);
+      expect(cancelled.state).toBe('cancelled');
+      const after = (await app.inject({ url: `/journals/${journalId}/service-plan`, cookies: { openscience_session: ownerToken } })).json().credits as typeof before;
+      expect(after.available).toBe(before.available);
+      expect(after.reserved).toBe(before.reserved);
+      expect(after.consumed).toBe(before.consumed);
+
+      await page.goto(`${baseUrl}/journals/manage/${journalId}/services`, { waitUntil: 'networkidle' });
+      await page.getByRole('radio', { name: /Starter/ }).check();
+      await page.getByLabel('需求说明', { exact: true }).fill('Synthetic browser service request; no purchase or entitlement activation.');
+      const serviceResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/journals/${journalId}/service-requests`));
+      await page.getByRole('button', { name: '提交服务申请', exact: true }).click();
+      const service = await serviceResponse;
+      expect(service.status(), await service.text()).toBe(200);
+      await page.getByRole('status').filter({ hasText: '服务申请已提交' }).waitFor({ state: 'visible' });
+      expect((await prisma.journalServiceRequest.findUniqueOrThrow({ where: { id: (await service.json() as { request: { id: string } }).request.id } })).status).toBe('submitted');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+      await page.screenshot({ path: resolve(outputDir, 'services-request-mobile-375.png'), fullPage: true });
+      expect(errors).toEqual([]);
+    } finally {
+      if (submittedJobId) await cancelJournalJob({ prisma, mailer: createFakeMailer() }, ownerId, journalId, submittedJobId);
+      await context.close();
+      await browser.close();
+    }
+  }, 120_000);
 });

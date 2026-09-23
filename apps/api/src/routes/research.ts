@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
 import type { StorageAdapter } from '@openscience/storage';
 import { getBlob } from '@openscience/storage';
-import { getPublicEvidenceSource, PublicEvidenceSourceError, readPublicationMetadata, publicVersionNumber, publicHistoryMedia, readPublicArtifactManifest, getPublicArtifactDownload } from '@openscience/domain';
+import { canReadCurrentPublicResearch, getPublicEvidenceSource, PublicEvidenceSourceError, readPublicationMetadata, publicVersionNumber, publicHistoryMedia, readPublicArtifactManifest, getPublicArtifactDownload } from '@openscience/domain';
 
 /** /research 公开路由依赖：AuthDeps（仅用 prisma）。 */
 export type ResearchRouteDeps = AuthDeps & { storage?: StorageAdapter };
@@ -122,7 +122,7 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
     const matches = await deps.prisma.version.findMany({
       where: { researchObjectId: ro.id, publications: { some: {} },
         researchRecord: { path: ['publicationCorrection', 'previousPublicVersionId'], equals: `${publicId}-v${versionNo}` } },
-      select: { publicationNo: true, publicVersionId: true, researchRecord: true },
+      select: { id: true, publicationNo: true, publicVersionId: true, researchRecord: true },
       take: 2,
     });
     if (matches.length !== 1) return false;
@@ -131,6 +131,7 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
     const correction = record(record(corrected.researchRecord).publicationCorrection);
     if (correction.correctedPublicationNo !== corrected.publicationNo
       || correction.correctedPublicVersionId !== corrected.publicVersionId) return false;
+    if (!await canReadCurrentPublicResearch(deps, { researchObjectId: ro.id, versionId: corrected.id })) return false;
     // Relative Location works through both /api public proxy and internal API origin.
     const depth = suffix.split('/').filter(Boolean).length;
     reply.header('Cache-Control', 'no-store').redirect(`${'../'.repeat(depth)}${corrected.publicationNo}${suffix}`, 307);
@@ -176,17 +177,23 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
     if (versionNo === null) {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: '版本未找到' } });
     }
+    if (!await canReadCurrentPublicResearch(deps, { researchObjectId: ro.id, versionId: version.id })) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: '版本未找到' } });
+    }
     const publicPath = `/research/${encodeURIComponent(publicId)}/v/${versionNo}`;
     reply.header('Content-Location', `/api${publicPath}`);
     const publication = version.publications[0] ?? null;
     const journalRelease = await deps.prisma.journalRelease?.findUnique({ where: { versionId: version.id }, include: { article: true } });
     let journalPackage: Record<string, unknown> | null = null;
+    let journalSourcePublic = true;
     if (journalRelease) {
       reply.header('Cache-Control', 'no-store');
       const rights = journalRelease.article.rights as Record<string, unknown>;
-      if (journalRelease.article.contentState !== 'active' || rights.publicDerivative !== true) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: '内容当前不公开' } });
       journalPackage = { ...(journalRelease.snapshot as Record<string, unknown>), articleId: journalRelease.articleId };
-      if (rights.publicSource !== true) {
+      journalSourcePublic = await canReadCurrentPublicResearch(deps, {
+        researchObjectId: ro.id, versionId: version.id, exposure: 'source',
+      });
+      if (!journalSourcePublic || rights.publicSource !== true) {
         const source = { ...(journalPackage.source as Record<string, unknown>) }; delete source.text; journalPackage.source = source;
       }
     }
@@ -257,7 +264,7 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
           limitations: claim.limitations,
           assessment: claim.assessment,
         })),
-        evidence: contentAvailable ? evidence : [],
+        evidence: contentAvailable && journalSourcePublic ? evidence : [],
         presentationAssets: (contentAvailable ? publicHistoryMedia(version.researchRecord) : []).map((asset) => ({
           id: asset.id,
           kind: asset.kind,
@@ -322,6 +329,9 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
       select: { id: true, researchRecord: true },
     });
     if (!version) throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
+    if (!await canReadCurrentPublicResearch(deps, { researchObjectId: ro.id, versionId: version.id })) {
+      throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
+    }
     const asset = publicHistoryMedia(version.researchRecord).find(item => item.id === assetId && item.researchObjectId === ro.id && item.versionId === version.id);
     if (!asset) throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
 

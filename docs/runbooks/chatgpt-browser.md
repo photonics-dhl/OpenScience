@@ -102,7 +102,7 @@ Sources: https://playwright.dev/docs/docker ; https://github.com/novnc/websockif
 
 ## Production web image provider
 - Distinct chatgpt-web Gateway provider reuses the existing request/result spool and pending scientific-review asset pipeline. It never approves assets or publishes automatically.
-- Install from built immutable release with install.sh --confirm-provider --source /opt/openscience-releases/<SHA> --renderer-image <existing immutable FFmpeg image digest>; then select HERMES_SCENE_IMAGE_PROVIDER=chatgpt-web for API/worker. No account/profile reinstallation is needed.
+- Install from built immutable release with install.sh --confirm-provider --source /opt/openscience-releases/`<SHA>` --renderer-image `<existing immutable FFmpeg image digest>`; then select HERMES_SCENE_IMAGE_PROVIDER=chatgpt-web for API/worker. No account/profile reinstallation is needed.
 - Results root:1000 mode2750 propagates worker-readable group ownership; only worker mounts inbox rw/results ro. Broker uses the shared browser lock, one exclusive submission marker, strict canonical conversation, and aspect-preserving padding.
 - First attach failure may trigger one Chat-target reload and one attach retry only before any submission. A submitted job may restart the browser once and run `recover` against its exact canonical conversation; it never reloads the composer or resends. Production execution succeeded on 2026-09-10: canonical `6aa23223-62f8-83e9-9b43-19d424eb51a6`, PNG 1280×720/971354 bytes, product asset/task `eb48809b-c402-4983-969d-ee82d0fe6200` in `draft`.
 

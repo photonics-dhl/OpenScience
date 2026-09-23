@@ -13,6 +13,8 @@ import {
   transferJournalOwnership, reopenJournalApplication,
   respondJournalFeedback, reviewJournalArticle, reviewJournalServiceRequest, saveJournalApplication, setJournalOperationalState, submitJournalApplication,
   submitJournalJob, txReleases, updateJournalArticle, updateJournalHomepage, verifyJournalApplication,
+  addJournalArticleSource, getJournalServicePlan, listJournalArticleSources, listJournalProcessingPriorities,
+  setJournalPriorityOverride, updateJournalArticleSourceRights,
   type JournalMetadata,
 } from '@openscience/domain';
 import { requireCurrentUser } from './session-guard';
@@ -35,6 +37,17 @@ const applicationBody = z.object({
 const metadata = z.object({ title: z.string().trim().min(1).max(200), doi: z.string().max(300).optional(), authors: z.array(z.string().max(300)).max(200), publishedDate: z.string().max(10).optional(), journalTitle: z.string().max(300).optional(), issns: z.array(z.string().max(20)).max(5).default([]), originalUrl: safeUrl, abstract: z.string().max(50_000).optional() }).strict();
 const source = z.object({ kind: z.enum(['metadata', 'abstract', 'fulltext']), text: z.string().max(200_000), url: safeUrl.or(z.literal('')), label: z.string().max(500) }).strict();
 const rights = z.object({ internalProcessing: z.boolean(), derivativeGeneration: z.boolean(), publicSource: z.boolean(), publicDerivative: z.boolean(), externalProcessing: z.boolean(), license: z.string().max(500), evidence: z.string().max(5000) }).strict();
+const sourcePermissions = z.object({ internalProcessing: z.boolean(), derivativeGeneration: z.boolean(), publicSource: z.boolean(), publicDerivative: z.boolean(), externalProcessing: z.boolean(), figureReuse: z.boolean(), derivativeIllustration: z.boolean() }).strict();
+const sourceEvidence = z.object({ statement: z.string().max(5000), license: z.string().max(500).optional(), verifiedBy: z.string().max(300).optional(), verifiedAt: z.string().datetime().optional(), expiresAt: z.string().datetime().optional() }).strict();
+const sourceRecord = z.object({
+  sourceType: z.enum(['doi_metadata', 'abstract', 'public_full_text', 'publisher_full_text', 'editor_uploaded_pdf', 'author_material', 'supplementary', 'figure_asset', 'parsed_text', 'ocr_visual_sidecar', 'manual_note']),
+  title: z.string().max(500).optional(), url: safeUrl.optional(), fileId: z.string().max(300).optional(),
+  rightsStatus: z.enum(['unknown', 'metadata_only_allowed', 'abstract_processing_allowed', 'internal_processing_only', 'public_summary_allowed', 'figure_reuse_allowed', 'derivative_illustration_allowed', 'full_public_processing_allowed', 'restricted_blocked']),
+  sourceConfidence: z.enum(['verified', 'editor_claimed', 'author_claimed', 'publicly_accessible', 'machine_parsed_only', 'conflict', 'expired', 'revoked']),
+  permissions: sourcePermissions, evidence: sourceEvidence, notes: z.string().max(5000).optional(), activeForGeneration: z.boolean(),
+}).strict();
+const sourceRightsUpdate = sourceRecord.pick({ rightsStatus: true, sourceConfidence: true, permissions: true, evidence: true, notes: true, activeForGeneration: true }).extend({ revision }).strict();
+const jobBody = z.object({ revision, language: z.enum(['zh', 'en']), requestKey, retryOf: z.string().uuid().optional(), manualConfirmation: z.boolean().optional() }).strict();
 const memberRole = z.enum(['admin', 'editor', 'reviewer']);
 const role = (r: string) => ({ maintainer: 'admin', author: 'editor' }[r] ?? r);
 const pageQuery = z.object({ query: z.string().max(200).optional(), subject: z.string().max(100).optional(), cursor: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(100).default(20) });
@@ -151,6 +164,10 @@ export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
     return { items };
   }));
   app.get('/journals/:id/articles/:articleId', member(async (req, uid) => { const p = articleIds.parse(req.params); return { article: await getManagedJournalArticle(deps, uid, p.id, p.articleId) }; }));
+  app.get('/journals/:id/articles/:articleId/sources', member(async (req, uid) => { const p = articleIds.parse(req.params); return listJournalArticleSources(deps, uid, p.id, p.articleId); }));
+  app.post('/journals/:id/articles/:articleId/sources', member(async (req, uid) => { const p = articleIds.parse(req.params); return addJournalArticleSource(deps, uid, p.id, p.articleId, z.object({ revision, source: sourceRecord }).strict().parse(req.body)); }));
+  app.patch('/journals/:id/articles/:articleId/sources/:sourceId/rights', member(async (req, uid) => { const p = articleIds.extend({ sourceId: z.string().min(1).max(200) }).parse(req.params); return updateJournalArticleSourceRights(deps, uid, p.id, p.articleId, p.sourceId, sourceRightsUpdate.parse(req.body)); }));
+  app.post('/journals/:id/articles/:articleId/processing-capability/recalculate', member(async (req, uid) => { const p = articleIds.parse(req.params); const result = await listJournalArticleSources(deps, uid, p.id, p.articleId); return { capability: result.capability }; }));
   app.post('/journals/:id/articles/:articleId/source-file', member(async (req, uid) => {
     const p = articleIds.parse(req.params);
     await journalScope(deps.prisma, p.id, uid, ['owner', 'maintainer', 'author'], true);
@@ -165,7 +182,10 @@ export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
     return uploadJournalSource({ ...deps, storage: deps.storage }, uid, p.id, p.articleId, { ...input, ...file });
   }));
   app.patch('/journals/:id/articles/:articleId', member(async (req, uid) => { const p = articleIds.parse(req.params); const body = z.object({ revision, metadata: metadata.optional(), directoryVisible: z.boolean().optional(), source: source.optional(), rights: rights.optional(), draft: z.unknown().optional() }).strict().parse(req.body); await updateJournalArticle(deps, uid, p.id, p.articleId, body as Parameters<typeof updateJournalArticle>[4]); return { article: await getManagedJournalArticle(deps, uid, p.id, p.articleId) }; }));
-  app.post('/journals/:id/articles/:articleId/ai-drafts', member(async (req, uid) => { const p = articleIds.parse(req.params); return { job: await submitJournalJob(deps, uid, p.id, p.articleId, z.object({ revision, language: z.enum(['zh', 'en']), requestKey, retryOf: z.string().uuid().optional() }).strict().parse(req.body)) }; }));
+  app.post('/journals/:id/articles/:articleId/ai-drafts', member(async (req, uid) => { const p = articleIds.parse(req.params); return { job: await submitJournalJob(deps, uid, p.id, p.articleId, jobBody.parse(req.body)) }; }));
+  app.post('/journals/:id/articles/:articleId/processing-jobs', member(async (req, uid) => { const p = articleIds.parse(req.params); return { job: await submitJournalJob(deps, uid, p.id, p.articleId, jobBody.parse(req.body)) }; }));
+  app.get('/journals/:id/processing-priorities', member(async (req, uid) => { const p = ids.parse(req.params); return listJournalProcessingPriorities(deps, uid, p.id, z.object({ cursor: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(100).default(20) }).strict().parse(req.query)); }));
+  app.post('/journals/:id/articles/:articleId/priority-override', member(async (req, uid) => { const p = articleIds.parse(req.params); return { priority: await setJournalPriorityOverride(deps, uid, p.id, p.articleId, z.object({ editorPriorityScore: z.number().int().min(0).max(10), deferredUntil: z.string().datetime().nullable().default(null), reason: z.string().trim().min(1).max(2000) }).strict().parse(req.body)) }; }));
   app.post('/journals/:id/jobs/:jobId/cancel', member(async (req, uid) => { const p = ids.extend({ jobId: z.string().uuid() }).parse(req.params); return { job: await cancelJournalJob(deps, uid, p.id, p.jobId) }; }));
   app.post('/journals/:id/articles/:articleId/review', member(async (req, uid) => { const p = articleIds.parse(req.params); return { article: await reviewJournalArticle(deps, uid, p.id, p.articleId, z.object({ revision, decision: z.enum(['submit', 'approve', 'request_changes']), note: z.string().max(5000).default('') }).strict().parse(req.body)) }; }));
   app.post('/journals/:id/articles/:articleId/reviewer', member(async (req, uid) => { const p = articleIds.parse(req.params); return { article: await assignJournalReviewer(deps, uid, p.id, p.articleId, z.object({ revision, reviewerId: z.string().uuid() }).strict().parse(req.body)) }; }));
@@ -183,7 +203,8 @@ export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
     return { feedback: await respondJournalFeedback(deps, uid, p.id, p.feedbackId, z.object({ expectedStatus: z.enum(['open', 'resolved', 'declined']), status: z.enum(['resolved', 'declined']), response: z.string().trim().min(1).max(5000) }).strict().parse(req.body)) };
   }));
   app.post('/journals/:id/articles/:articleId/restrict', member(async (req, uid) => { const p = articleIds.parse(req.params); return { article: await restrictJournalArticle(deps, uid, p.id, p.articleId, z.object({ state: z.enum(['restricted', 'withdrawn']), reason: z.string().trim().min(1).max(5000) }).strict().parse(req.body)) }; }));
-  app.post('/journals/:id/service-requests', member(async (req, uid) => ({ request: await createJournalServiceRequest(deps, uid, ids.parse(req.params).id, z.object({ annualVolume: z.number().int().positive().max(1_000_000), language: z.string().max(100), figureScale: z.string().max(100), services: z.array(z.string().max(100)).min(1).max(20), notes: z.string().max(5000).optional(), requestKey }).strict().parse(req.body)) })));
+  app.get('/journals/:id/service-plan', member(async (req, uid) => getJournalServicePlan(deps, uid, ids.parse(req.params).id)));
+  app.post('/journals/:id/service-requests', member(async (req, uid) => ({ request: await createJournalServiceRequest(deps, uid, ids.parse(req.params).id, z.object({ annualVolume: z.number().int().positive().max(1_000_000), language: z.string().max(100), figureScale: z.string().max(100), services: z.array(z.string().max(100)).min(1).max(20), notes: z.string().max(5000).optional(), requestKey, planChoice: z.enum(['free', 'starter', 'pro', 'premium', 'custom']).optional() }).strict().parse(req.body)) })));
   app.get('/journals/:id/stats', member(async (req, uid) => { const { id } = ids.parse(req.params); await journalScope(deps.prisma, id, uid, ['owner', 'maintainer', 'author']); return journalStats(deps, id); }));
   app.get('/admin/journals/applications', admin(async (_req, uid) => ({ items: await listAdminApplications(deps, uid) })));
   app.post('/admin/journals/applications/:id/reopen', admin(async (req, uid) => ({ application: await reopenJournalApplication(deps, uid, {
@@ -201,7 +222,10 @@ export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
     const journal = await deps.prisma.journal.findFirst({ where: { id, homepagePublished: true } }); if (!journal) throw new JournalError('JOURNAL_NOT_FOUND', '期刊不存在');
     const rows = await deps.prisma.journalArticle.findMany({ where: { journalId: id, directoryVisible: true }, orderBy: { id: 'asc' }, take: q.limit + 1, ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}) });
     return { items: await Promise.all(rows.slice(0, q.limit).map(async (a) => {
-      const releases = a.contentState === 'active' ? await txReleases(deps.prisma, a.id, true) : [];
+      // Keep the public bibliography entry visible even when the current source
+      // rights do not permit exposing an interpretation. txReleases applies the
+      // current rights gate to each published release.
+      const releases = a.contentState === 'active' ? await txReleases(deps.prisma, a.id, true, deps.now?.() ?? new Date()) : [];
       return { id: a.id, journalId: id, workId: a.workId, metadata: publicArticleMetadata(a.metadata), directoryState: 'listed', contentState: a.contentState,
         interpretationKind: releases[0]?.scope ?? null, latestUrl: releases[0] ? `/research/${releases[0].publicId}` : null, releases };
     })), nextCursor: rows.length > q.limit ? rows[q.limit - 1]!.id : null };

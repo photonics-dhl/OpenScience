@@ -1,4 +1,5 @@
 import { getBlobStorageKey } from '@openscience/storage';
+import { canReadCurrentPublicResearch } from '../visibility/current-public-access';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import { ClaimEvidenceError } from './claim-evidence-errors';
 import { resolveEvidenceSource } from './claim-evidence-service';
@@ -71,6 +72,11 @@ export async function getPublicEvidenceSource(
     select: { id: true, researchRecord: true },
   });
   if (!version) throw new PublicEvidenceSourceError('NOT_FOUND', 'published Evidence source not found');
+  if (!await canReadCurrentPublicResearch(deps, {
+    researchObjectId: ro.id, versionId: version.id, exposure: 'source',
+  })) {
+    throw new PublicEvidenceSourceError('NOT_FOUND', 'published Evidence source not found');
+  }
   const frozen = record(version.researchRecord);
   const dto = record(frozen.dto);
   const evidence = (Array.isArray(dto.evidence) ? dto.evidence.map(record) : []).find(item => item.id === input.evidenceId);

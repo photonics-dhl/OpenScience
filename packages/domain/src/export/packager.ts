@@ -46,7 +46,7 @@ export async function buildExportPackage(
     include: { researchObject: true, manifest: { include: { entries: true } }, publications: true },
   });
   if (!version) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '版本不存在');
-  await requireRoAccess(deps, { researchObjectId: version.researchObjectId, userId: input.userId });
+  await requireRoAccess(deps, { researchObjectId: version.researchObjectId, versionId: version.id, userId: input.userId });
 
   const ro = version.researchObject;
   const core = (version.manifest?.coreJson as Record<string, string>) ?? {};

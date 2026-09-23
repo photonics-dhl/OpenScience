@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import type { DocumentSourceMap } from '@openscience/domain';
+import { PDF_TEXT_ITEM_METADATA } from '../src/parsers/native-pdf-contract';
 
 import {
   CANONICAL_CORPUS_MANIFEST_SHA256,
@@ -85,7 +86,7 @@ function validDraft() {
   const identities = [
     ['corrupt-pdf-en', 'needs_review', 0, 1],
     ['dual-column-pdf-en', 'succeeded', 5, 5],
-    ['formula-pdf-en', 'succeeded', 2, 2],
+    ['formula-pdf-en', 'needs_review', 2, 2],
     ['markdown-mixed', 'succeeded', 2, 2],
     ['native-docx-en', 'succeeded', 1, 1],
     ['native-pdf-en', 'succeeded', 1, 1],
@@ -110,35 +111,42 @@ function validDraft() {
     locatorTotal,
     reviewReasons: id === 'corrupt-pdf-en'
       ? ['unreadable-or-corrupt-document']
+      : id === 'formula-pdf-en'
+        ? ['formula-visual-transcription-required']
       : id === 'scan-png-empty'
         ? ['no-meaningful-content']
         : [],
     falseReady: false,
     elapsedMs: index + 1,
-    stages: status === 'succeeded' ? [{
-      parser: id === 'scan-pdf-image-only' ? 'tesseract' : 'v1-text-transition',
-      version: id === 'scan-pdf-image-only' ? '5.3.0' : '2.0.0',
+    stages: status === 'succeeded' || id === 'formula-pdf-en' ? [{
+      kind: id === 'formula-pdf-en' ? 'equation' : 'paragraph',
+      parser: id === 'scan-pdf-image-only' ? 'tesseract'
+        : id === 'formula-pdf-en' ? PDF_TEXT_ITEM_METADATA.name : 'v1-text-transition',
+      version: id === 'scan-pdf-image-only' ? '5.3.0'
+        : id === 'formula-pdf-en' ? PDF_TEXT_ITEM_METADATA.version : '2.0.0',
       confidence: id === 'scan-pdf-image-only' ? 0.97 : null,
       boundingBox: { x: 10, y: 20, width: 30, height: 40 },
       transformations: [{
         stage: id === 'scan-pdf-image-only' ? 'ocr' : 'extract_text',
-        parser: id === 'scan-pdf-image-only' ? 'tesseract' : 'v1-text-transition',
-        version: id === 'scan-pdf-image-only' ? '5.3.0' : '2.0.0',
+        parser: id === 'scan-pdf-image-only' ? 'tesseract'
+          : id === 'formula-pdf-en' ? PDF_TEXT_ITEM_METADATA.name : 'v1-text-transition',
+        version: id === 'scan-pdf-image-only' ? '5.3.0'
+          : id === 'formula-pdf-en' ? PDF_TEXT_ITEM_METADATA.version : '2.0.0',
       }],
     }] : [],
   }));
   return {
     schemaVersion: 3,
-    acceptanceProfile: 'hermes-parser-14-2-v1',
+    acceptanceProfile: 'hermes-parser-13-3-v3',
     sourceSha: 'a'.repeat(40),
     manifestSha256: CANONICAL_CORPUS_MANIFEST_SHA256,
     images: { worker: `sha256:${'b'.repeat(64)}`, parser: `sha256:${'c'.repeat(64)}` },
     runtimeProcess: { uid: 1000, gid: 1000, effectiveEnvCount: 0 },
     gatewayCalls: {
-      structuredFake: 14, externalProvider: 0,
+      structuredFake: 26, externalProvider: 0,
       forbidden: { complete: 0, ocr: 0, stream: 0, unknown: 0 },
     },
-    summary: { falseReadyCount: 0, failed: 0, succeeded: 14, needsReview: 2, p50ElapsedMs: 8, p95ElapsedMs: 16 },
+    summary: { falseReadyCount: 0, failed: 0, succeeded: 13, needsReview: 3, p50ElapsedMs: 8, p95ElapsedMs: 16 },
     cases,
   };
 }
@@ -234,7 +242,7 @@ describe('Task 8 acceptance contract', () => {
   });
 
   it('accepts only the byte-exact canonical corpus identity with all four actionable cases ready', () => {
-    expect(CANONICAL_CORPUS_MANIFEST_SHA256).toBe('db62ae00bb3fb7ecb0b2daba5815d75b1960d4ff1e5ef9549dd1e7617925ac03');
+    expect(CANONICAL_CORPUS_MANIFEST_SHA256).toBe('105af3de93dde9242456c9c861992dfa97db4a8c03a10eb83c95bc1597dcc315');
     const parsed = parseCanonicalManifest(canonicalManifest);
     expect(parsed.cases.map(({ id }) => id)).toEqual(canonicalIds);
     expect(parsed.cases.filter(({ id }) => [
@@ -255,9 +263,9 @@ describe('Task 8 acceptance contract', () => {
   it('accepts only a complete hard-gate draft with exact calls, statuses, locators and provenance', () => {
     expect(validateAcceptanceDraft(validDraft())).toMatchObject({
       schemaVersion: 3,
-      acceptanceProfile: 'hermes-parser-14-2-v1',
-      summary: { failed: 0, falseReadyCount: 0, succeeded: 14, needsReview: 2 },
-      gatewayCalls: { structuredFake: 14, externalProvider: 0 },
+      acceptanceProfile: 'hermes-parser-13-3-v3',
+      summary: { failed: 0, falseReadyCount: 0, succeeded: 13, needsReview: 3 },
+      gatewayCalls: { structuredFake: 26, externalProvider: 0 },
     });
   });
 
@@ -497,6 +505,7 @@ describe('Task 8 acceptance contract', () => {
     ['wrong acceptance profile', (draft: ReturnType<typeof validDraft>) => { (draft as { acceptanceProfile: string }).acceptanceProfile = 'legacy-10-6'; }, /identity|profile/i],
     ['reason on succeeded case', (draft: ReturnType<typeof validDraft>) => { draft.cases[1]!.reviewReasons = ['unexpected-review']; }, /review reason/i],
     ['missing intentional review reason', (draft: ReturnType<typeof validDraft>) => { draft.cases[0]!.reviewReasons = []; }, /review reason/i],
+    ['missing formula review reason', (draft: ReturnType<typeof validDraft>) => { draft.cases[2]!.reviewReasons = []; }, /review reason/i],
     ['wrong intentional review reason', (draft: ReturnType<typeof validDraft>) => { draft.cases[11]!.reviewReasons = ['raw provider exception']; }, /review reason/i],
     ['unknown raw case field', (draft: ReturnType<typeof validDraft>) => {
       (draft.cases[0] as typeof draft.cases[number] & { providerError: string }).providerError = 'raw provider exception';
@@ -504,6 +513,9 @@ describe('Task 8 acceptance contract', () => {
     ['unknown raw stage field', (draft: ReturnType<typeof validDraft>) => {
       (draft.cases[1]!.stages[0] as typeof draft.cases[number]['stages'][number] & { rawOutput: string }).rawOutput = 'secret';
     }, /stage provenance|stage shape/i],
+    ['non-string stage kind', (draft: ReturnType<typeof validDraft>) => {
+      (draft.cases[1]!.stages[0] as unknown as { kind: unknown }).kind = ['paragraph'];
+    }, /stage provenance/i],
     ['unknown raw transformation field', (draft: ReturnType<typeof validDraft>) => {
       (draft.cases[1]!.stages[0]!.transformations[0] as typeof draft.cases[number]['stages'][number]['transformations'][number] & { exception: string }).exception = 'raw';
     }, /stage provenance|transformation shape/i],
@@ -517,7 +529,8 @@ describe('Task 8 acceptance contract', () => {
     ['false ready', (draft: ReturnType<typeof validDraft>) => { draft.cases[1]!.falseReady = true; }, /false-ready/i],
     ['missing stage', (draft: ReturnType<typeof validDraft>) => { draft.cases[1]!.stages = []; }, /stage provenance/i],
     ['missing Tesseract provenance', (draft: ReturnType<typeof validDraft>) => { draft.cases[10]!.stages[0]!.parser = 'v1-text-transition'; }, /Tesseract provenance/i],
-    ['hidden structured call', (draft: ReturnType<typeof validDraft>) => { draft.gatewayCalls.structuredFake = 15; }, /structured fake/i],
+    ['missing native formula provenance', (draft: ReturnType<typeof validDraft>) => { draft.cases[2]!.stages[0]!.kind = 'paragraph'; }, /formula review provenance/i],
+    ['hidden structured call', (draft: ReturnType<typeof validDraft>) => { draft.gatewayCalls.structuredFake = 27; }, /structured fake/i],
     ['forbidden OCR call', (draft: ReturnType<typeof validDraft>) => { draft.gatewayCalls.forbidden.ocr = 1; }, /forbidden gateway/i],
     ['missing runtime identity', (draft: ReturnType<typeof validDraft>) => { delete (draft as Partial<typeof draft>).runtimeProcess; }, /identity|runtime process/i],
   ])('rejects $0', (_name, mutate, expected) => {
@@ -536,14 +549,15 @@ describe('Task 8 acceptance contract', () => {
     });
     expect(buildFinalAcceptanceReport(draft, resources)).toMatchObject({
       schemaVersion: 3,
-      acceptanceProfile: 'hermes-parser-14-2-v1',
+      acceptanceProfile: 'hermes-parser-13-3-v3',
       resources: { worker: { user: '1000:1000' }, parser: { effectiveEnvCount: 0 } },
     });
   });
 
-  it('binds the canonical scan-PDF manifest case to the 14/2 ready identity', () => {
+  it('binds the canonical scan and formula cases to the 13/3 review identity', () => {
     const manifest = parseCanonicalManifest(canonicalManifest);
     expect(manifest.cases.find(({ id }) => id === 'scan-pdf-image-only')).toMatchObject({ expectedCurrentStatus: 'ready' });
+    expect(manifest.cases.find(({ id }) => id === 'formula-pdf-en')).toMatchObject({ expectedCurrentStatus: 'needs_review' });
   });
 
   it.each([
@@ -564,10 +578,18 @@ describe('Task 8 acceptance contract', () => {
   it('labels deterministic structured fakes separately and counts every forbidden gateway seam', async () => {
     const seam = createAcceptanceGatewaySeam({ schemaVersion: '0.1.0', fields: {} });
     await expect(seam.gateway.completeStructured()).resolves.toMatchObject({ schemaVersion: '0.1.0' });
+    await expect(seam.gateway.completeStructuredWithMetadata(undefined, [{ role: 'user', content: 'fixture' }]))
+      .resolves.toMatchObject({
+        value: { schemaVersion: '0.1.0' },
+        completion: {
+          provider: 'deterministic-acceptance', model: 'deterministic-acceptance-v2',
+          usage: { inputTokens: 0, outputTokens: 0 }, finishReason: 'stop',
+        },
+      });
     await expect(seam.gateway.ocr()).rejects.toThrow(/forbidden gateway seam/i);
     await expect((seam.gateway as Record<string, () => Promise<unknown>>).hiddenProvider()).rejects.toThrow(/forbidden gateway seam/i);
     expect(seam.snapshot()).toEqual({
-      structuredFake: 1, externalProvider: 0,
+      structuredFake: 2, externalProvider: 0,
       forbidden: { complete: 0, ocr: 1, stream: 0, unknown: 1 },
     });
   });
@@ -614,6 +636,7 @@ describe('Task 8 acceptance contract', () => {
     expect(() => classifyAcceptanceHandlerResult(withLocations)).toThrow(/handler result/i);
     const canonicalCompleted = { ...withLocations, sourceMapRef };
     expect(classifyAcceptanceHandlerResult(canonicalCompleted)).toBe('completed');
+    expect(() => classifyAcceptanceHandlerResult(canonicalCompleted, true)).toThrow(/handler result/i);
     const withSegments = {
       ...canonicalCompleted,
       core: { ...canonicalCompleted.core, problem: 'Supported problem' },
@@ -805,7 +828,7 @@ describe('Task 8 acceptance contract', () => {
     await publishCandidate(candidate, final, testUid);
     await expect(access(candidate)).rejects.toThrow();
     expect(JSON.parse(await readFile(final, 'utf8'))).toMatchObject({
-      schemaVersion: 3, acceptanceProfile: 'hermes-parser-14-2-v1',
+      schemaVersion: 3, acceptanceProfile: 'hermes-parser-13-3-v3',
     });
   });
 

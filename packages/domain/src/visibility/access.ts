@@ -1,4 +1,5 @@
 import type { WorkspaceDeps } from '../workspace/types';
+import { canReadCurrentPublicResearch } from './current-public-access';
 import { VisibilityError } from './errors';
 
 export type RoAccess = 'granted' | 'denied';
@@ -32,15 +33,16 @@ export async function requirePrivateRoAccess(deps: WorkspaceDeps, input: { resea
  */
 export async function canAccessRo(
   deps: WorkspaceDeps,
-  input: { researchObjectId: string; userId?: string },
+  input: { researchObjectId: string; userId?: string; versionId?: string },
 ): Promise<RoAccess> {
   const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
   if (!ro) return 'denied'; // 不存在 → denied（404 语义不泄露）
 
-  // public：公众可见（§4.2），匿名可看
-  if (ro.visibility === 'public') return 'granted';
+  // 期刊发布仍受当前来源权限约束；普通 public RO 保持原有行为。
+  if (ro.visibility === 'public'
+    && await canReadCurrentPublicResearch(deps, { researchObjectId: ro.id, versionId: input.versionId })) return 'granted';
 
-  // 未登录：private/invite_only 均不可
+  // 未登录：private/invite_only 或当前不可公开的期刊 RO 均不可
   if (!input.userId) return 'denied';
 
   // 成员：所有可见性可看
@@ -63,7 +65,7 @@ export async function canAccessRo(
 /** 断言可访问；否则抛 404（不泄露 RO 存在性，§17）。 */
 export async function requireRoAccess(
   deps: WorkspaceDeps,
-  input: { researchObjectId: string; userId?: string },
+  input: { researchObjectId: string; userId?: string; versionId?: string },
 ): Promise<void> {
   const access = await canAccessRo(deps, input);
   if (access === 'denied') {

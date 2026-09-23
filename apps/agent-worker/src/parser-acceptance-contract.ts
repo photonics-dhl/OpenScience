@@ -15,8 +15,9 @@ import { SDF_CORE_VERSION } from '@openscience/sdf-schema';
 
 import { PDF_TEXT_ITEM_METADATA } from './parsers/native-pdf-contract';
 
-export const CANONICAL_CORPUS_MANIFEST_SHA256 = 'db62ae00bb3fb7ecb0b2daba5815d75b1960d4ff1e5ef9549dd1e7617925ac03';
-export const ACCEPTANCE_PROFILE = 'hermes-parser-14-2-v1';
+export const CANONICAL_CORPUS_MANIFEST_SHA256 = '105af3de93dde9242456c9c861992dfa97db4a8c03a10eb83c95bc1597dcc315';
+export const ACCEPTANCE_PROFILE = 'hermes-parser-13-3-v3';
+const ACCEPTANCE_STRUCTURED_FAKE_CALLS = 26;
 
 export interface AcceptanceLocator extends Record<string, unknown> { kind: string }
 export interface AcceptanceManifestCase {
@@ -251,7 +252,7 @@ export function reproduceAcceptanceLocator(
 export const CANONICAL_CASE_IDENTITIES = Object.freeze([
   ['corrupt-pdf-en', 'corrupt.pdf', 'needs_review', 1],
   ['dual-column-pdf-en', 'dual-column.pdf', 'ready', 5],
-  ['formula-pdf-en', 'formula.pdf', 'ready', 2],
+  ['formula-pdf-en', 'formula.pdf', 'needs_review', 2],
   ['markdown-mixed', 'claim.md', 'ready', 2],
   ['native-docx-en', 'fixture.docx', 'ready', 1],
   ['native-pdf-en', 'fixture.pdf', 'ready', 1],
@@ -289,7 +290,7 @@ const CANONICAL_CASE_CONTENT_HASHES: Readonly<Record<string, string>> = Object.f
 const HARD_CASE_EXPECTATIONS = Object.freeze([
   ['corrupt-pdf-en', 'needs_review', 0, 'unreadable-or-corrupt-document'],
   ['dual-column-pdf-en', 'succeeded', 5],
-  ['formula-pdf-en', 'succeeded', 2],
+  ['formula-pdf-en', 'needs_review', 2, 'formula-visual-transcription-required'],
   ['markdown-mixed', 'succeeded', 2],
   ['native-docx-en', 'succeeded', 1],
   ['native-pdf-en', 'succeeded', 1],
@@ -311,6 +312,7 @@ interface AcceptanceTransformation {
   version: string;
 }
 interface AcceptanceStage {
+  kind: string;
   parser: string;
   version: string;
   confidence: number | null;
@@ -359,6 +361,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const SDF_FIELDS = Object.freeze([
   'problem', 'insight', 'method', 'results', 'limitations', 'reproducibility',
+] as const);
+const ACCEPTANCE_MISSING_FIELDS = Object.freeze([
+  'insight', 'method', 'results', 'limitations', 'reproducibility',
 ] as const);
 
 function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
@@ -571,7 +576,56 @@ export async function verifyAcceptanceRuntimeGraphManifest(
   }
 }
 
-export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | 'needs_review' {
+function isAcceptanceScientificReview(
+  value: unknown,
+  sourceMapRef: ReturnType<typeof parseDocumentSourceMapReference>,
+): boolean {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'provider', 'model', 'kind', 'compositionSkill', 'contractVersion', 'status', 'attemptId',
+    'reviewedCandidateHash', 'semanticStage', 'promptHash', 'responseHash', 'usage', 'finishReason',
+  ]) || value.provider !== 'deterministic-acceptance' || value.model !== 'deterministic-acceptance-v2'
+    || value.kind !== 'model_self_check' || value.contractVersion !== '4'
+    || value.status !== 'blocked_scientific_review'
+    || typeof value.attemptId !== 'string' || !value.attemptId
+    || !/^[a-f0-9]{64}$/u.test(String(value.promptHash))
+    || !/^[a-f0-9]{64}$/u.test(String(value.responseHash)) || value.finishReason !== 'stop') return false;
+  if (!isRecord(value.compositionSkill) || !hasExactKeys(value.compositionSkill, ['id', 'version'])
+    || value.compositionSkill.id !== 'scientific-summary' || value.compositionSkill.version !== '6'
+    || !isRecord(value.usage) || !hasExactKeys(value.usage, ['inputTokens', 'outputTokens'])
+    || value.usage.inputTokens !== 0 || value.usage.outputTokens !== 0) return false;
+  const stage = value.semanticStage;
+  if (!isRecord(stage) || !hasExactKeys(stage, [
+    'kind', 'provider', 'model', 'usage', 'finishReason', 'promptHash', 'responseHash',
+    'source', 'reduction', 'passageBindings',
+  ]) || stage.kind !== 'source_bridge' || stage.provider !== 'deterministic-acceptance'
+    || stage.model !== 'deterministic-acceptance-v2' || stage.finishReason !== 'stop'
+    || !/^[a-f0-9]{64}$/u.test(String(stage.promptHash))
+    || !/^[a-f0-9]{64}$/u.test(String(stage.responseHash))
+    || !isRecord(stage.usage) || !hasExactKeys(stage.usage, ['inputTokens', 'outputTokens'])
+    || stage.usage.inputTokens !== 0 || stage.usage.outputTokens !== 0
+    || !Array.isArray(stage.passageBindings) || stage.passageBindings.length !== 0) return false;
+  if (!isRecord(stage.source) || !hasExactKeys(stage.source, ['artifactId', 'contentHash', 'sourceMapHash'])
+    || stage.source.artifactId !== sourceMapRef.artifactId || stage.source.contentHash !== sourceMapRef.contentHash
+    || stage.source.sourceMapHash !== sourceMapRef.serializedSha256) return false;
+  const reduction = stage.reduction;
+  if (!isRecord(reduction) || !hasExactKeys(reduction, ['fields', 'chosenRepresentativeCase'])
+    || reduction.chosenRepresentativeCase !== null || !isRecord(reduction.fields)
+    || !hasExactKeys(reduction.fields, SDF_FIELDS)) return false;
+  const fields = reduction.fields;
+  if (SDF_FIELDS.some((field) => !Array.isArray(fields[field]))) return false;
+  if ((fields.problem as unknown[]).length !== 1
+    || ACCEPTANCE_MISSING_FIELDS.some((field) => (fields[field] as unknown[]).length !== 0)
+    || value.reviewedCandidateHash !== createHash('sha256').update(JSON.stringify(reduction)).digest('hex')) return false;
+  const points = SDF_FIELDS.flatMap((field) => fields[field] as unknown[]);
+  return points.length === 1 && points.every((point) => isRecord(point)
+    && hasExactKeys(point, ['statement', 'type', 'conditionCase', 'comparison', 'operation', 'evidenceIds'])
+    && typeof point.statement === 'string' && Boolean(point.statement.trim())
+    && point.type === 'observation' && point.conditionCase === '' && point.comparison === null && point.operation === null
+    && Array.isArray(point.evidenceIds) && point.evidenceIds.length === 1
+    && typeof point.evidenceIds[0] === 'string' && /^P\d{5}$/u.test(point.evidenceIds[0]));
+}
+
+export function classifyAcceptanceHandlerResult(value: unknown, requireSemantic = false): 'completed' | 'needs_review' {
   if (!isRecord(value)) throw new Error('invalid sdf.extract handler result');
   const hasSourceMapRef = value.sourceMapRef !== undefined;
   let sourceMapRef: ReturnType<typeof parseDocumentSourceMapReference> | undefined;
@@ -592,19 +646,37 @@ export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | '
   }
   const hasEvidenceLocation = value.evidenceLocation !== undefined;
   const hasEvidenceSegments = value.evidenceSegments !== undefined;
+  const hasSemanticResult = value.understandingSkill !== undefined
+    || value.canonicalExtractionContract !== undefined || value.scientificReview !== undefined;
+  const partialKeys = ['reason', 'fieldDiagnostics', 'fieldDiagnosticsDetails', 'unverifiedSummaries', 'unverifiedSourcePassageIds'];
+  const hasPartialResult = partialKeys.some((key) => value[key] !== undefined);
   const expectedKeys = ['core', 'evidence', 'needsMoreInformation',
     ...(hasSourceMapRef ? ['sourceMapRef'] : []),
     ...(hasEvidenceLocation ? ['evidenceLocation'] : []),
-    ...(hasEvidenceSegments ? ['evidenceSegments'] : [])];
+    ...(hasEvidenceSegments ? ['evidenceSegments'] : []),
+    ...(hasSemanticResult ? ['understandingSkill', 'canonicalExtractionContract', 'scientificReview'] : []),
+    ...(hasPartialResult ? partialKeys : [])];
   if (!hasExactKeys(value, expectedKeys)
     || !isRecord(value.core) || !isRecord(value.evidence)
-    || !Array.isArray(value.needsMoreInformation)) {
+    || !Array.isArray(value.needsMoreInformation)
+    || (requireSemantic && hasSourceMapRef && !hasSemanticResult)
+    || (hasSemanticResult && (!sourceMapRef
+      || !isRecord(value.understandingSkill)
+      || !hasExactKeys(value.understandingSkill, ['id', 'version'])
+      || value.understandingSkill.id !== 'paper-analysis' || value.understandingSkill.version !== '8'
+      || value.canonicalExtractionContract !== 'grounded-passages-v2'
+      || !isAcceptanceScientificReview(value.scientificReview, sourceMapRef)))) {
     throw new Error('invalid sdf.extract handler result');
   }
   const core = value.core;
   const evidenceByField = value.evidence;
   const evidenceLocations = value.evidenceLocation as Record<string, unknown> | undefined;
   const needsMoreInformation = value.needsMoreInformation;
+  const scientificStatus = isRecord(value.scientificReview) ? value.scientificReview.status : undefined;
+  const partialFields = needsMoreInformation.filter((field): field is string => typeof field === 'string');
+  const fieldDiagnostics = value.fieldDiagnostics;
+  const fieldDiagnosticsDetails = value.fieldDiagnosticsDetails;
+  const unverifiedSourcePassageIds = value.unverifiedSourcePassageIds;
   if (!hasExactKeys(core, ['schemaVersion', ...SDF_FIELDS])
     || core.schemaVersion !== SDF_CORE_VERSION
     || SDF_FIELDS.some((field) => typeof core[field] !== 'string')
@@ -625,7 +697,19 @@ export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | '
       })))
     || (hasEvidenceSegments && (!sourceMapRef || !isEvidenceSegmentBundle(value.evidenceSegments, sourceMapRef)))
     || new Set(needsMoreInformation).size !== needsMoreInformation.length
-    || needsMoreInformation.some((field) => !SDF_FIELDS.includes(field))) {
+    || needsMoreInformation.some((field) => !SDF_FIELDS.includes(field))
+    || (hasSemanticResult && JSON.stringify(needsMoreInformation) !== JSON.stringify(ACCEPTANCE_MISSING_FIELDS))
+    || (hasSemanticResult && (hasPartialResult !== (scientificStatus === 'blocked_scientific_review')))
+    || (hasPartialResult && (value.reason !== 'canonical_partial_validation_exhausted'
+      || JSON.stringify(partialFields) !== JSON.stringify(ACCEPTANCE_MISSING_FIELDS)
+      || !isRecord(fieldDiagnostics) || !hasExactKeys(fieldDiagnostics, partialFields)
+      || partialFields.some((field) => fieldDiagnostics[field] !== 'malformed_item')
+      || !isRecord(fieldDiagnosticsDetails) || !hasExactKeys(fieldDiagnosticsDetails, partialFields)
+      || partialFields.some((field) => fieldDiagnosticsDetails[field] !== 'scientificReview=needs_source_evidence')
+      || !isRecord(value.unverifiedSummaries) || !hasExactKeys(value.unverifiedSummaries, [])
+      || !isRecord(unverifiedSourcePassageIds) || !hasExactKeys(unverifiedSourcePassageIds, partialFields)
+      || partialFields.some((field) => !Array.isArray(unverifiedSourcePassageIds[field])
+        || (unverifiedSourcePassageIds[field] as unknown[]).length !== 0)))) {
     throw new Error('invalid sdf.extract handler result');
   }
   if (hasEvidenceSegments) {
@@ -659,7 +743,9 @@ function validBox(value: unknown): value is AcceptanceStage['boundingBox'] {
 
 function validateStage(stage: unknown): asserts stage is AcceptanceStage {
   if (!isRecord(stage)
-    || !hasExactKeys(stage, ['parser', 'version', 'confidence', 'boundingBox', 'transformations'])
+    || !hasExactKeys(stage, ['kind', 'parser', 'version', 'confidence', 'boundingBox', 'transformations'])
+    || typeof stage.kind !== 'string'
+    || !['heading', 'paragraph', 'figure', 'table', 'equation', 'caption', 'reference'].includes(stage.kind)
     || typeof stage.parser !== 'string' || !stage.parser
     || typeof stage.version !== 'string' || !stage.version
     || (stage.confidence !== null && (!Number.isFinite(stage.confidence)
@@ -695,7 +781,7 @@ export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
   const gateway = value.gatewayCalls;
   if (!isRecord(gateway)
     || !hasExactKeys(gateway, ['structuredFake', 'externalProvider', 'forbidden'])
-    || gateway.structuredFake !== 14) throw new Error('structured fake call count mismatch');
+    || gateway.structuredFake !== ACCEPTANCE_STRUCTURED_FAKE_CALLS) throw new Error('structured fake call count mismatch');
   const forbiddenCalls = gateway.forbidden;
   if (gateway.externalProvider !== 0 || !isRecord(forbiddenCalls)
     || !hasExactKeys(forbiddenCalls, ['complete', 'ocr', 'stream', 'unknown'])
@@ -753,6 +839,15 @@ export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
           && entry.parser === 'tesseract' && entry.version === '5.3.0'));
       if (!tesseract) throw new Error('mandatory scanned-PDF Tesseract provenance missing');
     }
+    if (item.id === 'formula-pdf-en') {
+      const nativeEquation = item.stages.find((stage) => stage.kind === 'equation'
+        && stage.parser === PDF_TEXT_ITEM_METADATA.name
+        && stage.version === PDF_TEXT_ITEM_METADATA.version
+        && stage.transformations.some((entry) => entry.stage === 'extract_text'
+          && entry.parser === PDF_TEXT_ITEM_METADATA.name
+          && entry.version === PDF_TEXT_ITEM_METADATA.version));
+      if (!nativeEquation) throw new Error('mandatory native formula review provenance missing');
+    }
     if (item.status === 'succeeded') succeeded += 1;
     else needsReview += 1;
   });
@@ -760,7 +855,7 @@ export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
   if (!isRecord(summary) || !hasExactKeys(summary, [
     'falseReadyCount', 'failed', 'succeeded', 'needsReview', 'p50ElapsedMs', 'p95ElapsedMs',
   ]) || summary.falseReadyCount !== 0 || summary.failed !== 0
-    || summary.succeeded !== 14 || summary.needsReview !== 2
+    || summary.succeeded !== 13 || summary.needsReview !== 3
     || summary.succeeded !== succeeded || summary.needsReview !== needsReview
     || summary.p50ElapsedMs !== percentile(elapsed, 0.5)
     || summary.p95ElapsedMs !== percentile(elapsed, 0.95)) {
@@ -1015,16 +1110,33 @@ export function createAcceptanceGatewaySeam<T>(structuredValue: T | ((args: unkn
     counts.forbidden[kind] += 1;
     throw new Error(`forbidden gateway seam invoked: ${kind}`);
   };
+  const resolveStructured = (args: unknown[]) => {
+    counts.structuredFake += 1;
+    const value = typeof structuredValue === 'function'
+      ? (structuredValue as (args: unknown[]) => T)(args)
+      : structuredValue;
+    if (typeof args[0] === 'function' && !(args[0] as (value: T) => boolean)(value)) {
+      throw new Error('deterministic structured fixture failed its schema guard');
+    }
+    return value;
+  };
   const target: Record<string, (...args: unknown[]) => Promise<unknown>> = {
-    completeStructured: async (...args: unknown[]) => {
-      counts.structuredFake += 1;
-      const value = typeof structuredValue === 'function'
-        ? (structuredValue as (args: unknown[]) => T)(args)
-        : structuredValue;
-      if (typeof args[0] === 'function' && !(args[0] as (value: T) => boolean)(value)) {
-        throw new Error('deterministic structured fixture failed its schema guard');
-      }
-      return value;
+    completeStructured: async (...args: unknown[]) => resolveStructured(args),
+    completeStructuredWithMetadata: async (...args: unknown[]) => {
+      const value = resolveStructured(args);
+      const messages = Array.isArray(args[1]) ? args[1] : [];
+      const text = JSON.stringify(value);
+      return {
+        value,
+        completion: {
+          text,
+          usage: { inputTokens: 0, outputTokens: 0 },
+          model: 'deterministic-acceptance-v2',
+          provider: 'deterministic-acceptance',
+          finishReason: 'stop',
+          promptHash: createHash('sha256').update(JSON.stringify(messages)).digest('hex'),
+        },
+      };
     },
     complete: forbidden('complete'),
     ocr: forbidden('ocr'),
