@@ -1241,8 +1241,11 @@ async function readNarrativeTechnicalReceipt(prisma: Pick<Prisma.TransactionClie
             continue;
         }
         if (scene.failureKind === 'submission_unknown') {
+            // moveRun copies its terminal error to every non-succeeded step. That
+            // can replace the old scene error without changing its task or asset.
+            const terminalRunError = run.status === 'failed' && step.status === 'failed' && step.error === run.error;
             if (replacement || step.agentTaskId !== scene.taskId || step.presentationAssetId !== oldStep.presentationAssetId
-                || step.status !== oldStep.status || step.error !== oldStep.error)
+                || step.status !== oldStep.status || (step.error !== oldStep.error && !terminalRunError))
                 throw new PresentationAssetError('VALIDATION_ERROR', 'Unknown narrative submission was changed or replaced');
             continue;
         }
@@ -1423,8 +1426,10 @@ async function readNarrativeTechnicalFollowupReceipt(
         if (!current || current.id !== before.id || before.ordinal !== index || before.agentTaskId !== scene.taskId)
             throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative review followup step changed');
         if (!replacement) {
+            const terminalRunError = scene.failureKind === 'submission_unknown'
+                && run.status === 'failed' && current.status === 'failed' && current.error === run.error;
             if (current.agentTaskId !== before.agentTaskId || current.presentationAssetId !== before.presentationAssetId
-                || current.status !== before.status || current.error !== before.error)
+                || current.status !== before.status || (current.error !== before.error && !terminalRunError))
                 throw new PresentationAssetError('VALIDATION_ERROR', 'Preserved narrative scene was modified');
             continue;
         }
