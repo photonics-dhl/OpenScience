@@ -1,5 +1,6 @@
 # Server ChatGPT browser — operator login research
 
+- Windows PowerShell通过`ssh-run.sh`发送远端heredoc时，须将CRLF归一为LF并确保结束标记后有最终LF；否则远端操作可能已经成功，随后却因尾`PY`被解释为Python名字而返回exit1。遇此情况先按不可变bundle SHA、unit、live runner及timer状态定向读回，绝不按exit1盲重放已消费的安装。构建日志应放在release目录外的项目私有证据目录；immutable source manifest会拒绝额外日志文件。
 - 2026-09-22正常review输入修复：先上传、再填全文、发送前复核完整正文/附件/6Pro/普通模式。原输入无Send取证证明ProseMirror innerText为P/BR增加段落换行，附件显示时间戳后缀；全文比较仅归一连续空白，附件名仍锚定原stem/extension及已观察的数字或YYYYMMDD-HHMMSS后缀。promptHash与发送后原user anchor不变。候选已High PASS，实际安装与恢复进度只见CURRENT。
 - 已失败且明确not_submitted的review不由自然broker重发。仅在具体用户授权、独立审查后，按原science-review锁、原deadline、private/reservation/inner/failed-result全等、完整PNG、无submitted/conversation/anchor/result和无旧活页，使用私有独占一次性操作收据继续原execute；不删旧错误、不延长期限、不覆盖公共failed。真实提交后仅走自然recover及现有completed-only产品入口；本次八项脚本/收据不能作为下一轮自动批量重放入口。失败或期限不足保持原证据，按当时状态另行判定。
 - 2026-09-22容量修复：23:19:39Z内核确认浏览器4GiB cgroup触顶并OOM-kill Chrome，与两个图片任务提交前超时相邻；共享内存/PID未触顶。主机约30GiB内存、约15GiB可用，High审查后在线将memory/memory-swap同步提高至8GiB；原container ID/running/network/PID/shm/security配置均未变化，没有重启。唯一安装默认值同步8GiB，防止未来重建退回旧容量。收据`/opt/openscience/observations/browser-memory-20260922.json`；旧页恢复仍需独立证据，扩容不等于已恢复。

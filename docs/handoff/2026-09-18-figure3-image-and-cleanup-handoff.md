@@ -1,6 +1,10 @@
 # 2026-09-18 交接：Fig. 3 出图卡在 chatgpt-web 桥 + 本轮调试产物清理
 
-## 2026-09-23 — 续审六项终态、Pro菜单与生产来源
+## 2026-09-23 — 集成候选与独立provider安装
+- 交付候选a6a27ef543f3217a94b02ed4ee281e01e8e1e4a4将媒体c1c5ef07与期刊1ede35f6安全合并，独立High静态PASS、已推送draft PR #110；production仍e05/rollback c085。精确SHA源码由项目SSH wrapper传入服务器独立release目录，Gateway服务器构建完成；未运行测试/预检/CI、未发布应用或发模型请求。
+- 第一次provider安装在manifest校验发现自己生成的`.gateway-build-20260923.log`，未切换bundle；日志按原路径/权限完整移到私有备份`provider-backup-20260923-visual-journal-a6a27ef5`并记录恢复说明，manifest随后通过。第二次三锁/空闲/备份安装实际输出`INSTALLED source=a6a27ef5`；客户端助手因尾`PY`无LF而exit1，独立读回两unit指向该bundle、三live runner逐字节等于源码、timer均active/enabled，不能重放。第二备份`provider-backup-20260923-visual-journal-retry-a6a27ef5`保留，浏览器未重启。详细边界见CURRENT。
+
+## 2026-09-23 — 续审六项终态、Pro菜单与生产来源（安装前取证）
 - 第一段技术续审收据已消费且GET无再次续审入口；候选沿原retry-generation追加最多一次review-only续审，六项分别以精确not_submitted旁证4、供应商前P2034且零audit1、旧result/response哈希一致的额度拒绝1作授权。新task/request身份复用原PNG objectKey/hash/Claims/方案；两张旧unknown不替换。第一收据加第二段pre-state逐跳回读，第二段不得继续追加；新额度拒绝只记拒绝，不当科学审阅。独立High静态GO，尚未部署/实际续审；仅定向只读六任务审计字段，没有测试/预检/新模型请求。
 - 6dee9fd3既有review-spool结果虽标`succeeded`，对应response.txt精确为`You've hit your limit. Please try again later.\n\nRetry`，不是科学审阅；不得送入质量验收或重发原请求。新桥候选在同会话锚定响应出现该精确拒绝时写入独立、不可覆盖的`quota-exhausted.json`，不落假result；broker核任务目录/提交标记/请求身份后停止对此任务重复recover；Gateway对已错标的原/恢复result在身份+哈希核对后拒绝额度正文。增量High静态GO，尚未安装/部署，实际效果待观察。用户被异步请求在浏览器登录可用第二Pro账号，当前账号未退出。
 - c085b157正常服务器构建启动exit0，独立marker release c085/rollback574、journal/failed=false；第三篇新attempt2原按钮11:22:22 HTTP202、第二篇原writer11:22:50 HTTP202。收据9db94168/2cd08fa6各生成三项review-only，保留两项历史生图unknown，旧500 writer不重放。原PNG复用不再生图。
