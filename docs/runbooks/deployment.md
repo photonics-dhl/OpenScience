@@ -133,7 +133,7 @@ Git Bash 会沿用 Windows 用户目录中的 SSH 配置和项目专用密钥。
 
 ## 2. 执行步骤
 
-### 2.0 显式无测试部署
+### 2.0 发布验收范围
 
 默认发布合同保持 Parser acceptance、ScanSci capability canary、embedding runtime probe 与公网 auth 探针。标准命令仍为：
 
