@@ -3,6 +3,65 @@ import { PresentationAssetError } from './errors';
 import { presentationStoryboardView, type StoryboardRequest } from './storyboard';
 
 export interface SceneImageRequest { storyboardAssetId: string; sceneIndex: number; styleReferenceAssetId?: string; revisionAssetId?: string }
+export interface GeneratedImageReview {
+  stage: 'generated-image'; requestId: string; decision: 'accepted' | 'blocked'; summary: string;
+  repairInstruction: string | null; contentHash: string; sourceEvidenceIdentity: string;
+  parentIdentity: string; promptHash: string; responseHash: string;
+  provider: 'chatgpt-web-science-review'; model: string;
+}
+export type ImageReviewIdentity = Pick<GeneratedImageReview, 'requestId' | 'contentHash' | 'sourceEvidenceIdentity' | 'parentIdentity'>;
+const reviewHash = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
+
+/** One receipt format for persisted image review, used by workers and approval. */
+export function readStoredGeneratedImageReview(value: unknown, expected: ImageReviewIdentity): GeneratedImageReview | undefined {
+  if (value === undefined) return undefined;
+  const saved = value as Record<string, unknown> | null;
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)
+    || Object.keys(saved).sort().join(',') !== 'contentHash,decision,model,parentIdentity,promptHash,provider,repairInstruction,requestId,responseHash,sourceEvidenceIdentity,stage,summary'
+    || saved.stage !== 'generated-image' || saved.provider !== 'chatgpt-web-science-review'
+    || typeof saved.model !== 'string' || !saved.model.trim() || saved.model.length > 200
+    || ![saved.contentHash, saved.sourceEvidenceIdentity, saved.promptHash, saved.responseHash].every(reviewHash)
+    || Object.entries(expected).some(([key, expectedValue]) => saved[key] !== expectedValue)
+    || (saved.decision !== 'accepted' && saved.decision !== 'blocked')
+    || typeof saved.summary !== 'string' || !saved.summary.trim() || saved.summary.length > 2000
+    || (saved.repairInstruction !== null && (typeof saved.repairInstruction !== 'string'
+      || !saved.repairInstruction.trim() || saved.repairInstruction.length > 400))
+    || (saved.decision === 'accepted' && saved.repairInstruction !== null)) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Saved image review does not match the persisted image');
+  }
+  return saved as unknown as GeneratedImageReview;
+}
+
+export function requireAcceptedSceneImageReview(asset: { id: string; contentHash: string; provenance: unknown },
+  parent: { identity: string; sourceEvidenceIdentity?: string }): void {
+  const provenance = asset.provenance as Record<string, unknown> | null;
+  if (['admin_reviewed_import', 'version_history_copy'].includes(String(provenance?.source))) return;
+  const review = readStoredGeneratedImageReview(provenance?.imageReview, {
+    requestId: asset.id, contentHash: asset.contentHash,
+    sourceEvidenceIdentity: String(provenance?.sourceEvidenceIdentity ?? ''), parentIdentity: parent.identity,
+  });
+  if (provenance?.source !== 'approved_storyboard_scene' || provenance.taskId !== asset.id
+    || provenance.sourceEvidenceIdentity !== parent.sourceEvidenceIdentity || review?.decision !== 'accepted') {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image requires an accepted pixel review for the saved image and current sources');
+  }
+}
+
+export function generatedSceneImageRequiresPixelReview(payload: unknown): boolean {
+  const task = payload as Record<string, unknown> | null;
+  const authority = task?.hermesRunAuthority as Record<string, unknown> | null;
+  return !['onchip-field-sampling-v1', 'content-driven-v1', 'content-driven-image-v1'].includes(String(authority?.profile));
+}
+
+/** Only explicit legacy Hermes profiles lack a pixel-review writer. Manual tasks must be reviewed. */
+export async function sceneImageRequiresPixelReview(prisma: Pick<Prisma.TransactionClient, 'agentTask'>,
+  asset: { id: string; provenance: unknown }): Promise<boolean> {
+  const provenance = asset.provenance as Record<string, unknown> | null;
+  if (['admin_reviewed_import', 'version_history_copy'].includes(String(provenance?.source))) return false;
+  if (provenance?.pixelReviewRequired !== undefined) return true;
+  if (provenance?.imageReview !== undefined) return true;
+  const task = await prisma.agentTask.findUnique({ where: { id: asset.id }, select: { payload: true } });
+  return !task || generatedSceneImageRequiresPixelReview(task.payload);
+}
 export function parseSceneImageRequest(value: unknown): SceneImageRequest {
   const v = value as Record<string, unknown> | null;
   if (!v || typeof v !== 'object' || Array.isArray(v) || !('sceneIndex' in v) || !('storyboardAssetId' in v) || Object.keys(v).some(key => !['sceneIndex', 'storyboardAssetId', 'styleReferenceAssetId', 'revisionAssetId'].includes(key))

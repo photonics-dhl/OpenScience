@@ -37,13 +37,13 @@ export function HermesMediaReview({ researchObjectId, versionId, onConfirmationC
     const match = /^(采用|拒绝|approve|reject)\s*(\d+)$/iu.exec(command);
     if (!match) throw new Error(t('mediaReviewInstruction'));
     const asset = assets[Number(match[2]) - 1];
-    if (!asset || !asset.canTransition) throw new Error(t('mediaReviewUnavailable'));
-    beforeReview(); writing.current = true; setBusy(true); setError('');
     const status = /^(采用|approve)$/iu.test(match[1]) ? 'approved' : 'rejected';
+    if (!asset || !asset.canTransition || (status === 'approved' && !asset.canApprove)) throw new Error(t('mediaReviewUnavailable'));
+    beforeReview(); writing.current = true; setBusy(true); setError('');
     try {
       const { asset: next } = await transitionPresentationAsset(researchObjectId, versionId, asset.id, status, asset.updatedAt);
       if (ownerRef.current !== owner) return;
-      setAssets((items) => items.map((item) => item.id === asset.id ? { ...item, status: next.status, updatedAt: next.updatedAt, canTransition: false } : item));
+      setAssets((items) => items.map((item) => item.id === asset.id ? { ...item, status: next.status, updatedAt: next.updatedAt, canTransition: false, canApprove: false } : item));
       setMessage(t(status === 'approved' ? 'mediaApproved' : 'mediaRejected', { title: mediaTitle(asset) })); onReviewed();
     } catch (cause) {
       if (ownerRef.current !== owner) return;

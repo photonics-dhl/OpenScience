@@ -349,3 +349,76 @@ it.each(['parent-rejected','parent-changed','malformed'])('blocks scene approval
   expect((await listPresentationAssets(ctx as never,ctx.input)).find(a=>a.id===childId)?.canTransition).toBe(false);
   await expect(transitionPresentationAsset(ctx as never,{...ctx.input,assetId:childId,status:'approved',expectedUpdatedAt:updatedAt})).rejects.toThrow();
 });
+
+it('blocks unreviewed narrative image approval while preserving rejection and legacy profiles', async () => {
+  const ctx = sceneFixture();
+  const branchId = '80000000-0000-4000-8000-000000000001';
+  const commitId = '90000000-0000-4000-8000-000000000001';
+  ctx.db.commits.push({ id: commitId, branchId });
+  ctx.db.versions[0].commitId = commitId;
+  ctx.db.versions[0].commit = { branchId };
+  ctx.prisma.$executeRaw = async () => 1;
+  ctx.prisma.$queryRaw = async () => [{ deleted_at: null }];
+  vi.spyOn(ctx.prisma.presentationAsset, 'updateMany').mockImplementation(async () => {
+    throw new Error('Scene image reached status update');
+  });
+  const { requireSceneImageParent } = await import('../../src/assets/scene-image');
+  ctx.db.presentationAssets[0].provenance.sourceEvidenceIdentity = 'a'.repeat(64);
+  const currentParent = await requireSceneImageParent(ctx.prisma, ctx.input);
+  const childId = '70000000-0000-4000-8000-000000000001';
+  const updatedAt = new Date();
+  ctx.db.presentationAssets.push({ id: childId, researchObjectId: RO, versionId: VERSION,
+    kind: 'image', status: 'draft', label: 'presentation_not_evidence', updatedAt,
+    generator: 'OpenScience Hermes scene image / chatgpt-web', contentHash: 'b'.repeat(64),
+    provenance: { source: 'approved_storyboard_scene', subtype: 'storyboard_scene_image', taskId: childId, sceneImage: ctx.input.sceneImage,
+      parentIdentity: currentParent!.identity, sourceEvidenceIdentity: 'a'.repeat(64) } });
+  ctx.db.presentationAssetClaims.push({ presentationAssetId: childId, claimId: CLAIM });
+  ctx.db.agentTasks.push({ id: childId, payload: { hermesRunAuthority: { profile: 'visual-narrative-v1' } } });
+
+  expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)).toMatchObject({ canTransition: true, canApprove: false });
+  await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
+    status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
+    status: 'rejected', expectedUpdatedAt: updatedAt })).rejects.toThrow('Scene image reached status update');
+  expect(ctx.db.presentationAssets.at(-1)?.status).toBe('draft');
+  const review = { stage: 'generated-image', requestId: childId, decision: 'blocked', summary: 'Wrong scale bar',
+    repairInstruction: null, contentHash: 'b'.repeat(64), sourceEvidenceIdentity: 'a'.repeat(64),
+    parentIdentity: currentParent!.identity, promptHash: 'c'.repeat(64), responseHash: 'd'.repeat(64),
+    provider: 'chatgpt-web-science-review', model: 'ChatGPT 6 Pro' };
+  ctx.db.presentationAssets.at(-1)!.provenance.imageReview = review;
+  expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)).toMatchObject({ canTransition: true, canApprove: false });
+  await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
+    status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  ctx.db.presentationAssets.at(-1)!.provenance.imageReview = { ...review, decision: 'accepted', summary: 'Exact labels and scale verified', contentHash: 'e'.repeat(64) };
+  expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)).toMatchObject({ canTransition: true, canApprove: false });
+  await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
+    status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  for (const [key, value] of [
+    ['requestId', ASSET], ['parentIdentity', 'stale-parent'], ['sourceEvidenceIdentity', 'e'.repeat(64)],
+  ] as const) {
+    ctx.db.presentationAssets.at(-1)!.provenance.imageReview = {
+      ...review, decision: 'accepted', summary: 'Exact labels and scale verified', [key]: value,
+    };
+    expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)?.canApprove).toBe(false);
+    await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
+      status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  }
+  ctx.db.presentationAssets.at(-1)!.provenance.imageReview = { ...review, decision: 'accepted', summary: 'Exact labels and scale verified' };
+  expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)).toMatchObject({ canTransition: true, canApprove: true });
+  await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
+    status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toThrow('Scene image reached status update');
+  delete ctx.db.presentationAssets.at(-1)!.provenance.imageReview;
+  ctx.db.presentationAssets.at(-1)!.provenance.pixelReviewRequired = 'generated-image-v1';
+  expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)).toMatchObject({ canTransition: true, canApprove: false });
+  await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
+    status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  delete ctx.db.presentationAssets.at(-1)!.provenance.pixelReviewRequired;
+  ctx.db.agentTasks[0].payload.hermesRunAuthority.profile = 'content-driven-image-v1';
+  expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)).toMatchObject({ canTransition: true, canApprove: true });
+  await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
+    status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toThrow('Scene image reached status update');
+  delete ctx.db.agentTasks[0].payload.hermesRunAuthority;
+  expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)).toMatchObject({ canTransition: true, canApprove: false });
+  await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
+    status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+});

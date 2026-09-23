@@ -1,25 +1,14 @@
 import { createHash } from 'node:crypto';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type ScienceReviewInput, type ScienceReviewAttachment } from '@openscience/ai-gateway';
-import { storyboardSceneStyles, type StoryboardDocument, type StoryboardRequest } from '@openscience/domain';
+import { storyboardSceneStyles, readStoredGeneratedImageReview as parseStoredGeneratedImageReview, type GeneratedImageReview, type ImageReviewIdentity, type StoryboardDocument, type StoryboardRequest } from '@openscience/domain';
 import type { PresentationClaim } from './chart-generator';
 import { loadIllustrationStyleSkills } from './illustration-styles';
 
-export interface GeneratedImageReview {
-  stage: 'generated-image';
-  requestId: string;
-  decision: 'accepted' | 'blocked';
-  summary: string;
-  repairInstruction: string | null;
-  contentHash: string;
-  sourceEvidenceIdentity: string;
-  parentIdentity: string;
-  promptHash: string;
-  responseHash: string;
-  provider: 'chatgpt-web-science-review';
-  model: string;
+export function readStoredGeneratedImageReview(value: unknown, expected: ImageReviewIdentity): GeneratedImageReview | undefined {
+  try { return parseStoredGeneratedImageReview(value, expected); }
+  catch { throw new Error('[blocked] Saved image review does not match the persisted image'); }
 }
-type ImageReviewIdentity = Pick<GeneratedImageReview, 'requestId' | 'contentHash' | 'sourceEvidenceIdentity' | 'parentIdentity'>;
 const sha256 = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 export function generatedImageReviewAttachment(bytes: Uint8Array, contentHash: string, contentType: unknown): ScienceReviewAttachment {
   if ((contentType !== 'image/png' && contentType !== 'image/jpeg' && contentType !== 'image/webp')
@@ -49,21 +38,6 @@ function parseDecision(value: unknown): Pick<GeneratedImageReview, 'decision' | 
   }
   return { decision: record.decision, summary: record.summary.trim(),
     repairInstruction: typeof record.repairInstruction === 'string' ? record.repairInstruction.trim() : null };
-}
-
-/** An existing receipt is reusable only for this exact persisted image and source/parent snapshot. */
-export function readStoredGeneratedImageReview(value: unknown, expected: ImageReviewIdentity): GeneratedImageReview | undefined {
-  if (value === undefined) return undefined;
-  const saved = object(value);
-  if (Object.keys(saved).sort().join(',') !== 'contentHash,decision,model,parentIdentity,promptHash,provider,repairInstruction,requestId,responseHash,sourceEvidenceIdentity,stage,summary'
-    || saved.stage !== 'generated-image' || saved.provider !== 'chatgpt-web-science-review'
-    || typeof saved.model !== 'string' || !saved.model.trim() || saved.model.length > 200
-    || ![saved.contentHash, saved.sourceEvidenceIdentity, saved.promptHash, saved.responseHash].every(hash => typeof hash === 'string' && /^[a-f0-9]{64}$/u.test(hash))
-    || Object.entries(expected).some(([key, value]) => saved[key] !== value)) {
-    throw new Error('[blocked] Saved image review does not match the persisted image');
-  }
-  parseDecision({ decision: saved.decision, summary: saved.summary, repairInstruction: saved.repairInstruction });
-  return saved as unknown as GeneratedImageReview;
 }
 
 /** Uses actual pixels, never the text-only plan reviewer. One spool identity per saved image. */

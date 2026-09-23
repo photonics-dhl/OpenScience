@@ -50,7 +50,7 @@ describe('presentation workbench', () => {
 it('previews private videos with native controls and keeps explicit draft approval', () => {
   const markup = renderToStaticMarkup(createElement(PresentationWorkbench, {
     researchObjectId: 'ro-video', claims: [],
-    assets: [{ id: 'video-1', researchObjectId: 'ro-video', versionId: 'version-1', kind: 'video', canTransition: true, contentHash: 'b'.repeat(64), generator: 'Reviewed local renderer', generatorVersion: 'v1', status: 'draft', label: 'presentation_not_evidence', sourceClaimIds: [], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }],
+    assets: [{ id: 'video-1', researchObjectId: 'ro-video', versionId: 'version-1', kind: 'video', canTransition: true, canApprove: true, contentHash: 'b'.repeat(64), generator: 'Reviewed local renderer', generatorVersion: 'v1', status: 'draft', label: 'presentation_not_evidence', sourceClaimIds: [], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }],
     version: {versionId: 'version-1', versionNo: 1, status: 'draft'}, canWrite: true,
     onCreateClaim: vi.fn().mockResolvedValue(true), onGenerate: vi.fn(), onTransition: vi.fn(),
   }));

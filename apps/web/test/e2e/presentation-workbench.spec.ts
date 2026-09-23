@@ -353,7 +353,7 @@ test('Hermes plans and revises sourced scenes, retaining the original through ap
     keys.push(route.request().headers()['idempotency-key']);
     if (!failedOnce) { failedOnce = true; return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Temporary storyboard failure' } }, 503); }
     const revision = Boolean(body.storyboard.baseAssetId);
-    plans.push({ ...asset, id: revision ? 'plan-revision' : 'plan-original', kind: 'interactive_html', canTransition: true,
+    plans.push({ ...asset, id: revision ? 'plan-revision' : 'plan-original', kind: 'interactive_html', canTransition: true, canApprove: true,
       storyboard: { ...body.storyboard, document: { schemaVersion: 1, title: revision ? 'Revised light journey' : 'Light journey', scenes: Array.from({ length: 3 }, (_, index) => ({ title: `Stage ${index + 1}`, narration: revision ? `Revised narration ${index}` : `Original narration ${index}`, visualAction: revision ? `Revised visual ${index}` : `Original visual ${index}`, durationSeconds: 8, sourceClaimIds: [initialClaim.id] })) } } });
     return json(route, { task: task('pending', 0) }, 202);
   });
@@ -417,7 +417,7 @@ test('approved scene produces an independently reviewable image with stable retr
     keys.push(route.request().headers()['idempotency-key']);
     expect(route.request().postDataJSON()).toEqual({ kind: 'image', sourceClaimIds: [initialClaim.id], sceneImage: { storyboardAssetId: 'approved-plan', sceneIndex: 1 } });
     if (requests++ === 0) return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Please retry the image request.' } }, 503);
-    items.push({ ...asset, id: 'scene-image', kind: 'image', canTransition: true, sceneImage: { storyboardAssetId: 'approved-plan', sceneIndex: 1 } });
+    items.push({ ...asset, id: 'scene-image', kind: 'image', canTransition: true, canApprove: true, sceneImage: { storyboardAssetId: 'approved-plan', sceneIndex: 1 } });
     return json(route, { task: task('pending', 0) }, 202);
   });
   await page.route('**/api/**/presentation-tasks/presentation-task', route => json(route, { task: task('succeeded', 100) }));

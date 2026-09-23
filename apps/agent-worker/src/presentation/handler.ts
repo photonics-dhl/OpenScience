@@ -1,7 +1,7 @@
 import { planSceneImagePrompt } from './scene-image';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, type AiGateway, type OcrAuthorizationContext, type ScienceReviewInput } from '@openscience/ai-gateway';
-import { projectIllustrationEvidence, parseStoryboardDocument, parseStoryboardRequest, requireIllustrationSourceSupport, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativePixelReplanAuthority, requireVideoGenerationParents, storyboardSceneStyles, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
+import { projectIllustrationEvidence, parseStoryboardDocument, parseStoryboardRequest, requireIllustrationSourceSupport, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativePixelReplanAuthority, requireVideoGenerationParents, storyboardSceneStyles, generatedSceneImageRequiresPixelReview, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
 import { generateStoryboard, renderStoryboard } from './storyboard';
 import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@openscience/domain';
 import { createHash } from 'node:crypto';
@@ -381,8 +381,7 @@ async function requireIllustrationOriginalArtifacts(prisma: Pick<Prisma.Transact
 }
 
 function needsGeneratedImageReview(payload: PresentationGenerationPayload): boolean {
-  return Boolean(payload.sceneImage && payload.hermesRunAuthority?.stage === 'scene_image'
-    && payload.hermesRunAuthority.profile === 'visual-narrative-v1');
+  return Boolean(payload.sceneImage && generatedSceneImageRequiresPixelReview(payload));
 }
 
 /** Separate from ingestion/OCR authorization: only the current illustration task may send its sources. */
@@ -730,7 +729,9 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       const current = await requireStyleReferenceImage(prisma, { ...payload, styleReferenceAssetId: payload.sceneImage?.styleReferenceAssetId });
       if (current?.id !== styleReference.id || current.contentHash !== styleReference.contentHash || current.objectKey !== styleReference.objectKey) throw new Error('[blocked] Style reference changed during image generation');
     };
-    if (sceneParent && ((sceneParent.view.output === 'image' && !sceneParent.sourceEvidenceIdentity)
+    if (actualImageReview && (!sceneParent || !options.gateway?.reviewScientific))
+      throw new Error('[blocked] Generated image review unavailable before rendering');
+    if (sceneParent && (((sceneParent.view.output === 'image' || actualImageReview) && !sceneParent.sourceEvidenceIdentity)
       || (sceneParent.sourceEvidenceIdentity && sceneParent.sourceEvidenceIdentity !== sourceEvidenceIdentity))) {
       throw new Error('[blocked] Storyboard evidence has changed; revise the illustration plan before generating images');
     }
@@ -1437,7 +1438,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       const created = await tx.presentationAsset.create({ data: {
         id: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: payload.kind,
         objectKey, contentHash, generator, generatorVersion, promptHash, label: PRESENTATION_ASSET_LABEL,
-        provenance: { ...(scientificMedia ? { sourceEvidenceIdentity, sourceEvidenceIds: sourceEvidence.map((row) => row.id) } : {}), source: payload.sceneImage ? 'approved_storyboard_scene' : payload.video ? 'approved_storyboard_video' : 'verified_claims', ...(payload.sceneImage && sceneParent ? { subtype: 'storyboard_scene_image', sceneImage: { ...payload.sceneImage }, parentIdentity: sceneParent.identity, storyboardContentHash: sceneParent.contentHash, ...(sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]?.paperOriginal ? { paperOriginal: { sourceAssetId: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.assetId, sourceContentHash: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.contentHash, sourceObjectKey: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.objectKey } } : {}) } : {}), ...(videoProvenance ?? {}), ...(illustrationReview ? { illustrationReview } : {}), ...(illustrationRevisionReview ? { illustrationRevisionReview } : {}), ...(designSkills ? { designSkills } : {}), ...(styleReference ? { styleReference: { assetId: styleReference.id, contentHash: styleReference.contentHash, role: 'style' } } : {}), ...(sceneParent?.view.document.scenes[payload.sceneImage!.sceneIndex]?.illustration ? { illustrationCompilation: { skill: 'openscience-research-illustration', version: '6', mode: 'structured_brief' } } : {}), taskId: task.id, sourceClaimIds: payload.sourceClaimIds, contentType, ...(storyboardDocument && payload.storyboard ? { subtype: 'sourced_storyboard', storyboardDocument: JSON.parse(JSON.stringify(storyboardDocument)), storyboardSettings: JSON.parse(JSON.stringify(payload.storyboard)) } : {}) },
+        provenance: { ...(scientificMedia ? { sourceEvidenceIdentity, sourceEvidenceIds: sourceEvidence.map((row) => row.id) } : {}), source: payload.sceneImage ? 'approved_storyboard_scene' : payload.video ? 'approved_storyboard_video' : 'verified_claims', ...(payload.sceneImage && sceneParent ? { subtype: 'storyboard_scene_image', sceneImage: { ...payload.sceneImage }, parentIdentity: sceneParent.identity, storyboardContentHash: sceneParent.contentHash, ...(needsGeneratedImageReview(payload) ? { pixelReviewRequired: 'generated-image-v1' } : {}), ...(sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]?.paperOriginal ? { paperOriginal: { sourceAssetId: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.assetId, sourceContentHash: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.contentHash, sourceObjectKey: sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.paperOriginal!.objectKey } } : {}) } : {}), ...(videoProvenance ?? {}), ...(illustrationReview ? { illustrationReview } : {}), ...(illustrationRevisionReview ? { illustrationRevisionReview } : {}), ...(designSkills ? { designSkills } : {}), ...(styleReference ? { styleReference: { assetId: styleReference.id, contentHash: styleReference.contentHash, role: 'style' } } : {}), ...(sceneParent?.view.document.scenes[payload.sceneImage!.sceneIndex]?.illustration ? { illustrationCompilation: { skill: 'openscience-research-illustration', version: '6', mode: 'structured_brief' } } : {}), taskId: task.id, sourceClaimIds: payload.sourceClaimIds, contentType, ...(storyboardDocument && payload.storyboard ? { subtype: 'sourced_storyboard', storyboardDocument: JSON.parse(JSON.stringify(storyboardDocument)), storyboardSettings: JSON.parse(JSON.stringify(payload.storyboard)) } : {}) },
       } });
       await tx.presentationAssetClaim.createMany({ data: payload.sourceClaimIds.map((claimId) => ({ presentationAssetId: created.id, claimId, researchObjectId: payload.researchObjectId, versionId: payload.versionId })) });
       if (storyboardDocument) await deps.audit?.record({ actorId: scope.userId, action: 'presentation_asset.generated', workspaceId: researchObject.workspaceId, targetType: 'presentation_asset', targetId: created.id, metadata: { taskId: task.id, researchObjectId: payload.researchObjectId, versionId: payload.versionId, subtype: 'sourced_storyboard', baseAssetId: payload.storyboard?.baseAssetId ?? null } }, tx);

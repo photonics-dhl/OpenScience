@@ -1,5 +1,5 @@
 import { requireStyleReferenceImage } from './scene-image';
-import { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageRevision, requireSceneImageSpendIsNew, hasSceneImageProvenance, type SceneImageRequest } from './scene-image';
+import { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageRevision, requireSceneImageSpendIsNew, hasSceneImageProvenance, readStoredGeneratedImageReview, requireAcceptedSceneImageReview, sceneImageRequiresPixelReview, generatedSceneImageRequiresPixelReview, type SceneImageRequest } from './scene-image';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
 import { lockLiveResearchObject, lockTrashReferences } from '../trash/trash';
@@ -45,6 +45,7 @@ export interface PresentationAssetView {
   canGenerateSceneImage: boolean;
   canGenerateVideo: boolean;
   canTransition: boolean;
+  canApprove: boolean;
   id: string;
   researchObjectId: string;
   versionId: string;
@@ -350,6 +351,8 @@ export async function submitPresentationGeneration(deps: AgentDeps, input: {
   if (input.kind === 'image' || input.kind === 'video') await requirePlatformAdmin(deps, input.userId);
   if (payload.sceneImage) {
     const sceneParent = await requireSceneImageParent(deps.prisma, payload);
+    if (generatedSceneImageRequiresPixelReview(payload) && !/^[a-f0-9]{64}$/u.test(sceneParent?.sourceEvidenceIdentity ?? ''))
+      throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Reviewed scene image requires a source-bound storyboard; revise the plan before generating');
     if (sceneParent) await requireSceneImageSpendIsNew(deps.prisma, sceneParent, payload);
     await requireStyleReferenceImage(deps.prisma, { ...payload, styleReferenceAssetId: payload.sceneImage.styleReferenceAssetId });
   }
@@ -397,6 +400,7 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
     const claimsValid = ids.length > 0 && ids.every(id => validClaimIds.has(id));
     const paperOriginal = paperOriginalView(asset);
     let sceneValid = !hasSceneImageProvenance(asset);
+    let pixelReviewAccepted = true;
     let videoValid = !hasVideoProvenance(asset);
     if (isVersionHistoryCopy(asset)) {
       try { await requireValidVersionHistoryCopy(deps.prisma, asset); }
@@ -407,7 +411,11 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
       try {
         const parent = await requireSceneImageParent(deps.prisma, { ...input, sourceClaimIds: ids, sceneImage });
         sceneValid = parent?.identity === (asset.provenance as Prisma.JsonObject).parentIdentity;
-      } catch (error) { if (!(error instanceof PresentationAssetError)) throw error; }
+        if (sceneValid && parent && await sceneImageRequiresPixelReview(deps.prisma, asset)) {
+          try { requireAcceptedSceneImageReview(asset, parent); }
+          catch (error) { if (!(error instanceof PresentationAssetError)) throw error; pixelReviewAccepted = false; }
+        }
+      } catch (error) { if (!(error instanceof PresentationAssetError)) throw error; sceneValid = false; }
     }
     const video = presentationVideoView(asset);
     if (video && claimsValid) {
@@ -433,13 +441,15 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
       && storyboardForVideo.document.scenes.every((scene) => [...scene.narration].length <= 120)
       && storyboardForVideo.document.scenes.reduce((total, scene) => total + [...scene.narration].length, 0) <= 450
       && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index));
+    const canTransition = sceneValid && videoValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin' || hermesReviewable.has(asset.id));
     return ({
     sceneImage: presentationSceneImageView(asset),
     ...(paperOriginal ? { paperOriginal } : {}),
     canGenerateSceneImage: claimsValid && canWrite && user?.platformRole === 'platform_admin' && asset.status === 'approved' && !!presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
     canGenerateVideo,
     storyboard: presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
-    canTransition: sceneValid && videoValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin' || hermesReviewable.has(asset.id)),
+    canTransition,
+    canApprove: canTransition && pixelReviewAccepted,
     id: asset.id,
     researchObjectId: asset.researchObjectId,
     versionId: asset.versionId,
@@ -503,6 +513,10 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
       const task = step?.agentTaskId ? await tx.agentTask.findUnique({ where: { id: step.agentTaskId } }) : null;
       const p = asset.provenance as Prisma.JsonObject;
       const review = (stage === 'scene_image' ? p.imageReview : p.illustrationReview) as Prisma.JsonObject | undefined;
+      const imageReview = stage === 'scene_image' ? readStoredGeneratedImageReview(p.imageReview, {
+        requestId: asset.id, contentHash: asset.contentHash,
+        sourceEvidenceIdentity: String(p.sourceEvidenceIdentity ?? ''), parentIdentity: String(p.parentIdentity ?? ''),
+      }) : undefined;
       const expectedStatus = stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_storyboard_review';
       const ids = (await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } })).map(link => link.claimId).sort();
       const taskPayload = task ? parsePresentationGenerationPayload(task.payload) : undefined;
@@ -518,9 +532,7 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
         || typeof review.promptHash !== 'string' || !/^[a-f0-9]{64}$/.test(review.promptHash)
         || typeof review.responseHash !== 'string' || !/^[a-f0-9]{64}$/.test(review.responseHash)
         || review.requestId !== asset.id || typeof review.provider !== 'string' || !review.provider
-        || (stage === 'scene_image' ? (review.stage !== 'generated-image' || review.contentHash !== asset.contentHash || review.parentIdentity !== p.parentIdentity
-          || review.provider !== 'chatgpt-web-science-review' || typeof review.model !== 'string' || !review.model
-          || !['accepted', 'blocked'].includes(String(review.decision))) : (review.stage !== 'final-brief'
+        || (stage === 'scene_image' ? !imageReview : (review.stage !== 'final-brief'
           || !['accepted', 'revised', 'blocked'].includes(String(review.decision))))
         || (pixel && (stage === 'storyboard' ? task.id !== pixel.task.id
           : taskPayload.sceneImage?.storyboardAssetId !== pixel.task.id || step.ordinal >= pixel.sceneLimit))
@@ -598,7 +610,8 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
         const currentClaims = await tx.claimNode.findMany({ where: { id: { in: links.map(link => link.claimId) }, researchObjectId: input.researchObjectId, versionId: input.versionId }, select: { id: true, extractionStatus: true } });
         if (currentClaims.length !== links.length || currentClaims.some(claim => claim.extractionStatus !== 'succeeded')) throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Scene image source Claims are invalid');
         const parent = await requireSceneImageParent(tx, { researchObjectId: input.researchObjectId, versionId: input.versionId, sourceClaimIds: links.map(link => link.claimId).sort(), sceneImage });
-        if (parent?.identity !== (asset.provenance as Prisma.JsonObject).parentIdentity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed');
+        if (!parent || parent.identity !== (asset.provenance as Prisma.JsonObject).parentIdentity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed');
+        if (await sceneImageRequiresPixelReview(tx, asset)) requireAcceptedSceneImageReview(asset, parent);
       }
       if (hasVideoProvenance(asset)) {
         const video = presentationVideoView(asset);
