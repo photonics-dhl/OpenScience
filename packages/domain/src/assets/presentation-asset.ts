@@ -10,7 +10,7 @@ import { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboard
 import type { AuditContext } from '@openscience/observability';
 import type { PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { getBlobStorageKey } from '@openscience/storage';
-import { createAgentSession, getAgentTask, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
+import { createAgentSession, dispatchAgentTask, getAgentTask, persistAgentTaskInTransaction, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
 import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
@@ -916,7 +916,9 @@ async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionC
                 : [pixelReview.decision === 'accepted' ? 'approved' : 'rejected']).includes(image.status)
             || pixelReview.requestId !== image.id || pixelReview.contentHash !== image.contentHash
             || pixelReview.parentIdentity !== parentIdentity || pixelReview.sourceEvidenceIdentity !== p.sourceEvidenceIdentity
-            || pixelReview.provider !== 'chatgpt-web-science-review' || typeof pixelReview.model !== 'string' || !pixelReview.model.trim()
+            || (pixelReview.provider !== 'chatgpt-web-science-review'
+              && !(pixelReview.provider === 'codex-sol-image-review' && pixelReview.model === 'gpt-5.6-sol'))
+            || typeof pixelReview.model !== 'string' || !pixelReview.model.trim()
             || typeof pixelReview.summary !== 'string' || !pixelReview.summary.trim() || pixelReview.summary.length > 2000
             || (pixelReview.repairInstruction !== null && (pixelReview.decision !== 'blocked'
               || typeof pixelReview.repairInstruction !== 'string' || !pixelReview.repairInstruction.trim() || pixelReview.repairInstruction.length > 400))
@@ -1491,6 +1493,74 @@ export async function copyNarrativeImageForReview(tx: Prisma.TransactionClient, 
     await tx.presentationAssetClaim.createMany({ data: original.sourceClaims.map(link => ({ presentationAssetId: input.taskId,
         claimId: link.claimId, researchObjectId: original.researchObjectId, versionId: original.versionId })) });
     await refreshWorkingResearchRecord(tx, input);
+}
+
+/** Review existing private PNG pixels through the normal worker without paying for another render. */
+export async function submitExistingSceneImageReview(deps: AgentDeps, input: PresentationScope & {
+  assetId: string; idempotencyKey: string;
+}, ctx: AuditContext = {}): Promise<AgentTaskView> {
+  await requirePlatformAdmin(deps, input.userId);
+  const taskId = await withPresentationAssetWrite(deps.prisma, input, async (tx, version) => {
+    const original = await tx.presentationAsset.findUnique({ where: { id: input.assetId }, include: { sourceClaims: true } });
+    if (!original || original.deletedAt || original.kind !== 'image' || original.status !== 'draft'
+      || original.researchObjectId !== input.researchObjectId || original.versionId !== input.versionId) {
+      throw new PresentationAssetError('NOT_FOUND', 'Private image draft is unavailable');
+    }
+    const provenance = recordValue(original.provenance);
+    const previous = await tx.agentTask.findUnique({ where: { id: original.id }, include: { session: true } });
+    if (!previous || previous.deletedAt || previous.status !== 'succeeded' || previous.kind !== 'presentation.generate'
+      || previous.session.deletedAt || previous.session.userId !== input.userId
+      || previous.session.researchObjectId !== input.researchObjectId || provenance.imageReview !== undefined
+      || provenance.source !== 'approved_storyboard_scene' || provenance.taskId !== original.id
+      || provenance.contentType !== 'image/png' || provenance.reviewSourceAssetId !== undefined) {
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Only an unreviewed original scene PNG can enter review-only processing');
+    }
+    const payload = parsePresentationGenerationPayload(previous.payload);
+    if (!payload.sceneImage || payload.hermesRunAuthority || payload.versionId !== input.versionId
+      || payload.researchObjectId !== input.researchObjectId
+      || !/^[a-f0-9]{64}$/u.test(original.contentHash) || !original.objectKey
+      || !isDeepStrictEqual(payload.sourceClaimIds, original.sourceClaims.map(link => link.claimId).sort())) {
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Saved image task is not a matching manual scene');
+    }
+    const parent = await requireSceneImageParent(tx, payload);
+    if (!parent || parent.identity !== provenance.parentIdentity
+      || parent.sourceEvidenceIdentity !== provenance.sourceEvidenceIdentity
+      || !generatedSceneImageRequiresPixelReview(payload)) {
+      throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Image source or parent changed before review');
+    }
+    const copies = await tx.presentationAsset.findMany({ where: { researchObjectId: input.researchObjectId,
+      versionId: input.versionId, deletedAt: null, provenance: { path: ['reviewSourceAssetId'], equals: original.id } },
+      select: { id: true, contentHash: true, objectKey: true } });
+    if (copies.length) {
+      const existing = copies.length === 1 ? await tx.agentTask.findUnique({ where: { id: copies[0]!.id } }) : null;
+      if (!existing || existing.idempotencyKey !== input.idempotencyKey
+        || copies[0]!.contentHash !== original.contentHash || copies[0]!.objectKey !== original.objectKey) {
+        throw new PresentationAssetError('VALIDATION_ERROR', 'This image already has a review-only task');
+      }
+      return existing.id;
+    }
+    const { task, replayed } = await persistAgentTaskInTransaction(deps, tx, {
+      sessionId: previous.sessionId, userId: input.userId, kind: 'presentation.generate',
+      payload: previous.payload as Record<string, unknown>, idempotencyKey: input.idempotencyKey,
+    }, ctx);
+    if (replayed) {
+      const copy = await tx.presentationAsset.findUnique({ where: { id: task.id } });
+      if (!copy || recordValue(copy.provenance).reviewSourceAssetId !== original.id
+        || copy.contentHash !== original.contentHash || copy.objectKey !== original.objectKey) {
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Review-only task is bound to another image');
+      }
+    } else {
+      await copyNarrativeImageForReview(tx, { userId: input.userId, researchObjectId: input.researchObjectId,
+        versionId: input.versionId, previousTaskId: original.id, taskId: task.id });
+      await recordAudit(deps, tx, { actorId: input.userId, workspaceId: version.researchObject.workspaceId,
+        action: 'presentation_asset.image_review_submitted', targetType: 'presentation_asset', targetId: task.id,
+        metadata: { sourceAssetId: original.id, contentHash: original.contentHash, parentIdentity: parent.identity,
+          sourceEvidenceIdentity: parent.sourceEvidenceIdentity, renderAttempt: false } }, ctx);
+    }
+    return task.id;
+  }, { refreshWorkingRecord: false });
+  await dispatchAgentTask(deps, taskId);
+  return getAgentTask(deps, { userId: input.userId, taskId });
 }
 
 /** The worker consumes image feedback only under the explicit same-run correction grant. */

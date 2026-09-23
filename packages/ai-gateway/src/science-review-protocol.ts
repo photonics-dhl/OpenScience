@@ -120,6 +120,9 @@ export interface ScienceReviewProvider {
   readonly name: string;
   readonly model: string;
   review(input: ScienceReviewInput): Promise<ScienceReviewProviderResult>;
+  /** Detect a durable previous image-review attempt before selecting another provider. */
+  hasImageReviewReservation?(requestId: string): Promise<boolean>;
+  ownsLegacyImageReviewReservation?(requestId: string): Promise<boolean>;
   /** Consume an exact saved image-review response without publishing another request. */
   resumeFromCompletedResult?(input: ScienceReviewInput): Promise<ScienceReviewProviderResult>;
 }

@@ -8,6 +8,7 @@ import {
   PublicEvidenceSourceError,
   PresentationAssetError,
   submitPresentationGeneration,
+  submitExistingSceneImageReview,
   transitionPresentationAsset,
 } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
@@ -89,6 +90,15 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     if (!user) return;
     const params = scopeParams.parse(req.params);
     return reply.send({ assets: (await listPresentationAssets(deps, { userId: user.userId, ...params })).map(asset => ({ ...asset, canGenerateSceneImage: !!deps.sceneImageEnabled && asset.canGenerateSceneImage, canGenerateVideo: !!deps.videoEnabled && asset.canGenerateVideo })) });
+  });
+
+  app.post('/research-objects/:researchObjectId/versions/:versionId/presentation-assets/:assetId/review', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const params = assetParams.parse(req.params);
+    const idempotencyKey = z.string().trim().min(1).max(200).parse(req.headers['idempotency-key']);
+    const task = await submitExistingSceneImageReview(deps, { userId: user.userId, ...params, idempotencyKey }, auditCtx(req));
+    return reply.status(202).send({ task });
   });
 
   app.patch('/research-objects/:researchObjectId/versions/:versionId/presentation-assets/:assetId', async (req, reply) => {

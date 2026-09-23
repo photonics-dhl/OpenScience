@@ -5,6 +5,7 @@ import {
   listPresentationAssets,
   getPresentationTask,
   submitPresentationGeneration,
+  submitExistingSceneImageReview,
   transitionPresentationAsset,
 } from '../../src/assets/presentation-asset';
 
@@ -294,6 +295,56 @@ function sceneFixture() {
   const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'image' as const, sourceClaimIds: [CLAIM], sceneImage: { storyboardAssetId: ASSET, sceneIndex: 1 }, idempotencyKey: 'scene' };
   return { ...ctx, input };
 }
+it('starts one charged review-only task from an existing manual PNG without another render', async () => {
+  const ctx = sceneFixture();
+  const branchId = '80000000-0000-4000-8000-000000000001';
+  const commitId = '90000000-0000-4000-8000-000000000001';
+  ctx.db.commits.push({ id: commitId, branchId });
+  ctx.db.versions[0].commitId = commitId;
+  ctx.db.versions[0].commit = { branchId };
+  ctx.db.versions[0].publicVersionId = null;
+  ctx.db.versions[0].createdAt = new Date('2026-09-23T00:00:00Z');
+  ctx.db.researchObjects[0].title = 'Reviewed image fixture';
+  ctx.db.presentationAssets[0].provenance.sourceEvidenceIdentity = 'a'.repeat(64);
+  ctx.prisma.presentationAsset.findFirst = async () => null;
+  ctx.prisma.$executeRaw = async () => 1;
+  ctx.prisma.$queryRaw = async () => [{ deleted_at: null }];
+  const source = await submitPresentationGeneration(ctx as never, ctx.input);
+  ctx.db.agentTasks[0].status = 'succeeded';
+  const { requireSceneImageParent } = await import('../../src/assets/scene-image');
+  const parent = await requireSceneImageParent(ctx.prisma, ctx.input);
+  ctx.db.presentationAssets.push({ id: source.id, researchObjectId: RO, versionId: VERSION,
+    kind: 'image', status: 'draft', label: 'presentation_not_evidence', updatedAt: new Date(),
+    objectKey: 'private/review-source.png', contentHash: 'b'.repeat(64), generator: 'OpenScience scene image',
+    provenance: { source: 'approved_storyboard_scene', subtype: 'storyboard_scene_image', taskId: source.id,
+      sceneImage: ctx.input.sceneImage, parentIdentity: parent!.identity,
+      sourceEvidenceIdentity: 'a'.repeat(64), contentType: 'image/png' } });
+  ctx.db.presentationAssetClaims.push({ presentationAssetId: source.id, claimId: CLAIM });
+  const originalFindMany = ctx.prisma.presentationAsset.findMany;
+  ctx.prisma.presentationAsset.findMany = async (args: any) => args.where?.provenance?.path?.[0] === 'reviewSourceAssetId'
+    ? ctx.db.presentationAssets.filter(asset => asset.provenance?.reviewSourceAssetId === source.id)
+    : originalFindMany(args);
+  ctx.prisma.presentationAsset.findUniqueOrThrow = async ({ where }: any) => {
+    const found = ctx.db.presentationAssets.find(asset => asset.id === where.id);
+    if (!found) throw Error('NOT_FOUND');
+    return { ...found, sourceClaims: ctx.db.presentationAssetClaims.filter(link => link.presentationAssetId === found.id) };
+  };
+  ctx.prisma.trashObjectCleanup = { updateMany: async () => ({ count: 0 }) };
+  ctx.prisma.artifact.findMany = async () => [];
+  const input = { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: source.id, idempotencyKey: 'review-original-png' };
+  const reviewed = await submitExistingSceneImageReview(ctx as never, input);
+  expect(reviewed.id).not.toBe(source.id);
+  expect(ctx.db.presentationAssets.find(asset => asset.id === reviewed.id)).toMatchObject({
+    status: 'draft', objectKey: 'private/review-source.png', contentHash: 'b'.repeat(64),
+    provenance: { reviewSourceAssetId: source.id, taskId: reviewed.id },
+  });
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
+  expect((await submitExistingSceneImageReview(ctx as never, input)).id).toBe(reviewed.id);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
+  await expect(submitExistingSceneImageReview(ctx as never, { ...input, idempotencyKey: 'duplicate-review' }))
+    .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
+});
 it('submits one charged scene image with exact replay and narrow capability', async () => {
   const ctx = sceneFixture();
   const first = await submitPresentationGeneration(ctx as never, ctx.input);
@@ -407,6 +458,14 @@ it('blocks unreviewed narrative image approval while preserving rejection and le
   expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)).toMatchObject({ canTransition: true, canApprove: true });
   await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
     status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toThrow('Scene image reached status update');
+  ctx.db.presentationAssets.at(-1)!.provenance.imageReview = { ...review, decision: 'accepted',
+    summary: 'Source-bound labels and scale verified', provider: 'codex-sol-image-review', model: 'gpt-5.6-sol' };
+  expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)?.canApprove).toBe(true);
+  await expect(transitionPresentationAsset(ctx as never, { ...ctx.input, assetId: childId,
+    status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toThrow('Scene image reached status update');
+  ctx.db.presentationAssets.at(-1)!.provenance.imageReview = { ...review, decision: 'accepted',
+    summary: 'False provider identity', provider: 'codex-sol-image-review', model: 'chatgpt-web/6-pro' };
+  expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)?.canApprove).toBe(false);
   delete ctx.db.presentationAssets.at(-1)!.provenance.imageReview;
   ctx.db.presentationAssets.at(-1)!.provenance.pixelReviewRequired = 'generated-image-v1';
   expect((await listPresentationAssets(ctx as never, ctx.input)).find(asset => asset.id === childId)).toMatchObject({ canTransition: true, canApprove: false });

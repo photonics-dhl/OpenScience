@@ -65,6 +65,8 @@ export interface AiGatewayOptions {
   ocrProviders?: OcrProvider[];
   imageProviders?: ImageProvider[];
   scientificReviewProvider?: ScienceReviewProvider;
+  /** Explicit pixel-only reviewer; all other review routes retain scientificReviewProvider. */
+  illustrationImageReviewProvider?: ScienceReviewProvider;
   /** 缺省：第一条为 primary。 */
   primaryIndex?: number;
   /** §17 审计：调用日志落 AuditSink（action='ai.gateway.call'）；缺省 no-op。 */
@@ -141,6 +143,7 @@ export class AiGateway {
   private readonly ocrProviders: OcrProvider[];
   private readonly imageProviders: ImageProvider[];
   private readonly scientificReviewProvider?: ScienceReviewProvider;
+  private readonly illustrationImageReviewProvider?: ScienceReviewProvider;
   private readonly primaryIndex: number;
   private readonly audit?: AuditSink;
   private readonly logger?: Pick<Console, 'info' | 'warn' | 'error'>;
@@ -158,8 +161,10 @@ export class AiGateway {
     assertProviderPool(opts.ocrProviders ?? [], 'ocr');
     assertProviderPool(opts.imageProviders ?? [], 'image');
     if (opts.scientificReviewProvider) assertProviderPool([opts.scientificReviewProvider], 'scientific review');
+    if (opts.illustrationImageReviewProvider) assertProviderPool([opts.illustrationImageReviewProvider], 'illustration image review');
     this.imageProviders = [...(opts.imageProviders ?? [])];
     this.scientificReviewProvider = opts.scientificReviewProvider;
+    this.illustrationImageReviewProvider = opts.illustrationImageReviewProvider;
     this.providers = [...opts.providers];
     this.ocrProviders = [...(opts.ocrProviders ?? [])];
     this.primaryIndex = opts.primaryIndex ?? 0;
@@ -244,7 +249,15 @@ export class AiGateway {
       return { text, promptHash: sha256Text(input.prompt), responseHash: sha256Text(text),
         provider: result.completion.provider, model: result.completion.model };
     }
-    const provider = this.scientificReviewProvider;
+    let provider = this.scientificReviewProvider;
+    if ('kind' in input.source && input.source.kind === 'illustration-image' && this.illustrationImageReviewProvider) {
+      const prior = await this.scientificReviewProvider?.hasImageReviewReservation?.(input.requestId) ?? false;
+      const selected = await this.illustrationImageReviewProvider.hasImageReviewReservation?.(input.requestId) ?? false;
+      const solSelected = await this.illustrationImageReviewProvider.ownsLegacyImageReviewReservation?.(input.requestId) ?? false;
+      if (prior && selected && !solSelected) throw new AiGatewayError('SCHEMA_VALIDATION', 'image review has conflicting provider reservations');
+      provider = solSelected ? this.illustrationImageReviewProvider
+        : prior ? this.scientificReviewProvider : this.illustrationImageReviewProvider;
+    }
     if (!provider || !(await this.providerEnabled(provider.name, 'text')).enabled) {
       throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'scientific review provider unavailable');
     }

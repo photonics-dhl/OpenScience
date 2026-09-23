@@ -3,7 +3,7 @@
 
 ## 目标与授权
 - 需求基线§18.2及已批准docs/proposals/2026-09-21-visual-narrative-review.html：未读论文者通过六维内容和单/多图理解核心思想与关键点，兼顾科学准确、叙事和美感。用户否定原样裁出Fig.1；原图/生图按需，视频尚不执行。
-- 原链路：PDF → Hermes已审全文/六维/Claims/Evidence → science/art叙事 → Chat图 → 6Pro像素审阅 → reader → 新公开版本。用户只看最终成果，中间由系统推进；不重造全文分析器，不伪造人工核验或用户审美认可。
+- 目标链路：PDF → Hermes已审全文/六维/Claims/Evidence → science/art叙事 → Chat图 → 5.6 Sol正式像素审阅 → reader → 新公开版本。用户只看最终成果，中间由系统推进；不重造全文分析器，不伪造人工核验或用户审美认可。旧6Pro审阅收据仍保留。
 - “允许，不限额度，你把整个任务做完”持续有效，不再问费用。先完成三篇/学术、编辑、淡彩；最终用户质量认可前不批量冷启动。不盲重发未知请求、不自动切provider。
 - 最新纠正优先用好Hermes的skills、工具及反馈；默认6Pro plan末审候选已撤下并归档tmp/chat-plan-final-review-20260922，未部署。science/art/final仍M3、Chat仍负责生图；用户改用5.6Sol看图，当前只作本任务独立咨询，产品正式Sol像素审阅尚未接线，旧6Pro历史收据保留。跨任务自学习尚未实现。
 
@@ -15,7 +15,8 @@
 - 收尾根main及交付树status必须空，自有改动提交推送，prune/list。只剩这两树。268日志归档、12份长文staging归档均已完成，勿重复处理；不声称根治上游argv缺陷。
 
 ## Git与部署
-- application production=e0cf094531bcc7dd887fb07cd64210d62ddfe206，rollback=49b5ae162f288d27fd0ddd3d321ec54d1faef8d4；canonical release/onchip-production-line已推送该完整SHA，根main=62b83372e51285b31a65f89bc0fabeb88d7c09bf。手绘表现v2定向CI 35840121221 success；部署脚本 --confirm --no-tests --skip-migrate --reuse-unchanged-capability-images exit0、release CAS/retention完成，跨能力功能探针明确跳过。49b5保留回滚。Chat provider bundle仍a6a27ef5，未重装或重启共享桥。
+- application production=09ad55d3049ec33177e1a19ab87f8c77af1cd7d9，rollback=e0cf094531bcc7dd887fb07cd64210d62ddfe206；canonical release/onchip-production-line已推送该完整SHA，根main=62b83372e51285b31a65f89bc0fabeb88d7c09bf。新像素审批门禁CI 35853693143 success、部署exit0；第二/三篇私有图实见仍为draft且canApprove=false，未作正式审图或公开。Chat provider bundle仍a6a27ef5，未重装或重启共享桥。
+- 5.6 Sol正式产品审图候选正在本树开发：仅图像审阅走独立CLI/持久收据，保留Chat生图及Hermes科学分析/方案审阅；现有私有PNG可按原字节新增review-only任务，避免重画。定向类型检查/测试已通过，独立High审查中；服务器专用CLI 0.156.1已安装，独立账号设备登录等待完成。候选尚未提交/部署/运行真实正式审图，不能据本机内部咨询放行图片。
 - 独立Chat provider bundle=a6a27ef543f3217a94b02ed4ee281e01e8e1e4a4（集成候选）；两unit指向该bundle、三份live runner与该源码一致、两timer active/enabled，浏览器未重启。三锁/空闲安装；备份provider-backup-20260923-visual-journal-retry-a6a27ef5，首次失败备份同前缀去掉-retry。首次因构建日志留在immutable source被manifest阻断，日志已完整归档至首次备份并记录原路径/权限；第二次安装成功但助手尾heredoc缺LF报exit1，已精确读回安装完成，均不得重放。renderer sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f，sceneImage fallback=false。
 - 图队列当前4worker总65分钟、最多8为125分钟，private/started固定领取后最多10分钟，旧request/deadline不改；一次oneshot不叠慢恢复与新生成。不保证任意旧积压/多生产者。部署排空600秒不覆盖长排队，先等相关本地任务自然终态；超时上游结果仍未知。
 - 0bee5b9b已推送的单文件候选将narrative subjects对齐Domain既有1–4，非narrative保持1–2；各要点独立绑定支持段，art引用实际索引。High修复一项后PASS，已随本次正常发布部署。原场景数/共享预算/来源守卫不变，不保证消除所有推理错误。

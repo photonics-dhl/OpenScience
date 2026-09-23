@@ -78,7 +78,9 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
   // A malformed/uncertain response keeps its original spool record; there is no model retry here.
   const decision = parseDecision(JSON.parse(result.text.trim().replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, '')));
   if (result.promptHash !== sha256(prompt) || result.responseHash !== sha256(result.text)
-    || result.provider !== 'chatgpt-web-science-review' || !result.model) throw new Error('[blocked] Generated image review receipt is invalid');
+    || (result.provider !== 'chatgpt-web-science-review'
+      && !(result.provider === 'codex-sol-image-review' && result.model === 'gpt-5.6-sol'))
+    || !result.model) throw new Error('[blocked] Generated image review receipt is invalid');
   return { stage: 'generated-image', ...identity, ...decision, promptHash: result.promptHash,
-    responseHash: result.responseHash, provider: 'chatgpt-web-science-review', model: result.model };
+    responseHash: result.responseHash, provider: result.provider, model: result.model };
 }

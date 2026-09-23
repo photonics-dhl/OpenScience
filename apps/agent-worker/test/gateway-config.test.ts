@@ -15,6 +15,9 @@ const ocrRequest = () => ({
 });
 
 describe('MiniMax worker gateway config', () => {
+  it('boots with the global AI switch off even when Sol review is configured on', () => {
+    expect(() => buildGateway({ AI_ENABLED: 'false', CODEX_SOL_IMAGE_REVIEW_ENABLED: 'true' })).not.toThrow();
+  });
   it.each([
     ['legacy ScanSci HTTP credentials', {
       SCANSCI_ENABLED: 'true',

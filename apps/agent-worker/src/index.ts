@@ -9,6 +9,7 @@ import {
   CodexSpoolImageProvider,
   ChatGptWebSpoolImageProvider,
   ChatGptWebScienceReviewProvider,
+  CodexSolImageReviewProvider,
   MutableProviderKillSwitch,
   OpenAiCompatProvider,
   type ExternalProcessingPolicy,
@@ -1035,6 +1036,15 @@ export function buildGateway(
         withIllustrationSubmission: spoolSubmissions?.illustration,
       })
     : undefined;
+  const illustrationImageReviewProvider = env.AI_ENABLED === 'true' && env.CODEX_SOL_IMAGE_REVIEW_ENABLED === 'true'
+    && env.CODEX_SOL_REVIEW_INBOX_DIR?.trim() && env.CODEX_SOL_REVIEW_RESULTS_DIR?.trim()
+    && env.CHATGPT_WEB_REVIEW_INBOX_DIR?.trim() && spoolSubmissions?.illustration
+    ? new CodexSolImageReviewProvider({ inboxDir: env.CODEX_SOL_REVIEW_INBOX_DIR.trim(),
+        resultsDir: env.CODEX_SOL_REVIEW_RESULTS_DIR.trim(), legacyInboxDir: env.CHATGPT_WEB_REVIEW_INBOX_DIR.trim(),
+        withIllustrationSubmission: spoolSubmissions.illustration })
+    : undefined;
+  if (env.AI_ENABLED === 'true' && env.CODEX_SOL_IMAGE_REVIEW_ENABLED === 'true' && !illustrationImageReviewProvider)
+    throw new Error('CODEX_SOL_IMAGE_REVIEW_ENABLED requires authorized image review spool paths');
   const staticallyDisabled = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
   const killSwitch: ProviderCapabilityPolicy = {
     async isEnabled(provider, capability) {
@@ -1052,6 +1062,7 @@ export function buildGateway(
     ocrProviders,
     imageProviders,
     scientificReviewProvider,
+    illustrationImageReviewProvider,
     audit,
     logger: console,
     killSwitch,

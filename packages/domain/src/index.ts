@@ -326,6 +326,7 @@ export {
   getPresentationAssetForRead,
   getPresentationTask,
   submitPresentationGeneration,
+  submitExistingSceneImageReview,
   transitionPresentationAsset,
   PresentationAssetError,
   type PresentationGenerationKind,

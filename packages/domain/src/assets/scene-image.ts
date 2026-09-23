@@ -7,7 +7,7 @@ export interface GeneratedImageReview {
   stage: 'generated-image'; requestId: string; decision: 'accepted' | 'blocked'; summary: string;
   repairInstruction: string | null; contentHash: string; sourceEvidenceIdentity: string;
   parentIdentity: string; promptHash: string; responseHash: string;
-  provider: 'chatgpt-web-science-review'; model: string;
+  provider: 'chatgpt-web-science-review' | 'codex-sol-image-review'; model: string;
 }
 export type ImageReviewIdentity = Pick<GeneratedImageReview, 'requestId' | 'contentHash' | 'sourceEvidenceIdentity' | 'parentIdentity'>;
 const reviewHash = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
@@ -18,7 +18,9 @@ export function readStoredGeneratedImageReview(value: unknown, expected: ImageRe
   const saved = value as Record<string, unknown> | null;
   if (!saved || typeof saved !== 'object' || Array.isArray(saved)
     || Object.keys(saved).sort().join(',') !== 'contentHash,decision,model,parentIdentity,promptHash,provider,repairInstruction,requestId,responseHash,sourceEvidenceIdentity,stage,summary'
-    || saved.stage !== 'generated-image' || saved.provider !== 'chatgpt-web-science-review'
+    || saved.stage !== 'generated-image'
+    || (saved.provider !== 'chatgpt-web-science-review'
+      && !(saved.provider === 'codex-sol-image-review' && saved.model === 'gpt-5.6-sol'))
     || typeof saved.model !== 'string' || !saved.model.trim() || saved.model.length > 200
     || ![saved.contentHash, saved.sourceEvidenceIdentity, saved.promptHash, saved.responseHash].every(reviewHash)
     || Object.entries(expected).some(([key, expectedValue]) => saved[key] !== expectedValue)

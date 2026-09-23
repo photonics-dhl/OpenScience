@@ -174,6 +174,16 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
     } catch { return false; }
   }
 
+  async hasImageReviewReservation(requestId: string): Promise<boolean> {
+    if (!SCIENCE_REVIEW_ID_PATTERN.test(requestId)) return false;
+    await directory(this.config.inboxDir); await directory(this.config.resultsDir);
+    for (const path of [join(this.config.inboxDir, `${requestId}.submitted.json`),
+      join(this.config.inboxDir, `${requestId}.json`), join(this.config.resultsDir, requestId)]) {
+      try { await lstat(path); return true; } catch (error) { if (!missing(error)) throw error; }
+    }
+    return false;
+  }
+
   /** The old request was submitted, but its verified answer was a quota notice, not a review. */
   async canRetryAfterQuotaRefusal(input: { requestId: string; promptHash: string; researchObjectId: string;
     versionId: string; candidateHash: string; sourceEvidenceIdentity: string }): Promise<boolean> {

@@ -36,7 +36,9 @@ server.on('connect', (req, client, head) => {
 });
 server.on('clientError',(_,socket)=>socket.destroy());
 server.listen('/proxy/egress.sock',()=>{fs.chmodSync('/proxy/egress.sock',0o600);console.log('PROXY_READY');});
-setTimeout(()=>{for(const s of sockets)s.destroy();server.close();process.exit(0);},600000);
+const requestedLifetime=Number(process.env.XGS_PROXY_MAX_MS??600000);
+const lifetime=Number.isSafeInteger(requestedLifetime)&&requestedLifetime>=60000&&requestedLifetime<=1800000?requestedLifetime:600000;
+setTimeout(()=>{for(const s of sockets)s.destroy();server.close();process.exit(0);},lifetime);
 
 return server;
 }
