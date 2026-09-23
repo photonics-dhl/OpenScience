@@ -118,6 +118,7 @@ async function main(): Promise<void> {
       ...(imageReviewReader ? {
         canResumeImageReviewFromCompletedResult: (requestId: string) => imageReviewReader.canResumeFromCompletedResult(requestId),
         canRetryImageReviewBeforeSubmission: imageReviewReader.canRetryBeforeSubmission.bind(imageReviewReader),
+        canRetryImageReviewAfterQuotaRefusal: imageReviewReader.canRetryAfterQuotaRefusal.bind(imageReviewReader),
       } : {}),
       // P1A-6：审计落库（domain/auth 写操作 + authz.deny 经 deps.audit 流出）
       audit: createPrismaAuditSink(prisma),

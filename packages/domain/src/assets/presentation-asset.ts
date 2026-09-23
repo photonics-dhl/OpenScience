@@ -27,6 +27,7 @@ export const HERMES_IMAGE_RENDER_RECOVERY_ACTION = 'hermes.research_run.image_re
 export const NARRATIVE_PIXEL_REPLAN = 'narrative_pixel_scientific_replan';
 export const NARRATIVE_PIXEL_PLAN_REVISION = 'narrative_pixel_plan_scientific_revision';
 export const NARRATIVE_TECHNICAL_RECOVERY = 'narrative_scene_not_submitted_recovery';
+export const NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP = 'narrative_scene_review_followup';
 export const STORYBOARD_SOURCE_SUPPORT_INVALID = 'storyboard_source_support_invalid';
 export interface ImageReviewNotSubmittedInput {
     requestId: string; promptHash: string; researchObjectId: string; versionId: string;
@@ -1157,7 +1158,17 @@ export async function readNarrativePixelReplanAuthority(prisma: Pick<Prisma.Tran
     const history = await readNarrativePixelReplanHistory(prisma, { ...input, taskId: step.agentTaskId });
     if (!history) return null;
     const { run, metadata: meta } = history;
-    const technicalRecovery = await readNarrativeTechnicalReceipt(prisma, history);
+    const followupRows = await prisma.auditLog.findMany({ where: { actorId: run.actorId,
+      action: 'hermes.research_run.generation_retry', targetType: 'hermes_research_run', targetId: run.id,
+      AND: [ { metadata: { path: ['correction'], equals: NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP } },
+        { metadata: { path: ['parentStoryboardAssetId'], equals: history.task.id } } ] }, take: 2 });
+    if (followupRows.length > 1) throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative review followup count changed');
+    const followupMeta = followupRows.length ? recordValue(followupRows[0]!.metadata) : null;
+    const firstTechnical = await readNarrativeTechnicalReceipt(prisma, history,
+      followupMeta && Array.isArray(followupMeta.sceneSteps) ? followupMeta.sceneSteps : undefined);
+    if (followupMeta && !firstTechnical) throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative first technical receipt is missing');
+    const technicalRecovery = followupRows.length
+      ? await readNarrativeTechnicalFollowupReceipt(prisma, history, firstTechnical!, followupRows[0]!) : firstTechnical;
     if (step.ordinal !== 0 || run.steps.filter(item => item.stage === 'storyboard').length !== 1
       || (technicalRecovery?.metadata.maxAgentTasks ?? history.currentMetadata.maxAgentTasks) !== run.maxAgentTasks)
       throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative scientific replanning receipt is not current');
@@ -1174,7 +1185,7 @@ export async function readNarrativePixelReplanAuthority(prisma: Pick<Prisma.Tran
 
 /** One explicit technical replacement per current plan; old failures and their provider reservations are immutable. */
 async function readNarrativeTechnicalReceipt(prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'auditLog'>,
-    history: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanHistory>>>) {
+    history: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanHistory>>>, nextSceneSteps?: unknown[]) {
     const { run } = history;
     const receipts = await prisma.auditLog.findMany({ where: { actorId: run.actorId, action: 'hermes.research_run.generation_retry',
         targetType: 'hermes_research_run', targetId: run.id, AND: [
@@ -1218,7 +1229,7 @@ async function readNarrativeTechnicalReceipt(prisma: Pick<Prisma.TransactionClie
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement allowance changed');
     for (const [index, scene] of sceneReviews.entries()) {
         const oldStep = recordValue(metadata.sceneSteps[index]);
-        const step = run.steps.find(item => item.stage === 'scene_image' && item.ordinal === index);
+        const step = nextSceneSteps ? recordValue(nextSceneSteps[index]) : run.steps.find(item => item.stage === 'scene_image' && item.ordinal === index);
         const replacement = replacements.find(item => item.sceneIndex === index);
         if (scene.sceneIndex !== index || oldStep.ordinal !== index || oldStep.agentTaskId !== scene.taskId
             || !step || oldStep.id !== step.id || (oldStep.presentationAssetId !== null && oldStep.presentationAssetId !== scene.imageId)
@@ -1260,6 +1271,180 @@ async function readNarrativeTechnicalReceipt(prisma: Pick<Prisma.TransactionClie
         }
     }
     return { receipt, metadata, replacements };
+}
+
+type FirstTechnicalReceipt = NonNullable<Awaited<ReturnType<typeof readNarrativeTechnicalReceipt>>>;
+type ReviewFollowupProof = {
+    canRetryImageReviewBeforeSubmission?: (input: ImageReviewNotSubmittedInput) => Promise<boolean>;
+    canRetryImageReviewAfterQuotaRefusal?: (input: ImageReviewNotSubmittedInput) => Promise<boolean>;
+};
+
+/** Inspect only failed first-stage review copies; the original PNG and unknown siblings stay immutable. */
+export async function readNarrativeTechnicalReviewFollowupSource(
+    prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'auditLog'>,
+    history: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanHistory>>>,
+    first: FirstTechnicalReceipt, sceneSteps: unknown[], proof?: ReviewFollowupProof,
+    recordedSceneReviews?: unknown[],
+) {
+    const { run } = history;
+    const originalScenes = (first.metadata.sceneReviews as unknown[]).map(recordValue);
+    const steps = sceneSteps.map(recordValue);
+    if (steps.length !== originalScenes.length || steps.length < 1 || steps.length > history.sceneLimit
+        || first.replacements.some(item => item.mode !== 'review_only'))
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative review followup scene set changed');
+    const recorded = recordedSceneReviews?.map(recordValue);
+    const sceneReviews: Record<string, unknown>[] = [];
+    const recoverableFailures: Record<string, unknown>[] = [];
+    for (const [index, oldScene] of originalScenes.entries()) {
+        const step = steps[index]!;
+        const replacement = first.replacements.find(item => item.sceneIndex === index);
+        if (oldScene.sceneIndex !== index || step.ordinal !== index || typeof step.id !== 'string'
+            || (step.presentationAssetId !== null && step.presentationAssetId !== step.agentTaskId))
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative review followup step changed');
+        if (!replacement) {
+            if (step.agentTaskId !== oldScene.taskId || step.presentationAssetId !== oldScene.imageId
+                || !['submission_unknown', undefined].includes(oldScene.failureKind as string | undefined))
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Preserved narrative scene changed');
+            sceneReviews.push(oldScene);
+            continue;
+        }
+        if (step.agentTaskId !== replacement.newTaskId || step.presentationAssetId !== replacement.newTaskId
+            || step.status !== 'failed' || replacement.mode !== 'review_only')
+            throw new PresentationAssetError('VALIDATION_ERROR', 'First review replacement changed');
+        const task = await prisma.agentTask.findUnique({ where: { id: replacement.newTaskId as string }, include: { session: true } });
+        const image = await prisma.presentationAsset.findUnique({ where: { id: replacement.newTaskId as string },
+            include: { sourceClaims: { select: { claimId: true } } } });
+        const provenance = recordValue(image?.provenance);
+        if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'failed'
+            || task.executionAttempt !== 1 || task.retryCount !== 0 || task.result !== null || !task.error
+            || task.session.deletedAt || task.session.status !== 'active' || task.session.userId !== run.actorId
+            || task.session.researchObjectId !== run.researchObjectId || step.error !== task.error
+            || !image || image.deletedAt || image.status !== 'draft' || image.kind !== 'image'
+            || image.researchObjectId !== run.researchObjectId || image.versionId !== run.versionId
+            || !image.objectKey || !/^[a-f0-9]{64}$/.test(image.contentHash)
+            || provenance.taskId !== task.id || provenance.reviewSourceAssetId !== replacement.previousTaskId
+            || provenance.imageReview != null || provenance.contentType !== 'image/png'
+            || !isDeepStrictEqual(image.sourceClaims.map(link => link.claimId).sort(), run.sourceClaimIds))
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Failed review-only PNG changed');
+        const calls = await prisma.auditLog.findMany({ where: { requestId: task.id, action: 'ai.gateway.call' },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 2 });
+        const review = calls[0]; const meta = recordValue(review?.metadata);
+        const writeConflict = task.error.replace(/\r\n/gu, '\n').trim()
+            === 'Invalid `prisma.version.updateMany()` invocation:\n\n\nTransaction failed due to a write conflict or a deadlock. Please retry your transaction';
+        const reviewFailed = task.error === 'scientific review provider failed' && calls.length === 1
+            && review?.actorId === null && review.targetType === 'ai_gateway'
+            && review.createdAt >= task.createdAt && review.createdAt <= task.updatedAt
+            && meta.operation === 'scientific_review' && meta.provider === 'chatgpt-web-science-review'
+            && meta.model === 'chatgpt-web/6-pro' && meta.outcome === 'failed'
+            && meta.error === 'scientific_review_failed' && meta.retryCount === 0 && meta.fallbackReason === null
+            && meta.selectionReason === 'high_risk_scientific_review'
+            && meta.inputContentHash === first.metadata.sourceEvidenceIdentity
+            && meta.pageCount === 1 && isDeepStrictEqual(meta.pageNumbers, [1])
+            && typeof meta.promptHash === 'string' && /^[a-f0-9]{64}$/.test(meta.promptHash);
+        if ((!writeConflict || calls.length !== 0) && !reviewFailed)
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Failed review has untrusted provider history');
+        let reviewRecoveryState: string;
+        if (recorded) {
+            reviewRecoveryState = String(recorded[index]?.reviewRecoveryState);
+            if (reviewRecoveryState !== (writeConflict ? 'before_provider_write_conflict' : reviewRecoveryState)
+                || (!writeConflict && !['not_submitted', 'quota_exhausted'].includes(reviewRecoveryState)))
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Review followup failure class changed');
+        } else if (writeConflict) reviewRecoveryState = 'before_provider_write_conflict';
+        else {
+            const request = { requestId: task.id, promptHash: meta.promptHash as string,
+                researchObjectId: run.researchObjectId, versionId: run.versionId!, candidateHash: image.contentHash,
+                sourceEvidenceIdentity: first.metadata.sourceEvidenceIdentity as string };
+            reviewRecoveryState = await proof?.canRetryImageReviewBeforeSubmission?.(request).catch(() => false)
+                ? 'not_submitted' : await proof?.canRetryImageReviewAfterQuotaRefusal?.(request).catch(() => false)
+                    ? 'quota_exhausted' : 'unsafe';
+            if (reviewRecoveryState === 'unsafe') throw new PresentationAssetError('VALIDATION_ERROR', 'Review submission proof is unavailable');
+        }
+        const failure = { sceneIndex: index, taskId: task.id, imageId: image.id, contentHash: image.contentHash,
+            reviewHash: null, decision: null, failureKind: 'review_failed', reviewRecoveryState,
+            taskIdentity: JSON.stringify({ id: task.id, status: task.status, executionAttempt: task.executionAttempt,
+                retryCount: task.retryCount, error: task.error, result: task.result, payload: task.payload, updatedAt: task.updatedAt }),
+            reviewAuditIdentity: review ? JSON.stringify({ id: review.id, createdAt: review.createdAt, metadata: review.metadata }) : null,
+            imageIdentity: JSON.stringify({ id: image.id, contentHash: image.contentHash, objectKey: image.objectKey,
+                provenance: image.provenance, sourceClaimIds: run.sourceClaimIds }) };
+        sceneReviews.push(failure); recoverableFailures.push(failure);
+    }
+    if (!recoverableFailures.length || (recorded && !isDeepStrictEqual(sceneReviews, recordedSceneReviews)))
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative review followup source changed');
+    return { sceneReviews, recoverableFailures, sourceIdentity: JSON.stringify({ firstReceiptId: first.receipt.id,
+        parentIdentity: first.metadata.parentIdentity, sourceEvidenceIdentity: first.metadata.sourceEvidenceIdentity,
+        sceneReviews }) };
+}
+
+/** The second receipt is final: no third technical round may be created. */
+async function readNarrativeTechnicalFollowupReceipt(
+    prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'auditLog'>,
+    history: NonNullable<Awaited<ReturnType<typeof readNarrativePixelReplanHistory>>>, first: FirstTechnicalReceipt,
+    receipt: { id: string; actorId: string | null; metadata: Prisma.JsonValue },
+) {
+    const { run } = history; const metadata = recordValue(receipt.metadata);
+    const rawSteps = metadata.sceneSteps; const rawScenes = metadata.sceneReviews; const rawReplacements = metadata.replacements;
+    if (receipt.actorId !== run.actorId || metadata.correction !== NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP
+        || metadata.previousReceiptId !== first.receipt.id || metadata.rootReceiptId !== history.rootReceipt.id
+        || metadata.previousMaxAgentTasks !== first.metadata.maxAgentTasks
+        || metadata.sceneSet !== 'terminal' || metadata.parentStoryboardAssetId !== history.task.id
+        || metadata.parentIdentity !== first.metadata.parentIdentity
+        || metadata.sourceEvidenceIdentity !== first.metadata.sourceEvidenceIdentity
+        || !Array.isArray(rawSteps) || !Array.isArray(rawScenes) || !Array.isArray(rawReplacements)
+        || rawSteps.length !== rawScenes.length || rawReplacements.length < 1
+        || rawReplacements.length > history.sceneLimit || metadata.newTaskCount !== rawReplacements.length
+        || metadata.reviewOnlyTaskCount !== rawReplacements.length || metadata.maxNewImages !== 0
+        || metadata.maxNewStoryboards !== 0 || metadata.newRunCount !== 0
+        || metadata.chargeableAttempts !== rawReplacements.length || metadata.creditPolicy !== 'charged-on-submit'
+        || metadata.noProviderSwitch !== true || metadata.publicationAuthorized !== false
+        || !Number.isSafeInteger(metadata.existingTaskCount)
+        || metadata.existingTaskCount !== Number(first.metadata.existingTaskCount) + Number(first.metadata.newTaskCount)
+        || metadata.maxAgentTasks !== Math.max(Number(metadata.previousMaxAgentTasks),
+            Number(metadata.existingTaskCount) + Number(metadata.newTaskCount)))
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative review followup receipt is invalid');
+    const source = await readNarrativeTechnicalReviewFollowupSource(prisma, history, first, rawSteps, undefined, rawScenes);
+    const failures = source.recoverableFailures;
+    const kinds = [...new Set([...source.sceneReviews.filter(scene => scene.failureKind === 'submission_unknown').map(() => 'preserved_unknown'),
+        ...failures.filter(scene => scene.reviewRecoveryState === 'quota_exhausted').map(() => 'known_quota_refusal')])].sort();
+    if (source.sourceIdentity !== metadata.sourceIdentity || !isDeepStrictEqual(metadata.priorSubmissionKinds, kinds)
+        || rawReplacements.length !== failures.length
+        || new Set(rawReplacements.map(raw => recordValue(raw).newTaskId)).size !== failures.length
+        || new Set(rawReplacements.map(raw => recordValue(raw).sceneIndex)).size !== failures.length)
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative review followup identity changed');
+    for (const [index, raw] of rawScenes.entries()) {
+        const scene = recordValue(raw); const before = recordValue(rawSteps[index]);
+        const current = run.steps.find(step => step.stage === 'scene_image' && step.ordinal === index);
+        const replacement = rawReplacements.map(recordValue).find(item => item.sceneIndex === index);
+        if (!current || current.id !== before.id || before.ordinal !== index || before.agentTaskId !== scene.taskId)
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative review followup step changed');
+        if (!replacement) {
+            if (current.agentTaskId !== before.agentTaskId || current.presentationAssetId !== before.presentationAssetId
+                || current.status !== before.status || current.error !== before.error)
+                throw new PresentationAssetError('VALIDATION_ERROR', 'Preserved narrative scene was modified');
+            continue;
+        }
+        if (scene.failureKind !== 'review_failed' || replacement.mode !== 'review_only'
+            || replacement.previousTaskId !== scene.taskId || current.agentTaskId !== replacement.newTaskId
+            || current.presentationAssetId !== replacement.newTaskId || typeof replacement.newTaskId !== 'string')
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative review followup binding changed');
+        const previous = await prisma.agentTask.findUniqueOrThrow({ where: { id: scene.taskId as string } });
+        const next = await prisma.agentTask.findUnique({ where: { id: replacement.newTaskId }, include: { session: true } });
+        const oldImage = await prisma.presentationAsset.findUniqueOrThrow({ where: { id: previous.id } });
+        const nextImage = await prisma.presentationAsset.findUnique({ where: { id: replacement.newTaskId }, include: { sourceClaims: true } });
+        const { imageReview: _oldReview, ...prior } = recordValue(oldImage.provenance);
+        const { imageReview: _newReview, ...copied } = recordValue(nextImage?.provenance);
+        if (!next || next.deletedAt || next.kind !== 'presentation.generate' || next.sessionId !== previous.sessionId
+            || next.session.deletedAt || next.session.status !== 'active' || next.session.userId !== run.actorId
+            || next.session.researchObjectId !== run.researchObjectId || !isDeepStrictEqual(next.payload, previous.payload)
+            || next.idempotencyKey !== `hermes-run:${run.id}:generation-recovery:${metadata.requestDigest}:${index}`
+            || !nextImage || nextImage.deletedAt || nextImage.kind !== 'image'
+            || !['draft', 'approved', 'rejected'].includes(nextImage.status)
+            || nextImage.researchObjectId !== run.researchObjectId || nextImage.versionId !== run.versionId
+            || nextImage.objectKey !== oldImage.objectKey || nextImage.contentHash !== oldImage.contentHash
+            || !isDeepStrictEqual(nextImage.sourceClaims.map(link => link.claimId).sort(), run.sourceClaimIds)
+            || !isDeepStrictEqual(copied, { ...prior, taskId: next.id, reviewSourceAssetId: oldImage.id }))
+            throw new PresentationAssetError('VALIDATION_ERROR', 'Saved review followup PNG changed');
+    }
+    return { receipt, metadata, replacements: rawReplacements.map(recordValue) };
 }
 
 /** Add a draft reference to the exact PNG inside the caller's existing Serializable retry transaction. */

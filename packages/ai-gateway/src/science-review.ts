@@ -174,6 +174,33 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
     } catch { return false; }
   }
 
+  /** The old request was submitted, but its verified answer was a quota notice, not a review. */
+  async canRetryAfterQuotaRefusal(input: { requestId: string; promptHash: string; researchObjectId: string;
+    versionId: string; candidateHash: string; sourceEvidenceIdentity: string }): Promise<boolean> {
+    if (!SCIENCE_REVIEW_ID_PATTERN.test(input.requestId)) return false;
+    try {
+      await directory(this.config.inboxDir); await directory(this.config.resultsDir);
+      const output = join(this.config.resultsDir, input.requestId); await directory(output);
+      const request = validateScienceReviewRequest(JSON.parse((await boundedRead(join(this.config.inboxDir,
+        `${input.requestId}.submitted.json`), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+      const result = validateScienceReviewResult(JSON.parse((await boundedRead(join(output, 'result.json'),
+        SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+      if (request.id !== input.requestId || request.schemaVersion !== 3 || request.promptHash !== input.promptHash
+        || request.source.kind !== 'illustration-image' || request.source.researchObjectId !== input.researchObjectId
+        || request.source.versionId !== input.versionId || request.source.candidateHash !== input.candidateHash
+        || request.source.sourceEvidenceIdentity !== input.sourceEvidenceIdentity
+        || request.attachments?.length !== 1 || request.attachments[0]!.sha256 !== input.candidateHash
+        || result.status !== 'succeeded' || result.id !== request.id || result.promptHash !== request.promptHash
+        || typeof result.responseHash !== 'string') return false;
+      const response = await boundedRead(join(output, 'response.txt'), SCIENCE_REVIEW_MAX_RESPONSE_BYTES);
+      if (sha256Text(response.toString('utf8')) !== result.responseHash || !quotaRefusal(response.toString('utf8'))) return false;
+      for (const name of ['recovered-result.json', 'recovered-response.txt', 'not-submitted.json']) {
+        try { await lstat(join(output, name)); return false; } catch (error) { if (!missing(error)) throw error; }
+      }
+      return true;
+    } catch { return false; }
+  }
+
   async review(input: ScienceReviewInput): Promise<ScienceReviewProviderResult> {
     return this.reviewControlled(input, false);
   }
