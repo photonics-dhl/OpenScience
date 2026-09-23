@@ -43,6 +43,7 @@
 - 三张新图均为私有草稿，未经产品正式审图、读者页与新公开版本；5.6Sol 在本轮是 Codex 独立咨询，正式产品 provider 尚未接线，不能把内部 GO 冒充产品审核。用户最新收窄为先能生图；无测试/预检/CI，未部署应用。管理员曾按现有 Domain `topupCredit` + 审计给本次生图补3 credits，旧官方 HTTP 超时但未入账，Domain 入账一次；后续提交经产品正常扣额。
 - Guide 曾把可见标签修改错分到 art-only：b9443fa1 只更新 visualAction，`scene-image.ts` 对结构化 illustration 优先，故旧标签仍进入生图 prompt；该草稿未批准/生图。改走产品普通分镜修订已得到上述新图。根因与后续最小修复登记于能力台账，禁止把 art-only 结果当成结构化标签已改。
 - 用户要求说明 Hermes 的 skill 消费与理解力差额，并查看开发各阶段状态/效果。已建立只读 [研发观察台 HTML](../proposals/2026-09-23-hermes-development-live.html)：按三篇论文展示来源、六维、方案、真实图、内部/正式审阅与公开边界；页面可读取 ignored `tmp/hermes-development-live-feed.js` 每15秒显示本轮检查点，超过15分钟明确标为过期，CURRENT仍唯一权威。当前仅是本机展示候选，不是产品后台或自动遥测；Codex 浏览器的 file URL 策略拒绝代理预览，未作视觉运行观察。科学 skill v3、自有插图 skill 当前 loader v9、Baoyu 白名单风格均已接线，旧任务曾记录实际消费；按疑点回读原文和跨任务经验检索仍未实现。
+- 2026-09-23用户新增要求：看板先显示核心目标及当前生图任务的执行角色/技能/产物/效果/下一步，已原地修改候选HTML；`find-skills` 已本机安装，项目官方技能CLI已有只读find，不重复安装。检索K-Dense scientific-visualization后新增适配版`openscience-scientific-visual-clarity` v1，候选loader仅限定science/plan；独立High发现拆场景指令错投art及review提示占100k来源预算，已改为science读者目标/art现有布局可读性、不改正式review。该源码改动尚未部署、未见新任务消费或效果，未引入上游脚本/新provider。原文疑点回读、正式5.6Sol审图与后两篇发布仍未完成。
 
 ## 第二篇：旧资产与失败审阅（保留）
 - ROc896802c-35dd-4b59-8db1-5f374f83a6d8（deep-sub-cycle pulse）；Versiond07cfeee-c81d-4162-a469-0b431f964801；run7e9e1f3e-eafe-440a-be0f-7ff1ed349a8b failed/v61/max43。原PDF7bb96cc1/3770010bytes、source f1bb85c8 v5、7Claims27Evidence及六维保持。
