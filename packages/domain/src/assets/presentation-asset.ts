@@ -1273,7 +1273,13 @@ async function readNarrativeTechnicalReceipt(prisma: Pick<Prisma.TransactionClie
     return { receipt, metadata, replacements };
 }
 
-type FirstTechnicalReceipt = NonNullable<Awaited<ReturnType<typeof readNarrativeTechnicalReceipt>>>;
+// Both receipt readers validate the full audit row, but the followup logic only
+// needs the common identity, metadata and replacement projection.
+type FirstTechnicalReceipt = {
+    receipt: { id: string };
+    metadata: Record<string, unknown>;
+    replacements: Record<string, unknown>[];
+};
 type ReviewFollowupProof = {
     canRetryImageReviewBeforeSubmission?: (input: ImageReviewNotSubmittedInput) => Promise<boolean>;
     canRetryImageReviewAfterQuotaRefusal?: (input: ImageReviewNotSubmittedInput) => Promise<boolean>;
