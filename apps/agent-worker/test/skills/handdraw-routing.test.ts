@@ -22,7 +22,9 @@ describe('Hermes media skill stages', () => {
 
       const render = loadInstalledMediaSkills(style, '', 'render');
       expect(render.instructions).toContain('Reader-first hand-drawn direction');
-      expect(render.usage.map((item) => item.id)).toContain('openscience-handdraw-style');
+      expect(render.instructions).toContain('a third digit, changed unit or dropped subscript');
+      expect(render.instructions).toContain('endpoints must touch the specified nearest surfaces');
+      expect(render.usage).toContainEqual(expect.objectContaining({ id: 'openscience-handdraw-style', version: '2' }));
       expect(render.usage.map((item) => item.id)).not.toContain('openscience-handdraw-router');
     }
   });
@@ -52,18 +54,21 @@ describe('Hermes media skill stages', () => {
         quote: 'The source describes the relation.',
       } }], encoding: 'A labeled line indicates the supported relation.',
       composition: 'One focal relation with clear spacing.', treatment: 'Fine ink on a calm ground.',
-      labels: ['Supported relation'], constraints: ['Conceptual, not to scale'],
+      labels: ['Supported relation', 'FWHM_S≈77 nm'], constraints: ['Conceptual, not to scale'],
     };
     const design = loadInstalledMediaSkills('editorial', '', 'render');
     const prompt = compileIllustrationImagePrompt(brief, design.instructions);
     expect(prompt).toContain('A supported conceptual relation');
     expect(prompt).toContain('Conceptual, not to scale');
     expect(prompt).toContain('Reader-first hand-drawn direction');
+    expect(prompt).toContain('FWHM_S≈77 nm');
+    expect(prompt).toContain('a third digit, changed unit or dropped subscript');
     expect(imageSpoolRequestByteUpperBound(prompt)).toBeLessThanOrEqual(CODEX_IMAGE_MAX_JSON_BYTES);
     const fullBrief = { ...brief, message: `A supported conceptual relation ${'source detail '.repeat(185)}` };
     const fullPrompt = compileIllustrationImagePrompt(fullBrief, design.instructions);
     expect(fullPrompt).toContain(fullBrief.message);
     expect(fullPrompt).toContain('Reader-first hand-drawn direction');
+    expect(fullPrompt).toContain('a third digit, changed unit or dropped subscript');
     expect(imageSpoolRequestByteUpperBound(fullPrompt)).toBeLessThanOrEqual(CODEX_IMAGE_MAX_JSON_BYTES);
   });
 });

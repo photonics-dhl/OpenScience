@@ -169,7 +169,7 @@ export function loadInstalledMediaSkills(
       const isHanddrawRouter = skill === 'openscience-handdraw-router';
       entry = { id: skill, ...(isIllustration ? { version: '9' } : isVisualClarity
         ? { version: '1', upstreamCommit: SCIENTIFIC_VISUALIZATION_COMMIT }
-        : isHanddrawStyle ? { version: '1', upstreamCommit: HANDDRAW_STYLE_COMMIT }
+        : isHanddrawStyle ? { version: '2', upstreamCommit: HANDDRAW_STYLE_COMMIT }
         : isHanddrawRouter ? { version: '1', upstreamCommit: HANDDRAW_ROUTER_COMMIT }
         : { upstreamCommit: UPSTREAM_COMMIT }), resources: [] };
       usage.push(entry);
