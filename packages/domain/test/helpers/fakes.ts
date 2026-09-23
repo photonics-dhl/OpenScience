@@ -140,15 +140,21 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
   };
 
   const prisma: any = {
+    trashObjectCleanup: { updateMany: async () => ({ count: 0 }) },
     journalArticle: {
       findUnique: async () => null,
     },
-    $queryRaw: async (query: { strings?: readonly string[]; values?: unknown[] }) => {
-      const userId = String(query.values?.[0] ?? '');
-      const queryText = query.strings?.join('?') ?? '';
+    $queryRaw: async (query: { strings?: readonly string[]; values?: unknown[] } | readonly string[], ...tagValues: unknown[]) => {
+      const queryText = Array.isArray(query) ? query.join('?') : query.strings?.join('?') ?? '';
+      const values = Array.isArray(query) ? tagValues : query.values ?? [];
+      if (queryText.includes('SELECT deleted_at FROM research_objects')) {
+        const ro = db.researchObjects.find((candidate) => candidate.id === values[0]);
+        return ro ? [{ deleted_at: ro.deletedAt ?? null }] : [];
+      }
+      const userId = String(values[0] ?? '');
       const recoveryTarget = queryText.includes('{"kind":"personal"}')
         ? { kind: 'personal' }
-        : { kind: 'research_object', researchObjectId: String(query.values?.[1] ?? '') };
+        : { kind: 'research_object', researchObjectId: String(values[1] ?? '') };
       const rows = db.agentTasks.filter((task) => {
         if (task.kind !== 'source.retrieve' || task.status !== 'failed' || task.retryCount !== 0
           || task.error?.startsWith('[blocked]')) return false;
@@ -1416,6 +1422,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return row;
       },
     },
+    $executeRaw: async () => 0,
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
       let release!: () => void;
       const previous = transactionQueue;

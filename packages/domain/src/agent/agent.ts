@@ -553,7 +553,12 @@ async function persistAgentTaskCoreInTransaction(
     session.researchObjectId,
     requestedContext,
   );
-  if (billing === 'ai_credit') {
+  // The current persisted role, not a caller-supplied claim, controls admin funding.
+  const currentUser = billing === 'ai_credit'
+    ? await tx.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } })
+    : null;
+  const adminAutoFunded = currentUser?.platformRole === 'platform_admin';
+  if (billing === 'ai_credit' && !adminAutoFunded) {
     const balance = await tx.usageLedger.aggregate({
       where: { userId: input.userId, resource: AI_CREDIT_RESOURCE },
       _sum: { delta: true },
@@ -578,6 +583,17 @@ async function persistAgentTaskCoreInTransaction(
     throwOwnedPrismaIdempotencyConflict(error, AGENT_TASK_IDEMPOTENCY_CONSTRAINT);
   }
   if (billing === 'ai_credit') {
+    if (adminAutoFunded) {
+      await recordEntry(tx, {
+        userId: input.userId,
+        resource: AI_CREDIT_RESOURCE,
+        delta: 1,
+        kind: 'adjust',
+        reason: `Platform admin AI task funding ${input.kind}`,
+        idempotencyKey: `agent-task-admin-fund:${task.id}`,
+        metadata: { taskId: task.id, kind: input.kind, policy: 'platform-admin-auto-funded' },
+      });
+    }
     await recordEntry(tx, {
       userId: input.userId,
       resource: AI_CREDIT_RESOURCE,
@@ -590,7 +606,8 @@ async function persistAgentTaskCoreInTransaction(
   }
   await recordAudit(deps, tx, {
     actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: task.id,
-    metadata: { kind: input.kind, sessionId: session.id, creditPolicy: billing === 'ai_credit' ? 'charged-on-submit' : 'not-applicable-deterministic' },
+    metadata: { kind: input.kind, sessionId: session.id, creditPolicy: billing === 'ai_credit' ? 'charged-on-submit' : 'not-applicable-deterministic',
+      ...(adminAutoFunded ? { funding: 'platform-admin-auto-funded' } : {}) },
   }, ctx);
   return { task, replayed: false };
 }

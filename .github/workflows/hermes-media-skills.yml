@@ -36,9 +36,12 @@ on:
       - 'packages/domain/src/assets/scene-image.ts'
       - 'packages/domain/src/assets/presentation-asset.ts'
       - 'packages/domain/src/agent/agent.ts'
+      - 'packages/domain/src/ingestion/ingestion-service.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
       - 'packages/domain/test/agent/agent.test.ts'
+      - 'packages/domain/test/ingestion-service.test.ts'
+      - 'packages/domain/test/helpers/fakes.ts'
       - '.github/workflows/hermes-media-skills.yml'
   pull_request:
     branches: [release/onchip-production-line]
@@ -72,9 +75,12 @@ on:
       - 'packages/domain/src/assets/scene-image.ts'
       - 'packages/domain/src/assets/presentation-asset.ts'
       - 'packages/domain/src/agent/agent.ts'
+      - 'packages/domain/src/ingestion/ingestion-service.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
       - 'packages/domain/test/agent/agent.test.ts'
+      - 'packages/domain/test/ingestion-service.test.ts'
+      - 'packages/domain/test/helpers/fakes.ts'
       - '.github/workflows/hermes-media-skills.yml'
 
 jobs:
@@ -104,6 +110,8 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "recovers a saved manual PNG only"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "rearms only a receipted manual PNG review"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "prevents retrying a failed image source"
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "current platform admin can submit"
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/ingestion-service.test.ts -t "auto-funds a current platform admin"
       - run: node --check infra/codex-sol-review/runner.mjs
       - run: node --check infra/chatgpt-browser/review-broker.mjs
       - run: node --check infra/chatgpt-browser/review-runner.cjs

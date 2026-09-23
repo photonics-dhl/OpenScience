@@ -491,13 +491,25 @@ export async function retryIngestionTask(
           : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable'
             : compensatedSchemaRetry ? 'canonical_schema_exhaustion_compensation'
               : paidFailedRetry ? 'failed_retryable_paid' : 'failed_retryable';
+        let adminAutoFunded = false;
         if (canonicalAllMissingRecovery || paidFailedRetry) {
           if (!agentTask) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction task is unavailable');
-          const balance = await tx.usageLedger.aggregate({
-            where: { userId: input.userId, resource: AI_CREDIT_RESOURCE }, _sum: { delta: true },
-          });
-          if (Number(balance._sum.delta ?? 0) <= 0) {
-            throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
+          const actor = await tx.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } });
+          adminAutoFunded = actor?.platformRole === 'platform_admin';
+          if (!adminAutoFunded) {
+            const balance = await tx.usageLedger.aggregate({
+              where: { userId: input.userId, resource: AI_CREDIT_RESOURCE }, _sum: { delta: true },
+            });
+            if (Number(balance._sum.delta ?? 0) <= 0) {
+              throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
+            }
+          } else {
+            await recordEntry(tx, {
+              userId: input.userId, resource: AI_CREDIT_RESOURCE, delta: 1, kind: 'adjust',
+              reason: 'Platform admin AI task recovery funding',
+              idempotencyKey: `agent-task-recovery-admin-fund:${agentTask.id}:${retryAttempt}`,
+              metadata: { taskId: agentTask.id, kind: agentTask.kind, retryAttempt, policy: 'platform-admin-auto-funded' },
+            });
           }
           await recordEntry(tx, {
             userId: input.userId, resource: AI_CREDIT_RESOURCE, delta: -1, kind: 'consume',
@@ -541,7 +553,8 @@ export async function retryIngestionTask(
             ...(passageBudgetRecovery ? { previousExtractionResult: result } : {}),
             creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation'
               : paidFailedRetry ? 'charged-on-retry'
-                : compensatedSchemaRetry ? 'reuse-paid-remediation' : 'reuse-original-reservation' },
+                : compensatedSchemaRetry ? 'reuse-paid-remediation' : 'reuse-original-reservation',
+            ...(adminAutoFunded ? { funding: 'platform-admin-auto-funded' } : {}) },
         }, ctx);
         return tx.ingestionTask.findUnique({ where: { id: task.id }, include: { artifact: true } });
       }, { isolationLevel: 'Serializable' });

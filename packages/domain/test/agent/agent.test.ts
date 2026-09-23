@@ -850,6 +850,23 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     ).rejects.toThrow(/AI Credit 不足/);
   });
 
+  it('current platform admin can submit at zero credit without reducing the balance or bypassing task receipts', async () => {
+    const { deps, user, ro, db } = await makeDeps(0);
+    user.platformRole = 'platform_admin';
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'workspace.guide' });
+    const first = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload: {}, idempotencyKey: 'admin-one', dispatch: false });
+    const replay = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload: {}, idempotencyKey: 'admin-one', dispatch: false });
+    const second = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload: {}, idempotencyKey: 'admin-two', dispatch: false });
+    expect(replay.id).toBe(first.id);
+    expect(second.id).not.toBe(first.id);
+    expect(db.usageLedger.filter(entry => entry.idempotencyKey?.startsWith('agent-task-reserve:'))).toHaveLength(2);
+    expect(db.usageLedger.filter(entry => entry.idempotencyKey?.startsWith('agent-task-admin-fund:'))).toHaveLength(2);
+    expect(db.usageLedger.filter(entry => entry.resource === 'ai_credit').reduce((sum, entry) => sum + Number(entry.delta), 0)).toBe(0);
+    user.platformRole = 'user';
+    await expect(submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload: {}, idempotencyKey: 'after-demotion', dispatch: false }))
+      .rejects.toMatchObject({ code: 'INSUFFICIENT_CREDIT' });
+  });
+
   it('提交时原子预留 AI Credit，不能在首个任务完成前继续透支', async () => {
     const { deps, user, ro, db } = await makeDeps(1);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'workspace.guide' });

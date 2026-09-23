@@ -498,7 +498,7 @@ describe('multi-format ingestion service', () => {
     expect(db.usageLedger.filter((entry) => entry.idempotencyKey === `agent-task-recovery:${agentTask.id}:2`)).toHaveLength(1);
   });
 
-  it('fails closed without charging or changing state when canonical all-missing remediation has no credit', async () => {
+  it('requires credit for non-admin remediation but auto-funds a current platform admin', async () => {
     const { deps, db, user } = makeDeps();
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
@@ -523,6 +523,21 @@ describe('multi-format ingestion service', () => {
     expect(task).toMatchObject({ state: 'needs_review', retryCount: 1 });
     expect(agentTask).toMatchObject({ status: 'succeeded', retryCount: 1, executionAttempt: 2 });
     expect(db.usageLedger).toHaveLength(beforeLedgerSize);
+    db.users.find((row) => row.id === user.id)!.platformRole = 'platform_admin';
+    const retried = await retryIngestionTask(deps, { userId: user.id, taskId: task.id });
+    expect(retried).toMatchObject({ state: 'queued', retryCount: 2 });
+    expect(db.usageLedger).toContainEqual(expect.objectContaining({
+      resource: 'ai_credit', delta: BigInt(1), kind: 'adjust',
+      idempotencyKey: `agent-task-recovery-admin-fund:${agentTask.id}:2`,
+    }));
+    expect(db.usageLedger).toContainEqual(expect.objectContaining({
+      resource: 'ai_credit', delta: BigInt(-1), kind: 'consume',
+      idempotencyKey: `agent-task-recovery:${agentTask.id}:2`,
+    }));
+    expect(db.auditLogs).toContainEqual(expect.objectContaining({
+      action: 'ingestion.task.retry', targetId: task.id,
+      metadata: expect.objectContaining({ funding: 'platform-admin-auto-funded' }),
+    }));
   });
 
   it('does not charge or requeue canonical all-missing work from a closed AgentSession', async () => {
