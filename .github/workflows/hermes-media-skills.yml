@@ -1,0 +1,41 @@
+name: Hermes media skills
+
+# The existing CI runs only on main. Keep the release branch's skill loader
+# checked without expanding this change into unrelated monorepo gates.
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/onchip-production-line]
+    paths:
+      - '.agents/skills/openscience-handdraw-*/**'
+      - '.agents/skills/openscience-scientific-visual-clarity/**'
+      - 'apps/agent-worker/src/skills/installed-media-skills.ts'
+      - 'apps/agent-worker/test/skills/handdraw-routing.test.ts'
+      - '.github/workflows/hermes-media-skills.yml'
+  pull_request:
+    branches: [release/onchip-production-line]
+    paths:
+      - '.agents/skills/openscience-handdraw-*/**'
+      - '.agents/skills/openscience-scientific-visual-clarity/**'
+      - 'apps/agent-worker/src/skills/installed-media-skills.ts'
+      - 'apps/agent-worker/test/skills/handdraw-routing.test.ts'
+      - '.github/workflows/hermes-media-skills.yml'
+
+jobs:
+  skill-path:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: npx pnpm@9.15.0 install --frozen-lockfile
+      - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts
+      - run: npx pnpm@9.15.0 docs:lint

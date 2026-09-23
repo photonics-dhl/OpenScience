@@ -7,9 +7,11 @@ import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from './scientific-critical-thinki
 // Only this fixed catalogue can select files; no upstream tool/workflow is executed.
 const UPSTREAM_COMMIT = '1567581c26ec29f4216c6e6835415bf30343b0e3';
 const SCIENTIFIC_VISUALIZATION_COMMIT = '49c6e97775eaa18ba791bebe23162a70ae601c18';
+const HANDDRAW_STYLE_COMMIT = 'e1d7586e8a986deff92860e3e7c053a2bba81b64';
+const HANDDRAW_ROUTER_COMMIT = 'a778615aeca393085a1d0a89e7c3cd493ee2f474';
 const SKILLS_ROOT = resolve(__dirname, '../../../../.agents/skills');
 
-type SkillId = 'openscience-research-illustration' | 'openscience-scientific-visual-clarity' | 'baoyu-article-illustrator' | 'baoyu-cover-image' | 'baoyu-infographic';
+type SkillId = 'openscience-research-illustration' | 'openscience-scientific-visual-clarity' | 'openscience-handdraw-style' | 'openscience-handdraw-router' | 'baoyu-article-illustrator' | 'baoyu-cover-image' | 'baoyu-infographic';
 export type DesignSkillUsage = { id: SkillId | typeof SCIENTIFIC_CRITICAL_THINKING_SKILL.id; upstreamCommit?: string; version?: string; resources: string[] };
 export type InstalledMediaSkills = { instructions: string; usage: DesignSkillUsage[] };
 
@@ -163,8 +165,12 @@ export function loadInstalledMediaSkills(
     if (!entry) {
       const isIllustration = skill === 'openscience-research-illustration';
       const isVisualClarity = skill === 'openscience-scientific-visual-clarity';
+      const isHanddrawStyle = skill === 'openscience-handdraw-style';
+      const isHanddrawRouter = skill === 'openscience-handdraw-router';
       entry = { id: skill, ...(isIllustration ? { version: '9' } : isVisualClarity
         ? { version: '1', upstreamCommit: SCIENTIFIC_VISUALIZATION_COMMIT }
+        : isHanddrawStyle ? { version: '1', upstreamCommit: HANDDRAW_STYLE_COMMIT }
+        : isHanddrawRouter ? { version: '1', upstreamCommit: HANDDRAW_ROUTER_COMMIT }
         : { upstreamCommit: UPSTREAM_COMMIT }), resources: [] };
       usage.push(entry);
     }
@@ -173,6 +179,7 @@ export function loadInstalledMediaSkills(
 
   const isInfographic = fileExists(infographicPath(selection.style));
   const isCoverRequest = /cover|封面|杂志|编辑/.test(requested);
+  const handdrawTarget = selection.style === 'scientific' || selection.style === 'editorial' || selection.style === 'watercolor';
 
   if (stage === 'science' || stage === 'review') {
     // Scientific intent is selected before art direction. Only the final reviewer
@@ -200,6 +207,8 @@ export function loadInstalledMediaSkills(
   if (stage === 'render') include(artStyleSkill, `references/styles/${selection.style}.md`, ART_HEADINGS);
   include('openscience-research-illustration', 'SKILL.md', [stage === 'plan' ? 'Planning' : 'Execution', 'Visual craft']);
   if (stage === 'plan') include('openscience-scientific-visual-clarity', 'SKILL.md', ['Art legibility']);
+  if (handdrawTarget && stage === 'plan') include('openscience-handdraw-router', 'SKILL.md');
+  if (handdrawTarget) include('openscience-handdraw-style', 'SKILL.md');
   include('openscience-research-illustration', 'references/art-directions.md');
   if (stage !== 'render') include(artStyleSkill, `references/styles/${selection.style}.md`, ART_HEADINGS);
   if (selection.layout) include('baoyu-infographic', `references/layouts/${selection.layout}.md`);
