@@ -17,9 +17,9 @@
 
 > CURRENT：唯一交付入口是 `.worktrees/onchip-video-release` 的 `release/onchip-production-line`（canonical；旧 `codex/onchip-video-release` 缺 journals/学术身份，为历史线不得发版）。视觉交付按[需求基线§18.2](docs/OpenScience_Kimi_Development_Spec.md#182-视觉系统)：未读论文者能理解核心思想和关键点，叙事与美感共同设计；原图/生图/单多图按需采用，视频尚未进入执行。交付差额、用户反馈、版本与下一步唯一见[Hermes CURRENT handoff](docs/handoff/2026-09-10-hermes-web-image-handoff.md)，不以原图复用/发布成功或单图认可代替论文叙事验收。桥、恢复、发布及最新纠偏证据见[2026-09-18 交接](docs/handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。能力按[当前能力索引](docs/runbooks/hermes-capability-registry.md)定向查实现、调用和真实结果；下表日期/版本均为对应改动的历史记录，不作为当前release或自动next action。
 
-能力补接入口：`scripts/read-current-management-context.mjs`同读Git/Taskmaster/CURRENT指针；`infra/development-platform/code-intelligence/snapshot_identity.py`绑定成功MCP返回的源码版本。`packages/search/src/runtime-config.ts`共享BGE身份配置；`apps/api/src/{search-runtime,research-object-search}.ts`供私有ResearchList的POST全文检索；`packages/domain/src/agent/search-index-source.ts`及原ingestion确认事务绑定解析来源并提交索引；`scripts/index-confirmed-research-sources.cjs`仅补录本次授权的两篇真实论文，默认列计划、`--apply`复用同一producer。部署及实际效果见[CURRENT任务4](docs/handoff/2026-09-10-hermes-web-image-handoff.md#capability-linkage)，不复制任务状态。2026-09-23 用户澄清：新 Skill/链路要运行定向测试和必要 CI，避免无关的重复测试；当前细则见交付树 AGENTS.md。
+能力补接入口：`scripts/read-current-management-context.mjs`同读Git/Taskmaster/CURRENT指针；`infra/development-platform/code-intelligence/snapshot_identity.py`绑定成功MCP返回的源码版本。`packages/search/src/runtime-config.ts`共享BGE身份配置；`apps/api/src/{search-runtime,research-object-search}.ts`供私有ResearchList的POST全文检索；`packages/domain/src/agent/search-index-source.ts`及原ingestion确认事务绑定解析来源并提交索引；`scripts/index-confirmed-research-sources.cjs`仅补录本次授权的两篇真实论文，默认列计划、`--apply`复用同一producer。部署及实际效果见[CURRENT任务4](docs/handoff/2026-09-10-hermes-web-image-handoff.md)，不复制任务状态。2026-09-23 用户澄清：新 Skill/链路要运行定向测试和必要 CI，避免无关的重复测试；当前细则见交付树 AGENTS.md。
 
-后台索引恢复：`packages/search/src/embedder.ts`负责有界请求，`apps/agent-worker/src/search-indexer.ts`负责分片/批次，`packages/domain/src/agent/agent.ts`复用原任务鉴权恢复；显式补录脚本`--retry-incomplete`消费原Domain资格。未部署候选与下个session执行顺序只见CURRENT顶部暂停记录。
+后台索引恢复（历史能力入口）：`packages/search/src/embedder.ts`负责有界请求，`apps/agent-worker/src/search-indexer.ts`负责分片/批次，`packages/domain/src/agent/agent.ts`复用原任务鉴权恢复；显式补录脚本`--retry-incomplete`消费原Domain资格。当时的未部署候选与执行顺序属历史；当前状态只见 CURRENT。
 
 任务纠偏入口：`AGENTS.md`与`.agents/skills/docs-sync/SKILL.md`对齐既有Taskmaster当前tag与未完成交付项；`infra/development-platform/catalog/catalog-info.yaml`导航交付源码与需求，`telemetry/query.mjs --task`按原任务关联定位调用。`workspace-guide.ts`艺术路由保留原要求，Hermes结果/草稿/操作组件传递明确art/baseAssetId；自有配图Skill v5与原末审同轮检查明确艺术要求。部署、实际效果和未观察范围仅见CURRENT。
 
@@ -113,8 +113,8 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `packages/domain/src/research-intelligence/claim-graph.ts` / `docs/specs/2026-09-07-open-research-publication-prd.md` §3.2 | e7f95180已部署：允许一条主要结论，3–7仅为建议；结构/证据/资源数量限制保留。High PASS，真实第二篇1Claim/40来源review通过并首发v1 |
 
 > **历史部署实读 2026-09-14:** e7f95180 build/start exit0，第二篇23/v1发布201、匿名页面/API/PDF均200，DHL与许可一致；40来源/原配图保留、1280×720/0公式错误/0内部S标记，PDF原始568765字节与hash保持。历史/管理/回收站有效证据复用；恢复写入、真实清除、30天到期仍未操作，不冒称完整运行验收。
-> 最新质量推进：867方法笔记与3f68d30b结果/边界笔记均经服务器来源绑定修订及独立High科学/引用PASS，后者1745字符/19引用、实际Markdown20620字符完整。0685已修复Markdown改变TeX间距，实读26/26公式源逐字相等、6处间距保留，正文/引用/导出不变。通用来源机制已固化，具体指导与独立科学复核仍由本会话承担；六字段全自动仍失败，跨论文质量尚未确认，未采用/发布。
-> 唯一入口：docs/handoff/2026-09-10-hermes-web-image-handoff.md。当前自动agent d5c6f699真实字段审校仍失败；4bedbb4b具体方法回读核心科学PASS，但多问与局部共编仍丢条件。a8修复笔记漏路由/科学共编推理配置，10799ba3实产仍经High原文复核拒绝；停止重试，保留人工审校流程。
+> 历史质量推进：867方法笔记与3f68d30b结果/边界笔记均经服务器来源绑定修订及独立High科学/引用PASS，后者1745字符/19引用、实际Markdown20620字符完整。0685已修复Markdown改变TeX间距，实读26/26公式源逐字相等、6处间距保留，正文/引用/导出不变。通用来源机制已固化，具体指导与独立科学复核仍由本会话承担；六字段全自动仍失败，跨论文质量尚未确认，未采用/发布。
+> 历史自动稿记录（非当前论文配图状态）：入口以 docs/handoff/2026-09-10-hermes-web-image-handoff.md 为准。彼时自动agent d5c6f699真实字段审校失败；4bedbb4b具体方法回读核心科学PASS，但多问与局部共编仍丢条件。a8修复笔记漏路由/科学共编推理配置，10799ba3实产仍经High原文复核拒绝；停止重试，保留人工审校流程。
 > 私有92cafb82人工原文审校稿1118字符/17引用：1e627修复指定任务被较新失败63e正文覆盖，实际打开/只读编辑/回阅读/展开来源/截图均成功，正文和全部引用逐字等保存API与此前复核稿，user_edited保留；原40e23948、公开v10与已批图保留，尚未采用新稿/发布，视频/批量暂停。
 > 浏览器镜像8aa21251、登录/代理有效；07:55:11Z自行重启后旧target ID失效。新执行器在连接前依据instance/target私有记录回收自己完成/未提交失败的旧页；5260实际完成页已回收。未知旧页保留，不循环重启；既有失败/恢复账本不抹除。
 > 复用来源方法与实际调用见hermes-capability-registry“来源与选择”；无第三方安装、测试/预检/CI/本机运行，必要服务器build/start按授权继续。

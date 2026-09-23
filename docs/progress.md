@@ -13,7 +13,7 @@
 
 ## 当前工程状态
 - 手工 PNG 审图未提交恢复、像素标签提示已通过定向测试/类型检查、独立 High、[CI 35893326942](https://github.com/photonics-dhl/OpenScience/actions/runs/35893326942)，部署并真实用于第三篇。当前生产身份与回退见 CURRENT。
-- 管理员内部额度候选已在 Domain 的任务提交和付费提取恢复中保留原扣减/幂等审计并同事务自动补足；定向 2 项和 Domain 类型检查通过、独立 High GO。扩展旧 agent/ingestion 文件 90 pass/18 fail，集中旧确认/重试夹具与条件，不称全套通过。该候选尚待 CI、部署与最小真实验证，部署前不得说线上已经免内部额度。
+- 管理员内部 AI Credit 一对一事务自动补账已在 Domain agent 提交/付费提取恢复部署；原扣减、幂等和审计保留，普通用户额度不变。[定向 CI 35902058149](https://github.com/photonics-dhl/OpenScience/actions/runs/35902058149) success、独立 High GO、生产 release 精确核对。扩展旧 agent/ingestion 文件 90 pass/18 fail（旧确认/重试夹具与条件），不称全套通过；生产零余额新任务尚未发生，留待下次正常任务看账本，不额外发模型探针。
 - 只读 [Hermes 研发观察台](proposals/2026-09-23-hermes-development-live.html) 展示目标、角色/技能、阶段产物和实际效果；本机派生 feed 是人工检查点，会标示过期，不是自动遥测。能力消费与尚未实现的原文疑点回读/跨任务学习见 [能力台账](runbooks/hermes-capability-registry.md)。
 
 ## 其他交付

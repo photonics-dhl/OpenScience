@@ -7,7 +7,7 @@
 - 用户已授权完成任务和内部额度；2026-09-24 明确管理员不应被内部 AI Credit 挡住。保留逐任务审计、普通用户额度和 Chat 账号/供应商真实配额；不自动切 provider，不重发 unknown。必要定向测试/CI 应做，避免重复全套测试。
 
 ## Git、部署与当前边界
-- 当前应用生产/rollback：14089584c10bf9781db466b288d77c2f1daccfd8 / 80e9723be57bfbcd0234e54ac1bf90f352e7adde；canonical HEAD=14089584c10bf9781db466b288d77c2f1daccfd8（管理员自动补账改动仍在本树待提交/CI/部署）。上次 [定向 CI 35893326942](https://github.com/photonics-dhl/OpenScience/actions/runs/35893326942) success、无迁移部署 exit0；精确发布身份以 Git 与服务器 .release-id 再核。
+- 当前应用生产/rollback：d463122cb5b66e8f494229ca9a895c91575fdf37 / 14089584c10bf9781db466b288d77c2f1daccfd8；canonical branch release/onchip-production-line，本页后续文档提交使 HEAD 比生产多文档，不需再次部署。精确 HEAD 由 git rev-parse HEAD 读取。[定向 CI 35902058149](https://github.com/photonics-dhl/OpenScience/actions/runs/35902058149) success、失败步骤 0；无迁移部署 exit0，服务器 .release-id 与公网 /__release 精确匹配。三篇公开链接各 200，第三篇匿名页读到两图/六维/受限 PDF；Parser、ScanSci、embedding 和 auth/admin 的无关功能探针按 --no-tests 跳过，不冒称通过。
 - 服务器操作只经 infra/scripts/ssh-run.sh；不读/打印 Secret。新功能必要定向测试/CI 和真实产品路径要跑，旧全套用例不能冒充门禁。交付树及根 main 收尾 status --porcelain 为空，提交推送并 worktree prune/list；文档提交不部署。
 - 浏览器桥复用 openscience-chatgpt-browser 的已登录网页/CDP；2026-09-24 曾在 22 页、约 6.49/8 GiB 时 CDP 无响应，核对无活动任务后仅重启该浏览器容器，登录与页面恢复。此为一次有证据恢复，未证明上游内存根因已修；不要无证重启或盲重发。旧 CODEX_SOL_IMAGE_REVIEW_ENABLED=false，正式像素判断走 Chat 网页 5.6 Sol，非 Codex CLI 登录。
 
@@ -24,8 +24,8 @@
 - 14089584 增加手工 PNG 在正式审图前明确失败且 spool 证明 not_submitted 时的同图 review-only 恢复；Domain 与 worker 复验原 hash、父分镜、prompt、管理员及来源，原失败任务与旧图不删除。定向 Domain/Worker 测试、类型检查、独立 High GO；上述第三篇 scene0 为真实恢复并 approved。
 - 旧同父 scene1 68215708 及其 review-only copy ebf597b6 保持私有 draft：图上 “MOED” 错字虽被正式模型误判 accepted，人工实看拦下。新 scene1 已改正并真实审图。Prompt 加逐字缩写/公式检查仍不能保证模型不误判；任何公开前须保留实际像素核对。
 - 第二篇三风格实际检验：编辑图通过正式审图并公开；学术和淡彩 v1/v2 的 20 nm 标尺偏心、77→777 nm 或额外因果箭头等候选保持私有 NO-GO。提示词不能代替确定性定量绘制/像素审阅。
-- 2026-09-24 管理员内部额度候选：Domain agent 提交与 ingestion 付费恢复在 Serializable 事务内读当前 platform_admin，为每个原 -1 消费追加幂等 +1 adjust，余额净不减，原扣减/恢复收据与操作审计仍在；非管理员零额度继续拒绝。定向两例、Domain typecheck 通过，独立 High GO；扩展跑旧 agent+ingestion 文件 90 pass/18 fail（集中旧确认/重试夹具及条件，非本次定向结果），不声称全套通过。候选待 CI/部署，尚不可称生产已免内部额度。
+- 2026-09-24 管理员内部额度已部署：Domain agent 提交与 ingestion 付费恢复在 Serializable 事务内读当前 platform_admin，为每个原 -1 消费追加幂等 +1 adjust，余额净不减，原扣减/恢复收据与操作审计仍在；非管理员零额度继续拒绝。定向两例、Domain typecheck、独立 High GO 及 CI 35902058149 通过；扩展跑旧 agent+ingestion 文件 90 pass/18 fail（旧确认/重试夹具与条件），不声称全套通过。本次无生产零余额新任务，不把代码/CI 证据冒充该场景实际运行；后续正常管理员任务核对真实账本。
 
 ## 保留与下一动作
 - 保护原 PDF、已公开旧版本、用户认可图、失败/blocked/unknown 任务和原字节；旧 6Pro 额度拒绝和 unknown 生图不可重放。新生图要有确定未提交或新用户授权的独立任务；不因 Chat bridge 故障自动换 provider。
-- 当前先让管理员额度候选通过 CI 并从干净已推完整 SHA 部署，然后仅对管理员零余额新任务作最小真实验证；再同步本页/progress/能力台账与观察台 feed。用户可直接看三篇公开成品，针对叙事/美感提出反馈；修改公开内容须新版本，不改旧快照。
+- 下一步请用户看三篇公开成品，对科学叙事、美感和未读者可理解性给具体反馈；需要修改时新建公开版本，不改旧快照。继续补按疑点回读/跨任务经验、定量图确定性标尺或像素核验，并按既有要求处理 Fig.2 重复 plan 与悬空 draft。管理员额度在下一次正常任务中核对真实一对一账本，不专门发模型探针。
