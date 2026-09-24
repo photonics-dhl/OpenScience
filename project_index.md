@@ -25,7 +25,7 @@
 
 视觉叙事方案：[`docs/proposals/2026-09-21-visual-narrative-review.html`](docs/proposals/2026-09-21-visual-narrative-review.html) 是用户要求的离线可审查实现稿：PDF→经审全文→叙事→逐图设计→制作→成品审阅→发布→阅读，含既有/拟改边界、数据传递、媒体选择、实施顺序和意见导出；不是生产界面或最终科学稿。执行状态只见CURRENT。
 
-研发状态可视化：[`docs/proposals/2026-09-23-hermes-development-live.html`](docs/proposals/2026-09-23-hermes-development-live.html) 是只读 HTML 展示缓存，首屏为当前任务的目标、执行角色、能力、产物、效果和下一步，再按论文展示阶段与图片；优先读取 ignored `tmp/hermes-development-live-feed.js`，15 秒轮询并标记过期。feed 只在开发者核对 CURRENT/资产后按检查点更新，不是后台自动遥测、独立任务库或产品正式审阅入口；准确执行状态仍以 [Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md) 为准。
+研发状态可视化：[`docs/proposals/2026-09-23-hermes-development-live.html`](docs/proposals/2026-09-23-hermes-development-live.html) 是只读 HTML 展示缓存，首屏为当前任务的目标、执行角色、能力、产物、效果和下一步，再按论文展示阶段、真实图片与逐图风格/能力/效果审计；优先读取 ignored `tmp/hermes-development-live-feed.js`，15 秒轮询并标记过期。feed 只在开发者核对 CURRENT/资产后按检查点更新，不是后台自动遥测、独立任务库或产品正式审阅入口；准确执行状态仍以 [Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md) 为准。
 
 科学与美术制作说明容量：`packages/domain/src/assets/illustration-brief.ts`复用原整份brief容量，`apps/agent-worker/src/presentation/{illustration-planner,illustration-review,scene-image}.ts`区分内部说明与读者文字；科学返工反馈归science、art遵守当前encoding尺度/映射及原末审跨字段比较亦在planner/review。`packages/ai-gateway/src/{image,codex-image-protocol}.ts`及`infra/chatgpt-browser/runner.cjs`区分MiniMax专属1500与现有spool字节保护，部署先receiver后应用。实际状态只见CURRENT。
 

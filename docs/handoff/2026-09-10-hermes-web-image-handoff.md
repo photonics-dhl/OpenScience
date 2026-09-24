@@ -2,7 +2,7 @@
 > 唯一交付树 E:/Miscellaneous/XGS/.worktrees/onchip-video-release，branch release/onchip-production-line；根 main 只作导航。旧交接与失败收据见 [09-18 历史记录](2026-09-18-figure3-image-and-cleanup-handoff.md)，不得按旧 next action 重放。
 
 ## 目标与用户决定
-- 需求基线 §18.2 与 [视觉叙事方案](../proposals/2026-09-21-visual-narrative-review.html)：未读论文者应从六维内容和按需设计的图看懂核心思想、机制与关键点；原论文图不是默认成品，视频尚未开始。
+- 需求基线 §18.2 与 [视觉叙事方案](../proposals/2026-09-21-visual-narrative-review.html)：未读论文者应从六维内容和按需设计的图看懂核心思想、机制与关键点；原论文图不是默认成品，视频尚未开始。2026-09-24 用户明确称赞第三篇 scene0「光子准粒子」淡彩图，同时指出其他图仍有问题；这是单图反馈，不代表整篇或三篇整体认可。
 - 三篇真实论文走 PDF → Hermes 全文/SourceMap/六维/Claim/Evidence → 科学分镜与艺术设计 → Chat 生图 → Hermes 技能组织证据 + Chat 网页 5.6 Sol 正式像素审图 → 读者页与固定公开版本。不重造全文分析器，不以 accepted、发布或本页状态代替用户最终质量认可。
 - 用户已授权完成任务和内部额度；2026-09-24 明确管理员不应被内部 AI Credit 挡住。保留逐任务审计、普通用户额度和 Chat 账号/供应商真实配额；不自动切 provider，不重发 unknown。必要定向测试/CI 应做，避免重复全套测试。
 
@@ -16,7 +16,7 @@
 |---|---|
 | 第一篇学术图 / 1、5 | RO 9067a2d5，6 维/6 Claim/58 Evidence；方案 5226fcf5，正式 6Pro accepted 图 8bbcfd9b（hash 778815c8…）；[公开 OSR-2026-000023/v/3](https://openscience.428312321.xyz/research/OSR-2026-000023/v/3)。旧 v1/v2、PDF、已认可图保留；用户最终叙事/审美认可待反馈。 |
 | 第二篇编辑图 / 2、5 | RO c896802c，7 Claim/27 Evidence；批准方案 9a1b1a31，原图 cebcef87 仍 draft；5.6 Sol 正式 review-only 副本 6233e663，hash bbfaf594…，已 approved 并只选此图；[公开 OSR-2026-000022/v/2](https://openscience.428312321.xyz/research/OSR-2026-000022/v/2)，匿名实见图与六维，旧 v1 保留。学术/淡彩候选的标尺/多余因果错误仍 NO-GO，不混入公开；用户最终反馈待收。 |
-| 第三篇淡彩双幕 / 3、5 | RO aa450f1e，Version 9373f1e6，5 Claim/30 Evidence；批准同父分镜 c54dc291。scene0 生成 9a2a47ef 原任务审图未提交失败，凭 spool not_submitted 原 PNG 恢复为正式 5.6 Sol accepted 副本 e550137f（hash d64ea84b…），仅副本 approved。scene1 新任务 6f80639f（hash fd0d529c…）正式 accepted、已实看 “MQED”/公式并 approved；[公开 OSR-2026-000024/v/1](https://openscience.428312321.xyz/research/OSR-2026-000024/v/1)。匿名 200、六维/5 Claim/30 Evidence、两图轮播各 1280×720、PDF workspace_member 且无公开下载；用户最终反馈待收。 |
+| 第三篇淡彩双幕 / 3、5 | RO aa450f1e，Version 9373f1e6，5 Claim/30 Evidence；批准同父分镜 c54dc291。scene0 生成 9a2a47ef 原任务审图未提交失败，凭 spool not_submitted 原 PNG 恢复为正式 5.6 Sol accepted 副本 e550137f（hash d64ea84b…），仅副本 approved；该图获用户明确称赞。scene1 新任务 6f80639f（hash fd0d529c…）正式 accepted、已实看 “MQED”/公式并 approved；[公开 OSR-2026-000024/v/1](https://openscience.428312321.xyz/research/OSR-2026-000024/v/1)。匿名 200、六维/5 Claim/30 Evidence、两图轮播各 1280×720、PDF workspace_member 且无公开下载；整篇叙事与其他图仍需改进/确认。 |
 | 管理/学习 / 4 | 新图恢复门与审阅收据已接原产品任务；Hermes 科学/表现技能有实际按阶段消费，但按疑点回读全文与跨任务经验检索仍未完成。只读 [研发观察台](../proposals/2026-09-23-hermes-development-live.html) 的 ignored tmp/feed 为人工检查点，非自动遥测。 |
 | Fig.3 / reuse 历史 | 9f7 恢复图获用户认可；Fig.1 原字节展示已被否定，不能冒称叙事完成。Fig.2 的 d5087b03 悬空 copy、重复 draft/approved 影响与处置仍须保留原件并按用户先前要求处理，不批量删除他人资产。 |
 
@@ -28,4 +28,4 @@
 
 ## 保留与下一动作
 - 保护原 PDF、已公开旧版本、用户认可图、失败/blocked/unknown 任务和原字节；旧 6Pro 额度拒绝和 unknown 生图不可重放。新生图要有确定未提交或新用户授权的独立任务；不因 Chat bridge 故障自动换 provider。
-- 下一步请用户看三篇公开成品，对科学叙事、美感和未读者可理解性给具体反馈；需要修改时新建公开版本，不改旧快照。继续补按疑点回读/跨任务经验、定量图确定性标尺或像素核验，并按既有要求处理 Fig.2 重复 plan 与悬空 draft。管理员额度在下一次正常任务中核对真实一对一账本，不专门发模型探针。
+- 下一步以已获称赞的 scene0 作构图参照，逐张把科学关系变成未读者可读的视觉编码：先修学术图公式主导、编辑图工程标注感与 scene1 文字公式过重，再按原来源与像素审图核对；修改公开内容须新建版本，不改旧快照。补按疑点回读/跨任务经验、定量图确定性标尺或像素核验，并处理 Fig.2 重复 plan 与悬空 draft。管理员额度在下一次正常任务中核对真实账本，不专门发模型探针。

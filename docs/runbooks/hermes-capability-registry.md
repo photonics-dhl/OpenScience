@@ -9,6 +9,7 @@
 
 ## 当前能力索引：目的、调用、效果
 2026-09-24 当前正式像素审图：Hermes 复用已审科学证据与 review 阶段技能组织检查，Chat 网页 5.6 Sol 接收实际 PNG；独立 Codex CLI 审图仍关闭。第二篇编辑图正式 accepted 并公开 v2；第三篇淡彩双幕正式 accepted 并公开 v1，scene0 使用原 PNG 的精确未提交恢复。旧同父 scene1 的 MOED 错字虽被模型误判 accepted，人工拦下后重新出图；提示词不能替代像素核对。管理员内部额度一对一事务自动补账已通过定向 CI 35902058149 / 独立 High 并部署；普通用户额度及原扣减审计保留，供应商额度独立。生产零余额新任务尚未实际发生；精确 release 与图片身份见 CURRENT。
+2026-09-24 逐图质量反馈：用户明确称赞第三篇 scene0 淡彩概念图，同时指出其他图仍有问题。`installed-media-skills.ts` 按选定 style 只加载相应风格段落，不等于整个 Baoyu 库逐图执行；已有真实公开结果覆盖学术、编辑、淡彩，水墨等其他方向尚无本轮实图验收。当前薄弱处是把已审科学关系编码成未读者能一眼理解的画面，以及对缩写/定量标记的可靠像素核验；学术图偏公式、编辑图偏工程标注、第三篇 scene1 偏文字公式是本轮画面观察，不冒称新的科学错误。逐图能力与效果见[研发观察台](../proposals/2026-09-23-hermes-development-live.html)，具体新版本修订仍须沿原来源、审批与审图链路。
 2026-09-23定向断点：`workspace-guide.ts` 允许把某些“可见标签改字”请求路由为 `storyboard.revise` 的 art-only；真实 b9443fa1 只把新文字放入 `visualAction`，而 `presentation/scene-image.ts:68` 在结构化 `scene.illustration` 存在时直接编译该对象，不消费 `visualAction`，因此图片实际 prompt 仍有旧标签。该草稿未批准/生图；产品普通修订 9c37→9a1b 已将标签和几何约束写回 `illustration.encoding/labels/constraints` 并得到真实图 cebcef87。后续最小修复应在 Guide 路由/草稿校验处禁止把标签、尺寸、对象或关系变化认定为 art-only，且 art-only 完成后须核对结构化 brief 是否按请求更新；不要新增论文分析器或另一个任务库。本轮因用户收窄为生图，未改此代码、未部署。
 
 历史（2026-09-23）续审断点：两篇各3张真实PNG已保存；原产品入口各建立3个review-only任务，四项明确未提交，一项在供应商前因P2034失败，一项已提交却只收到Pro额度拒绝。候选沿现有review runner/broker/Gateway补显式选Pro、拒绝文本身份核验及停止同一拒绝任务重复恢复；Domain/Worker缩短纯复验事务并有界重试P2034。原技术收据已用，新增同一retry-generation入口最多第二段review-only收据：按精确未提交、供应商前写冲突、已提交但只收到额度提示三种凭据复制同objectKey/hash的原PNG到新审阅任务，unknown仍原样保留。各改动获独立High静态GO，尚待交付和真实观察。不新建论文分析器、技能或供应商，见CURRENT。
