@@ -2,7 +2,7 @@
 name: openscience-research-illustration
 description: Plan and refine evidence-grounded research illustrations for OpenScience through Hermes and Chat image generation, using structured briefs, source-scoped visual references and reusable art directions. Use for paper illustrations, scientific concept images and research covers; quantitative plots require a data renderer.
 metadata:
-  version: "9"
+  version: "10"
 ---
 
 # OpenScience research illustration
@@ -36,6 +36,8 @@ Assign each visible group its fixed conditions, varied quantities and reported o
 Decide whether lengths, areas, spacing and point sizes encode values or merely arrange an explanation. Quantitative comparisons conveyed by geometry require a common scale within each stated coordinate system. Use an available data renderer or approved original when exact ratios or data-derived shapes carry the takeaway. A generated conceptual schematic can use sourced dimension annotations with explicit non-scaled meaning, but cannot simultaneously claim proportional comparison through rulers or geometry. A non-scaled label does not excuse impossible topology, intersecting trajectories or wrong directions. For qualitative density encoding, vary only the quantity the encoding names; do not also vary point size unless it has its own supported meaning. A meaningful color has one consistent role.
 
 The science fields and encodings are carried into art direction unchanged. Later stages can arrange and style them but cannot introduce another scientific idea, equation, numerical example or relationship. An invalid scientific intent must return for correction before image generation.
+
+Read equations literally before turning them into visual motion. A dot-product condition constrains a projection; it does not by itself require parallel vectors. In a dispersion relation, `ω(k)` is frequency, not the spatial distance between wave crests. A qualitative wave motif may explain a relation, but its orientation, spacing and motion must not silently add a second physical condition or quantitative claim. Additional requirements for emission or coupling need their own bound source, even when they sound physically plausible.
 
 ## Planning
 
@@ -99,6 +101,8 @@ Review the selected scientific intent against its complete bound original passag
 For a whole-paper narrative, use the already completed upstream analysis to review the main message, intended audience, titles, narrations and reading sequence in this same call. A collection of individually correct scenes may still omit the main contribution or fail to connect its steps. Return an upstream replanning issue for those gaps or unexplained essential terminology. Review the scientific explanation surrounding an unchanged source image just as rigorously; registration and copying do not establish the caption. Art corrections must not pretend to alter a verbatim original.
 
 Assess the picture a reader can actually see: `labels` is its exclusive visible-text list, while other fields guide drawing. A necessary axis variable or boundary value present only in encoding is still missing from the picture; return a scientific-field correction upstream. A function drawn against coordinate axes asserts its shape, signs, zero crossings and relative extrema even without numeric ticks or with a conceptual disclaimer. Such a plot needs a data renderer. For Chat illustration, select a supported nonquantitative relationship rather than accepting an invented curve because its formula is correct.
+
+For every generated scene, compare the proposed `encoding`, `composition` and `treatment` mark by mark, including direction, connectivity, implied distances and all text callouts. Check vector operations and frequency/wavelength language against the exact original passage; do not accept a correct displayed equation beside a contradictory drawing or explanation. A reviewer summary must not substitute for this comparison.
 
 Retain the selected Claim's complete reviewed statement and Evidence while source roles remain field-scoped: an unselected passage marked `supports` may contain essential qualifiers. Claim kind/assessment are review context, not evidence or visible labels; preserve partial, disputed, counterexample and boundary meaning. Unconfirmed intermediate semanticStage output is not an approved finer-grained source. Do not silently reduce the context to subject citations alone.
 

@@ -9,6 +9,7 @@ on:
     paths:
       - '.agents/skills/openscience-handdraw-*/**'
       - '.agents/skills/openscience-scientific-visual-clarity/**'
+      - '.agents/skills/openscience-research-illustration/**'
       - 'apps/agent-worker/src/skills/installed-media-skills.ts'
       - 'apps/agent-worker/test/skills/handdraw-routing.test.ts'
       - 'apps/agent-worker/src/presentation/generated-image-review.ts'
@@ -57,6 +58,7 @@ on:
     paths:
       - '.agents/skills/openscience-handdraw-*/**'
       - '.agents/skills/openscience-scientific-visual-clarity/**'
+      - '.agents/skills/openscience-research-illustration/**'
       - 'apps/agent-worker/src/skills/installed-media-skills.ts'
       - 'apps/agent-worker/test/skills/handdraw-routing.test.ts'
       - 'apps/agent-worker/src/presentation/generated-image-review.ts'

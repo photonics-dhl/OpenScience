@@ -10,7 +10,7 @@
 - 第一篇学术图已公开 [OSR-2026-000023/v/3](https://openscience.428312321.xyz/research/OSR-2026-000023/v/3)，第二篇编辑图已公开 [OSR-2026-000022/v/2](https://openscience.428312321.xyz/research/OSR-2026-000022/v/2)；各自旧版本仍在。
 - 第三篇两幕淡彩图均取自同一批准分镜：scene0 原 PNG 的未提交审图故障经新 review-only 入口恢复，5.6 Sol accepted 的副本获批；scene1 新 PNG 纠正旧图 “MOED” 为 “MQED”，正式审图 accepted、人工实看后获批。[OSR-2026-000024/v/1](https://openscience.428312321.xyz/research/OSR-2026-000024/v/1) 已公开，匿名页核实六维、5 Claim/30 Evidence、两张 1280×720 图片轮播和 PDF 不公开下载。旧错图及误判 accepted 收据保留私有，不伪称审图零误差。
 - 三篇完成产品链路。用户明确称赞第三篇 scene0「光子准粒子」淡彩图，同时指出其他图仍有问题；整体科学叙事、美感与可理解性尚未获认可。第二篇学术/淡彩风格的标尺与多余因果问题候选保持私有 NO-GO，不能把“有图”算作三风格全部合格。
-- 叙事优先的 `auto` 风格链路已在 590902be 发布：science 不读风格目录，art 从可用手绘与 Baoyu 索引择一，render/正式审图只用选定资源；CI 35952973017 含 Web 正式 build success，服务器与公网 release 精确匹配。真实私有分镜 4d96bbb8 在艺术标识校验三次失败，无新 PNG；故障定位为 `auto_style_invalid_scene_0`。修复候选把模型风格选择改为独立 `styleId` 字段、程序生成内部标识并过滤 21 个不可选条目，定向 12 测试/Worker typecheck/独立 High 通过，待新 SHA CI/发布后用新任务实测。旧失败任务不盲重发、旧公开图不改。
+- 叙事优先的 `auto` 风格链路已在 fd612048 发布：science 不读风格目录，art 从可用手绘与 Baoyu 索引择一，render/正式审图只用选定资源；独立 `styleId` 修复经定向测试、High、CI 35957257382、真实任务实证。第三篇私有第二幕先选 Baoyu article:scientific、后选手绘 #175，均生成真实 PNG；正式像素审图分别因大公式喧宾夺主、电子/分叉断开和折线暗示未据物理关系而 blocked。新科学分镜 1d154c10 虽获模型 accepted，人工发现点积/频率解释错误，未生图；原配图技能 v10 补定向指导，加载 6/6 和 Worker typecheck 通过，待 CI/发布/真实任务。风格可选不等于叙事合格；旧公开图不改。
 
 ## 当前工程状态
 - 手工 PNG 审图未提交恢复、像素标签提示已通过定向测试/类型检查、独立 High、[CI 35893326942](https://github.com/photonics-dhl/OpenScience/actions/runs/35893326942)，部署并真实用于第三篇。当前生产身份与回退见 CURRENT。
