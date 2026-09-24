@@ -9,6 +9,7 @@ describe('Hermes media skill stages', () => {
     const science = loadInstalledMediaSkills('editorial', '', 'science');
     expect(science.instructions).toContain('one-sentence takeaway');
     expect(science.instructions).toContain('A dot-product condition constrains a projection');
+    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '10' }));
     expect(science.usage.map((item) => item.id)).toContain('openscience-scientific-visual-clarity');
     expect(science.instructions).not.toContain('Hand-drawn treatment routing');
   });
