@@ -533,7 +533,10 @@ let composerRepairAttempted = false;
   await send.focus();
   await send.press('Enter');
   stage = 'response';
-  const url = await resolveCanonicalConversation(page, Math.min(request.deadlineAt - 30000, Date.now() + 30000));
+  // Chat may assign the canonical URL after 30 seconds. Leave a minute before
+  // the broker's hard timeout for anchor and response validation; never resend.
+  const canonicalDeadline = Math.min(request.deadlineAt - 90000, Date.now() + 120000);
+  const url = await resolveCanonicalConversation(page, canonicalDeadline);
   once('conversation.json', { url });
   await recoverUserAnchor(page, request, Math.min(request.deadlineAt, Date.now() + 30000));
   await waitForReview(page, request, request.deadlineAt);

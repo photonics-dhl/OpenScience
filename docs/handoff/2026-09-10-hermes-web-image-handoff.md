@@ -7,7 +7,7 @@
 - 用户已授权完成任务和内部额度；2026-09-24 明确管理员不应被内部 AI Credit 挡住。保留逐任务审计、普通用户额度和 Chat 账号/供应商真实配额；不自动切 provider，不重发 unknown。必要定向测试/CI 应做，避免重复全套测试。
 
 ## Git、部署与当前边界
-- 当前应用生产/rollback：796ec4aa249ae84452fef84c5111220fa32b8f9c / fd612048f605c428608ed2674562d754f5456a21；canonical branch release/onchip-production-line。CI [35962018583](https://github.com/photonics-dhl/OpenScience/actions/runs/35962018583) success（含 Web 正式 build）；部署 exit0，服务器 .release-id 与公网 /__release 精确匹配。--no-tests 明确跳过无关 Parser/ScanSci/embedding/auth 探针，不冒称通过；后续文档提交不需要部署。
+- 当前应用生产/rollback：57373a798a99460c459203163231c9a70c5fe3b6 / 796ec4aa249ae84452fef84c5111220fa32b8f9c；canonical branch release/onchip-production-line。CI [35963964135](https://github.com/photonics-dhl/OpenScience/actions/runs/35963964135) success（含 Web 正式 build）；部署 exit0，服务器 .release-id 与公网 /__release 精确匹配。--no-tests 明确跳过无关 Parser/ScanSci/embedding/auth 探针，不冒称通过；后续文档提交不需要部署。
 - 服务器操作只经 infra/scripts/ssh-run.sh；不读/打印 Secret。新功能必要定向测试/CI 和真实产品路径要跑，旧全套用例不能冒充门禁。交付树及根 main 收尾 status --porcelain 为空，提交推送并 worktree prune/list；文档提交不部署。
 - 浏览器桥复用 openscience-chatgpt-browser 的已登录网页/CDP；2026-09-24 曾在 22 页、约 6.49/8 GiB 时 CDP 无响应，核对无活动任务后仅重启该浏览器容器，登录与页面恢复。此为一次有证据恢复，未证明上游内存根因已修；不要无证重启或盲重发。旧 CODEX_SOL_IMAGE_REVIEW_ENABLED=false，正式像素判断走 Chat 网页 5.6 Sol，非 Codex CLI 登录。
 
@@ -29,4 +29,4 @@
 
 ## 保留与下一动作
 - 保护原 PDF、已公开旧版本、用户认可图、失败/blocked/unknown 任务和原字节；旧 6Pro 额度拒绝和 unknown 生图不可重放。新生图要有确定未提交或新用户授权的独立任务；不因 Chat bridge 故障自动换 provider。
-- 下一步保持 scene0 原图与旧公开 v1。新独立分镜 1d154c10 虽获模型末审 accepted，却把 `v·k=ω(k)` 误写为向量同向，将空间波峰间距当成频率，人工拦下且未生图。原配图技能 v10 已加入点积/频率与画面逐项审查指导，定向加载 6/6、Worker typecheck、CI 35962018583 与发布完成。新分镜 c8f6ada6 在真实任务中正确保留点积投影和必要非充分条件，但其候选方向线被写成电子已“辐射出”且画出任意固定条数，人工拦下未生图；provenance 又将已加载 v10 误标 v9，根因为加载器硬编码，已改为读取技能元数据并过定向 6/6、typecheck，待 CI/发布。之后只修订该幕科学编码与可见标签，验真实 PNG/正式审图；通过才批准并以新公开版本替换第二幕。保留原文回读/跨任务经验、定量核验及 Fig.2 历史处置。
+- 下一步保持 scene0 原图与旧公开 v1。独立分镜 1d154c10 的点积/频率误解及 c8f6ada6 的“候选线=已辐射”和任意条数均被人工拦下，未生图。配图技能 v10 已发布；加载器 provenance v9 硬编码改读元数据并在真实方案 584cf22d 记录 v10，方案 approved。真实 PNG d22567ab（hash fa84e9c3…）获 5.6 Sol 正式像素审图 accepted，但人工实看多候选箭头与重复公式仍像板书，保持私有 draft。两示意候选方案 92548f87 已审并 approved；真实淡彩 PNG 59b861b5（hash 97127fbf…）生成后，网页审图因固定 30 秒规范 URL 等待报 ambiguous_no_resend。2026-09-24 在原一小时 grace 和 science-review 专锁内核对三份请求、PNG、唯一 owned target、完整 copied user turn 后，只补原会话标记并由原 runner recover，broker 发布独立 recovered 收据；原任务同 ID 重试复用已完成回复，状态 succeeded、正式审图 blocked（responseHash 610345ea…）：上方带箭头虚线误导为已发射。未重发审图/生图，原失败证据保留；新图私有不公开。桥接器等待窗口修正候选将从 30 秒改为最多 120 秒且比 broker 硬超时早 60 秒，尚待 CI/部署/新任务实测；下一步只修这条逻辑关联并再看实图，不锁死风格。保留原文回读/跨任务经验、定量核验及 Fig.2 历史处置。

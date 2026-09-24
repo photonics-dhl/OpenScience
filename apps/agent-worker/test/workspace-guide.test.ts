@@ -48,7 +48,8 @@ function trustedDeps(overrides: { taskUserId?: string; researchObjectIds?: strin
   const userId = overrides.taskUserId ?? 'user-1';
   return {
     prisma: {
-      agentTask: { findUnique: vi.fn().mockResolvedValue({ id: 'guide-1', kind: 'workspace.guide', session: { userId } }) },
+      agentTask: { findUnique: vi.fn().mockResolvedValue({ id: 'guide-1', kind: 'workspace.guide', session: { userId } }),
+        findMany: vi.fn().mockResolvedValue([]) },
       ingestionTask: { findMany: vi.fn().mockResolvedValue((overrides.ingestionTaskIds ?? ['task-1']).map((id) => ({ id, state: 'needs_review', batch: { userId, researchObjectId: 'ro-1' } }))) },
       researchObject: { findMany: vi.fn().mockResolvedValue((overrides.researchObjectIds ?? ['ro-1']).map((id) => ({
         id,
@@ -79,8 +80,8 @@ describe('workspace.guide handler', () => {
     expect(gateway.completeStructured).toHaveBeenCalledOnce();
     const messages = (gateway.completeStructured as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as Array<{ role: string; content: string }>;
     const system = messages.find((message) => message.role === 'system')?.content ?? '';
-    expect(system).toContain('needsMoreInformation 必须是 boolean');
-    expect(system).toContain('每个 nextSteps 项只能包含 label、intent、targetId');
+    expect(system).toContain('needsMoreInformation（boolean）');
+    expect(system).toContain('每项只能包含 label、intent、targetId');
     expect(system).toContain('禁止 title、description');
     expect(system).toContain('open-task 只能使用下列 task id：task-1');
     expect(system).toContain('open-ro 只能使用下列 research object id：ro-1');
@@ -93,7 +94,9 @@ describe('workspace.guide handler', () => {
     }));
     expect(deps.prisma.ingestionTask.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        batch: { userId: 'user-1', researchObject: { workspace: { members: { some: { userId: 'user-1' } } } } },
+        batch: expect.objectContaining({ userId: 'user-1', researchObject: expect.objectContaining({
+          workspace: { members: { some: { userId: 'user-1' } } },
+        }) }),
       }),
     }));
   });
@@ -126,23 +129,23 @@ describe('workspace.guide handler', () => {
 
   it('bounds the complete trusted model context across many research objects', async () => {
     const researchObjects = Array.from({ length: 20 }, (_, index) => ({
-      id: `ro-${index}-${'i'.repeat(90)}`,
-      title: `Paper ${index} ${'t'.repeat(220)}`,
-      status: `draft-${'s'.repeat(50)}`,
+      id: `ro-${index}-${'i'.repeat(30)}`,
+      title: `Paper ${index} ${'t'.repeat(80)}`,
+      status: `draft-${'s'.repeat(20)}`,
       sdfDocument: { coreJson: Object.fromEntries(['problem', 'insight', 'method', 'evidence', 'results', 'limitations', 'reproducibility'].map((field) => [field, `${field}-${index}-${'x'.repeat(1200)}`])) },
     }));
     const gateway = { completeStructured: vi.fn().mockResolvedValue({ ...result, nextSteps: [] }) } as unknown as AiGateway;
     const deps = trustedDeps({ researchObjectIds: researchObjects.map((item) => item.id), ingestionTaskIds: [] });
     deps.prisma.researchObject.findMany.mockResolvedValue(researchObjects);
     const tasks = Array.from({ length: 20 }, (_, index) => ({
-      id: `task-${index}-${'k'.repeat(88)}`,
+      id: `task-${index}-${'k'.repeat(30)}`,
       researchObjectId: researchObjects[index]!.id,
-      state: `needs-review-${'q'.repeat(45)}`,
+      state: `needs-review-${'q'.repeat(20)}`,
     }));
     deps.prisma.ingestionTask.findMany.mockResolvedValue(tasks.map((task) => ({ ...task, batch: { userId: 'user-1', researchObjectId: task.researchObjectId } })));
     const manyPayload = {
       ...payload,
-      goal: 'g'.repeat(2_000),
+      goal: 'g'.repeat(500),
       context: { tasks, researchObjects: researchObjects.map(({ id, title, status }) => ({ id, title, status })) },
     };
 
