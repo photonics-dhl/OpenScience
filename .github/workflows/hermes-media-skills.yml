@@ -11,6 +11,8 @@ on:
       - '.agents/skills/openscience-scientific-visual-clarity/**'
       - '.agents/skills/openscience-research-illustration/**'
       - 'apps/agent-worker/src/skills/installed-media-skills.ts'
+      - 'apps/agent-worker/src/workspace-guide.ts'
+      - 'apps/agent-worker/test/workspace-guide.test.ts'
       - 'apps/agent-worker/test/skills/handdraw-routing.test.ts'
       - 'apps/agent-worker/src/presentation/generated-image-review.ts'
       - 'apps/agent-worker/src/presentation/scene-image.ts'
@@ -60,6 +62,8 @@ on:
       - '.agents/skills/openscience-scientific-visual-clarity/**'
       - '.agents/skills/openscience-research-illustration/**'
       - 'apps/agent-worker/src/skills/installed-media-skills.ts'
+      - 'apps/agent-worker/src/workspace-guide.ts'
+      - 'apps/agent-worker/test/workspace-guide.test.ts'
       - 'apps/agent-worker/test/skills/handdraw-routing.test.ts'
       - 'apps/agent-worker/src/presentation/generated-image-review.ts'
       - 'apps/agent-worker/src/presentation/scene-image.ts'
@@ -124,6 +128,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off"
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts test/presentation/automatic-style.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/workspace-guide.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/presentation/generated-image-review.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "blocks unreviewed narrative image approval while preserving rejection and legacy profiles"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "starts one charged review-only task"
