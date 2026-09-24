@@ -22,6 +22,10 @@
       "types": "./dist/retrieval/browser-result.d.ts",
       "default": "./dist/retrieval/browser-result.js"
     },
+    "./storyboard-visible-action": {
+      "types": "./dist/assets/storyboard-visible-action.d.ts",
+      "default": "./dist/assets/storyboard-visible-action.js"
+    },
     "./test-helpers": { "types": "./test/helpers/fakes.ts", "default": "./test/helpers/fakes.ts" },
     "./test-fixtures": { "types": "./test/helpers/retrieval-payload-parity.ts", "default": "./test/helpers/retrieval-payload-parity.ts" }
   },

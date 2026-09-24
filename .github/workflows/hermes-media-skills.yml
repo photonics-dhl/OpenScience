@@ -41,6 +41,8 @@ on:
       - 'packages/domain/src/assets/scene-image.ts'
       - 'packages/domain/src/assets/presentation-asset.ts'
       - 'packages/domain/src/assets/storyboard.ts'
+      - 'packages/domain/src/assets/storyboard-visible-action.ts'
+      - 'packages/domain/package.json'
       - 'packages/domain/src/agent/agent.ts'
       - 'packages/domain/src/ingestion/ingestion-service.ts'
       - 'packages/domain/src/index.ts'
@@ -86,6 +88,8 @@ on:
       - 'packages/domain/src/assets/scene-image.ts'
       - 'packages/domain/src/assets/presentation-asset.ts'
       - 'packages/domain/src/assets/storyboard.ts'
+      - 'packages/domain/src/assets/storyboard-visible-action.ts'
+      - 'packages/domain/package.json'
       - 'packages/domain/src/agent/agent.ts'
       - 'packages/domain/src/ingestion/ingestion-service.ts'
       - 'packages/domain/src/index.ts'
@@ -130,5 +134,6 @@ jobs:
       - run: node --check infra/codex-sol-review/review-client.mjs
       - run: bash -n infra/codex-sol-review/install.sh
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck
+      - run: npx pnpm@9.15.0 --filter @openscience/web build
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx
       - run: npx pnpm@9.15.0 docs:lint

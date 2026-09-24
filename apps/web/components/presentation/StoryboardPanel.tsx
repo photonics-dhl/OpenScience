@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { visibleStoryboardAction } from '@openscience/domain';
+import { visibleStoryboardAction } from '@openscience/domain/storyboard-visible-action';
 import type { PresentationClaim, StoryboardRequest, StoryboardView, SceneImageRequest } from '@/lib/api';
 
 interface Props {

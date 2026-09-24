@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { visibleStoryboardAction } from '@openscience/domain';
+import { visibleStoryboardAction } from '@openscience/domain/storyboard-visible-action';
 import { ApiClientError, listPresentationAssets, transitionPresentationAsset, type PresentationAsset } from '@/lib/api';
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 

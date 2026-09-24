@@ -21,6 +21,7 @@
 | Fig.3 / reuse 历史 | 9f7 恢复图获用户认可；Fig.1 原字节展示已被否定，不能冒称叙事完成。Fig.2 的 d5087b03 悬空 copy、重复 draft/approved 影响与处置仍须保留原件并按用户先前要求处理，不批量删除他人资产。 |
 
 ## 新恢复与质量证据
+- 本轮 auto 风格候选 48b93045 经定向 CI 35951715188 success 与独立 High 审查；服务器发布在 Web build 阶段因客户端从 Domain 总入口引入 Node `crypto/fs` 被拦，生产仍为 d463122c，`.release-failed` 不存在，未切服务。后续候选改为浏览器安全的 `@openscience/domain/storyboard-visible-action` 独立导出，Web 本机正式 build 已通过，并把 build 纳入媒体 CI；待新提交 CI 与发布，旧 48b SHA 不重试部署。
 - 14089584 增加手工 PNG 在正式审图前明确失败且 spool 证明 not_submitted 时的同图 review-only 恢复；Domain 与 worker 复验原 hash、父分镜、prompt、管理员及来源，原失败任务与旧图不删除。定向 Domain/Worker 测试、类型检查、独立 High GO；上述第三篇 scene0 为真实恢复并 approved。
 - 旧同父 scene1 68215708 及其 review-only copy ebf597b6 保持私有 draft：图上 “MOED” 错字虽被正式模型误判 accepted，人工实看拦下。新 scene1 已改正并真实审图。Prompt 加逐字缩写/公式检查仍不能保证模型不误判；任何公开前须保留实际像素核对。
 - 第二篇三风格实际检验：编辑图通过正式审图并公开；学术和淡彩 v1/v2 的 20 nm 标尺偏心、77→777 nm 或额外因果箭头等候选保持私有 NO-GO。提示词不能代替确定性定量绘制/像素审阅。
