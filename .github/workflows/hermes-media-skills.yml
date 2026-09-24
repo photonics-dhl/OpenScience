@@ -13,6 +13,9 @@ on:
       - 'apps/agent-worker/test/skills/handdraw-routing.test.ts'
       - 'apps/agent-worker/src/presentation/generated-image-review.ts'
       - 'apps/agent-worker/src/presentation/scene-image.ts'
+      - 'apps/agent-worker/src/presentation/illustration-review.ts'
+      - 'apps/agent-worker/src/presentation/storyboard.ts'
+      - 'apps/agent-worker/test/presentation/automatic-style.test.ts'
       - 'apps/agent-worker/src/index.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
@@ -31,10 +34,13 @@ on:
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
       - 'apps/web/components/hermes/HermesMediaReview.tsx'
       - 'apps/web/components/presentation/PresentationResultGallery.tsx'
+      - 'apps/web/components/presentation/StoryboardPanel.tsx'
       - 'apps/web/lib/api.ts'
       - 'apps/web/test/presentation-result-gallery.test.tsx'
+      - 'apps/web/test/storyboard-panel.test.tsx'
       - 'packages/domain/src/assets/scene-image.ts'
       - 'packages/domain/src/assets/presentation-asset.ts'
+      - 'packages/domain/src/assets/storyboard.ts'
       - 'packages/domain/src/agent/agent.ts'
       - 'packages/domain/src/ingestion/ingestion-service.ts'
       - 'packages/domain/src/index.ts'
@@ -52,6 +58,9 @@ on:
       - 'apps/agent-worker/test/skills/handdraw-routing.test.ts'
       - 'apps/agent-worker/src/presentation/generated-image-review.ts'
       - 'apps/agent-worker/src/presentation/scene-image.ts'
+      - 'apps/agent-worker/src/presentation/illustration-review.ts'
+      - 'apps/agent-worker/src/presentation/storyboard.ts'
+      - 'apps/agent-worker/test/presentation/automatic-style.test.ts'
       - 'apps/agent-worker/src/index.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
@@ -70,10 +79,13 @@ on:
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
       - 'apps/web/components/hermes/HermesMediaReview.tsx'
       - 'apps/web/components/presentation/PresentationResultGallery.tsx'
+      - 'apps/web/components/presentation/StoryboardPanel.tsx'
       - 'apps/web/lib/api.ts'
       - 'apps/web/test/presentation-result-gallery.test.tsx'
+      - 'apps/web/test/storyboard-panel.test.tsx'
       - 'packages/domain/src/assets/scene-image.ts'
       - 'packages/domain/src/assets/presentation-asset.ts'
+      - 'packages/domain/src/assets/storyboard.ts'
       - 'packages/domain/src/agent/agent.ts'
       - 'packages/domain/src/ingestion/ingestion-service.ts'
       - 'packages/domain/src/index.ts'
@@ -103,7 +115,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off"
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts test/presentation/automatic-style.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/presentation/generated-image-review.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "blocks unreviewed narrative image approval while preserving rejection and legacy profiles"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "starts one charged review-only task"
@@ -118,5 +130,5 @@ jobs:
       - run: node --check infra/codex-sol-review/review-client.mjs
       - run: bash -n infra/codex-sol-review/install.sh
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx
       - run: npx pnpm@9.15.0 docs:lint

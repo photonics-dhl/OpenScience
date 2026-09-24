@@ -52,7 +52,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const [run, setRun] = React.useState<HermesResearchRun | null>(null);
   const [instruction, setInstruction] = React.useState('');
   const [generationLocale, setGenerationLocale] = React.useState<'zh' | 'en'>(locale);
-  const [style, setStyle] = React.useState('scientific');
+  const [style, setStyle] = React.useState('auto');
   const [actorId, setActorId] = React.useState('');
   const actorRef = React.useRef('');
   const [restoredOwner, setRestoredOwner] = React.useState('');
@@ -141,7 +141,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     setSelectedTaskId(taskId);
     setInstruction(guided?.instruction ?? pending?.generation.instruction ?? '');
     setGenerationLocale(guided?.locale ?? pending?.generation.locale ?? locale);
-    setStyle(guided?.style ?? pending?.generation.style ?? 'scientific');
+    setStyle(guided?.style ?? pending?.generation.style ?? 'auto');
     setPendingRestored(Boolean(pending && (!guided || (pending.generation.instruction === guided.instruction
       && pending.generation.locale === guided.locale && pending.generation.style === guided.style))));
   }, [actorId, researchObjectId, locale, guided]);

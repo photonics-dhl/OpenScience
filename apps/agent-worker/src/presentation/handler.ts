@@ -905,7 +905,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       } else {
       if (!options.gateway?.generateImage) throw new Error('[blocked] scene image gateway unavailable');
       const installedSkills = completedProviderRecovery ? undefined
-        : loadInstalledMediaSkills(storyboardSceneStyles(sceneParent.view, sceneParent.view.document.scenes)[payload.sceneImage.sceneIndex]!, sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.visualAction, 'render');
+        : loadInstalledMediaSkills(storyboardSceneStyles(sceneParent.view, sceneParent.view.document.scenes)[payload.sceneImage.sceneIndex]!, sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.illustration?.treatment ?? sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.visualAction, 'render');
       const imagePlanningGateway: Pick<AiGateway, 'completeStructured'> = technicalRecovery ? {
         completeStructured: async (guard, messages, opts) => {
           await deps.prisma.$transaction(requireTechnicalRecovery, { isolationLevel: 'Serializable' });

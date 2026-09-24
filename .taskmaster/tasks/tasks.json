@@ -3,24 +3,24 @@
     "tasks": [
       {
         "id": 1,
-        "title": "学术机制图与科学分类图谱",
-        "description": "复用已审核的上游科学解析，按论文叙事中需要解释的关系选择图谱或机制表达，形成清晰且美观的学术候选。目标读者未读论文也能理解本图承担的关键点，用户明确认可后才完成。",
+        "title": "机制关系的可视表达",
+        "description": "复用已审核的上游科学解析，按论文叙事中需要解释的关系选择图谱、机制图或其他合适表达，不预设学术风格。目标读者未读论文也能理解本图承担的关键点，用户明确认可后才完成。",
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
         "details": "需求：docs/OpenScience_Kimi_Development_Spec.md 的 2026-09-14 图片能力推进。执行及用户反馈：docs/handoff/2026-09-10-hermes-web-image-handoff.md#illustration-delivery。此任务只保存稳定交付条件；资产、版本、反馈、下一步仅在 CURRENT。",
-        "testStrategy": "不触发测试或模型演练；实际授权成图后核看科学、叙事理解、展示可读性与美感，用户明确认可后才done。整体论文叙事另见任务5。",
+        "testStrategy": "代码与技能路由变更做必要定向测试及适用 CI，不做无关演练；真实授权成图后核看科学、叙事理解、可读性与美感，用户明确认可后才done。整体论文叙事另见任务5。",
         "subtasks": []
       },
       {
         "id": 2,
-        "title": "编辑封面插画",
-        "description": "使用现有设计技能，以构图、文字层级与材质突出论文的核心思想，形成能让未读论文者理解主旨的编辑封面表达。复用科学内容，用户明确认可后才完成；封面可作为完整多图叙事的一部分。",
+        "title": "核心主旨的艺术表达",
+        "description": "使用现有设计技能，按论文核心思想选择有助理解的构图、文字层级与材质，不预设编辑封面风格。复用已审科学内容，用户明确认可后才完成；成品可作为完整多图叙事的一部分。",
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
         "details": "需求：docs/OpenScience_Kimi_Development_Spec.md 的 2026-09-14 图片能力推进。执行及用户反馈：docs/handoff/2026-09-10-hermes-web-image-handoff.md#illustration-delivery。此任务只保存稳定交付条件；资产、版本、反馈、下一步仅在 CURRENT。",
-        "testStrategy": "不触发测试或模型演练；实际授权成图后核看科学、主旨传达、展示可读性与美感，用户明确认可后才done。整体论文叙事另见任务5。",
+        "testStrategy": "代码与技能路由变更做必要定向测试及适用 CI，不做无关演练；真实授权成图后核看科学、主旨传达、可读性与美感，用户明确认可后才done。整体论文叙事另见任务5。",
         "subtasks": []
       },
       {
@@ -42,7 +42,7 @@
         "dependencies": [],
         "priority": "high",
         "details": "2026-09-15用户授权查明即可修复，不能停留于台账。实现、部署与实际结果见docs/handoff/2026-09-10-hermes-web-image-handoff.md#capability-linkage。本项不代替任务1/2的最终配图交付，不自动评定科学正确或用户审美。",
-        "testStrategy": "不运行测试/预检/演练；必要服务器构建启动和真实产品读取分别记录，不以安装成功冒称全部质量已确认。",
+        "testStrategy": "变更后运行能验证所改行为的定向测试及适用 CI；必要服务器构建启动和真实产品读取分别记录，不以安装成功冒称全部质量已确认。",
         "subtasks": []
       },
       {
@@ -53,7 +53,7 @@
         "dependencies": [],
         "priority": "high",
         "details": "需求：docs/OpenScience_Kimi_Development_Spec.md §18.2的2026-09-21视觉叙事与交互责任纠正。Hermes复用经内部审校的全文结果，自动完成叙事、分镜、媒体选择、设计、成图内审和有界修订；用户查看最终六维内容与图片，不承担中间审批。沿原Domain权限/来源/审校机制补齐自动状态推进，不伪造用户确认、不另建论文分析器。不能用原图复制或无关成品轮播代替叙事。资产、反馈和下一步仅见docs/handoff/2026-09-10-hermes-web-image-handoff.md#illustration-delivery。",
-        "testStrategy": "不触发测试/预检/演练/CI；沿授权真实产品流程检查科学依据、未读论文者可复述的思想和关键点、实际展示可读性及用户设计认可，不能以模型成功、发布成功或既有单图认可标done。",
+        "testStrategy": "变更后运行必要定向测试及适用 CI，不做无关预检或演练；沿授权真实产品流程检查科学依据、未读论文者可复述的思想和关键点、实际展示可读性及用户设计认可，不能以模型成功、发布成功或既有单图认可标done。",
         "subtasks": []
       }
     ],

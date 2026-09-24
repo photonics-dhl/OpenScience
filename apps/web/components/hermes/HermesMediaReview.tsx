@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { visibleStoryboardAction } from '@openscience/domain';
 import { ApiClientError, listPresentationAssets, transitionPresentationAsset, type PresentationAsset } from '@/lib/api';
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 
@@ -69,7 +70,7 @@ export function HermesMediaReview({ researchObjectId, versionId, onConfirmationC
     {!ready && !error && <p role="status">{t('mediaReviewLoading')}</p>}
     {ready && <><p>{assets.length ? t('mediaReviewInstruction') : t('mediaReviewEmpty')}</p>
       {assets.map((asset, index) => <details className="mt-3" key={asset.id}><summary>{index + 1}. {mediaTitle(asset)} · {t(asset.status === 'approved' ? 'adopted' : asset.status === 'rejected' ? 'rejected' : 'awaitingReview')}</summary>
-        {asset.storyboard ? <div className="mt-2 text-sm leading-6">{asset.storyboard.document.scenes.map((scene, sceneIndex) => <div className="mt-2" key={sceneIndex}><p>{sceneIndex + 1}. {scene.title}</p><p>{scene.narration}</p><p className="mt-2 whitespace-pre-wrap">{scene.visualAction}</p></div>)}</div> : <p className="mt-2 text-sm">{t('reviewOnLeft')}</p>}
+        {asset.storyboard ? <div className="mt-2 text-sm leading-6">{asset.storyboard.document.scenes.map((scene, sceneIndex) => <div className="mt-2" key={sceneIndex}><p>{sceneIndex + 1}. {scene.title}</p><p>{scene.narration}</p><p className="mt-2 whitespace-pre-wrap">{visibleStoryboardAction(scene.visualAction)}</p></div>)}</div> : <p className="mt-2 text-sm">{t('reviewOnLeft')}</p>}
       </details>)}
     </>}
     {message && <p className="mt-3" role="status">{message}</p>}

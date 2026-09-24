@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CODEX_IMAGE_MAX_JSON_BYTES, imageSpoolRequestByteUpperBound } from '@openscience/ai-gateway';
 import type { IllustrationBrief } from '@openscience/domain';
 import { compileIllustrationImagePrompt } from '../../src/presentation/scene-image';
-import { loadInstalledMediaSkills } from '../../src/skills/installed-media-skills';
+import { automaticStyleReviewGuidance, loadInstalledMediaSkills, selectedAutomaticArtStyle, selectedHanddrawStyle } from '../../src/skills/installed-media-skills';
 
 describe('Hermes media skill stages', () => {
   it('keeps scientific visual clarity in science without adding art routing', () => {
@@ -24,7 +24,7 @@ describe('Hermes media skill stages', () => {
       expect(render.instructions).toContain('Reader-first hand-drawn direction');
       expect(render.instructions).toContain('a third digit, changed unit or dropped subscript');
       expect(render.instructions).toContain('endpoints must touch the specified nearest surfaces');
-      expect(render.usage).toContainEqual(expect.objectContaining({ id: 'openscience-handdraw-style', version: '2' }));
+      expect(render.usage).toContainEqual(expect.objectContaining({ id: 'openscience-handdraw-style', version: '3' }));
       expect(render.usage.map((item) => item.id)).not.toContain('openscience-handdraw-router');
     }
   });
@@ -44,6 +44,35 @@ describe('Hermes media skill stages', () => {
         expect(selected.usage.map((item) => item.id)).not.toContain('openscience-handdraw-style');
       }
     }
+  });
+
+  it('keeps the full numbered catalogue in art planning, then scopes rendering to the chosen style', () => {
+    const science = loadInstalledMediaSkills('auto', '', 'science');
+    expect(science.instructions).not.toContain('NUMBERED HAND-DRAWN STYLE INDEX');
+    const plan = loadInstalledMediaSkills('auto', '', 'plan');
+    expect(plan.instructions).toContain('#001 Playful Deadpan Doodle');
+    expect(plan.instructions).toContain('#277');
+    expect(plan.instructions).toContain('article:scientific');
+    expect(plan.instructions).toContain('infographic:subway-map');
+    expect(plan.usage).toContainEqual(expect.objectContaining({ id: 'baoyu-article-illustrator' }));
+    expect(plan.usage).toContainEqual(expect.objectContaining({ id: 'baoyu-infographic' }));
+    expect(plan.usage).toContainEqual(expect.objectContaining({ id: 'openscience-handdraw-style', resources: expect.arrayContaining(['references/style-catalogue.json#index']) }));
+
+    expect(selectedHanddrawStyle('material HANDDRAW_STYLE=#002 fine ink')?.name).toBe('Conceptual Continuous-Line Editorial');
+    expect(selectedHanddrawStyle('HANDDRAW_STYLE=#999')).toBeUndefined();
+    expect(selectedHanddrawStyle('HANDDRAW_STYLE=#002 HANDDRAW_STYLE=#003')).toBeUndefined();
+    const render = loadInstalledMediaSkills('auto', 'HANDDRAW_STYLE=#002; fine ink, no extra subject.', 'render');
+    expect(render.instructions).toContain('Conceptual Continuous-Line Editorial');
+    expect(render.instructions).not.toContain('Playful Deadpan Doodle');
+    expect(render.usage).toContainEqual(expect.objectContaining({ id: 'openscience-handdraw-style', resources: expect.arrayContaining(['references/style-catalogue.json#002']) }));
+    const baoyu = loadInstalledMediaSkills('auto', 'BAOYU_STYLE=infographic:subway-map; editorial transit lines.', 'render');
+    expect(baoyu.instructions).toContain('Colored route lines');
+    expect(baoyu.instructions).not.toContain('NUMBERED HAND-DRAWN STYLE INDEX');
+    expect(baoyu.usage).toContainEqual(expect.objectContaining({ id: 'baoyu-infographic', resources: expect.arrayContaining(['references/styles/subway-map.md#Visual Elements']) }));
+    expect(selectedAutomaticArtStyle('BAOYU_STYLE=article:scientific; precise ink.')).toEqual({ kind: 'baoyu', family: 'article', id: 'scientific' });
+    expect(automaticStyleReviewGuidance('BAOYU_STYLE=infographic:subway-map; precise ink.')).toContain('Colored route lines');
+    expect(selectedAutomaticArtStyle('BAOYU_STYLE=article:missing; invalid.')).toBeUndefined();
+    expect(() => loadInstalledMediaSkills('auto', 'No selected marker', 'render')).toThrow('no valid selected style');
   });
 
   it('keeps the approved science and hand-drawn direction in the bounded image request', () => {

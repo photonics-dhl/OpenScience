@@ -4,6 +4,7 @@ import { ILLUSTRATION_BRIEF_MAX_CHARACTERS, describeIllustrationBrief, parseIllu
 import type { PresentationClaim } from './chart-generator';
 import { compileIllustrationImagePrompt } from './scene-image';
 import { loadIllustrationStyleSkills } from './illustration-styles';
+import { loadInstalledMediaSkills, mergeDesignSkillUsage, selectedAutomaticArtStyle } from '../skills/installed-media-skills';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
 
 type ReviewContext = Pick<ScienceReviewInput, 'authorizationContext' | 'illustrationContext'> & {
@@ -158,6 +159,10 @@ export async function reviewIllustrationStoryboard(
   const perSceneStyle = storyboardSceneStyles(settings, candidate.scenes);
   const generatedStyles = perSceneStyle.filter((_, index) => !candidate.scenes[index]!.paperOriginal);
   const reviewSkills = loadIllustrationStyleSkills(generatedStyles.length ? generatedStyles : [settings.style], settings.instruction, 'review');
+  const autoScenes = candidate.scenes.flatMap((scene, index) => perSceneStyle[index] === 'auto' && !scene.paperOriginal
+    ? [{ index, treatment: scene.illustration!.treatment }] : []);
+  const autoStyleSkills = autoScenes.map(({ index, treatment }) => ({ index, skills: loadInstalledMediaSkills('auto', treatment, 'render') }));
+  const autoStyleGuidance = autoStyleSkills.map(({ index, skills }) => `Scene ${index}: ${skills.instructions}`).join('\n');
   const verdictOnly = Boolean(settings.narrative || candidate.narrative || context.acceptanceOnly);
   const prompt = `Apply the shared scientific-critical-thinking skill below to the FINAL proposed research illustration. Use only the supplied analysis and original evidence; do not browse or operate tools. The image-specific task is to check what every axis, distance, color, region, arrow and curve communicates, including meaning introduced by composition and treatment. Decorative placement must not invent quantitative behavior or physical relationships.
 ${context.acceptanceOnly ? 'This candidate includes a proposed art correction. Assess the COMPLETE combined candidate afresh: composition/treatment must agree with the unchanged encoding, subjects, labels, conditions and captions. A different mathematical object, quantity, curve, parameter regime or label meaning is a scientific change, even when written in an art field. Return accepted only if the complete candidate is consistent; otherwise return blocked with all necessary upstream issues. Do not propose another correction or return revised.' : ''}
@@ -167,8 +172,10 @@ Choose accepted only if the complete picture faithfully explains the supplied se
 ${candidate.narrative ? 'Before accepting, compare title, narration, message, subjects, encoding, labels, constraints, composition and treatment for each scene. Treat ordered density/size sequences, proportional lengths/areas/distances, alignment, directional arrows or bridges, and fixed-versus-swept parameters as scientific claims: block contradictions between fields even when each field is separately plausible or supported under different conditions. In particular, equal-area or explicitly non-scaled encoding must not become proportional geometry in composition/treatment; correct numeric labels do not resolve that contradiction. Check that spatial paths are realizable in the stated view: a path required to stay in an open region cannot pass through the drawn solids, and dimensions along different directions cannot share an incompatible axis. Check which visual group each fixed parameter, sweep and numeric result belongs to; an overall caption cannot repair a group that both fixes and sweeps the same variable. Every depicted mapping must retain the operands, intermediate relations and conditions needed for the stated mechanism; a shortcut arrow or alignment must not assert a direct relation unsupported by the science. For generated scenes, enumerate all text boxes, callouts and annotations requested by composition/treatment and require their full visible text to be existing labels entries. Unchanged paper-original labels are exempt from that generated-text inventory. Report all conflicts together with their scene, conflicting fields and required scientific meaning; do not fix a scientific contradiction by silently changing the art.' : ''}
 ${verdictOnly ? 'Any remaining misleading meaning introduced by art must be reported as blocked; do not change this candidate or propose another revision.' : 'If only artistic placement or treatment introduced a misleading meaning, return revised with a minimal correction to composition or treatment. Preserve scene order/count, all scientific fields and unaffected artwork. Composition chooses placement, focal scale, reading path and spacing; treatment chooses material, palette, edges and typography. Neither may add a scientific mark, label, relationship or condition. Refer to existing subjects, encoding and labels; do not reselect the topic or rewrite the storyboard.'}
 In this same review, also compare composition/treatment with userRequest and perSceneStyle. Each scene's selected style overrides the global fallback. A material mismatch with explicit art direction, background, layout, texture or typography warrants ${verdictOnly ? 'blocked with the unresolved issue' : 'revised using only the permitted art fields'}. Preserve every scientific field and only art aspects explicitly accepted by the user. Resolve objective instruction mismatches, not subjective taste. Conformance does not certify visual quality or user approval; do not change science for decoration.
+${autoScenes.length ? 'For auto scenes, the treatment prefix HANDDRAW_STYLE or BAOYU_STYLE is internal selection metadata. Preserve the exact selected prefix in any treatment correction; revise only the artistic prose following it. The selected appearance guidance below cannot establish new scientific content.' : ''}
 Return ONLY JSON with EXACT keys {decision,summary,corrections}. decision is ${verdictOnly ? 'accepted|blocked' : 'accepted|revised|blocked'}; summary is a concise explanation in the requested locale. For accepted or blocked, corrections MUST be []. ${verdictOnly ? 'No further corrections are permitted.' : 'For revised, corrections is a nonempty list of {sceneIndex,composition?,treatment?}; each existing zero-based sceneIndex appears once, with at least one changed field and no other keys. composition and treatment must be nonempty single-line strings within the shared complete-brief budget.'} No HTML or code. Keep any corrections concise and in the requested locale. The complete scientific and artistic brief, including field headings and separators, must fit ${ILLUSTRATION_BRIEF_MAX_CHARACTERS} UTF-16 code units. Message, descriptions, encoding, constraints, composition and treatment share this total; they have no separate short allocations. Never mechanically truncate scientific meaning or remove necessary conditions to fit art. SourceIds and review notes are internal and are not drawn. Perform this focused audit yourself.
 ${reviewSkills.instructions}
+${autoStyleGuidance}
 ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, style: settings.style, perSceneStyle,
     ...(context.previousDefectReport ? { reportedPreviousDefects: context.previousDefectReport } : {}),
     ...(candidate.narrative ? { paper: projectVisualNarrativeSource(context.narrativeSource!) } : {}),
@@ -181,7 +188,7 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
     .replace('Perform this focused audit yourself.', `Perform this focused audit yourself. issues MUST be [] for ${verdictOnly ? 'accepted' : 'accepted/revised'}. For blocked, list ALL independent scientific issues together (1-36), each exactly {sceneIndex,labelIndex,kind,requiredMeaning,sourceIds}. sceneIndex refers to an existing zero-based scene. kind is label_clarification only when prepending/appending a short explanation to an existing label can fully resolve it without changing its existing symbols, equations, meaning or any other science/art field. Use that existing zero-based labelIndex and 1-8 exact supplied sourceIds. Combine all missing meanings for the same label into one issue; do not repeat label targets. If a definition repeated in multiple labels only needs one visible explanation, select one target. requiredMeaning is a precise complete description <=500 characters in the requested locale. For changes requiring any other field, new label/axis, different source or formula, use kind requires_replan and labelIndex:null; sourceIds may be [] only when the problem is missing evidence. Do not mistake successful JSON or mere presence of a symbol for completion of its required meaning.`) : prompt;
   if (requestPrompt.length > ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS) throw new Error(`[blocked] Illustration plan review input is ${requestPrompt.length} characters; text transport limit is ${ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS}. Saved plan retained.`);
   const validReview = (value: unknown): value is Record<string, unknown> => {
-    try { parseIllustrationReview(value, candidate, claims, sources, context.structuredIssues, verdictOnly); return true; }
+    try { parseIllustrationReview(value, candidate, claims, sources, perSceneStyle, context.structuredIssues, verdictOnly); return true; }
     catch { return false; }
   };
   const response = await gateway.reviewScientific({ requestId: context.authorizationContext.taskId,
@@ -189,16 +196,16 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
     source: { kind: 'illustration-plan', researchObjectId: context.researchObjectId, versionId: context.versionId,
       sourceEvidenceIdentity: context.sourceEvidenceIdentity, candidateHash }, prompt: requestPrompt }, validReview);
   const { document, decision, summary, issues } = parseIllustrationReview(
-    JSON.parse(response.text.trim().replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, '')), candidate, claims, sources, context.structuredIssues, verdictOnly);
+    JSON.parse(response.text.trim().replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, '')), candidate, claims, sources, perSceneStyle, context.structuredIssues, verdictOnly);
   if (decision === 'blocked' && !context.structuredIssues) throw new Error('[blocked] Illustration needs upstream scientific revision: ' + summary.slice(0, 300));
-  return { document, designSkills: reviewSkills.usage, provenance: { stage: 'final-brief', requestId: context.authorizationContext.taskId,
+  return { document, designSkills: mergeDesignSkillUsage(reviewSkills.usage, ...autoStyleSkills.map(({ skills }) => skills.usage)), provenance: { stage: 'final-brief', requestId: context.authorizationContext.taskId,
     decision, summary, candidateHash, sourceEvidenceIdentity: context.sourceEvidenceIdentity,
     promptHash: response.promptHash, responseHash: response.responseHash, provider: response.provider ?? 'chatgpt-web-science-review',
     ...(response.model ? { model: response.model } : {}), ...(issues ? { issues } : {}) } };
 }
 
 function parseIllustrationReview(value: unknown, candidate: StoryboardDocument, claims: readonly PresentationClaim[],
-  sources: readonly { claimId: string; evidenceId: string }[], structuredIssues?: boolean, verdictOnly = Boolean(candidate.narrative)) {
+  sources: readonly { claimId: string; evidenceId: string }[], perSceneStyle: readonly string[], structuredIssues?: boolean, verdictOnly = Boolean(candidate.narrative)) {
   const review = object(value);
   keys(review, structuredIssues ? ['decision', 'summary', 'corrections', 'issues'] : ['decision', 'summary', 'corrections']);
   const decision = review.decision;
@@ -228,9 +235,23 @@ function parseIllustrationReview(value: unknown, candidate: StoryboardDocument, 
         || (!('composition' in correction) && !('treatment' in correction))) throw new Error('[blocked] Invalid scene correction');
       const scene = scenes[index]!;
       if (scene.paperOriginal) throw new Error('[blocked] Review cannot redesign a verbatim paper-original scene');
+      let treatment = correction.treatment;
+      if ('treatment' in correction && perSceneStyle[index] === 'auto') {
+        const original = scene.illustration!.treatment;
+        const marker = original.match(/^(?:HANDDRAW_STYLE=#\d{3}|BAOYU_STYLE=(?:article|infographic):[a-z0-9-]+);/u)?.[0];
+        if (!marker || !selectedAutomaticArtStyle(original) || typeof treatment !== 'string')
+          throw new Error('[blocked] Auto art correction lost selected style');
+        if (/^(?:HANDDRAW_STYLE=|BAOYU_STYLE=)/u.test(treatment)) {
+          if (!treatment.startsWith(marker)) throw new Error('[blocked] Auto art correction changed selected style');
+        } else {
+          if (/(?:HANDDRAW_STYLE=|BAOYU_STYLE=)/u.test(treatment)) throw new Error('[blocked] Auto art correction has misplaced style marker');
+          treatment = `${marker} ${treatment}`;
+        }
+        if (typeof treatment !== 'string' || !selectedAutomaticArtStyle(treatment)) throw new Error('[blocked] Auto art correction has invalid selected style');
+      }
       const illustration = parseIllustrationBrief({ ...scene.illustration!,
         ...('composition' in correction ? { composition: correction.composition } : {}),
-        ...('treatment' in correction ? { treatment: correction.treatment } : {}) }, scene.sourceClaimIds);
+        ...('treatment' in correction ? { treatment } : {}) }, scene.sourceClaimIds);
       if (illustration.composition === scene.illustration!.composition
         && illustration.treatment === scene.illustration!.treatment) throw new Error('[blocked] Invalid or unchanged art correction');
       scenes[index] = { ...scene, illustration, visualAction: describeIllustrationBrief(illustration) };

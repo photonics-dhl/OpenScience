@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { AiGatewayError, type AiGateway } from '@openscience/ai-gateway';
-import { STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX, parseStoryboardDocument, requireAnimationSourceSupport, type PaperOriginalRef, type StoryboardDocument, type StoryboardRequest, type StoryboardView } from '@openscience/domain';
+import { STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX, parseStoryboardDocument, requireAnimationSourceSupport, visibleStoryboardAction, type PaperOriginalRef, type StoryboardDocument, type StoryboardRequest, type StoryboardView } from '@openscience/domain';
 import type { PresentationClaim } from './chart-generator';
 import { SCIENTIFIC_ART_DIRECTION_SKILL, SCIENTIFIC_VIDEO_DIRECTION_SKILL } from '../skills/media-direction';
 import { generateIllustrationStoryboard } from './illustration-planner';
@@ -116,5 +116,5 @@ Each action has EXACT keys {kind,target,start,end,meaning,basis}; ONLY translate
 }
 function escape(value: string) { return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;'); }
 export function renderStoryboard(document: StoryboardDocument, settings: StoryboardRequest): Buffer {
-    return Buffer.from(`<!doctype html><html lang="${settings.locale}"><meta charset="utf-8"><title>${escape(document.title)}</title><body><h1>${escape(document.title)}</h1>${document.narrative ? `<p>${escape(document.narrative.mainMessage)}</p><p>${escape(document.narrative.audience)}</p>` : ''}<p>${settings.output === 'image' ? 'Illustration plan. Images are generated in subsequent tasks.' : 'Storyboard draft — human scientific review required. No video has been rendered.'} Presentation, not evidence.</p>${document.scenes.map(s => `<section><h2>${escape(s.title)}</h2><p>${escape(s.narration)}</p><p>Visual action: ${escape(s.visualAction)}</p>${s.durationSeconds === undefined ? '' : `<p>${s.durationSeconds} s</p>`}<p>Source Claims: ${s.sourceClaimIds.map(escape).join(', ')}</p></section>`).join('')}</body></html>`);
+    return Buffer.from(`<!doctype html><html lang="${settings.locale}"><meta charset="utf-8"><title>${escape(document.title)}</title><body><h1>${escape(document.title)}</h1>${document.narrative ? `<p>${escape(document.narrative.mainMessage)}</p><p>${escape(document.narrative.audience)}</p>` : ''}<p>${settings.output === 'image' ? 'Illustration plan. Images are generated in subsequent tasks.' : 'Storyboard draft — human scientific review required. No video has been rendered.'} Presentation, not evidence.</p>${document.scenes.map(s => `<section><h2>${escape(s.title)}</h2><p>${escape(s.narration)}</p><p>Visual action: ${escape(visibleStoryboardAction(s.visualAction))}</p>${s.durationSeconds === undefined ? '' : `<p>${s.durationSeconds} s</p>`}<p>Source Claims: ${s.sourceClaimIds.map(escape).join(', ')}</p></section>`).join('')}</body></html>`);
 }

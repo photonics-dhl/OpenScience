@@ -37,7 +37,7 @@ Pixel science成功/art主调用超时的精确同task一次恢复复用`researc
 
 科学视觉清晰度：`.agents/skills/openscience-scientific-visual-clarity/SKILL.md` 及 `apps/agent-worker/src/skills/installed-media-skills.ts` 将经筛选的 K-Dense scientific-visualization 方法放入原 science/plan 阶段，不增加正式末审输入；已部署与真实消费、质量效果分开，以 [Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md) 和[能力台账](docs/runbooks/hermes-capability-registry.md)为准。
 
-手绘视觉指导：`.agents/skills/openscience-handdraw-{router,style}/SKILL.md` 将 handraw-style-router 的场景匹配与 handraw-style 的表现语言适配进原 art/scene-image 阶段；`apps/agent-worker/src/skills/installed-media-skills.ts` 是固定加载入口，`apps/agent-worker/test/skills/handdraw-routing.test.ts` 验证阶段隔离，`.github/workflows/hermes-media-skills.yml` 在交付分支运行定向 CI。候选、发布与真实效果见 [Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。
+手绘视觉指导：`.agents/skills/openscience-handdraw-{router,style}/SKILL.md` 将 handraw-style-router 的场景匹配与 handraw-style 的表现语言适配进原 art/scene-image 阶段；`openscience-handdraw-style/references/style-catalogue.json` 是固定上游版本的编号索引，`apps/agent-worker/src/skills/installed-media-skills.ts` 是与 Baoyu 共用的加载入口，`apps/agent-worker/test/{skills/handdraw-routing,presentation/automatic-style}.test.ts` 验证阶段隔离与选后渲染，`.github/workflows/hermes-media-skills.yml` 在交付分支运行定向 CI。候选、发布与真实效果见 [Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 审图保存恢复定位：infra/chatgpt-browser/review-broker.mjs复用已有完整job结果，原jobResponse保留身份及responseHash核对；并发结果保存与终态收尾沿现有presentation handler/research-run，实际进展只见CURRENT。
 

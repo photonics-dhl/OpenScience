@@ -10,6 +10,8 @@
 - 第一篇学术图已公开 [OSR-2026-000023/v/3](https://openscience.428312321.xyz/research/OSR-2026-000023/v/3)，第二篇编辑图已公开 [OSR-2026-000022/v/2](https://openscience.428312321.xyz/research/OSR-2026-000022/v/2)；各自旧版本仍在。
 - 第三篇两幕淡彩图均取自同一批准分镜：scene0 原 PNG 的未提交审图故障经新 review-only 入口恢复，5.6 Sol accepted 的副本获批；scene1 新 PNG 纠正旧图 “MOED” 为 “MQED”，正式审图 accepted、人工实看后获批。[OSR-2026-000024/v/1](https://openscience.428312321.xyz/research/OSR-2026-000024/v/1) 已公开，匿名页核实六维、5 Claim/30 Evidence、两张 1280×720 图片轮播和 PDF 不公开下载。旧错图及误判 accepted 收据保留私有，不伪称审图零误差。
 - 三篇完成产品链路。用户明确称赞第三篇 scene0「光子准粒子」淡彩图，同时指出其他图仍有问题；整体科学叙事、美感与可理解性尚未获认可。第二篇学术/淡彩风格的标尺与多余因果问题候选保持私有 NO-GO，不能把“有图”算作三风格全部合格。
+- 本轮叙事优先候选：无偏好图片改为 `auto`；Hermes 原 science 阶段不看风格，美术阶段可从手绘编号和 Baoyu article/infographic 按画面任务选风格，render 只加载所选条目并记来源。已过定向单测/类型检查；CI、部署及新 PNG 真实效果尚未确认，旧图不追认动态选择。
+- 用户进一步明确：学术、编辑、淡彩只是已做过的样本，不是未来配图的类别限制。唯一主目标是让未读论文者读懂核心思想；风格库用于增强艺术表达。现有自动任务默认 scientific、手动入口只露少数样式，原版 handraw 图库尚未接入 Hermes 动态选择，下一步沿原科学→美术→成图链路补接。
 
 ## 当前工程状态
 - 手工 PNG 审图未提交恢复、像素标签提示已通过定向测试/类型检查、独立 High、[CI 35893326942](https://github.com/photonics-dhl/OpenScience/actions/runs/35893326942)，部署并真实用于第三篇。当前生产身份与回退见 CURRENT。

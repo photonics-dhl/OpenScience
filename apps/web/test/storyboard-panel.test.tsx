@@ -37,3 +37,15 @@ it('offers one paid image action per current scene only when authorized', () => 
   expect(allowed).toContain('imageCharge');
   expect(renderToStaticMarkup(createElement(StoryboardPanel, { ...props, canGenerateImage: false }))).not.toContain('data-scene-image=');
 });
+
+it('defaults new image plans to narrative-driven style and hides internal style markers', () => {
+  const scene = { title: 'Relation', narration: 'One connection',
+    visualAction: '构图：clear link。视觉处理：BAOYU_STYLE=article:scientific; precise ink。可见标签：Connection。',
+    sourceClaimIds: ['claim'] };
+  const storyboard = { document: { schemaVersion: 1 as const, title: 'Plan', scenes: [scene] }, locale: 'en' as const, style: 'auto' };
+  const markup = renderToStaticMarkup(createElement(StoryboardPanel, { storyboard, claims: [], canGenerate: true, selectedClaimIds: ['claim'], onGenerate: vi.fn() }));
+  const newPlan = renderToStaticMarkup(createElement(StoryboardPanel, { claims: [], canGenerate: true, selectedClaimIds: ['claim'], onGenerate: vi.fn() }));
+  expect(newPlan).toContain('checked="" value="auto"');
+  expect(markup).toContain('precise ink');
+  expect(markup).not.toContain('BAOYU_STYLE=');
+});
