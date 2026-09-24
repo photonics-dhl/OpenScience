@@ -34,6 +34,28 @@ function mockGateway(treatment: string, styleId?: string) {
 }
 
 describe('automatic art direction after sourced science', () => {
+  it('stops a science plan that points past its visible-label list', async () => {
+    const invalidScience = { ...science, scenes: [{ ...science.scenes[0]!,
+      encoding: 'label 1 names the relation even though there is only one visible label.' }] };
+    const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1
+      ? invalidScience : { scenes: [{ layout: 'Place the single visible label beside its mark.', treatment: 'Quiet ink.' }] });
+    await expect(generateIllustrationStoryboard({ completeStructured } as never, claims, {
+      locale: 'en', style: 'watercolor', instruction: 'Explain the relation.', output: 'image',
+    })).rejects.toThrow('label_reference_out_of_range');
+    expect(completeStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops art that adds a nonexistent visible-label reference', async () => {
+    const completeStructured = vi.fn(async (_guard: unknown, _messages: unknown) =>
+      completeStructured.mock.calls.length === 1 ? science : { scenes: [{
+        layout: 'Place label 1 next to the single visible relation.', treatment: 'Quiet ink.',
+      }] });
+    await expect(generateIllustrationStoryboard({ completeStructured } as never, claims, {
+      locale: 'en', style: 'watercolor', instruction: 'Explain the relation.', output: 'image',
+    })).rejects.toThrow('label_reference_out_of_range');
+    expect(completeStructured).toHaveBeenCalledTimes(2);
+  });
+
   it('uses a numbered style only in art, then retains it in the drawable brief', async () => {
     const { gateway, calls } = mockGateway('Fine continuous ink lines on warm white paper.', 'handdraw:#002');
     const result = await generateIllustrationStoryboard(gateway, claims, {

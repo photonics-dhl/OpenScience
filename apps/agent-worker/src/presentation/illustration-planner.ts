@@ -10,6 +10,21 @@ import { loadIllustrationStyleSkills } from './illustration-styles';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
 
 type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string } };
+// New candidates only: stored historical briefs stay readable, but a freshly
+// generated plan must not send a nonexistent visible label to image rendering.
+function requireLabelReferencesInRange(brief: IllustrationBrief): void {
+  const prose = [
+    ...(brief.schemaVersion === 2 ? [['encoding', brief.encoding] as const] : []),
+    ['composition', brief.composition] as const,
+    ['treatment', brief.treatment] as const,
+  ];
+  for (const [field, value] of prose) {
+    for (const match of value.matchAll(/\blabel\s+([0-9]+)\b/giu)) {
+      if (Number(match[1]) >= brief.labels.length)
+        throw new Error(`label_reference_out_of_range_${field}_${match[1]}_count_${brief.labels.length}`);
+    }
+  }
+}
 export type StoryboardScienceCheckpoint = {
   intent: { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] };
   designSkills: DesignSkillUsage[];
@@ -348,6 +363,7 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
           composition: original ? 'Preserve the original figure geometry; explain its role in the reader caption.' : 'Art direction pending',
           treatment: original ? 'Copy the approved source image unchanged; this is source material, not a newly designed illustration.' : 'Art direction pending' }, claimIds);
         if (illustration.schemaVersion !== 2) throw new Error('structured_encoding_required');
+        requireLabelReferencesInRange(illustration);
         requireIllustrationSourceSupport(illustration, claims);
         // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
         compileIllustrationImagePrompt(illustration);
@@ -460,6 +476,7 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
       const illustration = parseIllustrationBrief({ ...scene.illustration,
         composition: text(art.layout, layoutLimit, 'layout', true),
         treatment }, scene.sourceClaimIds);
+      requireLabelReferencesInRange(illustration);
       compileIllustrationImagePrompt(illustration);
       scenes.push({ ...scene, illustration, visualAction: describeIllustrationBrief(illustration) } as typeof intent.scenes[number]);
     }
