@@ -176,6 +176,16 @@ export function selectedAutomaticArtStyle(treatment: string): AutomaticArtStyle 
   const skill = family === 'article' ? 'baoyu-article-illustrator' : 'baoyu-infographic';
   return fileExists(`${skill}/references/styles/${id}.md`) ? { kind: 'baoyu', family, id } : undefined;
 }
+/** Keep the model's style choice separate from its art prose; encode the marker ourselves. */
+export function automaticStyleTreatment(styleId: string, treatment: string): string | undefined {
+  const choice = styleId.trim();
+  const marker = /^(?:handdraw:)?#\d{3}$/u.test(choice)
+    ? `HANDDRAW_STYLE=${choice.slice(-4)}`
+    : /^(?:article|infographic):[a-z0-9-]+$/u.test(choice) ? `BAOYU_STYLE=${choice}` : undefined;
+  if (!marker || !treatment.trim()) return undefined;
+  const result = `${marker}; ${treatment.trim()}`;
+  return selectedAutomaticArtStyle(result) ? result : undefined;
+}
 export function automaticStyleReviewGuidance(treatment: string): string {
   // Formal reviewers inspect exactly the appearance guidance used to draw this scene.
   // Their scientific audit rules are supplied separately by the review caller.
@@ -183,7 +193,8 @@ export function automaticStyleReviewGuidance(treatment: string): string {
 }
 
 function handdrawIndex(): string {
-  return handdrawCatalogue().map(item => `#${item.number} ${item.name} · ${item.group}: ${item.traits.trim() || '[reference required: unavailable for automatic selection]'}`).join('\n');
+  return handdrawCatalogue().filter(item => item.traits.trim()).map(item =>
+    `#${item.number} ${item.name} · ${item.group}: ${item.traits.trim()}`).join('\n');
 }
 function baoyuIndex(family: 'article' | 'infographic'): string {
   const skill = family === 'article' ? 'baoyu-article-illustrator' : 'baoyu-infographic';

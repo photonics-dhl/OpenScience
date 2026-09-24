@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CODEX_IMAGE_MAX_JSON_BYTES, imageSpoolRequestByteUpperBound } from '@openscience/ai-gateway';
 import type { IllustrationBrief } from '@openscience/domain';
 import { compileIllustrationImagePrompt } from '../../src/presentation/scene-image';
-import { automaticStyleReviewGuidance, loadInstalledMediaSkills, selectedAutomaticArtStyle, selectedHanddrawStyle } from '../../src/skills/installed-media-skills';
+import { automaticStyleReviewGuidance, automaticStyleTreatment, loadInstalledMediaSkills, selectedAutomaticArtStyle, selectedHanddrawStyle } from '../../src/skills/installed-media-skills';
 
 describe('Hermes media skill stages', () => {
   it('keeps scientific visual clarity in science without adding art routing', () => {
@@ -46,12 +46,13 @@ describe('Hermes media skill stages', () => {
     }
   });
 
-  it('keeps the full numbered catalogue in art planning, then scopes rendering to the chosen style', () => {
+  it('offers selectable numbered styles in art planning, then scopes rendering to the chosen style', () => {
     const science = loadInstalledMediaSkills('auto', '', 'science');
     expect(science.instructions).not.toContain('NUMBERED HAND-DRAWN STYLE INDEX');
     const plan = loadInstalledMediaSkills('auto', '', 'plan');
     expect(plan.instructions).toContain('#001 Playful Deadpan Doodle');
     expect(plan.instructions).toContain('#277');
+    expect(plan.instructions).not.toContain('#055 Chaotic Color Doodle Crowd');
     expect(plan.instructions).toContain('article:scientific');
     expect(plan.instructions).toContain('infographic:subway-map');
     expect(plan.usage).toContainEqual(expect.objectContaining({ id: 'baoyu-article-illustrator' }));
@@ -72,6 +73,9 @@ describe('Hermes media skill stages', () => {
     expect(selectedAutomaticArtStyle('BAOYU_STYLE=article:scientific; precise ink.')).toEqual({ kind: 'baoyu', family: 'article', id: 'scientific' });
     expect(automaticStyleReviewGuidance('BAOYU_STYLE=infographic:subway-map; precise ink.')).toContain('Colored route lines');
     expect(selectedAutomaticArtStyle('BAOYU_STYLE=article:missing; invalid.')).toBeUndefined();
+    expect(automaticStyleTreatment('handdraw:#002', 'Fine ink.')).toBe('HANDDRAW_STYLE=#002; Fine ink.');
+    expect(automaticStyleTreatment('infographic:subway-map', 'Direct labels.')).toBe('BAOYU_STYLE=infographic:subway-map; Direct labels.');
+    expect(automaticStyleTreatment('handdraw:#055', 'Unavailable style.')).toBeUndefined();
     expect(() => loadInstalledMediaSkills('auto', 'No selected marker', 'render')).toThrow('no valid selected style');
   });
 

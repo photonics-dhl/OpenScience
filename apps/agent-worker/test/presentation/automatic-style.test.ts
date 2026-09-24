@@ -23,18 +23,19 @@ const science = { title: 'One relationship', scenes: [{
   labels: ['Supported relation'], constraints: ['Conceptual, not to scale'],
 }] };
 
-function mockGateway(treatment: string) {
+function mockGateway(treatment: string, styleId?: string) {
   const calls: Array<Array<{ content: string }>> = [];
   const completeStructured = vi.fn(async (_guard: unknown, messages: Array<{ content: string }>) => {
     calls.push(messages);
-    return calls.length === 1 ? science : { scenes: [{ layout: 'Place the relation at the focal point.', treatment }] };
+    return calls.length === 1 ? science : { scenes: [{ layout: 'Place the relation at the focal point.', treatment,
+      ...(styleId ? { styleId } : {}) }] };
   });
   return { gateway: { completeStructured } as never, calls };
 }
 
 describe('automatic art direction after sourced science', () => {
   it('uses a numbered style only in art, then retains it in the drawable brief', async () => {
-    const { gateway, calls } = mockGateway('HANDDRAW_STYLE=#002; fine continuous ink lines on warm white paper.');
+    const { gateway, calls } = mockGateway('Fine continuous ink lines on warm white paper.', 'handdraw:#002');
     const result = await generateIllustrationStoryboard(gateway, claims, {
       locale: 'en', style: 'auto', instruction: 'Help an uninitiated reader understand the supported relationship.', output: 'image',
     });
@@ -52,8 +53,8 @@ describe('automatic art direction after sourced science', () => {
   });
 
   it('rejects missing or unsupported style choices before any image request', async () => {
-    for (const treatment of ['Soft paper without a numbered choice.', 'HANDDRAW_STYLE=#999; unknown.', 'BAOYU_STYLE=article:missing; unknown.']) {
-      const { gateway } = mockGateway(treatment);
+    for (const styleId of [undefined, 'handdraw:#999', 'article:missing']) {
+      const { gateway } = mockGateway('Soft paper with a clear focal point.', styleId);
       await expect(generateIllustrationStoryboard(gateway, claims, {
         locale: 'en', style: 'auto', instruction: 'Explain the relationship.', output: 'image',
       })).rejects.toThrow('auto_style');
@@ -61,7 +62,7 @@ describe('automatic art direction after sourced science', () => {
   });
 
   it('can choose Baoyu art without changing the source-grounded science', async () => {
-    const { gateway, calls } = mockGateway('BAOYU_STYLE=infographic:subway-map; calm routes with direct labels.');
+    const { gateway, calls } = mockGateway('Calm routes with direct labels.', 'infographic:subway-map');
     const result = await generateIllustrationStoryboard(gateway, claims, {
       locale: 'en', style: 'auto', instruction: 'Explain the supported relation.', output: 'image',
     });
@@ -76,9 +77,22 @@ describe('automatic art direction after sourced science', () => {
     expect(design.usage).toContainEqual(expect.objectContaining({ id: 'baoyu-infographic' }));
   });
 
+  it('repairs a persisted old-format art rejection with the separate style field', async () => {
+    const { gateway, calls } = mockGateway('Direct ink labels.', 'handdraw:#002');
+    await generateIllustrationStoryboard(gateway, claims, {
+      locale: 'en', style: 'auto', instruction: 'Explain the relation.', output: 'image',
+    }, undefined, new Map(), undefined, undefined, undefined, {
+      rejectedCandidates: [{ structuredAttempt: 3, kind: 'schema_validation', diagnostic: 'auto_style_invalid_scene_0',
+        text: JSON.stringify({ scenes: [{ layout: 'A focal relation.', treatment: 'HANDDRAW_STYLE=#002; old format.' }] }) }],
+      saveScience: vi.fn(async () => {}), beforeArtSubmission: vi.fn(async () => {}), rejectArt: vi.fn(async () => {}),
+    });
+    expect(calls[1]!.at(-1)!.content).toContain('styleId');
+    expect(calls[1]!.at(-1)!.content).toContain('marker-free');
+  });
+
   it('retains the chosen style when formal review revises art prose', async () => {
     const settings = { locale: 'en' as const, style: 'auto', instruction: 'Explain the relation.', output: 'image' as const };
-    const candidate = await generateIllustrationStoryboard(mockGateway('HANDDRAW_STYLE=#002; quiet ink.').gateway, claims, settings);
+    const candidate = await generateIllustrationStoryboard(mockGateway('Quiet ink.', 'handdraw:#002').gateway, claims, settings);
     const reviewScientific = vi.fn(async (input: { prompt: string }) => {
       expect(input.prompt).toContain('Conceptual Continuous-Line Editorial');
       return { text: JSON.stringify({ decision: 'revised', summary: 'Simplify the art.', corrections: [
@@ -95,7 +109,7 @@ describe('automatic art direction after sourced science', () => {
 
   it('gives pixel review the same selected appearance guidance as rendering', async () => {
     const settings = { locale: 'en' as const, style: 'auto', instruction: 'Explain the relation.', output: 'image' as const };
-    const candidate = await generateIllustrationStoryboard(mockGateway('BAOYU_STYLE=infographic:subway-map; calm lines.').gateway, claims, settings);
+    const candidate = await generateIllustrationStoryboard(mockGateway('Calm lines.', 'infographic:subway-map').gateway, claims, settings);
     const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
     const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
     const reviewScientific = vi.fn(async (input: { prompt: string }) => {
