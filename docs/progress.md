@@ -8,13 +8,14 @@
 
 ## 2026-09-24 — 三篇读者页
 - 第一篇学术图已公开 [OSR-2026-000023/v/3](https://openscience.428312321.xyz/research/OSR-2026-000023/v/3)，第二篇编辑图已公开 [OSR-2026-000022/v/2](https://openscience.428312321.xyz/research/OSR-2026-000022/v/2)；各自旧版本仍在。
-- 第三篇两幕淡彩图均取自同一批准分镜：scene0 原 PNG 的未提交审图故障经新 review-only 入口恢复，5.6 Sol accepted 的副本获批；scene1 新 PNG 纠正旧图 “MOED” 为 “MQED”，正式审图 accepted、人工实看后获批。[OSR-2026-000024/v/1](https://openscience.428312321.xyz/research/OSR-2026-000024/v/1) 已公开，匿名页核实六维、5 Claim/30 Evidence、两张 1280×720 图片轮播和 PDF 不公开下载。旧错图及误判 accepted 收据保留私有，不伪称审图零误差。
+- 第三篇 v1 与获称赞的首图保留；新第二幕修正误导的发射箭头，真实 PNG 4e64c389 经网页 5.6 Sol 正式 accepted 与人工核图，和首图 approved copy 一起只选两图发布 [OSR-2026-000024/v/2](https://openscience.428312321.xyz/research/OSR-2026-000024/v/2)。匿名首页实际点入并切换轮播，核实六维、5 Claim/30 Evidence、两张 1280×720 图片加载；PDF 仍只对工作区成员开放下载。旧错图、阻断图和误判 accepted 收据保留私有。
 - 三篇完成产品链路。用户明确称赞第三篇 scene0「光子准粒子」淡彩图，同时指出其他图仍有问题；整体科学叙事、美感与可理解性尚未获认可。第二篇学术/淡彩风格的标尺与多余因果问题候选保持私有 NO-GO，不能把“有图”算作三风格全部合格。
-- 叙事优先的 `auto` 风格链路已在 fd612048 发布：science 不读风格目录，art 从可用手绘与 Baoyu 索引择一，render/正式审图只用选定资源；独立 `styleId` 修复经定向测试、High、CI 35957257382、真实任务实证。第三篇私有第二幕先选 Baoyu article:scientific、后选手绘 #175，均生成真实 PNG；正式像素审图分别因大公式喧宾夺主、电子/分叉断开和折线暗示未据物理关系而 blocked。科学稿 1d154c10/c8f6ada6 分别因点积/频率、候选/已辐射错误被人工拦下。技能 v10 与 provenance 元数据读取经定向 6/6、typecheck、CI 35963964135 发布，真实方案 584cf22d 记录 v10；其 PNG d22567ab 正式 5.6 Sol accepted，但人工实看多箭头/重复公式仍像板书，私有 NO-GO。两示意候选淡彩方案 92548f87 approved；真实 PNG 59b861b5 的同次网页审图在固定 30 秒 URL 等待超时后，经原一小时 grace、独占锁与完整身份/字节核验无重发恢复，原任务重试复用回复，正式 blocked：上方带箭头虚线把逻辑筛选误画成已发射。桥接等待修复候选待 CI/部署/实测；旧公开图不改。
+- `auto` 风格链路仍复用 Hermes 的 science→art→render/审图阶段与现有手绘/Baoyu 资源。第三篇旧科学稿、手绘/板书/淡彩坏图被人工或正式审图拦下；59b861b5 的审图在原窗口无重发恢复为 blocked。方案 cd150093 保留已审科学字段，仅用无方向虚线括弧表示逻辑条件；新图 4e64c389 获正式审图 accepted、人工实看并发布。Bridge URL 等待修复已随生产 c0b55 部署，真实新任务 13 秒取得 URL 并成功；30 秒之后才出现 URL 的真实案例未观察。下一项应改善前两篇机制画面的焦点，不重复全文分析或按风格凑数。
 
 ## 当前工程状态
 - 手工 PNG 审图未提交恢复、像素标签提示已通过定向测试/类型检查、独立 High、[CI 35893326942](https://github.com/photonics-dhl/OpenScience/actions/runs/35893326942)，部署并真实用于第三篇。当前生产身份与回退见 CURRENT。
 - 管理员内部 AI Credit 一对一事务自动补账已在 Domain agent 提交/付费提取恢复部署；原扣减、幂等和审计保留，普通用户额度不变。[定向 CI 35902058149](https://github.com/photonics-dhl/OpenScience/actions/runs/35902058149) success、独立 High GO、生产 release 精确核对。扩展旧 agent/ingestion 文件 90 pass/18 fail（旧确认/重试夹具与条件），不称全套通过；生产零余额新任务尚未发生，留待下次正常任务看账本，不额外发模型探针。
+- 本轮 bridge 等待、Guide 默认 `auto` 与对应 CI 范围更新经 17/17 定向测试、Worker typecheck、URL 35/120 秒模拟与单发送检查，[CI 35992870346](https://github.com/photonics-dhl/OpenScience/actions/runs/35992870346) success；生产 c0b55 / 回退 57373a79。新图的真实正常路径有完整 browser spool 和产品任务收据，未测试晚 URL 的真实上游时序。发布审核 passed/0 block，旧公开 v1 与私有候选均保留。
 - 只读 [Hermes 研发观察台](proposals/2026-09-23-hermes-development-live.html) 展示目标、角色/技能、阶段产物，并逐图列出实际风格、能力链、画面效果和具体差额；本机派生 feed 是人工检查点，会标示过期，不是自动遥测。能力消费与尚未实现的原文疑点回读/跨任务学习见 [能力台账](runbooks/hermes-capability-registry.md)。
 
 ## 其他交付
