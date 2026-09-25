@@ -494,3 +494,5 @@ Figma只读结果：本机figma-temp、figma-primary均enabled=false，当前会
 - 继续使用既有API、队列、版本/权限和人工审核；未来真实并发增长后再引入API生图，不扩建恢复框架。
 
 定向静态审阅的既有边界（2026-09-21，本次单场景/无原图计划未触发）：illustration-planner 的science/art要求最多2个subjects，Domain可读取最多4个旧subjects，旧art-only修订需对齐引用范围；figurePlan原图reuse占场景时，science提示未先减去reuse数、总数检查又在模型修正guard外，应让提示与最终总上限一致。当前先完成已保存计划的科学终审/成图；这些不是本次prompt超限根因，不自动重规划已保存草稿。
+
+2026-09-25 浏览器桥定向断点：第一篇已批准的 9df66c13 图任务 b9ebc05e、667494f6 均在 provider `page_selection` 报 `IMAGE_COMPOSER_NOT_FOUND`，spool `not-submitted` 证明没有发送提示词。服务器 Chat 新页面登录有效、可见编辑区为 role textbox `Ask ChatGPT`，图片模式通过 `Add files and more` → `Create image`，发送键为 `Send`；正式审图模型选项移到 `Select ChatGPT model` → `Select model` 二级菜单，选 `GPT-5.6 Sol` 后封闭标签为 `5.6 Medium`。5b7822d0 沿原 runner/review-runner 补新旧 DOM 兼容，保留页面归属、明确模型和未知提交不重发；已定向静态/独立 High 审查，CI success，生产真实图尚待验证。参考图上传完成态在新 DOM 未验证，不能称参考图或整条审图链已修复。原产品失败 image task 的通用手工 retry 按 Worker 安全门仍会拒绝缺 Hermes 恢复标记；这是 UI 可重试提示与实际恢复合同不一致，后续须在原入口校准，不放宽未知提交保护。
