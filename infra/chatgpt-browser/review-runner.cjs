@@ -86,25 +86,38 @@ function reviewAttachments(request) {
     return { attachment, file };
   });
 }
-async function uploadAttachments(input, request) {
+async function uploadAttachments(page, input, request) {
   const attachments = reviewAttachments(request);
   if (!attachments.length) return;
   const form = input.locator('xpath=ancestor::form[1]');
   if (await form.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
   for (const { attachment, file } of attachments) {
     const oldInput = form.locator('input[type="file"]');
-    const fileInput = await oldInput.count() === 1 ? oldInput : form.locator(attachment.mediaType.startsWith('image/')
-      ? 'input[type="file"][aria-label="Attach photos"]' : 'input[type="file"][aria-label="Attach files"]');
-    if (await fileInput.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
-    const groups = form.locator('[role="group"][aria-label]');
-    const before = await groups.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
-    await fileInput.setInputFiles(file);
+    const modern = await oldInput.count() !== 1;
+    const previews = modern ? form.locator('div[role="button"][aria-label]') : form.locator('[role="group"][aria-label]');
+    const before = await previews.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
+    if (modern) {
+      const add = form.getByRole('button', { name: 'Add files and more', exact: true });
+      if (await add.count() !== 1 || !await add.isVisible() || !await add.isEnabled()
+        || await page.evaluate(() => window.name) !== `xgs-review-${id}`) throw Error('ATTACHMENT_INPUT_NOT_READY');
+      await add.click();
+      const upload = page.getByRole('button', { name: 'Add photos & files', exact: true });
+      if (await upload.count() !== 1 || !await upload.isVisible()) throw Error('ATTACHMENT_INPUT_NOT_READY');
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), upload.click()]);
+      const selectedInput = await chooser.element();
+      if (await selectedInput.getAttribute('aria-label') !== 'Attach files'
+        || await selectedInput.getAttribute('accept') !== null) throw Error('ATTACHMENT_INPUT_NOT_READY');
+      await chooser.setFiles(file);
+    } else await oldInput.setInputFiles(file);
     const acceptedName = attachmentLabelPattern(attachment.fileName);
     const deadline = Date.now() + 30000;
     let confirmed = false;
     while (Date.now() < deadline) {
-      const labels = await groups.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? '')).catch(() => []);
-      if (labels.length > before.length && labels.some(label => acceptedName.test(label))) { confirmed = true; break; }
+      const labels = await previews.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? '')).catch(() => []);
+      if (labels.length > before.length && labels.some(label => acceptedName.test(label))
+        && await form.locator('[aria-busy="true"]:visible, [role="progressbar"]:visible, progress:visible').count() === 0) {
+        confirmed = true; break;
+      }
       await new Promise(resolve => setTimeout(resolve, 250));
     }
     if (!confirmed) throw Error('ATTACHMENT_UPLOAD_NOT_CONFIRMED');
@@ -120,10 +133,12 @@ async function attachmentsReady(input, request) {
   const form = input.locator('xpath=ancestor::form[1]');
   if (await form.count() !== 1) return false;
   const expected = request.attachments ?? [];
-  const groups = form.locator('[role="group"][aria-label]:visible');
-  if (await groups.count() !== expected.length
+  const oldInput = form.locator('input[type="file"]');
+  const previews = await oldInput.count() === 1 ? form.locator('[role="group"][aria-label]:visible')
+    : form.locator('div[role="button"][aria-label]:visible');
+  if (await previews.count() !== expected.length
     || await form.locator('[aria-busy="true"]:visible, [role="progressbar"]:visible, progress:visible').count() !== 0) return false;
-  const remaining = await groups.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
+  const remaining = await previews.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
   return expected.every(({ fileName }) => {
     const index = remaining.findIndex(label => attachmentLabelPattern(fileName).test(label));
     if (index < 0) return false;
@@ -494,7 +509,7 @@ let composerRepairAttempted = false;
   const baseline = await page.locator('[data-message-author-role="assistant"]').count();
   stage = 'attachments';
   if (await page.evaluate(() => window.name) !== ownedName) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
-  await uploadAttachments(input, request);
+  await uploadAttachments(page, input, request);
   input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000), request);
   stage = 'composer_fill';
   if (await page.evaluate(() => window.name) !== `xgs-review-${id}`) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
