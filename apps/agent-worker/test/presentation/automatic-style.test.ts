@@ -382,6 +382,41 @@ describe('automatic art direction after sourced science', () => {
     expect(JSON.stringify(receipts)).not.toMatch(/PRIVATE|FORGED|1234567890/u);
   });
 
+  it('separates explicit drawing indices from bare scientific zero/one assertions', async () => {
+    const indexed = { ...science, title: '场景1: mapping', scenes: [{ ...science.scenes[0]!,
+      encoding: '主体0 connects to 步骤1.', labels: ['①', '主体1'],
+    }] };
+    const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1 ? indexed
+      : { scenes: [{ layout: 'One clear mapping.', treatment: 'Quiet ink.' }] });
+    await generateIllustrationStoryboard({ completeStructured } as never, claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: 'image',
+    });
+    expect(completeStructured).toHaveBeenCalledTimes(2);
+    for (const [label, error] of [['270', 'unbound_numeric_270_bare_description'],
+      ['1 MeV', 'unbound_numeric_1_mev_description'], ['1', 'unbound_numeric_1_bare_description'],
+      ['probability reaches 1', 'unbound_numeric_1_bare_description']] as const) {
+      const unsupported = { ...indexed, scenes: [{ ...indexed.scenes[0]!, labels: [label],
+        ...(label === 'probability reaches 1' ? { narration: label, message: label } : {}) }] };
+      const failingGateway = { completeStructured: vi.fn(async () => unsupported) };
+      await expect(generateIllustrationStoryboard(failingGateway as never, claims, {
+        locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: 'image',
+      })).rejects.toThrow(error);
+      expect(failingGateway.completeStructured).toHaveBeenCalledTimes(1);
+    }
+    for (const [source, asserted, error] of [
+      ['The measured energy is 0.5 MeV.', '1.5 MeV', 'unbound_numeric_1_5_mev_description'],
+      ['The mixing ratio is 0:1.', '1:1 mixing ratio', 'unbound_numeric_1:1_ratio_description'],
+      ['The mixing ratio is 0 : 1.', '1 : 1 mixing ratio', 'unbound_numeric_1:1_ratio_description'],
+    ] as const) {
+      const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+      const unsupported = { ...indexed, scenes: [{ ...indexed.scenes[0]!, labels: [asserted],
+        subjects: [{ description: source, basis: { sourceId: 's0' } }] }] };
+      await expect(generateIllustrationStoryboard({ completeStructured: vi.fn(async () => unsupported) } as never,
+        inputClaims, { locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: 'image',
+        })).rejects.toThrow(error);
+    }
+  });
+
   it('stops art that adds a nonexistent visible-label reference', async () => {
     const completeStructured = vi.fn(async (_guard: unknown, _messages: unknown) =>
       completeStructured.mock.calls.length === 1 ? science : { scenes: [{

@@ -30,26 +30,31 @@ const QUANTITY_PATTERN = /(?<![A-Za-z\u0370-\u03ff\d])[+-]?(?:\d+(?:,\d{3})*(?:\
 // This is a new-plan guard, not a substitute for the scientific review of
 // geometry, conditions or causal meaning. Historical assets remain readable.
 function scientificQuantities(input: string): ScientificQuantity[] {
-  const value = input.normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
+  const value = input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
     .replaceAll('阿秒', 'as').replaceAll('飞秒', 'fs').replaceAll('纳米', 'nm')
     .replaceAll('微米', 'μm').replaceAll('兆电子伏特', 'MeV').replaceAll('兆电子伏', 'MeV')
     .replaceAll('皮库仑', 'pC')
     .replace(/μ\s+m/giu, 'μm')
-    .replace(/\b(?:label|subject|scene|figure|fig\.?)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*\b/giu, '')
-    .replace(/(?:图号|图|标签|场景|对象)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*|第?\d+幕|\d+号/gu, '');
+    .replace(/\b(?:label|subject|scene|figure|fig\.?|step|stage|panel|node|arrow|element)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*\b/giu, '')
+    .replace(/(?:图号|图|标签|场景|对象|主体|步骤|阶段|节点|箭头|序号)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*|第?\d+幕|\d+号/gu, '');
+  const ratioPattern = /(?<![\d.])\d+(?:\.\d+)?(?:[ \t]*:[ \t]*\d+(?:\.\d+)?){1,3}(?![\d.])/gu;
+  const ratios = [...value.matchAll(ratioPattern)].map(match => ({
+    value: match[0].replace(/[ \t]*:[ \t]*/gu, ':'), unit: 'ratio', variable: null,
+  }));
+  const scalarValue = value.replace(ratioPattern, ' ');
   const unitToken = '((?:scattered\\s+)?photons?|(?:个)?(?:散射)?光子|(?:scattered\\s+)?electrons?|[%°][A-Za-z0-9μ/%°^+-]*|[A-Za-zμ][A-Za-z0-9μ/%°^+-]*)';
   const unitPattern = new RegExp(`^\\s*[-–]?\\s*${unitToken}`, 'iu');
   const afterRange = new RegExp(`^\\s*(?:±|[-–—]|to)\\s*[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)\\s*${unitToken}`, 'iu');
-  const results: ScientificQuantity[] = [];
-  for (const match of value.matchAll(QUANTITY_PATTERN)) {
+  const results: ScientificQuantity[] = ratios;
+  for (const match of scalarValue.matchAll(QUANTITY_PATTERN)) {
     const raw = match[0];
-    const isRangeEnd = raw.startsWith('-') && /\d\s*$/u.test(value.slice(0, match.index));
+    const isRangeEnd = raw.startsWith('-') && /\d\s*$/u.test(scalarValue.slice(0, match.index));
     const normalizedNumber = (isRangeEnd ? raw.slice(1) : raw).replaceAll(',', '')
       .replace(/\s*[×x]\s*10\s*\^?\s*([+-]?\d+)/iu, 'e$1').replaceAll(' ', '').toLowerCase();
-    const after = value.slice(match.index! + raw.length, match.index! + raw.length + 40);
+    const after = scalarValue.slice(match.index! + raw.length, match.index! + raw.length + 40);
     const unitText = unitPattern.exec(after)?.[1] ?? afterRange.exec(after)?.[1] ?? null;
     const unit = unitText?.toLowerCase().replaceAll('µ', 'μ').replace(/^(?:(?:个)?(?:散射)?光子|(?:scattered\s+)?photons?)$/iu, 'photon_count') ?? null;
-    const before = value.slice(Math.max(0, match.index! - 80), match.index!).split(/[。.;\n]/u).at(-1) ?? '';
+    const before = scalarValue.slice(Math.max(0, match.index! - 80), match.index!).split(/[。.;\n]/u).at(-1) ?? '';
     const directVariable = /([A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]{0,24})\s*(?:=|≈|~|≪|<<|≥|≤|>|<)\s*$/iu.exec(before)?.[1]
       ?? /(FWHM[_\s]*[ST]|N[_\s]*SP)\s*\)?\s+of\s*$/iu.exec(before)?.[1] ?? null;
     const distantPhotonCount = !unit && /N[_\s]*SP[^。.;\n]{0,70}$/iu.test(before) ? 'nsp' : null;
@@ -98,9 +103,9 @@ function scienceRejectionReceipt(value: unknown, response: string, attempt: numb
   // Persist only bounded, allowlisted numeric tokens and valid current-request source IDs.
   // No model prose, paper passages, prompts or arbitrary diagnostic text enter AuditLog.
   const quantities = (input: unknown) => typeof input === 'string' ? scientificQuantities(input.slice(0, 2048)).slice(0, 4).map(item => {
-    const number = /^[0-9e.+-]{1,20}$/u.test(item.value) && (item.value.match(/\d/gu)?.length ?? 0) <= 6
+    const number = /^[0-9e.+:-]{1,20}$/u.test(item.value) && (item.value.match(/\d/gu)?.length ?? 0) <= 6
       ? item.value : 'other';
-    const unit = ['as', 'fs', 'nm', 'μm', 'mev', 'pc', 'photon_count'].includes(item.unit ?? '') ? item.unit
+    const unit = ['as', 'fs', 'nm', 'μm', 'mev', 'pc', 'photon_count', 'ratio'].includes(item.unit ?? '') ? item.unit
       : item.unit ? 'other' : ['fwhms', 'fwhmt', 'nsp'].includes(item.variable ?? '') ? item.variable : 'bare';
     return `${number}:${unit}`;
   }) : [];
@@ -410,6 +415,7 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
           labels: { eachCharLimit: 80, includes: 'all intended visible text, including axis letters, mathematical symbols and required conditions' },
           constraints: { count: { min: 1, max: 2 }, eachCharLimit: ILLUSTRATION_BRIEF_MAX_CHARACTERS },
           encodingCharLimit: ILLUSTRATION_BRIEF_MAX_CHARACTERS,
+          numbering: 'Use explicit subject/step words with structural indices; never use bare 0/1 as a reader-facing index. A scientific zero/one result still requires an exact supporting passage.',
         },
         perArt: { layoutCharLimit: ILLUSTRATION_BRIEF_MAX_CHARACTERS, treatmentCharLimit: ILLUSTRATION_BRIEF_MAX_CHARACTERS },
       } });
@@ -516,6 +522,10 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         const briefFeedback = briefOverflow ? ` The complete brief is ${briefOverflow[1]} characters for a ${briefOverflow[2]} shared limit. Remove repetition or choose a narrower source-supported relationship while preserving its complete meaning and conditions; leave necessary space for art. Do not mechanically truncate scientific text.` : '';
         let feedback = `Diagnostic: ${diagnostic.slice(0, 400)}. Return exactly ${scienceShape}. Every subject is {description,basis:{sourceId}}; bind only an exact planning.supportingSourceIds value from upstream.sourcePassages with relation supports. Paper excerpt IDs, Claim IDs and non-supporting passages are not subject bindings. Re-read the original passage and revise unsupported meaning; never substitute an arbitrary valid ID. Preserve valid fields and source-grounded qualifiers. No schemaVersion or illustration wrapper. labels must enumerate all intended visible text, including axis letters, mathematical symbols and required conditions; no fixed label count. Follow all original field and shared-brief limits, leaving art space. Shorten repetition, never truncate scientific meaning.`;
         if (diagnostic.startsWith('unbound_numeric_')) feedback += ` Each numerical result in titles, main message, narration, encoding, labels and constraints needs the same value, unit and stated variable in one subject description AND its own exact supporting passage. ${diagnostic.endsWith('_description') ? 'No subject description states this result; put it in a separate result subject and bind that subject to its original result passage.' : 'A subject states this result, but its bound original passage does not; select the actual supporting result passage or remove the unsupported value.'} A bare number with a different unit or variable is not support.`;
+        if (/^unbound_numeric_[01]_bare_(?:description|source)$/u.test(diagnostic)) {
+          const hint = ' A bare 0/1 used as a drawing index is not a scientific result: write an explicit structural reference such as subject 0 / step 1 or 主体0 / 步骤1, or remove the numeral. For a source-supported single electron, write 单电子. A real dimensionless 0/1 result must remain and bind to its exact result passage.';
+          if (feedback.length + hint.length <= 2000) feedback += hint;
+        }
         for (const detail of [...sourceFailures.map(failure => `Binding: ${failure}.`), ...lengthFailures.map(failure => `Length: ${failure}.`), figurePlanHint, briefFeedback]) {
           if (detail && feedback.length + detail.length + 1 <= 2000) feedback += ` ${detail}`;
         }
