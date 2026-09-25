@@ -189,6 +189,7 @@ async function composer(page) {
   const modern = page.getByRole('textbox', { name: 'Ask ChatGPT', exact: true });
   const input = await result.count() === 1 ? result : await modern.count() === 1 ? modern : null;
   if (!input || !await input.isVisible()
+    || await input.locator('xpath=ancestor::form[1]').count() !== 1
     || await page.getByTestId('accounts-profile-button').count() < 1
       && await page.locator('button[aria-label*="profile" i]').count() !== 1) return null;
   return input;

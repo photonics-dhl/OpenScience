@@ -266,7 +266,10 @@ async function imageComposer(page) {
   const rich = page.locator('#prompt-textarea');
   const modern = page.getByRole('textbox', { name: 'Ask ChatGPT', exact: true });
   const editor = await rich.count() === 1 ? rich : await modern.count() === 1 ? modern : null;
+  // The new home page briefly renders a visible pending-home-input outside
+  // the actual composer form. Wait for hydration before choosing image mode.
   if (!editor || !await editor.isVisible()
+    || await editor.locator('xpath=ancestor::form[1]').count() !== 1
     || await page.getByTestId('accounts-profile-button').count() < 1
       && await page.locator('button[aria-label*="profile" i]').count() !== 1) return null;
   return editor;
@@ -343,7 +346,8 @@ async function activateImageMode(page, composer, deadlineAt) {
   // Do not click twice or submit while the requested image tool is still unconfirmed.
   while (Date.now() < deadlineAt) {
     if (await imageModeActive(composer).catch(() => false)) return true;
-    if (await plus.count() === 1 && await plus.isVisible().catch(() => false)) break;
+    if (await plus.count() === 1 && await plus.isVisible().catch(() => false)
+      && await plus.isEnabled().catch(() => false)) break;
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   if (Date.now() >= deadlineAt) return false;
