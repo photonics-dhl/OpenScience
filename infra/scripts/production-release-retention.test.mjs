@@ -8,6 +8,7 @@ import {
   parseMountInfo,
   parsePendingIntent,
   parseRetentionCli,
+  PENDING_INTENT_MAX_BYTES,
   selectInactiveReleaseShas,
 } from './production-release-retention.mjs';
 
@@ -107,6 +108,23 @@ test('pending intent is strict and binds candidate to rollback', () => {
       ...protectedEntry,
     })), /protected release/u);
   }
+});
+
+test('the trusted pending-file limit covers the largest valid frozen retention plan', () => {
+  const shas = Array.from({ length: 256 }, (_, index) => (index + 2).toString(16).padStart(40, '0'));
+  const intent = {
+    schemaVersion: 2,
+    candidateSha: active,
+    rollbackSha: rollback,
+    releaseShas: shas,
+    capabilityShas: shas,
+    imageTags: shas.flatMap(deriveReleaseImageTags).sort(),
+  };
+  const serialized = `${JSON.stringify(intent)}\n`;
+  assert.ok(Buffer.byteLength(serialized) > 16 * 1024);
+  assert.ok(Buffer.byteLength(serialized) <= PENDING_INTENT_MAX_BYTES);
+  assert.deepEqual(parsePendingIntent(serialized), intent);
+  assert.throws(() => parsePendingIntent(JSON.stringify({ ...intent, releaseShas: [...shas, 'f'.repeat(40)] })), /identity is invalid/u);
 });
 
 test('CLI requires fixed FD9 and explicit expected identity', () => {

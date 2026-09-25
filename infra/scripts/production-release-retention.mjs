@@ -11,6 +11,9 @@ import { verifyProductionDeployLockOnHost } from './production-deploy-lock.mjs';
 
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const IMAGE_ID_PATTERN = /^sha256:[a-f0-9]{64}$/u;
+// parsePendingIntent permits 256 releases, 256 capabilities and 1024 image tags.
+// Their serialized intent can exceed trustedFile's small state-marker default.
+export const PENDING_INTENT_MAX_BYTES = 128 * 1024;
 const RELEASE_IMAGE_REPOSITORIES = [
   'openscience-agent-worker',
   'openscience-document-parser',
@@ -185,7 +188,7 @@ async function atomicWrite(path, source, mode = 0o600) {
 }
 
 async function readPending(paths, expectedActive, expectedRollback) {
-  const pending = parsePendingIntent(await trustedFile(paths.pending, { exactMode: 0o600 }));
+  const pending = parsePendingIntent(await trustedFile(paths.pending, { exactMode: 0o600, maxBytes: PENDING_INTENT_MAX_BYTES }));
   if (pending.candidateSha !== expectedActive || pending.rollbackSha !== expectedRollback) {
     throw new Error('rollback pending intent belongs to another transaction');
   }
