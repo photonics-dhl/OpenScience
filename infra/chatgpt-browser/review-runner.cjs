@@ -90,9 +90,12 @@ async function uploadAttachments(input, request) {
   const attachments = reviewAttachments(request);
   if (!attachments.length) return;
   const form = input.locator('xpath=ancestor::form[1]');
-  const fileInput = form.locator('input[type="file"]');
-  if (await form.count() !== 1 || await fileInput.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
+  if (await form.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
   for (const { attachment, file } of attachments) {
+    const oldInput = form.locator('input[type="file"]');
+    const fileInput = await oldInput.count() === 1 ? oldInput : form.locator(attachment.mediaType.startsWith('image/')
+      ? 'input[type="file"][aria-label="Attach photos"]' : 'input[type="file"][aria-label="Attach files"]');
+    if (await fileInput.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
     const groups = form.locator('[role="group"][aria-label]');
     const before = await groups.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
     await fileInput.setInputFiles(file);
@@ -183,8 +186,12 @@ async function reconnectBrowser() {
 function bounded(promise, timeout = 3000) { return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(Error('PAGE_UNRESPONSIVE')), timeout))]); }
 async function composer(page) {
   const result = page.locator('#prompt-textarea');
-  if (await result.count() !== 1 || !await result.isVisible() || await page.getByTestId('accounts-profile-button').count() < 1) return null;
-  return result;
+  const modern = page.getByRole('textbox', { name: 'Ask ChatGPT', exact: true });
+  const input = await result.count() === 1 ? result : await modern.count() === 1 ? modern : null;
+  if (!input || !await input.isVisible()
+    || await page.getByTestId('accounts-profile-button').count() < 1
+      && await page.locator('button[aria-label*="profile" i]').count() !== 1) return null;
+  return input;
 }
 async function composerText(input) { return input.evaluate(element => element instanceof HTMLTextAreaElement ? element.value : element.innerText); }
 // The rich-text editor inserts paragraph line breaks into innerText. Compare all
@@ -193,6 +200,7 @@ function normalizeComposerText(value) { return value.replace(/\s+/g, ' ').trim()
 const PRO_MODEL_LABEL = /^(?:(?:GPT[- ]?)?6\s*)?Pro$/i;
 const SOL_MODEL_OPTION = /^(?:GPT[- ]?)?5\.6\s*Sol$/i;
 const SOL_MODEL_ACTIVE = /^(?:GPT[- ]?)?5\.6\s*(?:High|Sol)$/i;
+const SOL_MODERN_ACTIVE = /^(?:GPT[- ]?)?5\.6\s*(?:Medium|High|Sol)$/i;
 function reviewModelLabel(request) { return request.model === 'chatgpt-web/5.6-sol' ? SOL_MODEL_ACTIVE : PRO_MODEL_LABEL; }
 function reviewModelOption(request) { return request.model === 'chatgpt-web/5.6-sol' ? SOL_MODEL_OPTION : PRO_MODEL_LABEL; }
 function reviewModelError(request) { return request.model === 'chatgpt-web/5.6-sol' ? 'MODEL_5_6_SOL_NOT_READY' : 'MODEL_6_PRO_NOT_READY'; }
@@ -207,9 +215,19 @@ function promptComparison(expected, actual) {
 async function reviewModelActive(input, request) {
   const form = input.locator('xpath=ancestor::form[1]');
   if (await form.count() !== 1) return false;
-  const control = form.locator('button[aria-haspopup="menu"]:not([data-testid="composer-plus-btn"])');
+  const control = await reviewModelControl(form);
   if (await control.count() !== 1) return false;
-  return reviewModelLabel(request).test(normalizeComposerText(await control.innerText().catch(() => '')));
+  const modern = await form.getByRole('button', { name: 'Select ChatGPT model', exact: true }).count() === 1;
+  const expected = modern && request.model === 'chatgpt-web/5.6-sol' ? SOL_MODERN_ACTIVE : reviewModelLabel(request);
+  return expected.test(normalizeComposerText(await control.innerText().catch(() => '')));
+}
+async function reviewModelControl(form) {
+  const modern = form.getByRole('button', { name: 'Select ChatGPT model', exact: true });
+  return await modern.count() === 1 ? modern : form.locator('button[aria-haspopup="menu"]:not([data-testid="composer-plus-btn"])');
+}
+function reviewSendButton(page, form) {
+  return page.getByRole('button', { name: 'Send prompt', exact: true })
+    .or(form.getByRole('button', { name: 'Send', exact: true }));
 }
 function quotaRefusal(text) {
   return /^You've hit your limit\. Please try again later\.(?:\s+Retry)?$/i.test(text.trim());
@@ -218,9 +236,12 @@ async function selectReviewModelOnFreshPage(page, input, name, deadlineAt, reque
   if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   if (await reviewModelActive(input, request)) return;
   const form = input.locator('xpath=ancestor::form[1]');
-  const control = form.locator('button[aria-haspopup="menu"]:not([data-testid="composer-plus-btn"])');
+  const control = await reviewModelControl(form);
   if (await control.count() !== 1 || !await control.isVisible()) throw Error('MODEL_SELECTOR_NOT_READY');
   await control.click();
+  const modernMenu = page.locator('[role="menuitem"][aria-label="Select model"]');
+  const modernPicker = await modernMenu.count() === 1 && await modernMenu.isVisible();
+  if (modernPicker) await modernMenu.click();
   const choice = page.getByRole('menuitemradio', { name: reviewModelOption(request) });
   await choice.waitFor({ state: 'visible', timeout: Math.max(1, Math.min(5000, deadlineAt - Date.now())) }).catch(() => { throw Error(reviewModelError(request)); });
   if (await choice.count() !== 1) throw Error(reviewModelError(request));
@@ -229,11 +250,14 @@ async function selectReviewModelOnFreshPage(page, input, name, deadlineAt, reque
     // At the configured 125% zoom a transient picker panel intercepts pointer
     // clicks on a fresh page. Activate only this verified menu item, then check
     // both the checked radio and the closed composer's model label.
-    await choice.dispatchEvent('click');
+    if (modernPicker) await choice.click(); else await choice.dispatchEvent('click');
     if (await choice.getAttribute('aria-checked').catch(() => null) !== 'true') throw Error(reviewModelError(request));
     await page.keyboard.press('Escape');
   } else await choice.click();
   if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
+  while (Date.now() < deadlineAt && !await reviewModelActive(input, request)) {
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
   if (!await reviewModelActive(input, request)) throw Error(reviewModelError(request));
 }
 async function normalChatMode(input) {
@@ -448,7 +472,7 @@ let composerRepairAttempted = false;
     input = await bounded(composer(page), 2000).catch(() => null);
     if (input) {
       const form = input.locator('xpath=ancestor::form[1]');
-      const control = form.locator('button[aria-haspopup="menu"]:not([data-testid="composer-plus-btn"])');
+      const control = await reviewModelControl(form);
       selectorReady = await bounded(control.count(), 2000).catch(() => 0) === 1
         && Boolean(normalizeComposerText(await bounded(control.innerText(), 2000).catch(() => '')));
     }
@@ -471,7 +495,7 @@ let composerRepairAttempted = false;
   stage = 'composer_fill';
   if (await page.evaluate(() => window.name) !== `xgs-review-${id}`) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   await input.fill(prompt);
-  const send = page.getByRole('button', { name: 'Send prompt', exact: true });
+  const send = reviewSendButton(page, input.locator('xpath=ancestor::form[1]'));
   const awaitReadiness = async () => {
     const readyDeadline = Math.min(request.deadlineAt, Date.now() + 10000);
     while (Date.now() < readyDeadline) {

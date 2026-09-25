@@ -264,9 +264,12 @@ async function findPreparedPage(context) {
 }
 async function imageComposer(page) {
   const rich = page.locator('#prompt-textarea');
-  if (await rich.count() !== 1 || !await rich.isVisible()
-    || await page.getByTestId('accounts-profile-button').count() < 1) return null;
-  return rich;
+  const modern = page.getByRole('textbox', { name: 'Ask ChatGPT', exact: true });
+  const editor = await rich.count() === 1 ? rich : await modern.count() === 1 ? modern : null;
+  if (!editor || !await editor.isVisible()
+    || await page.getByTestId('accounts-profile-button').count() < 1
+      && await page.locator('button[aria-label*="profile" i]').count() !== 1) return null;
+  return editor;
 }
 async function composerText(composer) {
   return await composer.evaluate(element => {
@@ -296,13 +299,19 @@ async function referenceAttachmentReady(page, composer) {
   if (await groups.count() !== 1 || !await groups.isVisible().catch(() => false)
     || !/^reference(?:\(\d+\))?\.png$/.test(await groups.getAttribute('aria-label') ?? '')) return false;
   if (await form.locator('[aria-busy="true"]:visible, [role="progressbar"]:visible, progress:visible').count() !== 0) return false;
-  return await page.getByRole('button', { name: 'Send prompt', exact: true }).isEnabled().catch(() => false)
+  return await imageSendButton(page, form).isEnabled().catch(() => false)
     && await imageModeActive(composer);
+}
+function imageSendButton(page, form) {
+  const old = page.getByRole('button', { name: 'Send prompt', exact: true });
+  const modern = form.getByRole('button', { name: 'Send', exact: true });
+  return old.or(modern);
 }
 async function uploadReferenceImage(page, composer, request) {
   const form = composer.locator('xpath=ancestor::form[1]');
   // This unique input was observed in the server's own blank Chat composer.
-  const input = form.locator('input[type="file"]');
+  const oldInput = form.locator('input[type="file"]');
+  const input = await oldInput.count() === 1 ? oldInput : form.locator('input[type="file"][aria-label="Attach photos"]');
   if (await form.count() !== 1 || await input.count() !== 1
     || await form.locator('[role="group"][aria-label]').count() !== 0) throw Error('REFERENCE_INPUT_NOT_READY');
   const deadlineAt = Math.min(request.deadlineAt, Date.now() + 30000);
@@ -328,7 +337,8 @@ async function activateImageMode(page, composer, deadlineAt) {
   stage = 'image_mode_plus';
   if (await imageModeActive(composer)) return true;
   const form = composer.locator('xpath=ancestor::form[1]');
-  const plus = form.getByTestId('composer-plus-btn');
+  const oldPlus = form.getByTestId('composer-plus-btn');
+  const plus = await oldPlus.count() === 1 ? oldPlus : form.getByRole('button', { name: 'Add files and more', exact: true });
   // Composer hydration, the menu and its mode pill share one bounded readiness window.
   // Do not click twice or submit while the requested image tool is still unconfirmed.
   while (Date.now() < deadlineAt) {
@@ -505,7 +515,7 @@ let stage = 'request';
   }
   stage = request.reference ? 'reference_send_readiness' : 'send_readiness';
   const normalize = value => value.replace(/\s+/g, ' ').trim();
-  const send = page.getByRole('button', { name: 'Send prompt', exact: true });
+  const send = imageSendButton(page, composer.locator('xpath=ancestor::form[1]'));
   const readyDeadline = Math.min(request.deadlineAt, Date.now() + 10000);
   while (Date.now() < readyDeadline) {
     if (normalize(await composerText(composer).catch(() => '')) === normalize(prompt)

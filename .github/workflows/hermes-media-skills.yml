@@ -25,6 +25,7 @@ on:
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'infra/codex-sol-review/**'
       - 'infra/chatgpt-browser/review-broker.mjs'
+      - 'infra/chatgpt-browser/runner.cjs'
       - 'infra/chatgpt-browser/review-runner.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
@@ -76,6 +77,7 @@ on:
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'infra/codex-sol-review/**'
       - 'infra/chatgpt-browser/review-broker.mjs'
+      - 'infra/chatgpt-browser/runner.cjs'
       - 'infra/chatgpt-browser/review-runner.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
@@ -139,6 +141,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/ingestion-service.test.ts -t "auto-funds a current platform admin"
       - run: node --check infra/codex-sol-review/runner.mjs
       - run: node --check infra/chatgpt-browser/review-broker.mjs
+      - run: node --check infra/chatgpt-browser/runner.cjs
       - run: node --check infra/chatgpt-browser/review-runner.cjs
       - run: node --check infra/codex-sol-review/review-client.mjs
       - run: bash -n infra/codex-sol-review/install.sh
