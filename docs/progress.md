@@ -8,7 +8,7 @@
 
 ## 2026-09-26 — 第一篇真实新图与叙事配文返工
 - 第一篇私有 v10 经已审 Hermes 同源分镜 `9bf1a712`、真实 Chat PNG `7f497502`、正式 5.6 Sol accepted、人工原始像素核对，沿已有审核/指定选图流程发布 [OSR-2026-000023/v/4](https://openscience.428312321.xyz/research/OSR-2026-000023/v/4)。匿名首页点入实见 1280×720 图片、六维/6 Claim/58 Evidence；旧 v3 仍可读，PDF 仍仅工作区成员可下载。v4 的 reader 配文主要描述布局，科学解释不足，故不宣称最终叙事质量通过。
-- 原 `openscience-research-illustration` skill 升为 v12，科学阶段要求 `narration` 面向读者讲论文支持的关系/条件，原审阅阶段阻断布局说明式配文；原 `installed-media-skills.ts` 路由未变。6 项定向测试、[CI 36165405964](https://github.com/photonics-dhl/OpenScience/actions/runs/36165405964) success；应用 `945788a5` 已部署，回退 `78d0a90f`。从 v4 恢复新私有 v11，已有六维/Claim/Evidence 原样复用，真实 Hermes 分镜 `b98c4735` 已写出科学配文，原十标签过密；同源修订 `2164dacd` 缩为四标签并 approved。Chat 真图 `21fefb6a` 已成功（hash `4b989596…`），正式网页 5.6 Sol accepted；原始 PNG 已实看，独立图文复核与发布审查尚未完成。
+- 原 `openscience-research-illustration` skill 升为 v12，科学阶段要求 `narration` 面向读者讲论文支持的关系/条件，原审阅阶段阻断布局说明式配文；原 `installed-media-skills.ts` 路由未变。6 项定向测试、[CI 36165405964](https://github.com/photonics-dhl/OpenScience/actions/runs/36165405964) success；应用 `945788a5` 已部署，回退 `78d0a90f`。从 v4 恢复新私有 v11，已有六维/Claim/Evidence 原样复用，真实 Hermes 分镜 `b98c4735` 已写出科学配文，原十标签过密；同源修订 `2164dacd` 缩为四标签并 approved。Chat 真图 `21fefb6a` 已成功（hash `4b989596…`），正式网页 5.6 Sol accepted；原始 PNG 经独立 High 判 NO-GO：上方近场纹理离孔较远且像第二束传播波，读者配文未直接说近场缺独立验证。保持私有；同源科学修订 `6c384954` 已成功，已批准，待新图。原 skill v13 与正式像素审图提示的定向修正经 17 项测试、Worker typecheck，CI/部署未完成。
 - 此前 `0317c9c4` 生图在 prompt 提交前被一个无任务归属的 Chat 图库标签卡住；精确关闭该标签后独立任务可成功，旧失败/未提交证据仍保留。偶发卡页尚未有永久修复；不自动重发 unknown 或切 provider。
 
 ## 2026-09-24 — 三篇读者页

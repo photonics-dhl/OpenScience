@@ -184,6 +184,8 @@ describe('automatic art direction after sourced science', () => {
       expect(input.prompt).toContain(render.instructions);
       expect(input.prompt).toContain('image together with its approved scene title and narration');
       expect(input.prompt).toContain('a caption cannot excuse a wrong arrow');
+      expect(input.prompt).toContain('a localized near region drawn far from its source or as an outward-spreading wave');
+      expect(input.prompt).toContain('the reader narration must state that limit directly');
       expect(input.prompt).toContain('A small deviation from an art/layout instruction is not blocking');
       expect(input.prompt).toContain('a style or layout departure blocks only if it makes an essential relationship unreadable or scientifically misleading');
       expect(input.prompt).toContain('A speculative claim that a reader might look elsewhere first is an aesthetic suggestion');
