@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { AiGateway, type Provider } from '@openscience/ai-gateway';
-import { generateIllustrationStoryboard } from '../../src/presentation/illustration-planner';
+import { generateIllustrationStoryboard, type StoryboardScienceRejectionReceipt } from '../../src/presentation/illustration-planner';
 import { reviewIllustrationStoryboard } from '../../src/presentation/illustration-review';
 import { compileIllustrationImagePrompt } from '../../src/presentation/scene-image';
 import { renderStoryboard } from '../../src/presentation/storyboard';
@@ -309,6 +309,77 @@ describe('automatic art direction after sourced science', () => {
     expect(requests).toHaveLength(3);
     expect(requests[1]!.at(-1)!.content).toContain('unbound_numeric_19_as_description');
     expect(result.document.scenes[0]!.illustration?.labels).toEqual(['19 nm aperture']);
+  });
+
+  it('records only bounded field and source-number summaries for a rejected science candidate', async () => {
+    const source = 'A 1 MeV electron crosses the field.';
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+    const rejected = { ...science, title: 'PRIVATE PROSE 19 as', scenes: [{ ...science.scenes[0]!,
+      labels: ['19 as PRIVATE PROSE'], subjects: [{ description: 'A 19 as pulse PRIVATE PROSE', basis: { sourceId: 's0' } }],
+    }] };
+    const accepted = { ...science, scenes: [{ ...science.scenes[0]!,
+      subjects: [{ description: 'A 1 MeV electron crosses the field.', basis: { sourceId: 's0' } }],
+    }] };
+    const responses = [rejected, accepted, { scenes: [{ layout: 'One electron path.', treatment: 'Quiet ink.' }] }];
+    let calls = 0;
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => ({
+      text: JSON.stringify(responses[calls++]!), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 },
+    }) };
+    const receipts: StoryboardScienceRejectionReceipt[] = [];
+    const result = await generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the supported electron.', output: 'image',
+    }, undefined, new Map(), undefined, undefined, undefined, undefined, async receipt => { receipts.push(receipt); });
+    expect(result.document.scenes).toHaveLength(1);
+    expect(calls).toBe(3);
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]).toMatchObject({ schemaVersion: 1, structuredAttempt: 1, kind: 'schema_validation',
+      diagnosticClass: 'numeric_source', rootQuantities: [{ field: 'title', quantities: ['19:as'] }],
+      scenes: [{ subjects: [{ sourceId: 's0', description: ['19:as'], source: ['1:mev'] }] }] });
+    expect(receipts[0]!.scenes[0]!.fields).toContainEqual({ field: 'label', quantities: ['19:as'] });
+    expect(JSON.stringify(receipts)).not.toContain('PRIVATE PROSE');
+    expect(JSON.stringify(receipts)).not.toContain(source);
+    expect(Buffer.byteLength(JSON.stringify(receipts[0]))).toBeLessThan(8192);
+  });
+
+  it('keeps malformed science text out of the receipt and stops after bounded retries', async () => {
+    let calls = 0;
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => ({
+      text: `PRIVATE PROSE invalid JSON ${++calls}`, model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 },
+    }) };
+    const receipts: StoryboardScienceRejectionReceipt[] = [];
+    await expect(generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: 'image',
+    }, undefined, new Map(), undefined, undefined, undefined, undefined,
+    async receipt => { receipts.push(receipt); })).rejects.toThrow();
+    expect(calls).toBe(3);
+    expect(receipts).toHaveLength(3);
+    expect(receipts.every(receipt => receipt.kind === 'json_parse' && receipt.rootKind === 'null')).toBe(true);
+    expect(JSON.stringify(receipts)).not.toContain('PRIVATE PROSE');
+  });
+
+  it('bounds hostile science receipts and excludes forged source IDs and long numeric identifiers', async () => {
+    const hostile = { title: 'PRIVATE PROSE 1234567890 as', scenes: Array.from({ length: 9 }, () => ({
+      ...science.scenes[0], labels: Array.from({ length: 20 }, () => 'PRIVATE PROSE 19 as'),
+      subjects: Array.from({ length: 10 }, () => ({ description: `PRIVATE PROSE ${'X'.repeat(3000)} 19 as`,
+        basis: { sourceId: 'PRIVATE FORGED SOURCE' } })),
+    })) };
+    let calls = 0;
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => ({
+      text: JSON.stringify(calls++ === 0 ? hostile : calls === 2 ? science
+        : { scenes: [{ layout: 'One relation.', treatment: 'Quiet ink.' }] }),
+      model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 },
+    }) };
+    const receipts: StoryboardScienceRejectionReceipt[] = [];
+    await generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: 'image',
+    }, undefined, new Map(), undefined, undefined, undefined, undefined,
+    async receipt => { receipts.push(receipt); });
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]!.sceneCount).toBe(9);
+    expect(receipts[0]!.scenes[0]!.subjects[0]!.sourceId).toBeNull();
+    expect(receipts[0]!.rootQuantities[0]!.quantities).toEqual(['other:as']);
+    expect(Buffer.byteLength(JSON.stringify(receipts[0]))).toBeLessThan(8192);
+    expect(JSON.stringify(receipts)).not.toMatch(/PRIVATE|FORGED|1234567890/u);
   });
 
   it('stops art that adds a nonexistent visible-label reference', async () => {

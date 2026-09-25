@@ -17,7 +17,7 @@ import { Prisma } from '@prisma/client';
 import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
 import { requireStyleReferenceImage } from '@openscience/domain';
 import { readStoredIllustrationIssues, reviewIllustrationStoryboard } from './illustration-review';
-import { clarifyIllustrationLabels, generateIllustrationStoryboard, type StoryboardScienceCheckpoint, type StoryboardArtRejection, type StoryboardPlanningPersistence } from './illustration-planner';
+import { clarifyIllustrationLabels, generateIllustrationStoryboard, type StoryboardScienceCheckpoint, type StoryboardScienceRejectionReceipt, type StoryboardArtRejection, type StoryboardPlanningPersistence } from './illustration-planner';
 import { readVisualNarrativeSource, resolveVisualNarrativeSource } from '../scientific-writing-source';
 import { generatedImageReviewAttachment, readStoredGeneratedImageReview, reviewGeneratedImage } from './generated-image-review';
 
@@ -1113,6 +1113,11 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           continuationStarted = true;
           return planningGateway!.completeStructured(guard, messages, { ...opts, ...(planningContinuation ? { primaryProviderOnly: true } : {}) });
         } };
+        const onScienceRejected = deps.audit ? async (receipt: StoryboardScienceRejectionReceipt) => {
+          await deps.audit!.record({ actorId: scope.userId, action: 'presentation.storyboard_science_candidate_rejected',
+            workspaceId: researchObject.workspaceId, targetType: 'agent_task', targetId: task.id, requestId: task.id,
+            metadata: { executionAttempt: task.executionAttempt, ...receipt } });
+        } : undefined;
         const saved = readStoryboardCheckpoint(owner.result, identity);
         if (saved) {
           requireStoryboardSourceSupport(saved.document, claims, paperOriginals);
@@ -1222,7 +1227,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             const reusableRejectedView = hasStoryboardSourceSupport(rejected.view.document, claims, paperOriginals)
               ? rejected.view : undefined;
             planned = await generateIllustrationStoryboard(durableGateway, claims, payload.storyboard,
-              reusableRejectedView, paperOriginals, narrativeSource?.context, { summary: rejected.feedback, issues: [] }, undefined, persistence);
+              reusableRejectedView, paperOriginals, narrativeSource?.context, { summary: rejected.feedback, issues: [] }, undefined, persistence, onScienceRejected);
           } else if (planningContext.revision) {
             const previous = readStoryboardCheckpoint(planningContext.revision.task.result, {
               payload: planningContext.revision.payload, sourceEvidenceIdentity,
@@ -1240,7 +1245,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
               || previous.document.scenes.length > (payload.storyboard.narrativeSceneLimit ?? 6)))
               ? await generateIllustrationStoryboard(durableGateway, claims, payload.storyboard, previousHasCurrentSupport ? {
                 document: previous.document, locale: payload.storyboard.locale, style: payload.storyboard.style, output: 'image',
-              } : undefined, paperOriginals, narrativeSource?.context, { summary: feedback, issues: issues ?? [] }, undefined, persistence)
+              } : undefined, paperOriginals, narrativeSource?.context, { summary: feedback, issues: issues ?? [] }, undefined, persistence, onScienceRejected)
               : await clarifyIllustrationLabels(planningGateway!, claims, payload.storyboard, previous, feedback, issues);
           } else {
             if (initialScienceRecovery) {
@@ -1252,13 +1257,13 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
                 },
               };
               planned = await generateIllustrationStoryboard(recoveryGateway, claims, payload.storyboard,
-                undefined, paperOriginals, narrativeSource?.context, undefined, recovery.receipts.at(-1)!.failureClass, persistence);
+                undefined, paperOriginals, narrativeSource?.context, undefined, recovery.receipts.at(-1)!.failureClass, persistence, onScienceRejected);
             } else if (sourceSupportFeedback) {
               planned = await generateIllustrationStoryboard(durableGateway, claims, payload.storyboard, undefined, paperOriginals,
-                narrativeSource?.context, { summary: sourceSupportFeedback, issues: [] }, undefined, persistence);
+                narrativeSource?.context, { summary: sourceSupportFeedback, issues: [] }, undefined, persistence, onScienceRejected);
             } else {
               planned = await generateIllustrationStoryboard(durableGateway, claims, payload.storyboard, base?.view, paperOriginals, narrativeSource?.context,
-                undefined, undefined, persistence);
+                undefined, undefined, persistence, onScienceRejected);
             }
           }
           planned.reviewFormat = 2;

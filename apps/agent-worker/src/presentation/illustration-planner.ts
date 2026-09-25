@@ -82,6 +82,58 @@ export type StoryboardScienceCheckpoint = {
   designSkills: DesignSkillUsage[];
 };
 export type StoryboardArtRejection = { structuredAttempt: number; kind: 'json_parse' | 'schema_validation'; text: string; diagnostic?: string };
+export type StoryboardScienceRejectionReceipt = {
+  schemaVersion: 1; structuredAttempt: number; kind: 'json_parse' | 'schema_validation';
+  candidateHash: string; candidateBytes: number; diagnosticClass: 'numeric_description' | 'numeric_source' | 'other';
+  rootKind: 'object' | 'array' | 'null' | 'scalar'; sceneCount: number;
+  rootQuantities: Array<{ field: 'title' | 'mainMessage'; quantities: string[] }>;
+  scenes: Array<{ index: number; fields: Array<{ field: 'title' | 'narration' | 'message' | 'encoding' | 'label' | 'constraint'; quantities: string[] }>;
+    subjects: Array<{ sourceId: string | null; description: string[]; source: string[] }> }>; invalidSourceCount: number;
+};
+function scienceRejectionReceipt(value: unknown, response: string, attempt: number, kind: 'json_parse' | 'schema_validation',
+  diagnostic: string | undefined, sources: ReadonlyMap<string, { text: string; relation: string }>): StoryboardScienceRejectionReceipt {
+  const rootKind = value === null || value === undefined ? 'null' : Array.isArray(value) ? 'array' : typeof value === 'object' ? 'object' : 'scalar';
+  const root = rootKind === 'object' ? value as Record<string, unknown> : {};
+  const rawScenes = Array.isArray(root.scenes) ? root.scenes : SCIENCE_SCENE_KEYS.every(key => key in root) ? [root] : [];
+  // Persist only bounded, allowlisted numeric tokens and valid current-request source IDs.
+  // No model prose, paper passages, prompts or arbitrary diagnostic text enter AuditLog.
+  const quantities = (input: unknown) => typeof input === 'string' ? scientificQuantities(input.slice(0, 2048)).slice(0, 4).map(item => {
+    const number = /^[0-9e.+-]{1,20}$/u.test(item.value) && (item.value.match(/\d/gu)?.length ?? 0) <= 6
+      ? item.value : 'other';
+    const unit = ['as', 'fs', 'nm', 'μm', 'mev', 'pc', 'photon_count'].includes(item.unit ?? '') ? item.unit
+      : item.unit ? 'other' : ['fwhms', 'fwhmt', 'nsp'].includes(item.variable ?? '') ? item.variable : 'bare';
+    return `${number}:${unit}`;
+  }) : [];
+  const fields = (pairs: Array<[StoryboardScienceRejectionReceipt['scenes'][number]['fields'][number]['field'], unknown]>) =>
+    pairs.map(([field, input]) => ({ field, quantities: quantities(input) })).filter(item => item.quantities.length);
+  let invalidSourceCount = 0;
+  const scenes = rawScenes.slice(0, 6).map((raw, index) => {
+    const scene = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+    const subjects = (Array.isArray(scene.subjects) ? scene.subjects : []).slice(0, 4).map(rawSubject => {
+      const subject = rawSubject && typeof rawSubject === 'object' && !Array.isArray(rawSubject) ? rawSubject as Record<string, unknown> : {};
+      const basis = subject.basis && typeof subject.basis === 'object' && !Array.isArray(subject.basis) ? subject.basis as Record<string, unknown> : {};
+      const source = typeof basis.sourceId === 'string' && /^s\d{1,3}$/u.test(basis.sourceId) ? sources.get(basis.sourceId) : undefined;
+      if (!source) invalidSourceCount += 1;
+      return { sourceId: source ? basis.sourceId as string : null, description: quantities(subject.description),
+        source: source ? quantities(source.text) : [] };
+    });
+    return { index, fields: fields([['title', scene.title], ['narration', scene.narration], ['message', scene.message],
+      ['encoding', scene.encoding], ...(Array.isArray(scene.labels) ? scene.labels.slice(0, 8).map((label): ['label', unknown] => ['label', label]) : []),
+      ...(Array.isArray(scene.constraints) ? scene.constraints.slice(0, 2).map((constraint): ['constraint', unknown] => ['constraint', constraint]) : [])]), subjects };
+  });
+  const narrative = root.narrative && typeof root.narrative === 'object' && !Array.isArray(root.narrative) ? root.narrative as Record<string, unknown> : {};
+  const receipt: StoryboardScienceRejectionReceipt = { schemaVersion: 1, structuredAttempt: attempt, kind,
+    candidateHash: createHash('sha256').update(response).digest('hex'), candidateBytes: Buffer.byteLength(response),
+    diagnosticClass: diagnostic?.startsWith('unbound_numeric_') ? diagnostic.endsWith('_description') ? 'numeric_description'
+      : diagnostic.endsWith('_source') ? 'numeric_source' : 'other' : 'other', rootKind, sceneCount: Math.min(rawScenes.length, 99),
+    rootQuantities: [{ field: 'title' as const, quantities: quantities(root.title) },
+      { field: 'mainMessage' as const, quantities: quantities(narrative.mainMessage) }].filter(item => item.quantities.length),
+    scenes, invalidSourceCount };
+  if (Buffer.byteLength(JSON.stringify(receipt)) > 8192) {
+    receipt.scenes = receipt.scenes.slice(0, 2).map(scene => ({ ...scene, fields: scene.fields.slice(0, 8), subjects: scene.subjects.slice(0, 2) }));
+  }
+  return receipt;
+}
 export type StoryboardPlanningPersistence = {
   science?: StoryboardScienceCheckpoint;
   rejectedCandidates?: StoryboardArtRejection[];
@@ -245,7 +297,7 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
 }
 
 /** Select scientific meaning before exposing it to composition/style guidance. */
-export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], settings: StoryboardRequest, base?: StoryboardView, paperOriginals: Map<string, PaperOriginalRef> = new Map(), narrativeSource?: VisualNarrativeSource, reviewFeedback?: { summary: string; issues: readonly IllustrationReviewIssue[] }, scienceRecovery?: 'initial_science_thinking_exhausted' | 'initial_science_schema_exhausted', persistence?: StoryboardPlanningPersistence) {
+export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], settings: StoryboardRequest, base?: StoryboardView, paperOriginals: Map<string, PaperOriginalRef> = new Map(), narrativeSource?: VisualNarrativeSource, reviewFeedback?: { summary: string; issues: readonly IllustrationReviewIssue[] }, scienceRecovery?: 'initial_science_thinking_exhausted' | 'initial_science_schema_exhausted', persistence?: StoryboardPlanningPersistence, onScienceRejected?: (receipt: StoryboardScienceRejectionReceipt) => Promise<void>) {
   if (scienceRecovery && (!settings.narrative || base || reviewFeedback || settings.revisionMode
     || settings.revisionTaskId || settings.revisionImageAssetId || settings.baseAssetId)) {
     throw new Error('[blocked] Initial science recovery cannot revise an existing plan');
@@ -445,6 +497,11 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
     const science = await gateway.completeStructured((value): value is Record<string, unknown> => {
       try { materializeScience(value); return true; } catch (error) { diagnostic = error instanceof Error ? error.message : 'invalid_scientific_intent'; return false; }
     }, scienceMessages!, { temperature: 0.1, thinking: 'adaptive', includeRejectedResponseOnRetry: true, maxRetries: 2,
+      includeJsonParseInRejectedCandidates: Boolean(onScienceRejected),
+      onRejectedCandidate: onScienceRejected ? async (value, completion, attempt, rejection) => {
+        if (rejection?.kind) await onScienceRejected(scienceRejectionReceipt(value, completion.text, attempt,
+          rejection.kind, rejection.diagnostic, sourceLookup));
+      } : undefined,
       ...(settings.narrative ? { maxTokens: 65536, timeoutMs: 600_000, primaryProviderOnly: true }
         : { maxTokens: 16384, escalateMaxTokens: 32768, timeoutMs: 300_000 }),
       validationDiagnostic: () => diagnostic.toLowerCase().replace(/[^a-z0-9_,:-]+/gu, '_').slice(0, 400),
