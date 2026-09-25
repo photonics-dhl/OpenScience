@@ -14,7 +14,7 @@
 
 ## 2026-09-26 — 第二篇叙事升级与技能收敛
 - 第二篇 [公开 v2](https://openscience.428312321.xyz/research/OSR-2026-000022/v/2) 原图实看为准确的纳米线/缝宽/电子轨迹工程说明，但“局域空间相遇怎样成为窄时间脉冲”需读者自己推导。已从 v2 恢复私有 v13 `fdd7ef10`，原核心 SDF、7 Claim/27 Evidence 逐项复用；公开 v2 不动。Hermes auto 初稿 `52ae14c2` hash `1f2d27d7…` 虽完成，但给八标签/整条公式，配文先列 19 as/99 as。普通科学修订 `7a8fc8df` 收敛四标签与机制构图，却被原末审 blocked：120 字单幕配文遗漏单电子虚拟/电子团独立工况与脉宽-产额权衡。下一步分两幕各讲一个来源支持的关系，不用再压掉必要边界。
-- 第一、二篇均出现标签过密，且第二篇初稿把数字放在机制解释之前；原配图 skill v14 候选只补“机制配文先讲关系、显式标签预算须核对、必要的独立工况拆幕”到 science/review，保持原能力/路由。定向加载测试 6/6、Worker typecheck exit0；独立 High、CI、部署及真实 v14 任务尚未完成，不把文本变更冒称质量改善。
+- 第一、二篇均出现标签过密，且第二篇初稿把数字放在机制解释之前；原配图 skill v14 只补“机制配文先讲关系、显式标签预算须核对、必要的独立工况拆幕”到 science/review，保持原能力/路由。定向加载测试 6/6、Worker typecheck、独立 High GO、[CI 36175932790](https://github.com/photonics-dhl/OpenScience/actions/runs/36175932790) success，生产 `d296e922` 定向部署 exit0，回退 `91ab1628`，公网 release 身份核对。两幕 auto 真任务 `3909a349` 失败且未产方案/PNG：定向 Worker 诊断先见科学标签索引越界，随后新结构化调用连续三次 `object_required`。原规划器只给单幕显式风格艺术阶段加末尾 `scenes` 形状提醒；现有两幕 auto 提醒缺口已作最小候选修复，automatic-style 12/12 与 Worker typecheck 通过，独立 High/CI/部署/新真任务待完成。不把 v14 指令注入或本地提示测试冒称图文质量通过。
 
 ## 2026-09-24 — 三篇读者页
 - 第一篇学术图已公开 [OSR-2026-000023/v/3](https://openscience.428312321.xyz/research/OSR-2026-000023/v/3)，第二篇编辑图已公开 [OSR-2026-000022/v/2](https://openscience.428312321.xyz/research/OSR-2026-000022/v/2)；各自旧版本仍在。

@@ -500,6 +500,11 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
     // A single-scene art response has returned bare fields; place the shape
     // reminder after both fresh and saved-rejection inputs without sample values.
     artRequest.push({ role: 'user', content: 'Return one JSON object with one top-level key "scenes" whose array contains exactly one object with only "layout" and "treatment" keys and nonempty, concrete string values. Use the supplied intent for placement and artistic treatment; no placeholders, no root-level layout or treatment, and no prose.' });
+  } else if (generatedScenes.length > 0) {
+    const sceneKeys = generatedStyles.map((style, index) => `scene ${index} has only ${style === 'auto'
+      ? '"layout", "treatment" and "styleId"' : '"layout" and "treatment"'} keys`).join('; ');
+    const count = generatedScenes.length === 1 ? 'one object' : `${generatedScenes.length} objects`;
+    artRequest.push({ role: 'user', content: `Return one JSON object with one top-level key "scenes" whose array contains exactly ${count} in the supplied intent order; ${sceneKeys}. Use nonempty, concrete layout and marker-free treatment strings for auto scenes. Include no root-level array, bare scene object, extra keys, placeholders or prose.` });
   }
   const art = generatedScenes.length ? await gateway.completeStructured((value): value is Record<string, unknown> => {
     try { combineArt(value); return true; } catch (error) { diagnostic = error instanceof Error ? error.message : 'invalid_art_direction'; return false; }

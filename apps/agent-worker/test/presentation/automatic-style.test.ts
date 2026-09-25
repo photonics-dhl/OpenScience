@@ -65,6 +65,29 @@ describe('automatic art direction after sourced science', () => {
     expect(finalInstruction).not.toContain('"layout":"placement"');
   });
 
+  it('ends a two-scene auto art request with the complete scenes wrapper and style keys', async () => {
+    const twoScenes = { title: 'Two relationships', scenes: [
+      { ...science.scenes[0]!, title: 'First relationship' },
+      { ...science.scenes[0]!, title: 'Second relationship' },
+    ] };
+    const calls: Array<Array<{ content: string }>> = [];
+    const completeStructured = vi.fn(async (_guard: unknown, messages: Array<{ content: string }>) => {
+      calls.push(messages);
+      return calls.length === 1 ? twoScenes : { scenes: [
+        { layout: 'First source-grounded relation.', treatment: 'Fine ink.', styleId: 'handdraw:#002' },
+        { layout: 'Second source-grounded relation.', treatment: 'Fine ink.', styleId: 'handdraw:#002' },
+      ] };
+    });
+    const result = await generateIllustrationStoryboard({ completeStructured } as never, claims, {
+      locale: 'en', style: 'auto', instruction: 'Use two separate scenes for two relationships.', output: 'image',
+    });
+    expect(result.document.scenes).toHaveLength(2);
+    expect(calls[1]!.at(-1)!.content).toContain('one top-level key "scenes"');
+    expect(calls[1]!.at(-1)!.content).toContain('exactly 2 objects');
+    expect(calls[1]!.at(-1)!.content).toContain('"styleId"');
+    expect(calls[1]!.at(-1)!.content).toContain('no root-level array');
+  });
+
   it('reasserts the one-scene wrapper after a saved malformed art candidate', async () => {
     const { gateway, calls } = mockGateway('Quiet ink.');
     await generateIllustrationStoryboard(gateway, claims, {
