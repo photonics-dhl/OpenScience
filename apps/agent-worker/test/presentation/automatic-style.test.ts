@@ -182,6 +182,9 @@ describe('automatic art direction after sourced science', () => {
     const reviewScientific = vi.fn(async (input: { prompt: string }) => {
       const render = loadInstalledMediaSkills('auto', candidate.document.scenes[0]!.illustration!.treatment, 'render');
       expect(input.prompt).toContain(render.instructions);
+      expect(input.prompt).toContain('image together with its approved scene title and narration');
+      expect(input.prompt).toContain('a caption cannot excuse a wrong arrow');
+      expect(input.prompt).toContain('A small deviation from an art/layout instruction is not blocking');
       const response = JSON.stringify({ decision: 'accepted', summary: 'The relation is readable.', repairInstruction: null });
       return { text: response, promptHash: hash(input.prompt), responseHash: hash(response),
         provider: 'chatgpt-web-science-review', model: 'gpt-5.6-sol' };

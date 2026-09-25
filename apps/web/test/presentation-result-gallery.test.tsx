@@ -19,3 +19,17 @@ it('keeps Reject available while hiding Approve for a draft without accepted pix
   expect(markup).toContain('reject');
   expect(markup).not.toContain('approve');
 });
+
+it('keeps the approved scene narration beside its image for reader-focused review', () => {
+  const scene = { title: 'Two components', narration: 'Near and far are two parts of one supported relationship.' };
+  const parent = { id: 'plan', storyboard: { document: { scenes: [scene] } } };
+  const image = { id: 'image', researchObjectId: 'ro', versionId: 'v', kind: 'image',
+    status: 'draft', label: 'presentation_not_evidence', sceneImage: { storyboardAssetId: 'plan', sceneIndex: 0 } };
+  const markup = renderToStaticMarkup(React.createElement(PresentationResultGallery, {
+    researchObjectId: 'ro', versionId: 'v', assets: [image], allAssets: [parent, image], canWrite: false,
+    working: false, onTransition: vi.fn(),
+  } as never));
+  expect(markup).toContain('Two components');
+  expect(markup).toContain('<figcaption');
+  expect(markup).toContain(scene.narration);
+});
