@@ -250,9 +250,12 @@ async function selectReviewModelOnFreshPage(page, input, name, deadlineAt, reque
   if (request.model === 'chatgpt-web/5.6-sol') {
     // At the configured 125% zoom a transient picker panel intercepts pointer
     // clicks on a fresh page. Activate only this verified menu item, then check
-    // both the checked radio and the closed composer's model label.
-    if (modernPicker) await choice.click(); else await choice.dispatchEvent('click');
-    if (await choice.getAttribute('aria-checked').catch(() => null) !== 'true') throw Error(reviewModelError(request));
+    // the closed composer's model label. Modern Chat unmounts the radio on
+    // selection, so reading aria-checked afterward waits for a vanished node.
+    if (modernPicker) await choice.click(); else {
+      await choice.dispatchEvent('click');
+      if (await choice.getAttribute('aria-checked').catch(() => null) !== 'true') throw Error(reviewModelError(request));
+    }
     await page.keyboard.press('Escape');
   } else await choice.click();
   if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
