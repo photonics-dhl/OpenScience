@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+import { AiGateway, type Provider } from '@openscience/ai-gateway';
 import { generateIllustrationStoryboard } from '../../src/presentation/illustration-planner';
 import { reviewIllustrationStoryboard } from '../../src/presentation/illustration-review';
 import { compileIllustrationImagePrompt } from '../../src/presentation/scene-image';
@@ -34,6 +35,50 @@ function mockGateway(treatment: string, styleId?: string) {
 }
 
 describe('automatic art direction after sourced science', () => {
+  it('repairs a bare art object through the real structured Gateway retry', async () => {
+    const requests: Array<Array<{ content: string }>> = [];
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async ({ messages }) => {
+      requests.push(messages);
+      const text = requests.length === 1 ? JSON.stringify(science)
+        : requests.length === 2 ? JSON.stringify({ layout: 'A focused relation.', treatment: 'Quiet ink.' })
+          : JSON.stringify({ scenes: [{ layout: 'A focused relation.', treatment: 'Quiet ink.' }] });
+      return { text, model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+    const result = await generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Keep one sourced relationship.', output: 'image',
+    });
+    expect(requests).toHaveLength(3);
+    expect(requests[2]!.at(-1)!.content).toMatch(/top-level.*"scenes".*"layout".*"treatment"/u);
+    expect(requests[2]!.at(-1)!.content).toContain('a root-level array');
+    expect(requests[2]!.at(-1)!.content).not.toContain('"layout":"placement"');
+    expect(result.document.scenes[0]!.illustration?.treatment).toBe('Quiet ink.');
+  });
+
+  it('ends a single explicit-style art request with its required scenes wrapper', async () => {
+    const { gateway, calls } = mockGateway('Quiet ink.');
+    await generateIllustrationStoryboard(gateway, claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Keep one sourced relationship.', output: 'image',
+    });
+    expect(calls).toHaveLength(2);
+    const finalInstruction = calls[1]!.at(-1)!.content;
+    expect(finalInstruction).toMatch(/one top-level key "scenes".*exactly one object.*"layout".*"treatment"/u);
+    expect(finalInstruction).not.toContain('"layout":"placement"');
+  });
+
+  it('reasserts the one-scene wrapper after a saved malformed art candidate', async () => {
+    const { gateway, calls } = mockGateway('Quiet ink.');
+    await generateIllustrationStoryboard(gateway, claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Keep one sourced relationship.', output: 'image',
+    }, undefined, new Map(), undefined, undefined, undefined, {
+      rejectedCandidates: [{ structuredAttempt: 3, kind: 'schema_validation', diagnostic: 'art_root:missing_scenes',
+        text: JSON.stringify({ layout: 'A focal relation.', treatment: 'Quiet ink.' }) }],
+      saveScience: vi.fn(async () => {}), beforeArtSubmission: vi.fn(async () => {}), rejectArt: vi.fn(async () => {}),
+    });
+    const finalInstruction = calls[1]!.at(-1)!.content;
+    expect(finalInstruction).toMatch(/one top-level key "scenes".*exactly one object.*"layout".*"treatment"/u);
+    expect(finalInstruction).toContain('no root-level layout or treatment');
+  });
+
   it('stops a science plan that points past its visible-label list', async () => {
     const invalidScience = { ...science, scenes: [{ ...science.scenes[0]!,
       encoding: 'label 1 names the relation even though there is only one visible label.' }] };

@@ -9,7 +9,8 @@ describe('Hermes media skill stages', () => {
     const science = loadInstalledMediaSkills('editorial', '', 'science');
     expect(science.instructions).toContain('one-sentence takeaway');
     expect(science.instructions).toContain('A dot-product condition constrains a projection');
-    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '10' }));
+    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '11' }));
+    expect(science.instructions).toContain('A replaceable artistic container is not scientific encoding');
     expect(science.usage.map((item) => item.id)).toContain('openscience-scientific-visual-clarity');
     expect(science.instructions).not.toContain('Hand-drawn treatment routing');
   });
@@ -34,6 +35,7 @@ describe('Hermes media skill stages', () => {
   it('does not displace source context from final scientific review', () => {
     const review = loadInstalledMediaSkills('editorial', '', 'review');
     expect(review.instructions).toContain('Check vector operations and frequency/wavelength language');
+    expect(review.instructions).toContain('If encoding or narration prescribes a rejected decorative form');
     expect(review.instructions).not.toContain('Hand-drawn treatment routing');
     expect(review.instructions).not.toContain('Reader-first hand-drawn direction');
     expect(review.usage.map((item) => item.id)).not.toContain('openscience-handdraw-style');
