@@ -18,6 +18,7 @@
 - 管理员内部 AI Credit 一对一事务自动补账已在 Domain agent 提交/付费提取恢复部署；原扣减、幂等和审计保留，普通用户额度不变。[定向 CI 35902058149](https://github.com/photonics-dhl/OpenScience/actions/runs/35902058149) success、独立 High GO、生产 release 精确核对。扩展旧 agent/ingestion 文件 90 pass/18 fail（旧确认/重试夹具与条件），不称全套通过；生产零余额新任务尚未发生，留待下次正常任务看账本，不额外发模型探针。
 - 本轮 bridge 等待、Guide 默认 `auto` 与对应 CI 范围更新经 17/17 定向测试、Worker typecheck、URL 35/120 秒模拟与单发送检查，[CI 35992870346](https://github.com/photonics-dhl/OpenScience/actions/runs/35992870346) success；生产 c0b55 / 回退 57373a79。新图的真实正常路径有完整 browser spool 和产品任务收据，未测试晚 URL 的真实上游时序。发布审核 passed/0 block，旧公开 v1 与私有候选均保留。
 - 原 planner 对新增候选的 science/art 文本检查 `label N` 是否越过可见标签数组，避免已观察到的两次越界分镜进入出图；不改历史草稿读取路径。先写定向行为测试复现两处红，再修复为 8/8 pass，Worker typecheck exit0；[CI 36014342028](https://github.com/photonics-dhl/OpenScience/actions/runs/36014342028) success，尚未部署生产。
+- 第一篇 abe8 草稿的“小印章”科学/艺术字段冲突仍未放行；同源修订 63e60709 于 art 阶段三次结构化输出失败，未产生方案或图片。现有 Hermes 技能与单幕 art 提示、Gateway 重试反馈已针对这次格式错误修复并推送 f64674d7，17/17 定向测试、Worker typecheck、独立 High GO；[CI 36116799049](https://github.com/photonics-dhl/OpenScience/actions/runs/36116799049) 运行中，生产未更新，真实任务效果待验证。不重跑全文分析或旧失败任务。
 - 只读 [Hermes 研发观察台](proposals/2026-09-23-hermes-development-live.html) 展示目标、角色/技能、阶段产物，并逐图列出实际风格、能力链、画面效果和具体差额；本机派生 feed 是人工检查点，会标示过期，不是自动遥测。能力消费与尚未实现的原文疑点回读/跨任务学习见 [能力台账](runbooks/hermes-capability-registry.md)。
 
 ## 其他交付
