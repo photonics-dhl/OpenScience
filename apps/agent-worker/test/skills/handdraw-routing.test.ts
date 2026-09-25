@@ -9,11 +9,14 @@ describe('Hermes media skill stages', () => {
     const science = loadInstalledMediaSkills('editorial', '', 'science');
     expect(science.instructions).toContain('one-sentence takeaway');
     expect(science.instructions).toContain('A dot-product condition constrains a projection');
-    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '13' }));
+    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '14' }));
     expect(science.instructions).toContain('A replaceable artistic container is not scientific encoding');
     expect(science.instructions).toContain('reader-facing scientific explanation');
     expect(science.instructions).toContain('A poor narration needs ordinary scientific planning revision');
     expect(science.instructions).toContain('state that fact directly');
+    expect(science.instructions).toContain('lead with that mechanism before result metrics');
+    expect(science.instructions).toContain('split into focused scenes rather than omit those limits');
+    expect(science.instructions).toContain('explicit visible-label budget');
     expect(science.usage.map((item) => item.id)).toContain('openscience-scientific-visual-clarity');
     expect(science.instructions).not.toContain('Hand-drawn treatment routing');
   });
@@ -42,6 +45,8 @@ describe('Hermes media skill stages', () => {
     expect(review.instructions).toContain('inspect the title and `narration` as text the reader will actually see');
     expect(review.instructions).toContain('block it for upstream planning correction');
     expect(review.instructions).toContain('direct statement of a material evidence limit');
+    expect(review.instructions).toContain('metric inventory instead of the selected mechanism');
+    expect(review.instructions).toContain('exceeds the explicit visible-label budget');
     expect(review.instructions).not.toContain('Hand-drawn treatment routing');
     expect(review.instructions).not.toContain('Reader-first hand-drawn direction');
     expect(review.usage.map((item) => item.id)).not.toContain('openscience-handdraw-style');

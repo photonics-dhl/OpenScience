@@ -12,6 +12,10 @@
 - skill v13 与原正式像素审图提示的空间语义修复通过 17 项定向测试、Worker typecheck、独立 High、[CI 36170285819](https://github.com/photonics-dhl/OpenScience/actions/runs/36170285819) success，生产 `91ab1628` 定向部署 exit0，回退 `945788a5`。6c 真实图 `0fdd4e30`（hash `f909e763…`）被新正式审图 blocked：孔旁墨点沿右侧形成楔形尾迹；art-only 方案 `93507dd7` 已批准，标题/读者配文/科学字段/证据约束逐项与 6c 相同，只把纹理压回孔缘四向窄环、加大远场间隔。新 Chat 真图 `65ffbfee` hash `54484359…` 正式 5.6 Sol accepted、人工看原始 PNG、独立 High GO。批准同版图、发布审查 passed/0 hardBlocks，独选此图发布 [OSR-2026-000023/v/5](https://openscience.428312321.xyz/research/OSR-2026-000023/v/5)；匿名首页实点 1280×720 图，公开 API 精确核完整标题/配文、六维/6 Claim/58 Evidence，旧 v4 仍 200、PDF `workspace_member` 无匿名下载。用户最终审美/可理解性反馈待收。
 - 此前 `0317c9c4` 生图在 prompt 提交前被一个无任务归属的 Chat 图库标签卡住；精确关闭该标签后独立任务可成功，旧失败/未提交证据仍保留。偶发卡页尚未有永久修复；不自动重发 unknown 或切 provider。
 
+## 2026-09-26 — 第二篇叙事升级与技能收敛
+- 第二篇 [公开 v2](https://openscience.428312321.xyz/research/OSR-2026-000022/v/2) 原图实看为准确的纳米线/缝宽/电子轨迹工程说明，但“局域空间相遇怎样成为窄时间脉冲”需读者自己推导。已从 v2 恢复私有 v13 `fdd7ef10`，原核心 SDF、7 Claim/27 Evidence 逐项复用；公开 v2 不动。Hermes auto 初稿 `52ae14c2` hash `1f2d27d7…` 虽完成，但给八标签/整条公式，配文先列 19 as/99 as。普通科学修订 `7a8fc8df` 收敛四标签与机制构图，却被原末审 blocked：120 字单幕配文遗漏单电子虚拟/电子团独立工况与脉宽-产额权衡。下一步分两幕各讲一个来源支持的关系，不用再压掉必要边界。
+- 第一、二篇均出现标签过密，且第二篇初稿把数字放在机制解释之前；原配图 skill v14 候选只补“机制配文先讲关系、显式标签预算须核对、必要的独立工况拆幕”到 science/review，保持原能力/路由。定向加载测试 6/6、Worker typecheck exit0；独立 High、CI、部署及真实 v14 任务尚未完成，不把文本变更冒称质量改善。
+
 ## 2026-09-24 — 三篇读者页
 - 第一篇学术图已公开 [OSR-2026-000023/v/3](https://openscience.428312321.xyz/research/OSR-2026-000023/v/3)，第二篇编辑图已公开 [OSR-2026-000022/v/2](https://openscience.428312321.xyz/research/OSR-2026-000022/v/2)；各自旧版本仍在。
 - 第三篇 v1 与获称赞的首图保留；新第二幕修正误导的发射箭头，真实 PNG 4e64c389 经网页 5.6 Sol 正式 accepted 与人工核图，和首图 approved copy 一起只选两图发布 [OSR-2026-000024/v/2](https://openscience.428312321.xyz/research/OSR-2026-000024/v/2)。匿名首页实际点入并切换轮播，核实六维、5 Claim/30 Evidence、两张 1280×720 图片加载；PDF 仍只对工作区成员开放下载。旧错图、阻断图和误判 accepted 收据保留私有。

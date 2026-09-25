@@ -2,7 +2,7 @@
 name: openscience-research-illustration
 description: Plan and refine evidence-grounded research illustrations for OpenScience through Hermes and Chat image generation, using structured briefs, source-scoped visual references and reusable art directions. Use for paper illustrations, scientific concept images and research covers; quantitative plots require a data renderer.
 metadata:
-  version: "13"
+  version: "14"
 ---
 
 # OpenScience research illustration
@@ -19,6 +19,8 @@ For a local illustration or an explicit figurePlan, select one useful scientific
 
 Write each scene `narration` as a reader-facing scientific explanation of what the selected relationship establishes and why its condition or limit matters. A local scene has only 120 characters: narrow the takeaway instead of spending that space on the layout. Do not narrate drawing instructions, gaze order, label positions or phrases such as “the reader sees”; those belong in `composition`/`treatment`. The image shows the relationship; the narration explains its paper-supported meaning. If lack of independent validation is a necessary limit, state that fact directly; saying only that the picture does not imply validation does not tell the reader what the paper did. A poor narration needs ordinary scientific planning revision, because art-only revision preserves it.
 
+When the requested image explains a mechanism, lead with that mechanism before result metrics in the reader narration. Keep only a result and limit that clarify the selected mechanism; move a longer numerical inventory to the six-dimensional text. If distinct result conditions are essential and cannot fit beside the mechanism within the narration limit, split into focused scenes rather than omit those limits or combine the conditions. A list of outcomes is not a substitute for explaining why the pictured steps yield them.
+
 For an explicit whole-paper narrative, consume the existing same-version SDF, reviewed full-paper analysis and internal scientific review; do not run another whole-paper analysis. Establish the main contribution and intended reader, then choose 1–6 focused scenes in an explanatory reading order. Distinguish original contributions from background and connect the key steps without a fixed number or panel template. Each scene still explains one coherent supported relationship. Titles and reader narrations explain its role, define essential terminology and preserve conditions; they are scientific content, not decorative copy. SourceMap excerpts provide additional context with explicit coverage, never a claim that a partial packet contains the whole paper. Insufficient reviewed evidence must remain a gap, not become a visual invention.
 
 Use available approved paper figures when their unchanged content serves a narrative step, including quantitative results lacking reusable data. Place originals where the reader needs them, not automatically first. An original is source material with a sourced reader explanation; copying it does not constitute a redesigned illustration or automatically satisfy narrative review. Generate a new conceptual visual only for a supported explanatory role. Never turn absent data into an AI-drawn quantitative curve.
@@ -26,6 +28,8 @@ Use available approved paper figures when their unchanged content serves a narra
 For each selected explanation, establish the domain, the minimum subjects and relationships, exact short labels, essential conditions and the meaning of every intended visual mark. Use complete original passage identifiers; the server supplies their actual text. The passage must support the full statement, including qualifiers. Reviewed summaries supply context but do not override a conflicting or narrower original passage. Unsupported details should be left out or reported as missing, not repaired from general knowledge.
 
 The renderer uses `labels` as the complete visible-text list. A variable mentioned only in a subject, encoding or composition will not be printed. Reserve labels for every necessary coordinate axis, classification boundary and essential condition before optional titles or decorative annotations. Bind each label to its corresponding mark in the encoding. If the label budget cannot make the picture self-contained, narrow the explanation instead of dropping its coordinate or threshold meaning.
+
+Honor an explicit visible-label budget in the request. If essential coordinates or conditions cannot fit within it, narrow the image's takeaway or report the conflict for upstream revision; do not quietly add formula labels, duplicate names or a second text hierarchy beyond the requested budget.
 
 When the takeaway is a classification, each region needs its source-supported category name as well as any defining criterion. An inequality alone may identify a boundary without telling the reader what the category means. Combine the name and criterion in the same short label when appropriate.
 
@@ -105,6 +109,8 @@ Review the selected scientific intent against its complete bound original passag
 For a whole-paper narrative, use the already completed upstream analysis to review the main message, intended audience, titles, narrations and reading sequence in this same call. A collection of individually correct scenes may still omit the main contribution or fail to connect its steps. Return an upstream replanning issue for those gaps or unexplained essential terminology. Review the scientific explanation surrounding an unchanged source image just as rigorously; registration and copying do not establish the caption. Art corrections must not pretend to alter a verbatim original.
 
 For every scene, inspect the title and `narration` as text the reader will actually see beside the image. If the narration mainly describes the drawing or omits the selected scientific takeaway and its necessary limit, block it for upstream planning correction even when the image brief is scientifically accurate. A comment about what the picture does not imply cannot replace a direct statement of a material evidence limit. Do not repair this scientific reader text through an art-only correction.
+
+For a mechanism image, block narration that is a metric inventory instead of the selected mechanism. Count `labels` against the request: if the list exceeds the explicit visible-label budget, block for upstream planning correction even when each individual label is accurate. Check that a formula or reference width is essential to the takeaway before allowing it to occupy visible space.
 
 Assess the picture a reader can actually see: `labels` is its exclusive visible-text list, while other fields guide drawing. A necessary axis variable or boundary value present only in encoding is still missing from the picture; return a scientific-field correction upstream. A function drawn against coordinate axes asserts its shape, signs, zero crossings and relative extrema even without numeric ticks or with a conceptual disclaimer. Such a plot needs a data renderer. For Chat illustration, select a supported nonquantitative relationship rather than accepting an invented curve because its formula is correct.
 
