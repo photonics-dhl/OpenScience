@@ -1614,15 +1614,63 @@ export async function submitExistingSceneImageReview(deps: AgentDeps & {
       if (!proved) throw new PresentationAssetError('VALIDATION_ERROR', 'Original image review submission is not proven absent');
     }
     const copies = await tx.presentationAsset.findMany({ where: { researchObjectId: input.researchObjectId,
-      versionId: input.versionId, deletedAt: null, provenance: { path: ['reviewSourceAssetId'], equals: original.id } },
-      select: { id: true, contentHash: true, objectKey: true } });
+      versionId: input.versionId, provenance: { path: ['reviewSourceAssetId'], equals: original.id } },
+      select: { id: true, deletedAt: true, contentHash: true, objectKey: true } });
+    // Soft-deleted attempts still consumed an auditable provider identity and
+    // must never reopen the replacement budget.
+    if (copies.some(copy => copy.deletedAt)) throw new PresentationAssetError('VALIDATION_ERROR', 'Archived review-only task prevents another replacement');
     if (copies.length) {
-      const existing = copies.length === 1 ? await tx.agentTask.findUnique({ where: { id: copies[0]!.id } }) : null;
-      if (!existing || existing.idempotencyKey !== input.idempotencyKey
-        || copies[0]!.contentHash !== original.contentHash || copies[0]!.objectKey !== original.objectKey) {
-        throw new PresentationAssetError('VALIDATION_ERROR', 'This image already has a review-only task');
+      for (const copy of copies) {
+        const existing = await tx.agentTask.findUnique({ where: { id: copy.id } });
+        if (existing?.idempotencyKey === input.idempotencyKey
+          && copy.contentHash === original.contentHash && copy.objectKey === original.objectKey) return existing.id;
       }
-      return existing.id;
+    }
+    if (copies.length > 1) throw new PresentationAssetError('VALIDATION_ERROR', 'This image already has a review-only replacement');
+    let failedCopyRecovery: { taskId: string; promptHash: string } | undefined;
+    if (copies.length === 1) {
+      const firstCopy = await tx.presentationAsset.findUnique({ where: { id: copies[0]!.id }, include: { sourceClaims: true } });
+      const firstTask = await tx.agentTask.findUnique({ where: { id: copies[0]!.id }, include: { session: true } });
+      const copyProvenance = recordValue(firstCopy?.provenance);
+      const receipt = await tx.auditLog.findFirst({ where: { action: 'presentation_asset.image_review_submitted',
+        targetType: 'presentation_asset', targetId: firstTask?.id, actorId: input.userId } });
+      const calls = firstTask ? await tx.auditLog.findMany({ where: { requestId: firstTask.id, action: 'ai.gateway.call' },
+        orderBy: { createdAt: 'asc' } }) : [];
+      const reviews = calls.filter(call => recordValue(call.metadata).operation === 'scientific_review');
+      const hashes = new Set(reviews.map(call => recordValue(call.metadata).promptHash));
+      if (!firstCopy || firstCopy.deletedAt || firstCopy.status !== 'draft' || firstCopy.kind !== 'image'
+        || firstCopy.researchObjectId !== original.researchObjectId || firstCopy.versionId !== original.versionId
+        || firstCopy.contentHash !== original.contentHash || firstCopy.objectKey !== original.objectKey
+        || copyProvenance.taskId !== firstCopy.id || copyProvenance.reviewSourceAssetId !== original.id
+        || copyProvenance.imageReview !== undefined || firstTask?.status !== 'failed'
+        || firstTask.error !== 'scientific review provider failed' || firstTask.kind !== 'presentation.generate'
+        || firstTask.deletedAt || firstTask.result !== null || firstTask.retryCount > 1
+        || firstTask.executionAttempt !== firstTask.retryCount + 1 || firstTask.session.deletedAt
+        || firstTask.session.userId !== input.userId || firstTask.sessionId !== previous.sessionId
+        || !isDeepStrictEqual(firstTask.payload, previous.payload)
+        || !isDeepStrictEqual(firstCopy.sourceClaims.map(link => link.claimId).sort(),
+          original.sourceClaims.map(link => link.claimId).sort())
+        || !receipt || recordValue(receipt.metadata).sourceAssetId !== original.id
+        || recordValue(receipt.metadata).contentHash !== original.contentHash
+        || recordValue(receipt.metadata).renderAttempt !== false
+        || reviews.length !== calls.length || reviews.length < 1 || hashes.size !== 1
+        || typeof [...hashes][0] !== 'string' || !/^[a-f0-9]{64}$/u.test([...hashes][0] as string)
+        || reviews.some(call => {
+          const metadata = recordValue(call.metadata);
+          return metadata.provider !== 'chatgpt-web-science-review'
+            || !['chatgpt-web/6-pro', 'chatgpt-web/5.6-sol'].includes(String(metadata.model))
+            || metadata.outcome !== 'failed' || metadata.error !== 'scientific_review_failed'
+            || metadata.inputContentHash !== parent.sourceEvidenceIdentity
+            || metadata.pageCount !== 1 || !isDeepStrictEqual(metadata.pageNumbers, [1]);
+        })) throw new PresentationAssetError('VALIDATION_ERROR', 'Existing review-only task is not safe to replace');
+      const promptHash = [...hashes][0] as string;
+      const proved = deps.canRetryImageReviewBeforeSubmission && await deps.canRetryImageReviewBeforeSubmission({
+        requestId: firstTask.id, promptHash, researchObjectId: input.researchObjectId,
+        versionId: input.versionId, candidateHash: original.contentHash,
+        sourceEvidenceIdentity: parent.sourceEvidenceIdentity!,
+      }).catch(() => false);
+      if (!proved) throw new PresentationAssetError('VALIDATION_ERROR', 'Existing review submission is not proven absent');
+      failedCopyRecovery = { taskId: firstTask.id, promptHash };
     }
     const { task, replayed } = await persistAgentTaskInTransaction(deps, tx, {
       sessionId: previous.sessionId, userId: input.userId, kind: 'presentation.generate',
@@ -1641,7 +1689,9 @@ export async function submitExistingSceneImageReview(deps: AgentDeps & {
         action: 'presentation_asset.image_review_submitted', targetType: 'presentation_asset', targetId: task.id,
         metadata: { sourceAssetId: original.id, contentHash: original.contentHash, parentIdentity: parent.identity,
           sourceEvidenceIdentity: parent.sourceEvidenceIdentity, renderAttempt: false,
-          ...(sourceReviewPromptHash ? { sourceReviewRecovery: 'not_submitted', sourceReviewPromptHash } : {}) } }, ctx);
+          ...(sourceReviewPromptHash ? { sourceReviewRecovery: 'not_submitted', sourceReviewPromptHash } : {}),
+          ...(failedCopyRecovery ? { previousReviewTaskId: failedCopyRecovery.taskId,
+            previousReviewRecovery: 'not_submitted', previousReviewPromptHash: failedCopyRecovery.promptHash } : {}) } }, ctx);
     }
     return task.id;
   }, { refreshWorkingRecord: false });

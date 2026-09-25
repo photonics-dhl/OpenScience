@@ -93,11 +93,13 @@ async function uploadAttachments(page, input, request) {
   if (await form.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
   for (const { attachment, file } of attachments) {
     const oldInput = form.locator('input[type="file"]');
-    const modern = await oldInput.count() !== 1;
+    const add = form.getByRole('button', { name: 'Add files and more', exact: true });
+    // A modern composer can briefly expose one file input while hydrating.
+    // Its explicit upload control is the stable discriminator between flows.
+    const modern = await add.count() === 1;
     const previews = modern ? form.locator('div[role="button"][aria-label]') : form.locator('[role="group"][aria-label]');
     const before = await previews.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
     if (modern) {
-      const add = form.getByRole('button', { name: 'Add files and more', exact: true });
       if (await add.count() !== 1 || !await add.isVisible() || !await add.isEnabled()
         || await page.evaluate(() => window.name) !== `xgs-review-${id}`) throw Error('ATTACHMENT_INPUT_NOT_READY');
       await add.click();
@@ -108,14 +110,20 @@ async function uploadAttachments(page, input, request) {
       if (await selectedInput.getAttribute('aria-label') !== 'Attach files'
         || await selectedInput.getAttribute('accept') !== null) throw Error('ATTACHMENT_INPUT_NOT_READY');
       await chooser.setFiles(file);
-    } else await oldInput.setInputFiles(file);
+    } else {
+      if (await oldInput.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
+      await oldInput.setInputFiles(file);
+    }
     const acceptedName = attachmentLabelPattern(attachment.fileName);
     const deadline = Date.now() + 30000;
     let confirmed = false;
     while (Date.now() < deadline) {
       const labels = await previews.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? '')).catch(() => []);
-      if (labels.length > before.length && labels.some(label => acceptedName.test(label))
-        && await form.locator('[aria-busy="true"]:visible, [role="progressbar"]:visible, progress:visible').count() === 0) {
+      const matching = labels.some(label => acceptedName.test(label));
+      const busyCount = await form.locator('[aria-busy="true"]:visible, [role="progressbar"]:visible, progress:visible').count().catch(() => -1);
+      attachmentDiagnostic = { modern, inputCount: await oldInput.count().catch(() => -1),
+        beforeCount: before.length, previewCount: labels.length, matching, busyCount };
+      if (labels.length > before.length && matching && busyCount === 0) {
         confirmed = true; break;
       }
       await new Promise(resolve => setTimeout(resolve, 250));
@@ -133,9 +141,9 @@ async function attachmentsReady(input, request) {
   const form = input.locator('xpath=ancestor::form[1]');
   if (await form.count() !== 1) return false;
   const expected = request.attachments ?? [];
-  const oldInput = form.locator('input[type="file"]');
-  const previews = await oldInput.count() === 1 ? form.locator('[role="group"][aria-label]:visible')
-    : form.locator('div[role="button"][aria-label]:visible');
+  const modern = await form.getByRole('button', { name: 'Add files and more', exact: true }).count() === 1;
+  const previews = modern ? form.locator('div[role="button"][aria-label]:visible')
+    : form.locator('[role="group"][aria-label]:visible');
   if (await previews.count() !== expected.length
     || await form.locator('[aria-busy="true"]:visible, [role="progressbar"]:visible, progress:visible').count() !== 0) return false;
   const remaining = await previews.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
@@ -449,6 +457,7 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
 let activePage;
 let stage = 'request';
 let comparisonDiagnostic;
+let attachmentDiagnostic;
 let composerRepairAttempted = false;
 (async () => {
   const stat = fs.lstatSync(dir); if (!stat.isDirectory() || stat.isSymbolicLink()) throw Error('INVALID_JOB_DIRECTORY');
@@ -599,6 +608,7 @@ let composerRepairAttempted = false;
     : /net::|navigation/i.test(error.message) ? 'navigation_failed' : 'other';
   try { once(`operator-attempt-error-${crypto.randomUUID()}.json`, { ...failure, stage, errorKind,
     at: new Date().toISOString(), composerRepairAttempted,
+    ...(attachmentDiagnostic ? { attachment: attachmentDiagnostic } : {}),
     ...(comparisonDiagnostic ? { comparison: comparisonDiagnostic } : {}) }); } catch {}
   console.log(JSON.stringify(failure));
   process.exit(1);
