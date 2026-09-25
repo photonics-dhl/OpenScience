@@ -304,10 +304,22 @@ async function referenceAttachmentReady(page, composer) {
   const form = composer.locator('xpath=ancestor::form[1]');
   if (await form.count() !== 1) return false;
   const groups = form.locator('[role="group"][aria-label]');
-  // Reuse the review transport's visible attachment labels; the image-mode shape
-  // must still be confirmed by the actual authorized image task.
-  if (await groups.count() !== 1 || !await groups.isVisible().catch(() => false)
-    || !/^reference(?:\(\d+\))?\.png$/.test(await groups.getAttribute('aria-label') ?? '')) return false;
+  // Chat now renders the uploaded image as a loaded thumbnail plus a scoped
+  // Remove button; keep the older group path for existing composer versions.
+  let attachmentReady = await groups.count() === 1 && await groups.isVisible().catch(() => false)
+    && /^reference(?:\(\d+\))?\.png$/.test(await groups.getAttribute('aria-label') ?? '');
+  if (!attachmentReady && await groups.count() === 0) {
+    const previews = form.locator('img[alt]');
+    if (await previews.count() === 1) {
+      const label = await previews.getAttribute('alt') ?? '';
+      const remove = form.getByRole('button', { name: `Remove ${label}`, exact: true });
+      attachmentReady = /^reference(?:\(\d+\))?\.png$/.test(label)
+        && await previews.isVisible().catch(() => false)
+        && await previews.evaluate(image => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0).catch(() => false)
+        && await remove.count() === 1 && await remove.isVisible().catch(() => false);
+    }
+  }
+  if (!attachmentReady) return false;
   if (await form.locator('[aria-busy="true"]:visible, [role="progressbar"]:visible, progress:visible').count() !== 0) return false;
   return await imageSendButton(page, form).isEnabled().catch(() => false)
     && await imageModeActive(composer);
