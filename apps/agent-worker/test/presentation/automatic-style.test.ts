@@ -120,7 +120,7 @@ describe('automatic art direction after sourced science', () => {
       ? unsupported : { scenes: [{ layout: 'Draw the pulse.', treatment: 'Quiet ink.' }] });
     await expect(generateIllustrationStoryboard({ completeStructured } as never, claims, {
       locale: 'en', style: 'watercolor', instruction: 'Explain the model result.', output: 'image',
-    })).rejects.toThrow('unbound_numeric_19');
+    })).rejects.toThrow('unbound_numeric_19_as_description');
     expect(completeStructured).toHaveBeenCalledTimes(1);
   });
 
@@ -216,6 +216,35 @@ describe('automatic art direction after sourced science', () => {
     expect(result.document.scenes[1]!.illustration?.labels).toContain('约270散射光子');
   });
 
+  it('treats 阿秒 and as as one unit without treating Fig. 2c as a result', async () => {
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!,
+      text: 'The virtual pulse has FWHMT of 19 as (Fig. 2c).' }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!,
+      title: 'Fig. 2c: 19 as 虚拟脉冲', message: '模型得到约19阿秒虚拟脉冲。',
+      narration: '图示仅说明约19阿秒的模型结果。', labels: ['约19阿秒'],
+      subjects: [{ description: '模型给出约19阿秒虚拟脉冲。', basis: { sourceId: 's0' } }],
+    }] };
+    const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1 ? candidate
+      : { scenes: [{ layout: 'A symbolic time window.', treatment: 'Quiet ink.' }] });
+    const result = await generateIllustrationStoryboard({ completeStructured } as never, inputClaims, {
+      locale: 'zh', style: 'aged-academia', instruction: 'Explain the sourced virtual pulse.', output: 'image',
+    });
+    expect(result.document.scenes[0]!.title).toContain('19 as');
+  });
+
+  it('distinguishes a result named by a subject from a result absent in its bound passage', async () => {
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!,
+      text: 'The modeled aperture is 19 nm wide.' }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!,
+      message: 'A 19 as virtual pulse.', narration: 'The modeled result is 19 as.',
+      labels: ['19 as'], subjects: [{ description: 'A virtual pulse of 19 as.', basis: { sourceId: 's0' } }],
+    }] };
+    const completeStructured = vi.fn(async () => candidate);
+    await expect(generateIllustrationStoryboard({ completeStructured } as never, inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the pulse.', output: 'image',
+    })).rejects.toThrow('unbound_numeric_19_as_source');
+  });
+
   it.each([
     { name: 'wrong unit', source: 'A 19 nm aperture was modeled.', subject: 'A 19 nm aperture.', claim: '19 as pulse' },
     { name: 'single-digit value', source: 'A 2 nm aperture was modeled.', subject: 'A 2 nm aperture.', claim: '2 MeV electron' },
@@ -232,6 +261,7 @@ describe('automatic art direction after sourced science', () => {
     { name: 'different scattered particles', source: 'The model yields 270 scattered electrons.', subject: '270 scattered electrons.', claim: '270 scattered photons' },
     { name: 'Chinese approximate prefix', source: 'A 19 nm aperture was modeled.', subject: 'A 19 nm aperture.', claim: '约19 as脉冲' },
     { name: 'sentence-final unsupported value', source: 'The model gives a 19 as pulse.', subject: 'A 19 as pulse.', claim: 'The model gives a 25 as pulse.' },
+    { name: 'Chinese unit with an unsupported value', source: 'The model gives a 19 as pulse.', subject: 'A 19 as pulse.', claim: '约25阿秒脉冲' },
   ])('rejects a $name even when a nearby number matches', async ({ source, subject, claim }) => {
     const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
     const candidate = { ...science, scenes: [{ ...science.scenes[0]!, message: claim, narration: claim,
@@ -277,7 +307,7 @@ describe('automatic art direction after sourced science', () => {
       locale: 'en', style: 'aged-academia', instruction: 'Explain the supported aperture.', output: 'image',
     });
     expect(requests).toHaveLength(3);
-    expect(requests[1]!.at(-1)!.content).toContain('unbound_numeric_19_as');
+    expect(requests[1]!.at(-1)!.content).toContain('unbound_numeric_19_as_description');
     expect(result.document.scenes[0]!.illustration?.labels).toEqual(['19 nm aperture']);
   });
 

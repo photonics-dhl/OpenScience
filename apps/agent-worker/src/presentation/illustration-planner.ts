@@ -31,9 +31,12 @@ const QUANTITY_PATTERN = /(?<![A-Za-z\u0370-\u03ff\d])[+-]?(?:\d+(?:,\d{3})*(?:\
 // geometry, conditions or causal meaning. Historical assets remain readable.
 function scientificQuantities(input: string): ScientificQuantity[] {
   const value = input.normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
+    .replaceAll('阿秒', 'as').replaceAll('飞秒', 'fs').replaceAll('纳米', 'nm')
+    .replaceAll('微米', 'μm').replaceAll('兆电子伏特', 'MeV').replaceAll('兆电子伏', 'MeV')
+    .replaceAll('皮库仑', 'pC')
     .replace(/μ\s+m/giu, 'μm')
-    .replace(/\b(?:label|subject|scene|figure|fig\.?)\s*#?\d+\b/giu, '')
-    .replace(/(?:标签|场景|对象)\s*#?\d+|第?\d+幕|\d+号/gu, '');
+    .replace(/\b(?:label|subject|scene|figure|fig\.?)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*\b/giu, '')
+    .replace(/(?:图号|图|标签|场景|对象)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*|第?\d+幕|\d+号/gu, '');
   const unitToken = '((?:scattered\\s+)?photons?|(?:个)?(?:散射)?光子|(?:scattered\\s+)?electrons?|[%°][A-Za-z0-9μ/%°^+-]*|[A-Za-zμ][A-Za-z0-9μ/%°^+-]*)';
   const unitPattern = new RegExp(`^\\s*[-–]?\\s*${unitToken}`, 'iu');
   const afterRange = new RegExp(`^\\s*(?:±|[-–—]|to)\\s*[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)\\s*${unitToken}`, 'iu');
@@ -66,9 +69,11 @@ function sameScientificQuantity(asserted: ScientificQuantity, supported: Scienti
 function requireBoundNumericalResults(fields: readonly string[], subjects: readonly IllustrationBrief['subjects'][number][]): void {
   const asserted = fields.flatMap(scientificQuantities);
   for (const quantity of asserted) {
-    if (!subjects.some(subject => scientificQuantities(subject.description).some(item => sameScientificQuantity(quantity, item))
-      && scientificQuantities(subject.basis.quote).some(item => sameScientificQuantity(quantity, item)))) {
-      throw new Error(`unbound_numeric_${quantity.value.replace('.', '_')}_${quantity.unit ?? quantity.variable ?? 'bare'}`);
+    const described = subjects.filter(subject => scientificQuantities(subject.description)
+      .some(item => sameScientificQuantity(quantity, item)));
+    if (!described.some(subject => scientificQuantities(subject.basis.quote)
+      .some(item => sameScientificQuantity(quantity, item)))) {
+      throw new Error(`unbound_numeric_${quantity.value.replace('.', '_')}_${quantity.unit ?? quantity.variable ?? 'bare'}_${described.length ? 'source' : 'description'}`);
     }
   }
 }
@@ -453,7 +458,7 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         const briefOverflow = /illustration_brief:description:length_(\d+)_max_(\d+)/u.exec(diagnostic);
         const briefFeedback = briefOverflow ? ` The complete brief is ${briefOverflow[1]} characters for a ${briefOverflow[2]} shared limit. Remove repetition or choose a narrower source-supported relationship while preserving its complete meaning and conditions; leave necessary space for art. Do not mechanically truncate scientific text.` : '';
         let feedback = `Diagnostic: ${diagnostic.slice(0, 400)}. Return exactly ${scienceShape}. Every subject is {description,basis:{sourceId}}; bind only an exact planning.supportingSourceIds value from upstream.sourcePassages with relation supports. Paper excerpt IDs, Claim IDs and non-supporting passages are not subject bindings. Re-read the original passage and revise unsupported meaning; never substitute an arbitrary valid ID. Preserve valid fields and source-grounded qualifiers. No schemaVersion or illustration wrapper. labels must enumerate all intended visible text, including axis letters, mathematical symbols and required conditions; no fixed label count. Follow all original field and shared-brief limits, leaving art space. Shorten repetition, never truncate scientific meaning.`;
-        if (diagnostic.startsWith('unbound_numeric_')) feedback += ' Each numerical result in titles, main message, narration, encoding, labels and constraints needs the same value, unit and stated variable in one subject description AND its own exact supporting passage. A matching bare number with a different unit or variable is not support. Bind the actual result passage or remove the unsupported value; do not borrow an unbound Claim summary.';
+        if (diagnostic.startsWith('unbound_numeric_')) feedback += ` Each numerical result in titles, main message, narration, encoding, labels and constraints needs the same value, unit and stated variable in one subject description AND its own exact supporting passage. ${diagnostic.endsWith('_description') ? 'No subject description states this result; put it in a separate result subject and bind that subject to its original result passage.' : 'A subject states this result, but its bound original passage does not; select the actual supporting result passage or remove the unsupported value.'} A bare number with a different unit or variable is not support.`;
         for (const detail of [...sourceFailures.map(failure => `Binding: ${failure}.`), ...lengthFailures.map(failure => `Length: ${failure}.`), figurePlanHint, briefFeedback]) {
           if (detail && feedback.length + detail.length + 1 <= 2000) feedback += ` ${detail}`;
         }
