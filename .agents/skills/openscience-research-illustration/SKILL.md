@@ -2,7 +2,7 @@
 name: openscience-research-illustration
 description: Plan and refine evidence-grounded research illustrations for OpenScience through Hermes and Chat image generation, using structured briefs, source-scoped visual references and reusable art directions. Use for paper illustrations, scientific concept images and research covers; quantitative plots require a data renderer.
 metadata:
-  version: "11"
+  version: "12"
 ---
 
 # OpenScience research illustration
@@ -16,6 +16,8 @@ Use the upstream reviewed scientific result and its bound original passages befo
 Claim `kind` and `assessment` describe argument role and internal review state, not additional evidence. Do not present partial/disputed/missing support or a counter/boundary Claim as an unqualified established result. Such inputs can explain uncertainty or limits when supported; do not discard them merely for their status. Ingestion completion alone does not establish scientific support.
 
 For a local illustration or an explicit figurePlan, select one useful scientific explanation per requested image from the upstream reviewed analysis and its complete original passages. This stage chooses what the reader should understand, not an artistic style. Preserve complete source context: do not split equations from definitions or qualifiers to fit a short quotation field.
+
+Write each scene `narration` as a reader-facing scientific explanation of what the selected relationship establishes and why its condition or limit matters. A local scene has only 120 characters: narrow the takeaway instead of spending that space on the layout. Do not narrate drawing instructions, gaze order, label positions or phrases such as “the reader sees”; those belong in `composition`/`treatment`. The image shows the relationship; the narration explains its paper-supported meaning. A poor narration needs ordinary scientific planning revision, because art-only revision preserves it.
 
 For an explicit whole-paper narrative, consume the existing same-version SDF, reviewed full-paper analysis and internal scientific review; do not run another whole-paper analysis. Establish the main contribution and intended reader, then choose 1–6 focused scenes in an explanatory reading order. Distinguish original contributions from background and connect the key steps without a fixed number or panel template. Each scene still explains one coherent supported relationship. Titles and reader narrations explain its role, define essential terminology and preserve conditions; they are scientific content, not decorative copy. SourceMap excerpts provide additional context with explicit coverage, never a claim that a partial packet contains the whole paper. Insufficient reviewed evidence must remain a gap, not become a visual invention.
 
@@ -101,6 +103,8 @@ Composition and treatment are design decisions, but they are not free-form. Use 
 Review the selected scientific intent against its complete bound original passages and the upstream conditions, limitations and conflicting evidence, including meanings introduced by composition and treatment. Do not repeat the whole-paper synthesis. Citation identity establishes where text came from; it does not establish that a description follows from it. Check each subject, relationship, condition, formula and visible label, then the meaning of axes, distances, regions, arrows, curves and semantic colors. A layout must not turn a logical relationship into a physical trajectory or invent data from an equation.
 
 For a whole-paper narrative, use the already completed upstream analysis to review the main message, intended audience, titles, narrations and reading sequence in this same call. A collection of individually correct scenes may still omit the main contribution or fail to connect its steps. Return an upstream replanning issue for those gaps or unexplained essential terminology. Review the scientific explanation surrounding an unchanged source image just as rigorously; registration and copying do not establish the caption. Art corrections must not pretend to alter a verbatim original.
+
+For every scene, inspect the title and `narration` as text the reader will actually see beside the image. If the narration mainly describes the drawing or omits the selected scientific takeaway and its necessary limit, block it for upstream planning correction even when the image brief is scientifically accurate. Do not repair this scientific reader text through an art-only correction.
 
 Assess the picture a reader can actually see: `labels` is its exclusive visible-text list, while other fields guide drawing. A necessary axis variable or boundary value present only in encoding is still missing from the picture; return a scientific-field correction upstream. A function drawn against coordinate axes asserts its shape, signs, zero crossings and relative extrema even without numeric ticks or with a conceptual disclaimer. Such a plot needs a data renderer. For Chat illustration, select a supported nonquantitative relationship rather than accepting an invented curve because its formula is correct.
 
