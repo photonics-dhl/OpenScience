@@ -54,28 +54,34 @@ function scientificQuantities(input: string): ScientificQuantity[] {
     const after = scalarValue.slice(match.index! + raw.length, match.index! + raw.length + 40);
     const unitText = unitPattern.exec(after)?.[1] ?? afterRange.exec(after)?.[1] ?? null;
     const unit = unitText?.toLowerCase().replaceAll('µ', 'μ').replace(/^(?:(?:个)?(?:散射)?光子|(?:scattered\s+)?photons?)$/iu, 'photon_count') ?? null;
-    const before = scalarValue.slice(Math.max(0, match.index! - 80), match.index!).split(/[。.;\n]/u).at(-1) ?? '';
+    const fullBefore = scalarValue.slice(Math.max(0, match.index! - 80), match.index!);
+    const before = fullBefore.split(/[。.;\n]/u).at(-1) ?? '';
+    // Source prose may spell out "FWHM_T, i.e., τ₁) of 19 as". Ignore
+    // periods only inside these abbreviations; a real sentence boundary must
+    // never bind the next sentence's result to the preceding variable.
+    const abbreviationSafeBefore = fullBefore.replace(/\bi\.e\./giu, 'ie').replace(/\be\.g\./giu, 'eg');
+    const namedFwhm = /(FWHM[_\s]*[ST])(?:(?!FWHM)[^。.;\n]){0,50}(?:of|=)\s*$/iu.exec(abbreviationSafeBefore)?.[1] ?? null;
     const directVariable = /([A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]{0,24})\s*(?:=|≈|~|≪|<<|≥|≤|>|<)\s*$/iu.exec(before)?.[1]
-      ?? /(FWHM[_\s]*[ST]|N[_\s]*SP)\s*\)?\s+of\s*$/iu.exec(before)?.[1] ?? null;
+      ?? /(FWHM[_\s]*[ST]|N[_\s]*SP)\s*\)?\s+of\s*$/iu.exec(before)?.[1] ?? namedFwhm;
     const distantPhotonCount = !unit && /N[_\s]*SP[^。.;\n]{0,70}$/iu.test(before) ? 'nsp' : null;
     const variable = (directVariable ?? distantPhotonCount)?.toLowerCase().replaceAll('_', '') ?? null;
     results.push({ value: normalizedNumber, unit, variable });
   }
   return results;
 }
-function sameScientificQuantity(asserted: ScientificQuantity, supported: ScientificQuantity): boolean {
+function sameScientificQuantity(asserted: ScientificQuantity, supported: ScientificQuantity, allowOmittedVariable = false): boolean {
   if (asserted.value !== supported.value) return false;
   if (!asserted.unit && supported.unit && !(asserted.variable === 'nsp' && supported.unit === 'photon_count')) return false;
   if (asserted.unit && asserted.unit !== supported.unit
     && !(asserted.unit === 'photon_count' && supported.variable === 'nsp')) return false;
-  if (asserted.variable && asserted.variable !== supported.variable) return false;
+  if (asserted.variable && asserted.variable !== supported.variable && !(allowOmittedVariable && !supported.variable)) return false;
   return true;
 }
 function requireBoundNumericalResults(fields: readonly string[], subjects: readonly IllustrationBrief['subjects'][number][]): void {
   const asserted = fields.flatMap(scientificQuantities);
   for (const quantity of asserted) {
     const described = subjects.filter(subject => scientificQuantities(subject.description)
-      .some(item => sameScientificQuantity(quantity, item)));
+      .some(item => sameScientificQuantity(quantity, item, true)));
     if (!described.some(subject => scientificQuantities(subject.basis.quote)
       .some(item => sameScientificQuantity(quantity, item)))) {
       throw new Error(`unbound_numeric_${quantity.value.replace('.', '_')}_${quantity.unit ?? quantity.variable ?? 'bare'}_${described.length ? 'source' : 'description'}`);
@@ -102,13 +108,18 @@ function scienceRejectionReceipt(value: unknown, response: string, attempt: numb
   const rawScenes = Array.isArray(root.scenes) ? root.scenes : SCIENCE_SCENE_KEYS.every(key => key in root) ? [root] : [];
   // Persist only bounded, allowlisted numeric tokens and valid current-request source IDs.
   // No model prose, paper passages, prompts or arbitrary diagnostic text enter AuditLog.
-  const quantities = (input: unknown) => typeof input === 'string' ? scientificQuantities(input.slice(0, 2048)).slice(0, 4).map(item => {
-    const number = /^[0-9e.+:-]{1,20}$/u.test(item.value) && (item.value.match(/\d/gu)?.length ?? 0) <= 6
-      ? item.value : 'other';
-    const unit = ['as', 'fs', 'nm', 'μm', 'mev', 'pc', 'photon_count', 'ratio'].includes(item.unit ?? '') ? item.unit
-      : item.unit ? 'other' : ['fwhms', 'fwhmt', 'nsp'].includes(item.variable ?? '') ? item.variable : 'bare';
-    return `${number}:${unit}`;
-  }) : [];
+  const quantities = (input: unknown): string[] => {
+    if (typeof input !== 'string') return [];
+    const all = scientificQuantities(input.slice(0, 8192));
+    return (all.length <= 8 ? all : [...all.slice(0, 4), ...all.slice(-4)]).map(item => {
+      const number = /^[0-9e.+:-]{1,20}$/u.test(item.value) && (item.value.match(/\d/gu)?.length ?? 0) <= 6
+        ? item.value : 'other';
+      const unit = ['as', 'fs', 'nm', 'μm', 'mev', 'pc', 'photon_count', 'ratio'].includes(item.unit ?? '') ? item.unit
+        : item.unit ? 'other' : ['fwhms', 'fwhmt', 'nsp'].includes(item.variable ?? '') ? item.variable : 'bare';
+      const variable = item.variable ? `@${['fwhms', 'fwhmt', 'nsp'].includes(item.variable) ? item.variable : 'other'}` : '';
+      return `${number}:${unit}${variable}`;
+    });
+  };
   const fields = (pairs: Array<[StoryboardScienceRejectionReceipt['scenes'][number]['fields'][number]['field'], unknown]>) =>
     pairs.map(([field, input]) => ({ field, quantities: quantities(input) })).filter(item => item.quantities.length);
   let invalidSourceCount = 0;

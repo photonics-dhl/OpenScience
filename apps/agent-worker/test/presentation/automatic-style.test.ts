@@ -417,6 +417,44 @@ describe('automatic art direction after sourced science', () => {
     }
   });
 
+  it('allows a source-named result when the subject states its value but not its variable', async () => {
+    const source = 'The virtual width (FWHM_T, i.e., τ₁) of 19 as is obtained.';
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!,
+      labels: ['FWHM_T = 19 as'], message: 'FWHM_T = 19 as',
+      subjects: [{ description: 'The virtual width is 19 as.', basis: { sourceId: 's0' } }],
+    }] };
+    const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1 ? candidate
+      : { scenes: [{ layout: 'One time window.', treatment: 'Quiet ink.' }] });
+    const result = await generateIllustrationStoryboard({ completeStructured } as never, inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the sourced result.', output: 'image',
+    });
+    expect(completeStructured).toHaveBeenCalledTimes(2);
+    expect(result.document.scenes[0]!.illustration?.labels).toEqual(['FWHM_T = 19 as']);
+    const mismatchedClaims = [{ ...inputClaims[0]!, sourcePassages: [{ ...inputClaims[0]!.sourcePassages![0]!,
+      text: source.replace('FWHM_T', 'FWHM_S') }] }];
+    await expect(generateIllustrationStoryboard({ completeStructured: vi.fn(async () => candidate) } as never,
+      mismatchedClaims, { locale: 'en', style: 'aged-academia', instruction: 'Explain the result.', output: 'image',
+      })).rejects.toThrow('unbound_numeric_19_as_source');
+    const separateResult = 'FWHM_T was measured. A separate pulse duration of 19 as was obtained.';
+    const separateClaims = [{ ...inputClaims[0]!, sourcePassages: [{ ...inputClaims[0]!.sourcePassages![0]!,
+      text: separateResult }] }];
+    await expect(generateIllustrationStoryboard({ completeStructured: vi.fn(async () => candidate) } as never,
+      separateClaims, { locale: 'en', style: 'aged-academia', instruction: 'Explain the result.', output: 'image',
+      })).rejects.toThrow('unbound_numeric_19_as_source');
+    const receipts: StoryboardScienceRejectionReceipt[] = [];
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => ({
+      text: JSON.stringify(candidate), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 },
+    }) };
+    await expect(generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), mismatchedClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the result.', output: 'image',
+    }, undefined, new Map(), undefined, undefined, undefined, undefined,
+    async receipt => { receipts.push(receipt); })).rejects.toThrow();
+    expect(receipts).toHaveLength(3);
+    expect(receipts[0]!.scenes[0]!.fields).toContainEqual({ field: 'message', quantities: ['19:as@fwhmt'] });
+    expect(receipts[0]!.scenes[0]!.subjects[0]!.source).toContain('19:as@fwhms');
+  });
+
   it('stops art that adds a nonexistent visible-label reference', async () => {
     const completeStructured = vi.fn(async (_guard: unknown, _messages: unknown) =>
       completeStructured.mock.calls.length === 1 ? science : { scenes: [{
