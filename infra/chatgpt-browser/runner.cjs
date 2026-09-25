@@ -102,6 +102,8 @@ async function primaryGeneratedImage(page) {
   const primary = candidates.and(page.locator('[role="button"][aria-labelledby]'));
   if (await primary.count() === 1 && await primary.isVisible()) return primary;
   if (await primary.count() === 0 && await candidates.count() === 1 && await candidates.isVisible()) return candidates;
+  const modern = page.locator('button[data-testid="generated-image-preview"][aria-label^="Generated image "]');
+  if (await candidates.count() === 0 && await modern.count() === 1 && await modern.isVisible()) return modern;
   return null;
 }
 async function observeConversation(browser, page, request, conversation, deadlineAt) {
@@ -157,12 +159,15 @@ async function waitAndDownload(browser, page, request) {
 async function readVisibleImage(generated, conversation, deadlineAt) {
   const image = await generated.evaluate(async (element, { conversation, timeout }) => {
     if (location.href !== conversation) throw Error('CONVERSATION_CHANGED');
-    const candidates = element.querySelectorAll('img[alt^="Generated image:"], img[alt^="Open image:"]');
+    const candidates = element.querySelectorAll('img[alt^="Generated image:"], img[alt^="Open image:"], img[alt^="Generated image "]');
     if (candidates.length !== 1) throw Error('EXPECTED_ONE_GENERATED_IMAGE');
     const img = candidates[0];
     const url = new URL(img.currentSrc);
+    const estuary = url.protocol === 'https:' && url.pathname === '/backend-api/estuary/content';
+    const ownedBlob = url.protocol === 'blob:' && /^https:\/\/chatgpt\.com\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(url.pathname)
+      && !url.search;
     if (!img.complete || !img.naturalWidth || !img.naturalHeight || !img.getClientRects().length
-      || url.origin !== 'https://chatgpt.com' || url.pathname !== '/backend-api/estuary/content'
+      || url.origin !== 'https://chatgpt.com' || !(estuary || ownedBlob)
       || url.username || url.password || url.hash) throw Error('INVALID_IMAGE_SOURCE');
     // Use only the already displayed image URL; keep its signed query inside Chrome.
     const response = await fetch(url.href, { credentials: 'same-origin', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(timeout) });
@@ -200,7 +205,9 @@ async function downloadImage(browser, page, request, conversation) {
   const dialog = page.getByRole('dialog');
   // Explicit recovery reads the already displayed image. It never races a fresh
   // native download after Save has timed out, or submits another prompt.
-  let nativeSave = mode !== 'download';
+  // The current gallery exposes a same-page PNG blob and a different Save UI.
+  // Read only its already displayed bytes after the source checks above.
+  let nativeSave = mode !== 'download' && await generated.getAttribute('data-testid') !== 'generated-image-preview';
   if (nativeSave) {
     if (await dialog.count() === 0) await generated.click();
     const save = dialog.getByRole('button', { name: 'Save', exact: true });
