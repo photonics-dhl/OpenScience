@@ -135,6 +135,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "blocks unreviewed narrative image approval while preserving rejection and legacy profiles"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "starts one charged review-only task"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "recovers a saved manual PNG only"
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "replaces one failed review-only request"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "rearms only a receipted manual PNG review"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "prevents retrying a failed image source"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "current platform admin can submit"
