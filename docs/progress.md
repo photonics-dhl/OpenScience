@@ -6,6 +6,11 @@
 - Hermes 复用已审 PDF/SourceMap/Claim/Evidence 和按阶段注入的科学/视觉技能，Chat 负责出图及网页 5.6 Sol 正式像素判断；保存坏图、失败收据与原 PDF，不自动重发未知付费请求。
 - 必要的定向测试、CI、真实路径核验必须做；避免与改动无关的重复全套测试。用户已授权内部额度，管理员不应受内部 AI Credit 阻断；供应商额度仍独立。
 
+## 2026-09-26 — 第一篇真实新图与叙事配文返工
+- 第一篇私有 v10 经已审 Hermes 同源分镜 `9bf1a712`、真实 Chat PNG `7f497502`、正式 5.6 Sol accepted、人工原始像素核对，沿已有审核/指定选图流程发布 [OSR-2026-000023/v/4](https://openscience.428312321.xyz/research/OSR-2026-000023/v/4)。匿名首页点入实见 1280×720 图片、六维/6 Claim/58 Evidence；旧 v3 仍可读，PDF 仍仅工作区成员可下载。v4 的 reader 配文主要描述布局，科学解释不足，故不宣称最终叙事质量通过。
+- 原 `openscience-research-illustration` skill 升为 v12，科学阶段要求 `narration` 面向读者讲论文支持的关系/条件，原审阅阶段阻断布局说明式配文；原 `installed-media-skills.ts` 路由未变。6 项定向测试、[CI 36165405964](https://github.com/photonics-dhl/OpenScience/actions/runs/36165405964) success；应用 `945788a5` 已部署，回退 `78d0a90f`。从 v4 恢复新私有 v11，已有六维/Claim/Evidence 原样复用，真实 Hermes 分镜 `b98c4735` 已写出科学配文，原十标签过密；同源修订 `2164dacd` 缩为四标签并 approved。Chat 真图 `21fefb6a` 已成功（hash `4b989596…`），正式网页 5.6 Sol accepted；原始 PNG 已实看，独立图文复核与发布审查尚未完成。
+- 此前 `0317c9c4` 生图在 prompt 提交前被一个无任务归属的 Chat 图库标签卡住；精确关闭该标签后独立任务可成功，旧失败/未提交证据仍保留。偶发卡页尚未有永久修复；不自动重发 unknown 或切 provider。
+
 ## 2026-09-24 — 三篇读者页
 - 第一篇学术图已公开 [OSR-2026-000023/v/3](https://openscience.428312321.xyz/research/OSR-2026-000023/v/3)，第二篇编辑图已公开 [OSR-2026-000022/v/2](https://openscience.428312321.xyz/research/OSR-2026-000022/v/2)；各自旧版本仍在。
 - 第三篇 v1 与获称赞的首图保留；新第二幕修正误导的发射箭头，真实 PNG 4e64c389 经网页 5.6 Sol 正式 accepted 与人工核图，和首图 approved copy 一起只选两图发布 [OSR-2026-000024/v/2](https://openscience.428312321.xyz/research/OSR-2026-000024/v/2)。匿名首页实际点入并切换轮播，核实六维、5 Claim/30 Evidence、两张 1280×720 图片加载；PDF 仍只对工作区成员开放下载。旧错图、阻断图和误判 accepted 收据保留私有。
