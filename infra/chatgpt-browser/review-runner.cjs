@@ -270,7 +270,7 @@ async function composer(page) {
   if (!input || !await input.isVisible()
     || await input.locator('xpath=ancestor::form[1]').count() !== 1
     || await page.getByTestId('accounts-profile-button').count() < 1
-      && await page.locator('button[aria-label*="profile" i]').count() !== 1) return null;
+      && await page.locator('button[aria-label*="profile" i]:visible').count() !== 1) return null;
   return input;
 }
 async function composerText(input) { return input.evaluate(element => element instanceof HTMLTextAreaElement ? element.value : element.innerText); }

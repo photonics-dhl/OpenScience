@@ -6,6 +6,10 @@
 - Hermes 复用已审 PDF/SourceMap/Claim/Evidence 和按阶段注入的科学/视觉技能，Chat 负责出图及网页 5.6 Sol 正式像素判断；保存坏图、失败收据与原 PDF，不自动重发未知付费请求。
 - 必要的定向测试、CI、真实路径核验必须做；避免与改动无关的重复全套测试。用户已授权内部额度，管理员不应受内部 AI Credit 阻断；供应商额度仍独立。
 
+## 2026-09-27 — 第二篇单幕叙事方案与桥接器实证
+- ffb 的 FWHM 同短语识别修复经 44/44、Worker typecheck、独立 High、[CI 36197632839](https://github.com/photonics-dhl/OpenScience/actions/runs/36197632839) success；干净 release 部署 exit0、公网 `/__release` 一致。第二篇私有 v13 真规划 `f85ac611` science 成功，但独立复核发现把 z 分布缩为点和把数学映射写成物理压缩；同源修订 `3d2115fe` 已正式 accepted、独立 High GO、批准生图，保留 1 MeV 与虚拟 19 as 的原文绑定。
+- 单张图任务 `5dc700aa` 在 Chat `page_selection` 报 `IMAGE_COMPOSER_NOT_FOUND`，spool `not_submitted`、无 PNG。真实新登录页有两个 profile 按钮匹配、仅一个可见；image/review runner 的旧函数均判 false，候选 `:visible` 均判 true。原标签索引守卫亦漏中文/括号写法；两项最小修复经 46/46、Worker typecheck、runner 语法及独立 High GO，待 CI/部署后用**新的**独立图任务验证，不重发旧失败请求。旧公开 v2 不变。
+
 ## 2026-09-26 — 第一篇真实新图与叙事配文返工
 - 第一篇私有 v10 经已审 Hermes 同源分镜 `9bf1a712`、真实 Chat PNG `7f497502`、正式 5.6 Sol accepted、人工原始像素核对，沿已有审核/指定选图流程发布 [OSR-2026-000023/v/4](https://openscience.428312321.xyz/research/OSR-2026-000023/v/4)。匿名首页点入实见 1280×720 图片、六维/6 Claim/58 Evidence；旧 v3 仍可读，PDF 仍仅工作区成员可下载。v4 的 reader 配文主要描述布局，科学解释不足，故不宣称最终叙事质量通过。
 - 原 `openscience-research-illustration` skill 升为 v12，科学阶段要求 `narration` 面向读者讲论文支持的关系/条件，原审阅阶段阻断布局说明式配文；原 `installed-media-skills.ts` 路由未变。6 项定向测试、[CI 36165405964](https://github.com/photonics-dhl/OpenScience/actions/runs/36165405964) success；应用 `945788a5` 曾部署。从 v4 恢复新私有 v11，六维/Claim/Evidence 同源复用；Hermes 十标签分镜 `b98c4735` → 四标签 `2164dacd`。Chat 真图 `21fefb6a`（hash `4b989596…`）正式网页 5.6 Sol accepted，但原始 PNG 经独立 High 判 NO-GO：上方近场纹理像第二束传播波、配文未直说独立验证缺口。旧图私有；科学修订 `6c384954` 已批准，配文改为直述近场未获独立数值/实验核对。

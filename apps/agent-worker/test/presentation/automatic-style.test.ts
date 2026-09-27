@@ -113,6 +113,17 @@ describe('automatic art direction after sourced science', () => {
     expect(completeStructured).toHaveBeenCalledTimes(1);
   });
 
+  it('stops a Chinese science-plan label reference past its visible-label list', async () => {
+    const invalidScience = { ...science, scenes: [{ ...science.scenes[0]!,
+      encoding: '右侧结果卡使用标签 1，但画内只有标签 0。' }] };
+    const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1
+      ? invalidScience : { scenes: [{ layout: 'Place the label beside its mark.', treatment: 'Quiet ink.' }] });
+    await expect(generateIllustrationStoryboard({ completeStructured } as never, claims, {
+      locale: 'zh', style: 'watercolor', instruction: '讲清来源支持的关系。', output: 'image',
+    })).rejects.toThrow('label_reference_out_of_range_encoding_1_count_1');
+    expect(completeStructured).toHaveBeenCalledTimes(1);
+  });
+
   it('stops a numerical result that no bound subject and original passage support', async () => {
     const unsupported = { ...science, scenes: [{ ...science.scenes[0]!,
       narration: 'A model gives a 19 as pulse.', message: 'A 19 as pulse.', labels: ['19 as pulse'] }] };
@@ -463,6 +474,15 @@ describe('automatic art direction after sourced science', () => {
     await expect(generateIllustrationStoryboard({ completeStructured } as never, claims, {
       locale: 'en', style: 'watercolor', instruction: 'Explain the relation.', output: 'image',
     })).rejects.toThrow('label_reference_out_of_range');
+    expect(completeStructured).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops a bracketed Chinese art label reference past the visible-label list', async () => {
+    const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1
+      ? science : { scenes: [{ layout: '把主标签[1]放在右侧。', treatment: 'Quiet ink.' }] });
+    await expect(generateIllustrationStoryboard({ completeStructured } as never, claims, {
+      locale: 'zh', style: 'watercolor', instruction: '讲清来源支持的关系。', output: 'image',
+    })).rejects.toThrow('label_reference_out_of_range_composition_1_count_1');
     expect(completeStructured).toHaveBeenCalledTimes(2);
   });
 

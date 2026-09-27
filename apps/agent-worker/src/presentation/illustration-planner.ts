@@ -19,9 +19,10 @@ function requireLabelReferencesInRange(brief: IllustrationBrief): void {
     ['treatment', brief.treatment] as const,
   ];
   for (const [field, value] of prose) {
-    for (const match of value.matchAll(/\blabel\s+([0-9]+)\b/giu)) {
-      if (Number(match[1]) >= brief.labels.length)
-        throw new Error(`label_reference_out_of_range_${field}_${match[1]}_count_${brief.labels.length}`);
+    for (const match of value.matchAll(/(?:\blabel\s*|标签\s*)(?:#\s*)?(?:\[\s*([0-9]+)\s*\]|([0-9]+)\b)/giu)) {
+      const index = match[1] ?? match[2];
+      if (Number(index) >= brief.labels.length)
+        throw new Error(`label_reference_out_of_range_${field}_${index}_count_${brief.labels.length}`);
     }
   }
 }

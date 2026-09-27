@@ -278,7 +278,7 @@ async function imageComposer(page) {
   if (!editor || !await editor.isVisible()
     || await editor.locator('xpath=ancestor::form[1]').count() !== 1
     || await page.getByTestId('accounts-profile-button').count() < 1
-      && await page.locator('button[aria-label*="profile" i]').count() !== 1) return null;
+      && await page.locator('button[aria-label*="profile" i]:visible').count() !== 1) return null;
   return editor;
 }
 async function composerText(composer) {
