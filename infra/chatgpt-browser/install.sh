@@ -9,6 +9,13 @@ if [[ ${1:-} == --confirm-provider ]]; then
   [[ -f "$source_release/packages/ai-gateway/dist/index.js" && ! -L "$source_release/packages/ai-gateway/dist/index.js" ]] || { echo 'Built AI Gateway dist is required in the immutable release'; exit 66; }
   docker container inspect openscience-chatgpt-browser >/dev/null
   docker image inspect "$renderer_image" >/dev/null
+  # An existing browser image can be mistaken for the renderer: image inspect
+  # passes, but the first paid image then fails at PNG normalization.
+  if ! timeout 25 docker run --rm --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges --entrypoint /usr/bin/ffmpeg "$renderer_image" -version >/dev/null 2>&1; then
+    echo 'Renderer image cannot execute ffmpeg; provider install did not change it' >&2
+    exit 66
+  fi
   root=/opt/openscience-chatgpt-browser; bundle="$root/releases/$release_sha"
   for target in "$root" "$root/jobs" "$root/spool" "$root/spool/inbox" "$root/spool/results" "$root/private" "$root/review-spool" "$root/review-spool/inbox" "$root/review-spool/results" "$root/review-private" "$root/releases"; do [[ ! -L $target ]] || exit 67; done
   install -d -m 0755 "$root/spool" "$root/review-spool" "$root/releases"
