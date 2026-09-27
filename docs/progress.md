@@ -8,7 +8,7 @@
 
 ## 2026-09-27 — 第二篇单幕叙事方案与桥接器实证
 - `8337ab47` 的可见 profile 选择与中文标签索引修复经 46/46、Worker typecheck、独立 High、[CI 36290324334](https://github.com/photonics-dhl/OpenScience/actions/runs/36290324334) success，定向部署且公网 `/__release` 一致；回退 ffb。第二篇 v13 的同源科学修订 `3d2115fe` 正式 accepted/独立 High GO/批准。旧图 `5dc700aa` 确定未提交 Chat，失败证据保留。
-- 第二篇真图 `1bf46ec9` 原 PNG 仅复用规范化、未重发 Chat，正式像素审图 blocked。之后 `51e95ec3`、`25117b5d` 真图亦 blocked，人工实看均未讲清局域→短脉冲；只改美术已停止。Hermes 同源科学画面编码修订 `ff11bbcf` 正式 accepted/独立 High GO/已批准，但图任务 `69f08f5f` 在 image_mode_confirm 技术失败，精确 not-submitted 证据证明无 Chat 提交。空白页探查发现当前模式选中为 `Remove Create image` 按钮；runner 增唯一识别与提交前一次同页 reload，node 语法/独立 High GO，待无费演练、CI/部署/同方案真实图验证。安装器 ffmpeg 前置校验正确/误配镜像实证 0/127、独立 High、CI 36292745105 success；配图 Skill v15 6/6、Worker typecheck、独立 High、CI 36294020004 success，均仅候选。公开 v2 不变。
+- 第二篇 v13 三张精确几何真图 `1bf46ec9`、`51e95ec3`、`25117b5d` 均正式 blocked；Hermes 同源概念编码 `ff11bbcf` accepted/High GO/批准。`69f08f5f` 确定未提交，桥接器图片模式修复经无费演练、独立 High、[CI 36295221466](https://github.com/photonics-dhl/OpenScience/actions/runs/36295221466) success；生产 6b09 已构建/部署，私有日志重试在首次 SSH 中断与锁内旧态恢复后成功，provider 同 SHA 安装且 renderer 校验通过。新 `22178361` 真实 Chat 提交、PNG/规范化/draft 成功；正式审图附件菜单旧 exact 文案失配，review-spool 确定未提交。新图人工实看 n(z) 空括号，不可发布。review-runner 候选改唯一上传按钮前缀，真实空白页 locator/filechooser 验证、语法、High GO；待 CI/安装、原 PNG 审图续接并返工画面。公开 v2 不变。
 
 ## 2026-09-26 — 第一篇真实新图与叙事配文返工
 - 第一篇私有 v10 经已审 Hermes 同源分镜 `9bf1a712`、真实 Chat PNG `7f497502`、正式 5.6 Sol accepted、人工原始像素核对，沿已有审核/指定选图流程发布 [OSR-2026-000023/v/4](https://openscience.428312321.xyz/research/OSR-2026-000023/v/4)。匿名首页点入实见 1280×720 图片、六维/6 Claim/58 Evidence；旧 v3 仍可读，PDF 仍仅工作区成员可下载。v4 的 reader 配文主要描述布局，科学解释不足，故不宣称最终叙事质量通过。

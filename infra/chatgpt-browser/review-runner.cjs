@@ -103,7 +103,9 @@ async function uploadAttachments(page, input, request) {
       if (await add.count() !== 1 || !await add.isVisible() || !await add.isEnabled()
         || await page.evaluate(() => window.name) !== `xgs-review-${id}`) throw Error('ATTACHMENT_INPUT_NOT_READY');
       await add.click();
-      const upload = page.getByRole('button', { name: 'Add photos & files', exact: true });
+      // Chat may append "Upload from computer" to this same menu button's
+      // accessible name. Keep the action anchored to its unique leading label.
+      const upload = page.getByRole('button', { name: /^Add photos & files(?:\s|$)/ });
       if (await upload.count() !== 1 || !await upload.isVisible()) throw Error('ATTACHMENT_INPUT_NOT_READY');
       const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), upload.click()]);
       const selectedInput = await chooser.element();
