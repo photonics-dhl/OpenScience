@@ -7,6 +7,7 @@
 - 必要的定向测试、CI、真实路径核验必须做；避免与改动无关的重复全套测试。用户已授权内部额度，管理员不应受内部 AI Credit 阻断；供应商额度仍独立。
 
 ## 2026-09-27 — 第二篇单幕叙事方案与桥接器实证
+- 当前生产 c29e8305/回退 6b09，[媒体 CI 36300011047](https://github.com/photonics-dhl/OpenScience/actions/runs/36300011047) success、同 SHA Chat provider 已安装。已保存概念图 `22178361` 走 review-only `7655f64e`，原 hash 相同，5.6 Sol 正式 blocked 仅因标点；人工拒发空 n(z)。Hermes 同源重构经独立 High 逐项修正，art-only `c108c45f` 保持科学字段全等并批准。其图任务 `f2f123a9` 在 Chat 图片模式前精确 not-submitted；空白页抓到菜单水合恢复已选状态使全页出现两处 `Create image`，runner 候选改为检查当前 form 已选标记，语法/High GO，待 CI、安装和独立新图。公开 v2 不变。
 - `8337ab47` 的可见 profile 选择与中文标签索引修复经 46/46、Worker typecheck、独立 High、[CI 36290324334](https://github.com/photonics-dhl/OpenScience/actions/runs/36290324334) success，定向部署且公网 `/__release` 一致；回退 ffb。第二篇 v13 的同源科学修订 `3d2115fe` 正式 accepted/独立 High GO/批准。旧图 `5dc700aa` 确定未提交 Chat，失败证据保留。
 - 第二篇 v13 三张精确几何真图 `1bf46ec9`、`51e95ec3`、`25117b5d` 均正式 blocked；Hermes 同源概念编码 `ff11bbcf` accepted/High GO/批准。`69f08f5f` 确定未提交，桥接器图片模式修复经无费演练、独立 High、[CI 36295221466](https://github.com/photonics-dhl/OpenScience/actions/runs/36295221466) success；生产 6b09 已构建/部署，私有日志重试在首次 SSH 中断与锁内旧态恢复后成功，provider 同 SHA 安装且 renderer 校验通过。新 `22178361` 真实 Chat 提交、PNG/规范化/draft 成功；正式审图附件菜单旧 exact 文案失配，review-spool 确定未提交。新图人工实看 n(z) 空括号，不可发布。review-runner 候选改唯一上传按钮前缀，真实空白页 locator/filechooser 验证、语法、High GO；待 CI/安装、原 PNG 审图续接并返工画面。公开 v2 不变。
 

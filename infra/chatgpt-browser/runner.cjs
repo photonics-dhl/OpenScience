@@ -383,9 +383,13 @@ async function activateImageMode(page, composer, deadlineAt) {
   const choice = page.getByText('Create image', { exact: true });
   const choiceDeadline = deadlineAt;
   while (Date.now() < choiceDeadline) {
+    // Hydration can restore the selected tool while opening the menu. That
+    // leaves both a form pill and a "Selected" menu row with this text.
+    if (await imageModeActive(composer).catch(() => false)) return true;
     if (await choice.count() === 1 && await choice.isVisible().catch(() => false)) break;
     await new Promise(resolve => setTimeout(resolve, 250));
   }
+  if (await imageModeActive(composer).catch(() => false)) return true;
   if (await choice.count() !== 1 || !await choice.isVisible().catch(() => false)) return false;
   if (Date.now() >= deadlineAt) return false;
   await choice.click({ timeout: Math.max(1, deadlineAt - Date.now()) });
