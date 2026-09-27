@@ -27,6 +27,10 @@ function requireLabelReferencesInRange(brief: IllustrationBrief): void {
   }
 }
 type ScientificQuantity = { value: string; unit: string | null; variable: string | null };
+const SOURCE_VARIABLE_NAMES = new Map([['fwhmt', 'FWHM_T'], ['fwhms', 'FWHM_S'], ['nsp', 'N_SP']]);
+class UnboundNumericSourceError extends Error {
+  constructor(message: string, readonly expectedVariable?: string) { super(message); }
+}
 const QUANTITY_PATTERN = /(?<![A-Za-z\u0370-\u03ff\d])[+-]?(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)(?:\s*[×x]\s*10\s*\^?\s*[+-]?\d+|[eE][+-]?\d+)?(?!\d|\.\d)/gu;
 // This is a new-plan guard, not a substitute for the scientific review of
 // geometry, conditions or causal meaning. Historical assets remain readable.
@@ -85,7 +89,12 @@ function requireBoundNumericalResults(fields: readonly string[], subjects: reado
       .some(item => sameScientificQuantity(quantity, item, true)));
     if (!described.some(subject => scientificQuantities(subject.basis.quote)
       .some(item => sameScientificQuantity(quantity, item)))) {
-      throw new Error(`unbound_numeric_${quantity.value.replace('.', '_')}_${quantity.unit ?? quantity.variable ?? 'bare'}_${described.length ? 'source' : 'description'}`);
+      const code = `unbound_numeric_${quantity.value.replace('.', '_')}_${quantity.unit ?? quantity.variable ?? 'bare'}_${described.length ? 'source' : 'description'}`;
+      const sourceVariables = [...new Set(described.flatMap(subject => scientificQuantities(subject.basis.quote))
+        .filter(item => sameScientificQuantity({ ...quantity, variable: null }, item)).map(item => item.variable))];
+      const onlySourceVariable = sourceVariables.length === 1 ? sourceVariables[0] : null;
+      throw new UnboundNumericSourceError(code,
+        onlySourceVariable ? SOURCE_VARIABLE_NAMES.get(onlySourceVariable) : undefined);
     }
   }
 }
@@ -385,6 +394,7 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
   let scienceMessages: Array<{ role: 'system' | 'user'; content: string }> | undefined;
   let scienceUsage: DesignSkillUsage[] = [];
   let diagnostic = 'invalid_scientific_intent';
+  let expectedSourceVariable: string | undefined;
   if (settings.revisionMode === 'art') {
     if (!base || base.output !== 'image' || base.locale !== settings.locale || !reusableBase) {
       throw new Error('[blocked] Art revision requires a current structured image base in the same language');
@@ -513,7 +523,11 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
       intent = restored; scienceUsage = saved.designSkills;
     } else {
     const science = await gateway.completeStructured((value): value is Record<string, unknown> => {
-      try { materializeScience(value); return true; } catch (error) { diagnostic = error instanceof Error ? error.message : 'invalid_scientific_intent'; return false; }
+      try { expectedSourceVariable = undefined; materializeScience(value); return true; } catch (error) {
+        diagnostic = error instanceof Error ? error.message : 'invalid_scientific_intent';
+        expectedSourceVariable = error instanceof UnboundNumericSourceError ? error.expectedVariable : undefined;
+        return false;
+      }
     }, scienceMessages!, { temperature: 0.1, thinking: 'adaptive', includeRejectedResponseOnRetry: true, maxRetries: 2,
       includeJsonParseInRejectedCandidates: Boolean(onScienceRejected),
       onRejectedCandidate: onScienceRejected ? async (value, completion, attempt, rejection) => {
@@ -534,6 +548,10 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         const briefFeedback = briefOverflow ? ` The complete brief is ${briefOverflow[1]} characters for a ${briefOverflow[2]} shared limit. Remove repetition or choose a narrower source-supported relationship while preserving its complete meaning and conditions; leave necessary space for art. Do not mechanically truncate scientific text.` : '';
         let feedback = `Diagnostic: ${diagnostic.slice(0, 400)}. Return exactly ${scienceShape}. Every subject is {description,basis:{sourceId}}; bind only an exact planning.supportingSourceIds value from upstream.sourcePassages with relation supports. Paper excerpt IDs, Claim IDs and non-supporting passages are not subject bindings. Re-read the original passage and revise unsupported meaning; never substitute an arbitrary valid ID. Preserve valid fields and source-grounded qualifiers. No schemaVersion or illustration wrapper. labels must enumerate all intended visible text, including axis letters, mathematical symbols and required conditions; no fixed label count. Follow all original field and shared-brief limits, leaving art space. Shorten repetition, never truncate scientific meaning.`;
         if (diagnostic.startsWith('unbound_numeric_')) feedback += ` Each numerical result in titles, main message, narration, encoding, labels and constraints needs the same value, unit and stated variable in one subject description AND its own exact supporting passage. ${diagnostic.endsWith('_description') ? 'No subject description states this result; put it in a separate result subject and bind that subject to its original result passage.' : 'A subject states this result, but its bound original passage does not; select the actual supporting result passage or remove the unsupported value.'} A bare number with a different unit or variable is not support.`;
+        if (diagnostic.endsWith('_source') && expectedSourceVariable) {
+          const hint = ` The bound passage has one matching source variable, ${expectedSourceVariable}; use that exact variable in the visible text and subject description, or remove the unsupported value. Do not infer an alias.`;
+          if (feedback.length + hint.length <= 2000) feedback += hint;
+        }
         if (/^unbound_numeric_[01]_bare_(?:description|source)$/u.test(diagnostic)) {
           const hint = ' A bare 0/1 used as a drawing index is not a scientific result: write an explicit structural reference such as subject 0 / step 1 or 主体0 / 步骤1, or remove the numeral. For a source-supported single electron, write 单电子. A real dimensionless 0/1 result must remain and bind to its exact result passage.';
           if (feedback.length + hint.length <= 2000) feedback += hint;

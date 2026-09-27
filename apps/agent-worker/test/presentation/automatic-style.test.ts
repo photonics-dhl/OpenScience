@@ -370,6 +370,46 @@ describe('automatic art direction after sourced science', () => {
     expect(result.document.scenes[0]!.illustration?.labels).toEqual(['19 nm aperture']);
   });
 
+  it('names the unique source variable when repairing a same-value numeric mismatch', async () => {
+    const source = 'The virtual width (FWHM_T, i.e., τ₁) of 19 as is obtained.';
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+    const candidate = (label: string) => ({ ...science, scenes: [{ ...science.scenes[0]!, title: 'Virtual width',
+      narration: label, message: label, labels: [label],
+      subjects: [{ description: label, basis: { sourceId: 's0' } }],
+    }] });
+    const requests: Array<Array<{ content: string }>> = [];
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async ({ messages }) => {
+      requests.push(messages);
+      const response = requests.length === 1 ? candidate('τ_e=19 as') : requests.length === 2
+        ? candidate('FWHM_T=19 as') : { scenes: [{ layout: 'One time window.', treatment: 'Quiet ink.' }] };
+      return { text: JSON.stringify(response), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+    const result = await generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the sourced virtual width.', output: 'image',
+    });
+    expect(requests).toHaveLength(3);
+    expect(requests[1]!.at(-1)!.content).toContain('FWHM_T');
+    expect(requests[1]!.at(-1)!.content).toContain('use that exact variable');
+    expect(result.document.scenes[0]!.illustration?.labels).toEqual(['FWHM_T=19 as']);
+  });
+
+  it('does not guess a correction when the bound source names two variables with the same value', async () => {
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!,
+      text: 'FWHM_S=19 as and FWHM_T=19 as are separate quantities.' }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!, message: 'τ_e=19 as',
+      subjects: [{ description: 'τ_e=19 as', basis: { sourceId: 's0' } }],
+    }] };
+    const requests: Array<Array<{ content: string }>> = [];
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async ({ messages }) => {
+      requests.push(messages);
+      return { text: JSON.stringify(candidate), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+    await expect(generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the sourced result.', output: 'image',
+    })).rejects.toThrow('结构化输出超过重试上限');
+    expect(requests[1]!.at(-1)!.content).not.toContain('one matching source variable');
+  });
+
   it('records only bounded field and source-number summaries for a rejected science candidate', async () => {
     const source = 'A 1 MeV electron crosses the field.';
     const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
