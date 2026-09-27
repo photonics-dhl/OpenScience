@@ -381,16 +381,22 @@ async function activateImageMode(page, composer, deadlineAt) {
   await plus.press('Enter', { timeout: Math.max(1, deadlineAt - Date.now()) });
   stage = 'image_mode_choice';
   const choice = page.getByText('Create image', { exact: true });
+  const choiceAvailable = async () => await choice.count() === 1
+    && await choice.isVisible().catch(() => false)
+    // Playwright reports a span as enabled even inside an aria-disabled row.
+    && await choice.evaluate(element => !element.closest('[aria-disabled="true"], [inert], button:disabled')).catch(() => false);
   const choiceDeadline = deadlineAt;
   while (Date.now() < choiceDeadline) {
     // Hydration can restore the selected tool while opening the menu. That
     // leaves both a form pill and a "Selected" menu row with this text.
     if (await imageModeActive(composer).catch(() => false)) return true;
-    if (await choice.count() === 1 && await choice.isVisible().catch(() => false)) break;
+    // The menu row can be visible while aria-disabled during hydration.
+    // Clicking that row is a no-op, then waiting for a selected pill times out.
+    if (await choiceAvailable()) break;
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   if (await imageModeActive(composer).catch(() => false)) return true;
-  if (await choice.count() !== 1 || !await choice.isVisible().catch(() => false)) return false;
+  if (!await choiceAvailable()) return false;
   if (Date.now() >= deadlineAt) return false;
   await choice.click({ timeout: Math.max(1, deadlineAt - Date.now()) });
   stage = 'image_mode_confirm';
