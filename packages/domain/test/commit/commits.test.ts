@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { StorageAdapter } from '@openscience/storage';
@@ -50,6 +50,19 @@ async function makeRo(audit?: AuditSink) {
 }
 
 describe('createCommit（§7.2.3 Manifest + §7.2.5 JSON Patch + §16 乐观锁/幂等）', () => {
+  it('allows enough transaction time to carry a media-heavy version', async () => {
+    const { deps, user, ro } = await makeRo();
+    const transaction = vi.spyOn(deps.prisma, '$transaction').mockRejectedValue(new Error('stop before persistence'));
+
+    await expect(createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'next version', version: 1 }))
+      .rejects.toThrow('stop before persistence');
+
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: 'Serializable',
+      timeout: 30_000,
+    });
+  });
+
   it('改 SDF core → Commit + ChangeSet(sdf_core) + Version + Manifest + RO.version+1', async () => {
     const { deps, db, user, ro } = await makeRo();
     const result = await createCommit(deps, {

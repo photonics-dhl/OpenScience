@@ -540,6 +540,9 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       findUnique: async ({ where }: any) => db.blobs.find((b) => b.sha256 === where.sha256) ?? null,
     },
     artifact: {
+      findMany: async ({ where }: any) => db.artifacts.filter((artifact) =>
+        (where?.id?.in === undefined || where.id.in.includes(artifact.id)) &&
+        (where?.workspaceId === undefined || artifact.workspaceId === where.workspaceId)),
       findUnique: async ({ where, include }: any) => {
         const row = db.artifacts.find((a) => where.id ? a.id === where.id : a.idempotencyKey === where.idempotencyKey) ?? null;
         if (!row || !include?.blob) return row;
@@ -629,6 +632,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       findFirst: async ({ where, orderBy, include }: any) => {
         const rows = db.versions.filter(
           (v) =>
+            (where.id === undefined || v.id === where.id) &&
             (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId) &&
             (where.commitId === undefined || v.commitId === where.commitId) &&
             (where.commit?.branchId === undefined || db.commits.some(c => c.id === v.commitId && c.branchId === where.commit.branchId)),
@@ -644,10 +648,16 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
             : null,
         };
       },
+      findFirstOrThrow: async ({ where, include }: any) => {
+        const row = await prisma.version.findFirst({ where, include });
+        if (!row) throw new Error('Version not found');
+        return row;
+      },
       findUnique: async ({ where, include }: any) => {
         const row = db.versions.find((v) => v.id === where.id) ?? null;
         if (!row) return null;
         const out: any = { ...row };
+        if (include?.commit) out.commit = db.commits.find((commit) => commit.id === row.commitId) ?? null;
         if (include?.publications) out.publications = db.publications.filter(p => p.versionId === row.id);
         if (include?.researchObject) {
           const ro = db.researchObjects.find((r) => r.id === row.researchObjectId) ?? null;
@@ -664,7 +674,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return out;
       },
       create: async ({ data }: any) => {
-        const row = { id: nextId(), status: 'draft', createdAt: new Date(), ...data };
+        const row = { id: nextId(), status: 'draft', publicVersionId: null, researchRecord: null, createdAt: new Date(), ...data };
         db.versions.push(row);
         return row;
       },
@@ -682,8 +692,12 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
       count: async ({ where }: any) =>
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)).length,
-      findMany: async ({ where }: any) =>
-        db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)),
+      findMany: async ({ where, include }: any) =>
+        db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId))
+          .map((version) => ({ ...version,
+            ...(include?.commit ? { commit: db.commits.find((commit) => commit.id === version.commitId) ?? null } : {}),
+            ...(include?.publications ? { publications: db.publications.filter((publication) => publication.versionId === version.id) } : {}),
+          })),
     },
     claimNode: {
       count: async ({ where }: any) => db.claimNodes.filter(row => Object.entries(where).every(([key, value]) => isDeepStrictEqual(row[key], value))).length,

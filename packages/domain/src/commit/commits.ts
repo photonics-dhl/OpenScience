@@ -288,7 +288,7 @@ export async function createCommit(
     );
     return { commit, version };
   };
-  const result = transaction ? await persist(transaction) : await deps.prisma.$transaction(persist, { isolationLevel: 'Serializable' }).catch((error: unknown) => {
+  const result = transaction ? await persist(transaction) : await deps.prisma.$transaction(persist, { isolationLevel: 'Serializable', timeout: 30_000 }).catch((error: unknown) => {
     if ((error as { code?: string }).code === 'P2034') throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');
     throw error;
   });
