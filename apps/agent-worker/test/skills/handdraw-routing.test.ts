@@ -9,7 +9,8 @@ describe('Hermes media skill stages', () => {
     const science = loadInstalledMediaSkills('editorial', '', 'science');
     expect(science.instructions).toContain('one-sentence takeaway');
     expect(science.instructions).toContain('A dot-product condition constrains a projection');
-    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '14' }));
+    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '15' }));
+    expect(science.instructions).toContain('encoding-feasibility failure');
     expect(science.instructions).toContain('A replaceable artistic container is not scientific encoding');
     expect(science.instructions).toContain('reader-facing scientific explanation');
     expect(science.instructions).toContain('A poor narration needs ordinary scientific planning revision');
@@ -41,6 +42,7 @@ describe('Hermes media skill stages', () => {
   it('does not displace source context from final scientific review', () => {
     const review = loadInstalledMediaSkills('editorial', '', 'review');
     expect(review.instructions).toContain('Check vector operations and frequency/wavelength language');
+    expect(review.instructions).toContain('encoding-feasibility failure');
     expect(review.instructions).toContain('If encoding or narration prescribes a rejected decorative form');
     expect(review.instructions).toContain('inspect the title and `narration` as text the reader will actually see');
     expect(review.instructions).toContain('block it for upstream planning correction');

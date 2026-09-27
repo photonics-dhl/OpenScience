@@ -2,7 +2,7 @@
 name: openscience-research-illustration
 description: Plan and refine evidence-grounded research illustrations for OpenScience through Hermes and Chat image generation, using structured briefs, source-scoped visual references and reusable art directions. Use for paper illustrations, scientific concept images and research covers; quantitative plots require a data renderer.
 metadata:
-  version: "14"
+  version: "15"
 ---
 
 # OpenScience research illustration
@@ -36,6 +36,8 @@ When the takeaway is a classification, each region needs its source-supported ca
 ## Scientific encoding
 
 Establish the source-supported coordinate domain and viewing plane before arranging a physical scene. Describe object extents, openings, trajectories and incoming/outgoing directions in that frame, then project them into the chosen view. Distinguish directions within the plane from directions into or out of it. Trace each physical path through the proposed arrangement and compare the depicted directions with the source relationship; a logical arrow is a different kind of mark. Put the necessary frame or projection indicators in the visible labels. When the sources do not establish a consistent spatial construction, choose a narrower supported conceptual relationship.
+
+When saved images and formal pixel review repeatedly show the same impossible spatial connectivity despite a correct source-bound intent, treat it as an encoding-feasibility failure. Stop cycling art-only corrections or longer prohibitions. Replan the visual encoding with the same reviewed Claim and original passages: show the supported causal relation through a faithful conceptual representation if an exact physical cross-section cannot be rendered reliably. Preserve the essential subject, variables, conditions, result and model/experimental boundary; do not label valid source science as invalid or invent a new claim. The revised plan still needs normal scientific review, a new real image and pixel review, while failed images remain private evidence.
 
 Assign each visible group its fixed conditions, varied quantities and reported outcomes. Combine results only when those conditions agree. A parameter sweep and a fixed-parameter example need distinct condition ownership even when they concern the same material. Match each promised takeaway to a visible label or supported visual relation; a result present only in a caption, subject or constraint does not make it visible in the image. Narrow the takeaway if its essential outcome and conditions cannot be shown clearly.
 
