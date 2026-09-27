@@ -6,10 +6,15 @@
 - Hermes 复用已审 PDF/SourceMap/Claim/Evidence 和按阶段注入的科学/视觉技能，Chat 负责出图及网页 5.6 Sol 正式像素判断；保存坏图、失败收据与原 PDF，不自动重发未知付费请求。
 - 必要的定向测试、CI、真实路径核验必须做；避免与改动无关的重复全套测试。用户已授权内部额度，管理员不应受内部 AI Credit 阻断；供应商额度仍独立。
 
+## 2026-09-28 — 第二篇手绘叙事图固定 v4
+- 生产 `5b4f7a1e` / rollback `44230e80`：[媒体 CI 36327366358](https://github.com/photonics-dhl/OpenScience/actions/runs/36327366358) success、51/51 定向测试、Worker typecheck、独立 High；原数值守卫只补同一错误的字段定位。真实第二篇 v13 的同源科学方案 `98fdab13` 获来源/独立 High GO；art-only 两次保持科学字段，只修“左右同序”和“虚线交叉”。新 Chat 真图 `e68ab9d2` hash `4d3d6b1c…` 正式 5.6 Sol accepted、原 PNG 实看与独立 High GO。
+- 只选 `e68ab9d2` 发布[第二篇固定 v4](https://openscience.428312321.xyz/research/OSR-2026-000022/v/4)；许可与发布审查 passed/0 hardBlocks。匿名首页实点 1280×720 新图、六维/7 Claim/27 Evidence，PDF `workspace_member`，旧 v3 HTTP 200；用户终评待收。
+- 图 `449e391b` 的 PNG 已保存，审图附件两次超时且提示词未提交；仅审图 `d9cee01e` 复用原字节。定向上传随后约 10 秒完成，长期根因不明。闲置产品页阻塞 CDP，精确重开该页恢复并保留会话。
+
 ## 2026-09-27 — 画面叙事守卫与重媒体草稿提交
 - `a8b3ba9e` 真图的稀疏公式横幅忠实于源分镜 `fa846164`，暴露科学方案本身没有用可见符号讲清关系。原配图 Skill v16 在 science/末审要求机制关系能从画面读取，允许确以数学表达式为主题的图。54/54 定向测试、Worker typecheck、独立 High、[媒体 CI 36316251147](https://github.com/photonics-dhl/OpenScience/actions/runs/36316251147) 通过并部署；效果须看新真实方案，不能把审图 accepted 当读者认可。
 - 第二篇公开 v3 的 68 项媒体使正常私有版本提交超过 Prisma 默认 5 秒并 P2028 回滚。28db 延长原 Serializable 事务到 30 秒，未删草稿/坏图或改审批语义；11/11 提交测试、Domain typecheck、独立 High、[媒体 CI 36319639855](https://github.com/photonics-dhl/OpenScience/actions/runs/36319639855) 通过，已部署。真实幂等提交约 10.4 秒，生成私有 v13，7 Claim/27 Evidence 与 49 个非分镜媒体完整继承；公开 v3 不变。额外 Domain 全套 99 项旧夹具/断言失败，不作本次发布通过证据。
-- 新 v16 科学方案 `10a5b4bd`、`bb990846` 均被原守卫拒收、无图；44230e80 只给唯一来源量名的重试提示，50/50 定向测试、Worker typecheck、独立 High、[媒体 CI 36324367593](https://github.com/photonics-dhl/OpenScience/actions/runs/36324367593) 通过并发布。新真实任务 `2f935b27` 已沿用原文 `FWHM_T 19 as`，却先有标签引用越界，后两轮在旁白、编码、标签保留无来源裸 `1`，仍无新分镜/图片。当前候选补原拒收反馈的字段定位，不改守卫；51/51 定向测试、Worker typecheck、独立 High GO，待 CI/发布/新真实任务。公开版不变，见 CURRENT。
+- 新 v16 科学方案 `10a5b4bd`、`bb990846` 均被原守卫拒收、无图；44230e80 只给唯一来源量名的重试提示，50/50 定向测试、Worker typecheck、独立 High、[媒体 CI 36324367593](https://github.com/photonics-dhl/OpenScience/actions/runs/36324367593) 通过并发布。新真实任务 `2f935b27` 已沿用原文 `FWHM_T 19 as`，却先有标签引用越界，后两轮在旁白、编码、标签保留无来源裸 `1`，仍无新分镜/图片。随后 5b 在原拒收反馈中定位字段而不改守卫，51/51 定向测试、Worker typecheck、独立 High、CI 和生产发布完成；新真实任务与固定 v4 结果见上及 CURRENT。
 
 ## 2026-09-27 — 美术预算修正与第二篇固定公开
 - 原 `b4437411` 的艺术字段连同已固定科学描述两次超过 4000 字完整 brief 上限（4333/4165）。Worker 在原 art 请求中给出每幕剩余字数，auto 风格预留内部 marker；不增加模型阶段、门禁或科学截断。混合原图/自动风格索引经独立 High NO-GO 后修复，48/48 定向测试、Worker typecheck、独立 High GO、[媒体 CI 36314197321](https://github.com/photonics-dhl/OpenScience/actions/runs/36314197321) success；干净 `354de481` 应用生产事务完成，公网 `/__release` 精确一致，第二篇 v3 仍 HTTP 200。真实 Hermes 对预算的遵循尚待下一个有实际叙事需求的任务观察，不为验证额外生图。生产/回退精确 SHA 与未完成项见 CURRENT。
@@ -34,12 +39,9 @@
 - 第一篇正从已审 v3 来源修订：私有 v10 草稿 eb8b3db7，复用 6 Claim/58 Evidence。新 PNG 31c/3f1/cb4/1cd/7d9/a38 均正式 blocked 或人工 NO-GO，未替换旧公开 v3；a38 的暖纸墨线接近用户偏好，但正式审图拦下小箭头/验讫章感，人工另发现“空孔”被涂成黑盘。新同源科学方案 80673845 与 art-only 41e0df85→9df66c13 成功；最终方案科学字段保持一致、空孔与禁印章一致并获 approved。两次新图任务在 Chat 新页面提交 prompt 前失败，spool 均有未提交凭据，尚无新 PNG。目录 277 编号手绘中 256 可供 auto 选，另有 Baoyu article 23、infographic 22；风格可选不等于成图合格。
 - `auto` 风格链路仍复用 Hermes 的 science→art→render/审图阶段与现有手绘/Baoyu 资源。第三篇旧科学稿、手绘/板书/淡彩坏图被人工或正式审图拦下；59b861b5 的审图在原窗口无重发恢复为 blocked。方案 cd150093 保留已审科学字段，仅用无方向虚线括弧表示逻辑条件；新图 4e64c389 获正式审图 accepted、人工实看并发布。Bridge URL 等待修复已随生产 c0b55 部署，真实新任务 13 秒取得 URL 并成功；30 秒之后才出现 URL 的真实案例未观察。下一项应改善前两篇机制画面的焦点，不重复全文分析或按风格凑数。
 
-## 当前工程状态
-- 手工 PNG 审图未提交恢复、像素标签提示已通过定向测试/类型检查、独立 High、[CI 35893326942](https://github.com/photonics-dhl/OpenScience/actions/runs/35893326942)，部署并真实用于第三篇。当前生产身份与回退见 CURRENT。
-- 管理员内部 AI Credit 一对一事务自动补账已在 Domain agent 提交/付费提取恢复部署；原扣减、幂等和审计保留，普通用户额度不变。[定向 CI 35902058149](https://github.com/photonics-dhl/OpenScience/actions/runs/35902058149) success、独立 High GO、生产 release 精确核对。扩展旧 agent/ingestion 文件 90 pass/18 fail（旧确认/重试夹具与条件），不称全套通过；生产零余额新任务尚未发生，留待下次正常任务看账本，不额外发模型探针。
-- 本轮 bridge 等待、Guide 默认 `auto` 与对应 CI 范围更新经 17/17 定向测试、Worker typecheck、URL 35/120 秒模拟与单发送检查，[CI 35992870346](https://github.com/photonics-dhl/OpenScience/actions/runs/35992870346) success；生产 c0b55 / 回退 57373a79。新图的真实正常路径有完整 browser spool 和产品任务收据，未测试晚 URL 的真实上游时序。发布审核 passed/0 block，旧公开 v1 与私有候选均保留。
-- 原 planner 新增候选 `label N` 越界校验 8/8 定向测试、Worker typecheck 与 [CI 36014342028](https://github.com/photonics-dhl/OpenScience/actions/runs/36014342028) success；Hermes 单幕 art `scenes` 结构修复 17/17、Worker typecheck、独立 High 与 [CI 36116799049](https://github.com/photonics-dhl/OpenScience/actions/runs/36116799049) success。二者已随应用 d7678b97 部署，真实 806→41e→9df 方案成功，未重做全文分析。网页桥因 Chat 新 UI 旧选择器失效，两次生图均未提交；5b7822d0 兼容候选已推送，[CI 36123227015](https://github.com/photonics-dhl/OpenScience/actions/runs/36123227015) success，provider 未更新，新图/正式审图未验证。
-- 只读 [Hermes 研发观察台](proposals/2026-09-23-hermes-development-live.html) 展示目标、角色/技能、阶段产物，并逐图列出实际风格、能力链、画面效果和具体差额；本机派生 feed 是人工检查点，会标示过期，不是自动遥测。能力消费与尚未实现的原文疑点回读/跨任务学习见 [能力台账](runbooks/hermes-capability-registry.md)。
+## 工程索引
+
+- 历史工程验证留在 Git、[能力台账](runbooks/hermes-capability-registry.md)与对应 CI；当前 release/回退、真实图文结果和未结项以 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md) 为准。研发观察台是人工更新快照。
 
 ## 其他交付
 - 期刊增强已随当前生产线集成并保留线上入口；真实授权刊物试用、版权来源与服务额度的准确状态见 [期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)，不以配图任务推断期刊已完成真实试用。
