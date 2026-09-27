@@ -8,7 +8,7 @@
 
 ## 2026-09-27 — 第二篇单幕叙事方案与桥接器实证
 - `8337ab47` 的可见 profile 选择与中文标签索引修复经 46/46、Worker typecheck、独立 High、[CI 36290324334](https://github.com/photonics-dhl/OpenScience/actions/runs/36290324334) success，定向部署且公网 `/__release` 一致；回退 ffb。第二篇 v13 的同源科学修订 `3d2115fe` 正式 accepted/独立 High GO/批准。旧图 `5dc700aa` 确定未提交 Chat，失败证据保留。
-- 新图 `1bf46ec9` 真正提交并下载原 PNG，但本轮独立 provider 安装把 browser 镜像误配为 renderer；备份配置/失败标记、只复用原 PNG 恢复出 1280×720，spool succeeded，原任务 retry 导入、未重发 Chat。正式 5.6 Sol 审图 blocked 且人工实看：局域带离狭缝、开口无义蓝点。art-only 修订 `dc964088` 的科学字段与原稿逐项相同，只改构图/材质并已批准；新图 `51e95ec3` 正在运行。安装器增加运行 ffmpeg 的前置校验，真实正确/错误镜像 0/127、Git Bash 语法与独立 High GO；候选待 CI/提交。旧公开 v2 不变。
+- 第二篇真图 `1bf46ec9` 原 PNG 仅复用规范化、未重发 Chat，正式像素审图 blocked。之后 `51e95ec3`、`25117b5d` 真图亦 blocked，人工实看均未讲清局域→短脉冲；只改美术已停止。Hermes 同源科学画面编码修订 `ff11bbcf` 正式 accepted/独立 High GO/已批准，但图任务 `69f08f5f` 在 image_mode_confirm 技术失败，精确 not-submitted 证据证明无 Chat 提交。空白页探查发现当前模式选中为 `Remove Create image` 按钮；runner 增唯一识别与提交前一次同页 reload，node 语法/独立 High GO，待无费演练、CI/部署/同方案真实图验证。安装器 ffmpeg 前置校验正确/误配镜像实证 0/127、独立 High、CI 36292745105 success；配图 Skill v15 6/6、Worker typecheck、独立 High、CI 36294020004 success，均仅候选。公开 v2 不变。
 
 ## 2026-09-26 — 第一篇真实新图与叙事配文返工
 - 第一篇私有 v10 经已审 Hermes 同源分镜 `9bf1a712`、真实 Chat PNG `7f497502`、正式 5.6 Sol accepted、人工原始像素核对，沿已有审核/指定选图流程发布 [OSR-2026-000023/v/4](https://openscience.428312321.xyz/research/OSR-2026-000023/v/4)。匿名首页点入实见 1280×720 图片、六维/6 Claim/58 Evidence；旧 v3 仍可读，PDF 仍仅工作区成员可下载。v4 的 reader 配文主要描述布局，科学解释不足，故不宣称最终叙事质量通过。
