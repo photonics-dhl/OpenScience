@@ -29,7 +29,7 @@ function requireLabelReferencesInRange(brief: IllustrationBrief): void {
 type ScientificQuantity = { value: string; unit: string | null; variable: string | null };
 const SOURCE_VARIABLE_NAMES = new Map([['fwhmt', 'FWHM_T'], ['fwhms', 'FWHM_S'], ['nsp', 'N_SP']]);
 class UnboundNumericSourceError extends Error {
-  constructor(message: string, readonly expectedVariable?: string) { super(message); }
+  constructor(message: string, readonly expectedVariable?: string, readonly fields: readonly string[] = []) { super(message); }
 }
 const QUANTITY_PATTERN = /(?<![A-Za-z\u0370-\u03ff\d])[+-]?(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)(?:\s*[×x]\s*10\s*\^?\s*[+-]?\d+|[eE][+-]?\d+)?(?!\d|\.\d)/gu;
 // This is a new-plan guard, not a substitute for the scientific review of
@@ -82,9 +82,9 @@ function sameScientificQuantity(asserted: ScientificQuantity, supported: Scienti
   if (asserted.variable && asserted.variable !== supported.variable && !(allowOmittedVariable && !supported.variable)) return false;
   return true;
 }
-function requireBoundNumericalResults(fields: readonly string[], subjects: readonly IllustrationBrief['subjects'][number][]): void {
-  const asserted = fields.flatMap(scientificQuantities);
-  for (const quantity of asserted) {
+function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][]): void {
+  const missing: Array<{ field: string; quantity: ScientificQuantity; code: string; expectedVariable?: string }> = [];
+  for (const [field, value] of fields) for (const quantity of scientificQuantities(value)) {
     const described = subjects.filter(subject => scientificQuantities(subject.description)
       .some(item => sameScientificQuantity(quantity, item, true)));
     if (!described.some(subject => scientificQuantities(subject.basis.quote)
@@ -93,9 +93,16 @@ function requireBoundNumericalResults(fields: readonly string[], subjects: reado
       const sourceVariables = [...new Set(described.flatMap(subject => scientificQuantities(subject.basis.quote))
         .filter(item => sameScientificQuantity({ ...quantity, variable: null }, item)).map(item => item.variable))];
       const onlySourceVariable = sourceVariables.length === 1 ? sourceVariables[0] : null;
-      throw new UnboundNumericSourceError(code,
-        onlySourceVariable ? SOURCE_VARIABLE_NAMES.get(onlySourceVariable) : undefined);
+      missing.push({ field, quantity, code,
+        expectedVariable: onlySourceVariable ? SOURCE_VARIABLE_NAMES.get(onlySourceVariable) : undefined });
     }
+  }
+  if (missing.length) {
+    const first = missing[0]!;
+    const sameResultFields = [...new Set(missing.filter(item => item.quantity.value === first.quantity.value
+      && item.quantity.unit === first.quantity.unit && item.quantity.variable === first.quantity.variable)
+      .map(item => item.field))].slice(0, 12);
+    throw new UnboundNumericSourceError(first.code, first.expectedVariable, sameResultFields);
   }
 }
 export type StoryboardScienceCheckpoint = {
@@ -395,6 +402,7 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
   let scienceUsage: DesignSkillUsage[] = [];
   let diagnostic = 'invalid_scientific_intent';
   let expectedSourceVariable: string | undefined;
+  let unsupportedNumericFields: readonly string[] = [];
   if (settings.revisionMode === 'art') {
     if (!base || base.output !== 'image' || base.locale !== settings.locale || !reusableBase) {
       throw new Error('[blocked] Art revision requires a current structured image base in the same language');
@@ -497,15 +505,18 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         if (illustration.schemaVersion !== 2) throw new Error('structured_encoding_required');
         requireLabelReferencesInRange(illustration);
         requireIllustrationSourceSupport(illustration, claims);
-        requireBoundNumericalResults([String(scene.title), String(scene.narration), illustration.message,
-          illustration.encoding, ...illustration.labels, ...illustration.constraints], illustration.subjects);
+        requireBoundNumericalResults([['title', String(scene.title)], ['narration', String(scene.narration)],
+          ['message', illustration.message], ['encoding', illustration.encoding],
+          ...illustration.labels.map((label, index): readonly [string, string] => [`labels[${index}]`, label]),
+          ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint])],
+        illustration.subjects);
         // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
         compileIllustrationImagePrompt(illustration);
         return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, settings.narrative ? 600 : 120, 'narration'), illustration,
           ...(original ? { paperOriginal: { assetId: original.assetId, objectKey: original.objectKey, contentHash: original.contentHash } } : {}),
           sourceClaimIds: [...new Set(illustration.subjects.map(subject => subject.basis.claimId))] };
       });
-      requireBoundNumericalResults([String(root.title), ...(narrative ? [narrative.mainMessage] : [])],
+      requireBoundNumericalResults([['title', String(root.title)], ...(narrative ? [['mainMessage', narrative.mainMessage] as const] : [])],
         [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects));
       if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
       return { title: text(root.title, 120), scenes, ...(narrative ? { narrative } : {}) };
@@ -523,9 +534,10 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
       intent = restored; scienceUsage = saved.designSkills;
     } else {
     const science = await gateway.completeStructured((value): value is Record<string, unknown> => {
-      try { expectedSourceVariable = undefined; materializeScience(value); return true; } catch (error) {
+      try { expectedSourceVariable = undefined; unsupportedNumericFields = []; materializeScience(value); return true; } catch (error) {
         diagnostic = error instanceof Error ? error.message : 'invalid_scientific_intent';
         expectedSourceVariable = error instanceof UnboundNumericSourceError ? error.expectedVariable : undefined;
+        unsupportedNumericFields = error instanceof UnboundNumericSourceError ? error.fields : [];
         return false;
       }
     }, scienceMessages!, { temperature: 0.1, thinking: 'adaptive', includeRejectedResponseOnRetry: true, maxRetries: 2,
@@ -548,6 +560,10 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         const briefFeedback = briefOverflow ? ` The complete brief is ${briefOverflow[1]} characters for a ${briefOverflow[2]} shared limit. Remove repetition or choose a narrower source-supported relationship while preserving its complete meaning and conditions; leave necessary space for art. Do not mechanically truncate scientific text.` : '';
         let feedback = `Diagnostic: ${diagnostic.slice(0, 400)}. Return exactly ${scienceShape}. Every subject is {description,basis:{sourceId}}; bind only an exact planning.supportingSourceIds value from upstream.sourcePassages with relation supports. Paper excerpt IDs, Claim IDs and non-supporting passages are not subject bindings. Re-read the original passage and revise unsupported meaning; never substitute an arbitrary valid ID. Preserve valid fields and source-grounded qualifiers. No schemaVersion or illustration wrapper. labels must enumerate all intended visible text, including axis letters, mathematical symbols and required conditions; no fixed label count. Follow all original field and shared-brief limits, leaving art space. Shorten repetition, never truncate scientific meaning.`;
         if (diagnostic.startsWith('unbound_numeric_')) feedback += ` Each numerical result in titles, main message, narration, encoding, labels and constraints needs the same value, unit and stated variable in one subject description AND its own exact supporting passage. ${diagnostic.endsWith('_description') ? 'No subject description states this result; put it in a separate result subject and bind that subject to its original result passage.' : 'A subject states this result, but its bound original passage does not; select the actual supporting result passage or remove the unsupported value.'} A bare number with a different unit or variable is not support.`;
+        if (unsupportedNumericFields.length) {
+          const hint = ` The unsupported result also occurs in these fields: ${unsupportedNumericFields.join(', ')}. Correct or remove every occurrence in those fields, including visible labels; preserve genuinely supported results.`;
+          if (feedback.length + hint.length <= 2000) feedback += hint;
+        }
         if (diagnostic.endsWith('_source') && expectedSourceVariable) {
           const hint = ` The bound passage has one matching source variable, ${expectedSourceVariable}; use that exact variable in the visible text and subject description, or remove the unsupported value. Do not infer an alias.`;
           if (feedback.length + hint.length <= 2000) feedback += hint;

@@ -9,7 +9,7 @@
 ## 2026-09-27 — 画面叙事守卫与重媒体草稿提交
 - `a8b3ba9e` 真图的稀疏公式横幅忠实于源分镜 `fa846164`，暴露科学方案本身没有用可见符号讲清关系。原配图 Skill v16 在 science/末审要求机制关系能从画面读取，允许确以数学表达式为主题的图。54/54 定向测试、Worker typecheck、独立 High、[媒体 CI 36316251147](https://github.com/photonics-dhl/OpenScience/actions/runs/36316251147) 通过并部署；效果须看新真实方案，不能把审图 accepted 当读者认可。
 - 第二篇公开 v3 的 68 项媒体使正常私有版本提交超过 Prisma 默认 5 秒并 P2028 回滚。28db 延长原 Serializable 事务到 30 秒，未删草稿/坏图或改审批语义；11/11 提交测试、Domain typecheck、独立 High、[媒体 CI 36319639855](https://github.com/photonics-dhl/OpenScience/actions/runs/36319639855) 通过，已部署。真实幂等提交约 10.4 秒，生成私有 v13，7 Claim/27 Evidence 与 49 个非分镜媒体完整继承；公开 v3 不变。额外 Domain 全套 99 项旧夹具/断言失败，不作本次发布通过证据。
-- 新 v16 科学方案任务 `10a5b4bd` 未产方案/图：16K 输出耗尽、下一次对象结构错、末次无来源 `y=0` 被原守卫拦截。聚焦定性关系的 `bb990846` 又三次将来源 `FWHM_T 19 as` 改写成其他变量，均被原守卫拒收；不盲重试、不放宽证据约束。原科学阶段已做唯一受控量名的定向反馈候选，50/50 定向测试、Worker typecheck、独立 High GO；待 CI/发布/真实任务验证，状态见 CURRENT。
+- 新 v16 科学方案 `10a5b4bd`、`bb990846` 均被原守卫拒收、无图；44230e80 只给唯一来源量名的重试提示，50/50 定向测试、Worker typecheck、独立 High、[媒体 CI 36324367593](https://github.com/photonics-dhl/OpenScience/actions/runs/36324367593) 通过并发布。新真实任务 `2f935b27` 已沿用原文 `FWHM_T 19 as`，却先有标签引用越界，后两轮在旁白、编码、标签保留无来源裸 `1`，仍无新分镜/图片。当前候选补原拒收反馈的字段定位，不改守卫；51/51 定向测试、Worker typecheck、独立 High GO，待 CI/发布/新真实任务。公开版不变，见 CURRENT。
 
 ## 2026-09-27 — 美术预算修正与第二篇固定公开
 - 原 `b4437411` 的艺术字段连同已固定科学描述两次超过 4000 字完整 brief 上限（4333/4165）。Worker 在原 art 请求中给出每幕剩余字数，auto 风格预留内部 marker；不增加模型阶段、门禁或科学截断。混合原图/自动风格索引经独立 High NO-GO 后修复，48/48 定向测试、Worker typecheck、独立 High GO、[媒体 CI 36314197321](https://github.com/photonics-dhl/OpenScience/actions/runs/36314197321) success；干净 `354de481` 应用生产事务完成，公网 `/__release` 精确一致，第二篇 v3 仍 HTTP 200。真实 Hermes 对预算的遵循尚待下一个有实际叙事需求的任务观察，不为验证额外生图。生产/回退精确 SHA 与未完成项见 CURRENT。

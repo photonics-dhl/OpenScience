@@ -370,6 +370,27 @@ describe('automatic art direction after sourced science', () => {
     expect(result.document.scenes[0]!.illustration?.labels).toEqual(['19 nm aperture']);
   });
 
+  it('identifies every field containing the same unsupported number in science retry feedback', async () => {
+    const invalid = { ...science, scenes: [{ ...science.scenes[0]!,
+      narration: 'Electron 1.', encoding: 'Place electron 1; show the relation.', labels: ['1'],
+    }] };
+    const requests: Array<Array<{ content: string }>> = [];
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async ({ messages }) => {
+      requests.push(messages);
+      const feedback = messages.at(-1)?.content ?? '';
+      const repaired = feedback.includes('narration') && feedback.includes('encoding') && feedback.includes('labels[0]');
+      const response = requests.length === 1 ? invalid : requests.length === 2 ? (repaired ? science : invalid)
+        : { scenes: [{ layout: 'One clear relation.', treatment: 'Quiet ink.' }] };
+      return { text: JSON.stringify(response), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+    const result = await generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the supported relation.', output: 'image',
+    });
+    expect(requests).toHaveLength(3);
+    expect(requests[1]!.at(-1)!.content).toContain('these fields: narration, encoding, labels[0]');
+    expect(result.document.scenes[0]!.illustration?.labels).toEqual(['Supported relation']);
+  });
+
   it('names the unique source variable when repairing a same-value numeric mismatch', async () => {
     const source = 'The virtual width (FWHM_T, i.e., τ₁) of 19 as is obtained.';
     const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
