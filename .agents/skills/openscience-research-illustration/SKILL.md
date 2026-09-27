@@ -2,7 +2,7 @@
 name: openscience-research-illustration
 description: Plan and refine evidence-grounded research illustrations for OpenScience through Hermes and Chat image generation, using structured briefs, source-scoped visual references and reusable art directions. Use for paper illustrations, scientific concept images and research covers; quantitative plots require a data renderer.
 metadata:
-  version: "15"
+  version: "16"
 ---
 
 # OpenScience research illustration
@@ -26,6 +26,8 @@ For an explicit whole-paper narrative, consume the existing same-version SDF, re
 Use available approved paper figures when their unchanged content serves a narrative step, including quantitative results lacking reusable data. Place originals where the reader needs them, not automatically first. An original is source material with a sourced reader explanation; copying it does not constitute a redesigned illustration or automatically satisfy narrative review. Generate a new conceptual visual only for a supported explanatory role. Never turn absent data into an AI-drawn quantitative curve.
 
 For each selected explanation, establish the domain, the minimum subjects and relationships, exact short labels, essential conditions and the meaning of every intended visual mark. Use complete original passage identifiers; the server supplies their actual text. The passage must support the full statement, including qualifiers. Reviewed summaries supply context but do not override a conflicting or narrower original passage. Unsupported details should be left out or reported as missing, not repaired from general knowledge.
+
+Before fixing a mechanism or transformation scene, walk through its planned marks and short labels as a reader who has not read the paper. The visible relation must show what is being related or transformed, rather than leave the key step inside a long equation or narration while generic repeated symbols merely decorate it. A row of interchangeable motifs plus an equation arrow and result is not a visual explanation of a mapping. Replan a narrower, source-supported encoding if necessary; do not invent a distribution, proportional geometry or a physical path to make the image busier. A mathematical expression may itself be the visual subject when the paper's selected insight is its structure and a pictorial mapping would mislead.
 
 The renderer uses `labels` as the complete visible-text list. A variable mentioned only in a subject, encoding or composition will not be printed. Reserve labels for every necessary coordinate axis, classification boundary and essential condition before optional titles or decorative annotations. Bind each label to its corresponding mark in the encoding. If the label budget cannot make the picture self-contained, narrow the explanation instead of dropping its coordinate or threshold meaning.
 
@@ -113,6 +115,8 @@ For a whole-paper narrative, use the already completed upstream analysis to revi
 For every scene, inspect the title and `narration` as text the reader will actually see beside the image. If the narration mainly describes the drawing or omits the selected scientific takeaway and its necessary limit, block it for upstream planning correction even when the image brief is scientifically accurate. A comment about what the picture does not imply cannot replace a direct statement of a material evidence limit. Do not repair this scientific reader text through an art-only correction.
 
 For a mechanism image, block narration that is a metric inventory instead of the selected mechanism. Count `labels` against the request: if the list exceeds the explicit visible-label budget, block for upstream planning correction even when each individual label is accurate. Check that a formula or reference width is essential to the takeaway before allowing it to occupy visible space.
+
+Review the proposed picture from its actual `encoding`, `composition`, `treatment` and exact `labels`, not from the scientific message alone. For a mechanism or transformation, identify the visible input, the relation between inputs and the resulting change. If the central relation can only be recovered by reading a long formula or narration while the marks remain a generic procession, block for scientific encoding replanning; an art-only recolour cannot repair that missing relationship. Do not impose this test on a scene whose sourced purpose is to explain a mathematical expression itself, and never demand invented quantitative marks.
 
 Assess the picture a reader can actually see: `labels` is its exclusive visible-text list, while other fields guide drawing. A necessary axis variable or boundary value present only in encoding is still missing from the picture; return a scientific-field correction upstream. A function drawn against coordinate axes asserts its shape, signs, zero crossings and relative extrema even without numeric ticks or with a conceptual disclaimer. Such a plot needs a data renderer. For Chat illustration, select a supported nonquantitative relationship rather than accepting an invented curve because its formula is correct.
 
