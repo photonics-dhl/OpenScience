@@ -65,6 +65,54 @@ describe('automatic art direction after sourced science', () => {
     expect(finalInstruction).not.toContain('"layout":"placement"');
   });
 
+  it('gives art the remaining brief budget after fixed science text', async () => {
+    const budgetFor = async (encoding: string) => {
+      const calls: Array<Array<{ content: string }>> = [];
+      const completeStructured = vi.fn(async (_guard: unknown, messages: Array<{ content: string }>) => {
+        calls.push(messages);
+        return calls.length === 1
+          ? { ...science, scenes: [{ ...science.scenes[0]!, encoding }] }
+          : { scenes: [{ layout: 'Place the relation at the focal point.', treatment: 'Quiet ink.' }] };
+      });
+      await generateIllustrationStoryboard({ completeStructured } as never, claims, {
+        locale: 'en', style: 'watercolor', instruction: 'Explain the relation.', output: 'image',
+      });
+      const artInput = JSON.parse(calls[1]![1]!.content);
+      return artInput.intent[0].artCharacterBudget as number;
+    };
+    const short = science.scenes[0]!.encoding;
+    const long = `${short} Use one clear visual relation and source-bound marks.`;
+    const shortBudget = await budgetFor(short);
+    expect(shortBudget).toBeGreaterThan(0);
+    expect(await budgetFor(long)).toBe(shortBudget - (long.length - short.length));
+  });
+
+  it('reserves the automatic style marker after a paper-original scene', async () => {
+    const originalId = '30000000-0000-4000-8000-000000000001';
+    const candidate = { ...science, narrative: { mainMessage: 'A supported relation.', audience: 'Readers' }, scenes: [
+      { ...science.scenes[0]!, paperOriginalAssetId: originalId },
+      { ...science.scenes[0]!, title: 'New explanation', paperOriginalAssetId: null },
+    ] };
+    const budgetFor = async (style: 'auto' | 'watercolor') => {
+      const calls: Array<Array<{ content: string }>> = [];
+      const completeStructured = vi.fn(async (_guard: unknown, messages: Array<{ content: string }>) => {
+        calls.push(messages);
+        return calls.length === 1 ? candidate : { scenes: [{ layout: 'One relation in the center.', treatment: 'Quiet ink.',
+          ...(style === 'auto' ? { styleId: 'handdraw:#002' } : {}) }] };
+      });
+      await generateIllustrationStoryboard({ completeStructured } as never, claims, {
+        locale: 'en', style, instruction: 'Explain the supported relation.', output: 'image', narrative: true,
+      }, undefined, new Map([['Fig. 1', { assetId: originalId, figureId: 'Fig. 1',
+        objectKey: `blobs/aa/aa/${'a'.repeat(64)}`, contentHash: 'a'.repeat(64), sourceClaimId: claims[0]!.id }]]),
+      { versionSdf: {}, reviewedAnalysis: {}, scientificReview: { status: 'review_received', fieldReviews: [], needsMoreEvidence: [] },
+        sourceContext: { excerpts: [], coverage: {} } } as never);
+      const artInput = JSON.parse(calls[1]![1]!.content);
+      expect(artInput.intent).toHaveLength(1);
+      return artInput.intent[0].artCharacterBudget as number;
+    };
+    expect(await budgetFor('watercolor') - await budgetFor('auto')).toBe(80);
+  });
+
   it('ends a two-scene auto art request with the complete scenes wrapper and style keys', async () => {
     const twoScenes = { title: 'Two relationships', scenes: [
       { ...science.scenes[0]!, title: 'First relationship' },
