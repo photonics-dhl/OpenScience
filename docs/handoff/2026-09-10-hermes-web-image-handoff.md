@@ -7,7 +7,7 @@
 - 代码/Skill 路由改动需定向测试和 CI，真实图文质量需真实任务；避免无关全套测试。发布来源必须为干净、已推送 SHA；文档提交不部署。服务器只用 `infra/scripts/ssh-run.sh`，不读或打印 Secret。
 
 ## 当前锚点
-- 生产/交付 HEAD `7e7f3ecaded867b7817faf8aa6b61724d711ff6f` / rollback `93ee9e36fb855d0b37bb838f65ebe7e807b687d9`；[媒体 CI 36306819117](https://github.com/photonics-dhl/OpenScience/actions/runs/36306819117) success，干净 SHA 物化、私有日志完成 `--no-tests --skip-migrate` 生产事务，公网 release 精确核对、journal 清除。Chat provider 同 SHA 安装，旧 provider 私有备份在 `observations/provider-upgrade-7e7f3eca-20260927`。Parser/ScanSci/embedding 功能探针按范围跳过，不宣称整站验收。
+- 生产应用 `354de48158be42f66ba3bc8e78f7d36d765d231a` / rollback `7e7f3ecaded867b7817faf8aa6b61724d711ff6f`；交付分支源码提交 `354de481`，其后文档提交的精确 HEAD 以 `git rev-parse HEAD` 为准，不需重部署。[媒体 CI 36314197321](https://github.com/photonics-dhl/OpenScience/actions/runs/36314197321) success；干净已推 SHA 物化、私有日志 `observations/deploy-354de481-20260927.log` 完成 `--no-tests --skip-migrate` 生产事务，公网 `/__release` 精确一致、第二篇公开 v3 HTTP 200、journal 清除。Parser/ScanSci/embedding 与 auth/admin 功能探针按范围跳过，不宣称整站验收。Chat provider 保持 `7e7f3eca`（本次仅应用 Worker 改动），原备份仍在 `observations/provider-upgrade-7e7f3eca-20260927`。
 - 上一版 `78d` 正式审图材料性提示经 14 项定向测试、Worker typecheck、独立 High 和 [CI 36158058855](https://github.com/photonics-dhl/OpenScience/actions/runs/36158058855) success。`eae487ce` 修复 release retention 输入上限后，官方保留事务清理精确 122 个非活动旧 release；当时磁盘使用率 47%、余 76 GiB，不能凭旧快照断言实时容量。
 - `openscience-chatgpt-browser` 登录态仍可用。2026-09-26 任务 `0317c9c4` 在 `browser_attach` 因单个无响应 Chat 图库标签超时，spool 的 `not-submitted`/`EXECUTION_FAILED` 证明 prompt 未提交；确认无任务归属后只关闭该标签，Playwright 恢复，下一独立任务成功。未重启共享浏览器；上游偶发卡页并未根治。原任务不可再用普通 retry 重发，产品 guard 已阻止。
 
@@ -22,6 +22,7 @@
 ## 当前执行与保护
 - 配图 Skill v15 和 ffmpeg renderer 前置校验已在 6b09 部署；该发布首次前台 SSH 中断后的锁内恢复、私有旧 journal 与成功重试证据仍在 `observations/recovery-6b09b7ae-20260927` / `deploy-6b09b7ae-retry-20260927.log`。c29 已修审图上传菜单副标题失配：旧 exact 0、新唯一前缀 1，真实 filechooser 属性保持；独立 High/CI/安装后，原 PNG 只审图任务 `7655f64e` 完成并保留相同 hash `6dd2c570…`，未重发生成。5.6 Sol 只拦标点、放过空白 n(z)，故以人工叙事判断拒发；正式 accepted/blocked 不等于用户质量认可。
 - 93ee 修复菜单水合恢复已选模式；7e7f 再修 `Create image` span 可见但祖先短暂 `aria-disabled=true` 的误点击，保留当前 form 已选模式/空 prompt/owned page/提交前复核/一次重载。真实禁用→启用、无费选择、语法/独立 High 与 CI 通过；正式独立图 `a8b3ba9e` 已证明 Chat 提交、原 PNG、产品 draft 和 5.6 Sol 审图连续成功。形式审图 accepted 仍漏掉图像叙事薄弱，人审拒发。第二篇重新在原 Skill/Claim/Evidence 上编码故事，未叠新全文分析器或自动 provider fallback。
+- `b4437411` 艺术阶段在科学内容已固定后两次输出 4333/4165 字，超过原 4000 字整份 brief 上限。354d 仅在原 art 请求给每幕传剩余美术字数（按 `describeIllustrationBrief` 计算，auto 风格预留 marker），原科学字段与最终验证不变；混合 paper-original/自动风格索引经独立 High 指出并修复，48/48 定向测试、Worker typecheck、独立 High GO、媒体 CI 和生产发布通过。真实 Hermes 遵守预算的效果尚未由新任务观察；不为填证据重复生成已公开图。技能 v15 的安装、注入与图像质量仍分开判断。
 - 第一篇 v4 返工历史：`974b3a0d` 真图和 `c203c68e` 真图均正式 blocked，分别有短竖连接和双签同轴带来的误读；`0317c9c4` 零提交技术失败保留，独立 `7f497502` 真图才获 accepted。旧 `31c/3f1/cb4/1cd/7d9/a38` 错图与收据继续私有，不删除。
 - v11 历史媒体 copy 的来源/字节/Claim/Evidence 验证可保留批准状态，但**不会把新分镜叙述绑定到旧图**；不能用旧图片 copy 或手改公开页面伪装新叙事。新公开需本版新分镜、新图、正式审图、人工实看、现有发布审查及匿名页核验；公开内容修改用新公开版本或明确勘误。
 - [研发观察台](../proposals/2026-09-23-hermes-development-live.html) 的 ignored `tmp/hermes-development-live-feed.js` 是人工更新快照，非自动遥测。交付树和根 main 每轮结束 `git status --porcelain` 为空，提交推送，`git worktree prune/list`；新图、日志和脚本留 ignored `tmp/`，不入库。
