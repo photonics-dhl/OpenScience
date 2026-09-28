@@ -18,7 +18,7 @@ import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage 
 import { requireStyleReferenceImage } from '@openscience/domain';
 import { readStoredIllustrationIssues, reviewIllustrationStoryboard } from './illustration-review';
 import { clarifyIllustrationLabels, generateIllustrationStoryboard, type StoryboardScienceCheckpoint, type StoryboardScienceRejectionReceipt, type StoryboardArtRejection, type StoryboardPlanningPersistence } from './illustration-planner';
-import { readVisualNarrativeSource, resolveVisualNarrativeSource } from '../scientific-writing-source';
+import { hasSingleReviewedVisualSource, readVisualNarrativeSource, resolveVisualNarrativeSource } from '../scientific-writing-source';
 import { generatedImageReviewAttachment, readStoredGeneratedImageReview, reviewGeneratedImage } from './generated-image-review';
 
 function presentationClaimContent(claims: readonly PresentationClaim[]): string {
@@ -45,6 +45,26 @@ type StoryboardCheckpointIdentity = {
   baseIdentity: string | null;
   narrativeSourceIdentity?: string;
 };
+
+async function readReviewedVisualContextSource(prisma: Parameters<typeof readVisualNarrativeSource>[0],
+  scope: Parameters<typeof readVisualNarrativeSource>[1], payload: PresentationGenerationPayload,
+  claims: readonly { extractionStatus: string; provenance?: unknown }[], evidence: readonly { artifactId: string }[], result: unknown) {
+  if (!payload.storyboard?.narrative) {
+    if (payload.storyboard?.output !== 'image' || !hasSingleReviewedVisualSource(claims, evidence)) return undefined;
+    const saved = result && typeof result === 'object' && !Array.isArray(result) ? result as Record<string, unknown> : {};
+    // Preserve the original context and identity for both saved checkpoint forms.
+    // Their existing recovery validation still applies; no old task gains new paid work or false source provenance.
+    if (['storyboardCheckpoint', 'storyboardPlanningCheckpoint'].some(key => {
+      const checkpoint = saved[key];
+      return checkpoint && typeof checkpoint === 'object' && !Array.isArray(checkpoint)
+        && !Object.hasOwn(checkpoint, 'narrativeSourceIdentity');
+    })) return undefined;
+  }
+  const source = await readVisualNarrativeSource(prisma, scope);
+  // A single Evidence artifact may still be a different paper from the Claim lineage.
+  // Compare against the authorized ingestion identity; authorization/identity errors above never become legacy fallback.
+  return !payload.storyboard?.narrative && evidence.some(row => row.artifactId !== source.reference.artifactId) ? undefined : source;
+}
 type StoryboardPlanningCheckpoint = StoryboardCheckpointIdentity & {
   schemaVersion: 1;
   science: StoryboardScienceCheckpoint;
@@ -488,10 +508,10 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
   if (source.kind === 'illustration-plan') {
     // Metadata only under the existing submission transaction. SourceMap bytes were
     // loaded outside it; re-use the exact source identity saved with this candidate.
-    const currentSource = payload.storyboard?.narrative ? await readVisualNarrativeSource(prisma, {
+    const currentSource = await readReviewedVisualContextSource(prisma, {
       userId: input.authorizationContext.actorId, workspaceId: input.authorizationContext.workspaceId,
       researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds,
-    }) : undefined;
+    }, payload, claims, evidence, owner.result);
     const identity = {
       payload, sourceEvidenceIdentity: source.sourceEvidenceIdentity,
       claimContent: snapshot.claimContent, baseIdentity: snapshot.baseIdentity,
@@ -643,14 +663,17 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     })) as PresentationClaim[]);
     const narrativeScope = { userId: scope.userId, workspaceId: researchObject.workspaceId,
       researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds };
-    const narrativeSource = payload.storyboard?.narrative
-      ? await resolveVisualNarrativeSource({ prisma: deps.prisma, storage: deps.storage }, narrativeScope) : undefined;
+    const sourceMetadata = await readReviewedVisualContextSource(deps.prisma, narrativeScope, payload, claimRows, sourceEvidence, owner.result);
+    const narrativeSource = sourceMetadata
+      ? await resolveVisualNarrativeSource({ prisma: deps.prisma, storage: deps.storage }, narrativeScope, sourceEvidence) : undefined;
+    if (narrativeSource && narrativeSource.identity !== sourceMetadata?.identity)
+      throw new Error('[blocked] Reviewed paper source changed during illustration planning');
     const requireUnchangedEvidence = async (prisma: Pick<Prisma.TransactionClient, 'evidenceRecord' | 'version' | 'claimNode' | 'ingestionTask' | 'presentationAsset'>) => {
       if (scientificMedia && presentationEvidenceIdentity(await readReviewedPresentationEvidence(prisma, payload, lineageByClaim)) !== sourceEvidenceIdentity) {
         throw new Error('[blocked] Reviewed source evidence changed during media generation');
       }
       if (narrativeSource && (await readVisualNarrativeSource(prisma, narrativeScope)).identity !== narrativeSource.identity)
-        throw new Error('[blocked] Reviewed whole-paper analysis changed during narrative planning');
+        throw new Error('[blocked] Reviewed paper source changed during illustration planning');
       if (storyboardDocument) await requireNarrativeOriginals(prisma, payload, storyboardDocument);
     };
     const planningContext = await readStoryboardPlanningContext(deps.prisma, payload, scope.userId);
@@ -1110,6 +1133,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         } : undefined;
         const durableGateway: Pick<AiGateway, 'completeStructured'> = { completeStructured: async (guard, messages, opts) => {
           if (requirePlanningContinuationUnchanged) await deps.prisma.$transaction(requirePlanningContinuationUnchanged, { isolationLevel: 'Serializable' });
+          if (narrativeSource) await requireUnchangedEvidence(deps.prisma);
           continuationStarted = true;
           return planningGateway!.completeStructured(guard, messages, { ...opts, ...(planningContinuation ? { primaryProviderOnly: true } : {}) });
         } };

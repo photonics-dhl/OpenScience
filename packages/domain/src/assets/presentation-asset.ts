@@ -46,6 +46,7 @@ export interface PresentationAssetView {
   canGenerateVideo: boolean;
   canTransition: boolean;
   canApprove: boolean;
+  canDelete: boolean;
   id: string;
   researchObjectId: string;
   versionId: string;
@@ -450,6 +451,8 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
     storyboard: presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
     canTransition,
     canApprove: canTransition && pixelReviewAccepted,
+    canDelete: workspace.status === 'active' && (membership.role === 'owner'
+      || (version.researchObject.createdBy === input.userId && WRITE_ROLES.has(membership.role))),
     id: asset.id,
     researchObjectId: asset.researchObjectId,
     versionId: asset.versionId,

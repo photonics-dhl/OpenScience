@@ -11,6 +11,7 @@ import { StoryboardPanel } from './StoryboardPanel';
 import { MechanismVideoPanel } from './MechanismVideoPanel';
 import { PresentationResultGallery } from './PresentationResultGallery';
 import { ResearchMediaDeck, type ResearchMediaSlide } from './ResearchMediaDeck';
+import { MediaAssetActions } from './MediaAssetActions';
 import { PaperFigureUpload, type PaperFigureSelection, type PaperFigureUploadOutcome, type PaperFigureReviewOutcome } from './PaperFigureUpload';
 import type { PresentationVideoRequest } from '@/lib/api';
 
@@ -43,6 +44,7 @@ export interface PresentationWorkbenchProps {
   onResumeTask?: () => void;
   onRetryData?: () => void;
   onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => Promise<PaperFigureReviewOutcome | null> | void;
+  onAssetDeleted?: (asset: PresentationAsset) => void;
   working?: boolean;
   error?: string;
   resultsOnly?: boolean;
@@ -52,7 +54,7 @@ const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryData, onTransition, working = false, error = '', resultsOnly = false,
+  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryData, onTransition, onAssetDeleted, working = false, error = '', resultsOnly = false,
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const versionLabels = useVersionLabels();
@@ -60,12 +62,23 @@ export function PresentationWorkbench({
   const selectionTouched = useRef(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [statement, setStatement] = useState('');
+  const [deletedTitle, setDeletedTitle] = useState('');
   const eligibleIds = useMemo(() => new Set(claims.filter((claim) => claim.extractionStatus === 'succeeded').map((claim) => claim.id)), [claims]);
   const paperOriginals = useMemo(() => assets.filter((asset) => asset.generator === 'OpenScience paper-original figure'), [assets]);
   const mediaAssets = useMemo(() => assets.filter((asset) => asset.status !== 'rejected'
     && asset.generator !== 'OpenScience paper-original figure'
     && !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg' || asset.kind === 'video')), [assets]);
   const storyboardAssets = useMemo(() => assets.filter((asset) => Boolean(asset.storyboard)), [assets]);
+
+  useEffect(() => { setDeletedTitle(''); }, [researchObjectId, version.versionId]);
+
+  const assetDeleted = onAssetDeleted ? (asset: PresentationAsset, title: string) => {
+    setDeletedTitle(title);
+    onAssetDeleted(asset);
+  } : undefined;
+  const deletionNotice = deletedTitle ? <p className="mt-3 text-sm leading-6 text-os-vermilion-ink" role="status">
+    {t('assetMovedToTrash', { title: deletedTitle })} <Link className="font-semibold underline" href="/trash">{t('restoreFromTrash')}</Link>
+  </p> : null;
 
   useEffect(() => {
     setSelected((current) => selectionTouched.current ? current.filter((id) => eligibleIds.has(id)) : [...eligibleIds].slice(0, MAX_SELECTED_CLAIMS));
@@ -114,13 +127,18 @@ export function PresentationWorkbench({
       return visualRank(left) - visualRank(right) || left.createdAt.localeCompare(right.createdAt);
     }).map((asset, index) => toSlide(asset, 'image', index === 0 ? t('coreImageTitle') : t('imageNumber', { number: index + 1 })));
     const videoSlides = mediaAssets.filter((asset) => asset.kind === 'video').map((asset) => toSlide(asset, 'video', t('researchVideoTitle')));
+    const renderActions = (slide: ResearchMediaSlide) => {
+      const asset = mediaAssets.find((item) => item.id === slide.id);
+      return asset ? <MediaAssetActions asset={asset} title={slide.label} canWrite={canWrite} working={working || loading || loadFailed} onTransition={onTransition} onDeleted={assetDeleted} /> : null;
+    };
     return (
       <div className="min-w-0 text-os-ink" data-presentation-results="true">
         {loading ? <p className="m-0 pb-4 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : null}
         <div className="grid min-w-0 gap-8 md:grid-cols-[minmax(0,3fr)_minmax(220px,2fr)]">
-          <ResearchMediaDeck title={t('coreImageTitle')} slides={imageSlides} emptyTitle={t('imagePlaceholderTitle')} emptyBody={t('imagePlaceholderBody')} emptyKind="image" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} eager />
-          <ResearchMediaDeck title={t('researchVideoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} />
+          <ResearchMediaDeck title={t('coreImageTitle')} slides={imageSlides} emptyTitle={t('imagePlaceholderTitle')} emptyBody={t('imagePlaceholderBody')} emptyKind="image" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} renderActions={renderActions} eager />
+          <ResearchMediaDeck title={t('researchVideoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} renderActions={renderActions} />
         </div>
+        {deletionNotice}
         {task && task.status !== 'succeeded' ? (
           <div className="mt-5 border-t border-os-rule-paper pt-5" data-presentation-task={task.status}>
             <div className="flex items-center justify-between gap-4 text-sm">
@@ -159,8 +177,9 @@ export function PresentationWorkbench({
                 {canWrite && onAskHermes ? <button type="button" className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" onClick={() => onAskHermes('image')}>{t('askHermes')}</button> : canWrite && researchObjectId ? <Link className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/hermes`}>{t('askHermes')}</Link> : null}
               </div>
             ) : (
-              <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={mediaAssets} allAssets={assets} canWrite={canWrite} working={working} onTransition={onTransition} />
+              <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={mediaAssets} allAssets={assets} canWrite={canWrite} working={working || loading || loadFailed} onTransition={onTransition} onAssetDeleted={assetDeleted} />
             )}
+            {deletionNotice}
           </section>
             {task && task.status !== 'succeeded' ? (
               <div className="mt-5 border-t border-os-rule-paper pt-5" data-presentation-task={task.status}>

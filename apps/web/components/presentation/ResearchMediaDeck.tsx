@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
 import { ScientificText } from '../content/ScientificText';
 import styles from './ResearchMediaDeck.module.css';
@@ -24,9 +24,10 @@ interface ResearchMediaDeckProps {
   emptyKind: 'image' | 'video';
   openImageLabel: string;
   eager?: boolean;
+  renderActions?: (slide: ResearchMediaSlide) => ReactNode;
 }
 
-export function ResearchMediaDeck({ title, slides, emptyTitle, emptyBody, previousLabel, nextLabel, positionLabel, emptyKind, openImageLabel, eager = false }: ResearchMediaDeckProps) {
+export function ResearchMediaDeck({ title, slides, emptyTitle, emptyBody, previousLabel, nextLabel, positionLabel, emptyKind, openImageLabel, eager = false, renderActions }: ResearchMediaDeckProps) {
   const [index, setIndex] = useState(0);
   const headingId = useId();
   const multiple = slides.length > 1;
@@ -59,6 +60,7 @@ export function ResearchMediaDeck({ title, slides, emptyTitle, emptyBody, previo
         </div>
         <figcaption className={styles.caption}><ScientificText as="strong" hideSourceMarkers>{active.label}</ScientificText>{active.description ? <ScientificText as="span" hideSourceMarkers>{active.description}</ScientificText> : null}</figcaption>
       </figure>
+      {renderActions ? <div className="border-t border-os-rule-paper px-4 py-3" key={active.id}>{renderActions(active)}</div> : null}
       {multiple ? <div className={styles.controls} aria-label={title}>
         <button type="button" onClick={previous} aria-label={previousLabel}>←</button>
         <span aria-live="polite">{positionLabel(activeIndex + 1, slides.length)}</span>

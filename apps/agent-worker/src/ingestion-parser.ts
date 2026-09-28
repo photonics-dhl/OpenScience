@@ -102,7 +102,43 @@ function doclingKind(label: unknown): 'heading' | 'paragraph' | 'equation' | 'ca
   return 'paragraph';
 }
 
-function doclingResult(payload: unknown, formulaEnrichment: boolean): ParserStageResult {
+function doclingTableText(item: DoclingRecord | undefined): { text?: string; ambiguous: boolean } {
+  const data = record(item?.data);
+  if (!Array.isArray(data?.table_cells)) return { ambiguous: true };
+  let ambiguous = false;
+  const cells: Array<{ row: number; rowEnd: number; column: number; columnEnd: number; text: string }> = [];
+  for (const value of data.table_cells) {
+    const cell = record(value);
+    const row = cell?.start_row_offset_idx, rowEnd = cell?.end_row_offset_idx;
+    const column = cell?.start_col_offset_idx, columnEnd = cell?.end_col_offset_idx;
+    const recognizedText = typeof cell?.text === 'string' ? cell.text : undefined;
+    const text = recognizedText?.trim() ? recognizedText : typeof cell?.orig === 'string' ? cell.orig : recognizedText;
+    if (typeof row !== 'number' || !Number.isSafeInteger(row) || row < 0
+      || typeof rowEnd !== 'number' || !Number.isSafeInteger(rowEnd) || rowEnd <= row
+      || typeof column !== 'number' || !Number.isSafeInteger(column) || column < 0
+      || typeof columnEnd !== 'number' || !Number.isSafeInteger(columnEnd) || columnEnd <= column
+      || (data.num_rows !== undefined && (typeof data.num_rows !== 'number' || !Number.isSafeInteger(data.num_rows) || rowEnd > data.num_rows))
+      || (data.num_cols !== undefined && (typeof data.num_cols !== 'number' || !Number.isSafeInteger(data.num_cols) || columnEnd > data.num_cols))
+      || (cell?.row_span !== undefined && cell.row_span !== rowEnd - row)
+      || (cell?.col_span !== undefined && cell.col_span !== columnEnd - column)
+      || text === undefined) {
+      ambiguous = true;
+      continue;
+    }
+    const normalized = text.replace(/\s+/gu, ' ').trim();
+    if (normalized) cells.push({ row, rowEnd, column, columnEnd, text: normalized });
+  }
+  cells.sort((left, right) => left.row - right.row || left.column - right.column);
+  // Sparse coordinates and merged ranges are source metadata, not inferred blank
+  // values. Keep each cell once; never expand an untrusted grid or copy a header.
+  const coordinate = (axis: string, start: number, end: number) => end === start + 1
+    ? `${axis} ${start + 1}` : `${axis}s ${start + 1}–${end}`;
+  const text = cells.map((cell) => `[${coordinate('row', cell.row, cell.rowEnd)}, ${coordinate('column', cell.column, cell.columnEnd)}] ${cell.text}`).join('\n');
+  return { ...(text ? { text } : {}), ambiguous: ambiguous || !text };
+}
+
+/** Pure normalization seam for replaying an existing Docling Serve result offline. */
+export function doclingResult(payload: unknown, formulaEnrichment: boolean): ParserStageResult {
   const response = record(payload);
   const documentResponse = record(response?.document);
   const document = record(documentResponse?.json_content);
@@ -111,11 +147,21 @@ function doclingResult(payload: unknown, formulaEnrichment: boolean): ParserStag
   }
   const byPage = new Map<number, StagePage['blocks']>();
   let unreadableFormula = false;
+  let ambiguousTable = false;
   const append = (itemValue: unknown, forcedKind?: 'table' | 'figure') => {
     const item = record(itemValue);
     const provenance = Array.isArray(item?.prov) ? item.prov : [];
     const recognizedText = typeof item?.text === 'string' ? item.text.trim() : '';
     let text = recognizedText || (typeof item?.orig === 'string' && item.orig.trim() ? item.orig.trim() : undefined);
+    const rawText = recognizedText ? item?.text as string
+      : typeof item?.orig === 'string' && item.orig.trim() ? item.orig : undefined;
+    const tablePages = forcedKind === 'table' ? new Set(provenance.map((value) => record(value)?.page_no)) : undefined;
+    if (forcedKind === 'table' && !text) {
+      // Cells have no per-provenance attribution: only a single region locates the whole table.
+      const table = provenance.length === 1 ? doclingTableText(item) : { ambiguous: true };
+      text = table.text;
+      ambiguousTable ||= table.ambiguous;
+    }
     let unreliableFormula = false;
     if (item?.label === 'formula') {
       unreliableFormula = !formulaEnrichment || !isRendererCompatibleFormula(recognizedText);
@@ -137,9 +183,17 @@ function doclingResult(payload: unknown, formulaEnrichment: boolean): ParserStag
       const pageNumber = typeof prov?.page_no === 'number' && Number.isInteger(prov.page_no) && prov.page_no > 0 ? prov.page_no : 1;
       const page = doclingPageSize(document, pageNumber);
       const kind = forcedKind ?? doclingKind(item?.label);
+      let locatedText = text;
+      if (forcedKind === 'table' && tablePages!.size > 1) {
+        const span = Array.isArray(prov?.charspan) ? prov.charspan : [];
+        // Character offsets refer to supplied item text, never our cell rendering.
+        if (rawText && span.length === 2 && Number.isSafeInteger(span[0]) && Number.isSafeInteger(span[1])
+          && span[0] >= 0 && span[1] > span[0] && span[1] <= rawText.length) locatedText = rawText.slice(span[0], span[1]).trim();
+        else { locatedText = undefined; ambiguousTable = true; }
+      }
       const block = {
         kind,
-        ...(text ? { text } : {}),
+        ...(locatedText ? { text: locatedText } : {}),
         boundingBox: doclingBoundingBox(prov?.bbox, page),
         ...(unreliableFormula ? { confidence: 0 } : {}),
       };
@@ -164,6 +218,7 @@ function doclingResult(payload: unknown, formulaEnrichment: boolean): ParserStag
     warnings: [
       ...(response.status === 'partial_success' ? ['partial_result'] : []),
       ...(unreadableFormula ? ['low_confidence'] : []),
+      ...(ambiguousTable ? ['layout_ambiguous'] : []),
     ],
   });
 }

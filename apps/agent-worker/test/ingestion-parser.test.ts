@@ -46,6 +46,111 @@ function serializedSidecarAdapter() {
   };
 }
 
+// Docling Serve TableData shape; all test text is self-authored.
+function doclingCell(row: number, column: number, text: unknown, overrides: Record<string, unknown> = {}) {
+  return { text, start_row_offset_idx: row, end_row_offset_idx: row + 1,
+    start_col_offset_idx: column, end_col_offset_idx: column + 1, row_span: 1, col_span: 1,
+    column_header: row === 0, row_header: column === 0, ...overrides };
+}
+
+function doclingTable(page: number, cells: unknown[], overrides: Record<string, unknown> = {}) {
+  return { label: 'table', self_ref: `#/tables/${page}`,
+    prov: [{ page_no: page, bbox: { l: 50, t: 700, r: 550, b: 200, coord_origin: 'BOTTOMLEFT' }, charspan: [0, 0] }],
+    data: { num_rows: 5, num_cols: 2, table_cells: cells }, ...overrides };
+}
+
+async function normalizeDoclingTables(tables: unknown[]) {
+  const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ task_id: 'saved-docling-result' })))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ task_status: 'success' })))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'success', document: { json_content: {
+      pages: { 13: { size: { width: 600, height: 800 } }, 14: { size: { width: 610, height: 810 } } }, texts: [], tables,
+    } } })));
+  vi.stubGlobal('fetch', fetcher);
+  vi.stubEnv('DOCLING_SERVE_URL', 'http://docling-fixture.invalid');
+  vi.stubEnv('DOCLING_FORMULA_ENRICHMENT', 'false');
+  try {
+    const result = await createDefaultIngestionAdapters().pdf!(Buffer.from('%PDF-Docling-result-fixture'));
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    return result;
+  } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs(); }
+}
+
+describe('Docling table normalization', () => {
+  it('preserves source-shaped cells in row/column reading order and keeps their own page geometry', async () => {
+    const result = await normalizeDoclingTables([
+      doclingTable(14, [doclingCell(0, 1, 'Next page definition'), doclingCell(0, 0, 'θ')]),
+      doclingTable(13, [doclingCell(2, 1, 'Second direction'), doclingCell(1, 0, 'x'), doclingCell(0, 1, 'Meaning'),
+        doclingCell(2, 0, 'y'), doclingCell(0, 0, 'Symbol'), doclingCell(1, 1, 'First direction')]),
+    ]);
+    expect(result.pages.map((page) => page.page)).toEqual([13, 14]);
+    expect(result.pages[0]?.blocks[0]).toMatchObject({ kind: 'table', boundingBox: { x: 50, y: 100, width: 500, height: 500 } });
+    expect(result.pages[0]?.blocks[0]?.text).toBe('[row 1, column 1] Symbol\n[row 1, column 2] Meaning\n[row 2, column 1] x\n[row 2, column 2] First direction\n[row 3, column 1] y\n[row 3, column 2] Second direction');
+    expect(result.pages[1]?.blocks[0]).toMatchObject({ text: '[row 1, column 1] θ\n[row 1, column 2] Next page definition', boundingBox: { y: 110 } });
+    expect(result.pages[0]?.blocks[0]?.text).not.toContain('Next page');
+  });
+
+  it('keeps merged headers and row-spanning text once without filling missing cells', async () => {
+    const result = await normalizeDoclingTables([doclingTable(13, [
+      doclingCell(0, 0, 'Coordinate group', { end_col_offset_idx: 2, col_span: 2 }),
+      doclingCell(1, 0, 'shared label', { end_row_offset_idx: 3, row_span: 2 }),
+      doclingCell(2, 1, '0'), doclingCell(4, 1, 'Sparse value'),
+    ])]);
+    expect(result.pages[0]?.blocks[0]?.text).toBe('[row 1, columns 1–2] Coordinate group\n[rows 2–3, column 1] shared label\n[row 3, column 2] 0\n[row 5, column 2] Sparse value');
+  });
+
+  it.each([{ text: 'Raw text', orig: 'Original text', expected: 'Raw text' },
+    { text: ' ', orig: 'Original text', expected: 'Original text' }])('keeps the existing item text/orig fallback: $expected', async ({ expected, ...item }) => {
+    const result = await normalizeDoclingTables([doclingTable(13, [], item)]);
+    expect(result.pages[0]?.blocks[0]?.text).toBe(expected);
+  });
+
+  it.each([{ condition: 'missing', data: {} }, { condition: 'empty', data: { table_cells: [] } },
+    { condition: 'only blank', data: { table_cells: [doclingCell(0, 0, ' \n ')] } }])(
+    'marks a textless table with $condition cells as ambiguous on its own', async ({ data }) => {
+      const result = await normalizeDoclingTables([doclingTable(13, [], { data })]);
+      expect(result.pages[0]?.blocks[0]?.text).toBeUndefined();
+      expect(result.warnings).toEqual(['layout_ambiguous']);
+    });
+
+  it('uses original cell text when recognized cell text is blank', async () => {
+    const result = await normalizeDoclingTables([doclingTable(13, [
+      doclingCell(0, 0, ' \n\t ', { orig: ' Original   symbol ' }),
+      doclingCell(0, 1, 'Recognized definition', { orig: 'Other definition' }),
+    ])]);
+    expect(result.pages[0]?.blocks[0]?.text).toBe('[row 1, column 1] Original symbol\n[row 1, column 2] Recognized definition');
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('does not stringify numbers or infer positions for invalid or absent cell data', async () => {
+    const result = await normalizeDoclingTables([doclingTable(13, [
+      doclingCell(1, 0, 'valid'), doclingCell(-1, 0, 'negative row'), doclingCell(1.5, 1, 'fractional row'),
+      doclingCell(1, 1, 42), { text: 'missing position' }, null,
+      doclingCell(2, 0, 'invalid span', { row_span: 2 }), doclingCell(2, 1, 'outside table', { end_col_offset_idx: 3, col_span: 2 }),
+    ]), doclingTable(14, [], { data: {} })]);
+    expect(result.pages[0]?.blocks[0]?.text).toBe('[row 2, column 1] valid');
+    expect(result.pages[1]?.blocks[0]?.text).toBeUndefined();
+    expect(result.warnings).toContain('layout_ambiguous');
+  });
+
+  it.each([13, 14])('does not duplicate cell text across multiple regions ending on page %i', async (secondPage) => {
+    const result = await normalizeDoclingTables([doclingTable(13, [doclingCell(1, 0, 'Unlocated cell')], {
+      prov: [...doclingTable(13, []).prov, { ...doclingTable(secondPage, []).prov[0],
+        bbox: { l: 50, t: 180, r: 550, b: 100, coord_origin: 'BOTTOMLEFT' } }],
+    })]);
+    expect(result.pages.map((page) => page.page)).toEqual(secondPage === 13 ? [13] : [13, 14]);
+    expect(result.pages.flatMap((page) => page.blocks)).toHaveLength(2);
+    expect(result.pages.flatMap((page) => page.blocks).every((block) => block.text === undefined)).toBe(true);
+    expect(result.warnings).toContain('layout_ambiguous');
+  });
+
+  it('uses explicit raw-text char spans for a table with provenance on different pages', async () => {
+    const result = await normalizeDoclingTables([doclingTable(13, [], { text: ' first second ', prov: [
+      { ...doclingTable(13, []).prov[0], charspan: [0, 7] }, { ...doclingTable(14, []).prov[0], charspan: [7, 14] },
+    ] })]);
+    expect(result.pages.map((page) => page.blocks[0]?.text)).toEqual(['first', 'second']);
+  });
+});
+
 describe('parseIngestion', () => {
   it('settles once and waits for close when Tesseract exits before reading stdin', async () => {
     const child = new EventEmitter() as EventEmitter & {

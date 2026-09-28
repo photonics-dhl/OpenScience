@@ -62,6 +62,8 @@
     "title": "回收站", "manageContent": "管理内容", "manageBody": "清理不再需要的会话、笔记和材料。已采用的成果与公开版所需材料会保留。",
     "delete": "删除", "archive": "归档", "archiveBody": "从工作列表归档这项研究。公开版本和链接保持有效，可在回收站与归档中恢复。",
     "deleteBody": "移入回收站后保留 30 天，期间可以恢复或提前彻底删除。",
+    "assetBody": "图片将从私有工作区移除；公开版本或其他内容仍引用的图片和文件会保留。",
+    "keep": "保留图片",
     "sessionBody": "删除这段会话，默认保留已生成的笔记和图片。",
     "deleteUnadopted": "同时删除未采用且未被其他内容引用的生成内容",
     "moveToTrash": "移入回收站", "restore": "恢复", "purge": "彻底删除", "purgeBody": "此操作无法撤销。所选私有内容将被清除；已被公开版或其他工作引用的材料会保留。",
@@ -1590,6 +1592,8 @@
     "browseAll": "探索全部研究"
   },
   "presentation": {
+    "retainedAsset": "已保留", "retainedDraft": "图片已保留，采用前仍需完成审核。", "retainingAsset": "正在保存…",
+    "assetMovedToTrash": "已将「{title}」移入回收站。", "restoreFromTrash": "前往回收站恢复",
     "askHermes": "交给 Hermes 制作",
     "emptyHermesBody": "告诉 Hermes 想解释的重点，制作进度与成果会保留在这里。",
     "manualToolsTitle": "来源与手动工具",

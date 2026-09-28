@@ -414,6 +414,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
       const result = await transitionPresentationAsset(params.id, version.versionId, asset.id, status, asset.updatedAt, scope.controller.signal);
       if (!scopeIsCurrent(scope)) return null;
       setAssets((current) => current.map((item) => item.id === asset.id ? { ...item, ...result.asset, sourceClaimIds: item.sourceClaimIds } : item));
+      window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId: params.id, versionId: version.versionId } }));
       return { status };
     } catch (cause) {
       if (!scopeIsCurrent(scope) || isAbort(cause)) return null;
@@ -504,6 +505,11 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             onResumeTask={() => setResumeNonce((current) => current + 1)}
             onRetryData={() => setLoadNonce((current) => current + 1)}
             onTransition={transition}
+            onAssetDeleted={(asset) => {
+              if (asset.researchObjectId !== params.id || asset.versionId !== versionId || !scopeIsCurrent(scopeRef.current)) return;
+              setAssets((current) => current.filter((item) => item.id !== asset.id));
+              window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId: params.id, versionId } }));
+            }}
             working={working}
             error={error}
             resultsOnly={embedded}

@@ -8,6 +8,7 @@ import { renderStoryboard } from '../../src/presentation/storyboard';
 import { reviewGeneratedImage } from '../../src/presentation/generated-image-review';
 import { loadInstalledMediaSkills } from '../../src/skills/installed-media-skills';
 import type { PresentationClaim } from '../../src/presentation/chart-generator';
+import type { VisualNarrativeSource } from '../../src/scientific-writing-source';
 
 const claims: PresentationClaim[] = [{
   id: '10000000-0000-4000-8000-000000000001', kind: 'finding',
@@ -35,6 +36,46 @@ function mockGateway(treatment: string, styleId?: string) {
 }
 
 describe('automatic art direction after sourced science', () => {
+  it.each([false, true])('passes original coordinate context through planning and review without changing narrative mode (%s)', async narrative => {
+    const context: VisualNarrativeSource = { versionSdf: {}, reviewedAnalysis: {},
+      scientificReview: { status: 'review_received', fieldReviews: [], needsMoreEvidence: [] },
+      sourceContext: { excerpts: [{ id: 'S40', text: 'The driving field propagates along x; its electric polarization is y; the particle travels along z.',
+        sourceLocator: { artifactId: 'private-artifact', contentHash: 'a'.repeat(64), page: 18 },
+        range: { start: 0, end: 113, total: 113 }, origin: { kind: 'paragraph', parser: 'fixture' } }],
+      coverage: { complete: false, selectedCharacters: 113, totalCharacters: 50000, omittedSegments: 40 } } };
+    const calls: Array<Array<{ content: string }>> = [];
+    const completeStructured = vi.fn(async (_guard: unknown, messages: Array<{ content: string }>) => {
+      calls.push(messages);
+      return calls.length === 1 ? { ...science, ...(narrative ? { narrative: { mainMessage: 'A supported relation.', audience: 'Readers' },
+        scenes: science.scenes.map(scene => ({ ...scene, paperOriginalAssetId: null })) } : {}) }
+        : { scenes: [{ layout: 'A focused relation.', treatment: 'Quiet ink.' }] };
+    });
+    const settings = { locale: 'en' as const, style: 'watercolor', instruction: 'Explain one relation.', output: 'image' as const,
+      ...(narrative ? { narrative: true as const } : {}) };
+    const result = await generateIllustrationStoryboard({ completeStructured } as never, claims, settings, undefined, new Map(), context);
+    const input = JSON.parse(calls[0]![1]!.content);
+    expect(input.paper.sourceContext.excerpts[0]).toMatchObject({ id: 'S40', page: 18, text: context.sourceContext.excerpts[0]!.text });
+    expect(input.planning.supportingSourceIds).toEqual(['s0']);
+    expect(input.planning.supportingSourceIds).not.toContain('S40');
+    expect(calls[0]![0]!.content.includes('Organize the whole paper')).toBe(narrative);
+    expect(calls[0]![0]!.content.includes('Choose ONE atomic relationship')).toBe(!narrative);
+    expect(Boolean(result.document.narrative)).toBe(narrative);
+    expect(JSON.stringify(calls[1])).not.toContain(context.sourceContext.excerpts[0]!.text);
+    const reviewScientific = vi.fn(async (reviewInput: { prompt: string }) => {
+      expect(reviewInput.prompt).toContain(context.sourceContext.excerpts[0]!.text);
+      expect(reviewInput.prompt).toContain('context only');
+      expect(reviewInput.prompt.includes('This is a whole-paper visual narrative.')).toBe(narrative);
+      expect(reviewInput.prompt).not.toContain('private-artifact');
+      return { text: JSON.stringify({ decision: 'accepted', summary: 'Source-consistent.', corrections: [] }),
+        promptHash: 'p', responseHash: 'r' };
+    });
+    await reviewIllustrationStoryboard({ reviewScientific } as never, claims, settings, result.document, {
+      researchObjectId: 'ro', versionId: 'version', sourceEvidenceIdentity: 'evidence', narrativeSource: context,
+      authorizationContext: { taskId: 'review' }, illustrationContext: {},
+    } as never);
+    expect(reviewScientific).toHaveBeenCalledOnce();
+  });
+
   it('repairs a bare art object through the real structured Gateway retry', async () => {
     const requests: Array<Array<{ content: string }>> = [];
     const provider: Provider = { name: 'fixture', model: 'fixture', complete: async ({ messages }) => {

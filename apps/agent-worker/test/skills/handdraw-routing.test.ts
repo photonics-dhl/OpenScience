@@ -9,7 +9,7 @@ describe('Hermes media skill stages', () => {
     const science = loadInstalledMediaSkills('editorial', '', 'science');
     expect(science.instructions).toContain('one-sentence takeaway');
     expect(science.instructions).toContain('A dot-product condition constrains a projection');
-    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '16' }));
+    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '17' }));
     expect(science.instructions).toContain('encoding-feasibility failure');
     expect(science.instructions).toContain('A replaceable artistic container is not scientific encoding');
     expect(science.instructions).toContain('reader-facing scientific explanation');
@@ -21,6 +21,53 @@ describe('Hermes media skill stages', () => {
     expect(science.instructions).toContain('explicit visible-label budget');
     expect(science.usage.map((item) => item.id)).toContain('openscience-scientific-visual-clarity');
     expect(science.instructions).not.toContain('Hand-drawn treatment routing');
+  });
+
+  // These cases verify the guidance delivered by the real stage loader, not a model's judgment.
+  it.each([
+    {
+      scenario: 'an extended material shown by two circular sections',
+      request: 'Use the accepted cross-section arrangement; correct the material treatment.',
+      required: ['material identity, the actual entity', 'A circular section of an extended object does not establish a sphere'],
+    },
+    {
+      scenario: 'orthogonal optical propagation, polarization and electron incidence',
+      request: 'Explain the interaction with the source coordinate frame, keeping the observer direction distinct.',
+      required: ['field propagation, polarization, particle trajectory and observer direction',
+        'For an angle, identify both directions and the reference axis or frame', 'Rotate the whole construction consistently'],
+    },
+    {
+      scenario: 'a gap, spatial field width and temporal pulse width in one explanation',
+      request: 'Retain the sourced gap and pulse conditions without interchanging the transverse gap and longitudinal field width.',
+      required: ['object, physical quantity, axis, definition and case',
+        'A geometric opening, the spatial width of field amplitude or intensity, and a temporal pulse width are different quantities'],
+    },
+    {
+      scenario: 'a caption refers to an original figure absent from the input',
+      request: 'Use the described figure only to the extent established by the supplied evidence.',
+      required: ['not evidence that the original figure pixels were inspected', 'identify what is missing or select a narrower supported explanation'],
+    },
+  ])('delivers source reconstruction guidance for $scenario to science and review', ({ request, required }) => {
+    for (const stage of ['science', 'review'] as const) {
+      const skill = loadInstalledMediaSkills('editorial', request, stage);
+      for (const criterion of required) expect(skill.instructions).toContain(criterion);
+      expect(skill.instructions).toContain('原文定义、图注和实际提供的原图');
+      expect(skill.instructions).toContain('每个尺寸或宽度须对应具体对象、物理量、方向、定义和算例');
+      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'scientific-critical-thinking', version: '4' }));
+      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '17',
+        resources: expect.arrayContaining(['SKILL.md#Scientific encoding']) }));
+    }
+  });
+
+  it('keeps material fidelity in art planning without rerunning scientific reconstruction', () => {
+    const art = loadInstalledMediaSkills('editorial', 'Use a restrained material palette.', 'plan');
+    expect(art.instructions).toContain('source-supported material and entity identity, section/view');
+    expect(art.instructions).toContain('material treatment must not imply unsupported properties such as metallic reflection or optical transparency');
+    for (const stage of ['plan', 'render'] as const) {
+      const skill = loadInstalledMediaSkills('editorial', '', stage);
+      expect(skill.instructions).not.toContain('Reconstruct the physical subjects');
+      expect(skill.usage.map(item => item.id)).not.toContain('scientific-critical-thinking');
+    }
   });
 
   it('offers scoped hand-drawn treatment selection to art planning and rendering', () => {

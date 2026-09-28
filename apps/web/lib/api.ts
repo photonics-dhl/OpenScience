@@ -821,6 +821,7 @@ export interface PresentationAsset {
   canGenerateVideo?: boolean;
   canTransition?: boolean;
   canApprove?: boolean;
+  canDelete?: boolean;
   id: string;
   researchObjectId: string;
   versionId: string;

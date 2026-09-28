@@ -416,7 +416,8 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
     }) };
   } else {
     const sourceInput = JSON.stringify({ request: settings.instruction, locale: settings.locale, upstream,
-      ...(settings.narrative ? { paper: projectVisualNarrativeSource(narrativeSource!), availablePaperOriginals: [...paperOriginals.values()]
+      ...(narrativeSource ? { paper: projectVisualNarrativeSource(narrativeSource) } : {}),
+      ...(settings.narrative ? { availablePaperOriginals: [...paperOriginals.values()]
         .map(ref => ({ assetId: ref.assetId, figureId: ref.figureId, sourceClaimId: ref.sourceClaimId })) } : {}),
       ...(reusableBase ? { previousIntent: reusableBase.map(scene => scene!.science) } : {}),
       ...(base?.document.narrative ? { previousNarrative: base.document.narrative } : {}),

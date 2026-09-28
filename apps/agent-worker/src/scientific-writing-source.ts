@@ -10,7 +10,7 @@ import {
   type WorkspaceWritingDraft,
   type WorkspaceWritingDraftInput,
 } from '@openscience/domain';
-import { createWritingSourcePacket, type WritingSourcePacket } from './citation-management';
+import { createWritingSourcePacket, type WritingSourcePacket, type WritingSourceSegment } from './citation-management';
 
 export interface VisualNarrativeSource {
   versionSdf: Record<string, unknown>;
@@ -42,6 +42,21 @@ export function projectVisualNarrativeSource(source: VisualNarrativeSource) {
 type NarrativeScope = { userId: string; workspaceId: string; researchObjectId: string; versionId: string; sourceClaimIds: string[] };
 type NarrativeReader = Pick<Prisma.TransactionClient, 'version' | 'claimNode' | 'ingestionTask'>;
 
+function reviewedSourceLineage(claim: { provenance?: unknown }): string | undefined {
+  const provenance = record(claim.provenance);
+  const lineage = provenance.sourceTaskLineage ?? (provenance.source === 'reviewed_ingestion' ? provenance.sourceTaskId : undefined);
+  return typeof lineage === 'string' && lineage.trim() ? lineage : undefined;
+}
+
+/** Eligibility is not authorization: an eligible source must still pass all version/owner/review checks below. */
+export function hasSingleReviewedVisualSource(claims: readonly { extractionStatus: string; provenance?: unknown }[],
+  evidence: readonly { artifactId: string }[] = []): boolean {
+  const lineages = claims.map(reviewedSourceLineage);
+  return claims.length > 0 && claims.every(claim => claim.extractionStatus === 'succeeded')
+    && lineages.every(lineage => lineage !== undefined) && new Set(lineages).size === 1
+    && new Set(evidence.map(row => row.artifactId)).size <= 1;
+}
+
 /** Resolve the paper through this version's reviewed Claims, never the newest document in the workspace. */
 export async function readVisualNarrativeSource(prisma: NarrativeReader, scope: NarrativeScope) {
   const [version, claims] = await Promise.all([
@@ -49,14 +64,9 @@ export async function readVisualNarrativeSource(prisma: NarrativeReader, scope: 
       include: { manifest: { include: { entries: true } } } }),
     prisma.claimNode.findMany({ where: { id: { in: scope.sourceClaimIds }, versionId: scope.versionId, researchObjectId: scope.researchObjectId } }),
   ]);
-  const lineages = claims.map(claim => {
-    const provenance = record(claim.provenance);
-    return typeof provenance.sourceTaskLineage === 'string' ? provenance.sourceTaskLineage
-      : provenance.source === 'reviewed_ingestion' ? provenance.sourceTaskId : undefined;
-  });
+  const lineages = claims.map(reviewedSourceLineage);
   if (!version?.manifest || claims.length !== scope.sourceClaimIds.length
-    || claims.some(claim => claim.extractionStatus !== 'succeeded')
-    || lineages.some(id => typeof id !== 'string') || new Set(lineages).size !== 1) {
+    || !hasSingleReviewedVisualSource(claims)) {
     throw new Error('[blocked] Whole-paper narrative requires reviewed Claims from one paper in this exact version');
   }
   const ingestion = await prisma.ingestionTask.findUnique({ where: { id: lineages[0] as string },
@@ -92,24 +102,98 @@ export async function readVisualNarrativeSource(prisma: NarrativeReader, scope: 
   };
 }
 
+type VisualSourceEvidence = { artifactId: string; contentHash: string; locator: unknown };
+
+function figureAndTableReferences(text: string): string[] {
+  return [...text.matchAll(/\b(Fig(?:ure)?s?\.?|Tables?|Tab\.)\s*([A-Z]?\d+[A-Z]?|[IVX]+)\b/giu)]
+    .map(match => `${/^fig/iu.test(match[1]!) ? 'figure' : 'table'}:${match[2]!.toLowerCase().replace(/(?<=\d)[a-z]$/u, '')}`);
+}
+
+/** Re-read context near the current Evidence, including late notation sections and linked figure/table paragraphs.
+ * Selection changes neither the Evidence nor its valid binding IDs. Preserve complete parser excerpts and coverage. */
+export function selectVisualSourceContext(sourceMap: DocumentSourceMap, extractionResult: unknown,
+  evidence: readonly VisualSourceEvidence[] = []): WritingSourcePacket {
+  const anchors = evidence.map(row => {
+    if (row.artifactId !== sourceMap.artifactId || row.contentHash !== sourceMap.contentHash)
+      throw new Error('[blocked] Illustration context evidence does not belong to the reviewed source');
+    const locator = validateSourceLocator(row.locator);
+    resolveSourceLocator(sourceMap, locator);
+    return locator;
+  });
+  const blockOrder = new Map(sourceMap.pages.flatMap(page => page.blocks).map((block, index) => [block.id, index]));
+  return createWritingSourcePacket(sourceMap, extractionResult, { maxCharacters: 18_000, prioritize: segments => {
+    const inDocumentOrder = [...segments].sort((a, b) => (blockOrder.get(a.block.id)! - blockOrder.get(b.block.id)!) || a.start - b.start);
+    const physicalOrder = (a: WritingSourceSegment, b: WritingSourceSegment) => a.page - b.page
+      || a.block.boundingBox.y - b.block.boundingBox.y || a.block.boundingBox.x - b.block.boundingBox.x
+      || blockOrder.get(a.block.id)! - blockOrder.get(b.block.id)!;
+    const priority = new Map<WritingSourceSegment, number>();
+    const prefer = (index: number, rank: number) => {
+      const excerpt = inDocumentOrder[index];
+      if (excerpt) priority.set(excerpt, Math.min(priority.get(excerpt) ?? Infinity, rank));
+    };
+    const nearby = (index: number, rank: number) => {
+      prefer(index - 1, rank); prefer(index, rank); prefer(index + 1, rank);
+    };
+    inDocumentOrder.forEach((excerpt, index) => {
+      if (anchors.some(locator => locator.blockId === excerpt.block.id
+        && (!locator.charRange || (locator.charRange.start < excerpt.end && locator.charRange.end > excerpt.start)))) nearby(index, 3);
+      // A notation/coordinate definition heading can live in a flattened paragraph or table caption.
+      // This is structural navigation, not a paper-specific keyword or a new scientific analysis.
+      if (/(?:^|\n)\s*(?:(?:Table|Tab\.)\s*(?:[A-Z]?\d+|[IVX]+)\s*[.:|]\s*)?(?:Notations?|Symbols?|Coordinate (?:systems?|definitions?)|Definition of symbols)\s*(?:\n|$)/iu.test(excerpt.text)) {
+        nearby(index, 0);
+        // Definition tables can follow explanatory text/page numbers and continue on the next page.
+        // Docling appends tables after page text, so delimit this section by page geometry, not array adjacency.
+        const nextHeading = inDocumentOrder.filter(candidate => candidate.block.kind === 'heading'
+          && candidate.block.id !== excerpt.block.id && physicalOrder(candidate, excerpt) > 0).sort(physicalOrder)[0];
+        inDocumentOrder.forEach((candidate, candidateIndex) => {
+          if (candidate.block.kind === 'table' && physicalOrder(candidate, excerpt) > 0
+            && (!nextHeading || physicalOrder(candidate, nextHeading) < 0)) prefer(candidateIndex, 0);
+        });
+      }
+    });
+    // Follow explicit references in the selected surroundings, then references in those captions
+    // (e.g. a main figure referring to its supplement). Do not infer relevance from scientific nouns.
+    for (let hop = 0; hop < 2; hop++) {
+      const references = new Set(inDocumentOrder.filter(excerpt => (priority.get(excerpt) ?? Infinity) <= 3)
+        .flatMap(excerpt => figureAndTableReferences(excerpt.text)));
+      inDocumentOrder.forEach((excerpt, index) => {
+        const referenced = figureAndTableReferences(excerpt.text).some(reference => references.has(reference));
+        const nearEvidencePage = anchors.some(locator => locator.page !== undefined && Math.abs(locator.page - excerpt.page) <= 1);
+        if (!referenced && !(nearEvidencePage && excerpt.block.kind === 'caption')) return;
+        // Repeated in-text mentions must not crowd out a late original caption and its definitions.
+        // Prefer classified captions; retain a caption inside an OCR paragraph as a fallback.
+        if (excerpt.block.kind === 'caption') {
+          prefer(index, 1);
+          const captionReferences = new Set(figureAndTableReferences(excerpt.text));
+          for (const neighborIndex of [index - 1, index + 1]) {
+            const neighbor = inDocumentOrder[neighborIndex];
+            // An adjacent paragraph explicitly explaining this figure belongs with its caption.
+            const explainsCaption = neighbor && figureAndTableReferences(neighbor.text).some(reference => captionReferences.has(reference));
+            prefer(neighborIndex, explainsCaption ? 1 : 2);
+          }
+        } else if (/(?:^|\n)\s*(?:Fig(?:ure)?\.?|Table|Tab\.)\s*(?:[A-Z]?\d+[A-Z]?|[IVX]+)\s*[.:|]/iu.test(excerpt.text)) nearby(index, 3);
+        else prefer(index, 4);
+      });
+    }
+    // Complete bound paragraphs already travel separately as sourcePassages. Keep their surrounding
+    // definitions/captions ahead of duplicate context. An absent range does not prove full coverage.
+    for (const excerpt of inDocumentOrder) {
+      if (excerpt.block.kind === 'paragraph' && anchors.some(locator => locator.blockId === excerpt.block.id
+        && locator.charRange !== undefined && locator.charRange.start <= excerpt.start && locator.charRange.end >= excerpt.end))
+        priority.set(excerpt, Math.max(priority.get(excerpt) ?? 3, 3));
+    }
+    return priority;
+  } });
+}
+
 /** Reuse parser output and the completed review. Excerpts are context, while scene facts still require exact Claim/Evidence bindings. */
-export async function resolveVisualNarrativeSource(deps: { prisma: NarrativeReader; storage: StorageAdapter }, scope: NarrativeScope) {
+export async function resolveVisualNarrativeSource(deps: { prisma: NarrativeReader; storage: StorageAdapter }, scope: NarrativeScope,
+  evidence: readonly VisualSourceEvidence[] = []) {
   const source = await readVisualNarrativeSource(deps.prisma, scope);
   const sourceMap = await loadDocumentSourceMapReference(deps.storage, source.reference);
-  const packet = createWritingSourcePacket(sourceMap, source.result);
-  // The existing packet orders reviewed evidence and headings first. Keep complete excerpts,
-  // explicitly reporting partial context instead of pretending to send the entire PDF again.
-  let selectedCharacters = 0;
-  const excerpts = packet.excerpts.filter(excerpt => {
-    if (selectedCharacters + excerpt.text.length > 18_000) return false;
-    selectedCharacters += excerpt.text.length;
-    return true;
-  });
   const context: VisualNarrativeSource = {
     versionSdf: source.versionSdf, reviewedAnalysis: source.reviewedAnalysis, scientificReview: source.scientificReview,
-    sourceContext: { excerpts, coverage: { ...packet.coverage, selectedCharacters,
-      complete: packet.coverage.complete && excerpts.length === packet.excerpts.length,
-      omittedSegments: packet.coverage.omittedSegments + packet.excerpts.length - excerpts.length } },
+    sourceContext: selectVisualSourceContext(sourceMap, source.result, evidence),
   };
   return { identity: source.identity, context };
 }

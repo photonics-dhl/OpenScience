@@ -33,6 +33,32 @@ function fixture(platformRole = 'user') {
 }
 
 describe('Presentation asset domain contract', () => {
+  it.each([
+    { role: 'author', creator: USER, expected: true },
+    { role: 'author', creator: ASSET, expected: false },
+    { role: 'owner', creator: ASSET, expected: true },
+    { role: 'viewer', creator: USER, expected: false },
+  ])('reports private media retention authority for $role and creator $creator', async ({ role, creator, expected }) => {
+    const ctx = fixture();
+    ctx.db.memberships[0].role = role;
+    ctx.db.researchObjects[0].createdBy = creator;
+    ctx.db.commits.push({ id: 'retention-commit', branchId: 'retention-branch' });
+    ctx.db.versions[0].commitId = 'retention-commit';
+    ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'chart', status: 'draft', label: 'Image', updatedAt: new Date() });
+    const [asset] = await listPresentationAssets(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION });
+    expect(asset.canDelete).toBe(expected);
+  });
+
+  it.each(['archived', 'published', 'sealed'])('reports private media retention authority independently of %s review state', async (state) => {
+    const ctx = fixture();
+    if (state === 'archived') ctx.db.workspaces[0].status = 'archived';
+    if (state === 'published') ctx.db.versions[0].status = 'published';
+    if (state === 'sealed') ctx.db.versions[0].researchRecord = { historyCapture: { state: 'sealed' } };
+    ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'chart', status: 'approved', label: 'Image', updatedAt: new Date() });
+    const [asset] = await listPresentationAssets(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION });
+    expect(asset.canDelete).toBe(state !== 'archived');
+  });
+
   it.each(['pending', 'running', 'succeeded'])('reads the existing %s task DTO in its exact scope, including archived memberships', async (status) => {
     const ctx = fixture();
     const task = await submitPresentationGeneration(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'chart', sourceClaimIds: [CLAIM], idempotencyKey: 'scoped-read' });

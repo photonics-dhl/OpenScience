@@ -109,9 +109,8 @@ async function taskHasProtectedReference(tx: Tx, id: string): Promise<boolean> {
   ) AS used`;
   return Boolean(rows[0]?.used);
 }
-async function assetIsReferenced(tx: Tx, id: string): Promise<boolean> {
-  const asset = await tx.presentationAsset.findUnique({ where: { id } });
-  if (!asset) return false;
+/** One traversal per operation: the same sealed records protect every listed asset. */
+async function publicAssetReferences(tx: Tx): Promise<Set<string>> {
   const publicVersions = await tx.version.findMany({ where: { publications: { some: {} } }, select: { researchRecord: true } });
   const recorded = new Map(publicVersions.flatMap(version => historyMediaItems(version.researchRecord)).map(row => [row.id, row]));
   // Unlisted source media still belongs to the sealed publication's scientific history.
@@ -122,7 +121,6 @@ async function assetIsReferenced(tx: Tx, id: string): Promise<boolean> {
   const seen = new Set<string>();
   while (pending.length) {
     const current = pending.pop()!;
-    if (current === id) return true;
     if (seen.has(current)) continue;
     seen.add(current);
     const row = recorded.get(current) ?? await tx.presentationAsset.findUnique({ where: { id: current }, select: { provenance: true } });
@@ -136,11 +134,27 @@ async function assetIsReferenced(tx: Tx, id: string): Promise<boolean> {
     };
     walk(row?.provenance);
   }
+  return seen;
+}
+async function assetIsReferenced(tx: Tx, id: string, publicReferences?: ReadonlySet<string>): Promise<boolean> {
+  const asset = await tx.presentationAsset.findUnique({ where: { id }, select: { id: true } });
+  if (!asset) return false;
+  if ((publicReferences ?? await publicAssetReferences(tx)).has(id)) return true;
   const rows = await tx.$queryRaw<Array<{ used: boolean }>>`SELECT (
     EXISTS (SELECT 1 FROM presentation_assets WHERE id <> ${id}::uuid AND deleted_at IS NULL AND status IN ('draft','approved') AND provenance::text LIKE ${'%' + id + '%'})
     OR EXISTS (SELECT 1 FROM sdf_documents WHERE core_json::text LIKE ${'%' + id + '%'})
   ) AS used`;
   return Boolean(rows[0]?.used);
+}
+
+// Lists can contain hundreds of historic tasks/media. Do not occupy the whole
+// connection pool with one reader; publication records are shared for this call only.
+async function mapContentReferences<T, R>(items: T[], map: (item: T) => Promise<R>): Promise<R[]> {
+  const result: R[] = [];
+  for (let offset = 0; offset < items.length; offset += 8) {
+    result.push(...await Promise.all(items.slice(offset, offset + 8).map(map)));
+  }
+  return result;
 }
 
 async function addEntry(tx: Tx, input: { kind: TrashKind; resourceId: string; userId: string; parentId?: string; at: Date }) {
@@ -283,10 +297,11 @@ export async function listCleanableContent(deps: TrashDeps, input: { userId: str
     ro ? deps.prisma.presentationAsset.findMany({ where: { researchObjectId: ro.id, deletedAt: null }, select: { id: true, kind: true, createdAt: true } }) : [],
     ro ? deps.prisma.artifact.findMany({ where: { deletedAt: null, workspaceId: ro.workspaceId, OR: [{ ingestionTasks: { some: { batch: { researchObjectId: ro.id } } } }, { evidenceRecords: { some: { researchObjectId: ro.id } } }] }, select: { id: true, logicalPath: true, uploadedBy: true, createdAt: true } }) : [],
   ]);
+  const publicReferences = assets.length ? await publicAssetReferences(deps.prisma) : new Set<string>();
   return [
     ...sessions.map(s => ({ kind: 'session' as const, resourceId: s.id, title: s.title || 'Hermes 会话', createdAt: s.createdAt, adopted: false, canDelete: true })),
-    ...await Promise.all(tasks.map(async t => ({ kind: 'task' as const, resourceId: t.id, title: String(jsonObject(jsonObject(t.result).writingDraft).title ?? (t.kind === 'sdf.extract' ? '论文分析草稿' : 'Hermes 研究内容')), createdAt: t.createdAt, adopted: await taskIsAdopted(deps.prisma, t.id), canDelete: true }))),
-    ...await Promise.all(assets.map(async a => ({ kind: 'asset' as const, resourceId: a.id, title: a.kind, createdAt: a.createdAt, adopted: await assetIsReferenced(deps.prisma, a.id), canDelete: canDeleteMaterials }))),
+    ...await mapContentReferences(tasks, async t => ({ kind: 'task' as const, resourceId: t.id, title: String(jsonObject(jsonObject(t.result).writingDraft).title ?? (t.kind === 'sdf.extract' ? '论文分析草稿' : 'Hermes 研究内容')), createdAt: t.createdAt, adopted: await taskIsAdopted(deps.prisma, t.id), canDelete: true })),
+    ...await mapContentReferences(assets, async a => ({ kind: 'asset' as const, resourceId: a.id, title: a.kind, createdAt: a.createdAt, adopted: await assetIsReferenced(deps.prisma, a.id, publicReferences), canDelete: canDeleteMaterials })),
     ...artifacts.map(a => ({ kind: 'artifact' as const, resourceId: a.id, title: a.logicalPath, createdAt: a.createdAt, adopted: true, canDelete: authority?.membership.role === 'owner' || (a.uploadedBy === input.userId && ['maintainer','author','contributor'].includes(authority?.membership.role ?? '')) })),
   ];
 }

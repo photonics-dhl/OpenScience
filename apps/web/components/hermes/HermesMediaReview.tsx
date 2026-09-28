@@ -21,9 +21,18 @@ export function HermesMediaReview({ researchObjectId, versionId, onConfirmationC
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [refresh, setRefresh] = useState(0);
   const owner = `${researchObjectId}:${versionId}`;
   const ownerRef = useRef(owner); ownerRef.current = owner;
   const writing = useRef(false);
+  useEffect(() => {
+    function onMediaUpdated(event: Event) {
+      const detail = (event as CustomEvent<{ researchObjectId?: string; versionId?: string }>).detail;
+      if (detail?.researchObjectId === researchObjectId && detail.versionId === versionId) setRefresh((value) => value + 1);
+    }
+    window.addEventListener('hermes-media-updated', onMediaUpdated);
+    return () => window.removeEventListener('hermes-media-updated', onMediaUpdated);
+  }, [researchObjectId, versionId]);
   useEffect(() => {
     let active = true; setReady(false); setError('');
     void listPresentationAssets(researchObjectId, versionId).then(({ assets: items }) => {
@@ -32,7 +41,7 @@ export function HermesMediaReview({ researchObjectId, versionId, onConfirmationC
       setReady(true);
     }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => { active = false; };
-  }, [researchObjectId, versionId]);
+  }, [researchObjectId, versionId, refresh]);
   async function review(command = '') {
     if (!ready || writing.current) return;
     const match = /^(采用|拒绝|approve|reject)\s*(\d+)$/iu.exec(command);

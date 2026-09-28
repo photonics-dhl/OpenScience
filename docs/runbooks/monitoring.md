@@ -87,6 +87,9 @@ printf 'monitor:%s\n' "$(openssl passwd -apr1 '<新密码>')" > /etc/nginx/.htpa
 - **拉镜像代理**：完成 ADR-005 切换后，dockerd 指向 Squid 7891；Squid优先 7890 隧道并在不可用时 DIRECT。切换前的旧状态仍是 dockerd直接指向 7890，断线时 pull 会失败。
 - **OpenScience 手机端打不开**：先查公共 DNS 是否返回 Cloudflare anycast，而非 `115.29.208.1`；再查 `cloudflared` 是否 healthy。仅“域名 NS 在 Cloudflare”不能证明已使用 Tunnel。
 - **Tunnel 502/530/1033 但源站健康**：查 HA metrics 与 `journalctl -u cloudflared`。若出现 QUIC `no recent network activity`，分别测试 TCP/UDP 7844；2026-08-15 实证为阿里云到部分 LAX Edge 不可达，生产已固定到三轮验证通过的 SJC IPv4/HTTP2 池。不要改 CNAME，也不要把 connector 迁到个人电脑。
+- **HA 连接正常但公网失败**：原 watchdog 增加对同一 `PUBLIC_URL` 的源站判断，使用 `--resolve openscience.428312321.xyz:443:127.0.0.1 --noproxy '*'`，保持正常 TLS/SNI 校验。源站同样失败时保留隧道并记录 `origin unhealthy`；源站正常而公网失败才按原冷却规则恢复隧道。HA 少于原下限仍沿原恢复路径。源站检查失败不是源站健康证据，不关闭 TLS 校验。
+- **2026-09-28 02:05 UTC 事故**：四条 Edge 连接断开后自动恢复；同一时段 API 约 4 GiB V8 堆耗尽，内容管理接口对 206 项媒体分别读取约 30 MB 公开记录，形成重复分配。应用修复在单次请求共享引用闭包并限制并发，不改公开冻结记录或删除授权。此前一天五次 `HA=4/public502` 的隧道重启不能修复源站问题；具体发布与实际观察见 Hermes CURRENT。
+- **watchdog 更新/回退**：保留 `/usr/local/sbin/openscience-cloudflared-watchdog` 的原内容、owner/mode，原子替换已提交脚本；原 timer 下一次运行生效，不重启 cloudflared。回退同样原子恢复备份，不改 timer/代理/账号。确认脚本版本、下一次 timer 结果与隧道 PID；不能把一次 HTTP 200 称为长期稳定。
 - **Tailscale 与阿里云内网冲突（2026-08-01 实测）**：tailscaled up 会劫持 `100.64.0.0/10` 路由，
   而阿里云 VPC 内部 DNS（100.100.2.136/138）恰在该段 → 全机 DNS 瘫痪、yum/apk 不可用。
   当日已完全卸载（包/服务/repo/状态目录），不要再在这台服务器上安装 Tailscale。

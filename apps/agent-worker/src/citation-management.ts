@@ -24,6 +24,14 @@ export interface WritingSourcePacket {
   };
 }
 
+export interface WritingSourceSegment {
+  block: DocumentBlock;
+  page: number;
+  text: string;
+  start: number;
+  end: number;
+}
+
 // Match the existing full-document analysis envelope; the previous 48k packet
 // omitted 193 segments of the current 100,563-character paper.
 const MAX_SOURCE_PACKET_CHARACTERS = 120_000;
@@ -51,6 +59,8 @@ function preferredBlockIds(extractionResult: unknown): Set<string> {
 export function createWritingSourcePacket(
   sourceMap: DocumentSourceMap,
   extractionResult: unknown,
+  options: { maxCharacters?: number;
+    prioritize?: (segments: readonly WritingSourceSegment[]) => ReadonlyMap<WritingSourceSegment, number> } = {},
 ): WritingSourcePacket {
   const preferred = preferredBlockIds(extractionResult);
   const blocks = sourceMap.pages.flatMap((page) => page.blocks.map((block) => ({ page: page.page, block })))
@@ -60,12 +70,17 @@ export function createWritingSourcePacket(
     const rightPriority = preferred.has(right.block.id) ? 0 : right.block.kind === 'heading' ? 1 : right.block.kind === 'reference' ? 3 : 2;
     return leftPriority - rightPriority || left.page - right.page;
   });
-  const segments = ordered.flatMap(({ block }) => splitBlockAtBoundaries(block.text!).map((range) => ({ block, ...range })));
+  const segments = ordered.flatMap(({ block, page }) => splitBlockAtBoundaries(block.text!).map((range) => ({ block, page, ...range })));
+  // Consumers may select source-local context before the shared budget is applied.
+  // Default writing order, splitting, locators and 120k ceiling remain unchanged.
+  const priorities = options.prioritize?.(segments);
+  if (priorities) segments.sort((a, b) => (priorities.get(a) ?? Number.MAX_SAFE_INTEGER) - (priorities.get(b) ?? Number.MAX_SAFE_INTEGER));
+  const maxCharacters = Math.min(options.maxCharacters ?? MAX_SOURCE_PACKET_CHARACTERS, MAX_SOURCE_PACKET_CHARACTERS);
   const selected: WritingSourceExcerpt[] = [];
   let characters = 0;
   let omittedSegments = 0;
   for (const { block, text, start, end } of segments) {
-    if (characters + text.length > MAX_SOURCE_PACKET_CHARACTERS) {
+    if (characters + text.length > maxCharacters) {
       omittedSegments += 1;
       continue;
     }
