@@ -8,6 +8,8 @@
 范围：此开发工作树及从包含此配置的提交创建的新工作树；既有其他分支/工作树、远端主机、云任务不会自动继承。新 MCP 进程加载配置，已启动进程须重载。既有同配置的桌面浏览器已实际打开 Example Domain，Pro 曾完成两次工具读写；这些证据不代表 XGS 科研业务验收，也不解决平台命令拦截或 Windows 原生截图兼容故障。回滚：移除本次新增的 `cua_repl`、`cua_repl.tools.js`、`node_repl.env` 三节，保留 `openscience_code`；不要删除其他项目仍引用的共享启动器。
 
 ## 当前能力索引：目的、调用、效果
+2026-09-28 真实 reviewOnly `423b90f1` 的 provenance 明确为科学批判 Skill v4/合同5，但六字段逐字不变/all accepted，披露完整性与“模型实现未公开”的层级歧义仍漏判；不是新几何硬错。现有共享 evidence rule v5 区分模型方程、参数/求解方法、可执行代码、网格/收敛披露，给出通用正反例，不硬编码论文答案、不加阶段或门禁。13 项加载/Gateway 桩与 Worker typecheck 只证明指导送达，真实同源效果待观察。仅来源复审保留旧 semanticStage，只校正最终候选，不能冒称中间 19/66 as 等导航问题已修。
+
 2026-09-28 新来源实测的后续断点：编辑页把已有 run 查询混入 1.5 秒 ingestion 轮询，碰到原 GET/POST 共用 10 次/分钟限流后不再调度。候选在原限流器分离有界 GET/HEAD 桶、保留 POST 10 次/分钟，解析期只读 ingestion，429 按 Retry-After、瞬时网络/5xx 退避，切换/取消不落旧结果；16 轮询、16 客户端、17 限流测试通过，发布状态见 CURRENT。新分析 `f3ec2302` succeeded，但 final composition 的 model_self_check 没有 fieldReviews，不能当来源审校。独立复核指出“未公开经典辐射模型具体实现”依据不足；现有 reviewOnly 能复用 SourceMap/候选执行科学 Skill v4。中间 semanticStage 另混淆 66 as/19 as 算例及窗口披露范围；它只作导航，后续不能视作已审科学事实，也不能把只审最终 core 冒称全中间结果已修。
 
 2026-09-28 表格来源丢失已修复上线：第二篇 v13 的 Docling SourceMap pp13/14 两个 `table` 块只有边界、无 text。原 `ingestion-parser.ts` 忽略 `data.table_cells`；现在复用原 table.text 保留可信行列和合并范围，缺失/歧义走原 layout_ambiguous，不推测 OCR 符号。12/12 解析、24/24 来源测试与独立 High、CI 通过；同 hash PDF 两页原适配器重放保留 48/74 cells，选段包含 x/y/z/θ/FWHM、Fig.2/S2 与 y20/z77，18k/105499 字明确 partial。生产重新上传同 hash 原 PDF 的新私有来源，实际 pp13/14 已有 1885/3051 字表格；模型结果尚待评价。旧 confirmed+visual-run 来源禁止直接 refresh，reanalyze 复用旧 SourceMap，因此此次使用站内上传建立新来源，不修改旧来源/公开版本。缺少“同一已确认 artifact 用新 parser 开新私有分析”的一步入口，是现有 ingestion 待改进点，不能再误称原 refresh 已支持。证据在 ignored `tmp/physics-source-diagnosis-20260928/`，状态仅见 CURRENT。

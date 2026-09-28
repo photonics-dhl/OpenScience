@@ -39,6 +39,67 @@ describe('sdfCoreGuard（§9.3 Schema 校验 + §5.1 六字段）', () => {
 });
 
 describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）', () => {
+  it('routes disclosure-layer guidance through synthesis and existing-source review with skill provenance', async () => {
+    // The provider is a transport fixture: this verifies injection and provenance, not scientific model judgment.
+    const sourceText = 'The model is defined by q(t) = q0 exp(-k t). Representative parameters and the Runge-Kutta solver are described. The supplied appendix contains no executable code or mesh/convergence settings.';
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-disclosure', contentHash: 'a'.repeat(64), parser: { name: 'fixture', version: '1' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'disclosure-block', kind: 'paragraph', text: sourceText,
+        boundingBox: { x: 1, y: 1, width: 98, height: 98 },
+        parser: { name: 'fixture', version: '1' }, transformations: [],
+      }] }],
+    };
+    const core: ExtractedCore = { schemaVersion: '0.1.0', problem: '研究如何计算一阶衰减过程。',
+      insight: '作者用速率方程描述一阶衰减。', method: '材料给出模型方程和求解方法。',
+      results: '数值求解得到随时间衰减的响应。', limitations: '该描述限定于所述模型和代表参数。',
+      reproducibility: '材料报告代表参数；当前附录未提供可执行代码、网格与收敛设置。' };
+    const semantic = { chosenRepresentativeCase: 'reported model', fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, [{
+      statement: core[field], type: 'bounded_synthesis', conditionCase: 'supplied appendix',
+      comparison: null, operation: null, evidenceIds: ['P00001'],
+    }]])) };
+    const fields = Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: core[field], sourcePassageIds: ['P00001'] }]));
+    const responses = [semantic, { fields, needsMoreEvidence: [] }, {
+      fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { ...fields[field], verdict: 'accepted', issues: [] }])),
+      needsMoreEvidence: [],
+    }];
+    const requests: Parameters<Provider['complete']>[0][] = [];
+    const provider: Provider = {
+      name: 'fixture', model: 'fixture',
+      complete: async (request) => {
+        const response = responses[requests.length];
+        requests.push(request);
+        if (!response) throw new Error('Unexpected provider call');
+        return { text: JSON.stringify(response), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 }, finishReason: 'stop' };
+      },
+    };
+    const gateway = new AiGateway({ providers: [provider] });
+    const authorizationContext = { taskId: 'review-task', workspaceId: 'workspace-1', actorId: 'actor-1' };
+    const composed = await extractHandler(gateway, { payload: {} }, {
+      sourceMap, scientificReview: { requestId: 'compose-task', authorizationContext },
+    });
+    expect(composed.needsMoreInformation).toEqual([]);
+    expect(requests).toHaveLength(2);
+    const reviewed = await extractHandler(gateway, { payload: {} }, {
+      sourceMap, previousResult: composed, requireReusableSemanticStage: true,
+      reviewExistingSourceTaskId: 'compose-task', scientificReview: { requestId: 'review-task', authorizationContext },
+    });
+    expect(requests).toHaveLength(3);
+    for (const request of [requests[0]!, requests[2]!]) {
+      const system = request.messages.filter(message => message.role === 'system').map(message => message.content).join('\n');
+      expect(system).toContain('模型定义与方程、参数与求解方法、可执行代码、网格与收敛设置');
+      expect(system).toContain('已给方程不证明代码可用，未取得代码不证明模型方法未交代');
+      expect(system).toContain('没有该层级的全文核对依据时，缩小或删除强断言');
+      expect(system).toContain('不能概括为“模型未公开”或“完整复现输入已披露”');
+      expect(JSON.stringify(request.messages)).toContain(sourceText);
+    }
+    expect(requests[2]!.messages[0]!.content).toContain('已有六字段候选的来源审校者');
+    expect(reviewed.scientificReview).toMatchObject({ sourceAgentTaskId: 'compose-task',
+      reviewSkill: { id: 'scientific-critical-thinking', version: '5' } });
+    expect(reviewed.scientificReview?.semanticStage).toEqual(composed.scientificReview?.semanticStage);
+    expect(reviewed.evidenceSegments?.reproducibility).toEqual(composed.evidenceSegments?.reproducibility);
+  });
+
   it('从 canonical source map 的页块顺序派生兼容正文', () => {
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-1',

@@ -53,9 +53,19 @@ describe('Hermes media skill stages', () => {
       for (const criterion of required) expect(skill.instructions).toContain(criterion);
       expect(skill.instructions).toContain('原文定义、图注和实际提供的原图');
       expect(skill.instructions).toContain('每个尺寸或宽度须对应具体对象、物理量、方向、定义和算例');
-      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'scientific-critical-thinking', version: '4' }));
+      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'scientific-critical-thinking', version: '5' }));
       expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '17',
         resources: expect.arrayContaining(['SKILL.md#Scientific encoding']) }));
+    }
+  });
+
+  it('delivers disclosure-layer distinctions to scientific planning and review', () => {
+    for (const stage of ['science', 'review'] as const) {
+      const skill = loadInstalledMediaSkills('editorial', 'Explain the reported equations and parameters without assuming code availability.', stage);
+      expect(skill.instructions).toContain('模型定义与方程、参数与求解方法、可执行代码、网格与收敛设置');
+      expect(skill.instructions).toContain('已给方程不证明代码可用，未取得代码不证明模型方法未交代');
+      expect(skill.instructions).toContain('不能概括为“模型未公开”或“完整复现输入已披露”');
+      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'scientific-critical-thinking', version: '5' }));
     }
   });
 
