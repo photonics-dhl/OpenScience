@@ -29,7 +29,7 @@ function requireLabelReferencesInRange(brief: IllustrationBrief): void {
 type ScientificQuantity = { value: string; unit: string | null; variable: string | null };
 const SOURCE_VARIABLE_NAMES = new Map([['fwhmt', 'FWHM_T'], ['fwhms', 'FWHM_S'], ['nsp', 'N_SP']]);
 class UnboundNumericSourceError extends Error {
-  constructor(message: string, readonly expectedVariable?: string, readonly fields: readonly string[] = [],
+  constructor(message: string, readonly expectedVariable?: string | null, readonly fields: readonly string[] = [],
     readonly otherDiagnostics: readonly string[] = []) { super(message); }
 }
 const QUANTITY_PATTERN = /(?<![A-Za-z\u0370-\u03ff\d])[+-]?(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)(?:\s*[×x]\s*10\s*\^?\s*[+-]?\d+|[eE][+-]?\d+)?(?!\d|\.\d)/gu;
@@ -93,7 +93,7 @@ function sameScientificQuantity(asserted: ScientificQuantity, supported: Scienti
   return true;
 }
 function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][]): void {
-  const missing: Array<{ field: string; quantity: ScientificQuantity; code: string; expectedVariable?: string }> = [];
+  const missing: Array<{ field: string; quantity: ScientificQuantity; code: string; expectedVariable?: string | null }> = [];
   for (const [field, value] of fields) for (const quantity of scientificQuantities(value)) {
     const described = subjects.filter(subject => scientificQuantities(subject.description)
       .some(item => sameScientificQuantity(quantity, item, true)));
@@ -104,7 +104,8 @@ function requireBoundNumericalResults(fields: readonly (readonly [string, string
         .filter(item => sameScientificQuantity({ ...quantity, variable: null }, item)).map(item => item.variable))];
       const onlySourceVariable = sourceVariables.length === 1 ? sourceVariables[0] : null;
       missing.push({ field, quantity, code,
-        expectedVariable: onlySourceVariable ? SOURCE_VARIABLE_NAMES.get(onlySourceVariable) : undefined });
+        expectedVariable: onlySourceVariable ? SOURCE_VARIABLE_NAMES.get(onlySourceVariable)
+          : quantity.variable && sourceVariables.length === 1 && sourceVariables[0] === null ? null : undefined });
     }
   }
   if (missing.length) {
@@ -131,6 +132,10 @@ export type StoryboardScienceCheckpoint = {
   designSkills: DesignSkillUsage[];
 };
 export type StoryboardArtRejection = { structuredAttempt: number; kind: 'json_parse' | 'schema_validation'; text: string; diagnostic?: string };
+/** Private task evidence only. Never put this content in AuditLog or a public task view. */
+export type StoryboardScienceRejectedCandidate = StoryboardArtRejection & {
+  sources: Array<{ sourceId: string; claimId: string; evidenceId: string; text: string; relation: string }>;
+};
 export type StoryboardScienceRejectionReceipt = {
   schemaVersion: 1; structuredAttempt: number; kind: 'json_parse' | 'schema_validation';
   candidateHash: string; candidateBytes: number; diagnosticClass: 'numeric_description' | 'numeric_source' | 'other';
@@ -351,7 +356,7 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
 }
 
 /** Select scientific meaning before exposing it to composition/style guidance. */
-export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], settings: StoryboardRequest, base?: StoryboardView, paperOriginals: Map<string, PaperOriginalRef> = new Map(), narrativeSource?: VisualNarrativeSource, reviewFeedback?: { summary: string; issues: readonly IllustrationReviewIssue[] }, scienceRecovery?: 'initial_science_thinking_exhausted' | 'initial_science_schema_exhausted', persistence?: StoryboardPlanningPersistence, onScienceRejected?: (receipt: StoryboardScienceRejectionReceipt) => Promise<void>) {
+export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], settings: StoryboardRequest, base?: StoryboardView, paperOriginals: Map<string, PaperOriginalRef> = new Map(), narrativeSource?: VisualNarrativeSource, reviewFeedback?: { summary: string; issues: readonly IllustrationReviewIssue[] }, scienceRecovery?: 'initial_science_thinking_exhausted' | 'initial_science_schema_exhausted', persistence?: StoryboardPlanningPersistence, onScienceRejected?: (receipt: StoryboardScienceRejectionReceipt, candidate: StoryboardScienceRejectedCandidate) => Promise<void>) {
   if (scienceRecovery && (!settings.narrative || base || reviewFeedback || settings.revisionMode
     || settings.revisionTaskId || settings.revisionImageAssetId || settings.baseAssetId)) {
     throw new Error('[blocked] Initial science recovery cannot revise an existing plan');
@@ -422,7 +427,7 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
   let scienceMessages: Array<{ role: 'system' | 'user'; content: string }> | undefined;
   let scienceUsage: DesignSkillUsage[] = [];
   let diagnostic = 'invalid_scientific_intent';
-  let expectedSourceVariable: string | undefined;
+  let expectedSourceVariable: string | null | undefined;
   let unsupportedNumericFields: readonly string[] = [];
   let otherNumericDiagnostics: readonly string[] = [];
   if (settings.revisionMode === 'art') {
@@ -555,6 +560,7 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
       if (!isDeepStrictEqual(restored, saved.intent)) throw new Error('[blocked] Saved scientific intent changed');
       intent = restored; scienceUsage = saved.designSkills;
     } else {
+    let scienceEvidenceFailed = false;
     const science = await gateway.completeStructured((value): value is Record<string, unknown> => {
       try { expectedSourceVariable = undefined; unsupportedNumericFields = []; otherNumericDiagnostics = []; materializeScience(value); return true; } catch (error) {
         diagnostic = error instanceof Error ? error.message : 'invalid_scientific_intent';
@@ -564,10 +570,22 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         return false;
       }
     }, scienceMessages!, { temperature: 0.1, thinking: 'adaptive', includeRejectedResponseOnRetry: true, maxRetries: 2,
+      // Gateway's generic callback is best-effort. A lost paid candidate must
+      // stop the next submission, using its existing per-provider barrier.
+      beforeEachProviderCall: async () => {
+        if (scienceEvidenceFailed) throw new Error('[blocked] Scientific rejection evidence could not be retained');
+      },
       includeJsonParseInRejectedCandidates: Boolean(onScienceRejected),
       onRejectedCandidate: onScienceRejected ? async (value, completion, attempt, rejection) => {
-        if (rejection?.kind) await onScienceRejected(scienceRejectionReceipt(value, completion.text, attempt,
-          rejection.kind, rejection.diagnostic, sourceLookup));
+        if (!rejection?.kind) return;
+        try {
+          const sources = [...sourceLookup].map(([sourceId, source]) => ({ sourceId, ...source }));
+          if (completion.text.length > 131_072 || Buffer.byteLength(JSON.stringify(sources)) > 524_288)
+            throw new Error('[blocked] Scientific rejection exceeds its private evidence budget');
+          await onScienceRejected(scienceRejectionReceipt(value, completion.text, attempt,
+            rejection.kind, rejection.diagnostic, sourceLookup), { structuredAttempt: attempt, kind: rejection.kind,
+            text: completion.text, diagnostic: (rejection.kind === 'schema_validation' ? diagnostic : 'invalid_json').slice(0, 512), sources });
+        } catch (error) { scienceEvidenceFailed = true; throw error; }
       } : undefined,
       // A single sourced mechanism can need the same reasoning budget as a full
       // narrative; panel count does not bound the scientific reasoning work.
@@ -585,6 +603,10 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         const briefFeedback = briefOverflow ? ` The complete brief is ${briefOverflow[1]} characters for a ${briefOverflow[2]} shared limit. Remove repetition or choose a narrower source-supported relationship while preserving its complete meaning and conditions; leave necessary space for art. Do not mechanically truncate scientific text.` : '';
         let feedback = `Diagnostic: ${diagnostic.slice(0, 400)}. Return exactly ${scienceShape}. Every subject is {description,basis:{sourceId}}; bind only an exact planning.supportingSourceIds value from upstream.sourcePassages with relation supports. Paper excerpt IDs, Claim IDs and non-supporting passages are not subject bindings. Re-read the original passage and revise unsupported meaning; never substitute an arbitrary valid ID. Preserve valid fields and source-grounded qualifiers. No schemaVersion or illustration wrapper. labels must enumerate all intended visible text, including axis letters, mathematical symbols and required conditions; no fixed label count. Follow all original field and shared-brief limits, leaving art space. Shorten repetition, never truncate scientific meaning.`;
         if (diagnostic.startsWith('unbound_numeric_')) feedback += ` Each numerical result in titles, main message, narration, encoding, labels and constraints needs the same value, unit and stated variable in one subject description AND its own exact supporting passage. ${diagnostic.endsWith('_description') ? 'No subject description states this result; put it in a separate result subject and bind that subject to its original result passage.' : 'A subject states this result, but its bound original passage does not; select the actual supporting result passage or remove the unsupported value.'} A bare number with a different unit or variable is not support.`;
+        if (expectedSourceVariable === null) {
+          const hint = ' The bound source gives this value and unit in prose without naming the asserted variable. Use the original quantity name and value in prose, removing the unsupported symbol or assignment; or bind a passage that explicitly names that symbol. Do not infer an alias.';
+          if (feedback.length + hint.length <= 2000) feedback += hint;
+        }
         if (unsupportedNumericFields.length) {
           const hint = ` The unsupported result also occurs in these fields: ${unsupportedNumericFields.join(', ')}. Correct or remove every occurrence in those fields, including visible labels; preserve genuinely supported results.`;
           if (feedback.length + hint.length <= 2000) feedback += hint;
@@ -605,7 +627,12 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
           if (feedback.length + hint.length <= 2000) feedback += hint;
         }
         return feedback;
-      } });
+      } }).catch(error => {
+        // Also report persistence failure on the final attempt, when there is
+        // no next provider barrier. Do not expose raw storage error details.
+        if (scienceEvidenceFailed) throw new Error('[blocked] Scientific rejection evidence could not be retained');
+        throw error;
+      });
     intent = materializeScience(science);
     }
   }

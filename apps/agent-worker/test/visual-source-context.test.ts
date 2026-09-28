@@ -7,6 +7,8 @@ import { hasSingleReviewedVisualSource, projectVisualNarrativeSource, readVisual
 import { createPresentationGenerationHandler } from '../src/presentation/handler';
 import { createWritingSourcePacket, materializeWritingCitations } from '../src/citation-management';
 import { generateIllustrationStoryboard } from '../src/presentation/illustration-planner';
+import { AiGateway } from '@openscience/ai-gateway';
+import { isDeepStrictEqual } from 'node:util';
 
 function sourceMapFixture(): DocumentSourceMap {
   const texts = [
@@ -54,7 +56,7 @@ async function reviewedFixture() {
 }
 
 describe('authorized illustration context from an existing reviewed source', () => {
-  it.each(['reviewed', 'manual', 'mixed', 'foreign-only', 'mixed-narrative', 'legacy-checkpoint', 'legacy-partial', 'unauthorized', 'changed'] as const)('routes a local illustration through the real task handler (%s)', async mode => {
+  it.each(['reviewed', 'manual', 'mixed', 'foreign-only', 'mixed-narrative', 'legacy-checkpoint', 'legacy-partial', 'unauthorized', 'changed', 'diagnostics', 'diagnostics-stale', 'diagnostics-cas', 'diagnostics-source', 'diagnostics-success', 'diagnostics-reentry'] as const)('routes a local illustration through the real task handler (%s)', async mode => {
     const f = await reviewedFixture();
     const ro = '40000000-0000-4000-8000-000000000001';
     const versionId = '50000000-0000-4000-8000-000000000001';
@@ -106,13 +108,21 @@ describe('authorized illustration context from an existing reviewed source', () 
           art: { state: 'not_started', executionAttempt: 1, rejectedCandidates: [] } } };
       }
     }
+    const updateMany = vi.fn(async ({ where, data }: { where: { executionAttempt: number; result: { equals: unknown } }; data: { result: Record<string, unknown> } }) => {
+      if (mode === 'diagnostics-cas' || where.executionAttempt !== owner.executionAttempt
+          || (owner.result !== null && !isDeepStrictEqual(where.result.equals, owner.result))) return { count: 0 };
+      owner.result = data.result;
+      return { count: 1 };
+    });
     const prisma = { ...f.prisma,
       version: { ...f.prisma.version, findUnique: async () => ({ ...f.version, researchObjectId: ro, status: 'draft',
         commit: { branchId: 'branch' }, researchObject: { id: ro, workspaceId: 'workspace' } }) },
       claimNode: { findMany: async () => claimRows },
       workspace: { findUnique: async () => ({ id: 'workspace', status: 'active' }) },
       membership: { findUnique: async () => ({ userId: 'owner', workspaceId: 'workspace', role: 'author' }) },
-      agentTask: { findUnique: async () => owner },
+      agentTask: { findUnique: async () => owner, updateMany },
+      trashEntry: { findFirst: async () => null },
+      artifact: { findMany: async () => [{ id: f.sourceMap.artifactId }] },
       presentationAsset: { findUnique: async () => null },
       evidenceRecord: { findMany: async () => evidence },
     };
@@ -130,9 +140,53 @@ describe('authorized illustration context from an existing reviewed source', () 
       throw new Error('fixture stopped at model boundary');
     });
     const reviewScientific = vi.fn(async (input: { prompt: string }) => {
-      expect(input.prompt).not.toContain('"paper":');
+      if (mode === 'diagnostics-success') expect(input.prompt).toContain('"paper":');
+      else expect(input.prompt).not.toContain('"paper":');
       throw new Error('fixture stopped at saved plan review');
     });
+    if (mode.startsWith('diagnostics')) {
+      if (mode === 'diagnostics-reentry') owner.result = { storyboardScienceDiagnostics: {
+        executionAttempt: owner.executionAttempt, candidates: [{ text: '{"private":"original paid response"}' }],
+      } };
+      let providerCalls = 0;
+      const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete: async () => {
+        providerCalls++;
+        if (mode === 'diagnostics-stale') owner.executionAttempt++;
+        if (mode === 'diagnostics-source') f.ingestion.agentTask.updatedAt = new Date('2026-02-01');
+        const text = mode === 'diagnostics-success' && providerCalls > 1 ? JSON.stringify(providerCalls === 2 ? {
+          title: 'Open channel', scenes: [{ title: 'Open channel', narration: 'The particle follows an open path.',
+            message: 'The particle follows an open channel.', domain: 'conceptual',
+            subjects: [{ description: 'The particle follows an open channel.', basis: { sourceId: 's0' } }],
+            encoding: 'One arrow represents the path of subject 0.', labels: ['Open channel'], constraints: ['Conceptual, not to scale'] }],
+        } : { scenes: [{ layout: 'One focused path.', treatment: 'Quiet ink.' }] }) : '{"private":"exact failed candidate"}';
+        return { text, model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+      } }] });
+      const db = { ...prisma, $transaction: async (work: (tx: typeof prisma) => Promise<unknown>) => work(prisma) };
+      await expect(createPresentationGenerationHandler({ gateway: {
+        completeStructured: gateway.completeStructured.bind(gateway), reviewScientific,
+      } as never })(
+        { prisma: db, storage: f.storage } as never, task as never)).rejects.toThrow(mode === 'diagnostics-reentry'
+          ? 'explicit same-task recovery' : mode === 'diagnostics-success' ? 'fixture stopped at saved plan review'
+          : mode === 'diagnostics' ? '结构化输出超过重试上限' : 'Scientific rejection evidence could not be retained');
+      expect(providerCalls).toBe(mode === 'diagnostics-reentry' ? 0 : ['diagnostics', 'diagnostics-success'].includes(mode) ? 3 : 1);
+      if (mode === 'diagnostics') {
+        const diagnostic = owner.result!.storyboardScienceDiagnostics as { candidates: Array<{ text: string }>; sources: unknown[] };
+        expect(diagnostic.candidates).toHaveLength(3);
+        expect(diagnostic.candidates[2]!.text).toBe('{"private":"exact failed candidate"}');
+        expect(diagnostic.sources).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: 's0', text: evidence[0]!.exactQuote })]));
+        expect(owner.result).not.toHaveProperty('storyboardCheckpoint');
+        expect(owner.result).not.toHaveProperty('storyboardPlanningCheckpoint');
+      } else if (mode === 'diagnostics-success') {
+        expect(owner.result).toHaveProperty('storyboardCheckpoint');
+        expect(owner.result).not.toHaveProperty('storyboardScienceDiagnostics');
+        expect(reviewScientific).toHaveBeenCalledOnce();
+      } else if (mode === 'diagnostics-reentry') {
+        expect(owner.result).toEqual({ storyboardScienceDiagnostics: {
+          executionAttempt: 1, candidates: [{ text: '{"private":"original paid response"}' }],
+        } });
+      } else expect(owner.result).toBeNull();
+      return;
+    }
     const run = createPresentationGenerationHandler({ gateway: { completeStructured, reviewScientific } as never })(
       { prisma, storage: f.storage } as never, task as never);
     await expect(run).rejects.toThrow(mode === 'legacy-checkpoint' ? 'fixture stopped at saved plan review'

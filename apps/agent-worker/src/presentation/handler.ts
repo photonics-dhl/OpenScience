@@ -17,7 +17,7 @@ import { Prisma } from '@prisma/client';
 import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
 import { requireStyleReferenceImage } from '@openscience/domain';
 import { readStoredIllustrationIssues, reviewIllustrationStoryboard } from './illustration-review';
-import { clarifyIllustrationLabels, generateIllustrationStoryboard, type StoryboardScienceCheckpoint, type StoryboardScienceRejectionReceipt, type StoryboardArtRejection, type StoryboardPlanningPersistence } from './illustration-planner';
+import { clarifyIllustrationLabels, generateIllustrationStoryboard, type StoryboardScienceCheckpoint, type StoryboardScienceRejectionReceipt, type StoryboardScienceRejectedCandidate, type StoryboardArtRejection, type StoryboardPlanningPersistence } from './illustration-planner';
 import { hasSingleReviewedVisualSource, readVisualNarrativeSource, resolveVisualNarrativeSource } from '../scientific-writing-source';
 import { generatedImageReviewAttachment, readStoredGeneratedImageReview, reviewGeneratedImage } from './generated-image-review';
 
@@ -1005,7 +1005,9 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           ...(narrativeSource ? { narrativeSourceIdentity: narrativeSource.identity } : {}),
         };
         let expectedResult = owner.result;
-        const persistCheckpoint = async (nextResult: Record<string, unknown>, planned?: StoryboardPlan, art?: StoryboardArtCorrection) => {
+        if (expectedResult && typeof expectedResult === 'object' && Object.hasOwn(expectedResult, 'storyboardScienceDiagnostics'))
+          throw new Error('[blocked] Rejected scientific candidate evidence requires explicit same-task recovery');
+        const persistCheckpoint = async (nextResult: Record<string, unknown>, planned?: StoryboardPlan, art?: StoryboardArtCorrection, rejectedScience = false) => {
           // Persist the paid plan before Chat review. A failed review must not restart planning.
           const saveCheckpoint = () => deps.prisma.$transaction(async tx => {
             const { owner: currentOwner, payload: currentPayload } = await requireIllustrationReviewAuthority(tx, {
@@ -1026,7 +1028,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             await requireUnchangedEvidence(tx);
             await requireUnchangedStyleReference(tx);
             if (planned) await requireNarrativeOriginals(tx, payload, planned.document);
-            else {
+            else if (!rejectedScience) {
               const partial = readStoryboardPlanningCheckpoint(nextResult, identity);
               if (!partial) throw new Error('[blocked] Planning checkpoint is missing');
               await requireNarrativeOriginals(tx, payload, partial.science.intent);
@@ -1066,6 +1068,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         persistPlan = async (planned, review, acceptance, art) => {
           const retained = { ...(expectedResult as Record<string, unknown> | null) };
           delete retained.storyboardPlanningCheckpoint;
+          delete retained.storyboardScienceDiagnostics;
           const previousCheckpoint = retained.storyboardCheckpoint as Record<string, unknown> | undefined;
           const generatedExecution = previousCheckpoint ? previousCheckpoint.executionAttempt : task.executionAttempt;
           await persistCheckpoint(art ? { ...retained, storyboardArtCorrection: art }
@@ -1137,11 +1140,19 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           continuationStarted = true;
           return planningGateway!.completeStructured(guard, messages, { ...opts, ...(planningContinuation ? { primaryProviderOnly: true } : {}) });
         } };
-        const onScienceRejected = deps.audit ? async (receipt: StoryboardScienceRejectionReceipt) => {
-          await deps.audit!.record({ actorId: scope.userId, action: 'presentation.storyboard_science_candidate_rejected',
+        const rejectedScienceCandidates: Omit<StoryboardScienceRejectedCandidate, 'sources'>[] = [];
+        const onScienceRejected = async (receipt: StoryboardScienceRejectionReceipt, candidate: StoryboardScienceRejectedCandidate) => {
+          const { sources, ...rejected } = candidate;
+          // Diagnostic evidence is never read as a successful checkpoint or retry authority.
+          // Keep one source mapping and at most the three paid structured candidates.
+          const candidates = [...rejectedScienceCandidates, rejected].slice(-3);
+          await persistCheckpoint({ storyboardScienceDiagnostics: { ...identity, executionAttempt: task.executionAttempt,
+            sources, candidates } }, undefined, undefined, true);
+          rejectedScienceCandidates.splice(0, rejectedScienceCandidates.length, ...candidates);
+          await deps.audit?.record({ actorId: scope.userId, action: 'presentation.storyboard_science_candidate_rejected',
             workspaceId: researchObject.workspaceId, targetType: 'agent_task', targetId: task.id, requestId: task.id,
             metadata: { executionAttempt: task.executionAttempt, ...receipt } });
-        } : undefined;
+        };
         const saved = readStoryboardCheckpoint(owner.result, identity);
         if (saved) {
           requireStoryboardSourceSupport(saved.document, claims, paperOriginals);

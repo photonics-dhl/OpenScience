@@ -126,6 +126,8 @@ v9真实结果进一步限定能力：342f87eb已记录science v9及完整scienc
 
 ### 当前技术债与处理
 
+2026-09-29科学分镜可诊断性：ea44被拒候选仅留数值摘要，非标准变量归为other，无法离线分辨量名误判与科学错误。当前候选复用私有AgentTask.result留存有界拒收全文和一次来源映射；对外投影剔除、不作为checkpoint/恢复授权，保存失败停止后续模型提交。数值守卫保持严格；同值同单位来源无显式符号时，反馈要求恢复原文量名，不能推断符号别名。受控retry兼容、验证与部署只见CURRENT；不据此宣称最终图片质量通过。
+
 2026-09-28 新来源检索已定向恢复：049c8b89原失败源于第14页完整表格3051字/607词法token被BGE tokenizer拒绝>1024，发生在generation创建前。已部署不可分块lexical降级，保留原表格/定位和所有权限/来源/CAS；search24、indexer17、Domain15定向及TC/High通过。原Domain精确恢复一次后v14的69 chunks active，Poynting查询实际召回新来源10段；旧v11仍58 active。core终态needs_review/token_limit_exceeded、canRetry=false，storage沿既有embedding_unavailable激活lexical。dense未完成，后续表格向量策略仍需保真设计；不以本次降级声称完整hybrid恢复。执行与收据见CURRENT。
 
 显式来源补审（2026-09-21已部署，用户再次继续后）：将固定一次恢复改为原9项预算内的连续review链，每次仍须原retry-generation明确动作；全部失败记录、同原v4候选/SourceMap、无有效科学响应及主尝试审计必须一致，所有尝试计入原额度并预留后续制作。历史provider_error不反推瞬态根因，只允许接受重复供应商费用后的显式补审；自动科学消费仍拒绝无有效审阅。原始幂等键入已有audit，精确历史请求重放不再派发；旧ordinal1缺原key元数据，不能追溯识别改version的旧raw-key复用。无新分析器/供应商/迁移，实际部署与运行只见CURRENT。

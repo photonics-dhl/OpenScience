@@ -677,6 +677,47 @@ describe('automatic art direction after sourced science', () => {
     expect(requests[1]!.at(-1)!.content).not.toContain('one matching source variable');
   });
 
+  it('repairs a source-prose quantity without inventing a variable alias or weakening source matching', async () => {
+    // Exact Fig.2 source phrasing; the source never calls the slit width w.
+    const source = 'By assuming a slit width of 20 nm and a nanowire diameter of 500 nm, we have an FWHMs ~77 nm';
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+    const candidate = (label: string) => ({ ...science, scenes: [{ ...science.scenes[0]!, message: label, labels: [label],
+      subjects: [{ description: label, basis: { sourceId: 's0' } }] }] });
+    const requests: Array<Array<{ content: string }>> = [];
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async ({ messages }) => {
+      requests.push(messages);
+      return { text: JSON.stringify(requests.length === 1 ? candidate('w = 20 nm') : requests.length === 2
+        ? candidate('slit width 20 nm') : { scenes: [{ layout: 'One slit.', treatment: 'Quiet ink.' }] }),
+        model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+    const result = await generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the slit.', output: 'image',
+    });
+    expect(requests).toHaveLength(3);
+    expect(requests[1]!.at(-1)!.content).toContain('source gives this value and unit in prose');
+    expect(requests[1]!.at(-1)!.content).toContain('original quantity name');
+    expect(result.document.scenes[0]!.illustration!.labels).toEqual(['slit width 20 nm']);
+    const wrong = new AiGateway({ providers: [{ ...provider, complete: async () => ({
+      text: JSON.stringify(candidate('FWHM_T = 20 nm')), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 },
+    }) }] });
+    await expect(generateIllustrationStoryboard(wrong, inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    })).rejects.toThrow('结构化输出超过重试上限');
+  });
+
+  it('reports a final-attempt evidence save failure instead of hiding it as schema exhaustion', async () => {
+    let calls = 0;
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => {
+      calls++; return { text: '{}', model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+    await expect(generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    }, undefined, new Map(), undefined, undefined, undefined, undefined, async receipt => {
+      if (receipt.structuredAttempt === 3) throw new Error('private database details');
+    })).rejects.toThrow('Scientific rejection evidence could not be retained');
+    expect(calls).toBe(3);
+  });
+
   it('records only bounded field and source-number summaries for a rejected science candidate', async () => {
     const source = 'A 1 MeV electron crosses the field.';
     const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
@@ -707,6 +748,40 @@ describe('automatic art direction after sourced science', () => {
     expect(Buffer.byteLength(JSON.stringify(receipts[0]))).toBeLessThan(8192);
   });
 
+  it('retains exact rejected science privately with original source IDs, without putting prose in audit', async () => {
+    const raw = JSON.stringify({ ...science, title: 'PRIVATE 20 nm', scenes: [{ ...science.scenes[0],
+      labels: ['w = 20 nm'], subjects: [{ description: 'w = 20 nm', basis: { sourceId: 's0' } }] }] });
+    const receipts: unknown[] = [], privateCandidates: unknown[] = [];
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => ({
+      text: raw, model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 },
+    }) };
+    await expect(generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    }, undefined, new Map(), undefined, undefined, undefined, undefined, async (receipt, candidate) => {
+      receipts.push(receipt); privateCandidates.push(candidate);
+    })).rejects.toThrow();
+    expect(privateCandidates).toHaveLength(3);
+    expect(privateCandidates[0]).toMatchObject({ text: raw, structuredAttempt: 1, kind: 'schema_validation',
+      sources: [{ sourceId: 's0', text: claims[0]!.sourcePassages![0]!.text, relation: 'supports' }] });
+    expect(JSON.stringify(receipts)).not.toContain('PRIVATE');
+    expect(JSON.stringify(receipts)).not.toContain('w = 20');
+  });
+
+  it.each(['schema', 'json', 'oversize'])('stops paid retries when private science evidence cannot be retained (%s)', async kind => {
+    let calls = 0;
+    const save = vi.fn(async () => { throw new Error('private storage unavailable'); });
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => {
+      calls++;
+      return { text: kind === 'json' ? 'not json' : kind === 'oversize' ? 'x'.repeat(131_073) : JSON.stringify({}),
+        model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+    await expect(generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    }, undefined, new Map(), undefined, undefined, undefined, undefined, save)).rejects.toThrow();
+    expect(calls).toBe(1);
+    expect(save).toHaveBeenCalledTimes(kind === 'oversize' ? 0 : 1);
+  });
+
   it('keeps malformed science text out of the receipt and stops after bounded retries', async () => {
     let calls = 0;
     const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => ({
@@ -726,7 +801,7 @@ describe('automatic art direction after sourced science', () => {
   it('bounds hostile science receipts and excludes forged source IDs and long numeric identifiers', async () => {
     const hostile = { title: 'PRIVATE PROSE 1234567890 as', scenes: Array.from({ length: 9 }, () => ({
       ...science.scenes[0], labels: Array.from({ length: 20 }, () => 'PRIVATE PROSE 19 as'),
-      subjects: Array.from({ length: 10 }, () => ({ description: `PRIVATE PROSE ${'X'.repeat(3000)} 19 as`,
+      subjects: Array.from({ length: 10 }, () => ({ description: `PRIVATE PROSE ${'X'.repeat(300)} 19 as`,
         basis: { sourceId: 'PRIVATE FORGED SOURCE' } })),
     })) };
     let calls = 0;

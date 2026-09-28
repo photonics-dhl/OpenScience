@@ -942,6 +942,29 @@ async function readPixelPlanningRecoveryReceipt(prisma: Pick<Prisma.TransactionC
   return { id: receipt.id, createdAt: receipt.createdAt, metadata: meta };
 }
 
+/** Rejected science is private evidence, never a successful plan or retry authority. */
+function hasNoStoryboardPlan(result: unknown, identity: Record<string, unknown>, executionAttempt: number): boolean {
+  if (result === null) return true;
+  const root = jsonRecord(result); const diagnostics = jsonRecord(root.storyboardScienceDiagnostics);
+  if (Object.keys(root).join(',') !== 'storyboardScienceDiagnostics'
+    || Object.keys(diagnostics).sort().join(',') !== [...Object.keys(identity), 'executionAttempt', 'sources', 'candidates'].sort().join(',')
+    || Object.entries(identity).some(([key, value]) => !isDeepStrictEqual(diagnostics[key], value))
+    || diagnostics.executionAttempt !== executionAttempt
+    || !Array.isArray(diagnostics.sources) || Buffer.byteLength(JSON.stringify(diagnostics.sources), 'utf8') > 524_288
+    || diagnostics.sources.some(raw => { const source = jsonRecord(raw);
+      return Object.keys(source).sort().join(',') !== 'claimId,evidenceId,relation,sourceId,text'
+        || ['sourceId', 'claimId', 'evidenceId', 'text', 'relation'].some(key => typeof source[key] !== 'string'); })
+    || !Array.isArray(diagnostics.candidates) || diagnostics.candidates.length < 1 || diagnostics.candidates.length > 3
+    || diagnostics.candidates.some((raw, index, values) => { const item = jsonRecord(raw);
+      return Object.keys(item).sort().join(',') !== 'diagnostic,kind,structuredAttempt,text'
+        || !Number.isInteger(item.structuredAttempt) || Number(item.structuredAttempt) < 1 || Number(item.structuredAttempt) > 3
+        || (index > 0 && Number(item.structuredAttempt) <= Number(jsonRecord(values[index - 1]).structuredAttempt))
+        || typeof item.kind !== 'string' || !['json_parse', 'schema_validation'].includes(item.kind)
+        || typeof item.text !== 'string' || item.text.length > 131_072
+        || typeof item.diagnostic !== 'string' || item.diagnostic.length > 512; })) return false;
+  return true;
+}
+
 /** Explicitly repeat one failed planning execution; logical task and image allowance stay intact. */
 async function inspectDurableStoryboardPlanning(tx: Prisma.TransactionClient, run: RunRow) {
   if (run.profile !== VISUAL_NARRATIVE_PROFILE || !run.versionId || !['failed', 'stopped'].includes(run.status)
@@ -990,13 +1013,15 @@ async function inspectDurableStoryboardPlanning(tx: Prisma.TransactionClient, ru
   const art = jsonRecord(partial.art); const science = jsonRecord(partial.science); const intent = jsonRecord(science.intent);
   const identity = { payload, sourceEvidenceIdentity: source.sourceEvidenceIdentity, claimContent: source.claimContent,
     baseIdentity: pixel?.baseIdentity ?? null, narrativeSourceIdentity: source.narrativeSourceIdentity };
+  const noPlan = hasNoStoryboardPlan(task.result, identity, task.executionAttempt);
   let planningFailureClass: 'art_only_structured_retry' | 'fresh_art_after_unknown' | 'full_planning_restart';
   let priorSubmission: 'none' | 'known_rejected_output' | 'outcome_unknown_after_provider_timeout' | 'uncheckpointed_provider_activity';
-  if (task.result === null) {
+  if (noPlan) {
     if (!['结构化输出超过重试上限', 'structured JSON invalid after retry limit', 'Provider exhausted output allowance before producing text',
       'Primary provider failed; automatic fallback is disabled for this request', 'structured output reached token limit'].includes(task.error ?? '')
       || !calls.some(call => !previous || call.createdAt > previous.createdAt)) return null;
-    planningFailureClass = 'full_planning_restart'; priorSubmission = 'uncheckpointed_provider_activity';
+    planningFailureClass = 'full_planning_restart';
+    priorSubmission = task.result === null ? 'uncheckpointed_provider_activity' : 'known_rejected_output';
   } else {
     if (Object.keys(result).join(',') !== 'storyboardPlanningCheckpoint'
       || Object.keys(partial).sort().join(',') !== [...Object.keys(identity), 'schemaVersion', 'science', 'art'].sort().join(',')
@@ -1030,7 +1055,7 @@ async function inspectDurableStoryboardPlanning(tx: Prisma.TransactionClient, ru
   }
   return { step, task, planningFailureClass, priorSubmission, ...identity, planningAuditIds: calls.map(call => call.id),
     planningAudits: pixelPlanningAuditSnapshot(calls), previousReceiptId: previous?.id, authorityReceiptId: pixel?.receipt.id ?? null,
-    existingTaskCount, storyboardPlanningCheckpoint: task.result === null ? null : partial,
+    existingTaskCount, storyboardPlanningCheckpoint: noPlan ? null : partial,
     remainingImageTasks: payload.storyboard.narrativeSceneLimit, revisionImageAssetId: undefined, chargeableAttempts: 1 as const };
 }
 
@@ -1055,7 +1080,7 @@ async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run
   const task = await tx.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } });
   if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'failed'
     || (initialSchemaFailure ? ![1, 2].includes(task.executionAttempt) || task.retryCount !== task.executionAttempt - 1
-      : task.executionAttempt !== 1 || task.retryCount !== 0) || task.result !== null || task.error !== run.error
+      : task.executionAttempt !== 1 || task.retryCount !== 0) || (initialFailure && task.result !== null) || task.error !== run.error
     || task.session.deletedAt || task.session.status !== 'active' || task.session.userId !== run.actorId
     || task.session.researchObjectId !== run.researchObjectId) return null;
   let payload: PresentationGenerationPayload;
@@ -1129,6 +1154,11 @@ async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run
   const images = run.steps.filter(item => item.stage === 'scene_image');
   if (!source || images.length !== 1 || images[0]!.status !== 'stopped'
     || images[0]!.agentTaskId !== source.imageTask.id || images[0]!.presentationAssetId !== source.image.id) return null;
+  if (task.result !== null) {
+    const evidence = await readNarrativeCheckpointEvidence(tx, run);
+    if (!evidence || !hasNoStoryboardPlan(task.result, { payload, sourceEvidenceIdentity: source.sourceEvidenceIdentity,
+      claimContent: evidence.claimContent, baseIdentity: source.identity, narrativeSourceIdentity: evidence.narrativeSourceIdentity }, task.executionAttempt)) return null;
+  }
   return { step, task, planningAuditIds: calls.map(call => call.id), baseIdentity: source.identity,
     sourceEvidenceIdentity: source.sourceEvidenceIdentity, revisionImageAssetId: source.image.id,
     remainingImageTasks: 1,
@@ -2476,7 +2506,8 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
                 || planning.planningFailureClass === PIXEL_PLANNING_ART_TIMEOUT_RETRY ? { progress: 10 } : {}),
               payload: { equals: planning.task.payload as Prisma.InputJsonValue },
               result: { equals: planning.task.result === null ? Prisma.AnyNull : planning.task.result as Prisma.InputJsonValue } },
-            data: { status: 'pending', progress: 0, retryCount: { increment: 1 }, error: null, dispatchedAt: null } });
+            data: { status: 'pending', progress: 0, retryCount: { increment: 1 }, error: null, dispatchedAt: null,
+              ...(Object.keys(jsonRecord(planning.task.result)).join(',') === 'storyboardScienceDiagnostics' ? { result: Prisma.DbNull } : {}) } });
             const stepChanged = await tx.hermesResearchStep.updateMany({ where: { id: planning.step.id, runId: run.id,
               agentTaskId: planning.task.id, status: planning.step.status, presentationAssetId: null },
             data: { status: 'running', error: null } });

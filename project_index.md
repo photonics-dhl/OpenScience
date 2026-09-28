@@ -1,5 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
+科学分镜失败取证与纠错位于 `apps/agent-worker/src/presentation/illustration-planner.ts`、`handler.ts`；私有任务结果投影在 `packages/domain/src/agent/agent.ts`，验收覆盖 `automatic-style.test.ts`、`visual-source-context.test.ts` 和 `packages/domain/test/agent/private-science-diagnostics.test.ts`。运行与恢复状态见Hermes CURRENT，不把拒收候选当成功分镜。
+
 生图第二通道评估：[Qwen/Z-Image 部署、许可和成本](docs/proposals/2026-09-28-open-image-models.md)，保留已有调研；用户已暂缓后续实施，范围与恢复条件见 Hermes CURRENT。
 
 图片管理沿 `MediaAssetActions.tsx` / 原 `/trash`；公开引用内存优化在 `packages/domain/src/trash/trash.ts`，回归在 `test/trash/content-list.test.ts`。局部分镜来源补接在 `apps/agent-worker/src/scientific-writing-source.ts` 和原 handler/planner/review，定向覆盖 `test/visual-source-context.test.ts`。源站与隧道区分沿 `infra/scripts/cloudflared-watchdog.sh`，操作边界见 [monitoring](docs/runbooks/monitoring.md)，实际结果只见 Hermes CURRENT。
