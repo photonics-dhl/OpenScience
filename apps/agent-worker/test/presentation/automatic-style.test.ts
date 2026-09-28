@@ -240,6 +240,60 @@ describe('automatic art direction after sourced science', () => {
     expect(completeStructured).toHaveBeenCalledTimes(2);
   });
 
+  describe('scientific quantity emphasis', () => {
+    const condition = 'Ve>2c·FWHMs/λ₀';
+    // Exact sentence from the reviewed paper's page-two insight passage.
+    const original = 'When an electron passes through such a field, a deep-sub-cycle virtual pulse can be obtained with a temporal width *τ*₁<*T*c1/2 providing that *V*e>2*c*·FWHMs/*λ*₀.';
+    function fixture(source: string, label = condition, otherSource?: string) {
+      const inputClaims = [{ ...claims[0]!, sourcePassages: [
+        { ...claims[0]!.sourcePassages![0]!, text: source },
+        ...(otherSource ? [{ evidenceId: '20000000-0000-4000-8000-000000000002', relation: 'supports', text: otherSource }] : []),
+      ] }];
+      const candidate = { ...science, scenes: [{ ...science.scenes[0]!, narration: label, message: label, labels: [label],
+        subjects: [{ description: label, basis: { sourceId: 's0' } }],
+      }] };
+      const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1 ? candidate
+        : { scenes: [{ layout: 'One symbolic relationship.', treatment: 'Quiet ink.' }] });
+      return { completeStructured, run: () => generateIllustrationStoryboard({ completeStructured } as never, inputClaims,
+        { locale: 'en', style: 'aged-academia', instruction: 'Explain the sourced condition.', output: 'image' }) };
+    }
+
+    it.each([
+      ['original italic variables and unit', original, condition],
+      ['italic candidate', `The condition is ${condition}.`, '*V*e>2*c*·FWHMs/*λ*₀'],
+      ['bold source', 'The condition is **V**e>2**c**·FWHMs/**λ**₀.', condition],
+      ['bold candidate', `The condition is ${condition}.`, '**V**e>2**c**·FWHMs/**λ**₀'],
+      ['underscored variable', 'The width is *FWHM_T*=19 *as*.', 'FWHM_T=19 as'],
+    ])('accepts display-equivalent %s without rewriting its source', async (_name, source, label) => {
+      const { run, completeStructured } = fixture(source, label);
+      const result = await run();
+      const brief = result.document.scenes[0]!.illustration!;
+      expect(brief.labels).toEqual([label]);
+      expect(brief.subjects[0]!.basis.quote).toBe(source);
+      expect(completeStructured).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+      ['different value', 'The condition is *V*e>3*c*·FWHMs/*λ*₀.', condition],
+      ['different unit', 'The condition is *V*e>2*m*·FWHMs/*λ*₀.', condition],
+      ['different variable', 'The condition is *U*e>2*c*·FWHMs/*λ*₀.', condition],
+      ['different underscored variable', 'The width is *FWHM_S*=19 *as*.', 'FWHM_T=19 as'],
+      ['unpaired multiplication', 'The expression is Ve>2*c.', condition],
+      ['multiplication between tokens', 'The expression is Ve>2*c*x.', 'Ve>2cx'],
+      ['escaped markers', String.raw`The expression is Ve>2\*c\*.`, condition],
+    ])('keeps %s unsupported despite emphasis normalization', async (_name, source, label) => {
+      const { run, completeStructured } = fixture(source, label);
+      await expect(run()).rejects.toThrow(/unbound_numeric_.*_source/u);
+      expect(completeStructured).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not use the matching quantity from a different unbound passage', async () => {
+      const { run, completeStructured } = fixture('*U*e>2*c*·FWHMs/*λ*₀', condition, original);
+      await expect(run()).rejects.toThrow('unbound_numeric_2_c_source');
+      expect(completeStructured).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it.each(['scene title', 'root title'])('rejects an unbound number that appears only in the $name', async field => {
     const candidate = field === 'scene title'
       ? { ...science, scenes: [{ ...science.scenes[0]!, title: '19 as virtual pulse' }] }

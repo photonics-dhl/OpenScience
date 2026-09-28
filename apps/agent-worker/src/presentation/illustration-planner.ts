@@ -36,6 +36,12 @@ const QUANTITY_PATTERN = /(?<![A-Za-z\u0370-\u03ff\d])[+-]?(?:\d+(?:,\d{3})*(?:\
 // geometry, conditions or causal meaning. Historical assets remain readable.
 function scientificQuantities(input: string): ScientificQuantity[] {
   const value = input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
+    // Compare displayed symbols (*V*e, 2*c*, **FWHM_T**) without changing the
+    // exact quote. Unpaired/escaped stars and multiplication in 2*c*x stay intact.
+    .replace(/(?<![\\*])(\*{1,2})([A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*)\1(?!\*)/gu,
+      (marked: string, _marker: string, symbol: string, offset: number, source: string) =>
+        /[\p{L}\p{N}]/u.test(source[offset - 1] ?? '') && /[\p{L}\p{N}]/u.test(source[offset + marked.length] ?? '')
+          ? marked : symbol)
     .replaceAll('阿秒', 'as').replaceAll('飞秒', 'fs').replaceAll('纳米', 'nm')
     .replaceAll('微米', 'μm').replaceAll('兆电子伏特', 'MeV').replaceAll('兆电子伏', 'MeV')
     .replaceAll('皮库仑', 'pC')
