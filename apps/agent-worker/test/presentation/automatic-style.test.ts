@@ -547,6 +547,56 @@ describe('automatic art direction after sourced science', () => {
     expect(completeStructured).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves physical expressions across structural label references', async () => {
+    const text = 'FWHM_T≈19 as (标签 0) ≪ Tc1/2≈0.26 fs (标签 1), ζ=Tc1/τ1≈27 (标签 2)';
+    const source = 'FWHM_T(19 as), Tc1/2(i.e.,0.26 fs), ζ≈27.';
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!, encoding: text,
+      labels: ['FWHM_T≈19 as', 'Tc1/2≈0.26 fs', 'ζ≈27'],
+      subjects: [{ description: source, basis: { sourceId: 's0' } }] }] };
+    const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1 ? candidate
+      : { scenes: [{ layout: 'One sourced relationship.', treatment: 'Quiet ink.' }] });
+    await expect(generateIllustrationStoryboard({ completeStructured } as never, inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    })).resolves.toBeDefined();
+  });
+
+  it('preserves prose quantities in approximate parentheses without swallowing earlier values', async () => {
+    const source = 'The field in the y-direction (~20 nm) is tighter than that in the z-direction (~77 nm).';
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!, labels: ['20 nm', '77 nm'],
+      subjects: [{ description: 'Widths of 20 nm and 77 nm.', basis: { sourceId: 's0' } }] }] };
+    const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1 ? candidate
+      : { scenes: [{ layout: 'Two sourced widths.', treatment: 'Quiet ink.' }] });
+    await expect(generateIllustrationStoryboard({ completeStructured } as never, inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    })).resolves.toBeDefined();
+  });
+
+  it('reports all independent numeric repairs within the existing feedback budget', async () => {
+    const quote = 'The slit width is 20 nm; the wire diameter is 500 nm; the driving wavelength is 1.8 μm. FWHM_S≈77 nm, FWHM_T≈19 as and ζ≈27.';
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: quote }] }];
+    const labels = ['d=500 nm', 'w=20 nm', 'λ0=1.8 μm', 'τ1=19 as', 'FWHMs_z=77 nm', 'q=27'];
+    const rejected = { ...science, scenes: [{ ...science.scenes[0]!, labels,
+      subjects: [{ description: labels.join('; '), basis: { sourceId: 's0' } }] }] };
+    const correct = { ...science, scenes: [{ ...science.scenes[0]!, labels: ['slit width 20 nm'],
+      subjects: [{ description: 'The slit width is 20 nm.', basis: { sourceId: 's0' } }] }] };
+    const requests: Array<Array<{ content: string }>> = [];
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async ({ messages }) => {
+      requests.push(messages);
+      return { text: JSON.stringify(requests.length === 1 ? rejected : requests.length === 2 ? correct
+        : { scenes: [{ layout: 'One sourced slit.', treatment: 'Quiet ink.' }] }),
+        model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+    await generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    });
+    const message = requests[1]!.at(-1)!.content;
+    const feedback = message.slice(message.indexOf('Diagnostic:'));
+    expect(feedback.length).toBeLessThanOrEqual(2000);
+    for (let index = 0; index < labels.length; index++) expect(feedback).toContain(`labels[${index}]`);
+  });
+
   it('keeps independent quantities in separate scientific fields and ignores a Chinese label reference', async () => {
     const source = 'FWHM_S≈77 nm and an electron energy of 1 MeV were used.';
     const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
@@ -703,6 +753,30 @@ describe('automatic art direction after sourced science', () => {
     await expect(generateIllustrationStoryboard(wrong, inputClaims, {
       locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
     })).rejects.toThrow('结构化输出超过重试上限');
+  });
+
+  it.each([
+    ['ζ=Tc1/τ₁≈27', 'The constraint factor ζ≈27.', true],
+    ['q=(a+b)/c≈27', 'The derived result q≈27.', true],
+    ['a/b≈27', 'The reported ratio a/b≈27.', true],
+    ['a/b≈27', 'The unrelated denominator b≈27.', false],
+    ['a+b≈27', 'The unrelated summand b≈27.', false],
+    ['FWHM_S/λ₀≈0.04', 'The wavelength λ₀≈0.04.', false],
+    ['λ₀≈0.04', 'The confinement ratio FWHM_S/λ₀≈0.04.', false],
+  ] as const)('binds the comparison expression, never its last operand (%s)', async (value, quote, accepted) => {
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: quote }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!, message: value, labels: [value],
+      subjects: [{ description: value, basis: { sourceId: 's0' } }] }] };
+    let calls = 0;
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => ({
+      text: JSON.stringify(++calls === 1 ? candidate : { scenes: [{ layout: 'One sourced relation.', treatment: 'Quiet ink.' }] }),
+      model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 },
+    }) };
+    const result = generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the sourced result.', output: 'image',
+    });
+    if (accepted) expect((await result).document.scenes[0]!.illustration!.labels).toEqual([value]);
+    else await expect(result).rejects.toThrow('结构化输出超过重试上限');
   });
 
   it('reports a final-attempt evidence save failure instead of hiding it as schema exhaustion', async () => {

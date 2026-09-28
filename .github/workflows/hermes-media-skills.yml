@@ -25,9 +25,11 @@ on:
       - 'apps/agent-worker/src/presentation/generated-image-review.ts'
       - 'apps/agent-worker/src/presentation/scene-image.ts'
       - 'apps/agent-worker/src/presentation/illustration-planner.ts'
+      - 'apps/agent-worker/src/presentation/scientific-comparison.ts'
       - 'apps/agent-worker/src/presentation/illustration-review.ts'
       - 'apps/agent-worker/src/presentation/storyboard.ts'
       - 'apps/agent-worker/test/presentation/automatic-style.test.ts'
+      - 'apps/agent-worker/test/presentation/scientific-comparison.test.ts'
       - 'apps/agent-worker/src/index.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
@@ -103,9 +105,11 @@ on:
       - 'apps/agent-worker/src/presentation/generated-image-review.ts'
       - 'apps/agent-worker/src/presentation/scene-image.ts'
       - 'apps/agent-worker/src/presentation/illustration-planner.ts'
+      - 'apps/agent-worker/src/presentation/scientific-comparison.ts'
       - 'apps/agent-worker/src/presentation/illustration-review.ts'
       - 'apps/agent-worker/src/presentation/storyboard.ts'
       - 'apps/agent-worker/test/presentation/automatic-style.test.ts'
+      - 'apps/agent-worker/test/presentation/scientific-comparison.test.ts'
       - 'apps/agent-worker/src/index.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
@@ -182,7 +186,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off"
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts test/presentation/automatic-style.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts test/presentation/automatic-style.test.ts test/presentation/scientific-comparison.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/extractor.test.ts -t "disclosure guidance"
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/visual-source-context.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-science-diagnostics.test.ts test/agent/storyboard-science-recovery.test.ts

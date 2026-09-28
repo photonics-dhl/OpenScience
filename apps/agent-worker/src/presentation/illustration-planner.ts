@@ -8,6 +8,7 @@ import { compileIllustrationImagePrompt } from './scene-image';
 import type { IllustrationReviewIssue } from './illustration-review';
 import { loadIllustrationStyleSkills } from './illustration-styles';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
+import { scientificComparisonBinding, type ScientificBinding } from './scientific-comparison';
 
 type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string } };
 // New candidates only: stored historical briefs stay readable, but a freshly
@@ -26,17 +27,27 @@ function requireLabelReferencesInRange(brief: IllustrationBrief): void {
     }
   }
 }
-type ScientificQuantity = { value: string; unit: string | null; variable: string | null };
+type ScientificQuantity = { value: string; unit: string | null; binding: ScientificBinding | null };
+const symbolKey = (quantity: ScientificQuantity) => quantity.binding?.kind === 'symbol' ? quantity.binding.key : null;
+const bindingKey = (quantity: ScientificQuantity) => !quantity.binding ? null : quantity.binding.kind === 'unsupported-expression'
+  ? 'unsupported-expression' : quantity.binding.kind === 'symbol' ? quantity.binding.key : `expression:${quantity.binding.key}`;
 const SOURCE_VARIABLE_NAMES = new Map([['fwhmt', 'FWHM_T'], ['fwhms', 'FWHM_S'], ['nsp', 'N_SP']]);
 class UnboundNumericSourceError extends Error {
   constructor(message: string, readonly expectedVariable?: string | null, readonly fields: readonly string[] = [],
     readonly otherDiagnostics: readonly string[] = []) { super(message); }
 }
 const QUANTITY_PATTERN = /(?<![A-Za-z\u0370-\u03ff\d])[+-]?(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)(?:\s*[×x]\s*10\s*\^?\s*[+-]?\d+|[eE][+-]?\d+)?(?!\d|\.\d)/gu;
+const STRUCTURAL_REFERENCE_PATTERN = /\b(?:label|subject|scene|figure|fig\.?|step|stage|panel|node|arrow|element)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*\b|(?:图号|图|标签|场景|对象|主体|步骤|阶段|节点|箭头|序号)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*|第?\d+幕|\d+号/giu;
+function stripStructuralReferences(value: string): string {
+  return value.replace(/\([^()]*\)|\[[^\[\]]*\]/gu, group => {
+    const inner = group.slice(1, -1), remaining = inner.replace(STRUCTURAL_REFERENCE_PATTERN, '');
+    return remaining !== inner && !remaining.trim() ? ' ' : group;
+  }).replace(STRUCTURAL_REFERENCE_PATTERN, ';');
+}
 // This is a new-plan guard, not a substitute for the scientific review of
 // geometry, conditions or causal meaning. Historical assets remain readable.
 function scientificQuantities(input: string): ScientificQuantity[] {
-  const value = input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
+  const value = stripStructuralReferences(input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
     // Compare displayed symbols (*V*e, 2*c*, **FWHM_T**) without changing the
     // exact quote. Unpaired/escaped stars and multiplication in 2*c*x stay intact.
     .replace(/(?<![\\*])(\*{1,2})([A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*)\1(?!\*)/gu,
@@ -46,18 +57,17 @@ function scientificQuantities(input: string): ScientificQuantity[] {
     .replaceAll('阿秒', 'as').replaceAll('飞秒', 'fs').replaceAll('纳米', 'nm')
     .replaceAll('微米', 'μm').replaceAll('兆电子伏特', 'MeV').replaceAll('兆电子伏', 'MeV')
     .replaceAll('皮库仑', 'pC')
-    .replace(/μ\s+m/giu, 'μm')
-    .replace(/\b(?:label|subject|scene|figure|fig\.?|step|stage|panel|node|arrow|element)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*\b/giu, '')
-    .replace(/(?:图号|图|标签|场景|对象|主体|步骤|阶段|节点|箭头|序号)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*|第?\d+幕|\d+号/gu, '');
+    .replace(/μ\s+m/giu, 'μm'));
   const ratioPattern = /(?<![\d.])\d+(?:\.\d+)?(?:[ \t]*:[ \t]*\d+(?:\.\d+)?){1,3}(?![\d.])/gu;
   const ratios = [...value.matchAll(ratioPattern)].map(match => ({
-    value: match[0].replace(/[ \t]*:[ \t]*/gu, ':'), unit: 'ratio', variable: null,
+    value: match[0].replace(/[ \t]*:[ \t]*/gu, ':'), unit: 'ratio', binding: null,
   }));
   const scalarValue = value.replace(ratioPattern, ' ');
   const unitToken = '((?:scattered\\s+)?photons?|(?:个)?(?:散射)?光子|(?:scattered\\s+)?electrons?|[%°][A-Za-z0-9μ/%°^+-]*|[A-Za-zμ][A-Za-z0-9μ/%°^+-]*)';
   const unitPattern = new RegExp(`^\\s*[-–]?\\s*${unitToken}`, 'iu');
   const afterRange = new RegExp(`^\\s*(?:±|[-–—]|to)\\s*[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)\\s*${unitToken}`, 'iu');
-  const results: ScientificQuantity[] = ratios;
+  const results: Array<{ quantity: ScientificQuantity; index: number }> = [];
+  const expressionRanges: Array<{ start: number; end: number }> = [];
   for (const match of scalarValue.matchAll(QUANTITY_PATTERN)) {
     const raw = match[0];
     const isRangeEnd = raw.startsWith('-') && /\d\s*$/u.test(scalarValue.slice(0, match.index));
@@ -73,23 +83,29 @@ function scientificQuantities(input: string): ScientificQuantity[] {
     // never bind the next sentence's result to the preceding variable.
     const abbreviationSafeBefore = fullBefore.replace(/\bi\.e\./giu, 'ie').replace(/\be\.g\./giu, 'eg');
     const namedFwhm = /(FWHM[_\s]*[ST])(?:(?!FWHM)[^。.;\n]){0,50}(?:of|=)\s*$/iu.exec(abbreviationSafeBefore)?.[1] ?? null;
-    const directVariable = /([A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]{0,24})\s*(?:=|≈|~|≪|<<|≥|≤|>|<)\s*$/iu.exec(before)?.[1]
-      ?? /(FWHM[_\s]*[ST]|N[_\s]*SP)\s*\)?\s+of\s*$/iu.exec(before)?.[1] ?? namedFwhm
+    const comparison = scientificComparisonBinding(scalarValue, match.index!);
+    const directVariable = /(FWHM[_\s]*[ST]|N[_\s]*SP)\s*\)?\s+of\s*$/iu.exec(before)?.[1] ?? namedFwhm
       // Original prose also writes "FWHM_T (19 as)". Bind only an immediately
       // adjacent named width, not another result elsewhere in a parenthesis.
       ?? /\b(FWHM[_\s]*[ST])\s*\(\s*$/iu.exec(before)?.[1];
     const distantPhotonCount = !unit && /N[_\s]*SP[^。.;\n]{0,70}$/iu.test(before) ? 'nsp' : null;
     const variable = (directVariable ?? distantPhotonCount)?.toLowerCase().replaceAll('_', '') ?? null;
-    results.push({ value: normalizedNumber, unit, variable });
+    if (comparison) expressionRanges.push(comparison);
+    results.push({ quantity: { value: normalizedNumber, unit,
+      binding: comparison?.binding ?? (variable ? { kind: 'symbol', key: variable } : null) }, index: match.index! });
   }
-  return results;
+  // Denominators and coefficients inside a parsed LHS are structure, not
+  // additional reported results (Tc1/2≈0.26 fs reports 0.26 fs, not bare 2).
+  return [...ratios, ...results.filter(item => !expressionRanges.some(range => item.index >= range.start && item.index < range.end))
+    .map(item => item.quantity)];
 }
 function sameScientificQuantity(asserted: ScientificQuantity, supported: ScientificQuantity, allowOmittedVariable = false): boolean {
+  if (asserted.binding?.kind === 'unsupported-expression' || supported.binding?.kind === 'unsupported-expression') return false;
   if (asserted.value !== supported.value) return false;
-  if (!asserted.unit && supported.unit && !(asserted.variable === 'nsp' && supported.unit === 'photon_count')) return false;
+  if (!asserted.unit && supported.unit && !(symbolKey(asserted) === 'nsp' && supported.unit === 'photon_count')) return false;
   if (asserted.unit && asserted.unit !== supported.unit
-    && !(asserted.unit === 'photon_count' && supported.variable === 'nsp')) return false;
-  if (asserted.variable && asserted.variable !== supported.variable && !(allowOmittedVariable && !supported.variable)) return false;
+    && !(asserted.unit === 'photon_count' && symbolKey(supported) === 'nsp')) return false;
+  if (asserted.binding && bindingKey(asserted) !== bindingKey(supported) && !(allowOmittedVariable && !supported.binding)) return false;
   return true;
 }
 function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][]): void {
@@ -99,31 +115,31 @@ function requireBoundNumericalResults(fields: readonly (readonly [string, string
       .some(item => sameScientificQuantity(quantity, item, true)));
     if (!described.some(subject => scientificQuantities(subject.basis.quote)
       .some(item => sameScientificQuantity(quantity, item)))) {
-      const code = `unbound_numeric_${quantity.value.replace('.', '_')}_${quantity.unit ?? quantity.variable ?? 'bare'}_${described.length ? 'source' : 'description'}`;
+      const code = `unbound_numeric_${quantity.value.replace('.', '_')}_${quantity.unit ?? bindingKey(quantity) ?? 'bare'}_${described.length ? 'source' : 'description'}`;
       const sourceVariables = [...new Set(described.flatMap(subject => scientificQuantities(subject.basis.quote))
-        .filter(item => sameScientificQuantity({ ...quantity, variable: null }, item)).map(item => item.variable))];
+        .filter(item => sameScientificQuantity({ ...quantity, binding: null }, item)).map(item => bindingKey(item)))];
       const onlySourceVariable = sourceVariables.length === 1 ? sourceVariables[0] : null;
       missing.push({ field, quantity, code,
         expectedVariable: onlySourceVariable ? SOURCE_VARIABLE_NAMES.get(onlySourceVariable)
-          : quantity.variable && sourceVariables.length === 1 && sourceVariables[0] === null ? null : undefined });
+          : quantity.binding && sourceVariables.length === 1 && sourceVariables[0] === null ? null : undefined });
     }
   }
   if (missing.length) {
     const first = missing[0]!;
     const sameResultFields = [...new Set(missing.filter(item => item.quantity.value === first.quantity.value
-      && item.quantity.unit === first.quantity.unit && item.quantity.variable === first.quantity.variable)
+      && item.quantity.unit === first.quantity.unit && bindingKey(item.quantity) === bindingKey(first.quantity))
       .map(item => item.field))].slice(0, 12);
     const otherResults = new Map<string, { code: string; variable: string | null; fields: string[] }>();
     for (const item of missing) {
       if (item.quantity.value === first.quantity.value && item.quantity.unit === first.quantity.unit
-          && item.quantity.variable === first.quantity.variable) continue;
-      const key = JSON.stringify([item.code, item.quantity.variable]);
+          && bindingKey(item.quantity) === bindingKey(first.quantity)) continue;
+      const key = JSON.stringify([item.code, bindingKey(item.quantity)]);
       const existing = otherResults.get(key);
       if (existing) { if (!existing.fields.includes(item.field)) existing.fields.push(item.field); }
-      else otherResults.set(key, { code: item.code, variable: item.quantity.variable, fields: [item.field] });
+      else otherResults.set(key, { code: item.code, variable: bindingKey(item.quantity), fields: [item.field] });
     }
     const otherDiagnostics = [...otherResults.values()].map(item =>
-      `${item.code}${item.variable ? ` (asserted variable ${item.variable})` : ''}: ${item.fields.slice(0, 12).join(', ')}`);
+      `${item.code}${item.variable ? ` (asserted binding ${item.variable})` : ''}: ${item.fields.slice(0, 12).join(', ')}`);
     throw new UnboundNumericSourceError(first.code, first.expectedVariable, sameResultFields, otherDiagnostics);
   }
 }
@@ -158,8 +174,8 @@ function scienceRejectionReceipt(value: unknown, response: string, attempt: numb
       const number = /^[0-9e.+:-]{1,20}$/u.test(item.value) && (item.value.match(/\d/gu)?.length ?? 0) <= 6
         ? item.value : 'other';
       const unit = ['as', 'fs', 'nm', 'μm', 'mev', 'pc', 'photon_count', 'ratio'].includes(item.unit ?? '') ? item.unit
-        : item.unit ? 'other' : ['fwhms', 'fwhmt', 'nsp'].includes(item.variable ?? '') ? item.variable : 'bare';
-      const variable = item.variable ? `@${['fwhms', 'fwhmt', 'nsp'].includes(item.variable) ? item.variable : 'other'}` : '';
+        : item.unit ? 'other' : ['fwhms', 'fwhmt', 'nsp'].includes(symbolKey(item) ?? '') ? symbolKey(item) : 'bare';
+      const variable = item.binding ? `@${['fwhms', 'fwhmt', 'nsp'].includes(symbolKey(item) ?? '') ? symbolKey(item) : 'other'}` : '';
       return `${number}:${unit}${variable}`;
     });
   };
@@ -601,18 +617,18 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         // Keep feedback within the Gateway's existing 2,000-character allowance.
         const briefOverflow = /illustration_brief:description:length_(\d+)_max_(\d+)/u.exec(diagnostic);
         const briefFeedback = briefOverflow ? ` The complete brief is ${briefOverflow[1]} characters for a ${briefOverflow[2]} shared limit. Remove repetition or choose a narrower source-supported relationship while preserving its complete meaning and conditions; leave necessary space for art. Do not mechanically truncate scientific text.` : '';
-        let feedback = `Diagnostic: ${diagnostic.slice(0, 400)}. Return exactly ${scienceShape}. Every subject is {description,basis:{sourceId}}; bind only an exact planning.supportingSourceIds value from upstream.sourcePassages with relation supports. Paper excerpt IDs, Claim IDs and non-supporting passages are not subject bindings. Re-read the original passage and revise unsupported meaning; never substitute an arbitrary valid ID. Preserve valid fields and source-grounded qualifiers. No schemaVersion or illustration wrapper. labels must enumerate all intended visible text, including axis letters, mathematical symbols and required conditions; no fixed label count. Follow all original field and shared-brief limits, leaving art space. Shorten repetition, never truncate scientific meaning.`;
-        if (diagnostic.startsWith('unbound_numeric_')) feedback += ` Each numerical result in titles, main message, narration, encoding, labels and constraints needs the same value, unit and stated variable in one subject description AND its own exact supporting passage. ${diagnostic.endsWith('_description') ? 'No subject description states this result; put it in a separate result subject and bind that subject to its original result passage.' : 'A subject states this result, but its bound original passage does not; select the actual supporting result passage or remove the unsupported value.'} A bare number with a different unit or variable is not support.`;
+        let feedback = `Diagnostic: ${diagnostic.slice(0, 400)}. Return exactly ${scienceShape}; no schemaVersion/illustration wrapper. Subjects: {description,basis:{sourceId}}, using only planning.supportingSourceIds from upstream.sourcePassages with relation supports. Re-read each bound quote; never substitute an arbitrary valid ID. Preserve supported meaning/conditions and all original field/shared-brief limits, leaving art space. labels enumerate all visible text.`;
+        if (diagnostic.startsWith('unbound_numeric_')) feedback += ' Every numerical result needs the same value, unit and stated symbol or complete expression in one subject description AND its own exact source quote. Repair every listed occurrence; do not infer aliases or bind only the last operand.';
         if (expectedSourceVariable === null) {
-          const hint = ' The bound source gives this value and unit in prose without naming the asserted variable. Use the original quantity name and value in prose, removing the unsupported symbol or assignment; or bind a passage that explicitly names that symbol. Do not infer an alias.';
+          const hint = ' The source gives this value and unit in prose: use the original quantity name, removing the invented symbol, or bind a quote explicitly naming it.';
           if (feedback.length + hint.length <= 2000) feedback += hint;
         }
         if (unsupportedNumericFields.length) {
-          const hint = ` The unsupported result also occurs in these fields: ${unsupportedNumericFields.join(', ')}. Correct or remove every occurrence in those fields, including visible labels; preserve genuinely supported results.`;
+          const hint = ` Correct these fields: ${unsupportedNumericFields.join(', ')}.`;
           if (feedback.length + hint.length <= 2000) feedback += hint;
         }
         if (diagnostic.endsWith('_source') && expectedSourceVariable) {
-          const hint = ` The bound passage has one matching source variable, ${expectedSourceVariable}; use that exact variable in the visible text and subject description, or remove the unsupported value. Do not infer an alias.`;
+          const hint = ` Source variable: ${expectedSourceVariable}; use that exact variable in visible text and subject description, or remove the unsupported value.`;
           if (feedback.length + hint.length <= 2000) feedback += hint;
         }
         if (/^unbound_numeric_[01]_bare_(?:description|source)$/u.test(diagnostic)) {
@@ -623,7 +639,7 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
           if (detail && feedback.length + detail.length + 1 <= 2000) feedback += ` ${detail}`;
         }
         for (const detail of otherNumericDiagnostics) {
-          const hint = ` Also unsupported by its own binding: ${detail}.`;
+          const hint = ` Also: ${detail}.`;
           if (feedback.length + hint.length <= 2000) feedback += hint;
         }
         return feedback;
