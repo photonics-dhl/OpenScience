@@ -1,6 +1,6 @@
 export type ScientificRepresentation = { kind: 'symbol' | 'expression' | 'quantity-name'; key: string };
 export type ScientificBinding = (ScientificRepresentation & { equivalents?: ScientificRepresentation[] }) | { kind: 'unsupported-expression' };
-type Token = { text: string; start: number; end: number; kind: 'identifier' | 'number' | 'other' };
+type Token = { text: string; start: number; end: number; kind: 'identifier' | 'number' | 'other'; horizontalSpaceBefore: boolean };
 type Expression = { key: string; symbol: boolean; numeric: boolean; symbolic: boolean; next: number };
 const identifier = /^[A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*$/u;
 const normalizeIdentifier = (value: string) => value.toLowerCase().replaceAll('_', '');
@@ -8,7 +8,8 @@ const proseBoundary = /^[.,;:!?。；，、：！？“”‘’"'—–\u4e00-\
 const mathSyntax = (token: Token | undefined) => token?.kind === 'other' && !proseBoundary.test(token.text);
 function tokenize(value: string): Token[] {
   return [...value.matchAll(/[A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*|(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?|\S/gu)]
-    .map(match => ({ text: match[0], start: match.index!, end: match.index! + match[0].length,
+    .map((match, index, matches) => ({ text: match[0], start: match.index!, end: match.index! + match[0].length,
+      horizontalSpaceBefore: index > 0 && /^[ \t]+$/u.test(value.slice(matches[index - 1]!.index! + matches[index - 1]![0].length, match.index!)),
       kind: identifier.test(match[0]) ? 'identifier' : /^(?:\d|\.\d)/u.test(match[0]) ? 'number' : 'other' }));
 }
 function mathParser(tokens: Token[]) {
@@ -23,7 +24,24 @@ function mathParser(tokens: Token[]) {
       const value = expression(index + 1);
       return value && tokens[value.next]?.text === ')' ? { ...value, next: value.next + 1 } : undefined;
     }
-    if (token.kind === 'identifier') return { key: normalizeIdentifier(token.text), symbol: true, numeric: false, symbolic: true, next: index + 1 };
+    if (token.kind === 'identifier') {
+      // A finite notation rule, not general implicit multiplication: one Greek
+      // coefficient, a standard trig name and one Greek argument. Keep every
+      // factor/argument in the key; never join arbitrary prose or cross lines.
+      let term = '';
+      for (let end = index; end < Math.min(tokens.length, index + 3); end++) {
+        const part = tokens[end]!;
+        if (part.kind !== 'identifier' || end > index && !part.horizontalSpaceBefore) break;
+        term += part.text;
+        const trig = /^([\u0370-\u03ff])?(sin|cos|tan)([\u0370-\u03ff])$/u.exec(term);
+        if (trig) {
+          const call = `${trig[2]}(${normalizeIdentifier(trig[3]!)})`;
+          return { key: trig[1] ? `(${normalizeIdentifier(trig[1])}*${call})` : call,
+            symbol: false, numeric: false, symbolic: true, next: end + 1 };
+        }
+      }
+      return { key: normalizeIdentifier(token.text), symbol: true, numeric: false, symbolic: true, next: index + 1 };
+    }
     if (token.kind === 'number') return { key: token.text, symbol: false, numeric: true, symbolic: false, next: index + 1 };
     return undefined;
   };
@@ -207,10 +225,30 @@ export function scientificExpressionReferences(input: string): Array<{ key: stri
     if (!referenceBoundary(tokens, index)) continue;
     const local = tokens.slice(index, index + 80);
     const value = mathParser(local)(0);
+    // A failed numerical math group must not be rescanned from its interior:
+    // that would turn (1-β f(θ)) into the valid but unrelated prefix (1-β).
+    if (!value && token.text === '(') {
+      const inner = mathParser(local)(1);
+      const startsNumericMath = local[1]?.kind === 'number' && ['+', '-', '*', '×', '·', '/'].includes(local[2]?.text ?? '');
+      if (inner?.numeric && inner.symbolic || startsNumericMath) {
+        let endIndex = index, depth = 1;
+        while (endIndex + 1 < tokens.length && endIndex - index + 1 < 80
+          && tokens[endIndex + 1]!.end - token.start <= 160 && !proseBoundary.test(tokens[endIndex + 1]!.text)) {
+          endIndex++;
+          if (tokens[endIndex]!.text === '(') depth++;
+          if (tokens[endIndex]!.text === ')' && --depth === 0) break;
+        }
+        result.push({ key: input.slice(token.start, tokens[endIndex]!.end), start: token.start, end: tokens[endIndex]!.end, unsupported: true });
+        index = endIndex;
+        continue;
+      }
+    }
     // An unparsed function/operator must not degrade to its internal bare
     // constant and accidentally match an unrelated numeric result.
     const continuation = value && tokens[index + value.next];
-    if (value?.symbolic && mathSyntax(continuation) && ![')', '=', '≈', '~', '<', '>', '≤', '≥', '≪'].includes(continuation!.text)
+    const incompleteProduct = value?.numeric && value.symbolic && local[value.next - 1]?.kind === 'identifier'
+      && continuation?.kind === 'identifier';
+    if (incompleteProduct || value?.symbolic && mathSyntax(continuation) && ![')', '=', '≈', '~', '<', '>', '≤', '≥', '≪'].includes(continuation!.text)
       && !(continuation!.text === '(' && groupBoundary(tokens, index + value.next))) {
       let endIndex = index;
       let depth = 0;
@@ -233,7 +271,12 @@ export function scientificExpressionReferences(input: string): Array<{ key: stri
     }
     if (!value || !value.numeric || !value.symbolic) continue;
     const last = local[value.next - 1]!, next = tokens[index + value.next];
-    if (last.end - token.start > 160 || mathSyntax(next) && ![')', '=', '≈', '~', '<', '>', '≤', '≥', '≪'].includes(next!.text)
+    if (last.end - token.start > 160) {
+      result.push({ key: input.slice(token.start, token.start + 160), start: token.start, end: token.start + 160, unsupported: true });
+      index += value.next - 1;
+      continue;
+    }
+    if (mathSyntax(next) && ![')', '=', '≈', '~', '<', '>', '≤', '≥', '≪'].includes(next!.text)
       || next?.kind === 'identifier' && next.start === last.end) continue;
     result.push({ key: value.key, start: token.start, end: last.end });
     index += value.next - 1;

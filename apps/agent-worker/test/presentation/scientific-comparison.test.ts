@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scientificComparisonBinding } from '../../src/presentation/scientific-comparison';
+import { scientificComparisonBinding, scientificExpressionReferences } from '../../src/presentation/scientific-comparison';
 
 const binding = (text: string) => scientificComparisonBinding(text, text.lastIndexOf('27'));
 describe('scientific comparison binding', () => {
@@ -46,4 +46,37 @@ describe('scientific comparison binding', () => {
   ])('preserves source annotations and adjacent quantities: %s', (text, number, expected) => {
     expect(scientificComparisonBinding(text as string, (text as string).lastIndexOf(number as string))?.binding).toEqual(expected);
   });
+});
+
+describe('complete expression references with spaced trigonometric terms', () => {
+  const references = (text: string) => scientificExpressionReferences(text.replaceAll('−', '-'));
+  it.each(['(1−β cosθ)', '(1 − β cos θ)', '(1-βcos θ)', '(1-β\tcosθ)'])
+    ('compares the whole %s with compact notation', text => {
+      const compact = references('(1-βcosθ)');
+      const spaced = references(text);
+      expect(spaced).toHaveLength(1);
+      expect(spaced[0]).toEqual({ key: compact[0]!.key, start: 0, end: text.length });
+      expect(binding(`${text.replaceAll('−', '-')}≈27`)?.binding).toEqual(binding('(1-βcosθ)≈27')?.binding);
+    });
+
+  it.each(['(1-β f(θ))', '(1-β cos(θ+φ))', '(1-β cosθ extra)', '(1-β cos)', '(1-β cosθ', '(1-β cosθ +)', '(1-β\ncosθ)',
+    '1-β f(θ)', '1-β cosθ1', `(1-${' '.repeat(161)}βcosθ)`])
+    ('does not turn incomplete or unsupported %s into a shorter reference', text => {
+      const parsed = references(text);
+      expect(parsed.some(item => item.unsupported)).toBe(true);
+      expect(parsed.filter(item => !item.unsupported)).not.toContainEqual(expect.objectContaining({ key: references('(1-β)')[0]!.key }));
+    });
+
+  it('keeps the unsupported group range local to its own brackets', () => {
+    const input = '1 MeV; (1-β cos(θ+φ)); 500 nm';
+    const parsed = references(input).filter(item => item.unsupported);
+    expect(parsed).toHaveLength(1);
+    expect(input.slice(parsed[0]!.start, parsed[0]!.end)).toBe('(1-β cos(θ+φ))');
+  });
+
+  it.each(['(1-β cosφ)', '(1+β cosθ)', '(1-β/cosθ)', '(1-β sinθ)', '(1-β cosθ1)', '(1-β cosθ+φ)'])
+    ('does not equate an altered angle, operator or argument: %s', text => {
+      const compactKey = references('(1-βcosθ)')[0]!.key;
+      expect(references(text).filter(item => !item.unsupported).map(item => item.key)).not.toContain(compactKey);
+    });
 });

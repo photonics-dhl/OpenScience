@@ -608,6 +608,35 @@ describe('automatic art direction after sourced science', () => {
     })).resolves.toBeDefined();
   });
 
+  it.each([
+    ['(1−β cosθ) time compression', '(1-βcosθ)', true],
+    ['(1−βcosθ) time compression', '(1-β cosθ)', true],
+    ['(1 − β cos θ) time compression', '(1-βcosθ)', true],
+    ['(1-β cosφ)', '(1-βcosθ)', false],
+    ['(1+β cosθ)', '(1-βcosθ)', false],
+    ['(1-β/cosθ)', '(1-βcosθ)', false],
+    ['(1-β cosθ1)', '(1-βcosθ)', false],
+    ['(1-β cos(θ+φ))', '(1-β)', false],
+    ['(1-β f(θ))', '(1-β)', false],
+    ['(1-β cosθ extra)', '(1-β)', false],
+    ['(1-β cos)', '(1-β)', false],
+    ['(1-β cosθ', '(1-β)', false],
+    ['(1-β\ncosθ)', '(1-β)', false],
+  ])('validates complete trigonometric references across field, description and source: %s / %s', async (label, expression, accepted) => {
+    const source = `The time factor is ${expression}; n=1.`;
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!, labels: [label],
+      subjects: [{ description: source, basis: { sourceId: 's0' } }] }] };
+    const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1 ? candidate
+      : { scenes: [{ layout: 'One sourced factor.', treatment: 'Quiet ink.' }] });
+    const result = generateIllustrationStoryboard({ completeStructured } as never, inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    });
+    if (accepted) await expect(result).resolves.toBeDefined();
+    else await expect(result).rejects.toThrow(label.includes('\n') ? /single_line_no_control_characters/ : /unbound_expression/);
+    expect(completeStructured).toHaveBeenCalledTimes(accepted ? 2 : 1);
+  });
+
   it('preserves prose quantities in approximate parentheses without swallowing earlier values', async () => {
     const source = 'The field in the y-direction (~20 nm) is tighter than that in the z-direction (~77 nm).';
     const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
