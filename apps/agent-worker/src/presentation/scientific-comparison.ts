@@ -1,55 +1,36 @@
-export type ScientificBinding = { kind: 'symbol' | 'expression'; key: string } | { kind: 'unsupported-expression' };
+export type ScientificRepresentation = { kind: 'symbol' | 'expression' | 'quantity-name'; key: string };
+export type ScientificBinding = (ScientificRepresentation & { equivalents?: ScientificRepresentation[] }) | { kind: 'unsupported-expression' };
 type Token = { text: string; start: number; end: number; kind: 'identifier' | 'number' | 'other' };
-type Expression = { key: string; symbol: boolean; next: number };
+type Expression = { key: string; symbol: boolean; numeric: boolean; symbolic: boolean; next: number };
 const identifier = /^[A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*$/u;
 const normalizeIdentifier = (value: string) => value.toLowerCase().replaceAll('_', '');
-
-/** Syntactic binding only: no evaluation, algebraic rewriting or symbol aliases. */
-export function scientificComparisonBinding(input: string, numberStart: number): {
-  binding: ScientificBinding; start: number; end: number;
-} | undefined {
-  const offset = Math.max(0, numberStart - 160);
-  const before = input.slice(offset, numberStart);
-  const relation = /(?:<<|<=|>=|=|≈|~|≪|≥|≤|>|<)\s*$/u.exec(before);
-  // Original sources also state a named width or ratio as "FWHM_T (19 as)"
-  // or "Tc1/2 (i.e., 0.26 fs)". Ordinary prose parentheses are not symbols.
-  const annotation = relation ? null : /\(\s*(?:i\.e\.,?\s*)?$/iu.exec(before);
-  const separator = relation ?? annotation;
-  if (!separator) return undefined;
-  const lhs = before.slice(0, separator.index).trimEnd();
-  const tokens: Token[] = [...lhs.matchAll(/[A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*|(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?|\S/gu)]
+const proseBoundary = /^[.,;:!?。；，、：！？“”‘’"'—–\u4e00-\u9fff]$/u;
+const mathSyntax = (token: Token | undefined) => token?.kind === 'other' && !proseBoundary.test(token.text);
+function tokenize(value: string): Token[] {
+  return [...value.matchAll(/[A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*|(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?|\S/gu)]
     .map(match => ({ text: match[0], start: match.index!, end: match.index! + match[0].length,
       kind: identifier.test(match[0]) ? 'identifier' : /^(?:\d|\.\d)/u.test(match[0]) ? 'number' : 'other' }));
-  if (!tokens.length) return undefined;
-  // "the z-direction (~77 nm)" supplies an approximate prose quantity, not
-  // an equation for everything before the parenthesis. Preserve both widths.
-  if (relation && tokens.at(-1)?.text === '(' && ['~', '≈'].includes(relation[0].trim())) {
-    const preceding = tokens.at(-2);
-    if (offset > 0 && tokens.length <= 2)
-      return { binding: { kind: 'unsupported-expression' }, start: numberStart, end: numberStart };
-    if (!preceding || preceding.kind === 'identifier' && preceding.end < tokens.at(-1)!.start)
-      return undefined;
-  }
-  const openGroups: number[] = [];
-  tokens.forEach((token, index) => {
-    if (token.text === '(') openGroups.push(index);
-    else if (token.text === ')') openGroups.pop();
-  });
+}
+function mathParser(tokens: Token[]) {
   const atom = (index: number): Expression | undefined => {
     const token = tokens[index];
     if (!token) return undefined;
     if (token.text === '+' || token.text === '-') {
       const value = atom(index + 1);
-      return value ? { key: `(${token.text}${value.key})`, symbol: false, next: value.next } : undefined;
+      return value ? { ...value, key: `(${token.text}${value.key})`, symbol: false } : undefined;
     }
     if (token.text === '(') {
       const value = expression(index + 1);
       return value && tokens[value.next]?.text === ')' ? { ...value, next: value.next + 1 } : undefined;
     }
-    if (token.kind === 'identifier') return { key: normalizeIdentifier(token.text), symbol: true, next: index + 1 };
-    if (token.kind === 'number') return { key: token.text, symbol: false, next: index + 1 };
+    if (token.kind === 'identifier') return { key: normalizeIdentifier(token.text), symbol: true, numeric: false, symbolic: true, next: index + 1 };
+    if (token.kind === 'number') return { key: token.text, symbol: false, numeric: true, symbolic: false, next: index + 1 };
     return undefined;
   };
+  const combine = (left: Expression, operator: string, right: Expression): Expression => ({
+    key: `(${left.key}${operator}${right.key})`, symbol: false,
+    numeric: left.numeric || right.numeric, symbolic: left.symbolic || right.symbolic, next: right.next,
+  });
   const product = (index: number): Expression | undefined => {
     let value = atom(index);
     if (!value) return undefined;
@@ -57,7 +38,7 @@ export function scientificComparisonBinding(input: string, numberStart: number):
       const operator: string = tokens[value.next]!.text === '/' ? '/' : '*';
       const right = atom(value.next + 1);
       if (!right) return undefined;
-      value = { key: `(${value.key}${operator}${right.key})`, symbol: false, next: right.next };
+      value = combine(value, operator, right);
     }
     return value;
   };
@@ -65,38 +46,131 @@ export function scientificComparisonBinding(input: string, numberStart: number):
     let value = product(index);
     if (!value) return undefined;
     while (['+', '-'].includes(tokens[value.next]?.text ?? '')) {
+      const operator: string = tokens[value.next]!.text;
       const right = product(value.next + 1);
       if (!right) return undefined;
-      value = { key: `(${value.key}${tokens[value.next]!.text}${right.key})`, symbol: false, next: right.next };
+      value = combine(value, operator, right);
     }
     return value;
   };
+  return expression;
+}
+const representation = (value: Expression): ScientificRepresentation => ({ kind: value.symbol ? 'symbol' : 'expression', key: value.key });
+
+/** Explicit local prose only; no translation, synonyms or inferred variable aliases. */
+function proseQuantity(before: string, offset: number) {
+  const unsupported = () => ({ binding: { kind: 'unsupported-expression' as const }, start: offset + before.length, end: offset + before.length });
+  const namedSymbol = /\(([A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*)\)\s+(?:is|of)\s*$/iu.exec(before);
+  if (namedSymbol) {
+    const prefix = before.slice(0, namedSymbol.index), name = /\b([A-Za-z][A-Za-z-]{2,})\s+$/u.exec(prefix);
+    if (prefix && (!name || !/\s$/u.test(prefix))) return unsupported();
+    return { binding: { kind: 'symbol' as const, key: normalizeIdentifier(namedSymbol[1]!) }, start: offset + namedSymbol.index, end: offset + before.length };
+  }
+  const predicate = /\b([A-Za-z]+(?:-[A-Za-z]+)*(?:[ \t]+[A-Za-z]+(?:-[A-Za-z]+)*){0,7})[ \t]+(?:of|is)[ \t]*$/iu.exec(before);
+  const prose = predicate ?? /\b([A-Za-z]+(?:-[A-Za-z]+)*(?:[ \t]+[A-Za-z]+(?:-[A-Za-z]+)*){1,7})[ \t]*(?:=|≈|~)[ \t]*$/u.exec(before);
+  if (!prose) return undefined;
+  if (!predicate && (prose[1]!.split(/\s+/u).at(-1)!.length === 1 || /[A-Z]/u.test(prose[1]!.split(/\s+/u).at(-1)!))) return undefined;
+  const preceding = before.slice(0, prose.index).trimEnd().at(-1);
+  const words = prose[1]!.toLowerCase().split(/\s+/u);
+  // Grammatical delimiters identify a local noun phrase; they never map words
+  // to a scientific symbol. Direction/object modifiers remain part of the key.
+  const lastDelimiter = words.reduce((last, word, index) => /^(?:a|an|the|with|has|have|assuming|assume|and|at|is)$/u.test(word) ? index : last, -1);
+  const prefixTokens = preceding === '(' ? tokenize(before.slice(0, prose.index)) : [];
+  const proseGroup = preceding === '(' && groupBoundary(prefixTokens, prefixTokens.length - 1);
+  if (prose.index === 0 && offset > 0 && lastDelimiter < 0
+    || preceding && !proseBoundary.test(preceding) && !proseGroup && (!/[A-Za-z\d]/u.test(preceding) || lastDelimiter < 0)) return unsupported();
+  const name = words.slice(lastDelimiter + 1).join(' ');
+  if (!name) return undefined;
+  return { binding: { kind: 'quantity-name' as const, key: name }, prose: !!predicate,
+    start: offset + prose.index, end: offset + before.length };
+}
+
+// A complete group can be a prose parenthesis, but not a function argument or
+// the interior of an unsupported mathematical expression.
+function groupBoundary(tokens: Token[], index: number): boolean {
+  const previous = tokens[index - 1];
+  if (!previous || proseBoundary.test(previous.text)) return true;
+  if (previous.kind !== 'identifier' || previous.end === tokens[index]!.start) return false;
+  if (/^(?:is|of|and|as)$/iu.test(previous.text)) return true;
+  if (previous.text.length < 3) return false;
+  const earlier = tokens[index - 2];
+  return !!earlier && earlier.kind === 'identifier' && earlier.end < previous.start;
+}
+function referenceBoundary(tokens: Token[], index: number): boolean {
+  const previous = tokens[index - 1];
+  if (tokens[index]!.text === '(' && !groupBoundary(tokens, index)) return false;
+  if (previous?.text === '(') return groupBoundary(tokens, index - 1);
+  return !mathSyntax(previous) || ['=', '≈', '~', '<', '>', '≤', '≥', '≪'].includes(previous!.text);
+}
+
+/** Only explicit local equality edges; no value-based or cross-passage inference. */
+export function scientificEqualityRelations(input: string): Array<[ScientificRepresentation, ScientificRepresentation]> {
+  const tokens = tokenize(input), relations: Array<[ScientificRepresentation, ScientificRepresentation]> = [];
+  for (let index = 0; index < tokens.length; index++) {
+    if (!referenceBoundary(tokens, index)) continue;
+    const local = tokens.slice(index, index + 80), parse = mathParser(local), left = parse(0);
+    if (!left?.symbolic || local[left.next]?.text !== '=') continue;
+    const right = parse(left.next + 1);
+    if (!right?.symbolic || local[right.next - 1]!.end - local[0]!.start > 160) continue;
+    const next = tokens[index + right.next];
+    if (next && (next.kind !== 'other' || mathSyntax(next) && ![')', '=', '≈', '~', '<', '>', '≤', '≥', '≪'].includes(next.text))) continue;
+    relations.push([representation(left), representation(right)]);
+  }
+  return relations;
+}
+
+/** Syntactic binding only: no evaluation, algebraic rewriting or inferred aliases. */
+export function scientificComparisonBinding(input: string, numberStart: number): {
+  binding: ScientificBinding; start: number; end: number; prose?: boolean;
+} | undefined {
+  const offset = Math.max(0, numberStart - 160);
+  const before = input.slice(offset, numberStart);
+  const prose = proseQuantity(before, offset);
+  if (prose) return prose;
+  const relation = /(?:<<|<=|>=|=|≈|~|≪|≥|≤|>|<)\s*$/u.exec(before);
+  const annotation = relation ? null : /\(\s*(?:i\.e\.,?\s*)?$/iu.exec(before);
+  const separator = relation ?? annotation;
+  if (!separator) return undefined;
+  const lhs = before.slice(0, separator.index).trimEnd();
+  const tokens = tokenize(lhs);
+  if (!tokens.length) return undefined;
+  if (relation && tokens.at(-1)?.text === '(' && ['~', '≈'].includes(relation[0].trim())) {
+    const preceding = tokens.at(-2);
+    if (offset > 0 && tokens.length <= 2)
+      return { binding: { kind: 'unsupported-expression' }, start: numberStart, end: numberStart };
+    if (!preceding || preceding.kind === 'identifier' && preceding.end < tokens.at(-1)!.start) return undefined;
+  }
+  const openGroups: number[] = [];
+  tokens.forEach((token, index) => {
+    if (token.text === '(') openGroups.push(index);
+    else if (token.text === ')') openGroups.pop();
+  });
+  const expression = mathParser(tokens);
   const completedQuantity = (end: number) => /\d\s*(?:as|fs|ps|ns|nm|μm|mm|MeV|keV|eV)\s*$/iu.test(lhs.slice(0, end));
-  const proseBoundary = /^[.,;:!?。；，、：！？“”‘’"'—–\u4e00-\u9fff]$/u;
-  const mathSyntax = (token: Token | undefined) => token?.kind === 'other' && !proseBoundary.test(token.text);
   let unsupportedStart: number | undefined;
   for (let start = 0; start < tokens.length; start++) {
     const previous = tokens[start - 1];
-    // Never recover a suffix after an operator, grouping delimiter, function
-    // call or other mathematical syntax: that would relabel the last operand.
     const opensComparison = previous?.text === '(' && openGroups.includes(start - 1)
       && (start === 1 && offset === 0 || completedQuantity(previous.start)
         || /[;:。；，,\u4e00-\u9fff]/u.test(tokens[start - 2]?.text ?? ''));
     const afterQuantityComparison = previous && /^[<>≤≥≪]$/u.test(previous.text) && completedQuantity(previous.start);
-    if (previous && (!opensComparison && !afterQuantityComparison && mathSyntax(previous)
+    const narrativeArrow = previous?.text === '→' && /[\u4e00-\u9fff]/u.test(lhs.slice(0, previous.start))
+      && !openGroups.some(index => index < start);
+    if (previous && (!opensComparison && !afterQuantityComparison && !narrativeArrow && mathSyntax(previous)
       || previous.kind === 'number' || previous.end === tokens[start]!.start && previous.kind === 'identifier')) continue;
-    // Whitespace can hide a cropped operator; a window boundary is never proof
-    // of a complete expression. A group after an identifier may be a function.
     if (start === 0 && offset > 0 || tokens[start]!.text === '(' && previous?.kind === 'identifier') continue;
     const first = expression(start);
     if (!first) {
       if (tokens[start]!.kind !== 'other' || tokens[start]!.text === '(') unsupportedStart = start;
       continue;
     }
-    let next = first.next;
+    const equivalents: ScientificRepresentation[] = [];
+    let next = first.next, exactChain = true;
     while (['=', '≈', '~'].includes(tokens[next]?.text ?? '')) {
+      exactChain &&= tokens[next]!.text === '=';
       const right = expression(next + 1);
       if (!right) break;
+      if (exactChain) equivalents.push(representation(right));
       next = right.next;
     }
     if (next !== tokens.length) {
@@ -104,15 +178,55 @@ export function scientificComparisonBinding(input: string, numberStart: number):
       continue;
     }
     if (annotation && first.symbol && !['fwhms', 'fwhmt', 'nsp'].includes(first.key)) return undefined;
-    return { binding: { kind: first.symbol ? 'symbol' : 'expression', key: first.key },
+    return { binding: { ...representation(first), ...(equivalents.length ? { equivalents } : {}) },
       start: offset + tokens[start]!.start, end: offset + separator.index };
   }
   const tail = tokens.at(-1)!;
   if (relation && (tail.kind !== 'other' || mathSyntax(tail)))
     return { binding: { kind: 'unsupported-expression' },
-      // A failed local expression may contain structural coefficients. When
-      // its beginning cannot be proved, do not hide any earlier quantities.
-      start: offset + (unsupportedStart === undefined ? separator.index : tokens[unsupportedStart]!.start),
-      end: offset + separator.index };
+      start: offset + (unsupportedStart === undefined ? separator.index : tokens[unsupportedStart]!.start), end: offset + separator.index };
   return undefined;
+}
+
+/** Whole symbolic references with constants (e.g. λ0/2), never bare constants. */
+export function scientificExpressionReferences(input: string): Array<{ key: string; start: number; end: number; unsupported?: boolean }> {
+  const tokens = tokenize(input), result: Array<{ key: string; start: number; end: number; unsupported?: boolean }> = [];
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index]!;
+    if (tokens[index - 1]?.kind === 'number') continue;
+    if (!referenceBoundary(tokens, index)) continue;
+    const local = tokens.slice(index, index + 80);
+    const value = mathParser(local)(0);
+    // An unparsed function/operator must not degrade to its internal bare
+    // constant and accidentally match an unrelated numeric result.
+    const continuation = value && tokens[index + value.next];
+    if (value?.symbolic && mathSyntax(continuation) && ![')', '=', '≈', '~', '<', '>', '≤', '≥', '≪'].includes(continuation!.text)
+      && !(continuation!.text === '(' && groupBoundary(tokens, index + value.next))) {
+      let endIndex = index;
+      let depth = 0;
+      while (endIndex + 1 < tokens.length && tokens[endIndex + 1]!.end - token.start <= 160
+        && !proseBoundary.test(tokens[endIndex + 1]!.text)) {
+        const previous = tokens[endIndex]!, next = tokens[endIndex + 1]!;
+        if (next.kind === 'identifier' && (previous.kind === 'identifier' || previous.kind === 'number')) break;
+        endIndex++;
+        if (tokens[endIndex]!.text === '(') depth++;
+        if (tokens[endIndex]!.text === ')' && --depth === 0) break;
+      }
+      const approximateProse = continuation!.text === '(' && !value.symbol
+        && ['~', '≈'].includes(tokens[index + value.next + 1]?.text ?? '');
+      if (approximateProse) continue;
+      if (tokens.slice(index, endIndex + 1).some(item => item.kind === 'number')) {
+        result.push({ key: input.slice(token.start, tokens[endIndex]!.end), start: token.start, end: tokens[endIndex]!.end, unsupported: true });
+        index = endIndex;
+      }
+      continue;
+    }
+    if (!value || !value.numeric || !value.symbolic) continue;
+    const last = local[value.next - 1]!, next = tokens[index + value.next];
+    if (last.end - token.start > 160 || mathSyntax(next) && ![')', '=', '≈', '~', '<', '>', '≤', '≥', '≪'].includes(next!.text)
+      || next?.kind === 'identifier' && next.start === last.end) continue;
+    result.push({ key: value.key, start: token.start, end: last.end });
+    index += value.next - 1;
+  }
+  return result;
 }

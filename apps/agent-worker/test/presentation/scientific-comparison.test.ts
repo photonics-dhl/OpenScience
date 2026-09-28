@@ -38,7 +38,7 @@ describe('scientific comparison binding', () => {
     ['ζ=Tc1/τ1≈27', { kind: 'symbol', key: 'ζ' }],
     ['q=(a+b)/c≈27', { kind: 'symbol', key: 'q' }],
     ['(a+b)/c≈27', { kind: 'expression', key: '((a+b)/c)' }],
-  ])('preserves complete bindings: %s', (text, expected) => expect(binding(text as string)?.binding).toEqual(expected));
+  ])('preserves complete bindings: %s', (text, expected) => expect(binding(text as string)?.binding).toMatchObject(expected));
   it.each([
     ['Tc1/2(i.e.,0.26fs)', '0.26', { kind: 'expression', key: '(tc1/2)' }],
     ['FWHM_T(19as)', '19', { kind: 'symbol', key: 'fwhmt' }],

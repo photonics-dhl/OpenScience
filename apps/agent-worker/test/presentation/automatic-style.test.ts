@@ -549,7 +549,7 @@ describe('automatic art direction after sourced science', () => {
 
   it('preserves physical expressions across structural label references', async () => {
     const text = 'FWHM_T≈19 as (标签 0) ≪ Tc1/2≈0.26 fs (标签 1), ζ=Tc1/τ1≈27 (标签 2)';
-    const source = 'FWHM_T(19 as), Tc1/2(i.e.,0.26 fs), ζ≈27.';
+    const source = 'FWHM_T(19 as), Tc1/2(i.e.,0.26 fs), ζ=Tc1/τ1≈27.';
     const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
     const candidate = { ...science, scenes: [{ ...science.scenes[0]!, encoding: text,
       labels: ['FWHM_T≈19 as', 'Tc1/2≈0.26 fs', 'ζ≈27'],
@@ -571,6 +571,54 @@ describe('automatic art direction after sourced science', () => {
     await expect(generateIllustrationStoryboard({ completeStructured } as never, inputClaims, {
       locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
     })).resolves.toBeDefined();
+  });
+
+  it.each([
+    ['slit width=20 nm', 'A slit width of 20 nm.', 'A slit width of 20 nm.'],
+    ['diameter=500 nm', 'A diameter of 500 nm.', 'A diameter of 500 nm.'],
+    ['λ0=1.8 μm', 'The driving wavelength (λ0) is 1.8 μm.', 'The driving wavelength (λ0) is 1.8 μm.'],
+    ['Ve=0.94c', 'The velocity Ve≈0.94c.', 'The velocity Ve≈0.94c.'],
+    ['Ve=0.94c', 'Energy of 1 MeV (corresponding to a velocity Ve≈0.94c).', 'Energy of 1 MeV (corresponding to a velocity Ve≈0.94c).'],
+    ['中心（slit width=20 nm）', 'A slit width of 20 nm.', 'A slit width of 20 nm.'],
+    ['τ1=19 as', 'FWHM_T=τ1=19 as.', 'FWHM_T=τ1=19 as.'],
+    ['λ0/2', 'The reference width is λ0/2.', 'The reference width is λ0/2.'],
+    ['1-βcosθ', 'The time factor is (1-βcosθ).', 'The factor (1-βcosθ) describes compression.'],
+    ['ζ=Tc1/τ1≈27', 'We define ζ=Tc1/τ1, and ζ≈27.', 'We define ζ=Tc1/τ1, and ζ≈27.'],
+    ['diameter=500 nm', 'A diameter of 500 nm.', 'Fig. S2| Calculated geometry with a diameter of 500 nm.'],
+  ])('matches explicitly sourced representations: %s', async (label, description, source) => {
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!, labels: [label],
+      subjects: [{ description, basis: { sourceId: 's0' } }] }] };
+    const completeStructured = vi.fn(async () => completeStructured.mock.calls.length === 1 ? candidate
+      : { scenes: [{ layout: 'One sourced quantity.', treatment: 'Quiet ink.' }] });
+    await expect(generateIllustrationStoryboard({ completeStructured } as never, inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    })).resolves.toBeDefined();
+  });
+
+  it.each([
+    ['y-direction slit width=20 nm', 'A z-direction slit width of 20 nm.', 'A z-direction slit width of 20 nm.'],
+    ['a/slit width=20 nm', 'A slit width of 20 nm.', 'A slit width of 20 nm.'],
+    ['q=19 as', 'q=19 as.', 'f(q) is 19 as.'],
+    ['FWHMT=q=19 as', 'FWHMT=q=19 as.', 'FWHMT=19 as.'],
+    ['f(λ0/2)', 'The reference width is λ0/2.', 'The reference width is λ0/2.'],
+    ['f(λ0/2)', 'The reference width is λ0/2; n=2.', 'The reference width is λ0/2; n=2.'],
+    ['b=19 as', 'b=19 as.', 'a=b c; a=19 as.'],
+    ['w=20 nm', 'A slit width of 20 nm.', 'A slit width of 20 nm.'],
+    ['z width=20 nm', 'A y width of 20 nm.', 'A y width of 20 nm.'],
+    ['λ0=1.8 μm', 'λ0=1.8 μm.', 'The symbol is λ0. The wavelength is 1.8 μm.'],
+    ['τ1=19 as', 'FWHM_T=τ1=19 as.', 'FWHM_T (19 as).'],
+    ['τ1=19 as', 'FWHM_T≈τ1≈19 as.', 'FWHM_T≈τ1≈19 as.'],
+    ['λ0/9', 'The reference width is λ0/2; the page is 9.', 'The reference width is λ0/2; the page is 9.'],
+  ])('rejects invented or mismatched representations: %s', async (label, description, source) => {
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!, labels: [label],
+      subjects: [{ description, basis: { sourceId: 's0' } }] }] };
+    const completeStructured = vi.fn(async () => candidate);
+    await expect(generateIllustrationStoryboard({ completeStructured } as never, inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    })).rejects.toThrow(/unbound_|unsupported_/);
+    expect(completeStructured).toHaveBeenCalledTimes(1);
   });
 
   it('reports all independent numeric repairs within the existing feedback budget', async () => {
@@ -687,12 +735,12 @@ describe('automatic art direction after sourced science', () => {
     expect(result.document.scenes[0]!.illustration?.subjects[1]!.basis.quote).toBe('The material diameter is 500 nm.');
   });
 
-  it('names the unique source variable when repairing a same-value numeric mismatch', async () => {
+  it.each([true, false])('names the unique source variable when repairing a same-value numeric mismatch (description repeats symbol: %s)', async (descriptionRepeatsSymbol) => {
     const source = 'The virtual width (FWHM_T, i.e., τ₁) of 19 as is obtained.';
     const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
     const candidate = (label: string) => ({ ...science, scenes: [{ ...science.scenes[0]!, title: 'Virtual width',
       narration: label, message: label, labels: [label],
-      subjects: [{ description: label, basis: { sourceId: 's0' } }],
+      subjects: [{ description: descriptionRepeatsSymbol ? label : 'FWHM_T=19 as', basis: { sourceId: 's0' } }],
     }] });
     const requests: Array<Array<{ content: string }>> = [];
     const provider: Provider = { name: 'fixture', model: 'fixture', complete: async ({ messages }) => {
@@ -756,8 +804,8 @@ describe('automatic art direction after sourced science', () => {
   });
 
   it.each([
-    ['ζ=Tc1/τ₁≈27', 'The constraint factor ζ≈27.', true],
-    ['q=(a+b)/c≈27', 'The derived result q≈27.', true],
+    ['ζ=Tc1/τ₁≈27', 'The constraint factor ζ=Tc1/τ1≈27.', true],
+    ['q=(a+b)/c≈27', 'The derived result q=(a+b)/c≈27.', true],
     ['a/b≈27', 'The reported ratio a/b≈27.', true],
     ['a/b≈27', 'The unrelated denominator b≈27.', false],
     ['a+b≈27', 'The unrelated summand b≈27.', false],

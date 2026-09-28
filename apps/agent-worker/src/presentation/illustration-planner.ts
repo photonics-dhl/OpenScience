@@ -8,7 +8,7 @@ import { compileIllustrationImagePrompt } from './scene-image';
 import type { IllustrationReviewIssue } from './illustration-review';
 import { loadIllustrationStyleSkills } from './illustration-styles';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
-import { scientificComparisonBinding, type ScientificBinding } from './scientific-comparison';
+import { scientificComparisonBinding, scientificExpressionReferences, scientificEqualityRelations, type ScientificBinding, type ScientificRepresentation } from './scientific-comparison';
 
 type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string } };
 // New candidates only: stored historical briefs stay readable, but a freshly
@@ -27,10 +27,16 @@ function requireLabelReferencesInRange(brief: IllustrationBrief): void {
     }
   }
 }
-type ScientificQuantity = { value: string; unit: string | null; binding: ScientificBinding | null };
+type ScientificQuantity = { value: string; unit: string | null; binding: ScientificBinding | null; representations?: ScientificRepresentation[]; equalities?: Array<[string, string]> };
 const symbolKey = (quantity: ScientificQuantity) => quantity.binding?.kind === 'symbol' ? quantity.binding.key : null;
+const representationKey = (binding: ScientificRepresentation) => binding.kind === 'expression' ? `expression:${binding.key}` : binding.key;
 const bindingKey = (quantity: ScientificQuantity) => !quantity.binding ? null : quantity.binding.kind === 'unsupported-expression'
-  ? 'unsupported-expression' : quantity.binding.kind === 'symbol' ? quantity.binding.key : `expression:${quantity.binding.key}`;
+  ? 'unsupported-expression' : representationKey(quantity.binding);
+const supportedBindingKeys = (quantity: ScientificQuantity) => {
+  const keys = [...(quantity.representations ?? []),
+    ...(!quantity.binding || quantity.binding.kind === 'unsupported-expression' ? [] : [quantity.binding, ...(quantity.binding.equivalents ?? [])])].map(representationKey);
+  return [...keys, ...(quantity.equalities ?? []).flatMap(([left, right]) => keys.includes(left) ? [right] : keys.includes(right) ? [left] : [])];
+};
 const SOURCE_VARIABLE_NAMES = new Map([['fwhmt', 'FWHM_T'], ['fwhms', 'FWHM_S'], ['nsp', 'N_SP']]);
 class UnboundNumericSourceError extends Error {
   constructor(message: string, readonly expectedVariable?: string | null, readonly fields: readonly string[] = [],
@@ -39,7 +45,8 @@ class UnboundNumericSourceError extends Error {
 const QUANTITY_PATTERN = /(?<![A-Za-z\u0370-\u03ff\d])[+-]?(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)(?:\s*[×x]\s*10\s*\^?\s*[+-]?\d+|[eE][+-]?\d+)?(?!\d|\.\d)/gu;
 const STRUCTURAL_REFERENCE_PATTERN = /\b(?:label|subject|scene|figure|fig\.?|step|stage|panel|node|arrow|element)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*\b|(?:图号|图|标签|场景|对象|主体|步骤|阶段|节点|箭头|序号)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*|第?\d+幕|\d+号/giu;
 function stripStructuralReferences(value: string): string {
-  return value.replace(/\([^()]*\)|\[[^\[\]]*\]/gu, group => {
+  return value.replace(/\b(?:fig\.?|figure)\s*S\d+[a-z]?\s*\|/giu, ';')
+    .replace(/\([^()]*\)|\[[^\[\]]*\]/gu, group => {
     const inner = group.slice(1, -1), remaining = inner.replace(STRUCTURAL_REFERENCE_PATTERN, '');
     return remaining !== inner && !remaining.trim() ? ' ' : group;
   }).replace(STRUCTURAL_REFERENCE_PATTERN, ';');
@@ -92,12 +99,20 @@ function scientificQuantities(input: string): ScientificQuantity[] {
     const variable = (directVariable ?? distantPhotonCount)?.toLowerCase().replaceAll('_', '') ?? null;
     if (comparison) expressionRanges.push(comparison);
     results.push({ quantity: { value: normalizedNumber, unit,
-      binding: comparison?.binding ?? (variable ? { kind: 'symbol', key: variable } : null) }, index: match.index! });
+      binding: comparison?.prose ? null : comparison?.binding ?? (variable ? { kind: 'symbol', key: variable } : null),
+      ...(comparison?.prose && comparison.binding.kind !== 'unsupported-expression' ? { representations: [comparison.binding] } : {}) }, index: match.index! });
   }
   // Denominators and coefficients inside a parsed LHS are structure, not
   // additional reported results (Tc1/2≈0.26 fs reports 0.26 fs, not bare 2).
-  return [...ratios, ...results.filter(item => !expressionRanges.some(range => item.index >= range.start && item.index < range.end))
-    .map(item => item.quantity)];
+  const references = scientificExpressionReferences(scalarValue)
+    .filter(reference => !expressionRanges.some(range => reference.start >= range.start
+      && (reference.end <= range.end || reference.unsupported && reference.start < range.end)));
+  const structuralRanges = [...expressionRanges, ...references];
+  const equalities = scientificEqualityRelations(scalarValue).map(([left, right]) => [representationKey(left), representationKey(right)] as [string, string]);
+  return [...ratios, ...references.map(reference => ({ value: reference.key, unit: '__expression__',
+    binding: reference.unsupported ? { kind: 'unsupported-expression' as const } : null })),
+    ...results.filter(item => !structuralRanges.some(range => item.index >= range.start && item.index < range.end))
+    .map(item => ({ ...item.quantity, equalities }))];
 }
 function sameScientificQuantity(asserted: ScientificQuantity, supported: ScientificQuantity, allowOmittedVariable = false): boolean {
   if (asserted.binding?.kind === 'unsupported-expression' || supported.binding?.kind === 'unsupported-expression') return false;
@@ -105,18 +120,45 @@ function sameScientificQuantity(asserted: ScientificQuantity, supported: Scienti
   if (!asserted.unit && supported.unit && !(symbolKey(asserted) === 'nsp' && supported.unit === 'photon_count')) return false;
   if (asserted.unit && asserted.unit !== supported.unit
     && !(asserted.unit === 'photon_count' && symbolKey(supported) === 'nsp')) return false;
-  if (asserted.binding && bindingKey(asserted) !== bindingKey(supported) && !(allowOmittedVariable && !supported.binding)) return false;
+  if (asserted.binding && !supportedBindingKeys(supported).includes(bindingKey(asserted)!) && !(allowOmittedVariable && !supported.binding)) return false;
+  if (asserted.binding) {
+    for (const equivalent of asserted.binding.equivalents ?? []) {
+      const key = representationKey(equivalent), primary = bindingKey(asserted)!;
+      const directMembers = supported.binding
+        ? [supported.binding, ...(supported.binding.equivalents ?? [])].map(representationKey) : [];
+      if (!(directMembers.includes(primary) && directMembers.includes(key))
+        && !supported.equalities?.some(([a, b]) => a === primary && b === key || a === key && b === primary)) return false;
+    }
+  }
   return true;
 }
 function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][]): void {
+  const cache = new Map<string, ScientificQuantity[]>();
+  const quantities = (text: string) => {
+    const existing = cache.get(text);
+    if (existing) return existing;
+    const parsed = scientificQuantities(text);
+    cache.set(text, parsed);
+    return parsed;
+  };
   const missing: Array<{ field: string; quantity: ScientificQuantity; code: string; expectedVariable?: string | null }> = [];
-  for (const [field, value] of fields) for (const quantity of scientificQuantities(value)) {
-    const described = subjects.filter(subject => scientificQuantities(subject.description)
+  for (const [field, value] of fields) for (const quantity of quantities(value)) {
+    const described = subjects.filter(subject => quantities(subject.description)
       .some(item => sameScientificQuantity(quantity, item, true)));
-    if (!described.some(subject => scientificQuantities(subject.basis.quote)
+    if (!described.some(subject => quantities(subject.basis.quote)
       .some(item => sameScientificQuantity(quantity, item)))) {
-      const code = `unbound_numeric_${quantity.value.replace('.', '_')}_${quantity.unit ?? bindingKey(quantity) ?? 'bare'}_${described.length ? 'source' : 'description'}`;
-      const sourceVariables = [...new Set(described.flatMap(subject => scientificQuantities(subject.basis.quote))
+      const reason = quantity.binding?.kind === 'unsupported-expression' ? 'syntax' : described.length ? 'source' : 'description';
+      const equality = quantity.binding && quantity.binding.kind !== 'unsupported-expression' && quantity.binding.equivalents?.length
+        ? [quantity.binding, ...quantity.binding.equivalents].map(representationKey).join('=') : null;
+      const code = quantity.unit === '__expression__' ? `unbound_expression_${quantity.value}_${reason}`
+        : equality ? `unbound_equality_${equality}_${quantity.value}_${quantity.unit ?? 'bare'}_${reason}`
+        : `unbound_numeric_${quantity.value.replace('.', '_')}_${quantity.unit ?? bindingKey(quantity) ?? 'bare'}_${reason}`;
+      // A unique explicitly supported notation is useful feedback even when
+      // the candidate's description used a different symbol. It is not an alias.
+      const feedbackSubjects = described.length ? described : subjects.filter(subject => quantities(subject.description)
+        .some(item => sameScientificQuantity({ ...quantity, binding: null }, item)
+          && quantities(subject.basis.quote).some(source => sameScientificQuantity(item, source))));
+      const sourceVariables = [...new Set(feedbackSubjects.flatMap(subject => quantities(subject.basis.quote))
         .filter(item => sameScientificQuantity({ ...quantity, binding: null }, item)).map(item => bindingKey(item)))];
       const onlySourceVariable = sourceVariables.length === 1 ? sourceVariables[0] : null;
       missing.push({ field, quantity, code,
@@ -618,7 +660,8 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         const briefOverflow = /illustration_brief:description:length_(\d+)_max_(\d+)/u.exec(diagnostic);
         const briefFeedback = briefOverflow ? ` The complete brief is ${briefOverflow[1]} characters for a ${briefOverflow[2]} shared limit. Remove repetition or choose a narrower source-supported relationship while preserving its complete meaning and conditions; leave necessary space for art. Do not mechanically truncate scientific text.` : '';
         let feedback = `Diagnostic: ${diagnostic.slice(0, 400)}. Return exactly ${scienceShape}; no schemaVersion/illustration wrapper. Subjects: {description,basis:{sourceId}}, using only planning.supportingSourceIds from upstream.sourcePassages with relation supports. Re-read each bound quote; never substitute an arbitrary valid ID. Preserve supported meaning/conditions and all original field/shared-brief limits, leaving art space. labels enumerate all visible text.`;
-        if (diagnostic.startsWith('unbound_numeric_')) feedback += ' Every numerical result needs the same value, unit and stated symbol or complete expression in one subject description AND its own exact source quote. Repair every listed occurrence; do not infer aliases or bind only the last operand.';
+        if (diagnostic.endsWith('_syntax')) feedback += ' The local expression syntax could not be parsed; this is not evidence that the paper omitted the quantity. Use an unambiguous complete source expression or the original prose quantity name.';
+        else if (/^unbound_(?:numeric|expression|equality)_/u.test(diagnostic)) feedback += ' Every numerical result or expression needs the same value, unit and stated name/symbol or complete expression in one subject description AND its own exact source quote. Each asserted equality also needs explicit source support. Repair every listed occurrence; do not infer aliases or bind only the last operand.';
         if (expectedSourceVariable === null) {
           const hint = ' The source gives this value and unit in prose: use the original quantity name, removing the invented symbol, or bind a quote explicitly naming it.';
           if (feedback.length + hint.length <= 2000) feedback += hint;
@@ -627,7 +670,7 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
           const hint = ` Correct these fields: ${unsupportedNumericFields.join(', ')}.`;
           if (feedback.length + hint.length <= 2000) feedback += hint;
         }
-        if (diagnostic.endsWith('_source') && expectedSourceVariable) {
+        if (expectedSourceVariable) {
           const hint = ` Source variable: ${expectedSourceVariable}; use that exact variable in visible text and subject description, or remove the unsupported value.`;
           if (feedback.length + hint.length <= 2000) feedback += hint;
         }
