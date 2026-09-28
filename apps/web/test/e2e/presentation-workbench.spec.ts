@@ -145,6 +145,58 @@ async function fixtures(page: Page, options: FixtureOptions = {}) {
   return { claimPostIds, claimPostBodies, generationKeys, generationBodies, patchExpectedTimes, taskReadCount: () => taskReads };
 }
 
+test('saved science retry refreshes a concurrent 409 without posting twice', async ({ page }) => {
+  await fixtures(page);
+  let posts = 0;
+  await page.route('**/presentation-tasks/presentation-task', route => json(route, {
+    task: { ...task(posts ? 'running' : 'failed', posts ? 37 : 10), canRetry: !posts },
+  }));
+  await page.route('**/api/agent/tasks/presentation-task/retry', route => {
+    posts += 1;
+    return json(route, { error: { code: 'ILLEGAL_TRANSITION', message: 'Another tab already continued this task.' } }, 409);
+  });
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2&task=presentation-task`);
+  await page.getByRole('button', { name: 'Continue task', exact: true }).click();
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '37');
+  await expect(page.getByRole('button', { name: 'Continue task', exact: true })).toHaveCount(0);
+  expect(posts).toBe(1);
+});
+
+test('saved science retry isolates a pending old task from a new task', async ({ page }) => {
+  await fixtures(page);
+  const posts: string[] = [];
+  let releaseA!: () => void;
+  const heldA = new Promise<void>(resolve => { releaseA = resolve; });
+  let releaseB!: () => void;
+  const heldB = new Promise<void>(resolve => { releaseB = resolve; });
+  await page.route('**/presentation-tasks/*', route => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
+    return json(route, { task: { ...task(posts.includes(id) ? 'running' : 'failed', posts.includes(id) ? 63 : 10), id, canRetry: !posts.includes(id) } });
+  });
+  await page.route('**/api/agent/tasks/*/retry', async route => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
+    posts.push(id);
+    await (id === 'task-a' ? heldA : heldB);
+    return json(route, { task: { ...task('pending', 0), id, canRetry: false } });
+  });
+  try {
+    await page.goto(`/research-objects/${ro.id}/presentation?version=version-2&task=task-a`);
+    await page.getByRole('button', { name: 'Continue task', exact: true }).click();
+    await expect.poll(() => posts).toEqual(['task-a']);
+    await page.evaluate(() => history.pushState(null, '', '?version=version-2&task=task-b'));
+    await page.getByRole('button', { name: 'Continue task', exact: true }).click();
+    await expect.poll(() => posts).toEqual(['task-a', 'task-b']);
+    await expect(page.getByRole('button', { name: 'Continuing…', exact: true })).toBeDisabled();
+    const oldResponse = page.waitForResponse(response => response.url().endsWith('/tasks/task-a/retry'));
+    releaseA();
+    await oldResponse;
+    await expect(page.getByRole('button', { name: 'Continuing…', exact: true })).toBeDisabled();
+    releaseB();
+    await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '63');
+    expect(posts).toEqual(['task-a', 'task-b']);
+  } finally { releaseA(); releaseB(); }
+});
+
 test('creates a human claim, retries stable intents, generates a chart, refreshes a real conflict, and approves', async ({ page }) => {
   const observed = await fixtures(page, { startEmpty: true });
   await page.goto(`/research-objects/${ro.id}/presentation`);

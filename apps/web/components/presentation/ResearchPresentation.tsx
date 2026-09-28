@@ -129,7 +129,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   const [error, setError] = useState('');
   const [taskState, setTaskState] = useState<PresentationTaskState | null>(null);
   const [resumeNonce, setResumeNonce] = useState(0);
-  const retryInFlight = useRef(false);
+  const retryInFlight = useRef<{ scope: ActiveScope; taskId: string } | null>(null);
   const loadedTaskId = useRef('');
   const renderedTaskId = useRef(taskId);
   renderedTaskId.current = taskId;
@@ -296,11 +296,13 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   }, [params.id, resumeNonce, router, scopeKey, scopeReady, t, taskId, versionId]);
 
   async function retryTask() {
-    if (!taskId || loadedTaskId.current !== taskId || retryInFlight.current || working || !canWrite || taskState?.status !== 'failed' || !taskState.canRetry) return;
     const scope = scopeRef.current;
+    if (!taskId || loadedTaskId.current !== taskId || working || !canWrite || taskState?.status !== 'failed' || !taskState.canRetry
+      || retryInFlight.current?.scope === scope && retryInFlight.current.taskId === taskId) return;
     const originalTaskId = taskId;
     if (!scopeIsCurrent(scope)) return;
-    retryInFlight.current = true;
+    const operation = { scope, taskId: originalTaskId };
+    retryInFlight.current = operation;
     setWorking(true);
     setError('');
     try {
@@ -313,10 +315,10 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
       setError(cause instanceof Error ? cause.message : t('generationStartFailed'));
       // A response loss can follow a successful write. Re-read this same task;
       // never automatically submit a second retry request.
-      if (hasAmbiguousWriteOutcome(cause)) setResumeNonce(value => value + 1);
+      if (hasAmbiguousWriteOutcome(cause) || cause instanceof ApiClientError && cause.status === 409) setResumeNonce(value => value + 1);
       else setTaskState(current => current ? { ...current, canRetry: false } : current);
     } finally {
-      retryInFlight.current = false;
+      if (retryInFlight.current === operation) retryInFlight.current = null;
       if (scopeIsCurrent(scope) && renderedTaskId.current === originalTaskId) setWorking(false);
     }
   }

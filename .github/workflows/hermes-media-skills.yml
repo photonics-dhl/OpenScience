@@ -51,6 +51,8 @@ on:
       - 'apps/web/components/presentation/PresentationResultGallery.tsx'
       - 'apps/web/components/presentation/StoryboardPanel.tsx'
       - 'apps/web/components/presentation/ResearchPresentation.tsx'
+      - 'apps/web/playwright.config.ts'
+      - 'apps/web/test/e2e/presentation-workbench.spec.ts'
       - 'apps/web/components/presentation/PresentationWorkbench.tsx'
       - 'apps/web/lib/api.ts'
       - 'apps/web/lib/ingestion-review-polling.ts'
@@ -135,6 +137,8 @@ on:
       - 'apps/web/components/presentation/PresentationResultGallery.tsx'
       - 'apps/web/components/presentation/StoryboardPanel.tsx'
       - 'apps/web/components/presentation/ResearchPresentation.tsx'
+      - 'apps/web/playwright.config.ts'
+      - 'apps/web/test/e2e/presentation-workbench.spec.ts'
       - 'apps/web/components/presentation/PresentationWorkbench.tsx'
       - 'apps/web/lib/api.ts'
       - 'apps/web/lib/ingestion-review-polling.ts'
@@ -223,6 +227,9 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web build
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-workbench.spec.ts --grep "saved science retry" --config playwright.config.ts --workers 1 --output ../../tmp/presentation-retry-browser
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/ingestion-review-polling.test.ts test/api-client-contract.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/surface-shells.test.tsx -t "review-only preflight recovery"
       - run: npx pnpm@9.15.0 docs:lint
