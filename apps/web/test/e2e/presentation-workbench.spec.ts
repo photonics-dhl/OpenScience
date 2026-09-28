@@ -162,21 +162,23 @@ test('saved science retry refreshes a concurrent 409 without posting twice', asy
   expect(posts).toBe(1);
 });
 
-test('saved science retry isolates a pending old task from a new task', async ({ page }) => {
+test('saved science retry deduplicates A-B-A round trips before either request commits', async ({ page }) => {
   await fixtures(page);
   const posts: string[] = [];
+  const committed = new Set<string>();
   let releaseA!: () => void;
   const heldA = new Promise<void>(resolve => { releaseA = resolve; });
   let releaseB!: () => void;
   const heldB = new Promise<void>(resolve => { releaseB = resolve; });
   await page.route('**/presentation-tasks/*', route => {
     const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
-    return json(route, { task: { ...task(posts.includes(id) ? 'running' : 'failed', posts.includes(id) ? 63 : 10), id, canRetry: !posts.includes(id) } });
+    return json(route, { task: { ...task(committed.has(id) ? 'running' : 'failed', committed.has(id) ? 63 : 10), id, canRetry: !committed.has(id) } });
   });
   await page.route('**/api/agent/tasks/*/retry', async route => {
     const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
     posts.push(id);
     await (id === 'task-a' ? heldA : heldB);
+    committed.add(id);
     return json(route, { task: { ...task('pending', 0), id, canRetry: false } });
   });
   try {
@@ -186,6 +188,14 @@ test('saved science retry isolates a pending old task from a new task', async ({
     await page.evaluate(() => history.pushState(null, '', '?version=version-2&task=task-b'));
     await page.getByRole('button', { name: 'Continue task', exact: true }).click();
     await expect.poll(() => posts).toEqual(['task-a', 'task-b']);
+    await expect(page.getByRole('button', { name: 'Continuing…', exact: true })).toBeDisabled();
+    const unchangedA = page.waitForResponse(response => response.url().endsWith('/presentation-tasks/task-a'));
+    await page.evaluate(() => history.pushState(null, '', '?version=version-2&task=task-a'));
+    expect((await (await unchangedA).json()).task).toMatchObject({ status: 'failed', canRetry: true });
+    await expect(page.getByRole('button', { name: 'Continuing…', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Continuing…', exact: true }).evaluate(button => (button as HTMLButtonElement).click());
+    expect(posts).toEqual(['task-a', 'task-b']);
+    await page.evaluate(() => history.pushState(null, '', '?version=version-2&task=task-b'));
     await expect(page.getByRole('button', { name: 'Continuing…', exact: true })).toBeDisabled();
     const oldResponse = page.waitForResponse(response => response.url().endsWith('/tasks/task-a/retry'));
     releaseA();

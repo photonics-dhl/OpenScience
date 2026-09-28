@@ -129,7 +129,8 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   const [error, setError] = useState('');
   const [taskState, setTaskState] = useState<PresentationTaskState | null>(null);
   const [resumeNonce, setResumeNonce] = useState(0);
-  const retryInFlight = useRef<{ scope: ActiveScope; taskId: string } | null>(null);
+  const retryInFlight = useRef(new Map<string, { scope: ActiveScope; taskId: string }>());
+  const [pendingRetries, setPendingRetries] = useState<ReadonlySet<string>>(new Set());
   const loadedTaskId = useRef('');
   const renderedTaskId = useRef(taskId);
   renderedTaskId.current = taskId;
@@ -297,12 +298,14 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
 
   async function retryTask() {
     const scope = scopeRef.current;
+    const retryKey = `${scope.key}:${taskId}`;
     if (!taskId || loadedTaskId.current !== taskId || working || !canWrite || taskState?.status !== 'failed' || !taskState.canRetry
-      || retryInFlight.current?.scope === scope && retryInFlight.current.taskId === taskId) return;
+      || retryInFlight.current.has(retryKey)) return;
     const originalTaskId = taskId;
     if (!scopeIsCurrent(scope)) return;
     const operation = { scope, taskId: originalTaskId };
-    retryInFlight.current = operation;
+    retryInFlight.current.set(retryKey, operation);
+    setPendingRetries(current => new Set(current).add(retryKey));
     setWorking(true);
     setError('');
     try {
@@ -318,8 +321,13 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
       if (hasAmbiguousWriteOutcome(cause) || cause instanceof ApiClientError && cause.status === 409) setResumeNonce(value => value + 1);
       else setTaskState(current => current ? { ...current, canRetry: false } : current);
     } finally {
-      if (retryInFlight.current === operation) retryInFlight.current = null;
+      if (retryInFlight.current.get(retryKey) === operation) {
+        retryInFlight.current.delete(retryKey);
+        setPendingRetries(current => { const next = new Set(current); next.delete(retryKey); return next; });
+      }
       if (scopeIsCurrent(scope) && renderedTaskId.current === originalTaskId) setWorking(false);
+      else if (scopeRef.current.key === scope.key && renderedTaskId.current === originalTaskId)
+        setResumeNonce(value => value + 1);
     }
   }
 
@@ -546,7 +554,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
               setAssets((current) => current.filter((item) => item.id !== asset.id));
               window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId: params.id, versionId } }));
             }}
-            working={working}
+            working={working || pendingRetries.has(`${scopeKey}:${taskId}`)}
             error={error}
             resultsOnly={embedded}
             onAskHermes={onAskHermes ?? ((kind) => { setHermesGoal(t(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); })}
