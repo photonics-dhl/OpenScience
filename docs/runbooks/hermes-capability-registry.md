@@ -9,7 +9,7 @@
 
 ## 当前能力索引：目的、调用、效果
 
-2026-09-28 续作：服务器主备已装凭据在22:08均通过非生成鉴权200，官方general时段/周剩99%，不是账户余额阻断；未重复轮换或重启。普通单图科学规划仍有16K→32K纯thinking耗尽和300秒超时，当前候选仅复用既有64K/600秒科学预算，保持adaptive/模型/权限/来源守卫及art/review。74/74与Worker typecheck、独立High通过；候选尚未部署或取得真实产物，旧unknown不重放，修复后独立新任务验收。精确执行状态见CURRENT。
+2026-09-28 续作：服务器主备已装凭据在22:08均通过非生成鉴权200，官方general时段/周剩99%，不是账户余额阻断；未重复轮换或重启。普通单图科学规划仍有16K→32K纯thinking耗尽和300秒超时，当前候选仅复用既有64K/600秒科学预算，保持adaptive/模型/权限/来源守卫及art/review。74/74与Worker typecheck、独立High通过；候选现随c390部署；新任务98a5835d首轮stop、36298输出token/339505ms，已证明旧预算不足；随后结构化候选三次拒收、未进入art。最终19as误拒为明确原文FWHM_T (19 as)的括号量名解析缺口，当前正补保守比较与正反回归，旧unknown及失败task均不重放。精确执行状态见CURRENT。
 
 2026-09-28 MiniMax 主备身份错配已修：用户指定备用原不在生产任一槽，旧备用的401不能归到该 key。官方额度接口确认主 key/指定备用 general 五小时剩98%、周剩99%；旧备用 business2049。指定备用在同一国内 Anthropic/M3 的非生成 count_tokens 鉴权200。仅替换原 MINIMAX_API_KEY_2，主 key、模型、路由顺序、OCR路由和开源生图暂停决定不变；同镜像重载后 API/Worker/Web 与文件一致，公网首页/精确 release 通过。首次 urllib403 触发完整回滚，已复用现有发布 curl 校验后成功；恢复说明见 deployment §2.3.1，收据见 CURRENT。此次零生成，不能据此证明真实故障转移完成。
 
@@ -124,7 +124,7 @@ v9真实结果进一步限定能力：342f87eb已记录science v9及完整scienc
 
 ### 当前技术债与处理
 
-2026-09-28 生产状态对接发现：第二篇 RO `c896802c` 的 `search.index` 任务 `049c8b89-7cb0-431c-ae52-2e5303de4c30` 在 07:09:25 UTC failed；21:31 本机时间只读复核仍失败，无活动 AgentTask。原私有检索 producer/Worker 入口未改，既有两篇 hybrid 成功只能作旧来源证据，不能证明本次修订来源已可召回。任务4下一步应读原失败收据与当前索引 generation 后定位，禁止据健康状态自动标完成或盲重跑；证据见 CURRENT 与 ignored `tmp/production-task-metadata-20260928.json`。
+2026-09-28 新来源检索已定向恢复：049c8b89原失败源于第14页完整表格3051字/607词法token被BGE tokenizer拒绝>1024，发生在generation创建前。已部署不可分块lexical降级，保留原表格/定位和所有权限/来源/CAS；search24、indexer17、Domain15定向及TC/High通过。原Domain精确恢复一次后v14的69 chunks active，Poynting查询实际召回新来源10段；旧v11仍58 active。core终态needs_review/token_limit_exceeded、canRetry=false，storage沿既有embedding_unavailable激活lexical。dense未完成，后续表格向量策略仍需保真设计；不以本次降级声称完整hybrid恢复。执行与收据见CURRENT。
 
 显式来源补审（2026-09-21已部署，用户再次继续后）：将固定一次恢复改为原9项预算内的连续review链，每次仍须原retry-generation明确动作；全部失败记录、同原v4候选/SourceMap、无有效科学响应及主尝试审计必须一致，所有尝试计入原额度并预留后续制作。历史provider_error不反推瞬态根因，只允许接受重复供应商费用后的显式补审；自动科学消费仍拒绝无有效审阅。原始幂等键入已有audit，精确历史请求重放不再派发；旧ordinal1缺原key元数据，不能追溯识别改version的旧raw-key复用。无新分析器/供应商/迁移，实际部署与运行只见CURRENT。
 

@@ -378,6 +378,8 @@ describe('automatic art direction after sourced science', () => {
       ['bold source', 'The condition is **V**e>2**c**·FWHMs/**λ**₀.', condition],
       ['bold candidate', `The condition is ${condition}.`, '**V**e>2**c**·FWHMs/**λ**₀'],
       ['underscored variable', 'The width is *FWHM_T*=19 *as*.', 'FWHM_T=19 as'],
+      ['original parenthetical width', 'As FWHM_T (19 as) is much shorter than half a cycle, the pulse is deep-sub-cycle.', 'FWHM_T=19 as'],
+      ['parenthetical spatial width', 'The confinement FWHM_S (77 nm) is spatial.', 'FWHM_S=77 nm'],
     ])('accepts display-equivalent %s without rewriting its source', async (_name, source, label) => {
       const { run, completeStructured } = fixture(source, label);
       const result = await run();
@@ -392,6 +394,10 @@ describe('automatic art direction after sourced science', () => {
       ['different unit', 'The condition is *V*e>2*m*·FWHMs/*λ*₀.', condition],
       ['different variable', 'The condition is *U*e>2*c*·FWHMs/*λ*₀.', condition],
       ['different underscored variable', 'The width is *FWHM_S*=19 *as*.', 'FWHM_T=19 as'],
+      ['different parenthetical variable', 'FWHM_S (19 as) is the named quantity.', 'FWHM_T=19 as'],
+      ['different parenthetical unit', 'FWHM_T (19 fs) is the named quantity.', 'FWHM_T=19 as'],
+      ['parenthetical value after sentence boundary', 'FWHM_T is defined here. (19 as) is a separate result.', 'FWHM_T=19 as'],
+      ['parenthetical value after other prose', 'FWHM_T is discussed alongside another result (19 as).', 'FWHM_T=19 as'],
       ['unpaired multiplication', 'The expression is Ve>2*c.', condition],
       ['multiplication between tokens', 'The expression is Ve>2*c*x.', 'Ve>2cx'],
       ['escaped markers', String.raw`The expression is Ve>2\*c\*.`, condition],

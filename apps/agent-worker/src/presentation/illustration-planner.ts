@@ -73,7 +73,10 @@ function scientificQuantities(input: string): ScientificQuantity[] {
     const abbreviationSafeBefore = fullBefore.replace(/\bi\.e\./giu, 'ie').replace(/\be\.g\./giu, 'eg');
     const namedFwhm = /(FWHM[_\s]*[ST])(?:(?!FWHM)[^。.;\n]){0,50}(?:of|=)\s*$/iu.exec(abbreviationSafeBefore)?.[1] ?? null;
     const directVariable = /([A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]{0,24})\s*(?:=|≈|~|≪|<<|≥|≤|>|<)\s*$/iu.exec(before)?.[1]
-      ?? /(FWHM[_\s]*[ST]|N[_\s]*SP)\s*\)?\s+of\s*$/iu.exec(before)?.[1] ?? namedFwhm;
+      ?? /(FWHM[_\s]*[ST]|N[_\s]*SP)\s*\)?\s+of\s*$/iu.exec(before)?.[1] ?? namedFwhm
+      // Original prose also writes "FWHM_T (19 as)". Bind only an immediately
+      // adjacent named width, not another result elsewhere in a parenthesis.
+      ?? /\b(FWHM[_\s]*[ST])\s*\(\s*$/iu.exec(before)?.[1];
     const distantPhotonCount = !unit && /N[_\s]*SP[^。.;\n]{0,70}$/iu.test(before) ? 'nsp' : null;
     const variable = (directVariable ?? distantPhotonCount)?.toLowerCase().replaceAll('_', '') ?? null;
     results.push({ value: normalizedNumber, unit, variable });
