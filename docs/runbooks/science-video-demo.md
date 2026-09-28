@@ -4,6 +4,34 @@
 Nginx Range 播放；独立于本样片，管理员 RO 单幕 Codex 生图已验证，通用 RO 自动视频仍未实现。演示不读取私有 RO，
 只使用原创图、固定脚本和预先生成的旁白。
 
+<a id="minimax-cloud-configuration"></a>
+
+## MiniMax 云视频配置（2026-09-28）
+
+本节记录已授权的按量试镜配置，与下方历史 D2NN 演示分开。当前只完成服务器凭据配置和视频列表鉴权，尚未接入 Hermes 的自动视频流程，也未验证收费生成、余额或配音质量。
+
+### 前置条件
+
+- 用户明确提供视频按量凭据并要求服务器配置；M3 文本主备槽保持原用途。
+- 文档依据为服务器当前 release 的部署/能力文档；模型参数补核 MiniMax 国内官方[创建任务](https://platform.minimax.cn/docs/api-reference/video-generation-v2-create)和[任务列表](https://platform.minimax.cn/docs/api-reference/video-generation-v2-list)。
+- 保留现有 `/opt/openscience-video` 权限和消费者；`secrets` 子目录 root/0700，密钥与配置 root/0600。旧 video runner 的 TTS、renderer 镜像缺失仍需修复，不能凭 active/accepting 判可用。
+
+### 已执行配置
+
+1. 经项目 SSH 包装器的 stdin 在内存传递本次凭据，原子创建 `/opt/openscience-video/secrets/minimax-video.key`；无凭据进入 argv、Git 或日志。已存在且内容不同的文件拒绝覆盖，中断后完整文件可复用并补齐配置。
+2. 创建 `/opt/openscience-video/minimax-cloud.json`，包含 `baseUrl=https://api.minimax.cn`、`apiKeyFile` 路径、`model=MiniMax-H3` 和试镜参数 `10s / 768P / 16:9 / maxCreateRequests=1`。这是后续试镜输入，当前线上 Worker 未消费该配置；调用程序须落实单次上限。
+3. GET `/v2/query/video_generation?page_num=1&page_size=1&filter.model=MiniMax-H3` 验证鉴权，随后从已写服务器文件重新读取凭据再验证，均为 HTTP 200。使用正常 TLS 及禁止重定向，不输出已有任务正文或下载地址。
+
+### 回滚与恢复
+
+- 没有替换旧凭据、修改应用环境、重启服务或改变 release 标记，因此无需回滚科研应用。若后续配置有误，先核对是否已有消费者；本次仅新建的文件在无人使用时按明确路径撤销，不能删除整个 video/private/results 目录。
+- 鉴权失败保留脱敏失败状态和非零退出码；配置落盘与鉴权通过分别判断。若提交生成超时，先保留并恢复同一上游 `task_id`；请求状态未知时不得重复提交。
+
+### 验证与未完成项
+
+- fresh evidence：独立 High 增量审查、Node/Python 语法检查通过；服务器文件读回鉴权 HTTP 200。脱敏收据位于 `secrets/minimax-config-receipt.json`，本地归档在 ignored `tmp/minimax-server-config-20260928/`。收据为本次观测，不是实时余额或自动健康证明。
+- 生成 POST=0；尚需 Gateway 调用、一次有界试镜、实际音轨和字幕审阅，以及既有 TTS/renderer 运行依赖恢复。新视频的清理继续按[综合计划 Task 4](../plans/2026-09-05-integrated-research-product-plan.md#task-4-视频)的引用和任务终态要求执行。
+
 ## 前置检查
 
 1. 用户已明确授权本次部署；记录当前 Git full SHA、`/opt/openscience/.release-id`
