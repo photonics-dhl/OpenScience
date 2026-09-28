@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scientificComparisonBinding, scientificExpressionReferences } from '../../src/presentation/scientific-comparison';
+import { scientificComparisonBinding, scientificExpressionReferences, scientificEqualityRelations } from '../../src/presentation/scientific-comparison';
 
 const binding = (text: string) => scientificComparisonBinding(text, text.lastIndexOf('27'));
 describe('scientific comparison binding', () => {
@@ -72,6 +72,33 @@ describe('complete expression references with spaced trigonometric terms', () =>
     const parsed = references(input).filter(item => item.unsupported);
     expect(parsed).toHaveLength(1);
     expect(input.slice(parsed[0]!.start, parsed[0]!.end)).toBe('(1-β cos(θ+φ))');
+  });
+
+  it.each(['(1-β cosθ) sinφ', '(1-β cosθ)foo', '(1-β cosθ) sin φ', '(1-β cosθ) β', '(1-β cosθ) f(φ)'])
+    ('does not discard a factor following a complete group: %s', text => {
+      const parsed = references(text);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0]).toMatchObject({ start: 0, end: text.length, unsupported: true });
+    });
+
+  it.each(['1/β cosθ', '1/βcosθ', '1/-β cosθ', '(1/β cosθ)'])
+    ('refuses an ambiguous implicit denominator in references, comparisons and equalities: %s', text => {
+      const parsed = references(text);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0]).toMatchObject({ start: 0, end: text.length, unsupported: true });
+      expect(binding(`${text}≈27`)?.binding).toEqual({ kind: 'unsupported-expression' });
+      expect(scientificEqualityRelations(`q=${text}`)).toEqual([]);
+    });
+
+  it('distinguishes a grouped denominator from explicit left-associative multiplication', () => {
+    const denominator = references('1/(β cosθ)');
+    const product = references('1/β*cosθ');
+    expect(denominator).toHaveLength(1);
+    expect(product).toHaveLength(1);
+    expect(denominator[0]!.unsupported).toBeUndefined();
+    expect(product[0]!.unsupported).toBeUndefined();
+    expect(denominator[0]!.key).toBe(references('1/(β*cosθ)')[0]!.key);
+    expect(product[0]!.key).not.toBe(denominator[0]!.key);
   });
 
   it.each(['(1-β cosφ)', '(1+β cosθ)', '(1-β/cosθ)', '(1-β sinθ)', '(1-β cosθ1)', '(1-β cosθ+φ)'])

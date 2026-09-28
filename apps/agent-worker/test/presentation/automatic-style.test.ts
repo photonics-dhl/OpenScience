@@ -612,6 +612,19 @@ describe('automatic art direction after sourced science', () => {
     ['(1−β cosθ) time compression', '(1-βcosθ)', true],
     ['(1−βcosθ) time compression', '(1-β cosθ)', true],
     ['(1 − β cos θ) time compression', '(1-βcosθ)', true],
+    ['(1-β cosθ) sinφ', '(1-βcosθ)', false],
+    ['(1-β cosθ)foo', '(1-βcosθ)', false],
+    ['(1-β cosθ) sin φ', '(1-βcosθ)', false],
+    ['(1-β cosθ) sin θ1', '(1-βcosθ)', false],
+    ['(1-β cosθ) sin x', '(1-βcosθ)', false],
+    ['(1-β cosθ) β', '(1-βcosθ)', false],
+    ['(1/β cosθ)', '(1/(β*cosθ))', false],
+    ['(1/βcosθ)', '(1/(β*cosθ))', false],
+    ['1/β cosθ', '(1/(β*cosθ))', false],
+    ['(1/(β cosθ))', '(1/(β*cosθ))', true],
+    ['(1/β*cosθ)', '(1/β*cosθ)', true],
+    ['(1/(β cosθ))', '(1/β*cosθ)', false],
+    ['(1/β*cosθ)', '(1/(β cosθ))', false],
     ['(1-β cosφ)', '(1-βcosθ)', false],
     ['(1+β cosθ)', '(1-βcosθ)', false],
     ['(1-β/cosθ)', '(1-βcosθ)', false],
@@ -635,6 +648,22 @@ describe('automatic art direction after sourced science', () => {
     if (accepted) await expect(result).resolves.toBeDefined();
     else await expect(result).rejects.toThrow(label.includes('\n') ? /single_line_no_control_characters/ : /unbound_expression/);
     expect(completeStructured).toHaveBeenCalledTimes(accepted ? 2 : 1);
+  });
+
+  it('rejects a spaced numeric factor even when an independent source quantity has the same value', async () => {
+    const source = 'The time factor is (1-βcosθ); x=2.';
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!, labels: ['(1-β cosθ) 2'],
+      subjects: [{ description: source, basis: { sourceId: 's0' } }] }] };
+    const completeStructured = vi.fn(async () => candidate);
+    const saveScience = vi.fn(async () => { throw new Error('OFFLINE_STOP_BEFORE_ART'); });
+    await expect(generateIllustrationStoryboard({ completeStructured } as never, inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain.', output: 'image',
+    }, undefined, new Map(), undefined, undefined, undefined, {
+      saveScience, beforeArtSubmission: vi.fn(), rejectArt: vi.fn(),
+    })).rejects.toThrow(/unbound_expression_.*_syntax/);
+    expect(saveScience).not.toHaveBeenCalled();
+    expect(completeStructured).toHaveBeenCalledTimes(1);
   });
 
   it('preserves prose quantities in approximate parentheses without swallowing earlier values', async () => {
