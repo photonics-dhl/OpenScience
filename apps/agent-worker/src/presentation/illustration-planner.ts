@@ -29,7 +29,8 @@ function requireLabelReferencesInRange(brief: IllustrationBrief): void {
 type ScientificQuantity = { value: string; unit: string | null; variable: string | null };
 const SOURCE_VARIABLE_NAMES = new Map([['fwhmt', 'FWHM_T'], ['fwhms', 'FWHM_S'], ['nsp', 'N_SP']]);
 class UnboundNumericSourceError extends Error {
-  constructor(message: string, readonly expectedVariable?: string, readonly fields: readonly string[] = []) { super(message); }
+  constructor(message: string, readonly expectedVariable?: string, readonly fields: readonly string[] = [],
+    readonly otherDiagnostics: readonly string[] = []) { super(message); }
 }
 const QUANTITY_PATTERN = /(?<![A-Za-z\u0370-\u03ff\d])[+-]?(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)(?:\s*[×x]\s*10\s*\^?\s*[+-]?\d+|[eE][+-]?\d+)?(?!\d|\.\d)/gu;
 // This is a new-plan guard, not a substitute for the scientific review of
@@ -111,7 +112,18 @@ function requireBoundNumericalResults(fields: readonly (readonly [string, string
     const sameResultFields = [...new Set(missing.filter(item => item.quantity.value === first.quantity.value
       && item.quantity.unit === first.quantity.unit && item.quantity.variable === first.quantity.variable)
       .map(item => item.field))].slice(0, 12);
-    throw new UnboundNumericSourceError(first.code, first.expectedVariable, sameResultFields);
+    const otherResults = new Map<string, { code: string; variable: string | null; fields: string[] }>();
+    for (const item of missing) {
+      if (item.quantity.value === first.quantity.value && item.quantity.unit === first.quantity.unit
+          && item.quantity.variable === first.quantity.variable) continue;
+      const key = JSON.stringify([item.code, item.quantity.variable]);
+      const existing = otherResults.get(key);
+      if (existing) { if (!existing.fields.includes(item.field)) existing.fields.push(item.field); }
+      else otherResults.set(key, { code: item.code, variable: item.quantity.variable, fields: [item.field] });
+    }
+    const otherDiagnostics = [...otherResults.values()].map(item =>
+      `${item.code}${item.variable ? ` (asserted variable ${item.variable})` : ''}: ${item.fields.slice(0, 12).join(', ')}`);
+    throw new UnboundNumericSourceError(first.code, first.expectedVariable, sameResultFields, otherDiagnostics);
   }
 }
 export type StoryboardScienceCheckpoint = {
@@ -412,6 +424,7 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
   let diagnostic = 'invalid_scientific_intent';
   let expectedSourceVariable: string | undefined;
   let unsupportedNumericFields: readonly string[] = [];
+  let otherNumericDiagnostics: readonly string[] = [];
   if (settings.revisionMode === 'art') {
     if (!base || base.output !== 'image' || base.locale !== settings.locale || !reusableBase) {
       throw new Error('[blocked] Art revision requires a current structured image base in the same language');
@@ -543,10 +556,11 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
       intent = restored; scienceUsage = saved.designSkills;
     } else {
     const science = await gateway.completeStructured((value): value is Record<string, unknown> => {
-      try { expectedSourceVariable = undefined; unsupportedNumericFields = []; materializeScience(value); return true; } catch (error) {
+      try { expectedSourceVariable = undefined; unsupportedNumericFields = []; otherNumericDiagnostics = []; materializeScience(value); return true; } catch (error) {
         diagnostic = error instanceof Error ? error.message : 'invalid_scientific_intent';
         expectedSourceVariable = error instanceof UnboundNumericSourceError ? error.expectedVariable : undefined;
         unsupportedNumericFields = error instanceof UnboundNumericSourceError ? error.fields : [];
+        otherNumericDiagnostics = error instanceof UnboundNumericSourceError ? error.otherDiagnostics : [];
         return false;
       }
     }, scienceMessages!, { temperature: 0.1, thinking: 'adaptive', includeRejectedResponseOnRetry: true, maxRetries: 2,
@@ -585,6 +599,10 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         }
         for (const detail of [...sourceFailures.map(failure => `Binding: ${failure}.`), ...lengthFailures.map(failure => `Length: ${failure}.`), figurePlanHint, briefFeedback]) {
           if (detail && feedback.length + detail.length + 1 <= 2000) feedback += ` ${detail}`;
+        }
+        for (const detail of otherNumericDiagnostics) {
+          const hint = ` Also unsupported by its own binding: ${detail}.`;
+          if (feedback.length + hint.length <= 2000) feedback += hint;
         }
         return feedback;
       } });

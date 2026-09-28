@@ -606,6 +606,37 @@ describe('automatic art direction after sourced science', () => {
     expect(result.document.scenes[0]!.illustration?.labels).toEqual(['Supported relation']);
   });
 
+  it('reports separate unsupported quantities together so one retry can repair their own bindings', async () => {
+    const inputClaims = [{ ...claims[0]!, sourcePassages: [
+      { ...claims[0]!.sourcePassages![0]!, text: 'FWHM_S=77 nm is the field width.' },
+      { ...claims[0]!.sourcePassages![0]!, evidenceId: '20000000-0000-4000-8000-000000000002', text: 'The material diameter is 500 nm.' },
+    ] }];
+    const invalid = { ...science, scenes: [{ ...science.scenes[0]!,
+      message: 'FWHM_T=77 nm', narration: 'Two sourced properties.', labels: ['500 nm'],
+      subjects: [{ description: 'FWHM_T=77 nm and a 500 nm diameter.', basis: { sourceId: 's0' } },
+        { description: 'The material.', basis: { sourceId: 's1' } }],
+    }] };
+    const repaired = { ...science, scenes: [{ ...invalid.scenes[0]!, message: 'FWHM_S=77 nm',
+      subjects: [{ description: 'FWHM_S=77 nm.', basis: { sourceId: 's0' } },
+        { description: 'The material diameter is 500 nm.', basis: { sourceId: 's1' } }],
+    }] };
+    const requests: Array<Array<{ content: string }>> = [];
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async ({ messages }) => {
+      requests.push(messages);
+      const feedback = messages.at(-1)?.content ?? '';
+      const informed = feedback.includes('unbound_numeric_77_nm_source') && feedback.includes('unbound_numeric_500_nm_source');
+      const response = requests.length === 1 ? invalid : requests.length === 2 ? (informed ? repaired : invalid)
+        : { scenes: [{ layout: 'Two symbolic properties.', treatment: 'Quiet ink.' }] };
+      return { text: JSON.stringify(response), model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+    const result = await generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), inputClaims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Explain the supported properties.', output: 'image',
+    });
+    expect(requests).toHaveLength(3);
+    expect(requests[1]!.at(-1)!.content).toContain('labels[0]');
+    expect(result.document.scenes[0]!.illustration?.subjects[1]!.basis.quote).toBe('The material diameter is 500 nm.');
+  });
+
   it('names the unique source variable when repairing a same-value numeric mismatch', async () => {
     const source = 'The virtual width (FWHM_T, i.e., τ₁) of 19 as is obtained.';
     const inputClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages![0]!, text: source }] }];
