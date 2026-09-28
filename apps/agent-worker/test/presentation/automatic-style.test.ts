@@ -223,6 +223,9 @@ describe('automatic art direction after sourced science', () => {
       expect(reviewInput.prompt).toContain(context.sourceContext.excerpts[0]!.text);
       expect(reviewInput.prompt).toContain('context only');
       expect(reviewInput.prompt.includes('This is a whole-paper visual narrative.')).toBe(narrative);
+      expect(reviewInput.prompt).toContain('Check that spatial paths are realizable in the stated view');
+      expect(reviewInput.prompt).toContain('compare title, narration, message, subjects, encoding, labels, constraints, composition and treatment');
+      expect(calls[1]![0]!.content).toContain('A path through an open region must remain clear of the depicted solids');
       expect(reviewInput.prompt).not.toContain('private-artifact');
       return { text: JSON.stringify({ decision: 'accepted', summary: 'Source-consistent.', corrections: [] }),
         promptHash: 'p', responseHash: 'r' };
