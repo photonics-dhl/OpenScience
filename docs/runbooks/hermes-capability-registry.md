@@ -9,7 +9,9 @@
 
 ## 当前能力索引：目的、调用、效果
 
-2026-09-28 修复后真实分镜仍失败：b613首轮M3 adaptive/16k返回length且text=0/thinking=1，32k重试300002ms超时，不能归类为thinking-only。原配置备用key2在123ms返回401；09:19只读确认两路均为M3/国内Anthropic端点、无外层空白，09-21/23/28三次备用均401，现存账本没有备用成功；未读取或打印Secret、未发鉴权completion。已配置不等于可工作冗余，具体账号/地区/授权原因尚无供应商证据。原HTTP客户端中止不能证明上游停止计费，现有审计又未保留可关联的供应商请求ID，故不盲重发或以温度对照绕过unknown；独立High对追加实验NO-GO。下一步查供应商管理记录确认主请求终态与备用授权，修复需原Secret流程。无科学候选/PNG，Skill和四来源容量修复不能算效果通过；收据与当前身份仅见CURRENT。
+2026-09-28 MiniMax 主备身份错配已修：用户指定备用原不在生产任一槽，旧备用的401不能归到该 key。官方额度接口确认主 key/指定备用 general 五小时剩98%、周剩99%；旧备用 business2049。指定备用在同一国内 Anthropic/M3 的非生成 count_tokens 鉴权200。仅替换原 MINIMAX_API_KEY_2，主 key、模型、路由顺序、OCR路由和开源生图暂停决定不变；同镜像重载后 API/Worker/Web 与文件一致，公网首页/精确 release 通过。首次 urllib403 触发完整回滚，已复用现有发布 curl 校验后成功；恢复说明见 deployment §2.3.1，收据见 CURRENT。此次零生成，不能据此证明真实故障转移完成。
+
+2026-09-28 修复后真实分镜仍失败：b613首轮M3 adaptive/16k返回length且text=0/thinking=1，32k重试300002ms超时，后者不能归类为thinking-only；旧配置备用123ms返回401。16k/32k是每次请求包含思考的输出预算，不是账户套餐余额。鉴权错配现已修正，但客户端中止不能证明上游停止计费，现有审计缺可关联供应商请求ID，故仍需供应商记录确认原超时终态，不盲重发unknown或追加温度对照。没有科学候选/PNG，Skill与来源修复不能算质量通过。
 2026-09-28 同一请求的可满足性修复：独立核源证明 CdS 最小单幕需 s16 工况、s4 几何、s10 时间映射三段，普通两subject上限不足。沿 Domain 已有四项容量统一 planner，不放宽单来源完整支持或把 SourceMap 当 Evidence；72/72 定向验证兼容艺术修订/标签澄清及错源拒绝。x/y/z表格通过原 createEvidence/verifyEvidence 人工核对加入私有 method，证据7154c1d1保留原页/范围和human provenance。配图 science/review 现在复用 v5.illustrationInstructions，保留共享科学规则但不再注入六字段/观察编号输出协议；全文 instructions/sourceReviewInstructions逐字不变，provenance记录资源投影。13/13路由、2/2披露及Worker TC通过。它们是已证实的输入/约束修复，不是 thinking-only 原因或科学能力提升的证据；发布及真实效果见 CURRENT。
 
 2026-09-28 单图思考耗尽复现：df59 部署后，普通单图 `57d39ec8` 两次 M3 adaptive 在16k/32k精确达到输出上限，均只有thinking块，无正文/候选/PNG，故不是本地科学守卫拒收。通过原只读来源恢复与mock Gateway重建完整请求，promptHash与两次实际审计一致；第二次inputTokens=1不能解读为输入丢失，当前审计未保存缓存token字段。官方M3接口确认思考计入max_tokens，仅M3.1有effort参数；不能借未文档参数承诺回答预留。普通两subject上限、可绑定Evidence覆盖及系统指导冗余正定向审查；尚未证明哪项导致模型耗尽。零模型重建证据在 `tmp/physics-source-diagnosis-20260928/single-cds-prompt.json`，停止原样重试。

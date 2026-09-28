@@ -186,6 +186,13 @@ ssh-run.sh "cd /opt/openscience-releases/<sha> && npx pnpm@9.15.0 install && npx
 
 Release SHA 目录是 write-once：已存在目录只核验 marker 与输入 archive，不会自动删除或替换。若存在 `/opt/openscience/.release-failed`，或 `.release-id` 缺失但仍有容器挂载 `/opt/openscience-releases/*`，部署必须硬停止；运维人员需先核对容器、Compose、Nginx 和实际 SHA，完成显式恢复后再清理故障标记。不得用再次部署代替恢复。
 
+### 2.3.1 同版本主备凭据维护（2026-09-28）
+
+- 前提：用户明确指定新备用；只读核对主备身份及官方额度/非生成鉴权，保持主 key、端点、模型与路由顺序。沿用生产 FD9 锁；release/rollback、镜像和运行时一致，无故障标记/未结束部署、无活动 AgentTask 后才操作。API 停止接收新任务后，由仍运行 Worker 再次确认零任务。
+- 执行：凭据仅经 SSH stdin 在内存传递；root:0600 原文件以保留权限方式备份到私有目录，再逐字校验只改 MINIMAX_API_KEY_2 后同目录原子替换。用当前 release 的 Compose、既有镜像和 --no-build/--pull never 重载 API/Worker/Web，不修改 release 标记或共享 Chat 桥。此次完成收据及原文件保存在 /opt/openscience/observations/minimax-backup-rotation-20260928T111208Z/，该目录 root:0700，env.prod.before/receipt.json 为 root:0600；不要输出其 Secret 内容。
+- 回滚：在同一生产锁内以原文件权限原子恢复 env.prod.before 到 /opt/openscience/.env.prod，再用同版本 Compose 重载三服务，核对两槽运行时与原备份、镜像、release及公网。若在换 key 前失败，也必须恢复已停止的 API；不得重发未知模型任务。备份须保留到后续维护不再需要回滚时。
+- 验证：三容器槽位一致、主 key 不变、API/Worker healthy、Web running，且公网首页200、/__release完整正文与原 SHA 精确相同。本次首次 urllib 公网403触发完整恢复；同一时点既有 curl 两页均200，因此改复用正式部署 curl 普通 TLS 校验后通过，未关闭证书验证或跟随重定向。不推断具体403规则；额度/鉴权正常不等于真实生成或故障转移已验证。
+
 ### 2.4 初始化生产对象存储（首次）
 
 ```bash
