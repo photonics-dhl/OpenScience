@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DocumentSourceMap } from '@openscience/domain';
+import { tokenizeSearchText } from '@openscience/search';
 
 import type { AiGateway } from '@openscience/ai-gateway';
 
@@ -82,6 +83,8 @@ function dependencies() {
       failIndexTask: vi.fn(async () => undefined),
     },
     embedder: {
+      tokenCounts: vi.fn(async ({ texts }: { texts: string[] }): Promise<number[] | undefined> =>
+        texts.map(text => tokenizeSearchText(text).length)),
       embed: vi.fn(async ({ texts }: { texts: string[] }) => ({
         ...MODEL_IDENTITY,
         dimension: 1024 as const,
@@ -92,6 +95,49 @@ function dependencies() {
 }
 
 describe('search indexer', () => {
+  it('stages complete lexical table chunks and finalizes needs_review after tokenizer overflow', async () => {
+    const deps = dependencies();
+    const text = Array.from({ length: 607 }, (_, index) => `cell${index}`).join(' ');
+    const map = sourceMap(text);
+    map.pages[0]!.page = 14;
+    map.pages[0]!.blocks[0]!.kind = 'table';
+    deps.embedder.tokenCounts.mockResolvedValue(undefined);
+    const authority = vi.fn(async (operation: () => Promise<unknown>) => operation());
+    const indexer = createSearchIndexer({ ...deps, modelIdentity: MODEL_IDENTITY });
+    await expect(indexer.index(job(map), authority)).resolves.toEqual({
+      status: 'needs_review', chunkCount: 1, errorCode: 'token_limit_exceeded',
+    });
+    expect(authority).toHaveBeenCalledTimes(3);
+    expect(deps.storage.stageIndexGeneration).toHaveBeenCalledWith(expect.objectContaining({ chunks: [expect.objectContaining({
+      text, tokenCount: 607, claimIds: ['claim-1'], locators: [{
+        artifactId: ARTIFACT, contentHash: CONTENT_HASH, blockId: 'paragraph-1', page: 14,
+        boundingBox: { x: 1, y: 1, width: 100, height: 20 },
+      }],
+    })] }));
+    expect(deps.storage.finalizeIndexGeneration).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'needs_review', errorCode: 'embedding_unavailable', embeddings: [],
+    }));
+    expect(deps.embedder.embed).not.toHaveBeenCalled();
+    expect(deps.storage.failIndexTask).not.toHaveBeenCalled();
+  });
+
+  it('preserves deterministic overflow classification when replaying a stored needs_review generation', async () => {
+    const deps = dependencies();
+    const map = sourceMap();
+    map.pages[0]!.blocks[0]!.kind = 'table';
+    deps.embedder.tokenCounts.mockResolvedValue(undefined);
+    deps.storage.beginIndexTask.mockResolvedValueOnce({
+      action: 'skip', taskId: TASK, status: 'needs_review', errorCode: 'embedding_unavailable',
+    });
+    const indexer = createSearchIndexer({ ...deps, modelIdentity: MODEL_IDENTITY });
+    await expect(indexer.index(job(map))).resolves.toEqual({
+      status: 'needs_review', chunkCount: 0, errorCode: 'token_limit_exceeded',
+    });
+    expect(deps.storage.stageIndexGeneration).not.toHaveBeenCalled();
+    expect(deps.storage.finalizeIndexGeneration).not.toHaveBeenCalled();
+    expect(deps.embedder.embed).not.toHaveBeenCalled();
+  });
+
   it('registers a strict internal search.index handler without exposing source text in its result', async () => {
     const deps = dependencies();
     const indexer = createSearchIndexer({ ...deps, modelIdentity: MODEL_IDENTITY });
@@ -99,6 +145,8 @@ describe('search indexer', () => {
     const payload = { artifactId: ARTIFACT, sourceMap: sourceMap() };
     const workerDeps = {
       prisma: {
+        $transaction: vi.fn(async (operation) => operation(workerDeps.prisma)),
+        $executeRaw: vi.fn(async () => 1),
         agentTask: { findUnique: vi.fn(async () => ({
           id: TASK,
           kind: 'search.index',
@@ -111,7 +159,10 @@ describe('search indexer', () => {
             researchObject: { id: RESEARCH_OBJECT, workspaceId: TENANT },
           },
         })) },
-        artifact: { findUnique: vi.fn(async () => ({ id: ARTIFACT, workspaceId: TENANT, blobSha256: CONTENT_HASH })) },
+        artifact: {
+          findUnique: vi.fn(async () => ({ id: ARTIFACT, workspaceId: TENANT, blobSha256: CONTENT_HASH })),
+          findFirst: vi.fn(async () => ({ id: ARTIFACT })),
+        },
         membership: { findUnique: vi.fn(async () => ({ id: 'membership-1' })) },
         version: { findFirst: vi.fn(async () => ({ id: SOURCE_VERSION, versionNo: 1 })) },
         claimNode: { findMany: vi.fn() },

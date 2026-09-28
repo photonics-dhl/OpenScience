@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { AiGateway, type Provider } from '@openscience/ai-gateway';
+import { AiGateway, TextProviderError, type CompleteOptions, type Provider } from '@openscience/ai-gateway';
 import { clarifyIllustrationLabels, generateIllustrationStoryboard, type StoryboardScienceRejectionReceipt } from '../../src/presentation/illustration-planner';
 import { reviewIllustrationStoryboard } from '../../src/presentation/illustration-review';
 import { compileIllustrationImagePrompt } from '../../src/presentation/scene-image';
@@ -116,6 +116,40 @@ describe('ordinary single-scene source capacity', () => {
 });
 
 describe('automatic art direction after sourced science', () => {
+  it.each([false, true])('lets a long adaptive science response reach art without repeating exhausted smaller requests (%s)', async narrative => {
+    const requests: CompleteOptions[] = [];
+    let scienceCompleted = false;
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async options => {
+      requests.push(options);
+      if (!scienceCompleted) {
+        // The recorded 57d task exhausted both 16K and 32K with only thinking.
+        // The provider boundary reproduces that failure without paid model calls.
+        if ((options.maxTokens ?? 0) <= 32768) throw new TextProviderError('provider_empty', 'thinking-only fixture', undefined, {
+          inputTokens: 19692, outputTokens: (options.maxTokens ?? 1) - 1, finishReason: 'length',
+          blockCounts: { text: 0, thinking: 1, other: 0 },
+        });
+        // A complete response can require more than the old five-minute deadline.
+        if ((options.timeoutMs ?? 0) < 360_000) throw new TextProviderError('provider_timeout', 'slow science fixture');
+        scienceCompleted = true;
+        const intent = { ...science, ...(narrative ? { narrative: { mainMessage: 'A supported relation.', audience: 'Readers' },
+          scenes: science.scenes.map(scene => ({ ...scene, paperOriginalAssetId: null })) } : {}) };
+        return { text: JSON.stringify(intent), model: 'fixture', usage: { inputTokens: 19692, outputTokens: 36000 } };
+      }
+      return { text: JSON.stringify({ scenes: [{ layout: 'A focused relation.', treatment: 'Quiet ink.' }] }),
+        model: 'fixture', usage: { inputTokens: 100, outputTokens: 100 } };
+    } };
+    const result = await generateIllustrationStoryboard(new AiGateway({ providers: [provider] }), claims, {
+      locale: 'en', style: 'aged-academia', instruction: 'Keep one sourced relationship.', output: 'image', ...(narrative ? { narrative: true } : {}),
+    }, undefined, new Map(), { versionSdf: {}, reviewedAnalysis: {},
+      scientificReview: { status: 'review_received', fieldReviews: [], needsMoreEvidence: [] },
+      sourceContext: { excerpts: [], coverage: { complete: false, selectedCharacters: 0, totalCharacters: 0, omittedSegments: 0 } } });
+    expect(result.document.scenes).toHaveLength(1);
+    expect(result.document.scenes[0]!.illustration?.subjects[0]!.basis.evidenceId).toBe(claims[0]!.sourcePassages[0]!.evidenceId);
+    expect(requests).toHaveLength(2);
+    expect(requests[0]!.thinking).toBe('adaptive');
+    expect(requests[1]).toMatchObject({ maxTokens: 16384, timeoutMs: 300_000, thinking: 'adaptive' });
+  });
+
   it.each([false, true])('passes original coordinate context through planning and review without changing narrative mode (%s)', async narrative => {
     const context: VisualNarrativeSource = { versionSdf: {}, reviewedAnalysis: {},
       scientificReview: { status: 'review_received', fieldReviews: [], needsMoreEvidence: [] },

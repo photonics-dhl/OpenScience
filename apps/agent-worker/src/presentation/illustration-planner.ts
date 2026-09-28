@@ -552,8 +552,10 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         if (rejection?.kind) await onScienceRejected(scienceRejectionReceipt(value, completion.text, attempt,
           rejection.kind, rejection.diagnostic, sourceLookup));
       } : undefined,
-      ...(settings.narrative ? { maxTokens: 65536, timeoutMs: 600_000, primaryProviderOnly: true }
-        : { maxTokens: 16384, escalateMaxTokens: 32768, timeoutMs: 300_000 }),
+      // A single sourced mechanism can need the same reasoning budget as a full
+      // narrative; panel count does not bound the scientific reasoning work.
+      maxTokens: 65536, timeoutMs: 600_000,
+      ...(settings.narrative ? { primaryProviderOnly: true } : {}),
       validationDiagnostic: () => diagnostic.toLowerCase().replace(/[^a-z0-9_,:-]+/gu, '_').slice(0, 400),
       validationFeedback: (value) => {
         const figurePlanHint = eligibleFigures && diagnostic.includes('figure_plan_scene_')

@@ -84,7 +84,7 @@ export interface SearchIndexStorage {
 
 type SearchIndexResult =
   | { status: 'succeeded'; chunkCount: number; denseChunkCount: number; activated: boolean }
-  | { status: 'needs_review'; chunkCount: number; errorCode: 'embedding_unavailable' | 'no_searchable_content' };
+  | { status: 'needs_review'; chunkCount: number; errorCode: 'embedding_unavailable' | 'token_limit_exceeded' | 'no_searchable_content' };
 
 export interface SearchIndexer {
   index(job: SearchIndexJob, withWriteAuthority?: <T>(operation: () => Promise<T>) => Promise<T>): Promise<SearchIndexResult>;
@@ -311,14 +311,14 @@ export function createSearchIndexer(dependencies: {
     async index(job: SearchIndexJob, withWriteAuthority = <T>(operation: () => Promise<T>) => operation()): Promise<SearchIndexResult> {
       validateJob(job);
       const generationSha256 = sourceGenerationSha256(job);
-      const chunks = (await chunkDocumentForEmbedding(
+      const chunking = await chunkDocumentForEmbedding(
         { sourceMap: job.sourceMap, claimIdsByBlockId: job.claimIdsByBlockId },
         texts => dependencies.embedder.tokenCounts({ purpose: 'chunk', texts }, EMBEDDING_REQUEST_BUDGET),
-      ))
-        .map((chunk) => ({
-          ...chunk,
-          id: scopeChunkId(chunk.id, job, modelIdentity.modelVersionId, generationSha256),
-        }));
+      );
+      const chunks = chunking.chunks.map((chunk) => ({
+        ...chunk,
+        id: scopeChunkId(chunk.id, job, modelIdentity.modelVersionId, generationSha256),
+      }));
       const leaseToken = randomBytes(32).toString('hex');
       const begin = await withWriteAuthority(() => dependencies.storage.beginIndexTask({
         taskId: job.taskId,
@@ -338,7 +338,9 @@ export function createSearchIndexer(dependencies: {
         if (begin.status === 'running') throw new Error('index_generation_running');
         if (begin.status === 'failed') throw new Error('index_task_attempts_exhausted');
         return begin.status === 'needs_review'
-          ? { status: 'needs_review', chunkCount: 0, errorCode: begin.errorCode }
+          ? { status: 'needs_review', chunkCount: 0,
+            errorCode: begin.errorCode === 'embedding_unavailable' && !chunking.embeddingAvailable
+              ? 'token_limit_exceeded' : begin.errorCode }
           : { status: 'succeeded', chunkCount: 0, denseChunkCount: 0, activated: false };
       }
       try {
@@ -361,6 +363,18 @@ export function createSearchIndexer(dependencies: {
       }
 
       const embeddings: DenseEmbeddingDraft[] = [];
+      if (!chunking.embeddingAvailable) {
+        await withWriteAuthority(() => finalizeWithCompensation(dependencies.storage, begin, {
+          taskId: begin.taskId,
+          leaseToken: begin.leaseToken,
+          status: 'needs_review',
+          errorCode: 'embedding_unavailable',
+          embeddings: [],
+        }));
+        // Storage activates lexical rows with its existing code; the core result
+        // distinguishes deterministic overflow so it cannot offer a futile retry.
+        return { status: 'needs_review', chunkCount: chunks.length, errorCode: 'token_limit_exceeded' };
+      }
       for (let offset = 0; offset < chunks.length; offset += MAX_EMBEDDING_BATCH) {
         try {
           await dependencies.storage.renewIndexTaskLease(begin);

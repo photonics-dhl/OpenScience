@@ -4,7 +4,8 @@ import {
   type DocumentBlock,
   type DocumentSourceMap,
 } from '@openscience/domain';
-import { chunkDocument } from '../src/chunker';
+import { chunkDocument, chunkDocumentForEmbedding } from '../src/chunker';
+import { EmbeddingClient } from '../src/embedder';
 import { tokenizeSearchText } from '../src/tokenizer';
 
 const parser = { name: 'fixture-parser', version: '1.0.0' };
@@ -42,6 +43,44 @@ function sourceMap(): DocumentSourceMap {
 }
 
 describe('locator-safe semantic chunking', () => {
+  it.each(['table', 'equation', 'reference'] as const)('retains a whole %s and its locator when the embedding tokenizer rejects it', async (kind) => {
+    const map = sourceMap();
+    const text = Array.from({ length: 607 }, (_, index) => `x${index}`).join(' ');
+    map.pages[0]!.page = 14;
+    map.pages[0]!.blocks = [block('oversized', kind, text, 10), block('after', 'paragraph', 'following text', 40)];
+    const client = new EmbeddingClient({
+      baseUrl: 'http://embedding-worker:8080',
+      fetchImpl: async (_url, init) => {
+        const { texts } = JSON.parse(String(init?.body));
+        return texts[0].includes('x0')
+          ? new Response(JSON.stringify({ schemaVersion: 1, error: 'token_limit_exceeded' }), { status: 422, headers: { 'content-type': 'application/json' } })
+          : new Response(JSON.stringify({ schemaVersion: 1, tokenCounts: [2] }), { headers: { 'content-type': 'application/json' } });
+      },
+    });
+    const result = await chunkDocumentForEmbedding({ sourceMap: map, claimIdsByBlockId: { oversized: ['claim-a'] } },
+      texts => client.tokenCounts({ purpose: 'chunk', texts }));
+    expect(result.embeddingAvailable).toBe(false);
+    expect(result.chunks.map(chunk => chunk.text)).toEqual([text, 'following text']);
+    expect(result.chunks[0]).toMatchObject({ tokenCount: 607, claimIds: ['claim-a'], locators: [{
+      artifactId: map.artifactId, contentHash: map.contentHash, blockId: 'oversized', page: 14,
+      boundingBox: { x: 10, y: 10, width: 500, height: 20 },
+    }] });
+    expect(result.chunks[0]!.locators[0]!.charRange).toBeUndefined();
+    for (const chunk of result.chunks) for (const locator of chunk.locators) resolveSourceLocator(map, locator);
+  });
+
+  it('still refines divisible text into dense-ready chunks without losing source characters', async () => {
+    const map = sourceMap();
+    const text = 'alpha beta gamma delta';
+    map.pages[0]!.blocks = [block('paragraph-1', 'paragraph', text, 10)];
+    const result = await chunkDocumentForEmbedding({ sourceMap: map }, async texts =>
+      texts[0] === text ? undefined : [1024]);
+    expect(result.embeddingAvailable).toBe(true);
+    expect(result.chunks.map(chunk => chunk.text)).toEqual(['alpha beta ', 'gamma delta']);
+    expect(result.chunks.flatMap(chunk => chunk.locators).map(locator => locator.charRange))
+      .toEqual([{ start: 0, end: 11 }, { start: 11, end: 22 }]);
+  });
+
   it('tokenizes Latin words and CJK bigrams deterministically', () => {
     expect(tokenizeSearchText('Ultrafast 光谱测量 ultrafast')).toEqual([
       'ultrafast', '光谱', '谱测', '测量', 'ultrafast',

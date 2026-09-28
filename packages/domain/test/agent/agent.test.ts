@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
 import {
@@ -71,7 +71,99 @@ async function makeDeps(credit = 100) {
   return { deps: { prisma, mailer: {} as never, redis } as never, db, user, ro, redis };
 }
 
+async function makeSourceIndexRecovery() {
+  const fixture = await makeDeps(0);
+  const { deps, db, user, ro } = fixture;
+  const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+  const artifactId = '11111111-1111-4111-8111-111111111111';
+  const sourceId = '22222222-2222-4222-8222-222222222222';
+  const versionId = '33333333-3333-4333-8333-333333333333';
+  const sourceMapRef = { schemaVersion: 1, parserStatus: 'succeeded', artifactId,
+    contentHash: 'a'.repeat(64), objectKey: `derived/source-maps/${'b'.repeat(64)}.json`, serializedSha256: 'b'.repeat(64), size: 123 };
+  const source = { ...seedSourceRetrieveTask(db, { id: sourceId, sessionId: session.id }),
+    kind: 'sdf.extract', status: 'succeeded', error: null,
+    payload: { artifactId, researchObjectId: ro.id }, result: { sourceMapRef } };
+  Object.assign(db.agentTasks.find(task => task.id === sourceId)!, source);
+  const task = seedSourceRetrieveTask(db, { id: '44444444-4444-4444-8444-444444444444', sessionId: session.id });
+  Object.assign(task, { kind: 'search.index', error: 'indivisible block exceeds embedding token limit', result: null,
+    payload: { artifactId, versionId, sourceTaskId: sourceId, sourceExecutionAttempt: 1, sourceMapRef },
+    idempotencyKey: `system:search-index:${sourceId}:1:${versionId}:${sourceMapRef.serializedSha256}` });
+  const prisma = (deps as any).prisma;
+  // The shared fake lacks these producer queries; keep their full source predicates visible.
+  prisma.artifact.findFirst = vi.fn(async ({ where }) => {
+    expect(where).toEqual({ id: artifactId, workspaceId: ro.workspaceId, deletedAt: null, bytesPurgedAt: null, blobSha256: sourceMapRef.contentHash });
+    return { id: artifactId };
+  });
+  prisma.ingestionTask.findFirst = vi.fn(async ({ where }) => {
+    expect(where).toEqual({ agentTaskId: sourceId, artifactId, state: 'confirmed', batch: { researchObjectId: ro.id } });
+    return { id: 'confirmed-ingestion' };
+  });
+  prisma.version.findFirst = vi.fn(async ({ where }) => {
+    expect(where).toEqual({ id: versionId, researchObjectId: ro.id,
+      manifest: { entries: { some: { artifactId, blobSha256: sourceMapRef.contentHash } } } });
+    return { id: versionId, commit: { idempotencyKey: 'ingestion-confirm:confirmed-ingestion' } };
+  });
+  return { ...fixture, task, source: db.agentTasks.find(task => task.id === sourceId)!, prisma };
+}
+
 describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => {
+  it.each(['token_limit_exceeded', 'embedding_unavailable'] as const)(
+    'recovers the original source-index failure and honors the real succeeded/%s terminal result', async (errorCode) => {
+    const { deps, user, task, db, redis } = await makeSourceIndexRecovery();
+    await expect(getAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({ canRetry: true });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id }))
+      .resolves.toMatchObject({ id: task.id, status: 'pending', retryCount: 1 });
+    await claimAgentTask(deps, task.id);
+    await markTaskProgress(deps, { taskId: task.id, status: 'succeeded',
+      result: { status: 'needs_review', chunkCount: 1, errorCode } });
+    await expect(getAgentTask(deps, { userId: user.id, taskId: task.id }))
+      .resolves.toMatchObject({ status: 'succeeded', canRetry: errorCode === 'embedding_unavailable' });
+    if (errorCode === 'embedding_unavailable') {
+      await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({ status: 'pending', retryCount: 2 });
+      await claimAgentTask(deps, task.id);
+      await markTaskProgress(deps, { taskId: task.id, status: 'succeeded',
+        result: { status: 'needs_review', chunkCount: 1, errorCode } });
+    }
+    await expect(getAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({ canRetry: false });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/failed tasks/i);
+    expect(db.agentTasks).toHaveLength(2);
+    expect(db.usageLedger.filter(entry => entry.delta < 0)).toHaveLength(0);
+    expect(task.retryCount).toBe(errorCode === 'token_limit_exceeded' ? 1 : 2);
+    expect(redis.lists.get('agent:queue')).toEqual(errorCode === 'token_limit_exceeded' ? [task.id] : [task.id, task.id]);
+  });
+
+  it.each(['stale-attempt', 'changed-reference', 'deleted-source', 'membership', 'owner', 'artifact', 'manifest', 'cas'])(
+    'rejects source-index recovery with %s without dispatch or credit debit', async (failure) => {
+      const { deps, user, task, source, db, redis, prisma } = await makeSourceIndexRecovery();
+      if (failure === 'stale-attempt') source.executionAttempt += 1;
+      if (failure === 'changed-reference') source.result = { sourceMapRef: { ...source.result.sourceMapRef, size: 124 } };
+      if (failure === 'deleted-source') source.deletedAt = new Date();
+      if (failure === 'membership') db.memberships.length = 0;
+      if (failure === 'owner') db.agentSessions[0].userId = 'another-user';
+      if (failure === 'artifact') prisma.artifact.findFirst.mockResolvedValue(null);
+      if (failure === 'manifest') prisma.version.findFirst.mockResolvedValue(null);
+      if (failure === 'cas') prisma.agentTask.updateMany = vi.fn(async () => ({ count: 0 }));
+      await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow();
+      expect(task.retryCount).toBe(0);
+      expect(task.status).toBe('failed');
+      expect(redis.lists.get('agent:queue') ?? []).toEqual([]);
+      expect(db.usageLedger.filter(entry => entry.delta < 0)).toHaveLength(0);
+      if (failure === 'cas') expect(prisma.agentTask.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({
+        id: task.id, status: 'failed', retryCount: 0, executionAttempt: 1,
+        error: 'indivisible block exceeds embedding token limit', result: { equals: expect.anything() },
+      }) }));
+    });
+
+  it.each(['indivisible block exceeds 1024 tokens or 65536 characters: table-1', 'search token exceeds embedding token limit',
+    'indivisible block exceeds embedding token limit: table-1', 'unrelated failure', 'inline-source'])(
+    'does not broaden source-index retries to %s', async (failure) => {
+      const { deps, user, task } = await makeSourceIndexRecovery();
+      if (failure === 'inline-source') task.payload = { artifactId: '11111111-1111-4111-8111-111111111111', sourceMap: {} };
+      else task.error = failure;
+      await expect(getAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({ canRetry: false });
+      await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/not retryable/i);
+    });
+
   it('retries one failed task without reserving a second AI credit', async () => {
     const { deps, user, ro, redis, db } = await makeDeps(1);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });

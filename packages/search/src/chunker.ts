@@ -257,10 +257,11 @@ export function chunkDocument(input: ChunkDocumentInput): SearchChunkDraft[] {
 export async function chunkDocumentForEmbedding(
   input: ChunkDocumentInput,
   tokenCounter: SearchChunkTokenCounter,
-): Promise<SearchChunkDraft[]> {
+): Promise<{ chunks: SearchChunkDraft[]; embeddingAvailable: boolean }> {
   const { sourceMap, sourceMapSha256, groups } = documentChunkUnits(input);
   const blockKinds = new Map(sourceMap.pages.flatMap(page => page.blocks.map(block => [block.id, block.kind] as const)));
   const accepted: ChunkUnit[][] = [];
+  let embeddingAvailable = true;
   let requests = 0;
   const refine = async (units: ChunkUnit[]): Promise<void> => {
     if (accepted.length >= MAX_SEARCH_CHUNKS_PER_DOCUMENT) throw new Error('search chunk limit exceeded');
@@ -284,7 +285,14 @@ export async function chunkDocumentForEmbedding(
     }
     const unit = units[0]!;
     const kind = blockKinds.get(unit.blockId);
-    if (kind === undefined || INDIVISIBLE_KINDS.has(kind)) throw new Error('indivisible block exceeds embedding token limit');
+    if (kind === undefined) throw new Error('indivisible block exceeds embedding token limit');
+    if (INDIVISIBLE_KINDS.has(kind)) {
+      // Persistence bounds already passed. Keep scholarly units and locators whole
+      // for lexical search when the embedding tokenizer cannot accept them.
+      embeddingAvailable = false;
+      accepted.push(units);
+      return;
+    }
     const tokens = tokenizeSearchTextWithOffsets(unit.text);
     if (tokens.length < 2) throw new Error('search token exceeds embedding token limit');
     const middle = tokens[Math.floor(tokens.length / 2)]!.start;
@@ -299,5 +307,8 @@ export async function chunkDocumentForEmbedding(
     await refine([slice(middle, unit.text.length)]);
   };
   for (const group of groups) await refine(group);
-  return accepted.map((group, ordinal) => materializeChunk(sourceMap, sourceMapSha256, ordinal, group));
+  return {
+    chunks: accepted.map((group, ordinal) => materializeChunk(sourceMap, sourceMapSha256, ordinal, group)),
+    embeddingAvailable,
+  };
 }

@@ -151,6 +151,7 @@ function isRetryableSourceSearchIndex(task: Pick<AgentTask, 'kind' | 'status' | 
     && task.result.status === 'needs_review' && task.result.errorCode === 'embedding_unavailable';
   const transientFailure = task.status === 'failed' && [
     'embedding_worker_worker_busy', 'embedding_transport_unavailable', 'embedding_response_unavailable',
+    'indivisible block exceeds embedding token limit',
   ].includes(task.error ?? '');
   if (!incomplete && !transientFailure) return false;
   try { return parseSourceMapSearchIndexPayload(task.payload) !== undefined; } catch { return false; }
