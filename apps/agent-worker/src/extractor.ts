@@ -1766,7 +1766,14 @@ function previousCanonicalPartial(
     }
     if (!summary.trim() || qualityReason || !validIds) return undefined;
     let verifiedSegments: Array<{ quote: string; sourceLocator: SourceLocator }>;
-    try { verifiedSegments = segmentsForPassages(sourceMap, ids, passageById); }
+    try {
+      verifiedSegments = segmentsForPassages(sourceMap, ids, passageById);
+      // Composition merges adjacent ranges; source review keeps P boundaries and
+      // joins them with newlines. Rebuild either existing form exactly from source.
+      if (verifiedSegments.map(segment => segment.quote).join('\n') !== evidenceRecord.quote) {
+        verifiedSegments = segmentsForPassages(sourceMap, ids, passageById, true);
+      }
+    }
     catch { return undefined; }
     const sourceQuote = verifiedSegments.map((segment) => segment.quote).join('\n');
     if (sourceQuote !== evidenceRecord.quote) return undefined;

@@ -30,6 +30,7 @@ export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
 
 const INGESTION_WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 const LEGACY_FULL_DOCUMENT_LIMIT_ERROR = '[blocked] Paper exceeds the full-document understanding limit; split the document into research sections before analysis';
+const REVIEW_CANDIDATE_PREFLIGHT_ERROR = '[blocked] Existing draft review requires a complete source-bound candidate';
 
 function exactRecordKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value)
@@ -415,6 +416,7 @@ export async function retryIngestionTask(
         const agentTask = task.agentTask;
         let parserCheckpoint: Prisma.InputJsonValue | undefined;
         let legacyFullDocumentLimitRecovery = false;
+        let reviewCandidateSourceId: string | undefined;
         if (agentTask?.kind === 'sdf.extract' && !task.artifact.bytesPurgedAt
           && task.artifact.workspaceId === workspace.id && task.batch.userId === input.userId
           && exactRecordKeys(agentTask.payload, ['artifactId', 'researchObjectId'])
@@ -437,6 +439,7 @@ export async function retryIngestionTask(
               && agentTask.status === 'failed' && agentTask.error === LEGACY_FULL_DOCUMENT_LIMIT_ERROR
               && agentTask.retryCount === 0 && agentTask.executionAttempt === 1
               && (result === null || parserCheckpoint !== undefined);
+            if (parserCheckpoint) reviewCandidateSourceId = await reviewCandidatePreflightSource(tx, task, input.userId);
           }
         }
         const failedRetry = task.state === 'failed_retryable' && task.retryCount >= 0 && task.retryCount < 3
@@ -481,11 +484,11 @@ export async function retryIngestionTask(
         const authorizedFailedRetry = failedRetry && activeFailedRetryOwner
           && (task.retryCount === 0 || paidFailedRetry || compensatedSchemaRetry);
         if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery && !parserRecovery
-          && !passageBudgetRecovery && !legacyFullDocumentLimitRecovery) {
+          && !passageBudgetRecovery && !legacyFullDocumentLimitRecovery && !reviewCandidateSourceId) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
         }
         if (!deps.audit?.record) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry audit is unavailable');
-        const recovery = legacyFullDocumentLimitRecovery ? 'legacy_full_document_limit'
+        const recovery = reviewCandidateSourceId ? 'review_candidate_preflight' : legacyFullDocumentLimitRecovery ? 'legacy_full_document_limit'
           : passageBudgetRecovery ? 'canonical_passage_budget' : parserRecovery ? 'unresolved_parser_pages'
           : canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
           : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable'
@@ -526,7 +529,7 @@ export async function retryIngestionTask(
             result: { equals: result === null ? Prisma.AnyNull : result as Prisma.InputJsonValue },
             status: legacyProposalFailure || canonicalAllMissingRecovery || parserRecovery || passageBudgetRecovery ? 'succeeded' : 'failed',
             ...(canonicalAllMissingRecovery ? { executionAttempt: 2 }
-              : authorizedFailedRetry || parserRecovery || passageBudgetRecovery || legacyFullDocumentLimitRecovery
+              : authorizedFailedRetry || parserRecovery || passageBudgetRecovery || legacyFullDocumentLimitRecovery || reviewCandidateSourceId
                 ? { executionAttempt: retryAttempt } : {}),
           },
           data: {
@@ -549,6 +552,7 @@ export async function retryIngestionTask(
             previousAgentStatus: agentTask!.status, previousAgentError: agentTask!.error,
             previousExecutionAttempt: agentTask!.executionAttempt, previousRetryCount: task.retryCount,
             previousAgentRetryCount: agentTask!.retryCount, checkpointReused: parserCheckpoint !== undefined,
+            ...(reviewCandidateSourceId ? { reviewExistingSourceTaskId: reviewCandidateSourceId } : {}),
             ...(parserRecovery ? { previousParserResult: result } : {}),
             ...(passageBudgetRecovery ? { previousExtractionResult: result } : {}),
             creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation'
@@ -598,6 +602,33 @@ function semanticCompositionSourceReference(value: unknown, artifact: { id: stri
   } catch {
     return undefined;
   }
+}
+
+/** Retry this pre-provider review failure once; the Worker reconstructs review-only context from the unchanged key. */
+async function reviewCandidatePreflightSource(
+  tx: Prisma.TransactionClient, task: HermesRefreshSource, userId: string,
+): Promise<string | undefined> {
+  const failed = task.agentTask;
+  if (task.state !== 'failed_blocked' || task.retryCount !== 0 || task.error !== REVIEW_CANDIDATE_PREFLIGHT_ERROR
+    || !failed || failed.status !== 'failed' || failed.error !== REVIEW_CANDIDATE_PREFLIGHT_ERROR
+    || failed.retryCount !== 0 || failed.executionAttempt !== 1 || task.batch.researchObject.status !== 'draft') return;
+  const key = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):scientific-review-v4$/.exec(failed.idempotencyKey ?? '');
+  if (!key || key[1] !== task.id || key[2] !== key[3]) return;
+  const source = await tx.agentTask.findUnique({ where: { id: key[2] }, include: { session: true } });
+  if (!source || source.kind !== 'sdf.extract' || source.status !== 'succeeded' || source.deletedAt
+    || source.session.deletedAt || source.session.status !== 'active' || source.session.userId !== userId
+    || source.session.researchObjectId !== task.batch.researchObjectId
+    || !exactRecordKeys(source.payload, ['artifactId', 'researchObjectId'])
+    || source.payload.artifactId !== task.artifactId || source.payload.researchObjectId !== task.batch.researchObjectId) return;
+  const reference = semanticCompositionSourceReference(source.result, task.artifact);
+  if (!reference || !exactRecordKeys(failed.result, ['sourceMapRef'])) return;
+  const checkpoint = parseDocumentSourceMapReference(failed.result.sourceMapRef);
+  if (reference.objectKey !== checkpoint.objectKey || reference.serializedSha256 !== checkpoint.serializedSha256
+    || reference.size !== checkpoint.size) return;
+  await requirePublicRefreshSource(tx, task.id);
+  if (await findSavedIngestionCommit(tx, { taskId: task.id, researchObjectId: task.batch.researchObjectId })
+    || await tx.auditLog.count({ where: { action: 'ai.gateway.call', requestId: failed.id } }) !== 0) return;
+  return source.id;
 }
 
 type HermesRefreshSource = Prisma.IngestionTaskGetPayload<{ include: {

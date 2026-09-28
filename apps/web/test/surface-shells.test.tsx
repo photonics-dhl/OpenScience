@@ -198,6 +198,16 @@ describe('Optical Editorial brand and surface shells', () => {
     expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 1, result: null })).toBe(false);
   });
 
+  it('offers review-only preflight recovery once and keeps other blocked sources non-retryable', () => {
+    const task = { state: 'failed_blocked' as const, retryCount: 0,
+      error: '[blocked] Existing draft review requires a complete source-bound candidate', result: { sourceMapAvailable: true } };
+    expect(isRetryableSdfExtraction(task)).toBe(true);
+    expect(isRetryableSdfExtraction({ ...task, retryCount: 1 })).toBe(false);
+    expect(isRetryableSdfExtraction({ ...task, result: null })).toBe(false);
+    expect(isRetryableSdfExtraction({ ...task, error: '[blocked] parser rejected unsafe content' })).toBe(false);
+    expect(isRetryableSdfExtraction({ ...task, state: 'confirmed' })).toBe(false);
+  });
+
   it('offers a charged reanalysis only for the exact six-field canonical all-missing projection', () => {
     const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
     const result = {

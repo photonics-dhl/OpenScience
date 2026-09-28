@@ -1,5 +1,7 @@
 # Runbook: 部署（Deployment）
 
+2026-09-28 二次来源复审恢复：无迁移、Provider 或 parser 协议变更，仍沿干净已推 SHA 的 `--no-tests --skip-migrate --reuse-unchanged-capability-images` 发布。现有 ingestion retry 只恢复首次、零模型调用且来源绑定有效的候选复用 preflight 失败；原 task/幂等键/SourceMap/成功候选保留，不新扣内部额度、不重解析。发布前确认无在途任务；发布后从原来源任务页点一次恢复并核实际结果。应用回退须先等恢复任务终态，保留失败审计和原文，不手动重置数据库；该恢复不证明科学 Skill 的判断质量。
+
 2026-09-28 媒体管理、来源补接与表格转换：相关定向测试、CI 与独立 High 完成后，沿干净已推 SHA 的 `--no-tests --skip-migrate --reuse-unchanged-capability-images` 正常构建启动。该复用开关只按现有输入/模型身份守卫复用 ScanSci/BGE，Worker 与 document-parser 始终重建；不要因 `ingestion-parser.ts` 改动而误关该开关、额外下载未变能力依赖。保留旧 SourceMap、完整/partial checkpoint 与公开版本。已确认且绑定 visual run 的来源不能直接 refresh；reanalyze 复用旧 SourceMap。当前最少分析次数的既有路径是重新上传同一 PDF、新 artifact/ingestion（内容存储去重）→核对→保存新私有版本。独立 watchdog 原子替换已提交脚本、留 owner/mode 备份，由原 timer 读取；实际版本/验证见 Hermes CURRENT。
 
 严格Parser验收的准备范围必须与正式部署一致：在全新SHA目录先完成依赖安装、数据库客户端生成和全应用构建，不能只构建Worker后固定运行快照。2026-09-22期刊发布实际发现首次与重复PNPM安装会改变部分`.bin`启动脚本，且全构建新增共享包输出；新目录预先完成安装收敛后，两轮完整构建的`runtime-snapshot`中`entryCount/sha256`必须相同，再构建最终镜像并生成正式报告。后续canonical部署仍保留全部源/快照/镜像检查；失败时保留旧报告，使用新SHA路径，禁止改报告、排除可执行依赖或清理生成文件来追旧散列。

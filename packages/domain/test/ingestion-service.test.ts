@@ -8,7 +8,7 @@ import { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, ge
 import { persistDocumentSourceMapReference } from '../src/research-intelligence/source-map-ref';
 import { createCommit } from '../src/commit/commits';
 import { updateClaim } from '../src/research-intelligence/claim-evidence-service';
-import { markTaskProgress } from '../src/agent/agent';
+import { createAgentSession, markTaskProgress } from '../src/agent/agent';
 
 const TEST_RO_ID = '00000000-0000-4000-8000-000000000101';
 const CORE = { schemaVersion: '0.1.0', problem: 'Question', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
@@ -212,6 +212,121 @@ const file = (filename: string) => {
   return { filename, content };
 };
 
+const REVIEW_PREFLIGHT_ERROR = '[blocked] Existing draft review requires a complete source-bound candidate';
+
+async function reviewPreflightFixture() {
+  const fixture = makeDeps();
+  const { deps, db, user, redis } = fixture;
+  const batch = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID,
+    processingConsent: true, files: [file('paper.pdf')] });
+  const task = db.ingestionTasks.find(row => row.id === batch.tasks[0].id)!;
+  const source = db.agentTasks.find(row => row.id === task.agentTaskId)!;
+  const artifact = db.artifacts.find(row => row.id === task.artifactId)!;
+  const sourceMapRef = await persistDocumentSourceMapReference(deps.storage, {
+    artifactId: artifact.id, contentHash: artifact.blobSha256, parser: { name: 'fixture', version: '1' },
+    pages: [{ page: 1, width: 600, height: 800, blocks: [{ id: 'source', kind: 'paragraph', text: 'Original evidence.',
+      boundingBox: { x: 0, y: 0, width: 100, height: 20 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }],
+  }, 'succeeded');
+  Object.assign(source, { status: 'succeeded', executionAttempt: 1, result: {
+    core: { ...CORE, insight: 'Insight', method: 'Method', results: 'Result', limitations: 'Limit', reproducibility: 'Parameters' },
+    canonicalExtractionContract: 'grounded-passages-v2', sourceMapRef,
+    scientificReview: { contractVersion: '5', status: 'review_received', semanticStage: {
+      kind: 'source_bridge', source: { artifactId: artifact.id, contentHash: artifact.blobSha256 },
+    } },
+  } });
+  const key = `ingestion-analysis-compose:${task.id}:${source.id}:${source.id}:scientific-review-v4`;
+  const session = await createAgentSession(deps, { userId: user.id, researchObjectId: TEST_RO_ID,
+    kind: 'ingestion', idempotencyKey: `${key}:session` });
+  const agent = await deps.prisma.agentTask.create({ data: { sessionId: session.id, kind: 'sdf.extract',
+    payload: { artifactId: artifact.id, researchObjectId: TEST_RO_ID }, idempotencyKey: key,
+    status: 'failed', error: REVIEW_PREFLIGHT_ERROR, executionAttempt: 1, result: { sourceMapRef },
+    dispatchedAt: new Date(),
+  } });
+  Object.assign(task, { agentTaskId: agent.id, state: 'failed_blocked', error: REVIEW_PREFLIGHT_ERROR });
+  Object.assign(deps.prisma.auditLog, { count: vi.fn(async ({ where }: { where: { action: string; requestId: string } }) =>
+    db.auditLogs.filter(row => row.action === where.action && row.requestId === where.requestId).length) });
+  redis.lpush.mockClear();
+  return { ...fixture, task, source, agent, artifact,
+    sourceSession: db.agentSessions.find(row => row.id === source.sessionId)!,
+    reviewSession: db.agentSessions.find(row => row.id === agent.sessionId)!,
+    input: { userId: user.id, taskId: task.id } };
+}
+
+describe('review-only preflight recovery', () => {
+  it('requeues the same review once without changing its candidate, source map, payload, key or charge', async () => {
+    const { deps, db, task, source, agent, redis, input } = await reviewPreflightFixture();
+    const original = structuredClone({ source, payload: agent.payload, checkpoint: agent.result, key: agent.idempotencyKey });
+    const charges = structuredClone(db.usageLedger);
+    db.auditLogs.push({ action: 'ai.gateway.call', requestId: source.id });
+
+    const result = await retryIngestionTask(deps, input);
+
+    expect(result).toMatchObject({ id: task.id, agentTaskId: agent.id, state: 'queued', retryCount: 1 });
+    expect(agent).toMatchObject({ status: 'pending', retryCount: 1, executionAttempt: 1, error: null,
+      payload: original.payload, idempotencyKey: original.key, result: original.checkpoint });
+    expect(source).toEqual(original.source);
+    expect(db.agentTasks).toHaveLength(2);
+    expect(db.usageLedger).toEqual(charges);
+    expect(redis.lpush).toHaveBeenCalledTimes(1);
+    expect(redis.lpush).toHaveBeenCalledWith('agent:queue', agent.id);
+    expect(db.auditLogs).toContainEqual(expect.objectContaining({ action: 'ingestion.task.retry',
+      metadata: expect.objectContaining({ recovery: 'review_candidate_preflight', reviewExistingSourceTaskId: source.id,
+        previousError: REVIEW_PREFLIGHT_ERROR, creditPolicy: 'reuse-original-reservation', checkpointReused: true }) }));
+  });
+
+  it('allows only one of two duplicate recovery requests and rejects another failed attempt', async () => {
+    const { deps, db, task, agent, redis, input } = await reviewPreflightFixture();
+    const results = await Promise.allSettled([retryIngestionTask(deps, input), retryIngestionTask(deps, input)]);
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(redis.lpush).toHaveBeenCalledTimes(1);
+    Object.assign(db.ingestionTasks.find(row => row.id === task.id)!, { state: 'failed_blocked', error: REVIEW_PREFLIGHT_ERROR });
+    Object.assign(db.agentTasks.find(row => row.id === agent.id)!, { status: 'failed', error: REVIEW_PREFLIGHT_ERROR, executionAttempt: 2 });
+    await expect(retryIngestionTask(deps, input)).rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
+    expect(db.agentTasks).toHaveLength(2);
+    expect(redis.lpush).toHaveBeenCalledTimes(1);
+  });
+
+  const rejected: Array<[string, (fixture: Awaited<ReturnType<typeof reviewPreflightFixture>>) => void]> = [
+    ['a model call on the failed review', f => { f.db.auditLogs.push({ action: 'ai.gateway.call', requestId: f.agent.id }); }],
+    ['a different blocked error', f => { f.task.error = f.agent.error = '[blocked] parser rejected unsafe content'; }],
+    ['a changed source artifact', f => { f.source.payload.artifactId = 'another-artifact'; }],
+    ['a changed source research object', f => { f.sourceSession.researchObjectId = 'another-ro'; }],
+    ['another source owner', f => { f.sourceSession.userId = 'another-user'; }],
+    ['a closed review session', f => { f.reviewSession.status = 'closed'; }],
+    ['a failed original candidate', f => { f.source.status = 'failed'; }],
+    ['a deleted original candidate', f => { f.source.deletedAt = new Date(); }],
+    ['a different source map', f => { f.source.result.sourceMapRef = { ...f.source.result.sourceMapRef,
+      objectKey: `derived/source-maps/${'a'.repeat(64)}.json`, serializedSha256: 'a'.repeat(64) }; }],
+    ['a different content hash', f => { f.source.result.sourceMapRef = { ...f.source.result.sourceMapRef, contentHash: 'b'.repeat(64) }; }],
+    ['a composition instead of review-only', f => { f.agent.idempotencyKey = f.agent.idempotencyKey.replace('scientific-review-v4', 'scientific-summary-v3'); }],
+    ['an already saved confirmation', f => {
+      f.db.commits.push({ id: 'saved', researchObjectId: TEST_RO_ID, idempotencyKey: `ingestion-confirm:${f.task.id}` });
+      f.db.versions.push({ id: 'version', commitId: 'saved', researchObjectId: TEST_RO_ID, versionNo: 1 });
+      f.db.versionManifests.push({ id: 'manifest', versionId: 'version', coreJson: CORE });
+    }],
+  ];
+  it.each(rejected)('rejects %s without changing the failed task or queue', async (_name, alter) => {
+    const fixture = await reviewPreflightFixture();
+    alter(fixture);
+    const { deps, db, task, agent, redis, input } = fixture;
+    const before = structuredClone({ task, agent, ledger: db.usageLedger });
+    await expect(retryIngestionTask(deps, input)).rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
+    expect(db.ingestionTasks.find(row => row.id === task.id)).toEqual(before.task);
+    expect(db.agentTasks.find(row => row.id === agent.id)).toEqual(before.agent);
+    expect(db.usageLedger).toEqual(before.ledger);
+    expect(redis.lpush).not.toHaveBeenCalled();
+  });
+
+  it('rolls back the AgentTask reset if the ingestion compare-and-swap loses', async () => {
+    const { deps, db, task, agent, redis, input } = await reviewPreflightFixture();
+    vi.spyOn(deps.prisma.ingestionTask, 'updateMany').mockResolvedValueOnce({ count: 0 });
+    await expect(retryIngestionTask(deps, input)).rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
+    expect(db.agentTasks.find(row => row.id === agent.id)).toMatchObject({ status: 'failed', retryCount: 0 });
+    expect(db.ingestionTasks.find(row => row.id === task.id)).toMatchObject({ state: 'failed_blocked', retryCount: 0 });
+    expect(redis.lpush).not.toHaveBeenCalled();
+  });
+});
+
 describe('multi-format ingestion service', () => {
   it.each([
     'paper.pdf', 'paper.docx', 'source.tex', 'notes.md', 'figure.png',
@@ -412,6 +527,7 @@ describe('multi-format ingestion service', () => {
     const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
     agentTask.status = 'failed';
     agentTask.error = 'provider timeout';
+    agentTask.executionAttempt = 1;
     const retried = await retryIngestionTask(deps, { userId: user.id, taskId: task.id });
     expect(retried).toMatchObject({ state: 'queued', retryCount: 1, error: null });
     expect(redis.lpush).toHaveBeenLastCalledWith('agent:queue', task.agentTaskId);
@@ -608,6 +724,7 @@ describe('multi-format ingestion service', () => {
     const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
     agentTask.status = 'failed';
     agentTask.error = 'provider timeout';
+    agentTask.executionAttempt = 1;
     redis.lpush.mockRejectedValueOnce(new Error('redis unavailable'));
     await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/redis unavailable/);
     expect(task).toMatchObject({ state: 'queued', retryCount: 1, error: null });

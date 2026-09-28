@@ -8,6 +8,8 @@
 范围：此开发工作树及从包含此配置的提交创建的新工作树；既有其他分支/工作树、远端主机、云任务不会自动继承。新 MCP 进程加载配置，已启动进程须重载。既有同配置的桌面浏览器已实际打开 Example Domain，Pro 曾完成两次工具读写；这些证据不代表 XGS 科研业务验收，也不解决平台命令拦截或 Windows 原生截图兼容故障。回滚：移除本次新增的 `cua_repl`、`cua_repl.tools.js`、`node_repl.env` 三节，保留 `openscience_code`；不要删除其他项目仍引用的共享启动器。
 
 ## 当前能力索引：目的、调用、效果
+2026-09-28 二次来源复审断点：初稿合并相邻引文，review 保留 P 段边界；`extractor.ts` 的 `previousCanonicalPartial` 仅重建合并形式，导致同一可信来源在二次复审前被拒。真实任务 `24e70850` failed_blocked、调用 0。候选依次从原 SourceMap 精确重建两种既有形式，不做空白归一化；连续两次复审和七种变造拒绝、Worker typecheck 通过。实际保存的初稿/已审结果离线回放分别成功，外部调用 0；这只证明程序复用，不能算 v5 科学效果。原三个恢复入口均拒绝该终态，正在既有 ingestion retry 增加受来源/权限/CAS 约束的一次恢复；发布和真实恢复证据见 CURRENT。
+
 2026-09-28 真实 reviewOnly `423b90f1` 的 provenance 明确为科学批判 Skill v4/合同5，但六字段逐字不变/all accepted，披露完整性与“模型实现未公开”的层级歧义仍漏判；不是新几何硬错。现有共享 evidence rule v5 区分模型方程、参数/求解方法、可执行代码、网格/收敛披露，给出通用正反例，不硬编码论文答案、不加阶段或门禁。13 项加载/Gateway 桩与 Worker typecheck 只证明指导送达，真实同源效果待观察。仅来源复审保留旧 semanticStage，只校正最终候选，不能冒称中间 19/66 as 等导航问题已修。
 
 2026-09-28 新来源实测的后续断点：编辑页把已有 run 查询混入 1.5 秒 ingestion 轮询，碰到原 GET/POST 共用 10 次/分钟限流后不再调度。候选在原限流器分离有界 GET/HEAD 桶、保留 POST 10 次/分钟，解析期只读 ingestion，429 按 Retry-After、瞬时网络/5xx 退避，切换/取消不落旧结果；16 轮询、16 客户端、17 限流测试通过，发布状态见 CURRENT。新分析 `f3ec2302` succeeded，但 final composition 的 model_self_check 没有 fieldReviews，不能当来源审校。独立复核指出“未公开经典辐射模型具体实现”依据不足；现有 reviewOnly 能复用 SourceMap/候选执行科学 Skill v4。中间 semanticStage 另混淆 66 as/19 as 算例及窗口披露范围；它只作导航，后续不能视作已审科学事实，也不能把只审最终 core 冒称全中间结果已修。

@@ -15,6 +15,7 @@ on:
       - 'apps/agent-worker/src/scientific-writing-source.ts'
       - 'apps/agent-worker/src/citation-management.ts'
       - 'apps/agent-worker/src/ingestion-parser.ts'
+      - 'apps/agent-worker/src/extractor.ts'
       - 'apps/agent-worker/test/ingestion-parser.test.ts'
       - 'apps/agent-worker/test/visual-source-context.test.ts'
       - 'apps/agent-worker/src/workspace-guide.ts'
@@ -50,6 +51,8 @@ on:
       - 'apps/web/lib/api.ts'
       - 'apps/web/lib/ingestion-review-polling.ts'
       - 'apps/web/app/research-objects/**/edit/page.tsx'
+      - 'apps/web/app/research-objects/**/hermes/page.tsx'
+      - 'apps/web/test/surface-shells.test.tsx'
       - 'apps/web/test/ingestion-review-polling.test.ts'
       - 'apps/web/test/api-client-contract.test.ts'
       - 'apps/api/src/security/rate-limit.ts'
@@ -87,6 +90,7 @@ on:
       - 'apps/agent-worker/src/scientific-writing-source.ts'
       - 'apps/agent-worker/src/citation-management.ts'
       - 'apps/agent-worker/src/ingestion-parser.ts'
+      - 'apps/agent-worker/src/extractor.ts'
       - 'apps/agent-worker/test/ingestion-parser.test.ts'
       - 'apps/agent-worker/test/visual-source-context.test.ts'
       - 'apps/agent-worker/src/workspace-guide.ts'
@@ -122,6 +126,8 @@ on:
       - 'apps/web/lib/api.ts'
       - 'apps/web/lib/ingestion-review-polling.ts'
       - 'apps/web/app/research-objects/**/edit/page.tsx'
+      - 'apps/web/app/research-objects/**/hermes/page.tsx'
+      - 'apps/web/test/surface-shells.test.tsx'
       - 'apps/web/test/ingestion-review-polling.test.ts'
       - 'apps/web/test/api-client-contract.test.ts'
       - 'apps/api/src/security/rate-limit.ts'
@@ -171,7 +177,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off"
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts test/presentation/automatic-style.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/extractor.test.ts -t "disclosure-layer guidance"
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/extractor.test.ts -t "disclosure guidance"
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/visual-source-context.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/ingestion-parser.test.ts -t "Docling table normalization"
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/workspace-guide.test.ts
@@ -187,6 +193,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "prevents retrying a failed image source"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "current platform admin can submit"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/ingestion-service.test.ts -t "auto-funds a current platform admin"
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/ingestion-service.test.ts -t "review-only preflight recovery"
       - run: node --check infra/codex-sol-review/runner.mjs
       - run: node --check infra/chatgpt-browser/review-broker.mjs
       - run: node --check infra/chatgpt-browser/runner.cjs
@@ -198,4 +205,5 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/ingestion-review-polling.test.ts test/api-client-contract.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/surface-shells.test.tsx -t "review-only preflight recovery"
       - run: npx pnpm@9.15.0 docs:lint

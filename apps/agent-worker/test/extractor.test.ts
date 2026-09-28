@@ -39,9 +39,11 @@ describe('sdfCoreGuard（§9.3 Schema 校验 + §5.1 六字段）', () => {
 });
 
 describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）', () => {
-  it('routes disclosure-layer guidance through synthesis and existing-source review with skill provenance', async () => {
+  it.each(['single-passage', 'adjacent-passages'])('routes disclosure guidance and resumes composition to review to review (%s)', async (mode) => {
     // The provider is a transport fixture: this verifies injection and provenance, not scientific model judgment.
-    const sourceText = 'The model is defined by q(t) = q0 exp(-k t). Representative parameters and the Runge-Kutta solver are described. The supplied appendix contains no executable code or mesh/convergence settings.';
+    const sourceExcerpt = 'The model is defined by q(t) = q0 exp(-k t). Representative parameters and the Runge-Kutta solver are described. The supplied appendix contains no executable code or mesh/convergence settings.';
+    const sourceText = `${sourceExcerpt} `.repeat(mode === 'adjacent-passages' ? 18 : 1).trim();
+    const sourcePassageIds = mode === 'adjacent-passages' ? ['P00001', 'P00002'] : ['P00001'];
     const sourceMap: DocumentSourceMap = {
       artifactId: 'artifact-disclosure', contentHash: 'a'.repeat(64), parser: { name: 'fixture', version: '1' },
       pages: [{ page: 1, width: 100, height: 100, blocks: [{
@@ -56,13 +58,14 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       reproducibility: '材料报告代表参数；当前附录未提供可执行代码、网格与收敛设置。' };
     const semantic = { chosenRepresentativeCase: 'reported model', fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, [{
       statement: core[field], type: 'bounded_synthesis', conditionCase: 'supplied appendix',
-      comparison: null, operation: null, evidenceIds: ['P00001'],
+      comparison: null, operation: null, evidenceIds: sourcePassageIds,
     }]])) };
-    const fields = Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: core[field], sourcePassageIds: ['P00001'] }]));
-    const responses = [semantic, { fields, needsMoreEvidence: [] }, {
+    const fields = Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: core[field], sourcePassageIds }]));
+    const reviewResponse = {
       fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { ...fields[field], verdict: 'accepted', issues: [] }])),
       needsMoreEvidence: [],
-    }];
+    };
+    const responses = [semantic, { fields, needsMoreEvidence: [] }, reviewResponse, reviewResponse];
     const requests: Parameters<Provider['complete']>[0][] = [];
     const provider: Provider = {
       name: 'fixture', model: 'fixture',
@@ -91,13 +94,39 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       expect(system).toContain('已给方程不证明代码可用，未取得代码不证明模型方法未交代');
       expect(system).toContain('没有该层级的全文核对依据时，缩小或删除强断言');
       expect(system).toContain('不能概括为“模型未公开”或“完整复现输入已披露”');
-      expect(JSON.stringify(request.messages)).toContain(sourceText);
+      expect(JSON.stringify(request.messages)).toContain(sourceExcerpt);
     }
     expect(requests[2]!.messages[0]!.content).toContain('已有六字段候选的来源审校者');
     expect(reviewed.scientificReview).toMatchObject({ sourceAgentTaskId: 'compose-task',
       reviewSkill: { id: 'scientific-critical-thinking', version: '5' } });
     expect(reviewed.scientificReview?.semanticStage).toEqual(composed.scientificReview?.semanticStage);
-    expect(reviewed.evidenceSegments?.reproducibility).toEqual(composed.evidenceSegments?.reproducibility);
+    expect(composed.evidenceSegments?.reproducibility).toHaveLength(1);
+    expect(reviewed.evidenceSegments?.reproducibility).toHaveLength(sourcePassageIds.length);
+    if (mode === 'adjacent-passages') {
+      expect(reviewed.evidence.reproducibility.quote).not.toBe(composed.evidence.reproducibility.quote);
+    }
+    const resume = (previousResult = reviewed, map = sourceMap) => extractHandler(gateway, { payload: {} }, {
+      sourceMap: map, previousResult, requireReusableSemanticStage: true,
+      reviewExistingSourceTaskId: 'review-task', scientificReview: { requestId: 'next-review-task', authorizationContext },
+    });
+    const rereviewed = await resume();
+    expect(requests).toHaveLength(4);
+    expect(rereviewed.core).toEqual(reviewed.core);
+    expect(rereviewed.evidence).toEqual(reviewed.evidence);
+    expect(rereviewed.evidenceSegments).toEqual(reviewed.evidenceSegments);
+    for (const tamper of ['quote', 'interior-whitespace', 'passage-id', 'persisted-identity', 'artifact-id', 'content-hash', 'source-text']) {
+      const previous = structuredClone(reviewed);
+      const map = structuredClone(sourceMap);
+      if (tamper === 'quote') previous.evidence.reproducibility.quote += 'unsupported';
+      if (tamper === 'interior-whitespace') previous.evidence.reproducibility.quote = previous.evidence.reproducibility.quote.replace('model', 'mo\ndel');
+      if (tamper === 'passage-id') previous.evidence.reproducibility.locator = 'passages:P99999';
+      if (tamper === 'persisted-identity') previous.scientificReview!.semanticStage!.source.artifactId = 'other-artifact';
+      if (tamper === 'artifact-id') map.artifactId = 'other-artifact';
+      if (tamper === 'content-hash') map.contentHash = 'b'.repeat(64);
+      if (tamper === 'source-text') map.pages[0]!.blocks[0]!.text += 'changed source';
+      await expect(resume(previous, map), tamper).rejects.toThrow('complete source-bound candidate');
+      expect(requests, tamper).toHaveLength(4);
+    }
   });
 
   it('从 canonical source map 的页块顺序派生兼容正文', () => {
