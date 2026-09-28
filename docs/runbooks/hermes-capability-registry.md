@@ -10,9 +10,7 @@
 ## 当前能力索引：目的、调用、效果
 2026-09-28 同一请求的可满足性修复：独立核源证明 CdS 最小单幕需 s16 工况、s4 几何、s10 时间映射三段，普通两subject上限不足。沿 Domain 已有四项容量统一 planner，不放宽单来源完整支持或把 SourceMap 当 Evidence；72/72 定向验证兼容艺术修订/标签澄清及错源拒绝。x/y/z表格通过原 createEvidence/verifyEvidence 人工核对加入私有 method，证据7154c1d1保留原页/范围和human provenance。配图 science/review 现在复用 v5.illustrationInstructions，保留共享科学规则但不再注入六字段/观察编号输出协议；全文 instructions/sourceReviewInstructions逐字不变，provenance记录资源投影。13/13路由、2/2披露及Worker TC通过。它们是已证实的输入/约束修复，不是 thinking-only 原因或科学能力提升的证据；发布及真实效果见 CURRENT。
 
-
 2026-09-28 单图思考耗尽复现：df59 部署后，普通单图 `57d39ec8` 两次 M3 adaptive 在16k/32k精确达到输出上限，均只有thinking块，无正文/候选/PNG，故不是本地科学守卫拒收。通过原只读来源恢复与mock Gateway重建完整请求，promptHash与两次实际审计一致；第二次inputTokens=1不能解读为输入丢失，当前审计未保存缓存token字段。官方M3接口确认思考计入max_tokens，仅M3.1有effort参数；不能借未文档参数承诺回答预留。普通两subject上限、可绑定Evidence覆盖及系统指导冗余正定向审查；尚未证明哪项导致模型耗尽。零模型重建证据在 `tmp/physics-source-diagnosis-20260928/single-cds-prompt.json`，停止原样重试。
-
 
 2026-09-28 数值来源误拒：真实新分镜 `0658e771` 的两个候选均被 `unbound_numeric_2_c_source` 拒收；来源中的 `*c*` 被读作无单位、`*V*e` 被读作量名 e。原 `scientificQuantities` 仅在比较副本中移除成对单/双星号，不改原引文，转义/未配对标记和字母数字之间的乘法保持保守拒绝。真实第 2 页完整来源＋最小候选离线修前拒/修后接受，13 个新增正反例及全文件 66/66、Worker typecheck、独立 High 通过。未保存的原完整三幕候选不冒称整体复验成功；部署及实际新任务见 CURRENT。
 
