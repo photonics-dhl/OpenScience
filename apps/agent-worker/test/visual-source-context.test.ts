@@ -56,7 +56,10 @@ async function reviewedFixture() {
 }
 
 describe('authorized illustration context from an existing reviewed source', () => {
-  it.each(['reviewed', 'manual', 'mixed', 'foreign-only', 'mixed-narrative', 'legacy-checkpoint', 'legacy-partial', 'unauthorized', 'changed', 'diagnostics', 'diagnostics-stale', 'diagnostics-cas', 'diagnostics-source', 'diagnostics-success', 'diagnostics-reentry'] as const)('routes a local illustration through the real task handler (%s)', async mode => {
+  it.each(['reviewed', 'manual', 'mixed', 'foreign-only', 'mixed-narrative', 'legacy-checkpoint', 'legacy-partial', 'unauthorized', 'changed', 'diagnostics', 'diagnostics-stale', 'diagnostics-cas', 'diagnostics-source', 'diagnostics-success', 'diagnostics-reentry',
+    'recovery', 'recovery-invalid', 'recovery-no-receipt', 'recovery-candidate-changed', 'recovery-map-changed', 'recovery-cas',
+    'recovery-revoked', 'recovery-source-changed', 'recovery-submitting', 'recovery-audit-changed', 'recovery-receipt-revoked',
+    'recovery-attempt-changed', 'recovery-before-art-reentry'] as const)('routes a local illustration through the real task handler (%s)', async mode => {
     const f = await reviewedFixture();
     const ro = '40000000-0000-4000-8000-000000000001';
     const versionId = '50000000-0000-4000-8000-000000000001';
@@ -126,6 +129,91 @@ describe('authorized illustration context from an existing reviewed source', () 
       presentationAsset: { findUnique: async () => null },
       evidenceRecord: { findMany: async () => evidence },
     };
+    if (mode.startsWith('recovery')) {
+      // The original response is provider data, not a successful science checkpoint.
+      const candidate = { title: 'Open channel', scenes: [{ title: 'Open channel', narration: 'The particle follows an open path.',
+        message: 'The particle follows an open channel.', domain: 'conceptual',
+        subjects: [{ description: 'The particle follows an open channel.', basis: { sourceId: 's0' } }],
+        encoding: 'One arrow represents the path of subject 0.', labels: [mode === 'recovery-invalid' ? 'w=20 nm' : 'Open channel'],
+        constraints: ['Conceptual, not to scale'] }] };
+      const sources = [{ sourceId: 's0', claimId, evidenceId: evidence[0]!.id, text: evidence[0]!.exactQuote, relation: 'supports' }];
+      const identity = { payload, baseIdentity: null,
+        claimContent: JSON.stringify(claimRows.map(({ id, kind, statement, assessment, conditions, limitations, extractionStatus }) =>
+          ({ id, kind, statement, assessment, conditions, limitations, extractionStatus }))),
+        sourceEvidenceIdentity: createHash('sha256').update(JSON.stringify(evidence.map(({ id, claimId, artifactId, contentHash,
+          exactQuote, relation, locator, extractionStatus, provenance }) =>
+          ({ id, claimId, artifactId, contentHash, exactQuote, relation, locator, extractionStatus, provenance })))).digest('hex'),
+        narrativeSourceIdentity: (await readVisualNarrativeSource(prisma as never, { ...f.scope, researchObjectId: ro, versionId, sourceClaimIds: [claimId] })).identity };
+      const candidates = [1, 2, 3].map(structuredAttempt => ({ text: JSON.stringify(candidate), structuredAttempt,
+        kind: 'schema_validation', diagnostic: 'old_validator_rejected' }));
+      owner.result = { storyboardScienceDiagnostics: { ...identity, executionAttempt: 1, sources, candidates } };
+      task.executionAttempt = owner.executionAttempt = 2; owner.retryCount = 1;
+      const calls = [1, 2, 3].map(n => ({ id: `paid-${n}`, actorId: null, targetType: 'ai_gateway',
+        createdAt: new Date(`2026-01-02T00:0${n}:00Z`), metadata: { operation: 'text', outcome: 'succeeded', error: null,
+          finishReason: 'stop', fallbackReason: null, retryCount: 0, model: 'fixture', provider: 'fixture' } }));
+      const rejections = candidates.map((c, i) => ({ id: `rejected-${i}`, createdAt: new Date(calls[i]!.createdAt.getTime() + 10),
+        metadata: { executionAttempt: 1, structuredAttempt: c.structuredAttempt, kind: c.kind,
+          candidateHash: createHash('sha256').update(c.text).digest('hex'), candidateBytes: Buffer.byteLength(c.text) } }));
+      const receipt = { id: 'retry-receipt', createdAt: new Date('2026-01-02T00:10:00Z'), metadata: { sourceEvidenceIdentity: identity.sourceEvidenceIdentity,
+        recoveryClass: 'saved_science_candidate', taskId, previousExecutionAttempt: 1, authorizedExecutionAttempt: 2, authorizedRetryCount: 1,
+        structuredAttempt: 3, candidateHash: rejections[2]!.metadata.candidateHash, candidateBytes: rejections[2]!.metadata.candidateBytes,
+        planningAuditIds: calls.map(c => c.id),
+        rejectionAuditIds: rejections.map(r => r.id), noScienceSubmission: true, noProviderSwitch: true } };
+      if (mode === 'recovery-candidate-changed') candidates[2]!.text += ' ';
+      if (mode === 'recovery-map-changed') sources[0]!.text = 'A different source.';
+      if (mode === 'recovery-audit-changed') calls[2]!.metadata = { ...calls[2]!.metadata, outcome: 'unknown' };
+      let receiptAvailable = mode !== 'recovery-no-receipt';
+      const auditLog = { findMany: vi.fn(async ({ where }) => where.action === 'agent.task.retry'
+        ? receiptAvailable ? [structuredClone(receipt)] : [] : where.action === 'ai.gateway.call' ? calls : rejections) };
+      const update = updateMany.getMockImplementation()!;
+      updateMany.mockImplementation(async args => {
+        if (mode === 'recovery-cas') return { count: 0 };
+        const result = await update(args);
+        if (mode === 'recovery-revoked') prisma.membership.findUnique = async () => ({ userId: 'owner', workspaceId: 'workspace', role: 'reader' });
+        if (mode === 'recovery-source-changed') f.ingestion.agentTask.updatedAt = new Date('2026-02-01');
+        if (mode === 'recovery-receipt-revoked') receiptAvailable = false;
+        if (mode === 'recovery-attempt-changed') owner.executionAttempt++;
+        return result;
+      });
+      let providerCalls = 0;
+      const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete: async () => {
+        providerCalls++;
+        expect(owner.result).toHaveProperty('storyboardPlanningCheckpoint.art.state', 'submitting');
+        if (mode === 'recovery-submitting') throw new Error('fixture art timeout');
+        return { text: JSON.stringify({ scenes: [{ layout: 'One focused path.', treatment: 'Quiet ink.' }] }),
+          model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+      } }] });
+      const review = vi.fn(async () => { throw new Error('fixture stopped at scientific review'); });
+      const db = { ...prisma, auditLog, $transaction: async (work: (tx: unknown) => Promise<unknown>) => work(db) };
+      const handler = createPresentationGenerationHandler({ gateway: { completeStructured: gateway.completeStructured.bind(gateway), reviewScientific: review } as never });
+      if (mode === 'recovery-before-art-reentry') {
+        // Simulate losing the worker after the durable science save and before any art submission.
+        let interrupt = true;
+        const interrupted = createPresentationGenerationHandler({ gateway: { completeStructured: async (...args: Parameters<AiGateway['completeStructured']>) => {
+          if (interrupt) { interrupt = false; throw new Error('fixture lost worker before art'); }
+          return gateway.completeStructured(...args);
+        }, reviewScientific: review } as never });
+        await expect(interrupted({ prisma: db, storage: f.storage } as never, task as never)).rejects.toThrow('fixture lost worker before art');
+        expect(owner.result).toHaveProperty('storyboardPlanningCheckpoint.art.state', 'not_started');
+        expect(providerCalls).toBe(0);
+      }
+      await expect(handler({ prisma: db, storage: f.storage } as never, task as never)).rejects.toThrow(mode === 'recovery'
+        || mode === 'recovery-before-art-reentry'
+        ? 'fixture stopped at scientific review' : mode === 'recovery-invalid' ? /unbound_numeric/ : mode === 'recovery-submitting' ? /Primary provider failed/ : /blocked|require/);
+      expect(providerCalls).toBe(['recovery', 'recovery-submitting', 'recovery-before-art-reentry'].includes(mode) ? 1 : 0);
+      expect(review).toHaveBeenCalledTimes(['recovery', 'recovery-before-art-reentry'].includes(mode) ? 1 : 0);
+      if (mode === 'recovery') {
+        expect(owner.result).toHaveProperty('storyboardCheckpoint');
+        expect(owner.result).not.toHaveProperty('storyboardScienceDiagnostics');
+        await expect(handler({ prisma: db, storage: f.storage } as never, task as never)).rejects.toThrow('explicit review recovery');
+        expect(providerCalls).toBe(1); expect(review).toHaveBeenCalledOnce();
+      }
+      if (mode === 'recovery-submitting') {
+        await expect(handler({ prisma: db, storage: f.storage } as never, task as never)).rejects.toThrow('already submitted art');
+        expect(providerCalls).toBe(1);
+      }
+      return;
+    }
     if (mode === 'changed') {
       const read = f.prisma.ingestionTask.findUnique;
       read.mockImplementation(async () => {

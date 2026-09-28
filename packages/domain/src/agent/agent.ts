@@ -24,6 +24,7 @@ import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from
 import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
 import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 import { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError, type SourceMapSearchIndexPayload } from './search-index-source';
+import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } from './standalone-science-recovery';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
@@ -203,6 +204,14 @@ function evaluateAgentTaskRetryEligibility(
   } catch {
     return { authorityValid: true, canRetry: false };
   }
+}
+
+async function canRetryAgentTask(deps: AgentDeps, task: AgentTaskRetrySnapshot, userId: string): Promise<boolean> {
+  if (!evaluateAgentTaskRetryEligibility(task, userId).canRetry) return false;
+  if (!hasStandaloneScienceDiagnostics(task.result)) return true;
+  if (!deps.audit?.record) return false;
+  try { await inspectStandaloneScienceRecovery(deps.prisma, task, userId); return true; }
+  catch { return false; }
 }
 
 async function findNewestRetryableSourceTask(
@@ -401,10 +410,10 @@ export async function listAgentTasks(
     orderBy: { updatedAt: 'desc' },
     take: 20,
   });
-  return rows.map((task) => ({
-    ...taskToView(task, evaluateAgentTaskRetryEligibility(task, input.userId).canRetry),
+  return Promise.all(rows.map(async (task) => ({
+    ...taskToView(task, await canRetryAgentTask(deps, task, input.userId)),
     researchObjectId: task.session.researchObjectId,
-  }));
+  })));
 }
 
 /**
@@ -854,7 +863,7 @@ export async function getAgentTask(
   if (!task || task.deletedAt || (task.session.deletedAt && !preservedProduct) || task.session.researchObject?.deletedAt || task.session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   }
-  return { ...taskToView(task, evaluateAgentTaskRetryEligibility(task, input.userId).canRetry),
+  return { ...taskToView(task, await canRetryAgentTask(deps, task, input.userId)),
     researchObjectId: task.session.researchObjectId };
 }
 
@@ -913,16 +922,22 @@ export async function retryAgentTask(
           }, ctx);
           if (owner.id !== task.id) throw new SearchIndexSourceError();
         }
+        // Retain paid rejected science only after the same actor explicitly retries.
+        // Diagnostics are data; this transaction's audit receipt is the authority.
+        const scienceRecovery = hasStandaloneScienceDiagnostics(task.result)
+          ? await inspectStandaloneScienceRecovery(tx, task, input.userId) : undefined;
+        if (scienceRecovery && !deps.audit?.record) throw new AgentError('ILLEGAL_TRANSITION', 'Science recovery requires an audit writer');
         const workspaceId = task.session.researchObject?.workspaceId ?? null;
         const changed = await tx.agentTask.updateMany({
           where: {
             id: task.id, sessionId: task.sessionId, status: task.status, kind: task.kind, retryCount: task.retryCount, error: task.error,
             executionAttempt: task.executionAttempt,
-            ...(sourceSearch ? { result: { equals: task.result === null ? Prisma.AnyNull : task.result as Prisma.InputJsonValue } } : {}),
+            ...(sourceSearch || scienceRecovery ? { result: { equals: task.result === null ? Prisma.AnyNull : task.result as Prisma.InputJsonValue } } : {}),
+            ...(scienceRecovery ? { deletedAt: null, payload: { equals: task.payload as Prisma.InputJsonValue } } : {}),
           },
           data: {
             status: 'pending', progress: 0,
-            result: task.kind === 'presentation.generate' && isJsonRecord(task.payload)
+            result: scienceRecovery ? task.result as Prisma.InputJsonValue : task.kind === 'presentation.generate' && isJsonRecord(task.payload)
               && isJsonRecord(task.payload.storyboard) && task.payload.storyboard.output === 'image'
               && isJsonRecord(task.result) && (isJsonRecord(task.result.storyboardCheckpoint) || isJsonRecord(task.result.storyboardPlanningCheckpoint))
               ? { ...(isJsonRecord(task.result.storyboardCheckpoint) ? { storyboardCheckpoint: task.result.storyboardCheckpoint }
@@ -936,7 +951,7 @@ export async function retryAgentTask(
         if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task retry is no longer available');
         await recordAudit(deps, tx, {
           actorId: input.userId, action: 'agent.task.retry', workspaceId,
-          targetType: 'agent_task', targetId: task.id, metadata: { retryAttempt: task.retryCount + 1,
+          targetType: 'agent_task', targetId: task.id, metadata: { retryAttempt: task.retryCount + 1, ...scienceRecovery,
             creditPolicy: sourceSearch ? 'not-applicable-deterministic' : 'reuse-original-reservation' },
         }, ctx);
         return tx.agentTask.findUnique({ where: { id: task.id } });

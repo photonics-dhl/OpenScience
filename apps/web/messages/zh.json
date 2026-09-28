@@ -1720,7 +1720,7 @@
     "assetStatus": { "draft": "待审阅", "approved": "已审批", "rejected": "已拒绝" }, "assessment": { "supported": "标记为支持", "partial": "标记为部分支持", "disputed": "标记为有争议", "missing": "尚未记录证据支持" }, "claimStatus": { "needs_review": "提取结果需审阅后才能使用", "blocked": "提取被阻断", "failed": "提取失败" },
     "provenance": "素材绑定当前版本与来源主张；主张修改后，相关素材会失效。",
     "loading": "正在加载展示工作区…", "loadError": "展示工作区暂时无法加载。", "generationStartFailed": "生成任务暂时无法启动；重试会继续使用同一次请求。", "generationFailed": "生成任务失败，请重试。", "transitionFailed": "展示内容状态暂时无法更新。",
-    "taskProgress": "展示内容任务进度", "taskPaused": "检查已暂停，任务仍可继续", "resumeTask": "继续检查", "taskStatus": { "pending": "等待启动", "running": "正在准备展示内容", "failed": "生成失败" },
+    "retryTask": "继续处理", "retryingTask": "正在继续…", "taskProgress": "展示内容任务进度", "taskPaused": "检查已暂停，任务仍可继续", "resumeTask": "继续检查", "taskStatus": { "pending": "等待启动", "running": "正在准备展示内容", "failed": "生成失败" },
     "version": "版本", "versionNumber": "版本 {number}", "versionOption": "v{number} · {status}", "invalidVersion": "链接中的版本不属于这个 Research Object，或已不可用。", "selectAvailableVersion": "可用版本", "chooseVersion": "选择版本", "versionStatus": { "draft": "草稿", "under_review": "审核中", "approved": "已批准", "published": "已发布", "revised": "修订中", "withdrawn": "已撤回", "restricted": "受限", "rejected": "已拒绝", "archived": "已归档" },
     "readonlyRole": "你在这个工作区只有查看权限；请联系所有者或维护者添加、审批展示材料。", "readonlyWorkspace": "工作区当前未启用，不能修改展示材料。", "readonlyVersion": { "under_review": "该版本正在审核，只能阅读。", "approved": "已批准版本只能阅读。", "published": "已发布版本只能阅读。", "revised": "修订快照仍只能阅读；请创建新的草稿版本继续。", "withdrawn": "已撤回版本只能阅读。", "restricted": "受限版本只能阅读。", "rejected": "已拒绝版本只能阅读。", "archived": "已归档版本只能阅读。" },
     "noVersion": "请先创建已提交版本，再生成展示内容。",

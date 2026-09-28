@@ -56,3 +56,21 @@ it('keeps public media decks free of private retention controls', () => {
   expect(markup).not.toContain('retainedAsset');
   expect(markup).not.toContain('<button');
 });
+
+it.each([
+  { status: 'failed' as const, canRetry: true, canWrite: true, working: false, shown: true },
+  { status: 'failed' as const, canRetry: true, canWrite: true, working: true, shown: true },
+  { status: 'failed' as const, canRetry: false, canWrite: true, working: false, shown: false },
+  { status: 'failed' as const, canRetry: true, canWrite: false, working: false, shown: false },
+  { status: 'running' as const, canRetry: true, canWrite: true, working: false, shown: false },
+])('offers only authorized failed-task continuation: %j', ({ status, canRetry, canWrite, working, shown }) => {
+  for (const resultsOnly of [false, true]) {
+    const markup = renderToStaticMarkup(React.createElement(PresentationWorkbench, {
+      claims: [], assets: [], version: { versionId: 'v', status: 'draft', createdAt: '2026-09-29T00:00:00Z' },
+      canWrite, working, resultsOnly, task: { status, progress: 10, paused: false, canRetry },
+      onRetryTask: vi.fn(), onCreateClaim: vi.fn(), onGenerate: vi.fn(), onTransition: vi.fn(),
+    }));
+    expect(markup.includes(working ? 'retryingTask' : 'retryTask')).toBe(shown);
+    if (shown && working) expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-busy="true"/);
+  }
+});

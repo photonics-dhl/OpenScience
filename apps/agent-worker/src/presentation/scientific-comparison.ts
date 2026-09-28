@@ -67,21 +67,31 @@ function proseQuantity(before: string, offset: number) {
     return { binding: { kind: 'symbol' as const, key: normalizeIdentifier(namedSymbol[1]!) }, start: offset + namedSymbol.index, end: offset + before.length };
   }
   const predicate = /\b([A-Za-z]+(?:-[A-Za-z]+)*(?:[ \t]+[A-Za-z]+(?:-[A-Za-z]+)*){0,7})[ \t]+(?:of|is)[ \t]*$/iu.exec(before);
-  const prose = predicate ?? /\b([A-Za-z]+(?:-[A-Za-z]+)*(?:[ \t]+[A-Za-z]+(?:-[A-Za-z]+)*){1,7})[ \t]*(?:=|≈|~)[ \t]*$/u.exec(before);
+  const annotation = /\b([A-Za-z]+(?:-[A-Za-z]+)*(?:[ \t]+[A-Za-z]+(?:-[A-Za-z]+)*){1,7})[ \t]+\(\s*(?:≈|~)?\s*$/u.exec(before);
+  const prose = predicate ?? annotation ?? /\b([A-Za-z]+(?:-[A-Za-z]+)*(?:[ \t]+[A-Za-z]+(?:-[A-Za-z]+)*){1,7})[ \t]*(?:=|≈|~)[ \t]*$/u.exec(before);
   if (!prose) return undefined;
   if (!predicate && (prose[1]!.split(/\s+/u).at(-1)!.length === 1 || /[A-Z]/u.test(prose[1]!.split(/\s+/u).at(-1)!))) return undefined;
   const preceding = before.slice(0, prose.index).trimEnd().at(-1);
   const words = prose[1]!.toLowerCase().split(/\s+/u);
   // Grammatical delimiters identify a local noun phrase; they never map words
   // to a scientific symbol. Direction/object modifiers remain part of the key.
-  const lastDelimiter = words.reduce((last, word, index) => /^(?:a|an|the|with|has|have|assuming|assume|and|at|is)$/u.test(word) ? index : last, -1);
+  const lastDelimiter = words.reduce((last, word, index) => /^(?:with|has|have|assuming|assume|and|is|although)$/u.test(word) ? index : last, -1);
   const prefixTokens = preceding === '(' ? tokenize(before.slice(0, prose.index)) : [];
   const proseGroup = preceding === '(' && groupBoundary(prefixTokens, prefixTokens.length - 1);
+  // A cropped noun phrase supplies no exact name. Preserve the existing
+  // unbound prose value instead of asserting that this is invalid math.
+  if (annotation && lastDelimiter < 0 && (prose.index === 0 && offset > 0 || preceding && /[A-Za-z]/u.test(preceding))) return undefined;
   if (prose.index === 0 && offset > 0 && lastDelimiter < 0
-    || preceding && !proseBoundary.test(preceding) && !proseGroup && (!/[A-Za-z\d]/u.test(preceding) || lastDelimiter < 0)) return unsupported();
-  const name = words.slice(lastDelimiter + 1).join(' ');
+    || preceding && !proseBoundary.test(preceding) && !proseGroup
+      && !(preceding === ')' && lastDelimiter >= 0)
+      && (!/[A-Za-z\d]/u.test(preceding) || lastDelimiter < 0)) return unsupported();
+  // Articles and hyphenation do not change the named quantity. In particular,
+  // an internal "the" must not discard the head or its direction modifier.
+  const name = words.slice(lastDelimiter + 1).filter((word, index) => word !== 'the' && !(index === 0 && /^(?:a|an)$/u.test(word)))
+    .map(word => word.split('-').map((part, index, parts) =>
+      `${index === 0 ? '' : part.length > 1 || parts[index - 1]!.length > 1 ? ' ' : '-'}${part}`).join('')).join(' ');
   if (!name) return undefined;
-  return { binding: { kind: 'quantity-name' as const, key: name }, prose: !!predicate,
+  return { binding: { kind: 'quantity-name' as const, key: name }, prose: !!predicate || !!annotation,
     start: offset + prose.index, end: offset + before.length };
 }
 

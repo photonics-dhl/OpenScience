@@ -35,6 +35,50 @@ function mockGateway(treatment: string, styleId?: string) {
   return { gateway: { completeStructured } as never, calls };
 }
 
+describe('revalidating an authorized original science candidate', () => {
+  const settings = { locale: 'en' as const, style: 'aged-academia', instruction: 'Explain one supported relation.', output: 'image' as const };
+  const original = () => ({ structuredAttempt: 3, kind: 'schema_validation' as const,
+    text: JSON.stringify(science), diagnostic: 'previous_guard_rejection',
+    sources: claims.flatMap(claim => claim.sourcePassages!.map((source, index) => ({ sourceId: `s${index}`, claimId: claim.id, ...source }))) });
+  const persistence = () => ({ rejectedScienceCandidate: original(), saveScience: vi.fn(async () => {}),
+    beforeArtSubmission: vi.fn(async () => {}), rejectArt: vi.fn(async () => {}) });
+  it('revalidates the original bytes and saves science before making only the art call', async () => {
+    const saved = persistence();
+    saved.rejectedScienceCandidate.text = `<think>Prior model reasoning.</think>\n\`\`\`json\n${saved.rejectedScienceCandidate.text}\n\`\`\``;
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: vi.fn(async () => {
+      expect(saved.saveScience).toHaveBeenCalledTimes(1);
+      expect(saved.beforeArtSubmission).toHaveBeenCalledTimes(1);
+      return { text: JSON.stringify({ scenes: [{ layout: 'One supported relation.', treatment: 'Quiet ink.' }] }),
+        model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } };
+    }) };
+    const gateway = new AiGateway({ providers: [provider] });
+    const calls = vi.spyOn(gateway, 'completeStructured');
+    const result = await generateIllustrationStoryboard(gateway, claims, settings,
+      undefined, new Map(), undefined, undefined, undefined, saved);
+    expect(provider.complete).toHaveBeenCalledTimes(1);
+    expect(saved.saveScience).toHaveBeenCalledWith(expect.objectContaining({ designSkills: [] }));
+    expect(result.promptHash).toBe(createHash('sha256').update(JSON.stringify([calls.mock.calls[0]![1]])).digest('hex'));
+    expect(result.document.title).toBe(science.title);
+    expect(result.document.scenes[0]!.illustration!.labels).toEqual(science.scenes[0]!.labels);
+  });
+  it.each(['numeric', 'schema', 'json', 'source-map', 'conflicting-checkpoint', 'persistence'] as const)
+    ('stops %s failures without any model call or science fallback', async failure => {
+      const saved = persistence();
+      if (failure === 'numeric') saved.rejectedScienceCandidate.text = JSON.stringify({ ...science,
+        scenes: [{ ...science.scenes[0], labels: ['999 nm'] }] });
+      if (failure === 'schema') saved.rejectedScienceCandidate.text = JSON.stringify({ title: 'Incomplete' });
+      if (failure === 'json') saved.rejectedScienceCandidate.text = 'unparseable';
+      if (failure === 'source-map') saved.rejectedScienceCandidate.sources[0]!.text += ' changed';
+      if (failure === 'conflicting-checkpoint') Object.assign(saved, { science: { intent: {} } });
+      if (failure === 'persistence') saved.saveScience.mockRejectedValue(new Error('storage unavailable'));
+      const completeStructured = vi.fn();
+      await expect(generateIllustrationStoryboard({ completeStructured }, claims, settings,
+        undefined, new Map(), undefined, undefined, undefined, saved)).rejects.toThrow();
+      expect(completeStructured).not.toHaveBeenCalled();
+      expect(saved.beforeArtSubmission).not.toHaveBeenCalled();
+    });
+});
+
 describe('ordinary single-scene source capacity', () => {
   const passages = [
     'The model uses a 1 MeV electron and yields a 19 as pulse.',
@@ -574,6 +618,8 @@ describe('automatic art direction after sourced science', () => {
   });
 
   it.each([
+    ['field confinement in y direction ~20 nm', 'y方向场约束约20 nm。', 'Although the field confinement in the *y*-direction (~20 nm) is tighter than that in the *z*-direction (~77 nm).'],
+    ['field confinement in y direction ~20 nm', 'y方向场约束约20 nm。', 'The field confinement in the y-direction is 20 nm.'],
     ['slit width=20 nm', 'A slit width of 20 nm.', 'A slit width of 20 nm.'],
     ['diameter=500 nm', 'A diameter of 500 nm.', 'A diameter of 500 nm.'],
     ['λ0=1.8 μm', 'The driving wavelength (λ0) is 1.8 μm.', 'The driving wavelength (λ0) is 1.8 μm.'],
@@ -597,6 +643,13 @@ describe('automatic art direction after sourced science', () => {
   });
 
   it.each([
+    ['the focus ~20 nm', '约20 nm。', 'The field width at the focus (~20 nm).'],
+    ['x y displacement ~20 nm', '位移约20 nm。', 'The x-y displacement (~20 nm).'],
+    ['field confinement in y direction ~20 nm', '场约束约20 nm。', 'The field confinement in the z-direction (~20 nm).'],
+    ['field confinement in y direction ~20 nm', '场约束约20 nm。', 'The slit width in the y-direction (~20 nm).'],
+    ['field confinement in y direction ~20 nm', '场约束约20 nm。', 'a+field confinement in the y-direction (~20 nm).'],
+    ['field confinement in y direction ~20 nm', '场约束约20 nm。', 'f(field confinement in the y-direction (~20 nm)).'],
+    ['type A field width ~20 nm', '场宽约20 nm。', 'The type B field width (~20 nm).'],
     ['y-direction slit width=20 nm', 'A z-direction slit width of 20 nm.', 'A z-direction slit width of 20 nm.'],
     ['a/slit width=20 nm', 'A slit width of 20 nm.', 'A slit width of 20 nm.'],
     ['q=19 as', 'q=19 as.', 'f(q) is 19 as.'],

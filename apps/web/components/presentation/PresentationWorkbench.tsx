@@ -21,6 +21,7 @@ export interface PresentationTaskState {
   status: 'pending' | 'running' | 'succeeded' | 'failed';
   progress: number;
   paused: boolean;
+  canRetry?: boolean;
 }
 
 export interface PresentationWorkbenchProps {
@@ -42,6 +43,7 @@ export interface PresentationWorkbenchProps {
   onGenerateVideo?: (claimIds: string[], request: PresentationVideoRequest) => void;
   onGenerateStoryboard?: (claimIds: string[], request: StoryboardRequest) => void;
   onResumeTask?: () => void;
+  onRetryTask?: () => void;
   onRetryData?: () => void;
   onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => Promise<PaperFigureReviewOutcome | null> | void;
   onAssetDeleted?: (asset: PresentationAsset) => void;
@@ -54,11 +56,15 @@ const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryData, onTransition, onAssetDeleted, working = false, error = '', resultsOnly = false,
+  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, working = false, error = '', resultsOnly = false,
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const versionLabels = useVersionLabels();
   const tw = useTranslations('workbench');
+  const retryAction = task?.status === 'failed' && task.canRetry && canWrite && onRetryTask
+    ? <button type="button" disabled={working} aria-busy={working} onClick={onRetryTask}
+      className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-50 motion-reduce:transform-none">
+      <RotateCw className="h-4 w-4" aria-hidden="true" />{t(working ? 'retryingTask' : 'retryTask')}</button> : null;
   const selectionTouched = useRef(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [statement, setStatement] = useState('');
@@ -148,6 +154,7 @@ export function PresentationWorkbench({
             <div className="mt-2 h-2 overflow-hidden rounded-control bg-os-rule-paper" role="progressbar" aria-label={t('taskProgress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={task.progress}>
               <span className="block h-full bg-os-vermilion-ink transition-[width] motion-reduce:transition-none" style={{ width: `${task.progress}%` }} />
             </div>
+            {retryAction}
             {task.paused && onResumeTask ? <button type="button" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onResumeTask}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('resumeTask')}</button> : null}
           </div>
         ) : null}
@@ -190,7 +197,8 @@ export function PresentationWorkbench({
                 <div className="mt-2 h-2 overflow-hidden rounded-control bg-os-rule-paper" role="progressbar" aria-label={t('taskProgress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={task.progress}>
                   <span className="block h-full bg-os-vermilion-ink transition-[width] motion-reduce:transition-none" style={{ width: `${task.progress}%` }} />
                 </div>
-                {task.paused && onResumeTask ? <button type="button" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onResumeTask}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('resumeTask')}</button> : null}
+                {retryAction}
+            {task.paused && onResumeTask ? <button type="button" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onResumeTask}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('resumeTask')}</button> : null}
               </div>
             ) : null}
 

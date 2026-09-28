@@ -21,6 +21,7 @@ import {
   type PresentationVideoRequest,
   type StoryboardRequest, type SceneImageRequest,
   getPresentationTask,
+  retryAgentTask,
   getResearchObject,
   listMyWorkspaces,
   listPresentationAssets,
@@ -128,6 +129,10 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   const [error, setError] = useState('');
   const [taskState, setTaskState] = useState<PresentationTaskState | null>(null);
   const [resumeNonce, setResumeNonce] = useState(0);
+  const retryInFlight = useRef(false);
+  const loadedTaskId = useRef('');
+  const renderedTaskId = useRef(taskId);
+  renderedTaskId.current = taskId;
   const scopeRef = useRef<ActiveScope>({ key: '', epoch: 0, controller: new AbortController() });
   const renderedScopeKey = useRef('');
   const bootstrapEpoch = useRef(0);
@@ -246,6 +251,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     scope.controller.signal.addEventListener('abort', abortFromScope, { once: true });
     setWorking(true);
     setError('');
+    loadedTaskId.current = '';
     setTaskState({ status: 'pending', progress: 0, paused: false });
 
     void (async () => {
@@ -253,6 +259,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
         for (let attempt = 0; !controller.signal.aborted; attempt += 1) {
           const current = (await getPresentationTask(params.id, versionId, taskId, controller.signal)).task;
           if (!scopeIsCurrent(scope) || controller.signal.aborted) return;
+          loadedTaskId.current = taskId;
           setTaskState({ status: current.status, progress: current.progress, paused: false });
           if (current.status === 'succeeded') {
             const refreshed = await listPresentationAssets(params.id, versionId, controller.signal);
@@ -265,7 +272,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
           }
           if (current.status === 'failed') {
             setError(current.error ?? t('generationFailed'));
-            setTaskState({ status: 'failed', progress: current.progress, paused: false });
+            setTaskState({ status: 'failed', progress: current.progress, paused: false, canRetry: current.canRetry === true });
             setWorking(false);
             return;
           }
@@ -287,6 +294,32 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
       controller.abort();
     };
   }, [params.id, resumeNonce, router, scopeKey, scopeReady, t, taskId, versionId]);
+
+  async function retryTask() {
+    if (!taskId || loadedTaskId.current !== taskId || retryInFlight.current || working || !canWrite || taskState?.status !== 'failed' || !taskState.canRetry) return;
+    const scope = scopeRef.current;
+    const originalTaskId = taskId;
+    if (!scopeIsCurrent(scope)) return;
+    retryInFlight.current = true;
+    setWorking(true);
+    setError('');
+    try {
+      await retryAgentTask(originalTaskId);
+      if (!scopeIsCurrent(scope) || renderedTaskId.current !== originalTaskId) return;
+      setTaskState({ status: 'pending', progress: 0, paused: false });
+      setResumeNonce(value => value + 1);
+    } catch (cause) {
+      if (!scopeIsCurrent(scope) || renderedTaskId.current !== originalTaskId) return;
+      setError(cause instanceof Error ? cause.message : t('generationStartFailed'));
+      // A response loss can follow a successful write. Re-read this same task;
+      // never automatically submit a second retry request.
+      if (hasAmbiguousWriteOutcome(cause)) setResumeNonce(value => value + 1);
+      else setTaskState(current => current ? { ...current, canRetry: false } : current);
+    } finally {
+      retryInFlight.current = false;
+      if (scopeIsCurrent(scope) && renderedTaskId.current === originalTaskId) setWorking(false);
+    }
+  }
 
   async function createClaim(statement: string): Promise<boolean> {
     if (!version || !canWrite || !scopeReady) return false;
@@ -503,6 +536,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             onGenerateSceneImage={(ids, request) => void generate(ids, undefined, request)}
             onGenerateVideo={(ids, request) => void generate(ids, undefined, undefined, request)}
             onResumeTask={() => setResumeNonce((current) => current + 1)}
+            onRetryTask={() => void retryTask()}
             onRetryData={() => setLoadNonce((current) => current + 1)}
             onTransition={transition}
             onAssetDeleted={(asset) => {

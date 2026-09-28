@@ -192,6 +192,7 @@ export {
   type CreateAgentSessionInput, type SubmitAgentTaskInput,
 } from './agent/agent';
 export { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError } from './agent/search-index-source';
+export { hasStandaloneScienceDiagnostics, readStandaloneScienceDiagnostics, readStandaloneScienceRecovery } from './agent/standalone-science-recovery';
 export { ApprovalError, type ApprovalErrorCode } from './approval/errors';
 export {
   approvalLevel, buildConfirmation, createApproval, approveApproval, rejectApproval, revokeApproval, listPendingApprovals,
