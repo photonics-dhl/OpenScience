@@ -8,7 +8,7 @@ import { recordValue, refreshWorkingResearchRecord } from '../commit/research-re
 import { isVersionHistoryCopy, requireValidVersionHistoryCopy } from './version-history-copy';
 import { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, canonicalStoryboardStyle, type StoryboardRequest, type StoryboardView } from './storyboard';
 import type { AuditContext } from '@openscience/observability';
-import type { PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
+import type { AgentTask, PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { getBlobStorageKey } from '@openscience/storage';
 import { createAgentSession, dispatchAgentTask, getAgentTask, persistAgentTaskInTransaction, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
 import { recordAudit } from '../workspace/audit';
@@ -1499,6 +1499,25 @@ export async function copyNarrativeImageForReview(tx: Prisma.TransactionClient, 
     await refreshWorkingResearchRecord(tx, input);
 }
 
+function isLocalImageReviewBudgetFailure(task: Pick<AgentTask, 'status' | 'error' | 'result' | 'retryCount' | 'executionAttempt'> | null): boolean {
+    if (!task || task.status !== 'failed' || task.result !== null || task.retryCount !== 0 || task.executionAttempt !== 1) return false;
+    // This error is emitted before reviewScientific. Do not accept arbitrary blocked errors or suffixes.
+    const match = /^\[blocked\] Generated image review exceeds the source input budget(?: \(([1-9][0-9]{0,14}) > ([1-9][0-9]{0,14}) characters\))?$/u.exec(task.error ?? '');
+    return !!match && match[0] === task.error && (!match[1] || Number(match[1]) > Number(match[2]));
+}
+
+async function requireLocalImageReviewBudgetHistory(
+    prisma: Pick<Prisma.TransactionClient, 'auditLog'>, taskId: string, imagePromptHash: string | null,
+): Promise<void> {
+    const calls = await prisma.auditLog.findMany({ where: { requestId: taskId, action: 'ai.gateway.call' } });
+    const image = recordValue(calls[0]?.metadata);
+    // The first render completed, but no review (including unknown/failed submission) reached the gateway.
+    if (calls.length !== 1 || image.operation !== 'image' || image.outcome !== 'succeeded' || image.error !== null
+        || image.provider !== 'chatgpt-web' || image.model !== 'chatgpt-web/6-pro-image-generation-tool'
+        || !imagePromptHash || !/^[a-f0-9]{64}$/u.test(imagePromptHash) || image.promptHash !== imagePromptHash)
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Local image review budget failure has untrusted gateway history');
+}
+
 /** Verify the admin review-only copy independently of managed-run recovery receipts. */
 export async function requireManualSceneImageReviewReceipt(
     prisma: Pick<Prisma.TransactionClient, 'agentTask' | 'presentationAsset' | 'auditLog' | 'user'>,
@@ -1529,7 +1548,8 @@ export async function requireManualSceneImageReviewReceipt(
     const { imageReview: _imageReview, ...copyWithoutReview } = copied;
     const metadata = recordValue(receipt.metadata);
     const failedSourceReview = sourceTask?.status === 'failed' && sourceTask.error === 'scientific review provider failed';
-    if (!sourceTask || !original || sourceTask.deletedAt || (sourceTask.status !== 'succeeded' && !failedSourceReview) ||
+    const localBudgetFailure = isLocalImageReviewBudgetFailure(sourceTask);
+    if (!sourceTask || !original || sourceTask.deletedAt || (sourceTask.status !== 'succeeded' && !failedSourceReview && !localBudgetFailure) ||
         sourceTask.kind !== 'presentation.generate' || sourceTask.sessionId !== task.sessionId ||
         !isDeepStrictEqual(parsePresentationGenerationPayload(sourceTask.payload), input.payload) || original.deletedAt ||
         original.kind !== 'image' || original.status !== 'draft' || prior.imageReview !== undefined ||
@@ -1549,7 +1569,10 @@ export async function requireManualSceneImageReviewReceipt(
         (failedSourceReview
           ? metadata.sourceReviewRecovery !== 'not_submitted' || typeof metadata.sourceReviewPromptHash !== 'string'
             || !/^[a-f0-9]{64}$/u.test(metadata.sourceReviewPromptHash)
-          : metadata.sourceReviewRecovery !== undefined || metadata.sourceReviewPromptHash !== undefined)) throw invalid();
+          : localBudgetFailure
+            ? metadata.sourceReviewRecovery !== 'local_budget_not_submitted' || metadata.sourceReviewPromptHash !== undefined
+            : metadata.sourceReviewRecovery !== undefined || metadata.sourceReviewPromptHash !== undefined)) throw invalid();
+    if (localBudgetFailure) await requireLocalImageReviewBudgetHistory(prisma, sourceTask.id, original.promptHash);
 }
 
 /** Review existing private PNG pixels through the normal worker without paying for another render. */
@@ -1572,7 +1595,8 @@ export async function submitExistingSceneImageReview(deps: AgentDeps & {
     const provenance = recordValue(original.provenance);
     const previous = await tx.agentTask.findUnique({ where: { id: original.id }, include: { session: true } });
     const failedSourceReview = previous?.status === 'failed' && previous.error === 'scientific review provider failed';
-    if (!previous || previous.deletedAt || (previous.status !== 'succeeded' && !failedSourceReview) || previous.kind !== 'presentation.generate'
+    const localBudgetFailure = isLocalImageReviewBudgetFailure(previous);
+    if (!previous || previous.deletedAt || (previous.status !== 'succeeded' && !failedSourceReview && !localBudgetFailure) || previous.kind !== 'presentation.generate'
       || previous.session.deletedAt || previous.session.userId !== input.userId
       || previous.session.researchObjectId !== input.researchObjectId || provenance.imageReview !== undefined
       || provenance.source !== 'approved_storyboard_scene' || provenance.taskId !== original.id
@@ -1592,6 +1616,7 @@ export async function submitExistingSceneImageReview(deps: AgentDeps & {
       || !generatedSceneImageRequiresPixelReview(payload)) {
       throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Image source or parent changed before review');
     }
+    if (localBudgetFailure) await requireLocalImageReviewBudgetHistory(tx, previous.id, original.promptHash);
     let sourceReviewPromptHash: string | undefined;
     if (failedSourceReview) {
       const calls = await tx.auditLog.findMany({ where: { requestId: previous.id, action: 'ai.gateway.call' },
@@ -1692,6 +1717,7 @@ export async function submitExistingSceneImageReview(deps: AgentDeps & {
         action: 'presentation_asset.image_review_submitted', targetType: 'presentation_asset', targetId: task.id,
         metadata: { sourceAssetId: original.id, contentHash: original.contentHash, parentIdentity: parent.identity,
           sourceEvidenceIdentity: parent.sourceEvidenceIdentity, renderAttempt: false,
+          ...(localBudgetFailure ? { sourceReviewRecovery: 'local_budget_not_submitted' } : {}),
           ...(sourceReviewPromptHash ? { sourceReviewRecovery: 'not_submitted', sourceReviewPromptHash } : {}),
           ...(failedCopyRecovery ? { previousReviewTaskId: failedCopyRecovery.taskId,
             previousReviewRecovery: 'not_submitted', previousReviewPromptHash: failedCopyRecovery.promptHash } : {}) } }, ctx);

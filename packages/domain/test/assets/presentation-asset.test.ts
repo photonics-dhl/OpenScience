@@ -447,6 +447,98 @@ it('recovers a saved manual PNG only with matching failed-review audit and not-s
   await expect(requireManualSceneImageReviewReceipt(ctx.prisma as never, receiptInput))
     .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
 });
+const LOCAL_IMAGE_REVIEW_BUDGET_ERROR = '[blocked] Generated image review exceeds the source input budget';
+
+async function localBudgetSceneFixture(error = LOCAL_IMAGE_REVIEW_BUDGET_ERROR) {
+  const saved = await savedManualSceneFixture();
+  const { ctx, source } = saved;
+  const originalTask = ctx.db.agentTasks.find(task => task.id === source.id)!;
+  Object.assign(originalTask, { status: 'failed', error, result: null, retryCount: 0, executionAttempt: 1 });
+  const original = ctx.db.presentationAssets.find(asset => asset.id === source.id)!;
+  original.promptHash = 'f'.repeat(64);
+  const imageCall = { id: 'local-budget-image-call', requestId: source.id, action: 'ai.gateway.call', createdAt: new Date(),
+    metadata: { operation: 'image', provider: 'chatgpt-web', model: 'chatgpt-web/6-pro-image-generation-tool',
+      outcome: 'succeeded', error: null, promptHash: original.promptHash } };
+  ctx.db.auditLogs.push(imageCall);
+  ctx.prisma.auditLog.findMany = async ({ where }: { where: { requestId: string; action: string } }) => ctx.db.auditLogs.filter(row =>
+    row.requestId === where.requestId && row.action === where.action);
+  ctx.prisma.auditLog.findFirst = async ({ where }: { where: { action: string; targetType: string; targetId: string; actorId: string } }) => ctx.db.auditLogs.find(row =>
+    row.action === where.action && row.targetType === where.targetType &&
+    row.targetId === where.targetId && row.actorId === where.actorId) ?? null;
+  return { ...saved, originalTask, original, imageCall,
+    input: { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: source.id, idempotencyKey: 'local-budget-review' } };
+}
+
+it.each([LOCAL_IMAGE_REVIEW_BUDGET_ERROR, `${LOCAL_IMAGE_REVIEW_BUDGET_ERROR} (62621 > 61440 characters)`])(
+  'recovers the saved PNG after the exact pre-gateway local budget failure: %s', async error => {
+    const { ctx, source, originalTask, original, input } = await localBudgetSceneFixture(error);
+    const before = structuredClone(originalTask);
+    const reviewed = await submitExistingSceneImageReview(ctx as never, input);
+    expect(reviewed.id).not.toBe(source.id);
+    expect(ctx.db.presentationAssets.find(asset => asset.id === reviewed.id)).toMatchObject({
+      status: 'draft', objectKey: original.objectKey, contentHash: original.contentHash,
+      provenance: { reviewSourceAssetId: source.id, taskId: reviewed.id },
+    });
+    const receipt = ctx.db.auditLogs.find(row => row.action === 'presentation_asset.image_review_submitted')!;
+    expect(receipt.metadata).toMatchObject({ renderAttempt: false, sourceReviewRecovery: 'local_budget_not_submitted' });
+    expect(receipt.metadata.sourceReviewPromptHash).toBeUndefined();
+    ctx.db.agentTasks.find(task => task.id === reviewed.id)!.status = 'running';
+    const receiptInput = { taskId: reviewed.id, actorId: USER, payload: parsePresentationGenerationPayload(originalTask.payload) };
+    await expect(requireManualSceneImageReviewReceipt(ctx.prisma as never, receiptInput)).resolves.toBeUndefined();
+    expect((await submitExistingSceneImageReview(ctx as never, input)).id).toBe(reviewed.id);
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
+    await expect(submitExistingSceneImageReview(ctx as never, { ...input, idempotencyKey: 'another-local-budget-review' })).rejects.toThrow();
+    expect(ctx.db.agentTasks).toHaveLength(2);
+    expect(ctx.db.agentTasks.find(task => task.id === source.id)).toEqual(before);
+    ctx.db.auditLogs.find(row => row.action === 'presentation_asset.image_review_submitted')!.metadata.sourceReviewRecovery = 'not_submitted';
+    await expect(requireManualSceneImageReviewReceipt(ctx.prisma as never, receiptInput)).rejects.toThrow();
+  });
+
+it.each(['unknown error', 'suffix', 'trailing newline', 'false counts', 'retry', 'result', 'no image call',
+  'failed image', 'unknown image', 'wrong prompt', 'review submitted', 'review unknown', 'extra call']) (
+  'rejects unproved local budget state at submission and worker receipt: %s', async change => {
+    const { ctx, originalTask, imageCall, input } = await localBudgetSceneFixture();
+    const reviewed = await submitExistingSceneImageReview(ctx as never, input);
+    ctx.db.agentTasks.find(task => task.id === reviewed.id)!.status = 'running';
+    const receiptInput = { taskId: reviewed.id, actorId: USER, payload: parsePresentationGenerationPayload(originalTask.payload) };
+    if (change === 'unknown error') originalTask.error = '[blocked] review submission unknown';
+    if (change === 'suffix') originalTask.error += ' after submission';
+    if (change === 'trailing newline') originalTask.error += '\n';
+    if (change === 'false counts') originalTask.error += ' (61440 > 62621 characters)';
+    if (change === 'retry') Object.assign(originalTask, { retryCount: 1, executionAttempt: 2 });
+    if (change === 'result') originalTask.result = { assetId: originalTask.id };
+    if (change === 'no image call') ctx.db.auditLogs.splice(ctx.db.auditLogs.indexOf(imageCall), 1);
+    if (change === 'failed image') imageCall.metadata.outcome = 'failed';
+    if (change === 'unknown image') imageCall.metadata.outcome = 'unknown';
+    if (change === 'wrong prompt') imageCall.metadata.promptHash = 'e'.repeat(64);
+    if (change === 'review submitted' || change === 'review unknown' || change === 'extra call') ctx.db.auditLogs.push({
+      ...imageCall, id: 'extra-call', metadata: { ...imageCall.metadata,
+        operation: change === 'extra call' ? 'image' : 'scientific_review',
+        outcome: change === 'review unknown' ? 'unknown' : 'succeeded' } });
+    await expect(submitExistingSceneImageReview(ctx as never, input)).rejects.toThrow();
+    await expect(requireManualSceneImageReviewReceipt(ctx.prisma as never, receiptInput)).rejects.toThrow();
+    expect(ctx.db.agentTasks).toHaveLength(2);
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
+  });
+
+it.each(['admin', 'membership', 'ro', 'version', 'parent', 'evidence', 'claims', 'reviewed', 'copy', 'cas'])(
+  'preserves the saved PNG local budget submission boundary: %s', async change => {
+    const { ctx, original, input } = await localBudgetSceneFixture();
+    if (change === 'admin') ctx.db.users[0].platformRole = 'user';
+    if (change === 'membership') ctx.db.memberships[0].role = 'viewer';
+    if (change === 'ro') original.researchObjectId = ASSET;
+    if (change === 'version') ctx.db.versions[0].status = 'published';
+    if (change === 'parent') original.provenance.parentIdentity = 'changed';
+    if (change === 'evidence') original.provenance.sourceEvidenceIdentity = 'c'.repeat(64);
+    if (change === 'claims') ctx.db.presentationAssetClaims = ctx.db.presentationAssetClaims.filter(link => link.presentationAssetId !== original.id);
+    if (change === 'reviewed') original.provenance.imageReview = { decision: 'blocked' };
+    if (change === 'copy') original.provenance.reviewSourceAssetId = ASSET;
+    if (change === 'cas') ctx.prisma.version.updateMany = async () => ({ count: 0 });
+    await expect(submitExistingSceneImageReview(ctx as never, input)).rejects.toThrow();
+    expect(ctx.db.agentTasks).toHaveLength(1);
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+  });
+
 it('replaces one failed review-only request with a new identity only after exact not-submitted proof', async () => {
   const { ctx, source, parent } = await savedManualSceneFixture();
   const originalTask = ctx.db.agentTasks.find(task => task.id === source.id)!;

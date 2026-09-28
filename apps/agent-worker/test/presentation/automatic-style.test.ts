@@ -1241,6 +1241,12 @@ describe('automatic art direction after sourced science', () => {
       expect(input.prompt).toContain('a style or layout departure blocks only if it makes an essential relationship unreadable or scientifically misleading');
       expect(input.prompt).toContain('A speculative claim that a reader might look elsewhere first is an aesthetic suggestion');
       expect(input.prompt).not.toContain('material violation of explicit art/style instructions');
+      const projected = JSON.parse(input.prompt.slice(input.prompt.lastIndexOf('\n{"locale":') + 1));
+      const { visualAction: _duplicate, ...structuredScene } = candidate.document.scenes[0]!;
+      expect(projected.scene).toEqual(structuredScene);
+      expect(projected.claims).toEqual(claims.map(claim => ({ id: claim.id, kind: claim.kind,
+        statement: claim.statement, assessment: claim.assessment, conditions: claim.conditions,
+        limitations: claim.limitations, evidence: claim.sourcePassages })));
       const response = JSON.stringify({ decision: 'accepted', summary: 'The relation is readable.', repairInstruction: null });
       return { text: response, promptHash: hash(input.prompt), responseHash: hash(response),
         provider: 'chatgpt-web-science-review', model: 'gpt-5.6-sol' };

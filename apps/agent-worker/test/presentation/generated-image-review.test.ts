@@ -1,6 +1,42 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { generatedSceneImageRequiresPixelReview } from '@openscience/domain';
-import { readStoredGeneratedImageReview } from '../../src/presentation/generated-image-review';
+import { readStoredGeneratedImageReview, reviewGeneratedImage } from '../../src/presentation/generated-image-review';
+
+const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
+function pixelInput() {
+  const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
+  return { bytes, contentType: 'image/png', claims: [] as unknown[],
+    settings: { locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: 'image' },
+    document: { schemaVersion: 1, title: 'Legacy scene', scenes: [{ title: 'Two regions', narration: 'A qualified relation.',
+      visualAction: 'The only legacy description of the arrow.', sourceClaimIds: [] }] }, sceneIndex: 0,
+    authorizationContext: { taskId: 'review' }, illustrationContext: {}, researchObjectId: 'ro', versionId: 'version',
+    identity: { requestId: 'review', contentHash: hash(bytes), sourceEvidenceIdentity: 'source', parentIdentity: 'parent' },
+  };
+}
+
+it('retains the only visual description when reviewing an unstructured legacy scene', async () => {
+  const input = pixelInput();
+  const reviewScientific = vi.fn(async (request: { prompt: string }) => {
+    const projected = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf('\n{"locale":') + 1));
+    expect(projected.scene).toEqual(input.document.scenes[0]);
+    const text = JSON.stringify({ decision: 'accepted', summary: 'The arrow is clear.', repairInstruction: null });
+    return { text, promptHash: hash(request.prompt), responseHash: hash(text), provider: 'chatgpt-web-science-review', model: 'gpt-5.6-sol' };
+  });
+  await reviewGeneratedImage({ reviewScientific } as never, input as never);
+  expect(reviewScientific).toHaveBeenCalledOnce();
+});
+
+it('still blocks oversized independent source text before submitting pixel review', async () => {
+  const input = pixelInput();
+  input.claims = [{ id: 'claim', kind: 'finding', statement: 'Bounded interpretation.', conditions: ['Under the stated conditions'],
+    limitations: ['Only one model'], sourcePassages: Array.from({ length: 40 }, (_, index) => ({ evidenceId: `e${index}`,
+      relation: 'supports', text: `Distinct passage ${index}: ` + 'x'.repeat(1800) })) }];
+  const reviewScientific = vi.fn();
+  await expect(reviewGeneratedImage({ reviewScientific } as never, input as never))
+    .rejects.toThrow(/Generated image review exceeds the source input budget \(\d+ > 61440 characters\)/u);
+  expect(reviewScientific).not.toHaveBeenCalled();
+});
 
 it('routes manual and narrative scene images to pixel review while preserving explicit legacy profiles', () => {
   expect(generatedSceneImageRequiresPixelReview({ sceneImage: { sceneIndex: 0 } })).toBe(true);
