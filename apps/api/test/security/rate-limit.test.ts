@@ -39,6 +39,33 @@ function makeAudit() {
 }
 
 describe('registerRateLimit（Fastify 封装）', () => {
+  it.each(['reads first', 'writes first'])('isolates bounded Hermes GET/HEAD reads from the unchanged POST budget: %s', async (order) => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    const app = Fastify({ logger: false });
+    try {
+      await registerRateLimit(app, { redis: makeFakeRedis() as never, enabled: true });
+      app.get('/research-objects/:id/hermes-runs', async () => ({ run: null }));
+      app.post('/research-objects/:id/hermes-runs', async () => ({ ok: true }));
+      const reads = async () => {
+        for (let hit = 0; hit < 60; hit++) {
+          expect((await app.inject({ method: hit % 2 ? 'HEAD' : 'GET',
+            url: `/research-objects/ro-${hit}/hermes-runs?ingestionTaskId=task-${hit}` })).statusCode).toBe(200);
+        }
+        const blocked = await app.inject({ method: 'GET', url: '/research-objects/another/hermes-runs' });
+        expect(blocked.statusCode).toBe(429);
+        expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+      };
+      const writes = async () => {
+        for (let hit = 0; hit < 10; hit++) {
+          expect((await app.inject({ method: 'POST', url: `/research-objects/ro-${hit}/hermes-runs` })).statusCode).toBe(200);
+        }
+        expect((await app.inject({ method: 'POST', url: '/research-objects/another/hermes-runs' })).statusCode).toBe(429);
+      };
+      if (order === 'reads first') { await reads(); await writes(); }
+      else { await writes(); await reads(); }
+    } finally { await app.close(); clock.mockRestore(); }
+  });
+
   it('登录超限 → 429 + Retry-After + 审计行', async () => {
     const f = makeFakeRedis();
     const { record, sink } = makeAudit();

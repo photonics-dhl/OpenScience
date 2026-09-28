@@ -29,7 +29,6 @@ import {
   confirmIngestionTask,
   getAgentTask,
   getCurrentUser,
-  getExistingHermesResearchRun,
   getAuthors,
   getIngestionTask,
   getResearchObject,
@@ -46,6 +45,7 @@ import {
   type SdfCore,
   type VersionSummary,
 } from '../../../../lib/api';
+import { startIngestionReviewPolling } from '../../../../lib/ingestion-review-polling';
 import {
   clearDraft,
   editorReducer,
@@ -354,34 +354,22 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       return () => { active = false; };
     }
     setConfirmedReanalysisSource(null);
-    let active = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     setIngestionLoading(true);
     setIngestionMessage(null);
-    const load = async () => {
-      try {
-        const [viewer, detail, existing] = await Promise.all([getCurrentUser(), getIngestionTask(selectedIngestionTaskId), getExistingHermesResearchRun(roId, selectedIngestionTaskId)]);
-        if (!active) return;
-        if (detail.researchObjectId !== roId || detail.task.id !== summary.id || detail.task.artifactId !== summary.artifactId) {
-          setIngestionMessage(t('ingestionScopeMismatch'));
+    return startIngestionReviewPolling({ researchObjectId: roId, taskId: summary.id, artifactId: summary.artifactId, version: state.version }, {
+      onUpdate: (update) => {
+        if (update.state === 'scope_mismatch' || update.state === 'version_changed') {
+          setIngestionMessage(t(update.state === 'scope_mismatch' ? 'ingestionScopeMismatch' : 'ingestionVersionChanged'));
           setIngestionProposal(null);
           return;
         }
-        if (detail.version !== state.version) {
-          setIngestionMessage(t('ingestionVersionChanged'));
-          setIngestionProposal(null);
+        if (update.state === 'pending' || update.state === 'unavailable') {
+          setIngestionMessage(update.state === 'pending' ? t('ingestionProcessing', { file: update.detail.task.logicalPath })
+            : update.detail.task.error || t('ingestionUnavailable'));
+          if (update.state === 'unavailable') setIngestionProposal(null);
           return;
         }
-        if (['queued', 'uploading', 'stored', 'parsing'].includes(detail.task.state)) {
-          setIngestionMessage(t('ingestionProcessing', { file: detail.task.logicalPath }));
-          timer = setTimeout(load, 1500);
-          return;
-        }
-        if (detail.task.state !== 'needs_review') {
-          setIngestionMessage(detail.task.error || t('ingestionUnavailable'));
-          setIngestionProposal(null);
-          return;
-        }
+        const { detail, userId, runId } = update;
         const proposed = detail.task.result?.core as Partial<SdfCore> | undefined;
         if (!proposed || typeof proposed.schemaVersion !== 'string' || !detail.task.agentTaskId
           || SDF_FIELDS.some((field) => typeof proposed[field] !== 'string')) {
@@ -391,7 +379,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         }
         const sourceCore = { ...proposed } as SdfCore;
         const scope = {
-          userId: viewer.userId,
+          userId,
           researchObjectId: roId,
           researchObjectVersion: detail.version,
           taskId: detail.task.id,
@@ -410,7 +398,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         }, { ...seededCore }) : seededCore;
         setIngestionProposal({
           scope,
-          ...(existing.run ? { hermesRunId: existing.run.id } : {}),
+          ...(runId ? { hermesRunId: runId } : {}),
           detail,
           core,
           sourceCore,
@@ -418,14 +406,10 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           touched: stored?.touched ?? [...protectedFields],
         });
         setIngestionMessage(null);
-      } catch (cause) {
-        if (active) setIngestionMessage(cause instanceof Error ? cause.message : t('ingestionUnavailable'));
-      } finally {
-        if (active) setIngestionLoading(false);
-      }
-    };
-    void load();
-    return () => { active = false; if (timer) clearTimeout(timer); };
+      },
+      onError: (cause) => setIngestionMessage(cause instanceof Error ? cause.message : t('ingestionUnavailable')),
+      onSettled: () => setIngestionLoading(false),
+    });
   }, [draftPrompt, editorLoaded, ingestionTasks, roId, selectedIngestionTaskId, state.version, t]);
 
   function editIngestionProposal(field: SdfField, value: string) {

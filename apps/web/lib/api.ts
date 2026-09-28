@@ -21,6 +21,7 @@ export class ApiClientError extends Error {
     readonly code: string,
     message: string,
     readonly status: number,
+    readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = 'ApiClientError';
@@ -182,7 +183,10 @@ export async function apiRequest<T>(path: string, init?: RequestInit, csrfRetry 
       csrfToken = null;
       return apiRequest<T>(path, init, false);
     }
-    throw new ApiClientError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? `请求失败 ${res.status}`, res.status);
+    const retryAfter = res.headers.get('retry-after')?.trim();
+    const retryAfterMs = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : undefined;
+    throw new ApiClientError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? `请求失败 ${res.status}`, res.status,
+      retryAfterMs !== undefined && Number.isSafeInteger(retryAfterMs) && retryAfterMs <= 2_147_483_647 ? retryAfterMs : undefined);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -1824,8 +1828,8 @@ export function isRefreshableIngestionAnalysis(task: Pick<IngestionTaskDetail['t
     && missing.every((field) => LEGACY_INGESTION_FIELDS.includes(field as typeof LEGACY_INGESTION_FIELDS[number]));
 }
 
-export async function getIngestionTask(taskId: string): Promise<IngestionTaskDetail> {
-  return apiRequest(`/api/ingestion/tasks/${taskId}`);
+export async function getIngestionTask(taskId: string, signal?: AbortSignal): Promise<IngestionTaskDetail> {
+  return apiRequest(`/api/ingestion/tasks/${taskId}`, { signal });
 }
 
 export async function confirmIngestionTask(

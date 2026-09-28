@@ -7,6 +7,8 @@ import { buildErrorBody } from '@openscience/observability';
 export interface RouteRule {
   limit: number;
   windowSec: number;
+  /** GET/HEAD share a separate bounded bucket when this path also submits work. */
+  readLimit?: number;
 }
 
 /**
@@ -41,7 +43,7 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   // Hermes/AI task submission: authenticated and credit-gated, but still bound burst traffic.
   '/agent/tasks': { limit: 20, windowSec: 60 },
   '/agent/tasks/:id/retry': { limit: 10, windowSec: 60 },
-  '/research-objects/:id/hermes-runs': { limit: 10, windowSec: 60 },
+  '/research-objects/:id/hermes-runs': { limit: 10, windowSec: 60, readLimit: 60 },
   '/research-objects/:id/hermes-runs/:runId/source-review': { limit: 10, windowSec: 60 },
   // Unified browser entry point for literature retrieval (provider selection is server-owned).
   '/literature/acquisitions': { limit: 10, windowSec: 60 },
@@ -87,12 +89,16 @@ export function registerRateLimit(app: FastifyInstance, opts: RegisterRateLimitO
     const matched = compiled.find(({ regex }) => regex.test(path));
     const rule = matched?.rule;
     if (!rule) return;
-    const r = await rateLimitHit(opts.redis, { ip: req.ip, route: matched.path, windowSec: rule.windowSec, limit: rule.limit });
+    const read = rule.readLimit !== undefined && (req.method === 'GET' || req.method === 'HEAD');
+    const limit = read ? rule.readLimit! : rule.limit;
+    // Keep the existing submission bucket; reads cannot consume its remaining allowance.
+    const bucketRoute = read ? `read:${matched.path}` : matched.path;
+    const r = await rateLimitHit(opts.redis, { ip: req.ip, route: bucketRoute, windowSec: rule.windowSec, limit });
     if (!r.allowed) {
       await opts.audit?.record({
         actorId: null,
         action: 'security.rate.limited',
-        metadata: { route: path, limit: rule.limit, windowSec: rule.windowSec },
+        metadata: { route: path, limit, windowSec: rule.windowSec },
         requestId: String(req.id),
         ip: req.ip,
       });
