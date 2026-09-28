@@ -3,6 +3,7 @@ import { CODEX_IMAGE_MAX_JSON_BYTES, imageSpoolRequestByteUpperBound } from '@op
 import type { IllustrationBrief } from '@openscience/domain';
 import { compileIllustrationImagePrompt } from '../../src/presentation/scene-image';
 import { automaticStyleReviewGuidance, automaticStyleTreatment, loadInstalledMediaSkills, selectedAutomaticArtStyle, selectedHanddrawStyle } from '../../src/skills/installed-media-skills';
+import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from '../../src/skills/scientific-critical-thinking';
 
 describe('Hermes media skill stages', () => {
   it('keeps scientific visual clarity in science without adding art routing', () => {
@@ -67,6 +68,29 @@ describe('Hermes media skill stages', () => {
       expect(skill.instructions).toContain('不能概括为“模型未公开”或“完整复现输入已披露”');
       expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'scientific-critical-thinking', version: '5' }));
     }
+  });
+
+  it('routes scientific evidence guidance to illustration stages without source-analysis output conventions', () => {
+    for (const stage of ['science', 'review'] as const) {
+      const skill = loadInstalledMediaSkills('auto', 'Explain a sourced interaction and its applicable conditions in one image.', stage);
+      expect(skill.instructions).not.toMatch(/六字段|观察编号|程序将回填|不要输出审核通过|literature-note|six-field|limitations\/reproducibility/u);
+      for (const rule of ['前提与对象→操作或推导→研究输出→验证与适用边界', '方法可以跨正文、公式、图注和附录',
+        '保留每条观察的来源和限定关系', '去掉重复表述但不丢独有条件',
+        '尚未解决的实质疑問需说明影响什么结论及需要回读的原文位置', '不虚构置信度',
+        '对象、强度、条件、参数和算例', '坐标基底和观察平面',
+        '场传播、偏振、粒子轨迹与观测方向', '原文未报告、当前材料未取得、解析有疑误是三种状态',
+        '公式识别或排版成功不能证明物理正确', '不能把context改成支持结论的证据',
+        '模型定义与方程、参数与求解方法、可执行代码、网格与收敛设置']) {
+        expect(skill.instructions).toContain(rule);
+      }
+      expect(skill.instructions).toContain("Use the caller's illustration JSON schema and supplied sourceIds");
+      expect(skill.usage).toContainEqual({ id: 'scientific-critical-thinking', version: '5',
+        resources: ['apps/agent-worker/src/skills/scientific-critical-thinking.ts#illustrationInstructions'] });
+    }
+    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions).toContain('六字段保持凝练');
+    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions).toContain('只引用输入中存在的观察编号，程序将回填原始来源');
+    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.sourceReviewInstructions).toContain('你是已有六字段候选的来源审校者');
+    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.sourceReviewInstructions).toContain('sourcePassageIds与sourceBindings只引用本轮原文中实际提供的P编号');
   });
 
   it('keeps material fidelity in art planning without rerunning scientific reconstruction', () => {

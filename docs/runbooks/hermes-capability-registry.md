@@ -8,6 +8,12 @@
 范围：此开发工作树及从包含此配置的提交创建的新工作树；既有其他分支/工作树、远端主机、云任务不会自动继承。新 MCP 进程加载配置，已启动进程须重载。既有同配置的桌面浏览器已实际打开 Example Domain，Pro 曾完成两次工具读写；这些证据不代表 XGS 科研业务验收，也不解决平台命令拦截或 Windows 原生截图兼容故障。回滚：移除本次新增的 `cua_repl`、`cua_repl.tools.js`、`node_repl.env` 三节，保留 `openscience_code`；不要删除其他项目仍引用的共享启动器。
 
 ## 当前能力索引：目的、调用、效果
+2026-09-28 同一请求的可满足性修复：独立核源证明 CdS 最小单幕需 s16 工况、s4 几何、s10 时间映射三段，普通两subject上限不足。沿 Domain 已有四项容量统一 planner，不放宽单来源完整支持或把 SourceMap 当 Evidence；72/72 定向验证兼容艺术修订/标签澄清及错源拒绝。x/y/z表格通过原 createEvidence/verifyEvidence 人工核对加入私有 method，证据7154c1d1保留原页/范围和human provenance。配图 science/review 现在复用 v5.illustrationInstructions，保留共享科学规则但不再注入六字段/观察编号输出协议；全文 instructions/sourceReviewInstructions逐字不变，provenance记录资源投影。13/13路由、2/2披露及Worker TC通过。它们是已证实的输入/约束修复，不是 thinking-only 原因或科学能力提升的证据；发布及真实效果见 CURRENT。
+
+
+2026-09-28 单图思考耗尽复现：df59 部署后，普通单图 `57d39ec8` 两次 M3 adaptive 在16k/32k精确达到输出上限，均只有thinking块，无正文/候选/PNG，故不是本地科学守卫拒收。通过原只读来源恢复与mock Gateway重建完整请求，promptHash与两次实际审计一致；第二次inputTokens=1不能解读为输入丢失，当前审计未保存缓存token字段。官方M3接口确认思考计入max_tokens，仅M3.1有effort参数；不能借未文档参数承诺回答预留。普通两subject上限、可绑定Evidence覆盖及系统指导冗余正定向审查；尚未证明哪项导致模型耗尽。零模型重建证据在 `tmp/physics-source-diagnosis-20260928/single-cds-prompt.json`，停止原样重试。
+
+
 2026-09-28 数值来源误拒：真实新分镜 `0658e771` 的两个候选均被 `unbound_numeric_2_c_source` 拒收；来源中的 `*c*` 被读作无单位、`*V*e` 被读作量名 e。原 `scientificQuantities` 仅在比较副本中移除成对单/双星号，不改原引文，转义/未配对标记和字母数字之间的乘法保持保守拒绝。真实第 2 页完整来源＋最小候选离线修前拒/修后接受，13 个新增正反例及全文件 66/66、Worker typecheck、独立 High 通过。未保存的原完整三幕候选不冒称整体复验成功；部署及实际新任务见 CURRENT。
 
 2026-09-28 二次来源复审断点已修复上线：初稿合并相邻引文，review 保留 P 段边界；`extractor.ts` 现在从原 SourceMap 精确重建两种既有形式，不做空白归一化。连续复审/七种变造拒绝、真实结果离线回放、18 Domain/1 Web 回归、typecheck、High 和媒体 CI 通过。原 ingestion retry 仅对精确零调用故障执行受来源/权限/双 CAS 约束的一次恢复，保留原任务/来源/扣费。真实 `24e70850` 在原页一次操作后 succeeded/retry1/exec2；72.4 秒 34 个相关响应全 200，页面自动显示结果。发布锚点见 CURRENT；程序复用成功不等于科学审核有效。

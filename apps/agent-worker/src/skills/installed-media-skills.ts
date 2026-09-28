@@ -290,8 +290,8 @@ export function loadInstalledMediaSkills(
     // Scientific intent is selected before art direction. Only the final reviewer
     // needs the style brief in addition to the shared scientific rules.
     usage.push({ id: SCIENTIFIC_CRITICAL_THINKING_SKILL.id, version: SCIENTIFIC_CRITICAL_THINKING_SKILL.version,
-      resources: ['apps/agent-worker/src/skills/scientific-critical-thinking.ts'] });
-    excerpts.push('Apply this shared skill as scientific reasoning only. Use the caller\'s illustration JSON schema and supplied sourceIds instead of its literature-note six-field/observation output conventions. Keep review notes out of visible picture text.', SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions);
+      resources: ['apps/agent-worker/src/skills/scientific-critical-thinking.ts#illustrationInstructions'] });
+    excerpts.push('Apply this shared skill as scientific reasoning. Use the caller\'s illustration JSON schema and supplied sourceIds. Keep review notes out of visible picture text.', SCIENTIFIC_CRITICAL_THINKING_SKILL.illustrationInstructions);
     include('openscience-research-illustration', 'SKILL.md', stage === 'science' ? ['Scientific intent', 'Scientific encoding'] : ['Scientific encoding', 'Scientific review', 'Visual craft']);
     if (stage === 'science') include('openscience-scientific-visual-clarity', 'SKILL.md', ['Scientific encoding', 'Reader goal']);
     if (stage === 'review' && selection.style !== 'auto') {

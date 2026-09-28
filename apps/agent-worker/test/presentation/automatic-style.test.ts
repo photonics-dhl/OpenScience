@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { AiGateway, type Provider } from '@openscience/ai-gateway';
-import { generateIllustrationStoryboard, type StoryboardScienceRejectionReceipt } from '../../src/presentation/illustration-planner';
+import { clarifyIllustrationLabels, generateIllustrationStoryboard, type StoryboardScienceRejectionReceipt } from '../../src/presentation/illustration-planner';
 import { reviewIllustrationStoryboard } from '../../src/presentation/illustration-review';
 import { compileIllustrationImagePrompt } from '../../src/presentation/scene-image';
 import { renderStoryboard } from '../../src/presentation/storyboard';
@@ -34,6 +34,86 @@ function mockGateway(treatment: string, styleId?: string) {
   });
   return { gateway: { completeStructured } as never, calls };
 }
+
+describe('ordinary single-scene source capacity', () => {
+  const passages = [
+    'The model uses a 1 MeV electron and yields a 19 as pulse.',
+    'Two coupled wires form a slit in the yz plane; the electron crosses along z.',
+    'The longitudinal interaction window maps to a compressed temporal pulse.',
+    'The emitted field is polarized along y under the stated conditions.',
+    'The source additionally describes the far-field observation geometry.',
+  ];
+  const settings = { locale: 'en' as const, style: 'aged-academia', instruction: 'Explain one supported relation.', output: 'image' as const };
+  function fixture(count: number) {
+    const inputClaims: PresentationClaim[] = [{ ...claims[0]!, sourcePassages: passages.slice(0, count).map((text, index) => ({
+      evidenceId: `20000000-0000-4000-8000-00000000000${index + 1}`, relation: 'supports', text,
+    })) }];
+    const candidate = { ...science, scenes: [{ ...science.scenes[0]!,
+      subjects: passages.slice(0, count).map((description, index) => ({ description, basis: { sourceId: `s${index}` } })),
+    }] };
+    const calls: Array<Array<{ content: string }>> = [];
+    const completeStructured = vi.fn(async (_guard: unknown, messages: Array<{ content: string }>) => {
+      calls.push(messages);
+      return calls.length === 1 ? candidate : { scenes: [{ layout: 'One supported relationship.', treatment: 'Quiet ink.' }] };
+    });
+    const run = (context?: VisualNarrativeSource) => generateIllustrationStoryboard({ completeStructured } as never,
+      inputClaims, settings, undefined, new Map(), context);
+    return { inputClaims, candidate, completeStructured, calls, run };
+  }
+
+  it.each([3, 4])('accepts %i independent sources in one ordinary scene and preserves their exact quotes', async count => {
+    const { run, calls } = fixture(count);
+    const result = await run();
+    expect(result.document.scenes).toHaveLength(1);
+    expect(result.document.scenes[0]!.illustration!.subjects.map(subject => subject.basis.quote)).toEqual(passages.slice(0, count));
+    const scienceInput = JSON.parse(calls[0]![1]!.content);
+    expect(scienceInput.planning.perScene.subjects).toMatchObject({ min: 1, max: 4 });
+    expect(calls[0]![0]!.content).toContain('split it into atomic subjects, each with its own single supporting sourceId');
+    const artInput = JSON.parse(calls[1]![1]!.content);
+    expect(artInput.intent[0].subjects.map((subject: { description: string }) => subject.description)).toEqual(passages.slice(0, count));
+  });
+
+  it('rejects a fifth independently sourced subject before art', async () => {
+    const { run, completeStructured } = fixture(5);
+    await expect(run()).rejects.toThrow('subject_count');
+    expect(completeStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not accept SourceMap context as the fourth bound Evidence', async () => {
+    const { run, candidate, completeStructured } = fixture(4);
+    candidate.scenes[0]!.subjects[3]!.basis.sourceId = 'S40';
+    const context: VisualNarrativeSource = { versionSdf: {}, reviewedAnalysis: {},
+      scientificReview: { status: 'review_received', fieldReviews: [], needsMoreEvidence: [] },
+      sourceContext: { excerpts: [{ id: 'S40', text: passages[3]!,
+        sourceLocator: { artifactId: 'private-artifact', contentHash: 'a'.repeat(64), page: 13 },
+        range: { start: 0, end: passages[3]!.length, total: passages[3]!.length }, origin: { kind: 'paragraph', parser: 'fixture' } }],
+      coverage: { complete: false, selectedCharacters: passages[3]!.length, totalCharacters: 1000, omittedSegments: 10 } } };
+    await expect(run(context)).rejects.toThrow('unknown_original_source');
+    expect(completeStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires supporting Evidence for the third subject', async () => {
+    const { run, inputClaims, completeStructured } = fixture(3);
+    inputClaims[0]!.sourcePassages![2]!.relation = 'context';
+    await expect(run()).rejects.toThrow('subject_requires_supporting_evidence');
+    expect(completeStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves four bound subjects through label clarification and an art-only revision', async () => {
+    const { run, inputClaims } = fixture(4);
+    const initial = await run();
+    const clarified = await clarifyIllustrationLabels({ completeStructured: vi.fn(async () => ({
+      changes: [{ sceneIndex: 0, labelIndex: 0, prefix: 'Source-supported ', suffix: '' }],
+    })) } as never, inputClaims, settings, initial, 'Clarify the existing relation label.');
+    const expectedSubjects = initial.document.scenes[0]!.illustration!.subjects;
+    expect(clarified.document.scenes[0]!.illustration!.subjects).toEqual(expectedSubjects);
+    const completeStructured = vi.fn(async () => ({ scenes: [{ layout: 'Keep the supported relation centered.', treatment: 'Fine ink.' }] }));
+    const revised = await generateIllustrationStoryboard({ completeStructured } as never, inputClaims,
+      { ...settings, revisionMode: 'art' }, { ...settings, document: clarified.document });
+    expect(revised.document.scenes[0]!.illustration!.subjects).toEqual(expectedSubjects);
+    expect(completeStructured).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('automatic art direction after sourced science', () => {
   it.each([false, true])('passes original coordinate context through planning and review without changing narrative mode (%s)', async narrative => {
