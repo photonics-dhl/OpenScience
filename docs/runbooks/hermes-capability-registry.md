@@ -122,6 +122,8 @@ v9真实结果进一步限定能力：342f87eb已记录science v9及完整scienc
 
 ### 当前技术债与处理
 
+2026-09-28 生产状态对接发现：第二篇 RO `c896802c` 的 `search.index` 任务 `049c8b89-7cb0-431c-ae52-2e5303de4c30` 在 07:09:25 UTC failed；21:31 本机时间只读复核仍失败，无活动 AgentTask。原私有检索 producer/Worker 入口未改，既有两篇 hybrid 成功只能作旧来源证据，不能证明本次修订来源已可召回。任务4下一步应读原失败收据与当前索引 generation 后定位，禁止据健康状态自动标完成或盲重跑；证据见 CURRENT 与 ignored `tmp/production-task-metadata-20260928.json`。
+
 显式来源补审（2026-09-21已部署，用户再次继续后）：将固定一次恢复改为原9项预算内的连续review链，每次仍须原retry-generation明确动作；全部失败记录、同原v4候选/SourceMap、无有效科学响应及主尝试审计必须一致，所有尝试计入原额度并预留后续制作。历史provider_error不反推瞬态根因，只允许接受重复供应商费用后的显式补审；自动科学消费仍拒绝无有效审阅。原始幂等键入已有audit，精确历史请求重放不再派发；旧ordinal1缺原key元数据，不能追溯识别改version的旧raw-key复用。无新分析器/供应商/迁移，实际部署与运行只见CURRENT。
 
 来源终审与输入（2026-09-21）：v5科学Skill、必需Claims guard/原有结构修正、P边界证据分段及连续失败谱系恢复已部署；原f2f真实产出六维和6条已审Claims，自动保存同一私有版本。模型定位元数据紧凑化保留全部原文与服务端身份，真实终审输入由超61440降至60406；thinking-only截断已接回既有16K→32K升级。历史300秒、缺Claims、P合并、超长prompt及截断证据见Git/CURRENT原收据，不重跑来源分析。
