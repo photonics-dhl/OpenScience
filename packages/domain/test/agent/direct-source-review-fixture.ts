@@ -97,4 +97,3 @@ export function fixture(legacy = false) {
   const input = { actorId: user.id, researchObjectId: ids.ro, runId: ids.run, expectedVersion: 7, idempotencyKey: 'explicit-fresh-review' };
   return { db, prisma, deps, redis, ids, input, anchorResult, failedResult };
 }
-
