@@ -8,7 +8,7 @@ Nginx Range 播放；独立于本样片，管理员 RO 单幕 Codex 生图已验
 
 ## MiniMax 云视频配置（2026-09-28）
 
-本节记录已授权的按量试镜配置，与下方历史 D2NN 演示分开。当前只完成服务器凭据配置和视频列表鉴权，尚未接入 Hermes 的自动视频流程，也未验证收费生成、余额或配音质量。
+本节记录已授权的按量试镜配置，与下方历史 D2NN 演示分开。原配置和视频列表鉴权已有证据；单次提交/续查入口在既有 Gateway 与视频执行器目录，实际提交、部署、音画质量只见 [Hermes CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。此操作入口尚不是 Hermes 任意论文自动视频产品。
 
 ### 前置条件
 
@@ -19,18 +19,28 @@ Nginx Range 播放；独立于本样片，管理员 RO 单幕 Codex 生图已验
 ### 已执行配置
 
 1. 经项目 SSH 包装器的 stdin 在内存传递本次凭据，原子创建 `/opt/openscience-video/secrets/minimax-video.key`；无凭据进入 argv、Git 或日志。已存在且内容不同的文件拒绝覆盖，中断后完整文件可复用并补齐配置。
-2. 创建 `/opt/openscience-video/minimax-cloud.json`，包含 `baseUrl=https://api.minimax.cn`、`apiKeyFile` 路径、`model=MiniMax-H3` 和试镜参数 `10s / 768P / 16:9 / maxCreateRequests=1`。这是后续试镜输入，当前线上 Worker 未消费该配置；调用程序须落实单次上限。
+2. 创建 `/opt/openscience-video/minimax-cloud.json`，包含 `baseUrl=https://api.minimax.cn`、`apiKeyFile` 路径、`model=MiniMax-H3` 和嵌套 `pilot={duration:10,resolution:"768P",ratio:"16:9",maxCreateRequests:1}`。普通 Worker 未消费此配置；下述 root 操作入口读取它，不修改文本主备槽。
 3. GET `/v2/query/video_generation?page_num=1&page_size=1&filter.model=MiniMax-H3` 验证鉴权，随后从已写服务器文件重新读取凭据再验证，均为 HTTP 200。使用正常 TLS 及禁止重定向，不输出已有任务正文或下载地址。
+
+### 单次提交与续查
+
+从干净、已推送的完整 SHA 通过既有 `scripts/cloud-sync.mjs` 物化不可变发布源；源码的 Gateway 依赖按现有服务器缓存构建。此操作不切换科研应用版本、不重启科研服务，也不启动失效的离线 TTS runner。设置操作 shell 的 `video_source=/opt/openscience-releases/<完整SHA>`，确认该源的完整性和审查/定向 CI；不得在未知原任务状态下另建试镜目录。
+
+1. 在 root/0600 的私密请求文件保存经审查的纯文本品牌概念与普通话旁白，格式严格为 `{model:"MiniMax-H3",content:[{type:"text",text:"..."}],resolution:"768P",duration:10,ratio:"16:9"}`；不含未公开论文和用户数据。执行 `node "$video_source/infra/codex-image-runner/minimax-video-pilot.mjs" prepare --request-file /opt/openscience-video/pilot-request.json`，只保存原请求，零模型调用。
+2. 执行同一命令并将 `prepare` 替换为 `submit`。固定 `/opt/openscience-video/minimax-h3-pilot/create-attempt` 使用独占创建、文件和父目录 fsync，完成后才 POST；并发、重启、换输入路径都不能获得第二次提交。此标记用于防止已观察到的会话中断重复收费；此前只有配置上限，没有实际消费者保障。
+3. 执行 `node "$video_source/infra/codex-image-runner/minimax-video-pilot.mjs" status`，只 GET 已保存的原 `taskId`；成功/失败终态缓存于 root 私密目录。标准输出仅参数、状态、任务 ID 和白名单错误码，媒体签名 URL 仅留 `terminal.json`，不输出密钥、旁白或供应商正文。
+4. `uncertain`、`rejected`、`query_failed` 与供应商失败均为非零退出。查询失败保留原 ID 可续查；创建标记存在但收据缺失时仅报告 unknown，必须人工对账，不删除标记来重试。准备后请求变化必须先解释变更；已提交请求不可修改。
 
 ### 回滚与恢复
 
 - 没有替换旧凭据、修改应用环境、重启服务或改变 release 标记，因此无需回滚科研应用。若后续配置有误，先核对是否已有消费者；本次仅新建的文件在无人使用时按明确路径撤销，不能删除整个 video/private/results 目录。
-- 鉴权失败保留脱敏失败状态和非零退出码；配置落盘与鉴权通过分别判断。若提交生成超时，先保留并恢复同一上游 `task_id`；请求状态未知时不得重复提交。
+- 鉴权失败保留脱敏失败状态和非零退出码；配置落盘与鉴权通过分别判断。若提交生成超时，先保留并恢复同一上游 `task_id`；请求状态未知时不得重复提交。代码回退不删除 `minimax-h3-pilot`、`create-attempt`、请求、任务收据或终态；停用本入口只需停止调用，不能用回滚重新获取一次额度。
 
 ### 验证与未完成项
 
 - fresh evidence：独立 High 增量审查、Node/Python 语法检查通过；服务器文件读回鉴权 HTTP 200。脱敏收据位于 `secrets/minimax-config-receipt.json`，本地归档在 ignored `tmp/minimax-server-config-20260928/`。收据为本次观测，不是实时余额或自动健康证明。
-- 生成 POST=0；尚需 Gateway 调用、一次有界试镜、实际音轨和字幕审阅，以及既有 TTS/renderer 运行依赖恢复。新视频的清理继续按[综合计划 Task 4](../plans/2026-09-05-integrated-research-product-plan.md#task-4-视频)的引用和任务终态要求执行。
+- 定向测试为 `node --test infra/codex-image-runner/core.test.mjs infra/codex-image-runner/video-runner.test.mjs infra/codex-image-runner/minimax-video-pilot.test.mjs` 与 Gateway 的 `test/minimax-video.test.ts`；Linux 下 runner 真实 owner/fsync 路径在隔离 CI 以 root 执行，所有 provider/Docker 操作均由 mock 代替。视频专属工作流覆盖原发布分支 CI 未监听的视频文件；不替代服务器和音画验证。
+- 实际视频须检查完整解码、画幅/时长、连续运动、真实音轨与完整旁白、字幕和手机可读性。旧 Qwen TTS 镜像缺失仍须独立恢复，不能把 H3 试镜成功算作离线配音恢复。当前 POST 数量及结果见 CURRENT；清理仍按[综合计划 Task 4](../plans/2026-09-05-integrated-research-product-plan.md#task-4-视频)的引用和任务终态要求，保留原片、已采用资产与 unknown 收据。
 
 ## 前置检查
 

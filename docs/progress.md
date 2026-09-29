@@ -2,6 +2,7 @@
 > 当前交付位于 release/onchip-production-line；精确 HEAD、生产/回退、资产与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。旧记录在 Git 历史，不能当下一动作。
 
 ## 本轮检查点
+- 视频：原执行器恢复修复与H3单次试镜入口已有定向测试/独立审查，实际部署、POST数及音画结果只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)视频行；离线TTS依赖恢复与任意RO视频仍未完成。
 - 用户认可最终细化图，Task2完成；当前推进“单PDF一次创建→Hermes自动完整图文→默认首选风格、可更换”。候选新建/恢复与布局定向已通过，普通用户换风格授权续作仍在实现；尚无本轮部署或新生产生成。精确范围、证据与剩余项统一见CURRENT。
 
 ## 用户目标
