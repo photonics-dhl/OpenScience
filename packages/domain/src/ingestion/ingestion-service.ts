@@ -357,6 +357,45 @@ export async function listActionableIngestionTasks(
   }));
 }
 
+type ParserRecoverySource = Prisma.IngestionTaskGetPayload<{ include: {
+  artifact: true; agentTask: true; batch: { include: { researchObject: true } };
+} }>;
+
+async function parserRecoveryForSource(tx: Prisma.TransactionClient, userId: string, task: ParserRecoverySource) {
+  const agent = task.agentTask;
+  if (task.state !== 'needs_review' || !Number.isSafeInteger(task.retryCount) || task.retryCount < 0
+    || !agent || agent.kind !== 'sdf.extract' || agent.status !== 'succeeded' || agent.deletedAt
+    || agent.retryCount !== task.retryCount || agent.executionAttempt !== task.retryCount + 1
+    || task.artifact.deletedAt || task.artifact.bytesPurgedAt || task.batch.researchObject.deletedAt
+    || task.batch.userId !== userId || task.artifact.workspaceId !== task.batch.researchObject.workspaceId
+    || !exactRecordKeys(agent.payload, ['artifactId', 'researchObjectId'])
+    || agent.payload.artifactId !== task.artifactId || agent.payload.researchObjectId !== task.batch.researchObjectId
+    || !agent.result || typeof agent.result !== 'object' || Array.isArray(agent.result)) return null;
+  const result = agent.result;
+  if (result.status !== 'needs_review' || result.reason !== 'unresolved pages remain' || Object.hasOwn(result, 'core')) return null;
+  try {
+    const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+    if (reference.parserStatus !== 'needs_review' || reference.artifactId !== task.artifactId
+      || reference.contentHash !== task.artifact.blobSha256) return null;
+    const session = await tx.agentSession.findUnique({ where: { id: agent.sessionId } });
+    if (!session || session.userId !== userId || session.status !== 'active' || session.deletedAt
+      || session.researchObjectId !== task.batch.researchObjectId) return null;
+    const pages = result.unresolvedPageNumbers;
+    const unresolvedPageNumbers = Array.isArray(pages) && pages.length > 0
+      && pages.every(page => typeof page === 'number' && Number.isSafeInteger(page) && page > 0)
+      ? [...new Set(pages as number[])].sort((a, b) => a - b) : undefined;
+    return { task, agent, canRetry: task.retryCount < 2,
+      checkpoint: { sourceMapRef: result.sourceMapRef as Prisma.InputJsonValue }, unresolvedPageNumbers };
+  } catch { return null; }
+}
+
+/** Inspect the existing parser-retry policy without queuing work or granting authority. */
+export async function inspectIngestionParserRecovery(tx: Prisma.TransactionClient, input: { userId: string; taskId: string }) {
+  const task = await tx.ingestionTask.findUnique({ where: { id: input.taskId },
+    include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } } });
+  return task ? parserRecoveryForSource(tx, input.userId, task) : null;
+}
+
 export async function retryIngestionTask(
   deps: IngestionDeps,
   input: { userId: string; taskId: string },
@@ -366,201 +405,7 @@ export async function retryIngestionTask(
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       queued = await deps.prisma.$transaction(async (tx) => {
-        const task = await tx.ingestionTask.findUnique({
-          where: { id: input.taskId }, include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } },
-        });
-        if (!task || task.artifact.deletedAt || task.agentTask?.deletedAt || task.batch.researchObject.deletedAt) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
-        const { workspace, membership } = await requireActiveMembership(tx, task.batch.researchObject.workspaceId, input.userId);
-        if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
-        const result = task.agentTask?.result;
-        let legacyProposalFailure = false;
-        let parserRecovery = false;
-        let passageBudgetRecovery = false;
-        if (task.state === 'needs_review' && task.retryCount >= 0 && task.retryCount < 2 && task.agentTask?.kind === 'sdf.extract'
-          && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === task.retryCount
-          && result && typeof result === 'object' && !Array.isArray(result)) {
-          const record = result as Record<string, unknown>;
-          try {
-            const reference = parseDocumentSourceMapReference(record.sourceMapRef);
-            legacyProposalFailure = task.retryCount === 0 && record.status === 'needs_review' && record.reason === 'sdf-proposal-unavailable'
-              && !Object.hasOwn(record, 'core') && reference.parserStatus === 'succeeded'
-              && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256;
-            if (task.retryCount === 0 && task.agentTask.executionAttempt === 1
-              && record.sourceMapReused === true
-              && /^ingestion-analysis-refresh:[0-9a-f-]{36}:[0-9a-f-]{36}:grounded-passages-v1$/.test(task.agentTask.idempotencyKey ?? '')
-              && task.batch.userId === input.userId && record.canonicalExtractionContract === 'grounded-passages-v1'
-              && record.reason === 'canonical_partial_validation_exhausted'
-              && reference.parserStatus === 'succeeded' && reference.artifactId === task.artifactId
-              && reference.contentHash === task.artifact.blobSha256
-              && record.fieldDiagnostics && typeof record.fieldDiagnostics === 'object' && !Array.isArray(record.fieldDiagnostics)) {
-              const entries = Object.entries(record.fieldDiagnostics);
-              const session = await tx.agentSession.findUnique({ where: { id: task.agentTask.sessionId } });
-              passageBudgetRecovery = entries.length > 0 && entries.every(([field, reason]) =>
-                SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number])
-                && ['passage_ids_required', 'segment_count_1_to_32', 'source_text_limit_8000'].includes(String(reason)))
-                && session?.userId === input.userId && session.status === 'active'
-                && session.researchObjectId === task.batch.researchObjectId;
-            }
-            if (record.status === 'needs_review' && record.reason === 'unresolved pages remain'
-              && !Object.hasOwn(record, 'core') && reference.parserStatus === 'needs_review'
-              && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256
-              && task.agentTask.executionAttempt === task.retryCount + 1 && task.batch.userId === input.userId) {
-              const session = await tx.agentSession.findUnique({ where: { id: task.agentTask.sessionId } });
-              parserRecovery = session?.userId === input.userId && session.status === 'active'
-                && session.researchObjectId === task.batch.researchObjectId;
-            }
-          } catch {
-            legacyProposalFailure = false;
-          }
-        }
-        const agentTask = task.agentTask;
-        let parserCheckpoint: Prisma.InputJsonValue | undefined;
-        let legacyFullDocumentLimitRecovery = false;
-        let reviewCandidateSourceId: string | undefined;
-        if (agentTask?.kind === 'sdf.extract' && !task.artifact.bytesPurgedAt
-          && task.artifact.workspaceId === workspace.id && task.batch.userId === input.userId
-          && exactRecordKeys(agentTask.payload, ['artifactId', 'researchObjectId'])
-          && agentTask.payload.artifactId === task.artifactId
-          && agentTask.payload.researchObjectId === task.batch.researchObjectId) {
-          const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
-          if (session?.userId === input.userId && session.status === 'active' && !session.deletedAt
-            && session.researchObjectId === task.batch.researchObjectId) {
-            if (exactRecordKeys(result, ['sourceMapRef'])) {
-              try {
-                const reference = parseDocumentSourceMapReference(result.sourceMapRef);
-                if (reference.parserStatus === 'succeeded' && reference.artifactId === task.artifactId
-                  && reference.contentHash === task.artifact.blobSha256) {
-                  parserCheckpoint = result as Prisma.InputJsonValue;
-                }
-              } catch { /* Invalid or incomplete results follow the existing reset policy. */ }
-            }
-            legacyFullDocumentLimitRecovery = task.state === 'failed_blocked' && task.retryCount === 0
-              && task.error === LEGACY_FULL_DOCUMENT_LIMIT_ERROR
-              && agentTask.status === 'failed' && agentTask.error === LEGACY_FULL_DOCUMENT_LIMIT_ERROR
-              && agentTask.retryCount === 0 && agentTask.executionAttempt === 1
-              && (result === null || parserCheckpoint !== undefined);
-            if (parserCheckpoint) reviewCandidateSourceId = await reviewCandidatePreflightSource(tx, task, input.userId);
-          }
-        }
-        const failedRetry = task.state === 'failed_retryable' && task.retryCount >= 0 && task.retryCount < 3
-          && agentTask?.kind === 'sdf.extract' && agentTask.status === 'failed'
-          && agentTask.retryCount === task.retryCount && agentTask.executionAttempt === task.retryCount + 1;
-        let canonicalAllMissingRecovery = false;
-        if (task.state === 'needs_review' && task.retryCount === 1 && agentTask?.kind === 'sdf.extract'
-          && agentTask.status === 'succeeded' && agentTask.retryCount === 1
-          && agentTask.executionAttempt === 2 && isCanonicalAllFieldsMissingResult(result, task.artifact)) {
-          const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
-          canonicalAllMissingRecovery = session?.userId === input.userId && session.status === 'active';
-        }
-        const retryAttempt = parserRecovery ? task.retryCount + 1 : canonicalAllMissingRecovery ? 2 : failedRetry ? task.retryCount + 1 : 1;
-        let activeFailedRetryOwner = false;
-        let paidFailedRetry = false;
-        let compensatedSchemaRetry = false;
-        if (failedRetry && agentTask) {
-          const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
-          if (session?.userId === input.userId && session.status === 'active') {
-            activeFailedRetryOwner = true;
-            if (task.retryCount === 1) {
-              paidFailedRetry = true;
-            } else if (task.retryCount === 2
-              && task.error === agentTask.error
-              && (agentTask.error === '结构化输出超过重试上限' || agentTask.error === 'canonical_validation_exhausted')) {
-              const priorCharge = await tx.usageLedger.findUnique({
-                where: { idempotencyKey: `agent-task-recovery:${agentTask.id}:2` },
-                select: { userId: true, resource: true, delta: true, kind: true, reason: true, metadata: true },
-              });
-              const priorMetadata = priorCharge?.metadata && typeof priorCharge.metadata === 'object'
-                && !Array.isArray(priorCharge.metadata) ? priorCharge.metadata as Record<string, unknown> : null;
-              compensatedSchemaRetry = priorCharge?.userId === input.userId
-                && priorCharge.resource === AI_CREDIT_RESOURCE && priorCharge.delta === BigInt(-1)
-                && priorCharge.kind === 'consume' && priorCharge.reason === 'Agent task recovery sdf.extract'
-                && Boolean(priorMetadata && exactRecordKeys(priorMetadata, ['taskId', 'kind', 'retryAttempt', 'policy'])
-                  && priorMetadata.taskId === agentTask.id && priorMetadata.kind === 'sdf.extract'
-                  && priorMetadata.retryAttempt === 2
-                  && (priorMetadata.policy === 'charged-on-remediation' || priorMetadata.policy === 'charged-on-retry'));
-            }
-          }
-        }
-        const authorizedFailedRetry = failedRetry && activeFailedRetryOwner
-          && (task.retryCount === 0 || paidFailedRetry || compensatedSchemaRetry);
-        if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery && !parserRecovery
-          && !passageBudgetRecovery && !legacyFullDocumentLimitRecovery && !reviewCandidateSourceId) {
-          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
-        }
-        if (!deps.audit?.record) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry audit is unavailable');
-        const recovery = reviewCandidateSourceId ? 'review_candidate_preflight' : legacyFullDocumentLimitRecovery ? 'legacy_full_document_limit'
-          : passageBudgetRecovery ? 'canonical_passage_budget' : parserRecovery ? 'unresolved_parser_pages'
-          : canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
-          : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable'
-            : compensatedSchemaRetry ? 'canonical_schema_exhaustion_compensation'
-              : paidFailedRetry ? 'failed_retryable_paid' : 'failed_retryable';
-        let adminAutoFunded = false;
-        if (canonicalAllMissingRecovery || paidFailedRetry) {
-          if (!agentTask) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction task is unavailable');
-          const actor = await tx.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } });
-          adminAutoFunded = actor?.platformRole === 'platform_admin';
-          if (!adminAutoFunded) {
-            const balance = await tx.usageLedger.aggregate({
-              where: { userId: input.userId, resource: AI_CREDIT_RESOURCE }, _sum: { delta: true },
-            });
-            if (Number(balance._sum.delta ?? 0) <= 0) {
-              throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
-            }
-          } else {
-            await recordEntry(tx, {
-              userId: input.userId, resource: AI_CREDIT_RESOURCE, delta: 1, kind: 'adjust',
-              reason: 'Platform admin AI task recovery funding',
-              idempotencyKey: `agent-task-recovery-admin-fund:${agentTask.id}:${retryAttempt}`,
-              metadata: { taskId: agentTask.id, kind: agentTask.kind, retryAttempt, policy: 'platform-admin-auto-funded' },
-            });
-          }
-          await recordEntry(tx, {
-            userId: input.userId, resource: AI_CREDIT_RESOURCE, delta: -1, kind: 'consume',
-            reason: 'Agent task recovery sdf.extract', idempotencyKey: `agent-task-recovery:${agentTask.id}:${retryAttempt}`,
-            metadata: { taskId: agentTask.id, kind: agentTask.kind, retryAttempt,
-              policy: canonicalAllMissingRecovery ? 'charged-on-remediation' : 'charged-on-retry' },
-          });
-        }
-        const resetAgent = await tx.agentTask.updateMany({
-          where: {
-            id: task.agentTaskId!, kind: 'sdf.extract', retryCount: retryAttempt - 1,
-            sessionId: agentTask!.sessionId, deletedAt: null, error: agentTask!.error,
-            payload: { equals: agentTask!.payload as Prisma.InputJsonValue },
-            result: { equals: result === null ? Prisma.AnyNull : result as Prisma.InputJsonValue },
-            status: legacyProposalFailure || canonicalAllMissingRecovery || parserRecovery || passageBudgetRecovery ? 'succeeded' : 'failed',
-            ...(canonicalAllMissingRecovery ? { executionAttempt: 2 }
-              : authorizedFailedRetry || parserRecovery || passageBudgetRecovery || legacyFullDocumentLimitRecovery || reviewCandidateSourceId
-                ? { executionAttempt: retryAttempt } : {}),
-          },
-          data: {
-            status: 'pending', progress: 0, result: parserCheckpoint ?? Prisma.JsonNull, error: null, dispatchedAt: null,
-            retryCount: { increment: 1 },
-          },
-        });
-        if (resetAgent.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry is no longer available');
-        const claimed = await tx.ingestionTask.updateMany({
-          where: { id: task.id, agentTaskId: task.agentTaskId, state: task.state, retryCount: retryAttempt - 1,
-            artifactId: task.artifactId, error: task.error },
-          data: { state: 'queued', retryCount: { increment: 1 }, error: null },
-        });
-        if (claimed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry is no longer available');
-        await recordAudit(deps, tx, {
-          actorId: input.userId, action: 'ingestion.task.retry', workspaceId: workspace.id,
-          targetType: 'ingestion_task', targetId: task.id,
-          metadata: { recovery, agentTaskId: task.agentTaskId, retryAttempt,
-            previousState: task.state, previousError: task.error,
-            previousAgentStatus: agentTask!.status, previousAgentError: agentTask!.error,
-            previousExecutionAttempt: agentTask!.executionAttempt, previousRetryCount: task.retryCount,
-            previousAgentRetryCount: agentTask!.retryCount, checkpointReused: parserCheckpoint !== undefined,
-            ...(reviewCandidateSourceId ? { reviewExistingSourceTaskId: reviewCandidateSourceId } : {}),
-            ...(parserRecovery ? { previousParserResult: result } : {}),
-            ...(passageBudgetRecovery ? { previousExtractionResult: result } : {}),
-            creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation'
-              : paidFailedRetry ? 'charged-on-retry'
-                : compensatedSchemaRetry ? 'reuse-paid-remediation' : 'reuse-original-reservation',
-            ...(adminAutoFunded ? { funding: 'platform-admin-auto-funded' } : {}) },
-        }, ctx);
-        return tx.ingestionTask.findUnique({ where: { id: task.id }, include: { artifact: true } });
+        return retryIngestionTaskInTransaction(deps, tx, input, ctx);
       }, { isolationLevel: 'Serializable' });
       break;
     } catch (error) {
@@ -573,6 +418,205 @@ export async function retryIngestionTask(
     await dispatchAgentTask(deps, queued.agentTaskId);
   }
   return taskToView(queued);
+}
+
+/** Shared retry mutation; callers own the transaction and dispatch only after commit. */
+export async function retryIngestionTaskInTransaction(
+  deps: AgentDeps, tx: Prisma.TransactionClient, input: { userId: string; taskId: string },
+  ctx: AuditContext = {},
+  runRequest?: { runId: string; sourceStepId: string; clientIdempotencyKey: string; requestDigest: string; previousVersion: number },
+) {
+  const task = await tx.ingestionTask.findUnique({
+    where: { id: input.taskId }, include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } },
+  });
+  if (!task || task.artifact.deletedAt || task.agentTask?.deletedAt || task.batch.researchObject.deletedAt) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+  const { workspace, membership } = await requireActiveMembership(tx, task.batch.researchObject.workspaceId, input.userId);
+  if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+  const result = task.agentTask?.result;
+  let legacyProposalFailure = false;
+  const parserProof = await parserRecoveryForSource(tx, input.userId, task);
+  const parserRecovery = parserProof?.canRetry === true;
+  if (parserRecovery && !runRequest) await requirePublicRefreshSource(tx, task.id);
+  let passageBudgetRecovery = false;
+  if (task.state === 'needs_review' && task.retryCount >= 0 && task.retryCount < 2 && task.agentTask?.kind === 'sdf.extract'
+    && task.agentTask.status === 'succeeded' && task.agentTask.retryCount === task.retryCount
+    && result && typeof result === 'object' && !Array.isArray(result)) {
+    const record = result as Record<string, unknown>;
+    try {
+      const reference = parseDocumentSourceMapReference(record.sourceMapRef);
+      legacyProposalFailure = task.retryCount === 0 && record.status === 'needs_review' && record.reason === 'sdf-proposal-unavailable'
+        && !Object.hasOwn(record, 'core') && reference.parserStatus === 'succeeded'
+        && reference.artifactId === task.artifactId && reference.contentHash === task.artifact.blobSha256;
+      if (task.retryCount === 0 && task.agentTask.executionAttempt === 1
+        && record.sourceMapReused === true
+        && /^ingestion-analysis-refresh:[0-9a-f-]{36}:[0-9a-f-]{36}:grounded-passages-v1$/.test(task.agentTask.idempotencyKey ?? '')
+        && task.batch.userId === input.userId && record.canonicalExtractionContract === 'grounded-passages-v1'
+        && record.reason === 'canonical_partial_validation_exhausted'
+        && reference.parserStatus === 'succeeded' && reference.artifactId === task.artifactId
+        && reference.contentHash === task.artifact.blobSha256
+        && record.fieldDiagnostics && typeof record.fieldDiagnostics === 'object' && !Array.isArray(record.fieldDiagnostics)) {
+        const entries = Object.entries(record.fieldDiagnostics);
+        const session = await tx.agentSession.findUnique({ where: { id: task.agentTask.sessionId } });
+        passageBudgetRecovery = entries.length > 0 && entries.every(([field, reason]) =>
+          SDF_NODE_TYPES.includes(field as typeof SDF_NODE_TYPES[number])
+          && ['passage_ids_required', 'segment_count_1_to_32', 'source_text_limit_8000'].includes(String(reason)))
+          && session?.userId === input.userId && session.status === 'active'
+          && session.researchObjectId === task.batch.researchObjectId;
+      }
+    } catch {
+      legacyProposalFailure = false;
+    }
+  }
+  const agentTask = task.agentTask;
+  let parserCheckpoint: Prisma.InputJsonValue | undefined = parserRecovery ? parserProof!.checkpoint : undefined;
+  let legacyFullDocumentLimitRecovery = false;
+  let reviewCandidateSourceId: string | undefined;
+  if (agentTask?.kind === 'sdf.extract' && !task.artifact.bytesPurgedAt
+    && task.artifact.workspaceId === workspace.id && task.batch.userId === input.userId
+    && exactRecordKeys(agentTask.payload, ['artifactId', 'researchObjectId'])
+    && agentTask.payload.artifactId === task.artifactId
+    && agentTask.payload.researchObjectId === task.batch.researchObjectId) {
+    const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
+    if (session?.userId === input.userId && session.status === 'active' && !session.deletedAt
+      && session.researchObjectId === task.batch.researchObjectId) {
+      if (exactRecordKeys(result, ['sourceMapRef'])) {
+        try {
+          const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+          if (reference.parserStatus === 'succeeded' && reference.artifactId === task.artifactId
+            && reference.contentHash === task.artifact.blobSha256) {
+            parserCheckpoint = result as Prisma.InputJsonValue;
+          }
+        } catch { /* Invalid or incomplete results follow the existing reset policy. */ }
+      }
+      legacyFullDocumentLimitRecovery = task.state === 'failed_blocked' && task.retryCount === 0
+        && task.error === LEGACY_FULL_DOCUMENT_LIMIT_ERROR
+        && agentTask.status === 'failed' && agentTask.error === LEGACY_FULL_DOCUMENT_LIMIT_ERROR
+        && agentTask.retryCount === 0 && agentTask.executionAttempt === 1
+        && (result === null || parserCheckpoint !== undefined);
+      if (parserCheckpoint) reviewCandidateSourceId = await reviewCandidatePreflightSource(tx, task, input.userId);
+    }
+  }
+  const failedRetry = task.state === 'failed_retryable' && task.retryCount >= 0 && task.retryCount < 3
+    && agentTask?.kind === 'sdf.extract' && agentTask.status === 'failed'
+    && agentTask.retryCount === task.retryCount && agentTask.executionAttempt === task.retryCount + 1;
+  let canonicalAllMissingRecovery = false;
+  if (task.state === 'needs_review' && task.retryCount === 1 && agentTask?.kind === 'sdf.extract'
+    && agentTask.status === 'succeeded' && agentTask.retryCount === 1
+    && agentTask.executionAttempt === 2 && isCanonicalAllFieldsMissingResult(result, task.artifact)) {
+    const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
+    canonicalAllMissingRecovery = session?.userId === input.userId && session.status === 'active';
+  }
+  const retryAttempt = parserRecovery ? task.retryCount + 1 : canonicalAllMissingRecovery ? 2 : failedRetry ? task.retryCount + 1 : 1;
+  let activeFailedRetryOwner = false;
+  let paidFailedRetry = false;
+  let compensatedSchemaRetry = false;
+  if (failedRetry && agentTask) {
+    const session = await tx.agentSession.findUnique({ where: { id: agentTask.sessionId } });
+    if (session?.userId === input.userId && session.status === 'active') {
+      activeFailedRetryOwner = true;
+      if (task.retryCount === 1) {
+        paidFailedRetry = true;
+      } else if (task.retryCount === 2
+        && task.error === agentTask.error
+        && (agentTask.error === '结构化输出超过重试上限' || agentTask.error === 'canonical_validation_exhausted')) {
+        const priorCharge = await tx.usageLedger.findUnique({
+          where: { idempotencyKey: `agent-task-recovery:${agentTask.id}:2` },
+          select: { userId: true, resource: true, delta: true, kind: true, reason: true, metadata: true },
+        });
+        const priorMetadata = priorCharge?.metadata && typeof priorCharge.metadata === 'object'
+          && !Array.isArray(priorCharge.metadata) ? priorCharge.metadata as Record<string, unknown> : null;
+        compensatedSchemaRetry = priorCharge?.userId === input.userId
+          && priorCharge.resource === AI_CREDIT_RESOURCE && priorCharge.delta === BigInt(-1)
+          && priorCharge.kind === 'consume' && priorCharge.reason === 'Agent task recovery sdf.extract'
+          && Boolean(priorMetadata && exactRecordKeys(priorMetadata, ['taskId', 'kind', 'retryAttempt', 'policy'])
+            && priorMetadata.taskId === agentTask.id && priorMetadata.kind === 'sdf.extract'
+            && priorMetadata.retryAttempt === 2
+            && (priorMetadata.policy === 'charged-on-remediation' || priorMetadata.policy === 'charged-on-retry'));
+      }
+    }
+  }
+  const authorizedFailedRetry = failedRetry && activeFailedRetryOwner
+    && (task.retryCount === 0 || paidFailedRetry || compensatedSchemaRetry);
+  if (runRequest && !parserRecovery) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Run parser recovery is no longer available');
+  if (!authorizedFailedRetry && !legacyProposalFailure && !canonicalAllMissingRecovery && !parserRecovery
+    && !passageBudgetRecovery && !legacyFullDocumentLimitRecovery && !reviewCandidateSourceId) {
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
+  }
+  if (!deps.audit?.record) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry audit is unavailable');
+  const recovery = reviewCandidateSourceId ? 'review_candidate_preflight' : legacyFullDocumentLimitRecovery ? 'legacy_full_document_limit'
+    : passageBudgetRecovery ? 'canonical_passage_budget' : parserRecovery ? 'unresolved_parser_pages'
+    : canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
+    : legacyProposalFailure ? 'legacy_sdf_proposal_unavailable'
+      : compensatedSchemaRetry ? 'canonical_schema_exhaustion_compensation'
+        : paidFailedRetry ? 'failed_retryable_paid' : 'failed_retryable';
+  let adminAutoFunded = false;
+  if (canonicalAllMissingRecovery || paidFailedRetry) {
+    if (!agentTask) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction task is unavailable');
+    const actor = await tx.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } });
+    adminAutoFunded = actor?.platformRole === 'platform_admin';
+    if (!adminAutoFunded) {
+      const balance = await tx.usageLedger.aggregate({
+        where: { userId: input.userId, resource: AI_CREDIT_RESOURCE }, _sum: { delta: true },
+      });
+      if (Number(balance._sum.delta ?? 0) <= 0) {
+        throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
+      }
+    } else {
+      await recordEntry(tx, {
+        userId: input.userId, resource: AI_CREDIT_RESOURCE, delta: 1, kind: 'adjust',
+        reason: 'Platform admin AI task recovery funding',
+        idempotencyKey: `agent-task-recovery-admin-fund:${agentTask.id}:${retryAttempt}`,
+        metadata: { taskId: agentTask.id, kind: agentTask.kind, retryAttempt, policy: 'platform-admin-auto-funded' },
+      });
+    }
+    await recordEntry(tx, {
+      userId: input.userId, resource: AI_CREDIT_RESOURCE, delta: -1, kind: 'consume',
+      reason: 'Agent task recovery sdf.extract', idempotencyKey: `agent-task-recovery:${agentTask.id}:${retryAttempt}`,
+      metadata: { taskId: agentTask.id, kind: agentTask.kind, retryAttempt,
+        policy: canonicalAllMissingRecovery ? 'charged-on-remediation' : 'charged-on-retry' },
+    });
+  }
+  const resetAgent = await tx.agentTask.updateMany({
+    where: {
+      id: task.agentTaskId!, kind: 'sdf.extract', retryCount: retryAttempt - 1,
+      sessionId: agentTask!.sessionId, deletedAt: null, error: agentTask!.error,
+      payload: { equals: agentTask!.payload as Prisma.InputJsonValue },
+      result: { equals: result === null ? Prisma.AnyNull : result as Prisma.InputJsonValue },
+      status: legacyProposalFailure || canonicalAllMissingRecovery || parserRecovery || passageBudgetRecovery ? 'succeeded' : 'failed',
+      ...(canonicalAllMissingRecovery ? { executionAttempt: 2 }
+        : authorizedFailedRetry || parserRecovery || passageBudgetRecovery || legacyFullDocumentLimitRecovery || reviewCandidateSourceId
+          ? { executionAttempt: retryAttempt } : {}),
+    },
+    data: {
+      status: 'pending', progress: 0, result: parserCheckpoint ?? Prisma.JsonNull, error: null, dispatchedAt: null,
+      retryCount: { increment: 1 },
+    },
+  });
+  if (resetAgent.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry is no longer available');
+  const claimed = await tx.ingestionTask.updateMany({
+    where: { id: task.id, agentTaskId: task.agentTaskId, state: task.state, retryCount: retryAttempt - 1,
+      artifactId: task.artifactId, error: task.error },
+    data: { state: 'queued', retryCount: { increment: 1 }, error: null },
+  });
+  if (claimed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry is no longer available');
+  await recordAudit(deps, tx, {
+    actorId: input.userId, action: 'ingestion.task.retry', workspaceId: workspace.id,
+    targetType: 'ingestion_task', targetId: task.id,
+    metadata: { recovery, agentTaskId: task.agentTaskId, retryAttempt,
+      previousState: task.state, previousError: task.error,
+      previousAgentStatus: agentTask!.status, previousAgentError: agentTask!.error,
+      previousExecutionAttempt: agentTask!.executionAttempt, previousRetryCount: task.retryCount,
+      previousAgentRetryCount: agentTask!.retryCount, checkpointReused: parserCheckpoint !== undefined,
+      ...(reviewCandidateSourceId ? { reviewExistingSourceTaskId: reviewCandidateSourceId } : {}),
+      ...(parserRecovery ? { previousParserResult: result } : {}),
+      ...(runRequest ? { ...runRequest, explicitUserAction: true, possibleDuplicateProviderCharge: true } : {}),
+      ...(passageBudgetRecovery ? { previousExtractionResult: result } : {}),
+      creditPolicy: canonicalAllMissingRecovery ? 'charged-on-remediation'
+        : paidFailedRetry ? 'charged-on-retry'
+          : compensatedSchemaRetry ? 'reuse-paid-remediation' : 'reuse-original-reservation',
+      ...(adminAutoFunded ? { funding: 'platform-admin-auto-funded' } : {}) },
+  }, ctx);
+  return tx.ingestionTask.findUnique({ where: { id: task.id }, include: { artifact: true } });
 }
 
 /** Upgrade only an unconfirmed older self-check; confirmed reanalysis retains its existing policy. */

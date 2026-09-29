@@ -47,6 +47,8 @@ export interface CascadeContext {
   trustedAuthorizationContext?: Readonly<OcrAuthorizationContext>;
   externalProcessingEligible: boolean;
   featureFlags: ParserCascadeFeatureFlags;
+  /** Persisted worker output, supplied only after the existing retry receipt is verified. */
+  resumeSourceMap?: DocumentSourceMap;
 }
 
 type CanonicalParserInput = Readonly<ParserInput>;
@@ -161,7 +163,7 @@ function mergeDeterministicMaps(
   const ids = new Set(pages.flatMap((page) => page.blocks.map(({ id }) => id)));
   for (const incomingPage of incoming.pages) {
     let page = pages.find(({ page: pageNumber }) => pageNumber === incomingPage.page);
-    let incomingBlocks = incomingPage.blocks;
+    const incomingBlocks = incomingPage.blocks;
     if (!page) {
       page = { page: incomingPage.page, width: incomingPage.width, height: incomingPage.height, blocks: [] };
       pages.push(page);
@@ -299,6 +301,29 @@ function boundedUniqueStrings(values: readonly string[]): string[] {
   return result;
 }
 
+function recognizedPages(sourceMap: DocumentSourceMap): Set<number> {
+  const pages = new Set<number>();
+  for (const page of sourceMap.pages) {
+    const candidates = page.blocks.filter(block => block.parser.name === 'llm_ocr_candidate');
+    if (candidates.length === 0) continue;
+    const candidate = candidates[0]!;
+    const [ocr, merge] = candidate.transformations;
+    if (candidates.length !== 1 || !/^block:llm-ocr-candidate:[a-f0-9]{64}$/.test(candidate.id)
+      || !/^[A-Za-z0-9._-]+:[A-Za-z0-9._/-]+$/.test(candidate.parser.version)
+      || candidate.kind !== 'paragraph' || !candidate.text?.trim()
+      || candidate.boundingBox.x !== 0 || candidate.boundingBox.y !== 0
+      || candidate.boundingBox.width !== page.width || candidate.boundingBox.height !== page.height
+      || candidate.transformations.length !== 2 || ocr?.stage !== 'ocr'
+      || ocr.processor.name !== candidate.parser.name || ocr.processor.version !== candidate.parser.version
+      || merge?.stage !== 'merge' || merge.processor.name !== PARSER_CASCADE_METADATA.name
+      || merge.processor.version !== PARSER_CASCADE_METADATA.version) {
+      throw new Error('Saved parser candidate provenance is invalid');
+    }
+    pages.add(page.page);
+  }
+  return pages;
+}
+
 export async function runParserCascade(
   input: ParserInput,
   context: CascadeContext,
@@ -310,7 +335,15 @@ export async function runParserCascade(
   let localStageSucceeded = false;
   let nativeTextFidelityReview = false;
 
-  try {
+  if (context.resumeSourceMap) {
+    current = parseDocumentSourceMap(context.resumeSourceMap);
+    if (current.artifactId !== canonicalInput.artifactId || current.contentHash !== canonicalInput.contentHash) {
+      throw new Error('Saved parser source identity changed');
+    }
+    localStageSucceeded = current.pages.some(page => page.blocks.length > 0);
+  }
+
+  if (!context.resumeSourceMap) try {
     const extracted = await runDocumentParser(adapterInput(canonicalInput), context.adapters.extractText);
     if (extracted.status === 'blocked') return extracted;
     if (extracted.status === 'failed') {
@@ -333,7 +366,7 @@ export async function runParserCascade(
     reasons.push('extract_text failed');
   }
 
-  if (context.featureFlags.detectLayout && context.adapters.detectLayout) {
+  if (!context.resumeSourceMap && context.featureFlags.detectLayout && context.adapters.detectLayout) {
     try {
       const layout = await runDocumentParser(adapterInput(canonicalInput), context.adapters.detectLayout);
       if (layout.status === 'blocked') return layout;
@@ -353,7 +386,7 @@ export async function runParserCascade(
     }
   }
 
-  if (context.featureFlags.grobid && context.adapters.grobid) {
+  if (!context.resumeSourceMap && context.featureFlags.grobid && context.adapters.grobid) {
     try {
       const result = await context.adapters.grobid(adapterInput(canonicalInput));
       const enriched = enrichWithGrobid(current, result);
@@ -380,10 +413,11 @@ export async function runParserCascade(
     }
   }
 
-  const initialUnresolved = unresolvedPages(current);
+  const alreadyRecognized = context.resumeSourceMap ? recognizedPages(current) : new Set<number>();
+  const initialUnresolved = unresolvedPages(current).filter(page => !alreadyRecognized.has(page.page));
   const initialReasonByPage = new Map(initialUnresolved.map(({ page, reason }) => [page, reason]));
   const locallyResolved = new Set<number>();
-  if (context.featureFlags.localOcr
+  if (!context.resumeSourceMap && context.featureFlags.localOcr
     && (context.adapters.isolatedLocalOcr || context.adapters.localOcr)
     && initialUnresolved.length > 0) {
     // Native formula blocks need visual transcription, not a full-page Tesseract pass.

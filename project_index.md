@@ -642,6 +642,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 
 | `packages/domain/src/assets/storyboard.ts` / `packages/domain/test/assets/storyboard.test.ts` / `apps/agent-worker/src/presentation/storyboard.ts` / `apps/web/components/presentation/StoryboardPanel.tsx` / `apps/web/test/storyboard-panel.test.tsx` | Sourced storyboard contract, Gateway planner and Hermes revision UI | 既有生产能力；2026-09-12艺术指导/叙事增强候选，实际release见CURRENT handoff |
 | `apps/web/lib/hermes/start-paper-narrative.ts` / `apps/web/test/e2e/create-illustrated-research.spec.ts` | 单篇 PDF 创建后衔接既有自动图文任务，保存原提交以恢复丢响应 | 实施与真实验收状态见 CURRENT |
+| `apps/agent-worker/src/parsers/recovery-checkpoint.ts` / `apps/agent-worker/test/parser-recovery-{checkpoint,handler}.test.ts` / `packages/domain/test/agent/source-parser-recovery.test.ts` | 原SourceMap单页解析恢复、原Hermes事务衔接与精确重试收据验证 | 状态与真实验收见CURRENT |
 | `apps/web/lib/presentation/result-gallery.ts` / `apps/web/components/presentation/IllustrationStyleChoices.tsx` / `apps/web/lib/presentation/illustration-style-switch.ts` | 同源图片历史归类、已保存风格选择与私有美术修订恢复 | 实施、权限范围与验证见 CURRENT |
 | `apps/web/lib/presentation/managed-illustration-style.ts` / `apps/web/test/e2e/managed-illustration-style.spec.ts` | 普通作者从当前图片选择已推荐风格，恢复同一次限额续作 | 实际验收与部署状态见 CURRENT |
 | `packages/domain/src/agent/art-style-continuation.ts` / `packages/domain/test/agent/art-style-continuation.test.ts` | 既有 Hermes 运行中的限额美术续作，精确来源与并发任务约束 | 候选，独立审查及部署状态见 CURRENT |

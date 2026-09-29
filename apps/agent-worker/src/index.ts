@@ -1,4 +1,5 @@
 import { requireStyleReferenceImage } from '@openscience/domain';
+import { requirePartialParserRecovery } from './parsers/recovery-checkpoint';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { Prisma } from '@prisma/client';
 import {
@@ -145,6 +146,7 @@ export function buildSearchIndexerFromEnv(
 export interface ParserCascadeAuthorization {
   trustedAuthorizationContext: Readonly<OcrAuthorizationContext>;
   externalProcessingEligible: boolean;
+  resumeSourceMap?: DocumentSourceMap;
 }
 
 export type ParserCascadeRunner = ((
@@ -231,6 +233,7 @@ export function createWorkerParserCascade(
       aiGateway: gateway,
       trustedAuthorizationContext: authorization.trustedAuthorizationContext,
       externalProcessingEligible: authorization.externalProcessingEligible,
+      resumeSourceMap: authorization.resumeSourceMap,
       featureFlags,
     }),
     {
@@ -330,6 +333,7 @@ export function createHandlers(
       const externalProcessingEligible = serverDerivedEligibility
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
       let reusableSourceMap: DocumentSourceMap | undefined;
+      let partialParserSourceMap: DocumentSourceMap | undefined;
       let reusableExtractionResult: Record<string, unknown> | undefined;
       let requireReusableSemanticStage = false;
       let reviewExistingSourceTaskId: string | undefined;
@@ -344,13 +348,23 @@ export function createHandlers(
           || ownerTask.executionAttempt !== task.executionAttempt || ownerTask.deletedAt
           || ownerTask.session.status !== 'active' || ownerTask.session.deletedAt || ownerResearchObject.deletedAt
           || artifact.deletedAt || artifact.bytesPurgedAt
-          || reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+          || reference.artifactId !== artifact.id
           || reference.contentHash !== artifact.blobSha256
           || Object.keys(task.payload).sort().join(',') !== 'artifactId,researchObjectId') {
           throw new Error('[blocked] Reusable parser checkpoint scope is invalid');
         }
-        // A parsed source is not a prior scientific result. Keep previousResult unset.
-        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+        if (reference.parserStatus === 'needs_review') {
+          if (!externalProcessingEligible) throw new Error('[blocked] Parser recovery processing authorization changed');
+          await requirePartialParserRecovery(deps.prisma, {
+            taskId: ownerTask.id, actorId: ownerTask.session.userId, workspaceId: ownerResearchObject.workspaceId,
+            researchObjectId: ownerResearchObject.id, artifactId: artifact.id,
+            retryCount: ownerTask.retryCount, executionAttempt: ownerTask.executionAttempt, reference,
+          });
+          partialParserSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+        } else {
+          // A parsed source is not a prior scientific result. Keep previousResult unset.
+          reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+        }
       }
       const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):(scientific-summary-v3|scientific-review-v4)$/.exec(ownerTask.idempotencyKey ?? '');
       if (composition) {
@@ -506,7 +520,8 @@ export function createHandlers(
         contentHash: artifact.blobSha256,
         content: bytes,
         mediaType: parserMediaType,
-      }, { trustedAuthorizationContext, externalProcessingEligible });
+      }, { trustedAuthorizationContext, externalProcessingEligible,
+        ...(partialParserSourceMap ? { resumeSourceMap: partialParserSourceMap } : {}) });
       const format = artifact.logicalPath.split('.').at(-1)?.toLowerCase() ?? 'unknown';
       if (parsed.status === 'blocked') throw new Error(`[blocked] ${parsed.code}`);
       const sourceMapRef = (parsed.status === 'succeeded' || parsed.status === 'needs_review') && parsed.sourceMap
@@ -534,7 +549,8 @@ export function createHandlers(
                 researchObjectId: ownerResearchObject.id,
                 researchObject: { deletedAt: null, workspaceId: ownerResearchObject.workspaceId } },
               payload: { equals: { artifactId: artifact.id, researchObjectId: ownerResearchObject.id } },
-              OR: [{ result: { equals: Prisma.AnyNull } }, { result: { equals: checkpoint } }],
+              OR: [{ result: { equals: Prisma.AnyNull } }, { result: { equals: checkpoint } },
+                ...(partialParserSourceMap ? [{ result: { equals: parserCheckpoint as Prisma.InputJsonValue } }] : [])],
             },
             data: { result: checkpoint },
           });

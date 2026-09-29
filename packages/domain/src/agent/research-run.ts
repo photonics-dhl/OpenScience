@@ -7,7 +7,7 @@ import { requireActiveMembership } from '../workspace/helpers';
 import { now } from '../workspace/types';
 import { confirmIngestionClaimEvidenceBridge, previewIngestionClaimEvidenceBridge, type IngestionClaimSelection } from '../ingestion/claim-evidence-bridge';
 import { MAX_INGESTION_CLAIMS } from '../ingestion/reviewed-claim-suggestions';
-import { ensureHermesIngestionReview, materializeHermesIngestion, recoverHermesSourceReviewInTransaction, type IngestionDeps } from '../ingestion/ingestion-service';
+import { ensureHermesIngestionReview, materializeHermesIngestion, recoverHermesSourceReviewInTransaction, inspectIngestionParserRecovery, retryIngestionTaskInTransaction, type IngestionDeps } from '../ingestion/ingestion-service';
 import { inspectHermesSourceReviewRecovery } from '../ingestion/source-review-recovery';
 import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE } from '../assets/video';
@@ -99,7 +99,11 @@ export interface HermesResearchRunView {
   canRetryGeneration?: boolean;
   canAuthorizeNarrativeCorrection?: boolean;
   chargeableAttempts?: number;
-  generationRecovery?: 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render' | 'narrative-scientific-replan' | 'narrative-source-support-replan';
+  generationRecovery?: 'source-parser' | 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render' | 'narrative-scientific-replan' | 'narrative-source-support-replan';
+  sourceParsing?: {
+    status: 'needs_review'; ingestionTaskId: string; agentTaskId: string;
+    unresolvedPageNumbers?: number[]; providerChargeMayApply: true;
+  };
   availableImageCount?: number;
   imageUsageLimited?: boolean;
   artStyleContinuation?: { eligibleImages: Array<{ imageAssetId: string; storyboardAssetId: string; sceneIndex: number }>; maxAgentTasks: 2 };
@@ -119,6 +123,28 @@ export interface HermesResearchRunView {
 }
 
 type RunRow = Prisma.HermesResearchRunGetPayload<{ include: typeof RUN_INCLUDE }>;
+
+async function inspectHermesSourceParser(tx: Prisma.TransactionClient, run: RunRow) {
+  if (run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || run.versionId !== null
+    || run.sourceClaimIds.length || run.sourceReviewDigest || run.steps.length !== 1) return null;
+  const step = run.steps[0]!;
+  if (step.stage !== 'source_ingestion' || step.ordinal !== 0 || !step.ingestionTaskId
+    || !step.agentTaskId || !step.artifactId || step.presentationAssetId) return null;
+  const proof = await inspectIngestionParserRecovery(tx, { userId: run.actorId, taskId: step.ingestionTaskId });
+  if (!proof || proof.task.batch.researchObjectId !== run.researchObjectId
+    || proof.task.batch.researchObject.status !== 'draft' || proof.agent.id !== step.agentTaskId
+    || proof.task.artifactId !== step.artifactId) return null;
+  return { ...proof, step };
+}
+
+function incompleteParserResult(value: unknown): boolean {
+  const result = jsonRecord(value);
+  if (result.status !== 'needs_review' || Object.hasOwn(result, 'core')) return false;
+  try { return parseDocumentSourceMapReference(result.sourceMapRef).parserStatus === 'needs_review'; }
+  catch { return false; }
+}
+
+const SOURCE_PARSER_INCOMPLETE = 'Source parsing is incomplete; explicit recovery is required';
 
 export async function createHermesArtStyleContinuation(...args: Parameters<typeof createArtStyleContinuation>) {
   const result = await createArtStyleContinuation(...args);
@@ -302,6 +328,13 @@ export async function getHermesResearchRun(
   if (run.maxAgentTasks === 2) return { ...toView(run), canRetryGeneration: false,
     artStyleContinuation: WRITE_ROLES.has(authority.membership.role)
       ? await getHermesArtStyleContinuationCapability(deps.prisma, run) : { eligibleImages: [], maxAgentTasks: 2 } };
+  const parser = await inspectHermesSourceParser(deps.prisma, run);
+  if (parser) return { ...toView(run),
+    canRetryGeneration: WRITE_ROLES.has(authority.membership.role) && run.status === 'failed' && parser.canRetry,
+    chargeableAttempts: 0, generationRecovery: 'source-parser',
+    sourceParsing: { status: 'needs_review', ingestionTaskId: parser.task.id, agentTaskId: parser.agent.id,
+      ...(parser.unresolvedPageNumbers ? { unresolvedPageNumbers: parser.unresolvedPageNumbers } : {}),
+      providerChargeMayApply: true } };
   const recovery = WRITE_ROLES.has(authority.membership.role)
     ? run.profile === VISUAL_NARRATIVE_PROFILE
       ? run.versionId
@@ -2270,6 +2303,46 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         if (run.profile === VISUAL_NARRATIVE_PROFILE) {
           if (!ro || ro.deletedAt || ro.status !== 'draft' || !membership || !WRITE_ROLES.has(membership.membership.role))
             throw new HermesResearchRunError('FORBIDDEN', 'Source review recovery permission is unavailable');
+          const parserReceipts = await tx.auditLog.findMany({ where: {
+            action: 'ingestion.task.retry', targetType: 'ingestion_task', actorId: input.actorId, workspaceId: ro.workspaceId,
+            AND: [{ metadata: { path: ['runId'], equals: run.id } },
+              { metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } }],
+          }, take: 2 });
+          if (parserReceipts.length) {
+            const receipt = parserReceipts[0]!;
+            const meta = jsonRecord(receipt.metadata);
+            const step = run.steps.find(item => item.id === meta.sourceStepId);
+            if (parserReceipts.length !== 1 || meta.requestDigest !== requestDigest
+              || meta.recovery !== 'unresolved_parser_pages' || !step || step.stage !== 'source_ingestion'
+              || receipt.targetId !== step.ingestionTaskId || !meta.agentTaskId
+              || jsonRecord(jsonRecord(meta.previousParserResult).sourceMapRef).artifactId !== step.artifactId)
+              throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Parser recovery receipt does not match this request');
+            // The committed pending task is the existing outbox; replay never dispatches again.
+            return { run, dispatchIds: [] as string[] };
+          }
+          const parser = await inspectHermesSourceParser(tx, run);
+          if (parser) {
+            if (run.version !== input.expectedVersion)
+              throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before recovering source parsing');
+            if (run.status !== 'failed' || !parser.canRetry)
+              throw new HermesResearchRunError('SOURCE_NOT_READY', 'Explicit parser recovery is unavailable');
+            const queued = await retryIngestionTaskInTransaction(deps, tx, {
+              userId: input.actorId, taskId: parser.task.id,
+            }, ctx, { runId: run.id, sourceStepId: parser.step.id, clientIdempotencyKey: input.idempotencyKey,
+              requestDigest, previousVersion: input.expectedVersion });
+            const source = await tx.hermesResearchStep.updateMany({ where: {
+              id: parser.step.id, runId: run.id, stage: 'source_ingestion', status: parser.step.status,
+              ingestionTaskId: parser.task.id, artifactId: parser.task.artifactId, agentTaskId: parser.agent.id,
+            }, data: { status: 'waiting', error: null } });
+            const moved = await tx.hermesResearchRun.updateMany({ where: {
+              id: run.id, actorId: input.actorId, researchObjectId: input.researchObjectId,
+              status: 'failed', version: input.expectedVersion, versionId: null, profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9,
+            }, data: { status: 'running', error: null, lastReconciledAt: null, version: { increment: 1 } } });
+            if (!queued?.agentTaskId || source.count !== 1 || moved.count !== 1)
+              throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Source parser recovery changed during retry');
+            return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }),
+              dispatchIds: [queued.agentTaskId] };
+          }
           const outputReceipt = await tx.auditLog.findFirst({ where: { action: STORYBOARD_OUTPUT_RESUME_ACTION,
             targetType: 'hermes_research_run', targetId: run.id, actorId: input.actorId,
             metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } } });
@@ -3133,7 +3206,8 @@ export async function reconcileHermesResearchRuns(
     let reconcileError: unknown;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        if (candidate.profile === VISUAL_NARRATIVE_PROFILE && candidate.status === 'awaiting_source_review') {
+        if (candidate.profile === VISUAL_NARRATIVE_PROFILE && candidate.status === 'awaiting_source_review'
+          && !await inspectHermesSourceParser(deps.prisma, candidate)) {
           result = await advanceAutomaticSources(deps, candidate);
           break;
         }
@@ -3158,6 +3232,13 @@ export async function reconcileHermesResearchRuns(
           if (sourceSteps.some((step) => !step.ingestionTask || step.ingestionTask.batch.researchObjectId !== run.researchObjectId
             || step.ingestionTask.artifactId !== step.artifactId || step.ingestionTask.agentTaskId !== step.agentTaskId)) {
             return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'source binding changed');
+          }
+          if (run.profile === VISUAL_NARRATIVE_PROFILE && ['running', 'awaiting_source_review'].includes(run.status)
+            && sourceSteps.some(step => step.ingestionTask?.state === 'needs_review'
+              && incompleteParserResult(step.ingestionTask.agentTask?.result))) {
+            await tx.hermesResearchStep.updateMany({ where: { runId: run.id, stage: 'source_ingestion' },
+              data: { status: 'failed', error: SOURCE_PARSER_INCOMPLETE } });
+            return moveRun(deps, tx, run, 'failed', ro.workspaceId, SOURCE_PARSER_INCOMPLETE);
           }
           if (run.status === 'running') {
             const failure = sourceSteps.map((step) => step.ingestionTask!).find((task) => FAILED_INGESTION_STATES.has(task.state));

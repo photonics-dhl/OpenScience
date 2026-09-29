@@ -18,6 +18,7 @@ import { runDocumentParser } from '../src/parsers/base-parser';
 import type { GrobidEnrichmentResult } from '../src/parsers/grobid-parser';
 import type { LocalOcrAdapter, OcrRasterPage } from '../src/parsers/ocr-parser';
 import type { DocumentParser, ParserInput } from '../src/parsers/types';
+import { PDF_TEXT_ITEM_METADATA } from '../src/parsers/native-pdf-contract';
 
 const TSV_HEADER = 'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext';
 
@@ -130,9 +131,88 @@ function baseContext(extractText: DocumentParser): CascadeContext {
   };
 }
 
+describe('saved partial parser recovery', () => {
+  it('reuses successful OCR pages and native blocks while processing only the unresolved page', async () => {
+    const native = { name: 'docling-serve-cpu', version: 'test' };
+    const sourceMap = map(native, [2, 18].map(page => ({ page, blocks: [{
+      ...block(`formula-${page}`, 'The measured relationship is E = mc squared and retains its source text.', 1, native),
+      kind: 'equation' as const,
+    }] })));
+    const extract = vi.fn().mockReturnValue({ status: 'succeeded', sourceMap, warnings: [] });
+    const renderPdfPages = vi.fn(async (_input: ParserInput, pages: readonly number[]) => pages.map(raster));
+    let failed = true;
+    const ocr = vi.fn(async (request: OcrRequest): Promise<OcrResult> => {
+      const result = gatewayResult(request);
+      if (failed) return { ...result, status: 'partial', pages: result.pages.map(page => page.pageNumber === 18
+        ? { status: 'failed', pageNumber: 18, code: 'providers_unavailable', retryable: true } : page) };
+      return result;
+    });
+    const context: CascadeContext = {
+      ...baseContext(parser(native, extract)),
+      adapters: { extractText: parser(native, extract), localOcr: { renderPdfPages, recognize: vi.fn() } as unknown as LocalOcrAdapter },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: true, llmOcr: true },
+      aiGateway: { ocr }, externalProcessingEligible: true,
+      trustedAuthorizationContext: { taskId: 'task', workspaceId: 'workspace', actorId: 'actor' },
+    };
+    const first = await runParserCascade(input(), context);
+    expect(first.status).toBe('needs_review');
+    if (first.status !== 'needs_review' || !first.sourceMap) throw new Error('expected partial source');
+    const saved = structuredClone(first.sourceMap);
+    extract.mockClear(); renderPdfPages.mockClear(); ocr.mockClear();
+    const repeatedTimeout = await runParserCascade(input(), { ...context, resumeSourceMap: first.sourceMap });
+    expect(repeatedTimeout.status).toBe('needs_review');
+    expect(ocr).toHaveBeenCalledTimes(1);
+    expect(ocr.mock.calls[0]![0].pages.map(page => page.pageNumber)).toEqual([18]);
+    expect(extract).not.toHaveBeenCalled();
+    failed = false;
+    extract.mockClear(); renderPdfPages.mockClear(); ocr.mockClear();
+    const recovered = await runParserCascade(input(), { ...context, resumeSourceMap: first.sourceMap });
+    expect(recovered.status).toBe('succeeded');
+    expect(extract).not.toHaveBeenCalled();
+    expect(renderPdfPages).toHaveBeenCalledTimes(1);
+    expect(renderPdfPages).toHaveBeenCalledWith(expect.anything(), [18]);
+    expect(ocr).toHaveBeenCalledTimes(1);
+    expect(ocr.mock.calls[0]![0].pages.map(page => page.pageNumber)).toEqual([18]);
+    if (recovered.status !== 'succeeded') throw new Error('expected recovered source');
+    expect(recovered.sourceMap.pages[0]).toEqual(saved.pages[0]);
+    expect(recovered.sourceMap.pages[1]!.blocks[0]).toEqual(saved.pages[1]!.blocks[0]);
+    expect(first.sourceMap).toEqual(saved);
+  });
+
+  it('rejects a saved map from another source before parser or provider execution', async () => {
+    const native = { name: 'docling', version: 'test' };
+    const parse = vi.fn();
+    const context = baseContext(parser(native, parse));
+    await expect(runParserCascade(input(), { ...context,
+      resumeSourceMap: { ...map(native), contentHash: 'f'.repeat(64) },
+    })).rejects.toThrow(/source identity/);
+    expect(parse).not.toHaveBeenCalled();
+  });
+
+  it.each(['duplicate', 'bounds', 'provider', 'transform'])('rejects %s candidate provenance without another OCR call', async mode => {
+    const native = { name: 'docling', version: 'test' };
+    const candidate = { ...block(`block:llm-ocr-candidate:${'a'.repeat(64)}`, 'recognized formula', 1,
+      { name: 'llm_ocr_candidate', version: 'vision:test' }),
+    boundingBox: { x: 0, y: 0, width: 500, height: 700 }, transformations: [
+      { stage: 'ocr' as const, processor: { name: 'llm_ocr_candidate', version: 'vision:test' } },
+      { stage: 'merge' as const, processor: CASCADE_ORCHESTRATOR_METADATA },
+    ] };
+    if (mode === 'bounds') candidate.boundingBox.height = 699;
+    if (mode === 'provider') candidate.parser.version = 'invalid';
+    if (mode === 'transform') candidate.transformations.pop();
+    const source = map(native, [{ page: 1, blocks: [candidate,
+      ...(mode === 'duplicate' ? [{ ...candidate, id: `block:llm-ocr-candidate:${'b'.repeat(64)}` }] : [])] }]);
+    const parse = vi.fn(), ocr = vi.fn();
+    await expect(runParserCascade(input(), { ...baseContext(parser(native, parse)), aiGateway: { ocr },
+      resumeSourceMap: source,
+    })).rejects.toThrow(/candidate provenance/);
+    expect(parse).not.toHaveBeenCalled(); expect(ocr).not.toHaveBeenCalled();
+  });
+});
+
 describe('runParserCascade', () => {
   it('retains native text fidelity review after targeted OCR while preserving healthy neighboring pages', async () => {
-    const textMetadata = { name: 'pdf-parse-pdfjs-text-items', version: '2.4.5+pdfjs-dist.5.4.296' };
+    const textMetadata = PDF_TEXT_ITEM_METADATA;
     const tesseract = { name: 'tesseract', version: '5.3.0' };
     const extractText = parser(textMetadata, () => ({
       status: 'succeeded',
@@ -173,12 +253,12 @@ describe('runParserCascade', () => {
     expect(result.sourceMap.pages[2]?.blocks[0]?.text).toBe('Healthy native page three has sufficient scientific evidence density');
     expect(inventoryPages).not.toHaveBeenCalled();
     expect(ocrPages).toHaveBeenCalledWith(expect.anything(), [{
-      page: 2, width: 500, height: 700, blocks: [], reason: 'low_confidence',
+      page: 2, width: 500, height: 700, blocks: [], reason: 'low_confidence', localOcrRequired: true,
     }]);
   });
 
   it('keeps the document in needs_review when targeted OCR cannot recover a failed-closed page', async () => {
-    const textMetadata = { name: 'pdf-parse-pdfjs-text-items', version: '2.4.5+pdfjs-dist.5.4.296' };
+    const textMetadata = PDF_TEXT_ITEM_METADATA;
     const extractText = parser(textMetadata, () => ({
       status: 'succeeded',
       sourceMap: map(textMetadata, [
@@ -269,7 +349,7 @@ describe('runParserCascade', () => {
     });
     expect(inventoryPages).toHaveBeenCalledTimes(1);
     expect(ocrPages).toHaveBeenCalledWith(expect.anything(), [{
-      page: 1, width: 612, height: 792, blocks: [], reason: 'low_confidence',
+      page: 1, width: 612, height: 792, blocks: [], reason: 'low_confidence', localOcrRequired: true,
     }]);
   });
   it('accepts sparse OCR text when its weighted OCR confidence clears the LLM threshold', async () => {

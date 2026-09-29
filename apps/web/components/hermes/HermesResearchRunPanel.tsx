@@ -69,7 +69,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const grantInFlight = React.useRef(false);
   const grantRequest = React.useRef<{ actorId: string; runId: string; version: number; key: string } | null>(null);
   const [retrying, setRetrying] = React.useState(false);
-  const retryRequest = React.useRef<{ actorId: string; runId: string; version: number; key: string } | null>(null);
+  const retryRequest = React.useRef<{ actorId: string; runId: string; version: number; key: string; sourceParser: boolean; postAttempted: boolean } | null>(null);
   const retryInFlight = React.useRef(false);
   const visibleRun = React.useRef(run);
   visibleRun.current = run;
@@ -310,8 +310,9 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     const requestedActor = actorId;
     const requestedRun = run;
     const previous = retryRequest.current;
-    const current = previous?.actorId === actorId && previous.runId === run.id && previous.version === run.version
-      ? previous : { actorId, runId: run.id, version: run.version, key: crypto.randomUUID() };
+    // An uncertain parser response must retain both the key and its original expectedVersion.
+    const current = previous?.actorId === actorId && previous.runId === run.id && ((previous.sourceParser && previous.postAttempted) || previous.version === run.version)
+      ? previous : { actorId, runId: run.id, version: run.version, key: crypto.randomUUID(), sourceParser: run.generationRecovery === 'source-parser', postAttempted: false };
     retryRequest.current = current;
     retryInFlight.current = true;
     setRetrying(true); setError('');
@@ -320,11 +321,18 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       if (!mounted.current || viewer.userId !== requestedActor || actorRef.current !== requestedActor
         || visibleRun.current?.id !== requestedRun.id || visibleRun.current.version !== requestedRun.version)
         throw new Error(t('narrative.identityChanged'));
-      const result = await retryHermesGeneration(researchObjectId, requestedRun.id, requestedRun.version, current.key);
+      current.postAttempted = true;
+      const result = await retryHermesGeneration(researchObjectId, requestedRun.id, current.version, current.key);
+      if (retryRequest.current === current) retryRequest.current = null;
       if (!mounted.current || actorRef.current !== requestedActor || visibleRun.current?.id !== requestedRun.id) return;
       setRun(result.run);
       onRunUpdated?.(result.run);
     } catch (cause) {
+      const definiteRejection = cause instanceof ApiClientError && cause.status >= 400 && cause.status < 500
+        && cause.status !== 408 && cause.status !== 429;
+      if (current.sourceParser && retryRequest.current === current && (!current.postAttempted || definiteRejection)) {
+        retryRequest.current = null;
+      }
       if (mounted.current && actorRef.current === requestedActor && visibleRun.current?.id === requestedRun.id)
         setError(cause instanceof ApiClientError ? cause.message : t('retryError'));
     } finally {
@@ -334,6 +342,8 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   }
 
   const narrative = run?.profile === 'visual-narrative-v1';
+  const sourceParsing = run?.sourceParsing?.status === 'needs_review' && run.steps.some(step => step.stage === 'source_ingestion'
+    && step.ingestionTaskId === run.sourceParsing?.ingestionTaskId && step.agentTaskId === run.sourceParsing?.agentTaskId) ? run.sourceParsing : null;
   const sourceReady = run?.status === 'awaiting_source_review';
   const claimReviewReady = run?.status === 'awaiting_claim_review' && Boolean(run.versionId);
   const terminal = run?.status === 'failed' || run?.status === 'stopped';
@@ -345,12 +355,15 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const legacyGrantNeedsUpgrade = Boolean(run
     && ['awaiting_claim_review', 'awaiting_storyboard_review'].includes(run.status)
     && run.profile === 'onchip-field-sampling-v1' && run.maxAgentTasks === 7);
-  const narrativeStage = terminal ? 'incomplete' : run?.status === 'succeeded' ? 'complete'
+  const narrativeStage = sourceParsing ? 'parsingIncomplete' : terminal ? 'incomplete' : run?.status === 'succeeded' ? 'complete'
     : ['generating_storyboard', 'awaiting_storyboard_review'].includes(run?.status ?? '') ? 'planning'
       : run?.status === 'generating_scene_images' ? 'illustrating'
         : ['awaiting_scene_images_review', 'generating_video', 'awaiting_video_review'].includes(run?.status ?? '') ? 'reviewing' : 'understanding';
   const steps = run ? <ol className="mt-4 divide-y divide-os-rule-paper border-y border-os-rule-paper">
-    {run.steps.map((step) => <li key={step.id} className="flex items-center justify-between gap-4 py-3 text-sm"><span>{t(`stage.${step.stage}`, { number: step.ordinal + 1 })}</span><span className="font-data text-os-muted-paper">{narrative && (step.status === 'awaiting_approval' || (step.availableAssetId && step.availableAssetStatus !== 'approved')) ? t('narrative.internalReview') : step.availableAssetId ? t(step.availableAssetStatus === 'approved' ? 'step.succeeded' : 'step.awaiting_approval') : t(`step.${step.status}`)}</span></li>)}
+    {run.steps.map((step) => <li key={step.id} className="py-3 text-sm">
+      <div className="flex items-center justify-between gap-4"><span>{t(`stage.${step.stage}`, { number: step.ordinal + 1 })}</span><span className="font-data text-os-muted-paper">{sourceParsing && step.stage === 'source_ingestion' && sourceParsing.ingestionTaskId === step.ingestionTaskId && sourceParsing.agentTaskId === step.agentTaskId ? t('sourceParsingIncomplete') : step.stage === 'source_ingestion' && step.status === 'succeeded' ? t('sourceParsingEnded') : narrative && (step.status === 'awaiting_approval' || (step.availableAssetId && step.availableAssetStatus !== 'approved')) ? t('narrative.internalReview') : step.availableAssetId ? t(step.availableAssetStatus === 'approved' ? 'step.succeeded' : 'step.awaiting_approval') : t(`step.${step.status}`)}</span></div>
+      {step.stage === 'source_ingestion' && step.status === 'succeeded' ? <p className="mt-1 text-xs leading-5 text-os-muted-paper">{t('sourceParsingBoundary')}</p> : null}
+    </li>)}
   </ol> : null;
   return <section className="surface-folio-sheet mt-7 max-w-3xl border-y border-os-rule-paper px-5 py-6 sm:px-7" aria-labelledby="hermes-run-title" data-hermes-research-run={run?.status ?? 'new'}>
     <p data-reading-role="caption" className="text-os-vermilion-ink">Hermes</p>
@@ -372,15 +385,16 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     {guideTaskId && !guided && !guideLoading && error ? <button type="button" onClick={() => setGuideRetry(value => value + 1)} className="mt-3 min-h-11 font-semibold text-os-vermilion-ink underline">{t('narrative.refreshStatus')}</button> : null}
     {run && narrative ? <div className="mt-4 border-t border-os-rule-paper pt-4">
       <p className="font-semibold text-os-ink" role="status">{t(`narrative.status.${narrativeStage}`)}</p>
-      <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(terminal ? 'narrative.incompleteDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
+      <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(sourceParsing ? 'sourceParsingDescription' : terminal ? 'narrative.incompleteDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
+      {sourceParsing?.unresolvedPageNumbers?.length ? <p className="mt-2 text-sm text-os-muted-paper">{t('sourceParsingPages', { pages: sourceParsing.unresolvedPageNumbers.join(', ') })}</p> : null}
       {imageSteps.length ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('narrative.imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
       {run.canAuthorizeNarrativeCorrection ? <div className="mt-4">
         <p className="text-sm leading-6 text-os-muted-paper">{t(run.maxAgentTasks === 11 ? 'narrative.finalCorrectionGrantDescription' : 'narrative.correctionGrantDescription')}</p>
         <button type="button" disabled={granting || retrying} onClick={() => void upgradeGenerationGrant()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(granting ? 'granting' : 'narrative.authorizeCorrection', { count: run.maxAgentTasks === 11 ? 2 : 3 })}</button>
       </div> : null}
       {run.canRetryGeneration ? <div className="mt-4">
-        <p className="text-sm leading-6 text-os-muted-paper">{t(run.generationRecovery === 'narrative-source-support-replan' ? 'narrative.resumeSourceSupportReplanDescription' : run.generationRecovery === 'narrative-scientific-replan' ? 'narrative.resumeScientificReplanDescription' : run.generationRecovery === 'image-render' ? run.chargeableAttempts === 0 ? 'narrative.resumeCompletedImageReviewDescription' : 'narrative.resumeImageRenderDescription' : run.generationRecovery === 'storyboard-art' ? run.chargeableAttempts === 0 ? 'narrative.resumeArtInterruptedDescription' : 'narrative.resumeArtDescription' : run.generationRecovery === 'storyboard-planning' ? run.chargeableAttempts === 0 ? 'narrative.resumePlanningUnsubmittedDescription' : 'narrative.resumePlanningDescription' : run.generationRecovery === 'storyboard-review' ? 'narrative.resumeMediaDescription' : (run.maxAgentTasks ?? 0) >= 11 ? 'narrative.resumeCorrectionDescription' : run.versionId ? 'narrative.resumeMediaDescription' : 'narrative.resumeDescription', { count: run.chargeableAttempts ?? 0 })}</p>
-        <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : 'narrative.resume')}</button>
+        <p className="text-sm leading-6 text-os-muted-paper">{t(run.generationRecovery === 'source-parser' ? 'sourceParsingRetryDescription' : run.generationRecovery === 'narrative-source-support-replan' ? 'narrative.resumeSourceSupportReplanDescription' : run.generationRecovery === 'narrative-scientific-replan' ? 'narrative.resumeScientificReplanDescription' : run.generationRecovery === 'image-render' ? run.chargeableAttempts === 0 ? 'narrative.resumeCompletedImageReviewDescription' : 'narrative.resumeImageRenderDescription' : run.generationRecovery === 'storyboard-art' ? run.chargeableAttempts === 0 ? 'narrative.resumeArtInterruptedDescription' : 'narrative.resumeArtDescription' : run.generationRecovery === 'storyboard-planning' ? run.chargeableAttempts === 0 ? 'narrative.resumePlanningUnsubmittedDescription' : 'narrative.resumePlanningDescription' : run.generationRecovery === 'storyboard-review' ? 'narrative.resumeMediaDescription' : (run.maxAgentTasks ?? 0) >= 11 ? 'narrative.resumeCorrectionDescription' : run.versionId ? 'narrative.resumeMediaDescription' : 'narrative.resumeDescription', { count: run.chargeableAttempts ?? 0 })}</p>
+        <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : run.generationRecovery === 'source-parser' ? 'sourceParsingResume' : 'narrative.resume')}</button>
       </div> : null}
       <details className="mt-4 text-sm text-os-muted-paper"><summary className="min-h-11 cursor-pointer py-3">{t('narrative.details')}</summary>{steps}</details>
       {run.status === 'succeeded' && run.versionId ? <Link className="mt-5 inline-flex min-h-11 items-center rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white" href={`/research-objects/${encodeURIComponent(researchObjectId)}/overview?version=${encodeURIComponent(run.versionId)}`}>{t('narrative.viewResult')}</Link> : null}
@@ -390,9 +404,9 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       {imageSteps.length ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
       {steps}
       {run.error && !run.imageUsageLimited ? <p className="mt-3 text-sm text-os-vermilion-ink">{t(/write conflict|deadlock|P2034/i.test(run.error) ? 'saveConflict' : 'stepFailed')}</p> : null}
-      {run.canRetryGeneration && run.chargeableAttempts !== undefined ? <p className="mt-3 text-sm leading-6 text-os-muted-paper">{t('retryDescription', { count: run.chargeableAttempts })}</p> : null}
+      {run.canRetryGeneration && run.chargeableAttempts !== undefined ? <p className="mt-3 text-sm leading-6 text-os-muted-paper">{t(run.generationRecovery === 'source-parser' ? 'sourceParsingRetryDescription' : 'retryDescription', { count: run.chargeableAttempts })}</p> : null}
       <nav className="mt-5 flex flex-wrap gap-4" aria-label={t('actions')}>
-        {run.canRetryGeneration ? <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="inline-flex min-h-11 items-center rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : 'retryGeneration')}</button> : null}
+        {run.canRetryGeneration ? <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="inline-flex min-h-11 items-center rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : run.generationRecovery === 'source-parser' ? 'sourceParsingResume' : 'retryGeneration')}</button> : null}
         {sourceReady ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={reviewHref(researchObjectId, run)}>{t('reviewSource')}</Link> : null}
         {claimReviewReady && run?.versionId ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`${runHref(researchObjectId, run.id)}&claimReview=1`}>{t('reviewClaims')}</Link> : null}
         {presentationReady && run?.versionId ? <Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(researchObjectId)}/presentation?version=${encodeURIComponent(run.versionId)}`}>{t('reviewPresentation')}</Link> : null}
