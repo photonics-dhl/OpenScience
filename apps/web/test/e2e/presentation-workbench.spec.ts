@@ -145,6 +145,168 @@ async function fixtures(page: Page, options: FixtureOptions = {}) {
   return { claimPostIds, claimPostBodies, generationKeys, generationBodies, patchExpectedTimes, taskReadCount: () => taskReads };
 }
 
+test('saved PNG review-only recovers a failed render without generating or approving again', async ({ page }) => {
+  await fixtures(page);
+  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', platformRole: 'platform_admin', status: 'email_verified' }));
+  const saved = { ...asset, id: 'saved-png', kind: 'image', canTransition: true, canApprove: false,
+    sceneImage: { storyboardAssetId: 'plan', sceneIndex: 0 } };
+  let reads = 0;
+  const writes: Array<{ path: string; key?: string }> = [];
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/versions/version-2/presentation-assets', route => json(route, { assets: ++reads > 1 ? [saved] : [] }));
+  await page.route('**/presentation-tasks/*', route => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
+    return json(route, { task: { ...task(id === 'review-task' ? 'running' : 'failed', 80), id,
+      error: '[blocked] Generated image review exceeds the source input budget (62621 > 61440 characters)' } });
+  });
+  await page.route('**/presentation-assets/**', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    writes.push({ path: new URL(route.request().url()).pathname, key: route.request().headers()['idempotency-key'] });
+    await held;
+    return json(route, { task: { ...task('pending', 0), id: 'review-task' } }, 202);
+  });
+  try {
+    await page.goto(`/research-objects/${ro.id}/presentation?version=version-2&task=saved-png`);
+    const actions = page.locator('[data-media-asset-actions="saved-png"]');
+    await expect(actions).toBeVisible();
+    await expect(actions.getByRole('button', { name: 'Review saved image only', exact: true })).toBeVisible();
+    await expect(actions.getByRole('button', { name: 'Approve for publication', exact: true })).toHaveCount(0);
+    await actions.getByRole('button', { name: 'Review saved image only', exact: true }).evaluate(button => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await expect(actions.getByRole('button', { name: 'Submitting review…', exact: true })).toBeDisabled();
+    await expect.poll(() => writes.length).toBe(1);
+    release();
+    await expect(actions).toContainText('Review submitted. The saved image will not be generated again.');
+    await expect(page).toHaveURL(/task=review-task/);
+    expect(writes[0].path).toBe(`/api/research-objects/${ro.id}/versions/version-2/presentation-assets/saved-png/review`);
+    expect(writes[0].key).toBeTruthy();
+  } finally { release(); }
+});
+
+test('saved PNG review-only hides recovered originals and accepted images, preserving system rejection', async ({ page }) => {
+  await fixtures(page);
+  const original = { ...asset, id: 'd075fc00-f0c4-4049-8f2b-97c255aa78d7', kind: 'image', canTransition: true, canApprove: false,
+    sceneImage: { storyboardAssetId: 'plan', sceneIndex: 0 } };
+  const copy = { ...original, id: '2943e5cc-75c5-4f1e-a1a8-c78a3be6ec1f' };
+  const accepted = { ...original, id: '2cc5003f-e5c4-40c7-8c5a-43de202aec4f', contentHash: 'b'.repeat(64), canApprove: true };
+  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', platformRole: 'platform_admin', status: 'email_verified' }));
+  await page.route('**/versions/version-2/presentation-assets', route => json(route, { assets: [original, copy, accepted] }));
+  await page.route('**/presentation-tasks/*', route => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
+    return json(route, { task: { ...task(id === copy.id ? 'succeeded' : 'failed', 100), id,
+      error: id === original.id ? '[blocked] Generated image review exceeds the source input budget (62621 > 61440 characters)' : null,
+      result: id === copy.id ? { assetId: id, imageReview: { decision: 'blocked' } } : null } });
+  });
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+  const copyActions = page.locator(`[data-media-asset-actions="${copy.id}"]`);
+  await expect(copyActions).toContainText('System review did not pass.');
+  await expect(copyActions.getByRole('button', { name: 'Reject draft', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Review saved image only', exact: true })).toHaveCount(0);
+  await expect(page.locator(`[data-media-asset-actions="${accepted.id}"]`).getByRole('button', { name: 'Approve for publication', exact: true })).toBeVisible();
+});
+
+test('saved PNG review-only requires platform admin as well as a writable version', async ({ page }) => {
+  await fixtures(page);
+  await page.route('**/versions/version-2/presentation-assets', route => json(route, { assets: [{ ...asset, id: 'saved-png', kind: 'image',
+    canTransition: true, canApprove: false, sceneImage: { storyboardAssetId: 'plan', sceneIndex: 0 } }] }));
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+  await expect(page.locator('[data-media-asset-actions="saved-png"]')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Review saved image only', exact: true })).toHaveCount(0);
+  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', platformRole: 'platform_admin', status: 'email_verified' }));
+  await page.route(`**/api/research-objects/${ro.id}/versions`, route => json(route, { versions: versions.map(version => ({ ...version, status: 'published' })) }));
+  await page.reload();
+  await expect(page.locator('[data-media-asset-actions="saved-png"]')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Review saved image only', exact: true })).toHaveCount(0);
+});
+
+test('saved PNG review-only isolates A-B-A requests and reuses the key after response loss', async ({ page }) => {
+  await fixtures(page, { versionStates: versions.map(version => ({ ...version, status: 'draft' })) });
+  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', platformRole: 'platform_admin', status: 'email_verified' }));
+  await page.route('**/versions/*/presentation-assets', route => {
+    const versionId = new URL(route.request().url()).pathname.split('/').at(-2)!;
+    return json(route, { assets: [{ ...asset, id: `saved-${versionId}`, versionId, kind: 'image', canTransition: true, canApprove: false,
+      sceneImage: { storyboardAssetId: 'plan', sceneIndex: 0 } }] });
+  });
+  await page.route('**/presentation-tasks/*', route => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
+    return json(route, { task: { ...task(id.startsWith('review-') ? 'running' : 'failed', 80), id, error: 'scientific review provider failed' } });
+  });
+  const writes: Array<{ version: string; key: string }> = [];
+  let releaseA!: () => void; let releaseB!: () => void;
+  const a = new Promise<void>(resolve => { releaseA = resolve; });
+  const b = new Promise<void>(resolve => { releaseB = resolve; });
+  await page.route('**/presentation-assets/*/review', async route => {
+    const version = new URL(route.request().url()).pathname.split('/').at(-4)!;
+    writes.push({ version, key: route.request().headers()['idempotency-key'] });
+    const index = writes.length;
+    if (index <= 2) await (version === 'version-2' ? a : b);
+    if (index === 2) return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Response lost' } }, 503);
+    return json(route, { task: { ...task('pending', 0), id: `review-${version}` } }, 202);
+  });
+  const select = page.locator('select').first();
+  const submit = page.getByRole('button', { name: 'Review saved image only', exact: true });
+  try {
+    await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+    await submit.click();
+    await expect.poll(() => writes.length).toBe(1);
+    await select.selectOption('version-1');
+    await submit.click();
+    await expect.poll(() => writes.length).toBe(2);
+    await select.selectOption('version-2');
+    await expect(page.getByRole('button', { name: 'Submitting review…', exact: true })).toBeDisabled();
+    releaseA();
+    await expect(page.getByText('Review submitted. The saved image will not be generated again.', { exact: true })).toBeVisible();
+    await expect(page).not.toHaveURL(/task=/);
+    releaseB();
+    await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toHaveCount(0);
+    await select.selectOption('version-1');
+    await expect(page.locator('[data-existing-image-review] [role="alert"]')).toContainText('Submission could not be confirmed.');
+    expect(writes).toHaveLength(2);
+    await page.getByRole('button', { name: 'Confirm review submission', exact: true }).click();
+    await expect(page).toHaveURL(/task=review-version-1/);
+    expect(writes).toHaveLength(3);
+    expect(writes[1]).toEqual(writes[2]);
+    expect(writes[0].key).not.toBe(writes[1].key);
+  } finally { releaseA(); releaseB(); }
+});
+
+test('saved PNG review-only recovers the same receipt after a committed copy loses its response', async ({ page }) => {
+  await fixtures(page);
+  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', platformRole: 'platform_admin', status: 'email_verified' }));
+  const original = { ...asset, id: 'original-png', kind: 'image', canTransition: true, canApprove: false,
+    sceneImage: { storyboardAssetId: 'plan', sceneIndex: 0 } };
+  const copy = { ...original, id: 'persisted-review-copy' };
+  let committed = false;
+  const keys: string[] = [];
+  await page.route('**/versions/version-2/presentation-assets', route => json(route, { assets: committed ? [original, copy] : [original] }));
+  await page.route('**/presentation-tasks/*', route => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
+    return json(route, { task: { ...task(id === copy.id ? 'running' : 'failed', id === copy.id ? 92 : 80), id, error: 'scientific review provider failed' } });
+  });
+  await page.route('**/presentation-assets/*/review', async route => {
+    expect(new URL(route.request().url()).pathname).toContain('/original-png/review');
+    keys.push(route.request().headers()['idempotency-key']);
+    if (!committed) { committed = true; return route.abort('failed'); }
+    return json(route, { task: { ...task('running', 92), id: copy.id } }, 202);
+  });
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+  await page.getByRole('button', { name: 'Review saved image only', exact: true }).click();
+  await expect(page.locator(`[data-media-asset-actions="${copy.id}"]`)).toBeVisible();
+  const originalActions = page.locator(`[data-media-asset-actions="${original.id}"]`);
+  await expect(originalActions.getByRole('alert')).toContainText('Submission could not be confirmed.');
+  await expect(page.getByRole('button', { name: 'Review saved image only', exact: true })).toHaveCount(0);
+  expect(keys).toHaveLength(1);
+  await originalActions.getByRole('button', { name: 'Confirm review submission', exact: true }).click();
+  await expect(page).toHaveURL(/task=persisted-review-copy/);
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '92');
+  await expect(originalActions).toContainText('Review submitted. The saved image will not be generated again.');
+  expect(keys).toHaveLength(2);
+  expect(keys[1]).toBe(keys[0]);
+});
+
 test('saved science retry refreshes a concurrent 409 without posting twice', async ({ page }) => {
   await fixtures(page);
   let posts = 0;

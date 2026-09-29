@@ -1596,6 +1596,16 @@
     "browseAll": "探索全部研究"
   },
   "presentation": {
+    "existingImageReview": {
+      "action": "仅审核已保存图片", "submitting": "正在提交审核…",
+      "recoverReceipt": "确认审核提交结果",
+      "description": "保留原图，仅补做审核。审核仍可能产生用量。",
+      "submitted": "已提交审核，将复用已保存图片，不重新生图。", "openTask": "查看审核进度",
+      "blocked": "系统审核未通过。可请 Hermes 修改图片，原图会保留供对照。",
+      "uncertain": "尚无法确认提交结果。可重试本次审核请求以找回同一回执，请勿重新生图。",
+      "failed": "未能提交审核，请刷新图片状态后重试。",
+      "refreshFailed": "未能刷新已保存图片，请重新加载此版本媒体，查看是否已有 PNG。"
+    },
     "retainedAsset": "已保留", "retainedDraft": "图片已保留，采用前仍需完成审核。", "retainingAsset": "正在保存…",
     "assetMovedToTrash": "已将「{title}」移入回收站。", "restoreFromTrash": "前往回收站恢复",
     "askHermes": "交给 Hermes 制作",

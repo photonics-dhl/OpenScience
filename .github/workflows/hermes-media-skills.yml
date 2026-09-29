@@ -67,6 +67,8 @@ on:
       - 'apps/web/test/storyboard-panel.test.tsx'
       - 'apps/web/test/presentation-media-retention.test.tsx'
       - 'apps/web/components/presentation/MediaAssetActions.tsx'
+      - 'apps/web/components/presentation/ExistingSceneImageReview.tsx'
+      - 'apps/web/test/existing-scene-image-review.test.tsx'
       - 'apps/web/components/research/TrashActionButton.tsx'
       - 'packages/domain/src/trash/trash.ts'
       - 'packages/domain/test/trash/content-list.test.ts'
@@ -153,6 +155,8 @@ on:
       - 'apps/web/test/storyboard-panel.test.tsx'
       - 'apps/web/test/presentation-media-retention.test.tsx'
       - 'apps/web/components/presentation/MediaAssetActions.tsx'
+      - 'apps/web/components/presentation/ExistingSceneImageReview.tsx'
+      - 'apps/web/test/existing-scene-image-review.test.tsx'
       - 'apps/web/components/research/TrashActionButton.tsx'
       - 'packages/domain/src/trash/trash.ts'
       - 'packages/domain/test/trash/content-list.test.ts'
@@ -226,8 +230,8 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/web build
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-workbench.spec.ts --grep "saved science retry" --config playwright.config.ts --workers 1 --output ../../tmp/presentation-retry-browser
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx test/existing-scene-image-review.test.tsx
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-workbench.spec.ts --grep "saved science retry|saved PNG review-only" --config playwright.config.ts --workers 1 --output ../../tmp/presentation-retry-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/ingestion-review-polling.test.ts test/api-client-contract.test.ts

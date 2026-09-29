@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import type { PresentationAsset } from '@/lib/api';
 import { TrashActionButton } from '@/components/research/TrashActionButton';
@@ -12,11 +12,12 @@ interface Props {
   canWrite: boolean;
   working: boolean;
   showReject?: boolean;
+  reviewAction?: ReactNode;
   onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => Promise<PaperFigureReviewOutcome | null> | void;
   onDeleted?: (asset: PresentationAsset, title: string) => void;
 }
 
-export function MediaAssetActions({ asset, title, canWrite, working, showReject = false, onTransition, onDeleted }: Props) {
+export function MediaAssetActions({ asset, title, canWrite, working, showReject = false, reviewAction, onTransition, onDeleted }: Props) {
   const t = useTranslations('presentation');
   const writing = useRef(false);
   const [pending, setPending] = useState<'approved' | 'rejected' | null>(null);
@@ -40,6 +41,7 @@ export function MediaAssetActions({ asset, title, canWrite, working, showReject 
       {showReject && reviewable ? <button type="button" disabled={disabled} onClick={() => void review('rejected')} className="min-h-11 rounded-control border border-os-rule-paper px-4 text-sm disabled:opacity-40">{t(pending === 'rejected' ? 'retainingAsset' : 'reject')}</button> : null}
       {asset.canDelete && onDeleted ? <TrashActionButton kind="asset" resourceId={asset.id} title={title} disabled={disabled} onDone={() => onDeleted(asset, title)} /> : null}
     </div>
+    {reviewAction}
     {error ? <p className="mb-0 mt-2 text-sm text-state-danger" role="alert">{error}</p> : null}
   </div>;
 }

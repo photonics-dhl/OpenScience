@@ -10,6 +10,7 @@ import { useVersionLabels } from '@/components/research/useVersionLabels';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { PresentationWorkbench, type PresentationTaskState } from '@/components/presentation/PresentationWorkbench';
+import { ExistingSceneImageReview, canRequestExistingImageReview, isSavedSceneReviewCandidate, type ExistingImageReviewState } from './ExistingSceneImageReview';
 import type { PaperFigureSelection, PaperFigureUploadOutcome, PaperFigureReviewOutcome } from '@/components/presentation/PaperFigureUpload';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
@@ -21,6 +22,9 @@ import {
   type PresentationVideoRequest,
   type StoryboardRequest, type SceneImageRequest,
   getPresentationTask,
+  getCurrentUser,
+  reviewExistingPresentationImage,
+  type AgentTaskView,
   retryAgentTask,
   getResearchObject,
   listMyWorkspaces,
@@ -118,6 +122,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   }
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [workspace, setWorkspace] = useState<WorkspaceApi | null>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loadedResearchObjectId, setLoadedResearchObjectId] = useState('');
   const [researchTitle, setResearchTitle] = useState('');
   const [claims, setClaims] = useState<PresentationClaim[]>([]);
@@ -142,6 +147,9 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   const paperFigureUploadScope = useRef<ActiveScope | null>(null);
   const paperFigureArtifacts = useRef(new Map<string, { key: string; artifactId?: string }>());
   const transitionScope = useRef<ActiveScope | null>(null);
+  const reviewIntents = useRef(new Map<string, { key: string; pending: boolean; taskId?: string }>());
+  const [reviewStates, setReviewStates] = useState<Record<string, ExistingImageReviewState>>({});
+  const [imageTasks, setImageTasks] = useState<Record<string, AgentTaskView>>({});
 
   const version = useMemo(
     () => loadedResearchObjectId === params.id
@@ -163,6 +171,8 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   renderedScopeKey.current = scopeKey;
   const role = workspace?.role ?? '';
   const canWrite = Boolean(version && version.status === 'draft' && workspace?.status === 'active' && WRITER_ROLES.has(role));
+  const canReviewImage = isPlatformAdmin && canWrite && scopeReady;
+  const reviewPending = Object.entries(reviewStates).some(([key, state]) => key.startsWith(`${scopeKey}:`) && state.status === 'submitting');
 
   useEffect(() => {
     function refreshReviewedMedia(event: Event) {
@@ -189,13 +199,15 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     setAssistantObject(null);
     setHermesOpen(false);
     setWorkspace(null);
+    setIsPlatformAdmin(false);
     setError('');
-    void Promise.all([getResearchObject(params.id), listVersions(params.id), listMyWorkspaces()]).then(([research, history, workspaces]) => {
+    void Promise.all([getResearchObject(params.id), listVersions(params.id), listMyWorkspaces(), getCurrentUser().catch(() => null)]).then(([research, history, workspaces, user]) => {
       if (bootstrapEpoch.current !== epoch) return;
       setVersions(history.versions);
       setResearchTitle(research.researchObject.title);
       setAssistantObject(research.researchObject);
       setWorkspace(workspaces.find((item) => item.id === research.researchObject.workspaceId) ?? null);
+      setIsPlatformAdmin(user?.platformRole === 'platform_admin');
       setLoadedResearchObjectId(params.id);
     }).catch((cause) => {
       if (bootstrapEpoch.current !== epoch) return;
@@ -222,6 +234,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     setError('');
     setClaims([]);
     setAssets([]);
+    setImageTasks({});
     setScopeLoad({ key: scopeKey, status: scopeKey ? 'loading' : 'idle' });
     if (!scopeKey || !versionId) return;
 
@@ -242,6 +255,21 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     });
     return () => scope.controller.abort();
   }, [loadNonce, params.id, scopeKey, t, versionId]);
+
+  useEffect(() => {
+    if (!canReviewImage) return;
+    const scope = scopeRef.current;
+    const controller = new AbortController();
+    void Promise.all(assets.filter(isSavedSceneReviewCandidate).map(async asset => {
+      try {
+        const { task } = await getPresentationTask(asset.researchObjectId, asset.versionId, asset.id, controller.signal);
+        return [asset.id, task] as const;
+      } catch { return null; } // A task owned by another actor must not expose a recovery action.
+    })).then(entries => {
+      if (scopeIsCurrent(scope) && !controller.signal.aborted) setImageTasks(Object.fromEntries(entries.filter(entry => entry !== null)));
+    });
+    return () => controller.abort();
+  }, [assets, canReviewImage, scopeKey]);
 
   useEffect(() => {
     if (!taskId || !versionId || !scopeReady) return;
@@ -275,6 +303,16 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             setError(current.error ?? t('generationFailed'));
             setTaskState({ status: 'failed', progress: current.progress, paused: false, canRetry: current.canRetry === true });
             setWorking(false);
+            // Rendering may have persisted the PNG before review failed.
+            try {
+              const refreshed = await listPresentationAssets(params.id, versionId, controller.signal);
+              if (!scopeIsCurrent(scope) || controller.signal.aborted) return;
+              setAssets(refreshed.assets);
+            } catch (cause) {
+              if (!scopeIsCurrent(scope) || controller.signal.aborted || isAbort(cause)) return;
+              setError(`${current.error ?? t('generationFailed')} ${t('existingImageReview.refreshFailed')}`);
+              setScopeLoad({ key: scope.key, status: 'failed' });
+            }
             return;
           }
           const interval = document.hidden ? 15_000 : attempt < 15 ? TASK_POLL_INTERVAL_MS : 5_000;
@@ -295,6 +333,42 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
       controller.abort();
     };
   }, [params.id, resumeNonce, router, scopeKey, scopeReady, t, taskId, versionId]);
+
+  async function reviewSavedImage(asset: PresentationAsset) {
+    const scope = scopeRef.current;
+    if (!canReviewImage || !scopeIsCurrent(scope) || asset.researchObjectId !== params.id || asset.versionId !== versionId) return;
+    const key = `${scope.key}:${asset.id}`;
+    let intent = reviewIntents.current.get(key);
+    if (intent?.pending) return;
+    if (intent?.taskId) { router.push(scopedUrl(params.id, versionId, intent.taskId)); return; }
+    const recoveringReceipt = !!intent && reviewStates[key]?.recoverReceipt === true;
+    if (working || reviewPending || (!recoveringReceipt && !canRequestExistingImageReview(asset, imageTasks[asset.id], assets))) return;
+    if (!intent) { intent = { key: crypto.randomUUID(), pending: false }; reviewIntents.current.set(key, intent); }
+    intent.pending = true;
+    const originalTaskId = renderedTaskId.current;
+    const update = (state: ExistingImageReviewState) => setReviewStates(current => ({ ...current, [key]: state }));
+    update({ status: 'submitting' });
+    try {
+      // Keep the receipt and idempotency key across scope changes. Aborting a
+      // write cannot establish that the server did not enqueue the review.
+      const { task } = await reviewExistingPresentationImage(asset.researchObjectId, asset.versionId, asset.id, intent.key);
+      intent.taskId = task.id;
+      update({ status: 'submitted', taskId: task.id });
+      if (!scopeIsCurrent(scope) || renderedTaskId.current !== originalTaskId) return;
+      router.push(scopedUrl(asset.researchObjectId, asset.versionId, task.id));
+    } catch (cause) {
+      update({ status: 'failed', recoverReceipt: hasAmbiguousWriteOutcome(cause), message: hasAmbiguousWriteOutcome(cause)
+        ? t('existingImageReview.uncertain') : cause instanceof Error ? cause.message : t('existingImageReview.failed') });
+      if (!scopeIsCurrent(scope)) return;
+      // Reconcile with GET only; never silently resubmit or start generation.
+      try {
+        const refreshed = await listPresentationAssets(asset.researchObjectId, asset.versionId, scope.controller.signal);
+        if (scopeIsCurrent(scope)) setAssets(refreshed.assets);
+      } catch { /* Keep the actionable submission error beside the button. */ }
+    } finally {
+      intent.pending = false;
+    }
+  }
 
   async function retryTask() {
     const scope = scopeRef.current;
@@ -549,12 +623,16 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             onRetryTask={() => void retryTask()}
             onRetryData={() => setLoadNonce((current) => current + 1)}
             onTransition={transition}
+            renderReviewAction={canReviewImage ? asset => <ExistingSceneImageReview asset={asset} task={imageTasks[asset.id]} assets={assets}
+              state={reviewStates[`${scopeKey}:${asset.id}`]} disabled={working || reviewPending
+                || (!reviewStates[`${scopeKey}:${asset.id}`]?.recoverReceipt && !canRequestExistingImageReview(asset, imageTasks[asset.id], assets))}
+              onReview={() => void reviewSavedImage(asset)} /> : undefined}
             onAssetDeleted={(asset) => {
               if (asset.researchObjectId !== params.id || asset.versionId !== versionId || !scopeIsCurrent(scopeRef.current)) return;
               setAssets((current) => current.filter((item) => item.id !== asset.id));
               window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId: params.id, versionId } }));
             }}
-            working={working || pendingRetries.has(`${scopeKey}:${taskId}`)}
+            working={working || reviewPending || pendingRetries.has(`${scopeKey}:${taskId}`)}
             error={error}
             resultsOnly={embedded}
             onAskHermes={onAskHermes ?? ((kind) => { setHermesGoal(t(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); })}

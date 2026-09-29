@@ -1596,6 +1596,16 @@
     "browseAll": "Explore all research"
   },
   "presentation": {
+    "existingImageReview": {
+      "action": "Review saved image only", "submitting": "Submitting review…",
+      "recoverReceipt": "Confirm review submission",
+      "description": "Reviews the saved image without generating it again. Review usage may still apply.",
+      "submitted": "Review submitted. The saved image will not be generated again.", "openTask": "View review progress",
+      "blocked": "System review did not pass. You can ask Hermes to revise the image; the original stays available for comparison.",
+      "uncertain": "Submission could not be confirmed. Retry this review request to recover the same receipt; do not generate another image.",
+      "failed": "Review could not be submitted. Refresh the image status and try again.",
+      "refreshFailed": "Saved images could not be refreshed. Reload this version to check for a saved PNG."
+    },
     "retainedAsset": "Kept", "retainedDraft": "This image is kept. Review is still required before use.", "retainingAsset": "Saving…",
     "assetMovedToTrash": "Moved “{title}” to Trash.", "restoreFromTrash": "Open Trash to restore",
     "askHermes": "Ask Hermes to create",

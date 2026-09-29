@@ -2,7 +2,7 @@
 
 import { ChevronDown, Image as ImageIcon, Plus, RotateCw } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { useVersionLabels } from '@/components/research/useVersionLabels';
 import { presentationAssetContentUrl, type PresentationAsset, type PresentationClaim, type VersionSummary } from '@/lib/api';
@@ -47,6 +47,7 @@ export interface PresentationWorkbenchProps {
   onRetryData?: () => void;
   onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => Promise<PaperFigureReviewOutcome | null> | void;
   onAssetDeleted?: (asset: PresentationAsset) => void;
+  renderReviewAction?: (asset: PresentationAsset) => ReactNode;
   working?: boolean;
   error?: string;
   resultsOnly?: boolean;
@@ -56,7 +57,7 @@ const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, working = false, error = '', resultsOnly = false,
+  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, renderReviewAction, working = false, error = '', resultsOnly = false,
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const versionLabels = useVersionLabels();
@@ -135,7 +136,7 @@ export function PresentationWorkbench({
     const videoSlides = mediaAssets.filter((asset) => asset.kind === 'video').map((asset) => toSlide(asset, 'video', t('researchVideoTitle')));
     const renderActions = (slide: ResearchMediaSlide) => {
       const asset = mediaAssets.find((item) => item.id === slide.id);
-      return asset ? <MediaAssetActions asset={asset} title={slide.label} canWrite={canWrite} working={working || loading || loadFailed} onTransition={onTransition} onDeleted={assetDeleted} /> : null;
+      return asset ? <MediaAssetActions key={asset.id} asset={asset} title={slide.label} canWrite={canWrite} working={working || loading || loadFailed} reviewAction={renderReviewAction?.(asset)} onTransition={onTransition} onDeleted={assetDeleted} /> : null;
     };
     return (
       <div className="min-w-0 text-os-ink" data-presentation-results="true">
@@ -184,7 +185,7 @@ export function PresentationWorkbench({
                 {canWrite && onAskHermes ? <button type="button" className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" onClick={() => onAskHermes('image')}>{t('askHermes')}</button> : canWrite && researchObjectId ? <Link className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/hermes`}>{t('askHermes')}</Link> : null}
               </div>
             ) : (
-              <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={mediaAssets} allAssets={assets} canWrite={canWrite} working={working || loading || loadFailed} onTransition={onTransition} onAssetDeleted={assetDeleted} />
+              <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={mediaAssets} allAssets={assets} canWrite={canWrite} working={working || loading || loadFailed} renderReviewAction={renderReviewAction} onTransition={onTransition} onAssetDeleted={assetDeleted} />
             )}
             {deletionNotice}
           </section>

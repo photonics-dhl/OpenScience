@@ -987,6 +987,12 @@ export async function getPresentationTask(roId: string, versionId: string, taskI
   return request(`${presentationScopePath(roId, versionId)}/presentation-tasks/${encodeURIComponent(taskId)}`, { signal });
 }
 
+export async function reviewExistingPresentationImage(roId: string, versionId: string, assetId: string, idempotencyKey: string): Promise<{ task: AgentTaskView }> {
+  return request(`${presentationScopePath(roId, versionId)}/presentation-assets/${encodeURIComponent(assetId)}/review`, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey },
+  });
+}
+
 export async function transitionPresentationAsset(roId: string, versionId: string, assetId: string, status: 'approved' | 'rejected', expectedUpdatedAt: string, signal?: AbortSignal): Promise<{ asset: PresentationAssetTransition }> {
   return request(`${presentationScopePath(roId, versionId)}/presentation-assets/${encodeURIComponent(assetId)}`, {
     method: 'PATCH',
@@ -1227,6 +1233,7 @@ export interface AgentTaskView {
   status: 'pending' | 'running' | 'succeeded' | 'failed';
   progress: number;
   retryCount: number;
+  executionAttempt?: number;
   canRetry: boolean;
   result: Record<string, unknown> | null;
   error: string | null;
