@@ -14,6 +14,7 @@ const sha256 = (value: unknown): value is string => typeof value === 'string' &&
 const tokenCount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const CONTRACT_REPAIR_CLASS = 'accepted_review_claim_contract_missing' as const;
 const SCHEMA_REPAIR_CLASS = 'schema_contract_retry_after_accepted_anchor' as const;
+const DIRECT_COMPOSITION_REVIEW_CLASS = 'direct_composition_structured_review_failure' as const;
 type ContractRepairEvidence = {
   reviewedCandidateHash: string; promptHash: string; responseHash: string;
   reviewSkill: { id: 'scientific-critical-thinking'; version: '3' };
@@ -34,7 +35,11 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   const canonical = run.steps.filter(step => step.stage === 'source_ingestion');
   const compositions = run.steps.filter(step => step.stage === 'source_composition');
   const reviews = run.steps.filter(step => step.stage === 'source_review').sort((a, b) => a.ordinal - b.ordinal);
-  if (canonical.length !== 1 || canonical[0]!.ordinal !== 0 || compositions.length !== 1 || compositions[0]!.ordinal !== 0
+  const directComposition = compositions.length === 0;
+  if (canonical.length !== 1 || canonical[0]!.ordinal !== 0 || compositions.length > 1
+    || (!directComposition && compositions[0]!.ordinal !== 0)
+    // A modern initial review may receive one explicit fresh review, never another recovery chain.
+    || (directComposition && reviews.length !== (replacementTaskId ? 2 : 1))
     || reviews.length < (replacementTaskId ? 2 : 1)
     || reviews.some((step, index) => step.ordinal !== index || !step.agentTaskId)
     || (replacementTaskId && reviews[reviews.length - 1]!.agentTaskId !== replacementTaskId)
@@ -47,8 +52,10 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
     ? step.status !== 'failed' : !['waiting', 'running', 'failed'].includes(step.status))) return null;
   const sourceStep = canonical[0]!;
   const originalStep = failedSteps[failedSteps.length - 1]!;
-  const compositionStep = compositions[0]!;
-  if (!sourceStep.ingestionTaskId || !sourceStep.artifactId || !originalStep.agentTaskId || !compositionStep.agentTaskId
+  if (directComposition && originalStep.status !== 'failed') return null;
+  const compositionStep = compositions[0];
+  if (!sourceStep.ingestionTaskId || !sourceStep.artifactId || !originalStep.agentTaskId
+    || (!directComposition && !compositionStep?.agentTaskId)
     || run.steps.some(step => step.ingestionTaskId !== sourceStep.ingestionTaskId || step.artifactId !== sourceStep.artifactId
       || step.presentationAssetId !== null)) return null;
   const source = await tx.ingestionTask.findUnique({ where: { id: sourceStep.ingestionTaskId },
@@ -57,7 +64,11 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   const byId = new Map(reviewTasks.map(task => [task.id, task]));
   if (reviewTasks.length !== reviews.length) return null;
   const failed = byId.get(originalStep.agentTaskId!);
-  const composition = await tx.agentTask.findUnique({ where: { id: compositionStep.agentTaskId }, include: { session: true } });
+  const anchorId = directComposition
+    ? record(record(byId.get(reviews[0]!.agentTaskId!)?.result).scientificReview).sourceAgentTaskId
+    : compositionStep!.agentTaskId;
+  if (typeof anchorId !== 'string' || !anchorId || reviews.some(step => step.agentTaskId === anchorId)) return null;
+  const composition = await tx.agentTask.findUnique({ where: { id: anchorId }, include: { session: true } });
   const replacement = replacementTaskId ? byId.get(replacementTaskId) : null;
   if (!source || !failed || !composition || (replacementTaskId && !replacement)
     || source.agentTaskId !== (replacementTaskId ?? failed.id) || sourceStep.agentTaskId !== source.agentTaskId
@@ -100,10 +111,19 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   const contractRepairAuditIds: string[] = [];
   const contractRepairs = new Map<string, ContractRepairEvidence>();
   const schemaRepairs = new Map<string, SchemaContractRepairEvidence>();
+  let directCompositionEvidence: { reviewedCandidateHash: string; structuredReviewAuditIds: string[];
+    freshReview: true; savedOutputReused: false } | undefined;
   try {
     if (automaticIngestionReviewStage({ artifactId: source.artifactId, artifact: source.artifact, agentTask: composition }) !== 'source_review'
       || originalReview.contractVersion !== '4') return null;
   } catch { return null; }
+  if (directComposition && (originalReview.kind !== 'model_self_check' || originalReview.status !== 'review_received'
+    || !isDeepStrictEqual(originalReview.compositionSkill, { id: 'scientific-summary', version: '6' })
+    || record(originalReview.semanticStage).kind !== 'semantic_reduce'
+    || !isDeepStrictEqual(original.needsMoreInformation, []) || !sha256(originalReview.reviewedCandidateHash)
+    || typeof originalReview.provider !== 'string' || !originalReview.provider
+    || typeof originalReview.model !== 'string' || !originalReview.model
+    || originalReview.finishReason !== 'stop' || !sha256(originalReview.promptHash) || !sha256(originalReview.responseHash))) return null;
   for (const step of failedSteps) {
     const task = byId.get(step.agentTaskId!)!;
     if (task.status !== 'succeeded' || task.executionAttempt !== 1 || task.retryCount !== 0) return null;
@@ -125,6 +145,40 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
     const audit = await tx.auditLog.findMany({ where: { action: 'ai.gateway.call', requestId: task.id },
       orderBy: { createdAt: 'asc' }, take: 17 });
     if (!audit.length || audit.length > 16) return null;
+    if (directComposition) {
+      // This is a fresh review of the original composed draft, not approval or saved-output recovery.
+      if (review.status !== 'blocked_scientific_review'
+        || !isDeepStrictEqual(review.reviewSkill, { id: 'scientific-critical-thinking', version: '5' })
+        || !isDeepStrictEqual(review.compositionSkill, originalReview.compositionSkill)
+        || review.fieldReviews != null || review.needsMoreEvidence != null || review.provider != null || review.model != null
+        || review.promptHash != null || review.responseHash != null || review.usage != null || review.finishReason != null
+        || 'reviewedClaimSuggestions' in result || 'rejectedCandidates' in review || 'rejectedCandidates' in result
+        || result.reason !== 'canonical_partial_validation_exhausted'
+        || !isDeepStrictEqual(result.needsMoreInformation, [...SDF_CORE_FIELDS])
+        || record(result.core).schemaVersion !== originalCore.schemaVersion
+        || Object.keys(record(result.core)).sort().join(',') !== ['schemaVersion', ...SDF_CORE_FIELDS].sort().join(',')
+        || [diagnostics, details, summaries, ids, record(result.evidence), record(result.evidenceSegments)]
+          .some(value => Object.keys(value).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(','))
+        || SDF_CORE_FIELDS.some(field => diagnostics[field] !== 'malformed_item'
+          || details[field] !== 'scientificReview=STRUCTURED_JSON_INVALID' || record(result.core)[field] !== ''
+          || summaries[field] !== originalCore[field] || !Array.isArray(ids[field]) || !(ids[field] as unknown[]).length
+          || (ids[field] as unknown[]).some(id => typeof id !== 'string' || !/^P\d{5}$/.test(id))
+          || record(evidence[field]).locator !== `passages:${(ids[field] as unknown[]).join(',')}`
+          || !isDeepStrictEqual(record(result.evidence)[field], { quote: '', locator: '' })
+          || !isDeepStrictEqual(record(result.evidenceSegments)[field], []))
+        || audit.length !== 2) return null;
+      for (const row of audit) {
+        const call = record(row.metadata);
+        if (row.requestId !== task.id || row.actorId !== null || row.targetType !== 'ai_gateway'
+          || call.operation !== 'text' || call.outcome !== 'succeeded' || call.finishReason !== 'stop'
+          || call.provider !== originalReview.provider || call.model !== originalReview.model
+          || call.fallbackReason !== null || call.retryCount !== 0 || call.error !== null
+          || !sha256(call.promptHash) || !tokenCount(call.inputTokens) || !tokenCount(call.outputTokens)) return null;
+      }
+      directCompositionEvidence = { reviewedCandidateHash: review.reviewedCandidateHash,
+        structuredReviewAuditIds: audit.map(row => row.id), freshReview: true, savedOutputReused: false };
+      continue;
+    }
     if (review.status === 'review_received') {
       // A historical accepted draft can lack the now-required Claims contract.
       // This permits another explicit review of the same draft, never a save or approval.
@@ -255,16 +309,26 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
     const predecessorId = reviews[step.ordinal - 1]!.agentTaskId!;
     const contractEvidence = contractRepairs.get(predecessorId);
     const schemaEvidence = schemaRepairs.get(predecessorId);
-    if (!genericFailureTaskIds.has(predecessorId) && !contractEvidence && !schemaEvidence) continue;
-    const receipt = await tx.auditLog.findFirst({ where: {
+    if (!genericFailureTaskIds.has(predecessorId) && !contractEvidence && !schemaEvidence && !directCompositionEvidence) continue;
+    const receiptWhere = {
       action: 'hermes.research_run.source_review_recovery', targetType: 'hermes_research_run', targetId: run.id,
       actorId: run.actorId, metadata: { path: ['newAgentTaskId'], equals: step.agentTaskId! },
-    } });
+    };
+    const directReceipts = directCompositionEvidence
+      ? await tx.auditLog.findMany({ where: { ...receiptWhere, workspaceId: run.researchObject.workspaceId }, take: 2 }) : null;
+    if (directReceipts && directReceipts.length !== 1) return null;
+    const receipt = directReceipts ? directReceipts[0] : await tx.auditLog.findFirst({ where: receiptWhere });
     const metadata = record(receipt?.metadata);
     const task = byId.get(step.agentTaskId!)!;
     if (!receipt || metadata.explicitUserAction !== true || metadata.oldAgentTaskId !== predecessorId
       || metadata.compositionSourceAgentTaskId !== composition.id || metadata.ordinal !== step.ordinal
       || task.session.idempotencyKey !== `${task.idempotencyKey}:hermes-recovery:${metadata.requestDigest}`) return null;
+    if (directCompositionEvidence && (metadata.recoveryClass !== DIRECT_COMPOSITION_REVIEW_CLASS
+      || metadata.reviewedCandidateHash !== directCompositionEvidence.reviewedCandidateHash
+      || !isDeepStrictEqual(metadata.structuredReviewAuditIds, directCompositionEvidence.structuredReviewAuditIds)
+      || metadata.freshReview !== true || metadata.savedOutputReused !== false
+      || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true
+      || !sha256(metadata.requestDigest) || typeof metadata.clientIdempotencyKey !== 'string' || !metadata.clientIdempotencyKey.trim())) return null;
     if (contractEvidence && (metadata.recoveryClass !== CONTRACT_REPAIR_CLASS
       || !isDeepStrictEqual(metadata.contractEvidence, contractEvidence)
       || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true)) return null;
@@ -302,8 +366,9 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   if (presentationCount !== 0 || sourceCount + presentationCount + 3 > run.maxAgentTasks) return null;
   return { run, source, failed, composition, replacement, sourceStep, originalStep, failedSteps, compositionStep,
     recoveryKey, nextOrdinal: reviews.length, auditIds, failureClassifications, contractRepairAuditIds,
-    recoveryClass: schemaRepairs.has(failed.id) ? SCHEMA_REPAIR_CLASS
+    recoveryClass: directCompositionEvidence ? DIRECT_COMPOSITION_REVIEW_CLASS : schemaRepairs.has(failed.id) ? SCHEMA_REPAIR_CLASS
       : contractRepairs.has(failed.id) ? CONTRACT_REPAIR_CLASS : 'service_failure' as const,
+    directCompositionEvidence,
     contractEvidence: contractRepairs.get(failed.id), schemaContractEvidence: schemaRepairs.get(failed.id) };
 }
 

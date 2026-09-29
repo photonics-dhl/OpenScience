@@ -1517,6 +1517,7 @@
     "sourceParsingDescription": "部分材料尚未完成解析，已有解析结果已保留。全文理解与科学审校尚未完成。",
     "sourceParsingPages": "待继续解析的页码：{pages}",
     "sourceParsingResume": "继续未完成页面解析",
+    "sourceReviewFresh": "重新审校并继续",
     "sourceParsingRetryDescription": "保留已有解析结果，上次超时可能已计费，继续可能产生模型费用。本次不新增平台额度扣费。",
     "sourceParsingBoundary": "此状态不代表全文理解或科学审校已完成。",
     "stage": {
@@ -1600,6 +1601,7 @@
       "stopped": "工作流因研究对象或权限范围变化而安全停止。"
     },
     "step": {
+      "progressPending": "等待处理结果",
       "waiting": "等待中",
       "running": "进行中",
       "awaiting_approval": "等待审核",

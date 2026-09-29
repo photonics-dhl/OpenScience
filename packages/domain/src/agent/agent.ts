@@ -1217,11 +1217,20 @@ function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMap
   });
 }
 
-/** Builds the public task result while keeping the private SourceMap storage reference server-side. */
+/** Builds the public task result while keeping storage references and rejected review diagnostics private. */
 export function projectAgentTaskResult(rawResult: unknown, kind: string): Record<string, unknown> | null {
   if (!isJsonRecord(rawResult)) return null;
   const sourceMapRef = rawResult.sourceMapRef;
   const publicResult = { ...rawResult };
+  if (isJsonRecord(rawResult.scientificReview)) {
+    const scientificReview = { ...rawResult.scientificReview };
+    delete scientificReview.rejectedCandidates;
+    delete scientificReview.rejectedOutputs;
+    publicResult.scientificReview = scientificReview;
+  } else {
+    // Malformed review values may contain raw diagnostic text rather than public review fields.
+    delete publicResult.scientificReview;
+  }
   delete publicResult.sourceMapRef;
   delete publicResult.sourceMapAvailable;
   delete publicResult.sourceMapIdentity;

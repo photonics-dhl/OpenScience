@@ -83,6 +83,8 @@ export interface ExtractionResult extends Record<string, unknown> {
     reviewSkill?: { id: string; version: string };
     /** Private rejected candidates, never reviewed fields or publishable Claims. */
     rejectedCandidates?: RejectedScientificCandidate[];
+    /** Private diagnostics only; never input to materialization or scientific approval. */
+    rejectedOutputs?: RejectedSourceReviewOutput[];
     sourceAgentTaskId?: string;
     fieldReviews?: ScientificReviewResponse['fields'];
     needsMoreEvidence?: ScientificReviewResponse['needsMoreEvidence'];
@@ -115,6 +117,22 @@ export interface ExtractionResult extends Record<string, unknown> {
 }
 
 type PersistedSemanticStage = NonNullable<NonNullable<ExtractionResult['scientificReview']>['semanticStage']>;
+
+const SOURCE_REVIEW_REJECTED_BYTES = 131_072;
+interface RejectedSourceReviewOutput {
+  structuredAttempt: number;
+  kind: 'schema_validation' | 'json_parse';
+  diagnostic?: string;
+  provider: string;
+  model: string;
+  promptHash: string;
+  responseHash: string;
+  byteLength: number;
+  usage: { inputTokens: number; outputTokens: number };
+  finishReason: 'stop';
+  text?: string;
+  omissionReason?: 'response_byte_limit' | 'field_structure_invalid';
+}
 
 export type EvidenceLocation = {
   status: 'located';
@@ -2177,6 +2195,7 @@ async function modelScientificReviewCanonicalProposal(
   const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash);
   const reviewPassages = selectScienceReviewPassages(passages, proposal, context?.coveragePassageIds);
   const rejectedCandidates: RejectedScientificCandidate[] = [];
+  const rejectedOutputs: RejectedSourceReviewOutput[] = [];
   let candidateIssues: string[] = [];
   let claimsDiagnostic: ReviewedClaimsDiagnostic | undefined;
   const byId = new Map(reviewPassages.map((passage) => [passage.id, passage]));
@@ -2237,7 +2256,21 @@ async function modelScientificReviewCanonicalProposal(
           + '\n你是当前候选的来源审校者。按候选的每项实质断言回读原文并作最小必要修订，不另选主题重新成稿。accepted必须逐字保留原summary和原来源集合，issues为空；revised必须实际修正文或来源，issues至少一项，说明原断言、来源和修订原因；blocked必须有问题或明确补证请求。每项保留断言及其限定都须有最终引用，不以引用存在代替语义支持。纠正后仍须与其他字段的对象、算例和范围一致；不能把一个算例的互证写成另一个算例或全篇互证。只返回规定JSON，不宣布科学通过。' },
           { role: 'user', content: prompt }],
         { ...SCIENTIFIC_REVIEW_OPTIONS, maxRetries: 1, primaryProviderOnly: true,
-          onRejectedCandidate: (value, rejected, structuredAttempt) => {
+          includeRejectedResponseOnRetry: true, maxRejectedResponseBytes: SOURCE_REVIEW_REJECTED_BYTES,
+          includeJsonParseInRejectedCandidates: true,
+          onRejectedCandidate: (value, rejected, structuredAttempt, rejection) => {
+            if (rejection?.kind && rejected.finishReason === 'stop' && rejectedOutputs.length < 2) {
+              const byteLength = Buffer.byteLength(rejected.text, 'utf8');
+              const omissionReason = byteLength > SOURCE_REVIEW_REJECTED_BYTES ? 'response_byte_limit'
+                : rejection.kind === 'schema_validation' && !scientificReviewGuard(value, new Set(reviewPassages.map(passage => passage.id)))
+                  ? 'field_structure_invalid' : undefined;
+              rejectedOutputs.push({ structuredAttempt, kind: rejection.kind,
+                ...(rejection.diagnostic ? { diagnostic: rejection.diagnostic.slice(0, 512) } : {}),
+                provider: rejected.provider, model: rejected.model, promptHash: rejected.promptHash,
+                responseHash: createHash('sha256').update(rejected.text).digest('hex'), byteLength,
+                usage: rejected.usage, finishReason: 'stop',
+                ...(omissionReason ? { omissionReason } : { text: rejected.text }) });
+            }
             const diagnostic = claimsDiagnostic;
             if (!context.requireReviewedClaims || !context.requestId || !diagnostic || rejectedCandidates.length >= 2
               || rejected.finishReason !== 'stop' || !validation.guard(value) || !boundedRejectedClaims(value)) return;
@@ -2312,6 +2345,7 @@ async function modelScientificReviewCanonicalProposal(
       reviewSkill: { id: SCIENTIFIC_CRITICAL_THINKING_SKILL.id, version: SCIENTIFIC_CRITICAL_THINKING_SKILL.version },
       contractVersion: SCIENCE_REVIEW_CONTRACT_VERSION, status, attemptId,
       ...(!parsed && rejectedCandidates.length ? { rejectedCandidates } : {}),
+      ...(!parsed && rejectedOutputs.length ? { rejectedOutputs } : {}),
       ...(parsed ? { fieldReviews: parsed.fields, needsMoreEvidence: parsed.needsMoreEvidence } : {}),
       reviewedCandidateHash: candidateHash,
       ...(completion ? { promptHash: completion.promptHash } : {}),

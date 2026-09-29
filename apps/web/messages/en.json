@@ -1517,6 +1517,7 @@
     "sourceParsingDescription": "Some source material has not finished parsing. Existing parsing results are retained; complete paper understanding and scientific review are still unfinished.",
     "sourceParsingPages": "Pages awaiting parsing: {pages}",
     "sourceParsingResume": "Continue unfinished page parsing",
+    "sourceReviewFresh": "Re-review and continue",
     "sourceParsingRetryDescription": "Existing parsing results are retained. The timed-out attempt may already have incurred charges, and continuing may incur model fees. No additional platform credit is charged for this recovery.",
     "sourceParsingBoundary": "This status does not confirm complete paper understanding or scientific review.",
     "stage": {
@@ -1600,6 +1601,7 @@
       "stopped": "The workflow stopped safely because its research object or permission scope changed."
     },
     "step": {
+      "progressPending": "Awaiting result",
       "waiting": "Waiting",
       "running": "In progress",
       "awaiting_approval": "Awaiting review",

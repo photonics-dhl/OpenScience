@@ -37,6 +37,65 @@ function renderRun(run: HermesResearchRun) {
 }
 
 describe('Hermes research run panel', () => {
+  it.each([undefined, 'source-review-fresh'] as const)('uses the existing paid source-review disclosure and removes retry controls after progress refresh (%s)', recovery => {
+    for (const locale of ['en', 'zh']) {
+      translations.locale = locale;
+      const copy = (locale === 'zh' ? zh : en).hermesRun;
+      const run = sourceRun();
+      run.canRetryGeneration = true;
+      run.chargeableAttempts = 1;
+      run.generationRecovery = recovery;
+      const buttonLabel = recovery === 'source-review-fresh' ? copy.sourceReviewFresh : copy.narrative.resume;
+      expect(run.versionId).toBeNull();
+      const failed = renderRun(run);
+      expect(failed).toContain(copy.narrative.resumeDescription);
+      expect(failed).toContain(`>${buttonLabel}</button>`);
+      if (recovery) {
+        expect(buttonLabel).toBe(locale === 'zh' ? '重新审校并继续' : 'Re-review and continue');
+        expect(failed).not.toContain(`>${copy.narrative.resume}</button>`);
+      }
+      expect(failed).not.toContain(copy.sourceParsingRetryDescription);
+      expect(failed).not.toContain(copy.sourceParsingResume);
+      expect(failed).not.toContain(copy.narrative.resumeMediaDescription);
+
+      run.canRetryGeneration = false;
+      run.status = 'running'; run.error = null;
+      const continuing = renderRun(run);
+      expect(continuing).not.toContain(`>${buttonLabel}</button>`);
+      expect(continuing).not.toContain(copy.narrative.resumeDescription);
+
+      run.status = 'succeeded'; run.versionId = 'version-1';
+      const completed = renderRun(run);
+      expect(completed).toContain('/overview?version=version-1');
+      expect(completed).not.toContain(`>${buttonLabel}</button>`);
+    }
+  });
+
+  it.each(['en', 'zh'])('does not describe bound source tasks as idle when their live status is not projected (%s)', locale => {
+    translations.locale = locale;
+    const run = sourceRun(); run.status = 'running'; run.error = null;
+    run.steps[0]!.status = 'waiting';
+    run.steps.push({ ...run.steps[0]!, id: 'review-1', stage: 'source_review', agentTaskId: 'review-task' });
+    const html = renderRun(run);
+    const copy = (locale === 'zh' ? zh : en).hermesRun;
+    const expected = locale === 'zh' ? '等待处理结果' : 'Awaiting result';
+    expect(html.split(expected)).toHaveLength(3);
+    expect(html).toContain(copy.narrative.status.understanding);
+    expect(html).not.toContain(`>${copy.step.waiting}<`);
+    expect(html).not.toContain(`>${copy.step.running}<`);
+    expect(html).not.toContain(copy.sourceParsingEnded);
+  });
+
+  it('keeps unbound, terminal and explicitly running step states distinct', () => {
+    const run = sourceRun(); run.status = 'awaiting_source_review'; run.steps[0]!.status = 'waiting';
+    run.steps[0]!.agentTaskId = null;
+    expect(renderRun(run)).toContain(`>${en.hermesRun.step.waiting}<`);
+    run.steps[0]!.agentTaskId = 'extract-1'; run.status = 'stopped';
+    expect(renderRun(run)).toContain(`>${en.hermesRun.step.waiting}<`);
+    run.status = 'running'; run.steps[0]!.status = 'running';
+    expect(renderRun(run)).toContain(`>${en.hermesRun.step.running}<`);
+  });
+
   it.each(['en', 'zh'])('does not equate an ended extraction task with completed understanding (%s)', (locale) => {
     translations.locale = locale;
     const html = renderRun(sourceRun());

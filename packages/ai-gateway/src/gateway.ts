@@ -112,6 +112,8 @@ export type StructuredGenerationOptions = TextGenerationOptions & {
   maxRetries?: number;
   /** Opt in to conversational repair with the rejected candidate; other structured calls keep replacement-only retries. */
   includeRejectedResponseOnRetry?: boolean;
+  /** Optional UTF-8 ceiling; oversized candidates use feedback-only repair, never a truncated body. */
+  maxRejectedResponseBytes?: number;
   /**
    * Output allowance for a single bounded escalation when the provider stops at
    * `length`. Repeating the same limit cannot repair a truncated response, but a
@@ -601,6 +603,10 @@ export class AiGateway {
     if (!Number.isSafeInteger(retryLimit) || retryLimit < 0 || retryLimit > MAX_STRUCTURED_RETRIES) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid structured retry limit');
     }
+    if (opts.maxRejectedResponseBytes !== undefined
+      && (!Number.isSafeInteger(opts.maxRejectedResponseBytes) || opts.maxRejectedResponseBytes < 1)) {
+      throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid rejected response byte limit');
+    }
     let lastError: unknown;
     let retryMessages = messages;
     if (controls.savedReviewTarget && sha256Text(JSON.stringify(messages)) !== controls.savedReviewTarget.promptHash)
@@ -625,6 +631,7 @@ export class AiGateway {
       feedback: string,
       replacementMessages: ChatMessage[],
     ): ChatMessage[] => opts.includeRejectedResponseOnRetry
+      && (opts.maxRejectedResponseBytes === undefined || Buffer.byteLength(result.text, 'utf8') <= opts.maxRejectedResponseBytes)
       ? [
           ...messages,
           { role: 'assistant', content: result.text },

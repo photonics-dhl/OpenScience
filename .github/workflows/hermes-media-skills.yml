@@ -22,6 +22,7 @@ on:
       - 'apps/agent-worker/test/workspace-guide.test.ts'
       - 'apps/agent-worker/test/skills/handdraw-routing.test.ts'
       - 'apps/agent-worker/test/extractor.test.ts'
+      - 'apps/agent-worker/test/source-review-output.test.ts'
       - 'apps/agent-worker/src/presentation/generated-image-review.ts'
       - 'apps/agent-worker/src/presentation/scene-image.ts'
       - 'apps/agent-worker/src/presentation/illustration-planner.ts'
@@ -54,6 +55,7 @@ on:
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
       - 'packages/ai-gateway/test/web-image-review-model.test.ts'
+      - 'packages/ai-gateway/test/structured-retry-budget.test.ts'
       - 'apps/agent-worker/src/presentation/handler.ts'
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
       - 'apps/web/components/hermes/HermesMediaReview.tsx'
@@ -111,6 +113,9 @@ on:
       - 'packages/domain/src/agent/standalone-science-recovery.ts'
       - 'packages/domain/test/agent/standalone-science-recovery.test.ts'
       - 'packages/domain/src/ingestion/ingestion-service.ts'
+      - 'packages/domain/src/ingestion/source-review-recovery.ts'
+      - 'packages/domain/test/agent/direct-source-review-*.ts'
+      - 'apps/api/test/direct-source-review-recovery.test.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
       - 'packages/domain/test/agent/agent.test.ts'
@@ -135,6 +140,7 @@ on:
       - 'apps/agent-worker/test/workspace-guide.test.ts'
       - 'apps/agent-worker/test/skills/handdraw-routing.test.ts'
       - 'apps/agent-worker/test/extractor.test.ts'
+      - 'apps/agent-worker/test/source-review-output.test.ts'
       - 'apps/agent-worker/src/presentation/generated-image-review.ts'
       - 'apps/agent-worker/src/presentation/scene-image.ts'
       - 'apps/agent-worker/src/presentation/illustration-planner.ts'
@@ -167,6 +173,7 @@ on:
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
       - 'packages/ai-gateway/test/web-image-review-model.test.ts'
+      - 'packages/ai-gateway/test/structured-retry-budget.test.ts'
       - 'apps/agent-worker/src/presentation/handler.ts'
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
       - 'apps/web/components/hermes/HermesMediaReview.tsx'
@@ -224,6 +231,9 @@ on:
       - 'packages/domain/src/agent/standalone-science-recovery.ts'
       - 'packages/domain/test/agent/standalone-science-recovery.test.ts'
       - 'packages/domain/src/ingestion/ingestion-service.ts'
+      - 'packages/domain/src/ingestion/source-review-recovery.ts'
+      - 'packages/domain/test/agent/direct-source-review-*.ts'
+      - 'apps/api/test/direct-source-review-recovery.test.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
       - 'packages/domain/test/agent/agent.test.ts'
@@ -247,17 +257,17 @@ jobs:
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
-      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts test/structured-retry-budget.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/source-parser-recovery.test.ts test/research-runs.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/source-parser-recovery.test.ts test/research-runs.test.ts test/direct-source-review-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off|bounds VLM page recognition"
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts test/presentation/automatic-style.test.ts test/presentation/scientific-comparison.test.ts test/presentation/style-recommendations.test.ts test/presentation/selected-scene-art.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/style-recommendations.test.ts test/agent/art-style-continuation.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/extractor.test.ts -t "disclosure guidance"
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/extractor.test.ts test/source-review-output.test.ts -t "disclosure guidance|private failed source-review output"
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/visual-source-context.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-science-diagnostics.test.ts test/agent/storyboard-science-recovery.test.ts test/agent/standalone-science-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/ingestion-parser.test.ts -t "Docling table normalization"
