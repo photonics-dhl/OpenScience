@@ -9,6 +9,7 @@ it('never projects private rejected scientific candidates into an API task resul
 
 const privateCandidates = [{ text: 'PRIVATE_REJECTED_CANDIDATE', diagnostic: 'internal guard reason' }];
 const privateOutputs = [{ text: 'PRIVATE_REJECTED_OUTPUT', attempt: 2, finishReason: 'length' }];
+const privateDraftClaims = [{ statement: 'PRIVATE_UNREVIEWED_CLAIM' }];
 const validReview = {
   status: 'review_received', contractVersion: '5', kind: 'model_self_check',
   fieldReviews: { method: { status: 'supported', summary: 'Grounded method' } },
@@ -21,7 +22,8 @@ const sourceMapRef = {
 
 for (const kind of ['sdf.extract', 'demo.echo']) {
   it.each([undefined, { invalid: true }, sourceMapRef])(`removes only private review diagnostics without mutating stored ${kind} results (sourceMapRef %j)`, reference => {
-    const scientificReview = Object.freeze({ ...validReview, rejectedCandidates: privateCandidates, rejectedOutputs: privateOutputs });
+    const scientificReview = Object.freeze({ ...validReview, rejectedCandidates: privateCandidates,
+      rejectedOutputs: privateOutputs, draftClaims: privateDraftClaims });
     const raw = Object.freeze({ core: { method: 'Original method' }, evidence: { method: { quote: 'Original evidence' } },
       scientificReview, ...(reference === undefined ? {} : { sourceMapRef: reference }) });
     const before = structuredClone(raw);
@@ -33,10 +35,11 @@ for (const kind of ['sdf.extract', 'demo.echo']) {
     expect(projected).not.toHaveProperty('sourceMapRef');
     expect(projected).not.toHaveProperty('sourceMapIdentity');
     expect(projected.sourceMapAvailable).toBe(reference === sourceMapRef ? true : undefined);
-    expect(JSON.stringify(projected)).not.toMatch(/PRIVATE_REJECTED|rejectedCandidates|rejectedOutputs/);
+    expect(JSON.stringify(projected)).not.toMatch(/PRIVATE_REJECTED|PRIVATE_UNREVIEWED|rejectedCandidates|rejectedOutputs|draftClaims/);
     expect(raw).toEqual(before);
     expect(raw.scientificReview.rejectedCandidates).toBe(privateCandidates);
     expect(raw.scientificReview.rejectedOutputs).toBe(privateOutputs);
+    expect(raw.scientificReview.draftClaims).toBe(privateDraftClaims);
   });
 
   it.each([null, 7, JSON.stringify({ rejectedOutputs: privateOutputs }), [{ rejectedCandidates: privateCandidates }]])(

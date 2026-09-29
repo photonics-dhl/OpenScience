@@ -1,5 +1,7 @@
 # Runbook: 部署（Deployment）
 
+2026-09-29 保存回答的来源审校纠正候选：无迁移或Provider协议变更，复用原retry-generation与9任务额度；只允许一次服务器绑定的完整纠正，供应商调用前重核来源/权限，任务再次领取拒绝重发。新凝练私有保存draftClaims，既有终审核对；旧任务字段缺失保留原路径，新空/无效草稿不降级，API投影剔除草稿。沿干净已推SHA的正常no-tests/skip-migrate发布，部署不创建模型任务。显式纠正创建后，回退先等当前任务终态；旧worker不认识新恢复收据，不把在途任务交给旧版，不归零执行次数、不删除失败记录。已观察效果和精确release只见CURRENT。
+
 2026-09-28 二次来源复审恢复：无迁移、Provider 或 parser 协议变更，仍沿干净已推 SHA 的 `--no-tests --skip-migrate --reuse-unchanged-capability-images` 发布。现有 ingestion retry 只恢复首次、零模型调用且来源绑定有效的候选复用 preflight 失败；原 task/幂等键/SourceMap/成功候选保留，不新扣内部额度、不重解析。发布前确认无在途任务；发布后从原来源任务页点一次恢复并核实际结果。应用回退须先等恢复任务终态，保留失败审计和原文，不手动重置数据库；该恢复不证明科学 Skill 的判断质量。
 
 2026-09-28 媒体管理、来源补接与表格转换：相关定向测试、CI 与独立 High 完成后，沿干净已推 SHA 的 `--no-tests --skip-migrate --reuse-unchanged-capability-images` 正常构建启动。该复用开关只按现有输入/模型身份守卫复用 ScanSci/BGE，Worker 与 document-parser 始终重建；不要因 `ingestion-parser.ts` 改动而误关该开关、额外下载未变能力依赖。保留旧 SourceMap、完整/partial checkpoint 与公开版本。已确认且绑定 visual run 的来源不能直接 refresh；reanalyze 复用旧 SourceMap。当前最少分析次数的既有路径是重新上传同一 PDF、新 artifact/ingestion（内容存储去重）→核对→保存新私有版本。独立 watchdog 原子替换已提交脚本、留 owner/mode 备份，由原 timer 读取；实际版本/验证见 Hermes CURRENT。

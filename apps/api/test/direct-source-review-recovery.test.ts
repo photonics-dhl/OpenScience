@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { createSession } from '@openscience/auth';
-import { fixture } from '../../../packages/domain/test/agent/direct-source-review-fixture';
+import { fixture, fields } from '../../../packages/domain/test/agent/direct-source-review-fixture';
 import { buildApp } from '../src/app';
 import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 
@@ -18,6 +19,28 @@ async function apiFixture() {
 }
 
 describe('fresh source review recovery HTTP contract', () => {
+  it('projects saved-body correction privately and reuses the same explicit endpoint and replay receipt', async () => {
+    const f = await apiFixture(); const result = f.db.agentTasks[1].result;
+    const text = JSON.stringify({ fields: fields(field => ({ verdict: 'accepted', summary: `Original ${field}`,
+      sourcePassageIds: ['P00001'], issues: [] })), needsMoreEvidence: [], claimSuggestions: [{ parentClientKey: 'missing' }] });
+    result.fieldDiagnosticsDetails = fields(() => 'scientificReview=review_contract_incomplete;reviewedClaims=invalid_structure');
+    result.scientificReview.rejectedOutputs = [{ structuredAttempt: 2, kind: 'schema_validation', diagnostic: 'claims_invalid_structure',
+      provider: 'primary', model: 'MiniMax-M3', promptHash: '2'.repeat(64), responseHash: createHash('sha256').update(text).digest('hex'),
+      byteLength: Buffer.byteLength(text), usage: { inputTokens: 100, outputTokens: 100 }, finishReason: 'stop', text }];
+    const read = await f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().run).toMatchObject({ generationRecovery: 'source-review-saved', chargeableAttempts: 1, canRetryGeneration: true });
+    for (const privateKey of ['rejectedOutputs', 'savedOutputEvidence', 'claimSuggestions', 'sourceMapRef']) expect(read.body).not.toContain(privateKey);
+    expect(f.redis.lpush).not.toHaveBeenCalled();
+    const request = { method: 'POST' as const, url: `${f.url}/retry-generation`, cookies: f.cookies,
+      headers: { 'idempotency-key': 'saved-review' }, payload: { expectedVersion: 7 } };
+    expect((await f.app.inject(request)).statusCode).toBe(202);
+    f.db.hermesResearchRuns[0].status = 'failed';
+    expect((await f.app.inject(request)).statusCode).toBe(202);
+    expect(f.redis.lpush).toHaveBeenCalledTimes(1);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+  });
+
   it('discloses fresh paid review on read and requires one explicit versioned idempotent POST', async () => {
     const f = await apiFixture();
     const read = await f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });

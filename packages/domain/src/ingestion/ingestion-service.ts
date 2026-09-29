@@ -752,8 +752,8 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
   if (!proof || proof.run.actorId !== input.actorId || proof.run.researchObjectId !== input.researchObjectId
     || proof.run.version !== input.expectedVersion) throw new IngestionError('VALIDATION_ERROR', 'This source review has no safe source recovery');
   const { run, source, failed, composition, sourceStep, originalStep, recoveryKey } = proof;
-  if (proof.directCompositionEvidence && !deps.audit?.record)
-    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Fresh source review recovery audit is unavailable');
+  if ((proof.directCompositionEvidence || proof.savedOutputEvidence) && !deps.audit?.record)
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Source review recovery audit is unavailable');
   const { membership } = await requireActiveMembership(tx, run.researchObject.workspaceId, input.actorId);
   if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
   // The phase row and the new paid task are committed together. Never reset the
@@ -783,6 +783,8 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
       ? 'Source review output contract is incomplete; prior accepted draft and failed review preserved'
       : proof.recoveryClass === 'direct_composition_structured_review_failure'
         ? 'Source review JSON is incomplete; original composed draft and failed review preserved for one fresh review'
+      : proof.recoveryClass === 'saved_source_review_output_correction'
+        ? 'Source review Claims contract is incomplete; exact rejected output preserved for one explicit correction'
       : 'Source review service unavailable; original candidate preserved') } });
   await tx.hermesResearchStep.create({ data: { runId: run.id, stage: 'source_review', ordinal: proof.nextOrdinal,
     status: 'waiting', ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: task.id } });
@@ -803,6 +805,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
       ...(proof.contractEvidence ? { contractEvidence: proof.contractEvidence } : {}),
       ...(proof.schemaContractEvidence ?? {}),
       ...(proof.directCompositionEvidence ?? {}),
+      ...(proof.savedOutputEvidence ? { savedOutputEvidence: proof.savedOutputEvidence, freshReview: false, savedOutputReused: true } : {}),
       stage: 'source_review', ordinal: proof.nextOrdinal, chargeableAttempts: 1, creditPolicy: 'new-review-task-charged;original-failure-preserved' } }, ctx);
   return task.id;
 }

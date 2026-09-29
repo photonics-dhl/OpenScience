@@ -1,0 +1,164 @@
+import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AiGateway } from '@openscience/ai-gateway';
+
+const seam = vi.hoisted(() => ({
+  extractHandler: vi.fn(),
+  requireSavedBinding: vi.fn(),
+}));
+
+vi.mock('../src/extractor', async load => ({
+  ...await load<typeof import('../src/extractor')>(),
+  extractHandler: seam.extractHandler,
+}));
+
+vi.mock('@openscience/domain', async load => ({
+  ...await load<typeof import('@openscience/domain')>(),
+  requireHermesSourceReviewRecoveryBinding: seam.requireSavedBinding,
+}));
+
+import { createHandlers } from '../src/index';
+
+// This is deliberately handler-seam coverage. The Domain fixture already exercises the
+// real saved-output identity, lease, and execution-attempt binder; this test verifies that
+// createHandlers passes that bound output to extraction and re-runs the binder immediately
+// before the extractor's provider submit boundary.
+
+const ids = {
+  ingestion: '11111111-1111-4111-8111-111111111111',
+  failed: '22222222-2222-4222-8222-222222222222',
+  source: '33333333-3333-4333-8333-333333333333',
+  owner: '44444444-4444-4444-8444-444444444444',
+};
+
+function fixture(executionAttempt = 1) {
+  const bytes = Buffer.from('%PDF-1.7 saved source review handler fixture');
+  const contentHash = createHash('sha256').update(bytes).digest('hex');
+  const parser = { name: 'openscience-parser-cascade', version: '1.0.0' };
+  const sourceMap = { artifactId: 'artifact', contentHash, parser, pages: [{ page: 1, width: 500, height: 700,
+    blocks: [{ id: 'source-block', kind: 'paragraph', text: 'A source-grounded scientific observation.',
+      boundingBox: { x: 0, y: 0, width: 500, height: 60 }, parser, transformations: [] }] }] };
+  const serialized = Buffer.from(JSON.stringify(sourceMap));
+  const serializedSha256 = createHash('sha256').update(serialized).digest('hex');
+  const reference = { schemaVersion: 1, parserStatus: 'succeeded', artifactId: 'artifact', contentHash,
+    serializedSha256, objectKey: `derived/source-maps/${serializedSha256}.json`, size: serialized.length };
+  const payload = { artifactId: 'artifact', researchObjectId: 'ro' };
+  const session = { userId: 'actor', status: 'active', deletedAt: null, researchObjectId: 'ro',
+    researchObject: { id: 'ro', workspaceId: 'workspace', status: 'active', deletedAt: null,
+      workspace: { status: 'active' } } };
+  const sourceResult = { canonicalExtractionContract: 'grounded-passages-v2', sourceMapRef: reference,
+    scientificReview: { semanticStage: { kind: 'semantic_reduce', source: { sourceMapHash: serializedSha256 } } } };
+  const owner = { id: ids.owner, kind: 'sdf.extract', status: 'running', executionAttempt, retryCount: 0,
+    payload, result: null, sessionId: 'session', session,
+    idempotencyKey: `ingestion-analysis-compose:${ids.ingestion}:${ids.failed}:${ids.source}:scientific-review-v4` };
+  const failed = { id: ids.failed, kind: 'sdf.extract', status: 'succeeded', payload, result: {},
+    session: { status: 'active', userId: 'actor', researchObjectId: 'ro' } };
+  const source = { id: ids.source, kind: 'sdf.extract', status: 'succeeded', payload, result: sourceResult,
+    session: { status: 'active', userId: 'actor', researchObjectId: 'ro' } };
+  const saved = { sourceTaskId: ids.failed, structuredAttempt: 2,
+    text: '{"fields":"saved-private-body"}', responseHash: 'a'.repeat(64), promptHash: 'b'.repeat(64),
+    provider: 'fixture-provider', model: 'fixture-model', byteLength: 31 };
+  const tasks = new Map([[owner.id, owner], [failed.id, failed], [source.id, source]]);
+  const stored = new Map([[reference.objectKey, serialized]]);
+  const storage = {
+    getObject: vi.fn(async (key: string) => {
+      const body = stored.get(key) ?? bytes;
+      return { body: Readable.from([body]), size: body.length };
+    }),
+    headObject: vi.fn().mockResolvedValue(null),
+    putObject: vi.fn(async (key: string, body: Buffer) => { stored.set(key, body); return { key, size: body.length, etag: 'test' }; }),
+  };
+  const tx = {
+    artifact: { findFirst: vi.fn().mockResolvedValue({ id: 'artifact' }) },
+    agentTask: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    $executeRaw: vi.fn(),
+  };
+  const prisma = {
+    agentTask: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => structuredClone(tasks.get(where.id) ?? null)) },
+    artifact: { findUnique: vi.fn().mockResolvedValue({ id: 'artifact', workspaceId: 'workspace', size: bytes.length,
+      blobSha256: contentHash, logicalPath: 'paper.pdf', mimeType: 'application/pdf', deletedAt: null, bytesPurgedAt: null }) },
+    membership: { findUnique: vi.fn().mockResolvedValue({ userId: 'actor', workspaceId: 'workspace', role: 'author' }) },
+    ingestionTask: { findUnique: vi.fn().mockResolvedValue({ id: ids.ingestion, agentTaskId: ids.owner, artifactId: 'artifact',
+      batch: { userId: 'actor', researchObjectId: 'ro' } }) },
+    hermesResearchStep: { findFirst: vi.fn().mockResolvedValue(null) },
+    $transaction: vi.fn(async (work: (client: typeof tx) => Promise<unknown>) => work(tx)),
+  };
+  const parserCascade = Object.assign(vi.fn(), { renderPages: vi.fn() });
+  const policy = vi.fn().mockResolvedValue(true);
+  const providerSubmit = vi.fn();
+  const gateway = { completeStructured: providerSubmit, completeStructuredWithMetadata: providerSubmit } as unknown as AiGateway;
+  const handlers = createHandlers(gateway, { parserCascade, externalProcessingPolicy: policy });
+  const execute = () => handlers['sdf.extract']!({ prisma, storage, malwareScanner: vi.fn() } as never,
+    { id: ids.owner, payload, executionAttempt, retryCount: 0 });
+  return { execute, owner, sourceResult, sourceMap, saved, reference, parserCascade, policy, providerSubmit,
+    prisma, tx, storage };
+}
+
+describe('saved source-review handler seam', () => {
+  beforeEach(() => {
+    seam.extractHandler.mockReset();
+    seam.requireSavedBinding.mockReset();
+  });
+
+  it('passes the exact saved body and trusted context to extraction without rerunning parser or composition', async () => {
+    const f = fixture();
+    const events: string[] = [];
+    seam.requireSavedBinding.mockImplementation(async () => { events.push('bind'); return f.saved; });
+    f.policy.mockImplementation(async () => { events.push('authorize'); return true; });
+    seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
+      expect(context).toMatchObject({ sourceMap: f.sourceMap, previousResult: f.sourceResult,
+        requireReusableSemanticStage: true, reviewExistingSourceTaskId: ids.source,
+        scientificReview: { requestId: ids.owner, requireReviewedClaims: true,
+          savedReviewOutput: f.saved, authorizationContext: { taskId: ids.owner, workspaceId: 'workspace', actorId: 'actor' } } });
+      expect(context.scientificReview.savedReviewOutput).toBe(f.saved);
+      await context.scientificReview.beforeReviewProviderCall();
+      events.push('submit'); f.providerSubmit();
+      return { core: { method: 'corrected' }, needsMoreInformation: [] };
+    });
+
+    await expect(f.execute()).resolves.toMatchObject({ core: { method: 'corrected' }, sourceMapReused: true });
+    expect(f.parserCascade).not.toHaveBeenCalled();
+    expect(seam.extractHandler).toHaveBeenCalledOnce();
+    expect(seam.requireSavedBinding).toHaveBeenCalledTimes(2);
+    expect(seam.requireSavedBinding).toHaveBeenNthCalledWith(1, f.tx, {
+      ownerTaskId: ids.owner, ingestionTaskId: ids.ingestion, failedTaskId: ids.failed, compositionTaskId: ids.source,
+    });
+    expect(seam.requireSavedBinding).toHaveBeenNthCalledWith(2, f.tx, {
+      ownerTaskId: ids.owner, ingestionTaskId: ids.ingestion, failedTaskId: ids.failed, compositionTaskId: ids.source,
+    });
+    expect(f.policy).toHaveBeenCalledTimes(2);
+    expect(f.providerSubmit).toHaveBeenCalledOnce();
+    expect(events).toEqual(['authorize', 'bind', 'bind', 'authorize', 'submit']);
+  });
+
+  it('rejects execution attempt 2 at the binding seam before extraction, submit, or result materialization', async () => {
+    const f = fixture(2);
+    seam.requireSavedBinding.mockRejectedValue(new Error('[blocked] Saved source review binding changed'));
+
+    await expect(f.execute()).rejects.toThrow('binding changed');
+    expect(seam.requireSavedBinding).toHaveBeenCalledOnce();
+    expect(seam.extractHandler).not.toHaveBeenCalled();
+    expect(f.providerSubmit).not.toHaveBeenCalled();
+    expect(f.parserCascade).not.toHaveBeenCalled();
+    expect(f.storage.putObject).not.toHaveBeenCalled();
+    expect(f.tx.agentTask.updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each(['authorization', 'saved-body'] as const)('stops a changed %s at the final submit boundary', async change => {
+    const f = fixture();
+    seam.requireSavedBinding.mockResolvedValueOnce(f.saved).mockResolvedValue(
+      change === 'saved-body' ? { ...f.saved, text: 'changed' } : f.saved);
+    f.policy.mockResolvedValueOnce(true).mockResolvedValue(change !== 'authorization');
+    seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
+      await context.scientificReview.beforeReviewProviderCall();
+      f.providerSubmit();
+      return { core: { method: 'must not materialize' } };
+    });
+    await expect(f.execute()).rejects.toThrow('authorization changed');
+    expect(f.providerSubmit).not.toHaveBeenCalled();
+    // The existing parsed-source checkpoint precedes the provider boundary; it is not a scientific result.
+    expect(f.tx.agentTask.updateMany.mock.calls.every(([input]) =>
+      Object.keys(input.data.result).join(',') === 'sourceMapRef')).toBe(true);
+  });
+});

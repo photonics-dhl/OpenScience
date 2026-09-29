@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
+import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
@@ -15,6 +16,69 @@ const tokenCount = (value: unknown): value is number => typeof value === 'number
 const CONTRACT_REPAIR_CLASS = 'accepted_review_claim_contract_missing' as const;
 const SCHEMA_REPAIR_CLASS = 'schema_contract_retry_after_accepted_anchor' as const;
 const DIRECT_COMPOSITION_REVIEW_CLASS = 'direct_composition_structured_review_failure' as const;
+const SAVED_OUTPUT_CORRECTION_CLASS = 'saved_source_review_output_correction' as const;
+export type HermesSavedSourceReviewOutput = {
+  sourceTaskId: string; structuredAttempt: number; text: string; responseHash: string;
+  promptHash: string; provider: string; model: string; byteLength: number;
+};
+type FreshReviewEvidence = { reviewedCandidateHash: string; structuredReviewAuditIds: string[];
+  freshReview: true; savedOutputReused: false };
+type SavedOutputEvidence = Omit<HermesSavedSourceReviewOutput, 'text'> & {
+  reviewedCandidateHash: string; structuredReviewAuditIds: string[];
+};
+
+/** Verify the persisted response identity; the Worker still owns full source/Claims validation. */
+function savedReviewOutput(taskId: string, review: Record<string, unknown>, result: Record<string, unknown>,
+  originalCore: Record<string, unknown>, audit: Array<{ id: string; metadata: unknown }>) {
+  const outputs = review.rejectedOutputs;
+  if (!Array.isArray(outputs) || !outputs.length || outputs.length > 2
+    || outputs.some((item, index) => !Number.isInteger(record(item).structuredAttempt)
+      || Number(record(item).structuredAttempt) < 1 || Number(record(item).structuredAttempt) > 2
+      || (index > 0 && Number(record(item).structuredAttempt) <= Number(record(outputs[index - 1]).structuredAttempt)))) return null;
+  const last = record(outputs[outputs.length - 1]);
+  const usage = record(last.usage);
+  const call = record(audit[audit.length - 1]?.metadata);
+  const diagnostic = typeof last.diagnostic === 'string' ? last.diagnostic : '';
+  const claimsFailure = /^claims_(required_missing|invalid_structure|source_unmaterializable|core_missing)$/.exec(diagnostic);
+  if (!claimsFailure || last.kind !== 'schema_validation' || last.finishReason !== 'stop'
+    || last.structuredAttempt !== 2 || audit.length !== 2 || last.omissionReason != null
+    || typeof last.text !== 'string' || !last.text || !sha256(last.responseHash) || !sha256(last.promptHash)
+    || !tokenCount(last.byteLength) || last.byteLength > 131_072 || Buffer.byteLength(last.text, 'utf8') !== last.byteLength
+    || createHash('sha256').update(last.text).digest('hex') !== last.responseHash
+    || typeof last.provider !== 'string' || typeof last.model !== 'string'
+    || last.provider !== call.provider || last.model !== call.model || last.promptHash !== call.promptHash
+    || usage.inputTokens !== call.inputTokens || usage.outputTokens !== call.outputTokens
+    || SDF_CORE_FIELDS.some(field => record(result.fieldDiagnosticsDetails)[field]
+      !== `scientificReview=review_contract_incomplete;reviewedClaims=${claimsFailure[1]}`)) return null;
+  let body: Record<string, unknown>;
+  try {
+    // Preserve the exact raw bytes for the assistant message; unwrap only for eligibility inspection.
+    const text = last.text.trim();
+    const json = /^```(?:json)?\s*\n([\s\S]*?)\n```$/i.exec(text)?.[1] ?? text;
+    body = record(JSON.parse(json));
+  } catch { return null; }
+  const fields = record(body.fields);
+  if (Object.keys(body).filter(key => key !== 'claimSuggestions').sort().join(',') !== 'fields,needsMoreEvidence'
+    || !isDeepStrictEqual(body.needsMoreEvidence, [])
+    || Object.keys(fields).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(',')
+    || SDF_CORE_FIELDS.some(field => {
+      const item = record(fields[field]);
+      return Object.keys(item).sort().join(',') !== 'issues,sourcePassageIds,summary,verdict'
+        || !['accepted', 'revised'].includes(String(item.verdict)) || typeof item.summary !== 'string' || !item.summary.trim()
+        || !Array.isArray(item.issues) || !Array.isArray(item.sourcePassageIds) || !item.sourcePassageIds.length
+        || new Set(item.sourcePassageIds).size !== item.sourcePassageIds.length
+        || item.sourcePassageIds.some(id => typeof id !== 'string' || !/^P\d{5}$/.test(id))
+        || (item.verdict === 'accepted' && (item.summary !== originalCore[field]
+          || item.summary !== record(result.unverifiedSummaries)[field]
+          || !isDeepStrictEqual(item.sourcePassageIds, record(result.unverifiedSourcePassageIds)[field])));
+    })) return null;
+  const identity = { sourceTaskId: taskId, structuredAttempt: 2,
+    responseHash: last.responseHash, promptHash: last.promptHash, provider: last.provider, model: last.model, byteLength: last.byteLength };
+  const output: HermesSavedSourceReviewOutput = { ...identity, text: last.text };
+  const evidence: SavedOutputEvidence = { ...identity, reviewedCandidateHash: review.reviewedCandidateHash as string,
+    structuredReviewAuditIds: audit.map(row => row.id) };
+  return { output, evidence };
+}
 type ContractRepairEvidence = {
   reviewedCandidateHash: string; promptHash: string; responseHash: string;
   reviewSkill: { id: 'scientific-critical-thinking'; version: '3' };
@@ -38,8 +102,8 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   const directComposition = compositions.length === 0;
   if (canonical.length !== 1 || canonical[0]!.ordinal !== 0 || compositions.length > 1
     || (!directComposition && compositions[0]!.ordinal !== 0)
-    // A modern initial review may receive one explicit fresh review, never another recovery chain.
-    || (directComposition && reviews.length !== (replacementTaskId ? 2 : 1))
+    // One fresh review and one saved-body correction at most; receipts below identify each slot.
+    || (directComposition && reviews.length > (replacementTaskId ? 3 : 2))
     || reviews.length < (replacementTaskId ? 2 : 1)
     || reviews.some((step, index) => step.ordinal !== index || !step.agentTaskId)
     || (replacementTaskId && reviews[reviews.length - 1]!.agentTaskId !== replacementTaskId)
@@ -111,8 +175,8 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   const contractRepairAuditIds: string[] = [];
   const contractRepairs = new Map<string, ContractRepairEvidence>();
   const schemaRepairs = new Map<string, SchemaContractRepairEvidence>();
-  let directCompositionEvidence: { reviewedCandidateHash: string; structuredReviewAuditIds: string[];
-    freshReview: true; savedOutputReused: false } | undefined;
+  const freshReviews = new Map<string, FreshReviewEvidence>();
+  const savedOutputs = new Map<string, NonNullable<ReturnType<typeof savedReviewOutput>>>();
   try {
     if (automaticIngestionReviewStage({ artifactId: source.artifactId, artifact: source.artifact, agentTask: composition }) !== 'source_review'
       || originalReview.contractVersion !== '4') return null;
@@ -146,7 +210,9 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
       orderBy: { createdAt: 'asc' }, take: 17 });
     if (!audit.length || audit.length > 16) return null;
     if (directComposition) {
-      // This is a fresh review of the original composed draft, not approval or saved-output recovery.
+      const schemaDetail = details[SDF_CORE_FIELDS[0]!];
+      const savedFailure = typeof schemaDetail === 'string'
+        && /^scientificReview=review_contract_incomplete;reviewedClaims=(required_missing|invalid_structure|source_unmaterializable|core_missing)$/.test(schemaDetail);
       if (review.status !== 'blocked_scientific_review'
         || !isDeepStrictEqual(review.reviewSkill, { id: 'scientific-critical-thinking', version: '5' })
         || !isDeepStrictEqual(review.compositionSkill, originalReview.compositionSkill)
@@ -160,7 +226,8 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
         || [diagnostics, details, summaries, ids, record(result.evidence), record(result.evidenceSegments)]
           .some(value => Object.keys(value).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(','))
         || SDF_CORE_FIELDS.some(field => diagnostics[field] !== 'malformed_item'
-          || details[field] !== 'scientificReview=STRUCTURED_JSON_INVALID' || record(result.core)[field] !== ''
+          || details[field] !== schemaDetail || (!savedFailure && schemaDetail !== 'scientificReview=STRUCTURED_JSON_INVALID')
+          || record(result.core)[field] !== ''
           || summaries[field] !== originalCore[field] || !Array.isArray(ids[field]) || !(ids[field] as unknown[]).length
           || (ids[field] as unknown[]).some(id => typeof id !== 'string' || !/^P\d{5}$/.test(id))
           || record(evidence[field]).locator !== `passages:${(ids[field] as unknown[]).join(',')}`
@@ -175,8 +242,16 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
           || call.fallbackReason !== null || call.retryCount !== 0 || call.error !== null
           || !sha256(call.promptHash) || !tokenCount(call.inputTokens) || !tokenCount(call.outputTokens)) return null;
       }
-      directCompositionEvidence = { reviewedCandidateHash: review.reviewedCandidateHash,
-        structuredReviewAuditIds: audit.map(row => row.id), freshReview: true, savedOutputReused: false };
+      if (savedFailure) {
+        const saved = savedReviewOutput(task.id, review, result, originalCore, audit);
+        if (!saved) return null;
+        savedOutputs.set(task.id, saved);
+      } else {
+        // The fresh-review slot belongs only to the initial failure.
+        if (step.ordinal !== 0) return null;
+        freshReviews.set(task.id, { reviewedCandidateHash: review.reviewedCandidateHash,
+          structuredReviewAuditIds: audit.map(row => row.id), freshReview: true, savedOutputReused: false });
+      }
       continue;
     }
     if (review.status === 'review_received') {
@@ -303,18 +378,22 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
     auditIds.push(...audit.map(row => row.id));
   }
   if (schemaRepairs.size && contractRepairs.size !== 1) return null;
+  let savedCorrectionCount = 0;
+  let replacementUsesSavedOutput = false;
   // A replacement after an unclassified failure or accepted-contract gap must carry the explicit
   // user action receipt; the read-only availability query never creates it.
   for (const step of reviews.filter(step => step.ordinal > 0)) {
     const predecessorId = reviews[step.ordinal - 1]!.agentTaskId!;
     const contractEvidence = contractRepairs.get(predecessorId);
     const schemaEvidence = schemaRepairs.get(predecessorId);
-    if (!genericFailureTaskIds.has(predecessorId) && !contractEvidence && !schemaEvidence && !directCompositionEvidence) continue;
+    const directCompositionEvidence = freshReviews.get(predecessorId);
+    const savedEvidence = savedOutputs.get(predecessorId)?.evidence;
+    if (!genericFailureTaskIds.has(predecessorId) && !contractEvidence && !schemaEvidence && !directComposition) continue;
     const receiptWhere = {
       action: 'hermes.research_run.source_review_recovery', targetType: 'hermes_research_run', targetId: run.id,
       actorId: run.actorId, metadata: { path: ['newAgentTaskId'], equals: step.agentTaskId! },
     };
-    const directReceipts = directCompositionEvidence
+    const directReceipts = directComposition
       ? await tx.auditLog.findMany({ where: { ...receiptWhere, workspaceId: run.researchObject.workspaceId }, take: 2 }) : null;
     if (directReceipts && directReceipts.length !== 1) return null;
     const receipt = directReceipts ? directReceipts[0] : await tx.auditLog.findFirst({ where: receiptWhere });
@@ -329,6 +408,15 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
       || metadata.freshReview !== true || metadata.savedOutputReused !== false
       || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true
       || !sha256(metadata.requestDigest) || typeof metadata.clientIdempotencyKey !== 'string' || !metadata.clientIdempotencyKey.trim())) return null;
+    if (directComposition && !directCompositionEvidence) {
+      if (!savedEvidence || metadata.recoveryClass !== SAVED_OUTPUT_CORRECTION_CLASS
+        || !isDeepStrictEqual(metadata.savedOutputEvidence, savedEvidence)
+        || metadata.freshReview !== false || metadata.savedOutputReused !== true
+        || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true
+        || !sha256(metadata.requestDigest) || typeof metadata.clientIdempotencyKey !== 'string' || !metadata.clientIdempotencyKey.trim()) return null;
+      savedCorrectionCount++;
+      if (step.agentTaskId === replacementTaskId) replacementUsesSavedOutput = true;
+    }
     if (contractEvidence && (metadata.recoveryClass !== CONTRACT_REPAIR_CLASS
       || !isDeepStrictEqual(metadata.contractEvidence, contractEvidence)
       || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true)) return null;
@@ -339,6 +427,12 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
       || !isDeepStrictEqual(metadata.schemaContractAuditIds, schemaEvidence.schemaContractAuditIds)
       || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true)) return null;
   }
+  if (savedCorrectionCount > 1 || (savedCorrectionCount && !replacementUsesSavedOutput)) return null;
+  const selectedSaved = savedOutputs.get(failed.id);
+  const savedOutput = (!replacementTaskId || replacementUsesSavedOutput) ? selectedSaved?.output : undefined;
+  const savedOutputEvidence = savedOutput ? selectedSaved?.evidence : undefined;
+  const directCompositionEvidence = savedOutput ? undefined : freshReviews.get(failed.id);
+  if (directComposition && !savedOutput && !directCompositionEvidence) return null;
   if (replacement?.status === 'succeeded') {
     const finalResult = record(replacement.result);
     const finalReview = record(finalResult.scientificReview);
@@ -366,20 +460,22 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   if (presentationCount !== 0 || sourceCount + presentationCount + 3 > run.maxAgentTasks) return null;
   return { run, source, failed, composition, replacement, sourceStep, originalStep, failedSteps, compositionStep,
     recoveryKey, nextOrdinal: reviews.length, auditIds, failureClassifications, contractRepairAuditIds,
-    recoveryClass: directCompositionEvidence ? DIRECT_COMPOSITION_REVIEW_CLASS : schemaRepairs.has(failed.id) ? SCHEMA_REPAIR_CLASS
+    recoveryClass: savedOutput ? SAVED_OUTPUT_CORRECTION_CLASS : directCompositionEvidence ? DIRECT_COMPOSITION_REVIEW_CLASS : schemaRepairs.has(failed.id) ? SCHEMA_REPAIR_CLASS
       : contractRepairs.has(failed.id) ? CONTRACT_REPAIR_CLASS : 'service_failure' as const,
-    directCompositionEvidence,
+    directCompositionEvidence, savedOutputEvidence, savedOutput,
     contractEvidence: contractRepairs.get(failed.id), schemaContractEvidence: schemaRepairs.get(failed.id) };
 }
 
 /** Worker exception to current-source equality: only the committed current recovery may use its unchanged v4 parent. */
 export async function requireHermesSourceReviewRecoveryBinding(tx: Prisma.TransactionClient, input: {
   ownerTaskId: string; ingestionTaskId: string; failedTaskId: string; compositionTaskId: string;
-}): Promise<void> {
+}): Promise<HermesSavedSourceReviewOutput | undefined> {
   const steps = await tx.hermesResearchStep.findMany({ where: { stage: 'source_review', ordinal: { gt: 0 }, agentTaskId: input.ownerTaskId }, take: 2 });
   const proof = steps.length === 1 ? await inspectHermesSourceReviewRecovery(tx, steps[0]!.runId, input.ownerTaskId) : null;
   if (!proof || proof.source.id !== input.ingestionTaskId || proof.failed.id !== input.failedTaskId
-    || proof.composition.id !== input.compositionTaskId || proof.replacement?.status !== 'running') {
+    || proof.composition.id !== input.compositionTaskId || proof.replacement?.status !== 'running'
+    || (proof.savedOutput && proof.replacement.executionAttempt !== 1)) {
     throw new Error('[blocked] Source review recovery binding changed');
   }
+  return proof.savedOutput;
 }

@@ -374,7 +374,7 @@ export interface HermesResearchRun {
   canRetryGeneration?: boolean;
   canAuthorizeNarrativeCorrection?: boolean;
   chargeableAttempts?: number;
-  generationRecovery?: 'source-review-fresh' | 'source-parser' | 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render' | 'narrative-scientific-replan' | 'narrative-source-support-replan';
+  generationRecovery?: 'source-review-saved' | 'source-review-fresh' | 'source-parser' | 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render' | 'narrative-scientific-replan' | 'narrative-source-support-replan';
   sourceParsing?: {
     status: 'needs_review'; ingestionTaskId: string; agentTaskId: string;
     unresolvedPageNumbers?: number[]; providerChargeMayApply: true;

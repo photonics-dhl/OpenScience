@@ -1226,6 +1226,7 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
     const scientificReview = { ...rawResult.scientificReview };
     delete scientificReview.rejectedCandidates;
     delete scientificReview.rejectedOutputs;
+    delete scientificReview.draftClaims;
     publicResult.scientificReview = scientificReview;
   } else {
     // Malformed review values may contain raw diagnostic text rather than public review fields.

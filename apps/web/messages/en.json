@@ -1518,6 +1518,8 @@
     "sourceParsingPages": "Pages awaiting parsing: {pages}",
     "sourceParsingResume": "Continue unfinished page parsing",
     "sourceReviewFresh": "Re-review and continue",
+    "sourceReviewSaved": "Correct saved review and continue",
+    "sourceReviewSavedDescription": "Keep the parsed source and six-field draft, and make one correction using the saved review response. This adds one charged task; earlier requests may already have been billed. Production continues only after review passes, and results remain private drafts.",
     "sourceParsingRetryDescription": "Existing parsing results are retained. The timed-out attempt may already have incurred charges, and continuing may incur model fees. No additional platform credit is charged for this recovery.",
     "sourceParsingBoundary": "This status does not confirm complete paper understanding or scientific review.",
     "stage": {

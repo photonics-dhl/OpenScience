@@ -27,6 +27,7 @@ import {
   assertSearchIndexSourceLive,
   findSavedIngestionCommit,
   requireHermesSourceReviewRecoveryBinding,
+  type HermesSavedSourceReviewOutput,
   VISUAL_NARRATIVE_PROFILE,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
@@ -337,6 +338,8 @@ export function createHandlers(
       let reusableExtractionResult: Record<string, unknown> | undefined;
       let requireReusableSemanticStage = false;
       let reviewExistingSourceTaskId: string | undefined;
+      let savedReviewOutput: HermesSavedSourceReviewOutput | undefined;
+      let beforeReviewProviderCall: (() => Promise<void>) | undefined;
       let requireReviewedClaims = false;
       let persistedScientificReviewCandidateHash: string | undefined;
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
@@ -369,10 +372,23 @@ export function createHandlers(
       const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):(scientific-summary-v3|scientific-review-v4)$/.exec(ownerTask.idempotencyKey ?? '');
       if (composition) {
         if (composition[4] === 'scientific-review-v4' && composition[2] !== composition[3]) {
-          await deps.prisma.$transaction(tx => requireHermesSourceReviewRecoveryBinding(tx, {
+          const recoveryInput = {
             ownerTaskId: ownerTask.id, ingestionTaskId: composition[1]!,
             failedTaskId: composition[2]!, compositionTaskId: composition[3]!,
-          }), { isolationLevel: 'Serializable' });
+          };
+          savedReviewOutput = await deps.prisma.$transaction(tx => requireHermesSourceReviewRecoveryBinding(tx,
+            recoveryInput), { isolationLevel: 'Serializable' });
+          if (savedReviewOutput) {
+            const selected = savedReviewOutput;
+            beforeReviewProviderCall = async () => {
+              const current = await deps.prisma.$transaction(tx => requireHermesSourceReviewRecoveryBinding(tx,
+                recoveryInput), { isolationLevel: 'Serializable' });
+              if (JSON.stringify(current) !== JSON.stringify(selected)
+                || !await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false)) {
+                throw new Error('[blocked] Saved source review processing authorization changed');
+              }
+            };
+          }
         }
         const ingestion = await deps.prisma.ingestionTask.findUnique({
           where: { id: composition[1]! }, include: { batch: true },
@@ -426,7 +442,7 @@ export function createHandlers(
             },
             select: { id: true },
           });
-          requireReviewedClaims = narrativeStep !== null;
+          requireReviewedClaims = Boolean(savedReviewOutput) || narrativeStep !== null;
         }
       }
       const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
@@ -575,6 +591,7 @@ export function createHandlers(
           scientificReview: {
             requestId: ownerTask.id,
             requireReviewedClaims,
+            ...(savedReviewOutput ? { savedReviewOutput, beforeReviewProviderCall } : {}),
             authorizationContext: trustedAuthorizationContext,
             ...(persistedScientificReviewCandidateHash ? { persistedCandidateHash: persistedScientificReviewCandidateHash } : {}),
             ...(reusableScientificReviewAttempt ? { reusableAttempt: reusableScientificReviewAttempt } : {}),

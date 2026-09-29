@@ -65,7 +65,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { ...fields[field], verdict: 'accepted', issues: [] }])),
       needsMoreEvidence: [],
     };
-    const responses = [semantic, { fields, needsMoreEvidence: [] }, reviewResponse, reviewResponse];
+    const responses = [semantic, { fields, needsMoreEvidence: [], draftClaims: [] }, reviewResponse, reviewResponse];
     const requests: Parameters<Provider['complete']>[0][] = [];
     const provider: Provider = {
       name: 'fixture', model: 'fixture',

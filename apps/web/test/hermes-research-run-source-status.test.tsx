@@ -37,7 +37,7 @@ function renderRun(run: HermesResearchRun) {
 }
 
 describe('Hermes research run panel', () => {
-  it.each([undefined, 'source-review-fresh'] as const)('uses the existing paid source-review disclosure and removes retry controls after progress refresh (%s)', recovery => {
+  it.each([undefined, 'source-review-fresh', 'source-review-saved'] as const)('uses the existing paid source-review disclosure and removes retry controls after progress refresh (%s)', recovery => {
     for (const locale of ['en', 'zh']) {
       translations.locale = locale;
       const copy = (locale === 'zh' ? zh : en).hermesRun;
@@ -45,13 +45,16 @@ describe('Hermes research run panel', () => {
       run.canRetryGeneration = true;
       run.chargeableAttempts = 1;
       run.generationRecovery = recovery;
-      const buttonLabel = recovery === 'source-review-fresh' ? copy.sourceReviewFresh : copy.narrative.resume;
+      const buttonLabel = recovery === 'source-review-saved' ? copy.sourceReviewSaved : recovery === 'source-review-fresh' ? copy.sourceReviewFresh : copy.narrative.resume;
+      const description = recovery === 'source-review-saved' ? copy.sourceReviewSavedDescription : copy.narrative.resumeDescription;
       expect(run.versionId).toBeNull();
       const failed = renderRun(run);
-      expect(failed).toContain(copy.narrative.resumeDescription);
+      expect(failed).toContain(description);
       expect(failed).toContain(`>${buttonLabel}</button>`);
       if (recovery) {
-        expect(buttonLabel).toBe(locale === 'zh' ? '重新审校并继续' : 'Re-review and continue');
+        expect(buttonLabel).toBe(recovery === 'source-review-saved'
+          ? locale === 'zh' ? '修正已保存审校并继续' : 'Correct saved review and continue'
+          : locale === 'zh' ? '重新审校并继续' : 'Re-review and continue');
         expect(failed).not.toContain(`>${copy.narrative.resume}</button>`);
       }
       expect(failed).not.toContain(copy.sourceParsingRetryDescription);
@@ -62,7 +65,7 @@ describe('Hermes research run panel', () => {
       run.status = 'running'; run.error = null;
       const continuing = renderRun(run);
       expect(continuing).not.toContain(`>${buttonLabel}</button>`);
-      expect(continuing).not.toContain(copy.narrative.resumeDescription);
+      expect(continuing).not.toContain(description);
 
       run.status = 'succeeded'; run.versionId = 'version-1';
       const completed = renderRun(run);
