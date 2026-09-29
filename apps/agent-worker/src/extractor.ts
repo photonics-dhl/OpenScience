@@ -2068,6 +2068,36 @@ function supplementalDocumentEvidence(
   return { manifest, manifestHash: sha256Json(manifest), attachments: [{ ...sourceDocument, bytes: Uint8Array.from(sourceDocument.bytes) }] };
 }
 
+/** Advisory paths only: the existing guards remain the sole acceptance authority. */
+function reviewedClaimRepairIssues(review: ScientificReviewResponse, proposal: ExtractedProposal): string[] {
+  if (!Array.isArray(review.claimSuggestions) || review.claimSuggestions.length > MAX_INGESTION_CLAIMS) return [];
+  const parents: string[] = [];
+  const bindings: string[] = [];
+  review.claimSuggestions.forEach((value, index) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    const item = value as Record<string, unknown>;
+    const path = `claimSuggestions[${index}]`;
+    if (CLAIM_KINDS.includes(item.kind as ReviewedClaimSuggestion['kind']) && item.kind !== 'core'
+      && (typeof item.parentClientKey !== 'string' || !item.parentClientKey.trim())) {
+      parents.push(`${path}.parentClientKey: required_non_core`);
+    }
+    if (!SDF_CORE_FIELDS.includes(item.sourceField as ReviewedClaimSuggestion['sourceField'])
+      || !Array.isArray(item.sourceBindings) || item.sourceBindings.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) return;
+    const field = review.fields[item.sourceField as ReviewedClaimSuggestion['sourceField']];
+    const originalIds = proposal.fields[item.sourceField as ReviewedClaimSuggestion['sourceField']].sourcePassageIds ?? [];
+    // Restoring an incorrectly changed field source set may also restore its claim bindings.
+    if (JSON.stringify([...field.sourcePassageIds].sort()) !== JSON.stringify([...originalIds].sort())) return;
+    item.sourceBindings.forEach((binding: unknown, bindingIndex: number) => {
+      if (!binding || typeof binding !== 'object' || Array.isArray(binding)) return;
+      const id = (binding as Record<string, unknown>).sourcePassageId;
+      if (typeof id === 'string' && !field.sourcePassageIds.includes(id)) {
+        bindings.push(`${path}.sourceBindings[${bindingIndex}].sourcePassageId: outside_field_source_ids`);
+      }
+    });
+  });
+  return [...parents, ...bindings];
+}
+
 function reviewedClaimSuggestionsPrompt(requireReviewedClaims = false): string {
   return [
     requireReviewedClaims
@@ -2197,6 +2227,7 @@ async function modelScientificReviewCanonicalProposal(
   const rejectedCandidates: RejectedScientificCandidate[] = [];
   const rejectedOutputs: RejectedSourceReviewOutput[] = [];
   let candidateIssues: string[] = [];
+  let claimRepairIssues: string[] = [];
   let claimsDiagnostic: ReviewedClaimsDiagnostic | undefined;
   const byId = new Map(reviewPassages.map((passage) => [passage.id, passage]));
   const reviewedField = (reviewed: ScientificReviewField): ExtractedFieldProposal => {
@@ -2207,7 +2238,9 @@ async function modelScientificReviewCanonicalProposal(
   const validation = scientificSourceValidation(sourceMap, reviewPassages,
     (value: unknown, allowedIds: ReadonlySet<string>): value is ScientificReviewResponse => {
       candidateIssues = [];
+      claimRepairIssues = [];
       if (!scientificReviewGuard(value, allowedIds)) return false;
+      if (context?.requireReviewedClaims) claimRepairIssues = reviewedClaimRepairIssues(value, proposal);
       const awaitingEvidence = fieldsAffectedByReviewEvidence(value);
       for (const field of SDF_CORE_FIELDS) {
         const item = value.fields[field];
@@ -2288,12 +2321,19 @@ async function modelScientificReviewCanonicalProposal(
             };
             if (Buffer.byteLength(JSON.stringify(receipt), 'utf8') <= 128 * 1024) rejectedCandidates.push(receipt);
           },
-          validationFeedback: () => (context.requireReviewedClaims
+          validationFeedback: () => {
+            let feedback = (context.requireReviewedClaims
             ? '只返回fields、needsMoreEvidence和claimSuggestions；原文支持核心贡献时至少保留一条有依据的core主张，不编造。'
             : '只返回fields、needsMoreEvidence及可选claimSuggestions。')
             + '六字段各只含verdict、summary、sourcePassageIds、issues；verdict为accepted/revised/blocked，issues每项只含code、problem、sourcePassageIds，code遵循原合同。保留必要科学条件，P编号只取原文。'
             + candidateIssues.join('；') + validation.feedback()
-            + (claimsDiagnostic ? `主张输出未满足现有来源绑定合同：claimSuggestions=${claimsDiagnostic}。按原合同返回可物化的core主张；sourceBindings仅引用所属字段的P编号，完整保留必要限定，不编造依据。` : ''),
+            + (claimsDiagnostic ? `主张输出未满足现有来源绑定合同：claimSuggestions=${claimsDiagnostic}。按原合同返回可物化的core主张；sourceBindings仅引用所属字段的P编号，完整保留必要限定，不编造依据。` : '');
+            for (const issue of claimRepairIssues) {
+              if (feedback.length + issue.length + 1 > 2_000) break;
+              feedback += `\n${issue}`;
+            }
+            return feedback;
+          },
           validationDiagnostic: () => claimsDiagnostic ? `claims_${claimsDiagnostic}` : undefined },
       );
       completion = response.completion;

@@ -24,6 +24,62 @@ const rejected = { fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [fiel
     statement: core.insight, conditions: [], limitations: [], sourceBindings: [{ sourcePassageId: 'P99999', relation: 'supports' }] }] };
 
 describe('private failed source-review output', () => {
+  it.each([{ corrected: true, crowded: false, changedSources: false }, { corrected: false, crowded: false, changedSources: false },
+    { corrected: false, crowded: true, changedSources: false }, { corrected: false, crowded: false, changedSources: true }])(
+    'reports field and Claims errors together in the existing single repair (%j)', async ({ corrected, crowded, changedSources }) => {
+    const reviewSourceMap = structuredClone(sourceMap);
+    if (changedSources) reviewSourceMap.pages[0]!.blocks[0]!.text += ' The model uses fixed parameters.'.repeat(40);
+    if (changedSources) reviewSourceMap.pages.push({ ...structuredClone(reviewSourceMap.pages[0]!), page: 2,
+      blocks: [{ ...structuredClone(reviewSourceMap.pages[0]!.blocks[0]!), id: 'context-block',
+        text: 'The appendix also describes a baseline control calculation with fixed input parameters.' }] });
+    const mixed = structuredClone(rejected);
+    mixed.claimSuggestions[0]!.sourceBindings[0]!.sourcePassageId = 'P00001';
+    mixed.fields.insight!.summary = '改写后的候选不能继续标记为未改动的 accepted。';
+    mixed.claimSuggestions.push({ ...structuredClone(mixed.claimSuggestions[0]!), clientKey: 'counter', kind: 'counter',
+      sourceBindings: [{ sourcePassageId: 'P99999', relation: 'supports' }] });
+    if (changedSources) mixed.fields.insight!.sourcePassageIds = ['P00002'];
+    if (crowded) {
+      for (const field of SDF_CORE_FIELDS) mixed.fields[field]!.summary = `改写${field}`;
+      for (let index = 2; index < 12; index++) mixed.claimSuggestions.push({ ...structuredClone(mixed.claimSuggestions[1]!),
+        clientKey: `counter-${index}`, sourceBindings: [{ sourcePassageId: 'P99999', relation: 'supports' },
+          { sourcePassageId: 'P88888', relation: 'context' }] });
+    }
+    const repaired = structuredClone(mixed);
+    repaired.fields.insight!.summary = core.insight;
+    Object.assign(repaired.claimSuggestions[1]!, { parentClientKey: 'claim',
+      sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] });
+    const outputs = [semantic, { fields, needsMoreEvidence: [] }, mixed, corrected ? repaired : mixed];
+    const requests: Parameters<Provider['complete']>[0][] = [];
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async request => {
+      const response = outputs[requests.length]; requests.push(request);
+      if (!response) throw new Error('Unexpected request');
+      return { text: JSON.stringify(response), model: 'fixture', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } };
+    } };
+    const gateway = new AiGateway({ providers: [provider] });
+    const authorizationContext = { taskId: 'source-review', workspaceId: 'workspace', actorId: 'actor' };
+    const composed = await extractHandler(gateway, { payload: {} }, { sourceMap: reviewSourceMap,
+      scientificReview: { requestId: 'source-compose', authorizationContext } });
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap: reviewSourceMap, previousResult: composed,
+      requireReusableSemanticStage: true, reviewExistingSourceTaskId: 'source-compose',
+      scientificReview: { requestId: 'source-review', authorizationContext, requireReviewedClaims: true } });
+    expect(requests).toHaveLength(4);
+    const feedback = requests[3]!.messages.at(-1)!.content;
+    expect(feedback).toContain('insight: accepted requires unchanged');
+    expect(feedback).toContain('claimSuggestions[1].parentClientKey: required_non_core');
+    if (changedSources) expect(feedback).not.toContain('outside_field_source_ids');
+    else expect(feedback).toContain('claimSuggestions[1].sourceBindings[0].sourcePassageId: outside_field_source_ids');
+    expect(feedback.slice(feedback.indexOf('只返回fields')).length).toBeLessThanOrEqual(2_000);
+    if (corrected) {
+      expect(result.scientificReview?.status).toBe('review_received');
+      expect(result.reviewedClaimSuggestions).toHaveLength(2);
+      expect(result.scientificReview?.rejectedOutputs).toBeUndefined();
+    } else {
+      expect(result.scientificReview?.status).toBe('blocked_scientific_review');
+      expect(result.reviewedClaimSuggestions).toBeUndefined();
+      expect(result.scientificReview?.rejectedOutputs).toHaveLength(2);
+    }
+  });
+
   it('accepts a corrected source-bound review after one bounded repair without repeating composition', async () => {
     const corrected = structuredClone(rejected);
     corrected.claimSuggestions[0]!.sourceBindings[0]!.sourcePassageId = 'P00001';
