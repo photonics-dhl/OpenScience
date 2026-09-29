@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { AiGateway, type Provider } from '@openscience/ai-gateway';
 import type { DocumentSourceMap } from '@openscience/domain';
@@ -24,9 +24,102 @@ const rejected = { fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [fiel
   needsMoreEvidence: [], claimSuggestions: [{ clientKey: 'claim', sourceField: 'insight', kind: 'core',
     statement: core.insight, conditions: [], limitations: [], sourceBindings: [{ sourcePassageId: 'P99999', relation: 'supports' }] }] };
 
+async function independentFixture() {
+  const pdf = Buffer.from('%PDF-1.7 independent-review fixture');
+  const map = structuredClone(sourceMap);
+  map.contentHash = createHash('sha256').update(pdf).digest('hex');
+  map.pages.push({ ...structuredClone(map.pages[0]!), page: 2, blocks: [{ ...structuredClone(map.pages[0]!.blocks[0]!),
+    id: 'control', text: 'A separate control case is described here; it does not establish the first case.' }] });
+  const draft = [{ ...structuredClone(rejected.claimSuggestions[0]!), sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }];
+  const output = { ...structuredClone(rejected), claimSuggestions: structuredClone(draft) };
+  const outputs = [semantic, { fields, needsMoreEvidence: [], draftClaims: draft }];
+  const complete = vi.fn(async () => ({ text: JSON.stringify(outputs.shift()), model: 'fixture', finishReason: 'stop' as const,
+    usage: { inputTokens: 1, outputTokens: 1 } }));
+  const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete }] });
+  const authorizationContext = { taskId: 'review', workspaceId: 'workspace', actorId: 'actor' };
+  const previousResult = await extractHandler(gateway, { payload: {} }, { sourceMap: map,
+    scientificReview: { requestId: 'compose', authorizationContext } });
+  expect(complete).toHaveBeenCalledTimes(2);
+  const beforeReviewProviderCall = vi.fn(async () => {});
+  const web = vi.spyOn(gateway, 'reviewScientific').mockImplementation(async () => ({ text: JSON.stringify(output),
+    promptHash: 'b'.repeat(64), responseHash: 'c'.repeat(64) }) as never);
+  const context: NonNullable<Parameters<typeof extractHandler>[2]> = { sourceMap: map, previousResult,
+    reviewExistingSourceTaskId: 'compose', requireReusableSemanticStage: true, scientificReview: {
+      mode: 'web', requestId: 'review', authorizationContext, requireReviewedClaims: true, beforeReviewProviderCall,
+      sourceDocument: { fileName: 'source.pdf', mediaType: 'application/pdf', sha256: map.contentHash, bytes: Uint8Array.from(pdf) },
+    } };
+  return { output, context, web, complete, beforeReviewProviderCall,
+    run: () => extractHandler(gateway, { payload: { mode: 'model' } }, context) };
+}
+
+describe('terminal independent source review', () => {
+  it.each(['missing-core', 'missing-parent', 'cross-field-source', 'accepted-change', 'false-revised', 'unexplained-block'])(
+    'rejects %s in the shared complete field/Claims guard after exactly one review', async failure => {
+      const f = await independentFixture();
+      if (failure === 'missing-core') f.output.claimSuggestions = [];
+      if (failure === 'missing-parent') f.output.claimSuggestions.push({ ...structuredClone(f.output.claimSuggestions[0]!), clientKey: 'counter', kind: 'counter' });
+      if (failure === 'cross-field-source') f.output.claimSuggestions[0]!.sourceBindings[0]!.sourcePassageId = 'P00002';
+      if (failure === 'accepted-change') f.output.fields.method!.summary = '这是不同的候选内容。';
+      if (failure === 'false-revised') Object.assign(f.output.fields.method!, { verdict: 'revised', issues: [{
+        code: 'QUALIFIER_LOSS', problem: 'No actual revision was made.', sourcePassageIds: ['P00001'] }] });
+      if (failure === 'unexplained-block') Object.assign(f.output.fields.method!, { verdict: 'blocked', summary: '', sourcePassageIds: [] });
+      const result = await f.run();
+      expect(result.scientificReview?.status).toBe('blocked_scientific_review');
+      expect(result.reviewedClaimSuggestions).toBeUndefined();
+      expect(f.web).toHaveBeenCalledOnce(); expect(f.complete).toHaveBeenCalledTimes(2);
+    });
+
+  it('stops on needsMoreEvidence, preserving its questions and never rendering or submitting again', async () => {
+    const f = await independentFixture();
+    Object.assign(f.output, { needsMoreEvidence: [{ affectedFields: ['method'], question: 'Is the equation legible?', requestedContext: 'Equation and its definition' }] });
+    const render = vi.fn(); f.context.scientificReview!.renderPages = render;
+    const result = await f.run();
+    expect(result.scientificReview).toMatchObject({ status: 'awaiting_review_evidence', needsMoreEvidence: f.output.needsMoreEvidence });
+    expect(result.core.method).toBe(''); expect(result.reviewedClaimSuggestions).toBeUndefined();
+    expect(f.web).toHaveBeenCalledOnce(); expect(render).not.toHaveBeenCalled(); expect(f.complete).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['permission', 'pdf-identity', 'pdf-size', 'saved-identity', 'required-packet-overflow'])(
+    'blocks %s before any independent provider submission', async failure => {
+      const f = await independentFixture();
+      const ctx = f.context.scientificReview!;
+      if (failure === 'permission') f.beforeReviewProviderCall.mockRejectedValue(new Error('[blocked] authorization changed'));
+      if (failure === 'pdf-identity') ctx.sourceDocument!.bytes = Buffer.from('different PDF');
+      if (failure === 'pdf-size') ctx.sourceDocument!.bytes = Buffer.alloc(4 * 1024 * 1024 + 1);
+      if (failure.startsWith('saved-') || failure === 'required-packet-overflow') {
+        const text = (failure === 'required-packet-overflow' ? ' '.repeat(61_440) : '') + JSON.stringify(f.output);
+        ctx.savedReviewOutput = { sourceTaskId: 'failed', structuredAttempt: 1, text, byteLength: Buffer.byteLength(text),
+          responseHash: createHash('sha256').update(text).digest('hex'), promptHash: 'a'.repeat(64), provider: 'fixture', model: 'fixture' };
+        if (failure === 'saved-identity') ctx.savedReviewOutput.text += ' ';
+      }
+      if (failure === 'required-packet-overflow') {
+        const result = await f.run();
+        expect(result.scientificReview?.status).toBe('awaiting_review_evidence');
+        expect(Object.values(result.fieldDiagnosticsDetails ?? {}).join(' ')).toContain('required_review_context_too_large');
+      } else await expect(f.run()).rejects.toThrow('[blocked]');
+      expect(f.web).not.toHaveBeenCalled(); expect(f.complete).toHaveBeenCalledTimes(2);
+    });
+
+  it('keeps the same identity on an unknown outcome; never switches to a model request', async () => {
+    const f = await independentFixture();
+    f.web.mockRejectedValue(new Error('submission outcome unknown'));
+    for (let i = 0; i < 2; i++) {
+      const result = await f.run();
+      expect(result.scientificReview?.status).toBe('blocked_scientific_review');
+      expect(f.web).toHaveBeenCalledTimes(i + 1);
+    }
+    expect(f.web.mock.calls[0]![0]).toEqual(f.web.mock.calls[1]![0]);
+    expect(f.complete).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('private failed source-review output', () => {
-  it.each(['draft', 'saved'] as const)('reviews candidate science and its source context, not only parent links (%s)', async mode => {
+  it.each(['draft', 'saved', 'web-draft', 'web-saved'] as const)('reviews candidate science and its source context, not only parent links (%s)', async mode => {
+    const web = mode.startsWith('web-');
+    const savedMode = mode.endsWith('saved');
     const scopedMap = structuredClone(sourceMap);
+    const pdf = Buffer.from('%PDF-1.7 source fixture');
+    scopedMap.contentHash = createHash('sha256').update(pdf).digest('hex');
     const texts = [
       'This paper describes a numerical model, not an experimental measurement. ',
       'Particles are homogeneous along the beta direction. The field is constant along alpha due to structural symmetry. ',
@@ -54,21 +147,31 @@ describe('private failed source-review output', () => {
       return { text: JSON.stringify(output), model: 'fixture', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } };
     } }] });
     const authorizationContext = { taskId: 'task', workspaceId: 'workspace', actorId: 'actor' };
+    let webPrompt = '';
+    const webReview = vi.spyOn(gateway, 'reviewScientific').mockImplementation(async input => {
+      webPrompt = input.prompt;
+      expect(input.attachments?.[0]?.bytes).toEqual(Uint8Array.from(pdf));
+      return { text: JSON.stringify(final), promptHash: 'a'.repeat(64), responseHash: 'b'.repeat(64) } as never;
+    });
     const composed = await extractHandler(gateway, { payload: {} }, { sourceMap: scopedMap,
       scientificReview: { requestId: 'compose', authorizationContext } });
     expect(composed.scientificReview?.draftClaims).toEqual(draft);
     expect(composed.reviewedClaimSuggestions).toBeUndefined();
-    if (mode === 'saved') delete composed.scientificReview!.draftClaims;
+    if (savedMode) delete composed.scientificReview!.draftClaims;
     const result = await extractHandler(gateway, { payload: {} }, { sourceMap: scopedMap, previousResult: composed,
       requireReusableSemanticStage: true, reviewExistingSourceTaskId: 'compose', scientificReview: {
         requestId: 'review', authorizationContext, requireReviewedClaims: true,
-        ...(mode === 'saved' ? { savedReviewOutput: { sourceTaskId: 'failed', structuredAttempt: 2, text,
+        ...(web ? { mode: 'web' as const, beforeReviewProviderCall: async () => {},
+          sourceDocument: { fileName: 'source.pdf' as const, mediaType: 'application/pdf' as const,
+            sha256: scopedMap.contentHash, bytes: Uint8Array.from(pdf) } } : {}),
+        ...(savedMode ? { savedReviewOutput: { sourceTaskId: 'failed', structuredAttempt: 2, text,
           byteLength: Buffer.byteLength(text), responseHash: createHash('sha256').update(text).digest('hex'),
           promptHash: 'a'.repeat(64), provider: 'fixture', model: 'fixture' }, beforeReviewProviderCall: async () => {} } : {}),
       } });
-    expect(requests).toHaveLength(3);
-    const prompt = requests[2]!.messages.map(message => message.content).join('\n');
-    expect(prompt).toContain(mode === 'saved' ? text : JSON.stringify(draft));
+    expect(requests).toHaveLength(web ? 2 : 3);
+    expect(webReview).toHaveBeenCalledTimes(web ? 1 : 0);
+    const prompt = web ? webPrompt : requests[2]!.messages.map(message => message.content).join('\n');
+    expect(prompt).toContain(savedMode ? text : JSON.stringify(draft));
     expect(prompt).toContain('[P00002'); expect(prompt).toContain('Particles are homogeneous along the beta direction');
     expect(prompt).toContain('field is constant along alpha'); expect(prompt).toContain('equal optical paths');
     expect(prompt).toContain('逐条'); expect(prompt).toContain('未审');

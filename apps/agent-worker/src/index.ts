@@ -26,7 +26,7 @@ import {
   lockTrashReferences,
   assertSearchIndexSourceLive,
   findSavedIngestionCommit,
-  requireHermesSourceReviewRecoveryBinding,
+  requireHermesSourceReviewExecution,
   type HermesSavedSourceReviewOutput,
   VISUAL_NARRATIVE_PROFILE,
 } from '@openscience/domain';
@@ -72,12 +72,17 @@ import { startJournalWorker } from './journal-worker';
 import { createPresentationGenerationHandler, requireIllustrationReviewAuthority, requireIllustrationReviewSubmission } from './presentation/handler';
 import { createPresentationFigureAuditHandler, enqueueFigureAuditFromResult } from './presentation/figure-audit';
 
-const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number }>();
+const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number;
+  sourceReview?: {
+    input: Parameters<typeof requireHermesSourceReviewExecution>[1];
+    execution: Extract<Awaited<ReturnType<typeof requireHermesSourceReviewExecution>>, { mode: 'web' }>;
+  };
+}>();
 type SpoolSubmission = NonNullable<ConstructorParameters<typeof CodexSpoolImageProvider>[0]['withSubmission']>;
 type IllustrationSubmission = NonNullable<ConstructorParameters<typeof ChatGptWebScienceReviewProvider>[0]['withIllustrationSubmission']>;
 
 /** Fence only local producer writes; provider waiting and model execution never hold this transaction. */
-function createSpoolSubmission(prisma: AgentDeps['prisma'], kind: 'sdf.extract' | 'presentation.generate'): SpoolSubmission {
+export function createSpoolSubmission(prisma: AgentDeps['prisma'], kind: 'sdf.extract' | 'presentation.generate'): SpoolSubmission {
   return async (owner, publish) => {
     const execution = spoolTaskExecution.getStore();
     if (!execution || execution.taskId !== owner.taskId
@@ -112,6 +117,18 @@ function createSpoolSubmission(prisma: AgentDeps['prisma'], kind: 'sdf.extract' 
         ...(Array.isArray(video?.sceneImageAssetIds) ? video.sceneImageAssetIds : [])].filter((id): id is string => typeof id === 'string');
       if (parents.length && await tx.presentationAsset.count({ where: { id: { in: parents }, deletedAt: null, researchObjectId: task.session.researchObjectId ?? undefined } }) !== new Set(parents).size) {
         throw new Error('[blocked] media source was deleted');
+      }
+      if (kind === 'sdf.extract' && execution.sourceReview) {
+        const bound = execution.sourceReview;
+        const expectedKey = `ingestion-analysis-compose:${bound.input.ingestionTaskId}:${bound.input.failedTaskId}:${bound.input.compositionTaskId}:scientific-review-v4`;
+        if (bound.input.ownerTaskId !== task.id || bound.input.executionAttempt !== execution.executionAttempt
+          || task.idempotencyKey !== expectedKey)
+          throw new Error('[blocked] Source review publication identity changed');
+        const current = await requireHermesSourceReviewExecution(tx, bound.input);
+        if (JSON.stringify(current) !== JSON.stringify(bound.execution)
+          || !await buildIngestionExternalProcessingPolicy(tx)({ taskId: task.id,
+            workspaceId: task.session.researchObject.workspaceId, actorId: task.session.userId }))
+          throw new Error('[blocked] Source review publication authorization changed');
       }
       return publish();
     }, { timeout: 30_000 });
@@ -341,6 +358,7 @@ export function createHandlers(
       let savedReviewOutput: HermesSavedSourceReviewOutput | undefined;
       let beforeReviewProviderCall: (() => Promise<void>) | undefined;
       let requireReviewedClaims = false;
+      let scientificReviewMode: 'model' | 'web' = 'model';
       let persistedScientificReviewCandidateHash: string | undefined;
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
       const parserCheckpoint = ownerTask.result;
@@ -371,21 +389,32 @@ export function createHandlers(
       }
       const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):(scientific-summary-v3|scientific-review-v4)$/.exec(ownerTask.idempotencyKey ?? '');
       if (composition) {
-        if (composition[4] === 'scientific-review-v4' && composition[2] !== composition[3]) {
-          const recoveryInput = {
+        if (composition[4] === 'scientific-review-v4') {
+          const executionInput = {
             ownerTaskId: ownerTask.id, ingestionTaskId: composition[1]!,
             failedTaskId: composition[2]!, compositionTaskId: composition[3]!,
+            executionAttempt: task.executionAttempt,
           };
-          savedReviewOutput = await deps.prisma.$transaction(tx => requireHermesSourceReviewRecoveryBinding(tx,
-            recoveryInput), { isolationLevel: 'Serializable' });
-          if (savedReviewOutput) {
-            const selected = savedReviewOutput;
+          const execution = await deps.prisma.$transaction(tx => requireHermesSourceReviewExecution(tx,
+            executionInput), { isolationLevel: 'Serializable' });
+          scientificReviewMode = execution.mode;
+          savedReviewOutput = execution.savedOutput;
+          if (execution.mode === 'web' && execution.taskId !== ownerTask.id)
+            throw new Error('[blocked] Independent source review task identity changed');
+          const claimedExecution = spoolTaskExecution.getStore();
+          if (execution.mode === 'web' && claimedExecution?.taskId === ownerTask.id
+            && claimedExecution.executionAttempt === executionInput.executionAttempt) {
+            // Keep the original selection through readiness/attachment awaits until the
+            // existing locked spool transaction can revalidate it immediately before publish.
+            claimedExecution.sourceReview = { input: { ...executionInput }, execution: structuredClone(execution) };
+          }
+          if (execution.mode === 'web' || savedReviewOutput) {
             beforeReviewProviderCall = async () => {
-              const current = await deps.prisma.$transaction(tx => requireHermesSourceReviewRecoveryBinding(tx,
-                recoveryInput), { isolationLevel: 'Serializable' });
-              if (JSON.stringify(current) !== JSON.stringify(selected)
+              const current = await deps.prisma.$transaction(tx => requireHermesSourceReviewExecution(tx,
+                executionInput), { isolationLevel: 'Serializable' });
+              if (JSON.stringify(current) !== JSON.stringify(execution)
                 || !await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false)) {
-                throw new Error('[blocked] Saved source review processing authorization changed');
+                throw new Error('[blocked] Source review processing authorization changed');
               }
             };
           }
@@ -442,7 +471,7 @@ export function createHandlers(
             },
             select: { id: true },
           });
-          requireReviewedClaims = Boolean(savedReviewOutput) || narrativeStep !== null;
+          requireReviewedClaims = scientificReviewMode === 'web' || Boolean(savedReviewOutput) || narrativeStep !== null;
         }
       }
       const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
@@ -590,8 +619,10 @@ export function createHandlers(
           reviewExistingSourceTaskId,
           scientificReview: {
             requestId: ownerTask.id,
+            mode: scientificReviewMode,
             requireReviewedClaims,
-            ...(savedReviewOutput ? { savedReviewOutput, beforeReviewProviderCall } : {}),
+            ...(savedReviewOutput ? { savedReviewOutput } : {}),
+            ...(beforeReviewProviderCall ? { beforeReviewProviderCall } : {}),
             authorizationContext: trustedAuthorizationContext,
             ...(persistedScientificReviewCandidateHash ? { persistedCandidateHash: persistedScientificReviewCandidateHash } : {}),
             ...(reusableScientificReviewAttempt ? { reusableAttempt: reusableScientificReviewAttempt } : {}),
@@ -782,7 +813,7 @@ export async function createPollOnce(
   };
 }
 
-function buildIngestionExternalProcessingPolicy(prisma: ReturnType<typeof createPrismaClient>): ExternalProcessingPolicy {
+function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionClient, 'ingestionTask' | 'membership'>): ExternalProcessingPolicy {
   return async (context) => {
     const task = await prisma.ingestionTask.findUnique({
       where: { agentTaskId: context.taskId },

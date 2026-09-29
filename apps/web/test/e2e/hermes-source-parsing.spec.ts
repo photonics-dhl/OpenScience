@@ -1,14 +1,20 @@
 import { expect, test } from 'playwright/test';
 
-test('saved source review correction keeps its charged operation after a lost response', async ({ page }) => {
+for (const scenario of [
+  { recovery: 'source-review-saved', outcome: 'lost-response' },
+  { recovery: 'source-review-independent', outcome: 'lost-response' },
+  { recovery: 'source-review-independent', outcome: '409' },
+]) {
+test(`${scenario.recovery} preserves the correct operation after ${scenario.outcome}`, async ({ page }) => {
   const ro = '10000000-0000-4000-8000-000000000001';
   const runId = '50000000-0000-4000-8000-000000000001';
   const run = { id: runId, researchObjectId: ro, actorId: 'author', versionId: null, version: 2,
     profile: 'visual-narrative-v1', maxAgentTasks: 9, sourceClaimIds: [], status: 'failed', error: 'review output incomplete',
     createdAt: '2026-09-29T00:00:00Z', updatedAt: '2026-09-29T00:00:00Z',
-    canRetryGeneration: true, generationRecovery: 'source-review-saved', chargeableAttempts: 1,
+    canRetryGeneration: true, generationRecovery: scenario.recovery, chargeableAttempts: 1,
     steps: [{ id: 'review-step', stage: 'source_review', ordinal: 1, status: 'failed', ingestionTaskId: 'source-task', agentTaskId: 'review-task', error: null }] };
   const writes: Array<{ key: string; body: unknown }> = [];
+  let refreshedAfterFailure = false;
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: 'http://127.0.0.1:3010' }]);
   await page.route('**/api/**', async route => {
     const request = route.request(), path = new URL(request.url()).pathname;
@@ -19,29 +25,47 @@ test('saved source review correction keeps its charged operation after a lost re
     if (path === `/api/research-objects/${ro}`) return json({ researchObject: { id: ro, workspaceId: 'workspace', title: 'Saved source review', version: 1, status: 'draft', visibility: 'private', sdf: { core: {}, nodes: [] } } });
     if (path.endsWith('/versions')) return json({ versions: [] });
     if (path.endsWith('/ingestion')) return json({ tasks: [] });
-    if (path.endsWith(`/hermes-runs/${runId}`)) return json({ run: { ...run, version: writes.length ? 9 : 2 } });
+    if (path.endsWith(`/hermes-runs/${runId}`)) {
+      refreshedAfterFailure ||= writes.length > 0;
+      return json({ run: { ...run, version: writes.length ? 9 : 2 } });
+    }
     if (request.method() === 'POST') {
       expect(path).toBe(`/api/research-objects/${ro}/hermes-runs/${runId}/retry-generation`);
       writes.push({ key: request.headers()['idempotency-key'], body: request.postDataJSON() });
-      if (writes.length === 1) return route.abort('failed');
+      if (writes.length === 1) return scenario.outcome === '409'
+        ? route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: { code: 'VERSION_CONFLICT', message: 'The run changed.' } }) })
+        : route.abort('failed');
       return json({ run: { ...run, version: 10, status: 'running', canRetryGeneration: false, error: null } });
     }
     return json({});
   });
   await page.goto(`/research-objects/${ro}/hermes?run=${runId}`);
-  await expect(page.getByText(/This adds one charged task/)).toBeVisible();
-  await expect(page.getByText(/earlier requests may already have been billed/)).toBeVisible();
-  const retry = page.getByRole('button', { name: 'Correct saved review and continue', exact: true });
+  if (scenario.recovery === 'source-review-independent') {
+    await expect(page.getByText(/ChatGPT Web 6 Pro/)).toBeVisible();
+    await expect(page.getByText(/platform task credits and ChatGPT subscription usage/)).toBeVisible();
+  } else {
+    await expect(page.getByText(/This adds one charged task/)).toBeVisible();
+    await expect(page.getByText(/earlier requests may already have been billed/)).toBeVisible();
+  }
+  const retry = page.getByRole('button', { name: scenario.recovery === 'source-review-independent'
+    ? 'Review independently and continue' : 'Correct saved review and continue', exact: true });
   await retry.click();
   await expect.poll(() => writes.length).toBe(1);
+  if (scenario.outcome === '409') await expect.poll(() => refreshedAfterFailure).toBe(true);
   await expect(retry).toBeEnabled();
   await retry.click();
   await expect.poll(() => writes.length).toBe(2);
   expect(writes[0]!.key).toBeTruthy();
-  expect(writes[1]).toEqual(writes[0]);
-  expect(writes[1]!.body).toEqual({ expectedVersion: 2 });
+  if (scenario.outcome === '409') {
+    expect(writes[1]!.key).not.toBe(writes[0]!.key);
+    expect(writes[1]!.body).toEqual({ expectedVersion: 9 });
+  } else {
+    expect(writes[1]).toEqual(writes[0]);
+    expect(writes[1]!.body).toEqual({ expectedVersion: 2 });
+  }
   await expect(retry).toHaveCount(0);
 });
+}
 
 for (const outcome of ['lost-response', '409', '408', '429', '503', 'before-post'] as const) {
 test(`parser recovery preserves only uncertain submitted requests: ${outcome}`, async ({ page }) => {

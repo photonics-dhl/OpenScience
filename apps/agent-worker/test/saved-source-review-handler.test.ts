@@ -5,7 +5,10 @@ import type { AiGateway } from '@openscience/ai-gateway';
 
 const seam = vi.hoisted(() => ({
   extractHandler: vi.fn(),
-  requireSavedBinding: vi.fn(),
+  requireExecution: vi.fn(),
+  claim: vi.fn(),
+  progress: vi.fn(),
+  lock: vi.fn(),
 }));
 
 vi.mock('../src/extractor', async load => ({
@@ -15,10 +18,13 @@ vi.mock('../src/extractor', async load => ({
 
 vi.mock('@openscience/domain', async load => ({
   ...await load<typeof import('@openscience/domain')>(),
-  requireHermesSourceReviewRecoveryBinding: seam.requireSavedBinding,
+  requireHermesSourceReviewExecution: seam.requireExecution,
+  claimAgentTask: seam.claim,
+  markTaskProgress: seam.progress,
+  lockTrashReferences: seam.lock,
 }));
 
-import { createHandlers } from '../src/index';
+import { createHandlers, createPollOnce, createSpoolSubmission } from '../src/index';
 
 // This is deliberately handler-seam coverage. The Domain fixture already exercises the
 // real saved-output identity, lease, and execution-attempt binder; this test verifies that
@@ -89,22 +95,113 @@ function fixture(executionAttempt = 1) {
   const providerSubmit = vi.fn();
   const gateway = { completeStructured: providerSubmit, completeStructuredWithMetadata: providerSubmit } as unknown as AiGateway;
   const handlers = createHandlers(gateway, { parserCascade, externalProcessingPolicy: policy });
-  const execute = () => handlers['sdf.extract']!({ prisma, storage, malwareScanner: vi.fn() } as never,
+  const deps = { prisma, storage, malwareScanner: vi.fn(), redis: {
+    brpoplpush: vi.fn().mockResolvedValue(ids.owner), lrem: vi.fn().mockResolvedValue(1),
+  } };
+  const execute = () => handlers['sdf.extract']!(deps as never,
     { id: ids.owner, payload, executionAttempt, retryCount: 0 });
   return { execute, owner, sourceResult, sourceMap, saved, reference, parserCascade, policy, providerSubmit,
-    prisma, tx, storage };
+    prisma, tx, storage, deps, handlers };
 }
 
 describe('saved source-review handler seam', () => {
   beforeEach(() => {
     seam.extractHandler.mockReset();
-    seam.requireSavedBinding.mockReset();
+    seam.requireExecution.mockReset().mockResolvedValue({ mode: 'model' });
+    seam.claim.mockReset().mockResolvedValue({ executionAttempt: 1, retryCount: 0 });
+    seam.progress.mockReset().mockResolvedValue(undefined);
+    seam.lock.mockReset().mockResolvedValue(undefined);
+  });
+
+  it.each(['unchanged', 'downgraded', 'revoked', 'run', 'receipt', 'task-key', 'legacy'] as const)(
+    'rechecks bound authority in the actual final spool transaction (%s)', async change => {
+      const f = fixture();
+      const execution = { mode: 'web', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
+        taskId: ids.owner, runId: 'run', savedOutput: f.saved };
+      seam.requireExecution.mockResolvedValue(change === 'legacy' ? { mode: 'model', savedOutput: f.saved } : execution);
+      Object.assign(f.tx.agentTask, { findUnique: f.prisma.agentTask.findUnique });
+      const membership = { findUnique: vi.fn().mockResolvedValue({ userId: 'actor', workspaceId: 'workspace', role: 'author' }) };
+      Object.assign(f.tx, {
+        artifact: { ...f.tx.artifact, ...f.prisma.artifact },
+        membership,
+        ingestionTask: { findUnique: vi.fn(async () => ({ agentTask: f.owner, artifactId: 'artifact',
+          artifact: { workspaceId: 'workspace' }, batch: { userId: 'actor', researchObjectId: 'ro',
+            researchObject: { workspaceId: 'workspace', workspace: { status: 'active' } } } })) },
+      });
+      const publish = vi.fn(async () => 'published');
+      const submission = createSpoolSubmission(f.prisma as never, 'sdf.extract');
+      seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
+        await context.scientificReview.beforeReviewProviderCall();
+        // This is the readiness/disk-await gap after successful early binding and policy.
+        await Promise.resolve();
+        if (change === 'downgraded' || change === 'revoked')
+          membership.findUnique.mockResolvedValue(change === 'revoked' ? null : {
+            userId: 'actor', workspaceId: 'workspace', role: 'reader' });
+        if (change === 'run') seam.requireExecution.mockRejectedValue(new Error('[blocked] run cancelled'));
+        if (change === 'receipt') seam.requireExecution.mockResolvedValue({ ...execution, savedOutput: { ...f.saved, text: 'changed' } });
+        if (change === 'task-key') f.owner.idempotencyKey = f.owner.idempotencyKey.replace(ids.failed, ids.source);
+        await submission({ taskId: ids.owner, artifactId: 'artifact' }, publish);
+        return { core: { method: 'reviewed' }, needsMoreInformation: [] };
+      });
+      const poll = await createPollOnce(f.handlers, { runMaintenance: false });
+      await poll(f.deps as never);
+      expect(f.policy, JSON.stringify(seam.progress.mock.calls.map(call => call[1]))).toHaveBeenCalledTimes(2);
+      expect(seam.lock).toHaveBeenCalledTimes(2); // Existing parser checkpoint, then final spool publication.
+      if (change === 'unchanged' || change === 'legacy') {
+        expect(publish).toHaveBeenCalledOnce();
+        expect(seam.progress).toHaveBeenLastCalledWith(f.deps, expect.objectContaining({ status: 'succeeded' }));
+        expect(seam.requireExecution).toHaveBeenCalledTimes(change === 'legacy' ? 2 : 3);
+      } else {
+        // The provider puts attachments, reservation and queue file exclusively inside publish.
+        expect(publish).not.toHaveBeenCalled();
+        expect(seam.progress).toHaveBeenLastCalledWith(f.deps, expect.objectContaining({ status: 'failed', error: expect.stringContaining('[blocked]') }));
+      }
+    });
+
+  it.each(['initial', 'saved'] as const)('binds the server-owned %s independent role and the original execution lease at submit', async kind => {
+    const f = fixture(2);
+    if (kind === 'initial') f.owner.idempotencyKey = `ingestion-analysis-compose:${ids.ingestion}:${ids.source}:${ids.source}:scientific-review-v4`;
+    const execution = { mode: 'web', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
+      taskId: ids.owner, runId: 'run', ...(kind === 'saved' ? { savedOutput: f.saved } : {}) };
+    seam.requireExecution.mockResolvedValue(execution);
+    seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
+      expect(context).toMatchObject({ requireReusableSemanticStage: true, reviewExistingSourceTaskId: ids.source,
+        scientificReview: { mode: 'web', requestId: ids.owner, requireReviewedClaims: true,
+          sourceDocument: { sha256: f.sourceMap.contentHash, mediaType: 'application/pdf' } } });
+      expect(context.scientificReview.savedReviewOutput).toBe(kind === 'saved' ? f.saved : undefined);
+      await context.scientificReview.beforeReviewProviderCall();
+      f.providerSubmit(); return { core: { method: 'independently reviewed' }, needsMoreInformation: [] };
+    });
+    await expect(f.execute()).resolves.toMatchObject({ core: { method: 'independently reviewed' } });
+    expect(seam.requireExecution).toHaveBeenCalledTimes(2);
+    for (const [tx, input] of seam.requireExecution.mock.calls) {
+      expect(tx).toBe(f.tx);
+      expect(input).toEqual({ ownerTaskId: ids.owner, ingestionTaskId: ids.ingestion, compositionTaskId: ids.source,
+        failedTaskId: kind === 'initial' ? ids.source : ids.failed, executionAttempt: 2 });
+    }
+    expect(f.parserCascade).not.toHaveBeenCalled(); expect(f.providerSubmit).toHaveBeenCalledOnce();
+  });
+
+  it.each(['mode', 'saved-body', 'lease', 'authorization'] as const)('rejects a changed independent %s before submit', async change => {
+    const f = fixture();
+    const execution = { mode: 'web', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
+      taskId: ids.owner, runId: 'run', savedOutput: f.saved };
+    seam.requireExecution.mockResolvedValueOnce(execution);
+    if (change === 'lease') seam.requireExecution.mockRejectedValue(new Error('[blocked] execution lease changed'));
+    else seam.requireExecution.mockResolvedValue(change === 'mode' ? { mode: 'model' }
+      : change === 'saved-body' ? { ...execution, savedOutput: { ...f.saved, text: 'changed' } } : execution);
+    f.policy.mockResolvedValueOnce(true).mockResolvedValue(change !== 'authorization');
+    seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
+      await context.scientificReview.beforeReviewProviderCall(); f.providerSubmit();
+    });
+    await expect(f.execute()).rejects.toThrow('[blocked]');
+    expect(f.providerSubmit).not.toHaveBeenCalled();
   });
 
   it('passes the exact saved body and trusted context to extraction without rerunning parser or composition', async () => {
     const f = fixture();
     const events: string[] = [];
-    seam.requireSavedBinding.mockImplementation(async () => { events.push('bind'); return f.saved; });
+    seam.requireExecution.mockImplementation(async () => { events.push('bind'); return { mode: 'model', savedOutput: f.saved }; });
     f.policy.mockImplementation(async () => { events.push('authorize'); return true; });
     seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
       expect(context).toMatchObject({ sourceMap: f.sourceMap, previousResult: f.sourceResult,
@@ -120,12 +217,12 @@ describe('saved source-review handler seam', () => {
     await expect(f.execute()).resolves.toMatchObject({ core: { method: 'corrected' }, sourceMapReused: true });
     expect(f.parserCascade).not.toHaveBeenCalled();
     expect(seam.extractHandler).toHaveBeenCalledOnce();
-    expect(seam.requireSavedBinding).toHaveBeenCalledTimes(2);
-    expect(seam.requireSavedBinding).toHaveBeenNthCalledWith(1, f.tx, {
-      ownerTaskId: ids.owner, ingestionTaskId: ids.ingestion, failedTaskId: ids.failed, compositionTaskId: ids.source,
+    expect(seam.requireExecution).toHaveBeenCalledTimes(2);
+    expect(seam.requireExecution).toHaveBeenNthCalledWith(1, f.tx, {
+      ownerTaskId: ids.owner, ingestionTaskId: ids.ingestion, failedTaskId: ids.failed, compositionTaskId: ids.source, executionAttempt: 1,
     });
-    expect(seam.requireSavedBinding).toHaveBeenNthCalledWith(2, f.tx, {
-      ownerTaskId: ids.owner, ingestionTaskId: ids.ingestion, failedTaskId: ids.failed, compositionTaskId: ids.source,
+    expect(seam.requireExecution).toHaveBeenNthCalledWith(2, f.tx, {
+      ownerTaskId: ids.owner, ingestionTaskId: ids.ingestion, failedTaskId: ids.failed, compositionTaskId: ids.source, executionAttempt: 1,
     });
     expect(f.policy).toHaveBeenCalledTimes(2);
     expect(f.providerSubmit).toHaveBeenCalledOnce();
@@ -134,10 +231,10 @@ describe('saved source-review handler seam', () => {
 
   it('rejects execution attempt 2 at the binding seam before extraction, submit, or result materialization', async () => {
     const f = fixture(2);
-    seam.requireSavedBinding.mockRejectedValue(new Error('[blocked] Saved source review binding changed'));
+    seam.requireExecution.mockRejectedValue(new Error('[blocked] Saved source review binding changed'));
 
     await expect(f.execute()).rejects.toThrow('binding changed');
-    expect(seam.requireSavedBinding).toHaveBeenCalledOnce();
+    expect(seam.requireExecution).toHaveBeenCalledOnce();
     expect(seam.extractHandler).not.toHaveBeenCalled();
     expect(f.providerSubmit).not.toHaveBeenCalled();
     expect(f.parserCascade).not.toHaveBeenCalled();
@@ -147,8 +244,8 @@ describe('saved source-review handler seam', () => {
 
   it.each(['authorization', 'saved-body'] as const)('stops a changed %s at the final submit boundary', async change => {
     const f = fixture();
-    seam.requireSavedBinding.mockResolvedValueOnce(f.saved).mockResolvedValue(
-      change === 'saved-body' ? { ...f.saved, text: 'changed' } : f.saved);
+    seam.requireExecution.mockResolvedValueOnce({ mode: 'model', savedOutput: f.saved }).mockResolvedValue(
+      { mode: 'model', savedOutput: change === 'saved-body' ? { ...f.saved, text: 'changed' } : f.saved });
     f.policy.mockResolvedValueOnce(true).mockResolvedValue(change !== 'authorization');
     seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
       await context.scientificReview.beforeReviewProviderCall();

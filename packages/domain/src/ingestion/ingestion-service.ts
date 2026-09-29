@@ -24,7 +24,7 @@ import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInpu
 import { automaticIngestionReview, automaticIngestionReviewStage, requireUnchangedAutomaticCore, type HermesIngestionReviewStage } from './automatic-review';
 import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
 import { findSavedIngestionCommit, type SavedIngestionOrigin } from './saved-source-commit';
-import { inspectHermesSourceReviewRecovery } from './source-review-recovery';
+import { HERMES_INDEPENDENT_SOURCE_REVIEW, inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview } from './source-review-recovery';
 
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
 
@@ -783,7 +783,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
       ? 'Source review output contract is incomplete; prior accepted draft and failed review preserved'
       : proof.recoveryClass === 'direct_composition_structured_review_failure'
         ? 'Source review JSON is incomplete; original composed draft and failed review preserved for one fresh review'
-      : proof.recoveryClass === 'saved_source_review_output_correction'
+      : proof.savedOutputEvidence
         ? 'Source review Claims contract is incomplete; exact rejected output preserved for one explicit correction'
       : 'Source review service unavailable; original candidate preserved') } });
   await tx.hermesResearchStep.create({ data: { runId: run.id, stage: 'source_review', ordinal: proof.nextOrdinal,
@@ -797,7 +797,8 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
   await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: run.researchObject.workspaceId,
     action: 'hermes.research_run.source_review_recovery', targetType: 'hermes_research_run', targetId: run.id,
     metadata: { requestDigest: input.requestDigest, clientIdempotencyKey: input.idempotencyKey,
-      explicitUserAction: true, possibleDuplicateProviderCharge: true, noProviderSwitch: true,
+      explicitUserAction: true, possibleDuplicateProviderCharge: true,
+      ...(proof.reviewMode === 'web' ? { ...HERMES_INDEPENDENT_SOURCE_REVIEW, noRuntimeFallback: true } : { noProviderSwitch: true }),
       previousVersion: input.expectedVersion, previousRunError: run.error, oldAgentTaskId: failed.id,
       compositionSourceAgentTaskId: composition.id, newAgentTaskId: task.id, serviceFailureAuditIds: proof.auditIds,
       serviceFailureClassifications: proof.failureClassifications,
@@ -837,6 +838,10 @@ export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
           if (recovery && (!proof || recovery.agentTaskId !== source.agentTaskId
             || source.agentTask.status !== 'succeeded'))
             throw new IngestionError('VALIDATION_ERROR', 'Recovered scientific review is not the bound final source');
+          if (!recovery && phases.some(step => step.stage === 'source_review')) {
+            const initial = await inspectInitialHermesSourceReview(tx, source.agentTaskId);
+            if (!initial) throw new IngestionError('VALIDATION_ERROR', 'Initial scientific review is not the bound final source');
+          }
           const completedPhases = proof ? phases.filter(step => !proof.failedSteps.some(failed => failed.id === step.id)) : phases;
           const completed = await tx.hermesResearchStep.updateMany({ where: { runId: run.id,
             id: { in: completedPhases.map(step => step.id) }, agentTask: { status: 'succeeded', deletedAt: null } },
@@ -1045,6 +1050,8 @@ export async function refreshIngestionAnalysis(
             throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the current scoped unconfirmed extraction can be composed');
           }
           const hermesRun = internalRunId ? await prepareHermesRefresh(tx, source, input, internalRunId) : undefined;
+          if (hermesRun && (!deps.audit?.record || hermesRun.maxAgentTasks !== 9 || hermesRun.steps.length + 1 + 3 > hermesRun.maxAgentTasks))
+            throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Independent source review receipt or remaining grant is unavailable');
           const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
             userId: input.userId,
             researchObjectId: source.batch.researchObjectId,
@@ -1073,7 +1080,9 @@ export async function refreshIngestionAnalysis(
             targetType: 'ingestion_task',
             targetId: source.id,
             metadata: {
-              policy: input.reviewOnly ? 'scientific_review_v4_correction' : 'scientific_summary_v3_composition',
+              policy: hermesRun ? 'scientific_review_v4_independent'
+                : input.reviewOnly ? 'scientific_review_v4_correction' : 'scientific_summary_v3_composition',
+              ...(hermesRun ? HERMES_INDEPENDENT_SOURCE_REVIEW : {}),
               oldAgentTaskId: input.sourceAgentTaskId,
               compositionSourceAgentTaskId: input.compositionSourceAgentTaskId,
               newAgentTaskId: replacement.id,

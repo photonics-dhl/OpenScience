@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-2026-09-29 保存回答的来源审校纠正候选：无迁移或Provider协议变更，复用原retry-generation与9任务额度；只允许一次服务器绑定的完整纠正，供应商调用前重核来源/权限，任务再次领取拒绝重发。新凝练私有保存draftClaims，既有终审核对；旧任务字段缺失保留原路径，新空/无效草稿不降级，API投影剔除草稿。沿干净已推SHA的正常no-tests/skip-migrate发布，部署不创建模型任务。显式纠正创建后，回退先等当前任务终态；旧worker不认识新恢复收据，不把在途任务交给旧版，不归零执行次数、不删除失败记录。已观察效果和精确release只见CURRENT。
+2026-09-29 独立来源终审候选：新Hermes来源审校以既有refresh审计记录固定ChatGPT Web 6 Pro职责；M3仍负责凝练，缺失或无效Hermes凭据不得降级成其他模型。历史M3任务不可重新标记；已保存拒收候选仅通过原retry-generation的一次明确独立审阅意图续作，原9任务预算、CAS、额度和外部提交保留。新终审只有一次请求，needsMoreEvidence终止，不自动补发或fallback。无迁移、安装、协议或endpoint变更；正常干净已推SHA部署不创建模型任务。回退前等独立审阅在途任务终态，保留提交/结果spool、审计与原文；旧7802 worker不理解新mode收据，不能接手在途任务。普通手动及历史路径兼容需定向验证，精确版本和真实科学质量只见CURRENT。
 
 2026-09-28 二次来源复审恢复：无迁移、Provider 或 parser 协议变更，仍沿干净已推 SHA 的 `--no-tests --skip-migrate --reuse-unchanged-capability-images` 发布。现有 ingestion retry 只恢复首次、零模型调用且来源绑定有效的候选复用 preflight 失败；原 task/幂等键/SourceMap/成功候选保留，不新扣内部额度、不重解析。发布前确认无在途任务；发布后从原来源任务页点一次恢复并核实际结果。应用回退须先等恢复任务终态，保留失败审计和原文，不手动重置数据库；该恢复不证明科学 Skill 的判断质量。
 

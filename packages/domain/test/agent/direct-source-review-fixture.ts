@@ -65,10 +65,11 @@ export function fixture(legacy = false) {
     metadata: { operation: 'text', outcome: 'succeeded', provider: 'primary', model: 'MiniMax-M3',
       promptHash: String(i + 1).repeat(64), inputTokens: 100, outputTokens: 100, retryCount: 0,
       fallbackReason: null, error: null, finishReason: 'stop' } });
-  type AuditWhere = { action?: string; actorId?: string; targetId?: string; targetType?: string; requestId?: string;
+  type AuditWhere = { action?: string | { in: string[] }; actorId?: string; targetId?: string; targetType?: string; requestId?: string; workspaceId?: string;
     metadata?: { path: string[]; equals: unknown }; AND?: Array<{ metadata: { path: string[]; equals: unknown } }> };
   const audits = (where: AuditWhere) => db.auditLogs.filter(row =>
-    ['action', 'actorId', 'targetId', 'targetType', 'requestId'].every(key => where[key as keyof AuditWhere] === undefined
+    (typeof where.action === 'object' ? where.action.in.includes(row.action) : where.action === undefined || row.action === where.action)
+    && ['actorId', 'targetId', 'targetType', 'requestId', 'workspaceId'].every(key => where[key as keyof AuditWhere] === undefined
       || row[key] === where[key as keyof AuditWhere])
     && (!where.metadata || row.metadata[where.metadata.path[0]!] === where.metadata.equals)
     && (!where.AND || where.AND.every(clause => row.metadata[clause.metadata.path[0]!] === clause.metadata.equals)));
@@ -82,13 +83,20 @@ export function fixture(legacy = false) {
     count: vi.fn(async () => db.agentTasks.filter(task => task.kind === 'presentation.generate').length) });
   Object.assign(prisma.hermesResearchRun, { findUniqueOrThrow: async (args: Parameters<typeof prisma.hermesResearchRun.findUnique>[0]) =>
     prisma.hermesResearchRun.findUnique(args) });
+  Object.assign(prisma.ingestionTask, { findUniqueOrThrow: async (args: Parameters<typeof prisma.ingestionTask.findUnique>[0]) =>
+    prisma.ingestionTask.findUnique(args) });
   Object.assign(prisma.hermesResearchStep, {
     create: async ({ data }: { data: Record<string, unknown> }) => {
       const step = { id: `step-${db.hermesResearchSteps.length}`, presentationAssetId: null, error: null, ...data };
       db.hermesResearchSteps.push(step); return step;
     },
-    findMany: async ({ where }: { where: { agentTaskId: string } }) => db.hermesResearchSteps.filter(step =>
-      step.stage === 'source_review' && step.ordinal > 0 && step.agentTaskId === where.agentTaskId),
+    findMany: async ({ where }: { where: { agentTaskId?: string; ordinal?: number | { gt: number };
+      OR?: Array<{ agentTaskId?: string; ingestionTaskId?: string }> } }) => db.hermesResearchSteps.filter(step =>
+      where.OR ? where.OR.some(part => (part.agentTaskId !== undefined && step.agentTaskId === part.agentTaskId)
+        || (part.ingestionTaskId !== undefined && step.ingestionTaskId === part.ingestionTaskId))
+      : step.stage === 'source_review' && step.agentTaskId === where.agentTaskId
+      && (typeof where.ordinal === 'number' ? step.ordinal === where.ordinal
+        : where.ordinal ? step.ordinal > where.ordinal.gt : true)),
     findFirst: async () => null,
   });
   const audit: AuditSink = { record: async (event, tx) => { await (tx as typeof prisma).auditLog.create({ data: event as never }); } };

@@ -37,6 +37,20 @@ function renderRun(run: HermesResearchRun) {
 }
 
 describe('Hermes research run panel', () => {
+  it.each(['en', 'zh'])('discloses the independent review provider and separate usage before continuation (%s)', locale => {
+    translations.locale = locale;
+    const run = sourceRun();
+    run.canRetryGeneration = true; run.chargeableAttempts = 1;
+    run.generationRecovery = 'source-review-independent' as HermesResearchRun['generationRecovery'];
+    const html = renderRun(run);
+    expect(html).toContain('ChatGPT Web 6 Pro');
+    expect(html).toContain(locale === 'zh' ? '平台任务额度及 ChatGPT 订阅额度' : 'platform task credits and ChatGPT subscription usage');
+    expect(html).toContain(locale === 'zh' ? '>独立审校并继续</button>' : '>Review independently and continue</button>');
+    run.canRetryGeneration = false; run.status = 'running';
+    const running = renderRun(run);
+    expect(running).not.toContain('ChatGPT Web 6 Pro');
+  });
+
   it.each([undefined, 'source-review-fresh', 'source-review-saved'] as const)('uses the existing paid source-review disclosure and removes retry controls after progress refresh (%s)', recovery => {
     for (const locale of ['en', 'zh']) {
       translations.locale = locale;

@@ -6,6 +6,7 @@ import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
 import { automaticIngestionReviewStage } from './automatic-review';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { findSavedIngestionCommit } from './saved-source-commit';
+import { requireActiveMembership } from '../workspace/helpers';
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {};
@@ -17,10 +18,24 @@ const CONTRACT_REPAIR_CLASS = 'accepted_review_claim_contract_missing' as const;
 const SCHEMA_REPAIR_CLASS = 'schema_contract_retry_after_accepted_anchor' as const;
 const DIRECT_COMPOSITION_REVIEW_CLASS = 'direct_composition_structured_review_failure' as const;
 const SAVED_OUTPUT_CORRECTION_CLASS = 'saved_source_review_output_correction' as const;
+const INDEPENDENT_REVIEW_CLASS = 'independent_source_review' as const;
+export const HERMES_INDEPENDENT_SOURCE_REVIEW = {
+  reviewMode: 'web', reviewProvider: 'chatgpt-web-science-review', reviewModel: 'chatgpt-web/6-pro',
+} as const;
 export type HermesSavedSourceReviewOutput = {
   sourceTaskId: string; structuredAttempt: number; text: string; responseHash: string;
   promptHash: string; provider: string; model: string; byteLength: number;
 };
+export type HermesSourceReviewExecution = { mode: 'model'; savedOutput?: HermesSavedSourceReviewOutput } | {
+  mode: 'web'; provider: 'chatgpt-web-science-review'; model: 'chatgpt-web/6-pro';
+  runId: string; taskId: string; savedOutput?: HermesSavedSourceReviewOutput;
+};
+type SourceReviewBindingInput = {
+  ownerTaskId: string; ingestionTaskId: string; failedTaskId: string; compositionTaskId: string; executionAttempt: number;
+};
+const independentMode = (metadata: Record<string, unknown>) => metadata.reviewMode === 'web'
+  && metadata.reviewProvider === HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider
+  && metadata.reviewModel === HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel;
 type FreshReviewEvidence = { reviewedCandidateHash: string; structuredReviewAuditIds: string[];
   freshReview: true; savedOutputReused: false };
 type SavedOutputEvidence = Omit<HermesSavedSourceReviewOutput, 'text'> & {
@@ -29,7 +44,7 @@ type SavedOutputEvidence = Omit<HermesSavedSourceReviewOutput, 'text'> & {
 
 /** Verify the persisted response identity; the Worker still owns full source/Claims validation. */
 function savedReviewOutput(taskId: string, review: Record<string, unknown>, result: Record<string, unknown>,
-  originalCore: Record<string, unknown>, audit: Array<{ id: string; metadata: unknown }>) {
+  originalCore: Record<string, unknown>, audit: Array<{ id: string; metadata: unknown }>, expectedAttempts = 2) {
   const outputs = review.rejectedOutputs;
   if (!Array.isArray(outputs) || !outputs.length || outputs.length > 2
     || outputs.some((item, index) => !Number.isInteger(record(item).structuredAttempt)
@@ -41,7 +56,7 @@ function savedReviewOutput(taskId: string, review: Record<string, unknown>, resu
   const diagnostic = typeof last.diagnostic === 'string' ? last.diagnostic : '';
   const claimsFailure = /^claims_(required_missing|invalid_structure|source_unmaterializable|core_missing)$/.exec(diagnostic);
   if (!claimsFailure || last.kind !== 'schema_validation' || last.finishReason !== 'stop'
-    || last.structuredAttempt !== 2 || audit.length !== 2 || last.omissionReason != null
+    || last.structuredAttempt !== expectedAttempts || audit.length !== expectedAttempts || last.omissionReason != null
     || typeof last.text !== 'string' || !last.text || !sha256(last.responseHash) || !sha256(last.promptHash)
     || !tokenCount(last.byteLength) || last.byteLength > 131_072 || Buffer.byteLength(last.text, 'utf8') !== last.byteLength
     || createHash('sha256').update(last.text).digest('hex') !== last.responseHash
@@ -72,7 +87,7 @@ function savedReviewOutput(taskId: string, review: Record<string, unknown>, resu
           || item.summary !== record(result.unverifiedSummaries)[field]
           || !isDeepStrictEqual(item.sourcePassageIds, record(result.unverifiedSourcePassageIds)[field])));
     })) return null;
-  const identity = { sourceTaskId: taskId, structuredAttempt: 2,
+  const identity = { sourceTaskId: taskId, structuredAttempt: expectedAttempts,
     responseHash: last.responseHash, promptHash: last.promptHash, provider: last.provider, model: last.model, byteLength: last.byteLength };
   const output: HermesSavedSourceReviewOutput = { ...identity, text: last.text };
   const evidence: SavedOutputEvidence = { ...identity, reviewedCandidateHash: review.reviewedCandidateHash as string,
@@ -102,8 +117,7 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   const directComposition = compositions.length === 0;
   if (canonical.length !== 1 || canonical[0]!.ordinal !== 0 || compositions.length > 1
     || (!directComposition && compositions[0]!.ordinal !== 0)
-    // One fresh review and one saved-body correction at most; receipts below identify each slot.
-    || (directComposition && reviews.length > (replacementTaskId ? 3 : 2))
+    // Historical model recoveries and the independent role are distinguished by their receipts below.
     || reviews.length < (replacementTaskId ? 2 : 1)
     || reviews.some((step, index) => step.ordinal !== index || !step.agentTaskId)
     || (replacementTaskId && reviews[reviews.length - 1]!.agentTaskId !== replacementTaskId)
@@ -127,6 +141,18 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   const reviewTasks = await tx.agentTask.findMany({ where: { id: { in: reviews.map(step => step.agentTaskId!) } }, include: { session: true } });
   const byId = new Map(reviewTasks.map(task => [task.id, task]));
   if (reviewTasks.length !== reviews.length) return null;
+  const recoveryReceipts = new Map<string, Record<string, unknown>>();
+  if (directComposition) {
+    for (const step of reviews.filter(step => step.ordinal > 0)) {
+      const receipts = await tx.auditLog.findMany({ where: {
+        action: 'hermes.research_run.source_review_recovery', targetType: 'hermes_research_run', targetId: run.id,
+        actorId: run.actorId, workspaceId: run.researchObject.workspaceId,
+        metadata: { path: ['newAgentTaskId'], equals: step.agentTaskId! },
+      }, take: 2 });
+      if (receipts.length !== 1) return null;
+      recoveryReceipts.set(step.agentTaskId!, record(receipts[0]!.metadata));
+    }
+  }
   const failed = byId.get(originalStep.agentTaskId!);
   const anchorId = directComposition
     ? record(record(byId.get(reviews[0]!.agentTaskId!)?.result).scientificReview).sourceAgentTaskId
@@ -162,7 +188,8 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
         || !/^[a-f0-9]{64}$/.test(task.session.idempotencyKey.slice(prefix.length))) return null;
     }
   }
-  if (replacement && (replacement.retryCount !== 0 || replacement.executionAttempt > 1
+  const independentReplacement = replacement && recoveryReceipts.get(replacement.id)?.recoveryClass === INDEPENDENT_REVIEW_CLASS;
+  if (replacement && (replacement.retryCount !== 0 || (!independentReplacement && replacement.executionAttempt > 1)
     || !['pending', 'running', 'succeeded'].includes(replacement.status))) return null;
   const original = record(composition.result);
   const originalReview = record(original.scientificReview);
@@ -210,6 +237,10 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
       orderBy: { createdAt: 'asc' }, take: 17 });
     if (!audit.length || audit.length > 16) return null;
     if (directComposition) {
+      const incomingReceipt = recoveryReceipts.get(task.id);
+      // Once an independent task exists, a failed/unknown outcome cannot authorize a second intent.
+      if (incomingReceipt?.recoveryClass === INDEPENDENT_REVIEW_CLASS) return null;
+      const expectedAttempts = incomingReceipt?.recoveryClass === SAVED_OUTPUT_CORRECTION_CLASS ? 1 : 2;
       const schemaDetail = details[SDF_CORE_FIELDS[0]!];
       const savedFailure = typeof schemaDetail === 'string'
         && /^scientificReview=review_contract_incomplete;reviewedClaims=(required_missing|invalid_structure|source_unmaterializable|core_missing)$/.test(schemaDetail);
@@ -233,7 +264,7 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
           || record(evidence[field]).locator !== `passages:${(ids[field] as unknown[]).join(',')}`
           || !isDeepStrictEqual(record(result.evidence)[field], { quote: '', locator: '' })
           || !isDeepStrictEqual(record(result.evidenceSegments)[field], []))
-        || audit.length !== 2) return null;
+        || audit.length !== expectedAttempts) return null;
       for (const row of audit) {
         const call = record(row.metadata);
         if (row.requestId !== task.id || row.actorId !== null || row.targetType !== 'ai_gateway'
@@ -243,7 +274,7 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
           || !sha256(call.promptHash) || !tokenCount(call.inputTokens) || !tokenCount(call.outputTokens)) return null;
       }
       if (savedFailure) {
-        const saved = savedReviewOutput(task.id, review, result, originalCore, audit);
+        const saved = savedReviewOutput(task.id, review, result, originalCore, audit, expectedAttempts);
         if (!saved) return null;
         savedOutputs.set(task.id, saved);
       } else {
@@ -379,6 +410,7 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   }
   if (schemaRepairs.size && contractRepairs.size !== 1) return null;
   let savedCorrectionCount = 0;
+  let independentReviewCount = 0;
   let replacementUsesSavedOutput = false;
   // A replacement after an unclassified failure or accepted-contract gap must carry the explicit
   // user action receipt; the read-only availability query never creates it.
@@ -393,10 +425,8 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
       action: 'hermes.research_run.source_review_recovery', targetType: 'hermes_research_run', targetId: run.id,
       actorId: run.actorId, metadata: { path: ['newAgentTaskId'], equals: step.agentTaskId! },
     };
-    const directReceipts = directComposition
-      ? await tx.auditLog.findMany({ where: { ...receiptWhere, workspaceId: run.researchObject.workspaceId }, take: 2 }) : null;
-    if (directReceipts && directReceipts.length !== 1) return null;
-    const receipt = directReceipts ? directReceipts[0] : await tx.auditLog.findFirst({ where: receiptWhere });
+    const receipt = directComposition ? { metadata: recoveryReceipts.get(step.agentTaskId!) }
+      : await tx.auditLog.findFirst({ where: receiptWhere });
     const metadata = record(receipt?.metadata);
     const task = byId.get(step.agentTaskId!)!;
     if (!receipt || metadata.explicitUserAction !== true || metadata.oldAgentTaskId !== predecessorId
@@ -409,12 +439,15 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
       || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true
       || !sha256(metadata.requestDigest) || typeof metadata.clientIdempotencyKey !== 'string' || !metadata.clientIdempotencyKey.trim())) return null;
     if (directComposition && !directCompositionEvidence) {
-      if (!savedEvidence || metadata.recoveryClass !== SAVED_OUTPUT_CORRECTION_CLASS
+      const independent = metadata.recoveryClass === INDEPENDENT_REVIEW_CLASS;
+      if (!savedEvidence || (!independent && metadata.recoveryClass !== SAVED_OUTPUT_CORRECTION_CLASS)
         || !isDeepStrictEqual(metadata.savedOutputEvidence, savedEvidence)
         || metadata.freshReview !== false || metadata.savedOutputReused !== true
-        || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true
+        || metadata.possibleDuplicateProviderCharge !== true
+        || (independent ? !independentMode(metadata) || metadata.noRuntimeFallback !== true : metadata.noProviderSwitch !== true)
         || !sha256(metadata.requestDigest) || typeof metadata.clientIdempotencyKey !== 'string' || !metadata.clientIdempotencyKey.trim()) return null;
-      savedCorrectionCount++;
+      if (independent) independentReviewCount++;
+      else savedCorrectionCount++;
       if (step.agentTaskId === replacementTaskId) replacementUsesSavedOutput = true;
     }
     if (contractEvidence && (metadata.recoveryClass !== CONTRACT_REPAIR_CLASS
@@ -427,17 +460,21 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
       || !isDeepStrictEqual(metadata.schemaContractAuditIds, schemaEvidence.schemaContractAuditIds)
       || metadata.possibleDuplicateProviderCharge !== true || metadata.noProviderSwitch !== true)) return null;
   }
-  if (savedCorrectionCount > 1 || (savedCorrectionCount && !replacementUsesSavedOutput)) return null;
+  if (savedCorrectionCount > 1 || independentReviewCount > 1 || (independentReviewCount && !independentReplacement)) return null;
   const selectedSaved = savedOutputs.get(failed.id);
   const savedOutput = (!replacementTaskId || replacementUsesSavedOutput) ? selectedSaved?.output : undefined;
   const savedOutputEvidence = savedOutput ? selectedSaved?.evidence : undefined;
   const directCompositionEvidence = savedOutput ? undefined : freshReviews.get(failed.id);
   if (directComposition && !savedOutput && !directCompositionEvidence) return null;
+  const reviewMode = savedOutput && (!replacement || independentReplacement) ? 'web' as const : 'model' as const;
   if (replacement?.status === 'succeeded') {
     const finalResult = record(replacement.result);
     const finalReview = record(finalResult.scientificReview);
     try {
       if (finalReview.sourceAgentTaskId !== composition.id || finalReview.reviewedCandidateHash !== candidateHash
+        || (reviewMode === 'web' && (finalReview.kind !== 'independent_review'
+          || finalReview.provider !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider
+          || finalReview.model !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel))
         || !isDeepStrictEqual(finalReview.semanticStage, originalReview.semanticStage)
         || !isDeepStrictEqual(parseDocumentSourceMapReference(finalResult.sourceMapRef), parseDocumentSourceMapReference(original.sourceMapRef))) return null;
     } catch { return null; }
@@ -460,9 +497,9 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   if (presentationCount !== 0 || sourceCount + presentationCount + 3 > run.maxAgentTasks) return null;
   return { run, source, failed, composition, replacement, sourceStep, originalStep, failedSteps, compositionStep,
     recoveryKey, nextOrdinal: reviews.length, auditIds, failureClassifications, contractRepairAuditIds,
-    recoveryClass: savedOutput ? SAVED_OUTPUT_CORRECTION_CLASS : directCompositionEvidence ? DIRECT_COMPOSITION_REVIEW_CLASS : schemaRepairs.has(failed.id) ? SCHEMA_REPAIR_CLASS
+    recoveryClass: reviewMode === 'web' ? INDEPENDENT_REVIEW_CLASS : savedOutput ? SAVED_OUTPUT_CORRECTION_CLASS : directCompositionEvidence ? DIRECT_COMPOSITION_REVIEW_CLASS : schemaRepairs.has(failed.id) ? SCHEMA_REPAIR_CLASS
       : contractRepairs.has(failed.id) ? CONTRACT_REPAIR_CLASS : 'service_failure' as const,
-    directCompositionEvidence, savedOutputEvidence, savedOutput,
+    directCompositionEvidence, savedOutputEvidence, savedOutput, reviewMode,
     contractEvidence: contractRepairs.get(failed.id), schemaContractEvidence: schemaRepairs.get(failed.id) };
 }
 
@@ -474,8 +511,142 @@ export async function requireHermesSourceReviewRecoveryBinding(tx: Prisma.Transa
   const proof = steps.length === 1 ? await inspectHermesSourceReviewRecovery(tx, steps[0]!.runId, input.ownerTaskId) : null;
   if (!proof || proof.source.id !== input.ingestionTaskId || proof.failed.id !== input.failedTaskId
     || proof.composition.id !== input.compositionTaskId || proof.replacement?.status !== 'running'
+    || proof.reviewMode === 'web'
     || (proof.savedOutput && proof.replacement.executionAttempt !== 1)) {
     throw new Error('[blocked] Source review recovery binding changed');
   }
   return proof.savedOutput;
+}
+
+/** Initial review uses the existing refresh receipt; a missing receipt never selects a provider. */
+export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionClient, ownerTaskId: string) {
+  const steps = await tx.hermesResearchStep.findMany({ where: { stage: 'source_review', ordinal: 0, agentTaskId: ownerTaskId }, take: 2 });
+  if (steps.length !== 1) return null;
+  const step = steps[0]!;
+  const run = await tx.hermesResearchRun.findUnique({ where: { id: step.runId }, include: { researchObject: true, steps: true } });
+  const owner = await tx.agentTask.findUnique({ where: { id: ownerTaskId }, include: { session: true } });
+  const source = step.ingestionTaskId ? await tx.ingestionTask.findUnique({ where: { id: step.ingestionTaskId },
+    include: { artifact: true, batch: true } }) : null;
+  const canonical = run?.steps.filter(item => item.stage === 'source_ingestion') ?? [];
+  const reviews = run?.steps.filter(item => item.stage === 'source_review') ?? [];
+  const compositions = run?.steps.filter(item => item.stage === 'source_composition') ?? [];
+  if (!run || !owner || !source || step.ordinal !== 0 || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9
+    || run.versionId !== null || run.sourceClaimIds.length || run.sourceReviewDigest
+    || !['running', 'awaiting_source_review'].includes(run.status) || run.researchObject.status !== 'draft' || run.researchObject.deletedAt
+    || canonical.length !== 1 || reviews.length !== 1 || compositions.length > 1 || run.steps.length !== 2 + compositions.length
+    || run.steps.some(item => item.ingestionTaskId !== source.id || item.artifactId !== source.artifactId || item.presentationAssetId !== null)
+    || canonical[0]!.agentTaskId !== owner.id || source.agentTaskId !== owner.id || source.retryCount !== 0
+    || source.batch.userId !== run.actorId || source.batch.researchObjectId !== run.researchObjectId
+    || source.artifact.workspaceId !== run.researchObject.workspaceId || source.artifact.deletedAt || source.artifact.bytesPurgedAt
+    || !['queued', 'parsing', 'needs_review', 'confirmed'].includes(source.state) || owner.retryCount !== 0) return null;
+  const receipts = await tx.auditLog.findMany({ where: { action: 'ingestion.task.system_analysis_refresh',
+    targetType: 'ingestion_task', targetId: source.id, actorId: null, workspaceId: run.researchObject.workspaceId,
+    metadata: { path: ['newAgentTaskId'], equals: owner.id } }, take: 2 });
+  if (receipts.length !== 1) return null;
+  const metadata = record(receipts[0]!.metadata);
+  if (metadata.executor !== 'hermes' || metadata.authorizedByUserId !== run.actorId || metadata.runId !== run.id
+    || metadata.stage !== 'source_review' || metadata.artifactId !== source.artifactId
+    || typeof metadata.oldAgentTaskId !== 'string' || metadata.oldAgentTaskId !== metadata.compositionSourceAgentTaskId) return null;
+  const independent = metadata.policy === 'scientific_review_v4_independent';
+  if (independent ? !independentMode(metadata)
+    : metadata.policy !== 'scientific_review_v4_correction' || metadata.reviewMode !== undefined
+      || metadata.reviewProvider !== undefined || metadata.reviewModel !== undefined) return null;
+  const composition = await tx.agentTask.findUnique({ where: { id: metadata.oldAgentTaskId }, include: { session: true } });
+  if (!composition || composition.status !== 'succeeded'
+    || compositions.some(item => item.ordinal !== 0 || item.agentTaskId !== composition.id || item.status !== 'succeeded')) return null;
+  const key = `ingestion-analysis-compose:${source.id}:${composition.id}:${composition.id}:scientific-review-v4`;
+  if (owner.idempotencyKey !== key || owner.session.idempotencyKey !== `${key}:session`) return null;
+  for (const task of [owner, composition]) {
+    if (task.deletedAt || task.kind !== 'sdf.extract' || task.session.deletedAt || task.session.status !== 'active'
+      || task.session.userId !== run.actorId || task.session.researchObjectId !== run.researchObjectId
+      || !isDeepStrictEqual(task.payload, { artifactId: source.artifactId, researchObjectId: run.researchObjectId })) return null;
+  }
+  try {
+    if (automaticIngestionReviewStage({ artifactId: source.artifactId, artifact: source.artifact, agentTask: composition }) !== 'source_review') return null;
+    const reference = parseDocumentSourceMapReference(record(composition.result).sourceMapRef);
+    if (metadata.sourceMapSha256 !== reference.serializedSha256) return null;
+    if (owner.status === 'succeeded' && independent) {
+      const final = record(owner.result); const review = record(final.scientificReview);
+      if (review.kind !== 'independent_review' || review.provider !== metadata.reviewProvider || review.model !== metadata.reviewModel
+        || review.sourceAgentTaskId !== composition.id
+        || !isDeepStrictEqual(parseDocumentSourceMapReference(final.sourceMapRef), reference)
+        || !isDeepStrictEqual(review.semanticStage, record(record(composition.result).scientificReview).semanticStage)) return null;
+    }
+  } catch { return null; }
+  return { run, source, composition, owner, independent };
+}
+
+/** Resolve the recorded role, with fresh actor/source/lease checks before the existing submission. */
+export async function requireHermesSourceReviewExecution(tx: Prisma.TransactionClient,
+  input: SourceReviewBindingInput): Promise<HermesSourceReviewExecution> {
+  const initial = input.failedTaskId === input.compositionTaskId;
+  if (initial) {
+    const bindings = await tx.hermesResearchStep.findMany({ where: {
+      OR: [{ agentTaskId: input.ownerTaskId }, { ingestionTaskId: input.ingestionTaskId }],
+    }, take: 1 });
+    if (!bindings.length) return requireUnmanagedInitialReview(tx, input);
+  }
+  const first = initial ? await inspectInitialHermesSourceReview(tx, input.ownerTaskId) : null;
+  const steps = initial ? [] : await tx.hermesResearchStep.findMany({ where: {
+    stage: 'source_review', ordinal: { gt: 0 }, agentTaskId: input.ownerTaskId,
+  }, take: 2 });
+  const continuation = steps.length === 1 ? await inspectHermesSourceReviewRecovery(tx, steps[0]!.runId, input.ownerTaskId) : null;
+  const proof = first ?? continuation;
+  const owner = first?.owner ?? continuation?.replacement;
+  if (!proof || !owner || owner.status !== 'running' || owner.executionAttempt !== input.executionAttempt
+    || !Number.isSafeInteger(input.executionAttempt) || input.executionAttempt < 1
+    || proof.source.id !== input.ingestionTaskId || proof.composition.id !== input.compositionTaskId
+    || (continuation && continuation.failed.id !== input.failedTaskId)) throw new Error('[blocked] Source review binding changed');
+  const { membership } = await requireActiveMembership(tx, proof.run.researchObject.workspaceId, proof.run.actorId);
+  if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) throw new Error('[blocked] Source review binding changed');
+  const savedOutput = continuation?.savedOutput;
+  if (!(first?.independent || continuation?.reviewMode === 'web')) return { mode: 'model', ...(savedOutput ? { savedOutput } : {}) };
+  return { mode: 'web', provider: HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider, model: HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel,
+    runId: proof.run.id, taskId: owner.id, ...(savedOutput ? { savedOutput } : {}) };
+}
+
+async function requireUnmanagedInitialReview(tx: Prisma.TransactionClient, input: SourceReviewBindingInput): Promise<HermesSourceReviewExecution> {
+  const blocked = () => { throw new Error('[blocked] Source review binding changed'); };
+  const taskReceipt = { path: ['newAgentTaskId'], equals: input.ownerTaskId };
+  const hermesReceipt = await tx.auditLog.findFirst({ where: {
+    action: { in: ['ingestion.task.system_analysis_refresh', 'hermes.research_run.source_review_recovery'] }, metadata: taskReceipt,
+  } });
+  if (hermesReceipt) return blocked();
+  const receipts = await tx.auditLog.findMany({ where: { action: 'ingestion.task.analysis_refresh', metadata: taskReceipt }, take: 2 });
+  if (receipts.length !== 1) return blocked();
+  const receipt = receipts[0]!; const metadata = record(receipt.metadata);
+  if (metadata.runId != null || metadata.executor === 'hermes' || metadata.reviewMode != null
+    || metadata.reviewProvider != null || metadata.reviewModel != null) return blocked();
+  const owner = await tx.agentTask.findUnique({ where: { id: input.ownerTaskId }, include: { session: true } });
+  const composition = await tx.agentTask.findUnique({ where: { id: input.compositionTaskId }, include: { session: true } });
+  const source = await tx.ingestionTask.findUnique({ where: { id: input.ingestionTaskId }, include: {
+    artifact: true, batch: { include: { researchObject: true } },
+  } });
+  if (!owner || !composition || !source || source.agentTaskId !== owner.id || source.retryCount !== owner.retryCount
+    || !['queued', 'parsing'].includes(source.state) || owner.status !== 'running'
+    || !Number.isSafeInteger(input.executionAttempt) || input.executionAttempt < 1 || owner.executionAttempt !== input.executionAttempt
+    || composition.status !== 'succeeded' || source.batch.researchObject.deletedAt
+    || source.artifact.deletedAt || source.artifact.bytesPurgedAt || source.artifact.workspaceId !== source.batch.researchObject.workspaceId) return blocked();
+  if (receipt.actorId !== source.batch.userId || receipt.workspaceId !== source.artifact.workspaceId
+    || receipt.targetType !== 'ingestion_task' || receipt.targetId !== source.id
+    || metadata.policy !== 'scientific_review_v4_correction' || metadata.artifactId !== source.artifactId
+    || metadata.oldAgentTaskId !== composition.id || metadata.compositionSourceAgentTaskId !== composition.id) return blocked();
+  for (const task of [owner, composition]) {
+    if (task.deletedAt || task.kind !== 'sdf.extract' || task.session.deletedAt || task.session.status !== 'active'
+      || task.session.userId !== source.batch.userId || task.session.researchObjectId !== source.batch.researchObjectId
+      || !isDeepStrictEqual(task.payload, { artifactId: source.artifactId, researchObjectId: source.batch.researchObjectId })) return blocked();
+  }
+  const key = `ingestion-analysis-compose:${source.id}:${composition.id}:${composition.id}:scientific-review-v4`;
+  if (owner.idempotencyKey !== key || owner.session.idempotencyKey !== `${key}:session`) return blocked();
+  try {
+    const result = record(composition.result); const review = record(result.scientificReview);
+    const reference = parseDocumentSourceMapReference(result.sourceMapRef);
+    if (result.canonicalExtractionContract !== 'grounded-passages-v2' || !review.semanticStage
+      || typeof review.semanticStage !== 'object' || Array.isArray(review.semanticStage)
+      || reference.parserStatus !== 'succeeded' || reference.artifactId !== source.artifactId
+      || reference.contentHash !== source.artifact.blobSha256 || metadata.sourceMapSha256 !== reference.serializedSha256) return blocked();
+  } catch { return blocked(); }
+  const { membership } = await requireActiveMembership(tx, source.artifact.workspaceId, source.batch.userId);
+  if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) return blocked();
+  return { mode: 'model' };
 }

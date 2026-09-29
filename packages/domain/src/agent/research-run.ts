@@ -99,7 +99,7 @@ export interface HermesResearchRunView {
   canRetryGeneration?: boolean;
   canAuthorizeNarrativeCorrection?: boolean;
   chargeableAttempts?: number;
-  generationRecovery?: 'source-parser' | 'source-review-fresh' | 'source-review-saved' | 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render' | 'narrative-scientific-replan' | 'narrative-source-support-replan';
+  generationRecovery?: 'source-parser' | 'source-review-fresh' | 'source-review-saved' | 'source-review-independent' | 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render' | 'narrative-scientific-replan' | 'narrative-source-support-replan';
   sourceParsing?: {
     status: 'needs_review'; ingestionTaskId: string; agentTaskId: string;
     unresolvedPageNumbers?: number[]; providerChargeMayApply: true;
@@ -341,12 +341,13 @@ export async function getHermesResearchRun(
         ? await inspectStoryboardCheckpointRecovery(deps.prisma, run).then(proof => proof ? {
           chargeableAttempts: 'savedOutputResumeMetadata' in proof ? 1 : 0 } : null).catch(() => null)
         : await inspectHermesSourceReviewRecovery(deps.prisma, run.id).then(proof => proof ? { chargeableAttempts: 1,
-          ...(proof.savedOutputEvidence ? { generationRecovery: 'source-review-saved' as const }
+          ...(proof.reviewMode === 'web' ? { generationRecovery: 'source-review-independent' as const }
+            : proof.savedOutputEvidence ? { generationRecovery: 'source-review-saved' as const }
             : proof.directCompositionEvidence ? { generationRecovery: 'source-review-fresh' as const } : {}) } : null).catch(() => null)
       : await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
   const view = toView(run, recovery ?? undefined);
   if (recovery && 'generationRecovery' in recovery && (recovery.generationRecovery === 'source-review-fresh'
-    || recovery.generationRecovery === 'source-review-saved')) view.generationRecovery = recovery.generationRecovery;
+    || recovery.generationRecovery === 'source-review-saved' || recovery.generationRecovery === 'source-review-independent')) view.generationRecovery = recovery.generationRecovery;
   view.artStyleContinuation = WRITE_ROLES.has(authority.membership.role)
     ? await getHermesArtStyleContinuationCapability(deps.prisma, run) : { eligibleImages: [], maxAgentTasks: 2 };
   const sourceSupportReplan = WRITE_ROLES.has(authority.membership.role)
@@ -2703,7 +2704,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             const canonical = run.steps.filter(step => step.stage === 'source_ingestion');
             let compositionTaskId = composition?.agentTaskId;
             if (!compositionTaskId && priorRequest
-              && ['direct_composition_structured_review_failure', 'saved_source_review_output_correction']
+              && ['direct_composition_structured_review_failure', 'saved_source_review_output_correction', 'independent_source_review']
                 .includes(String(jsonRecord(priorRequest.metadata).recoveryClass))) {
               const meta = jsonRecord(priorRequest.metadata);
               const receipts = await tx.auditLog.findMany({ where: {

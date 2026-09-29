@@ -29,7 +29,7 @@ describe('fresh source review recovery HTTP contract', () => {
       byteLength: Buffer.byteLength(text), usage: { inputTokens: 100, outputTokens: 100 }, finishReason: 'stop', text }];
     const read = await f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });
     expect(read.statusCode).toBe(200);
-    expect(read.json().run).toMatchObject({ generationRecovery: 'source-review-saved', chargeableAttempts: 1, canRetryGeneration: true });
+    expect(read.json().run).toMatchObject({ generationRecovery: 'source-review-independent', chargeableAttempts: 1, canRetryGeneration: true });
     for (const privateKey of ['rejectedOutputs', 'savedOutputEvidence', 'claimSuggestions', 'sourceMapRef']) expect(read.body).not.toContain(privateKey);
     expect(f.redis.lpush).not.toHaveBeenCalled();
     const request = { method: 'POST' as const, url: `${f.url}/retry-generation`, cookies: f.cookies,

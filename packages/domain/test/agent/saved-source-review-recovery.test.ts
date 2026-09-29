@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { fixture, fields } from './direct-source-review-fixture';
 import { getHermesResearchRun, retryHermesGeneration } from '../../src/agent/research-run';
-import { inspectHermesSourceReviewRecovery, requireHermesSourceReviewRecoveryBinding } from '../../src/ingestion/source-review-recovery';
+import { inspectHermesSourceReviewRecovery, requireHermesSourceReviewExecution } from '../../src/ingestion/source-review-recovery';
 import { ensureHermesIngestionReview } from '../../src/ingestion/ingestion-service';
 
 function saveRejectedBody(f: ReturnType<typeof fixture>, task = f.db.agentTasks[1]) {
@@ -41,10 +41,10 @@ describe('one explicit saved source review correction', () => {
   it('projects a paid saved-body correction read-only and keeps text private', async () => {
     const f = fixture(); const saved = saveRejectedBody(f);
     expect(await inspectHermesSourceReviewRecovery(f.prisma, f.ids.run)).toMatchObject({
-      recoveryClass: 'saved_source_review_output_correction', savedOutputEvidence: { sourceTaskId: f.ids.failed,
+      recoveryClass: 'independent_source_review', savedOutputEvidence: { sourceTaskId: f.ids.failed,
         responseHash: saved.outputs[1]!.responseHash, structuredAttempt: 2 }, nextOrdinal: 1 });
     const view = await getHermesResearchRun(f.deps, f.input);
-    expect(view).toMatchObject({ canRetryGeneration: true, generationRecovery: 'source-review-saved', chargeableAttempts: 1 });
+    expect(view).toMatchObject({ canRetryGeneration: true, generationRecovery: 'source-review-independent', chargeableAttempts: 1 });
     expect(JSON.stringify(view)).not.toContain('claimSuggestions');
     expect(f.redis.lpush).not.toHaveBeenCalled(); expect(f.db.agentTasks).toHaveLength(2);
   });
@@ -57,14 +57,14 @@ describe('one explicit saved source review correction', () => {
     expect(a.id).toBe(b.id); expect(f.redis.lpush).toHaveBeenCalledTimes(fresh ? 2 : 1);
     const task = f.db.agentTasks.at(-1)!; task.status = 'running'; task.executionAttempt = 1;
     const binding = { ownerTaskId: task.id, ingestionTaskId: f.ids.source, failedTaskId: predecessor.id, compositionTaskId: f.ids.anchor };
-    expect(await requireHermesSourceReviewRecoveryBinding(f.prisma, binding)).toMatchObject({
-      text: saved.outputs[1]!.text, sourceTaskId: predecessor.id, responseHash: saved.outputs[1]!.responseHash });
+    expect(await requireHermesSourceReviewExecution(f.prisma, { ...binding, executionAttempt: 1 })).toMatchObject({
+      mode: 'web', savedOutput: { text: saved.outputs[1]!.text, sourceTaskId: predecessor.id, responseHash: saved.outputs[1]!.responseHash } });
     const receipt = f.db.auditLogs.find(row => row.metadata?.newAgentTaskId === task.id);
-    expect(receipt.metadata).toMatchObject({ recoveryClass: 'saved_source_review_output_correction',
+    expect(receipt.metadata).toMatchObject({ recoveryClass: 'independent_source_review',
       savedOutputReused: true, freshReview: false, possibleDuplicateProviderCharge: true });
     expect(JSON.stringify(receipt)).not.toContain('claimSuggestions');
     task.executionAttempt = 2;
-    await expect(requireHermesSourceReviewRecoveryBinding(f.prisma, binding)).rejects.toThrow('binding changed');
+    await expect(requireHermesSourceReviewExecution(f.prisma, { ...binding, executionAttempt: 1 })).rejects.toThrow('binding changed');
     task.executionAttempt = 1;
     for (const state of ['running', 'succeeded', 'failed']) {
       f.db.hermesResearchRuns[0].status = state;
@@ -135,7 +135,7 @@ describe('one explicit saved source review correction', () => {
       if (change === 'source') f.db.ingestionTasks[0].agentTaskId = f.ids.anchor;
       if (change === 'audit') f.db.auditLogs[1].metadata.promptHash = '0'.repeat(64);
       if (change === 'lease-zero') task.executionAttempt = 0;
-      await expect(requireHermesSourceReviewRecoveryBinding(f.prisma, { ownerTaskId: task.id, ingestionTaskId: f.ids.source,
+      await expect(requireHermesSourceReviewExecution(f.prisma, { executionAttempt: 1, ownerTaskId: task.id, ingestionTaskId: f.ids.source,
         failedTaskId: f.ids.failed, compositionTaskId: f.ids.anchor })).rejects.toThrow('binding changed');
     });
 
@@ -144,14 +144,14 @@ describe('one explicit saved source review correction', () => {
     await retryHermesGeneration(f.deps, { ...f.input, expectedVersion: 8, idempotencyKey: 'saved' });
     const task = f.db.agentTasks.at(-1)!;
     Object.assign(task, { status: 'succeeded', executionAttempt: 1, result: { ...structuredClone(f.anchorResult),
-      scientificReview: { ...structuredClone(predecessor.result.scientificReview), status: 'review_received', responseHash: '4'.repeat(64) },
+      scientificReview: { ...structuredClone(predecessor.result.scientificReview), status: 'review_received', responseHash: '4'.repeat(64), kind: 'independent_review', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro' },
       reviewedClaimSuggestions: [{ clientKey: 'c1', sourceField: 'method', kind: 'core', statement: 'Reviewed method',
         conditions: [], limitations: [], sourceBindings: [{ sourceIndex: 0, relation: 'supports' }] }] } });
     // A full scientific replacement may revise the original draft; saved input is not approval.
     task.result.core.method = 'Scientifically revised method with corrected conditions';
     f.db.ingestionTasks[0].state = 'needs_review'; f.db.hermesResearchRuns[0].status = 'awaiting_source_review';
     expect(await inspectHermesSourceReviewRecovery(f.prisma, f.ids.run, task.id)).toMatchObject({
-      recoveryClass: 'saved_source_review_output_correction', replacement: { id: task.id } });
+      recoveryClass: 'independent_source_review', replacement: { id: task.id } });
     // The shared fake predates Prisma's id.in filter; model that existing query for reconciliation.
     const originalUpdate = f.prisma.hermesResearchStep.updateMany.bind(f.prisma.hermesResearchStep);
     vi.spyOn(f.prisma.hermesResearchStep, 'updateMany').mockImplementation(async args => {
