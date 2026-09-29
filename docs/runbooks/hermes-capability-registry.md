@@ -1,8 +1,8 @@
 # Hermes Capability Registry
 
-## 单页解析恢复（2026-09-29 候选）
+## 单页解析恢复（2026-09-29）
 
-真实单PDF自动图文入口发现：26页Docling结果完整保留，13个公式页中12页视觉识别成功，仅1页供应商超时；原任务返回needs_review，尚无六维/科学审核。候选复用既有ingestion retry与Hermes retry-generation，同事务恢复原任务/原run，保留精确SourceMap和成功OCR页，仅显式补未完成页。来源、当前权限或恢复收据失配时拒绝；补齐后先保存解析检查点，再走原科学理解与审核。原9任务额度及两次恢复上限不变，无新provider或迁移；超时可能已计费，UI明确提示且不自动重试。Worker46项及真实SourceMap无模型选页检查、Domain恢复/旧重试、API及界面定向检查通过，尚待最终High/CI/发布及原任务恢复实证；精确状态见CURRENT。
+真实单PDF自动图文入口发现：26页Docling结果完整保留，13个公式页中12页视觉识别成功，仅1页供应商超时；原任务返回needs_review，尚无六维/科学审核。候选复用既有ingestion retry与Hermes retry-generation，同事务恢复原任务/原run，保留精确SourceMap和成功OCR页，仅显式补未完成页。来源、当前权限或恢复收据失配时拒绝；补齐后先保存解析检查点，再走原科学理解与审核。原9任务额度及两次恢复上限不变，无新provider或迁移；超时可能已计费，UI明确提示且不自动重试。Worker46项及真实SourceMap选页、Domain/API/界面检查、High/CI通过并发布；真实恢复只调用第18页，未重跑成功12页，但同页60秒再次超时。候选仅将Worker VLM客户端等待设为已有120秒上限，90秒成功/120秒中止/单请求回归与旧provider检查通过；没有新增重试、provider或额度。该预算适用于Worker全部VLM页请求，会增加最坏任务/停机排空时长；600秒既有部署宽限能覆盖单批4页全超时，多批任务仍依赖既有恢复。预算调整不证明供应商根因或完成保证，超时可能已计费；下一次仅用现有显式恢复，若仍失败不绕过上限。精确状态见CURRENT。
 
 <a id="local-browser-proxy"></a>
 ## 本机浏览器代理配置

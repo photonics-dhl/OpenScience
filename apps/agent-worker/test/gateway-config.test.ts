@@ -18,6 +18,41 @@ describe('MiniMax worker gateway config', () => {
   it('boots with the global AI switch off even when Sol review is configured on', () => {
     expect(() => buildGateway({ AI_ENABLED: 'false', CODEX_SOL_IMAGE_REVIEW_ENABLED: 'true' })).not.toThrow();
   });
+  it.each([90_000, null])('bounds VLM page recognition at 120 seconds without resubmission (%s)', async responseAt => {
+    vi.useFakeTimers();
+    try {
+      const events: Array<Record<string, unknown>> = [];
+      let signal: AbortSignal | undefined;
+      const fetchMock = vi.fn((_url: string, init: RequestInit) => new Promise<Response>((resolve, reject) => {
+        signal = init.signal as AbortSignal;
+        const timer = responseAt === null ? undefined : setTimeout(() => resolve(new Response(JSON.stringify({
+          content: 'recognized equation', base_resp: { status_code: 0 },
+        }), { status: 200 })), responseAt);
+        signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(new DOMException('request aborted', 'AbortError'));
+        }, { once: true });
+      }));
+      const gateway = buildGateway({ AI_ENABLED: 'true', MINIMAX_API_KEY: 'test-key', MINIMAX_API_KEY_2: 'test-backup',
+        MINIMAX_VISION_ENABLED: 'true' }, fetchMock as never,
+      { record: async event => { events.push(event as unknown as Record<string, unknown>); } }, async () => true);
+      let settled = false;
+      const completion = gateway.ocr(ocrRequest()).then(result => { settled = true; return result; });
+      await vi.advanceTimersByTimeAsync(responseAt ?? 119_999);
+      if (responseAt === null) {
+        expect(settled).toBe(false);
+        expect(signal?.aborted).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+      }
+      expect((await completion).status).toBe(responseAt === null ? 'failed' : 'succeeded');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ metadata: responseAt === null
+        ? { outcome: 'failed', error: 'provider_timeout', latencyMs: 120_000 }
+        : { outcome: 'succeeded', latencyMs: 90_000 } });
+    } finally { vi.useRealTimers(); }
+  });
+
   it.each([
     ['legacy ScanSci HTTP credentials', {
       SCANSCI_ENABLED: 'true',
@@ -88,6 +123,7 @@ describe('MiniMax worker gateway config', () => {
       return new Response(JSON.stringify({ content: 'OCR result', base_resp: { status_code: 0 } }), { status: 200 });
     });
     const gateway = buildGateway({
+      AI_ENABLED: 'true',
       MINIMAX_API_KEY: 'test-token-plan-key',
       MINIMAX_VISION_ENABLED: 'true',
       MINIMAX_VISION_MODEL: 'coding-plan-vlm',
@@ -120,10 +156,10 @@ describe('MiniMax worker gateway config', () => {
   it.each([
     { label: 'default-disabled', env: { MINIMAX_API_KEY: 'test-key' } },
     { label: 'missing-key', env: { MINIMAX_VISION_ENABLED: 'true' } },
-    { label: 'kill-switch', env: { MINIMAX_API_KEY: 'test-key', MINIMAX_VISION_ENABLED: 'true', AI_DISABLED_PROVIDERS: 'minimax-vision' } },
+    { label: 'kill-switch', env: { AI_ENABLED: 'true', MINIMAX_API_KEY: 'test-key', MINIMAX_VISION_ENABLED: 'true', AI_DISABLED_PROVIDERS: 'minimax-vision' } },
   ])('$label vision configuration sends zero bytes', async ({ env }) => {
     const fetchMock = vi.fn();
-    const gateway = buildGateway(env, fetchMock as never, undefined, async () => true);
+    const gateway = buildGateway({ AI_ENABLED: 'true', ...env }, fetchMock as never, undefined, async () => true);
     const result = await gateway.ocr(ocrRequest());
     expect(result.status).toBe('failed');
     expect(fetchMock).not.toHaveBeenCalled();
@@ -131,7 +167,7 @@ describe('MiniMax worker gateway config', () => {
 
   it('production composition denies external processing until Task 4 injects a trusted policy', async () => {
     const fetchMock = vi.fn();
-    const gateway = buildGateway({ MINIMAX_API_KEY: 'test-key', MINIMAX_VISION_ENABLED: 'true' }, fetchMock as never);
+    const gateway = buildGateway({ AI_ENABLED: 'true', MINIMAX_API_KEY: 'test-key', MINIMAX_VISION_ENABLED: 'true' }, fetchMock as never);
     await expect(gateway.ocr(ocrRequest())).rejects.toThrow(/external processing denied/i);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -140,7 +176,7 @@ describe('MiniMax worker gateway config', () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ content: 'OCR result', base_resp: { status_code: 0 } }), { status: 200 }));
     const runtimeKillSwitch = new (await import('@openscience/ai-gateway')).MutableProviderKillSwitch();
     const gateway = buildGateway(
-      { MINIMAX_API_KEY: 'test-key', MINIMAX_VISION_ENABLED: 'true' },
+      { AI_ENABLED: 'true', MINIMAX_API_KEY: 'test-key', MINIMAX_VISION_ENABLED: 'true' },
       fetchMock as never,
       undefined,
       async () => true,
@@ -158,7 +194,7 @@ describe('MiniMax worker gateway config', () => {
       return new Response(JSON.stringify({ content: 'OCR result', base_resp: { status_code: 0 } }), { status: 200 });
     });
     const gateway = buildGateway(
-      { MINIMAX_API_KEY: 'test-key', MINIMAX_VISION_ENABLED: 'true', MINIMAX_VISION_REGION: 'cn' },
+      { AI_ENABLED: 'true', MINIMAX_API_KEY: 'test-key', MINIMAX_VISION_ENABLED: 'true', MINIMAX_VISION_REGION: 'cn' },
       fetchMock as never,
       undefined,
       async () => true,

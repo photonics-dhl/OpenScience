@@ -1039,6 +1039,7 @@ export function buildGateway(
         apiKey: visionPrimaryKey,
         ...(visionBackupKey && visionBackupKey !== visionPrimaryKey ? { backupApiKey: visionBackupKey } : {}),
         model: env.MINIMAX_VISION_MODEL ?? 'coding-plan-vlm',
+        timeoutMs: 120_000,
         pricing: visionPricing(env),
         maxPageBytes: optionalBoundedInteger(env.MINIMAX_VISION_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'MINIMAX_VISION_MAX_PAGE_BYTES'),
       }, fetcher)]
