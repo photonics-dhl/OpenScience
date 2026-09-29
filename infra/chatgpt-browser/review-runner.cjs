@@ -294,17 +294,26 @@ function promptComparison(expected, actual) {
     expectedNonWhitespace: left.replace(/\s/g, '').length, actualNonWhitespace: right.replace(/\s/g, '').length,
     firstDifference, expectedCodePoint: left.codePointAt(firstDifference) ?? null, actualCodePoint: right.codePointAt(firstDifference) ?? null };
 }
-async function reviewModelActive(input, request) {
+const REVIEW_MODEL_CONTROL_NAME = /^(?:Select ChatGPT model|选择 ChatGPT 模型)$/;
+async function reviewModelActive(page, input, ownerName, deadlineAt, request) {
+  if (await page.evaluate(() => window.name) !== ownerName) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   const form = input.locator('xpath=ancestor::form[1]');
   if (await form.count() !== 1) return false;
   const control = await reviewModelControl(form);
   if (await control.count() !== 1) return false;
-  const modern = await form.getByRole('button', { name: 'Select ChatGPT model', exact: true }).count() === 1;
+  const modern = await form.getByRole('button', { name: REVIEW_MODEL_CONTROL_NAME }).count() === 1;
   const expected = modern && request.model === 'chatgpt-web/5.6-sol' ? SOL_MODERN_ACTIVE : reviewModelLabel(request);
-  return expected.test(normalizeComposerText(await control.innerText().catch(() => '')));
+  const label = normalizeComposerText(await control.innerText().catch(() => ''));
+  if (expected.test(label)) return true;
+  // This closed label describes the control, not the selected model. Read a
+  // fresh owned popup at every existing check, including immediately before send.
+  if (request.model !== 'chatgpt-web/5.6-sol' && /^(?:思考强度|Thinking effort)$/.test(label))
+    return reviewStrengthModelActive(page, control, ownerName, deadlineAt);
+  return false;
 }
 async function reviewModelControl(form) {
-  const modern = form.getByRole('button', { name: 'Select ChatGPT model', exact: true });
+  const modern = form.getByRole('button', { name: REVIEW_MODEL_CONTROL_NAME });
+  if (await modern.count() > 1) return modern;
   return await modern.count() === 1 ? modern : form.locator('button[aria-haspopup="menu"]:not([data-testid="composer-plus-btn"])');
 }
 function reviewSendButton(page, form) {
@@ -344,6 +353,65 @@ async function openedReviewPicker(page, trigger, before, deadlineAt, parent, tar
   }
   throw Error('MODEL_6_PRO_PICKER_NOT_READY');
 }
+async function reviewStrengthModelActive(page, control, ownerName, deadlineAt) {
+  const stopAt = Math.min(deadlineAt, Date.now() + 5000);
+  const timeout = () => {
+    const remaining = stopAt - Date.now();
+    if (remaining <= 0) throw Error('MODEL_6_PRO_STRENGTH_TIMEOUT');
+    return remaining;
+  };
+  const read = value => bounded(value, timeout());
+  if (!await read(control.isVisible()) || !await read(control.isEnabled())) throw Error('MODEL_SELECTOR_NOT_READY');
+  const before = await read(page.locator(REVIEW_PICKERS).elementHandles());
+  await control.click({ timeout: timeout() });
+  const picker = await read(openedReviewPicker(page, control, before, stopAt));
+  try {
+    // The explicit model header proves identity; the hidden slider corroborates
+    // intensity. Neither "Latest" nor the slider endpoint identifies a model.
+    const header = picker.getByRole('menuitem', { name: /^(?:Select model|选择模型)$/ });
+    const slider = picker.locator('[role="slider"][aria-hidden="true"]');
+    const status = picker.getByRole('status');
+    while (Date.now() < stopAt && (await read(header.count()) === 0 || await read(slider.count()) === 0))
+      await new Promise(resolve => setTimeout(resolve, 100));
+    if (await read(header.count()) !== 1 || !await read(header.isVisible()) || !await read(header.isEnabled())
+      || await read(header.evaluate(element => Boolean(element.closest('[disabled],[aria-disabled="true"],[inert]'))))
+      || !/^(?:GPT[- ]?)?6\s+Pro$/i.test(normalizeComposerText(await header.innerText({ timeout: timeout() }))))
+      throw Error('MODEL_6_PRO_STRENGTH_HEADER_MISMATCH');
+    if (await read(slider.count()) !== 1 || await read(slider.getAttribute('aria-valuemin')) !== '0'
+      || await read(slider.getAttribute('aria-valuemax')) !== '4' || await read(slider.getAttribute('aria-valuenow')) !== '4')
+      throw Error('MODEL_6_PRO_STRENGTH_STATE_MISMATCH');
+    // The intensity label is localized. Verify the actual enclosing control,
+    // without assuming its name or treating the hidden slider as actionable.
+    const intensity = slider.locator('xpath=ancestor::*[@role="menuitem"][1]');
+    if (await read(intensity.count()) !== 1 || !await read(intensity.isVisible()) || !await read(intensity.isEnabled())
+      || !await read(intensity.evaluate((element, popup) => popup.contains(element), await read(picker.elementHandle())))
+      || await read(intensity.evaluate(element => Boolean(element.closest('[disabled],[aria-disabled="true"],[inert]')))))
+      throw Error('MODEL_6_PRO_STRENGTH_CONTROL_MISMATCH');
+    if (await read(status.count()) > 1) throw Error('MODEL_6_PRO_STRENGTH_STATUS_MISMATCH');
+    if (await read(status.count()) === 1) {
+      // This is a clipped accessibility announcement, not a printed model label.
+      // Parse only the observed Chinese form; unknown localized prose cannot
+      // supply model proof or replace the mandatory header and slider checks.
+      const announcement = normalizeComposerText(await status.innerText({ timeout: timeout() }));
+      const observed = /^(.+?)，\s*第\s*(\d+)\s*项，\s*共\s*(\d+)\s*项。$/.exec(announcement);
+      if (await read(status.getAttribute('aria-hidden')) === 'true'
+        || (observed && (observed[1] !== 'Pro' || observed[2] !== '5' || observed[3] !== '5')))
+        throw Error('MODEL_6_PRO_STRENGTH_STATUS_MISMATCH');
+    }
+    if (await read(page.evaluate(() => window.name)) !== ownerName) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
+    timeout();
+  } finally {
+    if (await bounded(page.evaluate(() => window.name), Math.max(1, stopAt - Date.now())) !== ownerName) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
+    // Await the action's own timeout. A Promise.race here would leave a late
+    // Escape/click running concurrently with another check or the send operation.
+    await control.press('Escape', { timeout: Math.max(1, stopAt - Date.now()) });
+    while (Date.now() < stopAt && await read(picker.isVisible())) await new Promise(resolve => setTimeout(resolve, 100));
+    if (await bounded(picker.isVisible(), Math.max(1, stopAt - Date.now()))
+      || await bounded(control.getAttribute('aria-expanded'), Math.max(1, stopAt - Date.now())) === 'true')
+      throw Error('MODEL_6_PRO_STRENGTH_NOT_CLOSED');
+  }
+  return true;
+}
 async function visibleReviewLabel(picker, label) {
   const matches = picker.getByText(label, { exact: true }), visible = [];
   for (let index = 0; index < await matches.count(); index++) {
@@ -363,7 +431,7 @@ async function clickReviewLabel(page, item, name) {
 }
 async function selectReviewModelOnFreshPage(page, input, name, deadlineAt, request) {
   if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
-  if (await reviewModelActive(input, request)) return;
+  if (await reviewModelActive(page, input, name, deadlineAt, request)) return;
   const form = input.locator('xpath=ancestor::form[1]');
   const control = await reviewModelControl(form);
   if (await control.count() !== 1 || !await control.isVisible() || !await control.isEnabled()) throw Error('MODEL_SELECTOR_NOT_READY');
@@ -408,21 +476,21 @@ async function selectReviewModelOnFreshPage(page, input, name, deadlineAt, reque
   } else await choice.click();
   }
   if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
-  while (Date.now() < deadlineAt && !await reviewModelActive(input, request)) {
+  while (Date.now() < deadlineAt && !await reviewModelActive(page, input, name, deadlineAt, request)) {
     await new Promise(resolve => setTimeout(resolve, 250));
   }
-  if (!await reviewModelActive(input, request)) throw Error(selectedPower ? 'MODEL_6_PRO_ACTIVE_LABEL_MISMATCH' : reviewModelError(request));
+  if (!await reviewModelActive(page, input, name, deadlineAt, request)) throw Error(selectedPower ? 'MODEL_6_PRO_ACTIVE_LABEL_MISMATCH' : reviewModelError(request));
 }
 async function normalChatMode(input) {
   const form = input.locator('xpath=ancestor::form[1]');
   return await form.count() === 1 && !await form.getByText('Create image', { exact: true }).isVisible().catch(() => false);
 }
-async function waitForComposer(page, deadlineAt, request) {
+async function waitForComposer(page, deadlineAt, request, ownerName) {
   let reason = 'CHAT_COMPOSER_NOT_FOUND';
   while (Date.now() < deadlineAt) {
     const found = await bounded(composer(page), 2000).catch(() => null);
     if (!found) reason = 'CHAT_COMPOSER_NOT_FOUND';
-    else if (!await bounded(reviewModelActive(found, request), 2000).catch(() => false)) reason = reviewModelError(request);
+    else if (!await reviewModelActive(page, found, ownerName, deadlineAt, request)) reason = reviewModelError(request);
     else if (!await bounded(normalChatMode(found), 2000).catch(() => false)) reason = 'NORMAL_CHAT_MODE_NOT_READY';
     else return found;
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -646,9 +714,9 @@ let composerRepairAttempted = false;
   if (!input) throw Error('CHAT_COMPOSER_NOT_FOUND');
   if (!selectorReady) throw Error('MODEL_SELECTOR_NOT_READY');
   await selectReviewModelOnFreshPage(page, input, ownedName, composerDeadline, request);
-  input = await waitForComposer(page, composerDeadline, request);
+  input = await waitForComposer(page, composerDeadline, request, ownedName);
   if (!input) throw Error('CHAT_COMPOSER_NOT_FOUND');
-  if (!await reviewModelActive(input, request)) throw Error(reviewModelError(request));
+  if (!await reviewModelActive(page, input, ownedName, composerDeadline, request)) throw Error(reviewModelError(request));
   if (!await normalChatMode(input)) throw Error('NORMAL_CHAT_MODE_NOT_READY');
   const prompt = reviewPrompt(request);
   if (prompt.length > 64 * 1024) throw Error('PROMPT_TOO_LARGE');
@@ -656,7 +724,7 @@ let composerRepairAttempted = false;
   stage = 'attachments';
   if (await page.evaluate(() => window.name) !== ownedName) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   await uploadAttachments(page, input, request);
-  input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000), request);
+  input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 30000), request, ownedName);
   stage = 'composer_fill';
   if (await page.evaluate(() => window.name) !== `xgs-review-${id}`) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   await input.fill(prompt);
@@ -666,7 +734,7 @@ let composerRepairAttempted = false;
     while (Date.now() < readyDeadline) {
       const promptReady = normalizeComposerText(await bounded(composerText(input), 2000).catch(() => '')) === normalizeComposerText(prompt);
       const attachmentReady = await bounded(attachmentsReady(input, request), 2000).catch(() => false);
-      const modelReady = await bounded(reviewModelActive(input, request), 2000).catch(() => false);
+      const modelReady = await reviewModelActive(page, input, ownedName, readyDeadline, request);
       const modeReady = await bounded(normalChatMode(input), 2000).catch(() => false);
       const sendReady = await bounded(send.isEnabled(), 2000).catch(() => false);
       if (promptReady && attachmentReady && modelReady && modeReady && sendReady) break;
@@ -684,13 +752,13 @@ let composerRepairAttempted = false;
     && !fs.existsSync(path.join(dir, 'submitted.json')) && Date.now() < request.deadlineAt) {
     // The owned editor can retain only the first paragraph after fill. Repair
     // this draft once; never overwrite unrelated text or relax exact matching.
-    input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 10000), request);
+    input = await waitForComposer(page, Math.min(request.deadlineAt, Date.now() + 10000), request, ownedName);
     actualPrompt = await bounded(composerText(input), 2000);
     const currentText = normalizeComposerText(actualPrompt);
     if ((lostSuffix(currentText) || currentText === expectedText)
       && await bounded(input.evaluate(element => element.isConnected && Boolean(element.closest('form'))), 1000)
       && await bounded(attachmentsReady(input, request), 2000)
-      && await bounded(reviewModelActive(input, request), 2000)
+      && await reviewModelActive(page, input, ownedName, request.deadlineAt, request)
       && await bounded(normalChatMode(input), 2000)
       && !fs.existsSync(path.join(dir, 'submitted.json')) && Date.now() < request.deadlineAt) {
       composerRepairAttempted = true;
@@ -704,6 +772,10 @@ let composerRepairAttempted = false;
       actualPrompt = await bounded(composerText(input), 2000);
     }
   }
+  // Model verification may open the owned menu. Re-read the existing prompt and
+  // attachment guards after it closes, before publishing the submission receipt.
+  if (!await reviewModelActive(page, input, ownedName, request.deadlineAt, request)) throw Error(reviewModelError(request));
+  actualPrompt = await bounded(composerText(input), 2000);
   if (normalizeComposerText(actualPrompt) !== normalizeComposerText(prompt)) {
     comparisonDiagnostic = { ...promptComparison(prompt, actualPrompt),
       composerConnected: await bounded(input.evaluate(element => element.isConnected && Boolean(element.closest('form'))), 1000).catch(() => null),
@@ -711,7 +783,6 @@ let composerRepairAttempted = false;
     throw Error('PROMPT_CHANGED');
   }
   if (!await bounded(attachmentsReady(input, request), 2000).catch(() => false)) throw Error('ATTACHMENT_UPLOAD_NOT_CONFIRMED');
-  if (!await bounded(reviewModelActive(input, request))) throw Error(reviewModelError(request));
   if (!await bounded(normalChatMode(input))) throw Error('NORMAL_CHAT_MODE_NOT_READY');
   if (!await send.isEnabled().catch(() => false)) throw Error('SEND_NOT_READY');
   if (Date.now() >= request.deadlineAt) throw Error('REQUEST_DEADLINE_EXCEEDED');
