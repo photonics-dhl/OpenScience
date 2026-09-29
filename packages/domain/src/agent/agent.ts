@@ -25,6 +25,7 @@ import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
 import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 import { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError, type SourceMapSearchIndexPayload } from './search-index-source';
 import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } from './standalone-science-recovery';
+import { inspectHermesSourceReviewRecovery, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
@@ -488,7 +489,7 @@ async function persistAgentTaskCoreInTransaction(
   tx: Prisma.TransactionClient,
   input: Omit<SubmitAgentTaskInput, 'dispatch'>,
   ctx: AuditContext = {},
-  billing: 'ai_credit' | 'deterministic' = 'ai_credit',
+  billing: 'ai_credit' | 'deterministic' | { sourceReviewReservationTaskId: string; reservationLedgerId: string } = 'ai_credit',
 ): Promise<{ task: AgentTask; replayed: boolean }> {
   await lockTrashReferences(tx);
   const session = await tx.agentSession.findUnique({ where: { id: input.sessionId } });
@@ -616,7 +617,9 @@ async function persistAgentTaskCoreInTransaction(
   }
   await recordAudit(deps, tx, {
     actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: task.id,
-    metadata: { kind: input.kind, sessionId: session.id, creditPolicy: billing === 'ai_credit' ? 'charged-on-submit' : 'not-applicable-deterministic',
+    metadata: { kind: input.kind, sessionId: session.id, creditPolicy: billing === 'ai_credit' ? 'charged-on-submit'
+      : typeof billing === 'object' ? 'reuse-original-reservation' : 'not-applicable-deterministic',
+      ...(typeof billing === 'object' ? billing : {}),
       ...(adminAutoFunded ? { funding: 'platform-admin-auto-funded' } : {}) },
   }, ctx);
   return { task, replayed: false };
@@ -636,6 +639,25 @@ export async function persistAgentTaskInTransaction(
     throw new AgentError('VALIDATION_ERROR', 'The retry contract marker is server-reserved');
   }
   return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);
+}
+
+/** Package-internal: only one proved-unsubmitted Hermes review can reuse its exact original debit. */
+export async function persistHermesSourceReviewTechnicalTaskInTransaction(
+  deps: AgentDeps, tx: Prisma.TransactionClient, input: { runId: string; sessionId: string; userId: string },
+  verifier: SourceReviewNotSubmittedVerifier, ctx: AuditContext = {},
+) {
+  const proof = await inspectHermesSourceReviewRecovery(tx, input.runId, undefined, verifier);
+  const session = await tx.agentSession.findUnique({ where: { id: input.sessionId } });
+  if (!deps.audit?.record || !proof?.technicalRecovery || proof.run.actorId !== input.userId
+    || session?.researchObjectId !== proof.run.researchObjectId || session.kind !== 'ingestion'
+    || !session.idempotencyKey?.startsWith(`${proof.recoveryKey}:hermes-recovery:`))
+    throw new AgentError('VALIDATION_ERROR', 'Source review reservation cannot be reused');
+  const { membership } = await requireActiveMembership(tx, proof.run.researchObject.workspaceId, input.userId);
+  if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) throw new AgentError('VALIDATION_ERROR', 'Source review writer is unavailable');
+  return persistAgentTaskCoreInTransaction(deps, tx, { sessionId: input.sessionId, userId: input.userId,
+    kind: 'sdf.extract', payload: { artifactId: proof.source.artifactId, researchObjectId: proof.run.researchObjectId },
+    idempotencyKey: proof.recoveryKey }, ctx, { sourceReviewReservationTaskId: proof.technicalRecovery.originalTaskId,
+    reservationLedgerId: proof.technicalRecovery.reservationLedgerId });
 }
 
 /** Package-internal durable path; callers cannot omit or partially stamp the acquisition contract. */

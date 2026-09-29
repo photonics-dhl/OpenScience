@@ -58,12 +58,20 @@ export interface ScienceReviewDocumentAttachmentRecord {
 export type ScienceReviewAttachmentRecord = ScienceReviewImageAttachmentRecord | ScienceReviewDocumentAttachmentRecord | IllustrationImageReviewAttachmentRecord;
 export type ScienceReviewAttachment = ScienceReviewAttachmentRecord & { bytes: Uint8Array };
 
+/** Server-bound identity of an original review proven not to have reached ChatGPT. */
+export interface SourceReviewNotSubmittedProof extends ScienceReviewSource {
+  requestId: string;
+  promptHash: string;
+}
+
 export interface ScienceReviewInput {
   requestId: string;
   authorizationContext: OcrAuthorizationContext;
   source: ScienceReviewSource | IllustrationReviewSource | IllustrationImageReviewSource;
   prompt: string;
   attachments?: readonly ScienceReviewAttachment[];
+  /** Trusted technical continuation; internal only, never serialized into the browser job. */
+  sourceReviewRecovery?: SourceReviewNotSubmittedProof;
   /** Worker-only authorization snapshot; never serialized into the review job. */
   illustrationContext?: {
     executionAttempt: number;
@@ -122,6 +130,7 @@ export interface ScienceReviewProvider {
   readonly name: string;
   readonly model: string;
   review(input: ScienceReviewInput): Promise<ScienceReviewProviderResult>;
+  canRetrySourceReviewBeforeSubmission?(input: SourceReviewNotSubmittedProof): Promise<boolean>;
   /** Detect a durable previous image-review attempt before selecting another provider. */
   hasImageReviewReservation?(requestId: string): Promise<boolean>;
   /** Attribute a failed image-review audit to the model pinned in a durable reservation. */

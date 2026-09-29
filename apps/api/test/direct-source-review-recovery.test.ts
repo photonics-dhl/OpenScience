@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { createSession } from '@openscience/auth';
 import { fixture, fields } from '../../../packages/domain/test/agent/direct-source-review-fixture';
@@ -8,17 +8,59 @@ import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
 
-async function apiFixture() {
+async function apiFixture(canRetrySourceReviewBeforeSubmission?: Parameters<typeof buildApp>[0]['canRetrySourceReviewBeforeSubmission']) {
   const f = fixture(); const redis = createFakeRedis();
   Object.assign(redis, { lpush: f.redis.lpush });
   const token = await createSession(redis, { userId: f.input.actorId, status: 'email_verified' });
   const app = await buildApp({ prisma: f.prisma, redis, audit: f.deps.audit, mailer: createFakeMailer(),
-    cookieSecret: 'test-secret', secureCookies: false });
+    cookieSecret: 'test-secret', secureCookies: false, canRetrySourceReviewBeforeSubmission });
   apps.push(app);
   return { ...f, app, cookies: { openscience_session: token }, url: `/research-objects/${f.ids.ro}/hermes-runs/${f.ids.run}` };
 }
 
 describe('fresh source review recovery HTTP contract', () => {
+  it('uses positive broker evidence for one disclosed uncharged technical successor through GET and POST', async () => {
+    const verifier = vi.fn(async () => true);
+    const f = await apiFixture(verifier);
+    const result = f.db.agentTasks[1].result;
+    const text = JSON.stringify({ fields: fields(field => ({ verdict: 'accepted', summary: `Original ${field}`,
+      sourcePassageIds: ['P00001'], issues: [] })), needsMoreEvidence: [], claimSuggestions: [{ parentClientKey: 'missing' }] });
+    result.fieldDiagnosticsDetails = fields(() => 'scientificReview=review_contract_incomplete;reviewedClaims=source_unmaterializable');
+    result.scientificReview.rejectedOutputs = [{ structuredAttempt: 2, kind: 'schema_validation', diagnostic: 'claims_source_unmaterializable',
+      provider: 'primary', model: 'MiniMax-M3', promptHash: '2'.repeat(64), responseHash: createHash('sha256').update(text).digest('hex'),
+      byteLength: Buffer.byteLength(text), usage: { inputTokens: 100, outputTokens: 100 }, finishReason: 'stop', text }];
+    const request = { method: 'POST' as const, url: `${f.url}/retry-generation`, cookies: f.cookies,
+      headers: { 'idempotency-key': 'initial-independent' }, payload: { expectedVersion: 7 } };
+    expect((await f.app.inject(request)).statusCode).toBe(202);
+    const root = f.db.agentTasks.at(-1)!;
+    root.status = 'succeeded'; root.executionAttempt = 1;
+    root.result = structuredClone(f.failedResult);
+    root.result.scientificReview = { ...root.result.scientificReview, kind: 'independent_review',
+      provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro', attemptId: '00000000-0000-5000-8000-000000000777' };
+    root.result.fieldDiagnosticsDetails = fields(() => 'scientificReview=unavailable');
+    f.db.auditLogs.push({ id: 'web-call', action: 'ai.gateway.call', requestId: root.id, actorId: null, targetType: 'ai_gateway',
+      metadata: { operation: 'scientific_review', outcome: 'failed', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
+        promptHash: 'c'.repeat(64), inputContentHash: 'a'.repeat(64), fallbackReason: null, retryCount: 0, error: 'scientific_review_failed' } });
+    f.db.hermesResearchSteps.at(-1)!.status = 'failed'; f.db.hermesResearchRuns[0].status = 'failed';
+    f.db.ingestionTasks[0].state = 'needs_review';
+    const read = () => f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });
+    expect((await read()).json().run).toMatchObject({ generationRecovery: 'source-review-not-submitted', chargeableAttempts: 0 });
+    expect(verifier).toHaveBeenCalledWith(expect.objectContaining({ requestId: root.result.scientificReview.attemptId, promptHash: 'c'.repeat(64) }));
+    verifier.mockResolvedValue(false);
+    expect((await read()).json().run.canRetryGeneration).not.toBe(true);
+    const retry = { ...request, headers: { 'idempotency-key': 'technical-successor' }, payload: { expectedVersion: f.db.hermesResearchRuns[0].version } };
+    const ledger = structuredClone(f.db.usageLedger);
+    const rejected = await f.app.inject(retry);
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR', message: 'This source review has no safe source recovery' } });
+    expect(f.db.usageLedger).toEqual(ledger);
+    expect(f.redis.lpush).toHaveBeenCalledTimes(1);
+    verifier.mockResolvedValue(true);
+    expect((await f.app.inject(retry)).statusCode).toBe(202);
+    expect((await f.app.inject(retry)).statusCode).toBe(202);
+    expect(f.db.usageLedger).toEqual(ledger);
+    expect(f.redis.lpush).toHaveBeenCalledTimes(2);
+  });
   it('projects saved-body correction privately and reuses the same explicit endpoint and replay receipt', async () => {
     const f = await apiFixture(); const result = f.db.agentTasks[1].result;
     const text = JSON.stringify({ fields: fields(field => ({ verdict: 'accepted', summary: `Original ${field}`,

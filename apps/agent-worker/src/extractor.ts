@@ -14,6 +14,7 @@ import {
   type ClaimRelation,
   type DocumentSourceMap,
   type HermesSavedSourceReviewOutput,
+  type SourceReviewNotSubmittedInput,
   type ReviewedClaimSuggestion,
   type SourceLocator,
 } from '@openscience/domain';
@@ -1231,6 +1232,8 @@ interface ScientificReviewContext {
   requireReviewedClaims?: boolean;
   /** Selected from a bound, persisted failed task; never accepted from user payload. */
   savedReviewOutput?: HermesSavedSourceReviewOutput;
+  /** Exact failed request proof from the server-owned technical successor receipt. */
+  sourceReviewRecovery?: SourceReviewNotSubmittedInput;
   /** Read from the private source composition, never user payload. */
   draftClaims?: DraftClaimSuggestion[];
   /** Set only from own-property inspection of the trusted persisted composition. */
@@ -2712,6 +2715,7 @@ async function webScientificReviewCanonicalProposal(
       authorizationContext: context.authorizationContext,
       source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash, candidateHash, sourceMapHash },
       prompt,
+      ...(context.sourceReviewRecovery ? { sourceReviewRecovery: context.sourceReviewRecovery } : {}),
       ...(context.sourceDocument ? { attachments: [{ ...context.sourceDocument,
         bytes: Uint8Array.from(context.sourceDocument.bytes) }] } : {}),
     });

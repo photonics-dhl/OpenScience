@@ -24,7 +24,8 @@ import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInpu
 import { automaticIngestionReview, automaticIngestionReviewStage, requireUnchangedAutomaticCore, type HermesIngestionReviewStage } from './automatic-review';
 import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
 import { findSavedIngestionCommit, type SavedIngestionOrigin } from './saved-source-commit';
-import { HERMES_INDEPENDENT_SOURCE_REVIEW, inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview } from './source-review-recovery';
+import { HERMES_INDEPENDENT_SOURCE_REVIEW, inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview, type SourceReviewNotSubmittedVerifier } from './source-review-recovery';
+import { persistHermesSourceReviewTechnicalTaskInTransaction } from '../agent/agent';
 
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
 
@@ -745,10 +746,10 @@ async function recordHermesRefresh(tx: Prisma.TransactionClient, run: Awaited<Re
 }
 
 /** Called only inside the existing run recovery transaction, under its version fence. */
-export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx: Prisma.TransactionClient, input: {
+export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & { canRetrySourceReviewBeforeSubmission?: SourceReviewNotSubmittedVerifier }, tx: Prisma.TransactionClient, input: {
   actorId: string; researchObjectId: string; runId: string; expectedVersion: number; requestDigest: string; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<string> {
-  const proof = await inspectHermesSourceReviewRecovery(tx, input.runId);
+  const proof = await inspectHermesSourceReviewRecovery(tx, input.runId, undefined, deps.canRetrySourceReviewBeforeSubmission);
   if (!proof || proof.run.actorId !== input.actorId || proof.run.researchObjectId !== input.researchObjectId
     || proof.run.version !== input.expectedVersion) throw new IngestionError('VALIDATION_ERROR', 'This source review has no safe source recovery');
   const { run, source, failed, composition, sourceStep, originalStep, recoveryKey } = proof;
@@ -763,7 +764,10 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
     title: `Ingestion source review recovery ${source.id}`,
     idempotencyKey: `${recoveryKey}:hermes-recovery:${input.requestDigest}`,
   }, ctx);
-  const { task, replayed } = await persistAgentTaskInTransaction(deps, tx, {
+  const { task, replayed } = proof.technicalRecovery
+    ? await persistHermesSourceReviewTechnicalTaskInTransaction(deps, tx, { runId: run.id, sessionId: session.id, userId: input.actorId },
+      deps.canRetrySourceReviewBeforeSubmission!, ctx)
+    : await persistAgentTaskInTransaction(deps, tx, {
     sessionId: session.id, userId: input.actorId, kind: 'sdf.extract',
     payload: { artifactId: source.artifactId, researchObjectId: run.researchObjectId }, idempotencyKey: recoveryKey,
   }, ctx);
@@ -775,7 +779,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
     id: sourceStep.id, runId: run.id, stage: 'source_ingestion', agentTaskId: failed.id,
     ingestionTaskId: source.id, artifactId: source.artifactId,
   }, data: { agentTaskId: task.id, status: 'waiting', error: null } });
-  const preserved = await tx.hermesResearchStep.updateMany({ where: {
+  const preserved = proof.technicalRecovery ? { count: 1 } : await tx.hermesResearchStep.updateMany({ where: {
     id: originalStep.id, runId: run.id, stage: 'source_review', ordinal: originalStep.ordinal, agentTaskId: failed.id,
   }, data: { status: 'failed', error: originalStep.error ?? (proof.recoveryClass === 'accepted_review_claim_contract_missing'
     ? 'Accepted source review is missing its required Claims contract; original candidate preserved'
@@ -807,7 +811,9 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps, tx
       ...(proof.schemaContractEvidence ?? {}),
       ...(proof.directCompositionEvidence ?? {}),
       ...(proof.savedOutputEvidence ? { savedOutputEvidence: proof.savedOutputEvidence, freshReview: false, savedOutputReused: true } : {}),
-      stage: 'source_review', ordinal: proof.nextOrdinal, chargeableAttempts: 1, creditPolicy: 'new-review-task-charged;original-failure-preserved' } }, ctx);
+      ...(proof.technicalRecovery ? { notSubmittedRecovery: proof.technicalRecovery, independentIntentTaskId: failed.id } : {}),
+      stage: 'source_review', ordinal: proof.nextOrdinal, chargeableAttempts: proof.technicalRecovery ? 0 : 1,
+      creditPolicy: proof.technicalRecovery ? 'reuse-original-reservation' : 'new-review-task-charged;original-failure-preserved' } }, ctx);
   return task.id;
 }
 

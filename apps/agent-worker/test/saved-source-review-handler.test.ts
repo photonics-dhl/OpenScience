@@ -113,7 +113,7 @@ describe('saved source-review handler seam', () => {
     seam.lock.mockReset().mockResolvedValue(undefined);
   });
 
-  it.each(['unchanged', 'downgraded', 'revoked', 'run', 'receipt', 'task-key', 'legacy'] as const)(
+  it.each(['unchanged', 'downgraded', 'revoked', 'run', 'receipt', 'proof', 'task-key', 'legacy'] as const)(
     'rechecks bound authority in the actual final spool transaction (%s)', async change => {
       const f = fixture();
       const execution = { mode: 'web', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
@@ -139,6 +139,9 @@ describe('saved source-review handler seam', () => {
             userId: 'actor', workspaceId: 'workspace', role: 'reader' });
         if (change === 'run') seam.requireExecution.mockRejectedValue(new Error('[blocked] run cancelled'));
         if (change === 'receipt') seam.requireExecution.mockResolvedValue({ ...execution, savedOutput: { ...f.saved, text: 'changed' } });
+        if (change === 'proof') seam.requireExecution.mockResolvedValue({ ...execution, notSubmittedRecovery: {
+          requestId: 'different', promptHash: 'a'.repeat(64), artifactId: 'artifact',
+          documentSha256: 'b'.repeat(64), candidateHash: 'c'.repeat(64), sourceMapHash: 'd'.repeat(64) } });
         if (change === 'task-key') f.owner.idempotencyKey = f.owner.idempotencyKey.replace(ids.failed, ids.source);
         await submission({ taskId: ids.owner, artifactId: 'artifact' }, publish);
         return { core: { method: 'reviewed' }, needsMoreInformation: [] };
@@ -158,17 +161,21 @@ describe('saved source-review handler seam', () => {
       }
     });
 
-  it.each(['initial', 'saved'] as const)('binds the server-owned %s independent role and the original execution lease at submit', async kind => {
+  it.each(['initial', 'saved', 'technical'] as const)('binds the server-owned %s independent role and the original execution lease at submit', async kind => {
     const f = fixture(2);
     if (kind === 'initial') f.owner.idempotencyKey = `ingestion-analysis-compose:${ids.ingestion}:${ids.source}:${ids.source}:scientific-review-v4`;
+    const proof = { requestId: 'original-request', promptHash: 'a'.repeat(64), artifactId: 'artifact',
+      documentSha256: f.sourceMap.contentHash, candidateHash: 'c'.repeat(64), sourceMapHash: 'd'.repeat(64) };
     const execution = { mode: 'web', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
-      taskId: ids.owner, runId: 'run', ...(kind === 'saved' ? { savedOutput: f.saved } : {}) };
+      taskId: ids.owner, runId: 'run', ...(kind !== 'initial' ? { savedOutput: f.saved } : {}),
+      ...(kind === 'technical' ? { notSubmittedRecovery: proof } : {}) };
     seam.requireExecution.mockResolvedValue(execution);
     seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
       expect(context).toMatchObject({ requireReusableSemanticStage: true, reviewExistingSourceTaskId: ids.source,
         scientificReview: { mode: 'web', requestId: ids.owner, requireReviewedClaims: true,
           sourceDocument: { sha256: f.sourceMap.contentHash, mediaType: 'application/pdf' } } });
-      expect(context.scientificReview.savedReviewOutput).toBe(kind === 'saved' ? f.saved : undefined);
+      expect(context.scientificReview.savedReviewOutput).toBe(kind !== 'initial' ? f.saved : undefined);
+      expect(context.scientificReview.sourceReviewRecovery).toEqual(kind === 'technical' ? proof : undefined);
       await context.scientificReview.beforeReviewProviderCall();
       f.providerSubmit(); return { core: { method: 'independently reviewed' }, needsMoreInformation: [] };
     });

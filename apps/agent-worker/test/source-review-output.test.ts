@@ -49,10 +49,20 @@ async function independentFixture() {
       sourceDocument: { fileName: 'source.pdf', mediaType: 'application/pdf', sha256: map.contentHash, bytes: Uint8Array.from(pdf) },
     } };
   return { output, context, web, complete, beforeReviewProviderCall,
-    run: () => extractHandler(gateway, { payload: { mode: 'model' } }, context) };
+    run: (payload: Record<string, unknown> = { mode: 'model' }) => extractHandler(gateway, { payload }, context) };
 }
 
 describe('terminal independent source review', () => {
+  it.each([false, true])('forwards only the server-bound zero-submit proof (bound=%s)', async bound => {
+    const f = await independentFixture();
+    const proof = { requestId: 'original-request', promptHash: 'b'.repeat(64), artifactId: f.context.sourceMap!.artifactId,
+      documentSha256: f.context.sourceMap!.contentHash, candidateHash: 'c'.repeat(64), sourceMapHash: 'd'.repeat(64) };
+    if (bound) f.context.scientificReview!.sourceReviewRecovery = proof;
+    await f.run({ sourceReviewRecovery: { ...proof, requestId: 'client-forged' } });
+    expect(f.web).toHaveBeenCalledOnce();
+    expect(f.web.mock.calls[0]![0].sourceReviewRecovery).toEqual(bound ? proof : undefined);
+    expect(f.beforeReviewProviderCall).toHaveBeenCalledOnce();
+  });
   it.each(['missing-core', 'missing-parent', 'cross-field-source', 'accepted-change', 'false-revised', 'unexplained-block'])(
     'rejects %s in the shared complete field/Claims guard after exactly one review', async failure => {
       const f = await independentFixture();

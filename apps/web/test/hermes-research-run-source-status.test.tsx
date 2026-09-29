@@ -37,6 +37,17 @@ function renderRun(run: HermesResearchRun) {
 }
 
 describe('Hermes research run panel', () => {
+  it.each(['en', 'zh'])('discloses reservation reuse while retaining subscription usage for technical continuation (%s)', locale => {
+    translations.locale = locale;
+    const run = sourceRun();
+    run.canRetryGeneration = true; run.chargeableAttempts = 0;
+    run.generationRecovery = 'source-review-not-submitted';
+    const html = renderRun(run);
+    expect(html).toContain(locale === 'zh' ? '复用原平台任务额度，不重复扣除' : 'Reuses the original platform task credit without another debit');
+    expect(html).toContain(locale === 'zh' ? '仍会使用 ChatGPT 订阅额度' : 'ChatGPT subscription usage still applies');
+    expect(html).toContain(locale === 'zh' ? '>继续独立审校</button>' : '>Continue independent review</button>');
+    expect(html).not.toContain(locale === 'zh' ? '平台任务额度及 ChatGPT 订阅额度' : 'platform task credits and ChatGPT subscription usage');
+  });
   it.each(['en', 'zh'])('discloses the independent review provider and separate usage before continuation (%s)', locale => {
     translations.locale = locale;
     const run = sourceRun();

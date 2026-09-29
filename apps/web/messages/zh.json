@@ -1520,6 +1520,8 @@
     "sourceReviewFresh": "重新审校并继续",
     "sourceReviewSaved": "修正已保存审校并继续",
     "sourceReviewIndependent": "独立审校并继续",
+    "sourceReviewTechnicalContinue": "继续独立审校",
+    "sourceReviewTechnicalDescription": "上次审校未发送到 ChatGPT。使用相同原文和候选继续一次独立审校；复用原平台任务额度，不重复扣除，仍会使用 ChatGPT 订阅额度。通过审核后继续制作，结果仍为私有草稿。",
     "sourceReviewIndependentDescription": "使用已保存的原文和候选，由 ChatGPT Web 6 Pro 独立审校一次。这会使用平台任务额度及 ChatGPT 订阅额度。通过审核后继续制作，结果仍为私有草稿。",
     "sourceReviewSavedDescription": "保留原文解析和六维草稿，使用已保存的审校回答进行一次纠正。这将新增一个计费任务；此前请求可能已计费。通过审核后继续制作，结果仍为私有草稿。",
     "sourceParsingRetryDescription": "保留已有解析结果，上次超时可能已计费，继续可能产生模型费用。本次不新增平台额度扣费。",

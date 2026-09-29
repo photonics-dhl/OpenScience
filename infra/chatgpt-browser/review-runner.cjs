@@ -314,20 +314,87 @@ function reviewSendButton(page, form) {
 function quotaRefusal(text) {
   return /^You've hit your limit\. Please try again later\.(?:\s+Retry)?$/i.test(text.trim());
 }
+const REVIEW_PICKERS = '[role="menu"]:visible,[role="listbox"]:visible,[role="dialog"]:visible';
+async function openedReviewPicker(page, trigger, before, deadlineAt, parent, targetLabel) {
+  const controls = (await trigger.getAttribute('aria-controls') || '').trim().split(/\s+/).filter(Boolean);
+  if (controls.length > 1) throw Error('MODEL_6_PRO_PICKER_AMBIGUOUS');
+  while (Date.now() < deadlineAt) {
+    if (controls.length === 1) {
+      const linked = page.locator(`[id=${JSON.stringify(controls[0])}]`);
+      if (await linked.count() > 1) throw Error('MODEL_6_PRO_PICKER_AMBIGUOUS');
+      if (await linked.count() === 1 && await linked.isVisible()) {
+        if (await linked.evaluate((element, previous) => previous.includes(element), before))
+          throw Error('MODEL_6_PRO_PICKER_NOT_OPENED');
+        if (!targetLabel || await visibleReviewLabel(linked, targetLabel)) return linked;
+      }
+    } else {
+      const visible = page.locator(REVIEW_PICKERS), opened = [];
+      for (let index = 0; index < await visible.count(); index++) {
+        const candidate = visible.nth(index);
+        if (!await candidate.evaluate((element, previous) => previous.includes(element), before)) opened.push(candidate);
+      }
+      if (opened.length > 1) throw Error('MODEL_6_PRO_PICKER_AMBIGUOUS');
+      if (opened.length === 1 && (!targetLabel || await visibleReviewLabel(opened[0], targetLabel))) return opened[0];
+      // An effort control may expand within its already-owned parent menu.
+      // Its container can remain visible while Power/submenu content is still rendering.
+      if (!opened.length && parent && await parent.isVisible()
+        && (!targetLabel || await visibleReviewLabel(parent, targetLabel))) return parent;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw Error('MODEL_6_PRO_PICKER_NOT_READY');
+}
+async function visibleReviewLabel(picker, label) {
+  const matches = picker.getByText(label, { exact: true }), visible = [];
+  for (let index = 0; index < await matches.count(); index++) {
+    const candidate = matches.nth(index);
+    if (await candidate.isVisible()) visible.push(candidate);
+  }
+  if (visible.length > 1) throw Error('MODEL_6_PRO_OPTION_AMBIGUOUS');
+  return visible[0];
+}
+async function clickReviewLabel(page, item, name) {
+  if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
+  if (!item || !await item.isVisible()) throw Error('MODEL_6_PRO_OPTION_NOT_READY');
+  // A confirmed label can be a span inside a disabled control; do not assume its DOM role.
+  if (!await item.isEnabled() || await item.evaluate(element => Boolean(element.closest('[disabled],[aria-disabled="true"],[inert]'))))
+    throw Error('MODEL_6_PRO_DISABLED');
+  await item.click();
+}
 async function selectReviewModelOnFreshPage(page, input, name, deadlineAt, request) {
   if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   if (await reviewModelActive(input, request)) return;
   const form = input.locator('xpath=ancestor::form[1]');
   const control = await reviewModelControl(form);
-  if (await control.count() !== 1 || !await control.isVisible()) throw Error('MODEL_SELECTOR_NOT_READY');
+  if (await control.count() !== 1 || !await control.isVisible() || !await control.isEnabled()) throw Error('MODEL_SELECTOR_NOT_READY');
+  const proRequest = request.model !== 'chatgpt-web/5.6-sol';
+  const before = proRequest ? await page.locator(REVIEW_PICKERS).elementHandles() : [];
   await control.click();
+  let selectedPower = false;
+  if (proRequest && await page.getByRole('menuitemradio', { name: PRO_MODEL_LABEL }).count() === 0) {
+    const picker = await openedReviewPicker(page, control, before, Math.min(deadlineAt, Date.now() + 5000));
+    const effort = await visibleReviewLabel(picker, 'Thinking effort');
+    if (effort) {
+      // Power has different meanings across model families. Only the explicitly
+      // identified 6 family may use this path; do not turn 5.6 Power into a 6 Pro claim.
+      if (!/^(?:GPT[- ]?)?6(?:\s|$)/i.test(normalizeComposerText(await control.innerText())))
+        throw Error('MODEL_6_PRO_FAMILY_NOT_CONFIRMED');
+      const previous = await page.locator(REVIEW_PICKERS).elementHandles();
+      await clickReviewLabel(page, effort, name);
+      const effortPicker = await openedReviewPicker(page, effort, previous, Math.min(deadlineAt, Date.now() + 5000), picker, 'Power');
+      const power = await visibleReviewLabel(effortPicker, 'Power');
+      await clickReviewLabel(page, power, name);
+      selectedPower = true;
+    }
+  }
+  if (!selectedPower) {
   const modernMenu = page.locator('[role="menuitem"][aria-label="Select model"]');
   const modernPicker = await modernMenu.count() === 1 && await modernMenu.isVisible();
   if (modernPicker) await modernMenu.click();
   const choice = page.getByRole('menuitemradio', { name: reviewModelOption(request) });
   await choice.waitFor({ state: 'visible', timeout: Math.max(1, Math.min(5000, deadlineAt - Date.now())) }).catch(() => { throw Error(reviewModelError(request)); });
   if (await choice.count() !== 1) throw Error(reviewModelError(request));
-  if (await choice.getAttribute('aria-disabled') === 'true') throw Error(request.model === 'chatgpt-web/5.6-sol' ? 'MODEL_5_6_SOL_DISABLED' : 'MODEL_6_PRO_DISABLED');
+  if (!await choice.isEnabled() || await choice.getAttribute('aria-disabled') === 'true') throw Error(request.model === 'chatgpt-web/5.6-sol' ? 'MODEL_5_6_SOL_DISABLED' : 'MODEL_6_PRO_DISABLED');
   if (request.model === 'chatgpt-web/5.6-sol') {
     // At the configured 125% zoom a transient picker panel intercepts pointer
     // clicks on a fresh page. Activate only this verified menu item, then check
@@ -339,11 +406,12 @@ async function selectReviewModelOnFreshPage(page, input, name, deadlineAt, reque
     }
     await page.keyboard.press('Escape');
   } else await choice.click();
+  }
   if (await page.evaluate(() => window.name) !== name) throw Error('REVIEW_PAGE_OWNERSHIP_LOST');
   while (Date.now() < deadlineAt && !await reviewModelActive(input, request)) {
     await new Promise(resolve => setTimeout(resolve, 250));
   }
-  if (!await reviewModelActive(input, request)) throw Error(reviewModelError(request));
+  if (!await reviewModelActive(input, request)) throw Error(selectedPower ? 'MODEL_6_PRO_ACTIVE_LABEL_MISMATCH' : reviewModelError(request));
 }
 async function normalChatMode(input) {
   const form = input.locator('xpath=ancestor::form[1]');

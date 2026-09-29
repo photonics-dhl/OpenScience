@@ -15,6 +15,7 @@ import {
   validateScienceReviewRequest,
   validateScienceReviewResult,
   type ScienceReviewInput,
+  type SourceReviewNotSubmittedProof,
   type ScienceReviewProvider,
   type ScienceReviewProviderResult,
   type ScienceReviewRequest,
@@ -176,6 +177,40 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
     } catch { return false; }
   }
 
+  /** Read broker-confirmed non-submission only; never reopen the failed reservation. */
+  async canRetrySourceReviewBeforeSubmission(input: SourceReviewNotSubmittedProof): Promise<boolean> {
+    if (!SCIENCE_REVIEW_ID_PATTERN.test(input.requestId)) return false;
+    try {
+      await directory(this.config.inboxDir); await directory(this.config.resultsDir);
+      const output = join(this.config.resultsDir, input.requestId); await directory(output);
+      const request = validateScienceReviewRequest(JSON.parse((await boundedRead(join(this.config.inboxDir,
+        `${input.requestId}.submitted.json`), SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+      const result = validateScienceReviewResult(JSON.parse((await boundedRead(join(output, 'result.json'),
+        SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
+      const proof = JSON.parse((await boundedRead(join(output, 'not-submitted.json'),
+        SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')) as Record<string, unknown>;
+      if (request.id !== input.requestId || request.schemaVersion !== 1 || request.promptHash !== input.promptHash
+        || request.source.artifactId !== input.artifactId || request.source.documentSha256 !== input.documentSha256
+        || request.source.candidateHash !== input.candidateHash || request.source.sourceMapHash !== input.sourceMapHash
+        || request.attachments?.length !== 1 || request.attachments[0]!.mediaType !== 'application/pdf'
+        || request.attachments[0]!.sha256 !== input.documentSha256
+        || result.status !== 'failed' || result.errorCode !== 'EXECUTION_FAILED'
+        || result.id !== request.id || result.promptHash !== request.promptHash
+        || !proof || typeof proof !== 'object' || Array.isArray(proof)
+        || Object.keys(proof).sort().join(',') !== 'id,promptHash,provider,state'
+        || proof.id !== request.id || proof.promptHash !== request.promptHash
+        || proof.provider !== this.name || proof.state !== 'not_submitted') return false;
+      const attachment = request.attachments[0]!;
+      const bytes = await boundedRead(join(this.config.inboxDir, `${request.id}.${attachment.fileName}`),
+        SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES);
+      if (!validPdf(bytes) || createHash('sha256').update(bytes).digest('hex') !== attachment.sha256) return false;
+      for (const name of ['response.txt', 'recovered-result.json', 'recovered-response.txt']) {
+        try { await lstat(join(output, name)); return false; } catch (error) { if (!missing(error)) throw error; }
+      }
+      return true;
+    } catch { return false; }
+  }
+
   async hasImageReviewReservation(requestId: string): Promise<boolean> {
     if (!SCIENCE_REVIEW_ID_PATTERN.test(requestId)) return false;
     await directory(this.config.inboxDir); await directory(this.config.resultsDir);
@@ -279,8 +314,16 @@ export class ChatGptWebScienceReviewProvider implements ScienceReviewProvider {
       ...(attachments?.length ? { attachments: attachments.map(({ record }) => record) } : {}),
     });
     if (Buffer.byteLength(JSON.stringify(request), 'utf8') > SCIENCE_REVIEW_MAX_JSON_BYTES) fail();
+    const recovery = input.sourceReviewRecovery ? Object.freeze({ ...input.sourceReviewRecovery }) : undefined;
+    if (recovery && (request.schemaVersion !== 1 || request.id === recovery.requestId
+      || request.promptHash !== recovery.promptHash || request.source.artifactId !== recovery.artifactId
+      || request.source.documentSha256 !== recovery.documentSha256 || request.source.candidateHash !== recovery.candidateHash
+      || request.source.sourceMapHash !== recovery.sourceMapHash || attachments?.length !== 1
+      || attachments[0]!.record.mediaType !== 'application/pdf' || attachments[0]!.record.sha256 !== recovery.documentSha256)) fail();
     const intendedRequest = request;
     const submit = async (): Promise<ScienceReviewProviderResult | null> => {
+      // Runs inside the worker's existing authority transaction, before any new spool write.
+      if (recovery && !await this.canRetrySourceReviewBeforeSubmission(recovery)) fail();
       const reservation = join(this.config.inboxDir, `${input.requestId}.submitted.json`);
       const reuseImageReservation = async (reserved: Buffer): Promise<ScienceReviewProviderResult | null> => {
         request = validateScienceReviewRequest(JSON.parse(reserved.toString('utf8')));

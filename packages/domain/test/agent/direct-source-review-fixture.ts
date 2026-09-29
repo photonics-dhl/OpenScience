@@ -75,6 +75,8 @@ export function fixture(legacy = false) {
     && (!where.AND || where.AND.every(clause => row.metadata[clause.metadata.path[0]!] === clause.metadata.equals)));
   Object.assign(prisma.auditLog, { findMany: vi.fn(async ({ where }: { where: AuditWhere }) => audits(where)),
     findFirst: vi.fn(async ({ where }: { where: AuditWhere }) => audits(where)[0] ?? null) });
+  Object.assign(prisma.usageLedger, { findUnique: async ({ where }: { where: { idempotencyKey: string } }) =>
+    db.usageLedger.find(row => row.idempotencyKey === where.idempotencyKey) ?? null });
   Object.assign(prisma.agentTask, { findMany: vi.fn(async ({ where }: { where: { id?: { in: string[] };
     session?: { idempotencyKey?: { endsWith: string } } } }) => db.agentTasks.filter(task =>
       (!where.id || where.id.in.includes(task.id)) && (!where.session?.idempotencyKey ||

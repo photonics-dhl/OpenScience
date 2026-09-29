@@ -181,7 +181,7 @@ async function pathEntryExists(path) {
   catch (error) { if (error.code === 'ENOENT') return false; throw error; }
 }
 // Publish evidence only: never clear a reservation, retry a browser operation, or extend its deadline.
-async function publishNotSubmittedEvidence(config, id) {
+export async function publishNotSubmittedEvidence(config, id) {
   const claimed = join(config.privateRoot, id), job = join(config.jobs, 'review', id), output = join(config.results, id);
   const proofPath = join(output, 'not-submitted.json');
   if (await pathEntryExists(proofPath)) return;
@@ -196,7 +196,11 @@ async function publishNotSubmittedEvidence(config, id) {
       ...(request.model ? { model: request.model } : {}), id: request.id, prompt: request.prompt,
       promptHash: request.promptHash, deadlineAt: request.deadlineAt, source: request.source,
       ...(request.attachments?.length ? { attachments: request.attachments } : {}) };
-    if (request.id !== id || request.schemaVersion !== 3 || !same(request, reservation) || !same(persisted, expected)
+    const sourceReview = request.schemaVersion === 1;
+    if (request.id !== id || (!sourceReview && request.schemaVersion !== 3)
+      || (sourceReview && (request.attachments?.length !== 1 || request.attachments[0].mediaType !== 'application/pdf'
+        || request.attachments[0].sha256 !== request.source.documentSha256 || result.errorCode !== 'EXECUTION_FAILED'))
+      || !same(request, reservation) || !same(persisted, expected)
       || result.id !== id || result.provider !== request.provider || result.promptHash !== request.promptHash || result.status !== 'failed'
       || operatorError?.state !== 'not_submitted') return;
     for (const name of ['submitted.json', 'conversation.json', 'result.json', 'response.txt', 'recovered-result.json', 'recovered-response.txt'])
@@ -205,7 +209,7 @@ async function publishNotSubmittedEvidence(config, id) {
       if (await pathEntryExists(join(output, name))) return;
     for (const attachment of request.attachments) {
       for (const path of [join(config.inbox, `${id}.${attachment.fileName}`), join(job, 'attachments', attachment.fileName)]) {
-        const bytes = await safeRead(path, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES);
+        const bytes = await safeRead(path, sourceReview ? SCIENCE_REVIEW_MAX_ATTACHMENT_BYTES : ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES);
         if (createHash('sha256').update(bytes).digest('hex') !== attachment.sha256) return;
       }
     }

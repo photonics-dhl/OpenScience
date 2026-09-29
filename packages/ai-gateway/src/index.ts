@@ -46,6 +46,7 @@ export {
   validateScienceReviewRequest,
   validateScienceReviewResult,
   type ScienceReviewInput,
+  type SourceReviewNotSubmittedProof,
   type ScienceReviewAttachment,
   type ScienceReviewAttachmentRecord,
   type ScienceReviewProvider,

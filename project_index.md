@@ -4,6 +4,7 @@
 
 科学分镜失败取证与纠错位于 `apps/agent-worker/src/presentation/illustration-planner.ts`、`handler.ts`；私有任务结果投影在 `packages/domain/src/agent/agent.ts`，完整表达式比较在 `apps/agent-worker/src/presentation/scientific-comparison.ts`；验收覆盖 `scientific-comparison.test.ts`、`automatic-style.test.ts`、`visual-source-context.test.ts` 和 `packages/domain/test/agent/private-science-diagnostics.test.ts`；managed受控恢复在 `research-run.ts` 与 `storyboard-science-recovery.test.ts`；普通任务原候选重验证沿 `packages/domain/src/agent/standalone-science-recovery.ts`、`standalone-science-recovery.test.ts` 及原Worker检查点。失败任务的可见续作入口在 `ResearchPresentation.tsx` / `PresentationWorkbench.tsx`，复用原retry API。运行与恢复状态见Hermes CURRENT，不把拒收候选当成功分镜。
 来源审校的有界原回答纠错、六字段/Claims同轮反馈与私有失败诊断在 `apps/agent-worker/src/extractor.ts`、`test/source-review-output.test.ts`；Gateway 回传字节上限在 `packages/ai-gateway/src/gateway.ts` 与 `test/structured-retry-budget.test.ts`。显式重新审校沿 `packages/domain/src/ingestion/source-review-recovery.ts`，现代直接凝练谱系由 `packages/domain/test/agent/direct-source-review-recovery.test.ts` 覆盖；精确状态与真实验收见 CURRENT。
+来源审校的发送前技术续接仍沿上述恢复入口，原消费额度复用由 `packages/domain/test/agent/source-review-not-submitted.test.ts` 验证；Gateway正证据与最终提交检查在 `science-review.ts` / `test/source-review-not-submitted.test.ts`，broker原四字段正证据覆盖 `test/source-review-broker.test.ts`。网页6Pro菜单兼容与延迟渲染覆盖 `infra/chatgpt-browser/review-runner-selector.test.cjs`；UI同键恢复沿 `hermes-source-parsing.spec.ts`。这些测试不代表生产ChatGPT实际响应。
 
 生图第二通道评估：[Qwen/Z-Image 部署、许可和成本](docs/proposals/2026-09-28-open-image-models.md)，保留已有调研；用户已暂缓后续实施，范围与恢复条件见 Hermes CURRENT。
 

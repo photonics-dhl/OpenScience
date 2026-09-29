@@ -48,6 +48,7 @@ on:
       - 'infra/chatgpt-browser/review-broker.mjs'
       - 'infra/chatgpt-browser/runner.cjs'
       - 'infra/chatgpt-browser/review-runner.cjs'
+      - 'infra/chatgpt-browser/review-runner-selector.test.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
       - 'packages/ai-gateway/src/codex-sol-review*.ts'
@@ -56,6 +57,8 @@ on:
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
       - 'packages/ai-gateway/test/web-image-review-model.test.ts'
+      - 'packages/ai-gateway/test/source-review-not-submitted.test.ts'
+      - 'packages/ai-gateway/test/source-review-broker.test.ts'
       - 'packages/ai-gateway/test/structured-retry-budget.test.ts'
       - 'apps/agent-worker/src/presentation/handler.ts'
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
@@ -118,6 +121,7 @@ on:
       - 'packages/domain/test/agent/direct-source-review-*.ts'
       - 'packages/domain/test/agent/saved-source-review-recovery.test.ts'
       - 'packages/domain/test/agent/independent-source-review.test.ts'
+      - 'packages/domain/test/agent/source-review-not-submitted.test.ts'
       - 'apps/api/test/direct-source-review-recovery.test.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
@@ -169,6 +173,7 @@ on:
       - 'infra/chatgpt-browser/review-broker.mjs'
       - 'infra/chatgpt-browser/runner.cjs'
       - 'infra/chatgpt-browser/review-runner.cjs'
+      - 'infra/chatgpt-browser/review-runner-selector.test.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
       - 'packages/ai-gateway/src/codex-sol-review*.ts'
@@ -177,6 +182,8 @@ on:
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
       - 'packages/ai-gateway/test/web-image-review-model.test.ts'
+      - 'packages/ai-gateway/test/source-review-not-submitted.test.ts'
+      - 'packages/ai-gateway/test/source-review-broker.test.ts'
       - 'packages/ai-gateway/test/structured-retry-budget.test.ts'
       - 'apps/agent-worker/src/presentation/handler.ts'
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
@@ -239,6 +246,7 @@ on:
       - 'packages/domain/test/agent/direct-source-review-*.ts'
       - 'packages/domain/test/agent/saved-source-review-recovery.test.ts'
       - 'packages/domain/test/agent/independent-source-review.test.ts'
+      - 'packages/domain/test/agent/source-review-not-submitted.test.ts'
       - 'apps/api/test/direct-source-review-recovery.test.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
@@ -263,10 +271,10 @@ jobs:
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
-      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts test/structured-retry-budget.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts test/structured-retry-budget.test.ts test/source-review-not-submitted.test.ts test/source-review-broker.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/source-parser-recovery.test.ts test/research-runs.test.ts test/direct-source-review-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
@@ -296,6 +304,7 @@ jobs:
       - run: node --check infra/chatgpt-browser/review-broker.mjs
       - run: node --check infra/chatgpt-browser/runner.cjs
       - run: node --check infra/chatgpt-browser/review-runner.cjs
+      - run: node --test infra/chatgpt-browser/review-runner-selector.test.cjs
       - run: node --check infra/codex-sol-review/review-client.mjs
       - run: bash -n infra/codex-sol-review/install.sh
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck

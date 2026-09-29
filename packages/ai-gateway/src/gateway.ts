@@ -23,7 +23,7 @@ import {
   type ProviderCapabilityPolicy,
 } from './ocr';
 import { TextProviderError, type ChatMessage, type Provider, type ProviderResult, type TextGenerationOptions, type TextTransportErrorCode } from './provider';
-import { ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS, type ScienceReviewInput, type ScienceReviewProvider, type ScienceReviewProviderResult } from './science-review-protocol';
+import { ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS, type ScienceReviewInput, type ScienceReviewProvider, type ScienceReviewProviderResult, type SourceReviewNotSubmittedProof } from './science-review-protocol';
 
 /** 调用日志（§9.3 + §17 脱敏：只记元数据，绝不记 prompt/附件/密钥）。 */
 export interface GatewayCallLog {
@@ -177,6 +177,11 @@ export class AiGateway {
     this.illustrationReviewPolicy = opts.illustrationReviewPolicy;
     this.authorizeIllustrationReview = opts.authorizeIllustrationReview;
     this.ocrLimits = { ...(opts.ocrLimits ?? {}) };
+  }
+
+  /** Read-only recovery evidence; unsupported providers cannot authorize a technical successor. */
+  async canRetrySourceReviewBeforeSubmission(input: SourceReviewNotSubmittedProof): Promise<boolean> {
+    return this.scientificReviewProvider?.canRetrySourceReviewBeforeSubmission?.(input) ?? false;
   }
 
   /** Plans use the text pool; actual images and explicit manuscript reviews use the existing visual reviewer. */

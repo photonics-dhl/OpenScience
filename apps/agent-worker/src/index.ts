@@ -28,6 +28,7 @@ import {
   findSavedIngestionCommit,
   requireHermesSourceReviewExecution,
   type HermesSavedSourceReviewOutput,
+  type SourceReviewNotSubmittedInput,
   VISUAL_NARRATIVE_PROFILE,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
@@ -356,6 +357,7 @@ export function createHandlers(
       let requireReusableSemanticStage = false;
       let reviewExistingSourceTaskId: string | undefined;
       let savedReviewOutput: HermesSavedSourceReviewOutput | undefined;
+      let sourceReviewRecovery: SourceReviewNotSubmittedInput | undefined;
       let beforeReviewProviderCall: (() => Promise<void>) | undefined;
       let requireReviewedClaims = false;
       let scientificReviewMode: 'model' | 'web' = 'model';
@@ -399,6 +401,7 @@ export function createHandlers(
             executionInput), { isolationLevel: 'Serializable' });
           scientificReviewMode = execution.mode;
           savedReviewOutput = execution.savedOutput;
+          sourceReviewRecovery = execution.mode === 'web' ? execution.notSubmittedRecovery : undefined;
           if (execution.mode === 'web' && execution.taskId !== ownerTask.id)
             throw new Error('[blocked] Independent source review task identity changed');
           const claimedExecution = spoolTaskExecution.getStore();
@@ -622,6 +625,7 @@ export function createHandlers(
             mode: scientificReviewMode,
             requireReviewedClaims,
             ...(savedReviewOutput ? { savedReviewOutput } : {}),
+            ...(sourceReviewRecovery ? { sourceReviewRecovery } : {}),
             ...(beforeReviewProviderCall ? { beforeReviewProviderCall } : {}),
             authorizationContext: trustedAuthorizationContext,
             ...(persistedScientificReviewCandidateHash ? { persistedCandidateHash: persistedScientificReviewCandidateHash } : {}),

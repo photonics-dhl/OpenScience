@@ -1520,6 +1520,8 @@
     "sourceReviewFresh": "Re-review and continue",
     "sourceReviewSaved": "Correct saved review and continue",
     "sourceReviewIndependent": "Review independently and continue",
+    "sourceReviewTechnicalContinue": "Continue independent review",
+    "sourceReviewTechnicalDescription": "The previous review was not sent to ChatGPT. Continue once with the same source and candidate. Reuses the original platform task credit without another debit; ChatGPT subscription usage still applies. Production continues after review passes, and results remain private drafts.",
     "sourceReviewIndependentDescription": "Use the saved source and candidate for one independent review by ChatGPT Web 6 Pro. This uses platform task credits and ChatGPT subscription usage. Production continues after review passes, and results remain private drafts.",
     "sourceReviewSavedDescription": "Keep the parsed source and six-field draft, and make one correction using the saved review response. This adds one charged task; earlier requests may already have been billed. Production continues only after review passes, and results remain private drafts.",
     "sourceParsingRetryDescription": "Existing parsing results are retained. The timed-out attempt may already have incurred charges, and continuing may incur model fees. No additional platform credit is charged for this recovery.",
