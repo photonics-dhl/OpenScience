@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { canonicalStoryboardStyle } from '@openscience/domain';
 import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from './scientific-critical-thinking';
 
@@ -191,6 +191,17 @@ export function automaticStyleTreatment(styleId: string, treatment: string): str
   const result = `${marker}; ${treatment.trim()}`;
   return selectedAutomaticArtStyle(result) ? result : undefined;
 }
+/** Resolve only catalogue-qualified selections; never alias across style families. */
+export function installedIllustrationStyle(styleId: string): { styleId: string; name: string } | undefined {
+  if (!/^(?:(?:article|infographic):[a-z0-9-]+|handdraw:#[0-9]{3})$/u.test(styleId)) return undefined;
+  const treatment = automaticStyleTreatment(styleId, 'Selected appearance');
+  const entry = treatment ? selectedAutomaticArtStyle(treatment) : undefined;
+  if (!entry) return undefined;
+  if (entry.kind === 'handdraw') return { styleId, name: entry.style.name };
+  const skill = entry.family === 'article' ? 'baoyu-article-illustrator' : 'baoyu-infographic';
+  const heading = readMarkdown(`${skill}/references/styles/${entry.id}.md`).split('\n').find(line => /^# /u.test(line));
+  return { styleId, name: heading?.slice(2).trim() || entry.id };
+}
 export function automaticStyleReviewGuidance(treatment: string): string {
   // Formal reviewers inspect exactly the appearance guidance used to draw this scene.
   // Their scientific audit rules are supplied separately by the review caller.
@@ -205,8 +216,13 @@ function baoyuIndex(family: 'article' | 'infographic'): string {
   const skill = family === 'article' ? 'baoyu-article-illustrator' : 'baoyu-infographic';
   return listDir(`${skill}/references/styles`).filter(name => name.endsWith('.md')).map(name => {
     const id = name.slice(0, -3);
-    const summary = readMarkdown(`${skill}/references/styles/${name}`).split('\n').find(line => line.trim() && !line.startsWith('#'))?.trim() ?? '';
-    return `${family}:${id} — ${summary}`;
+    const reference = readMarkdown(`${skill}/references/styles/${name}`);
+    const summary = reference.split('\n').find(line => line.trim() && !line.startsWith('#'))?.trim() ?? '';
+    const compact = (heading: string, limit: number) => {
+      const section = reference.split(`## ${heading}\n`)[1]?.split(/\n## /u)[0];
+      return section?.replace(/[#*|]/gu, '').replace(/\s+/gu, ' ').trim().slice(0, limit) ?? '';
+    };
+    return `${family}:${id} — ${summary.slice(0, 140)}; appearance: ${compact('Design Aesthetic', 220)}; labels: ${compact('Typography', 100)}`;
   }).join('\n');
 }
 
@@ -216,8 +232,13 @@ export function loadInstalledMediaSkills(
   stage: Stage = 'plan',
   opts?: IllustrationStyleSelection,
 ): InstalledMediaSkills {
+  const rawStyle = opts?.style ?? style;
+  const qualified = /:|^#/u.test(rawStyle);
+  const exactStyle = qualified ? installedIllustrationStyle(rawStyle) : undefined;
+  if (qualified && !exactStyle) throw new Error('[blocked] Selected illustration style is not in the installed catalogue');
+  const explicitHanddraw = exactStyle?.styleId.startsWith('handdraw:') === true;
   const selection: Selection = {
-    style: resolveStyle(opts?.style ?? style),
+    style: exactStyle ? (explicitHanddraw ? 'auto' : rawStyle.split(':')[1]!) : resolveStyle(rawStyle),
     layout: resolveLayout(opts?.layout),
     palette: resolvePalette(opts?.palette),
     coverPalette: resolveCoverPalette(opts?.coverPalette),
@@ -249,9 +270,20 @@ export function loadInstalledMediaSkills(
     entry.resources.push(...(headings ? headings.map((heading) => `${relativePath}#${heading}`) : [relativePath]));
   }
 
-  const isInfographic = fileExists(infographicPath(selection.style));
+  const isInfographic = exactStyle ? rawStyle.startsWith('infographic:') : fileExists(infographicPath(selection.style));
   const isCoverRequest = /cover|封面|杂志|编辑/.test(requested);
   const handdrawTarget = selection.style === 'scientific' || selection.style === 'editorial' || selection.style === 'watercolor';
+
+  if (explicitHanddraw && stage !== 'science') {
+    const rendered = loadInstalledMediaSkills('auto', automaticStyleTreatment(rawStyle, 'Selected appearance')!, 'render');
+    const shared = stage === 'review' ? loadInstalledMediaSkills('auto', instruction, 'review') : undefined;
+    if (stage === 'plan') {
+      include('openscience-research-illustration', 'SKILL.md', ['Planning', 'Visual craft']);
+      include('openscience-scientific-visual-clarity', 'SKILL.md', ['Art legibility']);
+    }
+    return { usage: mergeDesignSkillUsage(usage, shared?.usage, rendered.usage),
+      instructions: [...excerpts, shared?.instructions, rendered.instructions].filter(Boolean).join('\n\n') };
+  }
 
   if (selection.style === 'auto' && (stage === 'plan' || stage === 'render')) {
     if (stage === 'plan') {

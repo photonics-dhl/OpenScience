@@ -21,6 +21,8 @@ import {
   type WorkspaceApi,
 } from '@/lib/api';
 import type { Locale } from '@/i18n/locale';
+import { getHermesDraftStorage } from '@/lib/hermes/draft-state';
+import { startPaperNarrative } from '@/lib/hermes/start-paper-narrative';
 
 const CREATION_SUGGESTION: HermesGuideSuggestion = {
   bodyKey: 'guide.neutral.body',
@@ -47,6 +49,7 @@ export default function NewResearchObjectPage() {
   const [viewerId, setViewerId] = useState('');
   const [title, setTitle] = useState('');
   const [goal, setGoal] = useState('');
+  const [autoIllustrate, setAutoIllustrate] = useState(true);
   const [materials, setMaterials] = useState<IntakeMaterial[]>([]);
   const [researchObjectId, setResearchObjectId] = useState('');
   const [pending, setPending] = useState(false);
@@ -63,6 +66,7 @@ export default function NewResearchObjectPage() {
   const goalInput = useRef<HTMLTextAreaElement>(null);
   const ownerRef = useRef('');
   const pendingRef = useRef(false);
+  const canIllustrate = materials.length === 1 && (materials[0]?.file.type === 'application/pdf' || /\.pdf$/iu.test(materials[0]?.file.name ?? ''));
 
   const clearCreationState = useCallback(() => {
     setWorkspaces([]);
@@ -70,6 +74,7 @@ export default function NewResearchObjectPage() {
     setViewerId('');
     setTitle('');
     setGoal('');
+    setAutoIllustrate(true);
     setMaterials([]);
     setResearchObjectId('');
     setPending(false);
@@ -143,6 +148,7 @@ export default function NewResearchObjectPage() {
     event.preventDefault();
     const owner = ownerRef.current;
     if (pendingRef.current || session.status !== 'authenticated' || session.user?.userId !== owner || !owner || owner !== viewerId || !workspaceId || (!goal.trim() && !title.trim() && materials.length === 0)) return;
+    if (canIllustrate && autoIllustrate && goal.trim().length > 1000) { setError(t('illustrationInstructionTooLong')); return; }
     pendingRef.current = true;
     setPending(true);
     setError('');
@@ -186,6 +192,19 @@ export default function NewResearchObjectPage() {
         ingestionTasks = [...uploadedTasks.current];
         lastIngestionTaskId.current = ingestionTaskId;
         uploadKey.current = '';
+      }
+
+      if (canIllustrate && autoIllustrate && ingestionTaskId) {
+        const run = await startPaperNarrative({
+          scope: { userId: owner, researchObjectId: roId, ingestionTaskId },
+          generation: { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale, style: 'auto', instruction: firstGoal.current || t('illustrationGoal') },
+          storage: getHermesDraftStorage(),
+          isCurrent: () => ownerRef.current === owner,
+          identityError: t('error'), storageError: t('illustrationStorageError'),
+        });
+        if (ownerRef.current !== owner) return;
+        router.push(`/research-objects/${encodeURIComponent(roId)}/hermes?run=${encodeURIComponent(run.id)}`);
+        return;
       }
 
       let hermesTaskId = '';
@@ -261,30 +280,38 @@ export default function NewResearchObjectPage() {
       navigationLabel={t('navigationLabel')}
       skipLabel={t('skipLabel')}
     >
-      <div className="mx-auto max-w-[78rem]">
-        <header className="mx-auto max-w-3xl text-center">
-          <p data-reading-role="caption" className="text-os-vermilion-ink">{t('eyebrow')}</p>
-          <h1 className="mt-3 text-[clamp(2.35rem,6vw,4.6rem)] font-normal leading-[.98] tracking-[-0.045em] text-os-ink">{t('title')}</h1>
-          <p data-reading-role="body" className="mx-auto mt-5 max-w-2xl text-base leading-7 text-os-muted-paper">{t('description')}</p>
+      <div className="mx-auto max-w-4xl">
+        <header className="border-b border-os-rule-paper pb-5">
+          <h1 className="m-0 text-2xl font-semibold leading-8 tracking-[-0.02em] text-os-ink">{t('title')}</h1>
+          <p data-reading-role="body" className="mb-0 mt-2 max-w-2xl text-sm leading-6 text-os-muted-paper">{t('description')}</p>
         </header>
 
-        <form className="surface-folio-sheet mx-auto mt-10 max-w-4xl px-5 py-6 sm:px-8 sm:py-8" onSubmit={submit}>
-          <section className="grid gap-5 border-b border-os-rule-paper pb-7 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
-            <div className="relative mx-auto h-52 w-52 shrink-0 [&_.hermes-dock-anchor]:h-52 [&_.hermes-dock-anchor]:!min-h-52 [&_.hermes-workspace-stage]:!mt-0 sm:mx-0">
-              <HermesDockAnchor state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} onInvoke={() => goalInput.current?.focus()} />
-            </div>
-            <label data-reading-role="control" className="grid gap-3 text-sm font-medium text-os-ink">
-              <span className="flex flex-wrap items-baseline justify-between gap-2"><span>{t('hermesPrompt')}</span><span className="font-normal text-os-muted-paper">{t('hermesPromptNote')}</span></span>
-              <textarea ref={goalInput} className="min-h-36 w-full resize-y rounded-control border border-os-rule-paper bg-os-paper px-4 py-3 text-lg leading-7 text-os-ink outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-os-muted-paper focus:border-os-vermilion-ink focus:shadow-[0_0_0_3px_rgba(18,93,102,.12)]" maxLength={2000} value={goal} onChange={(event) => changeGoal(event.target.value)} placeholder={t('hermesPlaceholder')} />
-            </label>
-          </section>
-
-          <div className="pt-7">
+        <form className="mt-6" onSubmit={submit} aria-busy={pending}>
+          <fieldset className="m-0 min-w-0 border-0 p-0" disabled={pending} onDropCapture={(event) => { if (pending) { event.preventDefault(); event.stopPropagation(); } }}>
+          <div>
             <EvidenceIntake literature={{ instanceId: 'research-start-literature', onAuthenticationRequired: () => router.replace('/auth/login?returnTo=%2Fresearch-objects%2Fnew'), target: researchObjectId ? { kind: 'research_object', researchObjectId } : { kind: 'personal' }, withinForm: true }} materials={materials} onChange={changeMaterials} variant="research-start" />
           </div>
 
-          <details className="mt-7 border-t border-os-rule-paper pt-5">
-            <summary className="cursor-pointer text-sm font-medium text-os-muted-paper transition-colors duration-150 hover:text-os-ink">{t('details')}</summary>
+          {canIllustrate ? <div className="mt-4">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-os-ink">
+              <input type="checkbox" className="size-4 accent-os-vermilion-ink" checked={autoIllustrate} onChange={(event) => setAutoIllustrate(event.target.checked)} disabled={pending || Boolean(researchObjectId)} aria-describedby="auto-illustrate-description" />
+              {t('autoIllustrate')}
+            </label>
+            <p id="auto-illustrate-description" className="m-0 pl-7 text-sm leading-6 text-os-muted-paper">{t('autoIllustrateDescription')}</p>
+          </div> : null}
+
+          <section className="mt-5 grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+            <div className="relative mx-auto h-32 w-32 shrink-0 [&_.hermes-dock-anchor]:h-32 [&_.hermes-dock-anchor]:!min-h-32 [&_.hermes-workspace-stage]:!mt-0 sm:mx-0">
+              <HermesDockAnchor state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} onInvoke={() => goalInput.current?.focus()} />
+            </div>
+            <label data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
+              <span className="flex flex-wrap items-baseline justify-between gap-2"><span>{t('hermesPrompt')}</span><span className="font-normal text-os-muted-paper">{t('hermesPromptNote')}</span></span>
+              <textarea ref={goalInput} rows={2} className="min-h-24 w-full resize-y rounded-control border border-os-rule-paper bg-os-paper px-4 py-3 text-base leading-7 text-os-ink outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-os-muted-paper focus:border-os-vermilion-ink focus:shadow-[0_0_0_3px_rgba(18,93,102,.12)]" maxLength={canIllustrate && autoIllustrate ? 1000 : 2000} value={goal} onChange={(event) => changeGoal(event.target.value)} placeholder={t('hermesPlaceholder')} />
+            </label>
+          </section>
+
+          <details className="mt-5 border-t border-os-rule-paper">
+            <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-os-muted-paper transition-colors duration-150 hover:text-os-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink">{t('details')}</summary>
             <div className="mt-5 grid gap-6 sm:grid-cols-2">
               <label data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
                 {t('workspace')}
@@ -299,13 +326,14 @@ export default function NewResearchObjectPage() {
               </label>
             </div>
           </details>
+          </fieldset>
 
           {error ? <p className="mt-6 border-l-2 border-os-vermilion-ink pl-4 text-sm text-state-danger" role="alert">{error}</p> : null}
-          <footer className="mt-7 flex flex-wrap items-center justify-between gap-5 border-t border-os-rule-paper pt-6">
-            <p className="max-w-xl text-sm leading-6 text-os-muted-paper">{t('privacyNote')}</p>
+          <footer className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-4">
+            <p className="m-0 max-w-lg text-sm leading-6 text-os-muted-paper">{t('privacyNote')}</p>
             <div className="flex items-center gap-4">
               {researchObjectId ? <Link className="min-h-12 px-4 py-3 text-sm text-os-muted-paper hover:text-os-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/edit`}>{intakeT('openDraft')}</Link> : null}
-              <button className="min-h-12 rounded-control border-0 bg-os-vermilion-ink px-7 text-sm font-semibold text-white transition-[background-color,transform] duration-150 hover:brightness-90 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50" disabled={pending || !canCreate} type="submit">{pending ? t('creating') : researchObjectId ? t('continue') : t('create')}</button>
+              <button className="min-h-12 rounded-control border-0 bg-os-vermilion-ink px-7 text-sm font-semibold text-white transition-[background-color,transform] duration-150 hover:brightness-90 active:scale-[.98] motion-reduce:transform-none disabled:cursor-not-allowed disabled:opacity-50" disabled={pending || !canCreate} type="submit">{pending ? t('creating') : canIllustrate && autoIllustrate ? t('createIllustrated') : researchObjectId ? t('continue') : t('create')}</button>
             </div>
           </footer>
         </form>

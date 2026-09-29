@@ -11,6 +11,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { PresentationWorkbench, type PresentationTaskState } from '@/components/presentation/PresentationWorkbench';
 import { ExistingSceneImageReview, canRequestExistingImageReview, isSavedSceneReviewCandidate, type ExistingImageReviewState } from './ExistingSceneImageReview';
+import { IllustrationStyleChoices } from './IllustrationStyleChoices';
+import { ManagedIllustrationStyleChoices } from './ManagedIllustrationStyleChoices';
 import type { PaperFigureSelection, PaperFigureUploadOutcome, PaperFigureReviewOutcome } from '@/components/presentation/PaperFigureUpload';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
@@ -131,6 +133,8 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   const [scopeLoad, setScopeLoad] = useState<ScopeLoadState>({ key: '', status: 'idle' });
   const [loadNonce, setLoadNonce] = useState(0);
   const [working, setWorking] = useState(false);
+  const [styleWorking, setStyleWorking] = useState(false);
+  const [actorId, setActorId] = useState('');
   const [error, setError] = useState('');
   const [taskState, setTaskState] = useState<PresentationTaskState | null>(null);
   const [resumeNonce, setResumeNonce] = useState(0);
@@ -200,6 +204,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     setHermesOpen(false);
     setWorkspace(null);
     setIsPlatformAdmin(false);
+    setActorId('');
     setError('');
     void Promise.all([getResearchObject(params.id), listVersions(params.id), listMyWorkspaces(), getCurrentUser().catch(() => null)]).then(([research, history, workspaces, user]) => {
       if (bootstrapEpoch.current !== epoch) return;
@@ -208,6 +213,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
       setAssistantObject(research.researchObject);
       setWorkspace(workspaces.find((item) => item.id === research.researchObject.workspaceId) ?? null);
       setIsPlatformAdmin(user?.platformRole === 'platform_admin');
+      setActorId(user?.userId ?? '');
       setLoadedResearchObjectId(params.id);
     }).catch((cause) => {
       if (bootstrapEpoch.current !== epoch) return;
@@ -623,6 +629,16 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             onRetryTask={() => void retryTask()}
             onRetryData={() => setLoadNonce((current) => current + 1)}
             onTransition={transition}
+            renderStyleChoices={asset => {
+              const parent = assets.find(candidate => candidate.id === asset.sceneImage?.storyboardAssetId);
+              if (!actorId || !parent?.storyboard || !asset.sceneImage) return null;
+              return <ManagedIllustrationStyleChoices actorId={actorId} researchObjectId={params.id} versionId={versionId}
+                image={asset} parent={parent} canWrite={canWrite} disabled={working || styleWorking || reviewPending || !scopeReady}
+                onBusyChange={setStyleWorking} onSubmitted={runId => router.push(`/research-objects/${encodeURIComponent(params.id)}/hermes?run=${encodeURIComponent(runId)}`)}
+                fallback={isPlatformAdmin ? <IllustrationStyleChoices actorId={actorId} researchObjectId={params.id} versionId={versionId}
+                  asset={parent} sceneIndex={asset.sceneImage.sceneIndex} canWrite={canWrite} canGenerate={isPlatformAdmin}
+                  onBusyChange={setStyleWorking} onSubmitted={id => router.push(scopedUrl(params.id, versionId, id))} /> : null} />;
+            }}
             renderReviewAction={canReviewImage ? asset => <ExistingSceneImageReview asset={asset} task={imageTasks[asset.id]} assets={assets}
               state={reviewStates[`${scopeKey}:${asset.id}`]} disabled={working || reviewPending
                 || (!reviewStates[`${scopeKey}:${asset.id}`]?.recoverReceipt && !canRequestExistingImageReview(asset, imageTasks[asset.id], assets))}
@@ -632,7 +648,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
               setAssets((current) => current.filter((item) => item.id !== asset.id));
               window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId: params.id, versionId } }));
             }}
-            working={working || reviewPending || pendingRetries.has(`${scopeKey}:${taskId}`)}
+            working={working || styleWorking || reviewPending || pendingRetries.has(`${scopeKey}:${taskId}`)}
             error={error}
             resultsOnly={embedded}
             onAskHermes={onAskHermes ?? ((kind) => { setHermesGoal(t(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); })}

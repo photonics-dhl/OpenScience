@@ -35,7 +35,7 @@ export function MediaAssetActions({ asset, title, canWrite, working, showReject 
   }
   return <div data-media-asset-actions={asset.id}>
     <div className="flex flex-wrap items-center gap-3">
-      <span className="text-sm leading-6 text-os-muted-paper" role="status">{t(asset.status === 'draft' ? 'retainedDraft' : 'retainedAsset')}</span>
+      <span className="text-sm leading-6 text-os-muted-paper" role="status">{t(asset.status === 'draft' ? asset.canApprove ? 'readyToAdopt' : 'retainedDraft' : asset.status === 'rejected' ? 'retainedRejected' : 'retainedAsset')}</span>
       {reviewable && asset.canApprove ? <button type="button" disabled={disabled} onClick={() => void review('approved')}
         className="inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink disabled:opacity-40">{t(pending === 'approved' ? 'retainingAsset' : 'approve')}</button> : null}
       {showReject && reviewable ? <button type="button" disabled={disabled} onClick={() => void review('rejected')} className="min-h-11 rounded-control border border-os-rule-paper px-4 text-sm disabled:opacity-40">{t(pending === 'rejected' ? 'retainingAsset' : 'reject')}</button> : null}

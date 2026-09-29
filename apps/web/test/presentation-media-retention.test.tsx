@@ -57,6 +57,19 @@ it('keeps public media decks free of private retention controls', () => {
   expect(markup).not.toContain('<button');
 });
 
+it.each(['image', 'video'] as const)('keeps rejected %s out of the embedded deck but available in the full gallery', kind => {
+  const rejected = { ...asset, id: 'rejected-media', kind, status: 'rejected' as const, canApprove: false, canTransition: false };
+  const props = { researchObjectId: 'ro', assets: [rejected], claims: [],
+    version: { versionId: 'version', status: 'draft', createdAt: asset.createdAt }, canWrite: true,
+    onCreateClaim: vi.fn(), onGenerate: vi.fn(), onTransition: vi.fn() };
+  const embedded = renderToStaticMarkup(<PresentationWorkbench {...props} resultsOnly />);
+  expect(embedded).not.toContain('/presentation-assets/rejected-media/content');
+  expect(embedded).not.toContain('data-media-asset-actions="rejected-media"');
+  const full = renderToStaticMarkup(<PresentationWorkbench {...props} />);
+  expect(full).toContain('data-presentation-result="rejected-media"');
+  expect(full).toContain('/presentation-assets/rejected-media/content');
+});
+
 it.each([
   { status: 'failed' as const, canRetry: true, canWrite: true, working: false, shown: true },
   { status: 'failed' as const, canRetry: true, canWrite: true, working: true, shown: true },

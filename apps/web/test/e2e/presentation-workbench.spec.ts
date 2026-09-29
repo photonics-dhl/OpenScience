@@ -744,3 +744,67 @@ test('global Hermes image selection follows server capability and version switch
   await expect(review.getByRole('combobox', { name: /^Action/ })).toHaveValue('storyboard.create');
   await expect(review.getByRole('button', { name: 'Confirm · 1 AI credit' })).toBeDisabled();
 });
+
+test('rejected scene image remains in collapsed history after refresh', async ({ page }) => {
+  const existing = await fixtures(page);
+  const parent = { ...asset, id: 'history-plan', kind: 'interactive_html', status: 'approved',
+    canTransition: false, canGenerateSceneImage: false,
+    storyboard: { output: 'image', locale: 'en', style: 'technical', document: { schemaVersion: 1,
+      title: 'One scientific scene', scenes: [{ title: 'Measured response', narration: initialClaim.statement,
+        visualAction: 'Show the measured relation.', sourceClaimIds: [initialClaim.id] }] } } };
+  const approved = { ...asset, id: 'history-approved', kind: 'image', status: 'approved',
+    label: 'Earlier accepted image', canTransition: false, canApprove: false,
+    sceneImage: { storyboardAssetId: parent.id, sceneIndex: 0 } };
+  let candidate = { ...approved, id: 'history-candidate', status: 'draft', label: 'Latest image attempt',
+    contentHash: 'b'.repeat(64), canTransition: true, canApprove: true,
+    createdAt: '2026-09-06T00:00:00Z', updatedAt: '2026-09-06T00:00:00Z' };
+  const writes: Array<{ status: string; expectedUpdatedAt: string }> = [];
+  let listReads = 0;
+  const assetsPath = `/api/research-objects/${ro.id}/versions/version-2/presentation-assets`;
+  await page.route(`**${assetsPath}`, route => {
+    listReads += 1;
+    return json(route, { assets: [parent, approved, candidate] });
+  });
+  await page.route(`**${assetsPath}/${candidate.id}`, route => {
+    expect(route.request().method()).toBe('PATCH');
+    const body = route.request().postDataJSON() as { status: string; expectedUpdatedAt: string };
+    writes.push(body);
+    candidate = { ...candidate, status: body.status, canTransition: false, canApprove: false,
+      updatedAt: '2026-09-06T00:01:00Z' };
+    return json(route, { asset: candidate });
+  });
+  await page.route(`**${assetsPath}/*/content`, route => route.fulfill({ status: 200,
+    contentType: 'image/svg+xml',
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="60"><title>Saved scientific image</title><rect width="120" height="60" fill="white"/></svg>' }));
+
+  await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
+  const workbench = page.locator('[data-presentation-workbench]');
+  const latest = workbench.locator(`[data-presentation-result="${candidate.id}"]`);
+  await expect(latest).toHaveAttribute('data-presentation-current', candidate.id);
+  await latest.getByRole('button', { name: 'Reject draft', exact: true }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0]).toEqual({ status: 'rejected', expectedUpdatedAt: '2026-09-06T00:00:00Z' });
+
+  const history = workbench.locator('[data-presentation-history]');
+  await expect(history.locator(`[data-presentation-result="${candidate.id}"]`)).toHaveCount(1);
+  await expect(workbench.locator(`[data-presentation-current="${approved.id}"]`)).toBeVisible();
+  const beforeRefresh = listReads;
+  await page.reload();
+  await expect.poll(() => listReads).toBeGreaterThan(beforeRefresh);
+  await expect(history).toBeVisible();
+  await expect(history).not.toHaveAttribute('open');
+  await expect(workbench.locator(`[data-presentation-current="${approved.id}"]`)).toBeVisible();
+  await expect(latest).toHaveCount(1);
+  await expect(latest).not.toBeVisible();
+
+  await history.locator('summary').click();
+  await expect(latest).toBeVisible();
+  await expect(latest).toContainText('Rejected');
+  await expect(latest.getByRole('img')).toHaveAttribute('src', `${assetsPath}/${candidate.id}/content`);
+  await expect.poll(() => latest.getByRole('img').evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
+  await expect(latest.getByRole('link', { name: 'Open full-size diagram', exact: true })).toHaveAttribute('href', `${assetsPath}/${candidate.id}/content`);
+  await expect(latest.getByRole('button', { name: 'Approve for publication', exact: true })).toHaveCount(0);
+  await expect(latest.getByRole('button', { name: 'Reject draft', exact: true })).toHaveCount(0);
+  expect(writes).toHaveLength(1);
+  expect(existing.generationBodies).toHaveLength(0);
+});

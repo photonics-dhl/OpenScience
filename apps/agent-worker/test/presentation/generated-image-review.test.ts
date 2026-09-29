@@ -38,6 +38,25 @@ it('still blocks oversized independent source text before submitting pixel revie
   expect(reviewScientific).not.toHaveBeenCalled();
 });
 
+it('keeps science and art intact but excludes optional style choices from the pixel-review budget', async () => {
+  const input = pixelInput();
+  const scene = { ...input.document.scenes[0], illustration: { schemaVersion: 2, message: 'A qualified relation',
+    subjects: [{ description: 'The first region', basis: { sourceId: 's0' } }], labels: ['A'],
+    encoding: 'A identifies the first region', constraints: ['Conceptual'], composition: 'One focal region', treatment: 'Fine lines' },
+    styleRecommendations: { selectedStyleId: 'article:sketch', choices: [{ styleId: 'article:sketch', name: 'Sketch', reason: 'Readable relationships' }] } };
+  input.document.scenes = [scene];
+  const reviewScientific = vi.fn(async (request: { prompt: string }) => {
+    const projected = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf('\n{"locale":') + 1));
+    const { visualAction: _visual, styleRecommendations: _choices, ...expected } = scene;
+    expect(projected.scene).toEqual(expected);
+    expect(request.prompt).not.toContain('Readable relationships');
+    const text = JSON.stringify({ decision: 'accepted', summary: 'The relation is clear.', repairInstruction: null });
+    return { text, promptHash: hash(request.prompt), responseHash: hash(text), provider: 'chatgpt-web-science-review', model: 'gpt-5.6-sol' };
+  });
+  await reviewGeneratedImage({ reviewScientific } as never, input as never);
+  expect(reviewScientific).toHaveBeenCalledOnce();
+});
+
 it('routes manual and narrative scene images to pixel review while preserving explicit legacy profiles', () => {
   expect(generatedSceneImageRequiresPixelReview({ sceneImage: { sceneIndex: 0 } })).toBe(true);
   expect(generatedSceneImageRequiresPixelReview({ hermesRunAuthority: { profile: 'visual-narrative-v1' } })).toBe(true);

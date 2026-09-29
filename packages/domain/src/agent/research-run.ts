@@ -17,6 +17,8 @@ import { parseStoryboardDocument, presentationStoryboardView } from '../assets/s
 import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew } from '../assets/scene-image';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
+import { advanceArtStyleContinuation, createHermesArtStyleContinuation as createArtStyleContinuation, getHermesArtStyleContinuationCapability, requireArtStyleContinuationTaskAuthority } from './art-style-continuation';
+export { getHermesImageArtStyleCapability } from './art-style-continuation';
 
 const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 const READY_INGESTION_STATES = new Set(['needs_review', 'confirmed', 'written']);
@@ -100,6 +102,7 @@ export interface HermesResearchRunView {
   generationRecovery?: 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render' | 'narrative-scientific-replan' | 'narrative-source-support-replan';
   availableImageCount?: number;
   imageUsageLimited?: boolean;
+  artStyleContinuation?: { eligibleImages: Array<{ imageAssetId: string; storyboardAssetId: string; sceneIndex: number }>; maxAgentTasks: 2 };
   steps: Array<{
     id: string;
     stage: HermesResearchStage;
@@ -116,6 +119,11 @@ export interface HermesResearchRunView {
 }
 
 type RunRow = Prisma.HermesResearchRunGetPayload<{ include: typeof RUN_INCLUDE }>;
+
+export async function createHermesArtStyleContinuation(...args: Parameters<typeof createArtStyleContinuation>) {
+  const result = await createArtStyleContinuation(...args);
+  return { run: toView(result.run), taskIds: result.taskIds };
+}
 
 function toView(run: RunRow, recovery?: { chargeableAttempts: number }): HermesResearchRunView {
   return {
@@ -291,6 +299,9 @@ export async function getHermesResearchRun(
   if (!ro) throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
   const authority = await requireActiveMembership(deps.prisma, ro.workspaceId, input.actorId)
     .catch((cause) => { throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found', { cause }); });
+  if (run.maxAgentTasks === 2) return { ...toView(run), canRetryGeneration: false,
+    artStyleContinuation: WRITE_ROLES.has(authority.membership.role)
+      ? await getHermesArtStyleContinuationCapability(deps.prisma, run) : { eligibleImages: [], maxAgentTasks: 2 } };
   const recovery = WRITE_ROLES.has(authority.membership.role)
     ? run.profile === VISUAL_NARRATIVE_PROFILE
       ? run.versionId
@@ -299,6 +310,8 @@ export async function getHermesResearchRun(
         : await inspectHermesSourceReviewRecovery(deps.prisma, run.id).then(proof => proof ? { chargeableAttempts: 1 } : null).catch(() => null)
       : await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
   const view = toView(run, recovery ?? undefined);
+  view.artStyleContinuation = WRITE_ROLES.has(authority.membership.role)
+    ? await getHermesArtStyleContinuationCapability(deps.prisma, run) : { eligibleImages: [], maxAgentTasks: 2 };
   const sourceSupportReplan = WRITE_ROLES.has(authority.membership.role)
     ? await inspectNarrativeSourceSupportReplan(deps.prisma, run, deps.storage).catch(() => null) : null;
   if (sourceSupportReplan) {
@@ -1359,7 +1372,7 @@ async function inspectNarrativeAcceptedImageReplan(tx: Prisma.TransactionClient,
     storyboardStep, imageStep, priorGrantAuditId: originalGrant.id, priorResumeAuditId: secondResume.id };
 }
 
-async function readNarrativeCheckpointEvidence(tx: Prisma.TransactionClient, run: RunRow) {
+export async function readNarrativeCheckpointEvidence(tx: Prisma.TransactionClient, run: RunRow) {
   if (!run.versionId) return null;
   // Reuse the existing source, Claim and evidence identity formats for recovery.
   const claims = await tx.claimNode.findMany({ where: { id: { in: run.sourceClaimIds }, researchObjectId: run.researchObjectId, versionId: run.versionId }, orderBy: { id: 'asc' } });
@@ -2169,6 +2182,7 @@ export async function authorizeHermesGenerationGrant(deps: HermesResearchRunDeps
     if (!run || run.actorId !== input.actorId || run.researchObjectId !== input.researchObjectId) {
       throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
     }
+    if (run.maxAgentTasks === 2) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Art style continuation cannot renew a scientific correction grant');
     const ro = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
     const membership = ro ? await requireActiveMembership(tx, ro.workspaceId, input.actorId).catch(() => null) : null;
     const version = run.versionId ? await tx.version.findUnique({ where: { id: run.versionId } }) : null;
@@ -2250,6 +2264,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         if (!run || run.actorId !== input.actorId || run.researchObjectId !== input.researchObjectId) {
           throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
         }
+        if (run.maxAgentTasks === 2) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Art style continuation has no automatic replacement or recovery allowance');
         const ro = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
         const membership = ro ? await requireActiveMembership(tx, ro.workspaceId, input.actorId).catch(() => null) : null;
         if (run.profile === VISUAL_NARRATIVE_PROFILE) {
@@ -2800,6 +2815,7 @@ export async function requireHermesPresentationTaskAuthority(
   prisma: Prisma.TransactionClient,
   input: { taskId: string; actorId: string; payload: PresentationGenerationPayload; authority: HermesPresentationAuthority },
 ): Promise<void> {
+  if (await requireArtStyleContinuationTaskAuthority(prisma, { ...input, runId: input.authority.runId })) return;
   const expectedStatus = input.authority.stage === 'storyboard' ? 'generating_storyboard'
     : input.authority.stage === 'scene_image' ? 'generating_scene_images' : 'generating_video';
   const run = await prisma.hermesResearchRun.findUnique({
@@ -2852,7 +2868,7 @@ function jsonRecord(value: unknown): Record<string, unknown> {
 
 function terminalReconcileError(error: unknown): string | null {
   const code = (error as { code?: unknown })?.code;
-  if (['VALIDATION_ERROR', 'SOURCE_CLAIM_INVALID', 'ILLEGAL_TRANSITION'].includes(String(code))) {
+  if (['VALIDATION_ERROR', 'SOURCE_CLAIM_INVALID', 'ILLEGAL_TRANSITION', 'SOURCE_NOT_READY'].includes(String(code))) {
     return error instanceof Error ? error.message.slice(0, 1_000) : 'Hermes generation precondition failed';
   }
   const message = error instanceof Error ? error.message : '';
@@ -3179,6 +3195,13 @@ export async function reconcileHermesResearchRuns(
             return null;
           }
           const pixelAuthority = await readNarrativePixelReplanAuthority(tx, { runId: run.id, actorId: run.actorId });
+          if (run.maxAgentTasks === 2) {
+            const next = await advanceArtStyleContinuation(deps, tx, run);
+            if (next) return moveRun(deps, tx, run, next as HermesResearchRunStatus, ro.workspaceId,
+              ['failed', 'stopped'].includes(next) ? 'Style continuation could not complete; original images retained' : undefined);
+            await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
+            return null;
+          }
           const sourceState = await validateReviewedSources(tx, run);
           if (sourceState === 'invalid') return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'reviewed Claim or Evidence binding changed');
           if (sourceState === 'pending') {
@@ -3372,9 +3395,10 @@ export async function reconcileHermesResearchRuns(
           const run = await tx.hermesResearchRun.findUnique({ where: { id: candidate.id }, include: RUN_INCLUDE });
           if (!run || run.status !== candidate.status || run.version !== candidate.version) return null;
           const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
-          return moveRun(deps, tx, run, 'failed', ro?.workspaceId, terminalError);
+          return moveRun(deps, tx, run, run.maxAgentTasks === 2 ? 'stopped' : 'failed', ro?.workspaceId, terminalError);
         }, { isolationLevel: 'Serializable' }).catch(() => null);
         if (failed === 'failed') { counts.failed += 1; continue; }
+        if (failed === 'stopped') { counts.stopped += 1; continue; }
       }
       counts.errors += 1;
       await deps.prisma.hermesResearchRun.updateMany({

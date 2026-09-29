@@ -16,7 +16,7 @@
         "id": 2,
         "title": "核心主旨的艺术表达",
         "description": "使用现有设计技能，按论文核心思想选择有助理解的构图、文字层级与材质，不预设编辑封面风格。复用已审科学内容，用户明确认可后才完成；成品可作为完整多图叙事的一部分。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "details": "需求：docs/OpenScience_Kimi_Development_Spec.md 的 2026-09-14 图片能力推进。执行及用户反馈：docs/handoff/2026-09-10-hermes-web-image-handoff.md#illustration-delivery。此任务只保存稳定交付条件；资产、版本、反馈、下一步仅在 CURRENT。",
@@ -60,7 +60,7 @@
     "metadata": {
       "version": "1.0.0",
       "taskCount": 5,
-      "completedCount": 1,
+      "completedCount": 2,
       "tags": ["multistyle-research-illustration"]
     }
   },

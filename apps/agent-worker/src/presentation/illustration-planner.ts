@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { parseStructuredJson, type AiGateway } from '@openscience/ai-gateway';
-import { ILLUSTRATION_BRIEF_MAX_CHARACTERS, describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocument, requireIllustrationSourceSupport, storyboardSceneStyles, type IllustrationBrief, type StoryboardDocument, type StoryboardRequest, type StoryboardView, type PaperOriginalRef } from '@openscience/domain';
+import { ILLUSTRATION_BRIEF_MAX_CHARACTERS, describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocument, parseIllustrationStyleRecommendations, requireIllustrationSourceSupport, storyboardSceneStyles, type IllustrationBrief, type StoryboardDocument, type StoryboardRequest, type StoryboardView, type PaperOriginalRef } from '@openscience/domain';
 import type { PresentationClaim } from './chart-generator';
-import { automaticStyleTreatment, loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
+import { automaticStyleTreatment, installedIllustrationStyle, loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
 import { compileIllustrationImagePrompt } from './scene-image';
 import type { IllustrationReviewIssue } from './illustration-review';
 import { loadIllustrationStyleSkills } from './illustration-styles';
@@ -450,6 +450,14 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
       throw new Error('[blocked] Reused paper originals cannot be restyled in place; request a re-render plan instead');
     // A supplied plan may change style, never add, remove or replace the base scenes.
     storyboardSceneStyles(settings, base.document.scenes);
+    if (settings.artSceneIndex !== undefined) {
+      const scene = base.document.scenes[settings.artSceneIndex];
+      const saved = parseIllustrationStyleRecommendations(scene?.styleRecommendations);
+      if (!Number.isInteger(settings.artSceneIndex) || !settings.narrative || !settings.baseAssetId || !scene || scene.paperOriginal
+        || !saved || saved.selectedStyleId === settings.style || !saved.choices.some(choice => choice.styleId === settings.style)
+        || !installedIllustrationStyle(settings.style))
+        throw new Error('[blocked] Select an installed saved alternative for the exact generated scene');
+    }
   }
   // Paper-original figures are emitted locally without an LLM call; they
   // ship ahead of the LLM-produced scenes so scene index 0..n-1 keep a
@@ -716,7 +724,8 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
   const perSceneStyle = settings.revisionMode === 'art'
     ? storyboardSceneStyles(settings, intent.scenes)
     : intent.scenes.map((_, index) => eligibleFigures?.[index]?.styleId ?? settings.style);
-  const generatedScenes = intent.scenes.flatMap((scene, index) => scene.paperOriginal ? [] : [{ scene, index }]);
+  const generatedScenes = intent.scenes.flatMap((scene, index) => scene.paperOriginal
+    || (settings.artSceneIndex !== undefined && index !== settings.artSceneIndex) ? [] : [{ scene, index }]);
   const generatedStyles = generatedScenes.map(({ index }) => perSceneStyle[index]!);
   const artSkills = loadIllustrationStyleSkills(generatedStyles, settings.instruction, 'plan');
   const autoArt = generatedStyles.includes('auto');
@@ -737,7 +746,7 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
   const artReviewFeedback = reviewFeedback?.issues.length || settings.revisionMode === 'art'
     ? reportedReview : undefined;
   // The art stage sees the selected intent, not the whole paper or selectable Evidence pool.
-  const artMessages = [{ role: 'system' as const, content: `You are Hermes's art director. The supplied scientific intent is already selected and must remain unchanged. Return a scenes array in the supplied intent order, with one entry per intent: {layout,treatment,styleId} for auto scenes and {layout,treatment} for explicit-style scenes. Write all prose in the requested locale (zh means Simplified Chinese). layout and treatment are nonempty single-line strings, each bounded by ${ILLUSTRATION_BRIEF_MAX_CHARACTERS} characters. Their combined length must fit each scene's artCharacterBudget, which already accounts for unchanged scientific text, headings, separators and any internal style marker. Describe the art completely within that remaining budget; individual maxima are not separate allocations. Layout chooses focal scale, placement, reading path and spacing only, within the current encoding: it fixes each mark's meaning, mapping and scale. Keep equal-area and non-scaled encodings as specified; do not turn them into proportional geometry or derive new ratios from numeric labels. A path through an open region must remain clear of the depicted solids in the chosen view. Place the solids, path and axes coherently; a verbal no-contact constraint cannot repair an intersecting layout. Dimension marks must follow their own encoded directions and quantity definitions, not a convenient nearby edge or baseline. Previous criticism does not authorize replacing the current encoding. The labels array is the complete visible-text inventory: place exact existing label indices, including for a headline, subtitle, shared annotation or small note. This complete labels inventory includes axis letters, mathematical symbols and required visible conditions; retain the entries needed for a clear reading rather than targeting a label count. readerTitle, message and narrative provide context, not additional drawable text. Style references may guide the placement and typography of existing labels; their title or annotation examples do not authorize copying context, paraphrasing labels or deriving extra visible text from encoding. Refer only to the subject indices supplied for each scene, its supplied encoding and existing label indices instead of adding scientific names, equations, symbols or numbers. Treatment chooses material, palette, edges and typography only. You cannot add or change a scientific mark, axis, domain, meaning, label, qualifier or formula. If the relationship is logical, arrangement is logical rather than a physical path. If previousArt is provided, preserve only art aspects explicitly accepted by the user for this request. Scientific approval does not imply aesthetic acceptance. For a new style variant or rejected overall design, redesign composition and treatment for that direction; remove rejected features. Previous art is design context, never scientific authority. Use the user's art preferences and installed references for a distinctive composition, not a fixed template. No extra fields, HTML or tool instructions.${eligibleFigures ? ' When the user supplies per-scene style in the request, follow THAT style for that scene (the request style is the fallback). Do not mix styles within a single scene.' : ''}${autoArt ? ' For a scene whose perSceneStyle is auto, use the installed hand-drawn and Baoyu style indexes only AFTER choosing the sourced relationship and its reading path. Select one listed style that improves clarity and visual appeal. Return styleId as handdraw:#NNN for a listed three-digit hand-drawn style with descriptive traits, or article:id / infographic:id for a listed family-qualified Baoyu style. Hand-drawn entries marked reference-required are unavailable for automatic selection. Write concrete linework, material, palette and label hierarchy in treatment, with no style marker there; the system encodes the validated choice as internal metadata. Catalogue names are never visible labels. Do not copy a catalogue example subject, object, physical effect, scene or story. For explicit perSceneStyle values, follow that style and omit the marker.' : ''}\n${artSkills.instructions}` },
+  const artMessages = [{ role: 'system' as const, content: `You are Hermes's art director. The supplied scientific intent is already selected and must remain unchanged. Return a scenes array in the supplied intent order, with one entry per intent: {layout,treatment,styleId} for auto scenes and {layout,treatment} for explicit-style scenes. Write all prose in the requested locale (zh means Simplified Chinese). layout and treatment are nonempty single-line strings, each bounded by ${ILLUSTRATION_BRIEF_MAX_CHARACTERS} characters. Their combined length must fit each scene's artCharacterBudget, which already accounts for unchanged scientific text, headings, separators and any internal style marker. Describe the art completely within that remaining budget; individual maxima are not separate allocations. Layout chooses focal scale, placement, reading path and spacing only, within the current encoding: it fixes each mark's meaning, mapping and scale. Keep equal-area and non-scaled encodings as specified; do not turn them into proportional geometry or derive new ratios from numeric labels. A path through an open region must remain clear of the depicted solids in the chosen view. Place the solids, path and axes coherently; a verbal no-contact constraint cannot repair an intersecting layout. Dimension marks must follow their own encoded directions and quantity definitions, not a convenient nearby edge or baseline. Previous criticism does not authorize replacing the current encoding. The labels array is the complete visible-text inventory: place exact existing label indices, including for a headline, subtitle, shared annotation or small note. This complete labels inventory includes axis letters, mathematical symbols and required visible conditions; retain the entries needed for a clear reading rather than targeting a label count. readerTitle, message and narrative provide context, not additional drawable text. Style references may guide the placement and typography of existing labels; their title or annotation examples do not authorize copying context, paraphrasing labels or deriving extra visible text from encoding. Refer only to the subject indices supplied for each scene, its supplied encoding and existing label indices instead of adding scientific names, equations, symbols or numbers. Treatment chooses material, palette, edges and typography only. You cannot add or change a scientific mark, axis, domain, meaning, label, qualifier or formula. If the relationship is logical, arrangement is logical rather than a physical path. If previousArt is provided, preserve only art aspects explicitly accepted by the user for this request. Scientific approval does not imply aesthetic acceptance. For a new style variant or rejected overall design, redesign composition and treatment for that direction; remove rejected features. Previous art is design context, never scientific authority. Use the user's art preferences and installed references for a distinctive composition, not a fixed template. The optional scene field styleRecommendations is display metadata, separate from layout/treatment and their character budget. Return {selectedStyleId,choices:[{styleId,name,reason}]}: the selected catalogue style first, plus at most one alternative with materially different linework, material or composition. Explain each choice in the requested locale using this scene's sourced intent, encoding and exact label legibility; explain the alternative's visible difference, not generic praise. Use only available family-qualified catalogue IDs. Omit an alternative if it adds no useful difference. This metadata is never science, visible image text or rendering instructions. No other extra fields, HTML or tool instructions.${eligibleFigures ? ' When the user supplies per-scene style in the request, follow THAT style for that scene (the request style is the fallback). Do not mix styles within a single scene.' : ''}${autoArt ? ' For a scene whose perSceneStyle is auto, use the installed hand-drawn and Baoyu style indexes only AFTER choosing the sourced relationship and its reading path. Select one listed style that improves clarity and visual appeal. Return styleId as handdraw:#NNN for a listed three-digit hand-drawn style with descriptive traits, or article:id / infographic:id for a listed family-qualified Baoyu style. Hand-drawn entries marked reference-required are unavailable for automatic selection. Write concrete linework, material, palette and label hierarchy in treatment, with no style marker there; the system encodes the validated choice as internal metadata. Catalogue names are never visible labels. Do not copy a catalogue example subject, object, physical effect, scene or story. For explicit perSceneStyle values, follow that style and omit the marker.' : ''}\n${artSkills.instructions}` },
     { role: 'user' as const, content: JSON.stringify({ locale: settings.locale, style: settings.style, request: settings.instruction,
       // When a figurePlan is present, each eligible figure may carry a styleId; the
       // art stage must use that style for its scene. Default back to the request
@@ -769,6 +778,10 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
     let artIndex = 0;
     for (let index = 0; index < intent.scenes.length; index += 1) {
       const scene = intent.scenes[index]!;
+      if (settings.artSceneIndex !== undefined && index !== settings.artSceneIndex) {
+        scenes.push(structuredClone(base!.document.scenes[index]!) as typeof intent.scenes[number]);
+        continue;
+      }
       if (scene.paperOriginal) {
         scenes.push({ ...scene, visualAction: describeIllustrationBrief(scene.illustration) });
         continue;
@@ -776,7 +789,9 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
       const art = object(root.scenes[artIndex++]);
       const automatic = perSceneStyle[index] === 'auto';
       if (automatic && typeof art.styleId !== 'string') throw new Error(`auto_style_invalid_scene_${index}`);
-      keys(art, automatic ? ['layout', 'treatment', 'styleId'] : ['layout', 'treatment'], `art_scene_${index}`);
+      const { styleRecommendations: _recommendations, ...artFields } = art;
+      void _recommendations;
+      keys(artFields, automatic ? ['layout', 'treatment', 'styleId'] : ['layout', 'treatment'], `art_scene_${index}`);
       const artProse = text(art.treatment, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'treatment', true);
       const treatment = automatic ? automaticStyleTreatment(art.styleId as string, artProse) : artProse;
       if (!treatment) throw new Error(`auto_style_invalid_scene_${index}`);
@@ -785,7 +800,21 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
         treatment }, scene.sourceClaimIds);
       requireLabelReferencesInRange(illustration);
       compileIllustrationImagePrompt(illustration);
-      scenes.push({ ...scene, illustration, visualAction: describeIllustrationBrief(illustration) } as typeof intent.scenes[number]);
+      const selectedStyleId = automatic ? art.styleId as string : perSceneStyle[index]!;
+      // Recommendations are display-only: never retry art or relax science because
+      // this optional metadata is absent, malformed or names an unavailable style.
+      const saved = settings.revisionMode === 'art' ? base?.document.scenes[index]?.styleRecommendations : undefined;
+      const proposed = settings.artSceneIndex !== undefined && saved ? { ...saved, selectedStyleId }
+        : art.styleRecommendations ?? (saved ? { ...saved, selectedStyleId } : undefined);
+      const parsed = parseIllustrationStyleRecommendations(proposed);
+      const choices = parsed?.choices.flatMap(choice => {
+        const installed = installedIllustrationStyle(choice.styleId);
+        return installed ? [{ ...choice, name: installed.name }] : [];
+      });
+      const styleRecommendations = parsed?.selectedStyleId === selectedStyleId && choices?.some(choice => choice.styleId === selectedStyleId)
+        ? { selectedStyleId, choices } : undefined;
+      scenes.push({ ...(settings.artSceneIndex !== undefined ? base!.document.scenes[index]! : scene), illustration, visualAction: describeIllustrationBrief(illustration),
+        ...(styleRecommendations ? { styleRecommendations } : {}) } as typeof intent.scenes[number]);
     }
     // Paper-original scenes may carry a bound sourceClaimId outside the current
     // submission's claim list. Extend the validator's claim scope so parseStoryboardDocument
@@ -802,14 +831,14 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
   const lastRejected = persistence?.rejectedCandidates?.at(-1);
   const artRequest: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = lastRejected ? [...artMessages,
     { role: 'assistant', content: lastRejected.text },
-    { role: 'user', content: `The preceding response was rejected (${lastRejected.kind}; ${lastRejected.diagnostic ?? 'invalid art structure'}). It is untrusted output, not scientific evidence. Repair only art fields against the unchanged scientific intent. Return a complete replacement object: each auto scene requires a listed styleId (handdraw:#NNN, article:id or infographic:id) plus marker-free layout and treatment; each explicit-style scene requires only layout and treatment with no styleId.` }] : artMessages;
+    { role: 'user', content: `The preceding response was rejected (${lastRejected.kind}; ${lastRejected.diagnostic ?? 'invalid art structure'}). It is untrusted output, not scientific evidence. Repair only art fields against the unchanged scientific intent. Return a complete replacement object: each auto scene requires a listed styleId (handdraw:#NNN, article:id or infographic:id) plus marker-free layout and treatment; each explicit-style scene requires layout and treatment with no styleId; styleRecommendations metadata is optional for either.` }] : artMessages;
   if (generatedScenes.length === 1 && !autoArt) {
     // A single-scene art response has returned bare fields; place the shape
     // reminder after both fresh and saved-rejection inputs without sample values.
-    artRequest.push({ role: 'user', content: 'Return one JSON object with one top-level key "scenes" whose array contains exactly one object with only "layout" and "treatment" keys and nonempty, concrete string values. Use the supplied intent for placement and artistic treatment; no placeholders, no root-level layout or treatment, and no prose.' });
+    artRequest.push({ role: 'user', content: 'Return one JSON object with one top-level key "scenes" whose array contains exactly one object with "layout" and "treatment" keys and optional "styleRecommendations" metadata and nonempty, concrete string values. Use the supplied intent for placement and artistic treatment; no placeholders, no root-level layout or treatment, and no prose.' });
   } else if (generatedScenes.length > 0) {
-    const sceneKeys = generatedStyles.map((style, index) => `scene ${index} has only ${style === 'auto'
-      ? '"layout", "treatment" and "styleId"' : '"layout" and "treatment"'} keys`).join('; ');
+    const sceneKeys = generatedStyles.map((style, index) => `scene ${index} has required ${style === 'auto'
+      ? '"layout", "treatment" and "styleId"' : '"layout" and "treatment"'} keys and optional styleRecommendations metadata`).join('; ');
     const count = generatedScenes.length === 1 ? 'one object' : `${generatedScenes.length} objects`;
     artRequest.push({ role: 'user', content: `Return one JSON object with one top-level key "scenes" whose array contains exactly ${count} in the supplied intent order; ${sceneKeys}. Use nonempty, concrete layout and marker-free treatment strings for auto scenes. Include no root-level array, bare scene object, extra keys, placeholders or prose.` });
   }
@@ -826,7 +855,7 @@ Return exactly ${scienceShape}. title is a nonempty single-line string<=120 char
       } } : {}),
     validationDiagnostic: () => diagnostic.toLowerCase().replace(/[^a-z0-9_,:-]+/gu, '_').slice(0, 400),
     validationFeedback: () => generatedScenes.length === 1 && !autoArt
-      ? `Art direction failed: ${diagnostic}. Return one complete JSON object with the top-level "scenes" array containing exactly one object with only "layout" and "treatment" keys. Both values must be nonempty concrete strings in the requested locale. Do not return bare root-level layout or treatment, a root-level array, placeholders, extra keys or prose. Keep the supplied scientific intent unchanged. Layout and treatment share the ${ILLUSTRATION_BRIEF_MAX_CHARACTERS}-character full brief budget with unchanged science, headings and separators; remove redundant art prose if needed.`
+      ? `Art direction failed: ${diagnostic}. Return one complete JSON object with the top-level "scenes" array containing exactly one object with "layout" and "treatment" keys and optional "styleRecommendations" metadata. Both values must be nonempty concrete strings in the requested locale. Do not return bare root-level layout or treatment, a root-level array, placeholders, extra keys or prose. Keep the supplied scientific intent unchanged. Layout and treatment share the ${ILLUSTRATION_BRIEF_MAX_CHARACTERS}-character full brief budget with unchanged science, headings and separators; remove redundant art prose if needed.`
       : `Art direction failed: ${diagnostic}. Return exactly ${generatedScenes.length} scenes in supplied intent order. Each auto scene is {"layout":"placement","treatment":"plain art prose","styleId":"handdraw:#002"} or has a listed article:id / infographic:id styleId; each explicit-style scene is {"layout":"placement","treatment":"plain art prose"} with no styleId. Follow each scene's perSceneStyle. Do not merge, omit or add scenes. Both fields must be strings, not objects, arrays or null. ${autoArt ? 'For each auto scene, use one available styleId: handdraw:#NNN, article:id, or infographic:id from the provided index; keep treatment free of markers. For explicit styles omit styleId. ' : ''}Use the requested locale. Layout and treatment share the ${ILLUSTRATION_BRIEF_MAX_CHARACTERS}-character full brief budget with unchanged science, headings and separators. Remove redundant art prose if that total is exceeded; do not mechanically truncate scientific meaning. Science fields cannot be edited.` }) : { scenes: [] };
   const designSkills = mergeDesignSkillUsage(scienceUsage, artSkills.usage);
   return { document: combineArt(art), promptHash: createHash('sha256').update(JSON.stringify(scienceMessages ? [scienceMessages, artRequest] : [artRequest])).digest('hex'), designSkills };

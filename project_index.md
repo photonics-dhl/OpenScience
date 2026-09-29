@@ -639,6 +639,10 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `scripts/import-presentation-media.test.mjs` | 维护CLI实际启动回归，防止根目录workspace别名解析失败 | 本地实际入口测试与CI通过；ECS预检成功 |
 
 | `packages/domain/src/assets/storyboard.ts` / `packages/domain/test/assets/storyboard.test.ts` / `apps/agent-worker/src/presentation/storyboard.ts` / `apps/web/components/presentation/StoryboardPanel.tsx` / `apps/web/test/storyboard-panel.test.tsx` | Sourced storyboard contract, Gateway planner and Hermes revision UI | 既有生产能力；2026-09-12艺术指导/叙事增强候选，实际release见CURRENT handoff |
+| `apps/web/lib/hermes/start-paper-narrative.ts` / `apps/web/test/e2e/create-illustrated-research.spec.ts` | 单篇 PDF 创建后衔接既有自动图文任务，保存原提交以恢复丢响应 | 实施与真实验收状态见 CURRENT |
+| `apps/web/lib/presentation/result-gallery.ts` / `apps/web/components/presentation/IllustrationStyleChoices.tsx` / `apps/web/lib/presentation/illustration-style-switch.ts` | 同源图片历史归类、已保存风格选择与私有美术修订恢复 | 实施、权限范围与验证见 CURRENT |
+| `apps/web/lib/presentation/managed-illustration-style.ts` / `apps/web/test/e2e/managed-illustration-style.spec.ts` | 普通作者从当前图片选择已推荐风格，恢复同一次限额续作 | 实际验收与部署状态见 CURRENT |
+| `packages/domain/src/agent/art-style-continuation.ts` / `packages/domain/test/agent/art-style-continuation.test.ts` | 既有 Hermes 运行中的限额美术续作，精确来源与并发任务约束 | 候选，独立审查及部署状态见 CURRENT |
 | `apps/agent-worker/src/skills/media-direction.ts` | 图片艺术指导、跨图一致性、科学叙事及旁白；由storyboard/scene-image现有Gateway调用按阶段加载 | 0df87c9b已部署；不增加模型轮次，不据提示词宣称成片质量通过 |
 
 | `packages/ai-gateway/src/image.ts` / `packages/ai-gateway/test/image.test.ts` | Bounded MiniMax single-image provider and Gateway contract tests | DEPLOYED615ca2d; explicit CN region, real image and ECS decode verified; no automatic paid retry |

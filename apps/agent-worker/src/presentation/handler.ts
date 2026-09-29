@@ -818,6 +818,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           await withPresentationAssetWrite(deps.prisma, scope, readCurrent, { refreshWorkingRecord: false });
           return options.gateway!.resumeScientificReviewFromCompletedResult!(request, guard);
         } } : { reviewScientific: async (request, guard) => {
+          await requireHermesAuthority(deps.prisma);
           if (technicalRecovery || manualReviewCopy)
             await withPresentationAssetWrite(deps.prisma, scope, readCurrent, { refreshWorkingRecord: false });
           return options.gateway!.reviewScientific!(request, guard);
@@ -945,6 +946,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         : undefined;
       await requireUnchangedStyleReference(deps.prisma);
       await requireUnchangedSceneRevision(deps.prisma);
+      await requireHermesAuthority(deps.prisma);
       if (technicalRecovery) await deps.prisma.$transaction(requireTechnicalRecovery, { isolationLevel: 'Serializable' });
       const result = completedProviderRecovery
         ? await options.gateway.resumeImageFromCompletedResult!(task.id)
@@ -1174,13 +1176,19 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           },
         } : undefined;
         const durableGateway: Pick<AiGateway, 'completeStructured'> = { completeStructured: async (guard, messages, opts) => {
+          await requireHermesAuthority(deps.prisma);
           if (standaloneRecovery && !partial)
             throw new Error('[blocked] Saved science must pass validation and checkpoint before any provider call');
           if (requirePlanningContinuationUnchanged) await deps.prisma.$transaction(requirePlanningContinuationUnchanged, { isolationLevel: 'Serializable' });
           if (requireStandaloneScienceRecoveryUnchanged) await deps.prisma.$transaction(requireStandaloneScienceRecoveryUnchanged, { isolationLevel: 'Serializable' });
           if (narrativeSource) await requireUnchangedEvidence(deps.prisma);
           continuationStarted = true;
-          return planningGateway!.completeStructured(guard, messages, { ...opts, ...(planningContinuation || standaloneRecovery ? { primaryProviderOnly: true } : {}) });
+          return planningGateway!.completeStructured(guard, messages, { ...opts,
+            ...(payload.hermesRunAuthority ? { beforeEachProviderCall: async () => {
+              await requireHermesAuthority(deps.prisma);
+              await opts?.beforeEachProviderCall?.();
+            } } : {}),
+            ...(planningContinuation || standaloneRecovery ? { primaryProviderOnly: true } : {}) });
         } };
         const rejectedScienceCandidates: Omit<StoryboardScienceRejectedCandidate, 'sources'>[] = [];
         const onScienceRejected = async (receipt: StoryboardScienceRejectionReceipt, candidate: StoryboardScienceRejectedCandidate) => {
@@ -1382,6 +1390,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           ...(!artCorrection && previousDefectReport ? { previousDefectReport } : {}),
         };
         const gateway: Pick<AiGateway, 'reviewScientific'> = { reviewScientific: async (input, guard) => {
+          await requireHermesAuthority(deps.prisma);
           if (requirePlanningContinuationUnchanged) await deps.prisma.$transaction(requirePlanningContinuationUnchanged, { isolationLevel: 'Serializable' });
           if (revalidateInitialScienceRecovery) await deps.prisma.$transaction(tx => revalidateInitialScienceRecovery!(tx, false), { isolationLevel: 'Serializable' });
           if (requireStandaloneScienceRecoveryUnchanged) await deps.prisma.$transaction(requireStandaloneScienceRecoveryUnchanged, { isolationLevel: 'Serializable' });

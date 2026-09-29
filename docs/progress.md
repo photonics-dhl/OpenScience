@@ -1,6 +1,9 @@
 # CURRENT Progress Window
 > 当前交付位于 release/onchip-production-line；精确 HEAD、生产/回退、资产与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。旧记录在 Git 历史，不能当下一动作。
 
+## 本轮检查点
+- 用户认可最终细化图，Task2完成；当前推进“单PDF一次创建→Hermes自动完整图文→默认首选风格、可更换”。候选新建/恢复与布局定向已通过，普通用户换风格授权续作仍在实现；尚无本轮部署或新生产生成。精确范围、证据与剩余项统一见CURRENT。
+
 ## 用户目标
 - 让未读论文的人通过六维内容和设计过的单/多图读懂真实论文的核心思想；论文原图、生图按叙事需要使用，视频并行评估，用户已授权按量单镜头试生成但POST仍0；视频独立凭据已配置且鉴权GET200，缺失运行镜像仍由视频会话处理，详见CURRENT。三篇成品先交用户看，得到质量认可前不批量冷启动。
 - Hermes 复用已审 PDF/SourceMap/Claim/Evidence 和按阶段注入的科学/视觉技能，Chat 负责出图及网页 5.6 Sol 正式像素判断；保存坏图、失败收据与原 PDF，不自动重发未知付费请求。

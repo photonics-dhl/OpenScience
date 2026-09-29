@@ -1,4 +1,5 @@
 import { PresentationAssetError } from './errors';
+import { createHash } from 'node:crypto';
 import { getBlobStorageKey } from '@openscience/storage';
 import { parseSceneAnimation, type SceneAnimation } from './animation';
 import { ILLUSTRATION_BRIEF_MAX_CHARACTERS, parseIllustrationBrief, describeIllustrationBrief, type IllustrationBrief } from './illustration-brief';
@@ -40,6 +41,8 @@ export interface StoryboardRequest {
     baseAssetId?: string;
     /** Restyle a sourced image plan without regenerating its scientific fields. */
     revisionMode?: 'art';
+    /** Bounded narrative restyling preserves every other scene byte-for-byte. */
+    artSceneIndex?: number;
     /** Reuse an owned scientifically blocked image plan for a bounded revision. */
     revisionTaskId?: string;
     /** Replan after a bound narrative image requires scientific changes, never a render-only correction. */
@@ -62,6 +65,28 @@ export interface StoryboardRequest {
         }>;
     };
 }
+export interface IllustrationStyleRecommendations {
+    selectedStyleId: string;
+    choices: Array<{ styleId: string; name: string; reason: string }>;
+}
+/** Optional display metadata must never invalidate an otherwise valid scientific plan. */
+export function parseIllustrationStyleRecommendations(value: unknown): IllustrationStyleRecommendations | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    const v = value as Record<string, unknown>;
+    const id = (s: unknown): s is string => typeof s === 'string' && s.length <= 100
+        && /^(?:(?:article|infographic):[a-z0-9-]+|handdraw:#[0-9]{3})$/u.test(s);
+    const prose = (s: unknown, max: number): s is string => typeof s === 'string' && Boolean(s.trim())
+        && s.length <= max && !Array.from(s).some(character => character.charCodeAt(0) < 32);
+    if (!id(v.selectedStyleId) || !Array.isArray(v.choices) || !v.choices.length || v.choices.length > 2) return undefined;
+    const choices: IllustrationStyleRecommendations['choices'] = [];
+    for (const raw of v.choices) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+        const c = raw as Record<string, unknown>;
+        if (!id(c.styleId) || !prose(c.name, 120) || !prose(c.reason, 400) || choices.some(item => item.styleId === c.styleId)) continue;
+        choices.push({ styleId: c.styleId, name: c.name.trim(), reason: c.reason.trim() });
+    }
+    return choices.some(c => c.styleId === v.selectedStyleId) ? { selectedStyleId: v.selectedStyleId, choices } : undefined;
+}
 export interface StoryboardDocument {
     schemaVersion: 1;
     title: string;
@@ -71,6 +96,7 @@ export interface StoryboardDocument {
         narration: string;
         visualAction: string;
         illustration?: IllustrationBrief;
+        styleRecommendations?: IllustrationStyleRecommendations;
         durationSeconds?: number;
         sourceClaimIds: string[];
         animation?: SceneAnimation;
@@ -91,7 +117,10 @@ export interface StoryboardView {
     output?: StoryboardRequest['output'];
     narrative?: true;
     baseAssetId?: string;
+    artSceneIndex?: number;
     figurePlan?: StoryboardRequest['figurePlan'];
+    /** Existing final-brief review decision; absent for legacy/unbound reviews. */
+    scientificReview?: 'accepted' | 'revised' | 'blocked';
 }
 /** The planner emits reuse scenes first, then generated figures, preserving each group's order. */
 export function storyboardSceneStyles(settings: Pick<StoryboardRequest, 'style' | 'figurePlan'> & { output?: StoryboardRequest['output'] },
@@ -126,7 +155,7 @@ function text(value: unknown, max: number, reason: string): string {
 }
 export function parseStoryboardRequest(value: unknown): StoryboardRequest {
     const v = object(value, 'request_shape');
-    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'revisionTaskId', 'revisionImageAssetId', 'revisionMode', 'output', 'figurePlan', 'narrative', 'narrativeSceneLimit'], 'request_keys');
+    keys(v, ['locale', 'style', 'instruction'], ['baseAssetId', 'revisionTaskId', 'revisionImageAssetId', 'revisionMode', 'artSceneIndex', 'output', 'figurePlan', 'narrative', 'narrativeSceneLimit'], 'request_keys');
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (typeof v.locale !== 'string' || !['zh', 'en'].includes(v.locale)
         || typeof v.style !== 'string' || !v.style.trim() || v.style.length > 100
@@ -137,6 +166,8 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
             || v.output !== 'image' || v.narrative !== true || !('narrativeSceneLimit' in v)
             || ['baseAssetId', 'revisionTaskId', 'revisionMode', 'figurePlan'].some(key => key in v)))
         || ('revisionMode' in v && (v.revisionMode !== 'art' || v.output !== 'image' || !v.baseAssetId || 'revisionTaskId' in v))
+        || ('artSceneIndex' in v && (v.revisionMode !== 'art' || v.output !== 'image' || !v.baseAssetId || v.narrative !== true
+            || !Number.isInteger(v.artSceneIndex) || Number(v.artSceneIndex) < 0 || Number(v.artSceneIndex) > 5))
         || ('output' in v && v.output !== 'image' && v.output !== 'video')
         || ('narrative' in v && (v.narrative !== true || v.output !== 'image' || v.figurePlan != null))
         || ('narrativeSceneLimit' in v && (v.narrative !== true || !Number.isInteger(v.narrativeSceneLimit)
@@ -172,6 +203,7 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
         ...(v.revisionTaskId ? { revisionTaskId: v.revisionTaskId as string } : {}),
         ...(v.revisionImageAssetId ? { revisionImageAssetId: v.revisionImageAssetId as string } : {}),
         ...(v.revisionMode ? { revisionMode: v.revisionMode as 'art' } : {}),
+        ...(v.artSceneIndex !== undefined ? { artSceneIndex: v.artSceneIndex as number } : {}),
         ...(figurePlan ? { figurePlan } : {}),
     };
 }
@@ -185,7 +217,7 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
     const scenes = v.scenes.map((raw, index) => {
         const prefix = `scene_${index}`;
         const s = object(raw, `${prefix}:shape`);
-        keys(s, output === 'video' ? ['title', 'narration', 'visualAction', 'durationSeconds', 'sourceClaimIds'] : ['title', 'narration', 'visualAction', 'sourceClaimIds'], output === 'video' ? ['animation'] : ['illustration', 'paperOriginal'], `${prefix}:keys`);
+        keys(s, output === 'video' ? ['title', 'narration', 'visualAction', 'durationSeconds', 'sourceClaimIds'] : ['title', 'narration', 'visualAction', 'sourceClaimIds'], output === 'video' ? ['animation'] : ['illustration', 'paperOriginal', 'styleRecommendations'], `${prefix}:keys`);
         if (output === 'video' && (!Number.isInteger(s.durationSeconds) || Number(s.durationSeconds) < 4 || Number(s.durationSeconds) > 20))
             return invalid(`${prefix}:duration`);
         if (!Array.isArray(s.sourceClaimIds) || s.sourceClaimIds.length < 1 || s.sourceClaimIds.length > 12 || new Set(s.sourceClaimIds).size !== s.sourceClaimIds.length || s.sourceClaimIds.some(id => typeof id !== 'string' || !selected.includes(id)))
@@ -201,6 +233,7 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
             }
         }
         const illustration = output === 'image' && s.illustration !== undefined ? parseIllustrationBrief(s.illustration, ids) : undefined;
+        const styleRecommendations = output === 'image' ? parseIllustrationStyleRecommendations(s.styleRecommendations) : undefined;
         if (illustration && s.visualAction !== describeIllustrationBrief(illustration)) invalid(`${prefix}:illustration_description_mismatch`);
         let paperOriginal: { assetId: string; objectKey: string; contentHash: string } | undefined;
         if (output === 'image' && s.paperOriginal !== undefined) {
@@ -215,7 +248,7 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
             if (po.objectKey !== getBlobStorageKey(po.contentHash) && !legacyKey) invalid(`${prefix}:paper_original_values`);
             paperOriginal = { assetId: po.assetId, objectKey: po.objectKey, contentHash: po.contentHash };
         }
-        return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(illustration ? describeIllustrationBrief(illustration) : s.visualAction, output === 'image' ? STORYBOARD_IMAGE_VISUAL_ACTION_MAX : STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, `${prefix}:visual_action`), ...(illustration ? { illustration } : {}), ...(output === 'video' ? { durationSeconds: s.durationSeconds as number } : {}), sourceClaimIds: [...ids], ...(animation ? { animation } : {}), ...(paperOriginal ? { paperOriginal } : {}) };
+        return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(illustration ? describeIllustrationBrief(illustration) : s.visualAction, output === 'image' ? STORYBOARD_IMAGE_VISUAL_ACTION_MAX : STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, `${prefix}:visual_action`), ...(illustration ? { illustration } : {}), ...(styleRecommendations ? { styleRecommendations } : {}), ...(output === 'video' ? { durationSeconds: s.durationSeconds as number } : {}), sourceClaimIds: [...ids], ...(animation ? { animation } : {}), ...(paperOriginal ? { paperOriginal } : {}) };
     });
     const duration = scenes.reduce((n, s) => n + (s.durationSeconds ?? 0), 0);
     if (output === 'video' && (duration < 24 || duration > 90)) return invalid('total_duration');
@@ -246,8 +279,24 @@ export function presentationStoryboardView(asset: {
         const settings = parseStoryboardRequest({ ...object(p.storyboardSettings, 'saved_settings') });
         const document = parseStoryboardDocument(p.storyboardDocument, claimIds, settings.output);
         if (Boolean(settings.narrative) !== Boolean(document.narrative)) return undefined;
+        const review = p.illustrationReview && typeof p.illustrationReview === 'object' && !Array.isArray(p.illustrationReview)
+            ? p.illustrationReview as Record<string, unknown> : undefined;
+        const scientificReview = settings.output === 'image' && p.source === 'verified_claims' && review?.stage === 'final-brief'
+            && typeof p.taskId === 'string' && review.requestId === p.taskId
+            && typeof p.sourceEvidenceIdentity === 'string' && review.sourceEvidenceIdentity === p.sourceEvidenceIdentity
+            && review.candidateHash === createHash('sha256').update(JSON.stringify(document)).digest('hex')
+            && typeof review.promptHash === 'string' && /^[a-f0-9]{64}$/u.test(review.promptHash)
+            && typeof review.responseHash === 'string' && /^[a-f0-9]{64}$/u.test(review.responseHash)
+            && (review.provider === 'chatgpt-web-science-review'
+                || (typeof review.provider === 'string' && /^minimax-key-[1-9]\d*-model-[1-9]\d*$/u.test(review.provider)))
+            && typeof review.summary === 'string' && Boolean(review.summary.trim())
+            && ['accepted', 'revised', 'blocked'].includes(String(review.decision))
+            ? review.decision as NonNullable<StoryboardView['scientificReview']> : undefined;
         return { document, locale: settings.locale, style: settings.style, output: settings.output,
-            ...(settings.narrative ? { narrative: true as const } : {}), ...(settings.baseAssetId ? { baseAssetId: settings.baseAssetId } : {}), ...(settings.figurePlan ? { figurePlan: settings.figurePlan } : {}) };
+            ...(scientificReview ? { scientificReview } : {}),
+            ...(settings.narrative ? { narrative: true as const } : {}), ...(settings.baseAssetId ? { baseAssetId: settings.baseAssetId } : {}),
+            ...(settings.artSceneIndex !== undefined ? { artSceneIndex: settings.artSceneIndex } : {}),
+            ...(settings.figurePlan ? { figurePlan: settings.figurePlan } : {}) };
     }
     catch {
         return undefined;

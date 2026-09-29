@@ -1,0 +1,20 @@
+import { afterEach, expect, it, vi } from 'vitest';
+afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
+it('uses existing scoped routes, CSRF, fixed idempotency keys, exact base and single scene payloads', async () => {
+  const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(url === '/api/csrf-token' ? { csrfToken: 'csrf' } : { task: { id: 'task' }, asset: {} }), { status: 200 }));
+  vi.stubGlobal('fetch', fetchMock);
+  const { generatePresentationStoryboard, transitionPresentationAsset, generatePresentationSceneImage } = await import('../lib/api');
+  const request = { locale: 'en' as const, output: 'image' as const, style: 'article:watercolor', instruction: 'Change only art.', revisionMode: 'art' as const, baseAssetId: 'exact-base' };
+  await generatePresentationStoryboard('ro/one', 'v 1', ['source'], request, 'stable-plan');
+  await transitionPresentationAsset('ro/one', 'v 1', 'exact-new-plan', 'approved', 'timestamp');
+  await generatePresentationSceneImage('ro/one', 'v 1', ['source'], { storyboardAssetId: 'exact-new-plan', sceneIndex: 0 }, 'stable-image');
+  const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+  const writes = calls.filter(([, options]) => options?.method === 'POST' || options?.method === 'PATCH');
+  expect(writes).toHaveLength(3);
+  expect(writes.map(([url]) => url)).toEqual(['/api/research-objects/ro%2Fone/versions/v%201/presentation-assets/generations', '/api/research-objects/ro%2Fone/versions/v%201/presentation-assets/exact-new-plan', '/api/research-objects/ro%2Fone/versions/v%201/presentation-assets/generations']);
+  expect(JSON.parse(writes[0]![1].body as string)).toEqual({ kind: 'interactive_html', sourceClaimIds: ['source'], storyboard: request });
+  expect(JSON.parse(writes[1]![1].body as string)).toEqual({ status: 'approved', expectedUpdatedAt: 'timestamp' });
+  expect(JSON.parse(writes[2]![1].body as string)).toEqual({ kind: 'image', sourceClaimIds: ['source'], sceneImage: { storyboardAssetId: 'exact-new-plan', sceneIndex: 0 } });
+  expect(writes[0]![1].headers).toMatchObject({ 'idempotency-key': 'stable-plan', 'x-csrf-token': 'csrf' });
+  expect(writes[2]![1].headers).toMatchObject({ 'idempotency-key': 'stable-image', 'x-csrf-token': 'csrf' });
+});

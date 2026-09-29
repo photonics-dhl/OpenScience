@@ -48,6 +48,7 @@ export interface PresentationWorkbenchProps {
   onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => Promise<PaperFigureReviewOutcome | null> | void;
   onAssetDeleted?: (asset: PresentationAsset) => void;
   renderReviewAction?: (asset: PresentationAsset) => ReactNode;
+  renderStyleChoices?: (asset: PresentationAsset) => ReactNode;
   working?: boolean;
   error?: string;
   resultsOnly?: boolean;
@@ -57,7 +58,7 @@ const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, renderReviewAction, working = false, error = '', resultsOnly = false,
+  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, renderReviewAction, renderStyleChoices, working = false, error = '', resultsOnly = false,
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const versionLabels = useVersionLabels();
@@ -72,8 +73,7 @@ export function PresentationWorkbench({
   const [deletedTitle, setDeletedTitle] = useState('');
   const eligibleIds = useMemo(() => new Set(claims.filter((claim) => claim.extractionStatus === 'succeeded').map((claim) => claim.id)), [claims]);
   const paperOriginals = useMemo(() => assets.filter((asset) => asset.generator === 'OpenScience paper-original figure'), [assets]);
-  const mediaAssets = useMemo(() => assets.filter((asset) => asset.status !== 'rejected'
-    && asset.generator !== 'OpenScience paper-original figure'
+  const mediaAssets = useMemo(() => assets.filter((asset) => asset.generator !== 'OpenScience paper-original figure'
     && !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg' || asset.kind === 'video')), [assets]);
   const storyboardAssets = useMemo(() => assets.filter((asset) => Boolean(asset.storyboard)), [assets]);
 
@@ -127,13 +127,14 @@ export function PresentationWorkbench({
         description: narrativeScene?.narration?.trim() || `${t(`assetStatus.${asset.status}`)} · ${t('notEvidence')}`,
       };
     };
-    const imageSlides = mediaAssets.filter((asset) => asset.kind !== 'video' && asset.kind !== 'svg').sort((left, right) => {
+    const activeMediaAssets = mediaAssets.filter((asset) => asset.status !== 'rejected');
+    const imageSlides = activeMediaAssets.filter((asset) => asset.kind !== 'video' && asset.kind !== 'svg').sort((left, right) => {
       const approval = Number(right.status === 'approved') - Number(left.status === 'approved');
       if (approval) return approval;
       const visualRank = (asset: PresentationAsset) => asset.sceneImage?.sceneIndex === 0 ? 0 : asset.sceneImage ? 1 : asset.kind === 'image' ? 2 : 3;
       return visualRank(left) - visualRank(right) || left.createdAt.localeCompare(right.createdAt);
     }).map((asset, index) => toSlide(asset, 'image', index === 0 ? t('coreImageTitle') : t('imageNumber', { number: index + 1 })));
-    const videoSlides = mediaAssets.filter((asset) => asset.kind === 'video').map((asset) => toSlide(asset, 'video', t('researchVideoTitle')));
+    const videoSlides = activeMediaAssets.filter((asset) => asset.kind === 'video').map((asset) => toSlide(asset, 'video', t('researchVideoTitle')));
     const renderActions = (slide: ResearchMediaSlide) => {
       const asset = mediaAssets.find((item) => item.id === slide.id);
       return asset ? <MediaAssetActions key={asset.id} asset={asset} title={slide.label} canWrite={canWrite} working={working || loading || loadFailed} reviewAction={renderReviewAction?.(asset)} onTransition={onTransition} onDeleted={assetDeleted} /> : null;
@@ -185,7 +186,7 @@ export function PresentationWorkbench({
                 {canWrite && onAskHermes ? <button type="button" className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" onClick={() => onAskHermes('image')}>{t('askHermes')}</button> : canWrite && researchObjectId ? <Link className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/hermes`}>{t('askHermes')}</Link> : null}
               </div>
             ) : (
-              <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={mediaAssets} allAssets={assets} canWrite={canWrite} working={working || loading || loadFailed} renderReviewAction={renderReviewAction} onTransition={onTransition} onAssetDeleted={assetDeleted} />
+              <PresentationResultGallery researchObjectId={researchObjectId} versionId={version.versionId} assets={mediaAssets} allAssets={assets} canWrite={canWrite} working={working || loading || loadFailed} renderReviewAction={renderReviewAction} renderStyleChoices={renderStyleChoices} onTransition={onTransition} onAssetDeleted={assetDeleted} />
             )}
             {deletionNotice}
           </section>

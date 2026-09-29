@@ -58,7 +58,8 @@ export async function reviewGeneratedImage(
   const scene = document.scenes[sceneIndex]!;
   // Validated v2 scenes rebuild visualAction from the structured brief. Keep
   // every scientific/art field and source, without sending that expansion twice.
-  const { visualAction: _expandedBrief, ...structuredScene } = scene;
+  const { visualAction: _expandedBrief, styleRecommendations: _styleChoices, ...structuredScene } = scene;
+  void [_expandedBrief, _styleChoices];
   const reviewScene = scene.illustration?.schemaVersion === 2 ? structuredScene : scene;
   const selectedStyleGuidance = style === 'auto' && !scene.paperOriginal
     ? automaticStyleReviewGuidance(scene.illustration?.treatment ?? '') : '';

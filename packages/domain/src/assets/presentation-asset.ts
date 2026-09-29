@@ -1,4 +1,5 @@
 import { requireStyleReferenceImage } from './scene-image';
+import { requireArtStyleContinuationTaskAuthority } from '../agent/art-style-continuation';
 import { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageRevision, requireSceneImageSpendIsNew, hasSceneImageProvenance, readStoredGeneratedImageReview, requireAcceptedSceneImageReview, sceneImageRequiresPixelReview, generatedSceneImageRequiresPixelReview, type SceneImageRequest } from './scene-image';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
@@ -321,11 +322,19 @@ async function hasHermesAssetReviewAuthority(
     where: { presentationAssetId: input.assetId, status: 'awaiting_approval', run: {
       actorId: input.userId, researchObjectId: input.researchObjectId, versionId: input.versionId,
       OR: [{ profile: ONCHIP_FIELD_SAMPLING_PROFILE, maxAgentTasks: 7 }, { profile: CONTENT_DRIVEN_PROFILE, maxAgentTasks: 8 }, { profile: CONTENT_DRIVEN_IMAGE_PROFILE, maxAgentTasks: 7 },
-        { profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: { gte: 9 } }],
+        { profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: { gte: 9 } }, { profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 2 }],
       status: { in: ['awaiting_scene_images_review', 'awaiting_video_review'] },
     } }, include: { run: true },
   });
   if (!step || !isDeepStrictEqual([...step.run.sourceClaimIds].sort(), [...input.sourceClaimIds].sort())) return false;
+  if (step.run.maxAgentTasks === 2) {
+    if (step.stage !== 'scene_image' || step.agentTaskId !== input.assetId) return false;
+    const task = await prisma.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } });
+    if (!task || task.deletedAt || task.status !== 'succeeded' || task.session.deletedAt || task.session.status !== 'active'
+      || task.session.userId !== input.userId || task.session.researchObjectId !== input.researchObjectId) return false;
+    return requireArtStyleContinuationTaskAuthority(prisma, { runId: step.run.id, actorId: input.userId,
+      taskId: task.id, payload: parsePresentationGenerationPayload(task.payload), review: true });
+  }
   const pixel = await readNarrativePixelReplanAuthority(prisma, { runId: step.run.id, actorId: input.userId });
   if (pixel) return Boolean(step.agentTaskId === input.assetId && step.ordinal < pixel.sceneLimit);
   if (step.run.profile === VISUAL_NARRATIVE_PROFILE && ![9, 11, 13].includes(step.run.maxAgentTasks ?? 0)) {
@@ -497,7 +506,7 @@ export async function transitionHermesPresentationAsset(deps: AgentDeps, input: 
   const pixel = await readNarrativePixelReplanAuthority(deps.prisma, { runId: run.id, actorId: run.actorId });
   await transitionPresentationAssetUnderReview(deps, { userId: run.actorId, researchObjectId: run.researchObjectId,
     versionId: run.versionId, assetId: asset.id, expectedUpdatedAt: asset.updatedAt,
-    status: review.decision === 'blocked' || ((pixel || run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && asset.kind !== 'image' && review.decision !== 'accepted') ? 'rejected' : 'approved' }, {}, run.id);
+    status: review.decision === 'blocked' || ((pixel || run.maxAgentTasks === 2 || run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && asset.kind !== 'image' && review.decision !== 'accepted') ? 'rejected' : 'approved' }, {}, run.id);
 }
 
 async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
@@ -523,10 +532,12 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
       const expectedStatus = stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_storyboard_review';
       const ids = (await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } })).map(link => link.claimId).sort();
       const taskPayload = task ? parsePresentationGenerationPayload(task.payload) : undefined;
+      const styleAuthority = run?.maxAgentTasks === 2 && task && taskPayload
+        ? await requireArtStyleContinuationTaskAuthority(tx, { runId: run.id, actorId: input.userId, taskId: task.id, payload: taskPayload, review: true }) : false;
       const renderAuthority = run && task && ![9, 11, 13].includes(run.maxAgentTasks ?? 0) && stage === 'scene_image'
         ? await requireHermesImageRenderRecoveryAuthority(tx, { runId: run.id, actorId: input.userId,
           taskId: task.id, phase: 'review' }).catch(() => null) : null;
-      if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || (![9, 11, 13].includes(run.maxAgentTasks ?? 0) && !renderAuthority && !pixel) || run.status !== expectedStatus
+      if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || (![9, 11, 13].includes(run.maxAgentTasks ?? 0) && !renderAuthority && !pixel && !styleAuthority) || run.status !== expectedStatus
         || run.actorId !== input.userId || run.researchObjectId !== input.researchObjectId || run.versionId !== input.versionId
         || !step || step.status !== 'awaiting_approval' || task?.status !== 'succeeded' || task.deletedAt
         || taskPayload?.hermesRunAuthority?.runId !== run.id || taskPayload.hermesRunAuthority.stage !== stage
@@ -539,7 +550,7 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
           || !['accepted', 'revised', 'blocked'].includes(String(review.decision))))
         || (pixel && (stage === 'storyboard' ? task.id !== pixel.task.id
           : taskPayload.sceneImage?.storyboardAssetId !== pixel.task.id || step.ordinal >= pixel.sceneLimit))
-        || (input.status === 'approved') !== (stage === 'storyboard' && (pixel || run.maxAgentTasks === 11 || run.maxAgentTasks === 13) ? review.decision === 'accepted' : review.decision !== 'blocked')) {
+        || (input.status === 'approved') !== (stage === 'storyboard' && (pixel || styleAuthority || run.maxAgentTasks === 11 || run.maxAgentTasks === 13) ? review.decision === 'accepted' : review.decision !== 'blocked')) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes internal review does not match the current candidate and grant');
       }
       // Source-support authority was replayed above; its receipt preserves all historical image decisions.

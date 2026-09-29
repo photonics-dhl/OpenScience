@@ -412,6 +412,36 @@ export function getExistingHermesResearchRun(researchObjectId: string, ingestion
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs?ingestionTaskId=${encodeURIComponent(ingestionTaskId)}`, { signal });
 }
 
+export interface HermesArtStyleCapability {
+  runId: string;
+  expectedVersion: number;
+  versionId: string;
+  imageAssetId: string;
+  storyboardAssetId: string;
+  sceneIndex: number;
+  maxAgentTasks: 2;
+  choices: Array<{ styleId: string; name: string; reason: string }>;
+}
+
+export interface HermesArtStyleContinuationRequest {
+  expectedVersion: number;
+  versionId: string;
+  imageAssetId: string;
+  sceneIndex: number;
+  style: string;
+}
+
+export function getHermesImageArtStyleCapability(researchObjectId: string, versionId: string, imageAssetId: string, signal?: AbortSignal): Promise<{ styleContinuation: HermesArtStyleCapability | null }> {
+  const query = new URLSearchParams({ versionId, imageAssetId });
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-art-style-capability?${query}`, { signal, cache: 'no-store' });
+}
+
+export function createHermesArtStyleContinuation(researchObjectId: string, runId: string, body: HermesArtStyleContinuationRequest, idempotencyKey: string, signal?: AbortSignal): Promise<{ run: HermesResearchRun; taskIds: { storyboard: string; sceneImage: string | null } }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}/art-style-continuations`, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(body), signal,
+  });
+}
+
 export interface HermesSourceReview {
   ingestionTaskId: string;
   snapshotToken: string;
@@ -815,7 +845,7 @@ export interface PresentationClaim {
 }
 
 import type { StoryboardRequest, StoryboardView, SceneImageRequest, SourceLocator } from '@openscience/domain';
-export type { StoryboardRequest, StoryboardDocument, StoryboardView, SceneImageRequest, SourceLocator } from '@openscience/domain';
+export type { IllustrationStyleRecommendations, StoryboardRequest, StoryboardDocument, StoryboardView, SceneImageRequest, SourceLocator } from '@openscience/domain';
 
 export interface PresentationAsset {
   paperOriginal?: { figureId: string; caption?: string };
