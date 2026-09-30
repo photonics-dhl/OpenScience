@@ -83,7 +83,7 @@ function reviewAttachments(request) {
       || bytes.subarray(8, 12).toString('ascii') !== 'WEBP' || bytes.readUInt32LE(4) !== bytes.length - 8)) throw Error('INVALID_ATTACHMENT');
     if (attachment.mediaType === 'application/pdf' && (bytes.length < 16 || bytes.subarray(0, 5).toString('ascii') !== '%PDF-'
       || !bytes.subarray(Math.max(0, bytes.length - 2048)).includes(Buffer.from('%%EOF')))) throw Error('INVALID_ATTACHMENT');
-    return { attachment, file };
+    return { attachment, file, bytes };
   });
 }
 async function uploadAttachments(page, input, request) {
@@ -91,7 +91,10 @@ async function uploadAttachments(page, input, request) {
   if (!attachments.length) return;
   const form = input.locator('xpath=ancestor::form[1]');
   if (await form.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
-  for (const { attachment, file } of attachments) {
+  for (const { attachment, bytes } of attachments) {
+    // Upload the bytes already validated above; the broker's writable job path
+    // can change before Playwright would otherwise reopen it.
+    const uploadFile = { name: attachment.fileName, mimeType: attachment.mediaType, buffer: bytes };
     const oldInput = form.locator('input[type="file"]');
     const add = form.getByRole('button', { name: 'Add files and more', exact: true });
     // A modern composer can briefly expose one file input while hydrating.
@@ -109,12 +112,13 @@ async function uploadAttachments(page, input, request) {
       if (await upload.count() !== 1 || !await upload.isVisible()) throw Error('ATTACHMENT_INPUT_NOT_READY');
       const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), upload.click()]);
       const selectedInput = await chooser.element();
+      const accept = await selectedInput.getAttribute('accept');
       if (await selectedInput.getAttribute('aria-label') !== 'Attach files'
-        || await selectedInput.getAttribute('accept') !== null) throw Error('ATTACHMENT_INPUT_NOT_READY');
-      await chooser.setFiles(file);
+        || (accept !== null && accept !== '')) throw Error('ATTACHMENT_INPUT_NOT_READY');
+      await chooser.setFiles(uploadFile);
     } else {
       if (await oldInput.count() !== 1) throw Error('ATTACHMENT_INPUT_NOT_READY');
-      await oldInput.setInputFiles(file);
+      await oldInput.setInputFiles(uploadFile);
     }
     const acceptedName = attachmentLabelPattern(attachment.fileName);
     const deadline = Date.now() + 30000;

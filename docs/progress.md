@@ -1,5 +1,7 @@
 # CURRENT Progress Window
 
+- 附件上传两项已证缺陷已有最小候选/回归/独立审查；原PDF已解析且Hermes凝练已保存，当前断点仍是ChatGPT附件确认，尚无来源终审答案。无发送取证等待方法授权；候选与运行状态、未消耗续作及完整链路差额只见Hermes CURRENT。
+
 - 09-30视频：真实H3原片已取回并完整解码，像素复核发现触材及非局域波纹；已修正后续提示，生成被供应商余额不足拒绝。原片/请求/收据已保留，未改RO公开状态；实际镜头和精确恢复点只见Hermes CURRENT。
 - 2026-09-30：公司评估用固定源码/服务器说明已完成，独立High与最终ZIP检查通过；用户确认公司只做正式上线和年度运维，功能继续由我方开发。快照、脱敏/验收边界与证据见 [评估交接](handoff/2026-09-30-vendor-evaluation.md)，未发送公司或部署应用。
 > 当前交付位于 release/onchip-production-line；精确 HEAD、生产/回退、资产与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。旧记录在 Git 历史，不能当下一动作。

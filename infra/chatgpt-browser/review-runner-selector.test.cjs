@@ -2,10 +2,84 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const crypto = require('node:crypto');
+const path = require('node:path');
 
 // Load the real, side-effect-free selector functions without the operator's CLI,
 // browser connection, filesystem publication or installed server Playwright runtime.
 const source = fs.readFileSync(require.resolve('./review-runner.cjs'), 'utf8');
+
+// The external seam is Playwright's file chooser; validation and upload below
+// execute the real operator helpers, with a mutable fake job file.
+function attachmentFixture({ modern = true, accept = null, replaceAfterRead = false, png = false } = {}) {
+  const original = png ? Buffer.alloc(32) : Buffer.from('%PDF-1.7\noriginal validated paper\n%%EOF\n');
+  if (png) { Buffer.from('89504e470d0a1a0a', 'hex').copy(original); original.writeUInt32BE(20, 16); original.writeUInt32BE(10, 20); }
+  const replacement = png ? Buffer.from(original) : Buffer.from('%PDF-1.7\na different paper\n%%EOF\n');
+  if (png) replacement[28] = 1;
+  const fileName = png ? 'page-1.png' : 'source.pdf';
+  let current = original, now = 0;
+  const uploaded = [], labels = [];
+  const capture = async value => {
+    uploaded.push(typeof value === 'string' ? { buffer: current } : value);
+    labels.push(fileName);
+  };
+  const fileInput = { count: async () => modern ? 3 : 1, setInputFiles: capture };
+  const previews = { evaluateAll: async fn => fn(labels.map(label => ({ getAttribute: () => label }))) };
+  const add = { count: async () => modern ? 1 : 0, isVisible: async () => true,
+    isEnabled: async () => true, click: async () => {} };
+  const form = { count: async () => 1, getByRole: () => add,
+    locator: query => query === 'input[type="file"]' ? fileInput
+      : query.includes('aria-busy') ? { count: async () => 0 } : previews };
+  const input = { locator: () => form };
+  const chooser = { element: async () => ({ getAttribute: async name => name === 'aria-label' ? 'Attach files' : accept }),
+    setFiles: capture };
+  const page = { evaluate: async () => 'xgs-review-upload-test',
+    getByRole: () => ({ count: async () => 1, isVisible: async () => true, click: async () => {} }),
+    waitForEvent: async () => chooser };
+  const sandbox = { fs: {
+    lstatSync: () => ({ isFile: () => true, isSymbolicLink: () => false, size: current.length }),
+    readFileSync: () => { const bytes = Buffer.from(current); if (replaceAfterRead) current = replacement; return bytes; },
+  }, path, crypto, Buffer, dir: '/test-job', id: 'upload-test',
+    MAX_ATTACHMENT_BYTES: 4 * 1024 * 1024, IMAGE_REVIEW_MAX_ATTACHMENT_BYTES: 10 * 1024 * 1024,
+    MAX_TOTAL_ATTACHMENT_BYTES: 24 * 1024 * 1024,
+    Date: { now: () => now }, setTimeout: fn => { now += 250; fn(); }, attachmentDiagnostic: undefined };
+  vm.createContext(sandbox);
+  vm.runInContext(source.slice(source.indexOf('function reviewAttachments('), source.indexOf('function normalizeUserText(')), sandbox);
+  const request = { schemaVersion: png ? 3 : 1, attachments: [{ fileName, mediaType: png ? 'image/png' : 'application/pdf',
+    ...(png ? { pageNumber: 1, width: 20, height: 10 } : {}),
+    sha256: crypto.createHash('sha256').update(original).digest('hex') }] };
+  return { upload: () => sandbox.uploadAttachments(page, input, request), original, uploaded };
+}
+
+for (const modern of [true, false]) test(`uploads the validated bytes despite replacement in ${modern ? 'modern' : 'legacy'} flow`, async () => {
+  const f = attachmentFixture({ modern, replaceAfterRead: true });
+  await f.upload();
+  assert.equal(f.uploaded.length, 1);
+  assert.deepEqual(f.uploaded[0].buffer, f.original);
+  assert.equal(f.uploaded[0].name, 'source.pdf');
+  assert.equal(f.uploaded[0].mimeType, 'application/pdf');
+});
+
+for (const modern of [true, false]) test(`preserves validated image-review bytes in ${modern ? 'modern' : 'legacy'} flow`, async () => {
+  const f = attachmentFixture({ modern, replaceAfterRead: true, png: true });
+  await f.upload();
+  assert.equal(f.uploaded.length, 1);
+  assert.deepEqual(f.uploaded[0].buffer, f.original);
+  assert.equal(f.uploaded[0].name, 'page-1.png');
+  assert.equal(f.uploaded[0].mimeType, 'image/png');
+});
+
+for (const accept of [null, '']) test(`modern PDF upload accepts unrestricted input ${JSON.stringify(accept)}`, async () => {
+  const f = attachmentFixture({ accept });
+  await f.upload();
+  assert.equal(f.uploaded.length, 1);
+});
+
+for (const accept of ['image/*', 'image/*,video/*']) test(`rejects restricted input ${accept} before upload`, async () => {
+  const f = attachmentFixture({ accept });
+  await assert.rejects(f.upload(), /ATTACHMENT_INPUT_NOT_READY/);
+  assert.equal(f.uploaded.length, 0);
+});
 function selector(onTick = () => {}) {
   let now = 0;
   const sandbox = { Date: { now: () => now }, setTimeout: fn => { now += 250; onTick(); fn(); } };
