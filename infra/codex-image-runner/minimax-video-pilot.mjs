@@ -1,4 +1,5 @@
-import { lstat, mkdir, open } from 'node:fs/promises';
+import { lstat, mkdir, open, link, unlink } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { safeRead, atomicWrite } from './core.mjs';
@@ -7,6 +8,7 @@ import {
   validateMiniMaxVideoBaseUrl, validateMiniMaxVideoRequest,
   validateMiniMaxVideoTaskId, validateMiniMaxVideoTask,
 } from '../../packages/ai-gateway/dist/minimax-video.js';
+import { downloadMiniMaxVideo, validateMiniMaxVideoBytes, MINIMAX_VIDEO_MAX_DOWNLOAD_BYTES } from '../../packages/ai-gateway/dist/minimax-video-download.js';
 
 const CONFIG_PATH = '/opt/openscience-video/minimax-cloud.json';
 const fail = code => { throw new Error(code); };
@@ -45,8 +47,8 @@ export async function runPilot(options, dependencies = {}) {
     || (dependencies.getuid ?? process.getuid)?.() !== 0
     || (dependencies.geteuid ?? process.geteuid)?.() !== 0) fail('PILOT_ROOT_REQUIRED');
   const { command, requestFile } = options ?? {};
-  if (!['prepare', 'submit', 'status'].includes(command)
-    || (command !== 'status' && typeof requestFile !== 'string')
+  if (!['prepare', 'submit', 'status', 'download'].includes(command)
+    || (!['status', 'download'].includes(command) && typeof requestFile !== 'string')
     || Object.keys(options).some(key => !['command', 'requestFile'].includes(key))) fail('PILOT_ARGUMENTS_INVALID');
   const inspect = dependencies.lstat ?? lstat;
   const sync = dependencies.syncDirectory ?? syncDirectory;
@@ -129,6 +131,35 @@ export async function runPilot(options, dependencies = {}) {
   }
 
   const previous = await submission();
+  if (command === 'download') {
+    if (previous.status !== 'succeeded') fail('PILOT_VIDEO_NOT_READY');
+    const outputPath = join(stateRoot, 'source.mp4');
+    const validVideo = bytes => {
+      if (!Buffer.isBuffer(bytes) || bytes.length < 12 || bytes.length > MINIMAX_VIDEO_MAX_DOWNLOAD_BYTES
+        || bytes.toString('ascii', 4, 8) !== 'ftyp') fail('PILOT_VIDEO_INVALID');
+      return validateMiniMaxVideoBytes(bytes);
+    };
+    let saved = await optional(outputPath, MINIMAX_VIDEO_MAX_DOWNLOAD_BYTES);
+    if (saved === null) {
+      const terminal = validateMiniMaxVideoTask(json(await read(join(stateRoot, 'terminal.json'), 65536)), previous.taskId);
+      const bytes = validVideo(await (dependencies.download ?? downloadMiniMaxVideo)(terminal));
+      const temporaryPath = join(stateRoot, `.source-${randomUUID()}.part`);
+      let owned = false;
+      try {
+        owned = await writeExclusive(temporaryPath, bytes, sync);
+        if (!owned) fail('PILOT_OUTPUT_CONFLICT');
+        // Publish one complete original; concurrent GETs cannot overwrite it.
+        try { await link(temporaryPath, outputPath); }
+        catch (error) { if (error.code !== 'EEXIST') throw error; }
+        await sync(stateRoot);
+      } finally {
+        if (owned) await unlink(temporaryPath);
+      }
+      saved = await read(outputPath, MINIMAX_VIDEO_MAX_DOWNLOAD_BYTES);
+    }
+    validVideo(saved);
+    return summary('downloaded', { taskId: previous.taskId, path: outputPath, bytes: saved.length });
+  }
   if (command === 'prepare') return previous;
   if (command === 'submit' && previous.status !== 'prepared') return previous;
   if (command === 'status' && previous.status !== 'submitted') return previous;
@@ -171,7 +202,7 @@ export async function runPilot(options, dependencies = {}) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  const valid = (args.length === 1 && args[0] === 'status')
+  const valid = (args.length === 1 && ['status', 'download'].includes(args[0]))
     || (args.length === 3 && ['prepare', 'submit'].includes(args[0]) && args[1] === '--request-file');
   if (!valid) { console.error('PILOT_ARGUMENTS_INVALID'); process.exitCode = 64; }
   else {

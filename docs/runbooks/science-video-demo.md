@@ -29,7 +29,8 @@ Nginx Range 播放；独立于本样片，管理员 RO 单幕 Codex 生图已验
 1. 在 root/0600 的私密请求文件保存经审查的纯文本品牌概念与普通话旁白，格式严格为 `{model:"MiniMax-H3",content:[{type:"text",text:"..."}],resolution:"768P",duration:10,ratio:"16:9"}`；不含未公开论文和用户数据。执行 `node "$video_source/infra/codex-image-runner/minimax-video-pilot.mjs" prepare --request-file /opt/openscience-video/pilot-request.json`，只保存原请求，零模型调用。
 2. 执行同一命令并将 `prepare` 替换为 `submit`。固定 `/opt/openscience-video/minimax-h3-pilot/create-attempt` 使用独占创建、文件和父目录 fsync，完成后才 POST；并发、重启、换输入路径都不能获得第二次提交。此标记用于防止已观察到的会话中断重复收费；此前只有配置上限，没有实际消费者保障。
 3. 执行 `node "$video_source/infra/codex-image-runner/minimax-video-pilot.mjs" status`，只 GET 已保存的原 `taskId`；成功/失败终态缓存于 root 私密目录。标准输出仅参数、状态、任务 ID 和白名单错误码，媒体签名 URL 仅留 `terminal.json`，不输出密钥、旁白或供应商正文。
-4. `uncertain`、`rejected`、`query_failed` 与供应商失败均为非零退出。查询失败保留原 ID 可续查；创建标记存在但收据缺失时仅报告 unknown，必须人工对账，不删除标记来重试。准备后请求变化必须先解释变更；已提交请求不可修改。
+4. 原任务成功后执行同一入口的 `download`。只使用已保存终态，不读取 API key、不查询或创建另一任务。Gateway 对 HTTPS 主机解析后固定公开 IPv4，保持 TLS 校验，不跟随重定向；DNS 与传输共用 90 秒上限，响应最多 64 MiB。验证 HTTP 长度和 MP4 容器边界后才独占发布 root/0600 的 `minimax-h3-pilot/source.mp4`；再次执行复用原片，并发不能覆盖，失败保留原 task/receipt。该容器检查不是完整解码或音画质量验收；超时、过期签名或被拒原片须核原结果，不重新 POST。原片异常时保留证据，不能用静默覆盖冒充续取成功。
+5. `uncertain`、`rejected`、`query_failed` 与供应商失败均为非零退出。查询失败保留原 ID 可续查；创建标记存在但收据缺失时仅报告 unknown，必须人工对账，不删除标记来重试。准备后请求变化必须先解释变更；已提交请求不可修改。
 
 ### 回滚与恢复
 
@@ -39,7 +40,7 @@ Nginx Range 播放；独立于本样片，管理员 RO 单幕 Codex 生图已验
 ### 验证与未完成项
 
 - fresh evidence：独立 High 增量审查、Node/Python 语法检查通过；服务器文件读回鉴权 HTTP 200。脱敏收据位于 `secrets/minimax-config-receipt.json`，本地归档在 ignored `tmp/minimax-server-config-20260928/`。收据为本次观测，不是实时余额或自动健康证明。
-- 定向测试为 `node --test infra/codex-image-runner/core.test.mjs infra/codex-image-runner/video-runner.test.mjs infra/codex-image-runner/minimax-video-pilot.test.mjs` 与 Gateway 的 `test/minimax-video.test.ts`；Linux 下 runner 真实 owner/fsync 路径在隔离 CI 以 root 执行，所有 provider/Docker 操作均由 mock 代替。视频专属工作流覆盖原发布分支 CI 未监听的视频文件；不替代服务器和音画验证。
+- 定向测试为 `node --test infra/codex-image-runner/core.test.mjs infra/codex-image-runner/video-runner.test.mjs infra/codex-image-runner/minimax-video-pilot.test.mjs infra/codex-image-runner/minimax-video-download.test.mjs` 与 Gateway 的 `test/minimax-video.test.ts`、`test/minimax-video-download.test.ts`；Linux 下 runner 真实 owner/fsync 路径在隔离 CI 以 root 执行，所有 provider/Docker 操作均由 mock 代替。下载用例共用 16×16 H.264 测试片（既有 FFmpeg 生成并完整解码），验证同长度截断、私网、无凭据、超时及完整原片并发保存；测试片不作产品成片。视频专属工作流覆盖原发布分支 CI 未监听的视频文件；不替代服务器和音画验证。
 - 实际视频须检查完整解码、画幅/时长、连续运动、真实音轨与完整旁白、字幕和手机可读性。旧 Qwen TTS 镜像缺失仍须独立恢复，不能把 H3 试镜成功算作离线配音恢复。当前 POST 数量及结果见 CURRENT；清理仍按[综合计划 Task 4](../plans/2026-09-05-integrated-research-product-plan.md#task-4-视频)的引用和任务终态要求，保留原片、已采用资产与 unknown 收据。
 
 ## 前置检查
