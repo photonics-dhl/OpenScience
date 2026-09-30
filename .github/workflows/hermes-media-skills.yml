@@ -128,6 +128,8 @@ on:
       - 'packages/domain/test/agent/saved-source-review-recovery.test.ts'
       - 'packages/domain/test/agent/independent-source-review.test.ts'
       - 'packages/domain/test/agent/source-review-not-submitted.test.ts'
+      - 'packages/domain/test/agent/hermes-source-model-routing.test.ts'
+      - 'packages/domain/test/agent/historical-source-review-fixture.ts'
       - 'packages/domain/test/agent/private-source-reanalysis*.ts'
       - 'apps/api/src/routes/ingestion.ts'
       - 'apps/api/test/private-source-reanalysis.test.ts'
@@ -262,6 +264,8 @@ on:
       - 'packages/domain/test/agent/saved-source-review-recovery.test.ts'
       - 'packages/domain/test/agent/independent-source-review.test.ts'
       - 'packages/domain/test/agent/source-review-not-submitted.test.ts'
+      - 'packages/domain/test/agent/hermes-source-model-routing.test.ts'
+      - 'packages/domain/test/agent/historical-source-review-fixture.ts'
       - 'packages/domain/test/agent/private-source-reanalysis*.ts'
       - 'apps/api/src/routes/ingestion.ts'
       - 'apps/api/test/private-source-reanalysis.test.ts'
@@ -292,7 +296,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts test/structured-retry-budget.test.ts test/source-review-not-submitted.test.ts test/source-review-broker.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts test/agent/hermes-source-model-routing.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-source-reanalysis.test.ts test/agent/source-composition-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/source-parser-recovery.test.ts test/research-runs.test.ts test/direct-source-review-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/private-source-reanalysis.test.ts test/source-composition-recovery.test.ts

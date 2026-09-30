@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { createSession } from '@openscience/auth';
 import { fixture, fields } from '../../../packages/domain/test/agent/direct-source-review-fixture';
+import { seedHistoricalIndependentSourceReview } from '../../../packages/domain/test/agent/historical-source-review-fixture';
 import { buildApp } from '../src/app';
 import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 
@@ -31,8 +32,7 @@ describe('fresh source review recovery HTTP contract', () => {
       byteLength: Buffer.byteLength(text), usage: { inputTokens: 100, outputTokens: 100 }, finishReason: 'stop', text }];
     const request = { method: 'POST' as const, url: `${f.url}/retry-generation`, cookies: f.cookies,
       headers: { 'idempotency-key': 'initial-independent' }, payload: { expectedVersion: 7 } };
-    expect((await f.app.inject(request)).statusCode).toBe(202);
-    const root = f.db.agentTasks.at(-1)!;
+    const root = seedHistoricalIndependentSourceReview(f);
     root.status = 'succeeded'; root.executionAttempt = 1;
     root.result = structuredClone(f.failedResult);
     root.result.scientificReview = { ...root.result.scientificReview, kind: 'independent_review',
@@ -54,12 +54,12 @@ describe('fresh source review recovery HTTP contract', () => {
     expect(rejected.statusCode).toBe(400);
     expect(rejected.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR', message: 'This source review has no safe source recovery' } });
     expect(f.db.usageLedger).toEqual(ledger);
-    expect(f.redis.lpush).toHaveBeenCalledTimes(1);
+    expect(f.redis.lpush).not.toHaveBeenCalled();
     verifier.mockResolvedValue(true);
     expect((await f.app.inject(retry)).statusCode).toBe(202);
     expect((await f.app.inject(retry)).statusCode).toBe(202);
     expect(f.db.usageLedger).toEqual(ledger);
-    expect(f.redis.lpush).toHaveBeenCalledTimes(2);
+    expect(f.redis.lpush).toHaveBeenCalledTimes(1);
   });
   it('projects saved-body correction privately and reuses the same explicit endpoint and replay receipt', async () => {
     const f = await apiFixture(); const result = f.db.agentTasks[1].result;
@@ -71,7 +71,7 @@ describe('fresh source review recovery HTTP contract', () => {
       byteLength: Buffer.byteLength(text), usage: { inputTokens: 100, outputTokens: 100 }, finishReason: 'stop', text }];
     const read = await f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });
     expect(read.statusCode).toBe(200);
-    expect(read.json().run).toMatchObject({ generationRecovery: 'source-review-independent', chargeableAttempts: 1, canRetryGeneration: true });
+    expect(read.json().run).toMatchObject({ generationRecovery: 'source-review-saved', chargeableAttempts: 1, canRetryGeneration: true });
     for (const privateKey of ['rejectedOutputs', 'savedOutputEvidence', 'claimSuggestions', 'sourceMapRef']) expect(read.body).not.toContain(privateKey);
     expect(f.redis.lpush).not.toHaveBeenCalled();
     const request = { method: 'POST' as const, url: `${f.url}/retry-generation`, cookies: f.cookies,

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { fixture, fields } from './direct-source-review-fixture';
+import { seedHistoricalIndependentSourceReview } from './historical-source-review-fixture';
 import { getHermesResearchRun, retryHermesGeneration, reconcileHermesResearchRuns } from '../../src/agent/research-run';
 import { requireHermesSourceReviewExecution } from '../../src/ingestion/source-review-recovery';
 import { ensureHermesIngestionReview } from '../../src/ingestion/ingestion-service';
@@ -24,8 +25,8 @@ async function failedIndependent(fullHistory = false) {
     diagnostic: 'claims_source_unmaterializable', provider: 'primary', model: 'MiniMax-M3', promptHash: '2'.repeat(64),
     responseHash: createHash('sha256').update(text).digest('hex'), byteLength: Buffer.byteLength(text),
     usage: { inputTokens: 100, outputTokens: 100 }, finishReason: 'stop', text }];
-  await retryHermesGeneration(f.deps, { ...f.input, expectedVersion: f.db.hermesResearchRuns[0].version, idempotencyKey: 'saved-or-independent' });
   if (fullHistory) {
+    await retryHermesGeneration(f.deps, { ...f.input, expectedVersion: f.db.hermesResearchRuns[0].version, idempotencyKey: 'saved-or-independent' });
     const saved = f.db.agentTasks.at(-1)!;
     const receipt = f.db.auditLogs.find(row => row.metadata?.newAgentTaskId === saved.id)!;
     Object.assign(receipt.metadata, { recoveryClass: 'saved_source_review_output_correction', noProviderSwitch: true });
@@ -36,9 +37,8 @@ async function failedIndependent(fullHistory = false) {
     f.db.auditLogs.push({ ...structuredClone(call), id: 'saved-call', requestId: saved.id });
     f.db.hermesResearchSteps.at(-1)!.status = 'failed';
     f.db.hermesResearchRuns[0].status = 'failed'; f.db.ingestionTasks[0].state = 'needs_review';
-    await retryHermesGeneration(f.deps, { ...f.input, expectedVersion: f.db.hermesResearchRuns[0].version, idempotencyKey: 'independent-role' });
   }
-  const root = f.db.agentTasks.at(-1)!;
+  const root = seedHistoricalIndependentSourceReview(f);
   root.status = 'succeeded'; root.executionAttempt = 1;
   root.result = structuredClone(f.failedResult);
   root.result.scientificReview = { ...root.result.scientificReview, kind: 'independent_review',
@@ -81,7 +81,7 @@ describe('zero-submit source review technical successor', () => {
     await Promise.all([retryHermesGeneration(f.deps, f.input), retryHermesGeneration(f.deps, f.input)]);
     expect(f.db.agentTasks.find(task => task.id === f.root.id)).toEqual(original);
     expect(f.db.usageLedger).toEqual(ledger);
-    expect(f.db.agentTasks).toHaveLength(4); expect(f.redis.lpush).toHaveBeenCalledTimes(2);
+    expect(f.db.agentTasks).toHaveLength(4); expect(f.redis.lpush).toHaveBeenCalledTimes(1);
     const task = f.db.agentTasks.at(-1)!; task.status = 'running'; task.executionAttempt = 1;
     const binding = { ownerTaskId: task.id, ingestionTaskId: f.ids.source, compositionTaskId: f.ids.anchor,
       failedTaskId: f.root.id, executionAttempt: 1 };
@@ -95,7 +95,7 @@ describe('zero-submit source review technical successor', () => {
       f.db.hermesResearchRuns[0].status = status;
       await expect(retryHermesGeneration(f.deps, f.input)).resolves.toMatchObject({ id: f.ids.run });
     }
-    expect(f.redis.lpush).toHaveBeenCalledTimes(2);
+    expect(f.redis.lpush).toHaveBeenCalledTimes(1);
     f.db.hermesResearchRuns[0].status = 'failed'; task.status = 'succeeded'; task.result = structuredClone(original.result);
     f.db.ingestionTasks[0].state = 'needs_review'; f.db.hermesResearchSteps.at(-1)!.status = 'failed';
     await expect(retryHermesGeneration(f.deps, { ...f.input, expectedVersion: 9, idempotencyKey: 'another-key' })).rejects.toBeDefined();
@@ -123,7 +123,7 @@ describe('zero-submit source review technical successor', () => {
     const f = await failedIndependent(); const before = structuredClone(f.db);
     vi.spyOn(f.prisma.hermesResearchRun, 'updateMany').mockResolvedValueOnce({ count: 0 });
     await expect(retryHermesGeneration(f.deps, f.input)).rejects.toBeDefined();
-    expect(f.db).toEqual(before); expect(f.redis.lpush).toHaveBeenCalledTimes(1);
+    expect(f.db).toEqual(before); expect(f.redis.lpush).not.toHaveBeenCalled();
   });
 
   it.each(['receipt-source', 'receipt-ledger', 'receipt-credit', 'saved-body', 'permission', 'current-source'])(

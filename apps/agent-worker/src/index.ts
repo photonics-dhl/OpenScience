@@ -413,16 +413,14 @@ export function createHandlers(
             // existing locked spool transaction can revalidate it immediately before publish.
             claimedExecution.sourceReview = { input: { ...executionInput }, execution: structuredClone(execution) };
           }
-          if (execution.mode === 'web' || savedReviewOutput) {
-            beforeReviewProviderCall = async () => {
-              const current = await deps.prisma.$transaction(tx => requireHermesSourceReviewExecution(tx,
-                executionInput), { isolationLevel: 'Serializable' });
-              if (JSON.stringify(current) !== JSON.stringify(execution)
-                || !await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false)) {
-                throw new Error('[blocked] Source review processing authorization changed');
-              }
-            };
-          }
+          beforeReviewProviderCall = async () => {
+            const current = await deps.prisma.$transaction(tx => requireHermesSourceReviewExecution(tx,
+              executionInput), { isolationLevel: 'Serializable' });
+            if (JSON.stringify(current) !== JSON.stringify(execution)
+              || !await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false)) {
+              throw new Error('[blocked] Source review processing authorization changed');
+            }
+          };
         }
         const ingestion = await deps.prisma.ingestionTask.findUnique({
           where: { id: composition[1]! }, include: { batch: true },

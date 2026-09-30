@@ -32,6 +32,38 @@ vi.mock('@openscience/domain', async load => ({
 
 import { createHandlers, createPollOnce, createSpoolSubmission } from '../src/index';
 
+describe('new Hermes model review authorization', () => {
+  beforeEach(() => {
+    seam.extractHandler.mockReset();
+    seam.requireExecution.mockReset().mockResolvedValue({ mode: 'model' });
+    seam.resolveReanalysis.mockReset().mockResolvedValue(null);
+    seam.requireComposition.mockReset();
+    seam.savedCommit.mockReset().mockResolvedValue(null);
+    seam.progress.mockReset().mockResolvedValue(undefined);
+    seam.lock.mockReset().mockResolvedValue(undefined);
+  });
+
+  it.each(['unchanged', 'lease', 'mode', 'policy'])(
+    'revalidates an initial model review before both provider calls (%s)', async change => {
+      const f = fixture();
+      seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
+        expect(context.scientificReview.mode).toBe('model');
+        await context.scientificReview.beforeReviewProviderCall();
+        await f.providerSubmit();
+        if (change === 'lease') seam.requireExecution.mockRejectedValue(new Error('[blocked] lease changed'));
+        if (change === 'mode') seam.requireExecution.mockResolvedValue({ mode: 'web' });
+        if (change === 'policy') f.policy.mockResolvedValue(false);
+        await context.scientificReview.beforeReviewProviderCall();
+        await f.providerSubmit();
+        return { core: { method: 'reviewed' }, needsMoreInformation: [] };
+      });
+      if (change === 'unchanged') await f.execute(); else await expect(f.execute()).rejects.toThrow('[blocked]');
+      expect(f.providerSubmit).toHaveBeenCalledTimes(change === 'unchanged' ? 2 : 1);
+      expect(f.parserCascade).not.toHaveBeenCalled();
+      expect(f.parserCascade.renderPages).not.toHaveBeenCalled();
+    });
+});
+
 // This is deliberately handler-seam coverage. The Domain fixture already exercises the
 // real saved-output identity, lease, and execution-attempt binder; this test verifies that
 // createHandlers passes that bound output to extraction and re-runs the binder immediately
@@ -177,6 +209,7 @@ describe('bound final source composition handler', () => {
 describe('fresh private source reanalysis handler', () => {
   beforeEach(() => {
     seam.extractHandler.mockReset().mockResolvedValue({ core: { method: 'fresh analysis' }, needsMoreInformation: [] });
+    seam.requireExecution.mockReset();
     seam.resolveReanalysis.mockReset().mockResolvedValue(null);
     seam.savedCommit.mockReset().mockResolvedValue(null);
     seam.progress.mockReset().mockResolvedValue(undefined);

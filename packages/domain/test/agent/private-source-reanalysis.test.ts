@@ -136,8 +136,8 @@ describe('new paid private source analysis', () => {
     const f = await privateSourceReanalysisFixture(); const created = await reanalyzeConfirmedIngestion(f.deps, f.input);
     const { run, original, successor } = await advancePrivateSourceReanalysisToReview(f, created.id);
     Object.assign(successor, { status: 'succeeded', executionAttempt: 1, result: { ...structuredClone(original.result),
-      scientificReview: { ...structuredClone(original.result.scientificReview), kind: 'independent_review', contractVersion: '5',
-        sourceAgentTaskId: original.id, provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro' } } });
+      scientificReview: { ...structuredClone(original.result.scientificReview), kind: 'model_self_check', contractVersion: '5',
+        sourceAgentTaskId: original.id, provider: 'primary', model: 'MiniMax-M3' } } });
     f.db.ingestionTasks.at(-1)!.state = 'confirmed';
     const progressed = f.db.hermesResearchRuns.find(row => row.id === run.id)!;
     Object.assign(progressed, { status: 'awaiting_claim_review', versionId: 'saved-new-version', sourceReviewDigest: 'd'.repeat(64),

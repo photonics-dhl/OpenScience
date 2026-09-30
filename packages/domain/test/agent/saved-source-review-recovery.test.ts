@@ -41,10 +41,10 @@ describe('one explicit saved source review correction', () => {
   it('projects a paid saved-body correction read-only and keeps text private', async () => {
     const f = fixture(); const saved = saveRejectedBody(f);
     expect(await inspectHermesSourceReviewRecovery(f.prisma, f.ids.run)).toMatchObject({
-      recoveryClass: 'independent_source_review', savedOutputEvidence: { sourceTaskId: f.ids.failed,
+      recoveryClass: 'saved_source_review_output_correction', savedOutputEvidence: { sourceTaskId: f.ids.failed,
         responseHash: saved.outputs[1]!.responseHash, structuredAttempt: 2 }, nextOrdinal: 1 });
     const view = await getHermesResearchRun(f.deps, f.input);
-    expect(view).toMatchObject({ canRetryGeneration: true, generationRecovery: 'source-review-independent', chargeableAttempts: 1 });
+    expect(view).toMatchObject({ canRetryGeneration: true, generationRecovery: 'source-review-saved', chargeableAttempts: 1 });
     expect(JSON.stringify(view)).not.toContain('claimSuggestions');
     expect(f.redis.lpush).not.toHaveBeenCalled(); expect(f.db.agentTasks).toHaveLength(2);
   });
@@ -58,9 +58,9 @@ describe('one explicit saved source review correction', () => {
     const task = f.db.agentTasks.at(-1)!; task.status = 'running'; task.executionAttempt = 1;
     const binding = { ownerTaskId: task.id, ingestionTaskId: f.ids.source, failedTaskId: predecessor.id, compositionTaskId: f.ids.anchor };
     expect(await requireHermesSourceReviewExecution(f.prisma, { ...binding, executionAttempt: 1 })).toMatchObject({
-      mode: 'web', savedOutput: { text: saved.outputs[1]!.text, sourceTaskId: predecessor.id, responseHash: saved.outputs[1]!.responseHash } });
+      mode: 'model', savedOutput: { text: saved.outputs[1]!.text, sourceTaskId: predecessor.id, responseHash: saved.outputs[1]!.responseHash } });
     const receipt = f.db.auditLogs.find(row => row.metadata?.newAgentTaskId === task.id);
-    expect(receipt.metadata).toMatchObject({ recoveryClass: 'independent_source_review',
+    expect(receipt.metadata).toMatchObject({ recoveryClass: 'saved_source_review_output_correction', noProviderSwitch: true,
       savedOutputReused: true, freshReview: false, possibleDuplicateProviderCharge: true });
     expect(JSON.stringify(receipt)).not.toContain('claimSuggestions');
     task.executionAttempt = 2;
@@ -144,14 +144,24 @@ describe('one explicit saved source review correction', () => {
     await retryHermesGeneration(f.deps, { ...f.input, expectedVersion: 8, idempotencyKey: 'saved' });
     const task = f.db.agentTasks.at(-1)!;
     Object.assign(task, { status: 'succeeded', executionAttempt: 1, result: { ...structuredClone(f.anchorResult),
-      scientificReview: { ...structuredClone(predecessor.result.scientificReview), status: 'review_received', responseHash: '4'.repeat(64), kind: 'independent_review', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro' },
+      scientificReview: { ...structuredClone(predecessor.result.scientificReview), status: 'review_received', responseHash: '4'.repeat(64), kind: 'model_self_check' },
       reviewedClaimSuggestions: [{ clientKey: 'c1', sourceField: 'method', kind: 'core', statement: 'Reviewed method',
         conditions: [], limitations: [], sourceBindings: [{ sourceIndex: 0, relation: 'supports' }] }] } });
     // A full scientific replacement may revise the original draft; saved input is not approval.
     task.result.core.method = 'Scientifically revised method with corrected conditions';
     f.db.ingestionTasks[0].state = 'needs_review'; f.db.hermesResearchRuns[0].status = 'awaiting_source_review';
+    task.result.scientificReview.kind = 'independent_review';
+    const mismatched = structuredClone(f.db);
+    const dispatches = f.redis.lpush.mock.calls.length;
+    expect(await inspectHermesSourceReviewRecovery(f.prisma, f.ids.run, task.id)).toBeNull();
+    await expect(ensureHermesIngestionReview(f.deps, { actorId: f.input.actorId,
+      runId: f.ids.run, taskId: f.ids.source })).rejects.toBeDefined();
+    expect(f.db).toEqual(mismatched); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
+    // The fake Serializable rollback restores cloned records, so rebind this fixture handle.
+    Object.assign(task, f.db.agentTasks.find(row => row.id === task.id));
+    task.result.scientificReview.kind = 'model_self_check';
     expect(await inspectHermesSourceReviewRecovery(f.prisma, f.ids.run, task.id)).toMatchObject({
-      recoveryClass: 'independent_source_review', replacement: { id: task.id } });
+      recoveryClass: 'saved_source_review_output_correction', replacement: { id: task.id } });
     // The shared fake predates Prisma's id.in filter; model that existing query for reconciliation.
     const originalUpdate = f.prisma.hermesResearchStep.updateMany.bind(f.prisma.hermesResearchStep);
     vi.spyOn(f.prisma.hermesResearchStep, 'updateMany').mockImplementation(async args => {

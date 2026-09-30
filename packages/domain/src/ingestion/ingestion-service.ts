@@ -1151,9 +1151,7 @@ export async function refreshIngestionAnalysis(
             targetType: 'ingestion_task',
             targetId: source.id,
             metadata: {
-              policy: hermesRun ? 'scientific_review_v4_independent'
-                : input.reviewOnly ? 'scientific_review_v4_correction' : 'scientific_summary_v3_composition',
-              ...(hermesRun ? HERMES_INDEPENDENT_SOURCE_REVIEW : {}),
+              policy: input.reviewOnly ? 'scientific_review_v4_correction' : 'scientific_summary_v3_composition',
               oldAgentTaskId: input.sourceAgentTaskId,
               compositionSourceAgentTaskId: input.compositionSourceAgentTaskId,
               newAgentTaskId: replacement.id,

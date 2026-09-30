@@ -43,6 +43,12 @@ type SourceReviewBindingInput = {
 const independentMode = (metadata: Record<string, unknown>) => metadata.reviewMode === 'web'
   && metadata.reviewProvider === HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider
   && metadata.reviewModel === HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel;
+const initialReviewMode = (metadata: Record<string, unknown>): 'model' | 'web' | undefined => {
+  if (metadata.policy === 'scientific_review_v4_independent') return independentMode(metadata) ? 'web' : undefined;
+  if (metadata.policy === 'scientific_review_v4_correction' && metadata.reviewMode === undefined
+    && metadata.reviewProvider === undefined && metadata.reviewModel === undefined) return 'model';
+  return undefined;
+};
 type FreshReviewEvidence = { reviewedCandidateHash: string; structuredReviewAuditIds: string[];
   freshReview: true; savedOutputReused: false };
 type PacketFailureEvidence = { sourceTaskId: string; compositionSourceAgentTaskId: string; initialReviewAuditId: string;
@@ -263,6 +269,17 @@ async function inspectPrivateReanalysisSuccessor(tx: Prisma.TransactionClient, p
     || owner.session.userId !== run.actorId || owner.session.researchObjectId !== run.researchObjectId
     || owner.idempotencyKey !== key || owner.session.idempotencyKey !== `${key}:session`
     || !isDeepStrictEqual(owner.payload, { artifactId: proof.source.artifactId, researchObjectId: run.researchObjectId })) return null;
+  const rows = await tx.auditLog.findMany({ where: { action: 'ingestion.task.system_analysis_refresh',
+    targetType: 'ingestion_task', targetId: sourceId, actorId: null, workspaceId: proof.run.researchObject.workspaceId,
+    metadata: { path: ['newAgentTaskId'], equals: owner.id } }, take: 2 });
+  const metadata = record(rows[0]?.metadata);
+  const reviewMode = composing ? undefined : initialReviewMode(metadata);
+  if (rows.length !== 1 || metadata.executor !== 'hermes' || metadata.authorizedByUserId !== run.actorId || metadata.runId !== run.id
+    || metadata.stage !== (composing ? 'source_composition' : 'source_review')
+    || (composing ? metadata.policy !== 'scientific_review_v4' : !reviewMode || metadata.compositionSourceAgentTaskId !== anchor.id)
+    || metadata.oldAgentTaskId !== anchor.id
+    || metadata.artifactId !== proof.source.artifactId || metadata.sourceMapSha256 !== proof.reference.serializedSha256
+    || metadata.creditPolicy !== 'charged_ingestion_analysis_refresh') return null;
   try {
     for (const task of [composition, anchor]) {
       if (record(task.result).canonicalExtractionContract !== 'grounded-passages-v2'
@@ -272,22 +289,13 @@ async function inspectPrivateReanalysisSuccessor(tx: Prisma.TransactionClient, p
       const result = record(owner.result); const review = record(result.scientificReview);
       if (result.canonicalExtractionContract !== 'grounded-passages-v2'
         || (composing ? review.kind !== 'model_self_check' || review.contractVersion !== '4'
-          : review.kind !== 'independent_review' || review.contractVersion !== '5' || review.sourceAgentTaskId !== anchor.id
-            || review.provider !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider || review.model !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel)
+          : review.contractVersion !== '5' || review.sourceAgentTaskId !== anchor.id
+            || (reviewMode === 'web' ? review.kind !== 'independent_review'
+              || review.provider !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider || review.model !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel
+              : review.kind !== 'model_self_check'))
         || !isDeepStrictEqual(parseDocumentSourceMapReference(result.sourceMapRef), proof.reference)) return null;
     }
   } catch { return null; }
-  const rows = await tx.auditLog.findMany({ where: { action: 'ingestion.task.system_analysis_refresh',
-    targetType: 'ingestion_task', targetId: sourceId, actorId: null, workspaceId: proof.run.researchObject.workspaceId,
-    metadata: { path: ['newAgentTaskId'], equals: owner.id } }, take: 2 });
-  const metadata = record(rows[0]?.metadata);
-  if (rows.length !== 1 || metadata.executor !== 'hermes' || metadata.authorizedByUserId !== run.actorId || metadata.runId !== run.id
-    || metadata.stage !== (composing ? 'source_composition' : 'source_review')
-    || metadata.policy !== (composing ? 'scientific_review_v4' : 'scientific_review_v4_independent')
-    || (!composing && (!independentMode(metadata) || metadata.compositionSourceAgentTaskId !== anchor.id))
-    || metadata.oldAgentTaskId !== anchor.id
-    || metadata.artifactId !== proof.source.artifactId || metadata.sourceMapSha256 !== proof.reference.serializedSha256
-    || metadata.creditPolicy !== 'charged_ingestion_analysis_refresh') return null;
   return { owner, run };
 }
 
@@ -916,15 +924,16 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   const savedOutputEvidence = savedOutput ? selectedSaved?.evidence : undefined;
   const directCompositionEvidence = savedOutput ? undefined : freshReviews.get(failed.id);
   if (directComposition && !savedOutput && !directCompositionEvidence) return null;
-  const reviewMode = packetFailureEvidence || (savedOutput && (!replacement || independentReplacement)) ? 'web' as const : 'model' as const;
+  const reviewMode = packetFailureEvidence || technicalRecovery || independentReviewCount ? 'web' as const : 'model' as const;
+  if (savedOutput && !replacement && savedCorrectionCount && reviewMode === 'model') return null;
   if (replacement?.status === 'succeeded') {
     const finalResult = record(replacement.result);
     const finalReview = record(finalResult.scientificReview);
     try {
       if (finalReview.sourceAgentTaskId !== composition.id || finalReview.reviewedCandidateHash !== candidateHash
-        || (reviewMode === 'web' && (finalReview.kind !== 'independent_review'
+        || (reviewMode === 'web' ? (finalReview.kind !== 'independent_review'
           || finalReview.provider !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider
-          || finalReview.model !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel))
+          || finalReview.model !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel) : finalReview.kind !== 'model_self_check')
         || !isDeepStrictEqual(finalReview.semanticStage, originalReview.semanticStage)
         || !isDeepStrictEqual(parseDocumentSourceMapReference(finalResult.sourceMapRef), parseDocumentSourceMapReference(original.sourceMapRef))) return null;
     } catch { return null; }
@@ -999,10 +1008,9 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
   if (metadata.executor !== 'hermes' || metadata.authorizedByUserId !== run.actorId || metadata.runId !== run.id
     || metadata.stage !== 'source_review' || metadata.artifactId !== source.artifactId
     || typeof metadata.oldAgentTaskId !== 'string' || metadata.oldAgentTaskId !== metadata.compositionSourceAgentTaskId) return null;
-  const independent = metadata.policy === 'scientific_review_v4_independent';
-  if (independent ? !independentMode(metadata)
-    : metadata.policy !== 'scientific_review_v4_correction' || metadata.reviewMode !== undefined
-      || metadata.reviewProvider !== undefined || metadata.reviewModel !== undefined) return null;
+  const reviewMode = initialReviewMode(metadata);
+  if (!reviewMode) return null;
+  const independent = reviewMode === 'web';
   const composition = await tx.agentTask.findUnique({ where: { id: metadata.oldAgentTaskId }, include: { session: true } });
   if (!composition || composition.status !== 'succeeded'
     || (recoveredComposition ? recoveredComposition.replacement?.id !== composition.id
@@ -1019,9 +1027,10 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
     if (automaticIngestionReviewStage({ artifactId: source.artifactId, artifact: source.artifact, agentTask: composition }) !== 'source_review') return null;
     const reference = parseDocumentSourceMapReference(record(composition.result).sourceMapRef);
     if (metadata.sourceMapSha256 !== reference.serializedSha256) return null;
-    if (owner.status === 'succeeded' && independent) {
+    if (owner.status === 'succeeded') {
       const final = record(owner.result); const review = record(final.scientificReview);
-      if (review.kind !== 'independent_review' || review.provider !== metadata.reviewProvider || review.model !== metadata.reviewModel
+      if ((independent ? review.kind !== 'independent_review'
+        || review.provider !== metadata.reviewProvider || review.model !== metadata.reviewModel : review.kind !== 'model_self_check')
         || review.sourceAgentTaskId !== composition.id
         || !isDeepStrictEqual(parseDocumentSourceMapReference(final.sourceMapRef), reference)
         || !isDeepStrictEqual(review.semanticStage, record(record(composition.result).scientificReview).semanticStage)) return null;

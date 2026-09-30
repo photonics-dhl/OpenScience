@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
 import { fixture, fields } from './direct-source-review-fixture';
+import { seedHistoricalIndependentSourceReview } from './historical-source-review-fixture';
 import { getHermesResearchRun, retryHermesGeneration } from '../../src/agent/research-run';
 import { inspectHermesSourceReviewRecovery, requireHermesSourceReviewExecution } from '../../src/ingestion/source-review-recovery';
 import { ensureHermesIngestionReview, refreshIngestionAnalysis } from '../../src/ingestion/ingestion-service';
@@ -46,7 +47,7 @@ function initial(web = true) {
 }
 
 describe('server-owned independent source review role', () => {
-  it.each([false, true])('records the initial independent intent atomically with task, debit and run CAS (lose=%s)', async lose => {
+  it.each([false, true])('records initial Hermes model intent atomically with task, debit and run CAS (lose=%s)', async lose => {
     const f = fixture(); const objects = new Map<string, Buffer>();
     const storage = { headObject: async () => null,
       putObject: async (key: string, body: Buffer) => { objects.set(key, body); return { key, size: body.length, etag: 'test' }; },
@@ -73,15 +74,15 @@ describe('server-owned independent source review role', () => {
       await request;
       const task = f.db.agentTasks.at(-1)!; task.status = 'running'; task.executionAttempt = 1;
       expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: task.id, ingestionTaskId: f.ids.source,
-        compositionTaskId: f.ids.anchor, failedTaskId: f.ids.anchor, executionAttempt: 1 })).toMatchObject({ mode: 'web', taskId: task.id });
+        compositionTaskId: f.ids.anchor, failedTaskId: f.ids.anchor, executionAttempt: 1 })).toEqual({ mode: 'model' });
       expect(f.db.auditLogs.find(row => row.action === 'ingestion.task.system_analysis_refresh').metadata)
-        .toMatchObject({ policy: 'scientific_review_v4_independent', reviewMode: 'web' });
+        .toMatchObject({ policy: 'scientific_review_v4_correction' });
       expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
       expect(f.redis.lpush).toHaveBeenCalledTimes(1);
       task.status = 'succeeded'; f.db.ingestionTasks[0].state = 'needs_review';
       task.result = { ...structuredClone(f.db.agentTasks[0].result), scientificReview: {
-        ...structuredClone(f.db.agentTasks[0].result.scientificReview), kind: 'independent_review', contractVersion: '5',
-        sourceAgentTaskId: f.ids.anchor, provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
+        ...structuredClone(f.db.agentTasks[0].result.scientificReview), kind: 'model_self_check', contractVersion: '5',
+        sourceAgentTaskId: f.ids.anchor, provider: 'primary', model: 'MiniMax-M3',
       }, reviewedClaimSuggestions: [{ clientKey: 'c1', sourceField: 'method', kind: 'core', statement: 'Reviewed method',
         conditions: [], limitations: [], sourceBindings: [{ sourceIndex: 0, relation: 'supports' }] }] };
       const originalUpdate = f.prisma.hermesResearchStep.updateMany.bind(f.prisma.hermesResearchStep);
@@ -94,7 +95,7 @@ describe('server-owned independent source review role', () => {
       });
       await expect(ensureHermesIngestionReview({ ...f.deps, storage }, { actorId: f.input.actorId, runId: f.ids.run,
         taskId: f.ids.source })).resolves.toBe('ready');
-      task.result.scientificReview.provider = 'primary';
+      task.result.scientificReview.kind = 'independent_review';
       await expect(ensureHermesIngestionReview({ ...f.deps, storage }, { actorId: f.input.actorId, runId: f.ids.run,
         taskId: f.ids.source })).rejects.toBeDefined();
       expect(f.redis.lpush).toHaveBeenCalledTimes(1);
@@ -116,17 +117,18 @@ describe('server-owned independent source review role', () => {
       .toMatchObject({ mode: 'web', taskId: f.ids.failed });
   });
 
-  it('creates one independent task from the latest complete candidate and replays without redispatch', async () => {
+  it('keeps a model saved-output correction on Hermes and replays without redispatch', async () => {
     const f = fixture(); const text = rejected(f);
-    expect(await getHermesResearchRun(f.deps, f.input)).toMatchObject({ generationRecovery: 'source-review-independent', chargeableAttempts: 1 });
+    expect(await getHermesResearchRun(f.deps, f.input)).toMatchObject({ generationRecovery: 'source-review-saved', chargeableAttempts: 1 });
     await Promise.all([retryHermesGeneration(f.deps, f.input), retryHermesGeneration(f.deps, f.input)]);
     const task = f.db.agentTasks.at(-1)!; task.status = 'running'; task.executionAttempt = 1;
     const binding = { ownerTaskId: task.id, ingestionTaskId: f.ids.source, failedTaskId: f.ids.failed,
       compositionTaskId: f.ids.anchor, executionAttempt: 1 };
-    expect(await requireHermesSourceReviewExecution(f.prisma, binding)).toMatchObject({ mode: 'web', taskId: task.id,
+    expect(await requireHermesSourceReviewExecution(f.prisma, binding)).toMatchObject({ mode: 'model',
       savedOutput: { text, sourceTaskId: f.ids.failed } });
     task.executionAttempt = 2;
-    expect(await requireHermesSourceReviewExecution(f.prisma, { ...binding, executionAttempt: 2 })).toMatchObject({ taskId: task.id });
+    await expect(requireHermesSourceReviewExecution(f.prisma, { ...binding, executionAttempt: 2 })).rejects.toThrow('[blocked]');
+    task.executionAttempt = 1;
     for (const status of ['running', 'failed', 'succeeded']) {
       f.db.hermesResearchRuns[0].status = status;
       await expect(retryHermesGeneration(f.deps, f.input)).resolves.toMatchObject({ id: f.ids.run });
@@ -144,14 +146,13 @@ describe('server-owned independent source review role', () => {
     Object.assign(receipt.metadata, { recoveryClass: 'saved_source_review_output_correction', noProviderSwitch: true });
     for (const key of ['reviewMode', 'reviewProvider', 'reviewModel', 'noRuntimeFallback']) delete receipt.metadata[key];
     const text = rejected(f, historical, 1);
-    expect(await inspectHermesSourceReviewRecovery(f.prisma, f.ids.run)).toMatchObject({ reviewMode: 'web',
-      savedOutput: { text, sourceTaskId: historical.id, structuredAttempt: 1 } });
-    await retryHermesGeneration(f.deps, { ...f.input, expectedVersion: fresh ? 9 : 8, idempotencyKey: 'independent-role' });
-    const independent = f.db.agentTasks.at(-1)!;
-    rejected(f, independent, 1);
     expect(await inspectHermesSourceReviewRecovery(f.prisma, f.ids.run)).toBeNull();
-    await expect(retryHermesGeneration(f.deps, { ...f.input, expectedVersion: 9, idempotencyKey: 'another-web' })).rejects.toBeDefined();
-    expect(f.redis.lpush).toHaveBeenCalledTimes(fresh ? 3 : 2);
+    const independent = seedHistoricalIndependentSourceReview(f);
+    Object.assign(independent, { status: 'running', executionAttempt: 1 });
+    expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: independent.id, ingestionTaskId: f.ids.source,
+      failedTaskId: historical.id, compositionTaskId: f.ids.anchor, executionAttempt: 1 })).toMatchObject({ mode: 'web',
+      savedOutput: { text, sourceTaskId: historical.id, structuredAttempt: 1 } });
+    expect(f.redis.lpush).toHaveBeenCalledTimes(fresh ? 2 : 1);
   });
 
   it.each([false, true])('permits exact manual policy with published/retried=%s, never downgrading Hermes', async retried => {

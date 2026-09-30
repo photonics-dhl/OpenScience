@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
 import type { Prisma } from '@prisma/client';
 import { fixture, fields } from './direct-source-review-fixture';
+import { seedHistoricalIndependentSourceReview } from './historical-source-review-fixture';
 import { createHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration } from '../../src/agent/research-run';
 import { ensureHermesIngestionReview } from '../../src/ingestion/ingestion-service';
 import { persistDocumentSourceMapReference } from '../../src/research-intelligence/source-map-ref';
@@ -43,8 +44,7 @@ export async function privateSourceReanalysisFixture() {
   const call = f.db.auditLogs.find(row => row.requestId === fresh.id && row.metadata.promptHash === '2'.repeat(64))!;
   f.db.auditLogs.push({ ...structuredClone(call), id: 'saved-call', requestId: saved.id });
   stop();
-  await retryHermesGeneration(f.deps, { ...f.input, expectedVersion: f.db.hermesResearchRuns[0].version, idempotencyKey: 'independent' });
-  const root = f.db.agentTasks.at(-1)!;
+  const root = seedHistoricalIndependentSourceReview(f);
   Object.assign(root, { status: 'succeeded', executionAttempt: 1, result: structuredClone(f.failedResult) });
   root.result.scientificReview = { ...root.result.scientificReview, kind: 'independent_review',
     provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro', attemptId: '00000000-0000-5000-8000-000000000777' };
