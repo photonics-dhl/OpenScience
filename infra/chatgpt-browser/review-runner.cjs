@@ -280,10 +280,11 @@ async function composerText(input) { return input.evaluate(element => element in
 // text, allowing only the same whitespace normalization used by the image runner.
 function normalizeComposerText(value) { return value.replace(/\s+/g, ' ').trim(); }
 const PRO_MODEL_LABEL = /^(?:(?:GPT[- ]?)?6\s*)?Pro$/i;
+const PRO_MODEL_ACTIVE = /^(?:GPT[- ]?)?6\s*Pro$/i;
 const SOL_MODEL_OPTION = /^(?:GPT[- ]?)?5\.6\s*Sol$/i;
 const SOL_MODEL_ACTIVE = /^(?:GPT[- ]?)?5\.6\s*(?:High|Sol)$/i;
 const SOL_MODERN_ACTIVE = /^(?:GPT[- ]?)?5\.6\s*(?:Medium|High|Sol)$/i;
-function reviewModelLabel(request) { return request.model === 'chatgpt-web/5.6-sol' ? SOL_MODEL_ACTIVE : PRO_MODEL_LABEL; }
+function reviewModelLabel(request) { return request.model === 'chatgpt-web/5.6-sol' ? SOL_MODEL_ACTIVE : PRO_MODEL_ACTIVE; }
 function reviewModelOption(request) { return request.model === 'chatgpt-web/5.6-sol' ? SOL_MODEL_OPTION : PRO_MODEL_LABEL; }
 function reviewModelError(request) { return request.model === 'chatgpt-web/5.6-sol' ? 'MODEL_5_6_SOL_NOT_READY' : 'MODEL_6_PRO_NOT_READY'; }
 function promptComparison(expected, actual) {
@@ -305,9 +306,9 @@ async function reviewModelActive(page, input, ownerName, deadlineAt, request) {
   const expected = modern && request.model === 'chatgpt-web/5.6-sol' ? SOL_MODERN_ACTIVE : reviewModelLabel(request);
   const label = normalizeComposerText(await control.innerText().catch(() => ''));
   if (expected.test(label)) return true;
-  // This closed label describes the control, not the selected model. Read a
+  // These closed labels omit model identity. Read a
   // fresh owned popup at every existing check, including immediately before send.
-  if (request.model !== 'chatgpt-web/5.6-sol' && /^(?:思考强度|Thinking effort)$/.test(label))
+  if (request.model !== 'chatgpt-web/5.6-sol' && /^(?:思考强度|Thinking effort|Pro)$/.test(label))
     return reviewStrengthModelActive(page, control, ownerName, deadlineAt);
   return false;
 }

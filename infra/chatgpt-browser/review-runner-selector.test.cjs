@@ -35,7 +35,7 @@ function strengthFixture({ header = '6\nPro', headers = 1, status = 'Pro，第 5
   intensity = true, sliderNow = '4', sliderMax = '4', sliderCount = 1, disabled = false,
   opens = true, stale = false, closes = true, foreignSlider = false, english = false, delayedHeader = false,
   intensityDisabled = false, headerDisabled = false, intensityAncestorBlocked = false, headerAncestorBlocked = false,
-  statusCount = 1 } = {}) {
+  statusCount = 1, closedLabel } = {}) {
   const events = [];
   const state = { open: stale, header, status, ticks: 0, prompt: 'saved full prompt', attachments: ['original.pdf'] };
   const empty = new Locator([]);
@@ -51,7 +51,7 @@ function strengthFixture({ header = '6\nPro', headers = 1, status = 'Pro，第 5
     if (role === 'status') return new Locator(state.status === null ? [] : Array.from({ length: statusCount }, () => ({ label: () => state.status })));
     return empty;
   };
-  const control = new Locator([{ label: () => english ? 'Thinking effort' : '思考强度', disabled, controls: 'strength-menu',
+  const control = new Locator([{ label: () => closedLabel ?? (english ? 'Thinking effort' : '思考强度'), disabled, controls: 'strength-menu',
     attrs: { get 'aria-expanded'() { return String(state.open); } },
     click: () => { events.push('open'); state.open = opens; },
     press: () => { events.push('close'); if (closes) state.open = false; state.onClose?.(); } }]);
@@ -152,6 +152,30 @@ test('composer readiness and final active check reopen the popup and reject chan
   await assert.rejects(async () => { if (await checks.reviewModelActive(f.page, f.input, 'owned', 5000, request)) sent++; });
   assert.equal(sent, 0);
   assert.deepEqual(f.events, ['open', 'close', 'open', 'close']);
+});
+
+test('observed server Pro label requires fresh explicit 6 Pro proof and closes the menu', async () => {
+  const f = strengthFixture({ english: true, closedLabel: 'Pro', status: null }), checks = activeChecks(f);
+  assert.equal(await checks.reviewModelActive(f.page, f.input, 'owned', 5000, { model: 'chatgpt-web/6-pro' }), true);
+  assert.deepEqual(f.events, ['open', 'close']);
+  assert.equal(f.state.open, false);
+  assert.equal(f.state.prompt, 'saved full prompt');
+  assert.deepEqual(f.state.attachments, ['original.pdf']);
+});
+
+test('actual final submission guard verifies the server Pro label before continuing', async () => {
+  const f = strengthFixture({ english: true, closedLabel: 'Pro', status: null }), checks = activeChecks(f);
+  assert.equal(await checks.finalSubmissionCheck(), true);
+  assert.deepEqual(f.events, ['open', 'close']);
+  assert.equal(f.state.open, false);
+});
+
+for (const header of ['5.6 Pro', 'Pro']) test(`server Pro label does not authorize ${header} in the final guard`, async () => {
+  const f = strengthFixture({ english: true, closedLabel: 'Pro', status: null, header }), checks = activeChecks(f);
+  let submitted = 0;
+  await assert.rejects(async () => { await checks.finalSubmissionCheck(); submitted++; }, /STRENGTH_HEADER_MISMATCH/);
+  assert.equal(submitted, 0);
+  assert.deepEqual(f.events, ['open', 'close']);
 });
 
 for (const status of [null, 'unrecognized localized announcement']) test(`English control does not require an invented English status parser: ${status}`, async () => {
