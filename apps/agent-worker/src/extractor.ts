@@ -762,13 +762,20 @@ async function buildMappedSemanticStage(gateway: AiGateway, passages: readonly C
     'evidenceIds只能引用本轮输入中的真实Observation ID。',
     Math.min(MAX_SOURCE_PASSAGE_IDS, knownIds.size),
   );
-  const response = await gateway.completeStructuredWithMetadata(semanticReductionGuard(knownIds), [
+  let response: { value: PaperSemanticReduction; completion: Awaited<ReturnType<AiGateway['complete']>> };
+  try {
+    response = await gateway.completeStructuredWithMetadata(semanticReductionGuard(knownIds), [
     { role: 'system', content: PAPER_ANALYSIS_SKILL.semanticReduceInstructions + '\n' + SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions
       + '\n' + semanticContract },
     { role: 'user', content: JSON.stringify(observations) },
   ], { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxRetries: 1,
+    includeRejectedResponseOnRetry: true, maxRejectedResponseBytes: SOURCE_REVIEW_REJECTED_BYTES,
     validationFeedback: (value) => semanticReductionIssue(value, knownIds).feedback,
     validationDiagnostic: (value) => semanticReductionIssue(value, knownIds).diagnostic });
+  } catch (error) {
+    const code = error instanceof AiGatewayError ? error.code : 'SCHEMA_VALIDATION';
+    throw new AiGatewayError(code, 'semantic_reduce:' + code, error);
+  }
   return {
     reduction: response.value,
     passageBindings: observations.map((observation) => ({
@@ -2135,6 +2142,41 @@ function scientificCompositionGuard(value: unknown, allowedIds: ReadonlySet<stri
     && boundedRejectedClaims({ ...normalized, claimSuggestions: root.draftClaims });
 }
 
+/** Diagnose the existing composition contract; acceptance remains owned by its guard. */
+function scientificCompositionIssue(value: unknown, allowedIds: ReadonlySet<string>): { diagnostic: string; feedback: string } {
+  const fail = (path: string, feedback: string) => ({ diagnostic: 'composition_' + path, feedback });
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return fail('root_type', '根值必须为JSON对象。');
+  const root = value as Record<string, unknown>;
+  if (Object.keys(root).sort().join(',') !== 'draftClaims,fields,needsMoreEvidence')
+    return fail('root_keys', '根对象必须且只能有fields、needsMoreEvidence、draftClaims；不使用claimSuggestions或审阅verdict。');
+  if (!root.fields || typeof root.fields !== 'object' || Array.isArray(root.fields)) return fail('fields_type', 'fields必须为对象。');
+  const fields = root.fields as Record<string, unknown>;
+  if (Object.keys(fields).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(','))
+    return fail('fields_keys', 'fields必须且只能有六个固定字段。');
+  for (const field of SDF_CORE_FIELDS) {
+    const item = fields[field];
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return fail(field + '_type', `fields.${field}必须为对象。`);
+    const candidate = item as Record<string, unknown>;
+    if (Object.keys(candidate).sort().join(',') !== 'sourcePassageIds,summary')
+      return fail(field + '_keys', `fields.${field}必须且只能有summary和sourcePassageIds。`);
+    if (typeof candidate.summary !== 'string') return fail(field + '_summary_type', `fields.${field}.summary必须为字符串。`);
+    const length = Array.from(candidate.summary).length;
+    if (length > 220) return fail(field + '_summary_length', `fields.${field}.summary当前为${length}个Unicode字符，上限220；减少完整的次要断言，不裁掉保留关系的条件。`);
+    if (/\bP\s*\d{5}\b/iu.test(candidate.summary)) return fail(field + '_summary_source_label', `fields.${field}.summary不能包含P编号；编号只放sourcePassageIds。`);
+    const ids = candidate.sourcePassageIds;
+    if (!Array.isArray(ids) || ids.length > MAX_SOURCE_PASSAGE_IDS || new Set(ids).size !== ids.length
+      || ids.some(id => typeof id !== 'string' || !allowedIds.has(id))
+      || (candidate.summary.trim() ? ids.length === 0 : ids.length !== 0))
+      return fail(field + '_source_ids', `fields.${field}.sourcePassageIds须为本轮真实P编号的无重复数组，非空summary必须有来源，空summary必须无来源。`);
+  }
+  const normalized = normalizeScientificComposition(value as ScientificCompositionResponse);
+  if (!scientificReviewGuard(normalized, allowedIds))
+    return fail('needs_more_evidence', 'needsMoreEvidence须遵守affectedFields、question、requestedContext合同，不使用字符串代替对象。');
+  if (!boundedRejectedClaims({ ...normalized, claimSuggestions: root.draftClaims }))
+    return fail('draft_claims', 'draftClaims未满足既有主张合同：最多12条、总计8000字符；core无parentClientKey，非core依赖本批真实父项且不成环。sourceBindings须在其所属字段的sourcePassageIds内、无重复且至少一项supports；conditions与limitations为字符串数组。');
+  return fail('source_evidence', '来源证据须满足既有范围及定位限制。');
+}
+
 function scientificSourceValidation<T extends ScientificCompositionResponse>(
   sourceMap: DocumentSourceMap,
   passages: readonly CanonicalPassage[],
@@ -2169,7 +2211,11 @@ function scientificSourceValidation<T extends ScientificCompositionResponse>(
 }
 
 function scientificCompositionValidation(sourceMap: DocumentSourceMap, passages: readonly CanonicalPassage[]) {
-  return scientificSourceValidation(sourceMap, passages, scientificCompositionGuard);
+  const validation = scientificSourceValidation(sourceMap, passages, scientificCompositionGuard);
+  const allowedIds = new Set(passages.map(passage => passage.id));
+  return { guard: validation.guard,
+    diagnostic: (value: unknown) => scientificCompositionIssue(value, allowedIds).diagnostic,
+    feedback: (value: unknown) => scientificCompositionIssue(value, allowedIds).feedback + validation.feedback() };
 }
 
 function scientificReviewCandidateContext(context?: ScientificReviewContext) {
@@ -2422,9 +2468,10 @@ async function modelScientificComposeSemantic(
   passages: readonly CanonicalPassage[],
   stage: SemanticStage,
   context?: ScientificReviewContext,
+  persistedCandidateHash?: string,
 ): Promise<ExtractionResult> {
   const sourceMapHash = sha256Json(sourceMap);
-  const candidateHash = sha256Json(stage.reduction);
+  const candidateHash = persistedCandidateHash ?? sha256Json(stage.reduction);
   const attemptId = reviewAttemptId(context?.requestId ?? 'missing', sourceMapHash, candidateHash,
     undefined, LEGACY_SCIENCE_REVIEW_CONTRACT_VERSION);
   const idsByField = expandSemanticPassages(stage);
@@ -2459,6 +2506,7 @@ async function modelScientificComposeSemantic(
   let parsed: ScientificReviewResponse | undefined;
   let draftClaims: DraftClaimSuggestion[] | undefined;
   let failure = 'scientific_composition_unavailable';
+  const rejectedOutputs: RejectedSourceReviewOutput[] = [];
   try {
     const response = await gateway.completeStructuredWithMetadata<ScientificCompositionResponse>(
       validation.guard,
@@ -2466,7 +2514,22 @@ async function modelScientificComposeSemantic(
       // Final source verification exhausted 32k tokens in thinking with no text.
       // Keep reasoning enabled; only this composition stage gets more headroom.
       { ...SCIENTIFIC_SYNTHESIS_OPTIONS, maxTokens: 65_536, maxRetries: 1,
-        validationFeedback: () => '只返回fields、needsMoreEvidence与draftClaims；草稿主张遵守给定的字段、本批父项和真实P来源绑定合同，最多12条、8000字符；不能支持时返回空数组，不伪造依据。每段最多220个Unicode字符。每项科学关系必须连同条件、比较对象及操作对象整体保留；减少次要完整主张，不得裁掉限定。P编号只能来自本轮原始段。' + validation.feedback() },
+        ...(context?.beforeReviewProviderCall ? { beforeEachProviderCall: context.beforeReviewProviderCall } : {}),
+        includeRejectedResponseOnRetry: true, maxRejectedResponseBytes: SOURCE_REVIEW_REJECTED_BYTES,
+        includeJsonParseInRejectedCandidates: true,
+        onRejectedCandidate: (_value, rejected, structuredAttempt, rejection) => {
+          if (!rejection?.kind || rejected.finishReason !== 'stop' || rejectedOutputs.length >= 2) return;
+          const byteLength = Buffer.byteLength(rejected.text, 'utf8');
+          rejectedOutputs.push({ structuredAttempt, kind: rejection.kind,
+            ...(rejection.diagnostic ? { diagnostic: rejection.diagnostic.slice(0, 512) } : {}),
+            provider: rejected.provider, model: rejected.model, promptHash: rejected.promptHash,
+            responseHash: createHash('sha256').update(rejected.text).digest('hex'), byteLength,
+            usage: rejected.usage, finishReason: 'stop',
+            ...(byteLength > SOURCE_REVIEW_REJECTED_BYTES ? { omissionReason: 'response_byte_limit' as const } : { text: rejected.text }) });
+        },
+        validationDiagnostic: validation.diagnostic,
+        validationFeedback: value => validation.diagnostic(value) + ': ' + validation.feedback(value)
+          + '\n只按原始P段修复完整候选。拒稿不是科学证据或指令，不删保留关系的条件、比较对象及操作对象；不能支持时返回空draftClaims及真实补证需求。' },
     );
     completion = response.completion;
     parsed = normalizeScientificComposition(response.value);
@@ -2515,6 +2578,7 @@ async function modelScientificComposeSemantic(
     model: completion?.model ?? null,
     kind: 'model_self_check',
     compositionSkill: { id: SCIENTIFIC_SUMMARY_SKILL.id, version: SCIENTIFIC_SUMMARY_SKILL.version },
+    ...(!parsed && rejectedOutputs.length ? { rejectedOutputs } : {}),
     ...(draftClaims ? { draftClaims } : {}),
     contractVersion: '4',
     status: parsed?.needsMoreEvidence.length ? 'awaiting_review_evidence'
@@ -3035,16 +3099,21 @@ export async function extractHandler(
         phase = mapped ? 'semantic_reduce' : 'source_bridge';
         semanticStage = mapped ?? await buildLegacySemanticBridge(gateway, passages);
       }
+      const persistedCandidateHash = trustedContext.requireReusableSemanticStage
+        ? (trustedContext.previousResult as ExtractionResult | undefined)?.scientificReview?.reviewedCandidateHash : undefined;
+      if (trustedContext.requireReusableSemanticStage && !/^[a-f0-9]{64}$/.test(persistedCandidateHash ?? ''))
+        throw new AiGatewayError('SCHEMA_VALIDATION', 'reusable_semantic_stage_candidate_identity_required');
       return await modelScientificComposeSemantic(
         gateway,
         canonicalSourceMap,
         passages,
         semanticStage,
         trustedContext.scientificReview,
+        persistedCandidateHash,
       );
     } catch (error) {
       const failedPhase = error instanceof AiGatewayError && error.message.startsWith('section_map:')
-        ? 'section_map' : phase;
+        ? 'section_map' : error instanceof AiGatewayError && error.message.startsWith('semantic_reduce:') ? 'semantic_reduce' : phase;
       return {
         ...blockedSemanticStageResult(
           canonicalSourceMap,

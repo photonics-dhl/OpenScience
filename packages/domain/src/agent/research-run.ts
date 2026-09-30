@@ -18,6 +18,8 @@ import { parseStoryboardDocument, presentationStoryboardView } from '../assets/s
 import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew } from '../assets/scene-image';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
+import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, SOURCE_COMPOSITION_RECOVERY_ACTION } from '../ingestion/source-composition-recovery';
+import { recoverHermesSourceCompositionInTransaction } from '../ingestion/ingestion-service';
 import { advanceArtStyleContinuation, createHermesArtStyleContinuation as createArtStyleContinuation, getHermesArtStyleContinuationCapability, requireArtStyleContinuationTaskAuthority } from './art-style-continuation';
 export { getHermesImageArtStyleCapability } from './art-style-continuation';
 
@@ -101,7 +103,7 @@ export interface HermesResearchRunView {
   canRetryGeneration?: boolean;
   canAuthorizeNarrativeCorrection?: boolean;
   chargeableAttempts?: number;
-  generationRecovery?: 'source-parser' | 'source-review-fresh' | 'source-review-saved' | 'source-review-independent' | 'source-review-not-submitted' | 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render' | 'narrative-scientific-replan' | 'narrative-source-support-replan';
+  generationRecovery?: 'source-composition' | 'source-parser' | 'source-review-fresh' | 'source-review-saved' | 'source-review-independent' | 'source-review-not-submitted' | 'storyboard-planning' | 'storyboard-review' | 'storyboard-art' | 'image-render' | 'narrative-scientific-replan' | 'narrative-source-support-replan';
   sourceParsing?: {
     status: 'needs_review'; ingestionTaskId: string; agentTaskId: string;
     unresolvedPageNumbers?: number[]; providerChargeMayApply: true;
@@ -343,11 +345,13 @@ export async function getHermesResearchRun(
       ? run.versionId
         ? await inspectStoryboardCheckpointRecovery(deps.prisma, run).then(proof => proof ? {
           chargeableAttempts: 'savedOutputResumeMetadata' in proof ? 1 : 0 } : null).catch(() => null)
-        : await inspectHermesSourceReviewRecovery(deps.prisma, run.id, undefined, deps.canRetrySourceReviewBeforeSubmission).then(proof => proof ? { chargeableAttempts: proof.technicalRecovery ? 0 : 1,
+        : await inspectHermesSourceCompositionRecovery(deps.prisma, run.id).then(composition => composition
+          ? { chargeableAttempts: 1, generationRecovery: 'source-composition' as const }
+          : inspectHermesSourceReviewRecovery(deps.prisma, run.id, undefined, deps.canRetrySourceReviewBeforeSubmission).then(proof => proof ? { chargeableAttempts: proof.technicalRecovery ? 0 : 1,
           ...(proof.technicalRecovery ? { generationRecovery: 'source-review-not-submitted' as const }
             : proof.reviewMode === 'web' ? { generationRecovery: 'source-review-independent' as const }
             : proof.savedOutputEvidence ? { generationRecovery: 'source-review-saved' as const }
-            : proof.directCompositionEvidence ? { generationRecovery: 'source-review-fresh' as const } : {}) } : null).catch(() => null)
+            : proof.directCompositionEvidence ? { generationRecovery: 'source-review-fresh' as const } : {}) } : null)).catch(() => null)
       : await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
   const view = toView(run, recovery ?? undefined);
   if (WRITE_ROLES.has(authority.membership.role)) {
@@ -362,7 +366,7 @@ export async function getHermesResearchRun(
     }).catch(() => undefined);
     if (sourceReanalysis) view.sourceReanalysis = sourceReanalysis;
   }
-  if (recovery && 'generationRecovery' in recovery && (recovery.generationRecovery === 'source-review-fresh'
+  if (recovery && 'generationRecovery' in recovery && (recovery.generationRecovery === 'source-composition' || recovery.generationRecovery === 'source-review-fresh'
     || recovery.generationRecovery === 'source-review-saved' || recovery.generationRecovery === 'source-review-independent'
     || recovery.generationRecovery === 'source-review-not-submitted')) view.generationRecovery = recovery.generationRecovery;
   view.artStyleContinuation = WRITE_ROLES.has(authority.membership.role)
@@ -1173,12 +1177,15 @@ async function inspectFailedStoryboardPlanning(tx: Prisma.TransactionClient, run
     || (!initialFailure && await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry',
       targetType: 'hermes_research_run', targetId: run.id, metadata: { path: ['taskId'], equals: task.id } } }))) return null;
   if (initialFailure) {
+    const recoveredComposition = run.steps.some(item => item.stage === 'source_composition' && item.ordinal === 1)
+      ? await inspectHermesRecoveredSourceComposition(tx, run.id) : null;
     if (step.status !== 'failed' || step.error !== run.error || task.idempotencyKey !== `hermes-run:${run.id}:storyboard:0`
       || presentations.length !== 1 || presentations[0]!.id !== task.id
       || run.steps.filter(item => item.stage === 'source_ingestion').length !== 1
       || !run.steps.some(item => item.stage === 'source_review' && item.status === 'succeeded')
       || run.steps.some(item => item.id !== step.id
-        && (!['source_ingestion', 'source_composition', 'source_review'].includes(item.stage) || item.status !== 'succeeded'))
+        && (!['source_ingestion', 'source_composition', 'source_review'].includes(item.stage)
+          || (item.status !== 'succeeded' && item.id !== recoveredComposition?.failedStep.id)))
       || !isDeepStrictEqual(payload.storyboard, { ...narrativeSettings(run.generationSettings),
         output: 'image', narrative: true, narrativeSceneLimit: Math.min(6, run.maxAgentTasks! - sourceCount - 2) })
       || await tx.agentTask.count({ where: { id: { in: run.steps.flatMap(item => item.agentTaskId ? [item.agentTaskId] : []) },
@@ -2698,6 +2705,23 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
                 newTaskId: step.agentTaskId, newRunCount: 0, chargeableAttempts: 1, maxRemainingTasks: pair || revision ? 1 : 2 } }, ctx);
             return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [step.agentTaskId!] };
           }
+          const compositionReceipts = await tx.auditLog.findMany({ where: { action: SOURCE_COMPOSITION_RECOVERY_ACTION,
+            targetType: 'hermes_research_run', targetId: run.id, actorId: input.actorId, workspaceId: ro.workspaceId,
+            metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } }, take: 2 });
+          if (compositionReceipts.length) {
+            const metadata = jsonRecord(compositionReceipts[0]!.metadata);
+            const proof = await inspectHermesRecoveredSourceComposition(tx, run.id);
+            if (compositionReceipts.length !== 1 || metadata.requestDigest !== requestDigest
+              || !proof || proof.replacement?.id !== metadata.newAgentTaskId)
+              throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Final source composition recovery key changed');
+            return { run, dispatchIds: [] as string[] };
+          }
+          const finalComposition = run.versionId === null ? await inspectHermesSourceCompositionRecovery(tx, run.id) : null;
+          if (finalComposition) {
+            if (run.version !== input.expectedVersion) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before continuing composition');
+            const taskId = await recoverHermesSourceCompositionInTransaction(deps, tx, { ...input, requestDigest }, ctx);
+            return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [taskId] };
+          }
           // A raw client key cannot be reused with a different version tuple.
           // Historical receipts lack it, but their exact session digest remains replayable.
           const priorRequest = await tx.auditLog.findFirst({ where: {
@@ -2717,7 +2741,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
           if (replacement) {
             const recoveryStep = recoverySteps.find(step => step.agentTaskId === replacement.id)!;
             const failed = run.steps.find(step => step.stage === 'source_review' && step.ordinal === recoveryStep.ordinal - 1);
-            const composition = run.steps.find(step => step.stage === 'source_composition' && step.ordinal === 0);
+            const composition = run.steps.filter(step => step.stage === 'source_composition').sort((a, b) => b.ordinal - a.ordinal)[0];
             const canonical = run.steps.filter(step => step.stage === 'source_ingestion');
             let compositionTaskId = composition?.agentTaskId;
             if (!compositionTaskId && priorRequest
@@ -3220,7 +3244,7 @@ async function moveRun(
   if (changed.count !== 1) return null;
   if (to === 'failed' || to === 'stopped') {
     for (const step of run.steps) {
-      if (step.status === 'succeeded' || (step.stage === 'source_review' && step.status === 'failed')) continue;
+      if (step.status === 'succeeded' || (['source_composition', 'source_review'].includes(step.stage) && step.status === 'failed')) continue;
       await tx.hermesResearchStep.updateMany({ where: {
         id: step.id, runId: run.id, ...(to === 'failed' ? { presentationAssetId: null } : {}),
       }, data: { status: to, error } });

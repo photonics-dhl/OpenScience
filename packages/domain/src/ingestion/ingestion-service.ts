@@ -29,6 +29,7 @@ import { HERMES_INDEPENDENT_SOURCE_REVIEW, inspectHermesSourceReviewRecovery, in
   readHermesPrivateSourceReanalysisReplay, requireNoPrivateSourceReanalysisWriter, validPrivateSourceReanalysisInput,
   type HermesPrivateSourceReanalysisInput, type SourceReviewNotSubmittedVerifier } from './source-review-recovery';
 import { persistHermesSourceReviewTechnicalTaskInTransaction } from '../agent/agent';
+import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, SOURCE_COMPOSITION_RECOVERY_ACTION } from './source-composition-recovery';
 
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
 
@@ -717,6 +718,13 @@ async function prepareHermesRefresh(tx: Prisma.TransactionClient, source: Hermes
     || previous || automaticIngestionReviewStage(source) !== stage) {
     throw new IngestionError('VALIDATION_ERROR', 'Hermes permits each scientific composition and review upgrade only once');
   }
+  if (stage === 'source_review') {
+    const compositions = run.steps.filter(step => step.stage === 'source_composition').sort((a, b) => a.ordinal - b.ordinal);
+    const recovered = compositions.length === 2 ? await inspectHermesRecoveredSourceComposition(tx, run.id) : null;
+    if (compositions.length > 2 || (compositions.length === 2 && !recovered)
+      || (compositions.length && compositions.at(-1)!.agentTaskId !== source.agentTaskId))
+      throw new IngestionError('VALIDATION_ERROR', 'Initial review composition lineage changed');
+  }
   // Both this operation and run creation use Serializable transactions. Reading
   // active references before the source CAS prevents a concurrent run from losing
   // the generation it bound; do not silently transfer another run's source.
@@ -741,11 +749,59 @@ async function recordHermesRefresh(tx: Prisma.TransactionClient, run: Awaited<Re
   if (changed.count !== 1) throw new IngestionError('VALIDATION_ERROR', 'Hermes canonical source changed during replacement');
   await tx.hermesResearchStep.create({ data: { runId: run.id, stage, ordinal: 0, status: 'waiting',
     ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: replacementId } });
+  if (stage === 'source_review' && run.steps.some(step => step.stage === 'source_composition')) {
+    const completed = await tx.hermesResearchStep.updateMany({ where: { runId: run.id, stage: 'source_composition',
+      ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: source.agentTask!.id,
+      agentTask: { status: 'succeeded', deletedAt: null } }, data: { status: 'succeeded', error: null } });
+    if (completed.count !== 1) throw new IngestionError('VALIDATION_ERROR', 'Completed composition changed before initial review');
+  }
   const moved = await tx.hermesResearchRun.updateMany({ where: {
     id: run.id, version: run.version, status: 'awaiting_source_review', actorId: run.actorId,
     researchObjectId: run.researchObjectId, versionId: null,
   }, data: { status: 'running', version: { increment: 1 }, error: null } });
   if (moved.count !== 1) throw new IngestionError('VALIDATION_ERROR', 'Hermes run changed during source review upgrade');
+}
+
+/** One paid final composition, preserving the original failed phase and normal run budget. */
+export async function recoverHermesSourceCompositionInTransaction(deps: AgentDeps, tx: Prisma.TransactionClient, input: {
+  actorId: string; researchObjectId: string; runId: string; expectedVersion: number; requestDigest: string; idempotencyKey: string;
+}, ctx: AuditContext = {}): Promise<string> {
+  const proof = await inspectHermesSourceCompositionRecovery(tx, input.runId);
+  if (!proof || proof.run.actorId !== input.actorId || proof.run.researchObjectId !== input.researchObjectId
+    || proof.run.version !== input.expectedVersion || !deps.audit?.record)
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This source composition has no safe final-draft recovery');
+  const { run, source, failed, sourceStep, failedStep, reference, recoveryKey } = proof;
+  const moved = await tx.hermesResearchRun.updateMany({ where: { id: run.id, actorId: input.actorId, researchObjectId: input.researchObjectId,
+    status: 'failed', version: input.expectedVersion, versionId: null, maxAgentTasks: 9 },
+    data: { status: 'running', version: { increment: 1 }, error: null, lastReconciledAt: null } });
+  if (moved.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Source composition changed while continuing');
+  const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, { userId: run.actorId,
+    researchObjectId: run.researchObjectId, kind: 'ingestion', title: `Final source composition ${source.id}`,
+    idempotencyKey: `${recoveryKey}:hermes-recovery:${input.requestDigest}` }, ctx);
+  const { task, replayed } = await persistAgentTaskInTransaction(deps, tx, { sessionId: session.id, userId: run.actorId,
+    kind: 'sdf.extract', payload: { artifactId: source.artifactId, researchObjectId: run.researchObjectId }, idempotencyKey: recoveryKey }, ctx);
+  if (replayed) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Final composition has an unrecorded task binding');
+  const changed = await tx.ingestionTask.updateMany({ where: { id: source.id, agentTaskId: failed.id, state: 'needs_review', retryCount: 0 },
+    data: { agentTaskId: task.id, state: 'queued', error: null } });
+  const canonical = await tx.hermesResearchStep.updateMany({ where: { id: sourceStep.id, runId: run.id, stage: 'source_ingestion',
+    agentTaskId: failed.id, ingestionTaskId: source.id, artifactId: source.artifactId }, data: { agentTaskId: task.id, status: 'waiting', error: null } });
+  const preserved = await tx.hermesResearchStep.updateMany({ where: { id: failedStep.id, runId: run.id, stage: 'source_composition', ordinal: 0,
+    agentTaskId: failed.id, status: 'failed' }, data: { status: 'failed' } });
+  if (changed.count !== 1 || canonical.count !== 1 || preserved.count !== 1)
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Final composition source or failed phase changed');
+  await tx.hermesResearchStep.create({ data: { runId: run.id, stage: 'source_composition', ordinal: 1, status: 'waiting',
+    ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: task.id } });
+  const review = failed.result && typeof failed.result === 'object' && !Array.isArray(failed.result)
+    ? (failed.result as Record<string, unknown>).scientificReview as Record<string, unknown> : {};
+  const stage = review.semanticStage as Record<string, unknown>;
+  await recordAudit(deps, tx, { actorId: run.actorId, workspaceId: run.researchObject.workspaceId,
+    action: SOURCE_COMPOSITION_RECOVERY_ACTION, targetType: 'hermes_research_run', targetId: run.id,
+    metadata: { requestDigest: input.requestDigest, clientIdempotencyKey: input.idempotencyKey, expectedVersion: input.expectedVersion,
+      ingestionTaskId: source.id, artifactId: source.artifactId, oldAgentTaskId: failed.id, newAgentTaskId: task.id,
+      sourceMapSha256: reference.serializedSha256, reviewedCandidateHash: review.reviewedCandidateHash,
+      semanticPromptHash: stage.promptHash, semanticResponseHash: stage.responseHash,
+      creditPolicy: 'fresh_task_charge', chargeableAttempts: 1, noReanalysis: true, noProviderSwitch: true } }, ctx);
+  return task.id;
 }
 
 /** Called only inside the existing run recovery transaction, under its version fence. */
@@ -851,7 +907,12 @@ export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
             const initial = await inspectInitialHermesSourceReview(tx, source.agentTaskId);
             if (!initial) throw new IngestionError('VALIDATION_ERROR', 'Initial scientific review is not the bound final source');
           }
-          const completedPhases = proof ? phases.filter(step => !proof.failedSteps.some(failed => failed.id === step.id)) : phases;
+          const recoveredComposition = phases.filter(step => step.stage === 'source_composition').length === 2
+            ? await inspectHermesRecoveredSourceComposition(tx, run.id) : null;
+          if (phases.filter(step => step.stage === 'source_composition').length === 2 && !recoveredComposition)
+            throw new IngestionError('VALIDATION_ERROR', 'Recovered composition lineage changed');
+          const completedPhases = phases.filter(step => step.id !== recoveredComposition?.failedStep.id
+            && !proof?.failedSteps.some(failed => failed.id === step.id));
           const completed = await tx.hermesResearchStep.updateMany({ where: { runId: run.id,
             id: { in: completedPhases.map(step => step.id) }, agentTask: { status: 'succeeded', deletedAt: null } },
           data: { status: 'succeeded', error: null } });

@@ -26,6 +26,7 @@ import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict }
 import { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError, type SourceMapSearchIndexPayload } from './search-index-source';
 import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } from './standalone-science-recovery';
 import { inspectHermesSourceReviewRecovery, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
+import { requireHermesSourceCompositionRecoveryResult, SOURCE_COMPOSITION_RECOVERY_PREFIX } from '../ingestion/source-composition-recovery';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
@@ -1096,6 +1097,9 @@ async function markTaskProgressOnce(
     if (!(ALLOWED[currentStatus] ?? []).includes(input.status)) {
       throw new AgentError('ILLEGAL_TRANSITION', `任务状态 ${currentStatus} → ${input.status} 非法`);
     }
+    if (input.status === 'succeeded' && current.kind === 'sdf.extract'
+      && current.idempotencyKey?.startsWith(SOURCE_COMPOSITION_RECOVERY_PREFIX))
+      await requireHermesSourceCompositionRecoveryResult(tx, current, input.result);
     const changed = await tx.agentTask.updateMany({
       where: {
         id: current.id, deletedAt: null, session: { deletedAt: null },

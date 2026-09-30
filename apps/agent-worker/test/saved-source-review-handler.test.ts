@@ -7,6 +7,7 @@ const seam = vi.hoisted(() => ({
   extractHandler: vi.fn(),
   requireExecution: vi.fn(),
   resolveReanalysis: vi.fn(),
+  requireComposition: vi.fn(),
   savedCommit: vi.fn(),
   claim: vi.fn(),
   progress: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('@openscience/domain', async load => ({
   ...await load<typeof import('@openscience/domain')>(),
   requireHermesSourceReviewExecution: seam.requireExecution,
   resolveHermesPrivateSourceReanalysisExecution: seam.resolveReanalysis,
+  requireHermesSourceCompositionRecoveryExecution: seam.requireComposition,
   findSavedIngestionCommit: seam.savedCommit,
   claimAgentTask: seam.claim,
   markTaskProgress: seam.progress,
@@ -107,6 +109,70 @@ function fixture(executionAttempt = 1) {
   return { execute, owner, source, sourceResult, sourceMap, saved, reference, parserCascade, policy, providerSubmit,
     prisma, tx, storage, deps, handlers };
 }
+
+describe('bound final source composition handler', () => {
+  beforeEach(() => {
+    seam.extractHandler.mockReset().mockResolvedValue({ core: { method: 'private composition' }, needsMoreInformation: [] });
+    seam.requireComposition.mockReset(); seam.progress.mockReset().mockResolvedValue(undefined);
+    seam.lock.mockReset().mockResolvedValue(undefined);
+  });
+
+  function compositionFixture() {
+    const f = fixture();
+    f.owner.idempotencyKey = `ingestion-analysis-final-compose:${ids.ingestion}:${ids.failed}`;
+    const execution = { runId: 'run', taskId: ids.owner, sourceMapRef: f.reference, previousResult: f.sourceResult };
+    seam.requireComposition.mockResolvedValue(execution);
+    return { ...f, execution };
+  }
+
+  it('forwards only the original bound stage for a final-only composition without parsing or web review', async () => {
+    const f = compositionFixture();
+    await f.handlers['sdf.extract']!(f.deps as never, { id: ids.owner, executionAttempt: 1, retryCount: 0,
+      payload: { ...f.owner.payload, mode: 'web', previousResult: { forged: true } } });
+    expect(seam.requireComposition).toHaveBeenCalledWith(f.tx, { ownerTaskId: ids.owner,
+      ingestionTaskId: ids.ingestion, sourceAgentTaskId: ids.failed, executionAttempt: 1 });
+    const context = seam.extractHandler.mock.calls[0]![2];
+    expect(context.sourceMap).toEqual(f.sourceMap); expect(context.previousResult).toEqual(f.sourceResult);
+    expect(context.requireReusableSemanticStage).toBe(true); expect(context.reviewExistingSourceTaskId).toBeUndefined();
+    expect(context.scientificReview.mode).toBe('model');
+    expect(f.parserCascade).not.toHaveBeenCalled(); expect(f.parserCascade.renderPages).not.toHaveBeenCalled();
+  });
+
+  it('retains the existing scientific-summary-v3 source reuse consumer', async () => {
+    const f = fixture(); f.owner.idempotencyKey = f.owner.idempotencyKey.replace('scientific-review-v4', 'scientific-summary-v3');
+    Object.assign(f.sourceResult.scientificReview, { reviewedCandidateHash: 'a'.repeat(64) });
+    await f.execute(); const context = seam.extractHandler.mock.calls[0]![2];
+    expect(context.previousResult).toEqual(f.sourceResult); expect(context.requireReusableSemanticStage).toBe(true);
+    expect(context.reviewExistingSourceTaskId).toBeUndefined(); expect(f.parserCascade).not.toHaveBeenCalled();
+    expect(seam.requireComposition).not.toHaveBeenCalled();
+  });
+
+  it.each(['lease', 'receipt', 'cancelled', 'source-map'])(
+    'refuses changed %s before checkpoint, parser, or provider work', async change => {
+      const f = compositionFixture(); seam.requireComposition.mockRejectedValue(new Error(`[blocked] ${change} changed`));
+      await expect(f.execute()).rejects.toThrow(`${change} changed`);
+      expect(seam.extractHandler).not.toHaveBeenCalled(); expect(f.storage.putObject).not.toHaveBeenCalled();
+      expect(f.tx.agentTask.updateMany).not.toHaveBeenCalled(); expect(f.providerSubmit).not.toHaveBeenCalled();
+    });
+
+  it.each(['unchanged', 'binding', 'policy', 'lease'])(
+    'rebinds the same attempt immediately before each initial and repair call (%s)', async change => {
+      const f = compositionFixture();
+      seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
+        await context.scientificReview.beforeReviewProviderCall(); await f.providerSubmit();
+        if (change === 'binding') seam.requireComposition.mockResolvedValue({ ...f.execution, previousResult: { changed: true } });
+        if (change === 'policy') f.policy.mockResolvedValue(false);
+        if (change === 'lease') seam.requireComposition.mockRejectedValue(new Error('[blocked] lease changed'));
+        await context.scientificReview.beforeReviewProviderCall(); await f.providerSubmit();
+        return { core: { method: 'private composition' }, needsMoreInformation: [] };
+      });
+      if (change === 'unchanged') await f.execute(); else await expect(f.execute()).rejects.toThrow('[blocked]');
+      expect(f.providerSubmit).toHaveBeenCalledTimes(change === 'unchanged' ? 2 : 1);
+      expect(seam.requireComposition).toHaveBeenCalledTimes(3);
+      for (const call of seam.requireComposition.mock.calls) expect(call[1].executionAttempt).toBe(1);
+      expect(f.parserCascade).not.toHaveBeenCalled();
+    });
+});
 
 describe('fresh private source reanalysis handler', () => {
   beforeEach(() => {

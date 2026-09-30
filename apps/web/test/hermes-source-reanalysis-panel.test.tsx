@@ -105,18 +105,24 @@ function mountedPanel(run = sourceRun()) {
   let actor = ids.actor;
   const analysis = vi.fn(async () => json({ task: newTask }, 202));
   const create = vi.fn(async () => json({ run: newRun() }, 202));
+  const retry = vi.fn(async () => {
+    Object.assign(run, { status: 'running', canRetryGeneration: false, error: null, version: run.version + 1 });
+    return json({ run }, 202);
+  });
   const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
     if (path === '/api/csrf-token') return json({ csrfToken: 'csrf' });
     if (path === '/api/auth/me') return json({ userId: actor, email: 'researcher@example.test' });
     if (path.endsWith(`/hermes-runs/${ids.oldRun}`)) return json({ run });
     if (path.includes('hermes-runs?ingestionTaskId=')) return json({ run: null });
     if (path === `/api/ingestion/${ids.oldIngestion}/reanalyze`) return analysis();
+    if (path.endsWith('/retry-generation') && init?.method === 'POST') return retry();
     if (path.endsWith('/hermes-runs') && init?.method === 'POST') return create();
     throw new Error(`Unexpected request: ${path}`);
   });
   vi.stubGlobal('fetch', fetcher);
   const onRunCreated = vi.fn();
-  const props = { researchObjectId: ids.ro, tasks: [], runId: ids.oldRun, onRunCreated };
+  const onRunUpdated = vi.fn();
+  const props = { researchObjectId: ids.ro, tasks: [], runId: ids.oldRun, onRunCreated, onRunUpdated };
   let tree: React.ReactElement;
   const render = () => {
     dirty = false; stateCursor = 0; refCursor = 0; effectCursor = 0; memoCursor = 0;
@@ -144,13 +150,36 @@ function mountedPanel(run = sourceRun()) {
     };
     const found = find(tree!); if (!found) throw new Error(`Missing button: ${label}`); return found;
   };
-  return { settle, button, data, analysis, create, fetcher, onRunCreated,
+  return { settle, button, data, analysis, create, retry, fetcher, onRunCreated, onRunUpdated,
     html: () => renderToStaticMarkup(tree!), setActor: (value: string) => { actor = value; },
     saved: () => JSON.parse([...data.values()][0]!),
   };
 }
 
 describe('source reanalysis panel interactions', () => {
+  it('disables final composition while pending and prevents duplicate paid clicks', async () => {
+    const run = sourceRun(); run.sourceReanalysis = undefined; run.canRetryGeneration = true;
+    run.generationRecovery = 'source-composition'; run.chargeableAttempts = 1;
+    const panel = mountedPanel(run); let finish!: (response: Response) => void;
+    panel.retry.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    await panel.settle(); panel.onRunUpdated.mockClear(); const button = panel.button(en.hermesRun.sourceCompositionContinue);
+    button.props.onClick(); button.props.onClick(); await panel.settle();
+    expect(panel.retry).toHaveBeenCalledOnce();
+    expect(panel.html()).toContain('disabled=""');
+    expect(panel.analysis).not.toHaveBeenCalled(); expect(panel.create).not.toHaveBeenCalled();
+    finish(new Response(JSON.stringify({ run: { ...run, status: 'running', canRetryGeneration: false } }), { status: 202 }));
+    await panel.settle(); expect(panel.onRunUpdated).toHaveBeenCalledOnce();
+  });
+
+  it('does not submit final composition when the freshly checked account changed', async () => {
+    const run = sourceRun(); run.sourceReanalysis = undefined; run.canRetryGeneration = true;
+    run.generationRecovery = 'source-composition'; run.chargeableAttempts = 1;
+    const panel = mountedPanel(run); await panel.settle(); panel.onRunUpdated.mockClear(); panel.setActor(ids.ro);
+    panel.button(en.hermesRun.sourceCompositionContinue).props.onClick(); await panel.settle();
+    expect(panel.retry).not.toHaveBeenCalled(); expect(panel.onRunUpdated).not.toHaveBeenCalled();
+    expect(panel.html()).toContain(en.hermesRun.narrative.identityChanged);
+  });
+
   it('one click advances both phases with disabled feedback and ignores a double click', async () => {
     const panel = mountedPanel();
     let finishAnalysis!: (reply: Response) => void; let finishRun!: (reply: Response) => void;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { ensureHermesIngestionReview, reanalyzeConfirmedIngestion } from '../../src/ingestion/ingestion-service';
-import { getHermesResearchRun } from '../../src/agent/research-run';
+import { getHermesResearchRun, reconcileHermesResearchRuns } from '../../src/agent/research-run';
 import { resolveHermesPrivateSourceReanalysisExecution } from '../../src/ingestion/source-review-recovery';
 import { advancePrivateSourceReanalysisToReview, privateSourceReanalysisFixture } from './private-source-reanalysis-fixture';
 
@@ -74,6 +74,63 @@ describe('new paid private source analysis', () => {
       .sourceReanalysis?.existingIngestionTaskId).toBe(created.id);
     expect(f.db.usageLedger).toEqual(before); expect(f.db.agentTasks).toHaveLength(tasks);
   });
+
+  it('recovers the same paid operation while its normal run is composing, including a blocked completed draft', async () => {
+    const f = await privateSourceReanalysisFixture(); const created = await reanalyzeConfirmedIngestion(f.deps, f.input);
+    const { run, original, successor } = await advancePrivateSourceReanalysisToReview(f, created.id, 'source_composition');
+    const steps = f.db.hermesResearchSteps.filter(step => step.runId === run.id);
+    expect(steps.filter(step => step.stage === 'source_composition')).toHaveLength(1);
+    expect(steps.filter(step => step.stage === 'source_review')).toHaveLength(0);
+    expect(successor.id).not.toBe(original.id);
+    const before = structuredClone(f.db.usageLedger); const taskCount = f.db.agentTasks.length;
+    for (const completed of [false, true]) {
+      if (completed) {
+        const blocked = structuredClone(f.anchorResult);
+        Object.assign(blocked.scientificReview, { kind: 'model_self_check', contractVersion: '4', status: 'blocked_scientific_review' });
+        blocked.reason = 'canonical_partial_validation_exhausted';
+        Object.assign(successor, { status: 'succeeded', executionAttempt: 1, result: blocked });
+        f.db.ingestionTasks.find(row => row.id === created.id)!.state = 'needs_review';
+        for (let tick = 0; tick < 2; tick++) {
+          f.db.hermesResearchRuns.find(row => row.id === run.id)!.lastReconciledAt = null;
+          await reconcileHermesResearchRuns(f.deps);
+        }
+        expect(f.db.hermesResearchRuns.find(row => row.id === run.id)!.status).toBe('failed');
+      }
+      expect(await reanalyzeConfirmedIngestion(f.deps, { ...f.input, idempotencyKey: `lost-composition-${completed}` }))
+        .toMatchObject({ id: created.id, agentTaskId: successor.id });
+      expect((await getHermesResearchRun(f.deps, { actorId: f.input.userId, researchObjectId: f.ids.ro, runId: f.ids.run }))
+        .sourceReanalysis?.existingIngestionTaskId).toBe(created.id);
+    }
+    expect(f.db.usageLedger).toEqual(before); expect(f.db.agentTasks).toHaveLength(taskCount);
+  });
+
+  it.each(['receipt-policy', 'receipt-stage', 'receipt-parent', 'receipt-run', 'receipt-actor', 'receipt-map', 'duplicate-receipt',
+    'task-key', 'session', 'debit', 'phase-ordinal', 'extra-phase'])(
+    'rejects a changed %s composition replay without creating another paid operation', async change => {
+      const f = await privateSourceReanalysisFixture(); const created = await reanalyzeConfirmedIngestion(f.deps, f.input);
+      const { run, successor } = await advancePrivateSourceReanalysisToReview(f, created.id, 'source_composition');
+      const receipt = f.db.auditLogs.find(row => row.action === 'ingestion.task.system_analysis_refresh'
+        && row.metadata.newAgentTaskId === successor.id)!;
+      const phase = f.db.hermesResearchSteps.find(step => step.runId === run.id && step.stage === 'source_composition')!;
+      if (change === 'receipt-policy') receipt.metadata.policy = 'scientific_review_v4_independent';
+      if (change === 'receipt-stage') receipt.metadata.stage = 'source_review';
+      if (change === 'receipt-parent') receipt.metadata.oldAgentTaskId = f.current.id;
+      if (change === 'receipt-run') receipt.metadata.runId = f.ids.run;
+      if (change === 'receipt-actor') receipt.metadata.authorizedByUserId = 'other';
+      if (change === 'receipt-map') receipt.metadata.sourceMapSha256 = 'b'.repeat(64);
+      if (change === 'duplicate-receipt') f.db.auditLogs.push({ ...structuredClone(receipt), id: 'duplicate-composition-receipt' });
+      if (change === 'task-key') successor.idempotencyKey += ':other';
+      if (change === 'session') f.db.agentSessions.find(row => row.id === successor.sessionId)!.userId = 'other';
+      if (change === 'debit') f.db.usageLedger.find(row => row.idempotencyKey === `agent-task-reserve:${successor.id}`)!.userId = 'other';
+      if (change === 'phase-ordinal') phase.ordinal = 1;
+      if (change === 'extra-phase') f.db.hermesResearchSteps.push({ ...structuredClone(phase), id: 'extra-unbound-composition', ordinal: 1 });
+      const before = structuredClone(f.db.usageLedger); const taskCount = f.db.agentTasks.length;
+      await expect(reanalyzeConfirmedIngestion(f.deps, { ...f.input, idempotencyKey: 'changed-composition-replay' }))
+        .rejects.toThrow('replay binding changed');
+      expect((await getHermesResearchRun(f.deps, { actorId: f.input.userId, researchObjectId: f.ids.ro, runId: f.ids.run }))
+        .sourceReanalysis?.existingIngestionTaskId).toBeUndefined();
+      expect(f.db.usageLedger).toEqual(before); expect(f.db.agentTasks).toHaveLength(taskCount);
+    });
 
   it('keeps the paid replay handle after the legitimate review run advances beyond source review', async () => {
     const f = await privateSourceReanalysisFixture(); const created = await reanalyzeConfirmedIngestion(f.deps, f.input);

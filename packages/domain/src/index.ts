@@ -269,6 +269,7 @@ export { ensureHermesIngestionReview } from './ingestion/ingestion-service';
 export { requireHermesSourceReviewRecoveryBinding } from './ingestion/source-review-recovery';
 export { requireHermesSourceReviewExecution } from './ingestion/source-review-recovery';
 export { resolveHermesPrivateSourceReanalysisExecution } from './ingestion/source-review-recovery';
+export { requireHermesSourceCompositionRecoveryExecution } from './ingestion/source-composition-recovery';
 export type { HermesPrivateSourceReanalysisInput, HermesPrivateSourceReanalysisExecutionInput, HermesPrivateSourceReanalysisExecution } from './ingestion/source-review-recovery';
 export type { HermesSavedSourceReviewOutput, HermesSourceReviewExecution, SourceReviewNotSubmittedInput, SourceReviewNotSubmittedVerifier } from './ingestion/source-review-recovery';
 export { MAX_INGESTION_CLAIMS, parseReviewedClaimSuggestions, type ReviewedClaimSuggestion } from './ingestion/reviewed-claim-suggestions';

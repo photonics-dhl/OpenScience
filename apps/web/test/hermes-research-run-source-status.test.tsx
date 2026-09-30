@@ -62,6 +62,17 @@ describe('Hermes research run panel', () => {
     expect(running).not.toContain('ChatGPT Web 6 Pro');
   });
 
+  it.each(['en', 'zh'])('discloses final-only source composition as one paid task before ordinary review (%s)', locale => {
+    translations.locale = locale; const run = sourceRun();
+    run.canRetryGeneration = true; run.generationRecovery = 'source-composition'; run.chargeableAttempts = 1;
+    const html = renderRun(run); const copy = (locale === 'zh' ? zh : en).hermesRun;
+    expect(html).toContain(`>${copy.sourceCompositionContinue}</button>`);
+    expect(html).toContain(copy.sourceCompositionDescription.replace('{count}', '1'));
+    expect(html).not.toContain(`>${copy.sourceReviewIndependent}</button>`);
+    run.canRetryGeneration = false; run.status = 'running';
+    expect(renderRun(run)).not.toContain(copy.sourceCompositionDescription.replace('{count}', '1'));
+  });
+
   it.each([undefined, 'source-review-fresh', 'source-review-saved'] as const)('uses the existing paid source-review disclosure and removes retry controls after progress refresh (%s)', recovery => {
     for (const locale of ['en', 'zh']) {
       translations.locale = locale;

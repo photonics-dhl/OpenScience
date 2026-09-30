@@ -152,9 +152,17 @@ export async function privateSourceReanalysisFixture() {
 
 export type PrivateSourceReanalysisFixture = Awaited<ReturnType<typeof privateSourceReanalysisFixture>>;
 
-export async function advancePrivateSourceReanalysisToReview(f: PrivateSourceReanalysisFixture, ingestionTaskId: string) {
+export async function advancePrivateSourceReanalysisToReview(f: PrivateSourceReanalysisFixture, ingestionTaskId: string,
+  stage: 'source_review' | 'source_composition' = 'source_review') {
   const original = f.db.agentTasks.find(task => f.db.ingestionTasks.find(source => source.id === ingestionTaskId)?.agentTaskId === task.id)!;
   Object.assign(original, { status: 'succeeded', executionAttempt: 1, result: structuredClone(f.anchorResult) });
+  if (stage === 'source_composition') {
+    delete original.result.scientificReview.semanticStage;
+    original.result.scientificReview.kind = 'model_self_check';
+    original.result.scientificReview.contractVersion = '4';
+    original.result.scientificReview.status = 'blocked_scientific_review';
+    original.result.reason = 'canonical_partial_validation_exhausted';
+  }
   f.db.ingestionTasks.find(source => source.id === ingestionTaskId)!.state = 'needs_review';
   const run = await createHermesResearchRun(f.deps, { actorId: f.input.userId, researchObjectId: f.ids.ro,
     ingestionTaskIds: [ingestionTaskId], idempotencyKey: 'fresh-normal-narrative', generation: {

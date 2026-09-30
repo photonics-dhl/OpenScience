@@ -121,6 +121,9 @@ on:
       - 'packages/domain/test/agent/standalone-science-recovery.test.ts'
       - 'packages/domain/src/ingestion/ingestion-service.ts'
       - 'packages/domain/src/ingestion/source-review-recovery.ts'
+      - 'packages/domain/src/ingestion/source-composition-recovery.ts'
+      - 'packages/domain/test/agent/source-composition-recovery*.ts'
+      - 'apps/api/test/source-composition-recovery.test.ts'
       - 'packages/domain/test/agent/direct-source-review-*.ts'
       - 'packages/domain/test/agent/saved-source-review-recovery.test.ts'
       - 'packages/domain/test/agent/independent-source-review.test.ts'
@@ -252,6 +255,9 @@ on:
       - 'packages/domain/test/agent/standalone-science-recovery.test.ts'
       - 'packages/domain/src/ingestion/ingestion-service.ts'
       - 'packages/domain/src/ingestion/source-review-recovery.ts'
+      - 'packages/domain/src/ingestion/source-composition-recovery.ts'
+      - 'packages/domain/test/agent/source-composition-recovery*.ts'
+      - 'apps/api/test/source-composition-recovery.test.ts'
       - 'packages/domain/test/agent/direct-source-review-*.ts'
       - 'packages/domain/test/agent/saved-source-review-recovery.test.ts'
       - 'packages/domain/test/agent/independent-source-review.test.ts'
@@ -287,9 +293,9 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-source-reanalysis.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-source-reanalysis.test.ts test/agent/source-composition-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/source-parser-recovery.test.ts test/research-runs.test.ts test/direct-source-review-recovery.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/private-source-reanalysis.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/private-source-reanalysis.test.ts test/source-composition-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off|bounds VLM page recognition"

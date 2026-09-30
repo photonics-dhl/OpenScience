@@ -28,6 +28,7 @@ import {
   findSavedIngestionCommit,
   requireHermesSourceReviewExecution,
   resolveHermesPrivateSourceReanalysisExecution,
+  requireHermesSourceCompositionRecoveryExecution,
   type HermesSavedSourceReviewOutput,
   type SourceReviewNotSubmittedInput,
   VISUAL_NARRATIVE_PROFILE,
@@ -528,6 +529,24 @@ export function createHandlers(
             }
           }
         }
+      }
+      const finalComposition = /^ingestion-analysis-final-compose:([0-9a-f-]{36}):([0-9a-f-]{36})$/.exec(ownerTask.idempotencyKey ?? '');
+      if (finalComposition) {
+        if (!serverDerivedEligibility || !externalProcessingEligible) throw new Error('[blocked] Final composition processing authorization changed');
+        const executionInput = { ownerTaskId: ownerTask.id, ingestionTaskId: finalComposition[1]!,
+          sourceAgentTaskId: finalComposition[2]!, executionAttempt: task.executionAttempt ?? ownerTask.executionAttempt };
+        const execution = await deps.prisma.$transaction(tx => requireHermesSourceCompositionRecoveryExecution(tx, executionInput),
+          { isolationLevel: 'Serializable' });
+        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, execution.sourceMapRef);
+        reusableExtractionResult = execution.previousResult as Record<string, unknown>;
+        requireReusableSemanticStage = true;
+        beforeReviewProviderCall = async () => {
+          const current = await deps.prisma.$transaction(tx => requireHermesSourceCompositionRecoveryExecution(tx, executionInput),
+            { isolationLevel: 'Serializable' });
+          if (JSON.stringify(current) !== JSON.stringify(execution)
+            || !await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false))
+            throw new Error('[blocked] Final composition processing authority changed');
+        };
       }
       const reanalysis = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36})$/.exec(ownerTask.idempotencyKey ?? '');
       if (reanalysis) {

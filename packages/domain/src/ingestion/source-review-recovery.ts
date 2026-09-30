@@ -7,6 +7,7 @@ import { automaticIngestionReviewStage } from './automatic-review';
 import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { findSavedIngestionCommit } from './saved-source-commit';
 import { requireActiveMembership } from '../workspace/helpers';
+import { inspectHermesRecoveredSourceComposition } from './source-composition-recovery';
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {};
@@ -201,7 +202,7 @@ export async function requireNoPrivateSourceReanalysisWriter(tx: Prisma.Transact
 }
 
 /** A replay reads the same paid operation after its normal run advances; this grants no Worker execution. */
-async function inspectPrivateReanalysisReviewSuccessor(tx: Prisma.TransactionClient, proof: PrivateSourceReanalysisProof,
+async function inspectPrivateReanalysisSuccessor(tx: Prisma.TransactionClient, proof: PrivateSourceReanalysisProof,
   sourceId: string, ownerTaskId: string, composition: Prisma.AgentTaskGetPayload<{ include: { session: true } }>) {
   const bindings = await tx.hermesResearchStep.findMany({ where: { stage: 'source_ingestion', ordinal: 0,
     ingestionTaskId: sourceId, artifactId: proof.source.artifactId, agentTaskId: ownerTaskId }, take: 2 });
@@ -210,27 +211,66 @@ async function inspectPrivateReanalysisReviewSuccessor(tx: Prisma.TransactionCli
   const owner = await tx.agentTask.findUnique({ where: { id: ownerTaskId }, include: { session: true } });
   const canonical = run?.steps.filter(step => step.stage === 'source_ingestion') ?? [];
   const reviews = run?.steps.filter(step => step.stage === 'source_review') ?? [];
-  const key = `ingestion-analysis-compose:${sourceId}:${composition.id}:${composition.id}:scientific-review-v4`;
+  const compositions = run?.steps.filter(step => step.stage === 'source_composition') ?? [];
+  let anchor = composition;
+  if (run && compositions.length === 2) {
+    const recovered = await inspectHermesRecoveredSourceComposition(tx, run.id);
+    if (!recovered || recovered.parent.id !== composition.id || !recovered.replacement
+      || !isDeepStrictEqual(recovered.reference, proof.reference)) return null;
+    if (!reviews.length && recovered.replacement.id === ownerTaskId) return { owner: recovered.replacement, run };
+    anchor = recovered.replacement;
+  } else if (run && compositions.length === 1 && reviews.length === 1) {
+    const step = compositions[0]!;
+    const task = step.agentTaskId ? await tx.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } }) : null;
+    const initialRows = task ? await tx.auditLog.findMany({ where: { action: 'ingestion.task.system_analysis_refresh', actorId: null,
+      targetType: 'ingestion_task', targetId: sourceId, workspaceId: proof.run.researchObject.workspaceId,
+      metadata: { path: ['newAgentTaskId'], equals: task.id } }, take: 2 }) : [];
+    const initial = record(initialRows[0]?.metadata);
+    const debit = task ? await tx.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${task.id}` } }) : null;
+    const taskKey = `ingestion-analysis-refresh:${sourceId}:${composition.id}:scientific-review-v4`;
+    if (!task || step.ordinal !== 0 || step.status !== 'succeeded' || step.ingestionTaskId !== sourceId
+      || step.artifactId !== proof.source.artifactId || step.presentationAssetId !== null
+      || task.status !== 'succeeded' || task.kind !== 'sdf.extract' || task.deletedAt || task.retryCount !== 0
+      || task.session.deletedAt || task.session.status !== 'active' || task.session.kind !== 'ingestion'
+      || task.session.userId !== run.actorId || task.session.researchObjectId !== run.researchObjectId
+      || task.idempotencyKey !== taskKey || task.session.idempotencyKey !== `${taskKey}:session`
+      || !isDeepStrictEqual(task.payload, { artifactId: proof.source.artifactId, researchObjectId: run.researchObjectId })
+      || initialRows.length !== 1 || initial.executor !== 'hermes' || initial.authorizedByUserId !== run.actorId || initial.runId !== run.id
+      || initial.stage !== 'source_composition' || initial.policy !== 'scientific_review_v4' || initial.oldAgentTaskId !== composition.id
+      || initial.artifactId !== proof.source.artifactId || initial.sourceMapSha256 !== proof.reference.serializedSha256
+      || initial.creditPolicy !== 'charged_ingestion_analysis_refresh'
+      || !debit || debit.userId !== run.actorId || debit.resource !== 'ai_credit' || BigInt(debit.delta) !== -1n
+      || debit.kind !== 'consume' || debit.reason !== 'Agent task reservation sdf.extract'
+      || !isDeepStrictEqual(debit.metadata, { taskId: task.id, kind: 'sdf.extract', policy: 'charged-on-submit' })) return null;
+    anchor = task;
+  }
+  const composing = compositions.length === 1 && reviews.length === 0;
+  const phase = composing ? compositions[0]! : reviews[0];
+  const key = composing ? `ingestion-analysis-refresh:${sourceId}:${composition.id}:scientific-review-v4`
+    : `ingestion-analysis-compose:${sourceId}:${anchor.id}:${anchor.id}:scientific-review-v4`;
   if (!run || !owner || run.id === proof.run.id || run.actorId !== proof.run.actorId || run.researchObjectId !== proof.run.researchObjectId
-    || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || canonical.length !== 1 || reviews.length !== 1
-    || run.steps.some(step => step.stage === 'source_composition')
+    || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || canonical.length !== 1 || !phase
+    || (!composing && (compositions.length > 2 || reviews.length !== 1))
     || !['running', 'awaiting_source_review', 'awaiting_claim_review', 'generating_storyboard', 'awaiting_storyboard_review',
       'generating_scene_images', 'awaiting_scene_images_review', 'generating_video', 'awaiting_video_review', 'succeeded', 'failed', 'stopped'].includes(run.status)
-    || [canonical[0]!, reviews[0]!].some(step => step.ordinal !== 0 || step.agentTaskId !== owner.id
+    || [canonical[0]!, phase].some(step => step.ordinal !== 0 || step.agentTaskId !== owner.id
       || step.ingestionTaskId !== sourceId || step.artifactId !== proof.source.artifactId || step.presentationAssetId !== null)
-    || composition.status !== 'succeeded' || owner.deletedAt || owner.kind !== 'sdf.extract' || owner.retryCount !== 0
+    || composition.status !== 'succeeded' || anchor.status !== 'succeeded' || owner.deletedAt || owner.kind !== 'sdf.extract' || owner.retryCount !== 0
     || owner.session.deletedAt || owner.session.status !== 'active' || owner.session.kind !== 'ingestion'
     || owner.session.userId !== run.actorId || owner.session.researchObjectId !== run.researchObjectId
     || owner.idempotencyKey !== key || owner.session.idempotencyKey !== `${key}:session`
     || !isDeepStrictEqual(owner.payload, { artifactId: proof.source.artifactId, researchObjectId: run.researchObjectId })) return null;
   try {
-    if (record(composition.result).canonicalExtractionContract !== 'grounded-passages-v2'
-      || !isDeepStrictEqual(parseDocumentSourceMapReference(record(composition.result).sourceMapRef), proof.reference)) return null;
+    for (const task of [composition, anchor]) {
+      if (record(task.result).canonicalExtractionContract !== 'grounded-passages-v2'
+        || !isDeepStrictEqual(parseDocumentSourceMapReference(record(task.result).sourceMapRef), proof.reference)) return null;
+    }
     if (owner.status === 'succeeded') {
       const result = record(owner.result); const review = record(result.scientificReview);
-      if (result.canonicalExtractionContract !== 'grounded-passages-v2' || review.kind !== 'independent_review' || review.contractVersion !== '5'
-        || review.sourceAgentTaskId !== composition.id || review.provider !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider
-        || review.model !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel
+      if (result.canonicalExtractionContract !== 'grounded-passages-v2'
+        || (composing ? review.kind !== 'model_self_check' || review.contractVersion !== '4'
+          : review.kind !== 'independent_review' || review.contractVersion !== '5' || review.sourceAgentTaskId !== anchor.id
+            || review.provider !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider || review.model !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel)
         || !isDeepStrictEqual(parseDocumentSourceMapReference(result.sourceMapRef), proof.reference)) return null;
     }
   } catch { return null; }
@@ -239,8 +279,10 @@ async function inspectPrivateReanalysisReviewSuccessor(tx: Prisma.TransactionCli
     metadata: { path: ['newAgentTaskId'], equals: owner.id } }, take: 2 });
   const metadata = record(rows[0]?.metadata);
   if (rows.length !== 1 || metadata.executor !== 'hermes' || metadata.authorizedByUserId !== run.actorId || metadata.runId !== run.id
-    || metadata.stage !== 'source_review' || metadata.policy !== 'scientific_review_v4_independent' || !independentMode(metadata)
-    || metadata.oldAgentTaskId !== composition.id || metadata.compositionSourceAgentTaskId !== composition.id
+    || metadata.stage !== (composing ? 'source_composition' : 'source_review')
+    || metadata.policy !== (composing ? 'scientific_review_v4' : 'scientific_review_v4_independent')
+    || (!composing && (!independentMode(metadata) || metadata.compositionSourceAgentTaskId !== anchor.id))
+    || metadata.oldAgentTaskId !== anchor.id
     || metadata.artifactId !== proof.source.artifactId || metadata.sourceMapSha256 !== proof.reference.serializedSha256
     || metadata.creditPolicy !== 'charged_ingestion_analysis_refresh') return null;
   return { owner, run };
@@ -278,7 +320,7 @@ export async function readHermesPrivateSourceReanalysisReplay(tx: Prisma.Transac
     throw new Error('[blocked] Private source analysis replay binding changed');
   if (candidate.agentTaskId !== task.id) {
     const successor = candidate.agentTaskId
-      ? await inspectPrivateReanalysisReviewSuccessor(tx, proof, candidate.id, candidate.agentTaskId, task) : null;
+      ? await inspectPrivateReanalysisSuccessor(tx, proof, candidate.id, candidate.agentTaskId, task) : null;
     const successorDebit = successor ? await tx.usageLedger.findUnique({
       where: { idempotencyKey: `agent-task-reserve:${successor.owner.id}` },
     }) : null;
@@ -392,11 +434,13 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
     || run.sourceClaimIds.length || run.sourceReviewDigest || run.researchObject.status !== 'draft' || run.researchObject.deletedAt
     || !(replacementTaskId ? ['running', 'awaiting_source_review'].includes(run.status) : run.status === 'failed')) return null;
   const canonical = run.steps.filter(step => step.stage === 'source_ingestion');
-  const compositions = run.steps.filter(step => step.stage === 'source_composition');
+  const compositions = run.steps.filter(step => step.stage === 'source_composition').sort((a, b) => a.ordinal - b.ordinal);
   const reviews = run.steps.filter(step => step.stage === 'source_review').sort((a, b) => a.ordinal - b.ordinal);
   const directComposition = compositions.length === 0;
-  if (canonical.length !== 1 || canonical[0]!.ordinal !== 0 || compositions.length > 1
-    || (!directComposition && compositions[0]!.ordinal !== 0)
+  const recoveredComposition = compositions.length === 2 ? await inspectHermesRecoveredSourceComposition(tx, run.id) : null;
+  if (canonical.length !== 1 || canonical[0]!.ordinal !== 0 || compositions.length > 2
+    || (!directComposition && compositions.some((step, index) => step.ordinal !== index))
+    || (compositions.length === 2 && !recoveredComposition)
     // Historical model recoveries and the independent role are distinguished by their receipts below.
     || reviews.length < (replacementTaskId ? 2 : 1)
     || reviews.some((step, index) => step.ordinal !== index || !step.agentTaskId)
@@ -411,7 +455,7 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   const sourceStep = canonical[0]!;
   const originalStep = failedSteps[failedSteps.length - 1]!;
   if (directComposition && originalStep.status !== 'failed') return null;
-  const compositionStep = compositions[0];
+  const compositionStep = compositions.at(-1);
   if (!sourceStep.ingestionTaskId || !sourceStep.artifactId || !originalStep.agentTaskId
     || (!directComposition && !compositionStep?.agentTaskId)
     || run.steps.some(step => step.ingestionTaskId !== sourceStep.ingestionTaskId || step.artifactId !== sourceStep.artifactId
@@ -862,10 +906,12 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
   const canonical = run?.steps.filter(item => item.stage === 'source_ingestion') ?? [];
   const reviews = run?.steps.filter(item => item.stage === 'source_review') ?? [];
   const compositions = run?.steps.filter(item => item.stage === 'source_composition') ?? [];
+  const recoveredComposition = run && compositions.length === 2 ? await inspectHermesRecoveredSourceComposition(tx, run.id) : null;
   if (!run || !owner || !source || step.ordinal !== 0 || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9
     || run.versionId !== null || run.sourceClaimIds.length || run.sourceReviewDigest
     || !['running', 'awaiting_source_review'].includes(run.status) || run.researchObject.status !== 'draft' || run.researchObject.deletedAt
-    || canonical.length !== 1 || reviews.length !== 1 || compositions.length > 1 || run.steps.length !== 2 + compositions.length
+    || canonical.length !== 1 || reviews.length !== 1 || compositions.length > 2 || run.steps.length !== 2 + compositions.length
+    || (compositions.length === 2 && !recoveredComposition)
     || run.steps.some(item => item.ingestionTaskId !== source.id || item.artifactId !== source.artifactId || item.presentationAssetId !== null)
     || canonical[0]!.agentTaskId !== owner.id || source.agentTaskId !== owner.id || source.retryCount !== 0
     || source.batch.userId !== run.actorId || source.batch.researchObjectId !== run.researchObjectId
@@ -885,7 +931,9 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
       || metadata.reviewProvider !== undefined || metadata.reviewModel !== undefined) return null;
   const composition = await tx.agentTask.findUnique({ where: { id: metadata.oldAgentTaskId }, include: { session: true } });
   if (!composition || composition.status !== 'succeeded'
-    || compositions.some(item => item.ordinal !== 0 || item.agentTaskId !== composition.id || item.status !== 'succeeded')) return null;
+    || (recoveredComposition ? recoveredComposition.replacement?.id !== composition.id
+      || recoveredComposition.replacementStep?.status !== 'succeeded'
+      : compositions.some(item => item.ordinal !== 0 || item.agentTaskId !== composition.id || item.status !== 'succeeded'))) return null;
   const key = `ingestion-analysis-compose:${source.id}:${composition.id}:${composition.id}:scientific-review-v4`;
   if (owner.idempotencyKey !== key || owner.session.idempotencyKey !== `${key}:session`) return null;
   for (const task of [owner, composition]) {

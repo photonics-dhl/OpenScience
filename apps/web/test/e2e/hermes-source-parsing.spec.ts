@@ -1,6 +1,8 @@
 import { expect, test } from 'playwright/test';
 
 for (const scenario of [
+  { recovery: 'source-composition', outcome: 'lost-response' },
+  { recovery: 'source-composition', outcome: '409' },
   { recovery: 'source-review-saved', outcome: 'lost-response' },
   { recovery: 'source-review-independent', outcome: 'lost-response' },
   { recovery: 'source-review-independent', outcome: '409' },
@@ -14,7 +16,8 @@ test(`${scenario.recovery} preserves the correct operation after ${scenario.outc
     profile: 'visual-narrative-v1', maxAgentTasks: 9, sourceClaimIds: [], status: 'failed', error: 'review output incomplete',
     createdAt: '2026-09-29T00:00:00Z', updatedAt: '2026-09-29T00:00:00Z',
     canRetryGeneration: true, generationRecovery: scenario.recovery, chargeableAttempts: scenario.recovery === 'source-review-not-submitted' ? 0 : 1,
-    steps: [{ id: 'review-step', stage: 'source_review', ordinal: 1, status: 'failed', ingestionTaskId: 'source-task', agentTaskId: 'review-task', error: null }] };
+    steps: [{ id: 'review-step', stage: scenario.recovery === 'source-composition' ? 'source_composition' : 'source_review',
+      ordinal: scenario.recovery === 'source-composition' ? 0 : 1, status: 'failed', ingestionTaskId: 'source-task', agentTaskId: 'review-task', error: null }] };
   const writes: Array<{ key: string; body: unknown }> = [];
   let refreshedAfterFailure = false;
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: 'http://127.0.0.1:3010' }]);
@@ -42,7 +45,10 @@ test(`${scenario.recovery} preserves the correct operation after ${scenario.outc
     return json({});
   });
   await page.goto(`/research-objects/${ro}/hermes?run=${runId}`);
-  if (scenario.recovery === 'source-review-independent') {
+  if (scenario.recovery === 'source-composition') {
+    await expect(page.getByText(/already-read source, without parsing it again/)).toBeVisible();
+    await expect(page.getByText(/uses 1 platform task credit/)).toBeVisible();
+  } else if (scenario.recovery === 'source-review-independent') {
     await expect(page.getByText(/ChatGPT Web 6 Pro/)).toBeVisible();
     await expect(page.getByText(/platform task credits and ChatGPT subscription usage/)).toBeVisible();
   } else if (scenario.recovery === 'source-review-not-submitted') {
@@ -52,7 +58,7 @@ test(`${scenario.recovery} preserves the correct operation after ${scenario.outc
     await expect(page.getByText(/This adds one charged task/)).toBeVisible();
     await expect(page.getByText(/earlier requests may already have been billed/)).toBeVisible();
   }
-  const retry = page.getByRole('button', { name: scenario.recovery === 'source-review-not-submitted'
+  const retry = page.getByRole('button', { name: scenario.recovery === 'source-composition' ? 'Finish the paper summary' : scenario.recovery === 'source-review-not-submitted'
     ? 'Continue independent review' : scenario.recovery === 'source-review-independent'
     ? 'Review independently and continue' : 'Correct saved review and continue', exact: true });
   await retry.click();

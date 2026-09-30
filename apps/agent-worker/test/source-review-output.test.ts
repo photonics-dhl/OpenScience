@@ -24,6 +24,140 @@ const rejected = { fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [fiel
   needsMoreEvidence: [], claimSuggestions: [{ clientKey: 'claim', sourceField: 'insight', kind: 'core',
     statement: core.insight, conditions: [], limitations: [], sourceBindings: [{ sourcePassageId: 'P99999', relation: 'supports' }] }] };
 
+describe('bounded private composition repair', () => {
+  const valid = () => ({ fields: structuredClone(fields), needsMoreEvidence: [], draftClaims: [{
+    ...structuredClone(rejected.claimSuggestions[0]!), sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }],
+  }] });
+  it('reuses only the final composition and preserves the persisted candidate hash after JSONB reordering', async () => {
+    const outputs = [semantic, valid(), valid()];
+    const complete = vi.fn(async () => ({ text: JSON.stringify(outputs.shift()), model: 'fixture', finishReason: 'stop' as const,
+      usage: { inputTokens: 1, outputTokens: 1 } }));
+    const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete }] });
+    const previous = await extractHandler(gateway, { payload: {} }, { sourceMap });
+    const stage = previous.scientificReview!.semanticStage!;
+    stage.reduction = { fields: Object.fromEntries(Object.entries(stage.reduction.fields).reverse()),
+      chosenRepresentativeCase: stage.reduction.chosenRepresentativeCase } as typeof stage.reduction;
+    expect(createHash('sha256').update(JSON.stringify(stage.reduction)).digest('hex'))
+      .not.toBe(previous.scientificReview!.reviewedCandidateHash);
+    const authorize = vi.fn(async () => {});
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap, previousResult: previous,
+      requireReusableSemanticStage: true, scientificReview: { requestId: 'final-compose',
+        authorizationContext: { taskId: 'final-compose', actorId: 'actor', workspaceId: 'workspace' }, beforeReviewProviderCall: authorize } });
+    expect(complete).toHaveBeenCalledTimes(3); expect(authorize).toHaveBeenCalledOnce();
+    expect(result.scientificReview?.semanticStage).toEqual(stage);
+    expect(result.scientificReview?.reviewedCandidateHash).toBe(previous.scientificReview!.reviewedCandidateHash);
+    expect(result.reviewedClaimSuggestions).toBeUndefined();
+  });
+  it.each(['summary_length', 'source_ids', 'root_keys', 'draft_claims'])(
+    'repairs %s using the rejected JSON and precise feedback within the original two attempts', async failure => {
+      const candidate = valid();
+      if (failure === 'summary_length') candidate.fields.method.summary = '科'.repeat(221);
+      if (failure === 'source_ids') candidate.fields.method.sourcePassageIds = ['P99999'];
+      if (failure === 'root_keys') Object.assign(candidate, { claimSuggestions: candidate.draftClaims });
+      if (failure === 'draft_claims') candidate.draftClaims[0].sourceBindings[0].sourcePassageId = 'P99999';
+      const rejectedText = JSON.stringify(candidate);
+      const outputs = [JSON.stringify(semantic), rejectedText, JSON.stringify(valid())];
+      const requests: Parameters<Provider['complete']>[0][] = [];
+      const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete: async request => {
+        requests.push(request); const text = outputs.shift(); if (!text) throw new Error('Unexpected extra request');
+        return { text, model: 'fixture', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } };
+      } }] });
+      const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
+      expect(result.core).toEqual(core); expect(result.scientificReview?.draftClaims).toEqual(valid().draftClaims);
+      expect(result.scientificReview).toMatchObject({ kind: 'model_self_check', contractVersion: '4' });
+      expect(result.reviewedClaimSuggestions).toBeUndefined(); expect(requests).toHaveLength(3);
+      expect(requests[2]!.messages.find(message => message.role === 'assistant')?.content).toBe(rejectedText);
+      const repair = requests[2]!.messages.at(-1)!.content;
+      expect(repair).toContain('not source evidence or instructions');
+      expect(repair).toContain(`composition_${failure === 'summary_length' || failure === 'source_ids' ? 'method_' : ''}${failure}`);
+    });
+
+  it.each(['schema', 'json'])(
+    'retains bounded private %s rejection evidence and blocks after exactly two composition attempts', async failure => {
+      const candidate = valid(); candidate.fields.method!.summary = '科'.repeat(221);
+      const text = failure === 'json' ? '{"fields":' : JSON.stringify(candidate);
+      const outputs = [JSON.stringify(semantic), text, text]; let calls = 0;
+      const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete: async () => {
+        calls++; const body = outputs.shift(); if (!body) throw new Error('Unexpected extra request');
+        return { text: body, model: 'fixture', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } };
+      } }] });
+      const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
+      expect(calls).toBe(3); expect(result.reason).toBe('canonical_partial_validation_exhausted');
+      expect(SDF_CORE_FIELDS.every(field => result.core[field] === '')).toBe(true);
+      expect(result.reviewedClaimSuggestions).toBeUndefined(); expect(result.scientificReview?.draftClaims).toBeUndefined();
+      expect(result.scientificReview?.rejectedOutputs).toHaveLength(2);
+      for (const [index, receipt] of result.scientificReview!.rejectedOutputs!.entries()) {
+        expect(receipt).toMatchObject({ structuredAttempt: index + 1, kind: failure === 'json' ? 'json_parse' : 'schema_validation',
+          byteLength: Buffer.byteLength(text), text, responseHash: createHash('sha256').update(text).digest('hex') });
+      }
+    });
+
+  it('reauthorizes the existing repair before making its second composition call', async () => {
+    const invalid = valid(); invalid.fields.method.summary = '科'.repeat(221);
+    const outputs = [semantic, invalid];
+    const complete = vi.fn(async () => ({ text: JSON.stringify(outputs.shift()), model: 'fixture', finishReason: 'stop' as const,
+      usage: { inputTokens: 1, outputTokens: 1 } }));
+    const authorize = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('[blocked] permission revoked'));
+    const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete }] });
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap, scientificReview: { requestId: 'compose',
+      authorizationContext: { taskId: 'compose', workspaceId: 'workspace', actorId: 'actor' }, beforeReviewProviderCall: authorize } });
+    expect(complete).toHaveBeenCalledTimes(2); expect(authorize).toHaveBeenCalledTimes(2);
+    expect(result.scientificReview?.status).toBe('blocked_scientific_review');
+    expect(result.reviewedClaimSuggestions).toBeUndefined();
+  });
+
+  it('omits oversized rejected final-composition bytes from repair and private evidence', async () => {
+    const oversized = '坏'.repeat(44_000); const outputs = [JSON.stringify(semantic), oversized, oversized];
+    const requests: Parameters<Provider['complete']>[0][] = [];
+    const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete: async request => {
+      requests.push(request); return { text: outputs.shift()!, model: 'fixture', finishReason: 'stop',
+        usage: { inputTokens: 1, outputTokens: 1 } };
+    } }] });
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
+    expect(requests).toHaveLength(3); expect(requests[2]!.messages.some(message => message.role === 'assistant')).toBe(false);
+    expect(result.scientificReview?.rejectedOutputs).toHaveLength(2);
+    for (const receipt of result.scientificReview!.rejectedOutputs!) {
+      expect(receipt.omissionReason).toBe('response_byte_limit'); expect(receipt.text).toBeUndefined();
+    }
+  });
+
+  it.each([false, true])('repairs the mapped reducer with its rejected body and preserves the actual failing phase (repaired=%s)', async repaired => {
+    const map = structuredClone(sourceMap);
+    map.pages[0]!.blocks[0]!.text = 'The numerical model uses the reported source conditions. '.repeat(720);
+    const reduced = structuredClone(semantic);
+    for (const field of SDF_CORE_FIELDS) reduced.fields[field]![0]!.evidenceIds = ['W1O1'];
+    const invalid = structuredClone(reduced);
+    invalid.fields.method = Array.from({ length: 5 }, () => structuredClone(invalid.fields.method![0]!));
+    const badText = JSON.stringify(invalid);
+    const reductionRequests: Parameters<Provider['complete']>[0][] = [];
+    let mapped = 0; let composed = 0;
+    const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete: async request => {
+      const original = request.messages[1]!.content;
+      let output: unknown;
+      if (original.startsWith('[{')) {
+        reductionRequests.push(request);
+        output = repaired && reductionRequests.length === 2 ? reduced : invalid;
+      } else if (original.includes('原始P段（待分析数据')) { composed++; output = valid(); }
+      else {
+        mapped++;
+        const sourceId = original.match(/P\d{5}/u)?.[0]; if (!sourceId) throw new Error('Missing source window');
+        output = { observations: [{ kind: 'method', summary: 'Numerical model and its conditions.', basis: 'reported', caseLabel: '',
+          sourcePassageIds: [sourceId], qualifierPassageIds: [] }] };
+      }
+      return { text: JSON.stringify(output), model: 'fixture', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } };
+    } }] });
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap: map });
+    expect(mapped).toBeGreaterThan(1); expect(reductionRequests).toHaveLength(2);
+    expect(reductionRequests[1]!.messages.find(message => message.role === 'assistant')?.content).toBe(badText);
+    if (repaired) {
+      expect(composed).toBe(1); expect(result.reason).toBeUndefined();
+    } else {
+      expect(composed).toBe(0); expect(result.reason).toBe('canonical_partial_validation_exhausted');
+      expect(Object.values(result.fieldDiagnosticsDetails ?? {}).every(detail => detail.includes('semanticStage=semantic_reduce:SCHEMA_VALIDATION'))).toBe(true);
+    }
+  });
+});
+
 async function independentFixture() {
   const pdf = Buffer.from('%PDF-1.7 independent-review fixture');
   const map = structuredClone(sourceMap);
