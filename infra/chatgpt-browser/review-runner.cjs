@@ -86,6 +86,26 @@ function reviewAttachments(request) {
     return { attachment, file, bytes };
   });
 }
+async function attachmentPreviewLabels(form, modern) {
+  if (!modern) return form.locator('[role="group"][aria-label]:visible')
+    .evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
+  // Observed native file cards have a filename button plus "Remove <filename>"
+  // in this same composer. Keep all such cards, including unexpected names and
+  // duplicates, so final exact-count/source matching can reject them.
+  return form.locator('div[role="button"][aria-label]:visible, button[aria-label]:visible').evaluateAll(elements => {
+    const buttons = new Set(elements.filter(element => element.tagName === 'BUTTON')
+      .map(element => element.getAttribute('aria-label') ?? ''));
+    return elements.filter(element => {
+      if (element.tagName !== 'BUTTON') return true;
+      const name = element.getAttribute('aria-label') ?? '';
+      if (!name || !buttons.has(`Remove ${name}`)) return false;
+      // Count a native child only once when its same-label visible legacy
+      // ancestor already represents this physical card. Distinct cards remain.
+      const wrapper = element.closest('div[role="button"][aria-label]');
+      return !wrapper || wrapper.getAttribute('aria-label') !== name || !elements.includes(wrapper);
+    }).map(element => element.getAttribute('aria-label') ?? '');
+  });
+}
 async function uploadAttachments(page, input, request) {
   const attachments = reviewAttachments(request);
   if (!attachments.length) return;
@@ -100,8 +120,7 @@ async function uploadAttachments(page, input, request) {
     // A modern composer can briefly expose one file input while hydrating.
     // Its explicit upload control is the stable discriminator between flows.
     const modern = await add.count() === 1;
-    const previews = modern ? form.locator('div[role="button"][aria-label]') : form.locator('[role="group"][aria-label]');
-    const before = await previews.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
+    const before = await attachmentPreviewLabels(form, modern);
     if (modern) {
       if (await add.count() !== 1 || !await add.isVisible() || !await add.isEnabled()
         || await page.evaluate(() => window.name) !== `xgs-review-${id}`) throw Error('ATTACHMENT_INPUT_NOT_READY');
@@ -124,7 +143,7 @@ async function uploadAttachments(page, input, request) {
     const deadline = Date.now() + 30000;
     let confirmed = false;
     while (Date.now() < deadline) {
-      const labels = await previews.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? '')).catch(() => []);
+      const labels = await attachmentPreviewLabels(form, modern).catch(() => []);
       const matching = labels.some(label => acceptedName.test(label));
       const busyCount = await form.locator('[aria-busy="true"]:visible, [role="progressbar"]:visible, progress:visible').count().catch(() => -1);
       attachmentDiagnostic = { modern, inputCount: await oldInput.count().catch(() => -1),
@@ -148,11 +167,9 @@ async function attachmentsReady(input, request) {
   if (await form.count() !== 1) return false;
   const expected = request.attachments ?? [];
   const modern = await form.getByRole('button', { name: 'Add files and more', exact: true }).count() === 1;
-  const previews = modern ? form.locator('div[role="button"][aria-label]:visible')
-    : form.locator('[role="group"][aria-label]:visible');
-  if (await previews.count() !== expected.length
+  const remaining = await attachmentPreviewLabels(form, modern);
+  if (remaining.length !== expected.length
     || await form.locator('[aria-busy="true"]:visible, [role="progressbar"]:visible, progress:visible').count() !== 0) return false;
-  const remaining = await previews.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label') ?? ''));
   return expected.every(({ fileName }) => {
     const index = remaining.findIndex(label => attachmentLabelPattern(fileName).test(label));
     if (index < 0) return false;

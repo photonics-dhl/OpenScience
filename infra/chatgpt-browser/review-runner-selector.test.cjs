@@ -11,7 +11,7 @@ const source = fs.readFileSync(require.resolve('./review-runner.cjs'), 'utf8');
 
 // The external seam is Playwright's file chooser; validation and upload below
 // execute the real operator helpers, with a mutable fake job file.
-function attachmentFixture({ modern = true, accept = null, replaceAfterRead = false, png = false } = {}) {
+function attachmentFixture({ modern = true, accept = null, replaceAfterRead = false, png = false, native = false, wrapped = false } = {}) {
   const original = png ? Buffer.alloc(32) : Buffer.from('%PDF-1.7\noriginal validated paper\n%%EOF\n');
   if (png) { Buffer.from('89504e470d0a1a0a', 'hex').copy(original); original.writeUInt32BE(20, 16); original.writeUInt32BE(10, 20); }
   const replacement = png ? Buffer.from(original) : Buffer.from('%PDF-1.7\na different paper\n%%EOF\n');
@@ -19,17 +19,37 @@ function attachmentFixture({ modern = true, accept = null, replaceAfterRead = fa
   const fileName = png ? 'page-1.png' : 'source.pdf';
   let current = original, now = 0;
   const uploaded = [], labels = [];
+  const state = { nativeLabels: [], unpaired: false, busy: 0 };
   const capture = async value => {
     uploaded.push(typeof value === 'string' ? { buffer: current } : value);
-    labels.push(fileName);
+    if (native) state.nativeLabels.push('source(2).pdf');
+    else labels.push(fileName);
   };
   const fileInput = { count: async () => modern ? 3 : 1, setInputFiles: capture };
-  const previews = { evaluateAll: async fn => fn(labels.map(label => ({ getAttribute: () => label }))) };
+  const node = (tagName, label, wrapper = null) => ({ tagName,
+    getAttribute: name => name === 'aria-label' ? label : name === 'role' && tagName === 'DIV' ? 'button' : null,
+    closest: () => wrapper });
+  function elements() {
+    const wrappers = wrapped ? state.nativeLabels.map(label => node('DIV', label)) : [];
+    const old = [...labels.map(label => node('DIV', label)), ...wrappers];
+    const buttons = ['Add files and more', 'Select ChatGPT model', 'Dictate', 'Send'].map(label => node('BUTTON', label));
+    state.nativeLabels.forEach((label, index) => {
+      buttons.push(node('BUTTON', label, wrappers[index]));
+      if (!state.unpaired) buttons.push(node('BUTTON', `Remove ${label}`, wrappers[index]));
+    });
+    return { old, buttons, all: [...old, ...buttons] };
+  }
+  const previews = { count: async () => elements().old.length, evaluateAll: async fn => fn(elements().old) };
+  // These exact native labels mirror the server's no-send PDF receipt. The
+  // unrelated controls are in the same composer and must not count as files.
+  const buttons = { evaluateAll: async fn => fn(elements().buttons) };
+  const mixed = { evaluateAll: async fn => fn(elements().all) };
   const add = { count: async () => modern ? 1 : 0, isVisible: async () => true,
     isEnabled: async () => true, click: async () => {} };
   const form = { count: async () => 1, getByRole: () => add,
     locator: query => query === 'input[type="file"]' ? fileInput
-      : query.includes('aria-busy') ? { count: async () => 0 } : previews };
+      : query.includes('aria-busy') ? { count: async () => state.busy }
+        : query.includes(', button[') ? mixed : query.startsWith('button[') ? buttons : previews };
   const input = { locator: () => form };
   const chooser = { element: async () => ({ getAttribute: async name => name === 'aria-label' ? 'Attach files' : accept }),
     setFiles: capture };
@@ -48,8 +68,48 @@ function attachmentFixture({ modern = true, accept = null, replaceAfterRead = fa
   const request = { schemaVersion: png ? 3 : 1, attachments: [{ fileName, mediaType: png ? 'image/png' : 'application/pdf',
     ...(png ? { pageNumber: 1, width: 20, height: 10 } : {}),
     sha256: crypto.createHash('sha256').update(original).digest('hex') }] };
-  return { upload: () => sandbox.uploadAttachments(page, input, request), original, uploaded };
+  return { upload: () => sandbox.uploadAttachments(page, input, request),
+    ready: () => sandbox.attachmentsReady(input, request), original, uploaded, state };
 }
+
+test('confirms the observed native PDF card and final readiness, excluding same-form controls', async () => {
+  const f = attachmentFixture({ native: true });
+  await f.upload();
+  assert.equal(f.uploaded.length, 1);
+  assert.equal(await f.ready(), true);
+});
+
+test('final readiness accepts the observed renamed native PDF card', async () => {
+  const f = attachmentFixture({ native: true });
+  f.state.nativeLabels = ['source(2).pdf'];
+  assert.equal(await f.ready(), true);
+});
+
+test('a native button inside its same-label legacy card remains one physical attachment', async () => {
+  const f = attachmentFixture({ native: true, wrapped: true });
+  await f.upload();
+  assert.equal(await f.ready(), true);
+});
+
+test('distinct wrapped cards with the same filename still reject duplicate attachments', async () => {
+  const f = attachmentFixture({ native: true, wrapped: true });
+  f.state.nativeLabels = ['source(2).pdf', 'source(2).pdf'];
+  assert.equal(await f.ready(), false);
+});
+
+for (const [name, mutate] of Object.entries({
+  'foreign text file': f => { f.state.nativeLabels.push('notes.txt'); },
+  'duplicate expected file': f => { f.state.nativeLabels.push('source(2).pdf'); },
+  'wrong filename': f => { f.state.nativeLabels = ['other.pdf']; },
+  'busy upload': f => { f.state.busy = 1; },
+  'unpaired native label': f => { f.state.unpaired = true; },
+})) test(`final native attachment readiness rejects ${name} before send`, async () => {
+  const f = attachmentFixture({ native: true }); let sent = 0;
+  f.state.nativeLabels = ['source(2).pdf'];
+  mutate(f);
+  if (await f.ready()) sent++;
+  assert.equal(sent, 0);
+});
 
 for (const modern of [true, false]) test(`uploads the validated bytes despite replacement in ${modern ? 'modern' : 'legacy'} flow`, async () => {
   const f = attachmentFixture({ modern, replaceAfterRead: true });
@@ -58,6 +118,7 @@ for (const modern of [true, false]) test(`uploads the validated bytes despite re
   assert.deepEqual(f.uploaded[0].buffer, f.original);
   assert.equal(f.uploaded[0].name, 'source.pdf');
   assert.equal(f.uploaded[0].mimeType, 'application/pdf');
+  assert.equal(await f.ready(), true);
 });
 
 for (const modern of [true, false]) test(`preserves validated image-review bytes in ${modern ? 'modern' : 'legacy'} flow`, async () => {
@@ -67,6 +128,7 @@ for (const modern of [true, false]) test(`preserves validated image-review bytes
   assert.deepEqual(f.uploaded[0].buffer, f.original);
   assert.equal(f.uploaded[0].name, 'page-1.png');
   assert.equal(f.uploaded[0].mimeType, 'image/png');
+  assert.equal(await f.ready(), true);
 });
 
 for (const accept of [null, '']) test(`modern PDF upload accepts unrestricted input ${JSON.stringify(accept)}`, async () => {
