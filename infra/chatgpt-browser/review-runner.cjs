@@ -230,7 +230,7 @@ async function copiedModernUserText(page, turn) {
   await page.waitForFunction(() => typeof window.__xgsScienceReviewCopy === 'string', null, { timeout: 3000 }).catch(() => {});
   return page.evaluate(() => window.__xgsScienceReviewCopy ?? '').catch(() => '');
 }
-async function findUserAnchor(page, prompt) {
+async function findUserAnchor(page, prompt, request) {
   const expected = normalizeUserText(prompt);
   let found = await page.locator('[data-message-author-role]').evaluateAll((elements, wanted) => {
     const normalize = value => String(value ?? '').replace(/\u00a0/g, ' ').trim();
@@ -258,6 +258,19 @@ async function findUserAnchor(page, prompt) {
       found = { userMessageId: turns.userMessageId };
     }
   }
+  if (!found && request && fs.existsSync(path.join(dir, 'submitted.json'))
+    && fs.existsSync(path.join(dir, 'conversation.json'))) {
+    // A collapsed/changed renderer must not make a sent review unrecoverable.
+    // Read its original text in the already-bound conversation, never resend.
+    try {
+      const submitted = read('submitted.json');
+      if (request.id === id && submitted.id === id && submitted.promptHash === request.promptHash) {
+        const userMessageId = await readStoredReviewMessage(page, canonicalUrl(read('conversation.json').url),
+          'anchor', null, null, expected);
+        if (UUID.test(userMessageId)) found = { userMessageId };
+      }
+    } catch {}
+  }
   if (!found || !UUID.test(found.userMessageId)) return null;
   return { userMessageId: found.userMessageId, userMessageHash: crypto.createHash('sha256').update(expected).digest('hex'), submittedAt: Date.now() };
 }
@@ -266,7 +279,7 @@ async function recoverUserAnchor(page, request, deadlineAt) {
   if (fs.existsSync(existing)) return read('anchor.json');
   const prompt = reviewPrompt(request);
   while (Date.now() < deadlineAt) {
-    const anchor = await findUserAnchor(page, prompt);
+    const anchor = await findUserAnchor(page, prompt, request);
     if (anchor) { once('anchor.json', anchor); return anchor; }
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
@@ -568,10 +581,10 @@ async function assistantResponseText(page, assistantId, domText) {
   if (visible) return visible;
   return copiedMessageText(page.locator(`[data-message-author-role="assistant"][data-message-id="${assistantId}"]`), page);
 }
-async function storedFinalText(page, conversation, anchor, assistantId, expectedPrompt) {
-  // Same authenticated conversation, exact visible turn and original user text.
-  // Read only its completed user-visible final message; never return reasoning or credentials.
-  return page.evaluate(async ({ conversation, userId, assistantId, expectedPrompt }) => {
+async function readStoredReviewMessage(page, conversation, kind, userId, assistantId, expectedPrompt) {
+  // Reuse the existing same-conversation authenticated reader. Return only the
+  // exact user UUID or its completed final text, never tokens or reasoning.
+  const result = await page.evaluate(async ({ conversation, kind, userId, assistantId, expectedPrompt }) => {
     if (location.href !== conversation) return '';
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 10000);
     try {
@@ -587,28 +600,55 @@ async function storedFinalText(page, conversation, anchor, assistantId, expected
       const raw = await response.text();
       if (raw.length > 2 * 1024 * 1024) return '';
       const data = JSON.parse(raw), nodes = data.mapping;
-      const user = nodes?.[userId]?.message, finalNode = nodes?.[assistantId], final = finalNode?.message;
+      if (!nodes || typeof nodes !== 'object' || Array.isArray(nodes)) return '';
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       const plain = message => message?.content?.content_type === 'text' && Array.isArray(message.content.parts)
         && message.content.parts.every(part => typeof part === 'string') ? message.content.parts.join('\n') : null;
       const normalize = text => String(text ?? '').replace(/\u00a0/g, ' ').trim();
-      if (data.current_node !== assistantId || user?.id !== userId || user?.author?.role !== 'user'
-        || plain(user) === null || normalize(plain(user)) !== expectedPrompt
-        || final?.id !== assistantId || final?.author?.role !== 'assistant' || final.channel !== 'final'
-        || final.recipient !== 'all' || final.status !== 'finished_successfully' || final.end_turn !== true
-        || final.metadata?.is_visually_hidden_from_conversation || plain(final) === null) return '';
-      let parent = finalNode.parent;
-      const seen = new Set([assistantId]);
-      for (let count = 0; parent !== userId && count < 64; count++) {
-        if (!parent || seen.has(parent)) return '';
-        seen.add(parent);
-        const node = nodes[parent];
-        if (!node || !['assistant', 'tool'].includes(node.message?.author?.role)) return '';
-        parent = node.parent;
+      if (kind === 'final' && data.current_node !== assistantId) return '';
+      let cursor = data.current_node, user = null;
+      const seen = new Set();
+      // Preserve 64 intervening nodes, plus the current node and its user.
+      for (let count = 0; count < 66; count++) {
+        if (!uuid.test(cursor ?? '') || seen.has(cursor)) return '';
+        seen.add(cursor);
+        const node = nodes[cursor], message = node?.message;
+        if (!message || message.id !== cursor) return '';
+        if (message.author?.role === 'user') { user = message; break; }
+        if (!['assistant', 'tool'].includes(message.author?.role)) return '';
+        cursor = node.parent;
       }
-      if (parent !== userId) return '';
-      return plain(final);
+      if (!user) return '';
+      if (plain(user) === null) return kind === 'anchor' ? {
+        contentType: ['text', 'multimodal_text'].includes(user.content?.content_type) ? user.content.content_type : 'unsupported',
+        partCount: Array.isArray(user.content?.parts) ? Math.min(user.content.parts.length, 32) : null,
+        partKinds: Array.isArray(user.content?.parts) ? [...new Set(user.content.parts.slice(0, 32).map(part =>
+          part === null ? 'null' : typeof part))] : [],
+      } : '';
+      if (normalize(plain(user)) !== expectedPrompt) return '';
+      if (kind === 'anchor') {
+        const matches = Object.values(nodes).filter(node => node?.message?.author?.role === 'user'
+          && plain(node.message) !== null && normalize(plain(node.message)) === expectedPrompt);
+        return matches.length === 1 ? user.id : '';
+      }
+      const finalId = kind === 'completed' ? data.current_node : assistantId;
+      const final = nodes[finalId]?.message;
+      if (user.id !== userId || final?.id !== finalId || final?.author?.role !== 'assistant'
+        || final.channel !== 'final' || final.recipient !== 'all' || final.status !== 'finished_successfully'
+        || final.end_turn !== true || final.metadata?.is_visually_hidden_from_conversation || plain(final) === null) return '';
+      return kind === 'completed' ? { assistantId: finalId, text: plain(final) } : plain(final);
     } catch { return ''; } finally { clearTimeout(timer); }
-  }, { conversation, userId: anchor.userMessageId, assistantId, expectedPrompt }).catch(() => '');
+  }, { conversation, kind, userId, assistantId, expectedPrompt }).catch(() => '');
+  if (kind === 'anchor' && result && typeof result === 'object') {
+    anchorDiagnostic = result;
+    return '';
+  }
+  if (kind === 'completed' && result && typeof result === 'object'
+    && UUID.test(result.assistantId ?? '') && typeof result.text === 'string') return result;
+  return typeof result === 'string' ? result : '';
+}
+async function storedFinalText(page, conversation, anchor, assistantId, expectedPrompt) {
+  return readStoredReviewMessage(page, conversation, 'final', anchor.userMessageId, assistantId, expectedPrompt);
 }
 async function waitForReview(page, request, deadlineAt, recovered = false) {
   const conversation = canonicalUrl(read('conversation.json').url);
@@ -637,6 +677,15 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
         }
       }
     }
+    if (!anchored && crypto.createHash('sha256').update(expectedPrompt).digest('hex') === anchor.userMessageHash) {
+      if (Date.now() - lastStoredRead >= 30000) {
+        lastStoredRead = Date.now();
+        const completed = await readStoredReviewMessage(page, conversation, 'completed', anchor.userMessageId, null, expectedPrompt);
+        stored = completed?.text ?? ''; storedId = completed?.assistantId ?? '';
+        if (stored) console.log('SCIENTIFIC_REVIEW_CONVERSATION_API_READ');
+      }
+      if (stored && UUID.test(storedId)) anchored = { assistantId: storedId, assistantText: stored, fromStored: true };
+    }
     if (anchored && UUID.test(anchored.assistantId)
       && crypto.createHash('sha256').update(expectedPrompt).digest('hex') === anchor.userMessageHash) {
       const stopVisible = await page.getByRole('button', { name: /Stop|停止/ }).isVisible().catch(() => false);
@@ -653,7 +702,14 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
       if (text.length >= 20 && !stopVisible) {
         if (text === stable) stableCount += 1; else { stable = text; stableCount = 0; }
         if (stableCount >= 2) {
-          const currentAnchor = await findUserAnchor(page, reviewPrompt(request));
+          if (anchored.fromStored) {
+            const current = await readStoredReviewMessage(page, conversation, 'completed', anchor.userMessageId, null, expectedPrompt);
+            if (current?.assistantId !== anchored.assistantId || current?.text !== text) {
+              stored = ''; storedId = ''; stable = ''; stableCount = 0;
+              continue;
+            }
+          }
+          const currentAnchor = await findUserAnchor(page, reviewPrompt(request), request);
           if (!currentAnchor || currentAnchor.userMessageId !== anchor.userMessageId
             || currentAnchor.userMessageHash !== anchor.userMessageHash) throw Error('USER_MESSAGE_ANCHOR_CHANGED');
           if (quotaRefusal(text)) {
@@ -684,6 +740,7 @@ async function waitForReview(page, request, deadlineAt, recovered = false) {
 let activePage;
 let stage = 'request';
 let comparisonDiagnostic;
+let anchorDiagnostic;
 let attachmentDiagnostic;
 let composerRepairAttempted = false;
 (async () => {
@@ -839,7 +896,8 @@ let composerRepairAttempted = false;
   try { once(`operator-attempt-error-${crypto.randomUUID()}.json`, { ...failure, stage, errorKind,
     at: new Date().toISOString(), composerRepairAttempted,
     ...(attachmentDiagnostic ? { attachment: attachmentDiagnostic } : {}),
-    ...(comparisonDiagnostic ? { comparison: comparisonDiagnostic } : {}) }); } catch {}
+    ...(comparisonDiagnostic ? { comparison: comparisonDiagnostic } : {}),
+    ...(anchorDiagnostic ? { anchor: anchorDiagnostic } : {}) }); } catch {}
   console.log(JSON.stringify(failure));
   process.exit(1);
 });
