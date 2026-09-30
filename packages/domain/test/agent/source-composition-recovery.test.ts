@@ -1,23 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { getHermesResearchRun, retryHermesGeneration, reconcileHermesResearchRuns } from '../../src/agent/research-run';
 import { ensureHermesIngestionReview, reanalyzeConfirmedIngestion } from '../../src/ingestion/ingestion-service';
 import { requireHermesSourceReviewExecution } from '../../src/ingestion/source-review-recovery';
 import { inspectHermesSourceCompositionRecovery } from '../../src/ingestion/source-composition-recovery';
-import { sourceCompositionRecoveryFixture } from './source-composition-recovery-fixture';
+import { sourceCompositionRecoveryFixture, sourceCompositionCandidate as candidate, sourceReviewPacketFailureFixture } from './source-composition-recovery-fixture';
 import { claimAgentTask, markTaskProgress } from '../../src/agent/agent';
 import { requireHermesSourceCompositionRecoveryExecution } from '../../src/ingestion/source-composition-recovery';
-
-function candidate(f: Awaited<ReturnType<typeof sourceCompositionRecoveryFixture>>) {
-  const result = structuredClone(f.anchorResult);
-  result.scientificReview.semanticStage = structuredClone(f.failed.result.scientificReview.semanticStage);
-  result.scientificReview.reviewedCandidateHash = f.failed.result.scientificReview.reviewedCandidateHash;
-  for (const field of Object.keys(result.evidence)) result.evidence[field]!.locator = 'passages:P00001';
-  Object.assign(result.scientificReview, { usage: { inputTokens: 10, outputTokens: 10 }, draftClaims: [{ clientKey: 'core', kind: 'core',
-    sourceField: 'insight', statement: 'Supported contribution', conditions: [], limitations: [],
-    sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }] });
-  return result;
-}
 
 async function claimedRecovery() {
   const f = await sourceCompositionRecoveryFixture(); await retryHermesGeneration(f.deps, f.recoveryInput);
@@ -27,7 +16,161 @@ async function claimedRecovery() {
   return { ...f, owner, executionInput: { ownerTaskId: id, ingestionTaskId: f.source.id, sourceAgentTaskId: f.failed.id, executionAttempt: 1 } };
 }
 
+async function failedPacketIndependent() {
+  const f = await sourceReviewPacketFailureFixture(); await retryHermesGeneration(f.deps, f.packetInput);
+  const root = f.db.agentTasks.at(-1)!;
+  Object.assign(root, { status: 'succeeded', executionAttempt: 1, result: structuredClone(f.review.result) });
+  Object.assign(root.result.scientificReview, { status: 'blocked_scientific_review', attemptId: '22222222-2222-5222-8222-222222222222' });
+  for (const key of Object.keys(root.result.fieldDiagnosticsDetails)) root.result.fieldDiagnosticsDetails[key] = 'scientificReview=unavailable';
+  f.db.auditLogs.push({ id: 'packet-web-call', action: 'ai.gateway.call', requestId: root.id, actorId: null, targetType: 'ai_gateway',
+    metadata: { operation: 'scientific_review', outcome: 'failed', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
+      promptHash: 'c'.repeat(64), inputContentHash: f.reference.contentHash, fallbackReason: null, retryCount: 0, error: 'scientific_review_failed' } });
+  f.db.ingestionTasks.find(row => row.id === f.source.id)!.state = 'needs_review';
+  f.db.hermesResearchSteps.find(row => row.agentTaskId === root.id && row.stage === 'source_review')!.status = 'failed';
+  f.db.hermesResearchRuns.find(row => row.id === f.run.id)!.status = 'failed';
+  const verifier = vi.fn(async () => true);
+  return { ...f, root, verifier, deps: { ...f.deps, canRetrySourceReviewBeforeSubmission: verifier },
+    technicalInput: { ...f.packetInput, expectedVersion: f.db.hermesResearchRuns.find(row => row.id === f.run.id)!.version,
+      idempotencyKey: 'packet-technical-successor' } };
+}
+
 describe('same-run final source composition recovery', () => {
+  it('does not charge or offer the legacy packet recovery after compact formatting also exceeded the bound', async () => {
+    const f = await sourceReviewPacketFailureFixture();
+    for (const key of Object.keys(f.review.result.fieldDiagnosticsDetails))
+      f.review.result.fieldDiagnosticsDetails[key] = 'scientificReview=required_review_context_too_large;compact_packet_exhausted';
+    const tasks = f.db.agentTasks.length; const ledger = structuredClone(f.db.usageLedger);
+    expect((await getHermesResearchRun(f.deps, f.packetInput)).canRetryGeneration).not.toBe(true);
+    await expect(retryHermesGeneration(f.deps, f.packetInput)).rejects.toThrow();
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toEqual(ledger);
+  });
+
+  it('recognizes the paid packet continuation as the same independent intent for its one positively verified technical successor', async () => {
+    const f = await failedPacketIndependent(); const ledger = structuredClone(f.db.usageLedger);
+    expect(await getHermesResearchRun(f.deps, f.technicalInput)).toMatchObject({
+      generationRecovery: 'source-review-not-submitted', chargeableAttempts: 0 });
+    await retryHermesGeneration(f.deps, f.technicalInput); expect(f.db.usageLedger).toEqual(ledger);
+    const owner = f.db.agentTasks.at(-1)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
+    expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: owner.id, ingestionTaskId: f.source.id,
+      failedTaskId: f.root.id, compositionTaskId: f.composition.id, executionAttempt: 1 })).toMatchObject({
+      mode: 'web', notSubmittedRecovery: { requestId: f.root.result.scientificReview.attemptId, promptHash: 'c'.repeat(64) } });
+    await retryHermesGeneration(f.deps, f.technicalInput); expect(f.db.usageLedger).toEqual(ledger);
+  });
+
+  it.each(['bound-proof', 'credit-policy', 'chargeable', 'intent-owner', 'route', 'digest', 'request-key'])(
+    'rejects a changed technical packet receipt (%s) before provider authorization', async change => {
+      const f = await failedPacketIndependent(); await retryHermesGeneration(f.deps, f.technicalInput);
+      const owner = f.db.agentTasks.at(-1)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
+      const receipt = f.db.auditLogs.find(row => row.action === 'hermes.research_run.source_review_recovery' && row.metadata.newAgentTaskId === owner.id)!;
+      if (change === 'bound-proof') receipt.metadata.notSubmittedRecovery.input.promptHash = 'd'.repeat(64);
+      if (change === 'credit-policy') receipt.metadata.creditPolicy = 'free';
+      if (change === 'chargeable') receipt.metadata.chargeableAttempts = 1;
+      if (change === 'intent-owner') receipt.metadata.independentIntentTaskId = f.review.id;
+      if (change === 'route') receipt.metadata.reviewModel = 'MiniMax-M3';
+      if (change === 'digest') receipt.metadata.requestDigest = 'invalid';
+      if (change === 'request-key') receipt.metadata.clientIdempotencyKey = '';
+      await expect(requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: owner.id, ingestionTaskId: f.source.id,
+        failedTaskId: f.root.id, compositionTaskId: f.composition.id, executionAttempt: 1 })).rejects.toThrow('[blocked]');
+    });
+
+  it('rejects a paid packet recovery receipt moved to another workspace', async () => {
+    const f = await sourceReviewPacketFailureFixture(); await retryHermesGeneration(f.deps, f.packetInput);
+    const owner = f.db.agentTasks.at(-1)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
+    f.db.auditLogs.find(row => row.action === 'hermes.research_run.source_review_recovery' && row.metadata.newAgentTaskId === owner.id)!.workspaceId = 'other';
+    await expect(requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: owner.id, ingestionTaskId: f.source.id,
+      failedTaskId: f.review.id, compositionTaskId: f.composition.id, executionAttempt: 1 })).rejects.toThrow('[blocked]');
+  });
+
+  it('continues an exact initial local packet overflow with one paid web review and preserves the failed rows', async () => {
+    const f = await sourceReviewPacketFailureFixture();
+    const oldReview = structuredClone(f.review); const failedSteps = structuredClone(f.db.hermesResearchSteps.filter(row => row.runId === f.run.id && row.status === 'failed'));
+    const tasks = f.db.agentTasks.length; const debits = f.db.usageLedger.length;
+    expect(await getHermesResearchRun(f.deps, f.packetInput)).toMatchObject({
+      canRetryGeneration: true, generationRecovery: 'source-review-independent', chargeableAttempts: 1 });
+    await retryHermesGeneration(f.deps, f.packetInput);
+    const owner = f.db.agentTasks.at(-1)!;
+    expect(f.db.agentTasks).toHaveLength(tasks + 1); expect(f.db.usageLedger).toHaveLength(debits + 1);
+    expect(f.review).toEqual(oldReview);
+    for (const row of failedSteps) expect(f.db.hermesResearchSteps.find(step => step.id === row.id)).toEqual(row);
+    expect(f.db.auditLogs.at(-1)!.metadata).toMatchObject({ recoveryClass: 'independent_source_review_packet_overflow', reviewMode: 'web' });
+    const after = structuredClone(f.db.usageLedger); const dispatches = f.redis.lpush.mock.calls.length;
+    await retryHermesGeneration(f.deps, f.packetInput);
+    expect(f.db.usageLedger).toEqual(after); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
+    Object.assign(owner, { status: 'running', executionAttempt: 1 });
+    expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: owner.id, ingestionTaskId: f.source.id,
+      failedTaskId: f.review.id, compositionTaskId: f.composition.id, executionAttempt: 1 })).toMatchObject({ mode: 'web' });
+  });
+
+  it.each(['receipt-missing', 'receipt-duplicate', 'receipt-actor', 'receipt-run', 'receipt-policy', 'receipt-map', 'receipt-charge',
+    'receipt-parent', 'provider-call', 'prompt', 'response', 'usage', 'evidence-output', 'wrong-diagnostic', 'partial-diagnostic',
+    'changed-summary', 'changed-ids', 'changed-source', 'changed-map', 'changed-stage', 'public-core', 'public-evidence',
+    'review-status', 'wrong-route', 'debit', 'owner-lease', 'pointer', 'scope'])(
+    'denies packet continuation after %s without adding a task or debit', async change => {
+      const f = await sourceReviewPacketFailureFixture(); const result = f.review.result;
+      const receipt = f.db.auditLogs.find(row => row.action === 'ingestion.task.system_analysis_refresh' && row.metadata.newAgentTaskId === f.review.id)!;
+      if (change === 'receipt-missing') f.db.auditLogs.splice(f.db.auditLogs.indexOf(receipt), 1);
+      if (change === 'receipt-duplicate') f.db.auditLogs.push({ ...structuredClone(receipt), id: 'duplicate-initial' });
+      if (change === 'receipt-actor') receipt.actorId = f.input.userId;
+      if (change === 'receipt-run') receipt.metadata.runId = f.ids.run;
+      if (change === 'receipt-policy') receipt.metadata.policy = 'scientific_review_v4_correction';
+      if (change === 'receipt-map') receipt.metadata.sourceMapSha256 = '9'.repeat(64);
+      if (change === 'receipt-charge') receipt.metadata.creditPolicy = 'free';
+      if (change === 'receipt-parent') receipt.metadata.oldAgentTaskId = f.failed.id;
+      if (change === 'provider-call') f.db.auditLogs.push({ ...structuredClone(receipt), id: 'unexpected-call', action: 'ai.gateway.call', requestId: f.review.id });
+      if (change === 'prompt') result.scientificReview.promptHash = 'e'.repeat(64);
+      if (change === 'response') result.scientificReview.responseHash = 'e'.repeat(64);
+      if (change === 'usage') result.scientificReview.usage = { inputTokens: 1, outputTokens: 1 };
+      if (change === 'evidence-output') result.scientificReview.needsMoreEvidence = [];
+      if (change === 'wrong-diagnostic') for (const key of Object.keys(result.fieldDiagnosticsDetails)) result.fieldDiagnosticsDetails[key] = 'scientificReview=invalid_response';
+      if (change === 'partial-diagnostic') result.fieldDiagnosticsDetails.method = 'scientificReview=invalid_response';
+      if (change === 'changed-summary') result.unverifiedSummaries.method += 'Changed';
+      if (change === 'changed-ids') result.unverifiedSourcePassageIds.method = ['P00002'];
+      if (change === 'changed-source') result.scientificReview.sourceAgentTaskId = f.failed.id;
+      if (change === 'changed-map') result.sourceMapRef.serializedSha256 = 'e'.repeat(64);
+      if (change === 'changed-stage') result.scientificReview.semanticStage.reduction.chosenRepresentativeCase = 'Different case';
+      if (change === 'public-core') result.core.method = 'Unreviewed';
+      if (change === 'public-evidence') result.evidence.method.quote = 'Unreviewed';
+      if (change === 'review-status') result.scientificReview.status = 'review_received';
+      if (change === 'wrong-route') result.scientificReview.model = 'MiniMax-M3';
+      if (change === 'debit') f.db.usageLedger.find(row => row.idempotencyKey === `agent-task-reserve:${f.review.id}`)!.delta = 0n;
+      if (change === 'owner-lease') f.review.executionAttempt = 2;
+      if (change === 'pointer') f.source.agentTaskId = f.composition.id;
+      if (change === 'scope') f.db.agentSessions.find(row => row.id === f.review.sessionId)!.userId = 'another';
+      const tasks = f.db.agentTasks.length; const debits = f.db.usageLedger.length;
+      expect((await getHermesResearchRun(f.deps, f.packetInput)).canRetryGeneration).not.toBe(true);
+      await expect(retryHermesGeneration(f.deps, f.packetInput)).rejects.toThrow();
+      expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(debits);
+    });
+
+  it('rejects changed packet recovery evidence and a second client key while retaining the same paid intent', async () => {
+    const f = await sourceReviewPacketFailureFixture(); await retryHermesGeneration(f.deps, f.packetInput);
+    const owner = f.db.agentTasks.at(-1)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
+    const input = { ownerTaskId: owner.id, ingestionTaskId: f.source.id, failedTaskId: f.review.id,
+      compositionTaskId: f.composition.id, executionAttempt: 1 };
+    const receipt = f.db.auditLogs.find(row => row.action === 'hermes.research_run.source_review_recovery' && row.metadata.newAgentTaskId === owner.id)!;
+    const tasks = f.db.agentTasks.length; const debits = f.db.usageLedger.length;
+    await expect(retryHermesGeneration(f.deps, { ...f.packetInput, idempotencyKey: 'second-key' })).rejects.toThrow();
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(debits);
+    f.db.auditLogs.find(row => row.id === receipt.id)!.metadata.packetFailureEvidence.reviewedCandidateHash = 'e'.repeat(64);
+    await expect(requireHermesSourceReviewExecution(f.prisma, input)).rejects.toThrow('[blocked]');
+  });
+
+  it('reconciles a completed packet continuation into the existing ready review, preserving original diagnostics', async () => {
+    const f = await sourceReviewPacketFailureFixture(); const oldStep = structuredClone(f.db.hermesResearchSteps.find(row => row.agentTaskId === f.review.id && row.stage === 'source_review'));
+    await retryHermesGeneration(f.deps, f.packetInput); const owner = f.db.agentTasks.at(-1)!;
+    owner.status = 'succeeded'; owner.executionAttempt = 1;
+    owner.result = { ...structuredClone(f.composition.result), scientificReview: { ...structuredClone(f.composition.result.scientificReview),
+      kind: 'independent_review', contractVersion: '5', status: 'review_received', sourceAgentTaskId: f.composition.id,
+      reviewedCandidateHash: f.review.result.scientificReview.reviewedCandidateHash, provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro' },
+      reviewedClaimSuggestions: [{ clientKey: 'core', kind: 'core', sourceField: 'insight', statement: 'Reviewed contribution',
+        conditions: [], limitations: [], sourceBindings: [{ sourceIndex: 0, relation: 'supports' }] }] };
+    f.source.state = 'needs_review';
+    expect(await ensureHermesIngestionReview(f.deps, { actorId: f.input.userId, runId: f.run.id, taskId: f.source.id })).toBe('ready');
+    expect(f.db.hermesResearchSteps.find(row => row.id === oldStep!.id)).toEqual(oldStep);
+    const after = structuredClone(f.db.usageLedger); await retryHermesGeneration(f.deps, f.packetInput);
+    expect(f.db.usageLedger).toEqual(after);
+  });
+
   it('offers one paid final composition from the saved complete semantic stage, without a review or new run', async () => {
     const f = await sourceCompositionRecoveryFixture(); expect(f.run.status).toBe('failed');
     const before = structuredClone(f.db);

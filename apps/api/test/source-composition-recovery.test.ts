@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createSession } from '@openscience/auth';
 import { reconcileHermesResearchRuns } from '@openscience/domain';
-import { sourceCompositionRecoveryFixture } from '../../../packages/domain/test/agent/source-composition-recovery-fixture';
+import { sourceCompositionRecoveryFixture, sourceReviewPacketFailureFixture } from '../../../packages/domain/test/agent/source-composition-recovery-fixture';
 import { buildApp } from '../src/app';
 import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
 
-async function fixture() {
-  const f = await sourceCompositionRecoveryFixture(); const redis = createFakeRedis();
+async function fixture(packet = false) {
+  const f = packet ? await sourceReviewPacketFailureFixture() : await sourceCompositionRecoveryFixture(); const redis = createFakeRedis();
   Object.assign(redis, { lpush: f.redis.lpush });
   const token = await createSession(redis, { userId: f.input.userId, status: 'email_verified' });
   const app = await buildApp({ prisma: f.prisma, redis, storage: f.storage, audit: f.deps.audit,
@@ -22,6 +22,32 @@ async function fixture() {
 }
 
 describe('existing retry-generation final composition HTTP contract', () => {
+  it('projects and replays one paid independent continuation for an exact initial local overflow', async () => {
+    const f = await fixture(true); const version = f.run.version;
+    const read = await f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });
+    expect(read.statusCode).toBe(200); expect(read.json().run).toMatchObject({
+      canRetryGeneration: true, generationRecovery: 'source-review-independent', chargeableAttempts: 1 });
+    expect(read.body).not.toMatch(/packetFailureEvidence|unverifiedSummaries|draftClaims|semanticStage/);
+    const debits = f.db.usageLedger.length; const tasks = f.db.agentTasks.length;
+    const [first, replay] = await Promise.all([f.post('packet-browser', { expectedVersion: version }), f.post('packet-browser', { expectedVersion: version })]);
+    expect(first.statusCode).toBe(202); expect(replay.statusCode).toBe(202); expect(first.json()).toEqual(replay.json());
+    expect(f.db.agentTasks).toHaveLength(tasks + 1); expect(f.db.usageLedger).toHaveLength(debits + 1);
+    const dispatches = f.redis.lpush.mock.calls.length;
+    expect((await f.post('packet-browser', { expectedVersion: version })).statusCode).toBe(202);
+    expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
+    expect((await f.post('different-packet-browser', { expectedVersion: version })).statusCode).toBe(409);
+    expect(f.db.usageLedger).toHaveLength(debits + 1);
+  });
+
+  it('denies a locally marked packet failure if any provider call was already recorded', async () => {
+    const f = await fixture(true);
+    const taskId = f.db.ingestionTasks.find(row => row.id === f.source.id)!.agentTaskId;
+    f.db.auditLogs.push({ id: 'unexpected-provider-call', action: 'ai.gateway.call', requestId: taskId, actorId: null,
+      targetType: 'ai_gateway', metadata: { operation: 'scientific_review' } });
+    const before = structuredClone(f.db); const denied = await f.post('not-local');
+    expect(denied.statusCode).toBe(400); expect(denied.json().error.code).toBe('VALIDATION_ERROR'); expect(f.db).toEqual(before);
+  });
+
   it.each(['failed_retryable', 'failed_blocked'])('replays the same terminal %s operation without restarting or charging', async state => {
     const f = await fixture(); const version = f.run.version;
     expect((await f.post('terminal-replay', { expectedVersion: version })).statusCode).toBe(202);

@@ -812,7 +812,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & {
   if (!proof || proof.run.actorId !== input.actorId || proof.run.researchObjectId !== input.researchObjectId
     || proof.run.version !== input.expectedVersion) throw new IngestionError('VALIDATION_ERROR', 'This source review has no safe source recovery');
   const { run, source, failed, composition, sourceStep, originalStep, recoveryKey } = proof;
-  if ((proof.directCompositionEvidence || proof.savedOutputEvidence) && !deps.audit?.record)
+  if ((proof.directCompositionEvidence || proof.savedOutputEvidence || proof.packetFailureEvidence) && !deps.audit?.record)
     throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Source review recovery audit is unavailable');
   const { membership } = await requireActiveMembership(tx, run.researchObject.workspaceId, input.actorId);
   if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
@@ -838,7 +838,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & {
     id: sourceStep.id, runId: run.id, stage: 'source_ingestion', agentTaskId: failed.id,
     ingestionTaskId: source.id, artifactId: source.artifactId,
   }, data: { agentTaskId: task.id, status: 'waiting', error: null } });
-  const preserved = proof.technicalRecovery ? { count: 1 } : await tx.hermesResearchStep.updateMany({ where: {
+  const preserved = proof.technicalRecovery || (proof.packetFailureEvidence && originalStep.status === 'failed') ? { count: 1 } : await tx.hermesResearchStep.updateMany({ where: {
     id: originalStep.id, runId: run.id, stage: 'source_review', ordinal: originalStep.ordinal, agentTaskId: failed.id,
   }, data: { status: 'failed', error: originalStep.error ?? (proof.recoveryClass === 'accepted_review_claim_contract_missing'
     ? 'Accepted source review is missing its required Claims contract; original candidate preserved'
@@ -860,7 +860,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & {
   await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: run.researchObject.workspaceId,
     action: 'hermes.research_run.source_review_recovery', targetType: 'hermes_research_run', targetId: run.id,
     metadata: { requestDigest: input.requestDigest, clientIdempotencyKey: input.idempotencyKey,
-      explicitUserAction: true, possibleDuplicateProviderCharge: true,
+      explicitUserAction: true, possibleDuplicateProviderCharge: proof.packetFailureEvidence ? false : true,
       ...(proof.reviewMode === 'web' ? { ...HERMES_INDEPENDENT_SOURCE_REVIEW, noRuntimeFallback: true } : { noProviderSwitch: true }),
       previousVersion: input.expectedVersion, previousRunError: run.error, oldAgentTaskId: failed.id,
       compositionSourceAgentTaskId: composition.id, newAgentTaskId: task.id, serviceFailureAuditIds: proof.auditIds,
@@ -870,6 +870,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & {
       ...(proof.schemaContractEvidence ?? {}),
       ...(proof.directCompositionEvidence ?? {}),
       ...(proof.savedOutputEvidence ? { savedOutputEvidence: proof.savedOutputEvidence, freshReview: false, savedOutputReused: true } : {}),
+      ...(proof.packetFailureEvidence ? { packetFailureEvidence: proof.packetFailureEvidence, freshReview: true, savedOutputReused: false } : {}),
       ...(proof.technicalRecovery ? { notSubmittedRecovery: proof.technicalRecovery, independentIntentTaskId: failed.id } : {}),
       stage: 'source_review', ordinal: proof.nextOrdinal, chargeableAttempts: proof.technicalRecovery ? 0 : 1,
       creditPolicy: proof.technicalRecovery ? 'reuse-original-reservation' : 'new-review-task-charged;original-failure-preserved' } }, ctx);

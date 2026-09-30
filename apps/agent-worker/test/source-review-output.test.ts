@@ -187,6 +187,46 @@ async function independentFixture() {
 }
 
 describe('terminal independent source review', () => {
+  it.each([940, 1120])('keeps complete oversized review data and the transport bound (%s source characters)', async sourceChars => {
+    const f = await independentFixture();
+    const map = f.context.sourceMap!;
+    map.pages = Array.from({ length: 53 }, (_, index) => ({ ...structuredClone(map.pages[0]!), page: index + 1,
+      blocks: [{ ...structuredClone(map.pages[0]!.blocks[0]!), id: `review-context-${index + 1}`,
+        text: `Case ${index + 1}: the stated model, its assumptions and its distinct control are numerical evidence. `.padEnd(sourceChars, 'q') }] }));
+    const candidate = f.context.previousResult as Awaited<ReturnType<typeof extractHandler>>;
+    candidate.scientificReview!.semanticStage!.source.sourceMapHash = createHash('sha256').update(JSON.stringify(map)).digest('hex');
+    const byField = Object.fromEntries(SDF_CORE_FIELDS.map((field, fieldIndex) => [field,
+      Array.from({ length: 27 }, (_, index) => index * 2).filter((_, index) => index % 6 === fieldIndex)]));
+    for (const field of SDF_CORE_FIELDS) {
+      const ids = byField[field]!.map(index => 'P' + String(index + 1).padStart(5, '0'));
+      f.output.fields[field]!.sourcePassageIds = ids;
+      candidate.evidence[field] = { quote: byField[field]!.map(index => map.pages[index]!.blocks[0]!.text).join('\n'), locator: 'passages:' + ids.join(',') };
+    }
+    const drafts = Array.from({ length: 11 }, (_, index) => ({ ...structuredClone(f.output.claimSuggestions[0]!),
+      clientKey: `review-draft-${index}`, conditions: [`condition-${index}-`.padEnd(350, 'c')],
+      sourceBindings: [{ sourcePassageId: f.output.fields.insight!.sourcePassageIds[0]!, relation: 'supports' as const }] }));
+    candidate.scientificReview!.draftClaims = drafts; f.output.claimSuggestions = structuredClone(drafts);
+    const result = await f.run();
+    if (sourceChars === 1120) {
+      expect(f.web).not.toHaveBeenCalled(); expect(f.beforeReviewProviderCall).not.toHaveBeenCalled();
+      expect(Object.values(result.fieldDiagnosticsDetails ?? {}).join(' ')).toContain('required_review_context_too_large;compact_packet_exhausted');
+      expect(f.complete).toHaveBeenCalledTimes(2); return;
+    }
+    expect(f.web, JSON.stringify(result.fieldDiagnosticsDetails)).toHaveBeenCalledOnce();
+    const input = f.web.mock.calls[0]![0];
+    expect(input.prompt.length).toBeLessThanOrEqual(61_440);
+    for (const [index, page] of map.pages.entries()) {
+      expect(input.prompt).toContain(`[P${String(index + 1).padStart(5, '0')} page:${index + 1}`);
+      expect(input.prompt).toContain(page.blocks[0]!.text);
+    }
+    expect(input.prompt).toContain(JSON.stringify(drafts));
+    for (const field of SDF_CORE_FIELDS) expect(input.prompt).toContain(JSON.stringify({
+      summary: candidate.core[field], sourcePassageIds: f.output.fields[field]!.sourcePassageIds, needsMoreInformation: false }));
+    expect(input.attachments![0]!.bytes).toEqual(f.context.scientificReview!.sourceDocument!.bytes);
+    expect(f.beforeReviewProviderCall).toHaveBeenCalledOnce(); expect(f.complete).toHaveBeenCalledTimes(2);
+    expect(result.scientificReview?.status).toBe('review_received');
+  });
+
   it.each([false, true])('forwards only the server-bound zero-submit proof (bound=%s)', async bound => {
     const f = await independentFixture();
     const proof = { requestId: 'original-request', promptHash: 'b'.repeat(64), artifactId: f.context.sourceMap!.artifactId,

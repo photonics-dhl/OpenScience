@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
-import { reanalyzeConfirmedIngestion } from '../../src/ingestion/ingestion-service';
-import { reconcileHermesResearchRuns } from '../../src/agent/research-run';
+import { ensureHermesIngestionReview, reanalyzeConfirmedIngestion } from '../../src/ingestion/ingestion-service';
+import { reconcileHermesResearchRuns, retryHermesGeneration } from '../../src/agent/research-run';
 import { advancePrivateSourceReanalysisToReview, privateSourceReanalysisFixture } from './private-source-reanalysis-fixture';
 
 export async function sourceCompositionRecoveryFixture() {
@@ -50,4 +50,48 @@ export async function sourceCompositionRecoveryFixture() {
     original: f.db.agentTasks.find(row => row.id === original.id)!, failed: f.db.agentTasks.find(row => row.id === failed.id)!,
     recoveryInput: { actorId: f.input.userId, researchObjectId: f.ids.ro, runId: run.id,
       expectedVersion: currentRun.version, idempotencyKey: 'same-final-composition' } };
+}
+
+export function sourceCompositionCandidate(f: Awaited<ReturnType<typeof sourceCompositionRecoveryFixture>>) {
+  const result = structuredClone(f.anchorResult);
+  result.scientificReview.semanticStage = structuredClone(f.failed.result.scientificReview.semanticStage);
+  result.scientificReview.reviewedCandidateHash = f.failed.result.scientificReview.reviewedCandidateHash;
+  for (const field of Object.keys(result.evidence)) result.evidence[field]!.locator = 'passages:P00001';
+  Object.assign(result.scientificReview, { usage: { inputTokens: 10, outputTokens: 10 }, draftClaims: [{ clientKey: 'core', kind: 'core',
+    sourceField: 'insight', statement: 'Supported contribution', conditions: [], limitations: [],
+    sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }] });
+  return result;
+}
+
+export async function sourceReviewPacketFailureFixture() {
+  const f = await sourceCompositionRecoveryFixture(); await retryHermesGeneration(f.deps, f.recoveryInput);
+  const composition = f.db.agentTasks.at(-1)!; const candidate = sourceCompositionCandidate(f);
+  Object.assign(composition, { status: 'succeeded', executionAttempt: 1, result: candidate });
+  const source = f.db.ingestionTasks.find(row => row.id === f.source.id)!;
+  source.state = 'needs_review'; await reconcileHermesResearchRuns(f.deps);
+  await ensureHermesIngestionReview(f.deps, { actorId: f.input.userId, runId: f.run.id, taskId: source.id });
+  const review = f.db.agentTasks.at(-1)!;
+  Object.assign(review, { status: 'succeeded', executionAttempt: 1, result: {
+    ...structuredClone(candidate), reason: 'canonical_partial_validation_exhausted',
+    core: { schemaVersion: candidate.core.schemaVersion, ...Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, ''])) },
+    evidence: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { quote: '', locator: '' }])),
+    evidenceSegments: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, []])), needsMoreInformation: [...SDF_CORE_FIELDS],
+    fieldDiagnostics: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, 'malformed_item'])),
+    fieldDiagnosticsDetails: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, 'scientificReview=required_review_context_too_large'])),
+    unverifiedSummaries: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, candidate.core[field]])),
+    unverifiedSourcePassageIds: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, ['P00001']])),
+    scientificReview: { kind: 'independent_review', contractVersion: '5', status: 'awaiting_review_evidence',
+      provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro', attemptId: '11111111-1111-4111-8111-111111111111',
+      reviewedCandidateHash: 'f'.repeat(64), sourceAgentTaskId: composition.id,
+      compositionSkill: structuredClone(candidate.scientificReview.compositionSkill),
+      semanticStage: structuredClone(candidate.scientificReview.semanticStage) },
+  } });
+  source.state = 'needs_review';
+  for (let tick = 0; tick < 2; tick++) {
+    f.db.hermesResearchRuns.find(row => row.id === f.run.id)!.lastReconciledAt = null; await reconcileHermesResearchRuns(f.deps);
+  }
+  const run = f.db.hermesResearchRuns.find(row => row.id === f.run.id)!;
+  return { ...f, source: f.db.ingestionTasks.find(row => row.id === source.id)!, run,
+    composition: f.db.agentTasks.find(row => row.id === composition.id)!, review: f.db.agentTasks.find(row => row.id === review.id)!,
+    packetInput: { ...f.recoveryInput, expectedVersion: run.version, idempotencyKey: 'same-packet-review-recovery' } };
 }
