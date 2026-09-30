@@ -1458,6 +1458,19 @@
     "viewVersions": "View versions"
   },
   "hermesRun": {
+    "sourceReanalysis": {
+      "start": "Start new paid analysis",
+      "continue": "Continue analysis",
+      "description": "Reuse the extracted source and skip PDF/OCR. This creates a new private analysis and a new workflow, preserving the old attempt. Analysis, independent review and subsequent production use the existing rates; ChatGPT subscription usage also applies.",
+      "restoreDescription": "Continue the private analysis already created and restore or start its workflow. This does not start another paid analysis. Review and subsequent production use the existing rates and ChatGPT subscription usage. The old attempt is preserved.",
+      "pendingDescription": "Restore the same saved request with its original source and settings. Earlier processing may already have been charged. PDF/OCR is reused; analysis, review and subsequent production use the existing rates and ChatGPT subscription usage. The old attempt is preserved.",
+      "analyzing": "Starting the new private analysis…",
+      "startingRun": "Restoring the analysis and illustrated workflow…",
+      "uncertain": "The response could not be confirmed. Continue analysis to restore this same request. Earlier processing may already have been charged.",
+      "contextError": "The account, source or workflow version changed. Reload progress for the current account before continuing; the saved request is preserved.",
+      "storageError": "This browser could not retain the request for recovery. Enable session storage and reload progress before continuing. Saved processing is preserved.",
+      "responseError": "The returned analysis or workflow does not match this source and account. Reload progress before continuing; the saved request is preserved."
+    },
     "narrative": {
       "correctionGrantDescription": "This image needs a scientific correction. The existing workflow has used 8 tasks. A one-time increase from 9 to 11 total tasks permits at most one revised plan, one new image and one internal correction of either the plan or its rendering, charged by actual use. Existing papers, images and published versions remain; nothing is published automatically.",
       "authorizeCorrection": "Authorize up to {count} correction tasks",

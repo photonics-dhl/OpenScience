@@ -24,7 +24,10 @@ import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInpu
 import { automaticIngestionReview, automaticIngestionReviewStage, requireUnchangedAutomaticCore, type HermesIngestionReviewStage } from './automatic-review';
 import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
 import { findSavedIngestionCommit, type SavedIngestionOrigin } from './saved-source-commit';
-import { HERMES_INDEPENDENT_SOURCE_REVIEW, inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview, type SourceReviewNotSubmittedVerifier } from './source-review-recovery';
+import { HERMES_INDEPENDENT_SOURCE_REVIEW, inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview,
+  inspectHermesPrivateSourceReanalysis, privateSourceReanalysisBatchKey, privateSourceReanalysisRequestDigest,
+  readHermesPrivateSourceReanalysisReplay, requireNoPrivateSourceReanalysisWriter, validPrivateSourceReanalysisInput,
+  type HermesPrivateSourceReanalysisInput, type SourceReviewNotSubmittedVerifier } from './source-review-recovery';
 import { persistHermesSourceReviewTechnicalTaskInTransaction } from '../agent/agent';
 
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
@@ -1262,11 +1265,14 @@ export async function refreshIngestionAnalysis(
 /** Starts a separately confirmable analysis generation without changing confirmed history. */
 export async function reanalyzeConfirmedIngestion(
   deps: IngestionDeps,
-  input: { userId: string; taskId: string; sourceAgentTaskId: string; processingConsent: boolean; idempotencyKey: string },
+  input: { userId: string; taskId: string; sourceAgentTaskId: string; processingConsent: boolean; idempotencyKey: string;
+    sourceReanalysis?: HermesPrivateSourceReanalysisInput },
   ctx: AuditContext = {},
 ): Promise<IngestionTaskView> {
   if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
   if (!input.idempotencyKey || input.idempotencyKey.length > 64) throw new IngestionError('VALIDATION_ERROR', 'A bounded idempotency key is required');
+  if (input.sourceReanalysis !== undefined && !validPrivateSourceReanalysisInput(input.sourceReanalysis))
+    throw new IngestionError('VALIDATION_ERROR', 'A scoped paid private source analysis intent is required');
   const initial = await deps.prisma.ingestionTask.findUnique({
     where: { id: input.taskId },
     include: { artifact: true, agentTask: { include: { session: true } }, batch: { include: { researchObject: true } } },
@@ -1276,21 +1282,25 @@ export async function reanalyzeConfirmedIngestion(
   if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
   const sourceAgent = initial.agentTask;
   const sourcePayload = sourceAgent?.payload;
-  if (initial.state !== 'confirmed' || initial.agentTaskId !== input.sourceAgentTaskId
+  const privateProof = input.sourceReanalysis ? await inspectHermesPrivateSourceReanalysis(deps.prisma, input.sourceReanalysis) : null;
+  if ((input.sourceReanalysis ? !privateProof || privateProof.source.id !== initial.id || privateProof.run.actorId !== input.userId
+    : initial.state !== 'confirmed') || initial.agentTaskId !== input.sourceAgentTaskId
     || initial.batch.userId !== input.userId || initial.artifact.workspaceId !== workspace.id
     || !sourceAgent || sourceAgent.kind !== 'sdf.extract' || sourceAgent.status !== 'succeeded'
     || sourceAgent.session.userId !== input.userId || sourceAgent.session.researchObjectId !== initial.batch.researchObjectId
     || !exactRecordKeys(sourcePayload, ['artifactId', 'researchObjectId'])
     || sourcePayload.artifactId !== initial.artifactId || sourcePayload.researchObjectId !== initial.batch.researchObjectId
-    || analysisRefreshPolicy(sourceAgent.result, initial.artifact) !== 'user_requested_reanalysis'
-    || !await savedConfirmation(deps, initial.id, initial.batch.researchObjectId)) {
-    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only a scoped confirmed extraction can create a new analysis draft');
+    || (!input.sourceReanalysis && (analysisRefreshPolicy(sourceAgent.result, initial.artifact) !== 'user_requested_reanalysis'
+      || !await savedConfirmation(deps, initial.id, initial.batch.researchObjectId)))) {
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', input.sourceReanalysis
+      ? 'Only the scoped exhausted private source review can create a new paid analysis draft'
+      : 'Only a scoped confirmed extraction can create a new analysis draft');
   }
   const reference = parseDocumentSourceMapReference((sourceAgent.result as Record<string, unknown>).sourceMapRef);
   await loadDocumentSourceMapReference(deps.storage, reference);
   const sourceMapProof = { objectKey: reference.objectKey, serializedSha256: reference.serializedSha256 };
-  const batchKey = `ingestion-reanalysis:${initial.id}:${input.idempotencyKey}`;
-  const requestDigest = createHash('sha256').update(JSON.stringify({
+  const batchKey = privateProof ? privateSourceReanalysisBatchKey(privateProof.input) : `ingestion-reanalysis:${initial.id}:${input.idempotencyKey}`;
+  const requestDigest = privateProof ? privateSourceReanalysisRequestDigest(privateProof) : createHash('sha256').update(JSON.stringify({
     taskId: initial.id, sourceAgentTaskId: sourceAgent.id, artifactId: initial.artifactId,
     sourceMapSha256: sourceMapProof.serializedSha256,
   })).digest('hex');
@@ -1309,16 +1319,26 @@ export async function reanalyzeConfirmedIngestion(
         if (!INGESTION_WRITE_ROLES.has(transactionMembership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
         const scoped = { ...deps, prisma: tx as IngestionDeps['prisma'] };
         const transactionPayload = source.agentTask?.payload;
-        if (source.state !== 'confirmed' || source.agentTaskId !== sourceAgent.id
+        const transactionProof = input.sourceReanalysis ? await inspectHermesPrivateSourceReanalysis(tx, input.sourceReanalysis) : null;
+        if ((input.sourceReanalysis ? !transactionProof || transactionProof.run.actorId !== input.userId || transactionProof.source.id !== source.id
+          : source.state !== 'confirmed') || source.agentTaskId !== sourceAgent.id
           || source.batch.userId !== input.userId || source.batch.researchObjectId !== initial.batch.researchObjectId
           || source.artifactId !== initial.artifactId || source.artifact.workspaceId !== transactionWorkspace.id
           || !source.agentTask || source.agentTask.kind !== 'sdf.extract' || source.agentTask.status !== 'succeeded'
           || source.agentTask.session.userId !== input.userId || source.agentTask.session.researchObjectId !== initial.batch.researchObjectId
           || !exactRecordKeys(transactionPayload, ['artifactId', 'researchObjectId'])
           || transactionPayload.artifactId !== source.artifactId || transactionPayload.researchObjectId !== source.batch.researchObjectId
-          || analysisRefreshPolicy(source.agentTask.result, source.artifact) !== 'user_requested_reanalysis'
-          || !await savedConfirmation(scoped, source.id, source.batch.researchObjectId)) {
-          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Confirmed extraction changed while creating a new draft');
+          || (!input.sourceReanalysis && (analysisRefreshPolicy(source.agentTask.result, source.artifact) !== 'user_requested_reanalysis'
+            || !await savedConfirmation(scoped, source.id, source.batch.researchObjectId)))) {
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', input.sourceReanalysis
+            ? 'Private source review changed while creating a new paid analysis draft'
+            : 'Confirmed extraction changed while creating a new draft');
+        }
+        if (transactionProof) {
+          const replay = await readHermesPrivateSourceReanalysisReplay(tx, transactionProof).catch(error => {
+            throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Private source analysis replay binding changed', error);
+          });
+          if (replay) return tx.ingestionTask.findUniqueOrThrow({ where: { id: replay.id }, include: { artifact: true } });
         }
         const replay = await tx.ingestionBatch.findUnique({
           where: { idempotencyKey: batchKey },
@@ -1341,8 +1361,24 @@ export async function reanalyzeConfirmedIngestion(
         }
         const transactionReference = parseDocumentSourceMapReference((source.agentTask.result as Record<string, unknown>).sourceMapRef);
         if (transactionReference.objectKey !== sourceMapProof.objectKey
-          || transactionReference.serializedSha256 !== sourceMapProof.serializedSha256) {
+          || transactionReference.serializedSha256 !== sourceMapProof.serializedSha256
+          || (transactionProof && (privateSourceReanalysisRequestDigest(transactionProof) !== requestDigest
+            || transactionReference.size !== reference.size || transactionReference.parserStatus !== reference.parserStatus
+            || transactionReference.artifactId !== reference.artifactId || transactionReference.contentHash !== reference.contentHash))) {
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction source map changed while creating a new draft');
+        }
+        if (transactionProof) {
+          if (!deps.audit?.record) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Private source analysis audit is unavailable');
+          await requireNoPrivateSourceReanalysisWriter(tx, transactionProof).catch(error => {
+            throw new IngestionError('INGESTION_BUSY', 'Another source analysis is active', error);
+          });
+          // Read CAS authority in this Serializable snapshot; no update of old rows or deadlines.
+          const authority = await tx.hermesResearchRun.findUnique({ where: { id: transactionProof.run.id,
+            version: input.sourceReanalysis!.expectedRunVersion, actorId: input.userId, researchObjectId: source.batch.researchObjectId,
+            status: 'failed', versionId: null, profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9 }, select: { id: true } });
+          const freshAuthority = await requireActiveMembership(tx, transactionWorkspace.id, input.userId);
+          if (!authority || freshAuthority.workspace.status !== 'active' || !INGESTION_WRITE_ROLES.has(freshAuthority.membership.role))
+            throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Private source analysis authority changed');
         }
         const batch = await tx.ingestionBatch.create({ data: {
           researchObjectId: source.batch.researchObjectId, userId: input.userId,
@@ -1369,7 +1405,8 @@ export async function reanalyzeConfirmedIngestion(
           actorId: input.userId, action: 'ingestion.task.reanalyze', workspaceId: transactionWorkspace.id,
           targetType: 'ingestion_task', targetId: newIngestion.id,
           metadata: { sourceIngestionTaskId: source.id, sourceAgentTaskId: sourceAgent.id, newAgentTaskId: analysis.id,
-            artifactId: source.artifactId, sourceMapSha256: sourceMapProof.serializedSha256, confirmationPolicy: 'new_draft' },
+            artifactId: source.artifactId, sourceMapSha256: sourceMapProof.serializedSha256, confirmationPolicy: 'new_draft',
+            ...(transactionProof ? { ...transactionProof.input, creditPolicy: 'fresh_task_charge' } : {}) },
         }, ctx);
         return tx.ingestionTask.findUniqueOrThrow({ where: { id: newIngestion.id }, include: { artifact: true } });
       }, { isolationLevel: 'Serializable' });

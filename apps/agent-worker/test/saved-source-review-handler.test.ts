@@ -6,6 +6,8 @@ import type { AiGateway } from '@openscience/ai-gateway';
 const seam = vi.hoisted(() => ({
   extractHandler: vi.fn(),
   requireExecution: vi.fn(),
+  resolveReanalysis: vi.fn(),
+  savedCommit: vi.fn(),
   claim: vi.fn(),
   progress: vi.fn(),
   lock: vi.fn(),
@@ -19,6 +21,8 @@ vi.mock('../src/extractor', async load => ({
 vi.mock('@openscience/domain', async load => ({
   ...await load<typeof import('@openscience/domain')>(),
   requireHermesSourceReviewExecution: seam.requireExecution,
+  resolveHermesPrivateSourceReanalysisExecution: seam.resolveReanalysis,
+  findSavedIngestionCommit: seam.savedCommit,
   claimAgentTask: seam.claim,
   markTaskProgress: seam.progress,
   lockTrashReferences: seam.lock,
@@ -100,14 +104,90 @@ function fixture(executionAttempt = 1) {
   } };
   const execute = () => handlers['sdf.extract']!(deps as never,
     { id: ids.owner, payload, executionAttempt, retryCount: 0 });
-  return { execute, owner, sourceResult, sourceMap, saved, reference, parserCascade, policy, providerSubmit,
+  return { execute, owner, source, sourceResult, sourceMap, saved, reference, parserCascade, policy, providerSubmit,
     prisma, tx, storage, deps, handlers };
 }
+
+describe('fresh private source reanalysis handler', () => {
+  beforeEach(() => {
+    seam.extractHandler.mockReset().mockResolvedValue({ core: { method: 'fresh analysis' }, needsMoreInformation: [] });
+    seam.resolveReanalysis.mockReset().mockResolvedValue(null);
+    seam.savedCommit.mockReset().mockResolvedValue(null);
+    seam.progress.mockReset().mockResolvedValue(undefined);
+    seam.lock.mockReset().mockResolvedValue(undefined);
+  });
+
+  function reanalysisFixture() {
+    const f = fixture();
+    f.owner.idempotencyKey = `ingestion-analysis-reanalysis:${ids.ingestion}:${ids.source}`;
+    f.prisma.ingestionTask.findUnique.mockResolvedValue({ id: ids.ingestion, agentTaskId: ids.owner,
+      artifactId: 'artifact', state: 'queued', batch: { userId: 'actor', researchObjectId: 'ro' } } as never);
+    Object.assign(f.source, { ingestionTask: { id: ids.failed, state: 'needs_review', artifactId: 'artifact',
+      batch: { userId: 'actor', researchObjectId: 'ro' } } });
+    return f;
+  }
+
+  it('reuses the bound extraction, skips parser/OCR, and performs a fresh composition', async () => {
+    const f = reanalysisFixture();
+    seam.resolveReanalysis.mockResolvedValue({ sourceMapRef: f.reference });
+    await expect(f.execute()).resolves.toMatchObject({ core: { method: 'fresh analysis' }, sourceMapReused: true });
+    expect(seam.resolveReanalysis).toHaveBeenCalledWith(f.tx, { ownerTaskId: ids.owner,
+      ingestionTaskId: ids.ingestion, sourceAgentTaskId: ids.source, executionAttempt: 1 });
+    expect(f.parserCascade).not.toHaveBeenCalled();
+    expect(f.parserCascade.renderPages).not.toHaveBeenCalled();
+    expect(seam.extractHandler).toHaveBeenCalledOnce();
+    const context = seam.extractHandler.mock.calls[0]![2];
+    expect(context.sourceMap).toEqual(f.sourceMap);
+    expect(context.previousResult).toBeUndefined();
+    expect(context.requireReusableSemanticStage).toBe(false);
+    expect(context.reviewExistingSourceTaskId).toBeUndefined();
+    expect(seam.requireExecution).not.toHaveBeenCalled();
+  });
+
+  it.each(['actor', 'run-version', 'receipt', 'lease'] as const)(
+    'rejects changed %s before parsing, composition, or checkpoint writes', async change => {
+      const f = reanalysisFixture();
+      seam.resolveReanalysis.mockRejectedValue(new Error(`[blocked] private reanalysis ${change} changed`));
+      await expect(f.execute()).rejects.toThrow(`private reanalysis ${change} changed`);
+      expect(seam.extractHandler).not.toHaveBeenCalled();
+      expect(f.parserCascade).not.toHaveBeenCalled();
+      expect(f.storage.putObject).not.toHaveBeenCalled();
+      expect(f.tx.agentTask.updateMany).not.toHaveBeenCalled();
+    });
+
+  it('rejects a bound SourceMap for a different PDF without falling back to OCR', async () => {
+    const f = reanalysisFixture();
+    seam.resolveReanalysis.mockResolvedValue({ sourceMapRef: { ...f.reference, contentHash: 'a'.repeat(64) } });
+    await expect(f.execute()).rejects.toThrow('source identity changed');
+    expect(seam.extractHandler).not.toHaveBeenCalled();
+    expect(f.parserCascade).not.toHaveBeenCalled();
+  });
+
+  it('does not turn absent private authority into an arbitrary unconfirmed reanalysis', async () => {
+    const f = reanalysisFixture();
+    await expect(f.execute()).rejects.toThrow('[blocked]');
+    expect(seam.resolveReanalysis).toHaveBeenCalledOnce();
+    expect(seam.extractHandler).not.toHaveBeenCalled();
+    expect(f.parserCascade).not.toHaveBeenCalled();
+  });
+
+  it('preserves the existing confirmed reanalysis path when no private intent exists', async () => {
+    const f = reanalysisFixture();
+    Object.assign(f.source, { ingestionTask: { id: ids.failed, state: 'confirmed', artifactId: 'artifact',
+      batch: { userId: 'actor', researchObjectId: 'ro' } } });
+    seam.savedCommit.mockResolvedValue({ commit: { researchObjectId: 'ro' } });
+    await expect(f.execute()).resolves.toMatchObject({ sourceMapReused: true });
+    expect(f.parserCascade).not.toHaveBeenCalled();
+    expect(seam.extractHandler).toHaveBeenCalledOnce();
+  });
+});
 
 describe('saved source-review handler seam', () => {
   beforeEach(() => {
     seam.extractHandler.mockReset();
     seam.requireExecution.mockReset().mockResolvedValue({ mode: 'model' });
+    seam.resolveReanalysis.mockReset().mockResolvedValue(null);
+    seam.savedCommit.mockReset().mockResolvedValue(null);
     seam.claim.mockReset().mockResolvedValue({ executionAttempt: 1, retryCount: 0 });
     seam.progress.mockReset().mockResolvedValue(undefined);
     seam.lock.mockReset().mockResolvedValue(undefined);

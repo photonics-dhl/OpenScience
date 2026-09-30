@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
 import { automaticIngestionReviewStage } from './automatic-review';
-import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
+import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { findSavedIngestionCommit } from './saved-source-commit';
 import { requireActiveMembership } from '../workspace/helpers';
 
@@ -46,6 +46,281 @@ type FreshReviewEvidence = { reviewedCandidateHash: string; structuredReviewAudi
 type SavedOutputEvidence = Omit<HermesSavedSourceReviewOutput, 'text'> & {
   reviewedCandidateHash: string; structuredReviewAuditIds: string[];
 };
+
+export type HermesPrivateSourceReanalysisInput = {
+  intent: 'new_paid_private_analysis'; sourceRunId: string; expectedRunVersion: number;
+};
+export type HermesPrivateSourceReanalysisExecutionInput = {
+  ownerTaskId: string; ingestionTaskId: string; sourceAgentTaskId: string; executionAttempt: number;
+};
+export type HermesPrivateSourceReanalysisExecution = { sourceMapRef: DocumentSourceMapReference };
+const PRIVATE_SOURCE_REANALYSIS = 'new_paid_private_analysis' as const;
+const PRIVATE_REANALYSIS_BATCH_PREFIX = 'ingestion-private-source-reanalysis:';
+const SOURCE_WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
+const uuid = (value: unknown): value is string => typeof value === 'string'
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+export function validPrivateSourceReanalysisInput(value: unknown): value is HermesPrivateSourceReanalysisInput {
+  const input = record(value);
+  return Object.keys(input).sort().join(',') === 'expectedRunVersion,intent,sourceRunId'
+    && input.intent === PRIVATE_SOURCE_REANALYSIS && uuid(input.sourceRunId)
+    && typeof input.expectedRunVersion === 'number' && Number.isSafeInteger(input.expectedRunVersion) && input.expectedRunVersion > 0;
+}
+
+export function privateSourceReanalysisBatchKey(input: HermesPrivateSourceReanalysisInput): string {
+  return `${PRIVATE_REANALYSIS_BATCH_PREFIX}${input.sourceRunId}:${input.expectedRunVersion}`;
+}
+
+/** A new paid intent after the recorded independent role and its sole technical successor are exhausted.
+ * This reads historical receipts; it never asks the broker for zero-submit/refund authority. */
+export async function inspectHermesPrivateSourceReanalysis(tx: Prisma.TransactionClient, input: HermesPrivateSourceReanalysisInput) {
+  if (!validPrivateSourceReanalysisInput(input)) return null;
+  const run = await tx.hermesResearchRun.findUnique({ where: { id: input.sourceRunId }, include: { steps: true, researchObject: true } });
+  const settings = record(run?.generationSettings);
+  if (!run || run.version !== input.expectedRunVersion || run.status !== 'failed' || run.profile !== VISUAL_NARRATIVE_PROFILE
+    || run.maxAgentTasks !== 9 || run.versionId !== null || run.sourceClaimIds.length || run.sourceReviewDigest
+    || run.researchObject.deletedAt || run.researchObject.status !== 'draft' || run.researchObject.visibility !== 'private'
+    || Object.keys(settings).sort().join(',') !== 'instruction,locale,style' || !['zh', 'en'].includes(String(settings.locale))
+    || typeof settings.style !== 'string' || !settings.style.trim() || settings.style.length > 100
+    || typeof settings.instruction !== 'string' || !settings.instruction.trim() || settings.instruction.length > 1000) return null;
+  const canonical = run.steps.filter(step => step.stage === 'source_ingestion');
+  const reviews = run.steps.filter(step => step.stage === 'source_review').sort((a, b) => a.ordinal - b.ordinal);
+  if (canonical.length !== 1 || canonical[0]!.ordinal !== 0 || !['succeeded', 'failed'].includes(canonical[0]!.status)
+    || reviews.length < 3 || run.steps.length !== 1 + reviews.length || run.steps.length + 3 > 9
+    || reviews.some((step, index) => step.ordinal !== index || step.status !== 'failed' || !step.agentTaskId)
+    || new Set(reviews.map(step => step.agentTaskId)).size !== reviews.length) return null;
+  const sourceStep = canonical[0]!;
+  if (!sourceStep.ingestionTaskId || !sourceStep.artifactId || !sourceStep.agentTaskId
+    || sourceStep.agentTaskId !== reviews.at(-1)!.agentTaskId
+    || run.steps.some(step => step.ingestionTaskId !== sourceStep.ingestionTaskId || step.artifactId !== sourceStep.artifactId
+      || step.presentationAssetId !== null)) return null;
+  const source = await tx.ingestionTask.findUnique({ where: { id: sourceStep.ingestionTaskId }, include: { artifact: true, batch: true } });
+  if (!source || source.state !== 'needs_review' || source.retryCount !== 0 || source.agentTaskId !== sourceStep.agentTaskId
+    || source.artifactId !== sourceStep.artifactId || source.batch.userId !== run.actorId || source.batch.researchObjectId !== run.researchObjectId
+    || source.artifact.workspaceId !== run.researchObject.workspaceId || source.artifact.deletedAt || source.artifact.bytesPurgedAt) return null;
+  const authority = await requireActiveMembership(tx, run.researchObject.workspaceId, run.actorId).catch(() => null);
+  if (!authority) return null;
+  const { workspace, membership } = authority;
+  if (workspace.status !== 'active' || !SOURCE_WRITE_ROLES.has(membership.role)) return null;
+  const tasks = await tx.agentTask.findMany({ where: { id: { in: reviews.map(step => step.agentTaskId!) } }, include: { session: true } });
+  if (tasks.length !== reviews.length) return null;
+  const byId = new Map(tasks.map(task => [task.id, task]));
+  const current = byId.get(source.agentTaskId)!;
+  const anchorId = record(record(byId.get(reviews[0]!.agentTaskId!)?.result).scientificReview).sourceAgentTaskId;
+  if (!uuid(anchorId) || byId.has(anchorId)) return null;
+  const anchor = await tx.agentTask.findUnique({ where: { id: anchorId }, include: { session: true } });
+  if (!anchor) return null;
+  let reference: DocumentSourceMapReference;
+  try { reference = parseDocumentSourceMapReference(record(current.result).sourceMapRef); } catch { return null; }
+  if (reference.parserStatus !== 'succeeded' || reference.artifactId !== source.artifactId || reference.contentHash !== source.artifact.blobSha256) return null;
+  for (const task of [anchor, ...tasks]) {
+    if (task.deletedAt || task.kind !== 'sdf.extract' || task.status !== 'succeeded' || task.executionAttempt < 1
+      || task.session.deletedAt || task.session.status !== 'active' || task.session.kind !== 'ingestion'
+      || task.session.userId !== run.actorId || task.session.researchObjectId !== run.researchObjectId
+      || !isDeepStrictEqual(task.payload, { artifactId: source.artifactId, researchObjectId: run.researchObjectId })
+      || record(task.result).canonicalExtractionContract !== 'grounded-passages-v2') return null;
+    try { if (!isDeepStrictEqual(parseDocumentSourceMapReference(record(task.result).sourceMapRef), reference)) return null; } catch { return null; }
+  }
+  const receipts = new Map<string, Record<string, unknown>>();
+  let previousVersion = 0;
+  for (const step of reviews) {
+    const task = byId.get(step.agentTaskId!)!;
+    const predecessorId = step.ordinal === 0 ? anchor.id : reviews[step.ordinal - 1]!.agentTaskId!;
+    const key = `ingestion-analysis-compose:${source.id}:${predecessorId}:${anchor.id}:scientific-review-v4`;
+    const review = record(record(task.result).scientificReview);
+    if (task.idempotencyKey !== key || task.retryCount !== 0 || review.sourceAgentTaskId !== anchor.id
+      || review.status !== 'blocked_scientific_review' || review.contractVersion !== '5') return null;
+    if (step.ordinal === 0) { if (task.session.idempotencyKey !== `${key}:session`) return null; continue; }
+    const rows = await tx.auditLog.findMany({ where: { action: 'hermes.research_run.source_review_recovery',
+      targetType: 'hermes_research_run', targetId: run.id, actorId: run.actorId, workspaceId: workspace.id,
+      metadata: { path: ['newAgentTaskId'], equals: task.id } }, take: 2 });
+    if (rows.length !== 1) return null;
+    const metadata = record(rows[0]!.metadata);
+    if (metadata.explicitUserAction !== true || metadata.oldAgentTaskId !== predecessorId || metadata.compositionSourceAgentTaskId !== anchor.id
+      || metadata.stage !== 'source_review' || metadata.ordinal !== step.ordinal || !sha256(metadata.requestDigest)
+      || typeof metadata.clientIdempotencyKey !== 'string' || !metadata.clientIdempotencyKey.trim()
+      || !Number.isSafeInteger(metadata.previousVersion) || Number(metadata.previousVersion) <= previousVersion
+      || Number(metadata.previousVersion) >= run.version || task.session.idempotencyKey !== `${key}:hermes-recovery:${metadata.requestDigest}`) return null;
+    previousVersion = Number(metadata.previousVersion); receipts.set(task.id, metadata);
+  }
+  const root = byId.get(reviews.at(-2)!.agentTaskId!)!;
+  const rootReceipt = receipts.get(root.id)!;
+  const technical = receipts.get(current.id)!;
+  const rootReview = record(record(root.result).scientificReview);
+  const currentReview = record(record(current.result).scientificReview);
+  const recovery = record(technical.notSubmittedRecovery);
+  const recoveryInput = record(recovery.input);
+  if (rootReceipt.recoveryClass !== INDEPENDENT_REVIEW_CLASS || !independentMode(rootReceipt) || rootReceipt.noRuntimeFallback !== true
+    || rootReceipt.chargeableAttempts !== 1 || rootReceipt.creditPolicy !== 'new-review-task-charged;original-failure-preserved'
+    || technical.recoveryClass !== SOURCE_REVIEW_NOT_SUBMITTED || !independentMode(technical) || technical.noRuntimeFallback !== true
+    || technical.independentIntentTaskId !== root.id || technical.chargeableAttempts !== 0 || technical.creditPolicy !== 'reuse-original-reservation'
+    || recovery.originalTaskId !== root.id || recovery.reservationIdempotencyKey !== `agent-task-reserve:${root.id}`
+    || !isDeepStrictEqual(recoveryInput, { requestId: rootReview.attemptId, promptHash: recoveryInput.promptHash,
+      artifactId: source.artifactId, documentSha256: reference.contentHash, candidateHash: rootReview.reviewedCandidateHash,
+      sourceMapHash: reference.serializedSha256 }) || !sha256(recoveryInput.promptHash) || !sha256(rootReview.reviewedCandidateHash)
+    || !uuid(rootReview.attemptId) || rootReview.kind !== 'independent_review' || currentReview.kind !== 'independent_review'
+    || rootReview.provider !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider || rootReview.model !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel
+    || currentReview.provider !== rootReview.provider || currentReview.model !== rootReview.model
+    || currentReview.reviewedCandidateHash !== rootReview.reviewedCandidateHash) return null;
+  const earlier = reviews.slice(1, -2).map(step => receipts.get(step.agentTaskId!)!.recoveryClass);
+  if (earlier.some(value => ![DIRECT_COMPOSITION_REVIEW_CLASS, SAVED_OUTPUT_CORRECTION_CLASS].includes(value as typeof DIRECT_COMPOSITION_REVIEW_CLASS))
+    || new Set(earlier).size !== earlier.length) return null;
+  const calls = await tx.auditLog.findMany({ where: { action: 'ai.gateway.call', requestId: root.id }, take: 2 });
+  const call = record(calls[0]?.metadata);
+  const debit = await tx.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${root.id}` } });
+  if (calls.length !== 1 || calls[0]!.id !== recovery.auditId || calls[0]!.actorId !== null || calls[0]!.targetType !== 'ai_gateway'
+    || call.operation !== 'scientific_review' || call.outcome !== 'failed' || call.provider !== rootReview.provider || call.model !== rootReview.model
+    || call.promptHash !== recoveryInput.promptHash || call.inputContentHash !== reference.contentHash
+    || call.retryCount !== 0 || call.fallbackReason !== null || call.error !== 'scientific_review_failed'
+    || !debit || debit.id !== recovery.reservationLedgerId || debit.userId !== run.actorId || debit.resource !== 'ai_credit'
+    || BigInt(debit.delta) !== -1n || debit.kind !== 'consume' || debit.reason !== 'Agent task reservation sdf.extract'
+    || !isDeepStrictEqual(debit.metadata, { taskId: root.id, kind: 'sdf.extract', policy: 'charged-on-submit' })) return null;
+  if (await findSavedIngestionCommit(tx, { taskId: source.id, researchObjectId: run.researchObjectId })
+    || await tx.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${source.id}` } })
+    || await tx.commit.findUnique({ where: { idempotencyKey: `hermes-ingestion:${run.id}:${source.id}` } })
+    || await tx.hermesResearchStep.findFirst({ where: { stage: 'source_ingestion', ingestionTaskId: source.id,
+      runId: { not: run.id }, run: { status: { notIn: ['succeeded', 'failed', 'stopped'] } } }, select: { id: true } })) return null;
+  const persistedInput: HermesPrivateSourceReanalysisInput = { intent: PRIVATE_SOURCE_REANALYSIS,
+    sourceRunId: run.id, expectedRunVersion: run.version };
+  return { run, source, current, anchor, reference, input: persistedInput, historicalSessionIds: [anchor, ...tasks].map(task => task.sessionId) };
+}
+type PrivateSourceReanalysisProof = NonNullable<Awaited<ReturnType<typeof inspectHermesPrivateSourceReanalysis>>>;
+
+/** Extend the existing reanalysis request digest with the paid intent and CAS identity. */
+export function privateSourceReanalysisRequestDigest(proof: PrivateSourceReanalysisProof): string {
+  return createHash('sha256').update(JSON.stringify({ taskId: proof.source.id, sourceAgentTaskId: proof.current.id,
+    artifactId: proof.source.artifactId, sourceMapSha256: proof.reference.serializedSha256, sourceReanalysis: proof.input })).digest('hex');
+}
+
+export async function requireNoPrivateSourceReanalysisWriter(tx: Prisma.TransactionClient, proof: PrivateSourceReanalysisProof, exceptTaskId?: string) {
+  if (await tx.agentTask.findFirst({ where: { kind: 'sdf.extract', status: { in: ['pending', 'running'] },
+    deletedAt: null, ...(exceptTaskId ? { id: { not: exceptTaskId } } : {}),
+    session: { researchObjectId: proof.run.researchObjectId, deletedAt: null, status: 'active' },
+    payload: { path: ['artifactId'], equals: proof.source.artifactId } }, select: { id: true } }))
+    throw new Error('[blocked] Private source analysis has an active writer');
+}
+
+/** A replay reads the same paid operation after its normal run advances; this grants no Worker execution. */
+async function inspectPrivateReanalysisReviewSuccessor(tx: Prisma.TransactionClient, proof: PrivateSourceReanalysisProof,
+  sourceId: string, ownerTaskId: string, composition: Prisma.AgentTaskGetPayload<{ include: { session: true } }>) {
+  const bindings = await tx.hermesResearchStep.findMany({ where: { stage: 'source_ingestion', ordinal: 0,
+    ingestionTaskId: sourceId, artifactId: proof.source.artifactId, agentTaskId: ownerTaskId }, take: 2 });
+  const run = bindings.length === 1 ? await tx.hermesResearchRun.findUnique({ where: { id: bindings[0]!.runId },
+    include: { steps: true } }) : null;
+  const owner = await tx.agentTask.findUnique({ where: { id: ownerTaskId }, include: { session: true } });
+  const canonical = run?.steps.filter(step => step.stage === 'source_ingestion') ?? [];
+  const reviews = run?.steps.filter(step => step.stage === 'source_review') ?? [];
+  const key = `ingestion-analysis-compose:${sourceId}:${composition.id}:${composition.id}:scientific-review-v4`;
+  if (!run || !owner || run.id === proof.run.id || run.actorId !== proof.run.actorId || run.researchObjectId !== proof.run.researchObjectId
+    || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || canonical.length !== 1 || reviews.length !== 1
+    || run.steps.some(step => step.stage === 'source_composition')
+    || !['running', 'awaiting_source_review', 'awaiting_claim_review', 'generating_storyboard', 'awaiting_storyboard_review',
+      'generating_scene_images', 'awaiting_scene_images_review', 'generating_video', 'awaiting_video_review', 'succeeded', 'failed', 'stopped'].includes(run.status)
+    || [canonical[0]!, reviews[0]!].some(step => step.ordinal !== 0 || step.agentTaskId !== owner.id
+      || step.ingestionTaskId !== sourceId || step.artifactId !== proof.source.artifactId || step.presentationAssetId !== null)
+    || composition.status !== 'succeeded' || owner.deletedAt || owner.kind !== 'sdf.extract' || owner.retryCount !== 0
+    || owner.session.deletedAt || owner.session.status !== 'active' || owner.session.kind !== 'ingestion'
+    || owner.session.userId !== run.actorId || owner.session.researchObjectId !== run.researchObjectId
+    || owner.idempotencyKey !== key || owner.session.idempotencyKey !== `${key}:session`
+    || !isDeepStrictEqual(owner.payload, { artifactId: proof.source.artifactId, researchObjectId: run.researchObjectId })) return null;
+  try {
+    if (record(composition.result).canonicalExtractionContract !== 'grounded-passages-v2'
+      || !isDeepStrictEqual(parseDocumentSourceMapReference(record(composition.result).sourceMapRef), proof.reference)) return null;
+    if (owner.status === 'succeeded') {
+      const result = record(owner.result); const review = record(result.scientificReview);
+      if (result.canonicalExtractionContract !== 'grounded-passages-v2' || review.kind !== 'independent_review' || review.contractVersion !== '5'
+        || review.sourceAgentTaskId !== composition.id || review.provider !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider
+        || review.model !== HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel
+        || !isDeepStrictEqual(parseDocumentSourceMapReference(result.sourceMapRef), proof.reference)) return null;
+    }
+  } catch { return null; }
+  const rows = await tx.auditLog.findMany({ where: { action: 'ingestion.task.system_analysis_refresh',
+    targetType: 'ingestion_task', targetId: sourceId, actorId: null, workspaceId: proof.run.researchObject.workspaceId,
+    metadata: { path: ['newAgentTaskId'], equals: owner.id } }, take: 2 });
+  const metadata = record(rows[0]?.metadata);
+  if (rows.length !== 1 || metadata.executor !== 'hermes' || metadata.authorizedByUserId !== run.actorId || metadata.runId !== run.id
+    || metadata.stage !== 'source_review' || metadata.policy !== 'scientific_review_v4_independent' || !independentMode(metadata)
+    || metadata.oldAgentTaskId !== composition.id || metadata.compositionSourceAgentTaskId !== composition.id
+    || metadata.artifactId !== proof.source.artifactId || metadata.sourceMapSha256 !== proof.reference.serializedSha256
+    || metadata.creditPolicy !== 'charged_ingestion_analysis_refresh') return null;
+  return { owner, run };
+}
+
+/** Replay still proves the actor/source, persisted paid receipt, fixed batch, fresh session and task. */
+export async function readHermesPrivateSourceReanalysisReplay(tx: Prisma.TransactionClient, proof: PrivateSourceReanalysisProof) {
+  const batch = await tx.ingestionBatch.findUnique({ where: { idempotencyKey: privateSourceReanalysisBatchKey(proof.input) },
+    include: { tasks: { include: { artifact: true, agentTask: { include: { session: true } } } } } });
+  if (!batch) return null;
+  const candidate = batch.tasks[0];
+  const rows = candidate ? await tx.auditLog.findMany({ where: { action: 'ingestion.task.reanalyze',
+    targetType: 'ingestion_task', targetId: candidate.id }, take: 2 }) : [];
+  const receipt = rows[0]; const metadata = record(receipt?.metadata);
+  const task = typeof metadata.newAgentTaskId === 'string'
+    ? await tx.agentTask.findUnique({ where: { id: metadata.newAgentTaskId }, include: { session: true } }) : null;
+  const debit = task ? await tx.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${task.id}` } }) : null;
+  if (batch.userId !== proof.run.actorId || batch.researchObjectId !== proof.run.researchObjectId
+    || batch.requestDigest !== privateSourceReanalysisRequestDigest(proof) || batch.tasks.length !== 1 || !candidate || !task
+    || candidate.id === proof.source.id || candidate.artifactId !== proof.source.artifactId || task.deletedAt || task.kind !== 'sdf.extract'
+    || task.id === proof.current.id || task.session.deletedAt || task.session.status !== 'active' || task.session.kind !== 'ingestion'
+    || proof.historicalSessionIds.includes(task.sessionId) || batch.agentSessionId !== task.sessionId
+    || task.session.userId !== proof.run.actorId || task.session.researchObjectId !== proof.run.researchObjectId
+    || task.session.idempotencyKey !== `${batch.idempotencyKey}:session`
+    || task.idempotencyKey !== `ingestion-analysis-reanalysis:${candidate.id}:${proof.current.id}`
+    || !isDeepStrictEqual(task.payload, { artifactId: proof.source.artifactId, researchObjectId: proof.run.researchObjectId })
+    || rows.length !== 1 || receipt!.actorId !== proof.run.actorId || receipt!.workspaceId !== proof.run.researchObject.workspaceId
+    || metadata.intent !== PRIVATE_SOURCE_REANALYSIS || metadata.sourceRunId !== proof.run.id || metadata.expectedRunVersion !== proof.run.version
+    || metadata.creditPolicy !== 'fresh_task_charge' || metadata.confirmationPolicy !== 'new_draft'
+    || metadata.sourceIngestionTaskId !== proof.source.id || metadata.sourceAgentTaskId !== proof.current.id
+    || metadata.newAgentTaskId !== task.id || metadata.artifactId !== proof.source.artifactId || metadata.sourceMapSha256 !== proof.reference.serializedSha256
+    || !debit || debit.userId !== proof.run.actorId || debit.resource !== 'ai_credit' || BigInt(debit.delta) !== -1n
+    || debit.kind !== 'consume' || debit.reason !== 'Agent task reservation sdf.extract'
+    || !isDeepStrictEqual(debit.metadata, { taskId: task.id, kind: 'sdf.extract', policy: 'charged-on-submit' }))
+    throw new Error('[blocked] Private source analysis replay binding changed');
+  if (candidate.agentTaskId !== task.id) {
+    const successor = candidate.agentTaskId
+      ? await inspectPrivateReanalysisReviewSuccessor(tx, proof, candidate.id, candidate.agentTaskId, task) : null;
+    const successorDebit = successor ? await tx.usageLedger.findUnique({
+      where: { idempotencyKey: `agent-task-reserve:${successor.owner.id}` },
+    }) : null;
+    if (!successor || successor.owner.id !== candidate.agentTaskId || successor.run.actorId !== proof.run.actorId
+      || successor.run.researchObjectId !== proof.run.researchObjectId
+      || !successorDebit || successorDebit.userId !== proof.run.actorId || successorDebit.resource !== 'ai_credit'
+      || BigInt(successorDebit.delta) !== -1n || successorDebit.kind !== 'consume'
+      || successorDebit.reason !== 'Agent task reservation sdf.extract'
+      || !isDeepStrictEqual(successorDebit.metadata,
+        { taskId: successor.owner.id, kind: 'sdf.extract', policy: 'charged-on-submit' }))
+      throw new Error('[blocked] Private source analysis replay binding changed');
+  }
+  return candidate;
+}
+
+/** Worker seam: task payloads cannot choose a private mode or SourceMap. */
+export async function resolveHermesPrivateSourceReanalysisExecution(tx: Prisma.TransactionClient,
+  input: HermesPrivateSourceReanalysisExecutionInput): Promise<HermesPrivateSourceReanalysisExecution | null> {
+  const ingestion = await tx.ingestionTask.findUnique({ where: { id: input.ingestionTaskId }, include: { batch: true } });
+  const owner = await tx.agentTask.findUnique({ where: { id: input.ownerTaskId }, include: { session: true } });
+  const rows = await tx.auditLog.findMany({ where: { action: 'ingestion.task.reanalyze',
+    targetType: 'ingestion_task', targetId: input.ingestionTaskId }, take: 2 });
+  const metadata = record(rows[0]?.metadata);
+  const privateMarker = metadata.intent !== undefined || metadata.sourceRunId !== undefined || metadata.expectedRunVersion !== undefined
+    || metadata.creditPolicy === 'fresh_task_charge'
+    || ingestion?.batch.idempotencyKey?.startsWith(PRIVATE_REANALYSIS_BATCH_PREFIX)
+    || owner?.session.idempotencyKey?.startsWith(PRIVATE_REANALYSIS_BATCH_PREFIX)
+    || record(owner?.payload).sourceReanalysis !== undefined;
+  if (!privateMarker) return null;
+  const blocked = () => { throw new Error('[blocked] Private source analysis execution binding changed'); };
+  const privateInput = { intent: metadata.intent, sourceRunId: metadata.sourceRunId, expectedRunVersion: metadata.expectedRunVersion };
+  if (rows.length !== 1 || !validPrivateSourceReanalysisInput(privateInput)) return blocked();
+  const proof = await inspectHermesPrivateSourceReanalysis(tx, privateInput);
+  const replay = proof ? await readHermesPrivateSourceReanalysisReplay(tx, proof) : null;
+  if (!proof || !owner || !ingestion || !replay || metadata.newAgentTaskId !== owner.id
+    || replay.id !== input.ingestionTaskId || replay.agentTaskId !== owner.id
+    || ingestion.agentTaskId !== owner.id || input.sourceAgentTaskId !== proof.current.id
+    || owner.status !== 'running' || owner.executionAttempt !== input.executionAttempt || !Number.isSafeInteger(input.executionAttempt)
+    || input.executionAttempt < 1 || !['queued', 'parsing'].includes(ingestion.state)) return blocked();
+  await requireNoPrivateSourceReanalysisWriter(tx, proof, owner.id);
+  return { sourceMapRef: proof.reference };
+}
 
 /** Verify the persisted response identity; the Worker still owns full source/Claims validation. */
 function savedReviewOutput(taskId: string, review: Record<string, unknown>, result: Record<string, unknown>,

@@ -40,6 +40,9 @@ on:
       - 'packages/domain/test/agent/source-parser-recovery.test.ts'
       - 'apps/api/test/source-parser-recovery.test.ts'
       - 'apps/web/components/hermes/HermesResearchRunPanel.tsx'
+      - 'apps/web/lib/hermes/source-reanalysis-intent.ts'
+      - 'apps/web/test/hermes-source-reanalysis*.test.*'
+      - 'apps/web/test/fixtures/source-reanalysis.ts'
       - 'apps/web/test/hermes-research-run-source-status.test.tsx'
       - 'apps/web/test/e2e/hermes-source-parsing.spec.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
@@ -122,6 +125,9 @@ on:
       - 'packages/domain/test/agent/saved-source-review-recovery.test.ts'
       - 'packages/domain/test/agent/independent-source-review.test.ts'
       - 'packages/domain/test/agent/source-review-not-submitted.test.ts'
+      - 'packages/domain/test/agent/private-source-reanalysis*.ts'
+      - 'apps/api/src/routes/ingestion.ts'
+      - 'apps/api/test/private-source-reanalysis.test.ts'
       - 'apps/api/test/direct-source-review-recovery.test.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
@@ -165,6 +171,9 @@ on:
       - 'packages/domain/test/agent/source-parser-recovery.test.ts'
       - 'apps/api/test/source-parser-recovery.test.ts'
       - 'apps/web/components/hermes/HermesResearchRunPanel.tsx'
+      - 'apps/web/lib/hermes/source-reanalysis-intent.ts'
+      - 'apps/web/test/hermes-source-reanalysis*.test.*'
+      - 'apps/web/test/fixtures/source-reanalysis.ts'
       - 'apps/web/test/hermes-research-run-source-status.test.tsx'
       - 'apps/web/test/e2e/hermes-source-parsing.spec.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
@@ -247,6 +256,9 @@ on:
       - 'packages/domain/test/agent/saved-source-review-recovery.test.ts'
       - 'packages/domain/test/agent/independent-source-review.test.ts'
       - 'packages/domain/test/agent/source-review-not-submitted.test.ts'
+      - 'packages/domain/test/agent/private-source-reanalysis*.ts'
+      - 'apps/api/src/routes/ingestion.ts'
+      - 'apps/api/test/private-source-reanalysis.test.ts'
       - 'apps/api/test/direct-source-review-recovery.test.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
@@ -275,7 +287,9 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-source-reanalysis.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/source-parser-recovery.test.ts test/research-runs.test.ts test/direct-source-review-recovery.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/private-source-reanalysis.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off|bounds VLM page recognition"
@@ -311,6 +325,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web build
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-source-reanalysis-api.test.ts test/hermes-source-reanalysis-intent.test.ts test/hermes-source-reanalysis-panel.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/illustration-style-switch.test.ts test/illustration-style-choices.test.tsx test/illustration-style-api.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/managed-illustration-style.test.ts test/managed-illustration-style-api.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test create-illustrated-research.spec.ts managed-illustration-style.spec.ts hermes-source-parsing.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/illustrated-creation-browser

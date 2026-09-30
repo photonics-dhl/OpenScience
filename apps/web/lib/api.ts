@@ -379,6 +379,11 @@ export interface HermesResearchRun {
     status: 'needs_review'; ingestionTaskId: string; agentTaskId: string;
     unresolvedPageNumbers?: number[]; providerChargeMayApply: true;
   };
+  sourceReanalysis?: {
+    ingestionTaskId: string;
+    sourceAgentTaskId: string;
+    existingIngestionTaskId?: string;
+  };
   availableImageCount?: number;
   imageUsageLimited?: boolean;
   sourceClaimIds: string[];
@@ -1795,6 +1800,26 @@ export async function reanalyzeConfirmedIngestion(taskId: string, sourceAgentTas
     method: 'POST',
     headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify({ processingConsent: true, sourceAgentTaskId }),
+  });
+  return result.task;
+}
+
+export interface HermesSourceReanalysisRequest {
+  intent: 'new_paid_private_analysis';
+  sourceRunId: string;
+  expectedRunVersion: number;
+}
+
+export async function reanalyzeHermesRunSource(
+  taskId: string,
+  sourceAgentTaskId: string,
+  sourceReanalysis: HermesSourceReanalysisRequest,
+  idempotencyKey: string,
+): Promise<IngestionTaskSummary> {
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${encodeURIComponent(taskId)}/reanalyze`, {
+    method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey },
+    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId, sourceReanalysis }),
   });
   return result.task;
 }

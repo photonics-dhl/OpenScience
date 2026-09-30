@@ -21,6 +21,8 @@ import {
   type WorkspaceGuideResult,
 } from '@/lib/api';
 import { clearPendingHermesRunStart, getHermesDraftStorage, loadPendingHermesRunStart, readHermesResearchRunDraft, savePendingHermesRunStart, type PendingHermesRunStart } from '@/lib/hermes/draft-state';
+import { continueSourceReanalysis, isSourceReanalysisCurrent, loadSourceReanalysisIntent, SourceReanalysisIntentError,
+  type SourceReanalysisIntent } from '@/lib/hermes/source-reanalysis-intent';
 
 function isEligible(task: DashboardTaskApi): boolean {
   return !task.state.startsWith('failed_');
@@ -71,6 +73,12 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const [retrying, setRetrying] = React.useState(false);
   const retryRequest = React.useRef<{ actorId: string; runId: string; version: number; key: string; preserveUncertainRequest: boolean; postAttempted: boolean } | null>(null);
   const retryInFlight = React.useRef(false);
+  const [sourceReanalysisIntent, setSourceReanalysisIntent] = React.useState<SourceReanalysisIntent | null>(null);
+  const [sourceReanalysisPhase, setSourceReanalysisPhase] = React.useState<'analysis' | 'run' | null>(null);
+  const [sourceReanalysisError, setSourceReanalysisError] = React.useState('');
+  const sourceReanalysisInFlight = React.useRef(false);
+  const visibleContext = React.useRef({ researchObjectId, runId });
+  visibleContext.current = { researchObjectId, runId };
   const visibleRun = React.useRef(run);
   visibleRun.current = run;
   const [loading, setLoading] = React.useState(Boolean(runId));
@@ -85,6 +93,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     const clearViewer = () => {
       revision += 1; actorRef.current = ''; setActorId(''); setRestoredOwner('');
       setInstruction(''); setRun(null); setPendingRestored(false);
+      setSourceReanalysisIntent(null); setSourceReanalysisError('');
     };
     const refreshViewer = async () => {
       const requested = ++revision;
@@ -233,6 +242,16 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [loadRun, run?.status, runId]);
 
+  React.useEffect(() => {
+    setSourceReanalysisIntent(null); setSourceReanalysisError('');
+    if (!actorId || !run || run.id !== runId || run.actorId !== actorId || run.researchObjectId !== researchObjectId) return;
+    try {
+      const pending = loadSourceReanalysisIntent(getHermesDraftStorage(), { actorId, researchObjectId, sourceRunId: run.id });
+      setSourceReanalysisIntent(pending);
+      if (pending && !isSourceReanalysisCurrent(pending, run)) setSourceReanalysisError(t('sourceReanalysis.contextError'));
+    } catch { setSourceReanalysisError(t('sourceReanalysis.storageError')); }
+  }, [actorId, researchObjectId, run, runId, t]);
+
   const start = React.useCallback(async () => {
     if (!selectedTask || !actorId || restoredOwner !== owner || resolvedSource !== sourceScope || startInFlight.current || (guideTaskId && (!guided || guideLoading))) return;
     startInFlight.current = true;
@@ -277,7 +296,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   }, [selectedTask, actorId, restoredOwner, owner, resolvedSource, sourceScope, guideTaskId, guided, guideLoading, generationLocale, style, instruction, researchObjectId, onRunCreated, t]);
 
   async function upgradeGenerationGrant() {
-    if (!run || grantInFlight.current || !actorId || run.actorId !== actorId) return;
+    if (!run || grantInFlight.current || sourceReanalysisInFlight.current || !actorId || run.actorId !== actorId) return;
     const requestedActor = actorId;
     const requestedRun = run;
     const previous = grantRequest.current;
@@ -306,7 +325,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   }
 
   async function retryGeneration() {
-    if (!run?.canRetryGeneration || retryInFlight.current || !actorId || run.actorId !== actorId) return;
+    if (!run?.canRetryGeneration || retryInFlight.current || sourceReanalysisInFlight.current || !actorId || run.actorId !== actorId) return;
     const requestedActor = actorId;
     const requestedRun = run;
     const previous = retryRequest.current;
@@ -351,7 +370,42 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     }
   }
 
+  async function reanalyzeSource() {
+    if (!run || !actorId || run.actorId !== actorId || sourceReanalysisInFlight.current
+      || retryInFlight.current || grantInFlight.current || loading || sourceReanalysisError === t('sourceReanalysis.storageError')) return;
+    const requestedRun = run;
+    const requestedActor = actorId;
+    const sameViewer = () => mounted.current && actorRef.current === requestedActor
+      && visibleContext.current.researchObjectId === researchObjectId && visibleContext.current.runId === requestedRun.id;
+    sourceReanalysisInFlight.current = true;
+    setSourceReanalysisPhase(sourceReanalysisIntent?.newIngestionTaskId || run.sourceReanalysis?.existingIngestionTaskId ? 'run' : 'analysis');
+    setSourceReanalysisError('');
+    try {
+      const result = await continueSourceReanalysis({ run: requestedRun, actorId: requestedActor, researchObjectId,
+        storage: getHermesDraftStorage(),
+        isCurrent: intent => sameViewer() && isSourceReanalysisCurrent(intent, visibleRun.current),
+        onIntentSaved: intent => { if (sameViewer()) setSourceReanalysisIntent(intent); },
+        onPhase: phase => { if (sameViewer()) setSourceReanalysisPhase(phase); },
+      });
+      if (!sameViewer() || visibleRun.current?.id !== requestedRun.id || visibleRun.current.version !== requestedRun.version) return;
+      setRun(result); onRunCreated(result);
+    } catch (cause) {
+      if (sameViewer()) setSourceReanalysisError(cause instanceof SourceReanalysisIntentError
+        ? t(`sourceReanalysis.${cause.reason}Error`) : cause instanceof ApiClientError ? cause.message : t('sourceReanalysis.uncertain'));
+    } finally {
+      sourceReanalysisInFlight.current = false;
+      if (mounted.current) setSourceReanalysisPhase(null);
+    }
+  }
+
   const narrative = run?.profile === 'visual-narrative-v1';
+  const pendingSourceReanalysis = sourceReanalysisIntent?.actorId === actorId
+    && sourceReanalysisIntent.researchObjectId === researchObjectId && sourceReanalysisIntent.sourceRunId === run?.id
+    ? sourceReanalysisIntent : null;
+  const showSourceReanalysis = run?.status === 'failed' && narrative && run.maxAgentTasks === 9
+    && Boolean(run.sourceReanalysis || pendingSourceReanalysis);
+  const continuingSourceReanalysis = Boolean(pendingSourceReanalysis || run?.sourceReanalysis?.existingIngestionTaskId);
+  const reanalyzingSource = sourceReanalysisPhase !== null;
   const sourceParsing = run?.sourceParsing?.status === 'needs_review' && run.steps.some(step => step.stage === 'source_ingestion'
     && step.ingestionTaskId === run.sourceParsing?.ingestionTaskId && step.agentTaskId === run.sourceParsing?.agentTaskId) ? run.sourceParsing : null;
   const sourceReady = run?.status === 'awaiting_source_review';
@@ -398,13 +452,26 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(sourceParsing ? 'sourceParsingDescription' : terminal ? 'narrative.incompleteDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
       {sourceParsing?.unresolvedPageNumbers?.length ? <p className="mt-2 text-sm text-os-muted-paper">{t('sourceParsingPages', { pages: sourceParsing.unresolvedPageNumbers.join(', ') })}</p> : null}
       {imageSteps.length ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('narrative.imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
+      {showSourceReanalysis ? <div className="mt-4">
+        <p className="text-sm leading-6 text-os-muted-paper">{t(pendingSourceReanalysis?.newIngestionTaskId || run.sourceReanalysis?.existingIngestionTaskId
+          ? 'sourceReanalysis.restoreDescription' : pendingSourceReanalysis ? 'sourceReanalysis.pendingDescription' : 'sourceReanalysis.description')}</p>
+        <button type="button" disabled={reanalyzingSource || retrying || granting || loading || !actorId || run.actorId !== actorId
+          || Boolean(pendingSourceReanalysis && !isSourceReanalysisCurrent(pendingSourceReanalysis, run))
+          || sourceReanalysisError === t('sourceReanalysis.storageError')}
+          onClick={() => void reanalyzeSource()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">
+          {t(sourceReanalysisPhase === 'analysis' ? 'sourceReanalysis.analyzing' : sourceReanalysisPhase === 'run' ? 'sourceReanalysis.startingRun'
+            : continuingSourceReanalysis ? 'sourceReanalysis.continue' : 'sourceReanalysis.start')}
+        </button>
+        {reanalyzingSource ? <p className="mt-2 text-sm leading-6 text-os-muted-paper" role="status">{t(sourceReanalysisPhase === 'analysis' ? 'sourceReanalysis.analyzing' : 'sourceReanalysis.startingRun')}</p> : null}
+        {sourceReanalysisError ? <p className="mt-2 text-sm leading-6 text-red-900" role="alert">{sourceReanalysisError}</p> : null}
+      </div> : null}
       {run.canAuthorizeNarrativeCorrection ? <div className="mt-4">
         <p className="text-sm leading-6 text-os-muted-paper">{t(run.maxAgentTasks === 11 ? 'narrative.finalCorrectionGrantDescription' : 'narrative.correctionGrantDescription')}</p>
-        <button type="button" disabled={granting || retrying} onClick={() => void upgradeGenerationGrant()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(granting ? 'granting' : 'narrative.authorizeCorrection', { count: run.maxAgentTasks === 11 ? 2 : 3 })}</button>
+        <button type="button" disabled={granting || retrying || reanalyzingSource} onClick={() => void upgradeGenerationGrant()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(granting ? 'granting' : 'narrative.authorizeCorrection', { count: run.maxAgentTasks === 11 ? 2 : 3 })}</button>
       </div> : null}
       {run.canRetryGeneration ? <div className="mt-4">
         <p className="text-sm leading-6 text-os-muted-paper">{t(run.generationRecovery === 'source-review-not-submitted' ? 'sourceReviewTechnicalDescription' : run.generationRecovery === 'source-review-independent' ? 'sourceReviewIndependentDescription' : run.generationRecovery === 'source-review-saved' ? 'sourceReviewSavedDescription' : run.generationRecovery === 'source-review-fresh' ? 'narrative.resumeDescription' : run.generationRecovery === 'source-parser' ? 'sourceParsingRetryDescription' : run.generationRecovery === 'narrative-source-support-replan' ? 'narrative.resumeSourceSupportReplanDescription' : run.generationRecovery === 'narrative-scientific-replan' ? 'narrative.resumeScientificReplanDescription' : run.generationRecovery === 'image-render' ? run.chargeableAttempts === 0 ? 'narrative.resumeCompletedImageReviewDescription' : 'narrative.resumeImageRenderDescription' : run.generationRecovery === 'storyboard-art' ? run.chargeableAttempts === 0 ? 'narrative.resumeArtInterruptedDescription' : 'narrative.resumeArtDescription' : run.generationRecovery === 'storyboard-planning' ? run.chargeableAttempts === 0 ? 'narrative.resumePlanningUnsubmittedDescription' : 'narrative.resumePlanningDescription' : run.generationRecovery === 'storyboard-review' ? 'narrative.resumeMediaDescription' : (run.maxAgentTasks ?? 0) >= 11 ? 'narrative.resumeCorrectionDescription' : run.versionId ? 'narrative.resumeMediaDescription' : 'narrative.resumeDescription', { count: run.chargeableAttempts ?? 0 })}</p>
-        <button type="button" disabled={retrying} onClick={() => void retryGeneration()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : run.generationRecovery === 'source-review-not-submitted' ? 'sourceReviewTechnicalContinue' : run.generationRecovery === 'source-review-independent' ? 'sourceReviewIndependent' : run.generationRecovery === 'source-review-saved' ? 'sourceReviewSaved' : run.generationRecovery === 'source-review-fresh' ? 'sourceReviewFresh' : run.generationRecovery === 'source-parser' ? 'sourceParsingResume' : 'narrative.resume')}</button>
+        <button type="button" disabled={retrying || reanalyzingSource} onClick={() => void retryGeneration()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : run.generationRecovery === 'source-review-not-submitted' ? 'sourceReviewTechnicalContinue' : run.generationRecovery === 'source-review-independent' ? 'sourceReviewIndependent' : run.generationRecovery === 'source-review-saved' ? 'sourceReviewSaved' : run.generationRecovery === 'source-review-fresh' ? 'sourceReviewFresh' : run.generationRecovery === 'source-parser' ? 'sourceParsingResume' : 'narrative.resume')}</button>
       </div> : null}
       <details className="mt-4 text-sm text-os-muted-paper"><summary className="min-h-11 cursor-pointer py-3">{t('narrative.details')}</summary>{steps}</details>
       {run.status === 'succeeded' && run.versionId ? <Link className="mt-5 inline-flex min-h-11 items-center rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white" href={`/research-objects/${encodeURIComponent(researchObjectId)}/overview?version=${encodeURIComponent(run.versionId)}`}>{t('narrative.viewResult')}</Link> : null}

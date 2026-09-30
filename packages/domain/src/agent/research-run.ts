@@ -8,7 +8,8 @@ import { now } from '../workspace/types';
 import { confirmIngestionClaimEvidenceBridge, previewIngestionClaimEvidenceBridge, type IngestionClaimSelection } from '../ingestion/claim-evidence-bridge';
 import { MAX_INGESTION_CLAIMS } from '../ingestion/reviewed-claim-suggestions';
 import { ensureHermesIngestionReview, materializeHermesIngestion, recoverHermesSourceReviewInTransaction, inspectIngestionParserRecovery, retryIngestionTaskInTransaction, type IngestionDeps } from '../ingestion/ingestion-service';
-import { inspectHermesSourceReviewRecovery, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
+import { inspectHermesSourceReviewRecovery, inspectHermesPrivateSourceReanalysis, readHermesPrivateSourceReanalysisReplay,
+  requireNoPrivateSourceReanalysisWriter, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE } from '../assets/video';
 import { HERMES_IMAGE_RENDER_RECOVERY_ACTION, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION, NARRATIVE_TECHNICAL_RECOVERY, NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP, STORYBOARD_SOURCE_SUPPORT_INVALID, readNarrativeSourceSupportParent, readNarrativeTechnicalRecoverySource, readNarrativeTechnicalReviewFollowupSource, copyNarrativeImageForReview, parsePresentationGenerationPayload, readNarrativeImageRenderSource, readNarrativeImageReplanSource, readNarrativePixelReplanSource, readNarrativePixelReplanAuthority, readNarrativePixelBlockedPlan, readStoppedStoryboardImageRevision, requireHermesImageRenderRecoveryAuthority, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type ImageReviewNotSubmittedInput, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
@@ -105,6 +106,7 @@ export interface HermesResearchRunView {
     status: 'needs_review'; ingestionTaskId: string; agentTaskId: string;
     unresolvedPageNumbers?: number[]; providerChargeMayApply: true;
   };
+  sourceReanalysis?: { ingestionTaskId: string; sourceAgentTaskId: string; existingIngestionTaskId?: string };
   availableImageCount?: number;
   imageUsageLimited?: boolean;
   artStyleContinuation?: { eligibleImages: Array<{ imageAssetId: string; storyboardAssetId: string; sceneIndex: number }>; maxAgentTasks: 2 };
@@ -348,6 +350,18 @@ export async function getHermesResearchRun(
             : proof.directCompositionEvidence ? { generationRecovery: 'source-review-fresh' as const } : {}) } : null).catch(() => null)
       : await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
   const view = toView(run, recovery ?? undefined);
+  if (WRITE_ROLES.has(authority.membership.role)) {
+    const sourceReanalysis = await inspectHermesPrivateSourceReanalysis(deps.prisma, {
+      intent: 'new_paid_private_analysis', sourceRunId: run.id, expectedRunVersion: run.version,
+    }).then(async proof => {
+      if (!proof) return undefined;
+      const existing = await readHermesPrivateSourceReanalysisReplay(deps.prisma, proof);
+      if (!existing) await requireNoPrivateSourceReanalysisWriter(deps.prisma, proof);
+      return { ingestionTaskId: proof.source.id, sourceAgentTaskId: proof.current.id,
+        ...(existing ? { existingIngestionTaskId: existing.id } : {}) };
+    }).catch(() => undefined);
+    if (sourceReanalysis) view.sourceReanalysis = sourceReanalysis;
+  }
   if (recovery && 'generationRecovery' in recovery && (recovery.generationRecovery === 'source-review-fresh'
     || recovery.generationRecovery === 'source-review-saved' || recovery.generationRecovery === 'source-review-independent'
     || recovery.generationRecovery === 'source-review-not-submitted')) view.generationRecovery = recovery.generationRecovery;

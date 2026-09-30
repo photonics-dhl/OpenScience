@@ -27,6 +27,7 @@ import {
   assertSearchIndexSourceLive,
   findSavedIngestionCommit,
   requireHermesSourceReviewExecution,
+  resolveHermesPrivateSourceReanalysisExecution,
   type HermesSavedSourceReviewOutput,
   type SourceReviewNotSubmittedInput,
   VISUAL_NARRATIVE_PROFILE,
@@ -530,6 +531,10 @@ export function createHandlers(
       }
       const reanalysis = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36})$/.exec(ownerTask.idempotencyKey ?? '');
       if (reanalysis) {
+        const privateReanalysis = await deps.prisma.$transaction(tx =>
+          resolveHermesPrivateSourceReanalysisExecution(tx, { ownerTaskId: ownerTask.id,
+            ingestionTaskId: reanalysis[1]!, sourceAgentTaskId: reanalysis[2]!, executionAttempt: task.executionAttempt }),
+        { isolationLevel: 'Serializable' });
         const ingestion = await deps.prisma.ingestionTask.findUnique({
           where: { id: reanalysis[1]! }, include: { batch: true },
         });
@@ -538,7 +543,7 @@ export function createHandlers(
         });
         const previousResult = previous?.result as Record<string, unknown> | null;
         const previousPayload = previous?.payload as Record<string, unknown> | null;
-        const confirmation = previous?.ingestionTask
+        const confirmation = !privateReanalysis && previous?.ingestionTask
           ? await findSavedIngestionCommit(deps.prisma, { taskId: previous.ingestionTask.id, researchObjectId: ownerResearchObject.id })
           : null;
         if (!serverDerivedEligibility || !externalProcessingEligible || refresh
@@ -546,18 +551,19 @@ export function createHandlers(
           || ingestion.batch.userId !== ownerTask.session.userId || ingestion.batch.researchObjectId !== ownerResearchObject.id
           || !['queued', 'parsing'].includes(ingestion.state) || previous?.kind !== 'sdf.extract' || previous.status !== 'succeeded'
           || previous.session.userId !== ownerTask.session.userId || previous.session.researchObjectId !== ownerResearchObject.id
-          || previous.ingestionTask?.state !== 'confirmed' || previous.ingestionTask.artifactId !== artifact.id
-          || previous.ingestionTask.batch.userId !== ownerTask.session.userId
-          || previous.ingestionTask.batch.researchObjectId !== ownerResearchObject.id
-          || confirmation?.commit.researchObjectId !== ownerResearchObject.id
+          || (!privateReanalysis && (previous.ingestionTask?.state !== 'confirmed'
+            || previous.ingestionTask.artifactId !== artifact.id
+            || previous.ingestionTask.batch.userId !== ownerTask.session.userId
+            || previous.ingestionTask.batch.researchObjectId !== ownerResearchObject.id
+            || confirmation?.commit.researchObjectId !== ownerResearchObject.id))
           || !previousPayload || Object.keys(previousPayload).sort().join(',') !== 'artifactId,researchObjectId'
           || previousPayload.artifactId !== artifact.id || previousPayload.researchObjectId !== ownerResearchObject.id
           || previousResult?.canonicalExtractionContract !== 'grounded-passages-v2') {
           throw new Error('[blocked] Reusable confirmed analysis scope is invalid');
         }
-        const reference = parseDocumentSourceMapReference(previousResult.sourceMapRef);
+        const reference = privateReanalysis?.sourceMapRef ?? parseDocumentSourceMapReference(previousResult.sourceMapRef);
         if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
-          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable confirmed source identity changed');
+          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable analysis source identity changed');
         reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
       }
       const parserMediaType = canonicalParserMediaType(artifact.logicalPath, artifact.mimeType);

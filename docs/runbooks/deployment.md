@@ -1,5 +1,15 @@
 # Runbook: 部署（Deployment）
 
+## 2026-09-30 私有来源耗尽后的新分析
+
+前置：本增量沿现有reanalyze API新增严格付费意图，仅用于已终止、未确认且未物化版本的受控来源链。完成受影响Domain/API/Worker/Web验证、独立High及精确CI后，从干净已推SHA部署；实际release和是否提交新分析只见CURRENT。
+
+执行：正常`--no-tests --skip-migrate --reuse-unchanged-capability-images`构建启动，重建Domain依赖和应用，不复用旧dist。无迁移、parser/OCR改动或新provider安装；已安装的6Pro兼容provider继续使用。部署本身不派发模型，新任务仅来自显式“开始新的付费分析”，复用原SourceMap、重新凝练，随后沿新max9run初次独立审校及原图文链路。
+
+补偿：新付费意图提交前可沿既有部署事务回退旧应用；提交后旧Worker不识别私有复用收据，应保留兼容版本并前向修复。保留新旧ingestion/run/task、原PDF/SourceMap、审计和消费，不重置旧期限、额度或技术后继。丢响应恢复复用原两阶段键与已创建的ingestion，不另收费创建第二份分析。
+
+观察：从站内Hermes失败页面核费用说明、显式点击一次，观察新ingestion与run连续状态；核SourceMap复用和OCR零调用、普通新扣费以及初次审校实际6Pro。科学结果须逐项对照原文，再验默认风格、实际图片和审图；CI、接口202或服务健康均不替代这一真实链路。
+
 2026-09-29 独立来源终审候选：新Hermes来源审校以既有refresh审计记录固定ChatGPT Web 6 Pro职责；M3仍负责凝练，缺失或无效Hermes凭据不得降级成其他模型。历史M3任务不可重新标记；已保存拒收候选仅通过原retry-generation的一次明确独立审阅意图续作，原9任务预算、CAS、额度和外部提交保留。新终审只有一次请求，needsMoreEvidence终止，不自动补发或fallback。无迁移、安装、协议或endpoint变更；正常干净已推SHA部署不创建模型任务。回退前等独立审阅在途任务终态，保留提交/结果spool、审计与原文；旧7802 worker不理解新mode收据，不能接手在途任务。普通手动及历史路径兼容需定向验证，精确版本和真实科学质量只见CURRENT。
 
 2026-09-28 二次来源复审恢复：无迁移、Provider 或 parser 协议变更，仍沿干净已推 SHA 的 `--no-tests --skip-migrate --reuse-unchanged-capability-images` 发布。现有 ingestion retry 只恢复首次、零模型调用且来源绑定有效的候选复用 preflight 失败；原 task/幂等键/SourceMap/成功候选保留，不新扣内部额度、不重解析。发布前确认无在途任务；发布后从原来源任务页点一次恢复并核实际结果。应用回退须先等恢复任务终态，保留失败审计和原文，不手动重置数据库；该恢复不证明科学 Skill 的判断质量。
