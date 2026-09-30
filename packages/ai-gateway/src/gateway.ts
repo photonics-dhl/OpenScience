@@ -22,7 +22,7 @@ import {
   type ProviderCapabilityDecision,
   type ProviderCapabilityPolicy,
 } from './ocr';
-import { TextProviderError, type ChatMessage, type Provider, type ProviderResult, type TextGenerationOptions, type TextTransportErrorCode } from './provider';
+import { TextProviderError, snapshotChatMessages, type ChatMessage, type Provider, type ProviderResult, type TextGenerationOptions, type TextTransportErrorCode } from './provider';
 import { ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS, type ScienceReviewInput, type ScienceReviewProvider, type ScienceReviewProviderResult, type SourceReviewNotSubmittedProof } from './science-review-protocol';
 
 /** 调用日志（§9.3 + §17 脱敏：只记元数据，绝不记 prompt/附件/密钥）。 */
@@ -61,7 +61,7 @@ export interface GatewayCallLog {
 export interface AiGatewayOptions {
   /** 按序尝试的 providers（primary 在前）。 */
   providers: Provider[];
-  /** Dedicated vision/OCR provider pool; text providers never receive images. */
+  /** Dedicated transcription/OCR pool; native M3 source/image understanding uses its own Messages transport. */
   ocrProviders?: OcrProvider[];
   imageProviders?: ImageProvider[];
   scientificReviewProvider?: ScienceReviewProvider;
@@ -437,6 +437,8 @@ export class AiGateway {
   }
 
   private async completeWithControls(messages: ChatMessage[], opts: TextGenerationOptions = {}, controls: TextExecutionControls = {}): Promise<GatewayCompletion> {
+    messages = snapshotChatMessages(messages);
+    const imageCount = messages.reduce((count, message) => count + (message.images?.length ?? 0), 0);
     const totalStart = Date.now();
     const promptHash = sha256Text(JSON.stringify(messages));
     let lastError: unknown;
@@ -445,6 +447,10 @@ export class AiGateway {
       const provider = this.providers[i];
       const isPrimary = i === this.primaryIndex;
       if (controls.primaryProviderOnly && !isPrimary) continue;
+      if (imageCount && provider.supportsImageInput !== true) {
+        fallbackNotes.push(`${provider.name}:native_images_unsupported`);
+        continue;
+      }
       if (controls.savedReviewTarget && (provider.name !== controls.savedReviewTarget.provider || provider.model !== controls.savedReviewTarget.model))
         throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'saved review provider changed');
       const capability = await this.providerEnabled(provider.name, 'text');
@@ -484,7 +490,7 @@ export class AiGateway {
           promptHash,
           inputContentHash: controls.reviewSourceIdentity ?? null,
           pageNumbers: [],
-          pageCount: 0,
+          pageCount: imageCount,
           selectionReason: controls.reviewSourceIdentity ? 'source_grounded_illustration_review' : null,
           outcome: 'succeeded',
           error: null,
@@ -518,7 +524,7 @@ export class AiGateway {
           promptHash,
           inputContentHash: controls.reviewSourceIdentity ?? null,
           pageNumbers: [],
-          pageCount: 0,
+          pageCount: imageCount,
           selectionReason: controls.reviewSourceIdentity ? 'source_grounded_illustration_review' : null,
           outcome: 'failed',
           error: failure,
@@ -604,6 +610,7 @@ export class AiGateway {
     guard: SchemaGuard<T>, messages: ChatMessage[], opts: StructuredGenerationOptions,
     controls: TextExecutionControls = {},
   ): Promise<{ value: T; completion: GatewayCompletion }> {
+    messages = snapshotChatMessages(messages);
     const retryLimit = opts.maxRetries ?? MAX_STRUCTURED_RETRIES;
     if (!Number.isSafeInteger(retryLimit) || retryLimit < 0 || retryLimit > MAX_STRUCTURED_RETRIES) {
       throw new AiGatewayError('SCHEMA_VALIDATION', 'invalid structured retry limit');

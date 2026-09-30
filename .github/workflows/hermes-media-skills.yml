@@ -56,6 +56,9 @@ on:
       - 'infra/compose/docker-compose.prod.yml'
       - 'packages/ai-gateway/src/codex-sol-review*.ts'
       - 'packages/ai-gateway/src/gateway.ts'
+      - 'packages/ai-gateway/src/provider.ts'
+      - 'packages/ai-gateway/src/index.ts'
+      - 'packages/ai-gateway/test/native-image-input.test.ts'
       - 'packages/ai-gateway/src/science-review*.ts'
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
@@ -192,6 +195,9 @@ on:
       - 'infra/compose/docker-compose.prod.yml'
       - 'packages/ai-gateway/src/codex-sol-review*.ts'
       - 'packages/ai-gateway/src/gateway.ts'
+      - 'packages/ai-gateway/src/provider.ts'
+      - 'packages/ai-gateway/src/index.ts'
+      - 'packages/ai-gateway/test/native-image-input.test.ts'
       - 'packages/ai-gateway/src/science-review*.ts'
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
@@ -293,7 +299,7 @@ jobs:
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
-      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts test/structured-retry-budget.test.ts test/source-review-not-submitted.test.ts test/source-review-broker.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts test/structured-retry-budget.test.ts test/source-review-not-submitted.test.ts test/source-review-broker.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts test/agent/hermes-source-model-routing.test.ts

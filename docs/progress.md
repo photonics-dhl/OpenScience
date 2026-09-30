@@ -1,6 +1,6 @@
 # CURRENT Progress Window
 
-- Hermes来源路由候选已回到现有model审校，并保留旧Web身份与科学/Claims守卫；初次及修复外呼都重新授权，合法model后继保持原付费重放。定向Domain246/Worker92/API35、构建/包TC/lint与独立High通过，尚未部署或证明真实科学质量。M3原生视觉Gateway/页面像素消费是下一断点；职责、服务器、费用与证据只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 新来源审校已回到Hermes model路径，历史Web及科学/Claims守卫保留；候选已提交，未部署。原生M3视觉传输20项及共享回归通过，尚未接产品；下一步是精确角色与调用前后checkpoint，再接原论文页/成图像素。CI揭示的历史fixture已调整且Domain93/API13通过，仍待精确CI。不能用传输、安装或schema通过声称科学质量稳定；身份、费用与证据只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 - 09-30视频：真实H3原片已取回并完整解码，像素复核发现触材及非局域波纹；已修正后续提示，生成被供应商余额不足拒绝。原片/请求/收据已保留，未改RO公开状态；实际镜头和精确恢复点只见Hermes CURRENT。
 - 2026-09-30：公司评估用固定源码/服务器说明已完成，独立High与最终ZIP检查通过；用户确认公司只做正式上线和年度运维，功能继续由我方开发。快照、脱敏/验收边界与证据见 [评估交接](handoff/2026-09-30-vendor-evaluation.md)，未发送公司或部署应用。

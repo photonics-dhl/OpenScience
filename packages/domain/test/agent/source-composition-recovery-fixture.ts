@@ -4,6 +4,7 @@ import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { ensureHermesIngestionReview, reanalyzeConfirmedIngestion } from '../../src/ingestion/ingestion-service';
 import { reconcileHermesResearchRuns, retryHermesGeneration } from '../../src/agent/research-run';
 import { advancePrivateSourceReanalysisToReview, privateSourceReanalysisFixture } from './private-source-reanalysis-fixture';
+import { HERMES_INDEPENDENT_SOURCE_REVIEW } from '../../src/ingestion/source-review-recovery';
 
 export async function sourceCompositionRecoveryFixture() {
   const f = await privateSourceReanalysisFixture();
@@ -71,6 +72,11 @@ export async function sourceReviewPacketFailureFixture() {
   source.state = 'needs_review'; await reconcileHermesResearchRuns(f.deps);
   await ensureHermesIngestionReview(f.deps, { actorId: f.input.userId, runId: f.run.id, taskId: source.id });
   const review = f.db.agentTasks.at(-1)!;
+  // This fixture represents an already persisted pre-Hermes-only Web packet failure.
+  // The separate current-producer test must continue to create a model receipt.
+  const historicalReceipt = f.db.auditLogs.find(row => row.action === 'ingestion.task.system_analysis_refresh'
+    && row.metadata.newAgentTaskId === review.id)!;
+  Object.assign(historicalReceipt.metadata, { policy: 'scientific_review_v4_independent', ...HERMES_INDEPENDENT_SOURCE_REVIEW });
   Object.assign(review, { status: 'succeeded', executionAttempt: 1, result: {
     ...structuredClone(candidate), reason: 'canonical_partial_validation_exhausted',
     core: { schemaVersion: candidate.core.schemaVersion, ...Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, ''])) },

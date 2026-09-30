@@ -211,7 +211,7 @@ describe('same-run final source composition recovery', () => {
     expect(f.db.usageLedger).toEqual(after); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
   });
 
-  it('advances a valid final composition to the existing first independent review without relabelling failed ordinal zero', async () => {
+  it('advances a valid final composition to the first Hermes model review without relabelling failed ordinal zero', async () => {
     const f = await sourceCompositionRecoveryFixture(); await retryHermesGeneration(f.deps, f.recoveryInput);
     const composed = f.db.agentTasks.at(-1)!;
     const result = candidate(f);
@@ -226,13 +226,13 @@ describe('same-run final source composition recovery', () => {
     expect(steps.filter(row => row.stage === 'source_review')).toHaveLength(1);
     expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: review.id, ingestionTaskId: f.source.id,
       failedTaskId: composed.id, compositionTaskId: composed.id, executionAttempt: 1 }))
-      .toMatchObject({ mode: 'web', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro' });
+      .toEqual({ mode: 'model' });
     expect(await reanalyzeConfirmedIngestion(f.deps, { ...f.input, idempotencyKey: 'lost-paid-tab-initial-review' }))
       .toMatchObject({ id: f.source.id, agentTaskId: review.id });
     review.status = 'succeeded';
     review.result = { ...structuredClone(result), scientificReview: { ...structuredClone(result.scientificReview),
-      kind: 'independent_review', contractVersion: '5', sourceAgentTaskId: composed.id,
-      provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro' },
+      kind: 'model_self_check', contractVersion: '5', sourceAgentTaskId: composed.id,
+      provider: 'primary', model: 'MiniMax-M3' },
       reviewedClaimSuggestions: [{ clientKey: 'core', kind: 'core', sourceField: 'insight', statement: 'Reviewed contribution',
         conditions: [], limitations: [], sourceBindings: [{ sourceIndex: 0, relation: 'supports' }] }] };
     f.db.ingestionTasks.find(row => row.id === f.source.id)!.state = 'needs_review';

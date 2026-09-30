@@ -6,13 +6,57 @@ import {
   type OcrProviderPageRequest,
   type OcrProviderResult,
   validateProviderPageRequest,
+  encodedImageDimensions,
 } from './ocr';
+import { ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
+  ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS } from './science-review-protocol';
 
 /** AI Provider 抽象（§9.3：Provider SDK 只存在于 ai-gateway 包内）。 */
+
+export interface ChatImageInput {
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp';
+  /** Inline pixels only. Remote URLs are never fetched on this route. */
+  data: string;
+}
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  images?: readonly ChatImageInput[];
+}
+
+// Use decimal MB for the documented provider limits; never exceed them by assuming MiB.
+const NATIVE_IMAGE_MAX_BYTES = 10_000_000;
+const NATIVE_IMAGE_REQUEST_MAX_BYTES = 64_000_000;
+const NATIVE_IMAGE_MODELS = /^(?:MiniMax-M3|MiniMax-M3\.1-Flash-Preview)$/u;
+
+/** Snapshot before asynchronous authority checks; repair attempts retain the same pixels. */
+export function snapshotChatMessages(messages: readonly ChatMessage[]): ChatMessage[] {
+  return messages.map(message => {
+    if (message.images === undefined) return Object.freeze({ ...message });
+    if (message.role !== 'user' || typeof message.content !== 'string' || !Array.isArray(message.images) || !message.images.length) {
+      throw new TextProviderError('provider_error', 'Native images must be user source data');
+    }
+    const images = message.images.map(image => {
+      if (!image || !['image/png', 'image/jpeg', 'image/webp'].includes(image.mediaType)
+        || typeof image.data !== 'string' || !image.data.length
+        || image.data.length > 4 * Math.ceil(NATIVE_IMAGE_MAX_BYTES / 3)
+        || image.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(image.data)) {
+        throw new TextProviderError('provider_error', 'Invalid native image data');
+      }
+      const bytes = Buffer.from(image.data, 'base64');
+      if (bytes.byteLength > NATIVE_IMAGE_MAX_BYTES || bytes.toString('base64') !== image.data) {
+        throw new TextProviderError('provider_error', 'Invalid native image size or encoding');
+      }
+      const dimensions = encodedImageDimensions(image.mediaType, bytes, true);
+      if (dimensions.width > ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE || dimensions.height > ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE
+        || dimensions.width * dimensions.height > ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS) {
+        throw new TextProviderError('provider_error', 'Native image dimensions exceed the existing review bounds');
+      }
+      return Object.freeze({ mediaType: image.mediaType, data: image.data });
+    });
+    return Object.freeze({ ...message, images: Object.freeze(images) });
+  });
 }
 
 export interface CompleteOptions {
@@ -125,6 +169,8 @@ export interface ProviderConfig {
 export interface Provider {
   readonly name: string;
   readonly model: string;
+  /** Explicit native pixel capability; omission means text only. */
+  readonly supportsImageInput?: boolean;
   complete(opts: CompleteOptions): Promise<ProviderResult>;
 }
 
@@ -144,6 +190,9 @@ export class OpenAiCompatProvider implements Provider {
   }
 
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
+    if (opts.messages.some(message => message.images !== undefined)) {
+      throw new TextProviderError('provider_error', 'Native image transport is not verified for this provider');
+    }
     const timeout = textTimeout(opts);
     // Native fetch otherwise inherits Undici's 300s headers/body defaults.
     // This request owns its dispatcher; it cannot change another caller's policy.
@@ -226,19 +275,41 @@ export class AnthropicCompatProvider implements Provider {
     return this.cfg.model;
   }
 
+  get supportsImageInput(): boolean { return NATIVE_IMAGE_MODELS.test(this.model); }
+
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
+    const snapshot = snapshotChatMessages(opts.messages);
+    const hasImages = snapshot.some(message => message.images !== undefined);
+    if (hasImages && (!this.supportsImageInput || opts.model !== this.model)) {
+      throw new TextProviderError('provider_error', 'Provider model cannot inspect native images');
+    }
     const timeout = textTimeout(opts);
     const dispatcher = timeout > 300_000 ? new Agent({ headersTimeout: timeout, bodyTimeout: timeout }) : undefined;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
     try {
-      const system = opts.messages
+      const system = snapshot
         .filter((message) => message.role === 'system')
         .map((message) => message.content)
         .join('\n\n');
-      const messages = opts.messages
+      const messages = snapshot
         .filter((message) => message.role !== 'system')
-        .map((message) => ({ role: message.role, content: message.content }));
+        .map((message) => ({ role: message.role, content: message.images ? [
+          { type: 'text', text: message.content },
+          ...message.images.map(image => ({ type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } })),
+        ] : message.content }));
+      const body = JSON.stringify({
+        model: opts.model,
+        system: system || undefined,
+        messages,
+        temperature: opts.temperature,
+        max_tokens: opts.maxTokens ?? 4096,
+        ...(opts.thinking ? { thinking: { type: opts.thinking } } : {}),
+        top_p: opts.topP,
+      });
+      if (hasImages && Buffer.byteLength(body, 'utf8') > NATIVE_IMAGE_REQUEST_MAX_BYTES) {
+        throw new TextProviderError('provider_error', 'Native image request exceeds the provider body limit');
+      }
       const res = await this.fetcher(`${this.cfg.baseUrl.replace(/\/$/, '')}/v1/messages`, {
         method: 'POST',
         headers: {
@@ -246,15 +317,7 @@ export class AnthropicCompatProvider implements Provider {
           'x-api-key': this.cfg.apiKey,
           'anthropic-version': '2023-06-01',
         },
-        body: JSON.stringify({
-          model: opts.model,
-          system: system || undefined,
-          messages,
-          temperature: opts.temperature,
-          max_tokens: opts.maxTokens ?? 4096,
-          ...(opts.thinking ? { thinking: { type: opts.thinking } } : {}),
-          top_p: opts.topP,
-        }),
+        body,
         signal: controller.signal,
         ...(dispatcher ? { dispatcher } : {}),
       });
@@ -272,6 +335,9 @@ export class AnthropicCompatProvider implements Provider {
       }
       if (!data || typeof data !== 'object' || !Array.isArray(data.content)) {
         throw new TextProviderError('provider_response_shape', `Provider ${this.name} response shape invalid`);
+      }
+      if (hasImages && data.model !== opts.model) {
+        throw new TextProviderError('provider_response_shape', 'Native image response model does not match the request');
       }
       const text = data.content
         ?.filter((block) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')

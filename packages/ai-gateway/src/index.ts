@@ -18,6 +18,7 @@ export {
   type ProviderConfig,
   type ProviderResult,
   type ChatMessage,
+  type ChatImageInput,
   type CompleteOptions,
   type TextGenerationOptions,
   type Usage,
