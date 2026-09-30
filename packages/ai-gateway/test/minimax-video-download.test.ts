@@ -39,6 +39,14 @@ function transport(options: {
 }
 
 describe('saved MiniMax video download', () => {
+  it('downloads paper output only with explicit mode and does not relax legacy validation', async () => {
+    const input: MiniMaxVideoTask = { ...task(), resolution: '2K', duration: 15 };
+    const mock = transport();
+    await expect(downloadMiniMaxVideo(input, mock)).rejects.toMatchObject({ code: 'VIDEO_RESPONSE_INVALID' });
+    expect(mock.resolve).not.toHaveBeenCalled();
+    await expect(downloadMiniMaxVideo(input, { ...mock, mode: 'paper' })).resolves.toEqual(bytes);
+    expect(mock.request).toHaveBeenCalledTimes(1);
+  });
   it('returns complete MP4 bytes without sending API credentials', async () => {
     const mock = transport();
     await expect(downloadMiniMaxVideo(task(), mock)).resolves.toEqual(bytes);

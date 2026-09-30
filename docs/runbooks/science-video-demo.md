@@ -43,6 +43,25 @@ Nginx Range 播放；独立于本样片，管理员 RO 单幕 Codex 生图已验
 - 定向测试为 `node --test infra/codex-image-runner/core.test.mjs infra/codex-image-runner/video-runner.test.mjs infra/codex-image-runner/minimax-video-pilot.test.mjs infra/codex-image-runner/minimax-video-download.test.mjs` 与 Gateway 的 `test/minimax-video.test.ts`、`test/minimax-video-download.test.ts`；Linux 下 runner 真实 owner/fsync 路径在隔离 CI 以 root 执行，所有 provider/Docker 操作均由 mock 代替。下载用例共用 16×16 H.264 测试片（既有 FFmpeg 生成并完整解码），验证同长度截断、私网、无凭据、超时及完整原片并发保存；测试片不作产品成片。视频专属工作流覆盖原发布分支 CI 未监听的视频文件；不替代服务器和音画验证。
 - 实际视频须检查完整解码、画幅/时长、连续运动、真实音轨与完整旁白、字幕和手机可读性。旧 Qwen TTS 镜像缺失仍须独立恢复，不能把 H3 试镜成功算作离线配音恢复。当前 POST 数量及结果见 CURRENT；清理仍按[综合计划 Task 4](../plans/2026-09-05-integrated-research-product-plan.md#task-4-视频)的引用和任务终态要求，保留原片、已采用资产与 unknown 收据。
 
+<a id="minimax-paper-reference-video"></a>
+
+## H3 论文参考视频（2026-09-30，候选执行路径）
+
+### 参考视频前置条件
+
+用户在观看原图试片后明确要求以 H3 制作真正运动的科普画面，并改善旁白；授权沿原工具继续制作。已审 Hermes 讲稿/Claim/Evidence 和已认可参考图作为输入，禁止以操作员改编冒充新一次全文自动凝练。此路径仍为私有候选，不自动更新 RO 或发布。
+
+### 参考视频执行步骤
+
+1. 原 Gateway 与 `minimax-video-pilot.mjs` 增加显式论文模式；默认品牌试镜参数、目录、create-attempt 与原 task 保留。论文模式使用原按量配置，固定 `paperVideo={id:"ics-paper-v2",duration:15,resolution:"2K",ratio:"16:9",shots:["hook","mechanism","mapping","result"]}`；每个指定镜头至多一次提交，不接受任意新 run/shot 来重开 unknown。
+2. 原 `prepare|submit|status|download` 命令附 `--paper-shot <上述镜头名>`，prepare/submit 仍带原 `--request-file`。输入为文本与已认可 PNG 的 `reference_image` data URI；只使用原服务器 Secret，禁止把 key 放进请求文件或日志。每镜头独立保存原请求、预留、task 与终态，继续使用原无重试、独占落盘与无凭据下载边界。
+3. 先生成 hook 并取回检查实际帧、运动与音轨；其余已准备镜头不能因首镜已提交就视为合格。生成像素须核对两个 CdS 截面/相对面真空缝、电子不触材、不分叉，空间局域不得画成远场光束；19 as 只作单电子虚拟脉冲模型结果，非实验、非确定单光子发射。后期精确标签不依赖模型绘字。
+4. 复用现有媒体镜像的 FFmpeg 做完整解码、分镜截图、音轨提取及最终剪辑。供应商成功、像素检查、声音自然度和用户接受分别记录；无实际听验不得声称旁白通过。实际任务/产物和付费数量只见 CURRENT 及其私有收据。
+
+### 参考视频恢复与验证
+
+原品牌任务和每镜头预留均不删除；中断只续查原 task。失败/unknown 不自动生成下一版本或换供应商。默认旧试镜严格校验与新模式来源图片、参数错配、并发重复提交须有定向用例；Linux 所有权/fsync 复用原视频 CI。停用仅停止调用新增论文模式，保留输入、原片与收据，不重启科研应用或删除 Qwen。此段说明候选合同；真实操作是否完成以 CURRENT 为准。
+
 ## 论文独立旁白试片（2026-09-30）
 
 本路径沿既有 Gateway、视频操作目录和 media-demo 渲染器制作私有试片。输入为已保存、已审的论文叙事与原图；口播改编有明确来源记录，不冒充新一轮 Hermes 自动全文分析或任意 RO 的按钮接线。结果及当前源版本只见 CURRENT。

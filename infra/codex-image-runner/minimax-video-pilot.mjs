@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { safeRead, atomicWrite } from './core.mjs';
 import {
   MiniMaxVideoClient, MiniMaxVideoError, MINIMAX_VIDEO_MAX_REQUEST_BYTES,
+  MINIMAX_PAPER_VIDEO, MINIMAX_VIDEO_MAX_PAPER_REQUEST_BYTES,
   validateMiniMaxVideoBaseUrl, validateMiniMaxVideoRequest,
   validateMiniMaxVideoTaskId, validateMiniMaxVideoTask,
 } from '../../packages/ai-gateway/dist/minimax-video.js';
@@ -46,10 +47,15 @@ export async function runPilot(options, dependencies = {}) {
   if ((dependencies.platform ?? process.platform) !== 'linux'
     || (dependencies.getuid ?? process.getuid)?.() !== 0
     || (dependencies.geteuid ?? process.geteuid)?.() !== 0) fail('PILOT_ROOT_REQUIRED');
-  const { command, requestFile } = options ?? {};
+  const { command, requestFile, paperShot } = options ?? {};
   if (!['prepare', 'submit', 'status', 'download'].includes(command)
     || (!['status', 'download'].includes(command) && typeof requestFile !== 'string')
-    || Object.keys(options).some(key => !['command', 'requestFile'].includes(key))) fail('PILOT_ARGUMENTS_INVALID');
+    || Object.keys(options).some(key => !['command', 'requestFile', 'paperShot'].includes(key))
+    || (paperShot !== undefined && !MINIMAX_PAPER_VIDEO.shots.includes(paperShot))) fail('PILOT_ARGUMENTS_INVALID');
+  const mode = paperShot === undefined ? 'pilot' : 'paper';
+  const requestLimit = mode === 'paper' ? MINIMAX_VIDEO_MAX_PAPER_REQUEST_BYTES : MINIMAX_VIDEO_MAX_REQUEST_BYTES;
+  const validateRequest = value => validateMiniMaxVideoRequest(value, mode);
+  const validateTask = (value, id) => validateMiniMaxVideoTask(value, id, mode);
   const inspect = dependencies.lstat ?? lstat;
   const sync = dependencies.syncDirectory ?? syncDirectory;
   async function directories(path, privateLeaf = false) {
@@ -72,31 +78,37 @@ export async function runPilot(options, dependencies = {}) {
   }
 
   const configPath = resolve(dependencies.configPath ?? CONFIG_PATH);
-  const root = dirname(configPath), stateRoot = join(root, 'minimax-h3-pilot');
+  const root = dirname(configPath), stateRoot = join(root, paperShot === undefined ? 'minimax-h3-pilot' : `minimax-${MINIMAX_PAPER_VIDEO.id}-${paperShot}`);
   const config = json(await read(configPath, 16384));
   validateMiniMaxVideoBaseUrl(config.baseUrl);
   if (config.model !== 'MiniMax-H3' || config.apiKeyFile !== join(root, 'secrets', 'minimax-video.key')
     || config.pilot?.duration !== 10 || config.pilot?.resolution !== '768P'
     || config.pilot?.ratio !== '16:9' || config.pilot?.maxCreateRequests !== 1) fail('PILOT_CONFIG_INVALID');
+  if (mode === 'paper' && (config.paperVideo?.id !== MINIMAX_PAPER_VIDEO.id
+    || config.paperVideo?.duration !== MINIMAX_PAPER_VIDEO.duration || config.paperVideo?.resolution !== MINIMAX_PAPER_VIDEO.resolution
+    || config.paperVideo?.ratio !== MINIMAX_PAPER_VIDEO.ratio
+    || JSON.stringify(config.paperVideo?.shots) !== JSON.stringify(MINIMAX_PAPER_VIDEO.shots)
+    || Object.keys(config.paperVideo).sort().join(',') !== 'duration,id,ratio,resolution,shots')) fail('PILOT_CONFIG_INVALID');
   let created = false;
   try { await mkdir(stateRoot, { mode: 0o700 }); created = true; }
   catch (error) { if (error.code !== 'EEXIST') throw error; }
   await directories(stateRoot, true);
   if (created) await sync(root);
   const savedRequestPath = join(stateRoot, 'request.json');
-  const summary = (status, extra = {}) => ({ status, model: 'MiniMax-H3', duration: 10,
-    resolution: '768P', ratio: '16:9', maxCreateRequests: 1, ...extra });
+  const summary = (status, extra = {}) => ({ status, model: 'MiniMax-H3', duration: mode === 'paper' ? 15 : 10,
+    resolution: mode === 'paper' ? '2K' : '768P', ratio: '16:9', maxCreateRequests: 1,
+    ...(paperShot === undefined ? {} : { paperShot, runId: MINIMAX_PAPER_VIDEO.id }), ...extra });
   let proposed;
-  if (requestFile !== undefined) proposed = validateMiniMaxVideoRequest(json(await read(resolve(requestFile), MINIMAX_VIDEO_MAX_REQUEST_BYTES)));
+  if (requestFile !== undefined) proposed = validateRequest(json(await read(resolve(requestFile), requestLimit)));
   if (command === 'prepare') {
     await writeExclusive(savedRequestPath, JSON.stringify(proposed), sync);
   }
-  const request = validateMiniMaxVideoRequest(json(await read(savedRequestPath, MINIMAX_VIDEO_MAX_REQUEST_BYTES)));
+  const request = validateRequest(json(await read(savedRequestPath, requestLimit)));
   const canonical = JSON.stringify(request);
   if (proposed && JSON.stringify(proposed) !== canonical) fail('PILOT_REQUEST_MISMATCH');
 
   async function submission() {
-    const attempted = await optional(join(stateRoot, 'create-attempt'));
+    const attempted = await optional(join(stateRoot, 'create-attempt'), requestLimit + 1024);
     if (attempted === null) {
       if (await optional(join(stateRoot, 'receipt.json')) !== null) fail('PILOT_INVALID_STATE');
       return summary('prepared');
@@ -104,7 +116,7 @@ export async function runPilot(options, dependencies = {}) {
     let attempt;
     try { attempt = JSON.parse(attempted.toString('utf8')); }
     catch { return summary('uncertain', { errorCode: 'PILOT_ATTEMPT_INCOMPLETE' }); }
-    if (attempt.schemaVersion !== 1 || JSON.stringify(validateMiniMaxVideoRequest(attempt.request)) !== canonical) fail('PILOT_REQUEST_MISMATCH');
+    if (attempt.schemaVersion !== 1 || JSON.stringify(validateRequest(attempt.request)) !== canonical) fail('PILOT_REQUEST_MISMATCH');
     const receiptBytes = await optional(join(stateRoot, 'receipt.json'));
     if (receiptBytes !== null) {
       const receipt = json(receiptBytes);
@@ -112,7 +124,7 @@ export async function runPilot(options, dependencies = {}) {
       const taskId = validateMiniMaxVideoTaskId(receipt.taskId);
       const terminalBytes = await optional(join(stateRoot, 'terminal.json'));
       if (terminalBytes !== null) {
-        const terminal = validateMiniMaxVideoTask(json(terminalBytes), taskId);
+        const terminal = validateTask(json(terminalBytes), taskId);
         if (!['succeeded', 'failed', 'cancelled'].includes(terminal.status)) fail('PILOT_INVALID_STATE');
         return summary(terminal.status, { taskId, hasVideo: !!terminal.content.url });
       }
@@ -141,8 +153,8 @@ export async function runPilot(options, dependencies = {}) {
     };
     let saved = await optional(outputPath, MINIMAX_VIDEO_MAX_DOWNLOAD_BYTES);
     if (saved === null) {
-      const terminal = validateMiniMaxVideoTask(json(await read(join(stateRoot, 'terminal.json'), 65536)), previous.taskId);
-      const bytes = validVideo(await (dependencies.download ?? downloadMiniMaxVideo)(terminal));
+      const terminal = validateTask(json(await read(join(stateRoot, 'terminal.json'), 65536)), previous.taskId);
+      const bytes = validVideo(await (dependencies.download ?? downloadMiniMaxVideo)(terminal, { mode }));
       const temporaryPath = join(stateRoot, `.source-${randomUUID()}.part`);
       let owned = false;
       try {
@@ -167,7 +179,7 @@ export async function runPilot(options, dependencies = {}) {
     if (dependencies.getClient) return dependencies.getClient(config);
     await directories(dirname(config.apiKeyFile), true);
     const apiKey = (await read(config.apiKeyFile, 4096)).toString('utf8').replace(/\r?\n$/u, '');
-    return new MiniMaxVideoClient({ baseUrl: config.baseUrl, apiKey });
+    return new MiniMaxVideoClient({ baseUrl: config.baseUrl, apiKey, mode });
   }
   const provider = await client();
   if (command === 'submit') {
@@ -190,7 +202,7 @@ export async function runPilot(options, dependencies = {}) {
     return summary('submitted', { taskId: receipt.task_id });
   }
   try {
-    const task = validateMiniMaxVideoTask(await provider.query(previous.taskId), previous.taskId);
+    const task = validateTask(await provider.query(previous.taskId), previous.taskId);
     if (['succeeded', 'failed', 'cancelled'].includes(task.status)) {
       await writeExclusive(join(stateRoot, 'terminal.json'), JSON.stringify(task), sync);
       return submission();
@@ -200,13 +212,26 @@ export async function runPilot(options, dependencies = {}) {
   } catch (error) { return summary('query_failed', { taskId: previous.taskId, ...diagnostics(error) }); }
 }
 
+export function parsePilotArgs(args) {
+  const [command, ...flags] = args;
+  if (!['prepare', 'submit', 'status', 'download'].includes(command) || flags.length % 2) fail('PILOT_ARGUMENTS_INVALID');
+  const options = { command };
+  for (let index = 0; index < flags.length; index += 2) {
+    const key = flags[index] === '--request-file' ? 'requestFile' : flags[index] === '--paper-shot' ? 'paperShot' : null;
+    if (!key || key in options || !flags[index + 1]) fail('PILOT_ARGUMENTS_INVALID');
+    options[key] = flags[index + 1];
+  }
+  if ((['prepare', 'submit'].includes(command)) !== ('requestFile' in options)
+    || ('paperShot' in options && !MINIMAX_PAPER_VIDEO.shots.includes(options.paperShot))) fail('PILOT_ARGUMENTS_INVALID');
+  return options;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const args = process.argv.slice(2);
-  const valid = (args.length === 1 && ['status', 'download'].includes(args[0]))
-    || (args.length === 3 && ['prepare', 'submit'].includes(args[0]) && args[1] === '--request-file');
-  if (!valid) { console.error('PILOT_ARGUMENTS_INVALID'); process.exitCode = 64; }
+  let options;
+  try { options = parsePilotArgs(process.argv.slice(2)); } catch { /* handled below */ }
+  if (!options) { console.error('PILOT_ARGUMENTS_INVALID'); process.exitCode = 64; }
   else {
-    runPilot({ command: args[0], ...(args.length === 3 ? { requestFile: args[2] } : {}) }).then(result => {
+    runPilot(options).then(result => {
       console.log(JSON.stringify(result));
       if (['uncertain', 'rejected', 'failed', 'cancelled', 'query_failed'].includes(result.status)) process.exitCode = 1;
     }).catch(error => {

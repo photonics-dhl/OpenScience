@@ -1,5 +1,6 @@
 # CURRENT Progress Window
 
+- 09-30视频：用户否定原图试片的声音/静态呈现，明确授权H3主画面；已复用已审来源准备并私有暂存四个镜头请求，旧音视频及Qwen保留。当前调用与质量状态只见Hermes CURRENT。
 - 2026-09-30：公司评估用固定源码/服务器说明已完成，独立High与最终ZIP检查通过；用户确认公司只做正式上线和年度运维，功能继续由我方开发。快照、脱敏/验收边界与证据见 [评估交接](handoff/2026-09-30-vendor-evaluation.md)，未发送公司或部署应用。
 > 当前交付位于 release/onchip-production-line；精确 HEAD、生产/回退、资产与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。旧记录在 Git 历史，不能当下一动作。
 

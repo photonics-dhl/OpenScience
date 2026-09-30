@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, lstat, symlink } from 'node:fs
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { runPilot } from './minimax-video-pilot.mjs';
+import { runPilot, parsePilotArgs } from './minimax-video-pilot.mjs';
 import { MiniMaxVideoError } from '../../packages/ai-gateway/dist/minimax-video.js';
 
 const request = {
@@ -172,4 +172,96 @@ test('malformed receipts and unexpected query task identities never drive new re
   await writeFile(join(f.stateRoot, 'receipt.json'), '{}');
   await assert.rejects(runPilot({ command: 'status' }, f.dependencies));
   assert.equal(creates, 1);
+});
+
+async function paperFixture(t) {
+  const f = await fixture(t);
+  const config = JSON.parse(await readFile(f.dependencies.configPath, 'utf8'));
+  config.paperVideo = { id: 'ics-paper-v2', duration: 15, resolution: '2K', ratio: '16:9', shots: ['hook', 'mechanism', 'mapping', 'result'] };
+  await writeFile(f.dependencies.configPath, JSON.stringify(config));
+  const png = await readFile(new URL('../../packages/ai-gateway/test/fixtures/minimax-reference.png', import.meta.url));
+  // A valid ancillary PNG text chunk takes the saved attempt above the old 64 KiB limit.
+  const data = Buffer.from(`Note\0${'a'.repeat(70000)}`), type = Buffer.from('tEXt');
+  const chunk = Buffer.alloc(data.length + 12);
+  chunk.writeUInt32BE(data.length); type.copy(chunk, 4); data.copy(chunk, 8);
+  let crc = 0xffffffff;
+  for (const byte of chunk.subarray(4, -4)) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  }
+  chunk.writeUInt32BE((crc ^ 0xffffffff) >>> 0, chunk.length - 4);
+  const reference = Buffer.concat([png.subarray(0, 33), chunk, png.subarray(33)]);
+  const paperRequest = { ...request, content: [request.content[0], {
+    type: 'image_url', image_url: { url: `data:image/png;base64,${reference.toString('base64')}` }, role: 'reference_image',
+  }], duration: 15, resolution: '2K' };
+  const paperFile = join(f.root, 'paper-request.json');
+  await writeFile(paperFile, JSON.stringify(paperRequest), { mode: 0o600 });
+  return { ...f, paperFile, paperRequest, paperRoot: join(f.root, 'minimax-ics-paper-v2-hook') };
+}
+
+test('paper CLI opt-in rejects unknown shots, duplicate flags and attempts to rename a run', () => {
+  assert.deepEqual(parsePilotArgs(['submit', '--paper-shot', 'hook', '--request-file', '/input.json']), {
+    command: 'submit', paperShot: 'hook', requestFile: '/input.json',
+  });
+  assert.deepEqual(parsePilotArgs(['status']), { command: 'status' });
+  for (const args of [['status', '--paper-shot', 'other'], ['status', '--paper-shot', 'hook', '--paper-shot', 'result'],
+    ['status', '--run-id', 'new'], ['status', '--request-file', '/input.json'], ['submit', '--paper-shot', 'hook']]) {
+    assert.throws(() => parsePilotArgs(args), /PILOT_ARGUMENTS_INVALID/);
+  }
+});
+
+test('paper shot submits once, resumes its large reference, and leaves the legacy pilot unchanged', async t => {
+  const f = await paperFixture(t); let creates = 0, queries = 0;
+  f.dependencies.getClient = () => ({
+    create: async value => { creates++; assert.deepEqual(value, f.paperRequest); return { task_id: 'paper-hook' }; },
+    query: async () => { queries++; return { ...task('succeeded'), id: 'paper-hook', duration: 15, resolution: '2K' }; },
+  });
+  await runPilot({ command: 'prepare', requestFile: f.requestFile }, f.dependencies);
+  const legacyBytes = await readFile(join(f.stateRoot, 'request.json'));
+  const options = { command: 'submit', requestFile: f.paperFile, paperShot: 'hook' };
+  await runPilot({ ...options, command: 'prepare' }, f.dependencies);
+  const results = await Promise.all([runPilot(options, f.dependencies), runPilot(options, f.dependencies)]);
+  assert.equal(creates, 1); assert.ok(results.some(result => result.status === 'submitted'));
+  assert.ok((await lstat(join(f.paperRoot, 'create-attempt'))).size > 65536);
+  assert.equal((await runPilot(options, f.dependencies)).taskId, 'paper-hook');
+  assert.equal((await runPilot({ command: 'status', paperShot: 'hook' }, f.dependencies)).status, 'succeeded');
+  assert.equal((await runPilot(options, f.dependencies)).status, 'succeeded');
+  assert.equal(creates, 1); assert.equal(queries, 1);
+  assert.deepEqual(await readFile(join(f.stateRoot, 'request.json')), legacyBytes);
+  await assert.rejects(lstat(join(f.stateRoot, 'create-attempt')), { code: 'ENOENT' });
+  const video = await readFile(new URL('../../packages/ai-gateway/test/fixtures/minimax-video-sample.mp4', import.meta.url));
+  let downloads = 0;
+  f.dependencies.download = async (value, { mode }) => { downloads++; assert.equal(mode, 'paper'); assert.equal(value.id, 'paper-hook'); return video; };
+  assert.equal((await runPilot({ command: 'download', paperShot: 'hook' }, f.dependencies)).status, 'downloaded');
+  await runPilot({ command: 'download', paperShot: 'hook' }, f.dependencies);
+  assert.equal(downloads, 1);
+});
+
+test('paper uncertainty stays consumed, another fixed shot has separate ownership, and changed input cannot replace it', async t => {
+  const f = await paperFixture(t); let creates = 0;
+  f.dependencies.getClient = () => ({ create: async () => { creates++; throw new MiniMaxVideoError('VIDEO_TIMEOUT', 'uncertain'); } });
+  const options = { command: 'submit', requestFile: f.paperFile, paperShot: 'hook' };
+  await runPilot({ ...options, command: 'prepare' }, f.dependencies);
+  assert.equal((await runPilot(options, f.dependencies)).status, 'uncertain');
+  assert.equal((await runPilot(options, f.dependencies)).status, 'uncertain');
+  assert.equal(creates, 1);
+  await runPilot({ ...options, command: 'prepare', paperShot: 'mechanism' }, f.dependencies);
+  await runPilot({ ...options, paperShot: 'mechanism' }, f.dependencies);
+  assert.equal(creates, 2);
+  const altered = { ...f.paperRequest, content: [{ type: 'text', text: 'Changed narration' }, f.paperRequest.content[1]] };
+  await writeFile(f.paperFile, JSON.stringify(altered));
+  await assert.rejects(runPilot(options, f.dependencies), /PILOT_REQUEST_MISMATCH/);
+  assert.equal(creates, 2);
+});
+
+test('paper mode requires explicit configuration and rejects a mismatched provider task', async t => {
+  const f = await paperFixture(t);
+  f.dependencies.getClient = () => ({ create: async () => ({ task_id: 'pilot-123' }), query: async () => task('succeeded') });
+  await runPilot({ command: 'prepare', requestFile: f.paperFile, paperShot: 'hook' }, f.dependencies);
+  await runPilot({ command: 'submit', requestFile: f.paperFile, paperShot: 'hook' }, f.dependencies);
+  assert.equal((await runPilot({ command: 'status', paperShot: 'hook' }, f.dependencies)).status, 'query_failed');
+  const config = JSON.parse(await readFile(f.dependencies.configPath, 'utf8'));
+  delete config.paperVideo;
+  await writeFile(f.dependencies.configPath, JSON.stringify(config));
+  await assert.rejects(runPilot({ command: 'prepare', requestFile: f.paperFile, paperShot: 'result' }, f.dependencies), /PILOT_CONFIG_INVALID/);
 });

@@ -5,22 +5,36 @@ export const MINIMAX_VIDEO_MAX_REQUEST_BYTES = 32 * 1024;
 export const MINIMAX_VIDEO_PILOT = Object.freeze({
   model: 'MiniMax-H3', duration: 10, resolution: '768P', ratio: '16:9', maxCreateRequests: 1,
 } as const);
+export const MINIMAX_PAPER_VIDEO = Object.freeze({
+  id: 'ics-paper-v2', duration: 15, resolution: '2K', ratio: '16:9',
+  shots: Object.freeze(['hook', 'mechanism', 'mapping', 'result']),
+} as const);
+export const MINIMAX_VIDEO_MAX_PAPER_REQUEST_BYTES = 8 * 1024 * 1024;
+export type MiniMaxVideoMode = 'pilot' | 'paper';
 
-export interface MiniMaxVideoRequest {
+interface MiniMaxPilotVideoRequest {
   model: 'MiniMax-H3';
   content: [{ type: 'text'; text: string }];
   resolution: '768P';
   duration: 10;
   ratio: '16:9';
 }
+interface MiniMaxPaperVideoRequest {
+  model: 'MiniMax-H3';
+  content: [{ type: 'text'; text: string }, { type: 'image_url'; image_url: { url: string }; role: 'reference_image' }];
+  resolution: '2K';
+  duration: 15;
+  ratio: '16:9';
+}
+export type MiniMaxVideoRequest = MiniMaxPilotVideoRequest | MiniMaxPaperVideoRequest;
 export type MiniMaxVideoStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 export interface MiniMaxVideoTask {
   id: string;
   model: 'MiniMax-H3';
   status: MiniMaxVideoStatus;
   content: { url?: string };
-  resolution: '768P';
-  duration: 10;
+  resolution: '768P' | '2K';
+  duration: 10 | 15;
   ratio: '16:9';
 }
 export type MiniMaxVideoErrorCode = 'VIDEO_CONFIG_INVALID' | 'VIDEO_REQUEST_INVALID'
@@ -57,6 +71,39 @@ function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
 }
 function badResponse(): never { throw new MiniMaxVideoError('VIDEO_RESPONSE_INVALID', 'uncertain'); }
 
+function settings(mode: MiniMaxVideoMode) {
+  if (mode !== 'pilot' && mode !== 'paper') throw new MiniMaxVideoError('VIDEO_CONFIG_INVALID', 'invalid');
+  return mode === 'paper' ? MINIMAX_PAPER_VIDEO : MINIMAX_VIDEO_PILOT;
+}
+
+/** Local original PNG only; container/size checks do not claim pixel acceptance. */
+function validatePaperReference(value: unknown): string {
+  if (typeof value !== 'string' || value.length > MINIMAX_VIDEO_MAX_PAPER_REQUEST_BYTES
+    || !value.startsWith('data:image/png;base64,')) throw new Error();
+  const encoded = value.slice(22);
+  if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(encoded)) throw new Error();
+  const bytes = Buffer.from(encoded, 'base64');
+  if (bytes.toString('base64') !== encoded || bytes.length < 57
+    || !bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    || bytes.readUInt32BE(8) !== 13 || bytes.toString('ascii', 12, 16) !== 'IHDR') throw new Error();
+  const width = bytes.readUInt32BE(16), height = bytes.readUInt32BE(20);
+  if (width < 256 || height < 256 || width > 5760 || height > 5760
+    || width * height > 16_000_000 || width / height < .4 || width / height > 2.5) throw new Error();
+  let offset = 8, idat = false, chunks = 0;
+  while (offset < bytes.length) {
+    if (bytes.length - offset < 12 || ++chunks > 10000) throw new Error();
+    const length = bytes.readUInt32BE(offset), type = bytes.toString('ascii', offset + 4, offset + 8);
+    if (length > bytes.length - offset - 12 || (type === 'IHDR' && offset !== 8)) throw new Error();
+    offset += length + 12;
+    if (type === 'IDAT' && length) idat = true;
+    if (type === 'IEND') {
+      if (length || offset !== bytes.length || !idat) throw new Error();
+      return value;
+    }
+  }
+  throw new Error();
+}
+
 export function validateMiniMaxVideoBaseUrl(value: unknown): string {
   try {
     if (typeof value !== 'string') throw new Error();
@@ -67,20 +114,30 @@ export function validateMiniMaxVideoBaseUrl(value: unknown): string {
 }
 
 /** Canonical serialization is also the exact body saved before submission. */
-export function validateMiniMaxVideoRequest(value: unknown): MiniMaxVideoRequest {
+export function validateMiniMaxVideoRequest(value: unknown, mode: MiniMaxVideoMode = 'pilot'): MiniMaxVideoRequest {
   try {
+    const expected = settings(mode), paper = mode === 'paper';
     if (!record(value) || !exactKeys(value, ['model', 'content', 'resolution', 'duration', 'ratio'])
-      || value.model !== 'MiniMax-H3' || value.resolution !== '768P' || value.duration !== 10 || value.ratio !== '16:9'
-      || !Array.isArray(value.content) || value.content.length !== 1) throw new Error();
+      || value.model !== 'MiniMax-H3' || value.resolution !== expected.resolution || value.duration !== expected.duration || value.ratio !== '16:9'
+      || !Array.isArray(value.content) || value.content.length !== (paper ? 2 : 1)) throw new Error();
     const content: unknown = value.content[0];
     if (!record(content) || !exactKeys(content, ['type', 'text']) || content.type !== 'text'
-      || typeof content.text !== 'string' || !content.text.trim()
+      || typeof content.text !== 'string' || !content.text.trim() || Buffer.byteLength(content.text, 'utf8') > MINIMAX_VIDEO_MAX_REQUEST_BYTES
       || [...content.text].some(char => { const code = char.charCodeAt(0); return code === 127 || (code < 32 && ![9, 10, 13].includes(code)); })) throw new Error();
-    const request: MiniMaxVideoRequest = {
+    let request: MiniMaxVideoRequest = {
       model: 'MiniMax-H3', content: [{ type: 'text', text: content.text }],
       resolution: '768P', duration: 10, ratio: '16:9',
     };
-    if (Buffer.byteLength(JSON.stringify(request), 'utf8') > MINIMAX_VIDEO_MAX_REQUEST_BYTES) throw new Error();
+    if (paper) {
+      const reference: unknown = value.content[1];
+      if (!record(reference) || !exactKeys(reference, ['type', 'image_url', 'role'])
+        || reference.type !== 'image_url' || reference.role !== 'reference_image'
+        || !record(reference.image_url) || !exactKeys(reference.image_url, ['url'])) throw new Error();
+      request = { model: 'MiniMax-H3', content: [request.content[0], {
+        type: 'image_url', image_url: { url: validatePaperReference(reference.image_url.url) }, role: 'reference_image',
+      }], resolution: '2K', duration: 15, ratio: '16:9' };
+    }
+    if (Buffer.byteLength(JSON.stringify(request), 'utf8') > (paper ? MINIMAX_VIDEO_MAX_PAPER_REQUEST_BYTES : MINIMAX_VIDEO_MAX_REQUEST_BYTES)) throw new Error();
     return request;
   } catch { throw new MiniMaxVideoError('VIDEO_REQUEST_INVALID', 'invalid'); }
 }
@@ -93,9 +150,10 @@ export function validateMiniMaxVideoTaskId(value: unknown): string {
 }
 
 /** Unknown provider fields (including errors and usage metadata) are discarded. */
-export function validateMiniMaxVideoTask(value: unknown, expectedId: string): MiniMaxVideoTask {
+export function validateMiniMaxVideoTask(value: unknown, expectedId: string, mode: MiniMaxVideoMode = 'pilot'): MiniMaxVideoTask {
+  const expected = settings(mode);
   if (!record(value) || value.id !== validateMiniMaxVideoTaskId(expectedId) || value.model !== 'MiniMax-H3'
-    || value.resolution !== '768P' || value.duration !== 10 || value.ratio !== '16:9'
+    || value.resolution !== expected.resolution || value.duration !== expected.duration || value.ratio !== '16:9'
     || !['queued', 'running', 'succeeded', 'failed', 'cancelled'].includes(String(value.status))) badResponse();
   let videoUrl: string | undefined;
   if (value.content !== undefined && value.content !== null) {
@@ -114,7 +172,7 @@ export function validateMiniMaxVideoTask(value: unknown, expectedId: string): Mi
   return {
     id: expectedId, model: 'MiniMax-H3', status: value.status as MiniMaxVideoStatus,
     content: value.status === 'succeeded' ? { url: videoUrl } : {},
-    resolution: '768P', duration: 10, ratio: '16:9',
+    resolution: expected.resolution, duration: expected.duration, ratio: '16:9',
   };
 }
 
@@ -124,6 +182,7 @@ export interface MiniMaxVideoClientConfig {
   timeoutMs?: number;
   maxResponseBytes?: number;
   fetch?: typeof fetch;
+  mode?: MiniMaxVideoMode;
 }
 
 async function boundedJson(response: Response, maxBytes: number): Promise<unknown> {
@@ -154,9 +213,12 @@ export class MiniMaxVideoClient {
   readonly #fetch: typeof fetch;
   readonly #timeoutMs: number;
   readonly #maxResponseBytes: number;
+  readonly #mode: MiniMaxVideoMode;
 
   constructor(config: MiniMaxVideoClientConfig) {
     validateMiniMaxVideoBaseUrl(config.baseUrl);
+    this.#mode = config.mode ?? 'pilot';
+    settings(this.#mode);
     if (typeof config.apiKey !== 'string' || !/^[\x21-\x7e]{1,4096}$/u.test(config.apiKey)) {
       throw new MiniMaxVideoError('VIDEO_CONFIG_INVALID', 'invalid');
     }
@@ -215,7 +277,7 @@ export class MiniMaxVideoClient {
   }
 
   async create(input: unknown): Promise<{ task_id: string }> {
-    const request = validateMiniMaxVideoRequest(input);
+    const request = validateMiniMaxVideoRequest(input, this.#mode);
     const data = await this.#request('POST', '/v2/video_generation', JSON.stringify(request));
     try {
       if (!record(data) || data.error !== undefined) badResponse();
@@ -227,6 +289,6 @@ export class MiniMaxVideoClient {
     const id = validateMiniMaxVideoTaskId(taskId);
     const data = await this.#request('GET', `/v2/query/video_generation/${id}`);
     if (!record(data) || data.error !== undefined) badResponse();
-    return validateMiniMaxVideoTask(data.task, id);
+    return validateMiniMaxVideoTask(data.task, id, this.#mode);
   }
 }

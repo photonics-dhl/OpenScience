@@ -3,7 +3,7 @@ import type { LookupAddress } from 'node:dns';
 import type { ClientRequest, IncomingMessage } from 'node:http';
 import { get, type RequestOptions } from 'node:https';
 import { BlockList, isIP, type TcpSocketConnectOpts } from 'node:net';
-import { MiniMaxVideoError, validateMiniMaxVideoTask, type MiniMaxVideoTask } from './minimax-video.js';
+import { MiniMaxVideoError, validateMiniMaxVideoTask, type MiniMaxVideoTask, type MiniMaxVideoMode } from './minimax-video.js';
 
 export const MINIMAX_VIDEO_MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024;
 const MAX_TIMEOUT_MS = 90_000;
@@ -62,6 +62,7 @@ for (const [address, prefix] of [
 export type MiniMaxVideoDownloadRequestOptions = RequestOptions & Pick<TcpSocketConnectOpts, 'autoSelectFamily'>;
 
 interface DownloadOptions {
+  mode?: MiniMaxVideoMode;
   maxBytes?: number;
   timeoutMs?: number;
   /** Test seams; production uses DNS and HTTPS directly, never an API credential. */
@@ -73,7 +74,7 @@ interface DownloadOptions {
  * HTTPS connects to a vetted public IPv4 address with normal hostname/TLS checks.
  * No redirects, retries, API key, proxy credentials or shared connection pool. */
 export async function downloadMiniMaxVideo(input: MiniMaxVideoTask, options: DownloadOptions = {}): Promise<Buffer> {
-  const task = validateMiniMaxVideoTask(input, input.id);
+  const task = validateMiniMaxVideoTask(input, input.id, options.mode);
   const invalid = () => new MiniMaxVideoError('VIDEO_RESPONSE_INVALID', 'invalid');
   if (task.status !== 'succeeded' || !task.content.url) throw invalid();
   const url = new URL(task.content.url);

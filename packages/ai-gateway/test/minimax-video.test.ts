@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { MiniMaxVideoClient, MiniMaxVideoError, validateMiniMaxVideoBaseUrl } from '../src/minimax-video';
 
 const request = {
@@ -107,5 +108,39 @@ describe('bounded MiniMax video gateway', () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ task: { ...task, ...change } }));
     const client = new MiniMaxVideoClient({ baseUrl: 'https://api.minimax.cn', apiKey: 'test-only-key', fetch: transport });
     await expect(client.query('pilot-123')).rejects.toMatchObject({ outcome: 'uncertain', code: 'VIDEO_RESPONSE_INVALID' });
+  });
+});
+
+describe('explicit paper-reference video mode', () => {
+  const png = readFileSync(new URL('./fixtures/minimax-reference.png', import.meta.url));
+  const paper = {
+    ...request, resolution: '2K', duration: 15,
+    content: [request.content[0], { type: 'image_url', image_url: { url: `data:image/png;base64,${png.toString('base64')}` }, role: 'reference_image' }],
+  };
+  it('submits the original reference once only after explicit paper opt-in', async () => {
+    const transport = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ task_id: 'paper-hook' }));
+    const legacy = new MiniMaxVideoClient({ baseUrl: 'https://api.minimax.cn', apiKey: 'test-only-key', fetch: transport });
+    await expect(legacy.create(paper)).rejects.toMatchObject({ code: 'VIDEO_REQUEST_INVALID' });
+    expect(transport).not.toHaveBeenCalled();
+    const client = new MiniMaxVideoClient({ baseUrl: 'https://api.minimax.cn', apiKey: 'test-only-key', mode: 'paper', fetch: transport });
+    expect(await client.create(paper)).toEqual({ task_id: 'paper-hook' });
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport.mock.calls[0][1]?.body).toBe(JSON.stringify(paper));
+  });
+  it.each(['https://example.com/reference.png', 'data:image/png;base64,bm90LXBuZw=='])('rejects invalid reference %s before transport', async url => {
+    const transport = vi.fn<typeof fetch>();
+    const client = new MiniMaxVideoClient({ baseUrl: 'https://api.minimax.cn', apiKey: 'test-only-key', mode: 'paper', fetch: transport });
+    await expect(client.create({ ...paper, content: [paper.content[0], { ...paper.content[1], image_url: { url } }] })).rejects.toMatchObject({ code: 'VIDEO_REQUEST_INVALID' });
+    expect(transport).not.toHaveBeenCalled();
+  });
+  it('matches paper task parameters and rejects legacy or different identities', async () => {
+    const task = { id: 'paper-hook', model: 'MiniMax-H3', status: 'running', content: {}, resolution: '2K', duration: 15, ratio: '16:9' };
+    const transport = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ task }));
+    const client = new MiniMaxVideoClient({ baseUrl: 'https://api.minimax.cn', apiKey: 'test-only-key', mode: 'paper', fetch: transport });
+    expect(await client.query('paper-hook')).toEqual(task);
+    for (const change of [{ id: 'other' }, { duration: 10 }, { resolution: '768P' }]) {
+      transport.mockResolvedValueOnce(Response.json({ task: { ...task, ...change } }));
+      await expect(client.query('paper-hook')).rejects.toMatchObject({ code: 'VIDEO_RESPONSE_INVALID' });
+    }
   });
 });
