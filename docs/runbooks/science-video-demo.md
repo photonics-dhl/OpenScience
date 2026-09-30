@@ -43,6 +43,25 @@ Nginx Range 播放；独立于本样片，管理员 RO 单幕 Codex 生图已验
 - 定向测试为 `node --test infra/codex-image-runner/core.test.mjs infra/codex-image-runner/video-runner.test.mjs infra/codex-image-runner/minimax-video-pilot.test.mjs infra/codex-image-runner/minimax-video-download.test.mjs` 与 Gateway 的 `test/minimax-video.test.ts`、`test/minimax-video-download.test.ts`；Linux 下 runner 真实 owner/fsync 路径在隔离 CI 以 root 执行，所有 provider/Docker 操作均由 mock 代替。下载用例共用 16×16 H.264 测试片（既有 FFmpeg 生成并完整解码），验证同长度截断、私网、无凭据、超时及完整原片并发保存；测试片不作产品成片。视频专属工作流覆盖原发布分支 CI 未监听的视频文件；不替代服务器和音画验证。
 - 实际视频须检查完整解码、画幅/时长、连续运动、真实音轨与完整旁白、字幕和手机可读性。旧 Qwen TTS 镜像缺失仍须独立恢复，不能把 H3 试镜成功算作离线配音恢复。当前 POST 数量及结果见 CURRENT；清理仍按[综合计划 Task 4](../plans/2026-09-05-integrated-research-product-plan.md#task-4-视频)的引用和任务终态要求，保留原片、已采用资产与 unknown 收据。
 
+## 论文独立旁白试片（2026-09-30）
+
+本路径沿既有 Gateway、视频操作目录和 media-demo 渲染器制作私有试片。输入为已保存、已审的论文叙事与原图；口播改编有明确来源记录，不冒充新一轮 Hermes 自动全文分析或任意 RO 的按钮接线。结果及当前源版本只见 CURRENT。
+
+### 旁白前置条件
+
+使用干净已推送源和现有国内 MiniMax 按量配置。`minimax-cloud.json` 及其指定密钥保留 root/0600；不打印密钥、不安装第二套配音模型。只读输入请求包含 text、voiceId 及可选 speed/vol/pitch，正文最多 2000 字符；当前选择官方系统声音，不克隆真人。语音由 Gateway 的 `minimax-speech.ts` 固定调用 `speech-2.8-hd`，请求和响应均有大小、时间及来源边界。
+
+### 旁白执行步骤
+
+1. 在上述不可变源下执行 `node infra/codex-image-runner/video-narration-pilot.mjs prepare --request-file /opt/openscience-video/narration-request.json`。它只在原视频目录内准备固定的私有 `minimax-ro-narration-pilot`，不调用模型。
+2. 执行同一入口的 `submit`。root/0600 的独占 create-attempt 在付费 POST 前写入并 fsync；中断、并发或重复调用都不能自动再次收费。原 H3 试镜标记不动。正文、原 MP3、metadata 和字幕地址只留私有目录，对外日志不含密钥或地址。
+3. `status` 只读原结果；成功后 `subtitles` 只下载原请求已生成的字幕 JSON，无新配音调用、无 API Key 外传，不允许私网下载或重定向。
+4. 用原媒体镜像把原 MP3 解码为 WAV；按供应商实际字幕时间建立原 `storyboard.json`。`artwork-explainer-v1` 支持 1–6 幕、90 秒内的原图主画面、明确的原图裁取范围和来源文字，不生成科学轨迹或替换原图像素。使用原隔离非 root、无网渲染入口生成 MP4。
+
+### 旁白回滚与验证
+
+失败或 unknown 保留 create-attempt、原音频和收据，不改请求或删除标记重新提交。停用只需停止调用这个操作入口；科研应用版本、H3 原片与 Qwen 权重不变。必须检查 MP4 完整解码、声音时长、实际字幕顺序及逐幕图像；模型成功与像素检查不等于声音已获用户认可。新文件验证沿视频 CI 与定向 speech/operator/artwork 用例，生成任务的真实结果记录于 CURRENT。
+
 ## 前置检查
 
 1. 用户已明确授权本次部署；记录当前 Git full SHA、`/opt/openscience/.release-id`

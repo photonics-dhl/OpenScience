@@ -2,6 +2,7 @@
 > 唯一交付树 `E:/Miscellaneous/XGS/.worktrees/onchip-video-release`，`release/onchip-production-line`；根 `main` 只作导航。历史与禁止重放事项见 [09-18 交接](2026-09-18-figure3-image-and-cleanup-handoff.md)。
 
 ## 目标与决定
+- 视频执行检查点：已补原 Gateway 的独立 MiniMax speech-2.8-hd 和原视频目录单次配音操作入口；media-demo 新 artwork-explainer-v1 消费原图/明确裁取与字幕，不改变科学像素。已准备 c896/771ff 同来源单电子私有试片素材：已认可681原字节和原论文Fig.1/2，338字口播逐幕绑定原证据，非新全文分析。Gateway14、操作恢复4、原图parser7及已装Chrome真实绘制1通过；构建/定向lint通过，独立Max方案/科学审查GO（尚未实际配音或成片）。真实只读DB导出及补充高分辨率渲染写入被平台安全状态检查拦截，未执行；采用已保存来源，不据此改RO/公开。下一步干净源CI及一次独立旁白、实际字幕合成与音画验收；旧H3/Qwen/应用不动。
 - 2026-09-30用户确认外部公司只负责正式上线与年度运维，功能开发仍由我方负责；首轮固定脱敏代码包和屏幕共享，不给GitHub/服务器账号。一次性快照与检查证据见[公司评估交接](2026-09-30-vendor-evaluation.md)，不改变下方未完成功能目标。
 - 2026-09-30视频用户反馈：已认可H3品牌样片画面，旁白仍需改善，不能将声音或RO论文成片标为验收通过。论文视频必须复用既有已审全文/SourceMap/六维/Claim/Evidence、科学分镜、美术方向及原论文图/已认可生图，不新建重复解析或生成工具。Qwen仅列条件性候选删除并观察：H3原生音轨不依赖它，但现有RO离线视频合同仍固定Qwen/Serena；完成替代音轨听验、真实RO路径和引用/回退核查之前保留权重与已有资产。
 - 本次视频审计：独立High与主线程核到现代image narrative不能直入旧content-driven视频，旧planner会丢弃不同output的base，scene/style/旁白上限亦不兼容；补接设计已写回原Task4，保留原已批分镜及图片父关系，只补视频讲稿/时间/有来源的运动。正常SSH实读runner loaded/inactive、Qwen模型4.3GiB、无tts标签镜像，保留media recovery镜像；根盘148GiB/已用84GiB/可用58GiB/60%。早先组合SSH/本机读调用曾被OpenAI安全状态检查拦截；后续明确单命令并修正wrapper配置根后已成功，不据此声称平台拦截根因已解决。本次仅审计与文档，未生成替代配音、未删模型/媒体、未部署；证据tmp/video-system-20260930/voice-ro-audit.md。

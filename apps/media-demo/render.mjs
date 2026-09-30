@@ -90,7 +90,7 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
     await page.route('**/*', route => route.abort());
     await page.setContent('<!doctype html><html><body style="margin:0"><canvas width="1280" height="720"></canvas></body></html>');
-    if (storyboard) await page.evaluate(storyboard.profile === 'onchip-field-sampling-v1' ? installOnchipDrawing : installStoryboardDrawing, {scenes, total, visualStyle, locale: storyboard.locale, artwork: await readSceneArtwork(input, scenes)});
+    if (storyboard) await page.evaluate(storyboard.profile === 'onchip-field-sampling-v1' ? installOnchipDrawing : installStoryboardDrawing, {scenes, total, visualStyle, locale: storyboard.locale, profile: storyboard.profile, artwork: await readSceneArtwork(input, scenes)});
     else await page.evaluate(installDrawing, { scenes, total, visualStyle, artworkData: `data:image/png;base64,${(await readFile(resolve(input, 'source-artwork.png'))).toString('base64')}`, scene3ArtworkData: scene3Artwork ? `data:image/png;base64,${(await readFile(scene3Artwork)).toString('base64')}` : undefined });
     await page.evaluate(() => document.fonts.ready);
     encoder = startEncoder(ffmpeg, ['-n', '-hide_banner', '-loglevel', 'error', ...ffmpegThreadLimits, '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(fps), '-i', 'pipe:0', '-an', '-c:v', 'libx264', '-threads:v', '2', '-preset', 'fast', '-crf', '19', '-pix_fmt', 'yuv420p', resolve(output, 'silent-v2.mp4')]);

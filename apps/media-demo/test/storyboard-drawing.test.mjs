@@ -1,11 +1,12 @@
 /* global document, window */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import process from 'node:process';
 import { chromium } from 'playwright-core';
 import { installStoryboardDrawing } from '../storyboard-drawing.mjs';
 
-test('uses each supplied image, contains edges, blends scenes and renders deterministically', async () => {
-  const browser = await chromium.launch({headless:true});
+test('artwork profile uses each supplied image, contains edges, blends scenes and renders deterministically', async () => {
+  const browser = await chromium.launch({headless:true, ...(process.env.SCIENCE_CHROMIUM ? {executablePath:process.env.SCIENCE_CHROMIUM} : {})});
   try {
     const page = await browser.newPage();
     await page.setContent('<canvas width="1280" height="720"></canvas>');
@@ -16,7 +17,7 @@ test('uses each supplied image, contains edges, blends scenes and renders determ
       return c.toDataURL();
     }));
     const scenes = artwork.map((_, i) => ({title:`Title ${i}`, start:i*5, duration:5, cues:[]}));
-    await page.evaluate(installStoryboardDrawing, {scenes, artwork, total:15, visualStyle:'watercolor', locale:'en'});
+    await page.evaluate(installStoryboardDrawing, {scenes, artwork, total:15, visualStyle:'watercolor', locale:'en', profile:'artwork-explainer-v1'});
     const sample = await page.evaluate(() => {
       const pixel = t => {window.render(t); return [...document.querySelector('canvas').getContext('2d').getImageData(640,350,1,1).data];};
       const red = pixel(3);

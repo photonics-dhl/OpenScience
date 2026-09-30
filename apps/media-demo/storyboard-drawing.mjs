@@ -1,6 +1,6 @@
 /* global document, window, Image */
 // Serialized into our static Canvas page. Inputs are data, never HTML or scripts.
-export async function installStoryboardDrawing({scenes, artwork, total, visualStyle, locale}) {
+export async function installStoryboardDrawing({scenes, artwork, total, visualStyle, locale, profile}) {
   const canvas = document.querySelector('canvas'); const ctx = canvas.getContext('2d');
   const images = await Promise.all(artwork.map(src => new Promise((accept, reject) => {
     const image = new Image(); image.onload = () => accept(image); image.onerror = () => reject(new Error('Scene artwork cannot be decoded')); image.src = src;
@@ -10,6 +10,55 @@ export async function installStoryboardDrawing({scenes, artwork, total, visualSt
   const palette = { ink: '#252b2c', blue: '#356b8c', teal: '#2b7a78', amber: '#b8792c', muted: '#747b78' };
   const diagram = { x: 64, y: 154, width: 816, height: 402 };
   const smooth = x => { const t = Math.max(0, Math.min(1, x)); return t*t*(3-2*t); };
+  // Editorial movement changes framing only. It does not animate or regenerate scientific pixels.
+  if (profile === 'artwork-explainer-v1') {
+    function wrap(text, width) {
+      const rows=[]; let row='';
+      for (const ch of text) {
+        if (row && ctx.measureText(row+ch).width>width) {rows.push(row);row='';}
+        row+=ch;
+      }
+      if(row)rows.push(row);return rows;
+    }
+    function write(text, y, size, width, count, weight=500) {
+      let rows;
+      do {ctx.font=`${weight} ${size}px "Noto Sans CJK SC", sans-serif`;rows=wrap(text,width);if(rows.length<=count)break;size--; } while(size>=18);
+      if(rows.length>count)throw new Error('Caption exceeds readable layout');
+      rows.forEach((row,i)=>ctx.fillText(row,64,y+i*(size+8)));
+    }
+    function picture(index,time,alpha) {
+      const scene=scenes[index],image=images[index];
+      const crop=scene.crop??{x:0,y:0,width:1,height:1};
+      const sourceWidth=image.width*crop.width,sourceHeight=image.height*crop.height;
+      const progress=smooth((time-scene.start)/scene.duration);
+      const scale=Math.min(1152/sourceWidth,452/sourceHeight)*(.978+.022*progress);
+      const width=sourceWidth*scale,height=sourceHeight*scale;
+      ctx.save();ctx.globalAlpha=alpha;
+      ctx.drawImage(image,image.width*crop.x,image.height*crop.y,sourceWidth,sourceHeight,
+        64+(1152-width)/2,123+(452-height)/2,width,height);
+      ctx.restore();
+    }
+    window.render=time=>{
+      ctx.globalAlpha=1;ctx.fillStyle='#faf6ec';ctx.fillRect(0,0,1280,720);
+      const index=Math.max(0,scenes.findLastIndex(scene=>time>=scene.start));
+      const scene=scenes[index],local=time-scene.start;
+      const blend=index?smooth(local/Math.min(.6,scene.duration/3)):1;
+      if(index&&blend<1)picture(index-1,time,1-blend);
+      picture(index,time,blend);
+      ctx.fillStyle='#352d22';
+      write(scene.title,88,32,1152,1,600);
+      ctx.font='12px sans-serif';ctx.fillStyle='#766a55';
+      ctx.fillText('OPENSCIENCE  /  PAPER IN FOCUS',64,35);
+      ctx.textAlign='right';ctx.fillText(`${String(index+1).padStart(2,'0')} / ${String(scenes.length).padStart(2,'0')}`,1216,35);ctx.textAlign='left';
+      ctx.font='14px "Noto Sans CJK SC", sans-serif';
+      ctx.fillText(scene.credit??(locale==='zh'?'论文图解':'Paper explainer'),64,597,1152);
+      const cue=scene.cues.find(c=>local>=c.start&&local<c.end);
+      if(cue){ctx.fillStyle='#25251f';write(cue.text,641,27,1152,2);}
+      ctx.fillStyle='#b47a35';ctx.fillRect(64,708,1152*Math.max(0,Math.min(1,time/total)),2);
+      return canvas.toDataURL('image/png').split(',')[1];
+    };
+    return;
+  }
   function lines(text, maxWidth) {
     const result = []; let line = '';
     for (const ch of text) {

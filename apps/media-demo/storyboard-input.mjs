@@ -57,17 +57,26 @@ function animation(value, sceneClaimIds) {
 export function storyboardTimeline(value, seconds, fps = 24) {
   const hasProfile = value && Object.hasOwn(value, 'profile');
   const contentDriven = value?.profile === 'content-driven-v1';
+  const artworkExplainer = value?.profile === 'artwork-explainer-v1';
   const v = object(value, `schemaVersion,title,locale,style,provider,speaker,scenes${hasProfile ? ',profile' : ''}`);
-  if (hasProfile && !['onchip-field-sampling-v1', 'content-driven-v1'].includes(v.profile)) invalid();
+  if (hasProfile && !['onchip-field-sampling-v1', 'content-driven-v1', 'artwork-explainer-v1'].includes(v.profile)) invalid();
   if (v.profile === 'onchip-field-sampling-v1' && (!Array.isArray(v.scenes) || v.scenes.length !== 5)) invalid();
   if (v.schemaVersion !== 1 || !['zh', 'en'].includes(v.locale) || !['technical', 'watercolor', 'ink'].includes(v.style)
     || !Number.isFinite(seconds) || seconds <= 0 || seconds > 90 || fps !== 24
-    || !Array.isArray(v.scenes) || v.scenes.length < 3 || v.scenes.length > 6) invalid();
+    || !Array.isArray(v.scenes) || v.scenes.length < (artworkExplainer ? 1 : 3) || v.scenes.length > 6) invalid();
   const title = text(v.title, 120);
   const provider = text(v.provider, 120); const speaker = text(v.speaker, 80);
   let hasDynamic = false;
   const scenes = v.scenes.map((raw, i) => {
-    const s = object(raw, `title,artwork,start,cues${v.profile === 'onchip-field-sampling-v1' ? ',role' : ''}${contentDriven ? ',sourceClaimIds,animation' : ''}`);
+    const s = object(raw, `title,artwork,start,cues${v.profile === 'onchip-field-sampling-v1' ? ',role' : ''}${contentDriven ? ',sourceClaimIds,animation' : ''}${artworkExplainer && Object.hasOwn(raw, 'crop') ? ',crop' : ''}${artworkExplainer && Object.hasOwn(raw, 'credit') ? ',credit' : ''}`);
+    let crop;
+    if (artworkExplainer && s.crop !== undefined) {
+      crop = object(s.crop, 'x,y,width,height');
+      if (![crop.x,crop.y,crop.width,crop.height].every(unit) || crop.width === 0 || crop.height === 0
+        || crop.x + crop.width > 1 || crop.y + crop.height > 1) invalid();
+      crop = { ...crop };
+    }
+    const credit = artworkExplainer && s.credit !== undefined ? text(s.credit, 160) : undefined;
     if (v.profile === 'onchip-field-sampling-v1' && s.role !== onchipRoles[i]) invalid();
     if (contentDriven && (!Array.isArray(s.sourceClaimIds) || s.sourceClaimIds.length < 1 || s.sourceClaimIds.length > 12
       || new Set(s.sourceClaimIds).size !== s.sourceClaimIds.length || s.sourceClaimIds.some(id => typeof id !== 'string'))) invalid();
@@ -85,6 +94,7 @@ export function storyboardTimeline(value, seconds, fps = 24) {
     const parsedAnimation = contentDriven ? animation(s.animation, s.sourceClaimIds) : undefined;
     if (parsedAnimation?.hasDynamic) hasDynamic = true;
     return {title: text(s.title, 120), artwork: s.artwork, start: s.start, duration, cues,
+      ...(crop ? {crop} : {}), ...(credit ? {credit} : {}),
       ...(v.profile === 'onchip-field-sampling-v1' ? {role: s.role} : {}),
       ...(contentDriven ? {sourceClaimIds: [...s.sourceClaimIds], animation: parsedAnimation.value} : {})};
   });
