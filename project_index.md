@@ -1,5 +1,11 @@
 # OpenScience (XGS) 项目文件索引
 
+公司上线/年度运维评估的固定代码快照、脱敏边界与只读证据见 [2026-09-30评估交接](docs/handoff/2026-09-30-vendor-evaluation.md)。公司仅做上线与运维，功能由我方继续；这是一次性样本，不是新的运行CURRENT。
+
+| 路径 | 用途 | 状态 |
+|---|---|---|
+| `docs/handoff/2026-09-30-vendor-evaluation.md` | 公司首轮评估代码包、脱敏与只读服务器证据定位 | 一次性固定快照；运行状态仍见Hermes CURRENT |
+
 云视频试镜定位：`packages/ai-gateway/src/minimax-video.ts`收口H3调用，`minimax-video-download.ts`负责有界公开地址下载与MP4容器检查；`infra/codex-image-runner/minimax-video-pilot.mjs`提供固定单次准备/提交/续查与原片续取；原`video-runner.mjs`维护离线TTS/渲染就绪、持久化预留及截止时间。用例与发布分支专属检查在相邻test文件及`.github/workflows/hermes-video.yml`；操作见[视频runbook](docs/runbooks/science-video-demo.md#minimax-cloud-configuration)，版本/真实音画/未完成项只见Hermes CURRENT。
 
 科学分镜失败取证与纠错位于 `apps/agent-worker/src/presentation/illustration-planner.ts`、`handler.ts`；私有任务结果投影在 `packages/domain/src/agent/agent.ts`，完整表达式比较在 `apps/agent-worker/src/presentation/scientific-comparison.ts`；验收覆盖 `scientific-comparison.test.ts`、`automatic-style.test.ts`、`visual-source-context.test.ts` 和 `packages/domain/test/agent/private-science-diagnostics.test.ts`；managed受控恢复在 `research-run.ts` 与 `storyboard-science-recovery.test.ts`；普通任务原候选重验证沿 `packages/domain/src/agent/standalone-science-recovery.ts`、`standalone-science-recovery.test.ts` 及原Worker检查点。失败任务的可见续作入口在 `ResearchPresentation.tsx` / `PresentationWorkbench.tsx`，复用原retry API。运行与恢复状态见Hermes CURRENT，不把拒收候选当成功分镜。

@@ -2,6 +2,7 @@
 > 唯一交付树 `E:/Miscellaneous/XGS/.worktrees/onchip-video-release`，`release/onchip-production-line`；根 `main` 只作导航。历史与禁止重放事项见 [09-18 交接](2026-09-18-figure3-image-and-cleanup-handoff.md)。
 
 ## 目标与决定
+- 2026-09-30用户确认外部公司只负责正式上线与年度运维，功能开发仍由我方负责；首轮固定脱敏代码包和屏幕共享，不给GitHub/服务器账号。一次性快照与检查证据见[公司评估交接](2026-09-30-vendor-evaluation.md)，不改变下方未完成功能目标。
 - 2026-09-30视频用户反馈：已认可H3品牌样片画面，旁白仍需改善，不能将声音或RO论文成片标为验收通过。论文视频必须复用既有已审全文/SourceMap/六维/Claim/Evidence、科学分镜、美术方向及原论文图/已认可生图，不新建重复解析或生成工具。Qwen仅列条件性候选删除并观察：H3原生音轨不依赖它，但现有RO离线视频合同仍固定Qwen/Serena；完成替代音轨听验、真实RO路径和引用/回退核查之前保留权重与已有资产。
 - 本次视频审计：独立High与主线程核到现代image narrative不能直入旧content-driven视频，旧planner会丢弃不同output的base，scene/style/旁白上限亦不兼容；补接设计已写回原Task4，保留原已批分镜及图片父关系，只补视频讲稿/时间/有来源的运动。正常SSH实读runner loaded/inactive、Qwen模型4.3GiB、无tts标签镜像，保留media recovery镜像；根盘148GiB/已用84GiB/可用58GiB/60%。早先组合SSH/本机读调用曾被OpenAI安全状态检查拦截；后续明确单命令并修正wrapper配置根后已成功，不据此声称平台拦截根因已解决。本次仅审计与文档，未生成替代配音、未删模型/媒体、未部署；证据tmp/video-system-20260930/voice-ro-audit.md。
 - 用户已认可最终细化图681ef614，要求可靠复现、减少创建RO到出图的操作、优化展示，并按论文自动推荐1–2种适合风格；明确默认首选自动出图，之后可换风格。局部管理员实现不代表普通用户旅程完成。09-30用户明确审校可用6Pro或5.6SolPro，生图要求实际Images2.5；不能把聊天审校模型与图像引擎混同。当前来源审校协议仍固定6Pro，已有5.6Sol用于像素审图；09-30手工选GPT-5.6 Sol后实见5.6Pro最高强度，自动审图兼容仍未验证；Chat生图只核Create image/PNG、内部transport标签不证明2.5引擎。补接前须实际可观察模型身份，旧失败/期限/技术后继预算不重开。
