@@ -136,6 +136,8 @@ v9真实结果进一步限定能力：342f87eb已记录science v9及完整scienc
 
 ### 当前技术债与处理
 
+视频配音与复用：`packages/domain/src/assets/video.ts`的`requireVideoGenerationParents`已校验同RO/同版的已批分镜、有序子图及Claim/Evidence，`apps/agent-worker/src/presentation/host-video-spool.ts`复用隔离执行器；但是spool与`infra/codex-image-runner/video-runner.mjs`仍固定Qwen/Serena，`video-tts.py`按字数估算字幕时间。H3品牌试镜自带音轨，不能证明这条RO配音路径可用，也不能直接拿品牌片填论文视频。沿原Gateway/任务/分镜/合成/私有资产审核补独立旁白与真实时间对齐，不另建解析器、素材库或渲染服务。Qwen仅为条件性候选删除，先完成替代听验与活动任务/回退引用核查；实际运行状态和用户反馈只见CURRENT。
+
 2026-09-29科学分镜可诊断性：ea44被拒候选仅留数值摘要，非标准变量归为other，无法离线分辨量名误判与科学错误。已部署实现复用私有AgentTask.result留存有界拒收全文和一次来源映射；对外投影剔除、不作为checkpoint/恢复授权，保存失败停止后续模型提交。数值守卫保持严格；同值同单位来源无显式符号时，反馈要求恢复原文量名，不能推断符号别名。受控retry兼容、验证与部署只见CURRENT；不据此宣称最终图片质量通过。
 
 2026-09-28 新来源检索已定向恢复：049c8b89原失败源于第14页完整表格3051字/607词法token被BGE tokenizer拒绝>1024，发生在generation创建前。已部署不可分块lexical降级，保留原表格/定位和所有权限/来源/CAS；search24、indexer17、Domain15定向及TC/High通过。原Domain精确恢复一次后v14的69 chunks active，Poynting查询实际召回新来源10段；旧v11仍58 active。core终态needs_review/token_limit_exceeded、canRetry=false，storage沿既有embedding_unavailable激活lexical。dense未完成，后续表格向量策略仍需保真设计；不以本次降级声称完整hybrid恢复。执行与收据见CURRENT。
