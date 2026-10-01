@@ -55,7 +55,7 @@ export default function TrashPage() {
     } catch { setError(t('operationFailed')); }
     finally { setBusy(null); }
   }
-  return <DashboardShell activeRoute="dashboard" skipLabel={t('title')}>
+  return <DashboardShell mainClassName="craft-trash" activeRoute="dashboard" skipLabel={t('title')}>
     <div className="mx-auto max-w-4xl">
       <Link className={styles.link} href="/dashboard">← {t('back')}</Link>
       <h1 className="mt-5 text-4xl">{t('title')}</h1>

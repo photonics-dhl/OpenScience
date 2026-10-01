@@ -1,0 +1,104 @@
+/* The global pet owns only its floating controls; page art and layouts stay local. */
+[data-hermes-global-companion='true'][data-hermes-placement='detached'][data-hermes-dock-ready='false'] {
+  visibility: hidden;
+}
+
+[data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-companion-actor {
+  inset: 1rem;
+}
+
+[data-hermes-global-companion='true'] .hermes-pet-menu-button {
+  position: absolute;
+  right: .25rem;
+  bottom: .25rem;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 1px solid var(--os-rule-paper);
+  border-radius: 50%;
+  background: var(--os-paper-strong);
+  color: var(--os-vermilion-ink);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  transition: background-color 140ms ease-out, color 140ms ease-out;
+}
+
+.hermes-workspace-stage[data-hermes-global-companion='true'] .hermes-presence-control {
+  top: auto;
+  bottom: .25rem;
+  left: .25rem;
+}
+
+[data-hermes-global-companion='true'] .hermes-presence-control summary {
+  border: 1px solid var(--os-rule-paper);
+  border-radius: 50%;
+  background: var(--os-paper-strong);
+  color: var(--os-vermilion-ink);
+  touch-action: manipulation;
+}
+
+[data-hermes-global-companion='true'] .hermes-presence-options {
+  top: auto;
+  bottom: calc(100% + .5rem);
+  left: 0;
+  width: min(12.25rem, calc(100vw - 2rem));
+  border: 1px solid var(--os-rule-paper);
+  border-radius: .5rem;
+  box-shadow: none;
+}
+
+[data-hermes-global-companion='true'][data-hermes-bubble-horizontal='left'] .hermes-presence-options {
+  right: 0;
+  left: auto;
+}
+
+[data-hermes-global-companion='true'] .hermes-presence-options button[aria-checked='true'] {
+  background: var(--os-paper);
+  color: var(--os-vermilion-ink);
+  box-shadow: none;
+}
+
+[data-hermes-global-companion='true'] :is(.hermes-pet-menu-button, .hermes-presence-control summary):hover {
+  background: var(--os-paper);
+  color: var(--os-ink);
+}
+
+[data-hermes-global-companion='true'] :is(.hermes-pet-menu-button, .hermes-presence-control summary):active {
+  background: var(--os-rule-paper);
+}
+
+[data-hermes-global-companion='true'] :is(.hermes-pet-menu-button, .hermes-presence-control summary):focus-visible {
+  outline: 2px solid var(--os-vermilion-ink);
+  outline-offset: 3px;
+}
+
+[data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-motion-enable {
+  top: auto;
+  right: 3.25rem;
+  bottom: .25rem;
+  left: 3.25rem;
+  min-height: 2.75rem;
+  height: auto;
+  padding: .25rem;
+  background: var(--os-paper-strong);
+  color: var(--os-vermilion-ink);
+  font-size: .6875rem;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+@media (max-width: 640px) {
+  [data-hermes-global-companion='true'][data-hermes-placement='detached']:not([data-hermes-guide-target]) .hermes-companion-actor {
+    inset: 1.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-hermes-global-companion='true'] .hermes-pet-menu-button { transition: none; }
+}
+
+@media print {
+  [data-hermes-global-companion='true'], [data-hermes-action-menu='true'] { display: none !important; }
+}

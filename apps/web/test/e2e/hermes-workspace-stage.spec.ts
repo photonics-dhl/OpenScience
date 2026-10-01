@@ -7,6 +7,8 @@ async function json(route: Route, body: unknown, status = 200) {
 }
 
 async function mockWorkspace(page: Page) {
+  // Keep the original-size hull stress cases while the product defaults to compact.
+  await page.addInitScript(() => localStorage.setItem('openscience:hermes-presence:workspace-current', 'original'));
   await page.route('**/api/auth/me', (route) => json(route, {
     userId: 'hermes-user', email: 'hermes@example.invalid', displayName: 'Ada Researcher', status: 'email_verified', level: 'free',
   }));
@@ -77,21 +79,24 @@ test('only the primary left pointer can own Hermes click and drag state', async 
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
 });
 
-test('anchored Hermes detaches only after drag intent and settles away from protected work', async ({ page }) => {
+test('floating Hermes preserves click intent and settles away from protected work after dragging', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockWorkspace(page);
   await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
 
   const stage = page.locator('[data-hermes-workspace-stage="true"]');
   const anchor = page.locator('[data-hermes-dock-anchor="true"]');
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
-  const [stageBox, anchorBox] = await Promise.all([stage.boundingBox(), anchor.boundingBox()]);
+  await expect(anchor).toBeHidden();
+  const stageBox = await stage.boundingBox();
   expect(stageBox).not.toBeNull();
-  expect(anchorBox).not.toBeNull();
   expect({ width: Math.round(stageBox!.width), height: Math.round(stageBox!.height) }).toEqual({ width: 360, height: 360 });
-  expect(Math.round(stageBox!.x + stageBox!.width / 2)).toBe(Math.round(anchorBox!.x + anchorBox!.width / 2));
-  expect(Math.round(stageBox!.y + stageBox!.height / 2)).toBe(Math.round(anchorBox!.y + anchorBox!.height / 2));
+  const viewport = page.viewportSize()!;
+  expect(stageBox!.x).toBeGreaterThanOrEqual(0);
+  expect(stageBox!.y).toBeGreaterThanOrEqual(0);
+  expect(stageBox!.x + stageBox!.width).toBeLessThanOrEqual(viewport.width);
+  expect(stageBox!.y + stageBox!.height).toBeLessThanOrEqual(viewport.height);
 
   const input = stage.locator('[data-hermes-input-owner]');
   const inputBox = await input.boundingBox();
@@ -101,7 +106,7 @@ test('anchored Hermes detaches only after drag intent and settles away from prot
   await page.mouse.down();
   await page.mouse.move(start.x + 3, start.y + 2);
   await page.mouse.up();
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
   await expect(stage).toHaveAttribute('data-hermes-invoke-count', '1');
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'true');
@@ -132,7 +137,7 @@ test('anchored Hermes detaches only after drag intent and settles away from prot
   await page.mouse.down();
   await page.mouse.move(120, 140, { steps: 8 });
   await page.mouse.up();
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
   expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBeNull();
   await page.locator('[data-hermes-test-blocker="true"]').evaluate((element) => element.remove());
 
@@ -150,7 +155,7 @@ test('anchored Hermes detaches only after drag intent and settles away from prot
   await stage.evaluate((element) => element.releasePointerCapture(1));
   await expect(stage).toHaveAttribute('data-hermes-test-lost-capture-count', '1');
   await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
   await page.mouse.up();
 
   const desired = protectedBoxes[0];
@@ -213,7 +218,7 @@ test('anchored Hermes detaches only after drag intent and settles away from prot
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '200');
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
   const mobileBox = await stage.boundingBox();
   expect(mobileBox).not.toBeNull();
   expect({ width: Math.round(mobileBox!.width), height: Math.round(mobileBox!.height) }).toEqual({ width: 200, height: 200 });
@@ -281,7 +286,7 @@ test('Hermes never persists a transitional desktop hull after mobile edge histor
   await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
 
   const stage = page.locator('[data-hermes-workspace-stage="true"]');
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
   expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBeNull();
   expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).toBeNull();
 

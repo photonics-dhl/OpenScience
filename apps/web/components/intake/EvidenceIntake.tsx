@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { FileUp } from 'lucide-react';
 
 import { LiteratureAcquisitionDisclosure, type LiteratureAcquisitionProps } from '@/components/dashboard/LiteratureAcquisition';
 
@@ -34,7 +35,7 @@ export function EvidenceIntake({ literature, materials, onChange, onRetry, varia
   }
 
   return (
-    <section aria-labelledby="evidence-intake-title">
+    <section aria-labelledby="evidence-intake-title" data-evidence-intake={variant}>
       <div className="flex items-end justify-between gap-5 border-b border-os-rule-paper pb-4">
         <div>
           {!researchStart ? <p data-reading-role="caption" className="text-os-vermilion-ink">{t('stepLabel')}</p> : null}
@@ -44,13 +45,16 @@ export function EvidenceIntake({ literature, materials, onChange, onRetry, varia
         <p className="hidden max-w-sm text-right text-sm leading-5 text-os-muted-paper sm:block">{t('localOnly')}</p>
       </div>
       <div
-        className={`mt-6 flex min-h-36 items-center justify-center border border-dashed px-6 text-center transition-colors motion-reduce:transition-none ${dragging ? 'border-os-vermilion-ink bg-[#b83b22]/[.06]' : 'border-os-rule-paper bg-os-paper'}`}
+        data-evidence-dropzone="true"
+        data-dragging={dragging}
+        className={`mt-6 flex min-h-36 items-center justify-center border border-dashed px-6 text-center transition-colors motion-reduce:transition-none ${dragging ? 'border-os-vermilion-ink bg-[#eaf5f3]' : 'border-os-rule-paper bg-os-paper'}`}
         onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => { event.preventDefault(); setDragging(false); add(Array.from(event.dataTransfer.files)); }}
       >
         <div>
+          <FileUp className="mx-auto text-os-vermilion-ink" size={28} strokeWidth={1.5} aria-hidden="true" />
           <p className="font-medium">{t(researchStart ? 'researchStartDropTitle' : 'dropTitle')}</p>
           {researchStart ? (
             <>

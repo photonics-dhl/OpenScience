@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { getPublicEvidenceSource, getPublicResearchVersion, type PublicEvidence, type PublicEvidenceSource } from '../../lib/api';
 import { LEGAL_DISCLAIMER_DEFAULT, LICENSE_NAMES } from '../../lib/constants';
 import { useTranslations } from 'next-intl';
-import { TabNavigation, ComingSoonTab, type TabId } from './TabNavigation';
+import type { TabId } from './TabNavigation';
 import { CitationRail } from './CitationRail';
 import { ProvenanceCaption } from './ProvenanceCaption';
 import { ClaimNarrative } from './ClaimNarrative';
@@ -189,7 +189,7 @@ const PUBLIC_SDF_NODES = [
   ['reproducibility', 'reproducibility'],
 ] as const;
 
-export function PublicReadingSurface({ research, activeTab = 'overview', onTabChange = () => undefined }: { research: PublicResearch; activeTab?: TabId; onTabChange?: (tab: TabId) => void }) {
+export function PublicReadingSurface({ research }: { research: PublicResearch; activeTab?: TabId; onTabChange?: (tab: TabId) => void }) {
   const t = useTranslations('public');
   const version = research.version;
   const directPresentation = research.presentationAssets.filter((asset) => asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'video');
@@ -236,7 +236,7 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
 
   if (!['published', 'revised'].includes(version.status)) return (
     <article className={`pub-reading-surface research-product ${styles.surface}`}>
-      <header className={`pub-reading-identity ${styles.identity}`}><p className="pub-kicker">{t('researchObject')}</p><h1>{research.title}</h1><p>{version.publicVersionId} · {publishedAt}</p></header>
+      <header className={`pub-reading-identity ${styles.identity}`}><h1>{research.title}</h1><p>{version.publicVersionId} · {publishedAt}</p></header>
       <section className={styles.contribution}><h2>{t(version.status === 'withdrawn' ? 'withdrawnTitle' : 'restrictedTitle')}</h2><p>{t('unavailableVersionBody')}</p></section>
       <p>{research.citation}</p>
       {research.history.length > 0 && <details><summary>{t('history.title')}</summary><ul>{research.history.map(item => <li key={item.publicVersionId}><Link href={item.url}>{item.publicVersionId}</Link></li>)}</ul></details>}
@@ -248,7 +248,6 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
       <div className="pub-reading-layout">
         <article className="pub-reading-column" data-public-reading-column="true">
           <header className={`pub-reading-identity ${styles.identity}`} data-public-identity="true">
-            <p className="pub-kicker">{t('researchObject')}</p>
             <h1>{research.title}</h1>
             <div className={styles.identityMeta}>
               <p className={styles.sourceLine}>{version.publicVersionId}<span>{publishedAt}</span></p>

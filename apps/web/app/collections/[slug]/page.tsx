@@ -18,7 +18,7 @@ export default async function CollectionPage({ params }: { params: { slug: strin
   const publicShell = (children: React.ReactNode, mainClassName?: string) => (
     <PublicShell
       headerActions={<SiteHeader context="public-product" tone="paper" />} headerUtilities={<PublicProductAccess />}
-      mainClassName={mainClassName}
+      mainClassName={['craft-collection', mainClassName].filter(Boolean).join(' ')}
       navigationLabel={shell('primaryNavigation')}
       skipLabel={shell('skipToContent')}
       tone="paper"

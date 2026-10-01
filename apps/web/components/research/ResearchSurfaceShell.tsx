@@ -60,9 +60,7 @@ export function ResearchSurfaceShell({
       objectHeader={<ObjectHeader actions={actions} objectId={object.id} saveState="saved" title={object.title} version={object.version} visibility={object.visibility} />}
       rightRail={<>
         {rail ?? <div><p data-reading-role="caption" className="text-os-muted-paper">{t('integrity')}</p><p className="mt-4 text-base leading-[var(--leading-body)] text-os-muted-paper">{t('integrityBody')}</p></div>}
-        <div className="mt-8 border-t border-os-rule-paper pt-4">
-          <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => openAssistant(null)} state="idle" suggestion={suggestion} workspaceId={object.id} />
-        </div>
+        <HermesDockAnchor floating assistantOpen={hermesOpen} onInvoke={() => openAssistant(null)} state="idle" suggestion={suggestion} workspaceId={object.id} />
         <HermesAssistantDrawer
           key={object.id}
           dashboardContext={{ tasks: [], researchObjects: [{ id: object.id, status: object.status, title: object.title }],
@@ -85,7 +83,7 @@ export function ResearchSurfaceShell({
 }
 
 export function SurfaceState({ detail, kind, title }: { detail: string; kind: 'loading' | 'empty' | 'error' | 'forbidden'; title: string }) {
-  return <div className="flex min-h-[42vh] max-w-2xl flex-col justify-center border-l-2 border-os-vermilion-ink pl-6" data-surface-state={kind} role={kind === 'error' ? 'alert' : undefined}><p data-reading-role="caption" className="text-os-vermilion-ink">{kind}</p><h1 className="mt-3 text-4xl font-normal text-os-ink">{title}</h1><p data-reading-role="body" className="mt-4 max-w-xl text-os-muted-paper">{detail}</p></div>;
+  return <div className="flex min-h-[42vh] max-w-2xl flex-col justify-center border-t border-os-rule-paper pt-6" data-surface-state={kind} role={kind === 'error' ? 'alert' : undefined}><h1 className="mt-3 text-3xl font-normal text-os-ink">{title}</h1><p data-reading-role="body" className="mt-4 max-w-xl text-os-muted-paper">{detail}</p></div>;
 }
 
 export function ResearchSurfaceStateShell({ active, detail, kind, objectId, title }: {

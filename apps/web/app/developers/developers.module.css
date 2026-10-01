@@ -3,18 +3,20 @@
 .shell[data-os-surface='public'] { background: var(--rp-canvas); color: var(--rp-ink); }
 .main { padding: 3rem clamp(1rem, 4vw, 4rem) 5rem; }
 .page { width: min(100%, 1000px); margin-inline: auto; font-family: var(--font-ui), system-ui, sans-serif; }
-.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-bottom: 28px; border-bottom: 1px solid var(--rp-rule); }
+.page .header h1 { margin: 0; font: 600 2rem/1.4 var(--font-ui); letter-spacing: -0.02em; }
 .header > div:first-child { min-width: 0; }
 .intro { max-width: 720px; margin: 14px 0 0; color: var(--rp-muted); font-size: 16px; line-height: 26px; }
 .language { flex-shrink: 0; }
 .language select, .language select:hover, .language select option { color: var(--rp-ink); background: var(--rp-paper); }
-.layout { display: grid; grid-template-columns: 140px minmax(0, 840px); gap: 20px; align-items: start; padding-top: 12px; }
-.contents { display: flex; position: sticky; top: 24px; flex-direction: column; gap: 4px; padding-right: 16px; }
+.layout { display: grid; grid-template-columns: 168px minmax(0, 840px); gap: 32px; align-items: start; padding-top: 28px; }
+.contents { display: flex; position: sticky; top: 24px; flex-direction: column; gap: 4px; padding: 8px; border-radius: 8px; background: #edf2f4; }
 .page a { color: var(--rp-accent); text-underline-offset: 4px; }
-.contents a { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; line-height: 20px; text-decoration: none; }
-.contents a:hover { text-decoration: underline; }
+.contents a { display: inline-flex; align-items: center; min-height: 44px; padding-inline: 10px; border-radius: 5px; font-size: 14px; line-height: 20px; text-decoration: none; transition: background-color 150ms ease; }
+.contents a:focus-visible { outline: 2px solid var(--rp-accent); outline-offset: 2px; }
 .sections { min-width: 0; display: grid; gap: 36px; }
 .section { min-width: 0; scroll-margin-top: 24px; }
+.page .section h2 { font: 600 1.25rem/1.5 var(--font-ui); letter-spacing: -0.01em; }
 .section h3 { margin: 20px 0 8px; color: var(--rp-ink); font-size: 16px; font-weight: 650; line-height: 24px; }
 .section p { margin: 12px 0; font-size: 16px; line-height: 26px; }
 .page code { font-family: var(--font-data), ui-monospace, monospace; font-size: 13px; }
@@ -28,7 +30,8 @@
 .exampleLinks a { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; line-height: 20px; }
 .endpoint { padding-block: 8px; }
 .endpoint > code { font-size: 14px; font-weight: 600; }
-.tableScroll { overflow-x: auto; }
+.tableScroll { overflow-x: auto; overscroll-behavior-inline: contain; }
+.tableScroll:focus-visible { outline: 2px solid var(--rp-accent); outline-offset: 3px; }
 .tableScroll table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 24px; text-align: left; }
 .tableScroll th, .tableScroll td { padding: 12px 16px 12px 0; border-bottom: 1px solid var(--rp-rule); vertical-align: top; }
 .tableScroll th { font-weight: 600; }
@@ -38,12 +41,15 @@
 .responses > div { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 20px; }
 .responses dt { color: var(--rp-accent); font-size: 14px; line-height: 24px; font-variant-numeric: tabular-nums; font-weight: 650; }
 .page pre:focus-visible { outline: 2px solid var(--rp-accent); outline-offset: 3px; }
+.page ::selection { background: #d3e9e8; color: #182b33; }
+@media (hover: hover) and (pointer: fine) { .contents a:hover { background: #dfeceb; } }
 @media (max-width: 760px) {
   .main { padding: 2rem 1rem 4rem; }
   .header { flex-wrap: wrap; gap: 16px; }
   .layout { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-top: 0; }
-  .contents { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px 20px; padding: 0 0 16px; border-bottom: 1px solid var(--rp-rule); }
+  .contents { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px 8px; padding: 8px; }
   .facts > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .page pre { padding: 14px 16px; }
   .tableScroll tbody th { width: 120px; }
 }
+@media (prefers-reduced-motion: reduce) { .contents a { transition: none; } }

@@ -35,6 +35,9 @@ import type { HermesConversationAction } from '@/lib/hermes/conversation-action'
 import { HermesMediaReview } from './HermesMediaReview';
 import { ScientificText } from '@/components/content/ScientificText';
 import { HermesWritingDraft, type HermesWritingDraftValue } from './HermesWritingDraft';
+import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStage';
+
+const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : React.useLayoutEffect;
 
 type LiteratureIntent = Extract<RoutedHermesIntent, { kind: 'literature.acquire' }>;
 
@@ -211,10 +214,28 @@ function isWritingInstruction(value: string) {
 }
 
 export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
+  const stage = useOptionalHermesWorkspaceStage();
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  // The editor owns a docked conversation even while it is closed. Register its
+  // existing action without moving the global pet into the conversation panel.
+  useClientLayoutEffect(() => {
+    if (!stage || !anchorRef.current || !props.docked || props.route !== 'research-object-edit') return;
+    return stage.register({
+      anchor: anchorRef.current,
+      assistantOpen: props.open,
+      floating: true,
+      onInvoke: () => props.onOpenChange(true),
+      suggestion: props.suggestion,
+      workspaceId: props.routeResearchObjectId ?? 'workspace-current',
+    });
+  }, [stage, props.docked, props.route, props.routeResearchObjectId, props.open, props.onOpenChange, props.suggestion]);
   const [opened, setOpened] = useState(props.open || Boolean(props.docked));
   useEffect(() => { if (props.open || props.docked) setOpened(true); }, [props.open, props.docked]);
   if (!opened && !props.open && !props.docked) return null;
-  return <React.Suspense fallback={null}><HermesAssistantDrawerContent {...props} /></React.Suspense>;
+  return <>
+    {props.docked && props.route === 'research-object-edit' ? <span data-hermes-floating-owner="editor" hidden ref={anchorRef} /> : null}
+    <React.Suspense fallback={null}><HermesAssistantDrawerContent {...props} /></React.Suspense>
+  </>;
 }
 
 function HermesAssistantDrawerContent({
@@ -527,7 +548,7 @@ function HermesAssistantDrawerContent({
     writingSaveGoal.current = '';
     if (!normalized || busy || actionBusy || submittingRef.current) return;
     if (pendingPayload.current && normalized !== pendingPayload.current.goal) { setError(tc('retrySame')); return; }
-    const command = normalized.replace(/[。！!\.]+$/u, '').trim();
+    const command = normalized.replace(/[。！!.]+$/u, '').trim();
     if (onSourceCommand && (!offeredAction.current || offeredAction.current.canDismiss)) {
       submittingRef.current = true; setActionBusy(true); setError('');
       try { if (await onSourceCommand(command)) { setGoal(''); return; } }

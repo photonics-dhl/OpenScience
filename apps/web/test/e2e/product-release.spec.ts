@@ -433,7 +433,7 @@ for (const releaseCase of PRODUCT_RELEASE_CASES) {
     });
     expect(postStateGeometry.excess, JSON.stringify(postStateGeometry.offenders, null, 2)).toBe(0);
     expect(postStateGeometry.companionOverlaps).toEqual([]);
-    expect(await page.locator('[data-hermes-placement="anchored"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
+    expect(await page.locator('[data-hermes-global-companion="true"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
 
     if (motionContract === 'static-optical') {
       expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
@@ -500,8 +500,8 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
   const trigger = page.locator('[data-hermes-input-owner="true"]');
   await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await page.waitForTimeout(4500);
-  expect(await page.locator('[data-hermes-placement="anchored"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
-  expect(await page.locator('[data-hermes-placement="anchored"] .hermes-guide-nudge[data-visible="true"]').count()).toBe(0);
+  expect(await page.locator('[data-hermes-global-companion="true"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
+  expect(await page.locator('[data-hermes-global-companion="true"] .hermes-guide-nudge[data-visible="true"]').count()).toBe(0);
   await page.locator('[data-hermes-companion-margin="true"]').evaluate((margin) => {
     const actor = margin.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]');
     if (!actor) throw new Error('Hermes actor is missing');

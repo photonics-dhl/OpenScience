@@ -9,9 +9,6 @@ export function HermesConversationCard({ onInvoke, open = false, working = false
   return (
     <section className={`hermes-conversation-card ${styles.hermesConversation}`} aria-label={t('conversation.label')} data-hermes-protected="true">
       <div className={styles.hermesIdentity}>
-        <div className={styles.hermesPortrait}>
-          <img src="/hermes/wanko-static-transparent.png" width={88} height={104} alt="Hermes" />
-        </div>
         <div>
           <h2 className={styles.hermesTitle}>Hermes</h2>
           <p className={styles.hermesMessage} aria-live="polite">{t(working ? 'taskStates.working' : 'conversation.body')}</p>

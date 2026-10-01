@@ -358,7 +358,7 @@
 
 .hermesIdentity {
   display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 1rem;
   width: 100%;

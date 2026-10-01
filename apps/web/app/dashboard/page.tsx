@@ -11,6 +11,7 @@ import LocaleSwitcher from '@/components/LocaleSwitcher';
 import { AccountLink } from '@/components/navigation/AccountLink';
 import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
 import { HermesConversationCard } from '@/components/dashboard/HermesConversationCard';
+import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { ImportStage } from '@/components/dashboard/ImportStage';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { ResearchList } from '@/components/dashboard/ResearchList';
@@ -281,6 +282,7 @@ export default function DashboardPage() {
           <ResearchList researchObjects={researchObjects} onChanged={() => window.location.reload()} />
         </div>
       </div>
+      <HermesDockAnchor floating assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={guideWorking ? 'scanning' : 'idle'} suggestion={suggestion} />
       <HermesAssistantDrawer
         dashboardContext={dashboardContext}
         locale={locale}

@@ -6,8 +6,11 @@ import type { HermesGuideSuggestion } from './hermes-guide';
 import type { HermesVisualState } from './hermes-state';
 import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStage';
 
-export function HermesDockAnchor({ assistantOpen = false, onInvoke, state, suggestion, workspaceId = 'workspace-current' }: {
+const useClientLayoutEffect = typeof window === 'undefined' ? React.useEffect : React.useLayoutEffect;
+
+export function HermesDockAnchor({ assistantOpen = false, floating = true, onInvoke, state, suggestion, workspaceId = 'workspace-current' }: {
   assistantOpen?: boolean;
+  floating?: boolean;
   onInvoke: () => void;
   state: HermesVisualState;
   suggestion: HermesGuideSuggestion;
@@ -15,10 +18,10 @@ export function HermesDockAnchor({ assistantOpen = false, onInvoke, state, sugge
 }) {
   const anchorRef = React.useRef<HTMLDivElement | null>(null);
   const stage = useOptionalHermesWorkspaceStage();
-  React.useLayoutEffect(() => {
+  useClientLayoutEffect(() => {
     const anchor = anchorRef.current;
     if (!anchor || !stage) return;
-    return stage.register({ anchor, assistantOpen, onInvoke, state, suggestion, workspaceId });
-  }, [assistantOpen, onInvoke, stage, state, suggestion, workspaceId]);
-  return <div className="hermes-dock-anchor" data-hermes-companion-margin="true" data-hermes-dock-anchor="true" ref={anchorRef} />;
+    return stage.register({ anchor, assistantOpen, floating, onInvoke, state, suggestion, workspaceId });
+  }, [assistantOpen, floating, onInvoke, stage, state, suggestion, workspaceId]);
+  return <div className={floating ? undefined : 'hermes-dock-anchor'} data-hermes-companion-margin={floating ? undefined : 'true'} data-hermes-dock-anchor="true" data-hermes-floating-owner={floating ? 'true' : undefined} hidden={floating} ref={anchorRef} />;
 }

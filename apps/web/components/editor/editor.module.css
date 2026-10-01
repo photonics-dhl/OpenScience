@@ -38,7 +38,7 @@
 
 .sectionNumber {
   margin-left: auto;
-  color: #82909b;
+  color: #596875;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -63,7 +63,7 @@
   transition: background-color 140ms ease, box-shadow 140ms ease;
 }
 
-.proseInput::placeholder { color: #82909b; }
+.proseInput::placeholder { color: #596875; }
 
 .proseInput:focus-visible {
   outline: none;

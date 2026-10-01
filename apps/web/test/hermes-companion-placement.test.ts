@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   expandHermesFootprintForMotion,
+  includeHermesControlFootprint,
   HERMES_PATROL_MOTION_ENVELOPE,
   HERMES_PATROL_TRANSLATION_ENVELOPE,
   resolveHermesBubblePlacement,
@@ -29,6 +30,21 @@ const overlaps = (a: RectLike, b: RectLike) => (
 );
 
 describe('Hermes companion placement', () => {
+  it('keeps floating controls inside the viewport after dragging a smaller actor to an edge', () => {
+    const actor = { bottom: 65, left: 70, right: 70, top: 115 };
+    const controls = { bottom: 100, left: 100, right: 100, top: 100 };
+    const footprint = includeHermesControlFootprint(actor, controls);
+    const viewport = rect(0, 0, 390, 700);
+    const settled = resolveHermesSettledDock({ desired: { x: 380, y: 690 }, footprint, obstacles: [], viewport });
+    const occupied = rectForFootprint(settled.point, footprint);
+    expect(settled.safe).toBe(true);
+    expect(occupied.left).toBeGreaterThanOrEqual(viewport.left);
+    expect(occupied.right).toBeLessThanOrEqual(viewport.right);
+    expect(occupied.bottom).toBeLessThanOrEqual(viewport.bottom);
+    expect(occupied.top).toBeGreaterThanOrEqual(viewport.top);
+    expect(footprint.top).toBe(actor.top);
+  });
+
   it('expands a dock footprint by the full patrol translation envelope', () => {
     expect(HERMES_PATROL_TRANSLATION_ENVELOPE).toEqual({ bottom: 0, left: 34, right: 34, top: 25 });
     expect(HERMES_PATROL_MOTION_ENVELOPE).toEqual({ bottom: 27, left: 51, right: 34, top: 28 });

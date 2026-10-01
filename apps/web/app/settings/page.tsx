@@ -36,10 +36,10 @@ export default function SettingsPage() {
     if (status === 'anonymous') router.replace('/auth/login?returnTo=%2Fsettings');
   }, [router, status]);
   async function signOut() { setBusy(true); try { await logout(); router.replace('/auth/login'); } catch (cause) { setError(cause as Error); setBusy(false); } }
-  if (error) return <DashboardShell activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} /></DashboardShell>;
-  if (!user || status !== 'authenticated') return <DashboardShell activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><h1 className="text-3xl text-os-ink">{meT('settingsTitle')}</h1><AccountLoadState loading={status === 'loading'} onRetry={() => void refresh(true)} /></DashboardShell>;
+  if (error) return <DashboardShell mainClassName="craft-account" activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} /></DashboardShell>;
+  if (!user || status !== 'authenticated') return <DashboardShell mainClassName="craft-account" activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><h1 className="text-3xl text-os-ink">{meT('settingsTitle')}</h1><AccountLoadState loading={status === 'loading'} onRetry={() => void refresh(true)} /></DashboardShell>;
   return (
-    <DashboardShell className="account-workspace" activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}>
+    <DashboardShell mainClassName="craft-account" className="account-workspace" activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}>
       <header className="account-heading">
         <p data-reading-role="caption" className="text-os-vermilion-ink">{t('settings.kicker')}</p>
         <h1 className="mt-2 text-[clamp(2rem,4vw,2.75rem)] font-normal text-os-ink">{meT('settingsTitle')}</h1>

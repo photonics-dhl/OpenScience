@@ -89,7 +89,7 @@ export default async function DevelopersPage() {
           </section>
           <section id="fields" className={styles.section}>
             <header className={readingStyles.sectionIntro}><h2>{t('fields.title')}</h2></header><p>{t('fields.body')}</p>
-            <div className={styles.tableScroll}><table><thead><tr><th scope="col">{t('field')}</th><th scope="col">{t('meaning')}</th></tr></thead><tbody>
+            <div className={styles.tableScroll} tabIndex={0} role="region" aria-label={t('fields.title')}><table><thead><tr><th scope="col">{t('field')}</th><th scope="col">{t('meaning')}</th></tr></thead><tbody>
               {fields.map((field, index) => <tr key={field}><th scope="row"><code>{paths[index]}</code></th><td>{t(`fields.${field}`)}</td></tr>)}
             </tbody></table></div>
             <p className={styles.note}>{t('fields.original')}</p>

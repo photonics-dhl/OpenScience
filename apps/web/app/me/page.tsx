@@ -124,11 +124,11 @@ export default function MyProfilePage() {
       setWriteStatus('saved');
     } catch (cause) { await handleWriteFailure(cause, owner); } finally { if (accountOwner.current === owner) setBusy(false); }
   }
-  if (!user || status !== 'authenticated') return <DashboardShell activeRoute="profile" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><h1 className="text-3xl text-os-ink">{meT('profileTitle')}</h1><AccountLoadState loading={status === 'loading'} onRetry={() => void refresh(true)} /></DashboardShell>;
+  if (!user || status !== 'authenticated') return <DashboardShell mainClassName="craft-account" activeRoute="profile" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><h1 className="text-3xl text-os-ink">{meT('profileTitle')}</h1><AccountLoadState loading={status === 'loading'} onRetry={() => void refresh(true)} /></DashboardShell>;
   const profileReady = profile && profileOwner === user.userId && !profileLoading && !error;
   const completedProfileGroups = profileReady ? [profile.identities.length, profile.disciplines.length, profile.methods.length, profile.topics.length, profile.languages.length].filter(Boolean).length : 0;
   return (
-    <DashboardShell className="account-workspace" activeRoute="profile" headerActions={<AccountLink user={user} active />} navigationLabel={meT('profileTitle')} skipLabel={t('settings.skip')}>
+    <DashboardShell mainClassName="craft-account" className="account-workspace" activeRoute="profile" headerActions={<AccountLink user={user} active />} navigationLabel={meT('profileTitle')} skipLabel={t('settings.skip')}>
       <header className="account-heading">
         <p data-reading-role="caption" className="text-os-vermilion-ink">{meT('privateLabel')}</p>
         <h1 className="mt-2 text-[clamp(2rem,4vw,2.75rem)] font-normal text-os-ink">{meT('profileTitle')}</h1>
