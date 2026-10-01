@@ -172,8 +172,8 @@ export async function createResearchObject(
   if (input.idempotencyKey?.startsWith('system:')) {
     throw new ResearchObjectError('VALIDATION_ERROR', '系统保留幂等键不可由公开请求使用');
   }
-  const { workspace } = await requireMembership(deps, input.workspaceId, input.userId);
-  void workspace;
+  const { membership } = await requireActiveMembership(deps.prisma, input.workspaceId, input.userId);
+  if (!['owner', 'maintainer', 'author'].includes(membership.role)) throw new ResearchObjectError('FORBIDDEN', '无权创建研究正文');
   const title = validateTitle(input.title);
   const core = input.sdf?.core ?? emptyCore();
 
@@ -219,8 +219,6 @@ export interface UpdateResearchObjectInput {
   version: number;
   patch: {
     title?: string;
-    status?: RoStatus;
-    visibility?: RoVisibility;
   };
 }
 
@@ -233,18 +231,19 @@ export async function updateResearchObject(
   const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.roId } });
   if (!ro || ro.deletedAt) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
   const { workspace, membership } = await requireMembership(deps, ro.workspaceId, input.userId);
-  if (workspace.status !== 'active' || (ro.createdBy !== input.userId && !['owner', 'maintainer', 'author'].includes(membership.role))) {
+  if (workspace.status !== 'active' || !['owner', 'maintainer', 'author'].includes(membership.role)) {
     throw new ResearchObjectError('FORBIDDEN', '无权修改或归档此研究工作');
   }
 
-  const patch: { title?: string; status?: RoStatus; visibility?: RoVisibility } = {};
+  if (Object.keys(input.patch).some((key) => key !== 'title')) {
+    throw new ResearchObjectError('VALIDATION_ERROR', '状态和可见性变更必须使用专用流程');
+  }
+  const patch: { title?: string } = {};
   if (input.patch.title !== undefined) {
     const t = input.patch.title.trim();
     if (!t || t.length > 200) throw new ResearchObjectError('VALIDATION_ERROR', '标题长度需为 1-200 字符');
     patch.title = t;
   }
-  if (input.patch.status !== undefined) patch.status = input.patch.status;
-  if (input.patch.visibility !== undefined) patch.visibility = input.patch.visibility;
 
   const result = await deps.prisma.$transaction(async (tx) => {
     const updated = await tx.researchObject.updateMany({

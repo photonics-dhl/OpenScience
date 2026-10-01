@@ -21,6 +21,11 @@ const neutralSuggestion = {
 };
 
 describe('Hermes dashboard guidance', () => {
+  it('leaves a floating drawer unmounted until opening and can render the docked composer', () => {
+    const props = { open: false, onOpenChange: () => undefined, locale: 'zh' as const, suggestion: neutralSuggestion, dashboardContext: { tasks: [], researchObjects: [] } };
+    expect(renderToStaticMarkup(createElement(HermesAssistantDrawer, props))).toBe('');
+    expect(renderToStaticMarkup(createElement(HermesAssistantDrawer, { ...props, open: true, docked: true }))).toContain('hermes-guide-goal');
+  });
   it('offers eight companion gestures and four truthful research actions from the real action catalog', () => {
     const companion = HERMES_CONTEXT_ACTIONS.filter((item) => item.group === 'companion');
     const research = HERMES_CONTEXT_ACTIONS.filter((item) => item.group === 'research');
@@ -61,7 +66,7 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).toContain('aria-checked="true"');
   });
 
-  it('renders an accessible assistant drawer with a real goal composer and task link', () => {
+  it('renders an accessible assistant drawer with a real goal composer and transcript', () => {
     const markup = renderToStaticMarkup(createElement(HermesAssistantDrawer, {
       open: true,
       onOpenChange: () => undefined,
@@ -75,11 +80,10 @@ describe('Hermes dashboard guidance', () => {
 
     expect(markup).toContain('role="dialog"');
     expect(markup).toContain('aria-modal="true"');
-    expect(markup).toContain('guide.eyebrow');
+    expect(markup).toContain('aria-label="guide.dialogLabel"');
     expect(markup).toContain('<textarea');
-    expect(markup).toContain('href="/research-objects/ro-1/hermes?task=task-1"');
-    expect(markup).toContain('data-literature-routing="deterministic"');
-    expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
+    expect(markup).toContain('role="log"');
+    expect(markup).toContain('aria-label="guide.close"');
     expect(markup).not.toContain('aria-live="assertive"');
   });
 
@@ -111,7 +115,7 @@ describe('Hermes dashboard guidance', () => {
 
     expect(deriveHermesGuide({ tasks: [task], researchObjects: [] })).toEqual({
       kind: 'actionable-task', titleKey: 'guide.review.title', bodyKey: 'guide.review.body',
-      href: '/research-objects/ro-1/hermes?task=ingestion-1', taskId: 'ingestion-1', researchObjectId: 'ro-1',
+      href: '/research-objects/ro-1/edit?ingestionTask=ingestion-1', taskId: 'ingestion-1', taskLabel: 'paper.pdf', researchObjectId: 'ro-1',
     });
     expect(deriveHermesGuide({ tasks: [{ ...task, state: 'failed_retryable' }], researchObjects: [] }).titleKey).toBe('guide.failed.title');
     expect(deriveHermesGuide({ tasks: [{ ...task, state: 'parsing' }], researchObjects: [] }).titleKey).toBe('guide.processing.title');
@@ -138,7 +142,7 @@ describe('Hermes dashboard guidance', () => {
     const task = { id: 'ingestion-1', researchObjectId: 'ro-1' };
     const href = hermesTaskHref(task);
     const rail = renderToStaticMarkup(createElement(HermesRail, { tasks: [{ ...task, researchTitle: 'Study', logicalPath: 'paper.pdf', state: 'needs_review', retryCount: 0, error: null }] }));
-    expect(href).toBe('/research-objects/ro-1/hermes?task=ingestion-1');
+    expect(href).toBe('/research-objects/ro-1/edit?ingestionTask=ingestion-1');
     expect(rail).toContain(`href="${href}"`);
   });
 
@@ -160,7 +164,7 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).toContain('data-hermes-rig-status="starting"');
     expect(markup).toContain('data-hermes-input-ready="false"');
     expect(markup).not.toContain('data-runtime-ready');
-    expect(markup).toContain('src="/hermes/wanko-static.png"');
+    expect(markup).toContain('src="/hermes/wanko-static-transparent.png"');
     expect(markup).not.toContain('<picture');
     expect(markup.match(/<img/g) ?? []).toHaveLength(1);
     expect(markup).toContain('class="hermes-portrait');
@@ -169,7 +173,7 @@ describe('Hermes dashboard guidance', () => {
     const reduced = renderToStaticMarkup(createElement(HermesVisualAdapter, {
       reducedMotion: true, state: 'idle', suggestion: neutralSuggestion, onInvoke: () => undefined,
     }));
-    expect(reduced).toContain('src="/hermes/wanko-static.png"');
+    expect(reduced).toContain('src="/hermes/wanko-static-transparent.png"');
     expect(reduced).not.toContain('<picture');
     expect(reduced.match(/<img/g) ?? []).toHaveLength(1);
     expect(reduced).toContain('class="hermes-portrait');
@@ -182,7 +186,7 @@ describe('Hermes dashboard guidance', () => {
       const markup = renderToStaticMarkup(createElement(HermesVisualAdapter, { state, suggestion: neutralSuggestion, onInvoke: () => undefined }));
       expect(markup).toContain(`data-hermes-state="${state}"`);
       expect(markup).toContain('data-hermes-renderer="articulated-mesh"');
-      expect(markup).toContain('src="/hermes/wanko-static.png"');
+      expect(markup).toContain('src="/hermes/wanko-static-transparent.png"');
       expect(markup).not.toContain('<picture');
       expect(markup.match(/<img/g) ?? []).toHaveLength(1);
       expect(markup).toContain('class="hermes-portrait');

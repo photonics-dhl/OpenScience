@@ -72,6 +72,7 @@ export interface BuildAppOptions extends AuthRouteDeps {
   rateLimitEnabled?: boolean;
   /** P1B-3：对象存储（/artifacts 上传下载）。缺省 undefined = 不注册 artifacts 路由（旧测试零影响）。 */
   storage?: StorageAdapter;
+  malwareScanner?: import('@openscience/storage').MalwareScanner;
   /** P1B-6：公开 ID 前缀（PUBLIC_ID_PREFIX env，§24）。缺省 'OSR'。 */
   publicIdPrefix?: string;
   downloadSigningSecret?: string;

@@ -4,12 +4,16 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
-import { hermesTaskHref, isProcessingHermesTask } from './hermes-state';
+import { hermesTaskHref, isActionableHermesTask, isProcessingHermesTask } from './hermes-state';
 
-const localizedTaskStates: Record<string, 'queued' | 'uploading' | 'parsing'> = {
+const localizedTaskStates: Record<string, string> = {
   queued: 'queued',
   uploading: 'uploading',
   parsing: 'parsing',
+  stored: 'stored',
+  needs_review: 'needsReview',
+  failed_retryable: 'failedRetryable',
+  failed_blocked: 'failedBlocked',
 };
 
 export interface HermesRailTask {
@@ -25,11 +29,12 @@ export interface HermesRailTask {
 export function HermesRail({ tasks, loadState = 'ready' }: { tasks: HermesRailTask[]; loadState?: 'loading' | 'ready' | 'unavailable' }) {
   const t = useTranslations('dashboard');
   const [expanded, setExpanded] = React.useState(false);
-  const processingTasks = tasks.filter(isProcessingHermesTask);
-  const visibleTasks = expanded ? processingTasks : processingTasks.slice(0, 3);
-  const hiddenCount = processingTasks.length - visibleTasks.length;
+  const actionableTasks = tasks.filter(isActionableHermesTask);
+  const ordered = [...actionableTasks.filter(task => !isProcessingHermesTask(task)), ...actionableTasks.filter(isProcessingHermesTask)];
+  const visibleTasks = expanded ? ordered : ordered.slice(0, 3);
+  const hiddenCount = actionableTasks.length - visibleTasks.length;
 
-  if (processingTasks.length === 0 && loadState === 'ready') return null;
+  if (actionableTasks.length === 0 && loadState === 'ready') return null;
 
   const taskRow = (task: HermesRailTask) => {
     const stateKey = localizedTaskStates[task.state];

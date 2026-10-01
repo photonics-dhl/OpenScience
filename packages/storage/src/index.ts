@@ -12,6 +12,7 @@ export type {
   GetObjectResult,
   HeadObjectResult,
 } from './types';
+export { createClamAvScanner, type MalwareScanner } from './clamav';
 export { sha256HexBuffer } from './checksum';
 export { streamToBuffer } from './streams';
 export { MinioStorageAdapter, mapMinioError } from './minio-adapter';

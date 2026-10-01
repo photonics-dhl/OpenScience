@@ -1,7 +1,7 @@
 import type { AuditContext } from '@openscience/observability';
 import { validateSdfDraftCore } from '@openscience/sdf-schema';
 import { recordAudit } from '../workspace/audit';
-import { requireMembership } from '../workspace/helpers';
+import { requireActiveMembership } from '../workspace/helpers';
 import { requirePrivateRoAccess } from '../visibility/access';
 import { createCommit } from '../commit/commits';
 import { carryVersionEvidence } from '../ingestion/ingestion-evidence';
@@ -58,7 +58,8 @@ export async function updateSdfDocument(
     include: { sdfDocument: { include: { nodes: true } } },
   });
   if (!ro || ro.deletedAt) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  const { membership } = await requireActiveMembership(deps.prisma, ro.workspaceId, input.userId);
+  if (!['owner', 'maintainer', 'author'].includes(membership.role)) throw new ResearchObjectError('FORBIDDEN', '无权修改研究正文');
   if (!ro.sdfDocument) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');
 
   // Every save is a private draft, including edits after a public release.

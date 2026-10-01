@@ -2,9 +2,10 @@
 
 import { CheckCircle2, Circle, ExternalLink, MailCheck } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { AccountLoadState } from './AccountLoadState';
 import {
   ApiClientError,
   beginOrcidConnection,
@@ -25,18 +26,21 @@ export function AcademicIdentityControl() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const loadGeneration = useRef(0);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setLoadFailed(false);
+  const refresh = useCallback(async (fresh = false) => {
+    const generation = ++loadGeneration.current;
+    setLoadAttempt(generation); setLoading(true); setLoadFailed(false);
     try {
-      setStatus(await getAcademicIdentityStatus());
+      const next = await getAcademicIdentityStatus({ fresh });
+      if (generation === loadGeneration.current) setStatus(next);
     } catch {
-      setLoadFailed(true);
-    } finally { setLoading(false); }
+      if (generation === loadGeneration.current) setLoadFailed(true);
+    } finally { if (generation === loadGeneration.current) setLoading(false); }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); return () => { loadGeneration.current += 1; }; }, [refresh]);
 
   async function connectOrcid() {
     setBusy(true); setError(''); setMessage('');
@@ -69,7 +73,7 @@ export function AcademicIdentityControl() {
       await verifyInstitutionEmail(email, code);
       setCode(''); setCodeRequested(false);
       setMessage(t('institutionVerified'));
-      await refresh();
+      await refresh(true);
     } catch (cause) {
       setError(cause instanceof ApiClientError && cause.status === 429 ? t('waitBeforeRetry') : t('verificationHelp'));
     } finally { setBusy(false); }
@@ -91,8 +95,8 @@ export function AcademicIdentityControl() {
         <MailCheck className="mt-0.5 h-5 w-5 text-os-vermilion-ink" />
         <div><h2 className="text-lg font-semibold text-os-ink">{t('title')}</h2><p className="mt-1 text-sm text-os-muted-paper">{t('description')}</p></div>
       </div>
-      {loading ? <p role="status" className="mt-4 text-sm text-os-muted-paper">{t('loading')}</p> : null}
-      {loadFailed ? <div className="mt-4"><p role="alert" className="text-sm text-os-vermilion-ink">{t('loadError')}</p><Button className="mt-2" disabled={loading || busy} onClick={() => void refresh()}>{t('retryStatus')}</Button></div> : null}
+      {loading ? <AccountLoadState key={loadAttempt} loading onRetry={() => void refresh(true)} /> : null}
+      {loadFailed ? <div className="mt-4"><p role="alert" className="text-sm text-os-vermilion-ink">{t('loadError')}</p><Button className="mt-2" disabled={loading || busy} onClick={() => void refresh(true)}>{t('retryStatus')}</Button></div> : null}
       <ol aria-label={t('progressLabel')} className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {steps.map(([label, complete], index) => (
           <li key={label} className="flex min-h-11 items-center gap-2 border-b border-os-rule-paper pb-2 text-sm text-os-ink">

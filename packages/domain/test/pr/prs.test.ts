@@ -68,6 +68,21 @@ async function makeRoWithBranches() {
 }
 
 describe('创建 PR（§8.2 全声明 + §16 幂等 + §6.3 许可继承）', () => {
+  it.each(['viewer', 'reviewer'])('%s cannot create a PR', async (role) => {
+    const { deps, db, owner, ro, feature, main } = await makeRoWithBranches();
+    db.memberships[0].role = role;
+    await expect(createPullRequest(deps, { researchObjectId: ro.id, userId: owner.id, sourceBranchId: feature.id, targetBranchId: main.id, title: 'Denied', body: '', ...PR_INPUT }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.pullRequests).toHaveLength(0);
+  });
+
+  it.each(['owner', 'maintainer', 'author', 'contributor'])('%s can propose a contribution through PR', async (role) => {
+    const { deps, db, owner, ro, feature, main } = await makeRoWithBranches();
+    db.memberships[0].role = role;
+    await expect(createPullRequest(deps, { researchObjectId: ro.id, userId: owner.id, sourceBranchId: feature.id, targetBranchId: main.id, title: 'Allowed', body: '', ...PR_INPUT }))
+      .resolves.toMatchObject({ status: 'open' });
+  });
+
   it('完整声明创建成功 + Notification 事件 + 审计', async () => {
     const { deps, owner, ro, feature, main } = await makeRoWithBranches();
     const pr = await createPullRequest(

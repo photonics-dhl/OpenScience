@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
-import { updateResearchObject } from '../../src/research-object/research-objects';
 import { createBranch, deleteBranch, listBranches, switchBranch, BRANCH_NAME_PATTERN } from '../../src/branch/branches';
 import { BranchError } from '../../src/branch/errors';
 
@@ -14,18 +13,19 @@ async function makeRo(visibility: 'private' | 'invite_only' | 'public' = 'privat
   const deps = { prisma, mailer: {} as never };
   const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'RO' });
   if (visibility !== 'private') {
-    await updateResearchObject(deps, { userId: user.id, roId: ro.id, version: 1, patch: { visibility } });
+    await prisma.researchObject.update({ where: { id: ro.id }, data: { visibility } });
   }
   return { prisma, db, user, deps, ro };
 }
 
-describe('可见性继承（§2.3 决策 3 + §4.2）：分支无自有 visibility，读走 canAccessRo', () => {
-  it('public RO：非成员（含匿名）可读分支列表', async () => {
+describe('工作分支读权限：发布快照不公开私有工作历史', () => {
+  it('public RO：工作分支仍需私有访问权限，成员可读，匿名拒绝', async () => {
     const { deps, user, ro } = await makeRo('public');
     await createBranch(deps, { researchObjectId: ro.id, userId: user.id, name: 'feature/x' });
-    const anon = await listBranches(deps, { researchObjectId: ro.id });
-    expect(anon).toHaveLength(1);
-    expect(anon[0].name).toBe('feature/x');
+    await expect(listBranches(deps, { researchObjectId: ro.id })).rejects.toMatchObject({ code: 'RESEARCH_OBJECT_NOT_FOUND' });
+    const branches = await listBranches(deps, { researchObjectId: ro.id, userId: user.id });
+    expect(branches).toHaveLength(1);
+    expect(branches[0].name).toBe('feature/x');
   });
 
   it('private RO：非成员读分支列表 → 404（不泄露）', async () => {
@@ -38,6 +38,26 @@ describe('可见性继承（§2.3 决策 3 + §4.2）：分支无自有 visibili
 });
 
 describe('创建分支（§17 越权 + §16 幂等 + Q3 headCommitId）', () => {
+  it('Contributor cannot reserve the main branch name', async () => {
+    const { deps, db, user, ro } = await makeRo();
+    db.memberships[0].role = 'contributor';
+    await expect(createBranch(deps, { researchObjectId: ro.id, userId: user.id, name: 'main' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.branches).toHaveLength(0);
+  });
+
+  it.each(['viewer', 'reviewer'])('%s cannot create a branch', async (role) => {
+    const { deps, db, user, ro } = await makeRo();
+    db.memberships[0].role = role;
+    await expect(createBranch(deps, { researchObjectId: ro.id, userId: user.id, name: 'denied' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.branches).toHaveLength(0);
+  });
+
+  it.each(['owner', 'maintainer', 'author', 'contributor'])('%s may create a contribution branch', async (role) => {
+    const { deps, db, user, ro } = await makeRo();
+    db.memberships[0].role = role;
+    await expect(createBranch(deps, { researchObjectId: ro.id, userId: user.id, name: 'allowed' })).resolves.toMatchObject({ name: 'allowed' });
+  });
+
   it('成员创建成功，默认非 isDefault，commitCount 0', async () => {
     const { deps, user, ro } = await makeRo();
     const b = await createBranch(deps, { researchObjectId: ro.id, userId: user.id, name: 'feature/x' });
@@ -105,6 +125,22 @@ describe('创建分支（§17 越权 + §16 幂等 + Q3 headCommitId）', () => 
 });
 
 describe('删除分支（三规则：default / 有 Commit / 被 PR 引用）', () => {
+  it.each(['author', 'contributor', 'viewer', 'reviewer'])('%s cannot delete a branch', async (role) => {
+    const { deps, db, user, ro } = await makeRo();
+    const branch = await createBranch(deps, { researchObjectId: ro.id, userId: user.id, name: 'keep' });
+    db.memberships[0].role = role;
+    await expect(deleteBranch(deps, { researchObjectId: ro.id, userId: user.id, branchId: branch.id })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.branches).toHaveLength(1);
+  });
+
+  it.each(['owner', 'maintainer'])('%s may delete an unused contribution branch', async (role) => {
+    const { deps, db, user, ro } = await makeRo();
+    const branch = await createBranch(deps, { researchObjectId: ro.id, userId: user.id, name: 'unused' });
+    db.memberships[0].role = role;
+    await deleteBranch(deps, { researchObjectId: ro.id, userId: user.id, branchId: branch.id });
+    expect(db.branches).toHaveLength(0);
+  });
+
   it('主分支禁删 → DEFAULT_BRANCH', async () => {
     const { deps, user, ro } = await makeRo();
     const main = await createBranch(deps, { researchObjectId: ro.id, userId: user.id, name: 'main' });

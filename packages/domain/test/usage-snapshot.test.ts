@@ -16,7 +16,7 @@ describe('getUsageSnapshot 用户侧聚合', () => {
     );
     const snap = await getUsageSnapshot({ prisma }, 'user-1');
     const credit = snap.user.find((i) => i.resource === 'ai_credit');
-    expect(credit).toMatchObject({ limit: 500, used: 380, remaining: 120, allowed: true });
+    expect(credit).toMatchObject({ limit: 500, used: 120, remaining: 380, allowed: true });
   });
 
   it('无 policy 时 limit=null，used 照查', async () => {
@@ -24,7 +24,7 @@ describe('getUsageSnapshot 用户侧聚合', () => {
     seedUser(db);
     const snap = await getUsageSnapshot({ prisma }, 'user-1');
     const credit = snap.user.find((i) => i.resource === 'ai_credit');
-    expect(credit).toMatchObject({ limit: null, used: 0, remaining: Number.POSITIVE_INFINITY, allowed: true });
+    expect(credit).toMatchObject({ limit: null, used: 0, remaining: 0, allowed: false });
   });
 
   it('workspace 级资源按成员 workspace 逐空间聚合', async () => {
@@ -48,4 +48,19 @@ describe('getUsageSnapshot 用户侧聚合', () => {
     const snap = await getUsageSnapshot({ prisma }, 'user-1');
     expect(snap.workspaces).toEqual([]);
   });
+  it('累积余额可以超过月度发放数，耗尽才阻断；不混入其他用户流水', async () => {
+    const { prisma, db } = createFakePrisma();
+    seedUser(db);
+    db.quotaPolicies.push({ id: 'p1', scope: 'global', scopeKey: null, resource: 'ai_credit', limitValue: 500, createdAt: new Date(), updatedAt: new Date() });
+    await prisma.$transaction(async tx => {
+      await recordEntry(tx, { userId: 'user-1', resource: 'ai_credit', delta: 500, kind: 'monthly_grant', period: '2026-08' });
+      await recordEntry(tx, { userId: 'user-1', resource: 'ai_credit', delta: 500, kind: 'monthly_grant', period: '2026-09' });
+      await recordEntry(tx, { userId: 'user-1', resource: 'ai_credit', delta: -100, kind: 'consume' });
+      await recordEntry(tx, { userId: 'other', resource: 'ai_credit', delta: -999, kind: 'consume' });
+    });
+    expect((await getUsageSnapshot({ prisma }, 'user-1')).user.find(i => i.resource === 'ai_credit')).toMatchObject({ limit: 500, used: 100, remaining: 900, allowed: true });
+    await prisma.$transaction(tx => recordEntry(tx, { userId: 'user-1', resource: 'ai_credit', delta: -900, kind: 'consume' }));
+    expect((await getUsageSnapshot({ prisma }, 'user-1')).user.find(i => i.resource === 'ai_credit')).toMatchObject({ used: 1000, remaining: 0, allowed: false });
+  });
+
 });

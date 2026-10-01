@@ -7,6 +7,11 @@ import { generateSessionToken, generateVerificationCode, hashVerificationCode } 
 import { CODE_TTL_MS, inCooldown, isCodeExpired, isLocked, registerFailedAttempt } from './verification';
 
 const ORCID_STATE_TTL_SECONDS = 10 * 60;
+/** Location must remain a local path; WHATWG URLs treat backslashes as separators. */
+function localReturnPath(value: unknown): string {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[\\\p{Cc}]/u.test(value)) return '/settings';
+  return value;
+}
 const ORCID_PATTERN = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/;
 
 export interface OrcidConfig {
@@ -168,7 +173,7 @@ export async function beginOrcidConnection(
   const state = generateSessionToken();
   const stored = await deps.redis.set(
     `orcid:state:${state}`,
-    JSON.stringify({ userId, returnTo: returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/settings' }),
+    JSON.stringify({ userId, returnTo: localReturnPath(returnTo) }),
     'EX',
     ORCID_STATE_TTL_SECONDS,
     'NX',
@@ -233,7 +238,7 @@ export async function completeOrcidConnection(
     },
   });
   await audit(deps, { actorId: userId, action: 'identity.orcid.connect', targetType: 'orcid', targetId: orcid }, ctx);
-  return { returnTo: state.returnTo, orcid };
+  return { returnTo: localReturnPath(state.returnTo), orcid };
 }
 
 export async function requestInstitutionEmailCode(

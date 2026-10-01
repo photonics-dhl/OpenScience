@@ -349,9 +349,13 @@
     "explore": "Explore",
     "exploreShort": "Explore",
     "create": "New research",
-    "createShort": "New RO",
+    "createShort": "Create",
     "settings": "Settings",
-    "settingsShort": "Settings"
+    "settingsShort": "Settings",
+    "journals": "Journals",
+    "journalsShort": "Journals",
+    "guide": "Guide",
+    "guideShort": "Guide"
   },
   "editor": {
     "savedVersionSources": "Check sources in the latest saved version",
@@ -535,7 +539,8 @@
     "yes": "Yes",
     "no": "No",
     "editingGuide": "Start with the research question, then work through each section. Hermes can help organize what you have.",
-    "suggestionsGuide": "Add your research content, then use AI Extract to prepare suggestions for your review."
+    "suggestionsGuide": "Add your research content, then use AI Extract to prepare suggestions for your review.",
+    "emptyExtractionNotice": "No content is ready to confirm: all six sections in the saved extraction are empty. This does not mean the paper omitted the information. Edit manually or use an offered recovery action, and check the source before confirming."
   },
   "collab": {
     "title": "Collaboration",
@@ -1128,7 +1133,7 @@
         "queued": "Queued",
         "uploading": "Uploading",
         "parsing": "Parsing",
-        "stored": "Prepared",
+        "stored": "Saved, waiting for processing",
         "needsReview": "Needs review",
         "failedRetryable": "Retry available",
         "failedBlocked": "Blocked",
@@ -1411,7 +1416,7 @@
     "loadError": "Unable to load the Hermes suggestion",
     "confirmError": "Confirmation failed. Refresh and try again.",
     "proposalUnavailableTitle": "The structured suggestion was not generated",
-    "proposalUnavailableBody": "The source is safely stored and parsed, but Hermes did not produce a result that passed validation. Retry the same material without uploading it again.",
+    "proposalUnavailableBody": "A structured proposal has not been produced or validated. This does not mean the paper omitted the information; use the supported recovery action below.",
     "proposalLongDocumentRecoveryBody": "The previous full-document limit has been removed. Continue with the same uploaded material; the original failure record will be preserved.",
     "proposalRetry": "Retry structured extraction",
     "proposalReviewRecoveryTitle": "Source review needs to continue",
@@ -1455,7 +1460,10 @@
     "viewProgress": "View progress and recovery",
     "allTasks": "All research tasks",
     "scopeMismatch": "This task does not belong to the current research object. Return to its task list to continue.",
-    "viewVersions": "View versions"
+    "viewVersions": "View versions",
+    "emptyExtractionTitle": "No content is ready to confirm",
+    "emptyExtractionBody": "All six saved text sections are empty; extraction is incomplete. This does not mean the source omitted the information. Continue in the editor manually, or use a recovery action only when it is offered below.",
+    "manualEdit": "Continue manually in the editor"
   },
   "hermesRun": {
     "sourceReanalysis": {
@@ -1629,7 +1637,8 @@
       "succeeded": "Complete",
       "failed": "Failed",
       "stopped": "Stopped"
-    }
+    },
+    "analysisRecord": "Analysis {number}"
   },
   "ingestion": {
     "status": {
@@ -1637,7 +1646,7 @@
       "uploading": "Uploading",
       "stored": "Stored",
       "parsing": "Parsing evidence",
-      "needs_review": "Needs review",
+      "needs_review": "Processing result needs checking",
       "confirmed": "Confirmed",
       "written": "Written to draft",
       "failed_retryable": "Retry available",
@@ -1651,7 +1660,7 @@
       "uploading": "Keeping the upload recoverable while bytes are transferred.",
       "stored": "The artifact is stored and ready for analysis.",
       "parsing": "Hermes is locating claims, methods, and source anchors.",
-      "needs_review": "Evidence is ready for your decisions.",
+      "needs_review": "Check the task for saved content and supported recovery actions.",
       "confirmed": "All proposed fields in this batch are confirmed.",
       "written": "Confirmed evidence has been written to the RO draft.",
       "failed_retryable": "Processing stopped safely and can be retried.",
@@ -2577,7 +2586,13 @@
     "motionFull": "Full motion",
     "motionScope": "Uses the existing Hermes preference in this browser only. It does not change other users or site-wide motion.",
     "motionError": "Your browser did not allow saving this preference. The change was not saved.",
-    "callbackHelp": "ORCID authorization did not complete. Check the server-reported status below and retry. Cancelling an attempt does not remove an existing connection."
+    "callbackHelp": "ORCID authorization did not complete. Check the server-reported status below and retry. Cancelling an attempt does not remove an existing connection.",
+    "loading": "Loading…",
+    "slowLoad": "This read is taking longer than usual. The status is still unknown; reload or return to your desk.",
+    "loadFailed": "Unable to load right now. Retry; saved information and verification records are preserved.",
+    "reload": "Reload",
+    "backToDesk": "Back to research desk",
+    "fieldsPending": "Research profile has not loaded"
   },
   "academicIdentity": {
     "loading": "Loading saved identity status…",
@@ -2899,5 +2914,49 @@
       "needs_information": "Return for revision",
       "rejected": "Decline onboarding"
     }
+  },
+  "usageBalance": {
+    "title": "Usage and balance",
+    "remaining": "Remaining AI credit",
+    "monthlyGrant": "Monthly credit grant",
+    "explanation": "Remaining credit comes from your account ledger and may differ from the monthly grant. Each operation has its own cost; grants are not a count of available calls.",
+    "lowCredit": "Remaining AI credit is below 10% of the monthly grant. Check the credit notice before continuing processing.",
+    "unavailable": "AI credit information was not returned. Reload later."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "This address may have changed or been entered incorrectly. Continue from the home page, Explore, or the guide.",
+    "home": "Home",
+    "explore": "Explore research",
+    "guide": "Guide",
+    "navigation": "Website navigation",
+    "skip": "Skip to content"
+  },
+  "productGuide": {
+    "title": "From materials to public research",
+    "intro": "Upload a paper or start a draft, work with Hermes to organize its contents, then confirm them and choose whether to publish.",
+    "navigation": "Website navigation",
+    "skip": "Skip to content",
+    "create": "Create research",
+    "desk": "Open research desk",
+    "research": {
+      "title": "What a research project contains",
+      "body": "A research project keeps papers, data, code, images and text together with traceable versions. Drafts are visible within the workspace permissions."
+    },
+    "fields": {
+      "title": "Six sections explain your research",
+      "body": "The text covers problem, insight, method, results, limitations and reproducibility. Hermes proposes content from your materials for you to check and confirm. A processing failure does not mean the paper omitted the information."
+    },
+    "publicId": {
+      "title": "Public identifiers support sharing and citation",
+      "body": "Published research receives a stable public identifier. Share its public page; a version link preserves the contents at that time. The identifier does not imply peer review approval."
+    },
+    "workflow": {
+      "title": "Four places to continue",
+      "body": "Overview reads the research; Edit changes its six sections; Presentation shows images and video; Materials holds the originals. Hermes keeps task status, reviews and supported recovery actions."
+    }
+  },
+  "journalServiceLabels": {
+    "basic": "Basic service"
   }
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
@@ -322,7 +323,7 @@ export default function NewResearchObjectPage() {
               </label>
               <label data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
                 {t('optionalTitle')}
-                <input className="min-h-12 border-0 border-b border-os-rule-paper bg-transparent text-base text-os-ink outline-none placeholder:text-os-muted-paper focus:border-os-vermilion-ink" maxLength={200} value={title} onChange={(event) => { createKey.current = ''; setTitle(event.target.value); }} disabled={Boolean(researchObjectId)} placeholder={t('titlePlaceholder')} />
+                <input name="title" className="min-h-12 border-0 border-b border-os-rule-paper bg-transparent text-base text-os-ink outline-none placeholder:text-os-muted-paper focus:border-os-vermilion-ink" maxLength={200} value={title} onChange={(event) => { createKey.current = ''; setTitle(event.target.value); }} disabled={Boolean(researchObjectId)} placeholder={t('titlePlaceholder')} />
               </label>
             </div>
           </details>

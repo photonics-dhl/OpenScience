@@ -109,7 +109,7 @@ describe('research continuation', () => {
   const task = (id: string, researchObjectId: string, state: string) => ({ id, researchObjectId, state, researchTitle: 'Research', logicalPath: 'paper.pdf', retryCount: 0, error: null });
   it('continues the current RO review before other pending work', () => {
     const markup = renderToStaticMarkup(createElement(ContinueResearch, { research, tasks: [task('foreign', 'ro-b', 'needs_review'), task('failed', 'ro-a', 'failed_retryable'), task('review', 'ro-a', 'needs_review')] }));
-    expect(markup).toContain('/research-objects/ro-a/hermes?task=review');
+    expect(markup).toContain('/research-objects/ro-a/edit?ingestionTask=review');
     expect(markup).not.toContain('task=foreign');
   });
   it('opens the task hub when attention is required but no task detail is loaded', () => {
@@ -118,7 +118,7 @@ describe('research continuation', () => {
   });
   it('keeps the editor as the next step when no work needs attention', () => {
     const markup = renderToStaticMarkup(createElement(ContinueResearch, { research: { ...research, pendingCount: 0 }, tasks: [task('done', 'ro-a', 'confirmed')] }));
-    expect(markup).toContain('href="/research-objects/ro-a/overview"');
+    expect(markup).toContain('href="/research-objects/ro-a/edit"');
     expect(markup).not.toContain('task=done');
   });
 });
@@ -373,7 +373,7 @@ describe('code-based auth forms', () => {
     const login = renderToStaticMarkup(createElement(LoginForm, { returnTo: '/dashboard' }));
 
     expect(context).toContain('data-research-identity-context="create"');
-    expect(decodeURIComponent(context)).toContain('/hermes/wanko-static.png');
+    expect(decodeURIComponent(context)).toContain('/hermes/wanko-static-transparent.png');
     expect(context).toContain('<h2');
     expect(signup).toContain('data-auth-flow="signup-code"');
     expect(login).toContain('data-auth-flow="login"');

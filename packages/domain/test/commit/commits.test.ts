@@ -50,6 +50,37 @@ async function makeRo(audit?: AuditSink) {
 }
 
 describe('createCommit（§7.2.3 Manifest + §7.2.5 JSON Patch + §16 乐观锁/幂等）', () => {
+  it.each(['viewer', 'reviewer'])('%s cannot create or replay a commit', async (role) => {
+    const { deps, db, user, ro } = await makeRo();
+    const input = { researchObjectId: ro.id, userId: user.id, message: 'Existing', version: 1, idempotencyKey: 'role-replay' };
+    await createCommit(deps, input);
+    db.memberships[0].role = role;
+    await expect(createCommit(deps, input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(createCommit(deps, { ...input, idempotencyKey: undefined, version: 2 })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.commits).toHaveLength(1);
+    expect(db.researchObjects[0].version).toBe(2);
+  });
+
+  it('Contributor may commit a feature branch but cannot edit main through a direct commit', async () => {
+    const { deps, db, user, ro } = await makeRo();
+    const branch = await deps.prisma.branch.create({ data: { researchObjectId: ro.id, name: 'feature', isDefault: false } });
+    db.memberships[0].role = 'contributor';
+    await expect(createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'Feature', version: 1, branchId: branch.id, sdfCore: { ...CORE1, problem: 'Contribution' } }))
+      .resolves.toMatchObject({ snapshot: { core: { problem: 'Contribution' } } });
+    expect(db.sdfDocuments[0].coreJson.problem).toBe('');
+    const mainInput = { researchObjectId: ro.id, userId: user.id, message: 'Main bypass', version: 2, sdfCore: CORE1 };
+    await expect(createCommit(deps, mainInput)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const main = await deps.prisma.branch.create({ data: { researchObjectId: ro.id, name: 'main', isDefault: true } });
+    await expect(createCommit(deps, { ...mainInput, branchId: main.id })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.commits).toHaveLength(1);
+  });
+
+  it.each(['owner', 'maintainer', 'author'])('%s may commit the main private draft', async (role) => {
+    const { deps, db, user, ro } = await makeRo();
+    db.memberships[0].role = role;
+    await expect(createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'Main', version: 1, sdfCore: CORE1 })).resolves.toMatchObject({ versionNo: 1 });
+  });
+
   it('allows enough transaction time to carry a media-heavy version', async () => {
     const { deps, user, ro } = await makeRo();
     const transaction = vi.spyOn(deps.prisma, '$transaction').mockRejectedValue(new Error('stop before persistence'));

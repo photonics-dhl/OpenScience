@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
-import { updateResearchObject } from '../../src/research-object/research-objects';
 import { createIssue, listIssues, getIssue, updateIssueStatus, createComment } from '../../src/issue/issues';
 import { IssueError } from '../../src/issue/errors';
 
@@ -16,7 +15,7 @@ async function makeRo(visibility: 'private' | 'invite_only' | 'public' = 'privat
   const deps = { prisma, mailer: {} as never };
   const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: owner.id, title: 'RO' });
   if (visibility !== 'private') {
-    await updateResearchObject(deps, { userId: owner.id, roId: ro.id, version: 1, patch: { visibility } });
+    await prisma.researchObject.update({ where: { id: ro.id }, data: { visibility } });
   }
   return { prisma, db, owner, viewer, deps, ro };
 }

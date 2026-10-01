@@ -247,8 +247,8 @@
     "previewLabel": "发布内容预览",
     "versionMismatch": "版本内容不一致，请重新打开当前版本。",
     "rightsNotice": "请确认你有权发布这些文字与素材。引用他人论文需保留来源；上传原文不等于获得转载授权。",
-    "openPublic": "查看公开 RO",
-    "openPublicVersion": "查看公开 RO · v{number}",
+    "openPublic": "查看公开研究项目",
+    "openPublicVersion": "查看公开研究项目 · v{number}",
     "platformAuthors": "平台作者：{names}",
     "reviewForPublication": "审核发布内容",
     "previewPublish": "预览并发布",
@@ -349,9 +349,13 @@
     "explore": "探索",
     "exploreShort": "探索",
     "create": "新建研究",
-    "createShort": "新建 RO",
+    "createShort": "新建研究",
     "settings": "设置",
-    "settingsShort": "设置"
+    "settingsShort": "设置",
+    "journals": "期刊",
+    "journalsShort": "期刊",
+    "guide": "使用指南",
+    "guideShort": "指南"
   },
   "editor": {
     "savedVersionSources": "核查最近保存版本的来源",
@@ -359,7 +363,7 @@
     "common": {
       "cancel": "取消"
     },
-    "title": "SDF 编辑器",
+    "title": "正文编辑器",
     "outline": "大纲",
     "versions": "发布历史",
     "coreEdit": "正文编辑",
@@ -391,7 +395,7 @@
     "ingestionTaskMissing": "服务器未返回材料分析任务",
     "ingestionProposalKicker": "来源提案",
     "ingestionProposalTitle": "核对自动整理结果",
-    "ingestionProposalBody": "以下内容来自所选材料，可逐项修改。普通保存和提交在提案确认前暂停；只有下方确认操作会把这份提案写入新的 SDF 版本。",
+    "ingestionProposalBody": "以下内容来自所选材料，可逐项修改。普通保存和提交在提案确认前暂停；只有下方确认操作会把这份提案写入新的 正文 版本。",
     "ingestionSource": "当前材料",
     "chooseIngestionSource": "选择一份材料",
     "ingestionLoading": "正在读取这份材料的服务器结果…",
@@ -423,7 +427,7 @@
     "legacyRefreshing": "正在创建重新分析任务…",
     "legacyRefreshStarted": "重新分析已在服务器开始；完成后会在当前提案中更新未编辑字段，原分析记录仍可追溯。",
     "legacyRefreshFailed": "未能开始重新分析。",
-    "confirmedReanalysisBody": "当前已确认的 SDF 和版本会保持不变。Hermes 将复用这份材料已核验的解析来源，创建一份新的分析草稿；只有你核对并确认新草稿后，才会写入新版本。",
+    "confirmedReanalysisBody": "当前已确认的 正文和版本会保持不变。Hermes 将复用这份材料已核验的解析来源，创建一份新的分析草稿；只有你核对并确认新草稿后，才会写入新版本。",
     "confirmedReanalysisAction": "重新分析并创建新草稿",
     "confirmedReanalyzing": "正在创建新分析草稿…",
     "confirmedReanalysisStarted": "新分析已在服务器开始。当前已确认内容保持不变；完成后请核对新草稿。",
@@ -466,13 +470,13 @@
     "evidencePending": "等待关联证据",
     "evidencePendingDescription": "证据片段将在这里显示，并保留素材与来源位置。",
     "reviewPending": "暂无进行中的评审",
-    "reviewPendingDescription": "人工与 Hermes 的评审记录始终绑定到受影响的 SDF 范围。",
+    "reviewPendingDescription": "人工与 Hermes 的评审记录始终绑定到受影响的 正文 范围。",
     "hermesExtractor": "Hermes 提取器",
     "hermesEvidenceLabel": "Hermes / 证据",
-    "sdfCoreLabel": "SDF / 核心结构 0.1",
+    "sdfCoreLabel": "正文 / 核心结构 0.1",
     "researcherPrompt": "研究者提示",
     "sourceLocatorUnavailable": "来源位置暂不可用",
-    "currentSdfAggregate": "当前 SDF 聚合内容",
+    "currentSdfAggregate": "当前 正文 聚合内容",
     "evidenceLocationLocated": "已定位",
     "evidenceLocationAmbiguous": "多处匹配",
     "evidenceLocationCrossBlock": "跨块引文",
@@ -535,7 +539,8 @@
     "yes": "是",
     "no": "否",
     "editingGuide": "先写清楚研究问题，再逐项补全。也可以让 Hermes 帮你整理已有内容。",
-    "suggestionsGuide": "填写或导入研究内容后，使用 AI 提取生成逐项建议，确认后再写入。"
+    "suggestionsGuide": "填写或导入研究内容后，使用 AI 提取生成逐项建议，确认后再写入。",
+    "emptyExtractionNotice": "未得到可确认的内容：原提取记录的六项正文均为空。这不代表论文未报告相关信息。可在此手动编辑，或使用页面已有的恢复操作；确认前请核对原文。"
   },
   "collab": {
     "title": "协作",
@@ -1128,7 +1133,7 @@
         "queued": "排队中",
         "uploading": "上传中",
         "parsing": "解析中",
-        "stored": "已整理",
+        "stored": "已保存，等待处理",
         "needsReview": "等待核对",
         "failedRetryable": "可重试",
         "failedBlocked": "已阻断",
@@ -1406,12 +1411,12 @@
     "back": "返回工作台",
     "eyebrow": "Hermes / 证据审核",
     "title": "确认你的研究结构",
-    "description": "Hermes 只提出建议，不替你写入。逐项检查六个 SDF 字段；只有你确认后，内容才会进入新的可追踪版本。",
+    "description": "Hermes 只提出建议，不替你写入。逐项检查六个 正文部分；只有你确认后，内容才会进入新的可追踪版本。",
     "loading": "正在读取材料与建议…",
     "loadError": "无法加载 Hermes 建议",
     "confirmError": "确认失败，请刷新后重试",
     "proposalUnavailableTitle": "结构化建议未生成",
-    "proposalUnavailableBody": "原文已安全保存并完成解析，但 Hermes 的结构化结果未通过校验。你可以重试同一份材料，无需重新上传。",
+    "proposalUnavailableBody": "结构化建议尚未生成或未通过校验。这不代表论文缺少相关信息；使用下方现有恢复操作继续处理。",
     "proposalLongDocumentRecoveryBody": "旧全文限制已解除。将继续处理同一份已上传材料，并保留原失败记录，无需重新上传。",
     "proposalRetry": "重试结构化提取",
     "proposalReviewRecoveryTitle": "来源审阅需要继续",
@@ -1419,7 +1424,7 @@
     "proposalReviewRecovery": "继续来源审阅",
     "proposalReviewRecovering": "正在恢复审阅…",
     "proposalReanalysisTitle": "结构化结果缺少可审阅证据",
-    "proposalReanalysisBody": "Hermes 已保留原文，但上次分析没有提取出任何有来源支持的 SDF 字段。重新分析同一份材料将使用 1 AI credit，无需重新上传。",
+    "proposalReanalysisBody": "Hermes 已保留原文，但上次分析没有提取出任何有来源支持的 正文部分。重新分析同一份材料将使用 1 AI credit，无需重新上传。",
     "proposalReanalysis": "重新分析 · 1 AI credit",
     "proposalCompensation": "继续分析 · 不重复扣费",
     "proposalCompensationBody": "上次已付费分析遇到结构化输出错误。符合恢复条件时可继续同一任务一次，复用已付费用，无需重新上传。",
@@ -1432,7 +1437,7 @@
     "legacyRefreshing": "正在创建重新分析任务…",
     "legacyRefreshError": "无法开始重新分析；旧分析未改变。",
     "legacyRefreshUncertain": "重新分析请求的结果暂未确认。旧分析历史仍会保留；请在当前任务中再次核对并续接。",
-    "fieldLabel": "SDF 字段审阅",
+    "fieldLabel": "正文部分审阅",
     "taskState": "任务状态：{state}",
     "boundary": "建议边界",
     "boundaryNote": "角色保持安静；右键或长按可查看当前证据工具。",
@@ -1455,7 +1460,10 @@
     "viewProgress": "查看进度与恢复操作",
     "allTasks": "返回研究任务",
     "scopeMismatch": "此任务不属于当前研究对象。请返回当前研究的任务列表继续。",
-    "viewVersions": "查看版本记录"
+    "viewVersions": "查看版本记录",
+    "emptyExtractionTitle": "未得到可确认的内容",
+    "emptyExtractionBody": "已保存的六项正文均为空，提取未完成。这不代表原文没有相关信息。可以打开编辑器手动完善；仅在下方显示恢复操作时，才可沿用该操作继续处理。",
+    "manualEdit": "打开编辑器手动完善"
   },
   "hermesRun": {
     "sourceReanalysis": {
@@ -1629,7 +1637,8 @@
       "succeeded": "已完成",
       "failed": "失败",
       "stopped": "已停止"
-    }
+    },
+    "analysisRecord": "分析记录 {number}"
   },
   "ingestion": {
     "status": {
@@ -1637,7 +1646,7 @@
       "uploading": "上传中",
       "stored": "已保存",
       "parsing": "正在解析证据",
-      "needs_review": "待确认",
+      "needs_review": "处理结果待核对",
       "confirmed": "已确认",
       "written": "已写入草稿",
       "failed_retryable": "可重试",
@@ -1651,9 +1660,9 @@
       "uploading": "文件传输期间会保留可恢复进度。",
       "stored": "Artifact 已保存，可以开始分析。",
       "parsing": "Hermes 正在定位论点、方法与来源锚点。",
-      "needs_review": "证据已就绪，请逐项确认。",
+      "needs_review": "处理结果需要核对，请打开任务查看已有内容和恢复操作。",
       "confirmed": "本批次的建议字段已全部确认。",
-      "written": "确认后的证据已写入 RO 草稿。",
+      "written": "确认后的证据已写入研究项目 草稿。",
       "failed_retryable": "处理已安全停止，可以重试。",
       "failed_blocked": "继续处理前需要先修正问题。"
     },
@@ -1679,7 +1688,7 @@
       "browse": "选择文件"
     },
     "evidence": {
-      "field": "SDF 字段",
+      "field": "正文部分",
       "confidence": "置信度",
       "source": "证据来源"
     },
@@ -1703,12 +1712,12 @@
       "clearPrimary": "取消主文稿",
       "progressLabel": "材料处理进度",
       "provenance": "每份原件都作为不可变 Artifact 保留，并记录源文件名与内容哈希。",
-      "consent": "提交即授权本批材料进行安全扫描、解析/OCR 与 SDF 建议生成。",
-      "submitNote": "在您审阅并确认建议前，系统不会把任何 SDF 字段写入草稿。",
-      "blankNote": "空白 RO 不附带源证据；您可以在之后随时补充材料。",
+      "consent": "提交即授权本批材料进行安全扫描、解析/OCR 与 正文 建议生成。",
+      "submitNote": "在您审阅并确认建议前，系统不会把任何 正文部分写入草稿。",
+      "blankNote": "空白研究项目 不附带源证据；您可以在之后随时补充材料。",
       "titlePlaceholder": "准确的研究工作标题",
       "blankTitle": "先建立结构，而不是先上传文件。",
-      "blankBody": "直接进入六字段 SDF 草稿，在科研对象准备好时再附加证据。",
+      "blankBody": "直接进入六字段 正文 草稿，在科研对象准备好时再附加证据。",
       "openDraft": "打开草稿",
       "reviewReady": "证据已可审阅",
       "roles": {
@@ -1722,7 +1731,7 @@
         "scan": "扫描",
         "upload": "上传",
         "parse": "解析 / OCR",
-        "map": "SDF 映射",
+        "map": "正文整理",
         "review": "审阅"
       },
       "status": {
@@ -2066,7 +2075,7 @@
   "productSurfaces": {
     "navigation": "科研对象导航",
     "skip": "跳到产品内容",
-    "objectMap": "SDF 结构图",
+    "objectMap": "六项正文结构图",
     "integrity": "完整性",
     "integrityBody": "每个动作都绑定到 Research Object 的具体版本与证据链。",
     "fields": {
@@ -2125,7 +2134,7 @@
       "ingestionUnknownBody": "暂时无法读取文献处理状态。你仍可打开 Hermes 查看任务与来源。",
       "continueIngestion": "继续文献整理与核对",
       "openHermes": "打开 Hermes",
-      "continue": "打开 SDF 编辑器",
+      "continue": "打开 正文编辑器",
       "inspect": "查看版本",
       "upload": "添加论文",
       "ask": "让 Hermes 帮我整理",
@@ -2237,7 +2246,7 @@
       "preferences": "偏好",
       "language": "语言",
       "evidenceCollapsed": "默认折叠证据",
-      "evidenceCollapsedHint": "公开 RO 仍会完整加载证据，页面上先以摘要高度展示；打印和辅助技术始终保留全文。",
+      "evidenceCollapsedHint": "公开研究项目 仍会完整加载证据，页面上先以摘要高度展示；打印和辅助技术始终保留全文。",
       "preferenceSaved": "阅读偏好已保存。",
       "preferenceConflict": "另一会话已更新偏好，已载入最新设置。",
       "preferenceError": "偏好暂时无法保存，请重试。",
@@ -2577,7 +2586,13 @@
     "motionFull": "完整动效",
     "motionScope": "复用现有 Hermes 动效设置，仅保存在当前浏览器，不会改变其他用户或全站动效。",
     "motionError": "浏览器未允许保存偏好，本次修改未保存。",
-    "callbackHelp": "ORCID 授权未完成，请核对下方从服务器读取的状态，然后重试。已有认证不会因本次取消而被移除。"
+    "callbackHelp": "ORCID 授权未完成，请核对下方从服务器读取的状态，然后重试。已有认证不会因本次取消而被移除。",
+    "loading": "正在读取…",
+    "slowLoad": "读取时间较长。状态尚未确认，可以重新加载或返回工作台。",
+    "loadFailed": "暂时无法读取，请重试。已有资料和认证记录保留。",
+    "reload": "重新加载",
+    "backToDesk": "返回工作台",
+    "fieldsPending": "科研资料尚未加载"
   },
   "academicIdentity": {
     "loading": "正在读取已保存的身份状态…",
@@ -2899,5 +2914,49 @@
       "needs_information": "退回修改",
       "rejected": "拒绝入驻"
     }
+  },
+  "usageBalance": {
+    "title": "用量与额度",
+    "remaining": "剩余 AI 额度",
+    "monthlyGrant": "本月发放额度",
+    "explanation": "剩余量来自账号额度账本，可与本月发放量不同。不同处理会消耗不同额度；发放量不代表可调用次数。",
+    "lowCredit": "剩余 AI 额度低于本月发放额度的 10%。请留意后续处理的额度提示。",
+    "unavailable": "暂时未返回 AI 额度信息，请稍后重新加载。"
+  },
+  "notFound": {
+    "title": "页面未找到",
+    "description": "这个地址可能已变更，也可能输入有误。可以回到首页，或从探索和使用指南继续。",
+    "home": "返回首页",
+    "explore": "探索研究",
+    "guide": "使用指南",
+    "navigation": "网站导航",
+    "skip": "跳至正文"
+  },
+  "productGuide": {
+    "title": "从资料到公开研究",
+    "intro": "上传论文或创建草稿，与 Hermes 整理研究内容，再由你确认并决定公开。",
+    "navigation": "网站导航",
+    "skip": "跳至正文",
+    "create": "新建研究",
+    "desk": "打开研究桌面",
+    "research": {
+      "title": "一项研究包含什么",
+      "body": "一个研究项目把论文、数据、代码、图片与正文放在一起，并保留可追踪的版本。草稿只在允许访问的工作区内可见。"
+    },
+    "fields": {
+      "title": "六项正文帮助读者理解研究",
+      "body": "正文按问题、洞见、方法、结果、局限和可复现性组织。Hermes 从资料中提出建议，你核对来源后确认；处理失败不代表论文没有报告相关内容。"
+    },
+    "publicId": {
+      "title": "公开编号用来分享和引用",
+      "body": "研究公开后会获得稳定的公开编号。分享公开页面链接即可；具体版本链接固定当时的内容，公开编号不代表通过同行评审。"
+    },
+    "workflow": {
+      "title": "继续研究的四个入口",
+      "body": "概览阅读完整内容；编辑修改六项正文；展示查看图片与视频；材料查看原始资料。Hermes 中保留处理状态、审核及支持的恢复操作。"
+    }
+  },
+  "journalServiceLabels": {
+    "basic": "基础服务"
   }
 }

@@ -51,7 +51,7 @@ const jobBody = z.object({ revision, language: z.enum(['zh', 'en']), requestKey,
 const memberRole = z.enum(['admin', 'editor', 'reviewer']);
 const role = (r: string) => ({ maintainer: 'admin', author: 'editor' }[r] ?? r);
 const pageQuery = z.object({ query: z.string().max(200).optional(), subject: z.string().max(100).optional(), cursor: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(100).default(20) });
-type Deps = AuthDeps & { storage?: StorageAdapter; journalsEnabled?: boolean; publicIdPrefix?: string; journalMetadataFetcher?: typeof fetch };
+type Deps = AuthDeps & { storage?: StorageAdapter; malwareScanner?: import('@openscience/storage').MalwareScanner; journalsEnabled?: boolean; publicIdPrefix?: string; journalMetadataFetcher?: typeof fetch };
 
 /** Fixed-origin metadata lookup. Never fetch DOI destination, paper URL, proof URL or redirects. */
 export async function fetchJournalDoiMetadata(doiInput: string, fetcher: typeof fetch = fetch): Promise<JournalMetadata> {

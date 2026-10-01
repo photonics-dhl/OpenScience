@@ -1,5 +1,5 @@
 import type { AuditContext } from '@openscience/observability';
-import { requireMembership } from '../workspace/helpers';
+import { requireActiveMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
 import { canAccessPrivateRo } from '../visibility/access';
 import type { ArtifactDeps } from '../artifact/artifacts';
@@ -163,8 +163,9 @@ export async function createPullRequest(
   if (!title || title.length > 200) throw new PrError('VALIDATION_ERROR', '标题需为 1-200 字符');
 
   const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
-  if (!ro) throw new PrError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  if (!ro || ro.deletedAt) throw new PrError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+  const { membership } = await requireActiveMembership(deps.prisma, ro.workspaceId, input.userId);
+  if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) throw new PrError('FORBIDDEN', '无权创建 Pull Request');
 
   // 幂等键重放（§16）：同 key 已存在 → 返回既有 PR
   if (input.idempotencyKey) {

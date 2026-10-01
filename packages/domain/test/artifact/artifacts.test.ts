@@ -58,6 +58,25 @@ const PNG = Buffer.from([
 ]);
 
 describe('createArtifact（§7.2.2 元数据 + §7.1 去重）', () => {
+  it.each(['viewer', 'reviewer'])('%s cannot upload or consume the input stream', async (role) => {
+    const { deps, db, user, storage } = makeDeps();
+    db.memberships[0].role = role;
+    let consumed = false;
+    const content = new Readable({ read() { consumed = true; this.push(PNG); this.push(null); } });
+    await expect(createArtifact(deps, { logicalPath: 'denied.png', content, uploadedBy: user.id, workspaceId: 'ws-1' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(consumed).toBe(false);
+    expect(db.artifacts).toHaveLength(0);
+    expect(storage.store.size).toBe(0);
+  });
+
+  it.each(['owner', 'maintainer', 'author', 'contributor'])('%s can upload branch evidence', async (role) => {
+    const { deps, db, user } = makeDeps();
+    db.memberships[0].role = role;
+    await createArtifact(deps, { logicalPath: 'allowed.png', content: PNG, uploadedBy: user.id, workspaceId: 'ws-1' });
+    expect(db.artifacts).toHaveLength(1);
+  });
+
   it('上传 → Blob + Artifact 入库，返回元数据', async () => {
     const { deps, db, user } = makeDeps();
     const result = await createArtifact(deps, {

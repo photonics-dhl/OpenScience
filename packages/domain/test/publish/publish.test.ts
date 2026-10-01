@@ -6,6 +6,7 @@ import { createCommit } from '../../src/commit/commits';
 import { setLicenses } from '../../src/license/licenses';
 import { runPublicationReview } from '../../src/review/publish-review';
 import { transitionVersionStatus, publishVersion } from '../../src/publish/publish';
+import { requestVisibilityChange } from '../../src/visibility/requests';
 
 const CORE = { schemaVersion: '0.1.0', problem: 'P', insight: 'I', method: 'M', results: 'R', limitations: 'L', reproducibility: 'RP' };
 
@@ -25,6 +26,11 @@ async function makeDeps() {
   } };
   const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'RO' });
   const commit = await createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'v1', version: 1, sdfCore: CORE });
+  db.claimNodes.push({
+    id: 'base-core', researchObjectId: ro.id, versionId: commit.versionId, parentClaimId: null,
+    kind: 'core', statement: 'Synthetic publication contribution', assessment: 'missing', conditions: [], limitations: [],
+    extractionStatus: 'succeeded', provenance: { source: 'human' },
+  });
   return { deps, db, user, ro, versionId: commit.versionId, auditEvents };
 }
 
@@ -47,6 +53,7 @@ async function makePublishable() {
     });
   }
   const review = await runPublicationReview(ctx.deps, { versionId: ctx.versionId, userId: ctx.user.id });
+  expect(review.hardBlocks).toEqual([]);
   expect(review.status).toBe('passed');
   await transitionVersionStatus(ctx.deps, { versionId: ctx.versionId, userId: ctx.user.id, status: 'under_review' });
   await transitionVersionStatus(ctx.deps, { versionId: ctx.versionId, userId: ctx.user.id, status: 'approved' });
@@ -80,6 +87,109 @@ describe('状态机推进（§4.1）', () => {
 });
 
 describe('publishVersion（§2.1-6 + 三重前置）', () => {
+  it('Author cannot restore visibility narrowed by an administrator through publish replay', async () => {
+    const { deps, db, user, ro, versionId } = await makePublishable();
+    const published = await publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' });
+    await requestVisibilityChange(deps, { userId: user.id, researchObjectId: ro.id, toVisibility: 'private' });
+    db.memberships[0].role = 'author';
+    await expect(publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.researchObjects.find((row) => row.id === ro.id).visibility).toBe('private');
+    expect(db.publications).toHaveLength(1);
+    expect(db.publications[0].publicVersionId).toBe(published.publicVersionId);
+  });
+
+  it.each(['owner', 'maintainer'])('%s may explicitly restore narrowed visibility without issuing a new publication', async (role) => {
+    const { deps, db, user, ro, versionId } = await makePublishable();
+    const published = await publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' });
+    await requestVisibilityChange(deps, { userId: user.id, researchObjectId: ro.id, toVisibility: 'private' });
+    db.memberships[0].role = role;
+    await expect(publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' }))
+      .resolves.toMatchObject({ visibility: 'public', publicVersionId: published.publicVersionId });
+    expect(db.publications).toHaveLength(1);
+  });
+
+  it('visibility repair rechecks a change to Author inside its transaction', async () => {
+    const { deps, db, user, ro, versionId } = await makePublishable();
+    await publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' });
+    await requestVisibilityChange(deps, { userId: user.id, researchObjectId: ro.id, toVisibility: 'private' });
+    const prisma = deps.prisma as unknown as { $transaction: (fn: (tx: unknown) => Promise<unknown>, options?: unknown) => Promise<unknown> };
+    const transaction = prisma.$transaction.bind(prisma);
+    prisma.$transaction = async (callback, options) => {
+      db.memberships[0].role = 'author';
+      return transaction(callback, options);
+    };
+    await expect(publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.researchObjects.find((row) => row.id === ro.id).visibility).toBe('private');
+    expect(db.publications).toHaveLength(1);
+  });
+
+  it.each(['viewer', 'reviewer', 'contributor'])('%s creator cannot advance a draft candidate', async (role) => {
+    const { deps, db, user, versionId } = await makeDeps();
+    db.memberships[0].role = role;
+    await expect(transitionVersionStatus(deps, { versionId, userId: user.id, status: 'under_review' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.versions.find((row) => row.id === versionId).status).toBe('draft');
+  });
+
+  it.each(['demoted', 'archived'])('publish repair rechecks %s authority in its transaction', async (change) => {
+    const { deps, db, user, ro, versionId } = await makePublishable();
+    await publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' });
+    db.researchObjects.find((row) => row.id === ro.id).visibility = 'private';
+    const prisma = deps.prisma as unknown as { $transaction: (fn: (tx: unknown) => Promise<unknown>, options?: unknown) => Promise<unknown> };
+    const transaction = prisma.$transaction.bind(prisma);
+    prisma.$transaction = async (callback, options) => {
+      if (change === 'demoted') db.memberships[0].role = 'viewer';
+      else db.workspaces[0].status = 'archived';
+      return transaction(callback, options);
+    };
+    await expect(publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.researchObjects.find((row) => row.id === ro.id).visibility).toBe('private');
+    expect(db.publications).toHaveLength(1);
+  });
+
+  it.each(['viewer', 'reviewer', 'contributor'])('%s creator cannot publish the main candidate', async (role) => {
+    const { deps, db, user, ro, versionId } = await makePublishable();
+    db.memberships[0].role = role;
+    await expect(publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.publications).toHaveLength(0);
+    expect(db.researchObjects.find((row) => row.id === ro.id).visibility).toBe('private');
+  });
+
+  it.each(['viewer', 'reviewer', 'contributor'])('%s creator cannot transition a candidate or withdraw a publication', async (role) => {
+    const { deps, db, user, versionId } = await makePublishable();
+    await publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' });
+    db.memberships[0].role = role;
+    await expect(transitionVersionStatus(deps, { versionId, userId: user.id, status: 'withdrawn' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.versions.find((row) => row.id === versionId).status).toBe('published');
+  });
+
+  it.each(['viewer', 'reviewer', 'contributor'])('%s creator cannot restore public visibility through publish replay', async (role) => {
+    const { deps, db, user, ro, versionId } = await makePublishable();
+    await publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' });
+    db.researchObjects.find((row) => row.id === ro.id).visibility = 'private';
+    db.memberships[0].role = role;
+    await expect(publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.researchObjects.find((row) => row.id === ro.id).visibility).toBe('private');
+    expect(db.publications).toHaveLength(1);
+  });
+
+  it.each(['owner', 'maintainer', 'author'])('%s noncreator can review, confirm publication and withdraw', async (role) => {
+    const { deps, db, user, ro, versionId } = await makePublishable();
+    db.memberships[0].role = role;
+    db.researchObjects.find((row) => row.id === ro.id).createdBy = 'other-creator';
+    await expect(runPublicationReview(deps, { versionId, userId: user.id })).resolves.toMatchObject({ status: 'passed' });
+    await expect(publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' }))
+      .resolves.toMatchObject({ status: 'published' });
+    await expect(transitionVersionStatus(deps, { versionId, userId: user.id, status: 'withdrawn' }))
+      .resolves.toMatchObject({ status: 'withdrawn' });
+  });
+
   it('缺 AI 审核 → REVIEW_NOT_PASSED', async () => {
     const { deps, user, ro, versionId } = await makeDeps();
     await setLicenses(deps, { researchObjectId: ro.id, userId: user.id, licenses: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
@@ -120,14 +230,15 @@ describe('publishVersion（§2.1-6 + 三重前置）', () => {
     expect(user.id).not.toBe(viewer.id);
   });
 
-  it('缺少 3–7 个核心 Claim 时硬阻断发布', async () => {
+  it('没有核心 Claim 时审核和发布均阻断', async () => {
     const { deps, db, user, versionId } = await makePublishable();
     db.claimNodes.length = 0;
-    await runPublicationReview(deps, { versionId, userId: user.id });
+    const review = await runPublicationReview(deps, { versionId, userId: user.id });
+    expect(review.hardBlocks).toContainEqual(expect.objectContaining({ code: 'claim_graph_invalid' }));
 
     await expect(
       publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' }),
-    ).rejects.toThrow(/3-7 core Claims/);
+    ).rejects.toMatchObject({ code: 'REVIEW_NOT_PASSED' });
   });
 
   it('发布成功：R3 原子扩展公开可见性并记录来源 + ID + 时间戳 + 哈希 + 事件', async () => {

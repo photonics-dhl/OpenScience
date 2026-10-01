@@ -211,6 +211,9 @@ function isWritingInstruction(value: string) {
 }
 
 export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
+  const [opened, setOpened] = useState(props.open || Boolean(props.docked));
+  useEffect(() => { if (props.open || props.docked) setOpened(true); }, [props.open, props.docked]);
+  if (!opened && !props.open && !props.docked) return null;
   return <React.Suspense fallback={null}><HermesAssistantDrawerContent {...props} /></React.Suspense>;
 }
 
@@ -440,6 +443,7 @@ function HermesAssistantDrawerContent({
   useEffect(() => {
     if (route !== 'research-object-edit' || !routeResearchObjectId) { setResolvedGuide({ owner: currentOwner, versionId: route }); return; }
     if (requestedVersion) { setResolvedGuide({ owner: currentOwner, versionId: requestedVersion }); return; }
+    if (!viewerId) return;
     let active = true;
     setResolvedGuide({ owner: currentOwner, versionId: '' });
     void listVersions(routeResearchObjectId)

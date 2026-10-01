@@ -1,5 +1,5 @@
 import type { AuditContext, AuditEvent } from '@openscience/observability';
-import { requireMembership } from '../workspace/helpers';
+import { requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { canAccessPrivateRo } from '../visibility/access';
 import type { WorkspaceDeps } from '../workspace/types';
 import { BranchError } from './errors';
@@ -95,8 +95,11 @@ export async function createBranch(
   assertValidName(input.name);
 
   const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
-  if (!ro) throw new BranchError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  if (!ro || ro.deletedAt) throw new BranchError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+  const { membership } = await requireActiveMembership(deps.prisma, ro.workspaceId, input.userId);
+  if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role) || (membership.role === 'contributor' && input.name === 'main')) {
+    throw new BranchError('FORBIDDEN', '无权创建此分支');
+  }
 
   if (input.headCommitId) {
     const head = await deps.prisma.commit.findUnique({ where: { id: input.headCommitId } });
@@ -158,8 +161,9 @@ export async function deleteBranch(
   ctx: AuditContext = {},
 ): Promise<void> {
   const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
-  if (!ro) throw new BranchError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  if (!ro || ro.deletedAt) throw new BranchError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+  const { membership } = await requireActiveMembership(deps.prisma, ro.workspaceId, input.userId);
+  if (!['owner', 'maintainer'].includes(membership.role)) throw new BranchError('FORBIDDEN', '仅 Owner/Maintainer 可删除分支');
 
   const { branch } = await requireBranch(deps, ro.id, input.branchId);
 

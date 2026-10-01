@@ -1,4 +1,6 @@
-const CORE_SOURCE = '/hermes/live2d/live2dcubismcore.min.js';
+import { LIVE2D_ASSET_ROOT } from './live2d-assets.mjs';
+
+const CORE_SOURCE = `${LIVE2D_ASSET_ROOT}/live2dcubismcore.min.js`;
 
 let coreTask: Promise<void> | null = null;
 

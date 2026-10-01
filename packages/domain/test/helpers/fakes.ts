@@ -378,6 +378,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
             (where.userId === undefined || r.userId === where.userId) &&
             (where.workspaceId === undefined || r.workspaceId === where.workspaceId) &&
             (where.resource === undefined || r.resource === where.resource) &&
+              (where.kind === undefined || r.kind === where.kind) &&
             (where.period === undefined || r.period === where.period),
         );
         const sum = rows.reduce((acc, r) => acc + Number(r[_sum.delta ? 'delta' : '']), 0);
@@ -635,6 +636,10 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
             (where.id === undefined || v.id === where.id) &&
             (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId) &&
             (where.commitId === undefined || v.commitId === where.commitId) &&
+            (where.status === undefined || (typeof where.status === 'string' ? v.status === where.status : where.status.in.includes(v.status))) &&
+            (where.publications?.some === undefined || db.publications.some(publication => publication.versionId === v.id)) &&
+            (where.researchObject?.visibility === undefined || db.researchObjects.some(ro => ro.id === v.researchObjectId && ro.visibility === where.researchObject.visibility)) &&
+            (where.commit?.branch?.isDefault === undefined || db.commits.some(c => c.id === v.commitId && db.branches.some(branch => branch.id === c.branchId && branch.isDefault === where.commit.branch.isDefault))) &&
             (where.commit?.branchId === undefined || db.commits.some(c => c.id === v.commitId && c.branchId === where.commit.branchId)),
         );
         if (orderBy?.versionNo === 'desc') rows.sort((a, b) => b.versionNo - a.versionNo);
@@ -650,6 +655,11 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
       findFirstOrThrow: async ({ where, include }: any) => {
         const row = await prisma.version.findFirst({ where, include });
+        if (!row) throw new Error('Version not found');
+        return row;
+      },
+      findUniqueOrThrow: async (args: any) => {
+        const row = await prisma.version.findUnique(args);
         if (!row) throw new Error('Version not found');
         return row;
       },
@@ -693,7 +703,9 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       count: async ({ where }: any) =>
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)).length,
       findMany: async ({ where, include }: any) =>
-        db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId))
+        db.versions.filter((v) =>
+          (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId) &&
+          (where.publications?.some === undefined || db.publications.some(publication => publication.versionId === v.id)))
           .map((version) => ({ ...version,
             ...(include?.commit ? { commit: db.commits.find((commit) => commit.id === version.commitId) ?? null } : {}),
             ...(include?.publications ? { publications: db.publications.filter((publication) => publication.versionId === version.id) } : {}),

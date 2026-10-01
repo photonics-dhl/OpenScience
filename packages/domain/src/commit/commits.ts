@@ -8,7 +8,7 @@ import { validateSdfDraftCore } from '@openscience/sdf-schema';
 import { buildSnapshot, diffSdfCore, type ManifestEntryInput, type VersionSnapshot } from '@openscience/versioning';
 import type { Prisma } from '@prisma/client';
 import type { AuditContext } from '@openscience/observability';
-import { requireMembership } from '../workspace/helpers';
+import { requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
 import { CommitError } from './errors';
 import { SDF_NODE_TYPES } from '../research-object/types';
@@ -76,6 +76,14 @@ export interface VersionSummary {
 
 const DEFAULT_BRANCH = 'main';
 
+async function requireCommitAuthority(deps: WorkspaceDeps, workspaceId: string, userId: string, isDefault: boolean) {
+  const { membership } = await requireActiveMembership(deps.prisma, workspaceId, userId);
+  if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role) || (isDefault && membership.role === 'contributor')) {
+    throw new CommitError('FORBIDDEN', '无权提交到此分支');
+  }
+  return membership;
+}
+
 /**
  * 创建 Commit（§7.2.3 Manifest + §7.2.4 复用 Blob + §7.2.5 JSON Patch + §16 乐观锁/幂等 + §2.2.3 不可变）：
  * 1. 成员校验 + 乐观锁（RO.version） + 公开不可变（最新版本 published → 拒绝）
@@ -108,7 +116,8 @@ export async function createCommit(
       if (existing.researchObjectId !== input.researchObjectId) throw new CommitError('VALIDATION_ERROR', 'Idempotency key belongs to another research object');
       const existingRo = await deps.prisma.researchObject.findUnique({ where: { id: existing.researchObjectId } });
       if (!existingRo || existingRo.deletedAt) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-      await requireMembership(deps, existingRo.workspaceId, input.userId);
+      const existingBranch = await deps.prisma.branch.findFirst({ where: { id: existing.branchId, researchObjectId: existingRo.id } });
+      await requireCommitAuthority(deps, existingRo.workspaceId, input.userId, !existingBranch || existingBranch.isDefault || existingBranch.name === DEFAULT_BRANCH);
       const version = await deps.prisma.version.findFirst({ where: { commitId: existing.id } });
       const snapshot = await loadSnapshot(deps, version?.id ?? '');
       if (version) {
@@ -122,7 +131,7 @@ export async function createCommit(
     include: { sdfDocument: true },
   });
   if (!ro || ro.deletedAt) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  const membership = await requireCommitAuthority(deps, ro.workspaceId, input.userId, !input.branchId);
 
   // 乐观锁（§16）
   if (ro.version !== input.version) {
@@ -136,6 +145,7 @@ export async function createCommit(
   if (input.branchId) {
     const target = await deps.prisma.branch.findFirst({ where: { id: input.branchId, researchObjectId: ro.id } });
     if (!target) throw new CommitError('VALIDATION_ERROR', '目标分支不存在');
+    if (membership.role === 'contributor' && (target.isDefault || target.name === DEFAULT_BRANCH)) throw new CommitError('FORBIDDEN', 'Contributor 须通过贡献分支和 PR 修改主分支');
     branch = { id: target.id, name: target.name, headCommitId: target.headCommitId, isDefault: target.isDefault };
   } else {
     const existing = await deps.prisma.branch.findFirst({ where: { researchObjectId: ro.id, name: DEFAULT_BRANCH } });
@@ -229,6 +239,7 @@ export async function createCommit(
 
   const persist = async (tx: Prisma.TransactionClient) => {
     await lockTrashReferences(tx);
+    await requireCommitAuthority({ ...deps, prisma: tx as WorkspaceDeps['prisma'] }, ro.workspaceId, input.userId, branch.isDefault || branch.name === DEFAULT_BRANCH);
     if (predecessorVersion) await sealVersionHistory(tx, { researchObjectId: ro.id, versionId: predecessorVersion.id });
     const advanced = await tx.researchObject.updateMany({
       where: { id: ro.id, version: input.version, deletedAt: null },

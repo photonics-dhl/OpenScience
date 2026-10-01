@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { getJournalDashboard, getJournalServicePlan, requestJournalService, type JournalServicePlan } from '@/lib/journal-api';
 
 const plans: Array<[JournalServicePlan['planChoice'], string, string]> = [
-  ['free', 'Free', '基础主页、目录和入驻试用。'],
+  ['free', 'basic', '基础主页、目录和入驻试用。'],
   ['starter', 'Starter', '单刊加工服务方案。'],
   ['pro', 'Pro', '历史论文整理与协作审核。'],
   ['premium', 'Premium', '重点期刊深度服务。'],
@@ -18,6 +19,8 @@ const fieldClass = 'min-h-10 border border-os-rule-paper bg-transparent p-2';
 const dateLabel = (value: string | null) => value ? new Date(value).toLocaleString('zh-CN') : '未设置';
 
 export function JournalServices({ journalId }: { journalId: string }) {
+  const t = useTranslations('journalServiceLabels');
+  const displayPlanName = (key: string) => key === 'free' ? t('basic') : planName(key);
   const [data, setData] = React.useState<JournalServicePlan | null>(null);
   const [canRequest, setCanRequest] = React.useState(false);
   const [choice, setChoice] = React.useState<JournalServicePlan['planChoice']>('starter');
@@ -55,8 +58,8 @@ export function JournalServices({ journalId }: { journalId: string }) {
     <header className="border-b border-os-rule-paper pb-5">
       <Link href={`/journals/manage/${journalId}`}>← 返回期刊工作台</Link>
       <h1 className="mt-5 text-3xl font-normal">服务包与额度</h1>
-      <p>最近开通方案：{planName(data.planChoice)}。额度有效期以各批次为准。</p>
-      {data.requestedPlanChoice ? <p>待人工处理方案：{planName(data.requestedPlanChoice)}，尚未开通。</p> : null}
+      <p>最近开通方案：{displayPlanName(data.planChoice)}。额度有效期以各批次为准。</p>
+      {data.requestedPlanChoice ? <p>待人工处理方案：{displayPlanName(data.requestedPlanChoice)}，尚未开通。</p> : null}
       <p className="text-sm text-os-muted-paper">服务按人工报价开通，不自动扣款或续费。人工编辑、审核和发布固定版本不消耗 AI 草稿额度。</p>
     </header>
     <section className="grid gap-2 sm:grid-cols-5" aria-label="额度概览">
@@ -88,7 +91,7 @@ export function JournalServices({ journalId }: { journalId: string }) {
       <h2 id="service-request-heading" className="text-xl font-normal">申请服务方案</h2>
       {canRequest ? <>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">{plans.map(([key, name, description]) => <label className="border border-os-rule-paper p-3" key={key}>
-          <input type="radio" name="plan" checked={choice === key} onChange={() => setChoice(key)} className="mr-2" />{name}<span className="mt-2 block text-sm">{description}</span>
+            <input type="radio" name="plan" checked={choice === key} onChange={() => setChoice(key)} className="mr-2" />{key === 'free' ? t('basic') : name}<span className="mt-2 block text-sm">{description}</span>
         </label>)}</div>
         <label className="mt-3 grid gap-1">预计年发文量<input className={fieldClass} type="number" min={1} max={1000000} value={volume} onChange={(event) => setVolume(Math.max(1, Number(event.target.value) || 1))} /></label>
         <label className="mt-3 grid gap-1">需求说明<textarea className={fieldClass} rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>

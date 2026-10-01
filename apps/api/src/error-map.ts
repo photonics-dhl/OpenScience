@@ -49,6 +49,7 @@ const ARTIFACT_ERROR_HTTP: Record<ArtifactError['code'], number> = {
   FORBIDDEN: 403,
   VALIDATION_ERROR: 400,
   FILE_TOO_LARGE: 413, // 超配额（§13.3）
+  SCAN_UNAVAILABLE: 503,
   MALICIOUS_FILE: 451, // 病毒扫描不通过（§17，P1B-8 实装）
 };
 

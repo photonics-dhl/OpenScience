@@ -26,6 +26,13 @@ async function confirmationFixture() {
 }
 
 describe('ingestion confirmation research record', () => {
+  it.each(['viewer', 'reviewer', 'contributor'])('%s cannot materialize a main version through import confirmation', async role => {
+    const { deps, db, input } = await confirmationFixture();
+    db.memberships[0].role = role;
+    await expect(confirmIngestionTask(deps, { ...input, sourceAgentTaskId: db.agentTasks[0].id })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.versions).toHaveLength(0); expect(db.commits).toHaveLength(0);
+    expect(db.ingestionTasks[0].state).toBe('needs_review');
+  });
   it('rejects a parser-review task with no SDF proposal before creating a version', async () => {
     const { deps, db, input } = await confirmationFixture();
     db.agentTasks[0].result = { status: 'needs_review', reason: 'native PDF text fidelity requires review' };
