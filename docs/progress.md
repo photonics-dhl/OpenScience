@@ -1,6 +1,6 @@
 # CURRENT Progress Window
 
-- 10-01入口/UI候选已保存，六步指南与桌面入口重排已验证，未合并／发布。按用户要求等切换账号后续评，再完成真实浏览、CI、部署和公司Word更新；源码、检查与截图只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 10-01用户否定UI候选叙事／审美，要求先学习成熟产品。新账号研究讨论已续接，原design/plan更新逐页职责与构图建议；未改应用或发布，后续和证据见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 - 10-01公司PDF21项已核查，权限/扫描/账户取数/UI等修正经High与精确CI通过、无迁移发布；公网精确版本、登录工作台/账户/额度与安装后的干净/EICAR扫描通过，11分钟复查无重启/OOM，6页逐项回复和证据已归档；修正已合入交付分支，其合并CI也通过。核查/用户决定/证据与剩余项见[评估交接](handoff/2026-09-30-vendor-evaluation.md)；运行锚点仍由Hermes CURRENT维护。
 
