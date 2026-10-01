@@ -38,4 +38,8 @@
 
 ## 实际冷启动差异
 
-首份source候选精确CI通过，但实际应用发布在API启动失败时自动回退。API helper import在main调用后，CommonJS执行有TDZ；修复合入顶部既有import，真实程序入口转译/执行回归已红2→绿2并进入CI。构建与HTTP buildApp夹具不等于入口冷启动；修复版精确CI和正常发布已成功，Native已安装激活，真实论文仍待科学质量验证。首次真实source复用Map后，分别RW bindmount使broker硬链接EXDEV；新增真实systemd回归证实common-parent RW及不可变子路径只读修复，原任务零模型调用、期限与租约不变，单次托管恢复与最终unit差异已High GO；原安装固定broker在修正隔离命名空间中派发同一task/attempt，费用/期限/租约未改，永久unit修复待精确CI交付。完整版本、任务与证据只见CURRENT。
+首份source候选精确CI通过，但实际应用发布在API启动失败时自动回退。API helper import在main调用后，CommonJS执行有TDZ；修复合入顶部既有import，真实程序入口转译/执行回归已红2→绿2并进入CI。构建与HTTP buildApp夹具不等于入口冷启动；修复版精确CI和正常发布已成功，Native已安装激活，真实论文仍待科学质量验证。首次真实source复用Map后，分别RW bindmount使broker硬链接EXDEV；新增真实systemd回归证实common-parent RW及不可变子路径只读修复，恢复前原任务零模型调用、期限与租约不变，单次托管恢复与最终unit差异已High GO；原安装固定broker在修正隔离命名空间中派发同一task/attempt，费用/期限/租约未改，永久unit修复待精确CI交付。完整版本、任务与证据只见CURRENT。
+
+## 原生工具错误语义
+
+实际Native首轮选择science分类为plugin namespace，现有Scope以BaseException硬停止而非给原生工具反馈。没有新增colon alias：仅未知/歧义选择或确认未逃逸的缺失引用返回既有success:false/error形状，让Agent在同一循环纠正；逐slot授权先执行，权限/I/O/绝对路径/父目录或symlink逃逸仍停止。真实隔离的已安装Agent旧实现RED、新实现通过错误反馈→发现→完整方法/引用，模拟SDK回答不冒充真实科学质量。成功Skill trace从最后完整已验证历史按call ID与success:true关联，失败请求不计为已读。永久修复按精确CI和既有安装/发布交付；当前真实failed任务/原回答不重开、不新增恢复grant。

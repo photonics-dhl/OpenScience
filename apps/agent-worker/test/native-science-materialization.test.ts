@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { createNativeScientificMaterializer } from '../src/extractor';
-import { restoreNativePaperDraft } from '../src/native-agent/paper-task';
+import { nativeSkillReads, restoreNativePaperDraft } from '../src/native-agent/paper-task';
 import type { ChatMessage } from '@openscience/ai-gateway';
 import type { DocumentSourceMap } from '@openscience/domain';
 const parser = { name: 'fixture', version: '1' };
@@ -14,6 +14,21 @@ const draft = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [
 const review = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { ...draft().fields[field], verdict: 'accepted', issues: [] }])),
   needsMoreEvidence: [], claimSuggestions: draft().draftClaims });
 describe('actual native Agent scientific materializer', () => {
+  it('records only actually successful native skill reads, retaining full-reference selection', () => {
+    const selections = [
+      { name: 'science:paper-method' }, { name: 'paper-method' },
+      { name: 'paper-method', file_path: 'references/positions.md' }, { name: 'missing' }, { name: 'malformed' },
+    ];
+    const messages: ChatMessage[] = [{ role: 'assistant', content: '', toolCalls: selections.map((args, index) => ({
+      id: `skill-${index}`, type: 'function', function: { name: 'skill_view', arguments: JSON.stringify(args) },
+    })) }, ...[
+      JSON.stringify({ success: false, error: 'Unknown namespace' }),
+      JSON.stringify({ success: true, content: 'Complete method' }),
+      JSON.stringify({ success: true, content: 'Full supporting reference' }),
+    ].map((content, index) => ({ role: 'tool' as const, content, toolCallId: `skill-${index}` })),
+    { role: 'tool', content: 'invalid metadata', toolCallId: 'skill-4' }];
+    expect(nativeSkillReads(messages)).toEqual([selections[1], selections[2]]);
+  });
   it('returns actionable review feedback in the same conversation and accepts the corrected exact JSON', () => {
     const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft());
     const changed = review(); changed.fields.method!.summary = 'Changed relation';

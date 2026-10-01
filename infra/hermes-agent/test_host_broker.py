@@ -141,7 +141,7 @@ class BrokerFilesystemTests(unittest.TestCase):
         for name in ('releases', 'observations'):
             (self.root/name).mkdir()
         protected = [self.root/'runtime.env', self.root/'install.lock', self.root/'releases'/'resource',
-                     self.root/'observations'/'receipt', Path(__file__).resolve()]
+                     self.root/'observations'/'receipt', Path('/etc/ld.so.cache')]
         for path in protected[:-1]:
             path.write_text('owned fixture, no credentials')
         template = (Path(__file__).parent/'openscience-hermes-broker.service').read_text()
@@ -155,11 +155,11 @@ root=Path(sys.argv[2]); result={}
 try:
  pin_bridge(root/'inbox',root/'bridges',sys.argv[3],producer_uid=0);result['linked']=True
 except OSError as error:result.update(linked=False,errno=error.errno)
-result['readonly']=[]
+result['readonly']=[];result['writeErrors']=[]
 for path in json.loads(sys.argv[4]):
  try:
-  fd=os.open(path,os.O_WRONLY);os.close(fd);result['readonly'].append(False)
- except OSError as error:result['readonly'].append(error.errno==30)
+  fd=os.open(path,os.O_WRONLY);os.close(fd);result['readonly'].append(False);result['writeErrors'].append(None)
+ except OSError as error:result['readonly'].append(error.errno==30);result['writeErrors'].append(error.errno)
 print(json.dumps(result))'''
         command = ['systemd-run', '--quiet', '--wait', '--pipe', '--collect',
                    '--unit=openscience-hermes-mount-test-'+uuid.uuid4().hex,

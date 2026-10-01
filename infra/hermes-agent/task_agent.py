@@ -1,9 +1,15 @@
 """Thin adapter for the installed Nous AIAgent. The upstream agent owns its loop."""
 from pathlib import Path, PurePosixPath
+import json
+import stat
 
 
 class NativeTaskStopped(BaseException):
     """Stop this process; native tool error/retry handlers must not consume lost authority."""
+
+
+class SkillSelectionError(ValueError):
+    """A correctable selection error grants no read and must not end the native loop."""
 
 
 class SkillScope:
@@ -21,9 +27,11 @@ class SkillScope:
             self.names.setdefault(folder.name, set()).add(folder)
 
     def resolve(self, name: str, file_path: str | None = None) -> Path:
+        if not isinstance(name, str) or not name or '\\' in name or PurePosixPath(name).is_absolute() or '..' in PurePosixPath(name).parts:
+            raise NativeTaskStopped('Invalid skill selection path')
         candidates = self.names.get(name, set()) if isinstance(name, str) else set()
         if len(candidates) != 1:
-            raise NativeTaskStopped("Skill name is absent, ambiguous or outside the task catalogue")
+            raise SkillSelectionError('Skill name is unavailable or ambiguous. Use skills_list and its exact name or category/path; category names are not plugin namespaces.')
         folder = next(iter(candidates)).resolve(strict=True)
         reference = file_path if file_path is not None else "SKILL.md"
         if not isinstance(reference, str) or not reference or "\\" in reference:
@@ -32,11 +40,19 @@ class SkillScope:
         if parts.is_absolute() or any(part in ("..", ".") for part in parts.parts):
             raise NativeTaskStopped("Skill reference escapes its selected skill")
         try:
-            target = (folder / reference).resolve(strict=True)
+            target = (folder / reference).resolve(strict=False)
         except (OSError, ValueError) as error:
             raise NativeTaskStopped("Skill reference is unavailable") from error
-        if not target.is_relative_to(folder) or not target.is_file():
+        if not target.is_relative_to(folder):
             raise NativeTaskStopped("Skill reference escapes its selected skill")
+        try:
+            info = target.stat()
+        except FileNotFoundError as error:
+            raise SkillSelectionError('Reference is absent within this skill. Use skill_view on SKILL.md and select an available supporting file.') from error
+        except OSError as error:
+            raise NativeTaskStopped('Skill reference is unavailable') from error
+        if not stat.S_ISREG(info.st_mode):
+            raise SkillSelectionError('Reference is not a readable file within this skill. Select a file named in SKILL.md.')
         return target
 
 
@@ -115,12 +131,15 @@ def guard_registered_tools(registry, allowed_tools, authorize, skill_scope: Skil
         original = entry.handler
 
         def guarded(args, _name=name, _handler=original, **kwargs):
-            if _name == "skill_view":
-                skill_scope.resolve(args.get("name"), args.get("file_path"))
             try:
                 authorize(_name, args)
             except Exception as error:
                 raise NativeTaskStopped("Task tool authorization is unavailable or revoked") from error
+            if _name == 'skill_view':
+                try:
+                    skill_scope.resolve(args.get('name'), args.get('file_path'))
+                except SkillSelectionError as error:
+                    return json.dumps({'success': False, 'error': str(error)}, ensure_ascii=False)
             return _handler(args, **kwargs)
 
         registry.register(name=entry.name, toolset=entry.toolset, schema=entry.schema, handler=guarded,
