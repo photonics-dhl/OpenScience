@@ -1,7 +1,7 @@
 import { DevOutboxMailer, SmtpMailer } from '@openscience/auth';
 import { loadApiEnv } from '@openscience/config';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
-import { createPersonalWorkspace } from '@openscience/domain';
+import { createPersonalWorkspace, nativeAgentRuntimeFromEnv } from '@openscience/domain';
 import { createClamAvScanner, createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
 import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
@@ -160,4 +160,3 @@ async function main(): Promise<void> {
 }
 
 void main().catch(error => { console.error('API startup failed', error); process.exitCode = 1; });
-import { nativeAgentRuntimeFromEnv } from '@openscience/domain';

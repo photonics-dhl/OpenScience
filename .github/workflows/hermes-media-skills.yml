@@ -158,6 +158,7 @@ on:
       - 'packages/domain/test/agent/private-source-reanalysis*.ts'
       - 'apps/api/src/routes/ingestion.ts'
       - 'apps/api/test/private-source-reanalysis.test.ts'
+      - 'apps/api/test/entrypoint-startup.test.ts'
       - 'apps/api/test/direct-source-review-recovery.test.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
@@ -319,6 +320,7 @@ on:
       - 'packages/domain/test/agent/private-source-reanalysis*.ts'
       - 'apps/api/src/routes/ingestion.ts'
       - 'apps/api/test/private-source-reanalysis.test.ts'
+      - 'apps/api/test/entrypoint-startup.test.ts'
       - 'apps/api/test/direct-source-review-recovery.test.ts'
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
@@ -354,7 +356,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts test/agent/hermes-source-model-routing.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-source-reanalysis.test.ts test/agent/source-composition-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/source-parser-recovery.test.ts test/research-runs.test.ts test/direct-source-review-recovery.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/private-source-reanalysis.test.ts test/source-composition-recovery.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/private-source-reanalysis.test.ts test/source-composition-recovery.test.ts test/entrypoint-startup.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off|bounds VLM page recognition"
