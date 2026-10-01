@@ -43,6 +43,22 @@ describe('new Hermes model review authorization', () => {
     seam.lock.mockReset().mockResolvedValue(undefined);
   });
 
+  it.each(['trusted', 'unbound', 'forged'] as const)('forwards only the server-bound saved composition descriptor (%s)', async scope => {
+    const f = fixture();
+    const descriptor = { structuredAttempt: 2, responseHash: 'c'.repeat(64), providerAuditId: 'paid-composition-audit' };
+    seam.requireExecution.mockResolvedValue({ mode: 'model', ...(scope === 'trusted' ? { savedCompositionCandidate: descriptor } : {}) });
+    seam.extractHandler.mockResolvedValue({ core: {}, needsMoreInformation: [] });
+    if (scope === 'forged') {
+      Object.assign(f.owner.payload, { savedCompositionCandidate: { ...descriptor, responseHash: 'forged' } });
+      await expect(f.execute()).rejects.toThrow('[blocked]');
+      expect(seam.extractHandler).not.toHaveBeenCalled(); return;
+    }
+    await f.execute();
+    const context = seam.extractHandler.mock.calls[0]![2];
+    expect(context.scientificReview.savedCompositionCandidate).toEqual(scope === 'trusted' ? descriptor : undefined);
+    expect(context.reviewExistingSourceTaskId).toBe(ids.source);
+  });
+
   it.each(['completed', 'unknown', 'revoked', 'changed-binding', 'revoked-after-submit'] as const)(
     'persists the native source attempt through the actual claimed handler and transaction (%s)', async outcome => {
       const f = fixture(); Object.assign(f.owner, { result: { nativeSourceReview: { mode: 'model-native', attempts: [] } } });

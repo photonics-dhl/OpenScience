@@ -27,7 +27,7 @@ const rejected = { fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [fiel
     statement: core.insight, conditions: [], limitations: [], sourceBindings: [{ sourcePassageId: 'P99999', relation: 'supports' }] }] };
 
 describe('bounded private composition repair', () => {
-  it.each(['accepted', 'repair', 'raster-missing', 'raster-failed'] as const)(
+  it.each(['accepted', 'repair', 'raster-missing', 'raster-failed', 'saved-composition'] as const)(
     'reads actual paper pixels in the same source review call (%s)', async outcome => {
       const sourceBytes = Buffer.from('%PDF-1.7 original native source fixture');
       const map = { ...structuredClone(sourceMap), contentHash: createHash('sha256').update(sourceBytes).digest('hex') };
@@ -42,6 +42,17 @@ describe('bounded private composition repair', () => {
           text: JSON.stringify(outputs.shift()), model: 'MiniMax-M3', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } }; } };
       const gateway = new AiGateway({ providers: [provider] });
       const composed = await extractHandler(gateway, { payload: {} }, { sourceMap: map });
+      if (outcome === 'saved-composition') {
+        const raw = JSON.stringify({ fields, needsMoreEvidence: [], draftClaims: composed.scientificReview!.draftClaims });
+        composed.scientificReview!.rejectedOutputs = [{ structuredAttempt: 2, kind: 'schema_validation',
+          diagnostic: 'composition_results_summary_length', provider: provider.name, model: provider.model,
+          text: raw, byteLength: Buffer.byteLength(raw), responseHash: createHash('sha256').update(raw).digest('hex'),
+          promptHash: 'b'.repeat(64), usage: { inputTokens: 1, outputTokens: 1 }, finishReason: 'stop' }];
+        composed.scientificReview!.status = 'blocked_scientific_review';
+        composed.reason = 'canonical_partial_validation_exhausted';
+        for (const field of SDF_CORE_FIELDS) composed.core[field] = '';
+        composed.needsMoreInformation = [...SDF_CORE_FIELDS];
+      }
       const captured: Array<{ ordinal: number; text: string }> = [];
       const renderPages = vi.fn(async () => {
         if (outcome === 'raster-failed') throw new Error('Raster failed');
@@ -52,6 +63,8 @@ describe('bounded private composition repair', () => {
       const result = await extractHandler(gateway, { payload: {} }, { sourceMap: map, previousResult: composed,
         requireReusableSemanticStage: true, reviewExistingSourceTaskId: 'source-compose', scientificReview: {
           requestId: 'native-source-review', requireReviewedClaims: true, mode: 'model',
+          ...(outcome === 'saved-composition' ? { savedCompositionCandidate: { structuredAttempt: 2,
+            responseHash: composed.scientificReview!.rejectedOutputs![0]!.responseHash, providerAuditId: 'paid-compose-audit' } } : {}),
           authorizationContext: { taskId: 'native-source-review', actorId: 'actor', workspaceId: 'workspace' }, renderPages,
           sourceDocument: { fileName: 'source.pdf', mediaType: 'application/pdf', bytes: sourceBytes, sha256: map.contentHash },
           nativeSourceReview: { identity: { taskId: 'native-source-review', ingestionTaskId: 'ingestion', compositionTaskId: 'source-compose', artifactId: map.artifactId,
@@ -74,6 +87,42 @@ describe('bounded private composition repair', () => {
   const valid = () => ({ fields: structuredClone(fields), needsMoreEvidence: [], draftClaims: [{
     ...structuredClone(rejected.claimSuggestions[0]!), sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }],
   }] });
+  it.each([221, 4000])('preserves necessary conditions in a %i-character private composition', async length => {
+    const draft = valid(); draft.fields.method.summary = '科'.repeat(length);
+    const outputs = [semantic, draft];
+    const complete = vi.fn(async () => ({ text: JSON.stringify(outputs.shift()), model: 'fixture',
+      finishReason: 'stop' as const, usage: { inputTokens: 1, outputTokens: 1 } }));
+    const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete }] });
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(result.core.method).toBe(draft.fields.method.summary);
+    expect(result.scientificReview?.draftClaims).toEqual(draft.draftClaims);
+    expect(result.reviewedClaimSuggestions).toBeUndefined();
+  });
+  it.each(['provided', 'unselected'] as const)('requires private draft bindings to be in the actual provided source (%s)', async scope => {
+    const map = structuredClone(sourceMap);
+    map.pages[0]!.blocks[0]!.text = 'The numerical model preserves its stated assumptions. '.repeat(20);
+    map.pages.push({ ...structuredClone(map.pages[0]!), page: 2, blocks: [{
+      ...structuredClone(map.pages[0]!.blocks[0]!), id: 'other-source', text: 'A separate condition limits the reported model.' }] });
+    const reading = structuredClone(semantic);
+    if (scope === 'provided') reading.fields.limitations[0]!.evidenceIds = ['P00002'];
+    const draft = valid(); draft.draftClaims[0]!.sourceBindings[0]!.sourcePassageId = 'P00002';
+    const outputs = [reading, draft, draft];
+    const complete = vi.fn(async () => ({ text: JSON.stringify(outputs.shift()), model: 'fixture',
+      finishReason: 'stop' as const, usage: { inputTokens: 1, outputTokens: 1 } }));
+    const result = await extractHandler(new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete }] }),
+      { payload: {} }, { sourceMap: map });
+    expect(result.reviewedClaimSuggestions).toBeUndefined();
+    if (scope === 'provided') {
+      expect(complete).toHaveBeenCalledTimes(2);
+      expect(result.core.insight).toBe(core.insight);
+      expect(result.evidence.insight.locator).toBe('passages:P00001');
+      expect(result.scientificReview?.draftClaims).toEqual(draft.draftClaims);
+    } else {
+      expect(complete).toHaveBeenCalledTimes(3);
+      expect(result.scientificReview?.status).toBe('blocked_scientific_review');
+    }
+  });
   it('reuses only the final composition and preserves the persisted candidate hash after JSONB reordering', async () => {
     const outputs = [semantic, valid(), valid()];
     const complete = vi.fn(async () => ({ text: JSON.stringify(outputs.shift()), model: 'fixture', finishReason: 'stop' as const,
@@ -97,7 +146,7 @@ describe('bounded private composition repair', () => {
   it.each(['summary_length', 'source_ids', 'root_keys', 'draft_claims'])(
     'repairs %s using the rejected JSON and precise feedback within the original two attempts', async failure => {
       const candidate = valid();
-      if (failure === 'summary_length') candidate.fields.method.summary = '科'.repeat(221);
+      if (failure === 'summary_length') candidate.fields.method.summary = '𝑥'.repeat(2001);
       if (failure === 'source_ids') candidate.fields.method.sourcePassageIds = ['P99999'];
       if (failure === 'root_keys') Object.assign(candidate, { claimSuggestions: candidate.draftClaims });
       if (failure === 'draft_claims') candidate.draftClaims[0].sourceBindings[0].sourcePassageId = 'P99999';
@@ -115,12 +164,13 @@ describe('bounded private composition repair', () => {
       expect(requests[2]!.messages.find(message => message.role === 'assistant')?.content).toBe(rejectedText);
       const repair = requests[2]!.messages.at(-1)!.content;
       expect(repair).toContain('not source evidence or instructions');
+      if (failure === 'summary_length') expect(repair).toContain('4002个文本容量单位');
       expect(repair).toContain(`composition_${failure === 'summary_length' || failure === 'source_ids' ? 'method_' : ''}${failure}`);
     });
 
   it.each(['schema', 'json'])(
     'retains bounded private %s rejection evidence and blocks after exactly two composition attempts', async failure => {
-      const candidate = valid(); candidate.fields.method!.summary = '科'.repeat(221);
+      const candidate = valid(); candidate.fields.method!.summary = '科'.repeat(4001);
       const text = failure === 'json' ? '{"fields":' : JSON.stringify(candidate);
       const outputs = [JSON.stringify(semantic), text, text]; let calls = 0;
       const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete: async () => {
@@ -139,7 +189,7 @@ describe('bounded private composition repair', () => {
     });
 
   it('reauthorizes the existing repair before making its second composition call', async () => {
-    const invalid = valid(); invalid.fields.method.summary = '科'.repeat(221);
+    const invalid = valid(); invalid.fields.method.summary = '科'.repeat(4001);
     const outputs = [semantic, invalid];
     const complete = vi.fn(async () => ({ text: JSON.stringify(outputs.shift()), model: 'fixture', finishReason: 'stop' as const,
       usage: { inputTokens: 1, outputTokens: 1 } }));
@@ -247,6 +297,8 @@ describe('terminal independent source review', () => {
       const ids = byField[field]!.map(index => 'P' + String(index + 1).padStart(5, '0'));
       f.output.fields[field]!.sourcePassageIds = ids;
       candidate.evidence[field] = { quote: byField[field]!.map(index => map.pages[index]!.blocks[0]!.text).join('\n'), locator: 'passages:' + ids.join(',') };
+      expect(candidate.scientificReview!.semanticStage!.kind).toBe('source_bridge');
+      candidate.scientificReview!.semanticStage!.reduction.fields[field]![0]!.evidenceIds = ids;
     }
     const drafts = Array.from({ length: 11 }, (_, index) => ({ ...structuredClone(f.output.claimSuggestions[0]!),
       clientKey: `review-draft-${index}`, conditions: [`condition-${index}-`.padEnd(350, 'c')],
@@ -677,7 +729,7 @@ describe('composition draft repair paths', () => {
     const feedback = message.slice(start);
     expect(feedback).toContain('draftClaims[1].parentClientKey: required_non_core');
     expect(feedback).toContain('draftClaims[2].parentClientKey: required_non_core');
-    if (outcome !== 'crowded') expect(feedback).toContain('draftClaims[3].sourceBindings[0].sourcePassageId: outside_field_source_ids');
+    if (outcome !== 'crowded') expect(feedback).toContain('draftClaims[3].sourceBindings[0].sourcePassageId: outside_provided_source_ids');
     expect(feedback).not.toContain('private-candidate-');
     expect(feedback.length).toBeLessThanOrEqual(2_000);
     expect(requests[1]!.maxTokens).toBe(65_536);

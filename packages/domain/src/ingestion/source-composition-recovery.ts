@@ -1,14 +1,17 @@
 import { isDeepStrictEqual } from 'node:util';
+import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS, validateSdfDraftCore } from '@openscience/sdf-schema';
 import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
 import { requireActiveMembership } from '../workspace/helpers';
 import { findSavedIngestionCommit } from './saved-source-commit';
 import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from '../research-intelligence/source-map-ref';
-import { parseReviewedClaimSuggestions } from './reviewed-claim-suggestions';
+import { areSourceCompositionDraftClaimsValid } from './reviewed-claim-suggestions';
+import { MAX_CANONICAL_CORE_CHARS } from './canonical-evidence-contract';
 
 export const SOURCE_COMPOSITION_RECOVERY_ACTION = 'hermes.research_run.source_composition_recovery';
 export const SOURCE_COMPOSITION_RECOVERY_PREFIX = 'ingestion-analysis-final-compose:';
+export type HermesSavedSourceCompositionCandidate = { structuredAttempt: number; responseHash: string; providerAuditId: string };
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {};
 const exact = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).sort().join(',') === keys.sort().join(',');
@@ -17,6 +20,14 @@ const text = (value: unknown, max: number, empty = false): value is string => ty
   && (empty || !!value.trim()) && value.length <= max;
 const count = (value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0;
 const roles = new Set(['owner', 'maintainer', 'author', 'contributor']);
+
+/** Called only after the saved reading-stage identity and envelope have been proven. */
+function sourceCompositionProvidedPassageIds(stage: Record<string, unknown>): string[] {
+  if (stage.kind === 'semantic_reduce') return [...new Set((stage.passageBindings as Array<Record<string, string[]>>)
+    .flatMap(binding => [...binding.sourcePassageIds!, ...binding.qualifierPassageIds!]))];
+  return [...new Set(SDF_CORE_FIELDS.flatMap(field => (record(record(stage.reduction).fields)[field] as Array<Record<string, string[]>>)
+    .flatMap(point => point.evidenceIds!)))];
+}
 
 function exhaustedFinalComposition(result: Record<string, unknown>, schemaOnly = true): boolean {
   const core = record(result.core); const review = record(result.scientificReview);
@@ -89,7 +100,7 @@ function completeSavedSemanticStage(result: Record<string, unknown>, reference: 
     && (stage.kind !== 'semantic_reduce' || (bindings.size === referenced.size && [...bindings].every(id => referenced.has(id))));
 }
 
-async function ordinaryDebit(tx: Prisma.TransactionClient, taskId: string, actorId: string): Promise<boolean> {
+export async function hasOrdinarySourceTaskDebit(tx: Prisma.TransactionClient, taskId: string, actorId: string): Promise<boolean> {
   const row = await tx.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${taskId}` } });
   return Boolean(row && row.userId === actorId && row.resource === 'ai_credit' && BigInt(row.delta) === -1n
     && row.kind === 'consume' && row.reason === 'Agent task reservation sdf.extract'
@@ -147,7 +158,7 @@ export async function inspectHermesSourceCompositionRecovery(tx: Prisma.Transact
     if (task.deletedAt || task.kind !== 'sdf.extract' || task.session.deletedAt || task.session.status !== 'active'
       || task.session.kind !== 'ingestion' || task.session.userId !== run.actorId || task.session.researchObjectId !== run.researchObjectId
       || !isDeepStrictEqual(task.payload, { artifactId: source.artifactId, researchObjectId: run.researchObjectId })
-      || !await ordinaryDebit(tx, task.id, run.actorId)) return null;
+      || !await hasOrdinarySourceTaskDebit(tx, task.id, run.actorId)) return null;
   }
   try { if (!isDeepStrictEqual(parseDocumentSourceMapReference(record(parent.result).sourceMapRef), reference)) return null; } catch { return null; }
   const recoveryKey = `${SOURCE_COMPOSITION_RECOVERY_PREFIX}${source.id}:${failed.id}`;
@@ -193,6 +204,59 @@ export async function inspectHermesRecoveredSourceComposition(tx: Prisma.Transac
   return step?.agentTaskId ? inspectHermesSourceCompositionRecovery(tx, runId, step.agentTaskId, true) : null;
 }
 
+/** A paid reply can be read as a private candidate; its failed task and phase remain immutable. */
+export async function inspectHermesSavedCompositionCandidate(tx: Prisma.TransactionClient, runId: string) {
+  const proof = await inspectHermesRecoveredSourceComposition(tx, runId);
+  if (!proof?.replacement || proof.replacement.status !== 'succeeded' || proof.replacement.executionAttempt !== 1
+    || proof.replacementStep?.status !== 'failed' || !(proof.source.artifact.mimeType === 'application/pdf'
+      || proof.source.artifact.logicalPath.toLowerCase().endsWith('.pdf'))) return null;
+  const result = record(proof.replacement.result); const review = record(result.scientificReview);
+  if (!exhaustedFinalComposition(result, false) || !Array.isArray(review.rejectedOutputs)
+    || review.rejectedOutputs.length !== 2) return null;
+  const output = record(review.rejectedOutputs.at(-1));
+  if (output.kind !== 'schema_validation' || output.structuredAttempt !== 2 || output.finishReason !== 'stop'
+    || !['composition_problem_summary_length', 'composition_insight_summary_length', 'composition_method_summary_length',
+      'composition_results_summary_length', 'composition_limitations_summary_length', 'composition_reproducibility_summary_length',
+      'composition_draft_claims'].includes(String(output.diagnostic))
+    || typeof output.text !== 'string' || output.omissionReason !== undefined || output.byteLength !== Buffer.byteLength(output.text)
+    || Number(output.byteLength) > 131_072 || !hash(output.promptHash) || !hash(output.responseHash)
+    || createHash('sha256').update(output.text).digest('hex') !== output.responseHash
+    || output.model !== 'MiniMax-M3' || typeof output.provider !== 'string' || !/^minimax-key-\d+-model-\d+$/.test(output.provider)) return null;
+  let parsed: Record<string, unknown>;
+  try { parsed = record(JSON.parse(output.text)); } catch { return null; }
+  if (!exact(parsed, ['fields', 'needsMoreEvidence', 'draftClaims']) || !isDeepStrictEqual(parsed.needsMoreEvidence, [])) return null;
+  const fields = record(parsed.fields); const providedIds = sourceCompositionProvidedPassageIds(record(review.semanticStage));
+  if (!exact(fields, [...SDF_CORE_FIELDS]) || SDF_CORE_FIELDS.some(field => {
+    const item = record(fields[field]); const ids = item.sourcePassageIds;
+    return !exact(item, ['summary', 'sourcePassageIds']) || !text(item.summary, MAX_CANONICAL_CORE_CHARS)
+      || /\bP\s*\d{5}\b/iu.test(String(item.summary)) || !Array.isArray(ids) || !ids.length || ids.length > 64
+      || new Set(ids).size !== ids.length || ids.some(id => typeof id !== 'string' || !providedIds.includes(id));
+  }) || !areSourceCompositionDraftClaimsValid(parsed.draftClaims, providedIds)
+    || !(parsed.draftClaims as unknown[]).some(raw => record(raw).kind === 'core')) return null;
+  const audits = await tx.auditLog.findMany({ where: { action: 'ai.gateway.call', requestId: proof.replacement.id },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 3 });
+  if (audits.length !== 2) return null;
+  for (const [index, raw] of review.rejectedOutputs.entries()) {
+    const receipt = record(raw); const metadata = record(audits[index]?.metadata); const usage = record(receipt.usage);
+    if (audits[index]?.actorId !== null || audits[index]?.targetType !== 'ai_gateway'
+      || audits[index]?.requestId !== proof.replacement.id || audits[index]?.action !== 'ai.gateway.call'
+      || receipt.structuredAttempt !== index + 1 || !['json_parse', 'schema_validation'].includes(String(receipt.kind))
+      || receipt.finishReason !== 'stop' || typeof receipt.text !== 'string' || receipt.omissionReason !== undefined
+      || receipt.byteLength !== Buffer.byteLength(receipt.text) || Number(receipt.byteLength) > 131_072
+      || !hash(receipt.responseHash) || createHash('sha256').update(receipt.text).digest('hex') !== receipt.responseHash
+      || !hash(receipt.promptHash) || metadata.promptHash !== receipt.promptHash
+      || metadata.operation !== 'text' || metadata.outcome !== 'succeeded'
+      || metadata.provider !== receipt.provider || metadata.model !== receipt.model || metadata.finishReason !== 'stop'
+      || receipt.model !== output.model || receipt.provider !== output.provider
+      || metadata.maxOutputTokens !== 65_536 || metadata.retryCount !== 0 || metadata.fallbackReason !== null || metadata.error !== null
+      || !exact(usage, ['inputTokens', 'outputTokens']) || !count(usage.inputTokens) || !count(usage.outputTokens)
+      || metadata.inputTokens !== usage.inputTokens || metadata.outputTokens !== usage.outputTokens) return null;
+  }
+  const audit = audits[1]!;
+  return { ...proof, savedCompositionCandidate: { structuredAttempt: 2, responseHash: output.responseHash,
+    providerAuditId: audit!.id } satisfies HermesSavedSourceCompositionCandidate };
+}
+
 export async function requireHermesSourceCompositionRecoveryExecution(tx: Prisma.TransactionClient,
   input: { ownerTaskId: string; ingestionTaskId: string; sourceAgentTaskId: string; executionAttempt: number }) {
   const steps = await tx.hermesResearchStep.findMany({ where: { stage: 'source_composition', ordinal: 1, agentTaskId: input.ownerTaskId }, take: 2 });
@@ -224,25 +288,16 @@ export async function requireHermesSourceCompositionRecoveryResult(tx: Prisma.Tr
       || review.contractVersion !== '4' || review.sourceAgentTaskId !== undefined || result.reviewedClaimSuggestions !== undefined)
       throw new Error('Final source composition identity changed');
     if (exhaustedFinalComposition(result, false)) return;
-    const core = record(result.core); const evidence = record(result.evidence); const claims = review.draftClaims;
+    const core = record(result.core); const claims = review.draftClaims;
     if (review.status !== 'review_received' || result.reason || Object.keys(record(result.fieldDiagnostics)).length
       || !validateSdfDraftCore(core).ok || SDF_CORE_FIELDS.some(field => typeof core[field] !== 'string' || !String(core[field]).trim()
-        || Array.from(String(core[field])).length > 220 || /\bP\s*\d{5}\b/iu.test(String(core[field])))
+        || String(core[field]).length > MAX_CANONICAL_CORE_CHARS || /\bP\s*\d{5}\b/iu.test(String(core[field])))
       || !isDeepStrictEqual(result.needsMoreInformation, []) || !Array.isArray(claims) || !claims.length
       || JSON.stringify(claims).length > 8000
       || !hash(review.promptHash) || !hash(review.responseHash) || review.finishReason !== 'stop'
       || !text(review.provider, Number.MAX_SAFE_INTEGER) || !text(review.model, Number.MAX_SAFE_INTEGER)) throw new Error('Final composition candidate is incomplete');
-    const ids = Object.fromEntries(SDF_CORE_FIELDS.map(field => [field,
-      typeof record(evidence[field]).locator === 'string' ? String(record(evidence[field]).locator).replace(/^passages:/, '').split(',') : []]));
-    const projected = claims.map(raw => {
-      const claim = record(raw);
-      return { ...claim, sourceBindings: Array.isArray(claim.sourceBindings) ? claim.sourceBindings.map(rawBinding => {
-        const binding = record(rawBinding);
-        if (!exact(binding, ['sourcePassageId', 'relation'])) throw new Error('Final composition draft binding changed');
-        return { sourceIndex: ids[String(claim.sourceField)]?.indexOf(String(binding.sourcePassageId)) ?? -1, relation: binding.relation };
-      }) : undefined };
-    });
-    const parsed = parseReviewedClaimSuggestions(projected, Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, ids[field]!.length])));
-    if (!parsed?.some(claim => claim.kind === 'core')) throw new Error('Final composition draft Claims are invalid');
+    const providedIds = sourceCompositionProvidedPassageIds(record(previousReview.semanticStage));
+    if (!areSourceCompositionDraftClaimsValid(claims, providedIds) || !claims.some(raw => record(raw).kind === 'core'))
+      throw new Error('Final composition draft Claims are invalid');
   } catch { throw new Error('[blocked] Final source composition result changed or is incomplete'); }
 }

@@ -5,6 +5,28 @@ import { MAX_CANONICAL_EVIDENCE_SEGMENTS } from './canonical-evidence-contract';
 /** The existing confirmation batch accepts at most twelve claims. */
 export const MAX_INGESTION_CLAIMS = 12;
 
+/** Private candidates use the actual supplied reading passages; this grants no reviewed evidence indices. */
+export function areSourceCompositionDraftClaimsValid(value: unknown, providedPassageIds: readonly string[]): boolean {
+  if (!Array.isArray(value) || JSON.stringify(value).length > 8_000) return false;
+  const ids = [...new Set(providedPassageIds)];
+  const projected: unknown[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+    const claim = raw as Record<string, unknown>;
+    if (!Array.isArray(claim.sourceBindings)) return false;
+    const bindings = [];
+    for (const rawBinding of claim.sourceBindings) {
+      if (!rawBinding || typeof rawBinding !== 'object' || Array.isArray(rawBinding)) return false;
+      const binding = rawBinding as Record<string, unknown>;
+      if (Object.keys(binding).sort().join(',') !== 'relation,sourcePassageId'
+        || typeof binding.sourcePassageId !== 'string') return false;
+      bindings.push({ sourceIndex: ids.indexOf(binding.sourcePassageId), relation: binding.relation });
+    }
+    projected.push({ ...claim, sourceBindings: bindings });
+  }
+  return parseReviewedClaimSuggestions(projected, Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, ids.length]))) !== undefined;
+}
+
 /** Worker-owned suggestions. Indices address this extraction's field evidenceSegments. */
 export interface ReviewedClaimSuggestion {
   clientKey: string;

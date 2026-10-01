@@ -30,7 +30,7 @@ import { HERMES_INDEPENDENT_SOURCE_REVIEW, inspectHermesSourceReviewRecovery, in
   readHermesPrivateSourceReanalysisReplay, requireNoPrivateSourceReanalysisWriter, validPrivateSourceReanalysisInput,
   type HermesPrivateSourceReanalysisInput, type SourceReviewNotSubmittedVerifier } from './source-review-recovery';
 import { persistHermesSourceReviewTechnicalTaskInTransaction } from '../agent/agent';
-import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, SOURCE_COMPOSITION_RECOVERY_ACTION } from './source-composition-recovery';
+import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, SOURCE_COMPOSITION_RECOVERY_ACTION } from './source-composition-recovery';
 
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
 
@@ -891,6 +891,62 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & {
   return task.id;
 }
 
+/** Review a previously paid, newly validated private composition without rerunning its failed producer. */
+export async function reviewHermesSavedCompositionInTransaction(deps: AgentDeps, tx: Prisma.TransactionClient, input: {
+  actorId: string; researchObjectId: string; runId: string; expectedVersion: number;
+}, ctx: AuditContext = {}): Promise<string> {
+  if (!deps.audit?.record) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Saved composition review audit is unavailable');
+  const proof = await inspectHermesSavedCompositionCandidate(tx, input.runId);
+  if (!proof || !proof.replacement || proof.run.actorId !== input.actorId || proof.run.researchObjectId !== input.researchObjectId
+    || proof.run.status !== 'failed' || proof.run.versionId !== null || proof.run.version !== input.expectedVersion
+    || proof.run.sourceClaimIds.length || proof.run.sourceReviewDigest || proof.run.steps.length !== 3
+    || proof.source.agentTaskId !== proof.replacement.id || proof.source.state !== 'needs_review')
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Saved composition candidate changed');
+  const { membership } = await requireActiveMembership(tx, proof.run.researchObject.workspaceId, input.actorId);
+  if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+  if (await findSavedIngestionCommit(tx, { taskId: proof.source.id, researchObjectId: input.researchObjectId }))
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Saved composition has already been adopted');
+  const other = await tx.hermesResearchStep.findFirst({ where: { stage: 'source_ingestion', ingestionTaskId: proof.source.id,
+    runId: { not: proof.run.id }, run: { status: { notIn: ['succeeded', 'failed', 'stopped'] } } }, select: { id: true } });
+  if (other) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Another active run uses this source');
+  if (await tx.agentTask.count({ where: { kind: 'presentation.generate',
+    payload: { path: ['hermesRunAuthority', 'runId'], equals: proof.run.id } } }))
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'A presentation task already writes this run');
+  const { run, source, replacement: composition } = proof;
+  const changedRun = await tx.hermesResearchRun.updateMany({ where: { id: run.id, actorId: input.actorId,
+    researchObjectId: input.researchObjectId, status: 'failed', version: input.expectedVersion, versionId: null, maxAgentTasks: 9 },
+    data: { status: 'awaiting_source_review', version: { increment: 1 }, error: null, lastReconciledAt: null } });
+  if (changedRun.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Saved composition continuation changed');
+  const key = `ingestion-analysis-compose:${source.id}:${composition.id}:${composition.id}:scientific-review-v4`;
+  const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, { userId: run.actorId,
+    researchObjectId: run.researchObjectId, kind: 'ingestion', title: `Review saved source composition ${source.id}`,
+    idempotencyKey: `${key}:session` }, ctx);
+  const { task, replayed } = await persistAgentTaskInTransaction(deps, tx, { sessionId: session.id, userId: run.actorId,
+    kind: 'sdf.extract', payload: { artifactId: source.artifactId, researchObjectId: run.researchObjectId }, idempotencyKey: key }, ctx);
+  if (replayed) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Saved composition has an unrecorded review task');
+  if (source.artifact.mimeType === 'application/pdf' || source.artifact.logicalPath.toLowerCase().endsWith('.pdf')) {
+    const initialized = await tx.agentTask.updateMany({ where: { id: task.id, status: task.status,
+      result: { equals: Prisma.AnyNull } }, data: { result: { nativeSourceReview: { mode: 'model-native', attempts: [] } } } });
+    if (initialized.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Saved composition native review initialization changed');
+  }
+  const changed = await tx.ingestionTask.updateMany({ where: { id: source.id, agentTaskId: composition.id,
+    state: 'needs_review', retryCount: 0 }, data: { agentTaskId: task.id, state: 'queued', error: null } });
+  const canonical = await tx.hermesResearchStep.updateMany({ where: { id: proof.sourceStep.id, runId: run.id,
+    stage: 'source_ingestion', ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: composition.id },
+    data: { agentTaskId: task.id, status: 'waiting', error: null } });
+  if (changed.count !== 1 || canonical.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Saved composition source changed');
+  await tx.hermesResearchStep.create({ data: { runId: run.id, stage: 'source_review', ordinal: 0, status: 'waiting',
+    ingestionTaskId: source.id, artifactId: source.artifactId, agentTaskId: task.id } });
+  await recordAudit(deps, tx, { action: 'ingestion.task.system_analysis_refresh', actorId: null,
+    workspaceId: run.researchObject.workspaceId, targetType: 'ingestion_task', targetId: source.id,
+    metadata: { executor: 'hermes', authorizedByUserId: run.actorId, runId: run.id, stage: 'source_review',
+      oldAgentTaskId: composition.id, compositionSourceAgentTaskId: composition.id, newAgentTaskId: task.id,
+      artifactId: source.artifactId, sourceMapSha256: proof.reference.serializedSha256,
+      policy: 'scientific_review_v4_correction', savedCompositionCandidate: proof.savedCompositionCandidate,
+      creditPolicy: 'charged_ingestion_analysis_refresh', noReanalysis: true, noProviderSwitch: true } }, ctx);
+  return task.id;
+}
+
 /** Upgrade to the existing v5 reviewed output under the run's durable grant. */
 export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
   actorId: string; runId: string; taskId: string;
@@ -915,18 +971,21 @@ export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
           const recovery = phases.filter(step => step.stage === 'source_review' && step.ordinal > 0)
             .sort((a, b) => b.ordinal - a.ordinal)[0];
           const proof = recovery ? await inspectHermesSourceReviewRecovery(tx, run.id, source.agentTaskId) : null;
+          let savedCompositionTaskId: string | undefined;
           if (recovery && (!proof || recovery.agentTaskId !== source.agentTaskId
             || source.agentTask.status !== 'succeeded'))
             throw new IngestionError('VALIDATION_ERROR', 'Recovered scientific review is not the bound final source');
           if (!recovery && phases.some(step => step.stage === 'source_review')) {
             const initial = await inspectInitialHermesSourceReview(tx, source.agentTaskId);
             if (!initial) throw new IngestionError('VALIDATION_ERROR', 'Initial scientific review is not the bound final source');
+            if (initial.savedCompositionCandidate) savedCompositionTaskId = initial.composition.id;
           }
           const recoveredComposition = phases.filter(step => step.stage === 'source_composition').length === 2
             ? await inspectHermesRecoveredSourceComposition(tx, run.id) : null;
           if (phases.filter(step => step.stage === 'source_composition').length === 2 && !recoveredComposition)
             throw new IngestionError('VALIDATION_ERROR', 'Recovered composition lineage changed');
           const completedPhases = phases.filter(step => step.id !== recoveredComposition?.failedStep.id
+            && !(step.stage === 'source_composition' && step.agentTaskId === savedCompositionTaskId)
             && !proof?.failedSteps.some(failed => failed.id === step.id));
           const completed = await tx.hermesResearchStep.updateMany({ where: { runId: run.id,
             id: { in: completedPhases.map(step => step.id) }, agentTask: { status: 'succeeded', deletedAt: null } },
