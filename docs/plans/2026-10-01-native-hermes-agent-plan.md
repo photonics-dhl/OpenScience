@@ -34,8 +34,8 @@
 
 私有Worker SDK桥已通过真实安装0.10.0的两进程验证：完整Skill/引用、按call ID关联的原页像素、完整Provider blocks和三份已完成回答重放。9次原生SDK请求只有6次模拟Gateway提交，外部模型0；DynamicUser实际不能访问宿主凭据/spool或创建互联网socket，运行时/Skill只读。模型调用参数JSON键序由原生规范化，按调用ID/类型/名称/JSON语义与未变完整Provider blocks核对；每轮既有请求前缀仍严格匹配。工程证据在CURRENT引用的ignored日志。
 
-后续source候选已接Domain私有对象引用/CAS、当前终态authority重核、server配置新任务marker、原Worker入口和真实paper_draft候选/现有科学Claims materializer；定向工程证据及独立High已收敛，尚待精确CI、生产协调安装和真实科学任务验证。新任务不先跑静态reader/reducer/composition；历史任务不按新配置改派，未知started不重发。实际独立冻结的已安装0.10.0 Agent→PaperTask/私有Store/科学物化完成11轮零外呼整合，原页与完整Skills/引用实际经过Native dispatch，22私有CP保留。原生512K配置与压缩器256K阈值已生效，压缩后的历史兼容尚未验证，严格停止。不得以模拟终答替代真实论文。
+后续source候选已接Domain私有对象引用/CAS、当前终态authority重核、server配置新任务marker、原Worker入口和真实paper_draft候选/现有科学Claims materializer；定向工程证据及独立High已收敛，source修复版精确CI、生产安装与激活已成功，真实科学任务仍待质量验证。新任务不先跑静态reader/reducer/composition；历史任务不按新配置改派，未知started不重发。实际独立冻结的已安装0.10.0 Agent→PaperTask/私有Store/科学物化完成11轮零外呼整合，原页与完整Skills/引用实际经过Native dispatch，22私有CP保留。原生512K配置与压缩器256K阈值已生效，压缩后的历史兼容尚未验证，严格停止。不得以模拟终答替代真实论文。
 
 ## 实际冷启动差异
 
-首份source候选精确CI通过，但实际应用发布在API启动失败时自动回退。API helper import在main调用后，CommonJS执行有TDZ；修复合入顶部既有import，真实程序入口转译/执行回归已红2→绿2并进入CI。构建与HTTP buildApp夹具不等于入口冷启动；原生尚未安装，真实论文与全链质量仍待验证。版本与证据只见CURRENT。
+首份source候选精确CI通过，但实际应用发布在API启动失败时自动回退。API helper import在main调用后，CommonJS执行有TDZ；修复合入顶部既有import，真实程序入口转译/执行回归已红2→绿2并进入CI。构建与HTTP buildApp夹具不等于入口冷启动；修复版精确CI和正常发布已成功，Native已安装激活，真实论文仍待科学质量验证。首次真实source复用Map后，分别RW bindmount使broker硬链接EXDEV；新增真实systemd回归证实common-parent RW及不可变子路径只读修复，原任务零模型调用、期限与租约不变，单次托管恢复与最终unit差异已High GO；原安装固定broker在修正隔离命名空间中派发同一task/attempt，费用/期限/租约未改，永久unit修复待精确CI交付。完整版本、任务与证据只见CURRENT。

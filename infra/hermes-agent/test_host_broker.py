@@ -6,6 +6,8 @@ import socket
 import stat
 import tempfile
 import unittest
+import subprocess
+import uuid
 from unittest.mock import patch
 from host_broker import pin_bridge, secure_open_directory, validated_instance, cleanup_ended
 from types import SimpleNamespace
@@ -132,6 +134,42 @@ class BrokerFilesystemTests(unittest.TestCase):
         self.assertEqual(set(p.name for p in self.task.iterdir()),{'request.json'})
         self.assertTrue(cleanup_ended(self.root,INSTANCE,run,lambda _:True,producer_uid=0))
         self.assertFalse(self.task.exists())
+
+    def test_real_broker_mount_namespace_pins_socket_and_keeps_resources_readonly(self):
+        if not Path('/run/systemd/system').is_dir():
+            self.skipTest('Requires an actual running systemd manager')
+        for name in ('releases', 'observations'):
+            (self.root/name).mkdir()
+        protected = [self.root/'runtime.env', self.root/'install.lock', self.root/'releases'/'resource',
+                     self.root/'observations'/'receipt', Path(__file__).resolve()]
+        for path in protected[:-1]:
+            path.write_text('owned fixture, no credentials')
+        template = (Path(__file__).parent/'openscience-hermes-broker.service').read_text()
+        properties = [line.replace('/opt/openscience-hermes', str(self.root)) for line in template.splitlines()
+                      if line.startswith(('ProtectSystem=', 'ReadWritePaths=', 'ReadOnlyPaths='))]
+        code = '''import json,os,sys
+from pathlib import Path
+sys.path.insert(0,sys.argv[1])
+from host_broker import pin_bridge
+root=Path(sys.argv[2]); result={}
+try:
+ pin_bridge(root/'inbox',root/'bridges',sys.argv[3],producer_uid=0);result['linked']=True
+except OSError as error:result.update(linked=False,errno=error.errno)
+result['readonly']=[]
+for path in json.loads(sys.argv[4]):
+ try:
+  fd=os.open(path,os.O_WRONLY);os.close(fd);result['readonly'].append(False)
+ except OSError as error:result['readonly'].append(error.errno==30)
+print(json.dumps(result))'''
+        command = ['systemd-run', '--quiet', '--wait', '--pipe', '--collect',
+                   '--unit=openscience-hermes-mount-test-'+uuid.uuid4().hex,
+                   '--property=Type=exec', *['--property='+p for p in properties],
+                   '/usr/bin/python3', '-c', code, str(Path(__file__).parent.resolve()), str(self.root), INSTANCE,
+                   json.dumps([str(path) for path in protected])]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=30, check=True)
+        observed = json.loads(result.stdout)
+        self.assertTrue(observed['linked'], observed)
+        self.assertEqual(observed['readonly'], [True]*len(protected), observed)
 
 
 class InstanceTests(unittest.TestCase):

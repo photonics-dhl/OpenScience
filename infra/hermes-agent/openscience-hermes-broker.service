@@ -10,7 +10,9 @@ UMask=0077
 NoNewPrivileges=yes
 ProtectHome=yes
 ProtectSystem=strict
-ReadWritePaths=/opt/openscience-hermes/bridges /opt/openscience-hermes/inbox
+# Socket hardlinks must remain on one mount. Protect immutable children separately.
+ReadWritePaths=/opt/openscience-hermes
+ReadOnlyPaths=-/opt/openscience-hermes/releases -/opt/openscience-hermes/runtime.env -/opt/openscience-hermes/install.lock -/opt/openscience-hermes/observations
 PrivateTmp=yes
 PrivateDevices=yes
 RestrictAddressFamilies=AF_UNIX
