@@ -108,9 +108,16 @@ Hermes技能与学习消费审计（2026-09-22）：82/606实际checkpoint记录
 
 原图视觉理解缺口：`provider.ts`普通ChatMessage仅文本；`figure-list.ts`是文字引用提取，`figure-audit.ts`只向`figure-auditor.ts`提供id/caption/role，且Evidence读取把pageStart固定为1，不能当作原图页定位。SourceMap的figure/caption块有bbox/文本但没有图像语义。现有MiniMax VLM经`ocr.ts`固定转录提示、`llm-ocr-fallback.ts`低质量页路径调用，外部处理权限仅允许sdf.extract；既不是普遍看过原图，也不提供坐标/拓扑解释。拟沿既有figure-audit按需绑定当前原文页、复用隔离renderPages与VLM传输，另设窄的视觉观察语义和presentation权限，观察只作上下文不自动成为Evidence；尚未实现。若页定位不唯一，不猜页或绕过权限。比例尺、条件分组等现有文字足够发现的问题不归因于缺视觉输入。
 
-上游能力与本产品接线分开：2026-09-22定向核对[MiniMax官方Anthropic接口文档](https://platform.minimax.io/docs/api-reference/text-anthropic-api)，M3已支持图像输入和tools/tool results，而mcp_servers参数被忽略；本项目普通Provider消息仍是纯文本，未接这些能力。原图语义补接应先比较沿已有M3调用加入有权限的选定页与既有VLM复用路径，不能以新安装MCP替代真实工具执行/结果回传，也不能绕过原图外发权限或把OCR转录冒作视觉理解。该核对没有发起模型请求、安装或改变路由。
+历史核对（2026-09-22；当时纯文本消息状态已被后续native页图接线取代）：[MiniMax官方Anthropic接口文档](https://platform.minimax.io/docs/api-reference/text-anthropic-api)与Provider能力须按实际版本分别判断。当前已在真实M3请求提供原页像素；这不证明原生Hermes工具循环或MCP已接入。OCR转录、原页视觉理解、科学正确性仍分别验收，不绕过原图外发权限。旧定向核对未发模型请求、安装或改变路由，后续实际质量见CURRENT。
 
 独立Hermes Agent的[Skill机制](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills/)和[MCP机制](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp/)支持按需加载方法、工具发现和经验保存；这是上游运行时能力，不代表本产品的Worker已接入。后续补接优先复用现有全文/证据/选定页/审阅记录，通过当前权限边界传递工具结果；核实后的科学纠错与用户审美偏好分别限定适用范围。当前不新装运行时、不另建全文分析器，不以存有日志冒称跨任务学习，也不假定6Pro意见必然正确。
+
+2026-10-01处理方式调研（用户要求先解释、检索并讨论；以下是方向提案，尚未采纳或实现）：
+- 实际论文路径为Worker固定调用M3：18k字符阅读窗口、至多两路并行观察提取、语义归约、六字段/候选Claims、native来源审校，再进入分镜。科学Skill主要是项目改写的TS提示词投影，未消费原生Hermes的skills_list/skill_view和按问题选工具循环；媒体风格资源加载另行核对。安装与注入不能证明科学方法执行可靠。
+- 上游[Hermes Skill机制](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/skills.md)按目录/正文/引用文件逐步加载；[文档抽取](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/document-extraction.md)支持读取窗口、识别缺口、必要页视觉与OCR。[PaperQA](https://github.com/Future-House/paper-qa)围绕问题召回/评价证据后回答，并分存媒体与生成图注；其检索也可能漏图，不可照搬纯TopK。
+- [Anthropic上下文工程](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)支持按需或混合读取，也指出运行时探索可能增加延迟。[K-Dense peer-review](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/peer-review/SKILL.md)先掌握中性全局再优先核中央主张，脚本只检结构/声明，不证明科学正确。QMD是可用上游MCP范例，本项目已有检索，不据此新装第二套索引；不把上游示例/基准成绩视为本链速度或准确率证据。
+- 倾向混合渐进：保留完整原PDF与可复用SourceMap；整体阅读正文/图注/表格/补充材料及缺口后，围绕读者需要的核心问题深读支持、限定、反证和跨引用，按需加载原页/方法参考，再凝练六字段/Claims并进入既有图文链。全文概览不得退化为目录/摘要扫描；初始问题可被原文推翻。完整复现实验/逐式审计可按需，已使用结论依赖的几何、量定义、位置、材料、工况、假设和边界不可省略。
+- 尚需讨论取证控制权、重要内容覆盖与证据充分/停止条件，不能找到支持段落即停止。主模型是否经受限工具决定下一次读取、Worker如何保持原权限/预算/任务来源，待具体设计；原有完整模型请求不盲重跑、费用不重置。仅调研/文档同步，无生产改动、安装或新模型请求；独立High只确认讨论约束，不是实施GO。后续以真实任务比较科学关系/限定遗漏、覆盖、耗时和费用，不能只看JSON通过率。
 
 针对15b真实失败的Skill v9：同一个Scientific encoding章节同时供science/review消费，明确坐标投影/拓扑、固定与扫描条件、可见核心结果、定量共同尺度与非比例概念图的选择、点密度和点径的独立含义；原泛化段原地替换，不叠一轮模型或新输出字段。不自动安装技能、改M3路由或宣称自学习；已部署，真实消费与效果见CURRENT。跨部署恢复的designSkills按id/version/upstreamCommit归并，保留科学旧版本与艺术新版本的实际来源。
 
