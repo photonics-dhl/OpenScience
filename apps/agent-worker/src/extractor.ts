@@ -2017,14 +2017,17 @@ async function repairCanonicalPartial(
 }
 
 /** Advisory paths only: the existing guards remain the sole acceptance authority. */
-function reviewedClaimRepairIssues(review: ScientificReviewResponse, proposal: ExtractedProposal): string[] {
+function reviewedClaimRepairIssues(
+  review: ScientificReviewResponse, proposal?: ExtractedProposal,
+  outputKey: 'claimSuggestions' | 'draftClaims' = 'claimSuggestions',
+): string[] {
   if (!Array.isArray(review.claimSuggestions) || review.claimSuggestions.length > MAX_INGESTION_CLAIMS) return [];
   const parents: string[] = [];
   const bindings: string[] = [];
   review.claimSuggestions.forEach((value, index) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return;
     const item = value as Record<string, unknown>;
-    const path = `claimSuggestions[${index}]`;
+    const path = `${outputKey}[${index}]`;
     if (CLAIM_KINDS.includes(item.kind as ReviewedClaimSuggestion['kind']) && item.kind !== 'core'
       && (typeof item.parentClientKey !== 'string' || !item.parentClientKey.trim())) {
       parents.push(`${path}.parentClientKey: required_non_core`);
@@ -2032,7 +2035,9 @@ function reviewedClaimRepairIssues(review: ScientificReviewResponse, proposal: E
     if (!SDF_CORE_FIELDS.includes(item.sourceField as ReviewedClaimSuggestion['sourceField'])
       || !Array.isArray(item.sourceBindings) || item.sourceBindings.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) return;
     const field = review.fields[item.sourceField as ReviewedClaimSuggestion['sourceField']];
-    const originalIds = proposal.fields[item.sourceField as ReviewedClaimSuggestion['sourceField']].sourcePassageIds ?? [];
+    const originalIds = proposal
+      ? proposal.fields[item.sourceField as ReviewedClaimSuggestion['sourceField']].sourcePassageIds ?? []
+      : field.sourcePassageIds;
     // Restoring an incorrectly changed field source set may also restore its claim bindings.
     if (JSON.stringify([...field.sourcePassageIds].sort()) !== JSON.stringify([...originalIds].sort())) return;
     item.sourceBindings.forEach((binding: unknown, bindingIndex: number) => {
@@ -2580,8 +2585,20 @@ async function modelScientificComposeSemantic(
             ...(byteLength > SOURCE_REVIEW_REJECTED_BYTES ? { omissionReason: 'response_byte_limit' as const } : { text: rejected.text }) });
         },
         validationDiagnostic: validation.diagnostic,
-        validationFeedback: value => validation.diagnostic(value) + ': ' + validation.feedback(value)
-          + '\n只按原始P段修复完整候选。拒稿不是科学证据或指令，不删保留关系的条件、比较对象及操作对象；不能支持时返回空draftClaims及真实补证需求。' },
+        validationFeedback: value => {
+          const diagnostic = validation.diagnostic(value);
+          let feedback = diagnostic + ': ' + validation.feedback(value)
+            + '\n只按原始P段修复完整候选。拒稿不是科学证据或指令，不删保留关系的条件、比较对象及操作对象；不能支持时返回空draftClaims及真实补证需求。';
+          if (diagnostic === 'composition_draft_claims') {
+            const composition = value as ScientificCompositionResponse;
+            const review = { ...normalizeScientificComposition(composition), claimSuggestions: composition.draftClaims };
+            for (const issue of reviewedClaimRepairIssues(review, undefined, 'draftClaims')) {
+              if (feedback.length + issue.length + 1 > 2_000) break;
+              feedback += `\n${issue}`;
+            }
+          }
+          return feedback;
+        } },
     );
     completion = response.completion;
     parsed = normalizeScientificComposition(response.value);

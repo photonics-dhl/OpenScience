@@ -645,3 +645,51 @@ describe('private failed source-review output', () => {
     } else expect(receipts?.[1]?.text).toBe(lastText);
   });
 });
+
+
+describe('composition draft repair paths', () => {
+  it.each(['repair', 'reject', 'crowded'] as const)('reports exact draft paths with the original bounded repair (%s)', async outcome => {
+    const coreClaim = { clientKey: 'core', sourceField: 'insight', kind: 'core', statement: core.insight,
+      conditions: [], limitations: [], sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] };
+    const bad = { fields: structuredClone(fields), needsMoreEvidence: [], draftClaims: [coreClaim,
+      { ...structuredClone(coreClaim), clientKey: 'boundary-one', kind: 'boundary' },
+      { ...structuredClone(coreClaim), clientKey: 'boundary-two', kind: 'boundary' },
+      { ...structuredClone(coreClaim), clientKey: 'outside-field', kind: 'supporting', parentClientKey: 'core',
+        sourceBindings: [{ sourcePassageId: 'P99999', relation: 'supports' }] }] };
+    if (outcome === 'crowded') {
+      bad.draftClaims = [coreClaim, ...Array.from({ length: 11 }, (_, i) => ({ ...structuredClone(coreClaim),
+        clientKey: `private-candidate-${i}`, kind: 'boundary',
+        sourceBindings: Array.from({ length: 12 }, (_, j) => ({ sourcePassageId: `P99${String(j).padStart(3, '0')}`, relation: 'supports' })) }))];
+    }
+    const corrected = { ...structuredClone(bad), draftClaims: bad.draftClaims.map((claim, i) =>
+      i === 0 ? claim : { ...claim, parentClientKey: 'core', sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }) };
+    const outputs = [semantic, bad, outcome === 'repair' ? corrected : bad];
+    const requests: Parameters<Provider['complete']>[0][] = [];
+    const gateway = new AiGateway({ providers: [{ name: 'fixture', model: 'fixture', complete: async request => {
+      requests.push(request); return { text: JSON.stringify(outputs.shift()), model: 'fixture', finishReason: 'stop',
+        usage: { inputTokens: 1, outputTokens: 1 } };
+    } }] });
+    const result = await extractHandler(gateway, { payload: {} }, { sourceMap });
+    expect(requests).toHaveLength(3);
+    const message = requests[2]!.messages.at(-1)!.content;
+    const start = message.indexOf('composition_draft_claims:');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const feedback = message.slice(start);
+    expect(feedback).toContain('draftClaims[1].parentClientKey: required_non_core');
+    expect(feedback).toContain('draftClaims[2].parentClientKey: required_non_core');
+    if (outcome !== 'crowded') expect(feedback).toContain('draftClaims[3].sourceBindings[0].sourcePassageId: outside_field_source_ids');
+    expect(feedback).not.toContain('private-candidate-');
+    expect(feedback.length).toBeLessThanOrEqual(2_000);
+    expect(requests[1]!.maxTokens).toBe(65_536);
+    expect(requests[2]!.maxTokens).toBe(65_536);
+    expect(result.reviewedClaimSuggestions).toBeUndefined();
+    if (outcome === 'repair') {
+      expect(result.scientificReview?.status).toBe('review_received');
+      expect(result.scientificReview?.draftClaims).toEqual(corrected.draftClaims);
+    } else {
+      expect(result.scientificReview?.status).toBe('blocked_scientific_review');
+      expect(result.scientificReview?.rejectedOutputs).toHaveLength(2);
+      expect(result.core.insight).toBe('');
+    }
+  });
+});
