@@ -5,6 +5,8 @@ description: "Use when building or modifying any UI page, component, or layout �
 
 # Frontend Design — 前端视觉与交互规范
 
+页面叙事、入口职能或整体审美需要重新设计时，同时读 [product-story-design](../product-story-design/SKILL.md)，以真实研究者任务、产品内容和既有用户决定确定构图。已有清楚规格的样式修复继续用本清单，不重复定位访谈。
+
 ## 当前产品判断（2026-09-11）
 
 先回答每个可见模块：谁会在什么情境使用它，完成什么动作，为什么此刻需要看到它。不能回答的模块不放进主屏；旧实现不是不可更改的需求。
