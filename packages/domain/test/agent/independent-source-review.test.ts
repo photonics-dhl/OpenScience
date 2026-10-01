@@ -74,7 +74,8 @@ describe('server-owned independent source review role', () => {
       await request;
       const task = f.db.agentTasks.at(-1)!; task.status = 'running'; task.executionAttempt = 1;
       expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: task.id, ingestionTaskId: f.ids.source,
-        compositionTaskId: f.ids.anchor, failedTaskId: f.ids.anchor, executionAttempt: 1 })).toEqual({ mode: 'model' });
+        compositionTaskId: f.ids.anchor, failedTaskId: f.ids.anchor, executionAttempt: 1 })).toMatchObject({ mode: 'model',
+          nativeSourceReview: { taskId: task.id, artifactId: f.ids.artifact, compositionTaskId: f.ids.anchor, maxAttempts: 2 } });
       expect(f.db.auditLogs.find(row => row.action === 'ingestion.task.system_analysis_refresh').metadata)
         .toMatchObject({ policy: 'scientific_review_v4_correction' });
       expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);

@@ -13,6 +13,7 @@ export {
   OpenAiCompatProvider,
   AnthropicCompatProvider,
   TextProviderError,
+  NATIVE_IMAGE_REQUEST_MAX_BYTES,
   MiniMaxCodingPlanVisionProvider,
   type Provider,
   type ProviderConfig,

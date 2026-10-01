@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
+import { readNativeSourceReview, type NativeSourceReviewIdentity } from './native-source-review';
 import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
@@ -32,7 +33,8 @@ export type HermesSavedSourceReviewOutput = {
   sourceTaskId: string; structuredAttempt: number; text: string; responseHash: string;
   promptHash: string; provider: string; model: string; byteLength: number;
 };
-export type HermesSourceReviewExecution = { mode: 'model'; savedOutput?: HermesSavedSourceReviewOutput } | {
+export type HermesSourceReviewExecution = { mode: 'model'; savedOutput?: HermesSavedSourceReviewOutput;
+  nativeSourceReview?: import('./native-source-review').NativeSourceReviewIdentity } | {
   mode: 'web'; provider: 'chatgpt-web-science-review'; model: 'chatgpt-web/6-pro';
   runId: string; taskId: string; savedOutput?: HermesSavedSourceReviewOutput;
   notSubmittedRecovery?: SourceReviewNotSubmittedInput;
@@ -492,6 +494,7 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
     }
   }
   const failed = byId.get(originalStep.agentTaskId!);
+  if (readNativeSourceReview(failed?.result)?.attempts.some(a => a.state === 'started')) return null;
   const anchorId = directComposition
     ? record(record(byId.get(reviews[0]!.agentTaskId!)?.result).scientificReview).sourceAgentTaskId
     : compositionStep!.agentTaskId;
@@ -1063,7 +1066,9 @@ export async function requireHermesSourceReviewExecution(tx: Prisma.TransactionC
   const { membership } = await requireActiveMembership(tx, proof.run.researchObject.workspaceId, proof.run.actorId);
   if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) throw new Error('[blocked] Source review binding changed');
   const savedOutput = continuation?.savedOutput;
-  if (!(first?.independent || continuation?.reviewMode === 'web')) return { mode: 'model', ...(savedOutput ? { savedOutput } : {}) };
+  if (!(first?.independent || continuation?.reviewMode === 'web')) return { mode: 'model', ...(savedOutput ? { savedOutput } : {}),
+    ...nativeSourceRole(owner, proof.composition, proof.source.id, proof.source.artifact, savedOutput ? 1 : 2) };
+  if (readNativeSourceReview(owner.result)) throw new Error('[blocked] Native source role cannot use historical Web review');
   return { mode: 'web', provider: HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider, model: HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel,
     runId: proof.run.id, taskId: owner.id, ...(savedOutput ? { savedOutput } : {}),
     ...(continuation?.technicalRecovery ? { notSubmittedRecovery: continuation.technicalRecovery.input } : {}) };
@@ -1112,5 +1117,17 @@ async function requireUnmanagedInitialReview(tx: Prisma.TransactionClient, input
   } catch { return blocked(); }
   const { membership } = await requireActiveMembership(tx, source.artifact.workspaceId, source.batch.userId);
   if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) return blocked();
-  return { mode: 'model' };
+  return { mode: 'model', ...nativeSourceRole(owner, composition, source.id, source.artifact, 2) };
+}
+
+function nativeSourceRole(owner: { id: string; result: unknown }, composition: { id: string; result: unknown },
+  ingestionTaskId: string, artifact: { id: string; blobSha256: string }, maxAttempts: 1 | 2): { nativeSourceReview?: NativeSourceReviewIdentity } {
+  const cp = readNativeSourceReview(owner.result);
+  if (!cp) return {};
+  const ref = parseDocumentSourceMapReference(record(composition.result).sourceMapRef);
+  const identity: NativeSourceReviewIdentity = { taskId: owner.id, ingestionTaskId, compositionTaskId: composition.id,
+    artifactId: artifact.id, documentSha256: artifact.blobSha256, sourceMapHash: ref.serializedSha256, maxAttempts };
+  if (cp.attempts.some(a => Object.entries(identity).some(([k, v]) => a[k as keyof NativeSourceReviewIdentity] !== v)))
+    throw new Error('[blocked] Native source role binding changed');
+  return { nativeSourceReview: identity };
 }

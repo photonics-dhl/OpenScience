@@ -14,7 +14,7 @@ export function fixture(legacy = false) {
   db.memberships.push({ workspaceId: 'workspace', userId: user.id, role: 'author' });
   db.researchObjects.push({ id: ids.ro, workspaceId: 'workspace', status: 'draft', deletedAt: null });
   db.usageLedger.push({ id: 'credit', userId: user.id, resource: 'ai_credit', delta: 100, createdAt: new Date() });
-  db.artifacts.push({ id: ids.artifact, workspaceId: 'workspace', blobSha256: 'a'.repeat(64), deletedAt: null, bytesPurgedAt: null });
+  db.artifacts.push({ id: ids.artifact, workspaceId: 'workspace', blobSha256: 'a'.repeat(64), logicalPath: 'source.pdf', mimeType: 'application/pdf', deletedAt: null, bytesPurgedAt: null });
   db.ingestionBatches.push({ id: 'batch', userId: user.id, researchObjectId: ids.ro });
   const sourceMapRef = { schemaVersion: 1, parserStatus: 'succeeded', artifactId: ids.artifact, contentHash: 'a'.repeat(64),
     objectKey: `derived/source-maps/${'b'.repeat(64)}.json`, serializedSha256: 'b'.repeat(64), size: 100 };

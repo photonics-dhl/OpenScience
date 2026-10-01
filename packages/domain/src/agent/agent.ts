@@ -25,10 +25,11 @@ import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
 import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 import { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError, type SourceMapSearchIndexPayload } from './search-index-source';
 import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } from './standalone-science-recovery';
-import { inspectHermesSourceReviewRecovery, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
+import { inspectHermesSourceReviewRecovery, requireHermesSourceReviewExecution, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { requireHermesSourceCompositionRecoveryResult, SOURCE_COMPOSITION_RECOVERY_PREFIX } from '../ingestion/source-composition-recovery';
 import { initialNativeImageReviewResult, nativeImageReviewTerminalResult } from '../assets/scene-image';
 import { readNativeImageReviewCheckpoint } from '../assets/native-image-review';
+import { readNativeSourceReview, nativeSourceReviewTerminalResult } from '../ingestion/native-source-review';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
@@ -943,6 +944,8 @@ export async function retryAgentTask(
         const sourceSearch = isRetryableSourceSearchIndex(task);
         const nativeReview = readNativeImageReviewCheckpoint(task.result);
         if (nativeReview?.state === 'started') throw new AgentError('ILLEGAL_TRANSITION', 'Native review outcome is unconfirmed');
+        const nativeSource = readNativeSourceReview(task.result);
+        if (nativeSource?.attempts.some(a => a.state === 'started')) throw new AgentError('ILLEGAL_TRANSITION', 'Native source review outcome is unconfirmed');
         if (sourceSearch) {
           const source = await assertSearchIndexSourceLive(tx, task);
           if (!source) throw new SearchIndexSourceError();
@@ -963,12 +966,13 @@ export async function retryAgentTask(
           where: {
             id: task.id, sessionId: task.sessionId, status: task.status, kind: task.kind, retryCount: task.retryCount, error: task.error,
             executionAttempt: task.executionAttempt,
-            ...(sourceSearch || scienceRecovery || nativeReview ? { result: { equals: task.result === null ? Prisma.AnyNull : task.result as Prisma.InputJsonValue } } : {}),
+            ...(sourceSearch || scienceRecovery || nativeReview || nativeSource ? { result: { equals: task.result === null ? Prisma.AnyNull : task.result as Prisma.InputJsonValue } } : {}),
             ...(scienceRecovery ? { deletedAt: null, payload: { equals: task.payload as Prisma.InputJsonValue } } : {}),
           },
           data: {
             status: 'pending', progress: 0,
-            result: nativeReview ? { nativeImageReview: nativeReview } as unknown as Prisma.InputJsonValue
+            result: nativeSource ? { nativeSourceReview: nativeSource } as unknown as Prisma.InputJsonValue
+              : nativeReview ? { nativeImageReview: nativeReview } as unknown as Prisma.InputJsonValue
               : scienceRecovery ? task.result as Prisma.InputJsonValue : task.kind === 'presentation.generate' && isJsonRecord(task.payload)
               && isJsonRecord(task.payload.storyboard) && task.payload.storyboard.output === 'image'
               && isJsonRecord(task.result) && (isJsonRecord(task.result.storyboardCheckpoint) || isJsonRecord(task.result.storyboardPlanningCheckpoint))
@@ -1109,12 +1113,21 @@ async function markTaskProgressOnce(
     if (input.status === 'succeeded' && current.kind === 'sdf.extract'
       && current.idempotencyKey?.startsWith(SOURCE_COMPOSITION_RECOVERY_PREFIX))
       await requireHermesSourceCompositionRecoveryResult(tx, current, input.result);
-    const result = await nativeImageReviewTerminalResult(tx, current, input.status, input.result);
+    if (input.status === 'succeeded' && readNativeSourceReview(current.result)) {
+      const key = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):scientific-review-v4$/u.exec(current.idempotencyKey ?? '');
+      if (!key) throw new AgentError('ILLEGAL_TRANSITION', 'Native source review task identity changed');
+      const execution = await requireHermesSourceReviewExecution(tx, { ownerTaskId: current.id, ingestionTaskId: key[1]!,
+        failedTaskId: key[2]!, compositionTaskId: key[3]!, executionAttempt: current.executionAttempt });
+      if (execution.mode !== 'model' || !execution.nativeSourceReview)
+        throw new AgentError('ILLEGAL_TRANSITION', 'Native source review authority changed');
+    }
+    const result = nativeSourceReviewTerminalResult(current, input.status,
+      await nativeImageReviewTerminalResult(tx, current, input.status, input.result));
     const changed = await tx.agentTask.updateMany({
       where: {
         id: current.id, deletedAt: null, session: { deletedAt: null },
         status: currentStatus,
-        ...(current.result && typeof current.result === 'object' && Object.hasOwn(current.result, 'nativeImageReview')
+        ...(current.result && typeof current.result === 'object' && (Object.hasOwn(current.result, 'nativeImageReview') || Object.hasOwn(current.result, 'nativeSourceReview'))
           ? { result: { equals: current.result as Prisma.InputJsonValue } } : {}),
         ...(input.expectedExecutionAttempt === undefined
           ? {}
@@ -1280,7 +1293,9 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   delete publicResult.storyboardArtCorrection;
   delete publicResult.storyboardScienceDiagnostics;
   delete publicResult.nativeImageReview;
-  if (sourceMapRef === undefined && Object.keys(publicResult).length === 0 && Object.hasOwn(rawResult, 'nativeImageReview')) return null;
+  delete publicResult.nativeSourceReview;
+  if (sourceMapRef === undefined && Object.keys(publicResult).length === 0
+    && (Object.hasOwn(rawResult, 'nativeImageReview') || Object.hasOwn(rawResult, 'nativeSourceReview'))) return null;
   if (sourceMapRef === undefined) return publicResult;
   try {
     const reference = parseDocumentSourceMapReference(sourceMapRef);

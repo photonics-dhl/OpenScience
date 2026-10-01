@@ -840,6 +840,11 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & {
     payload: { artifactId: source.artifactId, researchObjectId: run.researchObjectId }, idempotencyKey: recoveryKey,
   }, ctx);
   if (replayed) throw new IngestionError('VALIDATION_ERROR', 'Source recovery task exists without its committed run binding');
+  if (proof.reviewMode === 'model' && (source.artifact.mimeType === 'application/pdf' || source.artifact.logicalPath.toLowerCase().endsWith('.pdf'))) {
+    const initialized = await tx.agentTask.updateMany({ where: { id: task.id, status: task.status, result: { equals: Prisma.AnyNull } },
+      data: { result: { nativeSourceReview: { mode: 'model-native', attempts: [] } } } });
+    if (initialized.count !== 1) throw new IngestionError('VALIDATION_ERROR', 'Native source recovery role initialization changed');
+  }
   const changed = await tx.ingestionTask.updateMany({ where: {
     id: source.id, agentTaskId: failed.id, state: 'needs_review', retryCount: 0,
   }, data: { agentTaskId: task.id, state: 'queued', retryCount: 0, error: null } });
@@ -1147,6 +1152,12 @@ export async function refreshIngestionAnalysis(
             idempotencyKey: stableKey,
           }, ctx);
           if (hermesRun && replayed) throw new IngestionError('VALIDATION_ERROR', 'Hermes phase cannot adopt an unrecorded refresh replay');
+          if (!replayed && input.reviewOnly && (source.artifact.mimeType === 'application/pdf'
+            || source.artifact.logicalPath.toLowerCase().endsWith('.pdf'))) {
+            const initialized = await tx.agentTask.updateMany({ where: { id: replacement.id, status: replacement.status,
+              result: { equals: Prisma.AnyNull } }, data: { result: { nativeSourceReview: { mode: 'model-native', attempts: [] } } } });
+            if (initialized.count !== 1) throw new IngestionError('VALIDATION_ERROR', 'Native source review role initialization changed');
+          }
           const changed = await tx.ingestionTask.updateMany({
             where: { id: source.id, agentTaskId: input.sourceAgentTaskId, state: 'needs_review', retryCount: initial.retryCount },
             data: { agentTaskId: replacement.id, state: 'queued', retryCount: 0, error: null },

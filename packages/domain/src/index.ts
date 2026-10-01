@@ -268,6 +268,8 @@ export { findSavedIngestionCommit, type SavedIngestionOrigin } from './ingestion
 export { ensureHermesIngestionReview } from './ingestion/ingestion-service';
 export { requireHermesSourceReviewRecoveryBinding } from './ingestion/source-review-recovery';
 export { requireHermesSourceReviewExecution } from './ingestion/source-review-recovery';
+export { readNativeSourceReview, startNativeSourceReview, completeNativeSourceReview } from './ingestion/native-source-review';
+export type { NativeSourceReviewIdentity, NativeSourceReviewTarget, NativeSourceReviewResponse } from './ingestion/native-source-review';
 export { resolveHermesPrivateSourceReanalysisExecution } from './ingestion/source-review-recovery';
 export { requireHermesSourceCompositionRecoveryExecution } from './ingestion/source-composition-recovery';
 export type { HermesPrivateSourceReanalysisInput, HermesPrivateSourceReanalysisExecutionInput, HermesPrivateSourceReanalysisExecution } from './ingestion/source-review-recovery';

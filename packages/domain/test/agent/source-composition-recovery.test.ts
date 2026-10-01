@@ -226,7 +226,7 @@ describe('same-run final source composition recovery', () => {
     expect(steps.filter(row => row.stage === 'source_review')).toHaveLength(1);
     expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: review.id, ingestionTaskId: f.source.id,
       failedTaskId: composed.id, compositionTaskId: composed.id, executionAttempt: 1 }))
-      .toEqual({ mode: 'model' });
+      .toMatchObject({ mode: 'model', nativeSourceReview: { taskId: review.id, maxAttempts: 2 } });
     expect(await reanalyzeConfirmedIngestion(f.deps, { ...f.input, idempotencyKey: 'lost-paid-tab-initial-review' }))
       .toMatchObject({ id: f.source.id, agentTaskId: review.id });
     review.status = 'succeeded';

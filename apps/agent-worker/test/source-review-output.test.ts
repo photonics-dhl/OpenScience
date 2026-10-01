@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { AiGateway, type Provider } from '@openscience/ai-gateway';
 import type { DocumentSourceMap } from '@openscience/domain';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
@@ -25,6 +27,50 @@ const rejected = { fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [fiel
     statement: core.insight, conditions: [], limitations: [], sourceBindings: [{ sourcePassageId: 'P99999', relation: 'supports' }] }] };
 
 describe('bounded private composition repair', () => {
+  it.each(['accepted', 'repair', 'raster-missing', 'raster-failed'] as const)(
+    'reads actual paper pixels in the same source review call (%s)', async outcome => {
+      const sourceBytes = Buffer.from('%PDF-1.7 original native source fixture');
+      const map = { ...structuredClone(sourceMap), contentHash: createHash('sha256').update(sourceBytes).digest('hex') };
+      const pixels = readFileSync(resolve(__dirname, '../../../packages/ai-gateway/test/fixtures/minimax-reference.png'));
+      const reviewed = { ...structuredClone(rejected), claimSuggestions: [{ ...structuredClone(rejected.claimSuggestions[0]!),
+        sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }] };
+      const outputs = [semantic, { fields, needsMoreEvidence: [], draftClaims: [{ ...structuredClone(rejected.claimSuggestions[0]!),
+        sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }] }, ...(outcome === 'repair' ? [rejected] : []), reviewed];
+      const requests: Parameters<Provider['complete']>[0][] = [];
+      const provider: Provider = { name: 'minimax-key-1-model-1', model: 'MiniMax-M3', supportsImageInput: true,
+        preflightNativeImages: vi.fn(), complete: async request => { requests.push(request); return {
+          text: JSON.stringify(outputs.shift()), model: 'MiniMax-M3', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } }; } };
+      const gateway = new AiGateway({ providers: [provider] });
+      const composed = await extractHandler(gateway, { payload: {} }, { sourceMap: map });
+      const captured: Array<{ ordinal: number; text: string }> = [];
+      const renderPages = vi.fn(async () => {
+        if (outcome === 'raster-failed') throw new Error('Raster failed');
+        return { schemaVersion: 2 as const, kind: 'raster' as const, parser: map.parser,
+          pages: outcome === 'raster-missing' ? [] : [{ pageNumber: 1, mediaType: 'image/png' as const, bytesBase64: pixels.toString('base64'), width: 1, height: 1,
+            contentHash: createHash('sha256').update(pixels).digest('hex') }] };
+      });
+      const result = await extractHandler(gateway, { payload: {} }, { sourceMap: map, previousResult: composed,
+        requireReusableSemanticStage: true, reviewExistingSourceTaskId: 'source-compose', scientificReview: {
+          requestId: 'native-source-review', requireReviewedClaims: true, mode: 'model',
+          authorizationContext: { taskId: 'native-source-review', actorId: 'actor', workspaceId: 'workspace' }, renderPages,
+          sourceDocument: { fileName: 'source.pdf', mediaType: 'application/pdf', bytes: sourceBytes, sha256: map.contentHash },
+          nativeSourceReview: { identity: { taskId: 'native-source-review', ingestionTaskId: 'ingestion', compositionTaskId: 'source-compose', artifactId: map.artifactId,
+            documentSha256: map.contentHash, sourceMapHash: createHash('sha256').update(JSON.stringify(map)).digest('hex'), maxAttempts: 2 },
+            withSubmission: async (_candidate, ordinal, _target, submit) => {
+              const response = await submit(); captured.push({ ordinal, text: response.text }); return response;
+            } },
+        } });
+      expect(renderPages).toHaveBeenCalledOnce(); expect(renderPages).toHaveBeenCalledWith([1]);
+      if (outcome === 'raster-missing' || outcome === 'raster-failed') {
+        expect(requests).toHaveLength(2); expect(captured).toHaveLength(0);
+        expect(result.scientificReview?.status).toBe('blocked_scientific_review');
+      } else {
+        expect(requests).toHaveLength(outcome === 'repair' ? 4 : 3);
+        expect(captured.map(c => c.ordinal)).toEqual(outcome === 'repair' ? [0, 1] : [0]);
+        expect(result.scientificReview?.status).toBe('review_received'); expect(result.reviewedClaimSuggestions).toHaveLength(1);
+        for (const request of requests.slice(2)) expect(request.messages[1]?.images?.[0]?.data).toBe(pixels.toString('base64'));
+      }
+    });
   const valid = () => ({ fields: structuredClone(fields), needsMoreEvidence: [], draftClaims: [{
     ...structuredClone(rejected.claimSuggestions[0]!), sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }],
   }] });

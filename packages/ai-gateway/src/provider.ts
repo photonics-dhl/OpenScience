@@ -27,7 +27,7 @@ export interface ChatMessage {
 
 // Use decimal MB for the documented provider limits; never exceed them by assuming MiB.
 const NATIVE_IMAGE_MAX_BYTES = 10_000_000;
-const NATIVE_IMAGE_REQUEST_MAX_BYTES = 64_000_000;
+export const NATIVE_IMAGE_REQUEST_MAX_BYTES = 64_000_000;
 const NATIVE_IMAGE_MODELS = /^(?:MiniMax-M3|MiniMax-M3\.1-Flash-Preview)$/u;
 
 /** Snapshot before asynchronous authority checks; repair attempts retain the same pixels. */

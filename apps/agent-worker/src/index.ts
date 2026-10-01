@@ -1,5 +1,6 @@
 import { requireStyleReferenceImage } from '@openscience/domain';
 import { startNativeImageReview } from '@openscience/domain';
+import { readNativeSourceReview, startNativeSourceReview, completeNativeSourceReview } from '@openscience/domain';
 import { requirePartialParserRecovery } from './parsers/recovery-checkpoint';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { Prisma } from '@prisma/client';
@@ -14,6 +15,7 @@ import {
   CodexSolImageReviewProvider,
   MutableProviderKillSwitch,
   OpenAiCompatProvider,
+  NATIVE_IMAGE_REQUEST_MAX_BYTES,
   type ExternalProcessingPolicy,
   type ImageProvider,
   type MiniMaxVisionPricing,
@@ -50,7 +52,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { createPrivateJobCopyCleanup } from './trash-job-copies';
 import type { Readable } from 'node:stream';
 
-import { extractHandler, SCIENCE_REVIEW_CONTRACT_VERSION, sourceMapToManuscriptText } from './extractor';
+import { extractHandler, SCIENCE_REVIEW_CONTRACT_VERSION, sourceMapToManuscriptText, type NativeSourceReviewContext } from './extractor';
 import { MAX_PARSER_INPUT, type IngestionAdapters } from './ingestion-parser';
 import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
@@ -177,7 +179,7 @@ export type ParserCascadeRunner = ((
   authorization: ParserCascadeAuthorization,
 ) => Promise<ParserExtractionResult<DocumentSourceMap>>) & {
   readonly featureFlags: Readonly<ParserCascadeFeatureFlags>;
-  renderPages(input: ParserInput, pageNumbers: readonly number[]): Promise<ParserRasterResult>;
+  renderPages(input: ParserInput, pageNumbers: readonly number[], maxEncodedBytes?: number): Promise<ParserRasterResult>;
 };
 
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
@@ -205,10 +207,11 @@ export function createWorkerParserCascade(
     localOcr: true,
     llmOcr,
   });
-  const renderPages = async (input: ParserInput, pageNumbers: readonly number[]): Promise<ParserRasterResult> => {
+  const renderPages = async (input: ParserInput, pageNumbers: readonly number[], maxEncodedBytes?: number): Promise<ParserRasterResult> => {
     if (!rasterJobAdapter) throw new Error('isolated raster adapter unavailable');
     let parser: ParserRasterResult['parser'] | undefined;
     const pages: ParserRasterResult['pages'][number][] = [];
+    let encodedBytes = 0;
     for (let offset = 0; offset < pageNumbers.length; offset += 4) {
       const result = await rasterJobAdapter({
         schemaVersion: 2,
@@ -222,6 +225,9 @@ export function createWorkerParserCascade(
         throw new Error('isolated raster parser identity changed between batches');
       }
       parser ??= result.parser;
+      encodedBytes += result.pages.reduce((n, page) => n + page.bytesBase64.length, 0);
+      if (maxEncodedBytes !== undefined && encodedBytes > maxEncodedBytes)
+        throw new Error('[blocked] Native source raster accumulation exceeds the provider body budget');
       pages.push(...result.pages);
     }
     if (!parser) throw new Error('isolated raster request has no pages');
@@ -365,6 +371,7 @@ export function createHandlers(
       let beforeReviewProviderCall: (() => Promise<void>) | undefined;
       let requireReviewedClaims = false;
       let scientificReviewMode: 'model' | 'web' = 'model';
+      let nativeSourceReview: NativeSourceReviewContext | undefined;
       let persistedScientificReviewCandidateHash: string | undefined;
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
       const parserCheckpoint = ownerTask.result;
@@ -406,6 +413,30 @@ export function createHandlers(
           scientificReviewMode = execution.mode;
           savedReviewOutput = execution.savedOutput;
           sourceReviewRecovery = execution.mode === 'web' ? execution.notSubmittedRecovery : undefined;
+          if (execution.mode === 'model' && execution.nativeSourceReview) {
+            const identity = structuredClone(execution.nativeSourceReview);
+            nativeSourceReview = { identity, withSubmission: async (reviewedCandidateHash, ordinal, target, submit) => {
+              const lease = spoolTaskExecution.getStore();
+              if (lease?.taskId !== ownerTask.id || lease.executionAttempt !== executionInput.executionAttempt)
+                throw new Error('[blocked] Native source review lacks its claimed worker execution');
+              const submission = { identity, executionAttempt: executionInput.executionAttempt, ordinal, reviewedCandidateHash, target };
+              const cached = await deps.prisma.$transaction(async tx => {
+                await lockTrashReferences(tx);
+                const current = await requireHermesSourceReviewExecution(tx, executionInput);
+                if (JSON.stringify(current) !== JSON.stringify(execution)
+                  || !await buildIngestionExternalProcessingPolicy(tx)(trustedAuthorizationContext))
+                  throw new Error('[blocked] Native source review authority changed');
+                return startNativeSourceReview(tx, submission);
+              }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+              if (cached) return cached;
+              const response = await submit();
+              await deps.prisma.$transaction(async tx => {
+                await lockTrashReferences(tx);
+                await completeNativeSourceReview(tx, submission, { ...response, finishReason: response.finishReason ?? 'unknown' });
+              }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+              return response;
+            } };
+          }
           if (execution.mode === 'web' && execution.taskId !== ownerTask.id)
             throw new Error('[blocked] Independent source review task identity changed');
           const claimedExecution = spoolTaskExecution.getStore();
@@ -605,7 +636,6 @@ export function createHandlers(
           || sourceMapRef.contentHash !== artifact.blobSha256) {
           throw new Error('[blocked] Parser checkpoint source identity changed');
         }
-        const checkpoint = { sourceMapRef: { ...sourceMapRef } };
         await deps.prisma.$transaction(async (tx) => {
           await lockTrashReferences(tx);
           const currentArtifact = await tx.artifact.findFirst({
@@ -614,6 +644,9 @@ export function createHandlers(
             select: { id: true },
           });
           if (!currentArtifact) throw new Error('[blocked] Parser checkpoint source is unavailable');
+          const nativeOwner = nativeSourceReview ? await tx.agentTask.findUnique({ where: { id: task.id } }) : undefined;
+          if (nativeSourceReview && !readNativeSourceReview(nativeOwner?.result)) throw new Error('[blocked] Native source role disappeared before checkpoint');
+          const checkpoint = { ...(nativeSourceReview ? nativeOwner!.result as Record<string, unknown> : {}), sourceMapRef: { ...sourceMapRef } };
           const stored = await tx.agentTask.updateMany({
             where: {
               id: task.id, kind: 'sdf.extract', status: 'running', executionAttempt: task.executionAttempt,
@@ -622,7 +655,7 @@ export function createHandlers(
                 researchObjectId: ownerResearchObject.id,
                 researchObject: { deletedAt: null, workspaceId: ownerResearchObject.workspaceId } },
               payload: { equals: { artifactId: artifact.id, researchObjectId: ownerResearchObject.id } },
-              OR: [{ result: { equals: Prisma.AnyNull } }, { result: { equals: checkpoint } },
+              OR: nativeSourceReview ? [{ result: { equals: nativeOwner!.result as Prisma.InputJsonValue } }] : [{ result: { equals: Prisma.AnyNull } }, { result: { equals: checkpoint } },
                 ...(partialParserSourceMap ? [{ result: { equals: parserCheckpoint as Prisma.InputJsonValue } }] : [])],
             },
             data: { result: checkpoint },
@@ -651,6 +684,7 @@ export function createHandlers(
             requireReviewedClaims,
             ...(savedReviewOutput ? { savedReviewOutput } : {}),
             ...(sourceReviewRecovery ? { sourceReviewRecovery } : {}),
+            ...(nativeSourceReview ? { nativeSourceReview } : {}),
             ...(beforeReviewProviderCall ? { beforeReviewProviderCall } : {}),
             authorizationContext: trustedAuthorizationContext,
             ...(persistedScientificReviewCandidateHash ? { persistedCandidateHash: persistedScientificReviewCandidateHash } : {}),
@@ -660,7 +694,7 @@ export function createHandlers(
               contentHash: artifact.blobSha256,
               content: bytes,
               mediaType: parserMediaType,
-            }, pageNumbers),
+            }, pageNumbers, nativeSourceReview ? NATIVE_IMAGE_REQUEST_MAX_BYTES : undefined),
             ...(parserMediaType === 'application/pdf' ? {
               sourceDocument: { fileName: 'source.pdf' as const, mediaType: 'application/pdf' as const,
                 sha256: artifact.blobSha256, bytes: Uint8Array.from(bytes) },

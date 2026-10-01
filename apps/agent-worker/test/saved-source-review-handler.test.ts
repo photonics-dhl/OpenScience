@@ -43,6 +43,47 @@ describe('new Hermes model review authorization', () => {
     seam.lock.mockReset().mockResolvedValue(undefined);
   });
 
+  it.each(['completed', 'unknown', 'revoked', 'changed-binding', 'revoked-after-submit'] as const)(
+    'persists the native source attempt through the actual claimed handler and transaction (%s)', async outcome => {
+      const f = fixture(); Object.assign(f.owner, { result: { nativeSourceReview: { mode: 'model-native', attempts: [] } } });
+      const identity = { taskId: ids.owner, ingestionTaskId: ids.ingestion, compositionTaskId: ids.source,
+        artifactId: 'artifact', documentSha256: f.reference.contentHash, sourceMapHash: f.reference.serializedSha256, maxAttempts: 2 };
+      const execution = { mode: 'model', nativeSourceReview: identity };
+      seam.requireExecution.mockResolvedValue(execution); seam.claim.mockResolvedValue(f.owner);
+      Object.assign(f.tx.agentTask, { findUnique: vi.fn(async () => f.owner) });
+      f.tx.agentTask.updateMany.mockImplementation(async input => {
+        Object.assign(f.owner, { result: structuredClone(input.data.result) }); return { count: 1 };
+      });
+      const membership = vi.fn().mockResolvedValue({ userId: 'actor', workspaceId: 'workspace', role: 'author' });
+      Object.assign(f.tx, { membership: { findUnique: membership }, ingestionTask: { findUnique: vi.fn(async () => ({
+        agentTask: f.owner, artifactId: 'artifact', artifact: { workspaceId: 'workspace' },
+        batch: { userId: 'actor', researchObjectId: 'ro', researchObject: { workspaceId: 'workspace', workspace: { status: 'active' } } },
+      })) } });
+      let inTransaction = false;
+      f.prisma.$transaction.mockImplementation(async work => { inTransaction = true; try { return await work(f.tx); } finally { inTransaction = false; } });
+      const submit = vi.fn(async () => {
+        expect(inTransaction).toBe(false);
+        if (outcome === 'unknown') throw new Error('connection lost after submit');
+        if (outcome === 'revoked-after-submit') membership.mockResolvedValue(null);
+        return { text: '{"candidate":"actual-paid-reply"}', model: 'MiniMax-M3', finishReason: 'stop' as const, usage: { inputTokens: 1, outputTokens: 1 } };
+      });
+      seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
+        await context.scientificReview.beforeReviewProviderCall();
+        if (outcome === 'revoked') membership.mockResolvedValue(null);
+        if (outcome === 'changed-binding') seam.requireExecution.mockResolvedValue({ ...execution, nativeSourceReview: { ...identity, compositionTaskId: 'other' } });
+        const call = () => context.scientificReview.nativeSourceReview.withSubmission('c'.repeat(64), 0,
+          { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', promptHash: 'd'.repeat(64) }, submit);
+        const result = await call();
+        expect(await call()).toEqual(result);
+        return { core: { method: 'private native source review' }, needsMoreInformation: [] };
+      });
+      const poll = await createPollOnce(f.handlers, { runMaintenance: false }); await poll(f.deps as never);
+      expect(submit).toHaveBeenCalledTimes(['completed', 'unknown', 'revoked-after-submit'].includes(outcome) ? 1 : 0);
+      const cp = (f.owner.result as unknown as { nativeSourceReview: { attempts: Array<{ state: string }> } }).nativeSourceReview;
+      expect(cp.attempts).toHaveLength(['completed', 'unknown', 'revoked-after-submit'].includes(outcome) ? 1 : 0);
+      if (cp.attempts.length) expect(cp.attempts[0].state).toBe(outcome === 'unknown' ? 'started' : 'completed');
+    });
+
   it.each(['unchanged', 'lease', 'mode', 'policy'])(
     'revalidates an initial model review before both provider calls (%s)', async change => {
       const f = fixture();
