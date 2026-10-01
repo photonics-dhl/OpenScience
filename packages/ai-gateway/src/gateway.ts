@@ -1,4 +1,5 @@
 import type { AuditSink } from '@openscience/observability';
+import { snapshotToolDefinitions, validateToolHistory } from './native-tool-protocol';
 import { AiGatewayError } from './errors';
 import { isImageUsageLimit, validateImageBytes, validateImageRequest, type ImageProvider, type ImageRequest, type ImageResult } from './image';
 import { imagePromptHash } from './codex-image-protocol';
@@ -96,7 +97,10 @@ type TextExecutionControls = {
   reviewSourceIdentity?: string;
   primaryProviderOnly?: boolean;
   savedReviewTarget?: { provider: string; model: string; promptHash: string };
+  nativeAgent?: boolean;
 };
+
+export type NativeAgentExecutionControls = Required<Pick<TextExecutionControls, 'beforeProviderAttempt' | 'submitProvider'>>;
 
 export type StructuredGenerationOptions = TextGenerationOptions & {
   /** Do not submit a second key/model after an uncertain paid source-review call. */
@@ -464,14 +468,31 @@ export class AiGateway {
 
   /** 文本补全：primary → fallbacks 逐级回退（§9.3 回退策略配置管理）。 */
   async complete(messages: ChatMessage[], opts: TextGenerationOptions = {}): Promise<GatewayCompletion> {
+    this.rejectUnboundTools(messages, opts);
     return this.completeWithControls(messages, opts);
+  }
+
+  private rejectUnboundTools(messages: ChatMessage[], opts: TextGenerationOptions): void {
+    if (opts.tools !== undefined || messages.some(message => message.role === 'tool' || message.toolCalls !== undefined || message.providerContent !== undefined)) {
+      throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Tool turns require native agent submission authority');
+    }
+  }
+
+  /** Actual native Agent turns: authority and durable ownership are required; uncertainty cannot select a second provider. */
+  async nativeAgentComplete(messages: ChatMessage[], opts: TextGenerationOptions, controls: NativeAgentExecutionControls): Promise<GatewayCompletion> {
+    if (typeof controls?.beforeProviderAttempt !== 'function' || typeof controls?.submitProvider !== 'function') {
+      throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native agent submission authority is required');
+    }
+    return this.completeWithControls(messages, opts, { ...controls, primaryProviderOnly: true, nativeAgent: true });
   }
 
   private async completeWithControls(messages: ChatMessage[], opts: TextGenerationOptions = {}, controls: TextExecutionControls = {}): Promise<GatewayCompletion> {
     messages = snapshotChatMessages(messages);
+    opts = { ...opts, ...(opts.tools !== undefined ? { tools: snapshotToolDefinitions(opts.tools) } : {}) };
+    validateToolHistory(messages, opts.tools);
     const imageCount = messages.reduce((count, message) => count + (message.images?.length ?? 0), 0);
     const totalStart = Date.now();
-    const promptHash = sha256Text(JSON.stringify(messages));
+    const promptHash = sha256Text(JSON.stringify(opts.tools ? { messages, tools: opts.tools } : messages));
     let lastError: unknown;
     const fallbackNotes: string[] = [];
     for (let i = 0; i < this.providers.length; i++) {
@@ -491,7 +512,11 @@ export class AiGateway {
       }
       // Outside the provider retry catch: lost authority must stop all fallbacks.
       const request = { model: provider.model, messages, temperature: opts.temperature, maxTokens: opts.maxTokens,
-        thinking: opts.thinking, topP: opts.topP, timeoutMs: opts.timeoutMs };
+        thinking: opts.thinking, topP: opts.topP, timeoutMs: opts.timeoutMs, ...(opts.tools ? { tools: opts.tools } : {}) };
+      if (controls.nativeAgent) {
+        if (!provider.preflightNativeTools) throw new AiGatewayError('SCHEMA_VALIDATION', 'Native agent preflight unavailable');
+        provider.preflightNativeTools(request);
+      }
       if (imageCount && controls.submitProvider) {
         if (!provider.preflightNativeImages) throw new AiGatewayError('SCHEMA_VALIDATION', 'Native image preflight unavailable');
         provider.preflightNativeImages(request);
@@ -647,6 +672,7 @@ export class AiGateway {
     messages: ChatMessage[],
     opts: StructuredGenerationOptions = {},
   ): Promise<{ value: T; completion: GatewayCompletion }> {
+    this.rejectUnboundTools(messages, opts);
     return this.completeStructuredWithMetadataControlled(guard, messages, opts);
   }
 

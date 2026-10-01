@@ -31,7 +31,7 @@ SKILLS_RELEASE=FULL_INSTALLED_IMAGE_COMMIT bash run.sh find "scientific illustra
 
 ## 与 OpenScience Hermes 的关系
 
-CLI list 证明它能发现项目目录中的技能，不能证明本产品 Hermes 加载或使用了技能。上游支持的 `hermes-agent` 是另一个产品的适配名，不用于指代 OpenScience Hermes，也不写该 agent 的目录。
+CLI list 证明它能发现项目目录中的技能，不能证明本产品 Hermes 加载或使用了技能。用户2026-10-01已明确：OpenScience中的Hermes专指已安装的NousResearch Hermes Agent。此前将它视为另一产品的划分错误，已撤销；本CLI仍不负责产品Agent接入，也不写该Agent目录。原生接入、完整Skill消费和任务边界见Hermes CURRENT。
 
 本项目已安装的三个 Baoyu 包及自有 skill 保持不变；Hermes 的真实消费仍需按 `apps/agent-worker/src/skills/installed-media-skills.ts` 和已有资产 provenance/任务结果取证。这里不增加 agent-worker 调用，也不把 CLI 安装状态写成产品能力状态。主任务统一更新 project_index、能力台账与 CURRENT handoff。
 

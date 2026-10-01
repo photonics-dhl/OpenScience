@@ -8,7 +8,10 @@ export {
   type SchemaGuard,
   type StructuredGenerationOptions,
   type GatewayCompletion,
+  type NativeAgentExecutionControls,
 } from './gateway';
+export { type ChatToolDefinition, type ChatToolCall, type ProviderAssistantContent } from './native-tool-protocol';
+export { nativeAgentSdkRequest, nativeAgentSdkResponse } from './native-agent-bridge';
 export {
   OpenAiCompatProvider,
   AnthropicCompatProvider,
@@ -20,6 +23,7 @@ export {
   type ProviderResult,
   type ChatMessage,
   type ChatImageInput,
+  type ChatContentPart,
   type CompleteOptions,
   type TextGenerationOptions,
   type Usage,

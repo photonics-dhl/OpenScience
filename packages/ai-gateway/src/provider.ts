@@ -1,4 +1,6 @@
 import { Agent } from 'undici';
+import { anthropicMessages, callsFromAnthropic, snapshotAssistantContent, snapshotToolCalls, snapshotToolDefinitions, validateToolHistory, validateResponseCallIds,
+  type ChatToolDefinition, type ChatToolCall, type ProviderAssistantContent } from './native-tool-protocol';
 import {
   OcrProviderError,
   type OcrCostEstimate,
@@ -19,10 +21,18 @@ export interface ChatImageInput {
   data: string;
 }
 
+export type ChatContentPart = { type: 'text'; text: string } | { type: 'image'; imageIndex: number };
+
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   images?: readonly ChatImageInput[];
+  toolCalls?: readonly ChatToolCall[];
+  toolCallId?: string;
+  name?: string;
+  providerContent?: ProviderAssistantContent;
+  /** Native SDK can interleave captions and pixels. Indexes reference this message's already-validated images. */
+  contentParts?: readonly ChatContentPart[];
 }
 
 // Use decimal MB for the documented provider limits; never exceed them by assuming MiB.
@@ -33,6 +43,32 @@ const NATIVE_IMAGE_MODELS = /^(?:MiniMax-M3|MiniMax-M3\.1-Flash-Preview)$/u;
 /** Snapshot before asynchronous authority checks; repair attempts retain the same pixels. */
 export function snapshotChatMessages(messages: readonly ChatMessage[]): ChatMessage[] {
   return messages.map(message => {
+    if (typeof message.content !== 'string' || !['system', 'user', 'assistant', 'tool'].includes(message.role)) {
+      throw new TextProviderError('provider_error', 'Invalid chat message');
+    }
+    message = { ...message,
+      ...(message.toolCalls !== undefined ? { toolCalls: snapshotToolCalls(message.toolCalls) } : {}),
+      ...(message.providerContent !== undefined ? { providerContent: snapshotAssistantContent(message.providerContent) } : {}),
+    };
+    if (message.contentParts !== undefined) {
+      if (message.role !== 'user' || !Array.isArray(message.contentParts) || !message.contentParts.length) {
+        throw new TextProviderError('provider_error', 'Invalid native content order');
+      }
+      const indexes: number[] = []; const text: string[] = [];
+      const parts = message.contentParts.map(part => {
+        if (part?.type === 'text' && typeof part.text === 'string') {
+          text.push(part.text); return Object.freeze({ type: 'text' as const, text: part.text });
+        }
+        if (part?.type === 'image' && Number.isSafeInteger(part.imageIndex) && part.imageIndex >= 0 && part.imageIndex < (message.images?.length ?? 0)) {
+          indexes.push(part.imageIndex); return Object.freeze({ type: 'image' as const, imageIndex: part.imageIndex });
+        }
+        throw new TextProviderError('provider_error', 'Invalid native content order');
+      });
+      if (text.join('\n') !== message.content || indexes.length !== (message.images?.length ?? 0) || new Set(indexes).size !== indexes.length) {
+        throw new TextProviderError('provider_error', 'Native content order does not match the message');
+      }
+      message = { ...message, contentParts: Object.freeze(parts) };
+    }
     if (message.images === undefined) return Object.freeze({ ...message });
     if (message.role !== 'user' || typeof message.content !== 'string' || !Array.isArray(message.images) || !message.images.length) {
       throw new TextProviderError('provider_error', 'Native images must be user source data');
@@ -68,6 +104,7 @@ export interface CompleteOptions {
   thinking?: 'adaptive' | 'disabled';
   topP?: number;
   timeoutMs?: number;
+  tools?: readonly ChatToolDefinition[];
 }
 
 export type TextGenerationOptions = Omit<CompleteOptions, 'model' | 'messages'>;
@@ -91,6 +128,8 @@ export interface ProviderResult {
   model: string;
   /** Provider-controlled stop reason normalized before it reaches logs. */
   finishReason?: 'stop' | 'length' | 'other' | 'unknown';
+  toolCalls?: readonly ChatToolCall[];
+  providerContent?: ProviderAssistantContent;
 }
 
 export type TextProviderErrorCode =
@@ -173,6 +212,8 @@ export interface Provider {
   readonly supportsImageInput?: boolean;
   /** Exact deterministic native-body validation before a durable submission checkpoint. */
   preflightNativeImages?(opts: CompleteOptions): void;
+  /** Native Agent requests must be deterministically valid before persisting started. */
+  preflightNativeTools?(opts: CompleteOptions): void;
   complete(opts: CompleteOptions): Promise<ProviderResult>;
 }
 
@@ -191,10 +232,30 @@ export class OpenAiCompatProvider implements Provider {
     return this.cfg.model;
   }
 
-  async complete(opts: CompleteOptions): Promise<ProviderResult> {
-    if (opts.messages.some(message => message.images !== undefined)) {
-      throw new TextProviderError('provider_error', 'Native image transport is not verified for this provider');
+  private requestBody(opts: CompleteOptions) {
+    const messages = snapshotChatMessages(opts.messages);
+    const tools = snapshotToolDefinitions(opts.tools);
+    validateToolHistory(messages, tools);
+    if (messages.some(message => message.images !== undefined || message.providerContent !== undefined)) {
+      throw new TextProviderError('provider_error', 'Native image or provider continuation transport is not verified for this provider');
     }
+    const body = JSON.stringify({ model: opts.model,
+      messages: messages.map(({ toolCalls, toolCallId, contentParts, ...message }) => ({ ...message,
+        ...(contentParts ? { content: contentParts.map(part => part.type === 'text' ? part.text : '').join('\n') } : {}),
+        ...(toolCalls ? { tool_calls: toolCalls } : {}), ...(toolCallId ? { tool_call_id: toolCallId } : {}),
+      })), ...(tools ? { tools } : {}), temperature: opts.temperature, max_tokens: opts.maxTokens,
+      ...(opts.thinking ? { thinking: { type: opts.thinking } } : {}), top_p: opts.topP, stream: false });
+    if (tools && Buffer.byteLength(body, 'utf8') > NATIVE_IMAGE_REQUEST_MAX_BYTES) {
+      throw new TextProviderError('provider_error', 'Native agent request exceeds the provider body limit');
+    }
+    textTimeout(opts);
+    return { body, messages, tools };
+  }
+
+  preflightNativeTools(opts: CompleteOptions): void { this.requestBody(opts); }
+
+  async complete(opts: CompleteOptions): Promise<ProviderResult> {
+    const { body, messages, tools } = this.requestBody(opts);
     const timeout = textTimeout(opts);
     // Native fetch otherwise inherits Undici's 300s headers/body defaults.
     // This request owns its dispatcher; it cannot change another caller's policy.
@@ -208,21 +269,13 @@ export class OpenAiCompatProvider implements Provider {
           'content-type': 'application/json',
           authorization: `Bearer ${this.cfg.apiKey}`,
         },
-        body: JSON.stringify({
-          model: opts.model,
-          messages: opts.messages,
-          temperature: opts.temperature,
-          max_tokens: opts.maxTokens,
-          ...(opts.thinking ? { thinking: { type: opts.thinking } } : {}),
-          top_p: opts.topP,
-          stream: false,
-        }),
+        body,
         signal: controller.signal,
         ...(dispatcher ? { dispatcher } : {}),
       });
       if (!res.ok) throw new TextProviderError('provider_http', `Provider ${this.name} HTTP ${res.status}`, res.status);
       let data: {
-        choices?: Array<{ message?: { content?: string }; finish_reason?: unknown }>;
+        choices?: Array<{ message?: { content?: string | null; tool_calls?: unknown }; finish_reason?: unknown }>;
         usage?: { prompt_tokens?: number; completion_tokens?: number };
         model?: string;
       };
@@ -232,17 +285,22 @@ export class OpenAiCompatProvider implements Provider {
         throw new TextProviderError('provider_response_json', `Provider ${this.name} response JSON invalid`);
       }
       const choice = data && typeof data === 'object' && Array.isArray(data.choices) ? data.choices[0] : undefined;
-      if (!choice || !choice.message || typeof choice.message !== 'object' || typeof choice.message.content !== 'string') {
+      if (!choice || !choice.message || typeof choice.message !== 'object'
+        || (typeof choice.message.content !== 'string' && !(tools && choice.message.content == null && choice.message.tool_calls !== undefined))) {
         throw new TextProviderError('provider_response_shape', `Provider ${this.name} response shape invalid`);
       }
-      const text = choice.message.content;
-      if (!text.trim()) throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`, undefined, {
+      const toolCalls = tools && choice.message.tool_calls !== undefined ? snapshotToolCalls(choice.message.tool_calls, tools) : undefined;
+      validateResponseCallIds(toolCalls, messages);
+      if (tools && data.model !== opts.model) throw new TextProviderError('provider_response_shape', 'Native agent response model changed');
+      const text = choice.message.content ?? '';
+      if (!text.trim() && !toolCalls) throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`, undefined, {
         inputTokens: reportedTokens(data.usage?.prompt_tokens),
         outputTokens: reportedTokens(data.usage?.completion_tokens),
         finishReason: finishReason(choice.finish_reason),
       });
       return {
         text,
+        ...(toolCalls ? { toolCalls } : {}),
         usage: {
           inputTokens: data.usage?.prompt_tokens ?? 0,
           outputTokens: data.usage?.completion_tokens ?? 0,
@@ -281,6 +339,7 @@ export class AnthropicCompatProvider implements Provider {
 
   private requestBody(opts: CompleteOptions): { body: string; hasImages: boolean } {
     const snapshot = snapshotChatMessages(opts.messages);
+    const tools = snapshotToolDefinitions(opts.tools);
     const hasImages = snapshot.some(message => message.images !== undefined);
     if (hasImages && (!this.supportsImageInput || opts.model !== this.model)) {
       throw new TextProviderError('provider_error', 'Provider model cannot inspect native images');
@@ -289,30 +348,29 @@ export class AnthropicCompatProvider implements Provider {
         .filter((message) => message.role === 'system')
         .map((message) => message.content)
         .join('\n\n');
-      const messages = snapshot
-        .filter((message) => message.role !== 'system')
-        .map((message) => ({ role: message.role, content: message.images ? [
-          { type: 'text', text: message.content },
-          ...message.images.map(image => ({ type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } })),
-        ] : message.content }));
+      const messages = anthropicMessages(snapshot, tools, this.name, opts.model);
       const body = JSON.stringify({
         model: opts.model,
         system: system || undefined,
         messages,
+        ...(tools ? { tools: tools.map(tool => ({ name: tool.function.name,
+          ...(tool.function.description !== undefined ? { description: tool.function.description } : {}), input_schema: tool.function.parameters })) } : {}),
         temperature: opts.temperature,
         max_tokens: opts.maxTokens ?? 4096,
         ...(opts.thinking ? { thinking: { type: opts.thinking } } : {}),
         top_p: opts.topP,
       });
-      if (hasImages && Buffer.byteLength(body, 'utf8') > NATIVE_IMAGE_REQUEST_MAX_BYTES) {
+      if ((hasImages || tools) && Buffer.byteLength(body, 'utf8') > NATIVE_IMAGE_REQUEST_MAX_BYTES) {
         throw new TextProviderError('provider_error', 'Native image request exceeds the provider body limit');
       }
       return { body, hasImages };
   }
 
   preflightNativeImages(opts: CompleteOptions): void { this.requestBody(opts); }
+  preflightNativeTools(opts: CompleteOptions): void { this.requestBody(opts); textTimeout(opts); }
 
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
+    opts = { ...opts, messages: snapshotChatMessages(opts.messages), ...(opts.tools !== undefined ? { tools: snapshotToolDefinitions(opts.tools) } : {}) };
     const { body, hasImages } = this.requestBody(opts);
     const timeout = textTimeout(opts);
     const dispatcher = timeout > 300_000 ? new Agent({ headersTimeout: timeout, bodyTimeout: timeout }) : undefined;
@@ -332,7 +390,7 @@ export class AnthropicCompatProvider implements Provider {
       });
       if (!res.ok) throw new TextProviderError('provider_http', `Provider ${this.name} HTTP ${res.status}`, res.status);
       let data: {
-        content?: Array<{ type?: string; text?: string }>;
+        content?: Array<Record<string, unknown>>;
         usage?: { input_tokens?: number; output_tokens?: number };
         model?: string;
         stop_reason?: unknown;
@@ -352,7 +410,12 @@ export class AnthropicCompatProvider implements Provider {
         ?.filter((block) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
         .map((block) => block.text)
         .join('\n') ?? '';
-      if (!text.trim()) {
+      const tools = snapshotToolDefinitions(opts.tools);
+      const toolCalls = tools ? callsFromAnthropic(data.content, tools) : undefined;
+      validateResponseCallIds(toolCalls, opts.messages);
+      const providerContent = tools ? snapshotAssistantContent({ provider: this.name, model: opts.model, content: data.content }) : undefined;
+      if (tools && data.model !== opts.model) throw new TextProviderError('provider_response_shape', 'Native agent response model changed');
+      if (!text.trim() && !toolCalls) {
         const textBlocks = data.content.filter((block) => block && typeof block === 'object' && block.type === 'text').length;
         const thinkingBlocks = data.content.filter((block) => block && typeof block === 'object' && block.type === 'thinking').length;
         throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`, undefined, {
@@ -364,6 +427,8 @@ export class AnthropicCompatProvider implements Provider {
       }
       return {
         text,
+        ...(toolCalls ? { toolCalls } : {}),
+        ...(providerContent ? { providerContent } : {}),
         usage: {
           inputTokens: data.usage?.input_tokens ?? 0,
           outputTokens: data.usage?.output_tokens ?? 0,
