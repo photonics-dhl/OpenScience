@@ -11,11 +11,26 @@ async function prepare(page: Page, profileFails = false) {
       '/api/research-identity': { profile: { identities: [], primaryIdentity: null, disciplines: [], methods: [], topics: [], languages: [], acceptedSignals: [], rejectedSignals: [], profileVersion: 1 } },
       '/api/auth/academic-identity': { steps: { registered: true, emailVerified: true, orcidConnected: false, institutionEmailVerified: false }, credentials: [], scopedRoles: [], capabilities: { orcid: false, institutionEmail: false } },
       '/api/research-objects': { researchObjects: [] },
+      '/api/workspaces': { workspaces: [{ id: 'vendor-workspace', name: '个人研究', type: 'personal', role: 'owner', isArchived: false }] },
+      '/api/ingestion': { tasks: [] },
       '/api/usage': { user: [{ resource: 'ai_credit', scope: 'user_monthly', limit: 500, used: 8, remaining: 492, allowed: true }], workspaces: [] },
     };
     await route.fulfill({ json: bodies[path] ?? {} });
   });
 }
+
+test('public guidance reaches creation through the research desk', async ({ page }) => {
+  await prepare(page);
+  await page.goto('/guide');
+  await expect(page.locator('header a[href="/research-objects/new"]')).toHaveCount(0);
+  await expect(page.locator('article a[href^="/research-objects/new"]')).toHaveCount(0);
+  await page.locator('article').getByRole('link', { name: '打开研究桌面', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.getByRole('link', { name: '上传 PDF 或资料', exact: true }).click();
+  await expect(page).toHaveURL(/\/research-objects\/new\?mode=import$/);
+  await page.getByRole('link', { name: '返回研究桌面', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
 
 test('profile failure preserves session account and permits retry', async ({ page }) => {
   await prepare(page, true);
@@ -78,7 +93,7 @@ test('headers wrap at 1024 and keep every primary entry on small screens', async
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/settings');
     const links = page.locator('nav [data-product-route-navigation] a');
-    await expect(links).toHaveCount(6);
+    await expect(links).toHaveCount(4);
     for (const link of await links.all()) await expect(link).toBeVisible();
     const rects = await page.locator('header').first().locator('a').evaluateAll(elements => elements.map(element => {
       const rect = element.getBoundingClientRect(); return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom };

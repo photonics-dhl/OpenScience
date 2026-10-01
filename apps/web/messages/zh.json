@@ -355,7 +355,10 @@
     "journals": "期刊",
     "journalsShort": "期刊",
     "guide": "使用指南",
-    "guideShort": "指南"
+    "guideShort": "指南",
+    "accountTools": "账户工具",
+    "myJournals": "我的期刊",
+    "developers": "开发者 API"
   },
   "editor": {
     "savedVersionSources": "核查最近保存版本的来源",
@@ -1061,7 +1064,7 @@
     "continue": {
       "title": "继续研究",
       "emptyTitle": "导入第一份科研资料",
-      "emptyBody": "Hermes 会先保留来源证据，再提出可供你确认的 SDF 字段。",
+      "emptyBody": "从论文、数据或一个问题开始，逐步整理为可阅读、可修订的研究。",
       "open": "继续编辑研究",
       "version": "版本 {version}",
       "pending": "{count} 项等待处理",
@@ -1074,7 +1077,7 @@
     },
     "import": {
       "eyebrow": "开始新的研究",
-      "title": "添加论文或研究资料",
+      "title": "创建研究",
       "description": "上传 PDF 等现有资料交给 Hermes 整理，也可以从空白开始。",
       "upload": "上传 PDF 或资料",
       "blank": "从空白开始"
@@ -1360,7 +1363,8 @@
       "title": "无法加载工作台",
       "load": "暂时无法恢复研究上下文。",
       "retry": "重新加载"
-    }
+    },
+    "deskTools": "资料管理"
   },
   "createResearch": {
     "back": "返回研究驾驶舱",
@@ -1400,7 +1404,8 @@
     "progressLabel": "创建进度",
     "identityStep": "研究身份",
     "evidenceStep": "证据来源",
-    "eyebrow": "OpenScience / Research Object"
+    "eyebrow": "OpenScience / Research Object",
+    "backToDesk": "返回研究桌面"
   },
   "hermesReview": {
     "snapshotLoadError": "无法读取已确认的版本快照，请重试后查看保存内容。",

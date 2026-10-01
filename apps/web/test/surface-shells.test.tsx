@@ -111,9 +111,10 @@ describe('Optical Editorial brand and surface shells', () => {
     ));
 
     expect(markup).toContain('data-product-route-navigation="true"');
-    for (const href of ['/dashboard', '/explore', '/research-objects/new', '/settings']) {
+    for (const href of ['/dashboard', '/explore', '/journals', '/guide']) {
       expect(markup).toContain(`href="${href}"`);
     }
+    expect(markup).not.toContain('href="/research-objects/new"');
   });
 
   it('identity pages keep public discovery and the research desk reachable', () => {

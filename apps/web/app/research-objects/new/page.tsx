@@ -277,11 +277,12 @@ export default function NewResearchObjectPage() {
 
   return (
     <DashboardShell
-      activeRoute="create"
+      activeRoute="dashboard"
       navigationLabel={t('navigationLabel')}
       skipLabel={t('skipLabel')}
     >
       <div className="mx-auto max-w-4xl">
+        <Link href="/dashboard" className="research-return-link"><span aria-hidden="true">←</span>{t('backToDesk')}</Link>
         <header className="border-b border-os-rule-paper pb-5">
           <h1 className="m-0 text-2xl font-semibold leading-8 tracking-[-0.02em] text-os-ink">{t('title')}</h1>
           <p data-reading-role="body" className="mb-0 mt-2 max-w-2xl text-sm leading-6 text-os-muted-paper">{t('description')}</p>

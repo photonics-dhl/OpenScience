@@ -65,6 +65,7 @@
 
 .startResearch,
 .literature { grid-column: 1 / -1; }
+.startResearch > section { box-shadow:none; background:transparent; border-top:1px solid #dce1e5; border-radius:0; padding-inline:0; }
 
 .taskRail {
   grid-column: 2;
@@ -84,14 +85,14 @@
 .taskRail > aside,
 .taskRail > section {
   padding: 20px;
-  border: 1px solid #dce1e5;
+  border: 0;
   border-radius: 12px;
   background: #fff;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgb(29 41 53 / .04), 0 0 0 1px rgb(29 41 53 / .04);
 }
 
 .continueResearch > section {
-  border-top: 3px solid #125d66;
+  border-top: 0;
   min-height: 0;
 }
 
@@ -109,13 +110,13 @@
   min-height: 180px;
   flex: 1;
   border-color: #b9d3d3;
-  background: linear-gradient(145deg, #ffffff 0%, #f3f9f8 100%);
+  background: #edf5f4;
 }
 
 .taskRail > :global(.hermes-conversation-card)::after {
   position: absolute;
   inset: 0 0 auto;
-  height: 3px;
+  height: 1px;
   background: #125d66;
   content: '';
 }
@@ -256,3 +257,15 @@
 }
 .desk .heading p { margin-block: 0 10px; }
 .desk .heading h1 { margin-block: 0 10px; }
+
+.heading { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; }
+.heading > div { min-width:0; }
+.deskTools { position:relative; flex:none; }
+.deskTools > summary { display:flex; align-items:center; justify-content:center; min-height:44px; padding:0 14px; border-radius:8px; color:#596875; cursor:pointer; font-size:14px; }
+.deskTools > div { display:flex; flex-direction:column; gap:8px; position:absolute; z-index:30; right:0; top:calc(100% + 8px); width:220px; padding:12px; border-radius:12px; background:#fff; box-shadow:0 12px 32px rgb(29 41 53 / .12); }
+.deskTools > div a { padding:10px 12px; font-size:14px; }
+.desk .continueResearch > section { padding:28px; }
+.desk .library > section { padding:24px 0; border-top:1px solid #dce1e5; border-radius:0; background:transparent; box-shadow:none; }
+.desk .library li { background:transparent; }
+.desk .layout h2 { letter-spacing:0; }
+@media(max-width:479px) { .heading { gap:12px; } .deskTools > summary { padding-inline:8px; } .desk .continueResearch > section { padding:24px 20px; } .desk .library > section { padding-inline:0; } }

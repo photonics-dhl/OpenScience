@@ -1,0 +1,28 @@
+.primary, .publicLinks { display:flex; align-items:center; gap:4px; margin:0; padding:0; list-style:none; }
+.primary li, .publicLinks li { min-width:0; }
+.primaryLink, .publicLink, .deskLink, .accountLink { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 14px; border-radius:8px; font:500 14px/1.4 var(--font-ui); text-decoration:none; white-space:nowrap; color:var(--os-muted-paper); transition:transform 120ms var(--ease-standard), background-color 160ms ease, color 160ms ease; }
+.primaryLink[aria-current='page'], .publicLink[aria-current='page'] { color:var(--os-vermilion-ink); background:#e7f1f2; }
+.publicNavigation { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px 28px; }
+.access { display:flex; align-items:center; gap:8px; }
+.deskLink { color:var(--os-ink); box-shadow:inset 0 0 0 1px var(--os-rule-paper); }
+[data-navigation-tone='dark'] .publicLink, [data-navigation-tone='dark'] .accountLink { color:var(--os-muted-dark); }
+[data-navigation-tone='dark'] .deskLink { color:var(--os-paper); box-shadow:inset 0 0 0 1px var(--os-rule-dark); }
+.account { display:flex; align-items:center; position:relative; gap:0; color:var(--os-ink); }
+.accountLink { justify-content:flex-start; gap:8px; padding:0 6px; color:inherit; }
+.avatar { display:grid; place-items:center; flex:none; width:30px; height:30px; border-radius:50%; background:#e7f1f2; color:#125d66; font-size:13px; }
+.accountName { max-width:100px; overflow:hidden; text-overflow:ellipsis; }
+.accountTools { position:relative; }
+.accountTools summary { display:grid; place-items:center; width:44px; height:44px; cursor:pointer; border-radius:8px; list-style:none; color:var(--os-muted-paper); }
+.accountTools summary::-webkit-details-marker { display:none; }
+[data-navigation-tone='dark'] .accountTools summary { color:var(--os-muted-dark); }
+.accountTools summary svg { transition:transform 160ms var(--ease-standard); }
+.accountTools[open] summary svg { transform:rotate(180deg); }
+.accountPanel { position:absolute; top:calc(100% + 8px); right:0; z-index:60; width:220px; padding:12px; background:#fff; color:#20252b; border-radius:12px; box-shadow:0 12px 32px rgb(25 38 42 / .14), 0 0 0 1px rgb(25 38 42 / .06); animation:arrive 160ms var(--ease-standard); }
+.accountPanel p { margin:0; padding:4px 12px 8px; color:#626c76; font:500 12px/1.5 var(--font-ui); }
+.accountPanel a { display:flex; align-items:center; min-height:44px; padding:8px 12px; color:#20252b; text-decoration:none; border-radius:6px; font:400 14px/1.4 var(--font-ui); }
+.primaryLink:focus-visible, .publicLink:focus-visible, .deskLink:focus-visible, .account a:focus-visible, .account summary:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }
+.primaryLink:active, .publicLink:active, .deskLink:active, .accountLink:active { transform:scale(.98); }
+@media(hover:hover) { .primaryLink:hover, .publicLink:hover, .accountPanel a:hover { color:#125d66; background:#edf4f4; } .deskLink:hover { background:#e7f1f2; } [data-navigation-tone='dark'] .publicLink:hover, [data-navigation-tone='dark'] .deskLink:hover { background:rgb(241 238 231 / .08); color:var(--os-paper); } .accountTools summary:hover { background:#edf4f4; color:#125d66; } }
+@media(max-width:639px) { .primary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; } .primaryLink { display:flex; padding:0 8px; } .publicNavigation { gap:8px; } .publicLinks { flex:1; } .publicLink { padding-inline:9px; } .access { justify-content:space-between; width:100%; border-top:1px solid var(--os-rule-paper); padding-top:6px; } [data-navigation-tone='dark'] .access { border-color:var(--os-rule-dark); } .accountName { max-width:76px; } }
+@keyframes arrive { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+@media(prefers-reduced-motion:reduce) { .primaryLink, .publicLink, .deskLink, .accountLink, .accountTools summary svg { transition:none; } .primaryLink:active, .publicLink:active, .deskLink:active, .accountLink:active { transform:none; } .accountPanel { animation:none; } }

@@ -223,8 +223,6 @@ export default function DashboardPage() {
       mainClassName={styles.main}
       headerActions={(
         <div className={styles.utilities}>
-          <ResearchContentManager />
-          <Link href="/trash" className="inline-flex min-h-11 items-center text-sm text-os-vermilion-ink underline">{trashT('title')}</Link>
           <AccountLink user={user} />
           <LocaleSwitcher locale={locale} />
         </div>
@@ -234,6 +232,7 @@ export default function DashboardPage() {
     >
       <div className={styles.layout}>
         <header className={styles.heading}>
+          <div>
           <p data-reading-role="caption" className={styles.eyebrow}>
             {t('eyebrow')}
           </p>
@@ -243,18 +242,23 @@ export default function DashboardPage() {
           <p data-reading-role="body" className={styles.welcome}>
             {t('welcome', { name: user?.displayName ?? '' })}
           </p>
+          </div>
+          <details className={styles.deskTools}>
+            <summary>{t('deskTools')}</summary>
+            <div><ResearchContentManager /><Link href="/trash">{trashT('title')}</Link></div>
+          </details>
         </header>
 
         <div className={styles.continueResearch}>
-          <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
+          {researchObjects[0] ? <ContinueResearch research={researchObjects[0]} tasks={tasks} /> : <ImportStage />}
         </div>
         <div className={styles.taskRail}>
           <HermesConversationCard onInvoke={() => setHermesOpen(true)} working={guideWorking} />
           <HermesRail tasks={tasks} loadState={taskLoadState} />
         </div>
-        <div className={styles.startResearch}>
+        {researchObjects.length > 0 ? <div className={styles.startResearch}>
           <ImportStage />
-        </div>
+        </div> : null}
         <div className={styles.literature}>
           <LiteratureAcquisitionDisclosure
             initialTask={literatureTask}

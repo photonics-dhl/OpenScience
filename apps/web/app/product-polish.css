@@ -1,0 +1,28 @@
+/* Shared craft details for the existing research, reading and account surfaces.
+   Scientific text and historical/public content keep their own rendering. */
+.surface-product-app, .research-product {
+  --product-step: #edf3f4;
+  --product-shadow: 0 2px 8px rgb(29 41 53 / .04), 0 0 0 1px rgb(29 41 53 / .04);
+  -webkit-font-smoothing: antialiased;
+}
+.surface-product-app > header { position:relative; z-index:40; }
+.surface-product-app :is(button, summary, a), .research-product :is(button, summary, a) { touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+.surface-product-app :is(button, summary), .research-product :is(button, summary) { transition:transform 120ms cubic-bezier(.2,.8,.2,1), opacity 160ms ease; }
+.surface-product-app button:not(:disabled):active, .research-product button:not(:disabled):active { transform:scale(.98); }
+.surface-product-app :is(input,textarea,select), .research-product :is(input,textarea,select) { transition:box-shadow 160ms ease, border-color 160ms ease; }
+.surface-product-app .product-main { padding-block:36px 64px; }
+.surface-product-app .surface-folio-sheet { box-shadow:var(--product-shadow); }
+.research-return-link { display:inline-flex; align-items:center; min-height:44px; gap:8px; margin-bottom:20px; color:var(--os-vermilion-ink); font:500 14px/1.5 var(--font-ui); text-decoration:none; }
+.research-return-link > span { font-size:18px; }
+.surface-product-app :is(h1,h2,h3) { text-wrap:balance; }
+:lang(zh) .surface-product-app :is(h1,h2,h3) { letter-spacing:0; }
+.surface-product-app p { text-wrap:pretty; }
+.surface-product-app :is(details,section) { scroll-margin-top:24px; }
+.account-workspace .account-monogram { background:#e7f1f2; color:#125d66; }
+.account-workspace .surface-folio-sheet { border-color:transparent; box-shadow:var(--product-shadow); }
+@media(hover:hover) { .research-return-link:hover { text-decoration:underline; text-underline-offset:4px; } }
+@media(max-width:639px) { .surface-product-app .product-main { padding-block:24px 44px; } }
+@media(prefers-reduced-motion:reduce) {
+  .surface-product-app :is(button,summary,input,textarea,select), .research-product :is(button,summary,input,textarea,select) { transition:none; }
+  .surface-product-app button:not(:disabled):active, .research-product button:not(:disabled):active { transform:none; }
+}

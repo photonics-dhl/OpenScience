@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 import { ProductRouteNavigation, type ProductRouteId } from '@/components/navigation/ProductRouteNavigation';
+import { AccountLink } from '@/components/navigation/AccountLink';
 import { ShellHeader, SkipLink } from './ShellPrimitives';
 
 interface DashboardShellProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -32,7 +33,7 @@ function DashboardShell({
         actions={<ProductRouteNavigation active={activeRoute} />}
         navigationLabel={navigationLabel}
         tone="paper"
-        utilities={headerActions}
+        utilities={headerActions ?? <AccountLink user={null} />}
         wrapActionsOnMobile
       />
       <div className={cn('min-h-[calc(100dvh-3.5rem)]', rail && 'lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]')}>

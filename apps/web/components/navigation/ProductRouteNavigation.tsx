@@ -1,55 +1,14 @@
 'use client';
-
+import * as React from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import * as React from 'react';
-import { cn } from '@/lib/utils';
-import { useSession } from '@/components/auth/SessionProvider';
-import { JournalAdminLink } from '@/components/journals/JournalAdminLink';
 import { PRODUCT_PRIMARY_ROUTES, type PrimaryProductRouteId } from '@/lib/product-navigation';
-
-export type ProductRouteId = PrimaryProductRouteId | 'profile' | 'journalAdmin';
-
-const productRoutes = PRODUCT_PRIMARY_ROUTES;
-
-const identityRoutes = productRoutes.filter(({ id }) => id === 'explore' || id === 'dashboard');
-
-export function ProductRouteNavigation({
-  active,
-  variant = 'product',
-}: {
-  active?: ProductRouteId;
-  variant?: 'identity' | 'product';
-}) {
+import styles from './navigation.module.css';
+export type ProductRouteId = PrimaryProductRouteId | 'create' | 'settings' | 'profile' | 'journalAdmin';
+export function ProductRouteNavigation({ active, variant = 'product' }: { active?: ProductRouteId; variant?: 'identity' | 'product' }) {
   const t = useTranslations('productNavigation');
-  const { status, user } = useSession();
-  const administrator = status === 'authenticated' && user?.platformRole === 'platform_admin';
-  const routes = variant === 'identity' ? identityRoutes : productRoutes;
-
-  return (
-    <ul
-      className={cn(
-        'm-0 grid w-full list-none items-stretch gap-1 p-0 sm:flex sm:flex-wrap',
-        variant === 'identity' ? (administrator ? 'grid-cols-3' : 'grid-cols-2') : 'grid-cols-3',
-      )}
-      data-product-route-navigation="true"
-    >
-      {routes.map(({ href, id }) => (
-        <li className="flex min-w-0" key={id}>
-          <Link
-            aria-current={active === id ? 'page' : undefined}
-            className={active === id
-              ? 'inline-flex min-h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-b-2 border-os-vermilion-ink px-1 text-xs font-semibold text-os-ink no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:px-3 sm:text-sm'
-              : 'inline-flex min-h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-b-2 border-transparent px-1 text-xs text-os-muted-paper no-underline transition-colors hover:text-os-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:px-3 sm:text-sm'}
-            data-reading-role="control"
-            href={href}
-          >
-            <span className="sm:hidden">{t(`${id}Short`)}</span>
-            <span className="hidden sm:inline">{t(id)}</span>
-          </Link>
-        </li>
-      ))}
-      {administrator ? <li className="flex min-w-0"><JournalAdminLink active={active === 'journalAdmin'} className={cn('inline-flex min-h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-b-2 px-1 text-xs font-semibold no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:px-3 sm:text-sm', active === 'journalAdmin' ? 'border-os-vermilion-ink text-os-ink' : 'border-transparent text-os-muted-paper hover:text-os-ink')} /></li> : null}
-    </ul>
-  );
+  const routes = variant === 'identity' ? PRODUCT_PRIMARY_ROUTES.filter(({ id }) => id === 'explore' || id === 'dashboard') : PRODUCT_PRIMARY_ROUTES;
+  return <ul className={styles.primary} data-product-route-navigation="true" data-navigation-variant={variant}>
+    {routes.map(({ href, id }) => <li key={id}><Link href={href} className={styles.primaryLink} aria-current={active === id || (active === 'create' && id === 'dashboard') ? 'page' : undefined} data-reading-role="control">{t(id)}</Link></li>)}
+  </ul>;
 }

@@ -1,5 +1,17 @@
 # Integrated Research Product Delivery Plan
 
+## 2026-10-01 本轮：入口与视觉重排
+
+用户决定见同主题设计的 10-01 节；科研质量目标继续保留。
+
+1. 导航：product-navigation、SiteHeader、ProductRouteNavigation、AccountLink 和共享 shell；公开探索、私有研究、账户工具分层，保留旧 URL/登录回跳。验证指南→桌面→创建→返回路径，更新既有导航断言。
+2. 工作布局：Dashboard/ImportStage、新建页、共享产品表面；继续研究优先，创建归桌面，主内容不被装饰抢占；业务数据、角色与恢复保持。
+3. 指南：重做既有 guide 和中英文资源，四阶段可选择导览、诚实示例、按需细节，主动作只导向桌面；键盘/减少动态效果可用。
+4. 验证：定向 Web 单元、入口 E2E、构建/typecheck/改动 lint；375/1024/1440 实际浏览和截图。共享导航账号/管理员展示由独立 High 审查，发布关键 CI 按工作流执行。
+5. 交付：干净已推源部署已授权 UI 修订，真实点击主线；更新公司回复 DOCX并渲染检查，同步 CURRENT/progress/index，完成工作树生命周期。
+
+只改前端展示/导航，不新增 API/DB/模型调用或依赖；保护另一会话的 canonical Hermes 改动。临时证据在 ignored `tmp/ui-narrative-20261001/`。
+
 > 当前任务、版本和已观察结果只见 [CURRENT handoff](../handoff/2026-09-10-hermes-web-image-handoff.md)。本页保留路线与历史实施证据，不另维护任务状态。
 
 ## 实施路线（任务状态见CURRENT）

@@ -355,7 +355,10 @@
     "journals": "Journals",
     "journalsShort": "Journals",
     "guide": "Guide",
-    "guideShort": "Guide"
+    "guideShort": "Guide",
+    "accountTools": "Account tools",
+    "myJournals": "My journals",
+    "developers": "Developer API"
   },
   "editor": {
     "savedVersionSources": "Check sources in the latest saved version",
@@ -1061,7 +1064,7 @@
     "continue": {
       "title": "Continue research",
       "emptyTitle": "Import your first research material",
-      "emptyBody": "Hermes preserves source evidence before proposing SDF fields for your confirmation.",
+      "emptyBody": "Start with a paper, data, or a question. Build a readable, evolving research object.",
       "open": "Continue editing",
       "version": "Version {version}",
       "pending": "{count} items need attention",
@@ -1074,7 +1077,7 @@
     },
     "import": {
       "eyebrow": "Start new research",
-      "title": "Add a paper or research material",
+      "title": "Start a research object",
       "description": "Upload a PDF or other material for Hermes to organise, or begin from a blank record.",
       "upload": "Upload PDF or material",
       "blank": "Start from blank"
@@ -1360,7 +1363,8 @@
       "title": "Dashboard unavailable",
       "load": "We could not restore your research context.",
       "retry": "Reload"
-    }
+    },
+    "deskTools": "Research utilities"
   },
   "createResearch": {
     "back": "Dashboard",
@@ -1400,7 +1404,8 @@
     "progressLabel": "Creation progress",
     "identityStep": "Research identity",
     "evidenceStep": "Evidence source",
-    "eyebrow": "OpenScience / Research Object"
+    "eyebrow": "OpenScience / Research Object",
+    "backToDesk": "Back to research desk"
   },
   "hermesReview": {
     "snapshotLoadError": "The saved confirmation snapshot could not be loaded. Retry to view its contents.",

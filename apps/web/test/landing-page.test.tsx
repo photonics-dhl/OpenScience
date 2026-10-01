@@ -102,9 +102,10 @@ describe('Optical Editorial landing page', () => {
     expect(markup).not.toContain('data-landing-module="trust"');
   });
 
-  it('keeps Create, Explore and standalone login as real destinations', async () => {
+  it('keeps public exploration and a real research-desk destination', async () => {
     const markup = await renderLandingPage();
-    expect(markup).toContain('href="/research-objects/new"');
+    expect(markup).toContain('href="/dashboard"');
+    expect(markup).not.toContain('href="/research-objects/new"');
     expect(markup).toContain('href="/explore"');
     expect(markup).toContain('href="/auth/login"');
     const { default: ExplorePage } = await import('../app/explore/page');
@@ -115,7 +116,7 @@ describe('Optical Editorial landing page', () => {
     const markup = await renderLandingPage();
     expect(markup).toContain('data-hero-action="primary"');
     expect(markup).toContain('data-hero-action="secondary"');
-    expect(markup.indexOf('href="/explore"')).toBeLessThan(markup.indexOf('href="/research-objects/new"'));
+    expect(markup.indexOf('href="/explore"')).toBeLessThan(markup.indexOf('href="/dashboard"'));
     expect(markup).not.toContain('data-hero-metadata-legend');
     expect(markup).not.toContain('optical-cursor-ring');
     expect(markup).toContain('data-typography-coupling="reference-plate"');
@@ -146,15 +147,12 @@ describe('Optical Editorial landing page', () => {
     expect(markup).not.toContain('data-optical-field="true"');
   });
 
-  it('uses the next viewport for a complete Open RO anatomy instead of principle placeholders', async () => {
-    const markup = await renderLandingPage();
+  it('uses the next viewport for the public research index', async () => {
+    const { default: LatestResearch } = await import('../components/landing/LatestResearch');
+    const markup = renderToStaticMarkup(await LatestResearch());
     expect(markup).toContain('data-landing-module="open-ro"');
-    expect(markup).toContain('data-open-ro-index="true"');
-    expect(markup.match(/data-sdf-node=/g)).toHaveLength(6);
-    expect(markup.match(/data-sdf-node-summary=/g) ?? []).toHaveLength(6);
-    expect(markup.match(/tabindex="0"/g)?.length ?? 0).toBeGreaterThanOrEqual(6);
-    expect(markup).toContain('data-open-ro-density="calm"');
-    expect(markup).toContain('Open Research Object');
+    expect(markup).toContain('id="open-ro"');
+    expect(markup).toContain('OPEN RESEARCH');
     expect(markup).toContain('href="/explore"');
     expect(markup).not.toContain('data-landing-module="principles"');
   });
@@ -164,20 +162,20 @@ describe('Optical Editorial landing page', () => {
     const markup = renderToStaticMarkup(await ExplorePage());
     expect(markup).toContain('data-navigation-tone="paper"');
     const navigation = markup.match(/<div[^>]*data-navigation-tone="paper"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? '';
-    expect(navigation).toContain('text-os-muted-paper');
-    expect(navigation).toContain('border-os-rule-paper text-os-ink');
-    expect(navigation).not.toContain('text-os-muted-dark');
+    expect(navigation).toContain('href="/explore"');
+    expect(navigation).toContain('href="/journals"');
+    expect(navigation).toContain('href="/guide"');
   });
 
-  it('keeps Landing navigation frozen while public product pages expose the research desk', async () => {
+  it('gives public pages one desk entry and keeps creation inside the desk', async () => {
     const { default: SiteHeader } = await import('../components/landing/SiteHeader');
     const landing = renderToStaticMarkup(<SiteHeader />);
     const publicProduct = renderToStaticMarkup(<SiteHeader active="explore" context="public-product" tone="paper" />);
 
-    expect(landing).not.toContain('href="/dashboard"');
+    expect(landing.match(/href="\/dashboard"/g)).toHaveLength(1);
     expect(publicProduct).toContain('href="/dashboard"');
     expect(publicProduct).toMatch(/aria-current="page"[^>]*href="\/explore"/u);
-    expect(publicProduct).toContain('href="/research-objects/new"');
+    expect(publicProduct).not.toContain('href="/research-objects/new"');
     expect(publicProduct).toContain('href="/auth/login"');
     expect(publicProduct).toContain('data-mobile-navigation-grid="true"');
     expect(landing).not.toContain('data-mobile-navigation-grid="true"');

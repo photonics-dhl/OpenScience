@@ -1,12 +1,17 @@
 'use client';
+import * as React from 'react';
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useSession } from '@/components/auth/SessionProvider';
 import type { CurrentUser } from '@/lib/api';
+import { ChevronDown } from 'lucide-react';
+import { JournalAdminLink } from '@/components/journals/JournalAdminLink';
+import styles from './navigation.module.css';
 
-export function AccountLink({ user, active = false }: { user: CurrentUser | null; active?: boolean }) {
+export function AccountLink({ user, active = false, tone = 'paper' }: { user: CurrentUser | null; active?: boolean; tone?: 'paper' | 'dark' }) {
   const t = useTranslations('myAccount');
+  const navigation = useTranslations('productNavigation');
   const session = useSession();
   const visibleUser = !session.managed
     ? user
@@ -16,11 +21,14 @@ export function AccountLink({ user, active = false }: { user: CurrentUser | null
         ? null
         : session.user ?? user;
   if (!visibleUser) return null;
-  return (
-    <Link href="/me" aria-current={active ? 'page' : undefined} aria-label={t('accountLink', { name: visibleUser.displayName })}
-      className="no-underline inline-flex min-h-11 max-w-48 items-center gap-2 rounded-control px-2 text-sm text-os-ink transition-colors hover:bg-os-paper-2 hover:text-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" data-account-link="true">
-      <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-os-rule-paper">{Array.from(visibleUser.displayName)[0] || '○'}</span>
-      <span className="max-w-24 truncate sm:max-w-32">{visibleUser.displayName}</span>
+
+  return <div className={styles.account} data-navigation-tone={tone}>
+    <Link href="/me" aria-current={active ? 'page' : undefined} aria-label={t('accountLink', { name: visibleUser.displayName })} className={styles.accountLink} data-account-link="true">
+      <span aria-hidden="true" className={styles.avatar}>{Array.from(visibleUser.displayName)[0] || '○'}</span><span className={styles.accountName}>{visibleUser.displayName}</span>
     </Link>
-  );
+    <details className={styles.accountTools} onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
+      <summary aria-label={navigation('accountTools')}><ChevronDown size={16} aria-hidden="true" /></summary>
+      <div className={styles.accountPanel}><p>{navigation('accountTools')}</p><Link href="/settings" prefetch={false}>{navigation('settings')}</Link><Link href="/journals/manage" prefetch={false}>{navigation('myJournals')}</Link><Link href="/developers">{navigation('developers')}</Link><JournalAdminLink /></div>
+    </details>
+  </div>;
 }

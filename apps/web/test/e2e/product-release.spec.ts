@@ -327,12 +327,12 @@ async function assertVisibleOpticalMotion(page: Page, acceptedSurface: Locator) 
 }
 
 function expectedGlobalRoutes(surface: string) {
-  if (surface === 'landing') return ['/explore', '/research-objects/new', '/auth/login'];
+  if (surface === 'landing') return ['/explore', '/journals', '/guide', '/dashboard', '/auth/login'];
   if (surface === 'auth' || surface === 'login') return ['/dashboard', '/explore'];
   if (surface === 'public' || surface === 'explore' || surface === 'collection') {
-    return ['/dashboard', '/explore', '/research-objects/new', '/auth/login'];
+    return ['/dashboard', '/explore', '/journals', '/guide', '/auth/login'];
   }
-  return ['/dashboard', '/explore', '/research-objects/new', '/settings'];
+  return ['/dashboard', '/explore', '/journals', '/guide'];
 }
 
 async function assertGlobalRouteNavigation(page: Page, surface: string) {
