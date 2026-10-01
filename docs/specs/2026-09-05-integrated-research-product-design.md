@@ -51,6 +51,8 @@
 
 [Impeccable](https://github.com/pbakaus/impeccable) 的表面模式、独立视觉批评与字级/空间方法用于细化；[Marketing Skills](https://github.com/coreyhaines31/marketingskills) 的 product-marketing / copywriting 用于具体收益及下一行动。它们的固定访谈、英语转化模板和无来源营销数字不作为科研产品要求。源码判断、技术检查和真实视觉验收分开。
 
+[Anthropic frontend-design](https://github.com/anthropics/skills/tree/main/skills/frontend-design)补充“从产品内容建立构图、实施前对照简报、表达集中在有效焦点”的方法；[Anthropic design-critique](https://github.com/anthropics/knowledge-work-plugins/tree/main/design/skills/design-critique)用于有界评审首印象、可用性、阅读层级、一致性及可访问性。评审明确输入是实际网页、Figma、截图或源码描述；源码不能证明首屏视觉、实际对比度或交互质量。指南比稿围绕真实材料与成果的关系，而非通过更换整块底色、增加阴影或重复图文判断质感。配置来源、试用、反馈及后续执行只见 CURRENT。
+
 候选筛选须看实际内容与适用性。Taste 的 redesign 参考建议编造姓名／公司、改变数字及随机日期来制造真实感，因此不采用。Figma 可提供设计变量、组件与实现关联，见[官方 MCP 文档](https://developers.figma.com/docs/figma-mcp-server/)；Figma、MagicPath 的连接和试验结果只记 CURRENT，连接前不宣称具有效果。
 
 ### 指南两种构图供比较
