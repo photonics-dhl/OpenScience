@@ -1,6 +1,6 @@
 # CURRENT Progress Window
 
-- 10-01公司PDF21项问题已汇总核查并形成隔离候选；API/Worker构建、相关定向回归及缓存/UI High通过，最终集成审查因502中断后续审，尚未部署。核查/用户决定/证据与剩余项见[评估交接](handoff/2026-09-30-vendor-evaluation.md)；运行锚点仍由Hermes CURRENT维护。
+- 10-01公司PDF21项已核查，权限/扫描/账户取数/UI等修正经High与精确CI通过、无迁移发布；公网精确版本、登录工作台/账户/额度与安装后的干净/EICAR扫描通过，稳定观察及回复整理中。核查/用户决定/证据与剩余项见[评估交接](handoff/2026-09-30-vendor-evaluation.md)；运行锚点仍由Hermes CURRENT维护。
 
 - 新来源审校已回到Hermes model路径，历史Web及科学/Claims守卫保留；候选已提交，未部署。原生M3视觉传输20项及共享回归通过，尚未接产品；下一步是精确角色与调用前后checkpoint，再接原论文页/成图像素。CI揭示的历史fixture已调整且Domain93/API13通过，仍待精确CI。不能用传输、安装或schema通过声称科学质量稳定；身份、费用与证据只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 

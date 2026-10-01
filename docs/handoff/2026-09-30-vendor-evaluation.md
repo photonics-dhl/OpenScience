@@ -41,13 +41,13 @@
 - 裁剪包不含内部 docs/会话/真实视觉样例，部分总仓门禁不可复现；公司先列隔离环境所需依赖。
 - 交付树有其他活跃会话的论文审校源码改动，不能删除、暂存或混入资料提交；本轮仅提交自己负责的说明。原临时发布树与并行代码由原任务负责。
 
-## 评估问题核查与修正（执行中）
+## 评估问题核查与修正
 
 - 用户随后提供23页PDF/21项问题，授权核查、修正服务器、验证和书面回复；原包90da仅为历史评估样本。本次在Codex管理的`vendor-launch-fixes/XGS`隔离树、`codex/vendor-launch-fixes-20260930`执行，已整合canonical已提交a7af0663；其他会话未提交Hermes源码保持。
 - 已确认统一额度并隐藏free标签；保留期刊/Live2D、优化加载、完善站内状态，不加任务邮件；保留现ECS、需要隔离测试环境、每周发版、12430020审批、日期待定。
-- 只读生产锚点55a8/rollback c299；没有running/pending AgentTask。32个published Version均有Publication且publicVersionId一致；2个team只有owner。近7天仍needs_review3个、六维全空2个，不能当总体失败率。ClamAV生产配置与调用已核，干净/EICAR实测分别接受/阻断，无业务写入。
+- 发布前只读快照55a8/rollback c299；没有running/pending AgentTask。32个published Version均有Publication且publicVersionId一致；2个team只有owner。近7天仍needs_review3个、六维全空2个，不能当总体失败率。ClamAV生产配置与调用已核，干净/EICAR实测分别接受/阻断，无业务写入。
 - 候选包括角色/生命周期/ORCID/下载/登录、账户隔离取数复用、路由/导航/账户/额度/任务显示、延迟Live2D、Nginx、真实余额、普通/期刊上传ClamAV。原生产只有Worker解析接完整扫描，普通/期刊上传缺口由本候选补齐。额度19、Nginx9、协议2、Fork8、确认角色3项通过。首次CI发现账户切换后错误接收旧actor结果，已修正，相关Web83项通过；不能以旧CI失败结果当通过。
-- 10-01集成High发现扫描期间权限撤回、后续导入事务窗口和锁顺序问题：Artifact扫描后锁会员再空间复核；导入batch/session/task/扣费/审计在同一Serializable事务复核并持锁，提交后入队。9个扫描/准备后降权、撤员、归档回归和3扫描基本项通过；普通/期刊恶意451与扫描不可用503的实际HTTP四项通过。Domain新构建、相关四套件112项、定向ESLint、docs-sync8项和Markdown检查通过；High/新CI/生产发布未完成。
+- 10-01集成High发现扫描期间权限撤回、后续导入事务窗口和锁顺序问题：Artifact扫描后锁会员再空间复核；导入batch/session/task/扣费/审计在同一Serializable事务复核并持锁，提交后入队。9个扫描/准备后降权、撤员、归档回归和3扫描基本项通过；普通/期刊恶意451与扫描不可用503的实际HTTP四项通过。Domain新构建、相关四套件112项、定向ESLint、docs-sync8项和Markdown检查通过；最终集成High GO、精确CI36799844261 success；正常干净已推精确源无迁移发布exit0，发布身份只见Hermes CURRENT。
 - 权限解释按既有需求：Author首发和撤回保留R3/科学约束，恢复已被收窄的公开可见性仅Owner/Maintainer；这是实现判断，不冒称用户新决定。创建者降权不保留特权；Contributor只提交贡献分支。Fork旁路三角色越权已红绿修正；导入确认已有嵌套Commit守卫，新增三回归通过，无新增生产确认逻辑。
 - 核查限制：一般VisibilityRequest扩大仍仅pending，未找到审批落地消费者；部分非事务审计、全链路科研质量和长期SLA未验收。公开版本一致性核查不等于RO.status是出版状态，空六维不冒称PDF解析失败。
-- 新证据在隔离树ignored `tmp/vendor-findings/`；原PDF/text/server-before在canonical `tmp/vendor-findings-20260930/`。下一步完成候选、相关测试/审查/CI，再正常干净精确SHA构建发布并从站内真实入口复验，最终回复逐项标记已修/澄清/待交接。
+- 新证据在隔离树ignored `tmp/vendor-findings/`；原PDF/text/server-before在canonical `tmp/vendor-findings-20260930/`。生产实证：公网/源站精确版本一致，API/Web/Worker restart0/OOM false，各healthcheck服务healthy；登录后工作台→设置→个人主页可用，余额/500发放额及低额提示显示且free隐藏，auth/me从2降1，两个ingestion为不同scope均200；安装后的API扫描factory clean接受/EICAR阻断，路由307/指南200/404/匿名401/管理302及nosniff通过。首次HTTP脚本尾部Windows管道CR导致exit127，仅本地脚本问题，改用Git Bash原生管道后exit0；未改业务状态。稳定观察与最终文档排版继续。
